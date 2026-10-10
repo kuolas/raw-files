@@ -1,7 +1,7 @@
 # CI — the checks from CONTRIBUTING.md §Code style and checks, run on every
 # pull request. `hygiene` checks commits once; `build` runs the cargo checks on
-# macOS, Linux and Windows; `msrv` builds and tests with the oldest Rust the
-# crate supports.
+# macOS, Linux and Windows (ADR007); `msrv` builds and tests with the oldest
+# Rust the crate supports.
 #
 # Every pull request runs every job, docs-only ones included: the jobs are
 # required checks on master, and a skipped workflow never reports, which
