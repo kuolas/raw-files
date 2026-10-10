@@ -13,3 +13,13 @@ categories = ["multimedia::images", "parser-implementations"]
 # Meant for crates.io, but not before the first release: a crate version
 # can be yanked but never deleted. Remove this line when releasing.
 publish = false
+
+# Code policy: docs/architecture-decisions/adr008-lints-and-panics.md
+[lints.rust]
+unsafe_code = "forbid"
+missing_docs = "warn"
+
+[lints.clippy]
+dbg_macro = "warn"
+todo = "warn"
+unimplemented = "warn"

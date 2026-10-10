@@ -13,6 +13,7 @@ each: the context, what was decided, and what follows from it. They answer
 | [ADR005](adr005-github-issues-tracker.md) | GitHub Issues as the only tracker | Accepted |
 | [ADR006](adr006-ai-assisted-contributions.md) | AI-assisted contributions | Accepted |
 | [ADR007](adr007-pure-rust-cross-platform.md) | Pure Rust, on macOS, Linux and Windows | Accepted |
+| [ADR008](adr008-lints-and-panics.md) | No unsafe code, a few extra lints, no panics on malformed input | Accepted |
 
 ## When to write one
 
