@@ -11,6 +11,7 @@ each: the context, what was decided, and what follows from it. They answer
 | [ADR003](adr003-linear-history.md) | Linear history with rebase-merge | Accepted |
 | [ADR004](adr004-gnome-commit-messages.md) | GNOME-style commit messages | Accepted |
 | [ADR005](adr005-github-issues-tracker.md) | GitHub Issues as the only tracker | Accepted |
+| [ADR006](adr006-ai-assisted-contributions.md) | AI-assisted contributions | Accepted |
 
 ## When to write one
 
