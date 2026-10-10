@@ -7,6 +7,7 @@ each: the context, what was decided, and what follows from it. They answer
 | ADR | Title | Status |
 |---|---|---|
 | [ADR001](adr001-record-architecture-decisions.md) | Record architecture decisions | Accepted |
+| [ADR002](adr002-license-mit-or-apache-2.md) | License: MIT OR Apache-2.0 | Accepted |
 
 ## When to write one
 
