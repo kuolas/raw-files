@@ -25,7 +25,6 @@ Then:
 git clone https://github.com/kuolas/raw-files.git
 cd raw-files
 cargo build
-cargo run
 cargo test
 ```
 

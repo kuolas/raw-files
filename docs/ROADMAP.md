@@ -7,7 +7,7 @@ requests live in the
 ## Where we are
 
 The repository, its license and its contribution process exist. The crate
-is a skeleton that prints a greeting; it does nothing else yet.
+is a library with no public API; it does nothing yet.
 
 ## Milestones
 

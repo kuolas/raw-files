@@ -3,8 +3,8 @@
 A camera RAW library in pure Rust. It extracts the JPEG previews embedded in
 Nikon NEF and Sony ARW files, with fuller RAW decoding planned.
 
-**Status: early.** Nothing below works yet — the crate is a skeleton that
-prints a greeting. See the [roadmap](docs/ROADMAP.md) for the plan.
+**Status: early.** Nothing below works yet — the crate is a library with no
+public API. See the [roadmap](docs/ROADMAP.md) for the plan.
 
 ## What it will do
 
@@ -19,14 +19,13 @@ prints a greeting. See the [roadmap](docs/ROADMAP.md) for the plan.
 Pure Rust means no C or C++ library to build, link or ship, on macOS, Linux
 and Windows alike.
 
-## Build and run
+## Build and test
 
 There are no releases yet. To build from source on macOS, Linux or Windows
 you need Rust 1.85 or later:
 
 ```sh
 cargo build
-cargo run
 cargo test
 ```
 

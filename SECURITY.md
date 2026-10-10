@@ -27,7 +27,7 @@ will receive security fixes.
 
 ## Scope
 
-Nothing in the crate reads untrusted input yet — it prints a greeting. A RAW
+Nothing in the crate reads untrusted input yet — it has no public API. A RAW
 library exists to read files from cameras and from anyone who sends one, so
 every byte it parses is untrusted input. Once it parses files, the most
 valuable reports are malformed files that make it crash or panic, loop
