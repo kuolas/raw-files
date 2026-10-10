@@ -8,6 +8,7 @@ each: the context, what was decided, and what follows from it. They answer
 |---|---|---|
 | [ADR001](adr001-record-architecture-decisions.md) | Record architecture decisions | Accepted |
 | [ADR002](adr002-license-mit-or-apache-2.md) | License: MIT OR Apache-2.0 | Accepted |
+| [ADR003](adr003-linear-history.md) | Linear history with rebase-merge | Accepted |
 
 ## When to write one
 
