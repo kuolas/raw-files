@@ -1,6 +1,15 @@
 [package]
 name = "raw-files"
 version = "0.1.0"
+authors = ["Alvaro Kuolas <kuolas@gmail.com>"]
 edition = "2024"
-
-[dependencies]
+rust-version = "1.85"
+description = "Pure-Rust camera RAW library: extracts embedded JPEG previews from Nikon NEF and Sony ARW files, with fuller RAW decoding planned"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/kuolas/raw-files"
+readme = "README.md"
+keywords = ["raw", "nef", "arw", "camera", "photography"]
+categories = ["multimedia::images", "parser-implementations"]
+# Meant for crates.io, but not before the first release: a crate version
+# can be yanked but never deleted. Remove this line when releasing.
+publish = false
