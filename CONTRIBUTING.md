@@ -210,7 +210,8 @@ A few conventions:
 - **New source files start with the license header:**
   `// SPDX-License-Identifier: MIT OR Apache-2.0`.
 - **Decisions that would surprise someone reading only the code** get a short
-  note, with the reason, in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+  Architecture Decision Record in
+  [docs/architecture-decisions/](docs/architecture-decisions/README.md).
 
 ## License of contributions
 

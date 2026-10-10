@@ -13,4 +13,5 @@ raw-files is one Rust crate (edition 2024) with a single binary,
 When the code outgrows one file, this page gains a table of modules — one
 row each, saying what the module owns — and a description of how data
 moves between them. A change that adds a module, or moves data between
-modules, updates both.
+modules, updates both. A constraint that forces the shape gets
+[an ADR](architecture-decisions/README.md).

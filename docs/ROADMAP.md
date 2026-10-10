@@ -18,8 +18,7 @@ is a skeleton that prints a greeting; it does nothing else yet.
    capture date, camera make and model, and image dimensions.
 4. **Raw sensor data.** Decode the sensor data of NEF and ARW files.
 
-The order is a plan, not a promise; a change of direction is recorded on
-this page, with the reason.
+The order is a plan, not a promise; a change of direction gets an ADR.
 
 ## Open questions
 
