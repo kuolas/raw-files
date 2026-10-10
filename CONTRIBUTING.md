@@ -37,14 +37,14 @@ To run a single test, or every test whose name contains a word:
 The tracker is [GitHub Issues](https://github.com/kuolas/raw-files/issues).
 It is the project's one list of what is broken, deferred or wanted.
 
-- **A bug** — say what happened, how to reproduce it, and what you expected
-  instead. Most bugs in a RAW library are about one camera's files, so name
-  the camera model, and link a sample file if you can share one.
-- **A feature** — start from the problem rather than the solution. A request
-  for a camera or format is input to the order in
-  [docs/ROADMAP.md](docs/ROADMAP.md) rather than a place in a queue.
-- **Anything else** (a docs fix, a question) — the same: a short issue is
-  fine.
+- **A bug** — use the *Bug report* form: what happened, how to reproduce it,
+  and what you expected instead. Most bugs in a RAW library are about one
+  camera's files, so name the camera model, and link a sample file if you can
+  share one.
+- **A feature** — use the *Feature request* form, and start from the problem
+  rather than the solution. A request for a camera or format is input to the
+  order in [docs/ROADMAP.md](docs/ROADMAP.md) rather than a place in a queue.
+- **Anything else** (a docs fix, a question) — a blank issue is fine.
 
 For anything bigger than a small fix, please open or find an issue **before**
 you start, so we can agree on the approach before you spend time on it.
@@ -97,8 +97,8 @@ maintainer's own. The flow:
    ```
 
 5. **Open a pull request.** Describe what changed and why, and link the issue
-   it answers. Give the PR a title in the same shape as a commit subject
-   (`nef: Read the preview from the SubIFDs`).
+   it answers. The template has a short checklist. Give the PR a title in the
+   same shape as a commit subject (`nef: Read the preview from the SubIFDs`).
 
 ### Linear history: why rebase, not merge
 

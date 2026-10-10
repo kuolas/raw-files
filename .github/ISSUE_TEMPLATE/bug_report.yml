@@ -1,0 +1,70 @@
+name: Bug report
+description: Something does the wrong thing — the library, a script, a hook or the docs' instructions.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report this. raw-files is at a very early stage, so a short, reproducible report is the most useful kind.
+
+        **A security problem does not belong here** — the tracker is public. A file that makes raw-files crash, hang or use far too much memory may be one; report it privately as [SECURITY.md](https://github.com/kuolas/raw-files/blob/master/SECURITY.md) describes.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you saw, including any error message.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: The smallest program or sequence of commands that shows the problem.
+      placeholder: |
+        1. Call … on the attached file
+        2. …
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected instead
+    validations:
+      required: true
+  - type: input
+    id: camera
+    attributes:
+      label: Camera
+      description: Make and model of the camera that wrote the file, and its firmware version if you know it.
+      placeholder: e.g. Nikon Z 6II, firmware 1.60
+  - type: textarea
+    id: sample
+    attributes:
+      label: Sample file
+      description: Most RAW bugs need the file to reproduce. Attach it (zipped) or link to it. **Anything you attach is public** — only share a photo you are happy for anyone to see and use.
+  - type: input
+    id: commit
+    attributes:
+      label: Commit
+      description: Nothing has been released yet, so the commit you built is the version — `git rev-parse --short HEAD`.
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      description: Operating system and `rustc --version`.
+      placeholder: e.g. macOS 15.1, rustc 1.95.0
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs or output
+      description: Paste any relevant output; it is formatted as code automatically.
+      render: text
+  - type: checkboxes
+    id: searched
+    attributes:
+      label: Before submitting
+      options:
+        - label: I searched the existing issues and this is not a duplicate.
+          required: true
