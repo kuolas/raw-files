@@ -125,7 +125,7 @@ milestone that needs the tag. [P][1]
 | 0x003D | BlackLevel | u16[4] | per-channel black level, recorded at 14-bit scale | 4 |
 | 0x003E | ImageSizeRAW | u16 | 1 large, 2 medium, 3 small | 4 |
 | 0x0045 | CropArea | u16[4] | left, top, width, height of the output rectangle | 3, 4 |
-| 0x0051 | (unnamed, Z 9 and later) | undef | NEFCompression as a little-endian u16 at byte 10 | 4 |
+| 0x0051 | (unnamed, Z 9 and later) | undef | NEFCompression as a u16 at byte 10; byte order disputed (see the note below) | 4 |
 | 0x0091 | ShotInfo | undef | model-specific; encrypted for versions 02xx and 08xx | none |
 | 0x0093 | NEFCompression | u16 | compression hint | 4 |
 | 0x0096 | NEFLinearizationTable | undef | curve and predictor seeds; unencrypted | 4 |
@@ -140,6 +140,8 @@ Notes:
 
 - 0x00A7 on newer bodies is the combined mechanical and electronic count;
   0x0037 is mechanical-only. The decryption key uses 0x00A7. [P][1]
+- Byte 10 of 0x0051 is read in the MakerNote's byte order by LibRaw, while
+  only rawler forces little-endian; the sources disagree. [P][7][9]
 - 0x0014 holds Coolpix colour data (2560-byte or 1280-byte variants, or an
   "NRW" block on P-series cameras) and is irrelevant to NEF DSLRs. [P][1]
 - Capture NX data (0x0E01) is a sequence of records that can carry a white
@@ -210,7 +212,7 @@ decryption applies and where it starts. [P][1][3][5][7]
 
 | Tag | Encrypted when | Decrypt from byte |
 |---|---|---|
-| 0x0097 ColorBalance | version 02xx (0100, 0102, 0103 are plain) | 4 for versions 0205 and 0219 to 0224 (0220 disputed: byte 4 or 284, see [open question 3](#11-open-questions)); 284 for the other 02xx versions |
+| 0x0097 ColorBalance | version 02xx (0100, 0102, 0103 are plain) | 4 for versions 0205, 0219 and 0221 to 0224; 284 for the other 02xx versions, including 0220 (ExifTool's ColorBalanceUnknown1, whose white balance it does not decode) |
 | 0x0098 LensData | version 0201 and later (0201 to 0204, 04xx, 08xx) | 4 |
 | 0x0091 ShotInfo | versions 02xx and 08xx | 4 |
 
@@ -323,6 +325,7 @@ The 0x0097 versions and where the four white-balance values sit:
 | 0211 | | yes | start 16 | G-first variants |
 | 0215 to 0217 | | yes | start 4 | G-first variants |
 | 0219, 0221 to 0224 | | yes, from 4 | ExifTool puts the values at 0x7C after decryption | |
+| 0220 | | yes, from 284 | not decoded by ExifTool (ColorBalanceUnknown1) | |
 | 08xx | Z bodies | yes | not mapped by any surveyed project | |
 
 Sources: [3][7][8][9]. ExifTool and LibRaw count the offset from different
@@ -433,11 +436,13 @@ compacts. [S][14]
 
 In the one NEF dump inspected the strings were NUL-terminated with the count
 including the NUL and no space padding (Make 18 bytes, Model 10 bytes for a
-D40). [P][14] The Exif standard allows space-filled "unknown" values, and
-ExifTool and LibRaw both strip trailing whitespace. So: cut at the first NUL,
-then trim trailing ASCII whitespace. [P][2][7] No D850 or Z-series dump was
-inspected. Compare model strings after trimming, because model checks
-elsewhere ("D50" suffix, a "Z" at index 6) assume trimmed text. [I]
+D40). [P][14] The D100 does space-pad Model: rawspeed compares it against
+"NIKON D100 " with a trailing space. [P][8] The Exif standard allows
+space-filled "unknown" values, and ExifTool and LibRaw both strip trailing
+whitespace. So: cut at the first NUL, then trim trailing ASCII whitespace.
+[P][2][7] No D850 or Z-series dump was inspected. Compare model strings after
+trimming, because model checks elsewhere ("D50" suffix, a "Z" at index 6)
+assume trimmed text. [I]
 
 ### 8.4 Image dimensions
 
@@ -546,7 +551,7 @@ For milestone 3, keep the MakerNote out of the critical path.
    return "absent" rather than an error for a MakerNote that does not parse.
    [I]
 3. **Do not implement decryption in milestone 3.** The fields above need no
-   key, the substitution tables have no licence-clean source yet
+   key, the substitution tables have no settled provenance yet
    ([section 11](#11-open-questions)), and white balance for every body of
    interest is available in plain form (0x000C). Defer 0x0097, 0x0098 and
    0x0091 to milestone 4, and only if older-body white balance is required.
@@ -565,33 +570,35 @@ For milestone 3, keep the MakerNote out of the critical path.
 
 ## 11. Open questions
 
-1. **Licence-clean decryption tables.** The two 256-byte tables are only
-   published in GPL, LGPL, CDDL or Artistic projects. raw-files needs either an
-   independent derivation, a permissively licensed source, or a legal
-   decision, before milestone 4 touches encrypted blocks.
+1. **Provenance of the decryption tables.** The two 256-byte tables are
+   published in GPL, LGPL, CDDL and Artistic projects and in dcraw, whose
+   header states that all of its code outside a single restricted (Foveon)
+   block is free for all uses; dcraw's licence is nevertheless described as
+   ambiguous for the whole file elsewhere on this page. That is an input to
+   the decision, not legal advice. raw-files needs an independent derivation,
+   a source it can use, or a recorded legal decision, before milestone 4
+   touches encrypted blocks. [10]
 2. **Non-numeric serial handling.** Which of the four conventions in
    [section 5.1](#51-non-numeric-serial-numbers) is correct for a real
    lettered serial. Checking a D50-family and a D200 sample would settle it.
-3. **ColorBalance decrypt start for version 0220.** The sources read for
-   this page list the 0219 to 0224 range as starting at byte 4 in one place
-   and 0220 as starting at byte 284 in another. Verify against ExifTool's
-   source.
-4. **ColorBalance version 08xx (Z bodies).** Whether any Z body lacks
+3. **ColorBalance version 08xx (Z bodies).** Whether any Z body lacks
    0x000C, and whether the encrypted block holds anything useful.
-5. **BlackLevel (0x003D) channel order.** LibRaw reads the four values in
+4. **BlackLevel (0x003D) channel order.** LibRaw reads the four values in
    fixed colour order R, G1, G2, B regardless of the CFA layout. rawspeed and
    rawler read them by position after assuming an RGGB pattern. The two agree
    only on RGGB. In rawspeed's camera list every non-RGGB Nikon is a
    pre-2010 body, so there may be no practical difference, but which body
    first wrote the tag is unknown. [P][7][8][9][17]
-6. **Bodies that write OffsetTimeOriginal.** Only the Z 9 is confirmed. [S]
-7. **Make/Model padding on D850 and Z bodies.** Needs a hex dump.
-8. **Presence of CropArea (0x0045).** Whether every body writes it, and the
+5. **Bodies that write OffsetTimeOriginal.** Only the Z 9 is confirmed. [S]
+6. **Make/Model padding on recent bodies.** The D100 space-pads Model
+   (see [section 8.3](#83-make-and-model)); whether the D850 and Z bodies do
+   needs a hex dump.
+7. **Presence of CropArea (0x0045).** Whether every body writes it, and the
    first body that did.
-9. **Outer byte order of recent bodies** (D800, D850, Z 6, Z 7, Z 9, Z f):
+8. **Outer byte order of recent bodies** (D800, D850, Z 6, Z 7, Z 9, Z f):
    no primary evidence found. Readers must accept both `II` and `MM`.
    [P][11]
-10. **Bodies that write NEFCompression 5 and 6.** Labels are known, bodies
+9. **Bodies that write NEFCompression 5 and 6.** Labels are known, bodies
     are not.
 
 ## Sources

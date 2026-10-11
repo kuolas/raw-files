@@ -8,8 +8,11 @@ it affects, and test-data.md describes the sample set that would answer Part 2.
 ## 1. Decisions for the maintainers
 
 1. **Provenance of format data tables.** Raw decoding needs data that is
-   published only in copyleft projects
-   ([licences-and-references.md](licences-and-references.md)):
+   published in copyleft projects and in dcraw, whose header states that
+   all its code outside a single restricted (Foveon) block is free for all
+   uses; dcraw's licence is still described as ambiguous for the whole file
+   ([licences-and-references.md](licences-and-references.md)). That is an
+   input to the decision, not legal advice. The data:
    - the symbol lists of the six NEF Huffman tables
      ([raw-data.md](raw-data.md)). Their structure, the counts per code
      length, is already documented.
@@ -88,22 +91,25 @@ it affects, and test-data.md describes the sample set that would answer Part 2.
 
 - **Time-zone tags.** Which bodies write OffsetTimeOriginal (0x9011). Only the
   Z 9 is evidenced.
-- **Make and Model strings.** Their padding on recent bodies: NUL-terminated
-  is confirmed on a D40, but trailing spaces are unconfirmed.
+- **Make and Model strings.** Their padding on recent bodies:
+  NUL-terminated is confirmed on a D40, and a trailing space on the D100
+  (rawspeed compares Model against "NIKON D100 "), but trailing spaces on
+  recent bodies are unconfirmed.
 - **Z-series white balance.** Whether 0x000C WB_RBLevels is present and
   correct on every Z body. Every decoder relies on it there, and no failure
   has been reported.
 - **Crop area.** Whether 0x0045 CropArea is always present, and how raw IFD
   size maps to output size on each body.
-- **ColorBalance 0220.** Whether version 0220 of 0x0097 ColorBalance is
-  decrypted from byte 4 or from byte 284. The sources disagree; check
-  ExifTool's `Nikon.pm` and a sample.
 
 ### Raw data
 
 - **0x0096 version bytes.** The version bytes written by lossy type 1 bodies:
   D1H, D1X, D70 and D2H are unconfirmed. Separately, which bodies write 0x49 or
   0x58, and what the 2110 bytes skipped for them contain.
+- **Predictor seed order.** dcraw and LibRaw read the four seeds of 0x0096
+  row-major, rawspeed and rawler column-major. Read the four seeds from
+  samples; if they are always equal the question is moot
+  ([raw-data.md](raw-data.md)).
 - **NEFCompression 5 and 6.** Which bodies write them.
 - **NEFCompression 9.** Whether Z bodies write 9 for 12-bit uncompressed
   files, or whether it comes only from Coolpix.

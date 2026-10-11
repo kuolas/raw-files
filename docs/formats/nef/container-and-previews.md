@@ -92,7 +92,7 @@ the raw image, with no JPEG SubIFD [15] **[P]**.
 | Tag | Name | Values worth knowing | Conf. |
 |---|---|---|---|
 | 0x00FE | NewSubfileType | 0 full resolution; 1 reduced resolution; 2 single page; 4 mask; 8 depth map; 16 enhanced; 0xFFFFFFFF invalid. The Nikon PreviewIFD table also lists 0x10001 ("alternate reduced") [1] | **[P]** [2] |
-| 0x0103 | Compression | 1 uncompressed; 6 old-style JPEG; 7 JPEG; 34713 Nikon NEF compressed. Value 32769 is also reported on very old files | **[P]** [2]; 32769 **[I]** |
+| 0x0103 | Compression | 1 uncompressed; 6 old-style JPEG; 7 JPEG; 34713 Nikon NEF compressed. Value 32769 is handled by dcraw as a packed layout with pad bytes [34] | **[P]** [2]; 32769 handling **[P]** [34]; which bodies write it **[I]** |
 | 0x0106 | PhotometricInterpretation | 32803 colour filter array (raw); 2 RGB; 6 YCbCr | 32803 **[P]** [2]; 2 and 6 are standard TIFF **[I]** |
 | 0x0111, 0x0117 | StripOffsets, StripByteCounts | A JPEG may be stored as a strip | **[P]** [3] |
 | 0x0201, 0x0202 | JPEGInterchangeFormat, ...Length | Offset and length of a JPEG | **[P]** [2] |
@@ -245,9 +245,11 @@ any process, not just baseline (section 7).
   acknowledged that some Z files carry an IFD0 JPEG. [3] [21] **[P]/[S]**
   Do not decide the format from IFD0; walk the container uniformly.
 - **sNEF ("Small").** The raw IFD holds 3 bytes per pixel of 12-bit YCbCr
-  4:2:2 (Y0 Y1 Cb Cr in each 6 bytes) instead of a CFA; NEFCompression value
-  8. [9] [10] **[P]** See [raw-data.md](raw-data.md). The container is otherwise
-  the same; previews are unaffected as far as is known.
+  4:2:2 (Y0 Y1 Cb Cr in each 6 bytes) instead of a CFA. [9] [10] **[P]**
+  ExifTool names NEFCompression value 8 "Small" [1] **[P]**; that sNEF files
+  carry it is **[I]**, since rawspeed and rawler detect sNEF by byte count
+  (3 bytes per pixel). See [raw-data.md](raw-data.md). The container is
+  otherwise the same; previews are unaffected as far as is known.
 - **HE and HE\* (Z 9 and later).** NEFCompression values 13 and 14 (Nikon
   MakerNote tag 0x0093) [1] **[P]**; on Z bodies a decoder reads the
   compression from MakerNote tag 0x51 [10] **[P]**; the raw IFD still reports
@@ -324,7 +326,11 @@ The steps below restate the common approach in original pseudocode terms.
    conditioning) are **not** start-of-frame markers. Handle standalone
    markers without a length (`01`, `D0` to `D7`, `D8`, `D9`), and stop at
    SOS (`DA`) without finding a SOF. The listed set is standard JPEG, not
-   NEF-specific. **[I]**
+   NEF-specific. **[I]** A lossless-process SOF (`C3`, `C7`, `CB`, `CF`)
+   marks raw data, not a preview: Sony ARW 4.0 and later store their raw
+   tiles as lossless JPEGs that begin with `FF D8` (see
+   [the ARW page](../arw/container-and-previews.md)). A preview finder shared
+   between formats should reject them.
 6. **Rank.** Largest pixel area (width times height from the SOF) wins; break
    ties by the larger byte length. If a candidate has no SOF, rank it after
    all candidates that have one, by byte length. Byte length alone is wrong
@@ -448,3 +454,4 @@ snippets only; those are marked.
 [31] ozhiker, Nikon MakerNote layouts — https://www.ozhiker.com/electronics/pjmt/jpeg_info/nikon_mn.html
 [32] intoPIX, TicoRAW on the Z 9 — https://www.intopix.com/blogs/post/nab-22-intopix-show-tico-raw-enabling-8kp60-on-the-z9-and-tico-xs-under-1-gbps
 [33] ExifTool, Nikon tags (NEFInfo table) — https://exiftool.org/TagNames/Nikon.html#NEFInfo
+[34] dcraw 9.28, dcraw.c (`apply_tiff`, TIFF Compression 32769) — https://dechifro.org/dcraw/dcraw.c

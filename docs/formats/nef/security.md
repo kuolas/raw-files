@@ -25,7 +25,6 @@ are our bugs to avoid.
 | CVE-2026-5342 | LibRaw `nikon_load_padded_packed_raw` (TIFF/NEF), up to 0.22.0 | Out-of-bounds read (CWE-119, 125) from attacker-controlled `load_flags` and `raw_width` | Published 2026-04-02; fixed in 0.22.1 (commit b8397cd, issue #795); public proof of concept; CVSS 5.3 (v3.1, as scored by VulDB). This is the padded 12-bit loader. [1][2] | P |
 | CVE-2024-8025 | Nikon NEF Codec 1.31.2 for Windows, thumbnail provider parsing NRW | Heap overflow (CWE-787): a copy length is not validated | Published 2024-11-22; NVD 7.8; ZDI-CAN-19873. Directly relevant: it is a preview and thumbnail path. [3] | P |
 | CVE-2020-15503 | LibRaw thumbnail handling | Missing range check on the thumbnail size | Directly relevant to preview extraction. [4] | P |
-| CVE-2018-20337 | LibRaw 0.19.1 `parse_makernote` | Stack buffer overflow | MakerNote parser. [5] | P |
 | CVE-2008-2696 | Exiv2 0.16, Nikon lens information | Divide by zero | Nikon MakerNote. [6] | P |
 | CVE-2020-18771 | Exiv2 0.27.99 `Nikon1MakerNote::print0x0088` | Global buffer over-read | Nikon MakerNote. [6] | P |
 
@@ -60,12 +59,15 @@ conservative reference. We do not claim these CVEs are fixed in any
 particular release.
 
 LibRaw 0.22.0 is dated 2025-12-25 in LibRaw's Changelog and 2026-01-13 on its
-GitHub release page; we do not know which is intended. [7]
+GitHub release page. The 0.22.0 tag contains commits from as late as
+2026-01-09, so the Changelog date precedes the code it describes; this page
+uses 2026-01-13. [7]
 
 ## 2. Adjacent vulnerabilities by bug class
 
 These are not NEF-specific but are the same shape as bugs a NEF parser can
-have. Identifiers are from the NVD keyword listings for each project. [5][6][8]
+have. Identifiers are from the NVD keyword listings for each project and,
+where a component or class is named, from the NVD records. [5][6][8][13]
 **[P]** unless marked.
 
 ### 2.1 Offsets, lengths and bounds
@@ -75,11 +77,17 @@ have. Identifiers are from the NVD keyword listings for each project. [5][6][8]
 | LibRaw | CVE-2017-6886, CVE-2017-6887 | `parse_tiff_ifd` |
 | LibRaw | CVE-2018-5809, CVE-2020-15365 | `parse_exif` (the latter an out-of-bounds write) |
 | LibRaw | CVE-2020-24890 | NULL dereference |
+| LibRaw | CVE-2018-20337 | Stack buffer overflow in `parse_makernote` (0.19.1); the crashing line is in its Fujifilm branch, not a Nikon path **[S]** |
 | dcraw | CVE-2018-19566 | Heap over-read in `parse_tiff_ifd` |
 | libexif | CVE-2020-13112 | MakerNote over-reads |
 | libexif | CVE-2020-13114 | Canon MakerNote, unrestricted size |
 | libexif | CVE-2017-7544 | Save routine |
 | Exiv2 | CVE-2025-26623 | Heap overflow in the metadata write path (0.28.0 to 0.28.4) **[S]** |
+| Exiv2 | CVE-2017-9953 | `printIFDStructure`, invalid free |
+| Exiv2 | CVE-2017-11336 | `printIFDStructure`, heap over-read |
+| Exiv2 | CVE-2017-11339 | `printIFDStructure`, heap overflow |
+| Exiv2 | CVE-2017-12955 | `printIFDStructure`, out-of-bounds write |
+| Exiv2 | CVE-2017-14863 | `printIFDStructure`, NULL dereference |
 
 ### 2.2 IFD loops, recursion and runaway work
 
@@ -87,7 +95,7 @@ have. Identifiers are from the NVD keyword listings for each project. [5][6][8]
 |---|---|---|
 | libexif | CVE-2007-6351 | Infinite recursion |
 | libexif | CVE-2018-20030 | CPU exhaustion through IFD loops |
-| Exiv2 | CVE-2017-9953, CVE-2017-11336, CVE-2017-11338, CVE-2017-11339, CVE-2017-12955, CVE-2017-14863 | `printIFDStructure` (infinite loops and related) |
+| Exiv2 | CVE-2017-11338 | `printIFDStructure`, infinite loop (its siblings in the same function are in section 2.1) |
 | Exiv2 | CVE-2017-14861 | Stack consumption through recursion |
 | Exiv2 | CVE-2017-11683 | TiffReader assertion |
 
@@ -100,7 +108,7 @@ have. Identifiers are from the NVD keyword listings for each project. [5][6][8]
 | dcraw-derived code | CVE-2026-24808, CVE-2026-4731 | Integer overflows in RawTherapee and ART |
 | LibRaw | CVE-2018-5815, CVE-2018-5816 | Integer overflows (from a summary **[S]**) |
 | LibRaw | CVE-2020-35534 | Excessive allocation (CWE-770) |
-| LibRaw | CVE-2018-25017 | Heap overflow in RawSpeed's `TableLookUp::setTable` copy, bundled by LibRaw |
+| RawSpeed (librawspeed) 3.1 | CVE-2018-25017 | Heap overflow in `TableLookUp::setTable`; relevant because `TableLookUp` is rawspeed's NEF curve lookup |
 | libexif | CVE-2007-2645, CVE-2007-6352 | Entry and thumbnail loading |
 | libexif | CVE-2016-6328 | MakerNote entry data |
 | libexif | CVE-2019-9278 | Integer overflow (Android) |
@@ -112,9 +120,11 @@ have. Identifiers are from the NVD keyword listings for each project. [5][6][8]
 
 | Project | IDs | Component |
 |---|---|---|
-| LibRaw | CVE-2017-6890 | Huffman table initialisation, stack overflow |
-| LibRaw | CVE-2020-35531 | `get_huffman_diff` out-of-bounds read |
 | LibRaw | CVE-2026-5318 | `HuffTable::initval`, out-of-bounds write |
+| LibRaw-demosaic-pack-GPL2 (a separate GPL add-on), before 0.18.2 | CVE-2017-6890 | `foveon_load_camf()`, Foveon code, not NEF |
+| LibRaw (Sigma X3F code) | CVE-2020-35531 | `get_huffman_diff()` in `x3f_utils_patched.cpp`, out-of-bounds read; X3F, not NEF |
+
+The two Foveon/X3F entries are adjacent examples only: they are not NEF bugs.
 
 ### 2.5 Division and modulo by zero
 
@@ -184,9 +194,8 @@ that introduces the feature lands (see [the roadmap](../../ROADMAP.md)).
    before indexing the curve, bounds-check the output row, and treat a
    bitstream that ends early as an error or a flagged zero-fill, never a
    panic. A hard-coded table still needs a test proving it is a complete,
-   valid prefix code. (CVE-2020-35531, CVE-2017-6890; CVE-2026-5318 is the
-   file-supplied variant of the same class and does not apply to fixed
-   tables.)
+   valid prefix code. (Adjacent examples, none in NEF: CVE-2026-5318,
+   and the Foveon/X3F bugs CVE-2017-6890 and CVE-2020-35531.)
 7. **Validate strides against the strip size (when relevant).** For packed
    and padded layouts compute the stride from validated tags, require
    `rows * stride <= strip bytes` per strip, and honour each strip's own
@@ -284,3 +293,7 @@ Report a security problem in raw-files privately, as described in
     **[P]**
 [12] rawmakase PR #412 (LibRaw output on an ungated Z5 II) —
     https://github.com/pch/rawmakase/pull/412 **[S]**
+[13] NVD records for CVE-2017-9953, CVE-2017-11336, CVE-2017-11338,
+    CVE-2017-11339, CVE-2017-12955, CVE-2017-14863, CVE-2017-6890,
+    CVE-2018-25017 and CVE-2020-35531 —
+    https://nvd.nist.gov/vuln/detail/<ID> **[P]**

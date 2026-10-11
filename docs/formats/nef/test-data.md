@@ -161,11 +161,12 @@ The set above answers many of them, mostly with `exiftool -v3`, `exiftool
 | Whether tag 0x000C white balance is present and correct on Z bodies | Z 6, Z 7, Z 8, Z 9, Z f |
 | Whether CropArea (0x0045) is always present, and raw-to-output size mapping | One file per body, compared with the Exif image size |
 | Version bytes written by lossy type 1 bodies; what the 2110-byte skip is | `exiftool -b -NEFLinearizationTable` on D1H, D1X, D100, D70, D200, D2X; read the first two bytes |
+| Order of the four 0x0096 predictor seeds (row-major or column-major) | Read the four seeds from 0x0096 on several bodies; if always equal the question is moot |
 | Which bodies write NEFCompression 5 and 6 | `exiftool -NEFCompression` across the whole Nikon set |
 | Black-level channel order on non-RGGB bodies | A non-RGGB body that carries tag 0x003D, such as D3100 or D90 if it does |
 | D850 M and S internals | D850 files at each size: CFA pattern, photometric interpretation, strip size |
 | Whether any Z body writes M or S NEF | Z 7 and Z 6 samples at M and S size, if the site has them |
-| Make and Model padding (NUL versus spaces) | The raw entry bytes of a few files |
+| Make and Model padding (NUL versus spaces) | The raw entry bytes of a few files, recent bodies in particular (the D100 is known to space-pad Model) |
 
 Findings from these checks should be written back into these NEF pages with
 the file name, hash and the exact command used.
