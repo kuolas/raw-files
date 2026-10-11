@@ -76,20 +76,20 @@ Claims carry a tag:
 
 ## Where to start, by milestone
 
-1. **NEF previews:**
-   - [container-and-previews.md](container-and-previews.md), especially its
-     recommended selection algorithm.
-   - [security.md](security.md) checklist items on offsets, IFD loops and
-     allocation.
-2. **Basic metadata:**
-   - [makernote-and-metadata.md](makernote-and-metadata.md), the viewer
-     metadata section.
-3. **Raw decoding:**
-   - [raw-data.md](raw-data.md).
-   - [makernote-and-metadata.md](makernote-and-metadata.md), for black level,
-     white balance and decryption.
-   - [open-questions.md](open-questions.md), for the data-table decisions that
-     must be taken first.
+- **Milestone 1, NEF previews:**
+  - [container-and-previews.md](container-and-previews.md), especially its
+    recommended selection algorithm.
+  - [security.md](security.md) checklist items on offsets, IFD loops and
+    allocation.
+- **Milestone 3, basic metadata:**
+  - [makernote-and-metadata.md](makernote-and-metadata.md), the viewer
+    metadata section.
+- **Milestone 4, raw decoding:**
+  - [raw-data.md](raw-data.md).
+  - [makernote-and-metadata.md](makernote-and-metadata.md), for black level,
+    white balance and decryption.
+  - [open-questions.md](open-questions.md), for the data-table decisions that
+    must be taken first.
 
 ## Licence hygiene
 

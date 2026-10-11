@@ -55,8 +55,10 @@ takes them from is an open decision (see
     packed layouts carry this value too (see
     [Choosing the decode path](#choosing-the-decode-path)). **[P]**
   - **1**, uncompressed. **[P]**
-  - **32769**, packed, on old bodies, with one pad byte after every ten
-    pixels. **[S]**
+  - **32769**, a packed layout with one pad byte after every ten pixels:
+    dcraw handles the value that way, generically and without naming a
+    camera. [1] **[P]** Which bodies write it is not established; it is
+    probably old ones. **[I]**
 - **The compression parameters** are in MakerNote tag **0x0096**
   (NEFLinearizationTable in ExifTool) [15], with **0x008C** as a fallback.
   dcraw and LibRaw record the position of whichever of the two tags they
@@ -76,8 +78,9 @@ takes them from is an open decision (see
 
 MakerNote tag 0x0093 (NEFCompression) names the encoding. On the Z 9 and
 later bodies 0x0093 is absent and the same value is an int16u at byte 10 of
-tag 0x0051; ExifTool, LibRaw and rawler all read it there (rawler as a
-little-endian u16). [6][14][15][16] **[P]**
+tag 0x0051; ExifTool, LibRaw and rawler all read it there. [6][14][15][16]
+**[P]** The sources disagree on the byte order: LibRaw reads the field in the
+MakerNote's byte order, and only rawler forces little-endian. **[P]**
 
 | Value | Name (ExifTool) | Layout | Bodies seen | Conf. |
 |---|---|---|---|---|
@@ -90,7 +93,7 @@ little-endian u16). [6][14][15][16] **[P]**
 | 7 | Unpacked 12 bits (padded to 16) | 12 bits in 16-bit words | Coolpix P330/P340/P7700/P7800/A1000 | **[P]** label, **[I]** bodies |
 | 8 | Small | sNEF YCbCr | D4S, D810 "RAW S" | **[I]** |
 | 9 | Packed 12 bits (2 pixels in 3 bytes) | 12-bit packed, little-endian | Coolpix; possibly Z 12-bit uncompressed | **[P]** label, **[I]** bodies |
-| 10 | Packed 14 bits (4 pixels in 7 bytes) | 14-bit packed, rows padded | D6, Z bodies uncompressed [16] | **[P]** |
+| 10 | Packed 14 bits (4 pixels in 7 bytes) | 14-bit packed, rows padded | D6 uncompressed [16] **[P]**; Z bodies **[I]** | **[P]**/**[I]** |
 | 13 | High Efficiency | JPEG XS based | Z 9 (2022 firmware), Z 8, Z f, Z 6III, Z5 II | **[P]**/**[S]** |
 | 14 | High Efficiency\* | JPEG XS based | same | **[P]**/**[S]** |
 
@@ -102,7 +105,9 @@ uncompressed files is not established **[I]**. The ExifTool names are also
 listed in
 [makernote-and-metadata.md](makernote-and-metadata.md#3-nefcompression-and-bit-depth).
 
-**No surveyed decoder dispatches on NEFCompression.** They select the path
+**No surveyed decoder dispatches on NEFCompression**, apart from rawler's
+refusal of the HE values 13 and 14 (see
+[Choosing the decode path](#choosing-the-decode-path)). They select the path
 from TIFF Compression, the strip byte count, the 0x0096 header and model
 hints; rawler's source says compression flags in some raws are unreliable
 because of firmware bugs. [4][11][14] **[P]** Use the value as a cross-check.
@@ -132,7 +137,12 @@ where ceil16(x) rounds x up to a multiple of 16.
 1. B = ⌈W/10⌉ · 16 · H: the D100 case, compressed-tagged but packed.
 2. 2B = 3 · W · H: 12-bit packed. For model names starting with "N", and in
    LibRaw also for the D810 and D4S, special load flags select the
-   little-endian nibble order. [1][5] **[P]**/**[S]**
+   little-endian nibble order. [1][5] **[P]**/**[S]** The "N" test runs on
+   the Model string before `identify()` strips the make, so it matches
+   every "NIKON …" body (all DSLRs, the Z bodies and Nikon 1) and excludes
+   only "COOLPIX …" and "E…" models. LibRaw's gate in the same function
+   likewise compares against the unstripped "NIKON Z 9". [1][4] **[P]** Files
+   with TIFF Compression 1 take the big-endian path. [1] **[P]**
 3. B = 3 · W · H: sNEF.
 4. B = 2 · W · H: 16-bit unpacked, read as big-endian.
 5. LibRaw only:
@@ -140,7 +150,9 @@ where ceil16(x) rounds x up to a multiple of 16.
      must satisfy 2 · B_strip = 3 · rows_per_strip · W; [4] **[P]**
    - rows padded to 16 bytes (the padded 12-bit loader); [3] **[P]**
    - for four Z models only, the JPEG XS sniff (see
-     [HE and HE\*](#he-and-he)). [4] **[P]**
+     [HE and HE\*](#he-and-he)); the sniff is also missed whenever the raw
+     IFD has more than one strip, because the striped branch, or the
+     fallback to the Huffman loader, comes before it. [4] **[P]**
 6. Otherwise: the Huffman decoder.
 
 LibRaw's `open_datastream` then re-routes some files: a Z body or the D6
@@ -170,8 +182,9 @@ for HE/HE\*. [14] **[P]**
   uncompressed sizes after it; rawspeed tries "uncompressed" first. The
   formulas can coincide for some W and H, so the order changes the result
   on such files. **[I]**
-- **HE gating.** LibRaw only sniffs for JPEG XS on four models; on other HE
-  bodies it runs the Huffman decoder. [4][31] **[P]**/**[S]**
+- **HE gating.** LibRaw only sniffs for JPEG XS on four models, and only
+  for a single-strip raw IFD; on other HE bodies, or with several strips,
+  it runs the Huffman decoder. [4][31] **[P]**/**[S]**
 - **Strips.** rawler treats several strips as one block; LibRaw seeks to
   each strip's offset. [3][14] **[P]**
 
@@ -291,7 +304,7 @@ All 16-bit values are in the MakerNote's byte order. [2][10][14] **[P]**
 | 0 | u8 | `ver0` |
 | 1 | u8 | `ver1` |
 | 2 | 2110 bytes | **skipped** when `ver0 == 0x49` **or** `ver1 == 0x58`; the fields below then start 2110 bytes later |
-| 2 | 4 × u16 | predictor seeds `vpred[row parity][column 0, 1]`, row-major |
+| 2 | 4 × u16 | predictor seeds; the order is disputed, see [Disagreements](#disagreements-1) |
 | 10 | u16 | `csize`, number of curve values |
 | 12 | `csize` × u16 | curve values (only some branches read them) |
 | 562 | u16 | `split` row, read only on the sparse lossy path; offset from the start of the block, **not** moved by the 2110-byte skip |
@@ -308,11 +321,27 @@ Notes: [1][2][10][14][18]
   computes `step = max / (csize - 1)` only when `csize > 1`. [1] **[P]**
 - **The split read.** dcraw reads `split` only when `ver0 == 0x44`,
   `ver1 == 0x20` and `step > 0`. [1] **[P]** rawspeed and rawler also read it
-  for `ver1 == 0x40`. [10][14] **[P]** A sweep of raw.pixls.us samples
+  for `ver1 == 0x40`. [10][14] **[P]** So does LibRaw's `nikon_load_raw`: it
+  reads offset 562 for `ver0 == 0x44` with `ver1` of 0x20 or 0x40, without
+  dcraw's `step > 0` condition, and divides `max` by 4 for 0x40 regardless
+  of `step > 3`. [2] **[P]** The last point conflicts with the `step > 3`
+  rule recorded under [The curve](#the-curve); both are observed, and the
+  case needs a sample check. **[I]** A sweep of raw.pixls.us samples
   reports a non-zero value at offset 562 on a Z 6II file. [41] **[S]**
 - LibRaw reads the curve in `open_datastream`, before unpacking, and the
   Huffman decoder re-reads the header for the seeds and the split. [2][5]
   **[P]**/**[S]**
+
+### Disagreements
+
+- **Order of the four predictor seeds.** dcraw and LibRaw read the four
+  shorts into `vpred[row & 1][col]`, so the file order is even row column 0,
+  even row column 1, odd row column 0, odd row column 1. rawspeed reads them
+  as `pUp[0][0]`, `pUp[1][0]`, `pUp[0][1]`, `pUp[1][1]`, which is
+  column-major, and rawler does the same. [1][2][10][14] **[P]** The
+  pseudocode under [Predictor loop](#predictor-loop) uses dcraw's reading.
+  If the four seeds are always equal the question is moot; reading them from
+  sample files settles it. **[I]**
 
 ### Version bytes by generation
 
@@ -382,7 +411,10 @@ with Clévy's values, but the larger ones are not seen in his data. **[I]**
 
 - **When branch B applies.** dcraw has no branch B: a 0x44 0x40 file falls
   into branch C there. [1] **[P]**, consequence **[I]**. LibRaw takes branch B
-  when `step > 3` and then divides `step` and `max` by 4 [2] **[P]**.
+  when `step > 3` and then divides `step` and `max` by 4 [2] **[P]**; its
+  `nikon_load_raw` is also read as dividing `max` by 4 for 0x40 without the
+  `step > 3` condition (see [The 0x0096 block](#the-0x0096-block)), a
+  conflict to settle with samples. **[I]**
   rawspeed and rawler instead reduce bits per sample by 2 before computing
   `max` (rawspeed calls it a Z 7 12/14-bit hack; rawler names the D780 and
   Z 7) [10][14] **[P]**. LibRaw and rawspeed agree when `csize − 1` divides
@@ -471,7 +503,7 @@ orders exist; never assume one without evidence. [1][3][11][14]
 |---|---|---|---|---|
 | 12-bit packed, big-endian | `p0 = b0<<4 \| b1>>4`, `p1 = (b1&15)<<8 \| b2` | 1.5 W | old DSLR uncompressed (D1, D1X, D2X, D200 …) | **[S]**/**[P]** |
 | 12-bit packed, little-endian | `p0 = b0 \| (b1&15)<<8`, `p1 = b1>>4 \| b2<<4` | 1.5 W, rounded up to 16 | Z 6, Z 7 12-bit uncompressed; other little-endian files | **[P]** |
-| 12-bit with pad byte | big-endian as above; a zero pad byte after every 15 data bytes (10 pixels) | 16 per 10 pixels | D100; TIFF Compression 32769 | **[P]** |
+| 12-bit with pad byte | big-endian as above; a zero pad byte after every 15 data bytes (10 pixels) | 16 per 10 pixels | D100 **[S]**; TIFF Compression 32769 (generic in dcraw) | **[P]** for the layout |
 | 14-bit in 16-bit words | one u16 per pixel in the TIFF byte order | 2 W | D3, D300, D800, D810 uncompressed | **[S]**/**[P]** |
 | 14-bit packed | 7 bytes as a 56-bit little-endian integer G; pixel n = `(G >> 14n) & 0x3FFF`, n = 0..3 | ceil16(⌈14W/8⌉) | D6; Z uncompressed (NEFCompression 10) | **[P]** |
 | 12-bit in 32-bit words | 32-bit little-endian words, 12-bit fields taken from the most significant end | from W | Coolpix NRW: P6000, P7000, P7100, B700, P950, P1000 | **[P]** |
@@ -486,9 +518,10 @@ Notes:
   big-endian reader. [11][14] **[S]**/**[P]**
 - **Little-endian 12-bit.** LibRaw's padded loader computes the stride as
   `ceil16(W · 3 / 2)` and rejects row sizes below 2000 or above 64000 bytes.
-  [3] **[P]**/**[S]** dcraw's unpadded branch for "N" models reads 24-bit
-  little-endian groups and swaps column pairs, which gives the same nibble
-  order. [1] **[P]**, equivalence **[I]** RawTherapee added the Z 7 12-bit
+  [3] **[P]**/**[S]** dcraw's unpadded branch for "N" models (which
+  covers every "NIKON …" body, see [dcraw and LibRaw](#dcraw-and-libraw))
+  reads 24-bit little-endian groups and swaps column pairs, which gives the
+  same nibble order. [1] **[P]**, equivalence **[I]** RawTherapee added the Z 7 12-bit
   case in 2018. [28] **[S]** rawler takes this path when the TIFF is
   little-endian, with per-row padding below 16 bytes. [14] **[P]** This
   loader is where LibRaw's out-of-bounds read CVE-2026-5342 was, fixed in
@@ -537,9 +570,11 @@ dcraw, not of the format.
   often 12-bit packed with pad bytes. rawspeed reads every 16th byte from
   index 15 over the first 256 bytes; pad bytes are always zero, so any
   non-zero value means the data really is compressed. [11] **[S]** The
-  packed path uses the second strip offset and a fixed 3040 × 2024 size,
-  because the stored width is unreliable [11][14] **[S]**/**[P]**; dcraw
-  widens compressed D100 files by 3 columns [1] **[P]**. libopenraw reports
+  packed path takes the first StripOffsets value of the second IFD that has
+  StripOffsets, and a fixed 3040 × 2024 size, because the stored width is
+  unreliable [11] **[S]**; rawler forces a width of 3040 for every D100
+  [14] **[P]**; dcraw widens D100 files on the packed (pad-byte) path by 3
+  columns [1] **[P]**. libopenraw reports
   that most D100 files are packed because compression froze the camera.
   [17] **[S]**
 - **D1.** Uncompressed. dcraw scales the red and blue white balance
@@ -571,7 +606,8 @@ dcraw, not of the format.
 The D4S and D810 "RAW S" files store YCbCr, not CFA data. [21] **[S]**
 
 - **Detection.** B = 3 · W · H: three bytes per pixel. [1][11] **[P]**
-  NEFCompression is presumably 8. **[I]**
+  ExifTool names NEFCompression value 8 "Small" [16] **[P]**; that sNEF
+  files carry it is **[I]**.
 - **Packing.** Every 6 bytes, read as a 48-bit little-endian integer, hold
   four 12-bit samples: sample k is bits 12k to 12k + 11, in the order Y0,
   Y1, Cb, Cr. [2] **[P]**, [21] **[S]**
@@ -655,8 +691,12 @@ decoder. [4][8] **[P]** The Z5_2, Z50_2 and ZR are not in the gate. [4]
 **[P]** On an ungated HE body such as the Z5 II the result is noise and a
 "data corrupted" warning, not an error. [31] **[S]**
 
+LibRaw also misses the sniff on a gated model whenever the raw IFD has more
+than one strip: the striped branch or the fallback to the Huffman loader
+comes first. [4] **[P]**
+
 The lesson: sniff `FF 10 FF 50` at the strip start of every NEF, whatever
-the model, before choosing any other path.
+the model and the strip count, before choosing any other path.
 
 ### Open-source status (October 2026)
 
@@ -802,8 +842,11 @@ full history is in [security.md](security.md).
    require the anchors to tile `max` in branches A and B; reject a zero
    `step`.
 6. **Huffman.** Build the six fixed tables once. Treat `shl > len` as
-   corrupt and handle `len == 0` without shifting. Past Huffman bugs in
-   LibRaw include CVE-2017-6890 and CVE-2020-35531. [42] **[S]**
+   corrupt and handle `len == 0` without shifting. Two Huffman-style
+   bugs in the LibRaw family, both in Foveon/X3F code and not NEF, show the
+   class: CVE-2017-6890 (`foveon_load_camf()` in the separate
+   LibRaw-demosaic-pack-GPL2 add-on, before 0.18.2) and CVE-2020-35531
+   (`get_huffman_diff()` in `x3f_utils_patched.cpp`, Sigma X3F). [42] **[S]**
 7. **End of data.** A bitstream that ends mid-image is either an error or
    zero-filled with a flag; pick one and document it. Never panic.
 8. **Predictor and lookup.** Wrapping or checked arithmetic; count range
@@ -856,6 +899,9 @@ These are also tracked in [open-questions.md](open-questions.md).
 
 - **0x0096 version bytes** for the D1H, D1X, D70 and D2H; which bodies
   write 0x49 or 0x58, and what the 2110 skipped bytes contain.
+- **Predictor seed order**: read the four seeds from samples; dcraw and
+  LibRaw (row-major) disagree with rawspeed and rawler (column-major), and
+  the question is moot if the seeds are always equal.
 - **NEFCompression 5 and 6**: which bodies write them, and whether 5 is the
   striped layout LibRaw decodes.
 - **NEFCompression 9 on Z bodies**: whether their 12-bit uncompressed files
@@ -907,7 +953,7 @@ All retrieved October 2026. Implementation sources are read only; see
 [25] DPReview forum, "D850 M sRAW" — https://www.dpreview.com/forums/threads/d850-m-sraw.4204326/ ; Photography Life, Nikon D850 review p. 4 — https://photographylife.com/reviews/nikon-d850/4 (both search extracts only)
 [26] Nikon, Z 7II/Z 6II online manual, technical notes — https://onlinemanual.nikonimglib.com/z7II_z6II/en/15_technical_notes_08.html
 [27] Nikon online manuals, image size: Z 8 — https://onlinemanual.nikonimglib.com/z8/en/image_area_quality_and_size_30.html ; Z 6III — https://onlinemanual.nikonimglib.com/z6III/en/image_area_quality_and_size_34.html ; Z f — https://onlinemanual.nikonimglib.com/zf/en/image_area_quality_and_size_31.html
-[28] RawTherapee issue #4801 (Z 6/Z 7 uncompressed) — https://github.com/Beep6581/RawTherapee/issues/4801
+[28] RawTherapee issue #4801, "Support for Nikon Z7 uncompressed NEF files" (closed) — https://github.com/RawTherapee/RawTherapee/issues/4801
 [29] RawDigger forum, Z 7II and D850 uncompressed packing — https://www.rawdigger.com/node/2454
 [30] ExifTool forum, "Nikon now using little endian for maker note" — https://exiftool.org/forum/index.php?msg=23787
 [31] rawmakase PR #412 (HE refused; LibRaw output on an ungated Z5 II) — https://github.com/pch/rawmakase/pull/412
@@ -921,6 +967,6 @@ All retrieved October 2026. Implementation sources are read only; see
 [39] discuss.pixls.us, "Nikon Z series high efficiency support" — https://discuss.pixls.us/t/nikon-z-series-high-efficiency-support/50427
 [40] HE decoding in Adobe software: bcgforums — https://bcgforums.com/threads/converting-nef-to-dng.29623/page-2 ; Capture One community — https://support.captureone.com/hc/es/community/posts/4415914839441-Nikon-Z9-RAW-NEF-High-Efficiency?page=4
 [41] Third-party sample sweeps: storytold/photocraft #1310 (2026) — https://github.com/storytold/photocraft ; radialmonster/lightcraft #16 (2026-10-08) — https://github.com/radialmonster/lightcraft (search extracts only)
-[42] NVD, LibRaw Huffman vulnerabilities — https://nvd.nist.gov/vuln/detail/CVE-2017-6890 ; https://nvd.nist.gov/vuln/detail/CVE-2020-35531
+[42] NVD, Foveon/X3F Huffman-style vulnerabilities in the LibRaw family — https://nvd.nist.gov/vuln/detail/CVE-2017-6890 ; https://nvd.nist.gov/vuln/detail/CVE-2020-35531
 [43] Licences: LibRaw README — https://raw.githubusercontent.com/LibRaw/LibRaw/master/README.md ; dcraw COPYING (Debian) — https://sources.debian.org/src/dcraw/9.28-8/COPYING ; dnglab — https://github.com/dnglab/dnglab ; rawspeed — https://github.com/darktable-org/rawspeed ; rawloader — https://github.com/pedrocr/rawloader
 [44] Nikon, Z 9 online manual, specifications — https://onlinemanual.nikonimglib.com/z9/en/specifications_348.html

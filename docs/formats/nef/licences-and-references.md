@@ -125,8 +125,8 @@ Licence information is **[P]**; maturity is **[I]**.
 ### 3.3 Release facts worth knowing
 
 - LibRaw 0.22.0: the project's Changelog dates it 2025-12-25, while the
-  GitHub release is dated 2026-01-13. We do not know which is the intended
-  date and cite both. [14] **[P]**
+  GitHub release is dated 2026-01-13. The 0.22.0 tag contains commits from
+  as late as 2026-01-09, so 2026-01-13 is the release date. [14] **[P]**
 - LibRaw 0.22.1 was released on 2026-04-06 and 0.22.2 on 2026-07-16 (GitHub
   releases). [14] **[P]**
 - HE and HE* (Nikon's High Efficiency modes) have no released open decoder.
@@ -158,8 +158,13 @@ So the working rules are:
 
 ### 4.2 Tables that need a decision
 
-Three kinds of data are needed by a decoder and are published in practice
-only inside copyleft projects.
+Three kinds of data are needed by a decoder. The first two are published in
+copyleft projects and in dcraw. dcraw carries both the Huffman data
+(`nikon_tree`) and the cipher tables (`xlat`) outside its single restricted
+(Foveon) block, and its header states that all other code "remains free for
+all uses". [11] **[P]** That sits beside the earlier description of dcraw's
+licence as ambiguous for the whole file, and is an input to the decision
+below, not legal advice. The third kind lives in copyleft projects.
 
 | Data | Where it is published | Why it is awkward |
 |---|---|---|
