@@ -1,0 +1,101 @@
+# Nikon NEF
+
+What raw-files needs to know about Nikon's NEF raw format, collected from
+public sources. Nikon publishes no specification, so everything here comes from
+the TIFF and Exif standards, community documentation and the source code of
+existing raw decoders, each cited where it is used.
+
+These pages support the [roadmap](../../ROADMAP.md): NEF previews first, then
+basic metadata, then raw decoding.
+
+## Status
+
+This is desk research, done in October 2026. **None of it has yet been checked
+against sample files.** Byte offsets and formulas taken from other projects'
+source code should be checked against that source and against real files
+before they are hard-coded. [open-questions.md](open-questions.md) lists what
+is still unknown. [research-record.md](research-record.md) describes how the
+research was done and what it could not reach.
+
+## Pages
+
+| Page | Read it for |
+|---|---|
+| [container-and-previews.md](container-and-previews.md) | The TIFF structure of a NEF, where the embedded JPEGs are, and how to pick the largest (milestone 1) |
+| [makernote-and-metadata.md](makernote-and-metadata.md) | The Nikon MakerNote, its encrypted blocks, and orientation, date, camera and size (milestone 3) |
+| [raw-data.md](raw-data.md) | How the sensor data is stored: Huffman compression, packed layouts, small raws, HE/HE\* (milestone 4) |
+| [security.md](security.md) | Past vulnerabilities in NEF parsers and the checklist that follows from them |
+| [licences-and-references.md](licences-and-references.md) | Standards, existing implementations and their licences, and what raw-files may reuse |
+| [test-data.md](test-data.md) | Where sample files come from, which may be committed, and which bodies to cover |
+| [open-questions.md](open-questions.md) | Decisions to take and facts still to establish |
+| [research-record.md](research-record.md) | How this documentation was researched, and its limits |
+
+## Confidence tags
+
+Claims carry a tag:
+
+- **[P]** — stated in a primary source: a specification, a tag reference such
+  as ExifTool's, or an implementation's source code.
+- **[S]** — secondary: a forum post, issue, blog or search extract.
+- **[I]** — inferred, or from a single unconfirmed report. Treat it as a
+  hypothesis to test on sample files.
+
+## NEF at a glance
+
+- **A NEF is a TIFF file.** It has IFD0, SubIFDs (tag 0x014A) and an Exif IFD
+  whose MakerNote (0x927C) holds Nikon's own tags. The outer byte order is
+  big-endian (`MM`) on the DSLRs documented up to about 2009 [P]; later
+  bodies are unconfirmed. A reader must accept both orders.
+- **Previews are JPEGs in SubIFDs and in the MakerNote.**
+  - Bodies from about 2012 carry a full-size JPEG plus a second JPEG of about
+    1620×1080 [S].
+  - The MakerNote's PreviewIFD (0x0011) holds a small JPEG. Its offsets count
+    from the MakerNote's embedded TIFF header, not from the start of the file
+    [P].
+  - IFD0 is a 160×120 uncompressed thumbnail on DSLRs [P].
+  - SubIFD order is not fixed, so choose by measured JPEG size.
+- **Viewer metadata is in standard tags.** Orientation, capture date, make and
+  model come from IFD0 and the Exif IFD; the stored sensor size comes from the
+  raw SubIFD, since IFD0's own size is the thumbnail's [P]. The MakerNote is
+  needed only for the crop area, black level, compression type and white
+  balance.
+- **Compressed raw data uses six fixed Huffman tables.**
+  - The tables are built into decoders; the file does not store them.
+  - Each pixel is predicted from the pixel of the same colour two columns to
+    the left.
+  - A linearisation curve in MakerNote 0x0096 maps the decoded values. Nikon's
+    "lossy" modes are that curve [S].
+- **HE and HE\*** (Z 9 and later) are a JPEG XS-based codec. JPEG XS is
+  covered by a patent pool; whether it applies to HE is a legal question. No
+  open decoder has been released. raw-files should detect them and refuse them
+  [P/S].
+- **No mature NEF implementation can be copied into raw-files.** They are GPL,
+  LGPL, CDDL or under dcraw's own terms. Small permissively licensed crates
+  exist but are immature. The mature ones can be read for understanding only
+  (see [licences-and-references.md](licences-and-references.md)).
+
+## Where to start, by milestone
+
+1. **NEF previews:**
+   - [container-and-previews.md](container-and-previews.md), especially its
+     recommended selection algorithm.
+   - [security.md](security.md) checklist items on offsets, IFD loops and
+     allocation.
+2. **Basic metadata:**
+   - [makernote-and-metadata.md](makernote-and-metadata.md), the viewer
+     metadata section.
+3. **Raw decoding:**
+   - [raw-data.md](raw-data.md).
+   - [makernote-and-metadata.md](makernote-and-metadata.md), for black level,
+     white balance and decryption.
+   - [open-questions.md](open-questions.md), for the data-table decisions that
+     must be taken first.
+
+## Licence hygiene
+
+raw-files is MIT OR Apache-2.0 ([ADR002](../../architecture-decisions/adr002-license-mit-or-apache-2.md)).
+These pages restate algorithms in prose or in original pseudocode. They copy
+no code and no wholesale data tables (such as Huffman symbol lists or
+decryption tables); individual facts such as tag IDs, value meanings and
+per-body values are cited to their source. Keep it that way when extending
+them.
