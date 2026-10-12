@@ -6,7 +6,7 @@ how decoders tell the layouts apart, the ARW1 and cRAW lossy schemes, the
 packed and uncompressed layouts, the lossless tiles and their YCbCr M/S
 variant, the ARW 6.0 codec that raw-files will refuse, the encrypted SRF
 data and the four-sample ARQ. It ends with the levels, the checks a decoder
-of untrusted input needs and a recommendation for milestone 4.
+of untrusted input needs and a recommendation for milestone 5.
 
 Back to [the ARW overview](README.md).
 
@@ -726,7 +726,7 @@ ignores it in favour of its table. [4][12][18] **[P]**
 ## ARW 6.0 (Compression 32766)
 
 **raw-files will detect and refuse these files** with a typed unsupported
-error for milestone 4, until two questions are decided: the provenance of
+error for milestone 5, until two questions are decided: the provenance of
 the 4096-entry curve that the file does not store, and the patent position.
 This is the same posture as Nikon's HE/HE\* (see
 [../nef/raw-data.md](../nef/raw-data.md)). Previews from ARW 6.0 files are
@@ -1260,7 +1260,7 @@ checklist ([../nef/raw-data.md](../nef/raw-data.md)) applies as well.
 
 ## Recommendation for raw-files
 
-For milestone 4: **[I]**
+For milestone 5: **[I]**
 
 - **First:**
   - uncompressed 16-bit words (Compression 1, B = 2·W·H), including the
@@ -1288,8 +1288,8 @@ For milestone 4: **[I]**
   0x7038 when present; the CFA pattern relative to a named origin; black
   and white levels from the file with their provenance (raw IFD, SR2SubIFD
   or fallback) and scale; DefaultCrop, SonyCrop and 0x7038 as separate
-  metadata. This fits the roadmap's open question on how far decoding goes
-  ([ROADMAP.md](../../ROADMAP.md#open-questions)).
+  metadata. Development to a linear image builds on this output
+  ([ADR010](../../architecture-decisions/adr010-decoding-ends-at-a-linear-image.md)).
 - **Corrupt data:** decode what can be decoded and count range violations
   and bad blocks, rather than silently returning different pixels.
 - **Tests:** one sample per row of the dispatch table, plus truncated and

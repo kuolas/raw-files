@@ -28,7 +28,7 @@ it affects, and test-data.md describes the sample set that would answer Part 2.
      source is not the person who writes the code.
 
    Per-body tables can always take route (b). The decision needs to be
-   recorded in an ADR before milestone 4.
+   recorded in an ADR before milestone 5.
 2. **HE / HE\*.** The recommendation is to detect these files and return an
    "unsupported" error ([raw-data.md](raw-data.md)). Implementing a decoder
    would touch the JPEG XS patent pool. That is a legal question, not an

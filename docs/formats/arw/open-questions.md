@@ -49,7 +49,7 @@ answer Part 2.
    change the picture: it matches dcraw element for element, so reading it
    is reading dcraw. A table that turned out to be a published formula
    would remove the problem for the ARW 6.0 curve. The decision needs to be
-   recorded in an ADR before milestone 4.
+   recorded in an ADR before milestone 5.
 2. **ARW 6.0.** The recommendation is to detect Compression 32766 and
    return a typed unsupported error before reading the strip, while still
    returning previews and metadata from these files
@@ -62,7 +62,7 @@ answer Part 2.
    ([licences-and-references.md](licences-and-references.md)). These are
    legal questions, not engineering ones, and the same posture as NEF
    HE/HE\*.
-3. **Decryption and anti-circumvention.** Milestone 4 needs the SR2
+3. **Decryption and anti-circumvention.** Milestone 5 needs the SR2
    keystream for the levels and white balance of older files and for
    Sony's white level on all of them; the key is stored in the file. Does
    decrypting it count as circumventing a technological measure under
@@ -82,7 +82,7 @@ answer Part 2.
    - the A100 keeps its white balance in a Minolta MRW block, and where its
      levels are is unknown.
 
-   Which of these milestone 4 decodes, and whether the rest return a typed
+   Which of these milestone 5 decodes, and whether the rest return a typed
    unsupported error, is to be decided. The pages suggest SRF and ARQ
    later, and the MRW block and SRF key chain behind "unsupported" until
    there is demand.
