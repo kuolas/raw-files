@@ -9,7 +9,7 @@ use crate::error::{Error, Result};
 use crate::io::{ByteOrder, Source};
 
 /// The length of the TIFF header in bytes.
-const HEADER_LEN: u64 = 8;
+pub(super) const HEADER_LEN: u64 = 8;
 
 /// The number that follows the byte-order mark in a TIFF header.
 const MAGIC: u16 = 42;
