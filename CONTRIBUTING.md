@@ -15,7 +15,7 @@ Everyone taking part is expected to follow the
 
 You need:
 
-- a stable Rust toolchain, **Rust 1.85 or later**, with the `rustfmt` and
+- a stable Rust toolchain, **Rust 1.95 or later**, with the `rustfmt` and
   `clippy` components (`rustup component add rustfmt clippy`);
 - `git`. The GitHub CLI (`gh`) is handy but optional.
 
@@ -228,9 +228,14 @@ RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps
 
 CI ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) runs them on every
 pull request on macOS, Linux and Windows, builds and tests the crate with
-Rust 1.85, the oldest version it supports, and checks the commit messages and
+Rust 1.95, the oldest version it supports, and checks the commit messages and
 that there are no merge commits in the PR. CI is the real gate: a pull request
 is merged only when all of its checks pass.
+
+The oldest supported Rust (`rust-version` in `Cargo.toml`) is a stable
+release at least six months old. It is raised only when the code needs
+something newer, in a minor release, with a line in the changelog; raising
+it is not a breaking change.
 
 A few conventions:
 
