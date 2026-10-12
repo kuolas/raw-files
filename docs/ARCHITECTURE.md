@@ -11,10 +11,9 @@ raw-files is one Rust crate (edition 2024): a library, with no binary.
 |---|---|---|
 | `src/lib.rs` | the library root: the crate documentation; no public API yet | — |
 
-**Data flow.** None yet: there is no public API. Choices that shape the code
-still to come, such as whether the API reads from a byte slice or a
-`Read + Seek` source, are open — see
-[ROADMAP.md](ROADMAP.md#open-questions).
+**Data flow.** None yet: there is no public API. The API to come reads any
+`Read + Seek` source through one handle
+([ADR009](architecture-decisions/adr009-public-api-shape.md)).
 
 **Untrusted input.** Everything the library will parse comes from a file, so
 every offset and length read from one is checked before it is used, and a bad
