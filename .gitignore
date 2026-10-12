@@ -1,6 +1,13 @@
 # Build output and local state only — never source.
 /target
 
+# What cargo-fuzz writes: its build, the inputs it collects, the inputs that
+# failed, and coverage reports.
+/fuzz/target
+/fuzz/corpus
+/fuzz/artifacts
+/fuzz/coverage
+
 # Local secrets
 .env
 .env.*

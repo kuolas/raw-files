@@ -10,16 +10,28 @@
 //! [architecture](https://github.com/kuolas/raw-files/blob/master/docs/ARCHITECTURE.md)
 //! for how the code is laid out.
 
+// A fuzzing build compiles the reader for one caller, the fuzz entry points,
+// which use only part of it. What is unused there, and so which `expect`s
+// go unfulfilled, says nothing about the library: the normal and test
+// builds keep both lints, and CI checks those.
+#![cfg_attr(fuzzing, allow(dead_code, unfulfilled_lint_expectations))]
+
 // Nothing uses the containers yet, and they read through `io`: compiled only
-// for tests until the file handle uses them, for the same reason as `io`.
-#[cfg(test)]
+// for tests and fuzzing until the file handle uses them, for the same reason
+// as `io`.
+#[cfg(any(test, fuzzing))]
 mod container;
 mod error;
-// Nothing reads files yet; tests already do. Compiled only for tests until the
-// first caller arrives: an `expect(dead_code)` on the module would mark the
-// error constructors it calls as used on some compilers and leave their own
-// expectations unfulfilled.
-#[cfg(test)]
+// The entry points of the fuzz targets in `fuzz/`: compiled only with
+// `--cfg fuzzing`, which cargo-fuzz sets, and hidden from the docs.
+#[cfg(fuzzing)]
+#[doc(hidden)]
+pub mod fuzzing;
+// Nothing reads files yet; tests and the fuzz targets already do. Compiled
+// only for those until the first caller arrives: an `expect(dead_code)` on
+// the module would mark the error constructors it calls as used on some
+// compilers and leave their own expectations unfulfilled.
+#[cfg(any(test, fuzzing))]
 mod io;
 mod limits;
 // The TIFF fixture builder lives with the integration tests and is shared
