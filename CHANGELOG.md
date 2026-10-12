@@ -13,3 +13,5 @@ decided with the first release.
 - The project is licensed under the MIT license or the Apache License,
   version 2.0, at your option.
 - Builds with Rust 1.95 or later.
+- `Error`, with an `ErrorKind` category and the byte offset when known,
+  and the `Result` alias.
