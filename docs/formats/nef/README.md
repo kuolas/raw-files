@@ -23,7 +23,7 @@ research was done and what it could not reach.
 |---|---|
 | [container-and-previews.md](container-and-previews.md) | The TIFF structure of a NEF, where the embedded JPEGs are, and how to pick the largest (milestone 1) |
 | [makernote-and-metadata.md](makernote-and-metadata.md) | The Nikon MakerNote, its encrypted blocks, and orientation, date, camera and size (milestone 3) |
-| [raw-data.md](raw-data.md) | How the sensor data is stored: Huffman compression, packed layouts, small raws, HE/HE\* (milestone 4) |
+| [raw-data.md](raw-data.md) | How the sensor data is stored: Huffman compression, packed layouts, small raws, HE/HE\* (milestone 5) |
 | [security.md](security.md) | Past vulnerabilities in NEF parsers and the checklist that follows from them |
 | [licences-and-references.md](licences-and-references.md) | Standards, existing implementations and their licences, and what raw-files may reuse |
 | [test-data.md](test-data.md) | Where sample files come from, which may be committed, and which bodies to cover |
@@ -84,7 +84,7 @@ Claims carry a tag:
 - **Milestone 3, basic metadata:**
   - [makernote-and-metadata.md](makernote-and-metadata.md), the viewer
     metadata section.
-- **Milestone 4, raw decoding:**
+- **Milestone 5, raw decoding:**
   - [raw-data.md](raw-data.md).
   - [makernote-and-metadata.md](makernote-and-metadata.md), for black level,
     white balance and decryption.

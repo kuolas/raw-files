@@ -4,7 +4,7 @@ This page describes the Nikon MakerNote found in NEF files: its three
 layouts, the tags that matter, the encrypted blocks and how they are
 decrypted, and where a viewer finds orientation, capture date, make, model
 and image size. It serves milestone 3 (basic metadata) and, for the
-decoding-related tags, milestone 4 (raw data).
+decoding-related tags, milestone 5 (raw data).
 
 See [the NEF overview](README.md). The TIFF container and the preview JPEGs
 are in [container-and-previews.md](container-and-previews.md); decoding of
@@ -346,7 +346,7 @@ bodies depend on 0x000C there too [P][7][8][9]. No report of an absent or wrong 
 but this is an absence of evidence rather than a proof. [I]
 
 For milestone 3 white balance is not needed at all; this section matters
-from milestone 4.
+from milestone 5.
 
 ## 7. LensData and ShotInfo
 
@@ -554,7 +554,7 @@ For milestone 3, keep the MakerNote out of the critical path.
    key, the substitution tables have no settled provenance yet
    ([section 11](#11-open-questions)), and white balance for every body of
    interest is available in plain form (0x000C). Defer 0x0097, 0x0098 and
-   0x0091 to milestone 4, and only if older-body white balance is required.
+   0x0091 to milestone 5, and only if older-body white balance is required.
    [I]
 4. **Output size policy:** report the CropArea rectangle if present and
    plausible (inside the raw IFD dimensions); otherwise report the stored
@@ -576,7 +576,7 @@ For milestone 3, keep the MakerNote out of the critical path.
    block is free for all uses; dcraw's licence is nevertheless described as
    ambiguous for the whole file elsewhere on this page. That is an input to
    the decision, not legal advice. raw-files needs an independent derivation,
-   a source it can use, or a recorded legal decision, before milestone 4
+   a source it can use, or a recorded legal decision, before milestone 5
    touches encrypted blocks. [10]
 2. **Non-numeric serial handling.** Which of the four conventions in
    [section 5.1](#51-non-numeric-serial-numbers) is correct for a real

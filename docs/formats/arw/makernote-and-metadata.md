@@ -6,7 +6,7 @@ variants are told apart, the tags that matter, the two unrelated ciphers Sony
 uses, the SR2Private block that carries the decoding parameters, and where a
 viewer finds orientation, capture date, make, model, image size and lens. It
 serves milestone 3 (basic metadata) and, for the decoding-related tags,
-milestone 4 (raw data).
+milestone 5 (raw data).
 
 See [the ARW overview](README.md). The TIFF container and the preview JPEGs
 (milestone 2) are in [container-and-previews.md](container-and-previews.md);
@@ -289,7 +289,7 @@ This page calls the first "enciphered" (ExifTool's word) and the second
 | Scheme | Applies to | Key | Needed for |
 |---|---|---|---|
 | Byte substitution, b³ mod 249 | MakerNote 0x2010, 0x900B, 0x9050 and the 0x94xx tags | none | nothing raw-files plans: shutter count, aspect ratio, LensType2, MakerNote orientation |
-| XOR keystream | the SR2SubIFD (every ARW 2.x to 6.0 and SR2), SRF's MakerNote IFDs and SRF pixel data | 32 bits from the file | milestone 4 white balance, black and white level on files before ARW 2.3.3; the SR2SubIFD's own white level on every file |
+| XOR keystream | the SR2SubIFD (every ARW 2.x to 6.0 and SR2), SRF's MakerNote IFDs and SRF pixel data | 32 bits from the file | milestone 5 white balance, black and white level on files before ARW 2.3.3; the SR2SubIFD's own white level on every file |
 
 Both were checked on the samples:
 
@@ -598,7 +598,7 @@ plausible: black 512 on most bodies, 800 on the 1-inch RX100 and RX100M6,
 ## 7. Raw-relevant tags
 
 These live in the raw SubIFD (IFD0 tag 0x014A) unless noted. Most are
-decoder input for milestone 4 and are documented further in
+decoder input for milestone 5 and are documented further in
 [raw-data.md](raw-data.md); the crop tags also serve milestone 3.
 
 | Tag | Name | Type | Meaning and measured values | M |
@@ -974,7 +974,7 @@ otherwise. [I]
 
 SRF needs no decryption for milestone 3: IFD0 has Make, Model and an Exif
 IFD with the dates, and IFD1 holds the preview JPEG. [S][24] The key
-chain matters only for white balance and the raw data (milestone 4, low
+chain matters only for white balance and the raw data (milestone 5, low
 priority). At the level metadata needs:
 
 - The MakerNote is a chain of seven IFDs, SRF0 to SRF6. SRF0 is plain, with
@@ -1085,7 +1085,7 @@ points specific to Sony metadata:
    3015), APS-C (6933), a lossless tile-padded raw (6929) and the SRF (1351).
    [I]
 
-**Milestone 4 needs the SR2 keystream for older files.**
+**Milestone 5 needs the SR2 keystream for older files.**
 
 1. Implement the keystream of [section 6](#6-the-sr2-keystream); it is about
    twenty lines and needs no table. Read white balance and black level from

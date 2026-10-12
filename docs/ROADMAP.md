@@ -9,14 +9,25 @@ requests live in the
 The repository, its license and its contribution process exist. The crate
 is a library with no public API; it does nothing yet.
 
+The first release, version 0.1.0, is milestones 1 and 2: the embedded
+previews of NEF and ARW files.
+
 ## Milestones
 
 1. **NEF previews.** Find the largest JPEG preview embedded in a Nikon NEF
    file and return its bytes, without decoding the raw data.
 2. **ARW previews.** The same for Sony ARW files.
-3. **Basic metadata.** What a viewer needs next to the preview: orientation,
-   capture date, camera make and model, and image dimensions.
-4. **Raw sensor data.** Decode the sensor data of NEF and ARW files.
+3. **Basic metadata.** What a viewer or a file renamer needs next to the
+   preview: capture time, camera make, model and serial number, lens,
+   exposure, orientation, and image sizes.
+4. **Focus points.** The autofocus points the camera used, in the
+   coordinates of the image, to judge sharpness where the photographer
+   focused.
+5. **Raw sensor data.** Decode the sensor data of NEF and ARW files.
+6. **Developed image.** Develop the sensor data to a linear image, plus the
+   colour model that converts it to a standard colour space; the creative
+   edit stays with the application
+   ([ADR010](architecture-decisions/adr010-decoding-ends-at-a-linear-image.md)).
 
 The order is a plan, not a promise; a change of direction gets an ADR.
 
@@ -30,8 +41,6 @@ Support for other formats comes in this order:
 
 ## Open questions
 
-- **How far decoding goes.** Raw sensor data only, leaving demosaicing and
-  colour to the caller, or a developed RGB image too.
 - **Which formats after Fujifilm.** Pentax PEF, Olympus ORF, Panasonic
   RW2, …, and in what order.
 

@@ -307,7 +307,7 @@ ARW we suggest [I]:
 - for the ARW 6.0 curve, no decision until section 4.3's questions are
   answered, and no table committed in the meantime.
 
-The milestones that need any of this (raw sensor data, milestone 4) come
+The milestones that need any of this (raw sensor data, milestone 5) come
 after ARW previews (milestone 2) and basic metadata (milestone 3). The
 metadata that milestone 3 needs is stored in plain form in every file
 checked, so milestones 2 and 3 need neither the keystream nor the cipher.
@@ -424,7 +424,7 @@ was confirmed on samples. These points were not [33]:
 - Whether PRONOM's DROID tool identifies ARW 4.0 and later files at all; a
   run on raw.pixls.us files 4466, 7361 and 8846 would show it.
 - The provenance policy for per-body values and colour matrices (section
-  4.2), to be recorded in an ADR before milestone 4.
+  4.2), to be recorded in an ADR before milestone 5.
 
 ## Sources
 

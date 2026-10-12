@@ -4,7 +4,7 @@ How a Nikon NEF stores its sensor data: where the strip is, the compressed
 (Huffman plus curve) scheme used by most bodies, the packed and unpacked
 layouts, the small and reduced-size raws, and the HE/HE\* codec that raw-files
 cannot decode. It ends with the checks a decoder of untrusted input needs and
-a recommendation for milestone 4.
+a recommendation for milestone 5.
 
 Back to [the NEF overview](README.md).
 
@@ -863,7 +863,7 @@ full history is in [security.md](security.md).
 
 ## Recommendation for raw-files
 
-For milestone 4: **[I]**
+For milestone 5: **[I]**
 
 - **Scope.** Decode the Huffman path (lossless, lossy type 1 and type 2,
   including split files), the uncompressed and packed layouts of DSLRs and
@@ -872,8 +872,8 @@ For milestone 4: **[I]**
   diagnostic raws out.
 - **Output.** The undemosaiced samples at raw dimensions, plus the crop,
   the CFA pattern stated relative to a named origin, and black and white
-  levels. No dithering. This fits the roadmap's open question on how far
-  decoding goes ([ROADMAP.md](../../ROADMAP.md#open-questions)).
+  levels. No dithering. Development to a linear image builds on this
+  output ([ADR010](../../architecture-decisions/adr010-decoding-ends-at-a-linear-image.md)).
 - **Dispatch.** HE sniff first; then compute every size candidate; resolve
   ties with NEFCompression; use the Huffman path only for Compression 34713
   when no size candidate matches.
