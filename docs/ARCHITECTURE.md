@@ -9,8 +9,9 @@ raw-files is one Rust crate (edition 2024): a library, with no binary.
 
 | File | Holds | May depend on |
 |---|---|---|
-| `src/lib.rs` | the library root: the crate documentation and the re-exports; the only public items so far are the error types | `error` |
+| `src/lib.rs` | the library root: the crate documentation and the re-exports | `error`, `limits` |
 | `src/error.rs` | `Error`, `ErrorKind`, `Result`: what can go wrong, by category, with the byte offset when known | — |
+| `src/limits.rs` | `Limits`: the caps on what a file can make the library walk or allocate | — |
 
 **Data flow.** None yet: nothing reads files so far. The API to come reads any
 `Read + Seek` source through one handle

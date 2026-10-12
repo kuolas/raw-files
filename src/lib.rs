@@ -11,5 +11,7 @@
 //! for how the code is laid out.
 
 mod error;
+mod limits;
 
 pub use error::{Error, ErrorKind, Result};
+pub use limits::Limits;
