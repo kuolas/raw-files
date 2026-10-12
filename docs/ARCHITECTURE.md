@@ -5,7 +5,8 @@ any structural change.
 
 ## Today
 
-raw-files is one Rust crate (edition 2024): a library, with no binary.
+raw-files is one Rust crate (edition 2024): a library, with no binary. Its
+fuzz targets are a second crate, in `fuzz/`, that is never published.
 
 | File | Holds | May depend on |
 |---|---|---|
@@ -19,8 +20,10 @@ raw-files is one Rust crate (edition 2024): a library, with no binary.
 | `src/container/tiff/ifd.rs` | TIFF IFDs: their entries, checked against the file and the entry limit, and typed access to tag values | `io`, `error`, `limits` |
 | `src/container/tiff/walk.rs` | the IFD walk: IFD0's chain, SubIFDs and the Exif IFD, with a visited set, a depth cap and a total cap | `io`, `error`, `limits` |
 | `src/container/tiff/robustness.rs` | tests only: the whole TIFF reader on truncated and corrupted files, which give an error or a tree within the limits, never a panic | — |
+| `src/fuzzing.rs` | the fuzz entry points, compiled only with `--cfg fuzzing`: each reads arbitrary bytes through a whole reader | `io`, `container`, `limits` |
 | `tests/support/tiff_builder.rs` | the fixture builder: small TIFF files described in code, for unit and integration tests | — (`std` only) |
 | `tests/tiff_builder.rs` | tests only: the fixture builder checked from outside the crate, which keeps `tests/support/` compiled | `tests/support` |
+| `fuzz/` | the fuzz targets: a separate crate, never published, each target one call into `src/fuzzing.rs`. Its one dependency besides the library, `libfuzzer-sys`, compiles libFuzzer's C++ runtime: the only native code in the repository, kept out of the library, which stays pure Rust ([ADR007](architecture-decisions/adr007-pure-rust-cross-platform.md)) | the library, `libfuzzer-sys` |
 
 **Data flow.** None yet: nothing reads files so far. The API to come reads any
 `Read + Seek` source through one handle

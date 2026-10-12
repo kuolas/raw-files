@@ -256,6 +256,34 @@ A few conventions:
   Architecture Decision Record in
   [docs/architecture-decisions/](docs/architecture-decisions/README.md).
 
+## Fuzzing
+
+The parsers read files from anyone, so they must answer any input with a
+result: never a panic, and never unbounded memory. Fuzzing tests that on
+inputs nobody would write by hand. The fuzz targets live in
+[`fuzz/`](fuzz/), a separate crate that is not part of the published
+package, and need nightly Rust and
+[cargo-fuzz](https://github.com/rust-fuzz/cargo-fuzz):
+
+```sh
+rustup toolchain install nightly
+cargo install cargo-fuzz
+```
+
+To fuzz the TIFF reader for a minute, from the repository root:
+
+```sh
+cargo +nightly fuzz run tiff_walk -- -max_total_time=60 -malloc_limit_mb=256
+```
+
+The allocation limit makes a runaway allocation a finding: the run stops
+on any one allocation over 256 MiB. (libFuzzer also stops once the whole
+process passes 2 GiB; a lower limit trips on the sanitizer's own
+bookkeeping, not on the reader.)
+An input that fails is saved in `fuzz/artifacts/`; a fix for it comes with
+a regression test that reads that input, as for any other bug. CI does not
+run the fuzz targets yet; it will, on a schedule.
+
 ## Local git hooks (optional)
 
 The repository ships git hooks that catch the common mistakes before they

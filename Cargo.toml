@@ -28,6 +28,8 @@ include = [
 [lints.rust]
 unsafe_code = "forbid"
 missing_docs = "warn"
+# cargo-fuzz builds with `--cfg fuzzing`, which compiles `src/fuzzing.rs`.
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(fuzzing)'] }
 
 [lints.clippy]
 dbg_macro = "warn"

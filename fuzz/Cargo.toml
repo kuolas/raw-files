@@ -1,0 +1,28 @@
+# The fuzz targets: they feed the library's parsers arbitrary bytes and
+# report any input that makes one panic, hang or allocate without bound.
+# They run with nightly Rust and cargo-fuzz (see CONTRIBUTING.md §Fuzzing).
+# A separate crate, never published, and not part of the raw-files package.
+
+[package]
+name = "raw-files-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2024"
+rust-version = "1.95"
+
+[package.metadata]
+cargo-fuzz = true
+
+# Its own workspace root, not a member of the library's.
+[workspace]
+
+[dependencies]
+libfuzzer-sys = "0.4"
+raw-files = { path = ".." }
+
+[[bin]]
+name = "tiff_walk"
+path = "fuzz_targets/tiff_walk.rs"
+test = false
+doc = false
+bench = false
