@@ -11,6 +11,7 @@
 - [ ] `cargo build --workspace`
 - [ ] `cargo test --workspace`
 - [ ] `RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps`
+- [ ] `RUSTDOCFLAGS="--cfg test -D warnings" cargo doc --workspace --no-deps --document-private-items`
 - [ ] A bug fix includes a regression test that fails without the fix
 - [ ] `CHANGELOG.md` updated, or the change is not user-visible
 

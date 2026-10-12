@@ -215,7 +215,7 @@ in [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)), not to a public issue.
 
 ## Code style and checks
 
-Before you open a pull request, run these five commands — the same ones CI
+Before you open a pull request, run these six commands — the same ones CI
 runs, in the same order:
 
 ```sh
@@ -224,7 +224,12 @@ cargo clippy --workspace --all-targets -- -D warnings
 cargo build --workspace
 cargo test --workspace
 RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps
+RUSTDOCFLAGS="--cfg test -D warnings" cargo doc --workspace --no-deps --document-private-items
 ```
+
+The last one documents the private items too, with the test configuration
+on, so that the modules compiled only for tests get their doc comments and
+links checked as well; the normal doc build never sees them.
 
 CI ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) runs them on every
 pull request on macOS, Linux and Windows, builds and tests the crate with
@@ -288,8 +293,14 @@ on any one allocation over 256 MiB. (libFuzzer also stops once the whole
 process passes 2 GiB; a lower limit trips on the sanitizer's own
 bookkeeping, not on the reader.)
 An input that fails is saved in `fuzz/artifacts/`; a fix for it comes with
-a regression test that reads that input, as for any other bug. CI does not
-run the fuzz targets yet; it will, on a schedule.
+a regression test that reads that input, as for any other bug.
+
+No other build compiles the fuzz code, so CI checks that both parts of it
+compile, on stable Rust: the library's entry points, with
+`RUSTFLAGS="--cfg fuzzing" cargo clippy --workspace --all-targets -- -D warnings`,
+and the fuzz crate, with
+`RUSTFLAGS="--cfg fuzzing" cargo check --manifest-path fuzz/Cargo.toml`.
+It does not run the targets yet; it will, on a schedule.
 
 ## Local git hooks (optional)
 
