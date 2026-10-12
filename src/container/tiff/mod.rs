@@ -6,7 +6,8 @@
 //! which sets the byte order of the file and says where its first directory,
 //! IFD0, starts. Both byte orders are accepted: files in the wild use both.
 //! The directories the header leads to, IFD0 and on, are read by the
-//! [`ifd`] module.
+//! [`ifd`] module, and found by the [`mod@walk`] module: IFD0's chain of
+//! next IFDs, their SubIFDs and IFD0's Exif IFD.
 //!
 //! This module is the container's face to the rest of the crate: it
 //! re-exports what the format modules use, and the split into files below
@@ -14,13 +15,19 @@
 
 mod header;
 mod ifd;
+mod walk;
 
 // Nothing outside this folder reads TIFF files yet. Each `expect` fails the
 // build once its item has a user, so it is then removed rather than left
 // behind.
-#[expect(unused_imports, reason = "nothing walks the IFDs yet")]
 pub(crate) use header::Header;
 #[expect(unused_imports, reason = "nothing opens files yet")]
 pub(crate) use header::parse_header;
-#[expect(unused_imports, reason = "nothing walks the IFDs yet")]
-pub(crate) use ifd::{Entry, Ifd, parse_ifd};
+#[expect(
+    unused_imports,
+    reason = "nothing reads entries outside this folder yet"
+)]
+pub(crate) use ifd::Entry;
+pub(crate) use ifd::{Ifd, parse_ifd};
+#[expect(unused_imports, reason = "nothing opens files yet")]
+pub(crate) use walk::{Location, Tree, walk};

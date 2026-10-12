@@ -145,6 +145,18 @@ answer Part 2.
 
    Whether the role filter is safe for NEF needs checking against NEF
    samples.
+9. **How strict the SubIFD check should be.** The reader follows a SubIFD
+   pointer only when its target parses as an IFD with every entry of a
+   known type and inside the file, the rule of
+   [container-and-previews.md](container-and-previews.md) §7.1 step 2 that
+   rejects the A100's raw-data pointer. The same rule drops a real SubIFD
+   with one entry of a vendor-private type, or one whose out-of-line value
+   lies past the end of a truncated file, even when its preview is still
+   readable; chain IFDs and the Exif IFD are kept with such entries. A
+   looser rule (reject only when few or no entries can be read) would
+   also reject the A100's pointer, whose entry types are garbage. The
+   strict rule is the documented one and stays until the sample and
+   corpus checks show it losing a preview.
 
 ## 2. Facts to establish from sample files
 
