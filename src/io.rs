@@ -46,6 +46,24 @@ pub(crate) enum ByteOrder {
     Big,
 }
 
+impl ByteOrder {
+    /// The value of these two bytes in this order.
+    pub(crate) fn u16(self, bytes: [u8; 2]) -> u16 {
+        match self {
+            ByteOrder::Little => u16::from_le_bytes(bytes),
+            ByteOrder::Big => u16::from_be_bytes(bytes),
+        }
+    }
+
+    /// The value of these four bytes in this order.
+    pub(crate) fn u32(self, bytes: [u8; 4]) -> u32 {
+        match self {
+            ByteOrder::Little => u32::from_le_bytes(bytes),
+            ByteOrder::Big => u32::from_be_bytes(bytes),
+        }
+    }
+}
+
 /// A `Read + Seek` source whose every read is checked against its length.
 ///
 /// The length is taken once, when the source is created. A read whose range
@@ -160,10 +178,7 @@ impl<R: Read + Seek> Source<R> {
     pub(crate) fn u16_at(&mut self, offset: u64, order: ByteOrder) -> Result<u16> {
         let mut bytes = [0; 2];
         self.read_cached(offset, &mut bytes)?;
-        Ok(match order {
-            ByteOrder::Little => u16::from_le_bytes(bytes),
-            ByteOrder::Big => u16::from_be_bytes(bytes),
-        })
+        Ok(order.u16(bytes))
     }
 
     /// Returns the 32-bit value at `offset` in byte order `order`, through
@@ -175,10 +190,7 @@ impl<R: Read + Seek> Source<R> {
     pub(crate) fn u32_at(&mut self, offset: u64, order: ByteOrder) -> Result<u32> {
         let mut bytes = [0; 4];
         self.read_cached(offset, &mut bytes)?;
-        Ok(match order {
-            ByteOrder::Little => u32::from_le_bytes(bytes),
-            ByteOrder::Big => u32::from_be_bytes(bytes),
-        })
+        Ok(order.u32(bytes))
     }
 
     /// Checks that the `len` bytes at `offset` lie inside the file.

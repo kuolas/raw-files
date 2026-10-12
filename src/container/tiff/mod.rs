@@ -5,12 +5,15 @@
 //! Reading a RAW format built on TIFF starts with the [`header`],
 //! which sets the byte order of the file and says where its first directory,
 //! IFD0, starts. Both byte orders are accepted: files in the wild use both.
+//! The directories the header leads to, IFD0 and on, are read by the
+//! [`ifd`] module.
 //!
 //! This module is the container's face to the rest of the crate: it
 //! re-exports what the format modules use, and the split into files below
 //! stays private to this folder.
 
 mod header;
+mod ifd;
 
 // Nothing outside this folder reads TIFF files yet. Each `expect` fails the
 // build once its item has a user, so it is then removed rather than left
@@ -19,3 +22,5 @@ mod header;
 pub(crate) use header::Header;
 #[expect(unused_imports, reason = "nothing opens files yet")]
 pub(crate) use header::parse_header;
+#[expect(unused_imports, reason = "nothing walks the IFDs yet")]
+pub(crate) use ifd::{Entry, Ifd, parse_ifd};
