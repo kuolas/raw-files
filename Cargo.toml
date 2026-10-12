@@ -18,6 +18,9 @@ publish = false
 # Cargo adds Cargo.toml and Cargo.lock itself.
 include = [
     "/src",
+    # The test build includes the fixture builder from here (`src/lib.rs`),
+    # so `cargo test` works from the packaged crate.
+    "/tests/support",
     "/LICENSE-APACHE",
     "/LICENSE-MIT",
     "/README.md",

@@ -30,7 +30,9 @@
 //! `write_fuzz_seeds` regenerates the files after a fixture changes
 //! (`cargo test --lib write_fuzz_seeds -- --ignored`), and
 //! `the_fuzz_seeds_match_the_fixtures` fails when a file is missing or has
-//! gone stale.
+//! gone stale. It is skipped when `fuzz/Cargo.toml` is absent, as in the
+//! packaged crate, which leaves `fuzz/` out; in the repository, a missing
+//! seeds directory fails it.
 //!
 //! How much the reader allocates is not measured here. Counting allocations
 //! takes a global allocator, which takes `unsafe` code, and ADR008 forbids
@@ -622,8 +624,21 @@ fn write_fuzz_seeds() {
 
 /// The committed seed files hold the fixtures' bytes, so that a changed
 /// fixture cannot leave the fuzzer starting from a stale file.
+///
+/// The skip is keyed on `fuzz/Cargo.toml`, which the repository has and the
+/// packaged crate leaves out: without it the test is skipped with a note.
+/// With it, every seed file must exist and match, so a renamed or deleted
+/// seeds directory fails instead of silently skipping.
 #[test]
 fn the_fuzz_seeds_match_the_fixtures() {
+    let fuzz_manifest = Path::new(env!("CARGO_MANIFEST_DIR")).join("fuzz/Cargo.toml");
+    if !fuzz_manifest.is_file() {
+        eprintln!(
+            "skipped: {} does not exist, as in the packaged crate",
+            fuzz_manifest.display()
+        );
+        return;
+    }
     let dir = seeds_dir();
     for (name, bytes) in seeds() {
         let path = dir.join(name);
