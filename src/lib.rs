@@ -11,6 +11,12 @@
 //! for how the code is laid out.
 
 mod error;
+// Nothing reads files yet; tests already do. Compiled only for tests until the
+// first caller arrives: an `expect(dead_code)` on the module would mark the
+// error constructors it calls as used on some compilers and leave their own
+// expectations unfulfilled.
+#[cfg(test)]
+mod io;
 mod limits;
 
 pub use error::{Error, ErrorKind, Result};

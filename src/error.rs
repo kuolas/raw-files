@@ -137,6 +137,22 @@ impl Error {
     pub(crate) fn limit(message: impl Into<Cow<'static, str>>, offset: u64) -> Self {
         Self::new(ErrorKind::LimitExceeded, message.into(), Some(offset), None)
     }
+
+    /// The reader failed with `source` while reading at byte `offset`.
+    ///
+    /// For a reader error whose place in the file matters, such as the file
+    /// ending early because it shrank after it was opened. Other reader
+    /// errors convert with `From<io::Error>`, without an offset, so that they
+    /// convert back to the original [`io::Error`].
+    #[cfg_attr(not(test), expect(dead_code, reason = "nothing reads files yet"))]
+    pub(crate) fn io_at(source: io::Error, offset: u64) -> Self {
+        Self::new(
+            ErrorKind::Io,
+            Cow::Borrowed("I/O error"),
+            Some(offset),
+            Some(source),
+        )
+    }
 }
 
 impl fmt::Debug for Error {
@@ -350,13 +366,21 @@ mod tests {
     }
 
     #[test]
+    fn io_at_keeps_the_offset_and_the_source() {
+        let err = Error::io_at(io::Error::from(io::ErrorKind::UnexpectedEof), 7);
+        assert_eq!(err.kind(), ErrorKind::Io);
+        assert_eq!(err.offset(), Some(7));
+        assert_eq!(err.to_string(), "I/O error at byte 7");
+        let source = err
+            .source()
+            .and_then(|source| source.downcast_ref::<io::Error>())
+            .expect("the source is the io::Error");
+        assert_eq!(source.kind(), io::ErrorKind::UnexpectedEof);
+    }
+
+    #[test]
     fn into_io_error_keeps_the_offset() {
-        let err = Error::new(
-            ErrorKind::Io,
-            Cow::Borrowed("read failed"),
-            Some(7),
-            Some(io::Error::from(io::ErrorKind::UnexpectedEof)),
-        );
+        let err = Error::io_at(io::Error::from(io::ErrorKind::UnexpectedEof), 7);
         let io_err = into_io(err);
         assert_eq!(io_err.kind(), io::ErrorKind::UnexpectedEof);
         let inner = io_err
@@ -373,5 +397,18 @@ mod tests {
         assert_eq!(err.offset(), Some(4096));
         assert_eq!(err.to_string(), "IFD runs past the end at byte 4096");
         assert!(err.source().is_none(), "{err:?}");
+    }
+    #[test]
+    fn a_wrapped_io_error_keeps_its_offset() {
+        let err = Error::io_at(io::Error::from(io::ErrorKind::UnexpectedEof), 7);
+        let err = Error::from(into_io(err));
+        assert_eq!(err.kind(), ErrorKind::Io);
+        assert_eq!(err.offset(), Some(7));
+        assert_eq!(err.to_string(), "I/O error at byte 7");
+        let source = err
+            .source()
+            .and_then(|source| source.downcast_ref::<io::Error>())
+            .expect("the source is still the reader's io::Error");
+        assert_eq!(source.kind(), io::ErrorKind::UnexpectedEof);
     }
 }
