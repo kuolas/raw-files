@@ -23,12 +23,22 @@
 //! file fits, and with each limit set just below what the undamaged file
 //! needs, so that the reader meets every limit.
 //!
+//! The fixtures also seed the fuzzer. A fuzzer finds a valid header only by
+//! luck, and from an empty corpus it never builds a big-endian one, so the
+//! fuzz target starts from the six fixtures, committed as files in
+//! `fuzz/seeds/tiff_walk/`. [`seeds`] lists them; the ignored test
+//! `write_fuzz_seeds` regenerates the files after a fixture changes
+//! (`cargo test --lib write_fuzz_seeds -- --ignored`), and
+//! `the_fuzz_seeds_match_the_fixtures` fails when a file is missing or has
+//! gone stale.
+//!
 //! How much the reader allocates is not measured here. Counting allocations
 //! takes a global allocator, which takes `unsafe` code, and ADR008 forbids
 //! it in this crate.
 
 use std::io::Cursor;
 use std::panic;
+use std::path::{Path, PathBuf};
 
 use super::header::parse_header;
 use super::walk::{Location, Tree, walk};
@@ -192,6 +202,33 @@ fn fixtures() -> Vec<Fixture> {
         .into_iter()
         .flat_map(|order| [small(order), with_subifds(order), with_chain(order)])
         .collect()
+}
+
+/// The fixtures as starting inputs for the fuzzer: each file name with the
+/// bytes of the fixture it holds.
+fn seeds() -> Vec<(&'static str, Vec<u8>)> {
+    vec![
+        ("small-le.tif", small(Order::Little).bytes().to_vec()),
+        ("small-be.tif", small(Order::Big).bytes().to_vec()),
+        (
+            "with-subifds-le.tif",
+            with_subifds(Order::Little).bytes().to_vec(),
+        ),
+        (
+            "with-subifds-be.tif",
+            with_subifds(Order::Big).bytes().to_vec(),
+        ),
+        (
+            "with-chain-le.tif",
+            with_chain(Order::Little).bytes().to_vec(),
+        ),
+        ("with-chain-be.tif", with_chain(Order::Big).bytes().to_vec()),
+    ]
+}
+
+/// Where the seed files live, under the crate's root.
+fn seeds_dir() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("fuzz/seeds/tiff_walk")
 }
 
 /// Limits far below the defaults, which the fixtures still fit.
@@ -566,5 +603,35 @@ fn extreme_structural_fields_give_an_error_or_a_tree_within_the_limits() {
                 }
             }
         }
+    }
+}
+
+/// Writes the fixtures to `fuzz/seeds/tiff_walk/`, where the fuzz target
+/// starts from them. Ignored, as it writes to the source tree; run it after
+/// changing a fixture:
+/// `cargo test --lib write_fuzz_seeds -- --ignored`.
+#[test]
+#[ignore = "writes the seed files; run it to regenerate them"]
+fn write_fuzz_seeds() {
+    let dir = seeds_dir();
+    std::fs::create_dir_all(&dir).unwrap();
+    for (name, bytes) in seeds() {
+        std::fs::write(dir.join(name), bytes).unwrap();
+    }
+}
+
+/// The committed seed files hold the fixtures' bytes, so that a changed
+/// fixture cannot leave the fuzzer starting from a stale file.
+#[test]
+fn the_fuzz_seeds_match_the_fixtures() {
+    let dir = seeds_dir();
+    for (name, bytes) in seeds() {
+        let path = dir.join(name);
+        let committed = std::fs::read(&path).ok();
+        assert!(
+            committed.as_deref() == Some(&bytes[..]),
+            "fuzz/seeds/tiff_walk/{name} is missing or differs from its fixture: \
+             regenerate it with `cargo test --lib write_fuzz_seeds -- --ignored`"
+        );
     }
 }
