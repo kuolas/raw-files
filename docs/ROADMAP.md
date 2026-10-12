@@ -20,12 +20,20 @@ is a library with no public API; it does nothing yet.
 
 The order is a plan, not a promise; a change of direction gets an ADR.
 
+## Formats after NEF and ARW
+
+Support for other formats comes in this order:
+
+1. **DNG**, Adobe's published raw format, also written by phones.
+2. **Canon**: CR2 and CR3.
+3. **Fujifilm**: RAF.
+
 ## Open questions
 
 - **How far decoding goes.** Raw sensor data only, leaving demosaicing and
   colour to the caller, or a developed RGB image too.
-- **Which formats next.** Other TIFF-based RAW formats (DNG, Canon CR2,
-  Pentax PEF, …), and in what order.
+- **Which formats after Fujifilm.** Pentax PEF, Olympus ORF, Panasonic
+  RW2, …, and in what order.
 
 Ideas and camera support requests are welcome as
 [feature requests](https://github.com/kuolas/raw-files/issues/new/choose).
