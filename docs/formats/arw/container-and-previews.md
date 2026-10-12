@@ -223,8 +223,9 @@ physical order, which is the same in shape in every 4.0 and later file
 | 10,383,360 | raw data: 204 lossless-JPEG tiles, running to the end of the file at 81,575,280 |
 
 All the metadata and all three JPEGs come before the raw data in every
-checked file, so a reader working from a `Read + Seek` source (one of the
-API shapes the roadmap leaves open) can find and return the largest preview
+checked file, so a reader working from a `Read + Seek` source (as raw-files
+does, [ADR009](../../architecture-decisions/adr009-public-api-shape.md))
+can find and return the largest preview
 without touching the raw. That ordering is an observation, not a rule; a
 re-saved file can move IFD0 to the end [18] **[P]**.
 

@@ -22,9 +22,6 @@ The order is a plan, not a promise; a change of direction gets an ADR.
 
 ## Open questions
 
-- **API shape.** Parse from a byte slice (simple, but the whole file is in
-  memory) or from a `Read + Seek` source (a preview without reading the
-  rest of a 50 MB file), or both.
 - **How far decoding goes.** Raw sensor data only, leaving demosaicing and
   colour to the caller, or a developed RGB image too.
 - **Which formats next.** Other TIFF-based RAW formats (DNG, Canon CR2,
