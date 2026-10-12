@@ -11,10 +11,13 @@
 //!
 //! This module is the container's face to the rest of the crate: it
 //! re-exports what the format modules use, and the split into files below
-//! stays private to this folder.
+//! stays private to this folder. One file holds only tests: `robustness`,
+//! which reads truncated and corrupted files through the whole reader.
 
 mod header;
 mod ifd;
+#[cfg(test)]
+mod robustness;
 mod walk;
 
 // Nothing outside this folder reads TIFF files yet. Each `expect` fails the
