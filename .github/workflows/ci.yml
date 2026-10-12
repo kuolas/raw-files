@@ -103,6 +103,24 @@ jobs:
       - run: cargo doc --workspace --no-deps
         env:
           RUSTDOCFLAGS: -D warnings
+      # The modules compiled only for tests are documented too: the normal
+      # doc build never sees them, and their broken links would go unnoticed.
+      - run: cargo doc --workspace --no-deps --document-private-items
+        env:
+          RUSTDOCFLAGS: --cfg test -D warnings
+      # The fuzz entry points compile only with `--cfg fuzzing`, and the fuzz
+      # crate is its own workspace, so none of the steps above compiles
+      # them. Building them needs no nightly, only running them does; once
+      # is enough, on Linux. The fuzz crate needs the flag too: the entry
+      # points it calls do not exist without it.
+      - if: matrix.os == 'ubuntu-latest'
+        run: cargo clippy --workspace --all-targets -- -D warnings
+        env:
+          RUSTFLAGS: --cfg fuzzing
+      - if: matrix.os == 'ubuntu-latest'
+        run: cargo check --manifest-path fuzz/Cargo.toml
+        env:
+          RUSTFLAGS: --cfg fuzzing
 
   msrv:
     name: cargo (msrv)
