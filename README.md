@@ -22,7 +22,7 @@ and Windows alike.
 ## Build and test
 
 There are no releases yet. To build from source on macOS, Linux or Windows
-you need Rust 1.85 or later:
+you need Rust 1.95 or later:
 
 ```sh
 cargo build
