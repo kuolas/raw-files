@@ -9,3 +9,7 @@
 //! for the plan and the
 //! [architecture](https://github.com/kuolas/raw-files/blob/master/docs/ARCHITECTURE.md)
 //! for how the code is laid out.
+
+mod error;
+
+pub use error::{Error, ErrorKind, Result};
