@@ -273,8 +273,15 @@ cargo install cargo-fuzz
 To fuzz the TIFF reader for a minute, from the repository root:
 
 ```sh
-cargo +nightly fuzz run tiff_walk -- -max_total_time=60 -malloc_limit_mb=256
+mkdir -p fuzz/corpus/tiff_walk
+cargo +nightly fuzz run tiff_walk fuzz/corpus/tiff_walk fuzz/seeds/tiff_walk -- -max_total_time=60 -malloc_limit_mb=256
 ```
+
+The first directory is where the fuzzer saves what it finds (it is not
+committed, and libFuzzer refuses to start when it does not exist, hence the
+`mkdir`); the second holds the seeds it starts from, a few valid files
+committed in [`fuzz/seeds/`](fuzz/seeds/README.md). Without them the fuzzer
+never builds a big-endian header, and half of the reader goes unfuzzed.
 
 The allocation limit makes a runaway allocation a finding: the run stops
 on any one allocation over 256 MiB. (libFuzzer also stops once the whole
