@@ -595,9 +595,10 @@ For milestone 3, keep the MakerNote out of the critical path.
    needs a hex dump.
 7. **Presence of CropArea (0x0045).** Whether every body writes it, and the
    first body that did.
-8. **Outer byte order of recent bodies** (D800, D850, Z 6, Z 7, Z 9, Z f):
-   no primary evidence found. Readers must accept both `II` and `MM`.
-   [P][11]
+8. **Outer byte order of recent bodies** (D800, D850, Z 6, Z 7, Z f): no
+   primary evidence found. The Z 9 is `II`, file and MakerNote alike (files
+   5146 to 5148, see [container-and-previews.md](container-and-previews.md)).
+   Readers must accept both `II` and `MM`. [P][11]
 9. **Bodies that write NEFCompression 5 and 6.** Labels are known, bodies
     are not.
 

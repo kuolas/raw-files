@@ -125,6 +125,17 @@ The pages cite their sources individually. By kind:
 - **No legal review.** Notes on copyright, data tables and the HE patent pool
   identify questions; they do not answer them.
 
+## Later check against sample files
+
+On 13 October 2026 the container and preview notes were checked against
+the three CC0 Nikon Z 9 files that CI downloads (files 5146 to 5148, listed
+in [test-data.md](test-data.md#21-the-ci-set)), by a structural walk of
+their IFDs and embedded JPEGs. What they show is tagged **[F]** in
+[container-and-previews.md](container-and-previews.md) and
+[raw-data.md](raw-data.md), and the questions they answer are marked in
+[open-questions.md](open-questions.md). Metadata and raw decoding were not
+checked.
+
 ## Extending this documentation
 
 Follow the same rules:

@@ -21,13 +21,20 @@ Every claim carries a confidence tag:
 - **[S]** secondary: a forum post, blog, issue report or search-result
   snippet.
 - **[I]** inferred, or recalled without a source; a hypothesis to test.
+- **[F]** measured on a named sample file. Files are cited as "file 5146",
+  the id of the file in the public raw.pixls.us collection; the files cited
+  here are described under [Sample files](#sample-files), and their URLs and
+  SHA-256 hashes are in [test-data.md](test-data.md#21-the-ci-set).
 
 Numbers in square brackets such as [3] refer to [Sources](#sources).
 
-**Nothing here has yet been checked against sample files.** Where a primary
-source's text was read only in part or in summary, exact byte values should
-be confirmed on real NEFs (see [Open questions](#open-questions)) before
-they are hard-coded.
+**Only the Z 9 has been checked against sample files.** The facts tagged
+**[F]** were measured on files 5146 to 5148, the three CC0 Z 9 files
+(lossless, HE\* and HE); every other body rests on the sources alone. Where
+a sample contradicts a source, this page follows the sample and records the
+disagreement. Where a primary source's text was read only in part or in
+summary, exact byte values should be confirmed on real NEFs (see
+[Open questions](#open-questions)) before they are hard-coded.
 
 This page restates algorithms in prose. No code from other projects is
 reproduced, and none should be copied into raw-files from GPL, LGPL or similar
@@ -50,7 +57,8 @@ Which byte order a given generation uses is only partly established:
 | A D40 NEF attachment on the Exiv2 tracker is `II`, but its Software tag names a Nikon editor and the MakerNote was rewritten [25] | A re-saved file, not a camera original | **[P]** that it is `II`; **[I]** that it was re-saved |
 | Forum posts say files turned from `II` to `MM`, or the reverse, after editing in Nikon's own software [26] | Editing software may change the outer order | **[S]** |
 | A snippet of an ExifTool forum thread says the D7100 and D5200 use Intel order for MakerNote and wrapper [23] | Probably about files from newer bodies; page not read in full | **[S]** |
-| D800, D850, Z 6, Z 7, Z 9, Z f, camera-original D1 and D100, and Coolpix NRW | No evidence found | **[I]** |
+| Files 5146 to 5148 (Z 9: lossless, HE\*, HE) | `II`, 42, IFD0 at offset 8; the MakerNote's embedded header is `II` too | **[F]** |
+| D800, D850, Z 6, Z 7, Z f, camera-original D1 and D100, and Coolpix NRW | No evidence found | **[I]** |
 
 The MakerNote has its own byte order, set by its embedded header, and it can
 differ from the outer file's: ExifTool's comments say Nikon's editing
@@ -87,6 +95,26 @@ assume "SubIFD[0] is the big JPEG".
 Clévy also reports that the D100 and D1x have a single SubIFD, holding only
 the raw image, with no JPEG SubIFD [15] **[P]**.
 
+The Z 9 has this shape, the same in files 5146 to 5148 (lossless, HE\* and
+HE). Its IFD0 holds a JPEG rather than an uncompressed thumbnail, and it has
+six SubIFDs, three of which hold no preview:
+
+| IFD | Reached through | Content | Conf. |
+|---|---|---|---|
+| IFD0 | TIFF header | NewSubfileType 1, Compression 6, Orientation 1, Make `NIKON CORPORATION`, Model `NIKON Z 9`; a 160x120 JPEG through 0x0201/0x0202; six SubIFD offsets in 0x014A, and the Exif IFD | **[F]** |
+| SubIFD0 | 0x014A, first offset | The full-size JPEG, 8256x5504: NewSubfileType 1, Compression 6, 0x0201/0x0202 | **[F]** |
+| SubIFD1 | 0x014A, second offset | The raw data: NewSubfileType 0, Compression 34713, Photometric 32803, 8280x5520, 14 bits, one strip (see [raw-data.md](raw-data.md#where-the-raw-data-lives)) | **[F]** |
+| SubIFD2 | 0x014A, third offset | The second JPEG, 1620x1080: NewSubfileType 1, Compression 6, 0x0201/0x0202 | **[F]** |
+| SubIFD3 | 0x014A, fourth offset | An uncompressed 8-bit grey image, 384x256: NewSubfileType 1, Compression 1, Photometric 1 (BlackIsZero), one sample per pixel, one strip of 98,304 bytes; purpose unknown (section 5) | **[F]** |
+| SubIFD4 | 0x014A, fifth offset | An empty image: NewSubfileType 1, Compression 34713, Photometric 1, width and height 0, BitsPerSample 12, strip offset and length 0 | **[F]** |
+| SubIFD5 | 0x014A, sixth offset | An empty image, as SubIFD4 but with Compression 1 and BitsPerSample 8 | **[F]** |
+| Exif IFD | tag 0x8769 | The MakerNote (tag 0x927C), in the embedded-TIFF-header layout, version 0211 (section 2) | **[F]** |
+| MakerNote PreviewIFD | MakerNote tag 0x0011 | A 640x424 JPEG: Compression 6, 0x0201/0x0202 counting from the MakerNote's embedded header | **[F]** |
+
+Every one of the four JPEGs is baseline (SOF0), 8-bit, with three
+components, and is stored in one piece through 0x0201/0x0202 (section 4).
+**[F]**
+
 ### 1.3 Tags that identify an IFD's role
 
 | Tag | Name | Values worth knowing | Conf. |
@@ -107,8 +135,8 @@ Compression 1 or 34713, Photometric 32803 and the CFA tags. [15] **[P]**
 
 | Pointer | Relative to | Conf. |
 |---|---|---|
-| IFD0, next-IFD chain, SubIFD array, Exif IFD pointer, and 0x0201 / strip offsets inside SubIFDs | the start of the file | **[P]** [17] |
-| Everything inside a MakerNote with an embedded TIFF header, including tag 0x0011 PreviewIFD and the 0x0201 value inside it | the embedded TIFF header, which is the MakerNote start plus 10 bytes | **[P]** [4] [6] [13] |
+| IFD0, next-IFD chain, SubIFD array, Exif IFD pointer, and 0x0201 / strip offsets inside SubIFDs | the start of the file | **[P]** [17]; files 5146 to 5148 **[F]** |
+| Everything inside a MakerNote with an embedded TIFF header, including tag 0x0011 PreviewIFD and the 0x0201 value inside it | the embedded TIFF header, which is the MakerNote start plus 10 bytes | **[P]** [4] [6] [13]; files 5146 to 5148 **[F]** |
 | Everything inside a headerless MakerNote or a `Nikon\0\1\0` one | the outer TIFF header | **[P]** [12] |
 
 The metadata-extractor issue shows a user first assuming SubIFD offsets were
@@ -130,7 +158,7 @@ bytes. [12] [31] **[P]**
 |---|---|---|---|---|---|
 | Headerless | no signature; a bare IFD | MakerNote start | outer TIFF header | E990, D1 family (D1 is big-endian per ExifTool) | **[P]** [12] [4] |
 | Short header | `Nikon\0\1\0` (8 bytes) | MakerNote start + 8 | outer TIFF header | E700 to E950 | **[P]** [12] |
-| Embedded TIFF header | `Nikon\0\2` + 3 more header bytes, then `II` or `MM`, 42, and an IFD offset (normally 8) | embedded header + its IFD offset, normally MakerNote start + 18 | embedded header = MakerNote start + 10 | E5400, D2H, D70, D100 and everything later | **[P]** [12] [4] |
+| Embedded TIFF header | `Nikon\0\2` + 3 more header bytes, then `II` or `MM`, 42, and an IFD offset (normally 8) | embedded header + its IFD offset, normally MakerNote start + 18 | embedded header = MakerNote start + 10 | E5400, D2H, D70, D100 and everything later; the Z 9 writes `Nikon\0`, `02 11` (version 0211), `00 00`, then an `II` header (files 5146 to 5148) **[F]** | **[P]** [12] [4] |
 
 Detection, combining what the cited projects do: if the data starts with
 `Nikon\0` and a valid byte-order mark plus magic 42 sit at offset 10, use the
@@ -150,8 +178,8 @@ this page. [3] [23] **[P]/[S]**
 |---|---|---|---|
 | JpgFromRaw | first full-size JPEG SubIFD (0x0201/0x0202, or a strip) | full sensor size on many bodies | **[P]** name; **[S]** sizes |
 | OtherImage | a second JPEG SubIFD | about 1620x1080 on 2012+ bodies | **[S]** |
-| PreviewImage | MakerNote PreviewIFD (tag 0x0011), own 0x0201/0x0202 | 640x424 or smaller; the smallest of the JPEGs | **[S]** |
-| ThumbnailTIFF | IFD0 | 160x120 uncompressed RGB, not a JPEG | **[S]** [15] |
+| PreviewImage | MakerNote PreviewIFD (tag 0x0011), own 0x0201/0x0202 | 640x424 or smaller; the smallest of the JPEGs. On the Z 9, 640x424 but not the smallest: IFD0's JPEG is smaller | **[S]**; Z 9 **[F]** |
+| ThumbnailTIFF | IFD0 | 160x120 uncompressed RGB, not a JPEG; on the Z 9 a 160x120 JPEG (note 1) | **[S]** [15]; Z 9 **[F]** |
 
 One forum snippet, for a file labelled only "D75" (the body is not
 identified further), shows exactly this set: JpgFromRaw 6016x4016, OtherImage
@@ -164,7 +192,9 @@ Notes on each location:
    Coolpix NRW files IFD0 holds a JPEG. [14] **[S]** ExifTool switches its
    NEF/NRW file type on IFD0 compression 6, and that misfired on Z 9 files,
    which shows at least some Z 9 NEFs have a JPEG in IFD0 (section 5). [3]
-   [21] **[P]/[S]**
+   [21] **[P]/[S]** Files 5146 to 5148 confirm it: their IFD0 has
+   Compression 6 and holds a 160x120 baseline JPEG through 0x0201/0x0202.
+   **[F]**
 2. **SubIFDs.** The large JPEGs. A JPEG here may use either the
    0x0201/0x0202 pair or a strip pair; ExifTool's naming covers both. [3]
    **[P]**
@@ -173,7 +203,8 @@ Notes on each location:
    PreviewImageStart (0x0201), PreviewImageLength (0x0202) and
    YCbCrPositioning (0x0213). [1] **[P]** ExifTool marks the directory
    "non-essential and often corrupted". [23] **[S]** Offsets are
-   MakerNote-relative (section 1.4).
+   MakerNote-relative (section 1.4). On the Z 9 it has Compression 6 and
+   holds a 640x424 JPEG (files 5146 to 5148). **[F]**
 4. **Exiv2's list.** Exiv2 checks the PreviewIFD (as `Exif.NikonPreview`) and
    about 40 generic loaders, and accepts TIFF-IFD previews only from sub-image
    groups with NewSubfileType 1. [11] **[P]**
@@ -194,6 +225,10 @@ bodies (D3, D40, D70, D90, D7000) have a single, full-size JPEG SubIFD. The
 author fully verified the Z 9, Z 8, Z 7II, Z 6II, Z 6, Z 5, Z f, Z fc, Z 50,
 Z 30, D850 and D500; the Z 6III was not verified. [27] **[S]**
 
+Files 5146 to 5148 confirm this for the Z 9: SubIFD0 holds the full-size
+8256x5504 JPEG, SubIFD1 the raw data and SubIFD2 a 1620x1080 JPEG; three
+more SubIFDs follow, none of them a JPEG (section 1.2). **[F]**
+
 Consequences: a NEF can contain two comparable JPEGs in SubIFDs, and which
 comes first varies. One report of a D5500 file lists a 1,737,279-byte JPEG at
 0x0201/0x0202 in a SubIFD; that size is small for a full-size JPEG, which
@@ -201,9 +236,10 @@ hints it may be the 1620x1080 one, unverified. [17] **[S]/[I]**
 
 ## 4. Preview sizes by body
 
-These are the sizes found in reports, not measured by raw-files. The largest
-embedded JPEG is full sensor size where it has been checked, but per-body
-tables are unreliable; raw-files should measure at run time (section 7).
+These are the sizes found in reports, except the Z 9's, which were measured
+on files 5146 to 5148. The largest embedded JPEG is full sensor size where it
+has been checked, but per-body tables are unreliable; raw-files should
+measure at run time (section 7).
 
 | Body | Findings | Conf. |
 |---|---|---|
@@ -215,12 +251,13 @@ tables are unreliable; raw-files should measure at run time (section 7).
 | D5 (probable) | SubIFD JPEGs of about 1.2 MB and 0.8 MB and a PreviewIFD JPEG of about 125 KB; dimensions not given; camera model inferred | **[S]** [16] |
 | D5500 | 1,737,279-byte JPEG in a SubIFD, reduced resolution | **[S]** [17] |
 | D850 | second JPEG 1620x1080 [27]; a full-size JPEG is also reported as embedded (uncited) | **[S]** (weak) |
-| Z 9 | second JPEG 1620x1080 [27]; Thom Hogan describes a large, basic-quality JPEG, and a user reports extracting one of about 2.4 MB from a 75 MB NEF (both uncited) | **[S]** (weak) |
+| Z 9 | four JPEGs, the same in the lossless, HE\* and HE files: 160x120 in IFD0, 640x424 in the PreviewIFD, 1620x1080 in SubIFD2 and 8256x5504 in SubIFD0. All are baseline (SOF0), 8-bit, three components, Compression 6 through 0x0201/0x0202, with no APP segment, and each ends with EOI (`FF D9`) exactly at its declared length (files 5146 to 5148). This confirms the 1620x1080 second JPEG of [27] | **[F]** |
 | Z 8 | an issue report mentions a matching-JPEG case of 8256x5504 | **[S]** [28] |
 | Z f | an anecdotal forum post claims the preview is only 1616x1080; unconfirmed | **[S]** (anecdotal) [29] |
-| D3/D300, D6, Z 6, Z 7, Z 8, Z 9 full-size dimensions | would follow from sensor size (for example 8256x5504 for the Z 7 and Z 9) but no source confirms the embedded dimensions | **[I]** |
+| D3/D300, D6, Z 6, Z 7, Z 8 full-size dimensions | would follow from sensor size (for example 8256x5504 for the Z 7, the size measured on the Z 9) but no source confirms the embedded dimensions | **[I]** |
 
-Whether any body's preview is progressive, or uses subsampling other than the
+The Z 9's four JPEGs are all baseline. **[F]** Whether any other body's
+preview is progressive, or whether any body uses subsampling other than the
 common ones, is not documented anywhere found. Plan to read the SOF marker of
 any process, not just baseline (section 7).
 
@@ -243,7 +280,9 @@ any process, not just baseline (section 7).
 - **Z 9 IFD0 JPEG misclassification.** ExifTool decides NEF versus NRW by
   IFD0 compression 6; that classified Z 9 NEFs as NRW, and its author
   acknowledged that some Z files carry an IFD0 JPEG. [3] [21] **[P]/[S]**
-  Do not decide the format from IFD0; walk the container uniformly.
+  Files 5146 to 5148 confirm it: IFD0 has Compression 6 and holds a 160x120
+  JPEG. **[F]** Do not decide the format from IFD0; walk the container
+  uniformly.
 - **sNEF ("Small").** The raw IFD holds 3 bytes per pixel of 12-bit YCbCr
   4:2:2 (Y0 Y1 Cb Cr in each 6 bytes) instead of a CFA. [9] [10] **[P]**
   ExifTool names NEFCompression value 8 "Small" [1] **[P]**; that sNEF files
@@ -252,10 +291,28 @@ any process, not just baseline (section 7).
   otherwise the same; previews are unaffected as far as is known.
 - **HE and HE\* (Z 9 and later).** NEFCompression values 13 and 14 (Nikon
   MakerNote tag 0x0093) [1] **[P]**; on Z bodies a decoder reads the
-  compression from MakerNote tag 0x51 [10] **[P]**; the raw IFD still reports
-  TIFF Compression 34713 on Z 9 samples [21] **[S]**. The codec comes from
-  intoPIX [32] **[S]**. No evidence was found that HE changes the IFD or
-  preview layout. **[I]**
+  compression from MakerNote tag 0x51 [10] **[P]**, and tag 0x0093 is
+  absent from files 5146 to 5148, the lossless one included **[F]**; the raw
+  IFD still reports TIFF Compression 34713 on Z 9 samples [21] **[S]**, and
+  does so on all three files, HE and HE\* included **[F]**, so the tag does
+  not tell HE from lossless. The raw strip's first bytes do: `FF 10 FF 50`,
+  the JPEG XS start-of-codestream and capabilities markers, on HE\* and HE
+  (files 5147 and 5148), and no marker on lossless (file 5146). **[F]** The
+  codec comes from intoPIX [32] **[S]**. HE changes little in the
+  container: the IFD layout, the SubIFD order, the tags of every IFD of the
+  tree and of the PreviewIFD, and the four preview sizes are the same in
+  the lossless, HE\* and HE files; the raw strip's content and length
+  differ; and the MakerNote IFD differs by one tag, 0x0096, present in the
+  lossless file only (files 5146 to 5148). **[F]**
+- **Z 9 SubIFDs that hold no preview.** After the two JPEG SubIFDs and the
+  raw one, the Z 9 has three more (section 1.2). **[F]** SubIFD3 is an
+  uncompressed 8-bit grey image of 384x256 (Photometric 1, one strip of
+  exactly 384 × 256 = 98,304 bytes, which begins with zero bytes); SubIFD4
+  and SubIFD5 are empty images whose width, height, strip offset and strip
+  length are all 0. What any of the three is for is unknown. A finder that
+  follows section 7.1 skips all three: the empty ones have no bytes, and the
+  grey image is not a JPEG (Compression 1, and its first bytes are not an
+  SOI).
 - **Capture NX re-saves.** Nikon's editing software can rewrite files: a
   changed byte order, a different slot for the large JPEG (section 3), and
   Nikon-style MakerNotes copied from another camera. [23] [4] **[S]/[P]**
@@ -289,8 +346,10 @@ any process, not just baseline (section 7).
 ## 7. Recommendation for raw-files
 
 Rank by what is measured in the JPEG itself, never by slot, tag dimensions
-(often absent or zero) or tag-claimed type. This is a design proposal, not
-settled behaviour; no part has been run against real files. **[I]**
+(often absent or zero) or tag-claimed type. raw-files implements these
+steps in its preview finder, shared with ARW, and its tests run it on files
+5146 to 5148, which give the four JPEGs of section 4 in size order. **[F]**
+Bodies other than the Z 9 remain unchecked. **[I]**
 
 The steps below restate the common approach in original pseudocode terms.
 
@@ -345,7 +404,8 @@ The steps below restate the common approach in original pseudocode terms.
 - Ranking by measured area handles the slot-order variation, the 2012+
   second JPEG, and the re-saved files in one rule.
 - The MakerNote PreviewIFD is a candidate like any other, since on the oldest
-  bodies it may be the only JPEG; on newer bodies it will simply rank last.
+  bodies it may be the only JPEG; on newer bodies it will simply rank low
+  (on the Z 9, third of four, above IFD0's 160x120 JPEG **[F]**).
 - The next-IFD chain and the 0x014A array both have to be walked, because a
   file may have been rewritten by different software.
 
@@ -359,8 +419,12 @@ Return the JPEG bytes as they are and expose the orientation separately.
 - SubIFDs may carry their own Orientation tag, but one NEF has 6 in IFD0 and
   1 in the SubIFDs, so SubIFD values should not override IFD0. [23] **[S]**
 - ExifTool's notes and a user report say the embedded JPEGs carry no
-  metadata of their own, at least on the D200. [19] **[S]** Whether the
-  later JPEGs have their own APP1 Exif is unverified. **[I]**
+  metadata of their own, at least on the D200. [19] **[S]** The Z 9's carry
+  none either (next item); whether other later bodies' JPEGs have their own
+  APP1 Exif is unverified. **[I]**
+- Files 5146 to 5148 (Z 9) have Orientation 1 in IFD0, and none of their
+  four JPEGs has an APP segment of any kind, so none carries an Orientation
+  of its own. **[F]**
 - LibRaw's maintainer says that for most cameras the extracted JPEG is
   already rotated or carries a correct Orientation; that is a general
   statement, not about Nikon. [22] **[S]**
@@ -379,12 +443,16 @@ invalid) and leave the decision to the caller.
 - The PreviewIFD is documented as often corrupted, so validate with SOI.
   [23] **[S]**
 - A tag-declared length is authoritative; no example of padding after the
-  end-of-image marker was found. **[I]**
+  end-of-image marker was found. **[I]** On the Z 9 each of the four JPEGs
+  ends with `FF D9` exactly at its declared length, with no padding and no
+  truncation (files 5146 to 5148). **[F]**
 - Byte order differs between the outer file and the MakerNote; parse each in
-  its own order. [4] **[P]**
+  its own order. [4] **[P]** On the Z 9 both are `II` (files 5146 to 5148)
+  **[F]**, so a file from it does not exercise this rule.
 - A MakerNote header can be copied from another make; check
   the `Nikon\0\2` signature before Make. [4] **[P]**
-- Do not classify NEF versus NRW by IFD0 compression. [3] [21]
+- Do not classify NEF versus NRW by IFD0 compression. [3] [21] The Z 9's
+  IFD0 has Compression 6 (files 5146 to 5148). **[F]**
 - A second ~1620x1080 JPEG can be the one listed first in a SubIFD array.
   [17] **[S]/[I]**
 - Cycles and absurd counts: use a visited set and caps (section 7.1).
@@ -395,26 +463,35 @@ Each needs sample files from the public raw.pixls.us collection, inspected
 with a dump tool and byte-by-byte reading.
 
 1. Preview dimensions, count and order for the D3/D300, D850, D5/D6, Z 6,
-   Z 7, Z 8, Z 9 and Z f, and whether the Z f really embeds only about
-   1616x1080.
-2. Outer TIFF byte order per generation, Z bodies and camera-original D1 and
-   D100 in particular.
+   Z 7, Z 8 and Z f, and whether the Z f really embeds only about
+   1616x1080. Answered for the Z 9 (section 4, files 5146 to 5148).
+2. Outer TIFF byte order per generation, Z bodies other than the Z 9 and
+   camera-original D1 and D100 in particular. The Z 9 is `II`, MakerNote
+   included (files 5146 to 5148).
 3. Where the D1, D1H, D1X and E-series bodies keep their JPEG (the
    PreviewIFD, and its size).
 4. Whether any body embeds a progressive or non-baseline JPEG, or unusual
-   chroma subsampling.
-5. Whether HE and HE\* files alter the IFD layout or preview slots.
+   chroma subsampling. The Z 9's four JPEGs are baseline; their subsampling
+   was not read.
+5. Answered: HE and HE\* files have the same IFD layout, SubIFD order,
+   tags in the tree's IFDs and the PreviewIFD, and preview slots as
+   lossless ones; the MakerNote IFD differs by one tag, 0x0096, present in
+   the lossless file only (section 5, files 5146 to 5148).
 6. Whether the PreviewIFD offset base for headerless and short-header
    MakerNotes is the outer TIFF header, as inferred.
-7. Whether any SubIFD JPEG uses several strips.
-8. How common truncated JPEGs or padding after EOI are in real files.
+7. Whether any SubIFD JPEG uses several strips. None does on the Z 9: every
+   JPEG is in one piece, through 0x0201/0x0202.
+8. How common truncated JPEGs or padding after EOI are in real files. The
+   Z 9 has neither: each JPEG ends with EOI exactly at its declared length.
 9. Whether a SubIFD or PreviewIFD JPEG ever has its own Exif APP1 with an
-   Orientation.
+   Orientation. Not on the Z 9, whose JPEGs have no APP segment at all.
 10. Nikon tag 0xC7D5 (NikonNEFInfo): which IFD hosts it across bodies. Its
     contents are documented and it does not affect preview location.
 11. Which IFD hosts NikonScanIFD (0x0E10) in a Coolscan file, and whether
     such files can ever contain a JPEG.
 12. Whether the Z 6III follows the 1620x1080 second-JPEG pattern.
+13. What the Z 9's 384x256 uncompressed grey SubIFD and its two empty
+    SubIFDs are for (section 5), and whether other Z bodies have them.
 
 ## Sources
 
@@ -455,3 +532,13 @@ snippets only; those are marked.
 [32] intoPIX, TicoRAW on the Z 9 — https://www.intopix.com/blogs/post/nab-22-intopix-show-tico-raw-enabling-8kp60-on-the-z9-and-tico-xs-under-1-gbps
 [33] ExifTool, Nikon tags (NEFInfo table) — https://exiftool.org/TagNames/Nikon.html#NEFInfo
 [34] dcraw 9.28, dcraw.c (`apply_tiff`, TIFF Compression 32769) — https://dechifro.org/dcraw/dcraw.c
+
+### Sample files
+
+Files 5146, 5147 and 5148: the three CC0 Nikon Z 9 files of raw.pixls.us,
+one per compression mode (lossless, High Efficiency\* and High Efficiency).
+Their SHA-256 hashes and URLs are in
+[test-data.md](test-data.md#21-the-ci-set). They were checked on 13 October
+2026 by a structural walk of the IFD0 chain, the SubIFDs, the Exif IFD and
+the MakerNote's PreviewIFD, reading each JPEG's marker segments to its frame
+header and its last two bytes.

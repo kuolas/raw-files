@@ -10,12 +10,18 @@ basic metadata, then raw decoding.
 
 ## Status
 
-This is desk research, done in October 2026. **None of it has yet been checked
-against sample files.** Byte offsets and formulas taken from other projects'
-source code should be checked against that source and against real files
-before they are hard-coded. [open-questions.md](open-questions.md) lists what
-is still unknown. [research-record.md](research-record.md) describes how the
-research was done and what it could not reach.
+This is desk research, done in October 2026. On 13 October 2026 the container
+and preview notes were checked against the three CC0 Nikon Z 9 files that CI
+downloads (files 5146 to 5148, listed in
+[test-data.md](test-data.md#21-the-ci-set)); what they show is tagged
+**[F]**. The check walked the files' structure only: the metadata and the
+raw data themselves were not checked, beyond the raw IFD's tags and the first
+bytes of its strip, and no other body was. **Everything else has yet to be
+checked against sample files.** Byte offsets and formulas taken from other
+projects' source code should be checked against that source and against real
+files before they are hard-coded. [open-questions.md](open-questions.md)
+lists what is still unknown. [research-record.md](research-record.md)
+describes how the research was done and what it could not reach.
 
 ## Pages
 
@@ -39,20 +45,30 @@ Claims carry a tag:
 - **[S]** — secondary: a forum post, issue, blog or search extract.
 - **[I]** — inferred, or from a single unconfirmed report. Treat it as a
   hypothesis to test on sample files.
+- **[F]** — measured on a named sample file. Files are cited by their
+  raw.pixls.us id ("file 5146"), and
+  [test-data.md](test-data.md#21-the-ci-set) lists them with their SHA-256.
+
+Where a sample contradicts a source, the pages follow the sample and record
+the disagreement.
 
 ## NEF at a glance
 
 - **A NEF is a TIFF file.** It has IFD0, SubIFDs (tag 0x014A) and an Exif IFD
   whose MakerNote (0x927C) holds Nikon's own tags. The outer byte order is
-  big-endian (`MM`) on the DSLRs documented up to about 2009 [P]; later
-  bodies are unconfirmed. A reader must accept both orders.
+  big-endian (`MM`) on the DSLRs documented up to about 2009 [P]. The Z 9 is
+  little-endian (`II`), in the file and in the MakerNote alike [F]; other
+  later bodies are unconfirmed. A reader must accept both orders.
 - **Previews are JPEGs in SubIFDs and in the MakerNote.**
   - Bodies from about 2012 carry a full-size JPEG plus a second JPEG of about
     1620×1080 [S].
+  - The Z 9 holds four JPEGs: 160×120, 640×424, 1620×1080 and 8256×5504
+    [F].
   - The MakerNote's PreviewIFD (0x0011) holds a small JPEG. Its offsets count
     from the MakerNote's embedded TIFF header, not from the start of the file
     [P].
-  - IFD0 is a 160×120 uncompressed thumbnail on DSLRs [P].
+  - IFD0 holds a 160×120 thumbnail: uncompressed on the DSLRs documented
+    [P], a JPEG on the Z 9 [F].
   - SubIFD order is not fixed, so choose by measured JPEG size.
 - **Viewer metadata is in standard tags.** Orientation, capture date, make and
   model come from IFD0 and the Exif IFD; the stored sensor size comes from the

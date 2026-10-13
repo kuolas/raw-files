@@ -2,8 +2,9 @@
 
 What the [NEF documentation](README.md) does not yet settle. Part 1 lists
 decisions for the maintainers. Part 2 lists facts that sample files can
-establish. Part 3 lists sources that were never read. Each item names the page
-it affects, and test-data.md describes the sample set that would answer Part 2.
+establish. Part 3 lists sources that were never read. Part 4 lists questions
+that sample files have already settled. Each item names the page it affects,
+and test-data.md describes the sample set that would answer Part 2.
 
 ## 1. Decisions for the maintainers
 
@@ -59,15 +60,18 @@ it affects, and test-data.md describes the sample set that would answer Part 2.
 ### Container and previews
 
 - **Largest preview per body.** The dimensions and count of embedded JPEGs on
-  the D3/D300/D700, D850, D5/D6 and Z bodies. The Z f's reported 1616×1080 in
-  particular needs checking.
+  the D3/D300/D700, D850, D5/D6 and the Z bodies other than the Z 9. The Z f's
+  reported 1616×1080 in particular needs checking. The Z 9 is answered: four
+  JPEGs of 160×120, 640×424, 1620×1080 and 8256×5504 (files 5146 to 5148)
+  ([container-and-previews.md](container-and-previews.md)).
 - **JPEG encoding.** Whether any body embeds a progressive JPEG, or one with
-  unusual chroma subsampling.
-- **Outer byte order.** For the D800 and later bodies, Z bodies and Coolpix
-  NRW. Pre-2010 DSLRs are `MM` and the E5700 is `II`.
+  unusual chroma subsampling. The Z 9's four are baseline (files 5146 to
+  5148); their subsampling was not read.
+- **Outer byte order.** For the D800 and later bodies, the Z bodies other than
+  the Z 9, and Coolpix NRW. Pre-2010 DSLRs are `MM`, the E5700 is `II`, and
+  the Z 9 is `II` for the file and the MakerNote alike (files 5146 to 5148).
 - **Early bodies.** Where the D1 and D1H keep their previews, and how large the
   MakerNote preview is on the D1X and D100.
-- **HE / HE\* layout.** Whether HE/HE\* files differ in IFD or preview layout.
 - **Coolscan NEF.** The exact structure of a scanner NEF, and which IFD holds
   NikonScanIFD (0x0E10).
 - **NikonNEFInfo.** Which IFD hosts tag 0xC7D5 (NikonNEFInfo) across bodies.
@@ -77,15 +81,24 @@ it affects, and test-data.md describes the sample set that would answer Part 2.
   headerless and short-header MakerNotes count from the outer TIFF header, as
   inferred ([container-and-previews.md](container-and-previews.md)).
 - **Multi-strip previews.** Whether any SubIFD JPEG is stored in several
-  strips ([container-and-previews.md](container-and-previews.md)).
+  strips. On the Z 9 every JPEG is in one piece, through 0x0201/0x0202 (files
+  5146 to 5148); other bodies are open
+  ([container-and-previews.md](container-and-previews.md)).
 - **Truncation and padding.** How common truncated JPEGs or padding after the
-  end-of-image marker are in real files
+  end-of-image marker are in real files. The Z 9 has neither: each JPEG ends
+  with the end-of-image marker exactly at its declared length (files 5146 to
+  5148); other bodies are open
   ([container-and-previews.md](container-and-previews.md)).
 - **Preview Exif.** Whether a SubIFD or PreviewIFD JPEG ever carries its own
-  Exif APP1 with an Orientation
+  Exif APP1 with an Orientation. Not on the Z 9, whose JPEGs have no APP
+  segment at all (files 5146 to 5148); other bodies are open
   ([container-and-previews.md](container-and-previews.md)).
 - **Z 6III previews.** Whether the Z 6III follows the 1620×1080 second-JPEG
   pattern ([container-and-previews.md](container-and-previews.md)).
+- **Z 9 SubIFDs without a preview.** What the Z 9's 384×256 uncompressed
+  8-bit grey SubIFD and its two empty SubIFDs (width, height and strip
+  length 0) are for (files 5146 to 5148). A preview finder skips all three
+  ([container-and-previews.md](container-and-previews.md)).
 
 ### MakerNote and metadata
 
@@ -113,6 +126,12 @@ it affects, and test-data.md describes the sample set that would answer Part 2.
 - **NEFCompression 5 and 6.** Which bodies write them.
 - **NEFCompression 9.** Whether Z bodies write 9 for 12-bit uncompressed
   files, or whether it comes only from Coolpix.
+- **NEFCompression on Z bodies.** Tag 0x0093 is absent from the Z 9 files,
+  the lossless one included (files 5146 to 5148), as the claim that Z bodies
+  keep the value in tag 0x0051 predicts; so reading the compression on Z
+  bodies must go through 0x0051. Its value was not read: what byte 10 of
+  0x0051 holds on each of these files, and in which byte order, remains to
+  be checked on the bytes ([raw-data.md](raw-data.md)).
 - **Lossless debut.** Whether lossless compression first appeared on the
   D3/D300.
 - **Curve sizes.** How Claff's encoding-table sizes relate to the stored
@@ -135,3 +154,17 @@ it affects, and test-data.md describes the sample set that would answer Part 2.
   issue tracker, which is not publicly indexed.
 - **Blocked.** DPReview and Photography Life articles. Claims that rest on
   them are tagged [S] from search extracts.
+
+## 4. Questions settled by sample files
+
+Each of these was open before the three CC0 Z 9 files were checked. The
+files that settled it are named; their SHA-256 hashes are in
+[test-data.md](test-data.md#21-the-ci-set).
+
+- **HE / HE\* layout**: HE and HE\* files do not differ from lossless ones
+  in IFD or preview layout. The IFD layout, the SubIFD order, the tags of
+  every IFD of the tree and of the PreviewIFD, and the four preview sizes
+  are the same in the lossless, HE\* and HE files; the raw strip's content
+  and length differ; and the MakerNote IFD differs by one tag, 0x0096,
+  present in the lossless file only (files 5146 to 5148)
+  ([container-and-previews.md](container-and-previews.md)).
