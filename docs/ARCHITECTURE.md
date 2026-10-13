@@ -41,7 +41,8 @@ fuzz targets are a second crate, in `fuzz/`, that is never published.
 | `tests/tiff_builder.rs` | tests only: the fixture builder checked from outside the crate, which keeps `tests/support/` compiled | `tests/support` |
 | `tests/jpeg_stub.rs` | tests only: the stub JPEG checked from outside the crate | `tests/support` |
 | `tests/open.rs` | tests only: the public API from outside the crate (opening, detection, limits, errors, `Send`) | `tests/support` |
-| `tests/nef.rs` | tests only: the NEF reader from outside the crate, on the Z 9 fixture (the previews listed, chosen and read, in both byte orders, with the MakerNote in either) | `tests/support` |
+| `tests/nef.rs` | tests only: the NEF reader from outside the crate, on the Z 9 fixture (the previews listed, chosen and read, in both byte orders, with the MakerNote in either), and on the three Z 9 sample files of `tests/samples.tsv` (each preview's size, place, format and orientation, and the largest read whole), each skipped when its file is absent | `tests/support`, the downloaded samples |
+| `tests/samples.tsv` | the real sample files the tests read when present: for each, its raw.pixls.us id, format, file name, SHA-256, licence and URL. Not committed themselves; `scripts/fetch-samples.sh` downloads them into `target/raw-samples`, or `RAW_FILES_SAMPLES`, and checks each hash ([test data](formats/nef/test-data.md#21-the-ci-set)) | — |
 | `fuzz/` | the fuzz targets: a separate crate, never published, each target one call into `src/fuzzing.rs`; `fuzz/seeds/` holds the committed starting inputs, generated from the test fixtures and checked against them by a test. Its one dependency besides the library, `libfuzzer-sys`, compiles libFuzzer's C++ runtime: the only native code in the repository, kept out of the library, which stays pure Rust ([ADR007](architecture-decisions/adr007-pure-rust-cross-platform.md)) | the library, `libfuzzer-sys` |
 
 **Data flow.** A file is opened through `Options`, or `RawFile`'s
@@ -70,7 +71,9 @@ the file's length.
 under `#[cfg(test)]`, so the unit tests and the integration tests share one
 copy of each without it becoming part of the library. A whole file of one
 camera's layout, built from those two, lives beside them for the
-integration tests: `tests/support/nef.rs`, the Z 9's.
+integration tests: `tests/support/nef.rs`, the Z 9's. Real files are not
+committed: `tests/samples.tsv` pins the ones the tests read by their
+SHA-256, and a test whose file has not been downloaded skips.
 
 ## As the code grows
 
