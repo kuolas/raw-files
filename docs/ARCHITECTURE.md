@@ -20,9 +20,12 @@ fuzz targets are a second crate, in `fuzz/`, that is never published.
 | `src/container/tiff/ifd.rs` | TIFF IFDs: their entries, checked against the file and the entry limit, and typed access to tag values | `io`, `error`, `limits` |
 | `src/container/tiff/walk.rs` | the IFD walk: IFD0's chain, SubIFDs and the Exif IFD, with a visited set, a depth cap and a total cap | `io`, `error`, `limits` |
 | `src/container/tiff/robustness.rs` | tests only: the whole TIFF reader on truncated and corrupted files, which give an error or a tree within the limits, never a panic | — |
+| `src/container/jpeg/mod.rs` | the JPEG container, as far as sizing a preview needs it: the walk over a stream's marker segments, inside a given range, to the frame header and the image's size; it never decodes | `io`, `error` |
 | `src/fuzzing.rs` | the fuzz entry points, compiled only with `--cfg fuzzing`: each reads arbitrary bytes through a whole reader | `io`, `container`, `limits` |
 | `tests/support/tiff_builder.rs` | the fixture builder: small TIFF files described in code, for unit and integration tests | — (`std` only) |
+| `tests/support/jpeg.rs` | the stub JPEG: a small well-formed stream with a chosen frame header and no image, for unit and integration tests | — (`std` only) |
 | `tests/tiff_builder.rs` | tests only: the fixture builder checked from outside the crate, which keeps `tests/support/` compiled | `tests/support` |
+| `tests/jpeg_stub.rs` | tests only: the stub JPEG checked from outside the crate | `tests/support` |
 | `fuzz/` | the fuzz targets: a separate crate, never published, each target one call into `src/fuzzing.rs`; `fuzz/seeds/` holds the committed starting inputs, generated from the test fixtures and checked against them by a test. Its one dependency besides the library, `libfuzzer-sys`, compiles libFuzzer's C++ runtime: the only native code in the repository, kept out of the library, which stays pure Rust ([ADR007](architecture-decisions/adr007-pure-rust-cross-platform.md)) | the library, `libfuzzer-sys` |
 
 **Data flow.** None yet: nothing reads files so far. The API to come reads any
@@ -37,9 +40,10 @@ goes through `io::Source`, where its offset and length are checked against
 the file's length.
 
 **Test fixtures.** Tests describe the TIFF files they read in code, with
-`tests/support/tiff_builder.rs`; `src/lib.rs` includes that file with
-`#[path]` under `#[cfg(test)]`, so the unit tests and the integration tests
-share one builder without it becoming part of the library.
+`tests/support/tiff_builder.rs`, and take their JPEG streams from
+`tests/support/jpeg.rs`; `src/lib.rs` includes both files with `#[path]`
+under `#[cfg(test)]`, so the unit tests and the integration tests share one
+copy of each without it becoming part of the library.
 
 ## As the code grows
 
