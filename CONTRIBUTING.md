@@ -237,7 +237,8 @@ offline. `scripts/fetch-samples.sh` downloads the pinned set listed in
 [`tests/samples.tsv`](tests/samples.tsv), about 118 MB, into
 `target/raw-samples`, or into the directory named by `RAW_FILES_SAMPLES`,
 and checks each file's SHA-256; `cargo test` then runs those tests too. CI
-does this on Linux.
+does this on Linux, from a cache that a workflow on `master` keeps filled,
+so a pull request downloads nothing unless it changes the list.
 
 CI ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) runs them on every
 pull request on macOS, Linux and Windows, builds and tests the crate with
