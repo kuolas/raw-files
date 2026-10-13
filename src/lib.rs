@@ -22,6 +22,7 @@
 #[cfg(any(test, fuzzing))]
 mod container;
 mod error;
+mod format;
 // The entry points of the fuzz targets in `fuzz/`: compiled only with
 // `--cfg fuzzing`, which cargo-fuzz sets, and hidden from the docs.
 #[cfg(fuzzing)]
@@ -52,6 +53,7 @@ mod preview;
 mod tiff_builder;
 
 pub use error::{Error, ErrorKind, Result};
+pub use format::Format;
 pub use geometry::Size;
 pub use limits::Limits;
 pub use orientation::Orientation;
