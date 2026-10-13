@@ -32,7 +32,7 @@
 use std::io::{Read, Seek};
 
 use crate::error::Result;
-use crate::io::{ByteOrder, Source};
+use crate::io::{ByteOrder, Source, within};
 
 /// The most steps the walk takes before it gives up on a stream.
 ///
@@ -74,13 +74,12 @@ impl Frame {
     /// A lossless JPEG keeps every sample exactly as it was, which is how a
     /// camera stores sensor data without loss, and such a stream can look much
     /// like a preview to the tags that point at it: Sony stores the raw tiles
-    /// of its lossless ARW files as lossless JPEG streams. The preview finder,
-    /// once written, will drop these frames.
+    /// of its lossless ARW files as lossless JPEG streams. The preview finder
+    /// drops these frames.
     ///
     /// The lossless frame markers are `C3`, the lossless process with Huffman
     /// coding, `C7`, its differential variant, and `CB` and `CF`, the same two
     /// with arithmetic coding.
-    #[cfg_attr(not(test), expect(dead_code, reason = "nothing finds previews yet"))]
     pub(crate) fn is_lossless(self) -> bool {
         matches!(self.marker, 0xC3 | 0xC7 | 0xCB | 0xCF)
     }
@@ -102,17 +101,11 @@ fn is_standalone(code: u8) -> bool {
     matches!(code, 0x01 | 0xD0..=0xD8)
 }
 
-/// `pos + n`, if it is at most `end`.
-fn within(pos: u64, n: u64, end: u64) -> Option<u64> {
-    pos.checked_add(n).filter(|&next| next <= end)
-}
-
-// Nothing finds previews yet; tests and the fuzz targets already probe.
-// Each `expect`, here and on `Frame::is_lossless`, fails the build once its
-// item has a caller, so it is then removed rather than left behind. What
-// `probe` calls has none: some compilers count an item under
+// The preview finder probes, and has no caller yet, so its own
+// `expect(dead_code)` stands for this path: neither `probe` nor
+// `Frame::is_lossless` carries one. Some compilers count an item under
 // `expect(dead_code)` as used code, and so what it calls, which would leave
-// those `expect`s unfulfilled there.
+// an `expect` here unfulfilled there.
 
 /// Finds the frame header of the JPEG stream in the `len` bytes at
 /// `offset` and returns the image's size from it.
@@ -139,7 +132,6 @@ fn within(pos: u64, n: u64, end: u64) -> Option<u64> {
 /// Only the errors of reading `src`: `Malformed` if the walk reads past the
 /// end of the file, which can happen only when the range does not lie
 /// inside it; `Io` if the reader fails.
-#[cfg_attr(not(test), expect(dead_code, reason = "nothing finds previews yet"))]
 pub(crate) fn probe<R: Read + Seek>(
     src: &mut Source<R>,
     offset: u64,

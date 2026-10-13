@@ -58,16 +58,11 @@ use std::mem;
 use std::vec;
 
 use super::header::HEADER_LEN;
+use super::tags::{EXIF_IFD, SUB_IFDS};
 use super::{Header, Ifd, parse_ifd};
 use crate::error::{Error, ErrorKind, Result};
 use crate::io::{ByteOrder, Source};
 use crate::limits::Limits;
-
-/// The SubIFDs tag: the offsets of an IFD's child IFDs.
-const SUB_IFDS: u16 = 0x014A;
-
-/// The Exif IFD tag: the offset of the IFD that holds the Exif metadata.
-const EXIF_IFD: u16 = 0x8769;
 
 /// The base of the offsets inside the file's own IFDs: the start of the
 /// file. Every link the walk follows is relative to it, so the offset as
@@ -114,13 +109,13 @@ pub(crate) struct Tree {
 }
 
 // No format reads the tree yet. Each `expect` fails the build once its
-// method has a caller, so it is then removed rather than left behind. `iter`
-// has none because `exif` calls it: some compilers count an item under
-// `expect(dead_code)` as used code, and so what it calls, which would leave
-// an `expect` on `iter` unfulfilled there.
+// method has a caller, so it is then removed rather than left behind.
+// `ifd0` and `iter` have none because the preview finder, which carries
+// the `expect` for its path, calls them, and `exif` calls `iter`: some
+// compilers count an item under `expect(dead_code)` as used code, and so
+// what it calls, which would leave an `expect` on either unfulfilled there.
 impl Tree {
     /// IFD0, the IFD the header points to.
-    #[cfg_attr(not(test), expect(dead_code, reason = "no format reads the tree yet"))]
     pub(crate) fn ifd0(&self) -> &Ifd {
         // `walk` returns a tree only once IFD0 is in it.
         &self.ifds[0].1
@@ -143,14 +138,14 @@ impl Tree {
     }
 
     /// The number of IFDs in the tree, at least 1.
-    #[cfg_attr(not(test), expect(dead_code, reason = "no format reads the tree yet"))]
+    #[cfg_attr(not(test), expect(dead_code, reason = "nothing reads this method yet"))]
     pub(crate) fn len(&self) -> usize {
         self.ifds.len()
     }
 
     /// The IFD at position `i` of the tree, with its location; `None` past
     /// the end. Position 0 is IFD0.
-    #[cfg_attr(not(test), expect(dead_code, reason = "no format reads the tree yet"))]
+    #[cfg_attr(not(test), expect(dead_code, reason = "nothing reads this method yet"))]
     pub(crate) fn get(&self, i: usize) -> Option<(Location, &Ifd)> {
         self.ifds.get(i).map(|(location, ifd)| (*location, ifd))
     }
@@ -359,11 +354,13 @@ impl<R: Read + Seek> Walker<'_, R> {
 /// Turns damage in the file into `None`, keeping only a failure of the
 /// reader as an error.
 ///
-/// Past IFD0, an IFD that cannot be parsed or a tag value that cannot be
-/// read costs only what it would have led to. An `Io` error is not damage:
-/// it says nothing about the file, and the reader may fail again on the
-/// next read.
-fn skip_damage<T>(result: Result<T>) -> Result<Option<T>> {
+/// The rule wherever damage should cost only the part of the file it
+/// touches: past IFD0, an IFD that cannot be parsed or a tag value that
+/// cannot be read costs the walk only what it would have led to, and the
+/// preview finder skips an IFD whose tags it cannot read. An `Io` error is
+/// not damage: it says nothing about the file, and the reader may fail
+/// again on the next read.
+pub(crate) fn skip_damage<T>(result: Result<T>) -> Result<Option<T>> {
     match result {
         Ok(value) => Ok(Some(value)),
         Err(err) if err.kind() == ErrorKind::Io => Err(err),

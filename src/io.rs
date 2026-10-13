@@ -9,6 +9,8 @@
 //! offset, found before the reader is touched, never a panic or a short read
 //! (ADR008). A file that turns out shorter than that length, because it
 //! shrank after it was opened, is an `Io` error at the offset of the read.
+//! [`within`] is the same check against the end of a range other than the
+//! file, for the readers that hold a range of their own.
 //!
 //! Small reads go through a block cache. Walking a file's TIFF directories
 //! reads a few bytes here and a few there, often close together; the cache
@@ -241,6 +243,17 @@ impl<R: Read + Seek> Source<R> {
         }
         Ok(())
     }
+}
+
+/// `pos + n` if the sum does not overflow and is at most `end`: the end of
+/// the `n` bytes at `pos` when they lie inside a range ending at `end`.
+///
+/// The check the readers make on a range of their own before they read in
+/// it, such as a JPEG stream's or a preview candidate's: a sum that would
+/// overflow lies inside no range, so it never wraps round to a small
+/// offset.
+pub(crate) fn within(pos: u64, n: u64, end: u64) -> Option<u64> {
+    pos.checked_add(n).filter(|&next| next <= end)
 }
 
 /// The last few blocks read from a file.
@@ -502,6 +515,22 @@ mod tests {
             .and_then(|source| source.downcast_ref::<io::Error>())
             .expect("the source is the io::Error");
         assert_eq!(source.kind(), io::ErrorKind::UnexpectedEof);
+    }
+
+    #[test]
+    fn within_gives_the_end_of_a_range_that_fits() {
+        assert_eq!(within(10, 5, 20), Some(15));
+        assert_eq!(within(10, 10, 20), Some(20), "ending at the end");
+        assert_eq!(within(20, 0, 20), Some(20), "empty, at the end");
+        assert_eq!(within(u64::MAX, 0, u64::MAX), Some(u64::MAX));
+    }
+
+    #[test]
+    fn within_refuses_a_range_past_the_end_or_one_that_overflows() {
+        assert_eq!(within(10, 11, 20), None, "one byte past the end");
+        assert_eq!(within(21, 0, 20), None, "empty, past the end");
+        assert_eq!(within(u64::MAX, 1, u64::MAX), None, "the sum overflows");
+        assert_eq!(within(2, u64::MAX - 1, u64::MAX), None, "the sum overflows");
     }
 
     #[test]

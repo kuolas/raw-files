@@ -33,7 +33,6 @@ impl Preview {
     ///
     /// The caller has checked that `offset + length` lies inside the file,
     /// so the sum does not overflow.
-    #[cfg_attr(not(test), expect(dead_code, reason = "nothing finds previews yet"))]
     pub(crate) fn new(
         offset: u64,
         length: u64,
