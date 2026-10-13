@@ -22,12 +22,19 @@ Every claim carries a confidence tag:
   search-result extract.
 - **[I]** inferred, or derived by arithmetic from primary facts; a hypothesis
   to test on sample files.
+- **[F]** measured on a named sample file. Files are cited as "file 5146",
+  the id of the file in the public raw.pixls.us collection; the files cited
+  here are described under [Sample files](#sample-files), and their URLs and
+  SHA-256 hashes are in [test-data.md](test-data.md#21-the-ci-set).
 
 Numbers in square brackets such as [3] refer to [Sources](#sources).
 
 **Offsets, formulas and constants taken from implementation source code must
 be checked against that source and against sample files before they are
-hard-coded.** Nothing on this page has yet been checked against real NEFs.
+hard-coded.** Only the facts tagged **[F]** have been checked against real
+NEFs: the Z 9's raw IFD, the first bytes of its strip and the absence of
+tag 0x0093, on files 5146 to 5148. No strip was decoded, and no MakerNote
+tag's value was read from them.
 
 **Licence hygiene.** The decoders read for this page are under dcraw's own
 licence, LGPL-2.1 or CDDL-1.0 (LibRaw), and LGPL-2.1 (rawspeed, rawler,
@@ -46,14 +53,21 @@ takes them from is an open decision (see
   in the IFD whose PhotometricInterpretation is 32803 (CFA) or that carries
   a CFAPattern tag; it is usually a SubIFD of IFD0. rawspeed and rawler both
   locate it as the IFD with a CFAPattern tag, and rawler falls back to the
-  full-resolution subfile. [11][14] **[P]**
+  full-resolution subfile. [11][14] **[P]** On the Z 9 it is SubIFD1, the
+  second of six SubIFDs: NewSubfileType 0, Compression 34713,
+  PhotometricInterpretation 32803, 8280 × 5520, BitsPerSample 14,
+  SamplesPerPixel 1 (files 5146 to 5148). **[F]**
 - **The strip.** StripOffsets and StripByteCounts of that IFD give the data.
   Most bodies write one strip; rawler notes that the D500 writes several and
-  sums their byte counts. [14] **[P]**
+  sums their byte counts. [14] **[P]** The Z 9 writes one strip, of
+  49,679,511 bytes for lossless (file 5146), 28,565,504 for HE\* (file 5147)
+  and 17,139,200 for HE (file 5148). **[F]**
 - **TIFF Compression (0x0103)** of the raw IFD takes three values: [1][14][17]
   - **34713**, Nikon compressed: the Huffman scheme below, although some
     packed layouts carry this value too (see
-    [Choosing the decode path](#choosing-the-decode-path)). **[P]**
+    [Choosing the decode path](#choosing-the-decode-path)). **[P]** The
+    Z 9 writes it for lossless, HE and HE\* alike (files 5146 to 5148), so
+    the value does not tell HE from lossless. **[F]**
   - **1**, uncompressed. **[P]**
   - **32769**, a packed layout with one pad byte after every ten pixels:
     dcraw handles the value that way, generically and without naming a
@@ -65,21 +79,27 @@ takes them from is an open decision (see
   parse last; rawspeed and rawler prefer 0x0096 and fall back to 0x008C.
   [1][6][11][14] **[P]** Offsets inside the MakerNote are relative to its
   embedded TIFF header, not to the file
-  ([makernote-and-metadata.md](makernote-and-metadata.md)).
+  ([makernote-and-metadata.md](makernote-and-metadata.md)). On the Z 9,
+  0x0096 is present in the lossless file 5146 only; the HE and HE\* files
+  5147 and 5148 carry 0x008C and not 0x0096, and all three carry 0x0051
+  (tags present, values not read). **[F]**
 - **Byte order.** The 16-bit values in 0x0096 are in the MakerNote's byte
   order, which can differ from the file's. [2][10] **[P]** Older NEFs are
   big-endian; Nikon began writing little-endian MakerNotes with the D7100
   and D5200 (2013), and files re-saved by Nikon's software can keep some
-  big-endian structures. [30] **[S]** rawler rejects a file whose TIFF and
-  MakerNote byte orders differ [14] **[P]**; LibRaw has a fix for NEFs
-  damaged by Nikon Transfer [9] **[P]**.
+  big-endian structures. [30] **[S]** The Z 9 is little-endian (`II`) in
+  the file and in the MakerNote (files 5146 to 5148). **[F]** rawler
+  rejects a file whose TIFF and MakerNote byte orders differ [14] **[P]**;
+  LibRaw has a fix for NEFs damaged by Nikon Transfer [9] **[P]**.
 
 ## NEFCompression
 
 MakerNote tag 0x0093 (NEFCompression) names the encoding. On the Z 9 and
 later bodies 0x0093 is absent and the same value is an int16u at byte 10 of
 tag 0x0051; ExifTool, LibRaw and rawler all read it there. [6][14][15][16]
-**[P]** The sources disagree on the byte order: LibRaw reads the field in the
+**[P]** On the Z 9, 0x0093 is absent from files 5146 to 5148, the lossless
+one included **[F]**; the value in 0x0051 was not read from them. The
+sources disagree on the byte order: LibRaw reads the field in the
 MakerNote's byte order, and only rawler forces little-endian. **[P]**
 
 | Value | Name (ExifTool) | Layout | Bodies seen | Conf. |
@@ -94,8 +114,12 @@ MakerNote's byte order, and only rawler forces little-endian. **[P]**
 | 8 | Small | sNEF YCbCr | D4S, D810 "RAW S" | **[I]** |
 | 9 | Packed 12 bits (2 pixels in 3 bytes) | 12-bit packed, little-endian | Coolpix; possibly Z 12-bit uncompressed | **[P]** label, **[I]** bodies |
 | 10 | Packed 14 bits (4 pixels in 7 bytes) | 14-bit packed, rows padded | D6 uncompressed [16] **[P]**; Z bodies **[I]** | **[P]**/**[I]** |
-| 13 | High Efficiency | JPEG XS based | Z 9 (2022 firmware), Z 8, Z f, Z 6III, Z5 II | **[P]**/**[S]** |
-| 14 | High Efficiency\* | JPEG XS based | same | **[P]**/**[S]** |
+| 13 | High Efficiency | JPEG XS based | Z 9 (2022 firmware), Z 8, Z f, Z 6III, Z5 II | **[P]**/**[S]**; Z 9 strip **[F]** (below) |
+| 14 | High Efficiency\* | JPEG XS based | same | **[P]**/**[S]**; Z 9 strip **[F]** (below) |
+
+For the Z 9, files 5148 (HE) and 5147 (HE\*) confirm rows 13 and 14 only
+in that their raw strips start with the JPEG XS markers `FF 10 FF 50`
+**[F]**; the NEFCompression value itself was not read.
 
 Values 0, 11 and 12 are not defined. [15] **[P]** ExifTool credits values 5
 to 9 to Iliah Borg and names no camera for 5 or 6. [16] **[P]** LibRaw treats
@@ -129,6 +153,11 @@ The candidate layouts are recognised by size:
 | otherwise, with Compression 34713 | Huffman |
 
 where ceil16(x) rounds x up to a multiple of 16.
+
+The first test is confirmed on the Z 9: the strips of files 5147 (HE\*) and
+5148 (HE) start `FF 10 FF 50`, and the strip of the lossless file 5146
+starts `A2 E6 43`, with no marker. All three carry TIFF Compression 34713,
+so only the strip's first bytes tell them apart. **[F]**
 
 ### dcraw and LibRaw
 
@@ -672,7 +701,9 @@ edge rule because averaging looks one pair ahead. [11] **[S]**, policy
   Z5 II. [4][31] **[P]**/**[S]** NEFCompression is 13 (HE) or 14 (HE\*), in
   tag 0x0051. [16] **[P]**
 - **Sniff.** The strip starts with the JPEG XS SOC and CAP markers,
-  `FF 10 FF 50`. [4] **[P]**
+  `FF 10 FF 50`. [4] **[P]** Confirmed on the Z 9: the HE\* and HE strips
+  of files 5147 and 5148 start with them, and the lossless strip of file
+  5146 does not. **[F]**
 - **Reverse-engineered details**, from two unmerged pull requests [34][35]
   **[S]**: a 5/3 wavelet; four components from a Star-Tetrix-style
   decorrelation of the Bayer planes, which the header does not signal; the
@@ -906,6 +937,9 @@ These are also tracked in [open-questions.md](open-questions.md).
   striped layout LibRaw decodes.
 - **NEFCompression 9 on Z bodies**: whether their 12-bit uncompressed files
   carry 9, and the byte order of a Z 6/Z 7 TIFF header.
+- **0x0051 on Z bodies**: 0x0093 is absent from the Z 9 files, the lossless
+  one included, so the compression must be read from 0x0051; its value and
+  byte order were not read from files 5146 to 5148.
 - **D850 M/S**: byte-level confirmation of a CFA layout and which Huffman
   table they use; whether the Z 9 and the original Z 6/Z 7 write M/S NEF.
 - **0x003D**: the first body to write it, and its channel order on any
@@ -970,3 +1004,13 @@ All retrieved October 2026. Implementation sources are read only; see
 [42] NVD, Foveon/X3F Huffman-style vulnerabilities in the LibRaw family — https://nvd.nist.gov/vuln/detail/CVE-2017-6890 ; https://nvd.nist.gov/vuln/detail/CVE-2020-35531
 [43] Licences: LibRaw README — https://raw.githubusercontent.com/LibRaw/LibRaw/master/README.md ; dcraw COPYING (Debian) — https://sources.debian.org/src/dcraw/9.28-8/COPYING ; dnglab — https://github.com/dnglab/dnglab ; rawspeed — https://github.com/darktable-org/rawspeed ; rawloader — https://github.com/pedrocr/rawloader
 [44] Nikon, Z 9 online manual, specifications — https://onlinemanual.nikonimglib.com/z9/en/specifications_348.html
+
+### Sample files
+
+Files 5146, 5147 and 5148: the three CC0 Nikon Z 9 files of raw.pixls.us,
+one per compression mode (lossless, High Efficiency\* and High Efficiency).
+Their SHA-256 hashes and URLs are in
+[test-data.md](test-data.md#21-the-ci-set). They were checked on 13 October
+2026 by a structural walk of the IFD0 chain, the SubIFDs, the Exif IFD and
+the MakerNote's PreviewIFD, reading each JPEG's marker segments to its frame
+header and its last two bytes.

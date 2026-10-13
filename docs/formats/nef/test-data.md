@@ -67,6 +67,10 @@ gives each its own name. The "8bit" is the site's label, not the files':
 all three hold 14-bit raw data (BitsPerSample 14 in the raw IFD), as the
 upload names say. Keep the URLs as they are.
 
+The container and preview facts tagged **[F]** on the other NEF pages were
+measured on these three files on 2026-10-13, so this section is where the
+**[F]** tag points.
+
 ## 3. What raw.pixls.us holds for Nikon
 
 Directory listings, 2026-10-10. **[P]** The data lives under
@@ -181,7 +185,7 @@ The set above answers many of them, mostly with `exiftool -v3`, `exiftool
 | Preview dimensions and count per body; unusual JPEG types | D3 or D300, D850, D5, D6, Z 6, Z 7, Z 8, Z 9, Z f: list each SubIFD and the PreviewIFD, read each JPEG's frame header |
 | Outer TIFF byte order per generation | The first eight bytes of one file per body; settles the Z bodies in particular |
 | Where previews live on the earliest bodies | D1, D1X, D1H and the E-series |
-| Whether HE and HE* change IFD or preview layout | The three Z 9 files side by side |
+| Whether HE and HE* change IFD or preview layout | The three Z 9 files side by side. Answered: they do not (section 2.1, files 5146 to 5148) |
 | Whether tag 0x000C white balance is present and correct on Z bodies | Z 6, Z 7, Z 8, Z 9, Z f |
 | Whether CropArea (0x0045) is always present, and raw-to-output size mapping | One file per body, compared with the Exif image size |
 | Version bytes written by lossy type 1 bodies; what the 2110-byte skip is | `exiftool -b -NEFLinearizationTable` on D1H, D1X, D100, D70, D200, D2X; read the first two bytes |

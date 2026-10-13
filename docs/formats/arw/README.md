@@ -179,8 +179,9 @@ not repeat what the two formats share:
 
 Two things differ: ARW needs no built-in Huffman tables (lossless tiles
 carry their own) and no MakerNote cipher for anything a milestone needs, and
-the ARW pages were checked against sample files, which the NEF pages have
-not yet been.
+the ARW pages were checked against sample files from the start, while the
+NEF pages were desk research first and have so far been checked on the Z 9
+only.
 
 ## Licence hygiene
 
