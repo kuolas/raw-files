@@ -2,19 +2,43 @@
 
 //! raw-files: a camera RAW library in pure Rust.
 //!
-//! raw-files will extract the JPEG previews embedded in Nikon NEF and Sony ARW
-//! files, and later decode their raw sensor data. A malformed file will give
-//! an error, never a panic.
+//! raw-files extracts the JPEG previews embedded in Nikon NEF files, will do
+//! the same for Sony ARW files, and later decode their raw sensor data. A
+//! malformed file gives an error, never a panic.
 //!
 //! [`RawFile`] opens a file by path, from bytes in memory or from any reader
 //! that can seek, detects its format from its content, lists its embedded
 //! previews and reads one; [`Options`] opens it with other [`Limits`].
-//! Nikon NEF files are recognised, though their previews are not read yet;
-//! any other file that can be read opens as `UnknownFormat`. See the
+//! The previews of Nikon NEF files are read; any other file that can be
+//! read opens as `UnknownFormat`. See the
 //! [roadmap](https://github.com/kuolas/raw-files/blob/master/docs/ROADMAP.md)
 //! for the plan and the
 //! [architecture](https://github.com/kuolas/raw-files/blob/master/docs/ARCHITECTURE.md)
 //! for how the code is laid out.
+//!
+//! # Examples
+//!
+//! Read the largest preview of a NEF file, with its size and the
+//! orientation it must be shown in:
+//!
+//! ```no_run
+//! use raw_files::RawFile;
+//!
+//! # fn main() -> raw_files::Result<()> {
+//! let mut file = RawFile::open("photo.nef")?;
+//! if let Some(preview) = file.largest_preview() {
+//!     let jpeg = file.read_preview(&preview)?;
+//!     println!(
+//!         "{} × {} pixels, shown upright by {:?}, {} bytes",
+//!         preview.width(),
+//!         preview.height(),
+//!         preview.orientation(),
+//!         jpeg.len(),
+//!     );
+//! }
+//! # Ok(())
+//! # }
+//! ```
 
 // A fuzzing build compiles the reader for one caller, the fuzz entry points,
 // which use only part of it. What is unused there, and so which `expect`s

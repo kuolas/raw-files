@@ -26,7 +26,9 @@ decided with the first release.
 - `RawFile`, an open RAW file: opened by path, from bytes or from any
   reader that can seek, with its format detected from its content. It
   lists the file's previews smallest first, picks the largest or the
-  smallest at least a given size, and reads one, exactly as stored. No
-  format is recognised yet, so a file that can be read opens as
-  `UnknownFormat`.
+  smallest at least a given size, and reads one, exactly as stored. A
+  file of no format the library knows opens as `UnknownFormat`.
 - `Options`, to open files with custom `Limits`.
+- Reading the embedded JPEG previews of Nikon NEF files: the ones in IFD0
+  and the SubIFDs, sized from their own frame headers, with IFD0's
+  orientation.

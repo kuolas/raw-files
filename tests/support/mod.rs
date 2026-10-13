@@ -10,4 +10,5 @@
 #![allow(dead_code)]
 
 pub mod jpeg;
+pub mod nef;
 pub mod tiff_builder;

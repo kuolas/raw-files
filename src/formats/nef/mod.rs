@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! The Nikon NEF reader: how the crate recognises a NEF file, and, next,
-//! how it finds the file's previews.
+//! The Nikon NEF reader: how the crate recognises a NEF file, and how it
+//! finds the file's previews.
 //!
 //! A NEF file is a TIFF file written by a Nikon camera, with Nikon's own
 //! additions inside: a MakerNote, compressed raw data. For this reader a
@@ -11,8 +11,11 @@
 //! looked at, and neither is the image IFD0 describes, which differs
 //! between bodies and does not tell a Nikon file from another.
 //!
-//! This folder will also hold the search for the previews, in `previews.rs`,
-//! and the reader of Nikon's MakerNote, in `makernote.rs`.
+//! The search for the previews is in `previews.rs`. The reader of Nikon's
+//! MakerNote, which will add the small preview the MakerNote points at, is
+//! still to come, in `makernote.rs`.
+
+mod previews;
 
 use std::io::{Read, Seek};
 
@@ -70,17 +73,16 @@ fn claims<R: Read + Seek>(src: &mut Source<R>, tree: &Tree) -> Result<bool> {
         .is_some_and(|start| start.eq_ignore_ascii_case(NIKON)))
 }
 
-/// Reads the previews of a NEF file that [`claims`] accepted: none yet.
-///
-/// The shared TIFF preview finder is to run here, over the whole tree;
-/// until it does, a NEF file opens with no previews.
+/// Reads the previews of a NEF file that [`claims`] accepted: the JPEGs
+/// that IFD0 and the SubIFDs declare, found by the shared TIFF preview
+/// finder over the whole tree.
 ///
 /// # Errors
 ///
-/// None yet: the `Result` is the format table's signature.
-fn parse<R: Read + Seek>(_src: &mut Source<R>, _tree: &Tree, _limits: &Limits) -> Result<Parsed> {
+/// As for [`previews::previews`].
+fn parse<R: Read + Seek>(src: &mut Source<R>, tree: &Tree, _limits: &Limits) -> Result<Parsed> {
     Ok(Parsed {
-        previews: Vec::new(),
+        previews: previews::previews(src, tree)?,
     })
 }
 
@@ -197,7 +199,7 @@ mod tests {
     }
 
     #[test]
-    fn a_claimed_file_has_no_previews_yet() {
+    fn a_claimed_file_without_a_jpeg_has_no_previews() {
         let (mut src, tree) = file(|builder, ifd| {
             builder.ascii(ifd, MAKE, "NIKON CORPORATION");
         });

@@ -12,8 +12,8 @@
 //! finder that the TIFF-based formats share lives in `tiff_previews`.
 //!
 //! The table holds NEF: a Nikon file is recognised by its IFD0's Make, and
-//! opens with no previews until the NEF reader runs the shared finder. A
-//! file no format claims is of no format the crate recognises.
+//! opens with its previews, which the NEF reader finds with the shared
+//! finder. A file no format claims is of no format the crate recognises.
 
 mod nef;
 mod tiff_previews;
