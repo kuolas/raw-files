@@ -16,6 +16,7 @@
 
 use std::io::Cursor;
 
+use crate::container::jpeg::probe;
 use crate::container::tiff::{parse_header, walk};
 use crate::io::Source;
 use crate::limits::Limits;
@@ -43,5 +44,44 @@ pub fn tiff_walk(data: &[u8]) {
             let _ = ifd.ascii(&mut src, tag);
             let _ = ifd.bytes(&mut src, tag);
         }
+    }
+}
+
+/// Reads `data` as a JPEG stream: the probe for its frame header over the
+/// whole of `data`, then over a range inside it that the first two bytes
+/// choose, and whether each frame found is lossless.
+///
+/// The second range tests the probe's bounds, which a caller sets from a
+/// preview's tags: the first byte is where it starts, the second how many
+/// bytes it leaves off the end, so that the fuzzer also probes ranges that
+/// start inside the bytes or end before them.
+///
+/// Whatever `data` holds, this must return, never panic, and do so in
+/// bounded time and memory. What it reads is thrown away: an error or no
+/// frame is an expected outcome for arbitrary bytes, so every result is
+/// ignored.
+pub fn jpeg_probe(data: &[u8]) {
+    let Ok(mut src) = Source::new(Cursor::new(data)) else {
+        return;
+    };
+    let Ok(len) = u64::try_from(data.len()) else {
+        return;
+    };
+    if let Ok(Some(frame)) = probe(&mut src, 0, len) {
+        let _ = frame.is_lossless();
+    }
+    let [start, cut, ..] = data else {
+        return;
+    };
+    let offset = u64::from(*start);
+    let Some(sub_len) = len
+        .checked_sub(u64::from(*cut))
+        .and_then(|end| end.checked_sub(offset))
+        .filter(|&sub_len| sub_len > 0)
+    else {
+        return;
+    };
+    if let Ok(Some(frame)) = probe(&mut src, offset, sub_len) {
+        let _ = frame.is_lossless();
     }
 }
