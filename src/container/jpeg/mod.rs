@@ -101,12 +101,6 @@ fn is_standalone(code: u8) -> bool {
     matches!(code, 0x01 | 0xD0..=0xD8)
 }
 
-// The preview finder probes, and has no caller yet, so its own
-// `expect(dead_code)` stands for this path: neither `probe` nor
-// `Frame::is_lossless` carries one. Some compilers count an item under
-// `expect(dead_code)` as used code, and so what it calls, which would leave
-// an `expect` here unfulfilled there.
-
 /// Finds the frame header of the JPEG stream in the `len` bytes at
 /// `offset` and returns the image's size from it.
 ///

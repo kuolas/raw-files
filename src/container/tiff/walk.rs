@@ -108,13 +108,10 @@ pub(crate) struct Tree {
     ifds: Vec<(Location, Ifd)>,
 }
 
-// The NEF reader's claim reads IFD0; no format reads the rest of the tree
-// yet. Each `expect` fails the build once its method has a caller, so it
-// is then removed rather than left behind. `iter` has none because the
-// preview finder, which carries the `expect` for its path, calls it, and
-// `exif` calls `iter`: some compilers count an item under
-// `expect(dead_code)` as used code, and so what it calls, which would
-// leave an `expect` on `iter` unfulfilled there.
+// The NEF reader's claim reads IFD0, and the preview finder goes through
+// every IFD of the tree; nothing reads the Exif IFD, the number of IFDs or
+// an IFD by its position yet. Each `expect` fails the build once its
+// method has a caller, so it is then removed rather than left behind.
 impl Tree {
     /// IFD0, the IFD the header points to.
     pub(crate) fn ifd0(&self) -> &Ifd {

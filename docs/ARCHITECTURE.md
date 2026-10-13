@@ -21,7 +21,8 @@ fuzz targets are a second crate, in `fuzz/`, that is never published.
 | `src/file.rs` | `RawFile`: the file handle. Opening reads the TIFF structure, detects the format through the table in `formats` and keeps the previews sorted; reading a preview checks it against `max_preview_bytes` before reading it through the `Source` | `container`, `formats`, `io`, `options`, `preview`, `format`, `limits`, `error` |
 | `src/formats/mod.rs` | the format table: one `FormatSpec` per format, a `claims` and a `parse` function over the TIFF tree, and detection, which asks each in order and lets the first that claims the file read it. The table holds NEF; each format is a folder here | `container`, `io`, `format`, `preview`, `limits`, `error` |
 | `src/formats/tiff_previews.rs` | the preview finder the TIFF-based formats share: which IFDs of the tree describe raw data, or have a tag that cannot be read, and are skipped, where the others declare their JPEG, the checks on each candidate, the tree's and the ones a format adds (inside the file, a frame header, not lossless), the size measured from that frame header, and IFD0's orientation given to every preview | `container`, `io`, `preview`, `orientation`, `error` |
-| `src/formats/nef/mod.rs` | the Nikon NEF reader: its claim, by IFD0's Make, and its spec in the format table | `container`, `io`, `format`, `preview`, `limits`, `error` |
+| `src/formats/nef/mod.rs` | the Nikon NEF reader: its claim, by IFD0's Make, and its spec in the format table, whose parse reads the previews through `nef/previews.rs` | `container`, `io`, `format`, `preview`, `limits`, `error` |
+| `src/formats/nef/previews.rs` | where a NEF file keeps its previews, and their search: the shared finder over the whole tree | `tiff_previews`, `container`, `io`, `preview`, `error` |
 | `src/io.rs` | `Source`: the one checked reader — bounded reads, checked offset arithmetic, a small block cache for the scattered reads of directory walking; `within`, the same bounds check on a range of a reader's own | `error` |
 | `src/container/mod.rs` | the containers: file structures that several formats share, with no knowledge of camera vendors | — |
 | `src/container/tiff/mod.rs` | the TIFF container's face to the crate: re-exports; one folder per container, so a container that grows never moves | — |
@@ -34,9 +35,11 @@ fuzz targets are a second crate, in `fuzz/`, that is never published.
 | `src/fuzzing.rs` | the fuzz entry points, compiled only with `--cfg fuzzing`: each reads arbitrary bytes through a whole reader, or through the file handle as a caller would | `io`, `container`, `limits`, `options` |
 | `tests/support/tiff_builder.rs` | the fixture builder: small TIFF files described in code, for unit and integration tests | — (`std` only) |
 | `tests/support/jpeg.rs` | the stub JPEG: a small well-formed stream with a chosen frame header and no image, for unit and integration tests | — (`std` only) |
+| `tests/support/nef.rs` | the Z 9 fixture: a file laid out like a Nikon Z 9's NEF files, with stub JPEGs, for integration tests | `tests/support/tiff_builder.rs`, `tests/support/jpeg.rs` |
 | `tests/tiff_builder.rs` | tests only: the fixture builder checked from outside the crate, which keeps `tests/support/` compiled | `tests/support` |
 | `tests/jpeg_stub.rs` | tests only: the stub JPEG checked from outside the crate | `tests/support` |
 | `tests/open.rs` | tests only: the public API from outside the crate (opening, detection, limits, errors, `Send`) | `tests/support` |
+| `tests/nef.rs` | tests only: the NEF reader from outside the crate, on the Z 9 fixture (the previews listed, chosen and read, in both byte orders) | `tests/support` |
 | `fuzz/` | the fuzz targets: a separate crate, never published, each target one call into `src/fuzzing.rs`; `fuzz/seeds/` holds the committed starting inputs, generated from the test fixtures and checked against them by a test. Its one dependency besides the library, `libfuzzer-sys`, compiles libFuzzer's C++ runtime: the only native code in the repository, kept out of the library, which stays pure Rust ([ADR007](architecture-decisions/adr007-pure-rust-cross-platform.md)) | the library, `libfuzzer-sys` |
 
 **Data flow.** A file is opened through `Options`, or `RawFile`'s
@@ -63,7 +66,9 @@ the file's length.
 `tests/support/tiff_builder.rs`, and take their JPEG streams from
 `tests/support/jpeg.rs`; `src/lib.rs` includes both files with `#[path]`
 under `#[cfg(test)]`, so the unit tests and the integration tests share one
-copy of each without it becoming part of the library.
+copy of each without it becoming part of the library. A whole file of one
+camera's layout, built from those two, lives beside them for the
+integration tests: `tests/support/nef.rs`, the Z 9's.
 
 ## As the code grows
 

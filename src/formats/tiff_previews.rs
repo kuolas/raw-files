@@ -116,7 +116,6 @@ pub(crate) struct Candidate {
 /// returns no other error here: it can fail with `Malformed` only on a
 /// range that runs past the end of the file, and no candidate that does is
 /// probed.
-#[cfg_attr(not(test), expect(dead_code, reason = "no format finds previews yet"))]
 pub(crate) fn find<R: Read + Seek>(
     src: &mut Source<R>,
     tree: &Tree,

@@ -41,7 +41,7 @@ fn a_file_that_is_not_tiff_is_of_unknown_format() {
 }
 
 #[test]
-fn a_tiff_file_whose_make_is_nikon_opens_as_nef_with_no_previews_yet() {
+fn a_nikon_file_that_holds_no_jpeg_opens_as_nef_with_no_previews() {
     let bytes = one_ifd(Some("NIKON CORPORATION"));
     let file = RawFile::from_bytes(&bytes).unwrap();
     assert_eq!(file.format(), Format::Nef);
