@@ -3,18 +3,19 @@
 //! The RAW formats: the table of the formats the crate can detect, and
 //! detection over it.
 //!
-//! Each format will live in its own folder here (`nef/`, `arw/`) and
-//! register itself in [`spec`] as a [`FormatSpec`]: one function that says
+//! Each format lives in its own folder here (`nef/`, and later `arw/`) and
+//! registers itself in [`spec`] as a [`FormatSpec`]: one function that says
 //! whether a file is of that format, and one that reads its previews.
 //! Detection goes by content, never by the file's name, so a renamed file
 //! opens as what it is; [`Format::from_extension`] is for file pickers,
 //! which must choose what to offer before opening anything. The preview
 //! finder that the TIFF-based formats share lives in `tiff_previews`.
 //!
-//! The table is empty until the NEF reader registers itself: for now
-//! detection claims no file, so a well-formed one is of no format the crate
-//! recognises.
+//! The table holds NEF: a Nikon file is recognised by its IFD0's Make, and
+//! opens with no previews until the NEF reader runs the shared finder. A
+//! file no format claims is of no format the crate recognises.
 
+mod nef;
 mod tiff_previews;
 
 use std::io::{Read, Seek};
@@ -54,11 +55,9 @@ pub(crate) struct FormatSpec<R> {
 /// The match is exhaustive, so a format added to [`Format`] fails to compile
 /// until it is handled here. A function, not a `static`, because the specs'
 /// functions are generic over the reader, and a `static` cannot be.
-// `None` is temporary: once the NEF reader registers its spec the `Option`
-// goes away, and a format without a spec fails to compile.
-pub(crate) fn spec<R: Read + Seek>(format: Format) -> Option<FormatSpec<R>> {
+pub(crate) fn spec<R: Read + Seek>(format: Format) -> FormatSpec<R> {
     match format {
-        Format::Nef => None,
+        Format::Nef => nef::spec(),
     }
 }
 
@@ -67,7 +66,7 @@ pub(crate) fn spec<R: Read + Seek>(format: Format) -> Option<FormatSpec<R>> {
 ///
 /// The order is [`Format::all`]'s, by construction.
 pub(crate) fn all<R: Read + Seek>() -> Vec<FormatSpec<R>> {
-    Format::all().iter().copied().filter_map(spec).collect()
+    Format::all().iter().copied().map(spec).collect()
 }
 
 /// Detects the format of the file in `src`, whose TIFF structure is `tree`,
@@ -99,6 +98,7 @@ pub(crate) fn detect<R: Read + Seek>(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::container::tiff::tags::MAKE;
     use crate::container::tiff::{parse_header, walk};
     use crate::error::{Error, ErrorKind};
     use crate::orientation::Orientation;
@@ -107,9 +107,6 @@ mod tests {
     use std::io::Cursor;
 
     type Src = Source<Cursor<Vec<u8>>>;
-
-    /// The Make tag: the camera's manufacturer, as text.
-    const MAKE: u16 = 0x010F;
 
     /// A one-IFD TIFF file whose Make is `make`, read into a source and a
     /// tree.
@@ -192,25 +189,27 @@ mod tests {
 
     #[test]
     fn the_table_follows_format_all() {
-        // Vacuous while every spec is `None`; it starts to bite with the first reader.
         for format in Format::all() {
-            if let Some(s) = super::spec::<Cursor<Vec<u8>>>(*format) {
-                assert_eq!(s.format, *format);
-            }
+            assert_eq!(super::spec::<Cursor<Vec<u8>>>(*format).format, *format);
         }
-        let specs = all::<Cursor<Vec<u8>>>();
-        assert!(specs.len() <= Format::all().len());
-        let mut listed = Format::all().iter();
-        for spec in &specs {
-            assert!(listed.any(|format| *format == spec.format));
-        }
+        let formats: Vec<Format> = all::<Cursor<Vec<u8>>>()
+            .iter()
+            .map(|spec| spec.format)
+            .collect();
+        assert_eq!(formats, Format::all());
     }
 
     #[test]
-    fn the_table_is_empty_so_nothing_is_detected() {
+    fn the_table_detects_a_nikon_file_as_nef_and_no_other() {
         let specs = all::<Cursor<Vec<u8>>>();
-        assert!(specs.is_empty());
-        assert_eq!(detected(&specs, "Nikon").unwrap(), None);
+        let format = |make: &str| {
+            let (mut src, tree) = file(make);
+            detect(&specs, &mut src, &tree, &Limits::default())
+                .unwrap()
+                .map(|(format, _)| format)
+        };
+        assert_eq!(format("NIKON CORPORATION"), Some(Format::Nef));
+        assert_eq!(format("Canon"), None);
     }
 
     #[test]
