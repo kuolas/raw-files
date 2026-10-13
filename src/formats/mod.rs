@@ -8,11 +8,14 @@
 //! whether a file is of that format, and one that reads its previews.
 //! Detection goes by content, never by the file's name, so a renamed file
 //! opens as what it is; [`Format::from_extension`] is for file pickers,
-//! which must choose what to offer before opening anything.
+//! which must choose what to offer before opening anything. The preview
+//! finder that the TIFF-based formats share lives in `tiff_previews`.
 //!
 //! The table is empty until the NEF reader registers itself: for now
 //! detection claims no file, so a well-formed one is of no format the crate
 //! recognises.
+
+mod tiff_previews;
 
 use std::io::{Read, Seek};
 
