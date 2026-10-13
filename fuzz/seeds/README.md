@@ -7,12 +7,20 @@ the corpus the fuzzer writes is not.
 
 - `tiff_walk/` seeds the `tiff_walk` target with the test fixtures of the
   TIFF reader, three layouts in both byte orders.
+- `jpeg_probe/` seeds the `jpeg_probe` target with stub JPEG streams: a
+  baseline, a progressive and a lossless frame header, application segments
+  before the frame header, and a frame header straight after SOI, as in a
+  Sony raw tile; and one input that is not a stream but two bytes choosing
+  a range inside the input, then a stream, since the target also probes the
+  range those bytes name.
 
 The files are generated from the fixtures in
-`src/container/tiff/robustness.rs`, never edited by hand, and a test
-(`the_fuzz_seeds_match_the_fixtures`) fails when one is missing or differs
-from its fixture. After changing a fixture, regenerate them from the
-repository root:
+`src/container/tiff/robustness.rs` and the stubs in
+`src/container/jpeg/mod.rs`, never edited by hand, and a test in each
+(`the_fuzz_seeds_match_the_fixtures`, `the_jpeg_fuzz_seeds_match_the_stubs`)
+fails when a file is missing or differs from what it is generated from.
+After changing a fixture or a stub, regenerate them all from the repository
+root:
 
 ```sh
 cargo test --lib write_fuzz_seeds -- --ignored

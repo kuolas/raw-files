@@ -26,3 +26,10 @@ path = "fuzz_targets/tiff_walk.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "jpeg_probe"
+path = "fuzz_targets/jpeg_probe.rs"
+test = false
+doc = false
+bench = false

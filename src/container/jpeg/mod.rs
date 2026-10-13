@@ -227,6 +227,7 @@ mod tests {
     use crate::ErrorKind;
     use crate::jpeg_stub::{FRAME_HEADER_AT, jpeg_stub, segment};
     use std::io::Cursor;
+    use std::path::{Path, PathBuf};
 
     /// Every frame header marker.
     const FRAME_MARKERS: [u8; 13] = [
@@ -269,6 +270,53 @@ mod tests {
         }
         bytes.extend_from_slice(&stub[FRAME_HEADER_AT..]);
         bytes
+    }
+
+    /// A stream as a camera writes a preview: SOI, a JFIF segment (APP0), an
+    /// Exif segment (APP1) and a comment, then a baseline frame header for
+    /// 640 by 480.
+    fn with_app_segments() -> Vec<u8> {
+        let mut exif = b"Exif\0\0".to_vec();
+        exif.extend_from_slice(&[b'I', b'I', 42, 0, 8, 0, 0, 0, 0, 0]);
+        soi_then(&[
+            segment(0xE0, b"JFIF\0\x01\x02\0\0\x01\0\x01\0\0"),
+            segment(0xE1, &exif),
+            segment(0xFE, b"a comment"),
+        ])
+    }
+
+    /// The streams the fuzz target `jpeg_probe` starts from: each file name
+    /// with the bytes it holds.
+    ///
+    /// A fuzzer finds the `FF D8 FF` that opens a stream only by luck, and
+    /// a frame header behind well-formed segments hardly ever, so it starts
+    /// from these, committed as files in `fuzz/seeds/jpeg_probe/`: the stub
+    /// with a baseline, a progressive and a lossless frame header, a stream
+    /// with application segments and a comment before its frame header, and
+    /// one whose frame header comes first, as in a Sony raw tile.
+    ///
+    /// The fuzz target reads the first two bytes of its input as a range
+    /// inside it to probe as well, and every stream starts `FF D8`, which
+    /// names a range no seed is long enough to hold. The last seed is not a
+    /// stream but a fuzz input: the two bytes that choose the range, 2 and
+    /// 0, then the baseline stub, so that the range they choose is exactly
+    /// the stub and the range probe starts from a valid stream too.
+    fn seeds() -> Vec<(&'static str, Vec<u8>)> {
+        let mut in_a_range = vec![2, 0];
+        in_a_range.extend(jpeg_stub(640, 480, 0xC0));
+        vec![
+            ("baseline.jpg", jpeg_stub(640, 480, 0xC0)),
+            ("progressive.jpg", jpeg_stub(640, 480, 0xC2)),
+            ("lossless.jpg", jpeg_stub(640, 480, 0xC3)),
+            ("with-app-segments.jpg", with_app_segments()),
+            ("sof-first.jpg", sof_first(512, 256, 0xC3)),
+            ("in-a-range.bin", in_a_range),
+        ]
+    }
+
+    /// Where the seed files live, under the crate's root.
+    fn seeds_dir() -> PathBuf {
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("fuzz/seeds/jpeg_probe")
     }
 
     /// A stream whose first marker after SOI is the frame header, with
@@ -338,14 +386,7 @@ mod tests {
 
     #[test]
     fn app_and_comment_segments_are_walked_over() {
-        let mut exif = b"Exif\0\0".to_vec();
-        exif.extend_from_slice(&[b'I', b'I', 42, 0, 8, 0, 0, 0, 0, 0]);
-        let bytes = soi_then(&[
-            segment(0xE0, b"JFIF\0\x01\x02\0\0\x01\0\x01\0\0"),
-            segment(0xE1, &exif),
-            segment(0xFE, b"a comment"),
-        ]);
-        assert_eq!(probe_all(&bytes).unwrap(), baseline(640, 480));
+        assert_eq!(probe_all(&with_app_segments()).unwrap(), baseline(640, 480));
     }
 
     #[test]
@@ -583,6 +624,50 @@ mod tests {
                     let _ = probe_all(&bytes);
                 }
             }
+        }
+    }
+
+    /// Writes the seeds to `fuzz/seeds/jpeg_probe/`, where the fuzz target
+    /// starts from them. Ignored, as it writes to the source tree; run it
+    /// after changing a seed or the stub:
+    /// `cargo test --lib write_fuzz_seeds -- --ignored`, which also writes
+    /// the TIFF reader's.
+    #[test]
+    #[ignore = "writes the seed files; run it to regenerate them"]
+    fn write_fuzz_seeds() {
+        let dir = seeds_dir();
+        std::fs::create_dir_all(&dir).unwrap();
+        for (name, bytes) in seeds() {
+            std::fs::write(dir.join(name), bytes).unwrap();
+        }
+    }
+
+    /// The committed seed files hold the seeds' bytes, so that a changed
+    /// stub cannot leave the fuzzer starting from a stale file.
+    ///
+    /// The skip is keyed on `fuzz/Cargo.toml`, which the repository has and
+    /// the packaged crate leaves out: without it the test is skipped with a
+    /// note. With it, every seed file must exist and match, so a renamed or
+    /// deleted seeds directory fails instead of silently skipping.
+    #[test]
+    fn the_jpeg_fuzz_seeds_match_the_stubs() {
+        let fuzz_manifest = Path::new(env!("CARGO_MANIFEST_DIR")).join("fuzz/Cargo.toml");
+        if !fuzz_manifest.is_file() {
+            eprintln!(
+                "skipped: {} does not exist, as in the packaged crate",
+                fuzz_manifest.display()
+            );
+            return;
+        }
+        let dir = seeds_dir();
+        for (name, bytes) in seeds() {
+            let path = dir.join(name);
+            let committed = std::fs::read(&path).ok();
+            assert!(
+                committed.as_deref() == Some(&bytes[..]),
+                "fuzz/seeds/jpeg_probe/{name} is missing or differs from its stub: \
+                 regenerate it with `cargo test --lib write_fuzz_seeds -- --ignored`"
+            );
         }
     }
 }
