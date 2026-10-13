@@ -137,15 +137,10 @@ impl PreviewFormat {
     }
 }
 
-// The file handle that orders and picks previews does not exist yet; tests
-// already call these. Each `expect` fails the build once its function has a
-// caller, so it is then removed rather than left behind.
-
 /// Orders `previews` smallest first: by pixel area, then by byte length.
 ///
 /// The area is computed in `u64`, so it cannot overflow. The sort is
 /// stable: previews equal in both keep their order.
-#[cfg_attr(not(test), expect(dead_code, reason = "nothing lists previews yet"))]
 pub(crate) fn sort(previews: &mut [Preview]) {
     previews.sort_by_key(|preview| {
         (
@@ -163,7 +158,6 @@ pub(crate) fn sort(previews: &mut [Preview]) {
 /// chosen is the same bytes either way. When none is large enough, the
 /// largest is returned, so a caller asking for more than the file has still
 /// gets the best there is. `None` only when there are no previews.
-#[cfg_attr(not(test), expect(dead_code, reason = "nothing chooses previews yet"))]
 pub(crate) fn at_least(previews: &[Preview], width: u32, height: u32) -> Option<Preview> {
     previews
         .iter()

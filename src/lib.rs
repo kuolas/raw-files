@@ -4,7 +4,13 @@
 //!
 //! raw-files will extract the JPEG previews embedded in Nikon NEF and Sony ARW
 //! files, and later decode their raw sensor data. A malformed file will give
-//! an error, never a panic. Nothing is implemented yet: see the
+//! an error, never a panic.
+//!
+//! [`RawFile`] opens a file by path, from bytes in memory or from any reader
+//! that can seek, detects its format from its content, lists its embedded
+//! previews and reads one; [`Options`] opens it with other [`Limits`]. No
+//! format is recognised yet, so a file that can be read opens as
+//! `UnknownFormat`: the NEF and ARW readers come next. See the
 //! [roadmap](https://github.com/kuolas/raw-files/blob/master/docs/ROADMAP.md)
 //! for the plan and the
 //! [architecture](https://github.com/kuolas/raw-files/blob/master/docs/ARCHITECTURE.md)
@@ -16,24 +22,17 @@
 // builds keep both lints, and CI checks those.
 #![cfg_attr(fuzzing, allow(dead_code, unfulfilled_lint_expectations))]
 
-// Nothing uses the containers yet, and they read through `io`: compiled only
-// for tests and fuzzing until the file handle uses them, for the same reason
-// as `io`.
-#[cfg(any(test, fuzzing))]
 mod container;
 mod error;
+mod file;
 mod format;
+mod formats;
 // The entry points of the fuzz targets in `fuzz/`: compiled only with
 // `--cfg fuzzing`, which cargo-fuzz sets, and hidden from the docs.
 #[cfg(fuzzing)]
 #[doc(hidden)]
 pub mod fuzzing;
 mod geometry;
-// Nothing reads files yet; tests and the fuzz targets already do. Compiled
-// only for those until the first caller arrives: an `expect(dead_code)` on
-// the module would mark the error constructors it calls as used on some
-// compilers and leave their own expectations unfulfilled.
-#[cfg(any(test, fuzzing))]
 mod io;
 // The stub JPEG lives with the integration tests and is shared with the
 // unit tests, as the TIFF fixture builder below is.
@@ -42,6 +41,7 @@ mod io;
 #[path = "../tests/support/jpeg.rs"]
 mod jpeg_stub;
 mod limits;
+mod options;
 mod orientation;
 mod preview;
 // The TIFF fixture builder lives with the integration tests and is shared
@@ -53,8 +53,10 @@ mod preview;
 mod tiff_builder;
 
 pub use error::{Error, ErrorKind, Result};
+pub use file::RawFile;
 pub use format::Format;
 pub use geometry::Size;
 pub use limits::Limits;
+pub use options::Options;
 pub use orientation::Orientation;
 pub use preview::{Preview, PreviewFormat};

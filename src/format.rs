@@ -35,7 +35,7 @@ pub enum Format {
 impl Format {
     /// Every format, in a fixed order.
     ///
-    /// The order is the order in which detection will try the formats.
+    /// Detection tries the formats in this order.
     pub fn all() -> &'static [Format] {
         &[Format::Nef]
     }
