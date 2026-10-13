@@ -72,3 +72,8 @@ pub(crate) const JPEG_INTERCHANGE_FORMAT_LENGTH: u16 = 0x0202;
 /// The offset of the IFD that holds the Exif capture metadata (Exif IFD),
 /// read from IFD0.
 pub(crate) const EXIF_IFD: u16 = 0x8769;
+
+/// The camera maker's own metadata block, whose layout each vendor defines
+/// (MakerNote): an Exif tag, read from the Exif IFD, whose value is the
+/// block's bytes.
+pub(crate) const MAKER_NOTE: u16 = 0x927C;

@@ -30,5 +30,5 @@ decided with the first release.
   file of no format the library knows opens as `UnknownFormat`.
 - `Options`, to open files with custom `Limits`.
 - Reading the embedded JPEG previews of Nikon NEF files: the ones in IFD0
-  and the SubIFDs, sized from their own frame headers, with IFD0's
-  orientation.
+  and the SubIFDs, and the one the MakerNote points at, sized from their
+  own frame headers, with IFD0's orientation.

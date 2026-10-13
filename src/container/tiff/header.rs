@@ -2,11 +2,16 @@
 
 //! The TIFF header: the byte order of the file and the offset of its first
 //! directory, IFD0.
+//!
+//! A TIFF structure embedded in a file, such as the one inside a Nikon
+//! MakerNote, starts with a header of its own, laid out the same way and
+//! read at its own position; the offsets inside that structure count from
+//! its header.
 
 use std::io::{Read, Seek};
 
 use crate::error::{Error, Result};
-use crate::io::{ByteOrder, Source};
+use crate::io::{ByteOrder, Source, within};
 
 /// The length of the TIFF header in bytes.
 pub(super) const HEADER_LEN: u64 = 8;
@@ -18,17 +23,30 @@ const MAGIC: u16 = 42;
 /// 64-bit offsets.
 const BIGTIFF_MAGIC: u16 = 43;
 
-/// The 8-byte header at the start of every TIFF file.
+/// The 8-byte header at the start of every TIFF file, and of a TIFF
+/// structure embedded in one.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) struct Header {
-    /// The order of the bytes in every multi-byte value of the file.
+    /// The order of the bytes in every multi-byte value of the file, or of
+    /// the embedded structure.
     pub order: ByteOrder,
-    /// The offset of IFD0 from the start of the file, as the header gives it:
-    /// not yet checked against anything.
+    /// The offset of IFD0 from the start of the header, as the header gives
+    /// it: not yet checked against anything. For a file's own header, which
+    /// is at byte 0, that is the offset from the start of the file.
     pub ifd0: u32,
 }
 
-/// Reads the TIFF header at the start of `src`.
+/// Reads the TIFF header at the start of `src`: [`parse_header_at`] at
+/// byte 0.
+///
+/// # Errors
+///
+/// As for [`parse_header_at`].
+pub(crate) fn parse_header<R: Read + Seek>(src: &mut Source<R>) -> Result<Header> {
+    parse_header_at(src, 0)
+}
+
+/// Reads the TIFF header at byte `at` of `src`.
 ///
 /// The header is a byte-order mark, `II` for little-endian or `MM` for
 /// big-endian; the number 42 in that order; and the offset of IFD0 in that
@@ -36,20 +54,28 @@ pub(crate) struct Header {
 /// header or past the end of the file, and whoever reads IFD0 decides
 /// whether it can be read.
 ///
+/// A file's own header is at byte 0, which [`parse_header`] reads. A TIFF
+/// header embedded inside the file, such as the one a Nikon MakerNote
+/// carries, is read with this function at its own position; its
+/// [`Header::ifd0`] then counts from `at`, not from the start of the file,
+/// as every offset inside the embedded structure does.
+///
 /// # Errors
 ///
-/// `UnknownFormat` if the file is shorter than the header, starts with
-/// neither byte-order mark, or has a number other than 42 after it, which
-/// includes BigTIFF's 43; `Io` if the reader fails.
-pub(crate) fn parse_header<R: Read + Seek>(src: &mut Source<R>) -> Result<Header> {
+/// `UnknownFormat` if the file ends before the 8 bytes from `at` do, the
+/// header starts with neither byte-order mark, or has a number other than
+/// 42 after it, which includes BigTIFF's 43; `Io` if the reader fails.
+pub(crate) fn parse_header_at<R: Read + Seek>(src: &mut Source<R>, at: u64) -> Result<Header> {
     // Checked here, before reading, so that a short file is "not a TIFF
-    // file" rather than the `Malformed` of a read past the end.
-    if src.len() < HEADER_LEN {
+    // file" rather than the `Malformed` of a read past the end. Once the
+    // header's end is inside the file, so is every byte before it, and the
+    // offsets below cannot overflow.
+    if within(at, HEADER_LEN, src.len()).is_none() {
         return Err(Error::unknown_format(
             "the file is too short to hold a TIFF header",
         ));
     }
-    let order = match src.bytes(0, 2)?.as_slice() {
+    let order = match src.bytes(at, 2)?.as_slice() {
         b"II" => ByteOrder::Little,
         b"MM" => ByteOrder::Big,
         _ => {
@@ -58,7 +84,7 @@ pub(crate) fn parse_header<R: Read + Seek>(src: &mut Source<R>) -> Result<Header
             ));
         }
     };
-    match src.u16_at(2, order)? {
+    match src.u16_at(at + 2, order)? {
         MAGIC => {}
         BIGTIFF_MAGIC => {
             return Err(Error::unknown_format(
@@ -71,7 +97,7 @@ pub(crate) fn parse_header<R: Read + Seek>(src: &mut Source<R>) -> Result<Header
             ));
         }
     }
-    let ifd0 = src.u32_at(4, order)?;
+    let ifd0 = src.u32_at(at + 4, order)?;
     Ok(Header { order, ifd0 })
 }
 
@@ -124,6 +150,47 @@ mod tests {
                     ifd0: 0x0102_0304
                 }
             );
+        }
+    }
+
+    #[test]
+    fn reads_a_header_at_an_offset_in_both_byte_orders() {
+        for (order, expected) in [
+            (Order::Little, ByteOrder::Little),
+            (Order::Big, ByteOrder::Big),
+        ] {
+            let (mut builder, _) = one_ifd(order);
+            builder.ifd0_offset(Some(0x0102_0304));
+            // Ten bytes before the header, as a Nikon MakerNote has, the
+            // first two of them a byte-order mark of the other order, so
+            // that reading at the wrong position would show.
+            let mut bytes = b"MMII\0\0\x02\x11\0\0".to_vec();
+            bytes.extend_from_slice(&builder.build().bytes);
+            let mut src = Source::new(Cursor::new(bytes)).unwrap();
+            let header = parse_header_at(&mut src, 10).unwrap();
+            assert_eq!(
+                header,
+                Header {
+                    order: expected,
+                    ifd0: 0x0102_0304
+                },
+                "{order:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_header_at_an_offset_must_end_inside_the_file() {
+        let built = one_ifd(Order::Little).0.build();
+        let mut bytes = vec![0; 10];
+        bytes.extend_from_slice(&built.bytes[..8]);
+        let mut src = Source::new(Cursor::new(bytes)).unwrap();
+        parse_header_at(&mut src, 10).unwrap();
+        // One byte later, the header would end past the file; at the
+        // largest offset, its end overflows.
+        for at in [11, u64::MAX] {
+            let err = parse_header_at(&mut src, at).expect_err("no room for a header");
+            assert_eq!(err.kind(), ErrorKind::UnknownFormat, "{at}: {err:?}");
         }
     }
 

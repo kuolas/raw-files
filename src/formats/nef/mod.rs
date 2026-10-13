@@ -11,10 +11,11 @@
 //! looked at, and neither is the image IFD0 describes, which differs
 //! between bodies and does not tell a Nikon file from another.
 //!
-//! The search for the previews is in `previews.rs`. The reader of Nikon's
-//! MakerNote, which will add the small preview the MakerNote points at, is
-//! still to come, in `makernote.rs`.
+//! The search for the previews is in `previews.rs`, and the reader of
+//! Nikon's MakerNote, which finds the small preview the MakerNote points
+//! at, in `makernote.rs`.
 
+mod makernote;
 mod previews;
 
 use std::io::{Read, Seek};
@@ -75,14 +76,15 @@ fn claims<R: Read + Seek>(src: &mut Source<R>, tree: &Tree) -> Result<bool> {
 
 /// Reads the previews of a NEF file that [`claims`] accepted: the JPEGs
 /// that IFD0 and the SubIFDs declare, found by the shared TIFF preview
-/// finder over the whole tree.
+/// finder over the whole tree, and the one the MakerNote points at, read
+/// within `limits`.
 ///
 /// # Errors
 ///
 /// As for [`previews::previews`].
-fn parse<R: Read + Seek>(src: &mut Source<R>, tree: &Tree, _limits: &Limits) -> Result<Parsed> {
+fn parse<R: Read + Seek>(src: &mut Source<R>, tree: &Tree, limits: &Limits) -> Result<Parsed> {
     Ok(Parsed {
-        previews: previews::previews(src, tree)?,
+        previews: previews::previews(src, tree, limits)?,
     })
 }
 

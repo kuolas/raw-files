@@ -28,7 +28,11 @@
 //! - SubIFD4 and SubIFD5 are reduced-resolution images with no pixels:
 //!   their width, height, strip offset and strip length are all 0. The
 //!   first has Compression 34713, the second none (1).
-//! - The Exif IFD holds only the ExifVersion, `0232`.
+//! - The Exif IFD holds the ExifVersion, `0232`, and the MakerNote, whose
+//!   value is the block [`nikon_makernote`] writes: Nikon's own metadata,
+//!   here only its version and its PreviewIFD, which declares a small JPEG
+//!   of 640 by 424 pixels. The MakerNote is in the file's byte order unless
+//!   the file is built with [`z9_file_with`], which may give it the other.
 //!
 //! Every stub JPEG is a baseline one. The tags that the shared builder has
 //! no constant for are named here.
@@ -68,6 +72,14 @@ const JPEG_INTERCHANGE_FORMAT: u16 = 0x0201;
 const JPEG_INTERCHANGE_FORMAT_LENGTH: u16 = 0x0202;
 /// The version of the Exif standard the file follows (ExifVersion).
 const EXIF_VERSION: u16 = 0x9000;
+/// The camera maker's own metadata block (MakerNote).
+const MAKER_NOTE: u16 = 0x927C;
+/// The version of the Nikon MakerNote's layout, as four ASCII digits in an
+/// UNDEFINED value (MakerNoteVersion, a tag of the MakerNote IFD).
+const MAKER_NOTE_VERSION: u16 = 0x0001;
+/// The offset of the MakerNote's PreviewIFD, the IFD that declares its
+/// small JPEG (PreviewIFD, a tag of the MakerNote IFD).
+const PREVIEW_IFD: u16 = 0x0011;
 
 /// NewSubfileType of the full-resolution image.
 const FULL_RESOLUTION: u32 = 0;
@@ -86,6 +98,13 @@ const CFA: u16 = 32803;
 /// The baseline frame header's marker, SOF0.
 const BASELINE: u8 = 0xC0;
 
+/// The start of a Nikon MakerNote of the layout with an embedded TIFF
+/// header: the signature `Nikon` and a NUL, the version `02 11`, which
+/// the Z 9 writes, and two zero bytes. The inner TIFF header follows.
+const MAKER_NOTE_START: [u8; 10] = *b"Nikon\0\x02\x11\0\0";
+/// The MakerNote's version as its MakerNoteVersion tag gives it.
+const MAKER_NOTE_VERSION_0211: &[u8; 4] = b"0211";
+
 /// The size in pixels of each JPEG of the file: IFD0's small one, SubIFD0's
 /// full-size one and SubIFD2's medium one.
 pub const IFD0_JPEG: (u16, u16) = (160, 120);
@@ -93,6 +112,9 @@ pub const IFD0_JPEG: (u16, u16) = (160, 120);
 pub const FULL_SIZE_JPEG: (u16, u16) = (8256, 5504);
 /// See [`IFD0_JPEG`].
 pub const MEDIUM_JPEG: (u16, u16) = (1620, 1080);
+/// The size in pixels of the MakerNote's small JPEG, the one its
+/// PreviewIFD declares.
+pub const PREVIEW_JPEG: (u16, u16) = (640, 424);
 
 /// The start of the raw strip: the start-of-codestream marker of JPEG XS.
 pub const RAW_STRIP_START: [u8; 4] = [0xFF, 0x10, 0xFF, 0x50];
@@ -102,7 +124,7 @@ pub fn stub((width, height): (u16, u16)) -> Vec<u8> {
     jpeg_stub(width, height, BASELINE)
 }
 
-/// Where the blobs of a Z 9 file are, as [`z9_file_with_blobs`] laid them
+/// Where the blobs of a Z 9 file are, as [`z9_file_with`] laid them
 /// out.
 #[derive(Clone, Copy, Debug)]
 pub struct Z9Blobs {
@@ -116,6 +138,43 @@ pub struct Z9Blobs {
     pub medium_jpeg: BlobId,
     /// SubIFD3's grey strip.
     pub grey: BlobId,
+    /// The Exif IFD's MakerNote block.
+    pub makernote: BlobId,
+    /// Where the MakerNote's small JPEG starts, counted from the start of
+    /// the MakerNote block: the JPEG is at `blob_offset(makernote)` plus
+    /// this.
+    pub preview_in_makernote: u64,
+}
+
+/// A Nikon MakerNote of the layout every body since the D70 writes, in byte
+/// order `order`, whose PreviewIFD declares `preview`; and where `preview`
+/// starts, counted from the start of the block.
+///
+/// The block is [`MAKER_NOTE_START`] and then a TIFF structure of its own:
+/// a TIFF header in `order`, then the MakerNote IFD, which holds the
+/// MakerNoteVersion `0211` and the PreviewIFD tag, then the PreviewIFD,
+/// which declares `preview` through JPEGInterchangeFormat and
+/// JPEGInterchangeFormatLength, then `preview`'s bytes. Every offset
+/// inside the block counts from the inner TIFF header, 10 bytes in, which
+/// is exactly how a second [`TiffBuilder`] counts them: from its own first
+/// byte, which is that header.
+pub fn nikon_makernote(order: Order, preview: &[u8]) -> (Vec<u8>, u64) {
+    let mut inner = TiffBuilder::new(order);
+    let makernote = inner.ifd();
+    let preview_ifd = inner.ifd();
+    inner
+        .undefined(makernote, MAKER_NOTE_VERSION, MAKER_NOTE_VERSION_0211)
+        .ifd_pointer(makernote, PREVIEW_IFD, preview_ifd);
+    let jpeg = inner.blob(preview);
+    inner
+        .long_blob(preview_ifd, JPEG_INTERCHANGE_FORMAT, jpeg)
+        .long_blob_len(preview_ifd, JPEG_INTERCHANGE_FORMAT_LENGTH, jpeg);
+    let inner = inner.build();
+
+    let mut block = MAKER_NOTE_START.to_vec();
+    block.extend_from_slice(&inner.bytes);
+    let header_at = u64::try_from(MAKER_NOTE_START.len()).expect("ten bytes");
+    (block, header_at + inner.blob_offset(jpeg))
 }
 
 /// The Z 9 layout, in byte order `order`, with IFD0's Orientation
@@ -127,6 +186,13 @@ pub fn z9_file(order: Order, orientation: u16) -> Built {
 /// As [`z9_file`], with where its blobs are, so that a test can find them
 /// with [`Built::blob_offset`].
 pub fn z9_file_with_blobs(order: Order, orientation: u16) -> (Built, Z9Blobs) {
+    z9_file_with(order, orientation, order)
+}
+
+/// As [`z9_file_with_blobs`], with the MakerNote in byte order
+/// `makernote_order`, which may differ from the file's: a MakerNote's
+/// numbers follow its own TIFF header.
+pub fn z9_file_with(order: Order, orientation: u16, makernote_order: Order) -> (Built, Z9Blobs) {
     let mut builder = TiffBuilder::new(order);
     let ifd0 = builder.ifd();
     let subs: Vec<IfdId> = (0..6).map(|_| builder.ifd()).collect();
@@ -184,6 +250,9 @@ pub fn z9_file_with_blobs(order: Order, orientation: u16) -> (Built, Z9Blobs) {
     }
 
     builder.undefined(exif, EXIF_VERSION, b"0232");
+    let (block, preview_in_makernote) = nikon_makernote(makernote_order, &stub(PREVIEW_JPEG));
+    let makernote = builder.blob(&block);
+    builder.undefined_blob(exif, MAKER_NOTE, makernote);
 
     let blobs = Z9Blobs {
         ifd0_jpeg,
@@ -191,6 +260,8 @@ pub fn z9_file_with_blobs(order: Order, orientation: u16) -> (Built, Z9Blobs) {
         raw,
         medium_jpeg,
         grey,
+        makernote,
+        preview_in_makernote,
     };
     (builder.build(), blobs)
 }
