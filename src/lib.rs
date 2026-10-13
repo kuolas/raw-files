@@ -27,6 +27,7 @@ mod error;
 #[cfg(fuzzing)]
 #[doc(hidden)]
 pub mod fuzzing;
+mod geometry;
 // Nothing reads files yet; tests and the fuzz targets already do. Compiled
 // only for those until the first caller arrives: an `expect(dead_code)` on
 // the module would mark the error constructors it calls as used on some
@@ -40,6 +41,7 @@ mod io;
 #[path = "../tests/support/jpeg.rs"]
 mod jpeg_stub;
 mod limits;
+mod orientation;
 // The TIFF fixture builder lives with the integration tests and is shared
 // with the unit tests: compiled into each test build, never into the
 // library. Each side uses only part of it.
@@ -49,4 +51,6 @@ mod limits;
 mod tiff_builder;
 
 pub use error::{Error, ErrorKind, Result};
+pub use geometry::Size;
 pub use limits::Limits;
+pub use orientation::Orientation;

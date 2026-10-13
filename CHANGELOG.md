@@ -16,3 +16,5 @@ decided with the first release.
 - `Error`, with an `ErrorKind` category and the byte offset when known,
   and the `Result` alias.
 - `Limits`, the caps on what a file can make the library walk or allocate.
+- `Orientation`, the EXIF orientation a viewer must apply to a preview, and
+  `Size`, a width and height in pixels.

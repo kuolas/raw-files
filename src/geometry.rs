@@ -1,0 +1,45 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
+//! Sizes in pixels.
+
+/// The size of an image in pixels, as stored in the file, before any
+/// [`Orientation`](crate::Orientation) is applied.
+///
+/// For an orientation that swaps the dimensions, the size a viewer shows is
+/// this size with its width and height exchanged.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct Size {
+    /// The number of pixel columns, as stored.
+    pub width: u32,
+    /// The number of pixel rows, as stored.
+    pub height: u32,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn construction_and_equality() {
+        let size = Size {
+            width: 640,
+            height: 480,
+        };
+        assert_eq!(size.width, 640);
+        assert_eq!(size.height, 480);
+        assert_eq!(
+            size,
+            Size {
+                width: 640,
+                height: 480
+            }
+        );
+        assert_ne!(
+            size,
+            Size {
+                width: 480,
+                height: 640
+            }
+        );
+    }
+}
