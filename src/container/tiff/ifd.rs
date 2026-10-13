@@ -243,10 +243,10 @@ fn parse_entry(raw: &[u8; 12], base: u64, order: ByteOrder, file_len: u64) -> Op
     })
 }
 
-// The walk and the preview finder read IFDs through some of these
-// accessors; the others wait for the format modules. Each `expect` fails the
-// build once its accessor has a caller, so it is then removed rather than
-// left behind.
+// The walk, the preview finder and the NEF reader's claim read IFDs
+// through some of these accessors; the others wait for the format modules.
+// Each `expect` fails the build once its accessor has a caller, so it is
+// then removed rather than left behind.
 impl Ifd {
     /// The absolute offset of the IFD: where its entry count is.
     #[cfg_attr(
@@ -367,7 +367,6 @@ impl Ifd {
     /// # Errors
     ///
     /// As for [`u32s`](Self::u32s).
-    #[cfg_attr(not(test), expect(dead_code, reason = "no format reads IFDs yet"))]
     pub(crate) fn ascii<R: Read + Seek>(
         &self,
         src: &mut Source<R>,

@@ -8,9 +8,9 @@
 //!
 //! [`RawFile`] opens a file by path, from bytes in memory or from any reader
 //! that can seek, detects its format from its content, lists its embedded
-//! previews and reads one; [`Options`] opens it with other [`Limits`]. No
-//! format is recognised yet, so a file that can be read opens as
-//! `UnknownFormat`: the NEF and ARW readers come next. See the
+//! previews and reads one; [`Options`] opens it with other [`Limits`].
+//! Nikon NEF files are recognised, though their previews are not read yet;
+//! any other file that can be read opens as `UnknownFormat`. See the
 //! [roadmap](https://github.com/kuolas/raw-files/blob/master/docs/ROADMAP.md)
 //! for the plan and the
 //! [architecture](https://github.com/kuolas/raw-files/blob/master/docs/ARCHITECTURE.md)

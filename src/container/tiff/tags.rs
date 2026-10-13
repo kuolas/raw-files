@@ -25,6 +25,10 @@ pub(crate) const COMPRESSION: u16 = 0x0103;
 /// a colour filter array of sensor data, and so on.
 pub(crate) const PHOTOMETRIC_INTERPRETATION: u16 = 0x0106;
 
+/// The manufacturer of the camera that wrote the file, as text (Make), read
+/// from IFD0: what tells one vendor's files from another's.
+pub(crate) const MAKE: u16 = 0x010F;
+
 /// Where each strip of the image's data starts, as absolute offsets
 /// (StripOffsets).
 pub(crate) const STRIP_OFFSETS: u16 = 0x0111;

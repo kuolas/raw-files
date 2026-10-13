@@ -26,9 +26,8 @@ use std::fmt;
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[non_exhaustive]
 pub enum Format {
-    /// Nikon NEF, including the NRW files of Coolpix cameras.
-    ///
-    /// Recognition of NEF files arrives with the NEF reader.
+    /// Nikon NEF, including the NRW files of Coolpix cameras: a TIFF file
+    /// whose first directory's Make names Nikon.
     Nef,
 }
 

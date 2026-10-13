@@ -8,7 +8,7 @@ mod support;
 use std::fs::File;
 use std::io::{self, Cursor};
 
-use raw_files::{ErrorKind, Limits, Options, RawFile};
+use raw_files::{ErrorKind, Format, Limits, Options, RawFile};
 use support::tiff_builder::{Order, TiffBuilder};
 
 /// The Make tag: the camera's manufacturer, as text.
@@ -38,6 +38,19 @@ fn two_ifds() -> Vec<u8> {
 fn a_file_that_is_not_tiff_is_of_unknown_format() {
     let err = RawFile::from_bytes(b"not a tiff").unwrap_err();
     assert_eq!(err.kind(), ErrorKind::UnknownFormat);
+}
+
+#[test]
+fn a_tiff_file_whose_make_is_nikon_opens_as_nef_with_no_previews_yet() {
+    let bytes = one_ifd(Some("NIKON CORPORATION"));
+    let file = RawFile::from_bytes(&bytes).unwrap();
+    assert_eq!(file.format(), Format::Nef);
+    assert!(file.previews().is_empty());
+    assert_eq!(file.largest_preview(), None);
+    let file = RawFile::from_reader(Cursor::new(bytes)).unwrap();
+    assert_eq!(file.format(), Format::Nef);
+    assert!(file.previews().is_empty());
+    assert_eq!(file.largest_preview(), None);
 }
 
 #[test]
