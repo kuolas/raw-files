@@ -1,0 +1,48 @@
+# Samples — keeps the real sample files of tests/samples.tsv in a cache that
+# every pull request can restore, so that CI downloads them from
+# raw.pixls.us once per change of the list rather than once per pull
+# request.
+#
+# A workflow run can only restore caches created on its own branch or on the
+# default branch, and the CI workflow runs on pull requests, so a cache it
+# saves is scoped to that pull request and the next one starts cold. This
+# workflow runs on master, where it saves the cache under the same key the
+# CI workflow restores (the hash of the list), and once a week, because a
+# cache nobody has restored for seven days is evicted.
+#
+# Actions must be node24-generation majors; see ci.yml.
+
+name: Samples
+
+on:
+  push:
+    branches: [master]
+    paths: [tests/samples.tsv, scripts/fetch-samples.sh]
+  schedule:
+    # Mondays at 06:17 UTC. An odd minute avoids the busiest moment on the
+    # hosted runners, when runs on the hour are often delayed.
+    - cron: '17 6 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  seed:
+    name: sample cache
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+      # The same path and key as the CI workflow's restore step: both must
+      # change together.
+      # actions/cache@v6 declares `using: 'node24'` (checked 2026-10-13).
+      - uses: actions/cache@v6
+        with:
+          path: ${{ runner.temp }}/raw-samples
+          key: raw-samples-${{ hashFiles('tests/samples.tsv') }}
+      # Downloads only what the cache did not hold: a file already present
+      # with the right hash is kept.
+      - run: scripts/fetch-samples.sh
+        env:
+          RAW_FILES_SAMPLES: ${{ runner.temp }}/raw-samples

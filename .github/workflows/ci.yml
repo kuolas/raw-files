@@ -106,7 +106,10 @@ jobs:
       # directory does not exist and those tests skip. It is under the
       # runner's temp directory rather than target/, which rust-cache
       # manages. The cache is keyed on the list, so a changed list starts
-      # from an empty directory and downloads every file again.
+      # from an empty directory and downloads every file again. A pull
+      # request can restore a cache saved on master, and samples.yml saves
+      # one there under this key, so a pull request that leaves the list
+      # alone downloads nothing.
       # actions/cache@v6 declares `using: 'node24'` (checked 2026-10-13).
       - if: matrix.os == 'ubuntu-latest'
         uses: actions/cache@v6
