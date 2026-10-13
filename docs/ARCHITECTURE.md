@@ -10,11 +10,12 @@ fuzz targets are a second crate, in `fuzz/`, that is never published.
 
 | File | Holds | May depend on |
 |---|---|---|
-| `src/lib.rs` | the library root: the crate documentation and the re-exports | `error`, `geometry`, `limits`, `orientation` |
+| `src/lib.rs` | the library root: the crate documentation and the re-exports | `error`, `geometry`, `limits`, `orientation`, `preview` |
 | `src/error.rs` | `Error`, `ErrorKind`, `Result`: what can go wrong, by category, with the byte offset when known | — |
 | `src/limits.rs` | `Limits`: the caps on what a file can make the library walk or allocate | — |
 | `src/orientation.rs` | `Orientation`: what a viewer must do to the stored pixels to show the image upright, from the EXIF tag's eight values | — |
 | `src/geometry.rs` | `Size`: a width and height in pixels, as stored | — |
+| `src/preview.rs` | `Preview`, `PreviewFormat`: one embedded preview — its byte range in the file, its size measured from its frame header, its format and orientation — and the crate's ordering of previews, smallest first, and choice of the smallest at least a given size | `geometry`, `orientation` |
 | `src/io.rs` | `Source`: the one checked reader — bounded reads, checked offset arithmetic, a small block cache for the scattered reads of directory walking | `error` |
 | `src/container/mod.rs` | the containers: file structures that several formats share, with no knowledge of camera vendors | — |
 | `src/container/tiff/mod.rs` | the TIFF container's face to the crate: re-exports; one folder per container, so a container that grows never moves | — |

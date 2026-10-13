@@ -42,6 +42,7 @@ mod io;
 mod jpeg_stub;
 mod limits;
 mod orientation;
+mod preview;
 // The TIFF fixture builder lives with the integration tests and is shared
 // with the unit tests: compiled into each test build, never into the
 // library. Each side uses only part of it.
@@ -54,3 +55,4 @@ pub use error::{Error, ErrorKind, Result};
 pub use geometry::Size;
 pub use limits::Limits;
 pub use orientation::Orientation;
+pub use preview::{Preview, PreviewFormat};
