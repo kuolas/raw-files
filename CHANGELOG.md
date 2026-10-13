@@ -23,3 +23,10 @@ decided with the first release.
   encoded, with a media type and a file extension.
 - `Format`, the RAW formats the library knows, with a name, the file
   extensions and a lookup by extension for file pickers.
+- `RawFile`, an open RAW file: opened by path, from bytes or from any
+  reader that can seek, with its format detected from its content. It
+  lists the file's previews smallest first, picks the largest or the
+  smallest at least a given size, and reads one, exactly as stored. No
+  format is recognised yet, so a file that can be read opens as
+  `UnknownFormat`.
+- `Options`, to open files with custom `Limits`.

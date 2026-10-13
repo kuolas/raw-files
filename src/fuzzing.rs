@@ -20,6 +20,7 @@ use crate::container::jpeg::probe;
 use crate::container::tiff::{parse_header, walk};
 use crate::io::Source;
 use crate::limits::Limits;
+use crate::options::Options;
 
 /// Reads `data` as a TIFF file: the header, the walk with the default
 /// limits, then every value of every IFD the walk found, through each
@@ -83,5 +84,26 @@ pub fn jpeg_probe(data: &[u8]) {
     };
     if let Ok(Some(frame)) = probe(&mut src, offset, sub_len) {
         let _ = frame.is_lossless();
+    }
+}
+
+/// Opens `data` as a RAW file, as a caller would, with the default options,
+/// then asks it everything the handle answers: its format, its largest
+/// preview, the smallest at least 1 by 1, and the bytes of every preview,
+/// read into one buffer.
+///
+/// Whatever `data` holds, this must return, never panic, and do so in
+/// bounded time and memory. What it reads is thrown away: an error is an
+/// expected outcome for arbitrary bytes, so every `Result` is ignored.
+pub fn open(data: &[u8]) {
+    let Ok(mut file) = Options::new().from_bytes(data) else {
+        return;
+    };
+    let _ = file.format();
+    let _ = file.largest_preview();
+    let _ = file.preview_at_least(1, 1);
+    let mut buf = Vec::new();
+    for preview in file.previews().to_vec() {
+        let _ = file.read_preview_into(&preview, &mut buf);
     }
 }

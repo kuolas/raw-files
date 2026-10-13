@@ -13,6 +13,9 @@ the corpus the fuzzer writes is not.
   Sony raw tile; and one input that is not a stream but two bytes choosing
   a range inside the input, then a stream, since the target also probes the
   range those bytes name.
+- The `open` target has no directory of its own: it starts from
+  `tiff_walk/`, since every file it can open is a TIFF file. Fixtures of
+  the RAW formats will join it as their readers arrive.
 
 The files are generated from the fixtures in
 `src/container/tiff/robustness.rs` and the stubs in

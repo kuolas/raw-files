@@ -98,24 +98,16 @@ impl Error {
     }
 }
 
-// The format modules that call these do not exist yet; tests already do.
-// Each `expect` fails the build once its constructor has a caller, so it is
-// then removed rather than left behind.
+// The constructors the rest of the crate builds errors with. No format
+// module reports `Unsupported` yet; the `expect` fails the build once that
+// constructor has a caller, so it is then removed rather than left behind.
 impl Error {
     /// The file contradicts itself or its format at byte `offset`.
-    #[cfg_attr(
-        not(test),
-        expect(dead_code, reason = "no format module reports this error yet")
-    )]
     pub(crate) fn malformed(message: impl Into<Cow<'static, str>>, offset: u64) -> Self {
         Self::new(ErrorKind::Malformed, message.into(), Some(offset), None)
     }
 
     /// The file is not a RAW file this version recognises.
-    #[cfg_attr(
-        not(test),
-        expect(dead_code, reason = "no format module reports this error yet")
-    )]
     pub(crate) fn unknown_format(message: impl Into<Cow<'static, str>>) -> Self {
         Self::new(ErrorKind::UnknownFormat, message.into(), None, None)
     }
@@ -130,10 +122,6 @@ impl Error {
     }
 
     /// Reading on from byte `offset` would cross a limit.
-    #[cfg_attr(
-        not(test),
-        expect(dead_code, reason = "no format module reports this error yet")
-    )]
     pub(crate) fn limit(message: impl Into<Cow<'static, str>>, offset: u64) -> Self {
         Self::new(ErrorKind::LimitExceeded, message.into(), Some(offset), None)
     }
@@ -144,7 +132,6 @@ impl Error {
     /// ending early because it shrank after it was opened. Other reader
     /// errors convert with `From<io::Error>`, without an offset, so that they
     /// convert back to the original [`io::Error`].
-    #[cfg_attr(not(test), expect(dead_code, reason = "nothing reads files yet"))]
     pub(crate) fn io_at(source: io::Error, offset: u64) -> Self {
         Self::new(
             ErrorKind::Io,

@@ -20,17 +20,18 @@ mod ifd;
 mod robustness;
 mod walk;
 
-// Nothing outside this folder reads TIFF files yet. Each `expect` fails the
-// build once its item has a user, so it is then removed rather than left
-// behind.
-pub(crate) use header::Header;
-#[expect(unused_imports, reason = "nothing opens files yet")]
-pub(crate) use header::parse_header;
+// No format reads entries or locations yet. Each `expect` fails the build
+// once its item has a user, so it is then removed rather than left behind.
+pub(crate) use header::{Header, parse_header};
 #[expect(
     unused_imports,
     reason = "nothing reads entries outside this folder yet"
 )]
 pub(crate) use ifd::Entry;
 pub(crate) use ifd::{Ifd, parse_ifd};
-#[expect(unused_imports, reason = "nothing opens files yet")]
-pub(crate) use walk::{Location, Tree, walk};
+#[expect(
+    unused_imports,
+    reason = "nothing reads locations outside this folder yet"
+)]
+pub(crate) use walk::Location;
+pub(crate) use walk::{Tree, walk};

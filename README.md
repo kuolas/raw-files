@@ -3,8 +3,11 @@
 A camera RAW library in pure Rust. It extracts the JPEG previews embedded in
 Nikon NEF and Sony ARW files, with fuller RAW decoding planned.
 
-**Status: early.** Nothing below works yet — the crate is a library with no
-public API. See the [roadmap](docs/ROADMAP.md) for the plan.
+**Status: early.** Nothing below works yet. The public API is the file handle
+(`RawFile` and `Options`) with the preview types (`Preview`, `PreviewFormat`,
+`Orientation`, `Size`), `Format`, `Error` and `Limits`, but no RAW format is
+recognised yet, so every file opens as `UnknownFormat` until the NEF reader
+lands. See the [roadmap](docs/ROADMAP.md) for the plan.
 
 ## What it will do
 

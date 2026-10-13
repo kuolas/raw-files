@@ -113,8 +113,14 @@ pub(crate) struct Tree {
     ifds: Vec<(Location, Ifd)>,
 }
 
+// No format reads the tree yet. Each `expect` fails the build once its
+// method has a caller, so it is then removed rather than left behind. `iter`
+// has none because `exif` calls it: some compilers count an item under
+// `expect(dead_code)` as used code, and so what it calls, which would leave
+// an `expect` on `iter` unfulfilled there.
 impl Tree {
     /// IFD0, the IFD the header points to.
+    #[cfg_attr(not(test), expect(dead_code, reason = "no format reads the tree yet"))]
     pub(crate) fn ifd0(&self) -> &Ifd {
         // `walk` returns a tree only once IFD0 is in it.
         &self.ifds[0].1
@@ -129,6 +135,7 @@ impl Tree {
     ///
     /// `None` also when the Exif IFD tag points to an IFD the walk had
     /// already found at another location.
+    #[cfg_attr(not(test), expect(dead_code, reason = "no format reads the tree yet"))]
     pub(crate) fn exif(&self) -> Option<&Ifd> {
         self.iter()
             .find(|&(location, _)| location == Location::Exif)
@@ -136,12 +143,14 @@ impl Tree {
     }
 
     /// The number of IFDs in the tree, at least 1.
+    #[cfg_attr(not(test), expect(dead_code, reason = "no format reads the tree yet"))]
     pub(crate) fn len(&self) -> usize {
         self.ifds.len()
     }
 
     /// The IFD at position `i` of the tree, with its location; `None` past
     /// the end. Position 0 is IFD0.
+    #[cfg_attr(not(test), expect(dead_code, reason = "no format reads the tree yet"))]
     pub(crate) fn get(&self, i: usize) -> Option<(Location, &Ifd)> {
         self.ifds.get(i).map(|(location, ifd)| (*location, ifd))
     }

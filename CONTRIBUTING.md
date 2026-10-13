@@ -287,9 +287,16 @@ committed, and libFuzzer refuses to start when it does not exist, hence the
 `mkdir`); the second holds the seeds it starts from, a few valid files
 committed in [`fuzz/seeds/`](fuzz/seeds/README.md). Without them the fuzzer
 never builds a big-endian header, and half of the reader goes unfuzzed.
-The other target, `jpeg_probe`, which fuzzes the search for a JPEG
-preview's frame header, runs the same way, with `jpeg_probe` in place of
-`tiff_walk` throughout.
+The target `jpeg_probe`, which fuzzes the search for a JPEG preview's
+frame header, runs the same way, with `jpeg_probe` in place of `tiff_walk`
+throughout. The target `open`, which opens the input as a caller would and
+reads every preview it finds, has no seeds of its own and starts from the
+TIFF ones; libFuzzer takes several corpus directories:
+
+```sh
+mkdir -p fuzz/corpus/open
+cargo +nightly fuzz run open fuzz/corpus/open fuzz/seeds/tiff_walk -- -max_total_time=60 -malloc_limit_mb=256
+```
 
 The allocation limit makes a runaway allocation a finding: the run stops
 on any one allocation over 256 MiB. (libFuzzer also stops once the whole

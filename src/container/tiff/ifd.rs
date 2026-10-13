@@ -243,25 +243,32 @@ fn parse_entry(raw: &[u8; 12], base: u64, order: ByteOrder, file_len: u64) -> Op
     })
 }
 
+// The walk reads IFDs through some of these accessors; the others wait for
+// the format modules. Each `expect` fails the build once its accessor has a
+// caller, so it is then removed rather than left behind.
 impl Ifd {
     /// The absolute offset of the IFD: where its entry count is.
+    #[cfg_attr(not(test), expect(dead_code, reason = "no format reads IFDs yet"))]
     pub(crate) fn offset(&self) -> u64 {
         self.offset
     }
 
     /// The base that the offsets written inside the IFD are relative to,
     /// as given to [`parse_ifd`].
+    #[cfg_attr(not(test), expect(dead_code, reason = "no format reads IFDs yet"))]
     pub(crate) fn base(&self) -> u64 {
         self.base
     }
 
     /// The number of entries that can be read; skipped entries are not
     /// counted.
+    #[cfg_attr(not(test), expect(dead_code, reason = "no format reads IFDs yet"))]
     pub(crate) fn len(&self) -> usize {
         self.entries.len()
     }
 
     /// Whether no entry can be read: every entry of the IFD was skipped.
+    #[cfg_attr(not(test), expect(dead_code, reason = "no format reads IFDs yet"))]
     pub(crate) fn is_empty(&self) -> bool {
         self.entries.is_empty()
     }
@@ -276,12 +283,14 @@ impl Ifd {
     }
 
     /// The entries that can be read, in the order of the file.
+    #[cfg_attr(not(test), expect(dead_code, reason = "no format reads IFDs yet"))]
     pub(crate) fn entries(&self) -> &[Entry] {
         &self.entries
     }
 
     /// The tags of the entries that can be read, in the order of the file,
     /// a repeated tag each time it appears.
+    #[cfg_attr(not(test), expect(dead_code, reason = "no format reads IFDs yet"))]
     pub(crate) fn tags(&self) -> impl Iterator<Item = u16> {
         self.entries.iter().map(|entry| entry.tag)
     }
@@ -339,6 +348,7 @@ impl Ifd {
     /// # Errors
     ///
     /// As for [`u32s`](Self::u32s).
+    #[cfg_attr(not(test), expect(dead_code, reason = "no format reads IFDs yet"))]
     pub(crate) fn ascii<R: Read + Seek>(
         &self,
         src: &mut Source<R>,
@@ -360,6 +370,7 @@ impl Ifd {
     /// # Errors
     ///
     /// As for [`u32s`](Self::u32s).
+    #[cfg_attr(not(test), expect(dead_code, reason = "no format reads IFDs yet"))]
     pub(crate) fn bytes<R: Read + Seek>(
         &self,
         src: &mut Source<R>,
@@ -399,18 +410,23 @@ impl Ifd {
     }
 }
 
+// Nothing reads an entry's fields yet. Each `expect` fails the build once
+// its accessor has a caller, so it is then removed rather than left behind.
 impl Entry {
     /// The entry's tag.
+    #[cfg_attr(not(test), expect(dead_code, reason = "no format reads IFDs yet"))]
     pub(crate) fn tag(&self) -> u16 {
         self.tag
     }
 
     /// The entry's field type, one of the types 1 to 13.
+    #[cfg_attr(not(test), expect(dead_code, reason = "no format reads IFDs yet"))]
     pub(crate) fn typ(&self) -> u16 {
         self.typ
     }
 
     /// The number of values, as written.
+    #[cfg_attr(not(test), expect(dead_code, reason = "no format reads IFDs yet"))]
     pub(crate) fn count(&self) -> u32 {
         self.count
     }
@@ -419,6 +435,7 @@ impl Entry {
     /// and so stored out of line; `None` when it is in the entry.
     ///
     /// The value's bytes, from this offset, lie inside the file.
+    #[cfg_attr(not(test), expect(dead_code, reason = "no format reads IFDs yet"))]
     pub(crate) fn value_offset(&self) -> Option<u64> {
         match self.value {
             Value::Inline(_) => None,

@@ -84,30 +84,23 @@ impl Limits {
     }
 }
 
-// Nothing reads the limits yet; tests already do. Each `expect` fails the
-// build once its getter has a caller, so it is then removed rather than left
-// behind.
 impl Limits {
     /// The most IFDs visited per file.
-    #[cfg_attr(not(test), expect(dead_code, reason = "nothing reads the limits yet"))]
     pub(crate) fn ifds(&self) -> u32 {
         self.max_ifds
     }
 
     /// The most entries in one IFD.
-    #[cfg_attr(not(test), expect(dead_code, reason = "nothing reads the limits yet"))]
     pub(crate) fn ifd_entries(&self) -> u32 {
         self.max_ifd_entries
     }
 
     /// The deepest SubIFD nesting.
-    #[cfg_attr(not(test), expect(dead_code, reason = "nothing reads the limits yet"))]
     pub(crate) fn ifd_depth(&self) -> u32 {
         self.max_ifd_depth
     }
 
     /// The most bytes of one preview.
-    #[cfg_attr(not(test), expect(dead_code, reason = "nothing reads the limits yet"))]
     pub(crate) fn preview_bytes(&self) -> u64 {
         self.max_preview_bytes
     }

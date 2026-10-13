@@ -6,8 +6,11 @@ requests live in the
 
 ## Where we are
 
-The repository, its license and its contribution process exist. The crate
-is a library with no public API; it does nothing yet.
+The repository, its license and its contribution process exist. The public
+API is the file handle (`RawFile` and `Options`) with the preview types
+(`Preview`, `PreviewFormat`, `Orientation`, `Size`), `Format`, `Error` and
+`Limits`; no RAW format is recognised yet, so every file opens as
+`UnknownFormat` until the NEF reader lands.
 
 The first release, version 0.1.0, is milestones 1 and 2: the embedded
 previews of NEF and ARW files.

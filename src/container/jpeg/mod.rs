@@ -80,6 +80,7 @@ impl Frame {
     /// The lossless frame markers are `C3`, the lossless process with Huffman
     /// coding, `C7`, its differential variant, and `CB` and `CF`, the same two
     /// with arithmetic coding.
+    #[cfg_attr(not(test), expect(dead_code, reason = "nothing finds previews yet"))]
     pub(crate) fn is_lossless(self) -> bool {
         matches!(self.marker, 0xC3 | 0xC7 | 0xCB | 0xCF)
     }
@@ -106,6 +107,13 @@ fn within(pos: u64, n: u64, end: u64) -> Option<u64> {
     pos.checked_add(n).filter(|&next| next <= end)
 }
 
+// Nothing finds previews yet; tests and the fuzz targets already probe.
+// Each `expect`, here and on `Frame::is_lossless`, fails the build once its
+// item has a caller, so it is then removed rather than left behind. What
+// `probe` calls has none: some compilers count an item under
+// `expect(dead_code)` as used code, and so what it calls, which would leave
+// those `expect`s unfulfilled there.
+
 /// Finds the frame header of the JPEG stream in the `len` bytes at
 /// `offset` and returns the image's size from it.
 ///
@@ -131,6 +139,7 @@ fn within(pos: u64, n: u64, end: u64) -> Option<u64> {
 /// Only the errors of reading `src`: `Malformed` if the walk reads past the
 /// end of the file, which can happen only when the range does not lie
 /// inside it; `Io` if the reader fails.
+#[cfg_attr(not(test), expect(dead_code, reason = "nothing finds previews yet"))]
 pub(crate) fn probe<R: Read + Seek>(
     src: &mut Source<R>,
     offset: u64,
