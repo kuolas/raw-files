@@ -43,6 +43,30 @@ Confidence tags: **[P]** primary (verified from the primary page or API),
 
 The repository never holds a file whose licence is unclear, however small.
 
+### 2.1 The CI set
+
+The files CI downloads are listed in
+[`tests/samples.tsv`](../../../tests/samples.tsv), the source of truth for
+their names, hashes, licences and URLs; `scripts/fetch-samples.sh`
+downloads them and checks each hash, and the tests in `tests/nef.rs` read
+them. Today the set is the three Z 9 files of raw.pixls.us, one per
+compression mode:
+
+| Id | Body | Compression | SHA-256 | Licence |
+|---|---|---|---|---|
+| 5146 | Z 9 | Lossless | `99d0fe24a38f0f7623aeab21440d266a5ac09f9665cf5283f590337e84323c38` | CC0 |
+| 5147 | Z 9 | HE* | `e113deb305d84153b26251ce259d1f839be1f36b048cbe83a4548cbda806c0f5` | CC0 |
+| 5148 | Z 9 | HE | `be91bac25573adf7ec6320a542105d87b4fb9c956d7b620ec90d57ac2ae6c3f0` | CC0 |
+
+The site's repository data, 2026-10-13, gives each file the CC0 mark and
+this SHA-256, and the Z 9 is not among its non-CC0 models; the compression
+mode is in the name the file was uploaded under, which the directory
+listing shows. [1] **[P]** The site's download link names all three
+files alike, "Nikon - Z 9 - 8bit 8bit compressed (3:2).NEF", so the list
+gives each its own name. The "8bit" is the site's label, not the files':
+all three hold 14-bit raw data (BitsPerSample 14 in the raw IFD), as the
+upload names say. Keep the URLs as they are.
+
 ## 3. What raw.pixls.us holds for Nikon
 
 Directory listings, 2026-10-10. **[P]** The data lives under

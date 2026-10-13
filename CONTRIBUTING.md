@@ -231,6 +231,14 @@ The last one documents the private items too, with the test configuration
 on, so that the modules compiled only for tests get their doc comments and
 links checked as well; the normal doc build never sees them.
 
+Some tests read real sample files, which are too large to commit. When the
+files are absent, those tests print a note and pass, so the suite runs
+offline. `scripts/fetch-samples.sh` downloads the pinned set listed in
+[`tests/samples.tsv`](tests/samples.tsv), about 118 MB, into
+`target/raw-samples`, or into the directory named by `RAW_FILES_SAMPLES`,
+and checks each file's SHA-256; `cargo test` then runs those tests too. CI
+does this on Linux.
+
 CI ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) runs them on every
 pull request on macOS, Linux and Windows, builds and tests the crate with
 Rust 1.95, the oldest version it supports, and checks the commit messages and
