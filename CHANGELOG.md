@@ -18,3 +18,6 @@ decided with the first release.
 - `Limits`, the caps on what a file can make the library walk or allocate.
 - `Orientation`, the EXIF orientation a viewer must apply to a preview, and
   `Size`, a width and height in pixels.
+- `Preview`, one embedded preview: where its bytes are in the file, its
+  size, format and orientation; and `PreviewFormat`, how its bytes are
+  encoded, with a media type and a file extension.
