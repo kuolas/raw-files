@@ -21,3 +21,5 @@ decided with the first release.
 - `Preview`, one embedded preview: where its bytes are in the file, its
   size, format and orientation; and `PreviewFormat`, how its bytes are
   encoded, with a media type and a file extension.
+- `Format`, the RAW formats the library knows, with a name, the file
+  extensions and a lookup by extension for file pickers.
