@@ -26,8 +26,8 @@
 //! (`C3`, `C7`, `CB`, `CF`) is never a preview: Sony stores the raw sensor
 //! data of its lossless ARW files as tiles that are lossless JPEG streams,
 //! each starting `FF D8 FF C3`, and a strip that points at the first tile
-//! looks to the tags much like a preview. The probe reports the marker so
-//! that its caller can tell them apart.
+//! looks to the tags much like a preview. The frame says whether it is
+//! lossless, so that the finder can drop it.
 
 use std::io::{Read, Seek};
 
@@ -62,8 +62,27 @@ pub(crate) struct Frame {
     pub height: u16,
     /// The code of the frame header's marker, from `C0` to `CF`, which says
     /// how the image is coded: `C0` for a baseline JPEG, `C2` for a
-    /// progressive one, `C3` for a lossless one, and so on.
+    /// progressive one, `C3` for a lossless one, and so on; see
+    /// [`is_lossless`](Frame::is_lossless).
     pub marker: u8,
+}
+
+impl Frame {
+    /// Whether the image is coded losslessly, which is to say it is raw data
+    /// and not a preview.
+    ///
+    /// A lossless JPEG keeps every sample exactly as it was, which is how a
+    /// camera stores sensor data without loss, and such a stream can look much
+    /// like a preview to the tags that point at it: Sony stores the raw tiles
+    /// of its lossless ARW files as lossless JPEG streams. The preview finder,
+    /// once written, will drop these frames.
+    ///
+    /// The lossless frame markers are `C3`, the lossless process with Huffman
+    /// coding, `C7`, its differential variant, and `CB` and `CF`, the same two
+    /// with arithmetic coding.
+    pub(crate) fn is_lossless(self) -> bool {
+        matches!(self.marker, 0xC3 | 0xC7 | 0xCB | 0xCF)
+    }
 }
 
 /// Whether `code` is the code of a frame header (SOF) marker.
@@ -104,7 +123,8 @@ fn within(pos: u64, n: u64, end: u64) -> Option<u64> {
 /// nothing after it is taken for part of the stream. Fill bytes, any run of
 /// `FF` before a marker's code, are skipped, as the JPEG standard allows.
 /// Every frame header is reported, lossless ones included: telling a
-/// preview from raw data is the caller's decision.
+/// preview from raw data is the caller's decision, for which there is
+/// [`is_lossless`](Frame::is_lossless).
 ///
 /// # Errors
 ///
@@ -276,6 +296,32 @@ mod tests {
             assert_eq!(frame.width, 6048, "marker {marker:02X}");
             assert_eq!(frame.height, 4024, "marker {marker:02X}");
             assert_eq!(frame.marker, marker);
+        }
+    }
+
+    #[test]
+    fn lossless_frames_are_told_apart() {
+        const LOSSLESS: [u8; 4] = [0xC3, 0xC7, 0xCB, 0xCF];
+        for marker in LOSSLESS {
+            assert!(
+                FRAME_MARKERS.contains(&marker),
+                "marker {marker:02X} is not found as a frame"
+            );
+            let frame = probe_all(&jpeg_stub(640, 480, marker))
+                .unwrap()
+                .unwrap_or_else(|| panic!("no frame for marker {marker:02X}"));
+            assert!(frame.is_lossless(), "marker {marker:02X}");
+        }
+        let others: Vec<u8> = FRAME_MARKERS
+            .into_iter()
+            .filter(|marker| !LOSSLESS.contains(marker))
+            .collect();
+        assert_eq!(others.len(), 9);
+        for marker in others {
+            let frame = probe_all(&jpeg_stub(640, 480, marker))
+                .unwrap()
+                .unwrap_or_else(|| panic!("no frame for marker {marker:02X}"));
+            assert!(!frame.is_lossless(), "marker {marker:02X}");
         }
     }
 
