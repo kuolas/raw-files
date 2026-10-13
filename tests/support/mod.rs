@@ -9,4 +9,5 @@
 
 #![allow(dead_code)]
 
+pub mod jpeg;
 pub mod tiff_builder;

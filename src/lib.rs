@@ -33,6 +33,12 @@ pub mod fuzzing;
 // compilers and leave their own expectations unfulfilled.
 #[cfg(any(test, fuzzing))]
 mod io;
+// The stub JPEG lives with the integration tests and is shared with the
+// unit tests, as the TIFF fixture builder below is.
+#[cfg(test)]
+#[allow(dead_code)]
+#[path = "../tests/support/jpeg.rs"]
+mod jpeg_stub;
 mod limits;
 // The TIFF fixture builder lives with the integration tests and is shared
 // with the unit tests: compiled into each test build, never into the
