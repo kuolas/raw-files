@@ -27,6 +27,7 @@
 
 use std::io::{Read, Seek};
 
+use super::types::{ASCII, BYTE, IFD, LONG, SHORT, UNDEFINED, type_size};
 use crate::error::{Error, Result};
 use crate::io::{ByteOrder, Source};
 use crate::limits::Limits;
@@ -38,46 +39,6 @@ use crate::limits::Limits;
 /// texts, far below it. A longer value is a payload, such as a preview,
 /// which has its own path and its own limit.
 const MAX_VALUE_LEN: u32 = 1024 * 1024;
-
-/// Field type BYTE: 8-bit unsigned integers.
-const BYTE: u16 = 1;
-/// Field type ASCII: text, ending in a NUL.
-const ASCII: u16 = 2;
-/// Field type SHORT: 16-bit unsigned integers.
-const SHORT: u16 = 3;
-/// Field type LONG: 32-bit unsigned integers.
-const LONG: u16 = 4;
-/// Field type RATIONAL: pairs of LONGs, numerator first.
-const RATIONAL: u16 = 5;
-/// Field type SBYTE: 8-bit signed integers.
-const SBYTE: u16 = 6;
-/// Field type UNDEFINED: bytes that the tag gives a meaning to.
-const UNDEFINED: u16 = 7;
-/// Field type SSHORT: 16-bit signed integers.
-const SSHORT: u16 = 8;
-/// Field type SLONG: 32-bit signed integers.
-const SLONG: u16 = 9;
-/// Field type SRATIONAL: pairs of SLONGs, numerator first.
-const SRATIONAL: u16 = 10;
-/// Field type FLOAT: 32-bit IEEE floating point.
-const FLOAT: u16 = 11;
-/// Field type DOUBLE: 64-bit IEEE floating point.
-const DOUBLE: u16 = 12;
-/// Field type IFD: the offsets of IFDs, as LONGs (TIFF Technical Note 1).
-const IFD: u16 = 13;
-
-/// The size in bytes of one value of field type `typ`, or `None` for a type
-/// that neither TIFF 6.0 (types 1 to 12) nor TIFF Technical Note 1 (type
-/// 13) defines.
-fn type_size(typ: u16) -> Option<u32> {
-    match typ {
-        BYTE | ASCII | SBYTE | UNDEFINED => Some(1),
-        SHORT | SSHORT => Some(2),
-        LONG | SLONG | FLOAT | IFD => Some(4),
-        RATIONAL | SRATIONAL | DOUBLE => Some(8),
-        _ => None,
-    }
-}
 
 /// An IFD read by [`parse_ifd`]: the entries that can be read, and how many
 /// could not.
@@ -243,8 +204,9 @@ fn parse_entry(raw: &[u8; 12], base: u64, order: ByteOrder, file_len: u64) -> Op
     })
 }
 
-// The walk, the preview finder and the NEF reader's claim read IFDs
-// through some of these accessors; the others wait for the format modules.
+// The walk, the preview finder, the NEF reader's claim and its MakerNote
+// reader read IFDs through some of these accessors; the others wait for the
+// format modules.
 // Each `expect` fails the build once its accessor has a caller, so it is
 // then removed rather than left behind.
 impl Ifd {
@@ -431,8 +393,9 @@ impl Ifd {
     }
 }
 
-// Nothing reads an entry's fields yet. Each `expect` fails the build once
-// its accessor has a caller, so it is then removed rather than left behind.
+// The NEF MakerNote reader reads an entry's type, count and value offset;
+// nothing reads its tag yet. Each `expect` fails the build once its
+// accessor has a caller, so it is then removed rather than left behind.
 impl Entry {
     /// The entry's tag.
     #[cfg_attr(
@@ -444,13 +407,11 @@ impl Entry {
     }
 
     /// The entry's field type, one of the types 1 to 13.
-    #[cfg_attr(not(test), expect(dead_code, reason = "no format reads IFDs yet"))]
     pub(crate) fn typ(&self) -> u16 {
         self.typ
     }
 
     /// The number of values, as written.
-    #[cfg_attr(not(test), expect(dead_code, reason = "no format reads IFDs yet"))]
     pub(crate) fn count(&self) -> u32 {
         self.count
     }
@@ -459,7 +420,6 @@ impl Entry {
     /// and so stored out of line; `None` when it is in the entry.
     ///
     /// The value's bytes, from this offset, lie inside the file.
-    #[cfg_attr(not(test), expect(dead_code, reason = "no format reads IFDs yet"))]
     pub(crate) fn value_offset(&self) -> Option<u64> {
         match self.value {
             Value::Inline(_) => None,
@@ -472,6 +432,7 @@ impl Entry {
 mod tests {
     use super::*;
     use crate::ErrorKind;
+    use crate::container::tiff::types::{DOUBLE, RATIONAL};
     use crate::tiff_builder::{Built, IfdId, Order, RawValue, TiffBuilder};
     use std::io::Cursor;
 
@@ -524,17 +485,6 @@ mod tests {
     fn file_bytes(built: &Built, at: u64, len: usize) -> &[u8] {
         let at = usize::try_from(at).unwrap();
         &built.bytes[at..at + len]
-    }
-
-    #[test]
-    fn type_sizes() {
-        let sizes = [1, 1, 2, 4, 8, 1, 1, 2, 4, 8, 4, 8, 4];
-        for (typ, size) in (1..=13).zip(sizes) {
-            assert_eq!(type_size(typ), Some(size), "type {typ}");
-        }
-        for typ in [0, 14, 99, u16::MAX] {
-            assert_eq!(type_size(typ), None, "type {typ}");
-        }
     }
 
     #[test]

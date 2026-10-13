@@ -7,29 +7,39 @@
 //! full-size one, and on bodies from about 2012 on a medium one of about
 //! 1620 by 1080 pixels, sit in SubIFDs, in an order that varies between
 //! bodies. The MakerNote's PreviewIFD holds a small one too, which on the
-//! oldest bodies is the only JPEG; reading it is still to come, and it will
-//! join as the one candidate the reader adds outside the tree.
+//! oldest bodies is the only JPEG: the MakerNote reader finds it, and it
+//! joins the search as the one candidate the reader adds outside the tree.
 //!
-//! The shared TIFF preview finder does the finding, over the whole tree:
-//! it tells the previews from the raw data and measures each one.
+//! The shared TIFF preview finder does the finding, over the whole tree and
+//! that candidate: it tells the previews from the raw data and measures
+//! each one.
 
 use std::io::{Read, Seek};
 
+use super::makernote;
 use crate::container::tiff::Tree;
 use crate::error::Result;
 use crate::formats::tiff_previews;
 use crate::io::Source;
+use crate::limits::Limits;
 use crate::preview::Preview;
 
 /// The previews of the NEF file in `src`, whose IFDs are `tree`, in the
-/// order they were found.
+/// order they were found: the tree's, then the MakerNote's, read within
+/// `limits`.
 ///
 /// # Errors
 ///
 /// `Io` when the reader fails. Nothing the file holds is an error here: an
-/// IFD whose tags cannot be read costs only its own preview.
-pub(super) fn previews<R: Read + Seek>(src: &mut Source<R>, tree: &Tree) -> Result<Vec<Preview>> {
-    tiff_previews::find(src, tree, &[])
+/// IFD whose tags cannot be read, or a MakerNote that does not hold
+/// together, costs only its own preview.
+pub(super) fn previews<R: Read + Seek>(
+    src: &mut Source<R>,
+    tree: &Tree,
+    limits: &Limits,
+) -> Result<Vec<Preview>> {
+    let extra = makernote::preview_candidate(src, tree, limits)?;
+    tiff_previews::find(src, tree, extra.as_slice())
 }
 
 #[cfg(test)]
@@ -72,5 +82,26 @@ mod tests {
             .map(|p| (p.width(), p.height()))
             .collect();
         assert_eq!(sizes, [(160, 120), (1620, 1080)]);
+    }
+
+    #[test]
+    fn a_file_without_a_makernote_still_gives_its_tree_previews() {
+        // An Exif IFD, as every Nikon file has, with no MakerNote in it.
+        let mut builder = TiffBuilder::new(Order::Little);
+        let ifd0 = builder.ifd();
+        let exif = builder.ifd();
+        builder
+            .ascii(ifd0, MAKE, "NIKON CORPORATION")
+            .exif(ifd0, exif);
+        // ExifVersion.
+        builder.undefined(exif, 0x9000, b"0232");
+        jpeg(&mut builder, ifd0, 160, 120);
+        let mut src = Source::new(Cursor::new(builder.build().bytes)).unwrap();
+        let header = parse_header(&mut src).unwrap();
+        let tree = walk(&mut src, header, &Limits::default()).unwrap();
+
+        let previews = super::previews(&mut src, &tree, &Limits::default()).unwrap();
+        let sizes: Vec<(u32, u32)> = previews.iter().map(|p| (p.width(), p.height())).collect();
+        assert_eq!(sizes, [(160, 120)]);
     }
 }

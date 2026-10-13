@@ -108,10 +108,11 @@ pub(crate) struct Tree {
     ifds: Vec<(Location, Ifd)>,
 }
 
-// The NEF reader's claim reads IFD0, and the preview finder goes through
-// every IFD of the tree; nothing reads the Exif IFD, the number of IFDs or
-// an IFD by its position yet. Each `expect` fails the build once its
-// method has a caller, so it is then removed rather than left behind.
+// The NEF reader's claim reads IFD0, the preview finder goes through every
+// IFD of the tree, and the NEF MakerNote reader reads the Exif IFD; nothing
+// reads the number of IFDs or an IFD by its position yet. Each `expect`
+// fails the build once its method has a caller, so it is then removed
+// rather than left behind.
 impl Tree {
     /// IFD0, the IFD the header points to.
     pub(crate) fn ifd0(&self) -> &Ifd {
@@ -128,7 +129,6 @@ impl Tree {
     ///
     /// `None` also when the Exif IFD tag points to an IFD the walk had
     /// already found at another location.
-    #[cfg_attr(not(test), expect(dead_code, reason = "no format reads the tree yet"))]
     pub(crate) fn exif(&self) -> Option<&Ifd> {
         self.iter()
             .find(|&(location, _)| location == Location::Exif)
@@ -354,10 +354,11 @@ impl<R: Read + Seek> Walker<'_, R> {
 ///
 /// The rule wherever damage should cost only the part of the file it
 /// touches: past IFD0, an IFD that cannot be parsed or a tag value that
-/// cannot be read costs the walk only what it would have led to, and the
-/// preview finder skips an IFD whose tags it cannot read. An `Io` error is
-/// not damage: it says nothing about the file, and the reader may fail
-/// again on the next read.
+/// cannot be read costs the walk only what it would have led to, the
+/// preview finder skips an IFD whose tags it cannot read, and a NEF
+/// MakerNote that does not hold together costs only its own preview. An
+/// `Io` error is not damage: it says nothing about the file, and the
+/// reader may fail again on the next read.
 pub(crate) fn skip_damage<T>(result: Result<T>) -> Result<Option<T>> {
     match result {
         Ok(value) => Ok(Some(value)),

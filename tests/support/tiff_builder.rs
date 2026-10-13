@@ -355,9 +355,16 @@ impl TiffBuilder {
         self.long(ifd, SUB_IFDS, offsets)
     }
 
+    /// Adds an entry under `tag` that points at `child`: a LONG holding
+    /// the offset of `child`, as the Exif IFD tag does in IFD0, or the
+    /// PreviewIFD tag in a Nikon MakerNote.
+    pub fn ifd_pointer(&mut self, ifd: IfdId, tag: u16, child: IfdId) -> &mut Self {
+        self.entry(ifd, tag, LONG, 1, Value::Ifds(vec![child]))
+    }
+
     /// Adds an Exif IFD entry (0x8769), a LONG for the offset of `child`.
     pub fn exif(&mut self, ifd: IfdId, child: IfdId) -> &mut Self {
-        self.entry(ifd, EXIF_IFD, LONG, 1, Value::Ifds(vec![child]))
+        self.ifd_pointer(ifd, EXIF_IFD, child)
     }
 
     /// Adds a blob, placed after the IFDs and after the blobs that this
@@ -381,6 +388,21 @@ impl TiffBuilder {
     /// Adds a LONG entry holding the length of `blob`.
     pub fn long_blob_len(&mut self, ifd: IfdId, tag: u16, blob: BlobId) -> &mut Self {
         self.entry(ifd, tag, LONG, 1, Value::BlobLen(blob))
+    }
+
+    /// Adds an UNDEFINED entry whose value is the bytes of `blob`: its count
+    /// is the blob's length, and its value field holds the blob's offset, as
+    /// the field of any value longer than four bytes does. This is how a
+    /// MakerNote is written. The blob must be longer than four bytes, or
+    /// its bytes would belong in the field itself.
+    pub fn undefined_blob(&mut self, ifd: IfdId, tag: u16, blob: BlobId) -> &mut Self {
+        let len = self.blobs[blob.0].bytes.len();
+        assert!(len > 4, "a blob of {len} bytes would be an inline value");
+        // The value field is the blob's offset in four bytes, exactly what
+        // `long_blob` writes, so the two share `Value::BlobOffset` on
+        // purpose: there the four bytes are the value, here they say where
+        // the value is.
+        self.entry(ifd, tag, UNDEFINED, len, Value::BlobOffset(blob))
     }
 
     /// Makes the file at least `len` bytes long, padding it with zeros.
@@ -767,6 +789,58 @@ mod tests {
         assert_eq!(u64::from(u32_le(bytes, a_at + 2)), a_at, "points to itself");
         assert_eq!(u32_le(bytes, built.ifd_offset(b) + 2), 0xDEAD_BEEF);
         assert_eq!(u32_le(bytes, built.ifd_offset(exif) + 2), 0);
+    }
+
+    #[test]
+    fn an_ifd_pointer_holds_the_childs_offset_under_any_tag() {
+        let mut builder = TiffBuilder::new(Order::Little);
+        let ifd0 = builder.ifd();
+        let (a, child) = (builder.ifd(), builder.ifd());
+        builder.ifd_pointer(ifd0, 0x0011, child);
+        let built = builder.build();
+        let bytes = &built.bytes;
+
+        // One entry at 8 + 2: the tag, LONG, one value, inline.
+        assert_eq!(u16_le(bytes, 8 + 2), 0x0011);
+        assert_eq!(u16_le(bytes, 8 + 2 + 2), LONG);
+        assert_eq!(u32_le(bytes, 8 + 2 + 4), 1);
+        assert_eq!(u64::from(u32_le(bytes, 8 + 2 + 8)), built.ifd_offset(child));
+        assert_ne!(built.ifd_offset(child), built.ifd_offset(a));
+    }
+
+    #[test]
+    fn an_undefined_blob_counts_the_blobs_bytes_and_points_at_them() {
+        let mut builder = TiffBuilder::new(Order::Little);
+        let ifd = builder.ifd();
+        let first = builder.blob(b"another blob first");
+        let value = b"Nikon\0, and more";
+        let blob = builder.blob(value);
+        builder.undefined_blob(ifd, 0x927C, blob);
+        let built = builder.build();
+        let bytes = &built.bytes;
+
+        // One entry at 8 + 2: the tag, UNDEFINED, the blob's length, and
+        // the blob's offset in the value field.
+        assert_eq!(u16_le(bytes, 8 + 2), 0x927C);
+        assert_eq!(u16_le(bytes, 8 + 2 + 2), UNDEFINED);
+        assert_eq!(
+            usize::try_from(u32_le(bytes, 8 + 2 + 4)).unwrap(),
+            value.len()
+        );
+        let at = built.blob_offset(blob);
+        assert_ne!(at, built.blob_offset(first));
+        assert_eq!(u64::from(u32_le(bytes, 8 + 2 + 8)), at);
+        let at = usize::try_from(at).unwrap();
+        assert_eq!(&bytes[at..at + value.len()], value);
+    }
+
+    #[test]
+    #[should_panic(expected = "inline value")]
+    fn an_undefined_blob_of_four_bytes_is_a_mistake() {
+        let mut builder = TiffBuilder::new(Order::Little);
+        let ifd = builder.ifd();
+        let blob = builder.blob(b"four");
+        builder.undefined_blob(ifd, 0x927C, blob);
     }
 
     #[test]

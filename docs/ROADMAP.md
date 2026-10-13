@@ -9,10 +9,10 @@ requests live in the
 The repository, its license and its contribution process exist. The public
 API is the file handle (`RawFile` and `Options`) with the preview types
 (`Preview`, `PreviewFormat`, `Orientation`, `Size`), `Format`, `Error` and
-`Limits`. A Nikon NEF file opens with the JPEG previews in its IFD0 and
-SubIFDs, checked on a test file laid out like a Nikon Z 9's; the preview
-in the MakerNote, and tests on real sample files, are still to come. Any
-other file that can be read opens as `UnknownFormat`.
+`Limits`. A Nikon NEF file opens with the JPEG previews in its IFD0, its
+SubIFDs and its MakerNote, checked on a test file laid out like a Nikon
+Z 9's; tests on real sample files are still to come. Any other file that
+can be read opens as `UnknownFormat`.
 
 The first release, version 0.1.0, is milestones 1 and 2: the embedded
 previews of NEF and ARW files.
