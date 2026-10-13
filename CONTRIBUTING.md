@@ -240,6 +240,17 @@ and checks each file's SHA-256; `cargo test` then runs those tests too. CI
 does this on Linux, from a cache that a workflow on `master` keeps filled,
 so a pull request downloads nothing unless it changes the list.
 
+One test is ignored by default: it runs the reader over a folder of your own
+RAW files and prints counts only, never paths or metadata, so its output can
+go into an issue. It checks that every file opens, that every one has a
+preview, and that the largest preview is a whole JPEG, and it fails on a
+folder it cannot read, that holds no RAW file, or that holds an entry it
+cannot read. Run it with `--release`, because it reads every file:
+
+```sh
+RAW_FILES_LOCAL_CORPUS=/path/to/photos cargo test --release --test local_corpus -- --ignored --nocapture
+```
+
 CI ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) runs them on every
 pull request on macOS, Linux and Windows, builds and tests the crate with
 Rust 1.95, the oldest version it supports, and checks the commit messages and
