@@ -49,8 +49,9 @@ The files CI downloads are listed in
 [`tests/samples.tsv`](../../../tests/samples.tsv), the source of truth for
 their names, hashes, licences and URLs; `scripts/fetch-samples.sh`
 downloads them and checks each hash, and the tests in `tests/nef.rs` read
-them. Today the set is the three Z 9 files of raw.pixls.us, one per
-compression mode:
+the NEF files among them. The Sony files of the set are on the
+[ARW test-data page](../arw/test-data.md#21-the-ci-set); the NEF files are
+the three Z 9 files of raw.pixls.us, one per compression mode:
 
 | Id | Body | Compression | SHA-256 | Licence |
 |---|---|---|---|---|

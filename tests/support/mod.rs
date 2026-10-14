@@ -12,4 +12,5 @@
 pub mod arw;
 pub mod jpeg;
 pub mod nef;
+pub mod samples;
 pub mod tiff_builder;

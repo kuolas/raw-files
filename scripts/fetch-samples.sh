@@ -2,10 +2,18 @@
 # fetch-samples.sh — download the real sample files that the tests read when
 # they are present (CONTRIBUTING.md §Code style and checks). The list is
 # tests/samples.tsv: one file per line, pinned by its SHA-256, each with its
-# licence and the URL it comes from. Without the files, those tests skip.
+# tier, its licence and the URL it comes from. Without the files, those
+# tests skip.
 #
-#   scripts/fetch-samples.sh             # every file in the list
-#   scripts/fetch-samples.sh nef         # only the files of one format
+#   scripts/fetch-samples.sh                     # every file of the normal tier
+#   scripts/fetch-samples.sh arw                 # only those of one format
+#   RAW_FILES_LARGE=1 scripts/fetch-samples.sh   # the large tier as well
+#
+# A file of the "large" tier, such as the 325 MiB ARQ, is skipped with a
+# note unless RAW_FILES_LARGE is 1, so a plain run stays at the size CI
+# downloads. A format given as the argument limits either run to the files
+# of that format; a run without RAW_FILES_LARGE whose every file is in the
+# large tier fails, saying so, rather than pass having fetched nothing.
 #
 # The files go to $RAW_FILES_SAMPLES (relative to the current directory), or
 # to target/raw-samples in the repository when it is unset; cargo test looks
@@ -52,7 +60,7 @@ sha256() {
 }
 
 header=$(head -n 1 "$list")
-if [ "$header" != "$(printf 'id\tformat\tfile\tsha256\tlicence\turl')" ]; then
+if [ "$header" != "$(printf 'id\tformat\tfile\ttier\tsha256\tlicence\turl')" ]; then
 	printf 'fetch-samples: %s does not start with the expected header line\n' "$list" >&2
 	exit 2
 fi
@@ -67,7 +75,8 @@ cleanup() {
 trap cleanup EXIT
 
 matched=0
-while IFS=$'\t' read -r id format file sha256 licence url || [ -n "$id" ]; do
+skipped=0
+while IFS=$'\t' read -r id format file tier sha256 licence url || [ -n "$id" ]; do
 	[ -n "$id" ] || continue
 	if [ -n "$only" ] && [ "$format" != "$only" ]; then
 		continue
@@ -81,9 +90,24 @@ while IFS=$'\t' read -r id format file sha256 licence url || [ -n "$id" ]; do
 			exit 2
 			;;
 	esac
+	case "$tier" in
+		normal | large) ;;
+		*)
+			printf 'fetch-samples: %s: bad tier "%s" for %s; it must be normal or large\n' "$list" "$tier" "$file" >&2
+			exit 2
+			;;
+	esac
 	if ! [[ "$sha256" =~ ^[0-9a-f]{64}$ ]] || [ -z "$url" ]; then
 		printf 'fetch-samples: %s: line for %s needs a lower-case SHA-256 and a URL\n' "$list" "$file" >&2
 		exit 2
+	fi
+
+	# A large file is skipped only after its line has been checked, so a bad
+	# line fails even when its file is not fetched.
+	if [ "$tier" = large ] && [ "${RAW_FILES_LARGE:-}" != 1 ]; then
+		printf 'skipped  %s (%s, large; RAW_FILES_LARGE=1 fetches it)\n' "$file" "$id"
+		skipped=$((skipped + 1))
+		continue
 	fi
 
 	target="$dest/$file"
@@ -112,5 +136,9 @@ done < <(tail -n +2 "$list")
 
 if [ "$matched" -eq 0 ]; then
 	printf 'fetch-samples: no samples%s in %s\n' "${only:+ of format $only}" "$list" >&2
+	exit 2
+fi
+if [ "$skipped" -eq "$matched" ]; then
+	printf 'fetch-samples: nothing fetched: the %d sample(s)%s are all in the large tier; RAW_FILES_LARGE=1 fetches them\n' "$matched" "${only:+ of format $only}" >&2
 	exit 2
 fi

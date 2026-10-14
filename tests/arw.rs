@@ -3,18 +3,22 @@
 //! The ARW reader from outside the crate, on files laid out like each
 //! generation of Sony's RAW family (see [`support::arw`]): what each opens
 //! as, which previews it lists, that none of them is the raw data, and
-//! what reading one returns.
+//! what reading one returns. Then the previews of the real Sony sample
+//! files, when they have been downloaded (see [`support::samples::path`]).
 
 mod support;
 
+use std::collections::BTreeSet;
+use std::fs;
 use std::io::Cursor;
 
-use raw_files::{Format, Orientation, Preview, PreviewFormat, RawFile};
+use raw_files::{Format, Orientation, PreviewFormat, RawFile};
 use support::arw::{
     A100_JPEG, A100_RAW_AS_COUNT, A100_TAG_SIZE, ARW4_FULL_SIZE_JPEG, ArwBlobs, IFD0_JPEG,
     MEDIUM_FULL_SIZE_JPEG, SR2_JPEG, SRF_JPEG, THUMBNAIL, a100_file, arq_file, arw2_file,
     arw4_file, arw4_medium_file, sr2_file, srf_file, stub,
 };
+use support::samples::{Jpeg, Sample, check, sizes};
 use support::tiff_builder::{BlobId, Built, Order};
 
 const ORDERS: [Order; 2] = [Order::Little, Order::Big];
@@ -24,11 +28,6 @@ const SUB_IFDS: u16 = 0x014A;
 
 /// The entries an IFD may have under the default limits.
 const DEFAULT_MAX_IFD_ENTRIES: u16 = 1000;
-
-/// The stored size of each preview, in order.
-fn sizes(previews: &[Preview]) -> Vec<(u32, u32)> {
-    previews.iter().map(|p| (p.width(), p.height())).collect()
-}
 
 /// `size` as a preview reports it.
 fn wide((width, height): (u16, u16)) -> (u32, u32) {
@@ -339,4 +338,949 @@ fn the_a100s_subifd_pointer_leads_to_bytes_that_are_not_an_ifd() {
         assert_eq!(file.format(), Format::Arw, "{order:?}");
         assert_eq!(file.previews().len(), 2, "{order:?}");
     }
+}
+
+// Real files. The 36 CC0 Sony-family files of raw.pixls.us that the ARW
+// notes were checked against are listed with their hashes in
+// `tests/samples.tsv`; `scripts/fetch-samples.sh` downloads them. They are
+// too large to commit, so a test whose file is absent says so and passes:
+// the suite runs offline. The ARQ, at 325 MiB, is in the list's large tier,
+// which the script fetches only with `RAW_FILES_LARGE=1`, so its test is
+// nearly always skipped.
+
+/// The Sony samples of the list's normal tier, which CI downloads, each
+/// with the previews the ARW notes predict for it.
+const SAMPLES: &[Sample] = &[
+    // SLT-A55 (raw.pixls.us 964)
+    Sample {
+        file: "sony-slt-a55.arw",
+        orientation: Orientation::NoTransforms,
+        previews: &[
+            Jpeg {
+                width: 160,
+                height: 120,
+                offset: 47_796,
+                len: 3_028,
+                after_eoi: 0,
+            },
+            Jpeg {
+                width: 1616,
+                height: 1080,
+                offset: 163_891,
+                len: 608_696,
+                after_eoi: 51,
+            },
+        ],
+    },
+    // ILCE-7RM2 (raw.pixls.us 1310)
+    Sample {
+        file: "sony-ilce-7rm2-compressed.arw",
+        orientation: Orientation::NoTransforms,
+        previews: &[
+            Jpeg {
+                width: 160,
+                height: 120,
+                offset: 38_908,
+                len: 10_962,
+                after_eoi: 0,
+            },
+            Jpeg {
+                width: 1616,
+                height: 1080,
+                offset: 146_082,
+                len: 564_782,
+                after_eoi: 0,
+            },
+        ],
+    },
+    // ILCE-7RM2 (raw.pixls.us 1311)
+    Sample {
+        file: "sony-ilce-7rm2-uncompressed.arw",
+        orientation: Orientation::NoTransforms,
+        previews: &[
+            Jpeg {
+                width: 160,
+                height: 120,
+                offset: 38_908,
+                len: 10_931,
+                after_eoi: 0,
+            },
+            Jpeg {
+                width: 1616,
+                height: 1080,
+                offset: 146_082,
+                len: 559_709,
+                after_eoi: 0,
+            },
+        ],
+    },
+    // DSC-F828 (raw.pixls.us 1351)
+    Sample {
+        file: "sony-dsc-f828.srf",
+        orientation: Orientation::NoTransforms,
+        previews: &[Jpeg {
+            width: 640,
+            height: 480,
+            offset: 740,
+            len: 151_046,
+            after_eoi: 0,
+        }],
+    },
+    // NEX-5 (raw.pixls.us 1457)
+    Sample {
+        file: "sony-nex-5.arw",
+        orientation: Orientation::NoTransforms,
+        previews: &[
+            Jpeg {
+                width: 160,
+                height: 120,
+                offset: 47_796,
+                len: 2_790,
+                after_eoi: 0,
+            },
+            Jpeg {
+                width: 1616,
+                height: 1080,
+                offset: 163_891,
+                len: 469_514,
+                after_eoi: 51,
+            },
+        ],
+    },
+    // ILCE-9 (raw.pixls.us 1541)
+    Sample {
+        file: "sony-ilce-9-compressed.arw",
+        orientation: Orientation::NoTransforms,
+        previews: &[
+            Jpeg {
+                width: 160,
+                height: 120,
+                offset: 43_056,
+                len: 9_432,
+                after_eoi: 0,
+            },
+            Jpeg {
+                width: 1616,
+                height: 1080,
+                offset: 151_714,
+                len: 398_026,
+                after_eoi: 0,
+            },
+        ],
+    },
+    // ILCE-9 (raw.pixls.us 1542)
+    Sample {
+        file: "sony-ilce-9-uncompressed.arw",
+        orientation: Orientation::NoTransforms,
+        previews: &[
+            Jpeg {
+                width: 160,
+                height: 120,
+                offset: 43_056,
+                len: 9_334,
+                after_eoi: 0,
+            },
+            Jpeg {
+                width: 1616,
+                height: 1080,
+                offset: 151_714,
+                len: 393_347,
+                after_eoi: 0,
+            },
+        ],
+    },
+    // ILCE-7S (raw.pixls.us 1582)
+    Sample {
+        file: "sony-ilce-7s.arw",
+        orientation: Orientation::NoTransforms,
+        previews: &[
+            Jpeg {
+                width: 160,
+                height: 120,
+                offset: 38_516,
+                len: 8_908,
+                after_eoi: 0,
+            },
+            Jpeg {
+                width: 1616,
+                height: 1080,
+                offset: 144_034,
+                len: 734_118,
+                after_eoi: 0,
+            },
+        ],
+    },
+    // DSLR-A200 (raw.pixls.us 2271)
+    Sample {
+        file: "sony-dslr-a200.arw",
+        orientation: Orientation::NoTransforms,
+        previews: &[
+            Jpeg {
+                width: 160,
+                height: 120,
+                offset: 32_770,
+                len: 3_726,
+                after_eoi: 15,
+            },
+            Jpeg {
+                width: 1616,
+                height: 1080,
+                offset: 155_683,
+                len: 552_749,
+                after_eoi: 0,
+            },
+        ],
+    },
+    // DSLR-A100 (raw.pixls.us 2346)
+    Sample {
+        file: "sony-dslr-a100.arw",
+        orientation: Orientation::NoTransforms,
+        previews: &[
+            Jpeg {
+                width: 160,
+                height: 120,
+                offset: 68_535,
+                len: 4_071,
+                after_eoi: 0,
+            },
+            Jpeg {
+                width: 640,
+                height: 480,
+                offset: 25_683,
+                len: 42_850,
+                after_eoi: 0,
+            },
+        ],
+    },
+    // DSLR-A700 (raw.pixls.us 2521)
+    Sample {
+        file: "sony-dslr-a700.arw",
+        orientation: Orientation::NoTransforms,
+        previews: &[
+            Jpeg {
+                width: 160,
+                height: 120,
+                offset: 32_770,
+                len: 4_686,
+                after_eoi: 4,
+            },
+            Jpeg {
+                width: 1616,
+                height: 1080,
+                offset: 155_683,
+                len: 533_647,
+                after_eoi: 0,
+            },
+        ],
+    },
+    // DSC-RX100M6 (raw.pixls.us 3012)
+    Sample {
+        file: "sony-dsc-rx100m6-1x1.arw",
+        orientation: Orientation::NoTransforms,
+        previews: &[
+            Jpeg {
+                width: 160,
+                height: 120,
+                offset: 38_978,
+                len: 6_918,
+                after_eoi: 0,
+            },
+            Jpeg {
+                width: 1088,
+                height: 1080,
+                offset: 143_522,
+                len: 316_756,
+                after_eoi: 0,
+            },
+        ],
+    },
+    // DSC-RX100M6 (raw.pixls.us 3015)
+    Sample {
+        file: "sony-dsc-rx100m6-16x9.arw",
+        orientation: Orientation::NoTransforms,
+        previews: &[
+            Jpeg {
+                width: 160,
+                height: 120,
+                offset: 38_978,
+                len: 6_326,
+                after_eoi: 0,
+            },
+            Jpeg {
+                width: 1920,
+                height: 1080,
+                offset: 143_522,
+                len: 476_154,
+                after_eoi: 0,
+            },
+        ],
+    },
+    // DSC-R1 (raw.pixls.us 3221)
+    Sample {
+        file: "sony-dsc-r1.sr2",
+        orientation: Orientation::NoTransforms,
+        previews: &[
+            Jpeg {
+                width: 160,
+                height: 120,
+                offset: 165_198,
+                len: 28_372,
+                after_eoi: 0,
+            },
+            Jpeg {
+                width: 640,
+                height: 424,
+                offset: 1_358,
+                len: 145_173,
+                after_eoi: 0,
+            },
+        ],
+    },
+    // ILCE-7RM3 (raw.pixls.us 3251)
+    Sample {
+        file: "sony-ilce-7rm3-pixel-shift.arw",
+        orientation: Orientation::NoTransforms,
+        previews: &[
+            Jpeg {
+                width: 160,
+                height: 120,
+                offset: 43_246,
+                len: 6_053,
+                after_eoi: 0,
+            },
+            Jpeg {
+                width: 1616,
+                height: 1080,
+                offset: 135_330,
+                len: 254_293,
+                after_eoi: 0,
+            },
+        ],
+    },
+    // SLT-A99 (raw.pixls.us 3751)
+    Sample {
+        file: "sony-slt-a99.arw",
+        orientation: Orientation::Rotate270,
+        previews: &[
+            Jpeg {
+                width: 160,
+                height: 120,
+                offset: 37_158,
+                len: 10_091,
+                after_eoi: 0,
+            },
+            Jpeg {
+                width: 1616,
+                height: 1080,
+                offset: 143_522,
+                len: 905_337,
+                after_eoi: 0,
+            },
+        ],
+    },
+    // Hasselblad Lunar (raw.pixls.us 4051)
+    Sample {
+        file: "hasselblad-lunar.arw",
+        orientation: Orientation::NoTransforms,
+        previews: &[
+            Jpeg {
+                width: 160,
+                height: 120,
+                offset: 40_526,
+                len: 8_913,
+                after_eoi: 0,
+            },
+            Jpeg {
+                width: 1616,
+                height: 1080,
+                offset: 144_546,
+                len: 379_829,
+                after_eoi: 0,
+            },
+        ],
+    },
+    // ILCE-1 (raw.pixls.us 4466)
+    Sample {
+        file: "sony-ilce-1-lossless.arw",
+        orientation: Orientation::NoTransforms,
+        previews: &[
+            Jpeg {
+                width: 160,
+                height: 120,
+                offset: 44_008,
+                len: 13_144,
+                after_eoi: 0,
+            },
+            Jpeg {
+                width: 1616,
+                height: 1080,
+                offset: 143_522,
+                len: 484_164,
+                after_eoi: 0,
+            },
+            Jpeg {
+                width: 8640,
+                height: 5760,
+                offset: 630_784,
+                len: 9_751_756,
+                after_eoi: 0,
+            },
+        ],
+    },
+    // ILCE-7SM3 (raw.pixls.us 5418)
+    Sample {
+        file: "sony-ilce-7sm3.arw",
+        orientation: Orientation::NoTransforms,
+        previews: &[
+            Jpeg {
+                width: 160,
+                height: 120,
+                offset: 43_808,
+                len: 10_649,
+                after_eoi: 0,
+            },
+            Jpeg {
+                width: 1616,
+                height: 1080,
+                offset: 143_522,
+                len: 804_619,
+                after_eoi: 0,
+            },
+            Jpeg {
+                width: 4240,
+                height: 2832,
+                offset: 950_272,
+                len: 2_302_638,
+                after_eoi: 0,
+            },
+        ],
+    },
+    // DSC-RX100 (raw.pixls.us 5811)
+    Sample {
+        file: "sony-dsc-rx100.arw",
+        orientation: Orientation::NoTransforms,
+        previews: &[
+            Jpeg {
+                width: 160,
+                height: 120,
+                offset: 27_030,
+                len: 9_550,
+                after_eoi: 0,
+            },
+            Jpeg {
+                width: 1616,
+                height: 1080,
+                offset: 105_122,
+                len: 838_931,
+                after_eoi: 0,
+            },
+        ],
+    },
+    // DSLR-A900 (raw.pixls.us 5858)
+    Sample {
+        file: "sony-dslr-a900.arw",
+        orientation: Orientation::NoTransforms,
+        previews: &[
+            Jpeg {
+                width: 160,
+                height: 120,
+                offset: 32_770,
+                len: 4_046,
+                after_eoi: 15,
+            },
+            Jpeg {
+                width: 1616,
+                height: 1080,
+                offset: 155_683,
+                len: 845_435,
+                after_eoi: 0,
+            },
+        ],
+    },
+    // ILCE-6700 (raw.pixls.us 6736)
+    Sample {
+        file: "sony-ilce-6700-lossless.arw",
+        orientation: Orientation::NoTransforms,
+        previews: &[
+            Jpeg {
+                width: 160,
+                height: 120,
+                offset: 43_872,
+                len: 10_150,
+                after_eoi: 0,
+            },
+            Jpeg {
+                width: 1616,
+                height: 1080,
+                offset: 196_770,
+                len: 534_901,
+                after_eoi: 0,
+            },
+            Jpeg {
+                width: 6192,
+                height: 4128,
+                offset: 733_184,
+                len: 7_218_228,
+                after_eoi: 0,
+            },
+        ],
+    },
+    // ILCE-7M4 (raw.pixls.us 6929)
+    Sample {
+        file: "sony-ilce-7m4-lossless-l.arw",
+        orientation: Orientation::NoTransforms,
+        previews: &[
+            Jpeg {
+                width: 160,
+                height: 120,
+                offset: 43_946,
+                len: 12_285,
+                after_eoi: 0,
+            },
+            Jpeg {
+                width: 1616,
+                height: 1080,
+                offset: 196_770,
+                len: 584_555,
+                after_eoi: 0,
+            },
+            Jpeg {
+                width: 7008,
+                height: 4672,
+                offset: 782_336,
+                len: 7_424_248,
+                after_eoi: 0,
+            },
+        ],
+    },
+    // ILCE-7M4 (raw.pixls.us 6930)
+    Sample {
+        file: "sony-ilce-7m4-lossless-m.arw",
+        orientation: Orientation::NoTransforms,
+        previews: &[
+            Jpeg {
+                width: 160,
+                height: 120,
+                offset: 43_946,
+                len: 12_326,
+                after_eoi: 0,
+            },
+            Jpeg {
+                width: 1616,
+                height: 1080,
+                offset: 196_770,
+                len: 492_638,
+                after_eoi: 0,
+            },
+            Jpeg {
+                width: 4608,
+                height: 3072,
+                offset: 692_224,
+                len: 3_586_860,
+                after_eoi: 0,
+            },
+        ],
+    },
+    // ILCE-7M4 (raw.pixls.us 6931)
+    Sample {
+        file: "sony-ilce-7m4-lossless-s.arw",
+        orientation: Orientation::NoTransforms,
+        previews: &[
+            Jpeg {
+                width: 160,
+                height: 120,
+                offset: 43_946,
+                len: 12_235,
+                after_eoi: 0,
+            },
+            Jpeg {
+                width: 1616,
+                height: 1080,
+                offset: 196_770,
+                len: 483_370,
+                after_eoi: 0,
+            },
+            Jpeg {
+                width: 3504,
+                height: 2336,
+                offset: 684_032,
+                len: 2_354_346,
+                after_eoi: 0,
+            },
+        ],
+    },
+    // ILCE-7M4 (raw.pixls.us 6933)
+    Sample {
+        file: "sony-ilce-7m4-uncompressed-apsc.arw",
+        orientation: Orientation::NoTransforms,
+        previews: &[
+            Jpeg {
+                width: 160,
+                height: 120,
+                offset: 43_946,
+                len: 12_281,
+                after_eoi: 0,
+            },
+            Jpeg {
+                width: 1616,
+                height: 1080,
+                offset: 192_674,
+                len: 479_036,
+                after_eoi: 0,
+            },
+            Jpeg {
+                width: 4608,
+                height: 3072,
+                offset: 671_744,
+                len: 3_837_614,
+                after_eoi: 0,
+            },
+        ],
+    },
+    // ILCE-7M4 (raw.pixls.us 6936)
+    Sample {
+        file: "sony-ilce-7m4-compressed-apsc.arw",
+        orientation: Orientation::NoTransforms,
+        previews: &[
+            Jpeg {
+                width: 160,
+                height: 120,
+                offset: 43_946,
+                len: 12_903,
+                after_eoi: 0,
+            },
+            Jpeg {
+                width: 1616,
+                height: 1080,
+                offset: 192_674,
+                len: 515_116,
+                after_eoi: 0,
+            },
+            Jpeg {
+                width: 4608,
+                height: 3072,
+                offset: 708_608,
+                len: 4_087_916,
+                after_eoi: 0,
+            },
+        ],
+    },
+    // ILCE-9M3 (raw.pixls.us 7361)
+    Sample {
+        file: "sony-ilce-9m3-compressed.arw",
+        orientation: Orientation::NoTransforms,
+        previews: &[
+            Jpeg {
+                width: 160,
+                height: 120,
+                offset: 44_030,
+                len: 10_700,
+                after_eoi: 0,
+            },
+            Jpeg {
+                width: 1616,
+                height: 1080,
+                offset: 196_770,
+                len: 478_764,
+                after_eoi: 0,
+            },
+            Jpeg {
+                width: 6000,
+                height: 4000,
+                offset: 675_840,
+                len: 4_086_721,
+                after_eoi: 0,
+            },
+        ],
+    },
+    // ILCE-9M3 (raw.pixls.us 7364)
+    Sample {
+        file: "sony-ilce-9m3-lossless-s.arw",
+        orientation: Orientation::NoTransforms,
+        previews: &[
+            Jpeg {
+                width: 160,
+                height: 120,
+                offset: 44_030,
+                len: 10_767,
+                after_eoi: 0,
+            },
+            Jpeg {
+                width: 1616,
+                height: 1080,
+                offset: 196_770,
+                len: 485_378,
+                after_eoi: 0,
+            },
+            Jpeg {
+                width: 3008,
+                height: 2000,
+                offset: 684_032,
+                len: 1_379_719,
+                after_eoi: 0,
+            },
+        ],
+    },
+    // ILCE-1M2 (raw.pixls.us 7835)
+    Sample {
+        file: "sony-ilce-1m2-lossy-apsc.arw",
+        orientation: Orientation::NoTransforms,
+        previews: &[
+            Jpeg {
+                width: 160,
+                height: 120,
+                offset: 44_228,
+                len: 4_170,
+                after_eoi: 0,
+            },
+            Jpeg {
+                width: 1616,
+                height: 1080,
+                offset: 196_770,
+                len: 107_146,
+                after_eoi: 0,
+            },
+            Jpeg {
+                width: 5616,
+                height: 3744,
+                offset: 307_200,
+                len: 1_102_572,
+                after_eoi: 0,
+            },
+        ],
+    },
+    // ILCE-7M5 (raw.pixls.us 8846)
+    Sample {
+        file: "sony-ilce-7m5-compressed-hq.arw",
+        orientation: Orientation::NoTransforms,
+        previews: &[
+            Jpeg {
+                width: 160,
+                height: 120,
+                offset: 43_992,
+                len: 6_339,
+                after_eoi: 0,
+            },
+            Jpeg {
+                width: 1616,
+                height: 1080,
+                offset: 200_866,
+                len: 333_230,
+                after_eoi: 0,
+            },
+            Jpeg {
+                width: 7008,
+                height: 4672,
+                offset: 536_576,
+                len: 4_259_249,
+                after_eoi: 0,
+            },
+        ],
+    },
+    // ILCE-7M5 (raw.pixls.us 8847)
+    Sample {
+        file: "sony-ilce-7m5-compressed.arw",
+        orientation: Orientation::NoTransforms,
+        previews: &[
+            Jpeg {
+                width: 160,
+                height: 120,
+                offset: 43_992,
+                len: 6_360,
+                after_eoi: 0,
+            },
+            Jpeg {
+                width: 1616,
+                height: 1080,
+                offset: 200_866,
+                len: 333_372,
+                after_eoi: 0,
+            },
+            Jpeg {
+                width: 7008,
+                height: 4672,
+                offset: 536_576,
+                len: 4_270_440,
+                after_eoi: 0,
+            },
+        ],
+    },
+    // ILCE-7M5 (raw.pixls.us 8848)
+    Sample {
+        file: "sony-ilce-7m5-lossless-apsc.arw",
+        orientation: Orientation::NoTransforms,
+        previews: &[
+            Jpeg {
+                width: 160,
+                height: 120,
+                offset: 43_992,
+                len: 7_374,
+                after_eoi: 0,
+            },
+            Jpeg {
+                width: 1616,
+                height: 1080,
+                offset: 200_866,
+                len: 440_228,
+                after_eoi: 0,
+            },
+            Jpeg {
+                width: 4608,
+                height: 3072,
+                offset: 643_072,
+                len: 2_359_452,
+                after_eoi: 0,
+            },
+        ],
+    },
+    // ILCE-7M5 (raw.pixls.us 8849)
+    Sample {
+        file: "sony-ilce-7m5-compressed-hq-apsc.arw",
+        orientation: Orientation::NoTransforms,
+        previews: &[
+            Jpeg {
+                width: 160,
+                height: 120,
+                offset: 43_992,
+                len: 7_329,
+                after_eoi: 0,
+            },
+            Jpeg {
+                width: 1616,
+                height: 1080,
+                offset: 200_866,
+                len: 433_383,
+                after_eoi: 0,
+            },
+            Jpeg {
+                width: 4608,
+                height: 3072,
+                offset: 634_880,
+                len: 2_312_397,
+                after_eoi: 0,
+            },
+        ],
+    },
+    // ILCE-7M5 (raw.pixls.us 8850)
+    Sample {
+        file: "sony-ilce-7m5-compressed-apsc.arw",
+        orientation: Orientation::NoTransforms,
+        previews: &[
+            Jpeg {
+                width: 160,
+                height: 120,
+                offset: 43_992,
+                len: 7_283,
+                after_eoi: 0,
+            },
+            Jpeg {
+                width: 1616,
+                height: 1080,
+                offset: 200_866,
+                len: 452_187,
+                after_eoi: 0,
+            },
+            Jpeg {
+                width: 4608,
+                height: 3072,
+                offset: 655_360,
+                len: 2_555_667,
+                after_eoi: 0,
+            },
+        ],
+    },
+];
+
+/// The Sony samples of the list's large tier, fetched only on request: the
+/// ARQ, whose container is that of the pixel-shift frame 3251.
+const LARGE_SAMPLES: &[Sample] = &[
+    // ILCE-7RM3 (raw.pixls.us 3255), large tier
+    Sample {
+        file: "sony-ilce-7rm3.arq",
+        orientation: Orientation::NoTransforms,
+        previews: &[
+            Jpeg {
+                width: 160,
+                height: 120,
+                offset: 43_246,
+                len: 6_053,
+                after_eoi: 0,
+            },
+            Jpeg {
+                width: 1616,
+                height: 1080,
+                offset: 135_330,
+                len: 254_293,
+                after_eoi: 0,
+            },
+        ],
+    },
+];
+
+#[test]
+fn every_sony_sample_opens_with_the_previews_the_notes_predict() {
+    for sample in SAMPLES {
+        check(sample, Format::Arw);
+    }
+}
+
+#[test]
+fn the_arq_sample_opens_with_the_two_previews_of_its_pixel_shift_frame() {
+    for sample in LARGE_SAMPLES {
+        check(sample, Format::Arw);
+    }
+}
+
+#[test]
+fn the_hasselblad_lunar_sample_opens_as_a_sony_file() {
+    // The Lunar is a Sony NEX-7 sold under Hasselblad's name. Its Make is
+    // not Sony's, so it is the one sample the reader claims by its other
+    // rule: a Hasselblad Make with Sony's private pointer in the four-byte
+    // shape Sony writes it, in a file that is not a DNG, which every reader
+    // refuses first. The loop above covers it too; this test names that
+    // rule.
+    let lunar = SAMPLES
+        .iter()
+        .find(|sample| sample.file == "hasselblad-lunar.arw")
+        .unwrap();
+    check(lunar, Format::Arw);
+}
+
+#[test]
+fn the_sample_list_and_the_expected_previews_name_the_same_sony_files() {
+    // The list is in the repository, so this runs without any download.
+    let list =
+        fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/samples.tsv")).unwrap();
+    let mut lines = list.lines();
+    let header: Vec<&str> = lines.next().unwrap().split('\t').collect();
+    assert_eq!(
+        header,
+        ["id", "format", "file", "tier", "sha256", "licence", "url"]
+    );
+    let mut listed = BTreeSet::new();
+    for line in lines.filter(|line| !line.is_empty()) {
+        let fields: Vec<&str> = line.split('\t').collect();
+        assert_eq!(fields.len(), header.len(), "{line}");
+        if fields[1] == "arw" {
+            listed.insert((fields[2], fields[3]));
+        }
+    }
+
+    let tables = SAMPLES
+        .iter()
+        .map(|sample| (sample.file, "normal"))
+        .chain(LARGE_SAMPLES.iter().map(|sample| (sample.file, "large")));
+    let expected: BTreeSet<(&str, &str)> = tables.clone().collect();
+    assert_eq!(
+        expected.len(),
+        tables.count(),
+        "a file is in the tables twice"
+    );
+    let unexpected: Vec<_> = listed.difference(&expected).collect();
+    let unlisted: Vec<_> = expected.difference(&listed).collect();
+    assert!(
+        unexpected.is_empty() && unlisted.is_empty(),
+        "listed without expected previews: {unexpected:?}; \
+         expected previews but not listed: {unlisted:?}"
+    );
 }

@@ -12,8 +12,10 @@ opens with its JPEG previews; any other file that can be read opens as
 `UnknownFormat`. The NEF previews are checked on a test file laid out like a
 Nikon Z 9's, with small stand-in JPEGs, and on three CC0 Nikon Z 9 files
 (lossless, HE and HE*) that CI downloads; the ARW previews on test files
-laid out like each generation of Sony's family, with tests on real sample
-files still to come. See the [roadmap](docs/ROADMAP.md) for the plan.
+laid out like each generation of Sony's family and on 36 CC0 Sony-family
+files of raw.pixls.us, from the DSC-F828's SRF to the A7 V's ARW 6.0, 35
+of which CI downloads (the pixel-shift ARQ is fetched on request). See the
+[roadmap](docs/ROADMAP.md) for the plan.
 
 ## What it will do
 

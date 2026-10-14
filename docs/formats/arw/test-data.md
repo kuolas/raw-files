@@ -45,8 +45,8 @@ section only adds what is specific to Sony.
 - corrupted variants of those (section 5.2);
 - minimal reproducers for bugs, each added with its fix.
 
-**Downloaded in CI** (large: 5.9 MiB to about 129 MiB per ARW, and 325 MiB
-for the one ARQ [1]):
+**Downloaded, in CI or on request** (large: 5.9 MiB to about 129 MiB per
+ARW, and 325 MiB for the one ARQ [1]):
 
 - real samples from raw.pixls.us, fetched by URL and **pinned by SHA-256**.
   The site publishes `filelist.sha256` and repeats each file's hash in the
@@ -57,7 +57,8 @@ for the one ARQ [1]):
   entry. [1] **[P]**
 - Tests that need these files are skipped, not failed, when they are
   absent, so contributors can run the suite offline.
-- The ARQ belongs in an opt-in "large" tier.
+- The ARQ is in an opt-in "large" tier, fetched only with
+  `RAW_FILES_LARGE=1`.
 
 Practical points for the download step, as observed in October 2026
 **[P]**:
@@ -70,6 +71,23 @@ Practical points for the download step, as observed in October 2026
   path.
 
 The repository never holds a file whose licence is unclear, however small.
+
+### 2.1 The CI set
+
+The files CI downloads are listed in
+[`tests/samples.tsv`](../../../tests/samples.tsv), the source of truth for
+their names, hashes, licences and URLs; `scripts/fetch-samples.sh`
+downloads them and checks each hash, and the tests in `tests/arw.rs` read
+them. The set is every file of [Files checked](#files-checked): 35 in the
+normal tier, and the ARQ (file 3255) in the large tier, which the script
+fetches only with `RAW_FILES_LARGE=1`.
+
+For each file, `tests/arw.rs` checks the previews against
+[section 7.2](container-and-previews.md#72-expected-results-on-the-checked-files)
+and [section 4](container-and-previews.md#4-preview-sizes-by-body-and-generation)
+of the container page: their sizes, offsets and lengths, the padding after
+each end-of-image marker, and IFD0's orientation. Those expected results
+are now checked by the test suite as well as by the throwaway scripts.
 
 ## 3. What raw.pixls.us holds for Sony
 
