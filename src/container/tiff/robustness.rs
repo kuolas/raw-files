@@ -28,7 +28,7 @@
 //! fuzz target starts from the six fixtures, committed as files in
 //! `fuzz/seeds/tiff_walk/`. [`seeds`] lists them; the ignored test
 //! `write_fuzz_seeds` regenerates the files after a fixture changes
-//! (`cargo test --lib write_fuzz_seeds -- --ignored`), and
+//! (`cargo test write_fuzz_seeds -- --ignored`), and
 //! `the_fuzz_seeds_match_the_fixtures` fails when a file is missing or has
 //! gone stale. It is skipped when `fuzz/Cargo.toml` is absent, as in the
 //! packaged crate, which leaves `fuzz/` out; in the repository, a missing
@@ -611,7 +611,8 @@ fn extreme_structural_fields_give_an_error_or_a_tree_within_the_limits() {
 /// Writes the fixtures to `fuzz/seeds/tiff_walk/`, where the fuzz target
 /// starts from them. Ignored, as it writes to the source tree; run it after
 /// changing a fixture:
-/// `cargo test --lib write_fuzz_seeds -- --ignored`.
+/// `cargo test write_fuzz_seeds -- --ignored`, which also writes the JPEG
+/// search's seeds and the `open` target's.
 #[test]
 #[ignore = "writes the seed files; run it to regenerate them"]
 fn write_fuzz_seeds() {
@@ -646,7 +647,7 @@ fn the_fuzz_seeds_match_the_fixtures() {
         assert!(
             committed.as_deref() == Some(&bytes[..]),
             "fuzz/seeds/tiff_walk/{name} is missing or differs from its fixture: \
-             regenerate it with `cargo test --lib write_fuzz_seeds -- --ignored`"
+             regenerate it with `cargo test write_fuzz_seeds -- --ignored`"
         );
     }
 }

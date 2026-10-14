@@ -313,12 +313,13 @@ never builds a big-endian header, and half of the reader goes unfuzzed.
 The target `jpeg_probe`, which fuzzes the search for a JPEG preview's
 frame header, runs the same way, with `jpeg_probe` in place of `tiff_walk`
 throughout. The target `open`, which opens the input as a caller would and
-reads every preview it finds, has no seeds of its own and starts from the
-TIFF ones; libFuzzer takes several corpus directories:
+reads every preview it finds, has seeds of its own, fixtures of the Nikon
+and Sony layouts, and takes the TIFF ones too, since a plain TIFF file is
+also something it must open; libFuzzer takes several corpus directories:
 
 ```sh
 mkdir -p fuzz/corpus/open
-cargo +nightly fuzz run open fuzz/corpus/open fuzz/seeds/tiff_walk -- -max_total_time=60 -timeout=25 -malloc_limit_mb=256
+cargo +nightly fuzz run open fuzz/corpus/open fuzz/seeds/open fuzz/seeds/tiff_walk -- -max_total_time=60 -timeout=25 -malloc_limit_mb=256
 ```
 
 The allocation limit makes a runaway allocation a finding: the run stops

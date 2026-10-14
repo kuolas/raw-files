@@ -625,8 +625,8 @@ mod tests {
     /// Writes the seeds to `fuzz/seeds/jpeg_probe/`, where the fuzz target
     /// starts from them. Ignored, as it writes to the source tree; run it
     /// after changing a seed or the stub:
-    /// `cargo test --lib write_fuzz_seeds -- --ignored`, which also writes
-    /// the TIFF reader's.
+    /// `cargo test write_fuzz_seeds -- --ignored`, which also writes the
+    /// TIFF reader's seeds and the `open` target's.
     #[test]
     #[ignore = "writes the seed files; run it to regenerate them"]
     fn write_fuzz_seeds() {
@@ -661,7 +661,7 @@ mod tests {
             assert!(
                 committed.as_deref() == Some(&bytes[..]),
                 "fuzz/seeds/jpeg_probe/{name} is missing or differs from its stub: \
-                 regenerate it with `cargo test --lib write_fuzz_seeds -- --ignored`"
+                 regenerate it with `cargo test write_fuzz_seeds -- --ignored`"
             );
         }
     }

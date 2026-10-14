@@ -13,20 +13,25 @@ the corpus the fuzzer writes is not.
   Sony raw tile; and one input that is not a stream but two bytes choosing
   a range inside the input, then a stream, since the target also probes the
   range those bytes name.
-- The `open` target has no directory of its own: it starts from
-  `tiff_walk/`, since every file it can open is a TIFF file. Fixtures of
-  the RAW formats will join it as their readers arrive.
+- `open/` seeds the `open` target with the integration tests' fixtures of
+  the RAW formats: a file laid out like a Nikon Z 9's NEF and one like each
+  generation of Sony's family (ARW 4.0 with a lossless and with a medium
+  raw, ARW 2.x, ARQ, SR2, SRF and the A100), in both byte orders. The target
+  still takes the `tiff_walk/` seeds as a second corpus directory, since a
+  plain TIFF file is also something it must open.
 
 The files are generated from the fixtures in
-`src/container/tiff/robustness.rs` and the stubs in
-`src/container/jpeg/mod.rs`, never edited by hand, and a test in each
-(`the_fuzz_seeds_match_the_fixtures`, `the_jpeg_fuzz_seeds_match_the_stubs`)
-fails when a file is missing or differs from what it is generated from.
+`src/container/tiff/robustness.rs`, the stubs in
+`src/container/jpeg/mod.rs` and the integration tests' fixtures through
+`tests/fuzz_seeds.rs`, never edited by hand, and a test in each
+(`the_fuzz_seeds_match_the_fixtures`, `the_jpeg_fuzz_seeds_match_the_stubs`
+and `the_open_fuzz_seeds_match_the_fixtures`) fails when a file is missing
+or differs from what it is generated from.
 After changing a fixture or a stub, regenerate them all from the repository
 root:
 
 ```sh
-cargo test --lib write_fuzz_seeds -- --ignored
+cargo test write_fuzz_seeds -- --ignored
 ```
 
 The fuzzer saves what it finds to `fuzz/corpus/`, which git ignores; see
