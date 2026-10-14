@@ -32,3 +32,7 @@ decided with the first release.
 - Reading the embedded JPEG previews of Nikon NEF files: the ones in IFD0
   and the SubIFDs, and the one the MakerNote points at, sized from their
   own frame headers, with IFD0's orientation.
+- Reading the embedded JPEG previews of Sony ARW files, and of the SRF, SR2
+  and ARQ files of the same family: the ones in IFD0, IFD1 and, on bodies
+  writing FileFormat 4.0 and later, the full-size one in IFD2, sized from
+  their own frame headers, with IFD0's orientation.

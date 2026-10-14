@@ -24,7 +24,8 @@ fuzz targets are a second crate, in `fuzz/`, that is never published.
 | `src/formats/nef/mod.rs` | the Nikon NEF reader: its claim, by IFD0's Make, and its spec in the format table, whose parse reads the previews through `nef/previews.rs` | `container`, `io`, `format`, `preview`, `limits`, `error` |
 | `src/formats/nef/previews.rs` | where a NEF file keeps its previews, and their search: the shared finder over the whole tree, with the MakerNote's preview as its one extra candidate | `nef/makernote.rs`, `tiff_previews`, `container`, `io`, `limits`, `preview`, `error` |
 | `src/formats/nef/makernote.rs` | the Nikon MakerNote, as far as its preview needs it: the layout with an embedded TIFF header, whose offsets count from that header, read as a block that every offset is checked against; the PreviewIFD's JPEG, as a candidate for the shared finder. A damaged block gives no candidate; only a failing reader is an error | `container`, `io`, `limits`, `error`, `tiff_previews` (for `Candidate`) |
-| `src/formats/arw/mod.rs` | the Sony ARW reader, for the SRF, SR2 and ARQ files too: its claim, by IFD0's Make and, for a Hasselblad Make, the pointer to Sony's private directory with no DNG version, and its spec in the format table, whose parse finds no previews yet | `container`, `io`, `format`, `limits`, `error` |
+| `src/formats/arw/mod.rs` | the Sony ARW reader, for the SRF, SR2 and ARQ files too: its claim, by IFD0's Make and, for a Hasselblad Make, the pointer to Sony's private directory with no DNG version, and its spec in the format table, whose parse reads the previews through `arw/previews.rs` | `container`, `io`, `format`, `limits`, `error` |
+| `src/formats/arw/previews.rs` | where a Sony file keeps its previews (IFD0, IFD1 and, from FileFormat 4.0, IFD2; IFD1 alone on the SRF), and their search: the shared finder over the whole tree, with no candidate of its own | `tiff_previews`, `container`, `io`, `preview`, `error` |
 | `src/io.rs` | `Source`: the one checked reader — bounded reads, checked offset arithmetic, a small block cache for the scattered reads of directory walking; `within`, the same bounds check on a range of a reader's own | `error` |
 | `src/container/mod.rs` | the containers: file structures that several formats share, with no knowledge of camera vendors | — |
 | `src/container/tiff/mod.rs` | the TIFF container's face to the crate: re-exports; one folder per container, so a container that grows never moves | — |
@@ -39,10 +40,12 @@ fuzz targets are a second crate, in `fuzz/`, that is never published.
 | `tests/support/tiff_builder.rs` | the fixture builder: small TIFF files described in code, for unit and integration tests | — (`std` only) |
 | `tests/support/jpeg.rs` | the stub JPEG: a small well-formed stream with a chosen frame header and no image, for unit and integration tests | — (`std` only) |
 | `tests/support/nef.rs` | the Z 9 fixture: a file laid out like a Nikon Z 9's NEF files, with stub JPEGs and a Nikon MakerNote holding the small one, in the file's byte order or the other, for integration tests | `tests/support/tiff_builder.rs`, `tests/support/jpeg.rs` |
+| `tests/support/arw.rs` | the Sony fixtures: files laid out like each generation of Sony's RAW family (ARW 4 with a lossless or a medium raw, ARW 2, ARQ, SR2, SRF, and the A100's ARW 1.0), with stub JPEGs and stand-in raw data, in either byte order, each with where its JPEGs and raw data are, for integration tests | `tests/support/tiff_builder.rs`, `tests/support/jpeg.rs` |
 | `tests/tiff_builder.rs` | tests only: the fixture builder checked from outside the crate, which keeps `tests/support/` compiled | `tests/support` |
 | `tests/jpeg_stub.rs` | tests only: the stub JPEG checked from outside the crate | `tests/support` |
 | `tests/open.rs` | tests only: the public API from outside the crate (opening, detection, limits, errors, `Send`) | `tests/support` |
 | `tests/nef.rs` | tests only: the NEF reader from outside the crate, on the Z 9 fixture (the previews listed, chosen and read, in both byte orders, with the MakerNote in either), and on the three Z 9 sample files of `tests/samples.tsv` (each preview's size, place, format and orientation, and the largest read whole), each skipped when its file is absent | `tests/support`, the downloaded samples |
+| `tests/arw.rs` | tests only: the ARW reader from outside the crate, on the Sony fixtures (each layout's previews listed, chosen and read, in both byte orders; none of them the raw data; the A100's sized from its frame header and its SubIFD pointer shown not to be an IFD) | `tests/support` |
 | `tests/local_corpus.rs` | tests only: the reader run over a folder of your own RAW files (every file opens, has a preview, and its largest preview is a whole JPEG); ignored by default, run by hand on a folder named by `RAW_FILES_LOCAL_CORPUS`; prints counts only | the library |
 | `tests/samples.tsv` | the real sample files the tests read when present: for each, its raw.pixls.us id, format, file name, SHA-256, licence and URL. Not committed themselves; `scripts/fetch-samples.sh` downloads them into `target/raw-samples`, or `RAW_FILES_SAMPLES`, and checks each hash ([test data](formats/nef/test-data.md#21-the-ci-set)) | — |
 | `fuzz/` | the fuzz targets: a separate crate, never published, each target one call into `src/fuzzing.rs`; `fuzz/seeds/` holds the committed starting inputs, generated from the test fixtures and checked against them by a test. Its one dependency besides the library, `libfuzzer-sys`, compiles libFuzzer's C++ runtime: the only native code in the repository, kept out of the library, which stays pure Rust ([ADR007](architecture-decisions/adr007-pure-rust-cross-platform.md)) | the library, `libfuzzer-sys` |
@@ -71,11 +74,12 @@ the file's length.
 `tests/support/tiff_builder.rs`, and take their JPEG streams from
 `tests/support/jpeg.rs`; `src/lib.rs` includes both files with `#[path]`
 under `#[cfg(test)]`, so the unit tests and the integration tests share one
-copy of each without it becoming part of the library. A whole file of one
-camera's layout, built from those two, lives beside them for the
-integration tests: `tests/support/nef.rs`, the Z 9's. Real files are not
-committed: `tests/samples.tsv` pins the ones the tests read by their
-SHA-256, and a test whose file has not been downloaded skips.
+copy of each without it becoming part of the library. Whole files of one
+camera's layout, built from those two, live beside them for the
+integration tests: `tests/support/nef.rs`, the Z 9's, and
+`tests/support/arw.rs`, one for each generation of Sony's family. Real
+files are not committed: `tests/samples.tsv` pins the ones the tests read
+by their SHA-256, and a test whose file has not been downloaded skips.
 
 ## As the code grows
 

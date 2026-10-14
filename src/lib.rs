@@ -2,16 +2,15 @@
 
 //! raw-files: a camera RAW library in pure Rust.
 //!
-//! raw-files extracts the JPEG previews embedded in Nikon NEF files, will do
-//! the same for Sony ARW files, and later decode their raw sensor data. A
-//! malformed file gives an error, never a panic.
+//! raw-files extracts the JPEG previews embedded in Nikon NEF and Sony ARW
+//! files, and will later decode their raw sensor data. A malformed file
+//! gives an error, never a panic.
 //!
 //! [`RawFile`] opens a file by path, from bytes in memory or from any reader
 //! that can seek, detects its format from its content, lists its embedded
 //! previews and reads one; [`Options`] opens it with other [`Limits`].
-//! Nikon NEF files open with their previews; Sony ARW files are
-//! recognised, though their previews are not read yet; any other file that
-//! can be read opens as `UnknownFormat`. See the
+//! Nikon NEF and Sony ARW files open with their previews; any other file
+//! that can be read opens as `UnknownFormat`. See the
 //! [roadmap](https://github.com/kuolas/raw-files/blob/master/docs/ROADMAP.md)
 //! for the plan and the
 //! [architecture](https://github.com/kuolas/raw-files/blob/master/docs/ARCHITECTURE.md)

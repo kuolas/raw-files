@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! The Sony ARW reader: how the crate recognises a Sony RAW file and, next,
-//! how it finds the file's previews.
+//! The Sony ARW reader: how the crate recognises a Sony RAW file, and how
+//! it finds the file's previews.
 //!
 //! Sony's RAW files are one family. Every Sony body since 2006 writes ARW;
 //! Sony's earliest bodies wrote SRF and SR2 files; and Sony's software
@@ -29,8 +29,9 @@
 //! carry a DNG version, as far as the published samples show; [`claims`]
 //! says what was measured. The file's name is never looked at.
 //!
-//! The search for the previews will live beside this file, in
-//! `previews.rs`.
+//! The search for the previews is in `previews.rs`.
+
+mod previews;
 
 use std::io::{Read, Seek};
 
@@ -131,12 +132,17 @@ fn claims<R: Read + Seek>(src: &mut Source<R>, tree: &Tree) -> Result<bool> {
     Ok(starts_with(HASSELBLAD) && sony_pointer && ifd0.entry(DNG_VERSION).is_none())
 }
 
-/// Reads the previews of a file that [`claims`] accepted. It finds none
-/// yet, and cannot fail: the shared TIFF preview finder is to run here
-/// next.
-fn parse<R: Read + Seek>(_src: &mut Source<R>, _tree: &Tree, _limits: &Limits) -> Result<Parsed> {
+/// Reads the previews of a file that [`claims`] accepted: the JPEGs that
+/// the IFDs of IFD0's chain declare, found by the shared TIFF preview
+/// finder over the whole tree. The finder takes no limits of its own, so
+/// `_limits` goes unused here: the walk that built `tree` applied them.
+///
+/// # Errors
+///
+/// As for [`previews::previews`].
+fn parse<R: Read + Seek>(src: &mut Source<R>, tree: &Tree, _limits: &Limits) -> Result<Parsed> {
     Ok(Parsed {
-        previews: Vec::new(),
+        previews: previews::previews(src, tree)?,
     })
 }
 
@@ -302,7 +308,7 @@ mod tests {
     }
 
     #[test]
-    fn a_claimed_file_has_no_previews_yet() {
+    fn a_claimed_file_without_a_jpeg_has_no_previews() {
         let (mut src, tree) = file(|builder, ifd| {
             builder.ascii(ifd, MAKE, "SONY");
         });
