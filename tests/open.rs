@@ -54,7 +54,7 @@ fn a_nikon_file_that_holds_no_jpeg_opens_as_nef_with_no_previews() {
 }
 
 #[test]
-fn a_sony_file_opens_as_arw_with_no_previews() {
+fn a_sony_file_that_holds_no_jpeg_opens_as_arw_with_no_previews() {
     let bytes = one_ifd(Some("SONY"));
     let file = RawFile::from_bytes(&bytes).unwrap();
     assert_eq!(file.format(), Format::Arw);

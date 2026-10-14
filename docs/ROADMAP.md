@@ -12,7 +12,12 @@ API is the file handle (`RawFile` and `Options`) with the preview types
 `Limits`. A Nikon NEF file opens with the JPEG previews in its IFD0, its
 SubIFDs and its MakerNote, checked on a test file laid out like a Nikon
 Z 9's and on three CC0 Nikon Z 9 files (lossless, HE and HE*) that CI
-downloads. Any other file that can be read opens as `UnknownFormat`.
+downloads. A Sony ARW file, or an SRF, SR2 or ARQ file of the same family,
+opens with the JPEG previews in its IFD0, IFD1 and, on newer bodies, IFD2,
+checked on test files laid out like each generation of the family; tests
+on real Sony sample files are still to come. Milestones 1 and 2 both
+work, the second so far checked on test files only. Any other file that
+can be read opens as `UnknownFormat`.
 
 The first release, version 0.1.0, is milestones 1 and 2: the embedded
 previews of NEF and ARW files.

@@ -1,18 +1,19 @@
 # raw-files
 
 A camera RAW library in pure Rust. It extracts the JPEG previews embedded in
-Nikon NEF files, with Sony ARW files next and fuller RAW decoding planned.
+Nikon NEF and Sony ARW files, with fuller RAW decoding planned.
 
 **Status: early.** Of the list below, the embedded previews work for Nikon
-NEF files; the previews of Sony ARW files, metadata and RAW decoding are
-planned. The public API is the file handle (`RawFile` and `Options`) with the
-preview types (`Preview`, `PreviewFormat`, `Orientation`, `Size`), `Format`,
-`Error` and `Limits`. A NEF file opens with the JPEG previews in its IFD0,
-its SubIFDs and its MakerNote; any other file that can be read opens as
+NEF and Sony ARW files (SRF, SR2 and ARQ included); metadata and RAW
+decoding are planned. The public API is the file handle (`RawFile` and
+`Options`) with the preview types (`Preview`, `PreviewFormat`,
+`Orientation`, `Size`), `Format`, `Error` and `Limits`. A NEF or ARW file
+opens with its JPEG previews; any other file that can be read opens as
 `UnknownFormat`. The NEF previews are checked on a test file laid out like a
 Nikon Z 9's, with small stand-in JPEGs, and on three CC0 Nikon Z 9 files
-(lossless, HE and HE*) that CI downloads. See the
-[roadmap](docs/ROADMAP.md) for the plan.
+(lossless, HE and HE*) that CI downloads; the ARW previews on test files
+laid out like each generation of Sony's family, with tests on real sample
+files still to come. See the [roadmap](docs/ROADMAP.md) for the plan.
 
 ## What it will do
 

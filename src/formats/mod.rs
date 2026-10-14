@@ -15,8 +15,8 @@
 //! by its IFD0's Make, and opens with its previews, which the NEF reader
 //! finds with the shared finder. A Sony file is recognised by its IFD0's
 //! Make too, helped for a Hasselblad Make by the pointer to Sony's private
-//! directory, and opens with no previews until the ARW reader runs the
-//! shared finder. A file no format claims is of no format the crate
+//! directory, and opens with its previews, which the ARW reader finds with
+//! the shared finder. A file no format claims is of no format the crate
 //! recognises.
 
 mod arw;
