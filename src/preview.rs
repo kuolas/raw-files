@@ -16,6 +16,29 @@ use crate::{Orientation, Size};
 ///
 /// The size comes from the JPEG's own frame header, never from the tags
 /// that describe the preview: those are often missing, zero or wrong.
+///
+/// # Examples
+///
+/// A `Preview` describes where the bytes are, so a caller that holds the file
+/// in memory need not copy them: this borrows the largest preview from the
+/// buffer and saves it under the extension its format uses.
+///
+/// ```no_run
+/// use raw_files::RawFile;
+///
+/// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+/// let bytes = std::fs::read("photo.nef")?;
+/// let file = RawFile::from_bytes(&bytes)?;
+/// if let Some(preview) = file.largest_preview() {
+///     let range = preview.byte_range();
+///     let (start, end) = (usize::try_from(range.start)?, usize::try_from(range.end)?);
+///     let jpeg = &bytes[start..end];
+///     let name = format!("preview.{}", preview.format().extension());
+///     std::fs::write(name, jpeg)?;
+/// }
+/// # Ok(())
+/// # }
+/// ```
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct Preview {
     offset: u64,

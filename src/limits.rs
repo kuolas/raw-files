@@ -7,8 +7,10 @@
 ///
 /// The defaults are safe for untrusted input and sit above anything a real
 /// camera file needs. They may be tuned in minor releases, so do not rely on
-/// their exact values. Reading that would cross a limit fails with
-/// [`ErrorKind::LimitExceeded`](crate::ErrorKind::LimitExceeded).
+/// their exact values. A cap the reader cannot go on without fails with
+/// [`ErrorKind::LimitExceeded`](crate::ErrorKind::LimitExceeded); past the
+/// first directory, a directory that crosses a cap is left out as a damaged
+/// one is.
 ///
 /// `Limits` is `#[non_exhaustive]`: build it from [`Limits::default()`] (or
 /// [`Limits::unlimited()`]) and the setters, never with struct syntax.
