@@ -36,3 +36,5 @@ decided with the first release.
   and ARQ files of the same family: the ones in IFD0, IFD1 and, on bodies
   writing FileFormat 4.0 and later, the full-size one in IFD2, sized from
   their own frame headers, with IFD0's orientation.
+- A DNG is of no known format, whatever camera maker its Make names:
+  converters and the phones that write DNG keep the maker's name.

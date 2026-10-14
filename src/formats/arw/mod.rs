@@ -21,10 +21,12 @@
 //! in the Make: 3FR and FFF files, which are TIFF-based, and, from the
 //! camera modules it makes for DJI's drones, DNG files.
 //!
-//! For this reader a file is a Sony file when the Make tag of its IFD0,
-//! which names the camera's manufacturer, names Sony; or when it names
-//! Hasselblad and IFD0 shows Sony's structure: the pointer to Sony's
-//! private directory, in the shape Sony writes it, and no DNG version.
+//! For this reader a file is a Sony file when it is not a DNG and the Make
+//! tag of its IFD0, which names the camera's manufacturer, names Sony; or
+//! names Hasselblad, and IFD0 shows Sony's structure: the pointer to Sony's
+//! private directory, in the shape Sony writes it. A DNG keeps the maker's
+//! name in its Make, whether Adobe's converter made it from an ARW file or
+//! one of Sony's phones wrote it, but it is Adobe's format, not Sony's.
 //! Hasselblad's 3FR and FFF files carry no such pointer, and its DNG files
 //! carry a DNG version, as far as the published samples show; [`claims`]
 //! says what was measured. The file's name is never looked at.
@@ -35,9 +37,9 @@ mod previews;
 
 use std::io::{Read, Seek};
 
-use super::{FormatSpec, Parsed};
+use super::{FormatSpec, Parsed, is_dng, make_starts_with};
 use crate::container::tiff::Tree;
-use crate::container::tiff::tags::{DNG_PRIVATE_DATA, DNG_VERSION, MAKE};
+use crate::container::tiff::tags::DNG_PRIVATE_DATA;
 use crate::container::tiff::types::BYTE;
 use crate::error::Result;
 use crate::format::Format;
@@ -62,16 +64,17 @@ pub(crate) fn spec<R: Read + Seek>() -> FormatSpec<R> {
 }
 
 /// Whether the file whose TIFF structure is `tree` is a Sony RAW file:
-/// whether the Make of its IFD0, trimmed of spaces at either end, starts
-/// with `SONY`, in any case; or starts with `HASSELBLAD`, in any case, in
-/// an IFD0 that holds Sony's private pointer (DNGPrivateData, as four
-/// bytes) and no DNGVersion.
+/// whether it is not a DNG ([`is_dng`]), and the Make of its IFD0, trimmed
+/// of spaces at either end, starts with `SONY`, in any case
+/// ([`make_starts_with`]); or starts with `HASSELBLAD`, in any case, in an
+/// IFD0 that holds Sony's private pointer (DNGPrivateData, as four bytes).
 ///
-/// A Sony Make decides alone. The ARW notes (`docs/formats/arw/`) record
-/// `SONY` as the Make of every Sony body, padded with eleven spaces on the
-/// A100 and with one on the A200 to A900, which the trim covers. The SRF
-/// files of the earliest bodies carry no private pointer, but their Make
-/// is Sony's too, so the pointer is not asked of a Sony Make.
+/// For a file that is not a DNG, a Sony Make decides alone. The ARW notes
+/// (`docs/formats/arw/`) record `SONY` as the Make of every Sony body,
+/// padded with eleven spaces on the A100 and with one on the A200 to A900,
+/// which the trim covers. The SRF files of the earliest bodies carry no
+/// private pointer, but their Make is Sony's too, so the pointer is not
+/// asked of a Sony Make.
 ///
 /// A Hasselblad Make appears here because Hasselblad sold a few Sony
 /// cameras under its own name, rebuilt around Sony's electronics (the
@@ -89,9 +92,11 @@ pub(crate) fn spec<R: Read + Seek>() -> FormatSpec<R> {
 /// the L1D-20c and L2D-20c drone modules, carry both; and the Lunar's file
 /// carries DNGPrivateData and no DNGVersion, as Sony's ARW files do. So a
 /// Hasselblad Make is claimed only with the pointer present and the
-/// version absent. The dumps are exiv2's output, read in place of the
-/// files themselves; the Lunar's dump lists its DNGPrivateData, so the
-/// dumps do list the tag when a file has it.
+/// version absent. The version's absence is the test this claim makes
+/// first, for every Make, so the Hasselblad branch asks only for the
+/// pointer. The dumps are exiv2's output, read in place of the files
+/// themselves; the Lunar's dump lists its DNGPrivateData, so the dumps do
+/// list the tag when a file has it.
 ///
 /// The pointer must also have Sony's shape. Sony writes DNGPrivateData as
 /// four bytes (type BYTE, count 4) holding the offset of its private
@@ -104,32 +109,25 @@ pub(crate) fn spec<R: Read + Seek>() -> FormatSpec<R> {
 /// DNG without a version, or a Sony-built Hasselblad without the pointer,
 /// would call for checking it again.
 ///
-/// A missing Make, a Make that is not text (type ASCII), and the Make of any
-/// other manufacturer are all "no".
-///
 /// # Errors
 ///
-/// Whatever reading the Make returns: `LimitExceeded` for a value longer
-/// than one tag may take, `Io` when the reader fails. A claim that cannot
-/// read its tag stops detection rather than passing the file on.
+/// As for [`make_starts_with`].
 fn claims<R: Read + Seek>(src: &mut Source<R>, tree: &Tree) -> Result<bool> {
-    let ifd0 = tree.ifd0();
-    let Some(make) = ifd0.ascii(src, MAKE)? else {
+    if is_dng(tree) {
         return Ok(false);
-    };
-    let make = make.trim_matches(' ').as_bytes();
-    let starts_with = |name: &[u8]| {
-        make.get(..name.len())
-            .is_some_and(|start| start.eq_ignore_ascii_case(name))
-    };
-    if starts_with(SONY) {
+    }
+    if make_starts_with(src, tree, SONY)? {
         return Ok(true);
     }
-    // Sony's pointer is four bytes; a DNG's private data block is not.
-    let sony_pointer = ifd0
+    // Sony's pointer is four bytes; a DNG's private data block is not. The
+    // DNG version, the other half of the Hasselblad rule, was ruled out
+    // above for every Make. The pointer is tested first because it costs
+    // no read, and the Make was read once already.
+    let sony_pointer = tree
+        .ifd0()
         .entry(DNG_PRIVATE_DATA)
         .is_some_and(|entry| entry.typ() == BYTE && entry.count() == 4);
-    Ok(starts_with(HASSELBLAD) && sony_pointer && ifd0.entry(DNG_VERSION).is_none())
+    Ok(sony_pointer && make_starts_with(src, tree, HASSELBLAD)?)
 }
 
 /// Reads the previews of a file that [`claims`] accepted: the JPEGs that
@@ -149,25 +147,9 @@ fn parse<R: Read + Seek>(src: &mut Source<R>, tree: &Tree, _limits: &Limits) -> 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::container::tiff::tags::ORIENTATION;
-    use crate::container::tiff::{parse_header, walk};
-    use crate::error::ErrorKind;
-    use crate::tiff_builder::{ASCII, IfdId, Order, RawValue, TiffBuilder};
-    use std::io::Cursor;
-
-    type Src = Source<Cursor<Vec<u8>>>;
-
-    /// The file that `build` describes in a one-IFD TIFF file, read into a
-    /// source and a tree.
-    fn file(build: impl FnOnce(&mut TiffBuilder, IfdId)) -> (Src, Tree) {
-        let mut builder = TiffBuilder::new(Order::Little);
-        let ifd = builder.ifd();
-        build(&mut builder, ifd);
-        let mut src = Source::new(Cursor::new(builder.build().bytes)).unwrap();
-        let header = parse_header(&mut src).unwrap();
-        let tree = walk(&mut src, header, &Limits::default()).unwrap();
-        (src, tree)
-    }
+    use crate::container::tiff::tags::{DNG_VERSION, MAKE};
+    use crate::formats::testing::file;
+    use crate::tiff_builder::{IfdId, TiffBuilder};
 
     /// Whether the ARW reader claims the file that `build` describes.
     fn claimed(build: impl FnOnce(&mut TiffBuilder, IfdId)) -> bool {
@@ -206,16 +188,6 @@ mod tests {
         // Eleven spaces after the name; the builder adds the NUL that makes
         // the value sixteen bytes.
         assert!(claimed_make("SONY           "));
-    }
-
-    #[test]
-    fn a_sony_make_in_lower_case_is_claimed() {
-        assert!(claimed_make("sony"));
-    }
-
-    #[test]
-    fn a_sony_make_with_spaces_at_either_end_is_claimed() {
-        assert!(claimed_make("  SONY  "));
     }
 
     #[test]
@@ -273,38 +245,15 @@ mod tests {
     }
 
     #[test]
-    fn a_file_without_a_make_is_not_claimed() {
+    fn a_dng_from_a_sony_camera_is_not_claimed() {
+        // As Adobe's converter writes it: Sony's Make, a DNG version and a
+        // private data block.
         assert!(!claimed(|builder, ifd| {
-            // A tag that is not Make, for an IFD0 that needs an entry and
-            // nothing else.
-            builder.short(ifd, ORIENTATION, &[1]);
+            builder
+                .ascii(ifd, MAKE, "SONY")
+                .byte(ifd, DNG_VERSION, &[1, 4, 0, 0])
+                .byte(ifd, DNG_PRIVATE_DATA, &[0; 32]);
         }));
-    }
-
-    #[test]
-    fn a_make_that_is_not_text_is_not_claimed() {
-        assert!(!claimed(|builder, ifd| {
-            builder.byte(ifd, MAKE, b"SONY\0");
-        }));
-    }
-
-    #[test]
-    fn an_empty_make_is_not_claimed() {
-        assert!(!claimed_make(""));
-    }
-
-    #[test]
-    fn a_make_too_long_to_read_is_an_error() {
-        // A Make of more bytes than the 1 MiB one tag value may take, inside
-        // the file.
-        let count: u32 = 1024 * 1024 + 1;
-        let (mut src, tree) = file(|builder, ifd| {
-            builder.raw(ifd, MAKE, ASCII, count, RawValue::Offset(4096));
-            builder.pad_to(4096 + u64::from(count));
-        });
-        let err = claims(&mut src, &tree).expect_err("the Make is too long");
-        assert_eq!(err.kind(), ErrorKind::LimitExceeded, "{err:?}");
-        assert_eq!(err.offset(), Some(4096));
     }
 
     #[test]
