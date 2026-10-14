@@ -298,6 +298,10 @@ The Lunar is a rebadged NEX-7 [40] **[S]** and its file is an ordinary ARW
 the NUL), Model `Lunar`, FileFormat `3 3 0 0`, SonyModelID 289 (the NEX-7's
 value [1] **[P]**), a headerless MakerNote of 76 entries, IFD0 JPEG
 1616x1080, IFD1 JPEG 160x120, and a 12-bit compressed raw SubIFD.
+Its IFD0 carries Sony's DNGPrivateData pointer (BYTE, count 4) and no
+DNGVersion, as every Sony ARW does **[F]**, while Hasselblad's own 3FR and
+FFF files carry neither tag ([test data, section
+3.2](test-data.md#32-contents)) **[P]**.
 
 ### 1.4 Tags that identify an IFD's role
 

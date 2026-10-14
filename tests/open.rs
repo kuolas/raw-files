@@ -54,6 +54,19 @@ fn a_nikon_file_that_holds_no_jpeg_opens_as_nef_with_no_previews() {
 }
 
 #[test]
+fn a_sony_file_opens_as_arw_with_no_previews() {
+    let bytes = one_ifd(Some("SONY"));
+    let file = RawFile::from_bytes(&bytes).unwrap();
+    assert_eq!(file.format(), Format::Arw);
+    assert!(file.previews().is_empty());
+    assert_eq!(file.largest_preview(), None);
+    let file = RawFile::from_reader(Cursor::new(bytes)).unwrap();
+    assert_eq!(file.format(), Format::Arw);
+    assert!(file.previews().is_empty());
+    assert_eq!(file.largest_preview(), None);
+}
+
+#[test]
 fn a_tiff_file_of_no_known_format_is_of_unknown_format() {
     for make in [Some("Canon"), None] {
         let bytes = one_ifd(make);

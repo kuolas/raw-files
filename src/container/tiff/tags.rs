@@ -77,3 +77,13 @@ pub(crate) const EXIF_IFD: u16 = 0x8769;
 /// (MakerNote): an Exif tag, read from the Exif IFD, whose value is the
 /// block's bytes.
 pub(crate) const MAKER_NOTE: u16 = 0x927C;
+
+/// The version of the DNG specification a DNG file follows (DNGVersion),
+/// read from IFD0: present in every DNG and in the DNG-based files of some
+/// makers, absent from a Sony RAW file.
+pub(crate) const DNG_VERSION: u16 = 0xC612;
+
+/// A maker's private data block (DNGPrivateData), read from IFD0: Sony
+/// writes it in every ARW, SR2 and ARQ file as the offset of its
+/// SR2Private directory, or, on the A100, of a Minolta block.
+pub(crate) const DNG_PRIVATE_DATA: u16 = 0xC634;

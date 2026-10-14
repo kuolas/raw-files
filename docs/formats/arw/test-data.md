@@ -128,7 +128,12 @@ From the catalogue and directory listings in October 2026 [1][2] **[P]**:
   206 ARW, the Hasselblad Lunar included. The extension is `.ARW` on most
   files and `.arw` on nine.
 - The catalogue's Sony listing also carries 24 Hasselblad 3FR, FFF and DNG
-  files; they are not Sony formats and are ignored here.
+  files. They are not Sony formats, but their metadata dumps were read to
+  check the reader's rule for a Hasselblad Make: none of the 11 3FR and 11
+  FFF files carries DNGVersion or DNGPrivateData, and the two DNG files,
+  from the L1D-20c and L2D-20c drone camera modules, carry both. The
+  Lunar's dump shows its DNGPrivateData, so the dumps show the tag when a
+  file has it. **[P]**
 - **The nine non-CC0 Sony files**, all CC BY-NC-SA imports from
   rawsamples.ch, with their ids: DSLR-A300 (339), DSC-RX10M2 (340), NEX-3
   (348), DSLR-A580 (350), DSLR-A330 (355), DSLR-A850 (356), NEX-5R (359),
