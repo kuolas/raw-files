@@ -10,9 +10,6 @@ repository = "https://github.com/kuolas/raw-files"
 readme = "README.md"
 keywords = ["raw", "nef", "arw", "camera", "photography"]
 categories = ["multimedia::images", "parser-implementations"]
-# Meant for crates.io, but not before the first release: a crate version
-# can be yanked but never deleted. Remove this line when releasing.
-publish = false
 # What a crates.io package holds: the code, what the license requires and
 # what docs.rs shows. Repository tooling and contributor docs stay in git.
 # Cargo adds Cargo.toml and Cargo.lock itself.
