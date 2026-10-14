@@ -3,7 +3,7 @@
 //! The RAW formats: the table of the formats the crate can detect, and
 //! detection over it.
 //!
-//! Each format lives in its own folder here (`nef/`, and later `arw/`) and
+//! Each format lives in its own folder here (`nef/`, `arw/`) and
 //! registers itself in [`spec`] as a [`FormatSpec`]: one function that says
 //! whether a file is of that format, and one that reads its previews.
 //! Detection goes by content, never by the file's name, so a renamed file
@@ -11,10 +11,15 @@
 //! which must choose what to offer before opening anything. The preview
 //! finder that the TIFF-based formats share lives in `tiff_previews`.
 //!
-//! The table holds NEF: a Nikon file is recognised by its IFD0's Make, and
-//! opens with its previews, which the NEF reader finds with the shared
-//! finder. A file no format claims is of no format the crate recognises.
+//! The table holds NEF and ARW, in that order. A Nikon file is recognised
+//! by its IFD0's Make, and opens with its previews, which the NEF reader
+//! finds with the shared finder. A Sony file is recognised by its IFD0's
+//! Make too, helped for a Hasselblad Make by the pointer to Sony's private
+//! directory, and opens with no previews until the ARW reader runs the
+//! shared finder. A file no format claims is of no format the crate
+//! recognises.
 
+mod arw;
 mod nef;
 mod tiff_previews;
 
@@ -58,6 +63,7 @@ pub(crate) struct FormatSpec<R> {
 pub(crate) fn spec<R: Read + Seek>(format: Format) -> FormatSpec<R> {
     match format {
         Format::Nef => nef::spec(),
+        Format::Arw => arw::spec(),
     }
 }
 
@@ -200,7 +206,7 @@ mod tests {
     }
 
     #[test]
-    fn the_table_detects_a_nikon_file_as_nef_and_no_other() {
+    fn the_table_detects_each_vendors_file_as_its_format() {
         let specs = all::<Cursor<Vec<u8>>>();
         let format = |make: &str| {
             let (mut src, tree) = file(make);
@@ -208,6 +214,7 @@ mod tests {
                 .unwrap()
                 .map(|(format, _)| format)
         };
+        assert_eq!(format("SONY"), Some(Format::Arw));
         assert_eq!(format("NIKON CORPORATION"), Some(Format::Nef));
         assert_eq!(format("Canon"), None);
     }

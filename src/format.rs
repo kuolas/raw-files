@@ -20,8 +20,11 @@ use std::fmt;
 /// use raw_files::Format;
 ///
 /// assert_eq!(Format::from_extension(".NEF"), Some(Format::Nef));
+/// assert_eq!(Format::from_extension(".ARW"), Some(Format::Arw));
+/// assert_eq!(Format::from_extension("sr2"), Some(Format::Arw));
 /// assert_eq!(Format::from_extension("jpg"), None);
 /// assert_eq!(Format::Nef.to_string(), "Nikon NEF");
+/// assert_eq!(Format::Arw.to_string(), "Sony ARW");
 /// ```
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[non_exhaustive]
@@ -29,6 +32,12 @@ pub enum Format {
     /// Nikon NEF, including the NRW files of Coolpix cameras: a TIFF file
     /// whose first directory's Make names Nikon.
     Nef,
+    /// Sony ARW, with the SRF and SR2 files of Sony's earliest bodies and
+    /// the ARQ pixel-shift composites made by Sony's software: a TIFF file
+    /// whose first directory's Make names Sony, or names Hasselblad for the
+    /// Sony-built Hasselblad bodies (the Lunar among them), which write
+    /// Sony's structure.
+    Arw,
 }
 
 impl Format {
@@ -36,7 +45,7 @@ impl Format {
     ///
     /// Detection tries the formats in this order.
     pub fn all() -> &'static [Format] {
-        &[Format::Nef]
+        &[Format::Nef, Format::Arw]
     }
 
     /// The name of the format as a person would say it, for example in a
@@ -44,6 +53,7 @@ impl Format {
     pub fn name(self) -> &'static str {
         match self {
             Format::Nef => "Nikon NEF",
+            Format::Arw => "Sony ARW",
         }
     }
 
@@ -52,6 +62,7 @@ impl Format {
     pub fn extensions(self) -> &'static [&'static str] {
         match self {
             Format::Nef => &["nef", "nrw"],
+            Format::Arw => &["arw", "srf", "sr2", "arq"],
         }
     }
 
@@ -85,7 +96,7 @@ mod tests {
 
     #[test]
     fn all_lists_every_format_once_with_well_formed_names() {
-        assert_eq!(Format::all(), &[Format::Nef]);
+        assert_eq!(Format::all(), &[Format::Nef, Format::Arw]);
         for format in Format::all() {
             assert!(!format.name().is_empty());
             assert!(!format.extensions().is_empty());
@@ -95,6 +106,12 @@ mod tests {
                 assert!(!ext.contains('.'));
             }
         }
+    }
+
+    #[test]
+    fn extensions_are_those_of_each_formats_files() {
+        assert_eq!(Format::Nef.extensions(), &["nef", "nrw"]);
+        assert_eq!(Format::Arw.extensions(), &["arw", "srf", "sr2", "arq"]);
     }
 
     #[test]
@@ -110,7 +127,7 @@ mod tests {
 
     #[test]
     fn from_extension_rejects_everything_else() {
-        for ext in ["", ".", "jpg", ".jpg", "nef ", "..nef"] {
+        for ext in ["", ".", "jpg", ".jpg", "nef ", "..nef", "arw ", "..arw"] {
             assert_eq!(Format::from_extension(ext), None, "{ext:?}");
         }
     }
@@ -119,5 +136,7 @@ mod tests {
     fn display_is_the_name() {
         assert_eq!(Format::Nef.to_string(), "Nikon NEF");
         assert_eq!(Format::Nef.to_string(), Format::Nef.name());
+        assert_eq!(Format::Arw.to_string(), "Sony ARW");
+        assert_eq!(Format::Arw.to_string(), Format::Arw.name());
     }
 }
