@@ -1,0 +1,99 @@
+# Fuzz — runs the fuzz targets of fuzz/ for ten minutes each, twice a week and
+# on request.
+#
+# The parsers read files from anyone, and fuzzing finds the inputs nobody
+# writes by hand: a header that points past the end of the file, a count
+# that promises more than the file holds. CI already builds the targets on
+# every pull request (ci.yml), but only this workflow runs them, since a
+# run of minutes has no place in a check that gates every merge. It is not a
+# required check: a finding here is a bug to fix, not a blocked pull
+# request. The failing input is uploaded as a run artifact.
+#
+# The commands are the ones of CONTRIBUTING.md §Fuzzing.
+#
+# Actions must be node24-generation majors; see ci.yml. Before adding or
+# bumping one, check that the tag's action.yml says `using: node24`:
+#   gh api repos/OWNER/REPO/contents/action.yml?ref=TAG --jq .content | base64 -d | grep using:
+# Composite actions (such as dtolnay/rust-toolchain) have no node runtime.
+
+name: Fuzz
+
+on:
+  schedule:
+    # Sundays and Wednesdays at 03:43 UTC. Sunday is a day and a few hours
+    # away from samples.yml (Mondays, 06:17 UTC). GitHub evicts a cache entry
+    # unused for seven days, and a weekly run that starts a few minutes late
+    # finds the corpus gone; the second run keeps the entry younger than
+    # that. An odd minute avoids the busiest moment on the hosted runners,
+    # when runs on the hour are often delayed.
+    - cron: '43 3 * * 0,3'
+  workflow_dispatch:
+
+concurrency:
+  group: fuzz
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  fuzz:
+    name: fuzz (${{ matrix.target }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: tiff_walk
+            seeds: fuzz/seeds/tiff_walk
+          - target: jpeg_probe
+            seeds: fuzz/seeds/jpeg_probe
+          # `open` has no seeds of its own: every file it can open is a TIFF
+          # file, so it starts from the TIFF ones (fuzz/seeds/README.md).
+          - target: open
+            seeds: fuzz/seeds/tiff_walk
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+      # Fuzzing needs nightly Rust. dtolnay/rust-toolchain is a composite
+      # action: it has no node runtime.
+      - uses: dtolnay/rust-toolchain@nightly
+      # Nightly moves daily, so a build cache keyed on the compiler would
+      # never hit a run days apart. The install, a minute or two, is repeated
+      # each run, which a job this rare can afford; a pinned nightly would
+      # cache, but would need bumping by hand.
+      - run: cargo install cargo-fuzz --locked
+      # The corpus is what the fuzzer learned. Without it, ten minutes twice a
+      # week never gets past what ten minutes from the seeds finds; with it,
+      # every run starts from what the last one found. Each run restores the
+      # newest corpus and saves its own under a new key; the old entries
+      # expire unused after seven days.
+      # actions/cache/restore@v6 and actions/cache/save@v6 declare
+      # `using: 'node24'` (checked 2026-10-14).
+      - uses: actions/cache/restore@v6
+        with:
+          path: fuzz/corpus/${{ matrix.target }}
+          key: fuzz-corpus-${{ matrix.target }}-${{ github.run_id }}
+          restore-keys: fuzz-corpus-${{ matrix.target }}-
+      # From the repository root, as in CONTRIBUTING.md §Fuzzing. libFuzzer
+      # refuses to start when the corpus directory does not exist, as on the
+      # first run, when there is nothing to restore.
+      - run: mkdir -p fuzz/corpus/${{ matrix.target }}
+      - run: cargo +nightly fuzz run ${{ matrix.target }} fuzz/corpus/${{ matrix.target }} ${{ matrix.seeds }} -- -max_total_time=600 -timeout=25 -malloc_limit_mb=256
+      # The save runs whatever the outcome. The cache action saves only after
+      # a successful job, and a run that found a crash is the one whose
+      # corpus is worth keeping: it holds the inputs that led there.
+      - if: always()
+        uses: actions/cache/save@v6
+        with:
+          path: fuzz/corpus/${{ matrix.target }}
+          key: fuzz-corpus-${{ matrix.target }}-${{ github.run_id }}
+      # actions/upload-artifact@v6 declares `using: 'node24'` (checked
+      # 2026-10-13); v5 and earlier are node20.
+      - if: failure()
+        uses: actions/upload-artifact@v6
+        with:
+          name: fuzz-artifacts-${{ matrix.target }}
+          path: fuzz/artifacts/${{ matrix.target }}/
+          if-no-files-found: ignore
+          retention-days: 30
