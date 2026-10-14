@@ -302,7 +302,7 @@ To fuzz the TIFF reader for a minute, from the repository root:
 
 ```sh
 mkdir -p fuzz/corpus/tiff_walk
-cargo +nightly fuzz run tiff_walk fuzz/corpus/tiff_walk fuzz/seeds/tiff_walk -- -max_total_time=60 -malloc_limit_mb=256
+cargo +nightly fuzz run tiff_walk fuzz/corpus/tiff_walk fuzz/seeds/tiff_walk -- -max_total_time=60 -timeout=25 -malloc_limit_mb=256
 ```
 
 The first directory is where the fuzzer saves what it finds (it is not
@@ -318,13 +318,16 @@ TIFF ones; libFuzzer takes several corpus directories:
 
 ```sh
 mkdir -p fuzz/corpus/open
-cargo +nightly fuzz run open fuzz/corpus/open fuzz/seeds/tiff_walk -- -max_total_time=60 -malloc_limit_mb=256
+cargo +nightly fuzz run open fuzz/corpus/open fuzz/seeds/tiff_walk -- -max_total_time=60 -timeout=25 -malloc_limit_mb=256
 ```
 
 The allocation limit makes a runaway allocation a finding: the run stops
 on any one allocation over 256 MiB. (libFuzzer also stops once the whole
 process passes 2 GiB; a lower limit trips on the sanitizer's own
-bookkeeping, not on the reader.)
+bookkeeping, not on the reader.) The timeout makes a hang a finding too:
+libFuzzer waits 1200 seconds for one input by default, longer than the CI
+job lasts, and a parse takes milliseconds, so 25 seconds is a hang. It is
+reported as a `timeout-*` file in `fuzz/artifacts/`.
 An input that fails is saved in `fuzz/artifacts/`; a fix for it comes with
 a regression test that reads that input, as for any other bug.
 
@@ -333,7 +336,13 @@ compile, on stable Rust: the library's entry points, with
 `RUSTFLAGS="--cfg fuzzing" cargo clippy --workspace --all-targets -- -D warnings`,
 and the fuzz crate, with
 `RUSTFLAGS="--cfg fuzzing" cargo check --manifest-path fuzz/Cargo.toml`.
-It does not run the targets yet; it will, on a schedule.
+CI runs the three targets for ten minutes each twice a week and on request
+(`.github/workflows/fuzz.yml`, started by hand from the Actions tab), with
+the same commands as above but `-max_total_time=600`, ten minutes per
+target, and keeps the corpus each run found in the Actions cache for the
+next run. It uploads any failing input as a run artifact for thirty days.
+It is not a required check, so a finding there is a bug to fix, not a
+blocked pull request.
 
 ## Local git hooks (optional)
 
