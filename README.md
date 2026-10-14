@@ -73,8 +73,9 @@ and Windows alike.
 
 ## Build and test
 
-There are no releases yet. To build from source on macOS, Linux or Windows
-you need Rust 1.95 or later:
+raw-files is on [crates.io](https://crates.io/crates/raw-files); add it to a
+project with `cargo add raw-files`. It needs Rust 1.95 or later. To build
+from source on macOS, Linux or Windows:
 
 ```sh
 cargo build

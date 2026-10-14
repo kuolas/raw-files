@@ -2,11 +2,18 @@
 
 All notable changes to raw-files are documented in this file.
 
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
-Nothing has been released yet, so there is no versioning promise; that will be
-decided with the first release.
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
+and the version numbers follow [Semantic Versioning](https://semver.org/).
+Before 1.0, a minor release (0.2.0, 0.3.0, ...) may change the public API,
+and the changelog says what changed; a patch release (0.1.1, ...) never
+does.
 
 ## [Unreleased]
+
+## [0.1.0] - 2026-10-14
+
+The first release: the embedded JPEG previews of Nikon NEF and Sony ARW
+files.
 
 ### Added
 
@@ -27,7 +34,7 @@ decided with the first release.
   reader that can seek, with its format detected from its content. It
   lists the file's previews smallest first, picks the largest or the
   smallest at least a given size, and reads one, exactly as stored. A
-  file of no format the library knows opens as `UnknownFormat`.
+  file of no format the library knows is refused with the `UnknownFormat` error.
 - `Options`, to open files with custom `Limits`.
 - Reading the embedded JPEG previews of Nikon NEF files: the ones in IFD0
   and the SubIFDs, and the one the MakerNote points at, sized from their
@@ -38,3 +45,6 @@ decided with the first release.
   their own frame headers, with IFD0's orientation.
 - A DNG is of no known format, whatever camera maker its Make names:
   converters and the phones that write DNG keep the maker's name.
+
+[Unreleased]: https://github.com/kuolas/raw-files/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/kuolas/raw-files/releases/tag/v0.1.0
