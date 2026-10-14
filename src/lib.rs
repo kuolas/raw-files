@@ -9,8 +9,8 @@
 //! [`RawFile`] opens a file by path, from bytes in memory or from any reader
 //! that can seek, detects its format from its content, lists its embedded
 //! previews and reads one; [`Options`] opens it with other [`Limits`].
-//! Nikon NEF and Sony ARW files open with their previews; any other file
-//! that can be read opens as `UnknownFormat`. See the
+//! Nikon NEF and Sony ARW files open with their previews; any other file is
+//! refused with the `UnknownFormat` error. See the
 //! [roadmap](https://github.com/kuolas/raw-files/blob/master/docs/ROADMAP.md)
 //! for the plan and the
 //! [architecture](https://github.com/kuolas/raw-files/blob/master/docs/ARCHITECTURE.md)
@@ -39,6 +39,45 @@
 //! # Ok(())
 //! # }
 //! ```
+//!
+//! # Guarantees
+//!
+//! - A malformed or truncated file returns an error, never a panic,
+//!   whatever its bytes. Every offset and length read from a file is checked
+//!   before it is used; the tests feed the readers truncated and corrupted
+//!   files, and fuzz targets exercise them.
+//! - An untrusted file cannot make the library allocate or walk without
+//!   bound. [`Limits`] caps the directories visited, their entries, their
+//!   nesting and the size of a preview, with defaults that suit untrusted
+//!   input. A cap the walk cannot go on without (the first directory's
+//!   size, the total number of directories, a preview larger than allowed
+//!   when it is read) fails with
+//!   [`LimitExceeded`](ErrorKind::LimitExceeded). A directory past the first
+//!   that crosses a cap, or one nested deeper than allowed, is left out as a
+//!   damaged one is, so the file still opens with what was reachable.
+//! - The format comes from the file's content, never from its name. A
+//!   renamed file opens as what it is, and a DNG is refused the same way
+//!   even when its Make names Nikon or Sony. [`Format::from_extension`]
+//!   exists for file pickers only.
+//! - Opening reads the structure and the frame header of each preview
+//!   through a block cache, a few blocks rather than the whole file, and a
+//!   preview's bytes only when asked for.
+//! - The crate is pure Rust with no dependencies outside the standard
+//!   library, and it contains no `unsafe` code: it forbids it.
+//!
+//! # Formats
+//!
+//! Nikon NEF, including the NRW files of Coolpix cameras, and Sony ARW,
+//! including the SRF, SR2 and ARQ files of the same family and the ARW files
+//! of the Sony-built Hasselblad bodies. Version 0.1.0 reads only the
+//! embedded previews of these files, not their raw data.
+//!
+//! # What comes next
+//!
+//! The [roadmap](https://github.com/kuolas/raw-files/blob/master/docs/ROADMAP.md)
+//! plans basic metadata such as the capture time, the camera and the lens;
+//! then the autofocus points; then the raw sensor data; and last a developed
+//! linear image.
 
 // A fuzzing build compiles the reader for one caller, the fuzz entry points,
 // which use only part of it. What is unused there, and so which `expect`s
