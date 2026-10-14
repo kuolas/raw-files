@@ -14,6 +14,12 @@ use support::tiff_builder::{Order, TiffBuilder};
 /// The Make tag: the camera's manufacturer, as text.
 const MAKE: u16 = 0x010F;
 
+/// The DNGVersion tag: the version of the DNG specification a DNG follows.
+const DNG_VERSION: u16 = 0xC612;
+
+/// The DNGPrivateData tag: a block of the camera maker's own data.
+const DNG_PRIVATE_DATA: u16 = 0xC634;
+
 /// A TIFF file of one IFD, with Make `make` when there is one.
 fn one_ifd(make: Option<&str>) -> Vec<u8> {
     let mut builder = TiffBuilder::new(Order::Little);
@@ -64,6 +70,25 @@ fn a_sony_file_that_holds_no_jpeg_opens_as_arw_with_no_previews() {
     assert_eq!(file.format(), Format::Arw);
     assert!(file.previews().is_empty());
     assert_eq!(file.largest_preview(), None);
+}
+
+#[test]
+fn a_dng_whose_make_names_a_known_maker_is_of_unknown_format() {
+    for make in ["SONY", "NIKON CORPORATION"] {
+        // As Adobe's converter writes it: the camera's Make, a DNG version
+        // and a private data block.
+        let mut builder = TiffBuilder::new(Order::Little);
+        let ifd = builder.ifd();
+        builder
+            .ascii(ifd, MAKE, make)
+            .byte(ifd, DNG_VERSION, &[1, 4, 0, 0])
+            .byte(ifd, DNG_PRIVATE_DATA, &[0; 32]);
+        let bytes = builder.build().bytes;
+        let err = RawFile::from_bytes(&bytes).unwrap_err();
+        assert_eq!(err.kind(), ErrorKind::UnknownFormat, "{make}");
+        let err = RawFile::from_reader(Cursor::new(bytes)).unwrap_err();
+        assert_eq!(err.kind(), ErrorKind::UnknownFormat, "{make}");
+    }
 }
 
 #[test]

@@ -18,6 +18,11 @@
 //! directory, and opens with its previews, which the ARW reader finds with
 //! the shared finder. A file no format claims is of no format the crate
 //! recognises.
+//!
+//! A DNG is of no format the crate recognises either, whatever its Make
+//! says: converters and the phones that write DNG keep the maker's name in
+//! the Make, so each reader refuses a DNG before it looks at the Make
+//! ([`is_dng`]), and [`make_starts_with`] reads the Make for them.
 
 mod arw;
 mod nef;
@@ -26,6 +31,7 @@ mod tiff_previews;
 use std::io::{Read, Seek};
 
 use crate::container::tiff::Tree;
+use crate::container::tiff::tags::{DNG_VERSION, MAKE};
 use crate::error::Result;
 use crate::format::Format;
 use crate::io::Source;
@@ -75,6 +81,55 @@ pub(crate) fn all<R: Read + Seek>() -> Vec<FormatSpec<R>> {
     Format::all().iter().copied().map(spec).collect()
 }
 
+/// Whether the file whose TIFF structure is `tree` is a DNG: whether its
+/// IFD0 holds DNGVersion, which every DNG carries there.
+///
+/// A maker's reader refuses a DNG whatever its Make says. DNG is Adobe's
+/// format, which no reader of this release reads, yet a DNG keeps the
+/// camera maker's name: Adobe's converter leaves `SONY` or
+/// `NIKON CORPORATION` in IFD0's Make and adds DNGVersion, and Sony's Xperia
+/// phones write DNG with `Sony` as the Make. Without this test such a file
+/// would open as its maker's own format. A reader of DNG would claim a file
+/// by DNGVersion itself.
+///
+/// An entry that the IFD parser skipped because it could not be read (an
+/// unknown field type, a length that overflows, a value outside the file)
+/// is absent from the tree, so a DNG whose version entry is damaged is
+/// taken for a file without one. That is the crate's rule for damage, which
+/// costs only what it touches: the preview finder takes an Orientation it
+/// cannot read for none in the same way.
+pub(super) fn is_dng(tree: &Tree) -> bool {
+    tree.ifd0().entry(DNG_VERSION).is_some()
+}
+
+/// Whether the Make of the IFD0 of the file whose TIFF structure is `tree`,
+/// which names the camera's manufacturer, starts with `name` once trimmed
+/// of spaces at either end, compared without regard to case.
+///
+/// The readers' claims decide by it. A missing Make, a Make that is not
+/// text (type ASCII), and a Make that starts with anything else are all
+/// "no".
+///
+/// # Errors
+///
+/// Whatever reading the Make returns: `LimitExceeded` for a value longer
+/// than one tag may take, `Io` when the reader fails. A claim that cannot
+/// read its tag stops detection rather than passing the file on.
+pub(super) fn make_starts_with<R: Read + Seek>(
+    src: &mut Source<R>,
+    tree: &Tree,
+    name: &[u8],
+) -> Result<bool> {
+    let Some(make) = tree.ifd0().ascii(src, MAKE)? else {
+        return Ok(false);
+    };
+    Ok(make
+        .trim_matches(' ')
+        .as_bytes()
+        .get(..name.len())
+        .is_some_and(|start| start.eq_ignore_ascii_case(name)))
+}
+
 /// Detects the format of the file in `src`, whose TIFF structure is `tree`,
 /// from `specs` in order, and reads it with the first spec that claims it.
 ///
@@ -101,29 +156,51 @@ pub(crate) fn detect<R: Read + Seek>(
     Ok(None)
 }
 
+/// What the unit tests of detection and of the readers share: a file
+/// described in code, read into a source and a tree as opening a file
+/// reads it.
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::container::tiff::tags::MAKE;
-    use crate::container::tiff::{parse_header, walk};
-    use crate::error::{Error, ErrorKind};
-    use crate::orientation::Orientation;
-    use crate::preview::PreviewFormat;
-    use crate::tiff_builder::{Order, TiffBuilder};
+pub(super) mod testing {
     use std::io::Cursor;
 
-    type Src = Source<Cursor<Vec<u8>>>;
+    use crate::container::tiff::{Tree, parse_header, walk};
+    use crate::io::Source;
+    use crate::limits::Limits;
+    use crate::tiff_builder::{IfdId, Order, TiffBuilder};
 
-    /// A one-IFD TIFF file whose Make is `make`, read into a source and a
-    /// tree.
-    fn file(make: &str) -> (Src, Tree) {
+    /// A source over a file held in memory.
+    pub(super) type Src = Source<Cursor<Vec<u8>>>;
+
+    /// The file that `build` describes in a one-IFD little-endian TIFF
+    /// file, read into a source and a tree.
+    pub(super) fn file(build: impl FnOnce(&mut TiffBuilder, IfdId)) -> (Src, Tree) {
         let mut builder = TiffBuilder::new(Order::Little);
         let ifd = builder.ifd();
-        builder.ascii(ifd, MAKE, make);
+        build(&mut builder, ifd);
         let mut src = Source::new(Cursor::new(builder.build().bytes)).unwrap();
         let header = parse_header(&mut src).unwrap();
         let tree = walk(&mut src, header, &Limits::default()).unwrap();
         (src, tree)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::testing::{self, Src};
+    use super::*;
+    use crate::container::tiff::tags::{DNG_PRIVATE_DATA, ORIENTATION};
+    use crate::error::{Error, ErrorKind};
+    use crate::orientation::Orientation;
+    use crate::preview::PreviewFormat;
+    use crate::tiff_builder::{ASCII, IfdId, RawValue, TiffBuilder};
+    use std::io::Cursor;
+
+    /// A one-IFD TIFF file whose Make is `make`, read into a source and a
+    /// tree.
+    fn file(make: &str) -> (Src, Tree) {
+        testing::file(|builder, ifd| {
+            builder.ascii(ifd, MAKE, make);
+        })
     }
 
     fn yes(_: &mut Src, _: &Tree) -> Result<bool> {
@@ -261,5 +338,134 @@ mod tests {
         let specs = [spec(yes, parse_fails), spec(yes, parse_2)];
         let err = detected(&specs, "Nikon").unwrap_err();
         assert_eq!(err.kind(), ErrorKind::Unsupported);
+    }
+
+    #[test]
+    fn a_dng_is_claimed_by_no_format() {
+        let specs = all::<Cursor<Vec<u8>>>();
+        for make in ["SONY", "NIKON CORPORATION"] {
+            // As Adobe's converter writes it: the camera's Make, a DNG
+            // version and a private data block far longer than Sony's
+            // four-byte pointer.
+            let (mut src, tree) = testing::file(|builder, ifd| {
+                builder
+                    .ascii(ifd, MAKE, make)
+                    .byte(ifd, DNG_VERSION, &[1, 4, 0, 0])
+                    .byte(ifd, DNG_PRIVATE_DATA, &[0; 32]);
+            });
+            assert!(is_dng(&tree), "{make}");
+            let found = detect(&specs, &mut src, &tree, &Limits::default()).unwrap();
+            assert!(found.is_none(), "{make}");
+        }
+    }
+
+    #[test]
+    fn a_file_without_a_dng_version_is_not_a_dng() {
+        let (_, tree) = file("SONY");
+        assert!(!is_dng(&tree));
+    }
+
+    /// Whether the Make of the file that `build` describes starts with
+    /// `name`, as [`make_starts_with`] reads it.
+    fn make_of(build: impl FnOnce(&mut TiffBuilder, IfdId), name: &[u8]) -> Result<bool> {
+        let (mut src, tree) = testing::file(build);
+        make_starts_with(&mut src, &tree, name)
+    }
+
+    /// Whether the Make `make`, as ASCII, starts with `name`.
+    fn starts_with(make: &str, name: &[u8]) -> bool {
+        make_of(
+            |builder, ifd| {
+                builder.ascii(ifd, MAKE, make);
+            },
+            name,
+        )
+        .unwrap()
+    }
+
+    #[test]
+    fn a_make_that_starts_with_the_name_starts_with_it() {
+        assert!(starts_with("NIKON CORPORATION", b"NIKON"));
+        assert!(starts_with("NIKON", b"NIKON"));
+    }
+
+    #[test]
+    fn a_make_is_compared_without_regard_to_case() {
+        assert!(starts_with("nikon corporation", b"NIKON"));
+        assert!(starts_with("Hasselblad", b"HASSELBLAD"));
+    }
+
+    #[test]
+    fn a_make_with_spaces_at_either_end_starts_with_the_name() {
+        assert!(starts_with("  NIKON CORPORATION  ", b"NIKON"));
+    }
+
+    #[test]
+    fn a_make_padded_with_nuls_starts_with_the_name() {
+        // The builder adds one NUL; the value holds three. Cutting the text
+        // at the first NUL cannot change a prefix test, so this checks only
+        // that the padding does no harm.
+        assert!(starts_with("NIKON\0\0", b"NIKON"));
+    }
+
+    #[test]
+    fn a_make_of_another_manufacturer_does_not_start_with_the_name() {
+        assert!(!starts_with("Canon", b"NIKON"));
+    }
+
+    #[test]
+    fn a_make_shorter_than_the_name_does_not_start_with_it() {
+        assert!(!starts_with("NIKO", b"NIKON"));
+    }
+
+    #[test]
+    fn a_make_with_the_name_inside_it_but_not_first_does_not_start_with_it() {
+        assert!(!starts_with("MYNIKON", b"NIKON"));
+    }
+
+    #[test]
+    fn an_empty_make_does_not_start_with_the_name() {
+        assert!(!starts_with("", b"NIKON"));
+    }
+
+    #[test]
+    fn a_missing_make_does_not_start_with_the_name() {
+        let starts = make_of(
+            |builder, ifd| {
+                // A tag that is not Make, for an IFD0 that needs an entry
+                // and nothing else.
+                builder.short(ifd, ORIENTATION, &[1]);
+            },
+            b"NIKON",
+        );
+        assert!(!starts.unwrap());
+    }
+
+    #[test]
+    fn a_make_that_is_not_text_does_not_start_with_the_name() {
+        let starts = make_of(
+            |builder, ifd| {
+                builder.byte(ifd, MAKE, b"NIKON\0");
+            },
+            b"NIKON",
+        );
+        assert!(!starts.unwrap());
+    }
+
+    #[test]
+    fn a_make_too_long_to_read_is_an_error() {
+        // A Make of more bytes than the 1 MiB one tag value may take, inside
+        // the file.
+        let count: u32 = 1024 * 1024 + 1;
+        let err = make_of(
+            |builder, ifd| {
+                builder.raw(ifd, MAKE, ASCII, count, RawValue::Offset(4096));
+                builder.pad_to(4096 + u64::from(count));
+            },
+            b"NIKON",
+        )
+        .expect_err("the Make is too long");
+        assert_eq!(err.kind(), ErrorKind::LimitExceeded, "{err:?}");
+        assert_eq!(err.offset(), Some(4096));
     }
 }

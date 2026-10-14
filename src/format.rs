@@ -29,14 +29,14 @@ use std::fmt;
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[non_exhaustive]
 pub enum Format {
-    /// Nikon NEF, including the NRW files of Coolpix cameras: a TIFF file
-    /// whose first directory's Make names Nikon.
+    /// Nikon NEF, including the NRW files of Coolpix cameras: a TIFF file,
+    /// not a DNG, whose first directory's Make names Nikon.
     Nef,
     /// Sony ARW, with the SRF and SR2 files of Sony's earliest bodies and
-    /// the ARQ pixel-shift composites made by Sony's software: a TIFF file
-    /// whose first directory's Make names Sony, or names Hasselblad for the
-    /// Sony-built Hasselblad bodies (the Lunar among them), which write
-    /// Sony's structure.
+    /// the ARQ pixel-shift composites made by Sony's software: a TIFF file,
+    /// not a DNG, whose first directory's Make names Sony, or names
+    /// Hasselblad for the Sony-built Hasselblad bodies (the Lunar among
+    /// them), which write Sony's structure.
     Arw,
 }
 
