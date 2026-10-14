@@ -101,15 +101,17 @@ jobs:
       - run: cargo build --workspace
       # The real sample files of tests/samples.tsv, which the tests read when
       # they are present and skip otherwise (CONTRIBUTING.md §Code style and
-      # checks). They are 118 MB, and the code that reads them is the same on
-      # every OS, so only Linux downloads them; on macOS and Windows the
-      # directory does not exist and those tests skip. It is under the
-      # runner's temp directory rather than target/, which rust-cache
-      # manages. The cache is keyed on the list, so a changed list starts
-      # from an empty directory and downloads every file again. A pull
-      # request can restore a cache saved on master, and samples.yml saves
-      # one there under this key, so a pull request that leaves the list
-      # alone downloads nothing.
+      # checks). The files of the normal tier are about 1.1 GB; the large
+      # tier is left out, since RAW_FILES_LARGE is not set here, and its
+      # tests skip. The code that reads them is the same on every OS, so
+      # only Linux downloads them; on macOS and Windows the directory does
+      # not exist and those tests skip. It is under the runner's temp
+      # directory rather than target/, which rust-cache manages. The cache
+      # is keyed on the list, so a changed list starts from an empty
+      # directory and downloads every file again. A pull request can
+      # restore a cache saved on master, and samples.yml saves one there
+      # under this key, so a pull request that leaves the list alone
+      # downloads nothing.
       # actions/cache@v6 declares `using: 'node24'` (checked 2026-10-13).
       - if: matrix.os == 'ubuntu-latest'
         uses: actions/cache@v6

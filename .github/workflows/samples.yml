@@ -1,7 +1,7 @@
-# Samples — keeps the real sample files of tests/samples.tsv in a cache that
-# every pull request can restore, so that CI downloads them from
-# raw.pixls.us once per change of the list rather than once per pull
-# request.
+# Samples — keeps the real sample files of tests/samples.tsv (the normal
+# tier; the large tier is left out, as in CI) in a cache that every pull
+# request can restore, so that CI downloads them from raw.pixls.us once per
+# change of the list rather than once per pull request.
 #
 # A workflow run can only restore caches created on its own branch or on the
 # default branch, and the CI workflow runs on pull requests, so a cache it
@@ -31,7 +31,7 @@ jobs:
   seed:
     name: sample cache
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v5
       # The same path and key as the CI workflow's restore step: both must
