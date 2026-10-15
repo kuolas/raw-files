@@ -215,8 +215,8 @@ in [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)), not to a public issue.
 
 ## Code style and checks
 
-Before you open a pull request, run these six commands — the same ones CI
-runs, in the same order:
+Before you open a pull request, run these six commands — the ones CI's build
+job runs on every platform, in the same order:
 
 ```sh
 cargo fmt --all --check
@@ -259,6 +259,21 @@ pull request on macOS, Linux and Windows, builds and tests the crate with
 Rust 1.95, the oldest version it supports, and checks the commit messages and
 that there are no merge commits in the PR. CI is the real gate: a pull request
 is merged only when all of its checks pass.
+
+CI also compares the crate's public API with the newest version on crates.io,
+with `cargo-semver-checks`, so that a change that would break callers of the
+last release is caught before it is merged. It catches many breaking changes,
+such as a removed or renamed item, but not all: a changed type or behaviour
+is still for review to find. A breaking change is allowed only once the
+version in `Cargo.toml` has been raised to one that permits it: before 1.0,
+the minor number, as the versioning promise in `CHANGELOG.md` says. So the
+pull request that makes the first breaking change of a release raises the
+version, not the commit that releases it. Adding to the API needs no bump to
+pass, and that a patch release adds nothing to the API is for review to
+check. To run it yourself, use `cargo install cargo-semver-checks --locked`,
+then `cargo semver-checks` in the repository root (it downloads the published
+version from crates.io the first time). It is not one of the six commands
+above because it needs that install and the network.
 
 The oldest supported Rust (`rust-version` in `Cargo.toml`) is a stable
 release at least six months old. It is raised only when the code needs

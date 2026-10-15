@@ -1,7 +1,8 @@
 # CI — the checks from CONTRIBUTING.md §Code style and checks, run on every
 # pull request. `hygiene` checks commits once; `build` runs the cargo checks on
 # macOS, Linux and Windows (ADR007); `msrv` builds and tests with the oldest
-# Rust the crate supports.
+# Rust the crate supports; `semver` compares the public API with the newest
+# version on crates.io.
 #
 # Every pull request runs every job, docs-only ones included: the jobs are
 # required checks on master, and a skipped workflow never reports, which
@@ -159,3 +160,29 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - run: cargo build --workspace --all-targets
       - run: cargo test --workspace
+
+  semver:
+    name: cargo (semver)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+      # Compares the public API of this crate with the newest version
+      # published on crates.io, so that a change that would break callers of
+      # the last release is caught before it is merged. It catches many
+      # breaking changes, such as a removed or renamed item, but not all: a
+      # changed type or behaviour is still for review to find. The verdict
+      # depends on the version in Cargo.toml: while it is still the published
+      # one, adding public items passes and removing one fails. The pull
+      # request that makes the first breaking change of a release raises the
+      # version, and before 1.0 that is the minor number (the versioning
+      # promise in CHANGELOG.md).
+      # There is no toolchain or rust-cache step: the action installs the
+      # latest stable Rust itself, since the newest rustdoc has the fewest
+      # false positives, and keeps the baseline's rustdoc in the Actions
+      # cache. It takes no inputs: the defaults are right for one package
+      # with no features, and the baseline moves by itself to each version
+      # as it is published.
+      # obi1kenobi/cargo-semver-checks-action@v2 declares `using: 'node24'`
+      # (checked 2026-10-15).
+      - uses: obi1kenobi/cargo-semver-checks-action@v2
