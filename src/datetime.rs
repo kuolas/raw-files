@@ -15,6 +15,11 @@
 
 use std::fmt;
 
+/// The farthest an offset from UTC may lie from it, in minutes: 14 hours,
+/// since no offset from UTC in use lies outside -14:00 to +14:00. An offset
+/// beyond it, from any tag, is taken for damage.
+const MAX_OFFSET_MINUTES: i16 = 14 * 60;
+
 /// A date and time as a camera's clock recorded it: local time, with the
 /// fraction of a second and the offset from UTC when the file records them.
 ///
@@ -147,6 +152,23 @@ impl DateTime {
             subsec_digits,
             offset: offset.and_then(parse_offset),
         })
+    }
+
+    /// This time with the offset from UTC `minutes`, in minutes east of
+    /// UTC, in place of the one it has, if any: for an offset that a file
+    /// records apart from the Exif texts, such as the time-zone setting of
+    /// a Nikon camera's clock.
+    ///
+    /// Returns `None` when `minutes` lies more than 14 hours from UTC,
+    /// beyond `-14:00` to `+14:00`, the bound [`from_exif`](Self::from_exif)
+    /// applies to an Exif offset.
+    pub(crate) fn with_offset(self, minutes: i16) -> Option<Self> {
+        (-MAX_OFFSET_MINUTES..=MAX_OFFSET_MINUTES)
+            .contains(&minutes)
+            .then_some(Self {
+                offset: Some(minutes),
+                ..self
+            })
     }
 
     /// The year, from 0 to 9999.
@@ -289,8 +311,7 @@ fn parse_subsec(text: &[u8]) -> Option<(u32, u8)> {
 /// The offset from UTC, in minutes east of UTC, from its Exif text; `None`
 /// when the text, cut at its first NUL and without the spaces at either
 /// end, is not exactly `+HH:MM` or `-HH:MM` with the minutes from 00 to 59,
-/// or lies more than 14 hours from UTC, since no offset from UTC in use
-/// lies outside ±14:00.
+/// or lies more than 14 hours from UTC ([`MAX_OFFSET_MINUTES`]).
 fn parse_offset(text: &[u8]) -> Option<i16> {
     let &[sign, h0, h1, b':', m0, m1] = cleaned(text) else {
         return None;
@@ -304,7 +325,7 @@ fn parse_offset(text: &[u8]) -> Option<i16> {
     let minutes = two_digits(m0, m1)?;
     // At most 99 hours and 99 minutes, so this cannot overflow.
     let total = i16::from(hours) * 60 + i16::from(minutes);
-    if minutes > 59 || total > 14 * 60 {
+    if minutes > 59 || total > MAX_OFFSET_MINUTES {
         return None;
     }
     Some(sign * total)
@@ -530,6 +551,38 @@ mod tests {
                 None,
                 "2022-01-31T10:20:30.85",
             );
+        }
+    }
+
+    #[test]
+    fn an_offset_given_apart_is_taken_up_to_fourteen_hours() {
+        let cases: [(i16, &str); 5] = [
+            (60, "2022-01-31T10:20:30.85+01:00"),
+            (0, "2022-01-31T10:20:30.85+00:00"),
+            (-420, "2022-01-31T10:20:30.85-07:00"),
+            (840, "2022-01-31T10:20:30.85+14:00"),
+            (-840, "2022-01-31T10:20:30.85-14:00"),
+        ];
+        for (minutes, display) in cases {
+            // On a time without an offset, and in place of an Exif one.
+            for offset in [None, Some(&b"-05:00"[..])] {
+                let time = read(DATE, Some(b"85"), offset).with_offset(minutes);
+                check(
+                    time.expect("an offset in range"),
+                    FIELDS,
+                    850_000_000,
+                    Some(minutes),
+                    display,
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn an_offset_given_apart_beyond_fourteen_hours_is_refused() {
+        for minutes in [841, -841, 15360, i16::MAX, i16::MIN] {
+            let time = read(DATE, Some(b"85"), None);
+            assert_eq!(time.with_offset(minutes), None, "{minutes}");
         }
     }
 

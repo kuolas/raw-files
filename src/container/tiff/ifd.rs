@@ -416,10 +416,6 @@ impl Ifd {
     /// # Errors
     ///
     /// As for [`u32s`](Self::u32s).
-    #[cfg_attr(
-        not(test),
-        expect(dead_code, reason = "nothing reads this accessor yet")
-    )]
     pub(crate) fn bytes<R: Read + Seek>(
         &self,
         src: &mut Source<R>,

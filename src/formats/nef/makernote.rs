@@ -41,6 +41,29 @@
 //! (sample 2956), takes the MakerNote's range and keeps its name; an Exif
 //! range with any value known is kept whole.
 //!
+//! WorldTime is the time zone and daylight-saving setting of the camera's
+//! clock, and so gives the capture time's offset from UTC on bodies whose
+//! Exif tags record none. It is four bytes: the zone in minutes east of
+//! UTC, a signed 16-bit number in the MakerNote's byte order; a byte that
+//! is 1 when daylight saving time is on and 0 when it is off; and one for
+//! how the camera shows dates, which is not read. The offset is the zone,
+//! plus 60 minutes when daylight saving time is on. On every public sample
+//! that also records the Exif OffsetTimeOriginal, the two agree, with
+//! daylight saving time off (samples 1835, 3827, 3587 and 5146 to 5148)
+//! and on (samples 6887 and 7808 to 7810). The bodies before the D850
+//! write no Exif offset, and most of them from the D300 on write
+//! WorldTime: the D300, D700, D7000, D750, D810, Nikon 1 J1 and Coolpix A
+//! (samples 928, 2255, 961, 895, 2036, 2956 and 2238); the D1H, D100, D70,
+//! D200, Coolpix E5700 and P7800 do not. WorldTime gives an offset only
+//! when it is of type UNDEFINED and exactly four bytes long, its
+//! daylight-saving byte is 0 or 1, and the offset lies within 14 hours of
+//! UTC, the bound an Exif offset is held to: a zone that editing software
+//! has rewritten in the wrong byte order reads as hundreds of hours, 15360
+//! minutes for 60. It is used only for a capture time the standard tags
+//! give, when they give no offset for it: OffsetTimeOriginal is missing,
+//! or cannot be read. An Exif offset always wins, even where WorldTime
+//! records another.
+//!
 //! Nikon has used three layouts for the block, told apart by their first
 //! bytes. The one every body since the D70 and the D100 writes, and the one
 //! read here, starts with the signature `Nikon` and a NUL, two version
@@ -60,16 +83,16 @@
 //! three numbers that lead to the JPEG must be held in their entries, not
 //! stored elsewhere; the whole JPEG, as declared, must lie inside the
 //! block; and so must every value read from the MakerNote IFD's entries:
-//! the ISO's two numbers, which the entry holds, and CropArea's four
-//! numbers, the serial number and the lens's range, which take more than
-//! the four bytes an entry holds and so are stored elsewhere. A value of
-//! another type than its tag's rule allows is not read. A block that does
-//! not hold together, whether its inner header is not one, an IFD in it is
-//! cut short or has more entries than the limits allow, costs what the
-//! MakerNote would have given, the small preview, the crop area and the
-//! three values above, never the file: the NEF security notes ask that bad
-//! entries be skipped rather than fail the file
-//! (`docs/formats/nef/security.md`, item 4 of the checklist). Only a
+//! the ISO's two numbers and WorldTime's four bytes, which the entry
+//! holds, and CropArea's four numbers, the serial number and the lens's
+//! range, which take more than the four bytes an entry holds and so are
+//! stored elsewhere. A value of another type than its tag's rule allows is
+//! not read. A block that does not hold together, whether its inner header
+//! is not one, an IFD in it is cut short or has more entries than the
+//! limits allow, costs what the MakerNote would have given, the small
+//! preview, the crop area and the values above, never the file: the NEF
+//! security notes ask that bad entries be skipped rather than fail the
+//! file (`docs/formats/nef/security.md`, item 4 of the checklist). Only a
 //! failure of the reader itself is an error: that is not the file's fault,
 //! and says nothing about the MakerNote.
 //!
@@ -107,6 +130,13 @@ const PREVIEW_IFD: u16 = 0x0011;
 /// The Nikon MakerNote tag that records the camera body's serial number
 /// (SerialNumber), as ASCII text.
 const SERIAL_NUMBER: u16 = 0x001D;
+
+/// The Nikon MakerNote tag that records the time zone and daylight-saving
+/// setting of the camera's clock (WorldTime): four UNDEFINED bytes, the
+/// zone in minutes east of UTC as a signed 16-bit number in the
+/// MakerNote's byte order, then 1 when daylight saving time is on and 0
+/// when it is off, then the date display format.
+const WORLD_TIME: u16 = 0x0024;
 
 /// The Nikon MakerNote tag that records the visible image, the rectangle
 /// of the stored raw data inside its border (CropArea): its left column,
@@ -251,10 +281,15 @@ pub(super) fn preview_candidate<R: Read + Seek>(
 /// default crop, which comes first, and when there is a raw size for the
 /// crop area to lie inside ([`crop_area`]). Then, each only when the
 /// standard tags gave none, the serial number ([`serial_number`]), the ISO
-/// ([`iso`]) and the lens's range ([`lens_range`]): a range fills a lens
-/// whose standard tags gave no value of its range, keeping their make,
-/// model and serial number, or makes a lens of the range alone when they
-/// described none. Every other value is the standard tags'.
+/// ([`iso`]), the lens's range ([`lens_range`]) and the capture time's
+/// offset from UTC ([`world_time`]): a range fills a lens whose standard
+/// tags gave no value of its range, keeping their make, model and serial
+/// number, or makes a lens of the range alone when they described none;
+/// an offset is given only to a capture time the standard tags gave, one
+/// whose OffsetTimeOriginal is missing or could not be read, and only
+/// within the bound every offset is held to
+/// ([`DateTime::with_offset`](crate::datetime::DateTime::with_offset)).
+/// Every other value is the standard tags'.
 ///
 /// # Errors
 ///
@@ -283,6 +318,15 @@ pub(super) fn metadata<R: Read + Seek>(
     if !metadata.lens.as_ref().is_some_and(Lens::has_range) {
         let range = lens_range(src, makernote)?;
         metadata.lens = Lens::with_range(metadata.lens.take(), range);
+    }
+    // An offset belongs to a time: without a capture time, WorldTime gives
+    // nothing.
+    if let Some(time) = metadata.capture_time
+        && time.offset_minutes().is_none()
+        && let Some(offset) = world_time(src, makernote)?
+        && let Some(time) = time.with_offset(offset)
+    {
+        metadata.capture_time = Some(time);
     }
     Ok(metadata)
 }
@@ -393,6 +437,43 @@ fn lens_range<R: Read + Seek>(
         .map(|(numerator, denominator)| Rational::known(numerator, denominator)))
 }
 
+/// The offset of the camera's clock from UTC, in minutes east of UTC, that
+/// `makernote`'s WorldTime records: its time zone, plus 60 minutes when
+/// its daylight-saving byte is 1; `None` when the tag is missing, is not of
+/// type UNDEFINED, does not hold exactly four bytes, or has a
+/// daylight-saving byte other than 0 or 1.
+///
+/// The zone is read in the MakerNote's byte order. The offset is not
+/// bounded here: [`DateTime::with_offset`](crate::datetime::DateTime::with_offset),
+/// which takes it, refuses one beyond 14 hours, as a zone rewritten in the
+/// wrong byte order is.
+///
+/// See the [module documentation](self) for what WorldTime is.
+///
+/// # Errors
+///
+/// `Io` when the reader fails. Nothing the block holds is an error.
+fn world_time<R: Read + Seek>(src: &mut Source<R>, makernote: &MakerNote) -> Result<Option<i16>> {
+    // Four bytes are held in the entry, inside the block with it; the
+    // check costs nothing and keeps the rule of the block in one place.
+    if !has_value_in_block(makernote, WORLD_TIME, &[UNDEFINED]) {
+        return Ok(None);
+    }
+    let bytes = skip_damage(makernote.ifd.bytes(src, WORLD_TIME))?.flatten();
+    let Some(&[zone0, zone1, daylight_saving, _date_format]) = bytes.as_deref() else {
+        return Ok(None);
+    };
+    let zone = i32::from(makernote.order.u16([zone0, zone1]).cast_signed());
+    let offset = match daylight_saving {
+        0 => zone,
+        1 => zone + 60,
+        _ => return Ok(None),
+    };
+    // A zone near the end of the 16-bit range, plus the daylight hour, may
+    // not fit; it is far beyond any offset in use anyway.
+    Ok(i16::try_from(offset).ok())
+}
+
 /// Whether `makernote`'s MakerNote IFD has an entry of tag `tag`, of one
 /// of the types `types`, whose value lies inside the block: the rule every
 /// value read from the MakerNote IFD's entries follows.
@@ -490,11 +571,13 @@ fn fits(block: &Range<u64>, at: u64, len: u64) -> bool {
 mod tests {
     use super::*;
     use crate::container::tiff::tags::{
-        BODY_SERIAL_NUMBER, DEFAULT_CROP_ORIGIN, DEFAULT_CROP_SIZE, IMAGE_LENGTH, IMAGE_WIDTH,
-        LENS_MODEL, LENS_SPECIFICATION, MAKE, PHOTOGRAPHIC_SENSITIVITY, PHOTOMETRIC_INTERPRETATION,
+        BODY_SERIAL_NUMBER, DATE_TIME_ORIGINAL, DEFAULT_CROP_ORIGIN, DEFAULT_CROP_SIZE,
+        IMAGE_LENGTH, IMAGE_WIDTH, LENS_MODEL, LENS_SPECIFICATION, MAKE, OFFSET_TIME_ORIGINAL,
+        PHOTOGRAPHIC_SENSITIVITY, PHOTOMETRIC_INTERPRETATION, SUB_SEC_TIME_ORIGINAL,
     };
     use crate::container::tiff::types::{IFD, SRATIONAL};
     use crate::container::tiff::{parse_header, walk};
+    use crate::datetime::DateTime;
     use crate::error::ErrorKind;
     use crate::jpeg_stub::jpeg_stub;
     use crate::tiff_builder::{ASCII, IfdId, Order, RawValue, TiffBuilder};
@@ -1706,6 +1789,237 @@ mod tests {
             assert_eq!(metadata.serial_number.as_deref(), Some(SERIAL), "{file:?}");
             let lens = metadata.lens.expect("a lens");
             assert_eq!(range_of(&lens), known(D300_LENS), "{file:?}");
+        }
+    }
+
+    /// The DateTimeOriginal the WorldTime tests give the Exif IFD: the
+    /// D300 fixture's, made up.
+    const DATE: &str = "2008:05:17 10:22:31";
+
+    /// [`DATE`] with the SubSecTimeOriginal `34`, as shown without an
+    /// offset.
+    const LOCAL: &str = "2008-05-17T10:22:31.34";
+
+    /// WorldTime's four bytes in byte order `order`: the time zone `zone`,
+    /// in minutes east of UTC, the daylight-saving byte `daylight_saving`,
+    /// and the date format 0.
+    fn world_time_bytes(order: Order, zone: i16, daylight_saving: u8) -> Vec<u8> {
+        let mut bytes = order.u16(zone.cast_unsigned()).to_vec();
+        bytes.extend_from_slice(&[daylight_saving, 0]);
+        bytes
+    }
+
+    /// The capture time of a file in byte order `file` whose MakerNote is
+    /// `block`, declared whole, and whose Exif IFD holds what `exif` adds.
+    fn capture_time_of(
+        file: Order,
+        block: &[u8],
+        exif: impl FnOnce(&mut TiffBuilder, IfdId),
+    ) -> Option<DateTime> {
+        exif_metadata(file, block, exif).capture_time
+    }
+
+    /// The capture time of a file in byte order `order`, MakerNote alike,
+    /// whose Exif IFD holds [`DATE`] and its sub-seconds, with the
+    /// OffsetTimeOriginal `offset` when there is one, and whose MakerNote
+    /// holds what `tags` adds; the time must be read.
+    fn time_with(
+        order: Order,
+        offset: Option<&str>,
+        tags: impl FnOnce(&mut TiffBuilder, IfdId),
+    ) -> DateTime {
+        let block = tags_block(order, tags).0;
+        capture_time_of(order, &block, |builder, exif| {
+            builder
+                .ascii(exif, DATE_TIME_ORIGINAL, DATE)
+                .ascii(exif, SUB_SEC_TIME_ORIGINAL, "34");
+            if let Some(offset) = offset {
+                builder.ascii(exif, OFFSET_TIME_ORIGINAL, offset);
+            }
+        })
+        .expect("a capture time")
+    }
+
+    /// The capture time of a file in byte order `order` with [`DATE`], no
+    /// OffsetTimeOriginal, and a WorldTime of the time zone `zone` and the
+    /// daylight-saving byte `daylight_saving`.
+    fn zone_time(order: Order, zone: i16, daylight_saving: u8) -> DateTime {
+        time_with(order, None, |inner, ifd| {
+            inner.undefined(
+                ifd,
+                WORLD_TIME,
+                &world_time_bytes(order, zone, daylight_saving),
+            );
+        })
+    }
+
+    #[test]
+    fn without_an_exif_offset_world_time_gives_it() {
+        // The D300's zone, as on public sample 928; the zone of samples
+        // 6887 and 7808 to 7810 with daylight saving time on, which agrees
+        // with their Exif -04:00; one of daylight saving time on west of
+        // UTC, as on sample 961; and UTC itself.
+        for order in ORDERS {
+            for (zone, daylight_saving, minutes, display) in [
+                (60, 0, 60, "+01:00"),
+                (-300, 1, -240, "-04:00"),
+                (-480, 1, -420, "-07:00"),
+                (0, 0, 0, "+00:00"),
+            ] {
+                let time = zone_time(order, zone, daylight_saving);
+                let what = format!("{order:?}, {zone}, {daylight_saving}");
+                assert_eq!(time.offset_minutes(), Some(minutes), "{what}");
+                assert_eq!(time.to_string(), format!("{LOCAL}{display}"), "{what}");
+            }
+        }
+    }
+
+    #[test]
+    fn a_world_time_offset_of_up_to_fourteen_hours_is_taken() {
+        for order in ORDERS {
+            for (zone, daylight_saving, display) in
+                [(840, 0, "+14:00"), (780, 1, "+14:00"), (-840, 0, "-14:00")]
+            {
+                let time = zone_time(order, zone, daylight_saving);
+                assert_eq!(
+                    time.to_string(),
+                    format!("{LOCAL}{display}"),
+                    "{order:?}, {zone}, {daylight_saving}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn a_world_time_offset_beyond_fourteen_hours_gives_none() {
+        // With the daylight hour too: 840 plus 60 is 15 hours. And at the
+        // end of the 16-bit range, where adding the hour would overflow it.
+        for order in ORDERS {
+            for (zone, daylight_saving) in
+                [(841, 0), (840, 1), (-841, 0), (i16::MAX, 1), (i16::MIN, 0)]
+            {
+                let time = zone_time(order, zone, daylight_saving);
+                let what = format!("{order:?}, {zone}, {daylight_saving}");
+                assert_eq!(time.offset_minutes(), None, "{what}");
+                assert_eq!(time.to_string(), LOCAL, "{what}");
+            }
+        }
+    }
+
+    #[test]
+    fn a_byte_swapped_world_time_gives_none() {
+        // As editing software can rewrite it: the zone's two bytes in the
+        // other order from the MakerNote's, so 60 reads as 15360, and
+        // -300 as -11010.
+        for (order, swapped) in [(Order::Little, Order::Big), (Order::Big, Order::Little)] {
+            for zone in [60, -300] {
+                let time = time_with(order, None, |inner, ifd| {
+                    inner.undefined(ifd, WORLD_TIME, &world_time_bytes(swapped, zone, 0));
+                });
+                assert_eq!(time.offset_minutes(), None, "{order:?}, {zone}");
+                assert_eq!(time.to_string(), LOCAL, "{order:?}, {zone}");
+            }
+        }
+    }
+
+    #[test]
+    fn a_world_time_daylight_saving_byte_of_another_value_gives_none() {
+        for order in ORDERS {
+            for daylight_saving in [2, 255] {
+                let time = zone_time(order, 60, daylight_saving);
+                assert_eq!(time.offset_minutes(), None, "{order:?}, {daylight_saving}");
+            }
+        }
+    }
+
+    #[test]
+    fn an_exif_offset_wins_over_world_time() {
+        for order in ORDERS {
+            let time = time_with(order, Some("-05:00"), |inner, ifd| {
+                inner.undefined(ifd, WORLD_TIME, &world_time_bytes(order, 60, 0));
+            });
+            assert_eq!(time.to_string(), format!("{LOCAL}-05:00"), "{order:?}");
+        }
+    }
+
+    #[test]
+    fn an_unreadable_exif_offset_gives_way_to_world_time() {
+        // The standard tags keep the time and drop an offset they cannot
+        // read, so they give none, and WorldTime gives it.
+        for order in ORDERS {
+            let time = time_with(order, Some("+5:00"), |inner, ifd| {
+                inner.undefined(ifd, WORLD_TIME, &world_time_bytes(order, 60, 0));
+            });
+            assert_eq!(time.to_string(), format!("{LOCAL}+01:00"), "{order:?}");
+        }
+    }
+
+    #[test]
+    fn without_a_date_time_original_world_time_gives_no_capture_time() {
+        for order in ORDERS {
+            let block = tags_block(order, |inner, ifd| {
+                inner.undefined(ifd, WORLD_TIME, &world_time_bytes(order, 60, 0));
+            })
+            .0;
+            let time = capture_time_of(order, &block, |builder, exif| {
+                builder.ascii(exif, SUB_SEC_TIME_ORIGINAL, "34");
+            });
+            assert_eq!(time, None, "{order:?}");
+        }
+    }
+
+    #[test]
+    fn a_world_time_of_another_type_or_length_gives_none() {
+        for order in ORDERS {
+            // The four bytes of a zone of 60 without daylight saving time,
+            // declared as four BYTEs or as two SHORTs.
+            for (typ, count) in [(BYTE, 4), (SHORT, 2)] {
+                let (block, entry) = tags_block(order, |inner, ifd| {
+                    inner.undefined(ifd, WORLD_TIME, &world_time_bytes(order, 60, 0));
+                });
+                let block = retyped(order, block, entry, typ, count);
+                let time = capture_time_of(order, &block, |builder, exif| {
+                    builder.ascii(exif, DATE_TIME_ORIGINAL, DATE);
+                })
+                .expect("a capture time");
+                assert_eq!(time.offset_minutes(), None, "{order:?}, type {typ}");
+            }
+            // Three of those bytes, held in the entry, and the four and one
+            // more, stored elsewhere inside the block.
+            let bytes = world_time_bytes(order, 60, 0);
+            let mut five = bytes.clone();
+            five.push(0);
+            for value in [&bytes[..3], &five] {
+                let time = time_with(order, None, |inner, ifd| {
+                    inner.undefined(ifd, WORLD_TIME, value);
+                });
+                assert_eq!(time.offset_minutes(), None, "{order:?}, {value:?}");
+            }
+        }
+    }
+
+    #[test]
+    fn without_world_time_the_time_has_no_offset() {
+        // As the D200 and older bodies write it (public sample 8079).
+        for order in ORDERS {
+            let time = time_with(order, None, |_, _| {});
+            assert_eq!(time.offset_minutes(), None, "{order:?}");
+            assert_eq!(time.to_string(), LOCAL, "{order:?}");
+        }
+    }
+
+    #[test]
+    fn a_world_time_in_the_other_byte_order_from_the_files_is_read() {
+        for (file, inner_order) in [(Order::Little, Order::Big), (Order::Big, Order::Little)] {
+            let block = tags_block(inner_order, |inner, ifd| {
+                inner.undefined(ifd, WORLD_TIME, &world_time_bytes(inner_order, -300, 1));
+            })
+            .0;
+            let time = capture_time_of(file, &block, |builder, exif| {
+                builder.ascii(exif, DATE_TIME_ORIGINAL, DATE);
+            })
+            .expect("a capture time");
+            assert_eq!(time.to_string(), "2008-05-17T10:22:31-04:00", "{file:?}");
         }
     }
 

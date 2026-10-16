@@ -87,14 +87,15 @@ manufacturer's MakerNote only where nothing standard records it.
   Coolpix bodies) are not read; their files get the Exif fields only. No
   Sony MakerNote is read. Nothing is deciphered.
 - **The capture time is DateTimeOriginal**, with its own sub-seconds
-  (SubSecTimeOriginal) and offset from UTC (OffsetTimeOriginal). Without
-  OffsetTimeOriginal, a NEF's offset is its WorldTime zone, plus an hour
-  when daylight saving is on, accepted only within ±14:00, since a value
-  rewritten in the wrong byte order reads as hundreds of hours. The
-  offset is reported the same way whichever tag gave it. The time is
-  never taken from DateTimeDigitized or from IFD0's DateTime, which
-  editors change. An unset clock (blanks, spaces or zeros) or an
-  impossible date is `None`. raw-files has its own `DateTime` type.
+  (SubSecTimeOriginal) and offset from UTC (OffsetTimeOriginal). When
+  OffsetTimeOriginal gives no offset, because it is missing or cannot be
+  read, a NEF's offset is its WorldTime zone, plus an hour when daylight
+  saving is on, accepted only within ±14:00, since a value rewritten in
+  the wrong byte order reads as hundreds of hours. The offset is reported
+  the same way whichever tag gave it. The time is never taken from
+  DateTimeDigitized or from IFD0's DateTime, which editors change. An
+  unset clock (blanks, spaces or zeros) or an impossible date is `None`.
+  raw-files has its own `DateTime` type.
 - **Sizes as stored.** The raw size is that of the largest, by pixel
   count, of the IFDs holding raw data, the first of them on a tie: a file
   can hold a small full-resolution raw image beside the real one, as the
