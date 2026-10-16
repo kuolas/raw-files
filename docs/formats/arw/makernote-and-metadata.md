@@ -208,8 +208,10 @@ Notes:
 - **0x202F** reads `… 0 4` in the ARQ composite (file 3255) and `… 1 4` in
   the source frame (file 3251). [F]
 - **Serial numbers.** Exif BodySerialNumber (0xA431) is present in the
-  ILCE-1 and ILCE-7M5 samples only; MakerNote 0x2031 exists only on ILCE-9
-  firmware 2.00. [P][1][F] raw-files needs neither.
+  ILCE-1 and ILCE-7M5 samples only (files 4466, 8846 to 8850); MakerNote
+  0x2031 exists only on ILCE-9 firmware 2.00. [P][1][F] raw-files reports
+  the Exif one and reads no MakerNote serial, so the other bodies have none
+  ([ADR011](../../architecture-decisions/adr011-metadata-from-standard-tags.md)).
 - **Tag order trap.** 0xB001 comes after 0x2010, 0x9050 and the 0x94xx tags
   in IFD order, so anything that chooses a block layout by ModelID must parse
   the whole IFD first. LibRaw buffers those blocks until it reaches 0xB001.
@@ -871,7 +873,11 @@ includes masked or unused columns and, on lossless files, padding to whole
    on the ILCE-9, file 1542; (32, 20) and 9504 × 6336 in a 9728 × 6656
    lossless ILCE-7CR file). [F][S][19][24] On medium and small raws they are
    smaller than the stored image (6930: 5120 × 3584 stored, 4608 × 3072
-   crop; 6931: 3584 × 2560 stored, 3504 × 2336 crop). [F]
+   crop; 6931: 3584 × 2560 stored, 3504 × 2336 crop; the ILCE-9M3's small
+   raw, 7364: 3072 × 2048 stored, 3008 × 2000 crop). [F] APS-C files have
+   the same 4608 × 3072 crop inside differently sized stored images:
+   4736 × 3132 on the ILCE-7M4 (6933, 6936), 4640 × 3088 on the ILCE-7M5
+   (8849, 8850) and 5120 × 3584 on its lossless APS-C file (8848). [F]
 2. **SonyCropTopLeft and SonyCropSize** (0x74C7, 0x74C8), as (left, top) and
    (width, height). They hold the aspect-ratio crop where one is set, and
    can disagree with DefaultCrop by a few pixels (ILCE-7RM3). [F]
@@ -927,8 +933,20 @@ it by raw width. [P][12][F]
 - ExifTool's composite LensID combines LensType, LensType2 and LensSpec. Its
   lens table is not something to copy. [P][4]
 
-For milestone 3, report Exif LensModel when present and LensSpec's ranges
-otherwise. [I]
+**The samples overturn LensSpec as a fallback.** [F] Wherever 0xB02A is
+not all zeros, Exif LensSpecification (0xA432) describes the same lens;
+every body from the NEX-5 and SLT-A55 on writes it, the fixed-lens RX100
+and RX100M6 included, except with the ILCE-7S's manual lens (1582).
+LensSpec is all zeros on the A200, A700 and A900 (files 2271, 2521, 5858),
+which write no Exif range, on the A-mount lenses of the A55 and A99 (964,
+3751), whose Exif range is there, and with that manual lens. And on the
+RX100 family LensSpec holds the **35 mm-equivalent** focal
+lengths, 28 to 100 mm on the RX100 (5811) and 24 to 200 mm on the RX100M6
+(3012, 3015), where Exif gives the real ones (10.4 to 37.1 mm and 9 to
+72 mm). The A100 (2346) has no 0xB02A. So for milestone 3, report the
+lens from the Exif tags only: LensModel when present and not `----`, and
+the LensSpecification range. FNumber and FocalLength are `0/10` with the
+manual lens (1582), which means unknown. [F] ([ADR011](../../architecture-decisions/adr011-metadata-from-standard-tags.md))
 
 ## 10. A100, SR2 and SRF
 
@@ -1061,6 +1079,17 @@ points specific to Sony metadata:
 ## 12. Recommendation for raw-files
 
 **Milestone 3 needs no decryption and no deciphering.**
+
+raw-files decided this in [ADR011](../../architecture-decisions/adr011-metadata-from-standard-tags.md), which
+differs from the list below in three points. It reads no Sony MakerNote,
+so the lens comes from the Exif tags alone (items 2 and 5): LensSpec adds
+no range the Exif tags lack and is the 35 mm equivalent on the RX100
+family ([section 9.5](#95-lens)), and ModelID waits for a caller who
+needs it. And the image size is the DefaultCrop when it lies inside the
+stored size, else the stored size, without SonyCrop or 0x7038 (item 3).
+Text is also trimmed of spaces at both ends, not only trailing ones as
+in [section 9.3](#93-make-model-and-modelid), and a value over 255 bytes
+is taken for damage.
 
 1. **Standard tags:** IFD0 Make, Model and Orientation; Exif
    DateTimeOriginal, SubSecTimeOriginal and OffsetTimeOriginal (the last two

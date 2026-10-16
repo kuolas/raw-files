@@ -102,17 +102,14 @@ and test-data.md describes the sample set that would answer Part 2.
 
 ### MakerNote and metadata
 
-- **Time-zone tags.** Which bodies write OffsetTimeOriginal (0x9011). Only the
-  Z 9 is evidenced.
-- **Make and Model strings.** Their padding on recent bodies:
-  NUL-terminated is confirmed on a D40, and a trailing space on the D100
-  (rawspeed compares Model against "NIKON D100 "), but trailing spaces on
-  recent bodies are unconfirmed.
 - **Z-series white balance.** Whether 0x000C WB_RBLevels is present and
   correct on every Z body. Every decoder relies on it there, and no failure
   has been reported.
-- **Crop area.** Whether 0x0045 CropArea is always present, and how raw IFD
-  size maps to output size on each body.
+- **Crop area.** Which body first wrote 0x0045 CropArea: the D850 (2017)
+  does and the D810 (2014) does not, and no body in between was checked.
+  And how the raw IFD size maps to the visible size on the bodies without
+  it, which today report the raw size with its border pixels
+  ([makernote-and-metadata.md](makernote-and-metadata.md)).
 
 ### Raw data
 
@@ -157,9 +154,10 @@ and test-data.md describes the sample set that would answer Part 2.
 
 ## 4. Questions settled by sample files
 
-Each of these was open before the three CC0 Z 9 files were checked. The
-files that settled it are named; their SHA-256 hashes are in
-[test-data.md](test-data.md#21-the-ci-set).
+Each of these was open before the sample files were checked. The files
+that settled it are named; their SHA-256 hashes are in
+[test-data.md](test-data.md#2-what-is-committed-and-what-is-downloaded).
+These were settled by the three CC0 Z 9 files of the CI set:
 
 - **HE / HE\* layout**: HE and HE\* files do not differ from lossless ones
   in IFD or preview layout. The IFD layout, the SubIFD order, the tags of
@@ -168,3 +166,20 @@ files that settled it are named; their SHA-256 hashes are in
   and length differ; and the MakerNote IFD differs by one tag, 0x0096,
   present in the lossless file only (files 5146 to 5148)
   ([container-and-previews.md](container-and-previews.md)).
+
+The following were settled by the 23 files checked for metadata, listed in
+[test-data.md](test-data.md#22-files-checked-for-metadata) with their
+SHA-256 hashes; the details are in
+[makernote-and-metadata.md](makernote-and-metadata.md).
+
+- **Time-zone tags**: the D850 and every later checked body write
+  OffsetTimeOriginal (0x9011) with OffsetTime and OffsetTimeDigitized,
+  and the MakerNote's WorldTime agrees with it in all of them (files
+  1835, 3827, 3587, 6887, 7808 to 7810, 5146 to 5148). Older bodies write
+  no Exif offset; from the D300 on they have WorldTime, which is taken to
+  mean the same but cannot be compared there.
+- **Make and Model strings**: NUL-terminated and unpadded on every checked
+  body except the D100, whose Model has one trailing space (file 2996).
+- **Crop area on recent bodies**: the D850, D780 and Z bodies write 0x0045
+  CropArea, and it is the visible image inside the stored raw (files 1835,
+  3827, 3587, 6887, 7808 to 7810, 5146 to 5148).

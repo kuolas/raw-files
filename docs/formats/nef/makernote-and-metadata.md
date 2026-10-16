@@ -16,9 +16,15 @@ exiv2, and the source of existing decoders, read as references only (their
 licences do not allow copying code; see [Licences](#licences)). Claims carry
 a confidence tag: **[P]** primary (specification, tag documentation or
 implementation source), **[S]** secondary (write-ups, forum posts, sample
-listings), **[I]** inferred. Byte offsets and version numbers taken from
-implementation sources were read through summaries; verify them against the
-source, and against sample files, before hard-coding them.
+listings), **[I]** inferred, and **[F]** measured on a named sample file,
+cited by its raw.pixls.us id ("file 928"). The MakerNote layout and the
+viewer metadata (sections 1, 2 and 8) were checked in October 2026 on 23
+CC0 files from the D1H to the Z6III, listed in
+[test-data.md](test-data.md#22-files-checked-for-metadata); where a file
+contradicts a source, this page follows the file and records the
+disagreement. Byte offsets and version numbers taken from implementation
+sources were read through summaries; verify them against the source, and
+against sample files, before hard-coding them.
 
 ## Contents
 
@@ -53,9 +59,9 @@ detect them by bytes, never by a "type" number. [P][5][6][12]
 
 | Layout | Header | IFD starts at | Offsets relative to | Byte order | Bodies |
 |---|---|---|---|---|---|
-| Headerless | none | MakerNote + 0 | the outer TIFF header | the outer file's (the D1 is big-endian) | E990, D1, D1H, D1X |
+| Headerless | none | MakerNote + 0 | the outer TIFF header | the outer file's (the D1 is big-endian) | E990, D1, D1H, D1X; the D1H's is big-endian (file 5364) **[F]** |
 | Short header | `Nikon\0` `01 00` (8 bytes) | MakerNote + 8 | the outer TIFF header | exiv2 uses the outer order; ExifTool says little-endian | E700 to E950 |
-| Embedded TIFF header | `Nikon\0`, version `02 10` or `02 00`, `00 00`, then a TIFF header (`II*\0` or `MM\0*` and a 4-byte offset) (18 bytes) | MakerNote + 10 + the inner IFD offset (normally 8, so + 18) | MakerNote + 10, the inner TIFF header | the inner header's, independent of the file's | D70, D100, D200 and later DSLRs, every Z body |
+| Embedded TIFF header | `Nikon\0`, version `02 00`, `02 10` or `02 11`, `00 00`, then a TIFF header (`II*\0` or `MM\0*` and a 4-byte offset) (18 bytes) | MakerNote + 10 + the inner IFD offset (normally 8, so + 18) | MakerNote + 10, the inner TIFF header | the inner header's, independent of the file's | D70, D100, D200 and later DSLRs, every Z body; every checked file but the D1H's: `02 00` on the D100 and the Coolpix E5700 and P7800, `02 10` from the D70 to the D7000 and on the Nikon 1 J1, `02 11` on the Coolpix A (2013) and on every body from the D810 (2014) on **[F]** |
 
 Sources: [5][6][4][7]. The D1 byte-order remark is from ExifTool. [P]
 
@@ -71,6 +77,10 @@ low-priority. [I]
      order mark (`II` or `MM`) and the next u16 (read in that order) is 42,
      it is the embedded-TIFF layout;
    - otherwise it is the short-header layout, IFD at + 8.
+
+   Testing byte 6 rather than the whole version accepts the `02 11` that
+   recent bodies write beside `02 10` and `02 00` (files 5146 to 5148 and
+   the bodies listed in the table above). **[F]**
 2. Otherwise, if Make starts with "NIKON" (any case), it is the headerless
    layout, IFD at + 0.
 3. Otherwise the MakerNote is not Nikon's; ignore it.
@@ -115,19 +125,21 @@ milestone that needs the tag. [P][1]
 | ID | Name | Type | Meaning | M |
 |---|---|---|---|---|
 | 0x0001 | MakerNoteVersion | undef[4] | ASCII digits on some bodies, binary on others; do not rely on it | none |
+| 0x0002 | ISO | u16[2] | `[0, ISO]` on most bodies before the D810; absent from the D810 on; four zero bytes of type UNDEFINED on the D700 (file 2255), `[0, 0]` on the E5700 (file 4456) **[F]** | 3 |
 | 0x000C | WB_RBLevels | rational[4] | as-shot white-balance multipliers; LibRaw reads them as R, B, then two greens (ExifTool leaves the last two unidentified) | 4 |
 | 0x0011 | PreviewIFD | IFD | sub-IFD with a small JPEG preview; offsets relative to MakerNote + 10 | 1 |
 | 0x001B | CropHiSpeed | u16[7] | crop mode and geometry; field order in [section 8.4](#84-image-dimensions) | 3, 4 |
-| 0x001D | SerialNumber | string | decryption key input | 3, 4 |
-| 0x0024 | WorldTime | undef | home time zone fallback; layout in [section 8.2](#82-capture-date-and-time-zone) | 3 |
+| 0x001D | SerialNumber | string | the body's serial number; decryption key input. Seven digits on every checked DSLR and mirrorless body from the D300 on (eight on the Nikon 1 J1) and on the Coolpix A; seven spaces on the D200 (file 8079); absent before it and on the Coolpix E5700 and P7800 **[F]** | 3, 4 |
+| 0x0024 | WorldTime | undef | the time zone and daylight saving setting of the camera's clock; layout in [section 8.2](#82-capture-date-and-time-zone) | 3 |
 | 0x0034 | ShutterMode | u16 | mechanical, electronic, EFCS | none |
 | 0x0037 | MechanicalShutterCount | u32 | newer bodies; mechanical frames only | none |
 | 0x003D | BlackLevel | u16[4] | per-channel black level, recorded at 14-bit scale | 4 |
 | 0x003E | ImageSizeRAW | u16 | 1 large, 2 medium, 3 small | 4 |
 | 0x0045 | CropArea | u16[4] | left, top, width, height of the output rectangle | 3, 4 |
-| 0x0051 | (unnamed, Z 9 and later) | undef | NEFCompression as a u16 at byte 10; byte order disputed (see the note below) | 4 |
+| 0x0051 | (unnamed, Z bodies) | undef | NEFCompression as a u16 at byte 10; byte order disputed (see the note below). Present on the Z 6 (2018) too, and on the Z f, Z6III and Z 9 (files 3587, 6887, 7808 to 7810, 5146 to 5148); its value was not read **[F]** | 4 |
+| 0x0084 | Lens | rational[4] | the lens's shortest and longest focal length and the widest aperture at each; on every checked body with interchangeable lenses, from the D1H on; equal to Exif LensSpecification wherever both exist **[F]** | 3 |
 | 0x0091 | ShotInfo | undef | model-specific; encrypted for versions 02xx and 08xx | none |
-| 0x0093 | NEFCompression | u16 | compression hint | 4 |
+| 0x0093 | NEFCompression | u16 | compression hint; absent on the Z bodies checked, which write 0x0051 instead, and on the D1H and E5700 **[F]** | 4 |
 | 0x0096 | NEFLinearizationTable | undef | curve and predictor seeds; unencrypted | 4 |
 | 0x008C | (older curve) | undef | fallback for 0x0096 | 4 |
 | 0x0097 | ColorBalance | undef | white balance on older bodies; encrypted from version 0200 | 4 |
@@ -152,8 +164,9 @@ Notes:
 
 ## 3. NEFCompression and bit depth
 
-NEFCompression (0x0093; on Z 9 and later bodies the value is at byte 10 of
-0x0051) takes these values. [P][1][3][9]
+NEFCompression (0x0093; on Z bodies it is in 0x0051, since 0x0093 is
+absent from every checked Z body, the Z 6 included **[F]**; the sources
+put it at byte 10 of 0x0051 on the Z 9 and later) takes these values. [P][1][3][9]
 
 | Value | Meaning |
 |---|---|
@@ -374,7 +387,11 @@ The lesson is that the block can be that large, so cap allocations.
 
 Everything a viewer needs next to the preview comes from standard IFD0, its
 SubIFDs and the Exif IFD, except the crop rectangle, which comes from the
-MakerNote. IFD0's own ImageWidth and ImageLength describe the thumbnail
+MakerNote, and the serial number, ISO, lens range and offset from UTC
+that older bodies record only there (sections
+[8.2](#82-capture-date-and-time-zone) and
+[8.5](#85-serial-number-iso-and-lens)). **[F]** IFD0's own ImageWidth and
+ImageLength describe the thumbnail
 (160x120 on DSLRs), not the sensor; the stored sensor size is in the raw
 SubIFD reached through tag 0x014A.
 Decryption is never needed for these fields. [P][1][2]
@@ -399,18 +416,19 @@ IFD0 0x0112 wins. [S] See
 | Local capture time | Exif IFD 0x9003 DateTimeOriginal | `YYYY:MM:DD HH:MM:SS`, 20 bytes with NUL |
 | Sub-seconds | Exif IFD 0x9291 SubSecTimeOriginal | decimal fraction digits |
 | Offset from UTC | Exif IFD 0x9011 OffsetTimeOriginal, form `+HH:MM` | optional |
-| Fallback zone | MakerNote 0x0024 WorldTime | the camera's home zone setting |
+| Fallback zone | MakerNote 0x0024 WorldTime | the time zone and daylight saving setting of the camera's clock; agrees with OffsetTimeOriginal wherever both exist **[F]** |
 
 Also present: 0x9004 DateTimeDigitized and IFD0 0x0132 DateTime (the last
 modification time). [P][2]
 
 An unset camera clock yields a blank or space-filled string (spaces where the digits would be); return "none" for the date rather than an error. [I]
 
-**OffsetTimeOriginal writers.** Only the Z 9 is confirmed to write the
-OffsetTime tags (JPEG samples listing all three, Exif versions 0231 and
-0232). Z 8, Z 6III, Z f, D6, D780 and Z 6II are unchecked, and older bodies
-are reported to rely on the MakerNote zone instead. [S][15] Treat 0x9011 as
-optional.
+**OffsetTimeOriginal writers.** The D850, D780, Z 6, Z f, Z6III and Z 9
+write all three OffsetTime tags (files 1835, 3827, 3587, 6887, 7808 to 7810
+and 5146 to 5148); no older checked body writes any, the D810 (file 2036)
+included. **[F]** A Z 9 JPEG listing showed the same. [S][15] Treat 0x9011
+as optional. SubSecTimeOriginal is in every checked file except the
+Coolpix E5700's and P7800's (files 4456 and 1425). **[F]**
 
 **WorldTime layout (0x0024).** The data is an array of bytes with this
 layout, per ExifTool's definition: [P][3][1]
@@ -423,10 +441,24 @@ layout, per ExifTool's definition: [P][3][1]
 
 The i16 follows the MakerNote's byte order [I]; Capture NX can flip it, and
 a byte-swapped value then reads as an absurd offset (a bug report shows +256
-hours for the swapped form of 60 minutes). [S][13] Because it is the home
-zone and not necessarily the zone at capture, use it only as a fallback when
-OffsetTimeOriginal is absent, and reject implausible values (beyond
-roughly +-14 hours). [I]
+hours for the swapped form of 60 minutes). [S][13] Use it only when
+OffsetTimeOriginal is absent, and reject implausible values (beyond +-14
+hours). [I]
+
+**WorldTime is the offset of the camera's clock.** Sources describe it as
+the "home" zone, which need not be the zone at capture. The samples show
+otherwise: in every file that has both, the zone plus 60 minutes when the
+daylight saving byte is 1 equals OffsetTimeOriginal, with daylight saving
+off (files 1835, 3827, 3587, 5146 to 5148) and on (files 6887, 7808 to
+7810, at -04:00 from a zone of -300). **[F]** WorldTime is present on
+every checked DSLR and mirrorless body from the D300 on and on the Coolpix
+A, so also on the D300, D700, D7000, D750, D810 and Nikon 1 J1, which write
+no OffsetTimeOriginal; it is absent on the D1H, D100, D70, D200, E5700 and
+P7800. **[F]** On the D300 to the D810, which write no Exif offset, the
+agreement cannot be checked; taking WorldTime to mean the same there gives
+the offset of a decade of bodies. raw-files does so, and reports it as the
+offset, not as a separate home zone
+([ADR011](../../architecture-decisions/adr011-metadata-from-standard-tags.md)).
 
 ### 8.3 Make and model
 
@@ -440,9 +472,14 @@ D40). [P][14] The D100 does space-pad Model: rawspeed compares it against
 "NIKON D100 " with a trailing space. [P][8] The Exif standard allows
 space-filled "unknown" values, and ExifTool and LibRaw both strip trailing
 whitespace. So: cut at the first NUL, then trim trailing ASCII whitespace.
-[P][2][7] No D850 or Z-series dump was inspected. Compare model strings after
-trimming, because model checks elsewhere ("D50" suffix, a "Z" at index 6)
-assume trimmed text. [I]
+[P][2][7] Compare model strings after trimming, because model checks
+elsewhere ("D50" suffix, a "Z" at index 6) assume trimmed text. [I]
+
+The samples agree: every checked file has NUL-terminated Make and Model
+with no padding, the Z 9's 18 and 10 bytes long like the D40's, except the
+D100, whose Model is `NIKON D100 ` with one trailing space (file 2996).
+Make is `NIKON` on the Coolpix E5700 and P7800 and `NIKON CORPORATION`
+on every other body, the Coolpix A included. **[F]**
 
 ### 8.4 Image dimensions
 
@@ -454,14 +491,24 @@ Sources for the output size, in order: [P][7][9]
 
 1. **CropArea (0x0045)**: four u16 as left, top, width, height in raw
    pixels. rawler uses it as the crop rectangle; LibRaw stores it as an
-   inset crop. Whether every body writes it, especially before the D3, is
-   unknown. [P][I]
+   inset crop. [P] The D850, D780, Z 6, Z f, Z6III and Z 9 write it; no
+   older checked body does, the D810 (file 2036) included. **[F]** It is
+   the visible image: on the Z 9 `[12, 8, 8256, 5504]` inside the
+   8280x5520 raw, the size of the largest preview (files 5146 to 5148); on
+   the D850's small raw (ImageSizeRAW 3) `[12, 4, 6192, 4128]` inside
+   6216x4136 (file 1835), so CropArea counts stored pixels, not the
+   4128x2752 the menu names for that size (see ImageSizeRAW below); the
+   Z 6's small raw likewise `[10, 6, 4528, 3018]` inside 4548x3030
+   (file 3587). Z bodies change the stored raw
+   itself for an aspect ratio, and CropArea stays inside it: the Z6III's
+   1:1 file stores 4048x4040 with CropArea `[8, 4, 4032, 4032]` (file
+   7808). **[F]**
 2. A per-body table (as rawspeed's `cameras.xml` or rawler's camera data).
    Not suitable for a small library; raw-files should not carry one for
    milestone 3. [I]
 3. Exif PixelXDimension and PixelYDimension (0xA002, 0xA003): these exist,
    but Nikon's values describe the in-camera JPEG size and may differ from
-   the raw crop. [I]
+   the raw crop. [I] No checked NEF has them. **[F]**
 
 **CropHiSpeed (0x001B)** is seven u16 values. ExifTool's print conversion
 fixes the order as: [P][3]
@@ -492,6 +539,28 @@ SOF marker of the chosen JPEG; see
 
 The D100 is special: rawler forces a raw width of 3040 on its uncompressed
 path. [P][9]
+
+### 8.5 Serial number, ISO and lens
+
+Nikon added these to the standard Exif tags late; older bodies record
+them only in the MakerNote, in plain form. **[F]**
+
+| Item | Exif tag | MakerNote tag | Measured |
+|---|---|---|---|
+| Body serial number | 0xA431 BodySerialNumber | 0x001D SerialNumber | Exif from the D780 and Z 6 on (files 3827, 3587); MakerNote from the D300 on, blank on the D200 |
+| ISO | 0x8827 ISOSpeedRatings | 0x0002 ISO, `[0, ISO]` | Exif on every checked body except the D1H, D100, D70, D700 and E5700; the first three have it in the MakerNote |
+| Lens model | 0xA434 LensModel | none in plain text | the D780, Z 6 and later, and the Nikon 1 J1 (file 2956) |
+| Lens range | 0xA432 LensSpecification | 0x0084 Lens | Exif from the D780 and Z 6 on; MakerNote on every body with interchangeable lenses, equal to Exif where both exist |
+| Lens make, serial | 0xA433 LensMake, 0xA435 LensSerialNumber | none | the D780 and Z bodies; LensMake is empty for the D780's F-mount lens and the Z f's third-party lens (files 3827, 6887) |
+
+ISO is two SHORT values in 0x0002, of which the second is the ISO; the
+D700 writes four zero bytes of type UNDEFINED and the E5700 `[0, 0]`,
+which mean no ISO is recorded. The Z 9's Exif ISO is 0x8827 with
+SensitivityType 2 and an equal RecommendedExposureIndex (0x8832). The Z 9
+writes exposure values unreduced (ExposureTime `10/3200`, FNumber
+`900/100`, FocalLength `180/10`, files 5146 to 5148) and every checked
+body writes ExposureBiasValue as a signed rational (`0/6`; `-6/6` on the
+D100). **[F]**
 
 ## 9. Robustness pitfalls
 
@@ -529,13 +598,29 @@ The points specific to the MakerNote:
    (no next-IFD pointer); Coolpix NRW files (no 0x0096); D3 and D810
    (14-bit versus 16-bit and mislabelled uncompressed data); D780, Z 6 and
    Z 7 (curve header 0x44 0x40, bit depth two bits lower than labelled);
-   Z 9 and later (compression in 0x0051; HE and HE* undecodable).
+   Z bodies (compression in 0x0051, at byte 10 on the Z 9 and later);
+   Z 9 and later (HE and HE* undecodable).
    [P][1][3][8][9]
 9. **Nikon Scan files.** Scanner "NEFs" are TIFF RGB with a Nikon Scan IFD
    (tag 0x0E10); reject anything whose raw IFD is not CFA
    (PhotometricInterpretation 32803). [P][I][3]
 
 ## 10. Recommendation for raw-files
+
+raw-files decided this in
+[ADR011](../../architecture-decisions/adr011-metadata-from-standard-tags.md),
+which follows the recommendation below with these changes. From the
+samples: the MakerNote also gives the serial number, the ISO and the lens
+range when the Exif tags lack them
+([section 8.5](#85-serial-number-iso-and-lens)), and WorldTime gives the
+offset from UTC as a plain offset, not a labelled home zone
+([section 8.2](#82-capture-date-and-time-zone)). And by choice: text is
+trimmed of spaces at both ends, not only trailing ones as in
+[section 8.3](#83-make-and-model), and a value over 255 bytes is taken
+for damage; CropArea is used without the 0x001B cross-check of item 2;
+and only the embedded-TIFF layout is read, not the headerless and
+short-header ones items 2 and 6 cover, so their bodies (the D1 family and
+the earliest Coolpix) get the Exif fields only.
 
 For milestone 3, keep the MakerNote out of the critical path.
 
@@ -589,16 +674,24 @@ For milestone 3, keep the MakerNote out of the critical path.
    only on RGGB. In rawspeed's camera list every non-RGGB Nikon is a
    pre-2010 body, so there may be no practical difference, but which body
    first wrote the tag is unknown. [P][7][8][9][17]
-5. **Bodies that write OffsetTimeOriginal.** Only the Z 9 is confirmed. [S]
-6. **Make/Model padding on recent bodies.** The D100 space-pads Model
-   (see [section 8.3](#83-make-and-model)); whether the D850 and Z bodies do
-   needs a hex dump.
-7. **Presence of CropArea (0x0045).** Whether every body writes it, and the
-   first body that did.
-8. **Outer byte order of recent bodies** (D800, D850, Z 6, Z 7, Z f): no
-   primary evidence found. The Z 9 is `II`, file and MakerNote alike (files
-   5146 to 5148, see [container-and-previews.md](container-and-previews.md)).
-   Readers must accept both `II` and `MM`. [P][11]
+5. **Bodies that write OffsetTimeOriginal.** Answered: the D850 and every
+   later checked body. WorldTime agrees with it wherever both exist, and
+   is taken to give the offset on the older bodies from the D300 on,
+   where it cannot be compared ([section 8.2](#82-capture-date-and-time-zone)).
+   **[F]**
+6. **Make/Model padding on recent bodies.** Answered: none of the checked
+   bodies pads either, except the D100's Model
+   ([section 8.3](#83-make-and-model)). **[F]**
+7. **Presence of CropArea (0x0045).** Answered for the checked bodies: the
+   D850, D780 and Z bodies write it, the D810 and older do not
+   ([section 8.4](#84-image-dimensions)). Which bodies between the D810
+   and the D850 (2014 to 2017) first wrote it is still open. **[F]**
+8. **Outer byte order of recent bodies.** Answered: `II`, file and
+   MakerNote alike, on the D750, D810, D850, D780, Z 6, Z f, Z6III and Z 9;
+   `MM` on the DSLRs from the D1H to the D7000 and on the Coolpix A (2013);
+   `II` on the Coolpix E5700 and P7800 and the Nikon 1 J1. The MakerNote's
+   order equals the file's in every checked file. Readers must accept both
+   `II` and `MM`. **[F]** [P][11]
 9. **Bodies that write NEFCompression 5 and 6.** Labels are known, bodies
     are not.
 
