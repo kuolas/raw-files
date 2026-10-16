@@ -1,0 +1,334 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
+//! Tests of the whole open path on damaged RAW files, through the public
+//! API; this file holds no code of the reader itself.
+//!
+//! A RAW library often meets truncated and corrupted files, and must
+//! answer each with a result, never a panic (ADR008). The unit tests of
+//! the TIFF reader hold the walk to that; the tests here hold everything
+//! that opening a file runs after it to the same rule: the detection of
+//! the format, the preview finder, and the metadata reader, whose values
+//! come from tags all over the file. They damage the two fixtures that
+//! carry every metadata tag the readers read, a Nikon Z 9's NEF (with its
+//! MakerNote in the file's byte order and in the other) and an ILCE-7M4's
+//! ARW 4, in both byte orders: they cut each file at every length, and
+//! overwrite each byte in turn with 0x00, 0xFF and its complement.
+//!
+//! Each damaged file is opened as a caller would open it, with
+//! [`RawFile::from_bytes`], which reads through the same source and block
+//! cache as [`RawFile::from_reader`]. Opening may fail; when it does not,
+//! every getter of the metadata is read, every fraction is shown, reduced
+//! and turned into a decimal, the capture time is shown and taken apart,
+//! and every preview is read, so that a panic anywhere on the way is
+//! caught.
+//! Tests run with debug assertions, so an arithmetic overflow panics too.
+//!
+//! The ARW 4 file is 65,780 bytes, most of them the zeros before its two
+//! lossless raw tiles, which sit at a fixed offset, and the tiles
+//! themselves. Nothing reads those bytes when the file is opened: the tiles
+//! are raw data, which the preview finder passes over by its tags. So the
+//! ARW 4 file is cut at every length and overwritten byte by byte only up
+//! to the end of what the builder lays out before them (the header, the
+//! IFDs, their values and the JPEG stubs), and cut at a few lengths past
+//! that: in the zeros, at each tile's start and around it, and just short
+//! of the end. That keeps the whole file to a few seconds in a debug build.
+//!
+//! A last test damages one value only, the capture time, and checks that
+//! the file gives every other value exactly as the undamaged file does:
+//! damage to one value costs only that value (ADR011).
+
+mod support;
+
+use std::fmt::Write as _;
+use std::hint::black_box;
+use std::panic;
+
+use raw_files::{Metadata, Rational, RawFile, SignedRational};
+use support::arw::{ARW4_FULL_SIZE_JPEG, arw4_file, stub};
+use support::nef::{z9_file, z9_file_with};
+use support::tiff_builder::Order;
+
+const ORDERS: [Order; 2] = [Order::Little, Order::Big];
+
+/// A fixture to damage: its name for failure messages, its bytes, and how
+/// far into it the byte-by-byte damage goes.
+struct Fixture {
+    name: String,
+    bytes: Vec<u8>,
+    /// The bytes before this offset are cut at every length and
+    /// overwritten one by one; past it, only [`Fixture::more_lengths`] are
+    /// tried.
+    sweep_end: usize,
+    /// Lengths past `sweep_end` to cut the file at.
+    more_lengths: Vec<usize>,
+}
+
+/// The Z 9 fixture, with IFD0's Orientation 8, in both byte orders, and
+/// with its MakerNote in the other byte order from the file's; and the ARW
+/// 4 fixture, with Orientation 8, in both byte orders.
+fn fixtures() -> Vec<Fixture> {
+    let mut fixtures = Vec::new();
+    for order in ORDERS {
+        let bytes = z9_file(order, 8).bytes;
+        fixtures.push(Fixture {
+            name: format!("Z 9, {order:?}"),
+            sweep_end: bytes.len(),
+            more_lengths: Vec::new(),
+            bytes,
+        });
+    }
+    for (order, makernote_order) in [(Order::Little, Order::Big), (Order::Big, Order::Little)] {
+        let bytes = z9_file_with(order, 8, makernote_order).0.bytes;
+        fixtures.push(Fixture {
+            name: format!("Z 9, {order:?}, MakerNote {makernote_order:?}"),
+            sweep_end: bytes.len(),
+            more_lengths: Vec::new(),
+            bytes,
+        });
+    }
+    for order in ORDERS {
+        let (built, blobs) = arw4_file(order, 8);
+        let at = |offset: u64| usize::try_from(offset).unwrap();
+        // IFD2's JPEG is the last blob the builder lays out before the
+        // tiles, which it places at their own offset.
+        let ifd2_jpeg = blobs.ifd2_jpeg.unwrap();
+        let laid_out = at(built.blob_offset(ifd2_jpeg)) + stub(ARW4_FULL_SIZE_JPEG).len();
+        let tiles: Vec<usize> = blobs
+            .raw
+            .iter()
+            .map(|&tile| at(built.blob_offset(tile)))
+            .collect();
+        assert!(laid_out < tiles[0], "ARW 4, {order:?}: the tiles come last");
+        let len = built.bytes.len();
+        let mut more_lengths = vec![(laid_out + tiles[0]) / 2, len - 1, len];
+        for &tile in &tiles {
+            more_lengths.extend([tile - 1, tile, tile + 1]);
+        }
+        fixtures.push(Fixture {
+            name: format!("ARW 4, {order:?}"),
+            bytes: built.bytes,
+            sweep_end: laid_out,
+            more_lengths,
+        });
+    }
+    fixtures
+}
+
+/// Opens `bytes` and, when that succeeds, reads everything a caller can
+/// read from the file: every value of its metadata, in every form the
+/// library gives it, and every preview. Returns whether the file opened.
+///
+/// Reading a preview may fail; it must not panic.
+fn open_and_read_everything(bytes: &[u8]) -> bool {
+    let Ok(mut file) = RawFile::from_bytes(bytes) else {
+        return false;
+    };
+    let mut seen = String::new();
+    show_metadata(file.metadata(), &mut seen);
+    black_box(seen);
+    for preview in file.previews().to_vec() {
+        let _ = black_box(file.read_preview(&preview));
+    }
+    true
+}
+
+/// Writes every value of `metadata` to `out`, through every getter and in
+/// every form the library offers: each fraction shown, reduced and as a
+/// decimal; the capture time shown and taken apart.
+fn show_metadata(metadata: &Metadata, out: &mut String) {
+    let _ = write!(
+        out,
+        "{:?} {:?} {:?} {:?}",
+        metadata.make(),
+        metadata.model(),
+        metadata.serial_number(),
+        metadata.orientation()
+    );
+    if let Some(time) = metadata.capture_time() {
+        let _ = write!(
+            out,
+            " {time} {}-{}-{} {}:{}:{} {} {:?}",
+            time.year(),
+            time.month(),
+            time.day(),
+            time.hour(),
+            time.minute(),
+            time.second(),
+            time.nanosecond(),
+            time.offset_minutes()
+        );
+    }
+    let exposure = metadata.exposure();
+    let _ = write!(out, " {:?}", exposure.iso());
+    for fraction in [
+        exposure.exposure_time(),
+        exposure.f_number(),
+        exposure.focal_length(),
+    ] {
+        show_fraction(fraction, out);
+    }
+    show_signed_fraction(exposure.exposure_bias(), out);
+    if let Some(lens) = metadata.lens() {
+        let _ = write!(
+            out,
+            " {:?} {:?} {:?}",
+            lens.make(),
+            lens.model(),
+            lens.serial_number()
+        );
+        for fraction in [
+            lens.min_focal_length(),
+            lens.max_focal_length(),
+            lens.f_number_at_min_focal_length(),
+            lens.f_number_at_max_focal_length(),
+        ] {
+            show_fraction(fraction, out);
+        }
+    }
+    for size in [metadata.raw_size(), metadata.image_size()]
+        .into_iter()
+        .flatten()
+    {
+        let _ = write!(out, " {}x{}", size.width, size.height);
+    }
+}
+
+/// Writes `fraction`, when there is one, to `out`: as stored, reduced, and
+/// as a decimal.
+fn show_fraction(fraction: Option<Rational>, out: &mut String) {
+    if let Some(fraction) = fraction {
+        let _ = write!(
+            out,
+            " {fraction} {} {}",
+            fraction.reduced(),
+            fraction.to_f64()
+        );
+    }
+}
+
+/// Writes `fraction`, when there is one, to `out`: as stored, reduced, and
+/// as a decimal.
+fn show_signed_fraction(fraction: Option<SignedRational>, out: &mut String) {
+    if let Some(fraction) = fraction {
+        let _ = write!(
+            out,
+            " {fraction} {} {}",
+            fraction.reduced(),
+            fraction.to_f64()
+        );
+    }
+}
+
+/// Opens `bytes` and reads everything from it, failing the test, with the
+/// damage `what` names, if anything panics. Returns whether the file
+/// opened.
+fn check(bytes: &[u8], what: impl Fn() -> String) -> bool {
+    match panic::catch_unwind(|| open_and_read_everything(bytes)) {
+        Ok(opened) => opened,
+        Err(_) => panic!("opening or reading {} panicked", what()),
+    }
+}
+
+/// A file cut short anywhere, in its header, an IFD, a value, a MakerNote
+/// or a JPEG stub, opens or fails, and never panics, nor does reading what
+/// it gives.
+#[test]
+fn a_file_cut_short_opens_or_fails_without_a_panic() {
+    for fixture in fixtures() {
+        let (mut opened, mut failed) = (0, 0);
+        let lengths = (0..=fixture.sweep_end).chain(fixture.more_lengths.iter().copied());
+        for len in lengths {
+            if check(&fixture.bytes[..len], || {
+                format!("{} cut to {len} bytes", fixture.name)
+            }) {
+                opened += 1;
+            } else {
+                failed += 1;
+            }
+        }
+        // Both outcomes occur: the sweep reaches past the header and the
+        // walk, into what the readers read.
+        assert!(opened > 0 && failed > 0, "{}", fixture.name);
+        // Uncut, the file opens, by the same check as its cuts.
+        assert!(
+            check(&fixture.bytes, || fixture.name.clone()),
+            "{}",
+            fixture.name
+        );
+    }
+}
+
+/// A file with any one byte set to 0x00, to 0xFF or to its complement opens
+/// or fails, and never panics, nor does reading what it gives.
+#[test]
+fn a_file_with_a_byte_overwritten_opens_or_fails_without_a_panic() {
+    for fixture in fixtures() {
+        let (mut opened, mut failed) = (0, 0);
+        let mut damaged = fixture.bytes.clone();
+        for at in 0..fixture.sweep_end {
+            let original = fixture.bytes[at];
+            for byte in [0x00, 0xFF, !original] {
+                if byte == original {
+                    continue;
+                }
+                damaged[at] = byte;
+                let what = || format!("{} with byte {at} set to {byte:#04X}", fixture.name);
+                if check(&damaged, what) {
+                    opened += 1;
+                } else {
+                    failed += 1;
+                }
+            }
+            damaged[at] = original;
+        }
+        assert!(opened > 0 && failed > 0, "{}", fixture.name);
+    }
+}
+
+/// Asserts that `damaged` gives every value of `undamaged` but the capture
+/// time, which it does not give; `what` names the file in a failure.
+fn assert_all_but_the_capture_time(damaged: &Metadata, undamaged: &Metadata, what: &str) {
+    assert_eq!(damaged.capture_time(), None, "{what}");
+    assert!(undamaged.capture_time().is_some(), "{what}");
+    assert_eq!(damaged.make(), undamaged.make(), "{what}");
+    assert_eq!(damaged.model(), undamaged.model(), "{what}");
+    assert_eq!(damaged.serial_number(), undamaged.serial_number(), "{what}");
+    assert_eq!(damaged.orientation(), undamaged.orientation(), "{what}");
+    assert_eq!(damaged.exposure(), undamaged.exposure(), "{what}");
+    assert_eq!(damaged.lens(), undamaged.lens(), "{what}");
+    assert_eq!(damaged.raw_size(), undamaged.raw_size(), "{what}");
+    assert_eq!(damaged.image_size(), undamaged.image_size(), "{what}");
+}
+
+/// A capture time that names no real date, in an otherwise undamaged file,
+/// costs the capture time and nothing else: every other value is the one
+/// the undamaged file gives, and so are the previews.
+#[test]
+fn an_impossible_capture_time_costs_only_the_capture_time() {
+    for order in ORDERS {
+        let fixtures = [
+            ("Z 9", z9_file(order, 8).bytes, "2022:02:05 13:46:41"),
+            ("ARW 4", arw4_file(order, 8).0.bytes, "2023:10:19 16:13:48"),
+        ];
+        for (name, undamaged_bytes, time) in fixtures {
+            let at = undamaged_bytes
+                .windows(time.len())
+                .position(|window| window == time.as_bytes())
+                .unwrap_or_else(|| panic!("{name}: no DateTimeOriginal"));
+            // Where the damage goes in `YYYY:MM:DD HH:MM:SS`, and what it
+            // writes there.
+            for (damage, offset, replacement) in
+                [("month 13", 5, b"13"), ("a letter in the day", 8, b"0x")]
+            {
+                let what = format!("{name}, {order:?}, {damage}");
+                let mut bytes = undamaged_bytes.clone();
+                let start = at + offset;
+                bytes[start..start + 2].copy_from_slice(replacement);
+                let undamaged = RawFile::from_bytes(&undamaged_bytes).unwrap();
+                let damaged = RawFile::from_bytes(&bytes).unwrap();
+                assert_all_but_the_capture_time(damaged.metadata(), undamaged.metadata(), &what);
+                assert_eq!(damaged.previews(), undamaged.previews(), "{what}");
+            }
+        }
+    }
+}
