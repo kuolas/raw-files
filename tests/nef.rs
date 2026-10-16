@@ -245,13 +245,18 @@ fn assert_the_z9_metadata(built: &Built, orientation: Orientation, label: &str) 
             "{label}, from {how}"
         );
         // The raw size is SubIFD1's, the raw data's; with no default crop
-        // in the file, the image size is the same.
+        // in the file, the image size is the MakerNote's crop area, the
+        // raw less its border.
         let raw = Size {
             width: 8280,
             height: 5520,
         };
+        let image = Size {
+            width: 8256,
+            height: 5504,
+        };
         assert_eq!(metadata.raw_size(), Some(raw), "{label}, from {how}");
-        assert_eq!(metadata.image_size(), Some(raw), "{label}, from {how}");
+        assert_eq!(metadata.image_size(), Some(image), "{label}, from {how}");
     }
 }
 

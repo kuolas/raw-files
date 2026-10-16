@@ -17,8 +17,9 @@ does.
   UTC when recorded, orientation, the exposure (ISO, exposure time,
   f-number, focal length and exposure compensation, as stored), the lens
   (make, model, serial number, and focal-length and aperture range), and
-  the sizes of the raw data and of the visible image, with the `Metadata`,
-  `Exposure`, `Lens`, `DateTime`, `Rational` and `SignedRational` types.
+  the sizes of the raw data and of the visible image (on Nikon files, the
+  crop area the camera records), with the `Metadata`, `Exposure`, `Lens`,
+  `DateTime`, `Rational` and `SignedRational` types.
 
 ## [0.1.0] - 2026-10-14
 
