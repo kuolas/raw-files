@@ -14,8 +14,8 @@
 //! [`RawFile::metadata`] gives what the camera recorded about the picture,
 //! read when the file is opened. The NEF and ARW readers fill in the
 //! camera's make, model and serial number, the capture time, the
-//! orientation and the exposure; they do not read the lens or the sizes
-//! yet, which are empty. See the
+//! orientation, the exposure and the lens; they do not read the sizes yet,
+//! which are empty. See the
 //! [roadmap](https://github.com/kuolas/raw-files/blob/master/docs/ROADMAP.md)
 //! for the plan and the
 //! [architecture](https://github.com/kuolas/raw-files/blob/master/docs/ARCHITECTURE.md)

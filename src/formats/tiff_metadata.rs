@@ -5,7 +5,8 @@
 //!
 //! Cameras of every maker record the same facts in the same standard tags:
 //! the camera's make and model and the orientation in IFD0, the capture
-//! time, the body's serial number and the exposure in the Exif IFD. So
+//! time, the body's serial number, the exposure and the lens in the Exif
+//! IFD. So
 //! [`read`] reads them once, over the tree, for every format, and a format
 //! adds only what its own structures record and the standard tags lack
 //! (ADR011, which chose the standard tags first).
@@ -17,10 +18,11 @@
 //!   longer than one tag may take, gives `None` for its own value; every
 //!   other value is still read, and the file still opens. Only a failure of
 //!   the reader is an error: it says nothing about the file.
-//! - The make, the model and the serial number are text, read by the one
-//!   rule [`text`] gives: cut at the first NUL, `None` when longer than
-//!   255 bytes, trimmed of spaces at both ends, `None` when
-//!   nothing is left, and with bytes that are not UTF-8 replaced by U+FFFD.
+//! - The make, the model and the serial number, of the camera and of the
+//!   lens, are text, read by the one rule [`text`] gives: cut at the first
+//!   NUL, `None` when longer than 255 bytes, trimmed of spaces at both
+//!   ends, `None` when nothing is left, and with bytes that are not UTF-8
+//!   replaced by U+FFFD.
 //! - The capture time is the Exif DateTimeOriginal, with its own fraction
 //!   of a second (SubSecTimeOriginal) and offset from UTC
 //!   (OffsetTimeOriginal), each of type ASCII; [`DateTime::from_exif`]
@@ -42,13 +44,22 @@
 //!   ExposureBiasValue, of type SRATIONAL, its first value as stored; it is
 //!   `None` only when its denominator is zero, since a zero bias, such as
 //!   0/6, is no compensation ([`SignedRational::defined`]).
-//! - A file without an Exif IFD has no capture time, no serial number and
-//!   no exposure.
+//! - The lens is described by the Exif LensMake, LensModel and
+//!   LensSerialNumber, and by the LensSpecification, of type RATIONAL and
+//!   of exactly four values: the shortest and longest focal length and the
+//!   f-number at each. A LensSpecification of any other count is ignored
+//!   whole; each of its four values is `None` when its numerator or its
+//!   denominator is zero, as a 0/0 for a value the camera did not know
+//!   ([`Rational::known`]). A LensModel made only of `-` characters, which
+//!   Sony writes for a manual lens, names no lens and is `None`. A file
+//!   whose lens tags give no value has no lens ([`lens`]).
+//! - A file without an Exif IFD has no capture time, no serial number, no
+//!   exposure and no lens.
 //! - The orientation is IFD0's Orientation, read as the preview finder reads
 //!   it ([`tiff_previews::orientation`]), so that the metadata and the
 //!   previews never disagree.
 //!
-//! The lens and the sizes are not read yet, and are left empty (see #13).
+//! The sizes are not read yet, and are left empty (see #13).
 //!
 //! Nothing here panics on any input: every value is read through the IFD's
 //! checked accessors, which check its offset and length against the file
@@ -58,15 +69,16 @@ use std::io::{Read, Seek};
 
 use crate::container::tiff::tags::{
     BODY_SERIAL_NUMBER, DATE_TIME_ORIGINAL, EXPOSURE_BIAS_VALUE, EXPOSURE_TIME, F_NUMBER,
-    FOCAL_LENGTH, ISO_SPEED, MAKE, MODEL, OFFSET_TIME_ORIGINAL, PHOTOGRAPHIC_SENSITIVITY,
-    RECOMMENDED_EXPOSURE_INDEX, SUB_SEC_TIME_ORIGINAL,
+    FOCAL_LENGTH, ISO_SPEED, LENS_MAKE, LENS_MODEL, LENS_SERIAL_NUMBER, LENS_SPECIFICATION, MAKE,
+    MODEL, OFFSET_TIME_ORIGINAL, PHOTOGRAPHIC_SENSITIVITY, RECOMMENDED_EXPOSURE_INDEX,
+    SUB_SEC_TIME_ORIGINAL,
 };
 use crate::container::tiff::{Ifd, Tree, skip_damage};
 use crate::datetime::DateTime;
 use crate::error::Result;
 use crate::formats::tiff_previews;
 use crate::io::Source;
-use crate::metadata::{Exposure, Metadata};
+use crate::metadata::{Exposure, Lens, Metadata};
 use crate::rational::{Rational, SignedRational};
 
 /// The longest text, in bytes as stored, that is taken for a value rather
@@ -93,13 +105,14 @@ const ISO_65535_OR_MORE: u32 = 65535;
 /// reason is `None`, and costs no other value.
 pub(crate) fn read<R: Read + Seek>(src: &mut Source<R>, tree: &Tree) -> Result<Metadata> {
     let ifd0 = tree.ifd0();
-    let (serial_number, capture_time, exposure) = match tree.exif() {
+    let (serial_number, capture_time, exposure, lens) = match tree.exif() {
         Some(exif) => (
             text(src, exif, BODY_SERIAL_NUMBER)?,
             capture_time(src, exif)?,
             exposure(src, exif)?,
+            lens(src, exif)?,
         ),
-        None => (None, None, Exposure::default()),
+        None => (None, None, Exposure::default(), None),
     };
     Ok(Metadata {
         make: text(src, ifd0, MAKE)?,
@@ -108,6 +121,7 @@ pub(crate) fn read<R: Read + Seek>(src: &mut Source<R>, tree: &Tree) -> Result<M
         capture_time,
         orientation: tiff_previews::orientation(src, tree)?,
         exposure,
+        lens,
         ..Metadata::default()
     })
 }
@@ -257,6 +271,64 @@ fn signed_rational<R: Read + Seek>(
     Ok(first.and_then(|(numerator, denominator)| SignedRational::defined(numerator, denominator)))
 }
 
+/// The lens the picture was taken with, from the Exif IFD `exif`: its
+/// LensMake, LensModel and LensSerialNumber, read by the rule [`text`]
+/// gives, and its range from the LensSpecification, as
+/// [`lens_specification`] reads it. `None` when none of them gives a
+/// value ([`Lens::new`]).
+///
+/// A LensModel made only of `-` characters is `None`: Sony writes `----`
+/// for a manual lens, as on the public ILCE-7S sample 1582, and that names
+/// no lens. Only the model is read this way; a model with dashes among
+/// other characters, such as `FE 24-70mm F2.8 GM`, is kept.
+///
+/// # Errors
+///
+/// `Io` when the reader fails. A value that cannot be read for any other
+/// reason is `None`, and costs no other value.
+fn lens<R: Read + Seek>(src: &mut Source<R>, exif: &Ifd) -> Result<Option<Lens>> {
+    let make = text(src, exif, LENS_MAKE)?;
+    let model = text(src, exif, LENS_MODEL)?.filter(|model| !model.chars().all(|c| c == '-'));
+    let serial_number = text(src, exif, LENS_SERIAL_NUMBER)?;
+    let [min_focal, max_focal, f_number_at_min, f_number_at_max] = lens_specification(src, exif)?;
+    Ok(Lens::new(
+        make,
+        model,
+        serial_number,
+        min_focal,
+        max_focal,
+        f_number_at_min,
+        f_number_at_max,
+    ))
+}
+
+/// The lens's range, from the Exif IFD `exif`'s LensSpecification: its
+/// shortest and longest focal length, then the f-number at each, in the
+/// order the tag stores them.
+///
+/// The tag must be of type RATIONAL and hold exactly four values; with any
+/// other count it describes no range the reader can trust, and all four
+/// are `None`. Each value is `None` when its numerator or its denominator
+/// is zero ([`Rational::known`]): Exif writes 0/0 for a value the camera
+/// did not know, such as the apertures of a lens that does not report
+/// them.
+///
+/// # Errors
+///
+/// `Io` when the reader fails. A value that cannot be read for any other
+/// reason gives four `None`s.
+fn lens_specification<R: Read + Seek>(
+    src: &mut Source<R>,
+    exif: &Ifd,
+) -> Result<[Option<Rational>; 4]> {
+    let values = skip_damage(exif.rationals(src, LENS_SPECIFICATION))?.flatten();
+    let Some(&[first, second, third, fourth]) = values.as_deref() else {
+        return Ok([None; 4]);
+    };
+    Ok([first, second, third, fourth]
+        .map(|(numerator, denominator)| Rational::known(numerator, denominator)))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -280,16 +352,40 @@ mod tests {
     const DATE_TIME: u16 = 0x0132;
 
     /// The text values of a Z 9 file, each with its tag: IFD0's, then the
-    /// Exif IFD's. The time is that of a public sample file; the serial
-    /// number is made up.
+    /// Exif IFD's. The time and the lens are those of the public Z 9
+    /// sample 5147; the serial numbers are made up, the lens's with the two
+    /// spaces the Z 9 pads its eight digits with.
     const IFD0_TEXT: [(u16, &str); 2] = [(MAKE, "NIKON CORPORATION"), (MODEL, "NIKON Z 9")];
-    /// See [`IFD0_TEXT`].
-    const EXIF_TEXT: [(u16, &str); 4] = [
+    /// See [`IFD0_TEXT`]. The LensModel is stored padded, as
+    /// [`z9_bytes_except`] says.
+    const EXIF_TEXT: [(u16, &str); 7] = [
         (BODY_SERIAL_NUMBER, "1234567"),
         (DATE_TIME_ORIGINAL, "2022:02:05 13:46:41"),
         (SUB_SEC_TIME_ORIGINAL, "85"),
         (OFFSET_TIME_ORIGINAL, "-05:00"),
+        (LENS_MAKE, "NIKON"),
+        (LENS_MODEL, "NIKKOR Z 14-30mm f/4 S"),
+        (LENS_SERIAL_NUMBER, "12345678  "),
     ];
+
+    /// The Z 9 file's LensSpecification: 14-30 mm, f/4 at both ends, as
+    /// the public sample 5147 records it.
+    const Z9_LENS_SPECIFICATION: [(u32, u32); 4] = [(140, 10), (300, 10), (400, 100), (400, 100)];
+
+    /// How many bytes, with the NULs that end and pad it, the Z 9 stores
+    /// its LensModel in: 65 on the public sample 5147, whatever the name.
+    const Z9_LENS_MODEL_COUNT: usize = 65;
+
+    /// `model` as the Z 9 stores a LensModel: followed by NULs up to
+    /// [`Z9_LENS_MODEL_COUNT`] bytes, less the NUL the builder adds.
+    fn padded_lens_model(model: &str) -> String {
+        let mut padded = model.to_owned();
+        padded.extend(std::iter::repeat_n(
+            '\0',
+            Z9_LENS_MODEL_COUNT - 1 - model.len(),
+        ));
+        padded
+    }
 
     /// What adds one exposure value to the Exif IFD: given the builder,
     /// the Exif IFD and the value's tag.
@@ -323,10 +419,11 @@ mod tests {
     const TOO_LONG: u32 = 1024 * 1024 + 1;
 
     /// A little-endian file whose IFD0 holds the Orientation 8 and
-    /// [`IFD0_TEXT`], and whose Exif IFD holds [`EXIF_TEXT`] and
-    /// [`EXIF_EXPOSURE`], all but tag `except`. `change` is then given the
-    /// builder and the IDs of IFD0 and of the Exif IFD, to add what the
-    /// test needs in its place.
+    /// [`IFD0_TEXT`], and whose Exif IFD holds [`EXIF_TEXT`], with the
+    /// LensModel padded by [`padded_lens_model`], [`EXIF_EXPOSURE`] and
+    /// [`Z9_LENS_SPECIFICATION`], all but tag `except`. `change` is then
+    /// given the builder and the IDs of IFD0 and of the Exif IFD, to add
+    /// what the test needs in its place.
     fn z9_bytes_except(
         except: u16,
         change: impl FnOnce(&mut TiffBuilder, IfdId, IfdId),
@@ -337,11 +434,18 @@ mod tests {
         builder.exif(ifd0, exif).short(ifd0, ORIENTATION, &[8]);
         for (ifd, values) in [(ifd0, &IFD0_TEXT[..]), (exif, &EXIF_TEXT[..])] {
             for &(tag, text) in values.iter().filter(|(tag, _)| *tag != except) {
-                builder.ascii(ifd, tag, text);
+                if tag == LENS_MODEL {
+                    builder.ascii(ifd, tag, &padded_lens_model(text));
+                } else {
+                    builder.ascii(ifd, tag, text);
+                }
             }
         }
         for &(tag, add) in EXIF_EXPOSURE.iter().filter(|(tag, _)| *tag != except) {
             add(&mut builder, exif, tag);
+        }
+        if except != LENS_SPECIFICATION {
+            builder.rational(exif, LENS_SPECIFICATION, &Z9_LENS_SPECIFICATION);
         }
         change(&mut builder, ifd0, exif);
         builder.build().bytes
@@ -400,6 +504,66 @@ mod tests {
         }
     }
 
+    /// The lens of the Z 9 file, as [`EXIF_TEXT`] and
+    /// [`Z9_LENS_SPECIFICATION`] record it, with `change` made to its
+    /// values in the order [`Lens::new`] takes them.
+    fn z9_lens_with(change: impl FnOnce(&mut LensValues)) -> Option<Lens> {
+        let mut values = LensValues {
+            make: Some("NIKON".to_owned()),
+            model: Some("NIKKOR Z 14-30mm f/4 S".to_owned()),
+            serial_number: Some("12345678".to_owned()),
+            range: [
+                Some(fraction(140, 10)),
+                Some(fraction(300, 10)),
+                Some(fraction(400, 100)),
+                Some(fraction(400, 100)),
+            ],
+        };
+        change(&mut values);
+        values.lens()
+    }
+
+    /// The lens of the Z 9 file, every value read.
+    fn z9_lens() -> Option<Lens> {
+        z9_lens_with(|_| {})
+    }
+
+    /// The values a [`Lens`] is built from, for a test to change one.
+    struct LensValues {
+        make: Option<String>,
+        model: Option<String>,
+        serial_number: Option<String>,
+        /// The shortest and longest focal length, then the f-number at
+        /// each.
+        range: [Option<Rational>; 4],
+    }
+
+    impl LensValues {
+        /// No value: the lens of a file that describes none.
+        fn none() -> Self {
+            Self {
+                make: None,
+                model: None,
+                serial_number: None,
+                range: [None; 4],
+            }
+        }
+
+        /// The lens these values describe, as [`Lens::new`] builds it.
+        fn lens(self) -> Option<Lens> {
+            let [min, max, f_min, f_max] = self.range;
+            Lens::new(
+                self.make,
+                self.model,
+                self.serial_number,
+                min,
+                max,
+                f_min,
+                f_max,
+            )
+        }
+    }
+
     /// What the Z 9 file gives, every value read.
     fn z9_expected() -> Metadata {
         Metadata {
@@ -409,8 +573,28 @@ mod tests {
             capture_time: z9_time(Some(b"85"), Some(b"-05:00")),
             orientation: Orientation::Rotate270,
             exposure: z9_exposure(),
+            lens: z9_lens(),
             ..Metadata::default()
         }
+    }
+
+    /// The Z 9 file's metadata with the lens `lens` instead of its own.
+    fn z9_expected_with_lens(lens: Option<Lens>) -> Metadata {
+        Metadata {
+            lens,
+            ..z9_expected()
+        }
+    }
+
+    /// The lens read from a file whose Exif IFD holds only what `build`
+    /// adds, given the builder and the Exif IFD's ID.
+    fn lens(build: impl FnOnce(&mut TiffBuilder, IfdId)) -> Option<Lens> {
+        let (mut src, tree) = testing::file(|builder, ifd| {
+            let exif = builder.ifd();
+            builder.exif(ifd, exif);
+            build(builder, exif);
+        });
+        read(&mut src, &tree).unwrap().lens
     }
 
     /// The Z 9 file's metadata with the exposure `exposure` instead of its
@@ -462,8 +646,23 @@ mod tests {
         assert_eq!(exposure.f_number(), Some(fraction(900, 100)));
         assert_eq!(exposure.focal_length(), Some(fraction(180, 10)));
         assert_eq!(exposure.exposure_bias(), Some(signed(0, 6)));
+        let lens = metadata.lens().unwrap();
+        assert_eq!(lens.make(), Some("NIKON"));
+        // Read whole, without the NULs that pad it, nor the spaces that pad
+        // the serial number.
+        assert_eq!(lens.model(), Some("NIKKOR Z 14-30mm f/4 S"));
+        assert_eq!(lens.serial_number(), Some("12345678"));
+        assert_eq!(lens.min_focal_length(), Some(fraction(140, 10)));
+        assert_eq!(lens.max_focal_length(), Some(fraction(300, 10)));
+        assert_eq!(
+            lens.f_number_at_min_focal_length(),
+            Some(fraction(400, 100))
+        );
+        assert_eq!(
+            lens.f_number_at_max_focal_length(),
+            Some(fraction(400, 100))
+        );
         // Not read yet.
-        assert_eq!(metadata.lens(), None);
         assert_eq!(metadata.raw_size(), None);
         assert_eq!(metadata.image_size(), None);
     }
@@ -604,7 +803,7 @@ mod tests {
     }
 
     #[test]
-    fn a_file_without_an_exif_ifd_has_no_time_serial_or_exposure_but_its_camera_and_orientation() {
+    fn a_file_without_an_exif_ifd_has_only_its_camera_and_orientation() {
         // The Exif tags in IFD0, where they do not belong, are not read.
         let (mut src, tree) = testing::file(|builder, ifd| {
             builder
@@ -616,6 +815,11 @@ mod tests {
             for (tag, add) in EXIF_EXPOSURE {
                 add(builder, ifd, tag);
             }
+            builder.ascii(ifd, LENS_MODEL, "FE 50mm F2.5 G").rational(
+                ifd,
+                LENS_SPECIFICATION,
+                &Z9_LENS_SPECIFICATION,
+            );
         });
         assert!(tree.exif().is_none());
         let metadata = read(&mut src, &tree).unwrap();
@@ -670,7 +874,7 @@ mod tests {
     #[test]
     fn a_damaged_value_costs_only_itself() {
         type Change = fn(&mut TiffBuilder, IfdId, IfdId);
-        let cases: [(&str, u16, Change, Metadata); 12] = [
+        let cases: [(&str, u16, Change, Metadata); 16] = [
             (
                 "a Model that is not text",
                 MODEL,
@@ -784,6 +988,34 @@ mod tests {
                 PHOTOGRAPHIC_SENSITIVITY,
                 |builder, _, exif| too_long_of(builder, exif, PHOTOGRAPHIC_SENSITIVITY, SHORT, 2),
                 z9_expected(),
+            ),
+            (
+                "a LensMake too long to read",
+                LENS_MAKE,
+                |builder, _, exif| too_long(builder, exif, LENS_MAKE),
+                z9_expected_with_lens(z9_lens_with(|lens| lens.make = None)),
+            ),
+            (
+                "a LensModel that is not text",
+                LENS_MODEL,
+                |builder, _, exif| {
+                    builder.undefined(exif, LENS_MODEL, b"NIKKOR Z 14-30mm f/4 S\0");
+                },
+                z9_expected_with_lens(z9_lens_with(|lens| lens.model = None)),
+            ),
+            (
+                "a LensSerialNumber of 256 bytes",
+                LENS_SERIAL_NUMBER,
+                |builder, _, exif| {
+                    builder.ascii(exif, LENS_SERIAL_NUMBER, &"1".repeat(256));
+                },
+                z9_expected_with_lens(z9_lens_with(|lens| lens.serial_number = None)),
+            ),
+            (
+                "a LensSpecification too long to read",
+                LENS_SPECIFICATION,
+                |builder, _, exif| too_long_of(builder, exif, LENS_SPECIFICATION, RATIONAL, 8),
+                z9_expected_with_lens(z9_lens_with(|lens| lens.range = [None; 4])),
             ),
         ];
         for (case, tag, change, expected) in cases {
@@ -1213,5 +1445,237 @@ mod tests {
             builder.rational(exif, F_NUMBER, &[(0, 10), (56, 10)]);
         });
         assert_eq!(read.f_number, None);
+    }
+
+    #[test]
+    fn a_failure_of_the_reader_reading_the_lens_range_is_the_readers_error() {
+        // The lens's text values are covered with the others, by
+        // `a_failure_of_the_reader_is_the_readers_error`; its range, stored
+        // far away, is read here.
+        let far = u32::try_from(2 * FAR).unwrap();
+        let value: Vec<u8> = Z9_LENS_SPECIFICATION
+            .iter()
+            .flat_map(|&(n, d)| [n.to_le_bytes(), d.to_le_bytes()])
+            .flatten()
+            .collect();
+        let bytes = z9_bytes_except(LENS_SPECIFICATION, |builder, _, exif| {
+            builder.blob_at(2 * FAR, &value);
+            builder.raw(exif, LENS_SPECIFICATION, RATIONAL, 4, RawValue::Offset(far));
+        });
+        // The file is sound, for a reader that does not fail.
+        assert_eq!(read_bytes(bytes.clone()), z9_expected());
+
+        let mut src = Source::new(FailsFar(Cursor::new(bytes))).unwrap();
+        let header = parse_header(&mut src).unwrap();
+        let tree = walk(&mut src, header, &Limits::default()).unwrap();
+        let err = read(&mut src, &tree).expect_err("the read fails");
+        assert_eq!(err.kind(), ErrorKind::Io, "{err:?}");
+    }
+
+    #[test]
+    fn a_lens_make_of_nul_bytes_is_none() {
+        // As the D780 writes it for an adapted F-mount lens (sample 3827):
+        // six NULs, the builder adding the last.
+        let metadata = z9_except(LENS_MAKE, |builder, _, exif| {
+            builder.ascii(exif, LENS_MAKE, "\0\0\0\0\0");
+        });
+        assert_eq!(
+            metadata,
+            z9_expected_with_lens(z9_lens_with(|lens| lens.make = None))
+        );
+    }
+
+    #[test]
+    fn the_d780s_adapted_lens_gives_its_model_and_range_only() {
+        // The lens tags of the public D780 sample 3827: a LensMake and a
+        // LensSerialNumber of NULs only, a padded LensModel and a range.
+        let read = lens(|builder, exif| {
+            builder
+                .ascii(exif, LENS_MAKE, "\0\0\0\0\0")
+                .ascii(exif, LENS_MODEL, &padded_lens_model("VR 24-120mm f/4G"))
+                .ascii(exif, LENS_SERIAL_NUMBER, &"\0".repeat(10))
+                .rational(
+                    exif,
+                    LENS_SPECIFICATION,
+                    &[(240, 10), (1200, 10), (400, 100), (400, 100)],
+                );
+        });
+        let expected = LensValues {
+            model: Some("VR 24-120mm f/4G".to_owned()),
+            range: [
+                Some(fraction(240, 10)),
+                Some(fraction(1200, 10)),
+                Some(fraction(400, 100)),
+                Some(fraction(400, 100)),
+            ],
+            ..LensValues::none()
+        };
+        assert_eq!(read, expected.lens());
+    }
+
+    #[test]
+    fn a_lens_model_of_dashes_only_names_no_lens() {
+        // Sony's manual lens, as on the public ILCE-7S sample 1582.
+        let metadata = z9_except(LENS_MODEL, |builder, _, exif| {
+            builder.ascii(exif, LENS_MODEL, "----");
+        });
+        assert_eq!(
+            metadata,
+            z9_expected_with_lens(z9_lens_with(|lens| lens.model = None))
+        );
+        // With no other lens tag, as on that sample, there is no lens.
+        for model in ["----", "-", " -- "] {
+            let read = lens(|builder, exif| {
+                builder.ascii(exif, LENS_MODEL, model);
+            });
+            assert_eq!(read, None, "{model:?}");
+        }
+    }
+
+    #[test]
+    fn dashes_among_other_characters_are_kept() {
+        for model in ["FE 24-70mm F2.8 GM", "-A-", "--x"] {
+            let read = lens(|builder, exif| {
+                builder.ascii(exif, LENS_MODEL, model);
+            });
+            assert_eq!(
+                read.as_ref().and_then(Lens::model),
+                Some(model),
+                "{model:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn only_the_lens_model_is_refused_for_dashes() {
+        let read = lens(|builder, exif| {
+            builder
+                .ascii(exif, LENS_MAKE, "----")
+                .ascii(exif, LENS_SERIAL_NUMBER, "--");
+        });
+        let expected = LensValues {
+            make: Some("----".to_owned()),
+            serial_number: Some("--".to_owned()),
+            ..LensValues::none()
+        };
+        assert_eq!(read, expected.lens());
+    }
+
+    #[test]
+    fn a_lens_specification_of_other_than_four_values_is_ignored_whole() {
+        for values in [
+            &[(140, 10), (300, 10), (400, 100)][..],
+            &[(140, 10), (300, 10), (400, 100), (400, 100), (400, 100)][..],
+            &[][..],
+        ] {
+            let metadata = z9_except(LENS_SPECIFICATION, |builder, _, exif| {
+                builder.rational(exif, LENS_SPECIFICATION, values);
+            });
+            assert_eq!(
+                metadata,
+                z9_expected_with_lens(z9_lens_with(|lens| lens.range = [None; 4])),
+                "{} values",
+                values.len()
+            );
+        }
+        // With no other lens tag there is no lens.
+        let read = lens(|builder, exif| {
+            builder.rational(
+                exif,
+                LENS_SPECIFICATION,
+                &[(140, 10), (300, 10), (400, 100)],
+            );
+        });
+        assert_eq!(read, None);
+    }
+
+    #[test]
+    fn a_prime_lens_has_the_same_range_at_both_ends() {
+        let read = lens(|builder, exif| {
+            builder.rational(
+                exif,
+                LENS_SPECIFICATION,
+                &[(550, 10), (550, 10), (18, 10), (18, 10)],
+            );
+        });
+        let expected = LensValues {
+            range: [
+                Some(fraction(550, 10)),
+                Some(fraction(550, 10)),
+                Some(fraction(18, 10)),
+                Some(fraction(18, 10)),
+            ],
+            ..LensValues::none()
+        };
+        assert_eq!(read, expected.lens());
+    }
+
+    #[test]
+    fn an_unknown_value_of_the_range_is_none_and_costs_no_other() {
+        // Unknown apertures, as Exif writes them: 0/0.
+        let metadata = z9_except(LENS_SPECIFICATION, |builder, _, exif| {
+            builder.rational(
+                exif,
+                LENS_SPECIFICATION,
+                &[(140, 10), (300, 10), (0, 0), (0, 0)],
+            );
+        });
+        assert_eq!(
+            metadata,
+            z9_expected_with_lens(z9_lens_with(|lens| lens.range[2..].fill(None)))
+        );
+        // A zero numerator, or a zero denominator, in any one place.
+        for place in 0..4 {
+            for zero in [(0, 10), (10, 0)] {
+                let mut values = Z9_LENS_SPECIFICATION;
+                values[place] = zero;
+                let metadata = z9_except(LENS_SPECIFICATION, |builder, _, exif| {
+                    builder.rational(exif, LENS_SPECIFICATION, &values);
+                });
+                assert_eq!(
+                    metadata,
+                    z9_expected_with_lens(z9_lens_with(|lens| lens.range[place] = None)),
+                    "{place}: {zero:?}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn a_lens_specification_of_type_srational_is_ignored() {
+        let metadata = z9_except(LENS_SPECIFICATION, |builder, _, exif| {
+            builder.srational(
+                exif,
+                LENS_SPECIFICATION,
+                &[(140, 10), (300, 10), (400, 100), (400, 100)],
+            );
+        });
+        assert_eq!(
+            metadata,
+            z9_expected_with_lens(z9_lens_with(|lens| lens.range = [None; 4]))
+        );
+    }
+
+    #[test]
+    fn a_lens_with_only_a_serial_number_is_a_lens() {
+        let read = lens(|builder, exif| {
+            builder.ascii(exif, LENS_SERIAL_NUMBER, "12345678  ");
+        });
+        let expected = LensValues {
+            serial_number: Some("12345678".to_owned()),
+            ..LensValues::none()
+        };
+        assert_eq!(read, expected.lens());
+        assert!(read.is_some());
+    }
+
+    #[test]
+    fn an_exif_ifd_without_lens_tags_gives_no_lens() {
+        // An IFD without entries is damage and not read at all, so the Exif
+        // IFD holds a tag other than the lens's.
+        let read = lens(|builder, exif| {
+            builder.ascii(exif, DATE_TIME_ORIGINAL, "2022:02:05 13:46:41");
+        });
+        assert_eq!(read, None);
     }
 }

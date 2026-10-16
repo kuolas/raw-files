@@ -202,7 +202,6 @@ impl Lens {
     /// The text values come cleaned, as the metadata reader gives them;
     /// the four fractions are in the order the Exif LensSpecification tag
     /// stores them.
-    #[cfg_attr(not(test), expect(dead_code, reason = "nothing reads this yet"))]
     pub(crate) fn new(
         make: Option<String>,
         model: Option<String>,
@@ -236,7 +235,9 @@ impl Lens {
         self.make.as_deref()
     }
 
-    /// The lens's model name, such as `NIKKOR Z 14-30mm f/4 S`.
+    /// The lens's model name, such as `NIKKOR Z 14-30mm f/4 S`. A name
+    /// made only of `-` characters, which Sony writes for a manual lens,
+    /// names no lens and is `None`.
     pub fn model(&self) -> Option<&str> {
         self.model.as_deref()
     }

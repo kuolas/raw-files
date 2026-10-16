@@ -13,7 +13,9 @@ use std::collections::BTreeSet;
 use std::fs;
 use std::io::Cursor;
 
-use raw_files::{Exposure, Format, Orientation, PreviewFormat, Rational, RawFile, SignedRational};
+use raw_files::{
+    Exposure, Format, Lens, Orientation, PreviewFormat, Rational, RawFile, SignedRational,
+};
 use support::arw::{
     A100_JPEG, A100_RAW_AS_COUNT, A100_TAG_SIZE, ARW4_FULL_SIZE_JPEG, ArwBlobs, IFD0_JPEG,
     MEDIUM_FULL_SIZE_JPEG, SR2_JPEG, SRF_JPEG, THUMBNAIL, a100_file, arq_file, arw2_file,
@@ -234,8 +236,36 @@ fn assert_the_arw4_exposure(exposure: &Exposure, label: &str) {
     );
 }
 
+/// Checks that `lens` is the one the ARW 4 files record: the model
+/// `FE 50mm F2.5 G`, a 50 mm prime at f/2.5, with no make and no serial
+/// number; `label` names the file in a failure.
+fn assert_the_arw4_lens(lens: Option<&Lens>, label: &str) {
+    let lens = lens.unwrap_or_else(|| panic!("{label}: no lens"));
+    let fraction = |numerator, denominator| {
+        Some(Rational {
+            numerator,
+            denominator,
+        })
+    };
+    assert_eq!(lens.make(), None, "{label}");
+    assert_eq!(lens.model(), Some("FE 50mm F2.5 G"), "{label}");
+    assert_eq!(lens.serial_number(), None, "{label}");
+    assert_eq!(lens.min_focal_length(), fraction(500, 10), "{label}");
+    assert_eq!(lens.max_focal_length(), fraction(500, 10), "{label}");
+    assert_eq!(
+        lens.f_number_at_min_focal_length(),
+        fraction(25, 10),
+        "{label}"
+    );
+    assert_eq!(
+        lens.f_number_at_max_focal_length(),
+        fraction(25, 10),
+        "{label}"
+    );
+}
+
 #[test]
-fn the_arw4_file_gives_its_camera_capture_time_exposure_and_orientation() {
+fn the_arw4_file_gives_its_camera_capture_time_exposure_lens_and_orientation() {
     for order in ORDERS {
         for (value, orientation) in [(8, Orientation::Rotate270), (1, Orientation::NoTransforms)] {
             let label = format!("{order:?}, Orientation {value}");
@@ -252,8 +282,8 @@ fn the_arw4_file_gives_its_camera_capture_time_exposure_and_orientation() {
             assert_eq!(time.offset_minutes(), Some(120), "{label}");
             assert_eq!(metadata.orientation(), orientation, "{label}");
             assert_the_arw4_exposure(metadata.exposure(), &label);
-            // The lens and the sizes are not read yet.
-            assert_eq!(metadata.lens(), None, "{label}");
+            assert_the_arw4_lens(metadata.lens(), &label);
+            // The sizes are not read yet.
             assert_eq!(metadata.raw_size(), None, "{label}");
             assert_eq!(metadata.image_size(), None, "{label}");
             for preview in file.previews() {
@@ -264,9 +294,9 @@ fn the_arw4_file_gives_its_camera_capture_time_exposure_and_orientation() {
 }
 
 #[test]
-fn every_layout_gives_its_camera_and_a_time_and_exposure_only_if_it_has_them() {
+fn every_layout_gives_its_camera_and_a_time_exposure_and_lens_only_if_it_has_them() {
     // Each layout's name, model, capture time, and whether it records an
-    // exposure.
+    // exposure and a lens.
     let expected = [
         (
             "ARW 4",
@@ -290,7 +320,7 @@ fn every_layout_gives_its_camera_and_a_time_and_exposure_only_if_it_has_them() {
     for order in ORDERS {
         let layouts = every_layout(order);
         assert_eq!(layouts.len(), expected.len());
-        for ((name, (built, _)), (expected_name, model, time, has_exposure)) in
+        for ((name, (built, _)), (expected_name, model, time, has_exposure_and_lens)) in
             layouts.into_iter().zip(expected)
         {
             assert_eq!(name, expected_name);
@@ -306,10 +336,12 @@ fn every_layout_gives_its_camera_and_a_time_and_exposure_only_if_it_has_them() {
                 time,
                 "{label}"
             );
-            if has_exposure {
+            if has_exposure_and_lens {
                 assert_the_arw4_exposure(metadata.exposure(), &label);
+                assert_the_arw4_lens(metadata.lens(), &label);
             } else {
                 assert_eq!(metadata.exposure(), &Exposure::default(), "{label}");
+                assert_eq!(metadata.lens(), None, "{label}");
             }
             // Every layout is built upright, and the SRF has no
             // Orientation at all; the previews agree.

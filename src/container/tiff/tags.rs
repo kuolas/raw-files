@@ -135,6 +135,25 @@ pub(crate) const MAKER_NOTE: u16 = 0x927C;
 /// from the Exif IFD.
 pub(crate) const BODY_SERIAL_NUMBER: u16 = 0xA431;
 
+/// The lens's range, as four fractions of type RATIONAL
+/// (LensSpecification), read from the Exif IFD: its shortest and longest
+/// focal length in millimetres, then the f-number of its widest aperture at
+/// each, such as 140/10, 300/10, 400/100 and 400/100 for a 14-30 mm f/4. A
+/// value of 0/0 is one the camera did not know.
+pub(crate) const LENS_SPECIFICATION: u16 = 0xA432;
+
+/// The manufacturer of the lens, as text (LensMake), read from the Exif
+/// IFD.
+pub(crate) const LENS_MAKE: u16 = 0xA433;
+
+/// The lens's model name, as text (LensModel), read from the Exif IFD,
+/// such as `NIKKOR Z 14-30mm f/4 S`.
+pub(crate) const LENS_MODEL: u16 = 0xA434;
+
+/// The serial number of the lens, as text (LensSerialNumber), read from
+/// the Exif IFD.
+pub(crate) const LENS_SERIAL_NUMBER: u16 = 0xA435;
+
 /// The version of the DNG specification a DNG file follows (DNGVersion),
 /// read from IFD0: present in every DNG and in the DNG-based files of some
 /// makers, absent from a Sony RAW file.

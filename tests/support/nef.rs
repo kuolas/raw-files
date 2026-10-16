@@ -35,16 +35,22 @@
 //!   `0/6` (SRATIONAL), PhotographicSensitivity 64 and SensitivityType 2
 //!   (SHORT), and RecommendedExposureIndex 64 (LONG); these are the values
 //!   of the public Z 9 sample 5147 of raw.pixls.us, each of the type it
-//!   has there. The Exif IFD also holds the BodySerialNumber `1234567`,
-//!   made up, since no real camera's serial number is copied here; and the
-//!   MakerNote, whose
-//!   value is the block [`nikon_makernote`] writes: Nikon's own metadata,
-//!   here only its version and its PreviewIFD, which declares a small JPEG
-//!   of 640 by 424 pixels. The MakerNote is in the file's byte order unless
-//!   the file is built with [`z9_file_with`], which may give it the other.
+//!   has there. It holds the lens of that sample too: LensMake `NIKON`;
+//!   LensModel `NIKKOR Z 14-30mm f/4 S`, padded with NULs to 65 bytes as
+//!   the Z 9 stores it; and LensSpecification `140/10`, `300/10`,
+//!   `400/100`, `400/100`. The BodySerialNumber `1234567` and the
+//!   LensSerialNumber `12345678` are made up, since no real serial number
+//!   is copied here; the lens's has the two spaces and the NUL after its
+//!   eight digits that the Z 9 writes, 11 bytes in all. Last, the Exif IFD
+//!   holds the MakerNote, whose value is the block [`nikon_makernote`]
+//!   writes: Nikon's own metadata, here only its version and its
+//!   PreviewIFD, which declares a small JPEG of 640 by 424 pixels. The
+//!   MakerNote is in the file's byte order unless the file is built with
+//!   [`z9_file_with`], which may give it the other.
 //!
 //! Every text value is ASCII ending in one NUL, with no padding, as the
-//! Z 9 writes it.
+//! Z 9 writes it, but for the lens's model and serial number, padded as
+//! above.
 //!
 //! Every stub JPEG is a baseline one. The tags that the shared builder has
 //! no constant for are named here.
@@ -112,6 +118,15 @@ const SUB_SEC_TIME_ORIGINAL: u16 = 0x9291;
 const MAKER_NOTE: u16 = 0x927C;
 /// The camera body's serial number, as ASCII text (BodySerialNumber).
 const BODY_SERIAL_NUMBER: u16 = 0xA431;
+/// The lens's focal and aperture range, as four RATIONALs
+/// (LensSpecification).
+const LENS_SPECIFICATION: u16 = 0xA432;
+/// The lens's manufacturer, as ASCII text (LensMake).
+const LENS_MAKE: u16 = 0xA433;
+/// The lens's model name, as ASCII text (LensModel).
+const LENS_MODEL: u16 = 0xA434;
+/// The lens's serial number, as ASCII text (LensSerialNumber).
+const LENS_SERIAL_NUMBER: u16 = 0xA435;
 /// The version of the Nikon MakerNote's layout, as four ASCII digits in an
 /// UNDEFINED value (MakerNoteVersion, a tag of the MakerNote IFD).
 const MAKER_NOTE_VERSION: u16 = 0x0001;
@@ -153,6 +168,24 @@ pub const MEDIUM_JPEG: (u16, u16) = (1620, 1080);
 /// The size in pixels of the MakerNote's small JPEG, the one its
 /// PreviewIFD declares.
 pub const PREVIEW_JPEG: (u16, u16) = (640, 424);
+
+/// The model name of the Z 9 file's lens, as its LensModel records it.
+pub const LENS_MODEL_Z14_30: &str = "NIKKOR Z 14-30mm f/4 S";
+
+/// How many bytes the Z 9 stores its LensModel in, with the NUL that ends
+/// it and the NULs that pad it: 65 on the public sample 5147.
+const LENS_MODEL_COUNT: usize = 65;
+
+/// `model` padded with NULs as the Z 9 stores a LensModel, less the NUL
+/// the builder adds, so that the value is [`LENS_MODEL_COUNT`] bytes.
+fn padded_lens_model(model: &str) -> String {
+    let mut padded = model.to_owned();
+    padded.extend(std::iter::repeat_n(
+        '\0',
+        LENS_MODEL_COUNT - 1 - model.len(),
+    ));
+    padded
+}
 
 /// The start of the raw strip: the start-of-codestream marker of JPEG XS.
 pub const RAW_STRIP_START: [u8; 4] = [0xFF, 0x10, 0xFF, 0x50];
@@ -299,7 +332,15 @@ pub fn z9_file_with(order: Order, orientation: u16, makernote_order: Order) -> (
         .long(exif, RECOMMENDED_EXPOSURE_INDEX, &[64])
         .srational(exif, EXPOSURE_BIAS_VALUE, &[(0, 6)])
         .rational(exif, FOCAL_LENGTH, &[(180, 10)])
-        .ascii(exif, BODY_SERIAL_NUMBER, "1234567");
+        .ascii(exif, BODY_SERIAL_NUMBER, "1234567")
+        .rational(
+            exif,
+            LENS_SPECIFICATION,
+            &[(140, 10), (300, 10), (400, 100), (400, 100)],
+        )
+        .ascii(exif, LENS_MAKE, "NIKON")
+        .ascii(exif, LENS_MODEL, &padded_lens_model(LENS_MODEL_Z14_30))
+        .ascii(exif, LENS_SERIAL_NUMBER, "12345678  ");
     let (block, preview_in_makernote) = nikon_makernote(makernote_order, &stub(PREVIEW_JPEG));
     let makernote = builder.blob(&block);
     builder.undefined_blob(exif, MAKER_NOTE, makernote);
