@@ -7,7 +7,8 @@
 //! full-size one, and on bodies from about 2012 on a medium one of about
 //! 1620 by 1080 pixels, sit in SubIFDs, in an order that varies between
 //! bodies. The MakerNote's PreviewIFD holds a small one too, which on the
-//! oldest bodies is the only JPEG: the MakerNote reader finds it, and it
+//! oldest bodies is the only JPEG: the MakerNote reader finds it in the
+//! MakerNote that the NEF reader has read once for the whole file, and it
 //! joins the search as the one candidate the reader adds outside the tree.
 //!
 //! The shared TIFF preview finder does the finding, over the whole tree and
@@ -16,7 +17,7 @@
 
 use std::io::{Read, Seek};
 
-use super::makernote;
+use super::makernote::{self, MakerNote};
 use crate::container::tiff::Tree;
 use crate::error::Result;
 use crate::formats::tiff_previews;
@@ -24,9 +25,9 @@ use crate::io::Source;
 use crate::limits::Limits;
 use crate::preview::Preview;
 
-/// The previews of the NEF file in `src`, whose IFDs are `tree`, in the
-/// order they were found: the tree's, then the MakerNote's, read within
-/// `limits`.
+/// The previews of the NEF file in `src`, whose IFDs are `tree` and whose
+/// MakerNote, already read, is `makernote`, in the order they were found:
+/// the tree's, then the MakerNote's, read within `limits`.
 ///
 /// # Errors
 ///
@@ -36,9 +37,13 @@ use crate::preview::Preview;
 pub(super) fn previews<R: Read + Seek>(
     src: &mut Source<R>,
     tree: &Tree,
+    makernote: Option<&MakerNote>,
     limits: &Limits,
 ) -> Result<Vec<Preview>> {
-    let extra = makernote::preview_candidate(src, tree, limits)?;
+    let extra = match makernote {
+        Some(makernote) => makernote::preview_candidate(src, makernote, limits)?,
+        None => None,
+    };
     tiff_previews::find(src, tree, extra.as_slice())
 }
 
@@ -100,7 +105,9 @@ mod tests {
         let header = parse_header(&mut src).unwrap();
         let tree = walk(&mut src, header, &Limits::default()).unwrap();
 
-        let previews = super::previews(&mut src, &tree, &Limits::default()).unwrap();
+        let makernote = super::makernote::read(&mut src, &tree, &Limits::default()).unwrap();
+        let previews =
+            super::previews(&mut src, &tree, makernote.as_ref(), &Limits::default()).unwrap();
         let sizes: Vec<(u32, u32)> = previews.iter().map(|p| (p.width(), p.height())).collect();
         assert_eq!(sizes, [(160, 120)]);
     }
