@@ -106,8 +106,9 @@ impl Metadata {
     /// raw data: DNG's DefaultCropSize, which Sony writes, or Nikon's crop
     /// area. Otherwise it is the [raw size](Self::raw_size), which then
     /// includes the border pixels: older Nikon bodies, before the D850,
-    /// record no crop, and their stored raw is a few dozen pixels wider and
-    /// taller than the camera's own full-size preview.
+    /// record no crop, and on the public samples their stored raw is up to
+    /// 64 pixels wider and 24 taller than the camera's own full-size
+    /// preview.
     ///
     /// It is the default crop, not an aspect ratio chosen in the camera. On
     /// a Nikon small raw it counts the stored pixels, which can differ from

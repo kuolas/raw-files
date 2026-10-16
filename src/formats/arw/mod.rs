@@ -149,7 +149,7 @@ fn claims<R: Read + Seek>(src: &mut Source<R>, tree: &Tree) -> Result<bool> {
 fn parse<R: Read + Seek>(src: &mut Source<R>, tree: &Tree, _limits: &Limits) -> Result<Parsed> {
     Ok(Parsed {
         previews: previews::previews(src, tree)?,
-        metadata: tiff_metadata::read(src, tree)?,
+        metadata: tiff_metadata::read(src, tree)?.metadata,
     })
 }
 

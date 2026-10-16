@@ -14,10 +14,12 @@
 //! Nikon file from another.
 //!
 //! The reader of Nikon's MakerNote is in `makernote.rs`: it reads the
-//! MakerNote once per file, and finds the small preview the MakerNote
-//! points at. The search for the previews is in `previews.rs`, and takes
-//! the MakerNote already read. The metadata comes from the standard tags,
-//! through the reader the TIFF-based formats share.
+//! MakerNote once per file, finds the small preview the MakerNote points
+//! at, and reads what the MakerNote records that the standard tags lack.
+//! The search for the previews is in `previews.rs`, and takes the
+//! MakerNote already read. The metadata comes from the standard tags,
+//! through the reader the TIFF-based formats share, and then from that
+//! MakerNote.
 
 mod makernote;
 mod previews;
@@ -75,21 +77,26 @@ fn claims<R: Read + Seek>(src: &mut Source<R>, tree: &Tree) -> Result<bool> {
 /// at; the MakerNote and its preview are read within `limits`. The
 /// metadata is what the shared TIFF metadata reader reads from the
 /// standard tags: the camera, the capture time, the orientation, the
-/// exposure, the lens and the sizes. Reading what only the MakerNote
-/// records, on bodies whose standard tags lack it, is planned (ADR011,
-/// issue #13).
+/// exposure, the lens and the sizes. When there is a MakerNote, its
+/// CropArea then gives the visible image size, unless the raw IFD records
+/// a default crop ([`makernote::metadata`]). Reading the other values only
+/// the MakerNote records, on bodies whose standard tags lack them, is
+/// planned (ADR011, issue #13).
 ///
 /// # Errors
 ///
-/// As for [`makernote::read`], [`previews::previews`] and
-/// [`tiff_metadata::read`]: `Io` when the reader fails. Nothing the file
-/// holds is an error here.
+/// As for [`makernote::read`], [`previews::previews`],
+/// [`tiff_metadata::read`] and [`makernote::metadata`]: `Io` when the
+/// reader fails. Nothing the file holds is an error here.
 fn parse<R: Read + Seek>(src: &mut Source<R>, tree: &Tree, limits: &Limits) -> Result<Parsed> {
     let makernote = makernote::read(src, tree, limits)?;
-    Ok(Parsed {
-        previews: previews::previews(src, tree, makernote.as_ref(), limits)?,
-        metadata: tiff_metadata::read(src, tree)?,
-    })
+    let previews = previews::previews(src, tree, makernote.as_ref(), limits)?;
+    let standard = tiff_metadata::read(src, tree)?;
+    let metadata = match &makernote {
+        Some(makernote) => makernote::metadata(src, makernote, standard)?,
+        None => standard.metadata,
+    };
+    Ok(Parsed { previews, metadata })
 }
 
 #[cfg(test)]

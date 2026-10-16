@@ -484,9 +484,10 @@ impl Ifd {
     }
 }
 
-// The NEF MakerNote reader reads an entry's type, count and value offset;
-// nothing reads its tag yet. Each `expect` fails the build once its
-// accessor has a caller, so it is then removed rather than left behind.
+// The NEF MakerNote reader reads an entry's type, count, value offset and
+// value length; nothing reads its tag yet. Each `expect` fails the build
+// once its accessor has a caller, so it is then removed rather than left
+// behind.
 impl Entry {
     /// The entry's tag.
     #[cfg_attr(
@@ -516,6 +517,12 @@ impl Entry {
             Value::Inline(_) => None,
             Value::At(at) => Some(at),
         }
+    }
+
+    /// The length of the value in bytes: its count times the size of its
+    /// type, which the entry was checked not to overflow when it was read.
+    pub(crate) fn value_len(&self) -> u32 {
+        self.len
     }
 }
 
@@ -678,6 +685,34 @@ mod tests {
             let at = rational.value_offset().unwrap();
             assert_eq!(file_bytes(&built, at, 4), order.u32(300));
             assert_eq!(file_bytes(&built, at + 4, 4), order.u32(1));
+        }
+    }
+
+    #[test]
+    fn a_values_length_is_its_count_times_its_types_size() {
+        let mut builder = TiffBuilder::new(Order::Little);
+        let ifd = builder.ifd();
+        builder
+            .byte(ifd, 0x0001, &[0xFE])
+            .short(ifd, 0x0002, &[1, 2, 3])
+            .long(ifd, 0x0003, &[1, 2])
+            .ascii(ifd, 0x0004, "abcd")
+            .undefined(ifd, 0x0005, &[1, 2, 3, 4, 5, 6, 7, 8, 9])
+            .rational(ifd, 0x0006, &[(300, 1), (72, 1)])
+            .raw(ifd, 0x0007, SHORT, 0, RawValue::Inline([1, 2, 3, 4]));
+        let built = builder.build();
+        let (_, ifd, _) = read(Order::Little, &built, ifd);
+        // Inline and out of line alike; the ASCII value counts its NUL.
+        for (tag, len) in [
+            (0x0001, 1),
+            (0x0002, 6),
+            (0x0003, 8),
+            (0x0004, 5),
+            (0x0005, 9),
+            (0x0006, 16),
+            (0x0007, 0),
+        ] {
+            assert_eq!(ifd.entry(tag).unwrap().value_len(), len, "tag {tag:#06X}");
         }
     }
 

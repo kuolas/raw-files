@@ -45,10 +45,14 @@
 //!   is copied here; the lens's has the two spaces and the NUL after its
 //!   eight digits that the Z 9 writes, 11 bytes in all. Last, the Exif IFD
 //!   holds the MakerNote, whose value is the block [`nikon_makernote`]
-//!   writes: Nikon's own metadata, here only its version and its
-//!   PreviewIFD, which declares a small JPEG of 640 by 424 pixels. The
-//!   MakerNote is in the file's byte order unless the file is built with
-//!   [`z9_file_with`], which may give it the other.
+//!   writes: Nikon's own metadata, here only its version, its crop area
+//!   and its PreviewIFD. The crop area is the visible image, the raw data
+//!   inside its border: 8256 by 5504 pixels starting 12 columns and 8 rows
+//!   into the raw, the CropArea `[12, 8, 8256, 5504]` of the public Z 9
+//!   samples 5146 to 5148, as four SHORTs. The PreviewIFD declares a small
+//!   JPEG of 640 by 424 pixels. The MakerNote is in the file's byte order
+//!   unless the file is built with [`z9_file_with`], which may give it the
+//!   other.
 //!
 //! Every text value is ASCII ending in one NUL, with no padding, as the
 //! Z 9 writes it, but for the lens's model and serial number, padded as
@@ -135,6 +139,12 @@ const MAKER_NOTE_VERSION: u16 = 0x0001;
 /// The offset of the MakerNote's PreviewIFD, the IFD that declares its
 /// small JPEG (PreviewIFD, a tag of the MakerNote IFD).
 const PREVIEW_IFD: u16 = 0x0011;
+/// The visible image's rectangle in the raw data, as four SHORTs: its left
+/// column, top row, width and height (CropArea, a tag of the MakerNote
+/// IFD).
+const CROP_AREA: u16 = 0x0045;
+/// The Z 9's CropArea, as the public samples 5146 to 5148 record it.
+const CROP_AREA_Z9: [u16; 4] = [12, 8, 8256, 5504];
 
 /// NewSubfileType of the full-resolution image.
 const FULL_RESOLUTION: u32 = 0;
@@ -225,7 +235,8 @@ pub struct Z9Blobs {
 ///
 /// The block is [`MAKER_NOTE_START`] and then a TIFF structure of its own:
 /// a TIFF header in `order`, then the MakerNote IFD, which holds the
-/// MakerNoteVersion `0211` and the PreviewIFD tag, then the PreviewIFD,
+/// MakerNoteVersion `0211`, the PreviewIFD tag and the Z 9's CropArea, whose
+/// four SHORTs follow the IFD, then the PreviewIFD,
 /// which declares `preview` through JPEGInterchangeFormat and
 /// JPEGInterchangeFormatLength, then `preview`'s bytes. Every offset
 /// inside the block counts from the inner TIFF header, 10 bytes in, which
@@ -237,7 +248,8 @@ pub fn nikon_makernote(order: Order, preview: &[u8]) -> (Vec<u8>, u64) {
     let preview_ifd = inner.ifd();
     inner
         .undefined(makernote, MAKER_NOTE_VERSION, MAKER_NOTE_VERSION_0211)
-        .ifd_pointer(makernote, PREVIEW_IFD, preview_ifd);
+        .ifd_pointer(makernote, PREVIEW_IFD, preview_ifd)
+        .short(makernote, CROP_AREA, &CROP_AREA_Z9);
     let jpeg = inner.blob(preview);
     inner
         .long_blob(preview_ifd, JPEG_INTERCHANGE_FORMAT, jpeg)

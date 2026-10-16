@@ -70,7 +70,11 @@
 //! - The image size is the default crop of that same IFD, its
 //!   DefaultCropSize, when it and its DefaultCropOrigin each hold exactly
 //!   two whole numbers, the size is above zero, and the crop lies inside
-//!   the raw size; otherwise it is the raw size ([`default_crop`]).
+//!   the raw size; otherwise it is the raw size ([`default_crop`]). A
+//!   format whose own structures record a crop may then put it in place of
+//!   the raw size, never of a default crop, which [`read`] says it has
+//!   found ([`Standard`]): NEF puts the CropArea of Nikon's MakerNote there,
+//!   checked by the same test of a crop ([`crop`]).
 //!
 //! Nothing here panics on any input: every value is read through the IFD's
 //! checked accessors, which check its offset and length against the file
@@ -107,8 +111,26 @@ const MAX_TEXT_LEN: usize = 255;
 /// replaces with the real one when the file records it.
 const ISO_65535_OR_MORE: u32 = 65535;
 
+/// What [`read`] reads from the standard tags: the metadata, and whether
+/// its image size is a crop the raw IFD records, for a format whose own
+/// structures record a crop too.
+///
+/// A format's own crop, such as Nikon's crop area, may replace the raw size
+/// the image size otherwise falls back on, but never a default crop: the
+/// standard tags come first (ADR011). Comparing the image size with the raw
+/// size cannot tell the two apart, since a default crop may cover the whole
+/// raw.
+#[derive(Debug)]
+pub(crate) struct Standard {
+    /// The metadata, every value of it from the standard tags.
+    pub(crate) metadata: Metadata,
+    /// Whether the image size is the raw IFD's default crop; `false` when
+    /// it is the raw size, or there is no image size.
+    pub(crate) from_default_crop: bool,
+}
+
 /// Reads the metadata of the TIFF-based file in `src`, whose IFDs are
-/// `tree`.
+/// `tree`, with whether its image size is a default crop.
 ///
 /// See the [module documentation](self) for the rules.
 ///
@@ -116,7 +138,7 @@ const ISO_65535_OR_MORE: u32 = 65535;
 ///
 /// `Io` when the reader fails. A value that cannot be read for any other
 /// reason is `None`, and costs no other value.
-pub(crate) fn read<R: Read + Seek>(src: &mut Source<R>, tree: &Tree) -> Result<Metadata> {
+pub(crate) fn read<R: Read + Seek>(src: &mut Source<R>, tree: &Tree) -> Result<Standard> {
     let ifd0 = tree.ifd0();
     let (serial_number, capture_time, exposure, lens) = match tree.exif() {
         Some(exif) => (
@@ -127,8 +149,8 @@ pub(crate) fn read<R: Read + Seek>(src: &mut Source<R>, tree: &Tree) -> Result<M
         ),
         None => (None, None, Exposure::default(), None),
     };
-    let (raw_size, image_size) = sizes(src, tree)?;
-    Ok(Metadata {
+    let (raw_size, default_crop) = sizes(src, tree)?;
+    let metadata = Metadata {
         make: text(src, ifd0, MAKE)?,
         model: text(src, ifd0, MODEL)?,
         serial_number,
@@ -137,7 +159,11 @@ pub(crate) fn read<R: Read + Seek>(src: &mut Source<R>, tree: &Tree) -> Result<M
         exposure,
         lens,
         raw_size,
-        image_size,
+        image_size: default_crop.or(raw_size),
+    };
+    Ok(Standard {
+        metadata,
+        from_default_crop: default_crop.is_some(),
     })
 }
 
@@ -344,9 +370,9 @@ fn lens_specification<R: Read + Seek>(
         .map(|(numerator, denominator)| Rational::known(numerator, denominator)))
 }
 
-/// The raw size and the image size of the file whose IFDs are `tree`: both
-/// from the largest IFD that holds raw data and says how large it is, or
-/// both `None` when no IFD does.
+/// The raw size and the default crop of the file whose IFDs are `tree`:
+/// both from the largest IFD that holds raw data and says how large it is,
+/// or both `None` when no IFD does.
 ///
 /// The IFDs are asked in the tree's order, the Exif IFD left out, since it
 /// holds capture metadata and never an image. An IFD counts as raw data
@@ -355,8 +381,8 @@ fn lens_specification<R: Read + Seek>(
 /// over it. A raw IFD counts only when [`raw_size`] reads a size from it.
 /// Of those, the one with the most pixels gives the raw size, the first on
 /// a tie: the Coolpix E5700 (public sample 4456) writes a 656 by 484 raw
-/// image before its 2576 by 1924 one, both full-resolution. The image size
-/// is then that IFD's [`default_crop`], or the raw size when it has none.
+/// image before its 2576 by 1924 one, both full-resolution. The crop is
+/// then that IFD's [`default_crop`], `None` when it has none.
 ///
 /// # Errors
 ///
@@ -385,8 +411,7 @@ fn sizes<R: Read + Seek>(src: &mut Source<R>, tree: &Tree) -> Result<(Option<Siz
     let Some((ifd, raw)) = largest else {
         return Ok((None, None));
     };
-    let image = default_crop(src, ifd, raw)?.unwrap_or(raw);
-    Ok((Some(raw), Some(image)))
+    Ok((Some(raw), default_crop(src, ifd, raw)?))
 }
 
 /// The size of the raw data `ifd` describes: its ImageWidth and
@@ -411,10 +436,8 @@ fn raw_size<R: Read + Seek>(src: &mut Source<R>, ifd: &Ifd) -> Result<Option<Siz
 ///
 /// The crop needs both its DefaultCropOrigin, the column and the row where
 /// it starts, and its DefaultCropSize, its width and height, each exactly
-/// two whole numbers as [`whole_pair`] reads them. Its size must be above
-/// zero, and it must lie inside the raw data: the origin plus the size, in
-/// each direction, at most the raw size, a sum that overflows being
-/// outside. `None` otherwise, for the caller to take the raw size.
+/// two whole numbers as [`whole_pair`] reads them, and it must be one that
+/// [`crop`] accepts. `None` otherwise, for the caller to take the raw size.
 ///
 /// # Errors
 ///
@@ -424,16 +447,25 @@ fn default_crop<R: Read + Seek>(src: &mut Source<R>, ifd: &Ifd, raw: Size) -> Re
     let Some([x, y]) = whole_pair(src, ifd, DEFAULT_CROP_ORIGIN)? else {
         return Ok(None);
     };
-    let Some([width, height]) = whole_pair(src, ifd, DEFAULT_CROP_SIZE)? else {
+    let Some(size) = whole_pair(src, ifd, DEFAULT_CROP_SIZE)? else {
         return Ok(None);
     };
+    Ok(crop([x, y], size, raw))
+}
+
+/// The size of the crop whose first column and row are `x` and `y` and
+/// whose size is `width` by `height`, in raw data of size `raw`, when the
+/// crop can be trusted: its size is above zero, and it lies inside the raw
+/// data, the start plus the size, in each direction, at most the raw size,
+/// a sum that overflows being outside. `None` otherwise.
+///
+/// The one test for every crop a file records, the DNG default crop here
+/// and a format's own, such as Nikon's crop area.
+pub(crate) fn crop([x, y]: [u32; 2], [width, height]: [u32; 2], raw: Size) -> Option<Size> {
     let inside = |start: u32, length: u32, raw: u32| {
         length > 0 && start.checked_add(length).is_some_and(|end| end <= raw)
     };
-    Ok(
-        (inside(x, width, raw.width) && inside(y, height, raw.height))
-            .then_some(Size { width, height }),
-    )
+    (inside(x, width, raw.width) && inside(y, height, raw.height)).then_some(Size { width, height })
 }
 
 /// The two whole numbers tag `tag` of `ifd` holds, in the forms the DNG
@@ -592,7 +624,7 @@ mod tests {
         let mut src = Source::new(Cursor::new(bytes)).unwrap();
         let header = parse_header(&mut src).unwrap();
         let tree = walk(&mut src, header, &Limits::default()).unwrap();
-        read(&mut src, &tree).unwrap()
+        read(&mut src, &tree).unwrap().metadata
     }
 
     /// The metadata of [`z9_bytes_except`]'s file.
@@ -730,7 +762,7 @@ mod tests {
             builder.exif(ifd, exif);
             build(builder, exif);
         });
-        read(&mut src, &tree).unwrap().lens
+        read(&mut src, &tree).unwrap().metadata.lens
     }
 
     /// The Z 9 file's metadata with the exposure `exposure` instead of its
@@ -750,7 +782,7 @@ mod tests {
             builder.exif(ifd, exif);
             build(builder, exif);
         });
-        read(&mut src, &tree).unwrap().exposure
+        read(&mut src, &tree).unwrap().metadata.exposure
     }
 
     /// The ISO read from a file whose Exif IFD holds only what `build` adds,
@@ -765,7 +797,7 @@ mod tests {
         let (mut src, tree) = testing::file(|builder, ifd| {
             builder.ascii(ifd, MAKE, make);
         });
-        read(&mut src, &tree).unwrap().make
+        read(&mut src, &tree).unwrap().metadata.make
     }
 
     #[test]
@@ -874,7 +906,7 @@ mod tests {
             let count = u32::try_from(bytes.len()).unwrap();
             builder.raw(ifd, MAKE, ASCII, count, RawValue::Offset(4096));
         });
-        read(&mut src, &tree).unwrap().make
+        read(&mut src, &tree).unwrap().metadata.make
     }
 
     #[test]
@@ -917,7 +949,7 @@ mod tests {
             builder.exif(ifd, exif);
             builder.ascii(exif, SUB_SEC_TIME_ORIGINAL, "85");
         });
-        assert_eq!(read(&mut src, &tree).unwrap().capture_time(), None);
+        assert_eq!(read(&mut src, &tree).unwrap().metadata.capture_time(), None);
     }
 
     #[test]
@@ -927,7 +959,7 @@ mod tests {
             builder.exif(ifd, exif);
             builder.ascii(exif, OFFSET_TIME_ORIGINAL, "-05:00");
         });
-        assert_eq!(read(&mut src, &tree).unwrap().capture_time(), None);
+        assert_eq!(read(&mut src, &tree).unwrap().metadata.capture_time(), None);
     }
 
     #[test]
@@ -959,7 +991,7 @@ mod tests {
             );
         });
         assert!(tree.exif().is_none());
-        let metadata = read(&mut src, &tree).unwrap();
+        let metadata = read(&mut src, &tree).unwrap().metadata;
         assert_eq!(
             metadata,
             Metadata {
@@ -983,7 +1015,7 @@ mod tests {
             let (mut src, tree) = testing::file(|builder, ifd| {
                 builder.short(ifd, ORIENTATION, &[value]);
             });
-            let metadata = read(&mut src, &tree).unwrap();
+            let metadata = read(&mut src, &tree).unwrap().metadata;
             assert_eq!(metadata.orientation(), orientation, "{value}");
             assert_eq!(
                 tiff_previews::orientation(&mut src, &tree).unwrap(),
@@ -1835,14 +1867,19 @@ mod tests {
             .long(ifd, IMAGE_LENGTH, &[height]);
     }
 
-    /// The metadata of a little-endian file whose IFD0 holds the Make
-    /// `SONY` and what `build` adds, given the builder and IFD0.
-    fn metadata_of(build: impl FnOnce(&mut TiffBuilder, IfdId)) -> Metadata {
+    /// What [`read`] reads from a little-endian file whose IFD0 holds the
+    /// Make `SONY` and what `build` adds, given the builder and IFD0.
+    fn standard_of(build: impl FnOnce(&mut TiffBuilder, IfdId)) -> Standard {
         let (mut src, tree) = testing::file(|builder, ifd| {
             builder.ascii(ifd, MAKE, "SONY");
             build(builder, ifd);
         });
         read(&mut src, &tree).unwrap()
+    }
+
+    /// The metadata of [`standard_of`]'s file.
+    fn metadata_of(build: impl FnOnce(&mut TiffBuilder, IfdId)) -> Metadata {
+        standard_of(build).metadata
     }
 
     /// The image size of a file whose IFD0 holds raw data of size [`RAW`]
@@ -1998,6 +2035,41 @@ mod tests {
     #[test]
     fn no_crop_gives_the_raw_size() {
         assert_eq!(image_size(|_, _| {}), Some(RAW));
+    }
+
+    #[test]
+    fn only_a_default_crop_is_reported_as_one() {
+        let crop = |origin: [u32; 2], size: [u32; 2]| {
+            move |builder: &mut TiffBuilder, ifd| {
+                raw_tags(builder, ifd, RAW.width, RAW.height);
+                builder
+                    .long(ifd, DEFAULT_CROP_ORIGIN, &origin)
+                    .long(ifd, DEFAULT_CROP_SIZE, &size);
+            }
+        };
+        // A crop as large as the raw is a crop all the same, which the
+        // image size alone could not tell from the raw size.
+        for (origin, size) in [([12, 8], [5976, 3984]), ([0, 0], [6000, 4000])] {
+            let standard = standard_of(crop(origin, size));
+            assert!(standard.from_default_crop, "{origin:?}, {size:?}");
+            assert_eq!(
+                standard.metadata.image_size,
+                Some(Size {
+                    width: size[0],
+                    height: size[1]
+                })
+            );
+        }
+        // A crop outside the raw, no crop, and no raw data.
+        let outside = standard_of(crop([12, 8], [5990, 3984]));
+        assert!(!outside.from_default_crop);
+        assert_eq!(outside.metadata.image_size, Some(RAW));
+        let none = standard_of(|builder, ifd| raw_tags(builder, ifd, RAW.width, RAW.height));
+        assert!(!none.from_default_crop);
+        assert_eq!(none.metadata.image_size, Some(RAW));
+        let no_raw = standard_of(|_, _| {});
+        assert!(!no_raw.from_default_crop);
+        assert_eq!(no_raw.metadata.image_size, None);
     }
 
     #[test]

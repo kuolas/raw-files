@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! The Nikon MakerNote: where it lies in the file, and where it keeps its
-//! small preview JPEG.
+//! The Nikon MakerNote: where it lies in the file, where it keeps its small
+//! preview JPEG, and what it records of the picture that the standard tags
+//! lack.
 //!
 //! The MakerNote is a block of Nikon's own metadata, the value of the
 //! MakerNote tag of the Exif IFD. Among much else, it points at a
@@ -9,6 +10,19 @@
 //! JPEGInterchangeFormatLength declare a small JPEG, 640 by 424 pixels or
 //! smaller. Every Nikon body since the D70 writes one, and on the oldest
 //! bodies it is the file's only JPEG.
+//!
+//! It also records the visible image, which no standard tag of a NEF
+//! records: the part of the stored raw data that a viewer shows, without
+//! the border pixels around it. Its CropArea, which the D850, the D780 and
+//! the Z bodies write, is that rectangle: on the Z 9, the 8256 by 5504
+//! pixels that start 12 columns and 8 rows into the 8280 by 5520 raw, as
+//! large as the camera's full-size preview (public samples 5146 to 5148).
+//! It is four numbers, the left column, the top row, the width and the
+//! height, in stored raw pixels. It gives the image size only when it
+//! holds exactly four SHORTs or LONGs, its width and height are above
+//! zero, and it lies inside the raw size the standard tags give; and never
+//! when the raw IFD records a default crop, a standard tag, which comes
+//! first (ADR011).
 //!
 //! Nikon has used three layouts for the block, told apart by their first
 //! bytes. The one every body since the D70 and the D100 writes, and the one
@@ -27,14 +41,16 @@
 //! against the block, not only against the file: the MakerNote IFD and the
 //! PreviewIFD must lie inside the block, with their whole entry tables; the
 //! three numbers that lead to the JPEG must be held in their entries, not
-//! stored elsewhere; and the whole JPEG, as declared, must lie inside the
-//! block. A block that does not hold together, whether its inner header
-//! is not one, an IFD in it is cut short or has more entries than the
-//! limits allow, costs the small preview, never the file: the NEF security
-//! notes ask that bad entries be skipped rather than fail the file
-//! (`docs/formats/nef/security.md`, item 4 of the checklist). Only a
-//! failure of the reader itself is an error: that is not the file's fault,
-//! and says nothing about the MakerNote.
+//! stored elsewhere; the whole JPEG, as declared, must lie inside the
+//! block; and so must CropArea's four numbers, which take more than the
+//! four bytes an entry holds and so are stored elsewhere. A block that does
+//! not hold together, whether its inner header is not one, an IFD in it is
+//! cut short or has more entries than the limits allow, costs what the
+//! MakerNote would have given, the small preview and the crop area, never
+//! the file: the NEF security notes ask that bad entries be skipped rather
+//! than fail the file (`docs/formats/nef/security.md`, item 4 of the
+//! checklist). Only a failure of the reader itself is an error: that is not
+//! the file's fault, and says nothing about the MakerNote.
 //!
 //! The MakerNote is read once per file, into a [`MakerNote`]: its block
 //! found and checked, its MakerNote IFD parsed. Every use of the MakerNote
@@ -47,16 +63,24 @@ use std::ops::Range;
 use crate::container::tiff::tags::{
     JPEG_INTERCHANGE_FORMAT, JPEG_INTERCHANGE_FORMAT_LENGTH, MAKER_NOTE,
 };
-use crate::container::tiff::types::{BYTE, UNDEFINED};
+use crate::container::tiff::types::{BYTE, LONG, SHORT, UNDEFINED};
 use crate::container::tiff::{Entry, Ifd, Tree, parse_header_at, parse_ifd, skip_damage};
 use crate::error::Result;
+use crate::formats::tiff_metadata::{self, Standard};
 use crate::formats::tiff_previews::Candidate;
+use crate::geometry::Size;
 use crate::io::{ByteOrder, Source, within};
 use crate::limits::Limits;
+use crate::metadata::Metadata;
 
 /// The Nikon MakerNote tag that points at the PreviewIFD, the sub-IFD
 /// holding the small preview JPEG.
 const PREVIEW_IFD: u16 = 0x0011;
+
+/// The Nikon MakerNote tag that records the visible image, the rectangle
+/// of the stored raw data inside its border (CropArea): its left column,
+/// top row, width and height.
+const CROP_AREA: u16 = 0x0045;
 
 /// The signature a Nikon MakerNote starts with.
 const SIGNATURE: &[u8; 6] = b"Nikon\0";
@@ -182,6 +206,75 @@ pub(super) fn preview_candidate<R: Read + Seek>(
     }
 }
 
+/// The metadata of the file whose MakerNote is `makernote`: what the
+/// standard tags gave, `standard`, with what the MakerNote records that the
+/// standard tags lack.
+///
+/// That is the image size, from CropArea, which replaces the raw size the
+/// image size otherwise falls back on: when the raw IFD records no default
+/// crop, which comes first, and when there is a raw size for the crop area
+/// to lie inside ([`crop_area`]). Every other value is the standard tags'.
+///
+/// # Errors
+///
+/// `Io` when the reader fails. Nothing the block holds is an error.
+pub(super) fn metadata<R: Read + Seek>(
+    src: &mut Source<R>,
+    makernote: &MakerNote,
+    standard: Standard,
+) -> Result<Metadata> {
+    let Standard {
+        mut metadata,
+        from_default_crop,
+    } = standard;
+    if !from_default_crop
+        && let Some(raw) = metadata.raw_size
+        && let Some(image) = crop_area(src, makernote, raw)?
+    {
+        metadata.image_size = Some(image);
+    }
+    Ok(metadata)
+}
+
+/// The size of the visible image that `makernote`'s CropArea records, in
+/// raw data of size `raw`; `None` when the tag is missing, is not of type
+/// SHORT or LONG, does not hold exactly four values, stores them outside
+/// the block, or describes a rectangle that [`tiff_metadata::crop`] does
+/// not accept: one of zero width or height, or not inside the raw data.
+///
+/// See the [module documentation](self) for what CropArea is.
+///
+/// # Errors
+///
+/// `Io` when the reader fails. Nothing the block holds is an error.
+fn crop_area<R: Read + Seek>(
+    src: &mut Source<R>,
+    makernote: &MakerNote,
+    raw: Size,
+) -> Result<Option<Size>> {
+    let MakerNote { block, ifd, .. } = makernote;
+    let Some(entry) = ifd
+        .entry(CROP_AREA)
+        .filter(|entry| matches!(entry.typ(), SHORT | LONG))
+    else {
+        return Ok(None);
+    };
+    // A value stored elsewhere could be anywhere in the file, outside the
+    // block. One held in the entry is inside the block with the entry, and
+    // too short to be four values.
+    if entry
+        .value_offset()
+        .is_some_and(|at| !fits(block, at, u64::from(entry.value_len())))
+    {
+        return Ok(None);
+    }
+    let values = skip_damage(ifd.u32s(src, CROP_AREA))?.flatten();
+    let Some(&[left, top, width, height]) = values.as_deref() else {
+        return Ok(None);
+    };
+    Ok(tiff_metadata::crop([left, top], [width, height], raw))
+}
+
 /// Where the MakerNote's bytes are in the file, from its entry: `None`
 /// unless the entry holds bytes, of type UNDEFINED or BYTE, stored out of
 /// line, as a block of 18 bytes or more always is.
@@ -259,7 +352,11 @@ fn fits(block: &Range<u64>, at: u64, len: u64) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::container::tiff::tags::MAKE;
+    use crate::container::tiff::tags::{
+        DEFAULT_CROP_ORIGIN, DEFAULT_CROP_SIZE, IMAGE_LENGTH, IMAGE_WIDTH, MAKE,
+        PHOTOMETRIC_INTERPRETATION,
+    };
+    use crate::container::tiff::types::{IFD, RATIONAL};
     use crate::container::tiff::{parse_header, walk};
     use crate::error::ErrorKind;
     use crate::jpeg_stub::jpeg_stub;
@@ -405,6 +502,20 @@ mod tests {
         tail: u64,
         exif: impl FnOnce(&mut TiffBuilder, IfdId),
     ) -> Vec<u8> {
+        nikon_file_with(order, at, bytes, tail, |builder, _, exif_ifd| {
+            exif(builder, exif_ifd);
+        })
+    }
+
+    /// As [`nikon_file`], with `build` given the builder, IFD0 and the Exif
+    /// IFD, to add to either.
+    fn nikon_file_with(
+        order: Order,
+        at: u64,
+        bytes: &[u8],
+        tail: u64,
+        build: impl FnOnce(&mut TiffBuilder, IfdId, IfdId),
+    ) -> Vec<u8> {
         let mut builder = TiffBuilder::new(order);
         let ifd0 = builder.ifd();
         let exif_ifd = builder.ifd();
@@ -412,7 +523,7 @@ mod tests {
             .ascii(ifd0, MAKE, "NIKON CORPORATION")
             .exif(ifd0, exif_ifd);
         builder.undefined(exif_ifd, 0x9000, b"0232");
-        exif(&mut builder, exif_ifd);
+        build(&mut builder, ifd0, exif_ifd);
         builder.blob_at(at, bytes);
         builder.pad_to(at + u64::try_from(bytes.len()).unwrap() + tail);
         builder.build().bytes
@@ -722,6 +833,278 @@ mod tests {
         assert_eq!(found.unwrap(), Some(block.candidate(AT)));
         let found = try_candidate(bytes, &Limits::default().max_ifd_entries(1));
         assert_eq!(found.unwrap(), None);
+    }
+
+    /// The raw size of the files the CropArea tests build: the Z 9's.
+    const RAW: Size = Size {
+        width: 8280,
+        height: 5520,
+    };
+
+    /// The Z 9's CropArea: the 8256 by 5504 pixels that start 12 columns
+    /// and 8 rows into its raw (public samples 5146 to 5148).
+    const Z9_CROP_AREA: [u16; 4] = [12, 8, 8256, 5504];
+
+    /// The image size [`Z9_CROP_AREA`] gives.
+    const Z9_IMAGE: Size = Size {
+        width: 8256,
+        height: 5504,
+    };
+
+    /// The PhotometricInterpretation of a colour filter array: raw data, as
+    /// the preview finder takes it.
+    const CFA: u16 = 32803;
+
+    /// A Nikon MakerNote block in byte order `order` whose MakerNote IFD
+    /// holds the MakerNoteVersion and what `crop` adds, given the inner
+    /// builder and that IFD: a CropArea, whose values, stored out of line,
+    /// are then the last bytes of the block. Also where the CropArea's
+    /// entry is, the IFD's second, counted from the start of the block.
+    fn crop_block(order: Order, crop: impl FnOnce(&mut TiffBuilder, IfdId)) -> (Vec<u8>, u64) {
+        let mut inner = TiffBuilder::new(order);
+        let makernote = inner.ifd();
+        inner.undefined(makernote, MAKER_NOTE_VERSION, b"0211");
+        crop(&mut inner, makernote);
+        let built = inner.build();
+        let mut bytes = b"Nikon\0\x02\x11\0\0".to_vec();
+        bytes.extend_from_slice(&built.bytes);
+        (bytes, HEADER_AT + built.ifd_offset(makernote) + 2 + 12)
+    }
+
+    /// A MakerNote block in byte order `order` whose CropArea is `values`,
+    /// as SHORTs.
+    fn shorts_block(order: Order, values: &[u16]) -> Vec<u8> {
+        crop_block(order, |inner, ifd| {
+            inner.short(ifd, CROP_AREA, values);
+        })
+        .0
+    }
+
+    /// A MakerNote block in byte order `order` whose CropArea is `values`,
+    /// as LONGs.
+    fn longs_block(order: Order, values: &[u32]) -> Vec<u8> {
+        crop_block(order, |inner, ifd| {
+            inner.long(ifd, CROP_AREA, values);
+        })
+        .0
+    }
+
+    /// A Nikon file in byte order `order` whose IFD0 holds raw data of size
+    /// [`RAW`] and what `raw` adds, given the builder and IFD0, and whose
+    /// MakerNote, at [`AT`], is the first `count` bytes of `block`.
+    fn raw_file(
+        order: Order,
+        block: &[u8],
+        count: u64,
+        raw: impl FnOnce(&mut TiffBuilder, IfdId),
+    ) -> Vec<u8> {
+        nikon_file_with(order, AT, block, TAIL, |builder, ifd0, exif| {
+            builder
+                .short(ifd0, PHOTOMETRIC_INTERPRETATION, &[CFA])
+                .long(ifd0, IMAGE_WIDTH, &[RAW.width])
+                .long(ifd0, IMAGE_LENGTH, &[RAW.height]);
+            raw(builder, ifd0);
+            entry_at(builder, exif, MAKER_NOTE, UNDEFINED, AT, count);
+        })
+    }
+
+    /// The metadata of the file `bytes`: what the standard tags give, with
+    /// what [`metadata`] adds from the file's MakerNote, which must be
+    /// read.
+    fn metadata_of(bytes: Vec<u8>) -> Metadata {
+        let mut src = Source::new(Cursor::new(bytes)).unwrap();
+        let header = parse_header(&mut src).unwrap();
+        let tree = walk(&mut src, header, &Limits::default()).unwrap();
+        let makernote = read(&mut src, &tree, &Limits::default())
+            .unwrap()
+            .expect("a MakerNote");
+        let standard = tiff_metadata::read(&mut src, &tree).unwrap();
+        metadata(&mut src, &makernote, standard).unwrap()
+    }
+
+    /// The image size of the file [`raw_file`] builds in byte order `order`
+    /// with the MakerNote `block`, declared whole, and nothing more in
+    /// IFD0; the raw size must be read.
+    fn image_size(order: Order, block: &[u8]) -> Option<Size> {
+        let count = u64::try_from(block.len()).unwrap();
+        let metadata = metadata_of(raw_file(order, block, count, |_, _| {}));
+        assert_eq!(metadata.raw_size, Some(RAW), "{order:?}");
+        metadata.image_size
+    }
+
+    #[test]
+    fn a_crop_area_gives_the_image_size() {
+        for order in ORDERS {
+            let block = shorts_block(order, &Z9_CROP_AREA);
+            assert_eq!(image_size(order, &block), Some(Z9_IMAGE), "{order:?}");
+        }
+    }
+
+    #[test]
+    fn a_crop_area_of_longs_is_read() {
+        for order in ORDERS {
+            let block = longs_block(order, &Z9_CROP_AREA.map(u32::from));
+            assert_eq!(image_size(order, &block), Some(Z9_IMAGE), "{order:?}");
+        }
+    }
+
+    #[test]
+    fn a_crop_area_in_the_other_byte_order_from_the_files_is_read() {
+        for (file, inner) in [(Order::Little, Order::Big), (Order::Big, Order::Little)] {
+            let block = shorts_block(inner, &Z9_CROP_AREA);
+            assert_eq!(image_size(file, &block), Some(Z9_IMAGE), "{file:?}");
+        }
+    }
+
+    #[test]
+    fn a_makernote_without_a_crop_area_gives_the_raw_size() {
+        // As the bodies before the D850 write it.
+        for order in ORDERS {
+            let block = crop_block(order, |_, _| {}).0;
+            assert_eq!(image_size(order, &block), Some(RAW), "{order:?}");
+        }
+    }
+
+    #[test]
+    fn a_crop_area_whose_values_run_past_the_block_gives_the_raw_size() {
+        for order in ORDERS {
+            let block = shorts_block(order, &Z9_CROP_AREA);
+            // The values are the block's last 8 bytes.
+            let values: Vec<u8> = Z9_CROP_AREA.iter().flat_map(|&v| order.u16(v)).collect();
+            assert_eq!(block[block.len() - 8..], values, "{order:?}");
+
+            // Declared one byte short: the values' last byte lies in the
+            // file, after the block.
+            let whole = u64::try_from(block.len()).unwrap();
+            let file = raw_file(order, &block, whole - 1, |_, _| {});
+            assert_eq!(metadata_of(file).image_size, Some(RAW), "{order:?}");
+
+            // The control: declared whole, the same bytes are used.
+            let file = raw_file(order, &block, whole, |_, _| {});
+            assert_eq!(metadata_of(file).image_size, Some(Z9_IMAGE), "{order:?}");
+        }
+    }
+
+    #[test]
+    fn a_crop_area_outside_the_raw_gives_the_raw_size() {
+        for order in ORDERS {
+            for values in [
+                // Wider or taller than the raw by itself.
+                [0, 0, 8281, 5520],
+                [0, 0, 8280, 5521],
+                // One pixel past the raw's edge, with the left column or
+                // the top row.
+                [12, 8, 8269, 5504],
+                [12, 17, 8256, 5504],
+            ] {
+                let block = shorts_block(order, &values);
+                assert_eq!(
+                    image_size(order, &block),
+                    Some(RAW),
+                    "{order:?}, {values:?}"
+                );
+            }
+            // Sums that would wrap round to 1, inside the raw.
+            for values in [[u32::MAX, 8, 2, 5504], [12, u32::MAX, 8256, 2]] {
+                let block = longs_block(order, &values);
+                assert_eq!(
+                    image_size(order, &block),
+                    Some(RAW),
+                    "{order:?}, {values:?}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn a_crop_area_of_zero_width_or_height_gives_the_raw_size() {
+        for order in ORDERS {
+            for values in [[12, 8, 0, 5504], [12, 8, 8256, 0]] {
+                let block = shorts_block(order, &values);
+                assert_eq!(
+                    image_size(order, &block),
+                    Some(RAW),
+                    "{order:?}, {values:?}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn a_crop_area_of_other_than_four_values_gives_the_raw_size() {
+        for order in ORDERS {
+            // Three and five values, stored out of line; and two, which the
+            // entry holds itself.
+            for values in [&[12, 8, 8256][..], &[12, 8, 8256, 5504, 0], &[12, 8]] {
+                let block = shorts_block(order, values);
+                assert_eq!(
+                    image_size(order, &block),
+                    Some(RAW),
+                    "{order:?}, {values:?}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn a_crop_area_of_another_type_gives_the_raw_size() {
+        for order in ORDERS {
+            // The 16 bytes of four LONGs that would give the Z 9's image,
+            // declared as two RATIONALs, as 16 UNDEFINED bytes, or as four
+            // IFD offsets, which are numbers too.
+            for (typ, count) in [(RATIONAL, 2), (UNDEFINED, 16), (IFD, 4)] {
+                let (mut block, entry) = crop_block(order, |inner, ifd| {
+                    inner.long(ifd, CROP_AREA, &Z9_CROP_AREA.map(u32::from));
+                });
+                let entry = usize::try_from(entry).unwrap();
+                block[entry + 2..entry + 4].copy_from_slice(&order.u16(typ));
+                block[entry + 4..entry + 8].copy_from_slice(&order.u32(count));
+                assert_eq!(
+                    image_size(order, &block),
+                    Some(RAW),
+                    "{order:?}, type {typ}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn without_a_raw_size_a_crop_area_gives_no_image_size() {
+        for order in ORDERS {
+            let block = shorts_block(order, &Z9_CROP_AREA);
+            let count = u64::try_from(block.len()).unwrap();
+            let metadata = metadata_of(with_makernote(order, UNDEFINED, &block, count));
+            assert_eq!(metadata.raw_size, None, "{order:?}");
+            assert_eq!(metadata.image_size, None, "{order:?}");
+        }
+    }
+
+    #[test]
+    fn a_default_crop_comes_before_the_crop_area() {
+        for order in ORDERS {
+            let block = shorts_block(order, &Z9_CROP_AREA);
+            let count = u64::try_from(block.len()).unwrap();
+            // One smaller than the crop area, and one of the whole raw,
+            // which the image size alone cannot tell from no crop at all.
+            for (origin, size) in [([4, 4], [8000, 5000]), ([0, 0], [RAW.width, RAW.height])] {
+                let file = raw_file(order, &block, count, |builder, ifd0| {
+                    builder.long(ifd0, DEFAULT_CROP_ORIGIN, &origin).long(
+                        ifd0,
+                        DEFAULT_CROP_SIZE,
+                        &size,
+                    );
+                });
+                let expected = Size {
+                    width: size[0],
+                    height: size[1],
+                };
+                assert_eq!(
+                    metadata_of(file).image_size,
+                    Some(expected),
+                    "{order:?}, {size:?}"
+                );
+            }
+        }
     }
 
     /// The first byte of the second block the source caches: a reader that
