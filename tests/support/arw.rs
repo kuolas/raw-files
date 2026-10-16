@@ -21,10 +21,12 @@
 //!   and OffsetTimeOriginal `+02:00`; and the exposure, as ExposureTime
 //!   `1/50`, FNumber `56/10` and FocalLength `500/10` (RATIONAL),
 //!   ExposureBiasValue `0/10` (SRATIONAL), PhotographicSensitivity 250
-//!   (SHORT) and RecommendedExposureIndex 250 (LONG). These are the values
-//!   of the public ILCE-7M4 sample 6929 of raw.pixls.us, each of the type
-//!   it has there; the sample has no serial number in its Exif tags, so
-//!   neither has the fixture. IFD1, IFD0's next, repeats the
+//!   (SHORT) and RecommendedExposureIndex 250 (LONG); and the lens, as
+//!   LensModel `FE 50mm F2.5 G` and LensSpecification `500/10`, `500/10`,
+//!   `25/10`, `25/10`. These are the values of the public ILCE-7M4 sample
+//!   6929 of raw.pixls.us, each of the type it has there; the sample has
+//!   no serial number, of the body or of the lens, and no LensMake in its
+//!   Exif tags, so neither has the fixture. IFD1, IFD0's next, repeats the
 //!   Make, Model and Orientation and declares a thumbnail of 160 by 120
 //!   pixels the same way. IFD2, IFD1's next, declares a JPEG
 //!   of the picture's full size, 7008 by 4672 pixels, and says so in its
@@ -74,8 +76,8 @@
 //! The metadata: every file holds its Make and Model in IFD0, and every
 //! file but the SRF holds them again in IFD1, with the Orientation in both;
 //! the SRF has no Orientation. Only the two ARW 4 files hold a capture
-//! time and an exposure, and no file holds a serial number. Every text
-//! value is ASCII ending in one NUL.
+//! time, an exposure and a lens, and no file holds a serial number. Every
+//! text value is ASCII ending in one NUL.
 //!
 //! Every JPEG preview is a baseline stub. Each builder returns where it put
 //! the JPEGs and the raw data, as an [`ArwBlobs`], so that a test can check
@@ -146,6 +148,11 @@ const OFFSET_TIME_ORIGINAL: u16 = 0x9011;
 const EXPOSURE_BIAS_VALUE: u16 = 0x9204;
 /// The focal length in millimetres, as a RATIONAL (FocalLength).
 const FOCAL_LENGTH: u16 = 0x920A;
+/// The lens's focal and aperture range, as four RATIONALs
+/// (LensSpecification).
+const LENS_SPECIFICATION: u16 = 0xA432;
+/// The lens's model name, as ASCII text (LensModel).
+const LENS_MODEL: u16 = 0xA434;
 /// The capture time's fraction of a second, as ASCII digits
 /// (SubSecTimeOriginal).
 const SUB_SEC_TIME_ORIGINAL: u16 = 0x9291;
@@ -440,7 +447,13 @@ fn arw4(
         .short(exif, PHOTOGRAPHIC_SENSITIVITY, &[250])
         .long(exif, RECOMMENDED_EXPOSURE_INDEX, &[250])
         .srational(exif, EXPOSURE_BIAS_VALUE, &[(0, 10)])
-        .rational(exif, FOCAL_LENGTH, &[(500, 10)]);
+        .rational(exif, FOCAL_LENGTH, &[(500, 10)])
+        .rational(
+            exif,
+            LENS_SPECIFICATION,
+            &[(500, 10), (500, 10), (25, 10), (25, 10)],
+        )
+        .ascii(exif, LENS_MODEL, "FE 50mm F2.5 G");
 
     preview_ifd(&mut builder, ifd1, "SONY", "ILCE-7M4", orientation);
     let ifd1_jpeg = jpeg(&mut builder, ifd1, THUMBNAIL);

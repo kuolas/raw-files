@@ -138,9 +138,9 @@ fn claims<R: Read + Seek>(src: &mut Source<R>, tree: &Tree) -> Result<bool> {
 /// The previews are the JPEGs that the IFDs of IFD0's chain declare, found
 /// by the shared TIFF preview finder over the whole tree. The metadata is
 /// what the shared TIFF metadata reader reads from the standard tags: the
-/// camera, the capture time, the orientation and the exposure. Neither
-/// takes limits of its own, so `_limits` goes unused here: the walk that
-/// built `tree` applied them.
+/// camera, the capture time, the orientation, the exposure and the lens.
+/// Neither takes limits of its own, so `_limits` goes unused here: the walk
+/// that built `tree` applied them.
 ///
 /// # Errors
 ///
