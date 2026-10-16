@@ -231,6 +231,45 @@ impl Lens {
         (!empty).then_some(lens)
     }
 
+    /// Whether the lens has a range: whether any of its four fractions, the
+    /// shortest and longest focal length and the f-number at each, is
+    /// known.
+    pub(crate) fn has_range(&self) -> bool {
+        self.min_focal_length.is_some()
+            || self.max_focal_length.is_some()
+            || self.f_number_at_min_focal_length.is_some()
+            || self.f_number_at_max_focal_length.is_some()
+    }
+
+    /// `lens` with its range replaced by `range`, its make, model and
+    /// serial number kept, or, when there is no `lens`, a lens of the range
+    /// alone: for a format whose own structures record a range the standard
+    /// tags lack, such as Nikon's MakerNote. `None` when that leaves no
+    /// value, as for [`Lens::new`].
+    ///
+    /// The four fractions are in the order [`Lens::new`] takes them.
+    pub(crate) fn with_range(lens: Option<Self>, range: [Option<Rational>; 4]) -> Option<Self> {
+        let (make, model, serial_number) = match lens {
+            Some(lens) => (lens.make, lens.model, lens.serial_number),
+            None => (None, None, None),
+        };
+        let [
+            min_focal_length,
+            max_focal_length,
+            f_number_at_min_focal_length,
+            f_number_at_max_focal_length,
+        ] = range;
+        Self::new(
+            make,
+            model,
+            serial_number,
+            min_focal_length,
+            max_focal_length,
+            f_number_at_min_focal_length,
+            f_number_at_max_focal_length,
+        )
+    }
+
     /// The name of the lens's maker.
     pub fn make(&self) -> Option<&str> {
         self.make.as_deref()
@@ -388,6 +427,65 @@ mod tests {
         assert_eq!(lens.max_focal_length(), Some(fraction(720, 10)));
         assert_eq!(lens.f_number_at_min_focal_length(), Some(fraction(28, 10)));
         assert_eq!(lens.f_number_at_max_focal_length(), Some(fraction(45, 10)));
+    }
+
+    #[test]
+    fn a_lens_has_a_range_when_any_of_its_four_fractions_is_known() {
+        let value = Some(fraction(1, 1));
+        let model = || Some("x".to_owned());
+        // A lens named but with no range, as the Nikon 1 J1's Exif tags
+        // describe it (public sample 2956).
+        let named = Lens::new(None, model(), None, None, None, None, None).unwrap();
+        assert!(!named.has_range());
+        let ranges = [
+            Lens::new(None, None, None, value, None, None, None),
+            Lens::new(None, None, None, None, value, None, None),
+            Lens::new(None, None, None, None, None, value, None),
+            Lens::new(None, None, None, None, None, None, value),
+        ];
+        for (place, lens) in ranges.into_iter().enumerate() {
+            assert!(lens.unwrap().has_range(), "value {place}");
+        }
+    }
+
+    #[test]
+    fn a_lens_with_a_range_keeps_its_text_and_takes_the_new_range() {
+        let range = [
+            Some(fraction(100, 10)),
+            Some(fraction(300, 10)),
+            Some(fraction(35, 10)),
+            Some(fraction(56, 10)),
+        ];
+        let named = Lens::new(
+            Some("Nikon".to_owned()),
+            Some("1 NIKKOR VR 10-30mm f/3.5-5.6".to_owned()),
+            Some("20012345".to_owned()),
+            Some(fraction(1, 1)),
+            None,
+            None,
+            None,
+        );
+        let lens = Lens::with_range(named, range).unwrap();
+        assert_eq!(lens.make(), Some("Nikon"));
+        assert_eq!(lens.model(), Some("1 NIKKOR VR 10-30mm f/3.5-5.6"));
+        assert_eq!(lens.serial_number(), Some("20012345"));
+        assert_eq!(lens.min_focal_length(), range[0]);
+        assert_eq!(lens.max_focal_length(), range[1]);
+        assert_eq!(lens.f_number_at_min_focal_length(), range[2]);
+        assert_eq!(lens.f_number_at_max_focal_length(), range[3]);
+
+        // No lens and a range: a lens of the range alone.
+        let alone = Lens::with_range(None, range).unwrap();
+        assert_eq!((alone.make(), alone.model()), (None, None));
+        assert_eq!(alone.serial_number(), None);
+        assert_eq!(alone.min_focal_length(), range[0]);
+        assert_eq!(alone.f_number_at_max_focal_length(), range[3]);
+
+        // A range of nothing on a lens of a range alone, or on no lens,
+        // leaves no lens.
+        let bare = Lens::new(None, None, None, Some(fraction(1, 1)), None, None, None);
+        assert_eq!(Lens::with_range(bare, [None; 4]), None);
+        assert_eq!(Lens::with_range(None, [None; 4]), None);
     }
 
     #[test]

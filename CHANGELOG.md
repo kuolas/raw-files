@@ -19,7 +19,9 @@ does.
   (make, model, serial number, and focal-length and aperture range), and
   the sizes of the raw data and of the visible image (on Nikon files, the
   crop area the camera records), with the `Metadata`, `Exposure`, `Lens`,
-  `DateTime`, `Rational` and `SignedRational` types.
+  `DateTime`, `Rational` and `SignedRational` types; on Nikon bodies whose
+  standard tags lack them, the serial number, ISO and lens range come from
+  the MakerNote.
 
 ## [0.1.0] - 2026-10-14
 

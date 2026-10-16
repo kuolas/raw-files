@@ -8,11 +8,13 @@
 //! the TIFF reader hold the walk to that; the tests here hold everything
 //! that opening a file runs after it to the same rule: the detection of
 //! the format, the preview finder, and the metadata reader, whose values
-//! come from tags all over the file. They damage the two fixtures that
-//! carry every metadata tag the readers read, a Nikon Z 9's NEF (with its
-//! MakerNote in the file's byte order and in the other) and an ILCE-7M4's
-//! ARW 4, in both byte orders: they cut each file at every length, and
-//! overwrite each byte in turn with 0x00, 0xFF and its complement.
+//! come from tags all over the file. They damage the fixtures that carry
+//! every metadata tag the readers read: a Nikon Z 9's NEF (with its
+//! MakerNote in the file's byte order and in the other), a Nikon D300's
+//! NEF, whose MakerNote records the serial number and the lens's range
+//! that its standard tags lack, and an ILCE-7M4's ARW 4, each in
+//! both byte orders. They cut each file at every length, and overwrite
+//! each byte in turn with 0x00, 0xFF and its complement.
 //!
 //! Each damaged file is opened as a caller would open it, with
 //! [`RawFile::from_bytes`], which reads through the same source and block
@@ -45,7 +47,7 @@ use std::panic;
 
 use raw_files::{Metadata, Rational, RawFile, SignedRational};
 use support::arw::{ARW4_FULL_SIZE_JPEG, arw4_file, stub};
-use support::nef::{z9_file, z9_file_with};
+use support::nef::{d300_file, z9_file, z9_file_with};
 use support::tiff_builder::Order;
 
 const ORDERS: [Order; 2] = [Order::Little, Order::Big];
@@ -64,8 +66,9 @@ struct Fixture {
 }
 
 /// The Z 9 fixture, with IFD0's Orientation 8, in both byte orders, and
-/// with its MakerNote in the other byte order from the file's; and the ARW
-/// 4 fixture, with Orientation 8, in both byte orders.
+/// with its MakerNote in the other byte order from the file's; the D300
+/// fixture, with Orientation 8, in both byte orders; and the ARW 4
+/// fixture, with Orientation 8, in both byte orders.
 fn fixtures() -> Vec<Fixture> {
     let mut fixtures = Vec::new();
     for order in ORDERS {
@@ -81,6 +84,15 @@ fn fixtures() -> Vec<Fixture> {
         let bytes = z9_file_with(order, 8, makernote_order).0.bytes;
         fixtures.push(Fixture {
             name: format!("Z 9, {order:?}, MakerNote {makernote_order:?}"),
+            sweep_end: bytes.len(),
+            more_lengths: Vec::new(),
+            bytes,
+        });
+    }
+    for order in ORDERS {
+        let bytes = d300_file(order, 8).bytes;
+        fixtures.push(Fixture {
+            name: format!("D300, {order:?}"),
             sweep_end: bytes.len(),
             more_lengths: Vec::new(),
             bytes,
@@ -308,6 +320,7 @@ fn an_impossible_capture_time_costs_only_the_capture_time() {
     for order in ORDERS {
         let fixtures = [
             ("Z 9", z9_file(order, 8).bytes, "2022:02:05 13:46:41"),
+            ("D300", d300_file(order, 8).bytes, "2008:05:17 10:22:31"),
             ("ARW 4", arw4_file(order, 8).0.bytes, "2023:10:19 16:13:48"),
         ];
         for (name, undamaged_bytes, time) in fixtures {

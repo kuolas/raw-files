@@ -14,11 +14,12 @@ the corpus the fuzzer writes is not.
   a range inside the input, then a stream, since the target also probes the
   range those bytes name.
 - `open/` seeds the `open` target with the integration tests' fixtures of
-  the RAW formats: a file laid out like a Nikon Z 9's NEF and one like each
-  generation of Sony's family (ARW 4.0 with a lossless and with a medium
-  raw, ARW 2.x, ARQ, SR2, SRF and the A100), in both byte orders. The target
-  still takes the `tiff_walk/` seeds as a second corpus directory, since a
-  plain TIFF file is also something it must open.
+  the RAW formats: files laid out like the NEF of a Nikon Z 9 and of a
+  D300, and one like each generation of Sony's family (ARW 4.0 with a
+  lossless and with a medium raw, ARW 2.x, ARQ, SR2, SRF and the A100), in
+  both byte orders. The target still takes the `tiff_walk/` seeds as a
+  second corpus directory, since a plain TIFF file is also something it
+  must open.
 
 The files are generated from the fixtures in
 `src/container/tiff/robustness.rs`, the stubs in

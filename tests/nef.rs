@@ -2,8 +2,11 @@
 
 //! The NEF reader from outside the crate, on a file laid out like a Nikon
 //! Z 9's: what it opens as, which previews it lists, what reading one
-//! returns, and what metadata it gives. Then the same on real Z 9 files,
-//! when they have been downloaded (see [`support::samples::path`]).
+//! returns, and what metadata it gives. Then the previews and the metadata
+//! of a file laid out like a D300's, an older body that records its serial
+//! number and its lens's range only in its MakerNote. Then the same on real
+//! Z 9 files, when they have been downloaded (see
+//! [`support::samples::path`]).
 
 mod support;
 
@@ -13,8 +16,9 @@ use raw_files::{
     Format, Orientation, Preview, PreviewFormat, Rational, RawFile, SignedRational, Size,
 };
 use support::nef::{
+    D300_FULL_SIZE_JPEG, D300_LENS, D300_PREVIEW_JPEG, D300_RAW, D300_SERIAL_NUMBER,
     FULL_SIZE_JPEG, IFD0_JPEG, LENS_MODEL_Z14_30, MEDIUM_JPEG, PREVIEW_JPEG, RAW_STRIP_START,
-    Z9Blobs, stub, z9_file, z9_file_with, z9_file_with_blobs,
+    Z9Blobs, d300_file, d300_file_with_blobs, stub, z9_file, z9_file_with, z9_file_with_blobs,
 };
 use support::samples::{Jpeg, Sample, check, sizes};
 use support::tiff_builder::{Built, Order};
@@ -324,6 +328,106 @@ fn the_raw_strip_the_grey_image_and_the_empty_subifds_are_not_previews() {
         // The empty SubIFDs declare a strip at offset 0.
         assert!(!starts.contains(&0), "{order:?}: {starts:?}");
         assert_eq!(starts.len(), 4, "{order:?}");
+    }
+}
+
+#[test]
+fn the_d300_file_opens_as_nef_with_its_two_jpegs_smallest_first() {
+    // The MakerNote's small JPEG and SubIFD0's full-size one; IFD0's
+    // uncompressed thumbnail is not a JPEG, and the raw strip is not a
+    // preview, as on the public D300 sample 928.
+    for order in ORDERS {
+        let (built, blobs) = d300_file_with_blobs(order, 1);
+        let file = RawFile::from_bytes(&built.bytes).unwrap();
+        assert_eq!(file.format(), Format::Nef, "{order:?}");
+        let previews = file.previews();
+        assert_eq!(
+            sizes(previews),
+            [wide(D300_PREVIEW_JPEG), wide(D300_FULL_SIZE_JPEG)],
+            "{order:?}"
+        );
+        let expected = [
+            (
+                built.blob_offset(blobs.makernote) + blobs.preview_in_makernote,
+                D300_PREVIEW_JPEG,
+            ),
+            (built.blob_offset(blobs.full_size_jpeg), D300_FULL_SIZE_JPEG),
+        ];
+        for (preview, (offset, size)) in previews.iter().zip(expected) {
+            assert_eq!(preview.format(), PreviewFormat::Jpeg, "{order:?}");
+            assert_eq!(preview.byte_range().start, offset, "{order:?}");
+            assert_eq!(preview.byte_len(), stub_len(size), "{order:?}");
+        }
+        let starts: Vec<u64> = previews.iter().map(|p| p.byte_range().start).collect();
+        for strip in [blobs.thumbnail, blobs.raw] {
+            assert!(
+                !starts.contains(&built.blob_offset(strip)),
+                "{order:?}: {starts:?}"
+            );
+        }
+    }
+}
+
+#[test]
+fn the_d300_file_gives_its_serial_number_and_lens_range_from_the_makernote() {
+    for order in ORDERS {
+        for (value, orientation) in [(8, Orientation::Rotate270), (1, Orientation::NoTransforms)] {
+            let label = format!("{order:?}, Orientation {value}");
+            let built = d300_file(order, value);
+            let file = RawFile::from_bytes(&built.bytes).unwrap();
+            let metadata = file.metadata();
+            assert_eq!(metadata.make(), Some("NIKON CORPORATION"), "{label}");
+            assert_eq!(metadata.model(), Some("NIKON D300"), "{label}");
+            // No BodySerialNumber in the Exif IFD: the MakerNote's.
+            assert_eq!(
+                metadata.serial_number(),
+                Some(D300_SERIAL_NUMBER),
+                "{label}"
+            );
+            // No OffsetTimeOriginal, so no offset from UTC.
+            let time = metadata.capture_time().unwrap();
+            assert_eq!(time.to_string(), "2008-05-17T10:22:31.34", "{label}");
+            assert_eq!(time.offset_minutes(), None, "{label}");
+            assert_eq!(metadata.orientation(), orientation, "{label}");
+            // The exposure as stored: 1/10 s at f/7.1, 50 mm and ISO 200,
+            // with no compensation. The ISO is the Exif one, which the
+            // MakerNote's `[0, 200]` agrees with.
+            let exposure = metadata.exposure();
+            assert_eq!(exposure.iso(), Some(200), "{label}");
+            assert_eq!(exposure.exposure_time(), Some(fraction(10, 100)), "{label}");
+            assert_eq!(exposure.f_number(), Some(fraction(71, 10)), "{label}");
+            assert_eq!(exposure.focal_length(), Some(fraction(500, 10)), "{label}");
+            assert_eq!(
+                exposure.exposure_bias(),
+                Some(SignedRational {
+                    numerator: 0,
+                    denominator: 6,
+                }),
+                "{label}"
+            );
+            // No lens tag in the Exif IFD: a lens of the MakerNote's range
+            // alone, with no name and no serial number.
+            let lens = metadata.lens().unwrap();
+            assert_eq!(
+                (lens.make(), lens.model(), lens.serial_number()),
+                (None, None, None),
+                "{label}"
+            );
+            let [min_focal, max_focal, f_at_min, f_at_max] =
+                D300_LENS.map(|(n, d)| Some(fraction(n, d)));
+            assert_eq!(lens.min_focal_length(), min_focal, "{label}");
+            assert_eq!(lens.max_focal_length(), max_focal, "{label}");
+            assert_eq!(lens.f_number_at_min_focal_length(), f_at_min, "{label}");
+            assert_eq!(lens.f_number_at_max_focal_length(), f_at_max, "{label}");
+            // No CropArea and no default crop: the image size is the raw
+            // size, border pixels included.
+            let raw = Size {
+                width: D300_RAW.0,
+                height: D300_RAW.1,
+            };
+            assert_eq!(metadata.raw_size(), Some(raw), "{label}");
+            assert_eq!(metadata.image_size(), Some(raw), "{label}");
+        }
     }
 }
 
