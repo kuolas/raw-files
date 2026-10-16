@@ -9,7 +9,9 @@ mod support;
 
 use std::io::Cursor;
 
-use raw_files::{Format, Orientation, Preview, PreviewFormat, Rational, RawFile, SignedRational};
+use raw_files::{
+    Format, Orientation, Preview, PreviewFormat, Rational, RawFile, SignedRational, Size,
+};
 use support::nef::{
     FULL_SIZE_JPEG, IFD0_JPEG, LENS_MODEL_Z14_30, MEDIUM_JPEG, PREVIEW_JPEG, RAW_STRIP_START,
     Z9Blobs, stub, z9_file, z9_file_with, z9_file_with_blobs,
@@ -140,8 +142,9 @@ fn fraction(numerator: u32, denominator: u32) -> Rational {
 
 /// Checks that the Z 9 file `built`, whose IFD0's Orientation is
 /// `orientation`, gives the camera, the serial number, the capture time,
-/// the exposure and the lens the fixture records, and that orientation,
-/// from bytes and from a reader; `label` names the file in a failure.
+/// the exposure, the lens and the sizes the fixture records, and that
+/// orientation, from bytes and from a reader; `label` names the file in a
+/// failure.
 fn assert_the_z9_metadata(built: &Built, orientation: Orientation, label: &str) {
     let from_bytes = RawFile::from_bytes(&built.bytes).unwrap();
     let from_reader = RawFile::from_reader(Cursor::new(built.bytes.clone())).unwrap();
@@ -241,14 +244,19 @@ fn assert_the_z9_metadata(built: &Built, orientation: Orientation, label: &str) 
             Some(fraction(400, 100)),
             "{label}, from {how}"
         );
-        // The sizes are not read yet.
-        assert_eq!(metadata.raw_size(), None, "{label}, from {how}");
-        assert_eq!(metadata.image_size(), None, "{label}, from {how}");
+        // The raw size is SubIFD1's, the raw data's; with no default crop
+        // in the file, the image size is the same.
+        let raw = Size {
+            width: 8280,
+            height: 5520,
+        };
+        assert_eq!(metadata.raw_size(), Some(raw), "{label}, from {how}");
+        assert_eq!(metadata.image_size(), Some(raw), "{label}, from {how}");
     }
 }
 
 #[test]
-fn the_z9_file_gives_its_camera_serial_number_capture_time_exposure_lens_and_orientation() {
+fn the_z9_file_gives_every_value_its_fixture_records() {
     for order in ORDERS {
         for (value, orientation) in [(8, Orientation::Rotate270), (1, Orientation::NoTransforms)] {
             let built = z9_file(order, value);

@@ -20,7 +20,8 @@
 //!   whose samples are a colour filter array (CFA) or Sony's linear raw
 //!   (ARQ), one whose samples are wider than 8 bits, one stored in tiles,
 //!   and one that says it is the full-resolution image. No camera writes a
-//!   preview so.
+//!   preview so. The metadata reader takes the raw size by the same test
+//!   ([`is_raw`]), so that the two agree on which IFD holds the raw data.
 //! - An IFD is skipped too, with whatever it points at, when a tag these
 //!   rules read in it cannot be read, such as a value longer than one tag
 //!   may take: damage costs only the IFD it touches, never the other
@@ -186,6 +187,10 @@ pub(crate) fn orientation<R: Read + Seek>(src: &mut Source<R>, tree: &Tree) -> R
 /// Whether `ifd` describes raw data, by the role its tags give it, so that
 /// nothing it points at is a preview.
 ///
+/// The metadata reader (`tiff_metadata`) takes the raw size from the
+/// largest IFD this says is raw data, so that the finder and the metadata
+/// agree on which IFDs hold it.
+///
 /// A tag whose value the test reads says nothing either way when it is
 /// missing or not of an integer type that [`Ifd::u32s`] reads; a tile tag
 /// counts by its presence alone, whatever its type.
@@ -193,9 +198,9 @@ pub(crate) fn orientation<R: Read + Seek>(src: &mut Source<R>, tree: &Tree) -> R
 /// # Errors
 ///
 /// As for [`Ifd::u32s`]: `LimitExceeded` for a value longer than one tag
-/// may take, which [`find`] takes for damage and skips the IFD; `Io` when
-/// the reader fails.
-fn is_raw<R: Read + Seek>(src: &mut Source<R>, ifd: &Ifd) -> Result<bool> {
+/// may take, which [`find`] and the metadata reader take for damage and
+/// skip the IFD; `Io` when the reader fails.
+pub(crate) fn is_raw<R: Read + Seek>(src: &mut Source<R>, ifd: &Ifd) -> Result<bool> {
     if matches!(
         ifd.u32(src, PHOTOMETRIC_INTERPRETATION)?,
         Some(CFA | LINEAR_RAW)

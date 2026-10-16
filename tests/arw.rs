@@ -14,7 +14,7 @@ use std::fs;
 use std::io::Cursor;
 
 use raw_files::{
-    Exposure, Format, Lens, Orientation, PreviewFormat, Rational, RawFile, SignedRational,
+    Exposure, Format, Lens, Orientation, PreviewFormat, Rational, RawFile, SignedRational, Size,
 };
 use support::arw::{
     A100_JPEG, A100_RAW_AS_COUNT, A100_TAG_SIZE, ARW4_FULL_SIZE_JPEG, ArwBlobs, IFD0_JPEG,
@@ -236,6 +236,11 @@ fn assert_the_arw4_exposure(exposure: &Exposure, label: &str) {
     );
 }
 
+/// A size of `width` by `height` pixels.
+fn size(width: u32, height: u32) -> Size {
+    Size { width, height }
+}
+
 /// Checks that `lens` is the one the ARW 4 files record: the model
 /// `FE 50mm F2.5 G`, a 50 mm prime at f/2.5, with no make and no serial
 /// number; `label` names the file in a failure.
@@ -265,7 +270,7 @@ fn assert_the_arw4_lens(lens: Option<&Lens>, label: &str) {
 }
 
 #[test]
-fn the_arw4_file_gives_its_camera_capture_time_exposure_lens_and_orientation() {
+fn the_arw4_file_gives_every_value_its_fixture_records() {
     for order in ORDERS {
         for (value, orientation) in [(8, Orientation::Rotate270), (1, Orientation::NoTransforms)] {
             let label = format!("{order:?}, Orientation {value}");
@@ -283,9 +288,10 @@ fn the_arw4_file_gives_its_camera_capture_time_exposure_lens_and_orientation() {
             assert_eq!(metadata.orientation(), orientation, "{label}");
             assert_the_arw4_exposure(metadata.exposure(), &label);
             assert_the_arw4_lens(metadata.lens(), &label);
-            // The sizes are not read yet.
-            assert_eq!(metadata.raw_size(), None, "{label}");
-            assert_eq!(metadata.image_size(), None, "{label}");
+            // The raw SubIFD's size, padded to whole tiles, and its
+            // default crop, which lies inside it.
+            assert_eq!(metadata.raw_size(), Some(size(7168, 5120)), "{label}");
+            assert_eq!(metadata.image_size(), Some(size(7008, 4672)), "{label}");
             for preview in file.previews() {
                 assert_eq!(preview.orientation(), orientation, "{label}");
             }
@@ -294,34 +300,73 @@ fn the_arw4_file_gives_its_camera_capture_time_exposure_lens_and_orientation() {
 }
 
 #[test]
-fn every_layout_gives_its_camera_and_a_time_exposure_and_lens_only_if_it_has_them() {
-    // Each layout's name, model, capture time, and whether it records an
-    // exposure and a lens.
+fn every_layout_gives_the_metadata_its_fixture_records() {
+    let arw4_time = Some("2023-10-19T16:13:48.776+02:00");
+    // Each layout's name, model, capture time, whether it records an
+    // exposure and a lens, and its raw size and image size.
     let expected = [
         (
             "ARW 4",
             "ILCE-7M4",
-            Some("2023-10-19T16:13:48.776+02:00"),
+            arw4_time,
             true,
+            // Padded to whole tiles, then the default crop.
+            Some(size(7168, 5120)),
+            Some(size(7008, 4672)),
         ),
         (
             "ARW 4 medium",
             "ILCE-7M4",
-            Some("2023-10-19T16:13:48.776+02:00"),
+            arw4_time,
             true,
+            Some(size(5120, 3584)),
+            Some(size(4608, 3072)),
         ),
-        ("ARW 2", "SLT-A99V", None, false),
-        ("ARQ", "ILCE-7RM3", None, false),
-        ("SR2", "DSC-R1", None, false),
-        ("SRF", "DSC-F828", None, false),
-        // Its Make is `SONY` and eleven spaces, which are padding.
-        ("A100", "DSLR-A100", None, false),
+        (
+            "ARW 2",
+            "SLT-A99V",
+            None,
+            false,
+            Some(size(6024, 4024)),
+            Some(size(6024, 4024)),
+        ),
+        (
+            "ARQ",
+            "ILCE-7RM3",
+            None,
+            false,
+            Some(size(8000, 5320)),
+            Some(size(8000, 5320)),
+        ),
+        (
+            "SR2",
+            "DSC-R1",
+            None,
+            false,
+            Some(size(3984, 2608)),
+            Some(size(3984, 2608)),
+        ),
+        // IFD0 is the raw data, by its 14-bit samples.
+        (
+            "SRF",
+            "DSC-F828",
+            None,
+            false,
+            Some(size(3360, 2460)),
+            Some(size(3360, 2460)),
+        ),
+        // Its Make is `SONY` and eleven spaces, which are padding. Its
+        // SubIFD pointer leads to no IFD, and its IFDs are previews, so no
+        // IFD describes the raw data, whatever size IFD0's tags declare.
+        ("A100", "DSLR-A100", None, false, None, None),
     ];
     for order in ORDERS {
         let layouts = every_layout(order);
         assert_eq!(layouts.len(), expected.len());
-        for ((name, (built, _)), (expected_name, model, time, has_exposure_and_lens)) in
-            layouts.into_iter().zip(expected)
+        for (
+            (name, (built, _)),
+            (expected_name, model, time, has_exposure_and_lens, raw_size, image_size),
+        ) in layouts.into_iter().zip(expected)
         {
             assert_eq!(name, expected_name);
             let label = format!("{name}, {order:?}");
@@ -343,6 +388,8 @@ fn every_layout_gives_its_camera_and_a_time_exposure_and_lens_only_if_it_has_the
                 assert_eq!(metadata.exposure(), &Exposure::default(), "{label}");
                 assert_eq!(metadata.lens(), None, "{label}");
             }
+            assert_eq!(metadata.raw_size(), raw_size, "{label}");
+            assert_eq!(metadata.image_size(), image_size, "{label}");
             // Every layout is built upright, and the SRF has no
             // Orientation at all; the previews agree.
             assert_eq!(metadata.orientation(), Orientation::NoTransforms, "{label}");

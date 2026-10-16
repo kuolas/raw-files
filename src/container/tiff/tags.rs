@@ -13,6 +13,14 @@
 /// bit field, 0 for the full-resolution image.
 pub(crate) const NEW_SUBFILE_TYPE: u16 = 0x00FE;
 
+/// The width in pixels of the image an IFD describes (ImageWidth), as a
+/// SHORT or a LONG: read from the IFD of the raw data, its raw size.
+pub(crate) const IMAGE_WIDTH: u16 = 0x0100;
+
+/// The height in pixels of the image an IFD describes (ImageLength), as a
+/// SHORT or a LONG: read from the IFD of the raw data, its raw size.
+pub(crate) const IMAGE_LENGTH: u16 = 0x0101;
+
 /// How many bits each sample of the image's pixels holds, one value per
 /// sample (BitsPerSample).
 pub(crate) const BITS_PER_SAMPLE: u16 = 0x0102;
@@ -158,6 +166,17 @@ pub(crate) const LENS_SERIAL_NUMBER: u16 = 0xA435;
 /// read from IFD0: present in every DNG and in the DNG-based files of some
 /// makers, absent from a Sony RAW file.
 pub(crate) const DNG_VERSION: u16 = 0xC612;
+
+/// Where the visible image starts in the raw data, as two numbers, the
+/// column then the row (DefaultCropOrigin, from the DNG specification),
+/// read from the IFD of the raw data: of type SHORT, LONG or RATIONAL.
+/// Sony writes it in its ARW files from version 2.3.3 on.
+pub(crate) const DEFAULT_CROP_ORIGIN: u16 = 0xC61F;
+
+/// The size of the visible image in the raw data, as two numbers, the
+/// width then the height (DefaultCropSize, from the DNG specification),
+/// read from the IFD of the raw data: of type SHORT, LONG or RATIONAL.
+pub(crate) const DEFAULT_CROP_SIZE: u16 = 0xC620;
 
 /// A maker's private data block (DNGPrivateData), read from IFD0: Sony
 /// writes it in every ARW, SR2 and ARQ file as the offset of its

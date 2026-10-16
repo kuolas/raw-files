@@ -17,9 +17,11 @@
 //! - SubIFD1 is the raw data: the full-resolution image (NewSubfileType 0),
 //!   8280 by 5520 pixels, of 14-bit samples of a colour filter array
 //!   (PhotometricInterpretation 32803), with Nikon's Compression 34713, in
-//!   one strip. The strip is 64 bytes that start with `FF 10 FF 50`, the
-//!   start-of-codestream marker of JPEG XS, which is how the raw strips of
-//!   the Z 9's HE and HE* modes begin; the bytes stand for the raw data.
+//!   one strip. Its ImageWidth and ImageLength are LONGs, and it holds no
+//!   default crop, as on the public Z 9 sample 5147. The strip is 64 bytes
+//!   that start with `FF 10 FF 50`, the start-of-codestream marker of JPEG
+//!   XS, which is how the raw strips of the Z 9's HE and HE* modes begin;
+//!   the bytes stand for the raw data.
 //! - SubIFD2 is a reduced-resolution image that declares the medium JPEG,
 //!   1620 by 1080 pixels, as IFD0 does.
 //! - SubIFD3 is an uncompressed reduced-resolution grey image, 384 by 256
