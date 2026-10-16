@@ -27,7 +27,7 @@
 
 use std::io::{Read, Seek};
 
-use super::types::{ASCII, BYTE, IFD, LONG, SHORT, UNDEFINED, type_size};
+use super::types::{ASCII, BYTE, IFD, LONG, RATIONAL, SHORT, SRATIONAL, UNDEFINED, type_size};
 use crate::error::{Error, Result};
 use crate::io::{ByteOrder, Source};
 use crate::limits::Limits;
@@ -319,6 +319,59 @@ impl Ifd {
             .and_then(|values| values.first().copied()))
     }
 
+    /// The fractions of tag `tag`, such as an exposure time of 10/3200 s,
+    /// when its type is RATIONAL; `None` when the tag is missing or has
+    /// another type.
+    ///
+    /// Each value is a `(numerator, denominator)` pair of unsigned 32-bit
+    /// numbers, numerator first, both in the IFD's byte order. The pairs
+    /// are returned as written: a denominator of 0 is kept, for the caller
+    /// to judge.
+    ///
+    /// # Errors
+    ///
+    /// As for [`u32s`](Self::u32s).
+    #[cfg_attr(
+        not(test),
+        expect(dead_code, reason = "nothing reads this accessor yet")
+    )]
+    pub(crate) fn rationals<R: Read + Seek>(
+        &self,
+        src: &mut Source<R>,
+        tag: u16,
+    ) -> Result<Option<Vec<(u32, u32)>>> {
+        self.pairs(src, tag, RATIONAL)
+    }
+
+    /// The signed fractions of tag `tag`, such as an exposure compensation
+    /// of -2/3 EV, when its type is SRATIONAL; `None` when the tag is
+    /// missing or has another type.
+    ///
+    /// Each value is a `(numerator, denominator)` pair of signed 32-bit
+    /// numbers, numerator first, both in the IFD's byte order. The pairs
+    /// are returned as written: a denominator of 0 is kept, for the caller
+    /// to judge.
+    ///
+    /// # Errors
+    ///
+    /// As for [`u32s`](Self::u32s).
+    #[cfg_attr(
+        not(test),
+        expect(dead_code, reason = "nothing reads this accessor yet")
+    )]
+    pub(crate) fn srationals<R: Read + Seek>(
+        &self,
+        src: &mut Source<R>,
+        tag: u16,
+    ) -> Result<Option<Vec<(i32, i32)>>> {
+        Ok(self.pairs(src, tag, SRATIONAL)?.map(|pairs| {
+            pairs
+                .into_iter()
+                .map(|(n, d)| (n.cast_signed(), d.cast_signed()))
+                .collect()
+        }))
+    }
+
     /// The text of tag `tag`, when its type is ASCII; `None` when the tag is
     /// missing or has another type.
     ///
@@ -362,6 +415,31 @@ impl Ifd {
         Ok(self
             .value(src, tag, &[BYTE, UNDEFINED])?
             .map(|(_, bytes)| bytes))
+    }
+
+    /// The pairs of 32-bit numbers of tag `tag`, numerator first, both in
+    /// the IFD's byte order, when its type is `typ`: what
+    /// [`rationals`](Self::rationals) and [`srationals`](Self::srationals)
+    /// read, before the signed ones are cast. `None` when the tag is
+    /// missing or has another type.
+    fn pairs<R: Read + Seek>(
+        &self,
+        src: &mut Source<R>,
+        tag: u16,
+        typ: u16,
+    ) -> Result<Option<Vec<(u32, u32)>>> {
+        let Some((_, bytes)) = self.value(src, tag, &[typ])? else {
+            return Ok(None);
+        };
+        let order = self.order;
+        let (pairs, _) = bytes.as_chunks::<8>();
+        let values = pairs
+            .iter()
+            .map(|&[n0, n1, n2, n3, d0, d1, d2, d3]| {
+                (order.u32([n0, n1, n2, n3]), order.u32([d0, d1, d2, d3]))
+            })
+            .collect();
+        Ok(Some(values))
     }
 
     /// The first entry with tag `tag` and its value's bytes, when its type is
@@ -432,7 +510,7 @@ impl Entry {
 mod tests {
     use super::*;
     use crate::ErrorKind;
-    use crate::container::tiff::types::{DOUBLE, RATIONAL};
+    use crate::container::tiff::types::DOUBLE;
     use crate::tiff_builder::{Built, IfdId, Order, RawValue, TiffBuilder};
     use std::io::Cursor;
 
@@ -485,6 +563,20 @@ mod tests {
     fn file_bytes(built: &Built, at: u64, len: usize) -> &[u8] {
         let at = usize::try_from(at).unwrap();
         &built.bytes[at..at + len]
+    }
+
+    /// The bytes of SRATIONAL `values` in byte order `order`.
+    fn srational_bytes(order: Order, values: &[(i32, i32)]) -> Vec<u8> {
+        values
+            .iter()
+            .flat_map(|&(num, den)| {
+                [
+                    order.u32(num.cast_unsigned()),
+                    order.u32(den.cast_unsigned()),
+                ]
+            })
+            .flatten()
+            .collect()
     }
 
     #[test]
@@ -564,7 +656,7 @@ mod tests {
             let at = ifd.entry(0x0007).unwrap().value_offset().unwrap();
             assert_eq!(file_bytes(&built, at, 5), b"abcd\0");
 
-            // A RATIONAL has no typed accessor yet: its entry says where it is.
+            // A RATIONAL's entry says where its pairs are, numerator first.
             let rational = ifd.entry(0x000C).unwrap();
             assert_eq!(
                 (rational.tag(), rational.typ(), rational.count()),
@@ -635,6 +727,172 @@ mod tests {
             assert_eq!(ifd.bytes(src, 0x0006).unwrap(), None);
             assert_eq!(ifd.ascii(src, 0x0099).unwrap(), None);
             assert_eq!(ifd.bytes(src, 0x0099).unwrap(), None);
+        }
+    }
+
+    #[test]
+    fn rationals_and_srationals_in_both_byte_orders() {
+        let signed = [
+            (-2, 3),
+            (0x0102_0304, -0x0506_0708),
+            (i32::MIN, i32::MAX),
+            (7, 0),
+        ];
+        for order in ORDERS {
+            let mut builder = TiffBuilder::new(order);
+            let ifd = builder.ifd();
+            builder.blob_at(512, &srational_bytes(order, &signed));
+            builder
+                .rational(
+                    ifd,
+                    0x0001,
+                    &[
+                        (10, 3200),
+                        (0x0102_0304, 0x0506_0708),
+                        (u32::MAX, 1),
+                        (5, 0),
+                    ],
+                )
+                .raw(ifd, 0x0002, SRATIONAL, 4, RawValue::Offset(512))
+                .raw(ifd, 0x0003, RATIONAL, 0, RawValue::Inline([1, 2, 3, 4]))
+                .raw(ifd, 0x0004, SRATIONAL, 0, RawValue::Inline([1, 2, 3, 4]));
+            let built = builder.build();
+            let (mut src, ifd, _) = read(order, &built, ifd);
+            let src = &mut src;
+            assert_eq!(ifd.invalid_entries(), 0);
+
+            assert_eq!(
+                ifd.rationals(src, 0x0001).unwrap(),
+                Some(vec![
+                    (10, 3200),
+                    (0x0102_0304, 0x0506_0708),
+                    (u32::MAX, 1),
+                    (5, 0)
+                ])
+            );
+            assert_eq!(ifd.srationals(src, 0x0002).unwrap(), Some(signed.to_vec()));
+            // Count 0: an empty value, not a missing tag.
+            assert_eq!(ifd.rationals(src, 0x0003).unwrap(), Some(vec![]));
+            assert_eq!(ifd.srationals(src, 0x0004).unwrap(), Some(vec![]));
+        }
+    }
+
+    #[test]
+    fn rationals_and_srationals_read_their_own_type_only() {
+        for order in ORDERS {
+            let mut builder = TiffBuilder::new(order);
+            let ifd = builder.ifd();
+            builder.blob_at(512, &srational_bytes(order, &[(-1, 3)]));
+            builder.blob_at(520, &[0x3F, 0xF0, 0, 0, 0, 0, 0, 0]);
+            builder
+                .rational(ifd, 0x0001, &[(1, 3)])
+                .raw(ifd, 0x0002, SRATIONAL, 1, RawValue::Offset(512))
+                .short(ifd, 0x0003, &[1, 3])
+                .long(ifd, 0x0004, &[1, 3])
+                .raw(ifd, 0x0005, DOUBLE, 1, RawValue::Offset(520));
+            let built = builder.build();
+            let (mut src, ifd, _) = read(order, &built, ifd);
+            let src = &mut src;
+            assert_eq!(ifd.invalid_entries(), 0);
+
+            assert_eq!(ifd.rationals(src, 0x0001).unwrap(), Some(vec![(1, 3)]));
+            assert_eq!(ifd.srationals(src, 0x0002).unwrap(), Some(vec![(-1, 3)]));
+            assert_eq!(ifd.srationals(src, 0x0001).unwrap(), None, "RATIONAL");
+            assert_eq!(ifd.rationals(src, 0x0002).unwrap(), None, "SRATIONAL");
+            for tag in [0x0003, 0x0004, 0x0005, 0x0099] {
+                assert_eq!(ifd.rationals(src, tag).unwrap(), None, "tag {tag:#06X}");
+                assert_eq!(ifd.srationals(src, tag).unwrap(), None, "tag {tag:#06X}");
+            }
+            // And the other accessors do not read them.
+            assert_eq!(ifd.u32s(src, 0x0002).unwrap(), None);
+            assert_eq!(ifd.bytes(src, 0x0002).unwrap(), None);
+        }
+    }
+
+    #[test]
+    fn a_rational_past_the_end_of_the_file_is_read_as_u32s_reads_a_long() {
+        for order in ORDERS {
+            let mut builder = TiffBuilder::new(order);
+            let ifd = builder.ifd();
+            builder.blob_at(512, &srational_bytes(order, &[(-1, 3)]));
+            builder
+                .long(ifd, 0x0001, &[1, 3])
+                .rational(ifd, 0x0002, &[(1, 3)])
+                .raw(ifd, 0x0003, SRATIONAL, 1, RawValue::Offset(512));
+            let built = builder.build();
+            let (_, parsed, _) = read(order, &built, ifd);
+            let value_at = |tag| parsed.entry(tag).unwrap().value_offset().unwrap();
+            let first = [0x0001, 0x0002, 0x0003].map(value_at).into_iter().min();
+            let cut = usize::try_from(first.unwrap()).unwrap();
+            let at = built.ifd_offset(ifd);
+            assert!(
+                cut >= usize::try_from(at).unwrap() + 2 + 36 + 4,
+                "after the IFD"
+            );
+
+            // In a file cut before the values, the entries are skipped: each
+            // accessor finds no tag.
+            let short = built.truncated(cut);
+            let (cut_ifd, _) = try_read(order, &short, 0, at, &Limits::default()).unwrap();
+            assert_eq!(cut_ifd.invalid_entries(), 3);
+            let mut src = open(&short);
+            assert_eq!(cut_ifd.u32s(&mut src, 0x0001).unwrap(), None);
+            assert_eq!(cut_ifd.rationals(&mut src, 0x0002).unwrap(), None);
+            assert_eq!(cut_ifd.srationals(&mut src, 0x0003).unwrap(), None);
+
+            // Read through a shorter file than the IFD was read from, each
+            // value fails as `u32s` fails, at the value's offset.
+            let longs = parsed.u32s(&mut src, 0x0001).expect_err("past the end");
+            let rationals = parsed.rationals(&mut src, 0x0002).map(|_| ());
+            let srationals = parsed.srationals(&mut src, 0x0003).map(|_| ());
+            assert_eq!(longs.offset(), Some(value_at(0x0001)), "{longs:?}");
+            for (tag, result) in [(0x0002, rationals), (0x0003, srationals)] {
+                let err = result.expect_err("past the end");
+                assert_eq!(err.kind(), longs.kind(), "{err:?}");
+                assert_eq!(err.offset(), Some(value_at(tag)), "{err:?}");
+            }
+        }
+    }
+
+    #[test]
+    fn a_rational_longer_than_the_cap_exceeds_a_limit_as_u32s_does() {
+        let order = Order::Little;
+        let at = 512;
+        let max = MAX_VALUE_LEN;
+        let mut builder = TiffBuilder::new(order);
+        let ifd = builder.ifd();
+        builder
+            .raw(ifd, 0x0001, RATIONAL, max / 8, RawValue::Offset(at))
+            .raw(ifd, 0x0002, RATIONAL, max / 8 + 1, RawValue::Offset(at))
+            .raw(ifd, 0x0003, SRATIONAL, max / 8, RawValue::Offset(at))
+            .raw(ifd, 0x0004, SRATIONAL, max / 8 + 1, RawValue::Offset(at))
+            .raw(ifd, 0x0005, LONG, max / 4 + 1, RawValue::Offset(at));
+        builder.pad_to(u64::from(at) + u64::from(max) + 8);
+        let built = builder.build();
+        let (mut src, ifd, _) = read(order, &built, ifd);
+        let src = &mut src;
+        assert_eq!(ifd.invalid_entries(), 0, "every value is inside the file");
+
+        assert_eq!(
+            ifd.rationals(src, 0x0001).unwrap().unwrap().len(),
+            128 * 1024
+        );
+        assert_eq!(
+            ifd.srationals(src, 0x0003).unwrap().unwrap().len(),
+            128 * 1024
+        );
+        let longs = ifd
+            .u32s(src, 0x0005)
+            .expect_err("the value is over the cap");
+        assert_eq!(longs.kind(), ErrorKind::LimitExceeded, "{longs:?}");
+        assert_eq!(longs.offset(), Some(u64::from(at)), "{longs:?}");
+        for result in [
+            ifd.rationals(src, 0x0002).map(|_| ()),
+            ifd.srationals(src, 0x0004).map(|_| ()),
+        ] {
+            let err = result.expect_err("the value is over the cap");
+            assert_eq!(err.kind(), longs.kind(), "{err:?}");
+            assert_eq!(err.offset(), longs.offset(), "{err:?}");
         }
     }
 
