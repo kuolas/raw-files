@@ -14,10 +14,14 @@ This is desk research, done in October 2026. On 13 October 2026 the container
 and preview notes were checked against the three CC0 Nikon Z 9 files that CI
 downloads (files 5146 to 5148, listed in
 [test-data.md](test-data.md#21-the-ci-set)); what they show is tagged
-**[F]**. The check walked the files' structure only: the metadata and the
-raw data themselves were not checked, beyond the raw IFD's tags and the first
-bytes of its strip, and no other body was. **Everything else has yet to be
-checked against sample files.** Byte offsets and formulas taken from other
+**[F]**. On 15 October 2026 the MakerNote's layout and the viewer
+metadata were checked against those three files and 20 more CC0 files,
+from the D1H to the Z6III (listed in
+[test-data.md](test-data.md#22-files-checked-for-metadata)). The raw data
+was not checked, beyond the raw IFD's tags and the first bytes of the Z 9's
+strip, and the containers and previews of the 20 other files were not
+written up. **Everything else has yet to be checked against sample
+files.** Byte offsets and formulas taken from other
 projects' source code should be checked against that source and against real
 files before they are hard-coded. [open-questions.md](open-questions.md)
 lists what is still unknown. [research-record.md](research-record.md)
@@ -47,7 +51,8 @@ Claims carry a tag:
   hypothesis to test on sample files.
 - **[F]** — measured on a named sample file. Files are cited by their
   raw.pixls.us id ("file 5146"), and
-  [test-data.md](test-data.md#21-the-ci-set) lists them with their SHA-256.
+  [test-data.md](test-data.md#2-what-is-committed-and-what-is-downloaded)
+  lists them with their SHA-256.
 
 Where a sample contradicts a source, the pages follow the sample and record
 the disagreement.
