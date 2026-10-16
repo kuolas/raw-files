@@ -5,9 +5,10 @@
 //!
 //! A fuzzer reaches the Nikon or Sony reader only by building a layout that
 //! the format detection accepts, which it does by luck. So the target
-//! starts from one file laid out like a Nikon Z 9's NEF and one like each
-//! generation of Sony's family, in both byte orders. The fixtures live in
-//! `tests/support/`, outside the library, so this test writes and checks
+//! starts from files laid out like the NEF of a Nikon Z 9 and of a D300,
+//! whose MakerNote records what the Z 9's standard tags hold, and one like
+//! each generation of Sony's family, in both byte orders. The fixtures live
+//! in `tests/support/`, outside the library, so this test writes and checks
 //! the seed files, as the unit tests of the TIFF reader do for theirs.
 //! [`seeds`] lists them; the ignored test `write_fuzz_seeds` regenerates the
 //! files after a fixture changes, and `the_open_fuzz_seeds_match_the_fixtures`
@@ -20,7 +21,7 @@ use std::path::{Path, PathBuf};
 use support::arw::{
     a100_file, arq_file, arw2_file, arw4_file, arw4_medium_file, sr2_file, srf_file,
 };
-use support::nef::z9_file;
+use support::nef::{d300_file, z9_file};
 use support::tiff_builder::Order;
 
 /// The fixtures as starting inputs for the fuzzer: each file name with the
@@ -29,8 +30,9 @@ fn seeds() -> Vec<(String, Vec<u8>)> {
     // Each layout once: the stem and extension of its file names, and a
     // builder for the fixture in a given byte order.
     type Layout = (&'static str, &'static str, fn(Order) -> Vec<u8>);
-    let layouts: [Layout; 8] = [
+    let layouts: [Layout; 9] = [
         ("nikon-z9", "nef", |order| z9_file(order, 1).bytes),
+        ("nikon-d300", "nef", |order| d300_file(order, 1).bytes),
         ("sony-arw4", "arw", |order| arw4_file(order, 1).0.bytes),
         ("sony-arw4-medium", "arw", |order| {
             arw4_medium_file(order).0.bytes

@@ -24,6 +24,23 @@
 //! when the raw IFD records a default crop, a standard tag, which comes
 //! first (ADR011).
 //!
+//! Older bodies record three more values only here, in plain form: Nikon
+//! has written them in the standard Exif tags only since the D780 and the
+//! Z 6 (public samples 3827 and 3587). SerialNumber is the body's serial
+//! number, ASCII text, seven digits on every checked body from the D300 on
+//! (sample 928) but the Nikon 1 J1, which writes eight (sample 2956); the
+//! D200 writes seven spaces, which are none (sample 8079). ISO holds two
+//! SHORTs, of which the second is the ISO, and gives the ISO of the D100
+//! and the D70, which write none in the Exif tags (samples 2996 and 2060);
+//! the D700 writes four zero bytes there instead, which are none (sample
+//! 2255). Lens is the lens's range, four RATIONALs in the order of the
+//! Exif LensSpecification, on every checked body with interchangeable
+//! lenses. Each is used only when the standard tags give no value for it:
+//! an Exif value always wins, even where the MakerNote records another. A
+//! lens the Exif tags name but give no range for, such as the Nikon 1 J1's
+//! (sample 2956), takes the MakerNote's range and keeps its name; an Exif
+//! range with any value known is kept whole.
+//!
 //! Nikon has used three layouts for the block, told apart by their first
 //! bytes. The one every body since the D70 and the D100 writes, and the one
 //! read here, starts with the signature `Nikon` and a NUL, two version
@@ -42,15 +59,19 @@
 //! PreviewIFD must lie inside the block, with their whole entry tables; the
 //! three numbers that lead to the JPEG must be held in their entries, not
 //! stored elsewhere; the whole JPEG, as declared, must lie inside the
-//! block; and so must CropArea's four numbers, which take more than the
-//! four bytes an entry holds and so are stored elsewhere. A block that does
+//! block; and so must every value read from the MakerNote IFD's entries:
+//! the ISO's two numbers, which the entry holds, and CropArea's four
+//! numbers, the serial number and the lens's range, which take more than
+//! the four bytes an entry holds and so are stored elsewhere. A value of
+//! another type than its tag's rule allows is not read. A block that does
 //! not hold together, whether its inner header is not one, an IFD in it is
 //! cut short or has more entries than the limits allow, costs what the
-//! MakerNote would have given, the small preview and the crop area, never
-//! the file: the NEF security notes ask that bad entries be skipped rather
-//! than fail the file (`docs/formats/nef/security.md`, item 4 of the
-//! checklist). Only a failure of the reader itself is an error: that is not
-//! the file's fault, and says nothing about the MakerNote.
+//! MakerNote would have given, the small preview, the crop area and the
+//! three values above, never the file: the NEF security notes ask that bad
+//! entries be skipped rather than fail the file
+//! (`docs/formats/nef/security.md`, item 4 of the checklist). Only a
+//! failure of the reader itself is an error: that is not the file's fault,
+//! and says nothing about the MakerNote.
 //!
 //! The MakerNote is read once per file, into a [`MakerNote`]: its block
 //! found and checked, its MakerNote IFD parsed. Every use of the MakerNote
@@ -63,7 +84,7 @@ use std::ops::Range;
 use crate::container::tiff::tags::{
     JPEG_INTERCHANGE_FORMAT, JPEG_INTERCHANGE_FORMAT_LENGTH, MAKER_NOTE,
 };
-use crate::container::tiff::types::{BYTE, LONG, SHORT, UNDEFINED};
+use crate::container::tiff::types::{ASCII, BYTE, LONG, RATIONAL, SHORT, UNDEFINED};
 use crate::container::tiff::{Entry, Ifd, Tree, parse_header_at, parse_ifd, skip_damage};
 use crate::error::Result;
 use crate::formats::tiff_metadata::{self, Standard};
@@ -71,16 +92,31 @@ use crate::formats::tiff_previews::Candidate;
 use crate::geometry::Size;
 use crate::io::{ByteOrder, Source, within};
 use crate::limits::Limits;
-use crate::metadata::Metadata;
+use crate::metadata::{Lens, Metadata};
+use crate::rational::Rational;
+
+/// The Nikon MakerNote tag that records the ISO the picture was taken at
+/// (ISO): two SHORTs, the second of them the ISO, on the bodies whose Exif
+/// tags may lack one.
+const ISO: u16 = 0x0002;
 
 /// The Nikon MakerNote tag that points at the PreviewIFD, the sub-IFD
 /// holding the small preview JPEG.
 const PREVIEW_IFD: u16 = 0x0011;
 
+/// The Nikon MakerNote tag that records the camera body's serial number
+/// (SerialNumber), as ASCII text.
+const SERIAL_NUMBER: u16 = 0x001D;
+
 /// The Nikon MakerNote tag that records the visible image, the rectangle
 /// of the stored raw data inside its border (CropArea): its left column,
 /// top row, width and height.
 const CROP_AREA: u16 = 0x0045;
+
+/// The Nikon MakerNote tag that records the lens's range (Lens): its
+/// shortest and longest focal length and the f-number at each, as four
+/// RATIONALs in the order of the Exif LensSpecification.
+const LENS: u16 = 0x0084;
 
 /// The signature a Nikon MakerNote starts with.
 const SIGNATURE: &[u8; 6] = b"Nikon\0";
@@ -210,10 +246,15 @@ pub(super) fn preview_candidate<R: Read + Seek>(
 /// standard tags gave, `standard`, with what the MakerNote records that the
 /// standard tags lack.
 ///
-/// That is the image size, from CropArea, which replaces the raw size the
-/// image size otherwise falls back on: when the raw IFD records no default
-/// crop, which comes first, and when there is a raw size for the crop area
-/// to lie inside ([`crop_area`]). Every other value is the standard tags'.
+/// That is, first, the image size, from CropArea, which replaces the raw
+/// size the image size otherwise falls back on: when the raw IFD records no
+/// default crop, which comes first, and when there is a raw size for the
+/// crop area to lie inside ([`crop_area`]). Then, each only when the
+/// standard tags gave none, the serial number ([`serial_number`]), the ISO
+/// ([`iso`]) and the lens's range ([`lens_range`]): a range fills a lens
+/// whose standard tags gave no value of its range, keeping their make,
+/// model and serial number, or makes a lens of the range alone when they
+/// described none. Every other value is the standard tags'.
 ///
 /// # Errors
 ///
@@ -232,6 +273,16 @@ pub(super) fn metadata<R: Read + Seek>(
         && let Some(image) = crop_area(src, makernote, raw)?
     {
         metadata.image_size = Some(image);
+    }
+    if metadata.serial_number.is_none() {
+        metadata.serial_number = serial_number(src, makernote)?;
+    }
+    if metadata.exposure.iso.is_none() {
+        metadata.exposure.iso = iso(src, makernote)?;
+    }
+    if !metadata.lens.as_ref().is_some_and(Lens::has_range) {
+        let range = lens_range(src, makernote)?;
+        metadata.lens = Lens::with_range(metadata.lens.take(), range);
     }
     Ok(metadata)
 }
@@ -252,27 +303,113 @@ fn crop_area<R: Read + Seek>(
     makernote: &MakerNote,
     raw: Size,
 ) -> Result<Option<Size>> {
-    let MakerNote { block, ifd, .. } = makernote;
-    let Some(entry) = ifd
-        .entry(CROP_AREA)
-        .filter(|entry| matches!(entry.typ(), SHORT | LONG))
-    else {
-        return Ok(None);
-    };
-    // A value stored elsewhere could be anywhere in the file, outside the
-    // block. One held in the entry is inside the block with the entry, and
-    // too short to be four values.
-    if entry
-        .value_offset()
-        .is_some_and(|at| !fits(block, at, u64::from(entry.value_len())))
-    {
+    // Four values are too long for the entry to hold, so they are stored
+    // elsewhere, and must be inside the block.
+    if !has_value_in_block(makernote, CROP_AREA, &[SHORT, LONG]) {
         return Ok(None);
     }
-    let values = skip_damage(ifd.u32s(src, CROP_AREA))?.flatten();
+    let values = skip_damage(makernote.ifd.u32s(src, CROP_AREA))?.flatten();
     let Some(&[left, top, width, height]) = values.as_deref() else {
         return Ok(None);
     };
     Ok(tiff_metadata::crop([left, top], [width, height], raw))
+}
+
+/// The camera body's serial number that `makernote`'s SerialNumber
+/// records, read by the rule every text value of the metadata is read by
+/// ([`tiff_metadata::text`]); `None` when the tag is missing, is not of
+/// type ASCII, stores its value outside the block, or holds text that rule
+/// gives none for, such as the seven spaces the D200 writes (public sample
+/// 8079).
+///
+/// A serial number that is not all digits is returned as written.
+///
+/// # Errors
+///
+/// `Io` when the reader fails. Nothing the block holds is an error.
+fn serial_number<R: Read + Seek>(
+    src: &mut Source<R>,
+    makernote: &MakerNote,
+) -> Result<Option<String>> {
+    // Seven digits and a NUL are stored elsewhere, and must be inside the
+    // block.
+    if !has_value_in_block(makernote, SERIAL_NUMBER, &[ASCII]) {
+        return Ok(None);
+    }
+    tiff_metadata::text(src, &makernote.ifd, SERIAL_NUMBER)
+}
+
+/// The ISO that `makernote`'s ISO tag records: the second of its values,
+/// when it holds exactly two of type SHORT and that second one is above
+/// zero; `None` otherwise.
+///
+/// Most bodies that write the tag write `[0, ISO]`, such as `[0, 200]` on
+/// the D300 (public sample 928). Any other shape records no ISO: the D700
+/// writes four zero bytes of type UNDEFINED (sample 2255), the Coolpix
+/// E5700 `[0, 0]` (sample 4456).
+///
+/// # Errors
+///
+/// `Io` when the reader fails. Nothing the block holds is an error.
+fn iso<R: Read + Seek>(src: &mut Source<R>, makernote: &MakerNote) -> Result<Option<u32>> {
+    // Two SHORTs are held in the entry, inside the block with it; the
+    // check costs nothing and keeps the rule of the block in one place.
+    if !has_value_in_block(makernote, ISO, &[SHORT]) {
+        return Ok(None);
+    }
+    let values = skip_damage(makernote.ifd.u32s(src, ISO))?.flatten();
+    let Some(&[_, iso]) = values.as_deref() else {
+        return Ok(None);
+    };
+    Ok((iso > 0).then_some(iso))
+}
+
+/// The lens's range that `makernote`'s Lens tag records: its shortest and
+/// longest focal length, then the f-number at each, in the order of the
+/// Exif LensSpecification, as [`Lens::new`] takes them.
+///
+/// The tag must be of type RATIONAL, hold exactly four values and store
+/// them inside the block; otherwise all four are `None`. Each value is
+/// `None` when its numerator or its denominator is zero, as in the Exif
+/// tag ([`Rational::known`]).
+///
+/// # Errors
+///
+/// `Io` when the reader fails. Nothing the block holds is an error.
+fn lens_range<R: Read + Seek>(
+    src: &mut Source<R>,
+    makernote: &MakerNote,
+) -> Result<[Option<Rational>; 4]> {
+    // Four fractions, 32 bytes, are stored elsewhere, and must be inside
+    // the block.
+    if !has_value_in_block(makernote, LENS, &[RATIONAL]) {
+        return Ok([None; 4]);
+    }
+    let values = skip_damage(makernote.ifd.rationals(src, LENS))?.flatten();
+    let Some(&[first, second, third, fourth]) = values.as_deref() else {
+        return Ok([None; 4]);
+    };
+    Ok([first, second, third, fourth]
+        .map(|(numerator, denominator)| Rational::known(numerator, denominator)))
+}
+
+/// Whether `makernote`'s MakerNote IFD has an entry of tag `tag`, of one
+/// of the types `types`, whose value lies inside the block: the rule every
+/// value read from the MakerNote IFD's entries follows.
+///
+/// A value held in the entry is inside the block with the entry, which is
+/// inside the block with its IFD. A value stored elsewhere could be
+/// anywhere in the file, outside the block, so it must [`fit`](fits) the
+/// block. The type is checked here because the readers of values accept
+/// more types than a tag's rule allows: [`Ifd::u32s`] reads type IFD too.
+fn has_value_in_block(makernote: &MakerNote, tag: u16, types: &[u16]) -> bool {
+    let MakerNote { block, ifd, .. } = makernote;
+    ifd.entry(tag).is_some_and(|entry| {
+        types.contains(&entry.typ())
+            && entry
+                .value_offset()
+                .is_none_or(|at| fits(block, at, u64::from(entry.value_len())))
+    })
 }
 
 /// Where the MakerNote's bytes are in the file, from its entry: `None`
@@ -353,10 +490,10 @@ fn fits(block: &Range<u64>, at: u64, len: u64) -> bool {
 mod tests {
     use super::*;
     use crate::container::tiff::tags::{
-        DEFAULT_CROP_ORIGIN, DEFAULT_CROP_SIZE, IMAGE_LENGTH, IMAGE_WIDTH, MAKE,
-        PHOTOMETRIC_INTERPRETATION,
+        BODY_SERIAL_NUMBER, DEFAULT_CROP_ORIGIN, DEFAULT_CROP_SIZE, IMAGE_LENGTH, IMAGE_WIDTH,
+        LENS_MODEL, LENS_SPECIFICATION, MAKE, PHOTOGRAPHIC_SENSITIVITY, PHOTOMETRIC_INTERPRETATION,
     };
-    use crate::container::tiff::types::{IFD, RATIONAL};
+    use crate::container::tiff::types::{IFD, SRATIONAL};
     use crate::container::tiff::{parse_header, walk};
     use crate::error::ErrorKind;
     use crate::jpeg_stub::jpeg_stub;
@@ -856,15 +993,16 @@ mod tests {
     const CFA: u16 = 32803;
 
     /// A Nikon MakerNote block in byte order `order` whose MakerNote IFD
-    /// holds the MakerNoteVersion and what `crop` adds, given the inner
-    /// builder and that IFD: a CropArea, whose values, stored out of line,
-    /// are then the last bytes of the block. Also where the CropArea's
-    /// entry is, the IFD's second, counted from the start of the block.
-    fn crop_block(order: Order, crop: impl FnOnce(&mut TiffBuilder, IfdId)) -> (Vec<u8>, u64) {
+    /// holds the MakerNoteVersion and what `tags` adds, given the inner
+    /// builder and that IFD. When that is one tag, such as a CropArea, whose
+    /// value is stored out of line, the value is the last bytes of the
+    /// block. Also where the IFD's second entry is, the one tag's when
+    /// `tags` adds one, counted from the start of the block.
+    fn tags_block(order: Order, tags: impl FnOnce(&mut TiffBuilder, IfdId)) -> (Vec<u8>, u64) {
         let mut inner = TiffBuilder::new(order);
         let makernote = inner.ifd();
         inner.undefined(makernote, MAKER_NOTE_VERSION, b"0211");
-        crop(&mut inner, makernote);
+        tags(&mut inner, makernote);
         let built = inner.build();
         let mut bytes = b"Nikon\0\x02\x11\0\0".to_vec();
         bytes.extend_from_slice(&built.bytes);
@@ -874,7 +1012,7 @@ mod tests {
     /// A MakerNote block in byte order `order` whose CropArea is `values`,
     /// as SHORTs.
     fn shorts_block(order: Order, values: &[u16]) -> Vec<u8> {
-        crop_block(order, |inner, ifd| {
+        tags_block(order, |inner, ifd| {
             inner.short(ifd, CROP_AREA, values);
         })
         .0
@@ -883,7 +1021,7 @@ mod tests {
     /// A MakerNote block in byte order `order` whose CropArea is `values`,
     /// as LONGs.
     fn longs_block(order: Order, values: &[u32]) -> Vec<u8> {
-        crop_block(order, |inner, ifd| {
+        tags_block(order, |inner, ifd| {
             inner.long(ifd, CROP_AREA, values);
         })
         .0
@@ -960,7 +1098,7 @@ mod tests {
     fn a_makernote_without_a_crop_area_gives_the_raw_size() {
         // As the bodies before the D850 write it.
         for order in ORDERS {
-            let block = crop_block(order, |_, _| {}).0;
+            let block = tags_block(order, |_, _| {}).0;
             assert_eq!(image_size(order, &block), Some(RAW), "{order:?}");
         }
     }
@@ -1053,7 +1191,7 @@ mod tests {
             // declared as two RATIONALs, as 16 UNDEFINED bytes, or as four
             // IFD offsets, which are numbers too.
             for (typ, count) in [(RATIONAL, 2), (UNDEFINED, 16), (IFD, 4)] {
-                let (mut block, entry) = crop_block(order, |inner, ifd| {
+                let (mut block, entry) = tags_block(order, |inner, ifd| {
                     inner.long(ifd, CROP_AREA, &Z9_CROP_AREA.map(u32::from));
                 });
                 let entry = usize::try_from(entry).unwrap();
@@ -1104,6 +1242,470 @@ mod tests {
                     "{order:?}, {size:?}"
                 );
             }
+        }
+    }
+
+    /// A made-up serial number of seven digits, as the bodies from the
+    /// D300 on write theirs; no camera's serial number is copied here.
+    const SERIAL: &str = "7654321";
+
+    /// Another made-up serial number, for the Exif tag, which must win.
+    const EXIF_SERIAL: &str = "1234567";
+
+    /// The D300's Lens tag: an 18-70 mm lens of f/3.5 to f/4.5 (public
+    /// sample 928).
+    const D300_LENS: [(u32, u32); 4] = [(180, 10), (700, 10), (35, 10), (45, 10)];
+
+    /// Another lens's range, a 24-120 mm f/4, for the Exif tag, which must
+    /// win.
+    const EXIF_LENS: [(u32, u32); 4] = [(240, 10), (1200, 10), (400, 100), (400, 100)];
+
+    /// `values` as the reader returns a lens's range, each fraction as
+    /// stored.
+    fn known(values: [(u32, u32); 4]) -> [Option<Rational>; 4] {
+        values.map(|(numerator, denominator)| Rational::known(numerator, denominator))
+    }
+
+    /// The four fractions of `lens`'s range, in the order [`Lens::new`]
+    /// takes them.
+    fn range_of(lens: &Lens) -> [Option<Rational>; 4] {
+        [
+            lens.min_focal_length(),
+            lens.max_focal_length(),
+            lens.f_number_at_min_focal_length(),
+            lens.f_number_at_max_focal_length(),
+        ]
+    }
+
+    /// The count of a MakerNote that is all of `block`.
+    fn whole(block: &[u8]) -> u64 {
+        u64::try_from(block.len()).unwrap()
+    }
+
+    /// A Nikon file in byte order `order` whose Exif IFD holds what `exif`
+    /// adds, given the builder and that IFD, and whose MakerNote, at
+    /// [`AT`], is the first `count` bytes of `block`.
+    fn exif_file(
+        order: Order,
+        block: &[u8],
+        count: u64,
+        exif: impl FnOnce(&mut TiffBuilder, IfdId),
+    ) -> Vec<u8> {
+        nikon_file_with(order, AT, block, TAIL, |builder, _, exif_ifd| {
+            exif(builder, exif_ifd);
+            entry_at(builder, exif_ifd, MAKER_NOTE, UNDEFINED, AT, count);
+        })
+    }
+
+    /// The metadata of the file [`exif_file`] builds in byte order `order`
+    /// with the MakerNote `block`, declared whole, and what `exif` adds to
+    /// the Exif IFD.
+    fn exif_metadata(
+        order: Order,
+        block: &[u8],
+        exif: impl FnOnce(&mut TiffBuilder, IfdId),
+    ) -> Metadata {
+        metadata_of(exif_file(order, block, whole(block), exif))
+    }
+
+    /// The metadata of a file in byte order `order` whose MakerNote holds
+    /// what `tags` adds to its MakerNote IFD, and whose Exif IFD holds no
+    /// serial number, ISO or lens.
+    fn makernote_metadata(order: Order, tags: impl FnOnce(&mut TiffBuilder, IfdId)) -> Metadata {
+        exif_metadata(order, &tags_block(order, tags).0, |_, _| {})
+    }
+
+    /// `block` with the type and count of the entry at `entry` changed to
+    /// `typ` and `count`, its value left as it was.
+    fn retyped(order: Order, mut block: Vec<u8>, entry: u64, typ: u16, count: u32) -> Vec<u8> {
+        let entry = usize::try_from(entry).unwrap();
+        block[entry + 2..entry + 4].copy_from_slice(&order.u16(typ));
+        block[entry + 4..entry + 8].copy_from_slice(&order.u32(count));
+        block
+    }
+
+    #[test]
+    fn without_an_exif_serial_number_the_makernotes_is_used() {
+        for order in ORDERS {
+            let metadata = makernote_metadata(order, |inner, ifd| {
+                inner.ascii(ifd, SERIAL_NUMBER, SERIAL);
+            });
+            assert_eq!(metadata.serial_number.as_deref(), Some(SERIAL), "{order:?}");
+        }
+    }
+
+    #[test]
+    fn without_a_serial_number_in_either_there_is_none() {
+        for order in ORDERS {
+            let metadata = makernote_metadata(order, |_, _| {});
+            assert_eq!(metadata.serial_number, None, "{order:?}");
+        }
+    }
+
+    #[test]
+    fn a_makernote_serial_number_of_another_type_is_not_read() {
+        for order in ORDERS {
+            // The bytes of the serial number and its NUL, as UNDEFINED and
+            // as BYTE.
+            let mut bytes = SERIAL.as_bytes().to_vec();
+            bytes.push(0);
+            for typ in [UNDEFINED, BYTE] {
+                let (block, entry) = tags_block(order, |inner, ifd| {
+                    inner.ascii(ifd, SERIAL_NUMBER, SERIAL);
+                });
+                let count = u32::try_from(bytes.len()).unwrap();
+                let block = retyped(order, block, entry, typ, count);
+                let metadata = exif_metadata(order, &block, |_, _| {});
+                assert_eq!(metadata.serial_number, None, "{order:?}, type {typ}");
+            }
+        }
+    }
+
+    #[test]
+    fn a_makernote_serial_number_past_the_block_is_not_read() {
+        for order in ORDERS {
+            let block = tags_block(order, |inner, ifd| {
+                inner.ascii(ifd, SERIAL_NUMBER, SERIAL);
+            })
+            .0;
+            // The seven digits and the NUL are the block's last 8 bytes.
+            assert_eq!(block[block.len() - 8..], *b"7654321\0", "{order:?}");
+
+            // Declared one byte short: the NUL lies in the file, after the
+            // block.
+            let file = exif_file(order, &block, whole(&block) - 1, |_, _| {});
+            assert_eq!(metadata_of(file).serial_number, None, "{order:?}");
+
+            // The control: declared whole, the same bytes are used.
+            let file = exif_file(order, &block, whole(&block), |_, _| {});
+            assert_eq!(
+                metadata_of(file).serial_number.as_deref(),
+                Some(SERIAL),
+                "{order:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn an_exif_serial_number_wins_over_the_makernotes() {
+        for order in ORDERS {
+            let block = tags_block(order, |inner, ifd| {
+                inner.ascii(ifd, SERIAL_NUMBER, SERIAL);
+            })
+            .0;
+            let metadata = exif_metadata(order, &block, |builder, exif| {
+                builder.ascii(exif, BODY_SERIAL_NUMBER, EXIF_SERIAL);
+            });
+            assert_eq!(
+                metadata.serial_number.as_deref(),
+                Some(EXIF_SERIAL),
+                "{order:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_makernote_serial_number_of_spaces_is_none() {
+        // As the D200 writes it: seven spaces and a NUL (public sample
+        // 8079).
+        let metadata = makernote_metadata(Order::Big, |inner, ifd| {
+            inner.ascii(ifd, SERIAL_NUMBER, "       ");
+        });
+        assert_eq!(metadata.serial_number, None);
+    }
+
+    #[test]
+    fn a_makernote_serial_number_that_is_not_digits_is_returned_as_written() {
+        let metadata = makernote_metadata(Order::Big, |inner, ifd| {
+            inner.ascii(ifd, SERIAL_NUMBER, "ABC123");
+        });
+        assert_eq!(metadata.serial_number.as_deref(), Some("ABC123"));
+    }
+
+    #[test]
+    fn without_an_exif_iso_the_makernotes_second_value_is_used() {
+        // As most bodies write it: `[0, ISO]`, here the D300's (public
+        // sample 928).
+        for order in ORDERS {
+            let metadata = makernote_metadata(order, |inner, ifd| {
+                inner.short(ifd, ISO, &[0, 200]);
+            });
+            assert_eq!(metadata.exposure.iso, Some(200), "{order:?}");
+        }
+    }
+
+    #[test]
+    fn without_an_iso_in_either_there_is_none() {
+        for order in ORDERS {
+            let metadata = makernote_metadata(order, |_, _| {});
+            assert_eq!(metadata.exposure.iso, None, "{order:?}");
+        }
+    }
+
+    #[test]
+    fn a_makernote_iso_of_another_type_is_not_read() {
+        for order in ORDERS {
+            // `[0, 200]` as LONGs, stored out of line inside the block,
+            // which the reader of numbers reads; and the same two numbers
+            // declared as IFD offsets, which it reads too.
+            let long = tags_block(order, |inner, ifd| {
+                inner.long(ifd, ISO, &[0, 200]);
+            });
+            let ifds = retyped(order, long.0.clone(), long.1, IFD, 2);
+            for (label, block) in [("LONG", long.0), ("IFD", ifds)] {
+                let metadata = exif_metadata(order, &block, |_, _| {});
+                assert_eq!(metadata.exposure.iso, None, "{order:?}, {label}");
+            }
+        }
+    }
+
+    #[test]
+    fn a_makernote_iso_of_four_zero_bytes_is_none() {
+        // As the D700 writes it: four zero bytes of type UNDEFINED (public
+        // sample 2255).
+        for order in ORDERS {
+            let metadata = makernote_metadata(order, |inner, ifd| {
+                inner.undefined(ifd, ISO, &[0; 4]);
+            });
+            assert_eq!(metadata.exposure.iso, None, "{order:?}");
+        }
+    }
+
+    #[test]
+    fn a_makernote_iso_of_zero_is_none() {
+        // As the Coolpix E5700 writes it: `[0, 0]` (public sample 4456).
+        for order in ORDERS {
+            let metadata = makernote_metadata(order, |inner, ifd| {
+                inner.short(ifd, ISO, &[0, 0]);
+            });
+            assert_eq!(metadata.exposure.iso, None, "{order:?}");
+        }
+    }
+
+    #[test]
+    fn a_makernote_iso_of_other_than_two_values_is_none() {
+        for order in ORDERS {
+            // One value, which the entry holds, and three, stored out of
+            // line inside the block.
+            for values in [&[200][..], &[0, 200, 400]] {
+                let metadata = makernote_metadata(order, |inner, ifd| {
+                    inner.short(ifd, ISO, values);
+                });
+                assert_eq!(metadata.exposure.iso, None, "{order:?}, {values:?}");
+            }
+        }
+    }
+
+    #[test]
+    fn a_makernote_isos_first_value_is_not_read() {
+        // Most bodies write 0 first; the ISO is the second value whatever
+        // the first is.
+        for order in ORDERS {
+            let metadata = makernote_metadata(order, |inner, ifd| {
+                inner.short(ifd, ISO, &[1, 3200]);
+            });
+            assert_eq!(metadata.exposure.iso, Some(3200), "{order:?}");
+        }
+    }
+
+    #[test]
+    fn an_exif_iso_wins_over_the_makernotes() {
+        for order in ORDERS {
+            let block = tags_block(order, |inner, ifd| {
+                inner.short(ifd, ISO, &[0, 200]);
+            })
+            .0;
+            let metadata = exif_metadata(order, &block, |builder, exif| {
+                builder.short(exif, PHOTOGRAPHIC_SENSITIVITY, &[100]);
+            });
+            assert_eq!(metadata.exposure.iso, Some(100), "{order:?}");
+        }
+    }
+
+    #[test]
+    fn an_exif_iso_of_zero_alone_gives_the_makernotes() {
+        // The standard tags give no ISO for a PhotographicSensitivity of 0,
+        // an unknown sensitivity, without another sensitivity tag.
+        for order in ORDERS {
+            let block = tags_block(order, |inner, ifd| {
+                inner.short(ifd, ISO, &[0, 200]);
+            })
+            .0;
+            let metadata = exif_metadata(order, &block, |builder, exif| {
+                builder.short(exif, PHOTOGRAPHIC_SENSITIVITY, &[0]);
+            });
+            assert_eq!(metadata.exposure.iso, Some(200), "{order:?}");
+        }
+    }
+
+    #[test]
+    fn without_an_exif_lens_the_makernotes_range_makes_one() {
+        for order in ORDERS {
+            let metadata = makernote_metadata(order, |inner, ifd| {
+                inner.rational(ifd, LENS, &D300_LENS);
+            });
+            let lens = metadata.lens.expect("a lens");
+            assert_eq!(range_of(&lens), known(D300_LENS), "{order:?}");
+            assert_eq!(
+                (lens.make(), lens.model(), lens.serial_number()),
+                (None, None, None),
+                "{order:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn without_a_lens_in_either_there_is_none() {
+        for order in ORDERS {
+            let metadata = makernote_metadata(order, |_, _| {});
+            assert_eq!(metadata.lens, None, "{order:?}");
+        }
+    }
+
+    #[test]
+    fn a_makernote_lens_of_another_type_is_not_read() {
+        for order in ORDERS {
+            // The 32 bytes of the four fractions, declared as SRATIONALs,
+            // as eight LONGs, or as 32 UNDEFINED bytes.
+            for (typ, count) in [(SRATIONAL, 4), (LONG, 8), (UNDEFINED, 32)] {
+                let (block, entry) = tags_block(order, |inner, ifd| {
+                    inner.rational(ifd, LENS, &D300_LENS);
+                });
+                let block = retyped(order, block, entry, typ, count);
+                let metadata = exif_metadata(order, &block, |_, _| {});
+                assert_eq!(metadata.lens, None, "{order:?}, type {typ}");
+            }
+        }
+    }
+
+    #[test]
+    fn a_makernote_lens_past_the_block_is_not_read() {
+        for order in ORDERS {
+            let block = tags_block(order, |inner, ifd| {
+                inner.rational(ifd, LENS, &D300_LENS);
+            })
+            .0;
+            // The four fractions are the block's last 32 bytes.
+            let values: Vec<u8> = D300_LENS
+                .iter()
+                .flat_map(|&(n, d)| [order.u32(n), order.u32(d)])
+                .flatten()
+                .collect();
+            assert_eq!(block[block.len() - 32..], values, "{order:?}");
+
+            // Declared one byte short: the last fraction's last byte lies
+            // in the file, after the block.
+            let file = exif_file(order, &block, whole(&block) - 1, |_, _| {});
+            assert_eq!(metadata_of(file).lens, None, "{order:?}");
+
+            // The control: declared whole, the same bytes are used.
+            let file = exif_file(order, &block, whole(&block), |_, _| {});
+            let lens = metadata_of(file).lens.expect("a lens");
+            assert_eq!(range_of(&lens), known(D300_LENS), "{order:?}");
+        }
+    }
+
+    #[test]
+    fn an_exif_lens_range_wins_over_the_makernotes() {
+        for order in ORDERS {
+            let block = tags_block(order, |inner, ifd| {
+                inner.rational(ifd, LENS, &D300_LENS);
+            })
+            .0;
+            let metadata = exif_metadata(order, &block, |builder, exif| {
+                builder.rational(exif, LENS_SPECIFICATION, &EXIF_LENS);
+            });
+            let lens = metadata.lens.expect("a lens");
+            assert_eq!(range_of(&lens), known(EXIF_LENS), "{order:?}");
+        }
+    }
+
+    #[test]
+    fn an_exif_lens_range_with_one_known_value_wins_whole() {
+        // Not merged value by value: the three unknown values stay unknown.
+        for order in ORDERS {
+            let block = tags_block(order, |inner, ifd| {
+                inner.rational(ifd, LENS, &D300_LENS);
+            })
+            .0;
+            let exif_range = [(240, 10), (0, 0), (0, 0), (0, 0)];
+            let metadata = exif_metadata(order, &block, |builder, exif| {
+                builder.rational(exif, LENS_SPECIFICATION, &exif_range);
+            });
+            let lens = metadata.lens.expect("a lens");
+            assert_eq!(range_of(&lens), known(exif_range), "{order:?}");
+        }
+    }
+
+    #[test]
+    fn an_exif_lens_with_a_model_alone_takes_the_makernotes_range() {
+        // As the Nikon 1 J1 writes it: a LensModel and no LensSpecification
+        // in the Exif tags, the range in the MakerNote (public sample 2956).
+        for order in ORDERS {
+            let j1_range = [(100, 10), (300, 10), (35, 10), (56, 10)];
+            let block = tags_block(order, |inner, ifd| {
+                inner.rational(ifd, LENS, &j1_range);
+            })
+            .0;
+            let metadata = exif_metadata(order, &block, |builder, exif| {
+                builder.ascii(exif, LENS_MODEL, "1 NIKKOR VR 10-30mm f/3.5-5.6");
+            });
+            let lens = metadata.lens.expect("a lens");
+            assert_eq!(
+                lens.model(),
+                Some("1 NIKKOR VR 10-30mm f/3.5-5.6"),
+                "{order:?}"
+            );
+            assert_eq!(range_of(&lens), known(j1_range), "{order:?}");
+        }
+    }
+
+    #[test]
+    fn a_makernote_lens_of_other_than_four_values_is_not_read() {
+        for order in ORDERS {
+            let metadata = makernote_metadata(order, |inner, ifd| {
+                inner.rational(ifd, LENS, &D300_LENS[..3]);
+            });
+            assert_eq!(metadata.lens, None, "{order:?}");
+        }
+    }
+
+    #[test]
+    fn a_makernote_lens_value_of_zero_is_none_and_the_others_are_kept() {
+        for order in ORDERS {
+            let values = [(180, 10), (700, 10), (0, 0), (45, 10)];
+            let metadata = makernote_metadata(order, |inner, ifd| {
+                inner.rational(ifd, LENS, &values);
+            });
+            let lens = metadata.lens.expect("a lens");
+            assert_eq!(
+                range_of(&lens),
+                [
+                    Rational::known(180, 10),
+                    Rational::known(700, 10),
+                    None,
+                    Rational::known(45, 10)
+                ],
+                "{order:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn the_fallbacks_in_the_other_byte_order_from_the_files_are_read() {
+        for (file, inner_order) in [(Order::Little, Order::Big), (Order::Big, Order::Little)] {
+            let block = tags_block(inner_order, |inner, ifd| {
+                inner
+                    .short(ifd, ISO, &[0, 200])
+                    .ascii(ifd, SERIAL_NUMBER, SERIAL)
+                    .rational(ifd, LENS, &D300_LENS);
+            })
+            .0;
+            let metadata = exif_metadata(file, &block, |_, _| {});
+            assert_eq!(metadata.exposure.iso, Some(200), "{file:?}");
+            assert_eq!(metadata.serial_number.as_deref(), Some(SERIAL), "{file:?}");
+            let lens = metadata.lens.expect("a lens");
+            assert_eq!(range_of(&lens), known(D300_LENS), "{file:?}");
         }
     }
 

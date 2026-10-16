@@ -168,7 +168,9 @@ pub(crate) fn read<R: Read + Seek>(src: &mut Source<R>, tree: &Tree) -> Result<S
 }
 
 /// The text of tag `tag` of `ifd`, cleaned as every text value of the
-/// metadata is, such as the camera's make and serial number.
+/// metadata is, such as the camera's make and serial number, whether a
+/// standard tag or a format's own, such as the serial number in Nikon's
+/// MakerNote, records it.
 ///
 /// The value must be of type ASCII. It ends at its first NUL, or with the
 /// value when there is none. When what is before the NUL is longer than
@@ -184,7 +186,11 @@ pub(crate) fn read<R: Read + Seek>(src: &mut Source<R>, tree: &Tree) -> Result<S
 ///
 /// `Io` when the reader fails. A value that cannot be read for any other
 /// reason, such as one longer than one tag may take, is `None`.
-fn text<R: Read + Seek>(src: &mut Source<R>, ifd: &Ifd, tag: u16) -> Result<Option<String>> {
+pub(crate) fn text<R: Read + Seek>(
+    src: &mut Source<R>,
+    ifd: &Ifd,
+    tag: u16,
+) -> Result<Option<String>> {
     let Some(bytes) = skip_damage(ifd.ascii_bytes(src, tag))?.flatten() else {
         return Ok(None);
     };

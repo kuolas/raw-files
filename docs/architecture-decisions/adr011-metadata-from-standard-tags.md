@@ -81,11 +81,11 @@ manufacturer's MakerNote only where nothing standard records it.
 - **The standard tags come first.** IFD0, the Exif IFD and the raw IFD
   give every field. On NEF, the MakerNote (in the layout the preview
   reader already reads) gives the visible image size from CropArea, and,
-  only when the Exif tag is absent, the serial number, the ISO, the lens
-  range and the offset from UTC. An Exif value always wins. The older
-  Nikon MakerNote layouts (the D1 family and the earliest Coolpix bodies)
-  are not read; their files get the Exif fields only. No Sony MakerNote
-  is read. Nothing is deciphered.
+  only when the standard tags give no value for it, the serial number,
+  the ISO, the lens range and the offset from UTC. An Exif value always
+  wins. The older Nikon MakerNote layouts (the D1 family and the earliest
+  Coolpix bodies) are not read; their files get the Exif fields only. No
+  Sony MakerNote is read. Nothing is deciphered.
 - **The capture time is DateTimeOriginal**, with its own sub-seconds
   (SubSecTimeOriginal) and offset from UTC (OffsetTimeOriginal). Without
   OffsetTimeOriginal, a NEF's offset is its WorldTime zone, plus an hour
@@ -111,9 +111,10 @@ manufacturer's MakerNote only where nothing standard records it.
   `0/6` is a real zero. The ISO is Exif's PhotographicSensitivity; when
   it is absent, zero (unknown), or 65535, which Exif uses for "65535 or
   more", the RecommendedExposureIndex is used, or else the ISOSpeed, each
-  only when above zero, and a 65535 that neither replaces stands. On NEF
-  without the Exif ISO, the MakerNote's ISO is used only in its common
-  form of two numbers, `[0, ISO]`.
+  only when above zero, and a 65535 that neither replaces stands. On NEF,
+  when none of these gives an ISO, the MakerNote's ISO is the second of
+  exactly two SHORT values, when above zero; most bodies write
+  `[0, ISO]`.
 - **Text as written, cleaned.** Cut at the first NUL, trim spaces at both
   ends; an empty result, a value longer than 255 bytes, or a lens named
   only with `-` characters is `None`. Bytes that are not UTF-8 become
