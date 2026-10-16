@@ -168,11 +168,14 @@ pub(crate) fn find<R: Read + Seek>(
 /// The orientation of every preview: IFD0's Orientation, or none when it
 /// is missing, cannot be read or is not one of the eight EXIF values.
 ///
+/// The metadata reader (`tiff_metadata`) gives the file's metadata this
+/// orientation too, so that the metadata and the previews never disagree.
+///
 /// # Errors
 ///
 /// `Io` when the reader fails; a value that cannot be read for any other
 /// reason means none.
-fn orientation<R: Read + Seek>(src: &mut Source<R>, tree: &Tree) -> Result<Orientation> {
+pub(crate) fn orientation<R: Read + Seek>(src: &mut Source<R>, tree: &Tree) -> Result<Orientation> {
     Ok(skip_damage(tree.ifd0().u32(src, ORIENTATION))?
         .flatten()
         .and_then(|value| u16::try_from(value).ok())
@@ -264,10 +267,11 @@ mod tests {
     use super::*;
     use crate::container::tiff::{parse_header, walk};
     use crate::error::ErrorKind;
+    use crate::formats::testing::{FAR, FailsFar};
     use crate::jpeg_stub::jpeg_stub;
     use crate::limits::Limits;
     use crate::tiff_builder::{BlobId, IfdId, Order, RawValue, SHORT, TiffBuilder};
-    use std::io::{self, Cursor, SeekFrom};
+    use std::io::Cursor;
 
     const ORDERS: [Order; 2] = [Order::Little, Order::Big];
 
@@ -806,29 +810,6 @@ mod tests {
                 Orientation::NoTransforms,
                 "{order:?}"
             );
-        }
-    }
-
-    /// The first byte of the second block the source caches: a reader that
-    /// fails from here on still serves the header and the walk, which read
-    /// only the first.
-    const FAR: u64 = 64 * 1024;
-
-    /// A reader that fails every read from [`FAR`] on.
-    struct FailsFar(Cursor<Vec<u8>>);
-
-    impl Read for FailsFar {
-        fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
-            if self.0.position() >= FAR {
-                return Err(io::Error::from(io::ErrorKind::PermissionDenied));
-            }
-            self.0.read(buf)
-        }
-    }
-
-    impl Seek for FailsFar {
-        fn seek(&mut self, pos: SeekFrom) -> io::Result<u64> {
-            self.0.seek(pos)
         }
     }
 

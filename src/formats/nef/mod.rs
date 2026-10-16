@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 //! The Nikon NEF reader: how the crate recognises a NEF file, and how it
-//! finds the file's previews.
+//! finds the file's previews and reads its metadata.
 //!
 //! A NEF file is a TIFF file written by a Nikon camera, with Nikon's own
 //! additions inside: a MakerNote, compressed raw data. For this reader a
@@ -15,20 +15,20 @@
 //!
 //! The search for the previews is in `previews.rs`, and the reader of
 //! Nikon's MakerNote, which finds the small preview the MakerNote points
-//! at, in `makernote.rs`.
+//! at, in `makernote.rs`. The metadata comes from the standard tags,
+//! through the reader the TIFF-based formats share.
 
 mod makernote;
 mod previews;
 
 use std::io::{Read, Seek};
 
-use super::{FormatSpec, Parsed, is_dng, make_starts_with};
+use super::{FormatSpec, Parsed, is_dng, make_starts_with, tiff_metadata};
 use crate::container::tiff::Tree;
 use crate::error::Result;
 use crate::format::Format;
 use crate::io::Source;
 use crate::limits::Limits;
-use crate::metadata::Metadata;
 
 /// The manufacturer's name that a Nikon camera's Make starts with,
 /// compared without regard to case.
@@ -65,22 +65,25 @@ fn claims<R: Read + Seek>(src: &mut Source<R>, tree: &Tree) -> Result<bool> {
     Ok(!is_dng(tree) && make_starts_with(src, tree, NIKON)?)
 }
 
-/// Reads the previews of a NEF file that [`claims`] accepted: the JPEGs
-/// that IFD0 and the SubIFDs declare, found by the shared TIFF preview
-/// finder over the whole tree, and the one the MakerNote points at, read
-/// within `limits`.
+/// Reads the previews and the metadata of a NEF file that [`claims`]
+/// accepted.
 ///
-/// The metadata is empty, every value `None`: this reader does not read it
-/// yet. Reading it from the file's standard tags, and from the MakerNote
-/// where they lack a value, is planned (ADR011, issue #13).
+/// The previews are the JPEGs that IFD0 and the SubIFDs declare, found by
+/// the shared TIFF preview finder over the whole tree, and the one the
+/// MakerNote points at, read within `limits`. The metadata is what the
+/// shared TIFF metadata reader reads from the standard tags: the camera,
+/// the capture time and the orientation. Reading what only the MakerNote
+/// records, on bodies whose standard tags lack it, is planned (ADR011,
+/// issue #13).
 ///
 /// # Errors
 ///
-/// As for [`previews::previews`].
+/// As for [`previews::previews`] and [`tiff_metadata::read`]: `Io` when the
+/// reader fails. Nothing the file holds is an error here.
 fn parse<R: Read + Seek>(src: &mut Source<R>, tree: &Tree, limits: &Limits) -> Result<Parsed> {
     Ok(Parsed {
         previews: previews::previews(src, tree, limits)?,
-        metadata: Metadata::default(),
+        metadata: tiff_metadata::read(src, tree)?,
     })
 }
 

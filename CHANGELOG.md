@@ -12,9 +12,10 @@ does.
 
 ### Added
 
-- `RawFile::metadata`, what the camera recorded about the picture, with
-  the `Metadata`, `Exposure`, `Lens`, `DateTime`, `Rational` and
-  `SignedRational` types. The NEF and ARW readers do not fill it yet.
+- `RawFile::metadata`, the metadata of NEF and ARW files: camera make,
+  model and serial number, capture time with sub-seconds and offset from
+  UTC when recorded, and orientation, with the `Metadata`, `Exposure`,
+  `Lens`, `DateTime`, `Rational` and `SignedRational` types.
 
 ## [0.1.0] - 2026-10-14
 

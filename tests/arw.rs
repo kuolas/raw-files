@@ -2,9 +2,10 @@
 
 //! The ARW reader from outside the crate, on files laid out like each
 //! generation of Sony's RAW family (see [`support::arw`]): what each opens
-//! as, which previews it lists, that none of them is the raw data, and
-//! what reading one returns. Then the previews of the real Sony sample
-//! files, when they have been downloaded (see [`support::samples::path`]).
+//! as, which previews it lists, that none of them is the raw data, what
+//! reading one returns, and what metadata it gives. Then the previews of
+//! the real Sony sample files, when they have been downloaded (see
+//! [`support::samples::path`]).
 
 mod support;
 
@@ -12,7 +13,7 @@ use std::collections::BTreeSet;
 use std::fs;
 use std::io::Cursor;
 
-use raw_files::{Format, Metadata, Orientation, PreviewFormat, RawFile};
+use raw_files::{Exposure, Format, Orientation, PreviewFormat, RawFile};
 use support::arw::{
     A100_JPEG, A100_RAW_AS_COUNT, A100_TAG_SIZE, ARW4_FULL_SIZE_JPEG, ArwBlobs, IFD0_JPEG,
     MEDIUM_FULL_SIZE_JPEG, SR2_JPEG, SRF_JPEG, THUMBNAIL, a100_file, arq_file, arw2_file,
@@ -210,12 +211,75 @@ fn no_preview_starts_at_the_raw_data_of_any_layout() {
 }
 
 #[test]
-fn every_layout_opens_with_empty_metadata_since_the_reader_does_not_fill_it_yet() {
+fn the_arw4_file_gives_its_camera_capture_time_and_orientation() {
     for order in ORDERS {
-        for (name, (built, _)) in every_layout(order) {
+        for (value, orientation) in [(8, Orientation::Rotate270), (1, Orientation::NoTransforms)] {
+            let label = format!("{order:?}, Orientation {value}");
+            let (built, _) = arw4_file(order, value);
+            let file = RawFile::from_reader(Cursor::new(built.bytes)).unwrap();
+            let metadata = file.metadata();
+            assert_eq!(metadata.make(), Some("SONY"), "{label}");
+            assert_eq!(metadata.model(), Some("ILCE-7M4"), "{label}");
+            // Like the sample it copies, the file records no serial number.
+            assert_eq!(metadata.serial_number(), None, "{label}");
+            let time = metadata.capture_time().unwrap();
+            assert_eq!(time.to_string(), "2023-10-19T16:13:48.776+02:00", "{label}");
+            assert_eq!(time.nanosecond(), 776_000_000, "{label}");
+            assert_eq!(time.offset_minutes(), Some(120), "{label}");
+            assert_eq!(metadata.orientation(), orientation, "{label}");
+            // The exposure, the lens and the sizes are not read yet.
+            assert_eq!(metadata.exposure(), &Exposure::default(), "{label}");
+            assert_eq!(metadata.lens(), None, "{label}");
+            assert_eq!(metadata.raw_size(), None, "{label}");
+            assert_eq!(metadata.image_size(), None, "{label}");
+            for preview in file.previews() {
+                assert_eq!(preview.orientation(), orientation, "{label}");
+            }
+        }
+    }
+}
+
+#[test]
+fn every_layout_gives_the_make_and_model_its_fixture_writes_and_a_time_only_if_it_has_one() {
+    let expected = [
+        ("ARW 4", "ILCE-7M4", Some("2023-10-19T16:13:48.776+02:00")),
+        (
+            "ARW 4 medium",
+            "ILCE-7M4",
+            Some("2023-10-19T16:13:48.776+02:00"),
+        ),
+        ("ARW 2", "SLT-A99V", None),
+        ("ARQ", "ILCE-7RM3", None),
+        ("SR2", "DSC-R1", None),
+        ("SRF", "DSC-F828", None),
+        // Its Make is `SONY` and eleven spaces, which are padding.
+        ("A100", "DSLR-A100", None),
+    ];
+    for order in ORDERS {
+        let layouts = every_layout(order);
+        assert_eq!(layouts.len(), expected.len());
+        for ((name, (built, _)), (expected_name, model, time)) in layouts.into_iter().zip(expected)
+        {
+            assert_eq!(name, expected_name);
+            let label = format!("{name}, {order:?}");
             let file = RawFile::from_bytes(&built.bytes).unwrap();
-            assert_eq!(file.format(), Format::Arw, "{name}, {order:?}");
-            assert_eq!(file.metadata(), &Metadata::default(), "{name}, {order:?}");
+            assert_eq!(file.format(), Format::Arw, "{label}");
+            let metadata = file.metadata();
+            assert_eq!(metadata.make(), Some("SONY"), "{label}");
+            assert_eq!(metadata.model(), Some(model), "{label}");
+            assert_eq!(metadata.serial_number(), None, "{label}");
+            assert_eq!(
+                metadata.capture_time().map(|t| t.to_string()).as_deref(),
+                time,
+                "{label}"
+            );
+            // Every layout is built upright, and the SRF has no
+            // Orientation at all; the previews agree.
+            assert_eq!(metadata.orientation(), Orientation::NoTransforms, "{label}");
+            assert!(!file.previews().is_empty(), "{label}");
+            for preview in file.previews() {
+                assert_eq!(preview.orientation(), metadata.orientation(), "{label}");
+            }
         }
     }
 }

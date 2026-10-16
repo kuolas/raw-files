@@ -387,13 +387,34 @@ impl Ifd {
         src: &mut Source<R>,
         tag: u16,
     ) -> Result<Option<String>> {
+        Ok(self
+            .ascii_bytes(src, tag)?
+            .map(|bytes| String::from_utf8_lossy(&bytes).into_owned()))
+    }
+
+    /// The text of tag `tag` as the file stores it, when its type is ASCII:
+    /// the bytes [`ascii`](Self::ascii) reads, before they are turned into
+    /// a `String`, for a caller that measures or parses the bytes
+    /// themselves. `None` when the tag is missing or has another type.
+    ///
+    /// The bytes end at the first NUL, or with the value when there is
+    /// none. Bytes that are not UTF-8 are kept as they are.
+    ///
+    /// # Errors
+    ///
+    /// As for [`u32s`](Self::u32s).
+    pub(crate) fn ascii_bytes<R: Read + Seek>(
+        &self,
+        src: &mut Source<R>,
+        tag: u16,
+    ) -> Result<Option<Vec<u8>>> {
         let Some((_, mut bytes)) = self.value(src, tag, &[ASCII])? else {
             return Ok(None);
         };
         if let Some(nul) = bytes.iter().position(|&b| b == 0) {
             bytes.truncate(nul);
         }
-        Ok(Some(String::from_utf8_lossy(&bytes).into_owned()))
+        Ok(Some(bytes))
     }
 
     /// The bytes of tag `tag`, when its type is BYTE or UNDEFINED; `None`
@@ -928,6 +949,40 @@ mod tests {
         );
         assert_eq!(ifd.ascii(src, 0x0005).unwrap().as_deref(), Some("wxyz"));
         assert_eq!(ifd.ascii(src, 0x0006).unwrap().as_deref(), Some("a"));
+    }
+
+    #[test]
+    fn ascii_bytes_end_at_the_first_nul_and_keep_bytes_that_are_not_utf8() {
+        for order in ORDERS {
+            let mut builder = TiffBuilder::new(order);
+            let ifd = builder.ifd();
+            builder.blob_at(512, &[b'a', 0xFF, 0xFE, b'b', 0, b'c']);
+            builder.blob_at(520, b"  spaced  \0\0");
+            builder
+                .raw(ifd, 0x0001, ASCII, 6, RawValue::Offset(512))
+                .raw(ifd, 0x0002, ASCII, 12, RawValue::Offset(520))
+                .raw(ifd, 0x0003, ASCII, 4, RawValue::Inline([b'x', 0, b'y', 0]))
+                .raw(ifd, 0x0004, UNDEFINED, 4, RawValue::Inline(*b"wxyz"));
+            let built = builder.build();
+            let (mut src, ifd, _) = read(order, &built, ifd);
+            let src = &mut src;
+
+            let bytes = |src: &mut Source<_>, tag| ifd.ascii_bytes(src, tag).unwrap();
+            assert_eq!(
+                bytes(src, 0x0001).as_deref(),
+                Some(&[b'a', 0xFF, 0xFE, b'b'][..]),
+                "{order:?}"
+            );
+            assert_eq!(
+                bytes(src, 0x0002).as_deref(),
+                Some(&b"  spaced  "[..]),
+                "{order:?}"
+            );
+            assert_eq!(bytes(src, 0x0003).as_deref(), Some(&b"x"[..]), "{order:?}");
+            // Of type UNDEFINED, which is not text, and missing.
+            assert_eq!(bytes(src, 0x0004), None, "{order:?}");
+            assert_eq!(bytes(src, 0x0005), None, "{order:?}");
+        }
     }
 
     #[test]

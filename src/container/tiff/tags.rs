@@ -29,6 +29,10 @@ pub(crate) const PHOTOMETRIC_INTERPRETATION: u16 = 0x0106;
 /// from IFD0: what tells one vendor's files from another's.
 pub(crate) const MAKE: u16 = 0x010F;
 
+/// The model of the camera that wrote the file, as text (Model), read from
+/// IFD0, such as `NIKON Z 9`.
+pub(crate) const MODEL: u16 = 0x0110;
+
 /// Where each strip of the image's data starts, as absolute offsets
 /// (StripOffsets).
 pub(crate) const STRIP_OFFSETS: u16 = 0x0111;
@@ -73,10 +77,28 @@ pub(crate) const JPEG_INTERCHANGE_FORMAT_LENGTH: u16 = 0x0202;
 /// read from IFD0.
 pub(crate) const EXIF_IFD: u16 = 0x8769;
 
+/// When the picture was taken, as the camera's clock showed it, as text in
+/// the form `YYYY:MM:DD HH:MM:SS` (DateTimeOriginal), read from the Exif
+/// IFD: the capture time.
+pub(crate) const DATE_TIME_ORIGINAL: u16 = 0x9003;
+
+/// The offset from UTC of the camera's clock when the picture was taken,
+/// as text in the form `+HH:MM` or `-HH:MM` (OffsetTimeOriginal), read from
+/// the Exif IFD.
+pub(crate) const OFFSET_TIME_ORIGINAL: u16 = 0x9011;
+
+/// The fraction of a second of the capture time, as text holding its
+/// digits alone (SubSecTimeOriginal), read from the Exif IFD.
+pub(crate) const SUB_SEC_TIME_ORIGINAL: u16 = 0x9291;
+
 /// The camera maker's own metadata block, whose layout each vendor defines
 /// (MakerNote): an Exif tag, read from the Exif IFD, whose value is the
 /// block's bytes.
 pub(crate) const MAKER_NOTE: u16 = 0x927C;
+
+/// The serial number of the camera body, as text (BodySerialNumber), read
+/// from the Exif IFD.
+pub(crate) const BODY_SERIAL_NUMBER: u16 = 0xA431;
 
 /// The version of the DNG specification a DNG file follows (DNGVersion),
 /// read from IFD0: present in every DNG and in the DNG-based files of some

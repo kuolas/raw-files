@@ -10,14 +10,16 @@
 //! Detection goes by content, never by the file's name, so a renamed file
 //! opens as what it is; [`Format::from_extension`] is for file pickers,
 //! which must choose what to offer before opening anything. The preview
-//! finder that the TIFF-based formats share lives in `tiff_previews`.
+//! finder that the TIFF-based formats share lives in `tiff_previews`, and
+//! the metadata reader they share in `tiff_metadata`.
 //!
 //! The table holds NEF and ARW, in that order. A Nikon file is recognised
 //! by its IFD0's Make, and opens with its previews, which the NEF reader
-//! finds with the shared finder. A Sony file is recognised by its IFD0's
-//! Make too, helped for a Hasselblad Make by the pointer to Sony's private
-//! directory, and opens with its previews, which the ARW reader finds with
-//! the shared finder. A file no format claims is of no format the crate
+//! finds with the shared finder, and its metadata, which it reads with the
+//! shared reader. A Sony file is recognised by its IFD0's Make too, helped
+//! for a Hasselblad Make by the pointer to Sony's private directory, and
+//! opens with its previews and its metadata, which the ARW reader finds and
+//! reads the same way. A file no format claims is of no format the crate
 //! recognises.
 //!
 //! A DNG is of no format the crate recognises either, whatever its Make
@@ -27,6 +29,7 @@
 
 mod arw;
 mod nef;
+mod tiff_metadata;
 mod tiff_previews;
 
 use std::io::{Read, Seek};
@@ -165,10 +168,11 @@ pub(crate) fn detect<R: Read + Seek>(
 
 /// What the unit tests of detection and of the readers share: a file
 /// described in code, read into a source and a tree as opening a file
-/// reads it.
+/// reads it; and a reader that fails past the first block, for the tests
+/// that a failure of the reader is an error.
 #[cfg(test)]
 pub(super) mod testing {
-    use std::io::Cursor;
+    use std::io::{self, Cursor, Read, Seek, SeekFrom};
 
     use crate::container::tiff::{Tree, parse_header, walk};
     use crate::io::Source;
@@ -177,6 +181,30 @@ pub(super) mod testing {
 
     /// A source over a file held in memory.
     pub(super) type Src = Source<Cursor<Vec<u8>>>;
+
+    /// The first byte of the second block the source caches: a reader that
+    /// fails from here on still serves the header and the walk, which read
+    /// only the first.
+    pub(super) const FAR: u64 = 64 * 1024;
+
+    /// A reader that fails every read from [`FAR`] on, for the tests that
+    /// a failure of the reader is passed up, never taken for damage.
+    pub(super) struct FailsFar(pub(super) Cursor<Vec<u8>>);
+
+    impl Read for FailsFar {
+        fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+            if self.0.position() >= FAR {
+                return Err(io::Error::from(io::ErrorKind::PermissionDenied));
+            }
+            self.0.read(buf)
+        }
+    }
+
+    impl Seek for FailsFar {
+        fn seek(&mut self, pos: SeekFrom) -> io::Result<u64> {
+            self.0.seek(pos)
+        }
+    }
 
     /// The file that `build` describes in a one-IFD little-endian TIFF
     /// file, read into a source and a tree.

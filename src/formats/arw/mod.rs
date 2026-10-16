@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 //! The Sony ARW reader: how the crate recognises a Sony RAW file, and how
-//! it finds the file's previews.
+//! it finds the file's previews and reads its metadata.
 //!
 //! Sony's RAW files are one family. Every Sony body since 2006 writes ARW;
 //! Sony's earliest bodies wrote SRF and SR2 files; and Sony's software
@@ -31,13 +31,15 @@
 //! carry a DNG version, as far as the published samples show; [`claims`]
 //! says what was measured. The file's name is never looked at.
 //!
-//! The search for the previews is in `previews.rs`.
+//! The search for the previews is in `previews.rs`. The metadata comes
+//! from the standard tags, through the reader the TIFF-based formats share;
+//! no Sony MakerNote is read.
 
 mod previews;
 
 use std::io::{Read, Seek};
 
-use super::{FormatSpec, Parsed, is_dng, make_starts_with};
+use super::{FormatSpec, Parsed, is_dng, make_starts_with, tiff_metadata};
 use crate::container::tiff::Tree;
 use crate::container::tiff::tags::DNG_PRIVATE_DATA;
 use crate::container::tiff::types::BYTE;
@@ -45,7 +47,6 @@ use crate::error::Result;
 use crate::format::Format;
 use crate::io::Source;
 use crate::limits::Limits;
-use crate::metadata::Metadata;
 
 /// The manufacturer's name that a Sony camera's Make starts with, compared
 /// without regard to case.
@@ -131,22 +132,24 @@ fn claims<R: Read + Seek>(src: &mut Source<R>, tree: &Tree) -> Result<bool> {
     Ok(sony_pointer && make_starts_with(src, tree, HASSELBLAD)?)
 }
 
-/// Reads the previews of a file that [`claims`] accepted: the JPEGs that
-/// the IFDs of IFD0's chain declare, found by the shared TIFF preview
-/// finder over the whole tree. The finder takes no limits of its own, so
-/// `_limits` goes unused here: the walk that built `tree` applied them.
+/// Reads the previews and the metadata of a file that [`claims`]
+/// accepted.
 ///
-/// The metadata is empty, every value `None`: this reader does not read it
-/// yet. Reading it from the file's standard tags is planned (ADR011,
-/// issue #13).
+/// The previews are the JPEGs that the IFDs of IFD0's chain declare, found
+/// by the shared TIFF preview finder over the whole tree. The metadata is
+/// what the shared TIFF metadata reader reads from the standard tags: the
+/// camera, the capture time and the orientation. Neither takes limits of
+/// its own, so `_limits` goes unused here: the walk that built `tree`
+/// applied them.
 ///
 /// # Errors
 ///
-/// As for [`previews::previews`].
+/// As for [`previews::previews`] and [`tiff_metadata::read`]: `Io` when the
+/// reader fails. Nothing the file holds is an error here.
 fn parse<R: Read + Seek>(src: &mut Source<R>, tree: &Tree, _limits: &Limits) -> Result<Parsed> {
     Ok(Parsed {
         previews: previews::previews(src, tree)?,
-        metadata: Metadata::default(),
+        metadata: tiff_metadata::read(src, tree)?,
     })
 }
 
