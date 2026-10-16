@@ -16,9 +16,13 @@
 //!   with the Orientation given; it declares a JPEG of 1616 by 1080 pixels
 //!   through its JPEGInterchangeFormat and JPEGInterchangeFormatLength tags,
 //!   with Compression 6 (old-style JPEG), and points at the raw SubIFD and
-//!   at an Exif IFD that holds only the ExifVersion, `0232`. IFD1, IFD0's
-//!   next, repeats the Make, Model and Orientation and declares a thumbnail
-//!   of 160 by 120 pixels the same way. IFD2, IFD1's next, declares a JPEG
+//!   at an Exif IFD that holds the ExifVersion, `0232`, and the capture
+//!   time: DateTimeOriginal `2023:10:19 16:13:48`, SubSecTimeOriginal `776`
+//!   and OffsetTimeOriginal `+02:00`, the values of the public ILCE-7M4
+//!   sample 6929 of raw.pixls.us, which has no serial number in its Exif
+//!   tags, so neither has the fixture. IFD1, IFD0's next, repeats the
+//!   Make, Model and Orientation and declares a thumbnail of 160 by 120
+//!   pixels the same way. IFD2, IFD1's next, declares a JPEG
 //!   of the picture's full size, 7008 by 4672 pixels, and says so in its
 //!   tags: Compression 7 (JPEG as TIFF Technical Note 2 defines it), YCbCr
 //!   samples (PhotometricInterpretation 6) of 8 bits each, three per pixel,
@@ -30,10 +34,10 @@
 //!   marker and a lossless frame header. Like the real files, it also
 //!   lists one strip that starts at the first tile and is as long as the
 //!   tiles together.
-//! - [`arw4_medium_file`] is the same file shot as a medium raw: IFD2's
-//!   JPEG is 4608 by 3072 pixels, and the raw SubIFD holds YCbCr samples
-//!   (PhotometricInterpretation 6, the same as IFD2's) of 15 bits each,
-//!   three per pixel, in the same lossless tiles.
+//! - [`arw4_medium_file`] is the same file, with the same metadata, shot as
+//!   a medium raw: IFD2's JPEG is 4608 by 3072 pixels, and the raw SubIFD
+//!   holds YCbCr samples (PhotometricInterpretation 6, the same as IFD2's)
+//!   of 15 bits each, three per pixel, in the same lossless tiles.
 //! - [`arw2_file`] is a file of an ARW 2 body, an SLT-A99V's: IFD0 and IFD1
 //!   as above, with that Model, and no IFD2. The raw SubIFD is the full-resolution image,
 //!   6024 by 4024 pixels, of 12-bit colour filter array samples, with
@@ -62,6 +66,12 @@
 //!   offset of an IFD but that of the raw data, whose bytes do not hold
 //!   together as one (see [`a100_file`] for which rule of the walk
 //!   rejects them). IFD1 declares the thumbnail.
+//!
+//! The metadata: every file holds its Make and Model in IFD0, and every
+//! file but the SRF holds them again in IFD1, with the Orientation in both;
+//! the SRF has no Orientation. Only the two ARW 4 files hold a capture
+//! time, and no file holds a serial number. Every text value is ASCII
+//! ending in one NUL.
 //!
 //! Every JPEG preview is a baseline stub. Each builder returns where it put
 //! the JPEGs and the raw data, as an [`ArwBlobs`], so that a test can check
@@ -114,6 +124,14 @@ const JPEG_INTERCHANGE_FORMAT_LENGTH: u16 = 0x0202;
 const YCBCR_SUB_SAMPLING: u16 = 0x0212;
 /// The version of the Exif standard the file follows (ExifVersion).
 const EXIF_VERSION: u16 = 0x9000;
+/// When the picture was taken, as ASCII text (DateTimeOriginal).
+const DATE_TIME_ORIGINAL: u16 = 0x9003;
+/// The capture time's offset from UTC, as ASCII text
+/// (OffsetTimeOriginal).
+const OFFSET_TIME_ORIGINAL: u16 = 0x9011;
+/// The capture time's fraction of a second, as ASCII digits
+/// (SubSecTimeOriginal).
+const SUB_SEC_TIME_ORIGINAL: u16 = 0x9291;
 
 /// NewSubfileType of the full-resolution image.
 const FULL_RESOLUTION: u32 = 0;
@@ -395,7 +413,11 @@ fn arw4(
         .subifds(ifd0, &[raw])
         .exif(ifd0, exif)
         .next(ifd0, Some(ifd1));
-    builder.undefined(exif, EXIF_VERSION, b"0232");
+    builder
+        .undefined(exif, EXIF_VERSION, b"0232")
+        .ascii(exif, DATE_TIME_ORIGINAL, "2023:10:19 16:13:48")
+        .ascii(exif, SUB_SEC_TIME_ORIGINAL, "776")
+        .ascii(exif, OFFSET_TIME_ORIGINAL, "+02:00");
 
     preview_ifd(&mut builder, ifd1, "SONY", "ILCE-7M4", orientation);
     let ifd1_jpeg = jpeg(&mut builder, ifd1, THUMBNAIL);

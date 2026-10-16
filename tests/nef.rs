@@ -1,15 +1,15 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 //! The NEF reader from outside the crate, on a file laid out like a Nikon
-//! Z 9's: what it opens as, which previews it lists, and what reading one
-//! returns. Then the same on real Z 9 files, when they have been downloaded
-//! (see [`support::samples::path`]).
+//! Z 9's: what it opens as, which previews it lists, what reading one
+//! returns, and what metadata it gives. Then the same on real Z 9 files,
+//! when they have been downloaded (see [`support::samples::path`]).
 
 mod support;
 
 use std::io::Cursor;
 
-use raw_files::{Format, Metadata, Orientation, Preview, PreviewFormat, RawFile};
+use raw_files::{Exposure, Format, Orientation, Preview, PreviewFormat, RawFile};
 use support::nef::{
     FULL_SIZE_JPEG, IFD0_JPEG, MEDIUM_JPEG, PREVIEW_JPEG, RAW_STRIP_START, Z9Blobs, stub, z9_file,
     z9_file_with, z9_file_with_blobs,
@@ -130,14 +130,87 @@ fn every_preview_takes_ifd0s_orientation() {
     }
 }
 
+/// Checks that the Z 9 file `built`, whose IFD0's Orientation is
+/// `orientation`, gives the camera, the serial number and the capture time
+/// the fixture records, and that orientation, from bytes and from a reader;
+/// `label` names the file in a failure.
+fn assert_the_z9_metadata(built: &Built, orientation: Orientation, label: &str) {
+    let from_bytes = RawFile::from_bytes(&built.bytes).unwrap();
+    let from_reader = RawFile::from_reader(Cursor::new(built.bytes.clone())).unwrap();
+    for (how, metadata, previews) in [
+        ("bytes", from_bytes.metadata(), from_bytes.previews()),
+        ("reader", from_reader.metadata(), from_reader.previews()),
+    ] {
+        assert_eq!(
+            metadata.make(),
+            Some("NIKON CORPORATION"),
+            "{label}, from {how}"
+        );
+        assert_eq!(metadata.model(), Some("NIKON Z 9"), "{label}, from {how}");
+        assert_eq!(
+            metadata.serial_number(),
+            Some("1234567"),
+            "{label}, from {how}"
+        );
+        let time = metadata.capture_time().unwrap();
+        assert_eq!(
+            time.to_string(),
+            "2022-02-05T13:46:41.85-05:00",
+            "{label}, from {how}"
+        );
+        assert_eq!(
+            (time.year(), time.month(), time.day()),
+            (2022, 2, 5),
+            "{label}, from {how}"
+        );
+        assert_eq!(
+            (time.hour(), time.minute(), time.second()),
+            (13, 46, 41),
+            "{label}, from {how}"
+        );
+        assert_eq!(time.nanosecond(), 850_000_000, "{label}, from {how}");
+        assert_eq!(time.offset_minutes(), Some(-300), "{label}, from {how}");
+        assert_eq!(metadata.orientation(), orientation, "{label}, from {how}");
+        // The orientation is the one every preview takes.
+        assert_eq!(previews.len(), 4, "{label}, from {how}");
+        for preview in previews {
+            assert_eq!(preview.orientation(), orientation, "{label}, from {how}");
+        }
+        // The exposure, the lens and the sizes are not read yet.
+        assert_eq!(
+            metadata.exposure(),
+            &Exposure::default(),
+            "{label}, from {how}"
+        );
+        assert_eq!(metadata.lens(), None, "{label}, from {how}");
+        assert_eq!(metadata.raw_size(), None, "{label}, from {how}");
+        assert_eq!(metadata.image_size(), None, "{label}, from {how}");
+    }
+}
+
 #[test]
-fn the_z9_file_opens_with_empty_metadata_since_the_reader_does_not_fill_it_yet() {
+fn the_z9_file_gives_its_camera_serial_number_capture_time_and_orientation() {
     for order in ORDERS {
-        let built = z9_file(order, 8);
-        let from_bytes = RawFile::from_bytes(&built.bytes).unwrap();
-        assert_eq!(from_bytes.metadata(), &Metadata::default(), "{order:?}");
-        let from_reader = RawFile::from_reader(Cursor::new(built.bytes)).unwrap();
-        assert_eq!(from_reader.metadata(), &Metadata::default(), "{order:?}");
+        for (value, orientation) in [(8, Orientation::Rotate270), (1, Orientation::NoTransforms)] {
+            let built = z9_file(order, value);
+            assert_the_z9_metadata(
+                &built,
+                orientation,
+                &format!("{order:?}, Orientation {value}"),
+            );
+        }
+    }
+}
+
+#[test]
+fn a_makernote_in_the_other_byte_order_from_the_files_gives_the_same_metadata() {
+    for (order, makernote_order) in [(Order::Little, Order::Big), (Order::Big, Order::Little)] {
+        let (built, _) = z9_file_with(order, 8, makernote_order);
+        assert_the_z9_metadata(
+            &built,
+            Orientation::Rotate270,
+            &format!("{order:?}, MakerNote {makernote_order:?}"),
+        );
     }
 }
 

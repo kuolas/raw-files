@@ -89,7 +89,6 @@ impl DateTime {
     /// UTC, from `-14:00` to `+14:00`, since no offset from UTC in use lies
     /// outside that. A fraction or offset in any other form is left out,
     /// and the time stands without it.
-    #[cfg_attr(not(test), expect(dead_code, reason = "nothing reads this yet"))]
     pub(crate) fn from_exif(
         date: &[u8],
         subsec: Option<&[u8]>,

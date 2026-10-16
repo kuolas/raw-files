@@ -28,11 +28,18 @@
 //! - SubIFD4 and SubIFD5 are reduced-resolution images with no pixels:
 //!   their width, height, strip offset and strip length are all 0. The
 //!   first has Compression 34713, the second none (1).
-//! - The Exif IFD holds the ExifVersion, `0232`, and the MakerNote, whose
+//! - The Exif IFD holds the ExifVersion, `0232`; the capture time, as
+//!   DateTimeOriginal `2022:02:05 13:46:41`, SubSecTimeOriginal `85` and
+//!   OffsetTimeOriginal `-05:00`, the values of the public Z 9 sample
+//!   5147 of raw.pixls.us; the BodySerialNumber `1234567`, made up, since
+//!   no real camera's serial number is copied here; and the MakerNote, whose
 //!   value is the block [`nikon_makernote`] writes: Nikon's own metadata,
 //!   here only its version and its PreviewIFD, which declares a small JPEG
 //!   of 640 by 424 pixels. The MakerNote is in the file's byte order unless
 //!   the file is built with [`z9_file_with`], which may give it the other.
+//!
+//! Every text value is ASCII ending in one NUL, with no padding, as the
+//! Z 9 writes it.
 //!
 //! Every stub JPEG is a baseline one. The tags that the shared builder has
 //! no constant for are named here.
@@ -72,8 +79,18 @@ const JPEG_INTERCHANGE_FORMAT: u16 = 0x0201;
 const JPEG_INTERCHANGE_FORMAT_LENGTH: u16 = 0x0202;
 /// The version of the Exif standard the file follows (ExifVersion).
 const EXIF_VERSION: u16 = 0x9000;
+/// When the picture was taken, as ASCII text (DateTimeOriginal).
+const DATE_TIME_ORIGINAL: u16 = 0x9003;
+/// The capture time's offset from UTC, as ASCII text
+/// (OffsetTimeOriginal).
+const OFFSET_TIME_ORIGINAL: u16 = 0x9011;
+/// The capture time's fraction of a second, as ASCII digits
+/// (SubSecTimeOriginal).
+const SUB_SEC_TIME_ORIGINAL: u16 = 0x9291;
 /// The camera maker's own metadata block (MakerNote).
 const MAKER_NOTE: u16 = 0x927C;
+/// The camera body's serial number, as ASCII text (BodySerialNumber).
+const BODY_SERIAL_NUMBER: u16 = 0xA431;
 /// The version of the Nikon MakerNote's layout, as four ASCII digits in an
 /// UNDEFINED value (MakerNoteVersion, a tag of the MakerNote IFD).
 const MAKER_NOTE_VERSION: u16 = 0x0001;
@@ -249,7 +266,12 @@ pub fn z9_file_with(order: Order, orientation: u16, makernote_order: Order) -> (
             .long(sub, STRIP_BYTE_COUNTS, &[0]);
     }
 
-    builder.undefined(exif, EXIF_VERSION, b"0232");
+    builder
+        .undefined(exif, EXIF_VERSION, b"0232")
+        .ascii(exif, DATE_TIME_ORIGINAL, "2022:02:05 13:46:41")
+        .ascii(exif, SUB_SEC_TIME_ORIGINAL, "85")
+        .ascii(exif, OFFSET_TIME_ORIGINAL, "-05:00")
+        .ascii(exif, BODY_SERIAL_NUMBER, "1234567");
     let (block, preview_in_makernote) = nikon_makernote(makernote_order, &stub(PREVIEW_JPEG));
     let makernote = builder.blob(&block);
     builder.undefined_blob(exif, MAKER_NOTE, makernote);
