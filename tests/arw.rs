@@ -12,7 +12,7 @@ use std::collections::BTreeSet;
 use std::fs;
 use std::io::Cursor;
 
-use raw_files::{Format, Orientation, PreviewFormat, RawFile};
+use raw_files::{Format, Metadata, Orientation, PreviewFormat, RawFile};
 use support::arw::{
     A100_JPEG, A100_RAW_AS_COUNT, A100_TAG_SIZE, ARW4_FULL_SIZE_JPEG, ArwBlobs, IFD0_JPEG,
     MEDIUM_FULL_SIZE_JPEG, SR2_JPEG, SRF_JPEG, THUMBNAIL, a100_file, arq_file, arw2_file,
@@ -205,6 +205,17 @@ fn no_preview_starts_at_the_raw_data_of_any_layout() {
                     preview.byte_range().start
                 );
             }
+        }
+    }
+}
+
+#[test]
+fn every_layout_opens_with_empty_metadata_since_the_reader_does_not_fill_it_yet() {
+    for order in ORDERS {
+        for (name, (built, _)) in every_layout(order) {
+            let file = RawFile::from_bytes(&built.bytes).unwrap();
+            assert_eq!(file.format(), Format::Arw, "{name}, {order:?}");
+            assert_eq!(file.metadata(), &Metadata::default(), "{name}, {order:?}");
         }
     }
 }

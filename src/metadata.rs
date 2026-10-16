@@ -2,16 +2,120 @@
 
 //! What the camera recorded about a picture.
 //!
-//! Besides the image, a camera records how the picture was taken: the
-//! exposure it chose, and the lens it was taken with. [`Exposure`] and
-//! [`Lens`] hold those values as the file records them, fractions with the
-//! numerator and denominator it stored.
+//! Besides the image, a camera records how the picture was taken: by which
+//! camera and when, the exposure it chose, the lens it was taken with, and
+//! how large the image is. [`Metadata`] holds all of it, read when the file
+//! is opened; [`Exposure`] and [`Lens`] hold the exposure and the lens as
+//! the file records them, fractions with the numerator and denominator it
+//! stored.
 //!
 //! Every value is optional. A file may not record it, or may record it in a
 //! way that cannot be read, such as a tag of the wrong type; either way the
 //! value is `None`, and the others are unaffected.
 
+use crate::datetime::DateTime;
+use crate::geometry::Size;
+use crate::orientation::Orientation;
 use crate::rational::{Rational, SignedRational};
+
+/// What the camera recorded about a picture: the camera, when the picture
+/// was taken, how to turn it upright, its exposure and lens, and the sizes
+/// of its raw data and of its visible image.
+///
+/// Every value is `None` when the file does not record it or records it in
+/// a way that cannot be read. A damaged value costs only itself: the other
+/// values are still read, and the file still opens with its previews.
+///
+/// `Metadata::default()` is an empty one, with every value `None`, for a
+/// caller's tests. `Metadata` is not `Copy`, so that a later value that
+/// cannot be copied does not break callers.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
+pub struct Metadata {
+    pub(crate) make: Option<String>,
+    pub(crate) model: Option<String>,
+    pub(crate) serial_number: Option<String>,
+    pub(crate) capture_time: Option<DateTime>,
+    pub(crate) orientation: Orientation,
+    pub(crate) exposure: Exposure,
+    pub(crate) lens: Option<Lens>,
+    pub(crate) raw_size: Option<Size>,
+    pub(crate) image_size: Option<Size>,
+}
+
+impl Metadata {
+    /// The camera's maker as the file records it, such as
+    /// `NIKON CORPORATION`, cleaned of padding.
+    pub fn make(&self) -> Option<&str> {
+        self.make.as_deref()
+    }
+
+    /// The camera's model as the file records it, such as `NIKON Z 9`,
+    /// cleaned of padding.
+    pub fn model(&self) -> Option<&str> {
+        self.model.as_deref()
+    }
+
+    /// The camera body's serial number, as text. Many bodies do not record
+    /// one in a form the library reads, and then it is `None`.
+    pub fn serial_number(&self) -> Option<&str> {
+        self.serial_number.as_deref()
+    }
+
+    /// When the picture was taken, as the camera's clock showed it: the
+    /// Exif DateTimeOriginal, with its fraction of a second and its offset
+    /// from UTC when the file records them (see [`DateTime`]).
+    pub fn capture_time(&self) -> Option<DateTime> {
+        self.capture_time
+    }
+
+    /// What a viewer must do to the stored pixels to show the picture
+    /// upright: the same value the previews carry
+    /// ([`Preview::orientation`](crate::Preview::orientation)), and
+    /// [`NoTransforms`](Orientation::NoTransforms) when the file records
+    /// none.
+    pub fn orientation(&self) -> Orientation {
+        self.orientation
+    }
+
+    /// The exposure the picture was taken with. Always present, though each
+    /// of its values is optional.
+    pub fn exposure(&self) -> &Exposure {
+        &self.exposure
+    }
+
+    /// The lens the picture was taken with, or `None` when the file
+    /// describes no lens.
+    pub fn lens(&self) -> Option<&Lens> {
+        self.lens.as_ref()
+    }
+
+    /// The size of the raw data as stored, before any orientation is
+    /// applied.
+    ///
+    /// It can include masked border pixels and padding beyond the visible
+    /// image. On a camera's medium or small raw it is that smaller stored
+    /// size, not the sensor's.
+    pub fn raw_size(&self) -> Option<Size> {
+        self.raw_size
+    }
+
+    /// The size of the visible image as stored, before any orientation is
+    /// applied.
+    ///
+    /// It is the default crop the file records, when that lies inside the
+    /// raw data: DNG's DefaultCropSize, which Sony writes, or Nikon's crop
+    /// area. Otherwise it is the [raw size](Self::raw_size), which then
+    /// includes the border pixels: older Nikon bodies, before the D850,
+    /// record no crop, and their stored raw is a few dozen pixels wider and
+    /// taller than the camera's own full-size preview.
+    ///
+    /// It is the default crop, not an aspect ratio chosen in the camera. On
+    /// a Nikon small raw it counts the stored pixels, which can differ from
+    /// the size the camera's menu names. `None` when there is no raw size.
+    pub fn image_size(&self) -> Option<Size> {
+        self.image_size
+    }
+}
 
 /// The exposure of a picture: its sensitivity, how long and how wide the
 /// lens was open, at what focal length, and the compensation chosen.
@@ -328,5 +432,95 @@ mod tests {
                 .into_iter()
                 .collect();
         assert_eq!(exposures.len(), 2);
+    }
+
+    /// The metadata of a Z 9 picture, every value set and each one
+    /// different from the others, so that a getter reading the wrong value
+    /// is caught.
+    fn z9_metadata() -> Metadata {
+        Metadata {
+            make: Some("NIKON CORPORATION".to_owned()),
+            model: Some("NIKON Z 9".to_owned()),
+            serial_number: Some("3001234".to_owned()),
+            capture_time: DateTime::from_exif(b"2024:05:01 10:20:30", Some(b"85"), Some(b"+02:00")),
+            orientation: Orientation::Rotate90,
+            exposure: z9_exposure(),
+            lens: Lens::new(
+                None,
+                Some("NIKKOR Z 14-30mm f/4 S".to_owned()),
+                None,
+                None,
+                None,
+                None,
+                None,
+            ),
+            raw_size: Some(Size {
+                width: 8_280,
+                height: 5_520,
+            }),
+            image_size: Some(Size {
+                width: 8_256,
+                height: 5_504,
+            }),
+        }
+    }
+
+    #[test]
+    fn default_metadata_is_empty() {
+        let metadata = Metadata::default();
+        assert_eq!(metadata.make(), None);
+        assert_eq!(metadata.model(), None);
+        assert_eq!(metadata.serial_number(), None);
+        assert_eq!(metadata.capture_time(), None);
+        assert_eq!(metadata.orientation(), Orientation::NoTransforms);
+        assert_eq!(metadata.exposure(), &Exposure::default());
+        assert_eq!(metadata.lens(), None);
+        assert_eq!(metadata.raw_size(), None);
+        assert_eq!(metadata.image_size(), None);
+    }
+
+    #[test]
+    fn metadata_getters_return_what_was_set() {
+        let metadata = z9_metadata();
+        assert_eq!(metadata.make(), Some("NIKON CORPORATION"));
+        assert_eq!(metadata.model(), Some("NIKON Z 9"));
+        assert_eq!(metadata.serial_number(), Some("3001234"));
+        let time = metadata.capture_time().unwrap();
+        assert_eq!(time.to_string(), "2024-05-01T10:20:30.85+02:00");
+        assert_eq!(metadata.orientation(), Orientation::Rotate90);
+        assert_eq!(metadata.exposure(), &z9_exposure());
+        assert_eq!(
+            metadata.lens().and_then(Lens::model),
+            Some("NIKKOR Z 14-30mm f/4 S")
+        );
+        assert_eq!(
+            metadata.raw_size(),
+            Some(Size {
+                width: 8_280,
+                height: 5_520,
+            })
+        );
+        assert_eq!(
+            metadata.image_size(),
+            Some(Size {
+                width: 8_256,
+                height: 5_504,
+            })
+        );
+    }
+
+    #[test]
+    fn metadata_collects_in_a_set() {
+        // A renamer grouping a folder's pictures by what they record puts
+        // their metadata in a set.
+        let metadata = |model: &str| Metadata {
+            model: Some(model.to_owned()),
+            ..Metadata::default()
+        };
+        let all: std::collections::HashSet<Metadata> =
+            [metadata("A"), metadata("B"), metadata("A")]
+                .into_iter()
+                .collect();
+        assert_eq!(all.len(), 2);
     }
 }

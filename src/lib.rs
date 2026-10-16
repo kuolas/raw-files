@@ -10,7 +10,11 @@
 //! that can seek, detects its format from its content, lists its embedded
 //! previews and reads one; [`Options`] opens it with other [`Limits`].
 //! Nikon NEF and Sony ARW files open with their previews; any other file is
-//! refused with the `UnknownFormat` error. See the
+//! refused with the `UnknownFormat` error.
+//! [`RawFile::metadata`] gives what the camera recorded about the picture
+//! (the capture time, the camera, the lens, the exposure and the sizes),
+//! read when the file is opened. The NEF and ARW readers do not fill it
+//! yet, so every value is `None`. See the
 //! [roadmap](https://github.com/kuolas/raw-files/blob/master/docs/ROADMAP.md)
 //! for the plan and the
 //! [architecture](https://github.com/kuolas/raw-files/blob/master/docs/ARCHITECTURE.md)
@@ -124,7 +128,7 @@ pub use file::RawFile;
 pub use format::Format;
 pub use geometry::Size;
 pub use limits::Limits;
-pub use metadata::{Exposure, Lens};
+pub use metadata::{Exposure, Lens, Metadata};
 pub use options::Options;
 pub use orientation::Orientation;
 pub use preview::{Preview, PreviewFormat};

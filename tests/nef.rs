@@ -9,7 +9,7 @@ mod support;
 
 use std::io::Cursor;
 
-use raw_files::{Format, Orientation, Preview, PreviewFormat, RawFile};
+use raw_files::{Format, Metadata, Orientation, Preview, PreviewFormat, RawFile};
 use support::nef::{
     FULL_SIZE_JPEG, IFD0_JPEG, MEDIUM_JPEG, PREVIEW_JPEG, RAW_STRIP_START, Z9Blobs, stub, z9_file,
     z9_file_with, z9_file_with_blobs,
@@ -127,6 +127,17 @@ fn every_preview_takes_ifd0s_orientation() {
         for preview in file.previews() {
             assert_eq!(preview.orientation(), orientation, "Orientation {value}");
         }
+    }
+}
+
+#[test]
+fn the_z9_file_opens_with_empty_metadata_since_the_reader_does_not_fill_it_yet() {
+    for order in ORDERS {
+        let built = z9_file(order, 8);
+        let from_bytes = RawFile::from_bytes(&built.bytes).unwrap();
+        assert_eq!(from_bytes.metadata(), &Metadata::default(), "{order:?}");
+        let from_reader = RawFile::from_reader(Cursor::new(built.bytes)).unwrap();
+        assert_eq!(from_reader.metadata(), &Metadata::default(), "{order:?}");
     }
 }
 
