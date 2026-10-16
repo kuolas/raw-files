@@ -13,7 +13,7 @@ use std::collections::BTreeSet;
 use std::fs;
 use std::io::Cursor;
 
-use raw_files::{Exposure, Format, Orientation, PreviewFormat, RawFile};
+use raw_files::{Exposure, Format, Orientation, PreviewFormat, Rational, RawFile, SignedRational};
 use support::arw::{
     A100_JPEG, A100_RAW_AS_COUNT, A100_TAG_SIZE, ARW4_FULL_SIZE_JPEG, ArwBlobs, IFD0_JPEG,
     MEDIUM_FULL_SIZE_JPEG, SR2_JPEG, SRF_JPEG, THUMBNAIL, a100_file, arq_file, arw2_file,
@@ -210,8 +210,32 @@ fn no_preview_starts_at_the_raw_data_of_any_layout() {
     }
 }
 
+/// Checks that `exposure` is the one the ARW 4 files record, as stored:
+/// 1/50 s at f/5.6, 50 mm and ISO 250, with no compensation; `label` names
+/// the file in a failure.
+fn assert_the_arw4_exposure(exposure: &Exposure, label: &str) {
+    let fraction = |numerator, denominator| {
+        Some(Rational {
+            numerator,
+            denominator,
+        })
+    };
+    assert_eq!(exposure.iso(), Some(250), "{label}");
+    assert_eq!(exposure.exposure_time(), fraction(1, 50), "{label}");
+    assert_eq!(exposure.f_number(), fraction(56, 10), "{label}");
+    assert_eq!(exposure.focal_length(), fraction(500, 10), "{label}");
+    assert_eq!(
+        exposure.exposure_bias(),
+        Some(SignedRational {
+            numerator: 0,
+            denominator: 10,
+        }),
+        "{label}"
+    );
+}
+
 #[test]
-fn the_arw4_file_gives_its_camera_capture_time_and_orientation() {
+fn the_arw4_file_gives_its_camera_capture_time_exposure_and_orientation() {
     for order in ORDERS {
         for (value, orientation) in [(8, Orientation::Rotate270), (1, Orientation::NoTransforms)] {
             let label = format!("{order:?}, Orientation {value}");
@@ -227,8 +251,8 @@ fn the_arw4_file_gives_its_camera_capture_time_and_orientation() {
             assert_eq!(time.nanosecond(), 776_000_000, "{label}");
             assert_eq!(time.offset_minutes(), Some(120), "{label}");
             assert_eq!(metadata.orientation(), orientation, "{label}");
-            // The exposure, the lens and the sizes are not read yet.
-            assert_eq!(metadata.exposure(), &Exposure::default(), "{label}");
+            assert_the_arw4_exposure(metadata.exposure(), &label);
+            // The lens and the sizes are not read yet.
             assert_eq!(metadata.lens(), None, "{label}");
             assert_eq!(metadata.raw_size(), None, "{label}");
             assert_eq!(metadata.image_size(), None, "{label}");
@@ -240,25 +264,34 @@ fn the_arw4_file_gives_its_camera_capture_time_and_orientation() {
 }
 
 #[test]
-fn every_layout_gives_the_make_and_model_its_fixture_writes_and_a_time_only_if_it_has_one() {
+fn every_layout_gives_its_camera_and_a_time_and_exposure_only_if_it_has_them() {
+    // Each layout's name, model, capture time, and whether it records an
+    // exposure.
     let expected = [
-        ("ARW 4", "ILCE-7M4", Some("2023-10-19T16:13:48.776+02:00")),
+        (
+            "ARW 4",
+            "ILCE-7M4",
+            Some("2023-10-19T16:13:48.776+02:00"),
+            true,
+        ),
         (
             "ARW 4 medium",
             "ILCE-7M4",
             Some("2023-10-19T16:13:48.776+02:00"),
+            true,
         ),
-        ("ARW 2", "SLT-A99V", None),
-        ("ARQ", "ILCE-7RM3", None),
-        ("SR2", "DSC-R1", None),
-        ("SRF", "DSC-F828", None),
+        ("ARW 2", "SLT-A99V", None, false),
+        ("ARQ", "ILCE-7RM3", None, false),
+        ("SR2", "DSC-R1", None, false),
+        ("SRF", "DSC-F828", None, false),
         // Its Make is `SONY` and eleven spaces, which are padding.
-        ("A100", "DSLR-A100", None),
+        ("A100", "DSLR-A100", None, false),
     ];
     for order in ORDERS {
         let layouts = every_layout(order);
         assert_eq!(layouts.len(), expected.len());
-        for ((name, (built, _)), (expected_name, model, time)) in layouts.into_iter().zip(expected)
+        for ((name, (built, _)), (expected_name, model, time, has_exposure)) in
+            layouts.into_iter().zip(expected)
         {
             assert_eq!(name, expected_name);
             let label = format!("{name}, {order:?}");
@@ -273,6 +306,11 @@ fn every_layout_gives_the_make_and_model_its_fixture_writes_and_a_time_only_if_i
                 time,
                 "{label}"
             );
+            if has_exposure {
+                assert_the_arw4_exposure(metadata.exposure(), &label);
+            } else {
+                assert_eq!(metadata.exposure(), &Exposure::default(), "{label}");
+            }
             // Every layout is built upright, and the SRF has no
             // Orientation at all; the previews agree.
             assert_eq!(metadata.orientation(), Orientation::NoTransforms, "{label}");

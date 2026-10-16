@@ -73,9 +73,34 @@ pub(crate) const JPEG_INTERCHANGE_FORMAT: u16 = 0x0201;
 /// (JPEGInterchangeFormatLength).
 pub(crate) const JPEG_INTERCHANGE_FORMAT_LENGTH: u16 = 0x0202;
 
+/// How long the shutter was open, in seconds, as a fraction of type
+/// RATIONAL (ExposureTime), read from the Exif IFD, such as 10/3200 for
+/// 1/320 s.
+pub(crate) const EXPOSURE_TIME: u16 = 0x829A;
+
+/// The f-number the picture was taken at, as a fraction of type RATIONAL
+/// (FNumber), read from the Exif IFD, such as 900/100 for f/9.
+pub(crate) const F_NUMBER: u16 = 0x829D;
+
 /// The offset of the IFD that holds the Exif capture metadata (Exif IFD),
 /// read from IFD0.
 pub(crate) const EXIF_IFD: u16 = 0x8769;
+
+/// The sensitivity the picture was taken at, as a SHORT or a LONG
+/// (PhotographicSensitivity, called ISOSpeedRatings before Exif 2.3), read
+/// from the Exif IFD: the ISO. Exif writes 65535 for a sensitivity of 65535
+/// or more.
+pub(crate) const PHOTOGRAPHIC_SENSITIVITY: u16 = 0x8827;
+
+/// The recommended exposure index of the camera as ISO 12232 defines it,
+/// as a LONG (RecommendedExposureIndex), read from the Exif IFD: what
+/// gives the ISO when PhotographicSensitivity cannot.
+pub(crate) const RECOMMENDED_EXPOSURE_INDEX: u16 = 0x8832;
+
+/// The ISO speed of the camera as ISO 12232 defines it, as a LONG
+/// (ISOSpeed), read from the Exif IFD: what gives the ISO when neither
+/// PhotographicSensitivity nor RecommendedExposureIndex can.
+pub(crate) const ISO_SPEED: u16 = 0x8833;
 
 /// When the picture was taken, as the camera's clock showed it, as text in
 /// the form `YYYY:MM:DD HH:MM:SS` (DateTimeOriginal), read from the Exif
@@ -86,6 +111,16 @@ pub(crate) const DATE_TIME_ORIGINAL: u16 = 0x9003;
 /// as text in the form `+HH:MM` or `-HH:MM` (OffsetTimeOriginal), read from
 /// the Exif IFD.
 pub(crate) const OFFSET_TIME_ORIGINAL: u16 = 0x9011;
+
+/// The exposure compensation chosen, in EV, as a fraction of type
+/// SRATIONAL (ExposureBiasValue), read from the Exif IFD, such as -3/10;
+/// 0/6 means no compensation.
+pub(crate) const EXPOSURE_BIAS_VALUE: u16 = 0x9204;
+
+/// The focal length the picture was taken at, in millimetres, as a
+/// fraction of type RATIONAL (FocalLength), read from the Exif IFD: the
+/// lens's actual focal length, such as 180/10, not its 35 mm equivalent.
+pub(crate) const FOCAL_LENGTH: u16 = 0x920A;
 
 /// The fraction of a second of the capture time, as text holding its
 /// digits alone (SubSecTimeOriginal), read from the Exif IFD.

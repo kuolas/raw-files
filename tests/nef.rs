@@ -9,7 +9,7 @@ mod support;
 
 use std::io::Cursor;
 
-use raw_files::{Exposure, Format, Orientation, Preview, PreviewFormat, RawFile};
+use raw_files::{Format, Orientation, Preview, PreviewFormat, Rational, RawFile, SignedRational};
 use support::nef::{
     FULL_SIZE_JPEG, IFD0_JPEG, MEDIUM_JPEG, PREVIEW_JPEG, RAW_STRIP_START, Z9Blobs, stub, z9_file,
     z9_file_with, z9_file_with_blobs,
@@ -130,10 +130,18 @@ fn every_preview_takes_ifd0s_orientation() {
     }
 }
 
+/// The fraction `numerator`/`denominator`, as stored.
+fn fraction(numerator: u32, denominator: u32) -> Rational {
+    Rational {
+        numerator,
+        denominator,
+    }
+}
+
 /// Checks that the Z 9 file `built`, whose IFD0's Orientation is
-/// `orientation`, gives the camera, the serial number and the capture time
-/// the fixture records, and that orientation, from bytes and from a reader;
-/// `label` names the file in a failure.
+/// `orientation`, gives the camera, the serial number, the capture time and
+/// the exposure the fixture records, and that orientation, from bytes and
+/// from a reader; `label` names the file in a failure.
 fn assert_the_z9_metadata(built: &Built, orientation: Orientation, label: &str) {
     let from_bytes = RawFile::from_bytes(&built.bytes).unwrap();
     let from_reader = RawFile::from_reader(Cursor::new(built.bytes.clone())).unwrap();
@@ -176,12 +184,34 @@ fn assert_the_z9_metadata(built: &Built, orientation: Orientation, label: &str) 
         for preview in previews {
             assert_eq!(preview.orientation(), orientation, "{label}, from {how}");
         }
-        // The exposure, the lens and the sizes are not read yet.
+        // The exposure as stored: 1/320 s at f/9, 18 mm and ISO 64, with
+        // no compensation.
+        let exposure = metadata.exposure();
+        assert_eq!(exposure.iso(), Some(64), "{label}, from {how}");
         assert_eq!(
-            metadata.exposure(),
-            &Exposure::default(),
+            exposure.exposure_time(),
+            Some(fraction(10, 3200)),
             "{label}, from {how}"
         );
+        assert_eq!(
+            exposure.f_number(),
+            Some(fraction(900, 100)),
+            "{label}, from {how}"
+        );
+        assert_eq!(
+            exposure.focal_length(),
+            Some(fraction(180, 10)),
+            "{label}, from {how}"
+        );
+        assert_eq!(
+            exposure.exposure_bias(),
+            Some(SignedRational {
+                numerator: 0,
+                denominator: 6,
+            }),
+            "{label}, from {how}"
+        );
+        // The lens and the sizes are not read yet.
         assert_eq!(metadata.lens(), None, "{label}, from {how}");
         assert_eq!(metadata.raw_size(), None, "{label}, from {how}");
         assert_eq!(metadata.image_size(), None, "{label}, from {how}");
@@ -189,7 +219,7 @@ fn assert_the_z9_metadata(built: &Built, orientation: Orientation, label: &str) 
 }
 
 #[test]
-fn the_z9_file_gives_its_camera_serial_number_capture_time_and_orientation() {
+fn the_z9_file_gives_its_camera_serial_number_capture_time_exposure_and_orientation() {
     for order in ORDERS {
         for (value, orientation) in [(8, Orientation::Rotate270), (1, Orientation::NoTransforms)] {
             let built = z9_file(order, value);

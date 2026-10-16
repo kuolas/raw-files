@@ -37,6 +37,23 @@ pub struct Rational {
 }
 
 impl Rational {
+    /// The fraction a file stored as `numerator`/`denominator`, when it
+    /// gives a value: `None` when either number is zero.
+    ///
+    /// This is how the readers build every unsigned fraction they return,
+    /// so that none has a zero denominator. Exif writes a zero for a value
+    /// the camera did not know: an f-number of 0/10 from a lens that does
+    /// not report its aperture, as on the public ILCE-7S sample 1582, or a
+    /// lens range of 0/0. So a zero numerator is refused too, which suits
+    /// every unsigned fraction the library reads: none of them can be zero
+    /// when known.
+    pub(crate) fn known(numerator: u32, denominator: u32) -> Option<Self> {
+        (numerator != 0 && denominator != 0).then_some(Self {
+            numerator,
+            denominator,
+        })
+    }
+
     /// The fraction as a decimal: the numerator divided by the denominator,
     /// so 10/3200 gives 0.003125.
     ///
@@ -97,6 +114,20 @@ pub struct SignedRational {
 }
 
 impl SignedRational {
+    /// The fraction a file stored as `numerator`/`denominator`, when it is
+    /// a number: `None` when the denominator is zero.
+    ///
+    /// This is how the readers build every signed fraction they return, so
+    /// that none has a zero denominator. A zero numerator is kept: the
+    /// signed fraction the library reads, the exposure bias, is zero when
+    /// no compensation was chosen, which cameras write as 0/6 or 0/10.
+    pub(crate) fn defined(numerator: i32, denominator: i32) -> Option<Self> {
+        (denominator != 0).then_some(Self {
+            numerator,
+            denominator,
+        })
+    }
+
     /// The fraction as a decimal: the numerator divided by the denominator,
     /// so -2/3 gives about -0.667.
     ///
@@ -174,6 +205,31 @@ mod tests {
             numerator,
             denominator,
         }
+    }
+
+    #[test]
+    fn known_refuses_a_zero_numerator_or_denominator() {
+        assert_eq!(Rational::known(10, 3200), Some(unsigned(10, 3200)));
+        assert_eq!(Rational::known(u32::MAX, 1), Some(unsigned(u32::MAX, 1)));
+        // An unknown f-number, as Sony writes it, then an unknown lens
+        // range and a fraction that is no number.
+        assert_eq!(Rational::known(0, 10), None);
+        assert_eq!(Rational::known(0, 0), None);
+        assert_eq!(Rational::known(7, 0), None);
+    }
+
+    #[test]
+    fn defined_refuses_only_a_zero_denominator() {
+        assert_eq!(SignedRational::defined(-3, 10), Some(signed(-3, 10)));
+        assert_eq!(SignedRational::defined(2, -3), Some(signed(2, -3)));
+        // No compensation: a real zero, kept as stored.
+        assert_eq!(SignedRational::defined(0, 6), Some(signed(0, 6)));
+        assert_eq!(
+            SignedRational::defined(i32::MIN, -1),
+            Some(signed(i32::MIN, -1))
+        );
+        assert_eq!(SignedRational::defined(0, 0), None);
+        assert_eq!(SignedRational::defined(-7, 0), None);
     }
 
     #[test]

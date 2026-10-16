@@ -79,6 +79,9 @@ pub const LONG: u16 = 4;
 pub const RATIONAL: u16 = 5;
 /// The TIFF field type UNDEFINED: bytes the tag gives a meaning to.
 pub const UNDEFINED: u16 = 7;
+/// The TIFF field type SRATIONAL: pairs of signed 32-bit integers,
+/// numerator first.
+pub const SRATIONAL: u16 = 10;
 
 /// The SubIFDs tag: the offsets of child IFDs.
 pub const SUB_IFDS: u16 = 0x014A;
@@ -305,6 +308,22 @@ impl TiffBuilder {
             .flatten()
             .collect();
         self.entry(ifd, tag, RATIONAL, values.len(), Value::Bytes(bytes))
+    }
+
+    /// Adds an SRATIONAL entry of `(numerator, denominator)` pairs.
+    pub fn srational(&mut self, ifd: IfdId, tag: u16, values: &[(i32, i32)]) -> &mut Self {
+        let order = self.order;
+        let bytes = values
+            .iter()
+            .flat_map(|&(num, den)| {
+                [
+                    order.u32(num.cast_unsigned()),
+                    order.u32(den.cast_unsigned()),
+                ]
+            })
+            .flatten()
+            .collect();
+        self.entry(ifd, tag, SRATIONAL, values.len(), Value::Bytes(bytes))
     }
 
     /// Adds an UNDEFINED entry.
