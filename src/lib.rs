@@ -105,9 +105,11 @@ mod io;
 #[path = "../tests/support/jpeg.rs"]
 mod jpeg_stub;
 mod limits;
+mod metadata;
 mod options;
 mod orientation;
 mod preview;
+mod rational;
 // The TIFF fixture builder lives with the integration tests and is shared
 // with the unit tests: compiled into each test build, never into the
 // library. Each side uses only part of it.
@@ -122,6 +124,8 @@ pub use file::RawFile;
 pub use format::Format;
 pub use geometry::Size;
 pub use limits::Limits;
+pub use metadata::{Exposure, Lens};
 pub use options::Options;
 pub use orientation::Orientation;
 pub use preview::{Preview, PreviewFormat};
+pub use rational::{Rational, SignedRational};
