@@ -5,10 +5,10 @@
 //!
 //! Cameras of every maker record the same facts in the same standard tags:
 //! the camera's make and model and the orientation in IFD0, the capture
-//! time and the body's serial number in the Exif IFD. So [`read`] reads them
-//! once, over the tree, for every format, and a format adds only what its
-//! own structures record and the standard tags lack (ADR011, which chose
-//! the standard tags first).
+//! time, the body's serial number and the exposure in the Exif IFD. So
+//! [`read`] reads them once, over the tree, for every format, and a format
+//! adds only what its own structures record and the standard tags lack
+//! (ADR011, which chose the standard tags first).
 //!
 //! The rules:
 //!
@@ -27,13 +27,28 @@
 //!   checks them. Without a DateTimeOriginal there is no capture time,
 //!   whatever fraction or offset the file records. It is never taken from
 //!   DateTimeDigitized or from IFD0's DateTime, which editors change.
-//! - A file without an Exif IFD has no capture time and no serial number.
+//! - The ISO is the Exif PhotographicSensitivity, of type SHORT or LONG,
+//!   its first value. When that is missing, unreadable, zero, which Exif
+//!   writes for an unknown sensitivity, or 65535, which Exif writes for one
+//!   of 65535 or more, the ISO is the RecommendedExposureIndex, or else the
+//!   ISOSpeed, each its first value and only when above zero. A 65535 that
+//!   neither replaces stands, as the least the sensitivity was; a zero
+//!   that neither replaces is `None` ([`iso`]).
+//! - The exposure time, the f-number and the focal length are the Exif
+//!   ExposureTime, FNumber and FocalLength, of type RATIONAL, their first
+//!   value as stored; each is `None` when its numerator or its denominator
+//!   is zero, since Exif writes a zero for a value the camera did not know
+//!   ([`Rational::known`]). The exposure bias is the Exif
+//!   ExposureBiasValue, of type SRATIONAL, its first value as stored; it is
+//!   `None` only when its denominator is zero, since a zero bias, such as
+//!   0/6, is no compensation ([`SignedRational::defined`]).
+//! - A file without an Exif IFD has no capture time, no serial number and
+//!   no exposure.
 //! - The orientation is IFD0's Orientation, read as the preview finder reads
 //!   it ([`tiff_previews::orientation`]), so that the metadata and the
 //!   previews never disagree.
 //!
-//! The exposure, the lens and the sizes are not read yet, and are left
-//! empty (see #13).
+//! The lens and the sizes are not read yet, and are left empty (see #13).
 //!
 //! Nothing here panics on any input: every value is read through the IFD's
 //! checked accessors, which check its offset and length against the file
@@ -42,15 +57,17 @@
 use std::io::{Read, Seek};
 
 use crate::container::tiff::tags::{
-    BODY_SERIAL_NUMBER, DATE_TIME_ORIGINAL, MAKE, MODEL, OFFSET_TIME_ORIGINAL,
-    SUB_SEC_TIME_ORIGINAL,
+    BODY_SERIAL_NUMBER, DATE_TIME_ORIGINAL, EXPOSURE_BIAS_VALUE, EXPOSURE_TIME, F_NUMBER,
+    FOCAL_LENGTH, ISO_SPEED, MAKE, MODEL, OFFSET_TIME_ORIGINAL, PHOTOGRAPHIC_SENSITIVITY,
+    RECOMMENDED_EXPOSURE_INDEX, SUB_SEC_TIME_ORIGINAL,
 };
 use crate::container::tiff::{Ifd, Tree, skip_damage};
 use crate::datetime::DateTime;
 use crate::error::Result;
 use crate::formats::tiff_previews;
 use crate::io::Source;
-use crate::metadata::Metadata;
+use crate::metadata::{Exposure, Metadata};
+use crate::rational::{Rational, SignedRational};
 
 /// The longest text, in bytes as stored, that is taken for a value rather
 /// than for damage.
@@ -59,6 +76,11 @@ use crate::metadata::Metadata;
 /// a lens model, so a longer one than this is not a name or a serial
 /// number a camera wrote.
 const MAX_TEXT_LEN: usize = 255;
+
+/// The PhotographicSensitivity that Exif writes for a sensitivity of 65535
+/// or more: a least value, which a RecommendedExposureIndex or an ISOSpeed
+/// replaces with the real one when the file records it.
+const ISO_65535_OR_MORE: u32 = 65535;
 
 /// Reads the metadata of the TIFF-based file in `src`, whose IFDs are
 /// `tree`.
@@ -71,12 +93,13 @@ const MAX_TEXT_LEN: usize = 255;
 /// reason is `None`, and costs no other value.
 pub(crate) fn read<R: Read + Seek>(src: &mut Source<R>, tree: &Tree) -> Result<Metadata> {
     let ifd0 = tree.ifd0();
-    let (serial_number, capture_time) = match tree.exif() {
+    let (serial_number, capture_time, exposure) = match tree.exif() {
         Some(exif) => (
             text(src, exif, BODY_SERIAL_NUMBER)?,
             capture_time(src, exif)?,
+            exposure(src, exif)?,
         ),
-        None => (None, None),
+        None => (None, None, Exposure::default()),
     };
     Ok(Metadata {
         make: text(src, ifd0, MAKE)?,
@@ -84,6 +107,7 @@ pub(crate) fn read<R: Read + Seek>(src: &mut Source<R>, tree: &Tree) -> Result<M
         serial_number,
         capture_time,
         orientation: tiff_previews::orientation(src, tree)?,
+        exposure,
         ..Metadata::default()
     })
 }
@@ -148,6 +172,91 @@ fn capture_time<R: Read + Seek>(src: &mut Source<R>, exif: &Ifd) -> Result<Optio
     ))
 }
 
+/// The exposure the picture was taken with, from the Exif IFD `exif`: the
+/// ISO, as [`iso`] reads it, and the four fractions, as [`rational`] and
+/// [`signed_rational`] read them.
+///
+/// # Errors
+///
+/// `Io` when the reader fails. A value that cannot be read for any other
+/// reason is `None`, and costs no other value.
+fn exposure<R: Read + Seek>(src: &mut Source<R>, exif: &Ifd) -> Result<Exposure> {
+    Ok(Exposure {
+        iso: iso(src, exif)?,
+        exposure_time: rational(src, exif, EXPOSURE_TIME)?,
+        f_number: rational(src, exif, F_NUMBER)?,
+        focal_length: rational(src, exif, FOCAL_LENGTH)?,
+        exposure_bias: signed_rational(src, exif, EXPOSURE_BIAS_VALUE)?,
+    })
+}
+
+/// The ISO the picture was taken at, from the Exif IFD `exif`.
+///
+/// It is the first value of the PhotographicSensitivity, of type SHORT or
+/// LONG, as [`Ifd::u32`] reads it (which takes the type IFD too, a LONG
+/// under another name). Exif gives two of its values a meaning of their
+/// own: zero, a sensitivity the camera did not know, and 65535
+/// ([`ISO_65535_OR_MORE`]), one of 65535 or more. For those, and when the
+/// tag is missing or cannot be read, the ISO is the first value of the
+/// RecommendedExposureIndex, or else that of the ISOSpeed, each read the
+/// same way and taken only when above zero; the two are read only then.
+/// When neither gives one, a 65535 stands, since the sensitivity was at
+/// least that, and anything else is `None`.
+///
+/// # Errors
+///
+/// `Io` when the reader fails. A value that cannot be read for any other
+/// reason is missing.
+fn iso<R: Read + Seek>(src: &mut Source<R>, exif: &Ifd) -> Result<Option<u32>> {
+    let sensitivity = skip_damage(exif.u32(src, PHOTOGRAPHIC_SENSITIVITY))?.flatten();
+    if let Some(iso) = sensitivity.filter(|&iso| iso != 0 && iso != ISO_65535_OR_MORE) {
+        return Ok(Some(iso));
+    }
+    for tag in [RECOMMENDED_EXPOSURE_INDEX, ISO_SPEED] {
+        if let Some(iso) = skip_damage(exif.u32(src, tag))?
+            .flatten()
+            .filter(|&iso| iso > 0)
+        {
+            return Ok(Some(iso));
+        }
+    }
+    Ok(sensitivity.filter(|&iso| iso == ISO_65535_OR_MORE))
+}
+
+/// The first fraction of tag `tag` of `ifd`, which must be of type
+/// RATIONAL, as stored; `None` when its numerator or its denominator is
+/// zero ([`Rational::known`]).
+///
+/// # Errors
+///
+/// `Io` when the reader fails. A value that cannot be read for any other
+/// reason is `None`.
+fn rational<R: Read + Seek>(src: &mut Source<R>, ifd: &Ifd, tag: u16) -> Result<Option<Rational>> {
+    let first = skip_damage(ifd.rationals(src, tag))?
+        .flatten()
+        .and_then(|values| values.first().copied());
+    Ok(first.and_then(|(numerator, denominator)| Rational::known(numerator, denominator)))
+}
+
+/// The first fraction of tag `tag` of `ifd`, which must be of type
+/// SRATIONAL, as stored; `None` when its denominator is zero
+/// ([`SignedRational::defined`]).
+///
+/// # Errors
+///
+/// `Io` when the reader fails. A value that cannot be read for any other
+/// reason is `None`.
+fn signed_rational<R: Read + Seek>(
+    src: &mut Source<R>,
+    ifd: &Ifd,
+    tag: u16,
+) -> Result<Option<SignedRational>> {
+    let first = skip_damage(ifd.srationals(src, tag))?
+        .flatten()
+        .and_then(|values| values.first().copied());
+    Ok(first.and_then(|(numerator, denominator)| SignedRational::defined(numerator, denominator)))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -157,7 +266,9 @@ mod tests {
     use crate::formats::testing::{self, FAR, FailsFar};
     use crate::limits::Limits;
     use crate::orientation::Orientation;
-    use crate::tiff_builder::{ASCII, IfdId, Order, RawValue, TiffBuilder};
+    use crate::tiff_builder::{
+        ASCII, IfdId, LONG, Order, RATIONAL, RawValue, SHORT, SRATIONAL, TiffBuilder,
+    };
     use std::io::Cursor;
 
     /// When the picture was stored or digitised (DateTimeDigitized), an
@@ -180,13 +291,42 @@ mod tests {
         (OFFSET_TIME_ORIGINAL, "-05:00"),
     ];
 
+    /// What adds one exposure value to the Exif IFD: given the builder,
+    /// the Exif IFD and the value's tag.
+    type AddExposure = fn(&mut TiffBuilder, IfdId, u16);
+
+    /// The exposure values of the Z 9 file's Exif IFD, each with its tag
+    /// and what adds it: those of the public Z 9 sample 5147, each of the
+    /// type the Z 9 writes.
+    const EXIF_EXPOSURE: [(u16, AddExposure); 6] = [
+        (EXPOSURE_TIME, |builder, exif, tag| {
+            builder.rational(exif, tag, &[(10, 3200)]);
+        }),
+        (F_NUMBER, |builder, exif, tag| {
+            builder.rational(exif, tag, &[(900, 100)]);
+        }),
+        (PHOTOGRAPHIC_SENSITIVITY, |builder, exif, tag| {
+            builder.short(exif, tag, &[64]);
+        }),
+        (RECOMMENDED_EXPOSURE_INDEX, |builder, exif, tag| {
+            builder.long(exif, tag, &[64]);
+        }),
+        (EXPOSURE_BIAS_VALUE, |builder, exif, tag| {
+            builder.srational(exif, tag, &[(0, 6)]);
+        }),
+        (FOCAL_LENGTH, |builder, exif, tag| {
+            builder.rational(exif, tag, &[(180, 10)]);
+        }),
+    ];
+
     /// More bytes than the 1 MiB one tag value may take.
     const TOO_LONG: u32 = 1024 * 1024 + 1;
 
     /// A little-endian file whose IFD0 holds the Orientation 8 and
-    /// [`IFD0_TEXT`], and whose Exif IFD holds [`EXIF_TEXT`], all but tag
-    /// `except`. `change` is then given the builder and the IDs of IFD0 and
-    /// of the Exif IFD, to add what the test needs in its place.
+    /// [`IFD0_TEXT`], and whose Exif IFD holds [`EXIF_TEXT`] and
+    /// [`EXIF_EXPOSURE`], all but tag `except`. `change` is then given the
+    /// builder and the IDs of IFD0 and of the Exif IFD, to add what the
+    /// test needs in its place.
     fn z9_bytes_except(
         except: u16,
         change: impl FnOnce(&mut TiffBuilder, IfdId, IfdId),
@@ -199,6 +339,9 @@ mod tests {
             for &(tag, text) in values.iter().filter(|(tag, _)| *tag != except) {
                 builder.ascii(ifd, tag, text);
             }
+        }
+        for &(tag, add) in EXIF_EXPOSURE.iter().filter(|(tag, _)| *tag != except) {
+            add(&mut builder, exif, tag);
         }
         change(&mut builder, ifd0, exif);
         builder.build().bytes
@@ -229,6 +372,34 @@ mod tests {
         DateTime::from_exif(b"2022:02:05 13:46:41", subsec, offset)
     }
 
+    /// The fraction `numerator`/`denominator`, as stored.
+    fn fraction(numerator: u32, denominator: u32) -> Rational {
+        Rational {
+            numerator,
+            denominator,
+        }
+    }
+
+    /// The signed fraction `numerator`/`denominator`, as stored.
+    fn signed(numerator: i32, denominator: i32) -> SignedRational {
+        SignedRational {
+            numerator,
+            denominator,
+        }
+    }
+
+    /// The exposure of the Z 9 file, as [`EXIF_EXPOSURE`] records it:
+    /// 1/320 s at f/9, 18 mm and ISO 64, with no compensation.
+    fn z9_exposure() -> Exposure {
+        Exposure {
+            iso: Some(64),
+            exposure_time: Some(fraction(10, 3200)),
+            f_number: Some(fraction(900, 100)),
+            focal_length: Some(fraction(180, 10)),
+            exposure_bias: Some(signed(0, 6)),
+        }
+    }
+
     /// What the Z 9 file gives, every value read.
     fn z9_expected() -> Metadata {
         Metadata {
@@ -237,8 +408,35 @@ mod tests {
             serial_number: Some("1234567".to_owned()),
             capture_time: z9_time(Some(b"85"), Some(b"-05:00")),
             orientation: Orientation::Rotate270,
+            exposure: z9_exposure(),
             ..Metadata::default()
         }
+    }
+
+    /// The Z 9 file's metadata with the exposure `exposure` instead of its
+    /// own.
+    fn z9_expected_with(exposure: Exposure) -> Metadata {
+        Metadata {
+            exposure,
+            ..z9_expected()
+        }
+    }
+
+    /// The exposure read from a file whose Exif IFD holds only what `build`
+    /// adds, given the builder and the Exif IFD's ID.
+    fn exposure(build: impl FnOnce(&mut TiffBuilder, IfdId)) -> Exposure {
+        let (mut src, tree) = testing::file(|builder, ifd| {
+            let exif = builder.ifd();
+            builder.exif(ifd, exif);
+            build(builder, exif);
+        });
+        read(&mut src, &tree).unwrap().exposure
+    }
+
+    /// The ISO read from a file whose Exif IFD holds only what `build` adds,
+    /// as [`exposure`] builds it.
+    fn iso(build: impl FnOnce(&mut TiffBuilder, IfdId)) -> Option<u32> {
+        exposure(build).iso
     }
 
     /// The make read from a file whose IFD0's Make is `make`, as ASCII with
@@ -258,8 +456,13 @@ mod tests {
         assert_eq!(time.to_string(), "2022-02-05T13:46:41.85-05:00");
         assert_eq!(time.offset_minutes(), Some(-300));
         assert_eq!(time.nanosecond(), 850_000_000);
+        let exposure = metadata.exposure();
+        assert_eq!(exposure.iso(), Some(64));
+        assert_eq!(exposure.exposure_time(), Some(fraction(10, 3200)));
+        assert_eq!(exposure.f_number(), Some(fraction(900, 100)));
+        assert_eq!(exposure.focal_length(), Some(fraction(180, 10)));
+        assert_eq!(exposure.exposure_bias(), Some(signed(0, 6)));
         // Not read yet.
-        assert_eq!(metadata.exposure(), &crate::metadata::Exposure::default());
         assert_eq!(metadata.lens(), None);
         assert_eq!(metadata.raw_size(), None);
         assert_eq!(metadata.image_size(), None);
@@ -401,7 +604,7 @@ mod tests {
     }
 
     #[test]
-    fn a_file_without_an_exif_ifd_has_no_time_or_serial_but_its_camera_and_orientation() {
+    fn a_file_without_an_exif_ifd_has_no_time_serial_or_exposure_but_its_camera_and_orientation() {
         // The Exif tags in IFD0, where they do not belong, are not read.
         let (mut src, tree) = testing::file(|builder, ifd| {
             builder
@@ -410,6 +613,9 @@ mod tests {
                 .short(ifd, ORIENTATION, &[6])
                 .ascii(ifd, BODY_SERIAL_NUMBER, "1234567")
                 .ascii(ifd, DATE_TIME_ORIGINAL, "2022:02:05 13:46:41");
+            for (tag, add) in EXIF_EXPOSURE {
+                add(builder, ifd, tag);
+            }
         });
         assert!(tree.exif().is_none());
         let metadata = read(&mut src, &tree).unwrap();
@@ -450,14 +656,21 @@ mod tests {
     /// 4096, and makes the file long enough to hold them: a value that lies
     /// inside the file and cannot be read.
     fn too_long(builder: &mut TiffBuilder, ifd: IfdId, tag: u16) {
-        builder.raw(ifd, tag, ASCII, TOO_LONG, RawValue::Offset(4096));
-        builder.pad_to(4096 + u64::from(TOO_LONG));
+        too_long_of(builder, ifd, tag, ASCII, 1);
+    }
+
+    /// As [`too_long`], with values of type `typ`, of `size` bytes each:
+    /// as many as take at least [`TOO_LONG`] bytes.
+    fn too_long_of(builder: &mut TiffBuilder, ifd: IfdId, tag: u16, typ: u16, size: u32) {
+        let count = TOO_LONG.div_ceil(size);
+        builder.raw(ifd, tag, typ, count, RawValue::Offset(4096));
+        builder.pad_to(4096 + u64::from(count) * u64::from(size));
     }
 
     #[test]
     fn a_damaged_value_costs_only_itself() {
         type Change = fn(&mut TiffBuilder, IfdId, IfdId);
-        let cases: [(&str, u16, Change, Metadata); 7] = [
+        let cases: [(&str, u16, Change, Metadata); 12] = [
             (
                 "a Model that is not text",
                 MODEL,
@@ -529,6 +742,49 @@ mod tests {
                     ..z9_expected()
                 },
             ),
+            (
+                "an ExposureTime too long to read",
+                EXPOSURE_TIME,
+                |builder, _, exif| too_long_of(builder, exif, EXPOSURE_TIME, RATIONAL, 8),
+                z9_expected_with(Exposure {
+                    exposure_time: None,
+                    ..z9_exposure()
+                }),
+            ),
+            (
+                "an FNumber too long to read",
+                F_NUMBER,
+                |builder, _, exif| too_long_of(builder, exif, F_NUMBER, RATIONAL, 8),
+                z9_expected_with(Exposure {
+                    f_number: None,
+                    ..z9_exposure()
+                }),
+            ),
+            (
+                "a FocalLength too long to read",
+                FOCAL_LENGTH,
+                |builder, _, exif| too_long_of(builder, exif, FOCAL_LENGTH, RATIONAL, 8),
+                z9_expected_with(Exposure {
+                    focal_length: None,
+                    ..z9_exposure()
+                }),
+            ),
+            (
+                "an ExposureBiasValue too long to read",
+                EXPOSURE_BIAS_VALUE,
+                |builder, _, exif| too_long_of(builder, exif, EXPOSURE_BIAS_VALUE, SRATIONAL, 8),
+                z9_expected_with(Exposure {
+                    exposure_bias: None,
+                    ..z9_exposure()
+                }),
+            ),
+            (
+                // The RecommendedExposureIndex, 64 too, gives the ISO.
+                "a PhotographicSensitivity too long to read",
+                PHOTOGRAPHIC_SENSITIVITY,
+                |builder, _, exif| too_long_of(builder, exif, PHOTOGRAPHIC_SENSITIVITY, SHORT, 2),
+                z9_expected(),
+            ),
         ];
         for (case, tag, change, expected) in cases {
             assert_eq!(z9_except(tag, change), expected, "{case}");
@@ -559,5 +815,403 @@ mod tests {
             let err = read(&mut src, &tree).expect_err("the read fails");
             assert_eq!(err.kind(), ErrorKind::Io, "{tag:#06X}: {err:?}");
         }
+    }
+
+    #[test]
+    fn a_failure_of_the_reader_reading_the_exposure_is_the_readers_error() {
+        /// `values` as little-endian LONGs.
+        fn longs(values: &[u32]) -> Vec<u8> {
+            values.iter().flat_map(|v| v.to_le_bytes()).collect()
+        }
+        let only = |change: fn(&mut Exposure)| {
+            let mut exposure = Exposure::default();
+            change(&mut exposure);
+            exposure
+        };
+        // Each value stored far away, so that it is read through the
+        // failing part of the reader: of its tag's type, its first value
+        // the one expected, and longer than four bytes, so not held in its
+        // entry. The ISO's fallbacks are read only when the
+        // PhotographicSensitivity does not give it, so their files hold an
+        // inline one that does not.
+        let cases = [
+            (
+                EXPOSURE_TIME,
+                RATIONAL,
+                1,
+                longs(&[10, 3200]),
+                None,
+                only(|e| e.exposure_time = Some(fraction(10, 3200))),
+            ),
+            (
+                F_NUMBER,
+                RATIONAL,
+                1,
+                longs(&[900, 100]),
+                None,
+                only(|e| e.f_number = Some(fraction(900, 100))),
+            ),
+            (
+                FOCAL_LENGTH,
+                RATIONAL,
+                1,
+                longs(&[180, 10]),
+                None,
+                only(|e| e.focal_length = Some(fraction(180, 10))),
+            ),
+            (
+                EXPOSURE_BIAS_VALUE,
+                SRATIONAL,
+                1,
+                longs(&[(-3_i32).cast_unsigned(), 10]),
+                None,
+                only(|e| e.exposure_bias = Some(signed(-3, 10))),
+            ),
+            (
+                PHOTOGRAPHIC_SENSITIVITY,
+                SHORT,
+                3,
+                vec![64, 0, 0, 0, 0, 0],
+                None,
+                only(|e| e.iso = Some(64)),
+            ),
+            (
+                RECOMMENDED_EXPOSURE_INDEX,
+                LONG,
+                2,
+                longs(&[100, 0]),
+                Some(65535),
+                only(|e| e.iso = Some(100)),
+            ),
+            (
+                ISO_SPEED,
+                LONG,
+                2,
+                longs(&[200, 0]),
+                Some(0),
+                only(|e| e.iso = Some(200)),
+            ),
+        ];
+        let far = u32::try_from(2 * FAR).unwrap();
+        for (tag, typ, count, value, sensitivity, expected) in cases {
+            let mut builder = TiffBuilder::new(Order::Little);
+            let ifd0 = builder.ifd();
+            let exif = builder.ifd();
+            builder.exif(ifd0, exif).blob_at(2 * FAR, &value);
+            builder.raw(exif, tag, typ, count, RawValue::Offset(far));
+            if let Some(sensitivity) = sensitivity {
+                builder.short(exif, PHOTOGRAPHIC_SENSITIVITY, &[sensitivity]);
+            }
+            let bytes = builder.build().bytes;
+            // The file is sound, for a reader that does not fail.
+            assert_eq!(read_bytes(bytes.clone()).exposure, expected, "{tag:#06X}");
+
+            let mut src = Source::new(FailsFar(Cursor::new(bytes))).unwrap();
+            let header = parse_header(&mut src).unwrap();
+            let tree = walk(&mut src, header, &Limits::default()).unwrap();
+            let err = read(&mut src, &tree).expect_err("the read fails");
+            assert_eq!(err.kind(), ErrorKind::Io, "{tag:#06X}: {err:?}");
+        }
+    }
+
+    #[test]
+    fn an_iso_of_65535_is_replaced_by_the_recommended_exposure_index_or_else_the_iso_speed() {
+        // Exif writes 65535 for a sensitivity of 65535 or more.
+        assert_eq!(
+            iso(|builder, exif| {
+                builder
+                    .short(exif, PHOTOGRAPHIC_SENSITIVITY, &[65535])
+                    .long(exif, RECOMMENDED_EXPOSURE_INDEX, &[102_400])
+                    .long(exif, ISO_SPEED, &[204_800]);
+            }),
+            Some(102_400)
+        );
+        assert_eq!(
+            iso(|builder, exif| {
+                builder
+                    .short(exif, PHOTOGRAPHIC_SENSITIVITY, &[65535])
+                    .long(exif, ISO_SPEED, &[204_800]);
+            }),
+            Some(204_800)
+        );
+    }
+
+    #[test]
+    fn an_iso_of_65535_that_nothing_replaces_stands() {
+        assert_eq!(
+            iso(|builder, exif| {
+                builder.short(exif, PHOTOGRAPHIC_SENSITIVITY, &[65535]);
+            }),
+            Some(65535)
+        );
+        // Zeros replace nothing.
+        assert_eq!(
+            iso(|builder, exif| {
+                builder
+                    .short(exif, PHOTOGRAPHIC_SENSITIVITY, &[65535])
+                    .long(exif, RECOMMENDED_EXPOSURE_INDEX, &[0])
+                    .long(exif, ISO_SPEED, &[0]);
+            }),
+            Some(65535)
+        );
+    }
+
+    #[test]
+    fn a_missing_iso_is_the_recommended_exposure_index_or_else_the_iso_speed() {
+        assert_eq!(
+            iso(|builder, exif| {
+                builder
+                    .long(exif, RECOMMENDED_EXPOSURE_INDEX, &[64])
+                    .long(exif, ISO_SPEED, &[100]);
+            }),
+            Some(64)
+        );
+        assert_eq!(
+            iso(|builder, exif| {
+                builder.long(exif, ISO_SPEED, &[100]);
+            }),
+            Some(100)
+        );
+        // An Exif IFD with another tag: one with no entries at all is
+        // damage, which the walk leaves out of the tree.
+        assert_eq!(
+            iso(|builder, exif| {
+                builder.rational(exif, EXPOSURE_TIME, &[(10, 3200)]);
+            }),
+            None
+        );
+    }
+
+    #[test]
+    fn a_recommended_exposure_index_of_zero_is_skipped_for_the_iso_speed() {
+        assert_eq!(
+            iso(|builder, exif| {
+                builder
+                    .long(exif, RECOMMENDED_EXPOSURE_INDEX, &[0])
+                    .long(exif, ISO_SPEED, &[200]);
+            }),
+            Some(200)
+        );
+    }
+
+    #[test]
+    fn an_iso_of_zero_is_unknown() {
+        assert_eq!(
+            iso(|builder, exif| {
+                builder.short(exif, PHOTOGRAPHIC_SENSITIVITY, &[0]).long(
+                    exif,
+                    RECOMMENDED_EXPOSURE_INDEX,
+                    &[100],
+                );
+            }),
+            Some(100)
+        );
+        assert_eq!(
+            iso(|builder, exif| {
+                builder.short(exif, PHOTOGRAPHIC_SENSITIVITY, &[0]);
+            }),
+            None
+        );
+        assert_eq!(
+            iso(|builder, exif| {
+                builder.short(exif, PHOTOGRAPHIC_SENSITIVITY, &[0]).long(
+                    exif,
+                    RECOMMENDED_EXPOSURE_INDEX,
+                    &[0],
+                );
+            }),
+            None
+        );
+    }
+
+    #[test]
+    fn a_known_iso_is_taken_over_the_other_tags() {
+        assert_eq!(
+            iso(|builder, exif| {
+                builder
+                    .short(exif, PHOTOGRAPHIC_SENSITIVITY, &[64])
+                    .long(exif, RECOMMENDED_EXPOSURE_INDEX, &[100])
+                    .long(exif, ISO_SPEED, &[200]);
+            }),
+            Some(64)
+        );
+    }
+
+    #[test]
+    fn an_iso_is_read_as_a_short_or_a_long_its_first_value() {
+        assert_eq!(
+            iso(|builder, exif| {
+                builder.long(exif, PHOTOGRAPHIC_SENSITIVITY, &[64]);
+            }),
+            Some(64)
+        );
+        assert_eq!(
+            iso(|builder, exif| {
+                builder.short(exif, PHOTOGRAPHIC_SENSITIVITY, &[200, 100]);
+            }),
+            Some(200)
+        );
+    }
+
+    #[test]
+    fn an_iso_of_another_type_is_missing() {
+        assert_eq!(
+            iso(|builder, exif| {
+                builder
+                    .rational(exif, PHOTOGRAPHIC_SENSITIVITY, &[(64, 1)])
+                    .long(exif, RECOMMENDED_EXPOSURE_INDEX, &[100]);
+            }),
+            Some(100)
+        );
+        assert_eq!(
+            iso(|builder, exif| {
+                builder.rational(exif, PHOTOGRAPHIC_SENSITIVITY, &[(64, 1)]);
+            }),
+            None
+        );
+        // A fallback of another type is missing too.
+        assert_eq!(
+            iso(|builder, exif| {
+                builder
+                    .rational(exif, RECOMMENDED_EXPOSURE_INDEX, &[(100, 1)])
+                    .long(exif, ISO_SPEED, &[200]);
+            }),
+            Some(200)
+        );
+    }
+
+    #[test]
+    fn an_iso_that_cannot_be_read_is_missing() {
+        assert_eq!(
+            iso(|builder, exif| {
+                too_long_of(builder, exif, PHOTOGRAPHIC_SENSITIVITY, SHORT, 2);
+                builder.long(exif, RECOMMENDED_EXPOSURE_INDEX, &[100]);
+            }),
+            Some(100)
+        );
+        assert_eq!(
+            iso(|builder, exif| {
+                too_long_of(builder, exif, PHOTOGRAPHIC_SENSITIVITY, SHORT, 2);
+            }),
+            None
+        );
+        assert_eq!(
+            iso(|builder, exif| {
+                builder.short(exif, PHOTOGRAPHIC_SENSITIVITY, &[65535]);
+                too_long_of(builder, exif, RECOMMENDED_EXPOSURE_INDEX, LONG, 4);
+            }),
+            Some(65535)
+        );
+    }
+
+    #[test]
+    fn an_unknown_f_number_is_none() {
+        // Sony's ILCE-7S with a manual lens, as on the public sample 1582.
+        let metadata = z9_except(F_NUMBER, |builder, _, exif| {
+            builder.rational(exif, F_NUMBER, &[(0, 10)]);
+        });
+        assert_eq!(
+            metadata,
+            z9_expected_with(Exposure {
+                f_number: None,
+                ..z9_exposure()
+            })
+        );
+    }
+
+    #[test]
+    fn a_fraction_with_a_zero_denominator_is_none() {
+        type Unset = fn(&mut Exposure);
+        let unsigned: [(u16, Unset); 3] = [
+            (EXPOSURE_TIME, |exposure| exposure.exposure_time = None),
+            (F_NUMBER, |exposure| exposure.f_number = None),
+            (FOCAL_LENGTH, |exposure| exposure.focal_length = None),
+        ];
+        for (tag, unset) in unsigned {
+            let mut expected = z9_exposure();
+            unset(&mut expected);
+            for value in [(10, 0), (0, 0)] {
+                let metadata = z9_except(tag, |builder, _, exif| {
+                    builder.rational(exif, tag, &[value]);
+                });
+                assert_eq!(metadata.exposure, expected, "{tag:#06X}: {value:?}");
+            }
+        }
+        for value in [(-3, 0), (0, 0)] {
+            let metadata = z9_except(EXPOSURE_BIAS_VALUE, |builder, _, exif| {
+                builder.srational(exif, EXPOSURE_BIAS_VALUE, &[value]);
+            });
+            assert_eq!(
+                metadata.exposure,
+                Exposure {
+                    exposure_bias: None,
+                    ..z9_exposure()
+                },
+                "{value:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn no_compensation_is_a_real_zero_kept_as_stored() {
+        assert_eq!(z9_file().exposure.exposure_bias, Some(signed(0, 6)));
+        let bias = exposure(|builder, exif| {
+            builder.srational(exif, EXPOSURE_BIAS_VALUE, &[(0, 10)]);
+        })
+        .exposure_bias;
+        assert_eq!(bias, Some(signed(0, 10)));
+    }
+
+    #[test]
+    fn a_negative_bias_is_kept_as_stored() {
+        for value in [(-3, 10), (3, -10), (-2, 3)] {
+            let bias = exposure(|builder, exif| {
+                builder.srational(exif, EXPOSURE_BIAS_VALUE, &[value]);
+            })
+            .exposure_bias;
+            assert_eq!(bias, Some(signed(value.0, value.1)), "{value:?}");
+        }
+    }
+
+    #[test]
+    fn a_fraction_of_the_other_type_is_none() {
+        let read = exposure(|builder, exif| {
+            builder
+                .srational(exif, EXPOSURE_TIME, &[(10, 3200)])
+                .srational(exif, F_NUMBER, &[(900, 100)])
+                .srational(exif, FOCAL_LENGTH, &[(180, 10)])
+                .rational(exif, EXPOSURE_BIAS_VALUE, &[(0, 6)]);
+        });
+        assert_eq!(read, Exposure::default());
+    }
+
+    #[test]
+    fn a_fraction_with_several_values_gives_its_first() {
+        let read = exposure(|builder, exif| {
+            builder
+                .rational(exif, EXPOSURE_TIME, &[(1, 50), (1, 100)])
+                .rational(exif, F_NUMBER, &[(56, 10), (80, 10)])
+                .rational(exif, FOCAL_LENGTH, &[(180, 10), (500, 10)])
+                .srational(exif, EXPOSURE_BIAS_VALUE, &[(-3, 10), (0, 6)]);
+        });
+        assert_eq!(
+            read,
+            Exposure {
+                iso: None,
+                exposure_time: Some(fraction(1, 50)),
+                f_number: Some(fraction(56, 10)),
+                focal_length: Some(fraction(180, 10)),
+                exposure_bias: Some(signed(-3, 10)),
+            }
+        );
+    }
+
+    #[test]
+    fn a_fraction_whose_first_value_is_unknown_is_none_whatever_follows() {
+        // Only the first value is the picture's.
+        let read = exposure(|builder, exif| {
+            builder.rational(exif, F_NUMBER, &[(0, 10), (56, 10)]);
+        });
+        assert_eq!(read.f_number, None);
     }
 }

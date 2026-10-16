@@ -30,9 +30,14 @@
 //!   first has Compression 34713, the second none (1).
 //! - The Exif IFD holds the ExifVersion, `0232`; the capture time, as
 //!   DateTimeOriginal `2022:02:05 13:46:41`, SubSecTimeOriginal `85` and
-//!   OffsetTimeOriginal `-05:00`, the values of the public Z 9 sample
-//!   5147 of raw.pixls.us; the BodySerialNumber `1234567`, made up, since
-//!   no real camera's serial number is copied here; and the MakerNote, whose
+//!   OffsetTimeOriginal `-05:00`; the exposure, as ExposureTime `10/3200`,
+//!   FNumber `900/100` and FocalLength `180/10` (RATIONAL), ExposureBiasValue
+//!   `0/6` (SRATIONAL), PhotographicSensitivity 64 and SensitivityType 2
+//!   (SHORT), and RecommendedExposureIndex 64 (LONG); these are the values
+//!   of the public Z 9 sample 5147 of raw.pixls.us, each of the type it
+//!   has there. The Exif IFD also holds the BodySerialNumber `1234567`,
+//!   made up, since no real camera's serial number is copied here; and the
+//!   MakerNote, whose
 //!   value is the block [`nikon_makernote`] writes: Nikon's own metadata,
 //!   here only its version and its PreviewIFD, which declares a small JPEG
 //!   of 640 by 424 pixels. The MakerNote is in the file's byte order unless
@@ -77,6 +82,18 @@ const JPEG_INTERCHANGE_FORMAT: u16 = 0x0201;
 /// How many bytes the embedded JPEG stream takes
 /// (JPEGInterchangeFormatLength).
 const JPEG_INTERCHANGE_FORMAT_LENGTH: u16 = 0x0202;
+/// How long the shutter was open, in seconds, as a RATIONAL
+/// (ExposureTime).
+const EXPOSURE_TIME: u16 = 0x829A;
+/// The f-number, as a RATIONAL (FNumber).
+const F_NUMBER: u16 = 0x829D;
+/// The ISO, as a SHORT (PhotographicSensitivity).
+const PHOTOGRAPHIC_SENSITIVITY: u16 = 0x8827;
+/// Which of the Exif sensitivities the camera records, as a SHORT
+/// (SensitivityType): 2, the RecommendedExposureIndex.
+const SENSITIVITY_TYPE: u16 = 0x8830;
+/// The recommended exposure index, as a LONG (RecommendedExposureIndex).
+const RECOMMENDED_EXPOSURE_INDEX: u16 = 0x8832;
 /// The version of the Exif standard the file follows (ExifVersion).
 const EXIF_VERSION: u16 = 0x9000;
 /// When the picture was taken, as ASCII text (DateTimeOriginal).
@@ -84,6 +101,10 @@ const DATE_TIME_ORIGINAL: u16 = 0x9003;
 /// The capture time's offset from UTC, as ASCII text
 /// (OffsetTimeOriginal).
 const OFFSET_TIME_ORIGINAL: u16 = 0x9011;
+/// The exposure compensation in EV, as an SRATIONAL (ExposureBiasValue).
+const EXPOSURE_BIAS_VALUE: u16 = 0x9204;
+/// The focal length in millimetres, as a RATIONAL (FocalLength).
+const FOCAL_LENGTH: u16 = 0x920A;
 /// The capture time's fraction of a second, as ASCII digits
 /// (SubSecTimeOriginal).
 const SUB_SEC_TIME_ORIGINAL: u16 = 0x9291;
@@ -271,6 +292,13 @@ pub fn z9_file_with(order: Order, orientation: u16, makernote_order: Order) -> (
         .ascii(exif, DATE_TIME_ORIGINAL, "2022:02:05 13:46:41")
         .ascii(exif, SUB_SEC_TIME_ORIGINAL, "85")
         .ascii(exif, OFFSET_TIME_ORIGINAL, "-05:00")
+        .rational(exif, EXPOSURE_TIME, &[(10, 3200)])
+        .rational(exif, F_NUMBER, &[(900, 100)])
+        .short(exif, PHOTOGRAPHIC_SENSITIVITY, &[64])
+        .short(exif, SENSITIVITY_TYPE, &[2])
+        .long(exif, RECOMMENDED_EXPOSURE_INDEX, &[64])
+        .srational(exif, EXPOSURE_BIAS_VALUE, &[(0, 6)])
+        .rational(exif, FOCAL_LENGTH, &[(180, 10)])
         .ascii(exif, BODY_SERIAL_NUMBER, "1234567");
     let (block, preview_in_makernote) = nikon_makernote(makernote_order, &stub(PREVIEW_JPEG));
     let makernote = builder.blob(&block);

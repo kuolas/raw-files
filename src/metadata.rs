@@ -122,8 +122,9 @@ impl Metadata {
 ///
 /// Every value is `None` when the file does not record it or records it in
 /// a way that cannot be read. A zero ISO, exposure time, f-number or
-/// focal length means the camera did not know it, and is `None` too; a
-/// zero exposure bias is a real value.
+/// focal length means the camera did not know it, and is never returned:
+/// the value is `None`, unless, for the ISO, another of the file's
+/// sensitivity tags gives it. A zero exposure bias is a real value.
 ///
 /// `Exposure::default()` is an empty one, with every value `None`, for a
 /// caller's tests. `Exposure` is not `Copy`, so that a later value that
@@ -139,6 +140,9 @@ pub struct Exposure {
 
 impl Exposure {
     /// The ISO sensitivity, such as 64.
+    ///
+    /// 65535 means 65535 or more: Exif records that value for any higher
+    /// sensitivity, and it is kept when the file records no exact one.
     pub fn iso(&self) -> Option<u32> {
         self.iso
     }

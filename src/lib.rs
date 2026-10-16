@@ -13,9 +13,9 @@
 //! refused with the `UnknownFormat` error.
 //! [`RawFile::metadata`] gives what the camera recorded about the picture,
 //! read when the file is opened. The NEF and ARW readers fill in the
-//! camera's make, model and serial number, the capture time and the
-//! orientation; they do not read the exposure, the lens or the sizes yet,
-//! which are empty. See the
+//! camera's make, model and serial number, the capture time, the
+//! orientation and the exposure; they do not read the lens or the sizes
+//! yet, which are empty. See the
 //! [roadmap](https://github.com/kuolas/raw-files/blob/master/docs/ROADMAP.md)
 //! for the plan and the
 //! [architecture](https://github.com/kuolas/raw-files/blob/master/docs/ARCHITECTURE.md)

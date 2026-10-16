@@ -106,8 +106,10 @@ manufacturer's MakerNote only where nothing standard records it.
   denominator the file recorded (`Rational`, `SignedRational`), so
   `10/3200` is not silently turned into `1/320`; callers reduce them for
   display. A zero means "unknown" except for the exposure bias, where
-  `0/6` is a real zero. An ISO of 65535 means "65535 or more" in Exif, so
-  the RecommendedExposureIndex is used instead when present. On NEF
+  `0/6` is a real zero. The ISO is Exif's PhotographicSensitivity; when
+  it is absent, zero (unknown), or 65535, which Exif uses for "65535 or
+  more", the RecommendedExposureIndex is used, or else the ISOSpeed, each
+  only when above zero, and a 65535 that neither replaces stands. On NEF
   without the Exif ISO, the MakerNote's ISO is used only in its common
   form of two numbers, `[0, ISO]`.
 - **Text as written, cleaned.** Cut at the first NUL, trim spaces at both

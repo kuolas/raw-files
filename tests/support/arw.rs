@@ -16,11 +16,15 @@
 //!   with the Orientation given; it declares a JPEG of 1616 by 1080 pixels
 //!   through its JPEGInterchangeFormat and JPEGInterchangeFormatLength tags,
 //!   with Compression 6 (old-style JPEG), and points at the raw SubIFD and
-//!   at an Exif IFD that holds the ExifVersion, `0232`, and the capture
-//!   time: DateTimeOriginal `2023:10:19 16:13:48`, SubSecTimeOriginal `776`
-//!   and OffsetTimeOriginal `+02:00`, the values of the public ILCE-7M4
-//!   sample 6929 of raw.pixls.us, which has no serial number in its Exif
-//!   tags, so neither has the fixture. IFD1, IFD0's next, repeats the
+//!   at an Exif IFD that holds the ExifVersion, `0232`; the capture time,
+//!   as DateTimeOriginal `2023:10:19 16:13:48`, SubSecTimeOriginal `776`
+//!   and OffsetTimeOriginal `+02:00`; and the exposure, as ExposureTime
+//!   `1/50`, FNumber `56/10` and FocalLength `500/10` (RATIONAL),
+//!   ExposureBiasValue `0/10` (SRATIONAL), PhotographicSensitivity 250
+//!   (SHORT) and RecommendedExposureIndex 250 (LONG). These are the values
+//!   of the public ILCE-7M4 sample 6929 of raw.pixls.us, each of the type
+//!   it has there; the sample has no serial number in its Exif tags, so
+//!   neither has the fixture. IFD1, IFD0's next, repeats the
 //!   Make, Model and Orientation and declares a thumbnail of 160 by 120
 //!   pixels the same way. IFD2, IFD1's next, declares a JPEG
 //!   of the picture's full size, 7008 by 4672 pixels, and says so in its
@@ -70,8 +74,8 @@
 //! The metadata: every file holds its Make and Model in IFD0, and every
 //! file but the SRF holds them again in IFD1, with the Orientation in both;
 //! the SRF has no Orientation. Only the two ARW 4 files hold a capture
-//! time, and no file holds a serial number. Every text value is ASCII
-//! ending in one NUL.
+//! time and an exposure, and no file holds a serial number. Every text
+//! value is ASCII ending in one NUL.
 //!
 //! Every JPEG preview is a baseline stub. Each builder returns where it put
 //! the JPEGs and the raw data, as an [`ArwBlobs`], so that a test can check
@@ -122,6 +126,15 @@ const JPEG_INTERCHANGE_FORMAT_LENGTH: u16 = 0x0202;
 /// How much the chroma samples of a YCbCr image are subsampled,
 /// horizontally then vertically (YCbCrSubSampling).
 const YCBCR_SUB_SAMPLING: u16 = 0x0212;
+/// How long the shutter was open, in seconds, as a RATIONAL
+/// (ExposureTime).
+const EXPOSURE_TIME: u16 = 0x829A;
+/// The f-number, as a RATIONAL (FNumber).
+const F_NUMBER: u16 = 0x829D;
+/// The ISO, as a SHORT (PhotographicSensitivity).
+const PHOTOGRAPHIC_SENSITIVITY: u16 = 0x8827;
+/// The recommended exposure index, as a LONG (RecommendedExposureIndex).
+const RECOMMENDED_EXPOSURE_INDEX: u16 = 0x8832;
 /// The version of the Exif standard the file follows (ExifVersion).
 const EXIF_VERSION: u16 = 0x9000;
 /// When the picture was taken, as ASCII text (DateTimeOriginal).
@@ -129,6 +142,10 @@ const DATE_TIME_ORIGINAL: u16 = 0x9003;
 /// The capture time's offset from UTC, as ASCII text
 /// (OffsetTimeOriginal).
 const OFFSET_TIME_ORIGINAL: u16 = 0x9011;
+/// The exposure compensation in EV, as an SRATIONAL (ExposureBiasValue).
+const EXPOSURE_BIAS_VALUE: u16 = 0x9204;
+/// The focal length in millimetres, as a RATIONAL (FocalLength).
+const FOCAL_LENGTH: u16 = 0x920A;
 /// The capture time's fraction of a second, as ASCII digits
 /// (SubSecTimeOriginal).
 const SUB_SEC_TIME_ORIGINAL: u16 = 0x9291;
@@ -417,7 +434,13 @@ fn arw4(
         .undefined(exif, EXIF_VERSION, b"0232")
         .ascii(exif, DATE_TIME_ORIGINAL, "2023:10:19 16:13:48")
         .ascii(exif, SUB_SEC_TIME_ORIGINAL, "776")
-        .ascii(exif, OFFSET_TIME_ORIGINAL, "+02:00");
+        .ascii(exif, OFFSET_TIME_ORIGINAL, "+02:00")
+        .rational(exif, EXPOSURE_TIME, &[(1, 50)])
+        .rational(exif, F_NUMBER, &[(56, 10)])
+        .short(exif, PHOTOGRAPHIC_SENSITIVITY, &[250])
+        .long(exif, RECOMMENDED_EXPOSURE_INDEX, &[250])
+        .srational(exif, EXPOSURE_BIAS_VALUE, &[(0, 10)])
+        .rational(exif, FOCAL_LENGTH, &[(500, 10)]);
 
     preview_ifd(&mut builder, ifd1, "SONY", "ILCE-7M4", orientation);
     let ifd1_jpeg = jpeg(&mut builder, ifd1, THUMBNAIL);
