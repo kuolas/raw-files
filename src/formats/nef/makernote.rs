@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! The Nikon MakerNote, as far as the preview reader needs it: where it
-//! keeps its small preview JPEG.
+//! The Nikon MakerNote: where it lies in the file, and where it keeps its
+//! small preview JPEG.
 //!
 //! The MakerNote is a block of Nikon's own metadata, the value of the
 //! MakerNote tag of the Exif IFD. Among much else, it points at a
@@ -35,6 +35,11 @@
 //! (`docs/formats/nef/security.md`, item 4 of the checklist). Only a
 //! failure of the reader itself is an error: that is not the file's fault,
 //! and says nothing about the MakerNote.
+//!
+//! The MakerNote is read once per file, into a [`MakerNote`]: its block
+//! found and checked, its MakerNote IFD parsed. Every use of the MakerNote
+//! then reads from that same structure, so that none of them finds, checks
+//! or parses the block again.
 
 use std::io::{Read, Seek};
 use std::ops::Range;
@@ -64,21 +69,42 @@ const HEADER_AT: u64 = 10;
 /// the inner TIFF header, which is 8 bytes long.
 const MIN_LEN: u64 = HEADER_AT + 8;
 
-/// Where the preview JPEG of the MakerNote is, as a candidate for the
-/// shared finder, with its absolute offset; `None` when the file has no
-/// Exif IFD, no MakerNote, a MakerNote of another layout or maker, or one
-/// whose structure does not hold together.
+/// A Nikon MakerNote of the layout read here, its block found and its
+/// MakerNote IFD read: what every use of the MakerNote starts from, so
+/// that the block is found, checked and parsed once per file.
+///
+/// See the [module documentation](self) for the layout.
+#[derive(Debug)]
+pub(super) struct MakerNote {
+    /// Where the block's bytes are in the file: the bounds that every
+    /// offset found inside the block is checked against.
+    block: Range<u64>,
+    /// What every offset inside the block counts from: the inner TIFF
+    /// header, 10 bytes into the block.
+    base: u64,
+    /// The byte order of every number inside the block, the inner
+    /// header's, which may differ from the file's.
+    order: ByteOrder,
+    /// The MakerNote IFD, which holds Nikon's tags: the IFD the inner
+    /// header points at, inside the block with its whole entry table.
+    ifd: Ifd,
+}
+
+/// The Nikon MakerNote of the file in `src`, whose IFDs are `tree`, read
+/// within `limits`; `None` when the file has no Exif IFD, no MakerNote, a
+/// MakerNote of another layout or maker, or one whose inner header or
+/// MakerNote IFD does not hold together.
 ///
 /// See the [module documentation](self) for the layout and the checks.
 ///
 /// # Errors
 ///
 /// `Io` when the reader fails. Nothing the block holds is an error.
-pub(super) fn preview_candidate<R: Read + Seek>(
+pub(super) fn read<R: Read + Seek>(
     src: &mut Source<R>,
     tree: &Tree,
     limits: &Limits,
-) -> Result<Option<Candidate>> {
+) -> Result<Option<MakerNote>> {
     let Some(block) = tree
         .exif()
         .and_then(|exif| exif.entry(MAKER_NOTE))
@@ -104,13 +130,42 @@ pub(super) fn preview_candidate<R: Read + Seek>(
     let Some(header) = skip_damage(parse_header_at(src, base))? else {
         return Ok(None);
     };
-    let Some(makernote) = ifd_in(src, &block, base, header.ifd0, header.order, limits)? else {
+    let Some(ifd) = ifd_in(src, &block, base, header.ifd0, header.order, limits)? else {
         return Ok(None);
     };
-    let Some(pointer) = inline_u32(src, &makernote, PREVIEW_IFD)? else {
+    Ok(Some(MakerNote {
+        block,
+        base,
+        order: header.order,
+        ifd,
+    }))
+}
+
+/// Where the preview JPEG of `makernote` is, as a candidate for the shared
+/// finder, with its absolute offset, read within `limits`; `None` when the
+/// MakerNote has no PreviewIFD, or one whose structure does not hold
+/// together.
+///
+/// See the [module documentation](self) for the checks.
+///
+/// # Errors
+///
+/// `Io` when the reader fails. Nothing the block holds is an error.
+pub(super) fn preview_candidate<R: Read + Seek>(
+    src: &mut Source<R>,
+    makernote: &MakerNote,
+    limits: &Limits,
+) -> Result<Option<Candidate>> {
+    let MakerNote {
+        block,
+        base,
+        order,
+        ifd,
+    } = makernote;
+    let Some(pointer) = inline_u32(src, ifd, PREVIEW_IFD)? else {
         return Ok(None);
     };
-    let Some(preview) = ifd_in(src, &block, base, pointer, header.order, limits)? else {
+    let Some(preview) = ifd_in(src, block, *base, pointer, *order, limits)? else {
         return Ok(None);
     };
     let offset = inline_u32(src, &preview, JPEG_INTERCHANGE_FORMAT)?;
@@ -122,7 +177,7 @@ pub(super) fn preview_candidate<R: Read + Seek>(
     // An empty JPEG is passed on: the finder drops it with the others.
     let length = u64::from(length);
     match base.checked_add(u64::from(offset)) {
-        Some(offset) if fits(&block, offset, length) => Ok(Some(Candidate { offset, length })),
+        Some(offset) if fits(block, offset, length) => Ok(Some(Candidate { offset, length })),
         _ => Ok(None),
     }
 }
@@ -384,16 +439,31 @@ mod tests {
         with_makernote(order, UNDEFINED, &block.bytes, block.len())
     }
 
-    /// What [`preview_candidate`] returns for the file `bytes`, read with
-    /// the default limits, under `limits`.
+    /// The MakerNote's preview candidate in the file in `src`, whose IFDs
+    /// are `tree`: what [`read`] and then [`preview_candidate`] return,
+    /// each under `limits`.
+    fn read_candidate<R: Read + Seek>(
+        src: &mut Source<R>,
+        tree: &Tree,
+        limits: &Limits,
+    ) -> Result<Option<Candidate>> {
+        let Some(makernote) = read(src, tree, limits)? else {
+            return Ok(None);
+        };
+        preview_candidate(src, &makernote, limits)
+    }
+
+    /// The MakerNote's preview candidate in the file `bytes`, whose IFDs
+    /// are walked with the default limits, as [`read_candidate`] finds it
+    /// under `limits`.
     fn try_candidate(bytes: Vec<u8>, limits: &Limits) -> Result<Option<Candidate>> {
         let mut src = Source::new(Cursor::new(bytes)).unwrap();
         let header = parse_header(&mut src).unwrap();
         let tree = walk(&mut src, header, &Limits::default()).unwrap();
-        preview_candidate(&mut src, &tree, limits)
+        read_candidate(&mut src, &tree, limits)
     }
 
-    /// What [`preview_candidate`] returns for the file `bytes`, which must
+    /// The MakerNote's preview candidate in the file `bytes`, which must
     /// not be an error.
     fn candidate(bytes: Vec<u8>) -> Option<Candidate> {
         try_candidate(bytes, &Limits::default()).unwrap()
@@ -694,7 +764,7 @@ mod tests {
             let header = parse_header(&mut src).unwrap();
             let tree = walk(&mut src, header, &Limits::default()).unwrap();
             let err =
-                preview_candidate(&mut src, &tree, &Limits::default()).expect_err("the read fails");
+                read_candidate(&mut src, &tree, &Limits::default()).expect_err("the read fails");
             assert_eq!(err.kind(), ErrorKind::Io, "{at}: {err:?}");
         }
     }
