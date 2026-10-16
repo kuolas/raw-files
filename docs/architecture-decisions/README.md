@@ -16,6 +16,7 @@ each: the context, what was decided, and what follows from it. They answer
 | [ADR008](adr008-lints-and-panics.md) | No unsafe code, a few extra lints, no panics on malformed input | Accepted |
 | [ADR009](adr009-public-api-shape.md) | The shape of the public API | Accepted |
 | [ADR010](adr010-decoding-ends-at-a-linear-image.md) | Decoding ends at a linear image | Accepted |
+| [ADR011](adr011-metadata-from-standard-tags.md) | Metadata comes from the standard tags | Accepted |
 
 ## When to write one
 
