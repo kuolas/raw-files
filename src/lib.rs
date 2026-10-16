@@ -86,6 +86,7 @@
 #![cfg_attr(fuzzing, allow(dead_code, unfulfilled_lint_expectations))]
 
 mod container;
+mod datetime;
 mod error;
 mod file;
 mod format;
@@ -115,6 +116,7 @@ mod preview;
 #[path = "../tests/support/tiff_builder.rs"]
 mod tiff_builder;
 
+pub use datetime::DateTime;
 pub use error::{Error, ErrorKind, Result};
 pub use file::RawFile;
 pub use format::Format;

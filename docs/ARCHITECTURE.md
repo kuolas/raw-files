@@ -10,11 +10,12 @@ fuzz targets are a second crate, in `fuzz/`, that is never published.
 
 | File | Holds | May depend on |
 |---|---|---|
-| `src/lib.rs` | the library root: the crate documentation and the re-exports | `error`, `file`, `format`, `geometry`, `limits`, `options`, `orientation`, `preview` |
+| `src/lib.rs` | the library root: the crate documentation and the re-exports | `datetime`, `error`, `file`, `format`, `geometry`, `limits`, `options`, `orientation`, `preview` |
 | `src/error.rs` | `Error`, `ErrorKind`, `Result`: what can go wrong, by category, with the byte offset when known | — |
 | `src/limits.rs` | `Limits`: the caps on what a file can make the library walk or allocate | — |
 | `src/orientation.rs` | `Orientation`: what a viewer must do to the stored pixels to show the image upright, from the EXIF tag's eight values | — |
 | `src/geometry.rs` | `Size`: a width and height in pixels, as stored | — |
+| `src/datetime.rs` | `DateTime`: the time a camera's clock showed when a picture was taken, as local time with the fraction of a second and the offset from UTC when the file records them, always a real date and time, shown in ISO 8601 form; and the reading of the three Exif texts that record it, where an unset clock or an impossible date gives no time | — |
 | `src/preview.rs` | `Preview`, `PreviewFormat`: one embedded preview — its byte range in the file, its size measured from its frame header, its format and orientation — and the crate's ordering of previews, smallest first, and choice of the smallest at least a given size | `geometry`, `orientation` |
 | `src/format.rs` | `Format`: the RAW formats the library knows, with their names and file extensions, and the lookup of a format by extension; opening a file never uses the extension | — |
 | `src/options.rs` | `Options`: how a file is opened, today with which `Limits`; the one way a `RawFile` is built | `file`, `limits`, `error` |
