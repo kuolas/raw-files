@@ -45,6 +45,7 @@ use crate::error::Result;
 use crate::format::Format;
 use crate::io::Source;
 use crate::limits::Limits;
+use crate::metadata::Metadata;
 
 /// The manufacturer's name that a Sony camera's Make starts with, compared
 /// without regard to case.
@@ -135,12 +136,17 @@ fn claims<R: Read + Seek>(src: &mut Source<R>, tree: &Tree) -> Result<bool> {
 /// finder over the whole tree. The finder takes no limits of its own, so
 /// `_limits` goes unused here: the walk that built `tree` applied them.
 ///
+/// The metadata is empty, every value `None`: this reader does not read it
+/// yet. Reading it from the file's standard tags is planned (ADR011,
+/// issue #13).
+///
 /// # Errors
 ///
 /// As for [`previews::previews`].
 fn parse<R: Read + Seek>(src: &mut Source<R>, tree: &Tree, _limits: &Limits) -> Result<Parsed> {
     Ok(Parsed {
         previews: previews::previews(src, tree)?,
+        metadata: Metadata::default(),
     })
 }
 

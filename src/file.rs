@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! The file handle: a RAW file opened, its format detected and its
-//! previews listed, ready to read one.
+//! The file handle: a RAW file opened, its format detected, its previews
+//! listed and its metadata kept, ready to read a preview.
 
 use std::fmt;
 use std::fs::File;
@@ -14,18 +14,21 @@ use crate::format::Format;
 use crate::formats;
 use crate::io::Source;
 use crate::limits::Limits;
+use crate::metadata::Metadata;
 use crate::options::Options;
 use crate::preview::{self, Preview};
 
-/// An open RAW file: its format, its embedded previews, and the reader to
-/// fetch a preview's bytes from.
+/// An open RAW file: its format, its embedded previews, what the camera
+/// recorded about the picture, and the reader to fetch a preview's bytes
+/// from.
 ///
 /// Opening reads only the file's structure, through a cache of 64 KiB
 /// blocks, so a few blocks rather than the whole file, and finds the
-/// previews; no preview or raw data is read until asked for. The previews
-/// are listed with their sizes, and a preview's bytes are read only when
-/// asked for, so showing a preview costs the structure plus that preview,
-/// whether the file is on a disk, on a network share or in memory.
+/// previews and the metadata; no preview or raw data is read until asked
+/// for. The previews are listed with their sizes, and a preview's bytes are
+/// read only when asked for, so showing a preview costs the structure plus
+/// that preview, whether the file is on a disk, on a network share or in
+/// memory.
 ///
 /// `R` is any reader that can seek: a [`File`] from [`open`](Self::open),
 /// a `Cursor<&[u8]>` from [`from_bytes`](Self::from_bytes), or anything
@@ -72,6 +75,7 @@ pub struct RawFile<R> {
     format: Format,
     /// Smallest first, as [`preview::sort`] orders them.
     previews: Vec<Preview>,
+    metadata: Metadata,
     limits: Limits,
 }
 
@@ -140,7 +144,7 @@ impl<R: Read + Seek> RawFile<R> {
     ///
     /// Reads the TIFF structure and asks each format of the table, in
     /// order, whether the file is of that format; the first that says yes
-    /// reads its previews.
+    /// reads its previews and its metadata.
     pub(crate) fn new(reader: R, limits: Limits) -> Result<Self> {
         let mut src = Source::new(reader)?;
         // TIFF is the one container so far, and every format the crate
@@ -150,26 +154,26 @@ impl<R: Read + Seek> RawFile<R> {
         let header = parse_header(&mut src)?;
         let tree = walk(&mut src, header, &limits)?;
         match formats::detect(&formats::all(), &mut src, &tree, &limits)? {
-            Some((format, parsed)) => Ok(Self::from_parts(src, format, parsed.previews, limits)),
+            Some((format, parsed)) => Ok(Self::from_parts(src, format, parsed, limits)),
             None => Err(Error::unknown_format(
                 "the file is a TIFF file, but not a RAW format this version recognises",
             )),
         }
     }
 
-    /// The handle over `src`, of format `format`, with `previews` in any
-    /// order.
-    fn from_parts(
-        src: Source<R>,
-        format: Format,
-        mut previews: Vec<Preview>,
-        limits: Limits,
-    ) -> Self {
+    /// The handle over `src`, of format `format`, with what its reader
+    /// found in `parsed`: the previews, in any order, and the metadata.
+    fn from_parts(src: Source<R>, format: Format, parsed: formats::Parsed, limits: Limits) -> Self {
+        let formats::Parsed {
+            mut previews,
+            metadata,
+        } = parsed;
         preview::sort(&mut previews);
         Self {
             src,
             format,
             previews,
+            metadata,
             limits,
         }
     }
@@ -187,6 +191,37 @@ impl<R: Read + Seek> RawFile<R> {
     /// that describe it.
     pub fn previews(&self) -> &[Preview] {
         &self.previews
+    }
+
+    /// What the camera recorded about the picture, read when the file was
+    /// opened: the camera, when the picture was taken, its exposure and
+    /// lens, and its sizes.
+    ///
+    /// Reading it reads nothing from the file, so it never fails. A value
+    /// the file does not record, or records in a way that cannot be read,
+    /// is `None`.
+    ///
+    /// # Examples
+    ///
+    /// Print when a picture was taken, and with which camera:
+    ///
+    /// ```no_run
+    /// use raw_files::RawFile;
+    ///
+    /// fn main() -> raw_files::Result<()> {
+    ///     let file = RawFile::open("DSC_0001.NEF")?;
+    ///     let metadata = file.metadata();
+    ///     if let Some(time) = metadata.capture_time() {
+    ///         println!("taken at {time}");
+    ///     }
+    ///     if let (Some(make), Some(model)) = (metadata.make(), metadata.model()) {
+    ///         println!("with a {make} {model}");
+    ///     }
+    ///     Ok(())
+    /// }
+    /// ```
+    pub fn metadata(&self) -> &Metadata {
+        &self.metadata
     }
 
     /// The largest preview, the last of [`previews`](Self::previews), or
@@ -300,9 +335,13 @@ mod tests {
     }
 
     /// A handle over `reader`, of format NEF, with `previews` in the order
-    /// given, under `limits`.
+    /// given and no metadata, under `limits`.
     fn handle<R: Read + Seek>(reader: R, previews: Vec<Preview>, limits: Limits) -> RawFile<R> {
-        RawFile::from_parts(Source::new(reader).unwrap(), Format::Nef, previews, limits)
+        let parsed = formats::Parsed {
+            previews,
+            metadata: Metadata::default(),
+        };
+        RawFile::from_parts(Source::new(reader).unwrap(), Format::Nef, parsed, limits)
     }
 
     /// The bytes of a stand-in preview: what reading must return.
@@ -367,6 +406,27 @@ mod tests {
         let (bytes, _) = file_with_blob();
         let file = handle(Cursor::new(bytes), Vec::new(), Limits::default());
         assert_eq!(file.format(), Format::Nef);
+    }
+
+    #[test]
+    fn metadata_is_the_one_the_reader_found() {
+        let (bytes, _) = file_with_blob();
+        let metadata = Metadata {
+            model: Some("NIKON Z 9".to_owned()),
+            orientation: Orientation::Rotate90,
+            ..Metadata::default()
+        };
+        let parsed = formats::Parsed {
+            previews: Vec::new(),
+            metadata: metadata.clone(),
+        };
+        let file = RawFile::from_parts(
+            Source::new(Cursor::new(bytes)).unwrap(),
+            Format::Nef,
+            parsed,
+            Limits::default(),
+        );
+        assert_eq!(file.metadata(), &metadata);
     }
 
     #[test]

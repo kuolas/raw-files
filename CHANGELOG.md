@@ -10,6 +10,12 @@ does.
 
 ## [Unreleased]
 
+### Added
+
+- `RawFile::metadata`, what the camera recorded about the picture, with
+  the `Metadata`, `Exposure`, `Lens`, `DateTime`, `Rational` and
+  `SignedRational` types. The NEF and ARW readers do not fill it yet.
+
 ## [0.1.0] - 2026-10-14
 
 The first release: the embedded JPEG previews of Nikon NEF and Sony ARW

@@ -5,7 +5,8 @@
 //!
 //! Each format lives in its own folder here (`nef/`, `arw/`) and
 //! registers itself in [`spec`] as a [`FormatSpec`]: one function that says
-//! whether a file is of that format, and one that reads its previews.
+//! whether a file is of that format, and one that reads its previews and
+//! its metadata.
 //! Detection goes by content, never by the file's name, so a renamed file
 //! opens as what it is; [`Format::from_extension`] is for file pickers,
 //! which must choose what to offer before opening anything. The preview
@@ -36,13 +37,18 @@ use crate::error::Result;
 use crate::format::Format;
 use crate::io::Source;
 use crate::limits::Limits;
+use crate::metadata::Metadata;
 use crate::preview::Preview;
 
 /// What a format's reader found in a file: its previews, in the order it
-/// found them. The file handle sorts them.
+/// found them, and its metadata. The file handle sorts the previews and
+/// keeps both.
 pub(crate) struct Parsed {
     /// The file's embedded previews, unsorted.
     pub previews: Vec<Preview>,
+    /// What the camera recorded about the picture, which a format reads
+    /// from the same tree it reads the previews from.
+    pub metadata: Metadata,
 }
 
 /// One format the crate can detect, as two functions over the TIFF tree a
@@ -57,7 +63,8 @@ pub(crate) struct FormatSpec<R> {
     /// Whether this format owns the file. It looks at the tree, and may
     /// read tag values through the source, but never at the file's name.
     pub claims: fn(&mut Source<R>, &Tree) -> Result<bool>,
-    /// Reads the previews of a file that this format claimed.
+    /// Reads the previews and the metadata of a file that this format
+    /// claimed.
     pub parse: fn(&mut Source<R>, &Tree, &Limits) -> Result<Parsed>,
 }
 
@@ -233,6 +240,7 @@ mod tests {
                 PreviewFormat::Jpeg,
                 Orientation::NoTransforms,
             )],
+            metadata: Metadata::default(),
         }
     }
 
