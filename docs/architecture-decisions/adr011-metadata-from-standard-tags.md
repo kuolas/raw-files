@@ -95,12 +95,14 @@ manufacturer's MakerNote only where nothing standard records it.
   never taken from DateTimeDigitized or from IFD0's DateTime, which
   editors change. An unset clock (blanks, spaces or zeros) or an
   impossible date is `None`. raw-files has its own `DateTime` type.
-- **Sizes as stored.** The raw size is that of the first IFD holding raw
-  data. The image size is the default crop (DefaultCropSize, which Sony
-  writes from ARW 2.3.3 on) or, on NEF, CropArea, when it lies inside the
-  raw; otherwise it is the raw size, and then includes the border pixels.
-  The Exif pixel dimensions, per-camera tables and Sony's aspect-ratio
-  crop are not used.
+- **Sizes as stored.** The raw size is that of the largest, by pixel
+  count, of the IFDs holding raw data, the first of them on a tie: a file
+  can hold a small full-resolution raw image beside the real one, as the
+  Coolpix E5700 sample 4456 does. The image size is the default crop
+  (DefaultCropSize, which Sony writes from ARW 2.3.3 on) or, on NEF,
+  CropArea, when it lies inside the raw; otherwise it is the raw size, and
+  then includes the border pixels. The Exif pixel dimensions, per-camera
+  tables and Sony's aspect-ratio crop are not used.
 - **Numbers as stored.** Exposure time, f-number, focal length, exposure
   bias and the lens range are fractions with the numerator and
   denominator the file recorded (`Rational`, `SignedRational`), so

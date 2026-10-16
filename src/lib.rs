@@ -12,10 +12,10 @@
 //! Nikon NEF and Sony ARW files open with their previews; any other file is
 //! refused with the `UnknownFormat` error.
 //! [`RawFile::metadata`] gives what the camera recorded about the picture,
-//! read when the file is opened. The NEF and ARW readers fill in the
+//! read when the file is opened, from the standard TIFF and Exif tags: the
 //! camera's make, model and serial number, the capture time, the
-//! orientation, the exposure and the lens; they do not read the sizes yet,
-//! which are empty. See the
+//! orientation, the exposure, the lens, and the sizes of the raw data and
+//! of the visible image. See the
 //! [roadmap](https://github.com/kuolas/raw-files/blob/master/docs/ROADMAP.md)
 //! for the plan and the
 //! [architecture](https://github.com/kuolas/raw-files/blob/master/docs/ARCHITECTURE.md)

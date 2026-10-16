@@ -72,9 +72,9 @@ fn claims<R: Read + Seek>(src: &mut Source<R>, tree: &Tree) -> Result<bool> {
 /// the shared TIFF preview finder over the whole tree, and the one the
 /// MakerNote points at, read within `limits`. The metadata is what the
 /// shared TIFF metadata reader reads from the standard tags: the camera,
-/// the capture time, the orientation, the exposure and the lens. Reading
-/// what only the MakerNote records, on bodies whose standard tags lack it,
-/// is planned (ADR011, issue #13).
+/// the capture time, the orientation, the exposure, the lens and the
+/// sizes. Reading what only the MakerNote records, on bodies whose
+/// standard tags lack it, is planned (ADR011, issue #13).
 ///
 /// # Errors
 ///

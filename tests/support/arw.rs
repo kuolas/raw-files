@@ -33,22 +33,30 @@
 //!   tags: Compression 7 (JPEG as TIFF Technical Note 2 defines it), YCbCr
 //!   samples (PhotometricInterpretation 6) of 8 bits each, three per pixel,
 //!   subsampled 2 by 1. The raw SubIFD is a lossless raw: the
-//!   full-resolution image (NewSubfileType 0), 7040 by 4688 pixels, of
-//!   14-bit samples of a colour filter array (PhotometricInterpretation
-//!   32803), with Compression 7, in two tiles of 512 by 512 pixels that
-//!   are each a lossless JPEG stream, starting with the start-of-image
-//!   marker and a lossless frame header. Like the real files, it also
-//!   lists one strip that starts at the first tile and is as long as the
-//!   tiles together.
+//!   full-resolution image (NewSubfileType 0) of 14-bit samples of a
+//!   colour filter array (PhotometricInterpretation 32803), with
+//!   Compression 7. Its ImageWidth and ImageLength, SHORTs, say 7168 by
+//!   5120 pixels, and its default crop, LONGs, starts at DefaultCropOrigin
+//!   12, 8 and is DefaultCropSize 7008 by 4672 pixels, the size of IFD2's
+//!   JPEG: the values of the sample 6929, whose raw size is a whole number
+//!   of its 512-pixel tiles. The fixture's raw data is two tiles of 512 by
+//!   512 pixels that stand for them all, each a lossless JPEG stream,
+//!   starting with the start-of-image marker and a lossless frame header.
+//!   Like the real files, it also lists one strip that starts at the first
+//!   tile and is as long as the tiles together.
 //! - [`arw4_medium_file`] is the same file, with the same metadata, shot as
 //!   a medium raw: IFD2's JPEG is 4608 by 3072 pixels, and the raw SubIFD
 //!   holds YCbCr samples (PhotometricInterpretation 6, the same as IFD2's)
-//!   of 15 bits each, three per pixel, in the same lossless tiles.
+//!   of 15 bits each, three per pixel, in the same lossless tiles. Its
+//!   size, SHORTs, and default crop, LONGs, are those of the public
+//!   ILCE-7M4 medium raw sample 6930: 5120 by 3584 pixels, cropped from 8,
+//!   4 to 4608 by 3072.
 //! - [`arw2_file`] is a file of an ARW 2 body, an SLT-A99V's: IFD0 and IFD1
-//!   as above, with that Model, and no IFD2. The raw SubIFD is the full-resolution image,
-//!   6024 by 4024 pixels, of 12-bit colour filter array samples, with
-//!   Sony's compressed raw (Compression 32767), in one strip of 64 bytes
-//!   that are not a JPEG stream and stand for the raw data.
+//!   as above, with that Model, and no IFD2. The raw SubIFD is the
+//!   full-resolution image, 6024 by 4024 pixels, of 12-bit colour filter
+//!   array samples, with Sony's compressed raw (Compression 32767), in one
+//!   strip of 64 bytes that are not a JPEG stream and stand for the raw
+//!   data.
 //! - [`arq_file`] is a pixel-shift composite that Sony's software made from
 //!   the frames of an ILCE-7RM3: an ARW 2 file whose raw SubIFD holds
 //!   linear raw data (PhotometricInterpretation 32892), every colour at
@@ -62,9 +70,9 @@
 //!   RGB samples (PhotometricInterpretation 2) of 14 bits each, three per
 //!   pixel, uncompressed, with a StripByteCounts of 16,531,200 bytes and no
 //!   StripOffsets, because the raw data, encrypted, sits at a fixed offset
-//!   that the reader must know. IFD1 declares the file's only JPEG, 640 by 480 pixels, with
-//!   Compression 6. Neither IFD has a NewSubfileType, and there are no
-//!   SubIFDs.
+//!   that the reader must know. IFD1 declares the file's only JPEG, 640 by
+//!   480 pixels, with Compression 6. Neither IFD has a NewSubfileType, and
+//!   there are no SubIFDs.
 //! - [`a100_file`] is a file of the DSLR-A100, Sony's first ARW, version
 //!   1.0. Its Make is `SONY` padded with eleven spaces. IFD0 declares a
 //!   JPEG of 640 by 480 pixels, but its ImageWidth and ImageLength say 3872
@@ -77,7 +85,9 @@
 //! file but the SRF holds them again in IFD1, with the Orientation in both;
 //! the SRF has no Orientation. Only the two ARW 4 files hold a capture
 //! time, an exposure and a lens, and no file holds a serial number. Every
-//! text value is ASCII ending in one NUL.
+//! file but the A100 has an IFD that describes its raw data and gives its
+//! size; only the two ARW 4 files have a default crop. Every text value
+//! is ASCII ending in one NUL.
 //!
 //! Every JPEG preview is a baseline stub. Each builder returns where it put
 //! the JPEGs and the raw data, as an [`ArwBlobs`], so that a test can check
@@ -153,6 +163,12 @@ const FOCAL_LENGTH: u16 = 0x920A;
 const LENS_SPECIFICATION: u16 = 0xA432;
 /// The lens's model name, as ASCII text (LensModel).
 const LENS_MODEL: u16 = 0xA434;
+/// Where the visible image starts in the raw data, the column then the row
+/// (DefaultCropOrigin).
+const DEFAULT_CROP_ORIGIN: u16 = 0xC61F;
+/// The size of the visible image in the raw data, the width then the
+/// height (DefaultCropSize).
+const DEFAULT_CROP_SIZE: u16 = 0xC620;
 /// The capture time's fraction of a second, as ASCII digits
 /// (SubSecTimeOriginal).
 const SUB_SEC_TIME_ORIGINAL: u16 = 0x9291;
@@ -190,9 +206,30 @@ pub const IFD0_JPEG: (u16, u16) = (1616, 1080);
 pub const THUMBNAIL: (u16, u16) = (160, 120);
 /// The size in pixels of IFD2's full-size JPEG on the ARW 4 file.
 pub const ARW4_FULL_SIZE_JPEG: (u16, u16) = (7008, 4672);
+/// The size of the ARW 4 file's raw data, as its raw SubIFD's ImageWidth
+/// and ImageLength declare it, SHORTs: that of the public ILCE-7M4 sample
+/// 6929, a whole number of its 512-pixel tiles, so larger than the
+/// visible image.
+pub const ARW4_RAW_SIZE: (u16, u16) = (7168, 5120);
+/// The default crop of the ARW 4 file's raw SubIFD: where the visible
+/// image starts, the column then the row, and its width and height. The
+/// values of the public ILCE-7M4 sample 6929, which writes them as LONGs;
+/// the size is that of IFD2's full-size JPEG.
+pub const ARW4_CROP_ORIGIN: [u32; 2] = [12, 8];
+/// See [`ARW4_CROP_ORIGIN`].
+pub const ARW4_CROP_SIZE: [u32; 2] = [7008, 4672];
 /// The size in pixels of IFD2's full-size JPEG on the ARW 4 file with a
 /// medium raw.
 pub const MEDIUM_FULL_SIZE_JPEG: (u16, u16) = (4608, 3072);
+/// The size of the medium raw data, as its raw SubIFD declares it, SHORTs:
+/// that of the public ILCE-7M4 sample 6930, a medium raw, tile-padded too.
+pub const MEDIUM_RAW_SIZE: (u16, u16) = (5120, 3584);
+/// The default crop of the medium raw SubIFD, as [`ARW4_CROP_ORIGIN`] and
+/// [`ARW4_CROP_SIZE`] are the full raw's: the values of the public sample
+/// 6930, as LONGs; the size is that of IFD2's JPEG.
+pub const MEDIUM_CROP_ORIGIN: [u32; 2] = [8, 4];
+/// See [`MEDIUM_CROP_ORIGIN`].
+pub const MEDIUM_CROP_SIZE: [u32; 2] = [4608, 3072];
 /// The size in pixels of IFD0's JPEG on the SR2 file.
 pub const SR2_JPEG: (u16, u16) = (640, 424);
 /// The size in pixels of IFD1's JPEG on the SRF file, its only one.
@@ -263,11 +300,13 @@ pub struct ArwBlobs {
 pub fn arw4_file(order: Order, orientation: u16) -> (Built, ArwBlobs) {
     arw4(order, orientation, ARW4_FULL_SIZE_JPEG, |builder, raw| {
         builder
-            .long(raw, IMAGE_WIDTH, &[7040])
-            .long(raw, IMAGE_LENGTH, &[4688])
+            .short(raw, IMAGE_WIDTH, &[ARW4_RAW_SIZE.0])
+            .short(raw, IMAGE_LENGTH, &[ARW4_RAW_SIZE.1])
             .short(raw, PHOTOMETRIC_INTERPRETATION, &[CFA])
             .short(raw, BITS_PER_SAMPLE, &[14])
-            .short(raw, SAMPLES_PER_PIXEL, &[1]);
+            .short(raw, SAMPLES_PER_PIXEL, &[1])
+            .long(raw, DEFAULT_CROP_ORIGIN, &ARW4_CROP_ORIGIN)
+            .long(raw, DEFAULT_CROP_SIZE, &ARW4_CROP_SIZE);
     })
 }
 
@@ -276,11 +315,13 @@ pub fn arw4_file(order: Order, orientation: u16) -> (Built, ArwBlobs) {
 pub fn arw4_medium_file(order: Order) -> (Built, ArwBlobs) {
     arw4(order, 1, MEDIUM_FULL_SIZE_JPEG, |builder, raw| {
         builder
-            .long(raw, IMAGE_WIDTH, &[4608])
-            .long(raw, IMAGE_LENGTH, &[3072])
+            .short(raw, IMAGE_WIDTH, &[MEDIUM_RAW_SIZE.0])
+            .short(raw, IMAGE_LENGTH, &[MEDIUM_RAW_SIZE.1])
             .short(raw, PHOTOMETRIC_INTERPRETATION, &[YCBCR])
             .short(raw, BITS_PER_SAMPLE, &[15, 15, 15])
-            .short(raw, SAMPLES_PER_PIXEL, &[3]);
+            .short(raw, SAMPLES_PER_PIXEL, &[3])
+            .long(raw, DEFAULT_CROP_ORIGIN, &MEDIUM_CROP_ORIGIN)
+            .long(raw, DEFAULT_CROP_SIZE, &MEDIUM_CROP_SIZE);
     })
 }
 
