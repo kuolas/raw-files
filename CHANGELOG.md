@@ -21,7 +21,8 @@ does.
   crop area the camera records), with the `Metadata`, `Exposure`, `Lens`,
   `DateTime`, `Rational` and `SignedRational` types; on Nikon bodies whose
   standard tags lack them, the serial number, ISO and lens range come from
-  the MakerNote.
+  the MakerNote, and the offset from UTC from the camera's time-zone
+  setting.
 
 ## [0.1.0] - 2026-10-14
 

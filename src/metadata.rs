@@ -63,7 +63,14 @@ impl Metadata {
 
     /// When the picture was taken, as the camera's clock showed it: the
     /// Exif DateTimeOriginal, with its fraction of a second and its offset
-    /// from UTC when the file records them (see [`DateTime`]).
+    /// from UTC when the file records them (see [`DateTime`]). The offset
+    /// is the Exif one or, on older Nikon bodies, which record none, the
+    /// time-zone setting of the camera's clock.
+    ///
+    /// Both are what the camera was set to. A clock that was never set
+    /// gives its default date, which the library cannot tell from a real
+    /// one: the public Nikon 1 J1 sample 2956 records 2010-01-01 00:11,
+    /// with its time-zone setting of +02:00.
     pub fn capture_time(&self) -> Option<DateTime> {
         self.capture_time
     }

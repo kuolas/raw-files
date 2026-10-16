@@ -369,7 +369,7 @@ fn the_d300_file_opens_as_nef_with_its_two_jpegs_smallest_first() {
 }
 
 #[test]
-fn the_d300_file_gives_its_serial_number_and_lens_range_from_the_makernote() {
+fn the_d300_file_gives_what_its_exif_tags_lack_from_the_makernote() {
     for order in ORDERS {
         for (value, orientation) in [(8, Orientation::Rotate270), (1, Orientation::NoTransforms)] {
             let label = format!("{order:?}, Orientation {value}");
@@ -384,10 +384,11 @@ fn the_d300_file_gives_its_serial_number_and_lens_range_from_the_makernote() {
                 Some(D300_SERIAL_NUMBER),
                 "{label}"
             );
-            // No OffsetTimeOriginal, so no offset from UTC.
+            // No OffsetTimeOriginal: the offset from UTC is the MakerNote's
+            // WorldTime, a zone of 60 minutes without daylight saving time.
             let time = metadata.capture_time().unwrap();
-            assert_eq!(time.to_string(), "2008-05-17T10:22:31.34", "{label}");
-            assert_eq!(time.offset_minutes(), None, "{label}");
+            assert_eq!(time.to_string(), "2008-05-17T10:22:31.34+01:00", "{label}");
+            assert_eq!(time.offset_minutes(), Some(60), "{label}");
             assert_eq!(metadata.orientation(), orientation, "{label}");
             // The exposure as stored: 1/10 s at f/7.1, 50 mm and ISO 200,
             // with no compensation. The ISO is the Exif one, which the

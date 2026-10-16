@@ -4,7 +4,8 @@
 //! D300, with stub JPEGs in place of the real ones, so that the tests check
 //! the NEF reader on the real layouts without a real file. The Z 9 records
 //! its metadata in the standard tags; the D300, an older body, records its
-//! serial number and its lens's range only in its MakerNote.
+//! serial number, its lens's range and its clock's time zone only in its
+//! MakerNote.
 //!
 //! The Z 9 layout, which [`z9_file`] writes:
 //!

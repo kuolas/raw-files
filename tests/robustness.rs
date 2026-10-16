@@ -11,10 +11,10 @@
 //! come from tags all over the file. They damage the fixtures that carry
 //! every metadata tag the readers read: a Nikon Z 9's NEF (with its
 //! MakerNote in the file's byte order and in the other), a Nikon D300's
-//! NEF, whose MakerNote records the serial number and the lens's range
-//! that its standard tags lack, and an ILCE-7M4's ARW 4, each in
-//! both byte orders. They cut each file at every length, and overwrite
-//! each byte in turn with 0x00, 0xFF and its complement.
+//! NEF, whose MakerNote records the serial number, the lens's range and
+//! the clock's time zone that its standard tags lack, and an ILCE-7M4's
+//! ARW 4, each in both byte orders. They cut each file at every length,
+//! and overwrite each byte in turn with 0x00, 0xFF and its complement.
 //!
 //! Each damaged file is opened as a caller would open it, with
 //! [`RawFile::from_bytes`], which reads through the same source and block
