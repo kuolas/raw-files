@@ -20,6 +20,7 @@ use crate::container::jpeg::probe;
 use crate::container::tiff::{parse_header, walk};
 use crate::io::Source;
 use crate::limits::Limits;
+use crate::metadata::Metadata;
 use crate::options::Options;
 
 /// Reads `data` as a TIFF file: the header, the walk with the default
@@ -88,7 +89,8 @@ pub fn jpeg_probe(data: &[u8]) {
 }
 
 /// Opens `data` as a RAW file, as a caller would, with the default options,
-/// then asks it everything the handle answers: its format, its largest
+/// then asks it everything the handle answers: its format, every value of
+/// its metadata, formatted as a caller would print it, its largest
 /// preview, the smallest at least 1 by 1, and the bytes of every preview,
 /// read into one buffer.
 ///
@@ -100,10 +102,68 @@ pub fn open(data: &[u8]) {
         return;
     };
     let _ = file.format();
+    read_metadata(file.metadata());
     let _ = file.largest_preview();
     let _ = file.preview_at_least(1, 1);
     let mut buf = Vec::new();
     for preview in file.previews().to_vec() {
         let _ = file.read_preview_into(&preview, &mut buf);
     }
+}
+
+/// Asks `metadata` for every value, and formats, reduces and converts
+/// each time and fraction as a caller showing it would, so that what those
+/// types do with values the reader built from arbitrary bytes is fuzzed
+/// too, not only the reading. A `Debug` form of the whole covers whatever
+/// a later value adds.
+fn read_metadata(metadata: &Metadata) {
+    let _ = metadata.make();
+    let _ = metadata.model();
+    let _ = metadata.serial_number();
+    if let Some(time) = metadata.capture_time() {
+        let _ = time.to_string();
+        let _ = (
+            time.year(),
+            time.month(),
+            time.day(),
+            time.hour(),
+            time.minute(),
+            time.second(),
+            time.nanosecond(),
+            time.subsecond_digits(),
+            time.offset_minutes(),
+        );
+    }
+    let _ = metadata.orientation();
+    let exposure = metadata.exposure();
+    let _ = exposure.iso();
+    let mut fractions = vec![
+        exposure.exposure_time(),
+        exposure.f_number(),
+        exposure.focal_length(),
+    ];
+    if let Some(bias) = exposure.exposure_bias() {
+        let _ = bias.to_string();
+        let _ = bias.reduced();
+        let _ = bias.to_f64();
+    }
+    if let Some(lens) = metadata.lens() {
+        let _ = lens.make();
+        let _ = lens.model();
+        let _ = lens.serial_number();
+        fractions.extend([
+            lens.min_focal_length(),
+            lens.max_focal_length(),
+            lens.f_number_at_min_focal_length(),
+            lens.f_number_at_max_focal_length(),
+        ]);
+    }
+    for fraction in fractions.into_iter().flatten() {
+        let _ = fraction.to_string();
+        let _ = fraction.reduced();
+        let _ = fraction.to_f64();
+    }
+    let _ = metadata.raw_size();
+    let _ = metadata.image_size();
+    let _ = format!("{metadata:?}");
 }

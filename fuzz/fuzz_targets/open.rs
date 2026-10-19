@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! The file handle on arbitrary bytes: opening, detection, the previews
-//! and reading each one.
+//! The file handle on arbitrary bytes: opening, detection, the metadata,
+//! the previews and reading each one.
 
 #![no_main]
 
