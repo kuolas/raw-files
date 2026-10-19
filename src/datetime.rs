@@ -211,6 +211,16 @@ impl DateTime {
         self.nanosecond
     }
 
+    /// How many sub-second digits the file recorded, up to the nine the
+    /// library keeps; 0 when it recorded none. A time recorded as `.5` and
+    /// one recorded as `.50` give the same [`nanosecond`](Self::nanosecond)
+    /// and differ here, as they do in equality and in the
+    /// [`Display`](fmt::Display) form; so do a time without sub-seconds and
+    /// one whose recorded digits are zeros.
+    pub fn subsecond_digits(&self) -> u8 {
+        self.subsec_digits
+    }
+
     /// The offset of the camera's clock from UTC, in minutes east of UTC:
     /// -300 for a clock five hours behind UTC (`-05:00`), 60 for one an
     /// hour ahead (`+01:00`).
@@ -707,5 +717,14 @@ mod tests {
             Some(-300),
             "2022-01-31T10:20:30.85-05:00",
         );
+    }
+
+    #[test]
+    fn subsecond_digits_count_what_was_recorded() {
+        assert_eq!(read(DATE, None, None).subsecond_digits(), 0);
+        assert_eq!(read(DATE, Some(b"5"), None).subsecond_digits(), 1);
+        assert_eq!(read(DATE, Some(b"50"), None).subsecond_digits(), 2);
+        assert_eq!(read(DATE, Some(b"00"), None).subsecond_digits(), 2);
+        assert_eq!(read(DATE, Some(b"1234567890"), None).subsecond_digits(), 9);
     }
 }
