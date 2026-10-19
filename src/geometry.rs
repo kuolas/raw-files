@@ -7,7 +7,10 @@
 ///
 /// For an orientation that swaps the dimensions, the size a viewer shows is
 /// this size with its width and height exchanged.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+///
+/// Sizes order by width, then by height, so that they can key a map or be
+/// sorted; to compare how large two pictures are, compare their areas.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Size {
     /// The number of pixel columns, as stored.
     pub width: u32,

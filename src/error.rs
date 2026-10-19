@@ -52,9 +52,10 @@ struct Inner {
 /// The category of an [`Error`].
 ///
 /// More categories may be added, so a `match` on this type needs a wildcard
-/// arm.
+/// arm. The categories order as they are listed, and a new category is
+/// added after the existing ones, so an order once observed holds.
 #[non_exhaustive]
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum ErrorKind {
     /// The reader failed, including when the file shrank while it was being
     /// read.

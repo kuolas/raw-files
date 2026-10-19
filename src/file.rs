@@ -297,13 +297,14 @@ impl<R: Read + Seek> RawFile<R> {
     }
 }
 
-/// Shows the format and the previews; never the reader, which need not be
-/// `Debug`.
+/// Shows the format, the previews and the metadata; never the reader, which
+/// need not be `Debug`.
 impl<R> fmt::Debug for RawFile<R> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("RawFile")
             .field("format", &self.format)
             .field("previews", &self.previews)
+            .field("metadata", &self.metadata)
             .finish_non_exhaustive()
     }
 }

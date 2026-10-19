@@ -27,7 +27,7 @@ use crate::limits::Limits;
 /// let err = options.from_bytes(b"not a RAW file").unwrap_err();
 /// assert_eq!(err.kind(), ErrorKind::UnknownFormat);
 /// ```
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
 pub struct Options {
     limits: Limits,
 }

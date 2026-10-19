@@ -11,7 +11,8 @@
 /// `image` crate uses, so an application using it can map one to one.
 ///
 /// `Orientation` is not `#[non_exhaustive]`: EXIF defines exactly these eight
-/// values.
+/// values. It orders as its variants are listed, by their EXIF number, so
+/// that orientations can key a map or be sorted.
 ///
 /// # Examples
 ///
@@ -22,7 +23,7 @@
 /// assert_eq!(orientation, Orientation::Rotate90);
 /// assert!(orientation.swaps_dimensions());
 /// ```
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Orientation {
     /// Apply nothing: the stored pixels are upright. EXIF 1.
     #[default]
