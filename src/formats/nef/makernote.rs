@@ -81,13 +81,15 @@
 //! against the block, not only against the file: the MakerNote IFD and the
 //! PreviewIFD must lie inside the block, with their whole entry tables; the
 //! three numbers that lead to the JPEG must be held in their entries, not
-//! stored elsewhere; the whole JPEG, as declared, must lie inside the
-//! block; and so must every value read from the MakerNote IFD's entries:
-//! the ISO's two numbers and WorldTime's four bytes, which the entry
-//! holds, and CropArea's four numbers, the serial number and the lens's
-//! range, which take more than the four bytes an entry holds and so are
-//! stored elsewhere. A value of another type than its tag's rule allows is
-//! not read. A block that does not hold together, whether its inner header
+//! stored elsewhere; and the whole JPEG, as declared, must lie inside the
+//! block. When the block's IFDs are read, every entry whose value lies
+//! outside the block is dropped, as an entry whose value lies outside the
+//! file is, so every value read from them lies inside the block: the ISO's
+//! two numbers and WorldTime's four bytes, which the entry holds, and
+//! CropArea's four numbers, the serial number and the lens's range, which
+//! take more than the four bytes an entry holds and so are stored
+//! elsewhere. A value of another type than its tag's rule allows is not
+//! read. A block that does not hold together, whether its inner header
 //! is not one, an IFD in it is cut short or has more entries than the
 //! limits allow, costs what the MakerNote would have given, the small
 //! preview, the crop area and the values above, never the file: the NEF
@@ -176,7 +178,9 @@ pub(super) struct MakerNote {
     /// header's, which may differ from the file's.
     order: ByteOrder,
     /// The MakerNote IFD, which holds Nikon's tags: the IFD the inner
-    /// header points at, inside the block with its whole entry table.
+    /// header points at, inside the block with its whole entry table. Its
+    /// entries whose values lie outside the block were dropped when it was
+    /// read, so every value read from it lies inside the block.
     ifd: Ifd,
 }
 
@@ -347,9 +351,7 @@ fn crop_area<R: Read + Seek>(
     makernote: &MakerNote,
     raw: Size,
 ) -> Result<Option<Size>> {
-    // Four values are too long for the entry to hold, so they are stored
-    // elsewhere, and must be inside the block.
-    if !has_value_in_block(makernote, CROP_AREA, &[SHORT, LONG]) {
+    if !has_entry_of_type(makernote, CROP_AREA, &[SHORT, LONG]) {
         return Ok(None);
     }
     let values = skip_damage(makernote.ifd.u32s(src, CROP_AREA))?.flatten();
@@ -375,9 +377,7 @@ fn serial_number<R: Read + Seek>(
     src: &mut Source<R>,
     makernote: &MakerNote,
 ) -> Result<Option<String>> {
-    // Seven digits and a NUL are stored elsewhere, and must be inside the
-    // block.
-    if !has_value_in_block(makernote, SERIAL_NUMBER, &[ASCII]) {
+    if !has_entry_of_type(makernote, SERIAL_NUMBER, &[ASCII]) {
         return Ok(None);
     }
     tiff_metadata::text(src, &makernote.ifd, SERIAL_NUMBER)
@@ -396,9 +396,7 @@ fn serial_number<R: Read + Seek>(
 ///
 /// `Io` when the reader fails. Nothing the block holds is an error.
 fn iso<R: Read + Seek>(src: &mut Source<R>, makernote: &MakerNote) -> Result<Option<u32>> {
-    // Two SHORTs are held in the entry, inside the block with it; the
-    // check costs nothing and keeps the rule of the block in one place.
-    if !has_value_in_block(makernote, ISO, &[SHORT]) {
+    if !has_entry_of_type(makernote, ISO, &[SHORT]) {
         return Ok(None);
     }
     let values = skip_damage(makernote.ifd.u32s(src, ISO))?.flatten();
@@ -424,9 +422,7 @@ fn lens_range<R: Read + Seek>(
     src: &mut Source<R>,
     makernote: &MakerNote,
 ) -> Result<[Option<Rational>; 4]> {
-    // Four fractions, 32 bytes, are stored elsewhere, and must be inside
-    // the block.
-    if !has_value_in_block(makernote, LENS, &[RATIONAL]) {
+    if !has_entry_of_type(makernote, LENS, &[RATIONAL]) {
         return Ok([None; 4]);
     }
     let values = skip_damage(makernote.ifd.rationals(src, LENS))?.flatten();
@@ -454,9 +450,7 @@ fn lens_range<R: Read + Seek>(
 ///
 /// `Io` when the reader fails. Nothing the block holds is an error.
 fn world_time<R: Read + Seek>(src: &mut Source<R>, makernote: &MakerNote) -> Result<Option<i16>> {
-    // Four bytes are held in the entry, inside the block with it; the
-    // check costs nothing and keeps the rule of the block in one place.
-    if !has_value_in_block(makernote, WORLD_TIME, &[UNDEFINED]) {
+    if !has_entry_of_type(makernote, WORLD_TIME, &[UNDEFINED]) {
         return Ok(None);
     }
     let bytes = skip_damage(makernote.ifd.bytes(src, WORLD_TIME))?.flatten();
@@ -475,22 +469,16 @@ fn world_time<R: Read + Seek>(src: &mut Source<R>, makernote: &MakerNote) -> Res
 }
 
 /// Whether `makernote`'s MakerNote IFD has an entry of tag `tag`, of one
-/// of the types `types`, whose value lies inside the block: the rule every
-/// value read from the MakerNote IFD's entries follows.
+/// of the types `types`: the type its tag's rule allows.
 ///
-/// A value held in the entry is inside the block with the entry, which is
-/// inside the block with its IFD. A value stored elsewhere could be
-/// anywhere in the file, outside the block, so it must [`fit`](fits) the
-/// block. The type is checked here because the readers of values accept
-/// more types than a tag's rule allows: [`Ifd::u32s`] reads type IFD too.
-fn has_value_in_block(makernote: &MakerNote, tag: u16, types: &[u16]) -> bool {
-    let MakerNote { block, ifd, .. } = makernote;
-    ifd.entry(tag).is_some_and(|entry| {
-        types.contains(&entry.typ())
-            && entry
-                .value_offset()
-                .is_none_or(|at| fits(block, at, u64::from(entry.value_len())))
-    })
+/// The readers of values accept more types than a tag's rule allows:
+/// [`Ifd::u32s`] reads type IFD too. The value itself lies inside the
+/// block, as every value of the IFD does ([`ifd_in`]).
+fn has_entry_of_type(makernote: &MakerNote, tag: u16, types: &[u16]) -> bool {
+    makernote
+        .ifd
+        .entry(tag)
+        .is_some_and(|entry| types.contains(&entry.typ()))
 }
 
 /// Where the MakerNote's bytes are in the file, from its entry: `None`
@@ -508,8 +496,14 @@ fn block_of(entry: &Entry) -> Option<Range<u64>> {
 }
 
 /// The IFD at `offset` from `base`, read in byte order `order` with its
-/// own offsets counted from `base`; `None` when it does not lie inside
-/// `block` with its count and all its entries, or cannot be read.
+/// own offsets counted from `base`, without the entries whose value lies
+/// outside `block`; `None` when it does not lie inside `block` with its
+/// count and all its entries, or cannot be read.
+///
+/// An entry whose value is stored elsewhere is dropped unless the value
+/// [`fits`] the block: [`parse_ifd`] checks it only against the file.
+/// A value the entry holds is inside the block with the entry. So every
+/// value read from the IFD lies inside the block.
 ///
 /// The IFD's next-IFD pointer is not used, and not required: the D200
 /// writes none.
@@ -538,7 +532,15 @@ fn ifd_in<R: Read + Seek>(
     if !fits(block, at, table) {
         return Ok(None);
     }
-    Ok(skip_damage(parse_ifd(src, base, at, order, limits))?.map(|(ifd, _)| ifd))
+    let Some((mut ifd, _)) = skip_damage(parse_ifd(src, base, at, order, limits))? else {
+        return Ok(None);
+    };
+    ifd.retain(|entry| {
+        entry
+            .value_offset()
+            .is_none_or(|at| fits(block, at, u64::from(entry.value_len())))
+    });
+    Ok(Some(ifd))
 }
 
 /// The value of tag `tag` of `ifd`, as [`Ifd::u32`] reads it, when the
@@ -614,6 +616,12 @@ mod tests {
         /// The PreviewIFD pointer is stored out of line, inside the block,
         /// as two LONGs whose first is the right offset.
         PointerOutOfLine,
+        /// The PreviewIFD holds, before its JPEGInterchangeFormat, another
+        /// one of two LONGs, stored out of line in the 8 bytes just past the
+        /// block's end, which lie inside the file. The JPEG's length is then
+        /// the PreviewIFD's third entry, not the one [`Block::length_at`]
+        /// gives.
+        JpegOffsetPastTheBlockFirst,
     }
 
     /// A MakerNote block and where its parts are, each counted from the
@@ -692,6 +700,18 @@ mod tests {
         }
         let stub = jpeg_stub(640, 424, 0xC0);
         let jpeg = inner.blob(&stub);
+        if change == Change::JpegOffsetPastTheBlockFirst {
+            // Entries of the same tag keep the order they were added in, so
+            // this one comes first. Its offset is set once the block's
+            // length is known.
+            inner.raw(
+                preview,
+                JPEG_INTERCHANGE_FORMAT,
+                LONG,
+                2,
+                RawValue::Offset(0),
+            );
+        }
         if change != Change::NoJpegTags {
             inner.long_blob(preview, JPEG_INTERCHANGE_FORMAT, jpeg);
         }
@@ -702,14 +722,21 @@ mod tests {
 
         let mut bytes = b"Nikon\0\x02\x11\0\0".to_vec();
         bytes.extend_from_slice(&built.bytes);
-        Block {
+        let mut block = Block {
             bytes,
             order,
             makernote: HEADER_AT + built.ifd_offset(makernote),
             preview: HEADER_AT + built.ifd_offset(preview),
             jpeg: HEADER_AT + built.blob_offset(jpeg),
             jpeg_len: u64::try_from(stub.len()).unwrap(),
+        };
+        if change == Change::JpegOffsetPastTheBlockFirst {
+            // The block's end, counted from the inner header, written in
+            // the value field of the PreviewIFD's first entry, 8 bytes in.
+            let end = u32::try_from(block.len() - HEADER_AT).unwrap();
+            block.put_u32(block.preview + 2 + 8, end);
         }
+        block
     }
 
     /// A Nikon file in byte order `order`: IFD0 holds Make and points at an
@@ -1033,6 +1060,38 @@ mod tests {
             let mut long = block(order, Change::Nothing);
             long.put_u32(long.length_at(), u32::MAX);
             assert_eq!(candidate(with_block(order, &long)), None, "{order:?}");
+        }
+    }
+
+    #[test]
+    fn a_preview_ifd_entry_whose_value_lies_past_the_block_is_dropped() {
+        // The first of the PreviewIFD's two JPEGInterchangeFormat entries
+        // stores its value past the block, inside the file. Dropped when
+        // the PreviewIFD is read, it leaves the second, which the entry
+        // holds, to give the JPEG's offset. Kept, it would be the one
+        // found, and refused as stored out of line: no preview.
+        for order in ORDERS {
+            let block = block(order, Change::JpegOffsetPastTheBlockFirst);
+            let bytes = with_block(order, &block);
+
+            // The PreviewIFD as the file holds it: the out-of-line entry
+            // first, its value the 8 bytes just past the block.
+            let limits = Limits::default();
+            let mut src = Source::new(Cursor::new(bytes.clone())).unwrap();
+            let header = parse_header(&mut src).unwrap();
+            let tree = walk(&mut src, header, &limits).unwrap();
+            let makernote = read(&mut src, &tree, &limits)
+                .unwrap()
+                .expect("a MakerNote");
+            let at = AT + block.preview;
+            let (table, _) = parse_ifd(&mut src, makernote.base, at, makernote.order, &limits)
+                .expect("the PreviewIFD");
+            let first = &table.entries()[0];
+            assert_eq!(first.tag(), JPEG_INTERCHANGE_FORMAT, "{order:?}");
+            assert_eq!(first.value_offset(), Some(AT + block.len()), "{order:?}");
+            assert_eq!(table.invalid_entries(), 0, "{order:?}");
+
+            assert_eq!(candidate(bytes), Some(block.candidate(AT)), "{order:?}");
         }
     }
 
@@ -1466,6 +1525,32 @@ mod tests {
                 Some(SERIAL),
                 "{order:?}"
             );
+        }
+    }
+
+    #[test]
+    fn an_entry_whose_value_runs_past_the_block_is_dropped_when_read() {
+        // As in the test above, but on the MakerNote IFD itself: no reader
+        // of the IFD can reach the value, whatever it checks.
+        for order in ORDERS {
+            let block = tags_block(order, |inner, ifd| {
+                inner.ascii(ifd, SERIAL_NUMBER, SERIAL);
+            })
+            .0;
+            for (count, kept) in [(whole(&block) - 1, false), (whole(&block), true)] {
+                let file = exif_file(order, &block, count, |_, _| {});
+                let mut src = Source::new(Cursor::new(file)).unwrap();
+                let header = parse_header(&mut src).unwrap();
+                let tree = walk(&mut src, header, &Limits::default()).unwrap();
+                let makernote = read(&mut src, &tree, &Limits::default())
+                    .unwrap()
+                    .expect("a MakerNote");
+                let what = format!("{order:?}, declared {count} bytes");
+                assert_eq!(makernote.ifd.entry(SERIAL_NUMBER).is_some(), kept, "{what}");
+                assert_eq!(makernote.ifd.invalid_entries(), u32::from(!kept), "{what}");
+                // MakerNoteVersion, whose four bytes the entry holds, stays.
+                assert!(makernote.ifd.entry(MAKER_NOTE_VERSION).is_some(), "{what}");
+            }
         }
     }
 
