@@ -1,6 +1,8 @@
 # ADR011: Metadata comes from the standard tags
 
-- Status: Accepted
+- Status: Accepted; amended by
+  [ADR012](adr012-focus-points-as-the-camera-records-them.md), which reads
+  the Sony MakerNote for the focus point
 - Date: 2026-10-15
 - Issue: #13
 

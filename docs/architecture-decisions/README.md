@@ -16,7 +16,8 @@ each: the context, what was decided, and what follows from it. They answer
 | [ADR008](adr008-lints-and-panics.md) | No unsafe code, a few extra lints, no panics on malformed input | Accepted |
 | [ADR009](adr009-public-api-shape.md) | The shape of the public API | Accepted |
 | [ADR010](adr010-decoding-ends-at-a-linear-image.md) | Decoding ends at a linear image | Accepted |
-| [ADR011](adr011-metadata-from-standard-tags.md) | Metadata comes from the standard tags | Accepted |
+| [ADR011](adr011-metadata-from-standard-tags.md) | Metadata comes from the standard tags | Accepted; amended by [ADR012](adr012-focus-points-as-the-camera-records-them.md) |
+| [ADR012](adr012-focus-points-as-the-camera-records-them.md) | Focus points as the camera records them | Accepted |
 
 ## When to write one
 
@@ -37,3 +38,14 @@ local choices belong in a code comment or the commit message instead.
 Records are not rewritten or deleted. A new decision that replaces an old one
 gets its own ADR; the old one's status becomes "Superseded by
 [ADRxxx](…)", linking to the new record.
+
+A new decision that changes part of an old one, and leaves the rest
+standing, gets its own ADR too. It says "Amends [ADRxxx](…)" next to its
+status and names the point it changes; the old one's status becomes
+"Accepted; amended by [ADRyyy](…)", so that a reader of the old record
+finds the change.
+
+A new decision that builds on an old one without contradicting it, by
+covering what the old one left out, also gets its own ADR. It says
+"Builds on [ADRxxx](…)" next to its status, and the old record stays as
+it is, Accepted.
