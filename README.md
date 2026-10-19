@@ -106,7 +106,9 @@ Any other file, a DNG among them whatever its Make says, is refused with the
 - The format comes from the file's content, never from its name.
 - Opening reads the structure and each preview's frame header through a block
   cache, not the whole file; a preview's bytes are read only when asked for.
-- Pure Rust with no dependencies and no `unsafe` code.
+- Pure Rust with no dependencies and no `unsafe` code. There is no serde
+  feature, since that would be a dependency: the getters return text,
+  integers and small structs of integers.
 
 Pure Rust means no C or C++ library to build, link or ship, on macOS, Linux
 and Windows alike.

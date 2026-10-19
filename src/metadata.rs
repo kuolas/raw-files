@@ -30,6 +30,29 @@ use crate::rational::{Rational, SignedRational};
 /// `Metadata::default()` is an empty one, with every value `None`, for a
 /// caller's tests. `Metadata` is not `Copy`, so that a later value that
 /// cannot be copied does not break callers.
+///
+/// # Examples
+///
+/// Every value is optional, so each is handled on its own; a file that
+/// lacks one still gives the others:
+///
+/// ```no_run
+/// use raw_files::RawFile;
+///
+/// # fn main() -> raw_files::Result<()> {
+/// let file = RawFile::open("photo.nef")?;
+/// let metadata = file.metadata();
+/// println!("camera: {}", metadata.model().unwrap_or("unknown"));
+/// println!(
+///     "serial number: {}",
+///     metadata.serial_number().unwrap_or("not recorded")
+/// );
+/// if let Some(size) = metadata.image_size() {
+///     println!("{} × {} pixels", size.width, size.height);
+/// }
+/// # Ok(())
+/// # }
+/// ```
 #[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
 pub struct Metadata {
     pub(crate) make: Option<String>,
@@ -138,6 +161,28 @@ impl Metadata {
 /// `Exposure::default()` is an empty one, with every value `None`, for a
 /// caller's tests. `Exposure` is not `Copy`, so that a later value that
 /// cannot be copied does not break callers.
+///
+/// # Examples
+///
+/// The exposure in lowest terms, such as `1/320 s, f/9, ISO 64` from the
+/// fractions as stored (`10/3200` and `900/100`):
+///
+/// ```no_run
+/// use raw_files::RawFile;
+///
+/// # fn main() -> raw_files::Result<()> {
+/// let file = RawFile::open("photo.nef")?;
+/// let exposure = file.metadata().exposure();
+/// if let (Some(time), Some(f_number), Some(iso)) = (
+///     exposure.exposure_time(),
+///     exposure.f_number(),
+///     exposure.iso(),
+/// ) {
+///     println!("{} s, f/{}, ISO {iso}", time.reduced(), f_number.to_f64());
+/// }
+/// # Ok(())
+/// # }
+/// ```
 #[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
 pub struct Exposure {
     pub(crate) iso: Option<u32>,
@@ -193,6 +238,29 @@ impl Exposure {
 /// Focal lengths are in millimetres, the lens's actual ones, not their 35 mm
 /// equivalents; apertures are f-numbers. Both are fractions as stored, and
 /// a zero, which a file writes for a value it does not know, is `None`.
+///
+/// # Examples
+///
+/// The lens's name and its range of focal lengths, such as
+/// `NIKKOR Z 14-30mm f/4 S, 14-30 mm`:
+///
+/// ```no_run
+/// use raw_files::RawFile;
+///
+/// # fn main() -> raw_files::Result<()> {
+/// let file = RawFile::open("photo.nef")?;
+/// if let Some(lens) = file.metadata().lens() {
+///     let name = lens.model().unwrap_or("a lens without a name");
+///     match (lens.min_focal_length(), lens.max_focal_length()) {
+///         (Some(min), Some(max)) => {
+///             println!("{name}, {}-{} mm", min.to_f64(), max.to_f64());
+///         }
+///         _ => println!("{name}"),
+///     }
+/// }
+/// # Ok(())
+/// # }
+/// ```
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Lens {
     make: Option<String>,
