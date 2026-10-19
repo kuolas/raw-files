@@ -49,10 +49,11 @@ The files CI downloads are listed in
 [`tests/samples.tsv`](../../../tests/samples.tsv), the source of truth for
 their names, hashes, licences and URLs; `scripts/fetch-samples.sh`
 downloads them and checks each hash, and the tests in `tests/nef.rs` read
-the NEF files among them. The Sony files of the set are on the
-[ARW test-data page](../arw/test-data.md#21-the-ci-set); the NEF files are
-the three Z 9 files of raw.pixls.us, one per compression mode, and 20 files
-of 18 other bodies, listed after them:
+the NEF files among them, for their previews and their metadata
+([section 2.2](#22-files-checked-for-metadata)). The Sony files of the
+set are on the [ARW test-data page](../arw/test-data.md#21-the-ci-set);
+the NEF files are the three Z 9 files of raw.pixls.us, one per
+compression mode, and 20 files of 18 other bodies, listed after them:
 
 | Id | Body | Compression | SHA-256 | Licence |
 |---|---|---|---|---|
@@ -119,6 +120,11 @@ The MakerNote and metadata facts tagged **[F]** in
 The checks walked each file's IFDs, Exif IFD and MakerNote IFD with a
 throwaway, bounds-checked script written from these pages, and read the
 tags' values; no other program's output was used.
+
+The tests in `tests/nef.rs` check every metadata value the reader gives
+for each of these files against a table generated from such a walk, by
+the reader's rules, with serial numbers recorded by their shape alone;
+that table is the record of the values, so this page does not repeat it.
 
 ## 3. What raw.pixls.us holds for Nikon
 
