@@ -4,12 +4,14 @@
 //! Z 9's: what it opens as, which previews it lists, what reading one
 //! returns, and what metadata it gives. Then the previews and the metadata
 //! of a file laid out like a D300's, an older body that records its serial
-//! number and its lens's range only in its MakerNote. Then the same on real
-//! Z 9 files, when they have been downloaded (see
-//! [`support::samples::path`]).
+//! number and its lens's range only in its MakerNote. Then the previews
+//! of real files, three of the Z 9 and 20 of 18 other bodies, when they
+//! have been downloaded (see [`support::samples::path`]).
 
 mod support;
 
+use std::collections::BTreeSet;
+use std::fs;
 use std::io::Cursor;
 
 use raw_files::{
@@ -432,10 +434,11 @@ fn the_d300_file_gives_what_its_exif_tags_lack_from_the_makernote() {
     }
 }
 
-// Real files. The Z 9 files of raw.pixls.us, one per compression mode, are
-// listed with their hashes in `tests/samples.tsv`; `scripts/fetch-samples.sh`
-// downloads them. They are too large to commit, so a test whose file is
-// absent says so and passes: the suite runs offline.
+// Real files. The Z 9 files of raw.pixls.us, one per compression mode, and
+// 20 files of 18 other Nikon bodies, all CC0, are listed with their hashes
+// in `tests/samples.tsv`; `scripts/fetch-samples.sh` downloads them. They
+// are too large to commit, so a test whose file is absent says so and
+// passes: the suite runs offline.
 
 /// The Z 9 samples, each with its four previews, smallest first: the IFD0
 /// thumbnail, the MakerNote's preview, the medium JPEG in SubIFD2 and the
@@ -553,4 +556,544 @@ fn every_z9_sample_opens_with_its_four_previews() {
     for sample in SAMPLES {
         check(sample, Format::Nef);
     }
+}
+
+/// The samples of 18 other bodies, from the D1H of 2001 to the Z6III of
+/// 2024, each with the previews the reader finds in it, smallest first.
+/// They are the MakerNote's JPEG; the largest JPEG, in SubIFD0, on every
+/// file but the D1H's, the D100's and the E5700's; a JPEG 1080 pixels
+/// high in SubIFD2 on the D750, D810, D850, D780, Z 6, Z f and Z6III; and
+/// a 160 by 120 JPEG in IFD0 on the Z f, the Z6III and the P7800. The
+/// tables were made from a walk of each file's IFDs and MakerNote, by the
+/// reader's rules. Two files give fewer JPEGs than they hold: the D1H's
+/// one JPEG is in a MakerNote of the bare layout, which the reader does
+/// not read, so it gives none; and the P7800's MakerNote JPEG starts where
+/// the MakerNote's declared length ends, outside it, so it gives two. None
+/// is padded after its end-of-image marker, and no file's IFD0 asks for a
+/// rotation.
+const OTHER_SAMPLES: &[Sample] = &[
+    // D1H, 12-bit uncompressed (raw.pixls.us 5364)
+    Sample {
+        file: "nikon-d1h-12bit-uncompressed.nef",
+        orientation: Orientation::NoTransforms,
+        previews: &[],
+    },
+    // D100, 12-bit uncompressed (raw.pixls.us 2996)
+    Sample {
+        file: "nikon-d100-12bit-uncompressed.nef",
+        orientation: Orientation::NoTransforms,
+        previews: &[Jpeg {
+            width: 570,
+            height: 375,
+            offset: 6_260,
+            len: 107_689,
+            after_eoi: 0,
+        }],
+    },
+    // D70, 12-bit lossy (raw.pixls.us 2060)
+    Sample {
+        file: "nikon-d70-12bit-lossy.nef",
+        orientation: Orientation::NoTransforms,
+        previews: &[
+            Jpeg {
+                width: 564,
+                height: 372,
+                offset: 8_112,
+                len: 26_618,
+                after_eoi: 0,
+            },
+            Jpeg {
+                width: 3008,
+                height: 2000,
+                offset: 131_072,
+                len: 703_881,
+                after_eoi: 0,
+            },
+        ],
+    },
+    // D200, 12-bit lossy (raw.pixls.us 8079)
+    Sample {
+        file: "nikon-d200-12bit-lossy.nef",
+        orientation: Orientation::NoTransforms,
+        previews: &[
+            Jpeg {
+                width: 570,
+                height: 375,
+                offset: 9_096,
+                len: 112_612,
+                after_eoi: 0,
+            },
+            Jpeg {
+                width: 3872,
+                height: 2592,
+                offset: 179_712,
+                len: 1_107_857,
+                after_eoi: 0,
+            },
+        ],
+    },
+    // D300, 12-bit lossy (raw.pixls.us 928)
+    Sample {
+        file: "nikon-d300-12bit-lossy.nef",
+        orientation: Orientation::NoTransforms,
+        previews: &[
+            Jpeg {
+                width: 570,
+                height: 375,
+                offset: 10_496,
+                len: 88_176,
+                after_eoi: 0,
+            },
+            Jpeg {
+                width: 4288,
+                height: 2848,
+                offset: 156_672,
+                len: 543_086,
+                after_eoi: 0,
+            },
+        ],
+    },
+    // D700, 12-bit lossy (raw.pixls.us 2255)
+    Sample {
+        file: "nikon-d700-12bit-lossy.nef",
+        orientation: Orientation::NoTransforms,
+        previews: &[
+            Jpeg {
+                width: 570,
+                height: 375,
+                offset: 12_064,
+                len: 105_573,
+                after_eoi: 0,
+            },
+            Jpeg {
+                width: 4256,
+                height: 2832,
+                offset: 175_616,
+                len: 1_747_382,
+                after_eoi: 0,
+            },
+        ],
+    },
+    // D7000, 12-bit lossy (raw.pixls.us 961)
+    Sample {
+        file: "nikon-d7000-12bit-lossy.nef",
+        orientation: Orientation::NoTransforms,
+        previews: &[
+            Jpeg {
+                width: 570,
+                height: 375,
+                offset: 17_336,
+                len: 106_160,
+                after_eoi: 0,
+            },
+            Jpeg {
+                width: 4928,
+                height: 3264,
+                offset: 181_504,
+                len: 1_175_901,
+                after_eoi: 0,
+            },
+        ],
+    },
+    // D750, 12-bit lossy (raw.pixls.us 895)
+    Sample {
+        file: "nikon-d750-12bit-lossy.nef",
+        orientation: Orientation::NoTransforms,
+        previews: &[
+            Jpeg {
+                width: 640,
+                height: 424,
+                offset: 45_636,
+                len: 115_449,
+                after_eoi: 0,
+            },
+            Jpeg {
+                width: 1620,
+                height: 1080,
+                offset: 219_648,
+                len: 751_668,
+                after_eoi: 0,
+            },
+            Jpeg {
+                width: 6016,
+                height: 4016,
+                offset: 971_776,
+                len: 981_911,
+                after_eoi: 0,
+            },
+        ],
+    },
+    // D810, 12-bit small raw (raw.pixls.us 2036)
+    Sample {
+        file: "nikon-d810-12bit-small.nef",
+        orientation: Orientation::NoTransforms,
+        previews: &[
+            Jpeg {
+                width: 640,
+                height: 424,
+                offset: 44_964,
+                len: 161_928,
+                after_eoi: 0,
+            },
+            Jpeg {
+                width: 1620,
+                height: 1080,
+                offset: 265_216,
+                len: 914_381,
+                after_eoi: 0,
+            },
+            Jpeg {
+                width: 3680,
+                height: 2456,
+                offset: 1_179_648,
+                len: 717_240,
+                after_eoi: 0,
+            },
+        ],
+    },
+    // D850, 12-bit lossless small raw (raw.pixls.us 1835)
+    Sample {
+        file: "nikon-d850-12bit-lossless-small.nef",
+        orientation: Orientation::NoTransforms,
+        previews: &[
+            Jpeg {
+                width: 640,
+                height: 424,
+                offset: 54_768,
+                len: 148_517,
+                after_eoi: 0,
+            },
+            Jpeg {
+                width: 1620,
+                height: 1080,
+                offset: 261_632,
+                len: 1_108_506,
+                after_eoi: 0,
+            },
+            Jpeg {
+                width: 4128,
+                height: 2752,
+                offset: 1_370_624,
+                len: 1_325_032,
+                after_eoi: 0,
+            },
+        ],
+    },
+    // D780, 12-bit lossy (raw.pixls.us 3827)
+    Sample {
+        file: "nikon-d780-12bit-lossy.nef",
+        orientation: Orientation::NoTransforms,
+        previews: &[
+            Jpeg {
+                width: 640,
+                height: 424,
+                offset: 74_200,
+                len: 141_716,
+                after_eoi: 0,
+            },
+            Jpeg {
+                width: 1620,
+                height: 1080,
+                offset: 274_944,
+                len: 904_449,
+                after_eoi: 0,
+            },
+            Jpeg {
+                width: 6048,
+                height: 4024,
+                offset: 1_179_648,
+                len: 3_347_446,
+                after_eoi: 0,
+            },
+        ],
+    },
+    // Z 6, 12-bit small raw (raw.pixls.us 3587)
+    Sample {
+        file: "nikon-z6-12bit-small.nef",
+        orientation: Orientation::NoTransforms,
+        previews: &[
+            Jpeg {
+                width: 640,
+                height: 424,
+                offset: 76_256,
+                len: 137_675,
+                after_eoi: 0,
+            },
+            Jpeg {
+                width: 1620,
+                height: 1080,
+                offset: 1_428_992,
+                len: 737_043,
+                after_eoi: 0,
+            },
+            Jpeg {
+                width: 3024,
+                height: 2016,
+                offset: 2_166_272,
+                len: 432_488,
+                after_eoi: 0,
+            },
+        ],
+    },
+    // Z f, 14-bit (raw.pixls.us 6887)
+    Sample {
+        file: "nikon-zf-14bit.nef",
+        orientation: Orientation::NoTransforms,
+        previews: &[
+            Jpeg {
+                width: 160,
+                height: 120,
+                offset: 257_992,
+                len: 11_483,
+                after_eoi: 0,
+            },
+            Jpeg {
+                width: 640,
+                height: 424,
+                offset: 104_444,
+                len: 153_528,
+                after_eoi: 0,
+            },
+            Jpeg {
+                width: 1620,
+                height: 1080,
+                offset: 370_176,
+                len: 1_078_641,
+                after_eoi: 0,
+            },
+            Jpeg {
+                width: 6048,
+                height: 4032,
+                offset: 1_448_960,
+                len: 2_825_901,
+                after_eoi: 0,
+            },
+        ],
+    },
+    // Z6III, 14-bit, 3:2 (raw.pixls.us 7810)
+    Sample {
+        file: "nikon-z6iii-14bit-3x2.nef",
+        orientation: Orientation::NoTransforms,
+        previews: &[
+            Jpeg {
+                width: 160,
+                height: 120,
+                offset: 230_632,
+                len: 10_676,
+                after_eoi: 0,
+            },
+            Jpeg {
+                width: 640,
+                height: 424,
+                offset: 104_680,
+                len: 125_933,
+                after_eoi: 0,
+            },
+            Jpeg {
+                width: 1620,
+                height: 1080,
+                offset: 367_616,
+                len: 803_433,
+                after_eoi: 0,
+            },
+            Jpeg {
+                width: 3984,
+                height: 2656,
+                offset: 1_171_456,
+                len: 1_340_854,
+                after_eoi: 0,
+            },
+        ],
+    },
+    // Z6III, 14-bit, 16:9 (raw.pixls.us 7809)
+    Sample {
+        file: "nikon-z6iii-14bit-16x9.nef",
+        orientation: Orientation::NoTransforms,
+        previews: &[
+            Jpeg {
+                width: 160,
+                height: 120,
+                offset: 213_984,
+                len: 13_103,
+                after_eoi: 0,
+            },
+            Jpeg {
+                width: 640,
+                height: 360,
+                offset: 104_680,
+                len: 109_283,
+                after_eoi: 0,
+            },
+            Jpeg {
+                width: 1920,
+                height: 1080,
+                offset: 312_320,
+                len: 989_322,
+                after_eoi: 0,
+            },
+            Jpeg {
+                width: 6048,
+                height: 3400,
+                offset: 1_302_016,
+                len: 2_546_957,
+                after_eoi: 0,
+            },
+        ],
+    },
+    // Z6III, 14-bit, 1:1 (raw.pixls.us 7808)
+    Sample {
+        file: "nikon-z6iii-14bit-1x1.nef",
+        orientation: Orientation::NoTransforms,
+        previews: &[
+            Jpeg {
+                width: 160,
+                height: 120,
+                offset: 210_680,
+                len: 12_538,
+                after_eoi: 0,
+            },
+            Jpeg {
+                width: 480,
+                height: 480,
+                offset: 104_680,
+                len: 105_980,
+                after_eoi: 0,
+            },
+            Jpeg {
+                width: 1080,
+                height: 1080,
+                offset: 307_200,
+                len: 553_902,
+                after_eoi: 0,
+            },
+            Jpeg {
+                width: 4032,
+                height: 4032,
+                offset: 861_184,
+                len: 2_027_564,
+                after_eoi: 0,
+            },
+        ],
+    },
+    // Coolpix A, 14-bit lossy (raw.pixls.us 2238)
+    Sample {
+        file: "nikon-coolpix-a-14bit-lossy.nef",
+        orientation: Orientation::NoTransforms,
+        previews: &[
+            Jpeg {
+                width: 570,
+                height: 375,
+                offset: 18_092,
+                len: 105_404,
+                after_eoi: 0,
+            },
+            Jpeg {
+                width: 4928,
+                height: 3264,
+                offset: 181_504,
+                len: 1_772_400,
+                after_eoi: 0,
+            },
+        ],
+    },
+    // Coolpix P7800, 12-bit, an NRW file (raw.pixls.us 1425)
+    Sample {
+        file: "nikon-coolpix-p7800-12bit.nrw",
+        orientation: Orientation::NoTransforms,
+        previews: &[
+            Jpeg {
+                width: 160,
+                height: 120,
+                offset: 30_830,
+                len: 4_178,
+                after_eoi: 0,
+            },
+            Jpeg {
+                width: 4000,
+                height: 3000,
+                offset: 24_420_544,
+                len: 2_571_557,
+                after_eoi: 0,
+            },
+        ],
+    },
+    // E5700, 12-bit uncompressed (raw.pixls.us 4456)
+    Sample {
+        file: "nikon-e5700-12bit-uncompressed.nef",
+        orientation: Orientation::NoTransforms,
+        previews: &[Jpeg {
+            width: 640,
+            height: 480,
+            offset: 14_409,
+            len: 38_758,
+            after_eoi: 0,
+        }],
+    },
+    // Nikon 1 J1, 12-bit lossy (raw.pixls.us 2956)
+    Sample {
+        file: "nikon-1-j1-12bit-lossy.nef",
+        orientation: Orientation::NoTransforms,
+        previews: &[
+            Jpeg {
+                width: 1616,
+                height: 1080,
+                offset: 23_612,
+                len: 788_523,
+                after_eoi: 0,
+            },
+            Jpeg {
+                width: 3872,
+                height: 2592,
+                offset: 870_144,
+                len: 633_831,
+                after_eoi: 0,
+            },
+        ],
+    },
+];
+
+#[test]
+fn every_sample_of_the_other_nikon_bodies_opens_with_its_previews() {
+    for sample in OTHER_SAMPLES {
+        check(sample, Format::Nef);
+    }
+}
+
+#[test]
+fn the_sample_list_and_the_expected_previews_name_the_same_nikon_files() {
+    // The list is in the repository, so this runs without any download.
+    let list =
+        fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/samples.tsv")).unwrap();
+    let mut lines = list.lines();
+    let header: Vec<&str> = lines.next().unwrap().split('\t').collect();
+    assert_eq!(
+        header,
+        ["id", "format", "file", "tier", "sha256", "licence", "url"]
+    );
+    let mut listed = BTreeSet::new();
+    for line in lines.filter(|line| !line.is_empty()) {
+        let fields: Vec<&str> = line.split('\t').collect();
+        assert_eq!(fields.len(), header.len(), "{line}");
+        if fields[1] == "nef" {
+            listed.insert((fields[2], fields[3]));
+        }
+    }
+
+    let tables = SAMPLES
+        .iter()
+        .chain(OTHER_SAMPLES)
+        .map(|sample| (sample.file, "normal"));
+    let expected: BTreeSet<(&str, &str)> = tables.clone().collect();
+    assert_eq!(
+        expected.len(),
+        tables.count(),
+        "a file is in the tables twice"
+    );
+    let unexpected: Vec<_> = listed.difference(&expected).collect();
+    let unlisted: Vec<_> = expected.difference(&listed).collect();
+    assert!(
+        unexpected.is_empty() && unlisted.is_empty(),
+        "listed without expected previews: {unexpected:?}; \
+         expected previews but not listed: {unlisted:?}"
+    );
 }

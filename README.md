@@ -44,9 +44,10 @@ caps. The API documentation is on [docs.rs](https://docs.rs/raw-files).
 
 - **Nikon NEF**, with the NRW files of Coolpix cameras. The previews are
   found in IFD0, in its SubIFDs and in the small preview that the MakerNote
-  points at. They are checked on three CC0 Nikon Z 9 files from
-  raw.pixls.us (lossless, HE and HE\*) that CI downloads, and on test files
-  laid out like a Z 9's.
+  points at. They are checked on 23 CC0 Nikon files from raw.pixls.us that
+  CI downloads, three of the Z 9 (lossless, HE and HE\*) and 20 of 18
+  other bodies from the D1H to the Z6III, and on test files laid out like
+  a Z 9's.
 - **Sony ARW**, with the SRF, SR2 and ARQ files of the same family and the
   ARW files of the Sony-built Hasselblad bodies. The previews are found in
   IFD0 and IFD1 and, on bodies from version 4.0 of Sony's format, the
@@ -83,7 +84,7 @@ cargo test
 ```
 
 Some tests read real sample files, which `scripts/fetch-samples.sh`
-downloads (about 1.1 GB). `scripts/fetch-samples.sh nef` or `arw` fetches one
+downloads (about 1.4 GB). `scripts/fetch-samples.sh nef` or `arw` fetches one
 format only, and the 325 MiB ARQ file only with `RAW_FILES_LARGE=1`. Without
 the files, those tests skip.
 

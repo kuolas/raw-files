@@ -51,7 +51,8 @@ their names, hashes, licences and URLs; `scripts/fetch-samples.sh`
 downloads them and checks each hash, and the tests in `tests/nef.rs` read
 the NEF files among them. The Sony files of the set are on the
 [ARW test-data page](../arw/test-data.md#21-the-ci-set); the NEF files are
-the three Z 9 files of raw.pixls.us, one per compression mode:
+the three Z 9 files of raw.pixls.us, one per compression mode, and 20 files
+of 18 other bodies, listed after them:
 
 | Id | Body | Compression | SHA-256 | Licence |
 |---|---|---|---|---|
@@ -72,41 +73,48 @@ The container and preview facts tagged **[F]** on the other NEF pages were
 measured on these three files on 2026-10-13, so this section is where the
 **[F]** tag points.
 
+The other 20 NEF files were downloaded from raw.pixls.us on 2026-10-15.
+They cover the generations from the D1H (2001) to the Z6III (2024), both
+byte orders, the three versions of the embedded MakerNote, three small
+raws (D810, D850, Z 6), the Z6III's three aspect ratios, and three
+compacts, one of them an NRW file (Coolpix P7800). Each is CC0 in the
+site's catalogue, and its SHA-256 matched the catalogue's before it was
+read. "Mode" is the catalogue's label. **[P]** "Previews" are the JPEGs
+the tests expect the reader to give, smallest first, and what the file
+shows about them, with the outer byte order (`MM` big-endian, `II`
+little-endian); they were read from a walk of each file's IFDs and
+MakerNote on 2026-10-16, and the reader gives the same. Each JPEG is in
+one piece, through 0x0201 and 0x0202, and ends with the end-of-image
+marker exactly at its declared length. **[F]**
+
+| Id | Body | Mode | Previews | SHA-256 | Licence |
+|---|---|---|---|---|---|
+| 5364 | D1H | 12bit 12bit uncompressed (3:2) | None. Its only JPEG is a 570x375 preview (24,567 bytes at 3688) in the PreviewIFD of its headerless MakerNote, whose offsets count from the file's own TIFF header; the reader does not read that layout ([ADR011](../../architecture-decisions/adr011-metadata-from-standard-tags.md)), so the file opens as NEF with no preview. `MM` | `d110b80a8b10a3a67b5cd1c15ef33f1a6397557b73d5d3f4e565739f0c072571` | CC0 |
+| 2996 | D100 | 12bit 12bit compressed (Uncompressed) (3:2) | One, the MakerNote's 570x375, its only JPEG. MakerNote `02 00`; `MM` | `1889abfd1ed64048c90b0c3384e1e0be9bbb021692249427e90848d5d1e9c8f0` | CC0 |
+| 2060 | D70 | 12bit 12bit compressed (Lossy (type 1)) (3:2) | Two: the MakerNote's 564x372 and 3008x2000 in SubIFD0. MakerNote `02 10`; `MM` | `dd6405aeb33b0cd5bf66c98ba98ccbb478a765450cfd130810e470dab8d1f4b4` | CC0 |
+| 8079 | D200 | 12bit compressed (Lossy (type 1)) (3:2) | Two: 570x375 and 3872x2592. `MM` | `b0800a1166b952430b255600373573e1d528adf8de98857781e06a98472b3c35` | CC0 |
+| 928 | D300 | 12bit 12bit compressed (Lossy (type 2)) (3:2) | Two: 570x375 and 4288x2848. `MM` | `f1162624678ae9b0e0e835fcbe77d97584fc88ceefd996e38ee126942b54bc8c` | CC0 |
+| 2255 | D700 | 12bit 12bit compressed (Lossy (type 2)) (3:2) | Two: 570x375 and 4256x2832. `MM` | `bfd5e164c3fa10ffdc38237000ccb63f52a53bcd080ceb48de1443534dd17036` | CC0 |
+| 961 | D7000 | 12bit 12bit compressed (Lossy (type 2)) (3:2) | Two: 570x375 and 4928x3264. `MM` | `986db2bf9ed08cf095bb94cfbaf02f0e89d123edad28b63c05133e7815749486` | CC0 |
+| 895 | D750 | 12bit 12bit compressed (Lossy (type 2)) (3:2) | Three: 640x424, 1620x1080 in SubIFD2 and 6016x4016. MakerNote `02 11`; `II`, as on every later body of the set | `e4a3f85e014275fc0a47600a373af95ec850872a5f6cf87649bcaa42b77ef2e4` | CC0 |
+| 2036 | D810 | 12bit 12bit compressed ((8)), small raw (3:2) | Three: 640x424, 1620x1080 and 3680x2456, the size of its small raw. `II` | `0cb5b8193ddc1de57fcc5f2091d0f7e8476f3b3af4beeb1ccc73d45f1c7a6bed` | CC0 |
+| 1835 | D850 | 12bit 12bit compressed (Lossless) (3:2) | Three: 640x424, 1620x1080 and 4128x2752, smaller than its 6216x4136 raw. `II` | `31b7fe298a5c91694c6ca8b3284a0a016e572a02c3964b502d4732e8e9283da8` | CC0 |
+| 3827 | D780 | 12bit 12bit compressed (Lossy (type 2)) (3:2) | Three: 640x424, 1620x1080 and 6048x4024. `II` | `986488947e552af25c6824667aed5a1622140a581dc57efd4b00f0b55b5e4ae0` | CC0 |
+| 3587 | Z 6 | 12bit 12bit compressed (3:2) | Three: 640x424, 1620x1080 and 3024x2016, smaller than its 4548x3030 raw; a 12-bit 758x505 SubIFD and an empty one are not previews. `II` | `f0ab08da469ee205f2bc08efd9005778c64cdcb064893cee03768e32e5da1a36` | CC0 |
+| 6887 | Z f | 8bit 8bit lossy compressed (3:2) | Four, as on the Z 9: 160x120 in IFD0, 640x424, 1620x1080 and 6048x4032; a 384x256 grey SubIFD and two empty ones are not previews. `II` | `98d6ca8e6c98048ca7ffed68ccaeda7b2b9f03807f0d320d97d5678db21748c2` | CC0 |
+| 7810 | Z6III | 8bit compressed (3:2) | Four: 160x120, 640x424, 1620x1080 and 3984x2656, from a 4000x2672 raw. `II` | `a8fa2cacadcf9dc85475ebcf37fcc32614072bc155e39d01491cb9e293c1343d` | CC0 |
+| 7809 | Z6III | 8bit compressed (16:9) | Four: 160x120, then 640x360, 1920x1080 and 6048x3400, 16:9 like its 6064x3416 raw. `II` | `890e6bf952bf87d37491f8a6bd7bbfae3c464e08063767d57bf0d97d588d30df` | CC0 |
+| 7808 | Z6III | 8bit compressed (1:1) | Four: 160x120, then 480x480, 1080x1080 and 4032x4032, square, from a 4048x4040 raw. `II` | `da2fd1a263bb9985776d8c40aa2bdcb89dd7d8cc55bfa44dd851727c43709af8` | CC0 |
+| 2238 | Coolpix A | 14bit 14bit compressed (Lossy (type 2)) (3:2) | Two: 570x375 and 4928x3264, as on the D7000. MakerNote `02 11`; `MM` | `c5ca0333a7cda8a2fc33fb2157d18dfa89f1844548dc49c2fd2e67f502f72e25` | CC0 |
+| 1425 | Coolpix P7800 | 12bit 12bit compressed ((7)) (4:3) | Two of its three: 160x120 in IFD0 and 4000x3000. Its 640x480 MakerNote JPEG starts at byte 4546, where the MakerNote's declared 2,816 bytes end, so the reader does not read it. An NRW file; MakerNote `02 00`; `II` | `27ac09537dd0f75523864dcf221278e2db354d490534bc13b6eabdc031060e51` | CC0 |
+| 4456 | E5700 | 12bit 12bit uncompressed (4:3) | One, the MakerNote's 640x480, its only JPEG; its two SubIFDs are raw data. MakerNote `02 00`; `II` | `6efeb5049cb4957f0586c47478caed2c5cfdce23eed6b65f5e65ab50ab7c1294` | CC0 |
+| 2956 | Nikon 1 J1 | 12bit 12bit compressed (Lossy (type 2)) (3:2) | Two: the MakerNote's 1616x1080, the largest MakerNote JPEG of the set, and 3872x2592. `II` | `1d3b7c26b012cf585d46a28c9c83876d687a6e215b7d0bdf8d062c82ab626401` | CC0 |
+
 ### 2.2 Files checked for metadata
 
 The MakerNote and metadata facts tagged **[F]** in
 [makernote-and-metadata.md](makernote-and-metadata.md) were measured on the
-three files above and on these 20, downloaded from raw.pixls.us on
-2026-10-15. They cover the generations from the D1H (2001) to the Z6III
-(2024), both byte orders, the three versions of the embedded MakerNote,
-three small raws (D810, D850, Z 6), the Z6III's three aspect ratios,
-and three compacts, one of them an NRW file (Coolpix P7800). Each is CC0
-in the site's catalogue, and its SHA-256 matched the catalogue's before
-it was read. CI does not download them. "Mode" is the catalogue's label.
-**[P]**
-
-| Id | Body | Mode | SHA-256 | Licence |
-|---|---|---|---|---|
-| 5364 | D1H | 12bit 12bit uncompressed (3:2) | `d110b80a8b10a3a67b5cd1c15ef33f1a6397557b73d5d3f4e565739f0c072571` | CC0 |
-| 2996 | D100 | 12bit 12bit compressed (Uncompressed) (3:2) | `1889abfd1ed64048c90b0c3384e1e0be9bbb021692249427e90848d5d1e9c8f0` | CC0 |
-| 2060 | D70 | 12bit 12bit compressed (Lossy (type 1)) (3:2) | `dd6405aeb33b0cd5bf66c98ba98ccbb478a765450cfd130810e470dab8d1f4b4` | CC0 |
-| 8079 | D200 | 12bit compressed (Lossy (type 1)) (3:2) | `b0800a1166b952430b255600373573e1d528adf8de98857781e06a98472b3c35` | CC0 |
-| 928 | D300 | 12bit 12bit compressed (Lossy (type 2)) (3:2) | `f1162624678ae9b0e0e835fcbe77d97584fc88ceefd996e38ee126942b54bc8c` | CC0 |
-| 2255 | D700 | 12bit 12bit compressed (Lossy (type 2)) (3:2) | `bfd5e164c3fa10ffdc38237000ccb63f52a53bcd080ceb48de1443534dd17036` | CC0 |
-| 961 | D7000 | 12bit 12bit compressed (Lossy (type 2)) (3:2) | `986db2bf9ed08cf095bb94cfbaf02f0e89d123edad28b63c05133e7815749486` | CC0 |
-| 895 | D750 | 12bit 12bit compressed (Lossy (type 2)) (3:2) | `e4a3f85e014275fc0a47600a373af95ec850872a5f6cf87649bcaa42b77ef2e4` | CC0 |
-| 1835 | D850 | 12bit 12bit compressed (Lossless) (3:2) | `31b7fe298a5c91694c6ca8b3284a0a016e572a02c3964b502d4732e8e9283da8` | CC0 |
-| 3827 | D780 | 12bit 12bit compressed (Lossy (type 2)) (3:2) | `986488947e552af25c6824667aed5a1622140a581dc57efd4b00f0b55b5e4ae0` | CC0 |
-| 3587 | Z 6 | 12bit 12bit compressed (3:2) | `f0ab08da469ee205f2bc08efd9005778c64cdcb064893cee03768e32e5da1a36` | CC0 |
-| 6887 | Z f | 8bit 8bit lossy compressed (3:2) | `98d6ca8e6c98048ca7ffed68ccaeda7b2b9f03807f0d320d97d5678db21748c2` | CC0 |
-| 7810 | Z6III | 8bit compressed (3:2) | `a8fa2cacadcf9dc85475ebcf37fcc32614072bc155e39d01491cb9e293c1343d` | CC0 |
-| 7809 | Z6III | 8bit compressed (16:9) | `890e6bf952bf87d37491f8a6bd7bbfae3c464e08063767d57bf0d97d588d30df` | CC0 |
-| 7808 | Z6III | 8bit compressed (1:1) | `da2fd1a263bb9985776d8c40aa2bdcb89dd7d8cc55bfa44dd851727c43709af8` | CC0 |
-| 4456 | E5700 | 12bit 12bit uncompressed (4:3) | `6efeb5049cb4957f0586c47478caed2c5cfdce23eed6b65f5e65ab50ab7c1294` | CC0 |
-| 2238 | Coolpix A | 14bit 14bit compressed (Lossy (type 2)) (3:2) | `c5ca0333a7cda8a2fc33fb2157d18dfa89f1844548dc49c2fd2e67f502f72e25` | CC0 |
-| 1425 | Coolpix P7800 | 12bit 12bit compressed ((7)) (4:3) | `27ac09537dd0f75523864dcf221278e2db354d490534bc13b6eabdc031060e51` | CC0 |
-| 2956 | Nikon 1 J1 | 12bit 12bit compressed (Lossy (type 2)) (3:2) | `1d3b7c26b012cf585d46a28c9c83876d687a6e215b7d0bdf8d062c82ab626401` | CC0 |
-| 2036 | D810 | 12bit 12bit compressed ((8)), small raw (3:2) | `0cb5b8193ddc1de57fcc5f2091d0f7e8476f3b3af4beeb1ccc73d45f1c7a6bed` | CC0 |
+23 NEF files of section 2.1 on 2026-10-15.
 
 The checks walked each file's IFDs, Exif IFD and MakerNote IFD with a
 throwaway, bounds-checked script written from these pages, and read the
@@ -223,9 +231,9 @@ The set above answers many of them, mostly with `exiftool -v3`, `exiftool
 
 | Open question | Sample files that answer it |
 |---|---|
-| Preview dimensions and count per body; unusual JPEG types | D3 or D300, D850, D5, D6, Z 6, Z 7, Z 8, Z 9, Z f: list each SubIFD and the PreviewIFD, read each JPEG's frame header |
-| Outer TIFF byte order per generation | The first eight bytes of one file per body; settles the Z bodies in particular |
-| Where previews live on the earliest bodies | D1, D1X, D1H and the E-series |
+| Preview dimensions and count per body; unusual JPEG types | D3 or D300, D850, D5, D6, Z 6, Z 7, Z 8, Z 9, Z f: list each SubIFD and the PreviewIFD, read each JPEG's frame header. Partly answered by section 2.1, for the D300, D850, Z 6 and Z f among 18 bodies: every JPEG there is baseline |
+| Outer TIFF byte order per generation | The first eight bytes of one file per body; settles the Z bodies in particular. Answered for the bodies of section 2.1: `MM` up to the D7000 and on the Coolpix A, `II` from the D750 on and on the E5700, P7800 and J1 |
+| Where previews live on the earliest bodies | D1, D1X, D1H and the E-series. Answered for the D1H, D100 and E5700: in the MakerNote's PreviewIFD alone (section 2.1, files 5364, 2996 and 4456) |
 | Whether HE and HE* change IFD or preview layout | The three Z 9 files side by side. Answered: they do not (section 2.1, files 5146 to 5148) |
 | Whether tag 0x000C white balance is present and correct on Z bodies | Z 6, Z 7, Z 8, Z 9, Z f |
 | Whether CropArea (0x0045) is always present, and raw-to-output size mapping | One file per body, compared with the Exif image size. Partly answered by section 2.2: the D850, D780 and Z bodies write it, older ones do not, and the visible size of the older ones is still unknown |

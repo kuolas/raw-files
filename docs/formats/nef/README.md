@@ -16,14 +16,15 @@ downloads (files 5146 to 5148, listed in
 [test-data.md](test-data.md#21-the-ci-set)); what they show is tagged
 **[F]**. On 15 October 2026 the MakerNote's layout and the viewer
 metadata were checked against those three files and 20 more CC0 files,
-from the D1H to the Z6III (listed in
-[test-data.md](test-data.md#22-files-checked-for-metadata)). The raw data
-was not checked, beyond the raw IFD's tags and the first bytes of the Z 9's
-strip, and the containers and previews of the 20 other files were not
-written up. **Everything else has yet to be checked against sample
-files.** Byte offsets and formulas taken from other
-projects' source code should be checked against that source and against real
-files before they are hard-coded. [open-questions.md](open-questions.md)
+from the D1H to the Z6III, which CI downloads too (listed in
+[test-data.md](test-data.md#21-the-ci-set)); the tests check the previews
+of all 23, and test-data.md records them, but the containers of the 20
+other files are not yet written up in these pages. The raw data was not
+checked, beyond the raw IFD's tags and the first bytes of the Z 9's strip.
+**Everything else has yet to be checked against sample files.** Byte
+offsets and formulas taken from other projects' source code should be
+checked against that source and against real files before they are
+hard-coded. [open-questions.md](open-questions.md)
 lists what is still unknown. [research-record.md](research-record.md)
 describes how the research was done and what it could not reach.
 
@@ -61,9 +62,12 @@ the disagreement.
 
 - **A NEF is a TIFF file.** It has IFD0, SubIFDs (tag 0x014A) and an Exif IFD
   whose MakerNote (0x927C) holds Nikon's own tags. The outer byte order is
-  big-endian (`MM`) on the DSLRs documented up to about 2009 [P]. The Z 9 is
-  little-endian (`II`), in the file and in the MakerNote alike [F]; other
-  later bodies are unconfirmed. A reader must accept both orders.
+  big-endian (`MM`) on the DSLRs documented up to about 2009 [P], and on
+  the checked DSLRs from the D1H to the D7000 and on the Coolpix A [F].
+  The D750 and every later checked body, the Z 9 among them, are
+  little-endian (`II`), in the file and in the MakerNote alike, and so are
+  the Coolpix E5700 and P7800 and the Nikon 1 J1 [F]. A reader must
+  accept both orders.
 - **Previews are JPEGs in SubIFDs and in the MakerNote.**
   - Bodies from about 2012 carry a full-size JPEG plus a second JPEG of about
     1620×1080 [S].

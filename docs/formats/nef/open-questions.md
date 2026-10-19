@@ -60,41 +60,52 @@ and test-data.md describes the sample set that would answer Part 2.
 ### Container and previews
 
 - **Largest preview per body.** The dimensions and count of embedded JPEGs on
-  the D3/D300/D700, D850, D5/D6 and the Z bodies other than the Z 9. The Z f's
-  reported 1616×1080 in particular needs checking. The Z 9 is answered: four
-  JPEGs of 160×120, 640×424, 1620×1080 and 8256×5504 (files 5146 to 5148)
+  the D3, D5/D6 and the Z bodies not yet checked, such as the Z 7 and Z 8.
+  The Z 9 is answered: four JPEGs of 160×120, 640×424, 1620×1080 and
+  8256×5504 (files 5146 to 5148). So are the 18 bodies of the other 20 files
+  of the CI set, the D300, D700, D850, Z 6 and Z f among them; the Z f's
+  second JPEG is 1620×1080, not the 1616×1080 reported (file 6887). Each
+  file's JPEGs are listed in
+  [test-data.md](test-data.md#21-the-ci-set)
   ([container-and-previews.md](container-and-previews.md)).
 - **JPEG encoding.** Whether any body embeds a progressive JPEG, or one with
   unusual chroma subsampling. The Z 9's four are baseline (files 5146 to
-  5148); their subsampling was not read.
-- **Outer byte order.** For the D800 and later bodies, the Z bodies other than
-  the Z 9, and Coolpix NRW. Pre-2010 DSLRs are `MM`, the E5700 is `II`, and
-  the Z 9 is `II` for the file and the MakerNote alike (files 5146 to 5148).
-- **Early bodies.** Where the D1 and D1H keep their previews, and how large the
-  MakerNote preview is on the D1X and D100.
+  5148), and so is every JPEG of the other 20 files of the CI set; their
+  subsampling was not read.
+- **Early bodies.** Where the D1 keeps its previews, and how large the
+  MakerNote preview is on the D1X. The D1H is answered: its only JPEG is a
+  570×375 preview (24,567 bytes at offset 3688) in the PreviewIFD of its
+  headerless MakerNote, which raw-files does not read
+  ([ADR011](../../architecture-decisions/adr011-metadata-from-standard-tags.md)),
+  so the file opens with no preview (file 5364) **[F]**. The D100's
+  MakerNote preview, its only JPEG, is 570×375 (file 2996).
 - **Coolscan NEF.** The exact structure of a scanner NEF, and which IFD holds
   NikonScanIFD (0x0E10).
 - **NikonNEFInfo.** Which IFD hosts tag 0xC7D5 (NikonNEFInfo) across bodies.
   Its contents are documented and do not affect previews
   ([container-and-previews.md](container-and-previews.md)).
 - **PreviewIFD offset base.** Whether the PreviewIFD offsets of the
-  headerless and short-header MakerNotes count from the outer TIFF header, as
-  inferred ([container-and-previews.md](container-and-previews.md)).
+  short-header MakerNote count from the outer TIFF header, as inferred
+  ([container-and-previews.md](container-and-previews.md)). The headerless
+  one's do: the D1H's PreviewIFD and its JPEG are where offsets counted
+  from the file's own TIFF header put them (file 5364) **[F]**.
 - **Multi-strip previews.** Whether any SubIFD JPEG is stored in several
   strips. On the Z 9 every JPEG is in one piece, through 0x0201/0x0202 (files
-  5146 to 5148); other bodies are open
+  5146 to 5148), and so is every JPEG of the other 20 files of the CI set;
+  other bodies are open
   ([container-and-previews.md](container-and-previews.md)).
 - **Truncation and padding.** How common truncated JPEGs or padding after the
   end-of-image marker are in real files. The Z 9 has neither: each JPEG ends
   with the end-of-image marker exactly at its declared length (files 5146 to
-  5148); other bodies are open
+  5148), as does every JPEG of the other 20 files of the CI set; other
+  bodies are open
   ([container-and-previews.md](container-and-previews.md)).
 - **Preview Exif.** Whether a SubIFD or PreviewIFD JPEG ever carries its own
   Exif APP1 with an Orientation. Not on the Z 9, whose JPEGs have no APP
-  segment at all (files 5146 to 5148); other bodies are open
+  segment at all (files 5146 to 5148), nor on the other 20 files of the CI
+  set, whose JPEGs have none before their frame header; other bodies are
+  open
   ([container-and-previews.md](container-and-previews.md)).
-- **Z 6III previews.** Whether the Z 6III follows the 1620×1080 second-JPEG
-  pattern ([container-and-previews.md](container-and-previews.md)).
 - **Z 9 SubIFDs without a preview.** What the Z 9's 384×256 uncompressed
   8-bit grey SubIFD and its two empty SubIFDs (width, height and strip
   length 0) are for (files 5146 to 5148). A preview finder skips all three
@@ -138,8 +149,8 @@ and test-data.md describes the sample set that would answer Part 2.
   Also whether the Z 9 and the original Z 6/Z 7 write M/S NEF.
 - **BlackLevel.** Which body first wrote 0x003D BlackLevel, and its channel
   order on any non-RGGB body that carries it.
-- **Z 6 and Z 7 header.** The byte order of a Z 6/Z 7 TIFF header. Their
-  12-bit packing is little-endian either way.
+- **Z 7 header.** The byte order of a Z 7 TIFF header; the Z 6's is `II`
+  (file 3587). Their 12-bit packing is little-endian either way.
 - **sNEF.** A reference conversion for sNEF (D810, D4S), where implementations
   disagree.
 
@@ -167,9 +178,26 @@ These were settled by the three CC0 Z 9 files of the CI set:
   present in the lossless file only (files 5146 to 5148)
   ([container-and-previews.md](container-and-previews.md)).
 
+These were settled by the other 20 NEF files of the CI set, of 18 bodies
+from the D1H to the Z6III, listed in
+[test-data.md](test-data.md#21-the-ci-set) with the previews of each:
+
+- **Outer byte order**: big-endian (`MM`) on the D1H, D100, D70, D200,
+  D300, D700, D7000 and Coolpix A (files 5364, 2996, 2060, 8079, 928,
+  2255, 961, 2238); little-endian (`II`) on the D750, D810, D850, D780,
+  Z 6, Z f and Z6III, as on the Z 9, and on the E5700, the Nikon 1 J1 and
+  the Coolpix P7800, whose file is an NRW (files 895, 2036, 1835, 3827,
+  3587, 6887, 7808 to 7810, 4456, 2956, 1425). Every embedded MakerNote
+  header has its file's byte order
+  ([container-and-previews.md](container-and-previews.md)).
+- **Z 6III previews**: the Z6III follows the second-JPEG pattern,
+  1620×1080 at 3:2, and at its other aspect ratios writes a JPEG 1080
+  pixels high of the same shape, 1920×1080 at 16:9 and 1080×1080 at 1:1
+  (files 7810, 7809, 7808).
+
 The following were settled by the 23 files checked for metadata, listed in
-[test-data.md](test-data.md#22-files-checked-for-metadata) with their
-SHA-256 hashes; the details are in
+[test-data.md](test-data.md#21-the-ci-set) with their SHA-256 hashes; the
+details are in
 [makernote-and-metadata.md](makernote-and-metadata.md).
 
 - **Time-zone tags**: the D850 and every later checked body write

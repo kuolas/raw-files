@@ -235,7 +235,7 @@ links checked as well; the normal doc build never sees them.
 Some tests read real sample files, which are too large to commit. When the
 files are absent, those tests print a note and pass, so the suite runs
 offline. `scripts/fetch-samples.sh` downloads the pinned set listed in
-[`tests/samples.tsv`](tests/samples.tsv), about 1.1 GB, into
+[`tests/samples.tsv`](tests/samples.tsv), about 1.4 GB, into
 `target/raw-samples`, or into the directory named by `RAW_FILES_SAMPLES`,
 and checks each file's SHA-256; `cargo test` then runs those tests too.
 `scripts/fetch-samples.sh nef` (or `arw`) fetches the files of one format
