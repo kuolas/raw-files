@@ -23,8 +23,9 @@ use crate::rational::{Rational, SignedRational};
 /// of its raw data and of its visible image.
 ///
 /// Every value is `None` when the file does not record it or records it in
-/// a way that cannot be read. A damaged value costs only itself: the other
-/// values are still read, and the file still opens with its previews.
+/// a way that cannot be read. A damaged value costs only itself, and a
+/// damaged directory only the values in it: the rest is still read, and
+/// the file still opens with its previews.
 ///
 /// `Metadata::default()` is an empty one, with every value `None`, for a
 /// caller's tests. `Metadata` is not `Copy`, so that a later value that

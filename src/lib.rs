@@ -3,7 +3,8 @@
 //! raw-files: a camera RAW library in pure Rust.
 //!
 //! raw-files extracts the JPEG previews embedded in Nikon NEF and Sony ARW
-//! files, and will later decode their raw sensor data. A malformed file
+//! files and reads the metadata a viewer or a file renamer needs next to
+//! them, and will later decode their raw sensor data. A malformed file
 //! gives an error, never a panic.
 //!
 //! [`RawFile`] opens a file by path, from bytes in memory or from any reader
@@ -46,12 +47,50 @@
 //! # }
 //! ```
 //!
+//! Print when a picture was taken, with which camera and lens, and at what
+//! exposure. Every value is optional: a file that does not record one, or
+//! records it in a way that cannot be read, gives `None` for that value
+//! alone.
+//!
+//! ```no_run
+//! use raw_files::RawFile;
+//!
+//! # fn main() -> raw_files::Result<()> {
+//! let file = RawFile::open("photo.nef")?;
+//! let metadata = file.metadata();
+//! if let Some(time) = metadata.capture_time() {
+//!     println!("taken {time}");
+//! }
+//! if let (Some(make), Some(model)) = (metadata.make(), metadata.model()) {
+//!     println!("camera: {make} {model}");
+//! }
+//! if let Some(name) = metadata.lens().and_then(|lens| lens.model()) {
+//!     println!("lens: {name}");
+//! }
+//! let exposure = metadata.exposure();
+//! if let (Some(time), Some(f_number), Some(iso)) = (
+//!     exposure.exposure_time(),
+//!     exposure.f_number(),
+//!     exposure.iso(),
+//! ) {
+//!     println!("{} s at f/{}, ISO {iso}", time.reduced(), f_number.to_f64());
+//! }
+//! # Ok(())
+//! # }
+//! ```
+//!
 //! # Guarantees
 //!
 //! - A malformed or truncated file returns an error, never a panic,
 //!   whatever its bytes. Every offset and length read from a file is checked
 //!   before it is used; the tests feed the readers truncated and corrupted
 //!   files, and fuzz targets exercise them.
+//! - Damaged metadata costs only what it damages. Each value of
+//!   [`Metadata`] is read on its own when the file is opened: a tag that is
+//!   missing, of an unexpected type or out of range leaves that value
+//!   `None`, and the other values and the previews as they are. A damaged
+//!   directory, such as an Exif IFD whose pointer is wrong, loses the
+//!   values in it and no others.
 //! - An untrusted file cannot make the library allocate or walk without
 //!   bound. [`Limits`] caps the directories visited, their entries, their
 //!   nesting and the size of a preview, with defaults that suit untrusted
@@ -75,15 +114,16 @@
 //!
 //! Nikon NEF, including the NRW files of Coolpix cameras, and Sony ARW,
 //! including the SRF, SR2 and ARQ files of the same family and the ARW files
-//! of the Sony-built Hasselblad bodies. Version 0.1.0 reads only the
-//! embedded previews of these files, not their raw data.
+//! of the Sony-built Hasselblad bodies. Version 0.2.0 reads the embedded
+//! previews and the metadata of these files, not their raw data. Both are
+//! checked on 23 public Nikon files, from the D1H to the Z6III, and on 36
+//! public Sony-family files, from the DSC-F828 to the ILCE-7M5.
 //!
 //! # What comes next
 //!
 //! The [roadmap](https://github.com/kuolas/raw-files/blob/master/docs/ROADMAP.md)
-//! plans basic metadata such as the capture time, the camera and the lens;
-//! then the autofocus points; then the raw sensor data; and last a developed
-//! linear image.
+//! plans the autofocus points the camera used; then the raw sensor data;
+//! and last a developed linear image.
 
 // A fuzzing build compiles the reader for one caller, the fuzz entry points,
 // which use only part of it. What is unused there, and so which `expect`s
