@@ -301,6 +301,17 @@ A few conventions:
 - **Decisions that would surprise someone reading only the code** get a short
   Architecture Decision Record in
   [docs/architecture-decisions/](docs/architecture-decisions/README.md).
+- **The public API follows the
+  [Rust API Guidelines](https://rust-lang.github.io/api-guidelines/checklist.html).**
+  Before a release, go through its checklist for every public item added
+  since the last one: the common traits, a rustdoc example on each type,
+  an `# Errors` section on each fallible function, the Cargo metadata.
+  Where the project departs from a guideline on purpose, say so where a
+  reader would look: `DateTime`, `Rational` and `SignedRational` have no
+  `Ord`, and their docs say why; there is no serde feature, because the
+  crate has no dependencies, and the crate docs say so. The items about
+  macros, collections, iterators, smart pointers and destructors have
+  nothing to apply to yet.
 
 ## Fuzzing
 

@@ -53,6 +53,35 @@ const MAX_OFFSET_MINUTES: i16 = 14 * 60;
 /// kept); then the offset as `+HH:MM` or `-HH:MM`, when it is known, never
 /// as `Z`. A time taken at 10:20:30 and 85 hundredths, five hours behind
 /// UTC, shows as `2022-01-31T10:20:30.85-05:00`.
+///
+/// # Examples
+///
+/// A `DateTime` comes from a file. Print it, or take its parts to name the
+/// file by the moment it was taken, milliseconds included, since the
+/// frames of a burst share their second:
+///
+/// ```no_run
+/// use raw_files::RawFile;
+///
+/// # fn main() -> raw_files::Result<()> {
+/// let file = RawFile::open("photo.nef")?;
+/// if let Some(time) = file.metadata().capture_time() {
+///     println!("taken {time}");
+///     let name = format!(
+///         "{:04}{:02}{:02}-{:02}{:02}{:02}.{:03}.nef",
+///         time.year(),
+///         time.month(),
+///         time.day(),
+///         time.hour(),
+///         time.minute(),
+///         time.second(),
+///         time.nanosecond() / 1_000_000,
+///     );
+///     println!("could be renamed to {name}");
+/// }
+/// # Ok(())
+/// # }
+/// ```
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct DateTime {
     year: u16,

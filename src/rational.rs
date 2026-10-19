@@ -28,6 +28,24 @@ use std::fmt;
 /// Two values are equal when they were stored the same way, so 10/3200 is
 /// not equal to 1/320, although they are the same number. Compare their
 /// [`reduced`](Self::reduced) forms to compare the numbers.
+///
+/// There is no `Ord` for the same reason: an order by value would disagree
+/// with this equality. Sort by [`to_f64`](Self::to_f64) to order by value.
+///
+/// # Examples
+///
+/// An exposure time as a Nikon Z 9 stores it, shown as stored, in lowest
+/// terms and as a decimal:
+///
+/// ```
+/// use raw_files::Rational;
+///
+/// let time = Rational { numerator: 10, denominator: 3200 };
+/// assert_eq!(time.to_string(), "10/3200");
+/// assert_eq!(time.reduced(), Rational { numerator: 1, denominator: 320 });
+/// assert_eq!(time.reduced().to_string(), "1/320");
+/// assert_eq!(time.to_f64(), 0.003125);
+/// ```
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct Rational {
     /// The number above the line, as stored.
@@ -105,6 +123,23 @@ impl fmt::Display for Rational {
 /// Two values are equal when they were stored the same way, so -2/6 is not
 /// equal to -1/3, nor 2/-3 to -2/3, although they are the same number.
 /// Compare their [`reduced`](Self::reduced) forms to compare the numbers.
+///
+/// There is no `Ord` for the same reason: an order by value would disagree
+/// with this equality. Sort by [`to_f64`](Self::to_f64) to order by value.
+///
+/// # Examples
+///
+/// An exposure bias of two thirds of a stop under, as a camera stores it in
+/// sixths:
+///
+/// ```
+/// use raw_files::SignedRational;
+///
+/// let bias = SignedRational { numerator: -4, denominator: 6 };
+/// assert_eq!(bias.to_string(), "-4/6");
+/// assert_eq!(bias.reduced(), SignedRational { numerator: -2, denominator: 3 });
+/// assert!((bias.to_f64() + 2.0 / 3.0).abs() < 1e-9);
+/// ```
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct SignedRational {
     /// The number above the line, as stored.

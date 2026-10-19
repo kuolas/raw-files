@@ -108,7 +108,10 @@
 //!   through a block cache, a few blocks rather than the whole file, and a
 //!   preview's bytes only when asked for.
 //! - The crate is pure Rust with no dependencies outside the standard
-//!   library, and it contains no `unsafe` code: it forbids it.
+//!   library, and it contains no `unsafe` code: it forbids it. So there is
+//!   no serde feature either: a caller that stores metadata serialises what
+//!   the getters return, which is text, integers and small structs of
+//!   integers.
 //!
 //! # Formats
 //!

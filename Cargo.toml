@@ -7,6 +7,9 @@ rust-version = "1.95"
 description = "Pure-Rust camera RAW library: extracts embedded JPEG previews from Nikon NEF and Sony ARW files, with fuller RAW decoding planned"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/kuolas/raw-files"
+# Where the API documentation is read; docs.rs builds it from each release.
+# No `homepage`: the repository is the project's home page.
+documentation = "https://docs.rs/raw-files"
 readme = "README.md"
 keywords = ["raw", "nef", "arw", "camera", "photography"]
 categories = ["multimedia::images", "parser-implementations"]

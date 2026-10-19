@@ -10,6 +10,23 @@
 ///
 /// Sizes order by width, then by height, so that they can key a map or be
 /// sorted; to compare how large two pictures are, compare their areas.
+///
+/// # Examples
+///
+/// The size a viewer shows, once the orientation is applied:
+///
+/// ```
+/// use raw_files::{Orientation, Size};
+///
+/// let stored = Size { width: 8256, height: 5504 };
+/// let orientation = Orientation::Rotate270;
+/// let shown = if orientation.swaps_dimensions() {
+///     Size { width: stored.height, height: stored.width }
+/// } else {
+///     stored
+/// };
+/// assert_eq!(shown, Size { width: 5504, height: 8256 });
+/// ```
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Size {
     /// The number of pixel columns, as stored.
