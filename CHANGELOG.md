@@ -10,6 +10,11 @@ does.
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-10-19
+
+The second release: the basic metadata of Nikon NEF and Sony ARW files,
+read next to the previews when a file is opened.
+
 ### Added
 
 - `RawFile::metadata`, the metadata of NEF and ARW files: camera make,
@@ -71,5 +76,6 @@ files.
 - A DNG is of no known format, whatever camera maker its Make names:
   converters and the phones that write DNG keep the maker's name.
 
-[Unreleased]: https://github.com/kuolas/raw-files/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/kuolas/raw-files/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/kuolas/raw-files/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/kuolas/raw-files/releases/tag/v0.1.0
