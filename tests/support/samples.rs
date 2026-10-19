@@ -48,7 +48,8 @@ pub struct Jpeg {
 }
 
 /// A sample file of `tests/samples.tsv` and what opening it must give: its
-/// previews, smallest first, and the orientation IFD0 gives them all.
+/// previews, smallest first, none for a file in which the reader finds
+/// none, and the orientation IFD0 gives them all.
 pub struct Sample {
     pub file: &'static str,
     pub orientation: Orientation,
@@ -63,8 +64,9 @@ pub fn sizes(previews: &[Preview]) -> Vec<(u32, u32)> {
 /// Checks that `sample` opens as `format` with exactly its expected
 /// previews, smallest first: each a JPEG at its offset and of its length,
 /// with IFD0's orientation, that reads whole as stored, its padding after
-/// the end-of-image marker included; and that the largest is the last.
-/// Does nothing when the file has not been downloaded.
+/// the end-of-image marker included; and that the largest is the last, or
+/// that there is none when the file has no preview. Does nothing when the
+/// file has not been downloaded.
 pub fn check(sample: &Sample, format: Format) {
     let Some(path) = path(sample.file) else {
         return;
@@ -109,11 +111,10 @@ pub fn check(sample: &Sample, format: Format) {
         );
     }
 
-    let largest = file.largest_preview().unwrap();
-    let last = previews.last().unwrap();
+    let place = |preview: &Preview| (preview.size(), preview.byte_range());
     assert_eq!(
-        (largest.size(), largest.byte_range()),
-        (last.size(), last.byte_range()),
+        file.largest_preview().as_ref().map(place),
+        previews.last().map(place),
         "{label}"
     );
 }

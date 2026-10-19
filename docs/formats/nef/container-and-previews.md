@@ -28,9 +28,12 @@ Every claim carries a confidence tag:
 
 Numbers in square brackets such as [3] refer to [Sources](#sources).
 
-**Only the Z 9 has been checked against sample files.** The facts tagged
-**[F]** were measured on files 5146 to 5148, the three CC0 Z 9 files
-(lossless, HE\* and HE); every other body rests on the sources alone. Where
+**Only the Z 9 has been checked against sample files here.** The facts
+tagged **[F]** were measured on files 5146 to 5148, the three CC0 Z 9 files
+(lossless, HE\* and HE); every other body rests on the sources alone on
+this page. The previews of 20 more files, of 18 other bodies, are checked
+by the tests, and [test-data.md](test-data.md#21-the-ci-set) lists them;
+they are not yet written up here. Where
 a sample contradicts a source, this page follows the sample and records the
 disagreement. Where a primary source's text was read only in part or in
 summary, exact byte values should be confirmed on real NEFs (see
@@ -144,9 +147,11 @@ relative to the Exif block and then finding they were relative to the file.
 [17] **[S]** Exiv2's loader for the Nikon preview "sometimes" adds a
 MakerNote base offset, consistent with the table. [11] **[P]**
 
-Whether the PreviewIFD offsets of the two older layouts are outer-relative is
-the table's reading of how those layouts work; it has not been seen on a
-file (see [Open questions](#open-questions)). **[I]**
+Whether the PreviewIFD offsets of the short-header layout are
+outer-relative is the table's reading of how that layout works; it has not
+been seen on a file (see [Open questions](#open-questions)). **[I]** For
+the headerless layout it has: the D1H's PreviewIFD and its JPEG are where
+offsets counted from the file's own header put them (file 5364). **[F]**
 
 ## 2. MakerNote layouts, as far as previews need them
 
@@ -349,7 +354,9 @@ Rank by what is measured in the JPEG itself, never by slot, tag dimensions
 (often absent or zero) or tag-claimed type. raw-files implements these
 steps in its preview finder, shared with ARW, and its tests run it on files
 5146 to 5148, which give the four JPEGs of section 4 in size order. **[F]**
-Bodies other than the Z 9 remain unchecked. **[I]**
+They also run it on the 20 files of 18 other bodies listed in
+[test-data.md](test-data.md#21-the-ci-set), which give the previews listed
+there. **[F]**
 
 The steps below restate the common approach in original pseudocode terms.
 
@@ -460,7 +467,10 @@ invalid) and leave the decision to the caller.
 ## Open questions
 
 Each needs sample files from the public raw.pixls.us collection, inspected
-with a dump tool and byte-by-byte reading.
+with a dump tool and byte-by-byte reading. The 20 files of 18 other bodies
+in [test-data.md](test-data.md#21-the-ci-set) answer item 12 and part of
+items 1 to 4 and 6 to 9; [open-questions.md](open-questions.md) records
+what they show.
 
 1. Preview dimensions, count and order for the D3/D300, D850, D5/D6, Z 6,
    Z 7, Z 8 and Z f, and whether the Z f really embeds only about

@@ -23,6 +23,8 @@ does.
   standard tags lack them, the serial number, ISO and lens range come from
   the MakerNote, and the offset from UTC from the camera's time-zone
   setting.
+- NEF previews checked on 20 more sample files of 18 Nikon bodies, from
+  the D1H to the Z6III.
 
 ## [0.1.0] - 2026-10-14
 

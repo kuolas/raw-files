@@ -20,7 +20,7 @@ listings), **[I]** inferred, and **[F]** measured on a named sample file,
 cited by its raw.pixls.us id ("file 928"). The MakerNote layout and the
 viewer metadata (sections 1, 2 and 8) were checked in October 2026 on 23
 CC0 files from the D1H to the Z6III, listed in
-[test-data.md](test-data.md#22-files-checked-for-metadata); where a file
+[test-data.md](test-data.md#21-the-ci-set); where a file
 contradicts a source, this page follows the file and records the
 disagreement. Byte offsets and version numbers taken from implementation
 sources were read through summaries; verify them against the source, and
@@ -573,7 +573,13 @@ The points specific to the MakerNote:
    with the expected position four bytes after the IFD) and repairs only on
    request. Bounds-check every offset and length against the MakerNote and
    the file, skip bad entries rather than abort the IFD, and do not repair
-   in a first version. [P][S][4][19]
+   in a first version. [P][S][4][19] raw-files requires the PreviewIFD's
+   JPEG, as declared, to lie inside the MakerNote too. The Coolpix P7800
+   declares its MakerNote 2,816 bytes long, ending at byte 4546, and its
+   640x480 MakerNote JPEG starts at byte 4546, just past it, so the reader
+   does not read it and the file gives its 160x120 and 4000x3000 previews
+   (file 1425); on the E5700 and the D100, the other `02 00` bodies, the
+   declared length includes the JPEG (files 4456, 2996). **[F]**
 2. **Truncated MakerNotes.** DNG-converted NEFs can cut the MakerNote short
    (reported as "bad offset" errors on later tags). [S][21]
 3. **Capture NX.** Foreign brands, changed byte order and fixed-order
