@@ -245,10 +245,12 @@ on `master` keeps filled, so a pull request downloads nothing unless it
 changes the list.
 
 One test is ignored by default: it runs the reader over a folder of your own
-RAW files and prints counts only, never paths or metadata, so its output can
-go into an issue. It checks that every file opens, that every one has a
-preview, and that the largest preview is a whole JPEG, and it fails on a
-folder it cannot read, that holds no RAW file, or that holds an entry it
+RAW files and prints counts only, never a path or the value of a make,
+model, serial number, time, exposure or lens, so its output can go into an
+issue. It checks that every file opens, that every one has a preview, that
+the largest preview is a whole JPEG and that the metadata gives the
+preview's orientation; it counts how many files have each metadata field.
+It fails on a folder it cannot read, that holds no RAW file, or that holds an entry it
 cannot read. Run it with `--release`, because it reads every file:
 
 ```sh
