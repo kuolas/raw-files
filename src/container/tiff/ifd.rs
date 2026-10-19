@@ -50,6 +50,10 @@ const MAX_VALUE_LEN: u32 = 1024 * 1024;
 ///
 /// The accessors that read a value take the [`Source`] the IFD was read
 /// from. Inline values are served from the entry without touching it.
+///
+/// A reader whose rule for a value is stricter than the file's drops the
+/// entries that break it with [`retain`](Self::retain), and they are then
+/// skipped like the others.
 #[derive(Clone, Debug)]
 pub(crate) struct Ifd {
     offset: u64,
@@ -249,12 +253,37 @@ impl Ifd {
     }
 
     /// The number of entries skipped because their type is unknown, their
-    /// length overflows or their value lies outside the file.
+    /// length overflows or their value lies outside the file, or dropped
+    /// since by [`retain`](Self::retain).
     ///
     /// 0 means every entry of the IFD has a known type and lies inside the
-    /// file.
+    /// file, and none was dropped.
     pub(crate) fn invalid_entries(&self) -> u32 {
         self.invalid_entries
+    }
+
+    /// Keeps only the entries for which `keep` is true, in the order of the
+    /// file, and drops the others, as [`parse_ifd`] skips an entry it cannot
+    /// read.
+    ///
+    /// For a reader whose rule is stricter than the file's, such as a
+    /// MakerNote's, whose values must lie inside the MakerNote: once the
+    /// entries that break it are dropped, nothing can read them, and the
+    /// lookups by tag find the first occurrence that was kept. A dropped
+    /// entry cannot be read, so it counts in
+    /// [`invalid_entries`](Self::invalid_entries), as a skipped one does.
+    pub(crate) fn retain(&mut self, mut keep: impl FnMut(&Entry) -> bool) {
+        let mut dropped: u32 = 0;
+        self.entries.retain(|entry| {
+            let kept = keep(entry);
+            if !kept {
+                dropped += 1;
+            }
+            kept
+        });
+        // The entries kept and those skipped or dropped are together at most
+        // the IFD's 65,535: this cannot overflow.
+        self.invalid_entries += dropped;
     }
 
     /// The entries that can be read, in the order of the file.
@@ -1206,6 +1235,38 @@ mod tests {
             let entries = ifd.entries();
             assert_eq!(ifd.entry(0x0112), Some(&entries[0]));
             assert_ne!(entries[0], entries[2]);
+        }
+    }
+
+    #[test]
+    fn retain_drops_entries_and_counts_them_invalid() {
+        for order in ORDERS {
+            let mut builder = TiffBuilder::new(order);
+            let ifd = builder.ifd();
+            builder
+                .unsorted(ifd)
+                .short(ifd, 0x0112, &[1])
+                .short(ifd, 0x0100, &[9])
+                .short(ifd, 0x0101, &[8])
+                .short(ifd, 0x0112, &[2]);
+            let built = builder.build();
+            let (mut src, mut ifd, _) = read(order, &built, ifd);
+            assert_eq!(ifd.invalid_entries(), 0);
+
+            // Drop 0x0100 and the first 0x0112, the one of value 1.
+            let first = ifd.entry(0x0112).cloned();
+            ifd.retain(|entry| entry.tag() != 0x0100 && Some(entry) != first.as_ref());
+            assert_eq!(
+                ifd.tags().collect::<Vec<_>>(),
+                [0x0101, 0x0112],
+                "{order:?}"
+            );
+            assert_eq!(ifd.invalid_entries(), 2, "{order:?}");
+            assert!(ifd.entry(0x0100).is_none(), "{order:?}");
+            assert_eq!(ifd.u32(&mut src, 0x0100).unwrap(), None, "{order:?}");
+            assert_eq!(ifd.u32(&mut src, 0x0101).unwrap(), Some(8), "{order:?}");
+            // The lookup finds the first occurrence that was kept.
+            assert_eq!(ifd.u32(&mut src, 0x0112).unwrap(), Some(2), "{order:?}");
         }
     }
 
