@@ -3,9 +3,9 @@
 //! The ARW reader from outside the crate, on files laid out like each
 //! generation of Sony's RAW family (see [`support::arw`]): what each opens
 //! as, which previews it lists, that none of them is the raw data, what
-//! reading one returns, and what metadata it gives. Then the previews of
-//! the real Sony sample files, when they have been downloaded (see
-//! [`support::samples::path`]).
+//! reading one returns, and what metadata it gives. Then the real Sony sample
+//! files, when they have been downloaded (see [`support::samples::path`]):
+//! the previews each gives, and its metadata, every value of it.
 
 mod support;
 
@@ -21,7 +21,9 @@ use support::arw::{
     MEDIUM_FULL_SIZE_JPEG, SR2_JPEG, SRF_JPEG, THUMBNAIL, a100_file, arq_file, arw2_file,
     arw4_file, arw4_medium_file, sr2_file, srf_file, stub,
 };
-use support::samples::{Jpeg, Sample, check, sizes};
+use support::samples::{
+    Jpeg, Sample, SampleLens, SampleMetadata, SerialShape, check, check_metadata, sizes,
+};
 use support::tiff_builder::{BlobId, Built, Order};
 
 const ORDERS: [Order; 2] = [Order::Little, Order::Big];
@@ -537,7 +539,7 @@ fn the_a100s_subifd_pointer_leads_to_bytes_that_are_not_an_ifd() {
 // `tests/samples.tsv`; `scripts/fetch-samples.sh` downloads them. They are
 // too large to commit, so a test whose file is absent says so and passes:
 // the suite runs offline. The ARQ, at 325 MiB, is in the list's large tier,
-// which the script fetches only with `RAW_FILES_LARGE=1`, so its test is
+// which the script fetches only with `RAW_FILES_LARGE=1`, so its tests are
 // nearly always skipped.
 
 /// The Sony samples of the list's normal tier, which CI downloads, each
@@ -1409,6 +1411,890 @@ const LARGE_SAMPLES: &[Sample] = &[
     },
 ];
 
+/// The metadata each Sony sample of the list's normal tier must give, in
+/// the order of `tests/samples.tsv`, its serial numbers by their shape
+/// alone (see [`SampleMetadata`]). The table was generated from a walk of
+/// each file's IFDs and Exif IFD, by the reader's rules, which read only
+/// the standard tags on Sony files: Sony's MakerNote records nothing they
+/// lack that the reader could use (ADR011). So only the ILCE-1 and the
+/// ILCE-7M5 give a serial number, the only bodies of the set that write
+/// the Exif one; the DSLR-A100 gives no raw size and no image
+/// size, since its SubIFDs tag holds the offset of its raw data rather
+/// than that of an IFD; the ILCE-7S, with a manual lens whose model is
+/// `----` and whose f-number and focal length are 0/10, gives no lens, no
+/// f-number and no focal length; and the RX100 and the RX100M6 give a lens
+/// with a range and no model. A file without a default crop gives its raw
+/// size as its image size.
+const METADATA: &[SampleMetadata] = &[
+    // SLT-A55 (raw.pixls.us 964)
+    SampleMetadata {
+        file: "sony-slt-a55.arw",
+        make: Some("SONY"),
+        model: Some("SLT-A55V"),
+        serial_number: None,
+        capture_time: Some("2015-08-21T17:35:57"),
+        orientation: Orientation::NoTransforms,
+        iso: Some(100),
+        exposure_time: Some((1, 125)),
+        f_number: Some((100, 10)),
+        focal_length: Some((100, 10)),
+        exposure_bias: Some((0, 10)),
+        lens: Some(SampleLens {
+            make: None,
+            model: Some("28-80mm F3.5-5.6"),
+            serial_number: false,
+            min_focal_length: Some((280, 10)),
+            max_focal_length: Some((800, 10)),
+            f_number_at_min_focal_length: Some((35, 10)),
+            f_number_at_max_focal_length: Some((56, 10)),
+        }),
+        raw_size: Some((4928, 3280)),
+        image_size: Some((4928, 3280)),
+    },
+    // ILCE-7RM2 (raw.pixls.us 1310)
+    SampleMetadata {
+        file: "sony-ilce-7rm2-compressed.arw",
+        make: Some("SONY"),
+        model: Some("ILCE-7RM2"),
+        serial_number: None,
+        capture_time: Some("2017-04-06T18:44:31"),
+        orientation: Orientation::NoTransforms,
+        iso: Some(100),
+        exposure_time: Some((1, 6)),
+        f_number: Some((130, 10)),
+        focal_length: Some((510, 10)),
+        exposure_bias: Some((0, 10)),
+        lens: Some(SampleLens {
+            make: None,
+            model: Some("FE 24-70mm F2.8 GM"),
+            serial_number: false,
+            min_focal_length: Some((240, 10)),
+            max_focal_length: Some((700, 10)),
+            f_number_at_min_focal_length: Some((28, 10)),
+            f_number_at_max_focal_length: Some((28, 10)),
+        }),
+        raw_size: Some((8000, 5320)),
+        image_size: Some((8000, 5320)),
+    },
+    // ILCE-7RM2 (raw.pixls.us 1311)
+    SampleMetadata {
+        file: "sony-ilce-7rm2-uncompressed.arw",
+        make: Some("SONY"),
+        model: Some("ILCE-7RM2"),
+        serial_number: None,
+        capture_time: Some("2017-04-06T18:45:20"),
+        orientation: Orientation::NoTransforms,
+        iso: Some(100),
+        exposure_time: Some((1, 6)),
+        f_number: Some((130, 10)),
+        focal_length: Some((510, 10)),
+        exposure_bias: Some((0, 10)),
+        lens: Some(SampleLens {
+            make: None,
+            model: Some("FE 24-70mm F2.8 GM"),
+            serial_number: false,
+            min_focal_length: Some((240, 10)),
+            max_focal_length: Some((700, 10)),
+            f_number_at_min_focal_length: Some((28, 10)),
+            f_number_at_max_focal_length: Some((28, 10)),
+        }),
+        raw_size: Some((8000, 5320)),
+        image_size: Some((8000, 5320)),
+    },
+    // DSC-F828 (raw.pixls.us 1351)
+    SampleMetadata {
+        file: "sony-dsc-f828.srf",
+        make: Some("SONY"),
+        model: Some("DSC-F828"),
+        serial_number: None,
+        capture_time: Some("2017-03-27T15:02:34"),
+        orientation: Orientation::NoTransforms,
+        iso: Some(64),
+        exposure_time: Some((10, 1600)),
+        f_number: Some((40, 10)),
+        focal_length: Some((71, 10)),
+        exposure_bias: Some((0, 10)),
+        lens: None,
+        raw_size: Some((3360, 2460)),
+        image_size: Some((3360, 2460)),
+    },
+    // NEX-5 (raw.pixls.us 1457)
+    SampleMetadata {
+        file: "sony-nex-5.arw",
+        make: Some("SONY"),
+        model: Some("NEX-5"),
+        serial_number: None,
+        capture_time: Some("2015-09-24T09:28:02"),
+        orientation: Orientation::NoTransforms,
+        iso: Some(200),
+        exposure_time: Some((1, 200)),
+        f_number: Some((71, 10)),
+        focal_length: Some((180, 10)),
+        exposure_bias: Some((0, 10)),
+        lens: Some(SampleLens {
+            make: None,
+            model: Some("E 18-55mm F3.5-5.6 OSS"),
+            serial_number: false,
+            min_focal_length: Some((180, 10)),
+            max_focal_length: Some((550, 10)),
+            f_number_at_min_focal_length: Some((35, 10)),
+            f_number_at_max_focal_length: Some((56, 10)),
+        }),
+        raw_size: Some((4608, 3072)),
+        image_size: Some((4608, 3072)),
+    },
+    // ILCE-9 (raw.pixls.us 1541)
+    SampleMetadata {
+        file: "sony-ilce-9-compressed.arw",
+        make: Some("SONY"),
+        model: Some("ILCE-9"),
+        serial_number: None,
+        capture_time: Some("2017-06-25T16:02:57+02:00"),
+        orientation: Orientation::NoTransforms,
+        iso: Some(100),
+        exposure_time: Some((1, 400)),
+        f_number: Some((40, 10)),
+        focal_length: Some((550, 10)),
+        exposure_bias: Some((0, 10)),
+        lens: Some(SampleLens {
+            make: None,
+            model: Some("FE 55mm F1.8 ZA"),
+            serial_number: false,
+            min_focal_length: Some((550, 10)),
+            max_focal_length: Some((550, 10)),
+            f_number_at_min_focal_length: Some((18, 10)),
+            f_number_at_max_focal_length: Some((18, 10)),
+        }),
+        raw_size: Some((6048, 4024)),
+        image_size: Some((6000, 4000)),
+    },
+    // ILCE-9 (raw.pixls.us 1542)
+    SampleMetadata {
+        file: "sony-ilce-9-uncompressed.arw",
+        make: Some("SONY"),
+        model: Some("ILCE-9"),
+        serial_number: None,
+        capture_time: Some("2017-06-25T16:04:05+02:00"),
+        orientation: Orientation::NoTransforms,
+        iso: Some(100),
+        exposure_time: Some((1, 400)),
+        f_number: Some((40, 10)),
+        focal_length: Some((550, 10)),
+        exposure_bias: Some((0, 10)),
+        lens: Some(SampleLens {
+            make: None,
+            model: Some("FE 55mm F1.8 ZA"),
+            serial_number: false,
+            min_focal_length: Some((550, 10)),
+            max_focal_length: Some((550, 10)),
+            f_number_at_min_focal_length: Some((18, 10)),
+            f_number_at_max_focal_length: Some((18, 10)),
+        }),
+        raw_size: Some((6048, 4024)),
+        image_size: Some((6000, 4000)),
+    },
+    // ILCE-7S (raw.pixls.us 1582)
+    SampleMetadata {
+        file: "sony-ilce-7s.arw",
+        make: Some("SONY"),
+        model: Some("ILCE-7S"),
+        serial_number: None,
+        capture_time: Some("2017-07-13T16:58:28"),
+        orientation: Orientation::NoTransforms,
+        iso: Some(400),
+        exposure_time: Some((1, 250)),
+        f_number: None,
+        focal_length: None,
+        exposure_bias: Some((0, 10)),
+        lens: None,
+        raw_size: Some((2816, 1872)),
+        image_size: Some((2816, 1872)),
+    },
+    // DSLR-A200 (raw.pixls.us 2271)
+    SampleMetadata {
+        file: "sony-dslr-a200.arw",
+        make: Some("SONY"),
+        model: Some("DSLR-A200"),
+        serial_number: None,
+        capture_time: Some("2017-11-17T22:44:20"),
+        orientation: Orientation::NoTransforms,
+        iso: Some(800),
+        exposure_time: Some((1, 25)),
+        f_number: Some((45, 10)),
+        focal_length: Some((800, 10)),
+        exposure_bias: Some((0, 10)),
+        lens: None,
+        raw_size: Some((3880, 2600)),
+        image_size: Some((3880, 2600)),
+    },
+    // DSLR-A100 (raw.pixls.us 2346)
+    SampleMetadata {
+        file: "sony-dslr-a100.arw",
+        make: Some("SONY"),
+        model: Some("DSLR-A100"),
+        serial_number: None,
+        capture_time: Some("2018-02-19T17:55:25"),
+        orientation: Orientation::NoTransforms,
+        iso: Some(100),
+        exposure_time: Some((1, 125)),
+        f_number: Some((80, 10)),
+        focal_length: Some((600, 10)),
+        exposure_bias: Some((0, 10)),
+        lens: None,
+        raw_size: None,
+        image_size: None,
+    },
+    // DSLR-A700 (raw.pixls.us 2521)
+    SampleMetadata {
+        file: "sony-dslr-a700.arw",
+        make: Some("SONY"),
+        model: Some("DSLR-A700"),
+        serial_number: None,
+        capture_time: Some("2014-04-18T15:53:21"),
+        orientation: Orientation::NoTransforms,
+        iso: Some(200),
+        exposure_time: Some((1, 500)),
+        f_number: Some((50, 10)),
+        focal_length: Some((500, 10)),
+        exposure_bias: Some((0, 10)),
+        lens: None,
+        raw_size: Some((4288, 2856)),
+        image_size: Some((4288, 2856)),
+    },
+    // DSC-RX100M6 (raw.pixls.us 3012)
+    SampleMetadata {
+        file: "sony-dsc-rx100m6-1x1.arw",
+        make: Some("SONY"),
+        model: Some("DSC-RX100M6"),
+        serial_number: None,
+        capture_time: Some("2019-03-06T14:33:05+01:00"),
+        orientation: Orientation::NoTransforms,
+        iso: Some(125),
+        exposure_time: Some((1, 80)),
+        f_number: Some((71, 10)),
+        focal_length: Some((5892, 100)),
+        exposure_bias: Some((0, 10)),
+        lens: Some(SampleLens {
+            make: None,
+            model: None,
+            serial_number: false,
+            min_focal_length: Some((900, 100)),
+            max_focal_length: Some((7200, 100)),
+            f_number_at_min_focal_length: Some((28, 10)),
+            f_number_at_max_focal_length: Some((45, 10)),
+        }),
+        raw_size: Some((5504, 3672)),
+        image_size: Some((5472, 3648)),
+    },
+    // DSC-RX100M6 (raw.pixls.us 3015)
+    SampleMetadata {
+        file: "sony-dsc-rx100m6-16x9.arw",
+        make: Some("SONY"),
+        model: Some("DSC-RX100M6"),
+        serial_number: None,
+        capture_time: Some("2019-03-06T14:32:40+01:00"),
+        orientation: Orientation::NoTransforms,
+        iso: Some(125),
+        exposure_time: Some((1, 80)),
+        f_number: Some((71, 10)),
+        focal_length: Some((5892, 100)),
+        exposure_bias: Some((0, 10)),
+        lens: Some(SampleLens {
+            make: None,
+            model: None,
+            serial_number: false,
+            min_focal_length: Some((900, 100)),
+            max_focal_length: Some((7200, 100)),
+            f_number_at_min_focal_length: Some((28, 10)),
+            f_number_at_max_focal_length: Some((45, 10)),
+        }),
+        raw_size: Some((5504, 3672)),
+        image_size: Some((5472, 3648)),
+    },
+    // DSC-R1 (raw.pixls.us 3221)
+    SampleMetadata {
+        file: "sony-dsc-r1.sr2",
+        make: Some("SONY"),
+        model: Some("DSC-R1"),
+        serial_number: None,
+        capture_time: Some("2019-06-17T18:45:07"),
+        orientation: Orientation::NoTransforms,
+        iso: Some(160),
+        exposure_time: Some((10, 4000)),
+        f_number: Some((48, 10)),
+        focal_length: Some((715, 10)),
+        exposure_bias: Some((-3, 10)),
+        lens: None,
+        raw_size: Some((3984, 2608)),
+        image_size: Some((3984, 2608)),
+    },
+    // ILCE-7RM3 (raw.pixls.us 3251)
+    SampleMetadata {
+        file: "sony-ilce-7rm3-pixel-shift.arw",
+        make: Some("SONY"),
+        model: Some("ILCE-7RM3"),
+        serial_number: None,
+        capture_time: Some("2019-07-12T09:41:02-04:00"),
+        orientation: Orientation::NoTransforms,
+        iso: Some(100),
+        exposure_time: Some((1, 30)),
+        f_number: Some((28, 10)),
+        focal_length: Some((240, 10)),
+        exposure_bias: Some((0, 10)),
+        lens: Some(SampleLens {
+            make: None,
+            model: Some("FE 24mm F1.4 GM"),
+            serial_number: false,
+            min_focal_length: Some((240, 10)),
+            max_focal_length: Some((240, 10)),
+            f_number_at_min_focal_length: Some((14, 10)),
+            f_number_at_max_focal_length: Some((14, 10)),
+        }),
+        raw_size: Some((8000, 5320)),
+        image_size: Some((7952, 5304)),
+    },
+    // SLT-A99 (raw.pixls.us 3751)
+    SampleMetadata {
+        file: "sony-slt-a99.arw",
+        make: Some("SONY"),
+        model: Some("SLT-A99V"),
+        serial_number: None,
+        capture_time: Some("2019-10-26T15:58:28"),
+        orientation: Orientation::Rotate270,
+        iso: Some(100),
+        exposure_time: Some((1, 250)),
+        f_number: Some((56, 10)),
+        focal_length: Some((850, 10)),
+        exposure_bias: Some((7, 10)),
+        lens: Some(SampleLens {
+            make: None,
+            model: Some("85mm F1.4 ZA"),
+            serial_number: false,
+            min_focal_length: Some((850, 10)),
+            max_focal_length: Some((850, 10)),
+            f_number_at_min_focal_length: Some((14, 10)),
+            f_number_at_max_focal_length: Some((14, 10)),
+        }),
+        raw_size: Some((6048, 4024)),
+        image_size: Some((6048, 4024)),
+    },
+    // Hasselblad Lunar (raw.pixls.us 4051)
+    SampleMetadata {
+        file: "hasselblad-lunar.arw",
+        make: Some("HASSELBLAD"),
+        model: Some("Lunar"),
+        serial_number: None,
+        capture_time: Some("2016-05-31T15:21:03"),
+        orientation: Orientation::NoTransforms,
+        iso: Some(100),
+        exposure_time: Some((1, 125)),
+        f_number: Some((56, 10)),
+        focal_length: Some((410, 10)),
+        exposure_bias: Some((0, 10)),
+        lens: Some(SampleLens {
+            make: None,
+            model: Some("E 18-55mm F3.5-5.6 OSS"),
+            serial_number: false,
+            min_focal_length: Some((180, 10)),
+            max_focal_length: Some((550, 10)),
+            f_number_at_min_focal_length: Some((35, 10)),
+            f_number_at_max_focal_length: Some((56, 10)),
+        }),
+        raw_size: Some((6048, 4024)),
+        image_size: Some((6048, 4024)),
+    },
+    // ILCE-1 (raw.pixls.us 4466)
+    SampleMetadata {
+        file: "sony-ilce-1-lossless.arw",
+        make: Some("SONY"),
+        model: Some("ILCE-1"),
+        serial_number: Some(SerialShape {
+            len: 8,
+            digits: true,
+        }),
+        capture_time: Some("2021-04-05T15:29:40.959+00:00"),
+        orientation: Orientation::NoTransforms,
+        iso: Some(500),
+        exposure_time: Some((1, 160)),
+        f_number: Some((80, 10)),
+        focal_length: Some((1350, 10)),
+        exposure_bias: Some((10, 10)),
+        lens: Some(SampleLens {
+            make: None,
+            model: Some("FE 135mm F1.8 GM"),
+            serial_number: false,
+            min_focal_length: Some((1350, 10)),
+            max_focal_length: Some((1350, 10)),
+            f_number_at_min_focal_length: Some((18, 10)),
+            f_number_at_max_focal_length: Some((18, 10)),
+        }),
+        raw_size: Some((8704, 6144)),
+        image_size: Some((8640, 5760)),
+    },
+    // ILCE-7SM3 (raw.pixls.us 5418)
+    SampleMetadata {
+        file: "sony-ilce-7sm3.arw",
+        make: Some("SONY"),
+        model: Some("ILCE-7SM3"),
+        serial_number: None,
+        capture_time: Some("2022-04-10T17:25:57.888+08:00"),
+        orientation: Orientation::NoTransforms,
+        iso: Some(80),
+        exposure_time: Some((1, 160)),
+        f_number: Some((40, 10)),
+        focal_length: Some((530, 10)),
+        exposure_bias: Some((-3, 10)),
+        lens: Some(SampleLens {
+            make: None,
+            model: Some("FE 24-105mm F4 G OSS"),
+            serial_number: false,
+            min_focal_length: Some((240, 10)),
+            max_focal_length: Some((1050, 10)),
+            f_number_at_min_focal_length: Some((40, 10)),
+            f_number_at_max_focal_length: Some((40, 10)),
+        }),
+        raw_size: Some((4288, 2848)),
+        image_size: Some((4240, 2832)),
+    },
+    // DSC-RX100 (raw.pixls.us 5811)
+    SampleMetadata {
+        file: "sony-dsc-rx100.arw",
+        make: Some("SONY"),
+        model: Some("DSC-RX100"),
+        serial_number: None,
+        capture_time: Some("2012-12-24T12:27:30"),
+        orientation: Orientation::NoTransforms,
+        iso: Some(125),
+        exposure_time: Some((1, 250)),
+        f_number: Some((18, 10)),
+        focal_length: Some((1040, 100)),
+        exposure_bias: Some((0, 10)),
+        lens: Some(SampleLens {
+            make: None,
+            model: None,
+            serial_number: false,
+            min_focal_length: Some((1040, 100)),
+            max_focal_length: Some((3710, 100)),
+            f_number_at_min_focal_length: Some((18, 10)),
+            f_number_at_max_focal_length: Some((49, 10)),
+        }),
+        raw_size: Some((5504, 3672)),
+        image_size: Some((5504, 3672)),
+    },
+    // DSLR-A900 (raw.pixls.us 5858)
+    SampleMetadata {
+        file: "sony-dslr-a900.arw",
+        make: Some("SONY"),
+        model: Some("DSLR-A900"),
+        serial_number: None,
+        capture_time: Some("2022-08-14T19:36:44"),
+        orientation: Orientation::NoTransforms,
+        iso: Some(200),
+        exposure_time: Some((1, 80)),
+        f_number: Some((40, 10)),
+        focal_length: Some((280, 10)),
+        exposure_bias: Some((0, 10)),
+        lens: None,
+        raw_size: Some((6080, 4048)),
+        image_size: Some((6080, 4048)),
+    },
+    // ILCE-6700 (raw.pixls.us 6736)
+    SampleMetadata {
+        file: "sony-ilce-6700-lossless.arw",
+        make: Some("SONY"),
+        model: Some("ILCE-6700"),
+        serial_number: None,
+        capture_time: Some("2023-08-01T17:00:23.272+01:00"),
+        orientation: Orientation::NoTransforms,
+        iso: Some(100),
+        exposure_time: Some((1, 50)),
+        f_number: Some((110, 10)),
+        focal_length: Some((160, 10)),
+        exposure_bias: Some((0, 10)),
+        lens: Some(SampleLens {
+            make: None,
+            model: Some("E 16-55mm F2.8 G"),
+            serial_number: false,
+            min_focal_length: Some((160, 10)),
+            max_focal_length: Some((550, 10)),
+            f_number_at_min_focal_length: Some((28, 10)),
+            f_number_at_max_focal_length: Some((28, 10)),
+        }),
+        raw_size: Some((6656, 4608)),
+        image_size: Some((6192, 4128)),
+    },
+    // ILCE-7M4 (raw.pixls.us 6929)
+    SampleMetadata {
+        file: "sony-ilce-7m4-lossless-l.arw",
+        make: Some("SONY"),
+        model: Some("ILCE-7M4"),
+        serial_number: None,
+        capture_time: Some("2023-10-19T16:13:48.776+02:00"),
+        orientation: Orientation::NoTransforms,
+        iso: Some(250),
+        exposure_time: Some((1, 50)),
+        f_number: Some((56, 10)),
+        focal_length: Some((500, 10)),
+        exposure_bias: Some((0, 10)),
+        lens: Some(SampleLens {
+            make: None,
+            model: Some("FE 50mm F2.5 G"),
+            serial_number: false,
+            min_focal_length: Some((500, 10)),
+            max_focal_length: Some((500, 10)),
+            f_number_at_min_focal_length: Some((25, 10)),
+            f_number_at_max_focal_length: Some((25, 10)),
+        }),
+        raw_size: Some((7168, 5120)),
+        image_size: Some((7008, 4672)),
+    },
+    // ILCE-7M4 (raw.pixls.us 6930)
+    SampleMetadata {
+        file: "sony-ilce-7m4-lossless-m.arw",
+        make: Some("SONY"),
+        model: Some("ILCE-7M4"),
+        serial_number: None,
+        capture_time: Some("2023-10-19T16:14:16.647+02:00"),
+        orientation: Orientation::NoTransforms,
+        iso: Some(250),
+        exposure_time: Some((1, 50)),
+        f_number: Some((56, 10)),
+        focal_length: Some((500, 10)),
+        exposure_bias: Some((0, 10)),
+        lens: Some(SampleLens {
+            make: None,
+            model: Some("FE 50mm F2.5 G"),
+            serial_number: false,
+            min_focal_length: Some((500, 10)),
+            max_focal_length: Some((500, 10)),
+            f_number_at_min_focal_length: Some((25, 10)),
+            f_number_at_max_focal_length: Some((25, 10)),
+        }),
+        raw_size: Some((5120, 3584)),
+        image_size: Some((4608, 3072)),
+    },
+    // ILCE-7M4 (raw.pixls.us 6931)
+    SampleMetadata {
+        file: "sony-ilce-7m4-lossless-s.arw",
+        make: Some("SONY"),
+        model: Some("ILCE-7M4"),
+        serial_number: None,
+        capture_time: Some("2023-10-19T16:15:00.101+02:00"),
+        orientation: Orientation::NoTransforms,
+        iso: Some(250),
+        exposure_time: Some((1, 50)),
+        f_number: Some((56, 10)),
+        focal_length: Some((500, 10)),
+        exposure_bias: Some((0, 10)),
+        lens: Some(SampleLens {
+            make: None,
+            model: Some("FE 50mm F2.5 G"),
+            serial_number: false,
+            min_focal_length: Some((500, 10)),
+            max_focal_length: Some((500, 10)),
+            f_number_at_min_focal_length: Some((25, 10)),
+            f_number_at_max_focal_length: Some((25, 10)),
+        }),
+        raw_size: Some((3584, 2560)),
+        image_size: Some((3504, 2336)),
+    },
+    // ILCE-7M4 (raw.pixls.us 6933)
+    SampleMetadata {
+        file: "sony-ilce-7m4-uncompressed-apsc.arw",
+        make: Some("SONY"),
+        model: Some("ILCE-7M4"),
+        serial_number: None,
+        capture_time: Some("2023-10-19T16:16:39.709+02:00"),
+        orientation: Orientation::NoTransforms,
+        iso: Some(640),
+        exposure_time: Some((1, 80)),
+        f_number: Some((56, 10)),
+        focal_length: Some((500, 10)),
+        exposure_bias: Some((0, 10)),
+        lens: Some(SampleLens {
+            make: None,
+            model: Some("FE 50mm F2.5 G"),
+            serial_number: false,
+            min_focal_length: Some((500, 10)),
+            max_focal_length: Some((500, 10)),
+            f_number_at_min_focal_length: Some((25, 10)),
+            f_number_at_max_focal_length: Some((25, 10)),
+        }),
+        raw_size: Some((4736, 3132)),
+        image_size: Some((4608, 3072)),
+    },
+    // ILCE-7M4 (raw.pixls.us 6936)
+    SampleMetadata {
+        file: "sony-ilce-7m4-compressed-apsc.arw",
+        make: Some("SONY"),
+        model: Some("ILCE-7M4"),
+        serial_number: None,
+        capture_time: Some("2023-10-19T16:18:54.794+02:00"),
+        orientation: Orientation::NoTransforms,
+        iso: Some(640),
+        exposure_time: Some((1, 80)),
+        f_number: Some((56, 10)),
+        focal_length: Some((500, 10)),
+        exposure_bias: Some((0, 10)),
+        lens: Some(SampleLens {
+            make: None,
+            model: Some("FE 50mm F2.5 G"),
+            serial_number: false,
+            min_focal_length: Some((500, 10)),
+            max_focal_length: Some((500, 10)),
+            f_number_at_min_focal_length: Some((25, 10)),
+            f_number_at_max_focal_length: Some((25, 10)),
+        }),
+        raw_size: Some((4736, 3132)),
+        image_size: Some((4608, 3072)),
+    },
+    // ILCE-9M3 (raw.pixls.us 7361)
+    SampleMetadata {
+        file: "sony-ilce-9m3-compressed.arw",
+        make: Some("SONY"),
+        model: Some("ILCE-9M3"),
+        serial_number: None,
+        capture_time: Some("2024-03-26T12:47:24.654+00:00"),
+        orientation: Orientation::NoTransforms,
+        iso: Some(1000),
+        exposure_time: Some((1, 50)),
+        f_number: Some((18, 10)),
+        focal_length: Some((550, 10)),
+        exposure_bias: Some((0, 10)),
+        lens: Some(SampleLens {
+            make: None,
+            model: Some("FE 55mm F1.8 ZA"),
+            serial_number: false,
+            min_focal_length: Some((550, 10)),
+            max_focal_length: Some((550, 10)),
+            f_number_at_min_focal_length: Some((18, 10)),
+            f_number_at_max_focal_length: Some((18, 10)),
+        }),
+        raw_size: Some((6048, 4020)),
+        image_size: Some((6000, 4000)),
+    },
+    // ILCE-9M3 (raw.pixls.us 7364)
+    SampleMetadata {
+        file: "sony-ilce-9m3-lossless-s.arw",
+        make: Some("SONY"),
+        model: Some("ILCE-9M3"),
+        serial_number: None,
+        capture_time: Some("2024-03-26T12:47:59.397+00:00"),
+        orientation: Orientation::NoTransforms,
+        iso: Some(1000),
+        exposure_time: Some((1, 50)),
+        f_number: Some((18, 10)),
+        focal_length: Some((550, 10)),
+        exposure_bias: Some((0, 10)),
+        lens: Some(SampleLens {
+            make: None,
+            model: Some("FE 55mm F1.8 ZA"),
+            serial_number: false,
+            min_focal_length: Some((550, 10)),
+            max_focal_length: Some((550, 10)),
+            f_number_at_min_focal_length: Some((18, 10)),
+            f_number_at_max_focal_length: Some((18, 10)),
+        }),
+        raw_size: Some((3072, 2048)),
+        image_size: Some((3008, 2000)),
+    },
+    // ILCE-1M2 (raw.pixls.us 7835)
+    SampleMetadata {
+        file: "sony-ilce-1m2-lossy-apsc.arw",
+        make: Some("SONY"),
+        model: Some("ILCE-1M2"),
+        serial_number: None,
+        capture_time: Some("2025-05-09T09:36:24.457+01:00"),
+        orientation: Orientation::NoTransforms,
+        iso: Some(100),
+        exposure_time: Some((1, 1000)),
+        f_number: Some((28, 10)),
+        focal_length: Some((1330, 10)),
+        exposure_bias: Some((0, 10)),
+        lens: Some(SampleLens {
+            make: None,
+            model: Some("FE 70-200mm F2.8 GM OSS II"),
+            serial_number: false,
+            min_focal_length: Some((700, 10)),
+            max_focal_length: Some((2000, 10)),
+            f_number_at_min_focal_length: Some((28, 10)),
+            f_number_at_max_focal_length: Some((28, 10)),
+        }),
+        raw_size: Some((5664, 3768)),
+        image_size: Some((5616, 3744)),
+    },
+    // ILCE-7M5 (raw.pixls.us 8846)
+    SampleMetadata {
+        file: "sony-ilce-7m5-compressed-hq.arw",
+        make: Some("SONY"),
+        model: Some("ILCE-7M5"),
+        serial_number: Some(SerialShape {
+            len: 8,
+            digits: true,
+        }),
+        capture_time: Some("2025-12-17T16:05:02.978+01:00"),
+        orientation: Orientation::NoTransforms,
+        iso: Some(100),
+        exposure_time: Some((1, 8)),
+        f_number: Some((28, 10)),
+        focal_length: Some((240, 10)),
+        exposure_bias: Some((3, 10)),
+        lens: Some(SampleLens {
+            make: None,
+            model: Some("24-70mm F2.8 DG DN II | Art 024"),
+            serial_number: false,
+            min_focal_length: Some((240, 10)),
+            max_focal_length: Some((700, 10)),
+            f_number_at_min_focal_length: Some((28, 10)),
+            f_number_at_max_focal_length: Some((28, 10)),
+        }),
+        raw_size: Some((7040, 4688)),
+        image_size: Some((7008, 4672)),
+    },
+    // ILCE-7M5 (raw.pixls.us 8847)
+    SampleMetadata {
+        file: "sony-ilce-7m5-compressed.arw",
+        make: Some("SONY"),
+        model: Some("ILCE-7M5"),
+        serial_number: Some(SerialShape {
+            len: 8,
+            digits: true,
+        }),
+        capture_time: Some("2025-12-17T16:05:52.741+01:00"),
+        orientation: Orientation::NoTransforms,
+        iso: Some(100),
+        exposure_time: Some((1, 8)),
+        f_number: Some((28, 10)),
+        focal_length: Some((240, 10)),
+        exposure_bias: Some((3, 10)),
+        lens: Some(SampleLens {
+            make: None,
+            model: Some("24-70mm F2.8 DG DN II | Art 024"),
+            serial_number: false,
+            min_focal_length: Some((240, 10)),
+            max_focal_length: Some((700, 10)),
+            f_number_at_min_focal_length: Some((28, 10)),
+            f_number_at_max_focal_length: Some((28, 10)),
+        }),
+        raw_size: Some((7040, 4688)),
+        image_size: Some((7008, 4672)),
+    },
+    // ILCE-7M5 (raw.pixls.us 8848)
+    SampleMetadata {
+        file: "sony-ilce-7m5-lossless-apsc.arw",
+        make: Some("SONY"),
+        model: Some("ILCE-7M5"),
+        serial_number: Some(SerialShape {
+            len: 8,
+            digits: true,
+        }),
+        capture_time: Some("2025-12-17T16:06:25.008+01:00"),
+        orientation: Orientation::NoTransforms,
+        iso: Some(100),
+        exposure_time: Some((1, 6)),
+        f_number: Some((28, 10)),
+        focal_length: Some((240, 10)),
+        exposure_bias: Some((3, 10)),
+        lens: Some(SampleLens {
+            make: None,
+            model: Some("24-70mm F2.8 DG DN II | Art 024"),
+            serial_number: false,
+            min_focal_length: Some((240, 10)),
+            max_focal_length: Some((700, 10)),
+            f_number_at_min_focal_length: Some((28, 10)),
+            f_number_at_max_focal_length: Some((28, 10)),
+        }),
+        raw_size: Some((5120, 3584)),
+        image_size: Some((4608, 3072)),
+    },
+    // ILCE-7M5 (raw.pixls.us 8849)
+    SampleMetadata {
+        file: "sony-ilce-7m5-compressed-hq-apsc.arw",
+        make: Some("SONY"),
+        model: Some("ILCE-7M5"),
+        serial_number: Some(SerialShape {
+            len: 8,
+            digits: true,
+        }),
+        capture_time: Some("2025-12-17T16:06:35.524+01:00"),
+        orientation: Orientation::NoTransforms,
+        iso: Some(100),
+        exposure_time: Some((1, 8)),
+        f_number: Some((28, 10)),
+        focal_length: Some((240, 10)),
+        exposure_bias: Some((3, 10)),
+        lens: Some(SampleLens {
+            make: None,
+            model: Some("24-70mm F2.8 DG DN II | Art 024"),
+            serial_number: false,
+            min_focal_length: Some((240, 10)),
+            max_focal_length: Some((700, 10)),
+            f_number_at_min_focal_length: Some((28, 10)),
+            f_number_at_max_focal_length: Some((28, 10)),
+        }),
+        raw_size: Some((4640, 3088)),
+        image_size: Some((4608, 3072)),
+    },
+    // ILCE-7M5 (raw.pixls.us 8850)
+    SampleMetadata {
+        file: "sony-ilce-7m5-compressed-apsc.arw",
+        make: Some("SONY"),
+        model: Some("ILCE-7M5"),
+        serial_number: Some(SerialShape {
+            len: 8,
+            digits: true,
+        }),
+        capture_time: Some("2025-12-17T16:06:47.125+01:00"),
+        orientation: Orientation::NoTransforms,
+        iso: Some(100),
+        exposure_time: Some((1, 8)),
+        f_number: Some((28, 10)),
+        focal_length: Some((240, 10)),
+        exposure_bias: Some((3, 10)),
+        lens: Some(SampleLens {
+            make: None,
+            model: Some("24-70mm F2.8 DG DN II | Art 024"),
+            serial_number: false,
+            min_focal_length: Some((240, 10)),
+            max_focal_length: Some((700, 10)),
+            f_number_at_min_focal_length: Some((28, 10)),
+            f_number_at_max_focal_length: Some((28, 10)),
+        }),
+        raw_size: Some((4640, 3088)),
+        image_size: Some((4608, 3072)),
+    },
+];
+
+/// The metadata the ARQ of the list's large tier must give, fetched only
+/// on request: the same as that of the pixel-shift frame 3251.
+const LARGE_METADATA: &[SampleMetadata] = &[
+    // ILCE-7RM3 (raw.pixls.us 3255), large tier
+    SampleMetadata {
+        file: "sony-ilce-7rm3.arq",
+        make: Some("SONY"),
+        model: Some("ILCE-7RM3"),
+        serial_number: None,
+        capture_time: Some("2019-07-12T09:41:02-04:00"),
+        orientation: Orientation::NoTransforms,
+        iso: Some(100),
+        exposure_time: Some((1, 30)),
+        f_number: Some((28, 10)),
+        focal_length: Some((240, 10)),
+        exposure_bias: Some((0, 10)),
+        lens: Some(SampleLens {
+            make: None,
+            model: Some("FE 24mm F1.4 GM"),
+            serial_number: false,
+            min_focal_length: Some((240, 10)),
+            max_focal_length: Some((240, 10)),
+            f_number_at_min_focal_length: Some((14, 10)),
+            f_number_at_max_focal_length: Some((14, 10)),
+        }),
+        raw_size: Some((8000, 5320)),
+        image_size: Some((7952, 5304)),
+    },
+];
+
 #[test]
 fn every_sony_sample_opens_with_the_previews_the_notes_predict() {
     for sample in SAMPLES {
@@ -1420,6 +2306,20 @@ fn every_sony_sample_opens_with_the_previews_the_notes_predict() {
 fn the_arq_sample_opens_with_the_two_previews_of_its_pixel_shift_frame() {
     for sample in LARGE_SAMPLES {
         check(sample, Format::Arw);
+    }
+}
+
+#[test]
+fn every_sony_sample_gives_its_metadata() {
+    for expected in METADATA {
+        check_metadata(expected, Format::Arw);
+    }
+}
+
+#[test]
+fn the_arq_sample_gives_the_metadata_of_its_pixel_shift_frame() {
+    for expected in LARGE_METADATA {
+        check_metadata(expected, Format::Arw);
     }
 }
 
@@ -1439,7 +2339,7 @@ fn the_hasselblad_lunar_sample_opens_as_a_sony_file() {
 }
 
 #[test]
-fn the_sample_list_and_the_expected_previews_name_the_same_sony_files() {
+fn the_sample_list_and_the_tables_of_previews_and_metadata_name_the_same_sony_files() {
     // The list is in the repository, so this runs without any download.
     let list =
         fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/samples.tsv")).unwrap();
@@ -1458,21 +2358,33 @@ fn the_sample_list_and_the_expected_previews_name_the_same_sony_files() {
         }
     }
 
-    let tables = SAMPLES
+    let previews: Vec<(&str, &str)> = SAMPLES
         .iter()
         .map(|sample| (sample.file, "normal"))
-        .chain(LARGE_SAMPLES.iter().map(|sample| (sample.file, "large")));
-    let expected: BTreeSet<(&str, &str)> = tables.clone().collect();
-    assert_eq!(
-        expected.len(),
-        tables.count(),
-        "a file is in the tables twice"
-    );
-    let unexpected: Vec<_> = listed.difference(&expected).collect();
-    let unlisted: Vec<_> = expected.difference(&listed).collect();
-    assert!(
-        unexpected.is_empty() && unlisted.is_empty(),
-        "listed without expected previews: {unexpected:?}; \
-         expected previews but not listed: {unlisted:?}"
-    );
+        .chain(LARGE_SAMPLES.iter().map(|sample| (sample.file, "large")))
+        .collect();
+    let metadata: Vec<(&str, &str)> = METADATA
+        .iter()
+        .map(|expected| (expected.file, "normal"))
+        .chain(
+            LARGE_METADATA
+                .iter()
+                .map(|expected| (expected.file, "large")),
+        )
+        .collect();
+    for (what, tables) in [("previews", previews), ("metadata", metadata)] {
+        let expected: BTreeSet<(&str, &str)> = tables.iter().copied().collect();
+        assert_eq!(
+            expected.len(),
+            tables.len(),
+            "a file is in the tables of {what} twice"
+        );
+        let unexpected: Vec<_> = listed.difference(&expected).collect();
+        let unlisted: Vec<_> = expected.difference(&listed).collect();
+        assert!(
+            unexpected.is_empty() && unlisted.is_empty(),
+            "listed without expected {what}: {unexpected:?}; \
+             expected {what} but not listed: {unlisted:?}"
+        );
+    }
 }

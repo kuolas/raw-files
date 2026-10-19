@@ -25,6 +25,8 @@ does.
   setting.
 - NEF previews checked on 20 more sample files of 18 Nikon bodies, from
   the D1H to the Z6III, and the metadata of all 23 NEF sample files.
+- The metadata of the 36 Sony-family sample files checked, as their
+  previews were in 0.1.0.
 
 ## [0.1.0] - 2026-10-14
 

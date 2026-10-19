@@ -89,6 +89,11 @@ of the container page: their sizes, offsets and lengths, the padding after
 each end-of-image marker, and IFD0's orientation. Those expected results
 are now checked by the test suite as well as by the throwaway scripts.
 
+The tests also check every metadata value the reader gives for each file
+against a table generated from a walk of the file's IFDs and Exif IFD, by
+the reader's rules, with serial numbers recorded by their shape alone; that
+table is the record of the values, so this page does not repeat it.
+
 ## 3. What raw.pixls.us holds for Sony
 
 ### 3.1 Access
