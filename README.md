@@ -1,14 +1,18 @@
 # raw-files
 
 A camera RAW library in pure Rust. It extracts the JPEG previews embedded in
-Nikon NEF and Sony ARW files, with fuller RAW decoding planned.
+Nikon NEF and Sony ARW files and reads their metadata, with fuller RAW
+decoding planned.
 
-**Status: early.** The first release, 0.1.0, reads the JPEG previews
-embedded in Nikon NEF and Sony ARW files, the SRF, SR2 and ARQ files of
-Sony's family and the ARW files of the Sony-built Hasselblad bodies
-included. It gives the largest preview, or the smallest that fills a given
-size, with the orientation to show it in, and it never reads the raw data.
-Metadata, focus points and raw decoding come later; see the
+**Status: early.** Release 0.2.0 reads the JPEG previews embedded in Nikon
+NEF and Sony ARW files, the SRF, SR2 and ARQ files of Sony's family and the
+ARW files of the Sony-built Hasselblad bodies included, and the metadata a
+viewer or a file renamer needs next to them: the capture time, with
+sub-seconds and offset from UTC when recorded, the camera's make, model and
+serial number, the lens, the exposure, the orientation, and the sizes of the
+raw data and of the visible image. It gives the largest preview, or the
+smallest that fills a given size, with the orientation to show it in, and it
+never reads the raw data. Focus points and raw decoding come later; see the
 [roadmap](docs/ROADMAP.md).
 
 ## Usage
@@ -34,26 +38,58 @@ fn main() -> raw_files::Result<()> {
 }
 ```
 
+Print when the picture was taken, and with which camera and lens:
+
+```rust
+use raw_files::RawFile;
+
+fn main() -> raw_files::Result<()> {
+    let file = RawFile::open("photo.nef")?;
+    let metadata = file.metadata();
+    if let Some(time) = metadata.capture_time() {
+        println!("taken {time}");
+    }
+    if let (Some(make), Some(model)) = (metadata.make(), metadata.model()) {
+        println!("camera: {make} {model}");
+    }
+    if let Some(name) = metadata.lens().and_then(|lens| lens.model()) {
+        println!("lens: {name}");
+    }
+    Ok(())
+}
+```
+
 `RawFile` opens a path, bytes in memory or any reader that can seek. A
 `Preview` says where the bytes are, how large the picture is, its format and
 the orientation to show it in. `preview_at_least` picks the smallest preview
-that fills a box. `Options` and `Limits` open an untrusted file with other
-caps. The API documentation is on [docs.rs](https://docs.rs/raw-files).
+that fills a box. `Metadata` holds what the camera recorded about the
+picture, read when the file is opened; every value is optional, since not
+every camera records every one, and a damaged value is `None` on its own.
+`Options` and `Limits` open an untrusted file with other caps. The API
+documentation is on [docs.rs](https://docs.rs/raw-files).
 
 ## Formats
 
 - **Nikon NEF**, with the NRW files of Coolpix cameras. The previews are
   found in IFD0, in its SubIFDs and in the small preview that the MakerNote
-  points at. They are checked on 23 CC0 Nikon files from raw.pixls.us that
-  CI downloads, three of the Z 9 (lossless, HE and HE\*) and 20 of 18
-  other bodies from the D1H to the Z6III, and on test files laid out like
-  a Z 9's.
+  points at. The metadata comes from the standard TIFF and Exif tags and,
+  for what Nikon bodies before 2018 record only there, from the MakerNote:
+  the serial number, the ISO, the lens range and the time zone; the visible
+  image size is the crop area the MakerNote records. Previews and metadata
+  are checked on 23 CC0 Nikon files from raw.pixls.us that CI downloads,
+  three of the Z 9 (lossless, HE and HE\*) and 20 of 18 other bodies from
+  the D1H to the Z6III, and on test files laid out like a Z 9's and a
+  D300's.
 - **Sony ARW**, with the SRF, SR2 and ARQ files of the same family and the
   ARW files of the Sony-built Hasselblad bodies. The previews are found in
   IFD0 and IFD1 and, on bodies from version 4.0 of Sony's format, the
-  full-size JPEG in IFD2. They are checked on 36 CC0 Sony-family files from
-  raw.pixls.us, from the DSC-F828's SRF to the A7 V's ARW 6.0, 35 of which
-  CI downloads, and on test files laid out like each generation.
+  full-size JPEG in IFD2. The metadata comes from the standard tags alone;
+  most Sony bodies keep their serial number in a form the library does not
+  read, and of the public samples only the ILCE-1 and the ILCE-7M5 give
+  one. Previews and metadata are checked on 36 CC0 Sony-family
+  files from raw.pixls.us, from the DSC-F828's SRF to the A7 V's ARW 6.0,
+  35 of which CI downloads, and on test files laid out like each
+  generation.
 
 Any other file, a DNG among them whatever its Make says, is refused with the
 `UnknownFormat` error.
@@ -61,6 +97,9 @@ Any other file, a DNG among them whatever its Make says, is refused with the
 ## Guarantees
 
 - A malformed file returns an error, never a panic.
+- Damaged metadata costs only what it damages: a bad value leaves the other
+  values and the previews as they are, and a bad directory loses only the
+  values in it.
 - `Limits` keeps an untrusted file from making the library allocate or walk
   without bound: a cap the reader cannot go on without is an error; past the
   first directory a cap leaves a directory out.
