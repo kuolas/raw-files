@@ -4,9 +4,10 @@
 //! Z 9's: what it opens as, which previews it lists, what reading one
 //! returns, and what metadata it gives. Then the previews and the metadata
 //! of a file laid out like a D300's, an older body that records its serial
-//! number and its lens's range only in its MakerNote. Then the previews
-//! of real files, three of the Z 9 and 20 of 18 other bodies, when they
-//! have been downloaded (see [`support::samples::path`]).
+//! number and its lens's range only in its MakerNote. Then real files,
+//! three of the Z 9 and 20 of 18 other bodies, when they have been
+//! downloaded (see [`support::samples::path`]): the previews each gives,
+//! and its metadata, every value of it.
 
 mod support;
 
@@ -22,7 +23,9 @@ use support::nef::{
     FULL_SIZE_JPEG, IFD0_JPEG, LENS_MODEL_Z14_30, MEDIUM_JPEG, PREVIEW_JPEG, RAW_STRIP_START,
     Z9Blobs, d300_file, d300_file_with_blobs, stub, z9_file, z9_file_with, z9_file_with_blobs,
 };
-use support::samples::{Jpeg, Sample, check, sizes};
+use support::samples::{
+    Jpeg, Sample, SampleLens, SampleMetadata, SerialShape, check, check_metadata, sizes,
+};
 use support::tiff_builder::{Built, Order};
 
 const ORDERS: [Order; 2] = [Order::Little, Order::Big];
@@ -1059,8 +1062,622 @@ fn every_sample_of_the_other_nikon_bodies_opens_with_its_previews() {
     }
 }
 
+/// The metadata each NEF sample must give, in the order of
+/// `tests/samples.tsv`, its serial numbers by their shape alone (see
+/// [`SampleMetadata`]). The table was generated from a walk of each file's
+/// IFDs, Exif IFD and MakerNote, by the reader's rules, which read the
+/// standard tags first and the MakerNote only for what they lack
+/// (ADR011): on the bodies before the D780 and the Z 6, the serial number,
+/// the lens's range, the ISO or the offset from UTC can come from the
+/// MakerNote. The D1H's MakerNote is of the bare layout, which the reader
+/// does not read, so that file gives the values of its standard tags
+/// alone.
+const METADATA: &[SampleMetadata] = &[
+    // Z 9, 14-bit lossless compression (raw.pixls.us 5146)
+    SampleMetadata {
+        file: "nikon-z9-lossless.nef",
+        make: Some("NIKON CORPORATION"),
+        model: Some("NIKON Z 9"),
+        serial_number: Some(SerialShape {
+            len: 7,
+            digits: true,
+        }),
+        capture_time: Some("2022-02-05T13:45:03.04-05:00"),
+        orientation: Orientation::NoTransforms,
+        iso: Some(64),
+        exposure_time: Some((10, 3200)),
+        f_number: Some((900, 100)),
+        focal_length: Some((180, 10)),
+        exposure_bias: Some((0, 6)),
+        lens: Some(SampleLens {
+            make: Some("NIKON"),
+            model: Some("NIKKOR Z 14-30mm f/4 S"),
+            serial_number: true,
+            min_focal_length: Some((140, 10)),
+            max_focal_length: Some((300, 10)),
+            f_number_at_min_focal_length: Some((400, 100)),
+            f_number_at_max_focal_length: Some((400, 100)),
+        }),
+        raw_size: Some((8280, 5520)),
+        image_size: Some((8256, 5504)),
+    },
+    // Z 9, High Efficiency* (raw.pixls.us 5147)
+    SampleMetadata {
+        file: "nikon-z9-he-star.nef",
+        make: Some("NIKON CORPORATION"),
+        model: Some("NIKON Z 9"),
+        serial_number: Some(SerialShape {
+            len: 7,
+            digits: true,
+        }),
+        capture_time: Some("2022-02-05T13:46:41.85-05:00"),
+        orientation: Orientation::NoTransforms,
+        iso: Some(64),
+        exposure_time: Some((10, 3200)),
+        f_number: Some((900, 100)),
+        focal_length: Some((180, 10)),
+        exposure_bias: Some((0, 6)),
+        lens: Some(SampleLens {
+            make: Some("NIKON"),
+            model: Some("NIKKOR Z 14-30mm f/4 S"),
+            serial_number: true,
+            min_focal_length: Some((140, 10)),
+            max_focal_length: Some((300, 10)),
+            f_number_at_min_focal_length: Some((400, 100)),
+            f_number_at_max_focal_length: Some((400, 100)),
+        }),
+        raw_size: Some((8280, 5520)),
+        image_size: Some((8256, 5504)),
+    },
+    // Z 9, High Efficiency (raw.pixls.us 5148)
+    SampleMetadata {
+        file: "nikon-z9-he.nef",
+        make: Some("NIKON CORPORATION"),
+        model: Some("NIKON Z 9"),
+        serial_number: Some(SerialShape {
+            len: 7,
+            digits: true,
+        }),
+        capture_time: Some("2022-02-05T13:48:11.45-05:00"),
+        orientation: Orientation::NoTransforms,
+        iso: Some(64),
+        exposure_time: Some((10, 3200)),
+        f_number: Some((900, 100)),
+        focal_length: Some((180, 10)),
+        exposure_bias: Some((0, 6)),
+        lens: Some(SampleLens {
+            make: Some("NIKON"),
+            model: Some("NIKKOR Z 14-30mm f/4 S"),
+            serial_number: true,
+            min_focal_length: Some((140, 10)),
+            max_focal_length: Some((300, 10)),
+            f_number_at_min_focal_length: Some((400, 100)),
+            f_number_at_max_focal_length: Some((400, 100)),
+        }),
+        raw_size: Some((8280, 5520)),
+        image_size: Some((8256, 5504)),
+    },
+    // D1H, 12-bit uncompressed (raw.pixls.us 5364)
+    SampleMetadata {
+        file: "nikon-d1h-12bit-uncompressed.nef",
+        make: Some("NIKON CORPORATION"),
+        model: Some("NIKON D1H"),
+        serial_number: None,
+        capture_time: Some("2022-03-24T10:09:27.01"),
+        orientation: Orientation::NoTransforms,
+        iso: None,
+        exposure_time: Some((10, 8000)),
+        f_number: Some((45, 10)),
+        focal_length: Some((600, 10)),
+        exposure_bias: Some((4, 6)),
+        lens: None,
+        raw_size: Some((2012, 1324)),
+        image_size: Some((2012, 1324)),
+    },
+    // D100, 12-bit uncompressed (raw.pixls.us 2996)
+    SampleMetadata {
+        file: "nikon-d100-12bit-uncompressed.nef",
+        make: Some("NIKON CORPORATION"),
+        model: Some("NIKON D100"),
+        serial_number: None,
+        capture_time: Some("2013-08-02T19:12:06.20"),
+        orientation: Orientation::NoTransforms,
+        iso: Some(400),
+        exposure_time: Some((10, 1800)),
+        f_number: Some((45, 10)),
+        focal_length: Some((900, 10)),
+        exposure_bias: Some((-6, 6)),
+        lens: Some(SampleLens {
+            make: None,
+            model: None,
+            serial_number: false,
+            min_focal_length: Some((700, 10)),
+            max_focal_length: Some((3000, 10)),
+            f_number_at_min_focal_length: Some((40, 10)),
+            f_number_at_max_focal_length: Some((56, 10)),
+        }),
+        raw_size: Some((3034, 2024)),
+        image_size: Some((3034, 2024)),
+    },
+    // D70, 12-bit lossy (raw.pixls.us 2060)
+    SampleMetadata {
+        file: "nikon-d70-12bit-lossy.nef",
+        make: Some("NIKON CORPORATION"),
+        model: Some("NIKON D70"),
+        serial_number: None,
+        capture_time: Some("2017-09-02T16:55:01.80"),
+        orientation: Orientation::NoTransforms,
+        iso: Some(200),
+        exposure_time: Some((10, 2000)),
+        f_number: Some((32, 10)),
+        focal_length: Some((500, 10)),
+        exposure_bias: Some((0, 6)),
+        lens: Some(SampleLens {
+            make: None,
+            model: None,
+            serial_number: false,
+            min_focal_length: Some((500, 10)),
+            max_focal_length: Some((500, 10)),
+            f_number_at_min_focal_length: Some((18, 10)),
+            f_number_at_max_focal_length: Some((18, 10)),
+        }),
+        raw_size: Some((3040, 2014)),
+        image_size: Some((3040, 2014)),
+    },
+    // D200, 12-bit lossy (raw.pixls.us 8079)
+    SampleMetadata {
+        file: "nikon-d200-12bit-lossy.nef",
+        make: Some("NIKON CORPORATION"),
+        model: Some("NIKON D200"),
+        serial_number: None,
+        capture_time: Some("2007-10-13T10:27:30.16"),
+        orientation: Orientation::NoTransforms,
+        iso: Some(100),
+        exposure_time: Some((10, 2000)),
+        f_number: Some((80, 10)),
+        focal_length: Some((700, 10)),
+        exposure_bias: Some((0, 6)),
+        lens: Some(SampleLens {
+            make: None,
+            model: None,
+            serial_number: false,
+            min_focal_length: Some((180, 10)),
+            max_focal_length: Some((2000, 10)),
+            f_number_at_min_focal_length: Some((35, 10)),
+            f_number_at_max_focal_length: Some((56, 10)),
+        }),
+        raw_size: Some((3904, 2616)),
+        image_size: Some((3904, 2616)),
+    },
+    // D300, 12-bit lossy (raw.pixls.us 928)
+    SampleMetadata {
+        file: "nikon-d300-12bit-lossy.nef",
+        make: Some("NIKON CORPORATION"),
+        model: Some("NIKON D300"),
+        serial_number: Some(SerialShape {
+            len: 7,
+            digits: true,
+        }),
+        capture_time: Some("2017-01-17T21:27:12.34+01:00"),
+        orientation: Orientation::NoTransforms,
+        iso: Some(200),
+        exposure_time: Some((10, 100)),
+        f_number: Some((71, 10)),
+        focal_length: Some((500, 10)),
+        exposure_bias: Some((0, 6)),
+        lens: Some(SampleLens {
+            make: None,
+            model: None,
+            serial_number: false,
+            min_focal_length: Some((180, 10)),
+            max_focal_length: Some((700, 10)),
+            f_number_at_min_focal_length: Some((35, 10)),
+            f_number_at_max_focal_length: Some((45, 10)),
+        }),
+        raw_size: Some((4352, 2868)),
+        image_size: Some((4352, 2868)),
+    },
+    // D700, 12-bit lossy (raw.pixls.us 2255)
+    SampleMetadata {
+        file: "nikon-d700-12bit-lossy.nef",
+        make: Some("NIKON CORPORATION"),
+        model: Some("NIKON D700"),
+        serial_number: Some(SerialShape {
+            len: 7,
+            digits: true,
+        }),
+        capture_time: Some("2018-01-17T12:31:01.00+01:00"),
+        orientation: Orientation::NoTransforms,
+        iso: None,
+        exposure_time: Some((10, 20)),
+        f_number: Some((80, 10)),
+        focal_length: Some((200, 10)),
+        exposure_bias: Some((0, 6)),
+        lens: Some(SampleLens {
+            make: None,
+            model: None,
+            serial_number: false,
+            min_focal_length: Some((200, 10)),
+            max_focal_length: Some((200, 10)),
+            f_number_at_min_focal_length: Some((18, 10)),
+            f_number_at_max_focal_length: Some((18, 10)),
+        }),
+        raw_size: Some((4288, 2844)),
+        image_size: Some((4288, 2844)),
+    },
+    // D7000, 12-bit lossy (raw.pixls.us 961)
+    SampleMetadata {
+        file: "nikon-d7000-12bit-lossy.nef",
+        make: Some("NIKON CORPORATION"),
+        model: Some("NIKON D7000"),
+        serial_number: Some(SerialShape {
+            len: 7,
+            digits: true,
+        }),
+        capture_time: Some("2017-01-22T14:19:23.70-07:00"),
+        orientation: Orientation::NoTransforms,
+        iso: Some(100),
+        exposure_time: Some((10, 2000)),
+        f_number: Some((18, 10)),
+        focal_length: Some((500, 10)),
+        exposure_bias: Some((0, 6)),
+        lens: Some(SampleLens {
+            make: None,
+            model: None,
+            serial_number: false,
+            min_focal_length: Some((500, 10)),
+            max_focal_length: Some((500, 10)),
+            f_number_at_min_focal_length: Some((18, 10)),
+            f_number_at_max_focal_length: Some((18, 10)),
+        }),
+        raw_size: Some((4992, 3280)),
+        image_size: Some((4992, 3280)),
+    },
+    // D750, 12-bit lossy (raw.pixls.us 895)
+    SampleMetadata {
+        file: "nikon-d750-12bit-lossy.nef",
+        make: Some("NIKON CORPORATION"),
+        model: Some("NIKON D750"),
+        serial_number: Some(SerialShape {
+            len: 7,
+            digits: true,
+        }),
+        capture_time: Some("2017-01-15T21:38:43.42+01:00"),
+        orientation: Orientation::NoTransforms,
+        iso: Some(100),
+        exposure_time: Some((10, 300)),
+        f_number: Some((18, 10)),
+        focal_length: Some((350, 10)),
+        exposure_bias: Some((0, 6)),
+        lens: Some(SampleLens {
+            make: None,
+            model: None,
+            serial_number: false,
+            min_focal_length: Some((350, 10)),
+            max_focal_length: Some((350, 10)),
+            f_number_at_min_focal_length: Some((18, 10)),
+            f_number_at_max_focal_length: Some((18, 10)),
+        }),
+        raw_size: Some((6032, 4032)),
+        image_size: Some((6032, 4032)),
+    },
+    // D810, 12-bit small raw (raw.pixls.us 2036)
+    SampleMetadata {
+        file: "nikon-d810-12bit-small.nef",
+        make: Some("NIKON CORPORATION"),
+        model: Some("NIKON D810"),
+        serial_number: Some(SerialShape {
+            len: 7,
+            digits: true,
+        }),
+        capture_time: Some("2017-12-05T23:50:41.81+01:00"),
+        orientation: Orientation::NoTransforms,
+        iso: Some(100),
+        exposure_time: Some((10, 600)),
+        f_number: Some((80, 10)),
+        focal_length: Some((500, 10)),
+        exposure_bias: Some((0, 6)),
+        lens: Some(SampleLens {
+            make: None,
+            model: None,
+            serial_number: false,
+            min_focal_length: Some((500, 10)),
+            max_focal_length: Some((500, 10)),
+            f_number_at_min_focal_length: Some((14, 10)),
+            f_number_at_max_focal_length: Some((14, 10)),
+        }),
+        raw_size: Some((3680, 2456)),
+        image_size: Some((3680, 2456)),
+    },
+    // D850, 12-bit lossless small raw (raw.pixls.us 1835)
+    SampleMetadata {
+        file: "nikon-d850-12bit-lossless-small.nef",
+        make: Some("NIKON CORPORATION"),
+        model: Some("NIKON D850"),
+        serial_number: Some(SerialShape {
+            len: 7,
+            digits: true,
+        }),
+        capture_time: Some("2017-10-15T17:35:49.60+01:00"),
+        orientation: Orientation::NoTransforms,
+        iso: Some(64),
+        exposure_time: Some((10, 1600)),
+        f_number: Some((90, 10)),
+        focal_length: Some((350, 10)),
+        exposure_bias: Some((0, 6)),
+        lens: Some(SampleLens {
+            make: None,
+            model: None,
+            serial_number: false,
+            min_focal_length: Some((350, 10)),
+            max_focal_length: Some((350, 10)),
+            f_number_at_min_focal_length: Some((14, 10)),
+            f_number_at_max_focal_length: Some((14, 10)),
+        }),
+        raw_size: Some((6216, 4136)),
+        image_size: Some((6192, 4128)),
+    },
+    // D780, 12-bit lossy (raw.pixls.us 3827)
+    SampleMetadata {
+        file: "nikon-d780-12bit-lossy.nef",
+        make: Some("NIKON CORPORATION"),
+        model: Some("NIKON D780"),
+        serial_number: Some(SerialShape {
+            len: 7,
+            digits: true,
+        }),
+        capture_time: Some("2020-03-28T14:14:56.69+00:00"),
+        orientation: Orientation::NoTransforms,
+        iso: Some(100),
+        exposure_time: Some((10, 4000)),
+        f_number: Some((400, 100)),
+        focal_length: Some((700, 10)),
+        exposure_bias: Some((0, 6)),
+        lens: Some(SampleLens {
+            make: None,
+            model: Some("VR 24-120mm f/4G"),
+            serial_number: false,
+            min_focal_length: Some((240, 10)),
+            max_focal_length: Some((1200, 10)),
+            f_number_at_min_focal_length: Some((400, 100)),
+            f_number_at_max_focal_length: Some((400, 100)),
+        }),
+        raw_size: Some((6064, 4040)),
+        image_size: Some((6048, 4024)),
+    },
+    // Z 6, 12-bit small raw (raw.pixls.us 3587)
+    SampleMetadata {
+        file: "nikon-z6-12bit-small.nef",
+        make: Some("NIKON CORPORATION"),
+        model: Some("NIKON Z 6"),
+        serial_number: Some(SerialShape {
+            len: 7,
+            digits: true,
+        }),
+        capture_time: Some("2019-11-29T17:15:20.24+01:00"),
+        orientation: Orientation::NoTransforms,
+        iso: Some(100),
+        exposure_time: Some((10, 10)),
+        f_number: Some((670, 100)),
+        focal_length: Some((520, 10)),
+        exposure_bias: Some((0, 6)),
+        lens: Some(SampleLens {
+            make: Some("NIKON"),
+            model: Some("NIKKOR Z 24-70mm f/4 S"),
+            serial_number: true,
+            min_focal_length: Some((240, 10)),
+            max_focal_length: Some((700, 10)),
+            f_number_at_min_focal_length: Some((400, 100)),
+            f_number_at_max_focal_length: Some((400, 100)),
+        }),
+        raw_size: Some((4548, 3030)),
+        image_size: Some((4528, 3018)),
+    },
+    // Z f, 14-bit (raw.pixls.us 6887)
+    SampleMetadata {
+        file: "nikon-zf-14bit.nef",
+        make: Some("NIKON CORPORATION"),
+        model: Some("NIKON Z f"),
+        serial_number: Some(SerialShape {
+            len: 7,
+            digits: true,
+        }),
+        capture_time: Some("2023-10-18T17:19:29.68-04:00"),
+        orientation: Orientation::NoTransforms,
+        iso: Some(250),
+        exposure_time: Some((10, 600)),
+        f_number: Some((630, 100)),
+        focal_length: Some((1500, 10)),
+        exposure_bias: Some((0, 6)),
+        lens: Some(SampleLens {
+            make: None,
+            model: Some("TAMRON 35-150mm F/2-2.8 Di III VXD A058Z"),
+            serial_number: true,
+            min_focal_length: Some((350, 10)),
+            max_focal_length: Some((1500, 10)),
+            f_number_at_min_focal_length: Some((200, 100)),
+            f_number_at_max_focal_length: Some((280, 100)),
+        }),
+        raw_size: Some((6064, 4040)),
+        image_size: Some((6048, 4032)),
+    },
+    // Z6III, 14-bit, 3:2 (raw.pixls.us 7810)
+    SampleMetadata {
+        file: "nikon-z6iii-14bit-3x2.nef",
+        make: Some("NIKON CORPORATION"),
+        model: Some("NIKON Z6_3"),
+        serial_number: Some(SerialShape {
+            len: 7,
+            digits: true,
+        }),
+        capture_time: Some("2024-06-29T15:38:47.93-04:00"),
+        orientation: Orientation::NoTransforms,
+        iso: Some(200),
+        exposure_time: Some((10, 600)),
+        f_number: Some((800, 100)),
+        focal_length: Some((860, 10)),
+        exposure_bias: Some((0, 6)),
+        lens: Some(SampleLens {
+            make: Some("NIKON"),
+            model: Some("NIKKOR Z 24-200mm f/4-6.3 VR"),
+            serial_number: true,
+            min_focal_length: Some((240, 10)),
+            max_focal_length: Some((2000, 10)),
+            f_number_at_min_focal_length: Some((400, 100)),
+            f_number_at_max_focal_length: Some((630, 100)),
+        }),
+        raw_size: Some((4000, 2672)),
+        image_size: Some((3984, 2656)),
+    },
+    // Z6III, 14-bit, 16:9 (raw.pixls.us 7809)
+    SampleMetadata {
+        file: "nikon-z6iii-14bit-16x9.nef",
+        make: Some("NIKON CORPORATION"),
+        model: Some("NIKON Z6_3"),
+        serial_number: Some(SerialShape {
+            len: 7,
+            digits: true,
+        }),
+        capture_time: Some("2024-06-29T15:39:01.13-04:00"),
+        orientation: Orientation::NoTransforms,
+        iso: Some(200),
+        exposure_time: Some((10, 1000)),
+        f_number: Some((900, 100)),
+        focal_length: Some((860, 10)),
+        exposure_bias: Some((0, 6)),
+        lens: Some(SampleLens {
+            make: Some("NIKON"),
+            model: Some("NIKKOR Z 24-200mm f/4-6.3 VR"),
+            serial_number: true,
+            min_focal_length: Some((240, 10)),
+            max_focal_length: Some((2000, 10)),
+            f_number_at_min_focal_length: Some((400, 100)),
+            f_number_at_max_focal_length: Some((630, 100)),
+        }),
+        raw_size: Some((6064, 3416)),
+        image_size: Some((6048, 3400)),
+    },
+    // Z6III, 14-bit, 1:1 (raw.pixls.us 7808)
+    SampleMetadata {
+        file: "nikon-z6iii-14bit-1x1.nef",
+        make: Some("NIKON CORPORATION"),
+        model: Some("NIKON Z6_3"),
+        serial_number: Some(SerialShape {
+            len: 7,
+            digits: true,
+        }),
+        capture_time: Some("2024-06-29T15:38:53.42-04:00"),
+        orientation: Orientation::NoTransforms,
+        iso: Some(200),
+        exposure_time: Some((10, 1000)),
+        f_number: Some((900, 100)),
+        focal_length: Some((860, 10)),
+        exposure_bias: Some((0, 6)),
+        lens: Some(SampleLens {
+            make: Some("NIKON"),
+            model: Some("NIKKOR Z 24-200mm f/4-6.3 VR"),
+            serial_number: true,
+            min_focal_length: Some((240, 10)),
+            max_focal_length: Some((2000, 10)),
+            f_number_at_min_focal_length: Some((400, 100)),
+            f_number_at_max_focal_length: Some((630, 100)),
+        }),
+        raw_size: Some((4048, 4040)),
+        image_size: Some((4032, 4032)),
+    },
+    // Coolpix A, 14-bit lossy (raw.pixls.us 2238)
+    SampleMetadata {
+        file: "nikon-coolpix-a-14bit-lossy.nef",
+        make: Some("NIKON CORPORATION"),
+        model: Some("COOLPIX A"),
+        serial_number: Some(SerialShape {
+            len: 7,
+            digits: true,
+        }),
+        capture_time: Some("2015-12-23T11:41:13.50+01:00"),
+        orientation: Orientation::NoTransforms,
+        iso: Some(100),
+        exposure_time: Some((10, 6400)),
+        f_number: Some((40, 10)),
+        focal_length: Some((185, 10)),
+        exposure_bias: Some((0, 6)),
+        lens: None,
+        raw_size: Some((4992, 3280)),
+        image_size: Some((4992, 3280)),
+    },
+    // Coolpix P7800, 12-bit, an NRW file (raw.pixls.us 1425)
+    SampleMetadata {
+        file: "nikon-coolpix-p7800-12bit.nrw",
+        make: Some("NIKON"),
+        model: Some("COOLPIX P7800"),
+        serial_number: None,
+        capture_time: Some("2017-05-20T11:55:14"),
+        orientation: Orientation::NoTransforms,
+        iso: Some(80),
+        exposure_time: Some((10, 400)),
+        f_number: Some((20, 10)),
+        focal_length: Some((60, 10)),
+        exposure_bias: Some((0, 10)),
+        lens: None,
+        raw_size: Some((4032, 3024)),
+        image_size: Some((4032, 3024)),
+    },
+    // E5700, 12-bit uncompressed (raw.pixls.us 4456)
+    SampleMetadata {
+        file: "nikon-e5700-12bit-uncompressed.nef",
+        make: Some("NIKON"),
+        model: Some("E5700"),
+        serial_number: None,
+        capture_time: Some("2008-01-15T11:15:41"),
+        orientation: Orientation::NoTransforms,
+        iso: None,
+        exposure_time: Some((10, 4366)),
+        f_number: Some((80, 10)),
+        focal_length: Some((89, 10)),
+        exposure_bias: Some((0, 10)),
+        lens: None,
+        raw_size: Some((2576, 1924)),
+        image_size: Some((2576, 1924)),
+    },
+    // Nikon 1 J1, 12-bit lossy (raw.pixls.us 2956)
+    SampleMetadata {
+        file: "nikon-1-j1-12bit-lossy.nef",
+        make: Some("NIKON CORPORATION"),
+        model: Some("NIKON 1 J1"),
+        serial_number: Some(SerialShape {
+            len: 8,
+            digits: true,
+        }),
+        capture_time: Some("2010-01-01T00:11:05.00+02:00"),
+        orientation: Orientation::NoTransforms,
+        iso: Some(100),
+        exposure_time: Some((10, 130)),
+        f_number: Some((63, 10)),
+        focal_length: Some((189, 10)),
+        exposure_bias: Some((0, 6)),
+        lens: Some(SampleLens {
+            make: None,
+            model: Some("1 NIKKOR VR 10-30mm f/3.5-5.6"),
+            serial_number: false,
+            min_focal_length: Some((100, 10)),
+            max_focal_length: Some((300, 10)),
+            f_number_at_min_focal_length: Some((35, 10)),
+            f_number_at_max_focal_length: Some((56, 10)),
+        }),
+        raw_size: Some((3904, 2606)),
+        image_size: Some((3904, 2606)),
+    },
+];
+
 #[test]
-fn the_sample_list_and_the_expected_previews_name_the_same_nikon_files() {
+fn every_nikon_sample_gives_its_metadata() {
+    for expected in METADATA {
+        check_metadata(expected, Format::Nef);
+    }
+}
+
+#[test]
+fn the_sample_list_and_the_tables_of_previews_and_metadata_name_the_same_nikon_files() {
     // The list is in the repository, so this runs without any download.
     let list =
         fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/samples.tsv")).unwrap();
@@ -1079,21 +1696,25 @@ fn the_sample_list_and_the_expected_previews_name_the_same_nikon_files() {
         }
     }
 
-    let tables = SAMPLES
+    let previews: Vec<&str> = SAMPLES
         .iter()
         .chain(OTHER_SAMPLES)
-        .map(|sample| (sample.file, "normal"));
-    let expected: BTreeSet<(&str, &str)> = tables.clone().collect();
-    assert_eq!(
-        expected.len(),
-        tables.count(),
-        "a file is in the tables twice"
-    );
-    let unexpected: Vec<_> = listed.difference(&expected).collect();
-    let unlisted: Vec<_> = expected.difference(&listed).collect();
-    assert!(
-        unexpected.is_empty() && unlisted.is_empty(),
-        "listed without expected previews: {unexpected:?}; \
-         expected previews but not listed: {unlisted:?}"
-    );
+        .map(|sample| sample.file)
+        .collect();
+    let metadata: Vec<&str> = METADATA.iter().map(|expected| expected.file).collect();
+    for (what, files) in [("previews", previews), ("metadata", metadata)] {
+        let expected: BTreeSet<(&str, &str)> = files.iter().map(|&file| (file, "normal")).collect();
+        assert_eq!(
+            expected.len(),
+            files.len(),
+            "a file is in the tables of {what} twice"
+        );
+        let unexpected: Vec<_> = listed.difference(&expected).collect();
+        let unlisted: Vec<_> = expected.difference(&listed).collect();
+        assert!(
+            unexpected.is_empty() && unlisted.is_empty(),
+            "listed without expected {what}: {unexpected:?}; \
+             expected {what} but not listed: {unlisted:?}"
+        );
+    }
 }
