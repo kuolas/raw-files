@@ -126,6 +126,8 @@ impl Preview {
 ///
 /// `PreviewFormat` is `#[non_exhaustive]`: other encodings may be added as
 /// more RAW formats are supported, so a `match` on it needs a wildcard arm.
+/// It orders as its variants are listed, and a new variant is added after
+/// the existing ones, so an order once observed holds.
 ///
 /// # Examples
 ///
@@ -135,7 +137,7 @@ impl Preview {
 /// assert_eq!(PreviewFormat::Jpeg.mime_type(), "image/jpeg");
 /// assert_eq!(PreviewFormat::Jpeg.extension(), "jpg");
 /// ```
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[non_exhaustive]
 pub enum PreviewFormat {
     /// A baseline or progressive JPEG stream, which any image viewer shows.

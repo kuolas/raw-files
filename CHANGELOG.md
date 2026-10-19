@@ -30,6 +30,10 @@ does.
   the D1H to the Z6III, and the metadata of all 23 NEF sample files.
 - The metadata of the 36 Sony-family sample files checked, as their
   previews were in 0.1.0.
+- `Options` compares and hashes, `Limits` hashes, and `Format`,
+  `PreviewFormat`, `ErrorKind`, `Orientation` and `Size` order, as the Rust
+  API Guidelines ask of such types; the `Debug` form of `RawFile` shows the
+  metadata.
 
 ## [0.1.0] - 2026-10-14
 

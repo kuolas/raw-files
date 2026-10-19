@@ -7,7 +7,9 @@ use std::fmt;
 /// A RAW file format that raw-files can open.
 ///
 /// `Format` is `#[non_exhaustive]`: formats are added in later releases, so
-/// match on it with a wildcard arm.
+/// match on it with a wildcard arm. It orders as its variants are listed,
+/// and a new variant is added after the existing ones, so an order once
+/// observed holds.
 ///
 /// Opening a file never looks at its extension: the content is sniffed, so a
 /// renamed file opens as what it is. [`from_extension`](Format::from_extension)
@@ -26,7 +28,7 @@ use std::fmt;
 /// assert_eq!(Format::Nef.to_string(), "Nikon NEF");
 /// assert_eq!(Format::Arw.to_string(), "Sony ARW");
 /// ```
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[non_exhaustive]
 pub enum Format {
     /// Nikon NEF, including the NRW files of Coolpix cameras: a TIFF file,

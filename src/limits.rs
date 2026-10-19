@@ -23,7 +23,7 @@
 /// let limits = Limits::default().max_preview_bytes(32 * 1024 * 1024);
 /// ```
 #[non_exhaustive]
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Limits {
     max_ifds: u32,
     max_ifd_entries: u32,
