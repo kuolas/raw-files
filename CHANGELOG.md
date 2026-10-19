@@ -23,6 +23,9 @@ does.
   standard tags lack them, the serial number, ISO and lens range come from
   the MakerNote, and the offset from UTC from the camera's time-zone
   setting.
+- `DateTime::subsecond_digits`, how many sub-second digits the file
+  recorded, so that a time without sub-seconds can be told from one whose
+  recorded digits are zeros without formatting them.
 - NEF previews checked on 20 more sample files of 18 Nikon bodies, from
   the D1H to the Z6III, and the metadata of all 23 NEF sample files.
 - The metadata of the 36 Sony-family sample files checked, as their
