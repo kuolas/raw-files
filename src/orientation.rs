@@ -19,9 +19,17 @@
 /// ```
 /// use raw_files::Orientation;
 ///
-/// let orientation = Orientation::from_exif(6).unwrap();
+/// # fn main() {
+/// #     example().expect("6 is an EXIF orientation");
+/// # }
+/// # fn example() -> Option<()> {
+/// let orientation = Orientation::from_exif(6)?;
 /// assert_eq!(orientation, Orientation::Rotate90);
 /// assert!(orientation.swaps_dimensions());
+/// // EXIF defines no orientation 9.
+/// assert_eq!(Orientation::from_exif(9), None);
+/// # Some(())
+/// # }
 /// ```
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Orientation {
