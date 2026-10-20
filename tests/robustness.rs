@@ -15,9 +15,12 @@
 //! CropHiSpeed and CropArea place the focus point on the cropped picture, a
 //! Nikon D300's NEF, whose MakerNote records the serial number, the lens's
 //! range and the clock's time zone that its standard tags lack, and an
-//! ILCE-7M4's ARW 4, each in both byte orders. They cut each file at every
-//! length, and overwrite each byte in turn with 0x00, 0xFF and its
-//! complement.
+//! ILCE-7M4's ARW 4, each in both byte orders. They damage two real files
+//! too, committed with their pixels and personal fields removed: shots of
+//! the maintainer's own Z 9 in DX and 1:1 crop modes, which hold the
+//! camera's own layout of tags, in little-endian byte order, where the
+//! fixtures only imitate it. They cut each file at every length, and
+//! overwrite each byte in turn with 0x00, 0xFF and its complement.
 //!
 //! Each damaged file is opened as a caller would open it, with
 //! [`RawFile::from_bytes`], which reads through the same source and block
@@ -38,10 +41,13 @@
 //! IFDs, their values and the JPEG stubs), and cut at a few lengths past
 //! that: in the zeros, at each tile's start and around it, and just short
 //! of the end. That keeps the whole file to a few seconds in a debug build.
+//! Every other file is swept whole: the two stripped files are 4,270 bytes
+//! each, their raw data replaced by 64 bytes.
 //!
-//! A last test damages one value only, the capture time, and checks that
-//! the file gives every other value exactly as the undamaged file does:
-//! damage to one value costs only that value (ADR011).
+//! A last test damages one value only, the capture time, in each of these
+//! files, and checks that the file gives every other value exactly as the
+//! undamaged file does: damage to one value costs only that value
+//! (ADR011).
 
 mod support;
 
@@ -51,6 +57,7 @@ use std::panic;
 
 use raw_files::{Focus, Metadata, Rational, RawFile, SignedRational, Size};
 use support::arw::{ARW4_FULL_SIZE_JPEG, arw4_file, stub};
+use support::fixtures::{Z9_1X1, Z9_DX, read_fixture};
 use support::nef::{d300_file, z6iii_file, z9_file, z9_file_with};
 use support::tiff_builder::Order;
 
@@ -71,8 +78,10 @@ struct Fixture {
 
 /// The Z 9 fixture, with IFD0's Orientation 8, in both byte orders, and
 /// with its MakerNote in the other byte order from the file's; the Z6III
-/// and the D300 fixtures, with Orientation 8, in both byte orders; and the
-/// ARW 4 fixture, with Orientation 8, in both byte orders.
+/// and the D300 fixtures, with Orientation 8, in both byte orders; the
+/// ARW 4 fixture, with Orientation 8, in both byte orders; and the two
+/// files stripped from the maintainer's own Z 9 shots in DX and 1:1 crop
+/// modes, as they are committed.
 fn fixtures() -> Vec<Fixture> {
     let mut fixtures = Vec::new();
     for order in ORDERS {
@@ -134,6 +143,15 @@ fn fixtures() -> Vec<Fixture> {
             bytes: built.bytes,
             sweep_end: laid_out,
             more_lengths,
+        });
+    }
+    for (name, file) in [("Z 9 DX, stripped", Z9_DX), ("Z 9 1:1, stripped", Z9_1X1)] {
+        let bytes = read_fixture(file);
+        fixtures.push(Fixture {
+            name: name.to_owned(),
+            sweep_end: bytes.len(),
+            more_lengths: Vec::new(),
+            bytes,
         });
     }
     fixtures
@@ -363,34 +381,90 @@ fn assert_all_but_the_capture_time(damaged: &Metadata, undamaged: &Metadata, wha
 /// A capture time that names no real date, in an otherwise undamaged file,
 /// costs the capture time and nothing else: every other value is the one
 /// the undamaged file gives, and so are the previews.
+///
+/// The damage goes into each copy of the time's text in turn. A file can
+/// hold the same text in other tags: the two stripped Z 9 files hold it in
+/// IFD0's DateTime and DateTimeOriginal and in the Exif IFD's
+/// DateTimeOriginal and DateTimeDigitized. The capture time is read from
+/// the Exif IFD's DateTimeOriginal alone, so damage to exactly one copy
+/// costs it, and damage to any other copy changes nothing.
 #[test]
 fn an_impossible_capture_time_costs_only_the_capture_time() {
+    let mut fixtures = Vec::new();
     for order in ORDERS {
-        let fixtures = [
-            ("Z 9", z9_file(order, 8).bytes, "2022:02:05 13:46:41"),
-            ("Z6III", z6iii_file(order, 8).bytes, "2024:06:29 15:38:53"),
-            ("D300", d300_file(order, 8).bytes, "2008:05:17 10:22:31"),
-            ("ARW 4", arw4_file(order, 8).0.bytes, "2023:10:19 16:13:48"),
-        ];
-        for (name, undamaged_bytes, time) in fixtures {
-            let at = undamaged_bytes
-                .windows(time.len())
-                .position(|window| window == time.as_bytes())
-                .unwrap_or_else(|| panic!("{name}: no DateTimeOriginal"));
-            // Where the damage goes in `YYYY:MM:DD HH:MM:SS`, and what it
-            // writes there.
-            for (damage, offset, replacement) in
-                [("month 13", 5, b"13"), ("a letter in the day", 8, b"0x")]
-            {
-                let what = format!("{name}, {order:?}, {damage}");
+        fixtures.extend([
+            (
+                format!("Z 9, {order:?}"),
+                z9_file(order, 8).bytes,
+                "2022:02:05 13:46:41",
+            ),
+            (
+                format!("Z6III, {order:?}"),
+                z6iii_file(order, 8).bytes,
+                "2024:06:29 15:38:53",
+            ),
+            (
+                format!("D300, {order:?}"),
+                d300_file(order, 8).bytes,
+                "2008:05:17 10:22:31",
+            ),
+            (
+                format!("ARW 4, {order:?}"),
+                arw4_file(order, 8).0.bytes,
+                "2023:10:19 16:13:48",
+            ),
+        ]);
+    }
+    fixtures.extend([
+        (
+            "Z 9 DX, stripped".to_owned(),
+            read_fixture(Z9_DX),
+            "2026:10:19 19:26:32",
+        ),
+        (
+            "Z 9 1:1, stripped".to_owned(),
+            read_fixture(Z9_1X1),
+            "2026:10:19 19:26:52",
+        ),
+    ]);
+    for (name, undamaged_bytes, time) in fixtures {
+        let undamaged = RawFile::from_bytes(&undamaged_bytes).unwrap();
+        let copies: Vec<usize> = undamaged_bytes
+            .windows(time.len())
+            .enumerate()
+            .filter(|(_, window)| *window == time.as_bytes())
+            .map(|(at, _)| at)
+            .collect();
+        assert!(!copies.is_empty(), "{name}: no DateTimeOriginal");
+        // Where the damage goes in `YYYY:MM:DD HH:MM:SS`, and what it
+        // writes there.
+        for (damage, offset, replacement) in
+            [("month 13", 5, b"13"), ("a letter in the day", 8, b"0x")]
+        {
+            let mut costly = 0;
+            for &at in &copies {
+                let what = format!("{name}, {damage} in the copy at byte {at}");
                 let mut bytes = undamaged_bytes.clone();
                 let start = at + offset;
                 bytes[start..start + 2].copy_from_slice(replacement);
-                let undamaged = RawFile::from_bytes(&undamaged_bytes).unwrap();
                 let damaged = RawFile::from_bytes(&bytes).unwrap();
-                assert_all_but_the_capture_time(damaged.metadata(), undamaged.metadata(), &what);
+                if damaged.metadata().capture_time().is_none() {
+                    costly += 1;
+                    assert_all_but_the_capture_time(
+                        damaged.metadata(),
+                        undamaged.metadata(),
+                        &what,
+                    );
+                } else {
+                    // A copy the reader does not read.
+                    assert_eq!(damaged.metadata(), undamaged.metadata(), "{what}");
+                }
                 assert_eq!(damaged.previews(), undamaged.previews(), "{what}");
             }
+            assert_eq!(
+                costly, 1,
+                "{name}, {damage}: the copies at {copies:?} hold one capture time"
+            );
         }
     }
 }

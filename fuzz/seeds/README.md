@@ -17,14 +17,19 @@ the corpus the fuzzer writes is not.
   the RAW formats: files laid out like the NEF of a Nikon Z 9, of a Z6III
   on a 1:1 crop and of a D300, and one like each generation of Sony's
   family (ARW 4.0 with a lossless and with a medium raw, ARW 2.x, ARQ, SR2,
-  SRF and the A100), in both byte orders. The target still takes the
+  SRF and the A100), in both byte orders; and, beside these fixtures built
+  in code, the two real files committed in
+  [`tests/fixtures/`](../../tests/fixtures/README.md), shots of the
+  maintainer's own Z 9 in DX and 1:1 crop modes with their pixels and
+  personal fields removed, copied as they are. The target still takes the
   `tiff_walk/` seeds as a second corpus directory, since a plain TIFF file
   is also something it must open.
 
 The files are generated from the fixtures in
 `src/container/tiff/robustness.rs`, the stubs in
-`src/container/jpeg/mod.rs` and the integration tests' fixtures through
-`tests/fuzz_seeds.rs`, never edited by hand, and a test in each
+`src/container/jpeg/mod.rs` and the integration tests' fixtures, built in
+code or committed in `tests/fixtures/`, through `tests/fuzz_seeds.rs`,
+never edited by hand, and a test in each
 (`the_fuzz_seeds_match_the_fixtures`, `the_jpeg_fuzz_seeds_match_the_stubs`
 and `the_open_fuzz_seeds_match_the_fixtures`) fails when a file is missing
 or differs from what it is generated from.

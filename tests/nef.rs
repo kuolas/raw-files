@@ -8,8 +8,13 @@
 //! records into the cropped picture. Then the previews and the metadata
 //! of a file laid out like a D300's, an older body that records its serial
 //! number and its lens's range only in its MakerNote, and no focus point,
-//! shot through the viewfinder in manual focus. Then real files, three of
-//! the Z 9 and 20 of 18 other bodies, when they have been downloaded (see
+//! shot through the viewfinder in manual focus. Then two real files of the
+//! maintainer's own Z 9, in DX and 1:1 crop modes, committed with their
+//! pixels and personal fields removed (see [`support::fixtures`]): their
+//! previews, every value of their metadata, and their focus points, which
+//! the reader scales onto the DX crop and moves into the 1:1 window. Then
+//! real files too large to commit, three of the Z 9 and 20 of 18 other
+//! bodies, when they have been downloaded (see
 //! [`support::samples::path`]): the previews each gives, and its metadata,
 //! every value of it.
 
@@ -644,11 +649,201 @@ fn the_d300_file_gives_what_its_exif_tags_lack_from_the_makernote() {
     }
 }
 
-// Real files. The Z 9 files of raw.pixls.us, one per compression mode, and
-// 20 files of 18 other Nikon bodies, all CC0, are listed with their hashes
-// in `tests/samples.tsv`; `scripts/fetch-samples.sh` downloads them. They
-// are too large to commit, so a test whose file is absent says so and
-// passes: the suite runs offline.
+// Two real files, committed. Two shots of the maintainer's own Z 9, in DX
+// and 1:1 crop modes, with a single focus point placed in the top-left
+// corner of the picture, stripped of their pixels and personal fields with
+// their structure and values kept (`tests/fixtures/README.md`). Their
+// point lies far enough from the centre to tell a crop the reader scales
+// from one it shifts, which no public sample's point does.
+
+/// What one of the two stripped Z 9 files must give, beside what both
+/// give: the values that differ between the DX and the 1:1 shot.
+struct StrippedZ9 {
+    /// The file's name in `tests/fixtures/`.
+    file: &'static str,
+    /// The capture time, as [`DateTime`] displays it.
+    capture_time: &'static str,
+    /// The exposure time, as stored.
+    exposure_time: (u32, u32),
+    /// The size of the raw data, which the crop already cut.
+    raw_size: (u32, u32),
+    /// The size of the picture, the MakerNote's CropArea.
+    image_size: (u32, u32),
+    /// The four previews, smallest first: IFD0's, the MakerNote's,
+    /// SubIFD2's and SubIFD0's.
+    previews: [(u32, u32); 4],
+    /// The frame, the centre and the size of the focus point the reader
+    /// gives, on the cropped picture.
+    focus_frame: (u32, u32),
+    focus_center: (u32, u32),
+    focus_size: (u32, u32),
+}
+
+/// The DX shot. CropHiSpeed `[2, 8280, 5520, 5408, 3608, 1436, 956]`
+/// records a crop that cuts both sides, so the centre (636, 572) and the
+/// area 420 by 468 that AFInfo2 records in the full 8256 by 5504 frame are
+/// fractions of the cropped picture, and the reader scales them onto
+/// CropArea's 5392 by 3592, each rounded to the nearest pixel.
+const STRIPPED_Z9_DX: StrippedZ9 = StrippedZ9 {
+    file: support::fixtures::Z9_DX,
+    capture_time: "2026-10-19T19:26:32.53-03:00",
+    exposure_time: (10, 1000),
+    raw_size: (5408, 3608),
+    image_size: (5392, 3592),
+    previews: [(160, 120), (640, 424), (1620, 1080), (5392, 3592)],
+    focus_frame: (5392, 3592),
+    focus_center: (415, 373),
+    focus_size: (274, 305),
+};
+
+/// The 1:1 shot. CropHiSpeed `[17, 8280, 5520, 5520, 5520, 1380, 0]`
+/// records a crop that keeps the height, so the centre (1797, 424) that
+/// AFInfo2 records in the full 8256 by 5504 frame is a position in that
+/// frame, of which CropArea's 5504 by 5504 is the centred window: the
+/// reader moves x back by the window's origin, (8256 - 5504) / 2 = 1376,
+/// and keeps the area, 291 by 323.
+const STRIPPED_Z9_1X1: StrippedZ9 = StrippedZ9 {
+    file: support::fixtures::Z9_1X1,
+    capture_time: "2026-10-19T19:26:52.73-03:00",
+    exposure_time: (10, 600),
+    raw_size: (5520, 5520),
+    image_size: (5504, 5504),
+    previews: [(160, 120), (480, 480), (1080, 1080), (5504, 5504)],
+    focus_frame: (5504, 5504),
+    focus_center: (421, 424),
+    focus_size: (291, 323),
+};
+
+/// Checks that the stripped Z 9 file `expected` names opens as a NEF with
+/// its four previews, smallest first, each a stub JPEG of 122 bytes that
+/// reads whole, and gives every value of its metadata, the focus point
+/// placed on the cropped picture among them.
+fn check_stripped_z9(expected: &StrippedZ9) {
+    let label = expected.file;
+    let mut file = RawFile::open(support::fixtures::fixture(expected.file)).unwrap();
+    assert_eq!(file.format(), Format::Nef, "{label}");
+
+    // The stripping replaced each JPEG by a stub of 122 bytes with the
+    // original's frame header, so each keeps its size.
+    assert_eq!(sizes(file.previews()), expected.previews, "{label}");
+    let previews = file.previews().to_vec();
+    for preview in &previews {
+        let size = (preview.width(), preview.height());
+        assert_eq!(preview.format(), PreviewFormat::Jpeg, "{label} {size:?}");
+        assert_eq!(
+            preview.orientation(),
+            Orientation::NoTransforms,
+            "{label} {size:?}"
+        );
+        assert_eq!(preview.byte_len(), 122, "{label} {size:?}");
+        let bytes = file.read_preview(preview).unwrap();
+        assert_eq!(bytes.len(), 122, "{label} {size:?}");
+        assert_eq!(bytes[..3], [0xFF, 0xD8, 0xFF], "{label} {size:?}");
+        assert_eq!(bytes[bytes.len() - 2..], [0xFF, 0xD9], "{label} {size:?}");
+    }
+    assert_eq!(file.largest_preview(), previews.last().copied(), "{label}");
+
+    let metadata = file.metadata();
+    assert_eq!(metadata.make(), Some("NIKON CORPORATION"), "{label}");
+    assert_eq!(metadata.model(), Some("NIKON Z 9"), "{label}");
+    // The stripping removed BodySerialNumber and the MakerNote's
+    // SerialNumber.
+    assert_eq!(metadata.serial_number(), None, "{label}");
+    assert_eq!(
+        metadata
+            .capture_time()
+            .map(|time| time.to_string())
+            .as_deref(),
+        Some(expected.capture_time),
+        "{label}"
+    );
+    assert_eq!(metadata.orientation(), Orientation::NoTransforms, "{label}");
+    // The exposure as stored: ISO 100 at f/1.4 and 50 mm, with no
+    // compensation.
+    let exposure = metadata.exposure();
+    assert_eq!(exposure.iso(), Some(100), "{label}");
+    let (numerator, denominator) = expected.exposure_time;
+    assert_eq!(
+        exposure.exposure_time(),
+        Some(fraction(numerator, denominator)),
+        "{label}"
+    );
+    assert_eq!(exposure.f_number(), Some(fraction(140, 100)), "{label}");
+    assert_eq!(exposure.focal_length(), Some(fraction(500, 10)), "{label}");
+    assert_eq!(
+        exposure.exposure_bias(),
+        Some(SignedRational {
+            numerator: 0,
+            denominator: 6,
+        }),
+        "{label}"
+    );
+    // The lens from the Exif IFD: a LensMake that is empty, which gives no
+    // make, a model, no serial number, since the stripping removed it, and
+    // the range of a 50 mm f/1.4 prime.
+    let lens = metadata
+        .lens()
+        .unwrap_or_else(|| panic!("{label}: no lens"));
+    assert_eq!(
+        (lens.make(), lens.model(), lens.serial_number()),
+        (None, Some("50mm f/1.4G"), None),
+        "{label}"
+    );
+    assert_eq!(lens.min_focal_length(), Some(fraction(500, 10)), "{label}");
+    assert_eq!(lens.max_focal_length(), Some(fraction(500, 10)), "{label}");
+    assert_eq!(
+        lens.f_number_at_min_focal_length(),
+        Some(fraction(140, 100)),
+        "{label}"
+    );
+    assert_eq!(
+        lens.f_number_at_max_focal_length(),
+        Some(fraction(140, 100)),
+        "{label}"
+    );
+    // The raw size is the raw SubIFD's, already cropped; with no default
+    // crop in the file, the image size is the MakerNote's CropArea.
+    assert_eq!(
+        metadata.raw_size(),
+        Some(as_size(expected.raw_size)),
+        "{label}"
+    );
+    assert_eq!(
+        metadata.image_size(),
+        Some(as_size(expected.image_size)),
+        "{label}"
+    );
+    // The focus point, placed on the cropped picture by the crop rule (see
+    // the two files' constants), with focus confirmed.
+    let focus = metadata
+        .focus()
+        .unwrap_or_else(|| panic!("{label}: no focus point"));
+    assert_eq!(focus.frame(), as_size(expected.focus_frame), "{label}");
+    let (x, y) = expected.focus_center;
+    assert_eq!(focus.center(), Point { x, y }, "{label}");
+    assert_eq!(focus.size(), Some(as_size(expected.focus_size)), "{label}");
+    assert_eq!(focus.in_focus(), Some(true), "{label}");
+    // The frame is the picture's, so the point scales onto the full-size
+    // preview as it is.
+    assert_eq!(focus.frame(), as_size(expected.previews[3]), "{label}");
+}
+
+#[test]
+fn the_stripped_z9_dx_file_gives_its_previews_metadata_and_scaled_focus_point() {
+    check_stripped_z9(&STRIPPED_Z9_DX);
+}
+
+#[test]
+fn the_stripped_z9_1x1_file_gives_its_previews_metadata_and_shifted_focus_point() {
+    check_stripped_z9(&STRIPPED_Z9_1X1);
+}
+
+// Real files, downloaded. The Z 9 files of raw.pixls.us, one per
+// compression mode, and 20 files of 18 other Nikon bodies, all CC0, are
+// listed with their hashes in `tests/samples.tsv`;
+// `scripts/fetch-samples.sh` downloads them. They are too large to commit,
+// so a test whose file is absent says so and passes: the suite runs
+// offline.
 
 /// The Z 9 samples, each with its four previews, smallest first: the IFD0
 /// thumbnail, the MakerNote's preview, the medium JPEG in SubIFD2 and the

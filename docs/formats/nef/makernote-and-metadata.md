@@ -650,7 +650,10 @@ What the fields hold:
   check with the maintainer's Z 9 tell the two apart: two frames in each
   of FX, DX, 1:1 and 16:9 with a single point placed in the top-left
   corner of the picture, and five earlier frames of the same modes with
-  the same values. In the 8256x5504 frame they record:
+  the same values. One DX and one 1:1 frame are committed, stripped of
+  their pixels and personal fields, as fixtures
+  ([`tests/fixtures/`](../../../tests/fixtures/README.md)). In the
+  8256x5504 frame they record:
 
   | Mode | CropHiSpeed | CropArea | Centre, area recorded | Scaled onto CropArea | Shifted by the centred window |
   |---|---|---|---|---|---|
@@ -732,8 +735,8 @@ and what raw-files gives; a row without a file is an open question
 | Shot | What the file records | CC0 files | raw-files gives |
 |---|---|---|---|
 | Mirrorless, single point, pinpoint, wide area or 3D-tracking | a position | Z 6 3587, Z 9 5146 to 5148, Z f 6887, Z6III 7808 to 7810, 7812, 7813, Z50II 7767, 7770 | the point |
-| Mirrorless on a DX crop | a position, scaled into the full frame | Z6III 7810; the maintainer's Z 9 shots, off-centre | the point, scaled onto the crop |
-| Mirrorless on an aspect crop (1:1, 16:9) | a position in the full frame | Z6III 7808, 7809, 7812, 7813, Z50II 7767, 7770; the maintainer's Z 9 shots, off-centre | the point, moved into the window |
+| Mirrorless on a DX crop | a position, scaled into the full frame | Z6III 7810; the maintainer's Z 9 shots, off-centre, one DX frame committed stripped | the point, scaled onto the crop |
+| Mirrorless on an aspect crop (1:1, 16:9) | a position in the full frame | Z6III 7808, 7809, 7812, 7813, Z50II 7767, 7770; the maintainer's Z 9 shots, off-centre, one 1:1 frame committed stripped | the point, moved into the window |
 | A DX crop at 1:1 or 16:9 on an FX body | unknown | none | the point, scaled; unchecked |
 | Mirrorless small raw | a position in the full frame | Z 6 3587 | the point, in the full frame |
 | Mirrorless, auto-area with only a mask | a mask | Z5II 7735, 7736 | none: needs a table of points |
