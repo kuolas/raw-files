@@ -1,13 +1,15 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! Files laid out like the NEF files of two Nikon bodies, the Z 9 and the
-//! D300, with stub JPEGs in place of the real ones, so that the tests check
-//! the NEF reader on the real layouts without a real file. The Z 9 records
-//! its metadata in the standard tags; the D300, an older body, records its
-//! serial number, its lens's range and its clock's time zone only in its
-//! MakerNote. Both record where they focused only in their MakerNote: the
-//! Z 9 a focus point, and the D300, shot through the viewfinder in manual
-//! focus, none.
+//! Files laid out like the NEF files of three Nikon bodies, the Z 9, the
+//! D300 and the Z6III, with stub JPEGs in place of the real ones, so that
+//! the tests check the NEF reader on the real layouts without a real file.
+//! The Z 9 records its metadata in the standard tags; the D300, an older
+//! body, records its serial number, its lens's range and its clock's time
+//! zone only in its MakerNote; the Z6III is laid out like the Z 9, shot on
+//! a 1:1 crop. All three record where they focused only in their
+//! MakerNote: the Z 9 a focus point, the Z6III one in its full frame,
+//! which the reader places on the cropped picture, and the D300, shot
+//! through the viewfinder in manual focus, none.
 //!
 //! The Z 9 layout, which [`z9_file`] writes:
 //!
@@ -114,6 +116,38 @@
 //! Every text value of the D300 file is ASCII ending in one NUL, with no
 //! padding.
 //!
+//! The Z6III layout, which [`z6iii_file`] writes, is that of the public
+//! Z6III sample 7808 of raw.pixls.us, a 1:1 crop, which is little-endian,
+//! file and MakerNote alike; the builder takes the byte order, as the
+//! others do, and lays the file out as the Z 9's, with these differences:
+//!
+//! - IFD0's Model is `NIKON Z6_3`. Its small JPEG is the Z 9's 160 by 120.
+//! - SubIFD0 declares the full-size JPEG of the cropped picture, 4032 by
+//!   4032 pixels, and SubIFD2 the medium one, 1080 by 1080.
+//! - SubIFD1 is the raw data, 4048 by 4040 pixels, the stored pixels of the
+//!   1:1 crop, of 14-bit samples with Compression 34713, in one strip of 64
+//!   bytes that start with `FF 10 FF 50`, as the Z 9's.
+//! - SubIFD3 is an uncompressed grey image of 320 by 256 pixels, in one
+//!   strip of 64 zero bytes; SubIFD4 and SubIFD5 are the Z 9's empty ones.
+//! - The Exif IFD holds the sample's values, each of the type it has there:
+//!   ExifVersion `0232`; DateTimeOriginal `2024:06:29 15:38:53`,
+//!   SubSecTimeOriginal `42` and OffsetTimeOriginal `-04:00`; ExposureTime
+//!   `10/1000`, FNumber `900/100` and FocalLength `860/10`,
+//!   ExposureBiasValue `0/6`, PhotographicSensitivity 200, SensitivityType
+//!   2 and RecommendedExposureIndex 200; LensMake `NIKON`, LensModel
+//!   `NIKKOR Z 24-200mm f/4-6.3 VR`, padded with NULs to 65 bytes as the
+//!   Z 9's, and LensSpecification `240/10`, `2000/10`, `400/100`,
+//!   `630/100`. The BodySerialNumber `2345678` and the LensSerialNumber
+//!   `23456789`, padded as the Z 9's, are made up.
+//! - The MakerNote, of the version `0211`, holds the FocusMode `AF-S  `;
+//!   the CropHiSpeed `[17, 6064, 4040, 4048, 4040, 1008, 0]` (SHORT), the
+//!   1:1 crop of a 6064 by 4040 picture; the CropArea `[8, 4, 4032, 4032]`;
+//!   the sample's AFInfo2 of version `0401`, the 80 bytes the Z 9's layout
+//!   has, with the area mode 192 (pinpoint), a frame of 6048 by 4032, the
+//!   camera's full output, a focus area of 163 by 174 pixels centred at
+//!   (3023, 2016) in it, and the in-focus byte 0, a missed focus; and a
+//!   PreviewIFD that declares a small JPEG of 480 by 480 pixels.
+//!
 //! Every stub JPEG is a baseline one. The tags that the shared builder has
 //! no constant for are named here.
 
@@ -202,6 +236,11 @@ const FOCUS_MODE: u16 = 0x0007;
 /// The offset of the MakerNote's PreviewIFD, the IFD that declares its
 /// small JPEG (PreviewIFD, a tag of the MakerNote IFD).
 const PREVIEW_IFD: u16 = 0x0011;
+/// The crop mode and how large the picture was before and after the crop,
+/// as seven SHORTs: the mode, the original width and height, the cropped
+/// width and height, and the left column and top row where the crop starts
+/// (CropHiSpeed, a tag of the MakerNote IFD).
+const CROP_HI_SPEED: u16 = 0x001B;
 /// The camera body's serial number, as ASCII text (SerialNumber, a tag of
 /// the MakerNote IFD).
 const SERIAL_NUMBER: u16 = 0x001D;
@@ -297,30 +336,94 @@ pub const Z9_FOCUS_CENTER: (u32, u32) = (4905, 2461);
 /// point's, as on the public Z 9 samples 5146 to 5148.
 pub const Z9_FOCUS_AREA: (u32, u32) = (291, 323);
 
-/// The Z 9's AFInfo2, as the public samples 5146 to 5148 record it, with
-/// its SHORTs in byte order `order`: 80 bytes, the version `0400`, the
-/// detection method 2, the area mode 193 (single point), a zero byte and
-/// the coordinates flag 1; zeros up to byte 62; then [`Z9_FOCUS_FRAME`],
-/// [`Z9_FOCUS_CENTER`] and [`Z9_FOCUS_AREA`], each width or x before its
-/// height or y; the in-focus byte 1, focus confirmed; and five zero
+/// An AFInfo2 of the layout of versions 0400, 0401 and 0402, as the Z
+/// bodies write it, with its SHORTs in byte order `order`: 80 bytes, the
+/// version `version`, the detection method 2 (hybrid), the area mode
+/// `area_mode`, a zero byte and the coordinates flag 1; zeros up to byte
+/// 62; then the frame, the centre and the area of `record`, each width or
+/// x before its height or y; the in-focus byte `in_focus`; and five zero
 /// bytes.
-pub fn z9_af_info2(order: Order) -> Vec<u8> {
-    let mut value = b"0400".to_vec();
-    value.extend_from_slice(&[2, 0xC1, 0, 1]);
+pub fn af_info2_04xx(
+    order: Order,
+    version: &[u8; 4],
+    area_mode: u8,
+    record: [(u32, u32); 3],
+    in_focus: u8,
+) -> Vec<u8> {
+    let mut value = version.to_vec();
+    value.extend_from_slice(&[2, area_mode, 0, 1]);
     value.resize(62, 0);
-    for (first, second) in [Z9_FOCUS_FRAME, Z9_FOCUS_CENTER, Z9_FOCUS_AREA] {
+    for (first, second) in record {
         for number in [first, second] {
             let short = u16::try_from(number).expect("a SHORT");
             value.extend_from_slice(&order.u16(short));
         }
     }
-    value.push(1);
+    value.push(in_focus);
     value.resize(80, 0);
     value
 }
 
+/// The Z 9's AFInfo2, as the public samples 5146 to 5148 record it, with
+/// its SHORTs in byte order `order`, as [`af_info2_04xx`] writes it: the
+/// version `0400`, the area mode 193 (single point), [`Z9_FOCUS_FRAME`],
+/// [`Z9_FOCUS_CENTER`] and [`Z9_FOCUS_AREA`], and the in-focus byte 1,
+/// focus confirmed.
+pub fn z9_af_info2(order: Order) -> Vec<u8> {
+    af_info2_04xx(
+        order,
+        b"0400",
+        0xC1,
+        [Z9_FOCUS_FRAME, Z9_FOCUS_CENTER, Z9_FOCUS_AREA],
+        1,
+    )
+}
+
+/// The size in pixels of each JPEG of the Z6III file but IFD0's, which is
+/// [`IFD0_JPEG`], as on the public sample 7808: SubIFD0's full-size one,
+/// the size of the cropped picture.
+pub const Z6III_FULL_SIZE_JPEG: (u16, u16) = (4032, 4032);
+/// SubIFD2's medium JPEG; see [`Z6III_FULL_SIZE_JPEG`].
+pub const Z6III_MEDIUM_JPEG: (u16, u16) = (1080, 1080);
+/// The MakerNote's small JPEG; see [`Z6III_FULL_SIZE_JPEG`].
+pub const Z6III_PREVIEW_JPEG: (u16, u16) = (480, 480);
+/// The Z6III file's raw size, SubIFD1's: width, then height, the stored
+/// pixels of the 1:1 crop, as on the public sample 7808.
+pub const Z6III_RAW: (u32, u32) = (4048, 4040);
+/// The Z6III file's image size, its CropArea's: width, then height.
+pub const Z6III_IMAGE: (u32, u32) = (4032, 4032);
+
+/// The Z6III's CropHiSpeed, as the public sample 7808 records it: the mode
+/// 17 (FX 1:1), the original size 6064 by 4040, the cropped size 4048 by
+/// 4040, and the crop's left column, 1008, and top row, 0.
+const CROP_HI_SPEED_Z6III_1X1: [u16; 7] = [17, 6064, 4040, 4048, 4040, 1008, 0];
+/// The Z6III's CropArea, as the public sample 7808 records it.
+const CROP_AREA_Z6III_1X1: [u16; 4] = [8, 4, 4032, 4032];
+
+/// The focus point that the Z6III file's AFInfo2 records, as on the public
+/// sample 7808: the frame, the camera's full 6048 by 4032 output, the
+/// centre and the area in it, a pinpoint area, each width or x first.
+const Z6III_RECORDED_FOCUS: [(u32, u32); 3] = [(6048, 4032), (3023, 2016), (163, 174)];
+
+/// The frame of the Z6III file's focus point, as the reader gives it: the
+/// cropped picture, CropArea's size, not the frame AFInfo2 records.
+pub const Z6III_FOCUS_FRAME: (u32, u32) = (4032, 4032);
+/// The centre of the Z6III file's focus area in [`Z6III_FOCUS_FRAME`]: the
+/// recorded (3023, 2016) moved back across by the 1:1 window's origin,
+/// half of 6048 less 4032.
+pub const Z6III_FOCUS_CENTER: (u32, u32) = (2015, 2016);
+/// The size of the Z6III file's focus area, kept as recorded.
+pub const Z6III_FOCUS_AREA: (u32, u32) = (163, 174);
+/// Whether the Z6III file records that focus was confirmed: no, a miss
+/// beside a valid point, as on every public Z6III sample.
+pub const Z6III_IN_FOCUS: bool = false;
+
 /// The model name of the Z 9 file's lens, as its LensModel records it.
 pub const LENS_MODEL_Z14_30: &str = "NIKKOR Z 14-30mm f/4 S";
+
+/// The model name of the Z6III file's lens, as its LensModel records it on
+/// the public sample 7808.
+pub const LENS_MODEL_Z24_200: &str = "NIKKOR Z 24-200mm f/4-6.3 VR";
 
 /// How many bytes the Z 9 stores its LensModel in, with the NUL that ends
 /// it and the NULs that pad it: 65 on the public sample 5147.
@@ -346,7 +449,7 @@ pub fn stub((width, height): (u16, u16)) -> Vec<u8> {
 }
 
 /// Where the blobs of a Z 9 file are, as [`z9_file_with`] laid them
-/// out.
+/// out, or of a Z6III file, laid out alike by [`z6iii_file_with_blobs`].
 #[derive(Clone, Copy, Debug)]
 pub struct Z9Blobs {
     /// IFD0's small JPEG.
@@ -513,6 +616,125 @@ pub fn z9_file_with(order: Order, orientation: u16, makernote_order: Order) -> (
                 .ascii(ifd, FOCUS_MODE, "AF-S  ")
                 .short(ifd, CROP_AREA, &CROP_AREA_Z9)
                 .undefined(ifd, AF_INFO2, &z9_af_info2(makernote_order));
+        },
+    );
+    let makernote = builder.blob(&block);
+    builder.undefined_blob(exif, MAKER_NOTE, makernote);
+
+    let blobs = Z9Blobs {
+        ifd0_jpeg,
+        full_size_jpeg,
+        raw,
+        medium_jpeg,
+        grey,
+        makernote,
+        preview_in_makernote,
+    };
+    (builder.build(), blobs)
+}
+
+/// The Z6III layout, in byte order `order`, with IFD0's Orientation
+/// `orientation` (an EXIF value, 1 to 8).
+pub fn z6iii_file(order: Order, orientation: u16) -> Built {
+    z6iii_file_with_blobs(order, orientation).0
+}
+
+/// As [`z6iii_file`], with where its blobs are, so that a test can find
+/// them with [`Built::blob_offset`]: the Z6III file is laid out like the
+/// Z 9's, so the same fields name its blobs.
+pub fn z6iii_file_with_blobs(order: Order, orientation: u16) -> (Built, Z9Blobs) {
+    let mut builder = TiffBuilder::new(order);
+    let ifd0 = builder.ifd();
+    let subs: Vec<IfdId> = (0..6).map(|_| builder.ifd()).collect();
+    let exif = builder.ifd();
+
+    builder
+        .long(ifd0, NEW_SUBFILE_TYPE, &[REDUCED_RESOLUTION])
+        .ascii(ifd0, MAKE, "NIKON CORPORATION")
+        .ascii(ifd0, MODEL, "NIKON Z6_3")
+        .short(ifd0, ORIENTATION, &[orientation])
+        .short(ifd0, COMPRESSION, &[OLD_STYLE_JPEG]);
+    let ifd0_jpeg = jpeg(&mut builder, ifd0, IFD0_JPEG);
+    builder.subifds(ifd0, &subs).exif(ifd0, exif);
+
+    builder
+        .long(subs[0], NEW_SUBFILE_TYPE, &[REDUCED_RESOLUTION])
+        .short(subs[0], COMPRESSION, &[OLD_STYLE_JPEG]);
+    let full_size_jpeg = jpeg(&mut builder, subs[0], Z6III_FULL_SIZE_JPEG);
+
+    let mut raw_strip = RAW_STRIP_START.to_vec();
+    raw_strip.resize(64, 0);
+    let (raw_width, raw_height) = Z6III_RAW;
+    builder
+        .long(subs[1], NEW_SUBFILE_TYPE, &[FULL_RESOLUTION])
+        .long(subs[1], IMAGE_WIDTH, &[raw_width])
+        .long(subs[1], IMAGE_LENGTH, &[raw_height])
+        .short(subs[1], BITS_PER_SAMPLE, &[14])
+        .short(subs[1], COMPRESSION, &[NIKON_RAW])
+        .short(subs[1], PHOTOMETRIC_INTERPRETATION, &[CFA])
+        .short(subs[1], SAMPLES_PER_PIXEL, &[1]);
+    let raw = strip(&mut builder, subs[1], &raw_strip);
+
+    builder
+        .long(subs[2], NEW_SUBFILE_TYPE, &[REDUCED_RESOLUTION])
+        .short(subs[2], COMPRESSION, &[OLD_STYLE_JPEG]);
+    let medium_jpeg = jpeg(&mut builder, subs[2], Z6III_MEDIUM_JPEG);
+
+    builder
+        .long(subs[3], NEW_SUBFILE_TYPE, &[REDUCED_RESOLUTION])
+        .long(subs[3], IMAGE_WIDTH, &[320])
+        .long(subs[3], IMAGE_LENGTH, &[256])
+        .short(subs[3], BITS_PER_SAMPLE, &[8])
+        .short(subs[3], COMPRESSION, &[UNCOMPRESSED])
+        .short(subs[3], PHOTOMETRIC_INTERPRETATION, &[BLACK_IS_ZERO])
+        .short(subs[3], SAMPLES_PER_PIXEL, &[1]);
+    let grey = strip(&mut builder, subs[3], &[0; 64]);
+
+    for (sub, compression) in [(subs[4], NIKON_RAW), (subs[5], UNCOMPRESSED)] {
+        builder
+            .long(sub, NEW_SUBFILE_TYPE, &[REDUCED_RESOLUTION])
+            .long(sub, IMAGE_WIDTH, &[0])
+            .long(sub, IMAGE_LENGTH, &[0])
+            .short(sub, COMPRESSION, &[compression])
+            .long(sub, STRIP_OFFSETS, &[0])
+            .long(sub, STRIP_BYTE_COUNTS, &[0]);
+    }
+
+    builder
+        .undefined(exif, EXIF_VERSION, b"0232")
+        .ascii(exif, DATE_TIME_ORIGINAL, "2024:06:29 15:38:53")
+        .ascii(exif, SUB_SEC_TIME_ORIGINAL, "42")
+        .ascii(exif, OFFSET_TIME_ORIGINAL, "-04:00")
+        .rational(exif, EXPOSURE_TIME, &[(10, 1000)])
+        .rational(exif, F_NUMBER, &[(900, 100)])
+        .short(exif, PHOTOGRAPHIC_SENSITIVITY, &[200])
+        .short(exif, SENSITIVITY_TYPE, &[2])
+        .long(exif, RECOMMENDED_EXPOSURE_INDEX, &[200])
+        .srational(exif, EXPOSURE_BIAS_VALUE, &[(0, 6)])
+        .rational(exif, FOCAL_LENGTH, &[(860, 10)])
+        .ascii(exif, BODY_SERIAL_NUMBER, "2345678")
+        .rational(
+            exif,
+            LENS_SPECIFICATION,
+            &[(240, 10), (2000, 10), (400, 100), (630, 100)],
+        )
+        .ascii(exif, LENS_MAKE, "NIKON")
+        .ascii(exif, LENS_MODEL, &padded_lens_model(LENS_MODEL_Z24_200))
+        .ascii(exif, LENS_SERIAL_NUMBER, "23456789  ");
+    let (block, preview_in_makernote) = nikon_makernote(
+        order,
+        Z9_MAKER_NOTE_VERSION,
+        &stub(Z6III_PREVIEW_JPEG),
+        |inner, ifd| {
+            inner
+                .ascii(ifd, FOCUS_MODE, "AF-S  ")
+                .short(ifd, CROP_HI_SPEED, &CROP_HI_SPEED_Z6III_1X1)
+                .short(ifd, CROP_AREA, &CROP_AREA_Z6III_1X1)
+                .undefined(
+                    ifd,
+                    AF_INFO2,
+                    &af_info2_04xx(order, b"0401", 0xC0, Z6III_RECORDED_FOCUS, 0),
+                );
         },
     );
     let makernote = builder.blob(&block);

@@ -18,9 +18,14 @@ does.
   `Point` types, `Focus::new` and its `with_size` and `with_in_focus` to
   build one, and `Focus::scaled_to` to place it on a preview. It is read
   on Nikon files from the MakerNote's AFInfo2 block, which mirrorless
-  bodies and DSLRs in live view fill in, and is `None` on a file that
-  records only an autofocus point's number, such as a DSLR shot through
-  the viewfinder, on a manual-focus shot, and on Sony files.
+  bodies and DSLRs in live view fill in, and on a Nikon crop, DX, 1:1,
+  16:9 or any other CropHiSpeed records with a CropArea, the point is
+  placed inside the cropped picture, whose size becomes its frame; it is
+  `None` on a file that records only an autofocus point's number, such
+  as a DSLR shot through the viewfinder, on a manual-focus shot, at an
+  AFInfo2 version raw-files does not know, on a crop whose point cannot
+  be placed on the cropped picture (a 1:1 or 16:9 crop on a small raw, or
+  a crop whose CropArea cannot be used), and on Sony files.
 - Public constructors for `DateTime` (`new`, `with_subseconds`,
   `with_offset`), `Rational` and `SignedRational` (`new`), a builder for
   `Lens` (`Lens::builder`), and `with_…` builders on `Metadata` and

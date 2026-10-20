@@ -673,7 +673,10 @@ What the fields hold:
   CropArea, keeping the area, when CropArea's kept side equals the
   frame's. A 1:1 or 16:9 crop on a small raw, whose CropArea counts
   stored pixels, gives no point, and a DX crop on one is scaled onto that
-  CropArea (ADR012). The values of the CC0 files are in
+  CropArea (ADR012). A crop whose CropArea is present but cannot be used,
+  or cannot be checked against a raw size, gives no point; a crop with no
+  CropArea at all, such as the D810's, is read as recorded. The values of
+  the CC0 files are in
   [test-data.md](test-data.md#23-files-checked-for-the-focus-point).
 - **CropHiSpeed (0x001B) tells a cropped file apart**
   ([section 8.4](#84-image-dimensions)). On the crop files above its

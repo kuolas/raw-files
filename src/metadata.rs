@@ -219,11 +219,18 @@ impl Metadata {
     /// the camera's own record only, never an estimate from the picture.
     ///
     /// It is read on Nikon files, from the MakerNote's AFInfo2 block, as the
-    /// camera recorded it. It is `None` on a Nikon file that records no
-    /// position, such as a DSLR shot through the viewfinder, which records
-    /// only an autofocus point's number, and on a manual-focus shot; and on
-    /// Sony files, whatever they record, because their MakerNote is not
-    /// read.
+    /// camera recorded it. The exception is a Nikon crop, any that
+    /// CropHiSpeed records with a CropArea: there the point is placed inside
+    /// the cropped picture, by the sides the crop cuts, as the
+    /// [NEF format notes](https://github.com/kuolas/raw-files/blob/master/docs/formats/nef/makernote-and-metadata.md)
+    /// describe. DX, 1:1 and 16:9 are the checked cases. It is `None` on a Nikon file that records no position,
+    /// such as a DSLR shot through the viewfinder, which records only an
+    /// autofocus point's number, and on a manual-focus shot. It is `None`
+    /// too when the AFInfo2 version is one raw-files does not know, and on
+    /// a crop whose point cannot be placed on the cropped picture: a 1:1 or
+    /// 16:9 crop on a small raw, or a crop whose CropArea cannot be used.
+    /// On Sony files it is `None`, whatever they record, because their
+    /// MakerNote is not read.
     pub fn focus(&self) -> Option<Focus> {
         self.focus
     }
@@ -803,7 +810,8 @@ impl LensBuilder {
 /// focus records none that means anything. Those files give no `Focus`.
 ///
 /// On Nikon files, [`Metadata::focus`] is read from the MakerNote's AFInfo2
-/// block, as the camera recorded it, and is `None` for a manual-focus shot.
+/// block, as the camera recorded it but placed inside the cropped picture
+/// on a crop, and is `None` for a manual-focus shot.
 /// On Sony files it is `None`, whatever they record, because their
 /// MakerNote is not read.
 ///

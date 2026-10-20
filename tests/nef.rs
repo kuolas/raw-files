@@ -3,12 +3,15 @@
 //! The NEF reader from outside the crate, on a file laid out like a Nikon
 //! Z 9's: what it opens as, which previews it lists, what reading one
 //! returns, and what metadata it gives, the focus point among it. Then the
-//! previews and the metadata of a file laid out like a D300's, an older
-//! body that records its serial number and its lens's range only in its
-//! MakerNote, and no focus point, shot through the viewfinder in manual
-//! focus. Then real files, three of the Z 9 and 20 of 18 other bodies,
-//! when they have been downloaded (see [`support::samples::path`]): the
-//! previews each gives, and its metadata, every value of it.
+//! previews and the metadata of a file laid out like a Z6III's on a 1:1
+//! crop, whose focus point the reader moves from the full frame AFInfo2
+//! records into the cropped picture. Then the previews and the metadata
+//! of a file laid out like a D300's, an older body that records its serial
+//! number and its lens's range only in its MakerNote, and no focus point,
+//! shot through the viewfinder in manual focus. Then real files, three of
+//! the Z 9 and 20 of 18 other bodies, when they have been downloaded (see
+//! [`support::samples::path`]): the previews each gives, and its metadata,
+//! every value of it.
 
 mod support;
 
@@ -22,9 +25,11 @@ use raw_files::{
 };
 use support::nef::{
     D300_FULL_SIZE_JPEG, D300_LENS, D300_PREVIEW_JPEG, D300_RAW, D300_SERIAL_NUMBER,
-    FULL_SIZE_JPEG, IFD0_JPEG, LENS_MODEL_Z14_30, MEDIUM_JPEG, PREVIEW_JPEG, RAW_STRIP_START,
-    Z9_FOCUS_AREA, Z9_FOCUS_CENTER, Z9_FOCUS_FRAME, Z9Blobs, d300_file, d300_file_with_blobs, stub,
-    z9_file, z9_file_with, z9_file_with_blobs,
+    FULL_SIZE_JPEG, IFD0_JPEG, LENS_MODEL_Z14_30, LENS_MODEL_Z24_200, MEDIUM_JPEG, PREVIEW_JPEG,
+    RAW_STRIP_START, Z6III_FOCUS_AREA, Z6III_FOCUS_CENTER, Z6III_FOCUS_FRAME, Z6III_FULL_SIZE_JPEG,
+    Z6III_IMAGE, Z6III_IN_FOCUS, Z6III_MEDIUM_JPEG, Z6III_PREVIEW_JPEG, Z6III_RAW, Z9_FOCUS_AREA,
+    Z9_FOCUS_CENTER, Z9_FOCUS_FRAME, Z9Blobs, d300_file, d300_file_with_blobs, stub, z6iii_file,
+    z6iii_file_with_blobs, z9_file, z9_file_with, z9_file_with_blobs,
 };
 use support::samples::{
     Jpeg, Sample, SampleLens, SampleMetadata, SerialShape, check, check_metadata, sizes,
@@ -43,10 +48,28 @@ fn stub_len(size: (u16, u16)) -> u64 {
     u64::try_from(stub(size).len()).unwrap()
 }
 
-/// Checks that the Z 9 file `built`, whose blobs are `blobs`, opens as a
-/// NEF with its four JPEGs, smallest first, each where the fixture put it;
-/// `label` names the file in a failure.
-fn assert_the_four_jpegs(built: &Built, blobs: Z9Blobs, label: &str) {
+/// The sizes of the four JPEGs of a file laid out like the Z 9's: IFD0's,
+/// the MakerNote's, SubIFD2's medium one and SubIFD0's full-size one,
+/// smallest first.
+type FourJpegs = [(u16, u16); 4];
+
+/// The sizes of the Z 9 file's four JPEGs.
+const Z9_JPEGS: FourJpegs = [IFD0_JPEG, PREVIEW_JPEG, MEDIUM_JPEG, FULL_SIZE_JPEG];
+
+/// The sizes of the Z6III file's four JPEGs.
+const Z6III_JPEGS: FourJpegs = [
+    IFD0_JPEG,
+    Z6III_PREVIEW_JPEG,
+    Z6III_MEDIUM_JPEG,
+    Z6III_FULL_SIZE_JPEG,
+];
+
+/// Checks that the file `built`, laid out like the Z 9's, whose blobs are
+/// `blobs`, opens as a NEF with its four JPEGs of sizes `jpegs`, smallest
+/// first, each where the fixture put it; `label` names the file in a
+/// failure.
+fn assert_the_four_jpegs(built: &Built, blobs: Z9Blobs, jpegs: FourJpegs, label: &str) {
+    let [ifd0_jpeg, preview_jpeg, medium_jpeg, full_size_jpeg] = jpegs;
     let from_bytes = RawFile::from_bytes(&built.bytes).unwrap();
     let from_reader = RawFile::from_reader(Cursor::new(built.bytes.clone())).unwrap();
     for (how, format, previews) in [
@@ -54,24 +77,15 @@ fn assert_the_four_jpegs(built: &Built, blobs: Z9Blobs, label: &str) {
         ("reader", from_reader.format(), from_reader.previews()),
     ] {
         assert_eq!(format, Format::Nef, "{label}, from {how}");
-        assert_eq!(
-            sizes(previews),
-            [
-                wide(IFD0_JPEG),
-                wide(PREVIEW_JPEG),
-                wide(MEDIUM_JPEG),
-                wide(FULL_SIZE_JPEG)
-            ],
-            "{label}, from {how}"
-        );
+        assert_eq!(sizes(previews), jpegs.map(wide), "{label}, from {how}");
         let expected = [
-            (built.blob_offset(blobs.ifd0_jpeg), IFD0_JPEG),
+            (built.blob_offset(blobs.ifd0_jpeg), ifd0_jpeg),
             (
                 built.blob_offset(blobs.makernote) + blobs.preview_in_makernote,
-                PREVIEW_JPEG,
+                preview_jpeg,
             ),
-            (built.blob_offset(blobs.medium_jpeg), MEDIUM_JPEG),
-            (built.blob_offset(blobs.full_size_jpeg), FULL_SIZE_JPEG),
+            (built.blob_offset(blobs.medium_jpeg), medium_jpeg),
+            (built.blob_offset(blobs.full_size_jpeg), full_size_jpeg),
         ];
         for (preview, (offset, size)) in previews.iter().zip(expected) {
             assert_eq!(preview.format(), PreviewFormat::Jpeg, "{label}, from {how}");
@@ -85,7 +99,7 @@ fn assert_the_four_jpegs(built: &Built, blobs: Z9Blobs, label: &str) {
 fn the_z9_file_opens_as_nef_with_its_four_jpegs_smallest_first() {
     for order in ORDERS {
         let (built, blobs) = z9_file_with_blobs(order, 1);
-        assert_the_four_jpegs(&built, blobs, &format!("{order:?}"));
+        assert_the_four_jpegs(&built, blobs, Z9_JPEGS, &format!("{order:?}"));
     }
 }
 
@@ -96,6 +110,7 @@ fn a_makernote_in_the_other_byte_order_from_the_files_gives_the_same_four_jpegs(
         assert_the_four_jpegs(
             &built,
             blobs,
+            Z9_JPEGS,
             &format!("{order:?}, MakerNote {makernote_order:?}"),
         );
     }
@@ -424,6 +439,103 @@ fn the_raw_strip_the_grey_image_and_the_empty_subifds_are_not_previews() {
         // The empty SubIFDs declare a strip at offset 0.
         assert!(!starts.contains(&0), "{order:?}: {starts:?}");
         assert_eq!(starts.len(), 4, "{order:?}");
+    }
+}
+
+#[test]
+fn the_z6iii_file_opens_as_nef_with_its_four_jpegs_smallest_first() {
+    for order in ORDERS {
+        let (built, blobs) = z6iii_file_with_blobs(order, 1);
+        assert_the_four_jpegs(&built, blobs, Z6III_JPEGS, &format!("{order:?}"));
+    }
+}
+
+#[test]
+fn the_z6iii_file_gives_its_focus_point_on_the_cropped_picture() {
+    // A 1:1 crop: AFInfo2 records the point in the camera's full 6048 by
+    // 4032 frame, and the reader moves it into the 4032 by 4032 window
+    // that CropArea is, keeping the area, as on the public sample 7808.
+    for order in ORDERS {
+        let built = z6iii_file(order, 1);
+        let file = RawFile::from_bytes(&built.bytes).unwrap();
+        let metadata = file.metadata();
+        assert_eq!(metadata.make(), Some("NIKON CORPORATION"), "{order:?}");
+        assert_eq!(metadata.model(), Some("NIKON Z6_3"), "{order:?}");
+        assert_eq!(metadata.raw_size(), Some(as_size(Z6III_RAW)), "{order:?}");
+        assert_eq!(
+            metadata.image_size(),
+            Some(as_size(Z6III_IMAGE)),
+            "{order:?}"
+        );
+        let focus = metadata.focus().unwrap();
+        assert_eq!(focus.frame(), as_size(Z6III_FOCUS_FRAME), "{order:?}");
+        let (x, y) = Z6III_FOCUS_CENTER;
+        assert_eq!(focus.center(), Point { x, y }, "{order:?}");
+        assert_eq!(focus.size(), Some(as_size(Z6III_FOCUS_AREA)), "{order:?}");
+        assert_eq!(focus.in_focus(), Some(Z6III_IN_FOCUS), "{order:?}");
+        // The frame is the picture's, so the point scales onto the square
+        // previews as it is.
+        assert_eq!(
+            focus.frame(),
+            as_size(wide(Z6III_FULL_SIZE_JPEG)),
+            "{order:?}"
+        );
+    }
+}
+
+/// The metadata of the Z6III file, with the orientation `orientation`,
+/// built as a caller's test would, through the public constructors and
+/// the `with_…` methods alone; `None` when a constructor refuses a value.
+fn the_z6iii_metadata_by_hand(orientation: Orientation) -> Option<Metadata> {
+    let time = DateTime::new(2024, 6, 29, 15, 38, 53)?
+        .with_subseconds(420_000_000, 2)?
+        .with_offset(-240)?;
+    let exposure = Exposure::default()
+        .with_iso(200)
+        .with_exposure_time(Rational::new(10, 1000)?)
+        .with_f_number(Rational::new(900, 100)?)
+        .with_focal_length(Rational::new(860, 10)?)
+        .with_exposure_bias(SignedRational::new(0, 6)?);
+    let lens = Lens::builder()
+        .make("NIKON")
+        .model(LENS_MODEL_Z24_200)
+        .serial_number("23456789")
+        .min_focal_length(Rational::new(240, 10)?)
+        .max_focal_length(Rational::new(2000, 10)?)
+        .f_number_at_min_focal_length(Rational::new(400, 100)?)
+        .f_number_at_max_focal_length(Rational::new(630, 100)?)
+        .build()?;
+    let (x, y) = Z6III_FOCUS_CENTER;
+    let focus = Focus::new(as_size(Z6III_FOCUS_FRAME), Point { x, y })?
+        .with_size(as_size(Z6III_FOCUS_AREA))?
+        .with_in_focus(Z6III_IN_FOCUS);
+    let metadata = Metadata::default()
+        .with_make("NIKON CORPORATION")
+        .with_model("NIKON Z6_3")
+        .with_serial_number("2345678")
+        .with_capture_time(time)
+        .with_orientation(orientation)
+        .with_exposure(exposure)
+        .with_lens(lens)
+        .with_raw_size(as_size(Z6III_RAW))
+        .with_image_size(as_size(Z6III_IMAGE))
+        .with_focus(focus);
+    Some(metadata)
+}
+
+#[test]
+fn the_z6iii_metadata_built_by_hand_equals_what_open_reads() {
+    for order in ORDERS {
+        for (value, orientation) in [(8, Orientation::Rotate270), (1, Orientation::NoTransforms)] {
+            let label = format!("{order:?}, Orientation {value}");
+            let expected = the_z6iii_metadata_by_hand(orientation)
+                .expect("every value of the Z6III fixture is one the constructors accept");
+            let built = z6iii_file(order, value);
+            let from_bytes = RawFile::from_bytes(&built.bytes).unwrap();
+            let from_reader = RawFile::from_reader(Cursor::new(built.bytes.clone())).unwrap();
+            assert_eq!(from_bytes.metadata(), &expected, "{label}, from bytes");
+            assert_eq!(from_reader.metadata(), &expected, "{label}, from reader");
+        }
     }
 }
 

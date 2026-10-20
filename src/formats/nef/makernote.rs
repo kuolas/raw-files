@@ -96,6 +96,48 @@
 //! rule, the file gives no focus point, whatever AFInfo2 holds: the point
 //! of a manual-focus shot is not one the camera focused on (ADR012).
 //!
+//! On a crop mode, DX, 1:1 or 16:9, the point is not reported as recorded,
+//! for the frame AFInfo2 records stays the camera's full output while the
+//! picture is cut from it: the Z6III's 1:1 file records a 6048 by 4032
+//! frame for a picture of 4032 by 4032 (public sample 7808), and its 16:9
+//! and DX files and the Z50II's 1:1 and 16:9 files do the same (samples
+//! 7809, 7810, 7767 and 7770). What the values mean on the cropped picture
+//! depends on what the crop cut. A DX crop, which cuts both sides, records
+//! fractions of the cropped picture; a crop that keeps one side, 1:1 or
+//! 16:9, records positions in the full frame. Shots made with the
+//! maintainer's Z 9, with the point in the top-left corner of the picture,
+//! showed it, with the same single point of 291 by 323 at (502, 424) in FX.
+//! The DX shot records (636, 572) and an area of 420 by 468, which, scaled
+//! onto its 5392 by 3592 picture, are (415, 373) and 274 by 305, near the
+//! corner and about the FX area. The 1:1 shot records (1797, 424), which is
+//! (421, 424) in its 5504 by 5504 window of the frame, and the 16:9 shot
+//! (502, 715), which is (502, 283) in its 8256 by 4640 window, both with
+//! the FX area. CropHiSpeed tells a crop apart: its cropped size differs
+//! from its original size on a crop, and equals it on every other file
+//! checked but the D810's, below. The record is checked first as recorded,
+//! in the full frame, as on any file: one that does not hold there gives no
+//! focus point on a crop either. On a crop, the frame becomes CropArea's
+//! size. A DX crop's point is scaled onto it as [`Focus::scaled_to`]
+//! scales: the centre and the area are each rounded to the nearest pixel,
+//! a half rounding up. An area that rounding leaves a pixel too wide for
+//! its centre is trimmed to fit, and an area side that rounds to nothing
+//! is kept at one pixel. A centre that rounds onto an edge of the picture
+//! keeps the point without an area. A 1:1 or 16:9 crop's centre moves
+//! back by the window's origin, half the difference between the frame and
+//! CropArea, keeping the area. That window holds only when CropArea's
+//! kept side equals the frame's: a small raw's CropArea counts stored
+//! pixels, smaller than the full output, so a 1:1 or 16:9 crop on one
+//! gives no focus point, while a DX crop on one is scaled onto its
+//! CropArea. A file whose CropHiSpeed records a crop but that has no
+//! CropArea is read as recorded: the D810 writes a cropped width four
+//! pixels short of its original on an uncropped file, and no CropArea
+//! (sample 2036); one whose CropArea cannot be used, or cannot be checked
+//! against a raw size, gives no focus point. A CropHiSpeed that fits
+//! neither shape, cutting both sides or keeping exactly one, such as one
+//! with a cropped side larger than its original, gives none too.
+//! CropHiSpeed is read only when it holds exactly seven SHORTs; otherwise
+//! the file is read as no crop (ADR012).
+//!
 //! Nikon has used three layouts for the block, told apart by their first
 //! bytes. The one every body since the D70 and the D100 writes, and the one
 //! read here, starts with the signature `Nikon` and a NUL, two version
@@ -119,15 +161,15 @@
 //! every entry whose value lies outside the block is dropped, as an entry
 //! whose value lies outside the file is, so every value read from them lies
 //! inside the block: the ISO's two numbers and WorldTime's four bytes,
-//! which the entry holds, and CropArea's four numbers, the serial number,
-//! the lens's range, FocusMode's text and AFInfo2's bytes, which take more
-//! than the four bytes an entry holds and so are stored elsewhere. A value
-//! of another type than its tag's rule allows is not read. A block that
-//! does not hold together, whether its inner header is not one, an IFD in
-//! it is cut short or has more entries than the limits allow, costs what
-//! the MakerNote would have given, the small preview, the crop area and
-//! the values above, never the file: the NEF security notes ask that bad
-//! entries be skipped rather than fail the file
+//! which the entry holds, and CropArea's four numbers, CropHiSpeed's seven,
+//! the serial number, the lens's range, FocusMode's text and AFInfo2's
+//! bytes, which take more than the four bytes an entry holds and so are
+//! stored elsewhere. A value of another type than its tag's rule allows is
+//! not read. A block that does not hold together, whether its inner header
+//! is not one, an IFD in it is cut short or has more entries than the
+//! limits allow, costs what the MakerNote would have given, the small
+//! preview, the crop area and the values above, never the file: the NEF
+//! security notes ask that bad entries be skipped rather than fail the file
 //! (`docs/formats/nef/security.md`, item 4 of the checklist).
 //! Only a failure of the reader itself is an error: that is not the file's
 //! fault, and says nothing about the MakerNote.
@@ -168,6 +210,13 @@ const FOCUS_MODE: u16 = 0x0007;
 /// The Nikon MakerNote tag that points at the PreviewIFD, the sub-IFD
 /// holding the small preview JPEG.
 const PREVIEW_IFD: u16 = 0x0011;
+
+/// The Nikon MakerNote tag that records the crop mode the picture was
+/// taken in, and how large the picture was before and after the crop
+/// (CropHiSpeed): seven SHORTs, the mode, the original width and height,
+/// the cropped width and height, and the left column and top row where
+/// the crop starts.
+const CROP_HI_SPEED: u16 = 0x001B;
 
 /// The Nikon MakerNote tag that records the camera body's serial number
 /// (SerialNumber), as ASCII text.
@@ -331,19 +380,24 @@ pub(super) fn preview_candidate<R: Read + Seek>(
 /// That is, first, the image size, from CropArea, which replaces the raw
 /// size the image size otherwise falls back on: when the raw IFD records no
 /// default crop, which comes first, and when there is a raw size for the
-/// crop area to lie inside ([`crop_area`]). Then, each only when the
-/// standard tags gave none, the serial number ([`serial_number`]), the ISO
-/// ([`iso`]), the lens's range ([`lens_range`]) and the capture time's
-/// offset from UTC ([`world_time`]): a range fills a lens whose standard
-/// tags gave no value of its range, keeping their make, model and serial
-/// number, or makes a lens of the range alone when they described none;
-/// an offset is given only to a capture time the standard tags gave, one
-/// whose OffsetTimeOriginal is missing or could not be read, and only
-/// within the bound every offset is held to
+/// crop area to lie inside ([`crop_area`]). CropArea is read once,
+/// whether or not it gives the image size, and the focus point below
+/// takes what it gives too: on a crop, a CropArea that cannot be used, or
+/// that there is no raw size to check against, gives no focus point.
+/// Then, each only when the standard tags gave none, the serial number
+/// ([`serial_number`]), the ISO ([`iso`]), the lens's range
+/// ([`lens_range`]) and the capture time's offset from UTC
+/// ([`world_time`]): a range fills a lens whose standard tags gave no
+/// value of its range, keeping their make, model and serial number, or
+/// makes a lens of the range alone when they described none; an offset is
+/// given only to a capture time the standard tags gave, one whose
+/// OffsetTimeOriginal is missing or could not be read, and only within
+/// the bound every offset is held to
 /// ([`DateTime::with_offset`](crate::datetime::DateTime::with_offset)).
-/// Last, the focus point, from AFInfo2 and FocusMode ([`focus`]), always
-/// read: the standard tags never give one, so it is not a fallback. Every
-/// other value is the standard tags'.
+/// Last, the focus point, from AFInfo2 and FocusMode, placed on the
+/// cropped picture by CropHiSpeed and CropArea on a crop ([`focus`]),
+/// always read: the standard tags never give one, so it is not a fallback.
+/// Every other value is the standard tags'.
 ///
 /// # Errors
 ///
@@ -357,10 +411,9 @@ pub(super) fn metadata<R: Read + Seek>(
         mut metadata,
         from_default_crop,
     } = standard;
-    if !from_default_crop
-        && let Some(raw) = metadata.raw_size
-        && let Some(image) = crop_area(src, makernote, raw)?
-    {
+    // Read once, for the image size and the focus point.
+    let crop = crop_area(src, makernote, metadata.raw_size)?;
+    if !from_default_crop && let CropArea::Size(image) = crop {
         metadata.image_size = Some(image);
     }
     if metadata.serial_number.is_none() {
@@ -382,15 +435,35 @@ pub(super) fn metadata<R: Read + Seek>(
     {
         metadata.capture_time = Some(time);
     }
-    metadata.focus = focus(src, makernote)?;
+    metadata.focus = focus(src, makernote, crop)?;
     Ok(metadata)
 }
 
+/// What `makernote`'s CropArea gives, as [`crop_area`] reads it: the size
+/// of the visible image, or why there is none. The image size takes only
+/// a size; on a crop, the focus point tells the other two apart
+/// ([`in_crop`]).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum CropArea {
+    /// There is no CropArea tag, as on the D810 (public sample 2036).
+    Absent,
+    /// There is a CropArea tag, but its value cannot be used, or there is
+    /// no raw size to check it against.
+    Unusable,
+    /// The size of the visible image that CropArea records.
+    Size(Size),
+}
+
 /// The size of the visible image that `makernote`'s CropArea records, in
-/// raw data of size `raw`; `None` when the tag is missing, is not of type
-/// SHORT or LONG, does not hold exactly four values, stores them outside
-/// the block, or describes a rectangle that [`tiff_metadata::crop`] does
-/// not accept: one of zero width or height, or not inside the raw data.
+/// raw data of size `raw`, as [`CropArea::Size`].
+///
+/// [`CropArea::Absent`] when the tag is missing, or stores its value
+/// outside the block, where the reading of the block drops it. Otherwise
+/// [`CropArea::Unusable`] when there is no raw size, whatever the tag's
+/// type, or when the tag is not of type SHORT or LONG, does not hold
+/// exactly four values, or describes a rectangle that
+/// [`tiff_metadata::crop`] does not accept: one of zero width or height,
+/// or not inside the raw data.
 ///
 /// See the [module documentation](self) for what CropArea is.
 ///
@@ -400,16 +473,24 @@ pub(super) fn metadata<R: Read + Seek>(
 fn crop_area<R: Read + Seek>(
     src: &mut Source<R>,
     makernote: &MakerNote,
-    raw: Size,
-) -> Result<Option<Size>> {
+    raw: Option<Size>,
+) -> Result<CropArea> {
+    if makernote.ifd.entry(CROP_AREA).is_none() {
+        return Ok(CropArea::Absent);
+    }
+    // Without a raw size, the rectangle has nothing to lie inside.
+    let Some(raw) = raw else {
+        return Ok(CropArea::Unusable);
+    };
     if !has_entry_of_type(makernote, CROP_AREA, &[SHORT, LONG]) {
-        return Ok(None);
+        return Ok(CropArea::Unusable);
     }
     let values = skip_damage(makernote.ifd.u32s(src, CROP_AREA))?.flatten();
     let Some(&[left, top, width, height]) = values.as_deref() else {
-        return Ok(None);
+        return Ok(CropArea::Unusable);
     };
-    Ok(tiff_metadata::crop([left, top], [width, height], raw))
+    Ok(tiff_metadata::crop([left, top], [width, height], raw)
+        .map_or(CropArea::Unusable, CropArea::Size))
 }
 
 /// The camera body's serial number that `makernote`'s SerialNumber
@@ -522,22 +603,194 @@ fn world_time<R: Read + Seek>(src: &mut Source<R>, makernote: &MakerNote) -> Res
 /// Where the camera's autofocus aimed, as `makernote`'s AFInfo2 records
 /// it: the centre of the focus area, the area's size and the frame the two
 /// are measured in, with whether focus was confirmed on the versions that
-/// say; `None` when FocusMode records manual focus ([`manual_focus`]), or
-/// when AFInfo2 is missing, is not of type UNDEFINED, stores its value
-/// outside the block, or holds a value [`af_info2_focus`] gives none for.
+/// say, placed on the cropped picture when the file is a crop, by
+/// `crop_area`, what CropArea gives, already read ([`crop_area`]).
 ///
-/// See the [module documentation](self) for what AFInfo2 is.
+/// `None` when FocusMode records manual focus ([`manual_focus`]); when
+/// AFInfo2 is missing, is not of type UNDEFINED, stores its value outside
+/// the block, or holds a value [`af_info2_record`] gives none for; or when
+/// [`in_crop`] gives none, because [`FocusRecord::focus`] refuses the
+/// record as recorded or the record cannot be placed on the cropped
+/// picture. CropHiSpeed is read only once AFInfo2 has given a record
+/// ([`crop_hi_speed`]).
+///
+/// See the [module documentation](self) for what AFInfo2 and CropHiSpeed
+/// are.
 ///
 /// # Errors
 ///
 /// `Io` when the reader fails. Nothing the block holds is an error.
-fn focus<R: Read + Seek>(src: &mut Source<R>, makernote: &MakerNote) -> Result<Option<Focus>> {
-    // Without AFInfo2 there is no focus point, so FocusMode is not read.
+fn focus<R: Read + Seek>(
+    src: &mut Source<R>,
+    makernote: &MakerNote,
+    crop_area: CropArea,
+) -> Result<Option<Focus>> {
+    // Without AFInfo2 there is nothing to place, so FocusMode is not read.
     if !has_entry_of_type(makernote, AF_INFO2, &[UNDEFINED]) || manual_focus(src, makernote)? {
         return Ok(None);
     }
     let value = skip_damage(makernote.ifd.bytes(src, AF_INFO2))?.flatten();
-    Ok(value.and_then(|value| af_info2_focus(&value, makernote.order)))
+    let Some(record) = value.and_then(|value| af_info2_record(&value, makernote.order)) else {
+        return Ok(None);
+    };
+    let crop = crop_hi_speed(src, makernote)?;
+    Ok(in_crop(record, crop, crop_area))
+}
+
+/// What CropHiSpeed records of a crop, as [`in_crop`] uses it: the size of
+/// the picture before the crop and after it, in the sensor's pixels,
+/// which [`in_crop`] only compares with each other. The mode and where the
+/// crop starts are not used.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct CropHiSpeed {
+    /// The original width and height, those of the uncropped picture.
+    original: Size,
+    /// The cropped width and height.
+    cropped: Size,
+}
+
+/// What `makernote`'s CropHiSpeed records of the crop; `None` when the tag
+/// is missing, is not of type SHORT, does not hold exactly seven values,
+/// or stores them outside the block. A file without it is read as no crop.
+///
+/// # Errors
+///
+/// `Io` when the reader fails. Nothing the block holds is an error.
+fn crop_hi_speed<R: Read + Seek>(
+    src: &mut Source<R>,
+    makernote: &MakerNote,
+) -> Result<Option<CropHiSpeed>> {
+    if !has_entry_of_type(makernote, CROP_HI_SPEED, &[SHORT]) {
+        return Ok(None);
+    }
+    let values = skip_damage(makernote.ifd.u32s(src, CROP_HI_SPEED))?.flatten();
+    let Some(
+        &[
+            _mode,
+            original_width,
+            original_height,
+            cropped_width,
+            cropped_height,
+            _left,
+            _top,
+        ],
+    ) = values.as_deref()
+    else {
+        return Ok(None);
+    };
+    Ok(Some(CropHiSpeed {
+        original: Size {
+            width: original_width,
+            height: original_height,
+        },
+        cropped: Size {
+            width: cropped_width,
+            height: cropped_height,
+        },
+    }))
+}
+
+/// The focus point `record` describes, placed on the cropped picture when
+/// the file is a crop, and as AFInfo2 records it otherwise; `None` when
+/// the record is refused as recorded, or the file is a crop on which it
+/// cannot be placed.
+///
+/// The record is checked first, as recorded, in its own frame, by
+/// [`FocusRecord::focus`], on a crop as on any other file. A centre outside
+/// the recorded frame, or an area that does not fit around it there, gives
+/// none, even where placing it on the cropped picture would move it inside.
+///
+/// A file is a crop when CropHiSpeed, `crop`, records a cropped size
+/// that differs from its original size, and the file has a CropArea,
+/// which `crop_area` gives: a crop without a CropArea tag, such as the
+/// D810's, whose cropped width is four pixels short on an uncropped file
+/// (public sample 2036), has no picture to place the record on, and is
+/// read as recorded. A crop whose CropArea cannot be used, or could not be
+/// checked against a raw size, has a picture whose size is not known, and
+/// gives none. On a crop, AFInfo2's frame is still the camera's full
+/// output, and the frame becomes CropArea's size. What happens to the
+/// centre and the area depends on what the crop cut, as the module
+/// documentation shows:
+///
+/// - **A crop that cuts both sides** (DX) records fractions of the
+///   cropped picture, in the full frame's units. The point is scaled onto
+///   CropArea by [`Focus::scaled_to`]: x and the width multiplied by
+///   CropArea's width over the frame's, y and the height by the heights,
+///   each rounded to the nearest pixel, a half rounding up. An area that
+///   rounding leaves a pixel too wide for its centre is trimmed to fit,
+///   and an area side that rounds to nothing keeps one pixel. A centre
+///   that rounds onto an edge of CropArea leaves no room for an area, and
+///   keeps the point without one.
+/// - **A crop that keeps one side** (1:1, 16:9), whose cropped size
+///   equals the original on exactly one side and is smaller on the other,
+///   records positions in the full frame, of which the cropped picture is
+///   the centred window. The centre moves back on each axis by the
+///   window's origin, half the difference between the frame and CropArea,
+///   rounded down, and the area is kept. That holds only when CropArea's
+///   kept side equals the frame's: on a small raw, CropArea counts stored
+///   pixels and the frame the full output, the window cannot be placed,
+///   and the file gives none. A CropArea side larger than the frame's, or
+///   a centre that would move past the window's left or top edge, gives
+///   none too. The moved record is checked again by
+///   [`FocusRecord::focus`], in the window: a centre past its right or
+///   bottom edge, or an area that no longer fits around the moved centre,
+///   gives none.
+///
+/// A CropHiSpeed that fits neither shape, such as one whose cropped size
+/// is larger than its original on a side, records no crop the point can
+/// be placed on, and gives none.
+fn in_crop(record: FocusRecord, crop: Option<CropHiSpeed>, crop_area: CropArea) -> Option<Focus> {
+    // `Focus::new` refuses a frame with a zero side here, so the old frame
+    // whose sides `scaled_to` divides by below has no zero side.
+    let focus = record.focus()?;
+    let Some(CropHiSpeed { original, cropped }) = crop else {
+        return Some(focus);
+    };
+    if cropped == original {
+        return Some(focus);
+    }
+    let window = match crop_area {
+        CropArea::Absent => return Some(focus),
+        CropArea::Unusable => return None,
+        CropArea::Size(window) => window,
+    };
+    if cropped.width < original.width && cropped.height < original.height {
+        return focus.scaled_to(window);
+    }
+    let kept_width = cropped.width == original.width;
+    let kept_height = cropped.height == original.height;
+    // A window keeps exactly one side and cuts the other; the sizes differ
+    // here, so they cannot both be kept.
+    if !((kept_width && cropped.height < original.height)
+        || (kept_height && cropped.width < original.width))
+    {
+        return None;
+    }
+    let FocusRecord { frame, center, .. } = record;
+    if (kept_width && window.width != frame.width) || (kept_height && window.height != frame.height)
+    {
+        return None;
+    }
+    // `Focus` cannot move its centre, so the moved point is built anew,
+    // with the area and the in-focus byte as recorded.
+    FocusRecord {
+        frame: window,
+        center: Point {
+            x: shifted(center.x, frame.width, window.width)?,
+            y: shifted(center.y, frame.height, window.height)?,
+        },
+        ..record
+    }
+    .focus()
+}
+
+/// `value`, a position on an axis `frame` pixels long, as a position in
+/// the centred window `window` pixels long on it: less the window's
+/// origin, half of `frame - window`, rounded down. `None` when the window
+/// is longer than the frame, or the position lies before the window's
+/// start.
+fn shifted(value: u32, frame: u32, window: u32) -> Option<u32> {
+    value.checked_sub(frame.checked_sub(window)? / 2)
 }
 
 /// Whether `makernote`'s FocusMode records manual focus: whether it is of
@@ -621,18 +874,55 @@ fn layout(version: &[u8]) -> Option<Layout> {
     }
 }
 
-/// The focus point that the AFInfo2 value `value` records, its SHORTs in
-/// byte order `order`: the frame, the centre and the area at its version's
+/// What an AFInfo2 value records of the focus point, read but not yet
+/// checked: the frame, the centre of the focus area in it, the area's
+/// size, and whether focus was confirmed, on the versions that say.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct FocusRecord {
+    /// The frame the centre and the area are measured in.
+    frame: Size,
+    /// The centre of the focus area.
+    center: Point,
+    /// The focus area's width and height.
+    area: Size,
+    /// Whether focus was confirmed: `None` when the version has no byte
+    /// for it, or the byte is neither 1 nor 0.
+    in_focus: Option<bool>,
+}
+
+impl FocusRecord {
+    /// The focus point this record describes: `None` when [`Focus::new`]
+    /// or [`Focus::with_size`] refuses it, for a frame or an area with a
+    /// zero side, which is how a shot through a DSLR's viewfinder says it
+    /// records no position, a centre outside the frame, or an area that
+    /// does not fit inside the frame around its centre.
+    ///
+    /// [`in_crop`] calls it on the record as recorded, on every file, and
+    /// on a crop that keeps one side again, on the record moved into the
+    /// cropped picture.
+    fn focus(self) -> Option<Focus> {
+        // An area that `with_size` refuses costs the whole focus, not only
+        // the area. A zero side is how a Nikon file says it records no
+        // position; and an area of no zero side that does not fit around
+        // the centre is a record that cannot be used, which gives no focus
+        // on every format, as ADR012 decides.
+        let focus = Focus::new(self.frame, self.center)?.with_size(self.area)?;
+        Some(match self.in_focus {
+            Some(in_focus) => focus.with_in_focus(in_focus),
+            None => focus,
+        })
+    }
+}
+
+/// What the AFInfo2 value `value` records, its SHORTs in byte order
+/// `order`: the frame, the centre and the area at its version's
 /// [`layout`], and the in-focus byte, when the layout has one, as `true`
 /// for 1, `false` for 0, and nothing said for any other value.
 ///
-/// `None` when the version is not one read, the value is shorter than its
-/// layout, or [`Focus::new`] or [`Focus::with_size`] refuses what it
-/// records: a frame or an area with a zero side, which is how a shot
-/// through a DSLR's viewfinder says it records no position, a centre
-/// outside the frame, or an area that does not fit inside the frame
-/// around its centre.
-fn af_info2_focus(value: &[u8], order: ByteOrder) -> Option<Focus> {
+/// `None` when the version is not one read, or the value is shorter than
+/// its layout. The values are not checked here: [`in_crop`] checks them,
+/// as recorded, with [`FocusRecord::focus`], before it places them.
+fn af_info2_record(value: &[u8], order: ByteOrder) -> Option<FocusRecord> {
     let layout = layout(value.get(..4)?)?;
     if value.len() < layout.min_len {
         return None;
@@ -642,12 +932,6 @@ fn af_info2_focus(value: &[u8], order: ByteOrder) -> Option<Focus> {
     let (x, y) = shorts_at(value, layout.center, order)?;
     let (width, height) = shorts_at(value, layout.area, order)?;
     let area = Size { width, height };
-    // An area that `with_size` refuses costs the whole focus, not only the
-    // area. A zero side is how a Nikon file says it records no position;
-    // and an area of no zero side that does not fit around the centre is a
-    // record that cannot be used, which gives no focus on every format, as
-    // ADR012 decides.
-    let focus = Focus::new(frame, Point { x, y })?.with_size(area)?;
     let in_focus = layout
         .in_focus
         .and_then(|at| value.get(at))
@@ -656,9 +940,11 @@ fn af_info2_focus(value: &[u8], order: ByteOrder) -> Option<Focus> {
             1 => Some(true),
             _ => None,
         });
-    Some(match in_focus {
-        Some(in_focus) => focus.with_in_focus(in_focus),
-        None => focus,
+    Some(FocusRecord {
+        frame,
+        center: Point { x, y },
+        area,
+        in_focus,
     })
 }
 
@@ -1315,11 +1601,22 @@ mod tests {
         count: u64,
         raw: impl FnOnce(&mut TiffBuilder, IfdId),
     ) -> Vec<u8> {
+        raw_file_of(order, RAW, block, count, raw)
+    }
+
+    /// As [`raw_file`], with raw data of size `size`.
+    fn raw_file_of(
+        order: Order,
+        size: Size,
+        block: &[u8],
+        count: u64,
+        raw: impl FnOnce(&mut TiffBuilder, IfdId),
+    ) -> Vec<u8> {
         nikon_file_with(order, AT, block, TAIL, |builder, ifd0, exif| {
             builder
                 .short(ifd0, PHOTOMETRIC_INTERPRETATION, &[CFA])
-                .long(ifd0, IMAGE_WIDTH, &[RAW.width])
-                .long(ifd0, IMAGE_LENGTH, &[RAW.height]);
+                .long(ifd0, IMAGE_WIDTH, &[size.width])
+                .long(ifd0, IMAGE_LENGTH, &[size.height]);
             raw(builder, ifd0);
             entry_at(builder, exif, MAKER_NOTE, UNDEFINED, AT, count);
         })
@@ -2771,6 +3068,986 @@ mod tests {
             let block = retyped(order, block, entry, UNDEFINED, 7);
             let metadata = exif_metadata(order, &block, |_, _| {});
             assert_eq!(metadata.focus, Some(expected(Z9, Some(true))), "{order:?}");
+        }
+    }
+
+    /// What a crop test's file holds besides AFInfo2: the size of its raw
+    /// data, its CropHiSpeed's seven values, when it has one, and its
+    /// CropArea, when it has one, both as SHORTs.
+    #[derive(Clone, Copy, Debug)]
+    struct Crop {
+        raw: [u32; 2],
+        crop_hi_speed: Option<[u16; 7]>,
+        crop_area: Option<[u16; 4]>,
+    }
+
+    /// The Z6III's 1:1 crop (public samples 7808 and 7812).
+    const Z6III_1X1: Crop = Crop {
+        raw: [4048, 4040],
+        crop_hi_speed: Some([17, 6064, 4040, 4048, 4040, 1008, 0]),
+        crop_area: Some([8, 4, 4032, 4032]),
+    };
+
+    /// The Z6III's 16:9 crop (public samples 7809 and 7813).
+    const Z6III_16X9: Crop = Crop {
+        raw: [6064, 3416],
+        crop_hi_speed: Some([6, 6064, 4040, 6064, 3416, 0, 312]),
+        crop_area: Some([8, 8, 6048, 3400]),
+    };
+
+    /// The Z6III's DX crop (public sample 7810).
+    const Z6III_DX: Crop = Crop {
+        raw: [4000, 2672],
+        crop_hi_speed: Some([2, 6064, 4040, 4000, 2672, 1032, 684]),
+        crop_area: Some([8, 8, 3984, 2656]),
+    };
+
+    /// The Z50II's 1:1 crop (public sample 7767).
+    const Z50II_1X1: Crop = Crop {
+        raw: [3728, 3728],
+        crop_hi_speed: Some([18, 5600, 3728, 3728, 3728, 936, 0]),
+        crop_area: Some([8, 8, 3712, 3712]),
+    };
+
+    /// The Z50II's 16:9 crop (public sample 7770).
+    const Z50II_16X9: Crop = Crop {
+        raw: [5600, 3144],
+        crop_hi_speed: Some([9, 5600, 3728, 5600, 3144, 0, 292]),
+        crop_area: Some([16, 8, 5568, 3128]),
+    };
+
+    /// The Z 6's small raw, which is no crop: CropHiSpeed's two sizes are
+    /// equal, and CropArea counts the stored pixels (public sample 3587).
+    const Z6_SMALL_RAW: Crop = Crop {
+        raw: [4548, 3030],
+        crop_hi_speed: Some([11, 6064, 4040, 6064, 4040, 0, 0]),
+        crop_area: Some([10, 6, 4528, 3018]),
+    };
+
+    /// The Z 9's FX mode, which is no crop, as shots made with the
+    /// maintainer's Z 9 record it.
+    const Z9_FX: Crop = Crop {
+        raw: [8280, 5520],
+        crop_hi_speed: Some([11, 8280, 5520, 8280, 5520, 0, 0]),
+        crop_area: Some([12, 8, 8256, 5504]),
+    };
+
+    /// The Z 9's DX crop, as shots made with the maintainer's Z 9 record
+    /// it.
+    const Z9_DX: Crop = Crop {
+        raw: [5408, 3608],
+        crop_hi_speed: Some([2, 8280, 5520, 5408, 3608, 1436, 956]),
+        crop_area: Some([8, 8, 5392, 3592]),
+    };
+
+    /// The Z 9's 1:1 crop, as shots made with the maintainer's Z 9 record
+    /// it.
+    const Z9_1X1: Crop = Crop {
+        raw: [5520, 5520],
+        crop_hi_speed: Some([17, 8280, 5520, 5520, 5520, 1380, 0]),
+        crop_area: Some([8, 8, 5504, 5504]),
+    };
+
+    /// The Z 9's 16:9 crop, as shots made with the maintainer's Z 9 record
+    /// it.
+    const Z9_16X9: Crop = Crop {
+        raw: [8280, 4656],
+        crop_hi_speed: Some([6, 8280, 5520, 8280, 4656, 0, 432]),
+        crop_area: Some([12, 8, 8256, 4640]),
+    };
+
+    /// The record of the Z6III's 1:1 and 16:9 files, version 0401, a valid
+    /// point beside a missed focus (public samples 7808, 7809, 7812 and
+    /// 7813).
+    const Z6III_ASPECT: Recorded = Recorded {
+        frame: [6048, 4032],
+        center: [3023, 2016],
+        area: [163, 174],
+        in_focus: 0,
+    };
+
+    /// The record of the Z6III's DX file, version 0401 (public sample
+    /// 7810).
+    const Z6III_DX_RECORD: Recorded = Recorded {
+        area: [222, 245],
+        ..Z6III_ASPECT
+    };
+
+    /// The record of the Z50II's 1:1 file, version 0402 (public sample
+    /// 7767).
+    const Z50II_1X1_RECORD: Recorded = Recorded {
+        frame: [5568, 3712],
+        center: [2792, 1868],
+        area: [278, 276],
+        in_focus: 1,
+    };
+
+    /// The record of the Z50II's 16:9 file, version 0402 (public sample
+    /// 7770).
+    const Z50II_16X9_RECORD: Recorded = Recorded {
+        frame: [5568, 3712],
+        center: [2789, 1865],
+        area: [280, 280],
+        in_focus: 1,
+    };
+
+    /// The records of the shots made with the maintainer's Z 9, version
+    /// 0400, with a single point placed in the top-left corner of the
+    /// picture in each mode: FX, DX, 1:1 and 16:9.
+    const Z9_FX_CORNER: Recorded = Recorded {
+        frame: [8256, 5504],
+        center: [502, 424],
+        area: [291, 323],
+        in_focus: 1,
+    };
+
+    /// See [`Z9_FX_CORNER`].
+    const Z9_DX_CORNER: Recorded = Recorded {
+        center: [636, 572],
+        area: [420, 468],
+        ..Z9_FX_CORNER
+    };
+
+    /// See [`Z9_FX_CORNER`].
+    const Z9_1X1_CORNER: Recorded = Recorded {
+        center: [1797, 424],
+        ..Z9_FX_CORNER
+    };
+
+    /// See [`Z9_FX_CORNER`].
+    const Z9_16X9_CORNER: Recorded = Recorded {
+        center: [502, 715],
+        ..Z9_FX_CORNER
+    };
+
+    /// A MakerNote block in byte order `order` holding `crop`'s
+    /// CropHiSpeed and CropArea, each when it has one, and the AFInfo2
+    /// value `af_info2`, as UNDEFINED.
+    fn crop_block(order: Order, crop: Crop, af_info2: &[u8]) -> Vec<u8> {
+        tags_block(order, |inner, ifd| {
+            if let Some(values) = crop.crop_hi_speed {
+                inner.short(ifd, CROP_HI_SPEED, &values);
+            }
+            if let Some(values) = crop.crop_area {
+                inner.short(ifd, CROP_AREA, &values);
+            }
+            inner.undefined(ifd, AF_INFO2, af_info2);
+        })
+        .0
+    }
+
+    /// The focus of a file in byte order `order` whose raw data is of size
+    /// `raw` and whose MakerNote is the first `count` bytes of `block`; the
+    /// raw size must be read, since CropArea is checked against it.
+    fn focus_in(order: Order, raw: [u32; 2], block: &[u8], count: u64) -> Option<Focus> {
+        let [width, height] = raw;
+        let size = Size { width, height };
+        let metadata = metadata_of(raw_file_of(order, size, block, count, |_, _| {}));
+        assert_eq!(metadata.raw_size, Some(size), "{order:?}");
+        metadata.focus
+    }
+
+    /// The focus of a file in byte order `order` that holds `crop` and an
+    /// AFInfo2 of version `version` recording `recorded`.
+    fn crop_focus(order: Order, crop: Crop, version: &str, recorded: Recorded) -> Option<Focus> {
+        let block = crop_block(order, crop, &af_info2(order, version, recorded));
+        focus_in(order, crop.raw, &block, whole(&block))
+    }
+
+    /// The focus of `frame`, `center` and `area`, with `in_focus` as
+    /// whether focus was confirmed.
+    fn focus_at(
+        frame: [u16; 2],
+        center: [u16; 2],
+        area: [u16; 2],
+        in_focus: Option<bool>,
+    ) -> Focus {
+        let recorded = Recorded {
+            frame,
+            center,
+            area,
+            in_focus: 0,
+        };
+        expected(recorded, in_focus)
+    }
+
+    /// `value` on an axis `old` pixels long, on one `new` pixels long, by
+    /// the rounding the DX crops are scaled with, written out here apart
+    /// from [`Focus::scaled_to`]: to the nearest whole number, a half
+    /// rounding up.
+    fn scale_by_hand(value: u16, old: u16, new: u16) -> u16 {
+        let (value, old, new) = (u64::from(value), u64::from(old), u64::from(new));
+        u16::try_from((value * new + old / 2) / old).unwrap()
+    }
+
+    #[test]
+    fn the_crop_samples_give_the_point_on_the_cropped_picture() {
+        // On each, the frame becomes CropArea's size. The 1:1 and 16:9
+        // crops keep one side: the centre moves back on the other axis by
+        // half the difference between the frame and CropArea, 1008 across
+        // on the Z6III's 1:1 and 316 down on its 16:9, 928 and 292 on the
+        // Z50II's, and the area is kept. The DX crop cuts both sides, and
+        // the centre and the area are scaled onto CropArea.
+        for order in ORDERS {
+            for (what, crop, version, recorded, focus) in [
+                (
+                    "Z6III 1:1",
+                    Z6III_1X1,
+                    "0401",
+                    Z6III_ASPECT,
+                    focus_at([4032, 4032], [2015, 2016], [163, 174], Some(false)),
+                ),
+                (
+                    "Z6III 16:9",
+                    Z6III_16X9,
+                    "0401",
+                    Z6III_ASPECT,
+                    focus_at([6048, 3400], [3023, 1700], [163, 174], Some(false)),
+                ),
+                (
+                    "Z6III DX",
+                    Z6III_DX,
+                    "0401",
+                    Z6III_DX_RECORD,
+                    focus_at([3984, 2656], [1991, 1328], [146, 161], Some(false)),
+                ),
+                (
+                    "Z50II 1:1",
+                    Z50II_1X1,
+                    "0402",
+                    Z50II_1X1_RECORD,
+                    focus_at([3712, 3712], [1864, 1868], [278, 276], Some(true)),
+                ),
+                (
+                    "Z50II 16:9",
+                    Z50II_16X9,
+                    "0402",
+                    Z50II_16X9_RECORD,
+                    focus_at([5568, 3128], [2789, 1573], [280, 280], Some(true)),
+                ),
+            ] {
+                assert_eq!(
+                    crop_focus(order, crop, version, recorded),
+                    Some(focus),
+                    "{order:?}, {what}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn the_z9_shots_with_the_point_in_the_corner_keep_it_there_on_every_crop() {
+        // Shots made with the maintainer's Z 9, a single point placed in
+        // the top-left corner of the picture in each mode. FX is no crop,
+        // and is read as recorded. The DX shot, scaled onto its 5392 by
+        // 3592 CropArea, lies as near the corner as FX, with about its
+        // area; the 1:1 and 16:9 shots, moved back by 1376 across and 432
+        // down, lie there too, with FX's area.
+        for order in ORDERS {
+            for (what, crop, recorded, focus) in [
+                (
+                    "FX",
+                    Z9_FX,
+                    Z9_FX_CORNER,
+                    expected(Z9_FX_CORNER, Some(true)),
+                ),
+                (
+                    "DX",
+                    Z9_DX,
+                    Z9_DX_CORNER,
+                    focus_at([5392, 3592], [415, 373], [274, 305], Some(true)),
+                ),
+                (
+                    "1:1",
+                    Z9_1X1,
+                    Z9_1X1_CORNER,
+                    focus_at([5504, 5504], [421, 424], [291, 323], Some(true)),
+                ),
+                (
+                    "16:9",
+                    Z9_16X9,
+                    Z9_16X9_CORNER,
+                    focus_at([8256, 4640], [502, 283], [291, 323], Some(true)),
+                ),
+            ] {
+                assert_eq!(
+                    crop_focus(order, crop, "0400", recorded),
+                    Some(focus),
+                    "{order:?}, {what}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn a_file_that_is_no_crop_gives_the_point_as_recorded() {
+        // The D810 records a cropped width four pixels short of its
+        // original on an uncropped file, and writes no CropArea (public
+        // sample 2036); it records no position, so the record beside it is
+        // made up, a centred point in its 7360 by 4912 frame.
+        let d810 = Crop {
+            raw: [7380, 4928],
+            crop_hi_speed: Some([11, 7384, 4928, 7380, 4928, 0, 0]),
+            crop_area: None,
+        };
+        let d810_record = Recorded {
+            frame: [7360, 4912],
+            center: [3680, 2456],
+            area: [400, 400],
+            in_focus: 1,
+        };
+        for order in ORDERS {
+            for (what, crop, version, recorded, in_focus) in [
+                // CropHiSpeed's two sizes equal: the Z 6's small raw, whose
+                // CropArea is smaller than the frame on both sides (public
+                // sample 3587).
+                ("Z 6 small raw", Z6_SMALL_RAW, "0300", Z6, None),
+                // The Z 9's DX values without a CropHiSpeed.
+                (
+                    "no CropHiSpeed",
+                    Crop {
+                        crop_hi_speed: None,
+                        ..Z9_DX
+                    },
+                    "0400",
+                    Z9_DX_CORNER,
+                    Some(true),
+                ),
+                ("no CropArea", d810, "0100", d810_record, Some(true)),
+            ] {
+                assert_eq!(
+                    crop_focus(order, crop, version, recorded),
+                    Some(expected(recorded, in_focus)),
+                    "{order:?}, {what}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn a_crop_whose_crop_area_cannot_be_used_gives_none() {
+        // The Z6III's 1:1 crop with a CropArea the image-size check
+        // refuses, in a raw 4039 wide, one column too narrow for its 4032
+        // from column 8; with one of three values; and with one of type
+        // UNDEFINED, the eight bytes of its four SHORTs. Then the Z 9's DX
+        // crop with its CropArea in a raw one column too narrow. A crop is
+        // not read as no crop when its CropArea is there but cannot be
+        // used: each gives no point, not the point as recorded in the full
+        // frame.
+        let narrow = Crop {
+            raw: [4039, 4040],
+            ..Z6III_1X1
+        };
+        let narrow_z9 = Crop {
+            raw: [5399, 3608],
+            ..Z9_DX
+        };
+        let crop_hi_speed = Z6III_1X1.crop_hi_speed.unwrap();
+        let [left, top, width, height] = Z6III_1X1.crop_area.unwrap();
+        for order in ORDERS {
+            let value = af_info2(order, "0401", Z6III_ASPECT);
+            let bytes: Vec<u8> = [left, top, width, height]
+                .iter()
+                .flat_map(|&v| order.u16(v))
+                .collect();
+            for (what, raw, block) in [
+                (
+                    "outside the raw",
+                    narrow.raw,
+                    crop_block(order, narrow, &value),
+                ),
+                (
+                    "three values",
+                    Z6III_1X1.raw,
+                    tags_block(order, |inner, ifd| {
+                        inner
+                            .short(ifd, CROP_HI_SPEED, &crop_hi_speed)
+                            .short(ifd, CROP_AREA, &[left, top, width])
+                            .undefined(ifd, AF_INFO2, &value);
+                    })
+                    .0,
+                ),
+                (
+                    "UNDEFINED",
+                    Z6III_1X1.raw,
+                    tags_block(order, |inner, ifd| {
+                        inner
+                            .short(ifd, CROP_HI_SPEED, &crop_hi_speed)
+                            .undefined(ifd, CROP_AREA, &bytes)
+                            .undefined(ifd, AF_INFO2, &value);
+                    })
+                    .0,
+                ),
+                (
+                    "the Z 9's DX outside the raw",
+                    narrow_z9.raw,
+                    crop_block(order, narrow_z9, &af_info2(order, "0400", Z9_DX_CORNER)),
+                ),
+            ] {
+                assert_eq!(
+                    focus_in(order, raw, &block, whole(&block)),
+                    None,
+                    "{order:?}, {what}"
+                );
+            }
+            // The control: the same file with no CropArea tag is read as
+            // recorded, as the D810's is.
+            let none = Crop {
+                crop_area: None,
+                ..Z6III_1X1
+            };
+            assert_eq!(
+                crop_focus(order, none, "0401", Z6III_ASPECT),
+                Some(expected(Z6III_ASPECT, Some(false))),
+                "{order:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_crop_without_a_raw_size_gives_none_when_it_has_a_crop_area() {
+        // The Z6III's 1:1 crop in a file with no raw IFD, so no raw size
+        // to check its CropArea against: a CropArea of SHORTs, and one of
+        // type UNDEFINED, each give no point. The control, the same file
+        // with no CropArea tag, is read as recorded.
+        let crop_hi_speed = Z6III_1X1.crop_hi_speed.unwrap();
+        let crop_area = Z6III_1X1.crop_area.unwrap();
+        for order in ORDERS {
+            let value = af_info2(order, "0401", Z6III_ASPECT);
+            let bytes: Vec<u8> = crop_area.iter().flat_map(|&v| order.u16(v)).collect();
+            let none = Crop {
+                crop_area: None,
+                ..Z6III_1X1
+            };
+            for (what, block, focus) in [
+                ("SHORTs", crop_block(order, Z6III_1X1, &value), None),
+                (
+                    "UNDEFINED",
+                    tags_block(order, |inner, ifd| {
+                        inner
+                            .short(ifd, CROP_HI_SPEED, &crop_hi_speed)
+                            .undefined(ifd, CROP_AREA, &bytes)
+                            .undefined(ifd, AF_INFO2, &value);
+                    })
+                    .0,
+                    None,
+                ),
+                (
+                    "no CropArea",
+                    crop_block(order, none, &value),
+                    Some(expected(Z6III_ASPECT, Some(false))),
+                ),
+            ] {
+                let metadata = metadata_of(with_makernote(order, UNDEFINED, &block, whole(&block)));
+                assert_eq!(metadata.raw_size, None, "{order:?}, {what}");
+                assert_eq!(metadata.focus, focus, "{order:?}, {what}");
+            }
+        }
+    }
+
+    #[test]
+    fn a_crop_hi_speed_that_fits_neither_crop_shape_gives_none() {
+        // A crop cuts both sides, or keeps exactly one and cuts the other.
+        // The Z 6's small raw with a cropped size one pixel larger than
+        // its original on each side; the Z 9's DX crop with a cropped
+        // height of 5600, larger than its original 5520; and the Z 9's FX
+        // mode with a cropped width one pixel larger and the height kept,
+        // where CropArea's height equals the frame's. Moved by the window,
+        // each point would still lie in the picture; each gives none.
+        let z6 = Crop {
+            crop_hi_speed: Some([11, 6064, 4040, 6065, 4041, 0, 0]),
+            ..Z6_SMALL_RAW
+        };
+        let z9_dx = Crop {
+            crop_hi_speed: Some([2, 8280, 5520, 5408, 5600, 1436, 956]),
+            ..Z9_DX
+        };
+        let z9_dx_record = Recorded {
+            center: [6000, 3000],
+            ..Z9_DX_CORNER
+        };
+        let z9_fx = Crop {
+            crop_hi_speed: Some([11, 8280, 5520, 8281, 5520, 0, 0]),
+            ..Z9_FX
+        };
+        for order in ORDERS {
+            for (what, crop, version, recorded) in [
+                ("both sides larger", z6, "0300", Z6),
+                ("one side larger, one smaller", z9_dx, "0400", z9_dx_record),
+                ("one side larger, one kept", z9_fx, "0400", Z9_FX_CORNER),
+            ] {
+                assert_eq!(
+                    crop_focus(order, crop, version, recorded),
+                    None,
+                    "{order:?}, {what}"
+                );
+            }
+            // The control: both sides equal, the Z 6's small raw as it is,
+            // is no crop, and is read as recorded.
+            assert_eq!(
+                crop_focus(order, Z6_SMALL_RAW, "0300", Z6),
+                Some(expected(Z6, None)),
+                "{order:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_crop_hi_speed_of_other_than_seven_shorts_is_no_crop() {
+        // The Z 9's DX values short of their last, with one more, and as
+        // LONGs, which the reader of numbers reads too; then the seven
+        // SHORTs, the control, which scale the point.
+        let values = Z9_DX.crop_hi_speed.unwrap();
+        let mut eight = values.to_vec();
+        eight.push(0);
+        for order in ORDERS {
+            let value = af_info2(order, "0400", Z9_DX_CORNER);
+            for (what, block, focus) in [
+                (
+                    "six SHORTs",
+                    tags_block(order, |inner, ifd| {
+                        inner
+                            .short(ifd, CROP_HI_SPEED, &values[..6])
+                            .short(ifd, CROP_AREA, &Z9_DX.crop_area.unwrap())
+                            .undefined(ifd, AF_INFO2, &value);
+                    })
+                    .0,
+                    expected(Z9_DX_CORNER, Some(true)),
+                ),
+                (
+                    "eight SHORTs",
+                    tags_block(order, |inner, ifd| {
+                        inner
+                            .short(ifd, CROP_HI_SPEED, &eight)
+                            .short(ifd, CROP_AREA, &Z9_DX.crop_area.unwrap())
+                            .undefined(ifd, AF_INFO2, &value);
+                    })
+                    .0,
+                    expected(Z9_DX_CORNER, Some(true)),
+                ),
+                (
+                    "seven LONGs",
+                    tags_block(order, |inner, ifd| {
+                        inner
+                            .long(ifd, CROP_HI_SPEED, &values.map(u32::from))
+                            .short(ifd, CROP_AREA, &Z9_DX.crop_area.unwrap())
+                            .undefined(ifd, AF_INFO2, &value);
+                    })
+                    .0,
+                    expected(Z9_DX_CORNER, Some(true)),
+                ),
+                (
+                    "seven SHORTs",
+                    crop_block(order, Z9_DX, &value),
+                    focus_at([5392, 3592], [415, 373], [274, 305], Some(true)),
+                ),
+            ] {
+                assert_eq!(
+                    focus_in(order, Z9_DX.raw, &block, whole(&block)),
+                    Some(focus),
+                    "{order:?}, {what}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn a_crop_hi_speed_past_the_block_is_no_crop() {
+        for order in ORDERS {
+            let values = Z9_DX.crop_hi_speed.unwrap();
+            // Written in the order the tags are added, so that CropHiSpeed's
+            // values, stored after the others, are the block's last bytes.
+            let block = tags_block(order, |inner, ifd| {
+                inner
+                    .unsorted(ifd)
+                    .short(ifd, CROP_AREA, &Z9_DX.crop_area.unwrap())
+                    .undefined(ifd, AF_INFO2, &af_info2(order, "0400", Z9_DX_CORNER))
+                    .short(ifd, CROP_HI_SPEED, &values);
+            })
+            .0;
+            let bytes: Vec<u8> = values.iter().flat_map(|&v| order.u16(v)).collect();
+            assert_eq!(block[block.len() - 14..], bytes, "{order:?}");
+
+            // Declared one byte short: the last value's last byte lies in
+            // the file, after the block, and the point is as recorded.
+            assert_eq!(
+                focus_in(order, Z9_DX.raw, &block, whole(&block) - 1),
+                Some(expected(Z9_DX_CORNER, Some(true))),
+                "{order:?}"
+            );
+
+            // The control: declared whole, the same bytes scale the point.
+            assert_eq!(
+                focus_in(order, Z9_DX.raw, &block, whole(&block)),
+                Some(focus_at([5392, 3592], [415, 373], [274, 305], Some(true))),
+                "{order:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn an_aspect_crop_on_a_small_raw_gives_none() {
+        // The Z 9's 1:1 CropHiSpeed with a small raw's CropArea, which
+        // counts stored pixels: 4128 high, not the frame's 5504, so the
+        // window cannot be placed. The corner shot would move past the
+        // window's edge anyway; a centred point would not, and gives none
+        // all the same.
+        let crop = Crop {
+            raw: [4140, 4140],
+            crop_area: Some([8, 8, 4128, 4128]),
+            ..Z9_1X1
+        };
+        let centred = Recorded {
+            center: [4128, 2752],
+            ..Z9_1X1_CORNER
+        };
+        for order in ORDERS {
+            for recorded in [Z9_1X1_CORNER, centred] {
+                assert_eq!(
+                    crop_focus(order, crop, "0400", recorded),
+                    None,
+                    "{order:?}, {recorded:?}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn a_dx_crop_on_a_small_raw_is_scaled_onto_its_crop_area() {
+        // The Z 9's DX CropHiSpeed with a small raw's CropArea, 4044 by
+        // 2694 stored pixels inside a 4056 by 2706 raw.
+        let crop = Crop {
+            raw: [4056, 2706],
+            crop_area: Some([6, 6, 4044, 2694]),
+            ..Z9_DX
+        };
+        let [width, height] = Z9_DX_CORNER.frame;
+        let [x, y] = Z9_DX_CORNER.center;
+        let [area_width, area_height] = Z9_DX_CORNER.area;
+        let by_hand = focus_at(
+            [4044, 2694],
+            [
+                scale_by_hand(x, width, 4044),
+                scale_by_hand(y, height, 2694),
+            ],
+            [
+                scale_by_hand(area_width, width, 4044),
+                scale_by_hand(area_height, height, 2694),
+            ],
+            Some(true),
+        );
+        // What the formula gives: (636 × 4044 + 4128) / 8256 = 312,
+        // (572 × 2694 + 2752) / 5504 = 280, (420 × 4044 + 4128) / 8256 =
+        // 206 and (468 × 2694 + 2752) / 5504 = 229.
+        assert_eq!(
+            by_hand,
+            focus_at([4044, 2694], [312, 280], [206, 229], Some(true))
+        );
+        for order in ORDERS {
+            assert_eq!(
+                crop_focus(order, crop, "0400", Z9_DX_CORNER),
+                Some(by_hand),
+                "{order:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_window_that_cannot_be_placed_gives_none() {
+        for order in ORDERS {
+            // A CropArea 9000 wide, larger than the 8256 frame, on a crop
+            // that keeps the height, inside a raw large enough for it.
+            let wide = Crop {
+                raw: [9000, 5520],
+                crop_area: Some([0, 0, 9000, 5504]),
+                ..Z9_1X1
+            };
+            assert_eq!(
+                crop_focus(order, wide, "0400", Z9_1X1_CORNER),
+                None,
+                "{order:?}, wider than the frame"
+            );
+            // A centre 100 pixels in, which the 1:1 window's origin, 1376
+            // pixels in, would take below zero.
+            let left = Recorded {
+                center: [100, 424],
+                ..Z9_1X1_CORNER
+            };
+            assert_eq!(
+                crop_focus(order, Z9_1X1, "0400", left),
+                None,
+                "{order:?}, left of the window"
+            );
+        }
+    }
+
+    #[test]
+    fn a_crop_from_a_frame_with_a_zero_side_gives_none() {
+        // A frame with a zero side is refused as recorded, by `Focus::new`,
+        // before anything is scaled from it.
+        for order in ORDERS {
+            for frame in [[0, 5504], [8256, 0]] {
+                let recorded = Recorded {
+                    frame,
+                    ..Z9_DX_CORNER
+                };
+                assert_eq!(
+                    crop_focus(order, Z9_DX, "0400", recorded),
+                    None,
+                    "{order:?}, {frame:?}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn a_dx_crop_rounds_to_the_nearest_pixel_a_half_rounding_up() {
+        // A 1000 by 1000 frame scaled onto a 500 by 400 CropArea: by a half
+        // across and by 0.4 down. Across, 301 × 0.5 = 150.5 rounds up to
+        // 151 and 101 × 0.5 = 50.5 to 51; down, 501 × 0.4 = 200.4 rounds
+        // down to 200 and 101 × 0.4 = 40.4 to 40.
+        let crop = Crop {
+            raw: [500, 400],
+            crop_hi_speed: Some([2, 1000, 1000, 500, 400, 0, 0]),
+            crop_area: Some([0, 0, 500, 400]),
+        };
+        let recorded = Recorded {
+            frame: [1000, 1000],
+            center: [301, 501],
+            area: [101, 101],
+            in_focus: 1,
+        };
+        for order in ORDERS {
+            assert_eq!(
+                crop_focus(order, crop, "0400", recorded),
+                Some(focus_at([500, 400], [151, 200], [51, 40], Some(true))),
+                "{order:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_dx_crop_keeps_an_area_side_of_one_pixel() {
+        // A single pixel in the Z 9's frame, scaled onto a 1000 by 1000
+        // CropArea: 1000 / 8256 and 1000 / 5504 of a pixel round to
+        // nothing, and each side keeps one.
+        let crop = Crop {
+            raw: [1000, 1000],
+            crop_hi_speed: Some([2, 8280, 5520, 1000, 1000, 0, 0]),
+            crop_area: Some([0, 0, 1000, 1000]),
+        };
+        let recorded = Recorded {
+            center: [4128, 2752],
+            area: [1, 1],
+            ..Z9_FX_CORNER
+        };
+        for order in ORDERS {
+            assert_eq!(
+                crop_focus(order, crop, "0400", recorded),
+                Some(focus_at([1000, 1000], [500, 500], [1, 1], Some(true))),
+                "{order:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_dx_crop_trims_an_area_that_rounding_leaves_a_pixel_too_wide() {
+        // The Z 9's DX crop, with a centre 146 across and an area 292 wide,
+        // which fits the frame as recorded: half of 292 is 146. Scaled onto
+        // the 5392 by 3592 CropArea, x is (146 × 5392 + 4128) / 8256 = 95
+        // and the width (292 × 5392 + 4128) / 8256 = 191, whose half
+        // rounds up to 96, one more than 95: the width is trimmed to 190,
+        // twice the centre's distance from the left edge. Down, the corner
+        // shot's (572 × 3592 + 2752) / 5504 = 373 and (468 × 3592 + 2752)
+        // / 5504 = 305 fit as they are.
+        let near_the_edge = Recorded {
+            center: [146, 572],
+            area: [292, 468],
+            ..Z9_DX_CORNER
+        };
+        let [width, _] = Z9_DX_CORNER.frame;
+        assert_eq!(
+            (
+                scale_by_hand(146, width, 5392),
+                scale_by_hand(292, width, 5392)
+            ),
+            (95, 191)
+        );
+        for order in ORDERS {
+            assert_eq!(
+                crop_focus(order, Z9_DX, "0400", near_the_edge),
+                Some(focus_at([5392, 3592], [95, 373], [190, 305], Some(true))),
+                "{order:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_dx_crop_whose_centre_lies_outside_the_recorded_frame_gives_none() {
+        // A centre at x = 8257, one pixel past the right edge of the 8256
+        // frame, which `Focus::new` refuses as recorded. On the Z 9's DX
+        // CropArea it would scale past the right edge anyway, to 5393; on
+        // a small raw's CropArea, 4044 wide, it would scale to (8257 × 4044
+        // + 4128) / 8256 = 4044, on the right edge, and only its area would
+        // be lost. The control, the corner shot, gives the point on both.
+        let small_raw = Crop {
+            raw: [4056, 2706],
+            crop_area: Some([6, 6, 4044, 2694]),
+            ..Z9_DX
+        };
+        let outside = Recorded {
+            center: [8257, 572],
+            ..Z9_DX_CORNER
+        };
+        let [width, _] = Z9_DX_CORNER.frame;
+        assert_eq!(scale_by_hand(8257, width, 4044), 4044);
+        for order in ORDERS {
+            for crop in [Z9_DX, small_raw] {
+                assert_eq!(
+                    crop_focus(order, crop, "0400", outside),
+                    None,
+                    "{order:?}, {crop:?}"
+                );
+                assert!(
+                    crop_focus(order, crop, "0400", Z9_DX_CORNER).is_some(),
+                    "{order:?}, {crop:?}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn a_dx_crop_whose_area_does_not_fit_as_recorded_gives_none() {
+        // A centre 145 across with an area 291 wide: half of 291 rounds up
+        // to 146, one more than 145, so the area does not fit the frame as
+        // recorded. Scaled onto the Z 9's DX CropArea first, it would:
+        // (145 × 5392 + 4128) / 8256 = 95 and (291 × 5392 + 4128) / 8256 =
+        // 190, whose half is 95.
+        let too_wide = Recorded {
+            center: [145, 572],
+            area: [291, 468],
+            ..Z9_DX_CORNER
+        };
+        let [width, _] = Z9_DX_CORNER.frame;
+        assert_eq!(
+            (
+                scale_by_hand(145, width, 5392),
+                scale_by_hand(291, width, 5392)
+            ),
+            (95, 190)
+        );
+        for order in ORDERS {
+            assert_eq!(
+                crop_focus(order, Z9_DX, "0400", too_wide),
+                None,
+                "{order:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_dx_crop_that_rounds_the_centre_onto_an_edge_keeps_the_point_alone() {
+        // A 1000 by 1000 frame scaled onto a 400 by 400 CropArea, by 0.4:
+        // a centre 1 across, with an area 2 wide, which fits as recorded,
+        // rounds to (1 × 400 + 500) / 1000 = 0, on the left edge, where no
+        // area fits, and the point is kept without one. Down, (500 × 400 +
+        // 500) / 1000 = 200.
+        let crop = Crop {
+            raw: [400, 400],
+            crop_hi_speed: Some([2, 1000, 1000, 400, 400, 0, 0]),
+            crop_area: Some([0, 0, 400, 400]),
+        };
+        let recorded = Recorded {
+            frame: [1000, 1000],
+            center: [1, 500],
+            area: [2, 2],
+            in_focus: 1,
+        };
+        let frame = Size {
+            width: 400,
+            height: 400,
+        };
+        let point = Focus::new(frame, Point { x: 0, y: 200 })
+            .expect("a centre on the frame")
+            .with_in_focus(true);
+        for order in ORDERS {
+            assert_eq!(
+                crop_focus(order, crop, "0400", recorded),
+                Some(point),
+                "{order:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_crop_whose_area_no_longer_fits_gives_none() {
+        // The 16:9 shot's centre, 715 down, with an area 900 high, which
+        // fits the full frame: moved back to 283, the 450 above it would
+        // leave the window. The control, the shot's own 323, fits.
+        for order in ORDERS {
+            let tall = Recorded {
+                area: [291, 900],
+                ..Z9_16X9_CORNER
+            };
+            assert_eq!(crop_focus(order, Z9_16X9, "0400", tall), None, "{order:?}");
+            assert_eq!(
+                crop_focus(order, Z9_16X9, "0400", Z9_16X9_CORNER),
+                Some(focus_at([8256, 4640], [502, 283], [291, 323], Some(true))),
+                "{order:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_default_crop_leaves_the_crop_area_to_the_focus() {
+        // The image size is the default crop, which comes first; CropArea
+        // still gives the cropped picture the point is placed on.
+        for order in ORDERS {
+            let block = crop_block(order, Z6III_1X1, &af_info2(order, "0401", Z6III_ASPECT));
+            let [width, height] = Z6III_1X1.raw;
+            let raw = Size { width, height };
+            let file = raw_file_of(order, raw, &block, whole(&block), |builder, ifd0| {
+                builder.long(ifd0, DEFAULT_CROP_ORIGIN, &[0, 0]).long(
+                    ifd0,
+                    DEFAULT_CROP_SIZE,
+                    &[4000, 4000],
+                );
+            });
+            let metadata = metadata_of(file);
+            assert_eq!(
+                metadata.image_size,
+                Some(Size {
+                    width: 4000,
+                    height: 4000
+                }),
+                "{order:?}"
+            );
+            assert_eq!(
+                metadata.focus,
+                Some(focus_at(
+                    [4032, 4032],
+                    [2015, 2016],
+                    [163, 174],
+                    Some(false)
+                )),
+                "{order:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_crop_in_the_other_byte_order_from_the_files_is_read() {
+        for (file, inner_order) in [(Order::Little, Order::Big), (Order::Big, Order::Little)] {
+            let block = crop_block(
+                inner_order,
+                Z9_DX,
+                &af_info2(inner_order, "0400", Z9_DX_CORNER),
+            );
+            assert_eq!(
+                focus_in(file, Z9_DX.raw, &block, whole(&block)),
+                Some(focus_at([5392, 3592], [415, 373], [274, 305], Some(true))),
+                "{file:?}"
+            );
         }
     }
 
