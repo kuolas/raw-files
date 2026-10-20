@@ -16,7 +16,8 @@ use std::fs;
 use std::io::Cursor;
 
 use raw_files::{
-    Format, Orientation, Preview, PreviewFormat, Rational, RawFile, SignedRational, Size,
+    DateTime, Exposure, Format, Lens, Metadata, Orientation, Preview, PreviewFormat, Rational,
+    RawFile, SignedRational, Size,
 };
 use support::nef::{
     D300_FULL_SIZE_JPEG, D300_LENS, D300_PREVIEW_JPEG, D300_RAW, D300_SERIAL_NUMBER,
@@ -279,6 +280,67 @@ fn the_z9_file_gives_every_value_its_fixture_records() {
                 orientation,
                 &format!("{order:?}, Orientation {value}"),
             );
+        }
+    }
+}
+
+/// The metadata [`assert_the_z9_metadata`] checks, built as a caller's
+/// test would, through the public constructors and the `with_…` methods
+/// alone, with the orientation `orientation`; `None` when a constructor
+/// refuses a value. The fixture records no focus, so none is set.
+fn the_z9_metadata_by_hand(orientation: Orientation) -> Option<Metadata> {
+    let time = DateTime::new(2022, 2, 5, 13, 46, 41)?
+        .with_subseconds(850_000_000, 2)?
+        .with_offset(-300)?;
+    let exposure = Exposure::default()
+        .with_iso(64)
+        .with_exposure_time(Rational::new(10, 3200)?)
+        .with_f_number(Rational::new(900, 100)?)
+        .with_focal_length(Rational::new(180, 10)?)
+        .with_exposure_bias(SignedRational::new(0, 6)?);
+    let lens = Lens::builder()
+        .make("NIKON")
+        .model(LENS_MODEL_Z14_30)
+        .serial_number("12345678")
+        .min_focal_length(Rational::new(140, 10)?)
+        .max_focal_length(Rational::new(300, 10)?)
+        .f_number_at_min_focal_length(Rational::new(400, 100)?)
+        .f_number_at_max_focal_length(Rational::new(400, 100)?)
+        .build()?;
+    let metadata = Metadata::default()
+        .with_make("NIKON CORPORATION")
+        .with_model("NIKON Z 9")
+        .with_serial_number("1234567")
+        .with_capture_time(time)
+        .with_orientation(orientation)
+        .with_exposure(exposure)
+        .with_lens(lens)
+        .with_raw_size(Size {
+            width: 8280,
+            height: 5520,
+        })
+        .with_image_size(Size {
+            width: 8256,
+            height: 5504,
+        });
+    Some(metadata)
+}
+
+#[test]
+fn the_z9_metadata_built_by_hand_equals_what_open_reads() {
+    // The one test that ties the builders to the reader: a builder that
+    // wrote the wrong value, or a reader that read one, makes the two
+    // differ.
+    for order in ORDERS {
+        for (value, orientation) in [(8, Orientation::Rotate270), (1, Orientation::NoTransforms)] {
+            let label = format!("{order:?}, Orientation {value}");
+            let expected = the_z9_metadata_by_hand(orientation)
+                .expect("every value of the Z 9 fixture is one the constructors accept");
+            let built = z9_file(order, value);
+            let from_bytes = RawFile::from_bytes(&built.bytes).unwrap();
+            let from_reader = RawFile::from_reader(Cursor::new(built.bytes.clone())).unwrap();
+            assert_eq!(from_bytes.metadata(), &expected, "{label}, from bytes");
+            assert_eq!(from_reader.metadata(), &expected, "{label}, from reader");
         }
     }
 }
