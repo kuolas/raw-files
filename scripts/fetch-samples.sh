@@ -16,7 +16,8 @@
 # large tier fails, saying so, rather than pass having fetched nothing.
 #
 # The files go to $RAW_FILES_SAMPLES (relative to the current directory), or
-# to target/raw-samples in the repository when it is unset; cargo test looks
+# to raw-samples in the repository when it is unset, a folder that git
+# ignores and that cargo clean leaves alone, unlike target; cargo test looks
 # in the same place. A file already there whose hash matches is kept, so a
 # second run downloads nothing. A download whose hash differs is deleted, and
 # the script fails naming the file and both hashes.
@@ -41,7 +42,7 @@ fi
 cd "$(dirname "$0")/.."
 
 list=tests/samples.tsv
-dest=${dest:-target/raw-samples}
+dest=${dest:-raw-samples}
 
 # A browser's User-Agent: a site that filters bots may refuse curl's own.
 user_agent='Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36'

@@ -1,6 +1,10 @@
 # Build output and local state only — never source.
 /target
 
+# The real sample files that scripts/fetch-samples.sh downloads, listed in
+# tests/samples.tsv: kept out of target so that cargo clean leaves them.
+/raw-samples
+
 # What cargo-fuzz writes: its build, the inputs it collects, the inputs that
 # failed, and coverage reports.
 /fuzz/target

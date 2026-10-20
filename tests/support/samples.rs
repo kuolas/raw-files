@@ -16,12 +16,13 @@ use raw_files::{Format, Orientation, Preview, PreviewFormat, Rational, RawFile, 
 /// The path of the sample file `name`, or `None`, with a note on stderr,
 /// when it has not been downloaded. The files are in `RAW_FILES_SAMPLES`
 /// (relative to the current directory, which under `cargo test` is the
-/// crate's root), or in `target/raw-samples` when it is unset, where
-/// `scripts/fetch-samples.sh` puts them.
+/// crate's root), or in `raw-samples` at the crate's root when it is unset,
+/// where `scripts/fetch-samples.sh` puts them: a folder that git ignores and
+/// that `cargo clean` leaves alone.
 pub fn path(name: &str) -> Option<PathBuf> {
     let dir = match env::var_os("RAW_FILES_SAMPLES") {
         Some(dir) if !dir.is_empty() => PathBuf::from(dir),
-        _ => Path::new(env!("CARGO_MANIFEST_DIR")).join("target/raw-samples"),
+        _ => Path::new(env!("CARGO_MANIFEST_DIR")).join("raw-samples"),
     };
     let path = dir.join(name);
     if path.is_file() {
