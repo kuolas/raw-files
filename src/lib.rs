@@ -16,8 +16,9 @@
 //! read when the file is opened, from the standard TIFF and Exif tags and,
 //! on Nikon files, from what Nikon's MakerNote records that they lack: the
 //! camera's make, model and serial number, the capture time, the
-//! orientation, the exposure, the lens, and the sizes of the raw data and
-//! of the visible image. See the
+//! orientation, the exposure, the lens, the sizes of the raw data and of
+//! the visible image, and, on Nikon files, where the camera focused
+//! ([`Metadata::focus`]). See the
 //! [roadmap](https://github.com/kuolas/raw-files/blob/master/docs/ROADMAP.md)
 //! for the plan and the
 //! [architecture](https://github.com/kuolas/raw-files/blob/master/docs/ARCHITECTURE.md)
@@ -125,8 +126,9 @@
 //! # What comes next
 //!
 //! The [roadmap](https://github.com/kuolas/raw-files/blob/master/docs/ROADMAP.md)
-//! plans the autofocus points the camera used; then the raw sensor data;
-//! and last a developed linear image.
+//! plans the focus point of Sony files and of the DSLR shots that record
+//! only an autofocus point's number; then the raw sensor data; and last a
+//! developed linear image.
 
 // A fuzzing build compiles the reader for one caller, the fuzz entry points,
 // which use only part of it. What is unused there, and so which `expect`s

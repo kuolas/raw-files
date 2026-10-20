@@ -64,6 +64,38 @@
 //! or cannot be read. An Exif offset always wins, even where WorldTime
 //! records another.
 //!
+//! AFInfo2 records where the camera's autofocus aimed, which no standard
+//! tag records. Mirrorless bodies, and DSLRs in live view, fill in a
+//! position in pixels: the size of a frame, the centre of the focus area
+//! in that frame, and the area's width and height. A DSLR shot through the
+//! viewfinder records a zero frame instead, and only the number of an
+//! autofocus point, which only a table of the body's points, carried by no
+//! file, could place in pixels (public samples 928 and 1835): it gives no
+//! focus point.
+//! The position is the centre of the area, not its corner: the Coolpix A,
+//! focusing at the middle of its 4928 by 3264 frame, records (2464, 1632)
+//! (sample 2238). The frame is the camera's full-size output, not the
+//! stored raw: 8256 by 5504 on the Z 9, inside an 8280 by 5520 raw
+//! (samples 5146 to 5148), and the full 6048 by 4024 on the Z 6's small
+//! raw, whose stored image is 4548 by 3030 (sample 3587); the point is
+//! reported in that frame, as recorded. AFInfo2 is a value of type
+//! UNDEFINED that starts with a version, four ASCII digits, and each
+//! version keeps its fields at offsets of its own, as ExifTool's tables
+//! publish them. It is read at the exact versions 0100, 0101, 0300, 0301,
+//! 0400, 0401 and 0402; any other, such as the Nikon 1's 0200, gives no
+//! focus point, since its fields may lie elsewhere (ADR012). The frame,
+//! the centre and the area are SHORTs in the MakerNote's byte order. On
+//! every version read but 0300 and 0301, a byte says whether the camera
+//! confirmed focus: 1 for yes, 0 for a miss, and any other value says
+//! nothing. A focus point is given only when the value is at least as long
+//! as its version's layout, the frame and the area have no zero side, the
+//! centre lies on the frame, and the area fits inside the frame around it
+//! ([`Focus::new`], [`Focus::with_size`]). FocusMode, ASCII text, records
+//! how the camera focused: `MANUAL`, or an autofocus mode padded with
+//! spaces, such as `AF-S  `. When it reads exactly `MANUAL`, by the text
+//! rule, the file gives no focus point, whatever AFInfo2 holds: the point
+//! of a manual-focus shot is not one the camera focused on (ADR012).
+//!
 //! Nikon has used three layouts for the block, told apart by their first
 //! bytes. The one every body since the D70 and the D100 writes, and the one
 //! read here, starts with the signature `Nikon` and a NUL, two version
@@ -87,15 +119,16 @@
 //! every entry whose value lies outside the block is dropped, as an entry
 //! whose value lies outside the file is, so every value read from them lies
 //! inside the block: the ISO's two numbers and WorldTime's four bytes,
-//! which the entry holds, and CropArea's four numbers, the serial number
-//! and the lens's range, which take more than the four bytes an entry
-//! holds and so are stored elsewhere. A value of another type than its
-//! tag's rule allows is not read. A block that does not hold together,
-//! whether its inner header is not one, an IFD in it is cut short or has
-//! more entries than the limits allow, costs what the MakerNote would have
-//! given, the small preview, the crop area and the values above, never the
-//! file: the NEF security notes ask that bad entries be skipped rather than
-//! fail the file (`docs/formats/nef/security.md`, item 4 of the checklist).
+//! which the entry holds, and CropArea's four numbers, the serial number,
+//! the lens's range, FocusMode's text and AFInfo2's bytes, which take more
+//! than the four bytes an entry holds and so are stored elsewhere. A value
+//! of another type than its tag's rule allows is not read. A block that
+//! does not hold together, whether its inner header is not one, an IFD in
+//! it is cut short or has more entries than the limits allow, costs what
+//! the MakerNote would have given, the small preview, the crop area and
+//! the values above, never the file: the NEF security notes ask that bad
+//! entries be skipped rather than fail the file
+//! (`docs/formats/nef/security.md`, item 4 of the checklist).
 //! Only a failure of the reader itself is an error: that is not the file's
 //! fault, and says nothing about the MakerNote.
 //!
@@ -116,16 +149,21 @@ use crate::error::Result;
 use crate::formats::block_ifd::{block_of, fits, ifd_in};
 use crate::formats::tiff_metadata::{self, Standard};
 use crate::formats::tiff_previews::Candidate;
-use crate::geometry::Size;
+use crate::geometry::{Point, Size};
 use crate::io::{ByteOrder, Source};
 use crate::limits::Limits;
-use crate::metadata::{Lens, Metadata};
+use crate::metadata::{Focus, Lens, Metadata};
 use crate::rational::Rational;
 
 /// The Nikon MakerNote tag that records the ISO the picture was taken at
 /// (ISO): two SHORTs, the second of them the ISO, on the bodies whose Exif
 /// tags may lack one.
 const ISO: u16 = 0x0002;
+
+/// The Nikon MakerNote tag that records how the camera focused
+/// (FocusMode), as ASCII text: `MANUAL` for manual focus, or an autofocus
+/// mode padded with spaces to six characters, such as `AF-S  `.
+const FOCUS_MODE: u16 = 0x0007;
 
 /// The Nikon MakerNote tag that points at the PreviewIFD, the sub-IFD
 /// holding the small preview JPEG.
@@ -151,6 +189,14 @@ const CROP_AREA: u16 = 0x0045;
 /// shortest and longest focal length and the f-number at each, as four
 /// RATIONALs in the order of the Exif LensSpecification.
 const LENS: u16 = 0x0084;
+
+/// The Nikon MakerNote tag that records where the camera's autofocus
+/// aimed (AFInfo2): an UNDEFINED value that starts with its version, four
+/// ASCII digits, and holds, at offsets each version sets, the size of a
+/// frame, the centre of the focus area and the area's width and height,
+/// as SHORTs in the MakerNote's byte order, and on most versions a byte
+/// saying whether focus was confirmed.
+const AF_INFO2: u16 = 0x00B7;
 
 /// The signature a Nikon MakerNote starts with.
 const SIGNATURE: &[u8; 6] = b"Nikon\0";
@@ -280,7 +326,7 @@ pub(super) fn preview_candidate<R: Read + Seek>(
 
 /// The metadata of the file whose MakerNote is `makernote`: what the
 /// standard tags gave, `standard`, with what the MakerNote records that the
-/// standard tags lack.
+/// standard tags lack, the focus point among it.
 ///
 /// That is, first, the image size, from CropArea, which replaces the raw
 /// size the image size otherwise falls back on: when the raw IFD records no
@@ -295,7 +341,9 @@ pub(super) fn preview_candidate<R: Read + Seek>(
 /// whose OffsetTimeOriginal is missing or could not be read, and only
 /// within the bound every offset is held to
 /// ([`DateTime::with_offset`](crate::datetime::DateTime::with_offset)).
-/// Every other value is the standard tags'.
+/// Last, the focus point, from AFInfo2 and FocusMode ([`focus`]), always
+/// read: the standard tags never give one, so it is not a fallback. Every
+/// other value is the standard tags'.
 ///
 /// # Errors
 ///
@@ -334,6 +382,7 @@ pub(super) fn metadata<R: Read + Seek>(
     {
         metadata.capture_time = Some(time);
     }
+    metadata.focus = focus(src, makernote)?;
     Ok(metadata)
 }
 
@@ -468,6 +517,159 @@ fn world_time<R: Read + Seek>(src: &mut Source<R>, makernote: &MakerNote) -> Res
     // A zone near the end of the 16-bit range, plus the daylight hour, may
     // not fit; it is far beyond any offset in use anyway.
     Ok(i16::try_from(offset).ok())
+}
+
+/// Where the camera's autofocus aimed, as `makernote`'s AFInfo2 records
+/// it: the centre of the focus area, the area's size and the frame the two
+/// are measured in, with whether focus was confirmed on the versions that
+/// say; `None` when FocusMode records manual focus ([`manual_focus`]), or
+/// when AFInfo2 is missing, is not of type UNDEFINED, stores its value
+/// outside the block, or holds a value [`af_info2_focus`] gives none for.
+///
+/// See the [module documentation](self) for what AFInfo2 is.
+///
+/// # Errors
+///
+/// `Io` when the reader fails. Nothing the block holds is an error.
+fn focus<R: Read + Seek>(src: &mut Source<R>, makernote: &MakerNote) -> Result<Option<Focus>> {
+    // Without AFInfo2 there is no focus point, so FocusMode is not read.
+    if !has_entry_of_type(makernote, AF_INFO2, &[UNDEFINED]) || manual_focus(src, makernote)? {
+        return Ok(None);
+    }
+    let value = skip_damage(makernote.ifd.bytes(src, AF_INFO2))?.flatten();
+    Ok(value.and_then(|value| af_info2_focus(&value, makernote.order)))
+}
+
+/// Whether `makernote`'s FocusMode records manual focus: whether it is of
+/// type ASCII and reads `MANUAL`, exactly, by the rule every text value of
+/// the metadata is read by ([`tiff_metadata::text`]), which cuts it at its
+/// first NUL and trims the spaces that pad it. A FocusMode that is
+/// missing, of another type, or that reads anything else, such as `AF-S`,
+/// records no manual focus.
+///
+/// # Errors
+///
+/// `Io` when the reader fails. Nothing the block holds is an error.
+fn manual_focus<R: Read + Seek>(src: &mut Source<R>, makernote: &MakerNote) -> Result<bool> {
+    if !has_entry_of_type(makernote, FOCUS_MODE, &[ASCII]) {
+        return Ok(false);
+    }
+    let mode = tiff_metadata::text(src, &makernote.ifd, FOCUS_MODE)?;
+    Ok(mode.as_deref() == Some("MANUAL"))
+}
+
+/// Where one AFInfo2 version keeps the focus point: the byte offsets, from
+/// the start of the value, of the fields read, and the shortest value that
+/// version writes.
+///
+/// Each of the frame, the centre and the area is two SHORTs in the
+/// MakerNote's byte order, the width or x at its offset and the height or y
+/// two bytes after it. The offsets are those of ExifTool's published
+/// tables, confirmed on the public samples whose fields hold values.
+#[derive(Clone, Copy, Debug)]
+struct Layout {
+    /// How long a value of this version is, at least: the length of the
+    /// version's layout, whose last fields may not be read.
+    min_len: usize,
+    /// The frame's width, then its height.
+    frame: usize,
+    /// The centre's x, then its y.
+    center: usize,
+    /// The area's width, then its height.
+    area: usize,
+    /// The byte that says whether focus was confirmed, on the versions
+    /// that have one.
+    in_focus: Option<usize>,
+}
+
+/// The layout of AFInfo2 version `version`, its first four bytes: `None`
+/// for any version but the exact ones read, 0100, 0101, 0300, 0301, 0400,
+/// 0401 and 0402. A version that shares its first two digits with these,
+/// such as 0200 or a future 0403, may have moved its fields, and is not
+/// read at the offsets of its neighbours (ADR012).
+fn layout(version: &[u8]) -> Option<Layout> {
+    match version {
+        b"0100" => Some(Layout {
+            min_len: 30,
+            frame: 16,
+            center: 20,
+            area: 24,
+            in_focus: Some(28),
+        }),
+        b"0101" => Some(Layout {
+            min_len: 84,
+            frame: 70,
+            center: 74,
+            area: 78,
+            in_focus: Some(82),
+        }),
+        b"0300" | b"0301" => Some(Layout {
+            min_len: 60,
+            frame: 42,
+            center: 46,
+            area: 50,
+            in_focus: None,
+        }),
+        b"0400" | b"0401" | b"0402" => Some(Layout {
+            min_len: 80,
+            frame: 62,
+            center: 66,
+            area: 70,
+            in_focus: Some(74),
+        }),
+        _ => None,
+    }
+}
+
+/// The focus point that the AFInfo2 value `value` records, its SHORTs in
+/// byte order `order`: the frame, the centre and the area at its version's
+/// [`layout`], and the in-focus byte, when the layout has one, as `true`
+/// for 1, `false` for 0, and nothing said for any other value.
+///
+/// `None` when the version is not one read, the value is shorter than its
+/// layout, or [`Focus::new`] or [`Focus::with_size`] refuses what it
+/// records: a frame or an area with a zero side, which is how a shot
+/// through a DSLR's viewfinder says it records no position, a centre
+/// outside the frame, or an area that does not fit inside the frame
+/// around its centre.
+fn af_info2_focus(value: &[u8], order: ByteOrder) -> Option<Focus> {
+    let layout = layout(value.get(..4)?)?;
+    if value.len() < layout.min_len {
+        return None;
+    }
+    let (width, height) = shorts_at(value, layout.frame, order)?;
+    let frame = Size { width, height };
+    let (x, y) = shorts_at(value, layout.center, order)?;
+    let (width, height) = shorts_at(value, layout.area, order)?;
+    let area = Size { width, height };
+    // An area that `with_size` refuses costs the whole focus, not only the
+    // area. A zero side is how a Nikon file says it records no position;
+    // and an area of no zero side that does not fit around the centre is a
+    // record that cannot be used, which gives no focus on every format, as
+    // ADR012 decides.
+    let focus = Focus::new(frame, Point { x, y })?.with_size(area)?;
+    let in_focus = layout
+        .in_focus
+        .and_then(|at| value.get(at))
+        .and_then(|&byte| match byte {
+            0 => Some(false),
+            1 => Some(true),
+            _ => None,
+        });
+    Some(match in_focus {
+        Some(in_focus) => focus.with_in_focus(in_focus),
+        None => focus,
+    })
+}
+
+/// The two SHORTs at `at` in `value`, in byte order `order`; `None` when
+/// they do not lie inside it.
+fn shorts_at(value: &[u8], at: usize, order: ByteOrder) -> Option<(u32, u32)> {
+    let &[first0, first1, second0, second1] = value.get(at..)?.first_chunk::<4>()?;
+    Some((
+        u32::from(order.u16([first0, first1])),
+        u32::from(order.u16([second0, second1])),
+    ))
 }
 
 /// Whether `makernote`'s MakerNote IFD has an entry of tag `tag`, of one
@@ -2047,6 +2249,531 @@ mod tests {
         }
     }
 
+    /// Where a test's AFInfo2 value puts each field: the value's length,
+    /// then the byte offsets of the frame, the centre, the area and the
+    /// in-focus byte, as the NEF notes' table gives them for each version.
+    /// Written out here, apart from [`layout`], so that a wrong offset there
+    /// reads a field from the wrong place.
+    #[derive(Clone, Copy, Debug)]
+    struct Fields {
+        len: usize,
+        frame: usize,
+        center: usize,
+        area: usize,
+        in_focus: Option<usize>,
+    }
+
+    /// The fields of version 0100.
+    const FIELDS_0100: Fields = Fields {
+        len: 30,
+        frame: 16,
+        center: 20,
+        area: 24,
+        in_focus: Some(28),
+    };
+
+    /// The fields of version 0101.
+    const FIELDS_0101: Fields = Fields {
+        len: 84,
+        frame: 70,
+        center: 74,
+        area: 78,
+        in_focus: Some(82),
+    };
+
+    /// The fields of versions 0300 and 0301, which have no in-focus byte.
+    const FIELDS_03XX: Fields = Fields {
+        len: 60,
+        frame: 42,
+        center: 46,
+        area: 50,
+        in_focus: None,
+    };
+
+    /// The fields of versions 0400, 0401 and 0402.
+    const FIELDS_04XX: Fields = Fields {
+        len: 80,
+        frame: 62,
+        center: 66,
+        area: 70,
+        in_focus: Some(74),
+    };
+
+    /// The fields of the AFInfo2 version `version`, one of those read.
+    fn fields_of(version: &str) -> Fields {
+        match version {
+            "0100" => FIELDS_0100,
+            "0101" => FIELDS_0101,
+            "0300" | "0301" => FIELDS_03XX,
+            "0400" | "0401" | "0402" => FIELDS_04XX,
+            _ => panic!("no fields for version {version}"),
+        }
+    }
+
+    /// What an AFInfo2 value records: the frame's width and height, the
+    /// centre's x and y, the area's width and height, and the in-focus
+    /// byte, written only where the version has one.
+    #[derive(Clone, Copy, Debug)]
+    struct Recorded {
+        frame: [u16; 2],
+        center: [u16; 2],
+        area: [u16; 2],
+        in_focus: u8,
+    }
+
+    /// The Coolpix A's record, version 0100: a live-view shot focused at
+    /// the middle of its frame, and confirmed (public sample 2238).
+    const COOLPIX_A: Recorded = Recorded {
+        frame: [4928, 3264],
+        center: [2464, 1632],
+        area: [408, 336],
+        in_focus: 1,
+    };
+
+    /// A record for version 0101, made up, since no public sample fills in
+    /// its position: a D850-sized frame, off-centre, confirmed.
+    const MADE_UP_0101: Recorded = Recorded {
+        frame: [8256, 5504],
+        center: [3000, 2000],
+        area: [400, 400],
+        in_focus: 1,
+    };
+
+    /// The Z 6's record, version 0300, which has no in-focus byte (public
+    /// sample 3587).
+    const Z6: Recorded = Recorded {
+        frame: [6048, 4024],
+        center: [3024, 1160],
+        area: [285, 308],
+        in_focus: 1,
+    };
+
+    /// The Z 9's record, version 0400, confirmed (public samples 5146 to
+    /// 5148).
+    const Z9: Recorded = Recorded {
+        frame: [8256, 5504],
+        center: [4905, 2461],
+        area: [291, 323],
+        in_focus: 1,
+    };
+
+    /// An AFInfo2 value in byte order `order`, `fields.len` bytes long: the
+    /// four bytes of `version`, then zeros, with `recorded` at the offsets
+    /// of `fields`, its in-focus byte only where `fields` has one.
+    fn af_info2_with(order: Order, version: &str, fields: Fields, recorded: Recorded) -> Vec<u8> {
+        let mut value = vec![0; fields.len];
+        value[..4].copy_from_slice(version.as_bytes());
+        for (at, [first, second]) in [
+            (fields.frame, recorded.frame),
+            (fields.center, recorded.center),
+            (fields.area, recorded.area),
+        ] {
+            value[at..at + 2].copy_from_slice(&order.u16(first));
+            value[at + 2..at + 4].copy_from_slice(&order.u16(second));
+        }
+        if let Some(at) = fields.in_focus {
+            value[at] = recorded.in_focus;
+        }
+        value
+    }
+
+    /// An AFInfo2 value of version `version`, one of those read, in byte
+    /// order `order`, as long as its layout, recording `recorded`.
+    fn af_info2(order: Order, version: &str, recorded: Recorded) -> Vec<u8> {
+        af_info2_with(order, version, fields_of(version), recorded)
+    }
+
+    /// The focus that `recorded` describes, with `in_focus` as whether
+    /// focus was confirmed.
+    fn expected(recorded: Recorded, in_focus: Option<bool>) -> Focus {
+        let [width, height] = recorded.frame.map(u32::from);
+        let [x, y] = recorded.center.map(u32::from);
+        let [area_width, area_height] = recorded.area.map(u32::from);
+        let focus = Focus::new(Size { width, height }, Point { x, y })
+            .and_then(|focus| {
+                focus.with_size(Size {
+                    width: area_width,
+                    height: area_height,
+                })
+            })
+            .expect("a usable record");
+        match in_focus {
+            Some(in_focus) => focus.with_in_focus(in_focus),
+            None => focus,
+        }
+    }
+
+    /// The focus of a file in byte order `order` whose MakerNote holds what
+    /// `tags` adds to its MakerNote IFD.
+    fn focus_of(order: Order, tags: impl FnOnce(&mut TiffBuilder, IfdId)) -> Option<Focus> {
+        makernote_metadata(order, tags).focus
+    }
+
+    /// The focus of a file in byte order `order` whose MakerNote holds the
+    /// AFInfo2 value `value`, as UNDEFINED, and no FocusMode.
+    fn focus_from(order: Order, value: &[u8]) -> Option<Focus> {
+        focus_of(order, |inner, ifd| {
+            inner.undefined(ifd, AF_INFO2, value);
+        })
+    }
+
+    #[test]
+    fn each_af_info2_layout_gives_the_focus() {
+        // The Coolpix A's 0100, a made-up 0101, the Z 6's 0300, which does
+        // not say whether focus was confirmed, and the Z 9's 0400.
+        for order in ORDERS {
+            for (version, recorded, in_focus) in [
+                ("0100", COOLPIX_A, Some(true)),
+                ("0101", MADE_UP_0101, Some(true)),
+                ("0300", Z6, None),
+                ("0400", Z9, Some(true)),
+            ] {
+                assert_eq!(
+                    focus_from(order, &af_info2(order, version, recorded)),
+                    Some(expected(recorded, in_focus)),
+                    "{order:?}, {version}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn the_other_versions_of_a_layout_read_like_it() {
+        // 0301, which the D6, the Z 5 and the Z 6II write, and 0401 and
+        // 0402, which the Z f, the Z6III, the Z50II and the Z5II write.
+        for order in ORDERS {
+            for (version, recorded, in_focus) in [
+                ("0301", Z6, None),
+                ("0401", Z9, Some(true)),
+                ("0402", Z9, Some(true)),
+            ] {
+                assert_eq!(
+                    focus_from(order, &af_info2(order, version, recorded)),
+                    Some(expected(recorded, in_focus)),
+                    "{order:?}, {version}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn an_af_info2_version_not_read_gives_none() {
+        // The Nikon 1's 0200 and 0201, 42 bytes long as the J1 writes it
+        // (public sample 2956), with a position at the 0100 offsets; then
+        // versions no file shows, each laid out as the read version nearest
+        // it, which a reader choosing by the first two digits would read;
+        // then bytes that are no version at all.
+        for order in ORDERS {
+            let nikon_1 = Fields {
+                len: 42,
+                ..FIELDS_0100
+            };
+            for (version, fields, recorded) in [
+                ("0200", nikon_1, COOLPIX_A),
+                ("0201", nikon_1, COOLPIX_A),
+                ("0102", FIELDS_0101, MADE_UP_0101),
+                ("0302", FIELDS_03XX, Z6),
+                ("0403", FIELDS_04XX, Z9),
+                ("0500", FIELDS_04XX, Z9),
+                ("\0\0\0\0", FIELDS_04XX, Z9),
+                ("400 ", FIELDS_04XX, Z9),
+            ] {
+                let value = af_info2_with(order, version, fields, recorded);
+                assert_eq!(focus_from(order, &value), None, "{order:?}, {version:?}");
+            }
+            // Too short to hold a version, held in the entry itself.
+            assert_eq!(focus_from(order, b"040"), None, "{order:?}");
+        }
+    }
+
+    #[test]
+    fn an_af_info2_shorter_than_its_layout_gives_none() {
+        // Each layout ends past the last field read, so one byte short, the
+        // fields still lie inside the value; exactly its length gives the
+        // focus.
+        for order in ORDERS {
+            for (version, recorded, in_focus) in [
+                ("0100", COOLPIX_A, Some(true)),
+                ("0101", MADE_UP_0101, Some(true)),
+                ("0300", Z6, None),
+                ("0400", Z9, Some(true)),
+            ] {
+                let value = af_info2(order, version, recorded);
+                assert_eq!(
+                    focus_from(order, &value),
+                    Some(expected(recorded, in_focus)),
+                    "{order:?}, {version}, {} bytes",
+                    value.len()
+                );
+                let short = &value[..value.len() - 1];
+                assert_eq!(
+                    focus_from(order, short),
+                    None,
+                    "{order:?}, {version}, {} bytes",
+                    short.len()
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn an_af_info2_without_a_usable_position_gives_none() {
+        for order in ORDERS {
+            for (what, recorded) in [
+                // As the D300 writes it through the viewfinder: zeros past
+                // the version (public sample 928).
+                (
+                    "everything zero",
+                    Recorded {
+                        frame: [0, 0],
+                        center: [0, 0],
+                        area: [0, 0],
+                        in_focus: 0,
+                    },
+                ),
+                (
+                    "a zero frame width",
+                    Recorded {
+                        frame: [0, 5504],
+                        ..Z9
+                    },
+                ),
+                (
+                    "a zero frame height",
+                    Recorded {
+                        frame: [8256, 0],
+                        ..Z9
+                    },
+                ),
+                (
+                    "a zero area width",
+                    Recorded {
+                        area: [0, 323],
+                        ..Z9
+                    },
+                ),
+                (
+                    "a zero area height",
+                    Recorded {
+                        area: [291, 0],
+                        ..Z9
+                    },
+                ),
+                (
+                    "a centre right of the frame",
+                    Recorded {
+                        center: [8257, 2461],
+                        ..Z9
+                    },
+                ),
+                (
+                    "a centre below the frame",
+                    Recorded {
+                        center: [4905, 5505],
+                        ..Z9
+                    },
+                ),
+                // An area 291 pixels wide needs 146 on each side of the
+                // centre, and one 323 high 162 above and below it.
+                (
+                    "an area past the left edge",
+                    Recorded {
+                        center: [145, 2461],
+                        ..Z9
+                    },
+                ),
+                (
+                    "an area past the bottom edge",
+                    Recorded {
+                        center: [4905, 5504 - 161],
+                        ..Z9
+                    },
+                ),
+            ] {
+                let value = af_info2(order, "0400", recorded);
+                assert_eq!(focus_from(order, &value), None, "{order:?}, {what}");
+            }
+            // The control: the same areas just fit one pixel further in.
+            for center in [[146, 2461], [4905, 5504 - 162]] {
+                let recorded = Recorded { center, ..Z9 };
+                assert_eq!(
+                    focus_from(order, &af_info2(order, "0400", recorded)),
+                    Some(expected(recorded, Some(true))),
+                    "{order:?}, {center:?}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn an_af_info2_in_the_other_byte_order_from_the_files_is_read() {
+        for (file, inner_order) in [(Order::Little, Order::Big), (Order::Big, Order::Little)] {
+            let block = tags_block(inner_order, |inner, ifd| {
+                inner.undefined(ifd, AF_INFO2, &af_info2(inner_order, "0400", Z9));
+            })
+            .0;
+            let metadata = exif_metadata(file, &block, |_, _| {});
+            assert_eq!(metadata.focus, Some(expected(Z9, Some(true))), "{file:?}");
+        }
+    }
+
+    #[test]
+    fn a_byte_swapped_af_info2_gives_none() {
+        // As in the other byte order from the MakerNote's: the Coolpix A's
+        // frame reads as 16403 by 49164, the Z 9's as 16416 by 32789, and
+        // each centre then lies outside it.
+        for (order, swapped) in [(Order::Little, Order::Big), (Order::Big, Order::Little)] {
+            for (version, recorded) in [("0100", COOLPIX_A), ("0400", Z9)] {
+                let value = af_info2(swapped, version, recorded);
+                assert_eq!(focus_from(order, &value), None, "{order:?}, {version}");
+            }
+        }
+    }
+
+    #[test]
+    fn the_in_focus_byte_says_whether_focus_was_confirmed() {
+        // 1 is confirmed, 0 a miss, as on the Z6III samples beside a valid
+        // point (public samples 7808 to 7810); any other value says nothing,
+        // and the point is kept.
+        for order in ORDERS {
+            for (version, recorded) in [("0100", COOLPIX_A), ("0101", MADE_UP_0101), ("0400", Z9)] {
+                for (byte, in_focus) in [(1, Some(true)), (0, Some(false)), (2, None), (255, None)]
+                {
+                    let recorded = Recorded {
+                        in_focus: byte,
+                        ..recorded
+                    };
+                    assert_eq!(
+                        focus_from(order, &af_info2(order, version, recorded)),
+                        Some(expected(recorded, in_focus)),
+                        "{order:?}, {version}, {byte}"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn versions_0300_and_0301_do_not_say_whether_focus_was_confirmed() {
+        // Every byte but the version and the position set to 1, wherever an
+        // in-focus byte might be looked for.
+        for order in ORDERS {
+            for version in ["0300", "0301"] {
+                let mut value = af_info2(order, version, Z6);
+                value[4..FIELDS_03XX.frame].fill(1);
+                value[FIELDS_03XX.area + 4..].fill(1);
+                assert_eq!(
+                    focus_from(order, &value),
+                    Some(expected(Z6, None)),
+                    "{order:?}, {version}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn an_af_info2_past_the_block_is_not_read() {
+        for order in ORDERS {
+            let value = af_info2(order, "0400", Z9);
+            let block = tags_block(order, |inner, ifd| {
+                inner.undefined(ifd, AF_INFO2, &value);
+            })
+            .0;
+            // The value is the block's last 80 bytes.
+            assert_eq!(block[block.len() - 80..], value, "{order:?}");
+
+            // Declared one byte short: the value's last byte lies in the
+            // file, after the block.
+            let file = exif_file(order, &block, whole(&block) - 1, |_, _| {});
+            assert_eq!(metadata_of(file).focus, None, "{order:?}");
+
+            // The control: declared whole, the same bytes are used.
+            let file = exif_file(order, &block, whole(&block), |_, _| {});
+            assert_eq!(
+                metadata_of(file).focus,
+                Some(expected(Z9, Some(true))),
+                "{order:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn an_af_info2_of_another_type_is_not_read() {
+        // The Z 9's 80 bytes, declared as BYTEs, which the reader of bytes
+        // reads too.
+        for order in ORDERS {
+            let (block, entry) = tags_block(order, |inner, ifd| {
+                inner.undefined(ifd, AF_INFO2, &af_info2(order, "0400", Z9));
+            });
+            let block = retyped(order, block, entry, BYTE, 80);
+            let metadata = exif_metadata(order, &block, |_, _| {});
+            assert_eq!(metadata.focus, None, "{order:?}");
+        }
+    }
+
+    #[test]
+    fn a_makernote_without_af_info2_gives_no_focus() {
+        // As the D1H, D70, D100, D200 and older Coolpix bodies write it.
+        for order in ORDERS {
+            assert_eq!(focus_of(order, |_, _| {}), None, "{order:?}");
+        }
+    }
+
+    #[test]
+    fn a_focus_mode_of_manual_gives_no_focus() {
+        // `MANUAL` and the NUL the builder adds, as the D300 and the D850
+        // write it (public samples 928 and 1835), and padded with spaces as
+        // an autofocus mode is, beside the Z 9's AFInfo2.
+        for order in ORDERS {
+            for mode in ["MANUAL", "MANUAL  "] {
+                let focus = focus_of(order, |inner, ifd| {
+                    inner.ascii(ifd, FOCUS_MODE, mode).undefined(
+                        ifd,
+                        AF_INFO2,
+                        &af_info2(order, "0400", Z9),
+                    );
+                });
+                assert_eq!(focus, None, "{order:?}, {mode:?}");
+            }
+        }
+    }
+
+    #[test]
+    fn a_focus_mode_other_than_manual_keeps_the_focus() {
+        // Autofocus modes, padded as the bodies write them; `manual` in
+        // lower case, which the exact rule does not take for `MANUAL`; and
+        // no FocusMode at all.
+        for order in ORDERS {
+            for mode in [Some("AF-S  "), Some("AF-C  "), Some("manual"), None] {
+                let focus = focus_of(order, |inner, ifd| {
+                    if let Some(mode) = mode {
+                        inner.ascii(ifd, FOCUS_MODE, mode);
+                    }
+                    inner.undefined(ifd, AF_INFO2, &af_info2(order, "0400", Z9));
+                });
+                assert_eq!(focus, Some(expected(Z9, Some(true))), "{order:?}, {mode:?}");
+            }
+        }
+    }
+
+    #[test]
+    fn a_focus_mode_of_another_type_is_not_read() {
+        // `MANUAL` and its NUL as seven UNDEFINED bytes: not FocusMode's
+        // type, so no manual focus is recorded, and the focus is kept.
+        for order in ORDERS {
+            let (block, entry) = tags_block(order, |inner, ifd| {
+                inner.ascii(ifd, FOCUS_MODE, "MANUAL").undefined(
+                    ifd,
+                    AF_INFO2,
+                    &af_info2(order, "0400", Z9),
+                );
+            });
+            let block = retyped(order, block, entry, UNDEFINED, 7);
+            let metadata = exif_metadata(order, &block, |_, _| {});
+            assert_eq!(metadata.focus, Some(expected(Z9, Some(true))), "{order:?}");
+        }
+    }
+
     /// The first byte of the second block the source caches: a reader that
     /// fails from here on still serves the walk, which reads only the
     /// first.
@@ -2090,5 +2817,36 @@ mod tests {
                 read_candidate(&mut src, &tree, &Limits::default()).expect_err("the read fails");
             assert_eq!(err.kind(), ErrorKind::Io, "{at}: {err:?}");
         }
+    }
+
+    #[test]
+    fn a_reader_failure_while_reading_af_info2_is_an_error() {
+        // The block placed so that its inner header and MakerNote IFD lie
+        // before FAR and AFInfo2's value, its last 80 bytes, from FAR on.
+        let order = Order::Little;
+        let block = tags_block(order, |inner, ifd| {
+            inner.undefined(ifd, AF_INFO2, &af_info2(order, "0400", Z9));
+        })
+        .0;
+        let at = FAR - (whole(&block) - 80);
+        let bytes = nikon_file(order, at, &block, 0, |builder, exif| {
+            entry_at(builder, exif, MAKER_NOTE, UNDEFINED, at, whole(&block));
+        });
+        // The file is sound, for a reader that does not fail.
+        assert_eq!(
+            metadata_of(bytes.clone()).focus,
+            Some(expected(Z9, Some(true)))
+        );
+
+        let limits = Limits::default();
+        let mut src = Source::new(FailsFar(Cursor::new(bytes))).unwrap();
+        let header = parse_header(&mut src).unwrap();
+        let tree = walk(&mut src, header, &limits).unwrap();
+        let makernote = read(&mut src, &tree, &limits)
+            .unwrap()
+            .expect("a MakerNote");
+        let standard = tiff_metadata::read(&mut src, &tree).unwrap();
+        let err = metadata(&mut src, &makernote, standard).expect_err("the read fails");
+        assert_eq!(err.kind(), ErrorKind::Io, "{err:?}");
     }
 }

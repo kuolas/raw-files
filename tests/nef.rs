@@ -2,12 +2,13 @@
 
 //! The NEF reader from outside the crate, on a file laid out like a Nikon
 //! Z 9's: what it opens as, which previews it lists, what reading one
-//! returns, and what metadata it gives. Then the previews and the metadata
-//! of a file laid out like a D300's, an older body that records its serial
-//! number and its lens's range only in its MakerNote. Then real files,
-//! three of the Z 9 and 20 of 18 other bodies, when they have been
-//! downloaded (see [`support::samples::path`]): the previews each gives,
-//! and its metadata, every value of it.
+//! returns, and what metadata it gives, the focus point among it. Then the
+//! previews and the metadata of a file laid out like a D300's, an older
+//! body that records its serial number and its lens's range only in its
+//! MakerNote, and no focus point, shot through the viewfinder in manual
+//! focus. Then real files, three of the Z 9 and 20 of 18 other bodies,
+//! when they have been downloaded (see [`support::samples::path`]): the
+//! previews each gives, and its metadata, every value of it.
 
 mod support;
 
@@ -16,13 +17,14 @@ use std::fs;
 use std::io::Cursor;
 
 use raw_files::{
-    DateTime, Exposure, Format, Lens, Metadata, Orientation, Preview, PreviewFormat, Rational,
-    RawFile, SignedRational, Size,
+    DateTime, Exposure, Focus, Format, Lens, Metadata, Orientation, Point, Preview, PreviewFormat,
+    Rational, RawFile, SignedRational, Size,
 };
 use support::nef::{
     D300_FULL_SIZE_JPEG, D300_LENS, D300_PREVIEW_JPEG, D300_RAW, D300_SERIAL_NUMBER,
     FULL_SIZE_JPEG, IFD0_JPEG, LENS_MODEL_Z14_30, MEDIUM_JPEG, PREVIEW_JPEG, RAW_STRIP_START,
-    Z9Blobs, d300_file, d300_file_with_blobs, stub, z9_file, z9_file_with, z9_file_with_blobs,
+    Z9_FOCUS_AREA, Z9_FOCUS_CENTER, Z9_FOCUS_FRAME, Z9Blobs, d300_file, d300_file_with_blobs, stub,
+    z9_file, z9_file_with, z9_file_with_blobs,
 };
 use support::samples::{
     Jpeg, Sample, SampleLens, SampleMetadata, SerialShape, check, check_metadata, sizes,
@@ -152,9 +154,9 @@ fn fraction(numerator: u32, denominator: u32) -> Rational {
 
 /// Checks that the Z 9 file `built`, whose IFD0's Orientation is
 /// `orientation`, gives the camera, the serial number, the capture time,
-/// the exposure, the lens and the sizes the fixture records, and that
-/// orientation, from bytes and from a reader; `label` names the file in a
-/// failure.
+/// the exposure, the lens, the sizes and the focus point the fixture
+/// records, and that orientation, from bytes and from a reader; `label`
+/// names the file in a failure.
 fn assert_the_z9_metadata(built: &Built, orientation: Orientation, label: &str) {
     let from_bytes = RawFile::from_bytes(&built.bytes).unwrap();
     let from_reader = RawFile::from_reader(Cursor::new(built.bytes.clone())).unwrap();
@@ -267,7 +269,29 @@ fn assert_the_z9_metadata(built: &Built, orientation: Orientation, label: &str) 
         };
         assert_eq!(metadata.raw_size(), Some(raw), "{label}, from {how}");
         assert_eq!(metadata.image_size(), Some(image), "{label}, from {how}");
+        // The focus point, from the MakerNote's AFInfo2, as recorded: the
+        // centre and the area in the camera's full-size frame, with focus
+        // confirmed.
+        let focus = metadata.focus().unwrap();
+        assert_eq!(
+            focus.frame(),
+            as_size(Z9_FOCUS_FRAME),
+            "{label}, from {how}"
+        );
+        let (x, y) = Z9_FOCUS_CENTER;
+        assert_eq!(focus.center(), Point { x, y }, "{label}, from {how}");
+        assert_eq!(
+            focus.size(),
+            Some(as_size(Z9_FOCUS_AREA)),
+            "{label}, from {how}"
+        );
+        assert_eq!(focus.in_focus(), Some(true), "{label}, from {how}");
     }
+}
+
+/// `(width, height)` as a [`Size`].
+fn as_size((width, height): (u32, u32)) -> Size {
+    Size { width, height }
 }
 
 #[test]
@@ -287,7 +311,7 @@ fn the_z9_file_gives_every_value_its_fixture_records() {
 /// The metadata [`assert_the_z9_metadata`] checks, built as a caller's
 /// test would, through the public constructors and the `with_…` methods
 /// alone, with the orientation `orientation`; `None` when a constructor
-/// refuses a value. The fixture records no focus, so none is set.
+/// refuses a value.
 fn the_z9_metadata_by_hand(orientation: Orientation) -> Option<Metadata> {
     let time = DateTime::new(2022, 2, 5, 13, 46, 41)?
         .with_subseconds(850_000_000, 2)?
@@ -307,6 +331,10 @@ fn the_z9_metadata_by_hand(orientation: Orientation) -> Option<Metadata> {
         .f_number_at_min_focal_length(Rational::new(400, 100)?)
         .f_number_at_max_focal_length(Rational::new(400, 100)?)
         .build()?;
+    let (x, y) = Z9_FOCUS_CENTER;
+    let focus = Focus::new(as_size(Z9_FOCUS_FRAME), Point { x, y })?
+        .with_size(as_size(Z9_FOCUS_AREA))?
+        .with_in_focus(true);
     let metadata = Metadata::default()
         .with_make("NIKON CORPORATION")
         .with_model("NIKON Z 9")
@@ -322,7 +350,8 @@ fn the_z9_metadata_by_hand(orientation: Orientation) -> Option<Metadata> {
         .with_image_size(Size {
             width: 8256,
             height: 5504,
-        });
+        })
+        .with_focus(focus);
     Some(metadata)
 }
 
@@ -495,6 +524,10 @@ fn the_d300_file_gives_what_its_exif_tags_lack_from_the_makernote() {
             };
             assert_eq!(metadata.raw_size(), Some(raw), "{label}");
             assert_eq!(metadata.image_size(), Some(raw), "{label}");
+            // A shot through the viewfinder in manual focus, as on the
+            // sample: AFInfo2 records a zero frame, and FocusMode `MANUAL`,
+            // so no focus point.
+            assert_eq!(metadata.focus(), None, "{label}");
         }
     }
 }
