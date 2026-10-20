@@ -19,10 +19,12 @@ does.
   build one, and `Focus::scaled_to` to place it on a preview; no reader
   fills it in yet, so it is `None` for every file.
 - Public constructors for `DateTime` (`new`, `with_subseconds`,
-  `with_offset`), `Rational` and `SignedRational` (`new`), and a builder
-  for `Lens` (`Lens::builder`), so that a program can build the values
-  raw-files reads in its own tests; each gives `None` for a value the
-  library would never return.
+  `with_offset`), `Rational` and `SignedRational` (`new`), a builder for
+  `Lens` (`Lens::builder`), and `with_…` builders on `Metadata` and
+  `Exposure`, so that a program can build the values raw-files reads in
+  its own tests; the constructors give `None` for a date or time that
+  does not exist, a fraction with a zero denominator or a lens with no
+  value, and the builders store what they are given.
 
 ## [0.2.0] - 2026-10-19
 

@@ -14,6 +14,52 @@
 //! Every value is optional. A file may not record it, or may record it in a
 //! way that cannot be read, such as a tag of the wrong type; either way the
 //! value is `None`, and the others are unaffected.
+//!
+//! A program that uses raw-files can build these values for its own tests,
+//! without a camera file for each case. [`Metadata`] and [`Exposure`] start
+//! empty, from `default()`, and take each value through a `with_…` method
+//! named after the method that reads it back, such as
+//! [`Metadata::with_model`] for [`Metadata::model`]. A [`Lens`] is built
+//! through [`Lens::builder`], and a [`Focus`], a [`DateTime`] and a
+//! [`Rational`] through their checked constructors. The `with_…` methods
+//! store each value as given, so a test reads back what it wrote, and what
+//! it does not set stays `None`:
+//!
+//! ```
+//! use raw_files::{DateTime, Exposure, Lens, Metadata, Rational};
+//!
+//! # fn main() {
+//! #     example().expect("every step gives a value");
+//! # }
+//! # fn example() -> Option<()> {
+//! let time = DateTime::new(2022, 2, 5, 13, 46, 41)?
+//!     .with_subseconds(850_000_000, 2)?
+//!     .with_offset(-300)?;
+//! let exposure = Exposure::default()
+//!     .with_iso(64)
+//!     .with_exposure_time(Rational::new(10, 3200)?);
+//! let metadata = Metadata::default()
+//!     .with_model("NIKON Z 9")
+//!     .with_capture_time(time)
+//!     .with_exposure(exposure)
+//!     .with_lens(Lens::builder().model("NIKKOR Z 14-30mm f/4 S").build()?);
+//!
+//! assert_eq!(metadata.model(), Some("NIKON Z 9"));
+//! assert_eq!(
+//!     metadata.capture_time().map(|time| time.to_string()).as_deref(),
+//!     Some("2022-02-05T13:46:41.85-05:00")
+//! );
+//! assert_eq!(metadata.exposure().iso(), Some(64));
+//! assert_eq!(metadata.exposure().exposure_time(), Rational::new(10, 3200));
+//! assert_eq!(
+//!     metadata.lens().and_then(Lens::model),
+//!     Some("NIKKOR Z 14-30mm f/4 S")
+//! );
+//! assert_eq!(metadata.serial_number(), None);
+//! assert_eq!(metadata.exposure().f_number(), None);
+//! # Some(())
+//! # }
+//! ```
 
 use crate::datetime::DateTime;
 use crate::geometry::{Point, Size};
@@ -29,9 +75,22 @@ use crate::rational::{Rational, SignedRational};
 /// damaged directory only the values in it: the rest is still read, and
 /// the file still opens with its previews.
 ///
-/// `Metadata::default()` is an empty one, with every value `None`, for a
-/// caller's tests. `Metadata` is not `Copy`, so that a later value that
-/// cannot be copied does not break callers.
+/// `Metadata::default()` is an empty one, with every value `None` and the
+/// orientation [`NoTransforms`](Orientation::NoTransforms). A caller's
+/// tests start from it and set the values they need with the `with_…`
+/// methods, such as [`with_model`](Self::with_model), each named after the
+/// method that reads the value back and each replacing any value set
+/// before. The builder pattern of the Rust API Guidelines (C-BUILDER)
+/// uses a separate builder type, but `Metadata` needs none: every value is
+/// optional, so the empty `Metadata` is already a valid start for every
+/// chain. A [`Lens`], which has no empty value, is built through a
+/// [`LensBuilder`] instead.
+///
+/// The `with_…` methods store each value as given: none refuses or changes
+/// one. The docs of the methods that read a value say what the readers give
+/// for a file, such as a make cleaned of padding; a test gets back what it
+/// wrote. `Metadata` is not `Copy`, so that a later value that cannot be
+/// copied does not break callers.
 ///
 /// # Examples
 ///
@@ -70,20 +129,24 @@ pub struct Metadata {
 }
 
 impl Metadata {
-    /// The camera's maker as the file records it, such as
-    /// `NIKON CORPORATION`, cleaned of padding.
+    /// The camera's maker, such as `NIKON CORPORATION`: as the file records
+    /// it, cleaned of padding by the reader, or as given to
+    /// [`with_make`](Self::with_make).
     pub fn make(&self) -> Option<&str> {
         self.make.as_deref()
     }
 
-    /// The camera's model as the file records it, such as `NIKON Z 9`,
-    /// cleaned of padding.
+    /// The camera's model, such as `NIKON Z 9`: as the file records it,
+    /// cleaned of padding by the reader, or as given to
+    /// [`with_model`](Self::with_model).
     pub fn model(&self) -> Option<&str> {
         self.model.as_deref()
     }
 
-    /// The camera body's serial number, as text. Many bodies do not record
-    /// one in a form the library reads, and then it is `None`.
+    /// The camera body's serial number, as text: as the file records it,
+    /// cleaned of padding by the reader, or as given to
+    /// [`with_serial_number`](Self::with_serial_number). Many bodies do not
+    /// record one in a form the library reads, and then it is `None`.
     pub fn serial_number(&self) -> Option<&str> {
         self.serial_number.as_deref()
     }
@@ -103,7 +166,7 @@ impl Metadata {
     }
 
     /// What a viewer must do to the stored pixels to show the picture
-    /// upright: the same value the previews carry
+    /// upright. For a file, it is the same value the previews carry
     /// ([`Preview::orientation`](crate::Preview::orientation)), and
     /// [`NoTransforms`](Orientation::NoTransforms) when the file records
     /// none.
@@ -146,7 +209,8 @@ impl Metadata {
     ///
     /// It is the default crop, not an aspect ratio chosen in the camera. On
     /// a Nikon small raw it counts the stored pixels, which can differ from
-    /// the size the camera's menu names. `None` when there is no raw size.
+    /// the size the camera's menu names. For a file, it is `None` when there
+    /// is no raw size.
     pub fn image_size(&self) -> Option<Size> {
         self.image_size
     }
@@ -159,6 +223,86 @@ impl Metadata {
     pub fn focus(&self) -> Option<Focus> {
         self.focus
     }
+
+    /// Sets the camera's maker, in place of any set before;
+    /// [`make`](Self::make) reads it.
+    #[must_use]
+    pub fn with_make(mut self, make: impl Into<String>) -> Self {
+        self.make = Some(make.into());
+        self
+    }
+
+    /// Sets the camera's model, in place of any set before;
+    /// [`model`](Self::model) reads it.
+    #[must_use]
+    pub fn with_model(mut self, model: impl Into<String>) -> Self {
+        self.model = Some(model.into());
+        self
+    }
+
+    /// Sets the camera body's serial number, in place of any set before;
+    /// [`serial_number`](Self::serial_number) reads it.
+    #[must_use]
+    pub fn with_serial_number(mut self, serial_number: impl Into<String>) -> Self {
+        self.serial_number = Some(serial_number.into());
+        self
+    }
+
+    /// Sets when the picture was taken, in place of any time set before;
+    /// [`capture_time`](Self::capture_time) reads it.
+    #[must_use]
+    pub fn with_capture_time(mut self, time: DateTime) -> Self {
+        self.capture_time = Some(time);
+        self
+    }
+
+    /// Sets how to turn the picture upright, in place of the orientation
+    /// it had; [`orientation`](Self::orientation) reads it.
+    #[must_use]
+    pub fn with_orientation(mut self, orientation: Orientation) -> Self {
+        self.orientation = orientation;
+        self
+    }
+
+    /// Sets the exposure, in place of the one it had;
+    /// [`exposure`](Self::exposure) reads it.
+    #[must_use]
+    pub fn with_exposure(mut self, exposure: Exposure) -> Self {
+        self.exposure = exposure;
+        self
+    }
+
+    /// Sets the lens, in place of any set before; [`lens`](Self::lens)
+    /// reads it.
+    #[must_use]
+    pub fn with_lens(mut self, lens: Lens) -> Self {
+        self.lens = Some(lens);
+        self
+    }
+
+    /// Sets the size of the raw data, in place of any set before;
+    /// [`raw_size`](Self::raw_size) reads it.
+    #[must_use]
+    pub fn with_raw_size(mut self, size: Size) -> Self {
+        self.raw_size = Some(size);
+        self
+    }
+
+    /// Sets the size of the visible image, in place of any set before;
+    /// [`image_size`](Self::image_size) reads it.
+    #[must_use]
+    pub fn with_image_size(mut self, size: Size) -> Self {
+        self.image_size = Some(size);
+        self
+    }
+
+    /// Sets where the camera focused, in place of any focus set before;
+    /// [`focus`](Self::focus) reads it.
+    #[must_use]
+    pub fn with_focus(mut self, focus: Focus) -> Self {
+        self.focus = Some(focus);
+        self
+    }
 }
 
 /// The exposure of a picture: its sensitivity, how long and how wide the
@@ -166,13 +310,23 @@ impl Metadata {
 ///
 /// Every value is `None` when the file does not record it or records it in
 /// a way that cannot be read. A zero ISO, exposure time, f-number or
-/// focal length means the camera did not know it, and is never returned:
-/// the value is `None`, unless, for the ISO, another of the file's
-/// sensitivity tags gives it. A zero exposure bias is a real value.
+/// focal length means the camera did not know it, and the readers never
+/// return one: the value is `None`, unless, for the ISO, another of the
+/// file's sensitivity tags gives it. A zero exposure bias is a real value.
 ///
-/// `Exposure::default()` is an empty one, with every value `None`, for a
-/// caller's tests. `Exposure` is not `Copy`, so that a later value that
-/// cannot be copied does not break callers.
+/// `Exposure::default()` is an empty one, with every value `None`. A
+/// caller's tests start from it and set the values they need with the
+/// `with_…` methods, such as [`with_iso`](Self::with_iso), each named after
+/// the method that reads the value back and each replacing any value set
+/// before. As for [`Metadata`], every value is optional, so the empty
+/// `Exposure` is the start of every chain and there is no separate builder
+/// type.
+///
+/// The `with_…` methods store each value as given: none refuses or changes
+/// one, so a test reads back even a zero it wrote, such as an ISO of 0 or
+/// an f-number of 0/10, though the readers never return a zero ISO,
+/// exposure time, f-number or focal length. `Exposure` is not `Copy`, so
+/// that a later value that cannot be copied does not break callers.
 ///
 /// # Examples
 ///
@@ -207,8 +361,9 @@ pub struct Exposure {
 impl Exposure {
     /// The ISO sensitivity, such as 64.
     ///
-    /// 65535 means 65535 or more: Exif records that value for any higher
-    /// sensitivity, and it is kept when the file records no exact one.
+    /// For a file, 65535 means 65535 or more: Exif records that value for
+    /// any higher sensitivity, and it is kept when the file records no
+    /// exact one.
     pub fn iso(&self) -> Option<u32> {
         self.iso
     }
@@ -235,6 +390,46 @@ impl Exposure {
     /// A zero, such as 0/6, means no compensation, not an unknown one.
     pub fn exposure_bias(&self) -> Option<SignedRational> {
         self.exposure_bias
+    }
+
+    /// Sets the ISO sensitivity, in place of any set before;
+    /// [`iso`](Self::iso) reads it.
+    #[must_use]
+    pub fn with_iso(mut self, iso: u32) -> Self {
+        self.iso = Some(iso);
+        self
+    }
+
+    /// Sets how long the shutter was open, in seconds, in place of any time
+    /// set before; [`exposure_time`](Self::exposure_time) reads it.
+    #[must_use]
+    pub fn with_exposure_time(mut self, seconds: Rational) -> Self {
+        self.exposure_time = Some(seconds);
+        self
+    }
+
+    /// Sets the f-number, in place of any set before;
+    /// [`f_number`](Self::f_number) reads it.
+    #[must_use]
+    pub fn with_f_number(mut self, f_number: Rational) -> Self {
+        self.f_number = Some(f_number);
+        self
+    }
+
+    /// Sets the focal length, in millimetres, in place of any set before;
+    /// [`focal_length`](Self::focal_length) reads it.
+    #[must_use]
+    pub fn with_focal_length(mut self, millimetres: Rational) -> Self {
+        self.focal_length = Some(millimetres);
+        self
+    }
+
+    /// Sets the exposure compensation, in EV, in place of any set before;
+    /// [`exposure_bias`](Self::exposure_bias) reads it.
+    #[must_use]
+    pub fn with_exposure_bias(mut self, ev: SignedRational) -> Self {
+        self.exposure_bias = Some(ev);
+        self
     }
 }
 
@@ -1731,5 +1926,296 @@ mod tests {
                 .into_iter()
                 .collect();
         assert_eq!(all.len(), 2);
+    }
+
+    #[test]
+    fn each_exposure_builder_sets_its_own_value_and_no_other() {
+        let bias = SignedRational {
+            numerator: 3,
+            denominator: 3,
+        };
+        // From the empty exposure, and from a full one whose every value
+        // differs from the one set, so that a builder writing another
+        // value, or clearing one, is caught. The expected value is built
+        // field by field, not through the builders.
+        for start in [Exposure::default(), z9_exposure()] {
+            let cases = [
+                (
+                    start.clone().with_iso(100),
+                    Exposure {
+                        iso: Some(100),
+                        ..start.clone()
+                    },
+                ),
+                (
+                    start.clone().with_exposure_time(fraction(1, 250)),
+                    Exposure {
+                        exposure_time: Some(fraction(1, 250)),
+                        ..start.clone()
+                    },
+                ),
+                (
+                    start.clone().with_f_number(fraction(56, 10)),
+                    Exposure {
+                        f_number: Some(fraction(56, 10)),
+                        ..start.clone()
+                    },
+                ),
+                (
+                    start.clone().with_focal_length(fraction(240, 10)),
+                    Exposure {
+                        focal_length: Some(fraction(240, 10)),
+                        ..start.clone()
+                    },
+                ),
+                (
+                    start.clone().with_exposure_bias(bias),
+                    Exposure {
+                        exposure_bias: Some(bias),
+                        ..start.clone()
+                    },
+                ),
+            ];
+            for (place, (built, expected)) in cases.into_iter().enumerate() {
+                assert_eq!(built, expected, "builder {place} from {start:?}");
+            }
+        }
+    }
+
+    #[test]
+    fn each_metadata_builder_sets_its_own_value_and_no_other() {
+        let time = DateTime::new(2022, 2, 5, 13, 46, 41).unwrap();
+        let exposure = Exposure {
+            iso: Some(100),
+            ..Exposure::default()
+        };
+        let focus = Focus::new(size(6_000, 4_000), point(3_000, 2_000)).unwrap();
+        // From the empty metadata, and from a full one whose every value
+        // differs from the one set, so that a builder writing another
+        // value, or clearing one, is caught. The expected value is built
+        // field by field, not through the builders.
+        for start in [Metadata::default(), z9_metadata()] {
+            let cases = [
+                (
+                    start.clone().with_make("Nikon"),
+                    Metadata {
+                        make: Some("Nikon".to_owned()),
+                        ..start.clone()
+                    },
+                ),
+                (
+                    start.clone().with_model("NIKON Z 8"),
+                    Metadata {
+                        model: Some("NIKON Z 8".to_owned()),
+                        ..start.clone()
+                    },
+                ),
+                (
+                    start.clone().with_serial_number("7654321"),
+                    Metadata {
+                        serial_number: Some("7654321".to_owned()),
+                        ..start.clone()
+                    },
+                ),
+                (
+                    start.clone().with_capture_time(time),
+                    Metadata {
+                        capture_time: Some(time),
+                        ..start.clone()
+                    },
+                ),
+                (
+                    start.clone().with_orientation(Orientation::Rotate270),
+                    Metadata {
+                        orientation: Orientation::Rotate270,
+                        ..start.clone()
+                    },
+                ),
+                (
+                    start.clone().with_exposure(exposure.clone()),
+                    Metadata {
+                        exposure: exposure.clone(),
+                        ..start.clone()
+                    },
+                ),
+                (
+                    start.clone().with_lens(z_lens()),
+                    Metadata {
+                        lens: Some(z_lens()),
+                        ..start.clone()
+                    },
+                ),
+                (
+                    start.clone().with_raw_size(size(6_048, 4_024)),
+                    Metadata {
+                        raw_size: Some(size(6_048, 4_024)),
+                        ..start.clone()
+                    },
+                ),
+                (
+                    start.clone().with_image_size(size(6_000, 4_000)),
+                    Metadata {
+                        image_size: Some(size(6_000, 4_000)),
+                        ..start.clone()
+                    },
+                ),
+                (
+                    start.clone().with_focus(focus),
+                    Metadata {
+                        focus: Some(focus),
+                        ..start.clone()
+                    },
+                ),
+            ];
+            for (place, (built, expected)) in cases.into_iter().enumerate() {
+                assert_eq!(built, expected, "builder {place} from {start:?}");
+            }
+        }
+    }
+
+    /// [`z9_metadata`] built through the ten builders.
+    fn z9_metadata_built() -> Metadata {
+        let lens = Lens::builder()
+            .model("NIKKOR Z 14-30mm f/4 S")
+            .build()
+            .unwrap();
+        Metadata::default()
+            .with_make("NIKON CORPORATION")
+            .with_model("NIKON Z 9")
+            .with_serial_number("3001234")
+            .with_capture_time(
+                DateTime::from_exif(b"2024:05:01 10:20:30", Some(b"85"), Some(b"+02:00")).unwrap(),
+            )
+            .with_orientation(Orientation::Rotate90)
+            .with_exposure(z9_exposure_built())
+            .with_lens(lens)
+            .with_raw_size(size(8_280, 5_520))
+            .with_image_size(size(8_256, 5_504))
+            .with_focus(z9_focus())
+    }
+
+    /// [`z9_exposure`] built through the five builders.
+    fn z9_exposure_built() -> Exposure {
+        Exposure::default()
+            .with_iso(64)
+            .with_exposure_time(fraction(10, 3200))
+            .with_f_number(fraction(900, 100))
+            .with_focal_length(fraction(140, 10))
+            .with_exposure_bias(SignedRational {
+                numerator: -4,
+                denominator: 6,
+            })
+    }
+
+    #[test]
+    fn every_builder_in_a_chain_equals_the_value_built_field_by_field() {
+        assert_eq!(z9_exposure_built(), z9_exposure());
+        assert_eq!(z9_metadata_built(), z9_metadata());
+    }
+
+    #[test]
+    fn a_later_exposure_or_metadata_value_replaces_an_earlier_one() {
+        let one = fraction(1, 1);
+        let exposure = Exposure::default()
+            .with_iso(1)
+            .with_exposure_time(one)
+            .with_f_number(one)
+            .with_focal_length(one)
+            .with_exposure_bias(SignedRational {
+                numerator: 1,
+                denominator: 1,
+            });
+        // The Z 9's values, each set after a value of 1.
+        let exposure = exposure
+            .with_iso(64)
+            .with_exposure_time(fraction(10, 3200))
+            .with_f_number(fraction(900, 100))
+            .with_focal_length(fraction(140, 10))
+            .with_exposure_bias(SignedRational {
+                numerator: -4,
+                denominator: 6,
+            });
+        assert_eq!(exposure, z9_exposure());
+
+        let earlier = Metadata::default()
+            .with_make("A")
+            .with_model("A")
+            .with_serial_number("A")
+            .with_capture_time(DateTime::new(2000, 1, 1, 0, 0, 0).unwrap())
+            .with_orientation(Orientation::Rotate180)
+            .with_exposure(Exposure::default().with_iso(1))
+            .with_lens(Lens::builder().model("A").build().unwrap())
+            .with_raw_size(size(1, 1))
+            .with_image_size(size(1, 1))
+            .with_focus(Focus::new(size(1, 1), point(0, 0)).unwrap());
+        // Every value of `earlier` differs from the Z 9's, so each builder
+        // below has one to replace.
+        let z9 = z9_metadata();
+        let metadata = earlier
+            .with_make("NIKON CORPORATION")
+            .with_model("NIKON Z 9")
+            .with_serial_number("3001234")
+            .with_capture_time(z9.capture_time.unwrap())
+            .with_orientation(z9.orientation)
+            .with_exposure(z9.exposure.clone())
+            .with_lens(z9.lens.clone().unwrap())
+            .with_raw_size(z9.raw_size.unwrap())
+            .with_image_size(z9.image_size.unwrap())
+            .with_focus(z9.focus.unwrap());
+        assert_eq!(metadata, z9);
+    }
+
+    #[test]
+    fn the_metadata_builders_move_an_owned_text_rather_than_copy_it() {
+        let make = String::from("NIKON CORPORATION");
+        let model = String::from("NIKON Z 9");
+        let serial_number = String::from("3001234");
+        let addresses = [make.as_ptr(), model.as_ptr(), serial_number.as_ptr()];
+        let metadata = Metadata::default()
+            .with_make(make)
+            .with_model(model)
+            .with_serial_number(serial_number);
+        let texts = [metadata.make(), metadata.model(), metadata.serial_number()];
+        assert_eq!(
+            texts,
+            [
+                Some("NIKON CORPORATION"),
+                Some("NIKON Z 9"),
+                Some("3001234")
+            ]
+        );
+        // The very texts given, not copies of them.
+        assert_eq!(texts.map(|text| text.map(str::as_ptr)), addresses.map(Some));
+    }
+
+    #[test]
+    fn the_builders_store_values_as_given() {
+        // Neither cleaned nor refused, as the readers would a file's: a
+        // padded or empty text, a zero ISO or fraction, and an image size
+        // with no raw size.
+        let zero = Rational {
+            numerator: 0,
+            denominator: 1,
+        };
+        let exposure = Exposure::default()
+            .with_iso(0)
+            .with_exposure_time(zero)
+            .with_f_number(zero)
+            .with_focal_length(zero);
+        assert_eq!(exposure.iso(), Some(0));
+        assert_eq!(exposure.exposure_time(), Some(zero));
+        assert_eq!(exposure.f_number(), Some(zero));
+        assert_eq!(exposure.focal_length(), Some(zero));
+
+        let metadata = Metadata::default()
+            .with_make("  padded  ")
+            .with_model("NIKON Z 9\0\0")
+            .with_serial_number("")
+            .with_image_size(size(0, 0));
+        assert_eq!(metadata.make(), Some("  padded  "));
+        assert_eq!(metadata.model(), Some("NIKON Z 9\0\0"));
+        assert_eq!(metadata.serial_number(), Some(""));
+        assert_eq!(metadata.raw_size(), None);
+        assert_eq!(metadata.image_size(), Some(size(0, 0)));
     }
 }
