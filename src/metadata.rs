@@ -218,8 +218,12 @@ impl Metadata {
     /// Where the camera focused, as the file records it (see [`Focus`]):
     /// the camera's own record only, never an estimate from the picture.
     ///
-    /// The readers do not fill it in yet, so it is `None` for every file
-    /// for now.
+    /// It is read on Nikon files, from the MakerNote's AFInfo2 block, as the
+    /// camera recorded it. It is `None` on a Nikon file that records no
+    /// position, such as a DSLR shot through the viewfinder, which records
+    /// only an autofocus point's number, and on a manual-focus shot; and on
+    /// Sony files, whatever they record, because their MakerNote is not
+    /// read.
     pub fn focus(&self) -> Option<Focus> {
         self.focus
     }
@@ -798,8 +802,10 @@ impl LensBuilder {
 /// it used, which the library does not map to pixels; a shot in manual
 /// focus records none that means anything. Those files give no `Focus`.
 ///
-/// No reader fills it in yet, so [`Metadata::focus`] is `None` for every
-/// file for now, whatever the file records.
+/// On Nikon files, [`Metadata::focus`] is read from the MakerNote's AFInfo2
+/// block, as the camera recorded it, and is `None` for a manual-focus shot.
+/// On Sony files it is `None`, whatever they record, because their
+/// MakerNote is not read.
 ///
 /// # Equality
 ///

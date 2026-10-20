@@ -16,13 +16,13 @@
 //! The reader of Nikon's MakerNote is in `makernote.rs`: it reads the
 //! MakerNote once per file, finds the small preview the MakerNote points
 //! at, and reads what the MakerNote records that the standard tags lack:
-//! the visible image size, and, on the older bodies whose standard tags
-//! lack them, the serial number, the ISO, the lens's range and the capture
-//! time's offset from UTC, from the time-zone setting of the camera's
-//! clock. The search for the previews is in `previews.rs`, and takes the
-//! MakerNote already read. The metadata comes from the standard tags,
-//! through the reader the TIFF-based formats share, and then from that
-//! MakerNote.
+//! the visible image size, the focus point, and, on the older bodies whose
+//! standard tags lack them, the serial number, the ISO, the lens's range
+//! and the capture time's offset from UTC, from the time-zone setting of
+//! the camera's clock. The search for the previews is in `previews.rs`,
+//! and takes the MakerNote already read. The metadata comes from the
+//! standard tags, through the reader the TIFF-based formats share, and then
+//! from that MakerNote.
 
 mod makernote;
 mod previews;
@@ -86,7 +86,8 @@ fn claims<R: Read + Seek>(src: &mut Source<R>, tree: &Tree) -> Result<bool> {
 /// range when the standard tags gave none, as on bodies before the D780
 /// and the Z 6, and the capture time's offset from UTC, from its WorldTime,
 /// when the standard tags gave a capture time without one, as on bodies
-/// before the D850 ([`makernote::metadata`]).
+/// before the D850; and it gives the focus point, from its AFInfo2, which
+/// no standard tag records ([`makernote::metadata`]).
 ///
 /// # Errors
 ///

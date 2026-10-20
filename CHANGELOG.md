@@ -16,8 +16,11 @@ does.
   centre of the focus area, the area's size when recorded, the frame they
   are measured in and whether focus was confirmed, with the `Focus` and
   `Point` types, `Focus::new` and its `with_size` and `with_in_focus` to
-  build one, and `Focus::scaled_to` to place it on a preview; no reader
-  fills it in yet, so it is `None` for every file.
+  build one, and `Focus::scaled_to` to place it on a preview. It is read
+  on Nikon files from the MakerNote's AFInfo2 block, which mirrorless
+  bodies and DSLRs in live view fill in, and is `None` on a file that
+  records only an autofocus point's number, such as a DSLR shot through
+  the viewfinder, on a manual-focus shot, and on Sony files.
 - Public constructors for `DateTime` (`new`, `with_subseconds`,
   `with_offset`), `Rational` and `SignedRational` (`new`), a builder for
   `Lens` (`Lens::builder`), and `with_…` builders on `Metadata` and

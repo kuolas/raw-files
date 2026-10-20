@@ -5,7 +5,9 @@
 //! the NEF reader on the real layouts without a real file. The Z 9 records
 //! its metadata in the standard tags; the D300, an older body, records its
 //! serial number, its lens's range and its clock's time zone only in its
-//! MakerNote.
+//! MakerNote. Both record where they focused only in their MakerNote: the
+//! Z 9 a focus point, and the D300, shot through the viewfinder in manual
+//! focus, none.
 //!
 //! The Z 9 layout, which [`z9_file`] writes:
 //!
@@ -49,18 +51,24 @@
 //!   eight digits that the Z 9 writes, 11 bytes in all. Last, the Exif IFD
 //!   holds the MakerNote, whose value is a block [`nikon_makernote`]
 //!   writes: Nikon's own metadata, here only its version, `0211`, its
-//!   crop area and its PreviewIFD, and none of the serial number, ISO and
-//!   lens tags of older bodies. The crop area is the visible image, the
-//!   raw data inside its border: 8256 by 5504 pixels starting 12 columns
-//!   and 8 rows into the raw, the CropArea `[12, 8, 8256, 5504]` of the
-//!   public Z 9 samples 5146 to 5148, as four SHORTs. The PreviewIFD
-//!   declares a small JPEG of 640 by 424 pixels. The MakerNote is in the
-//!   file's byte order unless the file is built with [`z9_file_with`],
-//!   which may give it the other.
+//!   focus mode, its crop area, its AFInfo2 and its PreviewIFD, and none of
+//!   the serial number, ISO and lens tags of older bodies. The focus mode
+//!   is the FocusMode `AF-S  ` (ASCII), single-servo autofocus padded with
+//!   spaces to six characters, as the bodies write an autofocus mode. The
+//!   crop area is the visible image, the raw data inside its border: 8256
+//!   by 5504 pixels starting 12 columns and 8 rows into the raw, the
+//!   CropArea `[12, 8, 8256, 5504]` of the public Z 9 samples 5146 to
+//!   5148, as four SHORTs. AFInfo2 is the 80 UNDEFINED bytes of version
+//!   `0400` that those samples record, which [`z9_af_info2`] writes: a
+//!   focus area of 291 by 323 pixels centred at (4905, 2461) in a frame of
+//!   8256 by 5504, with focus confirmed. The PreviewIFD declares a small
+//!   JPEG of 640 by 424 pixels. The MakerNote, AFInfo2's numbers included,
+//!   is in the file's byte order unless the file is built with
+//!   [`z9_file_with`], which may give it the other.
 //!
 //! Every text value is ASCII ending in one NUL, with no padding, as the
-//! Z 9 writes it, but for the lens's model and serial number, padded as
-//! above.
+//! Z 9 writes it, but for the lens's model and serial number and the focus
+//! mode, padded as above.
 //!
 //! The D300 layout, which [`d300_file`] writes, is that of the public D300
 //! sample 928 of raw.pixls.us, which is big-endian, file and MakerNote
@@ -92,13 +100,16 @@
 //!   has there. Like the sample, it holds no BodySerialNumber and no lens
 //!   tag. Last, it holds the MakerNote, a block [`nikon_makernote`]
 //!   writes, of the version `0210`: its MakerNoteVersion, `0210`; its ISO,
-//!   `[0, 200]` (SHORT); its SerialNumber `7654321` (ASCII), made up, as
+//!   `[0, 200]` (SHORT); its FocusMode `MANUAL` (ASCII), the sample's, a
+//!   manual-focus shot; its SerialNumber `7654321` (ASCII), made up, as
 //!   no real serial number is copied here; its WorldTime, a time zone of
 //!   60 minutes, no daylight saving time and the date format 0, the
 //!   sample's; its Lens, `180/10`, `700/10`, `35/10`, `45/10` (RATIONAL),
-//!   the sample's 18-70 mm lens of f/3.5 to f/4.5; and its PreviewIFD,
-//!   which declares a small JPEG of 570 by 375 pixels. The MakerNote is in
-//!   the file's byte order.
+//!   the sample's 18-70 mm lens of f/3.5 to f/4.5; its AFInfo2, the
+//!   sample's version `0100` and 26 zero bytes (UNDEFINED), a shot through
+//!   the viewfinder, which records a zero frame and no position; and its
+//!   PreviewIFD, which declares a small JPEG of 570 by 375 pixels. The
+//!   MakerNote is in the file's byte order.
 //!
 //! Every text value of the D300 file is ASCII ending in one NUL, with no
 //! padding.
@@ -184,6 +195,10 @@ const MAKER_NOTE_VERSION: u16 = 0x0001;
 /// The ISO, as two SHORTs of which the second is the ISO (ISO, a tag of
 /// the MakerNote IFD).
 const ISO: u16 = 0x0002;
+/// How the camera focused, as ASCII text: `MANUAL`, or an autofocus mode
+/// padded with spaces to six characters (FocusMode, a tag of the MakerNote
+/// IFD).
+const FOCUS_MODE: u16 = 0x0007;
 /// The offset of the MakerNote's PreviewIFD, the IFD that declares its
 /// small JPEG (PreviewIFD, a tag of the MakerNote IFD).
 const PREVIEW_IFD: u16 = 0x0011;
@@ -205,6 +220,12 @@ const CROP_AREA_Z9: [u16; 4] = [12, 8, 8256, 5504];
 /// LensSpecification: the shortest and longest focal length, then the
 /// f-number at each (Lens, a tag of the MakerNote IFD).
 const LENS: u16 = 0x0084;
+/// Where the camera's autofocus aimed, as an UNDEFINED value that starts
+/// with its version, four ASCII digits, and holds at the version's offsets
+/// the size of a frame, the centre of the focus area and the area's size,
+/// as SHORTs in the MakerNote's byte order, and on most versions whether
+/// focus was confirmed (AFInfo2, a tag of the MakerNote IFD).
+const AF_INFO2: u16 = 0x00B7;
 
 /// NewSubfileType of the full-resolution image.
 const FULL_RESOLUTION: u32 = 0;
@@ -264,6 +285,39 @@ pub const D300_LENS: [(u32, u32); 4] = [(180, 10), (700, 10), (35, 10), (45, 10)
 /// with no daylight saving time and the date format 0, as on the public
 /// sample 928.
 const D300_TIME_ZONE: u16 = 60;
+
+/// The frame of the Z 9 file's focus point, as its AFInfo2 records it:
+/// width, then height, the camera's full-size output, as on the public Z 9
+/// samples 5146 to 5148.
+pub const Z9_FOCUS_FRAME: (u32, u32) = (8256, 5504);
+/// The centre of the Z 9 file's focus area in [`Z9_FOCUS_FRAME`]: x, then
+/// y, as on the public Z 9 samples 5146 to 5148.
+pub const Z9_FOCUS_CENTER: (u32, u32) = (4905, 2461);
+/// The size of the Z 9 file's focus area: width, then height, a single
+/// point's, as on the public Z 9 samples 5146 to 5148.
+pub const Z9_FOCUS_AREA: (u32, u32) = (291, 323);
+
+/// The Z 9's AFInfo2, as the public samples 5146 to 5148 record it, with
+/// its SHORTs in byte order `order`: 80 bytes, the version `0400`, the
+/// detection method 2, the area mode 193 (single point), a zero byte and
+/// the coordinates flag 1; zeros up to byte 62; then [`Z9_FOCUS_FRAME`],
+/// [`Z9_FOCUS_CENTER`] and [`Z9_FOCUS_AREA`], each width or x before its
+/// height or y; the in-focus byte 1, focus confirmed; and five zero
+/// bytes.
+pub fn z9_af_info2(order: Order) -> Vec<u8> {
+    let mut value = b"0400".to_vec();
+    value.extend_from_slice(&[2, 0xC1, 0, 1]);
+    value.resize(62, 0);
+    for (first, second) in [Z9_FOCUS_FRAME, Z9_FOCUS_CENTER, Z9_FOCUS_AREA] {
+        for number in [first, second] {
+            let short = u16::try_from(number).expect("a SHORT");
+            value.extend_from_slice(&order.u16(short));
+        }
+    }
+    value.push(1);
+    value.resize(80, 0);
+    value
+}
 
 /// The model name of the Z 9 file's lens, as its LensModel records it.
 pub const LENS_MODEL_Z14_30: &str = "NIKKOR Z 14-30mm f/4 S";
@@ -455,7 +509,10 @@ pub fn z9_file_with(order: Order, orientation: u16, makernote_order: Order) -> (
         Z9_MAKER_NOTE_VERSION,
         &stub(PREVIEW_JPEG),
         |inner, ifd| {
-            inner.short(ifd, CROP_AREA, &CROP_AREA_Z9);
+            inner
+                .ascii(ifd, FOCUS_MODE, "AF-S  ")
+                .short(ifd, CROP_AREA, &CROP_AREA_Z9)
+                .undefined(ifd, AF_INFO2, &z9_af_info2(makernote_order));
         },
     );
     let makernote = builder.blob(&block);
@@ -546,6 +603,8 @@ pub fn d300_file_with_blobs(order: Order, orientation: u16) -> (Built, D300Blobs
         .rational(exif, FOCAL_LENGTH, &[(500, 10)]);
     let mut world_time = order.u16(D300_TIME_ZONE).to_vec();
     world_time.extend_from_slice(&[0, 0]);
+    let mut af_info2 = b"0100".to_vec();
+    af_info2.resize(30, 0);
     let (block, preview_in_makernote) = nikon_makernote(
         order,
         D300_MAKER_NOTE_VERSION,
@@ -553,9 +612,11 @@ pub fn d300_file_with_blobs(order: Order, orientation: u16) -> (Built, D300Blobs
         |inner, ifd| {
             inner
                 .short(ifd, ISO, &[0, 200])
+                .ascii(ifd, FOCUS_MODE, "MANUAL")
                 .ascii(ifd, SERIAL_NUMBER, D300_SERIAL_NUMBER)
                 .undefined(ifd, WORLD_TIME, &world_time)
-                .rational(ifd, LENS, &D300_LENS);
+                .rational(ifd, LENS, &D300_LENS)
+                .undefined(ifd, AF_INFO2, &af_info2);
         },
     );
     let makernote = builder.blob(&block);

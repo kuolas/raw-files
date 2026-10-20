@@ -10,18 +10,20 @@
 //! the format, the preview finder, and the metadata reader, whose values
 //! come from tags all over the file. They damage the fixtures that carry
 //! every metadata tag the readers read: a Nikon Z 9's NEF (with its
-//! MakerNote in the file's byte order and in the other), a Nikon D300's
-//! NEF, whose MakerNote records the serial number, the lens's range and
-//! the clock's time zone that its standard tags lack, and an ILCE-7M4's
-//! ARW 4, each in both byte orders. They cut each file at every length,
-//! and overwrite each byte in turn with 0x00, 0xFF and its complement.
+//! MakerNote, which records the focus point, in the file's byte order and
+//! in the other), a Nikon D300's NEF, whose MakerNote records the serial
+//! number, the lens's range and the clock's time zone that its standard
+//! tags lack, and an ILCE-7M4's ARW 4, each in both byte orders. They cut
+//! each file at every length, and overwrite each byte in turn with 0x00,
+//! 0xFF and its complement.
 //!
 //! Each damaged file is opened as a caller would open it, with
 //! [`RawFile::from_bytes`], which reads through the same source and block
 //! cache as [`RawFile::from_reader`]. Opening may fail; when it does not,
 //! every getter of the metadata is read, every fraction is shown, reduced
 //! and turned into a decimal, the capture time is shown and taken apart,
-//! and every preview is read, so that a panic anywhere on the way is
+//! the focus point is shown and scaled onto a small frame and onto its
+//! own, and every preview is read, so that a panic anywhere on the way is
 //! caught.
 //! Tests run with debug assertions, so an arithmetic overflow panics too.
 //!
@@ -45,7 +47,7 @@ use std::fmt::Write as _;
 use std::hint::black_box;
 use std::panic;
 
-use raw_files::{Metadata, Rational, RawFile, SignedRational};
+use raw_files::{Focus, Metadata, Rational, RawFile, SignedRational, Size};
 use support::arw::{ARW4_FULL_SIZE_JPEG, arw4_file, stub};
 use support::nef::{d300_file, z9_file, z9_file_with};
 use support::tiff_builder::Order;
@@ -146,7 +148,8 @@ fn open_and_read_everything(bytes: &[u8]) -> bool {
 
 /// Writes every value of `metadata` to `out`, through every getter and in
 /// every form the library offers: each fraction shown, reduced and as a
-/// decimal; the capture time shown and taken apart.
+/// decimal; the capture time shown and taken apart; the focus point shown,
+/// and scaled onto a small frame and onto its own.
 fn show_metadata(metadata: &Metadata, out: &mut String) {
     let _ = write!(
         out,
@@ -203,6 +206,39 @@ fn show_metadata(metadata: &Metadata, out: &mut String) {
     {
         let _ = write!(out, " {}x{}", size.width, size.height);
     }
+    if let Some(focus) = metadata.focus() {
+        show_focus(focus, out);
+        // Placed on a small preview's frame, and on its own, which scales
+        // by one.
+        for frame in [SMALL_FRAME, focus.frame()] {
+            if let Some(scaled) = focus.scaled_to(frame) {
+                show_focus(scaled, out);
+            }
+        }
+    }
+}
+
+/// A small preview's frame, to place a focus point on: IFD0's JPEG of the
+/// Z 9 fixture.
+const SMALL_FRAME: Size = Size {
+    width: 160,
+    height: 120,
+};
+
+/// Writes `focus` to `out`: its frame, its centre, its size and whether
+/// focus was confirmed.
+fn show_focus(focus: Focus, out: &mut String) {
+    let (frame, center) = (focus.frame(), focus.center());
+    let _ = write!(
+        out,
+        " {}x{} ({}, {}) {:?} {:?}",
+        frame.width,
+        frame.height,
+        center.x,
+        center.y,
+        focus.size(),
+        focus.in_focus()
+    );
 }
 
 /// Writes `fraction`, when there is one, to `out`: as stored, reduced, and
