@@ -2,7 +2,8 @@
 
 //! Where the integration tests find the real sample files of
 //! `tests/samples.tsv`, and the checks that one opens with exactly the
-//! previews expected of it and gives exactly the metadata expected of it.
+//! previews expected of it and gives exactly the metadata expected of it,
+//! its focus point among it.
 //! They are too large to commit, so `scripts/fetch-samples.sh` downloads
 //! them, and a test whose file is absent skips with a note rather than
 //! failing: the suite runs offline.
@@ -124,7 +125,8 @@ pub fn check(sample: &Sample, format: Format) {
 /// every value of [`Metadata`](raw_files::Metadata), `None` where the file
 /// must give none. Fractions are the numerator and denominator as stored,
 /// so `(10, 3200)` is not `(1, 320)`. The capture time is its ISO 8601
-/// form, as [`DateTime`](raw_files::DateTime) displays it.
+/// form, as [`DateTime`](raw_files::DateTime) displays it. The focus point
+/// is the one the reader gives ([`SampleFocus`]).
 ///
 /// The files are public, but the repository holds no camera's or lens's
 /// serial number, so a serial number is recorded by its shape alone and a
@@ -144,6 +146,23 @@ pub struct SampleMetadata {
     pub lens: Option<SampleLens>,
     pub raw_size: Option<(u32, u32)>,
     pub image_size: Option<(u32, u32)>,
+    pub focus: Option<SampleFocus>,
+}
+
+/// Where the camera of a sample file focused, as the reader must give it
+/// ([`Focus`](raw_files::Focus)): the frame the point is measured in, its
+/// width and height in pixels; the centre of the focus area in that frame,
+/// x from its left and y from its top; the area's width and height, `None`
+/// when the file records no area; and whether the camera confirmed focus,
+/// `None` when the file does not say. The frame is the one the reader
+/// gives, not always the one the file records: on a Nikon crop mode it is
+/// the cropped picture, the size of the MakerNote's CropArea, and the
+/// centre and the area are placed in it.
+pub struct SampleFocus {
+    pub frame: (u32, u32),
+    pub center: (u32, u32),
+    pub size: Option<(u32, u32)>,
+    pub in_focus: Option<bool>,
 }
 
 /// The shape of a serial number, in place of its text: how many bytes
@@ -182,9 +201,10 @@ fn stored(fraction: Rational) -> (u32, u32) {
 }
 
 /// Checks that the sample file `expected` names opens as `format` and
-/// gives exactly the metadata `expected` records: every value compared, so
-/// that a value the file must not give fails as surely as a wrong or a
-/// missing one. Does nothing when the file has not been downloaded.
+/// gives exactly the metadata `expected` records: every value compared, the
+/// focus point's among them, so that a value the file must not give fails
+/// as surely as a wrong or a missing one. Does nothing when the file has
+/// not been downloaded.
 pub fn check_metadata(expected: &SampleMetadata, format: Format) {
     let Some(path) = path(expected.file) else {
         return;
@@ -279,4 +299,19 @@ pub fn check_metadata(expected: &SampleMetadata, format: Format) {
         expected.image_size,
         "{label}: image size"
     );
+
+    let focus = metadata.focus().map(|focus| {
+        let center = focus.center();
+        (
+            size(focus.frame()),
+            (center.x, center.y),
+            focus.size().map(size),
+            focus.in_focus(),
+        )
+    });
+    let expected_focus = expected
+        .focus
+        .as_ref()
+        .map(|focus| (focus.frame, focus.center, focus.size, focus.in_focus));
+    assert_eq!(focus, expected_focus, "{label}: focus");
 }

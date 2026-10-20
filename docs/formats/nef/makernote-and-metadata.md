@@ -140,7 +140,7 @@ milestone that needs the tag. [P][1]
 | 0x003D | BlackLevel | u16[4] | per-channel black level, recorded at 14-bit scale | 5 |
 | 0x003E | ImageSizeRAW | u16 | 1 large, 2 medium, 3 small | 5 |
 | 0x0045 | CropArea | u16[4] | left, top, width, height of the output rectangle | 3, 4, 5 |
-| 0x0051 | (unnamed, Z bodies) | undef | NEFCompression as a u16 at byte 10; byte order disputed (see the note below). Present on the Z 6 (2018) too, and on the Z f, Z6III and Z 9 (files 3587, 6887, 7808 to 7810, 5146 to 5148); its value was not read **[F]** | 5 |
+| 0x0051 | (unnamed, Z bodies) | undef | NEFCompression as a u16 at byte 10; byte order disputed (see the note below). Present on the Z 6 (2018) too, and on the Z f, Z6III and Z 9 (files 3587, 6887, 7808 to 7810, 5146 to 5148). Byte 10, read as a u16 in the MakerNote's byte order, little-endian on all three, is 3 (lossless) on the Z 9's lossless file, 14 (HE\*) on its HE\* file and 13 (HE) on its HE file (files 5146 to 5148) **[F]** | 5 |
 | 0x0084 | Lens | rational[4] | the lens's shortest and longest focal length and the widest aperture at each; on every checked body with interchangeable lenses, from the D1H on; equal to Exif LensSpecification wherever both exist **[F]** | 3 |
 | 0x0088 | AFInfo | undef[4] | area mode, the number of the focus point and a mask of the points in focus; no position. The only focus data of the checked bodies without AFInfo2: the D1H, D70, D100, D200 and Coolpix E5700 and P7800, and written by no checked body that has AFInfo2 **[F]**; [section 8.6](#86-focus-point) | 4 |
 | 0x0091 | ShotInfo | undef | model-specific; encrypted for versions 02xx and 08xx | none |

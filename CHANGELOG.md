@@ -26,6 +26,10 @@ does.
   AFInfo2 version raw-files does not know, on a crop whose point cannot
   be placed on the cropped picture (a 1:1 or 16:9 crop on a small raw, or
   a crop whose CropArea cannot be used), and on Sony files.
+- NEF previews and metadata checked on seven more CC0 Nikon sample
+  files, of the D5600 in live view and of the Z5II, Z50II and Z6III in
+  their 1:1 and 16:9 crop modes, 30 NEF files in all, and the focus point
+  on every one of them.
 - Public constructors for `DateTime` (`new`, `with_subseconds`,
   `with_offset`), `Rational` and `SignedRational` (`new`), a builder for
   `Lens` (`Lens::builder`), and `with_…` builders on `Metadata` and

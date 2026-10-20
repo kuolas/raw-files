@@ -13,10 +13,10 @@
 //! pixels and personal fields removed (see [`support::fixtures`]): their
 //! previews, every value of their metadata, and their focus points, which
 //! the reader scales onto the DX crop and moves into the 1:1 window. Then
-//! real files too large to commit, three of the Z 9 and 20 of 18 other
+//! 30 real files too large to commit, three of the Z 9 and 27 of 21 other
 //! bodies, when they have been downloaded (see
 //! [`support::samples::path`]): the previews each gives, and its metadata,
-//! every value of it.
+//! every value of it, the focus point among them.
 
 mod support;
 
@@ -37,7 +37,8 @@ use support::nef::{
     z6iii_file_with_blobs, z9_file, z9_file_with, z9_file_with_blobs,
 };
 use support::samples::{
-    Jpeg, Sample, SampleLens, SampleMetadata, SerialShape, check, check_metadata, sizes,
+    Jpeg, Sample, SampleFocus, SampleLens, SampleMetadata, SerialShape, check, check_metadata,
+    sizes,
 };
 use support::tiff_builder::{Built, Order};
 
@@ -838,9 +839,9 @@ fn the_stripped_z9_1x1_file_gives_its_previews_metadata_and_shifted_focus_point(
     check_stripped_z9(&STRIPPED_Z9_1X1);
 }
 
-// Real files, downloaded. The Z 9 files of raw.pixls.us, one per
-// compression mode, and 20 files of 18 other Nikon bodies, all CC0, are
-// listed with their hashes in `tests/samples.tsv`;
+// Real files, downloaded: 30 NEF files of raw.pixls.us, all CC0, the
+// three of the Z 9, one per compression mode, and 27 files of 21 other
+// Nikon bodies. They are listed with their hashes in `tests/samples.tsv`;
 // `scripts/fetch-samples.sh` downloads them. They are too large to commit,
 // so a test whose file is absent says so and passes: the suite runs
 // offline.
@@ -963,12 +964,13 @@ fn every_z9_sample_opens_with_its_four_previews() {
     }
 }
 
-/// The samples of 18 other bodies, from the D1H of 2001 to the Z6III of
-/// 2024, each with the previews the reader finds in it, smallest first.
+/// The samples of 21 other bodies, from the D1H of 2001 to the Z5II of
+/// 2025, each with the previews the reader finds in it, smallest first.
 /// They are the MakerNote's JPEG; the largest JPEG, in SubIFD0, on every
 /// file but the D1H's, the D100's and the E5700's; a JPEG 1080 pixels
-/// high in SubIFD2 on the D750, D810, D850, D780, Z 6, Z f and Z6III; and
-/// a 160 by 120 JPEG in IFD0 on the Z f, the Z6III and the P7800. The
+/// high in SubIFD2 on the D750, D810, D850, D780, D5600, Z 6, Z f, Z6III,
+/// Z5II and Z50II; and a 160 by 120 JPEG in IFD0 on the Z f, the Z6III,
+/// the Z5II, the Z50II and the P7800. The
 /// tables were made from a walk of each file's IFDs and MakerNote, by the
 /// reader's rules. Two files give fewer JPEGs than they hold: the D1H's
 /// one JPEG is in a MakerNote of the bare layout, which the reader does
@@ -1455,6 +1457,244 @@ const OTHER_SAMPLES: &[Sample] = &[
             },
         ],
     },
+    // D5600, 12-bit lossy, live view (raw.pixls.us 1415)
+    Sample {
+        file: "nikon-d5600-12bit-lossy.nef",
+        orientation: Orientation::NoTransforms,
+        previews: &[
+            Jpeg {
+                width: 640,
+                height: 424,
+                offset: 39_528,
+                len: 128_239,
+                after_eoi: 0,
+            },
+            Jpeg {
+                width: 1620,
+                height: 1080,
+                offset: 226_304,
+                len: 841_313,
+                after_eoi: 0,
+            },
+            Jpeg {
+                width: 6000,
+                height: 4000,
+                offset: 1_068_032,
+                len: 2_582_334,
+                after_eoi: 0,
+            },
+        ],
+    },
+    // Z5II, 14-bit, 1:1 (raw.pixls.us 7735)
+    Sample {
+        file: "nikon-z5ii-14bit-1x1.nef",
+        orientation: Orientation::NoTransforms,
+        previews: &[
+            Jpeg {
+                width: 160,
+                height: 120,
+                offset: 231_396,
+                len: 7_778,
+                after_eoi: 0,
+            },
+            Jpeg {
+                width: 480,
+                height: 480,
+                offset: 105_152,
+                len: 126_225,
+                after_eoi: 0,
+            },
+            Jpeg {
+                width: 1080,
+                height: 1080,
+                offset: 323_072,
+                len: 642_001,
+                after_eoi: 0,
+            },
+            Jpeg {
+                width: 4032,
+                height: 4032,
+                offset: 965_120,
+                len: 1_777_421,
+                after_eoi: 0,
+            },
+        ],
+    },
+    // Z5II, 14-bit, 16:9 (raw.pixls.us 7736)
+    Sample {
+        file: "nikon-z5ii-14bit-16x9.nef",
+        orientation: Orientation::NoTransforms,
+        previews: &[
+            Jpeg {
+                width: 160,
+                height: 120,
+                offset: 230_180,
+                len: 7_805,
+                after_eoi: 0,
+            },
+            Jpeg {
+                width: 640,
+                height: 360,
+                offset: 105_152,
+                len: 125_010,
+                after_eoi: 0,
+            },
+            Jpeg {
+                width: 1920,
+                height: 1080,
+                offset: 323_072,
+                len: 1_095_945,
+                after_eoi: 0,
+            },
+            Jpeg {
+                width: 6048,
+                height: 3400,
+                offset: 1_419_264,
+                len: 2_127_142,
+                after_eoi: 0,
+            },
+        ],
+    },
+    // Z50II, 14-bit, 1:1 (raw.pixls.us 7767)
+    Sample {
+        file: "nikon-z50ii-14bit-1x1.nef",
+        orientation: Orientation::NoTransforms,
+        previews: &[
+            Jpeg {
+                width: 160,
+                height: 120,
+                offset: 204_092,
+                len: 12_678,
+                after_eoi: 0,
+            },
+            Jpeg {
+                width: 480,
+                height: 480,
+                offset: 105_092,
+                len: 98_979,
+                after_eoi: 0,
+            },
+            Jpeg {
+                width: 1080,
+                height: 1080,
+                offset: 301_056,
+                len: 730_293,
+                after_eoi: 0,
+            },
+            Jpeg {
+                width: 3712,
+                height: 3712,
+                offset: 1_031_680,
+                len: 2_199_584,
+                after_eoi: 0,
+            },
+        ],
+    },
+    // Z50II, 14-bit, 16:9 (raw.pixls.us 7770)
+    Sample {
+        file: "nikon-z50ii-14bit-16x9.nef",
+        orientation: Orientation::NoTransforms,
+        previews: &[
+            Jpeg {
+                width: 160,
+                height: 120,
+                offset: 212_828,
+                len: 10_731,
+                after_eoi: 0,
+            },
+            Jpeg {
+                width: 640,
+                height: 360,
+                offset: 105_092,
+                len: 107_717,
+                after_eoi: 0,
+            },
+            Jpeg {
+                width: 1920,
+                height: 1080,
+                offset: 308_736,
+                len: 1_192_916,
+                after_eoi: 0,
+            },
+            Jpeg {
+                width: 5568,
+                height: 3128,
+                offset: 1_501_696,
+                len: 2_259_600,
+                after_eoi: 0,
+            },
+        ],
+    },
+    // Z6III, 14-bit High Efficiency*, 1:1 (raw.pixls.us 7812)
+    Sample {
+        file: "nikon-z6iii-14bit-1x1-he-star.nef",
+        orientation: Orientation::NoTransforms,
+        previews: &[
+            Jpeg {
+                width: 160,
+                height: 120,
+                offset: 210_748,
+                len: 12_595,
+                after_eoi: 0,
+            },
+            Jpeg {
+                width: 480,
+                height: 480,
+                offset: 104_680,
+                len: 106_050,
+                after_eoi: 0,
+            },
+            Jpeg {
+                width: 1080,
+                height: 1080,
+                offset: 307_712,
+                len: 551_924,
+                after_eoi: 0,
+            },
+            Jpeg {
+                width: 4032,
+                height: 4032,
+                offset: 859_648,
+                len: 2_049_047,
+                after_eoi: 0,
+            },
+        ],
+    },
+    // Z6III, 14-bit High Efficiency*, 16:9 (raw.pixls.us 7813)
+    Sample {
+        file: "nikon-z6iii-14bit-16x9-he-star.nef",
+        orientation: Orientation::NoTransforms,
+        previews: &[
+            Jpeg {
+                width: 160,
+                height: 120,
+                offset: 214_952,
+                len: 13_115,
+                after_eoi: 0,
+            },
+            Jpeg {
+                width: 640,
+                height: 360,
+                offset: 104_680,
+                len: 110_253,
+                after_eoi: 0,
+            },
+            Jpeg {
+                width: 1920,
+                height: 1080,
+                offset: 313_344,
+                len: 992_802,
+                after_eoi: 0,
+            },
+            Jpeg {
+                width: 6048,
+                height: 3400,
+                offset: 1_306_624,
+                len: 2_572_041,
+                after_eoi: 0,
+            },
+        ],
+    },
 ];
 
 #[test]
@@ -1473,7 +1713,9 @@ fn every_sample_of_the_other_nikon_bodies_opens_with_its_previews() {
 /// the lens's range, the ISO or the offset from UTC can come from the
 /// MakerNote. The D1H's MakerNote is of the bare layout, which the reader
 /// does not read, so that file gives the values of its standard tags
-/// alone.
+/// alone. The focus point is the one the rules of ADR012 give from each
+/// file's AFInfo2, FocusMode, CropHiSpeed and CropArea, on the cropped
+/// picture on a crop mode; where there is none, a comment says why.
 const METADATA: &[SampleMetadata] = &[
     // Z 9, 14-bit lossless compression (raw.pixls.us 5146)
     SampleMetadata {
@@ -1502,6 +1744,12 @@ const METADATA: &[SampleMetadata] = &[
         }),
         raw_size: Some((8280, 5520)),
         image_size: Some((8256, 5504)),
+        focus: Some(SampleFocus {
+            frame: (8256, 5504),
+            center: (4905, 2461),
+            size: Some((291, 323)),
+            in_focus: Some(true),
+        }),
     },
     // Z 9, High Efficiency* (raw.pixls.us 5147)
     SampleMetadata {
@@ -1530,6 +1778,12 @@ const METADATA: &[SampleMetadata] = &[
         }),
         raw_size: Some((8280, 5520)),
         image_size: Some((8256, 5504)),
+        focus: Some(SampleFocus {
+            frame: (8256, 5504),
+            center: (4905, 2461),
+            size: Some((291, 323)),
+            in_focus: Some(true),
+        }),
     },
     // Z 9, High Efficiency (raw.pixls.us 5148)
     SampleMetadata {
@@ -1558,6 +1812,12 @@ const METADATA: &[SampleMetadata] = &[
         }),
         raw_size: Some((8280, 5520)),
         image_size: Some((8256, 5504)),
+        focus: Some(SampleFocus {
+            frame: (8256, 5504),
+            center: (4905, 2461),
+            size: Some((291, 323)),
+            in_focus: Some(true),
+        }),
     },
     // D1H, 12-bit uncompressed (raw.pixls.us 5364)
     SampleMetadata {
@@ -1575,6 +1835,7 @@ const METADATA: &[SampleMetadata] = &[
         lens: None,
         raw_size: Some((2012, 1324)),
         image_size: Some((2012, 1324)),
+        focus: None, // the MakerNote's bare layout is not read; AFInfo holds a point number only
     },
     // D100, 12-bit uncompressed (raw.pixls.us 2996)
     SampleMetadata {
@@ -1600,6 +1861,7 @@ const METADATA: &[SampleMetadata] = &[
         }),
         raw_size: Some((3034, 2024)),
         image_size: Some((3034, 2024)),
+        focus: None, // no AFInfo2: AFInfo holds a point number only
     },
     // D70, 12-bit lossy (raw.pixls.us 2060)
     SampleMetadata {
@@ -1625,6 +1887,7 @@ const METADATA: &[SampleMetadata] = &[
         }),
         raw_size: Some((3040, 2014)),
         image_size: Some((3040, 2014)),
+        focus: None, // no AFInfo2: AFInfo holds a point number only
     },
     // D200, 12-bit lossy (raw.pixls.us 8079)
     SampleMetadata {
@@ -1650,6 +1913,7 @@ const METADATA: &[SampleMetadata] = &[
         }),
         raw_size: Some((3904, 2616)),
         image_size: Some((3904, 2616)),
+        focus: None, // no AFInfo2: AFInfo holds a point number only
     },
     // D300, 12-bit lossy (raw.pixls.us 928)
     SampleMetadata {
@@ -1678,6 +1942,7 @@ const METADATA: &[SampleMetadata] = &[
         }),
         raw_size: Some((4352, 2868)),
         image_size: Some((4352, 2868)),
+        focus: None, // FocusMode MANUAL, and a zero frame
     },
     // D700, 12-bit lossy (raw.pixls.us 2255)
     SampleMetadata {
@@ -1706,6 +1971,7 @@ const METADATA: &[SampleMetadata] = &[
         }),
         raw_size: Some((4288, 2844)),
         image_size: Some((4288, 2844)),
+        focus: None, // a viewfinder shot: a zero frame and only a point number
     },
     // D7000, 12-bit lossy (raw.pixls.us 961)
     SampleMetadata {
@@ -1734,6 +2000,12 @@ const METADATA: &[SampleMetadata] = &[
         }),
         raw_size: Some((4992, 3280)),
         image_size: Some((4992, 3280)),
+        focus: Some(SampleFocus {
+            frame: (4928, 3264),
+            center: (2816, 2336),
+            size: Some((408, 336)),
+            in_focus: Some(true),
+        }),
     },
     // D750, 12-bit lossy (raw.pixls.us 895)
     SampleMetadata {
@@ -1762,6 +2034,7 @@ const METADATA: &[SampleMetadata] = &[
         }),
         raw_size: Some((6032, 4032)),
         image_size: Some((6032, 4032)),
+        focus: None, // a viewfinder shot: a zero frame and only a point number
     },
     // D810, 12-bit small raw (raw.pixls.us 2036)
     SampleMetadata {
@@ -1790,6 +2063,7 @@ const METADATA: &[SampleMetadata] = &[
         }),
         raw_size: Some((3680, 2456)),
         image_size: Some((3680, 2456)),
+        focus: None, // a viewfinder shot: a zero frame and only a point number
     },
     // D850, 12-bit lossless small raw (raw.pixls.us 1835)
     SampleMetadata {
@@ -1818,6 +2092,7 @@ const METADATA: &[SampleMetadata] = &[
         }),
         raw_size: Some((6216, 4136)),
         image_size: Some((6192, 4128)),
+        focus: None, // FocusMode MANUAL, and a zero frame
     },
     // D780, 12-bit lossy (raw.pixls.us 3827)
     SampleMetadata {
@@ -1846,6 +2121,7 @@ const METADATA: &[SampleMetadata] = &[
         }),
         raw_size: Some((6064, 4040)),
         image_size: Some((6048, 4024)),
+        focus: None, // a viewfinder shot: a zero frame and only a point number
     },
     // Z 6, 12-bit small raw (raw.pixls.us 3587)
     SampleMetadata {
@@ -1874,6 +2150,12 @@ const METADATA: &[SampleMetadata] = &[
         }),
         raw_size: Some((4548, 3030)),
         image_size: Some((4528, 3018)),
+        focus: Some(SampleFocus {
+            frame: (6048, 4024),
+            center: (3024, 1160),
+            size: Some((285, 308)),
+            in_focus: None,
+        }),
     },
     // Z f, 14-bit (raw.pixls.us 6887)
     SampleMetadata {
@@ -1902,6 +2184,12 @@ const METADATA: &[SampleMetadata] = &[
         }),
         raw_size: Some((6064, 4040)),
         image_size: Some((6048, 4032)),
+        focus: Some(SampleFocus {
+            frame: (6048, 4032),
+            center: (3023, 2016),
+            size: Some((1859, 1452)),
+            in_focus: Some(true),
+        }),
     },
     // Z6III, 14-bit, 3:2 (raw.pixls.us 7810)
     SampleMetadata {
@@ -1930,6 +2218,12 @@ const METADATA: &[SampleMetadata] = &[
         }),
         raw_size: Some((4000, 2672)),
         image_size: Some((3984, 2656)),
+        focus: Some(SampleFocus {
+            frame: (3984, 2656),
+            center: (1991, 1328),
+            size: Some((146, 161)),
+            in_focus: Some(false),
+        }),
     },
     // Z6III, 14-bit, 16:9 (raw.pixls.us 7809)
     SampleMetadata {
@@ -1958,6 +2252,12 @@ const METADATA: &[SampleMetadata] = &[
         }),
         raw_size: Some((6064, 3416)),
         image_size: Some((6048, 3400)),
+        focus: Some(SampleFocus {
+            frame: (6048, 3400),
+            center: (3023, 1700),
+            size: Some((163, 174)),
+            in_focus: Some(false),
+        }),
     },
     // Z6III, 14-bit, 1:1 (raw.pixls.us 7808)
     SampleMetadata {
@@ -1986,6 +2286,12 @@ const METADATA: &[SampleMetadata] = &[
         }),
         raw_size: Some((4048, 4040)),
         image_size: Some((4032, 4032)),
+        focus: Some(SampleFocus {
+            frame: (4032, 4032),
+            center: (2015, 2016),
+            size: Some((163, 174)),
+            in_focus: Some(false),
+        }),
     },
     // Coolpix A, 14-bit lossy (raw.pixls.us 2238)
     SampleMetadata {
@@ -2006,6 +2312,12 @@ const METADATA: &[SampleMetadata] = &[
         lens: None,
         raw_size: Some((4992, 3280)),
         image_size: Some((4992, 3280)),
+        focus: Some(SampleFocus {
+            frame: (4928, 3264),
+            center: (2464, 1632),
+            size: Some((408, 336)),
+            in_focus: Some(true),
+        }),
     },
     // Coolpix P7800, 12-bit, an NRW file (raw.pixls.us 1425)
     SampleMetadata {
@@ -2023,6 +2335,7 @@ const METADATA: &[SampleMetadata] = &[
         lens: None,
         raw_size: Some((4032, 3024)),
         image_size: Some((4032, 3024)),
+        focus: None, // no AFInfo2: AFInfo holds a point number only
     },
     // E5700, 12-bit uncompressed (raw.pixls.us 4456)
     SampleMetadata {
@@ -2040,6 +2353,7 @@ const METADATA: &[SampleMetadata] = &[
         lens: None,
         raw_size: Some((2576, 1924)),
         image_size: Some((2576, 1924)),
+        focus: None, // no AFInfo2: AFInfo holds a point number only
     },
     // Nikon 1 J1, 12-bit lossy (raw.pixls.us 2956)
     SampleMetadata {
@@ -2068,6 +2382,235 @@ const METADATA: &[SampleMetadata] = &[
         }),
         raw_size: Some((3904, 2606)),
         image_size: Some((3904, 2606)),
+        focus: None, // version 0200: a point number only
+    },
+    // D5600, 12-bit lossy, live view (raw.pixls.us 1415)
+    SampleMetadata {
+        file: "nikon-d5600-12bit-lossy.nef",
+        make: Some("NIKON CORPORATION"),
+        model: Some("NIKON D5600"),
+        serial_number: Some(SerialShape {
+            len: 7,
+            digits: true,
+        }),
+        capture_time: Some("2017-05-12T18:35:56.99-05:00"),
+        orientation: Orientation::NoTransforms,
+        iso: Some(200),
+        exposure_time: Some((10, 2000)),
+        f_number: Some((56, 10)),
+        focal_length: Some((170, 10)),
+        exposure_bias: Some((0, 6)),
+        lens: Some(SampleLens {
+            make: None,
+            model: None,
+            serial_number: false,
+            min_focal_length: Some((170, 10)),
+            max_focal_length: Some((700, 10)),
+            f_number_at_min_focal_length: Some((28, 10)),
+            f_number_at_max_focal_length: Some((40, 10)),
+        }),
+        raw_size: Some((6016, 4016)),
+        image_size: Some((6016, 4016)),
+        focus: Some(SampleFocus {
+            frame: (6000, 4000),
+            center: (3368, 2000),
+            size: Some((984, 816)),
+            in_focus: Some(true),
+        }),
+    },
+    // Z5II, 14-bit, 1:1 (raw.pixls.us 7735)
+    SampleMetadata {
+        file: "nikon-z5ii-14bit-1x1.nef",
+        make: Some("NIKON CORPORATION"),
+        model: Some("NIKON Z5_2"),
+        serial_number: Some(SerialShape {
+            len: 7,
+            digits: true,
+        }),
+        capture_time: Some("2025-04-27T17:57:35.99+02:00"),
+        orientation: Orientation::NoTransforms,
+        iso: Some(100),
+        exposure_time: Some((10, 4000)),
+        f_number: Some((710, 100)),
+        focal_length: Some((240, 10)),
+        exposure_bias: Some((0, 6)),
+        lens: Some(SampleLens {
+            make: Some("NIKON"),
+            model: Some("NIKKOR Z 24-70mm f/4 S"),
+            serial_number: true,
+            min_focal_length: Some((240, 10)),
+            max_focal_length: Some((700, 10)),
+            f_number_at_min_focal_length: Some((400, 100)),
+            f_number_at_max_focal_length: Some((400, 100)),
+        }),
+        raw_size: Some((4048, 4040)),
+        image_size: Some((4032, 4032)),
+        focus: None, // auto-area mode: a mask of points only, zero frame
+    },
+    // Z5II, 14-bit, 16:9 (raw.pixls.us 7736)
+    SampleMetadata {
+        file: "nikon-z5ii-14bit-16x9.nef",
+        make: Some("NIKON CORPORATION"),
+        model: Some("NIKON Z5_2"),
+        serial_number: Some(SerialShape {
+            len: 7,
+            digits: true,
+        }),
+        capture_time: Some("2025-04-27T17:58:04.37+02:00"),
+        orientation: Orientation::NoTransforms,
+        iso: Some(100),
+        exposure_time: Some((10, 4000)),
+        f_number: Some((710, 100)),
+        focal_length: Some((240, 10)),
+        exposure_bias: Some((0, 6)),
+        lens: Some(SampleLens {
+            make: Some("NIKON"),
+            model: Some("NIKKOR Z 24-70mm f/4 S"),
+            serial_number: true,
+            min_focal_length: Some((240, 10)),
+            max_focal_length: Some((700, 10)),
+            f_number_at_min_focal_length: Some((400, 100)),
+            f_number_at_max_focal_length: Some((400, 100)),
+        }),
+        raw_size: Some((6064, 3416)),
+        image_size: Some((6048, 3400)),
+        focus: None, // auto-area mode: a mask of points only, zero frame
+    },
+    // Z50II, 14-bit, 1:1 (raw.pixls.us 7767)
+    SampleMetadata {
+        file: "nikon-z50ii-14bit-1x1.nef",
+        make: Some("NIKON CORPORATION"),
+        model: Some("NIKON Z50_2"),
+        serial_number: Some(SerialShape {
+            len: 7,
+            digits: true,
+        }),
+        capture_time: Some("2024-12-08T16:53:48.99+07:00"),
+        orientation: Orientation::NoTransforms,
+        iso: Some(100),
+        exposure_time: Some((10, 500)),
+        f_number: Some((420, 100)),
+        focal_length: Some((240, 10)),
+        exposure_bias: Some((0, 6)),
+        lens: Some(SampleLens {
+            make: Some("NIKON"),
+            model: Some("NIKKOR Z DX 16-50mm f/3.5-6.3 VR"),
+            serial_number: true,
+            min_focal_length: Some((160, 10)),
+            max_focal_length: Some((500, 10)),
+            f_number_at_min_focal_length: Some((350, 100)),
+            f_number_at_max_focal_length: Some((630, 100)),
+        }),
+        raw_size: Some((3728, 3728)),
+        image_size: Some((3712, 3712)),
+        focus: Some(SampleFocus {
+            frame: (3712, 3712),
+            center: (1864, 1868),
+            size: Some((278, 276)),
+            in_focus: Some(true),
+        }),
+    },
+    // Z50II, 14-bit, 16:9 (raw.pixls.us 7770)
+    SampleMetadata {
+        file: "nikon-z50ii-14bit-16x9.nef",
+        make: Some("NIKON CORPORATION"),
+        model: Some("NIKON Z50_2"),
+        serial_number: Some(SerialShape {
+            len: 7,
+            digits: true,
+        }),
+        capture_time: Some("2024-12-08T16:54:06.82+07:00"),
+        orientation: Orientation::NoTransforms,
+        iso: Some(100),
+        exposure_time: Some((10, 500)),
+        f_number: Some((420, 100)),
+        focal_length: Some((240, 10)),
+        exposure_bias: Some((0, 6)),
+        lens: Some(SampleLens {
+            make: Some("NIKON"),
+            model: Some("NIKKOR Z DX 16-50mm f/3.5-6.3 VR"),
+            serial_number: true,
+            min_focal_length: Some((160, 10)),
+            max_focal_length: Some((500, 10)),
+            f_number_at_min_focal_length: Some((350, 100)),
+            f_number_at_max_focal_length: Some((630, 100)),
+        }),
+        raw_size: Some((5600, 3144)),
+        image_size: Some((5568, 3128)),
+        focus: Some(SampleFocus {
+            frame: (5568, 3128),
+            center: (2789, 1573),
+            size: Some((280, 280)),
+            in_focus: Some(true),
+        }),
+    },
+    // Z6III, 14-bit High Efficiency*, 1:1 (raw.pixls.us 7812)
+    SampleMetadata {
+        file: "nikon-z6iii-14bit-1x1-he-star.nef",
+        make: Some("NIKON CORPORATION"),
+        model: Some("NIKON Z6_3"),
+        serial_number: Some(SerialShape {
+            len: 7,
+            digits: true,
+        }),
+        capture_time: Some("2024-06-29T15:38:03.76-04:00"),
+        orientation: Orientation::NoTransforms,
+        iso: Some(200),
+        exposure_time: Some((10, 1000)),
+        f_number: Some((900, 100)),
+        focal_length: Some((860, 10)),
+        exposure_bias: Some((0, 6)),
+        lens: Some(SampleLens {
+            make: Some("NIKON"),
+            model: Some("NIKKOR Z 24-200mm f/4-6.3 VR"),
+            serial_number: true,
+            min_focal_length: Some((240, 10)),
+            max_focal_length: Some((2000, 10)),
+            f_number_at_min_focal_length: Some((400, 100)),
+            f_number_at_max_focal_length: Some((630, 100)),
+        }),
+        raw_size: Some((4048, 4040)),
+        image_size: Some((4032, 4032)),
+        focus: Some(SampleFocus {
+            frame: (4032, 4032),
+            center: (2015, 2016),
+            size: Some((163, 174)),
+            in_focus: Some(false),
+        }),
+    },
+    // Z6III, 14-bit High Efficiency*, 16:9 (raw.pixls.us 7813)
+    SampleMetadata {
+        file: "nikon-z6iii-14bit-16x9-he-star.nef",
+        make: Some("NIKON CORPORATION"),
+        model: Some("NIKON Z6_3"),
+        serial_number: Some(SerialShape {
+            len: 7,
+            digits: true,
+        }),
+        capture_time: Some("2024-06-29T15:38:14.16-04:00"),
+        orientation: Orientation::NoTransforms,
+        iso: Some(200),
+        exposure_time: Some((10, 1000)),
+        f_number: Some((900, 100)),
+        focal_length: Some((860, 10)),
+        exposure_bias: Some((0, 6)),
+        lens: Some(SampleLens {
+            make: Some("NIKON"),
+            model: Some("NIKKOR Z 24-200mm f/4-6.3 VR"),
+            serial_number: true,
+            min_focal_length: Some((240, 10)),
+            max_focal_length: Some((2000, 10)),
+            f_number_at_min_focal_length: Some((400, 100)),
+            f_number_at_max_focal_length: Some((630, 100)),
+        }),
+        raw_size: Some((6064, 3416)),
+        image_size: Some((6048, 3400)),
+        focus: Some(SampleFocus {
+            frame: (6048, 3400),
+            center: (3023, 1700),
+            size: Some((163, 174)),
+            in_focus: Some(false),
+        }),
     },
 ];
 

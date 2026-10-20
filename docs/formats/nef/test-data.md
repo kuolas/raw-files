@@ -56,7 +56,7 @@ the NEF files among them, for their previews and their metadata
 ([section 2.2](#22-files-checked-for-metadata)). The Sony files of the
 set are on the [ARW test-data page](../arw/test-data.md#21-the-ci-set);
 the NEF files are the three Z 9 files of raw.pixls.us, one per
-compression mode, and 20 files of 18 other bodies, listed after them:
+compression mode, and 27 files of 21 other bodies, listed after them:
 
 | Id | Body | Compression | SHA-256 | Licence |
 |---|---|---|---|---|
@@ -77,19 +77,29 @@ The container and preview facts tagged **[F]** on the other NEF pages were
 measured on these three files on 2026-10-13, so this section is where the
 **[F]** tag points.
 
-The other 20 NEF files were downloaded from raw.pixls.us on 2026-10-15.
-They cover the generations from the D1H (2001) to the Z6III (2024), both
-byte orders, the three versions of the embedded MakerNote, three small
-raws (D810, D850, Z 6), the Z6III's three aspect ratios, and three
-compacts, one of them an NRW file (Coolpix P7800). Each is CC0 in the
-site's catalogue, and its SHA-256 matched the catalogue's before it was
-read. "Mode" is the catalogue's label. **[P]** "Previews" are the JPEGs
-the tests expect the reader to give, smallest first, and what the file
-shows about them, with the outer byte order (`MM` big-endian, `II`
-little-endian); they were read from a walk of each file's IFDs and
-MakerNote on 2026-10-16, and the reader gives the same. Each JPEG is in
-one piece, through 0x0201 and 0x0202, and ends with the end-of-image
-marker exactly at its declared length. **[F]**
+The other 27 NEF files were downloaded from raw.pixls.us: 20 on
+2026-10-15, and the last seven of the table on 2026-10-19, for the focus
+point ([section 2.3](#23-files-checked-for-the-focus-point)). They cover
+the generations from the D1H (2001) to the Z5II (2025), both byte
+orders, the three versions of the embedded MakerNote, three small raws
+(D810, D850, Z 6), a DSLR in live view (D5600), the Z6III's three aspect
+ratios, two of them again in HE\* (files 7812 and 7813), the 1:1 and
+16:9 crops of the Z5II and the Z50II, and three compacts, one of them an
+NRW file (Coolpix P7800). Each is CC0 in the site's catalogue, and its
+SHA-256 matched the catalogue's before it was read. "Mode" is the
+catalogue's label. **[P]** On the Z5II, Z50II and Z6III files its "8bit"
+is not the files': they hold 14-bit raw data, compressed as HE, or as
+HE\* on files 7812 and 7813, as byte 10 of MakerNote tag 0x0051 says:
+13 on files 7808 to 7810, 7735, 7736, 7767 and 7770, and 14 on 7812 and
+7813
+([makernote-and-metadata.md](makernote-and-metadata.md#2-key-tags)).
+**[F]** "Previews" are the JPEGs the tests expect the reader to give,
+smallest first, and what the file shows about them, with the outer byte
+order (`MM` big-endian, `II` little-endian); they were read from a walk
+of each file's IFDs and MakerNote, of the first 20 files on 2026-10-16
+and of the last seven on 2026-10-20, and the reader gives the same. Each
+JPEG is in one piece, through 0x0201 and 0x0202, and ends with the
+end-of-image marker exactly at its declared length. **[F]**
 
 | Id | Body | Mode | Previews | SHA-256 | Licence |
 |---|---|---|---|---|---|
@@ -113,6 +123,13 @@ marker exactly at its declared length. **[F]**
 | 1425 | Coolpix P7800 | 12bit 12bit compressed ((7)) (4:3) | Two of its three: 160x120 in IFD0 and 4000x3000. Its 640x480 MakerNote JPEG starts at byte 4546, where the MakerNote's declared 2,816 bytes end, so the reader does not read it. An NRW file; MakerNote `02 00`; `II` | `27ac09537dd0f75523864dcf221278e2db354d490534bc13b6eabdc031060e51` | CC0 |
 | 4456 | E5700 | 12bit 12bit uncompressed (4:3) | One, the MakerNote's 640x480, its only JPEG; its two SubIFDs are raw data. MakerNote `02 00`; `II` | `6efeb5049cb4957f0586c47478caed2c5cfdce23eed6b65f5e65ab50ab7c1294` | CC0 |
 | 2956 | Nikon 1 J1 | 12bit 12bit compressed (Lossy (type 2)) (3:2) | Two: the MakerNote's 1616x1080, the largest MakerNote JPEG of the set, and 3872x2592. `II` | `1d3b7c26b012cf585d46a28c9c83876d687a6e215b7d0bdf8d062c82ab626401` | CC0 |
+| 1415 | D5600 | 12bit 12bit compressed (Lossy (type 2)) (3:2) | Three: 640x424, 1620x1080 in SubIFD2 and 6000x4000, inside its 6016x4016 raw; IFD0 holds an uncompressed 160x120 thumbnail, not a JPEG. `II` | `82e15f02c4037820e80f14bacfacdc52ea29721b3c70d2cf08b237b50ce8db05` | CC0 |
+| 7735 | Z5II | 8bit compressed (1:1) | Four: 160x120, then 480x480, 1080x1080 and 4032x4032, square, from a 4048x4040 raw. `II` | `465aba7a444c013063b3a85d7dca1595e4ce1c77fdd115b781b952d490af7258` | CC0 |
+| 7736 | Z5II | 8bit compressed (16:9) | Four: 160x120, then 640x360, 1920x1080 and 6048x3400, 16:9 like its 6064x3416 raw. `II` | `6d087e8860491a9a871edbd145fa9a423ad41e06d787be4e0fec30b925c38218` | CC0 |
+| 7767 | Z50II | 8bit compressed (1:1) | Four: 160x120, then 480x480, 1080x1080 and 3712x3712, square, from a 3728x3728 raw. `II` | `99b2a569356fb084d6946fa6e0b501b014e6e004be0a8e8d564a7b9dab91857e` | CC0 |
+| 7770 | Z50II | 8bit compressed (16:9) | Four: 160x120, then 640x360, 1920x1080 and 5568x3128, 16:9 like its 5600x3144 raw. `II` | `663fd340edbf91cae2e754c2c5c0b2e49e3a25b7a471c1379ecffdb01cfe1599` | CC0 |
+| 7812 | Z6III | 8bit compressed (1:1) | Four, of the sizes of file 7808's: 160x120, 480x480, 1080x1080 and 4032x4032. `II` | `b026ebf6a3ee851925a8a9a44134e39cf3cddd6b383d39aafff15df2b418c89e` | CC0 |
+| 7813 | Z6III | 8bit compressed (16:9) | Four, of the sizes of file 7809's: 160x120, 640x360, 1920x1080 and 6048x3400. `II` | `b84499212126ef8bab31aa2b150f6dbf8cb6e0e2aab7ca669d85c3259784ecc5` | CC0 |
 
 ### 2.2 Files checked for metadata
 
@@ -124,19 +141,21 @@ The checks walked each file's IFDs, Exif IFD and MakerNote IFD with a
 throwaway, bounds-checked script written from these pages, and read the
 tags' values; no other program's output was used.
 
-The tests in `tests/nef.rs` check every metadata value the reader gives
-for each of these files against a table generated from such a walk, by
-the reader's rules, with serial numbers recorded by their shape alone;
-that table is the record of the values, so this page does not repeat it.
+The tests in `tests/nef.rs` check every metadata value the reader gives,
+the focus point among them, for each of the 30 NEF files of section 2.1
+against a table generated from such a walk, by the reader's rules, with
+serial numbers recorded by their shape alone; that table is the record of
+the values, so this page does not repeat it.
 
 ### 2.3 Files checked for the focus point
 
 The focus-point facts tagged **[F]** in
 [makernote-and-metadata.md](makernote-and-metadata.md#86-focus-point)
-were measured on 2026-10-19 on the 23 NEF files of section 2.1 and on
-seven more CC0 files from raw.pixls.us, downloaded that day, that the
-CI set does not hold yet. They add a DSLR in live view that is
-little-endian, and aspect-ratio crops from three mirrorless bodies:
+were measured on 2026-10-19 on the 30 NEF files of section 2.1: the
+first 23 of them, and seven more CC0 files from raw.pixls.us, downloaded
+that day for this check and listed last there. They add a DSLR in live
+view that is little-endian, and aspect-ratio crops from three mirrorless
+bodies:
 
 | Id | Body | Mode | SHA-256 | Licence |
 |---|---|---|---|---|
@@ -339,7 +358,7 @@ The set above answers many of them, mostly with `exiftool -v3`, `exiftool
 
 | Open question | Sample files that answer it |
 |---|---|
-| Preview dimensions and count per body; unusual JPEG types | D3 or D300, D850, D5, D6, Z 6, Z 7, Z 8, Z 9, Z f: list each SubIFD and the PreviewIFD, read each JPEG's frame header. Partly answered by section 2.1, for the D300, D850, Z 6 and Z f among 18 bodies: every JPEG there is baseline |
+| Preview dimensions and count per body; unusual JPEG types | D3 or D300, D850, D5, D6, Z 6, Z 7, Z 8, Z 9, Z f: list each SubIFD and the PreviewIFD, read each JPEG's frame header. Partly answered by section 2.1, for the D300, D850, Z 6 and Z f among 21 bodies: every JPEG there is baseline |
 | Outer TIFF byte order per generation | The first eight bytes of one file per body; settles the Z bodies in particular. Answered for the bodies of section 2.1: `MM` up to the D7000 and on the Coolpix A, `II` from the D750 on and on the E5700, P7800 and J1 |
 | Where previews live on the earliest bodies | D1, D1X, D1H and the E-series. Answered for the D1H, D100 and E5700: in the MakerNote's PreviewIFD alone (section 2.1, files 5364, 2996 and 4456) |
 | Whether HE and HE* change IFD or preview layout | The three Z 9 files side by side. Answered: they do not (section 2.1, files 5146 to 5148) |

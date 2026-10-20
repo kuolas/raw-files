@@ -31,7 +31,7 @@ Numbers in square brackets such as [3] refer to [Sources](#sources).
 **Only the Z 9 has been checked against sample files here.** The facts
 tagged **[F]** were measured on files 5146 to 5148, the three CC0 Z 9 files
 (lossless, HE\* and HE); every other body rests on the sources alone on
-this page. The previews of 20 more files, of 18 other bodies, are checked
+this page. The previews of 27 more files, of 21 other bodies, are checked
 by the tests, and [test-data.md](test-data.md#21-the-ci-set) lists them;
 they are not yet written up here. Where
 a sample contradicts a source, this page follows the sample and records the
@@ -354,7 +354,7 @@ Rank by what is measured in the JPEG itself, never by slot, tag dimensions
 (often absent or zero) or tag-claimed type. raw-files implements these
 steps in its preview finder, shared with ARW, and its tests run it on files
 5146 to 5148, which give the four JPEGs of section 4 in size order. **[F]**
-They also run it on the 20 files of 18 other bodies listed in
+They also run it on the 27 files of 21 other bodies listed in
 [test-data.md](test-data.md#21-the-ci-set), which give the previews listed
 there. **[F]**
 
@@ -467,7 +467,7 @@ invalid) and leave the decision to the caller.
 ## Open questions
 
 Each needs sample files from the public raw.pixls.us collection, inspected
-with a dump tool and byte-by-byte reading. The 20 files of 18 other bodies
+with a dump tool and byte-by-byte reading. The 27 files of 21 other bodies
 in [test-data.md](test-data.md#21-the-ci-set) answer item 12 and part of
 items 1 to 4 and 6 to 9; [open-questions.md](open-questions.md) records
 what they show.
