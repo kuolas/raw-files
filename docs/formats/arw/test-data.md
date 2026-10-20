@@ -94,6 +94,62 @@ against a table generated from a walk of the file's IFDs and Exif IFD, by
 the reader's rules, with serial numbers recorded by their shape alone; that
 table is the record of the values, so this page does not repeat it.
 
+### 2.2 The focus point of each file
+
+The focus-point facts tagged [F] in
+[makernote-and-metadata.md](makernote-and-metadata.md#96-focus-point)
+were measured on 2026-10-19 on all 36 files, with the same kind of
+throwaway script as the other checks, reading the MakerNote's
+FocusLocation (0x2027), FocusLocation2 (0x204A), FocusFrameSize (0x2037)
+and FocusMode (0x201B). What each file records, and the focus point that
+the rules of
+[ADR012](../../architecture-decisions/adr012-focus-points-as-the-camera-records-them.md)
+give from it (FocusLocation2 equals FocusLocation wherever it is
+present, so it is not repeated):
+
+| Id | Body | What the file records | Focus point by ADR012's rules |
+|---|---|---|---|
+| 964 | SLT-A55V | no focus tag read | none: no FocusLocation |
+| 1310 | ILCE-7RM2 | FocusLocation `[7952, 5304, 3976, 2652]`; FocusMode 0 | none: manual focus |
+| 1311 | ILCE-7RM2 | FocusLocation `[7952, 5304, 3976, 2652]`; FocusMode 0 | none: manual focus |
+| 1351 | DSC-F828 | no focus tag read | none: no FocusLocation |
+| 1457 | NEX-5 | no focus tag read | none: no FocusLocation |
+| 1541 | ILCE-9 | FocusLocation `[6000, 4000, 2662, 2000]`; FocusMode 3 | frame 6000 × 4000, centre (2662, 2000), area none |
+| 1542 | ILCE-9 | FocusLocation `[6000, 4000, 2493, 1808]`; FocusMode 3 | frame 6000 × 4000, centre (2493, 1808), area none |
+| 1582 | ILCE-7S | FocusMode 0 | none: manual focus |
+| 2271 | DSLR-A200 | no focus tag read | none: no FocusLocation |
+| 2346 | DSLR-A100 | no focus tag read | none: no FocusLocation |
+| 2521 | DSLR-A700 | no focus tag read | none: no FocusLocation |
+| 3012 | DSC-RX100M6 | FocusLocation `[3648, 3648, 1824, 1824]`; FocusMode 4 | frame 3648 × 3648, centre (1824, 1824), area none |
+| 3015 | DSC-RX100M6 | FocusLocation `[5472, 3080, 2736, 936]`; FocusMode 4 | frame 5472 × 3080, centre (2736, 936), area none |
+| 3221 | DSC-R1 | no focus tag read | none: no FocusLocation |
+| 3251 | ILCE-7RM3 | FocusLocation `[7952, 5304, 3976, 1911]`; FocusMode 2 | frame 7952 × 5304, centre (3976, 1911), area none |
+| 3255 | ILCE-7RM3 | FocusLocation `[7952, 5304, 3976, 1911]`; FocusMode 2 | frame 7952 × 5304, centre (3976, 1911), area none |
+| 3751 | SLT-A99V | FocusMode 3 | none: no FocusLocation |
+| 4051 | Hasselblad Lunar | no focus tag read | none: no FocusLocation |
+| 4466 | ILCE-1 | FocusLocation `[8640, 5760, 4320, 2880]`; FocusFrameSize `[1026, 912, 0]`; FocusMode 2 | frame 8640 × 5760, centre (4320, 2880), area 1026 × 912 |
+| 5418 | ILCE-7SM3 | FocusLocation `[4240, 2832, 2120, 1180]`; FocusFrameSize `[92, 94, 257]`; FocusMode 3 | frame 4240 × 2832, centre (2120, 1180), area 92 × 94 |
+| 5811 | DSC-RX100 | no focus tag read | none: no FocusLocation |
+| 5858 | DSLR-A900 | no focus tag read | none: no FocusLocation |
+| 6736 | ILCE-6700 | FocusLocation `[6192, 4128, 3096, 2064]`; FocusFrameSize `[135, 138, 257]`; FocusMode 2 | frame 6192 × 4128, centre (3096, 2064), area 135 × 138 |
+| 6929 | ILCE-7M4 | FocusLocation `[7008, 4672, 3832, 2102]`; FocusFrameSize `[350, 351, 257]`; FocusMode 3 | frame 7008 × 4672, centre (3832, 2102), area 350 × 351 |
+| 6930 | ILCE-7M4 | FocusLocation `[7008, 4672, 3482, 2306]`; FocusFrameSize `[350, 351, 257]`; FocusMode 3 | frame 7008 × 4672, centre (3482, 2306), area 350 × 351 |
+| 6931 | ILCE-7M4 | FocusLocation `[7008, 4672, 3591, 2306]`; FocusFrameSize `[350, 351, 257]`; FocusMode 3 | frame 7008 × 4672, centre (3591, 2306), area 350 × 351 |
+| 6933 | ILCE-7M4 | FocusLocation `[4608, 3072, 2304, 1529]`; FocusFrameSize `[230, 231, 257]`; FocusMode 3 | frame 4608 × 3072, centre (2304, 1529), area 230 × 231 |
+| 6936 | ILCE-7M4 | FocusLocation `[4608, 3072, 2275, 1516]`; FocusFrameSize `[230, 231, 257]`; FocusMode 3 | frame 4608 × 3072, centre (2275, 1516), area 230 × 231 |
+| 7361 | ILCE-9M3 | FocusLocation `[6000, 4000, 3000, 2000]`; FocusFrameSize `[0, 0, 0]`; FocusMode 0 | none: manual focus |
+| 7364 | ILCE-9M3 | FocusLocation `[3008, 2000, 1504, 1000]`; FocusFrameSize `[0, 0, 0]`; FocusMode 0 | none: manual focus |
+| 7835 | ILCE-1M2 | FocusLocation `[5616, 3744, 2808, 1872]`; FocusFrameSize `[1386, 998, 0]`; FocusMode 3 | frame 5616 × 3744, centre (2808, 1872), area 1386 × 998 |
+| 8846 | ILCE-7M5 | FocusLocation `[7008, 4672, 3504, 2336]`; FocusFrameSize `[745, 594, 257]`; FocusMode 2 | frame 7008 × 4672, centre (3504, 2336), area 745 × 594 |
+| 8847 | ILCE-7M5 | FocusLocation `[7008, 4672, 3504, 2336]`; FocusFrameSize `[745, 594, 257]`; FocusMode 2 | frame 7008 × 4672, centre (3504, 2336), area 745 × 594 |
+| 8848 | ILCE-7M5 | FocusLocation `[4608, 3072, 2304, 1536]`; FocusFrameSize `[490, 390, 257]`; FocusMode 2 | frame 4608 × 3072, centre (2304, 1536), area 490 × 390 |
+| 8849 | ILCE-7M5 | FocusLocation `[4608, 3072, 2304, 1536]`; FocusFrameSize `[490, 390, 257]`; FocusMode 2 | frame 4608 × 3072, centre (2304, 1536), area 490 × 390 |
+| 8850 | ILCE-7M5 | FocusLocation `[4608, 3072, 2304, 1536]`; FocusFrameSize `[490, 390, 257]`; FocusMode 2 | frame 4608 × 3072, centre (2304, 1536), area 490 × 390 |
+
+"No focus tag read" means that the file has none of these four tags; some
+of those files record a point number elsewhere
+([makernote-and-metadata.md](makernote-and-metadata.md#96-focus-point)).
+
 ## 3. What raw.pixls.us holds for Sony
 
 ### 3.1 Access

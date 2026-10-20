@@ -20,6 +20,10 @@ and test-data.md describes the sample set that would answer Part 2.
    - the two 256-byte substitution tables used by the MakerNote cipher
      ([makernote-and-metadata.md](makernote-and-metadata.md)).
    - per-body tables: CFA phase, crop trims and white levels.
+   - per-body tables of autofocus points, which turn the point number of a
+     DSLR shot through the viewfinder, a Nikon 1 shot or a Z body's
+     auto-area mask into a position
+     ([makernote-and-metadata.md](makernote-and-metadata.md#86-focus-point)).
 
    The options are:
    - (a) treat them as format facts, transcribed from two independent sources
@@ -28,8 +32,10 @@ and test-data.md describes the sample set that would answer Part 2.
    - (c) a clean-room process, in which the person who reads the copyleft
      source is not the person who writes the code.
 
-   Per-body tables can always take route (b). The decision needs to be
-   recorded in an ADR before milestone 5.
+   Per-body tables can always take route (b), though route (b) can check
+   a table of autofocus points only where a sample's point is known. The
+   decision needs to be recorded in an ADR before the first table enters
+   raw-files, which may be a table of autofocus points.
 2. **HE / HE\*.** The recommendation is to detect these files and return an
    "unsupported" error ([raw-data.md](raw-data.md)). Implementing a decoder
    would touch the JPEG XS patent pool. That is a legal question, not an
@@ -121,6 +127,25 @@ and test-data.md describes the sample set that would answer Part 2.
   And how the raw IFD size maps to the visible size on the bodies without
   it, which today report the raw size with its border pixels
   ([makernote-and-metadata.md](makernote-and-metadata.md)).
+- **Focus point.** What no sample shows yet
+  ([makernote-and-metadata.md](makernote-and-metadata.md#86-focus-point),
+  its section 11):
+  - the AFInfo2 position at version 0101, from a live-view file of a D5,
+    D500, D850, D3400, D3500 or D7500;
+  - version 0301, from a D6, Z 5, Z 6II, Z 7II, Z 30 or Z fc;
+  - a DSLR in live view on a DX or 1.2x crop: the cropped or the full
+    frame;
+  - what a Z body in manual focus writes in AFInfo2 (its FocusMode,
+    `MANUAL`, gives no point either way);
+  - a rotated shot with a focus point;
+  - CropHiSpeed's sizes on uncropped files, after the D810's four-pixel
+    difference under mode 11 (file 2036);
+  - which bodies write FaceDetect (0x0021);
+  - crops that cut both sides and change the aspect, such as a DX crop
+    at 1:1 on an FX body: scaled like DX or a window like 1:1;
+  - where an aspect crop's window lies: centred, as raw-files assumes,
+    or at CropHiSpeed's offsets, up to eight pixels away;
+  - whether a Z body records a crop mode on a small raw, and how.
 
 ### Raw data
 
