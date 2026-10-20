@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! Sizes in pixels.
+//! Sizes and positions in pixels.
 
 /// The size of an image in pixels, as stored in the file, before any
 /// [`Orientation`](crate::Orientation) is applied.
@@ -35,6 +35,37 @@ pub struct Size {
     pub height: u32,
 }
 
+/// A position on an image, in pixels, measured from its edges: `x` is the
+/// distance from the left edge and `y` the distance from the top edge of
+/// the image as stored in the file, before any
+/// [`Orientation`](crate::Orientation) is applied. So the middle of an
+/// image `width` pixels wide is at `x = width / 2`, and the middle of one
+/// `height` pixels high at `y = height / 2`.
+///
+/// Points order by `x`, then by `y`, so that they can key a map or be
+/// sorted; that order is only a convention, and says nothing more about
+/// where two points lie on the picture.
+///
+/// # Examples
+///
+/// The centre of a stored image, half its width from the left edge and
+/// half its height from the top:
+///
+/// ```
+/// use raw_files::{Point, Size};
+///
+/// let stored = Size { width: 8256, height: 5504 };
+/// let centre = Point { x: stored.width / 2, y: stored.height / 2 };
+/// assert_eq!(centre, Point { x: 4128, y: 2752 });
+/// ```
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct Point {
+    /// The distance in pixels from the left edge, as stored.
+    pub x: u32,
+    /// The distance in pixels from the top edge, as stored.
+    pub y: u32,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -61,5 +92,19 @@ mod tests {
                 height: 640
             }
         );
+    }
+
+    #[test]
+    fn point_construction_equality_and_order() {
+        let point = Point { x: 3, y: 7 };
+        assert_eq!(point.x, 3);
+        assert_eq!(point.y, 7);
+        assert_eq!(point, Point { x: 3, y: 7 });
+        assert_ne!(point, Point { x: 7, y: 3 });
+
+        // By x first, whatever y...
+        assert!(Point { x: 1, y: 9 } < Point { x: 2, y: 0 });
+        // ...then by y for the same x.
+        assert!(Point { x: 1, y: 2 } < Point { x: 1, y: 3 });
     }
 }
