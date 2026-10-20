@@ -408,7 +408,7 @@ fn iso<R: Read + Seek>(src: &mut Source<R>, makernote: &MakerNote) -> Result<Opt
 
 /// The lens's range that `makernote`'s Lens tag records: its shortest and
 /// longest focal length, then the f-number at each, in the order of the
-/// Exif LensSpecification, as [`Lens::new`] takes them.
+/// Exif LensSpecification, as [`Lens::from_parts`] takes them.
 ///
 /// The tag must be of type RATIONAL, hold exactly four values and store
 /// them inside the block; otherwise all four are `None`. Each value is
@@ -1403,13 +1403,14 @@ mod tests {
     const EXIF_LENS: [(u32, u32); 4] = [(240, 10), (1200, 10), (400, 100), (400, 100)];
 
     /// `values` as the reader returns a lens's range, each fraction as
-    /// stored.
+    /// stored, and `None` where either of its numbers is zero, by the
+    /// readers' own check ([`Rational::known`]).
     fn known(values: [(u32, u32); 4]) -> [Option<Rational>; 4] {
         values.map(|(numerator, denominator)| Rational::known(numerator, denominator))
     }
 
-    /// The four fractions of `lens`'s range, in the order [`Lens::new`]
-    /// takes them.
+    /// The four fractions of `lens`'s range, in the order
+    /// [`Lens::from_parts`] takes them.
     fn range_of(lens: &Lens) -> [Option<Rational>; 4] {
         [
             lens.min_focal_length(),
@@ -1840,22 +1841,25 @@ mod tests {
 
     #[test]
     fn a_makernote_lens_value_of_zero_is_none_and_the_others_are_kept() {
-        for order in ORDERS {
-            let values = [(180, 10), (700, 10), (0, 0), (45, 10)];
-            let metadata = makernote_metadata(order, |inner, ifd| {
-                inner.rational(ifd, LENS, &values);
-            });
-            let lens = metadata.lens.expect("a lens");
-            assert_eq!(
-                range_of(&lens),
-                [
-                    Rational::known(180, 10),
-                    Rational::known(700, 10),
-                    None,
-                    Rational::known(45, 10)
-                ],
-                "{order:?}"
-            );
+        // An unknown value written as 0/0, and as a zero over a denominator.
+        for zero in [(0, 0), (0, 10)] {
+            for order in ORDERS {
+                let values = [(180, 10), (700, 10), zero, (45, 10)];
+                let metadata = makernote_metadata(order, |inner, ifd| {
+                    inner.rational(ifd, LENS, &values);
+                });
+                let lens = metadata.lens.expect("a lens");
+                assert_eq!(
+                    range_of(&lens),
+                    [
+                        Rational::new(180, 10),
+                        Rational::new(700, 10),
+                        None,
+                        Rational::new(45, 10)
+                    ],
+                    "{zero:?} {order:?}"
+                );
+            }
         }
     }
 

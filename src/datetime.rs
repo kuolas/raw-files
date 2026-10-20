@@ -12,22 +12,39 @@
 //! as `YYYY:MM:DD HH:MM:SS`, the fraction of a second as its digits alone,
 //! and the offset as `+HH:MM` or `-HH:MM`. [`DateTime::from_exif`] reads
 //! them.
+//!
+//! Each rule a time is held to lives in one public constructor:
+//! [`DateTime::new`] for the date and time, [`DateTime::with_subseconds`]
+//! for the fraction of a second and [`DateTime::with_offset`] for the
+//! offset. The reader builds every time it returns through them, and a
+//! caller builds one through them for its tests, so the two cannot differ.
 
 use std::fmt;
 
+/// The latest year a `DateTime` may have: the last that the four digits of
+/// its ISO 8601 form can show, and the last that the four digits of an Exif
+/// date can hold.
+const MAX_YEAR: u16 = 9999;
+
 /// The farthest an offset from UTC may lie from it, in minutes: 14 hours,
 /// since no offset from UTC in use lies outside -14:00 to +14:00. An offset
-/// beyond it, from any tag, is taken for damage.
+/// beyond it is refused; from a file, it is taken for damage.
 const MAX_OFFSET_MINUTES: i16 = 14 * 60;
 
 /// A date and time as a camera's clock recorded it: local time, with the
 /// fraction of a second and the offset from UTC when the file records them.
 ///
-/// The date and time are always real ones: the month is 1 to 12, the day
-/// exists in its month (29 February only in a leap year), the hour is 0 to
-/// 23, and the minute and second are 0 to 59. A clock that was never set,
-/// or an impossible date, gives no `DateTime` at all rather than a wrong
-/// one.
+/// The date and time are always real ones: the year is 0 to 9999, the
+/// month 1 to 12, the day exists in its month (29 February only in a leap
+/// year), the hour is 0 to 23, and the minute and second are 0 to 59. A
+/// clock that was never set, or an impossible date, gives no `DateTime` at
+/// all rather than a wrong one.
+///
+/// A `DateTime` comes from a file, or a caller builds one with
+/// [`new`](Self::new), adding a fraction of a second with
+/// [`with_subseconds`](Self::with_subseconds) and an offset with
+/// [`with_offset`](Self::with_offset), for its tests. The same rules apply
+/// either way: the reader builds every time it returns through those three.
 ///
 /// Without an offset, the time is local to a zone the file does not name,
 /// so it cannot be compared with times from other clocks.
@@ -56,9 +73,9 @@ const MAX_OFFSET_MINUTES: i16 = 14 * 60;
 ///
 /// # Examples
 ///
-/// A `DateTime` comes from a file. Print it, or take its parts to name the
-/// file by the moment it was taken, milliseconds included, since the
-/// frames of a burst share their second:
+/// A file's capture time: print it, or take its parts to name the file by
+/// the moment it was taken, milliseconds included, since the frames of a
+/// burst share their second:
 ///
 /// ```no_run
 /// use raw_files::RawFile;
@@ -82,6 +99,28 @@ const MAX_OFFSET_MINUTES: i16 = 14 * 60;
 /// # Ok(())
 /// # }
 /// ```
+///
+/// A time built for a test, as a camera would record 85 hundredths of a
+/// second past 10:20:30 on 1 May 2024, two hours ahead of UTC; a date that
+/// does not exist gives none:
+///
+/// ```
+/// use raw_files::DateTime;
+///
+/// # fn main() {
+/// #     example().expect("every step accepts a real date and time");
+/// # }
+/// # fn example() -> Option<()> {
+/// let time = DateTime::new(2024, 5, 1, 10, 20, 30)?
+///     .with_subseconds(850_000_000, 2)?
+///     .with_offset(120)?;
+/// assert_eq!(time.to_string(), "2024-05-01T10:20:30.85+02:00");
+///
+/// // 2023 was not a leap year.
+/// assert_eq!(DateTime::new(2023, 2, 29, 0, 0, 0), None);
+/// # Some(())
+/// # }
+/// ```
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct DateTime {
     year: u16,
@@ -99,6 +138,106 @@ pub struct DateTime {
 }
 
 impl DateTime {
+    /// The date and time `year`-`month`-`day` `hour`:`minute`:`second`,
+    /// with no fraction of a second and no offset from UTC; `None` when
+    /// they are not a real date and time.
+    ///
+    /// This is how the reader builds every time it returns, and how a
+    /// caller builds one for its tests. It gives `None` when:
+    ///
+    /// - `year` is above 9999, which the four digits of the
+    ///   [`Display`](fmt::Display) form cannot show;
+    /// - `month` is not 1 to 12;
+    /// - `day` is 0, or past the last day of its month. 29 February exists
+    ///   only in a leap year, by the Gregorian rule: every fourth year,
+    ///   except the centuries that 400 does not divide, so 2000 was a leap
+    ///   year and 1900 was not;
+    /// - `hour` is above 23, or `minute` or `second` above 59. A leap
+    ///   second is not accepted.
+    ///
+    /// Add a fraction of a second with
+    /// [`with_subseconds`](Self::with_subseconds) and an offset with
+    /// [`with_offset`](Self::with_offset).
+    #[must_use]
+    pub fn new(year: u16, month: u8, day: u8, hour: u8, minute: u8, second: u8) -> Option<Self> {
+        if year > MAX_YEAR
+            || !(1..=12).contains(&month)
+            || day == 0
+            || day > days_in_month(year, month)
+            || hour > 23
+            || minute > 59
+            || second > 59
+        {
+            return None;
+        }
+        Some(Self {
+            year,
+            month,
+            day,
+            hour,
+            minute,
+            second,
+            nanosecond: 0,
+            subsec_digits: 0,
+            offset: None,
+        })
+    }
+
+    /// This time with the fraction of a second `nanosecond`, in
+    /// nanoseconds, recorded with `digits` digits, in place of the one it
+    /// has, if any. A time recorded as `.85` is
+    /// `with_subseconds(850_000_000, 2)`, and one recorded as `.850` is
+    /// `with_subseconds(850_000_000, 3)`: they name the same moment, but
+    /// differ in equality and in the [`Display`](fmt::Display) form, as
+    /// they would from a file.
+    ///
+    /// It gives `None` when:
+    ///
+    /// - `digits` is 0 or above 9: a fraction of a second is recorded with
+    ///   1 to 9 digits, the ninth being the nanosecond, and a time without
+    ///   one is simply built without this;
+    /// - `nanosecond` is 1 000 000 000 or more, a whole second;
+    /// - `nanosecond` does not fit in `digits` digits: it must be a
+    ///   multiple of 10 to the power of 9 minus `digits`, so that the
+    ///   digits recorded hold all of it. 855 000 000 with 2 digits is
+    ///   refused, since `.85` would lose its last 5.
+    #[must_use]
+    pub fn with_subseconds(self, nanosecond: u32, digits: u8) -> Option<Self> {
+        if !(1..=9).contains(&digits) || nanosecond >= 1_000_000_000 {
+            return None;
+        }
+        // The value of one unit of the last digit recorded: 1 for nine
+        // digits, 100 000 000 for one.
+        let unit = 10_u32.pow(9 - u32::from(digits));
+        nanosecond.is_multiple_of(unit).then_some(Self {
+            nanosecond,
+            subsec_digits: digits,
+            ..self
+        })
+    }
+
+    /// This time with the offset from UTC `minutes`, in minutes east of
+    /// UTC, in place of the one it has, if any: -300 for a clock five hours
+    /// behind UTC (`-05:00`), 60 for one an hour ahead (`+01:00`).
+    ///
+    /// This is how the reader gives a time the offset its Exif text
+    /// records, or one a file records apart from the Exif texts, such as
+    /// the time-zone setting of a Nikon camera's clock; and how a caller
+    /// gives one to a time for its tests.
+    ///
+    /// It gives `None` when `minutes` lies more than 14 hours from UTC,
+    /// beyond `-14:00` to `+14:00`, since no offset from UTC in use lies
+    /// outside that.
+    #[must_use]
+    pub fn with_offset(self, minutes: i16) -> Option<Self> {
+        (-MAX_OFFSET_MINUTES..=MAX_OFFSET_MINUTES)
+            .contains(&minutes)
+            .then_some(Self {
+                offset: Some(minutes),
+                ..self
+            })
+    }
+
     /// The time read from the three Exif texts that record it: the date
     /// and time, such as DateTimeOriginal; the fraction of a second, such
     /// as SubSecTimeOriginal; and the offset from UTC, such as
@@ -113,16 +252,17 @@ impl DateTime {
     ///
     /// Returns `None` when the date and time are not exactly
     /// `YYYY:MM:DD HH:MM:SS`, with digits in every digit place and those
-    /// separators, or do not name a real date and time. That covers a clock
-    /// that was never set, which cameras record as spaces, as spaces
-    /// between the separators, or as zeros.
+    /// separators, or do not name a real date and time, by the rules of
+    /// [`new`](Self::new). That covers a clock that was never set, which
+    /// cameras record as spaces, as spaces between the separators, or as
+    /// zeros.
     ///
     /// The fraction of a second is one or more ASCII digits; digits past the
     /// ninth are cut, not rounded. The offset is exactly `+HH:MM` or
-    /// `-HH:MM`, with the minutes from 00 to 59, and at most 14 hours from
-    /// UTC, from `-14:00` to `+14:00`, since no offset from UTC in use lies
-    /// outside that. A fraction or offset in any other form is left out,
-    /// and the time stands without it.
+    /// `-HH:MM`, with the minutes from 00 to 59, and is then held to the
+    /// bound of [`with_offset`](Self::with_offset), at most 14 hours from
+    /// UTC. A fraction or offset in any other form is left out, and the
+    /// time stands without it.
     pub(crate) fn from_exif(
         date: &[u8],
         subsec: Option<&[u8]>,
@@ -154,50 +294,26 @@ impl DateTime {
         else {
             return None;
         };
-        let year = u16::from(two_digits(y0, y1)?) * 100 + u16::from(two_digits(y2, y3)?);
-        let month = two_digits(mo0, mo1)?;
-        let day = two_digits(d0, d1)?;
-        let hour = two_digits(h0, h1)?;
-        let minute = two_digits(mi0, mi1)?;
-        let second = two_digits(s0, s1)?;
-        if !(1..=12).contains(&month)
-            || day == 0
-            || day > days_in_month(year, month)
-            || hour > 23
-            || minute > 59
-            || second > 59
-        {
-            return None;
-        }
-        let (nanosecond, subsec_digits) = subsec.and_then(parse_subsec).unwrap_or((0, 0));
-        Some(Self {
-            year,
-            month,
-            day,
-            hour,
-            minute,
-            second,
-            nanosecond,
-            subsec_digits,
-            offset: offset.and_then(parse_offset),
-        })
-    }
-
-    /// This time with the offset from UTC `minutes`, in minutes east of
-    /// UTC, in place of the one it has, if any: for an offset that a file
-    /// records apart from the Exif texts, such as the time-zone setting of
-    /// a Nikon camera's clock.
-    ///
-    /// Returns `None` when `minutes` lies more than 14 hours from UTC,
-    /// beyond `-14:00` to `+14:00`, the bound [`from_exif`](Self::from_exif)
-    /// applies to an Exif offset.
-    pub(crate) fn with_offset(self, minutes: i16) -> Option<Self> {
-        (-MAX_OFFSET_MINUTES..=MAX_OFFSET_MINUTES)
-            .contains(&minutes)
-            .then_some(Self {
-                offset: Some(minutes),
-                ..self
-            })
+        let time = Self::new(
+            u16::from(two_digits(y0, y1)?) * 100 + u16::from(two_digits(y2, y3)?),
+            two_digits(mo0, mo1)?,
+            two_digits(d0, d1)?,
+            two_digits(h0, h1)?,
+            two_digits(mi0, mi1)?,
+            two_digits(s0, s1)?,
+        )?;
+        // A fraction or offset that its parser or its constructor refuses
+        // is left out, and the time stands without it. The parser never
+        // gives a fraction the constructor refuses.
+        let time = subsec
+            .and_then(parse_subsec)
+            .and_then(|(nanosecond, digits)| time.with_subseconds(nanosecond, digits))
+            .unwrap_or(time);
+        let time = offset
+            .and_then(parse_offset)
+            .and_then(|minutes| time.with_offset(minutes))
+            .unwrap_or(time);
+        Some(time)
     }
 
     /// The year, from 0 to 9999.
@@ -349,8 +465,10 @@ fn parse_subsec(text: &[u8]) -> Option<(u32, u8)> {
 
 /// The offset from UTC, in minutes east of UTC, from its Exif text; `None`
 /// when the text, cut at its first NUL and without the spaces at either
-/// end, is not exactly `+HH:MM` or `-HH:MM` with the minutes from 00 to 59,
-/// or lies more than 14 hours from UTC ([`MAX_OFFSET_MINUTES`]).
+/// end, is not exactly `+HH:MM` or `-HH:MM` with the minutes from 00 to 59.
+///
+/// Any hours from 00 to 99 are read: the bound of 14 hours from UTC is
+/// [`DateTime::with_offset`]'s, which the offset is given through.
 fn parse_offset(text: &[u8]) -> Option<i16> {
     let &[sign, h0, h1, b':', m0, m1] = cleaned(text) else {
         return None;
@@ -364,10 +482,7 @@ fn parse_offset(text: &[u8]) -> Option<i16> {
     let minutes = two_digits(m0, m1)?;
     // At most 99 hours and 99 minutes, so this cannot overflow.
     let total = i16::from(hours) * 60 + i16::from(minutes);
-    if minutes > 59 || total > MAX_OFFSET_MINUTES {
-        return None;
-    }
-    Some(sign * total)
+    (minutes <= 59).then_some(sign * total)
 }
 
 #[cfg(test)]
@@ -755,5 +870,136 @@ mod tests {
         assert_eq!(read(DATE, Some(b"50"), None).subsecond_digits(), 2);
         assert_eq!(read(DATE, Some(b"00"), None).subsecond_digits(), 2);
         assert_eq!(read(DATE, Some(b"1234567890"), None).subsecond_digits(), 9);
+    }
+
+    /// The time `new` builds from these fields, which the test expects to
+    /// be accepted.
+    fn built(year: u16, month: u8, day: u8, hour: u8, minute: u8, second: u8) -> DateTime {
+        DateTime::new(year, month, day, hour, minute, second).unwrap_or_else(|| {
+            panic!("{year:04}-{month:02}-{day:02} {hour:02}:{minute:02}:{second:02} refused")
+        })
+    }
+
+    #[test]
+    fn new_takes_29_february_only_in_a_gregorian_leap_year() {
+        assert_eq!(built(2024, 2, 29, 0, 0, 0).day(), 29);
+        assert_eq!(DateTime::new(2023, 2, 29, 0, 0, 0), None);
+        // The century rule: 400 divides 2000, not 1900.
+        assert_eq!(built(2000, 2, 29, 0, 0, 0).day(), 29);
+        assert_eq!(DateTime::new(1900, 2, 29, 0, 0, 0), None);
+        assert_eq!(DateTime::new(2024, 2, 30, 0, 0, 0), None);
+    }
+
+    #[test]
+    fn new_checks_each_field_against_its_range() {
+        assert_eq!(built(2022, 4, 30, 0, 0, 0).day(), 30);
+        assert_eq!(DateTime::new(2022, 4, 31, 0, 0, 0), None);
+        assert_eq!(DateTime::new(2022, 0, 1, 0, 0, 0), None);
+        assert_eq!(DateTime::new(2022, 13, 1, 0, 0, 0), None);
+        assert_eq!(DateTime::new(2022, 1, 0, 0, 0, 0), None);
+        let last = built(2022, 12, 31, 23, 59, 59);
+        assert_eq!(last.to_string(), "2022-12-31T23:59:59");
+        assert_eq!(DateTime::new(2022, 1, 31, 24, 0, 0), None);
+        assert_eq!(DateTime::new(2022, 1, 31, 10, 60, 0), None);
+        assert_eq!(DateTime::new(2022, 1, 31, 10, 20, 60), None);
+    }
+
+    #[test]
+    fn new_takes_the_years_four_digits_can_show() {
+        assert_eq!(built(0, 1, 1, 0, 0, 0).to_string(), "0000-01-01T00:00:00");
+        assert_eq!(
+            built(9999, 12, 31, 0, 0, 0).to_string(),
+            "9999-12-31T00:00:00"
+        );
+        assert_eq!(DateTime::new(10000, 1, 1, 0, 0, 0), None);
+        assert_eq!(DateTime::new(u16::MAX, 1, 1, 0, 0, 0), None);
+    }
+
+    #[test]
+    fn new_builds_a_time_without_subseconds_or_offset_as_a_file_gives_it() {
+        let time = built(2022, 1, 31, 10, 20, 30);
+        check(time, FIELDS, 0, None, "2022-01-31T10:20:30");
+        assert_eq!(time.subsecond_digits(), 0);
+        assert_eq!(time, read(DATE, None, None));
+    }
+
+    #[test]
+    fn with_subseconds_takes_one_to_nine_digits() {
+        let time = built(2022, 1, 31, 10, 20, 30);
+        assert_eq!(time.with_subseconds(0, 0), None);
+        assert_eq!(time.with_subseconds(500_000_000, 0), None);
+        assert_eq!(time.with_subseconds(0, 10), None);
+        assert_eq!(time.with_subseconds(500_000_000, 10), None);
+        let nine = time.with_subseconds(999_999_999, 9).unwrap();
+        assert_eq!(nine.to_string(), "2022-01-31T10:20:30.999999999");
+        assert_eq!(nine.subsecond_digits(), 9);
+    }
+
+    #[test]
+    fn with_subseconds_refuses_a_whole_second() {
+        let time = built(2022, 1, 31, 10, 20, 30);
+        assert_eq!(time.with_subseconds(1_000_000_000, 9), None);
+        assert_eq!(time.with_subseconds(1_000_000_000, 1), None);
+        assert_eq!(time.with_subseconds(u32::MAX, 9), None);
+    }
+
+    #[test]
+    fn with_subseconds_refuses_what_its_digits_cannot_hold() {
+        let time = built(2022, 1, 31, 10, 20, 30);
+        let hundredths = time.with_subseconds(850_000_000, 2).unwrap();
+        check(
+            hundredths,
+            FIELDS,
+            850_000_000,
+            None,
+            "2022-01-31T10:20:30.85",
+        );
+        assert_eq!(time.with_subseconds(855_000_000, 2), None);
+        assert_eq!(time.with_subseconds(1, 8), None);
+        assert_eq!(
+            time.with_subseconds(1, 9).unwrap().to_string(),
+            "2022-01-31T10:20:30.000000001"
+        );
+    }
+
+    #[test]
+    fn with_subseconds_of_zero_differs_from_none() {
+        let time = built(2022, 1, 31, 10, 20, 30);
+        let zero = time.with_subseconds(0, 1).unwrap();
+        assert_eq!(zero.to_string(), "2022-01-31T10:20:30.0");
+        assert_eq!((zero.nanosecond(), zero.subsecond_digits()), (0, 1));
+        assert_ne!(zero, time);
+    }
+
+    #[test]
+    fn with_subseconds_replaces_earlier_ones_as_a_file_gives_them() {
+        let time = built(2022, 1, 31, 10, 20, 30);
+        let hundredths = time.with_subseconds(850_000_000, 2).unwrap();
+        assert_eq!(hundredths, read(DATE, Some(b"85"), None));
+        let tenths = hundredths.with_subseconds(500_000_000, 1).unwrap();
+        assert_eq!(tenths, read(DATE, Some(b"5"), None));
+        assert_eq!(tenths.subsecond_digits(), 1);
+    }
+
+    #[test]
+    fn with_offset_takes_fourteen_hours_either_way() {
+        let time = built(2022, 1, 31, 10, 20, 30);
+        let east = time.with_offset(840).unwrap();
+        assert_eq!(east.to_string(), "2022-01-31T10:20:30+14:00");
+        let west = time.with_offset(-840).unwrap();
+        assert_eq!(west.to_string(), "2022-01-31T10:20:30-14:00");
+        assert_eq!(time.with_offset(841), None);
+        assert_eq!(time.with_offset(-841), None);
+    }
+
+    #[test]
+    fn with_offset_replaces_an_earlier_one_as_a_file_gives_it() {
+        let time = built(2022, 1, 31, 10, 20, 30)
+            .with_subseconds(850_000_000, 2)
+            .and_then(|time| time.with_offset(60))
+            .and_then(|time| time.with_offset(-300))
+            .unwrap();
+        assert_eq!(time.offset_minutes(), Some(-300));
+        assert_eq!(time, read(DATE, Some(b"85"), Some(b"-05:00")));
     }
 }

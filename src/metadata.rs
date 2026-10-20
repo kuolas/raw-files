@@ -8,7 +8,8 @@
 //! of it, read when the file is opened; [`Exposure`] and [`Lens`] hold the
 //! exposure and the lens as the file records them, fractions with the
 //! numerator and denominator it stored, and [`Focus`] where the camera's
-//! autofocus aimed, as the camera recorded it.
+//! autofocus aimed, as the camera recorded it. [`LensBuilder`] builds a
+//! lens a value at a time, for a caller's tests.
 //!
 //! Every value is optional. A file may not record it, or may record it in a
 //! way that cannot be read, such as a tag of the wrong type; either way the
@@ -248,7 +249,11 @@ impl Exposure {
 ///
 /// Focal lengths are in millimetres, the lens's actual ones, not their 35 mm
 /// equivalents; apertures are f-numbers. Both are fractions as stored, and
-/// a zero, which a file writes for a value it does not know, is `None`.
+/// a zero, which a file writes for a value it does not know, is read as
+/// `None`.
+///
+/// A `Lens` comes from a file, or a caller builds one a value at a time
+/// with [`Lens::builder`] for its tests.
 ///
 /// # Examples
 ///
@@ -284,13 +289,27 @@ pub struct Lens {
 }
 
 impl Lens {
+    /// An empty [`LensBuilder`], to build a lens a value at a time for a
+    /// caller's tests. Its [`build`](LensBuilder::build) gives `None` until
+    /// a value is set.
+    #[must_use]
+    pub fn builder() -> LensBuilder {
+        LensBuilder::default()
+    }
+
     /// The lens with these values; `None` when every one of them is `None`,
     /// since a lens is described by at least one.
     ///
-    /// The text values come cleaned, as the metadata reader gives them;
-    /// the four fractions are in the order the Exif LensSpecification tag
-    /// stores them.
-    pub(crate) fn new(
+    /// This is the one place that rule is checked: for
+    /// [`LensBuilder::build`], and for the readers, which call it with the
+    /// texts they read, moved rather than copied. The texts are stored as
+    /// given, not trimmed or otherwise changed: the readers clean the text
+    /// a file records before they build a lens, such as by trimming its
+    /// spaces or by leaving out a model made only of `-` characters. The
+    /// four fractions are in the order the Exif LensSpecification tag
+    /// stores them: the shortest and longest focal length, then the
+    /// f-number at each.
+    pub(crate) fn from_parts(
         make: Option<String>,
         model: Option<String>,
         serial_number: Option<String>,
@@ -332,9 +351,11 @@ impl Lens {
     /// serial number kept, or, when there is no `lens`, a lens of the range
     /// alone: for a format whose own structures record a range the standard
     /// tags lack, such as Nikon's MakerNote. `None` when that leaves no
-    /// value, as for [`Lens::new`].
+    /// value, as for [`from_parts`](Self::from_parts); the texts are moved,
+    /// not copied.
     ///
-    /// The four fractions are in the order [`Lens::new`] takes them.
+    /// The four fractions are in the order
+    /// [`from_parts`](Self::from_parts) takes them.
     pub(crate) fn with_range(lens: Option<Self>, range: [Option<Rational>; 4]) -> Option<Self> {
         let (make, model, serial_number) = match lens {
             Some(lens) => (lens.make, lens.model, lens.serial_number),
@@ -346,7 +367,7 @@ impl Lens {
             f_number_at_min_focal_length,
             f_number_at_max_focal_length,
         ] = range;
-        Self::new(
+        Self::from_parts(
             make,
             model,
             serial_number,
@@ -362,9 +383,9 @@ impl Lens {
         self.make.as_deref()
     }
 
-    /// The lens's model name, such as `NIKKOR Z 14-30mm f/4 S`. A name
-    /// made only of `-` characters, which Sony writes for a manual lens,
-    /// names no lens and is `None`.
+    /// The lens's model name, such as `NIKKOR Z 14-30mm f/4 S`. In a file,
+    /// a name made only of `-` characters, which Sony writes for a manual
+    /// lens, names no lens and is read as `None`.
     pub fn model(&self) -> Option<&str> {
         self.model.as_deref()
     }
@@ -397,6 +418,141 @@ impl Lens {
     /// it zooms, the same as at the shortest.
     pub fn f_number_at_max_focal_length(&self) -> Option<Rational> {
         self.f_number_at_max_focal_length
+    }
+}
+
+/// Builds a [`Lens`] a value at a time, for a caller's tests.
+///
+/// A lens is described by at least one value, so there is no empty `Lens`
+/// to start from and change, as there is an empty [`Metadata`] or
+/// [`Exposure`]. A builder starts empty instead, from [`Lens::builder`].
+/// Each of its methods sets one value, in place of any it had, and is
+/// named after the [`Lens`] method that reads that value back;
+/// [`build`](Self::build) then gives the lens, or `None` when no value was
+/// set.
+///
+/// The values are stored as given. A text is not trimmed or otherwise
+/// changed, and a model made only of `-` characters is kept, though the
+/// readers leave such a model out of a file: they clean a file's text
+/// before they build a lens, and a test gets back what it wrote. A text
+/// may be a `&str`, which is copied, or a `String`, which is moved.
+///
+/// # Examples
+///
+/// A camera with a fixed 9-72 mm f/2.8-4.5 lens, which its files describe
+/// by the range alone; a lens described by its name alone; and a builder
+/// given no value, which builds no lens:
+///
+/// ```
+/// use raw_files::{Lens, Rational};
+///
+/// # fn main() {
+/// #     example().expect("every step gives a value");
+/// # }
+/// # fn example() -> Option<()> {
+/// let fixed = Lens::builder()
+///     .min_focal_length(Rational::new(90, 10)?)
+///     .max_focal_length(Rational::new(720, 10)?)
+///     .f_number_at_min_focal_length(Rational::new(28, 10)?)
+///     .f_number_at_max_focal_length(Rational::new(45, 10)?)
+///     .build()?;
+/// assert_eq!(fixed.model(), None);
+/// assert_eq!(fixed.min_focal_length(), Rational::new(90, 10));
+/// assert_eq!(fixed.max_focal_length(), Rational::new(720, 10));
+/// assert_eq!(fixed.f_number_at_min_focal_length(), Rational::new(28, 10));
+/// assert_eq!(fixed.f_number_at_max_focal_length(), Rational::new(45, 10));
+///
+/// let named = Lens::builder().model("NIKKOR Z 14-30mm f/4 S").build()?;
+/// assert_eq!(named.model(), Some("NIKKOR Z 14-30mm f/4 S"));
+/// assert_eq!(named.min_focal_length(), None);
+///
+/// assert_eq!(Lens::builder().build(), None);
+/// # Some(())
+/// # }
+/// ```
+#[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
+pub struct LensBuilder {
+    make: Option<String>,
+    model: Option<String>,
+    serial_number: Option<String>,
+    min_focal_length: Option<Rational>,
+    max_focal_length: Option<Rational>,
+    f_number_at_min_focal_length: Option<Rational>,
+    f_number_at_max_focal_length: Option<Rational>,
+}
+
+impl LensBuilder {
+    /// Sets the name of the lens's maker, in place of any set before;
+    /// [`Lens::make`] reads it.
+    #[must_use]
+    pub fn make(mut self, make: impl Into<String>) -> Self {
+        self.make = Some(make.into());
+        self
+    }
+
+    /// Sets the lens's model name, such as `NIKKOR Z 14-30mm f/4 S`, in
+    /// place of any set before; [`Lens::model`] reads it.
+    #[must_use]
+    pub fn model(mut self, model: impl Into<String>) -> Self {
+        self.model = Some(model.into());
+        self
+    }
+
+    /// Sets the lens's serial number, in place of any set before;
+    /// [`Lens::serial_number`] reads it.
+    #[must_use]
+    pub fn serial_number(mut self, serial_number: impl Into<String>) -> Self {
+        self.serial_number = Some(serial_number.into());
+        self
+    }
+
+    /// Sets the shortest focal length of the lens, in millimetres, in place
+    /// of any set before; [`Lens::min_focal_length`] reads it.
+    #[must_use]
+    pub fn min_focal_length(mut self, millimetres: Rational) -> Self {
+        self.min_focal_length = Some(millimetres);
+        self
+    }
+
+    /// Sets the longest focal length of the lens, in millimetres, in place
+    /// of any set before; [`Lens::max_focal_length`] reads it.
+    #[must_use]
+    pub fn max_focal_length(mut self, millimetres: Rational) -> Self {
+        self.max_focal_length = Some(millimetres);
+        self
+    }
+
+    /// Sets the widest aperture at the shortest focal length, as an
+    /// f-number, in place of any set before;
+    /// [`Lens::f_number_at_min_focal_length`] reads it.
+    #[must_use]
+    pub fn f_number_at_min_focal_length(mut self, f_number: Rational) -> Self {
+        self.f_number_at_min_focal_length = Some(f_number);
+        self
+    }
+
+    /// Sets the widest aperture at the longest focal length, as an
+    /// f-number, in place of any set before;
+    /// [`Lens::f_number_at_max_focal_length`] reads it.
+    #[must_use]
+    pub fn f_number_at_max_focal_length(mut self, f_number: Rational) -> Self {
+        self.f_number_at_max_focal_length = Some(f_number);
+        self
+    }
+
+    /// The lens with the values set; `None` when no value was set, since a
+    /// lens is described by at least one.
+    #[must_use]
+    pub fn build(self) -> Option<Lens> {
+        Lens::from_parts(
+            self.make,
+            self.model,
+            self.serial_number,
+            self.min_focal_length,
+            self.max_focal_length,
+            self.f_number_at_min_focal_length,
+            self.f_number_at_max_focal_length,
+        )
     }
 }
 
@@ -778,52 +934,61 @@ mod tests {
     }
 
     #[test]
-    fn a_lens_with_no_value_is_none() {
-        assert_eq!(Lens::new(None, None, None, None, None, None, None), None);
+    fn a_lens_from_parts_with_no_value_is_none() {
+        // The readers' way to build a lens.
+        assert_eq!(
+            Lens::from_parts(None, None, None, None, None, None, None),
+            None
+        );
     }
 
     #[test]
-    fn a_lens_with_any_one_value_is_some() {
-        let text = || Some("x".to_owned());
-        let value = Some(fraction(1, 1));
-        let lenses = [
-            Lens::new(text(), None, None, None, None, None, None),
-            Lens::new(None, text(), None, None, None, None, None),
-            Lens::new(None, None, text(), None, None, None, None),
-            Lens::new(None, None, None, value, None, None, None),
-            Lens::new(None, None, None, None, value, None, None),
-            Lens::new(None, None, None, None, None, value, None),
-            Lens::new(None, None, None, None, None, None, value),
+    fn an_empty_lens_builder_builds_no_lens() {
+        assert_eq!(Lens::builder().build(), None);
+    }
+
+    #[test]
+    fn each_lens_setter_alone_builds_a_lens_of_that_value_only() {
+        let value = fraction(1, 1);
+        let builders = [
+            Lens::builder().make("x"),
+            Lens::builder().model("x"),
+            Lens::builder().serial_number("x"),
+            Lens::builder().min_focal_length(value),
+            Lens::builder().max_focal_length(value),
+            Lens::builder().f_number_at_min_focal_length(value),
+            Lens::builder().f_number_at_max_focal_length(value),
         ];
-        for (place, lens) in lenses.into_iter().enumerate() {
-            let lens = lens.unwrap_or_else(|| panic!("value {place} alone gave no lens"));
-            let values = [
-                lens.make().is_some(),
-                lens.model().is_some(),
-                lens.serial_number().is_some(),
-                lens.min_focal_length().is_some(),
-                lens.max_focal_length().is_some(),
-                lens.f_number_at_min_focal_length().is_some(),
-                lens.f_number_at_max_focal_length().is_some(),
+        for (place, builder) in builders.into_iter().enumerate() {
+            let lens = builder
+                .build()
+                .unwrap_or_else(|| panic!("setter {place} alone gave no lens"));
+            let texts = [lens.make(), lens.model(), lens.serial_number()];
+            let fractions = [
+                lens.min_focal_length(),
+                lens.max_focal_length(),
+                lens.f_number_at_min_focal_length(),
+                lens.f_number_at_max_focal_length(),
             ];
-            // Only the value given is there, so each getter reads its own.
-            let expected: Vec<bool> = (0..values.len()).map(|i| i == place).collect();
-            assert_eq!(values.to_vec(), expected, "value {place}");
+            // Only the value set is there, so each setter writes its own
+            // and each getter reads its own.
+            let expected_texts: Vec<_> = (0..3).map(|i| (i == place).then_some("x")).collect();
+            let expected_fractions: Vec<_> =
+                (3..7).map(|i| (i == place).then_some(value)).collect();
+            assert_eq!(texts.to_vec(), expected_texts, "setter {place}");
+            assert_eq!(fractions.to_vec(), expected_fractions, "setter {place}");
         }
     }
 
     #[test]
     fn a_fixed_lens_described_by_its_ranges_alone() {
-        let lens = Lens::new(
-            None,
-            None,
-            None,
-            Some(fraction(90, 10)),
-            Some(fraction(720, 10)),
-            Some(fraction(28, 10)),
-            Some(fraction(45, 10)),
-        )
-        .unwrap();
+        let lens = Lens::builder()
+            .min_focal_length(fraction(90, 10))
+            .max_focal_length(fraction(720, 10))
+            .f_number_at_min_focal_length(fraction(28, 10))
+            .f_number_at_max_focal_length(fraction(45, 10))
+            .build()
+            .unwrap();
         assert_eq!(lens.model(), None);
         assert_eq!(lens.min_focal_length(), Some(fraction(90, 10)));
         assert_eq!(lens.max_focal_length(), Some(fraction(720, 10)));
@@ -833,20 +998,19 @@ mod tests {
 
     #[test]
     fn a_lens_has_a_range_when_any_of_its_four_fractions_is_known() {
-        let value = Some(fraction(1, 1));
-        let model = || Some("x".to_owned());
+        let value = fraction(1, 1);
         // A lens named but with no range, as the Nikon 1 J1's Exif tags
         // describe it (public sample 2956).
-        let named = Lens::new(None, model(), None, None, None, None, None).unwrap();
+        let named = Lens::builder().model("x").build().unwrap();
         assert!(!named.has_range());
         let ranges = [
-            Lens::new(None, None, None, value, None, None, None),
-            Lens::new(None, None, None, None, value, None, None),
-            Lens::new(None, None, None, None, None, value, None),
-            Lens::new(None, None, None, None, None, None, value),
+            Lens::builder().min_focal_length(value),
+            Lens::builder().max_focal_length(value),
+            Lens::builder().f_number_at_min_focal_length(value),
+            Lens::builder().f_number_at_max_focal_length(value),
         ];
-        for (place, lens) in ranges.into_iter().enumerate() {
-            assert!(lens.unwrap().has_range(), "value {place}");
+        for (place, builder) in ranges.into_iter().enumerate() {
+            assert!(builder.build().unwrap().has_range(), "value {place}");
         }
     }
 
@@ -858,15 +1022,12 @@ mod tests {
             Some(fraction(35, 10)),
             Some(fraction(56, 10)),
         ];
-        let named = Lens::new(
-            Some("Nikon".to_owned()),
-            Some("1 NIKKOR VR 10-30mm f/3.5-5.6".to_owned()),
-            Some("20012345".to_owned()),
-            Some(fraction(1, 1)),
-            None,
-            None,
-            None,
-        );
+        let named = Lens::builder()
+            .make("Nikon")
+            .model("1 NIKKOR VR 10-30mm f/3.5-5.6")
+            .serial_number("20012345")
+            .min_focal_length(fraction(1, 1))
+            .build();
         let lens = Lens::with_range(named, range).unwrap();
         assert_eq!(lens.make(), Some("Nikon"));
         assert_eq!(lens.model(), Some("1 NIKKOR VR 10-30mm f/3.5-5.6"));
@@ -885,23 +1046,29 @@ mod tests {
 
         // A range of nothing on a lens of a range alone, or on no lens,
         // leaves no lens.
-        let bare = Lens::new(None, None, None, Some(fraction(1, 1)), None, None, None);
+        let bare = Lens::builder().min_focal_length(fraction(1, 1)).build();
         assert_eq!(Lens::with_range(bare, [None; 4]), None);
         assert_eq!(Lens::with_range(None, [None; 4]), None);
     }
 
+    /// A NIKKOR Z 14-30mm f/4 S, every value set, the fractions as a Z 9
+    /// stores them.
+    fn z_lens() -> Lens {
+        Lens::builder()
+            .make("Nikon")
+            .model("NIKKOR Z 14-30mm f/4 S")
+            .serial_number("20012345")
+            .min_focal_length(fraction(140, 10))
+            .max_focal_length(fraction(300, 10))
+            .f_number_at_min_focal_length(fraction(400, 100))
+            .f_number_at_max_focal_length(fraction(400, 100))
+            .build()
+            .unwrap()
+    }
+
     #[test]
     fn a_z_lens_reads_back_exactly() {
-        let lens = Lens::new(
-            Some("Nikon".to_owned()),
-            Some("NIKKOR Z 14-30mm f/4 S".to_owned()),
-            Some("20012345".to_owned()),
-            Some(fraction(140, 10)),
-            Some(fraction(300, 10)),
-            Some(fraction(400, 100)),
-            Some(fraction(400, 100)),
-        )
-        .unwrap();
+        let lens = z_lens();
         assert_eq!(lens.make(), Some("Nikon"));
         assert_eq!(lens.model(), Some("NIKKOR Z 14-30mm f/4 S"));
         assert_eq!(lens.serial_number(), Some("20012345"));
@@ -920,11 +1087,85 @@ mod tests {
     }
 
     #[test]
+    fn a_lens_builder_keeps_its_texts_as_given() {
+        // Neither trimmed nor left out, as the readers would a file's.
+        let lens = Lens::builder()
+            .make("  padded  ")
+            .model("----")
+            .serial_number("")
+            .build()
+            .unwrap();
+        assert_eq!(lens.make(), Some("  padded  "));
+        assert_eq!(lens.model(), Some("----"));
+        assert_eq!(lens.serial_number(), Some(""));
+    }
+
+    #[test]
+    fn a_lens_builder_moves_an_owned_text_rather_than_copy_it() {
+        let make = String::from("Nikon");
+        let model = String::from("NIKKOR Z 14-30mm f/4 S");
+        let serial_number = String::from("20012345");
+        let addresses = [make.as_ptr(), model.as_ptr(), serial_number.as_ptr()];
+        let lens = Lens::builder()
+            .make(make)
+            .model(model)
+            .serial_number(serial_number)
+            .build()
+            .unwrap();
+        let texts = [lens.make(), lens.model(), lens.serial_number()];
+        assert_eq!(
+            texts,
+            [
+                Some("Nikon"),
+                Some("NIKKOR Z 14-30mm f/4 S"),
+                Some("20012345")
+            ]
+        );
+        // The very texts given, not copies of them.
+        assert_eq!(texts.map(|text| text.map(str::as_ptr)), addresses.map(Some));
+    }
+
+    #[test]
+    fn a_later_lens_value_replaces_an_earlier_one() {
+        let one = fraction(1, 1);
+        let lens = Lens::builder()
+            .make("A")
+            .model("A")
+            .serial_number("A")
+            .min_focal_length(one)
+            .max_focal_length(one)
+            .f_number_at_min_focal_length(one)
+            .f_number_at_max_focal_length(one)
+            .make("Nikon")
+            .model("NIKKOR Z 14-30mm f/4 S")
+            .serial_number("20012345")
+            .min_focal_length(fraction(140, 10))
+            .max_focal_length(fraction(300, 10))
+            .f_number_at_min_focal_length(fraction(400, 100))
+            .f_number_at_max_focal_length(fraction(400, 100))
+            .build()
+            .unwrap();
+        assert_eq!(lens, z_lens());
+    }
+
+    #[test]
+    fn a_lens_builder_starts_empty_and_compares_by_its_values() {
+        assert_eq!(LensBuilder::default(), Lens::builder());
+        let named = Lens::builder().model("x");
+        assert_ne!(named, Lens::builder());
+        assert_eq!(named.clone(), named);
+        assert!(format!("{named:?}").contains("\"x\""));
+        let builders: std::collections::HashSet<LensBuilder> =
+            [Lens::builder(), named.clone(), Lens::builder().model("x")]
+                .into_iter()
+                .collect();
+        assert_eq!(builders.len(), 2);
+    }
+
+    #[test]
     fn lenses_and_exposures_collect_in_a_set() {
         // A culler listing the lenses of a folder puts them in a set.
-        let lens = |model: &str| {
-            Lens::new(None, Some(model.to_owned()), None, None, None, None, None).unwrap()
-        };
+        let lens = |model: &str| Lens::builder().model(model).build().unwrap();
         let lenses: std::collections::HashSet<Lens> =
             [lens("A"), lens("B"), lens("A")].into_iter().collect();
         assert_eq!(lenses.len(), 2);
@@ -1418,15 +1659,7 @@ mod tests {
             capture_time: DateTime::from_exif(b"2024:05:01 10:20:30", Some(b"85"), Some(b"+02:00")),
             orientation: Orientation::Rotate90,
             exposure: z9_exposure(),
-            lens: Lens::new(
-                None,
-                Some("NIKKOR Z 14-30mm f/4 S".to_owned()),
-                None,
-                None,
-                None,
-                None,
-                None,
-            ),
+            lens: Lens::builder().model("NIKKOR Z 14-30mm f/4 S").build(),
             raw_size: Some(Size {
                 width: 8_280,
                 height: 5_520,
