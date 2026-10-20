@@ -173,7 +173,7 @@ pub use file::RawFile;
 pub use format::Format;
 pub use geometry::{Point, Size};
 pub use limits::Limits;
-pub use metadata::{Exposure, Focus, Lens, Metadata};
+pub use metadata::{Exposure, Focus, Lens, LensBuilder, Metadata};
 pub use options::Options;
 pub use orientation::Orientation;
 pub use preview::{Preview, PreviewFormat};

@@ -9,7 +9,12 @@
 //! numerator and denominator the file recorded. [`Rational`] holds an
 //! unsigned one and [`SignedRational`] a signed one; a caller reduces them
 //! with `reduced` to compare or show them in lowest terms, or turns them
-//! into a decimal with `to_f64`.
+//! into a decimal with `to_f64`. Each type's `new` refuses a fraction with
+//! a zero denominator, which is no number, so that a caller can build its
+//! own for its tests. The readers build every signed fraction through
+//! `new` too, and every unsigned one through a stricter check of their
+//! own, which also refuses a zero numerator: Exif writes a zero for a
+//! value the camera did not know.
 
 use std::fmt;
 
@@ -19,9 +24,9 @@ use std::fmt;
 /// Its fields are public because it is a small fixed value: a numerator and
 /// a denominator, nothing more.
 ///
-/// The values the library returns never have a zero denominator, but a
-/// caller can build one; every method then still gives a result rather than
-/// a panic.
+/// The values the library returns never have a zero denominator, nor do
+/// the ones [`new`](Self::new) builds, but a struct literal can hold one;
+/// every method then still gives a result rather than a panic.
 ///
 /// # Equality
 ///
@@ -55,21 +60,59 @@ pub struct Rational {
 }
 
 impl Rational {
-    /// The fraction a file stored as `numerator`/`denominator`, when it
-    /// gives a value: `None` when either number is zero.
+    /// The fraction `numerator`/`denominator`, kept as given, not reduced;
+    /// `None` when the denominator is zero.
     ///
-    /// This is how the readers build every unsigned fraction they return,
-    /// so that none has a zero denominator. Exif writes a zero for a value
-    /// the camera did not know: an f-number of 0/10 from a lens that does
-    /// not report its aperture, as on the public ILCE-7S sample 1582, or a
-    /// lens range of 0/0. So a zero numerator is refused too, which suits
-    /// every unsigned fraction the library reads: none of them can be zero
-    /// when known.
-    pub(crate) fn known(numerator: u32, denominator: u32) -> Option<Self> {
-        (numerator != 0 && denominator != 0).then_some(Self {
+    /// This is how a caller builds a fraction for its tests. A zero
+    /// denominator is refused because the fraction would be no number. A
+    /// zero numerator is kept: for a fraction a caller builds, zero is a
+    /// real value, such as an angle of 0° or a distance of 0. The readers
+    /// never return a zero unsigned fraction, since Exif writes a zero for
+    /// a value the camera did not know, and they read it as `None`.
+    ///
+    /// The fields are public, so a struct literal can still hold any two
+    /// numbers, unchecked: that is why every method still gives a result,
+    /// never a panic, for a zero denominator.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use raw_files::Rational;
+    ///
+    /// # fn main() {
+    /// #     example().expect("10/3200 is accepted");
+    /// # }
+    /// # fn example() -> Option<()> {
+    /// let time = Rational::new(10, 3200)?;
+    /// assert_eq!((time.numerator, time.denominator), (10, 3200));
+    /// // A fraction that is no number.
+    /// assert_eq!(Rational::new(1, 0), None);
+    /// # Some(())
+    /// # }
+    /// ```
+    #[must_use]
+    pub fn new(numerator: u32, denominator: u32) -> Option<Self> {
+        (denominator != 0).then_some(Self {
             numerator,
             denominator,
         })
+    }
+
+    /// The fraction a file stored as `numerator`/`denominator`, when it
+    /// gives a value: as [`new`](Self::new) builds it, and also `None` when
+    /// the numerator is zero.
+    ///
+    /// This is how the readers build every unsigned fraction they read.
+    /// Exif writes a zero for a value the camera did not know: an f-number
+    /// of 0/10 from a lens that does not report its aperture, as on the
+    /// public ILCE-7S sample 1582, or a lens range of 0/0. That suits every
+    /// unsigned fraction the library reads, such as an exposure time, an
+    /// f-number or a focal length: none of them can be zero when known.
+    pub(crate) fn known(numerator: u32, denominator: u32) -> Option<Self> {
+        if numerator == 0 {
+            return None;
+        }
+        Self::new(numerator, denominator)
     }
 
     /// The fraction as a decimal: the numerator divided by the denominator,
@@ -114,9 +157,9 @@ impl fmt::Display for Rational {
 /// a denominator, nothing more. The sign may be on either number, or on
 /// both, as the file stored it.
 ///
-/// The values the library returns never have a zero denominator, but a
-/// caller can build one; every method then still gives a result rather than
-/// a panic.
+/// The values the library returns never have a zero denominator, nor do
+/// the ones [`new`](Self::new) builds, but a struct literal can hold one;
+/// every method then still gives a result rather than a panic.
 ///
 /// # Equality
 ///
@@ -149,14 +192,39 @@ pub struct SignedRational {
 }
 
 impl SignedRational {
-    /// The fraction a file stored as `numerator`/`denominator`, when it is
-    /// a number: `None` when the denominator is zero.
+    /// The fraction `numerator`/`denominator`, kept as given, not reduced,
+    /// with each sign where it is given; `None` when the denominator is
+    /// zero.
     ///
-    /// This is how the readers build every signed fraction they return, so
-    /// that none has a zero denominator. A zero numerator is kept: the
-    /// signed fraction the library reads, the exposure bias, is zero when
-    /// no compensation was chosen, which cameras write as 0/6 or 0/10.
-    pub(crate) fn defined(numerator: i32, denominator: i32) -> Option<Self> {
+    /// This is how the readers build every signed fraction they return,
+    /// and how a caller builds one for its tests. A zero denominator is
+    /// refused because the fraction would be no number. A zero numerator is
+    /// kept: the signed fraction the library reads, the exposure bias, is
+    /// zero when no compensation was chosen, which cameras write as 0/6 or
+    /// 0/10.
+    ///
+    /// The fields are public, so a struct literal can still hold any two
+    /// numbers, unchecked: that is why every method still gives a result,
+    /// never a panic, for a zero denominator.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use raw_files::SignedRational;
+    ///
+    /// # fn main() {
+    /// #     example().expect("0/6 is accepted");
+    /// # }
+    /// # fn example() -> Option<()> {
+    /// // No exposure compensation, as a camera writes it in sixths.
+    /// let bias = SignedRational::new(0, 6)?;
+    /// assert_eq!((bias.numerator, bias.denominator), (0, 6));
+    /// assert_eq!(SignedRational::new(-2, 0), None);
+    /// # Some(())
+    /// # }
+    /// ```
+    #[must_use]
+    pub fn new(numerator: i32, denominator: i32) -> Option<Self> {
         (denominator != 0).then_some(Self {
             numerator,
             denominator,
@@ -243,28 +311,48 @@ mod tests {
     }
 
     #[test]
+    fn unsigned_new_refuses_only_a_zero_denominator() {
+        // Kept as given, not reduced.
+        assert_eq!(Rational::new(10, 3200), Some(unsigned(10, 3200)));
+        assert_eq!(Rational::new(u32::MAX, 1), Some(unsigned(u32::MAX, 1)));
+        // A real zero, such as an angle of 0°, kept as given.
+        assert_eq!(Rational::new(0, 1), Some(unsigned(0, 1)));
+        assert_eq!(Rational::new(0, 10), Some(unsigned(0, 10)));
+        // Fractions that are no number.
+        assert_eq!(Rational::new(1, 0), None);
+        assert_eq!(Rational::new(7, 0), None);
+        assert_eq!(Rational::new(0, 0), None);
+    }
+
+    #[test]
     fn known_refuses_a_zero_numerator_or_denominator() {
+        // Kept as given, not reduced.
         assert_eq!(Rational::known(10, 3200), Some(unsigned(10, 3200)));
         assert_eq!(Rational::known(u32::MAX, 1), Some(unsigned(u32::MAX, 1)));
         // An unknown f-number, as Sony writes it, then an unknown lens
-        // range and a fraction that is no number.
+        // range and fractions that are no number.
         assert_eq!(Rational::known(0, 10), None);
+        assert_eq!(Rational::known(0, 1), None);
         assert_eq!(Rational::known(0, 0), None);
+        assert_eq!(Rational::known(1, 0), None);
         assert_eq!(Rational::known(7, 0), None);
     }
 
     #[test]
-    fn defined_refuses_only_a_zero_denominator() {
-        assert_eq!(SignedRational::defined(-3, 10), Some(signed(-3, 10)));
-        assert_eq!(SignedRational::defined(2, -3), Some(signed(2, -3)));
+    fn signed_new_refuses_only_a_zero_denominator() {
+        // Kept as given, not reduced, each sign where it is given.
+        assert_eq!(SignedRational::new(-4, 6), Some(signed(-4, 6)));
+        assert_eq!(SignedRational::new(-3, 10), Some(signed(-3, 10)));
+        assert_eq!(SignedRational::new(2, -3), Some(signed(2, -3)));
         // No compensation: a real zero, kept as stored.
-        assert_eq!(SignedRational::defined(0, 6), Some(signed(0, 6)));
+        assert_eq!(SignedRational::new(0, 6), Some(signed(0, 6)));
         assert_eq!(
-            SignedRational::defined(i32::MIN, -1),
+            SignedRational::new(i32::MIN, -1),
             Some(signed(i32::MIN, -1))
         );
-        assert_eq!(SignedRational::defined(0, 0), None);
-        assert_eq!(SignedRational::defined(-7, 0), None);
+        assert_eq!(SignedRational::new(0, 0), None);
+        assert_eq!(SignedRational::new(-4, 0), None);
+        assert_eq!(SignedRational::new(-7, 0), None);
     }
 
     #[test]

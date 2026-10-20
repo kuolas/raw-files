@@ -43,7 +43,7 @@
 //!   ([`Rational::known`]). The exposure bias is the Exif
 //!   ExposureBiasValue, of type SRATIONAL, its first value as stored; it is
 //!   `None` only when its denominator is zero, since a zero bias, such as
-//!   0/6, is no compensation ([`SignedRational::defined`]).
+//!   0/6, is no compensation ([`SignedRational::new`]).
 //! - The lens is described by the Exif LensMake, LensModel and
 //!   LensSerialNumber, and by the LensSpecification, of type RATIONAL and
 //!   of exactly four values: the shortest and longest focal length and the
@@ -303,7 +303,7 @@ fn rational<R: Read + Seek>(src: &mut Source<R>, ifd: &Ifd, tag: u16) -> Result<
 
 /// The first fraction of tag `tag` of `ifd`, which must be of type
 /// SRATIONAL, as stored; `None` when its denominator is zero
-/// ([`SignedRational::defined`]).
+/// ([`SignedRational::new`]).
 ///
 /// # Errors
 ///
@@ -317,14 +317,14 @@ fn signed_rational<R: Read + Seek>(
     let first = skip_damage(ifd.srationals(src, tag))?
         .flatten()
         .and_then(|values| values.first().copied());
-    Ok(first.and_then(|(numerator, denominator)| SignedRational::defined(numerator, denominator)))
+    Ok(first.and_then(|(numerator, denominator)| SignedRational::new(numerator, denominator)))
 }
 
 /// The lens the picture was taken with, from the Exif IFD `exif`: its
 /// LensMake, LensModel and LensSerialNumber, read by the rule [`text`]
 /// gives, and its range from the LensSpecification, as
 /// [`lens_specification`] reads it. `None` when none of them gives a
-/// value ([`Lens::new`]).
+/// value ([`Lens::from_parts`]).
 ///
 /// A LensModel made only of `-` characters is `None`: Sony writes `----`
 /// for a manual lens, as on the public ILCE-7S sample 1582, and that names
@@ -340,7 +340,7 @@ fn lens<R: Read + Seek>(src: &mut Source<R>, exif: &Ifd) -> Result<Option<Lens>>
     let model = text(src, exif, LENS_MODEL)?.filter(|model| !model.chars().all(|c| c == '-'));
     let serial_number = text(src, exif, LENS_SERIAL_NUMBER)?;
     let [min_focal, max_focal, f_number_at_min, f_number_at_max] = lens_specification(src, exif)?;
-    Ok(Lens::new(
+    Ok(Lens::from_parts(
         make,
         model,
         serial_number,
@@ -682,7 +682,7 @@ mod tests {
 
     /// The lens of the Z 9 file, as [`EXIF_TEXT`] and
     /// [`Z9_LENS_SPECIFICATION`] record it, with `change` made to its
-    /// values in the order [`Lens::new`] takes them.
+    /// values in the order [`Lens::from_parts`] takes them.
     fn z9_lens_with(change: impl FnOnce(&mut LensValues)) -> Option<Lens> {
         let mut values = LensValues {
             make: Some("NIKON".to_owned()),
@@ -725,10 +725,11 @@ mod tests {
             }
         }
 
-        /// The lens these values describe, as [`Lens::new`] builds it.
+        /// The lens these values describe, as [`Lens::from_parts`] builds
+        /// it for the readers.
         fn lens(self) -> Option<Lens> {
             let [min, max, f_min, f_max] = self.range;
-            Lens::new(
+            Lens::from_parts(
                 self.make,
                 self.model,
                 self.serial_number,

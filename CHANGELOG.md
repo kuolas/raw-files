@@ -18,6 +18,11 @@ does.
   `Point` types, `Focus::new` and its `with_size` and `with_in_focus` to
   build one, and `Focus::scaled_to` to place it on a preview; no reader
   fills it in yet, so it is `None` for every file.
+- Public constructors for `DateTime` (`new`, `with_subseconds`,
+  `with_offset`), `Rational` and `SignedRational` (`new`), and a builder
+  for `Lens` (`Lens::builder`), so that a program can build the values
+  raw-files reads in its own tests; each gives `None` for a value the
+  library would never return.
 
 ## [0.2.0] - 2026-10-19
 
