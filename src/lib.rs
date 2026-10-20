@@ -171,7 +171,7 @@ pub use datetime::DateTime;
 pub use error::{Error, ErrorKind, Result};
 pub use file::RawFile;
 pub use format::Format;
-pub use geometry::Size;
+pub use geometry::{Point, Size};
 pub use limits::Limits;
 pub use metadata::{Exposure, Lens, Metadata};
 pub use options::Options;
