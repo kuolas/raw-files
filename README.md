@@ -76,10 +76,10 @@ documentation is on [docs.rs](https://docs.rs/raw-files).
   for what Nikon bodies before 2018 record only there, from the MakerNote:
   the serial number, the ISO, the lens range and the time zone; the visible
   image size is the crop area the MakerNote records. Previews and metadata
-  are checked on 23 CC0 Nikon files from raw.pixls.us that CI downloads,
-  three of the Z 9 (lossless, HE and HE\*) and 20 of 18 other bodies from
-  the D1H to the Z6III, and on test files laid out like a Z 9's and a
-  D300's.
+  are checked on 30 CC0 Nikon files from raw.pixls.us that CI downloads,
+  three of the Z 9 (lossless, HE and HE\*) and 27 of 21 other bodies from
+  the D1H to the Z5II, on test files laid out like a Z 9's, a Z6III's and
+  a D300's, and on two stripped files of the maintainer's own Z 9.
 - **Sony ARW**, with the SRF, SR2 and ARQ files of the same family and the
   ARW files of the Sony-built Hasselblad bodies. The previews are found in
   IFD0 and IFD1 and, on bodies from version 4.0 of Sony's format, the
@@ -125,7 +125,7 @@ cargo test
 ```
 
 Some tests read real sample files, which `scripts/fetch-samples.sh`
-downloads (about 1.4 GB). `scripts/fetch-samples.sh nef` or `arw` fetches one
+downloads (about 1.5 GB). `scripts/fetch-samples.sh nef` or `arw` fetches one
 format only, and the 325 MiB ARQ file only with `RAW_FILES_LARGE=1`. Without
 the files, those tests skip.
 

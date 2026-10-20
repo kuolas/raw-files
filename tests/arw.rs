@@ -1424,7 +1424,8 @@ const LARGE_SAMPLES: &[Sample] = &[
 /// `----` and whose f-number and focal length are 0/10, gives no lens, no
 /// f-number and no focal length; and the RX100 and the RX100M6 give a lens
 /// with a range and no model. A file without a default crop gives its raw
-/// size as its image size.
+/// size as its image size. No file gives a focus point: the reader reads
+/// none from Sony files.
 const METADATA: &[SampleMetadata] = &[
     // SLT-A55 (raw.pixls.us 964)
     SampleMetadata {
@@ -1450,6 +1451,7 @@ const METADATA: &[SampleMetadata] = &[
         }),
         raw_size: Some((4928, 3280)),
         image_size: Some((4928, 3280)),
+        focus: None,
     },
     // ILCE-7RM2 (raw.pixls.us 1310)
     SampleMetadata {
@@ -1475,6 +1477,7 @@ const METADATA: &[SampleMetadata] = &[
         }),
         raw_size: Some((8000, 5320)),
         image_size: Some((8000, 5320)),
+        focus: None,
     },
     // ILCE-7RM2 (raw.pixls.us 1311)
     SampleMetadata {
@@ -1500,6 +1503,7 @@ const METADATA: &[SampleMetadata] = &[
         }),
         raw_size: Some((8000, 5320)),
         image_size: Some((8000, 5320)),
+        focus: None,
     },
     // DSC-F828 (raw.pixls.us 1351)
     SampleMetadata {
@@ -1517,6 +1521,7 @@ const METADATA: &[SampleMetadata] = &[
         lens: None,
         raw_size: Some((3360, 2460)),
         image_size: Some((3360, 2460)),
+        focus: None,
     },
     // NEX-5 (raw.pixls.us 1457)
     SampleMetadata {
@@ -1542,6 +1547,7 @@ const METADATA: &[SampleMetadata] = &[
         }),
         raw_size: Some((4608, 3072)),
         image_size: Some((4608, 3072)),
+        focus: None,
     },
     // ILCE-9 (raw.pixls.us 1541)
     SampleMetadata {
@@ -1567,6 +1573,7 @@ const METADATA: &[SampleMetadata] = &[
         }),
         raw_size: Some((6048, 4024)),
         image_size: Some((6000, 4000)),
+        focus: None,
     },
     // ILCE-9 (raw.pixls.us 1542)
     SampleMetadata {
@@ -1592,6 +1599,7 @@ const METADATA: &[SampleMetadata] = &[
         }),
         raw_size: Some((6048, 4024)),
         image_size: Some((6000, 4000)),
+        focus: None,
     },
     // ILCE-7S (raw.pixls.us 1582)
     SampleMetadata {
@@ -1609,6 +1617,7 @@ const METADATA: &[SampleMetadata] = &[
         lens: None,
         raw_size: Some((2816, 1872)),
         image_size: Some((2816, 1872)),
+        focus: None,
     },
     // DSLR-A200 (raw.pixls.us 2271)
     SampleMetadata {
@@ -1626,6 +1635,7 @@ const METADATA: &[SampleMetadata] = &[
         lens: None,
         raw_size: Some((3880, 2600)),
         image_size: Some((3880, 2600)),
+        focus: None,
     },
     // DSLR-A100 (raw.pixls.us 2346)
     SampleMetadata {
@@ -1643,6 +1653,7 @@ const METADATA: &[SampleMetadata] = &[
         lens: None,
         raw_size: None,
         image_size: None,
+        focus: None,
     },
     // DSLR-A700 (raw.pixls.us 2521)
     SampleMetadata {
@@ -1660,6 +1671,7 @@ const METADATA: &[SampleMetadata] = &[
         lens: None,
         raw_size: Some((4288, 2856)),
         image_size: Some((4288, 2856)),
+        focus: None,
     },
     // DSC-RX100M6 (raw.pixls.us 3012)
     SampleMetadata {
@@ -1685,6 +1697,7 @@ const METADATA: &[SampleMetadata] = &[
         }),
         raw_size: Some((5504, 3672)),
         image_size: Some((5472, 3648)),
+        focus: None,
     },
     // DSC-RX100M6 (raw.pixls.us 3015)
     SampleMetadata {
@@ -1710,6 +1723,7 @@ const METADATA: &[SampleMetadata] = &[
         }),
         raw_size: Some((5504, 3672)),
         image_size: Some((5472, 3648)),
+        focus: None,
     },
     // DSC-R1 (raw.pixls.us 3221)
     SampleMetadata {
@@ -1727,6 +1741,7 @@ const METADATA: &[SampleMetadata] = &[
         lens: None,
         raw_size: Some((3984, 2608)),
         image_size: Some((3984, 2608)),
+        focus: None,
     },
     // ILCE-7RM3 (raw.pixls.us 3251)
     SampleMetadata {
@@ -1752,6 +1767,7 @@ const METADATA: &[SampleMetadata] = &[
         }),
         raw_size: Some((8000, 5320)),
         image_size: Some((7952, 5304)),
+        focus: None,
     },
     // SLT-A99 (raw.pixls.us 3751)
     SampleMetadata {
@@ -1777,6 +1793,7 @@ const METADATA: &[SampleMetadata] = &[
         }),
         raw_size: Some((6048, 4024)),
         image_size: Some((6048, 4024)),
+        focus: None,
     },
     // Hasselblad Lunar (raw.pixls.us 4051)
     SampleMetadata {
@@ -1802,6 +1819,7 @@ const METADATA: &[SampleMetadata] = &[
         }),
         raw_size: Some((6048, 4024)),
         image_size: Some((6048, 4024)),
+        focus: None,
     },
     // ILCE-1 (raw.pixls.us 4466)
     SampleMetadata {
@@ -1830,6 +1848,7 @@ const METADATA: &[SampleMetadata] = &[
         }),
         raw_size: Some((8704, 6144)),
         image_size: Some((8640, 5760)),
+        focus: None,
     },
     // ILCE-7SM3 (raw.pixls.us 5418)
     SampleMetadata {
@@ -1855,6 +1874,7 @@ const METADATA: &[SampleMetadata] = &[
         }),
         raw_size: Some((4288, 2848)),
         image_size: Some((4240, 2832)),
+        focus: None,
     },
     // DSC-RX100 (raw.pixls.us 5811)
     SampleMetadata {
@@ -1880,6 +1900,7 @@ const METADATA: &[SampleMetadata] = &[
         }),
         raw_size: Some((5504, 3672)),
         image_size: Some((5504, 3672)),
+        focus: None,
     },
     // DSLR-A900 (raw.pixls.us 5858)
     SampleMetadata {
@@ -1897,6 +1918,7 @@ const METADATA: &[SampleMetadata] = &[
         lens: None,
         raw_size: Some((6080, 4048)),
         image_size: Some((6080, 4048)),
+        focus: None,
     },
     // ILCE-6700 (raw.pixls.us 6736)
     SampleMetadata {
@@ -1922,6 +1944,7 @@ const METADATA: &[SampleMetadata] = &[
         }),
         raw_size: Some((6656, 4608)),
         image_size: Some((6192, 4128)),
+        focus: None,
     },
     // ILCE-7M4 (raw.pixls.us 6929)
     SampleMetadata {
@@ -1947,6 +1970,7 @@ const METADATA: &[SampleMetadata] = &[
         }),
         raw_size: Some((7168, 5120)),
         image_size: Some((7008, 4672)),
+        focus: None,
     },
     // ILCE-7M4 (raw.pixls.us 6930)
     SampleMetadata {
@@ -1972,6 +1996,7 @@ const METADATA: &[SampleMetadata] = &[
         }),
         raw_size: Some((5120, 3584)),
         image_size: Some((4608, 3072)),
+        focus: None,
     },
     // ILCE-7M4 (raw.pixls.us 6931)
     SampleMetadata {
@@ -1997,6 +2022,7 @@ const METADATA: &[SampleMetadata] = &[
         }),
         raw_size: Some((3584, 2560)),
         image_size: Some((3504, 2336)),
+        focus: None,
     },
     // ILCE-7M4 (raw.pixls.us 6933)
     SampleMetadata {
@@ -2022,6 +2048,7 @@ const METADATA: &[SampleMetadata] = &[
         }),
         raw_size: Some((4736, 3132)),
         image_size: Some((4608, 3072)),
+        focus: None,
     },
     // ILCE-7M4 (raw.pixls.us 6936)
     SampleMetadata {
@@ -2047,6 +2074,7 @@ const METADATA: &[SampleMetadata] = &[
         }),
         raw_size: Some((4736, 3132)),
         image_size: Some((4608, 3072)),
+        focus: None,
     },
     // ILCE-9M3 (raw.pixls.us 7361)
     SampleMetadata {
@@ -2072,6 +2100,7 @@ const METADATA: &[SampleMetadata] = &[
         }),
         raw_size: Some((6048, 4020)),
         image_size: Some((6000, 4000)),
+        focus: None,
     },
     // ILCE-9M3 (raw.pixls.us 7364)
     SampleMetadata {
@@ -2097,6 +2126,7 @@ const METADATA: &[SampleMetadata] = &[
         }),
         raw_size: Some((3072, 2048)),
         image_size: Some((3008, 2000)),
+        focus: None,
     },
     // ILCE-1M2 (raw.pixls.us 7835)
     SampleMetadata {
@@ -2122,6 +2152,7 @@ const METADATA: &[SampleMetadata] = &[
         }),
         raw_size: Some((5664, 3768)),
         image_size: Some((5616, 3744)),
+        focus: None,
     },
     // ILCE-7M5 (raw.pixls.us 8846)
     SampleMetadata {
@@ -2150,6 +2181,7 @@ const METADATA: &[SampleMetadata] = &[
         }),
         raw_size: Some((7040, 4688)),
         image_size: Some((7008, 4672)),
+        focus: None,
     },
     // ILCE-7M5 (raw.pixls.us 8847)
     SampleMetadata {
@@ -2178,6 +2210,7 @@ const METADATA: &[SampleMetadata] = &[
         }),
         raw_size: Some((7040, 4688)),
         image_size: Some((7008, 4672)),
+        focus: None,
     },
     // ILCE-7M5 (raw.pixls.us 8848)
     SampleMetadata {
@@ -2206,6 +2239,7 @@ const METADATA: &[SampleMetadata] = &[
         }),
         raw_size: Some((5120, 3584)),
         image_size: Some((4608, 3072)),
+        focus: None,
     },
     // ILCE-7M5 (raw.pixls.us 8849)
     SampleMetadata {
@@ -2234,6 +2268,7 @@ const METADATA: &[SampleMetadata] = &[
         }),
         raw_size: Some((4640, 3088)),
         image_size: Some((4608, 3072)),
+        focus: None,
     },
     // ILCE-7M5 (raw.pixls.us 8850)
     SampleMetadata {
@@ -2262,6 +2297,7 @@ const METADATA: &[SampleMetadata] = &[
         }),
         raw_size: Some((4640, 3088)),
         image_size: Some((4608, 3072)),
+        focus: None,
     },
 ];
 
@@ -2292,6 +2328,7 @@ const LARGE_METADATA: &[SampleMetadata] = &[
         }),
         raw_size: Some((8000, 5320)),
         image_size: Some((7952, 5304)),
+        focus: None,
     },
 ];
 
