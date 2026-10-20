@@ -82,21 +82,22 @@
 //! PreviewIFD must lie inside the block, with their whole entry tables; the
 //! three numbers that lead to the JPEG must be held in their entries, not
 //! stored elsewhere; and the whole JPEG, as declared, must lie inside the
-//! block. When the block's IFDs are read, every entry whose value lies
-//! outside the block is dropped, as an entry whose value lies outside the
-//! file is, so every value read from them lies inside the block: the ISO's
-//! two numbers and WorldTime's four bytes, which the entry holds, and
-//! CropArea's four numbers, the serial number and the lens's range, which
-//! take more than the four bytes an entry holds and so are stored
-//! elsewhere. A value of another type than its tag's rule allows is not
-//! read. A block that does not hold together, whether its inner header
-//! is not one, an IFD in it is cut short or has more entries than the
-//! limits allow, costs what the MakerNote would have given, the small
-//! preview, the crop area and the values above, never the file: the NEF
-//! security notes ask that bad entries be skipped rather than fail the
-//! file (`docs/formats/nef/security.md`, item 4 of the checklist). Only a
-//! failure of the reader itself is an error: that is not the file's fault,
-//! and says nothing about the MakerNote.
+//! block. The block's IFDs are read by the reading of an IFD inside a block
+//! written for any MakerNote reader ([`block_ifd`](crate::formats::block_ifd)):
+//! every entry whose value lies outside the block is dropped, as an entry
+//! whose value lies outside the file is, so every value read from them lies
+//! inside the block: the ISO's two numbers and WorldTime's four bytes,
+//! which the entry holds, and CropArea's four numbers, the serial number
+//! and the lens's range, which take more than the four bytes an entry
+//! holds and so are stored elsewhere. A value of another type than its
+//! tag's rule allows is not read. A block that does not hold together,
+//! whether its inner header is not one, an IFD in it is cut short or has
+//! more entries than the limits allow, costs what the MakerNote would have
+//! given, the small preview, the crop area and the values above, never the
+//! file: the NEF security notes ask that bad entries be skipped rather than
+//! fail the file (`docs/formats/nef/security.md`, item 4 of the checklist).
+//! Only a failure of the reader itself is an error: that is not the file's
+//! fault, and says nothing about the MakerNote.
 //!
 //! The MakerNote is read once per file, into a [`MakerNote`]: its block
 //! found and checked, its MakerNote IFD parsed. Every use of the MakerNote
@@ -109,13 +110,14 @@ use std::ops::Range;
 use crate::container::tiff::tags::{
     JPEG_INTERCHANGE_FORMAT, JPEG_INTERCHANGE_FORMAT_LENGTH, MAKER_NOTE,
 };
-use crate::container::tiff::types::{ASCII, BYTE, LONG, RATIONAL, SHORT, UNDEFINED};
-use crate::container::tiff::{Entry, Ifd, Tree, parse_header_at, parse_ifd, skip_damage};
+use crate::container::tiff::types::{ASCII, LONG, RATIONAL, SHORT, UNDEFINED};
+use crate::container::tiff::{Ifd, Tree, parse_header_at, skip_damage};
 use crate::error::Result;
+use crate::formats::block_ifd::{block_of, fits, ifd_in};
 use crate::formats::tiff_metadata::{self, Standard};
 use crate::formats::tiff_previews::Candidate;
 use crate::geometry::Size;
-use crate::io::{ByteOrder, Source, within};
+use crate::io::{ByteOrder, Source};
 use crate::limits::Limits;
 use crate::metadata::{Lens, Metadata};
 use crate::rational::Rational;
@@ -481,68 +483,6 @@ fn has_entry_of_type(makernote: &MakerNote, tag: u16, types: &[u16]) -> bool {
         .is_some_and(|entry| types.contains(&entry.typ()))
 }
 
-/// Where the MakerNote's bytes are in the file, from its entry: `None`
-/// unless the entry holds bytes, of type UNDEFINED or BYTE, stored out of
-/// line, as a block of 18 bytes or more always is.
-///
-/// The value of a kept entry lies inside the file, so the range does too.
-fn block_of(entry: &Entry) -> Option<Range<u64>> {
-    if !matches!(entry.typ(), UNDEFINED | BYTE) {
-        return None;
-    }
-    let start = entry.value_offset()?;
-    let end = start.checked_add(u64::from(entry.count()))?;
-    Some(start..end)
-}
-
-/// The IFD at `offset` from `base`, read in byte order `order` with its
-/// own offsets counted from `base`, without the entries whose value lies
-/// outside `block`; `None` when it does not lie inside `block` with its
-/// count and all its entries, or cannot be read.
-///
-/// An entry whose value is stored elsewhere is dropped unless the value
-/// [`fits`] the block: [`parse_ifd`] checks it only against the file.
-/// A value the entry holds is inside the block with the entry. So every
-/// value read from the IFD lies inside the block.
-///
-/// The IFD's next-IFD pointer is not used, and not required: the D200
-/// writes none.
-///
-/// # Errors
-///
-/// `Io` when the reader fails.
-fn ifd_in<R: Read + Seek>(
-    src: &mut Source<R>,
-    block: &Range<u64>,
-    base: u64,
-    offset: u32,
-    order: ByteOrder,
-    limits: &Limits,
-) -> Result<Option<Ifd>> {
-    let Some(at) = base.checked_add(u64::from(offset)) else {
-        return Ok(None);
-    };
-    // The count first, inside the block and so inside the file, then the
-    // entries it announces. The 16-bit count bounds the table to
-    // 2 + 12 * 65,535 bytes: this cannot overflow.
-    if !fits(block, at, 2) {
-        return Ok(None);
-    }
-    let table = 2 + 12 * u64::from(src.u16_at(at, order)?);
-    if !fits(block, at, table) {
-        return Ok(None);
-    }
-    let Some((mut ifd, _)) = skip_damage(parse_ifd(src, base, at, order, limits))? else {
-        return Ok(None);
-    };
-    ifd.retain(|entry| {
-        entry
-            .value_offset()
-            .is_none_or(|at| fits(block, at, u64::from(entry.value_len())))
-    });
-    Ok(Some(ifd))
-}
-
 /// The value of tag `tag` of `ifd`, as [`Ifd::u32`] reads it, when the
 /// entry holds it in its own value field; `None` when the tag is missing,
 /// of another type, or stored out of line.
@@ -564,11 +504,6 @@ fn inline_u32<R: Read + Seek>(src: &mut Source<R>, ifd: &Ifd, tag: u16) -> Resul
     Ok(skip_damage(ifd.u32(src, tag))?.flatten())
 }
 
-/// Whether the `len` bytes at `at` lie inside `block`.
-fn fits(block: &Range<u64>, at: u64, len: u64) -> bool {
-    at >= block.start && within(at, len, block.end).is_some()
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -577,8 +512,8 @@ mod tests {
         IMAGE_LENGTH, IMAGE_WIDTH, LENS_MODEL, LENS_SPECIFICATION, MAKE, OFFSET_TIME_ORIGINAL,
         PHOTOGRAPHIC_SENSITIVITY, PHOTOMETRIC_INTERPRETATION, SUB_SEC_TIME_ORIGINAL,
     };
-    use crate::container::tiff::types::{IFD, SRATIONAL};
-    use crate::container::tiff::{parse_header, walk};
+    use crate::container::tiff::types::{BYTE, IFD, SRATIONAL};
+    use crate::container::tiff::{parse_header, parse_ifd, walk};
     use crate::datetime::DateTime;
     use crate::error::ErrorKind;
     use crate::jpeg_stub::jpeg_stub;

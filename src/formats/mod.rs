@@ -11,7 +11,9 @@
 //! opens as what it is; [`Format::from_extension`] is for file pickers,
 //! which must choose what to offer before opening anything. The preview
 //! finder that the TIFF-based formats share lives in `tiff_previews`, and
-//! the metadata reader they share in `tiff_metadata`.
+//! the metadata reader they share in `tiff_metadata`. The reading of an IFD
+//! inside a bounded block, such as a MakerNote, written for any MakerNote
+//! reader to use, lives in `block_ifd`; the Nikon reader uses it.
 //!
 //! The table holds NEF and ARW, in that order. A Nikon file is recognised
 //! by its IFD0's Make, and opens with its previews, which the NEF reader
@@ -28,6 +30,7 @@
 //! ([`is_dng`]), and [`make_starts_with`] reads the Make for them.
 
 mod arw;
+mod block_ifd;
 mod nef;
 mod tiff_metadata;
 mod tiff_previews;
