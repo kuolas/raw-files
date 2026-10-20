@@ -126,6 +126,93 @@ for each of these files against a table generated from such a walk, by
 the reader's rules, with serial numbers recorded by their shape alone;
 that table is the record of the values, so this page does not repeat it.
 
+### 2.3 Files checked for the focus point
+
+The focus-point facts tagged **[F]** in
+[makernote-and-metadata.md](makernote-and-metadata.md#86-focus-point)
+were measured on 2026-10-19 on the 23 NEF files of section 2.1 and on
+seven more CC0 files from raw.pixls.us, downloaded that day, that the
+CI set does not hold yet. They add a DSLR in live view that is
+little-endian, and aspect-ratio crops from three mirrorless bodies:
+
+| Id | Body | Mode | SHA-256 | Licence |
+|---|---|---|---|---|
+| 1415 | D5600 | 12bit 12bit compressed (Lossy (type 2)) (3:2) | `82e15f02c4037820e80f14bacfacdc52ea29721b3c70d2cf08b237b50ce8db05` | CC0 |
+| 7735 | Z5II | 8bit compressed (1:1) | `465aba7a444c013063b3a85d7dca1595e4ce1c77fdd115b781b952d490af7258` | CC0 |
+| 7736 | Z5II | 8bit compressed (16:9) | `6d087e8860491a9a871edbd145fa9a423ad41e06d787be4e0fec30b925c38218` | CC0 |
+| 7767 | Z50II | 8bit compressed (1:1) | `99b2a569356fb084d6946fa6e0b501b014e6e004be0a8e8d564a7b9dab91857e` | CC0 |
+| 7770 | Z50II | 8bit compressed (16:9) | `663fd340edbf91cae2e754c2c5c0b2e49e3a25b7a471c1379ecffdb01cfe1599` | CC0 |
+| 7812 | Z6III | 8bit compressed (1:1) | `b026ebf6a3ee851925a8a9a44134e39cf3cddd6b383d39aafff15df2b418c89e` | CC0 |
+| 7813 | Z6III | 8bit compressed (16:9) | `b84499212126ef8bab31aa2b150f6dbf8cb6e0e2aab7ca669d85c3259784ecc5` | CC0 |
+
+The check read each file's MakerNote AFInfo2 (or AFInfo), FocusMode,
+CropHiSpeed and CropArea with the same kind of throwaway script as
+section 2.2. FocusMode is `MANUAL` on files 928 and 1835 and an AF mode
+on every other file but the D1H's. What
+each of the 30 files records, and the focus point that the rules of
+[ADR012](../../architecture-decisions/adr012-focus-points-as-the-camera-records-them.md)
+give from it:
+
+| Id | Body | AFInfo2 | What the file records | Focus point by ADR012's rules |
+|---|---|---|---|---|
+| 5146 | Z 9 | `0400` | frame 8256x5504, centre (4905, 2461), area 291x323, in focus: yes | as recorded |
+| 5147 | Z 9 | `0400` | frame 8256x5504, centre (4905, 2461), area 291x323, in focus: yes | as recorded |
+| 5148 | Z 9 | `0400` | frame 8256x5504, centre (4905, 2461), area 291x323, in focus: yes | as recorded |
+| 6887 | Z f | `0401` | frame 6048x4032, centre (3023, 2016), area 1859x1452, in focus: yes | as recorded |
+| 7808 | Z6III | `0401` | frame 6048x4032, centre (3023, 2016), area 163x174, in focus: no | frame 4032x4032, centre (2015, 2016), area 163x174, moved into the window |
+| 7812 | Z6III | `0401` | frame 6048x4032, centre (3023, 2016), area 163x174, in focus: no | frame 4032x4032, centre (2015, 2016), area 163x174, moved into the window |
+| 7809 | Z6III | `0401` | frame 6048x4032, centre (3023, 2016), area 163x174, in focus: no | frame 6048x3400, centre (3023, 1700), area 163x174, moved into the window |
+| 7813 | Z6III | `0401` | frame 6048x4032, centre (3023, 2016), area 163x174, in focus: no | frame 6048x3400, centre (3023, 1700), area 163x174, moved into the window |
+| 7810 | Z6III | `0401` | frame 6048x4032, centre (3023, 2016), area 222x245, in focus: no | frame 3984x2656, centre (1991, 1328), area 146x161, scaled onto CropArea |
+| 7767 | Z50II | `0402` | frame 5568x3712, centre (2792, 1868), area 278x276, in focus: yes | frame 3712x3712, centre (1864, 1868), area 278x276, moved into the window |
+| 7770 | Z50II | `0402` | frame 5568x3712, centre (2789, 1865), area 280x280, in focus: yes | frame 5568x3128, centre (2789, 1573), area 280x280, moved into the window |
+| 7735 | Z5II | `0402` | zero frame; a mask only (auto-area) | none |
+| 7736 | Z5II | `0402` | zero frame; a mask only (auto-area) | none |
+| 3587 | Z 6 | `0300` | frame 6048x4024, centre (3024, 1160), area 285x308, in focus: not recorded | as recorded |
+| 1415 | D5600 | `0100` | frame 6000x4000, centre (3368, 2000), area 984x816, in focus: yes | as recorded |
+| 961 | D7000 | `0100` | frame 4928x3264, centre (2816, 2336), area 408x336, in focus: yes | as recorded |
+| 2238 | Coolpix A | `0100` | frame 4928x3264, centre (2464, 1632), area 408x336, in focus: yes | as recorded |
+| 928 | D300 | `0100` | zero frame; primary point 0; FocusMode `MANUAL` | none |
+| 2255 | D700 | `0100` | zero frame; primary point 1 | none |
+| 895 | D750 | `0100` | zero frame; primary point 1 | none |
+| 2036 | D810 | `0100` | zero frame; primary point 3 | none |
+| 1835 | D850 | `0101` | zero frame; primary point 1; FocusMode `MANUAL` | none |
+| 3827 | D780 | `0300` | zero frame; primary point 34 | none |
+| 2956 | Nikon 1 J1 | `0200` | a point number and a mask | none: version not read |
+| 5364 | D1H | none | AFInfo `01000100`: area mode, point number and mask; no position | none |
+| 2060 | D70 | none | AFInfo `01000001`: area mode, point number and mask; no position | none |
+| 2996 | D100 | none | AFInfo `00000001`: area mode, point number and mask; no position | none |
+| 8079 | D200 | none | AFInfo `00000001`: area mode, point number and mask; no position | none |
+| 4456 | E5700 | none | AFInfo `00000000`: area mode, point number and mask; no position | none |
+| 1425 | Coolpix P7800 | none | AFInfo `00000100`: area mode, point number and mask; no position | none |
+
+A point is "as recorded" when the file is no crop, or is one without a
+CropArea. "Scaled onto CropArea", for a crop whose two sides are both
+smaller than the original (DX), multiplies x and the width by CropArea's
+width over the frame's, y and the height by the heights, rounded to the
+nearest pixel. "Moved into the window", for a crop that keeps one side
+(1:1, 16:9), takes half the difference between the frame and CropArea
+off the coordinate of the cut axis and keeps the area; it applies only
+when CropArea's kept side equals the frame's, which holds on every crop
+file here with a position.
+
+The shots that tell the two kinds of crop apart were made for this check
+with the maintainer's Z 9; raw.pixls.us holds one file per camera and
+mode and does not tell its crop modes apart, so they are not hosted
+there. Each records a single point placed in the top-left corner:
+
+| Frames | Mode | Recorded in 8256x5504 | Focus point by ADR012's rules |
+|---|---|---|---|
+| 9907, 9911 | FX | centre (502, 424), area 291x323 | as recorded |
+| 9908, 9912 | DX | centre (636, 572), area 420x468 | frame 5392x3592, centre (415, 373), area 274x305, scaled onto CropArea |
+| 9909, 9913 | 1:1 | centre (1797, 424), area 291x323 | frame 5504x5504, centre (421, 424), area 291x323, moved into the window |
+| 9910, 9914 | 16:9 | centre (502, 715), area 291x323 | frame 8256x4640, centre (502, 283), area 291x323, moved into the window |
+
+Five earlier frames of the same modes (9902 to 9906) record the same
+values. All are in focus (FocusResult 1), and their CropHiSpeed and
+CropArea values are in
+[makernote-and-metadata.md](makernote-and-metadata.md#86-focus-point).
+
 ## 3. What raw.pixls.us holds for Nikon
 
 Directory listings, 2026-10-10. **[P]** The data lives under

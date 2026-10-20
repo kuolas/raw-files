@@ -19,7 +19,10 @@ metadata were checked against those three files and 20 more CC0 files,
 from the D1H to the Z6III, which CI downloads too (listed in
 [test-data.md](test-data.md#21-the-ci-set)); the tests check the previews
 of all 23, and test-data.md records them, but the containers of the 20
-other files are not yet written up in these pages. The raw data was not
+other files are not yet written up in these pages. On 19 October 2026
+the autofocus data was checked against those 23 files and seven more
+CC0 files (listed in
+[test-data.md](test-data.md#23-files-checked-for-the-focus-point)). The raw data was not
 checked, beyond the raw IFD's tags and the first bytes of the Z 9's strip.
 **Everything else has yet to be checked against sample files.** Byte
 offsets and formulas taken from other projects' source code should be
@@ -33,7 +36,7 @@ describes how the research was done and what it could not reach.
 | Page | Read it for |
 |---|---|
 | [container-and-previews.md](container-and-previews.md) | The TIFF structure of a NEF, where the embedded JPEGs are, and how to pick the largest (milestone 1) |
-| [makernote-and-metadata.md](makernote-and-metadata.md) | The Nikon MakerNote, its encrypted blocks, and orientation, date, camera and size (milestone 3) |
+| [makernote-and-metadata.md](makernote-and-metadata.md) | The Nikon MakerNote, its encrypted blocks, and orientation, date, camera and size (milestone 3) and the focus point (milestone 4) |
 | [raw-data.md](raw-data.md) | How the sensor data is stored: Huffman compression, packed layouts, small raws, HE/HE\* (milestone 5) |
 | [security.md](security.md) | Past vulnerabilities in NEF parsers and the checklist that follows from them |
 | [licences-and-references.md](licences-and-references.md) | Standards, existing implementations and their licences, and what raw-files may reuse |
@@ -109,6 +112,9 @@ the disagreement.
 - **Milestone 3, basic metadata:**
   - [makernote-and-metadata.md](makernote-and-metadata.md), the viewer
     metadata section.
+- **Milestone 4, focus points:**
+  - [makernote-and-metadata.md](makernote-and-metadata.md), the focus
+    point section, with what the samples cover and what they do not.
 - **Milestone 5, raw decoding:**
   - [raw-data.md](raw-data.md).
   - [makernote-and-metadata.md](makernote-and-metadata.md), for black level,

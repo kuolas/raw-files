@@ -36,7 +36,11 @@ answer Part 2.
    - **the ARW 6.0 delinearisation curve, the hard case**: 4096 entries,
      not in the file, construction unknown, and published only as tables
      extracted from existing decoders (LibRaw's embedded table, under its
-     own licence, and an unlicensed write-up's).
+     own licence, and an unlicensed write-up's);
+   - tables of autofocus points, which turn the point number that the
+     A-mount, NEX and early ILCE bodies record into a position; no open source of
+     them is known
+     ([makernote-and-metadata.md](makernote-and-metadata.md#96-focus-point)).
 
    The options are, as for NEF:
    - (a) treat a short table as a format fact, transcribed from two
@@ -49,7 +53,7 @@ answer Part 2.
    change the picture: it matches dcraw element for element, so reading it
    is reading dcraw. A table that turned out to be a published formula
    would remove the problem for the ARW 6.0 curve. The decision needs to be
-   recorded in an ADR before milestone 5.
+   recorded in an ADR before the first table enters raw-files.
 2. **ARW 6.0.** The recommendation is to detect Compression 32766 and
    return a typed unsupported error before reading the strip, while still
    returning previews and metadata from these files
@@ -253,6 +257,19 @@ answer Part 2.
   7364 and 6736, and file 7835's block is mostly `FF` (219 of 256 bytes,
   `FF` at the count offsets). Nice-to-have only
   ([makernote-and-metadata.md](makernote-and-metadata.md)).
+- **Focus point.** What no sample shows yet
+  ([makernote-and-metadata.md](makernote-and-metadata.md#96-focus-point),
+  its section 13):
+  - the meaning of FocusFrameSize's third value (257 or 0);
+  - the point numbers in CameraInfo (0x0010) of the A-mount and NEX
+    bodies and in AFPointSelected (0x201E) of the ILCE-7S, which no
+    check decoded, and the A100's Minolta block;
+  - whether the ILCA bodies write FocusLocation;
+  - whether any plain tag, or the enciphered 0x940E block on ILCE
+    bodies, records that focus was confirmed;
+  - a rotated shot with a focus point, and a big-endian file;
+  - a file with FocusLocation2 and no FocusLocation;
+  - an autofocus shot whose FocusFrameSize is zero.
 
 ### Raw data
 

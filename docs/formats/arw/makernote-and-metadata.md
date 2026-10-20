@@ -4,9 +4,10 @@ This page describes the Sony MakerNote found in ARW files (and in the older
 SR2 and SRF files and the DSLR-A100's ARW 1.0): where it is and how its
 variants are told apart, the tags that matter, the two unrelated ciphers Sony
 uses, the SR2Private block that carries the decoding parameters, and where a
-viewer finds orientation, capture date, make, model, image size and lens. It
-serves milestone 3 (basic metadata) and, for the decoding-related tags,
-milestone 5 (raw data).
+viewer finds orientation, capture date, make, model, image size, lens and
+the point the camera focused on. It serves milestone 3 (basic metadata),
+milestone 4 (focus points) and, for the decoding-related tags, milestone 5
+(raw data).
 
 See [the ARW overview](README.md). The TIFF container and the preview JPEGs
 (milestone 2) are in [container-and-previews.md](container-and-previews.md);
@@ -168,21 +169,29 @@ milestone that needs the tag; "none" means nice-to-have. [P][1][2]
 
 | ID | Name | Enc. | Meaning | M |
 |---|---|---|---|---|
-| 0x0010 | CameraInfo | no | A-mount AF and lens data; layout chosen by byte count | none |
+| 0x0010 | CameraInfo | no | A-mount and NEX AF and lens data, the AF point among them by number; layout chosen by byte count | 4 (point numbers) |
 | 0x0114 | CameraSettings | no | layout by count; aspect ratio, drive mode, a Sony-coded orientation | none |
 | 0x2001 | PreviewImage | no | a JPEG-file feature; absent from every ARW, SR2 and ARQ sample [F] | none |
 | 0x2010 | Tag2010 | yes | settings, a date string, aspect ratio; not written from the ILCE-7SM3 on [F] | none |
-| 0x2029 | RAWFileType | no | 0 compressed, 1 uncompressed, 2 lossless, 3 Compressed RAW 2 | 4 (hint) |
-| 0x202E | Quality | no | u16[2]; first value 1 RAW, 2 S-size, 3 M-size, 4 compressed, 5 compressed HQ | 3, 4 (hint) |
+| 0x201B | FocusMode | no | 0 manual, 2 AF-S, 3 AF-C, 4 AF-A, 6 DMF, 7 AF-D; [section 9.6](#96-focus-point) | 4 |
+| 0x201D | FlexibleSpotPosition | no | the spot chosen in Flexible Spot mode, on a 640 × 480 grid | none |
+| 0x201E | AFPointSelected | no | the selected point or zone, by number | 4 (point numbers) |
+| 0x2020 | AFPointsUsed | no | a mask of the points used | 4 (point numbers) |
+| 0x2022 | FocalPlaneAFPointsUsed | no | a mask of the on-sensor focus points used | 4 (point numbers) |
+| 0x2027 | FocusLocation | no | u16[4]: frame width and height, centre x and y of the focus area | 4 |
+| 0x2029 | RAWFileType | no | 0 compressed, 1 uncompressed, 2 lossless, 3 Compressed RAW 2 | 5 (hint) |
+| 0x202E | Quality | no | u16[2]; first value 1 RAW, 2 S-size, 3 M-size, 4 compressed, 5 compressed HQ | 3, 5 (hint) |
 | 0x202F | PixelShiftInfo | no | group ID and shot number; marks ARQ composites | none |
+| 0x2037 | FocusFrameSize | no | 6 bytes: the focus area's width and height and a third value | 4 |
 | 0x2044 | HiddenInfo | no | offset and size of an unknown block | none |
+| 0x204A | FocusLocation2 | no | u16[4], as FocusLocation | 4 |
 | 0x3000 | ShotInfo | no | includes a plain date string at byte 6 | none |
 | 0x900B | Tag900b | yes | face detection | none |
 | 0x9050 | Tag9050 | yes | shutter count, LensType2, internal serial | none |
 | 0x9400 | Tag9400 | yes | sequence numbers, CameraOrientation | none |
 | 0x9401 to 0x9406, 0x940C, 0x940E, 0x9416 | Tag94xx | yes | ISO, lens, focus and AF data; 0x9416 replaces 0x9405 from the ILCE-7SM3 on [F] | none |
-| 0xB000 | FileFormat | no | u8[4] format version | 3, 4 |
-| 0xB001 | SonyModelID | no | u16 body identifier | 3, 4 |
+| 0xB000 | FileFormat | no | u8[4] format version | 3, 5 |
+| 0xB001 | SonyModelID | no | u16 body identifier | 3, 5 |
 | 0xB027 | LensType | no | A-mount lens ID; 65535 for E-mount lenses | 3 (lens) |
 | 0xB028 | MinoltaMakerNote | no | A100 only: offset of a Minolta-format IFD; 0 means absent | none |
 | 0xB02A | LensSpec | no | 8 bytes: flags, BCD focal and aperture range, flags | 3 (lens) |
@@ -748,7 +757,8 @@ Everything a viewer needs next to the preview comes from IFD0, the Exif IFD
 and the raw SubIFD, plus two plain MakerNote tags for identification and
 lens. **No decryption or deciphering is needed** on any sample: Make, Model,
 Orientation, dates, 0xB000, 0xB001 and the crop tags are plain in every
-file. [F] IFD0 has no ImageWidth or ImageLength except on the A100 (where
+file. [F] The focus point is a plain MakerNote tag too
+([section 9.6](#96-focus-point)). IFD0 has no ImageWidth or ImageLength except on the A100 (where
 they do not describe IFD0's JPEG) and in SRF files (where IFD0 describes the
 raw). [S][24][F]
 
@@ -907,7 +917,10 @@ same as 3:2. The aspect shows only in SonyCrop (3648 × 3648 and
 (1088 × 1080 and 1920 × 1080). [F] The sweep finds the same on the HX99,
 HX95, RX0M2, ILCE-7C, ILCE-7RM3A and ZV-E10. [S][24] So a viewer that
 wants the image as framed in the camera should apply SonyCrop inside
-DefaultCrop when the two differ by more than a border. [I]
+DefaultCrop when the two differ by more than a border. [I] The focus
+point's frame, FocusLocation's, has that framing on these files, and is
+the full-size output on the ILCE-7M4's medium and small raws
+([section 9.6](#96-focus-point)). [F]
 
 **APS-C (Super 35) mode** on full-frame bodies writes a smaller raw with the
 ModelID unchanged: ILCE-7M4 4736 × 3132 (6933, 6936), ILCE-7S 2816 × 1872
@@ -947,6 +960,102 @@ lengths, 28 to 100 mm on the RX100 (5811) and 24 to 200 mm on the RX100M6
 lens from the Exif tags only: LensModel when present and not `----`, and
 the LensSpecification range. FNumber and FocalLength are `0/10` with the
 manual lens (1582), which means unknown. [F] ([ADR011](../../architecture-decisions/adr011-metadata-from-standard-tags.md))
+
+### 9.6 Focus point
+
+Where the camera focused, which milestone 4 reports so that a viewer can
+judge sharpness at that point. raw-files decided what it reports in
+[ADR012](../../architecture-decisions/adr012-focus-points-as-the-camera-records-them.md);
+this section is the record behind it. Tag meanings are ExifTool's [P][1];
+every value was read on the 36 files of
+[test-data.md](test-data.md#files-checked) on 2026-10-19 **[F]**, and the
+expected focus point of each file is in
+[test-data.md](test-data.md#22-the-focus-point-of-each-file).
+
+**Where a Sony file records focus data.** Every source found, whether
+raw-files reads it or not; all are tags of the MakerNote IFD:
+
+| Source | What it holds | Checked files | raw-files |
+|---|---|---|---|
+| 0x2027 FocusLocation | four SHORTs: the frame's width and height, the centre's x and y | every sample from the ILCE-7RM2 (2015) on: ILCE-7RM2, ILCE-9, ILCE-7RM3 (ARW and ARQ), DSC-RX100M6, ILCE-1, ILCE-7SM3, ILCE-6700, ILCE-7M4, ILCE-9M3, ILCE-1M2, ILCE-7M5 **[F]** | read |
+| 0x204A FocusLocation2 | the same four values | the ILCE-9M3, ILCE-1M2 and ILCE-7M5, equal to FocusLocation on every one **[F]** | read when FocusLocation is absent, which no sample is |
+| 0x2037 FocusFrameSize | six bytes: the focus area's width and height as two u16, and a third u16 of 257 or 0 **[F]**; "width and height of FocusFrame, centered on FocusLocation" [P][1] | from the ILCE-7SM3 (2020) on: ILCE-7SM3, ILCE-1, ILCE-6700, ILCE-7M4, ILCE-9M3, ILCE-1M2, ILCE-7M5 **[F]** | read |
+| 0x201B FocusMode | 0 manual, 2 AF-S, 3 AF-C, 4 AF-A, 6 DMF, 7 AF-D [P][1] | the SLT-A99V, the ILCE-7S and every body with FocusLocation **[F]** | read: 0 gives no focus point |
+| 0x201D FlexibleSpotPosition | the spot chosen in Flexible Spot mode, on a 640 × 480 grid; valid in that mode only [P][1] | the same bodies as FocusMode **[F]** | not read: the spot chosen, not where focus landed, which FocusLocation records on every body that has both |
+| 0x201E AFPointSelected, 0x2020 AFPointsUsed | the selected point or zone by number, a mask of the points used [P][1] | the same bodies; the SLT-A99V's mask has one bit set, every other is zero **[F]** | not read: a number needs a table of the body's points |
+| 0x2022 FocalPlaneAFPointsUsed | a mask of the on-sensor focus points used [P][1] | the SLT-A99V, ILCE-7S and ILCE-7RM2, all zero **[F]** | not read: a mask, needs the same table |
+| 0x0010 CameraInfo | on the A-mount DSLRs and the SLT and NEX bodies, the AF point by number and a status per point, among lens data [P][1] | the SLT-A55V, NEX-5, DSLR-A200, A700 and A900 **[F]**; its values were not decoded | not read: a number only |
+| 0x940E AFInfo, enciphered | the AF type, the point in focus and the AF status; ExifTool decodes it for the SLT bodies only [P][1] | the ILCE-7S, SLT-A99V, Hasselblad Lunar and every ILCE sample from the ILCE-7RM2 on; not the RX100M6 **[F]** | not read: enciphered ([section 4](#4-the-makernote-substitution-cipher)) |
+| The A100's Minolta block (0xB028) | not looked at | the DSLR-A100 | not read |
+
+What the fields hold:
+
+- **FocusLocation is plain**, a tag of the MakerNote IFD outside every
+  enciphered block, read in the file's byte order; every sample is
+  little-endian. **[F]**
+- **The position is the centre of the area.** ExifTool's note on
+  FocusFrameSize says the area is centred on FocusLocation. [P][1] Several
+  autofocus shots with a recorded area sit at exactly half the frame,
+  among them the ILCE-1's `[8640, 5760, 4320, 2880]` with a 1026 × 912
+  area in AF-S (file 4466), and the ILCE-6700's `[6192, 4128, 3096, 2064]`
+  with 135 × 138 (file 6736). On the ILCE-7RM3 the location agrees with
+  FlexibleSpotPosition (320, 173) on its 640 × 480 grid: 320 / 640 = 0.500
+  = 3976 / 7952 and 173 / 480 = 0.360 = 1911 / 5304 (file 3251). **[F]**
+  The ILCE-7RM2's exact half (file 1310) proves nothing here, since it is
+  a manual-focus shot, which always records the centre.
+- **The frame is the picture as the camera framed it**, in stored
+  orientation and at the scale the file records. It is the DefaultCrop's
+  6000 × 4000 on the ILCE-9 (files 1541, 1542) and 4608 × 3072 in APS-C
+  mode on the ILCE-7M4 (6933, 6936). On the RX100M6's 1:1 file it is
+  SonyCrop's 3648 × 3648, not the 5472 × 3648 DefaultCrop that raw-files
+  reports as the image size, and the IFD0 preview is 1088 × 1080 (file
+  3012); on its 16:9 file SonyCrop's 5472 × 3080 (3015). On the ILCE-7M4's
+  medium and small raws it is the full-size 7008 × 4672, while their
+  default crops are 4608 × 3072 and 3504 × 2336 (6930, 6931); on the
+  ILCE-9M3's small raw it is 3008 × 2000, its default crop (7364).
+  **[F]** So the frame is not always the output size, but it always has
+  the framing of the previews ([section 9.4](#94-image-dimensions)).
+- **A manual-focus shot still records a location**: the frame's exact
+  centre, with FocusMode 0, on the ILCE-7RM2 (files 1310, 1311, with
+  FlexibleSpotPosition (0, 0)) and the ILCE-9M3 (7361, 7364, with
+  FocusFrameSize `0, 0, 0`). The ILCE-7S file is a manual-focus shot
+  without FocusLocation (1582). **[F]** Nothing else in the plain tags
+  says that no autofocus took place.
+- **FocusFrameSize's third value** is 257 on the ILCE-7SM3, ILCE-6700,
+  ILCE-7M4 and ILCE-7M5, and 0 on the ILCE-1 and ILCE-1M2 (files 4466,
+  7835) and on the manual-focus ILCE-9M3 files. **[F]** Its meaning is
+  unknown. Area sizes follow the body and mode: 92 × 94 on the
+  ILCE-7SM3, 350 × 351 on the ILCE-7M4, 1026 × 912 on the ILCE-1,
+  1386 × 998 on the ILCE-1M2. **[F]**
+- **No plain tag says whether focus was confirmed.** ExifTool finds an
+  AF status only in the enciphered 0x940E block, and only on SLT bodies.
+  [P][1]
+- **Every focus tag's value lies inside the length the MakerNote
+  declares**, on every sample; only 0xB02B FullImageSize of the A200,
+  A700 and A900 lies past it, and it is not read. **[F]**
+
+**What the samples cover.** Each kind of shot, the files that show it,
+and what raw-files gives; a row without a file is an open question
+([section 13](#13-open-questions)):
+
+| Shot | What the file records | CC0 files | raw-files gives |
+|---|---|---|---|
+| E-mount or RX body from the ILCE-7RM2 on, autofocus | FocusLocation; the area's size from the ILCE-7SM3 on | 1541, 1542, 3251, 4466, 5418, 6736, 6929, 8846, 8847 | the point |
+| Aspect ratio 1:1 or 16:9 | FocusLocation in SonyCrop's framing | RX100M6 3012, 3015 | the point; the frame differs from the image size |
+| APS-C (Super 35) mode | FocusLocation in the APS-C framing | ILCE-7M4 6933, 6936, ILCE-7M5 8848 to 8850, ILCE-1M2 7835 | the point |
+| Medium or small raw | FocusLocation in a full-size frame | ILCE-7M4 6930, 6931 | the point; the frame is larger than the image size |
+| Pixel-shift composite (ARQ) | the FocusLocation of its source frame | ILCE-7RM3 3255 | the point |
+| Manual focus | FocusMode 0, with the frame's centre where FocusLocation exists | ILCE-7RM2 1310, 1311, ILCE-9M3 7361, 7364, ILCE-7S 1582 (no FocusLocation) | none |
+| SLT body | a mask of A-mount points, CameraInfo | SLT-A99V 3751, SLT-A55V 964 | none: needs a table of points |
+| A-mount DSLR | CameraInfo, or the Minolta block on the A100 | DSLR-A100 2346, A200 2271, A700 2521, A900 5858 | none: needs a table of points |
+| NEX or ILCE body before the ILCE-7RM2 | a point number: CameraInfo on the NEX bodies, AFPointSelected on the ILCE-7S | NEX-5 1457; ILCE-7S 1582, a manual-focus shot, which gets none in any case | none: needs a table of points |
+| Hasselblad Lunar | only the enciphered block | 4051 | none |
+| The RX100 (2012) | no focus tag | DSC-RX100 5811 | none |
+| SR2 and SRF files | no focus tag | DSC-R1 3221, DSC-F828 1351 | none |
+| An ILCA body (A-mount, from 2014) | unknown | none | unknown |
+| FocusLocation2 without FocusLocation | FocusLocation2 | none | the point; unchecked |
+| A rotated shot with a focus point | expected: the frame in stored orientation | none (the rotated SLT-A99V file records no FocusLocation) | the point; unchecked |
+| A big-endian file | unknown: FocusFrameSize's byte order | none | read in the file's order; unchecked |
 
 ## 10. A100, SR2 and SRF
 
@@ -1091,6 +1200,16 @@ Text is also trimmed of spaces at both ends, not only trailing ones as
 in [section 9.3](#93-make-model-and-modelid), and a value over 255 bytes
 is taken for damage.
 
+The focus point is decided in
+[ADR012](../../architecture-decisions/adr012-focus-points-as-the-camera-records-them.md),
+under which the MakerNote is read after all, for the focus point
+alone. Its IFD is found by bytes as in
+[section 1](#1-finding-the-makernote), only the values inside its
+declared length are read, and the tags read are FocusLocation,
+FocusLocation2 when FocusLocation is absent, FocusFrameSize and
+FocusMode ([section 9.6](#96-focus-point)). Nothing is deciphered, and
+0xB000, 0xB001 and the lens tags stay unread.
+
 1. **Standard tags:** IFD0 Make, Model and Orientation; Exif
    DateTimeOriginal, SubSecTimeOriginal and OffsetTimeOriginal (the last two
    optional); the raw SubIFD's stored size and its DefaultCrop, SonyCrop and
@@ -1159,7 +1278,35 @@ is taken for damage.
     firmware.
 10. **Big-endian Sony files.** No `MM` Sony raw is known; if one exists, it
     would decide the SR2SubIFDKey byte-order disagreement
-    ([section 5](#5-sr2private-and-the-sr2subifd)).
+    ([section 5](#5-sr2private-and-the-sr2subifd)), and the byte order of
+    FocusFrameSize's values, which raw-files reads in the file's order
+    ([section 9.6](#96-focus-point)).
+11. **FocusFrameSize's third value.** It is 257 on most bodies and 0 on
+    the ILCE-1 and ILCE-1M2; its meaning is unknown.
+12. **The point numbers of the A-mount, NEX and early ILCE bodies.**
+    CameraInfo (0x0010) holds them by ExifTool's tables on the A-mount
+    and NEX bodies, and AFPointSelected (0x201E) on the ILCE-7S; the
+    values in the SLT-A55V, NEX-5, A200, A700 and A900 files were not
+    decoded, the ILCE-7S file's 0 is a manual-focus shot's, whose meaning
+    (perhaps "auto") was not checked, and the A100's Minolta block was
+    not looked at. Turning them into positions needs a
+    table of each body's points
+    ([ADR012](../../architecture-decisions/adr012-focus-points-as-the-camera-records-them.md)).
+13. **ILCA bodies.** Whether the ILCA A-mount bodies (the ILCA-77M2,
+    ILCA-68 and ILCA-99M2, from 2014 on) write FocusLocation;
+    raw.pixls.us's metadata listings name no 0x20xx tag at all.
+14. **Whether focus was confirmed.** No plain tag records it; ExifTool
+    decodes an AF status from the enciphered 0x940E block on SLT bodies
+    only. Whether ILCE bodies record it there, and whether raw-files
+    should decipher the block for it, is open.
+15. **A rotated shot with a focus point**, which would show that
+    FocusLocation stays in stored orientation; the one rotated sample,
+    the SLT-A99V's, records none.
+16. **FocusLocation2 alone.** Every sample with FocusLocation2 also has
+    FocusLocation, with equal values, so the fallback is unchecked.
+17. **A zero FocusFrameSize on an autofocus shot.** raw-files keeps the
+    point without a size; the only samples with `0, 0, 0` are
+    manual-focus shots (files 7361, 7364), which give no point anyway.
 
 ## Sources
 

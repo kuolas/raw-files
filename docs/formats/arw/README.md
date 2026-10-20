@@ -8,8 +8,8 @@ source code of existing raw decoders and the bytes of sample files, each
 cited where it is used.
 
 These pages support the [roadmap](../../ROADMAP.md): ARW previews
-(milestone 2), then basic metadata (milestone 3), then raw decoding
-(milestone 5).
+(milestone 2), then basic metadata (milestone 3), then focus points
+(milestone 4), then raw decoding (milestone 5).
 
 ## Status
 
@@ -20,7 +20,8 @@ marker, and ran the algorithms that the pages describe as *checked* (the SR2
 keystream, the MakerNote cipher, the cRAW block layout, ARW1 decoding, the
 lossless tile headers and the SRF key chain). They used throwaway scripts
 written from the pages' prose, which are not in the repository; none of this
-is implemented in raw-files yet. **No pixel output was compared with a
+is implemented in raw-files yet. On 19 October 2026 the autofocus data of
+the same 36 files was checked too. **No pixel output was compared with a
 reference decoder**, so "checked" means that the data decode consistently
 with the description, not that they are bit-exact.
 
@@ -36,7 +37,7 @@ was done and what it could not reach. The files checked are listed in
 | Page | Read it for |
 |---|---|
 | [container-and-previews.md](container-and-previews.md) | The TIFF structure of each member of the family, where the embedded JPEGs are, and how to pick the largest (milestone 2) |
-| [makernote-and-metadata.md](makernote-and-metadata.md) | The Sony MakerNote, its two ciphers, SR2Private, and orientation, date, camera, size and lens (milestone 3) |
+| [makernote-and-metadata.md](makernote-and-metadata.md) | The Sony MakerNote, its two ciphers, SR2Private, and orientation, date, camera, size and lens (milestone 3) and the focus point (milestone 4) |
 | [raw-data.md](raw-data.md) | How the sensor data is stored: uncompressed, cRAW, 12-bit packed, ARW1, lossless tiles, M/S YCbCr, SR2, SRF, ARQ and the refused ARW 6.0 (milestone 5) |
 | [security.md](security.md) | Past vulnerabilities in Sony parsers and the Sony additions to the NEF checklist |
 | [licences-and-references.md](licences-and-references.md) | Standards, existing implementations and their licences, what raw-files may reuse, and the legal questions |
@@ -100,6 +101,14 @@ the disagreement.
   lens). Milestones 2 and 3 need **no decryption and no deciphering** on any
   checked file [F]
   ([makernote-and-metadata.md](makernote-and-metadata.md)).
+- **The focus point is plain too.** FocusLocation (0x2027) gives the
+  frame and the centre of the focus area on every checked body from the
+  ILCE-7RM2 (2015) on, and FocusFrameSize (0x2037) the area's size from
+  the ILCE-7SM3 (2020) on; the frame has the framing of the previews,
+  which on an aspect-ratio file is not the default crop [F]. Older bodies
+  record at most a point number, and no plain tag says whether focus
+  was confirmed
+  ([makernote-and-metadata.md](makernote-and-metadata.md#96-focus-point)).
 - **Raw encodings** ([raw-data.md](raw-data.md)):
   - Compression 1, uncompressed 16-bit words (big-endian on the R1; four
     samples per pixel in ARQ);
@@ -149,6 +158,9 @@ the disagreement.
 - **Milestone 3, basic metadata:**
   - [makernote-and-metadata.md](makernote-and-metadata.md), the viewer
     metadata section and its recommendation.
+- **Milestone 4, focus points:**
+  - [makernote-and-metadata.md](makernote-and-metadata.md), the focus
+    point section, with what the samples cover and what they do not.
 - **Milestone 5, raw decoding:**
   - [raw-data.md](raw-data.md).
   - [makernote-and-metadata.md](makernote-and-metadata.md), for SR2Private,
