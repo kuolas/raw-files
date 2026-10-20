@@ -10,6 +10,15 @@ does.
 
 ## [Unreleased]
 
+### Added
+
+- `Metadata::focus`, where the camera focused, as it recorded it: the
+  centre of the focus area, the area's size when recorded, the frame they
+  are measured in and whether focus was confirmed, with the `Focus` and
+  `Point` types, `Focus::new` and its `with_size` and `with_in_focus` to
+  build one, and `Focus::scaled_to` to place it on a preview; no reader
+  fills it in yet, so it is `None` for every file.
+
 ## [0.2.0] - 2026-10-19
 
 The second release: the basic metadata of Nikon NEF and Sony ARW files,

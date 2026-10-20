@@ -310,6 +310,7 @@ fn assert_all_but_the_capture_time(damaged: &Metadata, undamaged: &Metadata, wha
     assert_eq!(damaged.lens(), undamaged.lens(), "{what}");
     assert_eq!(damaged.raw_size(), undamaged.raw_size(), "{what}");
     assert_eq!(damaged.image_size(), undamaged.image_size(), "{what}");
+    assert_eq!(damaged.focus(), undamaged.focus(), "{what}");
 }
 
 /// A capture time that names no real date, in an otherwise undamaged file,

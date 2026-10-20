@@ -8,7 +8,7 @@ mod support;
 use std::fs::File;
 use std::io::{self, Cursor};
 
-use raw_files::{ErrorKind, Format, Limits, Options, RawFile};
+use raw_files::{ErrorKind, Focus, Format, Limits, Metadata, Options, Point, RawFile};
 use support::tiff_builder::{Order, TiffBuilder};
 
 /// The Make tag: the camera's manufacturer, as text.
@@ -142,4 +142,17 @@ fn handles_are_send_and_sync_when_their_reader_is() {
     assert_sync::<RawFile<Cursor<&[u8]>>>();
     assert_send::<Options>();
     assert_sync::<Options>();
+}
+
+#[test]
+fn metadata_values_are_send_and_sync() {
+    // A culler reads the metadata of many files on a pool of threads.
+    fn assert_send<T: Send>() {}
+    fn assert_sync<T: Sync>() {}
+    assert_send::<Metadata>();
+    assert_sync::<Metadata>();
+    assert_send::<Focus>();
+    assert_sync::<Focus>();
+    assert_send::<Point>();
+    assert_sync::<Point>();
 }
