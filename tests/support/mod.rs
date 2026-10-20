@@ -10,6 +10,7 @@
 #![allow(dead_code)]
 
 pub mod arw;
+pub mod fixtures;
 pub mod jpeg;
 pub mod nef;
 pub mod samples;

@@ -19,7 +19,7 @@ Confidence tags: **[P]** primary (verified from the primary page or API),
 | Camera-review galleries (Imaging Resource, DPReview) | Proprietary, all rights reserved; terms not read. [I] | No, and do not redistribute. Manual experiments only. |
 | ExifTool sample images | No licence stated. The site says they are JPEG-only, with the main image replaced "to avoid copyright problems". The repository's `t/images` likewise states none. [4] **[P]** | No. Treat as unlicensed; use locally if at all. |
 | Fuzzing corpora from other projects | Seeds come from those projects' test data, so their licences are unknown. [5] **[S]** | No. Generate our own corpus from our own fixtures. |
-| Files you made yourself | Yours to licence. | Yes, with provenance recorded (section 4). |
+| Files you made yourself | Yours to licence. | Yes, if small, with provenance recorded (section 5.1). |
 
 ## 2. What is committed and what is downloaded
 
@@ -28,6 +28,9 @@ Confidence tags: **[P]** primary (verified from the primary page or API),
 - hand-built fixtures: an IFD skeleton, a MakerNote and a tiny JPEG;
 - fixtures stripped from a CC0 sample: pixel data removed, the structure
   kept;
+- fixtures stripped from the maintainer's own shots: pixel data and
+  personal fields removed, the structure and values kept, with their
+  provenance in [`tests/fixtures/README.md`](../../../tests/fixtures/README.md);
 - corrupted variants of those (section 5);
 - minimal reproducers for bugs, each added with its fix.
 
@@ -212,6 +215,11 @@ Five earlier frames of the same modes (9902 to 9906) record the same
 values. All are in focus (FocusResult 1), and their CropHiSpeed and
 CropArea values are in
 [makernote-and-metadata.md](makernote-and-metadata.md#86-focus-point).
+Frames 9908 (DX) and 9909 (1:1) are committed as
+`tests/fixtures/nikon-z9-dx.nef` and `tests/fixtures/nikon-z9-1x1.nef`,
+stripped as [their README](../../../tests/fixtures/README.md) says, so
+that CI checks both rules, the scaling and the window, on real camera
+bytes.
 
 ## 3. What raw.pixls.us holds for Nikon
 
@@ -285,12 +293,19 @@ needs:
    structure that hand-building misses (padding, gaps, odd byte order).
 
 Write the fixture generator as a test helper or small script in the
-repository, not a binary blob nobody can regenerate. Where a binary fixture
-is committed, a text file next to it records the provenance:
+repository, so that anyone can regenerate the fixture. The one exception
+is a fixture derived from a file that is not public, such as one of the
+maintainer's own shots: no script in the repository could regenerate it,
+since the file it comes from is not there, so it may be committed as a
+binary file when a text file next to it says how it was made and what
+was removed. Where a binary fixture is committed, that text file records
+the provenance:
 
 - how it was made (generated, or derived from which sample);
 - for a derived fixture, the sample's name, source URL, SHA-256 and licence
-  as checked;
+  as checked, or, for a file that is not public, who made it and the
+  licence they give it;
+- what was removed, and what was kept;
 - the date, and what the fixture is meant to exercise.
 
 ### 5.2 Corrupted variants

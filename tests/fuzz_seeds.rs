@@ -8,8 +8,11 @@
 //! starts from files laid out like the NEF of a Nikon Z 9, of a Z6III on
 //! a 1:1 crop, whose MakerNote records the crop, and of a D300, whose
 //! MakerNote records what the Z 9's standard tags hold, and one like each
-//! generation of Sony's family, in both byte orders. The fixtures live
-//! in `tests/support/`, outside the library, so this test writes and checks
+//! generation of Sony's family, in both byte orders; and from the two real
+//! files committed in `tests/fixtures/`, shots of the maintainer's own Z 9
+//! in DX and 1:1 crop modes with their pixels and personal fields removed,
+//! copied as they are, in their own little-endian byte order. The fixtures
+//! live in `tests/`, outside the library, so this test writes and checks
 //! the seed files, as the unit tests of the TIFF reader do for theirs.
 //! [`seeds`] lists them; the ignored test `write_fuzz_seeds` regenerates the
 //! files after a fixture changes, and `the_open_fuzz_seeds_match_the_fixtures`
@@ -22,11 +25,13 @@ use std::path::{Path, PathBuf};
 use support::arw::{
     a100_file, arq_file, arw2_file, arw4_file, arw4_medium_file, sr2_file, srf_file,
 };
+use support::fixtures::{Z9_1X1, Z9_DX, read_fixture};
 use support::nef::{d300_file, z6iii_file, z9_file};
 use support::tiff_builder::Order;
 
 /// The fixtures as starting inputs for the fuzzer: each file name with the
-/// bytes of the fixture it holds, in both byte orders.
+/// bytes of the fixture it holds, in both byte orders for those built in
+/// code, and once for the two stripped Z 9 files.
 fn seeds() -> Vec<(String, Vec<u8>)> {
     // Each layout once: the stem and extension of its file names, and a
     // builder for the fixture in a given byte order.
@@ -54,6 +59,11 @@ fn seeds() -> Vec<(String, Vec<u8>)> {
         for (stem, extension, build) in layouts {
             seeds.push((format!("{stem}-{suffix}.{extension}"), build(order)));
         }
+    }
+    // Real files, so in one byte order only, and under the names they are
+    // committed by.
+    for name in [Z9_DX, Z9_1X1] {
+        seeds.push((name.to_owned(), read_fixture(name)));
     }
     seeds
 }
