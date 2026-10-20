@@ -160,6 +160,8 @@ pub(crate) fn read<R: Read + Seek>(src: &mut Source<R>, tree: &Tree) -> Result<S
         lens,
         raw_size,
         image_size: default_crop.or(raw_size),
+        // No standard tag records where the camera focused.
+        focus: None,
     };
     Ok(Standard {
         metadata,
