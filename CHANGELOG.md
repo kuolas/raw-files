@@ -10,27 +10,29 @@ does.
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-10-21
+
+The third release: where the camera focused, read from Nikon NEF and Sony
+ARW files next to the previews and the metadata, and public constructors so
+that a program can build every metadata value in its own tests.
+
 ### Added
 
 - `Metadata::focus`, where the camera focused, as it recorded it: the
-  centre of the focus area, the area's size when recorded, the frame they
-  are measured in and whether focus was confirmed, with the `Focus` and
-  `Point` types, `Focus::new` and its `with_size` and `with_in_focus` to
-  build one, and `Focus::scaled_to` to place it on a preview. It is read
-  on Nikon files from the MakerNote's AFInfo2 block, which mirrorless
-  bodies and DSLRs in live view fill in, and on a Nikon crop, DX, 1:1,
-  16:9 or any other CropHiSpeed records with a CropArea, the point is
-  placed inside the cropped picture, whose size becomes its frame. It is
-  read on Sony bodies from the ILCE-7RM2 on from the MakerNote's
-  FocusLocation, in the frame the camera framed the picture in, with the
-  area's size from FocusFrameSize from the ILCE-7SM3 on; whether focus
-  was confirmed is `None` on Sony files, which record it in no plain tag.
-  It is `None` on a file that records no position, such as a Nikon DSLR
+  centre of the focus area, the area's size when the file records one,
+  the frame the two are measured in, and whether the camera confirmed
+  focus, with the `Focus` and `Point` types; `Focus::new`, `with_size`
+  and `with_in_focus` build one, and `Focus::scaled_to` places it on any
+  preview. Nikon mirrorless bodies and Nikon DSLRs in live view give a
+  focus point, read from the MakerNote's AFInfo2 block and placed inside
+  the cropped picture on a crop mode, and so do Sony bodies from the
+  ILCE-7RM2 on, read from the MakerNote's FocusLocation, with the area's
+  size from the ILCE-7SM3 on and nothing said about whether focus was
+  confirmed. A file that records no position gives `None`: a Nikon DSLR
   shot through the viewfinder or a Sony body before the ILCE-7RM2, which
-  record at most an autofocus point's number or a mask of points, on a
-  manual-focus shot, at an AFInfo2 version raw-files does not know, and
-  on a crop whose point cannot be placed on the cropped picture (a 1:1 or
-  16:9 crop on a small raw, or a crop whose CropArea cannot be used).
+  record at most an autofocus point's number or a mask of points, a
+  manual-focus shot, an AFInfo2 version raw-files does not know, and a
+  Nikon crop whose point cannot be placed on the cropped picture.
 - NEF previews and metadata checked on ten more CC0 Nikon sample files,
   of the D5 and the D5600 in live view, of the Z5II, Z50II and Z6III in
   their 1:1 and 16:9 crop modes, of a Z fc shot in manual focus and of a
@@ -113,6 +115,7 @@ files.
 - A DNG is of no known format, whatever camera maker its Make names:
   converters and the phones that write DNG keep the maker's name.
 
-[Unreleased]: https://github.com/kuolas/raw-files/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/kuolas/raw-files/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/kuolas/raw-files/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/kuolas/raw-files/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/kuolas/raw-files/releases/tag/v0.1.0
