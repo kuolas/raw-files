@@ -130,8 +130,9 @@ format only, and the 325 MiB ARQ file only with `RAW_FILES_LARGE=1`. Without
 the files, those tests skip.
 
 Another test runs the reader over a folder of your own RAW files. It prints
-counts only, never a path or the value of a make, model, serial number,
-time, exposure or lens, so its output can go into an issue:
+counts only, never a path, the value of a make, model, serial number,
+time, exposure or lens, or where the camera focused, so its output can go
+into an issue:
 
 ```sh
 RAW_FILES_LOCAL_CORPUS=/path/to/photos cargo test --release --test local_corpus -- --ignored --nocapture
