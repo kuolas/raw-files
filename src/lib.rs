@@ -80,6 +80,11 @@
 //! # }
 //! ```
 //!
+//! A program's tests can build every metadata value without a file,
+//! through the `with_…` methods of [`Metadata`] and [`Exposure`],
+//! [`Lens::builder`] and the checked constructors, such as
+//! [`DateTime::new`]; [`Metadata`] shows how.
+//!
 //! # Guarantees
 //!
 //! - A malformed or truncated file returns an error, never a panic,
