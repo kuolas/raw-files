@@ -21,9 +21,10 @@ keystream, the MakerNote cipher, the cRAW block layout, ARW1 decoding, the
 lossless tile headers and the SRF key chain). They used throwaway scripts
 written from the pages' prose, which are not in the repository; none of this
 is implemented in raw-files yet. On 19 October 2026 the autofocus data of
-the same 36 files was checked too. **No pixel output was compared with a
-reference decoder**, so "checked" means that the data decode consistently
-with the description, not that they are bit-exact.
+the same 36 files was checked too; raw-files reads the focus point from
+it, and `tests/arw.rs` checks every file's. **No pixel output was
+compared with a reference decoder**, so "checked" means that the data
+decode consistently with the description, not that they are bit-exact.
 
 Byte offsets and formulas taken from other projects' source code should
 still be checked against that source and against real files before they are

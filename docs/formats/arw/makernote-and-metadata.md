@@ -980,7 +980,7 @@ raw-files reads it or not; all are tags of the MakerNote IFD:
 | Source | What it holds | Checked files | raw-files |
 |---|---|---|---|
 | 0x2027 FocusLocation | four SHORTs: the frame's width and height, the centre's x and y | every sample from the ILCE-7RM2 (2015) on: ILCE-7RM2, ILCE-9, ILCE-7RM3 (ARW and ARQ), DSC-RX100M6, ILCE-1, ILCE-7SM3, ILCE-6700, ILCE-7M4, ILCE-9M3, ILCE-1M2, ILCE-7M5 **[F]** | read |
-| 0x204A FocusLocation2 | the same four values | the ILCE-9M3, ILCE-1M2 and ILCE-7M5, equal to FocusLocation on every one **[F]** | read when FocusLocation is absent, which no sample is |
+| 0x204A FocusLocation2 | the same four values | the ILCE-9M3, ILCE-1M2 and ILCE-7M5, equal to FocusLocation on every one **[F]** | read when FocusLocation gives nothing, absent or of another shape, which no sample is |
 | 0x2037 FocusFrameSize | six bytes: the focus area's width and height as two u16, and a third u16 of 257 or 0 **[F]**; "width and height of FocusFrame, centered on FocusLocation" [P][1] | from the ILCE-7SM3 (2020) on: ILCE-7SM3, ILCE-1, ILCE-6700, ILCE-7M4, ILCE-9M3, ILCE-1M2, ILCE-7M5 **[F]** | read |
 | 0x201B FocusMode | 0 manual, 2 AF-S, 3 AF-C, 4 AF-A, 6 DMF, 7 AF-D [P][1] | the SLT-A99V, the ILCE-7S and every body with FocusLocation **[F]** | read: 0 gives no focus point |
 | 0x201D FlexibleSpotPosition | the spot chosen in Flexible Spot mode, on a 640 × 480 grid; valid in that mode only [P][1] | the same bodies as FocusMode **[F]** | not read: the spot chosen, not where focus landed, which FocusLocation records on every body that has both |
@@ -1033,8 +1033,12 @@ What the fields hold:
   AF status only in the enciphered 0x940E block, and only on SLT bodies.
   [P][1]
 - **Every focus tag's value lies inside the length the MakerNote
-  declares**, on every sample; only 0xB02B FullImageSize of the A200,
-  A700 and A900 lies past it, and it is not read. **[F]**
+  declares**, on every sample. Only the DSLR-A200, A700 and A900 store
+  anything past it: five entries each, 0x2003, whose 256 bytes straddle
+  the end, 0xB020, LensSpec (0xB02A), FullImageSize (0xB02B) and
+  PreviewImageSize (0xB02C), read on the bytes of files 2271, 2521 and
+  5858 on 2026-10-21. None is a focus tag, and raw-files drops them
+  unread. **[F]**
 
 **What the samples cover.** Each kind of shot, the files that show it,
 and what raw-files gives; a row without a file is an open question
@@ -1208,7 +1212,8 @@ under which the MakerNote is read after all, for the focus point
 alone. Its IFD is found by bytes as in
 [section 1](#1-finding-the-makernote), only the values inside its
 declared length are read, and the tags read are FocusLocation,
-FocusLocation2 when FocusLocation is absent, FocusFrameSize and
+FocusLocation2 when FocusLocation gives nothing (absent, or not four
+SHORTs), FocusFrameSize and
 FocusMode ([section 9.6](#96-focus-point)). Nothing is deciphered, and
 0xB000, 0xB001 and the lens tags stay unread.
 
