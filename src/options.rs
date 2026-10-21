@@ -34,6 +34,7 @@ pub struct Options {
 
 impl Options {
     /// The default options: [`Limits::default()`].
+    #[must_use]
     pub fn new() -> Self {
         Self::default()
     }

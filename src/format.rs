@@ -74,6 +74,7 @@ impl Format {
     /// without its leading dot: `"NEF"`, `".nef"` and `"nef"` all name the
     /// same format. Anything else, including the empty string and a lone dot,
     /// gives `None`.
+    #[must_use]
     pub fn from_extension(ext: &str) -> Option<Format> {
         let ext = ext.strip_prefix('.').unwrap_or(ext);
         Format::all().iter().copied().find(|format| {

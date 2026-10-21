@@ -60,6 +60,7 @@ impl Orientation {
     ///
     /// Returns `None` for 0 and for 9 and above, which real files do contain;
     /// 0 is common for "unknown".
+    #[must_use]
     pub fn from_exif(value: u16) -> Option<Self> {
         match value {
             1 => Some(Self::NoTransforms),
