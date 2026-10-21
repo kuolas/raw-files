@@ -129,6 +129,7 @@ impl Rational {
     /// 1/320, 900/100 gives 9/1, and a zero numerator gives 0/1.
     ///
     /// A fraction with a zero denominator is returned unchanged.
+    #[must_use]
     pub fn reduced(self) -> Self {
         if self.denominator == 0 {
             return self;
@@ -250,6 +251,7 @@ impl SignedRational {
     /// when the result does not fit in an `i32`: -2147483648/-1 would be
     /// 2147483648/1, and 1/-2147483648 would have a denominator of
     /// 2147483648.
+    #[must_use]
     pub fn reduced(self) -> Self {
         if self.denominator == 0 {
             return self;

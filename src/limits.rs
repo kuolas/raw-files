@@ -46,6 +46,7 @@ impl Limits {
     /// Every limit at the largest value its type holds.
     ///
     /// For trusted input and tests, never for files from anyone else.
+    #[must_use]
     pub fn unlimited() -> Self {
         Self {
             max_ifds: u32::MAX,
