@@ -255,6 +255,12 @@ As of October 2026 no released open-source decoder handles ARW 6.0. **[P]**
 
 ## 4. Clean-room guidance for raw-files
 
+raw-files decided the working rules of section 4.1 in
+[ADR013](../../architecture-decisions/adr013-clean-room-and-third-party-code.md);
+the rules for contributors are in
+[CONTRIBUTING.md](../../../CONTRIBUTING.md#clean-room-and-third-party-code).
+The tables of section 4.2 still wait for a decision of their own.
+
 ### 4.1 Facts and expression
 
 The working rules in section 4.1 of the

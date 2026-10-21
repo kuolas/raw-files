@@ -18,6 +18,7 @@ each: the context, what was decided, and what follows from it. They answer
 | [ADR010](adr010-decoding-ends-at-a-linear-image.md) | Decoding ends at a linear image | Accepted |
 | [ADR011](adr011-metadata-from-standard-tags.md) | Metadata comes from the standard tags | Accepted; amended by [ADR012](adr012-focus-points-as-the-camera-records-them.md) |
 | [ADR012](adr012-focus-points-as-the-camera-records-them.md) | Focus points as the camera records them | Accepted |
+| [ADR013](adr013-clean-room-and-third-party-code.md) | Clean-room implementation and third-party code | Accepted |
 
 ## When to write one
 

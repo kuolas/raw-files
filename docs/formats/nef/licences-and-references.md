@@ -135,6 +135,12 @@ Licence information is **[P]**; maturity is **[I]**.
 
 ## 4. Clean-room guidance for raw-files
 
+raw-files decided the working rules of section 4.1 in
+[ADR013](../../architecture-decisions/adr013-clean-room-and-third-party-code.md);
+the rules for contributors are in
+[CONTRIBUTING.md](../../../CONTRIBUTING.md#clean-room-and-third-party-code).
+The tables of section 4.2 still wait for a decision of their own.
+
 ### 4.1 Facts and expression
 
 Copyright protects expression, not facts. Tag numbers, field offsets, the
