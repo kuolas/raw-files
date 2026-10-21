@@ -62,9 +62,8 @@ use crate::preview::{self, Preview};
 ///     file.read_preview_into(&preview, &mut bytes)?;
 ///     fs::write("preview.jpg", &bytes)?;
 ///     println!(
-///         "{} × {} pixels, shown upright by {:?}",
-///         preview.width(),
-///         preview.height(),
+///         "{} pixels, shown upright by {:?}",
+///         preview.size(),
 ///         preview.orientation(),
 ///     );
 ///     Ok(())

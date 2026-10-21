@@ -54,6 +54,11 @@ struct Inner {
 /// More categories may be added, so a `match` on this type needs a wildcard
 /// arm. The categories order as they are listed, and a new category is
 /// added after the existing ones, so an order once observed holds.
+///
+/// It has no [`Display`](fmt::Display): its text form is its variant's
+/// name, such as `Malformed`, which `Debug` gives. An [`Error`]'s own text
+/// is its message, followed by the byte offset when it is known; it does
+/// not name the category.
 #[non_exhaustive]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum ErrorKind {

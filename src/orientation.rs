@@ -14,6 +14,9 @@
 /// values. It orders as its variants are listed, by their EXIF number, so
 /// that orientations can key a map or be sorted.
 ///
+/// It has no [`Display`](std::fmt::Display): its text form is its
+/// variant's name, such as `Rotate90`, which `Debug` gives.
+///
 /// # Examples
 ///
 /// ```
