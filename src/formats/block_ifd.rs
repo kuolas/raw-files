@@ -20,7 +20,8 @@
 //! A Sony MakerNote counts them from the file's own header, so from base 0,
 //! in the file's byte order. The reading takes both as parameters, so that
 //! one reading can serve any MakerNote, and lives here rather than in one
-//! format's folder. The Nikon reader uses it; no Sony MakerNote is read.
+//! format's folder. Both MakerNote readers use it: Nikon's with its inner
+//! header's base and byte order, Sony's with base 0 and the file's order.
 //!
 //! [`block_of`] gives where a block's bytes are from the entry whose value
 //! it is, [`fits`] whether a range lies inside a block, and [`ifd_in`] the
@@ -107,6 +108,7 @@ pub(crate) fn fits(block: &Range<u64>, at: u64, len: u64) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::formats::testing::byte_order;
     use crate::tiff_builder::{ASCII, IfdId, LONG, Order, RawValue, TiffBuilder};
     use std::io::Cursor;
 
@@ -125,13 +127,6 @@ mod tests {
     const SECOND: u16 = 0x0102;
     const THIRD: u16 = 0x0103;
     const FOURTH: u16 = 0x0104;
-
-    fn byte_order(order: Order) -> ByteOrder {
-        match order {
-            Order::Little => ByteOrder::Little,
-            Order::Big => ByteOrder::Big,
-        }
-    }
 
     fn open(bytes: Vec<u8>) -> Source<Cursor<Vec<u8>>> {
         Source::new(Cursor::new(bytes)).unwrap()

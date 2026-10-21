@@ -81,12 +81,14 @@ and raw-files should detect them by bytes. [P][2][3][6][7]
 |---|---|---|---|---|---|
 | Headerless | none | MakerNote + 0 | the outer TIFF header | the outer file's | every ARW, SR2 and ARQ sample except the A100, including the DSC-R1's SR2 (file 3221) and the Hasselblad Lunar (file 4051) [F] |
 | `SONY DSC` header | `SONY DSC ` then three NUL bytes (12 bytes) | MakerNote + 12 | the outer TIFF header | ExifTool detects it; LibRaw and dcraw force little-endian; exiv2 uses the file's | the DSLR-A100's ARW 1.0 (file 2346) [F]; JPEGs from DSC compacts [P] |
-| Other 12-byte headers | `SONY CAM `, `SONY MOBILE`, `\0\0SONY PIC\0`, `VHAB` + five spaces + NUL | MakerNote + 12 | the outer TIFF header | as above | recognised by ExifTool; seen in no raw sample [P][F] |
-| Olympus-format | `SONY PI\0` (IFD at + 12) or `PREMI\0` (+ 8), with Olympus tag tables | as stated | the outer TIFF header | detected | JPEGs of early compacts (DSC-S650 and others) [P] |
-| Text block | `SONY PIC\0` | not an IFD | n/a | n/a | JPEGs of some compacts [P] |
+| Other 12-byte headers | `SONY CAM `, `SONY MOBILE`, `\0\0SONY PIC\0`, `VHAB` + five spaces + NUL | MakerNote + 12 | the outer TIFF header | as above | listed in ExifTool's MakerNote types page [27]; seen in no raw sample [P][F] |
+| Olympus-format | `SONY PI\0` (IFD at + 12) or `PREMI\0` (+ 8), with Olympus tag tables | as stated | the outer TIFF header | detected | JPEGs of early compacts (DSC-S650 and others) [P][27] |
+| Text block | `SONY PIC\0` | not an IFD | n/a | n/a | JPEGs of some compacts [P][27] |
 | SRF chain | none | MakerNote + 0, seven chained IFDs SRF0 to SRF6 | the outer file | the file's | DSC-F828 (file 1351) and DSC-V3 SRF files [P][F] |
 
-Sources: [2][3][6][7][9][11]. ExifTool also knows a `SEMC MS\0` header from
+Sources: [2][3][6][7][9][11]; the header bytes are also on ExifTool's
+MakerNote types page [27], documentation, which is what raw-files codes the
+headers seen in no sample from. ExifTool also knows a `SEMC MS\0` header from
 Sony Ericsson phones; Sony phones write DNG, not ARW, so it does not concern
 raw-files. [P][3]
 
@@ -1372,6 +1374,8 @@ Retrieved October 2026.
   https://github.com/lclevy/sony_raw
 - [26] ExifTool, `MinoltaRaw.pm` (read only) —
   https://github.com/exiftool/exiftool/blob/master/lib/Image/ExifTool/MinoltaRaw.pm
+
+- [27] ExifTool, MakerNote types — https://exiftool.org/makernote_types.html
 
 ### Sample files
 
