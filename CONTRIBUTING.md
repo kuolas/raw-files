@@ -403,6 +403,41 @@ To skip them once, set `SKIP_HOOKS=1` (for example `SKIP_HOOKS=1 git push`).
 If you change a hook or a script, keep it executable in git:
 `git update-index --chmod=+x <file>`. CI checks this.
 
+## Clean room and third-party code
+
+raw-files is a clean-room implementation: it is written from what the
+format notes in [docs/formats](docs/formats/) record, never from another
+project's source code
+([ADR013](docs/architecture-decisions/adr013-clean-room-and-third-party-code.md)).
+In short:
+
+- **Learn facts, write your own code.** A tag number, a field offset or a
+  flag's meaning is a fact: take it from published documentation, from a
+  sample file, or from what another program reports about a file, write
+  it into the notes with its source, confirm it on a file where you can,
+  and code from the notes.
+- **Never copy or translate code, comments or tables from another
+  project's source**, whatever its license (dcraw, LibRaw, rawspeed,
+  rawler, ExifTool, exiv2 and the like). Reading their source to settle a
+  fact is fine; what you learnt goes through the notes and a sample file
+  like any other fact, and is coded once a file confirms it. Where you
+  can, let someone else write the code for a part whose source you have
+  read. Never take a program apart: no firmware or software is
+  disassembled or decompiled to learn a format; observing what a program
+  does with an input is fine, recorded so that others can repeat it.
+- **Permissively licensed code (MIT, BSD, Apache-2.0) enters only by a
+  recorded decision**, with its license notice and author kept in a
+  notices file and a comment at the code. Nothing is copied without
+  attribution.
+- **Run other readers only to compare.** ExifTool or exiv2 may be run on a
+  file, or their published output read, to see what another reader found;
+  record it as a source and confirm it on the file's bytes where you can.
+  Nothing of theirs is a dependency, and neither the test suite nor CI
+  runs them: the samples stay the evidence.
+- **Say how you used a source.** In a commit, a pull request or a doc,
+  name whether you read a project's documentation or its source, which
+  file confirmed the fact, or that you ran a program to compare with.
+
 ## License of contributions
 
 raw-files is licensed under the [MIT license](LICENSE-MIT) or the

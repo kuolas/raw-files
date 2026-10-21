@@ -1,6 +1,9 @@
 ## What and why
 
-<!-- What changed and why. Link the issue it answers (e.g. "Closes #12"). -->
+<!-- What changed and why. Link the issue it answers (e.g. "Closes #12").
+     If another project was a source, say how it was used: documentation
+     read, source read to settle a fact, a file that confirmed it, or a
+     program run to compare with (CONTRIBUTING.md §Clean room). -->
 
 ## Checklist
 
