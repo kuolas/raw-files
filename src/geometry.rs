@@ -11,6 +11,10 @@
 /// Sizes order by width, then by height, so that they can key a map or be
 /// sorted; to compare how large two pictures are, compare their areas.
 ///
+/// Its fields are public because it is a small fixed value: a width and a
+/// height, nothing more. There is no `Default`, since a size of 0 × 0 is
+/// no image, and [`Focus::new`](crate::Focus::new) refuses it as a frame.
+///
 /// # Examples
 ///
 /// The size a viewer shows, once the orientation is applied:
@@ -45,6 +49,11 @@ pub struct Size {
 /// Points order by `x`, then by `y`, so that they can key a map or be
 /// sorted; that order is only a convention, and says nothing more about
 /// where two points lie on the picture.
+///
+/// Its fields are public because it is a small fixed value: a distance
+/// across and a distance down, nothing more. There is no `Default`, since
+/// (0, 0) is a real place, the top-left corner, which a default would
+/// silently choose.
 ///
 /// # Examples
 ///

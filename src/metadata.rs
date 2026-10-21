@@ -16,50 +16,10 @@
 //! value is `None`, and the others are unaffected.
 //!
 //! A program that uses raw-files can build these values for its own tests,
-//! without a camera file for each case. [`Metadata`] and [`Exposure`] start
-//! empty, from `default()`, and take each value through a `with_…` method
-//! named after the method that reads it back, such as
-//! [`Metadata::with_model`] for [`Metadata::model`]. A [`Lens`] is built
-//! through [`Lens::builder`], and a [`Focus`], a [`DateTime`] and a
-//! [`Rational`] through their checked constructors. The `with_…` methods
-//! store each value as given, so a test reads back what it wrote, and what
-//! it does not set stays `None`:
-//!
-//! ```
-//! use raw_files::{DateTime, Exposure, Lens, Metadata, Rational};
-//!
-//! # fn main() {
-//! #     example().expect("every step gives a value");
-//! # }
-//! # fn example() -> Option<()> {
-//! let time = DateTime::new(2022, 2, 5, 13, 46, 41)?
-//!     .with_subseconds(850_000_000, 2)?
-//!     .with_offset_minutes(-300)?;
-//! let exposure = Exposure::default()
-//!     .with_iso(64)
-//!     .with_exposure_time(Rational::new(10, 3200)?);
-//! let metadata = Metadata::default()
-//!     .with_model("NIKON Z 9")
-//!     .with_capture_time(time)
-//!     .with_exposure(exposure)
-//!     .with_lens(Lens::builder().model("NIKKOR Z 14-30mm f/4 S").build()?);
-//!
-//! assert_eq!(metadata.model(), Some("NIKON Z 9"));
-//! assert_eq!(
-//!     metadata.capture_time().map(|time| time.to_string()).as_deref(),
-//!     Some("2022-02-05T13:46:41.85-05:00")
-//! );
-//! assert_eq!(metadata.exposure().iso(), Some(64));
-//! assert_eq!(metadata.exposure().exposure_time(), Rational::new(10, 3200));
-//! assert_eq!(
-//!     metadata.lens().and_then(Lens::model),
-//!     Some("NIKKOR Z 14-30mm f/4 S")
-//! );
-//! assert_eq!(metadata.serial_number(), None);
-//! assert_eq!(metadata.exposure().f_number(), None);
-//! # Some(())
-//! # }
-//! ```
+//! without a camera file: [`Metadata`] and [`Exposure`] through their
+//! `with_…` methods, a [`Lens`] through [`Lens::builder`], and a [`Focus`],
+//! a [`DateTime`] and a [`Rational`] through their checked constructors.
+//! [`Metadata`]'s docs show how.
 
 use crate::datetime::DateTime;
 use crate::geometry::{Point, Size};
@@ -114,6 +74,57 @@ use crate::rational::{Rational, SignedRational};
 /// # Ok(())
 /// # }
 /// ```
+///
+/// A program's tests build a `Metadata` without a camera file, from the
+/// empty one, and read back what they set; what they do not set stays
+/// `None`:
+///
+/// ```
+/// use raw_files::{
+///     DateTime, Exposure, Focus, Lens, Metadata, Point, Rational, Size,
+/// };
+///
+/// # fn main() {
+/// #     example().expect("every step gives a value");
+/// # }
+/// # fn example() -> Option<()> {
+/// let time = DateTime::new(2022, 2, 5, 13, 46, 41)?
+///     .with_subseconds(850_000_000, 2)?
+///     .with_offset_minutes(-300)?;
+/// let exposure = Exposure::default()
+///     .with_iso(64)
+///     .with_exposure_time(Rational::new(10, 3200)?);
+/// let frame = Size { width: 8256, height: 5504 };
+/// let focus = Focus::new(frame, Point { x: 4905, y: 2461 })?
+///     .with_size(Size { width: 291, height: 323 })?
+///     .with_in_focus(true);
+/// let metadata = Metadata::default()
+///     .with_model("NIKON Z 9")
+///     .with_capture_time(time)
+///     .with_exposure(exposure)
+///     .with_lens(Lens::builder().model("NIKKOR Z 14-30mm f/4 S").build()?)
+///     .with_focus(focus);
+///
+/// assert_eq!(metadata.model(), Some("NIKON Z 9"));
+/// assert_eq!(
+///     metadata.capture_time().map(|time| time.to_string()).as_deref(),
+///     Some("2022-02-05T13:46:41.85-05:00")
+/// );
+/// assert_eq!(metadata.exposure().iso(), Some(64));
+/// assert_eq!(metadata.exposure().exposure_time(), Rational::new(10, 3200));
+/// assert_eq!(
+///     metadata.lens().and_then(Lens::model),
+///     Some("NIKKOR Z 14-30mm f/4 S")
+/// );
+/// assert_eq!(
+///     metadata.focus().map(|focus| focus.center()),
+///     Some(Point { x: 4905, y: 2461 })
+/// );
+/// assert_eq!(metadata.serial_number(), None);
+/// assert_eq!(metadata.exposure().f_number(), None);
+/// # Some(())
+/// # }
+/// ```
 #[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
 pub struct Metadata {
     pub(crate) make: Option<String>,
@@ -159,8 +170,8 @@ impl Metadata {
     ///
     /// Both are what the camera was set to. A clock that was never set
     /// gives its default date, which the library cannot tell from a real
-    /// one: the public Nikon 1 J1 sample 2956 records 2010-01-01 00:11,
-    /// with its time-zone setting of +02:00.
+    /// one: the raw.pixls.us sample 2956 of the Nikon 1 J1 records
+    /// 2010-01-01 00:11, with its time-zone setting of +02:00.
     pub fn capture_time(&self) -> Option<DateTime> {
         self.capture_time
     }
@@ -203,8 +214,8 @@ impl Metadata {
     /// raw data: DNG's DefaultCropSize, which Sony writes, or Nikon's crop
     /// area. Otherwise it is the [raw size](Self::raw_size), which then
     /// includes the border pixels: older Nikon bodies, before the D850,
-    /// record no crop, and on the public samples their stored raw is up to
-    /// 64 pixels wider and 24 taller than the camera's own full-size
+    /// record no crop, and on the raw.pixls.us samples their stored raw is
+    /// up to 64 pixels wider and 24 taller than the camera's own full-size
     /// preview.
     ///
     /// It is the default crop, not an aspect ratio chosen in the camera. On
@@ -230,9 +241,8 @@ impl Metadata {
     /// a crop whose point cannot be placed on the cropped picture: a 1:1 or
     /// 16:9 crop on a small raw, or a crop whose CropArea cannot be used.
     ///
-    /// On Sony files it is read from the MakerNote's FocusLocation, with
-    /// the area's size from its FocusFrameSize, on the bodies from the
-    /// ILCE-7RM2 on, as the camera recorded it and as the
+    /// On Sony files it is read from the MakerNote's FocusLocation, on the
+    /// bodies from the ILCE-7RM2 on, as the camera recorded it and as the
     /// [ARW format notes](https://github.com/kuolas/raw-files/blob/master/docs/formats/arw/makernote-and-metadata.md)
     /// describe. Its frame is the picture as the camera framed it, which
     /// differs from the image size on a picture taken at another aspect
@@ -241,7 +251,34 @@ impl Metadata {
     /// It is `None` on a manual-focus shot and on the older bodies, which
     /// record only an autofocus point's number or nothing at all, and its
     /// [`in_focus`](Focus::in_focus) is always `None`: Sony records it in
-    /// no plain tag.
+    /// no plain tag. The area's size is read from the MakerNote's
+    /// FocusFrameSize, which the bodies record only from the ILCE-7SM3 on,
+    /// so on the bodies before it [`size`](Focus::size) is `None`.
+    ///
+    /// # Examples
+    ///
+    /// Where the camera focused, and whether it confirmed focus there:
+    ///
+    /// ```no_run
+    /// use raw_files::RawFile;
+    ///
+    /// # fn main() -> raw_files::Result<()> {
+    /// let file = RawFile::open("photo.nef")?;
+    /// if let Some(focus) = file.metadata().focus() {
+    ///     let (centre, frame) = (focus.center(), focus.frame());
+    ///     println!(
+    ///         "focused at ({}, {}) on a frame of {} × {} pixels",
+    ///         centre.x, centre.y, frame.width, frame.height,
+    ///     );
+    ///     match focus.in_focus() {
+    ///         Some(true) => println!("in focus"),
+    ///         Some(false) => println!("missed focus"),
+    ///         None => println!("focus not recorded"),
+    ///     }
+    /// }
+    /// # Ok(())
+    /// # }
+    /// ```
     pub fn focus(&self) -> Option<Focus> {
         self.focus
     }
@@ -793,7 +830,7 @@ impl LensBuilder {
 /// The centre is a distance from the frame's left and top edges, so the
 /// middle of the frame is at (width / 2, height / 2), as the cameras
 /// record it: a Nikon Coolpix A focusing at the middle of its 4928 × 3264
-/// frame records (2464, 1632), as on the public sample 2238. An area
+/// frame records (2464, 1632), as on the raw.pixls.us sample 2238. An area
 /// `w` × `h` centred at (x, y) spans from x - w / 2 to x + w / 2 across
 /// and from y - h / 2 to y + h / 2 down. The values are whole numbers, as
 /// the cameras store them; to place the focus in fractions of the frame,
@@ -823,13 +860,15 @@ impl LensBuilder {
 /// On Nikon files, [`Metadata::focus`] is read from the MakerNote's AFInfo2
 /// block, as the camera recorded it but placed inside the cropped picture
 /// on a crop, and is `None` for a manual-focus shot.
-/// On Sony files it is read from the MakerNote's FocusLocation and
-/// FocusFrameSize, on the bodies from the ILCE-7RM2 on, in the frame the
-/// camera framed the picture in: the picture at an aspect-ratio setting,
-/// and, on a medium or small raw, the full size or the stored size, as
-/// the body chooses. It is `None` for a manual-focus shot and for the
-/// bodies that record only a point's number, and its
-/// [`in_focus`](Self::in_focus) is always `None`.
+/// On Sony files it is read from the MakerNote's FocusLocation, on the
+/// bodies from the ILCE-7RM2 on, in the frame the camera framed the
+/// picture in: the picture at an aspect-ratio setting, and, on a medium or
+/// small raw, the full size or the stored size, as the body chooses. It
+/// is `None` for a manual-focus shot and for the bodies that record only
+/// a point's number, and its [`in_focus`](Self::in_focus) is always
+/// `None`. The area's size is read from the MakerNote's FocusFrameSize,
+/// which the bodies record only from the ILCE-7SM3 on, so on the bodies
+/// before it [`size`](Self::size) is `None`.
 ///
 /// # Equality
 ///
