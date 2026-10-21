@@ -56,7 +56,7 @@ the NEF files among them, for their previews and their metadata
 ([section 2.2](#22-files-checked-for-metadata)). The Sony files of the
 set are on the [ARW test-data page](../arw/test-data.md#21-the-ci-set);
 the NEF files are the three Z 9 files of raw.pixls.us, one per
-compression mode, and 27 files of 21 other bodies, listed after them:
+compression mode, and 30 files of 24 other bodies, listed after them:
 
 | Id | Body | Compression | SHA-256 | Licence |
 |---|---|---|---|---|
@@ -77,17 +77,19 @@ The container and preview facts tagged **[F]** on the other NEF pages were
 measured on these three files on 2026-10-13, so this section is where the
 **[F]** tag points.
 
-The other 27 NEF files were downloaded from raw.pixls.us: 20 on
-2026-10-15, and the last seven of the table on 2026-10-19, for the focus
-point ([section 2.3](#23-files-checked-for-the-focus-point)). They cover
-the generations from the D1H (2001) to the Z5II (2025), both byte
-orders, the three versions of the embedded MakerNote, three small raws
-(D810, D850, Z 6), a DSLR in live view (D5600), the Z6III's three aspect
-ratios, two of them again in HE\* (files 7812 and 7813), the 1:1 and
-16:9 crops of the Z5II and the Z50II, and three compacts, one of them an
-NRW file (Coolpix P7800). Each is CC0 in the site's catalogue, and its
-SHA-256 matched the catalogue's before it was read. "Mode" is the
-catalogue's label. **[P]** On the Z5II, Z50II and Z6III files its "8bit"
+The other 30 NEF files were downloaded from raw.pixls.us: 20 on
+2026-10-15, the next seven on 2026-10-19, for the focus point
+([section 2.3](#23-files-checked-for-the-focus-point)), and the last
+three of the table on 2026-10-20, for coverage cells of the focus point
+that no file filled. They cover the generations from the D1H (2001) to
+the Z5II (2025), both byte orders, the three versions of the embedded
+MakerNote, three small raws (D810, D850, Z 6), two DSLRs in live view
+(D5600, D5), the Z6III's three aspect ratios, two of them again in HE\*
+(files 7812 and 7813), the 1:1 and 16:9 crops of the Z5II and the
+Z50II, a rotated shot (Z 30), a Z body in manual focus (Z fc), and
+three compacts, one of them an NRW file (Coolpix P7800). Each is CC0 in
+the site's catalogue, and its SHA-256 matched the catalogue's before it
+was read. "Mode" is the catalogue's label. **[P]** On the Z5II, Z50II and Z6III files its "8bit"
 is not the files': they hold 14-bit raw data, compressed as HE, or as
 HE\* on files 7812 and 7813, as byte 10 of MakerNote tag 0x0051 says:
 13 on files 7808 to 7810, 7735, 7736, 7767 and 7770, and 14 on 7812 and
@@ -97,7 +99,7 @@ HE\* on files 7812 and 7813, as byte 10 of MakerNote tag 0x0051 says:
 smallest first, and what the file shows about them, with the outer byte
 order (`MM` big-endian, `II` little-endian); they were read from a walk
 of each file's IFDs and MakerNote, of the first 20 files on 2026-10-16
-and of the last seven on 2026-10-20, and the reader gives the same. Each
+and of the last ten on 2026-10-20, and the reader gives the same. Each
 JPEG is in one piece, through 0x0201 and 0x0202, and ends with the
 end-of-image marker exactly at its declared length. **[F]**
 
@@ -130,19 +132,23 @@ end-of-image marker exactly at its declared length. **[F]**
 | 7770 | Z50II | 8bit compressed (16:9) | Four: 160x120, then 640x360, 1920x1080 and 5568x3128, 16:9 like its 5600x3144 raw. `II` | `663fd340edbf91cae2e754c2c5c0b2e49e3a25b7a471c1379ecffdb01cfe1599` | CC0 |
 | 7812 | Z6III | 8bit compressed (1:1) | Four, of the sizes of file 7808's: 160x120, 480x480, 1080x1080 and 4032x4032. `II` | `b026ebf6a3ee851925a8a9a44134e39cf3cddd6b383d39aafff15df2b418c89e` | CC0 |
 | 7813 | Z6III | 8bit compressed (16:9) | Four, of the sizes of file 7809's: 160x120, 640x360, 1920x1080 and 6048x3400. `II` | `b84499212126ef8bab31aa2b150f6dbf8cb6e0e2aab7ca669d85c3259784ecc5` | CC0 |
+| 2218 | D5 | 14bit 14bit compressed (Lossy (type 2)) (3:2) | Three: 640x424, 1620x1080 in SubIFD2 and 5568x3712, inside its 5584x3728 raw; IFD0 holds an uncompressed 160x120 thumbnail, not a JPEG. Each JPEG has only its quantization table before its frame header, and its Huffman table after it. `II` | `febde1abbb52dcd207f10d44412742af491d63ef96a9cbd8a491a33b98944eeb` | CC0 |
+| 5812 | Z 30 | 12bit 12bit compressed (Lossless) (3:2) | Three: 640x424, 1620x1080 in SubIFD2 and 5568x3712, inside its 5600x3728 raw; IFD0 holds an uncompressed 160x120 thumbnail, not a JPEG, and asks for a rotation (Orientation 8), which every preview takes. `II` | `75249c11a3a845367c7a322a1c4e7076f33c785ec2518fc6594c34c185b41161` | CC0 |
+| 8559 | Z fc | 12bit compressed (Lossless) (3:2) | Three, of the sizes of file 5812's: 640x424, 1620x1080 and 5568x3712; IFD0 holds an uncompressed 160x120 thumbnail. `II` | `a213f29e52f02c0155030d204bf885c7b85ae65a78057a751ccb3ade2d141798` | CC0 |
 
 ### 2.2 Files checked for metadata
 
 The MakerNote and metadata facts tagged **[F]** in
 [makernote-and-metadata.md](makernote-and-metadata.md) were measured on the
-23 NEF files of section 2.1 on 2026-10-15.
+23 NEF files of section 2.1 on 2026-10-15, and on the last three files
+there on 2026-10-20.
 
 The checks walked each file's IFDs, Exif IFD and MakerNote IFD with a
 throwaway, bounds-checked script written from these pages, and read the
 tags' values; no other program's output was used.
 
 The tests in `tests/nef.rs` check every metadata value the reader gives,
-the focus point among them, for each of the 30 NEF files of section 2.1
+the focus point among them, for each of the 33 NEF files of section 2.1
 against a table generated from such a walk, by the reader's rules, with
 serial numbers recorded by their shape alone; that table is the record of
 the values, so this page does not repeat it.
@@ -151,11 +157,14 @@ the values, so this page does not repeat it.
 
 The focus-point facts tagged **[F]** in
 [makernote-and-metadata.md](makernote-and-metadata.md#86-focus-point)
-were measured on 2026-10-19 on the 30 NEF files of section 2.1: the
-first 23 of them, and seven more CC0 files from raw.pixls.us, downloaded
-that day for this check and listed last there. They add a DSLR in live
-view that is little-endian, and aspect-ratio crops from three mirrorless
-bodies:
+were measured on 2026-10-19 and 2026-10-20 on the 33 NEF files of
+section 2.1: on 2026-10-19 on the first 23 of them and seven more CC0
+files from raw.pixls.us, downloaded that day for this check, and on
+2026-10-20 on three more, downloaded that day for coverage cells that no
+file filled; the ten are listed last there. They add a DSLR in live view
+that is little-endian, aspect-ratio crops from three mirrorless bodies,
+a DSLR in live view at version 0101, the first files at version 0301, a
+Z body in manual focus and a rotated shot:
 
 | Id | Body | Mode | SHA-256 | Licence |
 |---|---|---|---|---|
@@ -166,12 +175,15 @@ bodies:
 | 7770 | Z50II | 8bit compressed (16:9) | `663fd340edbf91cae2e754c2c5c0b2e49e3a25b7a471c1379ecffdb01cfe1599` | CC0 |
 | 7812 | Z6III | 8bit compressed (1:1) | `b026ebf6a3ee851925a8a9a44134e39cf3cddd6b383d39aafff15df2b418c89e` | CC0 |
 | 7813 | Z6III | 8bit compressed (16:9) | `b84499212126ef8bab31aa2b150f6dbf8cb6e0e2aab7ca669d85c3259784ecc5` | CC0 |
+| 2218 | D5 | 14bit 14bit compressed (Lossy (type 2)) (3:2) | `febde1abbb52dcd207f10d44412742af491d63ef96a9cbd8a491a33b98944eeb` | CC0 |
+| 5812 | Z 30 | 12bit 12bit compressed (Lossless) (3:2) | `75249c11a3a845367c7a322a1c4e7076f33c785ec2518fc6594c34c185b41161` | CC0 |
+| 8559 | Z fc | 12bit compressed (Lossless) (3:2) | `a213f29e52f02c0155030d204bf885c7b85ae65a78057a751ccb3ade2d141798` | CC0 |
 
 The check read each file's MakerNote AFInfo2 (or AFInfo), FocusMode,
 CropHiSpeed and CropArea with the same kind of throwaway script as
-section 2.2. FocusMode is `MANUAL` on files 928 and 1835 and an AF mode
-on every other file but the D1H's. What
-each of the 30 files records, and the focus point that the rules of
+section 2.2. FocusMode is `MANUAL` on files 928, 1835 and 8559 and an
+AF mode on every other file but the D1H's. What each of the 33 files
+records, and the focus point that the rules of
 [ADR012](../../architecture-decisions/adr012-focus-points-as-the-camera-records-them.md)
 give from it:
 
@@ -191,9 +203,12 @@ give from it:
 | 7735 | Z5II | `0402` | zero frame; a mask only (auto-area) | none |
 | 7736 | Z5II | `0402` | zero frame; a mask only (auto-area) | none |
 | 3587 | Z 6 | `0300` | frame 6048x4024, centre (3024, 1160), area 285x308, in focus: not recorded | as recorded |
+| 5812 | Z 30 | `0301` | frame 5568x3712, centre (3776, 1741), area 552x552, in focus: not recorded; Orientation 8 | as recorded, in stored orientation |
+| 8559 | Z fc | `0301` | frame 5568x3712, centre (2520, 1856), area 288x319, in focus: not recorded; FocusMode `MANUAL` | none |
 | 1415 | D5600 | `0100` | frame 6000x4000, centre (3368, 2000), area 984x816, in focus: yes | as recorded |
 | 961 | D7000 | `0100` | frame 4928x3264, centre (2816, 2336), area 408x336, in focus: yes | as recorded |
 | 2238 | Coolpix A | `0100` | frame 4928x3264, centre (2464, 1632), area 408x336, in focus: yes | as recorded |
+| 2218 | D5 | `0101` | frame 5568x3712, centre (3077, 2427), area 588x500, in focus: yes | as recorded |
 | 928 | D300 | `0100` | zero frame; primary point 0; FocusMode `MANUAL` | none |
 | 2255 | D700 | `0100` | zero frame; primary point 1 | none |
 | 895 | D750 | `0100` | zero frame; primary point 1 | none |
@@ -207,6 +222,15 @@ give from it:
 | 8079 | D200 | none | AFInfo `00000001`: area mode, point number and mask; no position | none |
 | 4456 | E5700 | none | AFInfo `00000000`: area mode, point number and mask; no position | none |
 | 1425 | Coolpix P7800 | none | AFInfo `00000100`: area mode, point number and mask; no position | none |
+
+The last three files settle four cases no other file showed. The D5's
+live-view shot is the first to fill the 0101 position, so ExifTool's
+0101 offsets (70 to 82) are checked on a file. The Z 30 and the Z fc
+are the first files at version 0301, read at the 03xx offsets. The Z
+fc, shot in manual focus, shows what a Z body writes then: a position,
+which the rules discard under FocusMode `MANUAL`. And the Z 30's shot,
+rotated (Orientation 8), records its point in the landscape 5568x3712
+frame, in stored orientation, as ADR012 says.
 
 A point is "as recorded" when the file is no crop, or is one without a
 CropArea. "Scaled onto CropArea", for a crop whose two sides are both
@@ -358,12 +382,12 @@ The set above answers many of them, mostly with `exiftool -v3`, `exiftool
 
 | Open question | Sample files that answer it |
 |---|---|
-| Preview dimensions and count per body; unusual JPEG types | D3 or D300, D850, D5, D6, Z 6, Z 7, Z 8, Z 9, Z f: list each SubIFD and the PreviewIFD, read each JPEG's frame header. Partly answered by section 2.1, for the D300, D850, Z 6 and Z f among 21 bodies: every JPEG there is baseline |
+| Preview dimensions and count per body; unusual JPEG types | D3 or D300, D850, D5, D6, Z 6, Z 7, Z 8, Z 9, Z f: list each SubIFD and the PreviewIFD, read each JPEG's frame header. Partly answered by section 2.1, for the D300, D850, D5, Z 6 and Z f among 24 bodies: every JPEG there is baseline |
 | Outer TIFF byte order per generation | The first eight bytes of one file per body; settles the Z bodies in particular. Answered for the bodies of section 2.1: `MM` up to the D7000 and on the Coolpix A, `II` from the D750 on and on the E5700, P7800 and J1 |
 | Where previews live on the earliest bodies | D1, D1X, D1H and the E-series. Answered for the D1H, D100 and E5700: in the MakerNote's PreviewIFD alone (section 2.1, files 5364, 2996 and 4456) |
 | Whether HE and HE* change IFD or preview layout | The three Z 9 files side by side. Answered: they do not (section 2.1, files 5146 to 5148) |
 | Whether tag 0x000C white balance is present and correct on Z bodies | Z 6, Z 7, Z 8, Z 9, Z f |
-| Whether CropArea (0x0045) is always present, and raw-to-output size mapping | One file per body, compared with the Exif image size. Partly answered by section 2.2: the D850, D780 and Z bodies write it, older ones do not, and the visible size of the older ones is still unknown |
+| Whether CropArea (0x0045) is always present, and raw-to-output size mapping | One file per body, compared with the Exif image size. Partly answered by section 2.2: the D5, D850, D780 and Z bodies write it, older ones and the D5600 do not, and the visible size of the bodies without it is still unknown |
 | Version bytes written by lossy type 1 bodies; what the 2110-byte skip is | `exiftool -b -NEFLinearizationTable` on D1H, D1X, D100, D70, D200, D2X; read the first two bytes |
 | Order of the four 0x0096 predictor seeds (row-major or column-major) | Read the four seeds from 0x0096 on several bodies; if always equal the question is moot |
 | Which bodies write NEFCompression 5 and 6 | `exiftool -NEFCompression` across the whole Nikon set |

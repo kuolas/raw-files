@@ -120,7 +120,7 @@
 //! including the SRF, SR2 and ARQ files of the same family and the ARW files
 //! of the Sony-built Hasselblad bodies. Version 0.2.0 reads the embedded
 //! previews and the metadata of these files, not their raw data. Both are
-//! checked on 23 public Nikon files, from the D1H to the Z6III, and on 36
+//! checked on 33 public Nikon files, from the D1H to the Z5II, and on 36
 //! public Sony-family files, from the DSC-F828 to the ILCE-7M5.
 //!
 //! # What comes next

@@ -13,7 +13,7 @@
 //! pixels and personal fields removed (see [`support::fixtures`]): their
 //! previews, every value of their metadata, and their focus points, which
 //! the reader scales onto the DX crop and moves into the 1:1 window. Then
-//! 30 real files too large to commit, three of the Z 9 and 27 of 21 other
+//! 33 real files too large to commit, three of the Z 9 and 30 of 24 other
 //! bodies, when they have been downloaded (see
 //! [`support::samples::path`]): the previews each gives, and its metadata,
 //! every value of it, the focus point among them.
@@ -839,8 +839,8 @@ fn the_stripped_z9_1x1_file_gives_its_previews_metadata_and_shifted_focus_point(
     check_stripped_z9(&STRIPPED_Z9_1X1);
 }
 
-// Real files, downloaded: 30 NEF files of raw.pixls.us, all CC0, the
-// three of the Z 9, one per compression mode, and 27 files of 21 other
+// Real files, downloaded: 33 NEF files of raw.pixls.us, all CC0, the
+// three of the Z 9, one per compression mode, and 30 files of 24 other
 // Nikon bodies. They are listed with their hashes in `tests/samples.tsv`;
 // `scripts/fetch-samples.sh` downloads them. They are too large to commit,
 // so a test whose file is absent says so and passes: the suite runs
@@ -964,20 +964,21 @@ fn every_z9_sample_opens_with_its_four_previews() {
     }
 }
 
-/// The samples of 21 other bodies, from the D1H of 2001 to the Z5II of
+/// The samples of 24 other bodies, from the D1H of 2001 to the Z5II of
 /// 2025, each with the previews the reader finds in it, smallest first.
 /// They are the MakerNote's JPEG; the largest JPEG, in SubIFD0, on every
 /// file but the D1H's, the D100's and the E5700's; a JPEG 1080 pixels
 /// high in SubIFD2 on the D750, D810, D850, D780, D5600, Z 6, Z f, Z6III,
-/// Z5II and Z50II; and a 160 by 120 JPEG in IFD0 on the Z f, the Z6III,
-/// the Z5II, the Z50II and the P7800. The
-/// tables were made from a walk of each file's IFDs and MakerNote, by the
-/// reader's rules. Two files give fewer JPEGs than they hold: the D1H's
-/// one JPEG is in a MakerNote of the bare layout, which the reader does
-/// not read, so it gives none; and the P7800's MakerNote JPEG starts where
-/// the MakerNote's declared length ends, outside it, so it gives two. None
-/// is padded after its end-of-image marker, and no file's IFD0 asks for a
-/// rotation.
+/// Z5II, Z50II, D5, Z 30 and Z fc; and a 160 by 120 JPEG in IFD0 on the
+/// Z f, the Z6III, the Z5II, the Z50II and the P7800. The tables were
+/// made from a walk of each file's IFDs and MakerNote, by the reader's
+/// rules. Two files give fewer JPEGs than they hold: the D1H's one JPEG is
+/// in a MakerNote of the bare layout, which the reader does not read, so
+/// it gives none; and the P7800's MakerNote JPEG starts where the
+/// MakerNote's declared length ends, outside it, so it gives two. None is
+/// padded after its end-of-image marker. Only the Z 30's IFD0 asks for a
+/// rotation, of 270 degrees clockwise (Orientation 8), which each of its
+/// previews reports.
 const OTHER_SAMPLES: &[Sample] = &[
     // D1H, 12-bit uncompressed (raw.pixls.us 5364)
     Sample {
@@ -1695,6 +1696,90 @@ const OTHER_SAMPLES: &[Sample] = &[
             },
         ],
     },
+    // D5, 14-bit lossy, live view (raw.pixls.us 2218)
+    Sample {
+        file: "nikon-d5-14bit-lossy.nef",
+        orientation: Orientation::NoTransforms,
+        previews: &[
+            Jpeg {
+                width: 640,
+                height: 424,
+                offset: 51_968,
+                len: 164_946,
+                after_eoi: 0,
+            },
+            Jpeg {
+                width: 1620,
+                height: 1080,
+                offset: 275_456,
+                len: 979_610,
+                after_eoi: 0,
+            },
+            Jpeg {
+                width: 5568,
+                height: 3712,
+                offset: 1_255_424,
+                len: 2_623_669,
+                after_eoi: 0,
+            },
+        ],
+    },
+    // Z 30, 12-bit lossless, rotated (raw.pixls.us 5812)
+    Sample {
+        file: "nikon-z30-12bit-lossless.nef",
+        orientation: Orientation::Rotate270,
+        previews: &[
+            Jpeg {
+                width: 640,
+                height: 424,
+                offset: 95_044,
+                len: 103_247,
+                after_eoi: 0,
+            },
+            Jpeg {
+                width: 1620,
+                height: 1080,
+                offset: 257_024,
+                len: 714_194,
+                after_eoi: 0,
+            },
+            Jpeg {
+                width: 5568,
+                height: 3712,
+                offset: 971_264,
+                len: 1_350_653,
+                after_eoi: 0,
+            },
+        ],
+    },
+    // Z fc, 12-bit lossless, manual focus (raw.pixls.us 8559)
+    Sample {
+        file: "nikon-zfc-12bit-lossless.nef",
+        orientation: Orientation::NoTransforms,
+        previews: &[
+            Jpeg {
+                width: 640,
+                height: 424,
+                offset: 96_684,
+                len: 114_159,
+                after_eoi: 0,
+            },
+            Jpeg {
+                width: 1620,
+                height: 1080,
+                offset: 269_824,
+                len: 1_078_447,
+                after_eoi: 0,
+            },
+            Jpeg {
+                width: 5568,
+                height: 3712,
+                offset: 1_348_608,
+                len: 2_827_393,
+                after_eoi: 0,
+            },
+        ],
+    },
 ];
 
 #[test]
@@ -1715,7 +1800,8 @@ fn every_sample_of_the_other_nikon_bodies_opens_with_its_previews() {
 /// does not read, so that file gives the values of its standard tags
 /// alone. The focus point is the one the rules of ADR012 give from each
 /// file's AFInfo2, FocusMode, CropHiSpeed and CropArea, on the cropped
-/// picture on a crop mode; where there is none, a comment says why.
+/// picture on a crop mode, and in the stored orientation on the Z 30's
+/// rotated shot; where there is none, a comment says why.
 const METADATA: &[SampleMetadata] = &[
     // Z 9, 14-bit lossless compression (raw.pixls.us 5146)
     SampleMetadata {
@@ -2611,6 +2697,103 @@ const METADATA: &[SampleMetadata] = &[
             size: Some((163, 174)),
             in_focus: Some(false),
         }),
+    },
+    // D5, 14-bit lossy, live view (raw.pixls.us 2218)
+    SampleMetadata {
+        file: "nikon-d5-14bit-lossy.nef",
+        make: Some("NIKON CORPORATION"),
+        model: Some("NIKON D5"),
+        serial_number: Some(SerialShape {
+            len: 7,
+            digits: true,
+        }),
+        capture_time: Some("2018-01-12T13:15:24.15+01:00"),
+        orientation: Orientation::NoTransforms,
+        iso: Some(400),
+        exposure_time: Some((10, 1250)),
+        f_number: Some((56, 10)),
+        focal_length: Some((140, 10)),
+        exposure_bias: Some((6, 6)),
+        lens: Some(SampleLens {
+            make: None,
+            model: None,
+            serial_number: false,
+            min_focal_length: Some((140, 10)),
+            max_focal_length: Some((240, 10)),
+            f_number_at_min_focal_length: Some((28, 10)),
+            f_number_at_max_focal_length: Some((28, 10)),
+        }),
+        raw_size: Some((5584, 3728)),
+        image_size: Some((5568, 3712)),
+        focus: Some(SampleFocus {
+            frame: (5568, 3712),
+            center: (3077, 2427),
+            size: Some((588, 500)),
+            in_focus: Some(true),
+        }),
+    },
+    // Z 30, 12-bit lossless, rotated (raw.pixls.us 5812)
+    SampleMetadata {
+        file: "nikon-z30-12bit-lossless.nef",
+        make: Some("NIKON CORPORATION"),
+        model: Some("NIKON Z 30"),
+        serial_number: Some(SerialShape {
+            len: 7,
+            digits: true,
+        }),
+        capture_time: Some("2022-07-26T15:56:46.86+02:00"),
+        orientation: Orientation::Rotate270,
+        iso: Some(1800),
+        exposure_time: Some((10, 600)),
+        f_number: Some((630, 100)),
+        focal_length: Some((500, 10)),
+        exposure_bias: Some((0, 6)),
+        lens: Some(SampleLens {
+            make: Some("NIKON"),
+            model: Some("NIKKOR Z DX 16-50mm f/3.5-6.3 VR"),
+            serial_number: true,
+            min_focal_length: Some((160, 10)),
+            max_focal_length: Some((500, 10)),
+            f_number_at_min_focal_length: Some((350, 100)),
+            f_number_at_max_focal_length: Some((630, 100)),
+        }),
+        raw_size: Some((5600, 3728)),
+        image_size: Some((5568, 3712)),
+        focus: Some(SampleFocus {
+            frame: (5568, 3712),
+            center: (3776, 1741),
+            size: Some((552, 552)),
+            in_focus: None,
+        }),
+    },
+    // Z fc, 12-bit lossless, manual focus (raw.pixls.us 8559)
+    SampleMetadata {
+        file: "nikon-zfc-12bit-lossless.nef",
+        make: Some("NIKON CORPORATION"),
+        model: Some("NIKON Z fc"),
+        serial_number: Some(SerialShape {
+            len: 7,
+            digits: true,
+        }),
+        capture_time: Some("2025-09-05T18:15:05.79+00:00"),
+        orientation: Orientation::NoTransforms,
+        iso: Some(100),
+        exposure_time: Some((10, 10)),
+        f_number: Some((900, 100)),
+        focal_length: Some((460, 10)),
+        exposure_bias: Some((0, 6)),
+        lens: Some(SampleLens {
+            make: None,
+            model: Some("18-70mm f/3.5-4.5G"),
+            serial_number: false,
+            min_focal_length: Some((180, 10)),
+            max_focal_length: Some((700, 10)),
+            f_number_at_min_focal_length: Some((350, 100)),
+            f_number_at_max_focal_length: Some((450, 100)),
+        }),
+        raw_size: Some((5600, 3728)),
+        image_size: Some((5568, 3712)),
+        focus: None, // FocusMode MANUAL; AFInfo2 records a position, (2520, 1856) and 288 by 319, which the rule discards
     },
 ];
 

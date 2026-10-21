@@ -66,17 +66,17 @@ and test-data.md describes the sample set that would answer Part 2.
 ### Container and previews
 
 - **Largest preview per body.** The dimensions and count of embedded JPEGs on
-  the D3, D5/D6 and the Z bodies not yet checked, such as the Z 7 and Z 8.
+  the D3, D6 and the Z bodies not yet checked, such as the Z 7 and Z 8.
   The Z 9 is answered: four JPEGs of 160×120, 640×424, 1620×1080 and
-  8256×5504 (files 5146 to 5148). So are the 21 bodies of the other 27 files
-  of the CI set, the D300, D700, D850, Z 6 and Z f among them; the Z f's
+  8256×5504 (files 5146 to 5148). So are the 24 bodies of the other 30 files
+  of the CI set, the D300, D700, D850, D5, Z 6 and Z f among them; the Z f's
   second JPEG is 1620×1080, not the 1616×1080 reported (file 6887). Each
   file's JPEGs are listed in
   [test-data.md](test-data.md#21-the-ci-set)
   ([container-and-previews.md](container-and-previews.md)).
 - **JPEG encoding.** Whether any body embeds a progressive JPEG, or one with
   unusual chroma subsampling. The Z 9's four are baseline (files 5146 to
-  5148), and so is every JPEG of the other 27 files of the CI set; their
+  5148), and so is every JPEG of the other 30 files of the CI set; their
   subsampling was not read.
 - **Early bodies.** Where the D1 keeps its previews, and how large the
   MakerNote preview is on the D1X. The D1H is answered: its only JPEG is a
@@ -97,18 +97,18 @@ and test-data.md describes the sample set that would answer Part 2.
   from the file's own TIFF header put them (file 5364) **[F]**.
 - **Multi-strip previews.** Whether any SubIFD JPEG is stored in several
   strips. On the Z 9 every JPEG is in one piece, through 0x0201/0x0202 (files
-  5146 to 5148), and so is every JPEG of the other 27 files of the CI set;
+  5146 to 5148), and so is every JPEG of the other 30 files of the CI set;
   other bodies are open
   ([container-and-previews.md](container-and-previews.md)).
 - **Truncation and padding.** How common truncated JPEGs or padding after the
   end-of-image marker are in real files. The Z 9 has neither: each JPEG ends
   with the end-of-image marker exactly at its declared length (files 5146 to
-  5148), as does every JPEG of the other 27 files of the CI set; other
+  5148), as does every JPEG of the other 30 files of the CI set; other
   bodies are open
   ([container-and-previews.md](container-and-previews.md)).
 - **Preview Exif.** Whether a SubIFD or PreviewIFD JPEG ever carries its own
   Exif APP1 with an Orientation. Not on the Z 9, whose JPEGs have no APP
-  segment at all (files 5146 to 5148), nor on the other 27 files of the CI
+  segment at all (files 5146 to 5148), nor on the other 30 files of the CI
   set, whose JPEGs have none before their frame header; other bodies are
   open
   ([container-and-previews.md](container-and-previews.md)).
@@ -122,22 +122,17 @@ and test-data.md describes the sample set that would answer Part 2.
 - **Z-series white balance.** Whether 0x000C WB_RBLevels is present and
   correct on every Z body. Every decoder relies on it there, and no failure
   has been reported.
-- **Crop area.** Which body first wrote 0x0045 CropArea: the D850 (2017)
-  does and the D810 (2014) does not, and no body in between was checked.
+- **Crop area.** Which body first wrote 0x0045 CropArea: the D5 (2016)
+  does (file 2218) and the D810 (2014) does not, and no body in between
+  was checked.
   And how the raw IFD size maps to the visible size on the bodies without
   it, which today report the raw size with its border pixels
   ([makernote-and-metadata.md](makernote-and-metadata.md)).
 - **Focus point.** What no sample shows yet
   ([makernote-and-metadata.md](makernote-and-metadata.md#86-focus-point),
   its section 11):
-  - the AFInfo2 position at version 0101, from a live-view file of a D5,
-    D500, D850, D3400, D3500 or D7500;
-  - version 0301, from a D6, Z 5, Z 6II, Z 7II, Z 30 or Z fc;
   - a DSLR in live view on a DX or 1.2x crop: the cropped or the full
     frame;
-  - what a Z body in manual focus writes in AFInfo2 (its FocusMode,
-    `MANUAL`, gives no point either way);
-  - a rotated shot with a focus point;
   - CropHiSpeed's sizes on uncropped files, after the D810's four-pixel
     difference under mode 11 (file 2036);
   - which bodies write FaceDetect (0x0021);
@@ -161,10 +156,14 @@ and test-data.md describes the sample set that would answer Part 2.
   files, or whether it comes only from Coolpix.
 - **NEFCompression on Z bodies.** Tag 0x0093 is absent from the Z 9 files,
   the lossless one included (files 5146 to 5148), as the claim that Z bodies
-  keep the value in tag 0x0051 predicts; so reading the compression on Z
-  bodies must go through 0x0051. Its value was not read: what byte 10 of
-  0x0051 holds on each of these files, and in which byte order, remains to
-  be checked on the bytes ([raw-data.md](raw-data.md)).
+  keep the value in tag 0x0051 predicts; but the Z fc and the Z 30 write
+  0x0093, value 3, and no 0x0051 (files 8559, 5812), so reading the
+  compression on Z bodies must try both. Byte 10 of 0x0051, read as a u16
+  in the MakerNote's byte order, reads 3, 14 and 13 on files 5146 to 5148,
+  their lossless, HE\* and HE files
+  ([makernote-and-metadata.md](makernote-and-metadata.md#2-key-tags));
+  since all three MakerNotes are little-endian, those files do not tell
+  which byte order the sources mean ([raw-data.md](raw-data.md)).
 - **Lossless debut.** Whether lossless compression first appeared on the
   D3/D300.
 - **Curve sizes.** How Claff's encoding-table sizes relate to the stored

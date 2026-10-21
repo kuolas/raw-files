@@ -33,8 +33,10 @@ Numbers in square brackets such as [3] refer to [Sources](#sources).
 be checked against that source and against sample files before they are
 hard-coded.** Only the facts tagged **[F]** have been checked against real
 NEFs: the Z 9's raw IFD, the first bytes of its strip and the absence of
-tag 0x0093, on files 5146 to 5148. No strip was decoded, and no MakerNote
-tag's value was read from them.
+tag 0x0093, on files 5146 to 5148, and the presence of 0x0093 and the
+absence of 0x0051 on the Z fc and the Z 30, on files 8559 and 5812, and
+byte 10 of 0x0051 on the three Z 9 files. No strip was decoded, and no
+other MakerNote value was read from them.
 
 **Licence hygiene.** The decoders read for this page are under dcraw's own
 licence, LGPL-2.1 or CDDL-1.0 (LibRaw), and LGPL-2.1 (rawspeed, rawler,
@@ -81,8 +83,10 @@ takes them from is an open decision (see
   embedded TIFF header, not to the file
   ([makernote-and-metadata.md](makernote-and-metadata.md)). On the Z 9,
   0x0096 is present in the lossless file 5146 only; the HE and HE\* files
-  5147 and 5148 carry 0x008C and not 0x0096, and all three carry 0x0051
-  (tags present, values not read). **[F]**
+  5147 and 5148 carry 0x008C and not 0x0096, and all three carry 0x0051,
+  whose byte 10 reads 3, 14 and 13 on them, lossless, HE\* and HE
+  ([makernote-and-metadata.md](makernote-and-metadata.md#2-key-tags)).
+  **[F]**
 - **Byte order.** The 16-bit values in 0x0096 are in the MakerNote's byte
   order, which can differ from the file's. [2][10] **[P]** Older NEFs are
   big-endian; Nikon began writing little-endian MakerNotes with the D7100
@@ -98,9 +102,14 @@ MakerNote tag 0x0093 (NEFCompression) names the encoding. On the Z 9 and
 later bodies 0x0093 is absent and the same value is an int16u at byte 10 of
 tag 0x0051; ExifTool, LibRaw and rawler all read it there. [6][14][15][16]
 **[P]** On the Z 9, 0x0093 is absent from files 5146 to 5148, the lossless
-one included **[F]**; the value in 0x0051 was not read from them. The
-sources disagree on the byte order: LibRaw reads the field in the
-MakerNote's byte order, and only rawler forces little-endian. **[P]**
+one included, as it is on most Z bodies checked; but the Z fc and the
+Z 30 write it, with the value 3, and no 0x0051 (files 8559 and 5812), so
+the compression of a Z body has to be looked for in both tags **[F]**.
+Byte 10 of 0x0051 reads 3 on the lossless file 5146, 14 on the HE\* file
+5147 and 13 on the HE file 5148, as a u16 in the MakerNote's order
+**[F]**. The sources disagree on the byte order: LibRaw reads the field in
+the MakerNote's byte order, and only rawler forces little-endian; the
+three files are little-endian, so they do not tell the two apart. **[P]**
 
 | Value | Name (ExifTool) | Layout | Bodies seen | Conf. |
 |---|---|---|---|---|
@@ -938,8 +947,12 @@ These are also tracked in [open-questions.md](open-questions.md).
 - **NEFCompression 9 on Z bodies**: whether their 12-bit uncompressed files
   carry 9, and the byte order of a Z 6/Z 7 TIFF header.
 - **0x0051 on Z bodies**: 0x0093 is absent from the Z 9 files, the lossless
-  one included, so the compression must be read from 0x0051; its value and
-  byte order were not read from files 5146 to 5148.
+  one included, and from most Z bodies checked, while the Z fc and the Z 30
+  write 0x0093 and no 0x0051 (files 8559 and 5812), so the compression of
+  a Z body has to be looked for in both tags; byte 10 of 0x0051 reads 3,
+  14 and 13 on files 5146 to 5148, but their byte order, little-endian on
+  all three, cannot settle how the field is to be read on a big-endian
+  MakerNote.
 - **D850 M/S**: byte-level confirmation of a CFA layout and which Huffman
   table they use; whether the Z 9 and the original Z 6/Z 7 write M/S NEF.
 - **0x003D**: the first body to write it, and its channel order on any

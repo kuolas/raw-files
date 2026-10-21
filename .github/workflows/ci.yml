@@ -102,7 +102,7 @@ jobs:
       - run: cargo build --workspace
       # The real sample files of tests/samples.tsv, which the tests read when
       # they are present and skip otherwise (CONTRIBUTING.md §Code style and
-      # checks). The files of the normal tier are about 1.5 GB; the large
+      # checks). The files of the normal tier are about 1.6 GB; the large
       # tier is left out, since RAW_FILES_LARGE is not set here, and its
       # tests skip. The code that reads them is the same on every OS, so
       # only Linux downloads them; on macOS and Windows the directory does
