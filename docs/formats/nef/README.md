@@ -21,8 +21,12 @@ from the D1H to the Z6III, which CI downloads too (listed in
 autofocus data was checked against those 23 files and seven more CC0
 files, and on 20 October 2026 against three more, which CI downloads too
 (listed in
-[test-data.md](test-data.md#23-files-checked-for-the-focus-point)). The
-tests check the previews of all 33, and test-data.md records them, but
+[test-data.md](test-data.md#23-files-checked-for-the-focus-point)). On
+21 October 2026 the MakerNote of two Nikon camera JPEGs from Wikimedia
+Commons, a D5300's and a D70's, was checked as well
+([makernote-and-metadata.md](makernote-and-metadata.md#in-a-jpeg-file),
+listed in the [JPEG test data](../jpeg/test-data.md#2-the-sample-files)).
+The tests check the previews of all 33, and test-data.md records them, but
 the containers of the 30 files of 24 other bodies are not yet written up
 in these pages. The raw data was not
 checked, beyond the raw IFD's tags and the first bytes of the Z 9's strip.

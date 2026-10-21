@@ -29,6 +29,14 @@ disagreement. Byte offsets and version numbers taken from implementation
 sources were read through summaries; verify them against the source, and
 against sample files, before hard-coding them.
 
+Nikon's camera JPEGs carry the same MakerNote, in their Exif segment. What
+the two Nikon JPEGs of the [JPEG test data](../jpeg/test-data.md#2-the-sample-files)
+show, a D5300's and a D70's from Wikimedia Commons, cited as "the D5300
+JPEG", is in [section 1](#in-a-jpeg-file) and
+[section 8.6](#86-focus-point); how raw-files reads a JPEG is decided in
+[ADR014](../../architecture-decisions/adr014-jpeg-files-as-a-format-of-their-own.md)
+and described in the [JPEG notes](../jpeg/README.md).
+
 ## Contents
 
 - [1. Finding the MakerNote](#1-finding-the-makernote)
@@ -117,6 +125,35 @@ embedded layout. [P][4]
 - Offsets in the headerless and short-header layouts are relative to the
   outer TIFF header, so anything that moves the MakerNote breaks them. The
   embedded layout survives being moved as a block. [P][5]
+
+### In a JPEG file
+
+In a camera JPEG the MakerNote is an entry of the Exif IFD inside the
+Exif segment, an APP1 segment that holds a TIFF structure of its own;
+that structure's header, 12 bytes into the file when the segment comes
+first, is the base of its offsets
+([JPEG notes](../jpeg/container-and-metadata.md#4-exif-the-app1-segment)).
+**[P]** In a JPEG, what this page calls the outer TIFF header is that
+header.
+
+- **The embedded-TIFF layout reads unchanged**, since its offsets count
+  from its own inner header. The D5300 JPEG's MakerNote starts `Nikon\0`,
+  `02 11`, `00 00` and an inner `II` header, with 58 entries; the D70
+  JPEG's starts `Nikon\0`, `02 10`, `00 00` and an inner `MM` header,
+  with 42 entries, inside a file whose own TIFF structure is
+  little-endian, while the D70's NEF is big-endian (file 2060). **[F]**
+  The inner byte order is independent of the file's in a JPEG too.
+- **The two older layouts** would count their offsets from the Exif
+  segment's TIFF header in a JPEG; no JPEG sample has one. [I]
+- **Every value read lies inside the Exif segment and the MakerNote's
+  declared length** on both files: the ISO (`[0, 400]` and `[0, 200]`),
+  the lens range, and on the D5300 AFInfo2 and CropHiSpeed. **[F]**
+- **The D70 JPEG's PreviewIFD holds a JPEG of 564x372**, inside the
+  declared length, as the PreviewIFD of the D70's NEF does (file 2060);
+  the D5300 JPEG has no PreviewIFD. raw-files is to offer the D70's as
+  a preview of the JPEG, under the same in-block rule as in a NEF
+  ([ADR014](../../architecture-decisions/adr014-jpeg-files-as-a-format-of-their-own.md)).
+  **[F]**
 
 ## 2. Key tags
 
@@ -736,6 +773,13 @@ What the fields hold:
   report the mode.
 - **Every AFInfo2 and CropHiSpeed value lies inside the MakerNote's
   declared length** on every checked file. **[F]**
+- **In a camera JPEG**, the D5300's AFInfo2 is version 0100 with a zero
+  frame and area, a shot through the viewfinder, and the D70 JPEG writes
+  only AFInfo (0x0088): neither gives a point. **[F]** No public Nikon
+  JPEG in the set records a position. A JPEG keeps a point only when its
+  frame has the JPEG's aspect ratio, so that an export cropped to another
+  shape, which may keep the camera's MakerNote, gives none
+  ([ADR014](../../architecture-decisions/adr014-jpeg-files-as-a-format-of-their-own.md)).
 
 **What the samples cover.** Each kind of shot, the files that show it,
 and what raw-files gives; a row without a file is an open question
@@ -762,6 +806,9 @@ and what raw-files gives; a row without a file is an open question
 | A DX crop on a small raw | unknown | none | the point, scaled onto CropArea in stored pixels; unchecked |
 | A rotated (portrait) shot | a position in the landscape frame | Z 30 5812 | the point, in stored orientation; checked |
 | Face detection | FaceDetect | none | not read |
+| Camera JPEG through the viewfinder | a zero frame (`0100`) | the D5300 JPEG from Wikimedia Commons | none |
+| Camera JPEG with a position | a position | none public | the point, when its frame has the JPEG's aspect ratio; unchecked on a public file |
+| Exported JPEG that keeps the camera's MakerNote | the camera's frame and position | none public | the point only when the frame has the export's aspect ratio |
 
 ## 9. Robustness pitfalls
 

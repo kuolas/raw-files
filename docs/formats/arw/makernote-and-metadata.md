@@ -33,6 +33,15 @@ and all checked files are in [test-data.md](test-data.md#files-checked).
 Where a sample contradicts a source, the sample wins and the disagreement is
 recorded.
 
+Sony's camera JPEGs carry the same MakerNote, behind a header. What five of
+them show, the ILCE-7M3, ILCE-7RM2, DSC-RX100M4, ILCE-6000 and DSLR-A100
+JPEGs from Wikimedia Commons listed in the
+[JPEG test data](../jpeg/test-data.md#2-the-sample-files) and cited as "the
+ILCE-7M3 JPEG", is in [section 1](#in-a-jpeg-file) and
+[section 9.6](#96-focus-point); how raw-files reads a JPEG is decided in
+[ADR014](../../architecture-decisions/adr014-jpeg-files-as-a-format-of-their-own.md)
+and described in the [JPEG notes](../jpeg/README.md).
+
 Versions are named as ExifTool names them ("ARW 2.3.3"), with the four bytes
 of MakerNote tag 0xB000 where it matters ("3 3 3 0").
 
@@ -80,7 +89,7 @@ and raw-files should detect them by bytes. [P][2][3][6][7]
 | Layout | Header | IFD starts at | Offsets relative to | Byte order | Seen in |
 |---|---|---|---|---|---|
 | Headerless | none | MakerNote + 0 | the outer TIFF header | the outer file's | every ARW, SR2 and ARQ sample except the A100, including the DSC-R1's SR2 (file 3221) and the Hasselblad Lunar (file 4051) [F] |
-| `SONY DSC` header | `SONY DSC ` then three NUL bytes (12 bytes) | MakerNote + 12 | the outer TIFF header | ExifTool detects it; LibRaw and dcraw force little-endian; exiv2 uses the file's | the DSLR-A100's ARW 1.0 (file 2346) [F]; JPEGs from DSC compacts [P] |
+| `SONY DSC` header | `SONY DSC ` then three NUL bytes (12 bytes) | MakerNote + 12 | the outer TIFF header | ExifTool detects it; LibRaw and dcraw force little-endian; exiv2 uses the file's | the DSLR-A100's ARW 1.0 (file 2346) [F]; every Sony camera JPEG checked, from the DSLR-A100's to the ILCE-7M3's ([in a JPEG file](#in-a-jpeg-file)) [F]; JPEGs from DSC compacts [P] |
 | Other 12-byte headers | `SONY CAM `, `SONY MOBILE`, `\0\0SONY PIC\0`, `VHAB` + five spaces + NUL | MakerNote + 12 | the outer TIFF header | as above | listed in ExifTool's MakerNote types page [27]; seen in no raw sample [P][F] |
 | Olympus-format | `SONY PI\0` (IFD at + 12) or `PREMI\0` (+ 8), with Olympus tag tables | as stated | the outer TIFF header | detected | JPEGs of early compacts (DSC-S650 and others) [P][27] |
 | Text block | `SONY PIC\0` | not an IFD | n/a | n/a | JPEGs of some compacts [P][27] |
@@ -140,7 +149,9 @@ anywhere, so a Sony check keyed on Make alone rejects a Sony-built file.
   (0xB028) is 1612, and a Minolta IFD parses at file offset 1612. [P][3][F]
   Anything that moves the MakerNote without fixing its offsets breaks them.
 - **Byte order.** All 36 samples are little-endian (`II`), and the MakerNote
-  uses the file's order. [F] Inner blocks with a fixed order are noted where
+  uses the file's order. [F] The DSLR-A100 JPEG is big-endian, and its
+  MakerNote follows the file's order too: its 28 entries read only in
+  big-endian order. [F] Inner blocks with a fixed order are noted where
   they occur.
 - **No next-IFD pointer.** The four bytes after the IFD entries are a zero
   pointer on older bodies and the start of the value data on newer ones.
@@ -159,6 +170,34 @@ anywhere, so a Sony check keyed on Make alone rejects a Sony-built file.
   ILCE-9: 0x011A, 0x7000, 0x0111, 0x7316 and 0x74C7; files 1541, 1542), and
   ExifTool allows out-of-order tags in Sony IFDs. Do not require sorted
   tags in any Sony IFD. [F][P][2]
+
+### In a JPEG file
+
+In a camera JPEG the MakerNote is an entry of the Exif IFD inside the Exif
+segment, an APP1 segment that holds a TIFF structure of its own; that
+structure's header, 12 bytes into the file when the segment comes first,
+is the base of its offsets
+([JPEG notes](../jpeg/container-and-metadata.md#4-exif-the-app1-segment)).
+[P] In a JPEG, what this page calls the outer TIFF header is that header.
+
+- **Every Sony camera JPEG checked has the `SONY DSC` header**: `SONY DSC `
+  and three zero bytes, then the IFD at + 12, on the ILCE-7M3 (102
+  entries), ILCE-7RM2 (97), DSC-RX100M4 (93), ILCE-6000 (94) and DSLR-A100
+  (28) JPEGs, while every ARW sample but the A100's is headerless. [F]
+- **Its offsets count from the Exif segment's TIFF header**, as an ARW's
+  count from the start of the file: read so, FocusLocation parses on the
+  ILCE-7M3, ILCE-7RM2 and DSC-RX100M4 JPEGs, and every focus tag's value
+  lies inside the length the MakerNote declares. [F]
+- **Its byte order is the file's**: little-endian on four files,
+  big-endian on the DSLR-A100's. A reader that forces little-endian, as
+  the table above records of LibRaw and dcraw, would misread the A100
+  JPEG's MakerNote. [F][I]
+- **One entry points outside the Exif segment.** The ILCE-6000 JPEG's tag
+  0x2001, PreviewImage, which ExifTool's tables describe as an HD-size
+  preview in JPEG images [P][1], declares 549,518 bytes at an offset that
+  lies inside the 1616 × 1080 MPF image after the main image. Such an
+  entry is to be dropped, as one outside the MakerNote is, and no reader
+  in raw-files reads that tag. [F]
 
 ## 2. Key tags
 
@@ -1039,6 +1078,20 @@ What the fields hold:
   PreviewImageSize (0xB02C), read on the bytes of files 2271, 2521 and
   5858 on 2026-10-21. None is a focus tag, and raw-files drops them
   unread. **[F]**
+- **In a camera JPEG** the frame is the JPEG's own picture. The ILCE-7M3
+  JPEG, at the camera's M size, records `[3936, 2624, 1783, 1804]` in
+  AF-C (FocusMode 3): an off-centre point in a frame of the JPEG's
+  3936 × 2624. The ILCE-7RM2 JPEG records `[7952, 5304, 3976, 2652]` in
+  AF-S, the exact centre; the DSC-RX100M4 JPEG the exact centre,
+  `[5472, 3648, 2736, 1824]`, with FocusMode 0, manual focus, which gives
+  no point; the ILCE-6000 JPEG has FocusMode 4 and no FocusLocation, like
+  the bodies before the ILCE-7RM2; the DSLR-A100 JPEG has neither.
+  **[F]** The RX100M4 adds a body to those known to write FocusLocation.
+  Unlike the ILCE-7M4's medium raw, whose frame stays full size, the
+  ILCE-7M3's medium JPEG records the frame at its own size; whether the
+  ILCE-7M4 does the same in a JPEG is unchecked. **[F]** A JPEG keeps a
+  point only when its frame has the JPEG's aspect ratio
+  ([ADR014](../../architecture-decisions/adr014-jpeg-files-as-a-format-of-their-own.md)).
 
 **What the samples cover.** Each kind of shot, the files that show it,
 and what raw-files gives; a row without a file is an open question
@@ -1062,6 +1115,9 @@ and what raw-files gives; a row without a file is an open question
 | FocusLocation2 without FocusLocation | FocusLocation2 | none | the point; unchecked |
 | A rotated shot with a focus point | expected: the frame in stored orientation | none (the rotated SLT-A99V file records no FocusLocation) | the point; unchecked |
 | A big-endian file | unknown: FocusFrameSize's byte order | none | read in the file's order; unchecked |
+| Camera JPEG, autofocus | FocusLocation in the JPEG's framing, at its own size | the ILCE-7M3 (CC0) and ILCE-7RM2 (CC BY) JPEGs from Wikimedia Commons | the point, when its frame has the JPEG's aspect ratio |
+| Camera JPEG, manual focus | the frame's centre, FocusMode 0 | the DSC-RX100M4 JPEG (CC BY) | none |
+| Camera JPEG of a body without FocusLocation | no focus tag raw-files reads | the ILCE-6000 and DSLR-A100 JPEGs (CC BY) | none |
 
 ## 10. A100, SR2 and SRF
 
