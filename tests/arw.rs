@@ -3,9 +3,11 @@
 //! The ARW reader from outside the crate, on files laid out like each
 //! generation of Sony's RAW family (see [`support::arw`]): what each opens
 //! as, which previews it lists, that none of them is the raw data, what
-//! reading one returns, and what metadata it gives. Then the real Sony sample
+//! reading one returns, and what metadata it gives, the focus point that
+//! the ARW 4 files' MakerNote records among it. Then the real Sony sample
 //! files, when they have been downloaded (see [`support::samples::path`]):
-//! the previews each gives, and its metadata, every value of it.
+//! the previews each gives, and its metadata, every value of it, the focus
+//! point among them.
 
 mod support;
 
@@ -14,15 +16,18 @@ use std::fs;
 use std::io::Cursor;
 
 use raw_files::{
-    Exposure, Format, Lens, Orientation, PreviewFormat, Rational, RawFile, SignedRational, Size,
+    Exposure, Focus, Format, Lens, Orientation, Point, PreviewFormat, Rational, RawFile,
+    SignedRational, Size,
 };
 use support::arw::{
-    A100_JPEG, A100_RAW_AS_COUNT, A100_TAG_SIZE, ARW4_FULL_SIZE_JPEG, ArwBlobs, IFD0_JPEG,
-    MEDIUM_FULL_SIZE_JPEG, SR2_JPEG, SRF_JPEG, THUMBNAIL, a100_file, arq_file, arw2_file,
-    arw4_file, arw4_medium_file, sr2_file, srf_file, stub,
+    A100_JPEG, A100_RAW_AS_COUNT, A100_TAG_SIZE, ARW4_FOCUS_CENTER, ARW4_FOCUS_FRAME,
+    ARW4_FOCUS_SIZE, ARW4_FULL_SIZE_JPEG, ArwBlobs, IFD0_JPEG, MEDIUM_FULL_SIZE_JPEG, SR2_JPEG,
+    SRF_JPEG, THUMBNAIL, a100_file, arq_file, arw2_file, arw4_file, arw4_medium_file, sr2_file,
+    srf_file, stub,
 };
 use support::samples::{
-    Jpeg, Sample, SampleLens, SampleMetadata, SerialShape, check, check_metadata, sizes,
+    Jpeg, Sample, SampleFocus, SampleLens, SampleMetadata, SerialShape, check, check_metadata,
+    sizes,
 };
 use support::tiff_builder::{BlobId, Built, Order};
 
@@ -271,6 +276,21 @@ fn assert_the_arw4_lens(lens: Option<&Lens>, label: &str) {
     );
 }
 
+/// Checks that `focus` is the one the ARW 4 files' MakerNote records: a
+/// frame of 7008 by 4672 pixels with the centre at (3832, 2102) and an
+/// area of 350 by 351, as given, and nothing said about whether focus was
+/// confirmed; `label` names the file in a failure.
+fn assert_the_arw4_focus(focus: Option<Focus>, label: &str) {
+    let focus = focus.unwrap_or_else(|| panic!("{label}: no focus point"));
+    let (width, height) = wide(ARW4_FOCUS_FRAME);
+    let (x, y) = wide(ARW4_FOCUS_CENTER);
+    let (area_width, area_height) = wide(ARW4_FOCUS_SIZE);
+    assert_eq!(focus.frame(), size(width, height), "{label}");
+    assert_eq!(focus.center(), Point { x, y }, "{label}");
+    assert_eq!(focus.size(), Some(size(area_width, area_height)), "{label}");
+    assert_eq!(focus.in_focus(), None, "{label}");
+}
+
 #[test]
 fn the_arw4_file_gives_every_value_its_fixture_records() {
     for order in ORDERS {
@@ -294,6 +314,9 @@ fn the_arw4_file_gives_every_value_its_fixture_records() {
             // default crop, which lies inside it.
             assert_eq!(metadata.raw_size(), Some(size(7168, 5120)), "{label}");
             assert_eq!(metadata.image_size(), Some(size(7008, 4672)), "{label}");
+            // From the MakerNote, in the stored orientation whatever the
+            // Orientation says.
+            assert_the_arw4_focus(metadata.focus(), &label);
             for preview in file.previews() {
                 assert_eq!(preview.orientation(), orientation, "{label}");
             }
@@ -305,7 +328,9 @@ fn the_arw4_file_gives_every_value_its_fixture_records() {
 fn every_layout_gives_the_metadata_its_fixture_records() {
     let arw4_time = Some("2023-10-19T16:13:48.776+02:00");
     // Each layout's name, model, capture time, whether it records an
-    // exposure and a lens, and its raw size and image size.
+    // exposure, a lens and a focus point, and its raw size and image size.
+    // The medium file's MakerNote is the lossless file's, so its focus
+    // point is too, in the full-size frame.
     let expected = [
         (
             "ARW 4",
@@ -367,7 +392,7 @@ fn every_layout_gives_the_metadata_its_fixture_records() {
         assert_eq!(layouts.len(), expected.len());
         for (
             (name, (built, _)),
-            (expected_name, model, time, has_exposure_and_lens, raw_size, image_size),
+            (expected_name, model, time, has_exposure_lens_and_focus, raw_size, image_size),
         ) in layouts.into_iter().zip(expected)
         {
             assert_eq!(name, expected_name);
@@ -383,12 +408,14 @@ fn every_layout_gives_the_metadata_its_fixture_records() {
                 time,
                 "{label}"
             );
-            if has_exposure_and_lens {
+            if has_exposure_lens_and_focus {
                 assert_the_arw4_exposure(metadata.exposure(), &label);
                 assert_the_arw4_lens(metadata.lens(), &label);
+                assert_the_arw4_focus(metadata.focus(), &label);
             } else {
                 assert_eq!(metadata.exposure(), &Exposure::default(), "{label}");
                 assert_eq!(metadata.lens(), None, "{label}");
+                assert_eq!(metadata.focus(), None, "{label}");
             }
             assert_eq!(metadata.raw_size(), raw_size, "{label}");
             assert_eq!(metadata.image_size(), image_size, "{label}");
@@ -1414,9 +1441,10 @@ const LARGE_SAMPLES: &[Sample] = &[
 /// The metadata each Sony sample of the list's normal tier must give, in
 /// the order of `tests/samples.tsv`, its serial numbers by their shape
 /// alone (see [`SampleMetadata`]). The table was generated from a walk of
-/// each file's IFDs and Exif IFD, by the reader's rules, which read only
-/// the standard tags on Sony files: Sony's MakerNote records nothing they
-/// lack that the reader could use (ADR011). So only the ILCE-1 and the
+/// each file's IFDs and Exif IFD, and its focus points from each file's
+/// MakerNote, by the reader's rules, which read the standard tags on Sony
+/// files and Sony's MakerNote for the focus point alone, which no standard
+/// tag records (ADR011, ADR012). So only the ILCE-1 and the
 /// ILCE-7M5 give a serial number, the only bodies of the set that write
 /// the Exif one; the DSLR-A100 gives no raw size and no image
 /// size, since its SubIFDs tag holds the offset of its raw data rather
@@ -1424,8 +1452,11 @@ const LARGE_SAMPLES: &[Sample] = &[
 /// `----` and whose f-number and focal length are 0/10, gives no lens, no
 /// f-number and no focal length; and the RX100 and the RX100M6 give a lens
 /// with a range and no model. A file without a default crop gives its raw
-/// size as its image size. No file gives a focus point: the reader reads
-/// none from Sony files.
+/// size as its image size. The bodies from the ILCE-7RM2 on give a focus
+/// point from the MakerNote's FocusLocation, with an area from its
+/// FocusFrameSize from the ILCE-7SM3 on, and never say whether focus was
+/// confirmed; a manual-focus shot and the files without a FocusLocation
+/// give none, each row saying why.
 const METADATA: &[SampleMetadata] = &[
     // SLT-A55 (raw.pixls.us 964)
     SampleMetadata {
@@ -1451,7 +1482,7 @@ const METADATA: &[SampleMetadata] = &[
         }),
         raw_size: Some((4928, 3280)),
         image_size: Some((4928, 3280)),
-        focus: None,
+        focus: None, // no FocusLocation: a point number in CameraInfo only
     },
     // ILCE-7RM2 (raw.pixls.us 1310)
     SampleMetadata {
@@ -1477,7 +1508,7 @@ const METADATA: &[SampleMetadata] = &[
         }),
         raw_size: Some((8000, 5320)),
         image_size: Some((8000, 5320)),
-        focus: None,
+        focus: None, // manual focus
     },
     // ILCE-7RM2 (raw.pixls.us 1311)
     SampleMetadata {
@@ -1503,7 +1534,7 @@ const METADATA: &[SampleMetadata] = &[
         }),
         raw_size: Some((8000, 5320)),
         image_size: Some((8000, 5320)),
-        focus: None,
+        focus: None, // manual focus
     },
     // DSC-F828 (raw.pixls.us 1351)
     SampleMetadata {
@@ -1521,7 +1552,7 @@ const METADATA: &[SampleMetadata] = &[
         lens: None,
         raw_size: Some((3360, 2460)),
         image_size: Some((3360, 2460)),
-        focus: None,
+        focus: None, // no FocusLocation: no focus tag at all
     },
     // NEX-5 (raw.pixls.us 1457)
     SampleMetadata {
@@ -1547,7 +1578,7 @@ const METADATA: &[SampleMetadata] = &[
         }),
         raw_size: Some((4608, 3072)),
         image_size: Some((4608, 3072)),
-        focus: None,
+        focus: None, // no FocusLocation: a point number in CameraInfo only
     },
     // ILCE-9 (raw.pixls.us 1541)
     SampleMetadata {
@@ -1573,7 +1604,12 @@ const METADATA: &[SampleMetadata] = &[
         }),
         raw_size: Some((6048, 4024)),
         image_size: Some((6000, 4000)),
-        focus: None,
+        focus: Some(SampleFocus {
+            frame: (6000, 4000),
+            center: (2662, 2000),
+            size: None,
+            in_focus: None,
+        }),
     },
     // ILCE-9 (raw.pixls.us 1542)
     SampleMetadata {
@@ -1599,7 +1635,12 @@ const METADATA: &[SampleMetadata] = &[
         }),
         raw_size: Some((6048, 4024)),
         image_size: Some((6000, 4000)),
-        focus: None,
+        focus: Some(SampleFocus {
+            frame: (6000, 4000),
+            center: (2493, 1808),
+            size: None,
+            in_focus: None,
+        }),
     },
     // ILCE-7S (raw.pixls.us 1582)
     SampleMetadata {
@@ -1617,7 +1658,7 @@ const METADATA: &[SampleMetadata] = &[
         lens: None,
         raw_size: Some((2816, 1872)),
         image_size: Some((2816, 1872)),
-        focus: None,
+        focus: None, // manual focus; no FocusLocation either
     },
     // DSLR-A200 (raw.pixls.us 2271)
     SampleMetadata {
@@ -1635,7 +1676,7 @@ const METADATA: &[SampleMetadata] = &[
         lens: None,
         raw_size: Some((3880, 2600)),
         image_size: Some((3880, 2600)),
-        focus: None,
+        focus: None, // no FocusLocation: a point number in CameraInfo only
     },
     // DSLR-A100 (raw.pixls.us 2346)
     SampleMetadata {
@@ -1653,7 +1694,7 @@ const METADATA: &[SampleMetadata] = &[
         lens: None,
         raw_size: None,
         image_size: None,
-        focus: None,
+        focus: None, // no FocusLocation: only the A100's Minolta block, which is not read
     },
     // DSLR-A700 (raw.pixls.us 2521)
     SampleMetadata {
@@ -1671,7 +1712,7 @@ const METADATA: &[SampleMetadata] = &[
         lens: None,
         raw_size: Some((4288, 2856)),
         image_size: Some((4288, 2856)),
-        focus: None,
+        focus: None, // no FocusLocation: a point number in CameraInfo only
     },
     // DSC-RX100M6 (raw.pixls.us 3012)
     SampleMetadata {
@@ -1697,7 +1738,12 @@ const METADATA: &[SampleMetadata] = &[
         }),
         raw_size: Some((5504, 3672)),
         image_size: Some((5472, 3648)),
-        focus: None,
+        focus: Some(SampleFocus {
+            frame: (3648, 3648),
+            center: (1824, 1824),
+            size: None,
+            in_focus: None,
+        }),
     },
     // DSC-RX100M6 (raw.pixls.us 3015)
     SampleMetadata {
@@ -1723,7 +1769,12 @@ const METADATA: &[SampleMetadata] = &[
         }),
         raw_size: Some((5504, 3672)),
         image_size: Some((5472, 3648)),
-        focus: None,
+        focus: Some(SampleFocus {
+            frame: (5472, 3080),
+            center: (2736, 936),
+            size: None,
+            in_focus: None,
+        }),
     },
     // DSC-R1 (raw.pixls.us 3221)
     SampleMetadata {
@@ -1741,7 +1792,7 @@ const METADATA: &[SampleMetadata] = &[
         lens: None,
         raw_size: Some((3984, 2608)),
         image_size: Some((3984, 2608)),
-        focus: None,
+        focus: None, // no FocusLocation: no focus tag at all
     },
     // ILCE-7RM3 (raw.pixls.us 3251)
     SampleMetadata {
@@ -1767,7 +1818,12 @@ const METADATA: &[SampleMetadata] = &[
         }),
         raw_size: Some((8000, 5320)),
         image_size: Some((7952, 5304)),
-        focus: None,
+        focus: Some(SampleFocus {
+            frame: (7952, 5304),
+            center: (3976, 1911),
+            size: None,
+            in_focus: None,
+        }),
     },
     // SLT-A99 (raw.pixls.us 3751)
     SampleMetadata {
@@ -1793,7 +1849,7 @@ const METADATA: &[SampleMetadata] = &[
         }),
         raw_size: Some((6048, 4024)),
         image_size: Some((6048, 4024)),
-        focus: None,
+        focus: None, // no FocusLocation: a mask of A-mount points (AFPointsUsed), no position
     },
     // Hasselblad Lunar (raw.pixls.us 4051)
     SampleMetadata {
@@ -1819,7 +1875,7 @@ const METADATA: &[SampleMetadata] = &[
         }),
         raw_size: Some((6048, 4024)),
         image_size: Some((6048, 4024)),
-        focus: None,
+        focus: None, // no FocusLocation: focus data only in an enciphered block
     },
     // ILCE-1 (raw.pixls.us 4466)
     SampleMetadata {
@@ -1848,7 +1904,12 @@ const METADATA: &[SampleMetadata] = &[
         }),
         raw_size: Some((8704, 6144)),
         image_size: Some((8640, 5760)),
-        focus: None,
+        focus: Some(SampleFocus {
+            frame: (8640, 5760),
+            center: (4320, 2880),
+            size: Some((1026, 912)),
+            in_focus: None,
+        }),
     },
     // ILCE-7SM3 (raw.pixls.us 5418)
     SampleMetadata {
@@ -1874,7 +1935,12 @@ const METADATA: &[SampleMetadata] = &[
         }),
         raw_size: Some((4288, 2848)),
         image_size: Some((4240, 2832)),
-        focus: None,
+        focus: Some(SampleFocus {
+            frame: (4240, 2832),
+            center: (2120, 1180),
+            size: Some((92, 94)),
+            in_focus: None,
+        }),
     },
     // DSC-RX100 (raw.pixls.us 5811)
     SampleMetadata {
@@ -1900,7 +1966,7 @@ const METADATA: &[SampleMetadata] = &[
         }),
         raw_size: Some((5504, 3672)),
         image_size: Some((5504, 3672)),
-        focus: None,
+        focus: None, // no FocusLocation: no focus tag at all
     },
     // DSLR-A900 (raw.pixls.us 5858)
     SampleMetadata {
@@ -1918,7 +1984,7 @@ const METADATA: &[SampleMetadata] = &[
         lens: None,
         raw_size: Some((6080, 4048)),
         image_size: Some((6080, 4048)),
-        focus: None,
+        focus: None, // no FocusLocation: a point number in CameraInfo only
     },
     // ILCE-6700 (raw.pixls.us 6736)
     SampleMetadata {
@@ -1944,7 +2010,12 @@ const METADATA: &[SampleMetadata] = &[
         }),
         raw_size: Some((6656, 4608)),
         image_size: Some((6192, 4128)),
-        focus: None,
+        focus: Some(SampleFocus {
+            frame: (6192, 4128),
+            center: (3096, 2064),
+            size: Some((135, 138)),
+            in_focus: None,
+        }),
     },
     // ILCE-7M4 (raw.pixls.us 6929)
     SampleMetadata {
@@ -1970,7 +2041,12 @@ const METADATA: &[SampleMetadata] = &[
         }),
         raw_size: Some((7168, 5120)),
         image_size: Some((7008, 4672)),
-        focus: None,
+        focus: Some(SampleFocus {
+            frame: (7008, 4672),
+            center: (3832, 2102),
+            size: Some((350, 351)),
+            in_focus: None,
+        }),
     },
     // ILCE-7M4 (raw.pixls.us 6930)
     SampleMetadata {
@@ -1996,7 +2072,12 @@ const METADATA: &[SampleMetadata] = &[
         }),
         raw_size: Some((5120, 3584)),
         image_size: Some((4608, 3072)),
-        focus: None,
+        focus: Some(SampleFocus {
+            frame: (7008, 4672),
+            center: (3482, 2306),
+            size: Some((350, 351)),
+            in_focus: None,
+        }),
     },
     // ILCE-7M4 (raw.pixls.us 6931)
     SampleMetadata {
@@ -2022,7 +2103,12 @@ const METADATA: &[SampleMetadata] = &[
         }),
         raw_size: Some((3584, 2560)),
         image_size: Some((3504, 2336)),
-        focus: None,
+        focus: Some(SampleFocus {
+            frame: (7008, 4672),
+            center: (3591, 2306),
+            size: Some((350, 351)),
+            in_focus: None,
+        }),
     },
     // ILCE-7M4 (raw.pixls.us 6933)
     SampleMetadata {
@@ -2048,7 +2134,12 @@ const METADATA: &[SampleMetadata] = &[
         }),
         raw_size: Some((4736, 3132)),
         image_size: Some((4608, 3072)),
-        focus: None,
+        focus: Some(SampleFocus {
+            frame: (4608, 3072),
+            center: (2304, 1529),
+            size: Some((230, 231)),
+            in_focus: None,
+        }),
     },
     // ILCE-7M4 (raw.pixls.us 6936)
     SampleMetadata {
@@ -2074,7 +2165,12 @@ const METADATA: &[SampleMetadata] = &[
         }),
         raw_size: Some((4736, 3132)),
         image_size: Some((4608, 3072)),
-        focus: None,
+        focus: Some(SampleFocus {
+            frame: (4608, 3072),
+            center: (2275, 1516),
+            size: Some((230, 231)),
+            in_focus: None,
+        }),
     },
     // ILCE-9M3 (raw.pixls.us 7361)
     SampleMetadata {
@@ -2100,7 +2196,7 @@ const METADATA: &[SampleMetadata] = &[
         }),
         raw_size: Some((6048, 4020)),
         image_size: Some((6000, 4000)),
-        focus: None,
+        focus: None, // manual focus
     },
     // ILCE-9M3 (raw.pixls.us 7364)
     SampleMetadata {
@@ -2126,7 +2222,7 @@ const METADATA: &[SampleMetadata] = &[
         }),
         raw_size: Some((3072, 2048)),
         image_size: Some((3008, 2000)),
-        focus: None,
+        focus: None, // manual focus
     },
     // ILCE-1M2 (raw.pixls.us 7835)
     SampleMetadata {
@@ -2152,7 +2248,12 @@ const METADATA: &[SampleMetadata] = &[
         }),
         raw_size: Some((5664, 3768)),
         image_size: Some((5616, 3744)),
-        focus: None,
+        focus: Some(SampleFocus {
+            frame: (5616, 3744),
+            center: (2808, 1872),
+            size: Some((1386, 998)),
+            in_focus: None,
+        }),
     },
     // ILCE-7M5 (raw.pixls.us 8846)
     SampleMetadata {
@@ -2181,7 +2282,12 @@ const METADATA: &[SampleMetadata] = &[
         }),
         raw_size: Some((7040, 4688)),
         image_size: Some((7008, 4672)),
-        focus: None,
+        focus: Some(SampleFocus {
+            frame: (7008, 4672),
+            center: (3504, 2336),
+            size: Some((745, 594)),
+            in_focus: None,
+        }),
     },
     // ILCE-7M5 (raw.pixls.us 8847)
     SampleMetadata {
@@ -2210,7 +2316,12 @@ const METADATA: &[SampleMetadata] = &[
         }),
         raw_size: Some((7040, 4688)),
         image_size: Some((7008, 4672)),
-        focus: None,
+        focus: Some(SampleFocus {
+            frame: (7008, 4672),
+            center: (3504, 2336),
+            size: Some((745, 594)),
+            in_focus: None,
+        }),
     },
     // ILCE-7M5 (raw.pixls.us 8848)
     SampleMetadata {
@@ -2239,7 +2350,12 @@ const METADATA: &[SampleMetadata] = &[
         }),
         raw_size: Some((5120, 3584)),
         image_size: Some((4608, 3072)),
-        focus: None,
+        focus: Some(SampleFocus {
+            frame: (4608, 3072),
+            center: (2304, 1536),
+            size: Some((490, 390)),
+            in_focus: None,
+        }),
     },
     // ILCE-7M5 (raw.pixls.us 8849)
     SampleMetadata {
@@ -2268,7 +2384,12 @@ const METADATA: &[SampleMetadata] = &[
         }),
         raw_size: Some((4640, 3088)),
         image_size: Some((4608, 3072)),
-        focus: None,
+        focus: Some(SampleFocus {
+            frame: (4608, 3072),
+            center: (2304, 1536),
+            size: Some((490, 390)),
+            in_focus: None,
+        }),
     },
     // ILCE-7M5 (raw.pixls.us 8850)
     SampleMetadata {
@@ -2297,7 +2418,12 @@ const METADATA: &[SampleMetadata] = &[
         }),
         raw_size: Some((4640, 3088)),
         image_size: Some((4608, 3072)),
-        focus: None,
+        focus: Some(SampleFocus {
+            frame: (4608, 3072),
+            center: (2304, 1536),
+            size: Some((490, 390)),
+            in_focus: None,
+        }),
     },
 ];
 
@@ -2328,7 +2454,12 @@ const LARGE_METADATA: &[SampleMetadata] = &[
         }),
         raw_size: Some((8000, 5320)),
         image_size: Some((7952, 5304)),
-        focus: None,
+        focus: Some(SampleFocus {
+            frame: (7952, 5304),
+            center: (3976, 1911),
+            size: None,
+            in_focus: None,
+        }),
     },
 ];
 

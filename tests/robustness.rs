@@ -15,7 +15,8 @@
 //! CropHiSpeed and CropArea place the focus point on the cropped picture, a
 //! Nikon D300's NEF, whose MakerNote records the serial number, the lens's
 //! range and the clock's time zone that its standard tags lack, and an
-//! ILCE-7M4's ARW 4, each in both byte orders. They damage two real files
+//! ILCE-7M4's ARW 4, with its MakerNote, which records the focus point,
+//! each in both byte orders. They damage two real files
 //! too, committed with their pixels and personal fields removed: shots of
 //! the maintainer's own Z 9 in DX and 1:1 crop modes, which hold the
 //! camera's own layout of tags, in little-endian byte order, where the

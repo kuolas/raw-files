@@ -1,15 +1,15 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 //! The Sony MakerNote: where it lies in the file, how its directory is
-//! found, and what is checked before anything in it is read.
+//! found, what is checked before anything in it is read, and the focus
+//! point read from it.
 //!
 //! The MakerNote is a block of Sony's own metadata, the value of the
 //! MakerNote tag of the Exif IFD: a directory of Sony's tags, an IFD like
 //! the file's own, with the values it points at. raw-files reads it for one
 //! thing only, the point where the camera focused, which no standard tag
-//! records and which Sony keeps in a plain tag of this directory. ADR012
+//! records and which Sony keeps in plain tags of this directory. ADR012
 //! decided it, amending ADR011, under which no Sony MakerNote was read.
-//! Nothing in the directory is used yet (#25).
 //!
 //! Sony has written the block in several layouts, told apart by its first
 //! bytes:
@@ -80,16 +80,98 @@
 //! found and checked, its IFD parsed. Every use of the MakerNote is to read
 //! from that same structure, as the Nikon reader's do, so that none of them
 //! finds, checks or parses the block again.
+//!
+//! # The focus point
+//!
+//! The bodies from the ILCE-7RM2 (2015) on record where the camera focused
+//! as a position in pixels, in plain tags of the MakerNote IFD, outside
+//! the values Sony enciphers. The tags' meanings are those of ExifTool's
+//! documentation, confirmed on the 36 public samples that the ARW notes
+//! list (`docs/formats/arw/makernote-and-metadata.md`, section 9.6), and
+//! every one of their values lies inside the block on every sample:
+//!
+//! - **FocusLocation** ([`FOCUS_LOCATION`]) says where the camera focused:
+//!   the width and height of a frame, then the x and y of the focus area's
+//!   centre in it. Every sample from the ILCE-7RM2 on has it; the ILCE-7S,
+//!   the NEX-5, the RX100, the A-mount bodies, the Hasselblad Lunar and the
+//!   older formats do not. The ILCE-9M3, the ILCE-1M2 and the ILCE-7M5
+//!   repeat it in **FocusLocation2** ([`FOCUS_LOCATION2`]), equal to it on
+//!   every sample. FocusLocation2 is read only when FocusLocation gives
+//!   nothing; no sample has FocusLocation2 alone, so such a file is
+//!   unchecked.
+//! - **FocusFrameSize** ([`FOCUS_FRAME_SIZE`]) says how large the focus
+//!   area is, on the bodies from the ILCE-7SM3 (2020) on: from 92 by 94
+//!   pixels on the ILCE-7SM3 (public sample 5418) to 1386 by 998 on the
+//!   ILCE-1M2 (file 7835). Its numbers are in the file's byte order, like
+//!   every number in the block; every sample is little-endian, so that a
+//!   big-endian file's are too is unchecked.
+//! - **FocusMode** ([`FOCUS_MODE`]) says how the camera focused: manual
+//!   focus, or one of the autofocus modes.
+//!
+//! The position is the centre of the area. Several autofocus shots with an
+//! area sit at exactly half their frame, such as the ILCE-1's (4320, 2880)
+//! in 8640 by 5760 pixels with an area of 1026 by 912 (file 4466) and the
+//! ILCE-6700's (file 6736); and the ILCE-7RM3's agrees with the spot that
+//! another tag, FlexibleSpotPosition, records on a grid of 640 by 480
+//! (file 3251).
+//!
+//! The frame is the picture as the camera framed it, in the orientation of
+//! the stored image and at the file's scale, which is not always the image
+//! size raw-files reports. It is 6000 by 4000 on the ILCE-9 (files 1541
+//! and 1542). On the RX100M6's 1:1 file it is 3648 by 3648, while the
+//! image size is the 5472 by 3648 default crop (file 3012), and on its 16:9
+//! file 5472 by 3080 (file 3015). On the ILCE-7M4's medium and small raws
+//! it is the full-size 7008 by 4672, larger than the stored image (files
+//! 6930 and 6931), and on the ILCE-9M3's small raw 3008 by 2000 (file
+//! 7364). The point is given as recorded, built through [`Focus::new`] and
+//! [`Focus::with_size`]: a frame with a zero side or a centre off the
+//! frame gives none, and so does an area that does not fit inside the
+//! frame around its centre, since such a record cannot be used, as on a
+//! Nikon file (ADR012). A side of zero in FocusFrameSize says only that no
+//! size is recorded, and the point is kept without one.
+//!
+//! A shot in manual focus still records a location, the frame's exact
+//! centre, with FocusMode 0: the ILCE-7RM2's files 1310 and 1311, and the
+//! ILCE-9M3's 7361 and 7364, whose FocusFrameSize is all zeros. The camera
+//! did not focus on that point, so FocusMode 0 gives none, whatever
+//! FocusLocation holds (ADR012). Nothing else in the plain tags says that
+//! no autofocus took place, so any other FocusMode, or none, keeps the
+//! point. The ILCE-7S's file is a manual-focus shot without FocusLocation
+//! (file 1582). No plain tag says whether focus was confirmed either, so
+//! [`Focus::in_focus`] is never set.
 
 use std::io::{Read, Seek};
 use std::ops::Range;
 
 use crate::container::tiff::tags::MAKER_NOTE;
-use crate::container::tiff::{Ifd, Tree};
+use crate::container::tiff::types::{BYTE, SHORT, UNDEFINED};
+use crate::container::tiff::{Ifd, Tree, skip_damage};
 use crate::error::Result;
 use crate::formats::block_ifd::{block_of, ifd_in};
+use crate::geometry::{Point, Size};
 use crate::io::Source;
 use crate::limits::Limits;
+use crate::metadata::Focus;
+
+/// The Sony MakerNote tag that records how the camera focused
+/// (FocusMode): one BYTE, 0 for manual focus, and 2, 3, 4, 6 or 7 for the
+/// autofocus modes AF-S, AF-C, AF-A, DMF and AF-D.
+pub(super) const FOCUS_MODE: u16 = 0x201B;
+
+/// The Sony MakerNote tag that records where the camera focused
+/// (FocusLocation): four SHORTs, the width and height of the frame, then
+/// the x and y of the focus area's centre in it.
+pub(super) const FOCUS_LOCATION: u16 = 0x2027;
+
+/// The Sony MakerNote tag that records the size of the focus area
+/// (FocusFrameSize): six UNDEFINED bytes, the area's width and height as
+/// 16-bit numbers in the MakerNote's byte order, then a third, 257 or 0,
+/// whose meaning is unknown.
+const FOCUS_FRAME_SIZE: u16 = 0x2037;
+
+/// The Sony MakerNote tag that repeats FocusLocation on the newest bodies
+/// (FocusLocation2): the same four SHORTs, with the same values.
+const FOCUS_LOCATION2: u16 = 0x204A;
 
 /// The header of the DSLR-A100's MakerNote (`SONY DSC `, then three NULs),
 /// which ExifTool's documentation also lists for the DSC compacts' JPEG
@@ -142,16 +224,17 @@ const NOT_SONY: [&[u8]; 3] = [SONY_PI, PREMI, SONY_PIC];
 ///
 /// See the [module documentation](self) for the layouts.
 #[derive(Debug)]
-#[cfg_attr(
-    not(test),
-    expect(
-        dead_code,
-        reason = "nothing uses the Sony MakerNote's directory yet (#25)"
-    )
-)]
 pub(super) struct MakerNote {
     /// Where the block's bytes are in the file: the bounds that every
     /// offset found inside the block is checked against.
+    #[cfg_attr(
+        not(test),
+        expect(
+            dead_code,
+            reason = "the IFD's values were checked against the block when it was read, \
+                      and the focus point's tags read nothing else"
+        )
+    )]
     block: Range<u64>,
     /// The MakerNote IFD, which holds Sony's tags: at the block's start, or
     /// 12 bytes in after a header, inside the block with its whole entry
@@ -171,13 +254,6 @@ pub(super) struct MakerNote {
 /// # Errors
 ///
 /// `Io` when the reader fails. Nothing the block holds is an error.
-#[cfg_attr(
-    not(test),
-    expect(
-        dead_code,
-        reason = "nothing uses the Sony MakerNote's directory yet (#25)"
-    )
-)]
 pub(super) fn read<R: Read + Seek>(
     src: &mut Source<R>,
     tree: &Tree,
@@ -225,6 +301,133 @@ fn ifd_start(head: &[u8]) -> Option<u64> {
     } else {
         Some(0)
     }
+}
+
+/// Where the camera focused, as `makernote` records it: the centre of the
+/// focus area and the frame it is measured in, from FocusLocation, and the
+/// area's size from FocusFrameSize when it records one. Whether focus was
+/// confirmed is never set: no plain tag records it.
+///
+/// `None` when FocusMode records manual focus ([`manual_focus`]); when
+/// neither FocusLocation nor FocusLocation2 gives a location
+/// ([`location`]); when [`Focus::new`] refuses the location, for a frame
+/// with a zero side or a centre off the frame; or when FocusFrameSize
+/// records an area, both of its sides above zero, that [`Focus::with_size`]
+/// refuses because it does not fit inside the frame around the centre.
+///
+/// FocusLocation2 is read only when FocusLocation gives no location: when
+/// it is missing, and also when it is there but is not four SHORTs, a shape
+/// no sample shows, which reads as missing. A location of the right shape
+/// is FocusLocation's, whatever FocusLocation2 holds. A FocusFrameSize that
+/// gives no area ([`area`]) keeps the point without a size.
+///
+/// See the [module documentation](self) for what the tags record.
+///
+/// # Errors
+///
+/// `Io` when the reader fails. Nothing the block holds is an error.
+pub(super) fn focus<R: Read + Seek>(
+    src: &mut Source<R>,
+    makernote: &MakerNote,
+) -> Result<Option<Focus>> {
+    if manual_focus(src, makernote)? {
+        return Ok(None);
+    }
+    let mut found = location(src, makernote, FOCUS_LOCATION)?;
+    if found.is_none() {
+        found = location(src, makernote, FOCUS_LOCATION2)?;
+    }
+    let Some(focus) = found.and_then(|(frame, center)| Focus::new(frame, center)) else {
+        return Ok(None);
+    };
+    // An area that `with_size` refuses costs the whole point: `area` gives
+    // none with a zero side, so this one is a record that cannot be used,
+    // which gives no focus on every format, as ADR012 decides.
+    Ok(match area(src, makernote)? {
+        Some(size) => focus.with_size(size),
+        None => Some(focus),
+    })
+}
+
+/// Whether `makernote`'s FocusMode records manual focus: whether it is one
+/// BYTE, and that byte is 0. A FocusMode that is missing, of another type
+/// or another count, or that holds any other value, such as 3 for AF-C,
+/// records no manual focus.
+///
+/// # Errors
+///
+/// `Io` when the reader fails. Nothing the block holds is an error.
+fn manual_focus<R: Read + Seek>(src: &mut Source<R>, makernote: &MakerNote) -> Result<bool> {
+    if !has_entry_of_shape(makernote, FOCUS_MODE, BYTE, 1) {
+        return Ok(false);
+    }
+    let mode = skip_damage(makernote.ifd.bytes(src, FOCUS_MODE))?.flatten();
+    Ok(mode.as_deref() == Some(&[0]))
+}
+
+/// The frame and the centre that `makernote`'s tag `tag`, FocusLocation or
+/// FocusLocation2, records: its four SHORTs, the frame's width and height,
+/// then the centre's x and y, widened to 32 bits. `None` when the tag is
+/// missing, is not of type SHORT, or does not hold exactly four values.
+///
+/// The values are not checked here: [`Focus::new`] checks them.
+///
+/// # Errors
+///
+/// `Io` when the reader fails. Nothing the block holds is an error.
+fn location<R: Read + Seek>(
+    src: &mut Source<R>,
+    makernote: &MakerNote,
+    tag: u16,
+) -> Result<Option<(Size, Point)>> {
+    if !has_entry_of_shape(makernote, tag, SHORT, 4) {
+        return Ok(None);
+    }
+    let values = skip_damage(makernote.ifd.u32s(src, tag))?.flatten();
+    let Some(&[width, height, x, y]) = values.as_deref() else {
+        return Ok(None);
+    };
+    Ok(Some((Size { width, height }, Point { x, y })))
+}
+
+/// The size of the focus area that `makernote`'s FocusFrameSize records:
+/// the first two of its three 16-bit numbers, the area's width and height,
+/// in the MakerNote's byte order, widened to 32 bits. The third is not
+/// read.
+///
+/// `None` when the tag is missing, is not of type UNDEFINED, does not hold
+/// exactly six bytes, or records a width or a height of zero, which on
+/// Sony says only that no size is recorded (ADR012).
+///
+/// # Errors
+///
+/// `Io` when the reader fails. Nothing the block holds is an error.
+fn area<R: Read + Seek>(src: &mut Source<R>, makernote: &MakerNote) -> Result<Option<Size>> {
+    if !has_entry_of_shape(makernote, FOCUS_FRAME_SIZE, UNDEFINED, 6) {
+        return Ok(None);
+    }
+    let value = skip_damage(makernote.ifd.bytes(src, FOCUS_FRAME_SIZE))?.flatten();
+    let Some(&[width0, width1, height0, height1, ..]) = value.as_deref() else {
+        return Ok(None);
+    };
+    let order = makernote.ifd.order();
+    let width = u32::from(order.u16([width0, width1]));
+    let height = u32::from(order.u16([height0, height1]));
+    Ok((width != 0 && height != 0).then_some(Size { width, height }))
+}
+
+/// Whether `makernote`'s MakerNote IFD has an entry of tag `tag`, of type
+/// `typ`, holding exactly `count` values: the shape its tag's rule allows.
+///
+/// The readers of values accept more types than a tag's rule allows:
+/// [`Ifd::u32s`] reads LONG and IFD as well as SHORT, and [`Ifd::bytes`]
+/// BYTE as well as UNDEFINED. The value itself lies inside the block, as
+/// every value of the IFD does ([`ifd_in`]).
+fn has_entry_of_shape(makernote: &MakerNote, tag: u16, typ: u16, count: u32) -> bool {
+    makernote
+        .ifd
+        .entry(tag)
+        .is_some_and(|entry| entry.typ() == typ && entry.count() == count)
 }
 
 #[cfg(test)]
@@ -673,18 +876,30 @@ mod tests {
     /// that nothing points at, before the MakerNote, holds bytes that push
     /// it there.
     fn far_file(order: Order, start: u64) -> (Built, IfdId) {
+        far_file_with(order, start, |builder| {
+            sound_ifd(builder, b"SONY DSC \0\0\0")
+        })
+    }
+
+    /// As [`far_file`], with the MakerNote IFD that `makernote` adds to the
+    /// builder and returns, after its prefix, if it has one.
+    fn far_file_with(
+        order: Order,
+        start: u64,
+        makernote: impl FnOnce(&mut TiffBuilder) -> IfdId,
+    ) -> (Built, IfdId) {
         let filler_entry = |builder: &mut TiffBuilder, filler: IfdId, len: u64| {
             let len = usize::try_from(len).unwrap();
             builder.undefined(filler, FIRST, &vec![0; len]);
         };
         let (mut builder, _, exif) = sony(order);
         let filler = builder.ifd();
-        let ifd = sound_ifd(&mut builder, b"SONY DSC \0\0\0");
+        let ifd = makernote(&mut builder);
         builder.undefined_ifd(exif, MAKER_NOTE, ifd);
         let mut probe = builder.clone();
         filler_entry(&mut probe, filler, 8);
         // The filler's bytes start after its one entry, at an even offset,
-        // and the MakerNote's header right after them.
+        // and the MakerNote's block right after them.
         let bytes_at = probe.build().ifd_offset(filler) + 2 + 12 + 4;
         filler_entry(&mut builder, filler, start - bytes_at);
         let built = builder.build();
@@ -710,5 +925,511 @@ mod tests {
             let err = read(&mut src, &tree, &Limits::default()).expect_err("the read fails");
             assert_eq!(err.kind(), ErrorKind::Io, "{start}: {err:?}");
         }
+    }
+
+    /// What a test adds to a MakerNote IFD, one of several cases.
+    type Tags<'a> = &'a dyn Fn(&mut TiffBuilder, IfdId);
+
+    /// The frame that the ILCE-7M4's FocusLocation records, its width and
+    /// height (public sample 6929).
+    const FRAME_7M4: [u16; 2] = [7008, 4672];
+
+    /// The centre that the ILCE-7M4's FocusLocation records in
+    /// [`FRAME_7M4`], its x and y (sample 6929).
+    const CENTER_7M4: [u16; 2] = [3832, 2102];
+
+    /// The area that the ILCE-7M4's FocusFrameSize records, its width and
+    /// height (sample 6929).
+    const AREA_7M4: [u16; 2] = [350, 351];
+
+    /// FocusFrameSize's six bytes for an area of `width` by `height`, then
+    /// `third`, as 16-bit numbers in byte order `order`.
+    fn frame_size(order: Order, [width, height]: [u16; 2], third: u16) -> Vec<u8> {
+        [order.u16(width), order.u16(height), order.u16(third)].concat()
+    }
+
+    /// FocusLocation's four SHORTs for a frame `frame` and a centre
+    /// `center`.
+    fn location_of([width, height]: [u16; 2], [x, y]: [u16; 2]) -> [u16; 4] {
+        [width, height, x, y]
+    }
+
+    /// Adds to `makernote`, in a file of byte order `order`, the ILCE-7M4's
+    /// tags as the sample 6929 has them: FocusMode 3 (AF-C), FocusLocation,
+    /// FocusFrameSize with 257 as its third number, FileFormat and
+    /// SonyModelID.
+    fn tags_7m4(builder: &mut TiffBuilder, makernote: IfdId, order: Order) {
+        tags_7m4_with(builder, makernote, order, Some(3), AREA_7M4);
+    }
+
+    /// As [`tags_7m4`], with FocusMode `mode`, or none, and an area of
+    /// `area` in FocusFrameSize. An IFD keeps every entry it is given, so a
+    /// test that wants another value of a tag writes it here, never a
+    /// second entry of the same tag.
+    fn tags_7m4_with(
+        builder: &mut TiffBuilder,
+        makernote: IfdId,
+        order: Order,
+        mode: Option<u8>,
+        area: [u16; 2],
+    ) {
+        if let Some(mode) = mode {
+            builder.byte(makernote, FOCUS_MODE, &[mode]);
+        }
+        builder
+            .short(
+                makernote,
+                FOCUS_LOCATION,
+                &location_of(FRAME_7M4, CENTER_7M4),
+            )
+            .undefined(makernote, FOCUS_FRAME_SIZE, &frame_size(order, area, 257))
+            // FileFormat and SonyModelID, which are not read.
+            .byte(makernote, 0xB000, &[4, 0, 1, 0])
+            .short(makernote, 0xB001, &[388]);
+    }
+
+    /// A Sony file in byte order `order` whose MakerNote, after `prefix`,
+    /// holds what `tags` adds to its IFD: the file, read into a source, and
+    /// its MakerNote, which must be one.
+    fn focus_file(
+        order: Order,
+        prefix: &[u8],
+        tags: impl FnOnce(&mut TiffBuilder, IfdId),
+    ) -> (Src, MakerNote) {
+        let (mut builder, _, exif) = sony(order);
+        let makernote = builder.ifd();
+        builder.prefix(makernote, prefix);
+        tags(&mut builder, makernote);
+        builder.undefined_ifd(exif, MAKER_NOTE, makernote);
+        let (src, found) = read_file(builder.build().bytes);
+        (src, found.expect("a MakerNote"))
+    }
+
+    /// What [`focus`] gives for a Sony file in byte order `order` whose
+    /// headerless MakerNote holds what `tags` adds to its IFD.
+    fn focus_of(order: Order, tags: impl FnOnce(&mut TiffBuilder, IfdId)) -> Option<Focus> {
+        let (mut src, makernote) = focus_file(order, b"", tags);
+        focus(&mut src, &makernote).unwrap()
+    }
+
+    /// The focus centred at `center` in `frame`, with an area of `area`
+    /// when there is one, and nothing said about whether focus was
+    /// confirmed.
+    fn expected(frame: [u16; 2], center: [u16; 2], area: Option<[u16; 2]>) -> Focus {
+        let [width, height] = frame.map(u32::from);
+        let [x, y] = center.map(u32::from);
+        let focus = Focus::new(Size { width, height }, Point { x, y }).expect("a usable centre");
+        match area.map(|area| area.map(u32::from)) {
+            Some([width, height]) => focus
+                .with_size(Size { width, height })
+                .expect("a usable area"),
+            None => focus,
+        }
+    }
+
+    /// The ILCE-7M4's focus point: [`FRAME_7M4`], [`CENTER_7M4`] and
+    /// [`AREA_7M4`].
+    fn focus_7m4() -> Focus {
+        expected(FRAME_7M4, CENTER_7M4, Some(AREA_7M4))
+    }
+
+    #[test]
+    fn the_7m4s_tags_give_its_focus_point() {
+        // Headerless, as on the ILCE-7M4, and after the A100's header, as
+        // no body with FocusLocation writes it.
+        for order in ORDERS {
+            for prefix in [&b""[..], b"SONY DSC \0\0\0"] {
+                let (mut src, makernote) = focus_file(order, prefix, |builder, ifd| {
+                    tags_7m4(builder, ifd, order);
+                });
+                let found = focus(&mut src, &makernote).unwrap();
+                let found = found.unwrap_or_else(|| panic!("{order:?}, {prefix:?}"));
+                let label = format!("{order:?}, {prefix:?}");
+                let size = |width, height| Size { width, height };
+                assert_eq!(found.frame(), size(7008, 4672), "{label}");
+                assert_eq!(found.center(), Point { x: 3832, y: 2102 }, "{label}");
+                assert_eq!(found.size(), Some(size(350, 351)), "{label}");
+                assert_eq!(found.in_focus(), None, "{label}");
+            }
+        }
+    }
+
+    #[test]
+    fn focus_mode_0_gives_none() {
+        // As the ILCE-9M3 writes a manual-focus shot: the frame's exact
+        // centre and an area of zeros (public sample 7361).
+        for order in ORDERS {
+            let manual = focus_of(order, |builder, ifd| {
+                builder
+                    .byte(ifd, FOCUS_MODE, &[0])
+                    .short(
+                        ifd,
+                        FOCUS_LOCATION,
+                        &location_of([6000, 4000], [3000, 2000]),
+                    )
+                    .undefined(ifd, FOCUS_FRAME_SIZE, &[0; 6]);
+            });
+            assert_eq!(manual, None, "{order:?}");
+            // With the ILCE-7M4's location and area too.
+            let manual = focus_of(order, |builder, ifd| {
+                tags_7m4_with(builder, ifd, order, Some(0), AREA_7M4);
+            });
+            assert_eq!(manual, None, "{order:?}");
+        }
+    }
+
+    #[test]
+    fn every_other_focus_mode_or_none_keeps_the_point() {
+        // AF-S, AF-C, AF-A, DMF and AF-D, and values no mode has.
+        for order in ORDERS {
+            for mode in [2, 3, 4, 6, 7, 1, 5, 255] {
+                let found = focus_of(order, |builder, ifd| {
+                    tags_7m4_with(builder, ifd, order, Some(mode), AREA_7M4);
+                });
+                assert_eq!(found, Some(focus_7m4()), "{order:?}, {mode}");
+            }
+            let found = focus_of(order, |builder, ifd| {
+                tags_7m4_with(builder, ifd, order, None, AREA_7M4);
+            });
+            assert_eq!(found, Some(focus_7m4()), "{order:?}, no FocusMode");
+        }
+    }
+
+    #[test]
+    fn a_focus_mode_of_another_shape_is_not_read() {
+        // A 0 that is not one BYTE says nothing of manual focus: a SHORT,
+        // two BYTEs, and one UNDEFINED byte.
+        for order in ORDERS {
+            for (what, mode) in [
+                (
+                    "a SHORT",
+                    &(|builder: &mut TiffBuilder, ifd| {
+                        builder.short(ifd, FOCUS_MODE, &[0]);
+                    }) as Tags,
+                ),
+                ("two BYTEs", &|builder, ifd| {
+                    builder.byte(ifd, FOCUS_MODE, &[0, 0]);
+                }),
+                ("UNDEFINED", &|builder, ifd| {
+                    builder.undefined(ifd, FOCUS_MODE, &[0]);
+                }),
+            ] {
+                let found = focus_of(order, |builder, ifd| {
+                    tags_7m4_with(builder, ifd, order, None, AREA_7M4);
+                    mode(builder, ifd);
+                });
+                assert_eq!(found, Some(focus_7m4()), "{order:?}, {what}");
+            }
+        }
+    }
+
+    #[test]
+    fn a_focus_location_of_another_shape_gives_none() {
+        // Three values, five, and four LONGs, with no FocusLocation2.
+        for order in ORDERS {
+            let [width, height, x, y] = location_of(FRAME_7M4, CENTER_7M4);
+            for (what, location) in [
+                (
+                    "three SHORTs",
+                    &(|builder: &mut TiffBuilder, ifd| {
+                        builder.short(ifd, FOCUS_LOCATION, &[width, height, x]);
+                    }) as Tags,
+                ),
+                ("five SHORTs", &|builder, ifd| {
+                    builder.short(ifd, FOCUS_LOCATION, &[width, height, x, y, 0]);
+                }),
+                ("four LONGs", &|builder, ifd| {
+                    let longs = [width, height, x, y].map(u32::from);
+                    builder.long(ifd, FOCUS_LOCATION, &longs);
+                }),
+            ] {
+                let found = focus_of(order, |builder, ifd| {
+                    builder.byte(ifd, FOCUS_MODE, &[3]);
+                    location(builder, ifd);
+                });
+                assert_eq!(found, None, "{order:?}, {what}");
+            }
+        }
+    }
+
+    #[test]
+    fn without_focus_location_focus_location2_gives_the_point() {
+        for order in ORDERS {
+            let found = focus_of(order, |builder, ifd| {
+                builder
+                    .byte(ifd, FOCUS_MODE, &[3])
+                    .short(ifd, FOCUS_LOCATION2, &location_of(FRAME_7M4, CENTER_7M4))
+                    .undefined(ifd, FOCUS_FRAME_SIZE, &frame_size(order, AREA_7M4, 257));
+            });
+            assert_eq!(found, Some(focus_7m4()), "{order:?}");
+        }
+    }
+
+    #[test]
+    fn focus_location_wins_over_focus_location2() {
+        for order in ORDERS {
+            let found = focus_of(order, |builder, ifd| {
+                tags_7m4(builder, ifd, order);
+                builder.short(ifd, FOCUS_LOCATION2, &location_of(FRAME_7M4, [3504, 2336]));
+            });
+            assert_eq!(found, Some(focus_7m4()), "{order:?}");
+        }
+    }
+
+    #[test]
+    fn a_focus_location_that_cannot_be_used_does_not_give_way_to_focus_location2() {
+        // FocusLocation of the right shape but with a zero frame is the
+        // location, refused as a whole: a sound FocusLocation2 beside it
+        // does not stand in.
+        for order in ORDERS {
+            let found = focus_of(order, |builder, ifd| {
+                builder
+                    .short(ifd, FOCUS_LOCATION, &location_of([0, 4672], [0, 0]))
+                    .short(ifd, FOCUS_LOCATION2, &location_of(FRAME_7M4, CENTER_7M4));
+            });
+            assert_eq!(found, None, "{order:?}");
+        }
+    }
+
+    #[test]
+    fn a_focus_location_of_another_shape_gives_way_to_focus_location2() {
+        // FocusLocation read as missing: three SHORTs, and four LONGs.
+        for order in ORDERS {
+            let [width, height, x, y] = location_of(FRAME_7M4, [3504, 2336]);
+            for (what, location) in [
+                (
+                    "three SHORTs",
+                    &(|builder: &mut TiffBuilder, ifd| {
+                        builder.short(ifd, FOCUS_LOCATION, &[width, height, x]);
+                    }) as Tags,
+                ),
+                ("four LONGs", &|builder, ifd| {
+                    let longs = [width, height, x, y].map(u32::from);
+                    builder.long(ifd, FOCUS_LOCATION, &longs);
+                }),
+            ] {
+                let found = focus_of(order, |builder, ifd| {
+                    builder
+                        .byte(ifd, FOCUS_MODE, &[3])
+                        .short(ifd, FOCUS_LOCATION2, &location_of(FRAME_7M4, CENTER_7M4))
+                        .undefined(ifd, FOCUS_FRAME_SIZE, &frame_size(order, AREA_7M4, 257));
+                    location(builder, ifd);
+                });
+                assert_eq!(found, Some(focus_7m4()), "{order:?}, {what}");
+            }
+        }
+    }
+
+    /// What [`focus`] gives for a Sony file in byte order `order` whose
+    /// MakerNote holds FocusMode 3 and a FocusLocation of `frame` and
+    /// `center`, and no FocusFrameSize, so that no area is checked.
+    fn location_focus(order: Order, frame: [u16; 2], center: [u16; 2]) -> Option<Focus> {
+        focus_of(order, |builder, ifd| {
+            builder.byte(ifd, FOCUS_MODE, &[3]).short(
+                ifd,
+                FOCUS_LOCATION,
+                &location_of(frame, center),
+            );
+        })
+    }
+
+    #[test]
+    fn a_frame_with_a_zero_side_gives_none() {
+        for order in ORDERS {
+            for frame in [[0, 4672], [7008, 0], [0, 0]] {
+                let found = location_focus(order, frame, [0, 0]);
+                assert_eq!(found, None, "{order:?}, {frame:?}");
+            }
+        }
+    }
+
+    #[test]
+    fn a_centre_on_the_far_edge_is_kept_and_one_past_it_gives_none() {
+        for order in ORDERS {
+            for center in [[7008, 2102], [3832, 4672], [7008, 4672], [0, 0]] {
+                assert_eq!(
+                    location_focus(order, FRAME_7M4, center),
+                    Some(expected(FRAME_7M4, center, None)),
+                    "{order:?}, {center:?}"
+                );
+            }
+            for center in [[7009, 2102], [3832, 4673]] {
+                let found = location_focus(order, FRAME_7M4, center);
+                assert_eq!(found, None, "{order:?}, {center:?}");
+            }
+        }
+    }
+
+    #[test]
+    fn a_focus_frame_size_that_gives_no_area_keeps_the_point_without_one() {
+        // Missing; all zeros, as on the ILCE-9M3's manual-focus files; a
+        // zero side, either one; four or eight bytes; and three SHORTs or
+        // six BYTEs, holding the area as numbers or as bytes.
+        for order in ORDERS {
+            let [width, height] = AREA_7M4;
+            let sound = frame_size(order, AREA_7M4, 257);
+            let cases: [(&str, Tags); 8] = [
+                ("missing", &|_, _| {}),
+                ("all zeros", &|builder, ifd| {
+                    builder.undefined(ifd, FOCUS_FRAME_SIZE, &[0; 6]);
+                }),
+                ("a zero width", &|builder, ifd| {
+                    let value = frame_size(order, [0, height], 257);
+                    builder.undefined(ifd, FOCUS_FRAME_SIZE, &value);
+                }),
+                ("a zero height", &|builder, ifd| {
+                    let value = frame_size(order, [width, 0], 257);
+                    builder.undefined(ifd, FOCUS_FRAME_SIZE, &value);
+                }),
+                ("four bytes", &|builder, ifd| {
+                    builder.undefined(ifd, FOCUS_FRAME_SIZE, &sound[..4]);
+                }),
+                ("eight bytes", &|builder, ifd| {
+                    let value = [&sound[..], &[0, 0]].concat();
+                    builder.undefined(ifd, FOCUS_FRAME_SIZE, &value);
+                }),
+                ("three SHORTs", &|builder, ifd| {
+                    builder.short(ifd, FOCUS_FRAME_SIZE, &[width, height, 257]);
+                }),
+                ("six BYTEs", &|builder, ifd| {
+                    builder.byte(ifd, FOCUS_FRAME_SIZE, &sound);
+                }),
+            ];
+            for (what, frame_size) in cases {
+                let found = focus_of(order, |builder, ifd| {
+                    builder.byte(ifd, FOCUS_MODE, &[3]).short(
+                        ifd,
+                        FOCUS_LOCATION,
+                        &location_of(FRAME_7M4, CENTER_7M4),
+                    );
+                    frame_size(builder, ifd);
+                });
+                assert_eq!(
+                    found,
+                    Some(expected(FRAME_7M4, CENTER_7M4, None)),
+                    "{order:?}, {what}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn an_area_that_does_not_fit_around_the_centre_gives_none() {
+        // At (3832, 2102) in 7008 by 4672, an area fits up to twice the
+        // distance to the nearer edge: 2 × (7008 - 3832) = 6352 wide and
+        // 2 × 2102 = 4204 high.
+        for order in ORDERS {
+            let with_area = |area: [u16; 2]| {
+                focus_of(order, |builder, ifd| {
+                    tags_7m4_with(builder, ifd, order, Some(3), area);
+                })
+            };
+            for area in [[6352, 351], [350, 4204], [6352, 4204]] {
+                assert_eq!(
+                    with_area(area),
+                    Some(expected(FRAME_7M4, CENTER_7M4, Some(area))),
+                    "{order:?}, {area:?}"
+                );
+            }
+            for area in [[6353, 351], [350, 4205]] {
+                assert_eq!(with_area(area), None, "{order:?}, {area:?}");
+            }
+        }
+    }
+
+    #[test]
+    fn focus_frame_sizes_numbers_are_read_in_the_files_byte_order() {
+        // The same area gives other bytes in each order: 5E 01 5F 01 01 01
+        // little-endian, 01 5E 01 5F 01 01 big-endian.
+        let mut stored = Vec::new();
+        for order in ORDERS {
+            let (mut src, makernote) = focus_file(order, b"", |builder, ifd| {
+                tags_7m4(builder, ifd, order);
+            });
+            let bytes = makernote.ifd.bytes(&mut src, FOCUS_FRAME_SIZE).unwrap();
+            stored.push(bytes.expect("FocusFrameSize"));
+            let found = focus(&mut src, &makernote).unwrap();
+            assert_eq!(found, Some(focus_7m4()), "{order:?}");
+        }
+        assert_eq!(
+            stored,
+            [
+                vec![0x5E, 0x01, 0x5F, 0x01, 0x01, 0x01],
+                vec![0x01, 0x5E, 0x01, 0x5F, 0x01, 0x01]
+            ]
+        );
+    }
+
+    #[test]
+    fn a_focus_location_whose_value_runs_past_the_block_gives_none() {
+        // FocusLocation's eight bytes are the block's last: a block one
+        // byte shorter drops the entry.
+        for order in ORDERS {
+            let (mut builder, _, exif) = sony(order);
+            let ifd = builder.ifd();
+            builder.byte(ifd, FOCUS_MODE, &[3]).short(
+                ifd,
+                FOCUS_LOCATION,
+                &location_of(FRAME_7M4, CENTER_7M4),
+            );
+            let mut probe = builder.clone();
+            makernote_at(&mut probe, exif, UNDEFINED, 0, 0);
+            let block = probe.build().ifd_block(ifd);
+            let len = block.end - block.start;
+
+            let mut cut = builder.clone();
+            makernote_at(&mut cut, exif, UNDEFINED, len - 1, block.start);
+            let (mut src, found) = read_file(cut.build().bytes);
+            let found = found.expect("a MakerNote");
+            assert!(found.ifd.entry(FOCUS_LOCATION).is_none(), "{order:?}");
+            assert_eq!(focus(&mut src, &found).unwrap(), None, "{order:?}");
+
+            // The control: the whole block gives the point.
+            makernote_at(&mut builder, exif, UNDEFINED, len, block.start);
+            let (mut src, found) = read_file(builder.build().bytes);
+            let found = found.expect("a MakerNote");
+            assert_eq!(
+                focus(&mut src, &found).unwrap(),
+                Some(expected(FRAME_7M4, CENTER_7M4, None)),
+                "{order:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_failure_of_the_reader_while_reading_the_focus_is_an_error() {
+        // A headerless MakerNote of two entries whose table ends just
+        // before FAR, so that the MakerNote is read, and FocusLocation's
+        // value, stored out of line, starts at FAR, so that reading it
+        // fails.
+        let order = Order::Little;
+        let start = FAR - (2 + 2 * 12 + 4);
+        let (built, ifd) = far_file_with(order, start, |builder| {
+            let ifd = builder.ifd();
+            builder.byte(ifd, FOCUS_MODE, &[3]).short(
+                ifd,
+                FOCUS_LOCATION,
+                &location_of(FRAME_7M4, CENTER_7M4),
+            );
+            ifd
+        });
+        assert_eq!(built.ifd_block(ifd), start..FAR + 8);
+        // The file is sound, for a reader that does not fail.
+        let (mut src, found) = read_file(built.bytes.clone());
+        let found = found.expect("a MakerNote");
+        assert_eq!(
+            focus(&mut src, &found).unwrap(),
+            Some(expected(FRAME_7M4, CENTER_7M4, None))
+        );
+
+        let limits = Limits::default();
+        let mut src = Source::new(FailsFar(Cursor::new(built.bytes))).unwrap();
+        let header = parse_header(&mut src).unwrap();
+        let tree = walk(&mut src, header, &limits).unwrap();
+        let makernote = read(&mut src, &tree, &limits)
+            .unwrap()
+            .expect("a MakerNote");
+        let err = focus(&mut src, &makernote).expect_err("the read fails");
+        assert_eq!(err.kind(), ErrorKind::Io, "{err:?}");
     }
 }

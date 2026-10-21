@@ -20,12 +20,17 @@ does.
   on Nikon files from the MakerNote's AFInfo2 block, which mirrorless
   bodies and DSLRs in live view fill in, and on a Nikon crop, DX, 1:1,
   16:9 or any other CropHiSpeed records with a CropArea, the point is
-  placed inside the cropped picture, whose size becomes its frame; it is
-  `None` on a file that records only an autofocus point's number, such
-  as a DSLR shot through the viewfinder, on a manual-focus shot, at an
-  AFInfo2 version raw-files does not know, on a crop whose point cannot
-  be placed on the cropped picture (a 1:1 or 16:9 crop on a small raw, or
-  a crop whose CropArea cannot be used), and on Sony files.
+  placed inside the cropped picture, whose size becomes its frame. It is
+  read on Sony bodies from the ILCE-7RM2 on from the MakerNote's
+  FocusLocation, in the frame the camera framed the picture in, with the
+  area's size from FocusFrameSize from the ILCE-7SM3 on; whether focus
+  was confirmed is `None` on Sony files, which record it in no plain tag.
+  It is `None` on a file that records no position, such as a Nikon DSLR
+  shot through the viewfinder or a Sony body before the ILCE-7RM2, which
+  record at most an autofocus point's number or a mask of points, on a
+  manual-focus shot, at an AFInfo2 version raw-files does not know, and
+  on a crop whose point cannot be placed on the cropped picture (a 1:1 or
+  16:9 crop on a small raw, or a crop whose CropArea cannot be used).
 - NEF previews and metadata checked on ten more CC0 Nikon sample files,
   of the D5 and the D5600 in live view, of the Z5II, Z50II and Z6III in
   their 1:1 and 16:9 crop modes, of a Z fc shot in manual focus and of a
