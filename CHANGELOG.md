@@ -44,6 +44,8 @@ does.
   for a date or time that does not exist, a fraction with a zero
   denominator or a lens with no value, and the builders store what they
   are given.
+- `Size` and `Point` print as text (`Display`), `8256x5504` and
+  `(4905, 2461)`, as the Rust API Guidelines ask of such types.
 
 ## [0.2.0] - 2026-10-19
 

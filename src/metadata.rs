@@ -69,7 +69,7 @@ use crate::rational::{Rational, SignedRational};
 ///     metadata.serial_number().unwrap_or("not recorded")
 /// );
 /// if let Some(size) = metadata.image_size() {
-///     println!("{} × {} pixels", size.width, size.height);
+///     println!("{size} pixels");
 /// }
 /// # Ok(())
 /// # }
@@ -266,10 +266,7 @@ impl Metadata {
     /// let file = RawFile::open("photo.nef")?;
     /// if let Some(focus) = file.metadata().focus() {
     ///     let (centre, frame) = (focus.center(), focus.frame());
-    ///     println!(
-    ///         "focused at ({}, {}) on a frame of {} × {} pixels",
-    ///         centre.x, centre.y, frame.width, frame.height,
-    ///     );
+    ///     println!("focused at {centre} on a frame of {frame} pixels");
     ///     match focus.in_focus() {
     ///         Some(true) => println!("in focus"),
     ///         Some(false) => println!("missed focus"),
@@ -914,9 +911,9 @@ impl LensBuilder {
 /// if let (Some(focus), Some(preview)) = (focus, file.largest_preview()) {
 ///     if let Some(focus) = focus.scaled_to(preview.size()) {
 ///         let centre = focus.center();
-///         println!("focused at ({}, {}) on the preview", centre.x, centre.y);
+///         println!("focused at {centre} on the preview");
 ///         if let Some(size) = focus.size() {
-///             println!("on an area of {} × {} pixels", size.width, size.height);
+///             println!("on an area of {size} pixels");
 ///         }
 ///     }
 /// }

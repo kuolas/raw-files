@@ -37,9 +37,8 @@
 //! if let Some(preview) = file.largest_preview() {
 //!     let jpeg = file.read_preview(&preview)?;
 //!     println!(
-//!         "{} × {} pixels, shown upright by {:?}, {} bytes",
-//!         preview.width(),
-//!         preview.height(),
+//!         "{} pixels, shown upright by {:?}, {} bytes",
+//!         preview.size(),
 //!         preview.orientation(),
 //!         jpeg.len(),
 //!     );

@@ -129,6 +129,9 @@ impl Preview {
 /// It orders as its variants are listed, and a new variant is added after
 /// the existing ones, so an order once observed holds.
 ///
+/// It has no [`Display`](std::fmt::Display): its text form is its
+/// variant's name, such as `Jpeg`, which `Debug` gives.
+///
 /// # Examples
 ///
 /// ```
