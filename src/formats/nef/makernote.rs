@@ -393,7 +393,7 @@ pub(super) fn preview_candidate<R: Read + Seek>(
 /// given only to a capture time the standard tags gave, one whose
 /// OffsetTimeOriginal is missing or could not be read, and only within
 /// the bound every offset is held to
-/// ([`DateTime::with_offset`](crate::datetime::DateTime::with_offset)).
+/// ([`DateTime::with_offset_minutes`](crate::datetime::DateTime::with_offset_minutes)).
 /// Last, the focus point, from AFInfo2 and FocusMode, placed on the
 /// cropped picture by CropHiSpeed and CropArea on a crop ([`focus`]),
 /// always read: the standard tags never give one, so it is not a fallback.
@@ -431,7 +431,7 @@ pub(super) fn metadata<R: Read + Seek>(
     if let Some(time) = metadata.capture_time
         && time.offset_minutes().is_none()
         && let Some(offset) = world_time(src, makernote)?
-        && let Some(time) = time.with_offset(offset)
+        && let Some(time) = time.with_offset_minutes(offset)
     {
         metadata.capture_time = Some(time);
     }
@@ -572,7 +572,8 @@ fn lens_range<R: Read + Seek>(
 /// daylight-saving byte other than 0 or 1.
 ///
 /// The zone is read in the MakerNote's byte order. The offset is not
-/// bounded here: [`DateTime::with_offset`](crate::datetime::DateTime::with_offset),
+/// bounded here:
+/// [`DateTime::with_offset_minutes`](crate::datetime::DateTime::with_offset_minutes),
 /// which takes it, refuses one beyond 14 hours, as a zone rewritten in the
 /// wrong byte order is.
 ///

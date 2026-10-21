@@ -34,7 +34,7 @@
 //! # fn example() -> Option<()> {
 //! let time = DateTime::new(2022, 2, 5, 13, 46, 41)?
 //!     .with_subseconds(850_000_000, 2)?
-//!     .with_offset(-300)?;
+//!     .with_offset_minutes(-300)?;
 //! let exposure = Exposure::default()
 //!     .with_iso(64)
 //!     .with_exposure_time(Rational::new(10, 3200)?);

@@ -336,7 +336,7 @@ fn the_z9_file_gives_every_value_its_fixture_records() {
 fn the_z9_metadata_by_hand(orientation: Orientation) -> Option<Metadata> {
     let time = DateTime::new(2022, 2, 5, 13, 46, 41)?
         .with_subseconds(850_000_000, 2)?
-        .with_offset(-300)?;
+        .with_offset_minutes(-300)?;
     let exposure = Exposure::default()
         .with_iso(64)
         .with_exposure_time(Rational::new(10, 3200)?)
@@ -495,7 +495,7 @@ fn the_z6iii_file_gives_its_focus_point_on_the_cropped_picture() {
 fn the_z6iii_metadata_by_hand(orientation: Orientation) -> Option<Metadata> {
     let time = DateTime::new(2024, 6, 29, 15, 38, 53)?
         .with_subseconds(420_000_000, 2)?
-        .with_offset(-240)?;
+        .with_offset_minutes(-240)?;
     let exposure = Exposure::default()
         .with_iso(200)
         .with_exposure_time(Rational::new(10, 1000)?)

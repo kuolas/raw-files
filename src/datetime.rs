@@ -15,8 +15,8 @@
 //!
 //! Each rule a time is held to lives in one public constructor:
 //! [`DateTime::new`] for the date and time, [`DateTime::with_subseconds`]
-//! for the fraction of a second and [`DateTime::with_offset`] for the
-//! offset. The reader builds every time it returns through them, and a
+//! for the fraction of a second and [`DateTime::with_offset_minutes`] for
+//! the offset. The reader builds every time it returns through them, and a
 //! caller builds one through them for its tests, so the two cannot differ.
 
 use std::fmt;
@@ -43,8 +43,9 @@ const MAX_OFFSET_MINUTES: i16 = 14 * 60;
 /// A `DateTime` comes from a file, or a caller builds one with
 /// [`new`](Self::new), adding a fraction of a second with
 /// [`with_subseconds`](Self::with_subseconds) and an offset with
-/// [`with_offset`](Self::with_offset), for its tests. The same rules apply
-/// either way: the reader builds every time it returns through those three.
+/// [`with_offset_minutes`](Self::with_offset_minutes), for its tests. The
+/// same rules apply either way: the reader builds every time it returns
+/// through those three.
 ///
 /// Without an offset, the time is local to a zone the file does not name,
 /// so it cannot be compared with times from other clocks.
@@ -113,7 +114,7 @@ const MAX_OFFSET_MINUTES: i16 = 14 * 60;
 /// # fn example() -> Option<()> {
 /// let time = DateTime::new(2024, 5, 1, 10, 20, 30)?
 ///     .with_subseconds(850_000_000, 2)?
-///     .with_offset(120)?;
+///     .with_offset_minutes(120)?;
 /// assert_eq!(time.to_string(), "2024-05-01T10:20:30.85+02:00");
 ///
 /// // 2023 was not a leap year.
@@ -157,7 +158,7 @@ impl DateTime {
     ///
     /// Add a fraction of a second with
     /// [`with_subseconds`](Self::with_subseconds) and an offset with
-    /// [`with_offset`](Self::with_offset).
+    /// [`with_offset_minutes`](Self::with_offset_minutes).
     #[must_use]
     pub fn new(year: u16, month: u8, day: u8, hour: u8, minute: u8, second: u8) -> Option<Self> {
         if year > MAX_YEAR
@@ -229,7 +230,7 @@ impl DateTime {
     /// beyond `-14:00` to `+14:00`, since no offset from UTC in use lies
     /// outside that.
     #[must_use]
-    pub fn with_offset(self, minutes: i16) -> Option<Self> {
+    pub fn with_offset_minutes(self, minutes: i16) -> Option<Self> {
         (-MAX_OFFSET_MINUTES..=MAX_OFFSET_MINUTES)
             .contains(&minutes)
             .then_some(Self {
@@ -260,9 +261,9 @@ impl DateTime {
     /// The fraction of a second is one or more ASCII digits; digits past the
     /// ninth are cut, not rounded. The offset is exactly `+HH:MM` or
     /// `-HH:MM`, with the minutes from 00 to 59, and is then held to the
-    /// bound of [`with_offset`](Self::with_offset), at most 14 hours from
-    /// UTC. A fraction or offset in any other form is left out, and the
-    /// time stands without it.
+    /// bound of [`with_offset_minutes`](Self::with_offset_minutes), at
+    /// most 14 hours from UTC. A fraction or offset in any other form is
+    /// left out, and the time stands without it.
     pub(crate) fn from_exif(
         date: &[u8],
         subsec: Option<&[u8]>,
@@ -311,7 +312,7 @@ impl DateTime {
             .unwrap_or(time);
         let time = offset
             .and_then(parse_offset)
-            .and_then(|minutes| time.with_offset(minutes))
+            .and_then(|minutes| time.with_offset_minutes(minutes))
             .unwrap_or(time);
         Some(time)
     }
@@ -468,7 +469,7 @@ fn parse_subsec(text: &[u8]) -> Option<(u32, u8)> {
 /// end, is not exactly `+HH:MM` or `-HH:MM` with the minutes from 00 to 59.
 ///
 /// Any hours from 00 to 99 are read: the bound of 14 hours from UTC is
-/// [`DateTime::with_offset`]'s, which the offset is given through.
+/// [`DateTime::with_offset_minutes`]'s, which the offset is given through.
 fn parse_offset(text: &[u8]) -> Option<i16> {
     let &[sign, h0, h1, b':', m0, m1] = cleaned(text) else {
         return None;
@@ -720,7 +721,7 @@ mod tests {
         for (minutes, display) in cases {
             // On a time without an offset, and in place of an Exif one.
             for offset in [None, Some(&b"-05:00"[..])] {
-                let time = read(DATE, Some(b"85"), offset).with_offset(minutes);
+                let time = read(DATE, Some(b"85"), offset).with_offset_minutes(minutes);
                 check(
                     time.expect("an offset in range"),
                     FIELDS,
@@ -736,7 +737,7 @@ mod tests {
     fn an_offset_given_apart_beyond_fourteen_hours_is_refused() {
         for minutes in [841, -841, 15360, i16::MAX, i16::MIN] {
             let time = read(DATE, Some(b"85"), None);
-            assert_eq!(time.with_offset(minutes), None, "{minutes}");
+            assert_eq!(time.with_offset_minutes(minutes), None, "{minutes}");
         }
     }
 
@@ -982,22 +983,22 @@ mod tests {
     }
 
     #[test]
-    fn with_offset_takes_fourteen_hours_either_way() {
+    fn with_offset_minutes_takes_fourteen_hours_either_way() {
         let time = built(2022, 1, 31, 10, 20, 30);
-        let east = time.with_offset(840).unwrap();
+        let east = time.with_offset_minutes(840).unwrap();
         assert_eq!(east.to_string(), "2022-01-31T10:20:30+14:00");
-        let west = time.with_offset(-840).unwrap();
+        let west = time.with_offset_minutes(-840).unwrap();
         assert_eq!(west.to_string(), "2022-01-31T10:20:30-14:00");
-        assert_eq!(time.with_offset(841), None);
-        assert_eq!(time.with_offset(-841), None);
+        assert_eq!(time.with_offset_minutes(841), None);
+        assert_eq!(time.with_offset_minutes(-841), None);
     }
 
     #[test]
-    fn with_offset_replaces_an_earlier_one_as_a_file_gives_it() {
+    fn with_offset_minutes_replaces_an_earlier_one_as_a_file_gives_it() {
         let time = built(2022, 1, 31, 10, 20, 30)
             .with_subseconds(850_000_000, 2)
-            .and_then(|time| time.with_offset(60))
-            .and_then(|time| time.with_offset(-300))
+            .and_then(|time| time.with_offset_minutes(60))
+            .and_then(|time| time.with_offset_minutes(-300))
             .unwrap();
         assert_eq!(time.offset_minutes(), Some(-300));
         assert_eq!(time, read(DATE, Some(b"85"), Some(b"-05:00")));

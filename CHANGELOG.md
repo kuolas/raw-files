@@ -37,12 +37,12 @@ does.
   rotated Z 30 shot, 33 NEF files in all, and the focus point on every
   one of them.
 - Public constructors for `DateTime` (`new`, `with_subseconds`,
-  `with_offset`), `Rational` and `SignedRational` (`new`), a builder for
-  `Lens` (`Lens::builder`), and `with_…` builders on `Metadata` and
-  `Exposure`, so that a program can build the values raw-files reads in
-  its own tests; the constructors give `None` for a date or time that
-  does not exist, a fraction with a zero denominator or a lens with no
-  value, and the builders store what they are given.
+  `with_offset_minutes`), `Rational` and `SignedRational` (`new`), a
+  builder for `Lens` (`Lens::builder`), and `with_…` builders on
+  `Metadata` and `Exposure`, so that a program can build the values
+  raw-files reads in its own tests; the constructors give `None` for a
+  date or time that does not exist, a fraction with a zero denominator or
+  a lens with no value, and the builders store what they are given.
 
 ## [0.2.0] - 2026-10-19
 
