@@ -39,7 +39,7 @@ published by community projects (section 5) and read from sample files.
 | TIFF 6.0 (Adobe, 1992) | Unchanged since 1992 | Free PDF mirrors; copying the document commercially needs Adobe's permission, which does not restrict implementing the format [5] | S |
 | TIFF/EP, ISO 12234-2:2001 | NEF's nominal base; edition 1, confirmed in 2026 per the ISO listing | Paid (the ISO store charges CHF 204); only the front matter is public [6] | S |
 | Exif, CIPA DC-008 | 2.31 (2016), 2.32 (2019), 3.0 (2023, adds a UTF-8 type), DC-008-2024; current is **Exif 3.1** (DC-008-Translation-2026), published 2026-01-30 [7][8] | Free download from CIPA, which states no licence terms | P (3.1), S (earlier) |
-| JPEG, ITU-T T.81 | Covers baseline and lossless processes | Free from ITU [9] | I |
+| JPEG, ITU-T T.81 | Covers baseline and lossless processes | Offered by the ITU only for a fee; the W3C hosts the CCITT publication of 1992 (see the [JPEG notes](../jpeg/licences-and-references.md#1-the-standards)) [9] | P |
 | DNG 1.7.1.0 (Adobe, September 2023) | Not used by NEF itself | Free PDF and SDK [10] | P |
 
 DNG carries a patent licence: royalty-free and worldwide for compliant
@@ -251,7 +251,8 @@ cite them; do not copy their tables or prose.
     https://www.cipa.jp/e/std/std-sec.html **[P]**
 [8] IPTC, "Exif 3.0 released" —
     https://iptc.org/news/exif-3-0-released-featuring-utf-8-support/ **[S]**
-[9] ITU-T Recommendation T.81 — https://www.itu.int/rec/T-REC-T.81 **[I]**
+[9] ITU-T Recommendation T.81 —
+    https://www.itu.int/rec/T-REC-T.81-199209-I/en **[P]**
 [10] Adobe, DNG SDK download page (specification 1.7.1.0, patent notice) —
     https://www.adobe.com/support/downloads/dng/dng_sdk.html **[P]**
 [11] dcraw 9.28 source header — https://dechifro.org/dcraw/dcraw.c **[P]**

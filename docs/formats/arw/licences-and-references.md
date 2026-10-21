@@ -89,7 +89,7 @@ signatures. [I]
 | TIFF 6.0 (Adobe, 1992) | The container: the IFD chain, the SubIFD, strips, tiles, the Compression tag | Unchanged since 1992; availability as on the [NEF page](../nef/licences-and-references.md) [8] | S |
 | TIFF/EP, ISO 12234-2:2001 | CFAPattern and CFARepeatPatternDim in the raw SubIFD | Paid ISO document [9]. None of the 36 files checked declares TIFFEPStandardID (0x9216) or DNGVersion in IFD0 **[F]** | S, F |
 | Exif, CIPA DC-008 | The Exif IFD, the MakerNote pointer, OffsetTime\*, BodySerialNumber | Current is **Exif 3.1** (DC-008-Translation-2026), published 2026-01-30; free from CIPA [10] | P |
-| ITU-T T.81 (lossless process) | Lossless Compressed raw: Compression 7, tiled, each tile a SOF3 lossless JPEG; also the M and S YCbCr modes | Free from ITU [11]; patents on the 1992 lossless process have long expired [I] | P, I |
+| ITU-T T.81 (lossless process) | Lossless Compressed raw: Compression 7, tiled, each tile a SOF3 lossless JPEG; also the M and S YCbCr modes | Offered by the ITU only for a fee; the W3C hosts the CCITT publication of 1992 (see the [JPEG notes](../jpeg/licences-and-references.md#1-the-standards)) [11]; patents on the 1992 lossless process have long expired [I] | P, I |
 | DNG 1.7.1.0 (Adobe) | ARW is not DNG, but borrows DNGPrivateData (0xC634) to point at the SR2Private IFD, and writes DefaultCropOrigin, DefaultCropSize and WhiteLevel (0xC61D) in the raw SubIFD | Free PDF and SDK; patent licence as described on the NEF page [12] | P |
 | SMPTE RDD 34:2015, "LLVC – Low Latency Video Codec for Network Transfer" | A possible ancestor of the ARW 6.0 codec (section 5) | Free PDF; a registered disclosure document, not a standard; Sony is the proponent, and IP enquiries go to Sony [13] | P (document), I (link) |
 | JPEG XS, ISO/IEC 21122 | A possible technical relative of the ARW 6.0 codec | Paid ISO document; a patent pool exists [36] | I |
@@ -465,7 +465,8 @@ was confirmed on samples. These points were not [33]:
     **[S]**
 [10] CIPA, standards page (DC-008-Translation-2026, Exif 3.1) —
     https://www.cipa.jp/e/std/std-sec.html **[P]**
-[11] ITU-T Recommendation T.81 — https://www.itu.int/rec/T-REC-T.81 **[I]**
+[11] ITU-T Recommendation T.81 —
+    https://www.itu.int/rec/T-REC-T.81-199209-I/en **[P]**
 [12] Adobe, DNG SDK download page —
     https://www.adobe.com/support/downloads/dng/dng_sdk.html **[P]** (as
     retrieved for the NEF page; not re-read for ARW)
