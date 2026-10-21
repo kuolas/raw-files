@@ -229,8 +229,19 @@ impl Metadata {
     /// too when the AFInfo2 version is one raw-files does not know, and on
     /// a crop whose point cannot be placed on the cropped picture: a 1:1 or
     /// 16:9 crop on a small raw, or a crop whose CropArea cannot be used.
-    /// On Sony files it is `None`, whatever they record, because their
-    /// MakerNote is not read.
+    ///
+    /// On Sony files it is read from the MakerNote's FocusLocation, with
+    /// the area's size from its FocusFrameSize, on the bodies from the
+    /// ILCE-7RM2 on, as the camera recorded it and as the
+    /// [ARW format notes](https://github.com/kuolas/raw-files/blob/master/docs/formats/arw/makernote-and-metadata.md)
+    /// describe. Its frame is the picture as the camera framed it, which
+    /// differs from the image size on a picture taken at another aspect
+    /// ratio than the sensor's, and can on a medium or small raw: the
+    /// ILCE-7M4 records the full size there, the ILCE-9M3 the stored size.
+    /// It is `None` on a manual-focus shot and on the older bodies, which
+    /// record only an autofocus point's number or nothing at all, and its
+    /// [`in_focus`](Focus::in_focus) is always `None`: Sony records it in
+    /// no plain tag.
     pub fn focus(&self) -> Option<Focus> {
         self.focus
     }
@@ -812,8 +823,13 @@ impl LensBuilder {
 /// On Nikon files, [`Metadata::focus`] is read from the MakerNote's AFInfo2
 /// block, as the camera recorded it but placed inside the cropped picture
 /// on a crop, and is `None` for a manual-focus shot.
-/// On Sony files it is `None`, whatever they record, because their
-/// MakerNote is not read.
+/// On Sony files it is read from the MakerNote's FocusLocation and
+/// FocusFrameSize, on the bodies from the ILCE-7RM2 on, in the frame the
+/// camera framed the picture in: the picture at an aspect-ratio setting,
+/// and, on a medium or small raw, the full size or the stored size, as
+/// the body chooses. It is `None` for a manual-focus shot and for the
+/// bodies that record only a point's number, and its
+/// [`in_focus`](Self::in_focus) is always `None`.
 ///
 /// # Equality
 ///

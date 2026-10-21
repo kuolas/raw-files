@@ -23,19 +23,26 @@
 //!   ExposureBiasValue `0/10` (SRATIONAL), PhotographicSensitivity 250
 //!   (SHORT) and RecommendedExposureIndex 250 (LONG); and the lens, as
 //!   LensModel `FE 50mm F2.5 G` and LensSpecification `500/10`, `500/10`,
-//!   `25/10`, `25/10`. These are the values of the public ILCE-7M4 sample
-//!   6929 of raw.pixls.us, each of the type it has there; the sample has
-//!   no serial number, of the body or of the lens, and no LensMake in its
-//!   Exif tags, so neither has the fixture. IFD1, IFD0's next, repeats the
-//!   Make, Model and Orientation and declares a thumbnail of 160 by 120
-//!   pixels the same way. IFD2, IFD1's next, declares a JPEG
-//!   of the picture's full size, 7008 by 4672 pixels, and says so in its
-//!   tags: Compression 7 (JPEG as TIFF Technical Note 2 defines it), YCbCr
-//!   samples (PhotometricInterpretation 6) of 8 bits each, three per pixel,
-//!   subsampled 2 by 1. The raw SubIFD is a lossless raw: the
-//!   full-resolution image (NewSubfileType 0) of 14-bit samples of a
-//!   colour filter array (PhotometricInterpretation 32803), with
-//!   Compression 7. Its ImageWidth and ImageLength, SHORTs, say 7168 by
+//!   `25/10`, `25/10`; and Sony's MakerNote, which records the focus point:
+//!   a directory of Sony's tags at the start of its block, without a
+//!   header, with its values inside the block, holding FocusMode 3 (AF-C),
+//!   one BYTE; FocusLocation, four SHORTs, a frame of 7008 by 4672 pixels
+//!   and a centre at (3832, 2102); FocusFrameSize, six UNDEFINED bytes that
+//!   hold the area's 350 by 351 pixels and a third number, 257, as 16-bit
+//!   numbers in the file's byte order; FileFormat, the four BYTEs 4, 0, 1,
+//!   0; and SonyModelID 388, a SHORT. These are the values of the public
+//!   ILCE-7M4 sample 6929 of raw.pixls.us, each of the type it has there;
+//!   the sample has no serial number, of the body or of the lens, and no
+//!   LensMake in its Exif tags, so neither has the fixture. IFD1, IFD0's
+//!   next, repeats the Make, Model and Orientation and declares a
+//!   thumbnail of 160 by 120 pixels the same way. IFD2, IFD1's next,
+//!   declares a JPEG of the picture's full size, 7008 by 4672 pixels, and
+//!   says so in its tags: Compression 7 (JPEG as TIFF Technical Note 2
+//!   defines it), YCbCr samples (PhotometricInterpretation 6) of 8 bits
+//!   each, three per pixel, subsampled 2 by 1. The raw SubIFD is a
+//!   lossless raw: the full-resolution image (NewSubfileType 0) of 14-bit
+//!   samples of a colour filter array (PhotometricInterpretation 32803),
+//!   with Compression 7. Its ImageWidth and ImageLength, SHORTs, say 7168 by
 //!   5120 pixels, and its default crop, LONGs, starts at DefaultCropOrigin
 //!   12, 8 and is DefaultCropSize 7008 by 4672 pixels, the size of IFD2's
 //!   JPEG: the values of the sample 6929, whose raw size is a whole number
@@ -45,9 +52,12 @@
 //!   Like the real files, it also lists one strip that starts at the first
 //!   tile and is as long as the tiles together.
 //! - [`arw4_medium_file`] is the same file, with the same metadata, shot as
-//!   a medium raw: IFD2's JPEG is 4608 by 3072 pixels, and the raw SubIFD
-//!   holds YCbCr samples (PhotometricInterpretation 6, the same as IFD2's)
-//!   of 15 bits each, three per pixel, in the same lossless tiles. Its
+//!   a medium raw. Its MakerNote is the lossless file's, a simplification:
+//!   the medium raw sample 6930 records the same frame and area, the
+//!   full-size ones, with its centre elsewhere. IFD2's JPEG is 4608 by
+//!   3072 pixels, and the raw SubIFD holds YCbCr samples
+//!   (PhotometricInterpretation 6, the same as IFD2's) of 15 bits each,
+//!   three per pixel, in the same lossless tiles. Its
 //!   size, SHORTs, and default crop, LONGs, are those of the public
 //!   ILCE-7M4 medium raw sample 6930: 5120 by 3584 pixels, cropped from 8,
 //!   4 to 4608 by 3072.
@@ -84,10 +94,11 @@
 //! The metadata: every file holds its Make and Model in IFD0, and every
 //! file but the SRF holds them again in IFD1, with the Orientation in both;
 //! the SRF has no Orientation. Only the two ARW 4 files hold a capture
-//! time, an exposure and a lens, and no file holds a serial number. Every
-//! file but the A100 has an IFD that describes its raw data and gives its
-//! size; only the two ARW 4 files have a default crop. Every text value
-//! is ASCII ending in one NUL.
+//! time, an exposure, a lens and a MakerNote, which records the focus
+//! point, and no file holds a serial number. Every file but the A100 has
+//! an IFD that describes its raw data and gives its size; only the two
+//! ARW 4 files have a default crop. Every text value is ASCII ending in
+//! one NUL.
 //!
 //! Every JPEG preview is a baseline stub. Each builder returns where it put
 //! the JPEGs and the raw data, as an [`ArwBlobs`], so that a test can check
@@ -172,6 +183,23 @@ const DEFAULT_CROP_SIZE: u16 = 0xC620;
 /// The capture time's fraction of a second, as ASCII digits
 /// (SubSecTimeOriginal).
 const SUB_SEC_TIME_ORIGINAL: u16 = 0x9291;
+/// The maker's own block of metadata, as UNDEFINED bytes (MakerNote).
+const MAKER_NOTE: u16 = 0x927C;
+/// The Sony MakerNote tag that records how the camera focused, one BYTE
+/// (FocusMode).
+const FOCUS_MODE: u16 = 0x201B;
+/// The Sony MakerNote tag that records where the camera focused, a frame's
+/// width and height and the centre's x and y, four SHORTs (FocusLocation).
+const FOCUS_LOCATION: u16 = 0x2027;
+/// The Sony MakerNote tag that records the focus area's width and height,
+/// then a third number, as six UNDEFINED bytes (FocusFrameSize).
+const FOCUS_FRAME_SIZE: u16 = 0x2037;
+/// The Sony MakerNote tag that records the version of Sony's file format,
+/// four BYTEs (FileFormat).
+const FILE_FORMAT: u16 = 0xB000;
+/// The Sony MakerNote tag that records the camera body by number, a SHORT
+/// (SonyModelID).
+const SONY_MODEL_ID: u16 = 0xB001;
 
 /// NewSubfileType of the full-resolution image.
 const FULL_RESOLUTION: u32 = 0;
@@ -230,6 +258,19 @@ pub const MEDIUM_RAW_SIZE: (u16, u16) = (5120, 3584);
 pub const MEDIUM_CROP_ORIGIN: [u32; 2] = [8, 4];
 /// See [`MEDIUM_CROP_ORIGIN`].
 pub const MEDIUM_CROP_SIZE: [u32; 2] = [4608, 3072];
+/// The frame of the focus point that the ARW 4 files' MakerNote records in
+/// its FocusLocation, the width then the height: that of the public
+/// ILCE-7M4 sample 6929.
+pub const ARW4_FOCUS_FRAME: (u16, u16) = (7008, 4672);
+/// The centre of the focus area in [`ARW4_FOCUS_FRAME`], x then y, as the
+/// FocusLocation of the sample 6929 records it.
+pub const ARW4_FOCUS_CENTER: (u16, u16) = (3832, 2102);
+/// The focus area's width and height, as the FocusFrameSize of the sample
+/// 6929 records them.
+pub const ARW4_FOCUS_SIZE: (u16, u16) = (350, 351);
+/// The third number of the FocusFrameSize of the sample 6929, whose
+/// meaning is unknown.
+const ARW4_FOCUS_FRAME_SIZE_THIRD: u16 = 257;
 /// The size in pixels of IFD0's JPEG on the SR2 file.
 pub const SR2_JPEG: (u16, u16) = (640, 424);
 /// The size in pixels of IFD1's JPEG on the SRF file, its only one.
@@ -495,6 +536,8 @@ fn arw4(
             &[(500, 10), (500, 10), (25, 10), (25, 10)],
         )
         .ascii(exif, LENS_MODEL, "FE 50mm F2.5 G");
+    let makernote = arw4_makernote(&mut builder, order);
+    builder.undefined_ifd(exif, MAKER_NOTE, makernote);
 
     preview_ifd(&mut builder, ifd1, "SONY", "ILCE-7M4", orientation);
     let ifd1_jpeg = jpeg(&mut builder, ifd1, THUMBNAIL);
@@ -539,6 +582,34 @@ fn arw4(
         raw: vec![first, second],
     };
     (builder.build(), blobs)
+}
+
+/// Adds to `builder`, which writes byte order `order`, the MakerNote IFD
+/// of the ARW 4 files, without a header, and returns it: the five tags of
+/// the sample 6929, each of the type it has there, FocusFrameSize's
+/// numbers in the file's byte order.
+fn arw4_makernote(builder: &mut TiffBuilder, order: Order) -> IfdId {
+    let makernote = builder.ifd();
+    let (frame_width, frame_height) = ARW4_FOCUS_FRAME;
+    let (x, y) = ARW4_FOCUS_CENTER;
+    let (width, height) = ARW4_FOCUS_SIZE;
+    let frame_size = [
+        order.u16(width),
+        order.u16(height),
+        order.u16(ARW4_FOCUS_FRAME_SIZE_THIRD),
+    ]
+    .concat();
+    builder
+        .byte(makernote, FOCUS_MODE, &[3])
+        .short(
+            makernote,
+            FOCUS_LOCATION,
+            &[frame_width, frame_height, x, y],
+        )
+        .undefined(makernote, FOCUS_FRAME_SIZE, &frame_size)
+        .byte(makernote, FILE_FORMAT, &[4, 0, 1, 0])
+        .short(makernote, SONY_MODEL_ID, &[388]);
+    makernote
 }
 
 /// The ARW 2 layout of a body whose Model is `model`, whose raw SubIFD, in

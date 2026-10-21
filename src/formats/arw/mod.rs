@@ -32,8 +32,9 @@
 //! says what was measured. The file's name is never looked at.
 //!
 //! The search for the previews is in `previews.rs`. The metadata comes
-//! from the standard tags, through the reader the TIFF-based formats share;
-//! no Sony MakerNote is read.
+//! from the standard tags, through the reader the TIFF-based formats share,
+//! and the focus point, which no standard tag records, from Sony's
+//! MakerNote, read for that alone, through `makernote.rs`.
 
 mod makernote;
 mod previews;
@@ -136,29 +137,37 @@ fn claims<R: Read + Seek>(src: &mut Source<R>, tree: &Tree) -> Result<bool> {
 /// Reads the previews and the metadata of a file that [`claims`]
 /// accepted.
 ///
+/// The MakerNote is read first, once for the whole file, within `limits`.
 /// The previews are the JPEGs that the IFDs of IFD0's chain declare, found
 /// by the shared TIFF preview finder over the whole tree. The metadata is
 /// what the shared TIFF metadata reader reads from the standard tags: the
 /// camera, the capture time, the orientation, the exposure, the lens and
-/// the sizes. Neither takes limits of its own, so `_limits` goes unused
-/// here: the walk that built `tree` applied them.
+/// the sizes. When there is a MakerNote, it then gives the focus point,
+/// which no standard tag records ([`makernote::focus`]).
 ///
 /// # Errors
 ///
-/// As for [`previews::previews`] and [`tiff_metadata::read`]: `Io` when the
-/// reader fails. Nothing the file holds is an error here.
-fn parse<R: Read + Seek>(src: &mut Source<R>, tree: &Tree, _limits: &Limits) -> Result<Parsed> {
-    Ok(Parsed {
-        previews: previews::previews(src, tree)?,
-        metadata: tiff_metadata::read(src, tree)?.metadata,
-    })
+/// As for [`makernote::read`], [`previews::previews`],
+/// [`tiff_metadata::read`] and [`makernote::focus`]: `Io` when the reader
+/// fails. Nothing the file holds is an error here.
+fn parse<R: Read + Seek>(src: &mut Source<R>, tree: &Tree, limits: &Limits) -> Result<Parsed> {
+    let makernote = makernote::read(src, tree, limits)?;
+    let previews = previews::previews(src, tree)?;
+    let mut metadata = tiff_metadata::read(src, tree)?.metadata;
+    if let Some(makernote) = &makernote {
+        metadata.focus = makernote::focus(src, makernote)?;
+    }
+    Ok(Parsed { previews, metadata })
 }
 
 #[cfg(test)]
 mod tests {
+    use super::makernote::{FOCUS_LOCATION, FOCUS_MODE};
     use super::*;
-    use crate::container::tiff::tags::{DNG_VERSION, MAKE};
+    use crate::container::tiff::tags::{DNG_VERSION, MAKE, MAKER_NOTE};
     use crate::formats::testing::file;
+    use crate::geometry::{Point, Size};
+    use crate::metadata::Focus;
     use crate::tiff_builder::{IfdId, TiffBuilder};
 
     /// Whether the ARW reader claims the file that `build` describes.
@@ -274,5 +283,55 @@ mod tests {
         assert!(claims(&mut src, &tree).unwrap());
         let parsed = parse(&mut src, &tree, &Limits::default()).unwrap();
         assert!(parsed.previews.is_empty());
+    }
+
+    /// The focus point that parsing a Sony file gives, when its Exif IFD
+    /// holds a MakerNote whose IFD, after `prefix`, records the ILCE-9's
+    /// autofocus point, FocusMode 3 (AF-C) and its FocusLocation (public
+    /// sample 1541); the file must be claimed.
+    fn parsed_focus(prefix: &[u8]) -> Option<Focus> {
+        let (mut src, tree) = file(|builder, ifd| {
+            let exif = builder.ifd();
+            let makernote = builder.ifd();
+            builder.ascii(ifd, MAKE, "SONY").exif(ifd, exif);
+            builder
+                .prefix(makernote, prefix)
+                .byte(makernote, FOCUS_MODE, &[3])
+                .short(makernote, FOCUS_LOCATION, &[6000, 4000, 2662, 2000]);
+            builder.undefined_ifd(exif, MAKER_NOTE, makernote);
+        });
+        assert!(claims(&mut src, &tree).unwrap());
+        let parsed = parse(&mut src, &tree, &Limits::default()).unwrap();
+        parsed.metadata.focus()
+    }
+
+    #[test]
+    fn the_focus_point_is_read_from_the_makernote() {
+        let focus = parsed_focus(b"").expect("a focus point");
+        let frame = Size {
+            width: 6000,
+            height: 4000,
+        };
+        assert_eq!(focus.frame(), frame);
+        assert_eq!(focus.center(), Point { x: 2662, y: 2000 });
+        assert_eq!(focus.size(), None);
+        assert_eq!(focus.in_focus(), None);
+    }
+
+    #[test]
+    fn a_makernote_that_holds_no_sony_directory_gives_no_focus_point() {
+        // The same IFD after the start of an Olympus-format MakerNote.
+        assert_eq!(parsed_focus(b"SONY PI\0"), None);
+    }
+
+    #[test]
+    fn a_file_without_a_makernote_gives_no_focus_point() {
+        let (mut src, tree) = file(|builder, ifd| {
+            let exif = builder.ifd();
+            builder.ascii(ifd, MAKE, "SONY").exif(ifd, exif);
+            builder.undefined(exif, 0x9000, b"0232");
+        });
+        let parsed = parse(&mut src, &tree, &Limits::default()).unwrap();
+        assert_eq!(parsed.metadata.focus(), None);
     }
 }
