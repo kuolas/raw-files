@@ -17,23 +17,33 @@
 //! never prints a path, a file name, or the value of a make, model, serial
 //! number, capture time, exposure or lens, so its output can be pasted into
 //! an issue without disclosing anything about the photos.
+//!
+//! For the focus point, where the camera focused, it counts the files that
+//! have one, how many of those record that the camera confirmed focus, that
+//! it missed, or neither, the sizes of the frames the points are measured
+//! in, how many different sizes the focus areas have, and how many frames
+//! are not the file's image size. It never prints where a point lies or how
+//! large one area is.
+//!
 //! It fails when the folder cannot be read or holds no file with a known
 //! RAW extension, and otherwise unless every entry could be read, every file
 //! opened, every file has a preview, every largest preview is a whole JPEG,
-//! and every file's metadata gives the orientation its largest preview
-//! carries. The metadata counts are printed for the reader of the output to
-//! judge, since what a folder's cameras record varies: a body that writes no
-//! serial number, or no sub-seconds, is not a failure of the library.
+//! every file's metadata gives the orientation its largest preview
+//! carries, and every focus point lies inside its frame, its area included,
+//! both as read and once placed on the largest preview. The metadata counts
+//! are printed for the reader of the output to judge, since what a folder's
+//! cameras record varies: a body that writes no serial number, or no
+//! sub-seconds, is not a failure of the library.
 
 use std::cell::Cell;
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::env;
 use std::fs::{self, File};
 use std::io::{self, Read, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
-use raw_files::{DateTime, Format, Metadata, RawFile};
+use raw_files::{DateTime, Focus, Format, Metadata, RawFile, Size};
 
 /// A file that counts the bytes its reads return, into a counter the caller
 /// keeps, so that the count is still there once the library owns the file.
@@ -131,6 +141,95 @@ impl MetadataTally {
     }
 }
 
+/// What the files say about where the camera focused, in counts. No
+/// centre and no area size is printed: the area sizes are kept only to
+/// count how many different ones there are.
+#[derive(Default)]
+struct FocusTally {
+    with_point: usize,
+    without_point: usize,
+    /// Files whose camera confirmed focus; `missed` and `unknown` count
+    /// the ones that record a miss and the ones that do not say.
+    confirmed: usize,
+    missed: usize,
+    unknown: usize,
+    /// How many points are measured in each frame size.
+    frames: BTreeMap<(u32, u32), usize>,
+    /// The different sizes of the focus areas, kept to count them.
+    area_sizes: BTreeSet<(u32, u32)>,
+    /// Files whose point, checked by hand here rather than trusted to the
+    /// library, lies outside its frame, area included: the library builds
+    /// no focus that does, so this must stay zero.
+    outside_frame: usize,
+    /// Files whose frame is not their image size, or that record no image
+    /// size. Printed, not asserted: a Sony picture taken at another aspect
+    /// ratio than the sensor's, or a medium or small raw, differs by design.
+    frame_not_image_size: usize,
+    /// Files whose point could not be placed on their largest preview. The
+    /// library refuses only a frame with a zero side, and a largest preview
+    /// with a zero side would be a finding in itself, so this must stay
+    /// zero.
+    not_scaled: usize,
+    /// Files whose point, once placed on their largest preview, lies
+    /// outside the preview, area included, checked by hand as for
+    /// `outside_frame`: this must stay zero too.
+    scaled_outside_frame: usize,
+}
+
+impl FocusTally {
+    /// Counts what `metadata` says about the focus.
+    fn record(&mut self, metadata: &Metadata) {
+        let Some(focus) = metadata.focus() else {
+            self.without_point += 1;
+            return;
+        };
+        self.with_point += 1;
+        match focus.in_focus() {
+            Some(true) => self.confirmed += 1,
+            Some(false) => self.missed += 1,
+            None => self.unknown += 1,
+        }
+        let frame = focus.frame();
+        *self.frames.entry((frame.width, frame.height)).or_default() += 1;
+        if let Some(size) = focus.size() {
+            self.area_sizes.insert((size.width, size.height));
+        }
+        self.outside_frame += usize::from(!lies_inside(&focus, frame));
+        self.frame_not_image_size += usize::from(metadata.image_size() != Some(frame));
+    }
+
+    /// Places `focus` on a largest preview of size `preview` and counts
+    /// whether that worked and kept the point inside the preview.
+    fn record_scaled(&mut self, focus: &Focus, preview: Size) {
+        match focus.scaled_to(preview) {
+            Some(scaled) => {
+                self.scaled_outside_frame += usize::from(!lies_inside(&scaled, preview));
+            }
+            None => self.not_scaled += 1,
+        }
+    }
+}
+
+/// Whether the centre of `focus` lies inside `frame`, edges included, and
+/// so does its area around the centre when it has one: on each axis, from
+/// the centre less half the side, rounded up, to the centre plus that half
+/// lies between 0 and the frame's side. Written out here, from the rule
+/// that `Focus::new` and `Focus::with_size` document, rather than asked
+/// of the library, so that the test does not take the library's word for
+/// it.
+fn lies_inside(focus: &Focus, frame: Size) -> bool {
+    let center = focus.center();
+    let fits = |center: u32, side: u32, frame: u32| {
+        let half = side.div_ceil(2);
+        half <= center && u64::from(center) + u64::from(half) <= u64::from(frame)
+    };
+    center.x <= frame.width
+        && center.y <= frame.height
+        && focus.size().is_none_or(|size| {
+            fits(center.x, size.width, frame.width) && fits(center.y, size.height, frame.height)
+        })
+}
+
 /// What the run found, in counts.
 #[derive(Default)]
 struct Tally {
@@ -144,6 +243,7 @@ struct Tally {
     sizes: BTreeMap<(u32, u32), usize>,
     orientations: BTreeMap<String, usize>,
     metadata: MetadataTally,
+    focus: FocusTally,
     /// Files whose metadata gives an orientation other than their largest
     /// preview's: both come from the same tag, so this must stay zero.
     orientation_disagreements: usize,
@@ -209,12 +309,16 @@ fn check(path: &Path, tally: &mut Tally) {
         .entry(format!("{:?}", raw.format()))
         .or_default() += 1;
     tally.metadata.record(raw.metadata());
+    tally.focus.record(raw.metadata());
     let Some(preview) = raw.largest_preview() else {
         tally.no_preview += 1;
         return;
     };
     if preview.orientation() != raw.metadata().orientation() {
         tally.orientation_disagreements += 1;
+    }
+    if let Some(focus) = raw.metadata().focus() {
+        tally.focus.record_scaled(&focus, preview.size());
     }
     *tally
         .sizes
@@ -308,6 +412,33 @@ fn every_file_of_the_local_corpus_opens_and_gives_a_whole_jpeg() {
     );
     println!("raw sizes: {:?}", m.raw_sizes);
     println!("image sizes: {:?}", m.image_sizes);
+    let f = &tally.focus;
+    println!(
+        "files with a focus point: {}, without: {}",
+        f.with_point, f.without_point
+    );
+    println!(
+        "focus confirmed: true {}, false {}, unknown {}",
+        f.confirmed, f.missed, f.unknown
+    );
+    println!("focus frames: {:?}", f.frames);
+    println!("distinct focus area sizes: {}", f.area_sizes.len());
+    println!(
+        "files whose focus point lies outside its frame, area included: {}",
+        f.outside_frame
+    );
+    println!(
+        "files whose focus frame differs from their image size: {}",
+        f.frame_not_image_size
+    );
+    println!(
+        "files whose focus point could not be scaled onto their largest preview: {}",
+        f.not_scaled
+    );
+    println!(
+        "files whose focus point, scaled onto their largest preview, lies outside it, area included: {}",
+        f.scaled_outside_frame
+    );
     println!(
         "files whose metadata orientation differs from their largest preview's: {}",
         tally.orientation_disagreements
@@ -340,5 +471,17 @@ fn every_file_of_the_local_corpus_opens_and_gives_a_whole_jpeg() {
     assert_eq!(
         tally.not_whole_jpeg, 0,
         "some largest previews are not whole JPEGs"
+    );
+    assert_eq!(
+        tally.focus.outside_frame, 0,
+        "some focus points lie outside their frame"
+    );
+    assert_eq!(
+        tally.focus.not_scaled, 0,
+        "some focus points could not be scaled onto their largest preview"
+    );
+    assert_eq!(
+        tally.focus.scaled_outside_frame, 0,
+        "some focus points, scaled onto their largest preview, lie outside it"
     );
 }

@@ -247,13 +247,16 @@ on `master` keeps filled, so a pull request downloads nothing unless it
 changes the list.
 
 One test is ignored by default: it runs the reader over a folder of your own
-RAW files and prints counts only, never a path or the value of a make,
-model, serial number, time, exposure or lens, so its output can go into an
-issue. It checks that every file opens, that every one has a preview, that
-the largest preview is a whole JPEG and that the metadata gives the
-preview's orientation; it counts how many files have each metadata field.
-It fails on a folder it cannot read, that holds no RAW file, or that holds an entry it
-cannot read. Run it with `--release`, because it reads every file:
+RAW files and prints counts only, never a path, the value of a make,
+model, serial number, time, exposure or lens, or where the camera focused,
+so its output can go into an issue. It checks that every file opens, that
+every one has a preview, that the largest preview is a whole JPEG, that the
+metadata gives the preview's orientation, and that every focus point lies
+inside its frame, area included, both as read and once placed on the
+largest preview; it counts how many files have each metadata field and a
+focus point. It fails on a folder it cannot read, that holds no RAW file,
+or that holds an entry it cannot read. Run it with `--release`, because it
+reads every file:
 
 ```sh
 RAW_FILES_LOCAL_CORPUS=/path/to/photos cargo test --release --test local_corpus -- --ignored --nocapture
