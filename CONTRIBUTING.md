@@ -347,10 +347,10 @@ never builds a big-endian header, and half of the reader goes unfuzzed.
 The target `jpeg_probe`, which fuzzes the search for a JPEG preview's
 frame header, runs the same way, with `jpeg_probe` in place of `tiff_walk`
 throughout. The target `open`, which opens the input as a caller would and
-reads its metadata and every preview it finds, has seeds of its own,
-fixtures of the Nikon and Sony layouts, and takes the TIFF ones too, since
-a plain TIFF file is also something it must open; libFuzzer takes several
-corpus directories:
+reads its metadata, its focus point placed on a preview, and every preview
+it finds, has seeds of its own, fixtures of the Nikon and Sony layouts, and
+takes the TIFF ones too, since a plain TIFF file is also something it must
+open; libFuzzer takes several corpus directories:
 
 ```sh
 mkdir -p fuzz/corpus/open
