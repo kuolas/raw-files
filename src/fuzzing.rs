@@ -18,9 +18,10 @@ use std::io::Cursor;
 
 use crate::container::jpeg::probe;
 use crate::container::tiff::{parse_header, walk};
+use crate::geometry::Size;
 use crate::io::Source;
 use crate::limits::Limits;
-use crate::metadata::Metadata;
+use crate::metadata::{Focus, Metadata};
 use crate::options::Options;
 
 /// Reads `data` as a TIFF file: the header, the walk with the default
@@ -91,8 +92,8 @@ pub fn jpeg_probe(data: &[u8]) {
 /// Opens `data` as a RAW file, as a caller would, with the default options,
 /// then asks it everything the handle answers: its format, every value of
 /// its metadata, formatted as a caller would print it, its largest
-/// preview, the smallest at least 1 by 1, and the bytes of every preview,
-/// read into one buffer.
+/// preview and the focus point placed on it, the smallest preview at least
+/// 1 by 1, and the bytes of every preview, read into one buffer.
 ///
 /// Whatever `data` holds, this must return, never panic, and do so in
 /// bounded time and memory. What it reads is thrown away: an error is an
@@ -103,7 +104,12 @@ pub fn open(data: &[u8]) {
     };
     let _ = file.format();
     read_metadata(file.metadata());
-    let _ = file.largest_preview();
+    let largest = file.largest_preview();
+    if let (Some(focus), Some(preview)) = (file.metadata().focus(), largest)
+        && let Some(on_preview) = focus.scaled_to(preview.size())
+    {
+        read_focus(&on_preview);
+    }
     let _ = file.preview_at_least(1, 1);
     let mut buf = Vec::new();
     for preview in file.previews().to_vec() {
@@ -114,8 +120,10 @@ pub fn open(data: &[u8]) {
 /// Asks `metadata` for every value, and formats, reduces and converts
 /// each time and fraction as a caller showing it would, so that what those
 /// types do with values the reader built from arbitrary bytes is fuzzed
-/// too, not only the reading. A `Debug` form of the whole covers whatever
-/// a later value adds.
+/// too, not only the reading. The focus point is read, then placed on a
+/// frame of 1 by 1 pixel and read again, since a tiny frame is where its
+/// rounding and trimming do the most. A `Debug` form of the whole covers
+/// whatever a later value adds.
 fn read_metadata(metadata: &Metadata) {
     let _ = metadata.make();
     let _ = metadata.model();
@@ -165,5 +173,25 @@ fn read_metadata(metadata: &Metadata) {
     }
     let _ = metadata.raw_size();
     let _ = metadata.image_size();
+    if let Some(focus) = metadata.focus() {
+        read_focus(&focus);
+        let tiny = Size {
+            width: 1,
+            height: 1,
+        };
+        if let Some(on_tiny) = focus.scaled_to(tiny) {
+            read_focus(&on_tiny);
+        }
+    }
     let _ = format!("{metadata:?}");
+}
+
+/// Asks `focus` for each of its values and its `Debug` form, as a caller
+/// showing it would.
+fn read_focus(focus: &Focus) {
+    let _ = focus.frame();
+    let _ = focus.center();
+    let _ = focus.size();
+    let _ = focus.in_focus();
+    let _ = format!("{focus:?}");
 }
