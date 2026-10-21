@@ -1,10 +1,10 @@
 # raw-files
 
 A camera RAW library in pure Rust. It extracts the JPEG previews embedded in
-Nikon NEF and Sony ARW files and reads their metadata, with fuller RAW
-decoding planned.
+Nikon NEF and Sony ARW files and reads their metadata and where the camera
+focused, with fuller RAW decoding planned.
 
-**Status: early.** Release 0.2.0 reads the JPEG previews embedded in Nikon
+**Status: early.** Release 0.3.0 reads the JPEG previews embedded in Nikon
 NEF and Sony ARW files, the SRF, SR2 and ARQ files of Sony's family and the
 ARW files of the Sony-built Hasselblad bodies included, and the metadata a
 viewer or a file renamer needs next to them: the capture time, with
@@ -12,7 +12,14 @@ sub-seconds and offset from UTC when recorded, the camera's make, model and
 serial number, the lens, the exposure, the orientation, and the sizes of the
 raw data and of the visible image. It gives the largest preview, or the
 smallest that fills a given size, with the orientation to show it in, and it
-never reads the raw data. Focus points and raw decoding come later; see the
+never reads the raw data. It also reads where the camera focused, as the
+file records it: the centre of the focus area, the frame it is measured in
+and, when recorded, the area's size and whether the camera confirmed focus,
+ready to be scaled onto any preview. Nikon mirrorless bodies, Nikon DSLRs in
+live view and Sony bodies from the ILCE-7RM2 on record it. The shots that
+record only an autofocus point's number or a mask of points, such as a
+DSLR's through the viewfinder, give no focus point yet, and a shot in manual
+focus gives none; plain JPEG files and raw decoding come later; see the
 [roadmap](docs/ROADMAP.md).
 
 ## Usage
@@ -27,9 +34,8 @@ fn main() -> raw_files::Result<()> {
     if let Some(preview) = file.largest_preview() {
         let jpeg = file.read_preview(&preview)?;
         println!(
-            "{} × {} pixels, shown upright by {:?}, {} bytes",
-            preview.width(),
-            preview.height(),
+            "{} pixels, shown upright by {:?}, {} bytes",
+            preview.size(),
             preview.orientation(),
             jpeg.len(),
         );
@@ -59,14 +65,63 @@ fn main() -> raw_files::Result<()> {
 }
 ```
 
+Find where the camera focused on the largest preview, the window in which
+to measure how sharp the picture is; a file that records no focus point
+gives none:
+
+```rust
+use raw_files::RawFile;
+
+fn main() -> raw_files::Result<()> {
+    let file = RawFile::open("photo.nef")?;
+    // The camera measures the point in its own frame; scale it to the preview.
+    let on_preview = file
+        .largest_preview()
+        .zip(file.metadata().focus())
+        .and_then(|(preview, focus)| focus.scaled_to(preview.size()));
+    match on_preview {
+        Some(focus) => {
+            let (centre, frame) = (focus.center(), focus.frame());
+            println!("focused at {centre} on the {frame} preview");
+            if let Some(size) = focus.size() {
+                println!("measure sharpness in the {size} area around it");
+            }
+        }
+        None => println!("no focus point to show"),
+    }
+    Ok(())
+}
+```
+
+Build the same values without a camera file, as a program's tests do:
+
+```rust
+use raw_files::{Focus, Metadata, Point, Size};
+
+fn main() {
+    let frame = Size { width: 8256, height: 5504 };
+    let focus = Focus::new(frame, Point { x: 4905, y: 2461 })
+        .expect("the centre lies on the frame")
+        .with_in_focus(true);
+    let metadata = Metadata::default()
+        .with_model("NIKON Z 9")
+        .with_focus(focus);
+    assert_eq!(metadata.focus(), Some(focus));
+}
+```
+
 `RawFile` opens a path, bytes in memory or any reader that can seek. A
 `Preview` says where the bytes are, how large the picture is, its format and
 the orientation to show it in. `preview_at_least` picks the smallest preview
 that fills a box. `Metadata` holds what the camera recorded about the
 picture, read when the file is opened; every value is optional, since not
 every camera records every one, and a damaged value is `None` on its own.
-`Options` and `Limits` open an untrusted file with other caps. The API
-documentation is on [docs.rs](https://docs.rs/raw-files).
+`Focus` is where the camera focused, and its `scaled_to` places it on a
+preview. The `with_…` methods of `Metadata` and `Exposure`, `Lens::builder`
+and the checked constructors, such as `Focus::new`, build every value
+without a file, for a program's tests. `Options` and `Limits` open an
+untrusted file with other caps. The API documentation is on
+[docs.rs](https://docs.rs/raw-files).
 
 ## Formats
 
@@ -75,21 +130,28 @@ documentation is on [docs.rs](https://docs.rs/raw-files).
   points at. The metadata comes from the standard TIFF and Exif tags and,
   for what Nikon bodies before 2018 record only there, from the MakerNote:
   the serial number, the ISO, the lens range and the time zone; the visible
-  image size is the crop area the MakerNote records. Previews and metadata
-  are checked on 33 CC0 Nikon files from raw.pixls.us that CI downloads,
-  three of the Z 9 (lossless, HE and HE\*) and 30 of 24 other bodies from
-  the D1H to the Z5II, on test files laid out like a Z 9's, a Z6III's and
-  a D300's, and on two stripped files of the maintainer's own Z 9.
+  image size is the crop area the MakerNote records. The focus point comes
+  from the MakerNote's AFInfo2 block, which mirrorless bodies and DSLRs in
+  live view fill in, and on a crop mode it is placed inside the cropped
+  picture. Previews and metadata are checked on 33 CC0 Nikon files from
+  raw.pixls.us that CI downloads, three of the Z 9 (lossless, HE and HE\*)
+  and 30 of 24 other bodies from the D1H to the Z5II, on test files laid
+  out like a Z 9's, a Z6III's and a D300's, and on two stripped files of
+  the maintainer's own Z 9.
 - **Sony ARW**, with the SRF, SR2 and ARQ files of the same family and the
   ARW files of the Sony-built Hasselblad bodies. The previews are found in
   IFD0 and IFD1 and, on bodies from version 4.0 of Sony's format, the
-  full-size JPEG in IFD2. The metadata comes from the standard tags alone;
-  most Sony bodies keep their serial number in a form the library does not
-  read, and of the public samples only the ILCE-1 and the ILCE-7M5 give
-  one. Previews and metadata are checked on 36 CC0 Sony-family
-  files from raw.pixls.us, from the DSC-F828's SRF to the A7 V's ARW 6.0,
-  35 of which CI downloads, and on test files laid out like each
-  generation.
+  full-size JPEG in IFD2. The metadata comes from the standard tags, and
+  the focus point, on the bodies from the ILCE-7RM2 on, from the
+  MakerNote's focus tags alone: the position from FocusLocation, or from
+  FocusLocation2 when that is missing, the area's size from FocusFrameSize
+  from the ILCE-7SM3 on, and the focus mode, since a shot in manual focus
+  gives none; nothing else in the MakerNote is read. Most Sony bodies keep
+  their serial number in a form the library does not read, and of the
+  public samples only the ILCE-1 and the ILCE-7M5 give one. Previews and
+  metadata are checked on 36 CC0 Sony-family files from the same site, from
+  the DSC-F828's SRF to the A7 V's ARW 6.0, 35 of which CI downloads, and on
+  test files laid out like each generation.
 
 Any other file, a DNG among them whatever its Make says, is refused with the
 `UnknownFormat` error.

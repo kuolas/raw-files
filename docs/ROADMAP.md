@@ -9,24 +9,34 @@ requests live in the
 The repository, its license and its contribution process exist. The public
 API is the file handle (`RawFile` and `Options`) with the preview types
 (`Preview`, `PreviewFormat`, `Orientation`, `Size`), the metadata types
-(`Metadata`, `Exposure`, `Lens`, `DateTime`, `Rational` and
-`SignedRational`), `Format`, `Error` and `Limits`. A Nikon NEF file opens
-with the JPEG previews in its IFD0, its SubIFDs and its MakerNote, checked
-on a test file laid out like a Nikon Z 9's and on 23 CC0 Nikon files that
-CI downloads: three of the Z 9 (lossless, HE and HE*), and 20 of 18 older
-and newer bodies, from the D1H to the Z6III. A Sony ARW file, or an SRF,
-SR2 or ARQ file of the same family, opens with the JPEG previews in its
-IFD0, IFD1 and, on newer bodies, IFD2, checked on test files laid out like
-each generation of the family and on 36 CC0 Sony-family files of
-raw.pixls.us, 35 of which CI downloads. Both open with their metadata too,
+(`Metadata`, `Exposure`, `Lens`, `LensBuilder`, `Focus`, `Point`,
+`DateTime`, `Rational` and `SignedRational`), `Format`, `Error`,
+`ErrorKind`, `Result` and `Limits`. A Nikon NEF file opens with the JPEG
+previews in its IFD0, its SubIFDs and its MakerNote, checked on test files
+laid out like a Nikon Z 9's, a Z6III's and a D300's, on two stripped files
+of the maintainer's own Z 9, and on the 33 CC0 Nikon files of
+raw.pixls.us that CI downloads: three of the Z 9 (lossless, HE and HE*),
+and 30 of 24 other bodies, from the D1H to the Z5II. A Sony ARW file, or
+an SRF, SR2 or ARQ file of the same family, opens with the JPEG previews in
+its IFD0, IFD1 and, on newer bodies, IFD2, checked on test files laid out
+like each generation of the family and on 36 CC0 Sony-family files of the
+same site, 35 of which CI downloads. Both open with their metadata too,
 read from the standard TIFF and Exif tags and, on Nikon files, from the
 MakerNote fields that older bodies record only there, checked on the same
-files. Milestones 1, 2 and 3 all work. Any other file that can be read
-opens as `UnknownFormat`.
+files. Both give where the camera focused, read from the MakerNote, on
+Nikon mirrorless bodies, Nikon DSLRs in live view and Sony bodies from the
+ILCE-7RM2 on, while a shot that records only an autofocus point's number
+gives none until the second step of milestone 4. Milestones 1, 2 and 3 all
+work, and milestone 4 works for the bodies that record a position. Any
+other file that can be read opens as `UnknownFormat`.
 
 The first release, version 0.1.0, is milestones 1 and 2: the embedded
 previews of NEF and ARW files. The second, 0.2.0, is milestone 3: their
-basic metadata.
+basic metadata. The third, 0.3.0, is the first step of milestone 4: the
+focus point as the camera records it. The next release is milestone 5,
+plain JPEG files ([#23](https://github.com/kuolas/raw-files/issues/23)),
+and the one after it the second step of milestone 4: the mapping of a
+DSLR's autofocus point number to pixels.
 
 ## Milestones
 
@@ -36,11 +46,15 @@ basic metadata.
 3. **Basic metadata.** What a viewer or a file renamer needs next to the
    preview: capture time, camera make, model and serial number, lens,
    exposure, orientation, and image sizes.
-4. **Focus points.** The autofocus points the camera used, in the
-   coordinates of the image, to judge sharpness where the photographer
-   focused.
-5. **Raw sensor data.** Decode the sensor data of NEF and ARW files.
-6. **Developed image.** Develop the sensor data to a linear image, plus the
+4. **Focus points.** Where the camera focused, in coordinates that place
+   it on a preview, to judge sharpness where the photographer focused.
+   First the position the camera records; then the shots that record only
+   the number of an autofocus point, such as a DSLR's through the
+   viewfinder, mapped to pixels through a table of the body's points.
+5. **Plain JPEG files.** Open the JPEG files a camera writes beside its
+   raw files, for their Exif metadata and their previews.
+6. **Raw sensor data.** Decode the sensor data of NEF and ARW files.
+7. **Developed image.** Develop the sensor data to a linear image, plus the
    colour model that converts it to a standard colour space; the creative
    edit stays with the application
    ([ADR010](architecture-decisions/adr010-decoding-ends-at-a-linear-image.md)).

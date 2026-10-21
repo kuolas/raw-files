@@ -4,7 +4,7 @@ How a Nikon NEF stores its sensor data: where the strip is, the compressed
 (Huffman plus curve) scheme used by most bodies, the packed and unpacked
 layouts, the small and reduced-size raws, and the HE/HE\* codec that raw-files
 cannot decode. It ends with the checks a decoder of untrusted input needs and
-a recommendation for milestone 5.
+a recommendation for milestone 6.
 
 Back to [the NEF overview](README.md).
 
@@ -903,7 +903,7 @@ full history is in [security.md](security.md).
 
 ## Recommendation for raw-files
 
-For milestone 5: **[I]**
+For milestone 6: **[I]**
 
 - **Scope.** Decode the Huffman path (lossless, lossy type 1 and type 2,
   including split files), the uncompressed and packed layouts of DSLRs and

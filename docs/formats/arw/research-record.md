@@ -22,7 +22,7 @@ roadmap milestones:
 - milestone 2: find and return the largest embedded JPEG preview;
 - milestone 3: read basic metadata (orientation, capture date, camera,
   dimensions);
-- milestone 5: decode the raw sensor data.
+- milestone 6: decode the raw sensor data.
 
 The research also had to establish three practical points:
 

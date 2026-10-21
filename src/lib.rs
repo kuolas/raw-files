@@ -17,8 +17,8 @@
 //! on Nikon and Sony files, from what the maker's MakerNote records that
 //! they lack: the camera's make, model and serial number, the capture
 //! time, the orientation, the exposure, the lens, the sizes of the raw
-//! data and of the visible image, and, on Nikon and Sony files, where the
-//! camera focused ([`Metadata::focus`]). See the
+//! data and of the visible image, and where the camera focused
+//! ([`Metadata::focus`]). See the
 //! [roadmap](https://github.com/kuolas/raw-files/blob/master/docs/ROADMAP.md)
 //! for the plan and the
 //! [architecture](https://github.com/kuolas/raw-files/blob/master/docs/ARCHITECTURE.md)
@@ -79,6 +79,35 @@
 //! # }
 //! ```
 //!
+//! Find where the camera focused on the largest preview: the window in
+//! which to measure how sharp the picture is. A file that records no focus
+//! point gives `None`, and one that records the point without its area
+//! gives the point alone.
+//!
+//! ```no_run
+//! use raw_files::RawFile;
+//!
+//! # fn main() -> raw_files::Result<()> {
+//! let file = RawFile::open("photo.nef")?;
+//! // The camera measures the point in its own frame; scale it to the preview.
+//! let on_preview = file
+//!     .largest_preview()
+//!     .zip(file.metadata().focus())
+//!     .and_then(|(preview, focus)| focus.scaled_to(preview.size()));
+//! match on_preview {
+//!     Some(focus) => {
+//!         let (centre, frame) = (focus.center(), focus.frame());
+//!         println!("focused at {centre} on the {frame} preview");
+//!         if let Some(size) = focus.size() {
+//!             println!("measure sharpness in the {size} area around it");
+//!         }
+//!     }
+//!     None => println!("no focus point to show"),
+//! }
+//! # Ok(())
+//! # }
+//! ```
+//!
 //! A program's tests can build every metadata value without a file,
 //! through the `with_…` methods of [`Metadata`] and [`Exposure`],
 //! [`Lens::builder`] and the checked constructors, such as
@@ -122,16 +151,26 @@
 //!
 //! Nikon NEF, including the NRW files of Coolpix cameras, and Sony ARW,
 //! including the SRF, SR2 and ARQ files of the same family and the ARW files
-//! of the Sony-built Hasselblad bodies. Version 0.2.0 reads the embedded
-//! previews and the metadata of these files, not their raw data. Both are
-//! checked on 33 public Nikon files, from the D1H to the Z5II, and on 36
-//! public Sony-family files, from the DSC-F828 to the ILCE-7M5.
+//! of the Sony-built Hasselblad bodies. Version 0.3.0 reads the embedded
+//! previews, the metadata and the focus point of these files, not their raw
+//! data. All three are checked on the public-domain (CC0) sample files of
+//! [raw.pixls.us](https://raw.pixls.us/): 33 Nikon files, from the D1H to
+//! the Z5II, and 36 Sony-family files, from the DSC-F828 to the ILCE-7M5.
+//!
+//! Nikon mirrorless bodies, Nikon DSLRs in live view and Sony bodies from
+//! the ILCE-7RM2 on record where they focused as a position, which
+//! [`Metadata::focus`] gives. A shot that records at most the number of an
+//! autofocus point or a mask of the points used, such as a Nikon DSLR's
+//! through the viewfinder or a Sony body's before the ILCE-7RM2, gives
+//! `None`, and so does a shot in manual focus.
 //!
 //! # What comes next
 //!
 //! The [roadmap](https://github.com/kuolas/raw-files/blob/master/docs/ROADMAP.md)
-//! plans the focus point of the shots that record only an autofocus
-//! point's number, such as a DSLR's through the viewfinder; then the raw
+//! plans plain JPEG files next, for the pictures a camera writes beside its
+//! raw files; then the focus point of the shots that record only an
+//! autofocus point's number, such as a DSLR's through the viewfinder,
+//! mapped to pixels through a table of the body's points; then the raw
 //! sensor data; and last a developed linear image.
 
 // A fuzzing build compiles the reader for one caller, the fuzz entry points,
