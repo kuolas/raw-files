@@ -140,11 +140,11 @@ milestone that needs the tag. [P][1]
 | 0x003D | BlackLevel | u16[4] | per-channel black level, recorded at 14-bit scale | 5 |
 | 0x003E | ImageSizeRAW | u16 | 1 large, 2 medium, 3 small | 5 |
 | 0x0045 | CropArea | u16[4] | left, top, width, height of the output rectangle | 3, 4, 5 |
-| 0x0051 | (unnamed, Z bodies) | undef | NEFCompression as a u16 at byte 10; byte order disputed (see the note below). Present on the Z 6 (2018) too, and on the Z f, Z6III and Z 9 (files 3587, 6887, 7808 to 7810, 5146 to 5148). Byte 10, read as a u16 in the MakerNote's byte order, little-endian on all three, is 3 (lossless) on the Z 9's lossless file, 14 (HE\*) on its HE\* file and 13 (HE) on its HE file (files 5146 to 5148) **[F]** | 5 |
+| 0x0051 | (unnamed, Z bodies) | undef | NEFCompression as a u16 at byte 10; byte order disputed (see the note below). Present on the Z 6 (2018) too, and on the Z f, Z6III, Z 9, Z5II and Z50II (files 3587, 6887, 7808 to 7810, 7812, 7813, 5146 to 5148, 7735, 7736, 7767, 7770); absent on the Z fc (2021) and Z 30 (2022), which write 0x0093 instead (files 8559, 5812). Byte 10, read as a u16 in the MakerNote's byte order, little-endian on the three Z 9 files, is 3 (lossless) on the Z 9's lossless file, 14 (HE\*) on its HE\* file and 13 (HE) on its HE file (files 5146 to 5148) **[F]** | 5 |
 | 0x0084 | Lens | rational[4] | the lens's shortest and longest focal length and the widest aperture at each; on every checked body with interchangeable lenses, from the D1H on; equal to Exif LensSpecification wherever both exist **[F]** | 3 |
 | 0x0088 | AFInfo | undef[4] | area mode, the number of the focus point and a mask of the points in focus; no position. The only focus data of the checked bodies without AFInfo2: the D1H, D70, D100, D200 and Coolpix E5700 and P7800, and written by no checked body that has AFInfo2 **[F]**; [section 8.6](#86-focus-point) | 4 |
 | 0x0091 | ShotInfo | undef | model-specific; encrypted for versions 02xx and 08xx | none |
-| 0x0093 | NEFCompression | u16 | compression hint; absent on the Z bodies checked, which write 0x0051 instead, and on the D1H and E5700 **[F]** | 5 |
+| 0x0093 | NEFCompression | u16 | compression hint; absent on the Z bodies checked but the Z fc and Z 30, which write 0x0051 instead, and on the D1H and E5700; present on the Z fc and Z 30, with the value 3 (lossless), where 0x0051 is absent (files 8559, 5812) **[F]** | 5 |
 | 0x0096 | NEFLinearizationTable | undef | curve and predictor seeds; unencrypted | 5 |
 | 0x008C | (older curve) | undef | fallback for 0x0096 | 5 |
 | 0x0097 | ColorBalance | undef | white balance on older bodies; encrypted from version 0200 | 5 |
@@ -170,9 +170,10 @@ Notes:
 
 ## 3. NEFCompression and bit depth
 
-NEFCompression (0x0093; on Z bodies it is in 0x0051, since 0x0093 is
-absent from every checked Z body, the Z 6 included **[F]**; the sources
-put it at byte 10 of 0x0051 on the Z 9 and later) takes these values. [P][1][3][9]
+NEFCompression (0x0093; on most Z bodies it is in 0x0051, since 0x0093
+is absent from every checked Z body, the Z 6 included, but the Z fc and
+Z 30, which write 0x0093 and no 0x0051 (files 8559, 5812) **[F]**; the
+sources put it at byte 10 of 0x0051 on the Z 9 and later) takes these values. [P][1][3][9]
 
 | Value | Meaning |
 |---|---|
@@ -498,11 +499,14 @@ Sources for the output size, in order: [P][7][9]
 
 1. **CropArea (0x0045)**: four u16 as left, top, width, height in raw
    pixels. rawler uses it as the crop rectangle; LibRaw stores it as an
-   inset crop. [P] The D850, D780, Z 6, Z f, Z6III and Z 9 write it; no
-   older checked body does, the D810 (file 2036) included. **[F]** It is
-   the visible image: on the Z 9 `[12, 8, 8256, 5504]` inside the
-   8280x5520 raw, the size of the largest preview (files 5146 to 5148); on
-   the D850's small raw (ImageSizeRAW 3) `[12, 4, 6192, 4128]` inside
+   inset crop. [P] The D5, D850, D780, Z 6, Z f, Z fc, Z 30, Z6III and
+   Z 9 write it; no checked body older than the D5 (2016) does, the D810
+   (file 2036) included, and the D5600, of the same year, does not either
+   (file 1415). **[F]** It is the visible image: on the Z 9
+   `[12, 8, 8256, 5504]` inside the 8280x5520 raw, the size of the largest
+   preview (files 5146 to 5148); on the D5 `[8, 8, 5568, 3712]` inside
+   5584x3728, the size of its largest preview too (file 2218); on the
+   D850's small raw (ImageSizeRAW 3) `[12, 4, 6192, 4128]` inside
    6216x4136 (file 1835), so CropArea counts stored pixels, not the
    4128x2752 the menu names for that size (see ImageSizeRAW below); the
    Z 6's small raw likewise `[10, 6, 4528, 3018]` inside 4548x3030
@@ -575,7 +579,7 @@ Where the camera focused, which milestone 4 reports so that a viewer can
 judge sharpness at that point. raw-files decided what it reports in
 [ADR012](../../architecture-decisions/adr012-focus-points-as-the-camera-records-them.md);
 this section is the record behind it. The field offsets are ExifTool's
-[P][1]; every value was read on the 30 CC0 Nikon files of
+[P][1]; every value was read on the 33 CC0 Nikon files of
 [test-data.md](test-data.md#23-files-checked-for-the-focus-point), and a
 field is tagged **[F]** where a sample holds a value for it.
 
@@ -585,12 +589,12 @@ raw-files reads it or not:
 | Source | What it holds | Checked files | raw-files |
 |---|---|---|---|
 | 0x00B7 AFInfo2, position fields | the size of a frame, the centre of the focus area and the area's size in that frame | mirrorless bodies, and DSLRs in live view **[F]** | read, at the versions of the table below |
-| 0x00B7 AFInfo2, in-focus byte | whether focus was confirmed: FocusResult on 04xx, ContrastDetectAFInFocus on 0100 and 0101 | Z 9, Z f, Z6III, Z50II, Z5II, D7000, D5600, Coolpix A **[F]** | read; on 0100 the flag is byte 28, where ExifTool also lists a 20-byte AFPointsSelected that cannot fit in the 30-byte value |
+| 0x00B7 AFInfo2, in-focus byte | whether focus was confirmed: FocusResult on 04xx, ContrastDetectAFInFocus on 0100 and 0101 | Z 9, Z f, Z6III, Z50II, Z5II, D7000, D5600, D5, Coolpix A **[F]** | read; on 0100 the flag is byte 28, where ExifTool also lists a 20-byte AFPointsSelected that cannot fit in the 30-byte value |
 | 0x00B7 AFInfo2, point fields | the primary point's number, a mask of the points used, and the layout of points (FocusPointSchema) | DSLRs through the viewfinder, the Nikon 1 J1, the Z5II in auto-area mode **[F]** | not read: a number needs a table of the body's points, which no file carries |
 | 0x00B7 AFInfo2, AFPointsInFocus | a mask of the points in focus, version 0101 only (byte 48) [P] | the D850, one point **[F]** | not read: a mask, needs the same table |
 | 0x0088 AFInfo | 4 bytes: area mode, point number, mask of the points in focus [P] | the bodies without AFInfo2: D1H, D70, D100, D200, E5700, P7800 **[F]** | not read: a number only |
-| 0x0021 FaceDetect | a frame size and up to twelve face rectangles in it [P] | none of the 30 files **[F]** | not read: no sample |
-| 0x0007 FocusMode | an ASCII string [P][1]: `MANUAL`, or an AF mode padded with spaces to six characters (`AF-S  `, `AF-C  `, `AF-A  `) **[F]** | `MANUAL` on the D300 and D850, both viewfinder shots with a zero frame (files 928, 1835); an AF mode on every other file with the embedded MakerNote, the maintainer's Z 9 shots included **[F]** | read: `MANUAL`, after trimming, gives no focus point |
+| 0x0021 FaceDetect | a frame size and up to twelve face rectangles in it [P] | none of the 33 files **[F]** | not read: no sample |
+| 0x0007 FocusMode | an ASCII string [P][1]: `MANUAL`, or an AF mode padded with spaces to six characters (`AF-S  `, `AF-C  `, `AF-A  `) **[F]** | `MANUAL` on the D300 and D850, both viewfinder shots with a zero frame (files 928, 1835), and on the Z fc, which records a position under it (file 8559); an AF mode on every other file with the embedded MakerNote, the maintainer's Z 9 shots included **[F]** | read: `MANUAL`, after trimming, gives no focus point |
 | 0x0085 ManualFocusDistance, 0x00B9 AFTune, the area modes in the MenuSettings blocks | settings, not a position [P] | not looked for | not read |
 
 **AFInfo2 layouts.** The value is UNDEFINED and starts with a version in
@@ -604,9 +608,9 @@ offsets from the start of the value:
 | Version | Length | Detection | Area mode | Point schema | Coordinates flag | Frame W, H | Centre X, Y | Area W, H | In focus | Bodies |
 |---|---|---|---|---|---|---|---|---|---|---|
 | `0100` | 30 | 4 | 5 | 6 | none | 16, 18 | 20, 22 | 24, 26 | 28 | DSLRs from the D3 and D300 (2007) and the D90 (2008) up to the D4S, D750, D810, D7200, D5500, D5600 and Df, and the Coolpix A [S]; samples: D300, D700, D750, D810, D7000, D5600, Coolpix A **[F]** |
-| `0101` | 84 | 4 | 5 | 6 | none | 70, 72 | 74, 76 | 78, 80 | 82 | D5, D500, D850, D3400, D3500, D7500 [P][S]; sample: D850, a viewfinder shot **[F]** |
+| `0101` | 84 | 4 | 5 | 6 | none | 70, 72 | 74, 76 | 78, 80 | 82 | D5, D500, D850, D3400, D3500, D7500 [P][S]; samples: D850, a viewfinder shot, and D5, in live view **[F]** |
 | `0200`, `0201` | 42 [F] | none | 5 | 6 | none | none | none | none | none | Nikon 1 bodies [P][S]; sample: J1, `0200` **[F]** |
-| `0300`, `0301` | 60 | 4 | 5 | 6 | 7 | 42, 44 | 46, 48 | 50, 52 | none | `0300`: D780, Z 6, Z 7, Z 50; `0301`: D6, Z 5, Z 6II, Z 7II, Z 30, Z fc [S]; samples: D780, Z 6, both `0300` **[F]** |
+| `0300`, `0301` | 60 | 4 | 5 | 6 | 7 | 42, 44 | 46, 48 | 50, 52 | none | `0300`: D780, Z 6, Z 7, Z 50; `0301`: D6, Z 5, Z 6II, Z 7II, Z 30, Z fc [S]; samples: D780, Z 6, both `0300`, and Z 30, Z fc, both `0301` **[F]** |
 | `0400`, `0401`, `0402` | 80 | 4 | 5 | none | 7 | 62, 64 | 66, 68 | 70, 72 | 74 | `0400`: Z 8, Z 9; `0401`: Z f, Z6III; `0402`: Z50II, Z5II [S]; samples: Z 9, Z f, Z6III, Z50II, Z5II **[F]** |
 
 ExifTool groups the tables by the first two digits (0100; 0101 and later
@@ -618,8 +622,9 @@ no AFInfo2 there. [S][22] Those listings decode only the 0100 offsets,
 and in one byte order whatever the file's, so they settle which version a
 body writes and nothing else. raw-files reads the position at the exact
 versions 0100, 0101, 0300, 0301, 0400, 0401 and 0402 (ADR012). The 0101
-offsets are checked on no file that fills them, and no sample has
-version 0301.
+offsets are checked on the D5's live-view file, the only one that fills
+them (file 2218), and version 0301, at the 03xx offsets, on the Z 30's
+and the Z fc's (files 5812, 8559).
 
 What the fields hold:
 
@@ -691,20 +696,22 @@ What the fields hold:
   `[9, 5600, 3728, 5600, 3144, 0, 292]` (16:9) on the Z50II; the Z5II's
   crop files read like the Z6III's (7735, 7736). On the other files the
   two sizes are equal, with mode 11 (FX uncropped) on the Z 9, Z 6, Z f,
-  D780, D850 and D750, 12 (DX uncropped) on the D5600 and 0 (off) on the
-  D200, D300, D700, D7000, J1 and Coolpix A, except on the D810, whose
-  mode 11 comes with a cropped width four pixels short:
+  D780, D850, D750 and D5, 12 (DX uncropped) on the D5600, Z 30 and Z fc
+  and 0 (off) on the D200, D300, D700, D7000, J1 and Coolpix A, except on
+  the D810, whose mode 11 comes with a cropped width four pixels short:
   `[11, 7384, 4928, 7380, 4928, 0, 0]` (file 2036). **[F]**
 - **In stored orientation**, like the sizes and previews raw-files
-  reports. No CC0 Nikon sample is rotated, so none shows it.
+  reports. The Z 30's shot, rotated (Orientation 8, 270 degrees clockwise
+  to view), records the landscape frame 5568x3712, and the position in
+  it, centre (3776, 1741) and area 552x552 (file 5812). **[F]**
 - **A DSLR shot through the viewfinder records no position.** The frame,
   centre and area are zero on the D300, D700, D750, D810, D850 and D780,
   and only the point fields are filled in: primary point 3 on the D810,
   34 on the D780, with 30 bits of its mask set (files 928, 2255, 895,
   2036, 1835, 3827). ExifTool's 0100 and 0101 tables call the position
   fields valid for contrast-detect AF only [P][1]; the live-view files
-  above, with a detection method of 1 (contrast) on the D7000, D5600 and
-  Coolpix A and 2 (hybrid) on the Z bodies, are the ones that fill them.
+  above, with a detection method of 1 (contrast) on the D7000, D5600, D5
+  and Coolpix A and 2 (hybrid) on the Z bodies, are the ones that fill them.
   **[F]** Mapping a point number to pixels needs a table of the body's
   points, which no file carries (ADR012).
 - **The coordinates flag (byte 7 of 03xx and 04xx)** is 1 on every
@@ -714,14 +721,16 @@ What the fields hold:
   auto-area) have a 28-bit mask, a zero frame and a FocusResult of 1
   (files 7735, 7736). **[F]** raw-files judges by the values, not by the
   flag.
-- **The in-focus byte** is 1 on the Z 9, Z f, Z50II, D7000, D5600 and
-  Coolpix A and 0 on all five Z6III files, which have a valid point
+- **The in-focus byte** is 1 on the Z 9, Z f, Z50II, D7000, D5600, D5
+  and Coolpix A and 0 on all five Z6III files, which have a valid point
   beside it: the camera recorded a miss. **[F]** Version 03xx has no such
   byte.
 - **Area modes** in the samples (byte 5): 193 (single point) on the Z 9
   and Z 6, 196 (wide area L) on the Z f, 192 (pinpoint) on the Z6III,
-  207 (3D-tracking) on the Z50II, 197 (auto-area) on the Z5II; 1 on the
-  D7000 and Coolpix A and 2 on the D5600, in live view. [P][1] **[F]**
+  207 (3D-tracking) on the Z50II, 197 (auto-area) on the Z5II, 199 on
+  the Z 30, which records a position under it, and 193 on the Z fc too,
+  in manual focus; 1 on the D7000 and Coolpix A and 2 on the D5600 and
+  D5, in live view. [P][1] **[F]**
   The area size follows the mode: 291x323 on the Z 9, 1859x1452 for the
   Z f's wide area, 984x816 on the D5600. **[F]** raw-files does not
   report the mode.
@@ -740,18 +749,18 @@ and what raw-files gives; a row without a file is an open question
 | A DX crop at 1:1 or 16:9 on an FX body | unknown | none | the point, scaled; unchecked |
 | Mirrorless small raw | a position in the full frame | Z 6 3587 | the point, in the full frame |
 | Mirrorless, auto-area with only a mask | a mask | Z5II 7735, 7736 | none: needs a table of points |
-| DSLR in live view | a position | D7000 961, D5600 1415, Coolpix A 2238 | the point |
+| DSLR in live view | a position | D7000 961, D5600 1415, D5 2218, Coolpix A 2238 | the point |
 | DSLR in live view on a DX or 1.2x crop | unknown: the cropped or the full frame | none | the point, by the crop rule; unchecked |
-| A `0101` body in live view | a position, at ExifTool's offsets | none | the point; unchecked |
-| A `0301` body | a position, at the 03xx offsets | none | the point; unchecked |
+| A `0101` body in live view | a position, at ExifTool's offsets | D5 2218 | the point; checked |
+| A `0301` body | a position, at the 03xx offsets | Z 30 5812, Z fc 8559 | the point, none on 8559, a manual-focus shot; checked |
 | DSLR through the viewfinder | a point number and a mask | D300 928, D700 2255, D750 895, D810 2036, D850 1835, D780 3827 | none: needs a table of points; 928 and 1835 are manual-focus shots, which get none in any case |
 | Nikon 1 | a point number and a mask | J1 2956 | none: needs a table of points |
 | Bodies without AFInfo2 | AFInfo: a point number | D1H 5364, D70 2060, D100 2996, D200 8079, E5700 4456, P7800 1425 | none: needs a table of points |
 | Manual focus | FocusMode `MANUAL`; a zero frame through the viewfinder | D300 928, D850 1835 | none |
-| Manual focus on a Z body | FocusMode `MANUAL`; AFInfo2 unknown | none | none |
+| Manual focus on a Z body | FocusMode `MANUAL`; a position in AFInfo2 | Z fc 8559 | none; checked |
 | A 1:1 or 16:9 crop on a small raw | unknown: CropArea counts stored pixels | none | none, since CropArea's kept side differs from the frame's |
 | A DX crop on a small raw | unknown | none | the point, scaled onto CropArea in stored pixels; unchecked |
-| A rotated (portrait) shot | expected: the landscape frame | none | the point, in stored orientation; unchecked |
+| A rotated (portrait) shot | a position in the landscape frame | Z 30 5812 | the point, in stored orientation; checked |
 | Face detection | FaceDetect | none | not read |
 
 ## 9. Robustness pitfalls
@@ -796,7 +805,8 @@ The points specific to the MakerNote:
    (no next-IFD pointer); Coolpix NRW files (no 0x0096); D3 and D810
    (14-bit versus 16-bit and mislabelled uncompressed data); D780, Z 6 and
    Z 7 (curve header 0x44 0x40, bit depth two bits lower than labelled);
-   Z bodies (compression in 0x0051, at byte 10 on the Z 9 and later);
+   Z bodies (compression in 0x0051, at byte 10 on the Z 9 and later,
+   but in 0x0093 on the Z fc and Z 30, which write no 0x0051);
    Z 9 and later (HE and HE* undecodable).
    [P][1][3][8][9]
 9. **Nikon Scan files.** Scanner "NEFs" are TIFF RGB with a Nikon Scan IFD
@@ -889,32 +899,40 @@ For milestone 3, keep the MakerNote out of the critical path.
    bodies pads either, except the D100's Model
    ([section 8.3](#83-make-and-model)). **[F]**
 7. **Presence of CropArea (0x0045).** Answered for the checked bodies: the
-   D850, D780 and Z bodies write it, the D810 and older do not
-   ([section 8.4](#84-image-dimensions)). Which bodies between the D810
-   and the D850 (2014 to 2017) first wrote it is still open. **[F]**
+   D5 (2016, file 2218), D850, D780 and Z bodies write it; the D810 and
+   older do not, nor does the D5600 ([section 8.4](#84-image-dimensions)).
+   Which body between the D810 and the D5 (2014 to 2016) first wrote it
+   is still open. **[F]**
 8. **Outer byte order of recent bodies.** Answered: `II`, file and
-   MakerNote alike, on the D750, D810, D850, D780, Z 6, Z f, Z6III and Z 9;
+   MakerNote alike, on the D750, D810, D850, D780, Z 6, Z f, Z6III and Z 9,
+   and on the D5600, Z5II, Z50II, D5, Z 30 and Z fc and the Z6III's HE\*
+   files (files 1415, 7735, 7736, 7767, 7770, 2218, 5812, 8559, 7812,
+   7813);
    `MM` on the DSLRs from the D1H to the D7000 and on the Coolpix A (2013);
    `II` on the Coolpix E5700 and P7800 and the Nikon 1 J1. The MakerNote's
    order equals the file's in every checked file. Readers must accept both
    `II` and `MM`. **[F]** [P][11]
 9. **Bodies that write NEFCompression 5 and 6.** Labels are known, bodies
     are not.
-10. **The 0101 position.** Its offsets (70 to 82) are ExifTool's; the only
-    0101 sample, the D850's, is a viewfinder shot with a zero frame (file
-    1835). A live-view file from a D5, D500, D850, D3400, D3500 or D7500
-    would check them ([section 8.6](#86-focus-point)).
-11. **Version 0301.** It is read at the 03xx offsets, and no sample has
-    it. A file from a D6, Z 5, Z 6II, Z 7II, Z 30 or Z fc would check it.
+10. **The 0101 position.** Answered: ExifTool's offsets (70 to 82) hold
+    the frame, the centre, the area and the in-focus byte on the D5's
+    live-view file: 5568x3712, (3077, 2427), 588x500, in focus (file 2218)
+    ([section 8.6](#86-focus-point)). **[F]**
+11. **Version 0301.** Answered: it has the 03xx layout, 60 bytes with the
+    position at the 0300 offsets, on the Z 30 and the Z fc (files 5812,
+    8559). **[F]**
 12. **A DSLR in live view on a DX or 1.2x crop.** Whether AFInfo2's frame
     is then the cropped output or the full one. The crop rule needs a
-    CropArea, which no checked DSLR before the D850 writes; a live-view
-    crop file from a D750, D810 or D850 would show it.
-13. **Manual focus on a Z body.** What it writes in AFInfo2. Its
-    FocusMode, `MANUAL`, gives no focus point whatever AFInfo2 holds; the
-    two manual-focus samples are DSLR viewfinder shots (files 928, 1835).
-14. **A rotated shot.** No CC0 Nikon sample is rotated, so none shows
-    that a portrait shot's frame stays in stored, landscape orientation.
+    CropArea, which no checked DSLR before the D5 writes; a live-view
+    crop file from a D5, D750, D810 or D850 would show it.
+13. **Manual focus on a Z body.** Answered: the Z fc writes a position
+    in AFInfo2 under FocusMode `MANUAL`, centre (2520, 1856) and area
+    288x319 in its 5568x3712 frame (file 8559). raw-files gives no focus
+    point for it, as for the two DSLR viewfinder shots in manual focus
+    (files 928, 1835). **[F]**
+14. **A rotated shot.** Answered: the Z 30's portrait shot (Orientation
+    8) records its frame in stored, landscape orientation, 5568x3712
+    (file 5812). **[F]**
 15. **CropHiSpeed's sizes on uncropped files.** The D810 writes mode 11,
     FX uncropped, with a cropped width four pixels short of the original
     (file 2036). Whether other bodies do the same, and so whether a crop
@@ -926,7 +944,7 @@ For milestone 3, keep the MakerNote out of the critical path.
     ([ADR012](../../architecture-decisions/adr012-focus-points-as-the-camera-records-them.md)).
     ExifTool's tables give the order of the points by number and, for
     the 11-point layout only, the bit order of the mask. [P][1]
-17. **FaceDetect.** Which bodies write 0x0021; none of the 30 checked
+17. **FaceDetect.** Which bodies write 0x0021; none of the 33 checked
     files does.
 18. **Crops that cut both sides and change the aspect**, such as a DX
     crop at 1:1 or 16:9 on an FX body: whether they are scaled like DX or

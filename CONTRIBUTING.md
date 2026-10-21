@@ -235,7 +235,7 @@ links checked as well; the normal doc build never sees them.
 Some tests read real sample files, which are too large to commit. When the
 files are absent, those tests print a note and pass, so the suite runs
 offline. `scripts/fetch-samples.sh` downloads the pinned set listed in
-[`tests/samples.tsv`](tests/samples.tsv), about 1.5 GB, into
+[`tests/samples.tsv`](tests/samples.tsv), about 1.6 GB, into
 `raw-samples/` at the repository's root, a folder that git ignores and
 that `cargo clean` leaves alone, or into the directory named by
 `RAW_FILES_SAMPLES`,

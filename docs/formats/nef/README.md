@@ -19,10 +19,11 @@ metadata were checked against those three files and 20 more CC0 files,
 from the D1H to the Z6III, which CI downloads too (listed in
 [test-data.md](test-data.md#21-the-ci-set)). On 19 October 2026 the
 autofocus data was checked against those 23 files and seven more CC0
-files, which CI downloads too (listed in
+files, and on 20 October 2026 against three more, which CI downloads too
+(listed in
 [test-data.md](test-data.md#23-files-checked-for-the-focus-point)). The
-tests check the previews of all 30, and test-data.md records them, but
-the containers of the 27 files of 21 other bodies are not yet written up
+tests check the previews of all 33, and test-data.md records them, but
+the containers of the 30 files of 24 other bodies are not yet written up
 in these pages. The raw data was not
 checked, beyond the raw IFD's tags and the first bytes of the Z 9's strip.
 **Everything else has yet to be checked against sample files.** Byte
