@@ -35,6 +35,7 @@
 //! from the standard tags, through the reader the TIFF-based formats share;
 //! no Sony MakerNote is read.
 
+mod makernote;
 mod previews;
 
 use std::io::{Read, Seek};

@@ -233,6 +233,11 @@ impl Ifd {
         self.base
     }
 
+    /// The byte order of the IFD's numbers, the one it was read in.
+    pub(crate) fn order(&self) -> ByteOrder {
+        self.order
+    }
+
     /// The number of entries that can be read; skipped entries are not
     /// counted.
     #[cfg_attr(
@@ -1287,6 +1292,17 @@ mod tests {
             assert_eq!(ifd.base(), 0);
             assert_eq!(read(order, &built, b).2, 0xDEAD_BEEF);
             assert_eq!(read(order, &built, c).2, 0);
+        }
+    }
+
+    #[test]
+    fn the_byte_order_is_the_one_the_ifd_was_read_in() {
+        for order in ORDERS {
+            let mut builder = TiffBuilder::new(order);
+            let ifd = builder.ifd();
+            builder.short(ifd, 0x0112, &[1]);
+            let (_, ifd, _) = read(order, &builder.build(), ifd);
+            assert_eq!(ifd.order(), byte_order(order), "{order:?}");
         }
     }
 

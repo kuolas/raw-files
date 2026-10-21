@@ -14,9 +14,10 @@
 //! - the 8-byte header: the byte-order mark, 42 and the offset of IFD0,
 //!   which by default is the first IFD created;
 //! - every IFD, in the order it was created, each at an even offset: the
-//!   2-byte entry count, the 12-byte entries, the 4-byte offset of the next
-//!   IFD (0 by default), and then the entry values longer than 4 bytes, each
-//!   at an even offset, in the order of the entries;
+//!   bytes set with [`TiffBuilder::prefix`], if any, immediately before it;
+//!   the 2-byte entry count, the 12-byte entries, the 4-byte offset of the
+//!   next IFD (0 by default), and then the entry values longer than 4 bytes,
+//!   each at an even offset, in the order of the entries;
 //! - the blobs added with [`TiffBuilder::blob`], each at an even offset, in
 //!   the order they were added;
 //! - the blobs added with [`TiffBuilder::blob_at`], each at its own offset,
@@ -28,9 +29,17 @@
 //! bytes or fewer sits in the entry's value field, left-justified, and the
 //! rest of the field is zero.
 //!
+//! An IFD with its prefix and its values is also a block that an entry can
+//! hold as its value, as a Sony MakerNote is held: an IFD that no other IFD
+//! points at, whose offsets count from the start of the file, like every
+//! offset the builder writes. [`TiffBuilder::undefined_ifd`] adds the entry,
+//! and [`Built::ifd_block`] says where the block is.
+//!
 //! This file uses only `std`, because it is compiled twice: into the
 //! library's unit tests and, through `tests/support/`, into the integration
 //! tests.
+
+use std::ops::Range;
 
 /// The byte order of the file being built.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -120,6 +129,9 @@ enum Value {
     BlobOffset(BlobId),
     /// The length of this blob, as a LONG.
     BlobLen(BlobId),
+    /// The offset of this IFD's block, as the field of an UNDEFINED value
+    /// whose count is the block's length; see [`Built::ifd_block`].
+    IfdBlock(IfdId),
 }
 
 impl Value {
@@ -129,7 +141,7 @@ impl Value {
             Value::Bytes(bytes) => Some(bytes.len()),
             Value::Raw(_) => None,
             Value::Ifds(ids) => Some(4 * ids.len()),
-            Value::BlobOffset(_) | Value::BlobLen(_) => Some(4),
+            Value::BlobOffset(_) | Value::BlobLen(_) | Value::IfdBlock(_) => Some(4),
         }
     }
 
@@ -157,6 +169,8 @@ enum Next {
 
 #[derive(Clone, Debug)]
 struct Ifd {
+    /// The bytes laid out immediately before the IFD.
+    prefix: Vec<u8>,
     entries: Vec<Entry>,
     sorted: bool,
     next: Next,
@@ -246,6 +260,7 @@ impl TiffBuilder {
     /// it.
     pub fn ifd(&mut self) -> IfdId {
         self.ifds.push(Ifd {
+            prefix: Vec::new(),
             entries: Vec::new(),
             sorted: true,
             next: Next::None,
@@ -270,6 +285,14 @@ impl TiffBuilder {
     /// Writes `offset` as the next-IFD pointer of `ifd`.
     pub fn next_raw(&mut self, ifd: IfdId, offset: u32) -> &mut Self {
         self.ifd_mut(ifd).next = Next::Raw(offset);
+        self
+    }
+
+    /// Lays `bytes` out immediately before `ifd`, such as the header a
+    /// MakerNote puts before its IFD; the IFD still starts at an even
+    /// offset, so the bytes may start at an odd one.
+    pub fn prefix(&mut self, ifd: IfdId, bytes: &[u8]) -> &mut Self {
+        self.ifd_mut(ifd).prefix = bytes.to_vec();
         self
     }
 
@@ -424,6 +447,19 @@ impl TiffBuilder {
         self.entry(ifd, tag, UNDEFINED, len, Value::BlobOffset(blob))
     }
 
+    /// Adds an UNDEFINED entry whose value is the block of `block_ifd`:
+    /// its prefix, the IFD with its next-IFD pointer, and the IFD's values
+    /// stored out of line, the bytes [`Built::ifd_block`] gives. Its count
+    /// is the block's length and its value field holds the block's offset,
+    /// both resolved when the file is built, so entries added to
+    /// `block_ifd` afterwards are in the block too. This is how a Sony
+    /// MakerNote is written. `block_ifd` should be an IFD that nothing
+    /// else points at.
+    pub fn undefined_ifd(&mut self, ifd: IfdId, tag: u16, block_ifd: IfdId) -> &mut Self {
+        // The count written here is a stand-in: `build` writes the block's.
+        self.entry(ifd, tag, UNDEFINED, 0, Value::IfdBlock(block_ifd))
+    }
+
     /// Makes the file at least `len` bytes long, padding it with zeros.
     pub fn pad_to(&mut self, len: u64) -> &mut Self {
         self.min_len = len;
@@ -446,13 +482,21 @@ impl TiffBuilder {
         put(&mut bytes, 4, &order.u32(ifd0));
 
         for (ifd, (&at, values)) in self.ifds.iter().zip(layout.ifds.iter().zip(&layout.values)) {
+            put(&mut bytes, at - to_u64(ifd.prefix.len()), &ifd.prefix);
             let count = u16::try_from(ifd.entries.len()).expect("at most 65,535 entries in an IFD");
             put(&mut bytes, at, &order.u16(count));
             let mut pos = at + 2;
             for (entry, value_at) in ifd.written().into_iter().zip(values) {
+                let count = match entry.value {
+                    Value::IfdBlock(block) => {
+                        let range = &layout.blocks[block.0];
+                        to_u32(range.end - range.start)
+                    }
+                    _ => entry.count,
+                };
                 put(&mut bytes, pos, &order.u16(entry.tag));
                 put(&mut bytes, pos + 2, &order.u16(entry.typ));
-                put(&mut bytes, pos + 4, &order.u32(entry.count));
+                put(&mut bytes, pos + 4, &order.u32(count));
                 let field = match (&entry.value, value_at) {
                     (Value::Raw(RawValue::Inline(field)), _) => *field,
                     (Value::Raw(RawValue::Offset(offset)), _) => order.u32(*offset),
@@ -490,6 +534,7 @@ impl TiffBuilder {
             bytes,
             ifds: layout.ifds,
             blobs: layout.blobs,
+            blocks: layout.blocks,
         }
     }
 
@@ -521,9 +566,14 @@ impl TiffBuilder {
         let mut pos = 8;
         let mut ifds = Vec::new();
         let mut values = Vec::new();
+        let mut blocks = Vec::new();
         for ifd in &self.ifds {
-            pos = even(pos);
+            // The prefix ends where the IFD starts, at an even offset; it
+            // starts at or after `pos`.
+            let prefix = to_u64(ifd.prefix.len());
+            pos = even(pos + prefix);
             ifds.push(pos);
+            let start = pos - prefix;
             pos += ifd.len();
             let mut placed = Vec::new();
             for entry in ifd.written() {
@@ -536,6 +586,7 @@ impl TiffBuilder {
                 }
             }
             values.push(placed);
+            blocks.push(start..pos);
         }
 
         let mut blobs = vec![0; self.blobs.len()];
@@ -566,6 +617,7 @@ impl TiffBuilder {
             ifds,
             values,
             blobs,
+            blocks,
         }
     }
 
@@ -583,6 +635,7 @@ impl TiffBuilder {
             Value::BlobLen(blob) => order
                 .u32(to_u32(to_u64(self.blobs[blob.0].bytes.len())))
                 .to_vec(),
+            Value::IfdBlock(ifd) => order.u32(to_u32(layout.blocks[ifd.0].start)).to_vec(),
         }
     }
 }
@@ -596,6 +649,9 @@ struct Layout {
     values: Vec<Vec<Option<u64>>>,
     /// The offset of each blob.
     blobs: Vec<u64>,
+    /// For each IFD, the bytes from the start of its prefix to the end of
+    /// its last out-of-line value, or of its next-IFD pointer.
+    blocks: Vec<Range<u64>>,
 }
 
 impl Layout {
@@ -611,12 +667,21 @@ pub struct Built {
     pub bytes: Vec<u8>,
     ifds: Vec<u64>,
     blobs: Vec<u64>,
+    blocks: Vec<Range<u64>>,
 }
 
 impl Built {
     /// The offset of `ifd` in the file.
     pub fn ifd_offset(&self, ifd: IfdId) -> u64 {
         self.ifds[ifd.0]
+    }
+
+    /// Where the block of `ifd` is in the file: from the start of its
+    /// prefix, or of the IFD when it has none, to the end of its last value
+    /// stored out of line, or of its next-IFD pointer when it has none. The
+    /// value of an entry added with [`TiffBuilder::undefined_ifd`].
+    pub fn ifd_block(&self, ifd: IfdId) -> Range<u64> {
+        self.blocks[ifd.0].clone()
     }
 
     /// The offset of `blob` in the file.
@@ -860,6 +925,80 @@ mod tests {
         let ifd = builder.ifd();
         let blob = builder.blob(b"four");
         builder.undefined_blob(ifd, 0x927C, blob);
+    }
+
+    #[test]
+    fn a_prefix_lies_just_before_its_ifd_which_stays_even() {
+        // IFD0 of one inline entry ends at 8 + 18, an even offset; nine
+        // bytes before an IFD at 26 + 9, rounded up to 36, start at 27.
+        let mut builder = TiffBuilder::new(Order::Little);
+        let ifd0 = builder.ifd();
+        let with = builder.ifd();
+        builder.short(ifd0, 0x0112, &[1]).short(with, 0x0112, &[6]);
+        builder.prefix(with, b"SONY PIC\0");
+        let built = builder.build();
+        let bytes = &built.bytes;
+
+        assert_eq!(built.ifd_offset(with), 36);
+        assert_eq!(&bytes[27..36], b"SONY PIC\0");
+        assert_eq!(bytes[26], 0, "the byte before the prefix is padding");
+        assert_eq!(u16_le(bytes, 36), 1, "the IFD's count follows the prefix");
+        assert_eq!(tags_le(bytes, 36), [0x0112]);
+        assert_eq!(built.ifd_block(with), 27..36 + 2 + 12 + 4);
+    }
+
+    #[test]
+    fn an_undefined_ifd_holds_the_prefix_the_ifd_and_its_values() {
+        let mut builder = TiffBuilder::new(Order::Little);
+        let ifd0 = builder.ifd();
+        let block = builder.ifd();
+        let after = builder.ifd();
+        builder.undefined_ifd(ifd0, 0x927C, block);
+        builder.short(after, 0x0001, &[1]);
+        // Added after the entry that holds the block, and still in it: an
+        // inline SHORT, then three SHORTs, which round the values up to an
+        // even end, and four LONGs.
+        builder.prefix(block, b"SONY DSC \0\0\0");
+        builder
+            .short(block, 0x0001, &[7])
+            .short(block, 0x0002, &[1, 2, 3])
+            .long(block, 0x0003, &[4, 5, 6, 7]);
+        let built = builder.build();
+        let bytes = &built.bytes;
+
+        // IFD0 at 8 holds one entry and ends at 8 + 18; the block's IFD
+        // after its 12-byte prefix, at 38, its 42-byte table and pointer,
+        // then six bytes and sixteen, at 80 and at 86.
+        let ifd = built.ifd_offset(block);
+        assert_eq!(ifd, 38);
+        assert_eq!(built.ifd_block(block), 26..86 + 16);
+        assert_eq!(&bytes[26..38], b"SONY DSC \0\0\0");
+        assert_eq!(u32_le(bytes, ifd + 2 + 12 + 8), 80, "the SHORTs");
+        assert_eq!(u32_le(bytes, ifd + 2 + 24 + 8), 86, "the LONGs");
+        // The next IFD starts past the block.
+        assert_eq!(built.ifd_offset(after), 102);
+
+        // One entry at 8 + 2: the tag, UNDEFINED, the block's length, and
+        // its offset in the value field.
+        assert_eq!(u16_le(bytes, 8 + 2), 0x927C);
+        assert_eq!(u16_le(bytes, 8 + 2 + 2), UNDEFINED);
+        assert_eq!(u32_le(bytes, 8 + 2 + 4), 102 - 26);
+        assert_eq!(u32_le(bytes, 8 + 2 + 8), 26);
+    }
+
+    #[test]
+    fn an_undefined_ifd_without_a_prefix_or_values_is_the_ifd() {
+        let mut builder = TiffBuilder::new(Order::Big);
+        let ifd0 = builder.ifd();
+        let block = builder.ifd();
+        builder.undefined_ifd(ifd0, 0x927C, block);
+        builder.short(block, 0x0001, &[7]);
+        let built = builder.build();
+        let at = built.ifd_offset(block);
+        assert_eq!(built.ifd_block(block), at..at + 2 + 12 + 4);
+        let bytes = &built.bytes;
+        assert_eq!(bytes[8 + 2 + 4..8 + 2 + 8], [0, 0, 0, 18]);
+        assert_eq!(bytes[8 + 2 + 8..8 + 2 + 12], to_u32(at).to_be_bytes());
     }
 
     #[test]

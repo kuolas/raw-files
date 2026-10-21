@@ -13,7 +13,8 @@
 //! finder that the TIFF-based formats share lives in `tiff_previews`, and
 //! the metadata reader they share in `tiff_metadata`. The reading of an IFD
 //! inside a bounded block, such as a MakerNote, written for any MakerNote
-//! reader to use, lives in `block_ifd`; the Nikon reader uses it.
+//! reader to use, lives in `block_ifd`; the Nikon and Sony MakerNote
+//! readers use it.
 //!
 //! The table holds NEF and ARW, in that order. A Nikon file is recognised
 //! by its IFD0's Make, and opens with its previews, which the NEF reader
@@ -178,12 +179,20 @@ pub(super) mod testing {
     use std::io::{self, Cursor, Read, Seek, SeekFrom};
 
     use crate::container::tiff::{Tree, parse_header, walk};
-    use crate::io::Source;
+    use crate::io::{ByteOrder, Source};
     use crate::limits::Limits;
     use crate::tiff_builder::{IfdId, Order, TiffBuilder};
 
     /// A source over a file held in memory.
     pub(super) type Src = Source<Cursor<Vec<u8>>>;
+
+    /// `order`, the fixture builder's byte order, as the reader names it.
+    pub(super) fn byte_order(order: Order) -> ByteOrder {
+        match order {
+            Order::Little => ByteOrder::Little,
+            Order::Big => ByteOrder::Big,
+        }
+    }
 
     /// The first byte of the second block the source caches: a reader that
     /// fails from here on still serves the header and the walk, which read
