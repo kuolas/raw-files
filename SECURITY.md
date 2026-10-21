@@ -22,14 +22,13 @@ Bugs that are not security-sensitive go in the public
 
 ## Supported versions
 
-Nothing has been released yet. Once something is, only the latest release
-will receive security fixes.
+Only the latest release on [crates.io](https://crates.io/crates/raw-files)
+receives security fixes.
 
 ## Scope
 
-Nothing in the crate reads untrusted input yet — it has no public API. A RAW
-library exists to read files from cameras and from anyone who sends one, so
-every byte it parses is untrusted input. Once it parses files, the most
-valuable reports are malformed files that make it crash or panic, loop
-without end, allocate far more memory than the file's size justifies, or read
-outside the data it was given.
+A RAW library exists to read files from cameras and from anyone who sends
+one, so every byte it parses is untrusted input. The most valuable reports
+are malformed files that make it crash or panic, loop without end, allocate
+far more memory than the file's size justifies, or read outside the data it
+was given.
