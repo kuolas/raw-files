@@ -1,10 +1,10 @@
 [package]
 name = "raw-files"
-version = "0.2.0"
+version = "0.3.0"
 authors = ["Alvaro Kuolas <kuolas@gmail.com>"]
 edition = "2024"
 rust-version = "1.95"
-description = "Pure-Rust camera RAW library: extracts the embedded JPEG previews and reads the metadata of Nikon NEF and Sony ARW files, with fuller RAW decoding planned"
+description = "Pure-Rust camera RAW library: extracts the embedded JPEG previews and reads the metadata and the focus point of Nikon NEF and Sony ARW files, with fuller RAW decoding planned"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/kuolas/raw-files"
 # Where the API documentation is read; docs.rs builds it from each release.
