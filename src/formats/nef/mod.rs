@@ -41,8 +41,8 @@ use crate::limits::Limits;
 /// compared without regard to case.
 const NIKON: &[u8; 5] = b"NIKON";
 
-/// The NEF format's entry in the format table.
-pub(crate) fn spec<R: Read + Seek>() -> FormatSpec<R> {
+/// The NEF format's entry in the TIFF container's list of formats.
+pub(crate) fn spec<R: Read + Seek>() -> FormatSpec<R, Tree> {
     FormatSpec {
         format: Format::Nef,
         claims,
