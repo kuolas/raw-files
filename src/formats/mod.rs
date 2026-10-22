@@ -3,10 +3,12 @@
 //! The RAW formats: the table of the formats the crate can detect, and
 //! detection over it.
 //!
-//! Each format lives in its own folder here (`nef/`, `arw/`) and
-//! registers itself in [`spec`] as a [`FormatSpec`]: one function that says
+//! Each format lives in its own folder here (`nef/`, `arw/`) and registers
+//! itself as a [`FormatSpec`] in the list of the container its files are
+//! built on, [`tiff_specs`] or [`jpeg_specs`]: one function that says
 //! whether a file is of that format, and one that reads its previews and
-//! its metadata.
+//! its metadata, both over the structure that container read from the
+//! file.
 //! Detection goes by content, never by the file's name, so a renamed file
 //! opens as what it is; [`Format::from_extension`] is for file pickers,
 //! which must choose what to offer before opening anything. The preview
@@ -17,14 +19,23 @@
 //! same reader; they read their IFDs inside the MakerNote's block with the
 //! TIFF container's [`ifd_in`](crate::container::tiff::ifd_in).
 //!
-//! The table holds NEF and ARW, in that order. A Nikon file is recognised
-//! by its IFD0's Make, and opens with its previews, which the NEF reader
-//! finds with the shared finder, and its metadata, which it reads with the
-//! shared reader. A Sony file is recognised by its IFD0's Make too, helped
-//! for a Hasselblad Make by the pointer to Sony's private directory, and
-//! opens with its previews and its metadata, which the ARW reader finds and
-//! reads the same way. A file no format claims is of no format the crate
-//! recognises.
+//! Detection, [`detect`], starts from the container: the file's first
+//! bytes name it, and its structure, a [`Structure`], is read before any
+//! format is asked. Only the formats that container can hold are then
+//! asked, in the order of its list, and the first that claims the file
+//! reads it. A file that no format of its container claims is of no
+//! format the crate recognises, and the error says which container the
+//! file is.
+//!
+//! The TIFF list holds NEF and ARW, in that order. A Nikon file is
+//! recognised by its IFD0's Make, and opens with its previews, which the
+//! NEF reader finds with the shared finder, and its metadata, which it
+//! reads with the shared reader. A Sony file is recognised by its IFD0's
+//! Make too, helped for a Hasselblad Make by the pointer to Sony's private
+//! directory, and opens with its previews and its metadata, which the ARW
+//! reader finds and reads the same way. A TIFF file no format claims is of
+//! no format the crate recognises. The JPEG list holds no format, so no
+//! JPEG file is of a format the crate recognises.
 //!
 //! A DNG is of no format the crate recognises either, whatever its Make
 //! says: converters and the phones that write DNG keep the maker's name in
@@ -39,9 +50,11 @@ mod tiff_previews;
 
 use std::io::{Read, Seek};
 
+use crate::container::Structure;
+use crate::container::jpeg::Segments;
 use crate::container::tiff::Tree;
 use crate::container::tiff::tags::{DNG_VERSION, MAKE};
-use crate::error::Result;
+use crate::error::{Error, Result};
 use crate::format::Format;
 use crate::io::Source;
 use crate::limits::Limits;
@@ -59,41 +72,41 @@ pub(crate) struct Parsed {
     pub metadata: Metadata,
 }
 
-/// One format the crate can detect, as two functions over the TIFF tree a
-/// file was read into.
+/// One format the crate can detect, as two functions over `S`, the
+/// structure that the container its files are built on read from a file:
+/// a [`Tree`] for a format on TIFF, the [`Segments`] for one on JPEG.
 ///
 /// A spec is a pair of plain functions rather than a trait object, so that
-/// the table is data: detection walks it in order, and a format joins it by
-/// giving it a [`spec`].
-pub(crate) struct FormatSpec<R> {
+/// each container's list is data: detection walks it in order, and a
+/// format joins it by giving it its spec. The structure is a type of the
+/// spec, so a format can sit only in the list of the container whose
+/// structure it reads.
+pub(crate) struct FormatSpec<R, S> {
     /// The format this spec detects and reads.
     pub format: Format,
-    /// Whether this format owns the file. It looks at the tree, and may
-    /// read tag values through the source, but never at the file's name.
-    pub claims: fn(&mut Source<R>, &Tree) -> Result<bool>,
+    /// Whether this format owns the file. It looks at the structure, and
+    /// may read values through the source, but never at the file's name.
+    pub claims: fn(&mut Source<R>, &S) -> Result<bool>,
     /// Reads the previews and the metadata of a file that this format
     /// claimed.
-    pub parse: fn(&mut Source<R>, &Tree, &Limits) -> Result<Parsed>,
+    pub parse: fn(&mut Source<R>, &S, &Limits) -> Result<Parsed>,
 }
 
-/// The spec of `format`.
+/// The specs of the formats whose files are TIFF files, in the order
+/// detection tries them: the first whose `claims` says yes reads the file.
 ///
-/// The match is exhaustive, so a format added to [`Format`] fails to compile
-/// until it is handled here. A function, not a `static`, because the specs'
-/// functions are generic over the reader, and a `static` cannot be.
-pub(crate) fn spec<R: Read + Seek>(format: Format) -> FormatSpec<R> {
-    match format {
-        Format::Nef => nef::spec(),
-        Format::Arw => arw::spec(),
-    }
+/// The order is [`Format::all`]'s, which a test checks, as it checks that
+/// every format is in the list of exactly one container. A function, not a
+/// `static`, because the specs' functions are generic over the reader, and
+/// a `static` cannot be.
+fn tiff_specs<R: Read + Seek>() -> Vec<FormatSpec<R, Tree>> {
+    vec![nef::spec(), arw::spec()]
 }
 
-/// Every format's spec, in the order detection tries them: the first whose
-/// `claims` says yes reads the file.
-///
-/// The order is [`Format::all`]'s, by construction.
-pub(crate) fn all<R: Read + Seek>() -> Vec<FormatSpec<R>> {
-    Format::all().iter().copied().map(spec).collect()
+/// The specs of the formats whose files are JPEG files, in the order
+/// detection tries them, as for [`tiff_specs`]: none.
+fn jpeg_specs<R: Read + Seek>() -> Vec<FormatSpec<R, Segments>> {
+    Vec::new()
 }
 
 /// Whether the file whose TIFF structure is `tree` is a DNG: whether its
@@ -145,8 +158,39 @@ pub(super) fn make_starts_with<R: Read + Seek>(
         .is_some_and(|start| start.eq_ignore_ascii_case(name)))
 }
 
-/// Detects the format of the file in `src`, whose TIFF structure is `tree`,
-/// from `specs` in order, and reads it with the first spec that claims it.
+/// Detects the format of the file in `src`, whose container read the
+/// structure `structure`, and reads the file with the first format of that
+/// container's list that claims it.
+///
+/// Returns the format and what its reader found.
+///
+/// # Errors
+///
+/// `UnknownFormat` when no format of the container's list claims the file,
+/// with a message that names the container; otherwise as for
+/// [`first_claim`].
+pub(crate) fn detect<R: Read + Seek>(
+    src: &mut Source<R>,
+    structure: &Structure,
+    limits: &Limits,
+) -> Result<(Format, Parsed)> {
+    // The claim of the container's list, and what to say when there is
+    // none.
+    let (found, unclaimed) = match structure {
+        Structure::Tiff(tree) => (
+            first_claim(&tiff_specs(), src, tree, limits)?,
+            "the file is a TIFF file, but not a RAW format this version recognises",
+        ),
+        Structure::Jpeg(segments) => (
+            first_claim(&jpeg_specs(), src, segments, limits)?,
+            "the file is a JPEG file, but not a format this version recognises",
+        ),
+    };
+    found.ok_or_else(|| Error::unknown_format(unclaimed))
+}
+
+/// Finds the format of the file in `src`, whose structure is `structure`,
+/// among `specs` in order, and reads it with the first spec that claims it.
 ///
 /// Returns the format and what its reader found, or `None` when no spec
 /// claims the file. Specs after the one that claims the file are not
@@ -157,15 +201,15 @@ pub(super) fn make_starts_with<R: Read + Seek>(
 /// Whatever the `claims` of a spec tried before the one that claims the
 /// file returns, which stops detection; whatever the claiming spec's
 /// `parse` returns.
-pub(crate) fn detect<R: Read + Seek>(
-    specs: &[FormatSpec<R>],
+fn first_claim<R: Read + Seek, S>(
+    specs: &[FormatSpec<R, S>],
     src: &mut Source<R>,
-    tree: &Tree,
+    structure: &S,
     limits: &Limits,
 ) -> Result<Option<(Format, Parsed)>> {
     for spec in specs {
-        if (spec.claims)(src, tree)? {
-            return Ok(Some((spec.format, (spec.parse)(src, tree, limits)?)));
+        if (spec.claims)(src, structure)? {
+            return Ok(Some((spec.format, (spec.parse)(src, structure, limits)?)));
         }
     }
     Ok(None)
@@ -275,7 +319,7 @@ mod tests {
     fn spec(
         claims: fn(&mut Src, &Tree) -> Result<bool>,
         parse: fn(&mut Src, &Tree, &Limits) -> Result<Parsed>,
-    ) -> FormatSpec<Cursor<Vec<u8>>> {
+    ) -> FormatSpec<Cursor<Vec<u8>>, Tree> {
         FormatSpec {
             format: Format::Nef,
             claims,
@@ -283,41 +327,80 @@ mod tests {
         }
     }
 
-    /// The offset of the one preview a detection found, naming the spec
-    /// that read the file; `None` when no spec claimed it.
-    fn detected(specs: &[FormatSpec<Cursor<Vec<u8>>>], make: &str) -> Result<Option<u64>> {
+    /// The offset of the one preview the first claim found, naming the
+    /// spec that read the file; `None` when no spec claimed it.
+    fn detected(specs: &[FormatSpec<Cursor<Vec<u8>>, Tree>], make: &str) -> Result<Option<u64>> {
         let (mut src, tree) = file(make);
-        let found = detect(specs, &mut src, &tree, &Limits::default())?;
+        let found = first_claim(specs, &mut src, &tree, &Limits::default())?;
         Ok(found.map(|(format, parsed)| {
             assert_eq!(format, Format::Nef);
             parsed.previews[0].byte_range().start
         }))
     }
 
-    #[test]
-    fn the_table_follows_format_all() {
-        for format in Format::all() {
-            assert_eq!(super::spec::<Cursor<Vec<u8>>>(*format).format, *format);
-        }
-        let formats: Vec<Format> = all::<Cursor<Vec<u8>>>()
-            .iter()
-            .map(|spec| spec.format)
-            .collect();
-        assert_eq!(formats, Format::all());
+    /// The formats of `specs`, in order.
+    fn formats<S>(specs: &[FormatSpec<Cursor<Vec<u8>>, S>]) -> Vec<Format> {
+        specs.iter().map(|spec| spec.format).collect()
     }
 
     #[test]
-    fn the_table_detects_each_vendors_file_as_its_format() {
-        let specs = all::<Cursor<Vec<u8>>>();
-        let format = |make: &str| {
-            let (mut src, tree) = file(make);
-            detect(&specs, &mut src, &tree, &Limits::default())
-                .unwrap()
-                .map(|(format, _)| format)
+    fn every_format_is_in_one_containers_list_in_the_order_of_format_all() {
+        let lists = [
+            formats(&tiff_specs::<Cursor<Vec<u8>>>()),
+            formats(&jpeg_specs()),
+        ];
+        for format in Format::all() {
+            let holding = lists.iter().filter(|list| list.contains(format)).count();
+            assert_eq!(holding, 1, "{format:?} is in {holding} lists");
+        }
+        // Each list holds a format once, in the order of `Format::all`.
+        for list in &lists {
+            let in_order: Vec<Format> = Format::all()
+                .iter()
+                .copied()
+                .filter(|format| list.contains(format))
+                .collect();
+            assert_eq!(*list, in_order);
+        }
+    }
+
+    /// The format detected in the one-IFD TIFF file whose Make is `make`.
+    fn detected_in_tiff(make: &str) -> Result<Format> {
+        let (mut src, tree) = file(make);
+        let structure = Structure::Tiff(tree);
+        detect(&mut src, &structure, &Limits::default()).map(|(format, _)| format)
+    }
+
+    #[test]
+    fn each_vendors_tiff_file_is_detected_as_its_format() {
+        assert_eq!(detected_in_tiff("SONY").unwrap(), Format::Arw);
+        assert_eq!(detected_in_tiff("NIKON CORPORATION").unwrap(), Format::Nef);
+    }
+
+    #[test]
+    fn a_tiff_file_no_format_claims_is_of_unknown_format() {
+        let err = detected_in_tiff("Canon").unwrap_err();
+        assert_eq!(err.kind(), ErrorKind::UnknownFormat, "{err:?}");
+        assert_eq!(err.offset(), None, "{err:?}");
+        assert_eq!(
+            err.to_string(),
+            "the file is a TIFF file, but not a RAW format this version recognises"
+        );
+    }
+
+    #[test]
+    fn a_jpeg_file_no_format_claims_is_of_unknown_format() {
+        let mut src = Source::new(Cursor::new(Vec::new())).unwrap();
+        let structure = Structure::Jpeg(Segments::default());
+        let Err(err) = detect(&mut src, &structure, &Limits::default()) else {
+            panic!("a format claimed a JPEG file");
         };
-        assert_eq!(format("SONY"), Some(Format::Arw));
-        assert_eq!(format("NIKON CORPORATION"), Some(Format::Nef));
-        assert_eq!(format("Canon"), None);
+        assert_eq!(err.kind(), ErrorKind::UnknownFormat, "{err:?}");
+        assert_eq!(err.offset(), None, "{err:?}");
+        assert_eq!(
+            err.to_string(),
+            "the file is a JPEG file, but not a format this version recognises"
+        );
     }
 
     #[test]
@@ -366,7 +449,7 @@ mod tests {
 
     #[test]
     fn a_dng_is_claimed_by_no_format() {
-        let specs = all::<Cursor<Vec<u8>>>();
+        let specs = tiff_specs::<Cursor<Vec<u8>>>();
         for make in ["SONY", "NIKON CORPORATION"] {
             // As Adobe's converter writes it: the camera's Make, a DNG
             // version and a private data block far longer than Sony's
@@ -378,7 +461,7 @@ mod tests {
                     .byte(ifd, DNG_PRIVATE_DATA, &[0; 32]);
             });
             assert!(is_dng(&tree), "{make}");
-            let found = detect(&specs, &mut src, &tree, &Limits::default()).unwrap();
+            let found = first_claim(&specs, &mut src, &tree, &Limits::default()).unwrap();
             assert!(found.is_none(), "{make}");
         }
     }

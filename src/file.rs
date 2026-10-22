@@ -8,7 +8,7 @@ use std::fs::File;
 use std::io::{Cursor, Read, Seek};
 use std::path::Path;
 
-use crate::container::tiff::{Block, walk};
+use crate::container::Structure;
 use crate::error::{Error, Result};
 use crate::format::Format;
 use crate::formats;
@@ -141,23 +141,18 @@ impl<R: Read + Seek> RawFile<R> {
     /// Opens the file that `reader` reads under `limits`: the one place a
     /// file is opened, which [`Options`] calls.
     ///
-    /// Reads the TIFF structure and asks each format of the table, in
-    /// order, whether the file is of that format; the first that says yes
-    /// reads its previews and its metadata.
+    /// Reads the structure of the file's container, which the file's first
+    /// bytes name, and asks the formats that container can hold, in order,
+    /// whether the file is of that format; the first that says yes reads
+    /// its previews and its metadata.
     pub(crate) fn new(reader: R, limits: Limits) -> Result<Self> {
         let mut src = Source::new(reader)?;
-        // TIFF is the one container so far, and every format the crate
-        // reads is built on it, so a file that is not TIFF, whose header the
-        // walk refuses, is no format the crate knows. A format on another
-        // container would be tried here, when the header is not TIFF's.
-        let block = Block::file(src.len());
-        let tree = walk(&mut src, &block, &limits)?;
-        match formats::detect(&formats::all(), &mut src, &tree, &limits)? {
-            Some((format, parsed)) => Ok(Self::from_parts(src, format, parsed, limits)),
-            None => Err(Error::unknown_format(
-                "the file is a TIFF file, but not a RAW format this version recognises",
-            )),
-        }
+        // The container first: a file of no container the crate knows is
+        // refused before any format is asked, and each format is asked
+        // only about a structure its own container read.
+        let structure = Structure::read(&mut src, &limits)?;
+        let (format, parsed) = formats::detect(&mut src, &structure, &limits)?;
+        Ok(Self::from_parts(src, format, parsed, limits))
     }
 
     /// The handle over `src`, of format `format`, with what its reader

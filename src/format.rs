@@ -45,7 +45,8 @@ pub enum Format {
 impl Format {
     /// Every format, in a fixed order.
     ///
-    /// Detection tries the formats in this order.
+    /// Detection tries the formats in this order, asking only those that
+    /// the file's container, TIFF or JPEG, can hold.
     pub fn all() -> &'static [Format] {
         &[Format::Nef, Format::Arw]
     }

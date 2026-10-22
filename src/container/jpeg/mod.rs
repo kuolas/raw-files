@@ -87,8 +87,9 @@
 //!
 //! # A JPEG file
 //!
-//! A JPEG file starts with SOI and a marker, `FF D8 FF`, and [`segments`]
-//! walks it from there to the end of the file, keeping three things:
+//! A JPEG file starts with SOI and a marker, `FF D8 FF`, and a file that
+//! does not is no JPEG file, for which [`segments`] gives nothing. It walks
+//! a JPEG file from there to the end of the file, keeping three things:
 //!
 //! - **The first frame header**, the main image's, read as [`probe`]
 //!   reads it. When it gives no size, none is kept, and a later frame
@@ -200,16 +201,8 @@ impl Frame {
 /// [module documentation](self#a-jpeg-file).
 ///
 /// Every field is `None` when the walk found no such segment before it
-/// ended, and all three when the file does not start with SOI and a
-/// marker.
+/// ended.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
-#[cfg_attr(
-    not(test),
-    expect(
-        dead_code,
-        reason = "the fields are read by the JPEG format, which is not in the format table yet"
-    )
-)]
 pub(crate) struct Segments {
     /// The first frame header, if it gives a size: `None` when there is no
     /// frame header before the walk ends, and when the first gives none,
@@ -502,26 +495,22 @@ pub(crate) fn probe<R: Read + Seek>(
 ///
 /// What the walk found before it ended is kept, whatever ended it: SOS,
 /// EOI, a length below 2, a segment that runs past the end of the file, a
-/// byte that is not a marker, or the cap of [`MAX_STEPS`] steps. A file
-/// that does not start with SOI and a marker (`FF D8 FF`) gives
-/// [`Segments`] with every field `None`.
+/// byte that is not a marker, or the cap of [`MAX_STEPS`] steps.
+///
+/// Returns `None` when the file does not start with SOI and a marker
+/// (`FF D8 FF`), a file shorter than those 3 bytes included: it is not a
+/// JPEG file. That answer is how [`Structure::read`](super::Structure::read)
+/// tells a JPEG file from any other.
 ///
 /// # Errors
 ///
 /// Only `Io`, if the reader fails: the walk reads only inside the file.
-#[cfg_attr(
-    not(test),
-    expect(
-        dead_code,
-        reason = "the JPEG format reads a file's segments, and it is not in the format table yet"
-    )
-)]
-pub(crate) fn segments<R: Read + Seek>(src: &mut Source<R>) -> Result<Segments> {
-    let mut found = Segments::default();
+pub(crate) fn segments<R: Read + Seek>(src: &mut Source<R>) -> Result<Option<Segments>> {
     let len = src.len();
     let Some(mut walk) = Walk::from_soi(src, 0, len)? else {
-        return Ok(found);
+        return Ok(None);
     };
+    let mut found = Segments::default();
     let mut frame_seen = false;
     while let Some(segment) = walk.next() {
         let segment = segment?;
@@ -536,7 +525,7 @@ pub(crate) fn segments<R: Read + Seek>(src: &mut Source<R>) -> Result<Segments> 
             found.mpf = block_after(walk.source(), &segment, MPF_ID)?;
         }
     }
-    Ok(found)
+    Ok(Some(found))
 }
 
 #[cfg(test)]
@@ -1020,9 +1009,15 @@ mod tests {
         segments.iter().map(|segment| segment.marker).collect()
     }
 
-    /// The segments of the file `bytes`.
-    fn segments_of(bytes: &[u8]) -> Segments {
+    /// What [`segments`] gives for the file `bytes`: `None` when it is no
+    /// JPEG file.
+    fn read_segments(bytes: &[u8]) -> Option<Segments> {
         segments(&mut Source::new(Cursor::new(bytes)).unwrap()).unwrap()
+    }
+
+    /// The segments of the JPEG file `bytes`.
+    fn segments_of(bytes: &[u8]) -> Segments {
+        read_segments(bytes).expect("a JPEG file")
     }
 
     /// The block of the `n`th Exif segment of `built`, from where the
@@ -1519,17 +1514,26 @@ mod tests {
     }
 
     #[test]
-    fn a_file_not_starting_with_soi_and_a_marker_gives_nothing() {
+    fn a_file_not_starting_with_soi_and_a_marker_is_no_jpeg_file() {
         let bytes = camera_jpeg().bytes;
-        for len in 0..3 {
-            assert_eq!(segments_of(&bytes[..len]), Segments::default(), "{len}");
-        }
         let tiff = [b'I', b'I', 42, 0, 8, 0, 0, 0, 0, 0, 0, 0, 0, 0];
-        assert_eq!(segments_of(&tiff), Segments::default());
+        assert_eq!(read_segments(&tiff), None);
         for start in [[0xFF, 0xD8, 0x00], [0xFF, 0xD9, 0xFF], [0x00, 0xD8, 0xFF]] {
             let mut bytes = bytes.clone();
             bytes[..3].copy_from_slice(&start);
-            assert_eq!(segments_of(&bytes), Segments::default(), "{start:02X?}");
+            assert_eq!(read_segments(&bytes), None, "{start:02X?}");
+        }
+        // The same file from its start is one.
+        assert!(read_segments(&bytes).is_some());
+    }
+
+    #[test]
+    fn a_file_shorter_than_soi_and_a_marker_is_no_jpeg_file() {
+        // Empty, one byte, and SOI without the marker after it: none is
+        // long enough to read the 3 bytes from, and none is an error.
+        let bytes = camera_jpeg().bytes;
+        for len in 0..3 {
+            assert_eq!(read_segments(&bytes[..len]), None, "{len}");
         }
     }
 
@@ -1580,11 +1584,12 @@ mod tests {
         let whole = segments_of(&built.bytes);
         assert_eq!(whole.frame, baseline(640, 480));
         for cut in 0..=built.bytes.len() {
-            let found = segments_of(&built.truncated(cut));
+            let found = read_segments(&built.truncated(cut));
             let cut = u64::try_from(cut).unwrap();
-            // What lies inside the prefix is found, as in the whole file.
+            // What lies inside the prefix is found, as in the whole file,
+            // once the prefix holds SOI and a marker.
             let exif = built.exif_tiff(0);
-            let expected = Segments {
+            let expected = (cut >= 3).then(|| Segments {
                 frame: (cut >= built.frame_header() + 13)
                     .then_some(whole.frame)
                     .flatten(),
@@ -1592,7 +1597,7 @@ mod tests {
                 mpf: (cut >= built.app2_payload(0).end)
                     .then(|| whole.mpf.clone())
                     .flatten(),
-            };
+            });
             assert_eq!(found, expected, "cut at {cut}");
         }
     }

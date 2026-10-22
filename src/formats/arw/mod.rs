@@ -59,8 +59,8 @@ const SONY: &[u8; 4] = b"SONY";
 /// compared without regard to case.
 const HASSELBLAD: &[u8; 10] = b"HASSELBLAD";
 
-/// The ARW format's entry in the format table.
-pub(crate) fn spec<R: Read + Seek>() -> FormatSpec<R> {
+/// The ARW format's entry in the TIFF container's list of formats.
+pub(crate) fn spec<R: Read + Seek>() -> FormatSpec<R, Tree> {
     FormatSpec {
         format: Format::Arw,
         claims,

@@ -9,6 +9,7 @@ use std::fs::File;
 use std::io::{self, Cursor};
 
 use raw_files::{ErrorKind, Focus, Format, Limits, Metadata, Options, Point, RawFile};
+use support::jpeg_builder::JpegBuilder;
 use support::tiff_builder::{Order, TiffBuilder};
 
 /// The Make tag: the camera's manufacturer, as text.
@@ -41,8 +42,26 @@ fn two_ifds() -> Vec<u8> {
 }
 
 #[test]
-fn a_file_that_is_not_tiff_is_of_unknown_format() {
-    let err = RawFile::from_bytes(b"not a tiff").unwrap_err();
+fn a_file_that_is_neither_a_tiff_nor_a_jpeg_file_is_of_unknown_format() {
+    for bytes in [&b"not a tiff"[..], b"", b"I", &[0xFF, 0xD8]] {
+        let err = RawFile::from_bytes(bytes).unwrap_err();
+        assert_eq!(err.kind(), ErrorKind::UnknownFormat, "{bytes:02X?}");
+    }
+}
+
+#[test]
+fn a_jpeg_file_is_of_unknown_format() {
+    // A camera's JPEG: JFIF, an Exif segment with a Nikon Make, then the
+    // image.
+    let mut tiff = TiffBuilder::new(Order::Little);
+    let ifd = tiff.ifd();
+    tiff.ascii(ifd, MAKE, "NIKON CORPORATION");
+    let mut builder = JpegBuilder::new();
+    builder.jfif().exif(&tiff.build().bytes);
+    let bytes = builder.build().bytes;
+    let err = RawFile::from_bytes(&bytes).unwrap_err();
+    assert_eq!(err.kind(), ErrorKind::UnknownFormat);
+    let err = RawFile::from_reader(Cursor::new(bytes)).unwrap_err();
     assert_eq!(err.kind(), ErrorKind::UnknownFormat);
 }
 
