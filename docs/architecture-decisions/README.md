@@ -20,6 +20,7 @@ each: the context, what was decided, and what follows from it. They answer
 | [ADR012](adr012-focus-points-as-the-camera-records-them.md) | Focus points as the camera records them | Accepted |
 | [ADR013](adr013-clean-room-and-third-party-code.md) | Clean-room implementation and third-party code | Accepted |
 | [ADR014](adr014-jpeg-files-as-a-format-of-their-own.md) | JPEG files as a format of their own | Accepted |
+| [ADR015](adr015-the-focus-point-of-a-crop-mode-jpeg.md) | The focus point of a crop-mode JPEG | Accepted |
 
 ## When to write one
 

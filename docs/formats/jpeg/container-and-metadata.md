@@ -423,7 +423,12 @@ decided, as steps. [I]
    ratio, to within one pixel of rounding in either size:
    `|fw × jh − fh × jw|` at most the longest of `fw`, `fh`, `jw` and
    `jh`, where `fw × fh` is the frame and `jw × jh` the JPEG, in stored
-   orientation.
+   orientation. Before that, a Nikon JPEG shot in a crop mode, whose
+   MakerNote records a crop and holds no CropArea, has its point placed
+   on the JPEG's own picture: a DX crop's scaled onto the JPEG's frame,
+   a 1:1 or 16:9 crop's moved into the centred window of the recorded
+   frame that has the JPEG's shape
+   ([ADR015](../../architecture-decisions/adr015-the-focus-point-of-a-crop-mode-jpeg.md)).
 
 ## 13. Pitfalls
 

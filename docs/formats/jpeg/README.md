@@ -11,7 +11,10 @@ These pages support the [roadmap](../../ROADMAP.md)'s milestone for plain
 JPEG files: a JPEG opens as a format of its own, with its metadata, its
 previews and, when the camera recorded one that fits its picture, its focus
 point. Why raw-files reads JPEG files, and how, is decided in
-[ADR014](../../architecture-decisions/adr014-jpeg-files-as-a-format-of-their-own.md).
+[ADR014](../../architecture-decisions/adr014-jpeg-files-as-a-format-of-their-own.md),
+and how the focus point of a Nikon JPEG shot in a crop mode is placed on
+its picture, in
+[ADR015](../../architecture-decisions/adr015-the-focus-point-of-a-crop-mode-jpeg.md).
 
 ## Status
 
@@ -22,7 +25,8 @@ Sony, Nikon and Canon bodies, listed in
 [test-data.md](test-data.md#2-the-sample-files); what they show is tagged
 **[F]**. [open-questions.md](open-questions.md) lists what is still
 unknown, among it the orientation of the small images on a portrait
-picture and what a Nikon JPEG records in a crop mode.
+picture on a public file. What a Nikon JPEG records in a crop mode is
+known from the maintainer's own Z 9 shots, not from a public file.
 
 ## Pages
 

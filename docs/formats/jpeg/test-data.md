@@ -156,7 +156,9 @@ never a panic, and the fuzz targets to start from the fixtures (see
 - **A portrait picture**: every file has orientation 1. [F]
 - **A camera crop mode**, a Nikon JPEG with a CropArea, and a Nikon JPEG
   with a focus position: the D5300 shot through the viewfinder, and the
-  D70 writes no AFInfo2. [F]
+  D70 writes no AFInfo2. [F] The maintainer's own Z 9 shots show the
+  crop modes
+  ([ADR015](../../architecture-decisions/adr015-the-focus-point-of-a-crop-mode-jpeg.md)).
 - **Fujifilm, Panasonic, Canon focus data and phones.** [S]
 
 See [open-questions.md](open-questions.md) for what these gaps leave

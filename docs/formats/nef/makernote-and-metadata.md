@@ -780,6 +780,15 @@ What the fields hold:
   frame has the JPEG's aspect ratio, so that an export cropped to another
   shape, which may keep the camera's MakerNote, gives none
   ([ADR014](../../architecture-decisions/adr014-jpeg-files-as-a-format-of-their-own.md)).
+- **In a camera JPEG shot in a crop mode**, the maintainer's Z 9 records
+  the raw file's AFInfo2 and CropHiSpeed, with the full 8256x5504 frame,
+  at every image size, and no CropArea; its full-size JPEG is the raw
+  file's CropArea (5392x3592, 5504x5504, 8256x4640), and its DX JPEGs at
+  the smaller sizes are exactly 3:2. **[F]** raw-files is to place such
+  a point on the JPEG's picture, as on CropArea in a raw file: a DX crop's
+  scaled onto the JPEG's frame, a 1:1 or 16:9 crop's moved into the
+  centred window of the frame that has the JPEG's shape
+  ([ADR015](../../architecture-decisions/adr015-the-focus-point-of-a-crop-mode-jpeg.md)).
 
 **What the samples cover.** Each kind of shot, the files that show it,
 and what raw-files gives; a row without a file is an open question
@@ -808,6 +817,7 @@ and what raw-files gives; a row without a file is an open question
 | Face detection | FaceDetect | none | not read |
 | Camera JPEG through the viewfinder | a zero frame (`0100`) | the D5300 JPEG from Wikimedia Commons | none |
 | Camera JPEG with a position | a position | none public | the point, when its frame has the JPEG's aspect ratio; unchecked on a public file |
+| Camera JPEG in a crop mode (DX, 1:1, 16:9), at any image size | a position in the full frame, no CropArea | none public; the maintainer's Z 9 shots | the point, to be placed on the JPEG's picture; unchecked on a public file |
 | Exported JPEG that keeps the camera's MakerNote | the camera's frame and position | none public | the point only when the frame has the export's aspect ratio |
 
 ## 9. Robustness pitfalls
