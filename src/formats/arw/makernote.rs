@@ -58,9 +58,8 @@
 //! (the raw SubIFD of the ILCE-9, samples 1541 and 1542), and the IFD keeps
 //! the order of the file, each tag found wherever it is.
 //!
-//! Nothing in the block is trusted. Its IFD is read by the reading of an
-//! IFD inside a block that both MakerNote readers share
-//! ([`block_ifd`](crate::formats::block_ifd)): the IFD must lie inside the
+//! Nothing in the block is trusted. Its IFD is read inside the block, as
+//! the Nikon reader's are ([`ifd_in`]): the IFD must lie inside the
 //! block with its count and its whole entry table, and every entry whose
 //! value lies outside the block is dropped, as an entry whose value lies
 //! outside the file is, so every value read from it lies inside the block.
@@ -141,13 +140,11 @@
 //! [`Focus::in_focus`] is never set.
 
 use std::io::{Read, Seek};
-use std::ops::Range;
 
 use crate::container::tiff::tags::MAKER_NOTE;
 use crate::container::tiff::types::{BYTE, SHORT, UNDEFINED};
-use crate::container::tiff::{Ifd, Tree, skip_damage};
+use crate::container::tiff::{Block, Entry, Ifd, Tree, ifd_in, skip_damage};
 use crate::error::Result;
-use crate::formats::block_ifd::{block_of, ifd_in};
 use crate::geometry::{Point, Size};
 use crate::io::Source;
 use crate::limits::Limits;
@@ -225,22 +222,15 @@ const NOT_SONY: [&[u8]; 3] = [SONY_PI, PREMI, SONY_PIC];
 /// See the [module documentation](self) for the layouts.
 #[derive(Debug)]
 pub(super) struct MakerNote {
-    /// Where the block's bytes are in the file: the bounds that every
-    /// offset found inside the block is checked against.
-    #[cfg_attr(
-        not(test),
-        expect(
-            dead_code,
-            reason = "the IFD's values were checked against the block when it was read, \
-                      and the focus point's tags read nothing else"
-        )
-    )]
-    block: Range<u64>,
     /// The MakerNote IFD, which holds Sony's tags: at the block's start, or
     /// 12 bytes in after a header, inside the block with its whole entry
     /// table, its offsets counted from the start of the file. Its entries
     /// whose values lie outside the block were dropped when it was read, so
     /// every value read from it lies inside the block.
+    ///
+    /// It was read in the block, [`Ifd::block`]: of base 0, and with bounds
+    /// where the block's bytes are in the file, which every offset found
+    /// inside the block is checked against.
     ifd: Ifd,
 }
 
@@ -262,20 +252,21 @@ pub(super) fn read<R: Read + Seek>(
     let Some(exif) = tree.exif() else {
         return Ok(None);
     };
-    let Some(block) = exif.entry(MAKER_NOTE).and_then(block_of) else {
+    let Some(range) = exif.entry(MAKER_NOTE).and_then(Entry::byte_range) else {
         return Ok(None);
     };
     // The block's bytes lie inside the file, as every kept entry's value
     // does, so a read that stays inside the block can fail only with the
-    // reader. `block_of` gives a range whose end is not before its start.
-    let len = block.end.saturating_sub(block.start);
-    let head = src.bytes(block.start, len.min(HEADER_LEN))?;
+    // reader. `Entry::byte_range` gives a range whose end is not before its
+    // start.
+    let len = range.end.saturating_sub(range.start);
+    let head = src.bytes(range.start, len.min(HEADER_LEN))?;
     let Some(skip) = ifd_start(&head) else {
         return Ok(None);
     };
     // The IFD's offset from base 0, as a TIFF offset is written: a block
     // that starts near the top of the 32-bit range may put it past.
-    let Some(offset) = block
+    let Some(offset) = range
         .start
         .checked_add(skip)
         .and_then(|at| u32::try_from(at).ok())
@@ -283,10 +274,11 @@ pub(super) fn read<R: Read + Seek>(
         return Ok(None);
     };
     // The block's numbers are in the file's byte order, the Exif IFD's.
-    let Some(ifd) = ifd_in(src, &block, 0, offset, exif.order(), limits)? else {
+    let block = Block::new(0, range);
+    let Some(ifd) = ifd_in(src, &block, offset, exif.order(), limits)? else {
         return Ok(None);
     };
-    Ok(Some(MakerNote { block, ifd }))
+    Ok(Some(MakerNote { ifd }))
 }
 
 /// How far into the block the MakerNote IFD starts, from `head`, the
@@ -524,8 +516,8 @@ mod tests {
     /// Checks that `makernote` is the sound MakerNote of `built`, whose
     /// IFD is `ifd`, in byte order `order`, with both its entries.
     fn assert_sound(src: &mut Src, makernote: &MakerNote, built: &Built, ifd: IfdId, order: Order) {
-        assert_eq!(makernote.block, built.ifd_block(ifd), "{order:?}");
         let found = &makernote.ifd;
+        assert_eq!(found.block().bounds(), &built.ifd_block(ifd), "{order:?}");
         assert_eq!(found.order(), byte_order(order), "{order:?}");
         assert_eq!(found.offset(), built.ifd_offset(ifd), "{order:?}");
         assert_eq!(found.block().base(), 0, "{order:?}");
@@ -613,9 +605,9 @@ mod tests {
 
                 // The IFD after the start is sound, and so ignored on
                 // purpose.
-                let block = at..at + LEN;
+                let block = Block::new(0, at..at + LEN);
                 let limits = Limits::unlimited();
-                let sound = ifd_in(&mut src, &block, 0, offset, byte_order(order), &limits);
+                let sound = ifd_in(&mut src, &block, offset, byte_order(order), &limits);
                 assert_eq!(sound.unwrap().map(|ifd| ifd.len()), Some(2), "{start:?}");
             }
         }
@@ -715,7 +707,7 @@ mod tests {
             makernote_at(&mut builder, exif, UNDEFINED, table, at);
             let (mut src, found) = read_file(builder.build().bytes);
             let found = found.expect("a MakerNote");
-            assert_eq!(found.block, at..at + table, "{order:?}");
+            assert_eq!(found.ifd.block().bounds(), &(at..at + table), "{order:?}");
             assert_eq!(found.ifd.u32(&mut src, SECOND).unwrap(), Some(8));
         }
     }
@@ -864,7 +856,7 @@ mod tests {
 
             let (mut src, found) = read_file(builder.build().bytes);
             let found = found.expect("a MakerNote");
-            assert_eq!(found.block, block, "{order:?}");
+            assert_eq!(found.ifd.block().bounds(), &block, "{order:?}");
             assert_eq!(found.ifd.len(), 1, "{order:?}");
             assert_eq!(found.ifd.u32(&mut src, 0x0003).unwrap(), Some(1234));
             assert!(found.ifd.entry(FIRST).is_none(), "{order:?}");

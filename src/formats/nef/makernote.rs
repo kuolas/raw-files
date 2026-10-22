@@ -156,9 +156,8 @@
 //! PreviewIFD must lie inside the block, with their whole entry tables; the
 //! three numbers that lead to the JPEG must be held in their entries, not
 //! stored elsewhere; and the whole JPEG, as declared, must lie inside the
-//! block. The block's IFDs are read by the reading of an IFD inside a block
-//! written for any MakerNote reader ([`block_ifd`](crate::formats::block_ifd)):
-//! every entry whose value lies outside the block is dropped, as an entry
+//! block. The block's IFDs are read inside the block ([`ifd_in`]): every
+//! entry whose value lies outside the block is dropped, as an entry
 //! whose value lies outside the file is, so every value read from them lies
 //! inside the block: the ISO's two numbers and WorldTime's four bytes,
 //! which the entry holds, and CropArea's four numbers, CropHiSpeed's seven,
@@ -180,15 +179,13 @@
 //! or parses the block again.
 
 use std::io::{Read, Seek};
-use std::ops::Range;
 
 use crate::container::tiff::tags::{
     JPEG_INTERCHANGE_FORMAT, JPEG_INTERCHANGE_FORMAT_LENGTH, MAKER_NOTE,
 };
 use crate::container::tiff::types::{ASCII, LONG, RATIONAL, SHORT, UNDEFINED};
-use crate::container::tiff::{Block, Ifd, Tree, parse_header, skip_damage};
+use crate::container::tiff::{Block, Entry, Ifd, Tree, ifd_in, parse_header, skip_damage};
 use crate::error::Result;
-use crate::formats::block_ifd::{block_of, fits, ifd_in};
 use crate::formats::tiff_metadata::{self, Standard};
 use crate::formats::tiff_previews::Candidate;
 use crate::geometry::{Point, Size};
@@ -265,19 +262,17 @@ const MIN_LEN: u64 = HEADER_AT + 8;
 /// See the [module documentation](self) for the layout.
 #[derive(Debug)]
 pub(super) struct MakerNote {
-    /// Where the block's bytes are in the file: the bounds that every
-    /// offset found inside the block is checked against.
-    block: Range<u64>,
-    /// What every offset inside the block counts from: the inner TIFF
-    /// header, 10 bytes into the block.
-    base: u64,
-    /// The byte order of every number inside the block, the inner
-    /// header's, which may differ from the file's.
-    order: ByteOrder,
     /// The MakerNote IFD, which holds Nikon's tags: the IFD the inner
     /// header points at, inside the block with its whole entry table. Its
     /// entries whose values lie outside the block were dropped when it was
     /// read, so every value read from it lies inside the block.
+    ///
+    /// It was read in the block, [`Ifd::block`]: its bounds are where the
+    /// block's bytes are in the file, which every offset found inside the
+    /// block is checked against, and its base, which every such offset
+    /// counts from, is the inner TIFF header, 10 bytes into the block. Its
+    /// byte order, [`Ifd::order`], is the inner header's: the order of
+    /// every number inside the block, which may differ from the file's.
     ifd: Ifd,
 }
 
@@ -296,41 +291,36 @@ pub(super) fn read<R: Read + Seek>(
     tree: &Tree,
     limits: &Limits,
 ) -> Result<Option<MakerNote>> {
-    let Some(block) = tree
+    let Some(range) = tree
         .exif()
         .and_then(|exif| exif.entry(MAKER_NOTE))
-        .and_then(block_of)
+        .and_then(Entry::byte_range)
     else {
         return Ok(None);
     };
     // The block's bytes lie inside the file, as every kept entry's value
     // does, so the reads below that stay inside the block can fail only
     // with the reader.
-    if block
+    if range
         .end
-        .checked_sub(block.start)
+        .checked_sub(range.start)
         .is_none_or(|len| len < MIN_LEN)
-        || src.bytes(block.start, 6)?.as_slice() != SIGNATURE
+        || src.bytes(range.start, 6)?.as_slice() != SIGNATURE
     {
         return Ok(None);
     }
 
-    let Some(base) = block.start.checked_add(HEADER_AT) else {
+    let Some(base) = range.start.checked_add(HEADER_AT) else {
         return Ok(None);
     };
-    let header = parse_header(src, &Block::new(base, block.clone()));
-    let Some(header) = skip_damage(header)? else {
+    let block = Block::new(base, range);
+    let Some(header) = skip_damage(parse_header(src, &block))? else {
         return Ok(None);
     };
-    let Some(ifd) = ifd_in(src, &block, base, header.ifd0, header.order, limits)? else {
+    let Some(ifd) = ifd_in(src, &block, header.ifd0, header.order, limits)? else {
         return Ok(None);
     };
-    Ok(Some(MakerNote {
-        block,
-        base,
-        order: header.order,
-        ifd,
-    }))
+    Ok(Some(MakerNote { ifd }))
 }
 
 /// Where the preview JPEG of `makernote` is, as a candidate for the shared
@@ -348,16 +338,12 @@ pub(super) fn preview_candidate<R: Read + Seek>(
     makernote: &MakerNote,
     limits: &Limits,
 ) -> Result<Option<Candidate>> {
-    let MakerNote {
-        block,
-        base,
-        order,
-        ifd,
-    } = makernote;
+    let ifd = &makernote.ifd;
+    let block = ifd.block();
     let Some(pointer) = inline_u32(src, ifd, PREVIEW_IFD)? else {
         return Ok(None);
     };
-    let Some(preview) = ifd_in(src, block, *base, pointer, *order, limits)? else {
+    let Some(preview) = ifd_in(src, block, pointer, ifd.order(), limits)? else {
         return Ok(None);
     };
     let offset = inline_u32(src, &preview, JPEG_INTERCHANGE_FORMAT)?;
@@ -368,8 +354,8 @@ pub(super) fn preview_candidate<R: Read + Seek>(
 
     // An empty JPEG is passed on: the finder drops it with the others.
     let length = u64::from(length);
-    match base.checked_add(u64::from(offset)) {
-        Some(offset) if fits(block, offset, length) => Ok(Some(Candidate { offset, length })),
+    match block.at(offset) {
+        Some(offset) if block.fits(offset, length) => Ok(Some(Candidate { offset, length })),
         _ => Ok(None),
     }
 }
@@ -591,7 +577,7 @@ fn world_time<R: Read + Seek>(src: &mut Source<R>, makernote: &MakerNote) -> Res
     let Some(&[zone0, zone1, daylight_saving, _date_format]) = bytes.as_deref() else {
         return Ok(None);
     };
-    let zone = i32::from(makernote.order.u16([zone0, zone1]).cast_signed());
+    let zone = i32::from(makernote.ifd.order().u16([zone0, zone1]).cast_signed());
     let offset = match daylight_saving {
         0 => zone,
         1 => zone + 60,
@@ -632,7 +618,8 @@ fn focus<R: Read + Seek>(
         return Ok(None);
     }
     let value = skip_damage(makernote.ifd.bytes(src, AF_INFO2))?.flatten();
-    let Some(record) = value.and_then(|value| af_info2_record(&value, makernote.order)) else {
+    let order = makernote.ifd.order();
+    let Some(record) = value.and_then(|value| af_info2_record(&value, order)) else {
         return Ok(None);
     };
     let crop = crop_hi_speed(src, makernote)?;
@@ -1510,8 +1497,8 @@ mod tests {
                 .unwrap()
                 .expect("a MakerNote");
             let at = AT + block.preview;
-            let whole_file = tiff::Block::new(makernote.base, 0..src.len());
-            let (table, _) = parse_ifd(&mut src, &whole_file, at, makernote.order, &limits)
+            let whole_file = tiff::Block::new(makernote.ifd.block().base(), 0..src.len());
+            let (table, _) = parse_ifd(&mut src, &whole_file, at, makernote.ifd.order(), &limits)
                 .expect("the PreviewIFD");
             let first = &table.entries()[0];
             assert_eq!(first.tag(), JPEG_INTERCHANGE_FORMAT, "{order:?}");

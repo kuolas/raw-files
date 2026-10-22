@@ -29,11 +29,17 @@
 //! be read. Values are read only when asked for, through the same
 //! [`Source`], and no accessor reads more than [`MAX_VALUE_LEN`] bytes for
 //! one value.
+//!
+//! [`ifd_in`] reads the IFD at an offset written inside a block, as a
+//! MakerNote's IFDs are found, and gives none when it is damaged.
+//! [`Entry::byte_range`] says where a value made of bytes, such as a
+//! MakerNote, lies in the file.
 
 use std::io::{Read, Seek};
+use std::ops::Range;
 
-use super::Block;
 use super::types::{ASCII, BYTE, IFD, LONG, RATIONAL, SHORT, SRATIONAL, UNDEFINED, type_size};
+use super::{Block, skip_damage};
 use crate::error::{Error, Result};
 use crate::io::{ByteOrder, Source, within};
 use crate::limits::Limits;
@@ -56,10 +62,6 @@ const MAX_VALUE_LEN: u32 = 1024 * 1024;
 ///
 /// The accessors that read a value take the [`Source`] the IFD was read
 /// from. Inline values are served from the entry without touching it.
-///
-/// A reader whose rule for a value is stricter than the file's drops the
-/// entries that break it with [`retain`](Self::retain), and they are then
-/// skipped like the others.
 #[derive(Clone, Debug)]
 pub(crate) struct Ifd {
     offset: u64,
@@ -245,6 +247,40 @@ fn check_inside(
     Err(Error::malformed(message, offset))
 }
 
+/// The IFD at `offset`, an offset written inside `block` and so counted
+/// from its base ([`Block::at`]), read in byte order `order`; `None` when
+/// that position would pass the largest offset, or when [`parse_ifd`]
+/// refuses the IFD as damaged ([`skip_damage`]).
+///
+/// For the IFDs a reader finds by offsets of its own rather than by the
+/// walk, such as a MakerNote's: where the offsets inside the block count
+/// from and the byte order of its numbers differ from maker to maker, and
+/// the caller gives both. Nothing the block holds is trusted. [`parse_ifd`]
+/// reads the IFD inside the block: it refuses an IFD that does not lie
+/// inside the block with its count and its whole entry table, and leaves
+/// out an entry whose value does not, as one whose value lies outside the
+/// file. So every value read from the IFD lies inside the block.
+///
+/// The IFD's next-IFD pointer is not used, and not required: the D200
+/// writes none in its MakerNote.
+///
+/// # Errors
+///
+/// `Io` when the reader fails.
+pub(crate) fn ifd_in<R: Read + Seek>(
+    src: &mut Source<R>,
+    block: &Block,
+    offset: u32,
+    order: ByteOrder,
+    limits: &Limits,
+) -> Result<Option<Ifd>> {
+    let Some(at) = block.at(offset) else {
+        return Ok(None);
+    };
+    let parsed = skip_damage(parse_ifd(src, block, at, order, limits))?;
+    Ok(parsed.map(|(ifd, _)| ifd))
+}
+
 /// Reads one 12-byte entry: `None` if its field type is unknown, its length
 /// overflows 32 bits, or its value is out of line and does not fit `inside`,
 /// the block cut at the end of the file, once the base is added to its
@@ -293,10 +329,6 @@ impl Ifd {
     /// The block the IFD was read in, as given to [`parse_ifd`]: the base
     /// that the offsets written inside it count from, and the bounds that
     /// it and its values lie inside.
-    #[cfg_attr(
-        not(test),
-        expect(dead_code, reason = "nothing reads this accessor yet")
-    )]
     pub(crate) fn block(&self) -> &Block {
         &self.block
     }
@@ -326,37 +358,13 @@ impl Ifd {
     }
 
     /// The number of entries skipped because their type is unknown, their
-    /// length overflows or their value lies outside the file, or dropped
-    /// since by [`retain`](Self::retain).
+    /// length overflows or their value lies outside the IFD's block or the
+    /// file.
     ///
     /// 0 means every entry of the IFD has a known type and lies inside the
-    /// file, and none was dropped.
+    /// block and the file.
     pub(crate) fn invalid_entries(&self) -> u32 {
         self.invalid_entries
-    }
-
-    /// Keeps only the entries for which `keep` is true, in the order of the
-    /// file, and drops the others, as [`parse_ifd`] skips an entry it cannot
-    /// read.
-    ///
-    /// For a reader whose rule is stricter than the file's, such as a
-    /// MakerNote's, whose values must lie inside the MakerNote: once the
-    /// entries that break it are dropped, nothing can read them, and the
-    /// lookups by tag find the first occurrence that was kept. A dropped
-    /// entry cannot be read, so it counts in
-    /// [`invalid_entries`](Self::invalid_entries), as a skipped one does.
-    pub(crate) fn retain(&mut self, mut keep: impl FnMut(&Entry) -> bool) {
-        let mut dropped: u32 = 0;
-        self.entries.retain(|entry| {
-            let kept = keep(entry);
-            if !kept {
-                dropped += 1;
-            }
-            kept
-        });
-        // The entries kept and those skipped or dropped are together at most
-        // the IFD's 65,535: this cannot overflow.
-        self.invalid_entries += dropped;
     }
 
     /// The entries that can be read, in the order of the file.
@@ -582,10 +590,10 @@ impl Ifd {
     }
 }
 
-// The NEF MakerNote reader reads an entry's type, count, value offset and
-// value length; nothing reads its tag yet. Each `expect` fails the build
-// once its accessor has a caller, so it is then removed rather than left
-// behind.
+// The format readers read an entry's type, count, value offset and byte
+// range, which reads its value length; nothing reads its tag yet. Each
+// `expect` fails the build once its accessor has a caller, so it is then
+// removed rather than left behind.
 impl Entry {
     /// The entry's tag.
     #[cfg_attr(
@@ -622,6 +630,24 @@ impl Entry {
     /// type, which the entry was checked not to overflow when it was read.
     pub(crate) fn value_len(&self) -> u32 {
         self.len
+    }
+
+    /// Where the bytes of the entry's value lie in the file, when the value
+    /// is made of bytes, such as a MakerNote, a maker's own metadata stored
+    /// as the value of one tag: from the value's offset to its end. `None`
+    /// unless the entry's type is UNDEFINED or BYTE and its value is stored
+    /// out of line, as a value longer than the four bytes an entry holds
+    /// itself always is.
+    ///
+    /// The value of a kept entry lies inside its IFD's block and the file,
+    /// so the range does too.
+    pub(crate) fn byte_range(&self) -> Option<Range<u64>> {
+        if !matches!(self.typ, UNDEFINED | BYTE) {
+            return None;
+        }
+        let start = self.value_offset()?;
+        let end = start.checked_add(u64::from(self.value_len()))?;
+        Some(start..end)
     }
 }
 
@@ -1328,38 +1354,6 @@ mod tests {
     }
 
     #[test]
-    fn retain_drops_entries_and_counts_them_invalid() {
-        for order in ORDERS {
-            let mut builder = TiffBuilder::new(order);
-            let ifd = builder.ifd();
-            builder
-                .unsorted(ifd)
-                .short(ifd, 0x0112, &[1])
-                .short(ifd, 0x0100, &[9])
-                .short(ifd, 0x0101, &[8])
-                .short(ifd, 0x0112, &[2]);
-            let built = builder.build();
-            let (mut src, mut ifd, _) = read(order, &built, ifd);
-            assert_eq!(ifd.invalid_entries(), 0);
-
-            // Drop 0x0100 and the first 0x0112, the one of value 1.
-            let first = ifd.entry(0x0112).cloned();
-            ifd.retain(|entry| entry.tag() != 0x0100 && Some(entry) != first.as_ref());
-            assert_eq!(
-                ifd.tags().collect::<Vec<_>>(),
-                [0x0101, 0x0112],
-                "{order:?}"
-            );
-            assert_eq!(ifd.invalid_entries(), 2, "{order:?}");
-            assert!(ifd.entry(0x0100).is_none(), "{order:?}");
-            assert_eq!(ifd.u32(&mut src, 0x0100).unwrap(), None, "{order:?}");
-            assert_eq!(ifd.u32(&mut src, 0x0101).unwrap(), Some(8), "{order:?}");
-            // The lookup finds the first occurrence that was kept.
-            assert_eq!(ifd.u32(&mut src, 0x0112).unwrap(), Some(2), "{order:?}");
-        }
-    }
-
-    #[test]
     fn the_next_pointer_is_returned_as_written() {
         for order in ORDERS {
             let mut builder = TiffBuilder::new(order);
@@ -1744,6 +1738,307 @@ mod tests {
             let cut = &bytes[..usize::try_from(end - 2).unwrap()];
             let (_, next) = try_read_in(order, cut, &block, at).unwrap();
             assert_eq!(next, 0, "{order:?}");
+        }
+    }
+
+    /// Where the tests that place a block inside a larger file put it.
+    const AT: u64 = 512;
+
+    /// How far such a file goes on past the block, so that what a test
+    /// points past the block still lies inside the file.
+    const TAIL: u64 = 256;
+
+    // Tags that mean nothing here, for entries the tests read back by tag,
+    // in the order an IFD sorts them in.
+    const FIRST: u16 = 0x0101;
+    const SECOND: u16 = 0x0102;
+    const THIRD: u16 = 0x0103;
+    const FOURTH: u16 = 0x0104;
+
+    /// The file `bytes`, read through a source, and what [`ifd_in`] gives
+    /// for the IFD at `offset` from `base` inside a block of bounds
+    /// `bounds`, in byte order `order`, which must not be an error.
+    fn read_ifd_in(
+        bytes: Vec<u8>,
+        bounds: &Range<u64>,
+        base: u64,
+        offset: u32,
+        order: Order,
+    ) -> (Source<Cursor<Vec<u8>>>, Option<Ifd>) {
+        let mut src = open(&bytes);
+        let block = Block::new(base, bounds.clone());
+        let ifd = ifd_in(
+            &mut src,
+            &block,
+            offset,
+            byte_order(order),
+            &Limits::default(),
+        )
+        .unwrap();
+        (src, ifd)
+    }
+
+    /// `bytes` placed at [`AT`] in a file of zeros that goes on [`TAIL`]
+    /// bytes past them; and the range they take, the block.
+    fn placed(bytes: &[u8]) -> (Vec<u8>, Range<u64>) {
+        let start = usize::try_from(AT).unwrap();
+        let mut file = vec![0; start];
+        file.extend_from_slice(bytes);
+        file.resize(file.len() + usize::try_from(TAIL).unwrap(), 0);
+        (file, AT..AT + u64::try_from(bytes.len()).unwrap())
+    }
+
+    /// A block in byte order `order` laid out as a TIFF structure whose
+    /// offsets count from its own first byte, as the Nikon MakerNote's
+    /// count from its inner header: one IFD holding a SHORT, which the
+    /// entry holds, and three LONGs, stored out of line; and that IFD's
+    /// offset.
+    fn sound_block(order: Order) -> (Vec<u8>, u32) {
+        let mut inner = TiffBuilder::new(order);
+        let ifd = inner.ifd();
+        inner.short(ifd, FIRST, &[7]).long(ifd, SECOND, &[1, 2, 3]);
+        let built = inner.build();
+        let offset = u32::try_from(built.ifd_offset(ifd)).unwrap();
+        (built.bytes, offset)
+    }
+
+    /// The entry of tag `tag` in IFD0 of the file `builder` builds, as
+    /// [`parse_ifd`] reads it.
+    fn entry_of(builder: &TiffBuilder, ifd0: IfdId, order: Order, tag: u16) -> Option<Entry> {
+        let built = builder.build();
+        let at = built.ifd_offset(ifd0);
+        let mut src = open(&built.bytes);
+        let block = Block::file(src.len());
+        let (ifd, _) =
+            parse_ifd(&mut src, &block, at, byte_order(order), &Limits::default()).unwrap();
+        ifd.entry(tag).cloned()
+    }
+
+    /// A file in byte order `order` whose IFD0 has one entry, of tag
+    /// [`FIRST`] and type `typ`, whose value is the ten bytes at [`AT`];
+    /// the builder and IFD0.
+    fn ten_bytes_at(order: Order, typ: u16) -> (TiffBuilder, IfdId) {
+        let mut builder = TiffBuilder::new(order);
+        let ifd0 = builder.ifd();
+        let at = u32::try_from(AT).unwrap();
+        builder.raw(ifd0, FIRST, typ, 10, RawValue::Offset(at));
+        builder.blob_at(AT, b"012345678\0");
+        builder.pad_to(AT + TAIL);
+        (builder, ifd0)
+    }
+
+    #[test]
+    fn bytes_stored_out_of_line_have_a_byte_range() {
+        for order in ORDERS {
+            for typ in [UNDEFINED, BYTE] {
+                let (builder, ifd0) = ten_bytes_at(order, typ);
+                let entry = entry_of(&builder, ifd0, order, FIRST).expect("the entry");
+                assert_eq!(entry.byte_range(), Some(AT..AT + 10), "{order:?}, {typ}");
+            }
+        }
+    }
+
+    #[test]
+    fn text_has_no_byte_range() {
+        // The same ten bytes, as ASCII: stored out of line too.
+        for order in ORDERS {
+            let (builder, ifd0) = ten_bytes_at(order, ASCII);
+            let entry = entry_of(&builder, ifd0, order, FIRST).expect("the entry");
+            assert_eq!(entry.value_offset(), Some(AT), "{order:?}");
+            assert_eq!(entry.byte_range(), None, "{order:?}");
+        }
+    }
+
+    #[test]
+    fn bytes_the_entry_holds_have_no_byte_range() {
+        for order in ORDERS {
+            let mut builder = TiffBuilder::new(order);
+            let ifd0 = builder.ifd();
+            builder.undefined(ifd0, FIRST, b"0211");
+            let entry = entry_of(&builder, ifd0, order, FIRST).expect("the entry");
+            assert_eq!(entry.count(), 4, "{order:?}");
+            assert_eq!(entry.byte_range(), None, "{order:?}");
+        }
+    }
+
+    #[test]
+    fn an_ifd_inside_the_block_is_read_with_its_entries() {
+        // Base 0, as a Sony MakerNote counts its offsets: the block is the
+        // file's second IFD and its values, which follow it, and IFD0 lies
+        // before the block.
+        for order in ORDERS {
+            let mut builder = TiffBuilder::new(order);
+            let ifd0 = builder.ifd();
+            let inside = builder.ifd();
+            builder.short(ifd0, FIRST, &[1]);
+            builder
+                .short(inside, FIRST, &[7])
+                .long(inside, SECOND, &[1, 2, 3]);
+            let built = builder.build();
+            let start = built.ifd_offset(inside);
+            let block = start..u64::try_from(built.bytes.len()).unwrap();
+            let offset = u32::try_from(start).unwrap();
+
+            let (mut src, ifd) = read_ifd_in(built.bytes, &block, 0, offset, order);
+            let ifd = ifd.expect("the IFD");
+            assert_eq!(ifd.len(), 2, "{order:?}");
+            assert_eq!(ifd.invalid_entries(), 0, "{order:?}");
+            assert_eq!(ifd.u32(&mut src, FIRST).unwrap(), Some(7), "{order:?}");
+            assert_eq!(
+                ifd.u32s(&mut src, SECOND).unwrap(),
+                Some(vec![1, 2, 3]),
+                "{order:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn offsets_inside_the_block_count_from_its_base() {
+        // As the Nikon MakerNote's count from its inner header: the block
+        // lies at AT, and so does its base.
+        for order in ORDERS {
+            let (bytes, offset) = sound_block(order);
+            let (file, block) = placed(&bytes);
+            let (mut src, ifd) = read_ifd_in(file, &block, AT, offset, order);
+            let ifd = ifd.expect("the IFD");
+            assert_eq!(ifd.offset(), AT + u64::from(offset), "{order:?}");
+            assert_eq!(ifd.block().base(), AT, "{order:?}");
+            assert_eq!(ifd.invalid_entries(), 0, "{order:?}");
+            assert_eq!(ifd.u32(&mut src, FIRST).unwrap(), Some(7), "{order:?}");
+            assert_eq!(
+                ifd.u32s(&mut src, SECOND).unwrap(),
+                Some(vec![1, 2, 3]),
+                "{order:?}"
+            );
+            let longs = ifd.entry(SECOND).and_then(Entry::value_offset);
+            assert!(longs.is_some_and(|at| block.contains(&at)), "{order:?}");
+        }
+    }
+
+    #[test]
+    fn a_count_that_straddles_the_blocks_end_has_none() {
+        for order in ORDERS {
+            let (bytes, offset) = sound_block(order);
+            let (file, block) = placed(&bytes);
+            let at = AT + u64::from(offset);
+
+            // The block ends one byte into the count, which the file holds
+            // whole.
+            let cut = block.start..at + 1;
+            let ifd = read_ifd_in(file.clone(), &cut, AT, offset, order).1;
+            assert!(ifd.is_none(), "{order:?}");
+
+            // The block ends where the file does, one byte into the count:
+            // the count is not read at all, so this is not an error.
+            let end = usize::try_from(at + 1).unwrap();
+            let short = file[..end].to_vec();
+            assert!(
+                read_ifd_in(short, &cut, AT, offset, order).1.is_none(),
+                "{order:?}"
+            );
+
+            // The control: the whole block gives the IFD.
+            let ifd = read_ifd_in(file, &block, AT, offset, order).1;
+            assert!(ifd.is_some(), "{order:?}");
+        }
+    }
+
+    #[test]
+    fn an_entry_table_that_runs_past_the_block_has_none() {
+        for order in ORDERS {
+            let (bytes, offset) = sound_block(order);
+            let (file, block) = placed(&bytes);
+            // Two entries: the table ends 2 + 24 bytes into the IFD, and
+            // the block one byte before. The file goes on.
+            let cut = block.start..AT + u64::from(offset) + 2 + 24 - 1;
+            let ifd = read_ifd_in(file.clone(), &cut, AT, offset, order).1;
+            assert!(ifd.is_none(), "{order:?}");
+
+            // The control: a block that ends with the table, before the
+            // next-IFD pointer, gives the IFD, without the LONGs, whose
+            // value lies past it.
+            let table = block.start..cut.end + 1;
+            let ifd = read_ifd_in(file, &table, AT, offset, order)
+                .1
+                .expect("the IFD");
+            assert!(ifd.entry(FIRST).is_some(), "{order:?}");
+            assert!(ifd.entry(SECOND).is_none(), "{order:?}");
+        }
+    }
+
+    #[test]
+    fn a_value_past_the_block_is_dropped() {
+        for order in ORDERS {
+            // A SHORT the entry holds and three LONGs inside the block;
+            // then two LONGs stored just past the block's end, and two
+            // that start 4 bytes before it and so end 4 bytes past it. The
+            // block ends 8 bytes after the three LONGs, and the file goes
+            // on 64 bytes past it.
+            let mut inner = TiffBuilder::new(order);
+            let ifd = inner.ifd();
+            inner.short(ifd, FIRST, &[7]).long(ifd, SECOND, &[1, 2, 3]);
+            // Offsets written into entries move nothing, so a copy with
+            // stand-in ones gives where the three LONGs end.
+            let mut probe = inner.clone();
+            probe.raw(ifd, THIRD, LONG, 2, RawValue::Offset(0)).raw(
+                ifd,
+                FOURTH,
+                LONG,
+                2,
+                RawValue::Offset(0),
+            );
+            let end = u32::try_from(probe.build().bytes.len()).unwrap() + 8;
+            inner
+                .raw(ifd, THIRD, LONG, 2, RawValue::Offset(end))
+                .raw(ifd, FOURTH, LONG, 2, RawValue::Offset(end - 4))
+                .pad_to(u64::from(end) + 64);
+            let built = inner.build();
+            let offset = u32::try_from(built.ifd_offset(ifd)).unwrap();
+
+            let (file, _) = placed(&built.bytes);
+            let block = AT..AT + u64::from(end);
+            let (mut src, ifd) = read_ifd_in(file.clone(), &block, AT, offset, order);
+            let ifd = ifd.expect("the IFD");
+            assert_eq!(ifd.u32(&mut src, FIRST).unwrap(), Some(7), "{order:?}");
+            assert_eq!(
+                ifd.u32s(&mut src, SECOND).unwrap(),
+                Some(vec![1, 2, 3]),
+                "{order:?}"
+            );
+            assert!(ifd.entry(THIRD).is_none(), "{order:?}");
+            assert!(ifd.entry(FOURTH).is_none(), "{order:?}");
+            assert_eq!(ifd.invalid_entries(), 2, "{order:?}");
+
+            // The control: a block that holds them keeps them all.
+            let whole = AT..AT + u64::try_from(built.bytes.len()).unwrap();
+            let ifd = read_ifd_in(file, &whole, AT, offset, order)
+                .1
+                .expect("the IFD");
+            assert_eq!(ifd.len(), 4, "{order:?}");
+            assert_eq!(ifd.invalid_entries(), 0, "{order:?}");
+        }
+    }
+
+    #[test]
+    fn an_ifd_past_the_end_of_the_file_has_none() {
+        for order in ORDERS {
+            let (bytes, _) = sound_block(order);
+            let (file, block) = placed(&bytes);
+            let ifd = read_ifd_in(file, &block, AT, u32::MAX, order).1;
+            assert!(ifd.is_none(), "{order:?}");
+        }
+    }
+
+    #[test]
+    fn a_base_and_offset_whose_sum_overflows_have_none() {
+        // The sum, wrapped around, would be the offset of a sound IFD at the
+        // start of a block that starts the file.
+        for order in ORDERS {
+            let (bytes, offset) = sound_block(order);
+            let block = 0..u64::try_from(bytes.len()).unwrap();
+            let wrapping = offset + 1;
+            let ifd = read_ifd_in(bytes, &block, u64::MAX, wrapping, order).1;
+            assert!(ifd.is_none(), "{order:?}");
         }
     }
 }
