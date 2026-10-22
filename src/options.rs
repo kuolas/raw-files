@@ -10,7 +10,8 @@ use crate::error::Result;
 use crate::file::RawFile;
 use crate::limits::Limits;
 
-/// How to open a RAW file: today, with which [`Limits`].
+/// How to open a camera file, a RAW file or a JPEG: today, with which
+/// [`Limits`].
 ///
 /// The defaults suit untrusted files, and opening with them is what
 /// [`RawFile::open`], [`RawFile::from_bytes`] and [`RawFile::from_reader`]
@@ -82,8 +83,8 @@ impl Options {
     ///
     /// # Errors
     ///
-    /// `UnknownFormat` if the file is not a RAW file this version
-    /// recognises; `Malformed` if its structure is damaged;
+    /// `UnknownFormat` if the file is not a RAW file or a JPEG file this
+    /// version recognises; `Malformed` if its structure is damaged;
     /// `LimitExceeded` if reading its structure would cross one of the
     /// limits; `Io` if the reader fails.
     pub fn from_reader<R: Read + Seek>(&self, reader: R) -> Result<RawFile<R>> {

@@ -1,13 +1,14 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! The RAW formats: the table of the formats the crate can detect, and
+//! The formats of the camera files the crate reads, RAW files and the JPEG
+//! files cameras write: the table of the formats the crate can detect, and
 //! detection over it.
 //!
-//! Each format lives in its own folder here (`nef/`, `arw/`) and registers
-//! itself as a [`FormatSpec`] in the list of the container its files are
-//! built on, [`tiff_specs`] or [`jpeg_specs`]: one function that says
-//! whether a file is of that format, and one that reads its previews and
-//! its metadata, both over the structure that container read from the
+//! Each format lives in its own folder here (`nef/`, `arw/`, `jpeg/`) and
+//! registers itself as a [`FormatSpec`] in the list of the container its
+//! files are built on, [`tiff_specs`] or [`jpeg_specs`]: one function that
+//! says whether a file is of that format, and one that reads its previews
+//! and its metadata, both over the structure that container read from the
 //! file.
 //! Detection goes by content, never by the file's name, so a renamed file
 //! opens as what it is; [`Format::from_extension`] is for file pickers,
@@ -34,8 +35,14 @@
 //! Make too, helped for a Hasselblad Make by the pointer to Sony's private
 //! directory, and opens with its previews and its metadata, which the ARW
 //! reader finds and reads the same way. A TIFF file no format claims is of
-//! no format the crate recognises. The JPEG list holds no format, so no
-//! JPEG file is of a format the crate recognises.
+//! no format the crate recognises.
+//!
+//! The JPEG list holds JPEG. A JPEG file is claimed when its first frame
+//! header gives the picture's size and is not lossless, and opens with its
+//! previews, the file itself, the thumbnail of its Exif segment and the
+//! images of its MPF list, which the JPEG reader checks with the shared
+//! finder, and with its orientation and image size. A JPEG file no format
+//! claims is of no format the crate recognises.
 //!
 //! A DNG is of no format the crate recognises either, whatever its Make
 //! says: converters and the phones that write DNG keep the maker's name in
@@ -43,6 +50,7 @@
 //! ([`is_dng`]), and [`make_starts_with`] reads the Make for them.
 
 mod arw;
+mod jpeg;
 mod makernote;
 mod nef;
 mod tiff_metadata;
@@ -104,10 +112,15 @@ fn tiff_specs<R: Read + Seek>() -> Vec<FormatSpec<R, Tree>> {
 }
 
 /// The specs of the formats whose files are JPEG files, in the order
-/// detection tries them, as for [`tiff_specs`]: none.
+/// detection tries them, as for [`tiff_specs`].
 fn jpeg_specs<R: Read + Seek>() -> Vec<FormatSpec<R, Segments>> {
-    Vec::new()
+    vec![jpeg::spec()]
 }
+
+/// What detection says of a JPEG file that no format claims, which the
+/// JPEG reader's `parse` says too of a file its claim refuses.
+const JPEG_UNCLAIMED: &str = "the file is a JPEG file, but holds no frame header that gives \
+                              the picture's size and is not lossless";
 
 /// Whether the file whose TIFF structure is `tree` is a DNG: whether its
 /// IFD0 holds DNGVersion, which every DNG carries there.
@@ -179,11 +192,11 @@ pub(crate) fn detect<R: Read + Seek>(
     let (found, unclaimed) = match structure {
         Structure::Tiff(tree) => (
             first_claim(&tiff_specs(), src, tree, limits)?,
-            "the file is a TIFF file, but not a RAW format this version recognises",
+            "the file is a TIFF file, but not of a format this version recognises",
         ),
         Structure::Jpeg(segments) => (
             first_claim(&jpeg_specs(), src, segments, limits)?,
-            "the file is a JPEG file, but not a format this version recognises",
+            JPEG_UNCLAIMED,
         ),
     };
     found.ok_or_else(|| Error::unknown_format(unclaimed))
@@ -257,6 +270,7 @@ mod tests {
     use super::*;
     use crate::container::tiff::tags::{DNG_PRIVATE_DATA, ORIENTATION};
     use crate::error::{Error, ErrorKind};
+    use crate::jpeg_builder::JpegBuilder;
     use crate::orientation::Orientation;
     use crate::preview::PreviewFormat;
     use crate::tiff_builder::{ASCII, IfdId, RawValue, TiffBuilder};
@@ -384,7 +398,7 @@ mod tests {
         assert_eq!(err.offset(), None, "{err:?}");
         assert_eq!(
             err.to_string(),
-            "the file is a TIFF file, but not a RAW format this version recognises"
+            "the file is a TIFF file, but not of a format this version recognises"
         );
     }
 
@@ -399,8 +413,18 @@ mod tests {
         assert_eq!(err.offset(), None, "{err:?}");
         assert_eq!(
             err.to_string(),
-            "the file is a JPEG file, but not a format this version recognises"
+            "the file is a JPEG file, but holds no frame header that gives the picture's size \
+             and is not lossless"
         );
+    }
+
+    #[test]
+    fn a_jpeg_file_that_holds_a_picture_is_detected_as_jpeg() {
+        let bytes = JpegBuilder::new().build().bytes;
+        let mut src = Source::new(Cursor::new(bytes)).unwrap();
+        let structure = Structure::read(&mut src, &Limits::default()).unwrap();
+        let (format, _) = detect(&mut src, &structure, &Limits::default()).unwrap();
+        assert_eq!(format, Format::Jpeg);
     }
 
     #[test]

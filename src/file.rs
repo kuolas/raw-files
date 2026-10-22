@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! The file handle: a RAW file opened, its format detected, its previews
-//! listed and its metadata kept, ready to read a preview.
+//! The file handle: a camera file opened, a RAW file or a JPEG, its format
+//! detected, its previews listed and its metadata kept, ready to read a
+//! preview.
 
 use std::fmt;
 use std::fs::File;
@@ -18,9 +19,14 @@ use crate::metadata::Metadata;
 use crate::options::Options;
 use crate::preview::{self, Preview};
 
-/// An open RAW file: its format, its embedded previews, what the camera
-/// recorded about the picture, and the reader to fetch a preview's bytes
-/// from.
+/// An open camera file: its format, its previews, what the camera recorded
+/// about the picture, and the reader to fetch a preview's bytes from.
+///
+/// It opens the camera files raw-files reads: RAW files, such as Nikon's
+/// NEF and Sony's ARW, and the JPEG files cameras write beside them or
+/// instead of them. [`format`](Self::format) says which a file is, and
+/// [`Format::is_raw`] whether it holds raw data. A JPEG file is one of its
+/// own previews, its whole byte range.
 ///
 /// Opening reads only the file's structure, through a cache of 64 KiB
 /// blocks, so a few blocks rather than the whole file, and finds the
@@ -79,7 +85,8 @@ pub struct RawFile<R> {
 }
 
 impl RawFile<File> {
-    /// Opens the RAW file at `path` with the default [`Limits`].
+    /// Opens the camera file at `path`, a RAW file or a JPEG, with the
+    /// default [`Limits`].
     ///
     /// The format is detected from the file's content, never from its
     /// extension, so a renamed file opens as what it is. The library opens
@@ -97,7 +104,7 @@ impl RawFile<File> {
 }
 
 impl<'a> RawFile<Cursor<&'a [u8]>> {
-    /// Opens a RAW file that is already in memory, such as a file read
+    /// Opens a camera file that is already in memory, such as a file read
     /// whole or mapped into memory, with the default [`Limits`].
     ///
     /// The same handle and the same code path as a file on disk. A preview's
@@ -115,7 +122,8 @@ impl<'a> RawFile<Cursor<&'a [u8]>> {
 }
 
 impl<R: Read + Seek> RawFile<R> {
-    /// Opens the RAW file that `reader` reads, with the default [`Limits`].
+    /// Opens the camera file that `reader` reads, with the default
+    /// [`Limits`].
     ///
     /// The file starts at the reader's start, whatever its position, and
     /// the format is detected from its content.
@@ -130,8 +138,8 @@ impl<R: Read + Seek> RawFile<R> {
     ///
     /// # Errors
     ///
-    /// `UnknownFormat` if the file is not a RAW file this version
-    /// recognises; `Malformed` if its structure is damaged;
+    /// `UnknownFormat` if the file is not a RAW file or a JPEG file this
+    /// version recognises; `Malformed` if its structure is damaged;
     /// `LimitExceeded` if reading its structure would cross one of the
     /// [`Limits`]; `Io` if the reader fails.
     pub fn from_reader(reader: R) -> Result<Self> {
@@ -177,8 +185,13 @@ impl<R: Read + Seek> RawFile<R> {
         self.format
     }
 
-    /// The previews embedded in the file, smallest first: by pixel area,
-    /// then by byte length.
+    /// The file's previews, smallest first: by pixel area, then by byte
+    /// length.
+    ///
+    /// A RAW file's are the JPEG images the camera embedded in it. A JPEG
+    /// file's are the smaller images it carries and the file itself, its
+    /// whole byte range, which is then the largest: reading it reads the
+    /// whole file, under [`Limits::max_preview_bytes`].
     ///
     /// Empty when the file holds no preview the library can show. The sizes
     /// are measured from each preview's own data, not taken from the tags

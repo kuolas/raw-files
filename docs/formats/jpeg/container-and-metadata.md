@@ -329,8 +329,8 @@ p. 99; 4.7.1.8, p. 104; 4.5.7, p. 25)
   width and height of the meaningful image, without padding; they are
   required in a compressed file. [P][3] (4.6.6.3.1 and 4.6.6.3.2, p. 48;
   Table 18, p. 95; 4.8.1, pp. 115 to 119) On all eight camera files they
-  equal the main frame header's size. [F] raw-files is to take the image
-  size from the frame header, the picture itself, and not to read them (see
+  equal the main frame header's size. [F] raw-files takes the image
+  size from the frame header, the picture itself, and does not read them (see
   [ADR014](../../architecture-decisions/adr014-jpeg-files-as-a-format-of-their-own.md)).
 - **Orientation (0x0112)** is a SHORT, 1 by default, whose values 1 to 8
   say where the stored image's first row and first column belong when it is
@@ -405,9 +405,10 @@ decided, as steps. [I]
    bytes into the payload, and its position is the base of every offset.
    Every IFD, value, thumbnail and MakerNote must lie inside the segment;
    one outside is dropped as damage. A segment whose TIFF header or IFD0
-   cannot be read gives no metadata, no thumbnail and no MakerNote
-   preview; the file still opens, with its own preview and its MPF
-   images.
+   cannot be read gives none of the values the segment records, no
+   thumbnail and no MakerNote preview; the file still opens, with its own
+   preview, its MPF images and its image size, which the frame header
+   gives, not the segment.
 5. **The previews** are the file itself (its whole byte range, with the
    main frame header's size); IFD1's JPEG thumbnail; each MPF entry after
    the first, at the MP header's position plus its offset, inside the file;

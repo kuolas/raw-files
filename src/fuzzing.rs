@@ -87,11 +87,12 @@ pub fn jpeg_probe(data: &[u8]) {
     }
 }
 
-/// Opens `data` as a RAW file, as a caller would, with the default options,
-/// then asks it everything the handle answers: its format, every value of
-/// its metadata, formatted as a caller would print it, its largest
-/// preview and the focus point placed on it, the smallest preview at least
-/// 1 by 1, and the bytes of every preview, read into one buffer.
+/// Opens `data` as a camera file, a RAW file or a JPEG, as a caller would,
+/// with the default options, then asks it everything the handle answers:
+/// its format, every value of its metadata, formatted as a caller would
+/// print it, its largest preview and the focus point placed on it, the
+/// smallest preview at least 1 by 1, and the bytes of every preview, read
+/// into one buffer.
 ///
 /// Whatever `data` holds, this must return, never panic, and do so in
 /// bounded time and memory. What it reads is thrown away: an error is an

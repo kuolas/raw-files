@@ -366,7 +366,8 @@ fn every_file_of_the_local_corpus_opens_and_gives_a_whole_jpeg() {
     tally.unreadable += walk(Path::new(&dir), &mut |path| {
         let known = path
             .extension()
-            .is_some_and(|ext| Format::from_extension(&ext.to_string_lossy()).is_some());
+            .and_then(|ext| Format::from_extension(&ext.to_string_lossy()))
+            .is_some_and(Format::is_raw);
         if known {
             paths.push(path);
         }
@@ -381,7 +382,7 @@ fn every_file_of_the_local_corpus_opens_and_gives_a_whole_jpeg() {
     let mut open_bytes = std::mem::take(&mut tally.open_bytes);
     open_bytes.sort_unstable();
     let m = &tally.metadata;
-    println!("files with a known extension: {}", tally.seen);
+    println!("files with a known RAW extension: {}", tally.seen);
     println!("unreadable: {}", tally.unreadable);
     println!("opened: {}", tally.opened);
     println!("failures by kind: {:?}", tally.failures);

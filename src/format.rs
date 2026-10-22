@@ -1,10 +1,13 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! The RAW file formats raw-files knows.
+//! The formats of the camera files raw-files reads: RAW files, and the
+//! JPEG files cameras write.
 
 use std::fmt;
 
-/// A RAW file format that raw-files can open.
+/// A format of the camera files raw-files can open: a RAW format, or JPEG,
+/// the format of the pictures cameras write beside their raw files or
+/// instead of them.
 ///
 /// `Format` is `#[non_exhaustive]`: formats are added in later releases, so
 /// match on it with a wildcard arm. It orders as its variants are listed,
@@ -24,9 +27,10 @@ use std::fmt;
 /// assert_eq!(Format::from_extension(".NEF"), Some(Format::Nef));
 /// assert_eq!(Format::from_extension(".ARW"), Some(Format::Arw));
 /// assert_eq!(Format::from_extension("sr2"), Some(Format::Arw));
-/// assert_eq!(Format::from_extension("jpg"), None);
+/// assert_eq!(Format::from_extension("jpg"), Some(Format::Jpeg));
 /// assert_eq!(Format::Nef.to_string(), "Nikon NEF");
 /// assert_eq!(Format::Arw.to_string(), "Sony ARW");
+/// assert_eq!(Format::Jpeg.to_string(), "JPEG");
 /// ```
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[non_exhaustive]
@@ -40,6 +44,13 @@ pub enum Format {
     /// Hasselblad for the Sony-built Hasselblad bodies (the Lunar among
     /// them), which write Sony's structure.
     Arw,
+    /// JPEG: a JPEG file as a camera writes it beside its raw files or
+    /// instead of them, or as an editor exports it. It holds no raw data.
+    /// Its previews are the file itself and the smaller images it carries:
+    /// the thumbnail of its Exif segment and the images its Multi-Picture
+    /// Format (MPF) list holds after the main one. Its metadata gives the
+    /// orientation and the size of the picture.
+    Jpeg,
 }
 
 impl Format {
@@ -48,7 +59,7 @@ impl Format {
     /// Detection tries the formats in this order, asking only those that
     /// the file's container, TIFF or JPEG, can hold.
     pub fn all() -> &'static [Format] {
-        &[Format::Nef, Format::Arw]
+        &[Format::Nef, Format::Arw, Format::Jpeg]
     }
 
     /// The name of the format as a person would say it, for example in a
@@ -57,6 +68,7 @@ impl Format {
         match self {
             Format::Nef => "Nikon NEF",
             Format::Arw => "Sony ARW",
+            Format::Jpeg => "JPEG",
         }
     }
 
@@ -66,18 +78,19 @@ impl Format {
         match self {
             Format::Nef => &["nef", "nrw"],
             Format::Arw => &["arw", "srf", "sr2", "arq"],
+            Format::Jpeg => &["jpg", "jpeg"],
         }
     }
 
     /// Whether files of this format hold a camera's raw sensor data, as NEF
-    /// and ARW files do.
+    /// and ARW files do and JPEG files do not.
     ///
     /// A program that treats raw files and other images apart, such as a
     /// browser that pairs a raw file with the JPEG of the same shot, can ask
     /// this instead of matching every variant of this `#[non_exhaustive]`
     /// enum, which may gain formats that hold no raw data. It is `true` for
-    /// both formats raw-files reads. It says nothing of the container or of
-    /// the codecs that compress the data.
+    /// NEF and ARW, and `false` for JPEG. It says nothing of the container or
+    /// of the codecs that compress the data.
     ///
     /// # Examples
     ///
@@ -86,6 +99,8 @@ impl Format {
     ///
     /// assert!(Format::Nef.is_raw());
     /// assert!(Format::from_extension("arw").is_some_and(Format::is_raw));
+    /// assert!(!Format::Jpeg.is_raw());
+    /// assert_eq!(Format::from_extension("jpg").map(Format::is_raw), Some(false));
     /// ```
     #[must_use]
     pub fn is_raw(self) -> bool {
@@ -93,6 +108,7 @@ impl Format {
         // holds raw data.
         match self {
             Format::Nef | Format::Arw => true,
+            Format::Jpeg => false,
         }
     }
 
@@ -127,7 +143,7 @@ mod tests {
 
     #[test]
     fn all_lists_every_format_once_with_well_formed_names() {
-        assert_eq!(Format::all(), &[Format::Nef, Format::Arw]);
+        assert_eq!(Format::all(), &[Format::Nef, Format::Arw, Format::Jpeg]);
         for format in Format::all() {
             assert!(!format.name().is_empty());
             assert!(!format.extensions().is_empty());
@@ -143,15 +159,14 @@ mod tests {
     fn extensions_are_those_of_each_formats_files() {
         assert_eq!(Format::Nef.extensions(), &["nef", "nrw"]);
         assert_eq!(Format::Arw.extensions(), &["arw", "srf", "sr2", "arq"]);
+        assert_eq!(Format::Jpeg.extensions(), &["jpg", "jpeg"]);
     }
 
     #[test]
-    fn is_raw_holds_for_nef_arw_and_every_listed_format() {
+    fn is_raw_holds_for_nef_and_arw_and_not_for_jpeg() {
         assert!(Format::Nef.is_raw());
         assert!(Format::Arw.is_raw());
-        for format in Format::all() {
-            assert!(format.is_raw(), "{format}");
-        }
+        assert!(!Format::Jpeg.is_raw());
     }
 
     #[test]
@@ -167,7 +182,9 @@ mod tests {
 
     #[test]
     fn from_extension_rejects_everything_else() {
-        for ext in ["", ".", "jpg", ".jpg", "nef ", "..nef", "arw ", "..arw"] {
+        for ext in [
+            "", ".", "jp", "jpgx", ".jpe", "nef ", "..nef", "arw ", "..arw", "jpg ", "..jpg",
+        ] {
             assert_eq!(Format::from_extension(ext), None, "{ext:?}");
         }
     }
@@ -178,5 +195,7 @@ mod tests {
         assert_eq!(Format::Nef.to_string(), Format::Nef.name());
         assert_eq!(Format::Arw.to_string(), "Sony ARW");
         assert_eq!(Format::Arw.to_string(), Format::Arw.name());
+        assert_eq!(Format::Jpeg.to_string(), "JPEG");
+        assert_eq!(Format::Jpeg.to_string(), Format::Jpeg.name());
     }
 }

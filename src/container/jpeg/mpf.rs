@@ -145,13 +145,6 @@ const ENTRY_LEN: usize = 16;
 /// # Errors
 ///
 /// `Io` when the reader fails. Nothing the segment holds is an error.
-#[cfg_attr(
-    not(test),
-    expect(
-        dead_code,
-        reason = "the JPEG format reads a file's MPF images, and it is not in the format table yet"
-    )
-)]
 pub(crate) fn images<R: Read + Seek>(
     src: &mut Source<R>,
     mpf: &Block,

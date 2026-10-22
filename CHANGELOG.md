@@ -12,9 +12,26 @@ does.
 
 ### Added
 
+- JPEG files open, as `Format::Jpeg`, detected by their content like
+  every other format: the JPEG a camera writes beside its raw file or
+  instead of it, or an editor exports. Their previews are the file
+  itself, the thumbnail of the Exif segment and the images the
+  Multi-Picture Format (MPF) list holds after the main one, each sized
+  from its own frame header, with the orientation the Exif segment
+  records; the metadata gives that orientation and the image size, the
+  size of the picture. A JPEG whose Exif segment is missing or damaged
+  still opens, with the file and its MPF images as previews.
 - `Format::is_raw`, whether a format's files hold a camera's raw sensor
-  data, true for NEF and ARW, so that a program can tell raw files from
-  other images without matching every `Format`.
+  data, true for NEF and ARW and false for JPEG, so that a program can
+  tell raw files from other images without matching every `Format`.
+
+### Changed
+
+- `Format::from_extension("jpg")` and `Format::from_extension("jpeg")`
+  return `Some(Format::Jpeg)` where they returned `None`, and
+  `Format::all` lists `Format::Jpeg`. A program that took every file whose
+  extension `from_extension` knows for a raw file should ask
+  `Format::is_raw` as well.
 
 ## [0.3.0] - 2026-10-21
 

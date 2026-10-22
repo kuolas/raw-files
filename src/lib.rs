@@ -8,10 +8,10 @@
 //! gives an error, never a panic.
 //!
 //! [`RawFile`] opens a file by path, from bytes in memory or from any reader
-//! that can seek, detects its format from its content, lists its embedded
-//! previews and reads one; [`Options`] opens it with other [`Limits`].
-//! Nikon NEF and Sony ARW files open with their previews; any other file is
-//! refused with the `UnknownFormat` error.
+//! that can seek, detects its format from its content, lists its previews
+//! and reads one; [`Options`] opens it with other [`Limits`]. Nikon NEF and
+//! Sony ARW files open with their previews, and so do JPEG files; any other
+//! file is refused with the `UnknownFormat` error.
 //! [`RawFile::metadata`] gives what the camera recorded about the picture,
 //! read when the file is opened, from the standard TIFF and Exif tags and,
 //! on Nikon and Sony files, from what the maker's MakerNote records that

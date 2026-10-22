@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! The preview finder shared by the TIFF-based formats: it finds the JPEG
+//! The preview finder shared by the TIFF-based formats, and by the JPEG
+//! format, whose Exif segment holds a TIFF structure: it finds the JPEG
 //! previews a camera embedded in a file, and measures each from its own
 //! frame header.
 //!
@@ -10,6 +11,12 @@
 //! the same for all of them, so [`find`] does it once, over the whole tree,
 //! and a format adds only the candidates it knows of outside the tree, such
 //! as a preview its MakerNote points at.
+//!
+//! [`find`] takes two steps, which a format may also take apart:
+//! [`tree_candidates`] gathers the candidates the tree's IFDs declare, and
+//! [`check`] checks a list of candidates and measures the ones that pass.
+//! A format may check candidates without a tree: a JPEG file with no usable
+//! Exif segment still has the images of its MPF list.
 //!
 //! The rules, in order:
 //!
@@ -41,7 +48,10 @@
 //!   unless it lies inside that block's bounds as well as the file. A NEF's
 //!   or an ARW's own IFDs have the start of the file as their base and the
 //!   whole file as their bounds. A format's own candidates are positions in
-//!   the file already, which the format has checked against its own block.
+//!   the file already: the format bounds each by the block it read it in,
+//!   as a MakerNote's preview must lie inside the MakerNote, while an MPF
+//!   image of a JPEG file, stored after the main image, is bounded by the
+//!   file alone, which the next rule checks for every candidate.
 //! - A candidate must lie inside the file, as declared: one that is empty,
 //!   or runs past the end of the file, is dropped, never cut to fit, since
 //!   a preview cut short would not decode.
@@ -100,10 +110,17 @@ const FULL_RESOLUTION: u32 = 0;
 /// The tags of an image stored in tiles, which only raw data is.
 const TILE_TAGS: [u16; 4] = [TILE_WIDTH, TILE_LENGTH, TILE_OFFSETS, TILE_BYTE_COUNTS];
 
-/// A candidate a format found outside the tree, for example in a
-/// MakerNote: where a preview may be, as declared, to be checked like the
-/// tree's own. The format has already turned the offset it read into a
-/// position in the file, and checked it against the block it read it in.
+/// Where a preview may be, as declared, to be checked like every other: an
+/// IFD's, or one a format found outside the tree, such as the preview a
+/// MakerNote points at or an image of a JPEG file's MPF list.
+///
+/// A format's own candidates are positions in the file, not offsets as a
+/// tag writes them: the format has turned each offset it read into a
+/// position. It bounds each candidate by the block it read it in, as a
+/// MakerNote's preview must lie inside the MakerNote; an MPF image, stored
+/// after the main image, outside the segment that lists it, is bounded by
+/// the file alone. [`check`] then drops every candidate, an IFD's or a
+/// format's, that does not lie inside the file.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) struct Candidate {
     /// Where the preview starts: a position in the file, not an offset as
@@ -119,6 +136,9 @@ pub(crate) struct Candidate {
 ///
 /// See the [module documentation](self) for the rules. The previews are in
 /// the order they were found: the tree's, in its order, then `extra`'s.
+/// It takes two steps: [`tree_candidates`] gathers the tree's candidates,
+/// and [`check`] checks them and `extra`, with IFD0's orientation
+/// ([`orientation`]).
 ///
 /// # Errors
 ///
@@ -134,7 +154,28 @@ pub(crate) fn find<R: Read + Seek>(
     extra: &[Candidate],
 ) -> Result<Vec<Preview>> {
     let orientation = orientation(src, tree)?;
+    let mut candidates = tree_candidates(src, tree)?;
+    candidates.extend_from_slice(extra);
+    check(src, &candidates, orientation)
+}
 
+/// The candidates that the IFDs of `tree` declare, in the tree's order:
+/// the first step of [`find`].
+///
+/// The Exif IFD is not asked, an IFD that describes raw data is skipped,
+/// and so is an IFD whose tags these rules read cannot be read; see the
+/// [module documentation](self). Each candidate counts from the base of
+/// the block its IFD was read in, and lies inside that block's bounds and
+/// the file.
+///
+/// # Errors
+///
+/// `Io` when the reader fails. A tag value that cannot be read for any
+/// other reason costs its IFD's candidate.
+pub(crate) fn tree_candidates<R: Read + Seek>(
+    src: &mut Source<R>,
+    tree: &Tree,
+) -> Result<Vec<Candidate>> {
     let mut candidates = Vec::new();
     for (location, ifd) in tree.iter() {
         if location == Location::Exif {
@@ -148,11 +189,34 @@ pub(crate) fn find<R: Read + Seek>(
         }
         candidates.extend(skip_damage(declared(src, ifd))?.flatten());
     }
-    candidates.extend_from_slice(extra);
+    Ok(candidates)
+}
 
+/// The previews among `candidates`, in their order, each shown upright by
+/// `orientation`: the second step of [`find`], which a format may also
+/// take without a tree, as a JPEG file with no usable Exif segment does
+/// for the images of its MPF list.
+///
+/// A candidate is dropped when it is empty or does not lie wholly inside
+/// the file, when its bytes hold no JPEG stream with a frame header that
+/// gives a size, when that frame is lossless, and when a candidate before
+/// it at the same position became a preview; see the
+/// [module documentation](self). Each preview's size is its frame
+/// header's.
+///
+/// # Errors
+///
+/// `Io` when the reader fails probing a candidate. Probing returns no
+/// other error here: it can fail with `Malformed` only on a range that
+/// runs past the end of the file, and no candidate that does is probed.
+pub(crate) fn check<R: Read + Seek>(
+    src: &mut Source<R>,
+    candidates: &[Candidate],
+    orientation: Orientation,
+) -> Result<Vec<Preview>> {
     let mut seen = BTreeSet::new();
     let mut previews = Vec::new();
-    for candidate in candidates {
+    for &candidate in candidates {
         if seen.contains(&candidate.offset) || !inside(candidate, src.len()) {
             continue;
         }
@@ -636,6 +700,55 @@ mod tests {
         let previews = found_with(&built.bytes, &[extra]);
         assert_eq!(sizes(&previews), [(640, 480)]);
         assert_eq!(previews[0].byte_len(), stub_len());
+    }
+
+    #[test]
+    fn candidates_are_checked_without_a_tree() {
+        // Bytes that hold no TIFF structure, as a JPEG file without an Exif
+        // segment does: zeros, a baseline JPEG, a lossless one, and a
+        // baseline one that ends the file.
+        let mut bytes = vec![0; 16];
+        let mut place = |stub: Vec<u8>| {
+            let at = u64::try_from(bytes.len()).unwrap();
+            bytes.extend(stub);
+            at
+        };
+        let baseline = place(jpeg_stub(640, 480, 0xC0));
+        let lossless = place(jpeg_stub(512, 256, 0xC3));
+        let last = place(jpeg_stub(160, 120, 0xC0));
+        let candidates = [
+            Candidate {
+                offset: baseline,
+                length: stub_len(),
+            },
+            Candidate {
+                offset: lossless,
+                length: stub_len(),
+            },
+            // One byte longer than the file holds.
+            Candidate {
+                offset: last,
+                length: stub_len() + 1,
+            },
+            // At the position of a candidate that became a preview.
+            Candidate {
+                offset: baseline,
+                length: stub_len(),
+            },
+        ];
+        let mut src = Source::new(Cursor::new(bytes)).unwrap();
+        let previews = check(&mut src, &candidates, Orientation::Rotate90).unwrap();
+        assert_eq!(
+            previews,
+            [Preview::new(
+                baseline,
+                stub_len(),
+                640,
+                480,
+                PreviewFormat::Jpeg,
+                Orientation::Rotate90,
+            )]
+        );
     }
 
     #[test]
