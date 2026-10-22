@@ -179,8 +179,8 @@ mod tests {
 
     #[test]
     fn the_base_may_lie_outside_the_bounds() {
-        // As a Sony MakerNote's: its offsets count from the start of the
-        // file, and it lies further in.
+        // As a Sony MakerNote's in an ARW file: its offsets count from the
+        // start of the file, and it lies further in.
         let block = Block::new(0, 512..1024);
         assert_eq!(block.base(), 0);
         assert!(!block.fits(0, 1));

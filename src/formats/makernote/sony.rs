@@ -39,15 +39,19 @@
 //! Make is not looked at: the ARW reader's claim has already decided that
 //! the file is Sony's.
 //!
-//! Every offset inside the block counts from the start of the file, where
-//! its TIFF header is, as the offsets of the file's own IFDs do: not from
-//! the block, nor from a header of its own, as Nikon's do. On the A100,
-//! tag 0xB028 records the offset of a Minolta-format IFD, and the IFD lies
-//! at that offset from the file's start (sample 2346). So the IFD is read
-//! with base 0. The block's numbers are in the file's byte order, the one
-//! the Exif IFD was read in. Every sample is little-endian; no big-endian
-//! Sony file is known, so that its MakerNote would follow the file's order
-//! is unchecked.
+//! Every offset inside the block counts from the TIFF header of the
+//! structure that holds the MakerNote, as the offsets of that structure's
+//! own IFDs do: not from the block, nor from a header of its own, as
+//! Nikon's do. In an ARW file that header is the start of the file: on the
+//! A100, tag 0xB028 records the offset of a Minolta-format IFD, and the IFD
+//! lies at that offset from the file's start (sample 2346). In a JPEG
+//! file, as planned, it is the TIFF header inside the Exif segment: the
+//! Sony JPEG files that ADR014 describes count from there. So the IFD is
+//! read in a block whose base is the Exif IFD's, the header of the
+//! structure the Exif IFD was read in. The block's numbers are in the
+//! file's byte order, the one the Exif IFD was read in. Every sample is
+//! little-endian; no big-endian Sony file is known, so that its MakerNote
+//! would follow the file's order is unchecked.
 //!
 //! The four bytes after the IFD's entries are not a next-IFD pointer to
 //! rely on: they are zero on the older bodies, such as the A100, the NEX-5
@@ -230,13 +234,15 @@ const NOT_SONY: [&[u8]; 3] = [SONY_PI, PREMI, SONY_PIC];
 pub(in crate::formats) struct MakerNote {
     /// The MakerNote IFD, which holds Sony's tags: at the block's start, or
     /// 12 bytes in after a header, inside the block with its whole entry
-    /// table, its offsets counted from the start of the file. Its entries
-    /// whose values lie outside the block were dropped when it was read, so
-    /// every value read from it lies inside the block.
+    /// table, its offsets counted from the TIFF header of the structure
+    /// that holds the MakerNote. Its entries whose values lie outside the
+    /// block were dropped when it was read, so every value read from it
+    /// lies inside the block.
     ///
-    /// It was read in the block, [`Ifd::block`]: of base 0, and with bounds
-    /// where the block's bytes are in the file, which every offset found
-    /// inside the block is checked against.
+    /// It was read in the block, [`Ifd::block`]: with that header as its
+    /// base, the Exif IFD's, and with bounds where the block's bytes are in
+    /// the file, which every offset found inside the block is checked
+    /// against.
     ifd: Ifd,
 }
 
@@ -270,21 +276,38 @@ pub(in crate::formats) fn read<R: Read + Seek>(
     let Some(skip) = ifd_start(&head) else {
         return Ok(None);
     };
-    // The IFD's offset from base 0, as a TIFF offset is written: a block
-    // that starts near the top of the 32-bit range may put it past.
-    let Some(offset) = range
-        .start
-        .checked_add(skip)
-        .and_then(|at| u32::try_from(at).ok())
-    else {
+    // The block's offsets count from the header of the TIFF structure that
+    // holds it, the base of the Exif IFD's block.
+    let base = exif.block().base();
+    let Some(offset) = ifd_offset(base, range.start, skip) else {
         return Ok(None);
     };
     // The block's numbers are in the file's byte order, the Exif IFD's.
-    let block = Block::new(0, range);
+    let block = Block::new(base, range);
     let Some(ifd) = ifd_in(src, &block, offset, exif.order(), limits)? else {
         return Ok(None);
     };
     Ok(Some(MakerNote { ifd }))
+}
+
+/// The offset of the MakerNote IFD as a TIFF offset is written, counted
+/// from `base`, the header of the TIFF structure that holds the MakerNote,
+/// for an IFD `skip` bytes into a MakerNote that starts at position
+/// `start`; `None` when the IFD lies before the base or more than the
+/// 32-bit range past it.
+///
+/// No offset written in the structure counts back from its header, so an
+/// IFD that lies before the header is one the offsets could not reach,
+/// and gives no MakerNote. A MakerNote the Exif IFD points at starts at the
+/// base or past it, since the entry's offset counts from the same base, so
+/// that check only keeps the subtraction from wrapping. A MakerNote that
+/// starts near the top of the 32-bit range past the base may put its IFD
+/// out of reach too.
+fn ifd_offset(base: u64, start: u64, skip: u64) -> Option<u32> {
+    start
+        .checked_add(skip)
+        .and_then(|at| at.checked_sub(base))
+        .and_then(|offset| u32::try_from(offset).ok())
 }
 
 /// How far into the block the MakerNote IFD starts, from `head`, the
@@ -1048,6 +1071,69 @@ mod tests {
                 assert_eq!(found.in_focus(), None, "{label}");
             }
         }
+    }
+
+    /// Where the tests of a TIFF structure inside a larger file place its
+    /// header, as a JPEG file holds the structure of its Exif segment.
+    const POS: u64 = 1000;
+
+    #[test]
+    fn a_makernote_inside_a_file_counts_from_its_structures_header() {
+        // The Sony file's structure at POS in a larger file, walked with its
+        // header as the base and its bytes as the bounds. Counted from the
+        // start of the file, the offsets of the values stored out of line,
+        // FocusLocation's among them, would lie before the block.
+        for order in ORDERS {
+            for prefix in [&b""[..], b"SONY DSC \0\0\0"] {
+                let (mut builder, _, exif) = sony(order);
+                let ifd = builder.ifd();
+                builder.prefix(ifd, prefix);
+                tags_7m4(&mut builder, ifd, order);
+                builder.undefined_ifd(exif, MAKER_NOTE, ifd);
+                let built = builder.build();
+                let mut bytes = vec![0; usize::try_from(POS).unwrap()];
+                bytes.extend_from_slice(&built.bytes);
+
+                let mut src = Source::new(Cursor::new(bytes)).unwrap();
+                let block = Block::new(POS, POS..src.len());
+                let tree = walk(&mut src, &block, &Limits::default()).unwrap();
+                let makernote = read(&mut src, &tree, &Limits::default())
+                    .unwrap()
+                    .unwrap_or_else(|| panic!("a MakerNote ({order:?}, {prefix:?})"));
+                let label = format!("{order:?}, {prefix:?}");
+                let found = &makernote.ifd;
+                assert_eq!(found.offset(), POS + built.ifd_offset(ifd), "{label}");
+                assert_eq!(found.block().base(), POS, "{label}");
+                let range = built.ifd_block(ifd);
+                assert_eq!(
+                    found.block().bounds(),
+                    &(POS + range.start..POS + range.end),
+                    "{label}"
+                );
+                assert_eq!(found.invalid_entries(), 0, "{label}");
+                let focus = focus(&mut src, &makernote).unwrap();
+                assert_eq!(focus, Some(focus_7m4()), "{label}");
+            }
+        }
+    }
+
+    #[test]
+    fn a_makernote_ifd_before_the_base_has_no_offset() {
+        // An offset as a TIFF offset is written, counted from the base.
+        assert_eq!(ifd_offset(0, 600, 12), Some(612));
+        assert_eq!(ifd_offset(1000, 1000, 0), Some(0));
+        assert_eq!(ifd_offset(1000, 1600, 12), Some(612));
+        // The IFD before the base, whether its block starts there or only
+        // the header before it does.
+        assert_eq!(ifd_offset(1000, 900, 0), None);
+        assert_eq!(ifd_offset(1000, 988, 11), None);
+        assert_eq!(ifd_offset(1000, 988, 12), Some(0));
+        // The IFD past the 32-bit range from the base, and past the largest
+        // position.
+        let top = 1000 + u64::from(u32::MAX);
+        assert_eq!(ifd_offset(1000, top, 0), Some(u32::MAX));
+        assert_eq!(ifd_offset(1000, top, 1), None);
+        assert_eq!(ifd_offset(0, u64::MAX, 12), None);
     }
 
     #[test]
