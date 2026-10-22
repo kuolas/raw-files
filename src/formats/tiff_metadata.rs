@@ -511,9 +511,10 @@ mod tests {
     use crate::container::tiff::tags::{NEW_SUBFILE_TYPE, ORIENTATION, PHOTOMETRIC_INTERPRETATION};
     use crate::container::tiff::{Block, walk};
     use crate::error::ErrorKind;
-    use crate::formats::testing::{self, FAR, FailsFar};
+    use crate::formats::testing;
     use crate::limits::Limits;
     use crate::orientation::Orientation;
+    use crate::testing::{FAR, FailsFar};
     use crate::tiff_builder::{
         ASCII, IfdId, LONG, Order, RATIONAL, RawValue, SHORT, SRATIONAL, TiffBuilder,
     };

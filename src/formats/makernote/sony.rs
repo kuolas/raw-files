@@ -456,7 +456,8 @@ mod tests {
     use crate::container::tiff::types::{ASCII, SHORT, UNDEFINED};
     use crate::container::tiff::{Block, walk};
     use crate::error::ErrorKind;
-    use crate::formats::testing::{FAR, FailsFar, Src, byte_order};
+    use crate::formats::testing::{Src, byte_order};
+    use crate::testing::{FAR, FailsFar};
     use crate::tiff_builder::{Built, IfdId, Order, RawValue, TiffBuilder};
     use std::io::Cursor;
 

@@ -26,7 +26,7 @@ use std::io::{self, Read, Seek, SeekFrom};
 use crate::error::{Error, Result};
 
 /// The size of one cached block, and the alignment of every block's start.
-const BLOCK_SIZE: u64 = 64 * 1024;
+pub(crate) const BLOCK_SIZE: u64 = 64 * 1024;
 
 /// How many blocks the cache holds.
 const BLOCKS: usize = 4;

@@ -984,8 +984,9 @@ mod tests {
     use crate::datetime::DateTime;
     use crate::error::ErrorKind;
     use crate::jpeg_stub::jpeg_stub;
+    use crate::testing::{FAR, FailsFar};
     use crate::tiff_builder::{ASCII, IfdId, Order, RawValue, TiffBuilder};
-    use std::io::{self, Cursor, SeekFrom};
+    use std::io::Cursor;
 
     const ORDERS: [Order; 2] = [Order::Little, Order::Big];
 
@@ -4075,29 +4076,6 @@ mod tests {
                 Some(focus_at([5392, 3592], [415, 373], [274, 305], Some(true))),
                 "{file:?}"
             );
-        }
-    }
-
-    /// The first byte of the second block the source caches: a reader that
-    /// fails from here on still serves the walk, which reads only the
-    /// first.
-    const FAR: u64 = 64 * 1024;
-
-    /// A reader that fails every read from [`FAR`] on.
-    struct FailsFar(Cursor<Vec<u8>>);
-
-    impl Read for FailsFar {
-        fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
-            if self.0.position() >= FAR {
-                return Err(io::Error::from(io::ErrorKind::PermissionDenied));
-            }
-            self.0.read(buf)
-        }
-    }
-
-    impl Seek for FailsFar {
-        fn seek(&mut self, pos: SeekFrom) -> io::Result<u64> {
-            self.0.seek(pos)
         }
     }
 

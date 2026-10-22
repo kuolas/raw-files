@@ -545,6 +545,7 @@ mod tests {
     use crate::ErrorKind;
     use crate::jpeg_builder::{Built, JpegBuilder};
     use crate::jpeg_stub::{FRAME_HEADER_AT, jpeg_stub, segment};
+    use crate::testing::{FAR, FailsFar};
     use std::io::Cursor;
     use std::path::{Path, PathBuf};
 
@@ -1073,30 +1074,6 @@ mod tests {
         payload.extend_from_slice(&width.to_be_bytes());
         payload.extend_from_slice(&[1, 1, 0x11, 0]);
         payload
-    }
-
-    /// Where reads start to fail in a [`FailsFar`]: the start of the block
-    /// cache's second block, so that the reads of the first all succeed.
-    pub(super) const FAR: u64 = 64 * 1024;
-
-    /// A reader that fails every read from [`FAR`] on, for the tests that a
-    /// failure of the reader is passed up, never taken for the end of the
-    /// walk or for damage in the MPF index.
-    pub(super) struct FailsFar(pub(super) Cursor<Vec<u8>>);
-
-    impl std::io::Read for FailsFar {
-        fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
-            if self.0.position() >= FAR {
-                return Err(std::io::Error::from(std::io::ErrorKind::PermissionDenied));
-            }
-            self.0.read(buf)
-        }
-    }
-
-    impl std::io::Seek for FailsFar {
-        fn seek(&mut self, pos: std::io::SeekFrom) -> std::io::Result<u64> {
-            self.0.seek(pos)
-        }
     }
 
     /// A file whose walk reads past [`FAR`] before its Exif segment and

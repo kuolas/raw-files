@@ -679,6 +679,7 @@ mod tests {
     use super::*;
     use crate::ErrorKind;
     use crate::container::tiff::types::DOUBLE;
+    use crate::testing::{FAR, FailsFar};
     use crate::tiff_builder::{Built, IfdId, Order, RawValue, TiffBuilder};
     use std::io::Cursor;
 
@@ -1567,28 +1568,6 @@ mod tests {
                 "an IFD runs past the end of the file",
                 at,
             );
-        }
-    }
-
-    /// Where reads start to fail in a [`FailsFar`]: the start of the block
-    /// cache's second block, so that the reads of the first all succeed.
-    const FAR: u64 = 64 * 1024;
-
-    /// A reader that fails every read from [`FAR`] on.
-    struct FailsFar(Cursor<Vec<u8>>);
-
-    impl Read for FailsFar {
-        fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
-            if self.0.position() >= FAR {
-                return Err(std::io::Error::from(std::io::ErrorKind::PermissionDenied));
-            }
-            self.0.read(buf)
-        }
-    }
-
-    impl Seek for FailsFar {
-        fn seek(&mut self, pos: std::io::SeekFrom) -> std::io::Result<u64> {
-            self.0.seek(pos)
         }
     }
 

@@ -215,6 +215,10 @@ mod rational;
 #[allow(dead_code)]
 #[path = "../tests/support/tiff_builder.rs"]
 mod tiff_builder;
+// The reader that fails past the first cached block, shared by the unit
+// tests of every module that reads a file.
+#[cfg(test)]
+mod testing;
 
 pub use datetime::DateTime;
 pub use error::{Error, ErrorKind, Result};
