@@ -261,7 +261,7 @@ const MIN_LEN: u64 = HEADER_AT + 8;
 ///
 /// See the [module documentation](self) for the layout.
 #[derive(Debug)]
-pub(super) struct MakerNote {
+pub(in crate::formats) struct MakerNote {
     /// The MakerNote IFD, which holds Nikon's tags: the IFD the inner
     /// header points at, inside the block with its whole entry table. Its
     /// entries whose values lie outside the block were dropped when it was
@@ -286,7 +286,7 @@ pub(super) struct MakerNote {
 /// # Errors
 ///
 /// `Io` when the reader fails. Nothing the block holds is an error.
-pub(super) fn read<R: Read + Seek>(
+pub(in crate::formats) fn read<R: Read + Seek>(
     src: &mut Source<R>,
     tree: &Tree,
     limits: &Limits,
@@ -333,7 +333,7 @@ pub(super) fn read<R: Read + Seek>(
 /// # Errors
 ///
 /// `Io` when the reader fails. Nothing the block holds is an error.
-pub(super) fn preview_candidate<R: Read + Seek>(
+pub(in crate::formats) fn preview_candidate<R: Read + Seek>(
     src: &mut Source<R>,
     makernote: &MakerNote,
     limits: &Limits,
@@ -389,7 +389,7 @@ pub(super) fn preview_candidate<R: Read + Seek>(
 /// # Errors
 ///
 /// `Io` when the reader fails. Nothing the block holds is an error.
-pub(super) fn metadata<R: Read + Seek>(
+pub(in crate::formats) fn metadata<R: Read + Seek>(
     src: &mut Source<R>,
     makernote: &MakerNote,
     standard: Standard,

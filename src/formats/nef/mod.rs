@@ -13,9 +13,10 @@
 //! image IFD0 describes, which differs between bodies and does not tell a
 //! Nikon file from another.
 //!
-//! The reader of Nikon's MakerNote is in `makernote.rs`: it reads the
-//! MakerNote once per file, finds the small preview the MakerNote points
-//! at, and reads what the MakerNote records that the standard tags lack:
+//! The reader of Nikon's MakerNote, shared with any other format whose
+//! files carry that MakerNote, is [`nikon`]: it reads the MakerNote once
+//! per file, finds the small preview the MakerNote points at, and reads
+//! what the MakerNote records that the standard tags lack:
 //! the visible image size, the focus point, and, on the older bodies whose
 //! standard tags lack them, the serial number, the ISO, the lens's range
 //! and the capture time's offset from UTC, from the time-zone setting of
@@ -24,7 +25,6 @@
 //! standard tags, through the reader the TIFF-based formats share, and then
 //! from that MakerNote.
 
-mod makernote;
 mod previews;
 
 use std::io::{Read, Seek};
@@ -33,6 +33,7 @@ use super::{FormatSpec, Parsed, is_dng, make_starts_with, tiff_metadata};
 use crate::container::tiff::Tree;
 use crate::error::Result;
 use crate::format::Format;
+use crate::formats::makernote::nikon;
 use crate::io::Source;
 use crate::limits::Limits;
 
@@ -87,19 +88,19 @@ fn claims<R: Read + Seek>(src: &mut Source<R>, tree: &Tree) -> Result<bool> {
 /// and the Z 6, and the capture time's offset from UTC, from its WorldTime,
 /// when the standard tags gave a capture time without one, as on bodies
 /// before the D850; and it gives the focus point, from its AFInfo2, which
-/// no standard tag records ([`makernote::metadata`]).
+/// no standard tag records ([`nikon::metadata`]).
 ///
 /// # Errors
 ///
-/// As for [`makernote::read`], [`previews::previews`],
-/// [`tiff_metadata::read`] and [`makernote::metadata`]: `Io` when the
+/// As for [`nikon::read`], [`previews::previews`],
+/// [`tiff_metadata::read`] and [`nikon::metadata`]: `Io` when the
 /// reader fails. Nothing the file holds is an error here.
 fn parse<R: Read + Seek>(src: &mut Source<R>, tree: &Tree, limits: &Limits) -> Result<Parsed> {
-    let makernote = makernote::read(src, tree, limits)?;
+    let makernote = nikon::read(src, tree, limits)?;
     let previews = previews::previews(src, tree, makernote.as_ref(), limits)?;
     let standard = tiff_metadata::read(src, tree)?;
     let metadata = match &makernote {
-        Some(makernote) => makernote::metadata(src, makernote, standard)?,
+        Some(makernote) => nikon::metadata(src, makernote, standard)?,
         None => standard.metadata,
     };
     Ok(Parsed { previews, metadata })

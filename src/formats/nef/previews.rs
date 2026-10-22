@@ -17,9 +17,9 @@
 
 use std::io::{Read, Seek};
 
-use super::makernote::{self, MakerNote};
 use crate::container::tiff::Tree;
 use crate::error::Result;
+use crate::formats::makernote::nikon::{self, MakerNote};
 use crate::formats::tiff_previews;
 use crate::io::Source;
 use crate::limits::Limits;
@@ -41,7 +41,7 @@ pub(super) fn previews<R: Read + Seek>(
     limits: &Limits,
 ) -> Result<Vec<Preview>> {
     let extra = match makernote {
-        Some(makernote) => makernote::preview_candidate(src, makernote, limits)?,
+        Some(makernote) => nikon::preview_candidate(src, makernote, limits)?,
         None => None,
     };
     tiff_previews::find(src, tree, extra.as_slice())
@@ -105,7 +105,7 @@ mod tests {
         let file_block = Block::file(src.len());
         let tree = walk(&mut src, &file_block, &Limits::default()).unwrap();
 
-        let makernote = super::makernote::read(&mut src, &tree, &Limits::default()).unwrap();
+        let makernote = super::nikon::read(&mut src, &tree, &Limits::default()).unwrap();
         let previews =
             super::previews(&mut src, &tree, makernote.as_ref(), &Limits::default()).unwrap();
         let sizes: Vec<(u32, u32)> = previews.iter().map(|p| (p.width(), p.height())).collect();

@@ -12,7 +12,9 @@
 //! which must choose what to offer before opening anything. The preview
 //! finder that the TIFF-based formats share lives in `tiff_previews`, and
 //! the metadata reader they share in `tiff_metadata`. The Nikon and Sony
-//! MakerNote readers read their IFDs inside the MakerNote's block with the
+//! MakerNote readers live in `makernote`, apart from the formats, so that
+//! every format whose files carry a maker's MakerNote reads it with the
+//! same reader; they read their IFDs inside the MakerNote's block with the
 //! TIFF container's [`ifd_in`](crate::container::tiff::ifd_in).
 //!
 //! The table holds NEF and ARW, in that order. A Nikon file is recognised
@@ -30,6 +32,7 @@
 //! ([`is_dng`]), and [`make_starts_with`] reads the Make for them.
 
 mod arw;
+mod makernote;
 mod nef;
 mod tiff_metadata;
 mod tiff_previews;
