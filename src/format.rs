@@ -69,6 +69,33 @@ impl Format {
         }
     }
 
+    /// Whether files of this format hold a camera's raw sensor data, as NEF
+    /// and ARW files do.
+    ///
+    /// A program that treats raw files and other images apart, such as a
+    /// browser that pairs a raw file with the JPEG of the same shot, can ask
+    /// this instead of matching every variant of this `#[non_exhaustive]`
+    /// enum, which may gain formats that hold no raw data. It is `true` for
+    /// both formats raw-files reads. It says nothing of the container or of
+    /// the codecs that compress the data.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use raw_files::Format;
+    ///
+    /// assert!(Format::Nef.is_raw());
+    /// assert!(Format::from_extension("arw").is_some_and(Format::is_raw));
+    /// ```
+    #[must_use]
+    pub fn is_raw(self) -> bool {
+        // No wildcard arm: a format added later has to say here whether it
+        // holds raw data.
+        match self {
+            Format::Nef | Format::Arw => true,
+        }
+    }
+
     /// The format whose files carry the given extension, if any.
     ///
     /// The comparison ignores case, and the extension may be given with or
@@ -116,6 +143,15 @@ mod tests {
     fn extensions_are_those_of_each_formats_files() {
         assert_eq!(Format::Nef.extensions(), &["nef", "nrw"]);
         assert_eq!(Format::Arw.extensions(), &["arw", "srf", "sr2", "arq"]);
+    }
+
+    #[test]
+    fn is_raw_holds_for_nef_arw_and_every_listed_format() {
+        assert!(Format::Nef.is_raw());
+        assert!(Format::Arw.is_raw());
+        for format in Format::all() {
+            assert!(format.is_raw(), "{format}");
+        }
     }
 
     #[test]

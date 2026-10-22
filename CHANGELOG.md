@@ -10,6 +10,12 @@ does.
 
 ## [Unreleased]
 
+### Added
+
+- `Format::is_raw`, whether a format's files hold a camera's raw sensor
+  data, true for NEF and ARW, so that a program can tell raw files from
+  other images without matching every `Format`.
+
 ## [0.3.0] - 2026-10-21
 
 The third release: where the camera focused, read from Nikon NEF and Sony
