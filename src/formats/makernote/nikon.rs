@@ -146,10 +146,13 @@
 //! header is the base of every offset inside the block, the MakerNote
 //! IFD's, the PreviewIFD's and the JPEG's, never the start of the file, and
 //! its byte order, which may differ from the file's, is the order of every
-//! number inside the block. The two older layouts, a bare IFD with no
-//! signature and an IFD after the 8 bytes `Nikon\0\1\0`, count their
-//! offsets from the file's own header instead. They are not read in this
-//! release: a file that has one gives no MakerNote preview.
+//! number inside the block. So the offsets are the same wherever the block
+//! lies, in a NEF file or in a JPEG file's Exif segment: the header of the
+//! TIFF structure that holds the MakerNote is not their base, as it is for
+//! Sony's. The two older layouts, a bare IFD with no signature and an IFD
+//! after the 8 bytes `Nikon\0\1\0`, count their offsets from the file's
+//! own header instead. They are not read in this release: a file that has
+//! one gives no MakerNote preview.
 //!
 //! Nothing in the block is trusted. Every offset found inside it is checked
 //! against the block, not only against the file: the MakerNote IFD and the
@@ -192,7 +195,7 @@ use crate::container::tiff::types::{LONG, SHORT, UNDEFINED};
 use crate::container::tiff::{Block, Entry, Ifd, Tree, ifd_in, parse_header, skip_damage};
 use crate::error::Result;
 use crate::formats::tiff_metadata::{self, Standard};
-use crate::formats::tiff_previews::Candidate;
+use crate::formats::tiff_previews::{self, Candidate};
 use crate::geometry::{Point, Size};
 use crate::io::{ByteOrder, Source};
 use crate::limits::Limits;
@@ -358,11 +361,7 @@ pub(in crate::formats) fn preview_candidate<R: Read + Seek>(
     };
 
     // An empty JPEG is passed on: the finder drops it with the others.
-    let length = u64::from(length);
-    match block.at(offset) {
-        Some(offset) if block.fits(offset, length) => Ok(Some(Candidate { offset, length })),
-        _ => Ok(None),
-    }
+    Ok(tiff_previews::candidate(block, offset, length))
 }
 
 /// The metadata of the file whose MakerNote is `makernote`: what the
@@ -1256,6 +1255,52 @@ mod tests {
             let block = block(inner, Change::Nothing);
             let bytes = with_block(file, &block);
             assert_eq!(candidate(bytes), Some(block.candidate(AT)), "{file:?}");
+        }
+    }
+
+    /// Where the tests of a TIFF structure inside a larger file place its
+    /// header, as a JPEG file holds the structure of its Exif segment.
+    const POS: u64 = 1000;
+
+    /// The file `bytes`, placed at [`POS`] in a larger file, after as many
+    /// bytes of filler: a source of that file, and the tree walked with the
+    /// header at POS as its base and the bytes from it as its bounds.
+    fn placed(bytes: &[u8]) -> (Source<Cursor<Vec<u8>>>, Tree) {
+        let mut file = vec![0; usize::try_from(POS).unwrap()];
+        file.extend_from_slice(bytes);
+        let mut src = Source::new(Cursor::new(file)).unwrap();
+        let block = tiff::Block::new(POS, POS..src.len());
+        let tree = walk(&mut src, &block, &Limits::default()).unwrap();
+        (src, tree)
+    }
+
+    #[test]
+    fn a_makernote_inside_a_file_counts_from_its_own_header() {
+        for order in ORDERS {
+            // The MakerNote lies POS bytes further into the file, with its
+            // inner header, so its preview does too.
+            let block = block(order, Change::Nothing);
+            let (mut src, tree) = placed(&with_block(order, &block));
+            let found = read_candidate(&mut src, &tree, &Limits::default()).unwrap();
+            assert_eq!(found, Some(block.candidate(POS + AT)), "{order:?}");
+
+            // A value stored out of line, read through the inner header.
+            let tags = tags_block(order, |inner, ifd| {
+                inner.ascii(ifd, SERIAL_NUMBER, SERIAL);
+            })
+            .0;
+            let (mut src, tree) = placed(&exif_file(order, &tags, whole(&tags), |_, _| {}));
+            let makernote = read(&mut src, &tree, &Limits::default())
+                .unwrap()
+                .expect("a MakerNote");
+            assert_eq!(
+                makernote.ifd.block().base(),
+                POS + AT + HEADER_AT,
+                "{order:?}"
+            );
+            let standard = tiff_metadata::read(&mut src, &tree).unwrap();
+            let metadata = metadata(&mut src, &makernote, standard).unwrap();
+            assert_eq!(metadata.serial_number.as_deref(), Some(SERIAL), "{order:?}");
         }
     }
 

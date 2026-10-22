@@ -29,10 +29,19 @@
 //! - An IFD's preview is the JPEG stream its JPEGInterchangeFormat and
 //!   JPEGInterchangeFormatLength tags declare, when it has both; otherwise
 //!   its one strip, when it is JPEG-compressed and stored as exactly one
-//!   strip. Two candidates, from IFDs or from the format, at one offset
-//!   are the same preview: the first that passes the checks below is kept,
-//!   and the other is dropped. A candidate that fails them claims nothing,
-//!   so a wrong declaration never hides a right one of the same bytes.
+//!   strip. Two candidates, from IFDs or from the format, at one position
+//!   in the file are the same preview: the first that passes the checks
+//!   below is kept, and the other is dropped. A candidate that fails them
+//!   claims nothing, so a wrong declaration never hides a right one of the
+//!   same bytes.
+//! - Inside a TIFF structure embedded in a file, such as a JPEG file's
+//!   Exif segment, an IFD's offsets count from that structure's header,
+//!   and its JPEG must lie inside the structure. So an IFD's candidate
+//!   counts from the base of the block the IFD was read in, and is dropped
+//!   unless it lies inside that block's bounds as well as the file. A NEF's
+//!   or an ARW's own IFDs have the start of the file as their base and the
+//!   whole file as their bounds. A format's own candidates are positions in
+//!   the file already, which the format has checked against its own block.
 //! - A candidate must lie inside the file, as declared: one that is empty,
 //!   or runs past the end of the file, is dropped, never cut to fit, since
 //!   a preview cut short would not decode.
@@ -58,7 +67,7 @@ use crate::container::tiff::tags::{
     NEW_SUBFILE_TYPE, ORIENTATION, PHOTOMETRIC_INTERPRETATION, STRIP_BYTE_COUNTS, STRIP_OFFSETS,
     TILE_BYTE_COUNTS, TILE_LENGTH, TILE_OFFSETS, TILE_WIDTH,
 };
-use crate::container::tiff::{Ifd, Location, Tree, skip_damage};
+use crate::container::tiff::{Block, Ifd, Location, Tree, skip_damage};
 use crate::error::Result;
 use crate::io::{Source, within};
 use crate::orientation::Orientation;
@@ -93,10 +102,12 @@ const TILE_TAGS: [u16; 4] = [TILE_WIDTH, TILE_LENGTH, TILE_OFFSETS, TILE_BYTE_CO
 
 /// A candidate a format found outside the tree, for example in a
 /// MakerNote: where a preview may be, as declared, to be checked like the
-/// tree's own.
+/// tree's own. The format has already turned the offset it read into a
+/// position in the file, and checked it against the block it read it in.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) struct Candidate {
-    /// The absolute byte offset where the preview starts.
+    /// Where the preview starts: a position in the file, not an offset as
+    /// a tag writes it.
     pub offset: u64,
     /// The preview's length in bytes, as declared.
     pub length: u64,
@@ -151,7 +162,7 @@ pub(crate) fn find<R: Read + Seek>(
         if frame.is_lossless() {
             continue;
         }
-        // Only a candidate that became a preview claims its offset, so a
+        // Only a candidate that became a preview claims its position, so a
         // wrong declaration never hides a right one of the same bytes.
         seen.insert(candidate.offset);
         previews.push(Preview::new(
@@ -226,20 +237,26 @@ pub(crate) fn is_raw<R: Read + Seek>(src: &mut Source<R>, ifd: &Ifd) -> Result<b
 
 /// Where `ifd` says its JPEG stream is, if it says so: the stream that
 /// JPEGInterchangeFormat and JPEGInterchangeFormatLength declare, or else a
-/// JPEG-compressed image's one strip.
+/// JPEG-compressed image's one strip; `None` when the stream it declares
+/// does not lie inside the IFD's block and the file.
 ///
-/// The offsets are absolute: the tree's IFDs are the file's own, whose
-/// offsets count from the start of the file.
+/// The offset is written as every offset inside the IFD's TIFF structure
+/// is, counted from the structure's header, the base of the block the IFD
+/// was read in ([`Ifd::block`]). That is the start of the file for a NEF's
+/// or an ARW's own IFDs, and the TIFF header inside the Exif segment for a
+/// JPEG file's, whose thumbnail must then lie inside the segment as well
+/// as the file.
 ///
 /// # Errors
 ///
 /// As for [`is_raw`]: `LimitExceeded`, which [`find`] takes for damage and
 /// skips the IFD, and `Io`.
 fn declared<R: Read + Seek>(src: &mut Source<R>, ifd: &Ifd) -> Result<Option<Candidate>> {
+    let block = ifd.block().within_file(src.len());
     let offset = ifd.u32(src, JPEG_INTERCHANGE_FORMAT)?;
     let length = ifd.u32(src, JPEG_INTERCHANGE_FORMAT_LENGTH)?;
     if let (Some(offset), Some(length)) = (offset, length) {
-        return Ok(Some(candidate(offset, length)));
+        return Ok(candidate(&block, offset, length));
     }
     if !matches!(ifd.u32(src, COMPRESSION)?, Some(OLD_STYLE_JPEG | JPEG)) {
         return Ok(None);
@@ -247,17 +264,27 @@ fn declared<R: Read + Seek>(src: &mut Source<R>, ifd: &Ifd) -> Result<Option<Can
     let offsets = ifd.u32s(src, STRIP_OFFSETS)?;
     let lengths = ifd.u32s(src, STRIP_BYTE_COUNTS)?;
     Ok(match (offsets.as_deref(), lengths.as_deref()) {
-        (Some(&[offset]), Some(&[length])) => Some(candidate(offset, length)),
+        (Some(&[offset]), Some(&[length])) => candidate(&block, offset, length),
         _ => None,
     })
 }
 
-/// A candidate of `length` bytes at `offset`, as a tag writes them.
-fn candidate(offset: u32, length: u32) -> Candidate {
-    Candidate {
-        offset: u64::from(offset),
-        length: u64::from(length),
-    }
+/// The candidate of `length` bytes at `offset`, as a tag of an IFD read in
+/// `block` writes them: at the position `offset` gives inside the block
+/// ([`Block::at`]), when the whole of it lies inside the block's bounds,
+/// an empty candidate included; `None` when it does not, or when that
+/// position would pass the largest offset.
+///
+/// The bounds are used as given. A caller whose bounds may run past the
+/// end of the file cuts them at it first ([`Block::within_file`]), as
+/// [`declared`] does; one whose bounds lie inside the file, such as a
+/// MakerNote's, passes its block as it is.
+pub(crate) fn candidate(block: &Block, offset: u32, length: u32) -> Option<Candidate> {
+    let offset = block.at(offset)?;
+    let length = u64::from(length);
+    block
+        .fits(offset, length)
+        .then_some(Candidate { offset, length })
 }
 
 /// Whether `candidate` is not empty and lies wholly inside a file of
@@ -270,13 +297,14 @@ fn inside(candidate: Candidate, file_len: u64) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::container::tiff::{Block, walk};
+    use crate::container::tiff::{parse_ifd, walk};
     use crate::error::ErrorKind;
-    use crate::formats::testing::{FAR, FailsFar};
+    use crate::formats::testing::{FAR, FailsFar, byte_order};
     use crate::jpeg_stub::jpeg_stub;
     use crate::limits::Limits;
-    use crate::tiff_builder::{BlobId, IfdId, Order, RawValue, SHORT, TiffBuilder};
+    use crate::tiff_builder::{BlobId, Built, IfdId, Order, RawValue, SHORT, TiffBuilder};
     use std::io::Cursor;
+    use std::ops::Range;
 
     const ORDERS: [Order; 2] = [Order::Little, Order::Big];
 
@@ -846,6 +874,156 @@ mod tests {
             let tree = walk(&mut src, &file_block, &Limits::default()).unwrap();
             let err = find(&mut src, &tree, &[]).expect_err("the read fails");
             assert_eq!(err.kind(), ErrorKind::Io, "{case}: {err:?}");
+        }
+    }
+
+    /// Where the tests of a TIFF structure inside a larger file place its
+    /// header, as a JPEG file holds the structure of its Exif segment: far
+    /// enough in that an offset counted from the start of the file lands
+    /// somewhere else.
+    const POS: u64 = 1000;
+
+    /// The bytes of a file that holds `built` at [`POS`], after as many
+    /// bytes of filler, and goes on `tail` bytes past it.
+    fn placed(built: &Built, tail: usize) -> Vec<u8> {
+        let mut bytes = vec![0; usize::try_from(POS).unwrap()];
+        bytes.extend_from_slice(&built.bytes);
+        bytes.resize(bytes.len() + tail, 0);
+        bytes
+    }
+
+    /// The length of the structure `built`.
+    fn len_of(built: &Built) -> u64 {
+        u64::try_from(built.bytes.len()).unwrap()
+    }
+
+    /// The previews of `bytes`, whose TIFF structure has its header at
+    /// [`POS`] and may use the bytes `bounds`; the finder must succeed.
+    fn found_in(bytes: &[u8], bounds: Range<u64>) -> Vec<Preview> {
+        let mut src = Source::new(Cursor::new(bytes.to_vec())).unwrap();
+        let tree = walk(&mut src, &Block::new(POS, bounds), &Limits::default()).unwrap();
+        find(&mut src, &tree, &[]).unwrap()
+    }
+
+    /// Writes into `bytes`, at `at`, a stub JPEG of 99 by 77: what a finder
+    /// that counted an offset from the wrong place would find.
+    fn decoy(bytes: &mut [u8], at: u64) {
+        let stub = jpeg_stub(99, 77, 0xC0);
+        bytes[usize::try_from(at).unwrap()..][..stub.len()].copy_from_slice(&stub);
+    }
+
+    #[test]
+    fn a_thumbnail_inside_a_file_counts_from_its_structures_header() {
+        for order in ORDERS {
+            // IFD0, then IFD1 with a JPEG thumbnail, as a JPEG file's Exif
+            // segment holds them. Counted from the start of the file, the
+            // thumbnail's offset lands on a decoy, which the bounds, the
+            // whole file, do not leave out: only the base is at stake.
+            let mut builder = TiffBuilder::new(order);
+            let ifd0 = plain_ifd(&mut builder);
+            let ifd1 = builder.ifd();
+            let blob = jpeg(&mut builder, ifd1, 160, 120);
+            builder.next(ifd0, Some(ifd1));
+            let built = builder.build();
+            let at = built.blob_offset(blob);
+            assert!(at + stub_len() <= POS, "the decoy lies before the header");
+            let mut bytes = placed(&built, 0);
+            decoy(&mut bytes, at);
+
+            let previews = found_in(&bytes, 0..POS + len_of(&built));
+            assert_eq!(sizes(&previews), [(160, 120)], "{order:?}");
+            assert_eq!(previews[0].byte_range().start, POS + at, "{order:?}");
+            assert_eq!(previews[0].byte_len(), stub_len(), "{order:?}");
+        }
+    }
+
+    #[test]
+    fn a_jpeg_strip_inside_a_file_counts_from_its_structures_header() {
+        for order in ORDERS {
+            // As the thumbnail: counted from the start of the file, the
+            // strip's offset lands on a decoy.
+            let mut builder = TiffBuilder::new(order);
+            let ifd0 = builder.ifd();
+            builder.short(ifd0, COMPRESSION, &[7]);
+            let blob = one_strip(&mut builder, ifd0, 640, 480);
+            let built = builder.build();
+            let at = built.blob_offset(blob);
+            assert!(at + stub_len() <= POS, "the decoy lies before the header");
+            let mut bytes = placed(&built, 0);
+            decoy(&mut bytes, at);
+
+            let previews = found_in(&bytes, 0..POS + len_of(&built));
+            assert_eq!(sizes(&previews), [(640, 480)], "{order:?}");
+            assert_eq!(previews[0].byte_range().start, POS + at, "{order:?}");
+            assert_eq!(previews[0].byte_len(), stub_len(), "{order:?}");
+        }
+    }
+
+    #[test]
+    fn a_jpeg_past_the_end_of_its_ifds_block_is_dropped() {
+        for order in ORDERS {
+            // IFD0's JPEG is the last thing in the structure, and the file
+            // goes on past the bounds, so that the bounds, not the file, are
+            // what leave it out.
+            let mut builder = TiffBuilder::new(order);
+            let ifd0 = builder.ifd();
+            let blob = jpeg(&mut builder, ifd0, 640, 480);
+            let built = builder.build();
+            let (at, len) = (built.blob_offset(blob), len_of(&built));
+            assert_eq!(at + stub_len(), len, "the JPEG ends the structure");
+            let bytes = placed(&built, 100);
+
+            for (end, expected, what) in [
+                (len, &[(640, 480)][..], "ending exactly at the bounds' end"),
+                (len - 1, &[], "ending one byte past it"),
+                (at, &[], "wholly past it"),
+            ] {
+                let previews = found_in(&bytes, POS..POS + end);
+                assert_eq!(sizes(&previews), expected, "{what} ({order:?})");
+            }
+        }
+    }
+
+    #[test]
+    fn an_offset_whose_position_would_overflow_gives_no_candidate() {
+        for order in ORDERS {
+            for strip in [false, true] {
+                // The IFD declares its JPEG at the largest offset, in a
+                // block whose base that offset carries past the largest
+                // position: wrapped around, it would land on the JPEG. No
+                // walk reads a header so far in, so the IFD is read alone.
+                let mut builder = TiffBuilder::new(order);
+                let ifd0 = builder.ifd();
+                let blob = builder.blob(&jpeg_stub(640, 480, 0xC0));
+                let length = u32::try_from(stub_len()).unwrap();
+                if strip {
+                    builder.short(ifd0, COMPRESSION, &[7]);
+                    builder.long(ifd0, STRIP_OFFSETS, &[u32::MAX]);
+                    builder.long(ifd0, STRIP_BYTE_COUNTS, &[length]);
+                } else {
+                    builder.long(ifd0, JPEG_INTERCHANGE_FORMAT, &[u32::MAX]);
+                    builder.long(ifd0, JPEG_INTERCHANGE_FORMAT_LENGTH, &[length]);
+                }
+                let built = builder.build();
+                let base = built.blob_offset(blob).wrapping_sub(u64::from(u32::MAX));
+                assert_eq!(base.checked_add(u64::from(u32::MAX)), None);
+
+                let mut src = Source::new(Cursor::new(built.bytes.clone())).unwrap();
+                let block = Block::new(base, 0..src.len());
+                let (ifd, _) = parse_ifd(
+                    &mut src,
+                    &block,
+                    built.ifd_offset(ifd0),
+                    byte_order(order),
+                    &Limits::default(),
+                )
+                .unwrap();
+                assert_eq!(
+                    declared(&mut src, &ifd).unwrap(),
+                    None,
+                    "strip {strip} ({order:?})"
+                );
+            }
         }
     }
 }

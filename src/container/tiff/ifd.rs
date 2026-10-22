@@ -1974,9 +1974,9 @@ mod tests {
 
     #[test]
     fn an_ifd_inside_the_block_is_read_with_its_entries() {
-        // Base 0, as a Sony MakerNote counts its offsets: the block is the
-        // file's second IFD and its values, which follow it, and IFD0 lies
-        // before the block.
+        // Base 0, as a Sony MakerNote in an ARW file counts its offsets: the
+        // block is the file's second IFD and its values, which follow it,
+        // and IFD0 lies before the block.
         for order in ORDERS {
             let mut builder = TiffBuilder::new(order);
             let ifd0 = builder.ifd();
