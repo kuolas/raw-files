@@ -299,9 +299,10 @@ mod tests {
     use super::*;
     use crate::container::tiff::{parse_ifd, walk};
     use crate::error::ErrorKind;
-    use crate::formats::testing::{FAR, FailsFar, byte_order};
+    use crate::formats::testing::byte_order;
     use crate::jpeg_stub::jpeg_stub;
     use crate::limits::Limits;
+    use crate::testing::{FAR, FailsFar};
     use crate::tiff_builder::{BlobId, Built, IfdId, Order, RawValue, SHORT, TiffBuilder};
     use std::io::Cursor;
     use std::ops::Range;

@@ -413,6 +413,7 @@ pub(crate) fn skip_damage<T>(result: Result<T>) -> Result<Option<T>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::testing::FailsFar;
     use crate::tiff_builder::{Built, IfdId, LONG, Order, RawValue, TiffBuilder};
     use std::io::{self, Cursor, SeekFrom};
 
@@ -1068,17 +1069,17 @@ mod tests {
     }
 
     /// The bytes of a little-endian file whose IFD0 links to an IFD that
-    /// lies past the first 64 KiB, at [`FAR`], through `link`.
+    /// lies past the first 64 KiB, at [`FAR_IFD`], through `link`.
     fn far_link(link: Link) -> Vec<u8> {
         let order = Order::Little;
         let mut inner = TiffBuilder::new(order);
         let far = ifd(&mut inner, 1);
         let inner = inner.build();
-        assert_eq!(inner.ifd_offset(far), FAR - FAR_BLOB);
+        assert_eq!(inner.ifd_offset(far), FAR_IFD - FAR_BLOB);
 
         let mut builder = TiffBuilder::new(order);
         let ifd0 = ifd(&mut builder, 0);
-        let far = u32::try_from(FAR).unwrap();
+        let far = u32::try_from(FAR_IFD).unwrap();
         match link {
             Link::SubIfds => builder.subifds_raw(ifd0, &[far]),
             Link::Exif => builder.long(ifd0, EXIF_IFD, &[far]),
@@ -1089,26 +1090,10 @@ mod tests {
     }
 
     const FAR_BLOB: u64 = 100_000;
-    const FAR: u64 = FAR_BLOB + 8;
-
-    /// A reader that fails every read from 64 KiB on: past the first cached
-    /// block, which holds IFD0, and before the far IFD.
-    struct FailsFar(Cursor<Vec<u8>>);
-
-    impl Read for FailsFar {
-        fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
-            if self.0.position() >= 64 * 1024 {
-                return Err(io::Error::from(io::ErrorKind::PermissionDenied));
-            }
-            self.0.read(buf)
-        }
-    }
-
-    impl Seek for FailsFar {
-        fn seek(&mut self, pos: SeekFrom) -> io::Result<u64> {
-            self.0.seek(pos)
-        }
-    }
+    /// Where the far IFD starts: past the first cached block, which holds
+    /// IFD0, and so past the position from which a [`FailsFar`] fails.
+    const FAR_IFD: u64 = FAR_BLOB + 8;
+    const _: () = assert!(FAR_IFD > crate::testing::FAR);
 
     #[test]
     fn a_reader_failure_past_ifd0_fails_the_walk() {

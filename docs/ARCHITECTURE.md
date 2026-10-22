@@ -44,6 +44,7 @@ fuzz targets are a second crate, in `fuzz/`, that is never published.
 | `src/container/tiff/robustness.rs` | tests only: the whole TIFF reader on truncated and corrupted files, which give an error or a tree within the limits, never a panic; `tests/robustness.rs` does the same for the whole open path | — |
 | `src/container/jpeg/mod.rs` | the JPEG container: the one walk over a stream's marker segments, inside a given range, one step per marker or fill byte under a fixed cap, ending at SOS, EOI, a byte that is not a marker, a length below 2 or a segment past the range's end; the probe that sizes a preview from the first frame header of that walk; and the walk over a JPEG file from SOI, which keeps its first frame header that gives a size, the block of its first Exif segment, based at its TIFF header, and the block of its first MPF segment, based at its MP header, each bounded by its segment, whose index `mpf.rs` reads; it never decodes | `io`, `error`, `container/tiff` (for `Block`) |
 | `src/container/jpeg/mpf.rs` | the MPF index of a JPEG file: where the images the file holds after its first one lie, such as its large thumbnails. The MP header and the MP Index IFD are read inside the MPF segment's block through the TIFF container, under the entry limit, every value inside the block; MPEntry, of type UNDEFINED and a multiple of 16 bytes long, gives one range per entry, in the entries' order, at the MP header's position plus the entry's offset, over its size, both read in the MP header's byte order, with checked sums. NumberOfImages is not read: the entries are those the value holds. An entry of offset 0, the file's first image, is left out; a range past the end of the file, an empty one or one that holds no image is kept for the preview finder to drop, and none is checked against the block, which bounds the index only. Damage gives fewer images or none; only a failing reader is an error | `io`, `error`, `limits`, `container/tiff` |
+| `src/testing.rs` | tests only: a reader that fails past the first block the source caches, shared by the unit tests of every module that reads a file, so that each tells a failure of the reader from damage in the file | `io` |
 | `src/fuzzing.rs` | the fuzz entry points, compiled only with `--cfg fuzzing`: each reads arbitrary bytes through a whole reader, or through the file handle as a caller would | `io`, `container`, `geometry`, `limits`, `metadata`, `options` |
 | `tests/support/tiff_builder.rs` | the fixture builder: small TIFF files described in code, for unit and integration tests | — (`std` only) |
 | `tests/support/jpeg_stub.rs` | the stub JPEG: a small well-formed stream with a chosen frame header and no image, for unit and integration tests | — (`std` only) |
@@ -91,8 +92,11 @@ the file's length.
 `tests/support/jpeg_stub.rs`, and describe JPEG files with
 `tests/support/jpeg_builder.rs`; `src/lib.rs` includes the three files with
 `#[path]` under `#[cfg(test)]`, so the unit tests and the integration tests
-share one copy of each without it becoming part of the library. Whole files
-of one camera's layout, built from the TIFF builder and the stub JPEG, live
+share one copy of each without it becoming part of the library.
+`src/testing.rs`, compiled only for the unit tests, holds a reader that
+fails past the first block the source caches, with which the tests of every
+reader tell a failure of the reader from damage in the file. Whole files of
+one camera's layout, built from the TIFF builder and the stub JPEG, live
 beside them for the integration tests: `tests/support/nef.rs`, the Z 9's,
 the Z6III's and the D300's, and `tests/support/arw.rs`, one for each
 generation of Sony's family. Two real files are committed, in

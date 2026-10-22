@@ -173,11 +173,10 @@ pub(crate) fn detect<R: Read + Seek>(
 
 /// What the unit tests of detection and of the readers share: a file
 /// described in code, read into a source and a tree as opening a file
-/// reads it; and a reader that fails past the first block, for the tests
-/// that a failure of the reader is an error.
+/// reads it.
 #[cfg(test)]
 pub(super) mod testing {
-    use std::io::{self, Cursor, Read, Seek, SeekFrom};
+    use std::io::Cursor;
 
     use crate::container::tiff::{Block, Tree, walk};
     use crate::io::{ByteOrder, Source};
@@ -192,30 +191,6 @@ pub(super) mod testing {
         match order {
             Order::Little => ByteOrder::Little,
             Order::Big => ByteOrder::Big,
-        }
-    }
-
-    /// The first byte of the second block the source caches: a reader that
-    /// fails from here on still serves the header and the walk, which read
-    /// only the first.
-    pub(super) const FAR: u64 = 64 * 1024;
-
-    /// A reader that fails every read from [`FAR`] on, for the tests that
-    /// a failure of the reader is passed up, never taken for damage.
-    pub(super) struct FailsFar(pub(super) Cursor<Vec<u8>>);
-
-    impl Read for FailsFar {
-        fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
-            if self.0.position() >= FAR {
-                return Err(io::Error::from(io::ErrorKind::PermissionDenied));
-            }
-            self.0.read(buf)
-        }
-    }
-
-    impl Seek for FailsFar {
-        fn seek(&mut self, pos: SeekFrom) -> io::Result<u64> {
-            self.0.seek(pos)
         }
     }
 

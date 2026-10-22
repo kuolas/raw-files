@@ -211,8 +211,8 @@ mod tests {
     use super::*;
     use crate::ErrorKind;
     use crate::container::jpeg::segments;
-    use crate::container::jpeg::tests::{FAR, FailsFar};
     use crate::jpeg_builder::{Built, JpegBuilder};
+    use crate::testing::{FAR, FailsFar};
     use crate::tiff_builder::Order;
     use std::io::Cursor;
 
