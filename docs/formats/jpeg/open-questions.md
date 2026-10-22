@@ -30,6 +30,19 @@ affects; [test-data.md](test-data.md) describes the files.
    follow, since an editor that
    rewrites the Exif segment can leave such a pointer behind. Affects
    [container-and-metadata.md](container-and-metadata.md#10-makernotes-in-a-jpeg).
+4. **MPF images other than large thumbnails.** The Multi-Picture Format
+   lists more than large thumbnails: its MP types include a gain map
+   (0x050000), the panorama, disparity and multi-angle images of a
+   multi-frame file (0x020001 to 0x020003), and an original kept for
+   preservation (0x040000) (CIPA DC-007 Table 4, p. 15). Such an image is
+   a whole JPEG stream and would pass the checks every preview passes, so
+   a caller asking for the smallest preview that fits a size could be
+   given a gain map, or one frame of a panorama, in place of the picture.
+   Every camera file in the set lists only its first image and large
+   thumbnails of classes 1 and 2. The reader of the MPF index keeps no MP
+   type, so every image the index lists is a preview; a rule by type, such
+   as keeping large thumbnails only, would have it read the type. Affects
+   [container-and-metadata.md](container-and-metadata.md#7-the-multi-picture-format).
 
 ## 2. Facts to establish from sample files
 

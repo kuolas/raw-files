@@ -18,6 +18,8 @@
 //!   give and reads the image's width and height from it.
 //! - [`segments`] reads a JPEG file: it keeps the file's frame header, its
 //!   Exif segment and its MPF segment, the parts a reader of the file needs.
+//! - [`mpf::images`] reads the MPF segment's index: where the images the
+//!   file holds after its first one lie, such as its large thumbnails.
 //!
 //! # Marker segments
 //!
@@ -107,11 +109,13 @@
 //!   them, and the index of the file's images after it, whose offsets count
 //!   from the MP header's first byte (DC-007 5.2, p. 10). It is kept as a
 //!   [`Block`] too: its base is the MP header, and its bounds run from
-//!   there to the end of the segment.
+//!   there to the end of the segment. The [`mpf`] module reads the index.
 //!
 //! A payload too short to hold its identifier is not that segment. One that
 //! holds the identifier and too little after it is: its block may be too
 //! small to read, which the reader of the block finds out, as damage.
+
+pub(crate) mod mpf;
 
 use std::io::{Read, Seek};
 use std::ops::Range;
@@ -1073,12 +1077,12 @@ mod tests {
 
     /// Where reads start to fail in a [`FailsFar`]: the start of the block
     /// cache's second block, so that the reads of the first all succeed.
-    const FAR: u64 = 64 * 1024;
+    pub(super) const FAR: u64 = 64 * 1024;
 
     /// A reader that fails every read from [`FAR`] on, for the tests that a
     /// failure of the reader is passed up, never taken for the end of the
-    /// walk.
-    struct FailsFar(Cursor<Vec<u8>>);
+    /// walk or for damage in the MPF index.
+    pub(super) struct FailsFar(pub(super) Cursor<Vec<u8>>);
 
     impl std::io::Read for FailsFar {
         fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
