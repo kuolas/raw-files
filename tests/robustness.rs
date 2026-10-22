@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! Tests of the whole open path on damaged RAW files, through the public
-//! API; this file holds no code of the reader itself.
+//! Tests of the whole open path on damaged RAW and JPEG files, through the
+//! public API; this file holds no code of the reader itself.
 //!
 //! A RAW library often meets truncated and corrupted files, and must
 //! answer each with a result, never a panic (ADR008). The unit tests of
@@ -20,8 +20,17 @@
 //! too, committed with their pixels and personal fields removed: shots of
 //! the maintainer's own Z 9 in DX and 1:1 crop modes, which hold the
 //! camera's own layout of tags, in little-endian byte order, where the
-//! fixtures only imitate it. They cut each file at every length, and
-//! overwrite each byte in turn with 0x00, 0xFF and its complement.
+//! fixtures only imitate it. And they damage the JPEG files the JPEG
+//! reader's tests open, whose segments the walk reads before the Exif
+//! segment's TIFF structure and the MPF index: one with no Exif segment,
+//! one with zeros after its end, one whose Exif segment holds IFD0 and
+//! IFD1's thumbnail, a camera's, whose Exif segment holds every value the
+//! metadata reads and whose MPF index lists two images after its main
+//! one, and a camera's with a JFIF segment first, whose Exif segment holds
+//! only IFD0's orientation and IFD1's thumbnail, those with a TIFF
+//! structure or an MPF index in both byte orders. They cut each file at
+//! every length, and overwrite each byte in turn with 0x00, 0xFF and its
+//! complement.
 //!
 //! Each damaged file is opened as a caller would open it, with
 //! [`RawFile::from_bytes`], which reads through the same source and block
@@ -43,10 +52,11 @@
 //! that: in the zeros, at each tile's start and around it, and just short
 //! of the end. That keeps the whole file to a few seconds in a debug build.
 //! Every other file is swept whole: the two stripped files are 4,270 bytes
-//! each, their raw data replaced by 64 bytes.
+//! each, their raw data replaced by 64 bytes, and the largest JPEG file,
+//! the one with zeros after its end, is 4,218 bytes.
 //!
-//! A last test damages one value only, the capture time, in each of these
-//! files, and checks that the file gives every other value exactly as the
+//! A last test damages one value only, the capture time, in each of the
+//! RAW files, and checks that the file gives every other value exactly as the
 //! undamaged file does: damage to one value costs only that value
 //! (ADR011).
 
@@ -59,6 +69,9 @@ use std::panic;
 use raw_files::{Focus, Metadata, Rational, RawFile, SignedRational, Size};
 use support::arw::{ARW4_FULL_SIZE_JPEG, arw4_file, stub};
 use support::fixtures::{Z9_1X1, Z9_DX, read_fixture};
+use support::jpeg_files::{
+    camera_jpeg, camera_jpeg_with_metadata, exif_jpeg, padded_jpeg, plain_jpeg,
+};
 use support::nef::{d300_file, z6iii_file, z9_file, z9_file_with};
 use support::tiff_builder::Order;
 
@@ -82,7 +95,11 @@ struct Fixture {
 /// and the D300 fixtures, with Orientation 8, in both byte orders; the
 /// ARW 4 fixture, with Orientation 8, in both byte orders; and the two
 /// files stripped from the maintainer's own Z 9 shots in DX and 1:1 crop
-/// modes, as they are committed.
+/// modes, as they are committed; and the JPEG files: without Exif, with
+/// zeros after its end, and, in both byte orders, with an Exif segment, a
+/// camera's with every value the metadata reads, and a camera's with a
+/// JFIF segment first, whose Exif segment holds only the orientation and
+/// the thumbnail.
 fn fixtures() -> Vec<Fixture> {
     let mut fixtures = Vec::new();
     for order in ORDERS {
@@ -150,6 +167,34 @@ fn fixtures() -> Vec<Fixture> {
         let bytes = read_fixture(file);
         fixtures.push(Fixture {
             name: name.to_owned(),
+            sweep_end: bytes.len(),
+            more_lengths: Vec::new(),
+            bytes,
+        });
+    }
+    let mut jpegs = vec![
+        ("JPEG without Exif".to_owned(), plain_jpeg().bytes),
+        ("JPEG with padding".to_owned(), padded_jpeg().bytes),
+    ];
+    for order in ORDERS {
+        jpegs.extend([
+            (
+                format!("JPEG with Exif, {order:?}"),
+                exif_jpeg(order).0.bytes,
+            ),
+            (
+                format!("camera JPEG, {order:?}"),
+                camera_jpeg_with_metadata(order).0.bytes,
+            ),
+            (
+                format!("camera JPEG, JFIF first, {order:?}"),
+                camera_jpeg(order, true).0.bytes,
+            ),
+        ]);
+    }
+    for (name, bytes) in jpegs {
+        fixtures.push(Fixture {
+            name,
             sweep_end: bytes.len(),
             more_lengths: Vec::new(),
             bytes,
@@ -307,9 +352,9 @@ fn check(bytes: &[u8], what: impl Fn() -> String) -> bool {
     }
 }
 
-/// A file cut short anywhere, in its header, an IFD, a value, a MakerNote
-/// or a JPEG stub, opens or fails, and never panics, nor does reading what
-/// it gives.
+/// A file cut short anywhere, in its header, a JPEG segment, an IFD, a
+/// value, a MakerNote or a JPEG stub, opens or fails, and never panics,
+/// nor does reading what it gives.
 #[test]
 fn a_file_cut_short_opens_or_fails_without_a_panic() {
     for fixture in fixtures() {

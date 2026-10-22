@@ -47,11 +47,13 @@ jobs:
             seeds: fuzz/seeds/tiff_walk
           - target: jpeg_probe
             seeds: fuzz/seeds/jpeg_probe
-          # `open` starts from its own seeds, the Nikon and Sony fixtures, and
-          # from the TIFF ones, which a plain TIFF file also needs
-          # (fuzz/seeds/README.md).
+          - target: jpeg_segments
+            seeds: fuzz/seeds/jpeg_segments
+          # `open` starts from its own seeds, the Nikon and Sony fixtures,
+          # from the TIFF ones, which a plain TIFF file also needs, and from
+          # the JPEG files of `jpeg_segments` (fuzz/seeds/README.md).
           - target: open
-            seeds: fuzz/seeds/open fuzz/seeds/tiff_walk
+            seeds: fuzz/seeds/open fuzz/seeds/tiff_walk fuzz/seeds/jpeg_segments
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:

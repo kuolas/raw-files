@@ -12,6 +12,7 @@
 pub mod arw;
 pub mod fixtures;
 pub mod jpeg_builder;
+pub mod jpeg_files;
 pub mod jpeg_stub;
 pub mod nef;
 pub mod samples;

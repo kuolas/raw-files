@@ -346,15 +346,27 @@ committed in [`fuzz/seeds/`](fuzz/seeds/README.md). Without them the fuzzer
 never builds a big-endian header, and half of the reader goes unfuzzed.
 The target `jpeg_probe`, which fuzzes the search for a JPEG preview's
 frame header, runs the same way, with `jpeg_probe` in place of `tiff_walk`
-throughout. The target `open`, which opens the input as a caller would and
-reads its metadata, its focus point placed on a preview, and every preview
-it finds, has seeds of its own, fixtures of the Nikon and Sony layouts, and
-takes the TIFF ones too, since a plain TIFF file is also something it must
-open; libFuzzer takes several corpus directories:
+throughout. So does the target `jpeg_segments`, which reads the input as
+a JPEG file: the walk over its segments, the TIFF structure of its Exif
+segment with every value in it, and the index of its MPF segment, which
+lists the images after the first. Its seeds are JPEG files built as the
+JPEG reader's tests build them:
+
+```sh
+mkdir -p fuzz/corpus/jpeg_segments
+cargo +nightly fuzz run jpeg_segments fuzz/corpus/jpeg_segments fuzz/seeds/jpeg_segments -- -max_total_time=60 -timeout=25 -malloc_limit_mb=256
+```
+
+The target `open`, which opens the input as a caller would and reads its
+metadata, its focus point placed on a preview, and every preview it finds,
+has seeds of its own, fixtures of the Nikon and Sony layouts, and takes
+the TIFF ones and the JPEG ones too, since a plain TIFF file and a JPEG
+file are also something it must open; libFuzzer takes several corpus
+directories:
 
 ```sh
 mkdir -p fuzz/corpus/open
-cargo +nightly fuzz run open fuzz/corpus/open fuzz/seeds/open fuzz/seeds/tiff_walk -- -max_total_time=60 -timeout=25 -malloc_limit_mb=256
+cargo +nightly fuzz run open fuzz/corpus/open fuzz/seeds/open fuzz/seeds/tiff_walk fuzz/seeds/jpeg_segments -- -max_total_time=60 -timeout=25 -malloc_limit_mb=256
 ```
 
 The allocation limit makes a runaway allocation a finding: the run stops
@@ -372,7 +384,7 @@ compile, on stable Rust: the library's entry points, with
 `RUSTFLAGS="--cfg fuzzing" cargo clippy --workspace --all-targets -- -D warnings`,
 and the fuzz crate, with
 `RUSTFLAGS="--cfg fuzzing" cargo check --manifest-path fuzz/Cargo.toml`.
-CI runs the three targets for ten minutes each twice a week and on request
+CI runs the four targets for ten minutes each twice a week and on request
 (`.github/workflows/fuzz.yml`, started by hand from the Actions tab), with
 the same commands as above but `-max_total_time=600`, ten minutes per
 target, and keeps the corpus each run found in the Actions cache for the

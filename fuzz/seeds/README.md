@@ -13,6 +13,16 @@ the corpus the fuzzer writes is not.
   Sony raw tile; and one input that is not a stream but two bytes choosing
   a range inside the input, then a stream, since the target also probes the
   range those bytes name.
+- `jpeg_segments/` seeds the `jpeg_segments` target with the JPEG files of
+  the JPEG reader's integration tests: one with no Exif segment; one whose
+  Exif segment holds IFD0 and IFD1's thumbnail; a camera's, whose Exif
+  segment holds every value the metadata reads, IFD0's and the Exif IFD's,
+  and whose MPF index lists two images after the main one; a camera's
+  with a JFIF segment first, whose Exif segment holds only IFD0's
+  orientation and IFD1's thumbnail, beside the same MPF index; and one with
+  zeros after its end. Each file with an Exif segment comes in both byte
+  orders, which the TIFF structure inside that segment and the camera's
+  MPF index share.
 - `open/` seeds the `open` target with the integration tests' fixtures of
   the RAW formats: files laid out like the NEF of a Nikon Z 9, of a Z6III
   on a 1:1 crop and of a D300, and one like each generation of Sony's
@@ -21,18 +31,19 @@ the corpus the fuzzer writes is not.
   in code, the two real files committed in
   [`tests/fixtures/`](../../tests/fixtures/README.md), shots of the
   maintainer's own Z 9 in DX and 1:1 crop modes with their pixels and
-  personal fields removed, copied as they are. The target still takes the
-  `tiff_walk/` seeds as a second corpus directory, since a plain TIFF file
-  is also something it must open.
+  personal fields removed, copied as they are. The target also takes the
+  `tiff_walk/` and `jpeg_segments/` seeds as further corpus directories,
+  since a plain TIFF file and a JPEG file are also something it must open.
 
 The files are generated from the fixtures in
 `src/container/tiff/robustness.rs`, the stubs in
 `src/container/jpeg/mod.rs` and the integration tests' fixtures, built in
 code or committed in `tests/fixtures/`, through `tests/fuzz_seeds.rs`,
-never edited by hand, and a test in each
-(`the_fuzz_seeds_match_the_fixtures`, `the_jpeg_fuzz_seeds_match_the_stubs`
-and `the_open_fuzz_seeds_match_the_fixtures`) fails when a file is missing
-or differs from what it is generated from.
+never edited by hand, and a test for each folder
+(`the_fuzz_seeds_match_the_fixtures`, `the_jpeg_fuzz_seeds_match_the_stubs`,
+`the_jpeg_segments_fuzz_seeds_match_the_fixtures` and
+`the_open_fuzz_seeds_match_the_fixtures`) fails when a file is missing or
+differs from what it is generated from.
 After changing a fixture or a stub, regenerate them all from the repository
 root:
 
