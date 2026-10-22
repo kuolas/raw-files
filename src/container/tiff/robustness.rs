@@ -612,7 +612,7 @@ fn extreme_structural_fields_give_an_error_or_a_tree_within_the_limits() {
 /// starts from them. Ignored, as it writes to the source tree; run it after
 /// changing a fixture:
 /// `cargo test write_fuzz_seeds -- --ignored`, which also writes the JPEG
-/// search's seeds and the `open` target's.
+/// search's seeds and those of the `jpeg_segments` and `open` targets.
 #[test]
 #[ignore = "writes the seed files; run it to regenerate them"]
 fn write_fuzz_seeds() {

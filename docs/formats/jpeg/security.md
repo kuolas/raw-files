@@ -189,12 +189,12 @@ the ones a JPEG adds.
     the file: `checked_*` arithmetic and `get(..)`, as everywhere else
     ([ADR008](../../architecture-decisions/adr008-lints-and-panics.md)).
     (little_exif #105, GHSA-2v8p-fqpx-2q3w, zenjpeg #223.)
-11. **Fuzzing.** The `open` fuzz target is to take JPEG seeds built from
-    the fixtures, and a target of its own, `jpeg_segments`, is to fuzz the
-    segment walk, the Exif block and the MPF index; the robustness tests
-    are to cut and corrupt every JPEG fixture. Every crash found becomes a
-    committed reproducer with a regression test shown to fail without its
-    fix. (little_exif #105 was found so.)
+11. **Fuzzing.** The `open` fuzz target takes JPEG seeds built from the
+    fixtures, and a target of its own, `jpeg_segments`, fuzzes the segment
+    walk, the Exif block and the MPF index; the robustness tests cut and
+    corrupt the JPEG files the seeds are built from. Every crash found
+    becomes a committed reproducer with a regression test shown to fail
+    without its fix. (little_exif #105 was found so.)
 
 ## 4. Reporting
 

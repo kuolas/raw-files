@@ -14,10 +14,10 @@
 //! that flag for every crate it builds: a project that fuzzes its own code
 //! compiles this module in its copy of raw-files too.
 
-use std::io::Cursor;
+use std::io::{Cursor, Read, Seek};
 
-use crate::container::jpeg::probe;
-use crate::container::tiff::{Block, walk};
+use crate::container::jpeg::{mpf, probe, segments};
+use crate::container::tiff::{Block, Tree, walk};
 use crate::geometry::Size;
 use crate::io::Source;
 use crate::limits::Limits;
@@ -39,11 +39,17 @@ pub fn tiff_walk(data: &[u8]) {
     let Ok(tree) = walk(&mut src, &block, &Limits::default()) else {
         return;
     };
+    read_values(&mut src, &tree);
+}
+
+/// Reads every value of every IFD of `tree` through each accessor, as a
+/// number, as text and as bytes, whatever the tag and its type.
+fn read_values<R: Read + Seek>(src: &mut Source<R>, tree: &Tree) {
     for (_, ifd) in tree.iter() {
         for tag in ifd.tags() {
-            let _ = ifd.u32s(&mut src, tag);
-            let _ = ifd.ascii(&mut src, tag);
-            let _ = ifd.bytes(&mut src, tag);
+            let _ = ifd.u32s(src, tag);
+            let _ = ifd.ascii(src, tag);
+            let _ = ifd.bytes(src, tag);
         }
     }
 }
@@ -84,6 +90,37 @@ pub fn jpeg_probe(data: &[u8]) {
     };
     if let Ok(Some(frame)) = probe(&mut src, offset, sub_len) {
         let _ = frame.is_lossless();
+    }
+}
+
+/// Reads `data` as a JPEG file: the walk over its segments, then whether
+/// the frame header it kept is lossless; the TIFF structure of its Exif
+/// segment, walked with the default limits and every value of every IFD
+/// read through each accessor, as [`tiff_walk`] reads a TIFF file; and the
+/// index of its MPF segment, with the default limits.
+///
+/// Whatever `data` holds, this must return, never panic, and do so in
+/// bounded time and memory. What it reads is thrown away: an error or a
+/// missing segment is an expected outcome for arbitrary bytes, so every
+/// result is ignored.
+pub fn jpeg_segments(data: &[u8]) {
+    let Ok(mut src) = Source::new(Cursor::new(data)) else {
+        return;
+    };
+    let Ok(Some(found)) = segments(&mut src) else {
+        return;
+    };
+    if let Some(frame) = found.frame {
+        let _ = frame.is_lossless();
+    }
+    let limits = Limits::default();
+    if let Some(exif) = &found.exif
+        && let Ok(tree) = walk(&mut src, exif, &limits)
+    {
+        read_values(&mut src, &tree);
+    }
+    if let Some(index) = &found.mpf {
+        let _ = mpf::images(&mut src, index, &limits);
     }
 }
 

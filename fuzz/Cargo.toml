@@ -35,6 +35,13 @@ doc = false
 bench = false
 
 [[bin]]
+name = "jpeg_segments"
+path = "fuzz_targets/jpeg_segments.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
 name = "open"
 path = "fuzz_targets/open.rs"
 test = false
