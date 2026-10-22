@@ -18,9 +18,13 @@ does.
   itself, the thumbnail of the Exif segment and the images the
   Multi-Picture Format (MPF) list holds after the main one, each sized
   from its own frame header, with the orientation the Exif segment
-  records; the metadata gives that orientation and the image size, the
-  size of the picture. A JPEG whose Exif segment is missing or damaged
-  still opens, with the file and its MPF images as previews.
+  records. Their metadata comes from the Exif segment, read as in a NEF
+  or an ARW file: the camera's make and model, its serial number, the
+  capture time, the exposure, the lens and the orientation. The image
+  size is the size of the picture, and there is no raw size. A JPEG
+  whose Exif segment is missing or damaged still opens, with the file
+  and its MPF images as previews and the image size as its only
+  metadata.
 - `Format::is_raw`, whether a format's files hold a camera's raw sensor
   data, true for NEF and ARW and false for JPEG, so that a program can
   tell raw files from other images without matching every `Format`.

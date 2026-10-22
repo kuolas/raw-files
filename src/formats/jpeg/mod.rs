@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 //! The JPEG reader: how the crate recognises a JPEG file, and how it finds
-//! the file's previews and reads its orientation and image size.
+//! the file's previews and reads its metadata.
 //!
 //! A JPEG file is a picture as a camera writes it beside its raw file or
 //! instead of it, or as an editor exports it: one JPEG stream, with the
@@ -52,24 +52,36 @@
 //! # Damage
 //!
 //! The Exif segment is read as a bounded block, whose TIFF header is the
-//! base of every offset. A TIFF header or an IFD0 that cannot be read
-//! gives no tree: it costs the orientation and the thumbnail, never the
-//! file, which opens with its own preview and its MPF images, listed in a
-//! segment of their own. Past IFD0, damage costs only what it touches, as
-//! in a raw file, and an MPF list that does not hold together costs only
-//! its images. Only a failure of the reader is an error.
+//! base of every offset. A TIFF header or an IFD0 that cannot be read, or
+//! a limit of the caller's [`Limits`] crossed while walking the segment's
+//! structure, gives no tree: it costs the segment's values and its
+//! thumbnail, never the file, which opens with its own preview and its MPF
+//! images, listed in a segment of their own. The image size remains, since
+//! it comes from the frame header, not from the segment. Past IFD0,
+//! damage costs only what it touches, as in a raw file: an IFD or a value
+//! that lies outside the segment is damage, and costs what it holds. An
+//! MPF list that does not hold together costs only its images. Only a
+//! failure of the reader is an error.
 //!
 //! # The metadata
 //!
-//! Only the orientation and the image size are read. The image size is
-//! the size in the frame header, the picture's own (T.81 B.2.2 and Figure
-//! B.3, p. 35); the Exif pixel dimensions are not read, since an editor may
-//! leave them unchanged. A JPEG holds no raw data, so it has no raw size.
+//! The metadata is read from the Exif segment's tree by the reader the
+//! TIFF-based formats share (`tiff_metadata`), by the same rules as in a
+//! raw file, the standard tags first (ADR011): the camera's make and model
+//! and the orientation from IFD0, and the serial number, the capture time,
+//! the exposure and the lens from the Exif IFD. The MakerNote is not read.
+//!
+//! The image size is the size in the frame header, the picture's own (T.81
+//! B.2.2 and Figure B.3, p. 35), never a size the tree gives: the Exif
+//! pixel dimensions are not read, since an editor may leave them
+//! unchanged, and an IFD that the shared reader would take for raw data
+//! gives no size either. A JPEG holds no raw data, so it has no raw size.
+//! Without a tree, the image size is the only value.
 
 use std::io::{Read, Seek};
 
 use super::tiff_previews::{self, Candidate};
-use super::{FormatSpec, JPEG_UNCLAIMED, Parsed};
+use super::{FormatSpec, JPEG_UNCLAIMED, Parsed, tiff_metadata};
 use crate::container::jpeg::{Frame, Segments, mpf};
 use crate::container::tiff::{skip_damage, walk};
 use crate::error::{Error, Result};
@@ -78,7 +90,6 @@ use crate::geometry::Size;
 use crate::io::Source;
 use crate::limits::Limits;
 use crate::metadata::Metadata;
-use crate::orientation::Orientation;
 use crate::preview::{Preview, PreviewFormat};
 
 /// The JPEG format's entry in the JPEG container's list of formats.
@@ -116,12 +127,12 @@ fn claims<R: Read + Seek>(_: &mut Source<R>, segments: &Segments) -> Result<bool
 /// accepted.
 ///
 /// The Exif segment's TIFF structure, when there is one, is walked within
-/// `limits`, and gives the orientation and the thumbnail's candidate; the
-/// MPF list, read within `limits` as well, gives a candidate for each image
-/// after the first. The shared finder checks them all, and the file itself
-/// joins them as a preview of its own, with its frame header's size. The
-/// metadata is the orientation and that size; see the
-/// [module documentation](self).
+/// `limits`, and gives the metadata, the orientation among it, and the
+/// thumbnail's candidate; the MPF list, read within `limits` as well,
+/// gives a candidate for each image after the first. The shared finder
+/// checks them all, and the file itself joins them as a preview of its
+/// own, with its frame header's size, which is the metadata's image size;
+/// see the [module documentation](self).
 ///
 /// # Errors
 ///
@@ -137,18 +148,29 @@ fn parse<R: Read + Seek>(
     let Some(frame) = picture(segments) else {
         return Err(Error::unknown_format(JPEG_UNCLAIMED));
     };
-    // A TIFF header or an IFD0 that cannot be read costs the tree, not the
-    // file.
+    let size = Size {
+        width: u32::from(frame.width),
+        height: u32::from(frame.height),
+    };
+    // A TIFF header or an IFD0 that cannot be read, or a limit crossed
+    // while walking, costs the tree, not the file.
     let tree = match &segments.exif {
         Some(exif) => skip_damage(walk(src, exif, limits))?,
         None => None,
     };
-    let (orientation, mut candidates) = match &tree {
+    let (standard, mut candidates) = match &tree {
         Some(tree) => (
-            tiff_previews::orientation(src, tree)?,
+            tiff_metadata::read(src, tree)?.metadata,
             tiff_previews::tree_candidates(src, tree)?,
         ),
-        None => (Orientation::NoTransforms, Vec::new()),
+        None => (Metadata::default(), Vec::new()),
+    };
+    // The picture's own size, whatever sizes the tree gives, and no raw
+    // size: a JPEG holds no raw data.
+    let metadata = Metadata {
+        raw_size: None,
+        image_size: Some(size),
+        ..standard
     };
     if let Some(index) = &segments.mpf {
         let images = mpf::images(src, index, limits)?;
@@ -159,25 +181,16 @@ fn parse<R: Read + Seek>(
             })
         }));
     }
-    let mut previews = tiff_previews::check(src, &candidates, orientation)?;
-
-    let size = Size {
-        width: u32::from(frame.width),
-        height: u32::from(frame.height),
-    };
+    // Every preview takes the metadata's orientation, IFD0's.
+    let mut previews = tiff_previews::check(src, &candidates, metadata.orientation)?;
     previews.push(Preview::new(
         0,
         src.len(),
         size.width,
         size.height,
         PreviewFormat::Jpeg,
-        orientation,
+        metadata.orientation,
     ));
-    let metadata = Metadata {
-        orientation,
-        image_size: Some(size),
-        ..Metadata::default()
-    };
     Ok(Parsed { previews, metadata })
 }
 

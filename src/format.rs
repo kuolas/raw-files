@@ -48,8 +48,11 @@ pub enum Format {
     /// instead of them, or as an editor exports it. It holds no raw data.
     /// Its previews are the file itself and the smaller images it carries:
     /// the thumbnail of its Exif segment and the images its Multi-Picture
-    /// Format (MPF) list holds after the main one. Its metadata gives the
-    /// orientation and the size of the picture.
+    /// Format (MPF) list holds after the main one. Its metadata is what its
+    /// Exif segment records, read as in a raw file: the camera, its serial
+    /// number, the capture time, the exposure, the lens and the
+    /// orientation. Its image size is the size of the picture, and it has
+    /// no raw size.
     Jpeg,
 }
 
