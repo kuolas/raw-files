@@ -10,7 +10,7 @@ use std::io;
 /// raw-files' [`Error`].
 pub type Result<T, E = Error> = std::result::Result<T, E>;
 
-/// An error from reading a RAW file.
+/// An error from reading a camera file, a RAW file or a JPEG.
 ///
 /// [`kind()`](Error::kind) says what went wrong, by category, and
 /// [`offset()`](Error::offset) says where in the file, when that is known.
@@ -65,7 +65,8 @@ pub enum ErrorKind {
     /// The reader failed, including when the file shrank while it was being
     /// read.
     Io,
-    /// The file is not a RAW file that this version of raw-files recognises.
+    /// The file is not a RAW file or a JPEG file that this version of
+    /// raw-files recognises.
     UnknownFormat,
     /// The file was recognised, but this variant of its format, or this
     /// feature of it, is not supported.
@@ -113,7 +114,7 @@ impl Error {
         Self::new(ErrorKind::Malformed, message.into(), Some(offset), None)
     }
 
-    /// The file is not a RAW file this version recognises.
+    /// The file is not a RAW file or a JPEG file this version recognises.
     pub(crate) fn unknown_format(message: impl Into<Cow<'static, str>>) -> Self {
         Self::new(ErrorKind::UnknownFormat, message.into(), None, None)
     }

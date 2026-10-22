@@ -8,8 +8,8 @@
 //! previews as JPEG streams, often several, from a thumbnail to a full-size
 //! image. And a JPEG file, the picture a camera writes beside its raw file
 //! or instead of it, is one such stream, with the camera's metadata inside
-//! it, which raw-files is to open as a format of its own, its metadata and
-//! previews read as a raw file's are (ADR014). Both are read by walking the
+//! it, which raw-files opens as a format of its own, its previews found as
+//! a raw file's are (ADR014). Both are read by walking the
 //! stream's segments up to its compressed image:
 //!
 //! - [`probe`] sizes a preview. The tags that describe a preview are often

@@ -1,13 +1,15 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! Embedded previews: the images a camera writes into a RAW file next to the
-//! raw data, and how to choose among them.
+//! Previews: the images a camera writes into a file to show the picture,
+//! such as the JPEGs beside a RAW file's raw data or the smaller copies a
+//! JPEG file carries, the JPEG file itself among them, and how to choose
+//! among them.
 
 use std::ops::Range;
 
 use crate::{Orientation, Size};
 
-/// One embedded preview a camera wrote into the file: where its bytes are,
+/// One preview a camera wrote into the file: where its bytes are,
 /// its measured size, its format and the orientation a viewer must apply.
 ///
 /// A `Preview` describes the image; it does not hold its bytes. It is a

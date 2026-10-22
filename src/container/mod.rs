@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! The containers: file structures that several RAW formats share.
+//! The containers: file structures that several formats share.
 //!
 //! A container module knows the structure and nothing about camera vendors:
 //! the TIFF module reads a TIFF file's structure, the JPEG module the

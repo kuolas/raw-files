@@ -202,7 +202,8 @@ impl Metadata {
     ///
     /// It can include masked border pixels and padding beyond the visible
     /// image. On a camera's medium or small raw it is that smaller stored
-    /// size, not the sensor's.
+    /// size, not the sensor's. A JPEG file holds no raw data, so it has no
+    /// raw size.
     pub fn raw_size(&self) -> Option<Size> {
         self.raw_size
     }
@@ -220,8 +221,11 @@ impl Metadata {
     ///
     /// It is the default crop, not an aspect ratio chosen in the camera. On
     /// a Nikon small raw it counts the stored pixels, which can differ from
-    /// the size the camera's menu names. For a file, it is `None` when there
-    /// is no raw size.
+    /// the size the camera's menu names. For a RAW file, it is `None` when
+    /// there is no raw size.
+    ///
+    /// For a JPEG file, it is the size its frame header gives: the picture's
+    /// own size.
     pub fn image_size(&self) -> Option<Size> {
         self.image_size
     }
