@@ -186,7 +186,7 @@ use crate::container::tiff::tags::{
     JPEG_INTERCHANGE_FORMAT, JPEG_INTERCHANGE_FORMAT_LENGTH, MAKER_NOTE,
 };
 use crate::container::tiff::types::{ASCII, LONG, RATIONAL, SHORT, UNDEFINED};
-use crate::container::tiff::{Ifd, Tree, parse_header_at, skip_damage};
+use crate::container::tiff::{Block, Ifd, Tree, parse_header, skip_damage};
 use crate::error::Result;
 use crate::formats::block_ifd::{block_of, fits, ifd_in};
 use crate::formats::tiff_metadata::{self, Standard};
@@ -318,7 +318,8 @@ pub(super) fn read<R: Read + Seek>(
     let Some(base) = block.start.checked_add(HEADER_AT) else {
         return Ok(None);
     };
-    let Some(header) = skip_damage(parse_header_at(src, base))? else {
+    let header = parse_header(src, &Block::new(base, block.clone()));
+    let Some(header) = skip_damage(header)? else {
         return Ok(None);
     };
     let Some(ifd) = ifd_in(src, &block, base, header.ifd0, header.order, limits)? else {
@@ -1002,7 +1003,7 @@ mod tests {
         PHOTOGRAPHIC_SENSITIVITY, PHOTOMETRIC_INTERPRETATION, SUB_SEC_TIME_ORIGINAL,
     };
     use crate::container::tiff::types::{BYTE, IFD, SRATIONAL};
-    use crate::container::tiff::{parse_header, parse_ifd, walk};
+    use crate::container::tiff::{self, parse_ifd, walk};
     use crate::datetime::DateTime;
     use crate::error::ErrorKind;
     use crate::jpeg_stub::jpeg_stub;
@@ -1240,8 +1241,8 @@ mod tests {
     /// under `limits`.
     fn try_candidate(bytes: Vec<u8>, limits: &Limits) -> Result<Option<Candidate>> {
         let mut src = Source::new(Cursor::new(bytes)).unwrap();
-        let header = parse_header(&mut src).unwrap();
-        let tree = walk(&mut src, header, &Limits::default()).unwrap();
+        let file_block = tiff::Block::file(src.len());
+        let tree = walk(&mut src, &file_block, &Limits::default()).unwrap();
         read_candidate(&mut src, &tree, limits)
     }
 
@@ -1498,17 +1499,19 @@ mod tests {
             let block = block(order, Change::JpegOffsetPastTheBlockFirst);
             let bytes = with_block(order, &block);
 
-            // The PreviewIFD as the file holds it: the out-of-line entry
+            // The PreviewIFD as the file holds it, read from the MakerNote's
+            // base with the whole file as bounds: the out-of-line entry
             // first, its value the 8 bytes just past the block.
             let limits = Limits::default();
             let mut src = Source::new(Cursor::new(bytes.clone())).unwrap();
-            let header = parse_header(&mut src).unwrap();
-            let tree = walk(&mut src, header, &limits).unwrap();
+            let file_block = tiff::Block::file(src.len());
+            let tree = walk(&mut src, &file_block, &limits).unwrap();
             let makernote = read(&mut src, &tree, &limits)
                 .unwrap()
                 .expect("a MakerNote");
             let at = AT + block.preview;
-            let (table, _) = parse_ifd(&mut src, makernote.base, at, makernote.order, &limits)
+            let whole_file = tiff::Block::new(makernote.base, 0..src.len());
+            let (table, _) = parse_ifd(&mut src, &whole_file, at, makernote.order, &limits)
                 .expect("the PreviewIFD");
             let first = &table.entries()[0];
             assert_eq!(first.tag(), JPEG_INTERCHANGE_FORMAT, "{order:?}");
@@ -1628,8 +1631,8 @@ mod tests {
     /// read.
     fn metadata_of(bytes: Vec<u8>) -> Metadata {
         let mut src = Source::new(Cursor::new(bytes)).unwrap();
-        let header = parse_header(&mut src).unwrap();
-        let tree = walk(&mut src, header, &Limits::default()).unwrap();
+        let file_block = tiff::Block::file(src.len());
+        let tree = walk(&mut src, &file_block, &Limits::default()).unwrap();
         let makernote = read(&mut src, &tree, &Limits::default())
             .unwrap()
             .expect("a MakerNote");
@@ -1976,8 +1979,8 @@ mod tests {
             for (count, kept) in [(whole(&block) - 1, false), (whole(&block), true)] {
                 let file = exif_file(order, &block, count, |_, _| {});
                 let mut src = Source::new(Cursor::new(file)).unwrap();
-                let header = parse_header(&mut src).unwrap();
-                let tree = walk(&mut src, header, &Limits::default()).unwrap();
+                let file_block = tiff::Block::file(src.len());
+                let tree = walk(&mut src, &file_block, &Limits::default()).unwrap();
                 let makernote = read(&mut src, &tree, &Limits::default())
                     .unwrap()
                     .expect("a MakerNote");
@@ -4089,8 +4092,8 @@ mod tests {
             assert_eq!(candidate(bytes.clone()), Some(block.candidate(at)), "{at}");
 
             let mut src = Source::new(FailsFar(Cursor::new(bytes))).unwrap();
-            let header = parse_header(&mut src).unwrap();
-            let tree = walk(&mut src, header, &Limits::default()).unwrap();
+            let file_block = tiff::Block::file(src.len());
+            let tree = walk(&mut src, &file_block, &Limits::default()).unwrap();
             let err =
                 read_candidate(&mut src, &tree, &Limits::default()).expect_err("the read fails");
             assert_eq!(err.kind(), ErrorKind::Io, "{at}: {err:?}");
@@ -4118,8 +4121,8 @@ mod tests {
 
         let limits = Limits::default();
         let mut src = Source::new(FailsFar(Cursor::new(bytes))).unwrap();
-        let header = parse_header(&mut src).unwrap();
-        let tree = walk(&mut src, header, &limits).unwrap();
+        let file_block = tiff::Block::file(src.len());
+        let tree = walk(&mut src, &file_block, &limits).unwrap();
         let makernote = read(&mut src, &tree, &limits)
             .unwrap()
             .expect("a MakerNote");

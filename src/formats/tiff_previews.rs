@@ -270,7 +270,7 @@ fn inside(candidate: Candidate, file_len: u64) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::container::tiff::{parse_header, walk};
+    use crate::container::tiff::{Block, walk};
     use crate::error::ErrorKind;
     use crate::formats::testing::{FAR, FailsFar};
     use crate::jpeg_stub::jpeg_stub;
@@ -290,8 +290,8 @@ mod tests {
     /// The result of finding the previews of `bytes`, with `extra`.
     fn try_find(bytes: &[u8], extra: &[Candidate]) -> Result<Vec<Preview>> {
         let mut src = Source::new(Cursor::new(bytes.to_vec()))?;
-        let header = parse_header(&mut src)?;
-        let tree = walk(&mut src, header, &Limits::default())?;
+        let file_block = Block::file(src.len());
+        let tree = walk(&mut src, &file_block, &Limits::default())?;
         find(&mut src, &tree, extra)
     }
 
@@ -842,8 +842,8 @@ mod tests {
             assert_eq!(sizes(&found(&bytes)), [(640, 480)], "{case}");
 
             let mut src = Source::new(FailsFar(Cursor::new(bytes))).unwrap();
-            let header = parse_header(&mut src).unwrap();
-            let tree = walk(&mut src, header, &Limits::default()).unwrap();
+            let file_block = Block::file(src.len());
+            let tree = walk(&mut src, &file_block, &Limits::default()).unwrap();
             let err = find(&mut src, &tree, &[]).expect_err("the read fails");
             assert_eq!(err.kind(), ErrorKind::Io, "{case}: {err:?}");
         }

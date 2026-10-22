@@ -51,7 +51,7 @@ mod tests {
     use crate::container::tiff::tags::{
         JPEG_INTERCHANGE_FORMAT, JPEG_INTERCHANGE_FORMAT_LENGTH, MAKE, NEW_SUBFILE_TYPE,
     };
-    use crate::container::tiff::{parse_header, walk};
+    use crate::container::tiff::{Block, walk};
     use crate::io::Source;
     use crate::jpeg_stub::jpeg_stub;
     use crate::limits::Limits;
@@ -79,8 +79,8 @@ mod tests {
         jpeg(&mut builder, ifd2, 7008, 4672);
         builder.next(ifd0, Some(ifd1)).next(ifd1, Some(ifd2));
         let mut src = Source::new(Cursor::new(builder.build().bytes)).unwrap();
-        let header = parse_header(&mut src).unwrap();
-        let tree = walk(&mut src, header, &Limits::default()).unwrap();
+        let file_block = Block::file(src.len());
+        let tree = walk(&mut src, &file_block, &Limits::default()).unwrap();
 
         let parsed = super::super::parse(&mut src, &tree, &Limits::default()).unwrap();
         let sizes: Vec<(u32, u32)> = parsed

@@ -8,7 +8,7 @@ use std::fs::File;
 use std::io::{Cursor, Read, Seek};
 use std::path::Path;
 
-use crate::container::tiff::{parse_header, walk};
+use crate::container::tiff::{Block, walk};
 use crate::error::{Error, Result};
 use crate::format::Format;
 use crate::formats;
@@ -147,11 +147,11 @@ impl<R: Read + Seek> RawFile<R> {
     pub(crate) fn new(reader: R, limits: Limits) -> Result<Self> {
         let mut src = Source::new(reader)?;
         // TIFF is the one container so far, and every format the crate
-        // reads is built on it, so a file that is not TIFF is no format the
-        // crate knows. A format on another container would be tried here,
-        // when the header is not TIFF's.
-        let header = parse_header(&mut src)?;
-        let tree = walk(&mut src, header, &limits)?;
+        // reads is built on it, so a file that is not TIFF, whose header the
+        // walk refuses, is no format the crate knows. A format on another
+        // container would be tried here, when the header is not TIFF's.
+        let block = Block::file(src.len());
+        let tree = walk(&mut src, &block, &limits)?;
         match formats::detect(&formats::all(), &mut src, &tree, &limits)? {
             Some((format, parsed)) => Ok(Self::from_parts(src, format, parsed, limits)),
             None => Err(Error::unknown_format(

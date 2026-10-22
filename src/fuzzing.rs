@@ -17,15 +17,15 @@
 use std::io::Cursor;
 
 use crate::container::jpeg::probe;
-use crate::container::tiff::{parse_header, walk};
+use crate::container::tiff::{Block, walk};
 use crate::geometry::Size;
 use crate::io::Source;
 use crate::limits::Limits;
 use crate::metadata::{Focus, Metadata};
 use crate::options::Options;
 
-/// Reads `data` as a TIFF file: the header, the walk with the default
-/// limits, then every value of every IFD the walk found, through each
+/// Reads `data` as a TIFF file: the walk with the default limits, header
+/// first, then every value of every IFD the walk found, through each
 /// accessor.
 ///
 /// Whatever `data` holds, this must return, never panic, and do so in
@@ -35,10 +35,8 @@ pub fn tiff_walk(data: &[u8]) {
     let Ok(mut src) = Source::new(Cursor::new(data)) else {
         return;
     };
-    let Ok(header) = parse_header(&mut src) else {
-        return;
-    };
-    let Ok(tree) = walk(&mut src, header, &Limits::default()) else {
+    let block = Block::file(src.len());
+    let Ok(tree) = walk(&mut src, &block, &Limits::default()) else {
         return;
     };
     for (_, ifd) in tree.iter() {
