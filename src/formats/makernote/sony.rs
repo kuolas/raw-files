@@ -153,12 +153,12 @@ use crate::metadata::Focus;
 /// The Sony MakerNote tag that records how the camera focused
 /// (FocusMode): one BYTE, 0 for manual focus, and 2, 3, 4, 6 or 7 for the
 /// autofocus modes AF-S, AF-C, AF-A, DMF and AF-D.
-pub(super) const FOCUS_MODE: u16 = 0x201B;
+pub(in crate::formats) const FOCUS_MODE: u16 = 0x201B;
 
 /// The Sony MakerNote tag that records where the camera focused
 /// (FocusLocation): four SHORTs, the width and height of the frame, then
 /// the x and y of the focus area's centre in it.
-pub(super) const FOCUS_LOCATION: u16 = 0x2027;
+pub(in crate::formats) const FOCUS_LOCATION: u16 = 0x2027;
 
 /// The Sony MakerNote tag that records the size of the focus area
 /// (FocusFrameSize): six UNDEFINED bytes, the area's width and height as
@@ -221,7 +221,7 @@ const NOT_SONY: [&[u8]; 3] = [SONY_PI, PREMI, SONY_PIC];
 ///
 /// See the [module documentation](self) for the layouts.
 #[derive(Debug)]
-pub(super) struct MakerNote {
+pub(in crate::formats) struct MakerNote {
     /// The MakerNote IFD, which holds Sony's tags: at the block's start, or
     /// 12 bytes in after a header, inside the block with its whole entry
     /// table, its offsets counted from the start of the file. Its entries
@@ -244,7 +244,7 @@ pub(super) struct MakerNote {
 /// # Errors
 ///
 /// `Io` when the reader fails. Nothing the block holds is an error.
-pub(super) fn read<R: Read + Seek>(
+pub(in crate::formats) fn read<R: Read + Seek>(
     src: &mut Source<R>,
     tree: &Tree,
     limits: &Limits,
@@ -318,7 +318,7 @@ fn ifd_start(head: &[u8]) -> Option<u64> {
 /// # Errors
 ///
 /// `Io` when the reader fails. Nothing the block holds is an error.
-pub(super) fn focus<R: Read + Seek>(
+pub(in crate::formats) fn focus<R: Read + Seek>(
     src: &mut Source<R>,
     makernote: &MakerNote,
 ) -> Result<Option<Focus>> {

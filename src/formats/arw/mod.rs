@@ -34,9 +34,9 @@
 //! The search for the previews is in `previews.rs`. The metadata comes
 //! from the standard tags, through the reader the TIFF-based formats share,
 //! and the focus point, which no standard tag records, from Sony's
-//! MakerNote, read for that alone, through `makernote.rs`.
+//! MakerNote, read for that alone, through [`sony`], the reader of Sony's
+//! MakerNote shared with any other format whose files carry it.
 
-mod makernote;
 mod previews;
 
 use std::io::{Read, Seek};
@@ -47,6 +47,7 @@ use crate::container::tiff::tags::DNG_PRIVATE_DATA;
 use crate::container::tiff::types::BYTE;
 use crate::error::Result;
 use crate::format::Format;
+use crate::formats::makernote::sony;
 use crate::io::Source;
 use crate::limits::Limits;
 
@@ -143,28 +144,28 @@ fn claims<R: Read + Seek>(src: &mut Source<R>, tree: &Tree) -> Result<bool> {
 /// what the shared TIFF metadata reader reads from the standard tags: the
 /// camera, the capture time, the orientation, the exposure, the lens and
 /// the sizes. When there is a MakerNote, it then gives the focus point,
-/// which no standard tag records ([`makernote::focus`]).
+/// which no standard tag records ([`sony::focus`]).
 ///
 /// # Errors
 ///
-/// As for [`makernote::read`], [`previews::previews`],
-/// [`tiff_metadata::read`] and [`makernote::focus`]: `Io` when the reader
+/// As for [`sony::read`], [`previews::previews`],
+/// [`tiff_metadata::read`] and [`sony::focus`]: `Io` when the reader
 /// fails. Nothing the file holds is an error here.
 fn parse<R: Read + Seek>(src: &mut Source<R>, tree: &Tree, limits: &Limits) -> Result<Parsed> {
-    let makernote = makernote::read(src, tree, limits)?;
+    let makernote = sony::read(src, tree, limits)?;
     let previews = previews::previews(src, tree)?;
     let mut metadata = tiff_metadata::read(src, tree)?.metadata;
     if let Some(makernote) = &makernote {
-        metadata.focus = makernote::focus(src, makernote)?;
+        metadata.focus = sony::focus(src, makernote)?;
     }
     Ok(Parsed { previews, metadata })
 }
 
 #[cfg(test)]
 mod tests {
-    use super::makernote::{FOCUS_LOCATION, FOCUS_MODE};
     use super::*;
     use crate::container::tiff::tags::{DNG_VERSION, MAKE, MAKER_NOTE};
+    use crate::formats::makernote::sony::{FOCUS_LOCATION, FOCUS_MODE};
     use crate::formats::testing::file;
     use crate::geometry::{Point, Size};
     use crate::metadata::Focus;
