@@ -10,7 +10,7 @@
 
 mod support;
 
-use support::jpeg::{FRAME_HEADER_AT, jpeg_stub, segment};
+use support::jpeg_stub::{FRAME_HEADER_AT, jpeg_stub, segment};
 
 #[test]
 fn a_stub_starts_ends_and_has_its_frame_header_where_documented() {

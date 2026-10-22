@@ -151,7 +151,7 @@
 //! Every stub JPEG is a baseline one. The tags that the shared builder has
 //! no constant for are named here.
 
-use super::jpeg::jpeg_stub;
+use super::jpeg_stub::jpeg_stub;
 use super::tiff_builder::{BlobId, Built, IfdId, Order, TiffBuilder};
 
 /// Whether an IFD's image is the full-resolution one, 0, or a
