@@ -14,7 +14,8 @@
 //! opens as what it is; [`Format::from_extension`] is for file pickers,
 //! which must choose what to offer before opening anything. The preview
 //! finder that the TIFF-based formats share lives in `tiff_previews`, and
-//! the metadata reader they share in `tiff_metadata`. The Nikon and Sony
+//! the metadata reader they share in `tiff_metadata`; the JPEG format uses
+//! both over its Exif segment's TIFF structure. The Nikon and Sony
 //! MakerNote readers live in `makernote`, apart from the formats, so that
 //! every format whose files carry a maker's MakerNote reads it with the
 //! same reader; they read their IFDs inside the MakerNote's block with the
@@ -41,8 +42,9 @@
 //! header gives the picture's size and is not lossless, and opens with its
 //! previews, the file itself, the thumbnail of its Exif segment and the
 //! images of its MPF list, which the JPEG reader checks with the shared
-//! finder, and with its orientation and image size. A JPEG file no format
-//! claims is of no format the crate recognises.
+//! finder, and with its metadata, which it reads from its Exif segment
+//! with the shared reader, its image size the picture's. A JPEG file no
+//! format claims is of no format the crate recognises.
 //!
 //! A DNG is of no format the crate recognises either, whatever its Make
 //! says: converters and the phones that write DNG keep the maker's name in

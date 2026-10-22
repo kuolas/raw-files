@@ -9,7 +9,10 @@
 //! IFD, and the sizes in the IFD of the raw data. So [`read`] reads them
 //! once, over the tree, for every format, and a format adds only what its
 //! own structures record and the standard tags lack (ADR011, which chose
-//! the standard tags first).
+//! the standard tags first). The JPEG reader shares it too, over the tree
+//! of a JPEG file's Exif segment, and then decides the sizes itself: the
+//! picture's own size in place of the ones read here, and no raw size
+//! (ADR014).
 //!
 //! The rules:
 //!
@@ -129,8 +132,9 @@ pub(crate) struct Standard {
     pub(crate) from_default_crop: bool,
 }
 
-/// Reads the metadata of the TIFF-based file in `src`, whose IFDs are
-/// `tree`, with whether its image size is a default crop.
+/// Reads the metadata that `tree` records, the IFDs of a TIFF-based file
+/// in `src` or of the Exif segment of a JPEG file in `src`, with whether
+/// its image size is a default crop.
 ///
 /// See the [module documentation](self) for the rules.
 ///

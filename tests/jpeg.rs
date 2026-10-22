@@ -3,25 +3,152 @@
 //! The JPEG reader from outside the crate, on JPEG files built in code: what
 //! they open as, which previews they list (the file itself, the thumbnail
 //! of the Exif segment and the images of the MPF list), what reading one
-//! returns, and the orientation and image size the metadata gives. Then
-//! the files it refuses, and the damage that costs a file some of its
-//! previews but never the file itself.
+//! returns, and the metadata it gives: every value the Exif segment
+//! records, read as in a raw file, and the image size of the picture,
+//! whatever size the tags give. Then the files it refuses, and the damage
+//! that costs a file some of its previews or of its metadata but never the
+//! file itself.
 
 mod support;
 
 use std::io::Cursor;
 use std::ops::Range;
 
-use raw_files::{ErrorKind, Format, Metadata, Orientation, Preview, PreviewFormat, RawFile, Size};
+use raw_files::{
+    DateTime, ErrorKind, Exposure, Format, Lens, Limits, Metadata, Options, Orientation, Preview,
+    PreviewFormat, Rational, RawFile, SignedRational, Size,
+};
 use support::jpeg_builder::{
     Built, JpegBuilder, LONG, MP_ENTRY, MP_ENTRY_AT, MP_ENTRY_LEN, MP_INDEX_AT, MPF_ID,
     MPF_VERSION, NUMBER_OF_IMAGES, UNDEFINED,
 };
 use support::jpeg_stub::{jpeg_stub, segment};
-use support::tiff_builder::{Order, TiffBuilder};
+use support::tiff_builder::{EXIF_IFD, IfdId, Order, TiffBuilder};
+
+/// The width of the image an IFD describes (ImageWidth).
+const IMAGE_WIDTH: u16 = 0x0100;
+
+/// The height of the image an IFD describes (ImageLength).
+const IMAGE_LENGTH: u16 = 0x0101;
+
+/// What the samples of the image an IFD describes mean
+/// (PhotometricInterpretation).
+const PHOTOMETRIC_INTERPRETATION: u16 = 0x0106;
+
+/// The PhotometricInterpretation of raw data: a colour filter array.
+const CFA: u16 = 32803;
+
+/// The camera's maker, in IFD0 (Make).
+const MAKE: u16 = 0x010F;
+
+/// The camera's model, in IFD0 (Model).
+const MODEL: u16 = 0x0110;
 
 /// The Orientation tag, in IFD0.
 const ORIENTATION: u16 = 0x0112;
+
+/// Where the visible image starts in raw data, column then row
+/// (DefaultCropOrigin).
+const DEFAULT_CROP_ORIGIN: u16 = 0xC61F;
+
+/// The size of the visible image in raw data (DefaultCropSize).
+const DEFAULT_CROP_SIZE: u16 = 0xC620;
+
+/// How long the shutter was open, in seconds, in the Exif IFD
+/// (ExposureTime).
+const EXPOSURE_TIME: u16 = 0x829A;
+
+/// The f-number, in the Exif IFD (FNumber).
+const F_NUMBER: u16 = 0x829D;
+
+/// The ISO, in the Exif IFD (PhotographicSensitivity).
+const PHOTOGRAPHIC_SENSITIVITY: u16 = 0x8827;
+
+/// When the picture was taken, in the Exif IFD (DateTimeOriginal).
+const DATE_TIME_ORIGINAL: u16 = 0x9003;
+
+/// The capture time's offset from UTC, in the Exif IFD
+/// (OffsetTimeOriginal).
+const OFFSET_TIME_ORIGINAL: u16 = 0x9011;
+
+/// The exposure compensation in EV, in the Exif IFD (ExposureBiasValue).
+const EXPOSURE_BIAS_VALUE: u16 = 0x9204;
+
+/// The focal length in millimetres, in the Exif IFD (FocalLength).
+const FOCAL_LENGTH: u16 = 0x920A;
+
+/// The capture time's fraction of a second, in the Exif IFD
+/// (SubSecTimeOriginal).
+const SUB_SEC_TIME_ORIGINAL: u16 = 0x9291;
+
+/// The width of the picture, as the Exif IFD records it
+/// (PixelXDimension).
+const PIXEL_X_DIMENSION: u16 = 0xA002;
+
+/// The height of the picture, as the Exif IFD records it
+/// (PixelYDimension).
+const PIXEL_Y_DIMENSION: u16 = 0xA003;
+
+/// The camera body's serial number, in the Exif IFD (BodySerialNumber).
+const BODY_SERIAL_NUMBER: u16 = 0xA431;
+
+/// The lens's focal lengths and f-numbers, in the Exif IFD
+/// (LensSpecification).
+const LENS_SPECIFICATION: u16 = 0xA432;
+
+/// The lens's maker, in the Exif IFD (LensMake).
+const LENS_MAKE: u16 = 0xA433;
+
+/// The lens's model, in the Exif IFD (LensModel).
+const LENS_MODEL: u16 = 0xA434;
+
+/// The lens's serial number, in the Exif IFD (LensSerialNumber).
+const LENS_SERIAL_NUMBER: u16 = 0xA435;
+
+/// The tags of the Exif IFD that [`camera_exif`] writes, each of which
+/// gives a value of the metadata.
+const EXIF_IFD_TAGS: [u16; 13] = [
+    BODY_SERIAL_NUMBER,
+    DATE_TIME_ORIGINAL,
+    SUB_SEC_TIME_ORIGINAL,
+    OFFSET_TIME_ORIGINAL,
+    EXPOSURE_TIME,
+    F_NUMBER,
+    PHOTOGRAPHIC_SENSITIVITY,
+    EXPOSURE_BIAS_VALUE,
+    FOCAL_LENGTH,
+    LENS_MAKE,
+    LENS_MODEL,
+    LENS_SERIAL_NUMBER,
+    LENS_SPECIFICATION,
+];
+
+/// The camera's make, in IFD0. This and the values below are those
+/// [`camera_exif`] writes: made up, in the shape a Nikon Z 9 records them.
+const CAMERA_MAKE: &str = "NIKON CORPORATION";
+/// The camera's model, in IFD0.
+const CAMERA_MODEL: &str = "NIKON Z 9";
+/// The camera's serial number, in the Exif IFD.
+const CAMERA_SERIAL_NUMBER: &str = "1234567";
+/// The capture time: DateTimeOriginal, SubSecTimeOriginal and
+/// OffsetTimeOriginal, in the Exif IFD, which [`capture_time`] gives as
+/// read.
+const CAPTURE_TIME: [&str; 3] = ["2024:06:15 09:30:12", "25", "+02:00"];
+/// The exposure time, as a fraction, in the Exif IFD.
+const EXPOSURE_SECONDS: (u32, u32) = (10, 2500);
+/// The f-number, as a fraction, in the Exif IFD.
+const APERTURE: (u32, u32) = (56, 10);
+/// The ISO, in the Exif IFD.
+const ISO: u16 = 400;
+/// The exposure compensation, as a fraction, in the Exif IFD.
+const EXPOSURE_BIAS: (i32, i32) = (-4, 6);
+/// The focal length, as a fraction, in the Exif IFD.
+const FOCAL_MILLIMETRES: (u32, u32) = (500, 10);
+/// The lens's make, model and serial number, in the Exif IFD.
+const LENS: [&str; 3] = ["NIKON", "NIKKOR Z 24-70mm f/2.8 S", "20012345"];
+/// The lens's range, in the Exif IFD: the shortest and the longest focal
+/// length, then the f-number at each.
+const LENS_RANGE: [(u32, u32); 4] = [(240, 10), (700, 10), (28, 10), (28, 10)];
 
 /// The JPEGInterchangeFormat tag: where a thumbnail's SOI lies, counted from
 /// the TIFF header.
@@ -99,8 +226,19 @@ fn whole(built: &Built) -> Range<u64> {
 /// as a JPEG with the previews `previews`, smallest first, and the metadata
 /// `metadata`; `label` names the file in a failure.
 fn assert_opens(bytes: &[u8], previews: &[Seen], metadata: &Metadata, label: &str) {
-    let from_bytes = RawFile::from_bytes(bytes).unwrap();
-    let from_reader = RawFile::from_reader(Cursor::new(bytes.to_vec())).unwrap();
+    assert_opens_with(&Options::new(), bytes, previews, metadata, label);
+}
+
+/// [`assert_opens`], with the options `options`.
+fn assert_opens_with(
+    options: &Options,
+    bytes: &[u8],
+    previews: &[Seen],
+    metadata: &Metadata,
+    label: &str,
+) {
+    let from_bytes = options.from_bytes(bytes).unwrap();
+    let from_reader = options.from_reader(Cursor::new(bytes.to_vec())).unwrap();
     for (how, format, found, read) in [
         (
             "bytes",
@@ -137,10 +275,20 @@ fn main_metadata(orientation: Orientation) -> Metadata {
 /// where the builder puts it. Returns the bytes and where the builder put
 /// the thumbnail in them.
 fn exif(orientation: u16, thumbnail_at: Option<u32>) -> (Vec<u8>, Range<u64>) {
+    exif_with(orientation, thumbnail_at, |_, _| {})
+}
+
+/// As [`exif`], with what `tags` adds, given the builder and IFD0.
+fn exif_with(
+    orientation: u16,
+    thumbnail_at: Option<u32>,
+    tags: impl FnOnce(&mut TiffBuilder, IfdId),
+) -> (Vec<u8>, Range<u64>) {
     let mut tiff = TiffBuilder::new(Order::Little);
     let (ifd0, ifd1) = (tiff.ifd(), tiff.ifd());
     tiff.short(ifd0, ORIENTATION, &[orientation])
         .next(ifd0, Some(ifd1));
+    tags(&mut tiff, ifd0);
     let blob = tiff.blob(&jpeg_stub(THUMBNAIL.0, THUMBNAIL.1, 0xC0));
     match thumbnail_at {
         Some(at) => {
@@ -174,18 +322,208 @@ fn in_file(built: &Built, in_tiff: &Range<u64>) -> Range<u64> {
 /// Returns the file and where its thumbnail lies in the TIFF structure.
 fn camera_jpeg(jfif: bool) -> (Built, Range<u64>) {
     let (tiff, thumbnail) = exif(ROTATE_90, None);
+    (camera_file(jfif, &tiff, &[]), thumbnail)
+}
+
+/// A file laid out as [`camera_jpeg`]'s, whose Exif segment holds the TIFF
+/// structure `tiff`, and with `outside`, when not empty, after the main
+/// image's EOI and before the MPF images: inside the file, outside the
+/// segment.
+fn camera_file(jfif: bool, tiff: &[u8], outside: &[u8]) -> Built {
     let mut builder = JpegBuilder::new();
     if jfif {
         builder.jfif();
     }
     builder
-        .exif(&tiff)
+        .exif(tiff)
         .mpf(Order::Little)
         .frame(MAIN.0, MAIN.1, 0xC0);
+    if !outside.is_empty() {
+        builder.after_eoi(outside);
+    }
     for (width, height) in MPF_IMAGES {
         builder.mpf_image(width, height, &[], 512);
     }
-    (builder.build(), thumbnail)
+    builder.build()
+}
+
+/// The TIFF structure of a camera's Exif segment, as [`exif`] writes it
+/// with Orientation 6, and with every value the metadata reads: IFD0's
+/// Make and Model, [`CAMERA_MAKE`] and [`CAMERA_MODEL`], and an Exif IFD
+/// holding each of [`EXIF_IFD_TAGS`], with the values below them, each of
+/// the type the Exif standard gives it. Then `change` adds what a test
+/// needs, given the builder, IFD0 and the Exif IFD. Returns the bytes and
+/// where the builder put the thumbnail in them.
+fn camera_exif(change: impl FnOnce(&mut TiffBuilder, IfdId, IfdId)) -> (Vec<u8>, Range<u64>) {
+    let [date_time, subseconds, offset] = CAPTURE_TIME;
+    let [lens_make, lens_model, lens_serial_number] = LENS;
+    exif_with(ROTATE_90, None, |tiff, ifd0| {
+        let exif = tiff.ifd();
+        tiff.ascii(ifd0, MAKE, CAMERA_MAKE)
+            .ascii(ifd0, MODEL, CAMERA_MODEL)
+            .exif(ifd0, exif);
+        tiff.ascii(exif, BODY_SERIAL_NUMBER, CAMERA_SERIAL_NUMBER)
+            .ascii(exif, DATE_TIME_ORIGINAL, date_time)
+            .ascii(exif, SUB_SEC_TIME_ORIGINAL, subseconds)
+            .ascii(exif, OFFSET_TIME_ORIGINAL, offset)
+            .rational(exif, EXPOSURE_TIME, &[EXPOSURE_SECONDS])
+            .rational(exif, F_NUMBER, &[APERTURE])
+            .short(exif, PHOTOGRAPHIC_SENSITIVITY, &[ISO])
+            .srational(exif, EXPOSURE_BIAS_VALUE, &[EXPOSURE_BIAS])
+            .rational(exif, FOCAL_LENGTH, &[FOCAL_MILLIMETRES])
+            .ascii(exif, LENS_MAKE, lens_make)
+            .ascii(exif, LENS_MODEL, lens_model)
+            .ascii(exif, LENS_SERIAL_NUMBER, lens_serial_number)
+            .rational(exif, LENS_SPECIFICATION, &LENS_RANGE);
+        change(tiff, ifd0, exif);
+    })
+}
+
+/// The capture time [`CAPTURE_TIME`] records: 15 June 2024 at 09:30:12,
+/// a quarter of a second, two digits, and two hours ahead of UTC.
+fn capture_time() -> DateTime {
+    DateTime::new(2024, 6, 15, 9, 30, 12)
+        .and_then(|time| time.with_subseconds(250_000_000, 2))
+        .and_then(|time| time.with_offset_minutes(120))
+        .unwrap()
+}
+
+/// `(numerator, denominator)` as a fraction of the metadata.
+fn fraction((numerator, denominator): (u32, u32)) -> Rational {
+    Rational::new(numerator, denominator).unwrap()
+}
+
+/// The metadata of a JPEG whose main image is of size [`MAIN`] and whose
+/// Exif segment holds [`camera_exif`]'s values, but the values of the
+/// tags in `lost`: the image size, no raw size and no focus point, and
+/// every value the segment records but those. The capture time goes with
+/// its DateTimeOriginal, which no test loses apart from its fraction and
+/// its offset.
+fn camera_metadata_without(lost: &[u16]) -> Metadata {
+    let kept = |tag: u16| !lost.contains(&tag);
+    let mut metadata = main_metadata(Orientation::Rotate90);
+    if kept(MAKE) {
+        metadata = metadata.with_make(CAMERA_MAKE);
+    }
+    if kept(MODEL) {
+        metadata = metadata.with_model(CAMERA_MODEL);
+    }
+    if kept(BODY_SERIAL_NUMBER) {
+        metadata = metadata.with_serial_number(CAMERA_SERIAL_NUMBER);
+    }
+    if kept(DATE_TIME_ORIGINAL) {
+        metadata = metadata.with_capture_time(capture_time());
+    }
+    let mut exposure = Exposure::default();
+    if kept(EXPOSURE_TIME) {
+        exposure = exposure.with_exposure_time(fraction(EXPOSURE_SECONDS));
+    }
+    if kept(F_NUMBER) {
+        exposure = exposure.with_f_number(fraction(APERTURE));
+    }
+    if kept(PHOTOGRAPHIC_SENSITIVITY) {
+        exposure = exposure.with_iso(u32::from(ISO));
+    }
+    if kept(EXPOSURE_BIAS_VALUE) {
+        let (numerator, denominator) = EXPOSURE_BIAS;
+        exposure =
+            exposure.with_exposure_bias(SignedRational::new(numerator, denominator).unwrap());
+    }
+    if kept(FOCAL_LENGTH) {
+        exposure = exposure.with_focal_length(fraction(FOCAL_MILLIMETRES));
+    }
+    let [lens_make, lens_model, lens_serial_number] = LENS;
+    let mut lens = Lens::builder();
+    if kept(LENS_MAKE) {
+        lens = lens.make(lens_make);
+    }
+    if kept(LENS_MODEL) {
+        lens = lens.model(lens_model);
+    }
+    if kept(LENS_SERIAL_NUMBER) {
+        lens = lens.serial_number(lens_serial_number);
+    }
+    if kept(LENS_SPECIFICATION) {
+        let [shortest, longest, at_shortest, at_longest] = LENS_RANGE.map(fraction);
+        lens = lens
+            .min_focal_length(shortest)
+            .max_focal_length(longest)
+            .f_number_at_min_focal_length(at_shortest)
+            .f_number_at_max_focal_length(at_longest);
+    }
+    metadata = metadata.with_exposure(exposure);
+    match lens.build() {
+        Some(lens) => metadata.with_lens(lens),
+        None => metadata,
+    }
+}
+
+/// The little-endian 16-bit number at `at` in `bytes`.
+fn le_u16(bytes: &[u8], at: usize) -> u16 {
+    u16::from_le_bytes([bytes[at], bytes[at + 1]])
+}
+
+/// The little-endian 32-bit number at `at` in `bytes`.
+fn le_u32(bytes: &[u8], at: usize) -> u32 {
+    u32::from_le_bytes(bytes[at..at + 4].try_into().unwrap())
+}
+
+/// Where the IFD at offset `ifd` of the little-endian TIFF structure
+/// `tiff` lies: its count of entries, its entries and its next-IFD
+/// pointer. The values stored after it are not part of it.
+fn ifd_range(tiff: &[u8], ifd: usize) -> Range<usize> {
+    ifd..ifd + 2 + 12 * usize::from(le_u16(tiff, ifd)) + 4
+}
+
+/// Where the value field, the last four bytes, of the entry of tag `tag`
+/// lies in the IFD at offset `ifd` of the little-endian TIFF structure
+/// `tiff`.
+fn field_of(tiff: &[u8], ifd: usize, tag: u16) -> Range<usize> {
+    let entry = (0..usize::from(le_u16(tiff, ifd)))
+        .map(|n| ifd + 2 + 12 * n)
+        .find(|&entry| le_u16(tiff, entry) == tag)
+        .expect("the tag is in the IFD");
+    entry + 8..entry + 12
+}
+
+/// Where the ASCII value of the entry of tag `tag` lies in the IFD at
+/// offset `ifd` of the little-endian TIFF structure `tiff`, a value longer
+/// than its field, at the offset the field holds over the count the entry
+/// gives.
+fn ascii_of(tiff: &[u8], ifd: usize, tag: u16) -> Range<usize> {
+    let field = field_of(tiff, ifd, tag);
+    let count = usize::try_from(le_u32(tiff, field.start - 4)).unwrap();
+    assert!(count > 4, "the value lies outside its entry");
+    let at = usize::try_from(le_u32(tiff, field.start)).unwrap();
+    at..at + count
+}
+
+/// The offsets of IFD0 and of the Exif IFD in the little-endian TIFF
+/// structure `tiff`: as its header and IFD0's Exif IFD entry give them.
+fn ifd0_and_exif(tiff: &[u8]) -> (usize, usize) {
+    let ifd0 = usize::try_from(le_u32(tiff, 4)).unwrap();
+    let exif = usize::try_from(le_u32(tiff, field_of(tiff, ifd0, EXIF_IFD).start)).unwrap();
+    (ifd0, exif)
+}
+
+/// A file laid out as [`camera_file`]'s, whose Exif segment holds `tiff`,
+/// a little-endian TIFF structure, but for the offset in its four bytes at
+/// `pointer`, which points at a copy of `tiff[moved]` laid after the main
+/// image's EOI: inside the file, outside the segment. The copy is the
+/// bytes as they are, so any offset it holds still points inside the
+/// segment, and reading it would give what reading the original gives.
+/// The file is built once to learn where the copy lands, then with the
+/// pointer: the segment's length does not depend on it.
+fn moved_outside(tiff: &[u8], moved: Range<usize>, pointer: Range<usize>) -> Built {
+    let copy = &tiff[moved];
+    let first = camera_file(false, tiff, copy);
+    let at = u32::try_from(first.after_eoi(0) - first.exif_tiff(0).start).unwrap();
+    let mut changed = tiff.to_vec();
+    changed[pointer].copy_from_slice(&at.to_le_bytes());
+    let built = camera_file(false, &changed, copy);
+    assert_eq!(built.after_eoi(0), first.after_eoi(0));
+    assert!(built.after_eoi(0) >= built.exif_tiff(0).end);
+    built
 }
 
 /// The four previews of [`camera_jpeg`], smallest first: the thumbnail,
@@ -287,6 +625,101 @@ fn a_jfif_segment_before_the_exif_segment_changes_nothing() {
         &main_metadata(Orientation::Rotate90),
         "JFIF first",
     );
+}
+
+/// `fraction` as the numerator and the denominator it stores.
+fn stored(fraction: Option<Rational>) -> Option<(u32, u32)> {
+    fraction.map(|fraction| (fraction.numerator, fraction.denominator))
+}
+
+#[test]
+fn a_camera_jpeg_gives_every_value_its_exif_segment_records() {
+    let (tiff, thumbnail) = camera_exif(|_, _, _| {});
+    let built = camera_file(false, &tiff, &[]);
+    let previews = camera_jpeg_previews(&built, &thumbnail);
+    assert_opens(
+        &built.bytes,
+        &previews,
+        &camera_metadata_without(&[]),
+        "camera JPEG with metadata",
+    );
+
+    // Each value, as the tags give it; the sizes, as the frame header
+    // gives them; and no focus point, which no standard tag records.
+    let file = RawFile::from_bytes(&built.bytes).unwrap();
+    let read = file.metadata();
+    assert_eq!(read.make(), Some(CAMERA_MAKE));
+    assert_eq!(read.model(), Some(CAMERA_MODEL));
+    assert_eq!(read.serial_number(), Some(CAMERA_SERIAL_NUMBER));
+    assert_eq!(read.capture_time(), Some(capture_time()));
+    assert_eq!(
+        read.capture_time().map(|time| time.to_string()).as_deref(),
+        Some("2024-06-15T09:30:12.25+02:00")
+    );
+    assert_eq!(read.orientation(), Orientation::Rotate90);
+    let exposure = read.exposure();
+    assert_eq!(stored(exposure.exposure_time()), Some(EXPOSURE_SECONDS));
+    assert_eq!(stored(exposure.f_number()), Some(APERTURE));
+    assert_eq!(exposure.iso(), Some(u32::from(ISO)));
+    assert_eq!(
+        exposure
+            .exposure_bias()
+            .map(|bias| (bias.numerator, bias.denominator)),
+        Some(EXPOSURE_BIAS)
+    );
+    assert_eq!(stored(exposure.focal_length()), Some(FOCAL_MILLIMETRES));
+    let lens = read.lens().expect("a lens");
+    assert_eq!(
+        [lens.make(), lens.model(), lens.serial_number()],
+        LENS.map(Some)
+    );
+    assert_eq!(
+        [
+            lens.min_focal_length(),
+            lens.max_focal_length(),
+            lens.f_number_at_min_focal_length(),
+            lens.f_number_at_max_focal_length(),
+        ]
+        .map(stored),
+        LENS_RANGE.map(Some)
+    );
+    assert_eq!(read.raw_size(), None);
+    assert_eq!(read.image_size(), Some(size_of(MAIN)));
+    assert_eq!(read.focus(), None);
+}
+
+#[test]
+fn the_image_size_is_the_pictures_whatever_the_tags_say() {
+    // Every size the tags give is another than the picture's: IFD0
+    // describes raw data, as a raw file's IFD does, with a size and a
+    // default crop inside it, which in a raw file would give the raw size
+    // and the image size; and the Exif pixel dimensions, which an editor
+    // may leave unchanged, give a third.
+    const RAW: [u32; 2] = [6064, 4040];
+    const CROP_ORIGIN: [u32; 2] = [8, 4];
+    const CROP: [u32; 2] = [6048, 4032];
+    const PIXELS: [u32; 2] = [4000, 3000];
+    let (tiff, thumbnail) = camera_exif(|tiff, ifd0, exif| {
+        tiff.short(ifd0, PHOTOMETRIC_INTERPRETATION, &[CFA])
+            .long(ifd0, IMAGE_WIDTH, &[RAW[0]])
+            .long(ifd0, IMAGE_LENGTH, &[RAW[1]])
+            .long(ifd0, DEFAULT_CROP_ORIGIN, &CROP_ORIGIN)
+            .long(ifd0, DEFAULT_CROP_SIZE, &CROP)
+            .long(exif, PIXEL_X_DIMENSION, &[PIXELS[0]])
+            .long(exif, PIXEL_Y_DIMENSION, &[PIXELS[1]]);
+    });
+    let built = camera_file(false, &tiff, &[]);
+    let previews = camera_jpeg_previews(&built, &thumbnail);
+    assert_opens(
+        &built.bytes,
+        &previews,
+        &camera_metadata_without(&[]),
+        "sizes in the tags",
+    );
+
+    let file = RawFile::from_bytes(&built.bytes).unwrap();
+    assert_eq!(file.metadata().image_size(), Some(size_of(MAIN)));
+    assert_eq!(file.metadata().raw_size(), None);
 }
 
 #[test]
@@ -397,38 +830,23 @@ fn a_jpeg_without_a_picture_to_show_is_of_unknown_format() {
 }
 
 #[test]
-fn a_damaged_exif_segment_costs_the_thumbnail_and_the_orientation_only() {
-    // A file laid out as `camera_jpeg`, whose Exif segment holds the TIFF
-    // structure `tiff`.
-    let build = |tiff: &[u8]| {
-        let mut builder = JpegBuilder::new();
-        builder
-            .exif(tiff)
-            .mpf(Order::Little)
-            .frame(MAIN.0, MAIN.1, 0xC0);
-        for (width, height) in MPF_IMAGES {
-            builder.mpf_image(width, height, &[], 512);
-        }
-        builder.build()
-    };
-    let (sound, _) = exif(ROTATE_90, None);
+fn a_damaged_exif_segment_costs_the_metadata_and_the_thumbnail_only() {
+    let (sound, _) = camera_exif(|_, _, _| {});
 
     // A TIFF header whose byte-order mark is neither `II` nor `MM`.
     let mut no_header = sound.clone();
     no_header[..2].copy_from_slice(b"XX");
-    // IFD0 at the main image's frame header: inside the file, outside the
-    // segment. The structure's length does not depend on the offset.
-    let first = build(&sound);
-    let ifd0_at = u32::try_from(first.frame_header() - first.exif_tiff(0).start).unwrap();
-    let mut ifd0_outside = sound.clone();
-    ifd0_outside[4..8].copy_from_slice(&ifd0_at.to_le_bytes());
+    let no_header = camera_file(false, &no_header, &[]);
+    // IFD0 after the main image: inside the file, outside the segment. Its
+    // copy there would read as IFD0 does, every value it points at lying
+    // inside the segment. The header's offset of IFD0 is its bytes 4 to 8.
+    let (ifd0, _) = ifd0_and_exif(&sound);
+    let ifd0_outside = moved_outside(&sound, ifd_range(&sound, ifd0), 4..8);
 
-    for (case, tiff) in [
+    for (case, built) in [
         ("no TIFF header", no_header),
         ("IFD0 outside", ifd0_outside),
     ] {
-        let built = build(&tiff);
-        assert_eq!(built.frame_header(), first.frame_header(), "{case}");
         let previews = expected(
             &[
                 (built.mpf_image(0), MPF_IMAGES[0]),
@@ -444,6 +862,98 @@ fn a_damaged_exif_segment_costs_the_thumbnail_and_the_orientation_only() {
             case,
         );
     }
+}
+
+/// The number of IFDs in the Exif segment of [`camera_exif`]'s structure:
+/// IFD0, the Exif IFD and IFD1, which holds the thumbnail.
+const EXIF_IFDS: u32 = 3;
+
+#[test]
+fn a_limit_crossed_inside_the_exif_segment_costs_its_metadata_only() {
+    let (tiff, thumbnail) = camera_exif(|_, _, _| {});
+    let built = camera_file(false, &tiff, &[]);
+
+    // With the default limits, or with exactly the IFDs the segment holds,
+    // it gives its thumbnail and values.
+    for (options, label) in [
+        (Options::new(), "default limits"),
+        (
+            Options::new().limits(Limits::default().max_ifds(EXIF_IFDS)),
+            "max_ifds at the segment's IFDs",
+        ),
+    ] {
+        assert_opens_with(
+            &options,
+            &built.bytes,
+            &camera_jpeg_previews(&built, &thumbnail),
+            &camera_metadata_without(&[]),
+            label,
+        );
+    }
+
+    // Walking the segment needs `EXIF_IFDS` IFDs, so one fewer crosses the
+    // limit: the segment's values and thumbnail are lost, not the file.
+    let options = Options::new().limits(Limits::default().max_ifds(EXIF_IFDS - 1));
+    let previews = expected(
+        &[
+            (built.mpf_image(0), MPF_IMAGES[0]),
+            (built.mpf_image(1), MPF_IMAGES[1]),
+            (whole(&built), MAIN),
+        ],
+        Orientation::NoTransforms,
+    );
+    assert_opens_with(
+        &options,
+        &built.bytes,
+        &previews,
+        &main_metadata(Orientation::NoTransforms),
+        "max_ifds below the segment's IFDs",
+    );
+}
+
+#[test]
+fn a_value_outside_the_exif_segment_costs_only_itself() {
+    let (sound, thumbnail) = camera_exif(|_, _, _| {});
+    let (ifd0, exif) = ifd0_and_exif(&sound);
+    // The text of IFD0's Model, then of the Exif IFD's LensModel, after the
+    // main image: inside the file, outside the segment. Its copy there
+    // would read as the text the segment holds.
+    for (case, ifd, tag) in [("Model", ifd0, MODEL), ("LensModel", exif, LENS_MODEL)] {
+        let built = moved_outside(
+            &sound,
+            ascii_of(&sound, ifd, tag),
+            field_of(&sound, ifd, tag),
+        );
+        let previews = camera_jpeg_previews(&built, &thumbnail);
+        assert_opens(
+            &built.bytes,
+            &previews,
+            &camera_metadata_without(&[tag]),
+            case,
+        );
+    }
+}
+
+#[test]
+fn an_exif_ifd_outside_the_exif_segment_costs_its_values_only() {
+    // The Exif IFD after the main image: inside the file, outside the
+    // segment. Its copy there would read as the Exif IFD does, every value
+    // it points at lying inside the segment.
+    let (sound, thumbnail) = camera_exif(|_, _, _| {});
+    let (ifd0, exif) = ifd0_and_exif(&sound);
+    let built = moved_outside(
+        &sound,
+        ifd_range(&sound, exif),
+        field_of(&sound, ifd0, EXIF_IFD),
+    );
+    let previews = camera_jpeg_previews(&built, &thumbnail);
+    // IFD0's make, model and orientation, and the thumbnail, remain.
+    assert_opens(
+        &built.bytes,
+        &previews,
+        &camera_metadata_without(&EXIF_IFD_TAGS),
+        "Exif IFD outside",
+    );
 }
 
 #[test]

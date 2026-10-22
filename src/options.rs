@@ -86,7 +86,10 @@ impl Options {
     /// `UnknownFormat` if the file is not a RAW file or a JPEG file this
     /// version recognises; `Malformed` if its structure is damaged;
     /// `LimitExceeded` if reading its structure would cross one of the
-    /// limits; `Io` if the reader fails.
+    /// limits, though a limit crossed inside a JPEG file's Exif or MPF
+    /// segment is not an error: it costs what that segment holds, the Exif
+    /// values and thumbnail or the MPF images, as damage there does; `Io` if
+    /// the reader fails.
     pub fn from_reader<R: Read + Seek>(&self, reader: R) -> Result<RawFile<R>> {
         RawFile::new(reader, self.limits.clone())
     }
