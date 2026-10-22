@@ -63,6 +63,12 @@
 //! block with its count and its whole entry table, and every entry whose
 //! value lies outside the block is dropped, as an entry whose value lies
 //! outside the file is, so every value read from it lies inside the block.
+//! A value is read only in the shape its tag's rule allows, its type and
+//! its number of values: the value readers accept more types than a tag's
+//! rule allows, [`Ifd::u32s`] reading LONG and IFD as well as SHORT and
+//! [`Ifd::bytes`] BYTE as well as UNDEFINED, so each reader first finds the
+//! tag's entry among the types its rule allows ([`Ifd::entry_of_type`]) and
+//! checks its count.
 //! The signatures are looked for in at most the block's first 12 bytes,
 //! never past its end. A block too short for its header or for the IFD's
 //! count, an IFD cut short by the block's end, one with no entries, and one
@@ -350,7 +356,11 @@ pub(in crate::formats) fn focus<R: Read + Seek>(
 ///
 /// `Io` when the reader fails. Nothing the block holds is an error.
 fn manual_focus<R: Read + Seek>(src: &mut Source<R>, makernote: &MakerNote) -> Result<bool> {
-    if !has_entry_of_shape(makernote, FOCUS_MODE, BYTE, 1) {
+    let one_byte = makernote
+        .ifd
+        .entry_of_type(FOCUS_MODE, &[BYTE])
+        .is_some_and(|entry| entry.count() == 1);
+    if !one_byte {
         return Ok(false);
     }
     let mode = skip_damage(makernote.ifd.bytes(src, FOCUS_MODE))?.flatten();
@@ -372,7 +382,11 @@ fn location<R: Read + Seek>(
     makernote: &MakerNote,
     tag: u16,
 ) -> Result<Option<(Size, Point)>> {
-    if !has_entry_of_shape(makernote, tag, SHORT, 4) {
+    let four_shorts = makernote
+        .ifd
+        .entry_of_type(tag, &[SHORT])
+        .is_some_and(|entry| entry.count() == 4);
+    if !four_shorts {
         return Ok(None);
     }
     let values = skip_damage(makernote.ifd.u32s(src, tag))?.flatten();
@@ -395,7 +409,11 @@ fn location<R: Read + Seek>(
 ///
 /// `Io` when the reader fails. Nothing the block holds is an error.
 fn area<R: Read + Seek>(src: &mut Source<R>, makernote: &MakerNote) -> Result<Option<Size>> {
-    if !has_entry_of_shape(makernote, FOCUS_FRAME_SIZE, UNDEFINED, 6) {
+    let six_bytes = makernote
+        .ifd
+        .entry_of_type(FOCUS_FRAME_SIZE, &[UNDEFINED])
+        .is_some_and(|entry| entry.count() == 6);
+    if !six_bytes {
         return Ok(None);
     }
     let value = skip_damage(makernote.ifd.bytes(src, FOCUS_FRAME_SIZE))?.flatten();
@@ -406,20 +424,6 @@ fn area<R: Read + Seek>(src: &mut Source<R>, makernote: &MakerNote) -> Result<Op
     let width = u32::from(order.u16([width0, width1]));
     let height = u32::from(order.u16([height0, height1]));
     Ok((width != 0 && height != 0).then_some(Size { width, height }))
-}
-
-/// Whether `makernote`'s MakerNote IFD has an entry of tag `tag`, of type
-/// `typ`, holding exactly `count` values: the shape its tag's rule allows.
-///
-/// The readers of values accept more types than a tag's rule allows:
-/// [`Ifd::u32s`] reads LONG and IFD as well as SHORT, and [`Ifd::bytes`]
-/// BYTE as well as UNDEFINED. The value itself lies inside the block, as
-/// every value of the IFD does ([`ifd_in`]).
-fn has_entry_of_shape(makernote: &MakerNote, tag: u16, typ: u16, count: u32) -> bool {
-    makernote
-        .ifd
-        .entry(tag)
-        .is_some_and(|entry| entry.typ() == typ && entry.count() == count)
 }
 
 #[cfg(test)]
