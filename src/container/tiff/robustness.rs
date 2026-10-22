@@ -42,7 +42,7 @@ use std::io::Cursor;
 use std::panic;
 use std::path::{Path, PathBuf};
 
-use super::header::parse_header;
+use super::Block;
 use super::walk::{Location, Tree, walk};
 use crate::error::{Error, Result};
 use crate::io::Source;
@@ -276,14 +276,14 @@ fn limit_sets(fixture: &Fixture) -> Vec<(&'static str, Limits)> {
     sets
 }
 
-/// Reads `bytes` as a caller would: the header, the walk with `limits`,
+/// Reads `bytes` as a caller would: the walk with `limits`, header first,
 /// then every value of every IFD the walk found, through each accessor.
 /// Returns the tree with the errors of the value reads, or the error that
 /// stopped the walk.
 fn read(bytes: &[u8], limits: &Limits) -> Result<(Tree, Vec<Error>)> {
     let mut src = Source::new(Cursor::new(bytes))?;
-    let header = parse_header(&mut src)?;
-    let tree = walk(&mut src, header, limits)?;
+    let block = Block::file(src.len());
+    let tree = walk(&mut src, &block, limits)?;
     let mut errors = Vec::new();
     for (_, ifd) in tree.iter() {
         for tag in ifd.tags() {

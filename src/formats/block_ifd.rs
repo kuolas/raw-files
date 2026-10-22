@@ -32,7 +32,7 @@ use std::io::{Read, Seek};
 use std::ops::Range;
 
 use crate::container::tiff::types::{BYTE, UNDEFINED};
-use crate::container::tiff::{Entry, Ifd, parse_ifd, skip_damage};
+use crate::container::tiff::{Block, Entry, Ifd, parse_ifd, skip_damage};
 use crate::error::Result;
 use crate::io::{ByteOrder, Source, within};
 use crate::limits::Limits;
@@ -58,9 +58,11 @@ pub(crate) fn block_of(entry: &Entry) -> Option<Range<u64>> {
 /// count and all its entries, or cannot be read.
 ///
 /// An entry whose value is stored elsewhere is dropped unless the value
-/// [`fits`] the block: [`parse_ifd`] checks it only against the file.
-/// A value the entry holds is inside the block with the entry. So every
-/// value read from the IFD lies inside the block.
+/// [`fits`] the block. A value the entry holds is inside the block with
+/// the entry. So every value read from the IFD lies inside the block.
+/// [`parse_ifd`], which reads the IFD inside the same block, already
+/// refuses an IFD that does not lie inside it and leaves out an entry
+/// whose value does not, so the checks made here change nothing.
 ///
 /// The IFD's next-IFD pointer is not used, and not required: the D200
 /// writes none in its MakerNote.
@@ -89,7 +91,8 @@ pub(crate) fn ifd_in<R: Read + Seek>(
     if !fits(block, at, table) {
         return Ok(None);
     }
-    let Some((mut ifd, _)) = skip_damage(parse_ifd(src, base, at, order, limits))? else {
+    let inside = Block::new(base, block.clone());
+    let Some((mut ifd, _)) = skip_damage(parse_ifd(src, &inside, at, order, limits))? else {
         return Ok(None);
     };
     ifd.retain(|entry| {
@@ -185,7 +188,9 @@ mod tests {
         let built = builder.build();
         let at = built.ifd_offset(ifd0);
         let mut src = open(built.bytes);
-        let (ifd, _) = parse_ifd(&mut src, 0, at, byte_order(order), &Limits::default()).unwrap();
+        let block = Block::file(src.len());
+        let (ifd, _) =
+            parse_ifd(&mut src, &block, at, byte_order(order), &Limits::default()).unwrap();
         ifd.entry(tag).cloned()
     }
 
@@ -311,7 +316,7 @@ mod tests {
             let (mut src, ifd) = read(file, &block, AT, offset, order);
             let ifd = ifd.expect("the IFD");
             assert_eq!(ifd.offset(), AT + u64::from(offset), "{order:?}");
-            assert_eq!(ifd.base(), AT, "{order:?}");
+            assert_eq!(ifd.block().base(), AT, "{order:?}");
             assert_eq!(ifd.invalid_entries(), 0, "{order:?}");
             assert_eq!(ifd.u32(&mut src, FIRST).unwrap(), Some(7), "{order:?}");
             assert_eq!(

@@ -435,7 +435,7 @@ mod tests {
     use super::*;
     use crate::container::tiff::tags::MAKE;
     use crate::container::tiff::types::{ASCII, SHORT, UNDEFINED};
-    use crate::container::tiff::{parse_header, walk};
+    use crate::container::tiff::{Block, walk};
     use crate::error::ErrorKind;
     use crate::formats::testing::{FAR, FailsFar, Src, byte_order};
     use crate::tiff_builder::{Built, IfdId, Order, RawValue, TiffBuilder};
@@ -503,8 +503,8 @@ mod tests {
     /// reads it.
     fn opened(bytes: Vec<u8>) -> (Src, Tree) {
         let mut src = Source::new(Cursor::new(bytes)).unwrap();
-        let header = parse_header(&mut src).unwrap();
-        let tree = walk(&mut src, header, &Limits::default()).unwrap();
+        let file_block = Block::file(src.len());
+        let tree = walk(&mut src, &file_block, &Limits::default()).unwrap();
         (src, tree)
     }
 
@@ -528,7 +528,7 @@ mod tests {
         let found = &makernote.ifd;
         assert_eq!(found.order(), byte_order(order), "{order:?}");
         assert_eq!(found.offset(), built.ifd_offset(ifd), "{order:?}");
-        assert_eq!(found.base(), 0, "{order:?}");
+        assert_eq!(found.block().base(), 0, "{order:?}");
         assert_eq!(found.len(), 2, "{order:?}");
         assert_eq!(found.invalid_entries(), 0, "{order:?}");
         assert_eq!(found.u32(src, FIRST).unwrap(), Some(7), "{order:?}");
@@ -920,8 +920,8 @@ mod tests {
             assert_sound(&mut src, &found.expect("a MakerNote"), &built, ifd, order);
 
             let mut src = Source::new(FailsFar(Cursor::new(built.bytes))).unwrap();
-            let header = parse_header(&mut src).unwrap();
-            let tree = walk(&mut src, header, &Limits::default()).unwrap();
+            let file_block = Block::file(src.len());
+            let tree = walk(&mut src, &file_block, &Limits::default()).unwrap();
             let err = read(&mut src, &tree, &Limits::default()).expect_err("the read fails");
             assert_eq!(err.kind(), ErrorKind::Io, "{start}: {err:?}");
         }
@@ -1424,8 +1424,8 @@ mod tests {
 
         let limits = Limits::default();
         let mut src = Source::new(FailsFar(Cursor::new(built.bytes))).unwrap();
-        let header = parse_header(&mut src).unwrap();
-        let tree = walk(&mut src, header, &limits).unwrap();
+        let file_block = Block::file(src.len());
+        let tree = walk(&mut src, &file_block, &limits).unwrap();
         let makernote = read(&mut src, &tree, &limits)
             .unwrap()
             .expect("a MakerNote");

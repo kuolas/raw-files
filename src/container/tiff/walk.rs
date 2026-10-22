@@ -13,18 +13,32 @@
 //! [`walk`] follows these links from IFD0 and returns every IFD it finds as
 //! a [`Tree`], each with the [`Location`] it was found at.
 //!
+//! The walk reads a TIFF structure inside a [`Block`]: its base, where the
+//! TIFF header lies and every link counts from, and its bounds, the range
+//! of the file that the structure's IFDs and values must lie inside. For a
+//! TIFF file's own structure the base is the start of the file and the
+//! bounds are the whole file; for a TIFF structure inside a file, such as
+//! the one in a JPEG file's Exif segment, the base is that header's
+//! position and the bounds are the segment. IFD0 lies at the base plus the
+//! offset the header gives, and every other IFD at the base plus the offset
+//! its link gives. The walk keeps the links as written and works out each
+//! IFD's position in the file from them; an IFD whose position would pass
+//! the largest offset cannot be read, and one outside the bounds is
+//! treated as one outside the file.
+//!
 //! The links are offsets read from the file, so a damaged or hostile file
 //! can make them loop, nest without end or multiply. Three things keep the
 //! walk bounded on any input:
 //!
-//! - a **visited set** of the offsets already tried, so no offset is parsed
-//!   twice: an IFD that points to itself, a cycle of SubIFDs, or two links to
-//!   one IFD cost one parse and give one entry in the tree, at the location
-//!   where the walk first found it; a chain that reaches it goes on from its
-//!   next pointer, which the set keeps, and passes each IFD once, so a
-//!   chain that loops ends. The set keeps a next pointer only for an IFD in
-//!   the tree: a SubIFD left out (see below) leaves 0, like an IFD that cannot
-//!   be parsed, so a chain that reaches it ends there;
+//! - a **visited set** of the positions in the file already tried, so no
+//!   position is parsed twice: an IFD that points to itself, a cycle of
+//!   SubIFDs, or two links to one IFD cost one parse and give one entry in
+//!   the tree, at the location where the walk first found it; a chain that
+//!   reaches it goes on from its next pointer, which the set keeps, and
+//!   passes each IFD once, so a chain that loops ends. The set keeps a next
+//!   pointer only for an IFD in the tree: a SubIFD left out (see below)
+//!   leaves 0, like an IFD that cannot be parsed, so a chain that reaches it
+//!   ends there;
 //! - a **depth cap**, [`Limits::max_ifd_depth`]: IFD0 and the chain IFDs are
 //!   at depth 0, their SubIFDs at depth 1, and so on, and the SubIFDs of an
 //!   IFD at the cap are not followed. A real file never nests that deep, so
@@ -36,14 +50,16 @@
 //!
 //! IFD0 must be readable: a file whose IFD0 cannot be parsed has nothing to
 //! offer, and the walk fails. Past IFD0, damage costs only the part of the
-//! tree it touches. A chain IFD that cannot be parsed ends the chain; a
-//! SubIFD or Exif IFD that cannot be parsed is left out; a link whose tag
-//! value cannot be read is not followed. No IFD can start inside the 8-byte
-//! header, so a link into it is not tried: it is neither parsed nor counted
-//! against the total cap, and a chain that reaches it ends. A SubIFD must
-//! also be wholly sound, with every entry of a known type and inside the
-//! file, or it is left out: the Sony DSLR-A100 writes the offset of its raw
-//! data in the SubIFDs tag, and the bytes there are not an IFD. Only a
+//! tree it touches. An IFD that cannot be parsed, one outside the bounds
+//! among them, ends the chain if it is a chain IFD, and is left out if it is
+//! a SubIFD or the Exif IFD; a link whose tag value cannot be read is not
+//! followed. No IFD can start inside the 8-byte header, so a link into it,
+//! one whose offset is below 8, is not tried: it is neither parsed nor
+//! counted against the total cap, and a chain that reaches it ends; nor is a
+//! link whose position would pass the largest offset. A SubIFD must also be
+//! wholly sound, with every entry of a known type and inside the bounds and
+//! the file, or it is left out: the Sony DSLR-A100 writes the offset of its
+//! raw data in the SubIFDs tag, and the bytes there are not an IFD. Only a
 //! failure of the reader itself stops the walk, as does the total cap.
 //!
 //! The walk follows nothing else: not the next-IFD pointers of SubIFDs or of
@@ -59,15 +75,10 @@ use std::vec;
 
 use super::header::HEADER_LEN;
 use super::tags::{EXIF_IFD, SUB_IFDS};
-use super::{Header, Ifd, parse_ifd};
+use super::{Block, Ifd, parse_header, parse_ifd};
 use crate::error::{Error, ErrorKind, Result};
 use crate::io::{ByteOrder, Source};
 use crate::limits::Limits;
-
-/// The base of the offsets inside the file's own IFDs: the start of the
-/// file. Every link the walk follows is relative to it, so the offset as
-/// written is the absolute offset.
-const BASE: u64 = 0;
 
 /// Where in a TIFF file the walk found an IFD: which link led to it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -149,30 +160,43 @@ impl Tree {
     }
 }
 
-/// Walks the IFDs of the TIFF file in `src` whose header is `header`: IFD0,
-/// its chain of next IFDs, the SubIFDs of each of those, recursively, and
-/// IFD0's Exif IFD.
+/// Walks the IFDs of the TIFF structure in `src` that `block` holds: reads
+/// its header at the block's base, then IFD0, its chain of next IFDs, the
+/// SubIFDs of each of those, recursively, and IFD0's Exif IFD, counting
+/// every link from the base and reading every IFD inside the bounds.
 ///
 /// See the [module documentation](self) for what is followed, what is left
 /// out and the order of the tree.
 ///
 /// # Errors
 ///
-/// `Malformed` if IFD0 lies inside the header, at IFD0's offset; whatever
-/// [`parse_ifd`] returns for IFD0 if it cannot be read; `LimitExceeded` if
-/// the walk would try to parse more IFDs than [`Limits::max_ifds`] allows,
-/// at the offset of the IFD that would cross it; `Io` if the reader fails.
+/// Whatever [`parse_header`] returns if the header cannot be read, which
+/// includes `UnknownFormat` when the block holds no TIFF header. Every other
+/// error offset is a position in the file. `Malformed` if IFD0 lies inside
+/// the header, at IFD0's position (the base plus IFD0's offset), or if that
+/// position would pass the largest offset, at the base; whatever
+/// [`parse_ifd`] returns for IFD0 if it cannot be read, which includes an
+/// IFD0 outside the bounds; `LimitExceeded` if the walk would try to parse
+/// more IFDs than [`Limits::max_ifds`] allows, at the position of the IFD
+/// that would cross it; `Io` if the reader fails.
 pub(crate) fn walk<R: Read + Seek>(
     src: &mut Source<R>,
-    header: Header,
+    block: &Block,
     limits: &Limits,
 ) -> Result<Tree> {
-    let at = u64::from(header.ifd0);
-    if at < HEADER_LEN {
+    let header = parse_header(src, block)?;
+    let Some(at) = block.at(header.ifd0) else {
+        return Err(Error::malformed(
+            "IFD0 lies past the largest offset",
+            block.base(),
+        ));
+    };
+    if u64::from(header.ifd0) < HEADER_LEN {
         return Err(Error::malformed("IFD0 lies inside the TIFF header", at));
     }
     let mut walker = Walker {
         src,
+        block,
         order: header.order,
         limits,
         visited: BTreeMap::new(),
@@ -182,23 +206,26 @@ pub(crate) fn walk<R: Read + Seek>(
 
     // IFD0 is the one IFD whose failure is the walk's.
     walker.claim(at)?;
-    let (ifd0, mut next) = parse_ifd(walker.src, BASE, at, header.order, limits)?;
+    let (ifd0, mut next) = parse_ifd(walker.src, block, at, header.order, limits)?;
     walker.place(Location::Ifd0, ifd0)?;
 
     let exif = skip_damage(walker.ifds[0].1.u32(walker.src, EXIF_IFD))?.flatten();
-    if let Some(offset) = exif
-        && let Some((ifd, next)) = walker.candidate(u64::from(offset))?
+    if let Some(at) = exif.and_then(|link| walker.target(link))
+        && let Some((ifd, next)) = walker.candidate(at)?
     {
-        walker.visited.insert(u64::from(offset), next);
+        walker.visited.insert(at, next);
         walker.ifds.push((Location::Exif, ifd));
     }
 
     let mut step: u32 = 1;
     while next != 0 {
-        let at = u64::from(next);
+        // A link into the header, or one whose position would pass the
+        // largest offset, ends the chain.
+        let Some(at) = walker.target(next) else {
+            break;
+        };
         if !walker.visited.contains_key(&at) {
-            // A new IFD. One that cannot be parsed, or a link into the
-            // header, ends the chain.
+            // A new IFD. One that cannot be parsed ends the chain.
             let Some((ifd, after)) = walker.candidate(at)? else {
                 break;
             };
@@ -211,7 +238,7 @@ pub(crate) fn walk<R: Read + Seek>(
         // takes it, leaving 0, so the chain goes on from each IFD at most
         // once and a loop ends.
         next = walker.visited.get_mut(&at).map_or(0, mem::take);
-        // Each step either claims a new offset or takes a pointer recorded
+        // Each step either claims a new position or takes a pointer recorded
         // when an earlier claim was parsed, so the total cap bounds the
         // steps to twice its value; saturating keeps the largest caps from
         // overflowing.
@@ -224,14 +251,17 @@ pub(crate) fn walk<R: Read + Seek>(
 /// The state of one walk.
 struct Walker<'a, R> {
     src: &'a mut Source<R>,
+    /// The block the structure is read in: every link counts from its base.
+    block: &'a Block,
     order: ByteOrder,
     limits: &'a Limits,
-    /// The absolute offset of every IFD the walk has tried to parse, whether
-    /// or not it could, with the next-IFD pointer read there that the chain
-    /// has yet to follow. The pointer is kept only for an IFD in the tree:
-    /// 0 when the IFD could not be parsed, when it is a SubIFD the walk left
-    /// out, when it is IFD0, whose pointer the chain starts from, and once
-    /// the chain has gone on from it.
+    /// The position in the file of every IFD the walk has tried to parse,
+    /// whether or not it could, with the next-IFD pointer read there that
+    /// the chain has yet to follow, as written: an offset from the base. The
+    /// pointer is kept only for an IFD in the tree: 0 when the IFD could not
+    /// be parsed, when it is a SubIFD the walk left out, when it is IFD0,
+    /// whose pointer the chain starts from, and once the chain has gone on
+    /// from it.
     visited: BTreeMap<u64, u32>,
     /// How many IFDs the walk has tried to parse: the size of `visited`, at
     /// most [`Limits::max_ifds`].
@@ -246,26 +276,37 @@ struct Children {
     parent: usize,
     /// The depth of the children: one more than the parent's.
     depth: u32,
-    /// The children's offsets, as written, each with its position in the
-    /// parent's SubIFDs array.
+    /// The children's offsets, as written, from the base, each with its
+    /// position in the parent's SubIFDs array.
     offsets: std::iter::Zip<vec::IntoIter<u32>, std::ops::RangeFrom<u32>>,
 }
 
 impl<R: Read + Seek> Walker<'_, R> {
-    /// Marks the IFD at `at` as tried, with no next-IFD pointer recorded
-    /// yet, and counts the attempt; `false`, with nothing counted, if it was
-    /// tried before or lies inside the header.
+    /// The position in the file of the IFD a link past IFD0 leads to, given
+    /// the link as written, an offset from the base: `None` if the link
+    /// cannot be followed, because it lies inside the header or its position
+    /// would pass the largest offset.
     ///
     /// No IFD can start inside the header, so a link there is not tried: it
     /// is neither parsed nor counted. (An IFD0 there is an error, which
     /// [`walk`] reports before it claims IFD0.)
+    fn target(&self, link: u32) -> Option<u64> {
+        if u64::from(link) < HEADER_LEN {
+            return None;
+        }
+        self.block.at(link)
+    }
+
+    /// Marks the IFD at position `at` in the file as tried, with no
+    /// next-IFD pointer recorded yet, and counts the attempt; `false`, with
+    /// nothing counted, if it was tried before.
     ///
     /// # Errors
     ///
     /// `LimitExceeded` at `at` if the walk has already tried as many IFDs as
     /// the total cap allows.
     fn claim(&mut self, at: u64) -> Result<bool> {
-        if at < HEADER_LEN || self.visited.contains_key(&at) {
+        if self.visited.contains_key(&at) {
             return Ok(false);
         }
         if self.attempts >= self.limits.ifds() {
@@ -276,11 +317,12 @@ impl<R: Read + Seek> Walker<'_, R> {
         Ok(true)
     }
 
-    /// Parses the IFD at `at`, reached by a link past IFD0: `None` if it was
-    /// tried before, lies inside the header or cannot be parsed. Returns the
-    /// IFD and its next-IFD pointer as written. It does not record the
-    /// pointer: the caller does, in `visited`, only once it keeps the IFD in
-    /// the tree, so that an IFD it rejects cannot feed a chain.
+    /// Parses the IFD at position `at` in the file, reached by a link past
+    /// IFD0 and found by [`target`](Self::target): `None` if it was tried
+    /// before or cannot be parsed. Returns the IFD and its next-IFD pointer
+    /// as written, an offset from the base. It does not record the pointer:
+    /// the caller does, in `visited`, only once it keeps the IFD in the tree,
+    /// so that an IFD it rejects cannot feed a chain.
     ///
     /// # Errors
     ///
@@ -289,7 +331,7 @@ impl<R: Read + Seek> Walker<'_, R> {
         if !self.claim(at)? {
             return Ok(None);
         }
-        skip_damage(parse_ifd(self.src, BASE, at, self.order, self.limits))
+        skip_damage(parse_ifd(self.src, self.block, at, self.order, self.limits))
     }
 
     /// Adds `ifd`, at depth 0, to the tree at `location`, then its SubIFDs,
@@ -312,10 +354,11 @@ impl<R: Read + Seek> Walker<'_, R> {
             let (parent, depth) = (children.parent, children.depth);
             // A SubIFD's own next-IFD pointer is not followed, but is kept for
             // a chain that reaches the SubIFD, if the SubIFD is kept.
-            if let Some((child, next)) = self.candidate(u64::from(offset))?
+            if let Some(at) = self.target(offset)
+                && let Some((child, next)) = self.candidate(at)?
                 && child.invalid_entries() == 0
             {
-                self.visited.insert(u64::from(offset), next);
+                self.visited.insert(at, next);
                 self.ifds.push((Location::Sub { parent, index }, child));
                 stack.extend(self.children(self.ifds.len() - 1, depth)?);
             }
@@ -370,7 +413,6 @@ pub(crate) fn skip_damage<T>(result: Result<T>) -> Result<Option<T>> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::container::tiff::header::parse_header;
     use crate::tiff_builder::{Built, IfdId, LONG, Order, RawValue, TiffBuilder};
     use std::io::{self, Cursor, SeekFrom};
 
@@ -390,11 +432,21 @@ mod tests {
         Source::new(Cursor::new(bytes.to_vec())).unwrap()
     }
 
-    /// Reads the header of `bytes` and walks the file with `limits`.
+    /// Walks the TIFF file `bytes`, its own structure, with `limits`.
     fn try_walk(bytes: &[u8], limits: &Limits) -> Result<(Source<Cursor<Vec<u8>>>, Tree)> {
+        let len = u64::try_from(bytes.len()).unwrap();
+        try_walk_in(bytes, &Block::file(len), limits)
+    }
+
+    /// Walks the TIFF structure that `block` holds in `bytes`, with
+    /// `limits`.
+    fn try_walk_in(
+        bytes: &[u8],
+        block: &Block,
+        limits: &Limits,
+    ) -> Result<(Source<Cursor<Vec<u8>>>, Tree)> {
         let mut src = open(bytes);
-        let header = parse_header(&mut src)?;
-        let tree = walk(&mut src, header, limits)?;
+        let tree = walk(&mut src, block, limits)?;
         Ok((src, tree))
     }
 
@@ -437,6 +489,8 @@ mod tests {
             let (mut src, tree) = walked(&built);
 
             assert_eq!(tree.len(), 4);
+            let len = u64::try_from(built.bytes.len()).unwrap();
+            assert_eq!(tree.ifd0().block(), &Block::file(len));
             assert_eq!(ids(&mut src, &tree), [0, 1, 2, 3]);
             assert_eq!(
                 locations(&tree),
@@ -1065,8 +1119,8 @@ mod tests {
             assert_eq!(ids(&mut src, &tree), [0, 1], "{link:?}");
 
             let mut src = Source::new(FailsFar(Cursor::new(bytes))).unwrap();
-            let header = parse_header(&mut src).unwrap();
-            let err = walk(&mut src, header, &Limits::default()).expect_err("the read fails");
+            let block = Block::file(src.len());
+            let err = walk(&mut src, &block, &Limits::default()).expect_err("the read fails");
             assert_eq!(err.kind(), ErrorKind::Io, "{link:?}: {err:?}");
         }
     }
@@ -1086,6 +1140,448 @@ mod tests {
             let (mut src, tree) = walked(&built);
             assert_eq!(ids(&mut src, &tree), [0, 1], "tag {tag:#06X}");
             assert_eq!(tree.ifd0().invalid_entries(), 0);
+        }
+    }
+
+    /// Where the tests of a TIFF structure inside a larger file place its
+    /// header: far enough in that a link counted from the start of the file
+    /// lands somewhere else.
+    const POS: u64 = 1000;
+
+    /// The bytes of a file that holds `built` at [`POS`], after as many
+    /// bytes of filler, as a JPEG file holds the TIFF structure of its Exif
+    /// segment.
+    fn placed(built: &Built) -> Vec<u8> {
+        let mut bytes = vec![0; usize::try_from(POS).unwrap()];
+        bytes.extend_from_slice(&built.bytes);
+        bytes
+    }
+
+    /// The block of the TIFF structure at `pos` in `bytes`, with the whole
+    /// file as bounds, so that only the base is at stake.
+    fn at_pos(bytes: &[u8], pos: u64) -> Block {
+        Block::new(pos, 0..u64::try_from(bytes.len()).unwrap())
+    }
+
+    /// Walks the TIFF structure at `pos` in `bytes`, with the whole file as
+    /// bounds, with `limits`.
+    fn try_walk_at(
+        bytes: &[u8],
+        pos: u64,
+        limits: &Limits,
+    ) -> Result<(Source<Cursor<Vec<u8>>>, Tree)> {
+        try_walk_in(bytes, &at_pos(bytes, pos), limits)
+    }
+
+    /// Walks `built`, placed at [`POS`], with the default limits, which must
+    /// succeed.
+    fn walked_at(built: &Built) -> (Source<Cursor<Vec<u8>>>, Tree) {
+        try_walk_at(&placed(built), POS, &Limits::default()).unwrap()
+    }
+
+    /// Writes into `bytes`, at `at`, an IFD that holds id 99 and nothing
+    /// else: what a walk that counted a link from the wrong place would
+    /// find.
+    fn decoy(bytes: &mut [u8], at: u64, order: Order) {
+        let mut builder = TiffBuilder::new(order);
+        let decoy = ifd(&mut builder, 99);
+        let built = builder.build();
+        let block = built.ifd_block(decoy);
+        let block = &built.bytes[usize::try_from(block.start).unwrap()..]
+            [..usize::try_from(block.end - block.start).unwrap()];
+        bytes[usize::try_from(at).unwrap()..][..block.len()].copy_from_slice(block);
+    }
+
+    #[test]
+    fn a_tree_inside_a_file_counts_every_link_from_its_header() {
+        for order in ORDERS {
+            // IFD0 with SubIFDs a, which has its own SubIFD c, and b; IFD0's
+            // Exif IFD; IFD1 along the chain, with a SubIFD d. c holds a
+            // value stored out of line, whose offset counts from the header
+            // too.
+            let mut builder = TiffBuilder::new(order);
+            let ifd0 = ifd(&mut builder, 0);
+            let [a, b, c, exif, ifd1, d] = [1, 2, 3, 4, 5, 6].map(|id| ifd(&mut builder, id));
+            builder
+                .subifds(ifd0, &[a, b])
+                .subifds(a, &[c])
+                .exif(ifd0, exif);
+            builder.next(ifd0, Some(ifd1)).subifds(ifd1, &[d]);
+            builder.long(c, 0x0101, &[0x0A0B_0C0D, 0x0102_0304]);
+            let built = builder.build();
+
+            let (mut src, at_zero) = walked(&built);
+            let at_zero = (ids(&mut src, &at_zero), locations(&at_zero));
+            let (mut src, tree) = walked_at(&built);
+            assert_eq!(
+                tree.ifd0().block(),
+                &at_pos(&placed(&built), POS),
+                "{order:?}"
+            );
+            assert_eq!(ids(&mut src, &tree), at_zero.0, "{order:?}");
+            assert_eq!(ids(&mut src, &tree), [0, 1, 3, 2, 4, 5, 6], "{order:?}");
+            assert_eq!(locations(&tree), at_zero.1, "{order:?}");
+            for (i, id) in [ifd0, a, c, b, exif, ifd1, d].into_iter().enumerate() {
+                let (_, found) = tree.get(i).unwrap();
+                assert_eq!(found.offset(), POS + built.ifd_offset(id), "{i}");
+            }
+            let (_, c) = tree.get(2).unwrap();
+            assert_eq!(
+                c.u32s(&mut src, 0x0101).unwrap(),
+                Some(vec![0x0A0B_0C0D, 0x0102_0304]),
+                "{order:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_link_inside_a_file_counts_from_its_header_not_from_the_start() {
+        for order in ORDERS {
+            for link in [Link::SubIfds, Link::Exif, Link::Next] {
+                // IFD0 links to X; counted from the start of the file, the
+                // link lands on a decoy.
+                let mut builder = TiffBuilder::new(order);
+                let ifd0 = ifd(&mut builder, 0);
+                let x = ifd(&mut builder, 1);
+                match link {
+                    Link::SubIfds => builder.subifds(ifd0, &[x]),
+                    Link::Exif => builder.exif(ifd0, x),
+                    Link::Next => builder.next(ifd0, Some(x)),
+                };
+                let built = builder.build();
+                let mut bytes = placed(&built);
+                decoy(&mut bytes, built.ifd_offset(x), order);
+                let (mut src, tree) = try_walk_at(&bytes, POS, &Limits::default()).unwrap();
+                assert_eq!(ids(&mut src, &tree), [0, 1], "{link:?} ({order:?})");
+
+                // IFD0 links to 500, where the file holds a decoy; counted
+                // from the header, the link lands past the end of the file.
+                let far = 500;
+                let mut builder = TiffBuilder::new(order);
+                let ifd0 = ifd(&mut builder, 0);
+                match link {
+                    Link::SubIfds => builder.subifds_raw(ifd0, &[far]),
+                    Link::Exif => builder.long(ifd0, EXIF_IFD, &[far]),
+                    Link::Next => builder.next_raw(ifd0, far),
+                };
+                let mut bytes = placed(&builder.build());
+                assert!(POS + u64::from(far) > u64::try_from(bytes.len()).unwrap());
+                decoy(&mut bytes, u64::from(far), order);
+                let (mut src, tree) = try_walk_at(&bytes, POS, &Limits::default()).unwrap();
+                assert_eq!(ids(&mut src, &tree), [0], "{link:?} ({order:?})");
+            }
+        }
+    }
+
+    #[test]
+    fn loops_inside_a_file_are_walked_once() {
+        for order in ORDERS {
+            // An IFD that points to itself.
+            let mut builder = TiffBuilder::new(order);
+            let ifd0 = ifd(&mut builder, 0);
+            builder.next(ifd0, Some(ifd0));
+            let (_, tree) = walked_at(&builder.build());
+            assert_eq!(locations(&tree), [Location::Ifd0], "{order:?}");
+
+            // IFD0 → IFD1 → IFD0.
+            let mut builder = TiffBuilder::new(order);
+            let ifd0 = ifd(&mut builder, 0);
+            let ifd1 = ifd(&mut builder, 1);
+            builder.next(ifd0, Some(ifd1)).next(ifd1, Some(ifd0));
+            let (mut src, tree) = walked_at(&builder.build());
+            assert_eq!(ids(&mut src, &tree), [0, 1], "{order:?}");
+
+            // A cycle of SubIFDs.
+            let mut builder = TiffBuilder::new(order);
+            let ifd0 = ifd(&mut builder, 0);
+            let (a, b) = (ifd(&mut builder, 1), ifd(&mut builder, 2));
+            builder
+                .subifds(ifd0, &[a])
+                .subifds(a, &[b])
+                .subifds(b, &[a, ifd0]);
+            let (mut src, tree) = walked_at(&builder.build());
+            assert_eq!(ids(&mut src, &tree), [0, 1, 2], "{order:?}");
+
+            // IFD0 → X → Y, X being IFD0's Exif IFD: the chain goes on from
+            // the pointer the walk kept for X.
+            let mut builder = TiffBuilder::new(order);
+            let ifd0 = ifd(&mut builder, 0);
+            let (x, y) = (ifd(&mut builder, 1), ifd(&mut builder, 2));
+            builder.exif(ifd0, x).next(ifd0, Some(x)).next(x, Some(y));
+            let (mut src, tree) = walked_at(&builder.build());
+            assert_eq!(ids(&mut src, &tree), [0, 1, 2], "{order:?}");
+            assert_eq!(
+                locations(&tree),
+                [Location::Ifd0, Location::Exif, Location::Chain(2)],
+                "{order:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn links_into_a_header_inside_a_file_are_not_tried() {
+        for order in ORDERS {
+            for link in [Link::SubIfds, Link::Exif, Link::Next] {
+                for at in 0..8 {
+                    if matches!(link, Link::Next) && at == 0 {
+                        // 0 is no next IFD, not a link.
+                        continue;
+                    }
+                    let mut builder = TiffBuilder::new(order);
+                    let ifd0 = ifd(&mut builder, 0);
+                    match link {
+                        Link::SubIfds => builder.subifds_raw(ifd0, &[at]),
+                        Link::Exif => builder.long(ifd0, EXIF_IFD, &[at]),
+                        Link::Next => builder.next_raw(ifd0, at),
+                    };
+                    // The cap allows IFD0 alone: trying any link would
+                    // cross it.
+                    let bytes = placed(&builder.build());
+                    let (_, tree) = try_walk_at(&bytes, POS, &Limits::default().max_ifds(1))
+                        .unwrap_or_else(|err| panic!("{link:?} at {at} ({order:?}): {err:?}"));
+                    assert_eq!(
+                        locations(&tree),
+                        [Location::Ifd0],
+                        "{link:?} at {at} ({order:?})"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn an_ifd0_inside_a_header_inside_a_file_fails_at_its_position() {
+        for order in ORDERS {
+            let mut builder = TiffBuilder::new(order);
+            ifd(&mut builder, 0);
+            for at in [0, 4, 7] {
+                builder.ifd0_offset(Some(at));
+                assert_error(
+                    try_walk_at(&placed(&builder.build()), POS, &Limits::default()),
+                    ErrorKind::Malformed,
+                    POS + u64::from(at),
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn the_total_cap_inside_a_file_fails_at_the_position_of_the_ifd_that_crosses_it() {
+        for order in ORDERS {
+            // IFD0, a SubIFD and IFD1.
+            let mut builder = TiffBuilder::new(order);
+            let ifd0 = ifd(&mut builder, 0);
+            let (sub, ifd1) = (ifd(&mut builder, 1), ifd(&mut builder, 2));
+            builder.subifds(ifd0, &[sub]).next(ifd0, Some(ifd1));
+            let built = builder.build();
+            let bytes = placed(&built);
+
+            let (mut src, tree) = try_walk_at(&bytes, POS, &Limits::default().max_ifds(3)).unwrap();
+            assert_eq!(ids(&mut src, &tree), [0, 1, 2]);
+            for (cap, crosses) in [(2, ifd1), (1, sub), (0, ifd0)] {
+                assert_error(
+                    try_walk_at(&bytes, POS, &Limits::default().max_ifds(cap)),
+                    ErrorKind::LimitExceeded,
+                    POS + built.ifd_offset(crosses),
+                );
+            }
+        }
+    }
+
+    /// Where [`AtTheEnd`] holds its bytes: so near the largest offset that
+    /// an offset of 2^31 or more from there would pass it.
+    const NEAR_THE_END: u64 = u64::MAX - 1023;
+
+    /// A reader as long as the largest offset allows, which holds its bytes
+    /// at [`NEAR_THE_END`] and zeros everywhere else.
+    struct AtTheEnd {
+        bytes: Vec<u8>,
+        pos: u64,
+    }
+
+    impl Read for AtTheEnd {
+        fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+            for (byte, pos) in buf.iter_mut().zip(self.pos..) {
+                *byte = pos
+                    .checked_sub(NEAR_THE_END)
+                    .and_then(|i| self.bytes.get(usize::try_from(i).ok()?))
+                    .copied()
+                    .unwrap_or(0);
+            }
+            let n = u64::try_from(buf.len()).unwrap();
+            self.pos = self.pos.saturating_add(n);
+            Ok(buf.len())
+        }
+    }
+
+    impl Seek for AtTheEnd {
+        fn seek(&mut self, pos: SeekFrom) -> io::Result<u64> {
+            self.pos = match pos {
+                SeekFrom::Start(pos) => pos,
+                SeekFrom::End(0) => u64::MAX,
+                _ => return Err(io::Error::from(io::ErrorKind::Unsupported)),
+            };
+            Ok(self.pos)
+        }
+    }
+
+    /// Walks the TIFF structure at [`NEAR_THE_END`] in an [`AtTheEnd`]
+    /// reader that holds `bytes`, with `limits`; and the reader.
+    fn try_walk_at_the_end(bytes: Vec<u8>, limits: &Limits) -> Result<(Source<AtTheEnd>, Tree)> {
+        let mut src = Source::new(AtTheEnd { bytes, pos: 0 }).unwrap();
+        let block = Block::new(NEAR_THE_END, 0..src.len());
+        let tree = walk(&mut src, &block, limits)?;
+        Ok((src, tree))
+    }
+
+    #[test]
+    fn links_whose_position_would_pass_the_largest_offset_are_not_tried() {
+        for order in ORDERS {
+            for link in [Link::SubIfds, Link::Exif, Link::Next] {
+                for at in [1 << 31, u32::MAX] {
+                    let mut builder = TiffBuilder::new(order);
+                    let ifd0 = ifd(&mut builder, 0);
+                    match link {
+                        Link::SubIfds => builder.subifds_raw(ifd0, &[at]),
+                        Link::Exif => builder.long(ifd0, EXIF_IFD, &[at]),
+                        Link::Next => builder.next_raw(ifd0, at),
+                    };
+                    // The cap allows IFD0 alone: trying any link would
+                    // cross it.
+                    let limits = Limits::default().max_ifds(1);
+                    let (mut src, tree) = try_walk_at_the_end(builder.build().bytes, &limits)
+                        .unwrap_or_else(|err| panic!("{link:?} at {at} ({order:?}): {err:?}"));
+                    assert_eq!(tree.ifd0().block().base(), NEAR_THE_END);
+                    assert_eq!(ids(&mut src, &tree), [0], "{link:?} at {at} ({order:?})");
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn an_ifd0_past_the_largest_offset_fails_at_the_base() {
+        for order in ORDERS {
+            let mut builder = TiffBuilder::new(order);
+            ifd(&mut builder, 0);
+            // The structure itself is sound where it is.
+            try_walk_at_the_end(builder.build().bytes, &Limits::default()).unwrap();
+            builder.ifd0_offset(Some(u32::MAX));
+            assert_error(
+                try_walk_at_the_end(builder.build().bytes, &Limits::default()),
+                ErrorKind::Malformed,
+                NEAR_THE_END,
+            );
+        }
+    }
+
+    /// Walks `built`, placed at [`POS`] in a file that goes on 100 bytes
+    /// past it, with bounds from its header to `end`, an offset from the
+    /// header, and the default limits.
+    fn try_walk_to(built: &Built, end: u64) -> Result<(Source<Cursor<Vec<u8>>>, Tree)> {
+        let mut bytes = placed(built);
+        bytes.resize(bytes.len() + 100, 0);
+        try_walk_in(&bytes, &Block::new(POS, POS..POS + end), &Limits::default())
+    }
+
+    #[test]
+    fn an_ifd_outside_the_bounds_is_left_out() {
+        for order in ORDERS {
+            for link in [Link::SubIfds, Link::Exif, Link::Next] {
+                // IFD0 links to X, the last IFD of the structure, which holds
+                // one entry; the file goes on past the bounds, so that the
+                // bounds, not the file, are what leave X out.
+                let mut builder = TiffBuilder::new(order);
+                let ifd0 = ifd(&mut builder, 0);
+                let x = ifd(&mut builder, 1);
+                match link {
+                    Link::SubIfds => builder.subifds(ifd0, &[x]),
+                    Link::Exif => builder.exif(ifd0, x),
+                    Link::Next => builder.next(ifd0, Some(x)),
+                };
+                let built = builder.build();
+                let x_at = built.ifd_offset(x);
+                let table_end = x_at + 2 + 12;
+                let len = u64::try_from(built.bytes.len()).unwrap();
+                assert_eq!(len, table_end + 4, "X ends the structure");
+
+                for (end, expected, what) in [
+                    (len, &[0, 1][..], "the whole structure"),
+                    (table_end, &[0, 1], "X's entries ending at the bounds"),
+                    (table_end - 1, &[0], "X's entries one byte past them"),
+                    (x_at, &[0], "X wholly past them"),
+                ] {
+                    let (mut src, tree) = try_walk_to(&built, end)
+                        .unwrap_or_else(|err| panic!("{what}, {link:?} ({order:?}): {err:?}"));
+                    assert_eq!(
+                        ids(&mut src, &tree),
+                        expected,
+                        "{what}, {link:?} ({order:?})"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn an_ifd0_outside_the_bounds_fails_the_walk() {
+        for order in ORDERS {
+            // IFD0 at 8 from the header, with one entry.
+            let mut builder = TiffBuilder::new(order);
+            ifd(&mut builder, 0);
+            let built = builder.build();
+            let table_end = 8 + 2 + 12;
+            let (_, tree) = try_walk_to(&built, table_end).unwrap();
+            assert_eq!(locations(&tree), [Location::Ifd0], "{order:?}");
+            // Its entries one byte past the bounds' end, its count past
+            // them, and IFD0 wholly past them.
+            for end in [table_end - 1, 9, 8] {
+                assert_error(try_walk_to(&built, end), ErrorKind::Malformed, POS + 8);
+            }
+            // The header itself one byte past them: not a TIFF structure.
+            let Err(err) = try_walk_to(&built, 7) else {
+                panic!("no room for the header ({order:?})");
+            };
+            assert_eq!(err.kind(), ErrorKind::UnknownFormat, "{err:?}");
+        }
+    }
+
+    #[test]
+    fn a_value_outside_the_bounds_leaves_out_a_subifd_but_not_a_chain_or_exif_ifd() {
+        for order in ORDERS {
+            for link in [Link::SubIfds, Link::Exif, Link::Next] {
+                // IFD0 links to X, the last IFD of the structure, which holds
+                // a value stored out of line, the last bytes of the
+                // structure.
+                let mut builder = TiffBuilder::new(order);
+                let ifd0 = ifd(&mut builder, 0);
+                let x = ifd(&mut builder, 1);
+                builder.long(x, 0x0101, &[1, 2]);
+                match link {
+                    Link::SubIfds => builder.subifds(ifd0, &[x]),
+                    Link::Exif => builder.exif(ifd0, x),
+                    Link::Next => builder.next(ifd0, Some(x)),
+                };
+                let built = builder.build();
+                let len = u64::try_from(built.bytes.len()).unwrap();
+                assert_eq!(built.ifd_block(x).end, len, "X's value ends the structure");
+
+                // The value ending exactly at the bounds' end: kept.
+                let (mut src, tree) = try_walk_to(&built, len).unwrap();
+                assert_eq!(ids(&mut src, &tree), [0, 1], "{link:?} ({order:?})");
+                assert_eq!(tree.get(1).unwrap().1.invalid_entries(), 0);
+
+                // One byte past it: X's entry is invalid, which leaves out
+                // a SubIFD only.
+                let (mut src, tree) = try_walk_to(&built, len - 1).unwrap();
+                if matches!(link, Link::SubIfds) {
+                    assert_eq!(ids(&mut src, &tree), [0], "{order:?}");
+                } else {
+                    assert_eq!(ids(&mut src, &tree), [0, 1], "{link:?} ({order:?})");
+                    let (_, found) = tree.get(1).unwrap();
+                    assert_eq!(found.invalid_entries(), 1, "{link:?} ({order:?})");
+                    assert_eq!(found.entry(0x0101), None, "{link:?} ({order:?})");
+                }
+            }
         }
     }
 }

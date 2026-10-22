@@ -178,7 +178,7 @@ pub(crate) fn detect<R: Read + Seek>(
 pub(super) mod testing {
     use std::io::{self, Cursor, Read, Seek, SeekFrom};
 
-    use crate::container::tiff::{Tree, parse_header, walk};
+    use crate::container::tiff::{Block, Tree, walk};
     use crate::io::{ByteOrder, Source};
     use crate::limits::Limits;
     use crate::tiff_builder::{IfdId, Order, TiffBuilder};
@@ -225,8 +225,8 @@ pub(super) mod testing {
         let ifd = builder.ifd();
         build(&mut builder, ifd);
         let mut src = Source::new(Cursor::new(builder.build().bytes)).unwrap();
-        let header = parse_header(&mut src).unwrap();
-        let tree = walk(&mut src, header, &Limits::default()).unwrap();
+        let file_block = Block::file(src.len());
+        let tree = walk(&mut src, &file_block, &Limits::default()).unwrap();
         (src, tree)
     }
 }

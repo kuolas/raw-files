@@ -509,7 +509,7 @@ fn whole_pair<R: Read + Seek>(
 mod tests {
     use super::*;
     use crate::container::tiff::tags::{NEW_SUBFILE_TYPE, ORIENTATION, PHOTOMETRIC_INTERPRETATION};
-    use crate::container::tiff::{parse_header, walk};
+    use crate::container::tiff::{Block, walk};
     use crate::error::ErrorKind;
     use crate::formats::testing::{self, FAR, FailsFar};
     use crate::limits::Limits;
@@ -630,8 +630,8 @@ mod tests {
     /// The metadata read from `bytes`; the reader must succeed.
     fn read_bytes(bytes: Vec<u8>) -> Metadata {
         let mut src = Source::new(Cursor::new(bytes)).unwrap();
-        let header = parse_header(&mut src).unwrap();
-        let tree = walk(&mut src, header, &Limits::default()).unwrap();
+        let file_block = Block::file(src.len());
+        let tree = walk(&mut src, &file_block, &Limits::default()).unwrap();
         read(&mut src, &tree).unwrap().metadata
     }
 
@@ -1220,8 +1220,8 @@ mod tests {
             assert_eq!(read_bytes(bytes.clone()), z9_expected(), "{tag:#06X}");
 
             let mut src = Source::new(FailsFar(Cursor::new(bytes))).unwrap();
-            let header = parse_header(&mut src).unwrap();
-            let tree = walk(&mut src, header, &Limits::default()).unwrap();
+            let file_block = Block::file(src.len());
+            let tree = walk(&mut src, &file_block, &Limits::default()).unwrap();
             let err = read(&mut src, &tree).expect_err("the read fails");
             assert_eq!(err.kind(), ErrorKind::Io, "{tag:#06X}: {err:?}");
         }
@@ -1317,8 +1317,8 @@ mod tests {
             assert_eq!(read_bytes(bytes.clone()).exposure, expected, "{tag:#06X}");
 
             let mut src = Source::new(FailsFar(Cursor::new(bytes))).unwrap();
-            let header = parse_header(&mut src).unwrap();
-            let tree = walk(&mut src, header, &Limits::default()).unwrap();
+            let file_block = Block::file(src.len());
+            let tree = walk(&mut src, &file_block, &Limits::default()).unwrap();
             let err = read(&mut src, &tree).expect_err("the read fails");
             assert_eq!(err.kind(), ErrorKind::Io, "{tag:#06X}: {err:?}");
         }
@@ -1644,8 +1644,8 @@ mod tests {
         assert_eq!(read_bytes(bytes.clone()), z9_expected());
 
         let mut src = Source::new(FailsFar(Cursor::new(bytes))).unwrap();
-        let header = parse_header(&mut src).unwrap();
-        let tree = walk(&mut src, header, &Limits::default()).unwrap();
+        let file_block = Block::file(src.len());
+        let tree = walk(&mut src, &file_block, &Limits::default()).unwrap();
         let err = read(&mut src, &tree).expect_err("the read fails");
         assert_eq!(err.kind(), ErrorKind::Io, "{err:?}");
     }
@@ -2351,8 +2351,8 @@ mod tests {
             assert_eq!(metadata.image_size, Some(crop), "{label}");
 
             let mut src = Source::new(FailsFar(Cursor::new(bytes))).unwrap();
-            let header = parse_header(&mut src).unwrap();
-            let tree = walk(&mut src, header, &Limits::default()).unwrap();
+            let file_block = Block::file(src.len());
+            let tree = walk(&mut src, &file_block, &Limits::default()).unwrap();
             let err = read(&mut src, &tree).expect_err("the read fails");
             assert_eq!(err.kind(), ErrorKind::Io, "{label}: {err:?}");
         }

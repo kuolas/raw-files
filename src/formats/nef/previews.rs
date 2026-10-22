@@ -52,7 +52,7 @@ mod tests {
     use crate::container::tiff::tags::{
         JPEG_INTERCHANGE_FORMAT, JPEG_INTERCHANGE_FORMAT_LENGTH, MAKE,
     };
-    use crate::container::tiff::{parse_header, walk};
+    use crate::container::tiff::{Block, walk};
     use crate::io::Source;
     use crate::jpeg_stub::jpeg_stub;
     use crate::limits::Limits;
@@ -77,8 +77,8 @@ mod tests {
         jpeg(&mut builder, sub, 1620, 1080);
         builder.subifds(ifd0, &[sub]);
         let mut src = Source::new(Cursor::new(builder.build().bytes)).unwrap();
-        let header = parse_header(&mut src).unwrap();
-        let tree = walk(&mut src, header, &Limits::default()).unwrap();
+        let file_block = Block::file(src.len());
+        let tree = walk(&mut src, &file_block, &Limits::default()).unwrap();
 
         let parsed = super::super::parse(&mut src, &tree, &Limits::default()).unwrap();
         let sizes: Vec<(u32, u32)> = parsed
@@ -102,8 +102,8 @@ mod tests {
         builder.undefined(exif, 0x9000, b"0232");
         jpeg(&mut builder, ifd0, 160, 120);
         let mut src = Source::new(Cursor::new(builder.build().bytes)).unwrap();
-        let header = parse_header(&mut src).unwrap();
-        let tree = walk(&mut src, header, &Limits::default()).unwrap();
+        let file_block = Block::file(src.len());
+        let tree = walk(&mut src, &file_block, &Limits::default()).unwrap();
 
         let makernote = super::makernote::read(&mut src, &tree, &Limits::default()).unwrap();
         let previews =

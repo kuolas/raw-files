@@ -12,24 +12,30 @@
 //! field that holds the values themselves when they fit in four bytes,
 //! left-justified, and otherwise the offset where they are stored.
 //!
-//! [`parse_ifd`] reads an IFD and checks each entry against the file once,
-//! while reading it. An entry whose type is unknown, whose length overflows,
-//! or whose value does not lie inside the file is counted and skipped, not an
-//! error for the IFD: real files carry such entries and still hold good
-//! previews. Every entry that is kept can be read. Values are read only when
-//! asked for, through the same [`Source`], and no accessor reads more than
-//! [`MAX_VALUE_LEN`] bytes for one value.
+//! An IFD is read inside a [`Block`]: the offsets written inside it count
+//! from the block's base, the start of the file for a TIFF file's own IFDs
+//! and an embedded TIFF header for the IFDs of a JPEG file's Exif segment or
+//! of some MakerNotes; and the IFD, with its values, must lie inside the
+//! block's bounds, the whole file for a TIFF file's own IFDs and the
+//! segment or the MakerNote for the others. Every offset this module
+//! returns is absolute, a position in the file, except the next-IFD
+//! pointer, which is returned as written.
 //!
-//! The offsets written inside an IFD are relative to a base: the start of
-//! the file for the file's own IFDs, an embedded TIFF header for the IFDs of
-//! some MakerNotes. Every offset this module returns is absolute, except the
-//! next-IFD pointer, which is returned as written.
+//! [`parse_ifd`] reads an IFD and checks each entry against the block and
+//! the file once, while reading it. An entry whose type is unknown, whose
+//! length overflows, or whose value does not lie inside the block and the
+//! file is counted and skipped, not an error for the IFD: real files carry
+//! such entries and still hold good previews. Every entry that is kept can
+//! be read. Values are read only when asked for, through the same
+//! [`Source`], and no accessor reads more than [`MAX_VALUE_LEN`] bytes for
+//! one value.
 
 use std::io::{Read, Seek};
 
+use super::Block;
 use super::types::{ASCII, BYTE, IFD, LONG, RATIONAL, SHORT, SRATIONAL, UNDEFINED, type_size};
 use crate::error::{Error, Result};
-use crate::io::{ByteOrder, Source};
+use crate::io::{ByteOrder, Source, within};
 use crate::limits::Limits;
 
 /// The longest value, in bytes, that one accessor of [`Ifd`] reads.
@@ -57,14 +63,15 @@ const MAX_VALUE_LEN: u32 = 1024 * 1024;
 #[derive(Clone, Debug)]
 pub(crate) struct Ifd {
     offset: u64,
-    base: u64,
+    /// The block it was read in, as given to [`parse_ifd`].
+    block: Block,
     order: ByteOrder,
     entries: Vec<Entry>,
     invalid_entries: u32,
 }
 
 /// An entry of an [`Ifd`]: a field type that is known, and a value that lies
-/// inside the file.
+/// inside the IFD's block and the file.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct Entry {
     tag: u16,
@@ -82,42 +89,67 @@ enum Value {
     /// In the entry's value field, as written: the first `len` bytes are the
     /// value, and `len` is at most 4.
     Inline([u8; 4]),
-    /// At this absolute offset, with its `len` bytes inside the file.
+    /// At this absolute offset, with its `len` bytes inside the block and
+    /// the file.
     At(u64),
 }
 
-/// Reads the IFD at byte `offset` of `src`, in byte order `order`.
+/// Reads the IFD at byte `offset` of `src`, inside `block`, in byte order
+/// `order`.
 ///
-/// `offset` is absolute. `base` is added to every offset written inside the
-/// IFD, which here means the offsets of values longer than four bytes: 0 for
-/// the file's own IFDs, the position of an embedded TIFF header for the IFDs
-/// of a MakerNote that has one.
+/// `offset` is a position in the file. The block's base is added to every
+/// offset written inside the IFD, which here means the offsets of values
+/// longer than four bytes, and the IFD may use only the block's bounds:
+/// the whole file for a TIFF file's own IFDs, and the MakerNote or the
+/// Exif segment for the IFDs inside one.
 ///
 /// Returns the IFD and its next-IFD pointer **as written**: relative to
-/// `base`, and not checked against anything. 0 means there is no next IFD;
-/// whoever follows the pointer adds `base` and decides whether it can be
-/// read.
+/// the base, and not checked against anything. 0 means there is no next
+/// IFD; whoever follows the pointer adds the base and decides whether it
+/// can be read.
 ///
 /// The IFD itself must be whole: its count and entries must lie inside the
-/// file. A next-IFD pointer cut off by the end of the file counts as 0, as
-/// other readers treat it. An entry that cannot be read is skipped and
-/// counted in [`Ifd::invalid_entries`]: one whose field type is unknown,
-/// whose length (count times type size) overflows 32 bits, or whose value is
-/// out of line and overflows or does not lie inside the file.
+/// block and the file. A next-IFD pointer cut off by the end of either
+/// counts as 0, as other readers treat one cut off by the end of the file.
+/// An entry that cannot be read is skipped and counted in
+/// [`Ifd::invalid_entries`]: one whose field type is unknown, whose length
+/// (count times type size) overflows 32 bits, or whose value is out of line
+/// and overflows or does not lie inside the block and the file.
 ///
 /// # Errors
 ///
-/// `Malformed` if the IFD has no entries, at `offset`, or its count or
-/// entries do not lie inside the file (at `offset` too); `LimitExceeded` if it has more entries than
-/// [`Limits::max_ifd_entries`] allows, at `offset`; `Io` if the reader
-/// fails.
+/// `Malformed` if the IFD has no entries, or its count or entries do not
+/// lie inside the block and the file; `LimitExceeded` if it has more
+/// entries than [`Limits::max_ifd_entries`] allows; `Io` if the reader
+/// fails. The `Malformed` and `LimitExceeded` errors are at `offset`.
+/// Nothing is read before its bounds are checked, so a count or entries
+/// outside the block or the file are `Malformed`, never `Io`, whatever
+/// the reader would do there.
 pub(crate) fn parse_ifd<R: Read + Seek>(
     src: &mut Source<R>,
-    base: u64,
+    block: &Block,
     offset: u64,
     order: ByteOrder,
     limits: &Limits,
 ) -> Result<(Ifd, u32)> {
+    // Nothing is read before its bounds are checked, once, against the block
+    // cut at the end of the file: what passes can be read, whatever bounds
+    // the caller gave, and what does not is never read. A range that runs
+    // past the end of the file is refused as one past the file, not the
+    // block, so that a TIFF file's own IFDs, whose block is the file, fail
+    // as they would without one; the count with the message of a read past
+    // the end of the file.
+    let file_len = src.len();
+    let inside = block.within_file(file_len);
+    check_inside(
+        &inside,
+        file_len,
+        offset,
+        2,
+        offset,
+        "data runs past the end of the file",
+        "an IFD lies outside its block",
+    )?;
     let count = src.u16_at(offset, order)?;
     if count == 0 {
         return Err(Error::malformed("an IFD with no entries", offset));
@@ -134,26 +166,31 @@ pub(crate) fn parse_ifd<R: Read + Seek>(
     // cut from memory with no offset arithmetic. The 16-bit count bounds the
     // read to 12 * 65,535 = 786,420 bytes: the product cannot overflow, and
     // the allocation is never larger than that.
-    let past_the_end = || Error::malformed("an IFD runs past the end of the file", offset);
+    let past_the_file = "an IFD runs past the end of the file";
     let table_len = 12 * u64::from(count);
     let table_at = offset
         .checked_add(2)
-        .filter(|at| {
-            at.checked_add(table_len)
-                .is_some_and(|end| end <= src.len())
-        })
-        .ok_or_else(past_the_end)?;
+        .ok_or_else(|| Error::malformed(past_the_file, offset))?;
+    check_inside(
+        &inside,
+        file_len,
+        table_at,
+        table_len,
+        offset,
+        past_the_file,
+        "an IFD runs past the end of its block",
+    )?;
     let table = src.bytes(table_at, table_len)?;
     // The table is exactly 12 × count bytes, so there is no remainder.
     let (raw_entries, _) = table.as_chunks::<12>();
 
     // The next-IFD pointer follows the entries. One cut off by the end of the
-    // file is read as 0, no next IFD, as other readers do.
-    let next = match table_at.checked_add(table_len).filter(|pointer_at| {
-        pointer_at
-            .checked_add(4)
-            .is_some_and(|end| end <= src.len())
-    }) {
+    // block or the file is read as 0, no next IFD, as other readers do at
+    // the end of the file.
+    let next = match table_at
+        .checked_add(table_len)
+        .filter(|&pointer_at| inside.fits(pointer_at, 4))
+    {
         Some(pointer_at) => src.u32_at(pointer_at, order)?,
         None => 0,
     };
@@ -161,7 +198,7 @@ pub(crate) fn parse_ifd<R: Read + Seek>(
     let mut entries = Vec::new();
     let mut invalid_entries: u32 = 0;
     for raw in raw_entries {
-        match parse_entry(raw, base, order, src.len()) {
+        match parse_entry(raw, &inside, order) {
             Some(entry) => entries.push(entry),
             // At most 65,535 entries: this cannot overflow.
             None => invalid_entries += 1,
@@ -170,7 +207,7 @@ pub(crate) fn parse_ifd<R: Read + Seek>(
 
     let ifd = Ifd {
         offset,
-        base,
+        block: block.clone(),
         order,
         entries,
         invalid_entries,
@@ -178,10 +215,41 @@ pub(crate) fn parse_ifd<R: Read + Seek>(
     Ok((ifd, next))
 }
 
+/// Checks, before anything there is read, that the `len` bytes at `at` lie
+/// inside `inside`, the block of the IFD at `offset` cut at the end of a
+/// file of `file_len` bytes.
+///
+/// # Errors
+///
+/// `Malformed` at `offset` if they do not: `past_the_file` if they run past
+/// the end of the file, or their end would pass the largest offset, and
+/// `outside_the_block` if they lie inside the file but not inside the
+/// block.
+fn check_inside(
+    inside: &Block,
+    file_len: u64,
+    at: u64,
+    len: u64,
+    offset: u64,
+    past_the_file: &'static str,
+    outside_the_block: &'static str,
+) -> Result<()> {
+    if inside.fits(at, len) {
+        return Ok(());
+    }
+    let message = if within(at, len, file_len).is_none() {
+        past_the_file
+    } else {
+        outside_the_block
+    };
+    Err(Error::malformed(message, offset))
+}
+
 /// Reads one 12-byte entry: `None` if its field type is unknown, its length
-/// overflows 32 bits, or its value is out of line and does not lie inside a
-/// file of `file_len` bytes once `base` is added to its offset.
-fn parse_entry(raw: &[u8; 12], base: u64, order: ByteOrder, file_len: u64) -> Option<Entry> {
+/// overflows 32 bits, or its value is out of line and does not fit `inside`,
+/// the block cut at the end of the file, once the base is added to its
+/// offset.
+fn parse_entry(raw: &[u8; 12], inside: &Block, order: ByteOrder) -> Option<Entry> {
     let [t0, t1, y0, y1, c0, c1, c2, c3, f0, f1, f2, f3] = *raw;
     let tag = order.u16([t0, t1]);
     let typ = order.u16([y0, y1]);
@@ -192,9 +260,8 @@ fn parse_entry(raw: &[u8; 12], base: u64, order: ByteOrder, file_len: u64) -> Op
     let value = if len <= 4 {
         Value::Inline(field)
     } else {
-        let at = base.checked_add(u64::from(order.u32(field)))?;
-        let end = at.checked_add(u64::from(len))?;
-        if end > file_len {
+        let at = inside.at(order.u32(field))?;
+        if !inside.fits(at, u64::from(len)) {
             return None;
         }
         Value::At(at)
@@ -223,14 +290,15 @@ impl Ifd {
         self.offset
     }
 
-    /// The base that the offsets written inside the IFD are relative to,
-    /// as given to [`parse_ifd`].
+    /// The block the IFD was read in, as given to [`parse_ifd`]: the base
+    /// that the offsets written inside it count from, and the bounds that
+    /// it and its values lie inside.
     #[cfg_attr(
         not(test),
         expect(dead_code, reason = "nothing reads this accessor yet")
     )]
-    pub(crate) fn base(&self) -> u64 {
-        self.base
+    pub(crate) fn block(&self) -> &Block {
+        &self.block
     }
 
     /// The byte order of the IFD's numbers, the one it was read in.
@@ -541,7 +609,8 @@ impl Entry {
     /// The absolute offset of the value, when it is longer than four bytes
     /// and so stored out of line; `None` when it is in the entry.
     ///
-    /// The value's bytes, from this offset, lie inside the file.
+    /// The value's bytes, from this offset, lie inside the IFD's block and
+    /// the file.
     pub(crate) fn value_offset(&self) -> Option<u64> {
         match self.value {
             Value::Inline(_) => None,
@@ -577,7 +646,8 @@ mod tests {
         Source::new(Cursor::new(bytes.to_vec())).unwrap()
     }
 
-    /// Reads the IFD at `offset` of `bytes`, with `base` and `limits`.
+    /// Reads the IFD at `offset` of `bytes`, with `limits`, in a block whose
+    /// base is `base` and whose bounds are the whole file.
     fn try_read(
         order: Order,
         bytes: &[u8],
@@ -585,16 +655,30 @@ mod tests {
         offset: u64,
         limits: &Limits,
     ) -> Result<(Ifd, u32)> {
-        parse_ifd(&mut open(bytes), base, offset, byte_order(order), limits)
+        let block = Block::new(base, 0..u64::try_from(bytes.len()).unwrap());
+        parse_ifd(&mut open(bytes), &block, offset, byte_order(order), limits)
+    }
+
+    /// Reads the IFD at `offset` of `bytes` in `block`, with the default
+    /// limits.
+    fn try_read_in(order: Order, bytes: &[u8], block: &Block, offset: u64) -> Result<(Ifd, u32)> {
+        parse_ifd(
+            &mut open(bytes),
+            block,
+            offset,
+            byte_order(order),
+            &Limits::default(),
+        )
     }
 
     /// Reads `ifd` of `built`, which must succeed, and returns the source to
     /// read its values through.
     fn read(order: Order, built: &Built, ifd: IfdId) -> (Source<Cursor<Vec<u8>>>, Ifd, u32) {
         let mut src = open(&built.bytes);
+        let block = Block::file(src.len());
         let (parsed, next) = parse_ifd(
             &mut src,
-            0,
+            &block,
             built.ifd_offset(ifd),
             byte_order(order),
             &Limits::default(),
@@ -1289,7 +1373,8 @@ mod tests {
             let (_, ifd, next) = read(order, &built, a);
             assert_eq!(u64::from(next), built.ifd_offset(b));
             assert_eq!(ifd.offset(), built.ifd_offset(a));
-            assert_eq!(ifd.base(), 0);
+            let len = u64::try_from(built.bytes.len()).unwrap();
+            assert_eq!(ifd.block(), &Block::file(len));
             assert_eq!(read(order, &built, b).2, 0xDEAD_BEEF);
             assert_eq!(read(order, &built, c).2, 0);
         }
@@ -1337,6 +1422,93 @@ mod tests {
                 );
             }
         }
+    }
+
+    /// Asserts that `result` is the `Malformed` error `message` at `at`.
+    fn assert_malformed(result: Result<(Ifd, u32)>, message: &str, at: u64) {
+        let err = result.expect_err("the IFD cannot be read");
+        assert_eq!(err.kind(), ErrorKind::Malformed, "{err:?}");
+        assert_eq!(err.offset(), Some(at), "{err:?}");
+        assert_eq!(err.to_string(), format!("{message} at byte {at}"));
+    }
+
+    #[test]
+    fn an_ifd_past_the_end_of_the_file_is_refused_as_past_the_file() {
+        // A TIFF file's own IFDs, whose block is the file: a count or an
+        // entry table past its end is refused as one past the end of the
+        // file, not of the block.
+        for order in ORDERS {
+            let mut builder = TiffBuilder::new(order);
+            let ifd = builder.ifd();
+            builder.short(ifd, 0x0001, &[1]).short(ifd, 0x0002, &[2]);
+            let built = builder.build();
+            let at = built.ifd_offset(ifd);
+            let len = u64::try_from(built.bytes.len()).unwrap();
+
+            // The count one byte short, at the end, and where `offset + 2`
+            // overflows.
+            for at in [len - 1, len, u64::MAX - 1, u64::MAX] {
+                assert_malformed(
+                    try_read(order, &built.bytes, 0, at, &Limits::default()),
+                    "data runs past the end of the file",
+                    at,
+                );
+            }
+
+            // The count whole, and the file cut one byte into the entries.
+            let cut = built.truncated(usize::try_from(at).unwrap() + 2 + 1);
+            assert_malformed(
+                try_read(order, &cut, 0, at, &Limits::default()),
+                "an IFD runs past the end of the file",
+                at,
+            );
+        }
+    }
+
+    /// Where reads start to fail in a [`FailsFar`]: the start of the block
+    /// cache's second block, so that the reads of the first all succeed.
+    const FAR: u64 = 64 * 1024;
+
+    /// A reader that fails every read from [`FAR`] on.
+    struct FailsFar(Cursor<Vec<u8>>);
+
+    impl Read for FailsFar {
+        fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+            if self.0.position() >= FAR {
+                return Err(std::io::Error::from(std::io::ErrorKind::PermissionDenied));
+            }
+            self.0.read(buf)
+        }
+    }
+
+    impl Seek for FailsFar {
+        fn seek(&mut self, pos: std::io::SeekFrom) -> std::io::Result<u64> {
+            self.0.seek(pos)
+        }
+    }
+
+    #[test]
+    fn an_ifd_outside_its_block_is_refused_before_it_is_read() {
+        // The IFD lies in the file, past the block and in the second block
+        // of the cache, where the reader fails: nothing there is read, so
+        // the IFD is refused as outside its block, not as a read that
+        // failed.
+        let at = FAR + 100;
+        let bytes = vec![0; usize::try_from(at).unwrap() + 100];
+        let mut src = Source::new(FailsFar(Cursor::new(bytes))).unwrap();
+        let block = Block::new(0, 0..FAR);
+        let result = parse_ifd(&mut src, &block, at, ByteOrder::Little, &Limits::default());
+        assert_malformed(result, "an IFD lies outside its block", at);
+
+        // The count, 1, lies in the block, at its last 2 bytes, and its one
+        // entry past it, where the reader fails: the entries are refused as
+        // running past the block before they are read.
+        let at = FAR - 2;
+        let mut bytes = vec![0; usize::try_from(FAR).unwrap() + 100];
+        bytes[usize::try_from(at).unwrap()] = 1;
+        let mut src = Source::new(FailsFar(Cursor::new(bytes))).unwrap();
+        let result = parse_ifd(&mut src, &block, at, ByteOrder::Little, &Limits::default());
+        assert_malformed(result, "an IFD runs past the end of its block", at);
     }
 
     #[test]
@@ -1387,16 +1559,17 @@ mod tests {
 
             let offset = base + inner.ifd_offset(ifd);
             let mut src = open(&outer.bytes);
+            let block = Block::new(base, 0..src.len());
             let (parsed, next) = parse_ifd(
                 &mut src,
-                base,
+                &block,
                 offset,
                 byte_order(order),
                 &Limits::default(),
             )
             .unwrap();
             assert_eq!(parsed.offset(), offset);
-            assert_eq!(parsed.base(), base);
+            assert_eq!(parsed.block(), &block);
             assert_eq!(next, 0x1234, "relative, as written");
             assert_eq!(parsed.invalid_entries(), 0);
             assert_eq!(
@@ -1450,6 +1623,127 @@ mod tests {
             let err = result.expect_err("the value is over the cap");
             assert_eq!(err.kind(), ErrorKind::LimitExceeded, "{err:?}");
             assert_eq!(err.offset(), Some(u64::from(at)), "{err:?}");
+        }
+    }
+
+    /// A file in byte order `order` whose IFD, at 8, holds two SHORTs, which
+    /// its entries hold, and the next-IFD pointer 0xDEAD_BEEF, and which goes
+    /// on 100 bytes past the IFD; and the IFD's offset and end, just past its
+    /// next-IFD pointer.
+    fn inline_ifd(order: Order) -> (Vec<u8>, u64, u64) {
+        let mut builder = TiffBuilder::new(order);
+        let ifd = builder.ifd();
+        builder.short(ifd, 0x0001, &[1]).short(ifd, 0x0002, &[2]);
+        builder.next_raw(ifd, 0xDEAD_BEEF);
+        let at = builder.build().ifd_offset(ifd);
+        let end = at + 2 + 24 + 4;
+        builder.pad_to(end + 100);
+        (builder.build().bytes, at, end)
+    }
+
+    #[test]
+    fn an_ifd_ending_exactly_at_the_blocks_end_is_read_with_its_next_pointer() {
+        for order in ORDERS {
+            let (bytes, at, end) = inline_ifd(order);
+            let block = Block::new(0, at..end);
+            let (parsed, next) = try_read_in(order, &bytes, &block, at).unwrap();
+            assert_eq!(next, 0xDEAD_BEEF, "{order:?}");
+            assert_eq!(parsed.tags().collect::<Vec<_>>(), [0x0001, 0x0002]);
+            assert_eq!(parsed.block(), &block, "{order:?}");
+        }
+    }
+
+    #[test]
+    fn a_next_pointer_cut_off_by_the_blocks_end_means_no_next_ifd() {
+        for order in ORDERS {
+            let (bytes, at, end) = inline_ifd(order);
+            // Right after the last entry, and 1 to 3 bytes into the pointer.
+            for cut in [end - 4, end - 3, end - 2, end - 1] {
+                let (parsed, next) = try_read_in(order, &bytes, &Block::new(0, at..cut), at)
+                    .unwrap_or_else(|err| panic!("cut at {cut} ({order:?}): {err:?}"));
+                assert_eq!(next, 0, "cut at {cut} ({order:?})");
+                assert_eq!(parsed.invalid_entries(), 0, "cut at {cut} ({order:?})");
+                assert_eq!(parsed.tags().collect::<Vec<_>>(), [0x0001, 0x0002]);
+            }
+        }
+    }
+
+    #[test]
+    fn an_ifd_that_runs_past_the_blocks_end_is_malformed() {
+        for order in ORDERS {
+            let (bytes, at, end) = inline_ifd(order);
+            let table_end = end - 4;
+            // Its entries one byte past the end, its count past it, and the
+            // IFD starting one byte before the block.
+            for block in [
+                Block::new(0, at..table_end - 1),
+                Block::new(0, at..at + 1),
+                Block::new(0, at + 1..end),
+            ] {
+                let result = try_read_in(order, &bytes, &block, at);
+                let err = result.expect_err("the IFD lies outside the block");
+                assert_eq!(err.kind(), ErrorKind::Malformed, "{block:?}: {err:?}");
+                assert_eq!(err.offset(), Some(at), "{block:?}: {err:?}");
+                assert!(err.to_string().contains("block"), "{block:?}: {err}");
+            }
+        }
+    }
+
+    #[test]
+    fn a_value_must_lie_inside_the_block() {
+        for order in ORDERS {
+            // A SHORT the entry holds, and two LONGs stored out of line,
+            // right after the IFD, in a file that goes on past them.
+            let mut builder = TiffBuilder::new(order);
+            let ifd = builder.ifd();
+            builder.short(ifd, 0x0001, &[1]).long(ifd, 0x0002, &[2, 3]);
+            let built = builder.build();
+            let at = built.ifd_offset(ifd);
+            let value_end = built.ifd_block(ifd).end;
+            assert_eq!(value_end, at + 2 + 24 + 4 + 8);
+            builder.pad_to(value_end + 100);
+            let bytes = builder.build().bytes;
+
+            // The value ending exactly at the block's end: kept.
+            let (parsed, _) =
+                try_read_in(order, &bytes, &Block::new(0, at..value_end), at).unwrap();
+            assert_eq!(parsed.invalid_entries(), 0, "{order:?}");
+            let mut src = open(&bytes);
+            assert_eq!(parsed.u32s(&mut src, 0x0002).unwrap(), Some(vec![2, 3]));
+
+            // One byte past it: the entry is invalid, the other kept.
+            let block = Block::new(0, at..value_end - 1);
+            let (parsed, _) = try_read_in(order, &bytes, &block, at).unwrap();
+            assert_eq!(parsed.invalid_entries(), 1, "{order:?}");
+            assert_eq!(parsed.tags().collect::<Vec<_>>(), [0x0001], "{order:?}");
+        }
+    }
+
+    #[test]
+    fn bounds_past_the_end_of_the_file_are_cut_at_it() {
+        for order in ORDERS {
+            // Bounds that run to the largest offset, past the end of the file:
+            // what lies past the end of the file is refused all the same, so
+            // that every entry kept can be read.
+            let block = Block::new(0, 0..u64::MAX);
+
+            // A value that runs past the end of the file.
+            let mut builder = TiffBuilder::new(order);
+            let ifd = builder.ifd();
+            builder.short(ifd, 0x0001, &[1]);
+            builder.raw(ifd, 0x0002, LONG, 2, RawValue::Offset(1000));
+            builder.pad_to(1004);
+            let built = builder.build();
+            let at = built.ifd_offset(ifd);
+            let (parsed, _) = try_read_in(order, &built.bytes, &block, at).unwrap();
+            assert_eq!(parsed.invalid_entries(), 1, "{order:?}");
+            assert_eq!(parsed.block(), &block, "{order:?}");
+
+            // A next-IFD pointer cut off by the end of the file.
+            let (bytes, at, end) = inline_ifd(order);
+            let cut = &bytes[..usize::try_from(end - 2).unwrap()];
+            let (_, next) = try_read_in(order, cut, &block, at).unwrap();
+            assert_eq!(next, 0, "{order:?}");
         }
     }
 }
