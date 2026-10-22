@@ -192,11 +192,15 @@ mod formats;
 pub mod fuzzing;
 mod geometry;
 mod io;
-// The stub JPEG lives with the integration tests and is shared with the
-// unit tests, as the TIFF fixture builder below is.
+// The stub JPEG and the JPEG file builder live with the integration tests
+// and are shared with the unit tests, as the TIFF fixture builder below is.
 #[cfg(test)]
 #[allow(dead_code)]
-#[path = "../tests/support/jpeg.rs"]
+#[path = "../tests/support/jpeg_builder.rs"]
+mod jpeg_builder;
+#[cfg(test)]
+#[allow(dead_code)]
+#[path = "../tests/support/jpeg_stub.rs"]
 mod jpeg_stub;
 mod limits;
 mod metadata;
