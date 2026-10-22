@@ -311,9 +311,8 @@ fn parse_entry(raw: &[u8; 12], inside: &Block, order: ByteOrder) -> Option<Entry
     })
 }
 
-// The walk, the preview finder, the NEF reader's claim and its MakerNote
-// reader read IFDs through some of these accessors; the others wait for the
-// format modules.
+// The walk and the format readers read IFDs through some of these
+// accessors; the others wait for a reader that needs them.
 // Each `expect` fails the build once its accessor has a caller, so it is
 // then removed rather than left behind.
 impl Ifd {
@@ -389,6 +388,26 @@ impl Ifd {
     /// The first entry with tag `tag`, if there is one that can be read.
     pub(crate) fn entry(&self, tag: u16) -> Option<&Entry> {
         self.entries.iter().find(|entry| entry.tag == tag)
+    }
+
+    /// The entry of tag `tag` when it has a type its tag's rule allows, one
+    /// of `types`; `None` when the tag is missing or has another type.
+    ///
+    /// A reader checks the type with it before it reads a value, because
+    /// the value readers accept more types than a tag's rule allows:
+    /// [`u32s`](Self::u32s) reads LONG and IFD as well as SHORT, and
+    /// [`bytes`](Self::bytes) reads BYTE as well as UNDEFINED. The entry's
+    /// value, as every kept entry's, lies inside the IFD's block and the
+    /// file: for an IFD read by [`ifd_in`], such as a MakerNote's, inside
+    /// the block.
+    ///
+    /// The entry is the tag's first occurrence, the one
+    /// [`entry`](Self::entry) finds. When that one has another type, a
+    /// later occurrence of an allowed type does not count: the lookups by
+    /// tag always mean the first occurrence, and a value reader would read
+    /// that one.
+    pub(crate) fn entry_of_type(&self, tag: u16, types: &[u16]) -> Option<&Entry> {
+        self.entry(tag).filter(|entry| types.contains(&entry.typ))
     }
 
     /// The values of tag `tag`, widened to 32 bits, when its type is SHORT,
@@ -569,7 +588,7 @@ impl Ifd {
         tag: u16,
         types: &[u16],
     ) -> Result<Option<(&Entry, Vec<u8>)>> {
-        let Some(entry) = self.entry(tag).filter(|entry| types.contains(&entry.typ)) else {
+        let Some(entry) = self.entry_of_type(tag, types) else {
             return Ok(None);
         };
         let bytes = match entry.value {
@@ -590,10 +609,10 @@ impl Ifd {
     }
 }
 
-// The format readers read an entry's type, count, value offset and byte
-// range, which reads its value length; nothing reads its tag yet. Each
-// `expect` fails the build once its accessor has a caller, so it is then
-// removed rather than left behind.
+// The format readers read an entry's count, value offset and byte range,
+// which reads its value length; nothing reads its tag or its type yet.
+// Each `expect` fails the build once its accessor has a caller, so it is
+// then removed rather than left behind.
 impl Entry {
     /// The entry's tag.
     #[cfg_attr(
@@ -605,6 +624,10 @@ impl Entry {
     }
 
     /// The entry's field type, one of the types 1 to 13.
+    #[cfg_attr(
+        not(test),
+        expect(dead_code, reason = "nothing reads this accessor yet")
+    )]
     pub(crate) fn typ(&self) -> u16 {
         self.typ
     }
@@ -1350,6 +1373,94 @@ mod tests {
             let entries = ifd.entries();
             assert_eq!(ifd.entry(0x0112), Some(&entries[0]));
             assert_ne!(entries[0], entries[2]);
+        }
+    }
+
+    /// An IFD of a SHORT at 0x0001, a LONG at 0x0002 and an ASCII text at
+    /// 0x0003, read in byte order `order`.
+    fn typed_ifd(order: Order) -> Ifd {
+        let mut builder = TiffBuilder::new(order);
+        let ifd = builder.ifd();
+        builder
+            .short(ifd, 0x0001, &[7])
+            .long(ifd, 0x0002, &[7])
+            .ascii(ifd, 0x0003, "text");
+        let built = builder.build();
+        read(order, &built, ifd).1
+    }
+
+    #[test]
+    fn entry_of_type_finds_an_entry_of_the_allowed_type() {
+        for order in ORDERS {
+            let ifd = typed_ifd(order);
+            for (tag, typ) in [(0x0001, SHORT), (0x0002, LONG), (0x0003, ASCII)] {
+                let entry = ifd.entry_of_type(tag, &[typ]);
+                assert!(entry.is_some(), "{order:?}, tag {tag:#06X}");
+                assert_eq!(entry, ifd.entry(tag), "{order:?}, tag {tag:#06X}");
+            }
+        }
+    }
+
+    #[test]
+    fn entry_of_type_finds_none_of_another_type() {
+        for order in ORDERS {
+            let ifd = typed_ifd(order);
+            // A LONG where only SHORT is allowed, which `u32s` would read.
+            assert_eq!(ifd.entry_of_type(0x0002, &[SHORT]), None, "{order:?}");
+            assert_eq!(ifd.entry_of_type(0x0001, &[LONG]), None, "{order:?}");
+            assert_eq!(
+                ifd.entry_of_type(0x0003, &[BYTE, UNDEFINED]),
+                None,
+                "{order:?}"
+            );
+            assert_eq!(ifd.entry_of_type(0x0001, &[]), None, "{order:?}");
+        }
+    }
+
+    #[test]
+    fn entry_of_type_takes_any_of_several_types() {
+        for order in ORDERS {
+            let ifd = typed_ifd(order);
+            for tag in [0x0001, 0x0002] {
+                let entry = ifd.entry_of_type(tag, &[SHORT, LONG]);
+                assert!(entry.is_some(), "{order:?}, tag {tag:#06X}");
+                assert_eq!(entry, ifd.entry(tag), "{order:?}, tag {tag:#06X}");
+            }
+            assert_eq!(ifd.entry_of_type(0x0003, &[SHORT, LONG]), None);
+        }
+    }
+
+    #[test]
+    fn entry_of_type_finds_none_for_a_missing_tag() {
+        for order in ORDERS {
+            let ifd = typed_ifd(order);
+            assert_eq!(
+                ifd.entry_of_type(0x0099, &[SHORT, LONG, ASCII]),
+                None,
+                "{order:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn entry_of_type_reads_only_the_first_of_a_repeated_tag() {
+        for order in ORDERS {
+            let mut builder = TiffBuilder::new(order);
+            let ifd = builder.ifd();
+            builder
+                .unsorted(ifd)
+                .short(ifd, 0x0112, &[1])
+                .long(ifd, 0x0112, &[2]);
+            let built = builder.build();
+            let (_, ifd, _) = read(order, &built, ifd);
+            assert_eq!(ifd.len(), 2, "both are kept");
+            // The first is a SHORT: the LONG after it is not found.
+            assert_eq!(ifd.entry_of_type(0x0112, &[LONG]), None, "{order:?}");
+            assert_eq!(
+                ifd.entry_of_type(0x0112, &[SHORT]),
+                Some(&ifd.entries()[0]),
+                "{order:?}"
+            );
         }
     }
 

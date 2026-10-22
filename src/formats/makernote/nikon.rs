@@ -164,11 +164,16 @@
 //! the serial number, the lens's range, FocusMode's text and AFInfo2's
 //! bytes, which take more than the four bytes an entry holds and so are
 //! stored elsewhere. A value of another type than its tag's rule allows is
-//! not read. A block that does not hold together, whether its inner header
-//! is not one, an IFD in it is cut short or has more entries than the
-//! limits allow, costs what the MakerNote would have given, the small
-//! preview, the crop area and the values above, never the file: the NEF
-//! security notes ask that bad entries be skipped rather than fail the file
+//! not read. The readers of text and of fractions read only ASCII and only
+//! RATIONAL, but those of numbers and of bytes accept more types than a
+//! tag's rule allows, such as [`Ifd::u32s`], which reads type IFD too, so a
+//! reader of numbers or bytes first finds the tag's entry among the types
+//! its rule allows ([`Ifd::entry_of_type`]). A block that does not hold
+//! together, whether its inner header is not one, an IFD in it is cut
+//! short or has more entries than the limits allow, costs what the
+//! MakerNote would have given, the small preview, the crop area and the
+//! values above, never the file: the NEF security notes ask that bad
+//! entries be skipped rather than fail the file
 //! (`docs/formats/nef/security.md`, item 4 of the checklist).
 //! Only a failure of the reader itself is an error: that is not the file's
 //! fault, and says nothing about the MakerNote.
@@ -183,7 +188,7 @@ use std::io::{Read, Seek};
 use crate::container::tiff::tags::{
     JPEG_INTERCHANGE_FORMAT, JPEG_INTERCHANGE_FORMAT_LENGTH, MAKER_NOTE,
 };
-use crate::container::tiff::types::{ASCII, LONG, RATIONAL, SHORT, UNDEFINED};
+use crate::container::tiff::types::{LONG, SHORT, UNDEFINED};
 use crate::container::tiff::{Block, Entry, Ifd, Tree, ifd_in, parse_header, skip_damage};
 use crate::error::Result;
 use crate::formats::tiff_metadata::{self, Standard};
@@ -462,17 +467,18 @@ fn crop_area<R: Read + Seek>(
     makernote: &MakerNote,
     raw: Option<Size>,
 ) -> Result<CropArea> {
-    if makernote.ifd.entry(CROP_AREA).is_none() {
+    let ifd = &makernote.ifd;
+    if ifd.entry(CROP_AREA).is_none() {
         return Ok(CropArea::Absent);
     }
     // Without a raw size, the rectangle has nothing to lie inside.
     let Some(raw) = raw else {
         return Ok(CropArea::Unusable);
     };
-    if !has_entry_of_type(makernote, CROP_AREA, &[SHORT, LONG]) {
+    if ifd.entry_of_type(CROP_AREA, &[SHORT, LONG]).is_none() {
         return Ok(CropArea::Unusable);
     }
-    let values = skip_damage(makernote.ifd.u32s(src, CROP_AREA))?.flatten();
+    let values = skip_damage(ifd.u32s(src, CROP_AREA))?.flatten();
     let Some(&[left, top, width, height]) = values.as_deref() else {
         return Ok(CropArea::Unusable);
     };
@@ -496,9 +502,6 @@ fn serial_number<R: Read + Seek>(
     src: &mut Source<R>,
     makernote: &MakerNote,
 ) -> Result<Option<String>> {
-    if !has_entry_of_type(makernote, SERIAL_NUMBER, &[ASCII]) {
-        return Ok(None);
-    }
     tiff_metadata::text(src, &makernote.ifd, SERIAL_NUMBER)
 }
 
@@ -515,10 +518,11 @@ fn serial_number<R: Read + Seek>(
 ///
 /// `Io` when the reader fails. Nothing the block holds is an error.
 fn iso<R: Read + Seek>(src: &mut Source<R>, makernote: &MakerNote) -> Result<Option<u32>> {
-    if !has_entry_of_type(makernote, ISO, &[SHORT]) {
+    let ifd = &makernote.ifd;
+    if ifd.entry_of_type(ISO, &[SHORT]).is_none() {
         return Ok(None);
     }
-    let values = skip_damage(makernote.ifd.u32s(src, ISO))?.flatten();
+    let values = skip_damage(ifd.u32s(src, ISO))?.flatten();
     let Some(&[_, iso]) = values.as_deref() else {
         return Ok(None);
     };
@@ -541,9 +545,6 @@ fn lens_range<R: Read + Seek>(
     src: &mut Source<R>,
     makernote: &MakerNote,
 ) -> Result<[Option<Rational>; 4]> {
-    if !has_entry_of_type(makernote, LENS, &[RATIONAL]) {
-        return Ok([None; 4]);
-    }
     let values = skip_damage(makernote.ifd.rationals(src, LENS))?.flatten();
     let Some(&[first, second, third, fourth]) = values.as_deref() else {
         return Ok([None; 4]);
@@ -570,14 +571,15 @@ fn lens_range<R: Read + Seek>(
 ///
 /// `Io` when the reader fails. Nothing the block holds is an error.
 fn world_time<R: Read + Seek>(src: &mut Source<R>, makernote: &MakerNote) -> Result<Option<i16>> {
-    if !has_entry_of_type(makernote, WORLD_TIME, &[UNDEFINED]) {
+    let ifd = &makernote.ifd;
+    if ifd.entry_of_type(WORLD_TIME, &[UNDEFINED]).is_none() {
         return Ok(None);
     }
-    let bytes = skip_damage(makernote.ifd.bytes(src, WORLD_TIME))?.flatten();
+    let bytes = skip_damage(ifd.bytes(src, WORLD_TIME))?.flatten();
     let Some(&[zone0, zone1, daylight_saving, _date_format]) = bytes.as_deref() else {
         return Ok(None);
     };
-    let zone = i32::from(makernote.ifd.order().u16([zone0, zone1]).cast_signed());
+    let zone = i32::from(ifd.order().u16([zone0, zone1]).cast_signed());
     let offset = match daylight_saving {
         0 => zone,
         1 => zone + 60,
@@ -613,12 +615,16 @@ fn focus<R: Read + Seek>(
     makernote: &MakerNote,
     crop_area: CropArea,
 ) -> Result<Option<Focus>> {
+    let ifd = &makernote.ifd;
     // Without AFInfo2 there is nothing to place, so FocusMode is not read.
-    if !has_entry_of_type(makernote, AF_INFO2, &[UNDEFINED]) || manual_focus(src, makernote)? {
+    if ifd.entry_of_type(AF_INFO2, &[UNDEFINED]).is_none() {
         return Ok(None);
     }
-    let value = skip_damage(makernote.ifd.bytes(src, AF_INFO2))?.flatten();
-    let order = makernote.ifd.order();
+    if manual_focus(src, makernote)? {
+        return Ok(None);
+    }
+    let value = skip_damage(ifd.bytes(src, AF_INFO2))?.flatten();
+    let order = ifd.order();
     let Some(record) = value.and_then(|value| af_info2_record(&value, order)) else {
         return Ok(None);
     };
@@ -649,10 +655,11 @@ fn crop_hi_speed<R: Read + Seek>(
     src: &mut Source<R>,
     makernote: &MakerNote,
 ) -> Result<Option<CropHiSpeed>> {
-    if !has_entry_of_type(makernote, CROP_HI_SPEED, &[SHORT]) {
+    let ifd = &makernote.ifd;
+    if ifd.entry_of_type(CROP_HI_SPEED, &[SHORT]).is_none() {
         return Ok(None);
     }
-    let values = skip_damage(makernote.ifd.u32s(src, CROP_HI_SPEED))?.flatten();
+    let values = skip_damage(ifd.u32s(src, CROP_HI_SPEED))?.flatten();
     let Some(
         &[
             _mode,
@@ -793,9 +800,6 @@ fn shifted(value: u32, frame: u32, window: u32) -> Option<u32> {
 ///
 /// `Io` when the reader fails. Nothing the block holds is an error.
 fn manual_focus<R: Read + Seek>(src: &mut Source<R>, makernote: &MakerNote) -> Result<bool> {
-    if !has_entry_of_type(makernote, FOCUS_MODE, &[ASCII]) {
-        return Ok(false);
-    }
     let mode = tiff_metadata::text(src, &makernote.ifd, FOCUS_MODE)?;
     Ok(mode.as_deref() == Some("MANUAL"))
 }
@@ -947,19 +951,6 @@ fn shorts_at(value: &[u8], at: usize, order: ByteOrder) -> Option<(u32, u32)> {
     ))
 }
 
-/// Whether `makernote`'s MakerNote IFD has an entry of tag `tag`, of one
-/// of the types `types`: the type its tag's rule allows.
-///
-/// The readers of values accept more types than a tag's rule allows:
-/// [`Ifd::u32s`] reads type IFD too. The value itself lies inside the
-/// block, as every value of the IFD does ([`ifd_in`]).
-fn has_entry_of_type(makernote: &MakerNote, tag: u16, types: &[u16]) -> bool {
-    makernote
-        .ifd
-        .entry(tag)
-        .is_some_and(|entry| types.contains(&entry.typ()))
-}
-
 /// The value of tag `tag` of `ifd`, as [`Ifd::u32`] reads it, when the
 /// entry holds it in its own value field; `None` when the tag is missing,
 /// of another type, or stored out of line.
@@ -989,7 +980,7 @@ mod tests {
         IMAGE_LENGTH, IMAGE_WIDTH, LENS_MODEL, LENS_SPECIFICATION, MAKE, OFFSET_TIME_ORIGINAL,
         PHOTOGRAPHIC_SENSITIVITY, PHOTOMETRIC_INTERPRETATION, SUB_SEC_TIME_ORIGINAL,
     };
-    use crate::container::tiff::types::{BYTE, IFD, SRATIONAL};
+    use crate::container::tiff::types::{BYTE, IFD, RATIONAL, SRATIONAL};
     use crate::container::tiff::{self, parse_ifd, walk};
     use crate::datetime::DateTime;
     use crate::error::ErrorKind;

@@ -130,8 +130,8 @@ fn claims<R: Read + Seek>(src: &mut Source<R>, tree: &Tree) -> Result<bool> {
     // no read, and the Make was read once already.
     let sony_pointer = tree
         .ifd0()
-        .entry(DNG_PRIVATE_DATA)
-        .is_some_and(|entry| entry.typ() == BYTE && entry.count() == 4);
+        .entry_of_type(DNG_PRIVATE_DATA, &[BYTE])
+        .is_some_and(|entry| entry.count() == 4);
     Ok(sony_pointer && make_starts_with(src, tree, HASSELBLAD)?)
 }
 
