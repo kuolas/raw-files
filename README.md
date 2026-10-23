@@ -1,26 +1,30 @@
 # raw-files
 
-A camera RAW library in pure Rust. It extracts the JPEG previews embedded in
-Nikon NEF and Sony ARW files and reads their metadata and where the camera
-focused, with fuller RAW decoding planned.
+A camera RAW library in pure Rust. It reads camera RAW files and the JPEG
+files cameras write: the previews they hold, their metadata and where the
+camera focused. The RAW files it reads are Nikon NEF and Sony ARW, and
+fuller RAW decoding is planned.
 
-**Status: early.** Release 0.3.0 reads the JPEG previews embedded in Nikon
-NEF and Sony ARW files, the SRF, SR2 and ARQ files of Sony's family and the
-ARW files of the Sony-built Hasselblad bodies included, and the metadata a
+**Status: early.** raw-files reads the JPEG previews embedded in Nikon NEF
+and Sony ARW files, the SRF, SR2 and ARQ files of Sony's family and the ARW
+files of the Sony-built Hasselblad bodies included, and the metadata a
 viewer or a file renamer needs next to them: the capture time, with
 sub-seconds and offset from UTC when recorded, the camera's make, model and
 serial number, the lens, the exposure, the orientation, and the sizes of the
-raw data and of the visible image. It gives the largest preview, or the
-smallest that fills a given size, with the orientation to show it in, and it
-never reads the raw data. It also reads where the camera focused, as the
-file records it: the centre of the focus area, the frame it is measured in
-and, when recorded, the area's size and whether the camera confirmed focus,
-ready to be scaled onto any preview. Nikon mirrorless bodies, Nikon DSLRs in
-live view and Sony bodies from the ILCE-7RM2 on record it. The shots that
-record only an autofocus point's number or a mask of points, such as a
-DSLR's through the viewfinder, give no focus point yet, and a shot in manual
-focus gives none; plain JPEG files and raw decoding come later; see the
-[roadmap](docs/ROADMAP.md).
+raw data and of the visible image. It reads the JPEG files cameras write
+beside their raw files or instead of them in the same way: a JPEG's previews
+are the file itself and the smaller images it holds, and its metadata is the
+same, with the picture's size and no raw size. It gives the largest preview,
+or the smallest that fills a given size, with the orientation to show it in,
+and it never reads the raw data. It also reads where the camera focused, as
+the file records it: the centre of the focus area, the frame it is measured
+in and, when recorded, the area's size and whether the camera confirmed
+focus, ready to be scaled onto any preview. Nikon mirrorless bodies, Nikon
+DSLRs in live view and Sony bodies from the ILCE-7RM2 on record it, and
+their JPEGs are read for it as their raw files are. The shots that record
+only an autofocus point's number or a mask of points, such as a DSLR's
+through the viewfinder, give no focus point yet, and a shot in manual focus
+gives none; raw decoding comes later; see the [roadmap](docs/ROADMAP.md).
 
 ## Usage
 
@@ -110,9 +114,42 @@ fn main() {
 }
 ```
 
-`RawFile` opens a path, bytes in memory or any reader that can seek. A
-`Preview` says where the bytes are, how large the picture is, its format and
-the orientation to show it in. `preview_at_least` picks the smallest preview
+Tell a raw file from the JPEG of the same shot by their names, before
+opening either, as a photo browser that shows the two as one picture does:
+
+```rust
+use std::path::Path;
+
+use raw_files::Format;
+
+/// The format a file's name says it holds, if raw-files reads it.
+fn format_of(name: &str) -> Option<Format> {
+    let extension = Path::new(name).extension()?.to_str()?;
+    Format::from_extension(extension)
+}
+
+fn main() {
+    for name in ["DSC_0001.NEF", "DSC_0001.JPG", "notes.txt"] {
+        let kind = match format_of(name) {
+            Some(format) if format.is_raw() => "a raw file",
+            Some(_) => "a picture with no raw data",
+            None => "not a file raw-files reads",
+        };
+        println!("{name}: {kind}");
+    }
+    assert_eq!(format_of("DSC_0001.NEF").map(Format::is_raw), Some(true));
+    assert_eq!(format_of("DSC_0001.JPG").map(Format::is_raw), Some(false));
+    assert_eq!(format_of("notes.txt"), None);
+}
+```
+
+`RawFile` opens a raw file or a JPEG file from a path, bytes in memory or
+any reader that can seek, and its `format` says which format the file is.
+`Format::is_raw` tells the raw formats from the others, and
+`Format::from_extension` gives the format a file's name suggests, for a file
+picker or a folder scan; opening never looks at the name. A `Preview` says
+where the bytes are, how large the picture is, its format and the
+orientation to show it in. `preview_at_least` picks the smallest preview
 that fills a box. `Metadata` holds what the camera recorded about the
 picture, read when the file is opened; every value is optional, since not
 every camera records every one, and a damaged value is `None` on its own.
@@ -152,6 +189,27 @@ untrusted file with other caps. The API documentation is on
   metadata are checked on 36 CC0 Sony-family files from the same site, from
   the DSC-F828's SRF to the A7 V's ARW 6.0, 35 of which CI downloads, and on
   test files laid out like each generation.
+- **JPEG**, as a camera writes it beside its raw file or instead of it, or
+  as an editor exports it. The previews are the file itself, the thumbnail
+  in the Exif segment, the images that the Multi-Picture Format (MPF) list
+  holds after the main one and, on the Nikon bodies that write one, such as
+  the D70, the small JPEG that the MakerNote points at. The metadata comes
+  from the Exif segment, read as in a NEF or an ARW file; the image size is
+  the picture's own, and there is no raw size. A Nikon camera's JPEG also
+  gives what its MakerNote records where the Exif segment does not, as a NEF
+  does, and the focus point, which on a crop mode (DX, 1:1, 16:9) is placed
+  on the picture; a Sony camera's JPEG gives the focus point its MakerNote
+  records, as an ARW does. No other maker's MakerNote is read. A focus point
+  is given only when its frame has the picture's shape, so an export cut to
+  another shape or turned upright gives none, except one cut from a Nikon
+  crop-mode JPEG, whose point may then be misplaced. A JPEG whose Exif
+  segment is missing or cannot be read still opens, with the file itself
+  and its MPF images as previews, its image size as the only value read
+  from it, and the default orientation, no transform. Previews and metadata
+  are checked on eight camera JPEGs from Wikimedia Commons that CI
+  downloads, of five Sony bodies, two Nikon bodies and a Canon, on JPEG
+  files built in the tests, and on three stripped JPEG files of the
+  maintainer's own Z 9.
 
 Any other file, a DNG among them whatever its Make says, is refused with the
 `UnknownFormat` error.
@@ -161,7 +219,7 @@ Any other file, a DNG among them whatever its Make says, is refused with the
 - A malformed file returns an error, never a panic.
 - Damaged metadata costs only what it damages: a bad value leaves the other
   values and the previews as they are, and a bad directory loses only the
-  values in it.
+  values in it. A JPEG whose Exif segment cannot be read still opens.
 - `Limits` keeps an untrusted file from making the library allocate or walk
   without bound: a cap the reader cannot go on without is an error; past the
   first directory a cap leaves a directory out.
@@ -187,9 +245,9 @@ cargo test
 ```
 
 Some tests read real sample files, which `scripts/fetch-samples.sh`
-downloads (about 1.6 GB). `scripts/fetch-samples.sh nef` or `arw` fetches one
-format only, and the 325 MiB ARQ file only with `RAW_FILES_LARGE=1`. Without
-the files, those tests skip.
+downloads (about 1.6 GB). `scripts/fetch-samples.sh nef`, `arw` or `jpeg`
+fetches one format only, and the 325 MiB ARQ file only with
+`RAW_FILES_LARGE=1`. Without the files, those tests skip.
 
 Another test runs the reader over a folder of your own camera files, RAW and
 JPEG, and counts per format. It prints counts only, never a path, the value

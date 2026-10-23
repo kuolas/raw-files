@@ -12,56 +12,46 @@ does.
 
 ### Added
 
-- JPEG files open, as `Format::Jpeg`, detected by their content like
-  every other format: the JPEG a camera writes beside its raw file or
-  instead of it, or an editor exports. Their previews are the file
-  itself, the thumbnail of the Exif segment and the images the
-  Multi-Picture Format (MPF) list holds after the main one, each sized
-  from its own frame header, with the orientation the Exif segment
-  records. Their metadata comes from the Exif segment, read as in a NEF
-  or an ARW file: the camera's make and model, its serial number, the
-  capture time, the exposure, the lens and the orientation. The image
-  size is the size of the picture, and there is no raw size. A JPEG
-  whose Exif segment is missing or damaged still opens, with the file
-  and its MPF images as previews and the image size as its only
-  metadata. A Nikon camera's JPEG also gives what its MakerNote
-  records, read as in a NEF: the serial number, the ISO, the lens's
-  range and the capture time's offset from UTC where its Exif segment
-  records none, the small JPEG of the MakerNote's PreviewIFD as a
-  preview on the bodies that write one, such as the D70, and the focus
-  point. On a crop mode (DX, 1:1, 16:9), whose
-  JPEG records the point in the camera's full output, the point is
-  placed on the JPEG's own picture. A Sony camera's JPEG gives the focus
-  point its MakerNote records, read as in an ARW file, with the size of
-  the focus area on the bodies that record one; the DSLR-A100's JPEG
-  records none. A JPEG's focus point is given only when its frame has the
-  picture's aspect ratio, so an export cut to another shape gives none,
-  except one cut from a Nikon crop-mode JPEG, whose point is placed on
-  the export's pixels and may be misplaced.
-- NEF files of the Nikon D1 family, whose MakerNote has no header, give
-  what that MakerNote records: the ISO and the lens's range where their
-  Exif tags lack them, and, where the MakerNote holds one, its small JPEG
-  as a preview, the file's only JPEG on the D1H. A JPEG file that holds a
-  MakerNote of that layout is read the same way; on the early Coolpix
-  JPEGs checked, from Wikimedia Commons, it gives nothing beyond the
-  Exif segment's values, and the small JPEG it points at, where it has
-  one, lies outside the MakerNote, so it is not given.
-- `Format::is_raw`, whether a format's files hold a camera's raw sensor
-  data, true for NEF and ARW and false for JPEG, so that a program can
-  tell raw files from other images without matching every `Format`.
-- JPEG previews and metadata checked on eight camera-original JPEGs from
-  Wikimedia Commons, of five Sony bodies, two Nikon bodies and a Canon,
-  under CC0, a public-domain dedication or CC BY, and on each the focus
-  point it gives, or that it gives none; `scripts/fetch-samples.sh jpeg`
+- JPEG files open, as `Format::Jpeg`: the pictures a camera writes beside
+  its raw files or instead of them, and the JPEGs an editor exports,
+  recognised by their content like every other format. A program gets
+  from one what it gets from a raw file. Its previews are the file itself
+  and the smaller images it holds: the Exif thumbnail, the images of its
+  Multi-Picture Format (MPF) list and, from Nikon bodies such as the D70,
+  one more small JPEG. Its metadata is what its Exif segment records,
+  with the picture's size and no raw size. In a Nikon or a Sony camera's
+  JPEG, the maker's MakerNote adds the focus point, and in a Nikon
+  camera's what Exif lacks, such as the serial number, the ISO, the
+  lens's range and the offset from UTC; on a Nikon crop mode (DX, 1:1,
+  16:9) the point is placed on the picture. A focus point is given only
+  when its frame has the picture's shape: an export cut to another shape
+  gives none, except one cut from a Nikon crop-mode JPEG, whose point may
+  then be misplaced. A JPEG whose Exif segment is missing or cannot be
+  read still opens, with the file itself and its MPF images as previews
+  and its image size.
+- NEF files of the Nikon D1 family give the ISO and the lens's range
+  where their Exif tags lack them, and those of the D1H and the D1X a
+  preview, their only JPEG, where they gave none. A JPEG file whose Nikon
+  MakerNote has the D1 family's layout is read the same way: on the early
+  Coolpix JPEGs checked, from Wikimedia Commons, that gives nothing beyond
+  the Exif values, and the small JPEG some of them hold is not given, as
+  it lies outside the MakerNote.
+- `Format::is_raw`: true for NEF and ARW and false for JPEG, so that a
+  program can tell raw files from other pictures without matching every
+  `Format`.
+- Eight camera JPEGs from Wikimedia Commons, of five Sony bodies, two
+  Nikon bodies and a Canon, under CC0, a public-domain dedication or
+  CC BY, check the JPEG reader: every preview, the metadata, and the
+  focus point or that there is none. `scripts/fetch-samples.sh jpeg`
   downloads them.
 
 ### Changed
 
-- `Format::from_extension("jpg")` and `Format::from_extension("jpeg")`
-  return `Some(Format::Jpeg)` where they returned `None`, and
-  `Format::all` lists `Format::Jpeg`. A program that took every file whose
-  extension `from_extension` knows for a raw file should ask
-  `Format::is_raw` as well.
+- `Format::from_extension` returns `Some(Format::Jpeg)` for `jpg` and
+  `jpeg` where it returned `None`, and `Format::all` lists `Format::Jpeg`.
+  A program that took every file whose extension `from_extension` knows
+  for a raw file now takes JPEGs too, and should ask `Format::is_raw` as
+  well.
 
 ## [0.3.0] - 2026-10-21
 
