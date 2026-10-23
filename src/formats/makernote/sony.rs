@@ -65,11 +65,12 @@
 //! (the raw SubIFD of the ILCE-9, samples 1541 and 1542), and the IFD keeps
 //! the order of the file, each tag found wherever it is.
 //!
-//! Nothing in the block is trusted. Its IFD is read inside the block, as
-//! the Nikon reader's are ([`ifd_in`]): the IFD must lie inside the
-//! block with its count and its whole entry table, and every entry whose
-//! value lies outside the block is dropped, as an entry whose value lies
-//! outside the file is, so every value read from it lies inside the block.
+//! Nothing in the block is trusted. Its IFD is read inside the block
+//! ([`MakerNoteBlock::ifd_at`]), as the Nikon reader's are: the IFD must
+//! lie inside the block with its count and its whole entry table, and
+//! every entry whose value lies outside the block is dropped, as an entry
+//! whose value lies outside the file is, so every value read from it lies
+//! inside the block.
 //! A value is read only in the shape its tag's rule allows, its type and
 //! its number of values: the value readers accept more types than a tag's
 //! rule allows, [`Ifd::u32s`] reading LONG and IFD as well as SHORT and
@@ -154,9 +155,9 @@
 
 use std::io::{Read, Seek};
 
-use crate::container::tiff::tags::MAKER_NOTE;
+use super::MakerNoteBlock;
 use crate::container::tiff::types::{BYTE, SHORT, UNDEFINED};
-use crate::container::tiff::{Block, Entry, Ifd, Tree, ifd_in, skip_damage};
+use crate::container::tiff::{Ifd, Tree, skip_damage};
 use crate::error::Result;
 use crate::geometry::{Point, Size};
 use crate::io::Source;
@@ -270,53 +271,18 @@ pub(in crate::formats) fn read<R: Read + Seek>(
     tree: &Tree,
     limits: &Limits,
 ) -> Result<Option<MakerNote>> {
-    let Some(exif) = tree.exif() else {
+    let Some(block) = MakerNoteBlock::find(tree) else {
         return Ok(None);
     };
-    let Some(range) = exif.entry(MAKER_NOTE).and_then(Entry::byte_range) else {
-        return Ok(None);
-    };
-    // The block's bytes lie inside the file, as every kept entry's value
-    // does, so a read that stays inside the block can fail only with the
-    // reader. `Entry::byte_range` gives a range whose end is not before its
-    // start.
-    let len = range.end.saturating_sub(range.start);
-    let head = src.bytes(range.start, len.min(HEADER_LEN))?;
+    let head = block.first_bytes(src, HEADER_LEN)?;
     let Some(skip) = ifd_start(&head) else {
         return Ok(None);
     };
     // The block's offsets count from the header of the TIFF structure that
-    // holds it, the base of the Exif IFD's block.
-    let base = exif.block().base();
-    let Some(offset) = ifd_offset(base, range.start, skip) else {
-        return Ok(None);
-    };
-    // The block's numbers are in the file's byte order, the Exif IFD's.
-    let block = Block::new(base, range);
-    let Some(ifd) = ifd_in(src, &block, offset, exif.order(), limits)? else {
-        return Ok(None);
-    };
-    Ok(Some(MakerNote { ifd }))
-}
-
-/// The offset of the MakerNote IFD as a TIFF offset is written, counted
-/// from `base`, the header of the TIFF structure that holds the MakerNote,
-/// for an IFD `skip` bytes into a MakerNote that starts at position
-/// `start`; `None` when the IFD lies before the base or more than the
-/// 32-bit range past it.
-///
-/// No offset written in the structure counts back from its header, so an
-/// IFD that lies before the header is one the offsets could not reach,
-/// and gives no MakerNote. A MakerNote the Exif IFD points at starts at the
-/// base or past it, since the entry's offset counts from the same base, so
-/// that check only keeps the subtraction from wrapping. A MakerNote that
-/// starts near the top of the 32-bit range past the base may put its IFD
-/// out of reach too.
-fn ifd_offset(base: u64, start: u64, skip: u64) -> Option<u32> {
-    start
-        .checked_add(skip)
-        .and_then(|at| at.checked_sub(base))
-        .and_then(|offset| u32::try_from(offset).ok())
+    // holds it, and its numbers are in that structure's byte order, the
+    // file's: the Exif IFD's base and order.
+    let ifd = block.ifd_at(src, skip, limits)?;
+    Ok(ifd.map(|ifd| MakerNote { ifd }))
 }
 
 /// How far into the block the MakerNote IFD starts, from `head`, the
@@ -461,9 +427,9 @@ fn area<R: Read + Seek>(src: &mut Source<R>, makernote: &MakerNote) -> Result<Op
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::container::tiff::tags::MAKE;
+    use crate::container::tiff::tags::{MAKE, MAKER_NOTE};
     use crate::container::tiff::types::{ASCII, SHORT, UNDEFINED};
-    use crate::container::tiff::{Block, walk};
+    use crate::container::tiff::{Block, ifd_in, walk};
     use crate::error::ErrorKind;
     use crate::formats::testing::{Src, byte_order};
     use crate::testing::{FAR, FailsFar};
@@ -1125,25 +1091,6 @@ mod tests {
                 assert_eq!(focus, Some(focus_7m4()), "{label}");
             }
         }
-    }
-
-    #[test]
-    fn a_makernote_ifd_before_the_base_has_no_offset() {
-        // An offset as a TIFF offset is written, counted from the base.
-        assert_eq!(ifd_offset(0, 600, 12), Some(612));
-        assert_eq!(ifd_offset(1000, 1000, 0), Some(0));
-        assert_eq!(ifd_offset(1000, 1600, 12), Some(612));
-        // The IFD before the base, whether its block starts there or only
-        // the header before it does.
-        assert_eq!(ifd_offset(1000, 900, 0), None);
-        assert_eq!(ifd_offset(1000, 988, 11), None);
-        assert_eq!(ifd_offset(1000, 988, 12), Some(0));
-        // The IFD past the 32-bit range from the base, and past the largest
-        // position.
-        let top = 1000 + u64::from(u32::MAX);
-        assert_eq!(ifd_offset(1000, top, 0), Some(u32::MAX));
-        assert_eq!(ifd_offset(1000, top, 1), None);
-        assert_eq!(ifd_offset(0, u64::MAX, 12), None);
     }
 
     #[test]
