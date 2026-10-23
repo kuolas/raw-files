@@ -1,13 +1,15 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 //! Where the integration tests find the real sample files of
-//! `tests/samples.tsv`, and the checks that one opens with exactly the
-//! previews expected of it and gives exactly the metadata expected of it,
-//! its focus point among it.
+//! `tests/samples.tsv`, which files of each format the list names, and the
+//! checks that one opens with exactly the previews expected of it and
+//! gives exactly the metadata expected of it, its focus point among it.
 //! They are too large to commit, so `scripts/fetch-samples.sh` downloads
-//! them, and a test whose file is absent skips with a note rather than
+//! them, the RAW files from raw.pixls.us and the JPEG files from Wikimedia
+//! Commons, and a test whose file is absent skips with a note rather than
 //! failing: the suite runs offline.
 
+use std::collections::BTreeSet;
 use std::env;
 use std::path::{Path, PathBuf};
 
@@ -36,12 +38,58 @@ pub fn path(name: &str) -> Option<PathBuf> {
     }
 }
 
+/// The list of sample files, `tests/samples.tsv`, compiled in, so that a
+/// test of the list runs without any download.
+const LIST: &str = include_str!("../samples.tsv");
+
+/// The columns of `tests/samples.tsv`, in order: the site a file comes
+/// from, `raw.pixls.us` or `commons`; its id there, a number on
+/// raw.pixls.us and the file's name on Wikimedia Commons; its format, the
+/// name of the file in `raw-samples/`, its tier, `normal` or `large`; its
+/// SHA-256; its licence, with the author for a licence that asks for
+/// credit; and its URL.
+const COLUMNS: [&str; 8] = [
+    "source", "id", "format", "file", "tier", "sha256", "licence", "url",
+];
+
+/// The files `tests/samples.tsv` lists of `format`, as its format column
+/// names it (`nef`, `arw` or `jpeg`), each with its tier, for the tests
+/// that check that the list and the tables of a format name the same
+/// files. Checks that the list starts with the header line of [`COLUMNS`],
+/// that every line has as many columns, from one of the two sources, and
+/// that no file name is listed twice anywhere in the list, whatever its
+/// format or tier: every file is saved under its name in one folder,
+/// `raw-samples/` or the one `RAW_FILES_SAMPLES` names ([`path`]), so two
+/// lines with one name would be one local file.
+pub fn listed(format: &str) -> BTreeSet<(&'static str, &'static str)> {
+    let mut lines = LIST.lines();
+    let header: Vec<&str> = lines.next().unwrap().split('\t').collect();
+    assert_eq!(header, COLUMNS);
+    let mut names = BTreeSet::new();
+    let mut listed = BTreeSet::new();
+    for line in lines.filter(|line| !line.is_empty()) {
+        let fields: Vec<&str> = line.split('\t').collect();
+        assert_eq!(fields.len(), COLUMNS.len(), "{line}");
+        assert!(
+            matches!(fields[0], "raw.pixls.us" | "commons"),
+            "{line}: an unknown source"
+        );
+        assert!(names.insert(fields[3]), "{line}: listed twice");
+        if fields[2] == format {
+            listed.insert((fields[3], fields[4]));
+        }
+    }
+    listed
+}
+
 /// One JPEG a sample file holds, as the notes on its format record it and
 /// the reader must report it: its size in pixels from its own frame header,
 /// where its bytes are, and how many bytes the declared length runs past
 /// the end-of-image marker (a preview can be padded, as some Sony files'
 /// are: the thumbnails of the DSLR-A200, A700 and A900 and the 1616 by
-/// 1080 previews of the SLT-A55 and NEX-5; see the ARW notes).
+/// 1080 previews of the SLT-A55 and NEX-5, see the ARW notes; and a JPEG
+/// file's own preview, the whole file, which runs through the zeros that
+/// some Sony bodies write after the last image, see the JPEG notes).
 pub struct Jpeg {
     pub width: u32,
     pub height: u32,

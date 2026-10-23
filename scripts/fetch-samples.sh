@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
 # fetch-samples.sh — download the real sample files that the tests read when
 # they are present (CONTRIBUTING.md §Code style and checks). The list is
-# tests/samples.tsv: one file per line, pinned by its SHA-256, each with its
-# tier, its licence and the URL it comes from. Without the files, those
-# tests skip.
+# tests/samples.tsv: one file per line, pinned by its SHA-256, each with the
+# site it comes from, its id there, its tier, its licence and its URL.
+# Without the files, those tests skip.
 #
 #   scripts/fetch-samples.sh                     # every file of the normal tier
-#   scripts/fetch-samples.sh arw                 # only those of one format
+#   scripts/fetch-samples.sh jpeg                # only those of one format:
+#                                                # nef, arw or jpeg
 #   RAW_FILES_LARGE=1 scripts/fetch-samples.sh   # the large tier as well
 #
 # A file of the "large" tier, such as the 325 MiB ARQ, is skipped with a
@@ -44,8 +45,15 @@ cd "$(dirname "$0")/.."
 list=tests/samples.tsv
 dest=${dest:-raw-samples}
 
-# A browser's User-Agent: a site that filters bots may refuse curl's own.
-user_agent='Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36'
+# The RAW files come from raw.pixls.us and the JPEG files from Wikimedia
+# Commons, as the list's source column says, and each site gets its own
+# User-Agent. raw.pixls.us gets a browser's: a site that filters bots may
+# refuse curl's own. Commons asks a script for one that names it and a way
+# to reach its authors, and to go easy on its servers, so the script waits
+# a moment before each download from Commons after the first.
+browser_agent='Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36'
+commons_agent='raw-files-fetch-samples/1.0 (https://github.com/kuolas/raw-files)'
+commons_pause=2
 
 # Linux has sha256sum; macOS has shasum.
 if command -v sha256sum >/dev/null 2>&1; then
@@ -61,7 +69,7 @@ sha256() {
 }
 
 header=$(head -n 1 "$list")
-if [ "$header" != "$(printf 'id\tformat\tfile\ttier\tsha256\tlicence\turl')" ]; then
+if [ "$header" != "$(printf 'source\tid\tformat\tfile\ttier\tsha256\tlicence\turl')" ]; then
 	printf 'fetch-samples: %s does not start with the expected header line\n' "$list" >&2
 	exit 2
 fi
@@ -77,8 +85,9 @@ trap cleanup EXIT
 
 matched=0
 skipped=0
-while IFS=$'\t' read -r id format file tier sha256 licence url || [ -n "$id" ]; do
-	[ -n "$id" ] || continue
+from_commons=0
+while IFS=$'\t' read -r source id format file tier sha256 licence url || [ -n "$source" ]; do
+	[ -n "$source" ] || continue
 	if [ -n "$only" ] && [ "$format" != "$only" ]; then
 		continue
 	fi
@@ -102,23 +111,40 @@ while IFS=$'\t' read -r id format file tier sha256 licence url || [ -n "$id" ]; 
 		printf 'fetch-samples: %s: line for %s needs a lower-case SHA-256 and a URL\n' "$list" "$file" >&2
 		exit 2
 	fi
+	# The source picks the User-Agent, so the URL must be on its site.
+	case "$source" in
+		raw.pixls.us) site='https://raw.pixls.us/' agent=$browser_agent ;;
+		commons) site='https://upload.wikimedia.org/' agent=$commons_agent ;;
+		*)
+			printf 'fetch-samples: %s: bad source "%s" for %s; it must be raw.pixls.us or commons\n' "$list" "$source" "$file" >&2
+			exit 2
+			;;
+	esac
+	if [ "${url#"$site"}" = "$url" ]; then
+		printf 'fetch-samples: %s: the URL of %s is not on %s, its source\n' "$list" "$file" "$site" >&2
+		exit 2
+	fi
 
 	# A large file is skipped only after its line has been checked, so a bad
 	# line fails even when its file is not fetched.
 	if [ "$tier" = large ] && [ "${RAW_FILES_LARGE:-}" != 1 ]; then
-		printf 'skipped  %s (%s, large; RAW_FILES_LARGE=1 fetches it)\n' "$file" "$id"
+		printf 'skipped  %s (%s %s, large; RAW_FILES_LARGE=1 fetches it)\n' "$file" "$source" "$id"
 		skipped=$((skipped + 1))
 		continue
 	fi
 
 	target="$dest/$file"
 	if [ -f "$target" ] && [ "$(sha256 "$target")" = "$sha256" ]; then
-		printf 'kept     %s (%s, %s)\n' "$file" "$id" "$licence"
+		printf 'kept     %s (%s %s, %s)\n' "$file" "$source" "$id" "$licence"
 		continue
 	fi
 
+	if [ "$source" = commons ]; then
+		if [ "$from_commons" -gt 0 ]; then sleep "$commons_pause"; fi
+		from_commons=$((from_commons + 1))
+	fi
 	part=$(mktemp "$dest/.$file.XXXXXX")
-	curl -fsSL --retry 3 --proto '=https' -A "$user_agent" -o "$part" "$url"
+	curl -fsSL --retry 3 --proto '=https' -A "$agent" -o "$part" "$url"
 	got=$(sha256 "$part")
 	if [ "$got" != "$sha256" ]; then
 		rm -f "$part"
@@ -132,7 +158,7 @@ while IFS=$'\t' read -r id format file tier sha256 licence url || [ -n "$id" ]; 
 	chmod 644 "$part"
 	mv -f "$part" "$target"
 	part=""
-	printf 'fetched  %s (%s, %s)\n' "$file" "$id" "$licence"
+	printf 'fetched  %s (%s %s, %s)\n' "$file" "$source" "$id" "$licence"
 done < <(tail -n +2 "$list")
 
 if [ "$matched" -eq 0 ]; then

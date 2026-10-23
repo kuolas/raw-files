@@ -12,7 +12,6 @@
 mod support;
 
 use std::collections::BTreeSet;
-use std::fs;
 use std::io::Cursor;
 
 use raw_files::{
@@ -27,7 +26,7 @@ use support::arw::{
 };
 use support::samples::{
     Jpeg, Sample, SampleFocus, SampleLens, SampleMetadata, SerialShape, check, check_metadata,
-    sizes,
+    listed, sizes,
 };
 use support::tiff_builder::{BlobId, Built, Order};
 
@@ -2508,23 +2507,8 @@ fn the_hasselblad_lunar_sample_opens_as_a_sony_file() {
 
 #[test]
 fn the_sample_list_and_the_tables_of_previews_and_metadata_name_the_same_sony_files() {
-    // The list is in the repository, so this runs without any download.
-    let list =
-        fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/samples.tsv")).unwrap();
-    let mut lines = list.lines();
-    let header: Vec<&str> = lines.next().unwrap().split('\t').collect();
-    assert_eq!(
-        header,
-        ["id", "format", "file", "tier", "sha256", "licence", "url"]
-    );
-    let mut listed = BTreeSet::new();
-    for line in lines.filter(|line| !line.is_empty()) {
-        let fields: Vec<&str> = line.split('\t').collect();
-        assert_eq!(fields.len(), header.len(), "{line}");
-        if fields[1] == "arw" {
-            listed.insert((fields[2], fields[3]));
-        }
-    }
+    // The list is compiled in, so this runs without any download.
+    let listed = listed("arw");
 
     let previews: Vec<(&str, &str)> = SAMPLES
         .iter()

@@ -41,6 +41,11 @@ does.
 - `Format::is_raw`, whether a format's files hold a camera's raw sensor
   data, true for NEF and ARW and false for JPEG, so that a program can
   tell raw files from other images without matching every `Format`.
+- JPEG previews and metadata checked on eight camera-original JPEGs from
+  Wikimedia Commons, of five Sony bodies, two Nikon bodies and a Canon,
+  under CC0, a public-domain dedication or CC BY, and on each the focus
+  point it gives, or that it gives none; `scripts/fetch-samples.sh jpeg`
+  downloads them.
 
 ### Changed
 
