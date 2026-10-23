@@ -21,13 +21,16 @@
 //! one whose Exif segment holds IFD0 and IFD1's thumbnail, a camera's with
 //! every value the metadata reads in its Exif segment and an MPF index of
 //! the images after its main one, the same camera layout with a JFIF
-//! segment first, one with zeros after its end, and four Nikon cameras'
-//! JPEGs, whose Exif segment holds a Nikon MakerNote, which a fuzzer would
-//! build by luck alone too: a Z 9's in FX and on a 1:1 crop, a D5300's and
-//! a D70's, the Exif segment's TIFF structure and the MPF index in both
+//! segment first, one with zeros after its end, four Nikon cameras' JPEGs,
+//! whose Exif segment holds a Nikon MakerNote, which a fuzzer would build
+//! by luck alone too: a Z 9's in FX and on a 1:1 crop, a D5300's and a
+//! D70's; and three Sony cameras' JPEGs, whose Exif segment holds a Sony
+//! MakerNote after its `SONY DSC` header: an ILCE-7M3's and an ILCE-7M4's,
+//! whose MakerNote records a focus point, and a DSLR-A100's, with no MPF
+//! index; the Exif segment's TIFF structure and the MPF index in both
 //! byte orders. The `open` target takes these seeds too, as JPEG files are
-//! something it must open, and reaches the Nikon MakerNote reader through
-//! the Nikon ones.
+//! something it must open, and reaches the Nikon and Sony MakerNote readers
+//! through them.
 //!
 //! The fixtures live in `tests/`, outside the library, so this test writes
 //! and checks the seed files, as the unit tests of the TIFF reader do for
@@ -46,8 +49,8 @@ use support::arw::{
 };
 use support::fixtures::{Z9_1X1, Z9_DX, read_fixture};
 use support::jpeg_files::{
-    MAIN, Z9Mode, camera_jpeg, camera_jpeg_with_metadata, d70_jpeg, d5300_jpeg, exif_jpeg,
-    padded_jpeg, plain_jpeg, z9_jpeg,
+    ILCE7M3_MAIN, MAIN, Z9Mode, a100_jpeg, camera_jpeg, camera_jpeg_with_metadata, d70_jpeg,
+    d5300_jpeg, exif_jpeg, ilce7m3_jpeg, ilce7m4_jpeg, padded_jpeg, plain_jpeg, z9_jpeg,
 };
 use support::nef::{d300_file, z6iii_file, z9_file};
 use support::tiff_builder::Order;
@@ -123,6 +126,13 @@ fn jpeg_segments_seeds() -> Vec<(String, Vec<u8>)> {
         ("nikon-d70", "jpg", |order| {
             d70_jpeg(order, false).0.built.bytes
         }),
+        ("sony-ilce7m3", "jpg", |order| {
+            ilce7m3_jpeg(order, ILCE7M3_MAIN).built.bytes
+        }),
+        ("sony-ilce7m4", "jpg", |order| {
+            ilce7m4_jpeg(order).built.bytes
+        }),
+        ("sony-a100", "jpg", |order| a100_jpeg(order).built.bytes),
     ]);
     seeds.push(("plain.jpg".to_owned(), plain_jpeg().bytes));
     seeds.push(("padded.jpg".to_owned(), padded_jpeg().bytes));

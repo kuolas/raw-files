@@ -55,9 +55,10 @@ pub enum Format {
     /// number, the capture time, the exposure, the lens and the
     /// orientation; from a Nikon camera, also what its MakerNote records
     /// where the Exif segment records nothing, as in a NEF, and the focus
-    /// point, placed on the picture on a crop mode, and given only when its
-    /// frame has the picture's shape. Its image size is the size of the
-    /// picture, and it has no raw size.
+    /// point, placed on the picture on a crop mode; from a Sony camera, the
+    /// focus point its MakerNote records, as in an ARW. A focus point is
+    /// given only when its frame has the picture's shape. Its image size is
+    /// the size of the picture, and it has no raw size.
     Jpeg,
 }
 

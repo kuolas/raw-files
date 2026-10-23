@@ -34,7 +34,13 @@
 //! records the serial number, the lens's range and the clock's time zone
 //! that its Exif segment lacks, and a D70's, whose MakerNote, in the other
 //! byte order from its Exif segment's, records the ISO and holds a preview;
-//! those with a TIFF structure or an MPF index in both byte orders. They
+//! and three Sony cameras' JPEGs, whose Exif segment holds a Sony
+//! MakerNote after its `SONY DSC` header, its offsets counted from the
+//! segment's TIFF header: an ILCE-7M3's, whose MakerNote records its focus
+//! point, an ILCE-7M4's, whose MakerNote records the focus area's size too,
+//! and a DSLR-A100's, with no MPF index, whose MakerNote holds tags of an
+//! older layout and no focus point; those with a TIFF structure or an MPF
+//! index in both byte orders. They
 //! cut each file at every length, and overwrite each byte in turn with
 //! 0x00, 0xFF and its complement.
 //!
@@ -76,8 +82,8 @@ use raw_files::{Focus, Metadata, Rational, RawFile, SignedRational, Size};
 use support::arw::{ARW4_FULL_SIZE_JPEG, arw4_file, stub};
 use support::fixtures::{Z9_1X1, Z9_DX, read_fixture};
 use support::jpeg_files::{
-    MAIN, Z9Mode, camera_jpeg, camera_jpeg_with_metadata, d70_jpeg, d5300_jpeg, exif_jpeg,
-    padded_jpeg, plain_jpeg, z9_jpeg,
+    ILCE7M3_MAIN, MAIN, Z9Mode, a100_jpeg, camera_jpeg, camera_jpeg_with_metadata, d70_jpeg,
+    d5300_jpeg, exif_jpeg, ilce7m3_jpeg, ilce7m4_jpeg, padded_jpeg, plain_jpeg, z9_jpeg,
 };
 use support::nef::{d300_file, z6iii_file, z9_file, z9_file_with};
 use support::tiff_builder::Order;
@@ -106,8 +112,9 @@ struct Fixture {
 /// zeros after its end, and, in both byte orders, with an Exif segment, a
 /// camera's with every value the metadata reads, a camera's with a JFIF
 /// segment first, whose Exif segment holds only the orientation and the
-/// thumbnail, and the Nikon JPEGs of a Z 9 in FX and on a 1:1 crop, of a
-/// D5300 and of a D70.
+/// thumbnail, the Nikon JPEGs of a Z 9 in FX and on a 1:1 crop, of a
+/// D5300 and of a D70, and the Sony JPEGs of an ILCE-7M3, an ILCE-7M4 and
+/// a DSLR-A100.
 fn fixtures() -> Vec<Fixture> {
     let mut fixtures = Vec::new();
     for order in ORDERS {
@@ -215,6 +222,18 @@ fn fixtures() -> Vec<Fixture> {
             (
                 format!("D70 JPEG, {order:?}"),
                 d70_jpeg(order, false).0.built.bytes,
+            ),
+            (
+                format!("ILCE-7M3 JPEG, {order:?}"),
+                ilce7m3_jpeg(order, ILCE7M3_MAIN).built.bytes,
+            ),
+            (
+                format!("ILCE-7M4 JPEG, {order:?}"),
+                ilce7m4_jpeg(order).built.bytes,
+            ),
+            (
+                format!("A100 JPEG, {order:?}"),
+                a100_jpeg(order).built.bytes,
             ),
         ]);
     }
