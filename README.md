@@ -26,7 +26,7 @@ focus gives none; plain JPEG files and raw decoding come later; see the
 
 Open a file, take its largest preview and read the JPEG:
 
-```rust
+```rust,no_run
 use raw_files::RawFile;
 
 fn main() -> raw_files::Result<()> {
@@ -46,7 +46,7 @@ fn main() -> raw_files::Result<()> {
 
 Print when the picture was taken, and with which camera and lens:
 
-```rust
+```rust,no_run
 use raw_files::RawFile;
 
 fn main() -> raw_files::Result<()> {
@@ -69,7 +69,7 @@ Find where the camera focused on the largest preview, the window in which
 to measure how sharp the picture is; a file that records no focus point
 gives none:
 
-```rust
+```rust,no_run
 use raw_files::RawFile;
 
 fn main() -> raw_files::Result<()> {

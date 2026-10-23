@@ -208,6 +208,12 @@ mod options;
 mod orientation;
 mod preview;
 mod rational;
+// The README's code samples, compiled by `cargo test` and run where they
+// open no file: only a doc-test build sees this module, so it is never part
+// of the library or its docs.
+#[cfg(doctest)]
+#[doc = include_str!("../README.md")]
+mod readme {}
 // The TIFF fixture builder lives with the integration tests and is shared
 // with the unit tests: compiled into each test build, never into the
 // library. Each side uses only part of it.

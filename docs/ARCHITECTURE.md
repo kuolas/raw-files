@@ -10,7 +10,7 @@ fuzz targets are a second crate, in `fuzz/`, that is never published.
 
 | File | Holds | May depend on |
 |---|---|---|
-| `src/lib.rs` | the library root: the crate documentation and the re-exports | `datetime`, `error`, `file`, `format`, `geometry`, `limits`, `metadata`, `options`, `orientation`, `preview`, `rational` |
+| `src/lib.rs` | the library root: the crate documentation and the re-exports; in a doc-test build only, the README as a module, so that its code samples are compiled | `datetime`, `error`, `file`, `format`, `geometry`, `limits`, `metadata`, `options`, `orientation`, `preview`, `rational` |
 | `src/error.rs` | `Error`, `ErrorKind`, `Result`: what can go wrong, by category, with the byte offset when known | — |
 | `src/limits.rs` | `Limits`: the caps on what a file can make the library walk or allocate | — |
 | `src/orientation.rs` | `Orientation`: what a viewer must do to the stored pixels to show the image upright, from the EXIF tag's eight values | — |
