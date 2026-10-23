@@ -2,23 +2,27 @@
 
 //! raw-files: a camera RAW library in pure Rust.
 //!
-//! raw-files extracts the JPEG previews embedded in Nikon NEF and Sony ARW
-//! files and reads the metadata a viewer or a file renamer needs next to
-//! them, and will later decode their raw sensor data. A malformed file
-//! gives an error, never a panic.
+//! raw-files reads camera RAW files and the JPEG files cameras write: the
+//! previews they hold, which in a raw file are the JPEG images it embeds
+//! and in a JPEG file the file itself and the smaller copies it carries,
+//! and the metadata a viewer or a file renamer needs next to them. The RAW
+//! files it reads are Nikon NEF and Sony ARW, whose raw sensor data it will
+//! later decode. A malformed file gives an error, never a panic.
 //!
 //! [`RawFile`] opens a file by path, from bytes in memory or from any reader
 //! that can seek, detects its format from its content, lists its previews
-//! and reads one; [`Options`] opens it with other [`Limits`]. Nikon NEF and
-//! Sony ARW files open with their previews, and so do JPEG files; any other
-//! file is refused with the `UnknownFormat` error.
+//! and reads one; [`Options`] opens it with other [`Limits`].
+//! [`RawFile::format`] says which [`Format`] the file is, and
+//! [`Format::is_raw`] whether it holds raw data; a file of no format
+//! raw-files reads is refused with the `UnknownFormat` error.
 //! [`RawFile::metadata`] gives what the camera recorded about the picture,
-//! read when the file is opened, from the standard TIFF and Exif tags and,
-//! on Nikon and Sony files, from what the maker's MakerNote records that
-//! they lack: the camera's make, model and serial number, the capture
-//! time, the orientation, the exposure, the lens, the sizes of the raw
-//! data and of the visible image, and where the camera focused
-//! ([`Metadata::focus`]). See the
+//! read when the file is opened, from the standard TIFF and Exif tags, in a
+//! JPEG those of its Exif segment, and, in the raw files and the JPEGs of
+//! Nikon and Sony cameras, from what the maker's MakerNote records that
+//! they lack: the camera's make, model and serial number, the capture time,
+//! the orientation, the exposure, the lens, the sizes of the raw data,
+//! which a JPEG lacks, and of the visible image, and where the camera
+//! focused ([`Metadata::focus`]). See the
 //! [roadmap](https://github.com/kuolas/raw-files/blob/master/docs/ROADMAP.md)
 //! for the plan and the
 //! [architecture](https://github.com/kuolas/raw-files/blob/master/docs/ARCHITECTURE.md)
@@ -113,6 +117,35 @@
 //! [`Lens::builder`] and the checked constructors, such as
 //! [`DateTime::new`]; [`Metadata`] shows how.
 //!
+//! Tell a raw file from the JPEG of the same shot by their names, before
+//! opening either, as a photo browser that shows the two as one picture
+//! does: [`Format::from_extension`] gives the format a name suggests, and
+//! [`Format::is_raw`] whether files of that format hold raw data.
+//!
+//! ```
+//! use std::path::Path;
+//!
+//! use raw_files::Format;
+//!
+//! /// The format a file's name says it holds, if raw-files reads it.
+//! fn format_of(name: &str) -> Option<Format> {
+//!     let extension = Path::new(name).extension()?.to_str()?;
+//!     Format::from_extension(extension)
+//! }
+//!
+//! for name in ["DSC_0001.NEF", "DSC_0001.JPG", "notes.txt"] {
+//!     let kind = match format_of(name) {
+//!         Some(format) if format.is_raw() => "a raw file",
+//!         Some(_) => "a picture with no raw data",
+//!         None => "not a file raw-files reads",
+//!     };
+//!     println!("{name}: {kind}");
+//! }
+//! assert_eq!(format_of("DSC_0001.NEF").map(Format::is_raw), Some(true));
+//! assert_eq!(format_of("DSC_0001.JPG").map(Format::is_raw), Some(false));
+//! assert_eq!(format_of("notes.txt"), None);
+//! ```
+//!
 //! # Guarantees
 //!
 //! - A malformed or truncated file returns an error, never a panic,
@@ -124,7 +157,10 @@
 //!   missing, of an unexpected type or out of range leaves that value
 //!   `None`, and the other values and the previews as they are. A damaged
 //!   directory, such as an Exif IFD whose pointer is wrong, loses the
-//!   values in it and no others.
+//!   values in it and no others. A JPEG whose Exif segment is missing or
+//!   cannot be read still opens: its image size is the only value read
+//!   from it, its orientation is the default, no transform, and its
+//!   previews are the file itself and the images after the main one.
 //! - An untrusted file cannot make the library allocate or walk without
 //!   bound. [`Limits`] caps the directories visited, their entries, their
 //!   nesting and the size of a preview, with defaults that suit untrusted
@@ -137,7 +173,8 @@
 //! - The format comes from the file's content, never from its name. A
 //!   renamed file opens as what it is, and a DNG is refused the same way
 //!   even when its Make names Nikon or Sony. [`Format::from_extension`]
-//!   exists for file pickers only.
+//!   exists for file pickers and folder scans, which decide what to offer
+//!   before opening anything.
 //! - Opening reads the structure and the frame header of each preview
 //!   through a block cache, a few blocks rather than the whole file, and a
 //!   preview's bytes only when asked for.
@@ -149,29 +186,51 @@
 //!
 //! # Formats
 //!
-//! Nikon NEF, including the NRW files of Coolpix cameras, and Sony ARW,
-//! including the SRF, SR2 and ARQ files of the same family and the ARW files
-//! of the Sony-built Hasselblad bodies. Version 0.3.0 reads the embedded
-//! previews, the metadata and the focus point of these files, not their raw
-//! data. All three are checked on the public-domain (CC0) sample files of
-//! [raw.pixls.us](https://raw.pixls.us/): 35 Nikon files, from the D1H to
-//! the Z5II, and 36 Sony-family files, from the DSC-F828 to the ILCE-7M5.
+//! Two RAW formats, Nikon NEF, including the NRW files of Coolpix cameras,
+//! and Sony ARW, including the SRF, SR2 and ARQ files of the same family
+//! and the ARW files of the Sony-built Hasselblad bodies; and JPEG, the
+//! files cameras write beside their raw files or instead of them. Of a raw
+//! file, raw-files reads the embedded previews, the metadata and the focus
+//! point, not the raw data, each checked on the public-domain (CC0) sample
+//! files of [raw.pixls.us](https://raw.pixls.us/): 35 Nikon files, from
+//! the D1H to the Z5II, and 36 Sony-family files, from the DSC-F828 to the
+//! ILCE-7M5.
+//!
+//! A JPEG file's previews are the file itself, the thumbnail of its Exif
+//! segment, the images its Multi-Picture Format (MPF) list holds after the
+//! main one and, from the Nikon bodies that write one, such as the D70,
+//! the small JPEG its MakerNote points at. Its metadata is what its Exif
+//! segment records, read as in a raw file, with the picture's size as the
+//! image size and no raw size; from a Nikon camera, also what its
+//! MakerNote records where the Exif segment records nothing, as in a NEF,
+//! and from a Nikon or a Sony camera the focus point. No other maker's
+//! MakerNote is read. These are checked on eight camera JPEGs from
+//! [Wikimedia Commons](https://commons.wikimedia.org/), of five Sony
+//! bodies, two Nikon bodies and a Canon; on three stripped JPEG files of
+//! the maintainer's own Z 9, one in FX and two in the DX and 16:9 crop
+//! modes, which check where a crop mode's focus point is placed; and on
+//! JPEG files built in the tests.
 //!
 //! Nikon mirrorless bodies, Nikon DSLRs in live view and Sony bodies from
 //! the ILCE-7RM2 on record where they focused as a position, which
-//! [`Metadata::focus`] gives. A shot that records at most the number of an
-//! autofocus point or a mask of the points used, such as a Nikon DSLR's
-//! through the viewfinder or a Sony body's before the ILCE-7RM2, gives
-//! `None`, and so does a shot in manual focus.
+//! [`Metadata::focus`] gives, from a raw file or a JPEG alike. A shot that
+//! records at most the number of an autofocus point or a mask of the
+//! points used, such as a Nikon DSLR's through the viewfinder or a Sony
+//! body's before the ILCE-7RM2, gives `None`, and so does a shot in manual
+//! focus. A Nikon JPEG shot in a crop mode (DX, 1:1, 16:9) records its
+//! point in the camera's full output, and the point is placed on the
+//! JPEG's picture. A JPEG gives its point only when the point's frame has
+//! the picture's shape, so an export cut to another shape or turned
+//! upright gives `None`; one cut from a Nikon crop-mode JPEG is the
+//! exception, and its point may be misplaced.
 //!
 //! # What comes next
 //!
 //! The [roadmap](https://github.com/kuolas/raw-files/blob/master/docs/ROADMAP.md)
-//! plans plain JPEG files next, for the pictures a camera writes beside its
-//! raw files; then the focus point of the shots that record only an
-//! autofocus point's number, such as a DSLR's through the viewfinder,
-//! mapped to pixels through a table of the body's points; then the raw
-//! sensor data; and last a developed linear image.
+//! plans next the focus point of the shots that record only an autofocus
+//! point's number, such as a DSLR's through the viewfinder, mapped to
+//! pixels through a table of the body's points; then the raw sensor data;
+//! and last a developed linear image.
 
 // A fuzzing build compiles the reader for one caller, the fuzz entry points,
 // which use only part of it. What is unused there, and so which `expect`s

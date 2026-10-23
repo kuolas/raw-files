@@ -26,16 +26,27 @@ MakerNote fields that older bodies record only there, checked on the same
 files. Both give where the camera focused, read from the MakerNote, on
 Nikon mirrorless bodies, Nikon DSLRs in live view and Sony bodies from the
 ILCE-7RM2 on, while a shot that records only an autofocus point's number
-gives none until the second step of milestone 4. Milestones 1, 2 and 3 all
-work, and milestone 4 works for the bodies that record a position. Any
-other file that can be read opens as `UnknownFormat`.
+gives none until the second step of milestone 4. A JPEG file, as a camera
+writes it beside its raw file or instead of it, opens with the file itself,
+the thumbnail of its Exif segment, the other images of its Multi-Picture
+Format (MPF) list and, from the Nikon bodies that write one, its
+MakerNote's small JPEG as previews, and with the metadata of its Exif
+segment, read as in a raw file, with no raw size. A Nikon camera's JPEG
+also gives what its MakerNote adds, as a NEF does, and a Nikon or Sony
+camera's JPEG gives the focus point, but only when its frame has the
+picture's shape. JPEG files are checked on test files built in code, on
+three stripped JPEG files of the maintainer's own Z 9 and on the eight
+camera JPEGs of Wikimedia Commons that CI downloads, of five Sony bodies,
+two Nikon bodies and a Canon. Milestones 1, 2, 3 and 5 all work, and
+milestone 4 works for the bodies that record a position. Any other file is
+refused with the `UnknownFormat` error.
 
 The first release, version 0.1.0, is milestones 1 and 2: the embedded
 previews of NEF and ARW files. The second, 0.2.0, is milestone 3: their
 basic metadata. The third, 0.3.0, is the first step of milestone 4: the
-focus point as the camera records it. The next release is milestone 5,
-plain JPEG files ([#23](https://github.com/kuolas/raw-files/issues/23)),
-and the one after it the second step of milestone 4: the mapping of a
+focus point as the camera records it. The fourth, 0.4.0, is milestone 5,
+plain JPEG files ([#23](https://github.com/kuolas/raw-files/issues/23)).
+The next release is the second step of milestone 4: the mapping of a
 DSLR's autofocus point number to pixels.
 
 ## Milestones
