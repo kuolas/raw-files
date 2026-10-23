@@ -14,28 +14,34 @@
 //! in the other), a Nikon Z6III's NEF on a 1:1 crop, whose MakerNote's
 //! CropHiSpeed and CropArea place the focus point on the cropped picture, a
 //! Nikon D300's NEF, whose MakerNote records the serial number, the lens's
-//! range and the clock's time zone that its standard tags lack, and an
-//! ILCE-7M4's ARW 4, with its MakerNote, which records the focus point,
-//! each in both byte orders. They damage five real files too, committed
-//! with their pixels and personal fields removed or zeroed: two NEF shots
-//! of the maintainer's own Z 9 in DX and 1:1 crop modes, and three JPEG
-//! shots of the same camera in FX and in DX and 16:9 crop modes, the last
-//! in portrait orientation, whose Exif segment is the camera's own; they
-//! hold the camera's own layout of tags, in little-endian byte order, where
-//! the fixtures only imitate it. And they damage the JPEG files the JPEG
+//! range and the clock's time zone that its standard tags lack, a Nikon
+//! D1H's NEF, whose MakerNote, of the headerless layout, its offsets
+//! counted from the start of the file, records the ISO and the lens's
+//! range and holds the file's only JPEG, and an ILCE-7M4's ARW 4, with its
+//! MakerNote, which records the focus point, each in both byte orders.
+//! They damage five real files too, committed with their pixels and
+//! personal fields removed or zeroed: two NEF shots of the maintainer's
+//! own Z 9 in DX and 1:1 crop modes, and three JPEG shots of the same
+//! camera in FX and in DX and 16:9 crop modes, the last in portrait
+//! orientation, whose Exif segment is the camera's own; they hold the
+//! camera's own layout of tags, in little-endian byte order, where the
+//! fixtures only imitate it. And they damage the JPEG files the JPEG
 //! reader's tests open, whose segments the walk reads before the Exif
 //! segment's TIFF structure and the MPF index: one with no Exif segment,
 //! one with zeros after its end, one whose Exif segment holds IFD0 and
 //! IFD1's thumbnail, a camera's, whose Exif segment holds every value the
 //! metadata reads and whose MPF index lists two images after its main
 //! one, a camera's with a JFIF segment first, whose Exif segment holds
-//! only IFD0's orientation and IFD1's thumbnail, and four Nikon cameras'
+//! only IFD0's orientation and IFD1's thumbnail, and five Nikon cameras'
 //! JPEGs, whose Exif segment holds a Nikon MakerNote: a Z 9's, whose
 //! MakerNote records its focus point, one of a Z 9's on a 1:1 crop, whose
 //! point is placed on the JPEG's pixels, a D5300's, whose MakerNote
 //! records the serial number, the lens's range and the clock's time zone
-//! that its Exif segment lacks, and a D70's, whose MakerNote, in the other
-//! byte order from its Exif segment's, records the ISO and holds a preview;
+//! that its Exif segment lacks, a D70's, whose MakerNote, in the other
+//! byte order from its Exif segment's, records the ISO and holds a
+//! preview, and one laid out as a D1H's would be, whose MakerNote, of the
+//! headerless layout, its offsets counted from the segment's TIFF header,
+//! records the ISO and the lens's range and holds a preview;
 //! and three Sony cameras' JPEGs, whose Exif segment holds a Sony
 //! MakerNote after its `SONY DSC` header, its offsets counted from the
 //! segment's TIFF header: an ILCE-7M3's, whose MakerNote records its focus
@@ -106,10 +112,11 @@ use raw_files::{Focus, Metadata, Rational, RawFile, SignedRational, Size};
 use support::arw::{ARW4_FULL_SIZE_JPEG, arw4_file, stub};
 use support::fixtures::{Z9_1X1, Z9_16X9_JPEG, Z9_DX, Z9_DX_JPEG, Z9_FX_JPEG, read_fixture};
 use support::jpeg_files::{
-    ILCE7M3_MAIN, MAIN, Z9Mode, a100_jpeg, camera_jpeg, camera_jpeg_with_metadata, d70_jpeg,
-    d5300_jpeg, exif_jpeg, ilce7m3_jpeg, ilce7m4_jpeg, padded_jpeg, plain_jpeg, z9_jpeg,
+    CAMERA_MAKE, ILCE7M3_MAIN, MAIN, Z9Mode, a100_jpeg, camera_jpeg, camera_jpeg_with_metadata,
+    d1h_jpeg, d70_jpeg, d5300_jpeg, exif_jpeg, ilce7m3_jpeg, ilce7m4_jpeg, padded_jpeg, plain_jpeg,
+    z9_jpeg,
 };
-use support::nef::{d300_file, z6iii_file, z9_file, z9_file_with};
+use support::nef::{d1h_file, d300_file, z6iii_file, z9_file, z9_file_with};
 use support::tiff_builder::Order;
 
 const ORDERS: [Order; 2] = [Order::Little, Order::Big];
@@ -133,7 +140,8 @@ struct Fixture {
 
 /// The Z 9 fixture, with IFD0's Orientation 8, in both byte orders, and
 /// with its MakerNote in the other byte order from the file's; the Z6III
-/// and the D300 fixtures, with Orientation 8, in both byte orders; the
+/// and the D300 fixtures, with Orientation 8, in both byte orders; the D1H
+/// fixture, which records no orientation, in both byte orders; the
 /// ARW 4 fixture, with Orientation 8, in both byte orders; the five files
 /// stripped from the maintainer's own Z 9 shots, as they are committed: two
 /// NEF files in DX and 1:1 crop modes, and three JPEG files in FX and in DX
@@ -142,8 +150,8 @@ struct Fixture {
 /// camera's with every value the metadata reads, a camera's with a JFIF
 /// segment first, whose Exif segment holds only the orientation and the
 /// thumbnail, the Nikon JPEGs of a Z 9 in FX and on a 1:1 crop, of a
-/// D5300 and of a D70, and the Sony JPEGs of an ILCE-7M3, an ILCE-7M4 and
-/// a DSLR-A100.
+/// D5300, of a D70 and laid out as a D1H's would be, and the Sony JPEGs of
+/// an ILCE-7M3, an ILCE-7M4 and a DSLR-A100.
 fn fixtures() -> Vec<Fixture> {
     let mut fixtures = Vec::new();
     for order in ORDERS {
@@ -180,6 +188,16 @@ fn fixtures() -> Vec<Fixture> {
         let bytes = d300_file(order, 8).bytes;
         fixtures.push(Fixture {
             name: format!("D300, {order:?}"),
+            sweep_end: bytes.len(),
+            more_lengths: Vec::new(),
+            unread: Vec::new(),
+            bytes,
+        });
+    }
+    for order in ORDERS {
+        let bytes = d1h_file(order).bytes;
+        fixtures.push(Fixture {
+            name: format!("D1H, {order:?}"),
             sweep_end: bytes.len(),
             more_lengths: Vec::new(),
             unread: Vec::new(),
@@ -271,6 +289,10 @@ fn fixtures() -> Vec<Fixture> {
             (
                 format!("D70 JPEG, {order:?}"),
                 d70_jpeg(order, false).0.built.bytes,
+            ),
+            (
+                format!("D1H JPEG, {order:?}"),
+                d1h_jpeg(order, CAMERA_MAKE, |_, _| {}).0.built.bytes,
             ),
             (
                 format!("ILCE-7M3 JPEG, {order:?}"),
@@ -679,6 +701,11 @@ fn an_impossible_capture_time_costs_only_the_capture_time() {
                 format!("D300, {order:?}"),
                 d300_file(order, 8).bytes,
                 "2008:05:17 10:22:31",
+            ),
+            (
+                format!("D1H, {order:?}"),
+                d1h_file(order).bytes,
+                "2022:03:24 10:09:27",
             ),
             (
                 format!("ARW 4, {order:?}"),

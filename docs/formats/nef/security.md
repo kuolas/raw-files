@@ -163,7 +163,9 @@ that introduces the feature lands (see [the roadmap](../../ROADMAP.md)).
    `offset + len <= available` with `checked_add`, against both the file and
    the enclosing sub-slice. Use `get(..)` and checked slicing, never plain
    indexing, on data derived from the file. A MakerNote is a bounded
-   sub-slice with its own base; never reuse the outer base inside it.
+   sub-slice with the base its layout sets: its inner TIFF header in the
+   embedded layout, never the outer base, and the outer TIFF header in
+   the headerless layout, whose offsets count from there.
    Applies to IFD offsets, entry value offsets, strip offsets and byte
    counts, SubIFD pointers, and JPEG preview offsets and lengths.
    (CVE-2020-15503, CVE-2024-8025, CVE-2017-7544, CVE-2018-20337,

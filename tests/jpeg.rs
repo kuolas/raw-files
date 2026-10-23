@@ -10,15 +10,17 @@
 //! file itself. Last, the Nikon MakerNote of a Nikon camera's JPEG, read by
 //! IFD0's Make: the values it adds where the Exif segment has none, its
 //! preview, and its focus point, placed on the JPEG's pixels on a crop mode
-//! and kept only when its frame has the picture's shape; and the damage
-//! and the limits that cost the MakerNote but not the file. Then the Sony
-//! MakerNote of a Sony camera's JPEG, read by IFD0's Make too, with its
-//! offsets counted from the Exif segment's TIFF header: its focus point,
-//! as recorded and kept only when its frame has the picture's shape, none
-//! where it records none, and the damage and the limits that cost the
-//! point but not the file. Then three real JPEGs of the maintainer's own
-//! Z 9, in FX and in DX and 16:9 crop modes, committed with their images
-//! replaced by stubs and their personal fields zeroed (see
+//! and kept only when its frame has the picture's shape; the MakerNote of
+//! the headerless layout of the D1 family, with its offsets counted from
+//! the Exif segment's TIFF header, its preview and its values; and the
+//! damage and the limits that cost the MakerNote but not the file. Then
+//! the Sony MakerNote of a Sony camera's JPEG, read by IFD0's Make too,
+//! with its offsets counted from the Exif segment's TIFF header: its focus
+//! point, as recorded and kept only when its frame has the picture's
+//! shape, none where it records none, and the damage and the limits that
+//! cost the point but not the file. Then three real JPEGs of the
+//! maintainer's own Z 9, in FX and in DX and 16:9 crop modes, committed
+//! with their images replaced by stubs and their personal fields zeroed (see
 //! [`support::fixtures`]), read whole from a path and from bytes: their
 //! previews, every value of their metadata, and their focus points, as
 //! recorded in FX, scaled onto the DX picture and moved into the 16:9
@@ -60,14 +62,15 @@ use support::jpeg_files::{
     camera_jpeg_with_metadata, exif, exif_jpeg, padded_jpeg, plain_jpeg,
 };
 use support::jpeg_files::{
-    D70_ISO, D70_LOST, D70_MAIN, D70_MODEL, D70_PREVIEW, D5300_ISO, D5300_LENS, D5300_LOST,
-    D5300_MAIN, D5300_MODEL, D5300_SERIAL_NUMBER, D5300_TIME_ZONE, NikonJpeg, Z9Mode, d70_jpeg,
-    d5300_jpeg, nikon_jpeg, z9_jpeg,
+    D1H_LOST, D1H_MAIN, D1H_MODEL, D70_ISO, D70_LOST, D70_MAIN, D70_MODEL, D70_PREVIEW, D5300_ISO,
+    D5300_LENS, D5300_LOST, D5300_MAIN, D5300_MODEL, D5300_SERIAL_NUMBER, D5300_TIME_ZONE,
+    NikonJpeg, Z9Mode, d1h_jpeg, d70_jpeg, d5300_jpeg, nikon_jpeg, z9_jpeg,
 };
 use support::jpeg_stub::{jpeg_stub, segment};
 use support::nef::{
-    AF_INFO2, CROP_HI_SPEED, D300_LENS, FOCUS_MODE, ISO as MAKER_NOTE_ISO, LENS as MAKER_NOTE_LENS,
-    PREVIEW_JPEG, SERIAL_NUMBER, WORLD_TIME, nikon_makernote_with, z9_af_info2,
+    AF_INFO2, CROP_HI_SPEED, D1H_ISO, D1H_LENS, D1H_PREVIEW_JPEG, D300_LENS, FOCUS_MODE,
+    ISO as MAKER_NOTE_ISO, LENS as MAKER_NOTE_LENS, PREVIEW_JPEG, SERIAL_NUMBER, WORLD_TIME,
+    nikon_makernote_with, z9_af_info2,
 };
 use support::samples::{
     Jpeg, Sample, SampleFocus, SampleLens, SampleMetadata, SerialShape, check, check_metadata,
@@ -1247,6 +1250,120 @@ fn a_nikon_makernote_under_another_makers_make_is_not_read() {
     }
 }
 
+/// The previews of the D1H's JPEG `file`, whose MakerNote's preview lies
+/// at `preview`, smallest first: the thumbnail, the MakerNote's preview
+/// when `read`, and the file, all turned by IFD0's Orientation 6.
+fn d1h_previews(file: &NikonJpeg, preview: Range<u64>, read: bool) -> Vec<Seen> {
+    let mut jpegs = vec![(in_file(&file.built, &file.thumbnail), THUMBNAIL)];
+    if read {
+        jpegs.push((preview, D1H_PREVIEW_JPEG));
+    }
+    jpegs.push((whole(&file.built), D1H_MAIN));
+    expected(&jpegs, Orientation::Rotate90)
+}
+
+/// The metadata of the D1H's JPEG that [`d1h_jpeg`] lays out under the
+/// Make `make`: what [`camera_exif`] writes but [`D1H_LOST`], that Make
+/// and its own Model, and, when `read`, the ISO and the lens's range that
+/// its MakerNote alone records. Its MakerNote records no time zone and no
+/// AFInfo2.
+fn d1h_metadata(make: &str, read: bool) -> Metadata {
+    let metadata = camera_metadata_without(&D1H_LOST)
+        .with_make(make)
+        .with_model(D1H_MODEL)
+        .with_capture_time(capture_time_at(None))
+        .with_image_size(size_of(D1H_MAIN));
+    if !read {
+        return metadata;
+    }
+    let exposure = metadata.exposure().clone().with_iso(u32::from(D1H_ISO));
+    metadata
+        .with_exposure(exposure)
+        .with_lens(lens_of_range(D1H_LENS))
+}
+
+#[test]
+fn a_headerless_nikon_makernote_is_read_at_the_exif_segments_tiff_header() {
+    // The D1H's layout in a JPEG: the MakerNote IFD at the block's first
+    // byte, its offsets counted from the Exif segment's TIFF header, its
+    // numbers in that structure's byte order. The PreviewIFD's JPEG, of
+    // 570 by 375, is a preview, and the MakerNote gives the ISO and the
+    // lens's range the Exif segment lacks.
+    for order in ORDERS {
+        let (file, preview) = d1h_jpeg(order, CAMERA_MAKE, |_, _| {});
+        assert!(file.makernote.start <= preview.start, "{order:?}");
+        assert_eq!(file.makernote.end, preview.end, "{order:?}");
+        assert_opens(
+            &file.built.bytes,
+            &d1h_previews(&file, preview, true),
+            &d1h_metadata(CAMERA_MAKE, true),
+            &format!("D1H, {order:?}"),
+        );
+    }
+}
+
+/// A tag of Nikon's MakerNote that the reader does not read, numbered
+/// between FocusMode and SerialNumber, with no tag between it and
+/// SerialNumber whose value is stored out of line, so that its value lies
+/// right before SerialNumber's in the IFD's values.
+const UNREAD_BEFORE_SERIAL: u16 = 0x0010;
+
+#[test]
+fn a_headerless_nikon_makernotes_offsets_count_from_the_exif_segments_tiff_header() {
+    // The D1H's JPEG, whose MakerNote holds 32 bytes of a tag the reader
+    // does not read, just before the value of SerialNumber, which the
+    // Exif segment lacks. The Exif segment comes first, so its TIFF header
+    // lies 12 bytes into the file, and the offset SerialNumber's entry
+    // holds, counted from the file's start, lands 12 bytes early, inside
+    // those 32 bytes, where a decoy lies: another serial number. Counted
+    // from the Exif segment's TIFF header, the serial number is the
+    // camera's; from the file's start it would be the decoy's.
+    let (serial, decoy) = (b"7654321\0", b"1111111\0");
+    for order in ORDERS {
+        let mut unread = vec![0; 32];
+        unread[20..28].copy_from_slice(decoy);
+        let (file, preview) = d1h_jpeg(order, CAMERA_MAKE, |tiff, ifd| {
+            tiff.undefined(ifd, UNREAD_BEFORE_SERIAL, &unread)
+                .ascii(ifd, SERIAL_NUMBER, "7654321");
+        });
+        let bytes = &file.built.bytes;
+        let base = file.built.exif_tiff(0).start;
+        assert_eq!(base, 12, "{order:?}");
+        let offset = u64::from(field_in(bytes, file.makernote.start, order, SERIAL_NUMBER));
+        let at = |pos: u64| &bytes[usize::try_from(pos).unwrap()..][..8];
+        assert_eq!(at(base + offset), serial, "{order:?}");
+        assert_eq!(at(offset), decoy, "{order:?}");
+        assert_opens(
+            bytes,
+            &d1h_previews(&file, preview, true),
+            &d1h_metadata(CAMERA_MAKE, true).with_serial_number("7654321"),
+            &format!("{order:?}"),
+        );
+    }
+}
+
+#[test]
+fn a_headerless_nikon_makernote_under_another_makers_make_is_not_read() {
+    // The D1H's JPEG under Canon's Make: nothing of its MakerNote is read,
+    // neither its preview nor its ISO nor its lens's range. Nikon's Make,
+    // in any case, reads all three.
+    for order in ORDERS {
+        for (make, read) in [
+            ("Canon", false),
+            ("NIKON CORPORATION", true),
+            ("Nikon", true),
+        ] {
+            let (file, preview) = d1h_jpeg(order, make, |_, _| {});
+            assert_opens(
+                &file.built.bytes,
+                &d1h_previews(&file, preview, read),
+                &d1h_metadata(make, read),
+                &format!("{make}, {order:?}"),
+            );
+        }
+    }
+}
+
 #[test]
 fn a_damaged_makernote_costs_only_what_it_gives() {
     // A MakerNote whose inner TIFF header has no byte-order mark: the file
@@ -1599,9 +1716,10 @@ fn a_sony_makernotes_offsets_count_from_the_exif_segments_tiff_header() {
 fn a_sony_makernote_under_another_makers_make_is_not_read() {
     // The ILCE-7M3's JPEG under other Makes: another maker's, Hasselblad's,
     // whose Sony-built bodies the ARW claim tells apart by a raw file's
-    // structure, which a JPEG lacks, and Nikon's, whose reader finds no
-    // Nikon MakerNote in Sony's. None gives the point. Sony's Make in any
-    // case reads it.
+    // structure, which a JPEG lacks, and Nikon's, whose reader takes
+    // Sony's block for a bare IFD, of Nikon's headerless layout, and finds
+    // in its first two bytes, `SO`, a count of thousands of entries. None
+    // gives the point. Sony's Make in any case reads it.
     for order in ORDERS {
         for (make, read) in [
             ("Canon", false),

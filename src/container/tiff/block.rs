@@ -16,7 +16,9 @@
 //! - the MPF index of a JPEG file: base at its MP header, and the APP2
 //!   segment that holds it as bounds;
 //! - the Nikon MakerNote: base at the TIFF header it holds, 10 bytes in,
-//!   and the MakerNote as bounds;
+//!   and the MakerNote as bounds; or, in the headerless layout of the D1
+//!   family, base at the header of the TIFF structure that holds it, as
+//!   for Sony's below;
 //! - the Sony MakerNote: base at the header of the TIFF structure that
 //!   holds it, since its offsets count from there (0 in an ARW file), and
 //!   the MakerNote as bounds. The base lies outside the bounds, which a

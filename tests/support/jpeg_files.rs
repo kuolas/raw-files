@@ -42,6 +42,14 @@
 //!   with no MPF index, whose MakerNote, in the other byte order from the
 //!   file's, records the ISO and the lens's range and holds a preview of
 //!   564 by 372 pixels, inside its declared length or just past it.
+//! - [`d1h_jpeg`]: a JPEG laid out as a Nikon D1H's would be, as
+//!   [`nikon_jpeg`]'s with no MPF index, under any Make, whose MakerNote,
+//!   of the headerless layout the D1H writes in its raw files, is written
+//!   by the builder of the segment's TIFF structure, so that its offsets
+//!   count from that structure's header; it records the ISO and the lens's
+//!   range that the Exif segment lacks, with any tags a test adds, and
+//!   holds a preview of 570 by 375 pixels. No JPEG file of the D1 family
+//!   is known.
 //! - [`sony_jpeg`]: a Sony camera's JPEG, laid out as the ILCE-7M3's: an
 //!   Exif segment, an MPF index, the main image of any size, the one MPF
 //!   image of [`SONY_MPF_IMAGE`] and zeros after it, or, without the MPF
@@ -60,7 +68,8 @@
 //!   index and a MakerNote of an older layout.
 //!
 //! The TIFF structure of an Exif segment and the MPF index are each in the
-//! byte order a test gives, a Nikon MakerNote in the one its layout gives,
+//! byte order a test gives, a Nikon MakerNote of the embedded layout in the
+//! one its layout gives, and a Nikon MakerNote of the headerless layout
 //! and a Sony MakerNote in the TIFF structure's.
 
 use std::ops::Range;
@@ -71,8 +80,9 @@ use super::arw::{
 use super::jpeg_builder::{Built, JpegBuilder};
 use super::jpeg_stub::jpeg_stub;
 use super::nef::{
-    self, AF_INFO2, CROP_AREA, CROP_HI_SPEED, D300_LENS, FOCUS_MODE, SERIAL_NUMBER, WORLD_TIME,
-    Z9_FOCUS_AREA, Z9_FOCUS_CENTER, Z9_FOCUS_FRAME, af_info2_04xx, nikon_makernote_with,
+    self, AF_INFO2, CROP_AREA, CROP_HI_SPEED, D1H_ISO, D1H_LENS, D1H_PREVIEW_JPEG, D300_LENS,
+    FOCUS_MODE, PREVIEW_IFD, SERIAL_NUMBER, WORLD_TIME, Z9_FOCUS_AREA, Z9_FOCUS_CENTER,
+    Z9_FOCUS_FRAME, af_info2_04xx, nikon_makernote_with,
 };
 use super::tiff_builder::{self, IfdId, Order, RawValue, TiffBuilder};
 
@@ -698,6 +708,81 @@ pub fn d70_jpeg(order: Order, preview_outside: bool) -> (NikonJpeg, Range<u64>) 
     let start = file.makernote.start + at;
     let end = start + u64::try_from(preview.len()).unwrap();
     (file, start..end)
+}
+
+/// The Model of the D1H's JPEG, in IFD0.
+pub const D1H_MODEL: &str = "NIKON D1H";
+/// The size of the D1H's JPEG: made up, as no JPEG file of the D1 family
+/// is known.
+pub const D1H_MAIN: (u16, u16) = (2000, 1312);
+/// The tags of [`camera_exif`] that the D1H's JPEG leaves out: its own
+/// Make and Model take the Z 9's place, and, as in the D1H's raw file, its
+/// Exif IFD holds no ISO, no serial number, no lens tags and no offset
+/// from UTC.
+pub const D1H_LOST: [u16; 9] = [
+    MAKE,
+    MODEL,
+    BODY_SERIAL_NUMBER,
+    OFFSET_TIME_ORIGINAL,
+    PHOTOGRAPHIC_SENSITIVITY,
+    LENS_MAKE,
+    LENS_MODEL,
+    LENS_SERIAL_NUMBER,
+    LENS_SPECIFICATION,
+];
+
+/// A JPEG laid out as a Nikon D1H's would be, in byte order `order`,
+/// MakerNote and all, with IFD0's Make `make`: no JPEG file of the D1
+/// family is known, so this one gives the MakerNote of the D1H's raw file
+/// to a JPEG laid out as [`nikon_jpeg`]'s, with no MPF index and a main
+/// image of [`D1H_MAIN`]; the values [`camera_exif`] writes, but
+/// [`D1H_LOST`], with IFD0's Model [`D1H_MODEL`]. The MakerNote is of the
+/// headerless layout: the MakerNote IFD at the block's first byte, written
+/// by the builder of the segment's TIFF structure, so that its offsets
+/// count from that structure's header, and its numbers are in byte order
+/// `order`, as in the D1H's raw file they count from the file's own. The
+/// MakerNote IFD holds the ISO `[0, D1H_ISO]`, the FocusMode `AF-S  `, the
+/// Lens `D1H_LENS`, an 18-70 mm lens of f/3.5 to f/4.5, the PreviewIFD
+/// pointer, and what `tags` adds, given the builder and that IFD; its
+/// PreviewIFD declares a JPEG of `D1H_PREVIEW_JPEG`, 570 by 375. The block
+/// runs from the MakerNote IFD through its values and the PreviewIFD to
+/// the end of that JPEG, and the MakerNote's entry declares it whole.
+/// Returns the file and where the preview's JPEG lies in it.
+pub fn d1h_jpeg(
+    order: Order,
+    make: &str,
+    tags: impl FnOnce(&mut TiffBuilder, IfdId),
+) -> (NikonJpeg, Range<u64>) {
+    let preview = jpeg_stub(D1H_PREVIEW_JPEG.0, D1H_PREVIEW_JPEG.1, 0xC0);
+    let (tiff, thumbnail, (makernote, jpeg)) =
+        camera_exif_built(order, &D1H_LOST, |tiff, ifd0, exif| {
+            tiff.ascii(ifd0, MAKE, make).ascii(ifd0, MODEL, D1H_MODEL);
+            let makernote = tiff.ifd();
+            let preview_ifd = tiff.ifd();
+            tiff.short(makernote, nef::ISO, &[0, D1H_ISO])
+                .ascii(makernote, FOCUS_MODE, "AF-S  ")
+                .ifd_pointer(makernote, PREVIEW_IFD, preview_ifd)
+                .rational(makernote, nef::LENS, &D1H_LENS);
+            tags(tiff, makernote);
+            // The first blob, so that it follows the PreviewIFD, inside the
+            // block.
+            let jpeg = tiff.blob(&preview);
+            tiff.long_blob(preview_ifd, JPEG_INTERCHANGE_FORMAT, jpeg)
+                .long_blob_len(preview_ifd, JPEG_INTERCHANGE_FORMAT_LENGTH, jpeg)
+                .block_through(makernote, jpeg)
+                .undefined_ifd(exif, MAKER_NOTE, makernote);
+            (makernote, jpeg)
+        });
+    let built = camera_layout(order, false, &tiff.bytes, &[], D1H_MAIN, false);
+    let base = built.exif_tiff(0).start;
+    let block = tiff.ifd_block(makernote);
+    let at = base + tiff.blob_offset(jpeg);
+    let file = NikonJpeg {
+        built,
+        thumbnail,
+        makernote: base + block.start..base + block.end,
+    };
+    (file, at..at + u64::try_from(preview.len()).unwrap())
 }
 
 /// The Make of a Sony camera's JPEG, in IFD0.

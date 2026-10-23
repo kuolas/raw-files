@@ -479,7 +479,8 @@ what they show.
    camera-original D1 and D100 in particular. The Z 9 is `II`, MakerNote
    included (files 5146 to 5148).
 3. Where the D1, D1H, D1X and E-series bodies keep their JPEG (the
-   PreviewIFD, and its size).
+   PreviewIFD, and its size). Answered for the D1H: its only JPEG, of
+   570x375, is in the PreviewIFD of its headerless MakerNote (file 5364).
 4. Whether any body embeds a progressive or non-baseline JPEG, or unusual
    chroma subsampling. The Z 9's four JPEGs are baseline; their subsampling
    was not read.
@@ -488,7 +489,11 @@ what they show.
    lossless ones; the MakerNote IFD differs by one tag, 0x0096, present in
    the lossless file only (section 5, files 5146 to 5148).
 6. Whether the PreviewIFD offset base for headerless and short-header
-   MakerNotes is the outer TIFF header, as inferred.
+   MakerNotes is the outer TIFF header, as inferred. Answered for the
+   headerless layout: the D1H's PreviewIFD and its JPEG lie where offsets
+   counted from the file's own header put them (file 5364). Open for the
+   short header, which no public file has, and which raw-files does not
+   read.
 7. Whether any SubIFD JPEG uses several strips. None does on the Z 9: every
    JPEG is in one piece, through 0x0201/0x0202.
 8. How common truncated JPEGs or padding after EOI are in real files. The

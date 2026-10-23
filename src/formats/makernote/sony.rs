@@ -42,12 +42,13 @@
 //!
 //! Every offset inside the block counts from the TIFF header of the
 //! structure that holds the MakerNote, as the offsets of that structure's
-//! own IFDs do: not from the block, nor from a header of its own, as
-//! Nikon's do. In an ARW file that header is the start of the file: on the
-//! A100, tag 0xB028 records the offset of a Minolta-format IFD, and the IFD
-//! lies at that offset from the file's start (sample 2346). In a JPEG
-//! file it is the TIFF header inside the Exif segment: the Sony JPEG files
-//! that ADR014 describes count from there. So the IFD is read in a block
+//! own IFDs do, and as in Nikon's headerless layout: not from the block,
+//! nor from a header of its own, as in Nikon's other layout. In an ARW
+//! file that header is the start of the file: on the A100, tag 0xB028
+//! records the offset of a Minolta-format IFD, and the IFD lies at that
+//! offset from the file's start (sample 2346). In a JPEG file it is the
+//! TIFF header inside the Exif segment: the Sony JPEG files that ADR014
+//! describes count from there. So the IFD is read in a block
 //! whose base is the Exif IFD's, the header of the structure the Exif IFD
 //! was read in. The block's numbers are in the file's byte order, the one
 //! the Exif IFD was read in. Every ARW sample is little-endian. The one

@@ -20,17 +20,20 @@ the corpus the fuzzer writes is not.
   and whose MPF index lists two images after the main one; a camera's
   with a JFIF segment first, whose Exif segment holds only IFD0's
   orientation and IFD1's thumbnail, beside the same MPF index; one with
-  zeros after its end; four Nikon cameras' JPEGs, whose Exif segment
+  zeros after its end; five Nikon cameras' JPEGs, whose Exif segment
   holds a Nikon MakerNote: a Z 9's in FX and on a 1:1 crop, whose
   MakerNote records a focus point, a D5300's, whose MakerNote records what
-  its Exif segment lacks, and a D70's, whose MakerNote, in the other byte
-  order, holds a preview; and three Sony cameras' JPEGs, whose Exif
-  segment holds a Sony MakerNote after its `SONY DSC` header: an
-  ILCE-7M3's and an ILCE-7M4's, whose MakerNote records a focus point, the
-  ILCE-7M4's with its area, and a DSLR-A100's, with no MPF index, whose
-  MakerNote holds tags of an older layout. Each of these files with an
-  Exif segment comes in both byte orders, which the TIFF structure inside
-  that segment, a Sony MakerNote and the camera's MPF index share. Beside
+  its Exif segment lacks, a D70's, whose MakerNote, in the other byte
+  order, holds a preview, and one laid out as a D1H's would be, whose
+  MakerNote, of the headerless layout, its offsets counted from the
+  segment's TIFF header, holds a preview; and three Sony cameras' JPEGs,
+  whose Exif segment holds a Sony MakerNote after its `SONY DSC` header:
+  an ILCE-7M3's and an ILCE-7M4's, whose MakerNote records a focus point,
+  the ILCE-7M4's with its area, and a DSLR-A100's, with no MPF index,
+  whose MakerNote holds tags of an older layout. Each of these files with
+  an Exif segment comes in both byte orders, which the TIFF structure
+  inside that segment, a Nikon MakerNote of the headerless layout, a Sony
+  MakerNote and the camera's MPF index share. Beside
   these files built in code are the three real JPEGs committed in
   [`tests/fixtures/`](../../tests/fixtures/README.md), shots of the
   maintainer's own Z 9 in FX and in DX and 16:9 crop modes with their
@@ -39,9 +42,10 @@ the corpus the fuzzer writes is not.
   little-endian byte order.
 - `open/` seeds the `open` target with the integration tests' fixtures of
   the RAW formats: files laid out like the NEF of a Nikon Z 9, of a Z6III
-  on a 1:1 crop and of a D300, and one like each generation of Sony's
-  family (ARW 4.0 with a lossless and with a medium raw, ARW 2.x, ARQ, SR2,
-  SRF and the A100), in both byte orders; and, beside these fixtures built
+  on a 1:1 crop, of a D300 and of a D1H, whose MakerNote is of the
+  headerless layout, and one like each generation of Sony's family (ARW
+  4.0 with a lossless and with a medium raw, ARW 2.x, ARQ, SR2, SRF and
+  the A100), in both byte orders; and, beside these fixtures built
   in code, the two real files committed in
   [`tests/fixtures/`](../../tests/fixtures/README.md), shots of the
   maintainer's own Z 9 in DX and 1:1 crop modes with their pixels and

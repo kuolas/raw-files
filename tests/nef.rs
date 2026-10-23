@@ -8,7 +8,12 @@
 //! records into the cropped picture. Then the previews and the metadata
 //! of a file laid out like a D300's, an older body that records its serial
 //! number and its lens's range only in its MakerNote, and no focus point,
-//! shot through the viewfinder in manual focus. Then two real files of the
+//! shot through the viewfinder in manual focus. Then the one preview and
+//! the metadata of a file laid out like a D1H's, whose MakerNote, of the
+//! headerless layout, with its offsets counted from the start of the file,
+//! holds the file's only JPEG and the ISO and the lens's range that its
+//! Exif tags lack; and the damage and the limits that cost that MakerNote
+//! what it gives, but not the file. Then two real files of the
 //! maintainer's own Z 9, in DX and 1:1 crop modes, committed with their
 //! pixels and personal fields removed (see [`support::fixtures`]): their
 //! previews, every value of their metadata, and their focus points, which
@@ -24,8 +29,12 @@ use std::collections::BTreeSet;
 use std::io::Cursor;
 
 use raw_files::{
-    DateTime, Exposure, Focus, Format, Lens, Metadata, Orientation, Point, Preview, PreviewFormat,
-    Rational, RawFile, SignedRational, Size,
+    DateTime, Exposure, Focus, Format, Lens, Limits, Metadata, Options, Orientation, Point,
+    Preview, PreviewFormat, Rational, RawFile, SignedRational, Size,
+};
+use support::nef::{
+    D1H_ISO, D1H_LENS, D1H_PREVIEW_JPEG, D1H_RAW, D1hBlobs, d1h_file, d1h_file_with,
+    d1h_file_with_blobs,
 };
 use support::nef::{
     D300_FULL_SIZE_JPEG, D300_LENS, D300_PREVIEW_JPEG, D300_RAW, D300_SERIAL_NUMBER,
@@ -649,6 +658,317 @@ fn the_d300_file_gives_what_its_exif_tags_lack_from_the_makernote() {
     }
 }
 
+/// The metadata of the D1H file, built as a caller's test would, through
+/// the public constructors and the `with_…` methods alone: what its
+/// standard tags give, with the ISO and the lens's range that its
+/// MakerNote alone records when `with_makernote`; `None` when a
+/// constructor refuses a value. It records no serial number, no offset
+/// from UTC, no orientation and no focus point either way.
+fn the_d1h_metadata_by_hand(with_makernote: bool) -> Option<Metadata> {
+    let time = DateTime::new(2022, 3, 24, 10, 9, 27)?.with_subseconds(10_000_000, 2)?;
+    let mut exposure = Exposure::default()
+        .with_exposure_time(Rational::new(10, 8000)?)
+        .with_f_number(Rational::new(45, 10)?)
+        .with_focal_length(Rational::new(600, 10)?)
+        .with_exposure_bias(SignedRational::new(4, 6)?);
+    let mut metadata = Metadata::default()
+        .with_make("NIKON CORPORATION")
+        .with_model("NIKON D1H")
+        .with_capture_time(time)
+        .with_raw_size(as_size(D1H_RAW))
+        .with_image_size(as_size(D1H_RAW));
+    if with_makernote {
+        exposure = exposure.with_iso(u32::from(D1H_ISO));
+        let [
+            (min, min_d),
+            (max, max_d),
+            (at_min, at_min_d),
+            (at_max, at_max_d),
+        ] = D1H_LENS;
+        let lens = Lens::builder()
+            .min_focal_length(Rational::new(min, min_d)?)
+            .max_focal_length(Rational::new(max, max_d)?)
+            .f_number_at_min_focal_length(Rational::new(at_min, at_min_d)?)
+            .f_number_at_max_focal_length(Rational::new(at_max, at_max_d)?)
+            .build()?;
+        metadata = metadata.with_lens(lens);
+    }
+    Some(metadata.with_exposure(exposure))
+}
+
+/// Checks that the D1H file `built`, whose parts are where `blobs` says,
+/// opens with `options` as a NEF, from bytes and from a reader, with the
+/// MakerNote's JPEG as its one preview when `preview`, and with no preview
+/// otherwise, and with the metadata [`the_d1h_metadata_by_hand`] gives
+/// with or without what the MakerNote records, as `with_makernote` says;
+/// `label` names the file in a failure.
+fn assert_the_d1h_file(
+    options: &Options,
+    built: &Built,
+    blobs: &D1hBlobs,
+    preview: bool,
+    with_makernote: bool,
+    label: &str,
+) {
+    let expected_metadata = the_d1h_metadata_by_hand(with_makernote)
+        .expect("every value of the D1H fixture is one the constructors accept");
+    let start = built.blob_offset(blobs.preview_jpeg);
+    let len = stub_len(D1H_PREVIEW_JPEG);
+    let expected_previews: Vec<_> = [(start..start + len, wide(D1H_PREVIEW_JPEG))]
+        .into_iter()
+        .filter(|_| preview)
+        .collect();
+    let from_bytes = options.from_bytes(&built.bytes).unwrap();
+    let from_reader = options
+        .from_reader(Cursor::new(built.bytes.clone()))
+        .unwrap();
+    for (how, format, previews, metadata) in [
+        (
+            "bytes",
+            from_bytes.format(),
+            from_bytes.previews(),
+            from_bytes.metadata(),
+        ),
+        (
+            "reader",
+            from_reader.format(),
+            from_reader.previews(),
+            from_reader.metadata(),
+        ),
+    ] {
+        assert_eq!(format, Format::Nef, "{label}, from {how}");
+        let found: Vec<_> = previews
+            .iter()
+            .map(|p| (p.byte_range(), (p.width(), p.height())))
+            .collect();
+        assert_eq!(found, expected_previews, "{label}, from {how}");
+        for preview in previews {
+            assert_eq!(preview.format(), PreviewFormat::Jpeg, "{label}, from {how}");
+            assert_eq!(
+                preview.orientation(),
+                Orientation::NoTransforms,
+                "{label}, from {how}"
+            );
+        }
+        assert_eq!(metadata, &expected_metadata, "{label}, from {how}");
+    }
+}
+
+#[test]
+fn the_d1h_file_opens_as_nef_with_its_makernotes_jpeg_alone() {
+    // The one JPEG, in the PreviewIFD of the headerless MakerNote, whose
+    // offsets count from the start of the file; IFD0's uncompressed
+    // thumbnail is not a JPEG, and the raw strip is not a preview, as on
+    // the public D1H sample 5364.
+    for order in ORDERS {
+        let (built, blobs) = d1h_file_with_blobs(order);
+        // The MakerNote's block holds the PreviewIFD and the whole JPEG, as
+        // the sample's does.
+        let jpeg = built.blob_offset(blobs.preview_jpeg);
+        assert!(blobs.makernote.contains(&blobs.preview_ifd), "{order:?}");
+        assert_eq!(
+            blobs.makernote.end,
+            jpeg + stub_len(D1H_PREVIEW_JPEG),
+            "{order:?}"
+        );
+        assert_the_d1h_file(
+            &Options::new(),
+            &built,
+            &blobs,
+            true,
+            true,
+            &format!("{order:?}"),
+        );
+        let file = RawFile::from_bytes(&built.bytes).unwrap();
+        let starts: Vec<u64> = file
+            .previews()
+            .iter()
+            .map(|p| p.byte_range().start)
+            .collect();
+        for strip in [blobs.thumbnail, blobs.raw] {
+            assert!(
+                !starts.contains(&built.blob_offset(strip)),
+                "{order:?}: {starts:?}"
+            );
+        }
+    }
+}
+
+#[test]
+fn reading_the_d1h_files_preview_returns_exactly_the_stubs_bytes() {
+    for order in ORDERS {
+        let built = d1h_file(order);
+        let mut file = RawFile::from_reader(Cursor::new(built.bytes)).unwrap();
+        let preview = file.largest_preview().unwrap();
+        assert_eq!(
+            file.read_preview(&preview).unwrap(),
+            stub(D1H_PREVIEW_JPEG),
+            "{order:?}"
+        );
+    }
+}
+
+#[test]
+fn the_d1h_file_gives_what_its_exif_tags_lack_from_its_headerless_makernote() {
+    for order in ORDERS {
+        let built = d1h_file(order);
+        let file = RawFile::from_bytes(&built.bytes).unwrap();
+        let metadata = file.metadata();
+        // No PhotographicSensitivity in the Exif IFD: the MakerNote's
+        // second value.
+        assert_eq!(
+            metadata.exposure().iso(),
+            Some(u32::from(D1H_ISO)),
+            "{order:?}"
+        );
+        // No lens tag in the Exif IFD: a lens of the MakerNote's range
+        // alone, with no name and no serial number.
+        let lens = metadata.lens().unwrap();
+        assert_eq!(
+            (lens.make(), lens.model(), lens.serial_number()),
+            (None, None, None),
+            "{order:?}"
+        );
+        let [min_focal, max_focal, f_at_min, f_at_max] =
+            D1H_LENS.map(|(n, d)| Some(fraction(n, d)));
+        assert_eq!(lens.min_focal_length(), min_focal, "{order:?}");
+        assert_eq!(lens.max_focal_length(), max_focal, "{order:?}");
+        assert_eq!(lens.f_number_at_min_focal_length(), f_at_min, "{order:?}");
+        assert_eq!(lens.f_number_at_max_focal_length(), f_at_max, "{order:?}");
+        // No serial number in either, no WorldTime, and AFInfo's point
+        // number alone, no AFInfo2.
+        assert_eq!(metadata.serial_number(), None, "{order:?}");
+        assert_eq!(
+            metadata.capture_time().unwrap().offset_minutes(),
+            None,
+            "{order:?}"
+        );
+        assert_eq!(metadata.focus(), None, "{order:?}");
+    }
+}
+
+#[test]
+fn a_d1h_makernote_declared_too_short_for_its_ifd_costs_what_it_gives() {
+    // The MakerNote IFD's count and its 15 entries take 182 bytes: one
+    // byte short of them, the IFD is not read, and neither is anything in
+    // it. The file opens with its standard tags' values.
+    for order in ORDERS {
+        let (built, blobs) = d1h_file_with(order, &[], Some(2 + 12 * 15 - 1));
+        assert_the_d1h_file(
+            &Options::new(),
+            &built,
+            &blobs,
+            false,
+            false,
+            &format!("{order:?}"),
+        );
+    }
+}
+
+#[test]
+fn a_d1h_preview_ifd_outside_the_declared_block_is_not_read() {
+    // Declared up to where the PreviewIFD starts: the PreviewIFD lies
+    // inside the file, outside the MakerNote, and gives no preview. The
+    // MakerNote IFD and its values, the ISO and the lens's range among
+    // them, lie inside, and are read.
+    for order in ORDERS {
+        let (_, sound) = d1h_file_with_blobs(order);
+        let declared = sound.preview_ifd - sound.makernote.start;
+        let (built, blobs) = d1h_file_with(order, &[], Some(declared));
+        assert_the_d1h_file(
+            &Options::new(),
+            &built,
+            &blobs,
+            false,
+            true,
+            &format!("{order:?}"),
+        );
+    }
+}
+
+#[test]
+fn a_d1h_preview_running_past_the_declared_block_is_not_a_preview() {
+    // Declared one byte short of the JPEG's end, which lies inside the
+    // file: the JPEG is not a preview. The rest of the MakerNote is read.
+    for order in ORDERS {
+        let (_, sound) = d1h_file_with_blobs(order);
+        let declared = sound.makernote.end - sound.makernote.start - 1;
+        let (built, blobs) = d1h_file_with(order, &[], Some(declared));
+        let jpeg_end = built.blob_offset(blobs.preview_jpeg) + stub_len(D1H_PREVIEW_JPEG);
+        assert!(
+            jpeg_end <= u64::try_from(built.bytes.len()).unwrap(),
+            "{order:?}"
+        );
+        assert_the_d1h_file(
+            &Options::new(),
+            &built,
+            &blobs,
+            false,
+            true,
+            &format!("{order:?}"),
+        );
+    }
+}
+
+#[test]
+fn a_short_header_makernote_under_a_nikon_make_is_not_read() {
+    // The D1H file's MakerNote IFD after the 8 bytes `Nikon\0\1\0`, with
+    // its offsets counted from the start of the file, as the sources
+    // describe the short-header layout of the Coolpix E700 to E950: the
+    // layout is not read, so the file gives nothing from it, though its
+    // IFD is sound 8 bytes in.
+    for order in ORDERS {
+        let (built, blobs) = d1h_file_with(order, b"Nikon\0\x01\0", None);
+        assert_the_d1h_file(
+            &Options::new(),
+            &built,
+            &blobs,
+            false,
+            false,
+            &format!("{order:?}"),
+        );
+    }
+}
+
+#[test]
+fn a_makernote_of_text_under_a_nikon_make_gives_nothing() {
+    // A block that starts with text, read as a bare IFD: its first two
+    // bytes count thousands of entries, and the IFD after the text is
+    // never reached. The file opens with its standard tags' values.
+    for order in ORDERS {
+        let (built, blobs) = d1h_file_with(order, b"Not a MakerNote IFD\0", None);
+        assert_the_d1h_file(
+            &Options::new(),
+            &built,
+            &blobs,
+            false,
+            false,
+            &format!("{order:?}"),
+        );
+    }
+}
+
+#[test]
+fn a_limit_crossed_inside_the_d1h_makernote_costs_the_makernote_only() {
+    // The MakerNote IFD holds 15 entries, IFD0 13, the most of any IFD
+    // outside the MakerNote: with a limit of 15 the MakerNote gives its
+    // preview, ISO and lens's range; with 14 or 13, none of them, and the
+    // rest of the file is as without it.
+    for order in ORDERS {
+        let (built, blobs) = d1h_file_with_blobs(order);
+        for (entries, read) in [(15, true), (14, false), (13, false)] {
+            assert_the_d1h_file(
+                &Options::new().limits(Limits::default().max_ifd_entries(entries)),
+                &built,
+                &blobs,
+                read,
+                read,
+                &format!("{entries} entries, {order:?}"),
+            );
+        }
+    }
+}
+
 // Two real files, committed. Two shots of the maintainer's own Z 9, in DX
 // and 1:1 crop modes, with a single focus point placed in the top-left
 // corner of the picture, stripped of their pixels and personal fields with
@@ -971,9 +1291,9 @@ fn every_z9_sample_opens_with_its_four_previews() {
 /// Z5II, Z50II, D5, Z 30 and Z fc; and a 160 by 120 JPEG in IFD0 on the
 /// Z f, the Z6III, the Z5II, the Z50II and the P7800. The tables were
 /// made from a walk of each file's IFDs and MakerNote, by the reader's
-/// rules. Two files give fewer JPEGs than they hold: the D1H's one JPEG is
-/// in a MakerNote of the bare layout, which the reader does not read, so
-/// it gives none; and the P7800's MakerNote JPEG starts where the
+/// rules. The D1H's one JPEG is in a MakerNote of the headerless layout,
+/// whose offsets count from the start of the file. One file gives fewer
+/// JPEGs than it holds: the P7800's MakerNote JPEG starts where the
 /// MakerNote's declared length ends, outside it, so it gives two. None is
 /// padded after its end-of-image marker. Only the Z 30's IFD0 asks for a
 /// rotation, of 270 degrees clockwise (Orientation 8), which each of its
@@ -983,7 +1303,13 @@ const OTHER_SAMPLES: &[Sample] = &[
     Sample {
         file: "nikon-d1h-12bit-uncompressed.nef",
         orientation: Orientation::NoTransforms,
-        previews: &[],
+        previews: &[Jpeg {
+            width: 570,
+            height: 375,
+            offset: 3_688,
+            len: 24_567,
+            after_eoi: 0,
+        }],
     },
     // D100, 12-bit uncompressed (raw.pixls.us 2996)
     Sample {
@@ -1795,12 +2121,11 @@ fn every_sample_of_the_other_nikon_bodies_opens_with_its_previews() {
 /// standard tags first and the MakerNote only for what they lack
 /// (ADR011): on the bodies before the D780 and the Z 6, the serial number,
 /// the lens's range, the ISO or the offset from UTC can come from the
-/// MakerNote. The D1H's MakerNote is of the bare layout, which the reader
-/// does not read, so that file gives the values of its standard tags
-/// alone. The focus point is the one the rules of ADR012 give from each
-/// file's AFInfo2, FocusMode, CropHiSpeed and CropArea, on the cropped
-/// picture on a crop mode, and in the stored orientation on the Z 30's
-/// rotated shot; where there is none, a comment says why.
+/// MakerNote, and the D1H's ISO and lens range come from one of the
+/// headerless layout. The focus point is the one the rules of ADR012 give
+/// from each file's AFInfo2, FocusMode, CropHiSpeed and CropArea, on the
+/// cropped picture on a crop mode, and in the stored orientation on the
+/// Z 30's rotated shot; where there is none, a comment says why.
 const METADATA: &[SampleMetadata] = &[
     // Z 9, 14-bit lossless compression (raw.pixls.us 5146)
     SampleMetadata {
@@ -1912,15 +2237,23 @@ const METADATA: &[SampleMetadata] = &[
         serial_number: None,
         capture_time: Some("2022-03-24T10:09:27.01"),
         orientation: Orientation::NoTransforms,
-        iso: None,
+        iso: Some(200),
         exposure_time: Some((10, 8000)),
         f_number: Some((45, 10)),
         focal_length: Some((600, 10)),
         exposure_bias: Some((4, 6)),
-        lens: None,
+        lens: Some(SampleLens {
+            make: None,
+            model: None,
+            serial_number: false,
+            min_focal_length: Some((180, 10)),
+            max_focal_length: Some((700, 10)),
+            f_number_at_min_focal_length: Some((35, 10)),
+            f_number_at_max_focal_length: Some((45, 10)),
+        }),
         raw_size: Some((2012, 1324)),
         image_size: Some((2012, 1324)),
-        focus: None, // the MakerNote's bare layout is not read; AFInfo holds a point number only
+        focus: None, // no AFInfo2: AFInfo holds a point number only
     },
     // D100, 12-bit uncompressed (raw.pixls.us 2996)
     SampleMetadata {

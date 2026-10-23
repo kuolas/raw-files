@@ -19,10 +19,13 @@
 //! What the readers share lives here, in a [`MakerNoteBlock`]: the
 //! MakerNote's block as the Exif IFD records it, where its bytes lie and
 //! the Exif IFD whose MakerNote it is. A reader finds the block through it
-//! and tells its maker's layout by the block's first bytes. A reader whose
+//! and tells its maker's layout by the block's first bytes. A layout whose
 //! offsets count from the header of the TIFF structure that holds the
-//! MakerNote, as Sony's do, also reads its IFD through it, with that
-//! structure's base and byte order.
+//! MakerNote, as Sony's and the headerless layout of Nikon's D1 family do,
+//! has its IFD read through it too, with that structure's base and byte
+//! order. A layout with a TIFF header of its own, as Nikon's other one,
+//! takes only where the block's bytes lie, and reads its IFD from that
+//! header.
 
 use std::io::{Read, Seek};
 use std::ops::Range;
@@ -69,6 +72,13 @@ impl<'a> MakerNoteBlock<'a> {
         Some(Self { exif, range })
     }
 
+    /// Where the block's bytes lie in the file: what a layout with a TIFF
+    /// header of its own reads its IFD in, with that header as the base.
+    /// The range lies inside the file, and its end is not before its start.
+    fn range(&self) -> &Range<u64> {
+        &self.range
+    }
+
     /// The block's first `max` bytes, or all of them when the block is
     /// shorter: where a reader looks for its maker's header, never past the
     /// block's end.
@@ -90,11 +100,13 @@ impl<'a> MakerNoteBlock<'a> {
     /// IFD ([`ifd_offset`]), or when the IFD does not hold together inside
     /// the block.
     ///
-    /// It serves the layouts whose offsets count from that header, such as
-    /// Sony's; a layout with a TIFF header of its own, such as Nikon's,
-    /// counts from that header instead. The IFD is read inside the block
-    /// ([`ifd_in`]): the bounds of the block it is read in are the
-    /// MakerNote's bytes, so every value read from it lies inside them.
+    /// It serves the layouts whose offsets count from that header, Sony's
+    /// and the headerless layout of Nikon's D1 family; a layout with a TIFF
+    /// header of its own, as Nikon's other one, counts from that header
+    /// instead, in the block's bytes ([`range`](Self::range)). The IFD is
+    /// read inside the block ([`ifd_in`]): the bounds of the block it is
+    /// read in are the MakerNote's bytes, so every value read from it lies
+    /// inside them.
     ///
     /// # Errors
     ///
@@ -210,7 +222,11 @@ mod tests {
                 let block = MakerNoteBlock::find(&tree).expect("a block");
                 let range = built.ifd_block(ifd);
                 let label = format!("{order:?}, {pos}");
-                assert_eq!(block.range, pos + range.start..pos + range.end, "{label}");
+                assert_eq!(
+                    block.range(),
+                    &(pos + range.start..pos + range.end),
+                    "{label}"
+                );
                 assert!(std::ptr::eq(block.exif, tree.exif().unwrap()), "{label}");
                 assert_eq!(block.first_bytes(&mut src, 12).unwrap(), HEADER, "{label}");
                 assert_eq!(block.first_bytes(&mut src, 4).unwrap(), b"SONY");

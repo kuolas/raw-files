@@ -8,12 +8,14 @@
 //! A fuzzer reaches the Nikon or Sony reader only by building a layout that
 //! the format detection accepts, which it does by luck. So the `open`
 //! target starts from files laid out like the NEF of a Nikon Z 9, of a
-//! Z6III on a 1:1 crop, whose MakerNote records the crop, and of a D300,
-//! whose MakerNote records what the Z 9's standard tags hold, and one like
-//! each generation of Sony's family, in both byte orders; and from the two
-//! real files committed in `tests/fixtures/`, shots of the maintainer's own
-//! Z 9 in DX and 1:1 crop modes with their pixels and personal fields
-//! removed, copied as they are, in their own little-endian byte order.
+//! Z6III on a 1:1 crop, whose MakerNote records the crop, of a D300,
+//! whose MakerNote records what the Z 9's standard tags hold, and of a
+//! D1H, whose MakerNote, of the headerless layout, holds its only JPEG,
+//! and one like each generation of Sony's family, in both byte orders;
+//! and from the two real files committed in `tests/fixtures/`, shots of
+//! the maintainer's own Z 9 in DX and 1:1 crop modes with their pixels and
+//! personal fields removed, copied as they are, in their own little-endian
+//! byte order.
 //!
 //! Likewise, a fuzzer builds an Exif segment that holds a TIFF structure,
 //! or an MPF segment that holds an index, only by luck. So the
@@ -21,10 +23,12 @@
 //! one whose Exif segment holds IFD0 and IFD1's thumbnail, a camera's with
 //! every value the metadata reads in its Exif segment and an MPF index of
 //! the images after its main one, the same camera layout with a JFIF
-//! segment first, one with zeros after its end, four Nikon cameras' JPEGs,
+//! segment first, one with zeros after its end, five Nikon cameras' JPEGs,
 //! whose Exif segment holds a Nikon MakerNote, which a fuzzer would build
-//! by luck alone too: a Z 9's in FX and on a 1:1 crop, a D5300's and a
-//! D70's; and three Sony cameras' JPEGs, whose Exif segment holds a Sony
+//! by luck alone too: a Z 9's in FX and on a 1:1 crop, a D5300's, a D70's
+//! and one laid out as a D1H's would be, whose MakerNote is of the
+//! headerless layout, its offsets counted from the segment's TIFF header;
+//! and three Sony cameras' JPEGs, whose Exif segment holds a Sony
 //! MakerNote after its `SONY DSC` header: an ILCE-7M3's and an ILCE-7M4's,
 //! whose MakerNote records a focus point, and a DSLR-A100's, with no MPF
 //! index; the Exif segment's TIFF structure and the MPF index in both
@@ -53,10 +57,11 @@ use support::arw::{
 };
 use support::fixtures::{Z9_1X1, Z9_16X9_JPEG, Z9_DX, Z9_DX_JPEG, Z9_FX_JPEG, read_fixture};
 use support::jpeg_files::{
-    ILCE7M3_MAIN, MAIN, Z9Mode, a100_jpeg, camera_jpeg, camera_jpeg_with_metadata, d70_jpeg,
-    d5300_jpeg, exif_jpeg, ilce7m3_jpeg, ilce7m4_jpeg, padded_jpeg, plain_jpeg, z9_jpeg,
+    CAMERA_MAKE, ILCE7M3_MAIN, MAIN, Z9Mode, a100_jpeg, camera_jpeg, camera_jpeg_with_metadata,
+    d1h_jpeg, d70_jpeg, d5300_jpeg, exif_jpeg, ilce7m3_jpeg, ilce7m4_jpeg, padded_jpeg, plain_jpeg,
+    z9_jpeg,
 };
-use support::nef::{d300_file, z6iii_file, z9_file};
+use support::nef::{d1h_file, d300_file, z6iii_file, z9_file};
 use support::tiff_builder::Order;
 
 /// A layout built in code, once: the stem and extension of its file names,
@@ -87,6 +92,7 @@ fn open_seeds() -> Vec<(String, Vec<u8>)> {
         ("nikon-z9", "nef", |order| z9_file(order, 1).bytes),
         ("nikon-z6iii-1x1", "nef", |order| z6iii_file(order, 1).bytes),
         ("nikon-d300", "nef", |order| d300_file(order, 1).bytes),
+        ("nikon-d1h", "nef", |order| d1h_file(order).bytes),
         ("sony-arw4", "arw", |order| arw4_file(order, 1).0.bytes),
         ("sony-arw4-medium", "arw", |order| {
             arw4_medium_file(order).0.bytes
@@ -130,6 +136,9 @@ fn jpeg_segments_seeds() -> Vec<(String, Vec<u8>)> {
         ("nikon-d5300", "jpg", |order| d5300_jpeg(order).built.bytes),
         ("nikon-d70", "jpg", |order| {
             d70_jpeg(order, false).0.built.bytes
+        }),
+        ("nikon-d1h", "jpg", |order| {
+            d1h_jpeg(order, CAMERA_MAKE, |_, _| {}).0.built.bytes
         }),
         ("sony-ilce7m3", "jpg", |order| {
             ilce7m3_jpeg(order, ILCE7M3_MAIN).built.bytes
