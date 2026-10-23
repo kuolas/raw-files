@@ -136,8 +136,8 @@ untrusted file with other caps. The API documentation is on
   picture. Previews and metadata are checked on 33 CC0 Nikon files from
   raw.pixls.us that CI downloads, three of the Z 9 (lossless, HE and HE\*)
   and 30 of 24 other bodies from the D1H to the Z5II, on test files laid
-  out like a Z 9's, a Z6III's and a D300's, and on two stripped files of
-  the maintainer's own Z 9.
+  out like a Z 9's, a Z6III's, a D300's and a D1H's, and on two stripped
+  files of the maintainer's own Z 9.
 - **Sony ARW**, with the SRF, SR2 and ARQ files of the same family and the
   ARW files of the Sony-built Hasselblad bodies. The previews are found in
   IFD0 and IFD1 and, on bodies from version 4.0 of Sony's format, the

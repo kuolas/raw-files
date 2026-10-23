@@ -352,7 +352,12 @@ segment wherever the raw file counts from the start of the file:
 - **Nikon** (the D5300 and D70 files): the layout with its own embedded
   TIFF header that NEF files use, whose offsets count from that inner
   header, so it reads the same in a JPEG. [F] The D70's PreviewIFD holds
-  a 564×372 JPEG inside the MakerNote's declared length. [F] See the
+  a 564×372 JPEG inside the MakerNote's declared length. [F] raw-files
+  reads the headerless layout of the D1 family too, an IFD at the
+  MakerNote's first byte whose offsets count, in a JPEG, from the TIFF
+  header inside the Exif segment, and whose numbers are in that
+  structure's byte order, as in a NEF they count from the start of the
+  file (file 5364 of raw.pixls.us); no JPEG file confirms it. [I] See the
   [NEF MakerNote notes](../nef/makernote-and-metadata.md#1-finding-the-makernote).
 - **Sony** (all five Sony files): the 12-byte header `SONY DSC ` and three
   zero bytes, then an IFD whose offsets count from the TIFF header inside

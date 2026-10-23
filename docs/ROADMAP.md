@@ -13,8 +13,8 @@ API is the file handle (`RawFile` and `Options`) with the preview types
 `DateTime`, `Rational` and `SignedRational`), `Format`, `Error`,
 `ErrorKind`, `Result` and `Limits`. A Nikon NEF file opens with the JPEG
 previews in its IFD0, its SubIFDs and its MakerNote, checked on test files
-laid out like a Nikon Z 9's, a Z6III's and a D300's, on two stripped files
-of the maintainer's own Z 9, and on the 33 CC0 Nikon files of
+laid out like a Nikon Z 9's, a Z6III's, a D300's and a D1H's, on two
+stripped files of the maintainer's own Z 9, and on the 33 CC0 Nikon files of
 raw.pixls.us that CI downloads: three of the Z 9 (lossless, HE and HE*),
 and 30 of 24 other bodies, from the D1H to the Z5II. A Sony ARW file, or
 an SRF, SR2 or ARQ file of the same family, opens with the JPEG previews in

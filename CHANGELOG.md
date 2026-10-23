@@ -38,6 +38,12 @@ does.
   picture's aspect ratio, so an export cut to another shape gives none,
   except one cut from a Nikon crop-mode JPEG, whose point is placed on
   the export's pixels and may be misplaced.
+- NEF files of the Nikon D1 family, whose MakerNote has no header, give
+  what that MakerNote records: the ISO and the lens's range where their
+  Exif tags lack them, and, where the MakerNote holds one, its small JPEG
+  as a preview, the file's only JPEG on the D1H. A JPEG file that holds a
+  MakerNote of that layout is read the same way, though no such file has
+  been checked.
 - `Format::is_raw`, whether a format's files hold a camera's raw sensor
   data, true for NEF and ARW and false for JPEG, so that a program can
   tell raw files from other images without matching every `Format`.

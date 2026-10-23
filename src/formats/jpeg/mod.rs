@@ -45,9 +45,10 @@
 //!   MakerNote the reader reads ([below](#the-metadata)), as the D70's
 //!   JPEGs hold one of 564 by 372 pixels. The MakerNote reader finds it as
 //!   in a NEF ([`nikon::preview_candidate`]): counted from the MakerNote's
-//!   own inner header, and wholly inside the length the MakerNote
-//!   declares, which lies inside the Exif segment. A JPEG that the
-//!   PreviewIFD places outside that length is not a preview.
+//!   own inner header, or, in the headerless layout of the D1 family,
+//!   from the Exif segment's TIFF header, and wholly inside the length the
+//!   MakerNote declares, which lies inside the Exif segment. A JPEG that
+//!   the PreviewIFD places outside that length is not a preview.
 //!
 //! The thumbnail, the MPF images and the MakerNote's preview are checked
 //! as every preview is, by the shared finder's
@@ -90,9 +91,14 @@
 //!
 //! - **When the Make starts with `NIKON`**, as the NEF claim tests it, the
 //!   Nikon MakerNote reader (`makernote/nikon.rs`) reads it as it reads a
-//!   NEF's. Its offsets count from its own inner header, so it reads the
-//!   same inside the Exif segment. It gives what it gives a NEF: the
-//!   serial number, the ISO, the lens's range and the capture time's
+//!   NEF's. In the layout every body since the D70 writes, the offsets
+//!   count from the MakerNote's own inner header, so it reads the same
+//!   inside the Exif segment. In the headerless layout of the D1 family,
+//!   they count from the TIFF header of the structure that holds the
+//!   MakerNote, as Sony's do, which in a JPEG is the one inside the Exif
+//!   segment, and the numbers are in that structure's byte order; no JPEG
+//!   file with that layout has been checked. It gives what it gives a NEF:
+//!   the serial number, the ISO, the lens's range and the capture time's
 //!   offset from UTC, each only when the standard tags gave none, so that
 //!   an Exif value always wins; and the focus point, below.
 //! - **When the Make starts with `SONY`**, as the ARW claim first tests it,

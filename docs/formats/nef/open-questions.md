@@ -81,10 +81,10 @@ and test-data.md describes the sample set that would answer Part 2.
 - **Early bodies.** Where the D1 keeps its previews, and how large the
   MakerNote preview is on the D1X. The D1H is answered: its only JPEG is a
   570×375 preview (24,567 bytes at offset 3688) in the PreviewIFD of its
-  headerless MakerNote, which raw-files does not read
-  ([ADR011](../../architecture-decisions/adr011-metadata-from-standard-tags.md)),
-  so the file opens with no preview (file 5364) **[F]**. The D100's
-  MakerNote preview, its only JPEG, is 570×375 (file 2996).
+  headerless MakerNote, which raw-files reads, so the file opens with that
+  preview, and with the ISO and the lens range the MakerNote records
+  (file 5364) **[F]**. The D100's MakerNote preview, its only JPEG, is
+  570×375 (file 2996).
 - **Coolscan NEF.** The exact structure of a scanner NEF, and which IFD holds
   NikonScanIFD (0x0E10).
 - **NikonNEFInfo.** Which IFD hosts tag 0xC7D5 (NikonNEFInfo) across bodies.
@@ -95,6 +95,13 @@ and test-data.md describes the sample set that would answer Part 2.
   ([container-and-previews.md](container-and-previews.md)). The headerless
   one's do: the D1H's PreviewIFD and its JPEG are where offsets counted
   from the file's own TIFF header put them (file 5364) **[F]**.
+- **The short-header layout.** raw-files does not read the MakerNote that
+  starts `Nikon\0\1\0`: no public file has one, and the sources disagree on
+  the byte order of its numbers
+  ([makernote-and-metadata.md](makernote-and-metadata.md#1-finding-the-makernote)).
+  raw.pixls.us has no file of the Coolpix E700 to E950 that wrote it, as
+  those bodies wrote no raw files. A file of one of them, a JPEG, would
+  settle its offset base and its byte order.
 - **Multi-strip previews.** Whether any SubIFD JPEG is stored in several
   strips. On the Z 9 every JPEG is in one piece, through 0x0201/0x0202 (files
   5146 to 5148), and so is every JPEG of the other 30 files of the CI set;

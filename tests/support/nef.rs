@@ -1,15 +1,18 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! Files laid out like the NEF files of three Nikon bodies, the Z 9, the
-//! D300 and the Z6III, with stub JPEGs in place of the real ones, so that
-//! the tests check the NEF reader on the real layouts without a real file.
-//! The Z 9 records its metadata in the standard tags; the D300, an older
-//! body, records its serial number, its lens's range and its clock's time
-//! zone only in its MakerNote; the Z6III is laid out like the Z 9, shot on
-//! a 1:1 crop. All three record where they focused only in their
-//! MakerNote: the Z 9 a focus point, the Z6III one in its full frame,
-//! which the reader places on the cropped picture, and the D300, shot
-//! through the viewfinder in manual focus, none.
+//! Files laid out like the NEF files of four Nikon bodies, the Z 9, the
+//! D300, the Z6III and the D1H, with stub JPEGs in place of the real ones,
+//! so that the tests check the NEF reader on the real layouts without a
+//! real file. The Z 9 records its metadata in the standard tags; the D300,
+//! an older body, records its serial number, its lens's range and its
+//! clock's time zone only in its MakerNote; the Z6III is laid out like the
+//! Z 9, shot on a 1:1 crop. The first three record where they focused only
+//! in their MakerNote: the Z 9 a focus point, the Z6III one in its full
+//! frame, which the reader places on the cropped picture, and the D300,
+//! shot through the viewfinder in manual focus, none. The D1H, the oldest
+//! body, records its ISO and its lens's range only in a MakerNote of the
+//! headerless layout, whose offsets count from the start of the file, and
+//! keeps its only JPEG there; it records no focus point.
 //!
 //! The Z 9 layout, which [`z9_file`] writes:
 //!
@@ -148,8 +151,59 @@
 //!   (3023, 2016) in it, and the in-focus byte 0, a missed focus; and a
 //!   PreviewIFD that declares a small JPEG of 480 by 480 pixels.
 //!
+//! The D1H layout, which [`d1h_file`] writes, is that of the public D1H
+//! sample 5364 of raw.pixls.us, which is big-endian, file and MakerNote
+//! alike; the builder takes the byte order, as the others do:
+//!
+//! - IFD0 is a reduced-resolution image (NewSubfileType 1) whose Make is
+//!   `NIKON CORPORATION` and Model `NIKON D1H`, with no Orientation. Its
+//!   image is an uncompressed thumbnail, 160 by 120 pixels of RGB, three
+//!   8-bit samples per pixel, in one strip of 64 zero bytes that stand for
+//!   the sample's 57,600, which is not a JPEG and so not a preview. IFD0
+//!   points at one SubIFD and at the Exif IFD.
+//! - SubIFD0 is the raw data: the full-resolution image (NewSubfileType
+//!   0), 2012 by 1324 pixels, of 12-bit samples of a colour filter array,
+//!   uncompressed (Compression 1), in one strip of 64 zero bytes that stand
+//!   for the sample's 67 strips. Its ImageWidth and ImageLength are LONGs,
+//!   and it holds no default crop.
+//! - The Exif IFD holds the sample's values, each of the type it has
+//!   there: DateTimeOriginal `2022:03:24 10:09:27` and SubSecTimeOriginal
+//!   `01`, with no OffsetTimeOriginal; ExposureTime `10/8000`, FNumber
+//!   `45/10` and FocalLength `600/10` (RATIONAL) and ExposureBiasValue
+//!   `4/6` (SRATIONAL). Like the sample, it holds no ExifVersion, no
+//!   sensitivity tag, no BodySerialNumber and no lens tag. Last, it holds
+//!   the MakerNote, of the headerless layout: no header, the MakerNote IFD
+//!   at its first byte, written by the file's own builder, so that every
+//!   offset in it, the PreviewIFD's and the JPEG's among them, counts from
+//!   the start of the file, and every number is in the file's byte order,
+//!   as on the sample. Its block runs from the MakerNote IFD through that
+//!   IFD's values, the PreviewIFD and its values, to the end of the
+//!   PreviewIFD's JPEG ([`TiffBuilder::block_through`]), so that all of
+//!   them lie inside the length the MakerNote's entry declares, as on the
+//!   sample. The MakerNote IFD holds the sample's MakerNoteVersion `0101`
+//!   (UNDEFINED); its ISO, `[0, 200]` (SHORT); its FocusMode `AF-S  `
+//!   (ASCII); its PreviewIFD pointer; its Lens, `180/10`, `700/10`,
+//!   `35/10`, `45/10` (RATIONAL), an 18-70 mm lens of f/3.5 to f/4.5; its
+//!   AFInfo `01 00 01 00`, a point number and no position, and no AFInfo2,
+//!   so no focus point; and the text of nine more of its tags, which the
+//!   reader does not read ([`D1H_TEXT_TAGS`]). It holds no SerialNumber,
+//!   WorldTime, CropArea or CropHiSpeed, as the sample holds none. The
+//!   PreviewIFD holds the sample's seven entries: Compression 6,
+//!   XResolution and YResolution `300/1`, ResolutionUnit 2 (inches),
+//!   JPEGInterchangeFormat and JPEGInterchangeFormatLength, which declare a
+//!   small JPEG of 570 by 375 pixels, the file's only JPEG, and
+//!   YCbCrPositioning 2. [`d1h_file_with`] may lay a header out before the
+//!   MakerNote IFD, inside the block, and may make the MakerNote's entry
+//!   declare less than the whole block.
+//!
+//! Every text value of the D1H file is ASCII, padded with spaces as the
+//! sample pads it, ending in one NUL, or in two for the last of
+//! [`D1H_TEXT_TAGS`], as on the sample.
+//!
 //! Every stub JPEG is a baseline one. The tags that the shared builder has
 //! no constant for are named here.
+
+use std::ops::Range;
 
 use super::jpeg_stub::jpeg_stub;
 use super::tiff_builder::{BlobId, Built, IfdId, Order, TiffBuilder};
@@ -179,11 +233,20 @@ const ORIENTATION: u16 = 0x0112;
 const SAMPLES_PER_PIXEL: u16 = 0x0115;
 /// How many bytes each strip takes (StripByteCounts).
 const STRIP_BYTE_COUNTS: u16 = 0x0117;
+/// The pixels per unit across, as a RATIONAL (XResolution).
+const X_RESOLUTION: u16 = 0x011A;
+/// The pixels per unit down, as a RATIONAL (YResolution).
+const Y_RESOLUTION: u16 = 0x011B;
+/// The unit of XResolution and YResolution, as a SHORT (ResolutionUnit).
+const RESOLUTION_UNIT: u16 = 0x0128;
 /// Where an embedded JPEG stream starts (JPEGInterchangeFormat).
 const JPEG_INTERCHANGE_FORMAT: u16 = 0x0201;
 /// How many bytes the embedded JPEG stream takes
 /// (JPEGInterchangeFormatLength).
 const JPEG_INTERCHANGE_FORMAT_LENGTH: u16 = 0x0202;
+/// Where the chroma samples lie against the luma samples, as a SHORT
+/// (YCbCrPositioning).
+const Y_CB_CR_POSITIONING: u16 = 0x0213;
 /// How long the shutter was open, in seconds, as a RATIONAL
 /// (ExposureTime).
 const EXPOSURE_TIME: u16 = 0x829A;
@@ -235,7 +298,7 @@ pub const ISO: u16 = 0x0002;
 pub const FOCUS_MODE: u16 = 0x0007;
 /// The offset of the MakerNote's PreviewIFD, the IFD that declares its
 /// small JPEG (PreviewIFD, a tag of the MakerNote IFD).
-const PREVIEW_IFD: u16 = 0x0011;
+pub const PREVIEW_IFD: u16 = 0x0011;
 /// The crop mode and how large the picture was before and after the crop,
 /// as seven SHORTs: the mode, the original width and height, the cropped
 /// width and height, and the left column and top row where the crop starts
@@ -259,6 +322,11 @@ const CROP_AREA_Z9: [u16; 4] = [12, 8, 8256, 5504];
 /// LensSpecification: the shortest and longest focal length, then the
 /// f-number at each (Lens, a tag of the MakerNote IFD).
 pub const LENS: u16 = 0x0084;
+/// Which autofocus point the camera used, as four UNDEFINED bytes: the
+/// area mode, the number of the point and a mask of the points in focus,
+/// with no position (AFInfo, a tag of the MakerNote IFD of the bodies
+/// without AFInfo2).
+const AF_INFO: u16 = 0x0088;
 /// Where the camera's autofocus aimed, as an UNDEFINED value that starts
 /// with its version, four ASCII digits, and holds at the version's offsets
 /// the size of a frame, the centre of the focus area and the area's size,
@@ -282,6 +350,11 @@ const BLACK_IS_ZERO: u16 = 1;
 const RGB: u16 = 2;
 /// PhotometricInterpretation of a colour filter array, raw sensor data.
 const CFA: u16 = 32803;
+/// ResolutionUnit of inches.
+const INCH: u16 = 2;
+/// YCbCrPositioning of chroma samples that lie on the first luma sample
+/// of each pair, co-sited.
+const CO_SITED: u16 = 2;
 /// The baseline frame header's marker, SOF0.
 const BASELINE: u8 = 0xC0;
 
@@ -324,6 +397,40 @@ pub const D300_LENS: [(u32, u32); 4] = [(180, 10), (700, 10), (35, 10), (45, 10)
 /// with no daylight saving time and the date format 0, as on the public
 /// sample 928.
 const D300_TIME_ZONE: u16 = 60;
+
+/// The size in pixels of the D1H file's one JPEG, the MakerNote's small
+/// one, as on the public sample 5364.
+pub const D1H_PREVIEW_JPEG: (u16, u16) = (570, 375);
+/// The size in pixels of the D1H file's uncompressed thumbnail in IFD0,
+/// which is not a JPEG.
+pub const D1H_THUMBNAIL: (u16, u16) = (160, 120);
+/// The D1H file's raw size, SubIFD0's: width, then height.
+pub const D1H_RAW: (u32, u32) = (2012, 1324);
+/// The D1H file's ISO, in its MakerNote only, the second of its two
+/// SHORTs, as on the public sample 5364.
+pub const D1H_ISO: u16 = 200;
+/// The D1H file's lens range, in its MakerNote only: that of the public
+/// sample 5364, an 18-70 mm lens of f/3.5 to f/4.5.
+pub const D1H_LENS: [(u32, u32); 4] = [(180, 10), (700, 10), (35, 10), (45, 10)];
+/// The D1H file's AFInfo, as on the public sample 5364: a point number, no
+/// position.
+const D1H_AF_INFO: [u8; 4] = [1, 0, 1, 0];
+/// Nine more tags of the D1H file's MakerNote IFD, each with its ASCII
+/// text, less the NUL the builder adds: those of the public sample 5364,
+/// which the reader does not read. They make the MakerNote IFD, of 15
+/// entries, longer than IFD0, of 13, the longest IFD outside it, as on the
+/// sample, whose MakerNote IFD holds 27 and IFD0 26.
+const D1H_TEXT_TAGS: [(u16, &str); 9] = [
+    (0x0003, "COLOR"),
+    (0x0004, "RAW    "),
+    (0x0005, "SUNNY       "),
+    (0x0006, "HIGH  "),
+    (0x0008, "            "),
+    (0x0009, "        "),
+    (0x0081, "NORMAL  "),
+    (0x008D, "MODE2   "),
+    (0x0090, "NATURAL   \0"),
+];
 
 /// The frame of the Z 9 file's focus point, as its AFInfo2 records it:
 /// width, then height, the camera's full-size output, as on the public Z 9
@@ -870,6 +977,121 @@ pub fn d300_file_with_blobs(order: Order, orientation: u16) -> (Built, D300Blobs
         preview_in_makernote,
     };
     (builder.build(), blobs)
+}
+
+/// Where the parts of a D1H file are, as [`d1h_file_with`] laid them out.
+#[derive(Clone, Debug)]
+pub struct D1hBlobs {
+    /// IFD0's uncompressed thumbnail strip.
+    pub thumbnail: BlobId,
+    /// SubIFD0's raw strip.
+    pub raw: BlobId,
+    /// The MakerNote's small JPEG, the one its PreviewIFD declares: the
+    /// file's only JPEG, the last bytes of the MakerNote's block.
+    pub preview_jpeg: BlobId,
+    /// Where the MakerNote's block lies in the file: from its first byte,
+    /// the MakerNote IFD's, or the header's when one is laid out before
+    /// it, to the end of the JPEG.
+    pub makernote: Range<u64>,
+    /// Where the PreviewIFD lies in the file.
+    pub preview_ifd: u64,
+}
+
+/// The D1H layout, in byte order `order`.
+pub fn d1h_file(order: Order) -> Built {
+    d1h_file_with_blobs(order).0
+}
+
+/// As [`d1h_file`], with where its parts are, so that a test can find
+/// them.
+pub fn d1h_file_with_blobs(order: Order) -> (Built, D1hBlobs) {
+    d1h_file_with(order, &[], None)
+}
+
+/// As [`d1h_file_with_blobs`], with `header` laid out before the MakerNote
+/// IFD, inside the MakerNote's block, when it is not empty, such as the
+/// `Nikon\0\1\0` of the short-header layout; and with the MakerNote's
+/// entry declaring the first `declared` bytes of the block when given,
+/// rather than the whole block. Neither moves anything but the MakerNote
+/// IFD and what follows it, by the header's length.
+pub fn d1h_file_with(order: Order, header: &[u8], declared: Option<u64>) -> (Built, D1hBlobs) {
+    let mut builder = TiffBuilder::new(order);
+    let ifd0 = builder.ifd();
+    let sub = builder.ifd();
+    let exif = builder.ifd();
+    let makernote = builder.ifd();
+    let preview_ifd = builder.ifd();
+
+    let (width, height) = D1H_THUMBNAIL;
+    builder
+        .long(ifd0, NEW_SUBFILE_TYPE, &[REDUCED_RESOLUTION])
+        .long(ifd0, IMAGE_WIDTH, &[u32::from(width)])
+        .long(ifd0, IMAGE_LENGTH, &[u32::from(height)])
+        .short(ifd0, BITS_PER_SAMPLE, &[8, 8, 8])
+        .short(ifd0, COMPRESSION, &[UNCOMPRESSED])
+        .short(ifd0, PHOTOMETRIC_INTERPRETATION, &[RGB])
+        .ascii(ifd0, MAKE, "NIKON CORPORATION")
+        .ascii(ifd0, MODEL, "NIKON D1H")
+        .short(ifd0, SAMPLES_PER_PIXEL, &[3]);
+    builder.subifds(ifd0, &[sub]).exif(ifd0, exif);
+
+    let (raw_width, raw_height) = D1H_RAW;
+    builder
+        .long(sub, NEW_SUBFILE_TYPE, &[FULL_RESOLUTION])
+        .long(sub, IMAGE_WIDTH, &[raw_width])
+        .long(sub, IMAGE_LENGTH, &[raw_height])
+        .short(sub, BITS_PER_SAMPLE, &[12])
+        .short(sub, COMPRESSION, &[UNCOMPRESSED])
+        .short(sub, PHOTOMETRIC_INTERPRETATION, &[CFA])
+        .short(sub, SAMPLES_PER_PIXEL, &[1]);
+
+    builder
+        .rational(exif, EXPOSURE_TIME, &[(10, 8000)])
+        .rational(exif, F_NUMBER, &[(45, 10)])
+        .ascii(exif, DATE_TIME_ORIGINAL, "2022:03:24 10:09:27")
+        .srational(exif, EXPOSURE_BIAS_VALUE, &[(4, 6)])
+        .rational(exif, FOCAL_LENGTH, &[(600, 10)])
+        .ascii(exif, SUB_SEC_TIME_ORIGINAL, "01");
+
+    builder
+        .prefix(makernote, header)
+        .undefined(makernote, MAKER_NOTE_VERSION, b"0101")
+        .short(makernote, ISO, &[0, D1H_ISO])
+        .ascii(makernote, FOCUS_MODE, "AF-S  ")
+        .ifd_pointer(makernote, PREVIEW_IFD, preview_ifd)
+        .rational(makernote, LENS, &D1H_LENS)
+        .undefined(makernote, AF_INFO, &D1H_AF_INFO);
+    for (tag, text) in D1H_TEXT_TAGS {
+        builder.ascii(makernote, tag, text);
+    }
+    builder
+        .short(preview_ifd, COMPRESSION, &[OLD_STYLE_JPEG])
+        .rational(preview_ifd, X_RESOLUTION, &[(300, 1)])
+        .rational(preview_ifd, Y_RESOLUTION, &[(300, 1)])
+        .short(preview_ifd, RESOLUTION_UNIT, &[INCH])
+        .short(preview_ifd, Y_CB_CR_POSITIONING, &[CO_SITED]);
+    // The first blob, so that it follows the PreviewIFD, inside the block.
+    let preview_jpeg = jpeg(&mut builder, preview_ifd, D1H_PREVIEW_JPEG);
+    builder.block_through(makernote, preview_jpeg);
+    let thumbnail = strip(&mut builder, ifd0, &[0; 64]);
+    let raw = strip(&mut builder, sub, &[0; 64]);
+
+    match declared {
+        None => builder.undefined_ifd(exif, MAKER_NOTE, makernote),
+        Some(declared) => {
+            let count = u32::try_from(declared).expect("a TIFF count");
+            builder.undefined_ifd_declaring(exif, MAKER_NOTE, makernote, count)
+        }
+    };
+    let built = builder.build();
+    let blobs = D1hBlobs {
+        thumbnail,
+        raw,
+        preview_jpeg,
+        makernote: built.ifd_block(makernote),
+        preview_ifd: built.ifd_offset(preview_ifd),
+    };
+    (built, blobs)
 }
 
 /// Adds the stub JPEG of `size` to the file, and points `ifd`'s

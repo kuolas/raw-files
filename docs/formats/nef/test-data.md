@@ -107,7 +107,7 @@ end-of-image marker exactly at its declared length. **[F]**
 
 | Id | Body | Mode | Previews | SHA-256 | Licence |
 |---|---|---|---|---|---|
-| 5364 | D1H | 12bit 12bit uncompressed (3:2) | None. Its only JPEG is a 570x375 preview (24,567 bytes at 3688) in the PreviewIFD of its headerless MakerNote, whose offsets count from the file's own TIFF header; the reader does not read that layout ([ADR011](../../architecture-decisions/adr011-metadata-from-standard-tags.md)), so the file opens as NEF with no preview. `MM` | `d110b80a8b10a3a67b5cd1c15ef33f1a6397557b73d5d3f4e565739f0c072571` | CC0 |
+| 5364 | D1H | 12bit 12bit uncompressed (3:2) | One, its only JPEG: a 570x375 preview (24,567 bytes at 3688) in the PreviewIFD of its headerless MakerNote, whose offsets count from the file's own TIFF header. The reader reads that layout, so the file gives that preview, and the ISO and the lens range the MakerNote records, which its Exif tags lack. `MM` | `d110b80a8b10a3a67b5cd1c15ef33f1a6397557b73d5d3f4e565739f0c072571` | CC0 |
 | 2996 | D100 | 12bit 12bit compressed (Uncompressed) (3:2) | One, the MakerNote's 570x375, its only JPEG. MakerNote `02 00`; `MM` | `1889abfd1ed64048c90b0c3384e1e0be9bbb021692249427e90848d5d1e9c8f0` | CC0 |
 | 2060 | D70 | 12bit 12bit compressed (Lossy (type 1)) (3:2) | Two: the MakerNote's 564x372 and 3008x2000 in SubIFD0. MakerNote `02 10`; `MM` | `dd6405aeb33b0cd5bf66c98ba98ccbb478a765450cfd130810e470dab8d1f4b4` | CC0 |
 | 8079 | D200 | 12bit compressed (Lossy (type 1)) (3:2) | Two: 570x375 and 3872x2592. `MM` | `b0800a1166b952430b255600373573e1d528adf8de98857781e06a98472b3c35` | CC0 |
@@ -184,7 +184,7 @@ Z body in manual focus and a rotated shot:
 The check read each file's MakerNote AFInfo2 (or AFInfo), FocusMode,
 CropHiSpeed and CropArea with the same kind of throwaway script as
 section 2.2. FocusMode is `MANUAL` on files 928, 1835 and 8559 and an
-AF mode on every other file but the D1H's. What each of the 33 files
+AF mode on every other file. What each of the 33 files
 records, and the focus point that the rules of
 [ADR012](../../architecture-decisions/adr012-focus-points-as-the-camera-records-them.md)
 give from it:
@@ -309,7 +309,10 @@ body exercises.
 | Scanner | Coolscan V ED | A TIFF-like "NEF" with no CFA; contents unverified |
 
 The short-header MakerNote (`Nikon\0\1\0`) only occurs on Coolpix E700 to
-E950, which have no NEF raw, so it is covered only by a hand-built fixture.
+E950, which have no NEF raw. raw-files does not read it, since no public
+file confirms it and the sources disagree on its byte order, so it has no
+fixture of its own: the tests only check that a block of that layout
+gives nothing.
 
 Plus corrupted variants (section 5) of the smallest of these.
 

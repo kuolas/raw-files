@@ -33,7 +33,11 @@
 //! hold as its value, as a Sony MakerNote is held: an IFD that no other IFD
 //! points at, whose offsets count from the start of the file, like every
 //! offset the builder writes. [`TiffBuilder::undefined_ifd`] adds the entry,
-//! and [`Built::ifd_block`] says where the block is.
+//! [`TiffBuilder::undefined_ifd_declaring`] one that declares a count of
+//! its own, and [`Built::ifd_block`] says where the block is. The block can
+//! run on past the IFD's values to the end of a blob, holding what lies
+//! between, as a Nikon MakerNote of the D1's layout holds its PreviewIFD
+//! and that IFD's JPEG: [`TiffBuilder::block_through`].
 //!
 //! This file uses only `std`, because it is compiled twice: into the
 //! library's unit tests and, through `tests/support/`, into the integration
@@ -132,6 +136,10 @@ enum Value {
     /// The offset of this IFD's block, as the field of an UNDEFINED value
     /// whose count is the block's length; see [`Built::ifd_block`].
     IfdBlock(IfdId),
+    /// The offset of this IFD's block, as the field of an UNDEFINED value
+    /// whose count is the entry's own; see
+    /// [`TiffBuilder::undefined_ifd_declaring`].
+    IfdBlockOffset(IfdId),
 }
 
 impl Value {
@@ -141,7 +149,10 @@ impl Value {
             Value::Bytes(bytes) => Some(bytes.len()),
             Value::Raw(_) => None,
             Value::Ifds(ids) => Some(4 * ids.len()),
-            Value::BlobOffset(_) | Value::BlobLen(_) | Value::IfdBlock(_) => Some(4),
+            Value::BlobOffset(_)
+            | Value::BlobLen(_)
+            | Value::IfdBlock(_)
+            | Value::IfdBlockOffset(_) => Some(4),
         }
     }
 
@@ -174,6 +185,9 @@ struct Ifd {
     entries: Vec<Entry>,
     sorted: bool,
     next: Next,
+    /// The blob the IFD's block runs on to the end of, when it does not
+    /// end with the IFD's own values; see [`TiffBuilder::block_through`].
+    through: Option<BlobId>,
 }
 
 impl Ifd {
@@ -264,6 +278,7 @@ impl TiffBuilder {
             entries: Vec::new(),
             sorted: true,
             next: Next::None,
+            through: None,
         });
         IfdId(self.ifds.len() - 1)
     }
@@ -460,6 +475,42 @@ impl TiffBuilder {
         self.entry(ifd, tag, UNDEFINED, 0, Value::IfdBlock(block_ifd))
     }
 
+    /// Adds an UNDEFINED entry that holds the block of `block_ifd` as
+    /// [`undefined_ifd`](Self::undefined_ifd) does, but declares `count`
+    /// bytes rather than the block's length: a MakerNote whose entry says
+    /// it is shorter than its block, or longer. Its value field holds the
+    /// block's offset, resolved when the file is built. The entry takes the
+    /// same 12 bytes either way, so the file is laid out as with
+    /// `undefined_ifd`.
+    pub fn undefined_ifd_declaring(
+        &mut self,
+        ifd: IfdId,
+        tag: u16,
+        block_ifd: IfdId,
+        count: u32,
+    ) -> &mut Self {
+        self.ifd_mut(ifd).entries.push(Entry {
+            tag,
+            typ: UNDEFINED,
+            count,
+            value: Value::IfdBlockOffset(block_ifd),
+        });
+        self
+    }
+
+    /// Makes the block of `block_ifd` run on to the end of `blob`, so that
+    /// everything the builder lays out between them lies inside it too:
+    /// the IFDs created after `block_ifd`, with their values, and the
+    /// blobs [`blob`](Self::blob) placed before `blob`. This is how a Nikon
+    /// MakerNote of the D1's headerless layout is written, a bare IFD whose
+    /// block holds its PreviewIFD and that IFD's JPEG: `block_ifd` is the
+    /// MakerNote IFD, the PreviewIFD the last IFD created, and `blob` the
+    /// JPEG, the first blob. `blob` must end past the block's own bytes.
+    pub fn block_through(&mut self, block_ifd: IfdId, blob: BlobId) -> &mut Self {
+        self.ifd_mut(block_ifd).through = Some(blob);
+        self
+    }
+
     /// Makes the file at least `len` bytes long, padding it with zeros.
     pub fn pad_to(&mut self, len: u64) -> &mut Self {
         self.min_len = len;
@@ -613,6 +664,17 @@ impl TiffBuilder {
             pos = at + to_u64(self.blobs[i].bytes.len());
         }
 
+        for (ifd, block) in self.ifds.iter().zip(&mut blocks) {
+            if let Some(blob) = ifd.through {
+                let end = blobs[blob.0] + to_u64(self.blobs[blob.0].bytes.len());
+                assert!(
+                    end >= block.end,
+                    "the blob ends at {end}, inside the block it should close"
+                );
+                block.end = end;
+            }
+        }
+
         Layout {
             ifds,
             values,
@@ -635,7 +697,9 @@ impl TiffBuilder {
             Value::BlobLen(blob) => order
                 .u32(to_u32(to_u64(self.blobs[blob.0].bytes.len())))
                 .to_vec(),
-            Value::IfdBlock(ifd) => order.u32(to_u32(layout.blocks[ifd.0].start)).to_vec(),
+            Value::IfdBlock(ifd) | Value::IfdBlockOffset(ifd) => {
+                order.u32(to_u32(layout.blocks[ifd.0].start)).to_vec()
+            }
         }
     }
 }
@@ -650,7 +714,8 @@ struct Layout {
     /// The offset of each blob.
     blobs: Vec<u64>,
     /// For each IFD, the bytes from the start of its prefix to the end of
-    /// its last out-of-line value, or of its next-IFD pointer.
+    /// its last out-of-line value, or of its next-IFD pointer, or of the
+    /// blob its block runs through.
     blocks: Vec<Range<u64>>,
 }
 
@@ -678,7 +743,8 @@ impl Built {
 
     /// Where the block of `ifd` is in the file: from the start of its
     /// prefix, or of the IFD when it has none, to the end of its last value
-    /// stored out of line, or of its next-IFD pointer when it has none. The
+    /// stored out of line, or of its next-IFD pointer when it has none, or
+    /// to the end of the blob set with [`TiffBuilder::block_through`]. The
     /// value of an entry added with [`TiffBuilder::undefined_ifd`].
     pub fn ifd_block(&self, ifd: IfdId) -> Range<u64> {
         self.blocks[ifd.0].clone()
@@ -999,6 +1065,81 @@ mod tests {
         let bytes = &built.bytes;
         assert_eq!(bytes[8 + 2 + 4..8 + 2 + 8], [0, 0, 0, 18]);
         assert_eq!(bytes[8 + 2 + 8..8 + 2 + 12], to_u32(at).to_be_bytes());
+    }
+
+    #[test]
+    fn an_undefined_ifd_declaring_a_count_keeps_the_layout() {
+        for order in [Order::Little, Order::Big] {
+            // The same file twice: the entry that holds the block declares
+            // its whole length in one and 5 bytes in the other. The block's
+            // prefix puts its start before its IFD, and a blob follows it.
+            let file = |count: Option<u32>| {
+                let mut builder = TiffBuilder::new(order);
+                let ifd0 = builder.ifd();
+                let block = builder.ifd();
+                match count {
+                    None => builder.undefined_ifd(ifd0, 0x927C, block),
+                    Some(count) => builder.undefined_ifd_declaring(ifd0, 0x927C, block, count),
+                };
+                builder
+                    .prefix(block, b"SONY DSC \0\0\0")
+                    .short(block, 0x0001, &[1, 2, 3]);
+                let blob = builder.blob(&[9; 6]);
+                (builder.build(), block, blob)
+            };
+            let (whole, block, blob) = file(None);
+            let (declared, _, _) = file(Some(5));
+            let range = whole.ifd_block(block);
+            assert_eq!(declared.ifd_block(block), range, "{order:?}");
+            assert_eq!(declared.ifd_offset(block), whole.ifd_offset(block));
+            assert_eq!(declared.blob_offset(blob), whole.blob_offset(blob));
+
+            // One entry at 8 + 2: the tag, UNDEFINED, the count given, and
+            // the block's offset in the value field. Every other byte is
+            // as with `undefined_ifd`, which declares the block's length.
+            let bytes = &declared.bytes;
+            let count = 8 + 2 + 4..8 + 2 + 8;
+            assert_eq!(bytes[8 + 2..8 + 2 + 2], order.u16(0x927C), "{order:?}");
+            assert_eq!(bytes[8 + 2 + 2..8 + 2 + 4], order.u16(UNDEFINED));
+            assert_eq!(bytes[count.clone()], order.u32(5), "{order:?}");
+            let field = 8 + 2 + 8..8 + 2 + 12;
+            assert_eq!(bytes[field], order.u32(to_u32(range.start)), "{order:?}");
+            let len = to_u32(range.end - range.start);
+            assert_eq!(whole.bytes[count.clone()], order.u32(len), "{order:?}");
+            let mut rest = bytes.clone();
+            rest[count.clone()].copy_from_slice(&whole.bytes[count]);
+            assert_eq!(rest, whole.bytes, "{order:?}");
+        }
+    }
+
+    #[test]
+    fn a_block_through_a_blob_holds_the_ifds_and_blobs_before_it() {
+        let mut builder = TiffBuilder::new(Order::Little);
+        let ifd0 = builder.ifd();
+        let block = builder.ifd();
+        let child = builder.ifd();
+        builder.undefined_ifd(ifd0, 0x927C, block);
+        builder.ifd_pointer(block, 0x0011, child);
+        builder.long(child, 0x0001, &[1, 2]);
+        let first = builder.blob(&[1, 2, 3]);
+        let last = builder.blob(&[4, 5, 6, 7, 8]);
+        let after = builder.blob(&[9; 6]);
+        builder.block_through(block, last);
+        let built = builder.build();
+        let bytes = &built.bytes;
+
+        // IFD0 at 8, one entry, ends at 26; the block's IFD there, one
+        // entry, to 44; the child at 44, its two LONGs at 62, to 70; the
+        // blobs at 70, 74 (rounded up from 73) and 80.
+        assert_eq!(built.ifd_offset(block), 26);
+        assert_eq!(built.ifd_offset(child), 44);
+        assert_eq!(built.blob_offset(first), 70);
+        assert_eq!(built.blob_offset(last), 74);
+        assert_eq!(built.blob_offset(after), 80);
+        assert_eq!(built.ifd_block(block), 26..79);
+        // The entry declares the whole of it.
+        assert_eq!(u32_le(bytes, 8 + 2 + 4), 79 - 26);
+        assert_eq!(u32_le(bytes, 8 + 2 + 8), 26);
     }
 
     #[test]
