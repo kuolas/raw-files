@@ -112,39 +112,56 @@ was not exhaustive. [S]
 
 ## 4. Fixtures
 
-The fixtures below are planned with the JPEG reader (#35); this section
-says what each is for, and moves to the tests' own documentation as they
-arrive. [I]
+The JPEG reader's tests use three kinds of fixture: files built in code,
+three files stripped from the maintainer's own camera JPEGs, and damaged
+copies of both. This section says what each kind is for; the tests' own
+documentation says what each file holds.
 
 ### 4.1 Built in code
 
-JPEG files built by the tests: an APP1 segment around the bytes of the
+The tests build JPEG files in code (`tests/support/jpeg_builder.rs` and
+`tests/support/jpeg_files.rs`): an Exif segment around the bytes of the
 TIFF builder that the NEF and ARW tests use, with the Nikon and Sony
 MakerNote builders inside, a JFIF segment, an XMP segment, an MPF
-segment with its images appended, and padding after the last image.
-They are to cover what no sample shows: a file without Exif, a damaged
-TIFF header, a value or thumbnail outside the Exif segment, a second
-Exif segment, an MPF image past the end of the file, a lossless frame, a
-zero side in a frame header, fill bytes, a length below 2, an Exif
-segment behind a JFIF segment, and an export whose MakerNote frame does
-not fit its picture.
+segment with its images appended, and padding after the last image. They
+cover what no sample shows: a file without Exif, a damaged TIFF header,
+a value or a thumbnail outside the Exif segment, a second Exif segment,
+an MPF image past the end of the file, a lossless frame, a zero side in a
+frame header, fill bytes, a segment length below 2, an Exif segment
+behind a JFIF segment, and an export whose MakerNote frame does not fit
+its picture. Some of these are tests of the segment walk alone, in
+`src/container/jpeg/mod.rs`, and the rest open whole files, in
+`tests/jpeg.rs`.
 
 ### 4.2 Stripped from the maintainer's own camera JPEGs
 
-Two or three JPEGs from the maintainer's own Nikon Z 9, stripped by a
-script: the Exif segment kept as the camera wrote it, with the serial
-numbers and shutter counts zeroed in place so that no offset moves; the XMP
-segment dropped; and every image (the main image, the thumbnail, the MPF
-images) replaced by a stub JPEG of the same frame size, about 65 to 70 KB
-each, most of it the Exif segment. They are to be published under MIT OR
-Apache-2.0 like the other fixtures, with their provenance and SHA-256 in
-[`tests/fixtures/README.md`](../../../tests/fixtures/README.md).
+Three JPEGs from the maintainer's own Nikon Z 9, taken on 2026-10-22,
+are committed in `tests/fixtures/`: one in FX, the camera's full output,
+at full size, 8256×5504; one in DX crop mode at full size, 5392×3592; and
+one in 16:9 crop mode at the middle size, 6192×3480, taken in portrait
+orientation and stored with Orientation 8. A script stripped them. The
+Exif segment is kept as the camera wrote it, with the serial numbers,
+the shutter counts, the time the camera was switched on, the MakerNote's
+encrypted blocks, Artist, Copyright, UserComment and the GPS values
+zeroed in place, so that no offset moves;
+the XMP segment is dropped; and every image (the main image, the
+thumbnail and the two MPF images) is replaced by a stub JPEG of the same
+frame size. Each file is 69,998 bytes, 65,536 of them the Exif segment.
+They are published under MIT OR Apache-2.0 like the other fixtures, with
+their provenance and SHA-256 in
+[`tests/fixtures/README.md`](../../../tests/fixtures/README.md). [F]
 
 ### 4.3 Corrupted variants
 
-As for NEF and ARW, the robustness tests are to cut every fixture short
-at many lengths and flip bytes in it, expecting an error or a result,
-never a panic, and the fuzz targets to start from the fixtures (see
+As for NEF and ARW, the robustness tests (`tests/robustness.rs`) cut
+every JPEG fixture short at every length and overwrite its bytes one at a
+time, and expect an error or a result, never a panic. On the three
+stripped files the overwriting skips three spans of zeros that no
+reader parses: the MakerNote's zeroed ShotInfo, the padding after the
+thumbnail's stub, and the camera's zeros after the thumbnail's declared
+length, up to the end of the Exif segment.
+The fuzz targets `jpeg_segments` and `open` start from copies of the
+fixtures, in `fuzz/seeds/jpeg_segments/` (see
 [security.md](security.md)).
 
 ## 5. What the samples do not cover

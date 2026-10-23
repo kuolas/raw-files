@@ -350,7 +350,8 @@ throughout. So does the target `jpeg_segments`, which reads the input as
 a JPEG file: the walk over its segments, the TIFF structure of its Exif
 segment with every value in it, and the index of its MPF segment, which
 lists the images after the first. Its seeds are JPEG files built as the
-JPEG reader's tests build them:
+JPEG reader's tests build them, and the stripped camera JPEGs committed
+in `tests/fixtures/`:
 
 ```sh
 mkdir -p fuzz/corpus/jpeg_segments

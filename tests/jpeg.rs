@@ -16,7 +16,13 @@
 //! offsets counted from the Exif segment's TIFF header: its focus point,
 //! as recorded and kept only when its frame has the picture's shape, none
 //! where it records none, and the damage and the limits that cost the
-//! point but not the file.
+//! point but not the file. Then three real JPEGs of the maintainer's own
+//! Z 9, in FX and in DX and 16:9 crop modes, committed with their images
+//! replaced by stubs and their personal fields zeroed (see
+//! [`support::fixtures`]), read whole from a path and from bytes: their
+//! previews, every value of their metadata, and their focus points, as
+//! recorded in FX, scaled onto the DX picture and moved into the 16:9
+//! window.
 
 mod support;
 
@@ -1651,4 +1657,269 @@ fn a_limit_crossed_inside_the_sony_makernote_costs_its_focus_point_only() {
             );
         }
     }
+}
+
+// Three real files, committed. Three JPEGs of the maintainer's own Z 9,
+// shot in FX, in DX crop mode and in 16:9 crop mode, with every image
+// replaced by a stub JPEG of its size and their personal fields zeroed in
+// place, their Exif segment otherwise as the camera wrote it
+// (`tests/fixtures/README.md`). They hold what the files built in code only
+// imitate: the camera's own Exif segment, every tag at the camera's
+// offset, with its MakerNote, IFD1's thumbnail, and the MPF list of the
+// images after the main one.
+//
+// The values below were read from each file's bytes by a walk of its
+// structure that shares no code with the reader, with the rules of ADR011,
+// ADR014 and ADR015 applied to what it read. Each focus point is, to the
+// pixel, the point the reader gives on the raw file of the same shot,
+// scaled onto the same frame.
+
+/// What one of the three stripped Z 9 JPEGs must give.
+struct StrippedZ9Jpeg {
+    /// The file's name in `tests/fixtures/`.
+    file: &'static str,
+    /// IFD0's Make and Model.
+    make: &'static str,
+    model: &'static str,
+    /// The capture time, as [`DateTime`] displays it: DateTimeOriginal,
+    /// SubSecTimeOriginal and OffsetTimeOriginal.
+    capture_time: &'static str,
+    /// The exposure, each value as stored.
+    exposure_time: (u32, u32),
+    f_number: (u32, u32),
+    iso: u32,
+    focal_length: (u32, u32),
+    exposure_bias: (i32, i32),
+    /// The lens from the Exif IFD: its make, its model, and its range, the
+    /// shortest and the longest focal length, then the f-number at each.
+    lens_make: Option<&'static str>,
+    lens_model: &'static str,
+    lens_range: [(u32, u32); 4],
+    /// IFD0's Orientation, which turns every preview.
+    orientation: Orientation,
+    /// The four previews, smallest first, each its byte range and size:
+    /// IFD1's thumbnail, the length IFD1 declares for it, the two images
+    /// of the MPF list, and the file itself, of its frame header's size.
+    previews: [(Range<u64>, (u16, u16)); 4],
+    /// The frame, the centre and the area of the focus point the reader
+    /// gives, and whether the camera confirmed focus.
+    focus_frame: (u32, u32),
+    focus_center: (u32, u32),
+    focus_size: (u32, u32),
+    in_focus: bool,
+}
+
+/// The FX shot, the camera's full output, at full size: CropHiSpeed
+/// `[11, 8280, 5520, 8280, 5520, 0, 0]` records no crop, so the point is as
+/// AFInfo2 records it, the centre (4225, 2614) and the area 406 by 406 in
+/// the frame of 8256 by 5504, which is the JPEG's own size.
+const STRIPPED_Z9_FX_JPEG: StrippedZ9Jpeg = StrippedZ9Jpeg {
+    file: support::fixtures::Z9_FX_JPEG,
+    make: "NIKON CORPORATION",
+    model: "NIKON Z 9",
+    capture_time: "2026-10-22T09:26:56.75-03:00",
+    exposure_time: (10, 2500),
+    f_number: (800, 100),
+    iso: 64,
+    focal_length: (700, 10),
+    exposure_bias: (0, 6),
+    lens_make: None,
+    lens_model: "VR 70-300mm f/4.5-5.6E",
+    lens_range: [(700, 10), (3000, 10), (450, 100), (560, 100)],
+    orientation: Orientation::NoTransforms,
+    previews: [
+        (39876..52662, (160, 120)),
+        (69754..69876, (640, 424)),
+        (69876..69998, (1620, 1080)),
+        (0..69998, (8256, 5504)),
+    ],
+    focus_frame: (8256, 5504),
+    focus_center: (4225, 2614),
+    focus_size: (406, 406),
+    in_focus: true,
+};
+
+/// The DX shot, at full size: CropHiSpeed `[2, 8280, 5520, 5408, 3608,
+/// 1436, 956]` records a crop that cuts both sides, so the centre (1024,
+/// 718) and the area 226 by 258 that AFInfo2 records in the full 8256 by
+/// 5504 frame are fractions of the picture, and the reader scales them
+/// onto the JPEG's 5392 by 3592, each rounded to the nearest pixel.
+const STRIPPED_Z9_DX_JPEG: StrippedZ9Jpeg = StrippedZ9Jpeg {
+    file: support::fixtures::Z9_DX_JPEG,
+    make: "NIKON CORPORATION",
+    model: "NIKON Z 9",
+    capture_time: "2026-10-22T09:40:59.19-03:00",
+    exposure_time: (10, 2000),
+    f_number: (800, 100),
+    iso: 64,
+    focal_length: (780, 10),
+    exposure_bias: (0, 6),
+    lens_make: None,
+    lens_model: "VR 70-300mm f/4.5-5.6E",
+    lens_range: [(700, 10), (3000, 10), (450, 100), (560, 100)],
+    orientation: Orientation::NoTransforms,
+    previews: [
+        (39876..50557, (160, 120)),
+        (69754..69876, (640, 424)),
+        (69876..69998, (1620, 1080)),
+        (0..69998, (5392, 3592)),
+    ],
+    focus_frame: (5392, 3592),
+    focus_center: (669, 469),
+    focus_size: (148, 168),
+    in_focus: true,
+};
+
+/// The 16:9 shot, at the middle size, 6192 by 3480, taken in portrait
+/// orientation and stored on its side with Orientation 8, which turns
+/// every preview. CropHiSpeed `[6, 8280, 5520, 8280, 4656, 0, 432]`
+/// records a crop that keeps the width, so the centre (878, 4504) that
+/// AFInfo2 records in the full 8256 by 5504 frame is a position in that
+/// frame. The window of the JPEG's shape in it is 8256 wide and 8256 x
+/// 3480 / 6192 = 4640 high, whose origin is (5504 - 4640) / 2 = 432 down:
+/// the reader moves y back to 4072 and keeps the area, 162 by 178.
+const STRIPPED_Z9_16X9_JPEG: StrippedZ9Jpeg = StrippedZ9Jpeg {
+    file: support::fixtures::Z9_16X9_JPEG,
+    make: "NIKON CORPORATION",
+    model: "NIKON Z 9",
+    capture_time: "2026-10-22T19:17:01.01-03:00",
+    exposure_time: (10, 200),
+    f_number: (450, 100),
+    iso: 1400,
+    focal_length: (700, 10),
+    exposure_bias: (0, 6),
+    lens_make: None,
+    lens_model: "VR 70-300mm f/4.5-5.6E",
+    lens_range: [(700, 10), (3000, 10), (450, 100), (560, 100)],
+    orientation: Orientation::Rotate270,
+    previews: [
+        (39876..51224, (160, 120)),
+        (69754..69876, (640, 360)),
+        (69876..69998, (1920, 1080)),
+        (0..69998, (6192, 3480)),
+    ],
+    focus_frame: (8256, 4640),
+    focus_center: (878, 4072),
+    focus_size: (162, 178),
+    in_focus: true,
+};
+
+/// Checks that the stripped Z 9 JPEG `stripped` names, read whole from its
+/// path and from its bytes, opens as a JPEG with its four previews,
+/// smallest first, each read whole, and gives every value of its metadata,
+/// the focus point among them.
+fn check_stripped_z9_jpeg(stripped: &StrippedZ9Jpeg) {
+    let label = stripped.file;
+    let bytes = support::fixtures::read_fixture(stripped.file);
+    let mut file = RawFile::open(support::fixtures::fixture(stripped.file)).unwrap();
+    let from_bytes = RawFile::from_bytes(&bytes).unwrap();
+    for (how, format, previews) in [
+        ("path", file.format(), file.previews()),
+        ("bytes", from_bytes.format(), from_bytes.previews()),
+    ] {
+        assert_eq!(format, Format::Jpeg, "{label}, from {how}");
+        let found: Vec<Seen> = previews.iter().map(seen).collect();
+        assert_eq!(
+            found,
+            expected(&stripped.previews, stripped.orientation),
+            "{label}, from {how}"
+        );
+    }
+    assert_eq!(file.metadata(), from_bytes.metadata(), "{label}");
+
+    // The file itself is the largest preview and reads as the whole file.
+    // Every other preview is a stub JPEG of its size: an MPF image exactly
+    // that, and the thumbnail the stub, then zeros to the length IFD1
+    // declares, which the stripping kept so that no offset moved.
+    let previews = file.previews().to_vec();
+    let largest = file.largest_preview().unwrap();
+    assert_eq!(Some(largest), previews.last().copied(), "{label}");
+    assert_eq!(largest.byte_range(), 0..to_u64(bytes.len()), "{label}");
+    for preview in &previews {
+        let size = (preview.width(), preview.height());
+        let read = file.read_preview(preview).unwrap();
+        if *preview == largest {
+            assert_eq!(read, bytes, "{label} {size:?}");
+            continue;
+        }
+        let stub = jpeg_stub(
+            u16::try_from(size.0).unwrap(),
+            u16::try_from(size.1).unwrap(),
+            0xC0,
+        );
+        assert_eq!(read[..stub.len()], stub[..], "{label} {size:?}");
+        assert!(
+            read[stub.len()..].iter().all(|&byte| byte == 0),
+            "{label} {size:?}"
+        );
+    }
+
+    let metadata = file.metadata();
+    assert_eq!(metadata.make(), Some(stripped.make), "{label}");
+    assert_eq!(metadata.model(), Some(stripped.model), "{label}");
+    // The stripping zeroed BodySerialNumber and the MakerNote's
+    // SerialNumber in place, so neither gives a serial number.
+    assert_eq!(metadata.serial_number(), None, "{label}");
+    assert_eq!(
+        metadata
+            .capture_time()
+            .map(|time| time.to_string())
+            .as_deref(),
+        Some(stripped.capture_time),
+        "{label}"
+    );
+    assert_eq!(metadata.orientation(), stripped.orientation, "{label}");
+    let (numerator, denominator) = stripped.exposure_bias;
+    assert_eq!(
+        metadata.exposure(),
+        &Exposure::default()
+            .with_exposure_time(fraction(stripped.exposure_time))
+            .with_f_number(fraction(stripped.f_number))
+            .with_iso(stripped.iso)
+            .with_focal_length(fraction(stripped.focal_length))
+            .with_exposure_bias(SignedRational::new(numerator, denominator).unwrap()),
+        "{label}"
+    );
+    // The lens from the Exif IFD: a LensMake that is empty gives no make,
+    // and the LensSerialNumber, empty and then zeroed, no serial number.
+    let [shortest, longest, at_shortest, at_longest] = stripped.lens_range.map(fraction);
+    let mut lens = Lens::builder()
+        .model(stripped.lens_model)
+        .min_focal_length(shortest)
+        .max_focal_length(longest)
+        .f_number_at_min_focal_length(at_shortest)
+        .f_number_at_max_focal_length(at_longest);
+    if let Some(make) = stripped.lens_make {
+        lens = lens.make(make);
+    }
+    assert_eq!(metadata.lens(), Some(&lens.build().unwrap()), "{label}");
+    // A JPEG holds no raw data, and its image size is its frame header's.
+    assert_eq!(metadata.raw_size(), None, "{label}");
+    assert_eq!(
+        metadata.image_size(),
+        Some(size_of(stripped.previews[3].1)),
+        "{label}"
+    );
+    let focus = confirmed(
+        stripped.focus_frame,
+        stripped.focus_center,
+        stripped.focus_size,
+    )
+    .with_in_focus(stripped.in_focus);
+    assert_eq!(metadata.focus(), Some(focus), "{label}");
+}
+
+#[test]
+fn the_stripped_z9_fx_jpeg_gives_its_previews_metadata_and_recorded_focus_point() {
+    check_stripped_z9_jpeg(&STRIPPED_Z9_FX_JPEG);
+}
+
+#[test]
+fn the_stripped_z9_dx_jpeg_gives_its_previews_metadata_and_scaled_focus_point() {
+    check_stripped_z9_jpeg(&STRIPPED_Z9_DX_JPEG);
+}
+
+#[test]
+fn the_stripped_z9_16x9_jpeg_gives_its_previews_metadata_and_moved_focus_point() {
+    check_stripped_z9_jpeg(&STRIPPED_Z9_16X9_JPEG);
 }

@@ -28,9 +28,13 @@
 //! MakerNote after its `SONY DSC` header: an ILCE-7M3's and an ILCE-7M4's,
 //! whose MakerNote records a focus point, and a DSLR-A100's, with no MPF
 //! index; the Exif segment's TIFF structure and the MPF index in both
-//! byte orders. The `open` target takes these seeds too, as JPEG files are
-//! something it must open, and reaches the Nikon and Sony MakerNote readers
-//! through them.
+//! byte orders. And from the three real JPEGs committed in
+//! `tests/fixtures/`, shots of the maintainer's own Z 9 in FX and in DX
+//! and 16:9 crop modes with their images replaced by stubs and their
+//! personal fields zeroed, copied as they are, the camera's own Exif
+//! segment in its little-endian byte order. The `open` target takes these
+//! seeds too, as JPEG files are something it must open, and reaches the
+//! Nikon and Sony MakerNote readers through them.
 //!
 //! The fixtures live in `tests/`, outside the library, so this test writes
 //! and checks the seed files, as the unit tests of the TIFF reader do for
@@ -47,7 +51,7 @@ use std::path::{Path, PathBuf};
 use support::arw::{
     a100_file, arq_file, arw2_file, arw4_file, arw4_medium_file, sr2_file, srf_file,
 };
-use support::fixtures::{Z9_1X1, Z9_DX, read_fixture};
+use support::fixtures::{Z9_1X1, Z9_16X9_JPEG, Z9_DX, Z9_DX_JPEG, Z9_FX_JPEG, read_fixture};
 use support::jpeg_files::{
     ILCE7M3_MAIN, MAIN, Z9Mode, a100_jpeg, camera_jpeg, camera_jpeg_with_metadata, d70_jpeg,
     d5300_jpeg, exif_jpeg, ilce7m3_jpeg, ilce7m4_jpeg, padded_jpeg, plain_jpeg, z9_jpeg,
@@ -103,8 +107,9 @@ fn open_seeds() -> Vec<(String, Vec<u8>)> {
 
 /// The JPEG files as starting inputs for the `jpeg_segments` target, and
 /// for the `open` target too: each file name with the bytes of the file it
-/// holds, in both byte orders for those with a TIFF structure and an MPF
-/// index, and once for those with neither.
+/// holds, in both byte orders for those built in code with a TIFF
+/// structure and an MPF index, once for those with neither, and once for
+/// the three stripped Z 9 JPEGs.
 fn jpeg_segments_seeds() -> Vec<(String, Vec<u8>)> {
     let mut seeds = in_both_orders(&[
         ("exif", "jpg", |order| exif_jpeg(order).0.bytes),
@@ -136,6 +141,11 @@ fn jpeg_segments_seeds() -> Vec<(String, Vec<u8>)> {
     ]);
     seeds.push(("plain.jpg".to_owned(), plain_jpeg().bytes));
     seeds.push(("padded.jpg".to_owned(), padded_jpeg().bytes));
+    // Real files, so in one byte order only, and under the names they are
+    // committed by.
+    for name in [Z9_FX_JPEG, Z9_DX_JPEG, Z9_16X9_JPEG] {
+        seeds.push((name.to_owned(), read_fixture(name)));
+    }
     seeds
 }
 

@@ -28,9 +28,15 @@ the corpus the fuzzer writes is not.
   segment holds a Sony MakerNote after its `SONY DSC` header: an
   ILCE-7M3's and an ILCE-7M4's, whose MakerNote records a focus point, the
   ILCE-7M4's with its area, and a DSLR-A100's, with no MPF index, whose
-  MakerNote holds tags of an older layout. Each file with an Exif segment
-  comes in both byte orders, which the TIFF structure inside that segment,
-  a Sony MakerNote and the camera's MPF index share.
+  MakerNote holds tags of an older layout. Each of these files with an
+  Exif segment comes in both byte orders, which the TIFF structure inside
+  that segment, a Sony MakerNote and the camera's MPF index share. Beside
+  these files built in code are the three real JPEGs committed in
+  [`tests/fixtures/`](../../tests/fixtures/README.md), shots of the
+  maintainer's own Z 9 in FX and in DX and 16:9 crop modes with their
+  images replaced by stubs and their personal fields zeroed, copied as
+  they are, the camera's own Exif segment and Nikon MakerNote in
+  little-endian byte order.
 - `open/` seeds the `open` target with the integration tests' fixtures of
   the RAW formats: files laid out like the NEF of a Nikon Z 9, of a Z6III
   on a 1:1 crop and of a D300, and one like each generation of Sony's
