@@ -150,8 +150,8 @@ header.
   the lens range, and on the D5300 AFInfo2 and CropHiSpeed. **[F]**
 - **The D70 JPEG's PreviewIFD holds a JPEG of 564x372**, inside the
   declared length, as the PreviewIFD of the D70's NEF does (file 2060);
-  the D5300 JPEG has no PreviewIFD. raw-files is to offer the D70's as
-  a preview of the JPEG, under the same in-block rule as in a NEF
+  the D5300 JPEG has no PreviewIFD. raw-files offers the D70's as a
+  preview of the JPEG, under the same in-block rule as in a NEF
   ([ADR014](../../architecture-decisions/adr014-jpeg-files-as-a-format-of-their-own.md)).
   **[F]**
 
@@ -779,16 +779,25 @@ What the fields hold:
   JPEG in the set records a position. A JPEG keeps a point only when its
   frame has the JPEG's aspect ratio, so that an export cropped to another
   shape, which may keep the camera's MakerNote, gives none
-  ([ADR014](../../architecture-decisions/adr014-jpeg-files-as-a-format-of-their-own.md)).
+  ([ADR014](../../architecture-decisions/adr014-jpeg-files-as-a-format-of-their-own.md)),
+  except an export cut from a crop-mode JPEG, whose point is placed on
+  the export's own pixels (below).
 - **In a camera JPEG shot in a crop mode**, the maintainer's Z 9 records
   the raw file's AFInfo2 and CropHiSpeed, with the full 8256x5504 frame,
   at every image size, and no CropArea; its full-size JPEG is the raw
   file's CropArea (5392x3592, 5504x5504, 8256x4640), and its DX JPEGs at
-  the smaller sizes are exactly 3:2. **[F]** raw-files is to place such
-  a point on the JPEG's picture, as on CropArea in a raw file: a DX crop's
+  the smaller sizes are exactly 3:2. **[F]** raw-files places such a
+  point on the JPEG's picture, as on CropArea in a raw file: a DX crop's
   scaled onto the JPEG's frame, a 1:1 or 16:9 crop's moved into the
   centred window of the frame that has the JPEG's shape
   ([ADR015](../../architecture-decisions/adr015-the-focus-point-of-a-crop-mode-jpeg.md)).
+  In a JPEG, a CropHiSpeed whose sizes differ on a file that is no crop,
+  as the D810's cropped width four pixels short does, reads as a crop of
+  the width: a JPEG of the frame's shape then gives its point unchanged,
+  since the window is the frame; an export cut narrower keeps a point
+  placed on its pixels, which may be misplaced, as ADR015 says of a
+  crop-mode JPEG cut again, and one cut wider makes a window longer than
+  the frame and gives none. No public D810 JPEG is in the set.
 
 **What the samples cover.** Each kind of shot, the files that show it,
 and what raw-files gives; a row without a file is an open question
@@ -817,7 +826,7 @@ and what raw-files gives; a row without a file is an open question
 | Face detection | FaceDetect | none | not read |
 | Camera JPEG through the viewfinder | a zero frame (`0100`) | the D5300 JPEG from Wikimedia Commons | none |
 | Camera JPEG with a position | a position | none public | the point, when its frame has the JPEG's aspect ratio; unchecked on a public file |
-| Camera JPEG in a crop mode (DX, 1:1, 16:9), at any image size | a position in the full frame, no CropArea | none public; the maintainer's Z 9 shots | the point, to be placed on the JPEG's picture; unchecked on a public file |
+| Camera JPEG in a crop mode (DX, 1:1, 16:9), at any image size | a position in the full frame, no CropArea | none public; the maintainer's Z 9 shots | the point, placed on the JPEG's picture; unchecked on a public file |
 | Exported JPEG that keeps the camera's MakerNote | the camera's frame and position | none public | the point only when the frame has the export's aspect ratio |
 
 ## 9. Robustness pitfalls

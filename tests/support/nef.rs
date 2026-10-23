@@ -228,11 +228,11 @@ const LENS_SERIAL_NUMBER: u16 = 0xA435;
 const MAKER_NOTE_VERSION: u16 = 0x0001;
 /// The ISO, as two SHORTs of which the second is the ISO (ISO, a tag of
 /// the MakerNote IFD).
-const ISO: u16 = 0x0002;
+pub const ISO: u16 = 0x0002;
 /// How the camera focused, as ASCII text: `MANUAL`, or an autofocus mode
 /// padded with spaces to six characters (FocusMode, a tag of the MakerNote
 /// IFD).
-const FOCUS_MODE: u16 = 0x0007;
+pub const FOCUS_MODE: u16 = 0x0007;
 /// The offset of the MakerNote's PreviewIFD, the IFD that declares its
 /// small JPEG (PreviewIFD, a tag of the MakerNote IFD).
 const PREVIEW_IFD: u16 = 0x0011;
@@ -240,31 +240,31 @@ const PREVIEW_IFD: u16 = 0x0011;
 /// as seven SHORTs: the mode, the original width and height, the cropped
 /// width and height, and the left column and top row where the crop starts
 /// (CropHiSpeed, a tag of the MakerNote IFD).
-const CROP_HI_SPEED: u16 = 0x001B;
+pub const CROP_HI_SPEED: u16 = 0x001B;
 /// The camera body's serial number, as ASCII text (SerialNumber, a tag of
 /// the MakerNote IFD).
-const SERIAL_NUMBER: u16 = 0x001D;
+pub const SERIAL_NUMBER: u16 = 0x001D;
 /// The time zone and daylight saving setting of the camera's clock, as
 /// four UNDEFINED bytes: the zone in minutes from UTC as a signed 16-bit
 /// number in the MakerNote's byte order, then whether daylight saving time
 /// is on, then the date format (WorldTime, a tag of the MakerNote IFD).
-const WORLD_TIME: u16 = 0x0024;
+pub const WORLD_TIME: u16 = 0x0024;
 /// The visible image's rectangle in the raw data, as four SHORTs: its left
 /// column, top row, width and height (CropArea, a tag of the MakerNote
 /// IFD).
-const CROP_AREA: u16 = 0x0045;
+pub const CROP_AREA: u16 = 0x0045;
 /// The Z 9's CropArea, as the public samples 5146 to 5148 record it.
 const CROP_AREA_Z9: [u16; 4] = [12, 8, 8256, 5504];
 /// The lens's range, as four RATIONALs in the order of the Exif
 /// LensSpecification: the shortest and longest focal length, then the
 /// f-number at each (Lens, a tag of the MakerNote IFD).
-const LENS: u16 = 0x0084;
+pub const LENS: u16 = 0x0084;
 /// Where the camera's autofocus aimed, as an UNDEFINED value that starts
 /// with its version, four ASCII digits, and holds at the version's offsets
 /// the size of a frame, the centre of the focus area and the area's size,
 /// as SHORTs in the MakerNote's byte order, and on most versions whether
 /// focus was confirmed (AFInfo2, a tag of the MakerNote IFD).
-const AF_INFO2: u16 = 0x00B7;
+pub const AF_INFO2: u16 = 0x00B7;
 
 /// NewSubfileType of the full-resolution image.
 const FULL_RESOLUTION: u32 = 0;
@@ -492,18 +492,36 @@ pub fn nikon_makernote(
     preview: &[u8],
     tags: impl FnOnce(&mut TiffBuilder, IfdId),
 ) -> (Vec<u8>, u64) {
+    let (block, at) = nikon_makernote_with(order, version, Some(preview), tags);
+    (block, at.expect("a PreviewIFD"))
+}
+
+/// As [`nikon_makernote`], with a PreviewIFD and its JPEG only when
+/// `preview` is given, and where that JPEG starts then; without one, the
+/// MakerNote IFD holds no PreviewIFD tag, as the MakerNote of the Nikon
+/// D5300's JPEG on Wikimedia Commons holds none.
+pub fn nikon_makernote_with(
+    order: Order,
+    version: [u8; 2],
+    preview: Option<&[u8]>,
+    tags: impl FnOnce(&mut TiffBuilder, IfdId),
+) -> (Vec<u8>, Option<u64>) {
     let mut inner = TiffBuilder::new(order);
     let makernote = inner.ifd();
-    let preview_ifd = inner.ifd();
+    let preview_ifd = preview.map(|_| inner.ifd());
     let digits = format!("{:02x}{:02x}", version[0], version[1]);
-    inner
-        .undefined(makernote, MAKER_NOTE_VERSION, digits.as_bytes())
-        .ifd_pointer(makernote, PREVIEW_IFD, preview_ifd);
+    inner.undefined(makernote, MAKER_NOTE_VERSION, digits.as_bytes());
+    if let Some(preview_ifd) = preview_ifd {
+        inner.ifd_pointer(makernote, PREVIEW_IFD, preview_ifd);
+    }
     tags(&mut inner, makernote);
-    let jpeg = inner.blob(preview);
-    inner
-        .long_blob(preview_ifd, JPEG_INTERCHANGE_FORMAT, jpeg)
-        .long_blob_len(preview_ifd, JPEG_INTERCHANGE_FORMAT_LENGTH, jpeg);
+    let jpeg = preview.zip(preview_ifd).map(|(preview, preview_ifd)| {
+        let jpeg = inner.blob(preview);
+        inner
+            .long_blob(preview_ifd, JPEG_INTERCHANGE_FORMAT, jpeg)
+            .long_blob_len(preview_ifd, JPEG_INTERCHANGE_FORMAT_LENGTH, jpeg);
+        jpeg
+    });
     let inner = inner.build();
 
     let mut block = MAKER_NOTE_SIGNATURE.to_vec();
@@ -511,7 +529,7 @@ pub fn nikon_makernote(
     block.extend_from_slice(&[0, 0]);
     let header_at = u64::try_from(block.len()).expect("ten bytes");
     block.extend_from_slice(&inner.bytes);
-    (block, header_at + inner.blob_offset(jpeg))
+    (block, jpeg.map(|jpeg| header_at + inner.blob_offset(jpeg)))
 }
 
 /// The Z 9 layout, in byte order `order`, with IFD0's Orientation

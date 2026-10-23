@@ -19,10 +19,14 @@ the corpus the fuzzer writes is not.
   segment holds every value the metadata reads, IFD0's and the Exif IFD's,
   and whose MPF index lists two images after the main one; a camera's
   with a JFIF segment first, whose Exif segment holds only IFD0's
-  orientation and IFD1's thumbnail, beside the same MPF index; and one with
-  zeros after its end. Each file with an Exif segment comes in both byte
-  orders, which the TIFF structure inside that segment and the camera's
-  MPF index share.
+  orientation and IFD1's thumbnail, beside the same MPF index; one with
+  zeros after its end; and four Nikon cameras' JPEGs, whose Exif segment
+  holds a Nikon MakerNote: a Z 9's in FX and on a 1:1 crop, whose
+  MakerNote records a focus point, a D5300's, whose MakerNote records what
+  its Exif segment lacks, and a D70's, whose MakerNote, in the other byte
+  order, holds a preview. Each file with an Exif segment comes in both
+  byte orders, which the TIFF structure inside that segment and the
+  camera's MPF index share.
 - `open/` seeds the `open` target with the integration tests' fixtures of
   the RAW formats: files laid out like the NEF of a Nikon Z 9, of a Z6III
   on a 1:1 crop and of a D300, and one like each generation of Sony's

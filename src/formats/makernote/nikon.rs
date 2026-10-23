@@ -11,18 +11,22 @@
 //! smaller. Every Nikon body since the D70 writes one, and on the oldest
 //! bodies it is the file's only JPEG.
 //!
-//! It also records the visible image, which no standard tag of a NEF
-//! records: the part of the stored raw data that a viewer shows, without
-//! the border pixels around it. Its CropArea, which the D850, the D780 and
-//! the Z bodies write, is that rectangle: on the Z 9, the 8256 by 5504
-//! pixels that start 12 columns and 8 rows into the 8280 by 5520 raw, as
-//! large as the camera's full-size preview (public samples 5146 to 5148).
-//! It is four numbers, the left column, the top row, the width and the
-//! height, in stored raw pixels. It gives the image size only when it
-//! holds exactly four SHORTs or LONGs, its width and height are above
-//! zero, and it lies inside the raw size the standard tags give; and never
-//! when the raw IFD records a default crop, a standard tag, which comes
-//! first (ADR011).
+//! It also records the visible image of a raw file, which no standard tag
+//! of a NEF records: the part of the stored raw data that a viewer shows,
+//! without the border pixels around it. Its CropArea, which the D850, the
+//! D780 and the Z bodies write in their raw files, is that rectangle: on the
+//! Z 9, the 8256 by 5504 pixels that start 12 columns and 8 rows into the
+//! 8280 by 5520 raw, as large as the camera's full-size preview (public
+//! samples 5146 to 5148). It is four numbers, the left column, the top
+//! row, the width and the height, in stored raw pixels. It gives the image
+//! size only when it holds exactly four SHORTs or LONGs, its width and
+//! height are above zero, and it lies inside the raw size the standard tags
+//! give; and never when the raw IFD records a default crop, a standard tag,
+//! which comes first (ADR011). So it never gives a JPEG's image size: a
+//! JPEG holds no raw data, so there is no raw size for CropArea to lie
+//! inside, and its picture is its own pixels, of the size its frame header
+//! gives (ADR014). The Z 9's own JPEGs hold no CropArea; a MakerNote
+//! copied from a raw file into an exported JPEG does.
 //!
 //! Older bodies record three more values only here, in plain form: Nikon
 //! has written them in the standard Exif tags only since the D780 and the
@@ -128,7 +132,7 @@
 //! kept side equals the frame's: a small raw's CropArea counts stored
 //! pixels, smaller than the full output, so a 1:1 or 16:9 crop on one
 //! gives no focus point, while a DX crop on one is scaled onto its
-//! CropArea. A file whose CropHiSpeed records a crop but that has no
+//! CropArea. A raw file whose CropHiSpeed records a crop but that has no
 //! CropArea is read as recorded: the D810 writes a cropped width four
 //! pixels short of its original on an uncropped file, and no CropArea
 //! (sample 2036); one whose CropArea cannot be used, or cannot be checked
@@ -137,6 +141,29 @@
 //! with a cropped side larger than its original, gives none too.
 //! CropHiSpeed is read only when it holds exactly seven SHORTs; otherwise
 //! the file is read as no crop (ADR012).
+//!
+//! A JPEG shot in a crop mode records the same AFInfo2 and CropHiSpeed as
+//! the raw file of the same shot, with the frame still the full output at
+//! every image size, and no CropArea: shots made with the maintainer's Z 9
+//! showed it, in each crop mode and at each of its three image sizes. Its
+//! picture is the JPEG's own pixels, of the size its frame header gives,
+//! which the metadata's image size holds, and its point is placed on them
+//! as a raw file's is placed on CropArea (ADR015). A DX crop's point is
+//! scaled onto the JPEG's size, which becomes the frame. A 1:1 or 16:9
+//! crop's picture is the centred window of the recorded frame that has the
+//! frame's length on the side the crop keeps and the JPEG's shape: its cut
+//! side is the kept length times the JPEG's cut side over its kept side,
+//! rounded to the nearest pixel, a half rounding up. The centre moves back
+//! by that window's origin, the area is kept, and the window becomes the
+//! frame, as with CropArea; a window longer than the frame on the cut side
+//! gives no focus point. A JPEG whose MakerNote holds a CropArea is read by
+//! the raw file's rule: with no raw size to check CropArea against, a crop
+//! gives no focus point, and a file that is no crop gives its point as
+//! recorded. The format's reader says which of the two a file's picture
+//! is, a raw file's or a JPEG's ([`Picture`]): a crop without a CropArea
+//! is placed on the JPEG's pixels, and a raw file, which has none of its
+//! own, gives its point as recorded. Whether the point placed so fits the
+//! JPEG's picture is for the JPEG reader to judge (ADR014).
 //!
 //! Nikon has used three layouts for the block, told apart by their first
 //! bytes. The one every body since the D70 and the D100 writes, and the one
@@ -186,6 +213,7 @@
 //! then reads from that same structure, so that none of them finds, checks
 //! or parses the block again.
 
+use std::cmp::Ordering;
 use std::io::{Read, Seek};
 
 use crate::container::tiff::tags::{
@@ -199,7 +227,7 @@ use crate::formats::tiff_previews::{self, Candidate};
 use crate::geometry::{Point, Size};
 use crate::io::{ByteOrder, Source};
 use crate::limits::Limits;
-use crate::metadata::{Focus, Lens, Metadata};
+use crate::metadata::{Focus, Lens, Metadata, scale};
 use crate::rational::Rational;
 
 /// The Nikon MakerNote tag that records the ISO the picture was taken at
@@ -262,6 +290,31 @@ const HEADER_AT: u64 = 10;
 /// The shortest block of the layout read here: everything up to the end of
 /// the inner TIFF header, which is 8 bytes long.
 const MIN_LEN: u64 = HEADER_AT + 8;
+
+/// The manufacturer's name that a Nikon camera's Make starts with,
+/// compared without regard to case: what a format's reader looks for in
+/// IFD0's Make before it takes a file for a Nikon one, the NEF claim and
+/// the JPEG reader alike.
+pub(in crate::formats) const NIKON: &[u8; 5] = b"NIKON";
+
+/// What a file's picture is, as the format that read the MakerNote knows
+/// it: what the focus point of a crop mode is placed on when the
+/// MakerNote holds no CropArea. [`metadata`] turns it, once, into the
+/// pixels it gives [`focus`]: none for a raw file, the image size for a
+/// JPEG.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(in crate::formats) enum Picture {
+    /// A raw file's, such as a NEF's: the picture is the part of the stored
+    /// raw data that CropArea locates inside it, and a crop's point is
+    /// placed on CropArea alone. A raw file has no pixels of its own to
+    /// place it on, so a crop without a CropArea is read as recorded
+    /// (ADR012).
+    Raw,
+    /// A JPEG's: the picture is the file's own pixels, of the size its
+    /// frame header gives, which the metadata's image size already holds.
+    /// A crop without a CropArea is placed on those pixels (ADR015).
+    Jpeg,
+}
 
 /// A Nikon MakerNote of the layout read here, its block found and its
 /// MakerNote IFD read: what every use of the MakerNote starts from, so
@@ -364,19 +417,21 @@ pub(in crate::formats) fn preview_candidate<R: Read + Seek>(
     Ok(tiff_previews::candidate(block, offset, length))
 }
 
-/// The metadata of the file whose MakerNote is `makernote`: what the
-/// standard tags gave, `standard`, with what the MakerNote records that the
-/// standard tags lack, the focus point among it.
+/// The metadata of the file whose MakerNote is `makernote` and whose
+/// picture is of the kind `picture` names: what the standard tags gave,
+/// `standard`, with what the MakerNote records that the standard tags
+/// lack, the focus point among it.
 ///
 /// That is, first, the image size, from CropArea, which replaces the raw
 /// size the image size otherwise falls back on: when the raw IFD records no
 /// default crop, which comes first, and when there is a raw size for the
-/// crop area to lie inside ([`crop_area`]). CropArea is read once,
-/// whether or not it gives the image size, and the focus point below
-/// takes what it gives too: on a crop, a CropArea that cannot be used, or
-/// that there is no raw size to check against, gives no focus point.
-/// Then, each only when the standard tags gave none, the serial number
-/// ([`serial_number`]), the ISO ([`iso`]), the lens's range
+/// crop area to lie inside ([`crop_area`]). A JPEG's reader passes no raw
+/// size, so a JPEG keeps the image size `standard` gives, its picture's.
+/// CropArea is read once, whether or not it gives the image size, and the
+/// focus point below takes what it gives too: on a crop, a CropArea that
+/// cannot be used, or that there is no raw size to check against, gives no
+/// focus point. Then, each only when the standard tags gave none, the
+/// serial number ([`serial_number`]), the ISO ([`iso`]), the lens's range
 /// ([`lens_range`]) and the capture time's offset from UTC
 /// ([`world_time`]): a range fills a lens whose standard tags gave no
 /// value of its range, keeping their make, model and serial number, or
@@ -387,8 +442,11 @@ pub(in crate::formats) fn preview_candidate<R: Read + Seek>(
 /// ([`DateTime::with_offset_minutes`](crate::datetime::DateTime::with_offset_minutes)).
 /// Last, the focus point, from AFInfo2 and FocusMode, placed on the
 /// cropped picture by CropHiSpeed and CropArea on a crop ([`focus`]),
-/// always read: the standard tags never give one, so it is not a fallback.
-/// Every other value is the standard tags'.
+/// always read: the standard tags never give one, so it is not a
+/// fallback. `picture` says, once, what a crop without a CropArea is
+/// placed on: nothing for a raw file's, whose point is then read as
+/// recorded, and for a JPEG's, its own pixels, of the image size
+/// `standard` gives. Every other value is the standard tags'.
 ///
 /// # Errors
 ///
@@ -397,12 +455,15 @@ pub(in crate::formats) fn metadata<R: Read + Seek>(
     src: &mut Source<R>,
     makernote: &MakerNote,
     standard: Standard,
+    picture: Picture,
 ) -> Result<Metadata> {
     let Standard {
         mut metadata,
         from_default_crop,
     } = standard;
-    // Read once, for the image size and the focus point.
+    // Read once, for the image size and the focus point. Without a raw
+    // size, as in a JPEG, CropArea is never a size, so it never replaces
+    // the image size a JPEG's reader gave, the picture's own (ADR014).
     let crop = crop_area(src, makernote, metadata.raw_size)?;
     if !from_default_crop && let CropArea::Size(image) = crop {
         metadata.image_size = Some(image);
@@ -426,7 +487,13 @@ pub(in crate::formats) fn metadata<R: Read + Seek>(
     {
         metadata.capture_time = Some(time);
     }
-    metadata.focus = focus(src, makernote, crop)?;
+    // What a crop without a CropArea is placed on: a raw file has no
+    // pixels of its own for it, a JPEG has the image size its reader gave.
+    let pixels = match picture {
+        Picture::Raw => None,
+        Picture::Jpeg => metadata.image_size,
+    };
+    metadata.focus = focus(src, makernote, crop, pixels)?;
     Ok(metadata)
 }
 
@@ -593,7 +660,9 @@ fn world_time<R: Read + Seek>(src: &mut Source<R>, makernote: &MakerNote) -> Res
 /// it: the centre of the focus area, the area's size and the frame the two
 /// are measured in, with whether focus was confirmed on the versions that
 /// say, placed on the cropped picture when the file is a crop, by
-/// `crop_area`, what CropArea gives, already read ([`crop_area`]).
+/// `crop_area`, what CropArea gives, already read ([`crop_area`]), or,
+/// when the MakerNote holds no CropArea, on `pixels`, a JPEG's own pixels,
+/// when the file has them ([`in_crop`]).
 ///
 /// `None` when FocusMode records manual focus ([`manual_focus`]); when
 /// AFInfo2 is missing, is not of type UNDEFINED, stores its value outside
@@ -613,6 +682,7 @@ fn focus<R: Read + Seek>(
     src: &mut Source<R>,
     makernote: &MakerNote,
     crop_area: CropArea,
+    pixels: Option<Size>,
 ) -> Result<Option<Focus>> {
     let ifd = &makernote.ifd;
     // Without AFInfo2 there is nothing to place, so FocusMode is not read.
@@ -628,7 +698,7 @@ fn focus<R: Read + Seek>(
         return Ok(None);
     };
     let crop = crop_hi_speed(src, makernote)?;
-    Ok(in_crop(record, crop, crop_area))
+    Ok(in_crop(record, crop, crop_area, pixels))
 }
 
 /// What CropHiSpeed records of a crop, as [`in_crop`] uses it: the size of
@@ -641,6 +711,54 @@ struct CropHiSpeed {
     original: Size,
     /// The cropped width and height.
     cropped: Size,
+}
+
+impl CropHiSpeed {
+    /// What this crop cut, by comparing its cropped size with its original
+    /// size on each side: `None` for no crop, the two sizes equal, and for
+    /// a crop that fits neither shape, such as one with a cropped side
+    /// larger than its original, or one side cut and the other larger.
+    fn cut(self) -> Option<Cut> {
+        let (original, cropped) = (self.original, self.cropped);
+        match (
+            cropped.width.cmp(&original.width),
+            cropped.height.cmp(&original.height),
+        ) {
+            (Ordering::Less, Ordering::Less) => Some(Cut::Both),
+            (Ordering::Less, Ordering::Equal) => Some(Cut::Width),
+            (Ordering::Equal, Ordering::Less) => Some(Cut::Height),
+            _ => None,
+        }
+    }
+}
+
+/// What a crop cut from the camera's full output, as CropHiSpeed tells it
+/// ([`CropHiSpeed::cut`]), which decides what its recorded focus point
+/// means on the cropped picture ([`in_crop`]).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Cut {
+    /// Both sides, as a DX crop does: the point records fractions of the
+    /// cropped picture.
+    Both,
+    /// The width, keeping the height, as a 1:1 crop of a landscape frame
+    /// does: the point records a position in the full frame.
+    Width,
+    /// The height, keeping the width, as a 16:9 crop of a 3:2 frame does:
+    /// the point records a position in the full frame.
+    Height,
+}
+
+/// What [`in_crop`] places a crop's focus point on: the picture, in the
+/// pixels it is measured in.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Onto {
+    /// CropArea's size: the visible rectangle of the stored raw data, in
+    /// a file whose MakerNote holds a CropArea that gave one.
+    CropArea(Size),
+    /// The size of a JPEG's own pixels, as its frame header gives it, in a
+    /// file whose MakerNote holds no CropArea: the `pixels` [`metadata`]
+    /// gives [`in_crop`] for a JPEG's picture (ADR015).
+    Pixels(Size),
 }
 
 /// What `makernote`'s CropHiSpeed records of the crop; `None` when the tag
@@ -696,73 +814,86 @@ fn crop_hi_speed<R: Read + Seek>(
 /// none, even where placing it on the cropped picture would move it inside.
 ///
 /// A file is a crop when CropHiSpeed, `crop`, records a cropped size
-/// that differs from its original size, and the file has a CropArea,
-/// which `crop_area` gives: a crop without a CropArea tag, such as the
-/// D810's, whose cropped width is four pixels short on an uncropped file
-/// (public sample 2036), has no picture to place the record on, and is
-/// read as recorded. A crop whose CropArea cannot be used, or could not be
-/// checked against a raw size, has a picture whose size is not known, and
-/// gives none. On a crop, AFInfo2's frame is still the camera's full
-/// output, and the frame becomes CropArea's size. What happens to the
-/// centre and the area depends on what the crop cut, as the module
-/// documentation shows:
+/// that differs from its original size. On a crop, AFInfo2's frame is
+/// still the camera's full output, and the point is placed on the cropped
+/// picture ([`Onto`]): CropArea, when the file has one, which `crop_area`
+/// gives; and, when it has none, `pixels`, a JPEG's own pixels, of the
+/// size its frame header gives (ADR015). A crop without a CropArea tag
+/// and without `pixels`, as in a raw file, such as the D810's, whose
+/// cropped width is four pixels short on an uncropped file (public sample
+/// 2036), has no picture to place the record on, and is read as recorded.
+/// A crop whose CropArea cannot be used, or could not be checked against
+/// a raw size, as in any JPEG, has a picture whose size is not known, and
+/// gives none. What happens to the centre and the area depends on what the
+/// crop cut ([`CropHiSpeed::cut`]), as the module documentation shows:
 ///
 /// - **A crop that cuts both sides** (DX) records fractions of the
 ///   cropped picture, in the full frame's units. The point is scaled onto
-///   CropArea by [`Focus::scaled_to`]: x and the width multiplied by
-///   CropArea's width over the frame's, y and the height by the heights,
-///   each rounded to the nearest pixel, a half rounding up. An area that
+///   CropArea, or onto the JPEG's pixels, by [`Focus::scaled_to`]: x and
+///   the width multiplied by the picture's width over the frame's, y and
+///   the height by the heights, each rounded to the nearest pixel, a half
+///   rounding up, and the frame becomes the picture's size. An area that
 ///   rounding leaves a pixel too wide for its centre is trimmed to fit,
 ///   and an area side that rounds to nothing keeps one pixel. A centre
-///   that rounds onto an edge of CropArea leaves no room for an area, and
-///   keeps the point without one.
+///   that rounds onto an edge of the picture leaves no room for an area,
+///   and keeps the point without one.
 /// - **A crop that keeps one side** (1:1, 16:9), whose cropped size
 ///   equals the original on exactly one side and is smaller on the other,
 ///   records positions in the full frame, of which the cropped picture is
-///   the centred window. The centre moves back on each axis by the
-///   window's origin, half the difference between the frame and CropArea,
-///   rounded down, and the area is kept. That holds only when CropArea's
-///   kept side equals the frame's: on a small raw, CropArea counts stored
-///   pixels and the frame the full output, the window cannot be placed,
-///   and the file gives none. A CropArea side larger than the frame's, or
-///   a centre that would move past the window's left or top edge, gives
-///   none too. The moved record is checked again by
+///   the centred window. The window is CropArea; on a JPEG's pixels, it
+///   is the frame's length on the side the crop keeps, and on the side it
+///   cuts, the kept length times the JPEG's cut side over its kept side
+///   ([`window_of_shape`]), so that the window has the JPEG's shape in the
+///   frame's pixels. The centre moves back on each axis by the window's
+///   origin, half the difference between the frame and the window, rounded
+///   down ([`shifted`]), the area is kept, and the frame becomes the
+///   window. That holds only when the window's kept side equals the
+///   frame's, as a JPEG's does by its making: on a small raw, CropArea
+///   counts stored pixels and the frame the full output, the window cannot
+///   be placed, and the file gives none. A window side larger than the
+///   frame's, or a centre that would move past the window's left or top
+///   edge, gives none too. The moved record is checked again by
 ///   [`FocusRecord::focus`], in the window: a centre past its right or
 ///   bottom edge, or an area that no longer fits around the moved centre,
 ///   gives none.
 ///
 /// A CropHiSpeed that fits neither shape, such as one whose cropped size
 /// is larger than its original on a side, records no crop the point can
-/// be placed on, and gives none.
-fn in_crop(record: FocusRecord, crop: Option<CropHiSpeed>, crop_area: CropArea) -> Option<Focus> {
+/// be placed on, and gives none; except in a file with neither a CropArea
+/// nor `pixels`, which is read as recorded whatever its CropHiSpeed
+/// records.
+fn in_crop(
+    record: FocusRecord,
+    crop: Option<CropHiSpeed>,
+    crop_area: CropArea,
+    pixels: Option<Size>,
+) -> Option<Focus> {
     // `Focus::new` refuses a frame with a zero side here, so the old frame
     // whose sides `scaled_to` divides by below has no zero side.
     let focus = record.focus()?;
-    let Some(CropHiSpeed { original, cropped }) = crop else {
+    let Some(crop) = crop else {
         return Some(focus);
     };
-    if cropped == original {
+    if crop.cropped == crop.original {
         return Some(focus);
     }
-    let window = match crop_area {
-        CropArea::Absent => return Some(focus),
-        CropArea::Unusable => return None,
-        CropArea::Size(window) => window,
+    let onto = match (crop_area, pixels) {
+        (CropArea::Size(window), _) => Onto::CropArea(window),
+        (CropArea::Unusable, _) => return None,
+        (CropArea::Absent, None) => return Some(focus),
+        (CropArea::Absent, Some(pixels)) => Onto::Pixels(pixels),
     };
-    if cropped.width < original.width && cropped.height < original.height {
-        return focus.scaled_to(window);
-    }
-    let kept_width = cropped.width == original.width;
-    let kept_height = cropped.height == original.height;
-    // A window keeps exactly one side and cuts the other; the sizes differ
-    // here, so they cannot both be kept.
-    if !((kept_width && cropped.height < original.height)
-        || (kept_height && cropped.width < original.width))
-    {
-        return None;
-    }
+    let cut = crop.cut()?;
     let FocusRecord { frame, center, .. } = record;
-    if (kept_width && window.width != frame.width) || (kept_height && window.height != frame.height)
+    let window = match (cut, onto) {
+        (Cut::Both, Onto::CropArea(size) | Onto::Pixels(size)) => {
+            return focus.scaled_to(size);
+        }
+        (_, Onto::CropArea(window)) => window,
+        (_, Onto::Pixels(pixels)) => window_of_shape(frame, cut, pixels)?,
+    };
+    if (cut == Cut::Height && window.width != frame.width)
+        || (cut == Cut::Width && window.height != frame.height)
     {
         return None;
     }
@@ -777,6 +908,36 @@ fn in_crop(record: FocusRecord, crop: Option<CropHiSpeed>, crop_area: CropArea) 
         ..record
     }
     .focus()
+}
+
+/// The centred window of the recorded frame `frame` that a crop which cut
+/// one side, `cut`, shows on a JPEG of `pixels`: the frame's length on the
+/// side the crop keeps, and on the side it cuts, that length times the
+/// JPEG's cut side over its kept side, rounded to the nearest pixel, a
+/// half rounding up, by the rule [`Focus::scaled_to`] scales by
+/// ([`scale`]) (ADR015). So the window has the JPEG's shape, in the frame's
+/// pixels. It may be longer than the frame on the cut side, which
+/// [`shifted`] then refuses. A cut side too long for a `u32` saturates at
+/// `u32::MAX`, as [`scale`] does, and is refused the same way: the
+/// frame's sides are read from SHORTs, so no frame is that long.
+///
+/// `None` for a crop that cut both sides, which has no window, and for a
+/// JPEG side of zero, which [`scale`] cannot divide by.
+fn window_of_shape(frame: Size, cut: Cut, pixels: Size) -> Option<Size> {
+    if pixels.width == 0 || pixels.height == 0 {
+        return None;
+    }
+    match cut {
+        Cut::Both => None,
+        Cut::Width => Some(Size {
+            width: scale(frame.height, pixels.height, pixels.width),
+            height: frame.height,
+        }),
+        Cut::Height => Some(Size {
+            width: frame.width,
+            height: scale(frame.width, pixels.width, pixels.height),
+        }),
+    }
 }
 
 /// `value`, a position on an axis `frame` pixels long, as a position in
@@ -1300,7 +1461,7 @@ mod tests {
                 "{order:?}"
             );
             let standard = tiff_metadata::read(&mut src, &tree).unwrap();
-            let metadata = metadata(&mut src, &makernote, standard).unwrap();
+            let metadata = metadata(&mut src, &makernote, standard, Picture::Raw).unwrap();
             assert_eq!(metadata.serial_number.as_deref(), Some(SERIAL), "{order:?}");
         }
     }
@@ -1650,10 +1811,10 @@ mod tests {
         })
     }
 
-    /// The metadata of the file `bytes`: what the standard tags give, with
-    /// what [`metadata`] adds from the file's MakerNote, which must be
-    /// read.
-    fn metadata_of(bytes: Vec<u8>) -> Metadata {
+    /// The file `bytes`, read as a format's reader reads it before it
+    /// calls [`metadata`]: a source of it, its MakerNote, which must be
+    /// read, and what the standard tags give.
+    fn read_file(bytes: Vec<u8>) -> (Source<Cursor<Vec<u8>>>, MakerNote, Standard) {
         let mut src = Source::new(Cursor::new(bytes)).unwrap();
         let file_block = tiff::Block::file(src.len());
         let tree = walk(&mut src, &file_block, &Limits::default()).unwrap();
@@ -1661,7 +1822,27 @@ mod tests {
             .unwrap()
             .expect("a MakerNote");
         let standard = tiff_metadata::read(&mut src, &tree).unwrap();
-        metadata(&mut src, &makernote, standard).unwrap()
+        (src, makernote, standard)
+    }
+
+    /// The metadata of the file `bytes`, a raw file: what the standard
+    /// tags give, with what [`metadata`] adds from the file's MakerNote,
+    /// which must be read.
+    fn metadata_of(bytes: Vec<u8>) -> Metadata {
+        let (mut src, makernote, standard) = read_file(bytes);
+        metadata(&mut src, &makernote, standard, Picture::Raw).unwrap()
+    }
+
+    /// The metadata of the file `bytes` read as a JPEG whose frame header
+    /// gives `pixels`: what the standard tags give, with no raw size and
+    /// `pixels` as the image size, as the JPEG reader builds it, then what
+    /// [`metadata`] adds from the file's MakerNote, which must be read,
+    /// for a JPEG's picture. The file must hold no raw data.
+    fn jpeg_metadata_of(bytes: Vec<u8>, [width, height]: [u32; 2]) -> Metadata {
+        let (mut src, makernote, mut standard) = read_file(bytes);
+        assert_eq!(standard.metadata.raw_size, None);
+        standard.metadata.image_size = Some(Size { width, height });
+        metadata(&mut src, &makernote, standard, Picture::Jpeg).unwrap()
     }
 
     /// The image size of the file [`raw_file`] builds in byte order `order`
@@ -4079,6 +4260,253 @@ mod tests {
         }
     }
 
+    /// `crop` as a camera's JPEG records it: with the raw file's
+    /// CropHiSpeed and no CropArea, as the Z 9's JPEGs do (ADR015).
+    fn in_a_jpeg(crop: Crop) -> Crop {
+        Crop {
+            crop_area: None,
+            ..crop
+        }
+    }
+
+    /// The metadata of a JPEG whose MakerNote, in byte order `order`, holds
+    /// `crop`'s CropHiSpeed and CropArea, each when it has one, and an
+    /// AFInfo2 of version 0400 recording `recorded`, inside a file in byte
+    /// order `file` that holds no raw data, read as [`jpeg_metadata_of`]
+    /// reads it with the picture `pixels`.
+    fn jpeg_metadata(
+        file: Order,
+        order: Order,
+        crop: Crop,
+        recorded: Recorded,
+        pixels: [u32; 2],
+    ) -> Metadata {
+        let block = crop_block(order, crop, &af_info2(order, "0400", recorded));
+        jpeg_metadata_of(
+            with_makernote(file, UNDEFINED, &block, whole(&block)),
+            pixels,
+        )
+    }
+
+    /// The focus point of the JPEG [`jpeg_metadata`] reads, its file and
+    /// its MakerNote both in byte order `order`.
+    fn jpeg_focus(order: Order, crop: Crop, recorded: Recorded, pixels: [u32; 2]) -> Option<Focus> {
+        jpeg_metadata(order, order, crop, recorded, pixels).focus
+    }
+
+    #[test]
+    fn a_jpegs_dx_crop_is_scaled_onto_its_pixels() {
+        // A DX crop records fractions of the cropped picture in the full
+        // frame's units, so its point is scaled onto the JPEG's pixels, as
+        // onto CropArea in a raw file, and the frame becomes the JPEG's
+        // size. At full size the JPEG is the raw file's CropArea, 5392 by
+        // 3592, and the point is the raw file's (415, 373), 274 by 305; at
+        // the middle size, 4032 by 2688, the recorded point is scaled onto
+        // that, by the rounding written out in `scale_by_hand`.
+        let [x, y] = Z9_DX_CORNER.center;
+        let [width, height] = Z9_DX_CORNER.area;
+        let middle = focus_at(
+            [4032, 2688],
+            [scale_by_hand(x, 8256, 4032), scale_by_hand(y, 5504, 2688)],
+            [
+                scale_by_hand(width, 8256, 4032),
+                scale_by_hand(height, 5504, 2688),
+            ],
+            Some(true),
+        );
+        for (file, order) in [
+            (Order::Little, Order::Little),
+            (Order::Big, Order::Big),
+            (Order::Little, Order::Big),
+            (Order::Big, Order::Little),
+        ] {
+            for (pixels, focus) in [
+                (
+                    [5392, 3592],
+                    focus_at([5392, 3592], [415, 373], [274, 305], Some(true)),
+                ),
+                ([4032, 2688], middle),
+            ] {
+                assert_eq!(
+                    jpeg_metadata(file, order, in_a_jpeg(Z9_DX), Z9_DX_CORNER, pixels).focus,
+                    Some(focus),
+                    "{file:?}, MakerNote {order:?}, {pixels:?}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn a_jpegs_aspect_crop_is_moved_into_the_window_of_its_shape() {
+        // A 1:1 or 16:9 crop records a position in the full 8256 by 5504
+        // frame. The JPEG's picture is the centred window of that frame
+        // with the frame's length on the kept side and the JPEG's shape.
+        // On 1:1, the height is kept: the window is 5504 times the JPEG's
+        // width over its height wide, 5504 at every size, so 5504 by 5504,
+        // whose origin is (8256 - 5504) / 2 = 1376 across, and the recorded
+        // (1797, 424) moves to (421, 424). On 16:9 the width is kept: the
+        // window is 8256 times the JPEG's height over its width high, 4640
+        // at every size (8256 x 4640 / 8256, x 3480 / 6192, x 2320 /
+        // 4128), whose origin is (5504 - 4640) / 2 = 432 down, and the
+        // recorded (502, 715) moves to (502, 283). The area is kept, and
+        // the frame is the window, whatever the JPEG's size.
+        let square = focus_at([5504, 5504], [421, 424], [291, 323], Some(true));
+        let wide = focus_at([8256, 4640], [502, 283], [291, 323], Some(true));
+        for order in ORDERS {
+            for (what, crop, recorded, pixels, focus) in [
+                ("1:1", Z9_1X1, Z9_1X1_CORNER, [5504, 5504], square),
+                ("1:1", Z9_1X1, Z9_1X1_CORNER, [4128, 4128], square),
+                ("1:1", Z9_1X1, Z9_1X1_CORNER, [2752, 2752], square),
+                ("16:9", Z9_16X9, Z9_16X9_CORNER, [8256, 4640], wide),
+                ("16:9", Z9_16X9, Z9_16X9_CORNER, [6192, 3480], wide),
+                ("16:9", Z9_16X9, Z9_16X9_CORNER, [4128, 2320], wide),
+            ] {
+                assert_eq!(
+                    jpeg_focus(order, in_a_jpeg(crop), recorded, pixels),
+                    Some(focus),
+                    "{order:?}, {what}, {pixels:?}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn a_jpegs_window_rounds_to_the_nearest_pixel_a_half_rounding_up() {
+        // A 16:9 crop, which keeps the frame's 8256 width. On a JPEG of
+        // 1000 by 563, the window is 8256 x 563 / 1000 = 4648.128 high,
+        // 4648 to the nearest pixel, whose origin is (5504 - 4648) / 2 =
+        // 428; on one of 128 by 71, it is 8256 x 71 / 128 = 4579.5, a half,
+        // 4580, whose origin is (5504 - 4580) / 2 = 462. The recorded y,
+        // 715, moves back by the origin.
+        for order in ORDERS {
+            for (pixels, focus) in [
+                (
+                    [1000, 563],
+                    focus_at([8256, 4648], [502, 287], [291, 323], Some(true)),
+                ),
+                (
+                    [128, 71],
+                    focus_at([8256, 4580], [502, 253], [291, 323], Some(true)),
+                ),
+            ] {
+                assert_eq!(
+                    jpeg_focus(order, in_a_jpeg(Z9_16X9), Z9_16X9_CORNER, pixels),
+                    Some(focus),
+                    "{order:?}, {pixels:?}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn a_jpegs_window_longer_than_the_frame_gives_none() {
+        // A 16:9 crop on a 4:3 JPEG of 4128 by 3096: the window would be
+        // 8256 x 3096 / 4128 = 6192 high, more than the frame's 5504. A 1:1
+        // crop on a 16:9 JPEG of 1920 by 1080: it would be 5504 x 1920 /
+        // 1080, 9785 wide, more than the frame's 8256.
+        for order in ORDERS {
+            for (what, crop, recorded, pixels) in [
+                ("16:9 on 4:3", Z9_16X9, Z9_16X9_CORNER, [4128, 3096]),
+                ("1:1 on 16:9", Z9_1X1, Z9_1X1_CORNER, [1920, 1080]),
+            ] {
+                assert_eq!(
+                    jpeg_focus(order, in_a_jpeg(crop), recorded, pixels),
+                    None,
+                    "{order:?}, {what}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn a_jpeg_side_of_zero_gives_no_window() {
+        // The JPEG reader never passes a side of zero, since the claim
+        // refuses such a frame header, but the window divides by the
+        // JPEG's sides, so it refuses one itself rather than divide by
+        // zero.
+        let frame = Size {
+            width: 8256,
+            height: 5504,
+        };
+        for cut in [Cut::Width, Cut::Height] {
+            for (width, height) in [(0, 2752), (2752, 0), (0, 0)] {
+                assert_eq!(
+                    window_of_shape(frame, cut, Size { width, height }),
+                    None,
+                    "{cut:?}, {width} x {height}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn a_jpegs_crop_area_gives_no_image_size_and_no_point_on_a_crop() {
+        // A MakerNote copied from a raw file into an export holds the raw
+        // file's CropArea. A JPEG has no raw size to check it against: it
+        // never gives the image size, which stays the JPEG's own, and a
+        // crop gives no point, as in a raw file whose CropArea cannot be
+        // checked. A file that is no crop gives its point as recorded.
+        for order in ORDERS {
+            for (what, crop, recorded, pixels, focus) in [
+                ("DX", Z9_DX, Z9_DX_CORNER, [5392, 3592], None),
+                ("1:1", Z9_1X1, Z9_1X1_CORNER, [5504, 5504], None),
+                (
+                    "FX, an export cut to portrait",
+                    Z9_FX,
+                    Z9_FX_CORNER,
+                    [3648, 5472],
+                    Some(expected(Z9_FX_CORNER, Some(true))),
+                ),
+            ] {
+                let metadata = jpeg_metadata(order, order, crop, recorded, pixels);
+                let [width, height] = pixels;
+                assert_eq!(
+                    metadata.image_size,
+                    Some(Size { width, height }),
+                    "{order:?}, {what}"
+                );
+                assert_eq!(metadata.focus, focus, "{order:?}, {what}");
+            }
+        }
+    }
+
+    #[test]
+    fn a_crop_hi_speed_that_fits_neither_shape_gives_none_in_a_jpeg_only() {
+        // A cropped width one pixel larger than the original, and a
+        // cropped height smaller, with no CropArea: a JPEG has nothing to
+        // place the point on, while a raw file without a CropArea is read
+        // as recorded, whatever its CropHiSpeed says.
+        let neither = Crop {
+            raw: [8280, 5520],
+            crop_hi_speed: Some([2, 8280, 5520, 8281, 3608, 0, 0]),
+            crop_area: None,
+        };
+        for order in ORDERS {
+            assert_eq!(
+                jpeg_focus(order, neither, Z9_FX_CORNER, [8256, 5504]),
+                None,
+                "{order:?}, JPEG"
+            );
+            assert_eq!(
+                crop_focus(order, neither, "0400", Z9_FX_CORNER),
+                Some(expected(Z9_FX_CORNER, Some(true))),
+                "{order:?}, raw"
+            );
+        }
+    }
+
+    #[test]
+    fn a_jpeg_that_is_no_crop_gives_the_point_as_recorded() {
+        // The Z 9's FX JPEG: CropHiSpeed's two sizes equal, no CropArea.
+        for order in ORDERS {
+            assert_eq!(
+                jpeg_focus(order, in_a_jpeg(Z9_FX), Z9_FX_CORNER, [8256, 5504]),
+                Some(expected(Z9_FX_CORNER, Some(true))),
+                "{order:?}"
+            );
+        }
+    }
+
     #[test]
     fn a_reader_failure_is_an_error() {
         // The block far away, so that reading its signature fails; and
@@ -4128,7 +4556,8 @@ mod tests {
             .unwrap()
             .expect("a MakerNote");
         let standard = tiff_metadata::read(&mut src, &tree).unwrap();
-        let err = metadata(&mut src, &makernote, standard).expect_err("the read fails");
+        let err =
+            metadata(&mut src, &makernote, standard, Picture::Raw).expect_err("the read fails");
         assert_eq!(err.kind(), ErrorKind::Io, "{err:?}");
     }
 }

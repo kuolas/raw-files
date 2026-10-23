@@ -33,13 +33,9 @@ use super::{FormatSpec, Parsed, is_dng, make_starts_with, tiff_metadata};
 use crate::container::tiff::Tree;
 use crate::error::Result;
 use crate::format::Format;
-use crate::formats::makernote::nikon;
+use crate::formats::makernote::nikon::{self, NIKON, Picture};
 use crate::io::Source;
 use crate::limits::Limits;
-
-/// The manufacturer's name that a Nikon camera's Make starts with,
-/// compared without regard to case.
-const NIKON: &[u8; 5] = b"NIKON";
 
 /// The NEF format's entry in the TIFF container's list of formats.
 pub(crate) fn spec<R: Read + Seek>() -> FormatSpec<R, Tree> {
@@ -88,7 +84,8 @@ fn claims<R: Read + Seek>(src: &mut Source<R>, tree: &Tree) -> Result<bool> {
 /// and the Z 6, and the capture time's offset from UTC, from its WorldTime,
 /// when the standard tags gave a capture time without one, as on bodies
 /// before the D850; and it gives the focus point, from its AFInfo2, which
-/// no standard tag records ([`nikon::metadata`]).
+/// no standard tag records, placed on CropArea on a crop, as on a raw
+/// file's picture ([`Picture::Raw`], [`nikon::metadata`]).
 ///
 /// # Errors
 ///
@@ -100,7 +97,7 @@ fn parse<R: Read + Seek>(src: &mut Source<R>, tree: &Tree, limits: &Limits) -> R
     let previews = previews::previews(src, tree, makernote.as_ref(), limits)?;
     let standard = tiff_metadata::read(src, tree)?;
     let metadata = match &makernote {
-        Some(makernote) => nikon::metadata(src, makernote, standard)?,
+        Some(makernote) => nikon::metadata(src, makernote, standard, Picture::Raw)?,
         None => standard.metadata,
     };
     Ok(Parsed { previews, metadata })

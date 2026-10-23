@@ -26,11 +26,17 @@
 //! one with zeros after its end, one whose Exif segment holds IFD0 and
 //! IFD1's thumbnail, a camera's, whose Exif segment holds every value the
 //! metadata reads and whose MPF index lists two images after its main
-//! one, and a camera's with a JFIF segment first, whose Exif segment holds
-//! only IFD0's orientation and IFD1's thumbnail, those with a TIFF
-//! structure or an MPF index in both byte orders. They cut each file at
-//! every length, and overwrite each byte in turn with 0x00, 0xFF and its
-//! complement.
+//! one, a camera's with a JFIF segment first, whose Exif segment holds
+//! only IFD0's orientation and IFD1's thumbnail, and four Nikon cameras'
+//! JPEGs, whose Exif segment holds a Nikon MakerNote: a Z 9's, whose
+//! MakerNote records its focus point, one of a Z 9's on a 1:1 crop, whose
+//! point is placed on the JPEG's pixels, a D5300's, whose MakerNote
+//! records the serial number, the lens's range and the clock's time zone
+//! that its Exif segment lacks, and a D70's, whose MakerNote, in the other
+//! byte order from its Exif segment's, records the ISO and holds a preview;
+//! those with a TIFF structure or an MPF index in both byte orders. They
+//! cut each file at every length, and overwrite each byte in turn with
+//! 0x00, 0xFF and its complement.
 //!
 //! Each damaged file is opened as a caller would open it, with
 //! [`RawFile::from_bytes`], which reads through the same source and block
@@ -70,7 +76,8 @@ use raw_files::{Focus, Metadata, Rational, RawFile, SignedRational, Size};
 use support::arw::{ARW4_FULL_SIZE_JPEG, arw4_file, stub};
 use support::fixtures::{Z9_1X1, Z9_DX, read_fixture};
 use support::jpeg_files::{
-    camera_jpeg, camera_jpeg_with_metadata, exif_jpeg, padded_jpeg, plain_jpeg,
+    MAIN, Z9Mode, camera_jpeg, camera_jpeg_with_metadata, d70_jpeg, d5300_jpeg, exif_jpeg,
+    padded_jpeg, plain_jpeg, z9_jpeg,
 };
 use support::nef::{d300_file, z6iii_file, z9_file, z9_file_with};
 use support::tiff_builder::Order;
@@ -97,9 +104,10 @@ struct Fixture {
 /// files stripped from the maintainer's own Z 9 shots in DX and 1:1 crop
 /// modes, as they are committed; and the JPEG files: without Exif, with
 /// zeros after its end, and, in both byte orders, with an Exif segment, a
-/// camera's with every value the metadata reads, and a camera's with a
-/// JFIF segment first, whose Exif segment holds only the orientation and
-/// the thumbnail.
+/// camera's with every value the metadata reads, a camera's with a JFIF
+/// segment first, whose Exif segment holds only the orientation and the
+/// thumbnail, and the Nikon JPEGs of a Z 9 in FX and on a 1:1 crop, of a
+/// D5300 and of a D70.
 fn fixtures() -> Vec<Fixture> {
     let mut fixtures = Vec::new();
     for order in ORDERS {
@@ -189,6 +197,24 @@ fn fixtures() -> Vec<Fixture> {
             (
                 format!("camera JPEG, JFIF first, {order:?}"),
                 camera_jpeg(order, true).0.bytes,
+            ),
+            (
+                format!("Z 9 JPEG, {order:?}"),
+                z9_jpeg(order, order, Z9Mode::Fx, MAIN, false).built.bytes,
+            ),
+            (
+                format!("Z 9 JPEG, 1:1, {order:?}"),
+                z9_jpeg(order, order, Z9Mode::Square, (2752, 2752), false)
+                    .built
+                    .bytes,
+            ),
+            (
+                format!("D5300 JPEG, {order:?}"),
+                d5300_jpeg(order).built.bytes,
+            ),
+            (
+                format!("D70 JPEG, {order:?}"),
+                d70_jpeg(order, false).0.built.bytes,
             ),
         ]);
     }
