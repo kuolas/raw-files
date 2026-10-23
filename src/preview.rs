@@ -9,8 +9,10 @@ use std::ops::Range;
 
 use crate::{Orientation, Size};
 
-/// One preview a camera wrote into the file: where its bytes are,
-/// its measured size, its format and the orientation a viewer must apply.
+/// One preview the file holds, an image of the picture that a camera or an
+/// editor wrote into it, or the file itself when it is a JPEG: where its
+/// bytes are, its measured size, its format and the orientation a viewer
+/// must apply.
 ///
 /// A `Preview` describes the image; it does not hold its bytes. It is a
 /// small `Copy` value, so a caller copies the one it wants out of the file
@@ -127,7 +129,7 @@ impl Preview {
 /// How a preview's bytes are encoded.
 ///
 /// `PreviewFormat` is `#[non_exhaustive]`: other encodings may be added as
-/// more RAW formats are supported, so a `match` on it needs a wildcard arm.
+/// more formats are supported, so a `match` on it needs a wildcard arm.
 /// It orders as its variants are listed, and a new variant is added after
 /// the existing ones, so an order once observed holds.
 ///

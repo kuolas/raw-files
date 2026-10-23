@@ -46,19 +46,23 @@ pub enum Format {
     Arw,
     /// JPEG: a JPEG file as a camera writes it beside its raw files or
     /// instead of them, or as an editor exports it. It holds no raw data.
+    ///
     /// Its previews are the file itself and the smaller images it carries:
     /// the thumbnail of its Exif segment, the images its Multi-Picture
     /// Format (MPF) list holds after the main one, and, from a Nikon
     /// camera that writes one, such as the D70, the small preview of its
-    /// MakerNote. Its metadata is what its
-    /// Exif segment records, read as in a raw file: the camera, its serial
-    /// number, the capture time, the exposure, the lens and the
-    /// orientation; from a Nikon camera, also what its MakerNote records
-    /// where the Exif segment records nothing, as in a NEF, and the focus
-    /// point, placed on the picture on a crop mode; from a Sony camera, the
-    /// focus point its MakerNote records, as in an ARW. A focus point is
-    /// given only when its frame has the picture's shape. Its image size is
-    /// the size of the picture, and it has no raw size.
+    /// MakerNote.
+    ///
+    /// Its metadata is what its Exif segment records, read as in a raw
+    /// file: the camera, its serial number, the capture time, the
+    /// exposure, the lens and the orientation; from a Nikon camera, also
+    /// what its MakerNote records where the Exif segment records nothing,
+    /// as in a NEF. Its image size is the size of the picture, and it has
+    /// no raw size.
+    ///
+    /// Its focus point comes from the MakerNote of a Nikon camera, placed
+    /// on the picture on a crop mode, or of a Sony camera, as in an ARW. It
+    /// is given only when its frame has the picture's shape.
     Jpeg,
 }
 

@@ -169,7 +169,10 @@
 //!   when it is read) fails with
 //!   [`LimitExceeded`](ErrorKind::LimitExceeded). A directory past the first
 //!   that crosses a cap, or one nested deeper than allowed, is left out as a
-//!   damaged one is, so the file still opens with what was reachable.
+//!   damaged one is, so the file still opens with what was reachable. In a
+//!   JPEG file, a cap crossed inside its Exif or MPF segment, the first
+//!   directory's size included, costs what that segment holds, not the
+//!   file.
 //! - The format comes from the file's content, never from its name. A
 //!   renamed file opens as what it is, and a DNG is refused the same way
 //!   even when its Make names Nikon or Sony. [`Format::from_extension`]
