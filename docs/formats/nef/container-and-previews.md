@@ -31,7 +31,7 @@ Numbers in square brackets such as [3] refer to [Sources](#sources).
 **Only the Z 9 has been checked against sample files here.** The facts
 tagged **[F]** were measured on files 5146 to 5148, the three CC0 Z 9 files
 (lossless, HE\* and HE); every other body rests on the sources alone on
-this page. The previews of 30 more files, of 24 other bodies, are checked
+this page. The previews of 32 more files, of 25 other bodies, are checked
 by the tests, and [test-data.md](test-data.md#21-the-ci-set) lists them;
 they are not yet written up here. Where
 a sample contradicts a source, this page follows the sample and records the
@@ -268,12 +268,19 @@ any process, not just baseline (section 7).
 
 ## 5. Generational quirks
 
-- **D1, D1H, D1X.** Uncompressed raw; the D1X stores 4024x1324 and each
-  stored row covers two output rows (pixel aspect 0.5 in dcraw and LibRaw),
-  so double the height, or halve the width, to get square pixels and a
-  roughly 3:2 image (see [raw-data.md](raw-data.md)). The D1 MakerNote is big-endian and headerless. Their
-  preview locations beyond Clévy's notes (section 4) are not sourced.
-  [14] [8] **[S]/[P]**
+- **D1, D1H, D1X.** Uncompressed raw, say the sources; the D1X stores
+  4024x1324 and each stored row covers two output rows (pixel aspect 0.5
+  in dcraw and LibRaw), so double the height, or halve the width, to get
+  square pixels and a roughly 3:2 image (see [raw-data.md](raw-data.md)).
+  Their preview locations beyond Clévy's notes (section 4) are not
+  sourced. [14] [8] **[S]/[P]** The files differ from the sources in two
+  ways. Files 1785 and 1786 store 4028x1324, not 4024x1324; this page
+  follows the files. And "uncompressed" holds for the D1H file and file
+  1786 but not for the whole family: file 1785's raw is compressed
+  (Compression 34713, NEFCompression 1, lossy type 1). **[F]** The D1X's
+  MakerNote is headerless and big-endian, like the file (files 1785 and
+  1786), as the D1's is (file 201, which is not in the CI set: its licence
+  is CC BY-NC-SA 4.0). **[F]**
 - **D100.** Its raw data may be uncompressed even though the TIFF
   Compression says compressed. [1] **[P]** Do not use Compression to classify
   the raw IFD; use the JPEG signature to recognise previews.
@@ -354,7 +361,7 @@ Rank by what is measured in the JPEG itself, never by slot, tag dimensions
 (often absent or zero) or tag-claimed type. raw-files implements these
 steps in its preview finder, shared with ARW, and its tests run it on files
 5146 to 5148, which give the four JPEGs of section 4 in size order. **[F]**
-They also run it on the 30 files of 24 other bodies listed in
+They also run it on the 32 files of 25 other bodies listed in
 [test-data.md](test-data.md#21-the-ci-set), which give the previews listed
 there. **[F]**
 
@@ -467,7 +474,7 @@ invalid) and leave the decision to the caller.
 ## Open questions
 
 Each needs sample files from the public raw.pixls.us collection, inspected
-with a dump tool and byte-by-byte reading. The 30 files of 24 other bodies
+with a dump tool and byte-by-byte reading. The 32 files of 25 other bodies
 in [test-data.md](test-data.md#21-the-ci-set) answer item 12 and part of
 items 1 to 4 and 6 to 9; [open-questions.md](open-questions.md) records
 what they show.
@@ -481,6 +488,10 @@ what they show.
 3. Where the D1, D1H, D1X and E-series bodies keep their JPEG (the
    PreviewIFD, and its size). Answered for the D1H: its only JPEG, of
    570x375, is in the PreviewIFD of its headerless MakerNote (file 5364).
+   Also for the D1X: the MakerNote's 570x375 is its only JPEG (files 1785
+   and 1786). And for the D1 (file 201, not in the CI set): it has no
+   PreviewIFD and no JPEG at all, only IFD0's 160x120 uncompressed strip,
+   so a D1 file gives no preview.
 4. Whether any body embeds a progressive or non-baseline JPEG, or unusual
    chroma subsampling. The Z 9's four JPEGs are baseline; their subsampling
    was not read.

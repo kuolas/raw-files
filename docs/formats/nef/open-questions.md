@@ -68,7 +68,7 @@ and test-data.md describes the sample set that would answer Part 2.
 - **Largest preview per body.** The dimensions and count of embedded JPEGs on
   the D3, D6 and the Z bodies not yet checked, such as the Z 7 and Z 8.
   The Z 9 is answered: four JPEGs of 160×120, 640×424, 1620×1080 and
-  8256×5504 (files 5146 to 5148). So are the 24 bodies of the other 30 files
+  8256×5504 (files 5146 to 5148). So are the 25 bodies of the other 32 files
   of the CI set, the D300, D700, D850, D5, Z 6 and Z f among them; the Z f's
   second JPEG is 1620×1080, not the 1616×1080 reported (file 6887). Each
   file's JPEGs are listed in
@@ -76,15 +76,19 @@ and test-data.md describes the sample set that would answer Part 2.
   ([container-and-previews.md](container-and-previews.md)).
 - **JPEG encoding.** Whether any body embeds a progressive JPEG, or one with
   unusual chroma subsampling. The Z 9's four are baseline (files 5146 to
-  5148), and so is every JPEG of the other 30 files of the CI set; their
+  5148), and so is every JPEG of the other 32 files of the CI set; their
   subsampling was not read.
-- **Early bodies.** Where the D1 keeps its previews, and how large the
-  MakerNote preview is on the D1X. The D1H is answered: its only JPEG is a
-  570×375 preview (24,567 bytes at offset 3688) in the PreviewIFD of its
+- **Early bodies.** The D1H is answered: its only JPEG is a 570×375
+  preview (24,567 bytes at offset 3688) in the PreviewIFD of its
   headerless MakerNote, which raw-files reads, so the file opens with that
   preview, and with the ISO and the lens range the MakerNote records
-  (file 5364) **[F]**. The D100's MakerNote preview, its only JPEG, is
-  570×375 (file 2996).
+  (file 5364) **[F]**. So is the D1X: its MakerNote preview, its only
+  JPEG, is 570×375, 27,540 bytes at offset 4,878 on file 1785 and 26,984
+  bytes at 3,688 on file 1786, and both files were read **[F]**. The D1
+  (file 201, not in the CI set) has no PreviewIFD and no JPEG at all: its
+  only image besides the raw is the 160×120 uncompressed strip of IFD0,
+  so it opens with no preview **[F]**. The D100's MakerNote preview, its
+  only JPEG, is 570×375 (file 2996).
 - **Coolscan NEF.** The exact structure of a scanner NEF, and which IFD holds
   NikonScanIFD (0x0E10).
 - **NikonNEFInfo.** Which IFD hosts tag 0xC7D5 (NikonNEFInfo) across bodies.
@@ -104,18 +108,18 @@ and test-data.md describes the sample set that would answer Part 2.
   settle its offset base and its byte order.
 - **Multi-strip previews.** Whether any SubIFD JPEG is stored in several
   strips. On the Z 9 every JPEG is in one piece, through 0x0201/0x0202 (files
-  5146 to 5148), and so is every JPEG of the other 30 files of the CI set;
+  5146 to 5148), and so is every JPEG of the other 32 files of the CI set;
   other bodies are open
   ([container-and-previews.md](container-and-previews.md)).
 - **Truncation and padding.** How common truncated JPEGs or padding after the
   end-of-image marker are in real files. The Z 9 has neither: each JPEG ends
   with the end-of-image marker exactly at its declared length (files 5146 to
-  5148), as does every JPEG of the other 30 files of the CI set; other
+  5148), as does every JPEG of the other 32 files of the CI set; other
   bodies are open
   ([container-and-previews.md](container-and-previews.md)).
 - **Preview Exif.** Whether a SubIFD or PreviewIFD JPEG ever carries its own
   Exif APP1 with an Orientation. Not on the Z 9, whose JPEGs have no APP
-  segment at all (files 5146 to 5148), nor on the other 30 files of the CI
+  segment at all (files 5146 to 5148), nor on the other 32 files of the CI
   set, whose JPEGs have none before their frame header; other bodies are
   open
   ([container-and-previews.md](container-and-previews.md)).

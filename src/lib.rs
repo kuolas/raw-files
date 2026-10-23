@@ -154,7 +154,7 @@
 //! of the Sony-built Hasselblad bodies. Version 0.3.0 reads the embedded
 //! previews, the metadata and the focus point of these files, not their raw
 //! data. All three are checked on the public-domain (CC0) sample files of
-//! [raw.pixls.us](https://raw.pixls.us/): 33 Nikon files, from the D1H to
+//! [raw.pixls.us](https://raw.pixls.us/): 35 Nikon files, from the D1H to
 //! the Z5II, and 36 Sony-family files, from the DSC-F828 to the ILCE-7M5.
 //!
 //! Nikon mirrorless bodies, Nikon DSLRs in live view and Sony bodies from
