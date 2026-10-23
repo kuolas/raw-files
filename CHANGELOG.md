@@ -52,6 +52,11 @@ does.
   A program that took every file whose extension `from_extension` knows
   for a raw file now takes JPEGs too, and should ask `Format::is_raw` as
   well.
+- Opening a JPEG file (`RawFile::open`, `from_bytes` and `from_reader`,
+  and the same on `Options`) succeeds, as `Format::Jpeg`, where 0.3.0
+  returned the `UnknownFormat` error. A program that took every file that
+  opens for a raw file, or that matched `format()` assuming NEF or ARW,
+  should ask `Format::is_raw`.
 
 ## [0.3.0] - 2026-10-21
 

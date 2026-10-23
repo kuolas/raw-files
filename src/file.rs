@@ -193,8 +193,8 @@ impl<R: Read + Seek> RawFile<R> {
     ///
     /// A RAW file's are the JPEG images the camera embedded in it. A JPEG
     /// file's are the smaller images it carries and the file itself, its
-    /// whole byte range, which is then the largest: reading it reads the
-    /// whole file, under [`Limits::max_preview_bytes`].
+    /// whole byte range, which on the camera files checked is the largest:
+    /// reading it reads the whole file, under [`Limits::max_preview_bytes`].
     ///
     /// Empty when the file holds no preview the library can show. The sizes
     /// are measured from each preview's own data, not taken from the tags

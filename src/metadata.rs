@@ -234,16 +234,17 @@ impl Metadata {
     /// the camera's own record only, never an estimate from the picture.
     ///
     /// It is read on Nikon files, from the MakerNote's AFInfo2 block, as the
-    /// camera recorded it. The exception is a Nikon crop, any that
-    /// CropHiSpeed records with a CropArea: there the point is placed inside
-    /// the cropped picture, by the sides the crop cuts, as the
+    /// camera recorded it. The exception, on a raw file, is a Nikon crop,
+    /// any that CropHiSpeed records with a CropArea: there the point is
+    /// placed inside the cropped picture, by the sides the crop cuts, as the
     /// [NEF format notes](https://github.com/kuolas/raw-files/blob/master/docs/formats/nef/makernote-and-metadata.md)
-    /// describe. DX, 1:1 and 16:9 are the checked cases. It is `None` on a Nikon file that records no position,
-    /// such as a DSLR shot through the viewfinder, which records only an
-    /// autofocus point's number, and on a manual-focus shot. It is `None`
-    /// too when the AFInfo2 version is one raw-files does not know, and on
-    /// a crop whose point cannot be placed on the cropped picture: a 1:1 or
-    /// 16:9 crop on a small raw, or a crop whose CropArea cannot be used.
+    /// describe. DX, 1:1 and 16:9 are the checked cases. It is `None` on a
+    /// Nikon file that records no position, such as a DSLR shot through the
+    /// viewfinder, which records only an autofocus point's number, and on a
+    /// manual-focus shot. It is `None` too when the AFInfo2 version is one
+    /// raw-files does not know, and on a crop whose point cannot be placed
+    /// on the cropped picture: a 1:1 or 16:9 crop on a small raw, or a crop
+    /// whose CropArea cannot be used.
     ///
     /// On Sony files it is read from the MakerNote's FocusLocation, on the
     /// bodies from the ILCE-7RM2 on, as the camera recorded it and as the
@@ -258,6 +259,14 @@ impl Metadata {
     /// no plain tag. The area's size is read from the MakerNote's
     /// FocusFrameSize, which the bodies record only from the ILCE-7SM3 on,
     /// so on the bodies before it [`size`](Focus::size) is `None`.
+    ///
+    /// A [`Format::Jpeg`](crate::Format::Jpeg) file of a Nikon or a Sony
+    /// camera gives the point as its raw file would. A Nikon crop-mode JPEG
+    /// (DX, 1:1 or 16:9), which has no CropArea, has its point placed on the
+    /// JPEG's own picture. A JPEG's point is given only when its frame has
+    /// the picture's shape, so an export cut to another shape, or turned
+    /// upright, gives `None`; the exception is an export cut from a Nikon
+    /// crop-mode JPEG, whose point may be misplaced.
     ///
     /// # Examples
     ///
@@ -870,6 +879,10 @@ impl LensBuilder {
 /// `None`. The area's size is read from the MakerNote's FocusFrameSize,
 /// which the bodies record only from the ILCE-7SM3 on, so on the bodies
 /// before it [`size`](Self::size) is `None`.
+///
+/// The JPEG files ([`Format::Jpeg`](crate::Format::Jpeg)) of those cameras
+/// record one too, given under the shape rule that [`Metadata::focus`]
+/// states.
 ///
 /// # Equality
 ///

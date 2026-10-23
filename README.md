@@ -222,7 +222,8 @@ Any other file, a DNG among them whatever its Make says, is refused with the
   values in it. A JPEG whose Exif segment cannot be read still opens.
 - `Limits` keeps an untrusted file from making the library allocate or walk
   without bound: a cap the reader cannot go on without is an error; past the
-  first directory a cap leaves a directory out.
+  first directory a cap leaves a directory out. In a JPEG file, a cap crossed
+  inside its Exif or MPF segment costs what that segment holds, not the file.
 - The format comes from the file's content, never from its name.
 - Opening reads the structure and each preview's frame header through a block
   cache, not the whole file; a preview's bytes are read only when asked for.
