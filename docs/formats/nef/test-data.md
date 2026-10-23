@@ -153,7 +153,9 @@ there on 2026-10-20.
 
 The checks walked each file's IFDs, Exif IFD and MakerNote IFD with a
 throwaway, bounds-checked script written from these pages, and read the
-tags' values; no other program's output was used.
+tags' values; no other program's output was used for them. The camera
+settings were checked later, with ExifTool's output for comparison
+([section 2.4](#24-files-checked-for-the-camera-settings)).
 
 The tests in `tests/nef.rs` check every metadata value the reader gives,
 the focus point among them, for each of the 35 NEF files of section 2.1
@@ -274,6 +276,61 @@ Frames 9908 (DX) and 9909 (1:1) are committed as
 stripped as [their README](../../../tests/fixtures/README.md) says, so
 that CI checks both rules, the scaling and the window, on real camera
 bytes.
+
+### 2.4 Files checked for the camera settings
+
+The camera-settings facts tagged **[F]** in
+[makernote-and-metadata.md](makernote-and-metadata.md#87-camera-settings)
+were measured on 2026-10-23 on the 35 NEF files of section 2.1 and on
+the D70 and D5300 JPEGs of the
+[JPEG test data](../jpeg/test-data.md#2-the-sample-files), with a
+bounds-checked script written from these pages that read each tag's
+type, count and value. ExifTool 13.55 was run on the same files as an
+independent reader to compare with, and read the same values; nothing
+of it is in the repository, the tests or CI.
+
+Which files record each setting; the values are in
+[makernote-and-metadata.md](makernote-and-metadata.md#87-camera-settings):
+
+| Setting | Tag | Files that record it | Files without it |
+|---|---|---|---|
+| Exposure program | Exif 0x8822 | all 35 and both JPEGs; 0 ("not defined") on 7735, 7736, 7808 to 7810, 7812, 7813 and the D5300 JPEG | none |
+| Metering mode | Exif 0x9207 | all 35 and both JPEGs | none |
+| Flash | Exif 0x9209 | 32 and both JPEGs | 1785, 1786, 5364 |
+| White balance | MakerNote 0x0005 | all 35 and both JPEGs | none |
+| White balance | Exif 0xA403 and 0x9208 | 31 and both JPEGs | 1785, 1786, 4456, 5364 |
+| Colour temperature | MakerNote 0x004F | 1835, 2218, 3587, 3827, 5146 to 5148, 5812, 6887, 7735, 7736, 7767, 7770, 7808 to 7810, 7812, 7813, 8559; 0 on 1835 and 8559 | the 16 others and both JPEGs |
+| Fine-tuning | MakerNote 0x003F | 895, 1415, 1835, 2036, 2218, 3587, 3827, 5146 to 5148, 5812, 6887, 7735, 7736, 7767, 7770, 7808 to 7810, 7812, 7813, 8559 | the 13 others and both JPEGs |
+| Fine-tuning | MakerNote 0x000B | 21 and both JPEGs | 4456, 5146 to 5148, 6887, 7735, 7736, 7767, 7770, 7808 to 7810, 7812, 7813 |
+| Shutter | MakerNote 0x0034 | 1835, 2956, 3587, 3827, 5146 to 5148, 5812, 6887, 7735, 7736, 7767, 7770, 7808 to 7810, 7812, 7813, 8559 | the 16 others and both JPEGs |
+| Image area | MakerNote 0x001B | 28 and the D5300 JPEG; 0 ("off") on 928, 961, 2238, 2255, 2956, 8079 and the D5300 JPEG | 1425, 1785, 1786, 2060, 2996, 4456, 5364 and the D70 JPEG |
+| Raw image size | MakerNote 0x003E | 895, 1415, 1835, 2036, 2218, 3587, 3827, 5146 to 5148, 5812, 6887, 7735, 7736, 7767, 7770, 7808 to 7810, 7812, 7813, 8559 | the 13 others and both JPEGs |
+| Colour space | Exif 0xA001 | both JPEGs | all 35 |
+| Colour space | MakerNote 0x001E | 28 and the D5300 JPEG | 1425, 1785, 1786, 2060, 2996, 4456, 5364 and the D70 JPEG |
+| Focal length in 35 mm terms | Exif 0xA405 | 31 and both JPEGs | 1785, 1786, 4456, 5364 |
+| Software | IFD0 0x0131 | all 35 and both JPEGs | none |
+
+The maintainer's own files, which stay private, were read on 2026-10-24
+with the same script, and only counts and the distributions of values
+were kept: no file name, date or single file's values. They are the
+raw files and the camera JPEGs of six Nikon DSLRs, and the JPEGs that
+a program later rewrote:
+
+| Body | NEF | Camera JPEG | Rewritten JPEG |
+|---|---|---|---|
+| D300s | 647 | 1,033 | 0 |
+| D3200 | 3,582 | 6,454 | 415 |
+| D3300 | 0 | 659 | 0 |
+| D600 | 1,374 | 0 | 0 |
+| D7100 | 407 | 2,699 | 8 |
+| D7200 | 6,277 | 4,816 | 2 |
+
+A camera JPEG is one whose Software is the camera's firmware and that
+holds a Nikon MakerNote. Not counted: four files that could not be read
+over the network, and 679 D7100 JPEGs with no Exif segment. The script
+found no Nikon MakerNote in 14 of the D3200's NEF files and seven of
+the D7100's. What these files show is in
+[makernote-and-metadata.md](makernote-and-metadata.md#87-camera-settings).
 
 ## 3. What raw.pixls.us holds for Nikon
 
