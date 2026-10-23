@@ -1,17 +1,17 @@
 [package]
 name = "raw-files"
-version = "0.3.0"
+version = "0.4.0"
 authors = ["Alvaro Kuolas <kuolas@gmail.com>"]
 edition = "2024"
 rust-version = "1.95"
-description = "Pure-Rust camera RAW library: extracts the embedded JPEG previews and reads the metadata and the focus point of Nikon NEF and Sony ARW files, with fuller RAW decoding planned"
+description = "Pure-Rust camera RAW library: reads the previews, metadata and focus point of Nikon NEF and Sony ARW files and of camera JPEGs, with fuller RAW decoding planned"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/kuolas/raw-files"
 # Where the API documentation is read; docs.rs builds it from each release.
 # No `homepage`: the repository is the project's home page.
 documentation = "https://docs.rs/raw-files"
 readme = "README.md"
-keywords = ["raw", "nef", "arw", "camera", "photography"]
+keywords = ["raw", "nef", "arw", "exif", "photography"]
 categories = ["multimedia::images", "parser-implementations"]
 # What a crates.io package holds: the code, what the license requires and
 # what docs.rs shows. Repository tooling and contributor docs stay in git.

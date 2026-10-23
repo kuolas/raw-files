@@ -10,6 +10,15 @@ does.
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-10-23
+
+The fourth release: JPEG files, as cameras and editors write them, open as
+a format of their own, with their previews, their Exif metadata and, from
+Nikon and Sony cameras, the focus point; `Format::is_raw` tells raw formats
+from the others; the headerless MakerNote of the Nikon D1 family is read.
+Nothing in 0.3.0's API was removed or changed in signature, though opening
+a JPEG now succeeds (see Changed).
+
 ### Added
 
 - JPEG files open, as `Format::Jpeg`: the pictures a camera writes beside
@@ -163,7 +172,8 @@ files.
 - A DNG is of no known format, whatever camera maker its Make names:
   converters and the phones that write DNG keep the maker's name.
 
-[Unreleased]: https://github.com/kuolas/raw-files/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/kuolas/raw-files/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/kuolas/raw-files/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/kuolas/raw-files/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/kuolas/raw-files/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/kuolas/raw-files/releases/tag/v0.1.0
