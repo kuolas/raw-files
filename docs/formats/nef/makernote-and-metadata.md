@@ -33,7 +33,12 @@ Nikon's camera JPEGs carry the same MakerNote, in their Exif segment. What
 the two Nikon JPEGs of the [JPEG test data](../jpeg/test-data.md#2-the-sample-files)
 show, a D5300's and a D70's from Wikimedia Commons, cited as "the D5300
 JPEG", is in [section 1](#in-a-jpeg-file) and
-[section 8.6](#86-focus-point); how raw-files reads a JPEG is decided in
+[section 8.6](#86-focus-point). The two older layouts were checked by
+hand on JPEGs of early Coolpix bodies from Wikimedia Commons, cited by
+their Commons file name, listed in the
+[JPEG test data](../jpeg/test-data.md#6-early-coolpix-files-checked-by-hand)
+and described in [section 1](#in-a-jpeg-file) too. How raw-files reads
+a JPEG is decided in
 [ADR014](../../architecture-decisions/adr014-jpeg-files-as-a-format-of-their-own.md)
 and described in the [JPEG notes](../jpeg/README.md).
 
@@ -70,8 +75,8 @@ detect them by bytes, never by a "type" number. [P][5][6][12]
 
 | Layout | Header | IFD starts at | Offsets relative to | Byte order | Bodies |
 |---|---|---|---|---|---|
-| Headerless | none | MakerNote + 0 | the outer TIFF header | the outer file's (the D1 is big-endian) | confirmed on the D1H and the D1X (files 5364, 1785 and 1786) and on the D1 (file 201, not in the CI set), big-endian, file and MakerNote alike **[F]**; the Coolpix E990 rests on documentation [P]; the E-series Coolpix files of raw.pixls.us, the E5400, E5700, E8400 and E8800 (files 212, 4456, 2082 and 2769), write the embedded-TIFF layout instead **[F]** |
-| Short header | `Nikon\0` `01 00` (8 bytes) | MakerNote + 8 | the outer TIFF header | exiv2 uses the outer order; ExifTool says little-endian | E700 to E950 |
+| Headerless | none | MakerNote + 0 | the outer TIFF header | the outer file's (the D1 is big-endian) | confirmed on the D1H and the D1X (files 5364, 1785 and 1786) and on the D1 (file 201, not in the CI set), big-endian, file and MakerNote alike **[F]**; in camera JPEGs of the Coolpix E990, E995 and E880, and of the E885, E2500 and E5000 on their earlier firmware, little-endian, Exif segment and MakerNote alike ([In a JPEG file](#in-a-jpeg-file)) **[F]**; the E-series Coolpix files of raw.pixls.us, the E5400, E5700, E8400 and E8800 (files 212, 4456, 2082 and 2769), write the embedded-TIFF layout instead **[F]** |
+| Short header | `Nikon\0` `01 00` (8 bytes) | MakerNote + 8 | the outer TIFF header | exiv2 uses the outer order; ExifTool says little-endian; the files are little-endian, and so is their outer order, so they do not tell which is right **[F]** | in camera JPEGs of the Coolpix E700, E800, E900 and E950 ([In a JPEG file](#in-a-jpeg-file)) **[F]** |
 | Embedded TIFF header | `Nikon\0`, version `02 00`, `02 10` or `02 11`, `00 00`, then a TIFF header (`II*\0` or `MM\0*` and a 4-byte offset) (18 bytes) | MakerNote + 10 + the inner IFD offset (normally 8, so + 18) | MakerNote + 10, the inner TIFF header | the inner header's, independent of the file's | D70, D100, D200 and later DSLRs, every Z body; every checked file but the D1H's and the D1X's: `02 00` on the D100 and the Coolpix E5700 and P7800, `02 10` from the D70 to the D7000 and on the Nikon 1 J1, `02 11` on the Coolpix A (2013) and on every body from the D810 (2014) on **[F]** |
 
 Sources: [5][6][4][7]. The D1 byte-order remark is from ExifTool. [P]
@@ -133,7 +138,16 @@ whose first two bytes are its count of entries.
 - The D200's MakerNote IFD has no next-IFD pointer; do not require one. [P][5]
 - Offsets in the headerless and short-header layouts are relative to the
   outer TIFF header, so anything that moves the MakerNote breaks them. The
-  embedded layout survives being moved as a block. [P][5]
+  embedded layout survives being moved as a block. [P][5] Early Coolpix
+  JPEGs confirm the base for both layouts, and an E885 JPEG that an
+  editor turned upright shows the breakage: its headerless MakerNote
+  lies 342 bytes nearer the Exif segment's TIFF header than in the
+  camera's own E885 files, its offsets unchanged, so every value stored
+  out of line lies 342 bytes before the place its entry points at, and
+  the PreviewIFD pointer reaches no IFD (`Priere-mosquee-saint-denis.JPG`
+  on Wikimedia Commons, listed in the
+  [JPEG test data](../jpeg/test-data.md#6-early-coolpix-files-checked-by-hand)).
+  **[F]**
 - The D1H's headerless MakerNote is bytes 898 to 28,256 of the file
   (27,358 bytes): a big-endian IFD of 27 entries at its first byte, whose
   table ends at 1224, with a next-IFD pointer of 0. Its PreviewIFD
@@ -160,20 +174,69 @@ header.
   with 42 entries, inside a file whose own TIFF structure is
   little-endian, while the D70's NEF is big-endian (file 2060). **[F]**
   The inner byte order is independent of the file's in a JPEG too.
-- **The two older layouts** would count their offsets from the Exif
-  segment's TIFF header in a JPEG; no JPEG sample has one. [I] raw-files
-  reads the headerless layout in a JPEG as in a NEF, at the Exif
-  segment's TIFF header and in that structure's byte order, which no JPEG
-  file confirms; the short-header layout is not read in either.
 - **Every value read lies inside the Exif segment and the MakerNote's
-  declared length** on both files: the ISO (`[0, 400]` and `[0, 200]`),
-  the lens range, and on the D5300 AFInfo2 and CropHiSpeed. **[F]**
+  declared length** on the D5300 and D70 files: the ISO (`[0, 400]` and
+  `[0, 200]`), the lens range, and on the D5300 AFInfo2 and CropHiSpeed.
+  **[F]**
 - **The D70 JPEG's PreviewIFD holds a JPEG of 564x372**, inside the
   declared length, as the PreviewIFD of the D70's NEF does (file 2060);
   the D5300 JPEG has no PreviewIFD. raw-files offers the D70's as a
   preview of the JPEG, under the same in-block rule as in a NEF
   ([ADR014](../../architecture-decisions/adr014-jpeg-files-as-a-format-of-their-own.md)).
   **[F]**
+
+The two older layouts appear in the JPEGs of early Coolpix bodies.
+Camera-original JPEGs of eleven of them on Wikimedia Commons were read
+byte by byte, as evidence checked by hand rather than as samples; the
+[JPEG test data](../jpeg/test-data.md#6-early-coolpix-files-checked-by-hand)
+lists them with their licences. Every one is little-endian, Exif segment
+and MakerNote alike. **[F]**
+
+- **The headerless layout**, in all 18 files of the E990 (firmware v1.0
+  and v1.1), E995 (v1.6 and v1.7), E880 (v1.0 and v1.1), E885 (v1.0 and
+  v1.1), E2500 (v1.0) and E5000 (v1.6): the MakerNote's first two bytes
+  are its count of entries, 16 on the E990, 17 on the E880 and 21 on
+  the others, which read big-endian, 4,096 or more, would make a table
+  longer than the MakerNote. Its 13 to 16 values stored out of line all
+  lie inside the MakerNote when their offsets count from the Exif
+  segment's TIFF header, and none does when they count from the
+  MakerNote's start (`2006T629_finger_ring.jpg`, an E990's;
+  `Adastra_Park_-_S_Field_1.jpg`, an E2500's). **[F]** Later firmware
+  of the E885 (v1.2), the E2500 (v1.1) and the E5000 (v1.7), and every
+  E4500 file (v1.1 to v1.3), write the embedded-TIFF layout instead.
+  **[F]** raw-files reads the headerless layout in a JPEG as in a NEF,
+  at the Exif segment's TIFF header and in that structure's byte order.
+  On these files it gives nothing the Exif segment lacks: the ISO tag
+  (0x0002) holds `[0, 0]`, which records no ISO, and the Exif segment
+  records one. **[F]**
+- **The headerless PreviewIFD's JPEG lies outside the MakerNote** on the
+  E885, E995, E2500 and E5000 files; the E990 and E880 have no
+  PreviewIFD. Tag 0x0011 points at an IFD of 7 entries at 1,764, inside
+  the MakerNote, which is 954 bytes long from 916; that IFD's JPEG,
+  320x240, starts at 14,397, 12,527 bytes past the MakerNote's end, and
+  ends inside the Exif segment, all offsets counted from the Exif
+  segment's TIFF header (`Adastra_Park_-_S_Field_1.jpg` and
+  `150019_and_158764_at_Worcester_Shrub_Hill.jpg`, both an E2500's).
+  **[F]** raw-files does not give it, under the in-block rule
+  ([section 9](#9-robustness-pitfalls), item 1).
+- **The short-header layout**, in all 18 files of the E700, E800, E900
+  and E950: the MakerNote starts `Nikon\0`, `01 00`, and an IFD follows
+  those 8 bytes, of 11 entries, 5 on the E900, with a next-IFD pointer
+  of 0 and no PreviewIFD. Read big-endian, the count would be 2,816, or
+  1,280, a table longer than the MakerNote. Its values stored out of
+  line, five, two on the E900, all lie inside the MakerNote when their
+  offsets count from the Exif segment's TIFF header, and none does when
+  they count from the MakerNote's start or from the end of its 8 bytes
+  (`MIKI-eki.jpg`, an E800's; `Yamaha_FJ1100.jpg` and
+  `Petro_Star_refinery.jpg`, both an E900's;
+  `Starr_020628-0045_Prosopis_pallida.jpg`, an E950's). **[F]**
+  raw-files does not read it
+  ([section 10](#10-recommendation-for-raw-files)).
+- **The short header's byte order stays open.** ExifTool's
+  documentation says its numbers are little-endian, and exiv2 reads
+  them in the outer order (table above); since every one of these files
+  is little-endian outside the MakerNote too, they agree with both.
+  [P] **[F]**
 
 ## 2. Key tags
 
@@ -860,13 +923,23 @@ The points specific to the MakerNote:
    with the expected position four bytes after the IFD) and repairs only on
    request. Bounds-check every offset and length against the MakerNote and
    the file, skip bad entries rather than abort the IFD, and do not repair
-   in a first version. [P][S][4][19] raw-files requires the PreviewIFD's
-   JPEG, as declared, to lie inside the MakerNote too. The Coolpix P7800
-   declares its MakerNote 2,816 bytes long, ending at byte 4546, and its
-   640x480 MakerNote JPEG starts at byte 4546, just past it, so the reader
-   does not read it and the file gives its 160x120 and 4000x3000 previews
-   (file 1425); on the E5700 and the D100, the other `02 00` bodies, the
-   declared length includes the JPEG (files 4456, 2996). **[F]**
+   in a first version. [P][S][4][19] An E885 JPEG that an editor turned
+   upright is such a file: its headerless MakerNote moved 342 bytes, and
+   its offsets did not ([section 1](#layout-details)). **[F]** raw-files
+   requires the PreviewIFD's JPEG, as declared, to lie inside the
+   MakerNote too. The Coolpix P7800 declares its MakerNote 2,816 bytes
+   long, ending at byte 4546, and its 640x480 MakerNote JPEG starts at
+   byte 4546, just past it, so the reader does not read it and the file
+   gives its 160x120 and 4000x3000 previews (file 1425); on the E5700 and
+   the D100, the other `02 00` bodies, the declared length includes the
+   JPEG (files 4456, 2996). **[F]** Early Coolpix JPEGs with a headerless
+   MakerNote go further: the E885, E995, E2500 and E5000, on their
+   earlier firmware, put their PreviewIFD's 320x240 JPEG 12,527 bytes
+   past the MakerNote's end, inside the Exif segment, so the reader does
+   not read it either ([section 1](#in-a-jpeg-file)). **[F]** Whether the
+   rule should let such a JPEG through is still to be decided: the issue
+   that asks for reading a MakerNote preview just past the MakerNote, the
+   P7800's, is open (#18).
 2. **Truncated MakerNotes.** DNG-converted NEFs can cut the MakerNote short
    (reported as "bad offset" errors on later tags). [S][21]
 3. **Capture NX.** Foreign brands, changed byte order and fixed-order
@@ -913,16 +986,16 @@ trimmed of spaces at both ends, not only trailing ones as in
 [section 8.3](#83-make-and-model), and a value over 255 bytes is taken
 for damage; CropArea is used without the 0x001B cross-check of item 2;
 and of the layouts items 2 and 6 cover, the embedded-TIFF and the
-headerless ones are read, not the short-header one, which no public file
-confirms and whose byte order the sources disagree on
-([section 1](#1-finding-the-makernote)): the D1 family gets its
-MakerNote preview, its ISO and its lens range from the headerless
-MakerNote (file 5364), and the earliest Coolpix the Exif fields only.
-Every Nikon MakerNote is read only under a Make that starts with
-`NIKON`, whatever its first bytes: the format's reader decides by IFD0's
-Make before the MakerNote is looked at, unlike the "Check the signature
-before Make" of section 1, so a Nikon-format MakerNote that Capture NX
-wrote into another brand's file is not read.
+headerless ones are read, not the short-header one, whose byte order
+the sources disagree on and the public files that have it, all
+little-endian, cannot settle ([section 1](#in-a-jpeg-file)): the D1
+family gets its MakerNote preview, its ISO and its lens range from the
+headerless MakerNote (file 5364), and the earliest Coolpix the Exif
+fields only. Every Nikon MakerNote is read only under a Make that starts
+with `NIKON`, whatever its first bytes: the format's reader decides by
+IFD0's Make before the MakerNote is looked at, unlike the "Check the
+signature before Make" of section 1, so a Nikon-format MakerNote that
+Capture NX wrote into another brand's file is not read.
 
 The focus point is decided in
 [ADR012](../../architecture-decisions/adr012-focus-points-as-the-camera-records-them.md):

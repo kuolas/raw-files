@@ -42,8 +42,10 @@ does.
   what that MakerNote records: the ISO and the lens's range where their
   Exif tags lack them, and, where the MakerNote holds one, its small JPEG
   as a preview, the file's only JPEG on the D1H. A JPEG file that holds a
-  MakerNote of that layout is read the same way, though no such file has
-  been checked.
+  MakerNote of that layout is read the same way; on the early Coolpix
+  JPEGs checked, from Wikimedia Commons, it gives nothing beyond the
+  Exif segment's values, and the small JPEG it points at, where it has
+  one, lies outside the MakerNote, so it is not given.
 - `Format::is_raw`, whether a format's files hold a camera's raw sensor
   data, true for NEF and ARW and false for JPEG, so that a program can
   tell raw files from other images without matching every `Format`.

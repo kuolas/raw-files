@@ -22,7 +22,10 @@ Claims carry a confidence tag:
 - **[F]**: measured on a named sample file: one of the eight
   camera-original JPEGs from Wikimedia Commons, cited by body ("the
   ILCE-7M3 file"), which [test-data.md](test-data.md#2-the-sample-files)
-  lists with its file name, licence and SHA-256.
+  lists with its file name, licence and SHA-256; or on the early
+  Coolpix files checked by hand, which
+  [test-data.md](test-data.md#6-early-coolpix-files-checked-by-hand)
+  lists the same way.
 
 Numbers in brackets point to the [Sources](#sources) at the end. The
 specifications are the editions listed there: T.81 (1992), T.871 (2011),
@@ -352,13 +355,23 @@ segment wherever the raw file counts from the start of the file:
 - **Nikon** (the D5300 and D70 files): the layout with its own embedded
   TIFF header that NEF files use, whose offsets count from that inner
   header, so it reads the same in a JPEG. [F] The D70's PreviewIFD holds
-  a 564×372 JPEG inside the MakerNote's declared length. [F] raw-files
-  reads the headerless layout of the D1 family too, an IFD at the
-  MakerNote's first byte whose offsets count, in a JPEG, from the TIFF
-  header inside the Exif segment, and whose numbers are in that
-  structure's byte order, as in a NEF they count from the start of the
-  file (file 5364 of raw.pixls.us); no JPEG file confirms it. [I] See the
-  [NEF MakerNote notes](../nef/makernote-and-metadata.md#1-finding-the-makernote).
+  a 564×372 JPEG inside the MakerNote's declared length. [F]
+- **Nikon, early Coolpix bodies** (files checked by hand, listed in
+  [test-data.md](test-data.md#6-early-coolpix-files-checked-by-hand)):
+  the two older layouts, little-endian like the Exif segment. The E990,
+  E995, E880, and the E885, E2500 and E5000 on their earlier firmware,
+  write the headerless layout of the D1 family, an IFD at the
+  MakerNote's first byte whose offsets count from the TIFF header inside
+  the Exif segment, as in a NEF they count from the start of the file
+  (file 5364 of raw.pixls.us). [F] raw-files reads it so, in that
+  structure's byte order. Its PreviewIFD, on the E885, E995, E2500 and
+  E5000, holds a 320×240 JPEG inside the Exif segment but 12,527 bytes
+  past the MakerNote's end; raw-files does not give it, since a
+  MakerNote's preview must lie inside the MakerNote. [F] The E700, E800,
+  E900 and E950 write the short header `Nikon\0\1\0`, then an IFD whose
+  offsets count from the same TIFF header; raw-files does not read that
+  layout. [F] See the
+  [NEF MakerNote notes](../nef/makernote-and-metadata.md#in-a-jpeg-file).
 - **Sony** (all five Sony files): the 12-byte header `SONY DSC ` and three
   zero bytes, then an IFD whose offsets count from the TIFF header inside
   the Exif segment, as an ARW's count from the start of the file. [F] The

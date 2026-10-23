@@ -96,16 +96,28 @@ and test-data.md describes the sample set that would answer Part 2.
   ([container-and-previews.md](container-and-previews.md)).
 - **PreviewIFD offset base.** Whether the PreviewIFD offsets of the
   short-header MakerNote count from the outer TIFF header, as inferred
-  ([container-and-previews.md](container-and-previews.md)). The headerless
-  one's do: the D1H's PreviewIFD and its JPEG are where offsets counted
-  from the file's own TIFF header put them (file 5364) **[F]**.
+  ([container-and-previews.md](container-and-previews.md)). The
+  short-header MakerNotes of the early Coolpix JPEGs checked hold no
+  PreviewIFD, though their other offsets count from that header
+  **[F]**, so no file shows it. The headerless one's do: the D1H's
+  PreviewIFD and its JPEG are where offsets counted from the file's own
+  TIFF header put them (file 5364), and the early Coolpix JPEGs'
+  PreviewIFDs are where offsets counted from the Exif segment's TIFF
+  header put them **[F]**.
 - **The short-header layout.** raw-files does not read the MakerNote that
-  starts `Nikon\0\1\0`: no public file has one, and the sources disagree on
-  the byte order of its numbers
-  ([makernote-and-metadata.md](makernote-and-metadata.md#1-finding-the-makernote)).
-  raw.pixls.us has no file of the Coolpix E700 to E950 that wrote it, as
-  those bodies wrote no raw files. A file of one of them, a JPEG, would
-  settle its offset base and its byte order.
+  starts `Nikon\0\1\0` yet. raw.pixls.us has no file of the Coolpix E700
+  to E950 that wrote it, as those bodies wrote no raw files, but their
+  camera JPEGs on Wikimedia Commons have it: an IFD 8 bytes in, whose
+  offsets count from the outer TIFF header, the Exif segment's
+  ([makernote-and-metadata.md](makernote-and-metadata.md#in-a-jpeg-file),
+  files listed in the
+  [JPEG test data](../jpeg/test-data.md#6-early-coolpix-files-checked-by-hand))
+  **[F]**. What stays open is the byte order of its numbers, on which
+  the sources disagree, ExifTool's documentation saying little-endian
+  and exiv2 reading the outer order: every one of those files is
+  little-endian inside the MakerNote and out, so they agree with both.
+  Only a file whose outer order is big-endian could settle it, and no
+  camera-original one is known.
 - **Multi-strip previews.** Whether any SubIFD JPEG is stored in several
   strips. On the Z 9 every JPEG is in one piece, through 0x0201/0x0202 (files
   5146 to 5148), and so is every JPEG of the other 32 files of the CI set;

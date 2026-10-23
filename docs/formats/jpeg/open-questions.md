@@ -28,10 +28,15 @@ affects; [test-data.md](test-data.md) describes the files.
    reader refuses a PreviewIFD JPEG that does not lie wholly inside the
    MakerNote's declared length, which costs one Coolpix NRW file its
    preview (#18). The JPEG reader applies the same rule, which refuses
-   the copy an exporting editor leaves outside the declared MakerNote. If
-   the rule is relaxed for that file (#18), the question is whether a
-   JPEG should follow, since an editor that rewrites the Exif segment can
-   leave such a pointer behind. Affects
+   the copy an exporting editor leaves outside the declared MakerNote.
+   Cameras write such a JPEG too: the early Coolpix E885, E995, E2500
+   and E5000, on their earlier firmware, put their PreviewIFD's 320×240
+   JPEG inside the Exif segment but 12,527 bytes past the MakerNote's
+   end, so those files give no MakerNote preview
+   ([test-data.md](test-data.md#6-early-coolpix-files-checked-by-hand)).
+   [F] If the rule is relaxed for the NRW file (#18), the question is
+   whether a JPEG should follow, since an editor that rewrites the Exif
+   segment can leave such a pointer behind. Affects
    [container-and-metadata.md](container-and-metadata.md#10-makernotes-in-a-jpeg).
 4. **MPF images other than large thumbnails.** The Multi-Picture Format
    lists more than large thumbnails: its MP types include a gain map
@@ -116,7 +121,11 @@ affects; [test-data.md](test-data.md) describes the files.
   header inside the Exif segment; read so, FocusLocation parses on every
   file that has it (the ILCE-7M3, ILCE-7RM2 and DSC-RX100M4 files). [F]
 - **Nikon's MakerNote in a JPEG** is the embedded-TIFF layout of the NEF
-  files, so its offsets need no change. [F]
+  files on the D5300 and the D70, so its offsets need no change. [F]
+  Early Coolpix JPEGs hold the two older layouts, whose offsets count
+  from the TIFF header inside the Exif segment
+  ([test-data.md](test-data.md#6-early-coolpix-files-checked-by-hand)).
+  [F]
 - **A camera JPEG can hold a MakerNote preview**: the D70's PreviewIFD
   holds a 564×372 JPEG inside the declared MakerNote. [F]
 - **What a Nikon JPEG records in a crop mode.** Shots made with the

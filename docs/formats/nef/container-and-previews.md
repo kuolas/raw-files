@@ -140,18 +140,25 @@ Compression 1 or 34713, Photometric 32803 and the CFA tags. [15] **[P]**
 |---|---|---|
 | IFD0, next-IFD chain, SubIFD array, Exif IFD pointer, and 0x0201 / strip offsets inside SubIFDs | the start of the file | **[P]** [17]; files 5146 to 5148 **[F]** |
 | Everything inside a MakerNote with an embedded TIFF header, including tag 0x0011 PreviewIFD and the 0x0201 value inside it | the embedded TIFF header, which is the MakerNote start plus 10 bytes | **[P]** [4] [6] [13]; files 5146 to 5148 **[F]** |
-| Everything inside a headerless MakerNote or a `Nikon\0\1\0` one | the outer TIFF header | **[P]** [12] |
+| Everything inside a headerless MakerNote or a `Nikon\0\1\0` one | the outer TIFF header | **[P]** [12]; the headerless layout on the D1H (file 5364) and both layouts in early Coolpix JPEGs, where the outer header is the Exif segment's **[F]** |
 
 The metadata-extractor issue shows a user first assuming SubIFD offsets were
 relative to the Exif block and then finding they were relative to the file.
 [17] **[S]** Exiv2's loader for the Nikon preview "sometimes" adds a
 MakerNote base offset, consistent with the table. [11] **[P]**
 
-Whether the PreviewIFD offsets of the short-header layout are
-outer-relative is the table's reading of how that layout works; it has not
-been seen on a file (see [Open questions](#open-questions)). **[I]** For
-the headerless layout it has: the D1H's PreviewIFD and its JPEG are where
-offsets counted from the file's own header put them (file 5364). **[F]**
+For the headerless layout, the PreviewIFD's offsets have been seen to
+count from the outer header: the D1H's PreviewIFD and its JPEG are where
+offsets counted from the file's own header put them (file 5364), and in
+early Coolpix JPEGs the PreviewIFD is where offsets counted from the
+Exif segment's TIFF header put it, inside the MakerNote, while its
+320x240 JPEG lies 12,527 bytes past the MakerNote's end. **[F]** The
+short-header layout has no PreviewIFD in the files that have it, JPEGs
+of the Coolpix E700 to E950, whose other offsets count from the outer
+header too. **[F]** The files are listed in the
+[JPEG test data](../jpeg/test-data.md#6-early-coolpix-files-checked-by-hand),
+and what they show is in
+[makernote-and-metadata.md](makernote-and-metadata.md#in-a-jpeg-file).
 
 ## 2. MakerNote layouts, as far as previews need them
 
@@ -161,8 +168,8 @@ bytes. [12] [31] **[P]**
 
 | Layout | Starts with | IFD starts at | Offsets relative to | Bodies | Conf. |
 |---|---|---|---|---|---|
-| Headerless | no signature; a bare IFD | MakerNote start | outer TIFF header | E990, D1 family (D1 is big-endian per ExifTool) | **[P]** [12] [4] |
-| Short header | `Nikon\0\1\0` (8 bytes) | MakerNote start + 8 | outer TIFF header | E700 to E950 | **[P]** [12] |
+| Headerless | no signature; a bare IFD | MakerNote start | outer TIFF header | D1 family, big-endian (files 201, 1785, 1786, 5364) **[F]**; in JPEGs, the Coolpix E990, E995 and E880, and the E885, E2500 and E5000 on their earlier firmware, little-endian **[F]** | **[P]** [12] [4]; **[F]** |
+| Short header | `Nikon\0\1\0` (8 bytes) | MakerNote start + 8 | outer TIFF header | in JPEGs, the Coolpix E700, E800, E900 and E950, little-endian **[F]** | **[P]** [12]; **[F]** |
 | Embedded TIFF header | `Nikon\0\2` + 3 more header bytes, then `II` or `MM`, 42, and an IFD offset (normally 8) | embedded header + its IFD offset, normally MakerNote start + 18 | embedded header = MakerNote start + 10 | E5400, D2H, D70, D100 and everything later; the Z 9 writes `Nikon\0`, `02 11` (version 0211), `00 00`, then an `II` header (files 5146 to 5148) **[F]** | **[P]** [12] [4] |
 
 Detection, combining what the cited projects do: if the data starts with
@@ -502,9 +509,13 @@ what they show.
 6. Whether the PreviewIFD offset base for headerless and short-header
    MakerNotes is the outer TIFF header, as inferred. Answered for the
    headerless layout: the D1H's PreviewIFD and its JPEG lie where offsets
-   counted from the file's own header put them (file 5364). Open for the
-   short header, which no public file has, and which raw-files does not
-   read.
+   counted from the file's own header put them (file 5364), and so do
+   the PreviewIFDs of early Coolpix JPEGs, counted from the Exif
+   segment's TIFF header, though their JPEGs lie past the MakerNote's
+   end (section 1.4). The short-header MakerNotes of early Coolpix JPEGs
+   count their other offsets from that header but hold no PreviewIFD,
+   so where theirs would count from cannot be seen; raw-files does not
+   read that layout.
 7. Whether any SubIFD JPEG uses several strips. None does on the Z 9: every
    JPEG is in one piece, through 0x0201/0x0202.
 8. How common truncated JPEGs or padding after EOI are in real files. The
@@ -568,3 +579,10 @@ Their SHA-256 hashes and URLs are in
 2026 by a structural walk of the IFD0 chain, the SubIFDs, the Exif IFD and
 the MakerNote's PreviewIFD, reading each JPEG's marker segments to its frame
 header and its last two bytes.
+
+The early Coolpix JPEGs from Wikimedia Commons that sections 1.4 and 2
+cite were checked by hand on 23 October 2026, by a walk of their Exif
+segment, MakerNote and PreviewIFD written for the purpose; they are not
+samples, and the
+[JPEG test data](../jpeg/test-data.md#6-early-coolpix-files-checked-by-hand)
+lists them with their licences and SHA-256 hashes.
