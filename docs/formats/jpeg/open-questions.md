@@ -135,7 +135,8 @@ affects; [test-data.md](test-data.md) describes the files.
   pixel of rounding. [F]
 - **The D70's IFD1 is also its Interoperability IFD**: both pointers lead
   to one IFD that holds the thumbnail's tags. It is not a loop for
-  raw-files' walk, which follows no Interoperability pointer. [F]
+  raw-files' walk, which follows no Interoperability pointer, and the
+  reader gives the file's 128×85 thumbnail. [F]
 - **The MP Entry's size** counts the SOI and EOI markers, on every file
   with MPF. [F]
 - **The MPF images' frame headers** lie 648 to 1,160 bytes into each

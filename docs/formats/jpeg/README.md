@@ -23,7 +23,8 @@ the editions listed in [licences-and-references.md](licences-and-references.md),
 and checked against eight camera-original JPEGs from Wikimedia Commons, of
 Sony, Nikon and Canon bodies, listed in
 [test-data.md](test-data.md#2-the-sample-files); what they show is tagged
-**[F]**. [open-questions.md](open-questions.md) lists what is still
+**[F]**. The tests download them and check every preview, metadata value
+and focus point of each. [open-questions.md](open-questions.md) lists what is still
 unknown, among it the orientation of the small images on a portrait
 picture on a public file. What a Nikon JPEG records in a crop mode is
 known from the maintainer's own Z 9 shots, not from a public file.

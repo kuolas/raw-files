@@ -1,10 +1,11 @@
 # JPEG: test data
 
-The JPEG tests are to combine small fixtures built in code, small
-fixtures stripped from the maintainer's own camera JPEGs, and
-camera-original JPEGs published on Wikimedia Commons, which CI is to
-download and check against a hash. This page lists the sources, the
-eight Commons files and how they were chosen, and the fixtures. Back to
+The JPEG tests combine small fixtures built in code, small fixtures
+stripped from the maintainer's own camera JPEGs, and camera-original
+JPEGs published on Wikimedia Commons, which `scripts/fetch-samples.sh`
+downloads and checks against a hash, in CI as on a contributor's
+machine. This page lists the sources, the eight Commons files, how they
+were chosen and how they are downloaded, and the fixtures. Back to
 [the JPEG overview](README.md).
 
 Confidence tags: **[P]** primary (read on the file's page or in the
@@ -16,7 +17,7 @@ retrieved in October 2026.
 
 | Source | Licence status | Commit to the repository? |
 |---|---|---|
-| Wikimedia Commons | A licence per file, stated on its page: CC0, public-domain dedications, CC BY, CC BY-SA and others. Commons keeps the uploaded file as it was uploaded; only its scaled copies are re-encoded. [1] **[P]** / **[S]** | No: the files are several megabytes each. CC0, public-domain and CC BY files are to be downloaded in CI, pinned by SHA-256, with the author and licence recorded for CC BY. CC BY-SA files are not used. |
+| Wikimedia Commons | A licence per file, stated on its page: CC0, public-domain dedications, CC BY, CC BY-SA and others. Commons keeps the uploaded file as it was uploaded; only its scaled copies are re-encoded. [1] **[P]** / **[S]** | No: the files are several megabytes each. CC0, public-domain and CC BY files are downloaded, pinned by SHA-256, with the author and licence recorded for CC BY (section 2). CC BY-SA files are not used. |
 | raw.pixls.us | CC0, but raw files only; it holds no camera JPEGs. [2] **[S]** | Not a source of JPEG files. |
 | Camera makers' sample galleries | All rights reserved or non-commercial terms, as usually stated; the terms of each were not read. [I] | No. |
 | Stock-photo sites (Unsplash, Pexels, Pixabay) | Licences of their own, not Creative Commons, and their downloads are re-encoded. [S] | No. |
@@ -32,8 +33,9 @@ Nikon MakerNotes, a Multi-Picture Format segment with one image and with
 two, a file with none, Sony's padding after the last image, and a maker
 whose MakerNote raw-files does not read. Each was downloaded from its
 original upload and walked byte by byte (section 3). Licences and
-authors are as shown on each file's page on 21 October 2026, and are
-checked again when the files join the downloaded set. [P]
+authors are as shown on each file's page, read when the files were
+chosen, on 21 October 2026, and checked again on each file page on 22
+October 2026, when they joined the downloaded set. [P]
 
 | Body (firmware) | File on Wikimedia Commons | Licence, author | Bytes | SHA-256 |
 |---|---|---|---|---|
@@ -59,11 +61,61 @@ What each covers [F]:
 | D70 | Nikon MakerNote version 0210 with a PreviewIFD JPEG of 564×372; a 128×85 thumbnail; IFD1 shared with the Interoperability IFD; two DQT and four DHT segments; no MPF |
 | G7 X | A MakerNote no reader reads; MPF 1620×1080 after 12 bytes that are not zeros |
 
-Doubts recorded for the licences [P]: the RX100M4 file's Exif Artist and
-Copyright name someone other than the author Commons credits; the
-ILCE-7RM2 file's page says the camera was lent to the author, who is
-still credited; and the D70's is a public-domain dedication by its
-author, a weaker statement than CC0.
+What the file pages say of the licences, as checked on 22 October 2026
+[P]:
+
+- **ILCE-6000**: the page offers three licences to choose from, the GNU
+  Free Documentation License 1.2 or later, CC BY-SA 3.0 and CC BY 2.5.
+  raw-files uses the file under CC BY 2.5, with attribution to
+  663highland.
+- **DSC-RX100M4**: CC BY 4.0, credited to Sunghyun, with the author's own
+  site given as the source. Commons marks the file as not yet reviewed
+  by a licence reviewer, and its Exif Artist and Copyright fields name
+  someone other than the person credited. It is kept, since it is only
+  downloaded and never committed, with this status recorded here; it
+  will be dropped if a review rejects its licence.
+- **ILCE-7RM2**: the page says the camera was lent to the author, who is
+  credited; the permission is confirmed through Wikimedia's volunteer
+  response team.
+- **G7 X** and **DSLR-A100**: both came from Flickr, and the review of
+  each Flickr licence on Commons confirms CC BY 2.0.
+- **D70**: released into the public domain by its copyright holder,
+  Charles Henri, a weaker statement than CC0.
+- **ILCE-7M3** and **D5300**: CC0, by Bernatburriel and by Syced.
+
+### 2.1 How they are downloaded and checked
+
+[`tests/samples.tsv`](../../../tests/samples.tsv), the list of every
+downloaded sample, names each of the eight with the source `commons`,
+its Commons file name as its id, the format `jpeg`, the name it is saved
+under, its SHA-256, its licence, with the author for CC BY, and the URL
+of its original upload. `scripts/fetch-samples.sh jpeg` downloads them,
+about 60 MiB, into `raw-samples/`, or the directory `RAW_FILES_SAMPLES`
+names, with the other samples; CI does the same. It sends Commons a
+User-Agent that names the script and the project, as Wikimedia asks of
+a script, and waits a moment between downloads, since quick successive
+downloads failed (section 3); a download whose SHA-256 differs is
+deleted, and the script fails. [F] The files are saved as:
+
+| Body | Saved as |
+|---|---|
+| Sony ILCE-7M3 | `sony-ilce-7m3.jpg` |
+| Sony ILCE-7RM2 | `sony-ilce-7rm2.jpg` |
+| Sony DSC-RX100M4 | `sony-dsc-rx100m4.jpg` |
+| Sony ILCE-6000 | `sony-ilce-6000.jpg` |
+| Sony DSLR-A100 | `sony-dslr-a100.jpg` |
+| Nikon D5300 | `nikon-d5300.jpg` |
+| Nikon D70 | `nikon-d70.jpg` |
+| Canon PowerShot G7 X | `canon-powershot-g7x.jpg` |
+
+`tests/jpeg.rs` opens each and checks every preview the reader gives,
+its size, place, format and orientation, read whole, the file's own
+preview through the zeros after its last image; every value of its
+metadata, serial numbers by their shape alone; and its focus point, or
+that it has none. The expected values are tables generated from a walk
+of each file's bytes, by the reader's rules, not typed in. A test whose
+file has not been downloaded says so and passes, so the suite runs
+offline. [F]
 
 ## 3. How the files were chosen
 
@@ -169,7 +221,7 @@ fixtures, in `fuzz/seeds/jpeg_segments/` (see
 - **Exported files.** No exported JPEG is in the set: an export's
   pixels and its kept MakerNote are the case the focus rule of
   [ADR014](../../architecture-decisions/adr014-jpeg-files-as-a-format-of-their-own.md)
-  guards against, which the built fixtures are to cover. [I]
+  guards against, which the built fixtures cover. [I]
 - **A portrait picture**: every file has orientation 1. [F]
 - **A camera crop mode**, a Nikon JPEG with a CropArea, and a Nikon JPEG
   with a focus position: the D5300 shot through the viewfinder, and the

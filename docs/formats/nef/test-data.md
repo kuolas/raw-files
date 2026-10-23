@@ -54,7 +54,9 @@ their names, hashes, licences and URLs; `scripts/fetch-samples.sh`
 downloads them and checks each hash, and the tests in `tests/nef.rs` read
 the NEF files among them, for their previews and their metadata
 ([section 2.2](#22-files-checked-for-metadata)). The Sony files of the
-set are on the [ARW test-data page](../arw/test-data.md#21-the-ci-set);
+set are on the [ARW test-data page](../arw/test-data.md#21-the-ci-set),
+and the camera JPEGs on the
+[JPEG test-data page](../jpeg/test-data.md#2-the-sample-files);
 the NEF files are the three Z 9 files of raw.pixls.us, one per
 compression mode, and 30 files of 24 other bodies, listed after them:
 

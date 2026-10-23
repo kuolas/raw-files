@@ -57,15 +57,18 @@ are under CC0, a public-domain dedication, CC BY 2.0, CC BY 2.5 or CC BY
   but that is weaker than CC0. [S][6]
 - **CC BY** asks that a copy or adaptation credit the author, link the
   licence and say whether it was changed. [S][7] raw-files does not
-  redistribute the files: CI is to download them from Commons, pinned by
-  their SHA-256. test-data.md records each file's author and licence all
-  the same, as the list of samples is to, so that the credit travels with
-  any reference to the file. [I]
+  redistribute the files: `scripts/fetch-samples.sh` downloads them from
+  Commons, in CI as elsewhere, pinned by their SHA-256. test-data.md
+  records each file's author and licence all the same, as the list of
+  samples, `tests/samples.tsv`, does, so that the credit travels with any
+  reference to the file. [I] The ILCE-6000 file's page offers it under
+  three licences, and raw-files takes CC BY 2.5 of them. [P][6]
 - **CC BY-SA** files are not used, since share-alike terms would follow
   any adaptation of the data. [I]
 - Commons keeps each upload byte for byte, and a later upload can replace
-  the file behind the same name; the SHA-256 pin is to make CI notice.
-  [S][6]
+  the file behind the same name; the SHA-256 pin makes the download
+  script notice, deleting the file it downloaded and failing, in CI as
+  elsewhere. [S][6]
 
 ## 4. Clean-room guidance for raw-files
 

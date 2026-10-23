@@ -235,13 +235,14 @@ links checked as well; the normal doc build never sees them.
 Some tests read real sample files, which are too large to commit. When the
 files are absent, those tests print a note and pass, so the suite runs
 offline. `scripts/fetch-samples.sh` downloads the pinned set listed in
-[`tests/samples.tsv`](tests/samples.tsv), about 1.6 GB, into
-`raw-samples/` at the repository's root, a folder that git ignores and
-that `cargo clean` leaves alone, or into the directory named by
-`RAW_FILES_SAMPLES`,
-and checks each file's SHA-256; `cargo test` then runs those tests too.
-`scripts/fetch-samples.sh nef` (or `arw`) fetches the files of one format
-only, and one file, the 325 MiB ARQ, is fetched only with
+[`tests/samples.tsv`](tests/samples.tsv), about 1.6 GB: RAW files from
+raw.pixls.us and camera JPEGs from Wikimedia Commons, as the list's
+source column says. It saves them into `raw-samples/` at the
+repository's root, a folder that git ignores and that `cargo clean`
+leaves alone, or into the directory named by `RAW_FILES_SAMPLES`, and
+checks each file's SHA-256; `cargo test` then runs those tests too.
+`scripts/fetch-samples.sh nef` (or `arw`, or `jpeg`) fetches the files of
+one format only, and one file, the 325 MiB ARQ, is fetched only with
 `RAW_FILES_LARGE=1`. CI does this on Linux, from a cache that a workflow
 on `master` keeps filled, so a pull request downloads nothing unless it
 changes the list.

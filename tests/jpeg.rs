@@ -22,10 +22,14 @@
 //! [`support::fixtures`]), read whole from a path and from bytes: their
 //! previews, every value of their metadata, and their focus points, as
 //! recorded in FX, scaled onto the DX picture and moved into the 16:9
-//! window.
+//! window. Then eight camera JPEGs of Wikimedia Commons, too large to
+//! commit, when they have been downloaded (see
+//! [`support::samples::path`]): the previews each gives, and its metadata,
+//! every value of it, the focus point among them.
 
 mod support;
 
+use std::collections::BTreeSet;
 use std::io::Cursor;
 use std::ops::Range;
 
@@ -64,6 +68,10 @@ use support::jpeg_stub::{jpeg_stub, segment};
 use support::nef::{
     AF_INFO2, CROP_HI_SPEED, D300_LENS, FOCUS_MODE, ISO as MAKER_NOTE_ISO, LENS as MAKER_NOTE_LENS,
     PREVIEW_JPEG, SERIAL_NUMBER, WORLD_TIME, nikon_makernote_with, z9_af_info2,
+};
+use support::samples::{
+    Jpeg, Sample, SampleFocus, SampleLens, SampleMetadata, SerialShape, check, check_metadata,
+    listed,
 };
 use support::tiff_builder::{EXIF_IFD, IfdId, Order, TiffBuilder};
 
@@ -1922,4 +1930,509 @@ fn the_stripped_z9_dx_jpeg_gives_its_previews_metadata_and_scaled_focus_point() 
 #[test]
 fn the_stripped_z9_16x9_jpeg_gives_its_previews_metadata_and_moved_focus_point() {
     check_stripped_z9_jpeg(&STRIPPED_Z9_16X9_JPEG);
+}
+
+// Real files, downloaded: eight camera-original JPEGs of Wikimedia
+// Commons, of five Sony bodies, two Nikon bodies and a Canon, under CC0, a
+// public-domain dedication or CC BY. They are listed with their licences,
+// their authors and their hashes in `tests/samples.tsv`;
+// `scripts/fetch-samples.sh` downloads them. They are too large to commit,
+// so a test whose file is absent says so and passes: the suite runs
+// offline.
+//
+// The tables below were generated from each file's bytes, by a walk of its
+// segments, its Exif segment's TIFF structure, its MakerNote and its MPF
+// list that shares no code with the reader, with the rules of ADR011,
+// ADR014 and ADR015 applied to what it read.
+
+/// The JPEG samples, each with the previews the reader finds in it,
+/// smallest first: IFD1's thumbnail, of 160 by 120 on every file but the
+/// D70's, of 128 by 85 in an IFD1 that is also the file's Interoperability
+/// IFD; the images of the MPF list after the first, one on the ILCE-7M3,
+/// ILCE-7RM2, DSC-RX100M4, ILCE-6000 and G7 X and two on the D5300; the
+/// D70's MakerNote preview, of 564 by 372, inside the length the MakerNote
+/// declares; and the file itself, of its frame header's size, whose bytes
+/// run on past the main image, through the MPF images and, on the
+/// ILCE-7M3, the ILCE-7RM2 and the ILCE-6000, through the zeros after the
+/// last image. Every file has orientation 1.
+const SAMPLES: &[Sample] = &[
+    // ILCE-7M3 (Wikimedia Commons Acanthodactylus_erythrurus_2025.jpg)
+    Sample {
+        file: "sony-ilce-7m3.jpg",
+        orientation: Orientation::NoTransforms,
+        previews: &[
+            Jpeg {
+                width: 160,
+                height: 120,
+                offset: 39_172,
+                len: 7_574,
+                after_eoi: 0,
+            },
+            Jpeg {
+                width: 1616,
+                height: 1080,
+                offset: 7_469_056,
+                len: 825_078,
+                after_eoi: 0,
+            },
+            Jpeg {
+                width: 3936,
+                height: 2624,
+                offset: 0,
+                len: 8_323_072,
+                after_eoi: 28_938,
+            },
+        ],
+    },
+    // ILCE-7RM2 (Wikimedia Commons Ulpu_Pajari_puhumassa_vastaanotettuaan_tiedonjulkistamisen_valtionpalkinnon_2.jpg)
+    Sample {
+        file: "sony-ilce-7rm2.jpg",
+        orientation: Orientation::NoTransforms,
+        previews: &[
+            Jpeg {
+                width: 160,
+                height: 120,
+                offset: 38_778,
+                len: 9_806,
+                after_eoi: 0,
+            },
+            Jpeg {
+                width: 1616,
+                height: 1080,
+                offset: 13_115_392,
+                len: 615_548,
+                after_eoi: 0,
+            },
+            Jpeg {
+                width: 7952,
+                height: 5304,
+                offset: 0,
+                len: 13_762_560,
+                after_eoi: 31_620,
+            },
+        ],
+    },
+    // DSC-RX100M4 (Wikimedia Commons 여의도한강공원샛강생태공원문화다리_09.jpg)
+    Sample {
+        file: "sony-dsc-rx100m4.jpg",
+        orientation: Orientation::NoTransforms,
+        previews: &[
+            Jpeg {
+                width: 160,
+                height: 120,
+                offset: 34_646,
+                len: 10_107,
+                after_eoi: 0,
+            },
+            Jpeg {
+                width: 1616,
+                height: 1080,
+                offset: 7_483_392,
+                len: 1_005_576,
+                after_eoi: 0,
+            },
+            Jpeg {
+                width: 5472,
+                height: 3648,
+                offset: 0,
+                len: 8_488_968,
+                after_eoi: 0,
+            },
+        ],
+    },
+    // ILCE-6000 (Wikimedia Commons 140319_MS_Queen_Elizabeth_Kobe_Japan01o.JPG)
+    Sample {
+        file: "sony-ilce-6000.jpg",
+        orientation: Orientation::NoTransforms,
+        previews: &[
+            Jpeg {
+                width: 160,
+                height: 120,
+                offset: 38_466,
+                len: 5_872,
+                after_eoi: 0,
+            },
+            Jpeg {
+                width: 1616,
+                height: 1080,
+                offset: 7_220_736,
+                len: 549_648,
+                after_eoi: 0,
+            },
+            Jpeg {
+                width: 6000,
+                height: 4000,
+                offset: 0,
+                len: 7_798_784,
+                after_eoi: 28_400,
+            },
+        ],
+    },
+    // DSLR-A100 (Wikimedia Commons "Krone"_flag_on_line_5_tram_(2564030031).jpg)
+    Sample {
+        file: "sony-dslr-a100.jpg",
+        orientation: Orientation::NoTransforms,
+        previews: &[
+            Jpeg {
+                width: 160,
+                height: 120,
+                offset: 40_306,
+                len: 4_129,
+                after_eoi: 0,
+            },
+            Jpeg {
+                width: 3872,
+                height: 2592,
+                offset: 0,
+                len: 4_002_446,
+                after_eoi: 0,
+            },
+        ],
+    },
+    // NIKON D5300 (Wikimedia Commons "Tours"_French_restaurant_in_Omotesando.JPG)
+    Sample {
+        file: "nikon-d5300.jpg",
+        orientation: Orientation::NoTransforms,
+        previews: &[
+            Jpeg {
+                width: 160,
+                height: 120,
+                offset: 15_872,
+                len: 7_745,
+                after_eoi: 0,
+            },
+            Jpeg {
+                width: 640,
+                height: 424,
+                offset: 7_301_632,
+                len: 35_624,
+                after_eoi: 0,
+            },
+            Jpeg {
+                width: 1620,
+                height: 1080,
+                offset: 7_337_472,
+                len: 485_513,
+                after_eoi: 0,
+            },
+            Jpeg {
+                width: 6000,
+                height: 4000,
+                offset: 0,
+                len: 7_822_985,
+                after_eoi: 0,
+            },
+        ],
+    },
+    // NIKON D70 (Wikimedia Commons "Stadswandeling".JPG)
+    Sample {
+        file: "nikon-d70.jpg",
+        orientation: Orientation::NoTransforms,
+        previews: &[
+            Jpeg {
+                width: 128,
+                height: 85,
+                offset: 29_228,
+                len: 4_554,
+                after_eoi: 0,
+            },
+            Jpeg {
+                width: 564,
+                height: 372,
+                offset: 2_330,
+                len: 26_731,
+                after_eoi: 0,
+            },
+            Jpeg {
+                width: 3008,
+                height: 2000,
+                offset: 0,
+                len: 4_178_961,
+                after_eoi: 0,
+            },
+        ],
+    },
+    // Canon PowerShot G7 X (Wikimedia Commons DC-3_OH-LCH_at_EFJM_20160717.jpg)
+    Sample {
+        file: "canon-powershot-g7x.jpg",
+        orientation: Orientation::NoTransforms,
+        previews: &[
+            Jpeg {
+                width: 160,
+                height: 120,
+                offset: 19_456,
+                len: 5_325,
+                after_eoi: 0,
+            },
+            Jpeg {
+                width: 1620,
+                height: 1080,
+                offset: 8_156_672,
+                len: 510_383,
+                after_eoi: 0,
+            },
+            Jpeg {
+                width: 5472,
+                height: 3648,
+                offset: 0,
+                len: 8_667_055,
+                after_eoi: 0,
+            },
+        ],
+    },
+];
+
+#[test]
+fn every_jpeg_sample_opens_with_its_previews() {
+    for sample in SAMPLES {
+        check(sample, Format::Jpeg);
+    }
+}
+
+/// The metadata each JPEG sample must give, in the order of
+/// `tests/samples.tsv`, its serial numbers by their shape alone (see
+/// [`SampleMetadata`]): the standard tags first (ADR011), then the Nikon
+/// MakerNote, read by IFD0's Make, for what they lack, the D5300's serial
+/// number, lens range and offset from UTC and the D70's ISO and lens
+/// range; no raw size, and the frame header's size as the image size
+/// (ADR014). The focus point is the one Sony's MakerNote records, as
+/// recorded, on the ILCE-7M3, off centre in a frame of its picture's size,
+/// and on the ILCE-7RM2, at the centre; where there is none, a comment
+/// says why.
+const METADATA: &[SampleMetadata] = &[
+    // ILCE-7M3 (Wikimedia Commons Acanthodactylus_erythrurus_2025.jpg)
+    SampleMetadata {
+        file: "sony-ilce-7m3.jpg",
+        make: Some("SONY"),
+        model: Some("ILCE-7M3"),
+        serial_number: None,
+        capture_time: Some("2025-06-05T10:47:33+01:00"),
+        orientation: Orientation::NoTransforms,
+        iso: Some(320),
+        exposure_time: Some((1, 200)),
+        f_number: Some((160, 10)),
+        focal_length: Some((160, 10)),
+        exposure_bias: Some((0, 10)),
+        lens: Some(SampleLens {
+            make: None,
+            model: Some("16mm F1.4 DC DN | Contemporary 017"),
+            serial_number: false,
+            min_focal_length: Some((160, 10)),
+            max_focal_length: Some((160, 10)),
+            f_number_at_min_focal_length: Some((14, 10)),
+            f_number_at_max_focal_length: Some((14, 10)),
+        }),
+        raw_size: None,
+        image_size: Some((3936, 2624)),
+        focus: Some(SampleFocus {
+            frame: (3936, 2624),
+            center: (1783, 1804),
+            size: None,
+            in_focus: None,
+        }),
+    },
+    // ILCE-7RM2 (Wikimedia Commons Ulpu_Pajari_puhumassa_vastaanotettuaan_tiedonjulkistamisen_valtionpalkinnon_2.jpg)
+    SampleMetadata {
+        file: "sony-ilce-7rm2.jpg",
+        make: Some("SONY"),
+        model: Some("ILCE-7RM2"),
+        serial_number: None,
+        capture_time: Some("2026-06-08T20:03:02"),
+        orientation: Orientation::NoTransforms,
+        iso: Some(5000),
+        exposure_time: Some((1, 160)),
+        f_number: Some((40, 10)),
+        focal_length: Some((1050, 10)),
+        exposure_bias: Some((0, 10)),
+        lens: Some(SampleLens {
+            make: None,
+            model: Some("FE 24-105mm F4 G OSS"),
+            serial_number: false,
+            min_focal_length: Some((240, 10)),
+            max_focal_length: Some((1050, 10)),
+            f_number_at_min_focal_length: Some((40, 10)),
+            f_number_at_max_focal_length: Some((40, 10)),
+        }),
+        raw_size: None,
+        image_size: Some((7952, 5304)),
+        focus: Some(SampleFocus {
+            frame: (7952, 5304),
+            center: (3976, 2652),
+            size: None,
+            in_focus: None,
+        }),
+    },
+    // DSC-RX100M4 (Wikimedia Commons 여의도한강공원샛강생태공원문화다리_09.jpg)
+    SampleMetadata {
+        file: "sony-dsc-rx100m4.jpg",
+        make: Some("SONY"),
+        model: Some("DSC-RX100M4"),
+        serial_number: None,
+        capture_time: Some("2019-11-19T10:51:00"),
+        orientation: Orientation::NoTransforms,
+        iso: Some(80),
+        exposure_time: Some((1, 320)),
+        f_number: Some((40, 10)),
+        focal_length: Some((880, 100)),
+        exposure_bias: Some((0, 10)),
+        lens: Some(SampleLens {
+            make: None,
+            model: None,
+            serial_number: false,
+            min_focal_length: Some((880, 100)),
+            max_focal_length: Some((2570, 100)),
+            f_number_at_min_focal_length: Some((18, 10)),
+            f_number_at_max_focal_length: Some((28, 10)),
+        }),
+        raw_size: None,
+        image_size: Some((5472, 3648)),
+        focus: None, // manual focus
+    },
+    // ILCE-6000 (Wikimedia Commons 140319_MS_Queen_Elizabeth_Kobe_Japan01o.JPG)
+    SampleMetadata {
+        file: "sony-ilce-6000.jpg",
+        make: Some("SONY"),
+        model: Some("ILCE-6000"),
+        serial_number: None,
+        capture_time: Some("2014-03-19T07:55:02"),
+        orientation: Orientation::NoTransforms,
+        iso: Some(100),
+        exposure_time: Some((1, 200)),
+        f_number: Some((80, 10)),
+        focal_length: Some((240, 10)),
+        exposure_bias: Some((-3, 10)),
+        lens: Some(SampleLens {
+            make: None,
+            model: Some("E 16-70mm F4 ZA OSS"),
+            serial_number: false,
+            min_focal_length: Some((160, 10)),
+            max_focal_length: Some((700, 10)),
+            f_number_at_min_focal_length: Some((40, 10)),
+            f_number_at_max_focal_length: Some((40, 10)),
+        }),
+        raw_size: None,
+        image_size: Some((6000, 4000)),
+        focus: None, // no FocusLocation: a point number only (AFPointSelected)
+    },
+    // DSLR-A100 (Wikimedia Commons "Krone"_flag_on_line_5_tram_(2564030031).jpg)
+    SampleMetadata {
+        file: "sony-dslr-a100.jpg",
+        make: Some("SONY"),
+        model: Some("DSLR-A100"),
+        serial_number: None,
+        capture_time: Some("2008-06-09T15:44:33"),
+        orientation: Orientation::NoTransforms,
+        iso: Some(200),
+        exposure_time: Some((1, 640)),
+        f_number: Some((80, 10)),
+        focal_length: Some((3000, 10)),
+        exposure_bias: Some((0, 10)),
+        lens: None,
+        raw_size: None,
+        image_size: Some((3872, 2592)),
+        focus: None, // no FocusLocation: only the A100's Minolta block, which is not read
+    },
+    // NIKON D5300 (Wikimedia Commons "Tours"_French_restaurant_in_Omotesando.JPG)
+    SampleMetadata {
+        file: "nikon-d5300.jpg",
+        make: Some("NIKON CORPORATION"),
+        model: Some("NIKON D5300"),
+        serial_number: Some(SerialShape {
+            len: 7,
+            digits: true,
+        }),
+        capture_time: Some("2018-12-02T12:42:13.30+09:00"),
+        orientation: Orientation::NoTransforms,
+        iso: Some(400),
+        exposure_time: Some((10, 1250)),
+        f_number: Some((56, 10)),
+        focal_length: Some((180, 10)),
+        exposure_bias: Some((0, 6)),
+        lens: Some(SampleLens {
+            make: None,
+            model: None,
+            serial_number: false,
+            min_focal_length: Some((180, 10)),
+            max_focal_length: Some((550, 10)),
+            f_number_at_min_focal_length: Some((35, 10)),
+            f_number_at_max_focal_length: Some((56, 10)),
+        }),
+        raw_size: None,
+        image_size: Some((6000, 4000)),
+        focus: None, // a viewfinder shot: a zero frame and only a point number
+    },
+    // NIKON D70 (Wikimedia Commons "Stadswandeling".JPG)
+    SampleMetadata {
+        file: "nikon-d70.jpg",
+        make: Some("NIKON CORPORATION"),
+        model: Some("NIKON D70"),
+        serial_number: None,
+        capture_time: Some("2009-06-07T11:52:30"),
+        orientation: Orientation::NoTransforms,
+        iso: Some(200),
+        exposure_time: Some((10, 2500)),
+        f_number: Some((80, 10)),
+        focal_length: Some((620, 10)),
+        exposure_bias: Some((0, 6)),
+        lens: Some(SampleLens {
+            make: None,
+            model: None,
+            serial_number: false,
+            min_focal_length: Some((280, 10)),
+            max_focal_length: Some((800, 10)),
+            f_number_at_min_focal_length: Some((33, 10)),
+            f_number_at_max_focal_length: Some((56, 10)),
+        }),
+        raw_size: None,
+        image_size: Some((3008, 2000)),
+        focus: None, // no AFInfo2: AFInfo holds a point number only
+    },
+    // Canon PowerShot G7 X (Wikimedia Commons DC-3_OH-LCH_at_EFJM_20160717.jpg)
+    SampleMetadata {
+        file: "canon-powershot-g7x.jpg",
+        make: Some("Canon"),
+        model: Some("Canon PowerShot G7 X"),
+        serial_number: None,
+        capture_time: Some("2016-07-17T17:30:26"),
+        orientation: Orientation::NoTransforms,
+        iso: Some(125),
+        exposure_time: Some((1, 200)),
+        f_number: Some((40, 10)),
+        focal_length: Some((23008, 1000)),
+        exposure_bias: Some((0, 3)),
+        lens: None,
+        raw_size: None,
+        image_size: Some((5472, 3648)),
+        focus: None, // the MakerNote of a maker no reader reads
+    },
+];
+
+#[test]
+fn every_jpeg_sample_gives_its_metadata() {
+    for expected in METADATA {
+        check_metadata(expected, Format::Jpeg);
+    }
+}
+
+#[test]
+fn the_sample_list_and_the_tables_of_previews_and_metadata_name_the_same_jpeg_files() {
+    // The list is compiled in, so this runs without any download.
+    let listed = listed("jpeg");
+    let previews: Vec<&str> = SAMPLES.iter().map(|sample| sample.file).collect();
+    let metadata: Vec<&str> = METADATA.iter().map(|expected| expected.file).collect();
+    for (what, files) in [("previews", previews), ("metadata", metadata)] {
+        let expected: BTreeSet<(&str, &str)> = files.iter().map(|&file| (file, "normal")).collect();
+        assert_eq!(
+            expected.len(),
+            files.len(),
+            "a file is in the tables of {what} twice"
+        );
+        let unexpected: Vec<_> = listed.difference(&expected).collect();
+        let unlisted: Vec<_> = expected.difference(&listed).collect();
+        assert!(
+            unexpected.is_empty() && unlisted.is_empty(),
+            "listed without expected {what}: {unexpected:?}; \
+             expected {what} but not listed: {unlisted:?}"
+        );
+    }
 }
