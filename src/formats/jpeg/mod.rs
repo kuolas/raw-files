@@ -68,10 +68,12 @@
 //! it comes from the frame header, not from the segment. Past IFD0,
 //! damage costs only what it touches, as in a raw file: an IFD or a value
 //! that lies outside the segment is damage, and costs what it holds. A
-//! Nikon MakerNote that does not hold together, or in which a limit is
-//! crossed, costs what it would have given, its values, its focus point
-//! and its preview, as in a NEF. An MPF list that does not hold together
-//! costs only its images. Only a failure of the reader is an error.
+//! MakerNote that does not hold together, or in which a limit is crossed,
+//! costs what it would have given, as in a raw file: a Nikon MakerNote its
+//! values, its focus point and its preview, as in a NEF, and a Sony
+//! MakerNote its focus point, as in an ARW. An MPF list that does not hold
+//! together costs only its images. Only a failure of the reader is an
+//! error.
 //!
 //! # The metadata
 //!
@@ -81,17 +83,32 @@
 //! and the orientation from IFD0, and the serial number, the capture time,
 //! the exposure and the lens from the Exif IFD.
 //!
-//! Then the MakerNote is read, by IFD0's Make, as in a raw file (ADR014):
-//! when the Make, trimmed of spaces at either end, starts with `NIKON`, in
-//! any case, as the NEF claim tests it, the Nikon MakerNote reader
-//! (`makernote/nikon.rs`) reads it as it reads a NEF's. Its offsets count
-//! from its own inner header, so it reads the same inside the Exif segment.
-//! It gives what it gives a NEF: the serial number, the ISO, the lens's
-//! range and the capture time's offset from UTC, each only when the
-//! standard tags gave none, so that an Exif value always wins; and the
-//! focus point, below. A MakerNote with Nikon's signature under another
-//! maker's Make is not read: Nikon's software writes such MakerNotes into
-//! other makers' files. No other maker's MakerNote is read.
+//! Then the MakerNote is read, by IFD0's Make, as in a raw file (ADR014),
+//! once, by the reader of the maker the Make names ([`Maker`]); the Make
+//! is compared trimmed of spaces at either end and in any case, as the
+//! claims of the raw formats compare it.
+//!
+//! - **When the Make starts with `NIKON`**, as the NEF claim tests it, the
+//!   Nikon MakerNote reader (`makernote/nikon.rs`) reads it as it reads a
+//!   NEF's. Its offsets count from its own inner header, so it reads the
+//!   same inside the Exif segment. It gives what it gives a NEF: the
+//!   serial number, the ISO, the lens's range and the capture time's
+//!   offset from UTC, each only when the standard tags gave none, so that
+//!   an Exif value always wins; and the focus point, below.
+//! - **When the Make starts with `SONY`**, as the ARW claim first tests it,
+//!   the Sony MakerNote reader (`makernote/sony.rs`) reads it as it reads
+//!   an ARW's, for the focus point alone, below. Its offsets count from
+//!   the TIFF header of the structure that holds it, which in a JPEG is
+//!   the one inside the Exif segment, the base of the Exif IFD's offsets,
+//!   as the Sony camera JPEGs that ADR014 describes count them; its IFD
+//!   follows Sony's 12-byte `SONY DSC` header, which every one of them
+//!   writes. The ARW claim's second test, a Hasselblad Make with the
+//!   pointer to Sony's private directory, looks for a raw file's
+//!   structure, and a JPEG under Hasselblad's Make is not read as Sony's.
+//!
+//! A MakerNote of one maker's layout under another maker's Make is not
+//! read: Nikon's software writes Nikon-style MakerNotes into other makers'
+//! files. No other maker's MakerNote is read.
 //!
 //! The image size is the size in the frame header, the picture's own (T.81
 //! B.2.2 and Figure B.3, p. 35), never a size the tree gives: the Exif
@@ -115,6 +132,15 @@
 //! holds a CropArea gives no point on a crop, since it has no raw size to
 //! check CropArea against.
 //!
+//! The Sony MakerNote reader gives the point as it gives an ARW's (ADR012):
+//! the frame and the centre from FocusLocation, or FocusLocation2 without
+//! it, the area from FocusFrameSize where it records one, and none in
+//! manual focus. Sony's frame is the picture as framed in the camera, so
+//! the point is not placed: the ILCE-7M3's JPEG at the camera's M size
+//! records its point at (1783, 1804) in a frame of its own 3936 by 2624
+//! pixels. The DSLR-A100's MakerNote, of an older layout, holds no
+//! FocusLocation, and gives none.
+//!
 //! Then the point is kept only when its frame has the picture's aspect
 //! ratio, to within one pixel of rounding in either size ([`same_shape`]),
 //! in the stored orientation (ADR014). A camera's own JPEG passes, and so
@@ -127,7 +153,8 @@
 
 use std::io::{Read, Seek};
 
-use super::makernote::nikon::{self, MakerNote, NIKON, Picture};
+use super::makernote::nikon::{self, NIKON, Picture};
+use super::makernote::sony::{self, SONY};
 use super::tiff_metadata::{self, Standard};
 use super::tiff_previews::{self, Candidate};
 use super::{FormatSpec, JPEG_UNCLAIMED, Parsed, make_starts_with};
@@ -180,7 +207,9 @@ fn claims<R: Read + Seek>(_: &mut Source<R>, segments: &Segments) -> Result<bool
 /// and the thumbnail's candidate. When IFD0's Make names Nikon, the Nikon
 /// MakerNote is read, within `limits`, and gives the values the standard
 /// tags lack, the focus point among them, placed on the picture, and the
-/// candidate of its preview. The MPF list, read within `limits` as well,
+/// candidate of its preview; when it names Sony, the Sony MakerNote is
+/// read, within `limits`, and gives the focus point alone, as recorded
+/// ([`MakerNote::read`]). The MPF list, read within `limits` as well,
 /// gives a candidate for each image after the first. The shared finder
 /// checks them all, and the file itself joins them as a preview of its
 /// own, with its frame header's size, which is the metadata's image size.
@@ -215,7 +244,7 @@ fn parse<R: Read + Seek>(
         Some(tree) => (
             tiff_metadata::read(src, tree)?.metadata,
             tiff_previews::tree_candidates(src, tree)?,
-            nikon_makernote(src, tree, limits)?,
+            MakerNote::read(src, tree, limits)?,
         ),
         None => (Metadata::default(), Vec::new(), None),
     };
@@ -233,10 +262,15 @@ fn parse<R: Read + Seek>(
         from_default_crop: false,
     };
     let mut metadata = match &makernote {
-        Some(makernote) => {
+        Some(MakerNote::Nikon(makernote)) => {
             candidates.extend(nikon::preview_candidate(src, makernote, limits)?);
             nikon::metadata(src, makernote, standard, Picture::Jpeg)?
         }
+        // Sony's gives the focus point alone, as in an ARW.
+        Some(MakerNote::Sony(makernote)) => Metadata {
+            focus: sony::focus(src, makernote)?,
+            ..standard.metadata
+        },
         None => standard.metadata,
     };
     metadata.focus = metadata
@@ -264,29 +298,85 @@ fn parse<R: Read + Seek>(
     Ok(Parsed { previews, metadata })
 }
 
-/// The Nikon MakerNote of the JPEG file in `src`, whose Exif segment's
-/// TIFF structure is `tree`, read within `limits`: `None` unless IFD0's
-/// Make, trimmed of spaces at either end, starts with `NIKON`, in any case,
-/// as the NEF claim tests it ([`make_starts_with`]), and otherwise as
-/// [`nikon::read`] gives it.
-///
-/// Make decides, not the MakerNote's `Nikon` signature, as in a NEF:
-/// Nikon's editing software writes Nikon-style MakerNotes into the files of
-/// other makes, whose Make it leaves as it was. A Make that cannot be read
-/// is taken for another maker's, so that it costs only the MakerNote.
-///
-/// # Errors
-///
-/// `Io` when the reader fails. Nothing the file holds is an error here.
-fn nikon_makernote<R: Read + Seek>(
-    src: &mut Source<R>,
-    tree: &Tree,
-    limits: &Limits,
-) -> Result<Option<MakerNote>> {
-    if skip_damage(make_starts_with(src, tree, NIKON))? != Some(true) {
-        return Ok(None);
+/// A maker whose MakerNote the JPEG reader reads, as IFD0's Make names it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Maker {
+    /// Nikon: a Make that starts with [`NIKON`], as the NEF claim tests it.
+    Nikon,
+    /// Sony: a Make that starts with [`SONY`], as the ARW claim tests it
+    /// first. The claim's second test, a Hasselblad Make with Sony's
+    /// private pointer, is a raw file's structure, which a JPEG lacks.
+    Sony,
+}
+
+impl Maker {
+    /// Every maker whose MakerNote the JPEG reader reads. No Make starts
+    /// with two of their names, so the order does not matter.
+    const ALL: [Maker; 2] = [Maker::Nikon, Maker::Sony];
+
+    /// The name the maker's Make starts with.
+    fn name(self) -> &'static [u8] {
+        match self {
+            Maker::Nikon => NIKON,
+            Maker::Sony => SONY,
+        }
     }
-    nikon::read(src, tree, limits)
+
+    /// The maker that the IFD0 of `tree` names in its Make, trimmed of
+    /// spaces at either end and in any case, as the claims of the raw
+    /// formats test it ([`make_starts_with`]); `None` for any other Make, or
+    /// none.
+    ///
+    /// # Errors
+    ///
+    /// As for [`make_starts_with`].
+    fn of<R: Read + Seek>(src: &mut Source<R>, tree: &Tree) -> Result<Option<Maker>> {
+        for maker in Maker::ALL {
+            if make_starts_with(src, tree, maker.name())? {
+                return Ok(Some(maker));
+            }
+        }
+        Ok(None)
+    }
+}
+
+/// The MakerNote of a JPEG file, read once by its maker's reader, which
+/// every use of it starts from.
+#[derive(Debug)]
+enum MakerNote {
+    /// Nikon's: its values, its focus point and its preview.
+    Nikon(nikon::MakerNote),
+    /// Sony's: its focus point.
+    Sony(sony::MakerNote),
+}
+
+impl MakerNote {
+    /// The MakerNote of the JPEG file in `src`, whose Exif segment's TIFF
+    /// structure is `tree`, read within `limits` by the reader of the maker
+    /// that IFD0's Make names ([`Maker::of`]), as [`nikon::read`] or
+    /// [`sony::read`] gives it; `None` under any other Make.
+    ///
+    /// Make decides, not what the MakerNote looks like, as in a raw file:
+    /// Nikon's editing software writes Nikon-style MakerNotes into the files
+    /// of other makes, whose Make it leaves as it was, and a Sony MakerNote
+    /// without a header, as an ARW's is, holds nothing that names Sony. A
+    /// Make that cannot be read is taken for another maker's, so that it
+    /// costs only the MakerNote.
+    ///
+    /// # Errors
+    ///
+    /// `Io` when the reader fails. Nothing the file holds is an error here.
+    fn read<R: Read + Seek>(
+        src: &mut Source<R>,
+        tree: &Tree,
+        limits: &Limits,
+    ) -> Result<Option<MakerNote>> {
+        Ok(match skip_damage(Maker::of(src, tree))?.flatten() {
+            Some(Maker::Nikon) => nikon::read(src, tree, limits)?.map(MakerNote::Nikon),
+            Some(Maker::Sony) => sony::read(src, tree, limits)?.map(MakerNote::Sony),
+            None => None,
+        })
+    }
 }
 
 /// Whether a focus point measured in `frame` fits a JPEG whose picture is
@@ -409,52 +499,71 @@ mod tests {
         }
     }
 
+    /// What parsing a JPEG file gives when its reader fails past `FAR`,
+    /// where the file holds the MakerNote `block`, under IFD0's Make
+    /// `make`. The Exif segment's TIFF structure starts 1,024 bytes before
+    /// `FAR`, behind a comment, with IFD0 and the Exif IFD before `FAR` and
+    /// the MakerNote 2,048 bytes in, after it: reading the MakerNote fails.
+    /// The same bytes, read without the failure, are checked to open.
+    fn parsed_when_the_makernote_fails(make: &str, block: &[u8]) -> Result<Parsed> {
+        const MAKER_NOTE_AT: u64 = 2048;
+        let mut tiff = TiffBuilder::new(Order::Little);
+        let (ifd0, exif) = (tiff.ifd(), tiff.ifd());
+        tiff.ascii(ifd0, MAKE, make).exif(ifd0, exif);
+        let makernote = tiff.blob_at(MAKER_NOTE_AT, block);
+        tiff.undefined_blob(exif, MAKER_NOTE, makernote);
+        // SOI, the comment's marker and length, then the Exif segment's
+        // marker, length and identifier come before the TIFF header: 16
+        // bytes besides the comment's payload.
+        let comment = usize::try_from(FAR - 1024 - 16).unwrap();
+        let mut builder = JpegBuilder::new();
+        builder
+            .segment(0xFE, &vec![0x20; comment])
+            .exif(&tiff.build().bytes);
+        let built = builder.build();
+        let header = built.exif_tiff(0).start;
+        assert_eq!(header, FAR - 1024, "{make}");
+        assert!(header + MAKER_NOTE_AT >= FAR, "{make}");
+        let (bytes, found) = read(&builder);
+        // Read without the failure, the same bytes open.
+        let mut src = Source::new(Cursor::new(bytes.clone())).unwrap();
+        parse(&mut src, &found, &Limits::default()).unwrap();
+
+        let mut src = Source::new(FailsFar(Cursor::new(bytes))).unwrap();
+        parse(&mut src, &found, &Limits::default())
+    }
+
+    /// Checks that the file of [`parsed_when_the_makernote_fails`] with the
+    /// MakerNote `block` fails with an `Io` error under IFD0's Make `make`,
+    /// which reads the MakerNote, and opens under another maker's, which
+    /// does not.
+    fn assert_only_its_make_reads(make: &str, block: &[u8]) {
+        let Err(err) = parsed_when_the_makernote_fails(make, block) else {
+            panic!("{make}: the reader fails");
+        };
+        assert_eq!(err.kind(), ErrorKind::Io, "{make}: {err:?}");
+        let parsed = parsed_when_the_makernote_fails("Canon", block)
+            .expect("another make's MakerNote is not read");
+        assert_eq!(parsed.metadata.make.as_deref(), Some("Canon"));
+    }
+
     #[test]
     fn a_failing_reader_inside_a_nikon_makernote_is_an_io_error() {
-        // The Exif segment's TIFF structure starts 1,024 bytes before
-        // `FAR`, behind a comment, with IFD0 and the Exif IFD before `FAR`
-        // and the MakerNote 2,048 bytes in, after it: reading the MakerNote
-        // fails, and only a Nikon Make reads it. The MakerNote is the
-        // signature, the version, two zero bytes and an inner TIFF header
-        // whose MakerNote IFD has no entries.
-        const MAKER_NOTE_AT: u64 = 2048;
+        // The signature, the version, two zero bytes and an inner TIFF
+        // header whose MakerNote IFD has no entries.
         let mut block = b"Nikon\0\x02\x11\0\0II\x2A\0\x08\0\0\0".to_vec();
         block.extend_from_slice(&[0; 6]);
-        for make in ["NIKON CORPORATION", "Canon"] {
-            let mut tiff = TiffBuilder::new(Order::Little);
-            let (ifd0, exif) = (tiff.ifd(), tiff.ifd());
-            tiff.ascii(ifd0, MAKE, make).exif(ifd0, exif);
-            let makernote = tiff.blob_at(MAKER_NOTE_AT, &block);
-            tiff.undefined_blob(exif, MAKER_NOTE, makernote);
-            // SOI, the comment's marker and length, then the Exif
-            // segment's marker, length and identifier come before the TIFF
-            // header: 16 bytes besides the comment's payload.
-            let comment = usize::try_from(FAR - 1024 - 16).unwrap();
-            let mut builder = JpegBuilder::new();
-            builder
-                .segment(0xFE, &vec![0x20; comment])
-                .exif(&tiff.build().bytes);
-            let built = builder.build();
-            let header = built.exif_tiff(0).start;
-            assert_eq!(header, FAR - 1024, "{make}");
-            assert!(header + MAKER_NOTE_AT >= FAR, "{make}");
-            let (bytes, found) = read(&builder);
-            // Read without the failure, the same bytes open.
-            let mut src = Source::new(Cursor::new(bytes.clone())).unwrap();
-            parse(&mut src, &found, &Limits::default()).unwrap();
+        assert_only_its_make_reads("NIKON CORPORATION", &block);
+    }
 
-            let mut src = Source::new(FailsFar(Cursor::new(bytes))).unwrap();
-            let parsed = parse(&mut src, &found, &Limits::default());
-            if make == "Canon" {
-                let parsed = parsed.expect("another make's MakerNote is not read");
-                assert_eq!(parsed.metadata.make.as_deref(), Some("Canon"));
-            } else {
-                let Err(err) = parsed else {
-                    panic!("{make}: the reader fails");
-                };
-                assert_eq!(err.kind(), ErrorKind::Io, "{make}: {err:?}");
-            }
-        }
+    #[test]
+    fn a_failing_reader_inside_a_sony_makernote_is_an_io_error() {
+        // The `SONY DSC` header, then an IFD of one entry, FocusMode, one
+        // BYTE 3, with no next IFD, little-endian as the file is.
+        let mut block = b"SONY DSC \0\0\0\x01\0".to_vec();
+        block.extend_from_slice(&[0x1B, 0x20, 0x01, 0, 0x01, 0, 0, 0, 0x03, 0, 0, 0]);
+        block.extend_from_slice(&[0; 4]);
+        assert_only_its_make_reads("SONY", &block);
     }
 
     /// `width` by `height`, as a size.

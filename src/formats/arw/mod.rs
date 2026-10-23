@@ -47,13 +47,9 @@ use crate::container::tiff::tags::DNG_PRIVATE_DATA;
 use crate::container::tiff::types::BYTE;
 use crate::error::Result;
 use crate::format::Format;
-use crate::formats::makernote::sony;
+use crate::formats::makernote::sony::{self, SONY};
 use crate::io::Source;
 use crate::limits::Limits;
-
-/// The manufacturer's name that a Sony camera's Make starts with, compared
-/// without regard to case.
-const SONY: &[u8; 4] = b"SONY";
 
 /// The manufacturer's name that a Hasselblad camera's Make starts with,
 /// compared without regard to case.

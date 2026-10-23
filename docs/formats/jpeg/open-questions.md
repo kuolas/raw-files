@@ -88,6 +88,11 @@ affects; [test-data.md](test-data.md) describes the files.
   points into its MPF image, outside the Exif segment, and is dropped.
   Whether other Sony bodies write it, and where it points, is unchecked;
   no reader needs it. [F]
+- **A phone's JPEG whose Make starts with `SONY`**, in any case, as Sony
+  Ericsson and Xperia phones write it, has its MakerNote read by the
+  reader of Sony's camera MakerNote. Whether such a MakerNote holds
+  Sony's camera tags is unchecked on any file; phones are outside what
+  the JPEG reader is for. [I]
 - **Other makers.** No camera-original Fujifilm, Panasonic or phone JPEG
   with a usable licence was found; Canon's MakerNote is not read. [S]
 

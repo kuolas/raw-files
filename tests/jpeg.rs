@@ -11,7 +11,12 @@
 //! IFD0's Make: the values it adds where the Exif segment has none, its
 //! preview, and its focus point, placed on the JPEG's pixels on a crop mode
 //! and kept only when its frame has the picture's shape; and the damage
-//! and the limits that cost the MakerNote but not the file.
+//! and the limits that cost the MakerNote but not the file. Then the Sony
+//! MakerNote of a Sony camera's JPEG, read by IFD0's Make too, with its
+//! offsets counted from the Exif segment's TIFF header: its focus point,
+//! as recorded and kept only when its frame has the picture's shape, none
+//! where it records none, and the damage and the limits that cost the
+//! point but not the file.
 
 mod support;
 
@@ -22,9 +27,19 @@ use raw_files::{
     DateTime, ErrorKind, Exposure, Focus, Format, Lens, Limits, Metadata, Options, Orientation,
     Point, Preview, PreviewFormat, Rational, RawFile, SignedRational, Size,
 };
+use support::arw::{
+    ARW4_FOCUS_CENTER, ARW4_FOCUS_FRAME, ARW4_FOCUS_SIZE, ARW4_FULL_SIZE_JPEG,
+    FOCUS_LOCATION as SONY_FOCUS_LOCATION,
+};
 use support::jpeg_builder::{
     Built, JpegBuilder, LONG, MP_ENTRY, MP_ENTRY_AT, MP_ENTRY_LEN, MP_INDEX_AT, MPF_ID,
     MPF_VERSION, NUMBER_OF_IMAGES, UNDEFINED,
+};
+use support::jpeg_files::{
+    A100_MAIN, A100_MODEL, ILCE7M3_FOCUS_LOCATION, ILCE7M3_MAIN, ILCE7M3_MODEL, ILCE7M4_MODEL,
+    ILCE6000_MAIN, ILCE6000_MODEL, RX100M4_MAIN, RX100M4_MODEL, SONY_LOST, SONY_MAKE,
+    SONY_MPF_IMAGE, SONY_PADDING, SonyJpeg, a100_jpeg, ilce7m3_jpeg, ilce7m3_jpeg_with,
+    ilce7m4_jpeg, ilce6000_jpeg, rx100m4_jpeg,
 };
 use support::jpeg_files::{
     APERTURE, BODY_SERIAL_NUMBER, CAMERA_MAKE, CAMERA_MODEL, CAMERA_SERIAL_NUMBER,
@@ -1285,6 +1300,353 @@ fn a_limit_crossed_inside_the_makernote_costs_the_makernote_only() {
                 &file.built.bytes,
                 &previews,
                 &metadata,
+                &format!("{entries} entries, {order:?}"),
+            );
+        }
+    }
+}
+
+/// The focus point a Sony MakerNote's FocusLocation `location` records:
+/// the frame's width and height, then the centre's x and y. Sony records
+/// no confirmation of focus.
+fn sony_focus([width, height, x, y]: [u16; 4]) -> Focus {
+    let frame = size_of((width, height));
+    Focus::new(
+        frame,
+        Point {
+            x: u32::from(x),
+            y: u32::from(y),
+        },
+    )
+    .expect("a usable focus point")
+}
+
+/// The previews of the Sony JPEG `file`, laid out with the MPF index and
+/// its image and a main image of `main`, smallest first: the thumbnail,
+/// the MPF image and the file, padding included, all turned by IFD0's
+/// Orientation 6.
+fn sony_previews(file: &SonyJpeg, main: (u16, u16)) -> Vec<Seen> {
+    let built = &file.built;
+    expected(
+        &[
+            (in_file(built, &file.thumbnail), THUMBNAIL),
+            (built.mpf_image(0), SONY_MPF_IMAGE),
+            (whole(built), main),
+        ],
+        Orientation::Rotate90,
+    )
+}
+
+/// The metadata of a Sony JPEG that `sony_jpeg` lays out with IFD0's
+/// Make `make` and Model `model` and a main image of `main`: every value
+/// [`camera_exif`] writes but [`SONY_LOST`], that Make and Model, the image
+/// size `main`, and the focus point `focus`.
+fn sony_metadata(make: &str, model: &str, main: (u16, u16), focus: Option<Focus>) -> Metadata {
+    let metadata = camera_metadata_without(&SONY_LOST)
+        .with_make(make)
+        .with_model(model)
+        .with_image_size(size_of(main));
+    match focus {
+        Some(focus) => metadata.with_focus(focus),
+        None => metadata,
+    }
+}
+
+#[test]
+fn a_sony_jpeg_gives_the_focus_point_its_makernote_records() {
+    // The ILCE-7M3's JPEG at the camera's M size, whose MakerNote, after
+    // the `SONY DSC` header, records its point off centre in a frame of
+    // the JPEG's own size, in AF-C: the point as recorded, with no area
+    // and no confirmation. Every value the Exif segment records is kept,
+    // and the file's own preview runs through the zeros after its end.
+    for order in ORDERS {
+        let file = ilce7m3_jpeg(order, ILCE7M3_MAIN);
+        let bytes = &file.built.bytes;
+        assert!(
+            bytes.ends_with(&[0; SONY_PADDING]),
+            "{order:?}: the file ends with zeros"
+        );
+        assert_opens(
+            bytes,
+            &sony_previews(&file, ILCE7M3_MAIN),
+            &sony_metadata(
+                SONY_MAKE,
+                ILCE7M3_MODEL,
+                ILCE7M3_MAIN,
+                Some(sony_focus(ILCE7M3_FOCUS_LOCATION)),
+            ),
+            &format!("ILCE-7M3, {order:?}"),
+        );
+    }
+}
+
+#[test]
+fn a_sony_jpeg_gives_the_area_its_makernote_records() {
+    // A JPEG whose MakerNote holds the ILCE-7M4 raw file's FocusLocation
+    // and FocusFrameSize, in the file's byte order: the point with its
+    // area of 350 by 351.
+    let (frame_width, frame_height) = ARW4_FOCUS_FRAME;
+    let (x, y) = ARW4_FOCUS_CENTER;
+    let focus = sony_focus([frame_width, frame_height, x, y])
+        .with_size(size_of(ARW4_FOCUS_SIZE))
+        .expect("an area that fits");
+    for order in ORDERS {
+        let file = ilce7m4_jpeg(order);
+        assert_opens(
+            &file.built.bytes,
+            &sony_previews(&file, ARW4_FULL_SIZE_JPEG),
+            &sony_metadata(SONY_MAKE, ILCE7M4_MODEL, ARW4_FULL_SIZE_JPEG, Some(focus)),
+            &format!("ILCE-7M4, {order:?}"),
+        );
+    }
+}
+
+#[test]
+fn a_smaller_sony_jpeg_of_the_same_shape_keeps_its_point() {
+    // The ILCE-7M3's MakerNote in a JPEG of half its size, 1968 by 1312,
+    // as an export scaled from it: the frame of 3936 by 2624 has the
+    // picture's shape, and the point is kept as recorded, in that frame.
+    let main = (1968, 1312);
+    for order in ORDERS {
+        let file = ilce7m3_jpeg(order, main);
+        assert_opens(
+            &file.built.bytes,
+            &sony_previews(&file, main),
+            &sony_metadata(
+                SONY_MAKE,
+                ILCE7M3_MODEL,
+                main,
+                Some(sony_focus(ILCE7M3_FOCUS_LOCATION)),
+            ),
+            &format!("{main:?}, {order:?}"),
+        );
+    }
+}
+
+#[test]
+fn a_sony_export_cut_to_another_shape_gives_no_focus_point() {
+    // The ILCE-7M3's MakerNote, kept by an export cut to portrait, or to a
+    // square: the frame of 3936 by 2624 has not the picture's shape, and
+    // the point is dropped (ADR014).
+    for order in ORDERS {
+        for main in [(2624, 3936), (2624, 2624)] {
+            let file = ilce7m3_jpeg(order, main);
+            assert_opens(
+                &file.built.bytes,
+                &sony_previews(&file, main),
+                &sony_metadata(SONY_MAKE, ILCE7M3_MODEL, main, None),
+                &format!("{main:?}, {order:?}"),
+            );
+        }
+    }
+}
+
+#[test]
+fn a_sony_jpeg_in_manual_focus_gives_no_focus_point() {
+    // The DSC-RX100M4's JPEG, whose FocusMode is the one BYTE 0, manual
+    // focus, and whose FocusLocation is the frame's centre: no point.
+    for order in ORDERS {
+        let file = rx100m4_jpeg(order);
+        assert_opens(
+            &file.built.bytes,
+            &sony_previews(&file, RX100M4_MAIN),
+            &sony_metadata(SONY_MAKE, RX100M4_MODEL, RX100M4_MAIN, None),
+            &format!("RX100M4, {order:?}"),
+        );
+    }
+}
+
+#[test]
+fn a_sony_jpeg_without_a_focus_location_gives_no_focus_point() {
+    // The ILCE-6000's JPEG, whose MakerNote holds a FocusMode of AF-A and
+    // no FocusLocation, as the bodies before the ILCE-7RM2 write it.
+    for order in ORDERS {
+        let file = ilce6000_jpeg(order);
+        assert_opens(
+            &file.built.bytes,
+            &sony_previews(&file, ILCE6000_MAIN),
+            &sony_metadata(SONY_MAKE, ILCE6000_MODEL, ILCE6000_MAIN, None),
+            &format!("ILCE-6000, {order:?}"),
+        );
+    }
+}
+
+#[test]
+fn an_a100_jpeg_opens_with_its_standard_metadata_and_no_focus_point() {
+    // The DSLR-A100's JPEG, with no MPF index, whose MakerNote, after the
+    // same header, holds tags of an older layout and no FocusLocation:
+    // the standard metadata, the thumbnail and the file, and no point.
+    for order in ORDERS {
+        let file = a100_jpeg(order);
+        let previews = expected(
+            &[
+                (in_file(&file.built, &file.thumbnail), THUMBNAIL),
+                (whole(&file.built), A100_MAIN),
+            ],
+            Orientation::Rotate90,
+        );
+        assert_opens(
+            &file.built.bytes,
+            &previews,
+            &sony_metadata(SONY_MAKE, A100_MODEL, A100_MAIN, None),
+            &format!("A100, {order:?}"),
+        );
+    }
+}
+
+/// The 16-bit number at `at` in `bytes`, in byte order `order`.
+fn u16_in(bytes: &[u8], at: u64, order: Order) -> u16 {
+    let at = usize::try_from(at).unwrap();
+    let pair = [bytes[at], bytes[at + 1]];
+    match order {
+        Order::Little => u16::from_le_bytes(pair),
+        Order::Big => u16::from_be_bytes(pair),
+    }
+}
+
+/// The 32-bit number at `at` in `bytes`, in byte order `order`.
+fn u32_in(bytes: &[u8], at: u64, order: Order) -> u32 {
+    let (high, low) = (u16_in(bytes, at, order), u16_in(bytes, at + 2, order));
+    match order {
+        Order::Little => u32::from(low) << 16 | u32::from(high),
+        Order::Big => u32::from(high) << 16 | u32::from(low),
+    }
+}
+
+/// The value field of the entry of tag `tag` in the IFD that lies at `ifd`
+/// in `bytes`, in byte order `order`: for a value stored out of line, its
+/// offset.
+fn field_in(bytes: &[u8], ifd: u64, order: Order, tag: u16) -> u32 {
+    let entry = (0..u64::from(u16_in(bytes, ifd, order)))
+        .map(|n| ifd + 2 + 12 * n)
+        .find(|&entry| u16_in(bytes, entry, order) == tag)
+        .expect("the tag is in the IFD");
+    u32_in(bytes, entry + 8, order)
+}
+
+/// The four SHORTs at `at` in `bytes`, in byte order `order`.
+fn shorts_in(bytes: &[u8], at: u64, order: Order) -> [u16; 4] {
+    [0, 2, 4, 6].map(|n| u16_in(bytes, at + n, order))
+}
+
+/// A tag of Sony's MakerNote that the JPEG reader does not read, numbered
+/// below FocusLocation, so that its value lies right before FocusLocation's
+/// in the IFD's values.
+const UNREAD_BEFORE_FOCUS: u16 = 0x0010;
+
+#[test]
+fn a_sony_makernotes_offsets_count_from_the_exif_segments_tiff_header() {
+    // The ILCE-7M3's JPEG, whose MakerNote holds 32 bytes of a tag the
+    // reader does not read, just before FocusLocation's value. The Exif
+    // segment comes first, so its TIFF header lies 12 bytes into the file,
+    // and the offset FocusLocation's entry holds, counted from the file's
+    // start, lands 12 bytes early, inside those 32 bytes, where a decoy
+    // lies: a FocusLocation of the same frame with another centre. Counted
+    // from the Exif segment's TIFF header, the point is the camera's; from
+    // the file's start it would be the decoy's, and from the MakerNote's
+    // own start, as Nikon's count, past the MakerNote, and none.
+    let decoy = [3936, 2624, 100, 200];
+    for order in ORDERS {
+        let mut unread = vec![0; 32];
+        unread[20..28].copy_from_slice(&decoy.map(|n| order.u16(n)).concat());
+        let file = ilce7m3_jpeg_with(order, SONY_MAKE, ILCE7M3_MAIN, |tiff, ifd| {
+            tiff.undefined(ifd, UNREAD_BEFORE_FOCUS, &unread);
+        });
+        let bytes = &file.built.bytes;
+        let base = file.built.exif_tiff(0).start;
+        assert_eq!(base, 12, "{order:?}");
+        let offset = u64::from(field_in(
+            bytes,
+            file.makernote_ifd,
+            order,
+            SONY_FOCUS_LOCATION,
+        ));
+        assert_eq!(
+            shorts_in(bytes, base + offset, order),
+            ILCE7M3_FOCUS_LOCATION,
+            "{order:?}"
+        );
+        assert_eq!(shorts_in(bytes, offset, order), decoy, "{order:?}");
+        assert_opens(
+            bytes,
+            &sony_previews(&file, ILCE7M3_MAIN),
+            &sony_metadata(
+                SONY_MAKE,
+                ILCE7M3_MODEL,
+                ILCE7M3_MAIN,
+                Some(sony_focus(ILCE7M3_FOCUS_LOCATION)),
+            ),
+            &format!("{order:?}"),
+        );
+    }
+}
+
+#[test]
+fn a_sony_makernote_under_another_makers_make_is_not_read() {
+    // The ILCE-7M3's JPEG under other Makes: another maker's, Hasselblad's,
+    // whose Sony-built bodies the ARW claim tells apart by a raw file's
+    // structure, which a JPEG lacks, and Nikon's, whose reader finds no
+    // Nikon MakerNote in Sony's. None gives the point. Sony's Make in any
+    // case reads it.
+    for order in ORDERS {
+        for (make, read) in [
+            ("Canon", false),
+            ("HASSELBLAD", false),
+            ("NIKON CORPORATION", false),
+            ("SONY", true),
+            ("sony", true),
+        ] {
+            let file = ilce7m3_jpeg_with(order, make, ILCE7M3_MAIN, |_, _| {});
+            let focus = read.then(|| sony_focus(ILCE7M3_FOCUS_LOCATION));
+            assert_opens(
+                &file.built.bytes,
+                &sony_previews(&file, ILCE7M3_MAIN),
+                &sony_metadata(make, ILCE7M3_MODEL, ILCE7M3_MAIN, focus),
+                &format!("{make}, {order:?}"),
+            );
+        }
+    }
+}
+
+#[test]
+fn a_damaged_sony_makernote_costs_only_its_focus_point() {
+    // The ILCE-7M3's JPEG whose MakerNote IFD counts 200 entries, whose
+    // table would run far past the MakerNote's end: the file opens with
+    // every value of its Exif segment and every preview, and no point.
+    for order in ORDERS {
+        let mut file = ilce7m3_jpeg(order, ILCE7M3_MAIN);
+        let at = usize::try_from(file.makernote_ifd).unwrap();
+        assert_eq!(u16_in(&file.built.bytes, file.makernote_ifd, order), 2);
+        file.built.bytes[at..at + 2].copy_from_slice(&order.u16(200));
+        assert_opens(
+            &file.built.bytes,
+            &sony_previews(&file, ILCE7M3_MAIN),
+            &sony_metadata(SONY_MAKE, ILCE7M3_MODEL, ILCE7M3_MAIN, None),
+            &format!("{order:?}"),
+        );
+    }
+}
+
+#[test]
+fn a_limit_crossed_inside_the_sony_makernote_costs_its_focus_point_only() {
+    // A MakerNote IFD of 12 entries: FocusMode, FocusLocation and 10 more
+    // of no meaning, beside an Exif IFD of 10, the most any other IFD of
+    // the file holds. With a limit of 12 entries the MakerNote gives its
+    // point; with 11 it gives none, and the rest of the file is as without
+    // it.
+    for order in ORDERS {
+        let file = ilce7m3_jpeg_with(order, SONY_MAKE, ILCE7M3_MAIN, |tiff, ifd| {
+            for tag in 0x1000..0x100A {
+                tiff.undefined(ifd, tag, &[0; 4]);
+            }
+        });
+        assert_eq!(u16_in(&file.built.bytes, file.makernote_ifd, order), 12);
+        for (entries, focus) in [(12, Some(sony_focus(ILCE7M3_FOCUS_LOCATION))), (11, None)] {
+            assert_opens_with(
+                &Options::new().limits(Limits::default().max_ifd_entries(entries)),
+                &file.built.bytes,
+                &sony_previews(&file, ILCE7M3_MAIN),
+                &sony_metadata(SONY_MAKE, ILCE7M3_MODEL, ILCE7M3_MAIN, focus),
                 &format!("{entries} entries, {order:?}"),
             );
         }

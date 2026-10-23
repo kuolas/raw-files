@@ -195,9 +195,10 @@ is the base of its offsets
 - **One entry points outside the Exif segment.** The ILCE-6000 JPEG's tag
   0x2001, PreviewImage, which ExifTool's tables describe as an HD-size
   preview in JPEG images [P][1], declares 549,518 bytes at an offset that
-  lies inside the 1616 × 1080 MPF image after the main image. Such an
-  entry is to be dropped, as one outside the MakerNote is, and no reader
-  in raw-files reads that tag. [F]
+  lies inside the 1616 × 1080 MPF image after the main image. raw-files
+  drops such an entry when it reads the MakerNote, as it drops any entry
+  whose value lies outside the MakerNote, and no reader in raw-files reads
+  that tag. [F]
 
 ## 2. Key tags
 

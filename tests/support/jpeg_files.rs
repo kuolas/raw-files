@@ -42,13 +42,32 @@
 //!   with no MPF index, whose MakerNote, in the other byte order from the
 //!   file's, records the ISO and the lens's range and holds a preview of
 //!   564 by 372 pixels, inside its declared length or just past it.
+//! - [`sony_jpeg`]: a Sony camera's JPEG, laid out as the ILCE-7M3's: an
+//!   Exif segment, an MPF index, the main image of any size, the one MPF
+//!   image of [`SONY_MPF_IMAGE`] and zeros after it, or, without the MPF
+//!   index, the main image alone after the Exif segment; [`camera_exif`]'s
+//!   values but [`SONY_LOST`], with a Sony Make and Model, or any; and a
+//!   Sony MakerNote in the Exif IFD, the [`SONY_DSC`] header and then an IFD
+//!   written by the builder of the segment's TIFF structure, so that its
+//!   offsets count from that structure's header, as on Sony's camera JPEGs.
+//!   Five bodies' layouts are built on it: [`ilce7m3_jpeg`], the
+//!   ILCE-7M3's, at any size, whose MakerNote records its focus point in a
+//!   frame of the JPEG's size, and [`ilce7m3_jpeg_with`], the same with
+//!   any Make and more MakerNote tags; [`ilce7m4_jpeg`], with the focus
+//!   point and area of the ILCE-7M4's raw file; [`rx100m4_jpeg`], a
+//!   DSC-RX100M4's in manual focus; [`ilce6000_jpeg`], an ILCE-6000's,
+//!   with no FocusLocation; and [`a100_jpeg`], a DSLR-A100's, with no MPF
+//!   index and a MakerNote of an older layout.
 //!
 //! The TIFF structure of an Exif segment and the MPF index are each in the
-//! byte order a test gives, and a Nikon MakerNote in the one its layout
-//! gives.
+//! byte order a test gives, a Nikon MakerNote in the one its layout gives,
+//! and a Sony MakerNote in the TIFF structure's.
 
 use std::ops::Range;
 
+use super::arw::{
+    self, ARW4_FOCUS_CENTER, ARW4_FOCUS_FRAME, ARW4_FULL_SIZE_JPEG, arw4_focus_frame_size,
+};
 use super::jpeg_builder::{Built, JpegBuilder};
 use super::jpeg_stub::jpeg_stub;
 use super::nef::{
@@ -679,6 +698,246 @@ pub fn d70_jpeg(order: Order, preview_outside: bool) -> (NikonJpeg, Range<u64>) 
     let start = file.makernote.start + at;
     let end = start + u64::try_from(preview.len()).unwrap();
     (file, start..end)
+}
+
+/// The Make of a Sony camera's JPEG, in IFD0.
+pub const SONY_MAKE: &str = "SONY";
+/// The header a Sony camera writes before the MakerNote IFD of its JPEGs
+/// (`SONY DSC `, then three NULs), on every Sony camera JPEG the notes
+/// record.
+pub const SONY_DSC: &[u8; 12] = b"SONY DSC \0\0\0";
+/// The tags of [`camera_exif`] that a Sony camera's JPEG leaves out: its
+/// own Make and Model take the Z 9's place, and the lens tags, which name
+/// a Nikon lens, are left out.
+pub const SONY_LOST: [u16; 6] = [
+    MAKE,
+    MODEL,
+    LENS_MAKE,
+    LENS_MODEL,
+    LENS_SERIAL_NUMBER,
+    LENS_SPECIFICATION,
+];
+/// The size of the one image the MPF list of a Sony camera's JPEG holds
+/// after the main one, a large thumbnail of class 2.
+pub const SONY_MPF_IMAGE: (u16, u16) = (1616, 1080);
+/// The zeros after the last image of a Sony camera's JPEG with an MPF
+/// list: a few, where the cameras write tens of thousands, up to a
+/// multiple of 64 KiB, so that the robustness tests sweep the file
+/// quickly.
+pub const SONY_PADDING: usize = 512;
+
+/// A Sony camera's JPEG, as [`sony_jpeg`] lays it out, and where its parts
+/// are.
+pub struct SonyJpeg {
+    /// The file.
+    pub built: Built,
+    /// Where IFD1's thumbnail lies in the Exif segment's TIFF structure,
+    /// counted from its header.
+    pub thumbnail: Range<u64>,
+    /// Where the MakerNote IFD lies in the file: its count of entries,
+    /// right after the [`SONY_DSC`] header.
+    pub makernote_ifd: u64,
+}
+
+/// A Sony camera's JPEG: an Exif segment, then, only when `mpf`, an MPF
+/// index in byte order `order`; the main image of `main`; and, only when
+/// `mpf`, the image of [`SONY_MPF_IMAGE`] after zeros up to a multiple of
+/// 512 bytes, then [`SONY_PADDING`] zeros, as the ILCE-7M3, ILCE-7RM2 and
+/// ILCE-6000 lay their JPEGs out (the ILCE-7M3's XMP segment left out).
+/// The Exif segment holds the TIFF structure [`camera_exif`] writes in byte
+/// order `order`, but [`SONY_LOST`], with IFD0's Make `make` and Model
+/// `model`, and with a Sony MakerNote in the Exif IFD: [`SONY_DSC`], then
+/// the MakerNote IFD with what `tags` adds, given the builder and that IFD,
+/// and the IFD's values, all written by the builder of the TIFF structure,
+/// so that every offset counts from that structure's header, as on the
+/// Sony camera JPEGs the notes record, and every number is in byte order
+/// `order`.
+pub fn sony_jpeg(
+    order: Order,
+    make: &str,
+    model: &str,
+    main: (u16, u16),
+    mpf: bool,
+    tags: impl FnOnce(&mut TiffBuilder, IfdId),
+) -> SonyJpeg {
+    let (tiff, thumbnail, makernote) = camera_exif_built(order, &SONY_LOST, |tiff, ifd0, exif| {
+        tiff.ascii(ifd0, MAKE, make).ascii(ifd0, MODEL, model);
+        let makernote = tiff.ifd();
+        tiff.prefix(makernote, SONY_DSC);
+        tags(tiff, makernote);
+        tiff.undefined_ifd(exif, MAKER_NOTE, makernote);
+        makernote
+    });
+    let mut builder = JpegBuilder::new();
+    builder.exif(&tiff.bytes);
+    if mpf {
+        builder.mpf(order);
+    }
+    builder.frame(main.0, main.1, 0xC0);
+    if mpf {
+        builder
+            .mpf_image(SONY_MPF_IMAGE.0, SONY_MPF_IMAGE.1, &[], 512)
+            .pad(SONY_PADDING);
+    }
+    let built = builder.build();
+    let makernote_ifd = built.exif_tiff(0).start + tiff.ifd_offset(makernote);
+    SonyJpeg {
+        built,
+        thumbnail,
+        makernote_ifd,
+    }
+}
+
+/// The Model of the ILCE-7M3's JPEG, in IFD0.
+pub const ILCE7M3_MODEL: &str = "ILCE-7M3";
+/// The size of the ILCE-7M3's JPEG at the camera's M size, as in the
+/// ILCE-7M3's JPEG on Wikimedia Commons.
+pub const ILCE7M3_MAIN: (u16, u16) = (3936, 2624);
+/// The FocusLocation of the ILCE-7M3's JPEG on Wikimedia Commons, as ADR014
+/// records it: the frame, the JPEG's own size, then the centre, off
+/// centre.
+pub const ILCE7M3_FOCUS_LOCATION: [u16; 4] = [3936, 2624, 1783, 1804];
+
+/// A JPEG laid out as the Sony ILCE-7M3's, in byte order `order`, with a
+/// main image of `main`, its MakerNote and all: laid out as
+/// [`sony_jpeg`]'s, with the MPF index, its image and the padding, with
+/// IFD0's Make [`SONY_MAKE`] and Model [`ILCE7M3_MODEL`]; its MakerNote
+/// holds FocusMode 3 (AF-C), one BYTE, and FocusLocation
+/// [`ILCE7M3_FOCUS_LOCATION`], four SHORTs, as the ILCE-7M3's JPEG on
+/// Wikimedia Commons records them. A `main` other than [`ILCE7M3_MAIN`]
+/// stands for an export that kept the camera's MakerNote.
+pub fn ilce7m3_jpeg(order: Order, main: (u16, u16)) -> SonyJpeg {
+    ilce7m3_jpeg_with(order, SONY_MAKE, main, |_, _| {})
+}
+
+/// As [`ilce7m3_jpeg`], with IFD0's Make `make`, and with what `tags` adds
+/// to the MakerNote IFD, given the builder and that IFD.
+pub fn ilce7m3_jpeg_with(
+    order: Order,
+    make: &str,
+    main: (u16, u16),
+    tags: impl FnOnce(&mut TiffBuilder, IfdId),
+) -> SonyJpeg {
+    sony_jpeg(order, make, ILCE7M3_MODEL, main, true, |tiff, ifd| {
+        tiff.byte(ifd, arw::FOCUS_MODE, &[3]).short(
+            ifd,
+            arw::FOCUS_LOCATION,
+            &ILCE7M3_FOCUS_LOCATION,
+        );
+        tags(tiff, ifd);
+    })
+}
+
+/// The Model of the ILCE-7M4's JPEG, in IFD0.
+pub const ILCE7M4_MODEL: &str = "ILCE-7M4";
+
+/// A JPEG laid out as the Sony ILCE-7M3's, in byte order `order`, but of
+/// an ILCE-7M4, a body that records the size of its focus area: IFD0's
+/// Model [`ILCE7M4_MODEL`], a main image of `ARW4_FULL_SIZE_JPEG`, 7008 by
+/// 4672, and a MakerNote that holds the focus tags of the ARW 4 fixtures,
+/// those of the public ILCE-7M4 sample 6929 of raw.pixls.us: FocusMode 3
+/// (AF-C), FocusLocation of `ARW4_FOCUS_FRAME` and `ARW4_FOCUS_CENTER`, and
+/// FocusFrameSize of `ARW4_FOCUS_SIZE` and a third number, its six bytes
+/// in byte order `order`. No ILCE-7M4 JPEG is recorded in the notes; this
+/// one gives its raw file's values to a JPEG of the raw file's size.
+pub fn ilce7m4_jpeg(order: Order) -> SonyJpeg {
+    let (frame_width, frame_height) = ARW4_FOCUS_FRAME;
+    let (x, y) = ARW4_FOCUS_CENTER;
+    sony_jpeg(
+        order,
+        SONY_MAKE,
+        ILCE7M4_MODEL,
+        ARW4_FULL_SIZE_JPEG,
+        true,
+        |tiff, ifd| {
+            tiff.byte(ifd, arw::FOCUS_MODE, &[3])
+                .short(ifd, arw::FOCUS_LOCATION, &[frame_width, frame_height, x, y])
+                .undefined(ifd, arw::FOCUS_FRAME_SIZE, &arw4_focus_frame_size(order));
+        },
+    )
+}
+
+/// The Model of the DSC-RX100M4's JPEG, in IFD0.
+pub const RX100M4_MODEL: &str = "DSC-RX100M4";
+/// The size of the DSC-RX100M4's JPEG, the frame its FocusLocation records.
+pub const RX100M4_MAIN: (u16, u16) = (5472, 3648);
+
+/// A JPEG laid out as the Sony ILCE-7M3's, in byte order `order`, but of
+/// a DSC-RX100M4 shot in manual focus: IFD0's Model [`RX100M4_MODEL`], a
+/// main image of [`RX100M4_MAIN`], and a MakerNote that holds FocusMode 0,
+/// manual focus, one BYTE, and the FocusLocation of the frame's exact
+/// centre, as the DSC-RX100M4's JPEG on Wikimedia Commons records them.
+pub fn rx100m4_jpeg(order: Order) -> SonyJpeg {
+    let (width, height) = RX100M4_MAIN;
+    sony_jpeg(
+        order,
+        SONY_MAKE,
+        RX100M4_MODEL,
+        RX100M4_MAIN,
+        true,
+        |tiff, ifd| {
+            tiff.byte(ifd, arw::FOCUS_MODE, &[0]).short(
+                ifd,
+                arw::FOCUS_LOCATION,
+                &[width, height, width / 2, height / 2],
+            );
+        },
+    )
+}
+
+/// The Model of the ILCE-6000's JPEG, in IFD0.
+pub const ILCE6000_MODEL: &str = "ILCE-6000";
+/// The size of the ILCE-6000's JPEG.
+pub const ILCE6000_MAIN: (u16, u16) = (6000, 4000);
+
+/// A JPEG laid out as the Sony ILCE-7M3's, in byte order `order`, but of
+/// an ILCE-6000, a body before the ILCE-7RM2 that writes no FocusLocation:
+/// IFD0's Model [`ILCE6000_MODEL`], a main image of [`ILCE6000_MAIN`], and
+/// a MakerNote that holds FocusMode 4 (AF-A), one BYTE, and no
+/// FocusLocation, as the ILCE-6000's JPEG on Wikimedia Commons records.
+pub fn ilce6000_jpeg(order: Order) -> SonyJpeg {
+    sony_jpeg(
+        order,
+        SONY_MAKE,
+        ILCE6000_MODEL,
+        ILCE6000_MAIN,
+        true,
+        |tiff, ifd| {
+            tiff.byte(ifd, arw::FOCUS_MODE, &[4]);
+        },
+    )
+}
+
+/// The Model of the DSLR-A100's JPEG, in IFD0.
+pub const A100_MODEL: &str = "DSLR-A100";
+/// The size of the DSLR-A100's JPEG: the image size its raw file records.
+pub const A100_MAIN: (u16, u16) = (3872, 2592);
+/// Tags of the DSLR-A100's MakerNote IFD, in its older layout, that the
+/// notes record: SceneMode, ZoneMatching, DynamicRangeOptimizer and
+/// ImageStabilization, then the offset of a Minolta-format IFD
+/// (MinoltaMakerNote), whose 0 means none.
+pub const A100_MAKER_NOTE_TAGS: [u16; 5] = [0xB023, 0xB024, 0xB025, 0xB026, 0xB028];
+
+/// A JPEG laid out as the Sony DSLR-A100's, in byte order `order` (the
+/// DSLR-A100's JPEG on Wikimedia Commons is big-endian): laid out as
+/// [`sony_jpeg`]'s, with no MPF index and no zeros after its end, as that
+/// JPEG has none, and a main image of [`A100_MAIN`], IFD0's Make
+/// [`SONY_MAKE`] and Model [`A100_MODEL`]; its MakerNote IFD, after the
+/// same header, holds [`A100_MAKER_NOTE_TAGS`], each one LONG of 0, made
+/// up, and neither FocusMode nor FocusLocation.
+pub fn a100_jpeg(order: Order) -> SonyJpeg {
+    sony_jpeg(
+        order,
+        SONY_MAKE,
+        A100_MODEL,
+        A100_MAIN,
+        false,
+        |tiff, ifd| {
+            for tag in A100_MAKER_NOTE_TAGS {
+                tiff.long(ifd, tag, &[0]);
+            }
+        },
+    )
 }
 
 /// A JPEG with no Exif segment whose main image, of [`MAIN`], is followed

@@ -36,8 +36,9 @@
 //!
 //! The headers are looked for first, then the blocks that hold no Sony
 //! directory; any other block is taken to start with its IFD. The file's
-//! Make is not looked at: the ARW reader's claim has already decided that
-//! the file is Sony's.
+//! Make is not looked at here: the format's reader has already decided by
+//! it that the file is Sony's, the ARW reader in its claim and the JPEG
+//! reader by IFD0's Make, both by the name [`SONY`].
 //!
 //! Every offset inside the block counts from the TIFF header of the
 //! structure that holds the MakerNote, as the offsets of that structure's
@@ -45,13 +46,15 @@
 //! Nikon's do. In an ARW file that header is the start of the file: on the
 //! A100, tag 0xB028 records the offset of a Minolta-format IFD, and the IFD
 //! lies at that offset from the file's start (sample 2346). In a JPEG
-//! file, as planned, it is the TIFF header inside the Exif segment: the
-//! Sony JPEG files that ADR014 describes count from there. So the IFD is
-//! read in a block whose base is the Exif IFD's, the header of the
-//! structure the Exif IFD was read in. The block's numbers are in the
-//! file's byte order, the one the Exif IFD was read in. Every sample is
-//! little-endian; no big-endian Sony file is known, so that its MakerNote
-//! would follow the file's order is unchecked.
+//! file it is the TIFF header inside the Exif segment: the Sony JPEG files
+//! that ADR014 describes count from there. So the IFD is read in a block
+//! whose base is the Exif IFD's, the header of the structure the Exif IFD
+//! was read in. The block's numbers are in the file's byte order, the one
+//! the Exif IFD was read in. Every ARW sample is little-endian. The one
+//! big-endian Sony file known is the DSLR-A100's JPEG from Wikimedia
+//! Commons, whose MakerNote's entries read only in the file's order, as
+//! the ARW notes record (`docs/formats/arw/makernote-and-metadata.md`,
+//! section 1); it holds no focus tag.
 //!
 //! The four bytes after the IFD's entries are not a next-IFD pointer to
 //! rely on: they are zero on the older bodies, such as the A100, the NEX-5
@@ -159,6 +162,12 @@ use crate::geometry::{Point, Size};
 use crate::io::Source;
 use crate::limits::Limits;
 use crate::metadata::Focus;
+
+/// The manufacturer's name that a Sony camera's Make starts with, compared
+/// without regard to case: what a format's reader looks for in IFD0's Make
+/// before it takes a file for a Sony one, the ARW claim and the JPEG reader
+/// alike.
+pub(in crate::formats) const SONY: &[u8; 4] = b"SONY";
 
 /// The Sony MakerNote tag that records how the camera focused
 /// (FocusMode): one BYTE, 0 for manual focus, and 2, 3, 4, 6 or 7 for the

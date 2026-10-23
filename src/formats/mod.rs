@@ -45,9 +45,9 @@
 //! MakerNote, which the JPEG reader checks with the shared finder, and
 //! with its metadata, which it reads from its Exif segment with the shared
 //! reader, its image size the picture's, and then, when IFD0's Make names
-//! Nikon, from its MakerNote with the Nikon reader, as a NEF's
-//! ([`make_starts_with`] reads that Make too). A JPEG file no format claims
-//! is of no format the crate recognises.
+//! Nikon or Sony, from its MakerNote with that maker's reader, as a NEF's
+//! or an ARW's ([`make_starts_with`] reads that Make too). A JPEG file no
+//! format claims is of no format the crate recognises.
 //!
 //! A DNG is of no format the crate recognises either, whatever its Make
 //! says: converters and the phones that write DNG keep the maker's name in

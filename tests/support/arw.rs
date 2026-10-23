@@ -187,13 +187,13 @@ const SUB_SEC_TIME_ORIGINAL: u16 = 0x9291;
 const MAKER_NOTE: u16 = 0x927C;
 /// The Sony MakerNote tag that records how the camera focused, one BYTE
 /// (FocusMode).
-const FOCUS_MODE: u16 = 0x201B;
+pub const FOCUS_MODE: u16 = 0x201B;
 /// The Sony MakerNote tag that records where the camera focused, a frame's
 /// width and height and the centre's x and y, four SHORTs (FocusLocation).
-const FOCUS_LOCATION: u16 = 0x2027;
+pub const FOCUS_LOCATION: u16 = 0x2027;
 /// The Sony MakerNote tag that records the focus area's width and height,
 /// then a third number, as six UNDEFINED bytes (FocusFrameSize).
-const FOCUS_FRAME_SIZE: u16 = 0x2037;
+pub const FOCUS_FRAME_SIZE: u16 = 0x2037;
 /// The Sony MakerNote tag that records the version of Sony's file format,
 /// four BYTEs (FileFormat).
 const FILE_FORMAT: u16 = 0xB000;
@@ -584,6 +584,19 @@ fn arw4(
     (builder.build(), blobs)
 }
 
+/// The six bytes of the FocusFrameSize of the sample 6929, in byte order
+/// `order`: [`ARW4_FOCUS_SIZE`]'s width and height, then the third number,
+/// as 16-bit numbers.
+pub fn arw4_focus_frame_size(order: Order) -> Vec<u8> {
+    let (width, height) = ARW4_FOCUS_SIZE;
+    [
+        order.u16(width),
+        order.u16(height),
+        order.u16(ARW4_FOCUS_FRAME_SIZE_THIRD),
+    ]
+    .concat()
+}
+
 /// Adds to `builder`, which writes byte order `order`, the MakerNote IFD
 /// of the ARW 4 files, without a header, and returns it: the five tags of
 /// the sample 6929, each of the type it has there, FocusFrameSize's
@@ -592,13 +605,6 @@ fn arw4_makernote(builder: &mut TiffBuilder, order: Order) -> IfdId {
     let makernote = builder.ifd();
     let (frame_width, frame_height) = ARW4_FOCUS_FRAME;
     let (x, y) = ARW4_FOCUS_CENTER;
-    let (width, height) = ARW4_FOCUS_SIZE;
-    let frame_size = [
-        order.u16(width),
-        order.u16(height),
-        order.u16(ARW4_FOCUS_FRAME_SIZE_THIRD),
-    ]
-    .concat();
     builder
         .byte(makernote, FOCUS_MODE, &[3])
         .short(
@@ -606,7 +612,7 @@ fn arw4_makernote(builder: &mut TiffBuilder, order: Order) -> IfdId {
             FOCUS_LOCATION,
             &[frame_width, frame_height, x, y],
         )
-        .undefined(makernote, FOCUS_FRAME_SIZE, &frame_size)
+        .undefined(makernote, FOCUS_FRAME_SIZE, &arw4_focus_frame_size(order))
         .byte(makernote, FILE_FORMAT, &[4, 0, 1, 0])
         .short(makernote, SONY_MODEL_ID, &[388]);
     makernote

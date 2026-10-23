@@ -31,10 +31,13 @@ does.
   preview on the bodies that write one, such as the D70, and the focus
   point. On a crop mode (DX, 1:1, 16:9), whose
   JPEG records the point in the camera's full output, the point is
-  placed on the JPEG's own picture. A JPEG's focus point is given only
-  when its frame has the picture's aspect ratio, so an export cut to
-  another shape gives none, except one cut from a Nikon crop-mode JPEG,
-  whose point is placed on the export's pixels and may be misplaced.
+  placed on the JPEG's own picture. A Sony camera's JPEG gives the focus
+  point its MakerNote records, read as in an ARW file, with the size of
+  the focus area on the bodies that record one; the DSLR-A100's JPEG
+  records none. A JPEG's focus point is given only when its frame has the
+  picture's aspect ratio, so an export cut to another shape gives none,
+  except one cut from a Nikon crop-mode JPEG, whose point is placed on
+  the export's pixels and may be misplaced.
 - `Format::is_raw`, whether a format's files hold a camera's raw sensor
   data, true for NEF and ARW and false for JPEG, so that a program can
   tell raw files from other images without matching every `Format`.
