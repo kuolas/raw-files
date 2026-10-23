@@ -1117,10 +1117,13 @@ fn fits(center: u32, side: u32, frame: u32) -> bool {
 /// nearest whole number, a half rounding up.
 ///
 /// The product and the half of `old` added to it fit in 64 bits for any
-/// `u32`s. `old` is a side of a [`Focus`]'s frame, which is never zero. A
-/// result too large for a `u32`, which a value on the old frame cannot
-/// give, saturates.
-fn scale(value: u32, old: u32, new: u32) -> u32 {
+/// `u32`s. `old` must not be zero, for it divides: here it is a side of a
+/// [`Focus`]'s frame, which never is, and the Nikon MakerNote's reader,
+/// which sizes a crop's window to a JPEG's shape with it, refuses a JPEG
+/// side of zero first. A result too large for a `u32`, which a value on
+/// the old frame cannot give but a window's side can, saturates, at
+/// `u32::MAX`.
+pub(crate) fn scale(value: u32, old: u32, new: u32) -> u32 {
     let old = u64::from(old);
     let scaled = (u64::from(value) * u64::from(new) + old / 2) / old;
     u32::try_from(scaled).unwrap_or(u32::MAX)

@@ -24,7 +24,17 @@ does.
   size is the size of the picture, and there is no raw size. A JPEG
   whose Exif segment is missing or damaged still opens, with the file
   and its MPF images as previews and the image size as its only
-  metadata.
+  metadata. A Nikon camera's JPEG also gives what its MakerNote
+  records, read as in a NEF: the serial number, the ISO, the lens's
+  range and the capture time's offset from UTC where its Exif segment
+  records none, the small JPEG of the MakerNote's PreviewIFD as a
+  preview on the bodies that write one, such as the D70, and the focus
+  point. On a crop mode (DX, 1:1, 16:9), whose
+  JPEG records the point in the camera's full output, the point is
+  placed on the JPEG's own picture. A JPEG's focus point is given only
+  when its frame has the picture's aspect ratio, so an export cut to
+  another shape gives none, except one cut from a Nikon crop-mode JPEG,
+  whose point is placed on the export's pixels and may be misplaced.
 - `Format::is_raw`, whether a format's files hold a camera's raw sensor
   data, true for NEF and ARW and false for JPEG, so that a program can
   tell raw files from other images without matching every `Format`.

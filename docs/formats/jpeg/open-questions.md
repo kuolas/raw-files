@@ -27,10 +27,11 @@ affects; [test-data.md](test-data.md) describes the files.
 3. **A MakerNote preview outside the declared MakerNote.** The NEF
    reader refuses a PreviewIFD JPEG that does not lie wholly inside the
    MakerNote's declared length, which costs one Coolpix NRW file its
-   preview (#18). The JPEG reader is to apply the same rule. If the rule
-   is relaxed for that file (#18), the question is whether a JPEG should
-   follow, since an editor that
-   rewrites the Exif segment can leave such a pointer behind. Affects
+   preview (#18). The JPEG reader applies the same rule, which refuses
+   the copy an exporting editor leaves outside the declared MakerNote. If
+   the rule is relaxed for that file (#18), the question is whether a
+   JPEG should follow, since an editor that rewrites the Exif segment can
+   leave such a pointer behind. Affects
    [container-and-metadata.md](container-and-metadata.md#10-makernotes-in-a-jpeg).
 4. **MPF images other than large thumbnails.** The Multi-Picture Format
    lists more than large thumbnails: its MP types include a gain map

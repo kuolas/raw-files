@@ -7,7 +7,11 @@
 //! records, read as in a raw file, and the image size of the picture,
 //! whatever size the tags give. Then the files it refuses, and the damage
 //! that costs a file some of its previews or of its metadata but never the
-//! file itself.
+//! file itself. Last, the Nikon MakerNote of a Nikon camera's JPEG, read by
+//! IFD0's Make: the values it adds where the Exif segment has none, its
+//! preview, and its focus point, placed on the JPEG's pixels on a crop mode
+//! and kept only when its frame has the picture's shape; and the damage
+//! and the limits that cost the MakerNote but not the file.
 
 mod support;
 
@@ -15,8 +19,8 @@ use std::io::Cursor;
 use std::ops::Range;
 
 use raw_files::{
-    DateTime, ErrorKind, Exposure, Format, Lens, Limits, Metadata, Options, Orientation, Preview,
-    PreviewFormat, Rational, RawFile, SignedRational, Size,
+    DateTime, ErrorKind, Exposure, Focus, Format, Lens, Limits, Metadata, Options, Orientation,
+    Point, Preview, PreviewFormat, Rational, RawFile, SignedRational, Size,
 };
 use support::jpeg_builder::{
     Built, JpegBuilder, LONG, MP_ENTRY, MP_ENTRY_AT, MP_ENTRY_LEN, MP_INDEX_AT, MPF_ID,
@@ -30,8 +34,20 @@ use support::jpeg_files::{
     PHOTOGRAPHIC_SENSITIVITY, ROTATE_90, THUMBNAIL, camera_exif, camera_file, camera_jpeg,
     camera_jpeg_with_metadata, exif, exif_jpeg, padded_jpeg, plain_jpeg,
 };
+use support::jpeg_files::{
+    D70_ISO, D70_LOST, D70_MAIN, D70_MODEL, D70_PREVIEW, D5300_ISO, D5300_LENS, D5300_LOST,
+    D5300_MAIN, D5300_MODEL, D5300_SERIAL_NUMBER, D5300_TIME_ZONE, NikonJpeg, Z9Mode, d70_jpeg,
+    d5300_jpeg, nikon_jpeg, z9_jpeg,
+};
 use support::jpeg_stub::{jpeg_stub, segment};
-use support::tiff_builder::{EXIF_IFD, Order};
+use support::nef::{
+    AF_INFO2, CROP_HI_SPEED, D300_LENS, FOCUS_MODE, ISO as MAKER_NOTE_ISO, LENS as MAKER_NOTE_LENS,
+    PREVIEW_JPEG, SERIAL_NUMBER, WORLD_TIME, nikon_makernote_with, z9_af_info2,
+};
+use support::tiff_builder::{EXIF_IFD, IfdId, Order, TiffBuilder};
+
+/// Both byte orders.
+const ORDERS: [Order; 2] = [Order::Little, Order::Big];
 
 /// The width of the image an IFD describes (ImageWidth).
 const IMAGE_WIDTH: u16 = 0x0100;
@@ -826,4 +842,451 @@ fn a_nefs_embedded_jpeg_saved_alone_opens_as_a_jpeg() {
     );
     let metadata = Metadata::default().with_image_size(size_of(MPF_IMAGES[1]));
     assert_opens(&stub, &previews, &metadata, "embedded JPEG");
+}
+
+/// The focus centred at `center` in `frame`, with an area of `area`, each
+/// width or x first, and focus confirmed.
+fn confirmed(frame: (u32, u32), center: (u32, u32), area: (u32, u32)) -> Focus {
+    let size = |(width, height)| Size { width, height };
+    let (x, y) = center;
+    Focus::new(size(frame), Point { x, y })
+        .and_then(|focus| focus.with_size(size(area)))
+        .expect("a usable focus point")
+        .with_in_focus(true)
+}
+
+/// The focus point a Z 9's JPEG taken in mode `mode` records, as recorded,
+/// in the full frame of 8256 by 5504.
+fn recorded(mode: Z9Mode) -> Focus {
+    let [frame, center, area] = mode.recorded();
+    confirmed(frame, center, area)
+}
+
+/// The previews of the Nikon JPEG `file`, laid out with the MPF index and
+/// its two images and a main image of `main`, smallest first: the
+/// thumbnail, the two MPF images and the file, all turned by IFD0's
+/// Orientation 6.
+fn nikon_previews(file: &NikonJpeg, main: (u16, u16)) -> Vec<Seen> {
+    let built = &file.built;
+    expected(
+        &[
+            (in_file(built, &file.thumbnail), THUMBNAIL),
+            (built.mpf_image(0), MPF_IMAGES[0]),
+            (built.mpf_image(1), MPF_IMAGES[1]),
+            (whole(built), main),
+        ],
+        Orientation::Rotate90,
+    )
+}
+
+/// The metadata of a Z 9's JPEG that [`z9_jpeg`] lays out with a main
+/// image of `main`: every value [`camera_exif`] writes, the image size
+/// `main`, and the focus point `focus`.
+fn z9_metadata(main: (u16, u16), focus: Option<Focus>) -> Metadata {
+    let metadata = camera_metadata_without(&[]).with_image_size(size_of(main));
+    match focus {
+        Some(focus) => metadata.with_focus(focus),
+        None => metadata,
+    }
+}
+
+/// The capture time that [`camera_exif`] records, but without its offset
+/// from UTC, which a Nikon JPEG without OffsetTimeOriginal takes from its
+/// MakerNote's WorldTime when it records one: `offset`, in minutes east of
+/// UTC, or none.
+fn capture_time_at(offset: Option<i16>) -> DateTime {
+    let time = DateTime::new(2024, 6, 15, 9, 30, 12)
+        .and_then(|time| time.with_subseconds(250_000_000, 2))
+        .unwrap();
+    match offset {
+        Some(offset) => time.with_offset_minutes(offset).unwrap(),
+        None => time,
+    }
+}
+
+/// A lens that only its range describes: `range`, the shortest and the
+/// longest focal length, then the f-number at each.
+fn lens_of_range(range: [(u32, u32); 4]) -> Lens {
+    let [shortest, longest, at_shortest, at_longest] = range.map(fraction);
+    Lens::builder()
+        .min_focal_length(shortest)
+        .max_focal_length(longest)
+        .f_number_at_min_focal_length(at_shortest)
+        .f_number_at_max_focal_length(at_longest)
+        .build()
+        .unwrap()
+}
+
+/// The pairs of byte orders the Nikon JPEGs are built in: the Exif
+/// segment's, then the MakerNote's, each in both, and each with the other.
+const NIKON_ORDERS: [(Order, Order); 4] = [
+    (Order::Little, Order::Little),
+    (Order::Big, Order::Big),
+    (Order::Little, Order::Big),
+    (Order::Big, Order::Little),
+];
+
+#[test]
+fn a_nikon_jpeg_gives_the_focus_point_its_makernote_records() {
+    // A Z 9's JPEG in FX, the full output: CropHiSpeed records no crop, so
+    // the point is as recorded, in the frame of 8256 by 5504, which has the
+    // picture's shape. Every value the Exif segment records is kept.
+    for (order, makernote_order) in NIKON_ORDERS {
+        let file = z9_jpeg(order, makernote_order, Z9Mode::Fx, MAIN, false);
+        assert_opens(
+            &file.built.bytes,
+            &nikon_previews(&file, MAIN),
+            &z9_metadata(MAIN, Some(recorded(Z9Mode::Fx))),
+            &format!("Z 9, {order:?}, MakerNote {makernote_order:?}"),
+        );
+    }
+}
+
+#[test]
+fn the_exif_values_win_over_the_makernotes() {
+    // The Z 9's FX JPEG, whose MakerNote also records a serial number, an
+    // ISO, a lens's range and a time zone, all other than the Exif
+    // segment's: the Exif values are kept.
+    for (order, makernote_order) in NIKON_ORDERS {
+        let mut world_time = makernote_order.u16((-300_i16).cast_unsigned()).to_vec();
+        world_time.extend_from_slice(&[0, 0]);
+        let (block, _) = nikon_makernote_with(makernote_order, [0x02, 0x11], None, |inner, ifd| {
+            inner
+                .short(ifd, MAKER_NOTE_ISO, &[0, 6400])
+                .ascii(ifd, FOCUS_MODE, "AF-S  ")
+                .short(ifd, CROP_HI_SPEED, &Z9Mode::Fx.crop_hi_speed())
+                .ascii(ifd, SERIAL_NUMBER, "7654321")
+                .undefined(ifd, WORLD_TIME, &world_time)
+                .rational(ifd, MAKER_NOTE_LENS, &D300_LENS)
+                .undefined(ifd, AF_INFO2, &z9_af_info2(makernote_order));
+        });
+        let file = nikon_jpeg(order, MAIN, true, &[], |_, _, _| {}, &block, block.len());
+        assert_opens(
+            &file.built.bytes,
+            &nikon_previews(&file, MAIN),
+            &z9_metadata(MAIN, Some(recorded(Z9Mode::Fx))),
+            &format!("{order:?}, MakerNote {makernote_order:?}"),
+        );
+    }
+}
+
+#[test]
+fn an_older_nikon_jpeg_takes_what_its_exif_lacks_from_its_makernote() {
+    // The D5300's JPEG records no serial number, lens range or offset from
+    // UTC in its Exif segment: the MakerNote gives them, the offset from
+    // its WorldTime's zone. Its AFInfo2 records a zero frame, a shot
+    // through the viewfinder: no focus point.
+    for order in ORDERS {
+        let file = d5300_jpeg(order);
+        let metadata = camera_metadata_without(&D5300_LOST)
+            .with_model(D5300_MODEL)
+            .with_serial_number(D5300_SERIAL_NUMBER)
+            .with_capture_time(capture_time_at(Some(D5300_TIME_ZONE)))
+            .with_lens(lens_of_range(D5300_LENS))
+            .with_image_size(size_of(D5300_MAIN));
+        assert_eq!(metadata.exposure().iso(), Some(u32::from(D5300_ISO)));
+        assert_opens(
+            &file.built.bytes,
+            &nikon_previews(&file, D5300_MAIN),
+            &metadata,
+            &format!("D5300, {order:?}"),
+        );
+    }
+}
+
+/// The metadata of the D70's JPEG that [`d70_jpeg`] lays out: what
+/// [`camera_exif`] writes but [`D70_LOST`], its own Model, and from its
+/// MakerNote the ISO and the lens's range, which its Exif segment lacks.
+/// Its MakerNote records no time zone and no AFInfo2.
+fn d70_metadata() -> Metadata {
+    let metadata = camera_metadata_without(&D70_LOST);
+    let exposure = metadata.exposure().clone().with_iso(u32::from(D70_ISO));
+    metadata
+        .with_model(D70_MODEL)
+        .with_exposure(exposure)
+        .with_capture_time(capture_time_at(None))
+        .with_lens(lens_of_range(D300_LENS))
+        .with_image_size(size_of(D70_MAIN))
+}
+
+#[test]
+fn the_makernotes_preview_inside_its_declared_length_is_a_preview() {
+    // The D70's JPEG, whose MakerNote's byte order is the other from its
+    // Exif segment's: its PreviewIFD's JPEG of 564 by 372 lies inside the
+    // length the MakerNote declares, and is a preview, turned by IFD0's
+    // Orientation like every other.
+    for order in ORDERS {
+        let (file, preview) = d70_jpeg(order, false);
+        let previews = expected(
+            &[
+                (in_file(&file.built, &file.thumbnail), THUMBNAIL),
+                (preview, D70_PREVIEW),
+                (whole(&file.built), D70_MAIN),
+            ],
+            Orientation::Rotate90,
+        );
+        let label = format!("D70, {order:?}");
+        assert_opens(&file.built.bytes, &previews, &d70_metadata(), &label);
+    }
+}
+
+#[test]
+fn a_makernote_preview_outside_the_declared_length_is_not_a_preview() {
+    // The D70's JPEG with its MakerNote declared up to where the
+    // PreviewIFD's JPEG starts: the JPEG lies inside the Exif segment but
+    // outside the MakerNote, and is not a preview. The values the
+    // MakerNote holds before it are still read.
+    for order in ORDERS {
+        let (file, preview) = d70_jpeg(order, true);
+        assert!(preview.start >= file.makernote.start, "{order:?}");
+        assert!(preview.end <= file.built.exif_tiff(0).end, "{order:?}");
+        let previews = expected(
+            &[
+                (in_file(&file.built, &file.thumbnail), THUMBNAIL),
+                (whole(&file.built), D70_MAIN),
+            ],
+            Orientation::Rotate90,
+        );
+        let label = format!("D70, preview outside, {order:?}");
+        assert_opens(&file.built.bytes, &previews, &d70_metadata(), &label);
+    }
+}
+
+#[test]
+fn an_export_cut_to_another_shape_gives_no_focus_point() {
+    // An export of the Z 9's FX shot that keeps the camera's MakerNote,
+    // copied from the raw file with its CropArea of 8256 by 5504. The
+    // image size is the export's, never CropArea's (a JPEG has no raw size
+    // for CropArea to lie inside). The point, recorded in 8256 by 5504, is
+    // kept only on an export of that shape: not on one cut to portrait or
+    // to a square.
+    for order in ORDERS {
+        for (main, focus) in [
+            ((4128, 2752), Some(recorded(Z9Mode::Fx))),
+            ((3648, 5472), None),
+            ((1742, 1742), None),
+        ] {
+            let file = z9_jpeg(order, order, Z9Mode::Fx, main, true);
+            assert_opens(
+                &file.built.bytes,
+                &nikon_previews(&file, main),
+                &z9_metadata(main, focus),
+                &format!("export of {main:?}, {order:?}"),
+            );
+        }
+    }
+}
+
+#[test]
+fn a_crop_mode_jpeg_places_its_point_on_its_pixels() {
+    // The Z 9's crop modes, whose JPEGs hold no CropArea and record their
+    // point in the full frame of 8256 by 5504, at each size, as the NEF
+    // notes record the maintainer's shots with a single point in the
+    // top-left corner of the picture (ADR015):
+    //
+    // - DX scales the recorded (636, 572), 420 by 468, onto the JPEG: at
+    //   full size, the raw file's CropArea, 5392 by 3592, that is the raw
+    //   file's (415, 373), 274 by 305; at 4032 by 2688, the recorded point
+    //   scaled by `Focus::scaled_to`, as onto CropArea.
+    // - 1:1 keeps the height: the window is 5504 by 5504 at every size,
+    //   whose origin is (8256 - 5504) / 2 = 1376 across, so the recorded
+    //   (1797, 424) is (421, 424), with the recorded area.
+    // - 16:9 keeps the width: the window is 8256 by 8256 x 4640 / 8256 =
+    //   4640, and 8256 x 3480 / 6192 = 4640, whose origin is (5504 - 4640)
+    //   / 2 = 432 down, so the recorded (502, 715) is (502, 283).
+    let middle_dx = recorded(Z9Mode::Dx)
+        .scaled_to(Size {
+            width: 4032,
+            height: 2688,
+        })
+        .unwrap();
+    let square = confirmed((5504, 5504), (421, 424), (291, 323));
+    let wide = confirmed((8256, 4640), (502, 283), (291, 323));
+    for (order, makernote_order) in NIKON_ORDERS {
+        for (mode, main, focus) in [
+            (
+                Z9Mode::Dx,
+                (5392, 3592),
+                confirmed((5392, 3592), (415, 373), (274, 305)),
+            ),
+            (Z9Mode::Dx, (4032, 2688), middle_dx),
+            (Z9Mode::Square, (5504, 5504), square),
+            (Z9Mode::Square, (2752, 2752), square),
+            (Z9Mode::Wide, (8256, 4640), wide),
+            (Z9Mode::Wide, (6192, 3480), wide),
+        ] {
+            let file = z9_jpeg(order, makernote_order, mode, main, false);
+            assert_opens(
+                &file.built.bytes,
+                &nikon_previews(&file, main),
+                &z9_metadata(main, Some(focus)),
+                &format!("{mode:?} at {main:?}, {order:?}, MakerNote {makernote_order:?}"),
+            );
+        }
+    }
+}
+
+#[test]
+fn a_crop_mode_jpeg_that_cannot_be_placed_gives_no_focus_point() {
+    // A crop whose MakerNote holds the raw file's CropArea, as a MakerNote
+    // copied into an export does: a JPEG has no raw size to check it
+    // against. And a 16:9 crop on a 4:3 JPEG, whose window would be 8256
+    // x 3096 / 4128 = 6192 high, more than the frame's 5504.
+    for order in ORDERS {
+        for (mode, main, crop_area) in [
+            (Z9Mode::Dx, (5392, 3592), true),
+            (Z9Mode::Square, (5504, 5504), true),
+            (Z9Mode::Wide, (8256, 4640), true),
+            (Z9Mode::Wide, (4128, 3096), false),
+        ] {
+            let file = z9_jpeg(order, order, mode, main, crop_area);
+            assert_opens(
+                &file.built.bytes,
+                &nikon_previews(&file, main),
+                &z9_metadata(main, None),
+                &format!("{mode:?} at {main:?}, CropArea {crop_area}, {order:?}"),
+            );
+        }
+    }
+}
+
+/// A Nikon MakerNote in byte order `order` that holds a serial number, the
+/// Z 9's FX CropHiSpeed and AFInfo2, and what `tags` adds, with a
+/// PreviewIFD that declares a JPEG of 640 by 424 pixels; and where that
+/// JPEG starts in the block.
+fn makernote_with_everything(
+    order: Order,
+    tags: impl FnOnce(&mut TiffBuilder, IfdId),
+) -> (Vec<u8>, u64) {
+    let preview = jpeg_stub(PREVIEW_JPEG.0, PREVIEW_JPEG.1, 0xC0);
+    let (block, at) = nikon_makernote_with(order, [0x02, 0x11], Some(&preview), |inner, ifd| {
+        inner
+            .ascii(ifd, FOCUS_MODE, "AF-S  ")
+            .short(ifd, CROP_HI_SPEED, &Z9Mode::Fx.crop_hi_speed())
+            .ascii(ifd, SERIAL_NUMBER, "7654321")
+            .undefined(ifd, AF_INFO2, &z9_af_info2(order));
+        tags(inner, ifd);
+    });
+    (block, at.unwrap())
+}
+
+#[test]
+fn a_nikon_makernote_under_another_makers_make_is_not_read() {
+    // A file of another make, whose Exif segment records no serial number,
+    // with a sound Nikon MakerNote that records one, a focus point and a
+    // preview: nothing of it is read. The same file with Nikon's Make reads
+    // all three.
+    for order in ORDERS {
+        let (block, at) = makernote_with_everything(order, |_, _| {});
+        for make in ["Canon", "NIKON CORPORATION"] {
+            let file = nikon_jpeg(
+                order,
+                MAIN,
+                true,
+                &[MAKE, BODY_SERIAL_NUMBER],
+                |tiff, ifd0, _| {
+                    tiff.ascii(ifd0, MAKE, make);
+                },
+                &block,
+                block.len(),
+            );
+            let mut metadata = camera_metadata_without(&[MAKE, BODY_SERIAL_NUMBER]).with_make(make);
+            let mut previews = nikon_previews(&file, MAIN);
+            if make != "Canon" {
+                metadata = metadata
+                    .with_serial_number("7654321")
+                    .with_focus(recorded(Z9Mode::Fx));
+                let start = file.makernote.start + at;
+                let preview = start..start + to_u64(jpeg_stub(640, 424, 0xC0).len());
+                previews.insert(
+                    1,
+                    (
+                        preview,
+                        wide(PREVIEW_JPEG),
+                        PreviewFormat::Jpeg,
+                        Orientation::Rotate90,
+                    ),
+                );
+            }
+            assert_opens(
+                &file.built.bytes,
+                &previews,
+                &metadata,
+                &format!("{make}, {order:?}"),
+            );
+        }
+    }
+}
+
+#[test]
+fn a_damaged_makernote_costs_only_what_it_gives() {
+    // A MakerNote whose inner TIFF header has no byte-order mark: the file
+    // opens with every value of its Exif segment and its other previews,
+    // and without the MakerNote's serial number, focus point and preview.
+    for order in ORDERS {
+        let (mut block, _) = makernote_with_everything(order, |_, _| {});
+        block[10..12].copy_from_slice(b"XX");
+        let file = nikon_jpeg(order, MAIN, true, &[], |_, _, _| {}, &block, block.len());
+        assert_opens(
+            &file.built.bytes,
+            &nikon_previews(&file, MAIN),
+            &camera_metadata_without(&[]),
+            &format!("{order:?}"),
+        );
+    }
+}
+
+#[test]
+fn a_limit_crossed_inside_the_makernote_costs_the_makernote_only() {
+    // A MakerNote IFD of 20 entries: the version, the PreviewIFD's pointer,
+    // the four tags of `makernote_with_everything` and 14 more of no
+    // meaning, beside an Exif IFD of 13, the most any other IFD of the file
+    // holds. With a limit of 20 entries the MakerNote gives its serial
+    // number, focus point and preview; with 19 it gives nothing, and the
+    // rest of the file is as without it.
+    let fillers = |inner: &mut TiffBuilder, ifd: IfdId| {
+        for tag in 0x1000..0x100E {
+            inner.undefined(ifd, tag, &[0; 4]);
+        }
+    };
+    for order in ORDERS {
+        let (block, at) = makernote_with_everything(order, fillers);
+        let file = nikon_jpeg(
+            order,
+            MAIN,
+            true,
+            &[BODY_SERIAL_NUMBER],
+            |_, _, _| {},
+            &block,
+            block.len(),
+        );
+        let start = file.makernote.start + at;
+        let preview = start..start + to_u64(jpeg_stub(640, 424, 0xC0).len());
+        let mut read = nikon_previews(&file, MAIN);
+        read.insert(
+            1,
+            (
+                preview,
+                wide(PREVIEW_JPEG),
+                PreviewFormat::Jpeg,
+                Orientation::Rotate90,
+            ),
+        );
+        let without = camera_metadata_without(&[BODY_SERIAL_NUMBER]);
+        let with = without
+            .clone()
+            .with_serial_number("7654321")
+            .with_focus(recorded(Z9Mode::Fx));
+        for (entries, previews, metadata) in
+            [(20, read, with), (19, nikon_previews(&file, MAIN), without)]
+        {
+            assert_opens_with(
+                &Options::new().limits(Limits::default().max_ifd_entries(entries)),
+                &file.built.bytes,
+                &previews,
+                &metadata,
+                &format!("{entries} entries, {order:?}"),
+            );
+        }
+    }
 }

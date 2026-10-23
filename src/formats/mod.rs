@@ -40,11 +40,14 @@
 //!
 //! The JPEG list holds JPEG. A JPEG file is claimed when its first frame
 //! header gives the picture's size and is not lossless, and opens with its
-//! previews, the file itself, the thumbnail of its Exif segment and the
-//! images of its MPF list, which the JPEG reader checks with the shared
-//! finder, and with its metadata, which it reads from its Exif segment
-//! with the shared reader, its image size the picture's. A JPEG file no
-//! format claims is of no format the crate recognises.
+//! previews, the file itself, the thumbnail of its Exif segment, the
+//! images of its MPF list and, on a Nikon file, the preview of its
+//! MakerNote, which the JPEG reader checks with the shared finder, and
+//! with its metadata, which it reads from its Exif segment with the shared
+//! reader, its image size the picture's, and then, when IFD0's Make names
+//! Nikon, from its MakerNote with the Nikon reader, as a NEF's
+//! ([`make_starts_with`] reads that Make too). A JPEG file no format claims
+//! is of no format the crate recognises.
 //!
 //! A DNG is of no format the crate recognises either, whatever its Make
 //! says: converters and the phones that write DNG keep the maker's name in
@@ -149,15 +152,18 @@ pub(super) fn is_dng(tree: &Tree) -> bool {
 /// which names the camera's manufacturer, starts with `name` once trimmed
 /// of spaces at either end, compared without regard to case.
 ///
-/// The readers' claims decide by it. A missing Make, a Make that is not
-/// text (type ASCII), and a Make that starts with anything else are all
-/// "no".
+/// The readers' claims decide by it, and the JPEG reader too, which reads
+/// a maker's MakerNote by it. A missing Make, a Make that is not text (type
+/// ASCII), and a Make that starts with anything else are all "no".
 ///
 /// # Errors
 ///
 /// Whatever reading the Make returns: `LimitExceeded` for a value longer
 /// than one tag may take, `Io` when the reader fails. A claim that cannot
-/// read its tag stops detection rather than passing the file on.
+/// read its tag stops detection rather than passing the file on. The JPEG
+/// reader takes a Make it cannot read, a value too long for its limits,
+/// for another maker's, but a failing reader stays an `Io` error there
+/// too.
 pub(super) fn make_starts_with<R: Read + Seek>(
     src: &mut Source<R>,
     tree: &Tree,

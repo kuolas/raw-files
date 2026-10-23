@@ -27,15 +27,35 @@
 //!   camera's JPEG with that structure in its Exif segment.
 //! - [`padded_jpeg`]: the main image, then 4,096 zeros after its EOI, as
 //!   some Sony bodies write their JPEG files.
+//! - [`nikon_jpeg`]: a Nikon camera's JPEG, laid out as [`camera_file`]'s,
+//!   with or without the MPF index and its images, a main image of any
+//!   size, [`camera_exif`]'s values but those a test leaves out, and a
+//!   Nikon MakerNote, which `nef.rs`'s [`nikon_makernote_with`] writes, in
+//!   the Exif IFD, at [`MAKER_NOTE_AT`] in the segment's TIFF structure,
+//!   declared whole or cut short. Three bodies' layouts are built on it:
+//!   [`z9_jpeg`], a Z 9's in FX or a crop mode ([`Z9Mode`]), at any size,
+//!   whose MakerNote records the mode's CropHiSpeed and focus point, and
+//!   the raw file's CropArea when asked, as an export that copied it
+//!   holds; [`d5300_jpeg`], a D5300's, shot through the viewfinder, whose
+//!   MakerNote records the serial number, the lens's range and the clock's
+//!   time zone that its Exif segment lacks; and [`d70_jpeg`], a D70's,
+//!   with no MPF index, whose MakerNote, in the other byte order from the
+//!   file's, records the ISO and the lens's range and holds a preview of
+//!   564 by 372 pixels, inside its declared length or just past it.
 //!
 //! The TIFF structure of an Exif segment and the MPF index are each in the
-//! byte order a test gives.
+//! byte order a test gives, and a Nikon MakerNote in the one its layout
+//! gives.
 
 use std::ops::Range;
 
 use super::jpeg_builder::{Built, JpegBuilder};
 use super::jpeg_stub::jpeg_stub;
-use super::tiff_builder::{IfdId, Order, TiffBuilder};
+use super::nef::{
+    self, AF_INFO2, CROP_AREA, CROP_HI_SPEED, D300_LENS, FOCUS_MODE, SERIAL_NUMBER, WORLD_TIME,
+    Z9_FOCUS_AREA, Z9_FOCUS_CENTER, Z9_FOCUS_FRAME, af_info2_04xx, nikon_makernote_with,
+};
+use super::tiff_builder::{self, IfdId, Order, RawValue, TiffBuilder};
 
 /// The camera's maker, in IFD0 (Make).
 pub const MAKE: u16 = 0x010F;
@@ -184,11 +204,24 @@ pub fn exif_with(
     thumbnail_at: Option<u32>,
     tags: impl FnOnce(&mut TiffBuilder, IfdId),
 ) -> (Vec<u8>, Range<u64>) {
+    let (built, thumbnail, ()) = exif_built(order, orientation, thumbnail_at, tags);
+    (built.bytes, thumbnail)
+}
+
+/// As [`exif_with`], with what `tags` returns, and the built structure in
+/// place of its bytes, so that a caller can find where the builder put
+/// what `tags` added.
+fn exif_built<T>(
+    order: Order,
+    orientation: u16,
+    thumbnail_at: Option<u32>,
+    tags: impl FnOnce(&mut TiffBuilder, IfdId) -> T,
+) -> (tiff_builder::Built, Range<u64>, T) {
     let mut tiff = TiffBuilder::new(order);
     let (ifd0, ifd1) = (tiff.ifd(), tiff.ifd());
     tiff.short(ifd0, ORIENTATION, &[orientation])
         .next(ifd0, Some(ifd1));
-    tags(&mut tiff, ifd0);
+    let added = tags(&mut tiff, ifd0);
     let blob = tiff.blob(&jpeg_stub(THUMBNAIL.0, THUMBNAIL.1, 0xC0));
     match thumbnail_at {
         Some(at) => {
@@ -203,7 +236,7 @@ pub fn exif_with(
     }
     let built = tiff.build();
     let at = built.blob_offset(blob);
-    (built.bytes, at..at + stub_len(THUMBNAIL))
+    (built, at..at + stub_len(THUMBNAIL), added)
 }
 
 /// A JPEG whose Exif segment holds [`exif`]'s TIFF structure in byte order
@@ -234,16 +267,35 @@ pub fn camera_jpeg(order: Order, jfif: bool) -> (Built, Range<u64>) {
 /// after the main image's EOI and before the MPF images: inside the file,
 /// outside the segment.
 pub fn camera_file(order: Order, jfif: bool, tiff: &[u8], outside: &[u8]) -> Built {
+    camera_layout(order, jfif, tiff, outside, MAIN, true)
+}
+
+/// As [`camera_file`], with a main image of `main`, and with no MPF index
+/// and no image after the main one unless `mpf`.
+fn camera_layout(
+    order: Order,
+    jfif: bool,
+    tiff: &[u8],
+    outside: &[u8],
+    main: (u16, u16),
+    mpf: bool,
+) -> Built {
     let mut builder = JpegBuilder::new();
     if jfif {
         builder.jfif();
     }
-    builder.exif(tiff).mpf(order).frame(MAIN.0, MAIN.1, 0xC0);
+    builder.exif(tiff);
+    if mpf {
+        builder.mpf(order);
+    }
+    builder.frame(main.0, main.1, 0xC0);
     if !outside.is_empty() {
         builder.after_eoi(outside);
     }
-    for (width, height) in MPF_IMAGES {
-        builder.mpf_image(width, height, &[], 512);
+    if mpf {
+        for (width, height) in MPF_IMAGES {
+            builder.mpf_image(width, height, &[], 512);
+        }
     }
     builder.build()
 }
@@ -260,28 +312,60 @@ pub fn camera_exif(
     order: Order,
     change: impl FnOnce(&mut TiffBuilder, IfdId, IfdId),
 ) -> (Vec<u8>, Range<u64>) {
+    let (built, thumbnail, ()) = camera_exif_built(order, &[], change);
+    (built.bytes, thumbnail)
+}
+
+/// As [`camera_exif`], without the tags of `lost`, among IFD0's Make and
+/// Model and [`EXIF_IFD_TAGS`], and with what `change` returns and the
+/// built structure in place of its bytes, so that a caller can find where
+/// the builder put what `change` added.
+fn camera_exif_built<T>(
+    order: Order,
+    lost: &[u16],
+    change: impl FnOnce(&mut TiffBuilder, IfdId, IfdId) -> T,
+) -> (tiff_builder::Built, Range<u64>, T) {
+    exif_built(order, ROTATE_90, None, |tiff, ifd0| {
+        let exif = tiff.ifd();
+        for tag in [MAKE, MODEL] {
+            if !lost.contains(&tag) {
+                camera_value(tiff, ifd0, tag);
+            }
+        }
+        tiff.exif(ifd0, exif);
+        for tag in EXIF_IFD_TAGS {
+            if !lost.contains(&tag) {
+                camera_value(tiff, exif, tag);
+            }
+        }
+        change(tiff, ifd0, exif)
+    })
+}
+
+/// Adds to `ifd` the entry of `tag`, one of IFD0's Make and Model or of
+/// [`EXIF_IFD_TAGS`], with the value [`camera_exif`] gives it, of the type
+/// the Exif standard gives it.
+fn camera_value(tiff: &mut TiffBuilder, ifd: IfdId, tag: u16) {
     let [date_time, subseconds, offset] = CAPTURE_TIME;
     let [lens_make, lens_model, lens_serial_number] = LENS;
-    exif_with(order, ROTATE_90, None, |tiff, ifd0| {
-        let exif = tiff.ifd();
-        tiff.ascii(ifd0, MAKE, CAMERA_MAKE)
-            .ascii(ifd0, MODEL, CAMERA_MODEL)
-            .exif(ifd0, exif);
-        tiff.ascii(exif, BODY_SERIAL_NUMBER, CAMERA_SERIAL_NUMBER)
-            .ascii(exif, DATE_TIME_ORIGINAL, date_time)
-            .ascii(exif, SUB_SEC_TIME_ORIGINAL, subseconds)
-            .ascii(exif, OFFSET_TIME_ORIGINAL, offset)
-            .rational(exif, EXPOSURE_TIME, &[EXPOSURE_SECONDS])
-            .rational(exif, F_NUMBER, &[APERTURE])
-            .short(exif, PHOTOGRAPHIC_SENSITIVITY, &[ISO])
-            .srational(exif, EXPOSURE_BIAS_VALUE, &[EXPOSURE_BIAS])
-            .rational(exif, FOCAL_LENGTH, &[FOCAL_MILLIMETRES])
-            .ascii(exif, LENS_MAKE, lens_make)
-            .ascii(exif, LENS_MODEL, lens_model)
-            .ascii(exif, LENS_SERIAL_NUMBER, lens_serial_number)
-            .rational(exif, LENS_SPECIFICATION, &LENS_RANGE);
-        change(tiff, ifd0, exif);
-    })
+    match tag {
+        MAKE => tiff.ascii(ifd, MAKE, CAMERA_MAKE),
+        MODEL => tiff.ascii(ifd, MODEL, CAMERA_MODEL),
+        BODY_SERIAL_NUMBER => tiff.ascii(ifd, tag, CAMERA_SERIAL_NUMBER),
+        DATE_TIME_ORIGINAL => tiff.ascii(ifd, tag, date_time),
+        SUB_SEC_TIME_ORIGINAL => tiff.ascii(ifd, tag, subseconds),
+        OFFSET_TIME_ORIGINAL => tiff.ascii(ifd, tag, offset),
+        EXPOSURE_TIME => tiff.rational(ifd, tag, &[EXPOSURE_SECONDS]),
+        F_NUMBER => tiff.rational(ifd, tag, &[APERTURE]),
+        PHOTOGRAPHIC_SENSITIVITY => tiff.short(ifd, tag, &[ISO]),
+        EXPOSURE_BIAS_VALUE => tiff.srational(ifd, tag, &[EXPOSURE_BIAS]),
+        FOCAL_LENGTH => tiff.rational(ifd, tag, &[FOCAL_MILLIMETRES]),
+        LENS_MAKE => tiff.ascii(ifd, tag, lens_make),
+        LENS_MODEL => tiff.ascii(ifd, tag, lens_model),
+        LENS_SERIAL_NUMBER => tiff.ascii(ifd, tag, lens_serial_number),
+        LENS_SPECIFICATION => tiff.rational(ifd, tag, &LENS_RANGE),
+        _ => panic!("no camera value for tag {tag:#06X}"),
+    };
 }
 
 /// A camera's JPEG laid out as [`camera_file`]'s, with no JFIF segment,
@@ -292,6 +376,309 @@ pub fn camera_exif(
 pub fn camera_jpeg_with_metadata(order: Order) -> (Built, Range<u64>) {
     let (tiff, thumbnail) = camera_exif(order, |_, _, _| {});
     (camera_file(order, false, &tiff, &[]), thumbnail)
+}
+
+/// The MakerNote tag, in the Exif IFD: the camera maker's own metadata.
+pub const MAKER_NOTE: u16 = 0x927C;
+
+/// Where a Nikon JPEG's MakerNote lies in its Exif segment's TIFF
+/// structure, counted from that structure's header: past everything else
+/// the structure holds, with zeros before it.
+pub const MAKER_NOTE_AT: u32 = 1024;
+
+/// A Nikon camera's JPEG, as [`nikon_jpeg`] lays it out, and where its
+/// parts are.
+pub struct NikonJpeg {
+    /// The file.
+    pub built: Built,
+    /// Where IFD1's thumbnail lies in the Exif segment's TIFF structure,
+    /// counted from its header.
+    pub thumbnail: Range<u64>,
+    /// Where the MakerNote's block lies in the file.
+    pub makernote: Range<u64>,
+}
+
+/// A Nikon camera's JPEG: laid out as [`camera_file`]'s, with no JFIF
+/// segment, a main image of `main`, and with the MPF index and the two
+/// [`MPF_IMAGES`] only when `mpf`; its Exif segment holds the TIFF
+/// structure [`camera_exif`] writes in byte order `order`, without the
+/// tags of `lost`, among IFD0's Make and Model and [`EXIF_IFD_TAGS`], with
+/// what `change` adds, given the builder, IFD0 and the Exif IFD, and with
+/// the MakerNote `makernote`, an UNDEFINED value in the Exif IFD at
+/// [`MAKER_NOTE_AT`], of which the MakerNote's entry declares the first
+/// `declared` bytes. The MPF index is in byte order `order` too.
+pub fn nikon_jpeg(
+    order: Order,
+    main: (u16, u16),
+    mpf: bool,
+    lost: &[u16],
+    change: impl FnOnce(&mut TiffBuilder, IfdId, IfdId),
+    makernote: &[u8],
+    declared: usize,
+) -> NikonJpeg {
+    let (tiff, thumbnail, ()) = camera_exif_built(order, lost, |tiff, ifd0, exif| {
+        change(tiff, ifd0, exif);
+        tiff.blob_at(u64::from(MAKER_NOTE_AT), makernote);
+        let count = u32::try_from(declared).unwrap();
+        tiff.raw(
+            exif,
+            MAKER_NOTE,
+            UNDEFINED,
+            count,
+            RawValue::Offset(MAKER_NOTE_AT),
+        );
+    });
+    let built = camera_layout(order, false, &tiff.bytes, &[], main, mpf);
+    let at = built.exif_tiff(0).start + u64::from(MAKER_NOTE_AT);
+    let len = u64::try_from(makernote.len()).unwrap();
+    NikonJpeg {
+        built,
+        thumbnail,
+        makernote: at..at + len,
+    }
+}
+
+/// The type UNDEFINED, of the MakerNote's value.
+const UNDEFINED: u16 = 7;
+
+/// A mode a Nikon Z 9 takes a picture in, as its MakerNote records it in
+/// its JPEGs, for [`z9_jpeg`]: the camera's full output, FX, or one of its
+/// crops. The values of each are those the NEF notes record of shots made
+/// with the maintainer's Z 9, and of the public Z 9 samples for FX.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Z9Mode {
+    /// No crop: the full 8256 by 5504 output.
+    Fx,
+    /// The DX crop, which cuts both sides.
+    Dx,
+    /// The 1:1 crop, which keeps the height and cuts the width.
+    Square,
+    /// The 16:9 crop, which keeps the width and cuts the height.
+    Wide,
+}
+
+impl Z9Mode {
+    /// Every mode.
+    pub const ALL: [Z9Mode; 4] = [Z9Mode::Fx, Z9Mode::Dx, Z9Mode::Square, Z9Mode::Wide];
+
+    /// The mode's CropHiSpeed: the mode's number, the original width and
+    /// height, the cropped width and height, and the left column and top
+    /// row where the crop starts. FX's two sizes are equal: no crop.
+    pub fn crop_hi_speed(self) -> [u16; 7] {
+        match self {
+            Z9Mode::Fx => [11, 8280, 5520, 8280, 5520, 0, 0],
+            Z9Mode::Dx => [2, 8280, 5520, 5408, 3608, 1436, 956],
+            Z9Mode::Square => [17, 8280, 5520, 5520, 5520, 1380, 0],
+            Z9Mode::Wide => [6, 8280, 5520, 8280, 4656, 0, 432],
+        }
+    }
+
+    /// The CropArea of the mode's raw file: what a MakerNote copied from
+    /// that raw file into an exported JPEG holds, and the size of the
+    /// mode's JPEG at full size.
+    pub fn crop_area(self) -> [u16; 4] {
+        match self {
+            Z9Mode::Fx => [12, 8, 8256, 5504],
+            Z9Mode::Dx => [8, 8, 5392, 3592],
+            Z9Mode::Square => [8, 8, 5504, 5504],
+            Z9Mode::Wide => [12, 8, 8256, 4640],
+        }
+    }
+
+    /// What the mode's AFInfo2 records, in the full frame of 8256 by 5504:
+    /// the frame, the centre and the area, each width or x first. On FX,
+    /// the point of the public Z 9 samples 5146 to 5148; on a crop, the
+    /// point of the maintainer's shot with a single point in the top-left
+    /// corner of the picture.
+    pub fn recorded(self) -> [(u32, u32); 3] {
+        let frame = Z9_FOCUS_FRAME;
+        match self {
+            Z9Mode::Fx => [frame, Z9_FOCUS_CENTER, Z9_FOCUS_AREA],
+            Z9Mode::Dx => [frame, (636, 572), (420, 468)],
+            Z9Mode::Square => [frame, (1797, 424), (291, 323)],
+            Z9Mode::Wide => [frame, (502, 715), (291, 323)],
+        }
+    }
+}
+
+/// A Nikon Z 9's JPEG taken in mode `mode`, with a main image of `main`:
+/// laid out as [`nikon_jpeg`]'s, with the MPF index and its two images,
+/// and every value [`camera_exif`] writes, in byte order `order`; and a
+/// MakerNote in byte order `makernote_order`, of the version `0211`, as
+/// the Z 9 writes it, which holds the FocusMode `AF-S  `, the mode's
+/// CropHiSpeed, the mode's AFInfo2 of version `0400`, with the area mode
+/// 193 (single point) and focus confirmed, and, only when `crop_area`, the
+/// CropArea of the mode's raw file, as a MakerNote copied from that raw
+/// file into an export holds it; and no PreviewIFD, as the D5300's JPEGs
+/// hold none. A camera's JPEG of a crop mode has no CropArea (ADR015).
+pub fn z9_jpeg(
+    order: Order,
+    makernote_order: Order,
+    mode: Z9Mode,
+    main: (u16, u16),
+    crop_area: bool,
+) -> NikonJpeg {
+    let (block, _) = nikon_makernote_with(makernote_order, [0x02, 0x11], None, |inner, ifd| {
+        inner
+            .ascii(ifd, FOCUS_MODE, "AF-S  ")
+            .short(ifd, CROP_HI_SPEED, &mode.crop_hi_speed());
+        if crop_area {
+            inner.short(ifd, CROP_AREA, &mode.crop_area());
+        }
+        let af_info2 = af_info2_04xx(makernote_order, b"0400", 0xC1, mode.recorded(), 1);
+        inner.undefined(ifd, AF_INFO2, &af_info2);
+    });
+    nikon_jpeg(order, main, true, &[], |_, _, _| {}, &block, block.len())
+}
+
+/// The Model of the D5300's JPEG, in IFD0.
+pub const D5300_MODEL: &str = "NIKON D5300";
+/// The size of the D5300's JPEG.
+pub const D5300_MAIN: (u16, u16) = (6000, 4000);
+/// The tags of [`camera_exif`] that the D5300's JPEG leaves out: its own
+/// Model takes the Z 9's place, and, as on the bodies before the D780 and
+/// the Z 6, its Exif IFD holds no serial number and no lens tags, and, as
+/// before the D850, no offset from UTC.
+pub const D5300_LOST: [u16; 7] = [
+    MODEL,
+    BODY_SERIAL_NUMBER,
+    OFFSET_TIME_ORIGINAL,
+    LENS_MAKE,
+    LENS_MODEL,
+    LENS_SERIAL_NUMBER,
+    LENS_SPECIFICATION,
+];
+/// The serial number in the D5300's MakerNote: made up, as no real serial
+/// number is copied here.
+pub const D5300_SERIAL_NUMBER: &str = "3456789";
+/// The ISO in the D5300's MakerNote, the second of its two SHORTs: the
+/// Exif ISO, [`ISO`].
+pub const D5300_ISO: u16 = ISO;
+/// The time zone of the D5300's WorldTime, in minutes east of UTC, with
+/// daylight saving time off: made up.
+pub const D5300_TIME_ZONE: i16 = 540;
+/// The lens's range in the D5300's MakerNote: an 18-55 mm lens of f/3.5 to
+/// f/5.6, made up.
+pub const D5300_LENS: [(u32, u32); 4] = [(180, 10), (550, 10), (35, 10), (56, 10)];
+
+/// A JPEG laid out as a Nikon D5300's, a DSLR shot through the viewfinder,
+/// in byte order `order`, MakerNote and all: laid out as [`nikon_jpeg`]'s,
+/// with the MPF index and its two images, as the D5300's JPEGs are, and a
+/// main image of [`D5300_MAIN`]; the values [`camera_exif`] writes, but
+/// [`D5300_LOST`], with IFD0's Model [`D5300_MODEL`]; and a MakerNote of
+/// the version `0211` with no PreviewIFD, as the D5300's JPEG on Wikimedia
+/// Commons has none. The MakerNote holds the ISO `[0, D5300_ISO]`, the
+/// FocusMode `AF-A  `, the SerialNumber [`D5300_SERIAL_NUMBER`], the
+/// WorldTime of [`D5300_TIME_ZONE`], daylight saving time off and the date
+/// format 0, the Lens [`D5300_LENS`], and an AFInfo2 of version `0100`,
+/// its 30 bytes zero after the version, as that JPEG's is: a zero frame,
+/// which records no position.
+pub fn d5300_jpeg(order: Order) -> NikonJpeg {
+    let mut world_time = order.u16(D5300_TIME_ZONE.cast_unsigned()).to_vec();
+    world_time.extend_from_slice(&[0, 0]);
+    let mut af_info2 = b"0100".to_vec();
+    af_info2.resize(30, 0);
+    let (block, _) = nikon_makernote_with(order, [0x02, 0x11], None, |inner, ifd| {
+        inner
+            .short(ifd, nef::ISO, &[0, D5300_ISO])
+            .ascii(ifd, FOCUS_MODE, "AF-A  ")
+            .ascii(ifd, SERIAL_NUMBER, D5300_SERIAL_NUMBER)
+            .undefined(ifd, WORLD_TIME, &world_time)
+            .rational(ifd, nef::LENS, &D5300_LENS)
+            .undefined(ifd, AF_INFO2, &af_info2);
+    });
+    nikon_jpeg(
+        order,
+        D5300_MAIN,
+        true,
+        &D5300_LOST,
+        |tiff, ifd0, _| {
+            tiff.ascii(ifd0, MODEL, D5300_MODEL);
+        },
+        &block,
+        block.len(),
+    )
+}
+
+/// The Model of the D70's JPEG, in IFD0.
+pub const D70_MODEL: &str = "NIKON D70";
+/// The size of the D70's JPEG.
+pub const D70_MAIN: (u16, u16) = (3008, 2000);
+/// The size of the JPEG the D70's MakerNote's PreviewIFD declares, as in
+/// the D70's JPEG on Wikimedia Commons.
+pub const D70_PREVIEW: (u16, u16) = (564, 372);
+/// The tags of [`camera_exif`] that the D70's JPEG leaves out: its own
+/// Model takes the Z 9's place, and, as on the D70, its Exif IFD holds no
+/// ISO, no serial number, no lens tags and no offset from UTC.
+pub const D70_LOST: [u16; 8] = [
+    MODEL,
+    BODY_SERIAL_NUMBER,
+    OFFSET_TIME_ORIGINAL,
+    PHOTOGRAPHIC_SENSITIVITY,
+    LENS_MAKE,
+    LENS_MODEL,
+    LENS_SERIAL_NUMBER,
+    LENS_SPECIFICATION,
+];
+/// The ISO in the D70's MakerNote, the second of its two SHORTs.
+pub const D70_ISO: u16 = 200;
+
+/// The byte order other than `order`.
+fn other(order: Order) -> Order {
+    match order {
+        Order::Little => Order::Big,
+        Order::Big => Order::Little,
+    }
+}
+
+/// A JPEG laid out as a Nikon D70's, in byte order `order`, with its
+/// MakerNote in the other byte order, as the D70's JPEG on Wikimedia
+/// Commons is, little-endian with a big-endian MakerNote: laid out as
+/// [`nikon_jpeg`]'s, with no MPF index, as the D70's JPEGs have none, and
+/// a main image of [`D70_MAIN`]; the values [`camera_exif`] writes, but
+/// [`D70_LOST`], with IFD0's Model [`D70_MODEL`]; and a MakerNote of the
+/// version `0210`, which holds the ISO `[0, D70_ISO]`, the FocusMode
+/// `AF-S  `, the Lens `D300_LENS`, an 18-70 mm lens of f/3.5 to f/4.5, and
+/// a PreviewIFD that declares a JPEG of [`D70_PREVIEW`], the block's last
+/// bytes, and no AFInfo2, as the D70 writes none. The MakerNote's entry
+/// declares its whole block unless `preview_outside`, when it declares the
+/// block up to where the preview's JPEG starts, so that the JPEG lies
+/// inside the Exif segment but outside the MakerNote. Returns the file and
+/// where the preview's JPEG lies in it.
+pub fn d70_jpeg(order: Order, preview_outside: bool) -> (NikonJpeg, Range<u64>) {
+    let makernote_order = other(order);
+    let preview = jpeg_stub(D70_PREVIEW.0, D70_PREVIEW.1, 0xC0);
+    let (block, at) = nikon_makernote_with(
+        makernote_order,
+        [0x02, 0x10],
+        Some(&preview),
+        |inner, ifd| {
+            inner
+                .short(ifd, nef::ISO, &[0, D70_ISO])
+                .ascii(ifd, FOCUS_MODE, "AF-S  ")
+                .rational(ifd, nef::LENS, &D300_LENS);
+        },
+    );
+    let at = at.expect("a PreviewIFD");
+    let declared = if preview_outside {
+        usize::try_from(at).unwrap()
+    } else {
+        block.len()
+    };
+    let file = nikon_jpeg(
+        order,
+        D70_MAIN,
+        false,
+        &D70_LOST,
+        |tiff, ifd0, _| {
+            tiff.ascii(ifd0, MODEL, D70_MODEL);
+        },
+        &block,
+        declared,
+    );
+    let start = file.makernote.start + at;
+    let end = start + u64::try_from(preview.len()).unwrap();
+    (file, start..end)
 }
 
 /// A JPEG with no Exif segment whose main image, of [`MAIN`], is followed

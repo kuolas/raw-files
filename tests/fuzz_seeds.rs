@@ -21,9 +21,13 @@
 //! one whose Exif segment holds IFD0 and IFD1's thumbnail, a camera's with
 //! every value the metadata reads in its Exif segment and an MPF index of
 //! the images after its main one, the same camera layout with a JFIF
-//! segment first, and one with zeros after its end, the Exif segment's TIFF
-//! structure and the MPF index in both byte orders. The `open` target takes
-//! these seeds too, as JPEG files are something it must open.
+//! segment first, one with zeros after its end, and four Nikon cameras'
+//! JPEGs, whose Exif segment holds a Nikon MakerNote, which a fuzzer would
+//! build by luck alone too: a Z 9's in FX and on a 1:1 crop, a D5300's and
+//! a D70's, the Exif segment's TIFF structure and the MPF index in both
+//! byte orders. The `open` target takes these seeds too, as JPEG files are
+//! something it must open, and reaches the Nikon MakerNote reader through
+//! the Nikon ones.
 //!
 //! The fixtures live in `tests/`, outside the library, so this test writes
 //! and checks the seed files, as the unit tests of the TIFF reader do for
@@ -42,7 +46,8 @@ use support::arw::{
 };
 use support::fixtures::{Z9_1X1, Z9_DX, read_fixture};
 use support::jpeg_files::{
-    camera_jpeg, camera_jpeg_with_metadata, exif_jpeg, padded_jpeg, plain_jpeg,
+    MAIN, Z9Mode, camera_jpeg, camera_jpeg_with_metadata, d70_jpeg, d5300_jpeg, exif_jpeg,
+    padded_jpeg, plain_jpeg, z9_jpeg,
 };
 use support::nef::{d300_file, z6iii_file, z9_file};
 use support::tiff_builder::Order;
@@ -105,6 +110,18 @@ fn jpeg_segments_seeds() -> Vec<(String, Vec<u8>)> {
         }),
         ("camera-jfif-first", "jpg", |order| {
             camera_jpeg(order, true).0.bytes
+        }),
+        ("nikon-z9", "jpg", |order| {
+            z9_jpeg(order, order, Z9Mode::Fx, MAIN, false).built.bytes
+        }),
+        ("nikon-z9-1x1", "jpg", |order| {
+            z9_jpeg(order, order, Z9Mode::Square, (2752, 2752), false)
+                .built
+                .bytes
+        }),
+        ("nikon-d5300", "jpg", |order| d5300_jpeg(order).built.bytes),
+        ("nikon-d70", "jpg", |order| {
+            d70_jpeg(order, false).0.built.bytes
         }),
     ]);
     seeds.push(("plain.jpg".to_owned(), plain_jpeg().bytes));
