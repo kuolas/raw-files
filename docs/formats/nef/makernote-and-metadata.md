@@ -70,9 +70,9 @@ detect them by bytes, never by a "type" number. [P][5][6][12]
 
 | Layout | Header | IFD starts at | Offsets relative to | Byte order | Bodies |
 |---|---|---|---|---|---|
-| Headerless | none | MakerNote + 0 | the outer TIFF header | the outer file's (the D1 is big-endian) | confirmed on the D1H, big-endian, file and MakerNote alike (file 5364) **[F]**; the D1, the D1X and the Coolpix E990 rest on documentation [P]; the E-series Coolpix files of raw.pixls.us, the E5400, E5700, E8400 and E8800 (files 212, 4456, 2082 and 2769), write the embedded-TIFF layout instead **[F]** |
+| Headerless | none | MakerNote + 0 | the outer TIFF header | the outer file's (the D1 is big-endian) | confirmed on the D1H and the D1X (files 5364, 1785 and 1786) and on the D1 (file 201, not in the CI set), big-endian, file and MakerNote alike **[F]**; the Coolpix E990 rests on documentation [P]; the E-series Coolpix files of raw.pixls.us, the E5400, E5700, E8400 and E8800 (files 212, 4456, 2082 and 2769), write the embedded-TIFF layout instead **[F]** |
 | Short header | `Nikon\0` `01 00` (8 bytes) | MakerNote + 8 | the outer TIFF header | exiv2 uses the outer order; ExifTool says little-endian | E700 to E950 |
-| Embedded TIFF header | `Nikon\0`, version `02 00`, `02 10` or `02 11`, `00 00`, then a TIFF header (`II*\0` or `MM\0*` and a 4-byte offset) (18 bytes) | MakerNote + 10 + the inner IFD offset (normally 8, so + 18) | MakerNote + 10, the inner TIFF header | the inner header's, independent of the file's | D70, D100, D200 and later DSLRs, every Z body; every checked file but the D1H's: `02 00` on the D100 and the Coolpix E5700 and P7800, `02 10` from the D70 to the D7000 and on the Nikon 1 J1, `02 11` on the Coolpix A (2013) and on every body from the D810 (2014) on **[F]** |
+| Embedded TIFF header | `Nikon\0`, version `02 00`, `02 10` or `02 11`, `00 00`, then a TIFF header (`II*\0` or `MM\0*` and a 4-byte offset) (18 bytes) | MakerNote + 10 + the inner IFD offset (normally 8, so + 18) | MakerNote + 10, the inner TIFF header | the inner header's, independent of the file's | D70, D100, D200 and later DSLRs, every Z body; every checked file but the D1H's and the D1X's: `02 00` on the D100 and the Coolpix E5700 and P7800, `02 10` from the D70 to the D7000 and on the Nikon 1 J1, `02 11` on the Coolpix A (2013) and on every body from the D810 (2014) on **[F]** |
 
 Sources: [5][6][4][7]. The D1 byte-order remark is from ExifTool. [P]
 
@@ -616,7 +616,7 @@ them only in the MakerNote, in plain form. **[F]**
 | Item | Exif tag | MakerNote tag | Measured |
 |---|---|---|---|
 | Body serial number | 0xA431 BodySerialNumber | 0x001D SerialNumber | Exif from the D780 and Z 6 on (files 3827, 3587); MakerNote from the D300 on, blank on the D200 |
-| ISO | 0x8827 ISOSpeedRatings | 0x0002 ISO, `[0, ISO]` | Exif on every checked body except the D1H, D100, D70, D700 and E5700; the first three have it in the MakerNote |
+| ISO | 0x8827 ISOSpeedRatings | 0x0002 ISO, `[0, ISO]` | Exif on every checked body except the D1H, D1X, D100, D70, D700 and E5700; the first four have it in the MakerNote |
 | Lens model | 0xA434 LensModel | none in plain text | the D780, Z 6 and later, and the Nikon 1 J1 (file 2956) |
 | Lens range | 0xA432 LensSpecification | 0x0084 Lens | Exif from the D780 and Z 6 on; MakerNote on every body with interchangeable lenses, equal to Exif where both exist |
 | Lens make, serial | 0xA433 LensMake, 0xA435 LensSerialNumber | none | the D780 and Z bodies; LensMake is empty for the D780's F-mount lens and the Z f's third-party lens (files 3827, 6887) |
@@ -636,7 +636,7 @@ Where the camera focused, which milestone 4 reports so that a viewer can
 judge sharpness at that point. raw-files decided what it reports in
 [ADR012](../../architecture-decisions/adr012-focus-points-as-the-camera-records-them.md);
 this section is the record behind it. The field offsets are ExifTool's
-[P][1]; every value was read on the 33 CC0 Nikon files of
+[P][1]; every value was read on the 35 CC0 Nikon files of
 [test-data.md](test-data.md#23-files-checked-for-the-focus-point), and a
 field is tagged **[F]** where a sample holds a value for it.
 
@@ -649,8 +649,8 @@ raw-files reads it or not:
 | 0x00B7 AFInfo2, in-focus byte | whether focus was confirmed: FocusResult on 04xx, ContrastDetectAFInFocus on 0100 and 0101 | Z 9, Z f, Z6III, Z50II, Z5II, D7000, D5600, D5, Coolpix A **[F]** | read; on 0100 the flag is byte 28, where ExifTool also lists a 20-byte AFPointsSelected that cannot fit in the 30-byte value |
 | 0x00B7 AFInfo2, point fields | the primary point's number, a mask of the points used, and the layout of points (FocusPointSchema) | DSLRs through the viewfinder, the Nikon 1 J1, the Z5II in auto-area mode **[F]** | not read: a number needs a table of the body's points, which no file carries |
 | 0x00B7 AFInfo2, AFPointsInFocus | a mask of the points in focus, version 0101 only (byte 48) [P] | the D850, one point **[F]** | not read: a mask, needs the same table |
-| 0x0088 AFInfo | 4 bytes: area mode, point number, mask of the points in focus [P] | the bodies without AFInfo2: D1H, D70, D100, D200, E5700, P7800 **[F]** | not read: a number only |
-| 0x0021 FaceDetect | a frame size and up to twelve face rectangles in it [P] | none of the 33 files **[F]** | not read: no sample |
+| 0x0088 AFInfo | 4 bytes: area mode, point number, mask of the points in focus [P] | the bodies without AFInfo2: D1H, D1X, D70, D100, D200, E5700, P7800 **[F]** | not read: a number only |
+| 0x0021 FaceDetect | a frame size and up to twelve face rectangles in it [P] | none of the 35 files **[F]** | not read: no sample |
 | 0x0007 FocusMode | an ASCII string [P][1]: `MANUAL`, or an AF mode padded with spaces to six characters (`AF-S  `, `AF-C  `, `AF-A  `) **[F]** | `MANUAL` on the D300 and D850, both viewfinder shots with a zero frame (files 928, 1835), and on the Z fc, which records a position under it (file 8559); an AF mode on every other file with the embedded MakerNote, the maintainer's Z 9 shots included **[F]** | read: `MANUAL`, after trimming, gives no focus point |
 | 0x0085 ManualFocusDistance, 0x00B9 AFTune, the area modes in the MenuSettings blocks | settings, not a position [P] | not looked for | not read |
 
@@ -1038,7 +1038,7 @@ For milestone 3, keep the MakerNote out of the critical path.
     ([ADR012](../../architecture-decisions/adr012-focus-points-as-the-camera-records-them.md)).
     ExifTool's tables give the order of the points by number and, for
     the 11-point layout only, the bit order of the mask. [P][1]
-17. **FaceDetect.** Which bodies write 0x0021; none of the 33 checked
+17. **FaceDetect.** Which bodies write 0x0021; none of the 35 checked
     files does.
 18. **Crops that cut both sides and change the aspect**, such as a DX
     crop at 1:1 or 16:9 on an FX body: whether they are scaled like DX or

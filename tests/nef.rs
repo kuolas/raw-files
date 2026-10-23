@@ -18,7 +18,7 @@
 //! pixels and personal fields removed (see [`support::fixtures`]): their
 //! previews, every value of their metadata, and their focus points, which
 //! the reader scales onto the DX crop and moves into the 1:1 window. Then
-//! 33 real files too large to commit, three of the Z 9 and 30 of 24 other
+//! 35 real files too large to commit, three of the Z 9 and 32 of 25 other
 //! bodies, when they have been downloaded (see
 //! [`support::samples::path`]): the previews each gives, and its metadata,
 //! every value of it, the focus point among them.
@@ -1158,8 +1158,8 @@ fn the_stripped_z9_1x1_file_gives_its_previews_metadata_and_shifted_focus_point(
     check_stripped_z9(&STRIPPED_Z9_1X1);
 }
 
-// Real files, downloaded: 33 NEF files of raw.pixls.us, all CC0, the
-// three of the Z 9, one per compression mode, and 30 files of 24 other
+// Real files, downloaded: 35 NEF files of raw.pixls.us, all CC0, the
+// three of the Z 9, one per compression mode, and 32 files of 25 other
 // Nikon bodies. They are listed with their hashes in `tests/samples.tsv`;
 // `scripts/fetch-samples.sh` downloads them. They are too large to commit,
 // so a test whose file is absent says so and passes: the suite runs
@@ -1283,21 +1283,21 @@ fn every_z9_sample_opens_with_its_four_previews() {
     }
 }
 
-/// The samples of 24 other bodies, from the D1H of 2001 to the Z5II of
+/// The samples of 25 other bodies, from the D1H of 2001 to the Z5II of
 /// 2025, each with the previews the reader finds in it, smallest first.
 /// They are the MakerNote's JPEG; the largest JPEG, in SubIFD0, on every
-/// file but the D1H's, the D100's and the E5700's; a JPEG 1080 pixels
-/// high in SubIFD2 on the D750, D810, D850, D780, D5600, Z 6, Z f, Z6III,
-/// Z5II, Z50II, D5, Z 30 and Z fc; and a 160 by 120 JPEG in IFD0 on the
-/// Z f, the Z6III, the Z5II, the Z50II and the P7800. The tables were
+/// file but the D1H's, the D1X's, the D100's and the E5700's; a JPEG 1080
+/// pixels high in SubIFD2 on the D750, D810, D850, D780, D5600, Z 6, Z f,
+/// Z6III, Z5II, Z50II, D5, Z 30 and Z fc; and a 160 by 120 JPEG in IFD0 on
+/// the Z f, the Z6III, the Z5II, the Z50II and the P7800. The tables were
 /// made from a walk of each file's IFDs and MakerNote, by the reader's
-/// rules. The D1H's one JPEG is in a MakerNote of the headerless layout,
-/// whose offsets count from the start of the file. One file gives fewer
-/// JPEGs than it holds: the P7800's MakerNote JPEG starts where the
-/// MakerNote's declared length ends, outside it, so it gives two. None is
-/// padded after its end-of-image marker. Only the Z 30's IFD0 asks for a
-/// rotation, of 270 degrees clockwise (Orientation 8), which each of its
-/// previews reports.
+/// rules. The one JPEG of the D1H and of the D1X is in a MakerNote of the
+/// headerless layout, whose offsets count from the start of the file. One
+/// file gives fewer JPEGs than it holds: the P7800's MakerNote JPEG starts
+/// where the MakerNote's declared length ends, outside it, so it gives
+/// two. None is padded after its end-of-image marker. Only the Z 30's
+/// IFD0 asks for a rotation, of 270 degrees clockwise (Orientation 8),
+/// which each of its previews reports.
 const OTHER_SAMPLES: &[Sample] = &[
     // D1H, 12-bit uncompressed (raw.pixls.us 5364)
     Sample {
@@ -1308,6 +1308,30 @@ const OTHER_SAMPLES: &[Sample] = &[
             height: 375,
             offset: 3_688,
             len: 24_567,
+            after_eoi: 0,
+        }],
+    },
+    // D1X, 12-bit lossy (raw.pixls.us 1785)
+    Sample {
+        file: "nikon-d1x-12bit-lossy.nef",
+        orientation: Orientation::NoTransforms,
+        previews: &[Jpeg {
+            width: 570,
+            height: 375,
+            offset: 4_878,
+            len: 27_540,
+            after_eoi: 0,
+        }],
+    },
+    // D1X, 12-bit uncompressed (raw.pixls.us 1786)
+    Sample {
+        file: "nikon-d1x-12bit-uncompressed.nef",
+        orientation: Orientation::NoTransforms,
+        previews: &[Jpeg {
+            width: 570,
+            height: 375,
+            offset: 3_688,
+            len: 26_984,
             after_eoi: 0,
         }],
     },
@@ -2121,11 +2145,12 @@ fn every_sample_of_the_other_nikon_bodies_opens_with_its_previews() {
 /// standard tags first and the MakerNote only for what they lack
 /// (ADR011): on the bodies before the D780 and the Z 6, the serial number,
 /// the lens's range, the ISO or the offset from UTC can come from the
-/// MakerNote, and the D1H's ISO and lens range come from one of the
-/// headerless layout. The focus point is the one the rules of ADR012 give
-/// from each file's AFInfo2, FocusMode, CropHiSpeed and CropArea, on the
-/// cropped picture on a crop mode, and in the stored orientation on the
-/// Z 30's rotated shot; where there is none, a comment says why.
+/// MakerNote, and the ISO and lens range of the D1H and the D1X come from
+/// one of the headerless layout. The focus point is the one the rules of
+/// ADR012 give from each file's AFInfo2, FocusMode, CropHiSpeed and
+/// CropArea, on the cropped picture on a crop mode, and in the stored
+/// orientation on the Z 30's rotated shot; where there is none, a comment
+/// says why.
 const METADATA: &[SampleMetadata] = &[
     // Z 9, 14-bit lossless compression (raw.pixls.us 5146)
     SampleMetadata {
@@ -2253,6 +2278,58 @@ const METADATA: &[SampleMetadata] = &[
         }),
         raw_size: Some((2012, 1324)),
         image_size: Some((2012, 1324)),
+        focus: None, // no AFInfo2: AFInfo holds a point number only
+    },
+    // D1X, 12-bit lossy (raw.pixls.us 1785)
+    SampleMetadata {
+        file: "nikon-d1x-12bit-lossy.nef",
+        make: Some("NIKON CORPORATION"),
+        model: Some("NIKON D1X"),
+        serial_number: None,
+        capture_time: Some("2004-07-30T12:23:24.51"),
+        orientation: Orientation::NoTransforms,
+        iso: Some(125),
+        exposure_time: Some((10, 1800)),
+        f_number: Some((110, 10)),
+        focal_length: Some((240, 10)),
+        exposure_bias: Some((0, 6)),
+        lens: Some(SampleLens {
+            make: None,
+            model: None,
+            serial_number: false,
+            min_focal_length: Some((120, 10)),
+            max_focal_length: Some((240, 10)),
+            f_number_at_min_focal_length: Some((45, 10)),
+            f_number_at_max_focal_length: Some((56, 10)),
+        }),
+        raw_size: Some((4028, 1324)),
+        image_size: Some((4028, 1324)),
+        focus: None, // no AFInfo2: AFInfo holds a point number only
+    },
+    // D1X, 12-bit uncompressed (raw.pixls.us 1786)
+    SampleMetadata {
+        file: "nikon-d1x-12bit-uncompressed.nef",
+        make: Some("NIKON CORPORATION"),
+        model: Some("NIKON D1X"),
+        serial_number: None,
+        capture_time: Some("2006-07-22T20:31:52.61"),
+        orientation: Orientation::NoTransforms,
+        iso: Some(200),
+        exposure_time: Some((10, 1250)),
+        f_number: Some((80, 10)),
+        focal_length: Some((700, 10)),
+        exposure_bias: Some((0, 6)),
+        lens: Some(SampleLens {
+            make: None,
+            model: None,
+            serial_number: false,
+            min_focal_length: Some((180, 10)),
+            max_focal_length: Some((700, 10)),
+            f_number_at_min_focal_length: Some((35, 10)),
+            f_number_at_max_focal_length: Some((45, 10)),
+        }),
+        raw_size: Some((4028, 1324)),
+        image_size: Some((4028, 1324)),
         focus: None, // no AFInfo2: AFInfo holds a point number only
     },
     // D100, 12-bit uncompressed (raw.pixls.us 2996)

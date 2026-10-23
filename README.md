@@ -133,9 +133,9 @@ untrusted file with other caps. The API documentation is on
   image size is the crop area the MakerNote records. The focus point comes
   from the MakerNote's AFInfo2 block, which mirrorless bodies and DSLRs in
   live view fill in, and on a crop mode it is placed inside the cropped
-  picture. Previews and metadata are checked on 33 CC0 Nikon files from
+  picture. Previews and metadata are checked on 35 CC0 Nikon files from
   raw.pixls.us that CI downloads, three of the Z 9 (lossless, HE and HE\*)
-  and 30 of 24 other bodies from the D1H to the Z5II, on test files laid
+  and 32 of 25 other bodies from the D1H to the Z5II, on test files laid
   out like a Z 9's, a Z6III's, a D300's and a D1H's, and on two stripped
   files of the maintainer's own Z 9.
 - **Sony ARW**, with the SRF, SR2 and ARQ files of the same family and the
