@@ -191,10 +191,10 @@ downloads (about 1.6 GB). `scripts/fetch-samples.sh nef` or `arw` fetches one
 format only, and the 325 MiB ARQ file only with `RAW_FILES_LARGE=1`. Without
 the files, those tests skip.
 
-Another test runs the reader over a folder of your own RAW files. It prints
-counts only, never a path, the value of a make, model, serial number,
-time, exposure or lens, or where the camera focused, so its output can go
-into an issue:
+Another test runs the reader over a folder of your own camera files, RAW and
+JPEG, and counts per format. It prints counts only, never a path, the value
+of a make, model, serial number, time, exposure or lens, or where the
+camera focused, so its output can go into an issue:
 
 ```sh
 RAW_FILES_LOCAL_CORPUS=/path/to/photos cargo test --release --test local_corpus -- --ignored --nocapture
