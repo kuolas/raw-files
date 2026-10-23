@@ -318,8 +318,11 @@ body exercises.
 | Scanner | Coolscan V ED | A TIFF-like "NEF" with no CFA; contents unverified |
 
 The short-header MakerNote (`Nikon\0\1\0`) only occurs on Coolpix E700 to
-E950, which have no NEF raw. raw-files does not read it, since no public
-file confirms it and the sources disagree on its byte order, so it has no
+E950, which have no NEF raw; their camera JPEGs on Wikimedia Commons have
+it, and were checked by hand
+([JPEG test data](../jpeg/test-data.md#6-early-coolpix-files-checked-by-hand)).
+raw-files does not read it, since the sources disagree on its byte order
+and those files, all little-endian, cannot settle it, so it has no
 fixture of its own: the tests only check that a block of that layout
 gives nothing.
 

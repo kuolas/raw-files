@@ -190,13 +190,18 @@
 //! writes it, big-endian, file and block alike: its MakerNote IFD starts
 //! at the block's first byte, and its PreviewIFD and that IFD's JPEG, the
 //! file's only one, 570 by 375 pixels, lie inside the block where offsets
-//! counted from the start of the file put them (public sample 5364). No
-//! JPEG file with this layout has been checked.
+//! counted from the start of the file put them (public sample 5364). Early
+//! Coolpix bodies, the E990 and others, write it into their JPEGs,
+//! little-endian like the Exif segment, with offsets counted from the
+//! segment's TIFF header, as camera JPEGs from Wikimedia Commons, checked
+//! by hand, show; where they hold a PreviewIFD, its JPEG lies past the end
+//! of the block, so it is not a preview.
 //!
 //! The third layout, an IFD after the 8 bytes `Nikon\0\1\0`, which the
-//! Coolpix E700 to E950 wrote, is not read: no public file confirms it, and
-//! the sources disagree on the byte order of its numbers. A file that has
-//! one gets nothing from its MakerNote, its preview included.
+//! Coolpix E700 to E950 wrote into their JPEGs, is not read: the sources
+//! disagree on the byte order of its numbers, and the public files that
+//! have it, little-endian inside the block and out, cannot settle it. A
+//! file that has one gets nothing from its MakerNote.
 //!
 //! A block that starts with the signature is of the embedded layout or of
 //! none: it is never read as a bare IFD. Any other block is taken for the

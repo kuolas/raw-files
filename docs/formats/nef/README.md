@@ -28,7 +28,12 @@ Commons, a D5300's and a D70's, was checked as well
 listed in the [JPEG test data](../jpeg/test-data.md#2-the-sample-files)).
 On 23 October 2026 two D1X files were added, which CI downloads too, to
 check the headerless MakerNote on a second body (listed in
-[test-data.md](test-data.md#21-the-ci-set)).
+[test-data.md](test-data.md#21-the-ci-set)). The same day the headerless
+and short-header MakerNotes were checked by hand on camera JPEGs of
+early Coolpix bodies from Wikimedia Commons, which are not downloaded
+([makernote-and-metadata.md](makernote-and-metadata.md#in-a-jpeg-file),
+listed in the
+[JPEG test data](../jpeg/test-data.md#6-early-coolpix-files-checked-by-hand)).
 The tests check the previews of all 35, and test-data.md records them, but
 the containers of the 32 files of 25 other bodies are not yet written up
 in these pages. The raw data was not

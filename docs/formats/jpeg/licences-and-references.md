@@ -42,9 +42,13 @@ independent reader, while the samples were chosen
 ([test-data.md](test-data.md#3-how-the-files-were-chosen)). Its output
 shortlisted the files, and what it showed of the files left out, and its
 warning about the D70 file's IFD1, which that file's bytes then
-explained, are recorded tagged **[S]**. Every fact tagged **[F]** comes
-from the eight files' bytes. None of ExifTool's code or printed text is
-copied into the repository. [I]
+explained, are recorded tagged **[S]**. It was also run as a reader on
+some of the early Coolpix files checked by hand
+([test-data.md](test-data.md#6-early-coolpix-files-checked-by-hand)),
+to compare its reading of their MakerNotes with what their bytes show.
+Every fact tagged **[F]** comes from the files' bytes, read with a
+script written for the purpose. None of ExifTool's code or printed text
+is copied into the repository. [I]
 
 ## 3. The sample files' licences
 
@@ -65,6 +69,14 @@ are under CC0, a public-domain dedication, CC BY 2.0, CC BY 2.5 or CC BY
   three licences, and raw-files takes CC BY 2.5 of them. [P][6]
 - **CC BY-SA** files are not used, since share-alike terms would follow
   any adaptation of the data. [I]
+- **The early Coolpix files checked by hand**
+  ([test-data.md](test-data.md#6-early-coolpix-files-checked-by-hand))
+  are not samples: nothing downloads them, and the repository holds
+  nothing of theirs but their names, licences and hashes and facts about
+  their structure, such as where a MakerNote lies and what its offsets
+  count from. Facts are not the work a licence covers, so some of them
+  are cited although they are under CC BY-SA, where no file of that body
+  under another licence was found; each is credited all the same. [I]
 - Commons keeps each upload byte for byte, and a later upload can replace
   the file behind the same name; the SHA-256 pin makes the download
   script notice, deleting the file it downloaded and failing, in CI as

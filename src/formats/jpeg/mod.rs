@@ -96,11 +96,12 @@
 //!   inside the Exif segment. In the headerless layout of the D1 family,
 //!   they count from the TIFF header of the structure that holds the
 //!   MakerNote, as Sony's do, which in a JPEG is the one inside the Exif
-//!   segment, and the numbers are in that structure's byte order; no JPEG
-//!   file with that layout has been checked. It gives what it gives a NEF:
-//!   the serial number, the ISO, the lens's range and the capture time's
-//!   offset from UTC, each only when the standard tags gave none, so that
-//!   an Exif value always wins; and the focus point, below.
+//!   segment, as the JPEGs of early Coolpix bodies that write it show,
+//!   and the numbers are in that structure's byte order. It gives what it
+//!   gives a NEF: the serial number, the ISO, the lens's range and the
+//!   capture time's offset from UTC, each only when the standard tags
+//!   gave none, so that an Exif value always wins; and the focus point,
+//!   below.
 //! - **When the Make starts with `SONY`**, as the ARW claim first tests it,
 //!   the Sony MakerNote reader (`makernote/sony.rs`) reads it as it reads
 //!   an ARW's, for the focus point alone, below. Its offsets count from

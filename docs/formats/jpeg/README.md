@@ -24,10 +24,15 @@ and checked against eight camera-original JPEGs from Wikimedia Commons, of
 Sony, Nikon and Canon bodies, listed in
 [test-data.md](test-data.md#2-the-sample-files); what they show is tagged
 **[F]**. The tests download them and check every preview, metadata value
-and focus point of each. [open-questions.md](open-questions.md) lists what is still
-unknown, among it the orientation of the small images on a portrait
-picture on a public file. What a Nikon JPEG records in a crop mode is
-known from the maintainer's own Z 9 shots, not from a public file.
+and focus point of each. On 23 October 2026 the MakerNotes of 47 more
+camera-original JPEGs from Wikimedia Commons, of early Coolpix bodies,
+were checked by hand for the two older layouts of the Nikon MakerNote;
+they are not downloaded
+([test-data.md](test-data.md#6-early-coolpix-files-checked-by-hand)).
+[open-questions.md](open-questions.md) lists what is still unknown,
+among it the orientation of the small images on a portrait picture on a
+public file. What a Nikon JPEG records in a crop mode is known from the
+maintainer's own Z 9 shots, not from a public file.
 
 ## Pages
 
@@ -55,7 +60,9 @@ Claims carry a tag:
   on sample files.
 - **[F]**: measured on a named sample file. Files are cited by body ("the
   ILCE-7M3 file"), and [test-data.md](test-data.md#2-the-sample-files)
-  lists each with its Commons name, licence and SHA-256.
+  lists each with its Commons name, licence and SHA-256; the early
+  Coolpix files checked by hand are listed the same way in
+  [test-data.md](test-data.md#6-early-coolpix-files-checked-by-hand).
 
 Where a sample contradicts a specification, the pages follow the sample
 and record the disagreement.
