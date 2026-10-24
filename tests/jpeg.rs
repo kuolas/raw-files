@@ -22,12 +22,13 @@
 //! maintainer's own Z 9, in FX and in DX and 16:9 crop modes, committed
 //! with their images replaced by stubs and their personal fields zeroed (see
 //! [`support::fixtures`]), read whole from a path and from bytes: their
-//! previews, every value of their metadata, and their focus points, as
-//! recorded in FX, scaled onto the DX picture and moved into the 16:9
-//! window. Then eight camera JPEGs of Wikimedia Commons, too large to
-//! commit, when they have been downloaded (see
-//! [`support::samples::path`]): the previews each gives, and its metadata,
-//! every value of it, the focus point among them.
+//! previews, every value of their metadata, the camera settings among
+//! them, and their focus points, as recorded in FX, scaled onto the DX
+//! picture and moved into the 16:9 window. Then eight camera JPEGs of
+//! Wikimedia Commons, too large to commit, when they have been downloaded
+//! (see [`support::samples::path`]): the previews each gives, and its
+//! metadata, every value of it, the focus point and the camera settings
+//! among them.
 
 mod support;
 
@@ -36,8 +37,9 @@ use std::io::Cursor;
 use std::ops::Range;
 
 use raw_files::{
-    DateTime, ErrorKind, Exposure, Focus, Format, Lens, Limits, Metadata, Options, Orientation,
-    Point, Preview, PreviewFormat, Rational, RawFile, SignedRational, Size,
+    CameraSettings, ColorSpace, DateTime, ErrorKind, Exposure, ExposureProgram, Flash, FlashMode,
+    Focus, Format, Lens, Limits, Metadata, MeteringMode, Options, Orientation, Point, Preview,
+    PreviewFormat, Rational, RawFile, SignedRational, Size, WhiteBalance, WhiteBalanceMode,
 };
 use support::arw::{
     ARW4_FOCUS_CENTER, ARW4_FOCUS_FRAME, ARW4_FOCUS_SIZE, ARW4_FULL_SIZE_JPEG,
@@ -74,8 +76,8 @@ use support::nef::{
     nikon_makernote_with, z9_af_info2,
 };
 use support::samples::{
-    Jpeg, Sample, SampleFocus, SampleLens, SampleMetadata, SerialShape, check, check_metadata,
-    listed,
+    Jpeg, Sample, SampleFocus, SampleLens, SampleMetadata, SampleSettings, SerialShape, check,
+    check_metadata, listed,
 };
 use support::tiff_builder::{EXIF_IFD, IfdId, Order, TiffBuilder};
 
@@ -519,6 +521,9 @@ fn a_camera_jpeg_gives_every_value_its_exif_segment_records() {
     assert_eq!(read.raw_size(), None);
     assert_eq!(read.image_size(), Some(size_of(MAIN)));
     assert_eq!(read.focus(), None);
+    // The file writes no settings tag, so the settings are the empty
+    // record.
+    assert_eq!(read.camera_settings(), &CameraSettings::default());
 }
 
 #[test]
@@ -2051,6 +2056,20 @@ fn check_stripped_z9_jpeg(stripped: &StrippedZ9Jpeg) {
     )
     .with_in_focus(stripped.in_focus);
     assert_eq!(metadata.focus(), Some(focus), "{label}");
+    // The settings the Exif IFD records, the same on the three shots:
+    // aperture priority, matrix metering, a Flash of 0, no flash fired and
+    // no mode recorded, auto white balance, and the ColorSpace 1, sRGB. The
+    // settings that only the MakerNote records are not read yet.
+    assert_eq!(
+        metadata.camera_settings(),
+        &CameraSettings::default()
+            .with_white_balance(WhiteBalance::default().with_mode(WhiteBalanceMode::Auto))
+            .with_exposure_program(ExposureProgram::AperturePriority)
+            .with_metering_mode(MeteringMode::MultiSegment)
+            .with_flash(Flash::new(false))
+            .with_color_space(ColorSpace::Srgb),
+        "{label}"
+    );
 }
 
 #[test]
@@ -2080,7 +2099,8 @@ fn the_stripped_z9_16x9_jpeg_gives_its_previews_metadata_and_moved_focus_point()
 // segments, its Exif segment's TIFF structure, its MakerNote and its MPF
 // list that shares no code with the reader, with the rules of ADR011,
 // ADR014 and ADR015 applied to what it read; the software and the focal
-// length in 35 mm terms too, from IFD0 and the Exif IFD.
+// length in 35 mm terms too, from IFD0 and the Exif IFD, and the camera
+// settings, from the Exif IFD and the Interoperability IFD.
 
 /// The JPEG samples, each with the previews the reader finds in it,
 /// smallest first: IFD1's thumbnail, of 160 by 120 on every file but the
@@ -2335,7 +2355,11 @@ fn every_jpeg_sample_opens_with_its_previews() {
 /// (ADR014). The focus point is the one Sony's MakerNote records, as
 /// recorded, on the ILCE-7M3, off centre in a frame of its picture's size,
 /// and on the ILCE-7RM2, at the centre; where there is none, a comment
-/// says why.
+/// says why. The camera settings are those the Exif IFD records: every
+/// file gives sRGB, the G7 X records no ExposureProgram and the D5300 the
+/// ExposureProgram 0, "not defined", so neither gives an exposure program,
+/// and the settings only a MakerNote records are `None` on every file,
+/// since the reader does not read them yet.
 const METADATA: &[SampleMetadata] = &[
     // ILCE-7M3 (Wikimedia Commons Acanthodactylus_erythrurus_2025.jpg)
     SampleMetadata {
@@ -2369,6 +2393,19 @@ const METADATA: &[SampleMetadata] = &[
             size: None,
             in_focus: None,
         }),
+        settings: SampleSettings {
+            white_balance_mode: Some(WhiteBalanceMode::Auto),
+            kelvin: None,
+            fine_tune: None,
+            exposure_program: Some(ExposureProgram::Manual),
+            metering_mode: Some(MeteringMode::MultiSegment),
+            flash: Some((false, Some(FlashMode::Off))),
+            shutter: None,
+            electronic_front_curtain_setting: None,
+            image_area: None,
+            raw_image_size: None,
+            color_space: Some(ColorSpace::Srgb),
+        },
     },
     // ILCE-7RM2 (Wikimedia Commons Ulpu_Pajari_puhumassa_vastaanotettuaan_tiedonjulkistamisen_valtionpalkinnon_2.jpg)
     SampleMetadata {
@@ -2402,6 +2439,19 @@ const METADATA: &[SampleMetadata] = &[
             size: None,
             in_focus: None,
         }),
+        settings: SampleSettings {
+            white_balance_mode: Some(WhiteBalanceMode::Auto),
+            kelvin: None,
+            fine_tune: None,
+            exposure_program: Some(ExposureProgram::Program),
+            metering_mode: Some(MeteringMode::MultiSegment),
+            flash: Some((false, Some(FlashMode::Off))),
+            shutter: None,
+            electronic_front_curtain_setting: None,
+            image_area: None,
+            raw_image_size: None,
+            color_space: Some(ColorSpace::Srgb),
+        },
     },
     // DSC-RX100M4 (Wikimedia Commons 여의도한강공원샛강생태공원문화다리_09.jpg)
     SampleMetadata {
@@ -2430,6 +2480,19 @@ const METADATA: &[SampleMetadata] = &[
         raw_size: None,
         image_size: Some((5472, 3648)),
         focus: None, // manual focus
+        settings: SampleSettings {
+            white_balance_mode: Some(WhiteBalanceMode::Shade),
+            kelvin: None,
+            fine_tune: None,
+            exposure_program: Some(ExposureProgram::Program),
+            metering_mode: Some(MeteringMode::MultiSegment),
+            flash: Some((false, Some(FlashMode::Off))),
+            shutter: None,
+            electronic_front_curtain_setting: None,
+            image_area: None,
+            raw_image_size: None,
+            color_space: Some(ColorSpace::Srgb),
+        },
     },
     // ILCE-6000 (Wikimedia Commons 140319_MS_Queen_Elizabeth_Kobe_Japan01o.JPG)
     SampleMetadata {
@@ -2458,6 +2521,19 @@ const METADATA: &[SampleMetadata] = &[
         raw_size: None,
         image_size: Some((6000, 4000)),
         focus: None, // no FocusLocation: a point number only (AFPointSelected)
+        settings: SampleSettings {
+            white_balance_mode: Some(WhiteBalanceMode::Auto),
+            kelvin: None,
+            fine_tune: None,
+            exposure_program: Some(ExposureProgram::AperturePriority),
+            metering_mode: Some(MeteringMode::MultiSegment),
+            flash: Some((false, Some(FlashMode::Off))),
+            shutter: None,
+            electronic_front_curtain_setting: None,
+            image_area: None,
+            raw_image_size: None,
+            color_space: Some(ColorSpace::Srgb),
+        },
     },
     // DSLR-A100 (Wikimedia Commons "Krone"_flag_on_line_5_tram_(2564030031).jpg)
     SampleMetadata {
@@ -2478,6 +2554,19 @@ const METADATA: &[SampleMetadata] = &[
         raw_size: None,
         image_size: Some((3872, 2592)),
         focus: None, // no FocusLocation: only the A100's Minolta block, which is not read
+        settings: SampleSettings {
+            white_balance_mode: Some(WhiteBalanceMode::Auto),
+            kelvin: None,
+            fine_tune: None,
+            exposure_program: Some(ExposureProgram::ShutterPriority),
+            metering_mode: Some(MeteringMode::MultiSegment),
+            flash: Some((false, Some(FlashMode::Off))),
+            shutter: None,
+            electronic_front_curtain_setting: None,
+            image_area: None,
+            raw_image_size: None,
+            color_space: Some(ColorSpace::Srgb),
+        },
     },
     // NIKON D5300 (Wikimedia Commons "Tours"_French_restaurant_in_Omotesando.JPG)
     SampleMetadata {
@@ -2509,6 +2598,19 @@ const METADATA: &[SampleMetadata] = &[
         raw_size: None,
         image_size: Some((6000, 4000)),
         focus: None, // a viewfinder shot: a zero frame and only a point number
+        settings: SampleSettings {
+            white_balance_mode: Some(WhiteBalanceMode::Auto),
+            kelvin: None,
+            fine_tune: None,
+            exposure_program: None,
+            metering_mode: Some(MeteringMode::MultiSegment),
+            flash: Some((false, Some(FlashMode::Off))),
+            shutter: None,
+            electronic_front_curtain_setting: None,
+            image_area: None,
+            raw_image_size: None,
+            color_space: Some(ColorSpace::Srgb),
+        },
     },
     // NIKON D70 (Wikimedia Commons "Stadswandeling".JPG)
     SampleMetadata {
@@ -2537,6 +2639,19 @@ const METADATA: &[SampleMetadata] = &[
         raw_size: None,
         image_size: Some((3008, 2000)),
         focus: None, // no AFInfo2: AFInfo holds a point number only
+        settings: SampleSettings {
+            white_balance_mode: Some(WhiteBalanceMode::Auto),
+            kelvin: None,
+            fine_tune: None,
+            exposure_program: Some(ExposureProgram::Program),
+            metering_mode: Some(MeteringMode::MultiSegment),
+            flash: Some((false, None)),
+            shutter: None,
+            electronic_front_curtain_setting: None,
+            image_area: None,
+            raw_image_size: None,
+            color_space: Some(ColorSpace::Srgb),
+        },
     },
     // Canon PowerShot G7 X (Wikimedia Commons DC-3_OH-LCH_at_EFJM_20160717.jpg)
     SampleMetadata {
@@ -2557,6 +2672,19 @@ const METADATA: &[SampleMetadata] = &[
         raw_size: None,
         image_size: Some((5472, 3648)),
         focus: None, // the MakerNote of a maker no reader reads
+        settings: SampleSettings {
+            white_balance_mode: Some(WhiteBalanceMode::Auto),
+            kelvin: None,
+            fine_tune: None,
+            exposure_program: None,
+            metering_mode: Some(MeteringMode::MultiSegment),
+            flash: Some((false, Some(FlashMode::Off))),
+            shutter: None,
+            electronic_front_curtain_setting: None,
+            image_area: None,
+            raw_image_size: None,
+            color_space: Some(ColorSpace::Srgb),
+        },
     },
 ];
 

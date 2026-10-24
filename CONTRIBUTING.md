@@ -256,8 +256,11 @@ that every file opens, that every one has a preview, that the largest
 preview is a whole JPEG, that the metadata gives the preview's orientation,
 and that every focus point lies inside its frame, area included, both as
 read and once placed on the largest preview; it counts how many files have
-each metadata field and a focus point, and how many previews of each size
-they hold. A preview may end in padding after the image's end marker, as
+each metadata field and a focus point, how many previews of each size they
+hold, and, for each camera setting the Exif tags record, how many files
+have each kind of it, such as aperture priority or auto white balance,
+and how many flashes fired: totals over the files of a format, never tied
+to one file. A preview may end in padding after the image's end marker, as
 some Sony cameras write it: `FF` bytes in any file, and zeros in a JPEG
 file, whose largest preview is the whole file and must hold its own image's
 end marker, not only its thumbnail's. Other data there fails a RAW file's

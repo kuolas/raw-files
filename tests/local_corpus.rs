@@ -24,6 +24,13 @@
 //! can be pasted into an issue without disclosing anything about the
 //! photos.
 //!
+//! For the camera settings that the Exif tags record, the exposure
+//! program, the metering mode, the flash, the white balance mode and the
+//! colour space, it counts, over the files of a section, how many have each
+//! setting and how many have each kind of it, by the name the library
+//! gives the kind, such as "Aperture priority", and how many flashes fired;
+//! as for the sizes, these are totals over the section, tied to no file.
+//!
 //! For the focus point, where the camera focused, it counts the files that
 //! have one, how many of those record that the camera confirmed focus, that
 //! it missed, or neither, the sizes of the frames the points are measured
@@ -159,6 +166,83 @@ impl MetadataTally {
     }
 }
 
+/// How the camera was set for the files, as the Exif tags record it, in
+/// counts: for each setting, how many files have it, and how many have each
+/// of its kinds, by the name the library gives the kind, such as
+/// "Aperture priority". The settings that only a MakerNote records are not
+/// counted, since the library does not read them yet.
+#[derive(Default)]
+struct SettingsTally {
+    exposure_program: usize,
+    exposure_programs: BTreeMap<&'static str, usize>,
+    metering_mode: usize,
+    metering_modes: BTreeMap<&'static str, usize>,
+    /// Files with a flash, of which `flash_fired` fired; `flash_modes`
+    /// counts the ones with each mode, and `flash_without_mode` the ones
+    /// that record none.
+    flash: usize,
+    flash_fired: usize,
+    flash_modes: BTreeMap<&'static str, usize>,
+    flash_without_mode: usize,
+    white_balance_mode: usize,
+    white_balance_modes: BTreeMap<&'static str, usize>,
+    color_space: usize,
+    color_spaces: BTreeMap<&'static str, usize>,
+}
+
+impl SettingsTally {
+    /// Counts the camera settings `metadata` has.
+    fn record(&mut self, metadata: &Metadata) {
+        /// Counts one more file with the setting, in `total`, and one more
+        /// with its kind `name`, in `by_kind`.
+        fn count(
+            total: &mut usize,
+            by_kind: &mut BTreeMap<&'static str, usize>,
+            name: &'static str,
+        ) {
+            *total += 1;
+            *by_kind.entry(name).or_default() += 1;
+        }
+        let settings = metadata.camera_settings();
+        if let Some(program) = settings.exposure_program() {
+            count(
+                &mut self.exposure_program,
+                &mut self.exposure_programs,
+                program.name(),
+            );
+        }
+        if let Some(mode) = settings.metering_mode() {
+            count(
+                &mut self.metering_mode,
+                &mut self.metering_modes,
+                mode.name(),
+            );
+        }
+        if let Some(flash) = settings.flash() {
+            self.flash += 1;
+            self.flash_fired += usize::from(flash.fired());
+            match flash.mode() {
+                Some(mode) => *self.flash_modes.entry(mode.name()).or_default() += 1,
+                None => self.flash_without_mode += 1,
+            }
+        }
+        if let Some(mode) = settings.white_balance().mode() {
+            count(
+                &mut self.white_balance_mode,
+                &mut self.white_balance_modes,
+                mode.name(),
+            );
+        }
+        if let Some(color_space) = settings.color_space() {
+            count(
+                &mut self.color_space,
+                &mut self.color_spaces,
+                color_space.name(),
+            );
+        }
+    }
+}
+
 /// What the files say about where the camera focused, in counts. No
 /// centre and no area size is printed: the area sizes are kept only to
 /// count how many different ones there are.
@@ -273,6 +357,7 @@ struct Tally {
     sizes: BTreeMap<(u32, u32), usize>,
     orientations: BTreeMap<String, usize>,
     metadata: MetadataTally,
+    settings: SettingsTally,
     focus: FocusTally,
     /// Files whose metadata gives an orientation other than their largest
     /// preview's: both come from the same tag, so this must stay zero.
@@ -344,6 +429,31 @@ impl Tally {
         );
         println!("raw sizes: {:?}", m.raw_sizes);
         println!("image sizes: {:?}", m.image_sizes);
+        let s = &self.settings;
+        println!(
+            "files with an exposure program: {}, by program: {:?}",
+            s.exposure_program, s.exposure_programs
+        );
+        println!(
+            "files with a metering mode: {}, by mode: {:?}",
+            s.metering_mode, s.metering_modes
+        );
+        println!(
+            "files with a flash: {}, of which fired: {}, not fired: {}; by mode: {:?}, without a mode: {}",
+            s.flash,
+            s.flash_fired,
+            s.flash - s.flash_fired,
+            s.flash_modes,
+            s.flash_without_mode
+        );
+        println!(
+            "files with a white balance mode: {}, by mode: {:?}",
+            s.white_balance_mode, s.white_balance_modes
+        );
+        println!(
+            "files with a colour space: {}, by colour space: {:?}",
+            s.color_space, s.color_spaces
+        );
         let f = &self.focus;
         println!(
             "files with a focus point: {}, without: {}",
@@ -569,6 +679,7 @@ fn check(path: &Path, tally: &mut Tally) {
             .or_default() += 1;
     }
     tally.metadata.record(raw.metadata());
+    tally.settings.record(raw.metadata());
     tally.focus.record(raw.metadata());
     let Some(preview) = raw.largest_preview() else {
         tally.no_preview += 1;
