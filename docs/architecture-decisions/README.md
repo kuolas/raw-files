@@ -16,7 +16,7 @@ each: the context, what was decided, and what follows from it. They answer
 | [ADR008](adr008-lints-and-panics.md) | No unsafe code, a few extra lints, no panics on malformed input | Accepted |
 | [ADR009](adr009-public-api-shape.md) | The shape of the public API | Accepted |
 | [ADR010](adr010-decoding-ends-at-a-linear-image.md) | Decoding ends at a linear image | Accepted |
-| [ADR011](adr011-metadata-from-standard-tags.md) | Metadata comes from the standard tags | Accepted; amended by [ADR012](adr012-focus-points-as-the-camera-records-them.md) |
+| [ADR011](adr011-metadata-from-standard-tags.md) | Metadata comes from the standard tags | Accepted; amended by [ADR012](adr012-focus-points-as-the-camera-records-them.md), and in place for the camera settings |
 | [ADR012](adr012-focus-points-as-the-camera-records-them.md) | Focus points as the camera records them | Accepted |
 | [ADR013](adr013-clean-room-and-third-party-code.md) | Clean-room implementation and third-party code | Accepted |
 | [ADR014](adr014-jpeg-files-as-a-format-of-their-own.md) | JPEG files as a format of their own | Accepted |
@@ -38,7 +38,8 @@ local choices belong in a code comment or the commit message instead.
 
 ## Changing a decision
 
-Records are not rewritten or deleted. A new decision that replaces an old one
+Records are not rewritten or deleted, with the one exception at the end
+of this section. A new decision that replaces an old one
 gets its own ADR; the old one's status becomes "Superseded by
 [ADRxxx](…)", linking to the new record.
 
@@ -52,3 +53,12 @@ A new decision that builds on an old one without contradicting it, by
 covering what the old one left out, also gets its own ADR. It says
 "Builds on [ADRxxx](…)" next to its status, and the old record stays as
 it is, Accepted.
+
+The exception: a decision that extends an old one to more values of the
+same kind, by the same rule, may be added to the old record in place.
+The additions are sections of their own, under the old Context,
+Decision and Consequences, each with the date and the issue it was
+added in; they say which of the old sentences no longer describe the
+whole decision, and the old text stays as it was. The old record's
+status names the addition. ADR011 was extended this way for the
+camera's settings.
