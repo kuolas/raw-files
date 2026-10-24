@@ -230,6 +230,10 @@ fixtures, in `fuzz/seeds/jpeg_segments/` (see
   crop modes
   ([ADR015](../../architecture-decisions/adr015-the-focus-point-of-a-crop-mode-jpeg.md)).
 - **Fujifilm, Panasonic, Canon focus data and phones.** [S]
+- **Some camera settings.** All eight files are sRGB and none had its
+  flash fire; the maintainer's Z 9 fixtures add a Nikon JPEG at a
+  smaller image size
+  ([container-and-metadata.md](container-and-metadata.md#10-makernotes-in-a-jpeg)). [F]
 
 See [open-questions.md](open-questions.md) for what these gaps leave
 open.
