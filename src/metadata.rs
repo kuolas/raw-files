@@ -227,9 +227,12 @@ impl Metadata {
     /// the file does not record it or records it in a way that cannot be
     /// read, a damaged value costing only itself.
     ///
-    /// No reader fills the settings in yet, so for every file it is the
-    /// empty record, `CameraSettings::default()`. A program's tests build
-    /// one with the `with_…` methods of [`CameraSettings`] and set it with
+    /// NEF, ARW and JPEG files give the settings that their standard Exif
+    /// tags record: the exposure program, the metering mode, the flash, the
+    /// white balance mode and the colour space. The others, which only a
+    /// maker's MakerNote records, are not read yet, so they are `None` for
+    /// every file. A program's tests build the settings with the `with_…`
+    /// methods of [`CameraSettings`] and set them with
     /// [`with_camera_settings`](Self::with_camera_settings).
     pub fn camera_settings(&self) -> &CameraSettings {
         &self.camera_settings

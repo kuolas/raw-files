@@ -6,18 +6,20 @@
 //! Cameras of every maker record the same facts in the same standard tags:
 //! the camera's make and model, the software that wrote the file and the
 //! orientation in IFD0, the capture time, the body's serial number, the
-//! exposure and the lens in the Exif IFD, and the sizes in the IFD of the
-//! raw data. So [`read`] reads them once, over the tree, for every format,
-//! and a format adds only what its own structures record and the standard
-//! tags lack (ADR011, which chose the standard tags first). The JPEG reader
-//! shares it too, over the tree of a JPEG file's Exif segment, and then
-//! decides the sizes itself: the picture's own size in place of the ones
-//! read here, and no raw size (ADR014).
+//! exposure, the lens and some of the camera's settings in the Exif IFD,
+//! with the Interoperability IFD for the colour space, and the sizes in the
+//! IFD of the raw data. So [`read`] reads them once, over the tree, for
+//! every format, and a format adds only what its own structures record and
+//! the standard tags lack (ADR011, which chose the standard tags first). The
+//! JPEG reader shares it too, over the tree of a JPEG file's Exif segment,
+//! and then decides the sizes itself: the picture's own size in place of
+//! the ones read here, and no raw size (ADR014).
 //!
 //! The rules:
 //!
 //! - A damaged value costs only itself. A tag that is missing, of a type
-//!   other than the standard's, or whose value cannot be read, such as one
+//!   other than the standard's, of a count other than one where the rules
+//!   below ask for one SHORT, or whose value cannot be read, such as one
 //!   longer than one tag may take, gives `None` for its own value; every
 //!   other value is still read, and the file still opens. Only a failure of
 //!   the reader is an error: it says nothing about the file.
@@ -51,10 +53,10 @@
 //!   ExposureBiasValue, of type SRATIONAL, its first value as stored; it is
 //!   `None` only when its denominator is zero, since a zero bias, such as
 //!   0/6, is no compensation ([`SignedRational::new`]).
-//! - The focal length in 35 mm terms is the Exif FocalLengthIn35mmFilm, of
-//!   type SHORT only, its first value; it is `None` when zero, which Exif
-//!   writes for one the camera did not know
-//!   ([`focal_length_in_35mm_film`]).
+//! - The focal length in 35 mm terms is the Exif FocalLengthIn35mmFilm,
+//!   exactly one SHORT, the type and count the standard gives it
+//!   ([`one_short`]); it is `None` when zero, which Exif writes for one the
+//!   camera did not know ([`focal_length_in_35mm_film`]).
 //! - The lens is described by the Exif LensMake, LensModel and
 //!   LensSerialNumber, and by the LensSpecification, of type RATIONAL and
 //!   of exactly four values: the shortest and longest focal length and the
@@ -64,8 +66,42 @@
 //!   ([`Rational::known`]). A LensModel made only of `-` characters, which
 //!   Sony writes for a manual lens, names no lens and is `None`. A file
 //!   whose lens tags give no value has no lens ([`lens`]).
+//! - The camera settings that Exif records come from tags of the Exif IFD,
+//!   each exactly one SHORT, as the standard gives them ([`one_short`]),
+//!   and each code Exif defines and a variant names gives that variant;
+//!   every other code, the ones Exif writes for "not defined" or "unknown"
+//!   among them, gives `None` ([`camera_settings`]):
+//!   - the exposure program is the ExposureProgram, 1 to 8; 0, "not
+//!     defined", and 9, which Exif does not define, give `None`
+//!     ([`exposure_program`]);
+//!   - the metering mode is the MeteringMode, 1 to 6 and 255, "other"; 0,
+//!     "unknown", gives `None` ([`metering_mode`]);
+//!   - the flash is the Flash, read by its bits: whether it fired, and its
+//!     mode, compulsory firing, compulsory suppression or auto, none when
+//!     the camera has no flash function; return light and red-eye
+//!     reduction are not read. A value with a reserved bit set, or that
+//!     says a flash fired on a camera without one, gives `None`
+//!     ([`flash`]);
+//!   - the white balance mode is auto for a WhiteBalance of 0; for 1,
+//!     "manual", it is the kind of light the LightSource names, such as
+//!     shade, and `None` for a light no mode stands for, such as the
+//!     standard light D65, for "unknown" and for "other"
+//!     ([`white_balance_mode`]);
+//!   - the colour space is sRGB for a ColorSpace of 1, and Adobe RGB for
+//!     65535, "uncalibrated", when the Interoperability IFD's
+//!     InteropIndex, read by the text rule, is `R03`, a DCF option file;
+//!     any other ColorSpace, an "uncalibrated" one beside another index or
+//!     none, and no ColorSpace give `None` ([`color_space`]).
+//!
+//!   The other settings are recorded only in a maker's MakerNote, where no
+//!   format reads them yet, so they are `None`: the white balance's colour
+//!   temperature and fine-tuning, the shutter, the electronic front curtain
+//!   setting, the image area and the raw image size. Nor are the
+//!   MakerNote's white balance setting, finer than Exif's, and Nikon's
+//!   colour space, which its raw files record, if at all, only there, read
+//!   yet. See #26.
 //! - A file without an Exif IFD has no capture time, no serial number, no
-//!   exposure and no lens.
+//!   exposure, no lens, and none of the camera settings.
 //! - The orientation is IFD0's Orientation, read as the preview finder reads
 //!   it ([`tiff_previews::orientation`]), so that the metadata and the
 //!   previews never disagree.
@@ -94,13 +130,17 @@
 
 use std::io::{Read, Seek};
 
-use crate::camera_settings::CameraSettings;
+use crate::camera_settings::{
+    CameraSettings, ColorSpace, ExposureProgram, Flash, FlashMode, MeteringMode, WhiteBalance,
+    WhiteBalanceMode,
+};
 use crate::container::tiff::tags::{
-    BODY_SERIAL_NUMBER, DATE_TIME_ORIGINAL, DEFAULT_CROP_ORIGIN, DEFAULT_CROP_SIZE,
-    EXPOSURE_BIAS_VALUE, EXPOSURE_TIME, F_NUMBER, FOCAL_LENGTH, FOCAL_LENGTH_IN_35MM_FILM,
-    IMAGE_LENGTH, IMAGE_WIDTH, ISO_SPEED, LENS_MAKE, LENS_MODEL, LENS_SERIAL_NUMBER,
-    LENS_SPECIFICATION, MAKE, MODEL, OFFSET_TIME_ORIGINAL, PHOTOGRAPHIC_SENSITIVITY,
-    RECOMMENDED_EXPOSURE_INDEX, SOFTWARE, SUB_SEC_TIME_ORIGINAL,
+    BODY_SERIAL_NUMBER, COLOR_SPACE, DATE_TIME_ORIGINAL, DEFAULT_CROP_ORIGIN, DEFAULT_CROP_SIZE,
+    EXPOSURE_BIAS_VALUE, EXPOSURE_PROGRAM, EXPOSURE_TIME, F_NUMBER, FLASH, FOCAL_LENGTH,
+    FOCAL_LENGTH_IN_35MM_FILM, IMAGE_LENGTH, IMAGE_WIDTH, INTEROP_INDEX, ISO_SPEED, LENS_MAKE,
+    LENS_MODEL, LENS_SERIAL_NUMBER, LENS_SPECIFICATION, LIGHT_SOURCE, MAKE, METERING_MODE, MODEL,
+    OFFSET_TIME_ORIGINAL, PHOTOGRAPHIC_SENSITIVITY, RECOMMENDED_EXPOSURE_INDEX, SOFTWARE,
+    SUB_SEC_TIME_ORIGINAL, WHITE_BALANCE,
 };
 use crate::container::tiff::types::SHORT;
 use crate::container::tiff::{Ifd, Tree, skip_damage};
@@ -155,14 +195,21 @@ pub(crate) struct Standard {
 /// reason is `None`, and costs no other value.
 pub(crate) fn read<R: Read + Seek>(src: &mut Source<R>, tree: &Tree) -> Result<Standard> {
     let ifd0 = tree.ifd0();
-    let (serial_number, capture_time, exposure, lens) = match tree.exif() {
+    let (serial_number, capture_time, exposure, camera_settings, lens) = match tree.exif() {
         Some(exif) => (
             text(src, exif, BODY_SERIAL_NUMBER)?,
             capture_time(src, exif)?,
             exposure(src, exif)?,
+            camera_settings(src, exif, tree.interop())?,
             lens(src, exif)?,
         ),
-        None => (None, None, Exposure::default(), None),
+        None => (
+            None,
+            None,
+            Exposure::default(),
+            CameraSettings::default(),
+            None,
+        ),
     };
     let (raw_size, default_crop) = sizes(src, tree)?;
     let metadata = Metadata {
@@ -173,8 +220,7 @@ pub(crate) fn read<R: Read + Seek>(src: &mut Source<R>, tree: &Tree) -> Result<S
         capture_time,
         orientation: tiff_previews::orientation(src, tree)?,
         exposure,
-        // No reader fills the camera settings yet. See #26
-        camera_settings: CameraSettings::default(),
+        camera_settings,
         lens,
         raw_size,
         image_size: default_crop.or(raw_size),
@@ -274,12 +320,11 @@ fn exposure<R: Read + Seek>(src: &mut Source<R>, exif: &Ifd) -> Result<Exposure>
 }
 
 /// The focal length in 35 mm terms, in whole millimetres, from the Exif
-/// IFD `exif`: the first value of its FocalLengthIn35mmFilm, which must be
-/// of type SHORT, the one type the standard gives it. The type is checked
-/// first ([`Ifd::entry_of_type`]), since [`Ifd::u32`] would take a LONG
-/// too. `None` when the value is zero, which Exif writes for a focal
-/// length the camera did not know, as the ILCE-7S does with a manual lens
-/// (public sample 1582).
+/// IFD `exif`: its FocalLengthIn35mmFilm, which must be exactly one SHORT,
+/// the type and count the standard gives it, as [`one_short`] reads it.
+/// `None` when the value is zero, which Exif writes for a focal length the
+/// camera did not know, as the ILCE-7S does with a manual lens (public
+/// sample 1582).
 ///
 /// # Errors
 ///
@@ -289,14 +334,39 @@ fn focal_length_in_35mm_film<R: Read + Seek>(
     src: &mut Source<R>,
     exif: &Ifd,
 ) -> Result<Option<u32>> {
-    if exif
-        .entry_of_type(FOCAL_LENGTH_IN_35MM_FILM, &[SHORT])
-        .is_none()
+    Ok(one_short(src, exif, FOCAL_LENGTH_IN_35MM_FILM)?
+        .filter(|&millimetres| millimetres > 0)
+        .map(u32::from))
+}
+
+/// The value of tag `tag` of `ifd`, when the tag is of type SHORT and
+/// holds exactly one value: the type and count the standard gives each
+/// Exif tag read this way, a single number or code such as the focal
+/// length in 35 mm terms or the metering mode.
+///
+/// `None` when the tag is missing, of another type or of another count.
+/// The type is checked first ([`Ifd::entry_of_type`]), since [`Ifd::u32`]
+/// would take a LONG too; a tag the standard gives one value that holds
+/// several, or none, records nothing the reader can trust, so even its
+/// first value is not taken (ADR011).
+///
+/// One SHORT is held in its entry, so reading it reads nothing more from
+/// the file.
+///
+/// # Errors
+///
+/// `Io` when the reader fails. A value that cannot be read for any other
+/// reason is `None`.
+fn one_short<R: Read + Seek>(src: &mut Source<R>, ifd: &Ifd, tag: u16) -> Result<Option<u16>> {
+    if ifd
+        .entry_of_type(tag, &[SHORT])
+        .is_none_or(|entry| entry.count() != 1)
     {
         return Ok(None);
     }
-    let first = skip_damage(exif.u32(src, FOCAL_LENGTH_IN_35MM_FILM))?.flatten();
-    Ok(first.filter(|&millimetres| millimetres > 0))
+    let value = skip_damage(ifd.u32(src, tag))?.flatten();
+    // A SHORT, widened to 32 bits, always fits back.
+    Ok(value.and_then(|value| u16::try_from(value).ok()))
 }
 
 /// The ISO the picture was taken at, from the Exif IFD `exif`.
@@ -422,6 +492,212 @@ fn lens_specification<R: Read + Seek>(
     };
     Ok([first, second, third, fourth]
         .map(|(numerator, denominator)| Rational::known(numerator, denominator)))
+}
+
+/// The ColorSpace Exif writes for sRGB.
+const SRGB: u16 = 1;
+
+/// The ColorSpace Exif writes for "uncalibrated": any colour space but
+/// sRGB, which the Interoperability IFD's InteropIndex may then name.
+const UNCALIBRATED: u16 = 0xFFFF;
+
+/// The InteropIndex of a DCF option file, which names Adobe RGB beside a
+/// ColorSpace of [`UNCALIBRATED`].
+///
+/// Exif gives the index only the meaning "DCF option file"; that such a
+/// file is in Adobe RGB is from ExifTool's published documentation of the
+/// tag, read as documentation, and the camera files the JPEG format notes
+/// checked agree (section 4 of those notes, and ADR011).
+const DCF_OPTION_FILE: &str = "R03";
+
+/// How the camera was set for the picture, as the Exif IFD `exif` records
+/// it, with the Interoperability IFD `interop`, when the tree has one, for
+/// the colour space: the exposure program, the metering mode, the flash,
+/// the white balance mode and the colour space, as the
+/// [module documentation](self) gives their rules.
+///
+/// The other settings, which only a maker's MakerNote records, are `None`.
+///
+/// # Errors
+///
+/// `Io` when the reader fails. A value that cannot be read for any other
+/// reason is `None`, and costs no other value.
+fn camera_settings<R: Read + Seek>(
+    src: &mut Source<R>,
+    exif: &Ifd,
+    interop: Option<&Ifd>,
+) -> Result<CameraSettings> {
+    Ok(CameraSettings {
+        white_balance: WhiteBalance {
+            mode: white_balance_mode(src, exif)?,
+            // Only a maker's MakerNote records the colour temperature and
+            // the fine-tuning, and none is read for them yet. See #26
+            kelvin: None,
+            fine_tune: None,
+        },
+        exposure_program: one_short(src, exif, EXPOSURE_PROGRAM)?.and_then(exposure_program),
+        metering_mode: one_short(src, exif, METERING_MODE)?.and_then(metering_mode),
+        flash: one_short(src, exif, FLASH)?.and_then(flash),
+        // Only a maker's MakerNote records these, and none is read for
+        // them yet. See #26
+        shutter: None,
+        electronic_front_curtain_setting: None,
+        image_area: None,
+        raw_image_size: None,
+        color_space: color_space(src, exif, interop)?,
+    })
+}
+
+/// The exposure program an Exif ExposureProgram `code` names: 1 manual,
+/// 2 program ("normal program"), 3 aperture priority, 4 shutter priority,
+/// 5 creative, 6 action, 7 portrait and 8 landscape. `None` for 0, "not
+/// defined", and for every code Exif does not define, such as 9.
+fn exposure_program(code: u16) -> Option<ExposureProgram> {
+    Some(match code {
+        1 => ExposureProgram::Manual,
+        2 => ExposureProgram::Program,
+        3 => ExposureProgram::AperturePriority,
+        4 => ExposureProgram::ShutterPriority,
+        5 => ExposureProgram::Creative,
+        6 => ExposureProgram::Action,
+        7 => ExposureProgram::Portrait,
+        8 => ExposureProgram::Landscape,
+        _ => return None,
+    })
+}
+
+/// The metering mode an Exif MeteringMode `code` names: 1 average, 2
+/// centre-weighted average, 3 spot, 4 multi-spot, 5 multi-segment (Exif's
+/// "pattern"), 6 partial and 255 other. `None` for 0, "unknown", and for
+/// every code Exif does not define.
+fn metering_mode(code: u16) -> Option<MeteringMode> {
+    Some(match code {
+        1 => MeteringMode::Average,
+        2 => MeteringMode::CenterWeighted,
+        3 => MeteringMode::Spot,
+        4 => MeteringMode::MultiSpot,
+        5 => MeteringMode::MultiSegment,
+        6 => MeteringMode::Partial,
+        255 => MeteringMode::Other,
+        _ => return None,
+    })
+}
+
+/// The flash an Exif Flash value `bits` records, by its bits: bit 0
+/// whether it fired, bits 3 and 4 its mode, and bit 5 that the camera has
+/// no flash function. Bits 1 and 2, whether the flash's return light was
+/// detected, and bit 6, red-eye reduction, are not read.
+///
+/// The mode is 1 [`Fill`](FlashMode::Fill) ("compulsory flash firing"), 2
+/// [`Off`](FlashMode::Off) ("compulsory flash suppression") and 3
+/// [`Auto`](FlashMode::Auto); 0, "unknown", gives no mode, and so does
+/// bit 5, since a camera without a flash function has no flash mode.
+///
+/// `None` when any of the reserved bits 7 to 15 is set, which no camera
+/// writes, and when bits 0 and 5 are both set, a flash that fired on a
+/// camera without one: the value contradicts itself.
+fn flash(bits: u16) -> Option<Flash> {
+    const FIRED: u16 = 1;
+    const NO_FLASH_FUNCTION: u16 = 1 << 5;
+    const RESERVED: u16 = 0xFF80;
+    if bits & RESERVED != 0 {
+        return None;
+    }
+    let fired = bits & FIRED != 0;
+    if bits & NO_FLASH_FUNCTION != 0 {
+        return (!fired).then_some(Flash::new(false));
+    }
+    let flash = Flash::new(fired);
+    Some(match (bits >> 3) & 0b11 {
+        1 => flash.with_mode(FlashMode::Fill),
+        2 => flash.with_mode(FlashMode::Off),
+        3 => flash.with_mode(FlashMode::Auto),
+        _ => flash,
+    })
+}
+
+/// The white balance mode the Exif IFD `exif` records: its WhiteBalance,
+/// 0 for auto, and, when it is 1, "manual", the kind of light its
+/// LightSource names ([`white_balance_of_light`]). Each must be exactly
+/// one SHORT ([`one_short`]).
+///
+/// `None` when the WhiteBalance is missing, cannot be read or holds
+/// another code, and for a manual white balance whose LightSource is
+/// missing, cannot be read or names no mode.
+///
+/// # Errors
+///
+/// `Io` when the reader fails. A value that cannot be read for any other
+/// reason is `None`.
+fn white_balance_mode<R: Read + Seek>(
+    src: &mut Source<R>,
+    exif: &Ifd,
+) -> Result<Option<WhiteBalanceMode>> {
+    match one_short(src, exif, WHITE_BALANCE)? {
+        Some(0) => Ok(Some(WhiteBalanceMode::Auto)),
+        Some(1) => Ok(one_short(src, exif, LIGHT_SOURCE)?.and_then(white_balance_of_light)),
+        _ => Ok(None),
+    }
+}
+
+/// The white balance mode a manual white balance set for the light an
+/// Exif LightSource `code` names: 1 daylight and 9 fine weather give
+/// [`Daylight`](WhiteBalanceMode::Daylight), 10 cloudy weather
+/// [`Cloudy`](WhiteBalanceMode::Cloudy), 11 shade
+/// [`Shade`](WhiteBalanceMode::Shade), 3 tungsten and 24 ISO studio
+/// tungsten [`Tungsten`](WhiteBalanceMode::Tungsten), 2 fluorescent and 12
+/// to 16, its five kinds of lamp,
+/// [`Fluorescent`](WhiteBalanceMode::Fluorescent), and 4 flash
+/// [`Flash`](WhiteBalanceMode::Flash).
+///
+/// `None` for every other code: 0, "unknown"; 17 to 23, the standard
+/// lights A to D50, and 25 to 34, light sources and LEDs by colour
+/// temperature, which name a light no mode stands for; 255, "other"; and
+/// every code Exif does not define.
+fn white_balance_of_light(code: u16) -> Option<WhiteBalanceMode> {
+    Some(match code {
+        1 | 9 => WhiteBalanceMode::Daylight,
+        10 => WhiteBalanceMode::Cloudy,
+        11 => WhiteBalanceMode::Shade,
+        3 | 24 => WhiteBalanceMode::Tungsten,
+        2 | 12..=16 => WhiteBalanceMode::Fluorescent,
+        4 => WhiteBalanceMode::Flash,
+        _ => return None,
+    })
+}
+
+/// The colour space the Exif IFD `exif` records in its ColorSpace, exactly
+/// one SHORT ([`one_short`]): [`SRGB`] is sRGB, and [`UNCALIBRATED`] is
+/// Adobe RGB when the Interoperability IFD `interop` holds the
+/// InteropIndex [`DCF_OPTION_FILE`], read as every text is ([`text`]).
+///
+/// `None` when the ColorSpace is missing, cannot be read or holds another
+/// code, such as 2, which Exif does not define; and for an "uncalibrated"
+/// one without an Interoperability IFD, or whose InteropIndex is missing,
+/// cannot be read or is another, such as `R98`, a DCF basic file. The
+/// InteropIndex is read only for an "uncalibrated" ColorSpace: with sRGB,
+/// it changes nothing.
+///
+/// # Errors
+///
+/// `Io` when the reader fails. A value that cannot be read for any other
+/// reason is `None`.
+fn color_space<R: Read + Seek>(
+    src: &mut Source<R>,
+    exif: &Ifd,
+    interop: Option<&Ifd>,
+) -> Result<Option<ColorSpace>> {
+    match one_short(src, exif, COLOR_SPACE)? {
+        Some(SRGB) => Ok(Some(ColorSpace::Srgb)),
+        Some(UNCALIBRATED) => {
+            let Some(interop) = interop else {
+                return Ok(None);
+            };
+            let index = text(src, interop, INTEROP_INDEX)?;
+            Ok((index.as_deref() == Some(DCF_OPTION_FILE)).then_some(ColorSpace::AdobeRgb))
+        }
+        _ => Ok(None),
+    }
 }
 
 /// The raw size and the default crop of the file whose IFDs are `tree`:
@@ -646,15 +922,44 @@ mod tests {
         }),
     ];
 
+    /// The camera settings of the Z 9 file's Exif IFD, each with its tag,
+    /// each one SHORT: those of the public Z 9 sample 5147, the program 2,
+    /// centre-weighted metering, a flash that did not fire and recorded no
+    /// mode, and auto white balance, with the LightSource 0, "unknown",
+    /// beside it. Like every Nikon raw file checked, the sample records no
+    /// ColorSpace.
+    const EXIF_SETTINGS: [(u16, u16); 5] = [
+        (EXPOSURE_PROGRAM, 2),
+        (METERING_MODE, 2),
+        (FLASH, 0),
+        (WHITE_BALANCE, 0),
+        (LIGHT_SOURCE, 0),
+    ];
+
+    /// The camera settings of the Z 9 file, as [`EXIF_SETTINGS`] records
+    /// them.
+    fn z9_settings() -> CameraSettings {
+        CameraSettings {
+            exposure_program: Some(ExposureProgram::Program),
+            metering_mode: Some(MeteringMode::CenterWeighted),
+            flash: Some(Flash::new(false)),
+            white_balance: WhiteBalance {
+                mode: Some(WhiteBalanceMode::Auto),
+                ..WhiteBalance::default()
+            },
+            ..CameraSettings::default()
+        }
+    }
+
     /// More bytes than the 1 MiB one tag value may take.
     const TOO_LONG: u32 = 1024 * 1024 + 1;
 
     /// A little-endian file whose IFD0 holds the Orientation 8 and
     /// [`IFD0_TEXT`], and whose Exif IFD holds [`EXIF_TEXT`], with the
-    /// LensModel padded by [`padded_lens_model`], [`EXIF_EXPOSURE`] and
-    /// [`Z9_LENS_SPECIFICATION`], all but tag `except`. `change` is then
-    /// given the builder and the IDs of IFD0 and of the Exif IFD, to add
-    /// what the test needs in its place.
+    /// LensModel padded by [`padded_lens_model`], [`EXIF_EXPOSURE`],
+    /// [`EXIF_SETTINGS`] and [`Z9_LENS_SPECIFICATION`], all but tag
+    /// `except`. `change` is then given the builder and the IDs of IFD0 and
+    /// of the Exif IFD, to add what the test needs in its place.
     fn z9_bytes_except(
         except: u16,
         change: impl FnOnce(&mut TiffBuilder, IfdId, IfdId),
@@ -674,6 +979,9 @@ mod tests {
         }
         for &(tag, add) in EXIF_EXPOSURE.iter().filter(|(tag, _)| *tag != except) {
             add(&mut builder, exif, tag);
+        }
+        for &(tag, code) in EXIF_SETTINGS.iter().filter(|(tag, _)| *tag != except) {
+            builder.short(exif, tag, &[code]);
         }
         if except != LENS_SPECIFICATION {
             builder.rational(exif, LENS_SPECIFICATION, &Z9_LENS_SPECIFICATION);
@@ -808,6 +1116,7 @@ mod tests {
             capture_time: z9_time(Some(b"85"), Some(b"-05:00")),
             orientation: Orientation::Rotate270,
             exposure: z9_exposure(),
+            camera_settings: z9_settings(),
             lens: z9_lens(),
             ..Metadata::default()
         }
@@ -883,6 +1192,18 @@ mod tests {
         assert_eq!(exposure.focal_length(), Some(fraction(180, 10)));
         assert_eq!(exposure.focal_length_in_35mm_film(), Some(18));
         assert_eq!(exposure.exposure_bias(), Some(signed(0, 6)));
+        let settings = metadata.camera_settings();
+        assert_eq!(settings.exposure_program(), Some(ExposureProgram::Program));
+        assert_eq!(settings.metering_mode(), Some(MeteringMode::CenterWeighted));
+        assert_eq!(settings.flash(), Some(Flash::new(false)));
+        assert_eq!(
+            settings.white_balance().mode(),
+            Some(WhiteBalanceMode::Auto)
+        );
+        // No ColorSpace, and what only a MakerNote records is not read.
+        assert_eq!(settings.color_space(), None);
+        assert_eq!(settings.white_balance().kelvin(), None);
+        assert_eq!(settings.shutter(), None);
         let lens = metadata.lens().unwrap();
         assert_eq!(lens.make(), Some("NIKON"));
         // Read whole, without the NULs that pad it, nor the spaces that pad
@@ -1097,7 +1418,8 @@ mod tests {
 
     #[test]
     fn a_file_without_an_exif_ifd_has_only_its_camera_and_orientation() {
-        // The Exif tags in IFD0, where they do not belong, are not read.
+        // The Exif tags in IFD0, where they do not belong, are not read:
+        // its camera settings are the empty record.
         let (mut src, tree) = testing::file(|builder, ifd| {
             builder
                 .ascii(ifd, MAKE, "SONY")
@@ -1108,6 +1430,10 @@ mod tests {
             for (tag, add) in EXIF_EXPOSURE {
                 add(builder, ifd, tag);
             }
+            for (tag, code) in EXIF_SETTINGS {
+                builder.short(ifd, tag, &[code]);
+            }
+            builder.short(ifd, COLOR_SPACE, &[1]);
             builder.ascii(ifd, LENS_MODEL, "FE 50mm F2.5 G").rational(
                 ifd,
                 LENS_SPECIFICATION,
@@ -1167,7 +1493,13 @@ mod tests {
     #[test]
     fn a_damaged_value_costs_only_itself() {
         type Change = fn(&mut TiffBuilder, IfdId, IfdId);
-        let cases: [(&str, u16, Change, Metadata); 19] = [
+        /// The Z 9 file's metadata with `change` made to its settings.
+        fn with_settings(change: fn(&mut CameraSettings)) -> Metadata {
+            let mut expected = z9_expected();
+            change(&mut expected.camera_settings);
+            expected
+        }
+        let cases: [(&str, u16, Change, Metadata); 24] = [
             (
                 "a Model that is not text",
                 MODEL,
@@ -1339,6 +1671,37 @@ mod tests {
                 |builder, _, exif| too_long_of(builder, exif, LENS_SPECIFICATION, RATIONAL, 8),
                 z9_expected_with_lens(z9_lens_with(|lens| lens.range = [None; 4])),
             ),
+            (
+                "an ExposureProgram too long to read",
+                EXPOSURE_PROGRAM,
+                |builder, _, exif| too_long_of(builder, exif, EXPOSURE_PROGRAM, SHORT, 2),
+                with_settings(|settings| settings.exposure_program = None),
+            ),
+            (
+                "a MeteringMode too long to read",
+                METERING_MODE,
+                |builder, _, exif| too_long_of(builder, exif, METERING_MODE, SHORT, 2),
+                with_settings(|settings| settings.metering_mode = None),
+            ),
+            (
+                "a Flash too long to read",
+                FLASH,
+                |builder, _, exif| too_long_of(builder, exif, FLASH, SHORT, 2),
+                with_settings(|settings| settings.flash = None),
+            ),
+            (
+                "a WhiteBalance too long to read",
+                WHITE_BALANCE,
+                |builder, _, exif| too_long_of(builder, exif, WHITE_BALANCE, SHORT, 2),
+                with_settings(|settings| settings.white_balance.mode = None),
+            ),
+            (
+                // An auto white balance does not read the LightSource.
+                "a LightSource too long to read",
+                LIGHT_SOURCE,
+                |builder, _, exif| too_long_of(builder, exif, LIGHT_SOURCE, SHORT, 2),
+                z9_expected(),
+            ),
         ];
         for (case, tag, change, expected) in cases {
             assert_eq!(z9_except(tag, change), expected, "{case}");
@@ -1387,7 +1750,9 @@ mod tests {
         // the one expected, and longer than four bytes, so not held in its
         // entry. The ISO's fallbacks are read only when the
         // PhotographicSensitivity does not give it, so their files hold an
-        // inline one that does not.
+        // inline one that does not. The focal length in 35 mm terms is not
+        // among them: it is read only as one SHORT, which its entry holds,
+        // so reading it never reads the file.
         let cases = [
             (
                 EXPOSURE_TIME,
@@ -1412,14 +1777,6 @@ mod tests {
                 longs(&[180, 10]),
                 None,
                 only(|e| e.focal_length = Some(fraction(180, 10))),
-            ),
-            (
-                FOCAL_LENGTH_IN_35MM_FILM,
-                SHORT,
-                3,
-                vec![18, 0, 0, 0, 0, 0],
-                None,
-                only(|e| e.focal_length_in_35mm_film = Some(18)),
             ),
             (
                 EXPOSURE_BIAS_VALUE,
@@ -1834,16 +2191,18 @@ mod tests {
     }
 
     #[test]
-    fn a_focal_length_in_35mm_film_of_several_values_gives_its_first() {
-        let read = exposure(|builder, exif| {
-            builder.short(exif, FOCAL_LENGTH_IN_35MM_FILM, &[18, 50]);
-        });
-        assert_eq!(read.focal_length_in_35mm_film, Some(18));
-        // Only the first value is the picture's.
-        let read = exposure(|builder, exif| {
-            builder.short(exif, FOCAL_LENGTH_IN_35MM_FILM, &[0, 50]);
-        });
-        assert_eq!(read.focal_length_in_35mm_film, None);
+    fn a_focal_length_in_35mm_film_of_other_than_one_value_is_none() {
+        // The standard gives it one value: with several, even the first is
+        // not trusted, and with none there is nothing to read.
+        for values in [&[18, 50][..], &[18, 18, 18][..], &[][..]] {
+            let read = exposure(|builder, exif| {
+                builder.rational(exif, FOCAL_LENGTH, &[(180, 10)]);
+                builder.short(exif, FOCAL_LENGTH_IN_35MM_FILM, values);
+            });
+            assert_eq!(read.focal_length_in_35mm_film, None, "{values:?}");
+            // The other values of the Exif IFD are still read.
+            assert_eq!(read.focal_length, Some(fraction(180, 10)), "{values:?}");
+        }
     }
 
     #[test]
@@ -2076,6 +2435,548 @@ mod tests {
             builder.ascii(exif, DATE_TIME_ORIGINAL, "2022:02:05 13:46:41");
         });
         assert_eq!(read, None);
+    }
+
+    /// The InteroperabilityVersion, a tag of the Interoperability IFD the
+    /// reader does not read, which cameras write beside the InteropIndex:
+    /// it keeps the IFD from being empty, which would be damage, in the
+    /// tests that leave the index out.
+    const INTEROP_VERSION: u16 = 0x0002;
+
+    /// The camera settings read from a file whose Exif IFD holds the
+    /// ExposureTime 1/320 s, so that it is never empty, and what `build`
+    /// adds, given the builder and the Exif IFD's ID.
+    fn settings(build: impl FnOnce(&mut TiffBuilder, IfdId)) -> CameraSettings {
+        let (mut src, tree) = testing::file(|builder, ifd| {
+            let exif = builder.ifd();
+            builder
+                .exif(ifd, exif)
+                .rational(exif, EXPOSURE_TIME, &[(10, 3200)]);
+            build(builder, exif);
+        });
+        read(&mut src, &tree).unwrap().metadata.camera_settings
+    }
+
+    /// The camera settings of [`settings`]'s file with the one SHORT `code`
+    /// in tag `tag` of its Exif IFD.
+    fn settings_of(tag: u16, code: u16) -> CameraSettings {
+        settings(|builder, exif| {
+            builder.short(exif, tag, &[code]);
+        })
+    }
+
+    #[test]
+    fn every_exposure_program_exif_defines_gives_its_program() {
+        let named = [
+            (1, ExposureProgram::Manual),
+            (2, ExposureProgram::Program),
+            (3, ExposureProgram::AperturePriority),
+            (4, ExposureProgram::ShutterPriority),
+            (5, ExposureProgram::Creative),
+            (6, ExposureProgram::Action),
+            (7, ExposureProgram::Portrait),
+            (8, ExposureProgram::Landscape),
+        ];
+        for (code, program) in named {
+            let read = settings_of(EXPOSURE_PROGRAM, code);
+            assert_eq!(read.exposure_program, Some(program), "{code}");
+        }
+    }
+
+    #[test]
+    fn an_exposure_program_exif_does_not_define_is_none() {
+        // 0 is Exif's "not defined", as on recent Z bodies' samples; 9 is
+        // the "bulb" that ExifTool's documentation lists and Exif does not
+        // define.
+        for code in [0, 9, 10, 255, 65535] {
+            let read = settings_of(EXPOSURE_PROGRAM, code);
+            assert_eq!(read.exposure_program, None, "{code}");
+        }
+    }
+
+    #[test]
+    fn every_metering_mode_exif_defines_gives_its_mode() {
+        let named = [
+            (1, MeteringMode::Average),
+            (2, MeteringMode::CenterWeighted),
+            (3, MeteringMode::Spot),
+            (4, MeteringMode::MultiSpot),
+            (5, MeteringMode::MultiSegment),
+            (6, MeteringMode::Partial),
+            (255, MeteringMode::Other),
+        ];
+        for (code, mode) in named {
+            let read = settings_of(METERING_MODE, code);
+            assert_eq!(read.metering_mode, Some(mode), "{code}");
+        }
+    }
+
+    #[test]
+    fn a_metering_mode_exif_does_not_define_is_none() {
+        // 0 is Exif's "unknown".
+        for code in [0, 7, 254, 256, 65535] {
+            let read = settings_of(METERING_MODE, code);
+            assert_eq!(read.metering_mode, None, "{code}");
+        }
+    }
+
+    #[test]
+    fn a_flash_gives_whether_it_fired_and_its_mode() {
+        let fired = |mode| Some(Flash { fired: true, mode });
+        let not_fired = |mode| Some(Flash { fired: false, mode });
+        let cases = [
+            // The four values of the public samples: the Z 9's and many
+            // more, the D100's, the D750's and the D810's, and most Sony
+            // bodies'. Bits 1 and 2, the return light, are not read.
+            (0x00, not_fired(None)),
+            (0x07, fired(None)),
+            (0x0F, fired(Some(FlashMode::Fill))),
+            (0x10, not_fired(Some(FlashMode::Off))),
+            // Each mode, fired and not.
+            (0x01, fired(None)),
+            (0x08, not_fired(Some(FlashMode::Fill))),
+            (0x09, fired(Some(FlashMode::Fill))),
+            (0x11, fired(Some(FlashMode::Off))),
+            (0x18, not_fired(Some(FlashMode::Auto))),
+            (0x19, fired(Some(FlashMode::Auto))),
+            // Red-eye reduction, bit 6, is not read either: 0x5F is every
+            // defined bit but bit 5.
+            (0x40, not_fired(None)),
+            (0x59, fired(Some(FlashMode::Auto))),
+            (0x5F, fired(Some(FlashMode::Auto))),
+        ];
+        for (bits, flash) in cases {
+            assert_eq!(settings_of(FLASH, bits).flash, flash, "{bits:#06X}");
+        }
+    }
+
+    #[test]
+    fn a_camera_without_a_flash_function_has_a_flash_that_did_not_fire_with_no_mode() {
+        // Bit 5 alone, and with each mode and the bits that are not read.
+        for bits in [0x20, 0x28, 0x30, 0x38, 0x26, 0x60, 0x7E] {
+            assert_eq!(
+                settings_of(FLASH, bits).flash,
+                Some(Flash::new(false)),
+                "{bits:#06X}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_flash_that_contradicts_itself_or_sets_a_reserved_bit_is_none() {
+        // A flash that fired on a camera without a flash function: alone,
+        // with a mode, and as every defined bit (0x7F).
+        for bits in [0x21, 0x39, 0x7F] {
+            assert_eq!(settings_of(FLASH, bits).flash, None, "{bits:#06X}");
+        }
+        // Each reserved bit, 7 to 15, alone and beside a sound value.
+        for bit in 7..16 {
+            for sound in [0x00, 0x10, 0x0F] {
+                let bits = sound | 1 << bit;
+                assert_eq!(settings_of(FLASH, bits).flash, None, "{bits:#06X}");
+            }
+        }
+    }
+
+    /// The white balance mode read from [`settings`]'s file with the
+    /// WhiteBalance `white_balance` and the LightSource `light`, each one
+    /// SHORT when `Some`.
+    fn white_balance(white_balance: Option<u16>, light: Option<u16>) -> Option<WhiteBalanceMode> {
+        settings(|builder, exif| {
+            if let Some(code) = white_balance {
+                builder.short(exif, WHITE_BALANCE, &[code]);
+            }
+            if let Some(code) = light {
+                builder.short(exif, LIGHT_SOURCE, &[code]);
+            }
+        })
+        .white_balance
+        .mode
+    }
+
+    #[test]
+    fn an_auto_white_balance_is_auto_whatever_the_light_source() {
+        for light in [None, Some(0), Some(1), Some(11), Some(17), Some(255)] {
+            assert_eq!(
+                white_balance(Some(0), light),
+                Some(WhiteBalanceMode::Auto),
+                "{light:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_manual_white_balance_is_the_mode_its_light_source_names() {
+        let named = [
+            (1, WhiteBalanceMode::Daylight),
+            (9, WhiteBalanceMode::Daylight),
+            (10, WhiteBalanceMode::Cloudy),
+            (11, WhiteBalanceMode::Shade),
+            (3, WhiteBalanceMode::Tungsten),
+            (24, WhiteBalanceMode::Tungsten),
+            (2, WhiteBalanceMode::Fluorescent),
+            (12, WhiteBalanceMode::Fluorescent),
+            (13, WhiteBalanceMode::Fluorescent),
+            (14, WhiteBalanceMode::Fluorescent),
+            (15, WhiteBalanceMode::Fluorescent),
+            (16, WhiteBalanceMode::Fluorescent),
+            (4, WhiteBalanceMode::Flash),
+        ];
+        for (light, mode) in named {
+            assert_eq!(white_balance(Some(1), Some(light)), Some(mode), "{light}");
+        }
+        // Every other code: 0, "unknown", the standard lights 17 to 23,
+        // the light sources and LEDs 25 to 34, 255, "other", and codes
+        // Exif does not define.
+        let others = (0..=40).chain([254, 255, 256, 65535]);
+        for light in others.filter(|light| named.iter().all(|&(code, _)| code != *light)) {
+            assert_eq!(white_balance(Some(1), Some(light)), None, "{light}");
+        }
+    }
+
+    #[test]
+    fn a_manual_white_balance_without_a_light_source_it_can_read_is_none() {
+        assert_eq!(white_balance(Some(1), None), None);
+        let read = settings(|builder, exif| {
+            builder.short(exif, WHITE_BALANCE, &[1]);
+            builder.long(exif, LIGHT_SOURCE, &[11]);
+        });
+        assert_eq!(read.white_balance.mode, None);
+    }
+
+    #[test]
+    fn a_white_balance_exif_does_not_define_or_none_is_none() {
+        for code in [2, 255, 65535] {
+            assert_eq!(white_balance(Some(code), Some(11)), None, "{code}");
+        }
+        // A LightSource alone says nothing of the white balance.
+        assert_eq!(white_balance(None, Some(11)), None);
+    }
+
+    /// What the InteropIndex of [`color_space`]'s file is.
+    #[derive(Clone, Copy, Debug)]
+    enum Index {
+        /// No Interoperability IFD at all.
+        NoIfd,
+        /// An Interoperability IFD without an InteropIndex.
+        Missing,
+        /// This text, as ASCII with the NUL the builder adds.
+        Text(&'static str),
+        /// These bytes, of type UNDEFINED.
+        Undefined(&'static [u8]),
+    }
+
+    /// The colour space read from [`settings`]'s file with the ColorSpace
+    /// `code`, one SHORT, when `Some`, and the Interoperability IFD
+    /// `index` says, which holds the InteroperabilityVersion too.
+    fn color_space(code: Option<u16>, index: Index) -> Option<ColorSpace> {
+        settings(|builder, exif| {
+            if let Some(code) = code {
+                builder.short(exif, COLOR_SPACE, &[code]);
+            }
+            if matches!(index, Index::NoIfd) {
+                return;
+            }
+            let interop = builder.ifd();
+            builder
+                .interop(exif, interop)
+                .undefined(interop, INTEROP_VERSION, b"0100");
+            match index {
+                Index::NoIfd | Index::Missing => {}
+                Index::Text(text) => {
+                    builder.ascii(interop, INTEROP_INDEX, text);
+                }
+                Index::Undefined(bytes) => {
+                    builder.undefined(interop, INTEROP_INDEX, bytes);
+                }
+            }
+        })
+        .color_space
+    }
+
+    #[test]
+    fn a_colour_space_of_srgb_is_srgb_whatever_the_index() {
+        // `R98` beside it, as on 39 of the public samples; no index, as
+        // on two; and `R03`, which does not overrule it.
+        for index in [
+            Index::Text("R98"),
+            Index::NoIfd,
+            Index::Missing,
+            Index::Text("R03"),
+        ] {
+            assert_eq!(
+                color_space(Some(1), index),
+                Some(ColorSpace::Srgb),
+                "{index:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn an_uncalibrated_colour_space_with_the_dcf_option_files_index_is_adobe_rgb() {
+        // As on the public A900 and DSC-R1 samples. The index is text,
+        // cleaned as every text is, so the spaces that pad it are dropped.
+        for text in ["R03", "R03 ", " R03  "] {
+            assert_eq!(
+                color_space(Some(65535), Index::Text(text)),
+                Some(ColorSpace::AdobeRgb),
+                "{text:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn an_uncalibrated_colour_space_without_the_dcf_option_files_index_is_none() {
+        let cases = [
+            // Another index, an empty one, as on the public DSLR-A100
+            // sample, or one that is not exactly `R03`.
+            Index::Text("R98"),
+            Index::Text(""),
+            Index::Text("r03"),
+            Index::Text("R030"),
+            Index::Text("R0 3"),
+            // An index of the wrong type, none, and no Interoperability
+            // IFD, as on a JPEG a program rewrote.
+            Index::Undefined(b"R03\0"),
+            Index::Missing,
+            Index::NoIfd,
+        ];
+        for index in cases {
+            assert_eq!(color_space(Some(65535), index), None, "{index:?}");
+        }
+    }
+
+    #[test]
+    fn the_index_alone_or_beside_an_undefined_colour_space_is_none() {
+        // No ColorSpace, as in every Nikon raw file checked, and codes Exif
+        // does not define: `R03` does not make them Adobe RGB.
+        for code in [None, Some(0), Some(2), Some(65534)] {
+            assert_eq!(color_space(code, Index::Text("R03")), None, "{code:?}");
+        }
+    }
+
+    #[test]
+    fn the_index_is_read_from_the_interoperability_ifd_alone() {
+        // Tag 0x0001 means the InteropIndex only there: in the Exif IFD it
+        // is not read.
+        let read = settings(|builder, exif| {
+            builder
+                .short(exif, COLOR_SPACE, &[65535])
+                .ascii(exif, INTEROP_INDEX, "R03");
+        });
+        assert_eq!(read.color_space, None);
+    }
+
+    #[test]
+    fn the_index_is_read_from_an_interoperability_ifd_that_is_also_ifd1() {
+        // The Nikon D70's layout: IFD0's next-IFD pointer and the Exif
+        // IFD's Interoperability IFD tag both lead to IFD1, which the walk
+        // keeps in the chain. Its InteropIndex is still read.
+        for (code, expected) in [(65535, ColorSpace::AdobeRgb), (1, ColorSpace::Srgb)] {
+            let (mut src, tree) = testing::file(|builder, ifd0| {
+                let (exif, ifd1) = (builder.ifd(), builder.ifd());
+                builder
+                    .exif(ifd0, exif)
+                    .short(exif, COLOR_SPACE, &[code])
+                    .next(ifd0, Some(ifd1))
+                    .interop(exif, ifd1)
+                    .undefined(ifd1, INTEROP_VERSION, b"0100")
+                    .ascii(ifd1, INTEROP_INDEX, "R03");
+            });
+            // IFD0, the Exif IFD and IFD1, which is not also placed as an
+            // Interoperability IFD: the Exif IFD alone holds no image.
+            assert_eq!(tree.iter().count(), 3);
+            let no_image = tree
+                .iter()
+                .filter(|(location, _)| location.holds_no_image());
+            assert_eq!(no_image.count(), 1);
+            let read = read(&mut src, &tree).unwrap().metadata.camera_settings;
+            assert_eq!(read.color_space, Some(expected), "{code}");
+        }
+    }
+
+    /// The settings of [`full_settings_except`]'s file, each one SHORT:
+    /// aperture priority, multi-segment metering, a flash that fired in
+    /// fill mode, a manual white balance for shade, and a colour space
+    /// that is "uncalibrated", which the InteropIndex `R03` beside it makes
+    /// Adobe RGB.
+    const FULL_SETTINGS: [(u16, u16); 6] = [
+        (EXPOSURE_PROGRAM, 3),
+        (METERING_MODE, 5),
+        (FLASH, 15),
+        (WHITE_BALANCE, 1),
+        (LIGHT_SOURCE, 11),
+        (COLOR_SPACE, 65535),
+    ];
+
+    /// The metadata of a file whose IFD0 holds the Make `SONY`, whose Exif
+    /// IFD holds the ExposureTime 1/320 s and [`FULL_SETTINGS`], and whose
+    /// Interoperability IFD holds the InteroperabilityVersion and the
+    /// InteropIndex `R03`, all but tag `except`. `change` is then given
+    /// the builder and the IDs of the Exif and Interoperability IFDs, to
+    /// add what the test needs in its place.
+    fn full_settings_except(
+        except: u16,
+        change: impl FnOnce(&mut TiffBuilder, IfdId, IfdId),
+    ) -> Metadata {
+        metadata_of(|builder, ifd0| {
+            let (exif, interop) = (builder.ifd(), builder.ifd());
+            builder
+                .exif(ifd0, exif)
+                .interop(exif, interop)
+                .rational(exif, EXPOSURE_TIME, &[(10, 3200)])
+                .undefined(interop, INTEROP_VERSION, b"0100");
+            for &(tag, code) in FULL_SETTINGS.iter().filter(|(tag, _)| *tag != except) {
+                builder.short(exif, tag, &[code]);
+            }
+            if except != INTEROP_INDEX {
+                builder.ascii(interop, INTEROP_INDEX, "R03");
+            }
+            change(builder, exif, interop);
+        })
+    }
+
+    /// What [`full_settings_except`]'s whole file gives, with `change`
+    /// made to its settings.
+    fn full_settings_expected(change: impl FnOnce(&mut CameraSettings)) -> Metadata {
+        let mut settings = CameraSettings {
+            exposure_program: Some(ExposureProgram::AperturePriority),
+            metering_mode: Some(MeteringMode::MultiSegment),
+            flash: Some(Flash::new(true).with_mode(FlashMode::Fill)),
+            white_balance: WhiteBalance {
+                mode: Some(WhiteBalanceMode::Shade),
+                ..WhiteBalance::default()
+            },
+            color_space: Some(ColorSpace::AdobeRgb),
+            ..CameraSettings::default()
+        };
+        change(&mut settings);
+        Metadata {
+            make: Some("SONY".to_owned()),
+            exposure: Exposure {
+                exposure_time: Some(fraction(10, 3200)),
+                ..Exposure::default()
+            },
+            camera_settings: settings,
+            ..Metadata::default()
+        }
+    }
+
+    #[test]
+    fn every_setting_exif_records_is_read() {
+        assert_eq!(
+            full_settings_except(0, |_, _, _| {}),
+            full_settings_expected(|_| {})
+        );
+    }
+
+    #[test]
+    fn a_setting_missing_or_of_another_type_or_count_is_none_and_costs_no_other() {
+        type Unset = fn(&mut CameraSettings);
+        let settings: [(u16, Unset); 6] = [
+            (EXPOSURE_PROGRAM, |settings| {
+                settings.exposure_program = None
+            }),
+            (METERING_MODE, |settings| settings.metering_mode = None),
+            (FLASH, |settings| settings.flash = None),
+            (WHITE_BALANCE, |settings| settings.white_balance.mode = None),
+            (LIGHT_SOURCE, |settings| settings.white_balance.mode = None),
+            (COLOR_SPACE, |settings| settings.color_space = None),
+        ];
+        // Each with the code that gives a value as one SHORT.
+        type Damage = fn(&mut TiffBuilder, IfdId, u16, u16);
+        let damages: [(&str, Damage); 6] = [
+            ("missing", |_, _, _, _| {}),
+            ("a LONG", |builder, exif, tag, code| {
+                builder.long(exif, tag, &[u32::from(code)]);
+            }),
+            ("a BYTE", |builder, exif, tag, code| {
+                builder.byte(exif, tag, &[u8::try_from(code).unwrap_or(u8::MAX)]);
+            }),
+            ("two SHORTs", |builder, exif, tag, code| {
+                builder.short(exif, tag, &[code, code]);
+            }),
+            ("no SHORT", |builder, exif, tag, _| {
+                builder.short(exif, tag, &[]);
+            }),
+            ("too long to read", |builder, exif, tag, _| {
+                too_long_of(builder, exif, tag, SHORT, 2);
+            }),
+        ];
+        for (tag, unset) in settings {
+            let code = FULL_SETTINGS.iter().find(|&&(t, _)| t == tag).unwrap().1;
+            for (damage, add) in damages {
+                let metadata = full_settings_except(tag, |builder, exif, _| {
+                    add(builder, exif, tag, code);
+                });
+                assert_eq!(
+                    metadata,
+                    full_settings_expected(unset),
+                    "{tag:#06X}: {damage}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn a_damaged_index_costs_only_the_colour_space() {
+        type Damage = fn(&mut TiffBuilder, IfdId);
+        let damages: [(&str, Damage); 5] = [
+            ("missing", |_, _| {}),
+            ("UNDEFINED", |builder, interop| {
+                builder.undefined(interop, INTEROP_INDEX, b"R03\0");
+            }),
+            ("BYTE", |builder, interop| {
+                builder.byte(interop, INTEROP_INDEX, b"R03\0");
+            }),
+            ("of 256 bytes", |builder, interop| {
+                builder.ascii(interop, INTEROP_INDEX, &format!("R03{}", " ".repeat(253)));
+            }),
+            ("too long to read", |builder, interop| {
+                too_long(builder, interop, INTEROP_INDEX);
+            }),
+        ];
+        for (damage, add) in damages {
+            let metadata = full_settings_except(INTEROP_INDEX, |builder, _, interop| {
+                add(builder, interop);
+            });
+            assert_eq!(
+                metadata,
+                full_settings_expected(|settings| settings.color_space = None),
+                "{damage}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_failure_of_the_reader_reading_the_index_is_the_readers_error() {
+        // The index stored far away, padded with NULs so that it is longer
+        // than four bytes and so not held in its entry. The settings read
+        // as one SHORT are held in their entries, so reading them never
+        // reads the file, and no failure of the reader can reach them.
+        let far = u32::try_from(2 * FAR).unwrap();
+        let value = b"R03\0\0\0\0\0";
+        let count = u32::try_from(value.len()).unwrap();
+        let mut builder = TiffBuilder::new(Order::Little);
+        let (ifd0, exif, interop) = (builder.ifd(), builder.ifd(), builder.ifd());
+        builder
+            .exif(ifd0, exif)
+            .interop(exif, interop)
+            .short(exif, COLOR_SPACE, &[65535])
+            .blob_at(2 * FAR, value);
+        builder.raw(interop, INTEROP_INDEX, ASCII, count, RawValue::Offset(far));
+        let bytes = builder.build().bytes;
+        // The file is sound, for a reader that does not fail.
+        assert_eq!(
+            read_bytes(bytes.clone()).camera_settings.color_space,
+            Some(ColorSpace::AdobeRgb)
+        );
+
+        let mut src = Source::new(FailsFar(Cursor::new(bytes))).unwrap();
+        let file_block = Block::file(src.len());
+        let tree = walk(&mut src, &file_block, &Limits::default()).unwrap();
+        let err = read(&mut src, &tree).expect_err("the read fails");
+        assert_eq!(err.kind(), ErrorKind::Io, "{err:?}");
     }
 
     /// The size of the raw data in the files of the size tests.

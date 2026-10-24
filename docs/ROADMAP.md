@@ -38,9 +38,9 @@ picture's shape. JPEG files are checked on test files built in code, on
 three stripped JPEG files of the maintainer's own Z 9 and on the eight
 camera JPEGs of Wikimedia Commons that CI downloads, of five Sony bodies,
 two Nikon bodies and a Canon. Milestones 1, 2 and 5 all work;
-milestone 3 works except for the camera's settings, and milestone 4
-works for the bodies that record a position. Any other file is
-refused with the `UnknownFormat` error.
+milestone 3 works except for the camera's settings that only a maker's
+MakerNote records, and milestone 4 works for the bodies that record a
+position. Any other file is refused with the `UnknownFormat` error.
 
 The first release, version 0.1.0, is milestones 1 and 2: the embedded
 previews of NEF and ARW files. The second, 0.2.0, is most of milestone 3:

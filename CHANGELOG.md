@@ -24,8 +24,17 @@ does.
   name each setting's choices in words that fit any maker, with a `name`
   that `Display` writes. A program's tests build these values through
   their `with_…` methods, `Metadata::with_camera_settings`, `FineTune::new`
-  and `Flash::new`. No file gives them yet: every file's camera settings
-  are the empty record.
+  and `Flash::new`. NEF, ARW and JPEG files give the settings their Exif
+  tags record: the exposure program, the metering mode, the flash, the
+  white balance mode, from Exif's auto or manual and the kind of light a
+  manual one was set for, and the colour space, sRGB or, from the `R03`
+  index of a DCF option file, Adobe RGB. A code Exif does not define, or
+  its "not defined" and "unknown", gives `None`. The other settings, which
+  only a maker's MakerNote records, are not read yet: the colour
+  temperature, the fine-tuning, the shutter, the electronic front curtain
+  setting, the image area and the raw image size are `None` for every
+  file, and so is the colour space of a Nikon raw file, which records it,
+  if at all, only there.
 - `Exposure::focal_length_in_35mm_film` and `Metadata::software`, read
   from NEF, ARW and JPEG files. The first is the focal length in 35 mm
   terms the camera recorded, in whole millimetres, from Exif's

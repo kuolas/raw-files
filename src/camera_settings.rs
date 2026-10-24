@@ -14,9 +14,15 @@
 //!
 //! Every value is optional. A file may not record it, or may record it in
 //! a way that cannot be read, such as a code no variant names; either way
-//! the value is `None`, and a damaged value costs only itself. No reader
-//! fills the settings in yet, so every file gives the empty record, with
-//! every value `None`.
+//! the value is `None`, and a damaged value costs only itself.
+//!
+//! NEF, ARW and JPEG files give the settings that their standard Exif tags
+//! record: the exposure program, the metering mode, the flash, the white
+//! balance mode and the colour space. The others are recorded only in a
+//! maker's own tags, its MakerNote, which raw-files does not read for them
+//! yet, so for every file they are `None`: the white balance's colour
+//! temperature and fine-tuning, the shutter, the electronic front curtain
+//! setting, the image area and the raw image size.
 //!
 //! A program that uses raw-files can build these values for its own
 //! tests, without a camera file: [`CameraSettings`] and [`WhiteBalance`]
@@ -33,9 +39,12 @@ use crate::rational::SignedRational;
 ///
 /// Every value is `None` when the file does not record it or records it in
 /// a way that cannot be read, such as a code that no variant names. A
-/// damaged value costs only itself. No reader fills the settings in yet:
-/// for every file, [`Metadata::camera_settings`](crate::Metadata::camera_settings)
-/// is the empty record.
+/// damaged value costs only itself.
+/// [`Metadata::camera_settings`](crate::Metadata::camera_settings) gives
+/// the values a file's standard Exif tags record: the exposure program,
+/// the metering mode, the flash, the white balance mode and the colour
+/// space. The others, which only a maker's MakerNote records, are not read
+/// yet, so they are `None` for every file.
 ///
 /// `CameraSettings::default()` is the empty record, with every value
 /// `None` and an empty [`WhiteBalance`]. A caller's tests start from it and
@@ -125,17 +134,27 @@ impl CameraSettings {
 
     /// The exposure program: how the camera chose the exposure, such as
     /// [`AperturePriority`](ExposureProgram::AperturePriority).
+    ///
+    /// Read from Exif's ExposureProgram. `None` also when the camera
+    /// records its 0, "not defined", as some cameras do.
     pub fn exposure_program(&self) -> Option<ExposureProgram> {
         self.exposure_program
     }
 
     /// How the camera metered the light, such as
     /// [`MultiSegment`](MeteringMode::MultiSegment).
+    ///
+    /// Read from Exif's MeteringMode. `None` also when the camera records
+    /// its 0, "unknown".
     pub fn metering_mode(&self) -> Option<MeteringMode> {
         self.metering_mode
     }
 
     /// Whether the flash fired, and its mode when the file records one.
+    ///
+    /// Read from Exif's Flash. `None` also when the value contradicts
+    /// itself, as a flash that fired on a camera without a flash function
+    /// does, or sets bits Exif reserves.
     pub fn flash(&self) -> Option<Flash> {
         self.flash
     }
@@ -143,8 +162,9 @@ impl CameraSettings {
     /// The shutter the camera used for the picture: on an auto setting, the
     /// one the camera chose.
     ///
-    /// A Sony body records it only in an enciphered block, which raw-files
-    /// does not read. Its
+    /// No file gives it yet, since only a maker's MakerNote records it and
+    /// raw-files does not read it there. A Sony body records it only in an
+    /// enciphered block, which raw-files does not read. Its
     /// [`electronic_front_curtain_setting`](Self::electronic_front_curtain_setting)
     /// is a setting, not the shutter used.
     pub fn shutter(&self) -> Option<Shutter> {
@@ -157,6 +177,9 @@ impl CameraSettings {
     /// It is the menu setting, not the shutter used, which
     /// [`shutter`](Self::shutter) gives: a body may use another shutter,
     /// such as a silent electronic one, with the setting on.
+    ///
+    /// No file gives it yet, since only Sony's MakerNote records it and
+    /// raw-files does not read it there.
     pub fn electronic_front_curtain_setting(&self) -> Option<bool> {
         self.electronic_front_curtain_setting
     }
@@ -164,6 +187,9 @@ impl CameraSettings {
     /// The part of the sensor the picture uses, such as the whole of a
     /// full-frame sensor or its APS-C crop; [`ImageArea`] says which of a
     /// maker's settings gives each.
+    ///
+    /// No file gives it yet, since only a maker's MakerNote records it and
+    /// raw-files does not read it there.
     pub fn image_area(&self) -> Option<ImageArea> {
         self.image_area
     }
@@ -171,12 +197,20 @@ impl CameraSettings {
     /// The raw size the camera was set to: large, medium or small. The
     /// size in pixels is [`Metadata::raw_size`](crate::Metadata::raw_size).
     ///
-    /// A JPEG file has none, since it holds no raw data.
+    /// A JPEG file has none, since it holds no raw data. No raw file gives
+    /// it yet either, since only a maker's MakerNote records it and
+    /// raw-files does not read it there.
     pub fn raw_image_size(&self) -> Option<RawImageSize> {
         self.raw_image_size
     }
 
     /// The colour space the camera was set to, such as sRGB.
+    ///
+    /// Read from Exif's ColorSpace, with the Interoperability IFD's index
+    /// for Adobe RGB, as [`ColorSpace`] says. No Nikon raw file checked
+    /// records a ColorSpace: those that record a colour space at all keep it
+    /// in their MakerNote, which raw-files does not read for it yet, so
+    /// theirs is `None`.
     pub fn color_space(&self) -> Option<ColorSpace> {
         self.color_space
     }
@@ -299,6 +333,12 @@ pub struct WhiteBalance {
 impl WhiteBalance {
     /// The white balance setting, such as [`Auto`](WhiteBalanceMode::Auto)
     /// or [`Shade`](WhiteBalanceMode::Shade).
+    ///
+    /// Read from Exif's WhiteBalance, which says auto or manual, and, for a
+    /// manual one, from its LightSource, the kind of light it was set for,
+    /// such as shade. `None` for a light no mode stands for, such as
+    /// Exif's standard light D65, and when the camera records "unknown" or
+    /// "other".
     pub fn mode(&self) -> Option<WhiteBalanceMode> {
         self.mode
     }
@@ -309,12 +349,18 @@ impl WhiteBalance {
     /// What it means differs by maker: on Nikon it is the temperature that
     /// auto white balance chose, on Sony the one a custom white balance
     /// set. So the [`mode`](Self::mode) beside it says which.
+    ///
+    /// No file gives it yet, since only a maker's MakerNote records it and
+    /// raw-files does not read it there.
     pub fn kelvin(&self) -> Option<u32> {
         self.kelvin
     }
 
     /// The photographer's shift of the white balance, a recorded zero shift
     /// included.
+    ///
+    /// No file gives it yet, since only a maker's MakerNote records it and
+    /// raw-files does not read it there.
     pub fn fine_tune(&self) -> Option<FineTune> {
         self.fine_tune
     }
@@ -462,7 +508,8 @@ impl Flash {
         self.fired
     }
 
-    /// The flash mode, or `None` when the file records none.
+    /// The flash mode, or `None` when the file records none, as a camera
+    /// without a flash function does.
     pub fn mode(&self) -> Option<FlashMode> {
         self.mode
     }
@@ -892,6 +939,14 @@ impl fmt::Display for RawImageSize {
 }
 
 /// The colour space the camera was set to.
+///
+/// Exif's ColorSpace names sRGB alone; for any other colour space it says
+/// "uncalibrated". A file in Adobe RGB then names it in its
+/// Interoperability IFD, with the index `R03` of a DCF option file, so
+/// "uncalibrated" with that index is [`AdobeRgb`](Self::AdobeRgb), and
+/// "uncalibrated" with another index, or none, is `None`. That the index
+/// means Adobe RGB is from ExifTool's published documentation of the tag,
+/// read as documentation, and the camera files checked agree.
 ///
 /// `ColorSpace` is `#[non_exhaustive]`, so match on it with a wildcard arm.
 /// Its [`name`](Self::name)s, which `Display` writes too, are "sRGB" and

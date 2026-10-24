@@ -82,7 +82,8 @@
 //! TIFF-based formats share (`tiff_metadata`), by the same rules as in a
 //! raw file, the standard tags first (ADR011): the camera's make and model
 //! and the orientation from IFD0, and the serial number, the capture time,
-//! the exposure and the lens from the Exif IFD.
+//! the exposure, the camera's settings and the lens from the Exif IFD, with
+//! the Interoperability IFD for the colour space.
 //!
 //! Then the MakerNote is read, by IFD0's Make, as in a raw file (ADR014),
 //! once, by the reader of the maker the Make names ([`Maker`]); the Make
@@ -412,8 +413,11 @@ fn same_shape(frame: Size, picture: Size) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::camera_settings::{CameraSettings, ColorSpace, MeteringMode};
     use crate::container::jpeg::segments;
-    use crate::container::tiff::tags::{MAKE, MAKER_NOTE};
+    use crate::container::tiff::tags::{
+        COLOR_SPACE, INTEROP_INDEX, MAKE, MAKER_NOTE, METERING_MODE,
+    };
     use crate::error::ErrorKind;
     use crate::jpeg_builder::JpegBuilder;
     use crate::testing::{FAR, FailsFar};
@@ -571,6 +575,50 @@ mod tests {
         block.extend_from_slice(&[0x1B, 0x20, 0x01, 0, 0x01, 0, 0, 0, 0x03, 0, 0, 0]);
         block.extend_from_slice(&[0; 4]);
         assert_only_its_make_reads("SONY", &block);
+    }
+
+    #[test]
+    fn a_jpeg_keeps_the_camera_settings_its_exif_segment_records() {
+        // Under each Make, through each way the MakerNote is read: Nikon's,
+        // whose IFD holds one entry, its version; Sony's, as the test above
+        // builds it; and none, under another maker's Make.
+        let mut nikon = b"Nikon\0\x02\x11\0\0II\x2A\0\x08\0\0\0".to_vec();
+        nikon.extend_from_slice(&[0x01, 0, 0x01, 0, 0x07, 0, 0, 0, 0x04, 0, 0, 0]);
+        nikon.extend_from_slice(b"0211");
+        nikon.extend_from_slice(&[0; 4]);
+        let mut sony = b"SONY DSC \0\0\0\x01\0".to_vec();
+        sony.extend_from_slice(&[0x1B, 0x20, 0x01, 0, 0x01, 0, 0, 0, 0x03, 0, 0, 0]);
+        sony.extend_from_slice(&[0; 4]);
+        for (make, block) in [
+            ("NIKON CORPORATION", &nikon[..]),
+            ("SONY", &sony[..]),
+            ("Canon", &[][..]),
+        ] {
+            let mut tiff = TiffBuilder::new(Order::Little);
+            let (ifd0, exif, interop) = (tiff.ifd(), tiff.ifd(), tiff.ifd());
+            tiff.ascii(ifd0, MAKE, make)
+                .exif(ifd0, exif)
+                .interop(exif, interop)
+                .short(exif, METERING_MODE, &[5])
+                .short(exif, COLOR_SPACE, &[65535])
+                .ascii(interop, INTEROP_INDEX, "R03");
+            if !block.is_empty() {
+                let makernote = tiff.blob(block);
+                tiff.undefined_blob(exif, MAKER_NOTE, makernote);
+            }
+            let mut builder = JpegBuilder::new();
+            builder.exif(&tiff.build().bytes).frame(640, 480, 0xC0);
+            let (bytes, found) = read(&builder);
+            let mut src = Source::new(Cursor::new(bytes)).unwrap();
+            let parsed = parse(&mut src, &found, &Limits::default()).unwrap();
+            assert_eq!(
+                parsed.metadata.camera_settings,
+                CameraSettings::default()
+                    .with_metering_mode(MeteringMode::MultiSegment)
+                    .with_color_space(ColorSpace::AdobeRgb),
+                "{make}"
+            );
+        }
     }
 
     /// `width` by `height`, as a size.
