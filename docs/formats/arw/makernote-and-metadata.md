@@ -22,7 +22,10 @@ on 36 CC0 sample files from raw.pixls.us made in October 2026. The two
 ciphers and the SRF key chain described below were checked on those samples
 with throwaway scripts written from the prose on this page; they are not
 implemented in raw-files, and the scripts are not in the repository. No
-pixel output was compared with a reference decoder.
+pixel output was compared with a reference decoder. The camera settings
+(section 9.7) were also compared with ExifTool's output, ExifTool being
+run on the files as an independent reader; none of its code is in
+raw-files.
 
 Claims carry a confidence tag: **[P]** primary (specification, tag
 documentation or implementation source), **[S]** secondary (write-ups, forum
@@ -212,9 +215,12 @@ milestone that needs the tag; "none" means nice-to-have. [P][1][2]
 | ID | Name | Enc. | Meaning | M |
 |---|---|---|---|---|
 | 0x0010 | CameraInfo | no | A-mount and NEX AF and lens data, the AF point among them by number; layout chosen by byte count | 4 (point numbers) |
+| 0x0112 | WhiteBalanceFineTune | no | u32; the white balance fine-tuning, 0 on every sample; [section 9.7](#97-camera-settings) [F] | 3 |
 | 0x0114 | CameraSettings | no | layout by count; aspect ratio, drive mode, a Sony-coded orientation | none |
+| 0x0115 | WhiteBalance | no | u32; the white balance setting: 0 auto, 16 daylight, 48 shade, 112 custom and others; not on the F828, R1 and A100 [F] | 3 |
 | 0x2001 | PreviewImage | no | a JPEG-file feature; absent from every ARW, SR2 and ARQ sample [F] | none |
 | 0x2010 | Tag2010 | yes | settings, a date string, aspect ratio; not written from the ILCE-7SM3 on [F] | none |
+| 0x201A | ElectronicFrontCurtainShutter | no | u32; the electronic front curtain setting, 0 off, 1 on; not the shutter used [F] | 3 |
 | 0x201B | FocusMode | no | 0 manual, 2 AF-S, 3 AF-C, 4 AF-A, 6 DMF, 7 AF-D; [section 9.6](#96-focus-point) | 4 |
 | 0x201D | FlexibleSpotPosition | no | the spot chosen in Flexible Spot mode, on a 640 × 480 grid | none |
 | 0x201E | AFPointSelected | no | the selected point or zone, by number | 4 (point numbers) |
@@ -222,23 +228,25 @@ milestone that needs the tag; "none" means nice-to-have. [P][1][2]
 | 0x2022 | FocalPlaneAFPointsUsed | no | a mask of the on-sensor focus points used | 4 (point numbers) |
 | 0x2027 | FocusLocation | no | u16[4]: frame width and height, centre x and y of the focus area | 4 |
 | 0x2029 | RAWFileType | no | 0 compressed, 1 uncompressed, 2 lossless, 3 Compressed RAW 2 | 6 (hint) |
-| 0x202E | Quality | no | u16[2]; first value 1 RAW, 2 S-size, 3 M-size, 4 compressed, 5 compressed HQ | 3, 6 (hint) |
+| 0x202E | Quality | no | u16[2]; first value 1 RAW, 2 S-size, 3 M-size, 4 compressed, 5 compressed HQ; APS-C files say 3 too, and the ILCE-7M5 gives the compression whatever the size [F] | 3, 6 (hint) |
 | 0x202F | PixelShiftInfo | no | group ID and shot number; marks ARQ composites | none |
 | 0x2037 | FocusFrameSize | no | 6 bytes: the focus area's width and height and a third value | 4 |
 | 0x2044 | HiddenInfo | no | offset and size of an unknown block | none |
 | 0x204A | FocusLocation2 | no | u16[4], as FocusLocation | 4 |
 | 0x3000 | ShotInfo | no | includes a plain date string at byte 6 | none |
 | 0x900B | Tag900b | yes | face detection | none |
-| 0x9050 | Tag9050 | yes | shutter count, LensType2, internal serial | none |
-| 0x9400 | Tag9400 | yes | sequence numbers, CameraOrientation | none |
-| 0x9401 to 0x9406, 0x940C, 0x940E, 0x9416 | Tag94xx | yes | ISO, lens, focus and AF data; 0x9416 replaces 0x9405 from the ILCE-7SM3 on [F] | none |
+| 0x9050 | Tag9050 | yes | shutter count, LensType2, internal serial, the shutter used and the APS-C mode flag; [section 9.7](#97-camera-settings) | none |
+| 0x9400 | Tag9400 | yes | sequence numbers, CameraOrientation, the shutter type on the RX100 bodies | none |
+| 0x9401 to 0x9406, 0x940C, 0x940E, 0x9416 | Tag94xx | yes | ISO, lens, focus and AF data, and in 0x9416 the APS-C mode flag; 0x9416 replaces 0x9405 from the ILCE-7SM3 on [F] | none |
 | 0xB000 | FileFormat | no | u8[4] format version | 3, 6 |
 | 0xB001 | SonyModelID | no | u16 body identifier | 3, 6 |
+| 0xB021 | ColorTemperature | no | u32; kelvin, 0 unless the white balance is custom on the samples [F] | 3 |
 | 0xB027 | LensType | no | A-mount lens ID; 65535 for E-mount lenses | 3 (lens) |
 | 0xB028 | MinoltaMakerNote | no | A100 only: offset of a Minolta-format IFD; 0 means absent | none |
 | 0xB02A | LensSpec | no | 8 bytes: flags, BCD focal and aperture range, flags | 3 (lens) |
 | 0xB02B | FullImageSize | no | u32[2], **height first**; the camera's output size | 3 (cross-check) |
 | 0xB02C | PreviewImageSize | no | u32[2], height first; the IFD0 preview's size | 2 (cross-check) |
+| 0xB054 | WhiteBalance | no | u16; a second white balance code, "auto" on two samples set to shade; not the setting [F] | none |
 
 Notes:
 
@@ -790,8 +798,9 @@ What the decoders do, and where they disagree: [P][9][10][14][15][16][17]
   rawler reads four u16 at + 12 into the record.
 
 The MakerNote also has 0xB021 ColorTemperature and a white balance mode and
-fine-tune; these are settings, not multipliers. [P][2] White balance is not
-needed for milestone 3.
+fine-tune; these are settings, not multipliers. [P][2] They are described
+in [section 9.7](#97-camera-settings); the multipliers are not needed for
+milestone 3.
 
 ## 9. Viewer metadata
 
@@ -800,7 +809,9 @@ and the raw SubIFD, plus two plain MakerNote tags for identification and
 lens. **No decryption or deciphering is needed** on any sample: Make, Model,
 Orientation, dates, 0xB000, 0xB001 and the crop tags are plain in every
 file. [F] The focus point is a plain MakerNote tag too
-([section 9.6](#96-focus-point)). IFD0 has no ImageWidth or ImageLength except on the A100 (where
+([section 9.6](#96-focus-point)), and so are most of the camera
+settings; the shutter used and APS-C mode are only in enciphered blocks
+([section 9.7](#97-camera-settings)). IFD0 has no ImageWidth or ImageLength except on the A100 (where
 they do not describe IFD0's JPEG) and in SRF files (where IFD0 describes the
 raw). [S][24][F]
 
@@ -1120,6 +1131,221 @@ and what raw-files gives; a row without a file is an open question
 | Camera JPEG, manual focus | the frame's centre, FocusMode 0 | the DSC-RX100M4 JPEG (CC BY) | none |
 | Camera JPEG of a body without FocusLocation | no focus tag raw-files reads | the ILCE-6000 and DSLR-A100 JPEGs (CC BY) | none |
 
+### 9.7 Camera settings
+
+How the photographer set the camera for the shot, which a viewer shows
+in its information panel beside the exposure: the white balance, the
+exposure program, the metering mode, the flash, the shutter, the image
+area, the raw image size and the colour space, and with them the focal
+length in 35 mm terms and the software that wrote the file. The Exif
+tags record most of these on every Sony body. The MakerNote adds the
+white balance setting itself, its colour temperature and fine-tuning,
+and the electronic front curtain setting in plain tags; the shutter the
+camera used and whether it shot in APS-C mode are only in enciphered
+blocks ([section 4](#4-the-makernote-substitution-cipher)).
+
+Every value below was read on the 36 files of
+[test-data.md](test-data.md#files-checked) and on the five Sony JPEGs of
+the [JPEG test data](../jpeg/test-data.md#2-the-sample-files) on
+2026-10-23, with a bounds-checked script written from these pages
+**[F]**; [test-data.md](test-data.md#23-the-camera-settings-of-each-file)
+lists which file records which value. The meaning of each code is
+ExifTool's, read in its published tag documentation [P][1][28][29].
+ExifTool was also run on the same files as an independent reader to
+compare with. It reads the same value as the script for every tag both
+read, with three exceptions: it prints FullImageSize (0xB02B) width
+first, where the file stores the height first
+([section 2](#2-key-tags)); it prints nothing for an ExposureMode
+(0xB041) of 65535 (the A100's); and on the A100 it finds the white
+balance and its fine-tuning in another IFD (below).
+Where this section reports a value that ExifTool decodes from a block
+the script does not read, enciphered or not, it is tagged **[S]**; none
+of ExifTool's code is in raw-files.
+
+**Where a Sony file records each setting.**
+
+| Setting | Standard tag | MakerNote tag | Checked files |
+|---|---|---|---|
+| Exposure program | Exif 0x8822 ExposureProgram | 0xB041 ExposureMode, not needed | Exif on every file |
+| Metering mode | Exif 0x9207 MeteringMode | 0x202C MeteringMode2, not needed | Exif on every file |
+| Flash | Exif 0x9209 Flash | 0x2017 FlashAction | Exif on every file; 0x2017 on 26 files, of the SLT-A99V, the ILCE-7S and every later body |
+| White balance | Exif 0xA403 WhiteBalance, auto or manual, and 0x9208 LightSource | 0x0115 WhiteBalance | Exif on every file; 0x0115 on every file but the F828's, the R1's and the A100's |
+| Colour temperature | none | 0xB021 ColorTemperature | every file but the F828's and the R1's; 0 unless the white balance is custom |
+| White balance fine-tuning | none | 0x0112 WhiteBalanceFineTune | every file but the F828's, the R1's and the A100's; 0 on all |
+| Shutter used | none | enciphered only: 0x9050 and 0x9400 | none in plain form |
+| Electronic front curtain setting | none | 0x201A ElectronicFrontCurtainShutter | 26 files, of the SLT-A99V, the ILCE-7S and every later body |
+| Image area (APS-C mode) | none | enciphered only: 0x9050 and 0x9416 | none in plain form |
+| Raw image size | none | 0x202E Quality, its first value | 20 files, of the ILCE-7RM3, the RX100M6 and every later body; APS-C and medium cannot be told apart |
+| Colour space | Exif 0xA001 ColorSpace and the Interoperability IFD's InteropIndex | none plain on the ARW bodies | Exif on every file |
+| Focal length in 35 mm terms | Exif 0xA405 FocalLengthIn35mmFilm | none | every file but the F828's and the R1's |
+| Software | IFD0 0x0131 Software | none | every file but the F828's and the R1's |
+
+**Exposure program and metering mode.** Both are Exif tags on every
+checked file **[F]**, with Exif's codes [P][28]. ExposureProgram is 1
+(manual) on ten files, 2 (normal program) on five, 3 (aperture
+priority) on 20, 6 (action) on the A200 (file 2271), and 4 (shutter
+priority) on the A100 JPEG; it is never 0. MeteringMode is 5
+(multi-segment) on 29 files and the five JPEGs, 2 (centre-weighted average) on the NEX-5,
+A100 and A700 (files 1457, 2346, 2521) and 3 (spot) on the RX100M6,
+A99V and A900 (files 3012, 3015, 3751, 5858) **[F]**. The MakerNote's
+ExposureMode (0xB041) and MeteringMode2 (0x202C) agree with them on
+every file that has them: ExposureMode 15 "manual" with Exif 1, 7
+"aperture-priority AE" with 3, 0 "program AE" or 6 "auto" with 2, and
+65535 on the A100; MeteringMode2 256 "multi-segment" with Exif 5, 770
+"spot (large)" with 3 [P][1] **[F]**. They add nothing Exif lacks.
+
+**Flash.** Exif's Flash (its bits are described in the
+[NEF notes](../nef/makernote-and-metadata.md#87-camera-settings)) is 16
+on every checked Sony file: the flash did not fire, and was set not to
+**[F]**. The MakerNote's FlashAction (0x2017, 0 "did not fire" [P][1])
+is 0 on all 26 files and four JPEGs that have it **[F]**. No sample
+shows a fired flash.
+
+**White balance.** The photographer chooses auto white balance, a kind
+of light, a colour temperature, or a custom value measured from a grey
+card, and may shift the result (the fine-tuning below). Exif records
+only whether it was auto (0xA403) and, in a tag of its own, the kind of
+light (0x9208 LightSource) [P][28]. The MakerNote's 0x0115 WhiteBalance,
+one LONG **[F]**, records the setting, with ExifTool's codes [P][1]: 0
+auto, 1 colour temperature or colour filter, 16 daylight, 32 cloudy, 48
+shade, 64 tungsten, 80 flash, 96 fluorescent, 112 custom, 128
+underwater. The checked files hold 0 on 30 files and the ILCE-6000,
+ILCE-7M3 and ILCE-7RM2 JPEGs, 48 on the ILCE-7S (file 1582) and the
+RX100M4 JPEG, and 112 on the ILCE-9M3 (files 7361, 7364) **[F]**. Exif
+agrees on every file: 0xA403 is 0 with 0x0115 0, and 1 with 48
+(LightSource 11, "shade") and with 112 (LightSource 255, "other").
+
+0xB054, also called WhiteBalance by ExifTool, one SHORT with codes for
+auto, custom, daylight, cloudy, the kinds of fluorescent and
+incandescent light, flash and underwater, and none for shade [P][1],
+is on 28 files and four JPEGs: every body but the A-mount DSLRs, the
+NEX-5, the SLT-A55V, the R1 and the F828.
+It is 4 ("custom") on the ILCE-9M3 files, and 0 ("auto") on every other
+one, the ILCE-7S's and the RX100M4 JPEG's included, whose setting
+0x0115 and Exif both give as shade **[F]**. So 0xB054 does not record
+the setting on those two files. The A100 writes 0x0115 and 0x0112 not
+in its Sony MakerNote but in the Minolta-format IFD that 0xB028 points
+to ([section 10](#dslr-a100-arw-10)), where ExifTool reads them as 0
+[S]. The F828 and the R1 have no white balance tag in their MakerNote;
+Exif gives auto on both **[F]**.
+
+**Colour temperature.** 0xB021 ColorTemperature, one LONG, in kelvin
+[P][1], is on every file but the F828's and the R1's. It is 5500 on the
+ILCE-9M3's two files, whose setting is custom, and 0 on all the others,
+under auto and under shade **[F]**: 0 means it was not recorded. What it
+holds under a colour-temperature setting is on no checked file.
+
+**White balance fine-tuning.** 0x0112 WhiteBalanceFineTune is one LONG
+**[F]**, which ExifTool documents as unsigned [P][1], on every file but
+the F828's, the R1's and the A100's, and 0 on all of them **[F]**. One
+value can hold only one axis; which one, which sign means which colour,
+and how a shift towards the negative side is written are shown by no
+file ([section 13](#13-open-questions)).
+
+**Shutter.** Which shutter took the picture: the mechanical one, the
+electronic front curtain (an electronic start of the exposure and a
+mechanical end), or a fully electronic, silent one. No plain tag
+records it. 0x201A ElectronicFrontCurtainShutter, one LONG, 0 "off" and
+1 "on" [P][1], is on 26 files, of the SLT-A99V, the ILCE-7S and every
+later body, and on four JPEGs
+**[F]**:
+
+| 0x201A | Files |
+|---|---|
+| 1 | the ILCE-7RM2, ILCE-9, ILCE-7RM3 (ARW and ARQ), SLT-A99V, ILCE-6700, ILCE-7M4 and ILCE-7M5 (files 1310, 1311, 1541, 1542, 3251, 3255, 3751, 6736, 6929 to 6931, 6933, 6936, 8846 to 8850) and the ILCE-6000, ILCE-7M3 and ILCE-7RM2 JPEGs |
+| 0 | the ILCE-7S, RX100M6, ILCE-1, ILCE-7SM3, ILCE-9M3 and ILCE-1M2 (files 1582, 3012, 3015, 4466, 5418, 7361, 7364, 7835) and the RX100M4 JPEG |
+
+It is the menu setting, not the shutter used. ExifTool decodes from the
+enciphered 0x9050 block (its Tag9050a, b and c tables, "Shutter":
+three numbers, `0 0 0` for a silent, electronic release) whether the
+release was electronic, on 18 files **[S]**. On four of them 0x201A
+contradicts it: the ILCE-1 and ILCE-7SM3 (files 4466, 5418) have the
+setting off and released electronically, and the ILCE-7RM3's
+pixel-shift ARW and its ARQ (files 3251, 3255) have it on and released
+electronically. The other 14 have non-zero numbers, a release with the
+mechanical shutter or the front curtain, which the numbers do not tell
+apart [I], so on them the shutter used is not known either. On the RX100M6 and the RX100M4 JPEG ExifTool decodes a
+ShutterType of 23, "mechanical", from the enciphered 0x9400 block (its
+Tag9400c table) **[S]**. On the A-mount DSLRs, the NEX-5, the SLT-A55V,
+the RX100, the Lunar, the R1 and the F828, nothing records the shutter
+or its setting in plain form.
+
+**Image area (APS-C mode).** A full-frame body can record only the
+centre of its sensor, the APS-C or Super 35 mm area. Nothing plain marks
+it except the smaller raw size ([section 9.4](#94-image-dimensions)).
+ExifTool decodes an APS-CSizeCapture flag from the enciphered 0x9050
+block (Tag9050a and b) and the enciphered 0x9416 block **[S]**: "on" on
+the ILCE-7M4's, ILCE-1M2's and ILCE-7M5's APS-C files (6933, 6936, 7835,
+8848 to 8850) and the ILCE-7M3 JPEG, whose 3936 × 2624 picture is that
+body's APS-C size and its M size alike; "off" on the other files it
+decodes, but also on the ILCE-7S's APS-C file (1582), whose 2816 × 1872
+raw is its APS-C crop. So the enciphered flag, as ExifTool reads it,
+fails on one of the seven APS-C files.
+
+**Raw image size.** 0x202E Quality, two SHORTs, gives the kind of raw
+in its first value (1 RAW, 2 S-size RAW, 3 M-size RAW, 4 compressed RAW,
+5 compressed HQ RAW) and the JPEG quality written beside it in its
+second [P][1]. It is on 20 files, of the ILCE-7RM3, the RX100M6 and
+every later body, and on the
+ILCE-7M3 JPEG **[F]**:
+
+| 0x202E | Files |
+|---|---|
+| 1, 0 | the ILCE-7RM3 (ARW and ARQ), ILCE-1, ILCE-6700, ILCE-9M3 and the ILCE-7M5's lossless APS-C file (3251, 3255, 4466, 6736, 7361, 8848) |
+| 1, 2 or 1, 3 | the RX100M6, the ILCE-7M4's large raw and the ILCE-7SM3 (3012, 3015, 6929, 5418) |
+| 2, 0 or 2, 2 | the small raws of the ILCE-9M3 and ILCE-7M4 (7364, 6931) |
+| 3, 2 | the ILCE-7M4's medium raw (6930), and the APS-C files of the ILCE-7M4 and ILCE-1M2 (6933, 6936, 7835) |
+| 4, 0 and 5, 0 | the ILCE-7M5's compressed and compressed HQ files, full frame and APS-C alike (8847, 8850 and 8846, 8849) |
+| 0, 3 | the ILCE-7M3 JPEG, written without a raw |
+
+So 3 means a medium raw on one body and an APS-C raw on two, and on the
+ILCE-7M5 the first value gives the compression whatever the size: the
+tag does not tell large, medium and small apart in general **[F]**. The
+older 0x0102 Quality (0 RAW, 6 RAW + JPEG, 7 compressed RAW [P][1])
+gives no size at all.
+
+**Colour space.** The colour space the camera was set to for its JPEG
+output. Exif ColorSpace (0xA001) is 1 (sRGB) on 33 files and the five
+JPEGs, and 65535 ("uncalibrated") on the A100, R1 and A900 (files 2346,
+3221, 5858) **[F]** [P][28]. The Interoperability IFD's InteropIndex
+(0x0001) then names the colour space under the DCF rule, `R98` for
+sRGB and `R03` for Adobe RGB [P][28]: it is `R98` on every file with
+ColorSpace 1 but the F828's, which has none, `R03` on the R1 and the
+A900, and empty on the A100 **[F]**. So the A100's colour space is not
+named in the standard tags, although its Minolta block, as ExifTool
+reads it, says Adobe RGB **[S]**; on the A900 the plain CameraSettings
+block (0x0114) says Adobe RGB too, agreeing with `R03` **[S]**.
+
+**Focal length in 35 mm terms.** Exif 0xA405 FocalLengthIn35mmFilm
+[P][28] is on every file but the F828's and the R1's, and is 0, meaning
+unknown, on the ILCE-7S with its manual lens (file 1582) **[F]**.
+
+**Software and firmware.** IFD0's Software is on every file but the
+F828's and the R1's, and holds the body's own name and its firmware
+version **[F]**: `ILCE-7M4 v2.00`, `SLT-A55V v1.10`, `DSLR-A700 v04`,
+`NEX-5 Ver.05`, and `Lunar v1.02` on the Hasselblad Lunar. No checked
+file carries an editor's name. The MakerNote holds no firmware version
+in a plain tag.
+
+**MakerNote values past the declared length.** On the A200, A700 and
+A900 (files 2271, 2521, 5858) the values of five MakerNote tags run past
+the MakerNote's declared length: 0x2003 straddles its end, and 0xB020,
+0xB02A, 0xB02B and 0xB02C lie wholly past it, ending 18 to 62 bytes
+after it **[F]**. A reader that reads only values inside the MakerNote
+drops them. None of them is a setting: every settings tag of those
+files lies inside **[F]**.
+
+**On the maintainer's own files.** 3,161 ARW files and 1,972 camera
+JPEGs of the maintainer's own ILCE-7M2, read the same way on 2026-10-24
+and given as counts only
+([test-data.md](test-data.md#23-the-camera-settings-of-each-file)),
+agree with the samples **[F]**: auto white balance on every one, with
+0x0115, 0xB054, 0xB021 and 0x0112 all 0; 0x201A 1 on every one; no
+0x202C and no 0x202E; Software `ILCE-7M2 v4.01`; on every ARW file
+ColorSpace 1 with `R98`. The focal length in 35 mm terms is 0 on 1,627 of the ARW files
+and 1,625 of the JPEGs, presumably shots with manual lenses, as on the
+ILCE-7S sample [I]. Every MakerNote value lies inside the MakerNote.
+
 ## 10. A100, SR2 and SRF
 
 ### DSLR-A100 (ARW 1.0)
@@ -1297,6 +1523,32 @@ FocusMode ([section 9.6](#96-focus-point)). Nothing is deciphered, and
    3015), APS-C (6933), a lossless tile-padded raw (6929) and the SRF (1351).
    [I]
 
+For the camera settings of [section 9.7](#97-camera-settings), read the
+Exif tags first and the plain MakerNote tags where Exif has no value,
+and decipher nothing [I]:
+
+- the exposure program, the metering mode, the flash and the focal
+  length in 35 mm terms from Exif alone: the MakerNote only repeats the
+  first three, and has no 35 mm focal length for the F828 and R1, which
+  lack it in Exif;
+- the white balance from 0x0115, which is finer than Exif's auto or
+  manual, else from Exif's WhiteBalance and LightSource; never from
+  0xB054, which says auto on two files set to shade;
+- the colour temperature from 0xB021 when it is above zero;
+- the electronic front curtain setting from 0x201A, as a setting and
+  never as the shutter used, which it contradicts on four of the 18
+  files where an enciphered block shows whether the release was
+  electronic;
+- the colour space from Exif's ColorSpace, with an InteropIndex of
+  `R03` naming Adobe RGB when ColorSpace is 65535;
+- the software from IFD0.
+
+The fine-tuning stays unread until a file shows what 0x0112's sign and
+axis mean; the raw image size, because 0x202E cannot tell an APS-C raw
+from a medium one; and the shutter used and APS-C mode, because only
+enciphered blocks hold them. The A100's Minolta-format IFD stays unread
+too, so its white balance comes from Exif alone.
+
 **Milestone 6 needs the SR2 keystream for older files.**
 
 1. Implement the keystream of [section 6](#6-the-sr2-keystream); it is about
@@ -1371,6 +1623,27 @@ FocusMode ([section 9.6](#96-focus-point)). Nothing is deciphered, and
 17. **A zero FocusFrameSize on an autofocus shot.** raw-files keeps the
     point without a size; the only samples with `0, 0, 0` are
     manual-focus shots (files 7361, 7364), which give no point anyway.
+18. **The fine-tuning's axis and sign.** 0x0112 is 0 on every sample;
+    which axis it records, which sign is which colour, and how a
+    negative shift is stored in a tag ExifTool documents as unsigned
+    would need a shot with a known shift each way.
+19. **The colour temperature under a set temperature.** 0xB021 is 0
+    under auto and shade and 5500 under a custom white balance; whether
+    it holds the chosen value when the photographer sets one in kelvin
+    is on no sample.
+20. **What 0xB054 records.** It gives auto where 0x0115 and Exif give
+    shade (files 1582 and the RX100M4 JPEG), and ExifTool's list for it
+    has no shade; whether it is a second setting, a fallback or
+    something else is open.
+21. **A plain record of the shutter used or of APS-C mode.** Both are
+    only in enciphered blocks on the samples ([section 9.7](#97-camera-settings)),
+    and ExifTool's reading of the APS-C flag is wrong on the ILCE-7S
+    (file 1582). Whether a newer body records either in plain form is
+    open.
+22. **The raw size on the ILCE-7M5.** Its 0x202E gives the compression,
+    not the size, on every sample, all of them large or APS-C;
+    whether a medium or small raw of that body says so anywhere plain
+    is open.
 
 ## Sources
 
@@ -1438,6 +1711,8 @@ Retrieved October 2026.
   https://github.com/exiftool/exiftool/blob/master/lib/Image/ExifTool/MinoltaRaw.pm
 
 - [27] ExifTool, MakerNote types — https://exiftool.org/makernote_types.html
+- [28] ExifTool, EXIF tags — https://exiftool.org/TagNames/EXIF.html
+- [29] ExifTool, Minolta tags — https://exiftool.org/TagNames/Minolta.html
 
 ### Sample files
 
