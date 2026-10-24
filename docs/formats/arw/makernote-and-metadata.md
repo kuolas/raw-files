@@ -1523,7 +1523,9 @@ FocusMode ([section 9.6](#96-focus-point)). Nothing is deciphered, and
    3015), APS-C (6933), a lossless tile-padded raw (6929) and the SRF (1351).
    [I]
 
-For the camera settings of [section 9.7](#97-camera-settings), read the
+For the camera settings of [section 9.7](#97-camera-settings),
+[ADR011](../../architecture-decisions/adr011-metadata-from-standard-tags.md)
+decides, in its sections on them, what this list recommends: read the
 Exif tags first and the plain MakerNote tags where Exif has no value,
 and decipher nothing [I]:
 

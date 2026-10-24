@@ -1291,7 +1291,9 @@ DX crop and moved into the window on an aspect crop; a FocusMode of
 `MANUAL` gives none, and a point number gives none until raw-files has
 a table of the body's points.
 
-For the camera settings of [section 8.7](#87-camera-settings), read the
+For the camera settings of [section 8.7](#87-camera-settings),
+[ADR011](../../architecture-decisions/adr011-metadata-from-standard-tags.md)
+decides, in its sections on them, what this list recommends: read the
 Exif tags first and the plain MakerNote tags where Exif has no value,
 and decrypt nothing [I]:
 
