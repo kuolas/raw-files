@@ -284,8 +284,10 @@ IFD1, the IFD that IFD0's next-IFD pointer leads to, holds the thumbnail.
   [F] (A reader that runs ExifTool on it is told that the IFD1 pointer
   refers to the Interoperability IFD. [S]) A reader that visits each IFD
   once and follows the Interoperability pointer first could take IFD1 for
-  a loop and lose the thumbnail; raw-files does not follow the
-  Interoperability pointer. [I]
+  a loop and lose the thumbnail. [I] raw-files follows the
+  Interoperability pointer only after IFD0's whole chain, so it reads the
+  shared IFD as IFD1 and keeps the thumbnail; it still takes that IFD as
+  the Interoperability IFD, which holds no InteropIndex. [F]
 
 ## 7. The Multi-Picture Format
 

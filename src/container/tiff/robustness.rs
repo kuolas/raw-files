@@ -341,7 +341,7 @@ fn assert_within(tree: &Tree, limits: &Limits, what: &impl Fn() -> String) {
             ifd.len()
         );
         let depth = match location {
-            Location::Ifd0 | Location::Chain(_) | Location::Exif => 0,
+            Location::Ifd0 | Location::Chain(_) | Location::Exif | Location::Interop => 0,
             Location::Sub { parent, .. } => {
                 assert!(parent < i, "{}: parent {parent} of {i}", what());
                 depths[parent] + 1

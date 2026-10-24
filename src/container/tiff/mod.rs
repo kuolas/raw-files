@@ -7,12 +7,11 @@
 //! TIFF file's own structure. Reading it starts with the [`header`], at the
 //! block's base, which sets the byte order of the structure and says where
 //! its first directory, IFD0, starts. Both byte orders are accepted: files
-//! in the wild use both.
-//! The directories the header leads to, IFD0 and on, are read by the
-//! [`ifd`] module, and found by the [`mod@walk`] module: IFD0's chain of
-//! next IFDs, their SubIFDs and IFD0's Exif IFD. The [`tags`] module names
-//! the tags the crate reads, and the [`types`] module the field types of
-//! their values.
+//! in the wild use both. The directories the header leads to, IFD0 and on,
+//! are read by the [`ifd`] module, and found by the [`mod@walk`] module:
+//! IFD0's chain of next IFDs, their SubIFDs, IFD0's Exif IFD and its
+//! Interoperability IFD. The [`tags`] module names the tags the crate
+//! reads, and the [`types`] module the field types of their values.
 //!
 //! This module is the container's face to the rest of the crate: it
 //! re-exports what the format modules use, and the split into files below
@@ -37,4 +36,4 @@ mod walk;
 pub(crate) use block::Block;
 pub(crate) use header::parse_header;
 pub(crate) use ifd::{Entry, Ifd, ifd_in, parse_ifd};
-pub(crate) use walk::{Location, Tree, skip_damage, walk};
+pub(crate) use walk::{Tree, skip_damage, walk};

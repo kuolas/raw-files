@@ -21,8 +21,9 @@
 //! The rules, in order:
 //!
 //! - Every IFD of the tree is asked, in the tree's order, except the Exif
-//!   IFD, which holds capture metadata and never an image; then the
-//!   format's own candidates, in the order it gives them.
+//!   IFD, which holds capture metadata, and the Interoperability IFD, which
+//!   names the rule the file follows, since neither ever holds an image;
+//!   then the format's own candidates, in the order it gives them.
 //! - An IFD that describes raw data is skipped, whatever it points at: one
 //!   whose samples are a colour filter array (CFA) or Sony's linear raw
 //!   (ARQ), one whose samples are wider than 8 bits, one stored in tiles,
@@ -77,7 +78,7 @@ use crate::container::tiff::tags::{
     NEW_SUBFILE_TYPE, ORIENTATION, PHOTOMETRIC_INTERPRETATION, STRIP_BYTE_COUNTS, STRIP_OFFSETS,
     TILE_BYTE_COUNTS, TILE_LENGTH, TILE_OFFSETS, TILE_WIDTH,
 };
-use crate::container::tiff::{Block, Ifd, Location, Tree, skip_damage};
+use crate::container::tiff::{Block, Ifd, Tree, skip_damage};
 use crate::error::Result;
 use crate::io::{Source, within};
 use crate::orientation::Orientation;
@@ -162,11 +163,11 @@ pub(crate) fn find<R: Read + Seek>(
 /// The candidates that the IFDs of `tree` declare, in the tree's order:
 /// the first step of [`find`].
 ///
-/// The Exif IFD is not asked, an IFD that describes raw data is skipped,
-/// and so is an IFD whose tags these rules read cannot be read; see the
-/// [module documentation](self). Each candidate counts from the base of
-/// the block its IFD was read in, and lies inside that block's bounds and
-/// the file.
+/// The Exif IFD and the Interoperability IFD are not asked, an IFD that
+/// describes raw data is skipped, and so is an IFD whose tags these rules
+/// read cannot be read; see the [module documentation](self). Each
+/// candidate counts from the base of the block its IFD was read in, and
+/// lies inside that block's bounds and the file.
 ///
 /// # Errors
 ///
@@ -178,7 +179,7 @@ pub(crate) fn tree_candidates<R: Read + Seek>(
 ) -> Result<Vec<Candidate>> {
     let mut candidates = Vec::new();
     for (location, ifd) in tree.iter() {
-        if location == Location::Exif {
+        if location.holds_no_image() {
             continue;
         }
         // An IFD whose tags cannot be read is skipped as raw data is,
@@ -496,6 +497,16 @@ mod tests {
         let exif = builder.ifd();
         jpeg(&mut builder, exif, 640, 480);
         builder.exif(ifd0, exif);
+        assert_eq!(found(&builder.build().bytes), []);
+    }
+
+    #[test]
+    fn the_interoperability_ifd_is_never_a_candidate() {
+        let mut builder = TiffBuilder::new(Order::Little);
+        let ifd0 = plain_ifd(&mut builder);
+        let (exif, interop) = (plain_ifd(&mut builder), builder.ifd());
+        jpeg(&mut builder, interop, 640, 480);
+        builder.exif(ifd0, exif).interop(exif, interop);
         assert_eq!(found(&builder.build().bytes), []);
     }
 
