@@ -3,14 +3,15 @@
 //! What the camera recorded about a picture.
 //!
 //! Besides the image, a camera records how the picture was taken: by which
-//! camera and when, the exposure it chose, how the camera was set, the
-//! lens it was taken with, how large the image is, and where the camera
-//! focused. [`Metadata`] holds all of it, read when the file is opened;
-//! [`Exposure`] and [`Lens`] hold the exposure and the lens as the file
-//! records them, fractions with the numerator and denominator it stored,
-//! [`CameraSettings`] the camera's settings, and [`Focus`] where the
-//! camera's autofocus aimed, as the camera recorded it. [`LensBuilder`]
-//! builds a lens a value at a time, for a caller's tests.
+//! camera and when, the software that wrote the file, the exposure it
+//! chose, how the camera was set, the lens it was taken with, how large the
+//! image is, and where the camera focused. [`Metadata`] holds all of it,
+//! read when the file is opened; [`Exposure`] and [`Lens`] hold the
+//! exposure and the lens as the file records them, fractions with the
+//! numerator and denominator it stored, [`CameraSettings`] the camera's
+//! settings, and [`Focus`] where the camera's autofocus aimed, as the
+//! camera recorded it. [`LensBuilder`] builds a lens a value at a time, for
+//! a caller's tests.
 //!
 //! Every value is optional. A file may not record it, or may record it in a
 //! way that cannot be read, such as a tag of the wrong type; either way the
@@ -28,10 +29,10 @@ use crate::geometry::{Point, Size};
 use crate::orientation::Orientation;
 use crate::rational::{Rational, SignedRational};
 
-/// What the camera recorded about a picture: the camera, when the picture
-/// was taken, how to turn it upright, its exposure, how the camera was set,
-/// its lens, the sizes of its raw data and of its visible image, and where
-/// the camera focused.
+/// What the camera recorded about a picture: the camera and the software
+/// that wrote the file, when the picture was taken, how to turn it upright,
+/// its exposure, how the camera was set, its lens, the sizes of its raw
+/// data and of its visible image, and where the camera focused.
 ///
 /// Every value is `None` when the file does not record it or records it in
 /// a way that cannot be read. A damaged value costs only itself, and a
@@ -141,6 +142,7 @@ use crate::rational::{Rational, SignedRational};
 pub struct Metadata {
     pub(crate) make: Option<String>,
     pub(crate) model: Option<String>,
+    pub(crate) software: Option<String>,
     pub(crate) serial_number: Option<String>,
     pub(crate) capture_time: Option<DateTime>,
     pub(crate) orientation: Orientation,
@@ -165,6 +167,19 @@ impl Metadata {
     /// [`with_model`](Self::with_model).
     pub fn model(&self) -> Option<&str> {
         self.model.as_deref()
+    }
+
+    /// The software that wrote the file: IFD0's Software, as the file
+    /// records it, cleaned of padding by the reader as every text value
+    /// is, or as given to [`with_software`](Self::with_software).
+    ///
+    /// A camera writes its firmware version there, such as `Ver.01.00`
+    /// (Nikon) or `ILCE-7M4 v2.00` (Sony), and a program that rewrites the
+    /// file writes its own name, so a caller cannot tell which without
+    /// reading the text. It is `None` on a file that records none, such as
+    /// those of the Sony DSC-F828 and DSC-R1.
+    pub fn software(&self) -> Option<&str> {
+        self.software.as_deref()
     }
 
     /// The camera body's serial number, as text: as the file records it,
@@ -338,6 +353,14 @@ impl Metadata {
         self
     }
 
+    /// Sets the software that wrote the file, in place of any set before;
+    /// [`software`](Self::software) reads it.
+    #[must_use]
+    pub fn with_software(mut self, software: impl Into<String>) -> Self {
+        self.software = Some(software.into());
+        self
+    }
+
     /// Sets the camera body's serial number, in place of any set before;
     /// [`serial_number`](Self::serial_number) reads it.
     #[must_use]
@@ -412,13 +435,15 @@ impl Metadata {
 }
 
 /// The exposure of a picture: its sensitivity, how long and how wide the
-/// lens was open, at what focal length, and the compensation chosen.
+/// lens was open, at what focal length, also in 35 mm terms, and the
+/// compensation chosen.
 ///
 /// Every value is `None` when the file does not record it or records it in
-/// a way that cannot be read. A zero ISO, exposure time, f-number or
-/// focal length means the camera did not know it, and the readers never
-/// return one: the value is `None`, unless, for the ISO, another of the
-/// file's sensitivity tags gives it. A zero exposure bias is a real value.
+/// a way that cannot be read. A zero ISO, exposure time, f-number, focal
+/// length or focal length in 35 mm terms means the camera did not know it,
+/// and the readers never return one: the value is `None`, unless, for the
+/// ISO, another of the file's sensitivity tags gives it. A zero exposure
+/// bias is a real value.
 ///
 /// `Exposure::default()` is an empty one, with every value `None`. A
 /// caller's tests start from it and set the values they need with the
@@ -431,8 +456,9 @@ impl Metadata {
 /// The `with_…` methods store each value as given: none refuses or changes
 /// one, so a test reads back even a zero it wrote, such as an ISO of 0 or
 /// an f-number of 0/10, though the readers never return a zero ISO,
-/// exposure time, f-number or focal length. `Exposure` is not `Copy`, so
-/// that a later value that cannot be copied does not break callers.
+/// exposure time, f-number, focal length or focal length in 35 mm terms.
+/// `Exposure` is not `Copy`, so that a later value that cannot be copied
+/// does not break callers.
 ///
 /// # Examples
 ///
@@ -461,6 +487,7 @@ pub struct Exposure {
     pub(crate) exposure_time: Option<Rational>,
     pub(crate) f_number: Option<Rational>,
     pub(crate) focal_length: Option<Rational>,
+    pub(crate) focal_length_in_35mm_film: Option<u32>,
     pub(crate) exposure_bias: Option<SignedRational>,
 }
 
@@ -487,9 +514,23 @@ impl Exposure {
     }
 
     /// The focal length the picture was taken at, in millimetres, as
-    /// stored: the lens's actual focal length, not its 35 mm equivalent.
+    /// stored: the lens's actual focal length, not its 35 mm equivalent,
+    /// which [`focal_length_in_35mm_film`](Self::focal_length_in_35mm_film)
+    /// gives.
     pub fn focal_length(&self) -> Option<Rational> {
         self.focal_length
+    }
+
+    /// The focal length in 35 mm terms the camera recorded, in whole
+    /// millimetres: the focal length that would give the same field of
+    /// view on a 35 mm film (full-frame) camera, so that pictures from
+    /// bodies with different sensor sizes compare, such as 75 for a 50 mm
+    /// lens on a Nikon DX body. It is Exif's FocalLengthIn35mmFilm.
+    ///
+    /// A recorded 0 means the camera did not know it, as with the manual
+    /// lens of the public ILCE-7S sample 1582, and the readers give `None`.
+    pub fn focal_length_in_35mm_film(&self) -> Option<u32> {
+        self.focal_length_in_35mm_film
     }
 
     /// The exposure compensation chosen, in EV, as stored, such as -2/3.
@@ -527,6 +568,16 @@ impl Exposure {
     #[must_use]
     pub fn with_focal_length(mut self, millimetres: Rational) -> Self {
         self.focal_length = Some(millimetres);
+        self
+    }
+
+    /// Sets the focal length in 35 mm terms, in whole millimetres, in place
+    /// of any set before;
+    /// [`focal_length_in_35mm_film`](Self::focal_length_in_35mm_film) reads
+    /// it.
+    #[must_use]
+    pub fn with_focal_length_in_35mm_film(mut self, millimetres: u32) -> Self {
+        self.focal_length_in_35mm_film = Some(millimetres);
         self
     }
 
@@ -1203,14 +1254,16 @@ mod tests {
         }
     }
 
-    /// An exposure of 1/320 s at f/9, 14 mm and ISO 64, with -2/3 EV of
-    /// compensation, as a camera stores it.
+    /// An exposure of 1/320 s at f/9, 14 mm, 14 mm in 35 mm terms too on a
+    /// full-frame body, and ISO 64, with -2/3 EV of compensation, as a
+    /// camera stores it.
     fn z9_exposure() -> Exposure {
         Exposure {
             iso: Some(64),
             exposure_time: Some(fraction(10, 3200)),
             f_number: Some(fraction(900, 100)),
             focal_length: Some(fraction(140, 10)),
+            focal_length_in_35mm_film: Some(14),
             exposure_bias: Some(SignedRational {
                 numerator: -4,
                 denominator: 6,
@@ -1225,6 +1278,7 @@ mod tests {
         assert_eq!(exposure.exposure_time(), None);
         assert_eq!(exposure.f_number(), None);
         assert_eq!(exposure.focal_length(), None);
+        assert_eq!(exposure.focal_length_in_35mm_film(), None);
         assert_eq!(exposure.exposure_bias(), None);
     }
 
@@ -1235,6 +1289,7 @@ mod tests {
         assert_eq!(exposure.exposure_time(), Some(fraction(10, 3200)));
         assert_eq!(exposure.f_number(), Some(fraction(900, 100)));
         assert_eq!(exposure.focal_length(), Some(fraction(140, 10)));
+        assert_eq!(exposure.focal_length_in_35mm_film(), Some(14));
         assert_eq!(
             exposure.exposure_bias(),
             Some(SignedRational {
@@ -1985,6 +2040,7 @@ mod tests {
         Metadata {
             make: Some("NIKON CORPORATION".to_owned()),
             model: Some("NIKON Z 9".to_owned()),
+            software: Some("Ver.01.00".to_owned()),
             serial_number: Some("3001234".to_owned()),
             capture_time: DateTime::from_exif(b"2024:05:01 10:20:30", Some(b"85"), Some(b"+02:00")),
             orientation: Orientation::Rotate90,
@@ -2008,6 +2064,7 @@ mod tests {
         let metadata = Metadata::default();
         assert_eq!(metadata.make(), None);
         assert_eq!(metadata.model(), None);
+        assert_eq!(metadata.software(), None);
         assert_eq!(metadata.serial_number(), None);
         assert_eq!(metadata.capture_time(), None);
         assert_eq!(metadata.orientation(), Orientation::NoTransforms);
@@ -2024,6 +2081,7 @@ mod tests {
         let metadata = z9_metadata();
         assert_eq!(metadata.make(), Some("NIKON CORPORATION"));
         assert_eq!(metadata.model(), Some("NIKON Z 9"));
+        assert_eq!(metadata.software(), Some("Ver.01.00"));
         assert_eq!(metadata.serial_number(), Some("3001234"));
         let time = metadata.capture_time().unwrap();
         assert_eq!(time.to_string(), "2024-05-01T10:20:30.85+02:00");
@@ -2107,6 +2165,13 @@ mod tests {
                     },
                 ),
                 (
+                    start.clone().with_focal_length_in_35mm_film(36),
+                    Exposure {
+                        focal_length_in_35mm_film: Some(36),
+                        ..start.clone()
+                    },
+                ),
+                (
                     start.clone().with_exposure_bias(bias),
                     Exposure {
                         exposure_bias: Some(bias),
@@ -2146,6 +2211,13 @@ mod tests {
                     start.clone().with_model("NIKON Z 8"),
                     Metadata {
                         model: Some("NIKON Z 8".to_owned()),
+                        ..start.clone()
+                    },
+                ),
+                (
+                    start.clone().with_software("Ver.01.10"),
+                    Metadata {
+                        software: Some("Ver.01.10".to_owned()),
                         ..start.clone()
                     },
                 ),
@@ -2219,7 +2291,7 @@ mod tests {
         }
     }
 
-    /// [`z9_metadata`] built through the eleven builders.
+    /// [`z9_metadata`] built through the twelve builders.
     fn z9_metadata_built() -> Metadata {
         let lens = Lens::builder()
             .model("NIKKOR Z 14-30mm f/4 S")
@@ -2228,6 +2300,7 @@ mod tests {
         Metadata::default()
             .with_make("NIKON CORPORATION")
             .with_model("NIKON Z 9")
+            .with_software("Ver.01.00")
             .with_serial_number("3001234")
             .with_capture_time(
                 DateTime::from_exif(b"2024:05:01 10:20:30", Some(b"85"), Some(b"+02:00")).unwrap(),
@@ -2241,13 +2314,14 @@ mod tests {
             .with_focus(z9_focus())
     }
 
-    /// [`z9_exposure`] built through the five builders.
+    /// [`z9_exposure`] built through the six builders.
     fn z9_exposure_built() -> Exposure {
         Exposure::default()
             .with_iso(64)
             .with_exposure_time(fraction(10, 3200))
             .with_f_number(fraction(900, 100))
             .with_focal_length(fraction(140, 10))
+            .with_focal_length_in_35mm_film(14)
             .with_exposure_bias(SignedRational {
                 numerator: -4,
                 denominator: 6,
@@ -2268,6 +2342,7 @@ mod tests {
             .with_exposure_time(one)
             .with_f_number(one)
             .with_focal_length(one)
+            .with_focal_length_in_35mm_film(1)
             .with_exposure_bias(SignedRational {
                 numerator: 1,
                 denominator: 1,
@@ -2278,6 +2353,7 @@ mod tests {
             .with_exposure_time(fraction(10, 3200))
             .with_f_number(fraction(900, 100))
             .with_focal_length(fraction(140, 10))
+            .with_focal_length_in_35mm_film(14)
             .with_exposure_bias(SignedRational {
                 numerator: -4,
                 denominator: 6,
@@ -2287,6 +2363,7 @@ mod tests {
         let earlier = Metadata::default()
             .with_make("A")
             .with_model("A")
+            .with_software("A")
             .with_serial_number("A")
             .with_capture_time(DateTime::new(2000, 1, 1, 0, 0, 0).unwrap())
             .with_orientation(Orientation::Rotate180)
@@ -2304,6 +2381,7 @@ mod tests {
         let metadata = earlier
             .with_make("NIKON CORPORATION")
             .with_model("NIKON Z 9")
+            .with_software("Ver.01.00")
             .with_serial_number("3001234")
             .with_capture_time(z9.capture_time.unwrap())
             .with_orientation(z9.orientation)
@@ -2320,18 +2398,31 @@ mod tests {
     fn the_metadata_builders_move_an_owned_text_rather_than_copy_it() {
         let make = String::from("NIKON CORPORATION");
         let model = String::from("NIKON Z 9");
+        let software = String::from("Ver.01.00");
         let serial_number = String::from("3001234");
-        let addresses = [make.as_ptr(), model.as_ptr(), serial_number.as_ptr()];
+        let addresses = [
+            make.as_ptr(),
+            model.as_ptr(),
+            software.as_ptr(),
+            serial_number.as_ptr(),
+        ];
         let metadata = Metadata::default()
             .with_make(make)
             .with_model(model)
+            .with_software(software)
             .with_serial_number(serial_number);
-        let texts = [metadata.make(), metadata.model(), metadata.serial_number()];
+        let texts = [
+            metadata.make(),
+            metadata.model(),
+            metadata.software(),
+            metadata.serial_number(),
+        ];
         assert_eq!(
             texts,
             [
                 Some("NIKON CORPORATION"),
                 Some("NIKON Z 9"),
+                Some("Ver.01.00"),
                 Some("3001234")
             ]
         );
@@ -2342,8 +2433,8 @@ mod tests {
     #[test]
     fn the_builders_store_values_as_given() {
         // Neither cleaned nor refused, as the readers would a file's: a
-        // padded or empty text, a zero ISO or fraction, and an image size
-        // with no raw size.
+        // padded or empty text, a zero ISO, fraction or focal length in
+        // 35 mm terms, and an image size with no raw size.
         let zero = Rational {
             numerator: 0,
             denominator: 1,
@@ -2352,19 +2443,23 @@ mod tests {
             .with_iso(0)
             .with_exposure_time(zero)
             .with_f_number(zero)
-            .with_focal_length(zero);
+            .with_focal_length(zero)
+            .with_focal_length_in_35mm_film(0);
         assert_eq!(exposure.iso(), Some(0));
         assert_eq!(exposure.exposure_time(), Some(zero));
         assert_eq!(exposure.f_number(), Some(zero));
         assert_eq!(exposure.focal_length(), Some(zero));
+        assert_eq!(exposure.focal_length_in_35mm_film(), Some(0));
 
         let metadata = Metadata::default()
             .with_make("  padded  ")
             .with_model("NIKON Z 9\0\0")
+            .with_software("Ver.1.10 ")
             .with_serial_number("")
             .with_image_size(size(0, 0));
         assert_eq!(metadata.make(), Some("  padded  "));
         assert_eq!(metadata.model(), Some("NIKON Z 9\0\0"));
+        assert_eq!(metadata.software(), Some("Ver.1.10 "));
         assert_eq!(metadata.serial_number(), Some(""));
         assert_eq!(metadata.raw_size(), None);
         assert_eq!(metadata.image_size(), Some(size(0, 0)));

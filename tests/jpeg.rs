@@ -54,12 +54,13 @@ use support::jpeg_files::{
     ilce7m4_jpeg, ilce6000_jpeg, rx100m4_jpeg,
 };
 use support::jpeg_files::{
-    APERTURE, BODY_SERIAL_NUMBER, CAMERA_MAKE, CAMERA_MODEL, CAMERA_SERIAL_NUMBER,
+    APERTURE, BODY_SERIAL_NUMBER, CAMERA_MAKE, CAMERA_MODEL, CAMERA_SERIAL_NUMBER, CAMERA_SOFTWARE,
     DATE_TIME_ORIGINAL, EXIF_IFD_TAGS, EXPOSURE_BIAS, EXPOSURE_BIAS_VALUE, EXPOSURE_SECONDS,
-    EXPOSURE_TIME, F_NUMBER, FOCAL_LENGTH, FOCAL_MILLIMETRES, ISO, LENS, LENS_MAKE, LENS_MODEL,
-    LENS_RANGE, LENS_SERIAL_NUMBER, LENS_SPECIFICATION, MAIN, MAKE, MODEL, MPF_IMAGES,
-    PHOTOGRAPHIC_SENSITIVITY, ROTATE_90, THUMBNAIL, camera_exif, camera_file, camera_jpeg,
-    camera_jpeg_with_metadata, exif, exif_jpeg, padded_jpeg, plain_jpeg,
+    EXPOSURE_TIME, F_NUMBER, FOCAL_LENGTH, FOCAL_LENGTH_IN_35MM_FILM, FOCAL_MILLIMETRES,
+    FOCAL_MILLIMETRES_IN_35MM_FILM, ISO, LENS, LENS_MAKE, LENS_MODEL, LENS_RANGE,
+    LENS_SERIAL_NUMBER, LENS_SPECIFICATION, MAIN, MAKE, MODEL, MPF_IMAGES,
+    PHOTOGRAPHIC_SENSITIVITY, ROTATE_90, SOFTWARE, THUMBNAIL, camera_exif, camera_file,
+    camera_jpeg, camera_jpeg_with_metadata, exif, exif_jpeg, padded_jpeg, plain_jpeg,
 };
 use support::jpeg_files::{
     D1H_LOST, D1H_MAIN, D1H_MODEL, D70_ISO, D70_LOST, D70_MAIN, D70_MODEL, D70_PREVIEW, D5300_ISO,
@@ -239,6 +240,9 @@ fn camera_metadata_without(lost: &[u16]) -> Metadata {
     if kept(MODEL) {
         metadata = metadata.with_model(CAMERA_MODEL);
     }
+    if kept(SOFTWARE) {
+        metadata = metadata.with_software(CAMERA_SOFTWARE);
+    }
     if kept(BODY_SERIAL_NUMBER) {
         metadata = metadata.with_serial_number(CAMERA_SERIAL_NUMBER);
     }
@@ -262,6 +266,10 @@ fn camera_metadata_without(lost: &[u16]) -> Metadata {
     }
     if kept(FOCAL_LENGTH) {
         exposure = exposure.with_focal_length(fraction(FOCAL_MILLIMETRES));
+    }
+    if kept(FOCAL_LENGTH_IN_35MM_FILM) {
+        exposure =
+            exposure.with_focal_length_in_35mm_film(u32::from(FOCAL_MILLIMETRES_IN_35MM_FILM));
     }
     let [lens_make, lens_model, lens_serial_number] = LENS;
     let mut lens = Lens::builder();
@@ -1386,7 +1394,7 @@ fn a_damaged_makernote_costs_only_what_it_gives() {
 fn a_limit_crossed_inside_the_makernote_costs_the_makernote_only() {
     // A MakerNote IFD of 20 entries: the version, the PreviewIFD's pointer,
     // the four tags of `makernote_with_everything` and 14 more of no
-    // meaning, beside an Exif IFD of 13, the most any other IFD of the file
+    // meaning, beside an Exif IFD of 14, the most any other IFD of the file
     // holds. With a limit of 20 entries the MakerNote gives its serial
     // number, focus point and preview; with 19 it gives nothing, and the
     // rest of the file is as without it.
@@ -1762,7 +1770,7 @@ fn a_damaged_sony_makernote_costs_only_its_focus_point() {
 #[test]
 fn a_limit_crossed_inside_the_sony_makernote_costs_its_focus_point_only() {
     // A MakerNote IFD of 12 entries: FocusMode, FocusLocation and 10 more
-    // of no meaning, beside an Exif IFD of 10, the most any other IFD of
+    // of no meaning, beside an Exif IFD of 11, the most any other IFD of
     // the file holds. With a limit of 12 entries the MakerNote gives its
     // point; with 11 it gives none, and the rest of the file is as without
     // it.
@@ -1804,9 +1812,10 @@ fn a_limit_crossed_inside_the_sony_makernote_costs_its_focus_point_only() {
 struct StrippedZ9Jpeg {
     /// The file's name in `tests/fixtures/`.
     file: &'static str,
-    /// IFD0's Make and Model.
+    /// IFD0's Make, Model and Software.
     make: &'static str,
     model: &'static str,
+    software: &'static str,
     /// The capture time, as [`DateTime`] displays it: DateTimeOriginal,
     /// SubSecTimeOriginal and OffsetTimeOriginal.
     capture_time: &'static str,
@@ -1815,6 +1824,7 @@ struct StrippedZ9Jpeg {
     f_number: (u32, u32),
     iso: u32,
     focal_length: (u32, u32),
+    focal_length_in_35mm_film: u32,
     exposure_bias: (i32, i32),
     /// The lens from the Exif IFD: its make, its model, and its range, the
     /// shortest and the longest focal length, then the f-number at each.
@@ -1843,11 +1853,13 @@ const STRIPPED_Z9_FX_JPEG: StrippedZ9Jpeg = StrippedZ9Jpeg {
     file: support::fixtures::Z9_FX_JPEG,
     make: "NIKON CORPORATION",
     model: "NIKON Z 9",
+    software: "Ver.05.30",
     capture_time: "2026-10-22T09:26:56.75-03:00",
     exposure_time: (10, 2500),
     f_number: (800, 100),
     iso: 64,
     focal_length: (700, 10),
+    focal_length_in_35mm_film: 70,
     exposure_bias: (0, 6),
     lens_make: None,
     lens_model: "VR 70-300mm f/4.5-5.6E",
@@ -1874,11 +1886,13 @@ const STRIPPED_Z9_DX_JPEG: StrippedZ9Jpeg = StrippedZ9Jpeg {
     file: support::fixtures::Z9_DX_JPEG,
     make: "NIKON CORPORATION",
     model: "NIKON Z 9",
+    software: "Ver.05.30",
     capture_time: "2026-10-22T09:40:59.19-03:00",
     exposure_time: (10, 2000),
     f_number: (800, 100),
     iso: 64,
     focal_length: (780, 10),
+    focal_length_in_35mm_film: 117,
     exposure_bias: (0, 6),
     lens_make: None,
     lens_model: "VR 70-300mm f/4.5-5.6E",
@@ -1908,11 +1922,13 @@ const STRIPPED_Z9_16X9_JPEG: StrippedZ9Jpeg = StrippedZ9Jpeg {
     file: support::fixtures::Z9_16X9_JPEG,
     make: "NIKON CORPORATION",
     model: "NIKON Z 9",
+    software: "Ver.05.30",
     capture_time: "2026-10-22T19:17:01.01-03:00",
     exposure_time: (10, 200),
     f_number: (450, 100),
     iso: 1400,
     focal_length: (700, 10),
+    focal_length_in_35mm_film: 70,
     exposure_bias: (0, 6),
     lens_make: None,
     lens_model: "VR 70-300mm f/4.5-5.6E",
@@ -1983,6 +1999,7 @@ fn check_stripped_z9_jpeg(stripped: &StrippedZ9Jpeg) {
     let metadata = file.metadata();
     assert_eq!(metadata.make(), Some(stripped.make), "{label}");
     assert_eq!(metadata.model(), Some(stripped.model), "{label}");
+    assert_eq!(metadata.software(), Some(stripped.software), "{label}");
     // The stripping zeroed BodySerialNumber and the MakerNote's
     // SerialNumber in place, so neither gives a serial number.
     assert_eq!(metadata.serial_number(), None, "{label}");
@@ -2003,6 +2020,7 @@ fn check_stripped_z9_jpeg(stripped: &StrippedZ9Jpeg) {
             .with_f_number(fraction(stripped.f_number))
             .with_iso(stripped.iso)
             .with_focal_length(fraction(stripped.focal_length))
+            .with_focal_length_in_35mm_film(stripped.focal_length_in_35mm_film)
             .with_exposure_bias(SignedRational::new(numerator, denominator).unwrap()),
         "{label}"
     );
@@ -2061,7 +2079,8 @@ fn the_stripped_z9_16x9_jpeg_gives_its_previews_metadata_and_moved_focus_point()
 // The tables below were generated from each file's bytes, by a walk of its
 // segments, its Exif segment's TIFF structure, its MakerNote and its MPF
 // list that shares no code with the reader, with the rules of ADR011,
-// ADR014 and ADR015 applied to what it read.
+// ADR014 and ADR015 applied to what it read; the software and the focal
+// length in 35 mm terms too, from IFD0 and the Exif IFD.
 
 /// The JPEG samples, each with the previews the reader finds in it,
 /// smallest first: IFD1's thumbnail, of 160 by 120 on every file but the
@@ -2323,6 +2342,7 @@ const METADATA: &[SampleMetadata] = &[
         file: "sony-ilce-7m3.jpg",
         make: Some("SONY"),
         model: Some("ILCE-7M3"),
+        software: Some("ILCE-7M3 v4.01"),
         serial_number: None,
         capture_time: Some("2025-06-05T10:47:33+01:00"),
         orientation: Orientation::NoTransforms,
@@ -2330,6 +2350,7 @@ const METADATA: &[SampleMetadata] = &[
         exposure_time: Some((1, 200)),
         f_number: Some((160, 10)),
         focal_length: Some((160, 10)),
+        focal_length_in_35mm_film: Some(24),
         exposure_bias: Some((0, 10)),
         lens: Some(SampleLens {
             make: None,
@@ -2354,6 +2375,7 @@ const METADATA: &[SampleMetadata] = &[
         file: "sony-ilce-7rm2.jpg",
         make: Some("SONY"),
         model: Some("ILCE-7RM2"),
+        software: Some("ILCE-7RM2 v4.00"),
         serial_number: None,
         capture_time: Some("2026-06-08T20:03:02"),
         orientation: Orientation::NoTransforms,
@@ -2361,6 +2383,7 @@ const METADATA: &[SampleMetadata] = &[
         exposure_time: Some((1, 160)),
         f_number: Some((40, 10)),
         focal_length: Some((1050, 10)),
+        focal_length_in_35mm_film: Some(105),
         exposure_bias: Some((0, 10)),
         lens: Some(SampleLens {
             make: None,
@@ -2385,6 +2408,7 @@ const METADATA: &[SampleMetadata] = &[
         file: "sony-dsc-rx100m4.jpg",
         make: Some("SONY"),
         model: Some("DSC-RX100M4"),
+        software: Some("DSC-RX100M4 v2.00"),
         serial_number: None,
         capture_time: Some("2019-11-19T10:51:00"),
         orientation: Orientation::NoTransforms,
@@ -2392,6 +2416,7 @@ const METADATA: &[SampleMetadata] = &[
         exposure_time: Some((1, 320)),
         f_number: Some((40, 10)),
         focal_length: Some((880, 100)),
+        focal_length_in_35mm_film: Some(24),
         exposure_bias: Some((0, 10)),
         lens: Some(SampleLens {
             make: None,
@@ -2411,6 +2436,7 @@ const METADATA: &[SampleMetadata] = &[
         file: "sony-ilce-6000.jpg",
         make: Some("SONY"),
         model: Some("ILCE-6000"),
+        software: Some("ILCE-6000 v1.00"),
         serial_number: None,
         capture_time: Some("2014-03-19T07:55:02"),
         orientation: Orientation::NoTransforms,
@@ -2418,6 +2444,7 @@ const METADATA: &[SampleMetadata] = &[
         exposure_time: Some((1, 200)),
         f_number: Some((80, 10)),
         focal_length: Some((240, 10)),
+        focal_length_in_35mm_film: Some(36),
         exposure_bias: Some((-3, 10)),
         lens: Some(SampleLens {
             make: None,
@@ -2437,6 +2464,7 @@ const METADATA: &[SampleMetadata] = &[
         file: "sony-dslr-a100.jpg",
         make: Some("SONY"),
         model: Some("DSLR-A100"),
+        software: Some("DSLR-A100 v1.04"),
         serial_number: None,
         capture_time: Some("2008-06-09T15:44:33"),
         orientation: Orientation::NoTransforms,
@@ -2444,6 +2472,7 @@ const METADATA: &[SampleMetadata] = &[
         exposure_time: Some((1, 640)),
         f_number: Some((80, 10)),
         focal_length: Some((3000, 10)),
+        focal_length_in_35mm_film: Some(450),
         exposure_bias: Some((0, 10)),
         lens: None,
         raw_size: None,
@@ -2455,6 +2484,7 @@ const METADATA: &[SampleMetadata] = &[
         file: "nikon-d5300.jpg",
         make: Some("NIKON CORPORATION"),
         model: Some("NIKON D5300"),
+        software: Some("Ver.1.02"),
         serial_number: Some(SerialShape {
             len: 7,
             digits: true,
@@ -2465,6 +2495,7 @@ const METADATA: &[SampleMetadata] = &[
         exposure_time: Some((10, 1250)),
         f_number: Some((56, 10)),
         focal_length: Some((180, 10)),
+        focal_length_in_35mm_film: Some(27),
         exposure_bias: Some((0, 6)),
         lens: Some(SampleLens {
             make: None,
@@ -2484,6 +2515,7 @@ const METADATA: &[SampleMetadata] = &[
         file: "nikon-d70.jpg",
         make: Some("NIKON CORPORATION"),
         model: Some("NIKON D70"),
+        software: Some("Ver.1.02"),
         serial_number: None,
         capture_time: Some("2009-06-07T11:52:30"),
         orientation: Orientation::NoTransforms,
@@ -2491,6 +2523,7 @@ const METADATA: &[SampleMetadata] = &[
         exposure_time: Some((10, 2500)),
         f_number: Some((80, 10)),
         focal_length: Some((620, 10)),
+        focal_length_in_35mm_film: Some(93),
         exposure_bias: Some((0, 6)),
         lens: Some(SampleLens {
             make: None,
@@ -2510,6 +2543,7 @@ const METADATA: &[SampleMetadata] = &[
         file: "canon-powershot-g7x.jpg",
         make: Some("Canon"),
         model: Some("Canon PowerShot G7 X"),
+        software: None,
         serial_number: None,
         capture_time: Some("2016-07-17T17:30:26"),
         orientation: Orientation::NoTransforms,
@@ -2517,6 +2551,7 @@ const METADATA: &[SampleMetadata] = &[
         exposure_time: Some((1, 200)),
         f_number: Some((40, 10)),
         focal_length: Some((23008, 1000)),
+        focal_length_in_35mm_film: None,
         exposure_bias: Some((0, 3)),
         lens: None,
         raw_size: None,

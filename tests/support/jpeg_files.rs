@@ -21,10 +21,10 @@
 //!   image, then the two [`MPF_IMAGES`], each after zeros up to a multiple
 //!   of 512 bytes; with a JFIF segment first when asked, as an editor
 //!   writes it. [`camera_exif`] writes the TIFF structure of such a file
-//!   with every value the metadata reads: IFD0's Make and Model, and an
-//!   Exif IFD holding each of [`EXIF_IFD_TAGS`], with values made up in the
-//!   shape a Nikon Z 9 records them; [`camera_jpeg_with_metadata`] is the
-//!   camera's JPEG with that structure in its Exif segment.
+//!   with every value the metadata reads: IFD0's Make, Model and Software,
+//!   and an Exif IFD holding each of [`EXIF_IFD_TAGS`], with values made up
+//!   in the shape a Nikon Z 9 records them; [`camera_jpeg_with_metadata`]
+//!   is the camera's JPEG with that structure in its Exif segment.
 //! - [`padded_jpeg`]: the main image, then 4,096 zeros after its EOI, as
 //!   some Sony bodies write their JPEG files.
 //! - [`nikon_jpeg`]: a Nikon camera's JPEG, laid out as [`camera_file`]'s,
@@ -95,6 +95,9 @@ pub const MODEL: u16 = 0x0110;
 /// The Orientation tag, in IFD0.
 const ORIENTATION: u16 = 0x0112;
 
+/// The firmware or program that wrote the file, in IFD0 (Software).
+pub const SOFTWARE: u16 = 0x0131;
+
 /// The JPEGInterchangeFormat tag: where a thumbnail's SOI lies, counted from
 /// the TIFF header.
 const JPEG_INTERCHANGE_FORMAT: u16 = 0x0201;
@@ -125,6 +128,10 @@ pub const EXPOSURE_BIAS_VALUE: u16 = 0x9204;
 /// The focal length in millimetres, in the Exif IFD (FocalLength).
 pub const FOCAL_LENGTH: u16 = 0x920A;
 
+/// The focal length in 35 mm terms, in whole millimetres, in the Exif IFD
+/// (FocalLengthIn35mmFilm).
+pub const FOCAL_LENGTH_IN_35MM_FILM: u16 = 0xA405;
+
 /// The capture time's fraction of a second, in the Exif IFD
 /// (SubSecTimeOriginal).
 pub const SUB_SEC_TIME_ORIGINAL: u16 = 0x9291;
@@ -147,7 +154,7 @@ pub const LENS_SERIAL_NUMBER: u16 = 0xA435;
 
 /// The tags of the Exif IFD that [`camera_exif`] writes, each of which
 /// gives a value of the metadata.
-pub const EXIF_IFD_TAGS: [u16; 13] = [
+pub const EXIF_IFD_TAGS: [u16; 14] = [
     BODY_SERIAL_NUMBER,
     DATE_TIME_ORIGINAL,
     SUB_SEC_TIME_ORIGINAL,
@@ -157,6 +164,7 @@ pub const EXIF_IFD_TAGS: [u16; 13] = [
     PHOTOGRAPHIC_SENSITIVITY,
     EXPOSURE_BIAS_VALUE,
     FOCAL_LENGTH,
+    FOCAL_LENGTH_IN_35MM_FILM,
     LENS_MAKE,
     LENS_MODEL,
     LENS_SERIAL_NUMBER,
@@ -168,6 +176,8 @@ pub const EXIF_IFD_TAGS: [u16; 13] = [
 pub const CAMERA_MAKE: &str = "NIKON CORPORATION";
 /// The camera's model, in IFD0.
 pub const CAMERA_MODEL: &str = "NIKON Z 9";
+/// The camera's firmware, in IFD0's Software.
+pub const CAMERA_SOFTWARE: &str = "Ver.01.00";
 /// The camera's serial number, in the Exif IFD.
 pub const CAMERA_SERIAL_NUMBER: &str = "1234567";
 /// The capture time: DateTimeOriginal, SubSecTimeOriginal and
@@ -184,6 +194,9 @@ pub const ISO: u16 = 400;
 pub const EXPOSURE_BIAS: (i32, i32) = (-4, 6);
 /// The focal length, as a fraction, in the Exif IFD.
 pub const FOCAL_MILLIMETRES: (u32, u32) = (500, 10);
+/// The focal length in 35 mm terms, in the Exif IFD: the same 50 mm, as on
+/// the Z 9's full frame, FX.
+pub const FOCAL_MILLIMETRES_IN_35MM_FILM: u16 = 50;
 /// The lens's make, model and serial number, in the Exif IFD.
 pub const LENS: [&str; 3] = ["NIKON", "NIKKOR Z 24-70mm f/2.8 S", "20012345"];
 /// The lens's range, in the Exif IFD: the shortest and the longest focal
@@ -331,9 +344,10 @@ fn camera_layout(
 
 /// The TIFF structure of a camera's Exif segment, in byte order `order`,
 /// as [`exif`] writes it with Orientation 6, and with every value the
-/// metadata reads: IFD0's Make and Model, [`CAMERA_MAKE`] and
-/// [`CAMERA_MODEL`], and an Exif IFD holding each of [`EXIF_IFD_TAGS`],
-/// with the values above, each of the type the Exif standard gives it.
+/// metadata reads: IFD0's Make, Model and Software, [`CAMERA_MAKE`],
+/// [`CAMERA_MODEL`] and [`CAMERA_SOFTWARE`], and an Exif IFD holding each
+/// of [`EXIF_IFD_TAGS`], with the values above, each of the type the Exif
+/// standard gives it.
 /// Then `change` adds what a test needs, given the builder, IFD0 and the
 /// Exif IFD. Returns the bytes and where the builder put the thumbnail in
 /// them.
@@ -345,10 +359,10 @@ pub fn camera_exif(
     (built.bytes, thumbnail)
 }
 
-/// As [`camera_exif`], without the tags of `lost`, among IFD0's Make and
-/// Model and [`EXIF_IFD_TAGS`], and with what `change` returns and the
-/// built structure in place of its bytes, so that a caller can find where
-/// the builder put what `change` added.
+/// As [`camera_exif`], without the tags of `lost`, among IFD0's Make,
+/// Model and Software and [`EXIF_IFD_TAGS`], and with what `change`
+/// returns and the built structure in place of its bytes, so that a caller
+/// can find where the builder put what `change` added.
 fn camera_exif_built<T>(
     order: Order,
     lost: &[u16],
@@ -356,7 +370,7 @@ fn camera_exif_built<T>(
 ) -> (tiff_builder::Built, Range<u64>, T) {
     exif_built(order, ROTATE_90, None, |tiff, ifd0| {
         let exif = tiff.ifd();
-        for tag in [MAKE, MODEL] {
+        for tag in [MAKE, MODEL, SOFTWARE] {
             if !lost.contains(&tag) {
                 camera_value(tiff, ifd0, tag);
             }
@@ -371,15 +385,16 @@ fn camera_exif_built<T>(
     })
 }
 
-/// Adds to `ifd` the entry of `tag`, one of IFD0's Make and Model or of
-/// [`EXIF_IFD_TAGS`], with the value [`camera_exif`] gives it, of the type
-/// the Exif standard gives it.
+/// Adds to `ifd` the entry of `tag`, one of IFD0's Make, Model and
+/// Software or of [`EXIF_IFD_TAGS`], with the value [`camera_exif`] gives
+/// it, of the type the Exif standard gives it.
 fn camera_value(tiff: &mut TiffBuilder, ifd: IfdId, tag: u16) {
     let [date_time, subseconds, offset] = CAPTURE_TIME;
     let [lens_make, lens_model, lens_serial_number] = LENS;
     match tag {
         MAKE => tiff.ascii(ifd, MAKE, CAMERA_MAKE),
         MODEL => tiff.ascii(ifd, MODEL, CAMERA_MODEL),
+        SOFTWARE => tiff.ascii(ifd, SOFTWARE, CAMERA_SOFTWARE),
         BODY_SERIAL_NUMBER => tiff.ascii(ifd, tag, CAMERA_SERIAL_NUMBER),
         DATE_TIME_ORIGINAL => tiff.ascii(ifd, tag, date_time),
         SUB_SEC_TIME_ORIGINAL => tiff.ascii(ifd, tag, subseconds),
@@ -389,6 +404,7 @@ fn camera_value(tiff: &mut TiffBuilder, ifd: IfdId, tag: u16) {
         PHOTOGRAPHIC_SENSITIVITY => tiff.short(ifd, tag, &[ISO]),
         EXPOSURE_BIAS_VALUE => tiff.srational(ifd, tag, &[EXPOSURE_BIAS]),
         FOCAL_LENGTH => tiff.rational(ifd, tag, &[FOCAL_MILLIMETRES]),
+        FOCAL_LENGTH_IN_35MM_FILM => tiff.short(ifd, tag, &[FOCAL_MILLIMETRES_IN_35MM_FILM]),
         LENS_MAKE => tiff.ascii(ifd, tag, lens_make),
         LENS_MODEL => tiff.ascii(ifd, tag, lens_model),
         LENS_SERIAL_NUMBER => tiff.ascii(ifd, tag, lens_serial_number),
@@ -717,14 +733,15 @@ pub const D1H_MODEL: &str = "NIKON D1H";
 pub const D1H_MAIN: (u16, u16) = (2000, 1312);
 /// The tags of [`camera_exif`] that the D1H's JPEG leaves out: its own
 /// Make and Model take the Z 9's place, and, as in the D1H's raw file, its
-/// Exif IFD holds no ISO, no serial number, no lens tags and no offset
-/// from UTC.
-pub const D1H_LOST: [u16; 9] = [
+/// Exif IFD holds no ISO, no focal length in 35 mm terms, no serial number,
+/// no lens tags and no offset from UTC.
+pub const D1H_LOST: [u16; 10] = [
     MAKE,
     MODEL,
     BODY_SERIAL_NUMBER,
     OFFSET_TIME_ORIGINAL,
     PHOTOGRAPHIC_SENSITIVITY,
+    FOCAL_LENGTH_IN_35MM_FILM,
     LENS_MAKE,
     LENS_MODEL,
     LENS_SERIAL_NUMBER,

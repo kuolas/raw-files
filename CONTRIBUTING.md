@@ -249,18 +249,18 @@ changes the list.
 
 One test is ignored by default: it runs the reader over a folder of your own
 camera files, RAW and JPEG, and prints counts only, never a path, the value
-of a make, model, serial number, time, exposure or lens, or where the camera
-focused, so its output can go into an issue. It counts each file under the
-format its extension names, in one section per format. It checks that every
-file opens, that every one has a preview, that the largest preview is a
-whole JPEG, that the metadata gives the preview's orientation, and that
-every focus point lies inside its frame, area included, both as read and
-once placed on the largest preview; it counts how many files have each
-metadata field and a focus point, and how many previews of each size they
-hold. A preview may end in padding after the image's end marker, as some
-Sony cameras write it: `FF` bytes in any file, and zeros in a JPEG file,
-whose largest preview is the whole file and must hold its own image's end
-marker, not only its thumbnail's. Other data there fails a RAW file's
+of a make, model, software, serial number, time, exposure or lens, or where
+the camera focused, so its output can go into an issue. It counts each file
+under the format its extension names, in one section per format. It checks
+that every file opens, that every one has a preview, that the largest
+preview is a whole JPEG, that the metadata gives the preview's orientation,
+and that every focus point lies inside its frame, area included, both as
+read and once placed on the largest preview; it counts how many files have
+each metadata field and a focus point, and how many previews of each size
+they hold. A preview may end in padding after the image's end marker, as
+some Sony cameras write it: `FF` bytes in any file, and zeros in a JPEG
+file, whose largest preview is the whole file and must hold its own image's
+end marker, not only its thumbnail's. Other data there fails a RAW file's
 preview, and is only counted in a JPEG file. It fails on a folder it cannot
 read, that holds no file of a format raw-files reads, or that holds an entry
 it cannot read. Run it with `--release`, because it reads every file:

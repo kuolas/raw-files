@@ -26,6 +26,17 @@ does.
   their `with_…` methods, `Metadata::with_camera_settings`, `FineTune::new`
   and `Flash::new`. No file gives them yet: every file's camera settings
   are the empty record.
+- `Exposure::focal_length_in_35mm_film` and `Metadata::software`, read
+  from NEF, ARW and JPEG files. The first is the focal length in 35 mm
+  terms the camera recorded, in whole millimetres, from Exif's
+  FocalLengthIn35mmFilm: the focal length that would give the same field
+  of view on a full-frame camera, so that pictures from bodies with
+  different sensor sizes compare; a recorded 0, which a camera writes when
+  it does not know it, gives `None`. The second is IFD0's Software,
+  cleaned of padding as every text value: the camera's firmware version,
+  such as `Ver.01.00` or `ILCE-7M4 v2.00`, or the name of a program that
+  rewrote the file. `Exposure::with_focal_length_in_35mm_film` and
+  `Metadata::with_software` build them for a program's tests.
 
 ## [0.4.0] - 2026-10-23
 

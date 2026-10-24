@@ -173,9 +173,11 @@ pub fn check(sample: &Sample, format: Format) {
 /// What a sample file of `tests/samples.tsv` must give as its metadata:
 /// every value of [`Metadata`](raw_files::Metadata), `None` where the file
 /// must give none. Fractions are the numerator and denominator as stored,
-/// so `(10, 3200)` is not `(1, 320)`. The capture time is its ISO 8601
-/// form, as [`DateTime`](raw_files::DateTime) displays it. The focus point
-/// is the one the reader gives ([`SampleFocus`]).
+/// so `(10, 3200)` is not `(1, 320)`. The software is its text, as the
+/// reader cleans it, and the focal length in 35 mm terms its whole
+/// millimetres. The capture time is its ISO 8601 form, as
+/// [`DateTime`](raw_files::DateTime) displays it. The focus point is the
+/// one the reader gives ([`SampleFocus`]).
 ///
 /// The files are public, but the repository holds no camera's or lens's
 /// serial number, so a serial number is recorded by its shape alone and a
@@ -184,6 +186,7 @@ pub struct SampleMetadata {
     pub file: &'static str,
     pub make: Option<&'static str>,
     pub model: Option<&'static str>,
+    pub software: Option<&'static str>,
     pub serial_number: Option<SerialShape>,
     pub capture_time: Option<&'static str>,
     pub orientation: Orientation,
@@ -191,6 +194,7 @@ pub struct SampleMetadata {
     pub exposure_time: Option<(u32, u32)>,
     pub f_number: Option<(u32, u32)>,
     pub focal_length: Option<(u32, u32)>,
+    pub focal_length_in_35mm_film: Option<u32>,
     pub exposure_bias: Option<(i32, i32)>,
     pub lens: Option<SampleLens>,
     pub raw_size: Option<(u32, u32)>,
@@ -264,6 +268,7 @@ pub fn check_metadata(expected: &SampleMetadata, format: Format) {
     let metadata = file.metadata();
     assert_eq!(metadata.make(), expected.make, "{label}: make");
     assert_eq!(metadata.model(), expected.model, "{label}: model");
+    assert_eq!(metadata.software(), expected.software, "{label}: software");
     assert_eq!(
         metadata.serial_number().map(SerialShape::of),
         expected.serial_number,
@@ -299,6 +304,11 @@ pub fn check_metadata(expected: &SampleMetadata, format: Format) {
         exposure.focal_length().map(stored),
         expected.focal_length,
         "{label}: focal length"
+    );
+    assert_eq!(
+        exposure.focal_length_in_35mm_film(),
+        expected.focal_length_in_35mm_film,
+        "{label}: focal length in 35 mm terms"
     );
     assert_eq!(
         exposure
