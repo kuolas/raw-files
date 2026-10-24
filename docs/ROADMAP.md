@@ -37,17 +37,20 @@ camera's JPEG gives the focus point, but only when its frame has the
 picture's shape. JPEG files are checked on test files built in code, on
 three stripped JPEG files of the maintainer's own Z 9 and on the eight
 camera JPEGs of Wikimedia Commons that CI downloads, of five Sony bodies,
-two Nikon bodies and a Canon. Milestones 1, 2, 3 and 5 all work, and
-milestone 4 works for the bodies that record a position. Any other file is
+two Nikon bodies and a Canon. Milestones 1, 2 and 5 all work;
+milestone 3 works except for the camera's settings, and milestone 4
+works for the bodies that record a position. Any other file is
 refused with the `UnknownFormat` error.
 
 The first release, version 0.1.0, is milestones 1 and 2: the embedded
-previews of NEF and ARW files. The second, 0.2.0, is milestone 3: their
-basic metadata. The third, 0.3.0, is the first step of milestone 4: the
+previews of NEF and ARW files. The second, 0.2.0, is most of milestone 3:
+their basic metadata. The third, 0.3.0, is the first step of milestone 4: the
 focus point as the camera records it. The fourth, 0.4.0, is milestone 5,
 plain JPEG files ([#23](https://github.com/kuolas/raw-files/issues/23)).
-The next release is the second step of milestone 4: the mapping of a
-DSLR's autofocus point number to pixels.
+The next release completes milestone 3 with the camera's settings
+([#26](https://github.com/kuolas/raw-files/issues/26)), and the one
+after it is the second step of milestone 4: the mapping of a DSLR's
+autofocus point number to pixels.
 
 ## Milestones
 
@@ -56,7 +59,8 @@ DSLR's autofocus point number to pixels.
 2. **ARW previews.** The same for Sony ARW files.
 3. **Basic metadata.** What a viewer or a file renamer needs next to the
    preview: capture time, camera make, model and serial number, lens,
-   exposure, orientation, and image sizes.
+   exposure, orientation, image sizes, and how the camera was set (white
+   balance, exposure program, metering, flash, shutter, image area).
 4. **Focus points.** Where the camera focused, in coordinates that place
    it on a preview, to judge sharpness where the photographer focused.
    First the position the camera records; then the shots that record only
