@@ -162,6 +162,13 @@ placed on the same frame. The tests also check each JPEG's four
 previews, where the camera's layout puts them, and every value of its
 metadata.
 
+The tests check the camera settings that each file's Exif IFD records,
+the same on all five shots: aperture priority, multi-segment (Nikon's
+matrix) metering, a flash that did not fire, with no mode recorded, and
+auto white balance. The JPEG files record the colour space sRGB; the
+NEF files, like every Nikon raw file checked, record no ColorSpace, so
+they give none.
+
 The tests also cut all five files at every length and overwrite each of
 their bytes, but, in the JPEG files, those of three spans of zeros that
 no reader parses, the zeroed ShotInfo, the padding after the thumbnail's

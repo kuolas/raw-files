@@ -13,7 +13,11 @@ use std::collections::BTreeSet;
 use std::env;
 use std::path::{Path, PathBuf};
 
-use raw_files::{Format, Orientation, Preview, PreviewFormat, Rational, RawFile, Size};
+use raw_files::{
+    ColorSpace, ExposureProgram, FlashMode, Format, ImageArea, MeteringMode, Orientation, Preview,
+    PreviewFormat, Rational, RawFile, RawImageSize, Shutter, SignedRational, Size,
+    WhiteBalanceMode,
+};
 
 /// The path of the sample file `name`, or `None`, with a note on stderr,
 /// when it has not been downloaded. The files are in `RAW_FILES_SAMPLES`
@@ -177,7 +181,8 @@ pub fn check(sample: &Sample, format: Format) {
 /// reader cleans it, and the focal length in 35 mm terms its whole
 /// millimetres. The capture time is its ISO 8601 form, as
 /// [`DateTime`](raw_files::DateTime) displays it. The focus point is the
-/// one the reader gives ([`SampleFocus`]).
+/// one the reader gives ([`SampleFocus`]), and so are the camera settings
+/// ([`SampleSettings`]).
 ///
 /// The files are public, but the repository holds no camera's or lens's
 /// serial number, so a serial number is recorded by its shape alone and a
@@ -200,6 +205,45 @@ pub struct SampleMetadata {
     pub raw_size: Option<(u32, u32)>,
     pub image_size: Option<(u32, u32)>,
     pub focus: Option<SampleFocus>,
+    pub settings: SampleSettings,
+}
+
+/// How the camera of a sample file was set, as the reader must give it
+/// ([`CameraSettings`](raw_files::CameraSettings)): every value, `None`
+/// where the file must give none, each a variant of the library's own
+/// enums, so that a row reads as what a caller gets. The white balance is
+/// its three parts: its mode, its colour temperature in kelvin, and its
+/// fine-tuning ([`SampleFineTune`]). Then the exposure program, the metering
+/// mode, the flash, whether it fired and then its mode, `None` when the
+/// file records no mode, the shutter used, whether Sony's electronic front
+/// curtain setting was on, the image area, the raw image size and the
+/// colour space.
+///
+/// Every row writes every field, `None` included, one to a line, so that
+/// a value read later changes one line of a row.
+pub struct SampleSettings {
+    pub white_balance_mode: Option<WhiteBalanceMode>,
+    pub kelvin: Option<u32>,
+    pub fine_tune: Option<SampleFineTune>,
+    pub exposure_program: Option<ExposureProgram>,
+    pub metering_mode: Option<MeteringMode>,
+    pub flash: Option<(bool, Option<FlashMode>)>,
+    pub shutter: Option<Shutter>,
+    pub electronic_front_curtain_setting: Option<bool>,
+    pub image_area: Option<ImageArea>,
+    pub raw_image_size: Option<RawImageSize>,
+    pub color_space: Option<ColorSpace>,
+}
+
+/// The white balance fine-tuning of a sample file, as the reader must give
+/// it ([`FineTune`](raw_files::FineTune)): the shift along the amber to
+/// blue axis, and the one along the green to magenta axis, `None` when the
+/// file records only the first, each fraction as stored, so `(-24, 4)` is
+/// not `(-6, 1)`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct SampleFineTune {
+    pub amber_blue: (i32, i32),
+    pub green_magenta: Option<(i32, i32)>,
 }
 
 /// Where the camera of a sample file focused, as the reader must give it
@@ -253,11 +297,16 @@ fn stored(fraction: Rational) -> (u32, u32) {
     (fraction.numerator, fraction.denominator)
 }
 
+/// The numerator and denominator of the signed `fraction`, as stored.
+fn stored_signed(fraction: SignedRational) -> (i32, i32) {
+    (fraction.numerator, fraction.denominator)
+}
+
 /// Checks that the sample file `expected` names opens as `format` and
 /// gives exactly the metadata `expected` records: every value compared, the
-/// focus point's among them, so that a value the file must not give fails
-/// as surely as a wrong or a missing one. Does nothing when the file has
-/// not been downloaded.
+/// focus point's and the camera settings' among them, so that a value the
+/// file must not give fails as surely as a wrong or a missing one. Does
+/// nothing when the file has not been downloaded.
 pub fn check_metadata(expected: &SampleMetadata, format: Format) {
     let Some(path) = path(expected.file) else {
         return;
@@ -373,4 +422,62 @@ pub fn check_metadata(expected: &SampleMetadata, format: Format) {
         .as_ref()
         .map(|focus| (focus.frame, focus.center, focus.size, focus.in_focus));
     assert_eq!(focus, expected_focus, "{label}: focus");
+
+    let settings = metadata.camera_settings();
+    let expected = &expected.settings;
+    let white_balance = settings.white_balance();
+    assert_eq!(
+        white_balance.mode(),
+        expected.white_balance_mode,
+        "{label}: white balance mode"
+    );
+    assert_eq!(
+        white_balance.kelvin(),
+        expected.kelvin,
+        "{label}: white balance colour temperature"
+    );
+    assert_eq!(
+        white_balance.fine_tune().map(|fine_tune| SampleFineTune {
+            amber_blue: stored_signed(fine_tune.amber_blue()),
+            green_magenta: fine_tune.green_magenta().map(stored_signed),
+        }),
+        expected.fine_tune,
+        "{label}: white balance fine-tuning"
+    );
+    assert_eq!(
+        settings.exposure_program(),
+        expected.exposure_program,
+        "{label}: exposure program"
+    );
+    assert_eq!(
+        settings.metering_mode(),
+        expected.metering_mode,
+        "{label}: metering mode"
+    );
+    assert_eq!(
+        settings.flash().map(|flash| (flash.fired(), flash.mode())),
+        expected.flash,
+        "{label}: flash"
+    );
+    assert_eq!(settings.shutter(), expected.shutter, "{label}: shutter");
+    assert_eq!(
+        settings.electronic_front_curtain_setting(),
+        expected.electronic_front_curtain_setting,
+        "{label}: electronic front curtain setting"
+    );
+    assert_eq!(
+        settings.image_area(),
+        expected.image_area,
+        "{label}: image area"
+    );
+    assert_eq!(
+        settings.raw_image_size(),
+        expected.raw_image_size,
+        "{label}: raw image size"
+    );
+    assert_eq!(
+        settings.color_space(),
+        expected.color_space,
+        "{label}: colour space"
+    );
 }
