@@ -145,6 +145,13 @@ pub(crate) const SUB_SEC_TIME_ORIGINAL: u16 = 0x9291;
 /// block's bytes.
 pub(crate) const MAKER_NOTE: u16 = 0x927C;
 
+/// The offset of the Interoperability IFD (Interoperability IFD Pointer),
+/// read from the Exif IFD: the IFD whose InteroperabilityIndex names the
+/// rule the file follows, such as `R03` for a DCF option file, which is how
+/// a file says it is in Adobe RGB when its ColorSpace says only
+/// "uncalibrated".
+pub(crate) const INTEROP_IFD: u16 = 0xA005;
+
 /// The focal length in 35 mm terms, in whole millimetres, as a SHORT
 /// (FocalLengthIn35mmFilm), read from the Exif IFD: the focal length that
 /// would give the same field of view on a 35 mm film camera, such as 75

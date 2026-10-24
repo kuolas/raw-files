@@ -70,14 +70,15 @@
 //!   it ([`tiff_previews::orientation`]), so that the metadata and the
 //!   previews never disagree.
 //! - The raw size is the ImageWidth and ImageLength, of type SHORT or LONG,
-//!   of the IFD of the tree, the Exif IFD left out, that the preview finder
-//!   takes for raw data ([`tiff_previews::is_raw`]), whose width and height
-//!   are both above zero, and that has the most pixels of all such IFDs,
-//!   the first in the tree's order on a tie: a file can hold a small
-//!   full-resolution raw image beside the real one, as the public Coolpix
-//!   E5700 sample 4456 does. An IFD whose tags say nothing readable either
-//!   way is passed over, as the finder passes over it. Without such an IFD
-//!   there is no raw size, and no image size.
+//!   of the IFD of the tree, the Exif and Interoperability IFDs left out,
+//!   that the preview finder takes for raw data
+//!   ([`tiff_previews::is_raw`]), whose width and height are both above
+//!   zero, and that has the most pixels of all such IFDs, the first in the
+//!   tree's order on a tie: a file can hold a small full-resolution raw
+//!   image beside the real one, as the public Coolpix E5700 sample 4456
+//!   does. An IFD whose tags say nothing readable either way is passed
+//!   over, as the finder passes over it. Without such an IFD there is no
+//!   raw size, and no image size.
 //! - The image size is the default crop of that same IFD, its
 //!   DefaultCropSize, when it and its DefaultCropOrigin each hold exactly
 //!   two whole numbers, the size is above zero, and the crop lies inside
@@ -102,7 +103,7 @@ use crate::container::tiff::tags::{
     RECOMMENDED_EXPOSURE_INDEX, SOFTWARE, SUB_SEC_TIME_ORIGINAL,
 };
 use crate::container::tiff::types::SHORT;
-use crate::container::tiff::{Ifd, Location, Tree, skip_damage};
+use crate::container::tiff::{Ifd, Tree, skip_damage};
 use crate::datetime::DateTime;
 use crate::error::Result;
 use crate::formats::tiff_previews;
@@ -427,8 +428,9 @@ fn lens_specification<R: Read + Seek>(
 /// both from the largest IFD that holds raw data and says how large it is,
 /// or both `None` when no IFD does.
 ///
-/// The IFDs are asked in the tree's order, the Exif IFD left out, since it
-/// holds capture metadata and never an image. An IFD counts as raw data
+/// The IFDs are asked in the tree's order, except the Exif IFD, which holds
+/// capture metadata, and the Interoperability IFD, which names the rule the
+/// file follows: neither ever holds an image. An IFD counts as raw data
 /// when the preview finder says so ([`tiff_previews::is_raw`]); one whose
 /// tags that test reads cannot be read is passed over, as the finder passes
 /// over it. A raw IFD counts only when [`raw_size`] reads a size from it.
@@ -447,7 +449,7 @@ fn sizes<R: Read + Seek>(src: &mut Source<R>, tree: &Tree) -> Result<(Option<Siz
     let pixels = |size: Size| u64::from(size.width) * u64::from(size.height);
     let mut largest: Option<(&Ifd, Size)> = None;
     for (location, ifd) in tree.iter() {
-        if location == Location::Exif {
+        if location.holds_no_image() {
             continue;
         }
         if skip_damage(tiff_previews::is_raw(src, ifd))? != Some(true) {
@@ -2462,6 +2464,18 @@ mod tests {
             let exif = builder.ifd();
             builder.exif(ifd, exif);
             raw_tags(builder, exif, RAW.width, RAW.height);
+        });
+        assert_eq!(metadata.raw_size, None);
+        assert_eq!(metadata.image_size, None);
+    }
+
+    #[test]
+    fn the_interoperability_ifd_never_gives_the_sizes() {
+        // Raw-looking tags in the Interoperability IFD, where no image is.
+        let metadata = metadata_of(|builder, ifd| {
+            let (exif, interop) = (builder.ifd(), builder.ifd());
+            builder.exif(ifd, exif).interop(exif, interop);
+            raw_tags(builder, interop, RAW.width, RAW.height);
         });
         assert_eq!(metadata.raw_size, None);
         assert_eq!(metadata.image_size, None);

@@ -5,13 +5,24 @@
 //!
 //! A TIFF-based RAW file holds several images, such as a thumbnail, one or
 //! more JPEG previews and the raw sensor data, and each is described by its
-//! own IFD. The IFDs reach each other through three kinds of link: the
+//! own IFD. The IFDs reach each other through four kinds of link: the
 //! next-IFD pointer at the end of an IFD, which chains IFD0 to IFD1, IFD1 to
 //! IFD2, and so on; the SubIFDs tag (0x014A), an array of offsets of child
-//! IFDs, which may have SubIFDs of their own; and IFD0's Exif IFD tag
-//! (0x8769), the offset of the IFD that holds the capture metadata.
+//! IFDs, which may have SubIFDs of their own; IFD0's Exif IFD tag (0x8769),
+//! the offset of the IFD that holds the capture metadata; and the Exif
+//! IFD's Interoperability IFD tag (0xA005), the offset of the IFD that
+//! names the rule the file follows, and so whether it is in Adobe RGB.
 //! [`walk`] follows these links from IFD0 and returns every IFD it finds as
 //! a [`Tree`], each with the [`Location`] it was found at.
+//!
+//! The Interoperability IFD is tried last, after IFD0's whole chain. The
+//! Nikon D70 writes one IFD that is both its IFD1, which holds the
+//! thumbnail, and its Interoperability IFD. Tried last, the
+//! Interoperability IFD tag finds that IFD already in the tree as IFD1,
+//! where it stays, so the preview finder, which never asks the
+//! Interoperability IFD, still finds the thumbnail there. The tree also
+//! keeps where the tag led, and [`Tree::interop`] gives that IFD wherever
+//! it lies, so an InteropIndex in an IFD shared with the chain is not lost.
 //!
 //! The walk reads a TIFF structure inside a [`Block`]: its base, where the
 //! TIFF header lies and every link counts from, and its bounds, the range
@@ -52,21 +63,24 @@
 //! offer, and the walk fails. Past IFD0, damage costs only the part of the
 //! tree it touches. An IFD that cannot be parsed, one outside the bounds
 //! among them, ends the chain if it is a chain IFD, and is left out if it is
-//! a SubIFD or the Exif IFD; a link whose tag value cannot be read is not
-//! followed. No IFD can start inside the 8-byte header, so a link into it,
-//! one whose offset is below 8, is not tried: it is neither parsed nor
-//! counted against the total cap, and a chain that reaches it ends; nor is a
-//! link whose position would pass the largest offset. A SubIFD must also be
-//! wholly sound, with every entry of a known type and inside the bounds and
-//! the file, or it is left out: the Sony DSLR-A100 writes the offset of its
-//! raw data in the SubIFDs tag, and the bytes there are not an IFD. Only a
-//! failure of the reader itself stops the walk, as does the total cap.
+//! a SubIFD, the Exif IFD or the Interoperability IFD; a link whose tag
+//! value cannot be read is not followed. No IFD can start inside the 8-byte
+//! header, so a link into it, one whose offset is below 8, is not tried: it
+//! is neither parsed nor counted against the total cap, and a chain that
+//! reaches it ends; nor is a link whose position would pass the largest
+//! offset. A SubIFD must also be wholly sound, with every entry of a known
+//! type and inside the bounds and the file, or it is left out: the Sony
+//! DSLR-A100 writes the offset of its raw data in the SubIFDs tag, and the
+//! bytes there are not an IFD. Only a failure of the reader itself stops the
+//! walk, as does the total cap.
 //!
 //! The walk follows nothing else: not the next-IFD pointers of SubIFDs or of
-//! the Exif IFD, unless IFD0's chain itself reaches that IFD; not the
-//! SubIFDs of the Exif IFD; and not the Exif IFD tag of any IFD but IFD0.
-//! The walk runs in a loop over an explicit stack, not by recursion, so a
-//! file cannot make it use more call stack however it nests its IFDs.
+//! the Exif IFD, unless IFD0's chain itself reaches that IFD, nor that of
+//! the Interoperability IFD; not the SubIFDs of the Exif IFD or of the
+//! Interoperability IFD; not the Exif IFD tag of any IFD but IFD0; and not
+//! the Interoperability IFD tag of any IFD but the Exif IFD. The walk runs
+//! in a loop over an explicit stack, not by recursion, so a file cannot make
+//! it use more call stack however it nests its IFDs.
 
 use std::collections::BTreeMap;
 use std::io::{Read, Seek};
@@ -74,7 +88,7 @@ use std::mem;
 use std::vec;
 
 use super::header::HEADER_LEN;
-use super::tags::{EXIF_IFD, SUB_IFDS};
+use super::tags::{EXIF_IFD, INTEROP_IFD, SUB_IFDS};
 use super::{Block, Ifd, parse_header, parse_ifd};
 use crate::error::{Error, ErrorKind, Result};
 use crate::io::{ByteOrder, Source};
@@ -102,6 +116,28 @@ pub(crate) enum Location {
     },
     /// IFD0's Exif IFD, through its Exif IFD tag (0x8769).
     Exif,
+    /// The Exif IFD's Interoperability IFD, through its Interoperability
+    /// IFD tag (0xA005), when the Exif IFD is in the tree at
+    /// [`Exif`](Self::Exif). An IFD the walk found first through another
+    /// link keeps that location, where [`Tree::interop`] finds it.
+    Interop,
+}
+
+impl Location {
+    /// Whether the IFD at this location never holds an image: the Exif IFD
+    /// holds the capture metadata, and the Interoperability IFD names the
+    /// rule the file follows. The preview finder and the search for the raw
+    /// size skip both.
+    ///
+    /// An IFD found first at another location stays there, and is asked: the
+    /// Nikon D70's IFD1, which is also its Interoperability IFD, lies at
+    /// `Chain(1)` and holds the thumbnail.
+    pub(crate) fn holds_no_image(self) -> bool {
+        match self {
+            Self::Exif | Self::Interop => true,
+            Self::Ifd0 | Self::Chain(_) | Self::Sub { .. } => false,
+        }
+    }
 }
 
 /// The IFDs of a TIFF file that [`walk`] found, each with its
@@ -111,19 +147,24 @@ pub(crate) enum Location {
 /// IFD0; then IFD0's SubIFDs, depth first, each followed by its own
 /// SubIFDs, in the order of the SubIFDs arrays; then IFD0's Exif IFD; then
 /// IFD1 and its SubIFDs in the same way, IFD2 and its SubIFDs, and so on
-/// along the chain. IFD0 is always first, and an IFD appears once, at the
-/// first location it was found at.
+/// along the chain; and last the Exif IFD's Interoperability IFD. IFD0 is
+/// always first, and an IFD appears once, at the first location it was
+/// found at.
 #[derive(Clone, Debug)]
 pub(crate) struct Tree {
     /// Never empty: IFD0 is always the first.
     ifds: Vec<(Location, Ifd)>,
+    /// The position in `ifds` of the IFD that the Exif IFD's
+    /// Interoperability IFD tag leads to, wherever the walk placed it;
+    /// `None` when the tag leads to no IFD of the tree.
+    interop: Option<usize>,
 }
 
 // The NEF reader's claim reads IFD0, the preview finder goes through every
-// IFD of the tree, and the NEF MakerNote reader reads the Exif IFD; nothing
-// reads the number of IFDs or an IFD by its position yet. Each `expect`
-// fails the build once its method has a caller, so it is then removed
-// rather than left behind.
+// IFD of the tree, and the metadata and MakerNote readers read the Exif
+// IFD; nothing reads the number of IFDs, an IFD by its position or the
+// Interoperability IFD yet. Each `expect` fails the build once its method
+// has a caller, so it is then removed rather than left behind.
 impl Tree {
     /// IFD0, the IFD the header points to.
     pub(crate) fn ifd0(&self) -> &Ifd {
@@ -139,10 +180,29 @@ impl Tree {
     /// IFD0's Exif IFD, if the walk found it there.
     ///
     /// `None` also when the Exif IFD tag points to an IFD the walk had
-    /// already found at another location.
+    /// already found at another location: unlike [`interop`](Self::interop),
+    /// this gives only the IFD at [`Location::Exif`].
     pub(crate) fn exif(&self) -> Option<&Ifd> {
         self.iter()
             .find(|&(location, _)| location == Location::Exif)
+            .map(|(_, ifd)| ifd)
+    }
+
+    /// The IFD that the Exif IFD's Interoperability IFD tag leads to,
+    /// wherever the walk placed it: at [`Location::Interop`] when the walk
+    /// found it first through that tag, and otherwise at the location where
+    /// it found it before, as on the Nikon D70, whose Interoperability IFD
+    /// is its IFD1, at `Chain(1)`. A tag that leads back to the Exif IFD
+    /// itself, or to IFD0, gives that IFD too, as the file says.
+    ///
+    /// `None` when there is no Exif IFD at [`Location::Exif`], when it has
+    /// no Interoperability IFD tag or one that cannot be read or followed,
+    /// and when the IFD the tag leads to is not in the tree: one that
+    /// cannot be parsed, or a SubIFD the walk left out.
+    #[cfg_attr(not(test), expect(dead_code, reason = "nothing reads this method yet"))]
+    pub(crate) fn interop(&self) -> Option<&Ifd> {
+        self.interop
+            .and_then(|i| self.ifds.get(i))
             .map(|(_, ifd)| ifd)
     }
 
@@ -162,8 +222,9 @@ impl Tree {
 
 /// Walks the IFDs of the TIFF structure in `src` that `block` holds: reads
 /// its header at the block's base, then IFD0, its chain of next IFDs, the
-/// SubIFDs of each of those, recursively, and IFD0's Exif IFD, counting
-/// every link from the base and reading every IFD inside the bounds.
+/// SubIFDs of each of those, recursively, IFD0's Exif IFD and its
+/// Interoperability IFD, counting every link from the base and reading
+/// every IFD inside the bounds.
 ///
 /// See the [module documentation](self) for what is followed, what is left
 /// out and the order of the tree.
@@ -245,7 +306,36 @@ pub(crate) fn walk<R: Read + Seek>(
         step = step.saturating_add(1);
     }
 
-    Ok(Tree { ifds: walker.ifds })
+    // The Interoperability IFD comes last, so that an IFD it shares with
+    // the chain, as the D70's IFD1, keeps its place in the chain.
+    let link = match walker
+        .ifds
+        .iter()
+        .find(|(location, _)| *location == Location::Exif)
+    {
+        Some((_, exif)) => skip_damage(exif.u32(walker.src, INTEROP_IFD))?.flatten(),
+        None => None,
+    };
+    let interop = match link.and_then(|link| walker.target(link)) {
+        Some(at) => match walker.candidate(at)? {
+            Some((ifd, _)) => {
+                // Nothing is walked after it, so its next-IFD pointer is
+                // not needed: `visited` keeps the 0 that `claim` recorded.
+                walker.ifds.push((Location::Interop, ifd));
+                Some(walker.ifds.len() - 1)
+            }
+            // Tried before, or not an IFD. One tried before and kept in the
+            // tree is found by its position, where it lies once; one left
+            // out, or that cannot be parsed, is not in the tree.
+            None => walker.ifds.iter().position(|(_, ifd)| ifd.offset() == at),
+        },
+        None => None,
+    };
+
+    Ok(Tree {
+        ifds: walker.ifds,
+        interop,
+    })
 }
 
 /// The state of one walk.
@@ -260,7 +350,8 @@ struct Walker<'a, R> {
     /// the chain has yet to follow, as written: an offset from the base. The
     /// pointer is kept only for an IFD in the tree: 0 when the IFD could not
     /// be parsed, when it is a SubIFD the walk left out, when it is IFD0,
-    /// whose pointer the chain starts from, and once the chain has gone on
+    /// whose pointer the chain starts from, when it is the Interoperability
+    /// IFD, tried once the chain has ended, and once the chain has gone on
     /// from it.
     visited: BTreeMap<u64, u32>,
     /// How many IFDs the walk has tried to parse: the size of `visited`, at
@@ -534,6 +625,19 @@ mod tests {
         let (_, tree) = walked(&builder.build());
         assert_eq!(tree.len(), 2);
         assert!(tree.exif().is_none());
+        assert!(tree.interop().is_none());
+    }
+
+    #[test]
+    fn an_exif_ifd_without_an_interoperability_ifd_has_none() {
+        let mut builder = TiffBuilder::new(Order::Little);
+        let ifd0 = ifd(&mut builder, 0);
+        let exif = ifd(&mut builder, 1);
+        builder.exif(ifd0, exif);
+        let (_, tree) = walked(&builder.build());
+        assert_eq!(locations(&tree), [Location::Ifd0, Location::Exif]);
+        assert!(tree.exif().is_some());
+        assert!(tree.interop().is_none());
     }
 
     #[test]
@@ -1041,13 +1145,18 @@ mod tests {
         for order in ORDERS {
             let mut builder = TiffBuilder::new(order);
             let ifd0 = ifd(&mut builder, 0);
-            let [sub, exif, ifd1] = [1, 2, 3].map(|id| ifd(&mut builder, id));
+            let [sub, exif, ifd1, interop] = [1, 2, 3, 4].map(|id| ifd(&mut builder, id));
             let [after_sub, exif_sub, after_exif, exif_of_ifd1, exif_of_sub] =
                 [10, 11, 12, 13, 14].map(|id| ifd(&mut builder, id));
+            let [after_interop, interop_sub, interop_of_interop] =
+                [15, 16, 17].map(|id| ifd(&mut builder, id));
+            let [interop_of_ifd0, interop_of_sub, interop_of_ifd1] =
+                [18, 19, 20].map(|id| ifd(&mut builder, id));
             builder
                 .subifds(ifd0, &[sub])
                 .exif(ifd0, exif)
-                .next(ifd0, Some(ifd1));
+                .next(ifd0, Some(ifd1))
+                .interop(exif, interop);
             // A SubIFD's next IFD; the Exif IFD's SubIFDs and next IFD; the
             // Exif IFDs of IFD1 and of a SubIFD.
             builder.next(sub, Some(after_sub));
@@ -1055,8 +1164,371 @@ mod tests {
                 .subifds(exif, &[exif_sub])
                 .next(exif, Some(after_exif));
             builder.exif(ifd1, exif_of_ifd1).exif(sub, exif_of_sub);
+            // The Interoperability IFD's next IFD, SubIFDs and own
+            // Interoperability IFD; the Interoperability IFDs of IFD0, of a
+            // SubIFD and of IFD1.
+            builder
+                .next(interop, Some(after_interop))
+                .subifds(interop, &[interop_sub])
+                .interop(interop, interop_of_interop);
+            builder
+                .interop(ifd0, interop_of_ifd0)
+                .interop(sub, interop_of_sub)
+                .interop(ifd1, interop_of_ifd1);
             let (mut src, tree) = walked(&builder.build());
-            assert_eq!(ids(&mut src, &tree), [0, 1, 2, 3]);
+            assert_eq!(ids(&mut src, &tree), [0, 1, 2, 3, 4]);
+        }
+    }
+
+    #[test]
+    fn the_interoperability_ifd_comes_last() {
+        for order in ORDERS {
+            // IFD0 with a SubIFD a and its Exif IFD, whose Interoperability
+            // IFD is I; IFD1 along the chain, with a SubIFD d.
+            let mut builder = TiffBuilder::new(order);
+            let ifd0 = ifd(&mut builder, 0);
+            let [interop, a, exif, ifd1, d] = [5, 1, 2, 3, 4].map(|id| ifd(&mut builder, id));
+            builder.subifds(ifd0, &[a]).exif(ifd0, exif);
+            builder.next(ifd0, Some(ifd1)).subifds(ifd1, &[d]);
+            builder.interop(exif, interop);
+            let built = builder.build();
+            let (mut src, tree) = walked(&built);
+
+            // I was written first after IFD0, and is still found last.
+            assert!(built.ifd_offset(interop) < built.ifd_offset(a));
+            assert_eq!(ids(&mut src, &tree), [0, 1, 2, 3, 4, 5], "{order:?}");
+            let sub = |parent, index| Location::Sub { parent, index };
+            assert_eq!(
+                locations(&tree),
+                [
+                    Location::Ifd0,
+                    sub(0, 0),
+                    Location::Exif,
+                    Location::Chain(1),
+                    sub(3, 0),
+                    Location::Interop,
+                ],
+                "{order:?}"
+            );
+            assert_eq!(tree.exif().unwrap().offset(), built.ifd_offset(exif));
+            let found = tree.interop().unwrap();
+            assert_eq!(found.offset(), built.ifd_offset(interop));
+            assert_eq!(found.u32(&mut src, ID).unwrap(), Some(5));
+        }
+    }
+
+    #[test]
+    fn an_interoperability_ifd_that_cannot_be_read_is_left_out() {
+        for order in ORDERS {
+            for link in [0xFFFF_0000, 1024] {
+                // IFD0, with its Exif IFD, → IFD1; the Exif IFD's
+                // Interoperability IFD tag points past the end of the file,
+                // or at bytes that are not an IFD.
+                let mut builder = TiffBuilder::new(order);
+                let ifd0 = ifd(&mut builder, 0);
+                let (exif, ifd1) = (ifd(&mut builder, 1), ifd(&mut builder, 2));
+                builder.exif(ifd0, exif).next(ifd0, Some(ifd1));
+                builder.long(exif, INTEROP_IFD, &[link]);
+                builder.blob_at(1024, &[0xFF; 32]);
+                let (mut src, tree) = walked(&builder.build());
+                assert_eq!(ids(&mut src, &tree), [0, 1, 2], "{link:#X} ({order:?})");
+                assert!(tree.interop().is_none());
+            }
+        }
+    }
+
+    #[test]
+    fn an_interoperability_link_into_the_header_is_not_tried() {
+        for order in ORDERS {
+            for link in [0, 1, 4, 7] {
+                let mut builder = TiffBuilder::new(order);
+                let ifd0 = ifd(&mut builder, 0);
+                let exif = ifd(&mut builder, 1);
+                builder.exif(ifd0, exif).long(exif, INTEROP_IFD, &[link]);
+                // The cap allows IFD0 and the Exif IFD alone: trying the
+                // link would cross it.
+                let (_, tree) = try_walk(&builder.build().bytes, &Limits::default().max_ifds(2))
+                    .unwrap_or_else(|err| panic!("{link} ({order:?}): {err:?}"));
+                assert_eq!(
+                    locations(&tree),
+                    [Location::Ifd0, Location::Exif],
+                    "{link} ({order:?})"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn an_interoperability_ifd_outside_the_bounds_is_left_out() {
+        for order in ORDERS {
+            // I, the Exif IFD's Interoperability IFD, is the last IFD of the
+            // structure and holds one entry; the file goes on past the
+            // bounds, so that the bounds, not the file, are what leave I out.
+            let mut builder = TiffBuilder::new(order);
+            let ifd0 = ifd(&mut builder, 0);
+            let (exif, interop) = (ifd(&mut builder, 1), ifd(&mut builder, 2));
+            builder.exif(ifd0, exif).interop(exif, interop);
+            let built = builder.build();
+            let interop_at = built.ifd_offset(interop);
+            let table_end = interop_at + 2 + 12;
+            let len = u64::try_from(built.bytes.len()).unwrap();
+            assert_eq!(len, table_end + 4, "I ends the structure");
+
+            for (end, expected, what) in [
+                (
+                    table_end,
+                    &[0, 1, 2][..],
+                    "I's entries ending at the bounds",
+                ),
+                (table_end - 1, &[0, 1], "I's entries one byte past them"),
+                (interop_at, &[0, 1], "I wholly past them"),
+            ] {
+                let (mut src, tree) = try_walk_to(&built, end)
+                    .unwrap_or_else(|err| panic!("{what} ({order:?}): {err:?}"));
+                assert_eq!(ids(&mut src, &tree), expected, "{what} ({order:?})");
+            }
+        }
+    }
+
+    #[test]
+    fn an_interoperability_link_to_an_ifd_found_before_is_walked_once() {
+        for order in ORDERS {
+            // The Exif IFD's Interoperability IFD tag points to the Exif
+            // IFD itself, then to IFD0: each stays where it was found, and
+            // is the IFD the tag leads to.
+            for to_exif in [true, false] {
+                let mut builder = TiffBuilder::new(order);
+                let ifd0 = ifd(&mut builder, 0);
+                let exif = ifd(&mut builder, 1);
+                let to = if to_exif { exif } else { ifd0 };
+                builder.exif(ifd0, exif).interop(exif, to);
+                let built = builder.build();
+                let (mut src, tree) = walked(&built);
+                assert_eq!(ids(&mut src, &tree), [0, 1], "{to_exif} ({order:?})");
+                assert_eq!(
+                    locations(&tree),
+                    [Location::Ifd0, Location::Exif],
+                    "{to_exif} ({order:?})"
+                );
+                let found = tree.interop().expect("the IFD the tag leads to");
+                assert_eq!(
+                    found.offset(),
+                    built.ifd_offset(to),
+                    "{to_exif} ({order:?})"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn an_ifd_both_ifd1_and_the_interoperability_ifd_stays_ifd1() {
+        for order in ORDERS {
+            // The Nikon D70's layout: IFD0's next-IFD pointer and the Exif
+            // IFD's Interoperability IFD tag both lead to IFD1, which holds
+            // the thumbnail. Here IFD1 also leads on to IFD2. IFD1 stays in
+            // the chain, once, and is still the Interoperability IFD.
+            let mut builder = TiffBuilder::new(order);
+            let ifd0 = ifd(&mut builder, 0);
+            let [exif, ifd1, ifd2] = [1, 2, 3].map(|id| ifd(&mut builder, id));
+            builder.exif(ifd0, exif).interop(exif, ifd1);
+            builder.next(ifd0, Some(ifd1)).next(ifd1, Some(ifd2));
+            let built = builder.build();
+            let (mut src, tree) = walked(&built);
+            assert_eq!(ids(&mut src, &tree), [0, 1, 2, 3], "{order:?}");
+            assert_eq!(
+                locations(&tree),
+                [
+                    Location::Ifd0,
+                    Location::Exif,
+                    Location::Chain(1),
+                    Location::Chain(2)
+                ],
+                "{order:?}"
+            );
+            assert_eq!(tree.get(2).unwrap().1.offset(), built.ifd_offset(ifd1));
+            let found = tree.interop().expect("IFD1, as the D70's");
+            assert_eq!(found.offset(), built.ifd_offset(ifd1), "{order:?}");
+            assert_eq!(found.u32(&mut src, ID).unwrap(), Some(2), "{order:?}");
+        }
+    }
+
+    #[test]
+    fn an_interoperability_link_to_a_subifd_or_a_chain_ifd_finds_it_there() {
+        for order in ORDERS {
+            // IFD0 with a SubIFD a and its Exif IFD; IFD1 with a SubIFD d;
+            // IFD2. The Exif IFD's Interoperability IFD tag leads to a, IFD1,
+            // d and IFD2 in turn, each found before the tag is followed.
+            let sub = |parent, index| Location::Sub { parent, index };
+            for (target, id) in [(0, 1), (1, 3), (2, 4), (3, 5)] {
+                let mut builder = TiffBuilder::new(order);
+                let ifd0 = ifd(&mut builder, 0);
+                let [a, exif, ifd1, d, ifd2] = [1, 2, 3, 4, 5].map(|id| ifd(&mut builder, id));
+                builder.subifds(ifd0, &[a]).exif(ifd0, exif);
+                builder.next(ifd0, Some(ifd1)).subifds(ifd1, &[d]);
+                builder.next(ifd1, Some(ifd2));
+                let to = [a, ifd1, d, ifd2][target];
+                builder.interop(exif, to);
+                let built = builder.build();
+                let (mut src, tree) = walked(&built);
+
+                // Each IFD once, at the location where it was found first.
+                let what = format!("to {id} ({order:?})");
+                assert_eq!(ids(&mut src, &tree), [0, 1, 2, 3, 4, 5], "{what}");
+                assert_eq!(
+                    locations(&tree),
+                    [
+                        Location::Ifd0,
+                        sub(0, 0),
+                        Location::Exif,
+                        Location::Chain(1),
+                        sub(3, 0),
+                        Location::Chain(2),
+                    ],
+                    "{what}"
+                );
+                let found = tree.interop().expect("the IFD the tag leads to");
+                assert_eq!(found.offset(), built.ifd_offset(to), "{what}");
+                assert_eq!(found.u32(&mut src, ID).unwrap(), Some(id), "{what}");
+            }
+        }
+    }
+
+    #[test]
+    fn an_interoperability_link_to_a_position_left_out_of_the_tree_gives_none() {
+        for order in ORDERS {
+            // The Exif IFD's Interoperability IFD tag leads to a position
+            // the walk tried before and left out of the tree: a SubIFD with
+            // an entry of unknown type, and bytes that are not an IFD, tried
+            // as a SubIFD and as IFD1.
+            for case in [
+                "a SubIFD left out",
+                "not an IFD as a SubIFD",
+                "not an IFD as IFD1",
+            ] {
+                let mut builder = TiffBuilder::new(order);
+                let ifd0 = ifd(&mut builder, 0);
+                let exif = ifd(&mut builder, 1);
+                builder.exif(ifd0, exif);
+                if case == "a SubIFD left out" {
+                    let x = ifd(&mut builder, 2);
+                    builder.raw(x, 0x0101, 99, 1, RawValue::Inline([0; 4]));
+                    builder.subifds(ifd0, &[x]).interop(exif, x);
+                } else {
+                    builder.blob_at(1024, &[0xFF; 32]);
+                    builder.long(exif, INTEROP_IFD, &[1024]);
+                    if case == "not an IFD as a SubIFD" {
+                        builder.subifds_raw(ifd0, &[1024]);
+                    } else {
+                        builder.next_raw(ifd0, 1024);
+                    }
+                }
+                // The cap allows IFD0, the position and the Exif IFD: the
+                // tag does not try the position again.
+                let limits = Limits::default().max_ifds(3);
+                let (_, tree) = try_walk(&builder.build().bytes, &limits)
+                    .unwrap_or_else(|err| panic!("{case} ({order:?}): {err:?}"));
+                assert_eq!(
+                    locations(&tree),
+                    [Location::Ifd0, Location::Exif],
+                    "{case} ({order:?})"
+                );
+                assert!(tree.interop().is_none(), "{case} ({order:?})");
+            }
+        }
+    }
+
+    #[test]
+    fn only_the_exif_and_interoperability_ifds_hold_no_image() {
+        assert!(Location::Exif.holds_no_image());
+        assert!(Location::Interop.holds_no_image());
+        let sub = Location::Sub {
+            parent: 0,
+            index: 0,
+        };
+        for location in [Location::Ifd0, Location::Chain(1), sub] {
+            assert!(!location.holds_no_image(), "{location:?}");
+        }
+    }
+
+    #[test]
+    fn the_interoperability_ifd_counts_towards_the_total_cap() {
+        for order in ORDERS {
+            // IFD0, its Exif IFD, IFD1, and the Exif IFD's Interoperability
+            // IFD, tried last: four IFDs.
+            let mut builder = TiffBuilder::new(order);
+            let ifd0 = ifd(&mut builder, 0);
+            let [exif, ifd1, interop] = [1, 2, 3].map(|id| ifd(&mut builder, id));
+            builder.exif(ifd0, exif).next(ifd0, Some(ifd1));
+            builder.interop(exif, interop);
+            let built = builder.build();
+            let bytes = placed(&built);
+
+            let (mut src, tree) = try_walk(&built.bytes, &Limits::default().max_ifds(4)).unwrap();
+            assert_eq!(ids(&mut src, &tree), [0, 1, 2, 3], "{order:?}");
+            assert_error(
+                try_walk(&built.bytes, &Limits::default().max_ifds(3)),
+                ErrorKind::LimitExceeded,
+                built.ifd_offset(interop),
+            );
+
+            // Inside a file, the error is at the IFD's position in it.
+            let (mut src, tree) = try_walk_at(&bytes, POS, &Limits::default().max_ifds(4)).unwrap();
+            assert_eq!(ids(&mut src, &tree), [0, 1, 2, 3], "{order:?}");
+            assert_error(
+                try_walk_at(&bytes, POS, &Limits::default().max_ifds(3)),
+                ErrorKind::LimitExceeded,
+                POS + built.ifd_offset(interop),
+            );
+        }
+    }
+
+    #[test]
+    fn an_interoperability_link_whose_value_is_too_long_to_read_is_not_followed() {
+        // Over the 1 MiB that one tag value may take, and inside the file.
+        let count = 256 * 1024 + 1;
+        let mut builder = TiffBuilder::new(Order::Little);
+        let ifd0 = ifd(&mut builder, 0);
+        let (exif, ifd1) = (ifd(&mut builder, 1), ifd(&mut builder, 2));
+        builder.exif(ifd0, exif).next(ifd0, Some(ifd1));
+        builder.raw(exif, INTEROP_IFD, LONG, count, RawValue::Offset(1024));
+        builder.pad_to(1024 + 4 * u64::from(count));
+        let (mut src, tree) = walked(&builder.build());
+        assert_eq!(ids(&mut src, &tree), [0, 1, 2]);
+        assert_eq!(tree.exif().unwrap().invalid_entries(), 0);
+        assert!(tree.interop().is_none());
+    }
+
+    #[test]
+    fn an_interoperability_link_inside_a_file_counts_from_its_header() {
+        for order in ORDERS {
+            // The Exif IFD's Interoperability IFD is I; counted from the
+            // start of the file, the link lands on a decoy.
+            let mut builder = TiffBuilder::new(order);
+            let ifd0 = ifd(&mut builder, 0);
+            let (exif, interop) = (ifd(&mut builder, 1), ifd(&mut builder, 2));
+            builder.exif(ifd0, exif).interop(exif, interop);
+            let built = builder.build();
+            let mut bytes = placed(&built);
+            decoy(&mut bytes, built.ifd_offset(interop), order);
+            let (mut src, tree) = try_walk_at(&bytes, POS, &Limits::default()).unwrap();
+            assert_eq!(ids(&mut src, &tree), [0, 1, 2], "{order:?}");
+            assert_eq!(
+                tree.interop().unwrap().offset(),
+                POS + built.ifd_offset(interop)
+            );
+
+            // The link is 500, where the file holds a decoy; counted from
+            // the header, it lands past the end of the file.
+            let far = 500;
+            let mut builder = TiffBuilder::new(order);
+            let ifd0 = ifd(&mut builder, 0);
+            let exif = ifd(&mut builder, 1);
+            builder.exif(ifd0, exif).long(exif, INTEROP_IFD, &[far]);
+            let mut bytes = placed(&builder.build());
+            assert!(POS + u64::from(far) > u64::try_from(bytes.len()).unwrap());
+            decoy(&mut bytes, u64::from(far), order);
+            let (mut src, tree) = try_walk_at(&bytes, POS, &Limits::default()).unwrap();
+            assert_eq!(ids(&mut src, &tree), [0, 1], "{order:?}");
         }
     }
 

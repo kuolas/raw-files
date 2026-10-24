@@ -100,6 +100,9 @@ pub const SRATIONAL: u16 = 10;
 pub const SUB_IFDS: u16 = 0x014A;
 /// The Exif IFD tag: the offset of the Exif IFD.
 pub const EXIF_IFD: u16 = 0x8769;
+/// The Interoperability IFD tag: the offset of the Interoperability IFD,
+/// in the Exif IFD.
+pub const INTEROP_IFD: u16 = 0xA005;
 
 /// An IFD of one builder, as [`TiffBuilder::ifd`] returned it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -422,6 +425,12 @@ impl TiffBuilder {
     /// Adds an Exif IFD entry (0x8769), a LONG for the offset of `child`.
     pub fn exif(&mut self, ifd: IfdId, child: IfdId) -> &mut Self {
         self.ifd_pointer(ifd, EXIF_IFD, child)
+    }
+
+    /// Adds an Interoperability IFD entry (0xA005), a LONG for the offset
+    /// of `child`: in the Exif IFD, the offset of its Interoperability IFD.
+    pub fn interop(&mut self, ifd: IfdId, child: IfdId) -> &mut Self {
+        self.ifd_pointer(ifd, INTEROP_IFD, child)
     }
 
     /// Adds a blob, placed after the IFDs and after the blobs that this

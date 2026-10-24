@@ -147,8 +147,9 @@ the ones a JPEG adds.
 4. **The IFD walk is bounded as in a raw file.** The set of visited IFDs,
    the limits on IFDs and entries (`Limits::max_ifds`,
    `Limits::max_ifd_entries`) and checked entry-size arithmetic apply
-   inside the Exif segment as in a NEF, and the Interoperability IFD is
-   not followed. (CVE-2007-6351, CVE-2018-20030, CVE-2017-11338,
+   inside the Exif segment as in a NEF, and they count the
+   Interoperability IFD, which the walk follows from the Exif IFD, like
+   any other. (CVE-2007-6351, CVE-2018-20030, CVE-2017-11338,
    CVE-2018-5772, CVE-2006-4168.)
 5. **Damage costs the data it touches, never the file.** A bad entry
    costs its value; a TIFF header or IFD0 that cannot be read costs the

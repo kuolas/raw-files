@@ -317,10 +317,6 @@ fn parse_entry(raw: &[u8; 12], inside: &Block, order: ByteOrder) -> Option<Entry
 // then removed rather than left behind.
 impl Ifd {
     /// The absolute offset of the IFD: where its entry count is.
-    #[cfg_attr(
-        not(test),
-        expect(dead_code, reason = "nothing reads this accessor yet")
-    )]
     pub(crate) fn offset(&self) -> u64 {
         self.offset
     }
