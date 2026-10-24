@@ -159,6 +159,47 @@ lists it: a point number or a mask in a plain tag, which needs a table of
 the body's points, the A100's Minolta block, focus data in an enciphered
 block only, or nothing.
 
+### 2.3 The camera settings of each file
+
+The camera-settings facts tagged [F] in
+[makernote-and-metadata.md](makernote-and-metadata.md#97-camera-settings)
+were measured on 2026-10-23 on all 36 files and on the five Sony JPEGs of
+the [JPEG test data](../jpeg/test-data.md#2-the-sample-files), with a
+bounds-checked script written from these pages that read each tag's
+type, count and value, and whether the value lies inside the
+MakerNote's declared length. ExifTool 13.55 was run on the same files
+as an independent reader to compare with, and read the same values,
+with the exceptions that page names; nothing of it is in the
+repository, the tests or CI.
+
+Which files record each setting; the values are in
+[makernote-and-metadata.md](makernote-and-metadata.md#97-camera-settings):
+
+| Setting | Tag | Files that record it | Files without it |
+|---|---|---|---|
+| Exposure program | Exif 0x8822 | all 36 and the five JPEGs | none |
+| Metering mode | Exif 0x9207 | all 36 and the five JPEGs | none |
+| Flash | Exif 0x9209 | all 36 and the five JPEGs; 16 (not fired) on every one | none |
+| White balance | Exif 0xA403 and 0x9208 | all 36 and the five JPEGs | none |
+| White balance | MakerNote 0x0115 | 33 and four JPEGs | 1351, 2346, 3221 and the A100 JPEG |
+| Colour temperature | MakerNote 0xB021 | 34 and the five JPEGs; 5500 on 7361 and 7364, 0 on the others | 1351, 3221 |
+| Fine-tuning | MakerNote 0x0112 | 33 and four JPEGs; 0 on every one | 1351, 2346, 3221 and the A100 JPEG |
+| Electronic front curtain setting | MakerNote 0x201A | 1310, 1311, 1541, 1542, 1582, 3012, 3015, 3251, 3255, 3751, 4466, 5418, 6736, 6929 to 6931, 6933, 6936, 7361, 7364, 7835, 8846 to 8850 and four JPEGs | 964, 1351, 1457, 2271, 2346, 2521, 3221, 4051, 5811, 5858 and the A100 JPEG |
+| Shutter used | none plain | none | all |
+| APS-C mode | none plain | none | all; the APS-C files are 1582, 6933, 6936, 7835 and 8848 to 8850 |
+| Raw image size | MakerNote 0x202E | 3012, 3015, 3251, 3255, 4466, 5418, 6736, 6929 to 6931, 6933, 6936, 7361, 7364, 7835, 8846 to 8850 and the ILCE-7M3 JPEG | the 16 others and four JPEGs |
+| Colour space | Exif 0xA001 | all 36 and the five JPEGs; 65535 on 2346, 3221, 5858 | none |
+| Colour space | InteropIndex | 35 and the five JPEGs; `R03` on 3221 and 5858, empty on 2346 | 1351 |
+| Focal length in 35 mm terms | Exif 0xA405 | 34 and the five JPEGs; 0 on 1582 | 1351, 3221 |
+| Software | IFD0 0x0131 | 34 and the five JPEGs | 1351, 3221 |
+
+The maintainer's own ILCE-7M2 files, which stay private, were read on
+2026-10-24 with the same script, and only counts and the distributions
+of values were kept: 3,161 ARW files and 1,972 camera JPEGs, none of
+them rewritten by a program; two more could not be read over the
+network. What they show is in
+[makernote-and-metadata.md](makernote-and-metadata.md#97-camera-settings).
+
 ## 3. What raw.pixls.us holds for Sony
 
 ### 3.1 Access
@@ -481,9 +522,13 @@ bounds-checked TIFF walker, a JPEG marker walker, the SR2 keystream, the
 MakerNote cipher, a cRAW block decoder and tone-curve builder, an ARW1
 decoder, a lossless tile header reader and the SRF key chain. They are not
 in the repository, and no code was taken from another project. No external
-decoder or ExifTool was run on the files, so no result depends on another
-implementation, and no pixel output was compared with a reference
-decoder. The ARQ (3255) was deleted after measurement.
+decoder was run on the files for these checks, so no result depends on
+another implementation, and no pixel output was compared with a reference
+decoder. ExifTool was run on the files later, only as a reader to compare
+with, for the focus point ([section 2.2](#22-the-focus-point-of-each-file))
+and the camera settings
+([section 2.3](#23-the-camera-settings-of-each-file)). The ARQ (3255)
+was deleted after measurement and downloaded again for those checks.
 
 "Mode" is the catalogue's label, with its remark where that adds the crop
 or size; "Bytes" is the file size.
