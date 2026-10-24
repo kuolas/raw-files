@@ -85,6 +85,7 @@
 
 use std::io::{Read, Seek};
 
+use crate::camera_settings::CameraSettings;
 use crate::container::tiff::tags::{
     BODY_SERIAL_NUMBER, DATE_TIME_ORIGINAL, DEFAULT_CROP_ORIGIN, DEFAULT_CROP_SIZE,
     EXPOSURE_BIAS_VALUE, EXPOSURE_TIME, F_NUMBER, FOCAL_LENGTH, IMAGE_LENGTH, IMAGE_WIDTH,
@@ -161,6 +162,8 @@ pub(crate) fn read<R: Read + Seek>(src: &mut Source<R>, tree: &Tree) -> Result<S
         capture_time,
         orientation: tiff_previews::orientation(src, tree)?,
         exposure,
+        // No reader fills the camera settings yet. See #26
+        camera_settings: CameraSettings::default(),
         lens,
         raw_size,
         image_size: default_crop.or(raw_size),

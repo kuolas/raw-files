@@ -154,11 +154,11 @@ that fills a box. `Metadata` holds what the camera recorded about the
 picture, read when the file is opened; every value is optional, since not
 every camera records every one, and a damaged value is `None` on its own.
 `Focus` is where the camera focused, and its `scaled_to` places it on a
-preview. The `with_…` methods of `Metadata` and `Exposure`, `Lens::builder`
-and the checked constructors, such as `Focus::new`, build every value
-without a file, for a program's tests. `Options` and `Limits` open an
-untrusted file with other caps. The API documentation is on
-[docs.rs](https://docs.rs/raw-files).
+preview. The `with_…` methods of `Metadata`, `Exposure`, `CameraSettings`
+and `WhiteBalance`, `Lens::builder` and the constructors, such as
+`Focus::new`, build every value without a file, for a program's tests.
+`Options` and `Limits` open an untrusted file with other caps. The API
+documentation is on [docs.rs](https://docs.rs/raw-files).
 
 ## Formats
 

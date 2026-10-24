@@ -113,9 +113,10 @@
 //! ```
 //!
 //! A program's tests can build every metadata value without a file,
-//! through the `with_…` methods of [`Metadata`] and [`Exposure`],
-//! [`Lens::builder`] and the checked constructors, such as
-//! [`DateTime::new`]; [`Metadata`] shows how.
+//! through the `with_…` methods of [`Metadata`], [`Exposure`],
+//! [`CameraSettings`] and [`WhiteBalance`], [`Lens::builder`], the
+//! constructors of [`FineTune`] and [`Flash`], and the checked
+//! constructors, such as [`DateTime::new`]; [`Metadata`] shows how.
 //!
 //! Tell a raw file from the JPEG of the same shot by their names, before
 //! opening either, as a photo browser that shows the two as one picture
@@ -241,6 +242,7 @@
 // builds keep both lints, and CI checks those.
 #![cfg_attr(fuzzing, allow(dead_code, unfulfilled_lint_expectations))]
 
+mod camera_settings;
 mod container;
 mod datetime;
 mod error;
@@ -288,6 +290,10 @@ mod tiff_builder;
 #[cfg(test)]
 mod testing;
 
+pub use camera_settings::{
+    CameraSettings, ColorSpace, ExposureProgram, FineTune, Flash, FlashMode, ImageArea,
+    MeteringMode, RawImageSize, Shutter, WhiteBalance, WhiteBalanceMode,
+};
 pub use datetime::DateTime;
 pub use error::{Error, ErrorKind, Result};
 pub use file::RawFile;

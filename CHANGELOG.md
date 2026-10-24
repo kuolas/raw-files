@@ -10,6 +10,23 @@ does.
 
 ## [Unreleased]
 
+### Added
+
+- `CameraSettings`, which `Metadata::camera_settings` gives: how the
+  camera was set for the shot, for a viewer's information panel beside
+  the exposure. It holds the white balance (`WhiteBalance`: its mode, its
+  colour temperature and its fine-tuning, `FineTune`), the exposure
+  program, the metering mode, the flash (`Flash`: whether it fired and
+  its mode), the shutter used, Sony's electronic front curtain setting,
+  the image area, the raw image size and the colour space, each optional.
+  The enums `WhiteBalanceMode`, `ExposureProgram`, `MeteringMode`,
+  `FlashMode`, `Shutter`, `ImageArea`, `RawImageSize` and `ColorSpace`
+  name each setting's choices in words that fit any maker, with a `name`
+  that `Display` writes. A program's tests build these values through
+  their `with_…` methods, `Metadata::with_camera_settings`, `FineTune::new`
+  and `Flash::new`. No file gives them yet: every file's camera settings
+  are the empty record.
+
 ## [0.4.0] - 2026-10-23
 
 The fourth release: JPEG files, as cameras and editors write them, open as
