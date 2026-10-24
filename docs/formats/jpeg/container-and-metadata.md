@@ -184,6 +184,62 @@ offset of the first IFD. [P][3] (4.7.2.3 and Figure 36, p. 105;
   one APP1 segment [P][3] (4.5.4, p. 20); what a reader does with a second
   is not said. [I]
 
+**The camera's settings.** How the camera was set for the shot is
+recorded in tags of the Exif IFD, and the program that wrote the file
+in IFD0's Software [P][3]:
+
+| Setting | Tag | Values | Exif 3.1 |
+|---|---|---|---|
+| Exposure program | 0x8822 ExposureProgram, SHORT | 0 not defined, 1 manual, 2 normal program, 3 aperture priority, 4 shutter priority, 5 creative, 6 action, 7 portrait, 8 landscape; others reserved | 4.6.6.7.3, p. 55 |
+| Metering mode | 0x9207 MeteringMode, SHORT | 0 unknown, 1 average, 2 centre-weighted average, 3 spot, 4 multi-spot, 5 pattern, 6 partial, 255 other | 4.6.6.7.19, p. 60 |
+| Kind of light | 0x9208 LightSource, SHORT | 0 unknown, 1 daylight, 2 fluorescent, 3 tungsten, 4 flash, 9 fine weather, 10 cloudy weather, 11 shade, 12 to 16 five kinds of fluorescent lamp, 17 to 23 standard lights A, B, C, D55, D65, D75, D50, 24 ISO studio tungsten, 25 to 29 five kinds of light source and 30 to 34 five kinds of LED by colour temperature, 255 other | 4.6.6.7.20, pp. 60 to 61 |
+| Flash | 0x9209 Flash, SHORT, bits | bit 0 fired; bits 1 and 2 whether return light was detected; bits 3 and 4 the mode: unknown, compulsory firing, compulsory suppression, auto; bit 5 no flash function; bit 6 red-eye reduction | 4.6.6.7.21 and Figure 19, pp. 61 to 62 |
+| White balance | 0xA403 WhiteBalance, SHORT | 0 auto, 1 manual | 4.6.6.7.37, p. 69 |
+| Focal length in 35 mm terms | 0xA405 FocalLengthIn35mmFilm, SHORT, in millimetres | 0 unknown | 4.6.6.7.39, p. 70 |
+| Colour space | 0xA001 ColorSpace, SHORT | 1 sRGB, 0xFFFF uncalibrated: any colour space but sRGB | 4.6.6.2.1, p. 47 |
+| Software | IFD0 0x0131 Software, ASCII or UTF-8 | the name and version of the software or firmware that generated the image | 4.6.5.4.4, p. 42 |
+
+- **A colour space other than sRGB is named elsewhere.** ColorSpace says
+  only sRGB or "uncalibrated". The Interoperability IFD, which the Exif
+  IFD points to with tag 0xA005 (4.6.3.3.1, p. 29), holds
+  InteroperabilityIndex (0x0001, ASCII), which names the rule the file
+  follows: `R98` a DCF basic file, `THM` a DCF thumbnail, `R03` a DCF
+  option file (4.6.8.1.1, p. 92) [P][3]. A DCF option file is in Adobe
+  RGB, in ExifTool's documentation of the tag [S][6], and the files
+  agree: all 615 of the maintainer's own D3200 JPEGs with ColorSpace
+  65535 and `R03` record Adobe RGB in Nikon's 0x001E
+  ([NEF notes](../nef/makernote-and-metadata.md#87-camera-settings))
+  **[F]**, and so does the A900 raw file's settings block, as ExifTool
+  decodes it
+  ([ARW notes](../arw/makernote-and-metadata.md#97-camera-settings))
+  **[S]**.
+- **Exif 3.0 added the camera's firmware** in a tag of its own,
+  CameraFirmware (0xA439), which "in principle, shall not be
+  overwritten", beside tags for the RAW developer, the image editor and
+  the metadata editor; Software should then repeat one of them
+  (4.6.6.9.11 to 4.6.6.9.14, pp. 81 to 82) [P][3]. None of the eight
+  camera files writes these tags, nor any raw sample or the stripped
+  Z 9 JPEGs of the fixtures; every one of them that declares an Exif
+  version declares one from 2.21 to 2.32, except the D70 file, which
+  writes `1220` **[F]**.
+- **On the eight camera files** [F]: MeteringMode, Flash, WhiteBalance
+  and ColorSpace are on all eight, ColorSpace 1 (sRGB) on every one.
+  The G7 X writes no ExposureProgram, LightSource,
+  FocalLengthIn35mmFilm or Software; the other seven write all four.
+  ExposureProgram is 0, "not defined", on the D5300 file. The flash
+  fired on none (Flash 16 or 0). White balance is manual on the
+  DSC-RX100M4 file only, with LightSource 11 (shade). InteropIndex is
+  `R98` on seven files. On the D70 file the Interoperability pointer
+  leads to IFD1 (section 6), which holds no InteropIndex.
+- **On the maintainer's own JPEGs that a program rewrote** (425, from
+  three Nikon DSLRs), Software names that program, not the camera:
+  Windows Photo Viewer, GIMP, Luminance HDR, Shotwell, ViewNX 2 and
+  darktable. 32 of them have ColorSpace 65535 with no InteropIndex,
+  and 10 of those still hold the camera's sRGB in the MakerNote, which
+  no longer describes the picture
+  ([NEF notes](../nef/makernote-and-metadata.md#87-camera-settings)).
+  [F]
+
 ## 5. Other application segments
 
 - **XMP** is another APP1 segment, whose payload starts with
@@ -380,8 +436,45 @@ segment wherever the raw file counts from the start of the file:
   [ARW MakerNote notes](../arw/makernote-and-metadata.md#1-finding-the-makernote).
 - **Canon** (the G7 X file) and other makers: no reader. [I]
 
-What each maker's MakerNote gives in a JPEG, the focus point among it, is
-in those pages.
+What each maker's MakerNote gives in a JPEG, the focus point and the
+camera settings among it, is in those pages.
+
+**The camera settings come through the same paths** as in a raw file:
+the Exif tags of section 4 from the Exif segment, and the MakerNote's
+settings tags from its IFD, in the layouts above. On the D5300, D70 and
+five Sony files they are the tags the
+[NEF notes](../nef/makernote-and-metadata.md#87-camera-settings) and the
+[ARW notes](../arw/makernote-and-metadata.md#97-camera-settings) record,
+with the values listed there. [F] The three stripped Z 9 JPEGs of the
+[fixtures](../../../tests/fixtures/README.md), shot with the
+maintainer's own Z 9 on firmware `Ver.05.30` and made public as
+fixtures, keep the camera's MakerNote whole, all 75 entries, beside the
+two stripped NEF files of the same body and firmware and the Z 9 NEF
+samples of raw.pixls.us (firmware `Ver.01.00`, 73 entries on the
+lossless file, 72 on the HE and HE\* ones). [F]
+
+- Every settings tag of the NEF notes is in the JPEG, with the NEF's
+  types: WhiteBalance (`AUTO0`), WhiteBalanceFineTune (0x003F),
+  ColorTemperatureAuto, ShutterMode (16), CropHiSpeed (11, 2 and 6 on
+  the FX, DX and 16:9 files), ImageSizeRAW, ColorSpace (1) and FlashMode.
+  [F]
+- The JPEG lacks what only the raw file needs, or what the camera
+  writes only beside raw data: the PreviewIFD (0x0011), CropArea
+  (0x0045, as [ADR015](../../architecture-decisions/adr015-the-focus-point-of-a-crop-mode-jpeg.md)
+  records), 0x0046 and 0x00A4, which the NEF fixtures keep, and against
+  the raw.pixls.us NEF files also the decoding tags (0x003D, 0x008C,
+  and 0x0096 on the lossless file) and 0x0051, 0x0058. [F] The JPEG has eleven tags those older
+  NEF files lack (0x0016, 0x0035, 0x0057, 0x0059 to 0x005D, 0x005F,
+  0x0062, 0x00A2); whether they come with the format or with the newer
+  firmware, no public file can say. [I]
+- **ImageSizeRAW (0x003E) is 1 on the two full-size JPEGs and 2 on the
+  middle-size one** [F]: in a JPEG it follows the JPEG's own size on
+  these files, or the raw size the camera was set to beside it; a
+  JPEG-only shot at another size, and its raw counterpart, would tell
+  which. [I] On the maintainer's own D7200 JPEGs it is 1 on 4,310 and
+  0 on 506, presumably those taken without a raw, which points to the
+  raw size. [F][I] Quality (0x0004) is `FINE` or `BASIC`, the JPEG's
+  compression, where the NEF's says `RAW`. [F]
 
 ## 11. The camera files, segment by segment
 
@@ -436,7 +529,9 @@ decided, as steps. [I]
    lossless; each takes IFD0's orientation.
 6. **The metadata** comes from the standard tags, then the MakerNote by
    IFD0's Make, as for a NEF or an ARW; the image size is the main frame
-   header's, and there is no raw size.
+   header's, and there is no raw size. The camera settings come the same
+   way, but a JPEG gives no raw image size, whatever its MakerNote's
+   ImageSizeRAW says (section 10).
 7. **The focus point** is kept only when its frame has the JPEG's aspect
    ratio, to within one pixel of rounding in either size:
    `|fw × jh − fh × jw|` at most the longest of `fw`, `fh`, `jw` and
@@ -502,5 +597,7 @@ decided, as steps. [I]
 [5] The eight camera-original JPEGs from Wikimedia Commons listed in
     [test-data.md](test-data.md#2-the-sample-files), walked byte by byte
     with a script of the maintainer's own in October 2026. **[F]**
+[6] ExifTool, EXIF tags, https://exiftool.org/TagNames/EXIF.html, read
+    as documentation. **[S]**
 
 All pages were retrieved in October 2026.

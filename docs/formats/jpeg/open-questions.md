@@ -100,6 +100,18 @@ affects; [test-data.md](test-data.md) describes the files.
   the JPEG reader is for. [I]
 - **Other makers.** No camera-original Fujifilm, Panasonic or phone JPEG
   with a usable licence was found; Canon's MakerNote is not read. [S]
+- **ImageSizeRAW in a camera JPEG.** On the three stripped Z 9 JPEGs it
+  is 1 on the full-size files and 2 on the middle-size one, so it follows
+  either the JPEG's size or the raw size set beside it. A JPEG-only shot
+  at a smaller size, and a RAW+JPEG pair at different sizes, would tell
+  which; the maintainer's own D7200 JPEGs, with 0 on 506 of them, point
+  to the raw size
+  ([section 10](container-and-metadata.md#10-makernotes-in-a-jpeg)). [F]
+- **An Adobe RGB camera JPEG and a fired flash.** All eight files are
+  sRGB (`R98`, or no InteropIndex on the D70's), and the flash
+  fired on none, so neither InteropIndex `R03` nor a fired Flash value
+  is checked on a public JPEG; the maintainer's own D3200 JPEGs show
+  `R03`. [F]
 
 ## 3. Sources not consulted
 
