@@ -8,6 +8,13 @@
 //! reads are listed, in the order of their numbers: a tag joins this list
 //! with its first reader.
 
+/// The rule the file follows, as text (InteroperabilityIndex), read from
+/// the Interoperability IFD, the one IFD where tag 0x0001 has this meaning:
+/// `R98` for a DCF basic file and `R03` for a DCF option file, which is how
+/// a file in Adobe RGB names its colour space when its ColorSpace says only
+/// "uncalibrated".
+pub(crate) const INTEROP_INDEX: u16 = 0x0001;
+
 /// Whether the image an IFD describes is the full-resolution image, a
 /// reduced-resolution copy of it, or a page of several (NewSubfileType): a
 /// bit field, 0 for the full-resolution image.
@@ -100,6 +107,12 @@ pub(crate) const F_NUMBER: u16 = 0x829D;
 /// read from IFD0.
 pub(crate) const EXIF_IFD: u16 = 0x8769;
 
+/// How the camera chose the exposure, as a SHORT (ExposureProgram), read
+/// from the Exif IFD: 1 manual, 2 program, 3 aperture priority, 4 shutter
+/// priority, and 5 to 8 programs biased toward a kind of subject; 0 is
+/// "not defined".
+pub(crate) const EXPOSURE_PROGRAM: u16 = 0x8822;
+
 /// The sensitivity the picture was taken at, as a SHORT or a LONG
 /// (PhotographicSensitivity, called ISOSpeedRatings before Exif 2.3), read
 /// from the Exif IFD: the ISO. Exif writes 65535 for a sensitivity of 65535
@@ -131,6 +144,25 @@ pub(crate) const OFFSET_TIME_ORIGINAL: u16 = 0x9011;
 /// 0/6 means no compensation.
 pub(crate) const EXPOSURE_BIAS_VALUE: u16 = 0x9204;
 
+/// How the camera metered the light, as a SHORT (MeteringMode), read from
+/// the Exif IFD: 1 to 6 for average, centre-weighted average, spot,
+/// multi-spot, pattern and partial metering, and 255 for another mode; 0
+/// is "unknown".
+pub(crate) const METERING_MODE: u16 = 0x9207;
+
+/// The kind of light the white balance was set for, as a SHORT
+/// (LightSource), read from the Exif IFD: such as 1 daylight, 3 tungsten
+/// or 11 shade; 0 is "unknown". It says which manual white balance was
+/// chosen when [`WHITE_BALANCE`] says manual.
+pub(crate) const LIGHT_SOURCE: u16 = 0x9208;
+
+/// The flash, as a SHORT of bits (Flash), read from the Exif IFD: bit 0
+/// whether it fired, bits 3 and 4 its mode, bit 5 that the camera has no
+/// flash function; bits 1, 2 and 6 say whether its return light was
+/// detected and whether red-eye reduction was on, and bits 7 to 15 are
+/// reserved.
+pub(crate) const FLASH: u16 = 0x9209;
+
 /// The focal length the picture was taken at, in millimetres, as a
 /// fraction of type RATIONAL (FocalLength), read from the Exif IFD: the
 /// lens's actual focal length, such as 180/10, not its 35 mm equivalent.
@@ -145,12 +177,22 @@ pub(crate) const SUB_SEC_TIME_ORIGINAL: u16 = 0x9291;
 /// block's bytes.
 pub(crate) const MAKER_NOTE: u16 = 0x927C;
 
+/// The colour space of the picture, as a SHORT (ColorSpace), read from the
+/// Exif IFD: 1 for sRGB, and 65535, "uncalibrated", for any other, which
+/// the [`INTEROP_INDEX`] may then name.
+pub(crate) const COLOR_SPACE: u16 = 0xA001;
+
 /// The offset of the Interoperability IFD (Interoperability IFD Pointer),
 /// read from the Exif IFD: the IFD whose InteroperabilityIndex names the
 /// rule the file follows, such as `R03` for a DCF option file, which is how
 /// a file says it is in Adobe RGB when its ColorSpace says only
 /// "uncalibrated".
 pub(crate) const INTEROP_IFD: u16 = 0xA005;
+
+/// Whether the white balance was set automatically or by hand, as a SHORT
+/// (WhiteBalance), read from the Exif IFD: 0 auto, 1 manual, the kind of
+/// light then in [`LIGHT_SOURCE`].
+pub(crate) const WHITE_BALANCE: u16 = 0xA403;
 
 /// The focal length in 35 mm terms, in whole millimetres, as a SHORT
 /// (FocalLengthIn35mmFilm), read from the Exif IFD: the focal length that

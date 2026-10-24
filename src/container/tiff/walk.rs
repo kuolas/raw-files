@@ -161,10 +161,11 @@ pub(crate) struct Tree {
 }
 
 // The NEF reader's claim reads IFD0, the preview finder goes through every
-// IFD of the tree, and the metadata and MakerNote readers read the Exif
-// IFD; nothing reads the number of IFDs, an IFD by its position or the
-// Interoperability IFD yet. Each `expect` fails the build once its method
-// has a caller, so it is then removed rather than left behind.
+// IFD of the tree, the metadata and MakerNote readers read the Exif IFD,
+// and the metadata reader reads the Interoperability IFD; nothing reads
+// the number of IFDs or an IFD by its position yet. Each `expect` fails
+// the build once its method has a caller, so it is then removed rather
+// than left behind.
 impl Tree {
     /// IFD0, the IFD the header points to.
     pub(crate) fn ifd0(&self) -> &Ifd {
@@ -199,7 +200,6 @@ impl Tree {
     /// no Interoperability IFD tag or one that cannot be read or followed,
     /// and when the IFD the tag leads to is not in the tree: one that
     /// cannot be parsed, or a SubIFD the walk left out.
-    #[cfg_attr(not(test), expect(dead_code, reason = "nothing reads this method yet"))]
     pub(crate) fn interop(&self) -> Option<&Ifd> {
         self.interop
             .and_then(|i| self.ifds.get(i))

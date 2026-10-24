@@ -77,15 +77,15 @@ fn claims<R: Read + Seek>(src: &mut Source<R>, tree: &Tree) -> Result<bool> {
 /// at; the MakerNote and its preview are read within `limits`. The
 /// metadata is what the shared TIFF metadata reader reads from the
 /// standard tags: the camera, the capture time, the orientation, the
-/// exposure, the lens and the sizes. When there is a MakerNote, its
-/// CropArea then gives the visible image size, unless the raw IFD records
-/// a default crop, and it gives the serial number, the ISO and the lens's
-/// range when the standard tags gave none, as on bodies before the D780
-/// and the Z 6, and the capture time's offset from UTC, from its WorldTime,
-/// when the standard tags gave a capture time without one, as on bodies
-/// before the D850; and it gives the focus point, from its AFInfo2, which
-/// no standard tag records, placed on CropArea on a crop, as on a raw
-/// file's picture ([`Picture::Raw`], [`nikon::metadata`]).
+/// exposure, the camera's settings, the lens and the sizes. When there is
+/// a MakerNote, its CropArea then gives the visible image size, unless the
+/// raw IFD records a default crop, and it gives the serial number, the ISO
+/// and the lens's range when the standard tags gave none, as on bodies
+/// before the D780 and the Z 6, and the capture time's offset from UTC,
+/// from its WorldTime, when the standard tags gave a capture time without
+/// one, as on bodies before the D850; and it gives the focus point, from
+/// its AFInfo2, which no standard tag records, placed on CropArea on a
+/// crop, as on a raw file's picture ([`Picture::Raw`], [`nikon::metadata`]).
 ///
 /// # Errors
 ///

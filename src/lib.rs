@@ -21,9 +21,11 @@
 //! Nikon and Sony cameras, from what the maker's MakerNote records that
 //! they lack: the camera's make, model and serial number, the software
 //! that wrote the file, the capture time, the orientation, the exposure,
-//! with the focal length in 35 mm terms, the lens, the sizes of the raw
-//! data, which a JPEG lacks, and of the visible image, and where the camera
-//! focused ([`Metadata::focus`]). See the
+//! with the focal length in 35 mm terms, the camera's settings that Exif
+//! records (the exposure program, the metering mode, the flash, the white
+//! balance mode and the colour space, in [`CameraSettings`]), the lens, the
+//! sizes of the raw data, which a JPEG lacks, and of the visible image, and
+//! where the camera focused ([`Metadata::focus`]). See the
 //! [roadmap](https://github.com/kuolas/raw-files/blob/master/docs/ROADMAP.md)
 //! for the plan and the
 //! [architecture](https://github.com/kuolas/raw-files/blob/master/docs/ARCHITECTURE.md)
