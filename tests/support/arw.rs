@@ -12,16 +12,17 @@
 //!
 //! - [`arw4_file`] is a file of the bodies that write version 4.0 or later
 //!   of Sony's file format, an ILCE-7M4's. IFD0 is a reduced-resolution
-//!   image (NewSubfileType 1) whose Make is `SONY` and Model `ILCE-7M4`,
-//!   with the Orientation given; it declares a JPEG of 1616 by 1080 pixels
-//!   through its JPEGInterchangeFormat and JPEGInterchangeFormatLength tags,
-//!   with Compression 6 (old-style JPEG), and points at the raw SubIFD and
-//!   at an Exif IFD that holds the ExifVersion, `0232`; the capture time,
-//!   as DateTimeOriginal `2023:10:19 16:13:48`, SubSecTimeOriginal `776`
-//!   and OffsetTimeOriginal `+02:00`; and the exposure, as ExposureTime
-//!   `1/50`, FNumber `56/10` and FocalLength `500/10` (RATIONAL),
-//!   ExposureBiasValue `0/10` (SRATIONAL), PhotographicSensitivity 250
-//!   (SHORT) and RecommendedExposureIndex 250 (LONG); and the lens, as
+//!   image (NewSubfileType 1) whose Make is `SONY`, Model `ILCE-7M4` and
+//!   Software `ILCE-7M4 v2.00`, with the Orientation given; it declares a
+//!   JPEG of 1616 by 1080 pixels through its JPEGInterchangeFormat and
+//!   JPEGInterchangeFormatLength tags, with Compression 6 (old-style JPEG),
+//!   and points at the raw SubIFD and at an Exif IFD that holds the
+//!   ExifVersion, `0232`; the capture time, as DateTimeOriginal
+//!   `2023:10:19 16:13:48`, SubSecTimeOriginal `776` and OffsetTimeOriginal
+//!   `+02:00`; and the exposure, as ExposureTime `1/50`, FNumber `56/10`
+//!   and FocalLength `500/10` (RATIONAL), ExposureBiasValue `0/10`
+//!   (SRATIONAL), PhotographicSensitivity 250 and FocalLengthIn35mmFilm 50
+//!   (SHORT), and RecommendedExposureIndex 250 (LONG); and the lens, as
 //!   LensModel `FE 50mm F2.5 G` and LensSpecification `500/10`, `500/10`,
 //!   `25/10`, `25/10`; and Sony's MakerNote, which records the focus point:
 //!   a directory of Sony's tags at the start of its block, without a
@@ -62,13 +63,15 @@
 //!   ILCE-7M4 medium raw sample 6930: 5120 by 3584 pixels, cropped from 8,
 //!   4 to 4608 by 3072.
 //! - [`arw2_file`] is a file of an ARW 2 body, an SLT-A99V's: IFD0 and IFD1
-//!   as above, with that Model, and no IFD2. The raw SubIFD is the
+//!   as above, with that Model and IFD0's Software `SLT-A99V v1.02`, the
+//!   public SLT-A99V sample's, and no IFD2. The raw SubIFD is the
 //!   full-resolution image, 6024 by 4024 pixels, of 12-bit colour filter
 //!   array samples, with Sony's compressed raw (Compression 32767), in one
 //!   strip of 64 bytes that are not a JPEG stream and stand for the raw
 //!   data.
 //! - [`arq_file`] is a pixel-shift composite that Sony's software made from
-//!   the frames of an ILCE-7RM3: an ARW 2 file whose raw SubIFD holds
+//!   the frames of an ILCE-7RM3: an ARW 2 file, whose IFD0's Software is
+//!   `ILCE-7RM3 v3.00`, the public ARQ sample's, and whose raw SubIFD holds
 //!   linear raw data (PhotometricInterpretation 32892), every colour at
 //!   every pixel, four 16-bit samples per pixel, uncompressed.
 //! - [`sr2_file`] is a file of the DSC-R1: IFD0 declares a JPEG of 640 by
@@ -84,7 +87,8 @@
 //!   480 pixels, with Compression 6. Neither IFD has a NewSubfileType, and
 //!   there are no SubIFDs.
 //! - [`a100_file`] is a file of the DSLR-A100, Sony's first ARW, version
-//!   1.0. Its Make is `SONY` padded with eleven spaces. IFD0 declares a
+//!   1.0. Its Make is `SONY` padded with eleven spaces, and IFD0's Software
+//!   is `DSLR-A100 v1.04`, the public DSLR-A100 sample's. IFD0 declares a
 //!   JPEG of 640 by 480 pixels, but its ImageWidth and ImageLength say 3872
 //!   by 2592, the raw data's size; and its SubIFDs tag holds not the
 //!   offset of an IFD but that of the raw data, whose bytes do not hold
@@ -93,12 +97,14 @@
 //!
 //! The metadata: every file holds its Make and Model in IFD0, and every
 //! file but the SRF holds them again in IFD1, with the Orientation in both;
-//! the SRF has no Orientation. Only the two ARW 4 files hold a capture
-//! time, an exposure, a lens and a MakerNote, which records the focus
-//! point, and no file holds a serial number. Every file but the A100 has
-//! an IFD that describes its raw data and gives its size; only the two
-//! ARW 4 files have a default crop. Every text value is ASCII ending in
-//! one NUL.
+//! the SRF has no Orientation. IFD0 holds the Software too on every file
+//! but the SR2 and the SRF, whose bodies write none: the body's name and
+//! firmware version, as Sony writes them. Only the two ARW 4 files hold a
+//! capture time, an exposure, its focal length in 35 mm terms among it, a
+//! lens and a MakerNote, which records the focus point, and no file holds
+//! a serial number. Every file but the A100 has an IFD that describes its
+//! raw data and gives its size; only the two ARW 4 files have a default
+//! crop. Every text value is ASCII ending in one NUL.
 //!
 //! Every JPEG preview is a baseline stub. Each builder returns where it put
 //! the JPEGs and the raw data, as an [`ArwBlobs`], so that a test can check
@@ -133,6 +139,8 @@ const ORIENTATION: u16 = 0x0112;
 const SAMPLES_PER_PIXEL: u16 = 0x0115;
 /// How many bytes each strip takes (StripByteCounts).
 const STRIP_BYTE_COUNTS: u16 = 0x0117;
+/// The firmware or program that wrote the file, as ASCII text (Software).
+const SOFTWARE: u16 = 0x0131;
 /// The width of each tile in pixels (TileWidth).
 const TILE_WIDTH: u16 = 0x0142;
 /// The height of each tile in pixels (TileLength).
@@ -169,6 +177,9 @@ const OFFSET_TIME_ORIGINAL: u16 = 0x9011;
 const EXPOSURE_BIAS_VALUE: u16 = 0x9204;
 /// The focal length in millimetres, as a RATIONAL (FocalLength).
 const FOCAL_LENGTH: u16 = 0x920A;
+/// The focal length in 35 mm terms, in whole millimetres, as a SHORT
+/// (FocalLengthIn35mmFilm).
+const FOCAL_LENGTH_IN_35MM_FILM: u16 = 0xA405;
 /// The lens's focal and aperture range, as four RATIONALs
 /// (LensSpecification).
 const LENS_SPECIFICATION: u16 = 0xA432;
@@ -369,20 +380,26 @@ pub fn arw4_medium_file(order: Order) -> (Built, ArwBlobs) {
 /// The ARW 2 layout, in byte order `order`, with IFD0's Orientation
 /// `orientation` (an EXIF value, 1 to 8).
 pub fn arw2_file(order: Order, orientation: u16) -> (Built, ArwBlobs) {
-    arw2(order, orientation, "SLT-A99V", |builder, raw| {
-        builder
-            .long(raw, IMAGE_WIDTH, &[6024])
-            .long(raw, IMAGE_LENGTH, &[4024])
-            .short(raw, COMPRESSION, &[SONY_RAW])
-            .short(raw, PHOTOMETRIC_INTERPRETATION, &[CFA])
-            .short(raw, BITS_PER_SAMPLE, &[12])
-            .short(raw, SAMPLES_PER_PIXEL, &[1]);
-    })
+    arw2(
+        order,
+        orientation,
+        "SLT-A99V",
+        "SLT-A99V v1.02",
+        |builder, raw| {
+            builder
+                .long(raw, IMAGE_WIDTH, &[6024])
+                .long(raw, IMAGE_LENGTH, &[4024])
+                .short(raw, COMPRESSION, &[SONY_RAW])
+                .short(raw, PHOTOMETRIC_INTERPRETATION, &[CFA])
+                .short(raw, BITS_PER_SAMPLE, &[12])
+                .short(raw, SAMPLES_PER_PIXEL, &[1]);
+        },
+    )
 }
 
 /// The ARQ layout, in byte order `order`, with no rotation.
 pub fn arq_file(order: Order) -> (Built, ArwBlobs) {
-    arw2(order, 1, "ILCE-7RM3", |builder, raw| {
+    arw2(order, 1, "ILCE-7RM3", "ILCE-7RM3 v3.00", |builder, raw| {
         builder
             .long(raw, IMAGE_WIDTH, &[8000])
             .long(raw, IMAGE_LENGTH, &[5320])
@@ -477,6 +494,7 @@ pub fn a100_file(order: Order) -> (Built, ArwBlobs) {
     // value sixteen bytes.
     preview_ifd(&mut builder, ifd0, "SONY           ", "DSLR-A100", 1);
     builder
+        .ascii(ifd0, SOFTWARE, "DSLR-A100 v1.04")
         .long(ifd0, IMAGE_WIDTH, &[u32::from(A100_TAG_SIZE.0)])
         .long(ifd0, IMAGE_LENGTH, &[u32::from(A100_TAG_SIZE.1)]);
     let ifd0_jpeg = jpeg(&mut builder, ifd0, A100_JPEG);
@@ -514,6 +532,7 @@ fn arw4(
     let ifd2 = builder.ifd();
 
     preview_ifd(&mut builder, ifd0, "SONY", "ILCE-7M4", orientation);
+    builder.ascii(ifd0, SOFTWARE, "ILCE-7M4 v2.00");
     let ifd0_jpeg = jpeg(&mut builder, ifd0, IFD0_JPEG);
     builder
         .subifds(ifd0, &[raw])
@@ -530,6 +549,7 @@ fn arw4(
         .long(exif, RECOMMENDED_EXPOSURE_INDEX, &[250])
         .srational(exif, EXPOSURE_BIAS_VALUE, &[(0, 10)])
         .rational(exif, FOCAL_LENGTH, &[(500, 10)])
+        .short(exif, FOCAL_LENGTH_IN_35MM_FILM, &[50])
         .rational(
             exif,
             LENS_SPECIFICATION,
@@ -618,12 +638,14 @@ fn arw4_makernote(builder: &mut TiffBuilder, order: Order) -> IfdId {
     makernote
 }
 
-/// The ARW 2 layout of a body whose Model is `model`, whose raw SubIFD, in
-/// one strip, holds what `raw_tags` adds.
+/// The ARW 2 layout of a body whose Model is `model` and whose IFD0's
+/// Software is `software`, whose raw SubIFD, in one strip, holds what
+/// `raw_tags` adds.
 fn arw2(
     order: Order,
     orientation: u16,
     model: &str,
+    software: &str,
     raw_tags: impl FnOnce(&mut TiffBuilder, IfdId),
 ) -> (Built, ArwBlobs) {
     let mut builder = TiffBuilder::new(order);
@@ -633,6 +655,7 @@ fn arw2(
     let ifd1 = builder.ifd();
 
     preview_ifd(&mut builder, ifd0, "SONY", model, orientation);
+    builder.ascii(ifd0, SOFTWARE, software);
     let ifd0_jpeg = jpeg(&mut builder, ifd0, IFD0_JPEG);
     builder
         .subifds(ifd0, &[raw])

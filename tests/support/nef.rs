@@ -17,11 +17,12 @@
 //! The Z 9 layout, which [`z9_file`] writes:
 //!
 //! - IFD0 is a reduced-resolution image (NewSubfileType 1) whose Make is
-//!   `NIKON CORPORATION` and Model `NIKON Z 9`, with the Orientation
-//!   given. It declares a small JPEG, 160 by 120 pixels, through its
-//!   JPEGInterchangeFormat and JPEGInterchangeFormatLength tags, with
-//!   Compression 6 (old-style JPEG); it points at six SubIFDs, in the
-//!   order below, and at the Exif IFD.
+//!   `NIKON CORPORATION`, Model `NIKON Z 9` and Software `Ver.01.00`, the
+//!   firmware of the public Z 9 sample 5147, padded with NULs to 13 bytes
+//!   as that sample stores it, with the Orientation given. It declares a
+//!   small JPEG, 160 by 120 pixels, through its JPEGInterchangeFormat and
+//!   JPEGInterchangeFormatLength tags, with Compression 6 (old-style JPEG);
+//!   it points at six SubIFDs, in the order below, and at the Exif IFD.
 //! - SubIFD0 is a reduced-resolution image that declares the full-size
 //!   JPEG, 8256 by 5504 pixels, the same way.
 //! - SubIFD1 is the raw data: the full-resolution image (NewSubfileType 0),
@@ -43,37 +44,37 @@
 //! - The Exif IFD holds the ExifVersion, `0232`; the capture time, as
 //!   DateTimeOriginal `2022:02:05 13:46:41`, SubSecTimeOriginal `85` and
 //!   OffsetTimeOriginal `-05:00`; the exposure, as ExposureTime `10/3200`,
-//!   FNumber `900/100` and FocalLength `180/10` (RATIONAL), ExposureBiasValue
-//!   `0/6` (SRATIONAL), PhotographicSensitivity 64 and SensitivityType 2
-//!   (SHORT), and RecommendedExposureIndex 64 (LONG); these are the values
-//!   of the public Z 9 sample 5147 of raw.pixls.us, each of the type it
-//!   has there. It holds the lens of that sample too: LensMake `NIKON`;
-//!   LensModel `NIKKOR Z 14-30mm f/4 S`, padded with NULs to 65 bytes as
-//!   the Z 9 stores it; and LensSpecification `140/10`, `300/10`,
-//!   `400/100`, `400/100`. The BodySerialNumber `1234567` and the
-//!   LensSerialNumber `12345678` are made up, since no real serial number
-//!   is copied here; the lens's has the two spaces and the NUL after its
-//!   eight digits that the Z 9 writes, 11 bytes in all. Last, the Exif IFD
-//!   holds the MakerNote, whose value is a block [`nikon_makernote`]
-//!   writes: Nikon's own metadata, here only its version, `0211`, its
-//!   focus mode, its crop area, its AFInfo2 and its PreviewIFD, and none of
-//!   the serial number, ISO and lens tags of older bodies. The focus mode
-//!   is the FocusMode `AF-S  ` (ASCII), single-servo autofocus padded with
-//!   spaces to six characters, as the bodies write an autofocus mode. The
-//!   crop area is the visible image, the raw data inside its border: 8256
-//!   by 5504 pixels starting 12 columns and 8 rows into the raw, the
-//!   CropArea `[12, 8, 8256, 5504]` of the public Z 9 samples 5146 to
-//!   5148, as four SHORTs. AFInfo2 is the 80 UNDEFINED bytes of version
-//!   `0400` that those samples record, which [`z9_af_info2`] writes: a
-//!   focus area of 291 by 323 pixels centred at (4905, 2461) in a frame of
-//!   8256 by 5504, with focus confirmed. The PreviewIFD declares a small
-//!   JPEG of 640 by 424 pixels. The MakerNote, AFInfo2's numbers included,
-//!   is in the file's byte order unless the file is built with
-//!   [`z9_file_with`], which may give it the other.
+//!   FNumber `900/100` and FocalLength `180/10` (RATIONAL),
+//!   ExposureBiasValue `0/6` (SRATIONAL), PhotographicSensitivity 64,
+//!   SensitivityType 2 and FocalLengthIn35mmFilm 18 (SHORT), and
+//!   RecommendedExposureIndex 64 (LONG); these are the values of the public
+//!   Z 9 sample 5147 of raw.pixls.us, each of the type it has there. It
+//!   holds the lens of that sample too: LensMake `NIKON`; LensModel `NIKKOR
+//!   Z 14-30mm f/4 S`, padded with NULs to 65 bytes as the Z 9 stores it;
+//!   and LensSpecification `140/10`, `300/10`, `400/100`, `400/100`. The
+//!   BodySerialNumber `1234567` and the LensSerialNumber `12345678` are
+//!   made up, since no real serial number is copied here; the lens's has
+//!   the two spaces and the NUL after its eight digits that the Z 9 writes,
+//!   11 bytes in all. Last, the Exif IFD holds the MakerNote, whose value
+//!   is a block [`nikon_makernote`] writes: Nikon's own metadata, here only
+//!   its version, `0211`, its focus mode, its crop area, its AFInfo2 and
+//!   its PreviewIFD, and none of the serial number, ISO and lens tags of
+//!   older bodies. The focus mode is the FocusMode `AF-S  ` (ASCII),
+//!   single-servo autofocus padded with spaces to six characters, as the
+//!   bodies write an autofocus mode. The crop area is the visible image,
+//!   the raw data inside its border: 8256 by 5504 pixels starting 12
+//!   columns and 8 rows into the raw, the CropArea `[12, 8, 8256, 5504]` of
+//!   the public Z 9 samples 5146 to 5148, as four SHORTs. AFInfo2 is the 80
+//!   UNDEFINED bytes of version `0400` that those samples record, which
+//!   [`z9_af_info2`] writes: a focus area of 291 by 323 pixels centred at
+//!   (4905, 2461) in a frame of 8256 by 5504, with focus confirmed. The
+//!   PreviewIFD declares a small JPEG of 640 by 424 pixels. The MakerNote,
+//!   AFInfo2's numbers included, is in the file's byte order unless the
+//!   file is built with [`z9_file_with`], which may give it the other.
 //!
 //! Every text value is ASCII ending in one NUL, with no padding, as the
-//! Z 9 writes it, but for the lens's model and serial number and the focus
-//! mode, padded as above.
+//! Z 9 writes it, but for the software, the lens's model and serial number
+//! and the focus mode, padded as above.
 //!
 //! The D300 layout, which [`d300_file`] writes, is that of the public D300
 //! sample 928 of raw.pixls.us, which is big-endian, file and MakerNote
@@ -81,12 +82,14 @@
 //! tests and the fuzz seeds can have both:
 //!
 //! - IFD0 is a reduced-resolution image (NewSubfileType 1) whose Make is
-//!   `NIKON CORPORATION` and Model `NIKON D300`, with the Orientation
-//!   given. Its image is an uncompressed thumbnail (Compression 1), 160 by
-//!   120 pixels of RGB (PhotometricInterpretation 2), three 8-bit samples
-//!   per pixel, in one strip, which is not a JPEG and so not a preview. The
-//!   strip is 64 zero bytes that stand for the sample's 57,600. IFD0 points
-//!   at two SubIFDs, in the order below, and at the Exif IFD.
+//!   `NIKON CORPORATION`, Model `NIKON D300` and Software `Ver.1.10 `, the
+//!   sample's firmware with the trailing space the Nikon DSLRs write, with
+//!   the Orientation given. Its image is an uncompressed thumbnail
+//!   (Compression 1), 160 by 120 pixels of RGB (PhotometricInterpretation
+//!   2), three 8-bit samples per pixel, in one strip, which is not a JPEG
+//!   and so not a preview. The strip is 64 zero bytes that stand for the
+//!   sample's 57,600. IFD0 points at two SubIFDs, in the order below, and
+//!   at the Exif IFD.
 //! - SubIFD0 is a reduced-resolution image that declares the full-size
 //!   JPEG, 4288 by 2848 pixels, through its JPEGInterchangeFormat and
 //!   JPEGInterchangeFormatLength tags, with Compression 6.
@@ -100,31 +103,32 @@
 //!   made up for the fixture, and SubSecTimeOriginal `34`, with no
 //!   OffsetTimeOriginal; the exposure, as ExposureTime `10/100`, FNumber
 //!   `71/10` and FocalLength `500/10` (RATIONAL), ExposureBiasValue `0/6`
-//!   (SRATIONAL) and PhotographicSensitivity 200 (SHORT), with no other
-//!   sensitivity tag; these are the sample's values, each of the type it
-//!   has there. Like the sample, it holds no BodySerialNumber and no lens
-//!   tag. Last, it holds the MakerNote, a block [`nikon_makernote`]
-//!   writes, of the version `0210`: its MakerNoteVersion, `0210`; its ISO,
-//!   `[0, 200]` (SHORT); its FocusMode `MANUAL` (ASCII), the sample's, a
-//!   manual-focus shot; its SerialNumber `7654321` (ASCII), made up, as
-//!   no real serial number is copied here; its WorldTime, a time zone of
-//!   60 minutes, no daylight saving time and the date format 0, the
-//!   sample's; its Lens, `180/10`, `700/10`, `35/10`, `45/10` (RATIONAL),
-//!   the sample's 18-70 mm lens of f/3.5 to f/4.5; its AFInfo2, the
-//!   sample's version `0100` and 26 zero bytes (UNDEFINED), a shot through
-//!   the viewfinder, which records a zero frame and no position; and its
-//!   PreviewIFD, which declares a small JPEG of 570 by 375 pixels. The
-//!   MakerNote is in the file's byte order.
+//!   (SRATIONAL), and PhotographicSensitivity 200 and FocalLengthIn35mmFilm
+//!   75 (SHORT), with no other sensitivity tag; these are the sample's
+//!   values, each of the type it has there. Like the sample, it holds no
+//!   BodySerialNumber and no lens tag. Last, it holds the MakerNote, a
+//!   block [`nikon_makernote`] writes, of the version `0210`: its
+//!   MakerNoteVersion, `0210`; its ISO, `[0, 200]` (SHORT); its FocusMode
+//!   `MANUAL` (ASCII), the sample's, a manual-focus shot; its SerialNumber
+//!   `7654321` (ASCII), made up, as no real serial number is copied here;
+//!   its WorldTime, a time zone of 60 minutes, no daylight saving time and
+//!   the date format 0, the sample's; its Lens, `180/10`, `700/10`,
+//!   `35/10`, `45/10` (RATIONAL), the sample's 18-70 mm lens of f/3.5 to
+//!   f/4.5; its AFInfo2, the sample's version `0100` and 26 zero bytes
+//!   (UNDEFINED), a shot through the viewfinder, which records a zero frame
+//!   and no position; and its PreviewIFD, which declares a small JPEG of
+//!   570 by 375 pixels. The MakerNote is in the file's byte order.
 //!
 //! Every text value of the D300 file is ASCII ending in one NUL, with no
-//! padding.
+//! padding but the Software's trailing space.
 //!
 //! The Z6III layout, which [`z6iii_file`] writes, is that of the public
 //! Z6III sample 7808 of raw.pixls.us, a 1:1 crop, which is little-endian,
 //! file and MakerNote alike; the builder takes the byte order, as the
 //! others do, and lays the file out as the Z 9's, with these differences:
 //!
-//! - IFD0's Model is `NIKON Z6_3`. Its small JPEG is the Z 9's 160 by 120.
+//! - IFD0's Model is `NIKON Z6_3`, and its Software the Z 9's, as the
+//!   sample's is. Its small JPEG is the Z 9's 160 by 120.
 //! - SubIFD0 declares the full-size JPEG of the cropped picture, 4032 by
 //!   4032 pixels, and SubIFD2 the medium one, 1080 by 1080.
 //! - SubIFD1 is the raw data, 4048 by 4040 pixels, the stored pixels of the
@@ -137,11 +141,11 @@
 //!   SubSecTimeOriginal `42` and OffsetTimeOriginal `-04:00`; ExposureTime
 //!   `10/1000`, FNumber `900/100` and FocalLength `860/10`,
 //!   ExposureBiasValue `0/6`, PhotographicSensitivity 200, SensitivityType
-//!   2 and RecommendedExposureIndex 200; LensMake `NIKON`, LensModel
-//!   `NIKKOR Z 24-200mm f/4-6.3 VR`, padded with NULs to 65 bytes as the
-//!   Z 9's, and LensSpecification `240/10`, `2000/10`, `400/100`,
-//!   `630/100`. The BodySerialNumber `2345678` and the LensSerialNumber
-//!   `23456789`, padded as the Z 9's, are made up.
+//!   2, FocalLengthIn35mmFilm 111 and RecommendedExposureIndex 200;
+//!   LensMake `NIKON`, LensModel `NIKKOR Z 24-200mm f/4-6.3 VR`, padded
+//!   with NULs to 65 bytes as the Z 9's, and LensSpecification `240/10`,
+//!   `2000/10`, `400/100`, `630/100`. The BodySerialNumber `2345678` and
+//!   the LensSerialNumber `23456789`, padded as the Z 9's, are made up.
 //! - The MakerNote, of the version `0211`, holds the FocusMode `AF-S  `;
 //!   the CropHiSpeed `[17, 6064, 4040, 4048, 4040, 1008, 0]` (SHORT), the
 //!   1:1 crop of a 6064 by 4040 picture; the CropArea `[8, 4, 4032, 4032]`;
@@ -156,7 +160,8 @@
 //! alike; the builder takes the byte order, as the others do:
 //!
 //! - IFD0 is a reduced-resolution image (NewSubfileType 1) whose Make is
-//!   `NIKON CORPORATION` and Model `NIKON D1H`, with no Orientation. Its
+//!   `NIKON CORPORATION`, Model `NIKON D1H` and Software `Ver.1.00 `, the
+//!   sample's firmware with its trailing space, with no Orientation. Its
 //!   image is an uncompressed thumbnail, 160 by 120 pixels of RGB, three
 //!   8-bit samples per pixel, in one strip of 64 zero bytes that stand for
 //!   the sample's 57,600, which is not a JPEG and so not a preview. IFD0
@@ -166,23 +171,23 @@
 //!   uncompressed (Compression 1), in one strip of 64 zero bytes that stand
 //!   for the sample's 67 strips. Its ImageWidth and ImageLength are LONGs,
 //!   and it holds no default crop.
-//! - The Exif IFD holds the sample's values, each of the type it has
-//!   there: DateTimeOriginal `2022:03:24 10:09:27` and SubSecTimeOriginal
-//!   `01`, with no OffsetTimeOriginal; ExposureTime `10/8000`, FNumber
-//!   `45/10` and FocalLength `600/10` (RATIONAL) and ExposureBiasValue
-//!   `4/6` (SRATIONAL). Like the sample, it holds no ExifVersion, no
-//!   sensitivity tag, no BodySerialNumber and no lens tag. Last, it holds
-//!   the MakerNote, of the headerless layout: no header, the MakerNote IFD
-//!   at its first byte, written by the file's own builder, so that every
-//!   offset in it, the PreviewIFD's and the JPEG's among them, counts from
-//!   the start of the file, and every number is in the file's byte order,
-//!   as on the sample. Its block runs from the MakerNote IFD through that
-//!   IFD's values, the PreviewIFD and its values, to the end of the
-//!   PreviewIFD's JPEG ([`TiffBuilder::block_through`]), so that all of
-//!   them lie inside the length the MakerNote's entry declares, as on the
-//!   sample. The MakerNote IFD holds the sample's MakerNoteVersion `0101`
-//!   (UNDEFINED); its ISO, `[0, 200]` (SHORT); its FocusMode `AF-S  `
-//!   (ASCII); its PreviewIFD pointer; its Lens, `180/10`, `700/10`,
+//! - The Exif IFD holds the sample's values, each of the type it has there:
+//!   DateTimeOriginal `2022:03:24 10:09:27` and SubSecTimeOriginal `01`,
+//!   with no OffsetTimeOriginal; ExposureTime `10/8000`, FNumber `45/10`
+//!   and FocalLength `600/10` (RATIONAL) and ExposureBiasValue `4/6`
+//!   (SRATIONAL). Like the sample, it holds no ExifVersion, no sensitivity
+//!   tag, no FocalLengthIn35mmFilm, no BodySerialNumber and no lens tag.
+//!   Last, it holds the MakerNote, of the headerless layout: no header, the
+//!   MakerNote IFD at its first byte, written by the file's own builder, so
+//!   that every offset in it, the PreviewIFD's and the JPEG's among them,
+//!   counts from the start of the file, and every number is in the file's
+//!   byte order, as on the sample. Its block runs from the MakerNote IFD
+//!   through that IFD's values, the PreviewIFD and its values, to the end
+//!   of the PreviewIFD's JPEG ([`TiffBuilder::block_through`]), so that all
+//!   of them lie inside the length the MakerNote's entry declares, as on
+//!   the sample. The MakerNote IFD holds the sample's MakerNoteVersion
+//!   `0101` (UNDEFINED); its ISO, `[0, 200]` (SHORT); its FocusMode `AF-S
+//!   ` (ASCII); its PreviewIFD pointer; its Lens, `180/10`, `700/10`,
 //!   `35/10`, `45/10` (RATIONAL), an 18-70 mm lens of f/3.5 to f/4.5; its
 //!   AFInfo `01 00 01 00`, a point number and no position, and no AFInfo2,
 //!   so no focus point; and the text of nine more of its tags, which the
@@ -233,6 +238,8 @@ const ORIENTATION: u16 = 0x0112;
 const SAMPLES_PER_PIXEL: u16 = 0x0115;
 /// How many bytes each strip takes (StripByteCounts).
 const STRIP_BYTE_COUNTS: u16 = 0x0117;
+/// The firmware or program that wrote the file, as ASCII text (Software).
+const SOFTWARE: u16 = 0x0131;
 /// The pixels per unit across, as a RATIONAL (XResolution).
 const X_RESOLUTION: u16 = 0x011A;
 /// The pixels per unit down, as a RATIONAL (YResolution).
@@ -270,6 +277,9 @@ const OFFSET_TIME_ORIGINAL: u16 = 0x9011;
 const EXPOSURE_BIAS_VALUE: u16 = 0x9204;
 /// The focal length in millimetres, as a RATIONAL (FocalLength).
 const FOCAL_LENGTH: u16 = 0x920A;
+/// The focal length in 35 mm terms, in whole millimetres, as a SHORT
+/// (FocalLengthIn35mmFilm).
+const FOCAL_LENGTH_IN_35MM_FILM: u16 = 0xA405;
 /// The capture time's fraction of a second, as ASCII digits
 /// (SubSecTimeOriginal).
 const SUB_SEC_TIME_ORIGINAL: u16 = 0x9291;
@@ -418,7 +428,7 @@ const D1H_AF_INFO: [u8; 4] = [1, 0, 1, 0];
 /// Nine more tags of the D1H file's MakerNote IFD, each with its ASCII
 /// text, less the NUL the builder adds: those of the public sample 5364,
 /// which the reader does not read. They make the MakerNote IFD, of 15
-/// entries, longer than IFD0, of 13, the longest IFD outside it, as on the
+/// entries, longer than IFD0, of 14, the longest IFD outside it, as on the
 /// sample, whose MakerNote IFD holds 27 and IFD0 26.
 const D1H_TEXT_TAGS: [(u16, &str); 9] = [
     (0x0003, "COLOR"),
@@ -547,6 +557,11 @@ fn padded_lens_model(model: &str) -> String {
     padded
 }
 
+/// The Software of the Z 9 and Z6III files, `Ver.01.00` followed by NULs,
+/// less the NUL the builder adds, so that the value is 13 bytes, as the
+/// public Z 9 sample 5147 and Z6III sample 7808 store it.
+const Z9_SOFTWARE: &str = "Ver.01.00\0\0\0";
+
 /// The start of the raw strip: the start-of-codestream marker of JPEG XS.
 pub const RAW_STRIP_START: [u8; 4] = [0xFF, 0x10, 0xFF, 0x50];
 
@@ -665,6 +680,7 @@ pub fn z9_file_with(order: Order, orientation: u16, makernote_order: Order) -> (
         .ascii(ifd0, MAKE, "NIKON CORPORATION")
         .ascii(ifd0, MODEL, "NIKON Z 9")
         .short(ifd0, ORIENTATION, &[orientation])
+        .ascii(ifd0, SOFTWARE, Z9_SOFTWARE)
         .short(ifd0, COMPRESSION, &[OLD_STYLE_JPEG]);
     let ifd0_jpeg = jpeg(&mut builder, ifd0, IFD0_JPEG);
     builder.subifds(ifd0, &subs).exif(ifd0, exif);
@@ -723,6 +739,7 @@ pub fn z9_file_with(order: Order, orientation: u16, makernote_order: Order) -> (
         .long(exif, RECOMMENDED_EXPOSURE_INDEX, &[64])
         .srational(exif, EXPOSURE_BIAS_VALUE, &[(0, 6)])
         .rational(exif, FOCAL_LENGTH, &[(180, 10)])
+        .short(exif, FOCAL_LENGTH_IN_35MM_FILM, &[18])
         .ascii(exif, BODY_SERIAL_NUMBER, "1234567")
         .rational(
             exif,
@@ -778,6 +795,7 @@ pub fn z6iii_file_with_blobs(order: Order, orientation: u16) -> (Built, Z9Blobs)
         .ascii(ifd0, MAKE, "NIKON CORPORATION")
         .ascii(ifd0, MODEL, "NIKON Z6_3")
         .short(ifd0, ORIENTATION, &[orientation])
+        .ascii(ifd0, SOFTWARE, Z9_SOFTWARE)
         .short(ifd0, COMPRESSION, &[OLD_STYLE_JPEG]);
     let ifd0_jpeg = jpeg(&mut builder, ifd0, IFD0_JPEG);
     builder.subifds(ifd0, &subs).exif(ifd0, exif);
@@ -837,6 +855,7 @@ pub fn z6iii_file_with_blobs(order: Order, orientation: u16) -> (Built, Z9Blobs)
         .long(exif, RECOMMENDED_EXPOSURE_INDEX, &[200])
         .srational(exif, EXPOSURE_BIAS_VALUE, &[(0, 6)])
         .rational(exif, FOCAL_LENGTH, &[(860, 10)])
+        .short(exif, FOCAL_LENGTH_IN_35MM_FILM, &[111])
         .ascii(exif, BODY_SERIAL_NUMBER, "2345678")
         .rational(
             exif,
@@ -920,6 +939,7 @@ pub fn d300_file_with_blobs(order: Order, orientation: u16) -> (Built, D300Blobs
         .ascii(ifd0, MAKE, "NIKON CORPORATION")
         .ascii(ifd0, MODEL, "NIKON D300")
         .short(ifd0, ORIENTATION, &[orientation])
+        .ascii(ifd0, SOFTWARE, "Ver.1.10 ")
         .short(ifd0, SAMPLES_PER_PIXEL, &[3]);
     let thumbnail = strip(&mut builder, ifd0, &[0; 64]);
     builder.subifds(ifd0, &subs).exif(ifd0, exif);
@@ -947,7 +967,8 @@ pub fn d300_file_with_blobs(order: Order, orientation: u16) -> (Built, D300Blobs
         .rational(exif, F_NUMBER, &[(71, 10)])
         .short(exif, PHOTOGRAPHIC_SENSITIVITY, &[200])
         .srational(exif, EXPOSURE_BIAS_VALUE, &[(0, 6)])
-        .rational(exif, FOCAL_LENGTH, &[(500, 10)]);
+        .rational(exif, FOCAL_LENGTH, &[(500, 10)])
+        .short(exif, FOCAL_LENGTH_IN_35MM_FILM, &[75]);
     let mut world_time = order.u16(D300_TIME_ZONE).to_vec();
     world_time.extend_from_slice(&[0, 0]);
     let mut af_info2 = b"0100".to_vec();
@@ -1032,7 +1053,8 @@ pub fn d1h_file_with(order: Order, header: &[u8], declared: Option<u64>) -> (Bui
         .short(ifd0, PHOTOMETRIC_INTERPRETATION, &[RGB])
         .ascii(ifd0, MAKE, "NIKON CORPORATION")
         .ascii(ifd0, MODEL, "NIKON D1H")
-        .short(ifd0, SAMPLES_PER_PIXEL, &[3]);
+        .short(ifd0, SAMPLES_PER_PIXEL, &[3])
+        .ascii(ifd0, SOFTWARE, "Ver.1.00 ");
     builder.subifds(ifd0, &[sub]).exif(ifd0, exif);
 
     let (raw_width, raw_height) = D1H_RAW;

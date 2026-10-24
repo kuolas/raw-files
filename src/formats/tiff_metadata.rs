@@ -4,15 +4,15 @@
 //! camera recorded about a picture from the standard TIFF and Exif tags.
 //!
 //! Cameras of every maker record the same facts in the same standard tags:
-//! the camera's make and model and the orientation in IFD0, the capture
-//! time, the body's serial number, the exposure and the lens in the Exif
-//! IFD, and the sizes in the IFD of the raw data. So [`read`] reads them
-//! once, over the tree, for every format, and a format adds only what its
-//! own structures record and the standard tags lack (ADR011, which chose
-//! the standard tags first). The JPEG reader shares it too, over the tree
-//! of a JPEG file's Exif segment, and then decides the sizes itself: the
-//! picture's own size in place of the ones read here, and no raw size
-//! (ADR014).
+//! the camera's make and model, the software that wrote the file and the
+//! orientation in IFD0, the capture time, the body's serial number, the
+//! exposure and the lens in the Exif IFD, and the sizes in the IFD of the
+//! raw data. So [`read`] reads them once, over the tree, for every format,
+//! and a format adds only what its own structures record and the standard
+//! tags lack (ADR011, which chose the standard tags first). The JPEG reader
+//! shares it too, over the tree of a JPEG file's Exif segment, and then
+//! decides the sizes itself: the picture's own size in place of the ones
+//! read here, and no raw size (ADR014).
 //!
 //! The rules:
 //!
@@ -22,10 +22,14 @@
 //!   other value is still read, and the file still opens. Only a failure of
 //!   the reader is an error: it says nothing about the file.
 //! - The make, the model and the serial number, of the camera and of the
-//!   lens, are text, read by the one rule [`text`] gives: cut at the first
-//!   NUL, `None` when longer than 255 bytes, trimmed of spaces at both
-//!   ends, `None` when nothing is left, and with bytes that are not UTF-8
-//!   replaced by U+FFFD.
+//!   lens, and the software are text, read by the one rule [`text`] gives:
+//!   cut at the first NUL, `None` when longer than 255 bytes, trimmed of
+//!   spaces at both ends, `None` when nothing is left, and with bytes that
+//!   are not UTF-8 replaced by U+FFFD.
+//! - The software is IFD0's Software, as written and cleaned by that rule:
+//!   the camera's firmware version, such as `Ver.1.10` from the D300's
+//!   `Ver.1.10 `, or the name of the program that last wrote the file.
+//!   Exif 3.0's CameraFirmware, which no checked file writes, is not read.
 //! - The capture time is the Exif DateTimeOriginal, with its own fraction
 //!   of a second (SubSecTimeOriginal) and offset from UTC
 //!   (OffsetTimeOriginal), each of type ASCII; [`DateTime::from_exif`]
@@ -47,6 +51,10 @@
 //!   ExposureBiasValue, of type SRATIONAL, its first value as stored; it is
 //!   `None` only when its denominator is zero, since a zero bias, such as
 //!   0/6, is no compensation ([`SignedRational::new`]).
+//! - The focal length in 35 mm terms is the Exif FocalLengthIn35mmFilm, of
+//!   type SHORT only, its first value; it is `None` when zero, which Exif
+//!   writes for one the camera did not know
+//!   ([`focal_length_in_35mm_film`]).
 //! - The lens is described by the Exif LensMake, LensModel and
 //!   LensSerialNumber, and by the LensSpecification, of type RATIONAL and
 //!   of exactly four values: the shortest and longest focal length and the
@@ -88,11 +96,12 @@ use std::io::{Read, Seek};
 use crate::camera_settings::CameraSettings;
 use crate::container::tiff::tags::{
     BODY_SERIAL_NUMBER, DATE_TIME_ORIGINAL, DEFAULT_CROP_ORIGIN, DEFAULT_CROP_SIZE,
-    EXPOSURE_BIAS_VALUE, EXPOSURE_TIME, F_NUMBER, FOCAL_LENGTH, IMAGE_LENGTH, IMAGE_WIDTH,
-    ISO_SPEED, LENS_MAKE, LENS_MODEL, LENS_SERIAL_NUMBER, LENS_SPECIFICATION, MAKE, MODEL,
-    OFFSET_TIME_ORIGINAL, PHOTOGRAPHIC_SENSITIVITY, RECOMMENDED_EXPOSURE_INDEX,
-    SUB_SEC_TIME_ORIGINAL,
+    EXPOSURE_BIAS_VALUE, EXPOSURE_TIME, F_NUMBER, FOCAL_LENGTH, FOCAL_LENGTH_IN_35MM_FILM,
+    IMAGE_LENGTH, IMAGE_WIDTH, ISO_SPEED, LENS_MAKE, LENS_MODEL, LENS_SERIAL_NUMBER,
+    LENS_SPECIFICATION, MAKE, MODEL, OFFSET_TIME_ORIGINAL, PHOTOGRAPHIC_SENSITIVITY,
+    RECOMMENDED_EXPOSURE_INDEX, SOFTWARE, SUB_SEC_TIME_ORIGINAL,
 };
+use crate::container::tiff::types::SHORT;
 use crate::container::tiff::{Ifd, Location, Tree, skip_damage};
 use crate::datetime::DateTime;
 use crate::error::Result;
@@ -158,6 +167,7 @@ pub(crate) fn read<R: Read + Seek>(src: &mut Source<R>, tree: &Tree) -> Result<S
     let metadata = Metadata {
         make: text(src, ifd0, MAKE)?,
         model: text(src, ifd0, MODEL)?,
+        software: text(src, ifd0, SOFTWARE)?,
         serial_number,
         capture_time,
         orientation: tiff_previews::orientation(src, tree)?,
@@ -243,8 +253,9 @@ fn capture_time<R: Read + Seek>(src: &mut Source<R>, exif: &Ifd) -> Result<Optio
 }
 
 /// The exposure the picture was taken with, from the Exif IFD `exif`: the
-/// ISO, as [`iso`] reads it, and the four fractions, as [`rational`] and
-/// [`signed_rational`] read them.
+/// ISO, as [`iso`] reads it, the four fractions, as [`rational`] and
+/// [`signed_rational`] read them, and the focal length in 35 mm terms, as
+/// [`focal_length_in_35mm_film`] reads it.
 ///
 /// # Errors
 ///
@@ -256,8 +267,35 @@ fn exposure<R: Read + Seek>(src: &mut Source<R>, exif: &Ifd) -> Result<Exposure>
         exposure_time: rational(src, exif, EXPOSURE_TIME)?,
         f_number: rational(src, exif, F_NUMBER)?,
         focal_length: rational(src, exif, FOCAL_LENGTH)?,
+        focal_length_in_35mm_film: focal_length_in_35mm_film(src, exif)?,
         exposure_bias: signed_rational(src, exif, EXPOSURE_BIAS_VALUE)?,
     })
+}
+
+/// The focal length in 35 mm terms, in whole millimetres, from the Exif
+/// IFD `exif`: the first value of its FocalLengthIn35mmFilm, which must be
+/// of type SHORT, the one type the standard gives it. The type is checked
+/// first ([`Ifd::entry_of_type`]), since [`Ifd::u32`] would take a LONG
+/// too. `None` when the value is zero, which Exif writes for a focal
+/// length the camera did not know, as the ILCE-7S does with a manual lens
+/// (public sample 1582).
+///
+/// # Errors
+///
+/// `Io` when the reader fails. A value that cannot be read for any other
+/// reason is `None`.
+fn focal_length_in_35mm_film<R: Read + Seek>(
+    src: &mut Source<R>,
+    exif: &Ifd,
+) -> Result<Option<u32>> {
+    if exif
+        .entry_of_type(FOCAL_LENGTH_IN_35MM_FILM, &[SHORT])
+        .is_none()
+    {
+        return Ok(None);
+    }
+    let first = skip_damage(exif.u32(src, FOCAL_LENGTH_IN_35MM_FILM))?.flatten();
+    Ok(first.filter(|&millimetres| millimetres > 0))
 }
 
 /// The ISO the picture was taken at, from the Exif IFD `exif`.
@@ -536,10 +574,14 @@ mod tests {
     const DATE_TIME: u16 = 0x0132;
 
     /// The text values of a Z 9 file, each with its tag: IFD0's, then the
-    /// Exif IFD's. The time and the lens are those of the public Z 9
-    /// sample 5147; the serial numbers are made up, the lens's with the two
-    /// spaces the Z 9 pads its eight digits with.
-    const IFD0_TEXT: [(u16, &str); 2] = [(MAKE, "NIKON CORPORATION"), (MODEL, "NIKON Z 9")];
+    /// Exif IFD's. The software, the time and the lens are those of the
+    /// public Z 9 sample 5147; the serial numbers are made up, the lens's
+    /// with the two spaces the Z 9 pads its eight digits with.
+    const IFD0_TEXT: [(u16, &str); 3] = [
+        (MAKE, "NIKON CORPORATION"),
+        (MODEL, "NIKON Z 9"),
+        (SOFTWARE, "Ver.01.00"),
+    ];
     /// See [`IFD0_TEXT`]. The LensModel is stored padded, as
     /// [`z9_bytes_except`] says.
     const EXIF_TEXT: [(u16, &str); 7] = [
@@ -578,7 +620,7 @@ mod tests {
     /// The exposure values of the Z 9 file's Exif IFD, each with its tag
     /// and what adds it: those of the public Z 9 sample 5147, each of the
     /// type the Z 9 writes.
-    const EXIF_EXPOSURE: [(u16, AddExposure); 6] = [
+    const EXIF_EXPOSURE: [(u16, AddExposure); 7] = [
         (EXPOSURE_TIME, |builder, exif, tag| {
             builder.rational(exif, tag, &[(10, 3200)]);
         }),
@@ -596,6 +638,9 @@ mod tests {
         }),
         (FOCAL_LENGTH, |builder, exif, tag| {
             builder.rational(exif, tag, &[(180, 10)]);
+        }),
+        (FOCAL_LENGTH_IN_35MM_FILM, |builder, exif, tag| {
+            builder.short(exif, tag, &[18]);
         }),
     ];
 
@@ -677,13 +722,15 @@ mod tests {
     }
 
     /// The exposure of the Z 9 file, as [`EXIF_EXPOSURE`] records it:
-    /// 1/320 s at f/9, 18 mm and ISO 64, with no compensation.
+    /// 1/320 s at f/9, 18 mm, 18 mm in 35 mm terms too, and ISO 64, with no
+    /// compensation.
     fn z9_exposure() -> Exposure {
         Exposure {
             iso: Some(64),
             exposure_time: Some(fraction(10, 3200)),
             f_number: Some(fraction(900, 100)),
             focal_length: Some(fraction(180, 10)),
+            focal_length_in_35mm_film: Some(18),
             exposure_bias: Some(signed(0, 6)),
         }
     }
@@ -754,6 +801,7 @@ mod tests {
         Metadata {
             make: Some("NIKON CORPORATION".to_owned()),
             model: Some("NIKON Z 9".to_owned()),
+            software: Some("Ver.01.00".to_owned()),
             serial_number: Some("1234567".to_owned()),
             capture_time: z9_time(Some(b"85"), Some(b"-05:00")),
             orientation: Orientation::Rotate270,
@@ -821,6 +869,7 @@ mod tests {
     fn the_z9_file_gives_every_value_it_records() {
         let metadata = z9_file();
         assert_eq!(metadata, z9_expected());
+        assert_eq!(metadata.software(), Some("Ver.01.00"));
         let time = metadata.capture_time().unwrap();
         assert_eq!(time.to_string(), "2022-02-05T13:46:41.85-05:00");
         assert_eq!(time.offset_minutes(), Some(-300));
@@ -830,6 +879,7 @@ mod tests {
         assert_eq!(exposure.exposure_time(), Some(fraction(10, 3200)));
         assert_eq!(exposure.f_number(), Some(fraction(900, 100)));
         assert_eq!(exposure.focal_length(), Some(fraction(180, 10)));
+        assert_eq!(exposure.focal_length_in_35mm_film(), Some(18));
         assert_eq!(exposure.exposure_bias(), Some(signed(0, 6)));
         let lens = metadata.lens().unwrap();
         assert_eq!(lens.make(), Some("NIKON"));
@@ -888,6 +938,61 @@ mod tests {
         assert_eq!(make("\0\0\0"), None);
         assert_eq!(make("    "), None);
         assert_eq!(make(""), None);
+    }
+
+    /// The metadata of the Z 9 file with IFD0's Software `software`, as
+    /// ASCII with the NUL the builder adds, in place of its own.
+    fn z9_with_software(software: &str) -> Metadata {
+        z9_except(SOFTWARE, |builder, ifd0, _| {
+            builder.ascii(ifd0, SOFTWARE, software);
+        })
+    }
+
+    #[test]
+    fn a_software_is_read_as_text_trimmed_of_its_padding() {
+        // The Nikon DSLRs' trailing space, as the D300's `Ver.1.10 ` on the
+        // public sample 928.
+        assert_eq!(
+            z9_with_software("Ver.1.10 "),
+            Metadata {
+                software: Some("Ver.1.10".to_owned()),
+                ..z9_expected()
+            }
+        );
+        // The two spaces inside the Coolpix P7800's are kept.
+        assert_eq!(
+            z9_with_software("COOLPIX P7800  V1.0").software(),
+            Some("COOLPIX P7800  V1.0")
+        );
+    }
+
+    #[test]
+    fn a_software_of_nul_bytes_or_spaces_only_is_none() {
+        for software in ["\0\0\0", "    ", ""] {
+            assert_eq!(
+                z9_with_software(software),
+                Metadata {
+                    software: None,
+                    ..z9_expected()
+                },
+                "{software:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn the_software_is_read_from_ifd0_alone() {
+        // A Software in the Exif IFD, where it does not belong, is not read.
+        let metadata = z9_except(SOFTWARE, |builder, _, exif| {
+            builder.ascii(exif, SOFTWARE, "Ver.01.00");
+        });
+        assert_eq!(
+            metadata,
+            Metadata {
+                software: None,
+                ..z9_expected()
+            }
+        );
     }
 
     #[test]
@@ -1060,7 +1165,7 @@ mod tests {
     #[test]
     fn a_damaged_value_costs_only_itself() {
         type Change = fn(&mut TiffBuilder, IfdId, IfdId);
-        let cases: [(&str, u16, Change, Metadata); 16] = [
+        let cases: [(&str, u16, Change, Metadata); 19] = [
             (
                 "a Model that is not text",
                 MODEL,
@@ -1069,6 +1174,26 @@ mod tests {
                 },
                 Metadata {
                     model: None,
+                    ..z9_expected()
+                },
+            ),
+            (
+                "a Software that is not text",
+                SOFTWARE,
+                |builder, ifd0, _| {
+                    builder.byte(ifd0, SOFTWARE, b"Ver.01.00\0");
+                },
+                Metadata {
+                    software: None,
+                    ..z9_expected()
+                },
+            ),
+            (
+                "a Software too long to read",
+                SOFTWARE,
+                |builder, ifd0, _| too_long(builder, ifd0, SOFTWARE),
+                Metadata {
+                    software: None,
                     ..z9_expected()
                 },
             ),
@@ -1156,6 +1281,15 @@ mod tests {
                 |builder, _, exif| too_long_of(builder, exif, FOCAL_LENGTH, RATIONAL, 8),
                 z9_expected_with(Exposure {
                     focal_length: None,
+                    ..z9_exposure()
+                }),
+            ),
+            (
+                "a FocalLengthIn35mmFilm too long to read",
+                FOCAL_LENGTH_IN_35MM_FILM,
+                |builder, _, exif| too_long_of(builder, exif, FOCAL_LENGTH_IN_35MM_FILM, SHORT, 2),
+                z9_expected_with(Exposure {
+                    focal_length_in_35mm_film: None,
                     ..z9_exposure()
                 }),
             ),
@@ -1276,6 +1410,14 @@ mod tests {
                 longs(&[180, 10]),
                 None,
                 only(|e| e.focal_length = Some(fraction(180, 10))),
+            ),
+            (
+                FOCAL_LENGTH_IN_35MM_FILM,
+                SHORT,
+                3,
+                vec![18, 0, 0, 0, 0, 0],
+                None,
+                only(|e| e.focal_length_in_35mm_film = Some(18)),
             ),
             (
                 EXPOSURE_BIAS_VALUE,
@@ -1619,6 +1761,7 @@ mod tests {
                 exposure_time: Some(fraction(1, 50)),
                 f_number: Some(fraction(56, 10)),
                 focal_length: Some(fraction(180, 10)),
+                focal_length_in_35mm_film: None,
                 exposure_bias: Some(signed(-3, 10)),
             }
         );
@@ -1631,6 +1774,74 @@ mod tests {
             builder.rational(exif, F_NUMBER, &[(0, 10), (56, 10)]);
         });
         assert_eq!(read.f_number, None);
+    }
+
+    #[test]
+    fn a_focal_length_in_35mm_film_of_zero_is_unknown() {
+        // Sony's ILCE-7S with a manual lens, as on the public sample 1582.
+        let metadata = z9_except(FOCAL_LENGTH_IN_35MM_FILM, |builder, _, exif| {
+            builder.short(exif, FOCAL_LENGTH_IN_35MM_FILM, &[0]);
+        });
+        assert_eq!(
+            metadata,
+            z9_expected_with(Exposure {
+                focal_length_in_35mm_film: None,
+                ..z9_exposure()
+            })
+        );
+    }
+
+    #[test]
+    fn a_missing_focal_length_in_35mm_film_is_none() {
+        // As on the D1H's, the D1X's and the Coolpix E5700's public samples.
+        let metadata = z9_except(FOCAL_LENGTH_IN_35MM_FILM, |_, _, _| {});
+        assert_eq!(
+            metadata,
+            z9_expected_with(Exposure {
+                focal_length_in_35mm_film: None,
+                ..z9_exposure()
+            })
+        );
+    }
+
+    #[test]
+    fn a_focal_length_in_35mm_film_of_another_type_than_short_is_none() {
+        // Unlike the ISO, not even a LONG, which the standard does not allow
+        // this tag.
+        type Add = fn(&mut TiffBuilder, IfdId);
+        let cases: [(&str, Add); 3] = [
+            ("LONG", |builder, exif| {
+                builder.long(exif, FOCAL_LENGTH_IN_35MM_FILM, &[18]);
+            }),
+            ("RATIONAL", |builder, exif| {
+                builder.rational(exif, FOCAL_LENGTH_IN_35MM_FILM, &[(18, 1)]);
+            }),
+            ("ASCII", |builder, exif| {
+                builder.ascii(exif, FOCAL_LENGTH_IN_35MM_FILM, "18");
+            }),
+        ];
+        for (case, add) in cases {
+            let read = exposure(|builder, exif| {
+                builder.rational(exif, FOCAL_LENGTH, &[(180, 10)]);
+                add(builder, exif);
+            });
+            assert_eq!(read.focal_length_in_35mm_film, None, "{case}");
+            // The other values of the Exif IFD are still read.
+            assert_eq!(read.focal_length, Some(fraction(180, 10)), "{case}");
+        }
+    }
+
+    #[test]
+    fn a_focal_length_in_35mm_film_of_several_values_gives_its_first() {
+        let read = exposure(|builder, exif| {
+            builder.short(exif, FOCAL_LENGTH_IN_35MM_FILM, &[18, 50]);
+        });
+        assert_eq!(read.focal_length_in_35mm_film, Some(18));
+        // Only the first value is the picture's.
+        let read = exposure(|builder, exif| {
+            builder.short(exif, FOCAL_LENGTH_IN_35MM_FILM, &[0, 50]);
+        });
+        assert_eq!(read.focal_length_in_35mm_film, None);
     }
 
     #[test]

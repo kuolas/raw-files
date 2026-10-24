@@ -10,7 +10,8 @@ and Sony ARW files, the SRF, SR2 and ARQ files of Sony's family and the ARW
 files of the Sony-built Hasselblad bodies included, and the metadata a
 viewer or a file renamer needs next to them: the capture time, with
 sub-seconds and offset from UTC when recorded, the camera's make, model and
-serial number, the lens, the exposure, the orientation, and the sizes of the
+serial number, the software that wrote the file, the lens, the exposure,
+with the focal length in 35 mm terms, the orientation, and the sizes of the
 raw data and of the visible image. It reads the JPEG files cameras write
 beside their raw files or instead of them in the same way: a JPEG's previews
 are the file itself and the smaller images it holds, and its metadata is the
@@ -252,8 +253,8 @@ fetches one format only, and the 325 MiB ARQ file only with
 
 Another test runs the reader over a folder of your own camera files, RAW and
 JPEG, and counts per format. It prints counts only, never a path, the value
-of a make, model, serial number, time, exposure or lens, or where the
-camera focused, so its output can go into an issue:
+of a make, model, software, serial number, time, exposure or lens, or where
+the camera focused, so its output can go into an issue:
 
 ```sh
 RAW_FILES_LOCAL_CORPUS=/path/to/photos cargo test --release --test local_corpus -- --ignored --nocapture

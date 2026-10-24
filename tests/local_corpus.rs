@@ -19,9 +19,10 @@
 //! formats its files opened as, so that a renamed file shows. It prints
 //! counts only: how many files opened, how many have each metadata field,
 //! how many previews the files have, and how the sizes are distributed; it
-//! never prints a path, a file name, or the value of a make, model, serial
-//! number, capture time, exposure or lens, so its output can be pasted into
-//! an issue without disclosing anything about the photos.
+//! never prints a path, a file name, or the value of a make, model,
+//! software, serial number, capture time, exposure or lens, so its output
+//! can be pasted into an issue without disclosing anything about the
+//! photos.
 //!
 //! For the focus point, where the camera focused, it counts the files that
 //! have one, how many of those record that the camera confirmed focus, that
@@ -86,6 +87,7 @@ impl Seek for CountingReader {
 struct MetadataTally {
     make: usize,
     model: usize,
+    software: usize,
     serial_number: usize,
     capture_time: usize,
     with_subseconds: usize,
@@ -94,6 +96,7 @@ struct MetadataTally {
     exposure_time: usize,
     f_number: usize,
     focal_length: usize,
+    focal_length_in_35mm_film: usize,
     exposure_bias: usize,
     lens: usize,
     lens_model: usize,
@@ -111,6 +114,7 @@ impl MetadataTally {
     fn record(&mut self, metadata: &Metadata) {
         self.make += usize::from(metadata.make().is_some());
         self.model += usize::from(metadata.model().is_some());
+        self.software += usize::from(metadata.software().is_some());
         self.serial_number += usize::from(metadata.serial_number().is_some());
         if let Some(time) = metadata.capture_time() {
             self.capture_time += 1;
@@ -123,6 +127,8 @@ impl MetadataTally {
         self.exposure_time += usize::from(exposure.exposure_time().is_some());
         self.f_number += usize::from(exposure.f_number().is_some());
         self.focal_length += usize::from(exposure.focal_length().is_some());
+        self.focal_length_in_35mm_film +=
+            usize::from(exposure.focal_length_in_35mm_film().is_some());
         self.exposure_bias += usize::from(exposure.exposure_bias().is_some());
         if let Some(lens) = metadata.lens() {
             self.lens += 1;
@@ -312,8 +318,8 @@ impl Tally {
         println!("largest-preview sizes: {:?}", self.sizes);
         println!("largest-preview orientations: {:?}", self.orientations);
         println!(
-            "files with a make: {}, a model: {}, a serial number: {}",
-            m.make, m.model, m.serial_number
+            "files with a make: {}, a model: {}, software: {}, a serial number: {}",
+            m.make, m.model, m.software, m.serial_number
         );
         println!(
             "files with a capture time: {}, of which with sub-seconds: {}, with an offset from UTC: {}",
@@ -324,8 +330,13 @@ impl Tally {
             m.shared_capture_times()
         );
         println!(
-            "files with an ISO: {}, an exposure time: {}, an f-number: {}, a focal length: {}, an exposure compensation: {}",
-            m.iso, m.exposure_time, m.f_number, m.focal_length, m.exposure_bias
+            "files with an ISO: {}, an exposure time: {}, an f-number: {}, a focal length: {}, a focal length in 35 mm terms: {}, an exposure compensation: {}",
+            m.iso,
+            m.exposure_time,
+            m.f_number,
+            m.focal_length,
+            m.focal_length_in_35mm_film,
+            m.exposure_bias
         );
         println!(
             "files with a lens: {}, of which with a model: {}, with a focal-length range: {}",

@@ -219,8 +219,8 @@ fn no_preview_starts_at_the_raw_data_of_any_layout() {
 }
 
 /// Checks that `exposure` is the one the ARW 4 files record, as stored:
-/// 1/50 s at f/5.6, 50 mm and ISO 250, with no compensation; `label` names
-/// the file in a failure.
+/// 1/50 s at f/5.6, 50 mm, 50 mm in 35 mm terms too, and ISO 250, with no
+/// compensation; `label` names the file in a failure.
 fn assert_the_arw4_exposure(exposure: &Exposure, label: &str) {
     let fraction = |numerator, denominator| {
         Some(Rational {
@@ -232,6 +232,7 @@ fn assert_the_arw4_exposure(exposure: &Exposure, label: &str) {
     assert_eq!(exposure.exposure_time(), fraction(1, 50), "{label}");
     assert_eq!(exposure.f_number(), fraction(56, 10), "{label}");
     assert_eq!(exposure.focal_length(), fraction(500, 10), "{label}");
+    assert_eq!(exposure.focal_length_in_35mm_film(), Some(50), "{label}");
     assert_eq!(
         exposure.exposure_bias(),
         Some(SignedRational {
@@ -300,6 +301,7 @@ fn the_arw4_file_gives_every_value_its_fixture_records() {
             let metadata = file.metadata();
             assert_eq!(metadata.make(), Some("SONY"), "{label}");
             assert_eq!(metadata.model(), Some("ILCE-7M4"), "{label}");
+            assert_eq!(metadata.software(), Some("ILCE-7M4 v2.00"), "{label}");
             // Like the sample it copies, the file records no serial number.
             assert_eq!(metadata.serial_number(), None, "{label}");
             let time = metadata.capture_time().unwrap();
@@ -326,14 +328,16 @@ fn the_arw4_file_gives_every_value_its_fixture_records() {
 #[test]
 fn every_layout_gives_the_metadata_its_fixture_records() {
     let arw4_time = Some("2023-10-19T16:13:48.776+02:00");
-    // Each layout's name, model, capture time, whether it records an
-    // exposure, a lens and a focus point, and its raw size and image size.
+    // Each layout's name, model, software, capture time, whether it
+    // records an exposure, a lens and a focus point, and its raw size and
+    // image size.
     // The medium file's MakerNote is the lossless file's, so its focus
     // point is too, in the full-size frame.
     let expected = [
         (
             "ARW 4",
             "ILCE-7M4",
+            Some("ILCE-7M4 v2.00"),
             arw4_time,
             true,
             // Padded to whole tiles, then the default crop.
@@ -343,6 +347,7 @@ fn every_layout_gives_the_metadata_its_fixture_records() {
         (
             "ARW 4 medium",
             "ILCE-7M4",
+            Some("ILCE-7M4 v2.00"),
             arw4_time,
             true,
             Some(size(5120, 3584)),
@@ -351,6 +356,7 @@ fn every_layout_gives_the_metadata_its_fixture_records() {
         (
             "ARW 2",
             "SLT-A99V",
+            Some("SLT-A99V v1.02"),
             None,
             false,
             Some(size(6024, 4024)),
@@ -359,6 +365,7 @@ fn every_layout_gives_the_metadata_its_fixture_records() {
         (
             "ARQ",
             "ILCE-7RM3",
+            Some("ILCE-7RM3 v3.00"),
             None,
             false,
             Some(size(8000, 5320)),
@@ -367,6 +374,7 @@ fn every_layout_gives_the_metadata_its_fixture_records() {
         (
             "SR2",
             "DSC-R1",
+            None,
             None,
             false,
             Some(size(3984, 2608)),
@@ -377,6 +385,7 @@ fn every_layout_gives_the_metadata_its_fixture_records() {
             "SRF",
             "DSC-F828",
             None,
+            None,
             false,
             Some(size(3360, 2460)),
             Some(size(3360, 2460)),
@@ -384,14 +393,30 @@ fn every_layout_gives_the_metadata_its_fixture_records() {
         // Its Make is `SONY` and eleven spaces, which are padding. Its
         // SubIFD pointer leads to no IFD, and its IFDs are previews, so no
         // IFD describes the raw data, whatever size IFD0's tags declare.
-        ("A100", "DSLR-A100", None, false, None, None),
+        (
+            "A100",
+            "DSLR-A100",
+            Some("DSLR-A100 v1.04"),
+            None,
+            false,
+            None,
+            None,
+        ),
     ];
     for order in ORDERS {
         let layouts = every_layout(order);
         assert_eq!(layouts.len(), expected.len());
         for (
             (name, (built, _)),
-            (expected_name, model, time, has_exposure_lens_and_focus, raw_size, image_size),
+            (
+                expected_name,
+                model,
+                software,
+                time,
+                has_exposure_lens_and_focus,
+                raw_size,
+                image_size,
+            ),
         ) in layouts.into_iter().zip(expected)
         {
             assert_eq!(name, expected_name);
@@ -401,6 +426,7 @@ fn every_layout_gives_the_metadata_its_fixture_records() {
             let metadata = file.metadata();
             assert_eq!(metadata.make(), Some("SONY"), "{label}");
             assert_eq!(metadata.model(), Some(model), "{label}");
+            assert_eq!(metadata.software(), software, "{label}");
             assert_eq!(metadata.serial_number(), None, "{label}");
             assert_eq!(
                 metadata.capture_time().map(|t| t.to_string()).as_deref(),
@@ -1448,20 +1474,25 @@ const LARGE_SAMPLES: &[Sample] = &[
 /// the Exif one; the DSLR-A100 gives no raw size and no image
 /// size, since its SubIFDs tag holds the offset of its raw data rather
 /// than that of an IFD; the ILCE-7S, with a manual lens whose model is
-/// `----` and whose f-number and focal length are 0/10, gives no lens, no
-/// f-number and no focal length; and the RX100 and the RX100M6 give a lens
-/// with a range and no model. A file without a default crop gives its raw
-/// size as its image size. The bodies from the ILCE-7RM2 on give a focus
-/// point from the MakerNote's FocusLocation, with an area from its
-/// FocusFrameSize from the ILCE-7SM3 on, and never say whether focus was
-/// confirmed; a manual-focus shot and the files without a FocusLocation
-/// give none, each row saying why.
+/// `----`, whose f-number and focal length are 0/10 and whose focal length
+/// in 35 mm terms is 0, gives no lens, no f-number and no focal length of
+/// either kind; and the RX100 and the RX100M6 give a lens with a range and
+/// no model. A file without a default crop gives its raw size as its image
+/// size. The software, the body's name and firmware version, and the
+/// focal length in 35 mm terms were generated from each file's IFD0 and
+/// Exif IFD by the same rules; the DSC-F828 and the DSC-R1 record neither.
+/// The bodies from the ILCE-7RM2 on give a focus point from the
+/// MakerNote's FocusLocation, with an area from its FocusFrameSize from
+/// the ILCE-7SM3 on, and never say whether focus was confirmed; a
+/// manual-focus shot and the files without a FocusLocation give none, each
+/// row saying why.
 const METADATA: &[SampleMetadata] = &[
     // SLT-A55 (raw.pixls.us 964)
     SampleMetadata {
         file: "sony-slt-a55.arw",
         make: Some("SONY"),
         model: Some("SLT-A55V"),
+        software: Some("SLT-A55V v1.10"),
         serial_number: None,
         capture_time: Some("2015-08-21T17:35:57"),
         orientation: Orientation::NoTransforms,
@@ -1469,6 +1500,7 @@ const METADATA: &[SampleMetadata] = &[
         exposure_time: Some((1, 125)),
         f_number: Some((100, 10)),
         focal_length: Some((100, 10)),
+        focal_length_in_35mm_film: Some(15),
         exposure_bias: Some((0, 10)),
         lens: Some(SampleLens {
             make: None,
@@ -1488,6 +1520,7 @@ const METADATA: &[SampleMetadata] = &[
         file: "sony-ilce-7rm2-compressed.arw",
         make: Some("SONY"),
         model: Some("ILCE-7RM2"),
+        software: Some("ILCE-7RM2 v3.30"),
         serial_number: None,
         capture_time: Some("2017-04-06T18:44:31"),
         orientation: Orientation::NoTransforms,
@@ -1495,6 +1528,7 @@ const METADATA: &[SampleMetadata] = &[
         exposure_time: Some((1, 6)),
         f_number: Some((130, 10)),
         focal_length: Some((510, 10)),
+        focal_length_in_35mm_film: Some(51),
         exposure_bias: Some((0, 10)),
         lens: Some(SampleLens {
             make: None,
@@ -1514,6 +1548,7 @@ const METADATA: &[SampleMetadata] = &[
         file: "sony-ilce-7rm2-uncompressed.arw",
         make: Some("SONY"),
         model: Some("ILCE-7RM2"),
+        software: Some("ILCE-7RM2 v3.30"),
         serial_number: None,
         capture_time: Some("2017-04-06T18:45:20"),
         orientation: Orientation::NoTransforms,
@@ -1521,6 +1556,7 @@ const METADATA: &[SampleMetadata] = &[
         exposure_time: Some((1, 6)),
         f_number: Some((130, 10)),
         focal_length: Some((510, 10)),
+        focal_length_in_35mm_film: Some(51),
         exposure_bias: Some((0, 10)),
         lens: Some(SampleLens {
             make: None,
@@ -1540,6 +1576,7 @@ const METADATA: &[SampleMetadata] = &[
         file: "sony-dsc-f828.srf",
         make: Some("SONY"),
         model: Some("DSC-F828"),
+        software: None,
         serial_number: None,
         capture_time: Some("2017-03-27T15:02:34"),
         orientation: Orientation::NoTransforms,
@@ -1547,6 +1584,7 @@ const METADATA: &[SampleMetadata] = &[
         exposure_time: Some((10, 1600)),
         f_number: Some((40, 10)),
         focal_length: Some((71, 10)),
+        focal_length_in_35mm_film: None,
         exposure_bias: Some((0, 10)),
         lens: None,
         raw_size: Some((3360, 2460)),
@@ -1558,6 +1596,7 @@ const METADATA: &[SampleMetadata] = &[
         file: "sony-nex-5.arw",
         make: Some("SONY"),
         model: Some("NEX-5"),
+        software: Some("NEX-5 Ver.05"),
         serial_number: None,
         capture_time: Some("2015-09-24T09:28:02"),
         orientation: Orientation::NoTransforms,
@@ -1565,6 +1604,7 @@ const METADATA: &[SampleMetadata] = &[
         exposure_time: Some((1, 200)),
         f_number: Some((71, 10)),
         focal_length: Some((180, 10)),
+        focal_length_in_35mm_film: Some(27),
         exposure_bias: Some((0, 10)),
         lens: Some(SampleLens {
             make: None,
@@ -1584,6 +1624,7 @@ const METADATA: &[SampleMetadata] = &[
         file: "sony-ilce-9-compressed.arw",
         make: Some("SONY"),
         model: Some("ILCE-9"),
+        software: Some("ILCE-9 v1.00"),
         serial_number: None,
         capture_time: Some("2017-06-25T16:02:57+02:00"),
         orientation: Orientation::NoTransforms,
@@ -1591,6 +1632,7 @@ const METADATA: &[SampleMetadata] = &[
         exposure_time: Some((1, 400)),
         f_number: Some((40, 10)),
         focal_length: Some((550, 10)),
+        focal_length_in_35mm_film: Some(55),
         exposure_bias: Some((0, 10)),
         lens: Some(SampleLens {
             make: None,
@@ -1615,6 +1657,7 @@ const METADATA: &[SampleMetadata] = &[
         file: "sony-ilce-9-uncompressed.arw",
         make: Some("SONY"),
         model: Some("ILCE-9"),
+        software: Some("ILCE-9 v1.00"),
         serial_number: None,
         capture_time: Some("2017-06-25T16:04:05+02:00"),
         orientation: Orientation::NoTransforms,
@@ -1622,6 +1665,7 @@ const METADATA: &[SampleMetadata] = &[
         exposure_time: Some((1, 400)),
         f_number: Some((40, 10)),
         focal_length: Some((550, 10)),
+        focal_length_in_35mm_film: Some(55),
         exposure_bias: Some((0, 10)),
         lens: Some(SampleLens {
             make: None,
@@ -1646,6 +1690,7 @@ const METADATA: &[SampleMetadata] = &[
         file: "sony-ilce-7s.arw",
         make: Some("SONY"),
         model: Some("ILCE-7S"),
+        software: Some("ILCE-7S v3.20"),
         serial_number: None,
         capture_time: Some("2017-07-13T16:58:28"),
         orientation: Orientation::NoTransforms,
@@ -1653,6 +1698,7 @@ const METADATA: &[SampleMetadata] = &[
         exposure_time: Some((1, 250)),
         f_number: None,
         focal_length: None,
+        focal_length_in_35mm_film: None,
         exposure_bias: Some((0, 10)),
         lens: None,
         raw_size: Some((2816, 1872)),
@@ -1664,6 +1710,7 @@ const METADATA: &[SampleMetadata] = &[
         file: "sony-dslr-a200.arw",
         make: Some("SONY"),
         model: Some("DSLR-A200"),
+        software: Some("DSLR-A200 v1.00"),
         serial_number: None,
         capture_time: Some("2017-11-17T22:44:20"),
         orientation: Orientation::NoTransforms,
@@ -1671,6 +1718,7 @@ const METADATA: &[SampleMetadata] = &[
         exposure_time: Some((1, 25)),
         f_number: Some((45, 10)),
         focal_length: Some((800, 10)),
+        focal_length_in_35mm_film: Some(120),
         exposure_bias: Some((0, 10)),
         lens: None,
         raw_size: Some((3880, 2600)),
@@ -1682,6 +1730,7 @@ const METADATA: &[SampleMetadata] = &[
         file: "sony-dslr-a100.arw",
         make: Some("SONY"),
         model: Some("DSLR-A100"),
+        software: Some("DSLR-A100 v1.04"),
         serial_number: None,
         capture_time: Some("2018-02-19T17:55:25"),
         orientation: Orientation::NoTransforms,
@@ -1689,6 +1738,7 @@ const METADATA: &[SampleMetadata] = &[
         exposure_time: Some((1, 125)),
         f_number: Some((80, 10)),
         focal_length: Some((600, 10)),
+        focal_length_in_35mm_film: Some(90),
         exposure_bias: Some((0, 10)),
         lens: None,
         raw_size: None,
@@ -1700,6 +1750,7 @@ const METADATA: &[SampleMetadata] = &[
         file: "sony-dslr-a700.arw",
         make: Some("SONY"),
         model: Some("DSLR-A700"),
+        software: Some("DSLR-A700 v04"),
         serial_number: None,
         capture_time: Some("2014-04-18T15:53:21"),
         orientation: Orientation::NoTransforms,
@@ -1707,6 +1758,7 @@ const METADATA: &[SampleMetadata] = &[
         exposure_time: Some((1, 500)),
         f_number: Some((50, 10)),
         focal_length: Some((500, 10)),
+        focal_length_in_35mm_film: Some(75),
         exposure_bias: Some((0, 10)),
         lens: None,
         raw_size: Some((4288, 2856)),
@@ -1718,6 +1770,7 @@ const METADATA: &[SampleMetadata] = &[
         file: "sony-dsc-rx100m6-1x1.arw",
         make: Some("SONY"),
         model: Some("DSC-RX100M6"),
+        software: Some("DSC-RX100M6 v1.00"),
         serial_number: None,
         capture_time: Some("2019-03-06T14:33:05+01:00"),
         orientation: Orientation::NoTransforms,
@@ -1725,6 +1778,7 @@ const METADATA: &[SampleMetadata] = &[
         exposure_time: Some((1, 80)),
         f_number: Some((71, 10)),
         focal_length: Some((5892, 100)),
+        focal_length_in_35mm_film: Some(163),
         exposure_bias: Some((0, 10)),
         lens: Some(SampleLens {
             make: None,
@@ -1749,6 +1803,7 @@ const METADATA: &[SampleMetadata] = &[
         file: "sony-dsc-rx100m6-16x9.arw",
         make: Some("SONY"),
         model: Some("DSC-RX100M6"),
+        software: Some("DSC-RX100M6 v1.00"),
         serial_number: None,
         capture_time: Some("2019-03-06T14:32:40+01:00"),
         orientation: Orientation::NoTransforms,
@@ -1756,6 +1811,7 @@ const METADATA: &[SampleMetadata] = &[
         exposure_time: Some((1, 80)),
         f_number: Some((71, 10)),
         focal_length: Some((5892, 100)),
+        focal_length_in_35mm_film: Some(163),
         exposure_bias: Some((0, 10)),
         lens: Some(SampleLens {
             make: None,
@@ -1780,6 +1836,7 @@ const METADATA: &[SampleMetadata] = &[
         file: "sony-dsc-r1.sr2",
         make: Some("SONY"),
         model: Some("DSC-R1"),
+        software: None,
         serial_number: None,
         capture_time: Some("2019-06-17T18:45:07"),
         orientation: Orientation::NoTransforms,
@@ -1787,6 +1844,7 @@ const METADATA: &[SampleMetadata] = &[
         exposure_time: Some((10, 4000)),
         f_number: Some((48, 10)),
         focal_length: Some((715, 10)),
+        focal_length_in_35mm_film: None,
         exposure_bias: Some((-3, 10)),
         lens: None,
         raw_size: Some((3984, 2608)),
@@ -1798,6 +1856,7 @@ const METADATA: &[SampleMetadata] = &[
         file: "sony-ilce-7rm3-pixel-shift.arw",
         make: Some("SONY"),
         model: Some("ILCE-7RM3"),
+        software: Some("ILCE-7RM3 v3.00"),
         serial_number: None,
         capture_time: Some("2019-07-12T09:41:02-04:00"),
         orientation: Orientation::NoTransforms,
@@ -1805,6 +1864,7 @@ const METADATA: &[SampleMetadata] = &[
         exposure_time: Some((1, 30)),
         f_number: Some((28, 10)),
         focal_length: Some((240, 10)),
+        focal_length_in_35mm_film: Some(24),
         exposure_bias: Some((0, 10)),
         lens: Some(SampleLens {
             make: None,
@@ -1829,6 +1889,7 @@ const METADATA: &[SampleMetadata] = &[
         file: "sony-slt-a99.arw",
         make: Some("SONY"),
         model: Some("SLT-A99V"),
+        software: Some("SLT-A99V v1.02"),
         serial_number: None,
         capture_time: Some("2019-10-26T15:58:28"),
         orientation: Orientation::Rotate270,
@@ -1836,6 +1897,7 @@ const METADATA: &[SampleMetadata] = &[
         exposure_time: Some((1, 250)),
         f_number: Some((56, 10)),
         focal_length: Some((850, 10)),
+        focal_length_in_35mm_film: Some(85),
         exposure_bias: Some((7, 10)),
         lens: Some(SampleLens {
             make: None,
@@ -1855,6 +1917,7 @@ const METADATA: &[SampleMetadata] = &[
         file: "hasselblad-lunar.arw",
         make: Some("HASSELBLAD"),
         model: Some("Lunar"),
+        software: Some("Lunar v1.02"),
         serial_number: None,
         capture_time: Some("2016-05-31T15:21:03"),
         orientation: Orientation::NoTransforms,
@@ -1862,6 +1925,7 @@ const METADATA: &[SampleMetadata] = &[
         exposure_time: Some((1, 125)),
         f_number: Some((56, 10)),
         focal_length: Some((410, 10)),
+        focal_length_in_35mm_film: Some(61),
         exposure_bias: Some((0, 10)),
         lens: Some(SampleLens {
             make: None,
@@ -1881,6 +1945,7 @@ const METADATA: &[SampleMetadata] = &[
         file: "sony-ilce-1-lossless.arw",
         make: Some("SONY"),
         model: Some("ILCE-1"),
+        software: Some("ILCE-1 v1.00"),
         serial_number: Some(SerialShape {
             len: 8,
             digits: true,
@@ -1891,6 +1956,7 @@ const METADATA: &[SampleMetadata] = &[
         exposure_time: Some((1, 160)),
         f_number: Some((80, 10)),
         focal_length: Some((1350, 10)),
+        focal_length_in_35mm_film: Some(135),
         exposure_bias: Some((10, 10)),
         lens: Some(SampleLens {
             make: None,
@@ -1915,6 +1981,7 @@ const METADATA: &[SampleMetadata] = &[
         file: "sony-ilce-7sm3.arw",
         make: Some("SONY"),
         model: Some("ILCE-7SM3"),
+        software: Some("ILCE-7SM3 v2.01"),
         serial_number: None,
         capture_time: Some("2022-04-10T17:25:57.888+08:00"),
         orientation: Orientation::NoTransforms,
@@ -1922,6 +1989,7 @@ const METADATA: &[SampleMetadata] = &[
         exposure_time: Some((1, 160)),
         f_number: Some((40, 10)),
         focal_length: Some((530, 10)),
+        focal_length_in_35mm_film: Some(53),
         exposure_bias: Some((-3, 10)),
         lens: Some(SampleLens {
             make: None,
@@ -1946,6 +2014,7 @@ const METADATA: &[SampleMetadata] = &[
         file: "sony-dsc-rx100.arw",
         make: Some("SONY"),
         model: Some("DSC-RX100"),
+        software: Some("DSC-RX100 v1.00"),
         serial_number: None,
         capture_time: Some("2012-12-24T12:27:30"),
         orientation: Orientation::NoTransforms,
@@ -1953,6 +2022,7 @@ const METADATA: &[SampleMetadata] = &[
         exposure_time: Some((1, 250)),
         f_number: Some((18, 10)),
         focal_length: Some((1040, 100)),
+        focal_length_in_35mm_film: Some(28),
         exposure_bias: Some((0, 10)),
         lens: Some(SampleLens {
             make: None,
@@ -1972,6 +2042,7 @@ const METADATA: &[SampleMetadata] = &[
         file: "sony-dslr-a900.arw",
         make: Some("SONY"),
         model: Some("DSLR-A900"),
+        software: Some("DSLR-A900 v2.00"),
         serial_number: None,
         capture_time: Some("2022-08-14T19:36:44"),
         orientation: Orientation::NoTransforms,
@@ -1979,6 +2050,7 @@ const METADATA: &[SampleMetadata] = &[
         exposure_time: Some((1, 80)),
         f_number: Some((40, 10)),
         focal_length: Some((280, 10)),
+        focal_length_in_35mm_film: Some(28),
         exposure_bias: Some((0, 10)),
         lens: None,
         raw_size: Some((6080, 4048)),
@@ -1990,6 +2062,7 @@ const METADATA: &[SampleMetadata] = &[
         file: "sony-ilce-6700-lossless.arw",
         make: Some("SONY"),
         model: Some("ILCE-6700"),
+        software: Some("ILCE-6700 v1.00"),
         serial_number: None,
         capture_time: Some("2023-08-01T17:00:23.272+01:00"),
         orientation: Orientation::NoTransforms,
@@ -1997,6 +2070,7 @@ const METADATA: &[SampleMetadata] = &[
         exposure_time: Some((1, 50)),
         f_number: Some((110, 10)),
         focal_length: Some((160, 10)),
+        focal_length_in_35mm_film: Some(24),
         exposure_bias: Some((0, 10)),
         lens: Some(SampleLens {
             make: None,
@@ -2021,6 +2095,7 @@ const METADATA: &[SampleMetadata] = &[
         file: "sony-ilce-7m4-lossless-l.arw",
         make: Some("SONY"),
         model: Some("ILCE-7M4"),
+        software: Some("ILCE-7M4 v2.00"),
         serial_number: None,
         capture_time: Some("2023-10-19T16:13:48.776+02:00"),
         orientation: Orientation::NoTransforms,
@@ -2028,6 +2103,7 @@ const METADATA: &[SampleMetadata] = &[
         exposure_time: Some((1, 50)),
         f_number: Some((56, 10)),
         focal_length: Some((500, 10)),
+        focal_length_in_35mm_film: Some(50),
         exposure_bias: Some((0, 10)),
         lens: Some(SampleLens {
             make: None,
@@ -2052,6 +2128,7 @@ const METADATA: &[SampleMetadata] = &[
         file: "sony-ilce-7m4-lossless-m.arw",
         make: Some("SONY"),
         model: Some("ILCE-7M4"),
+        software: Some("ILCE-7M4 v2.00"),
         serial_number: None,
         capture_time: Some("2023-10-19T16:14:16.647+02:00"),
         orientation: Orientation::NoTransforms,
@@ -2059,6 +2136,7 @@ const METADATA: &[SampleMetadata] = &[
         exposure_time: Some((1, 50)),
         f_number: Some((56, 10)),
         focal_length: Some((500, 10)),
+        focal_length_in_35mm_film: Some(50),
         exposure_bias: Some((0, 10)),
         lens: Some(SampleLens {
             make: None,
@@ -2083,6 +2161,7 @@ const METADATA: &[SampleMetadata] = &[
         file: "sony-ilce-7m4-lossless-s.arw",
         make: Some("SONY"),
         model: Some("ILCE-7M4"),
+        software: Some("ILCE-7M4 v2.00"),
         serial_number: None,
         capture_time: Some("2023-10-19T16:15:00.101+02:00"),
         orientation: Orientation::NoTransforms,
@@ -2090,6 +2169,7 @@ const METADATA: &[SampleMetadata] = &[
         exposure_time: Some((1, 50)),
         f_number: Some((56, 10)),
         focal_length: Some((500, 10)),
+        focal_length_in_35mm_film: Some(50),
         exposure_bias: Some((0, 10)),
         lens: Some(SampleLens {
             make: None,
@@ -2114,6 +2194,7 @@ const METADATA: &[SampleMetadata] = &[
         file: "sony-ilce-7m4-uncompressed-apsc.arw",
         make: Some("SONY"),
         model: Some("ILCE-7M4"),
+        software: Some("ILCE-7M4 v2.00"),
         serial_number: None,
         capture_time: Some("2023-10-19T16:16:39.709+02:00"),
         orientation: Orientation::NoTransforms,
@@ -2121,6 +2202,7 @@ const METADATA: &[SampleMetadata] = &[
         exposure_time: Some((1, 80)),
         f_number: Some((56, 10)),
         focal_length: Some((500, 10)),
+        focal_length_in_35mm_film: Some(75),
         exposure_bias: Some((0, 10)),
         lens: Some(SampleLens {
             make: None,
@@ -2145,6 +2227,7 @@ const METADATA: &[SampleMetadata] = &[
         file: "sony-ilce-7m4-compressed-apsc.arw",
         make: Some("SONY"),
         model: Some("ILCE-7M4"),
+        software: Some("ILCE-7M4 v2.00"),
         serial_number: None,
         capture_time: Some("2023-10-19T16:18:54.794+02:00"),
         orientation: Orientation::NoTransforms,
@@ -2152,6 +2235,7 @@ const METADATA: &[SampleMetadata] = &[
         exposure_time: Some((1, 80)),
         f_number: Some((56, 10)),
         focal_length: Some((500, 10)),
+        focal_length_in_35mm_film: Some(75),
         exposure_bias: Some((0, 10)),
         lens: Some(SampleLens {
             make: None,
@@ -2176,6 +2260,7 @@ const METADATA: &[SampleMetadata] = &[
         file: "sony-ilce-9m3-compressed.arw",
         make: Some("SONY"),
         model: Some("ILCE-9M3"),
+        software: Some("ILCE-9M3 v1.00"),
         serial_number: None,
         capture_time: Some("2024-03-26T12:47:24.654+00:00"),
         orientation: Orientation::NoTransforms,
@@ -2183,6 +2268,7 @@ const METADATA: &[SampleMetadata] = &[
         exposure_time: Some((1, 50)),
         f_number: Some((18, 10)),
         focal_length: Some((550, 10)),
+        focal_length_in_35mm_film: Some(55),
         exposure_bias: Some((0, 10)),
         lens: Some(SampleLens {
             make: None,
@@ -2202,6 +2288,7 @@ const METADATA: &[SampleMetadata] = &[
         file: "sony-ilce-9m3-lossless-s.arw",
         make: Some("SONY"),
         model: Some("ILCE-9M3"),
+        software: Some("ILCE-9M3 v1.00"),
         serial_number: None,
         capture_time: Some("2024-03-26T12:47:59.397+00:00"),
         orientation: Orientation::NoTransforms,
@@ -2209,6 +2296,7 @@ const METADATA: &[SampleMetadata] = &[
         exposure_time: Some((1, 50)),
         f_number: Some((18, 10)),
         focal_length: Some((550, 10)),
+        focal_length_in_35mm_film: Some(55),
         exposure_bias: Some((0, 10)),
         lens: Some(SampleLens {
             make: None,
@@ -2228,6 +2316,7 @@ const METADATA: &[SampleMetadata] = &[
         file: "sony-ilce-1m2-lossy-apsc.arw",
         make: Some("SONY"),
         model: Some("ILCE-1M2"),
+        software: Some("ILCE-1M2 v2.00"),
         serial_number: None,
         capture_time: Some("2025-05-09T09:36:24.457+01:00"),
         orientation: Orientation::NoTransforms,
@@ -2235,6 +2324,7 @@ const METADATA: &[SampleMetadata] = &[
         exposure_time: Some((1, 1000)),
         f_number: Some((28, 10)),
         focal_length: Some((1330, 10)),
+        focal_length_in_35mm_film: Some(199),
         exposure_bias: Some((0, 10)),
         lens: Some(SampleLens {
             make: None,
@@ -2259,6 +2349,7 @@ const METADATA: &[SampleMetadata] = &[
         file: "sony-ilce-7m5-compressed-hq.arw",
         make: Some("SONY"),
         model: Some("ILCE-7M5"),
+        software: Some("ILCE-7M5 v1.00"),
         serial_number: Some(SerialShape {
             len: 8,
             digits: true,
@@ -2269,6 +2360,7 @@ const METADATA: &[SampleMetadata] = &[
         exposure_time: Some((1, 8)),
         f_number: Some((28, 10)),
         focal_length: Some((240, 10)),
+        focal_length_in_35mm_film: Some(24),
         exposure_bias: Some((3, 10)),
         lens: Some(SampleLens {
             make: None,
@@ -2293,6 +2385,7 @@ const METADATA: &[SampleMetadata] = &[
         file: "sony-ilce-7m5-compressed.arw",
         make: Some("SONY"),
         model: Some("ILCE-7M5"),
+        software: Some("ILCE-7M5 v1.00"),
         serial_number: Some(SerialShape {
             len: 8,
             digits: true,
@@ -2303,6 +2396,7 @@ const METADATA: &[SampleMetadata] = &[
         exposure_time: Some((1, 8)),
         f_number: Some((28, 10)),
         focal_length: Some((240, 10)),
+        focal_length_in_35mm_film: Some(24),
         exposure_bias: Some((3, 10)),
         lens: Some(SampleLens {
             make: None,
@@ -2327,6 +2421,7 @@ const METADATA: &[SampleMetadata] = &[
         file: "sony-ilce-7m5-lossless-apsc.arw",
         make: Some("SONY"),
         model: Some("ILCE-7M5"),
+        software: Some("ILCE-7M5 v1.00"),
         serial_number: Some(SerialShape {
             len: 8,
             digits: true,
@@ -2337,6 +2432,7 @@ const METADATA: &[SampleMetadata] = &[
         exposure_time: Some((1, 6)),
         f_number: Some((28, 10)),
         focal_length: Some((240, 10)),
+        focal_length_in_35mm_film: Some(36),
         exposure_bias: Some((3, 10)),
         lens: Some(SampleLens {
             make: None,
@@ -2361,6 +2457,7 @@ const METADATA: &[SampleMetadata] = &[
         file: "sony-ilce-7m5-compressed-hq-apsc.arw",
         make: Some("SONY"),
         model: Some("ILCE-7M5"),
+        software: Some("ILCE-7M5 v1.00"),
         serial_number: Some(SerialShape {
             len: 8,
             digits: true,
@@ -2371,6 +2468,7 @@ const METADATA: &[SampleMetadata] = &[
         exposure_time: Some((1, 8)),
         f_number: Some((28, 10)),
         focal_length: Some((240, 10)),
+        focal_length_in_35mm_film: Some(36),
         exposure_bias: Some((3, 10)),
         lens: Some(SampleLens {
             make: None,
@@ -2395,6 +2493,7 @@ const METADATA: &[SampleMetadata] = &[
         file: "sony-ilce-7m5-compressed-apsc.arw",
         make: Some("SONY"),
         model: Some("ILCE-7M5"),
+        software: Some("ILCE-7M5 v1.00"),
         serial_number: Some(SerialShape {
             len: 8,
             digits: true,
@@ -2405,6 +2504,7 @@ const METADATA: &[SampleMetadata] = &[
         exposure_time: Some((1, 8)),
         f_number: Some((28, 10)),
         focal_length: Some((240, 10)),
+        focal_length_in_35mm_film: Some(36),
         exposure_bias: Some((3, 10)),
         lens: Some(SampleLens {
             make: None,
@@ -2434,6 +2534,7 @@ const LARGE_METADATA: &[SampleMetadata] = &[
         file: "sony-ilce-7rm3.arq",
         make: Some("SONY"),
         model: Some("ILCE-7RM3"),
+        software: Some("ILCE-7RM3 v3.00"),
         serial_number: None,
         capture_time: Some("2019-07-12T09:41:02-04:00"),
         orientation: Orientation::NoTransforms,
@@ -2441,6 +2542,7 @@ const LARGE_METADATA: &[SampleMetadata] = &[
         exposure_time: Some((1, 30)),
         f_number: Some((28, 10)),
         focal_length: Some((240, 10)),
+        focal_length_in_35mm_film: Some(24),
         exposure_bias: Some((0, 10)),
         lens: Some(SampleLens {
             make: None,

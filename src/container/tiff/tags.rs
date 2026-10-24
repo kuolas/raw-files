@@ -53,6 +53,12 @@ pub(crate) const ORIENTATION: u16 = 0x0112;
 /// strip (StripByteCounts).
 pub(crate) const STRIP_BYTE_COUNTS: u16 = 0x0117;
 
+/// The name and version of the firmware or program that wrote the file, as
+/// text (Software), read from IFD0: a camera writes its firmware version
+/// there, such as `Ver.01.00`, and a program that rewrites the file its own
+/// name.
+pub(crate) const SOFTWARE: u16 = 0x0131;
+
 /// The width in pixels of each tile of an image stored in tiles
 /// (TileWidth).
 pub(crate) const TILE_WIDTH: u16 = 0x0142;
@@ -138,6 +144,12 @@ pub(crate) const SUB_SEC_TIME_ORIGINAL: u16 = 0x9291;
 /// (MakerNote): an Exif tag, read from the Exif IFD, whose value is the
 /// block's bytes.
 pub(crate) const MAKER_NOTE: u16 = 0x927C;
+
+/// The focal length in 35 mm terms, in whole millimetres, as a SHORT
+/// (FocalLengthIn35mmFilm), read from the Exif IFD: the focal length that
+/// would give the same field of view on a 35 mm film camera, such as 75
+/// for 50 mm on a DX body. Exif writes 0 for one the camera did not know.
+pub(crate) const FOCAL_LENGTH_IN_35MM_FILM: u16 = 0xA405;
 
 /// The serial number of the camera body, as text (BodySerialNumber), read
 /// from the Exif IFD.
