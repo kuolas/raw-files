@@ -3,32 +3,35 @@
 //! What the camera recorded about a picture.
 //!
 //! Besides the image, a camera records how the picture was taken: by which
-//! camera and when, the exposure it chose, the lens it was taken with, how
-//! large the image is, and where the camera focused. [`Metadata`] holds all
-//! of it, read when the file is opened; [`Exposure`] and [`Lens`] hold the
-//! exposure and the lens as the file records them, fractions with the
-//! numerator and denominator it stored, and [`Focus`] where the camera's
-//! autofocus aimed, as the camera recorded it. [`LensBuilder`] builds a
-//! lens a value at a time, for a caller's tests.
+//! camera and when, the exposure it chose, how the camera was set, the
+//! lens it was taken with, how large the image is, and where the camera
+//! focused. [`Metadata`] holds all of it, read when the file is opened;
+//! [`Exposure`] and [`Lens`] hold the exposure and the lens as the file
+//! records them, fractions with the numerator and denominator it stored,
+//! [`CameraSettings`] the camera's settings, and [`Focus`] where the
+//! camera's autofocus aimed, as the camera recorded it. [`LensBuilder`]
+//! builds a lens a value at a time, for a caller's tests.
 //!
 //! Every value is optional. A file may not record it, or may record it in a
 //! way that cannot be read, such as a tag of the wrong type; either way the
 //! value is `None`, and the others are unaffected.
 //!
 //! A program that uses raw-files can build these values for its own tests,
-//! without a camera file: [`Metadata`] and [`Exposure`] through their
-//! `with_…` methods, a [`Lens`] through [`Lens::builder`], and a [`Focus`],
-//! a [`DateTime`] and a [`Rational`] through their checked constructors.
-//! [`Metadata`]'s docs show how.
+//! without a camera file: [`Metadata`], [`Exposure`] and [`CameraSettings`]
+//! through their `with_…` methods, a [`Lens`] through [`Lens::builder`],
+//! and a [`Focus`], a [`DateTime`] and a [`Rational`] through their checked
+//! constructors. [`Metadata`]'s docs show how.
 
+use crate::camera_settings::CameraSettings;
 use crate::datetime::DateTime;
 use crate::geometry::{Point, Size};
 use crate::orientation::Orientation;
 use crate::rational::{Rational, SignedRational};
 
 /// What the camera recorded about a picture: the camera, when the picture
-/// was taken, how to turn it upright, its exposure and lens, the sizes of
-/// its raw data and of its visible image, and where the camera focused.
+/// was taken, how to turn it upright, its exposure, how the camera was set,
+/// its lens, the sizes of its raw data and of its visible image, and where
+/// the camera focused.
 ///
 /// Every value is `None` when the file does not record it or records it in
 /// a way that cannot be read. A damaged value costs only itself, and a
@@ -81,7 +84,8 @@ use crate::rational::{Rational, SignedRational};
 ///
 /// ```
 /// use raw_files::{
-///     DateTime, Exposure, Focus, Lens, Metadata, Point, Rational, Size,
+///     CameraSettings, DateTime, Exposure, Focus, Lens, Metadata, MeteringMode, Point, Rational,
+///     Size,
 /// };
 ///
 /// # fn main() {
@@ -102,6 +106,9 @@ use crate::rational::{Rational, SignedRational};
 ///     .with_model("NIKON Z 9")
 ///     .with_capture_time(time)
 ///     .with_exposure(exposure)
+///     .with_camera_settings(
+///         CameraSettings::default().with_metering_mode(MeteringMode::MultiSegment),
+///     )
 ///     .with_lens(Lens::builder().model("NIKKOR Z 14-30mm f/4 S").build()?)
 ///     .with_focus(focus);
 ///
@@ -112,6 +119,11 @@ use crate::rational::{Rational, SignedRational};
 /// );
 /// assert_eq!(metadata.exposure().iso(), Some(64));
 /// assert_eq!(metadata.exposure().exposure_time(), Rational::new(10, 3200));
+/// assert_eq!(
+///     metadata.camera_settings().metering_mode(),
+///     Some(MeteringMode::MultiSegment)
+/// );
+/// assert_eq!(metadata.camera_settings().white_balance().mode(), None);
 /// assert_eq!(
 ///     metadata.lens().and_then(Lens::model),
 ///     Some("NIKKOR Z 14-30mm f/4 S")
@@ -133,6 +145,7 @@ pub struct Metadata {
     pub(crate) capture_time: Option<DateTime>,
     pub(crate) orientation: Orientation,
     pub(crate) exposure: Exposure,
+    pub(crate) camera_settings: CameraSettings,
     pub(crate) lens: Option<Lens>,
     pub(crate) raw_size: Option<Size>,
     pub(crate) image_size: Option<Size>,
@@ -189,6 +202,22 @@ impl Metadata {
     /// of its values is optional.
     pub fn exposure(&self) -> &Exposure {
         &self.exposure
+    }
+
+    /// How the camera was set for the picture (see [`CameraSettings`]),
+    /// for a viewer's information panel beside the exposure: the white
+    /// balance, the exposure program, the metering mode, the flash, the
+    /// shutter, the image area, the raw image size and the colour space.
+    /// Always present, though each of its values is optional: `None` when
+    /// the file does not record it or records it in a way that cannot be
+    /// read, a damaged value costing only itself.
+    ///
+    /// No reader fills the settings in yet, so for every file it is the
+    /// empty record, `CameraSettings::default()`. A program's tests build
+    /// one with the `with_…` methods of [`CameraSettings`] and set it with
+    /// [`with_camera_settings`](Self::with_camera_settings).
+    pub fn camera_settings(&self) -> &CameraSettings {
+        &self.camera_settings
     }
 
     /// The lens the picture was taken with, or `None` when the file
@@ -338,6 +367,14 @@ impl Metadata {
     #[must_use]
     pub fn with_exposure(mut self, exposure: Exposure) -> Self {
         self.exposure = exposure;
+        self
+    }
+
+    /// Sets the camera settings, in place of the ones it had;
+    /// [`camera_settings`](Self::camera_settings) reads them.
+    #[must_use]
+    pub fn with_camera_settings(mut self, settings: CameraSettings) -> Self {
+        self.camera_settings = settings;
         self
     }
 
@@ -1155,6 +1192,9 @@ fn trim(side: u32, center: u32, frame: u32) -> u32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::camera_settings::{
+        ColorSpace, ExposureProgram, MeteringMode, RawImageSize, Shutter,
+    };
 
     fn fraction(numerator: u32, denominator: u32) -> Rational {
         Rational {
@@ -1929,6 +1969,15 @@ mod tests {
         assert_eq!(set.len(), others.len() + 1);
     }
 
+    /// Camera settings of a Z 9 picture: aperture priority, matrix
+    /// metering and the electronic front curtain.
+    fn z9_camera_settings() -> CameraSettings {
+        CameraSettings::default()
+            .with_exposure_program(ExposureProgram::AperturePriority)
+            .with_metering_mode(MeteringMode::MultiSegment)
+            .with_shutter(Shutter::ElectronicFrontCurtain)
+    }
+
     /// The metadata of a Z 9 picture, every value set and each one
     /// different from the others, so that a getter reading the wrong value
     /// is caught.
@@ -1940,6 +1989,7 @@ mod tests {
             capture_time: DateTime::from_exif(b"2024:05:01 10:20:30", Some(b"85"), Some(b"+02:00")),
             orientation: Orientation::Rotate90,
             exposure: z9_exposure(),
+            camera_settings: z9_camera_settings(),
             lens: Lens::builder().model("NIKKOR Z 14-30mm f/4 S").build(),
             raw_size: Some(Size {
                 width: 8_280,
@@ -1962,6 +2012,7 @@ mod tests {
         assert_eq!(metadata.capture_time(), None);
         assert_eq!(metadata.orientation(), Orientation::NoTransforms);
         assert_eq!(metadata.exposure(), &Exposure::default());
+        assert_eq!(metadata.camera_settings(), &CameraSettings::default());
         assert_eq!(metadata.lens(), None);
         assert_eq!(metadata.raw_size(), None);
         assert_eq!(metadata.image_size(), None);
@@ -1978,6 +2029,7 @@ mod tests {
         assert_eq!(time.to_string(), "2024-05-01T10:20:30.85+02:00");
         assert_eq!(metadata.orientation(), Orientation::Rotate90);
         assert_eq!(metadata.exposure(), &z9_exposure());
+        assert_eq!(metadata.camera_settings(), &z9_camera_settings());
         assert_eq!(
             metadata.lens().and_then(Lens::model),
             Some("NIKKOR Z 14-30mm f/4 S")
@@ -2076,6 +2128,7 @@ mod tests {
             ..Exposure::default()
         };
         let focus = Focus::new(size(6_000, 4_000), point(3_000, 2_000)).unwrap();
+        let settings = CameraSettings::default().with_color_space(ColorSpace::Srgb);
         // From the empty metadata, and from a full one whose every value
         // differs from the one set, so that a builder writing another
         // value, or clearing one, is caught. The expected value is built
@@ -2125,6 +2178,13 @@ mod tests {
                     },
                 ),
                 (
+                    start.clone().with_camera_settings(settings.clone()),
+                    Metadata {
+                        camera_settings: settings.clone(),
+                        ..start.clone()
+                    },
+                ),
+                (
                     start.clone().with_lens(z_lens()),
                     Metadata {
                         lens: Some(z_lens()),
@@ -2159,7 +2219,7 @@ mod tests {
         }
     }
 
-    /// [`z9_metadata`] built through the ten builders.
+    /// [`z9_metadata`] built through the eleven builders.
     fn z9_metadata_built() -> Metadata {
         let lens = Lens::builder()
             .model("NIKKOR Z 14-30mm f/4 S")
@@ -2174,6 +2234,7 @@ mod tests {
             )
             .with_orientation(Orientation::Rotate90)
             .with_exposure(z9_exposure_built())
+            .with_camera_settings(z9_camera_settings())
             .with_lens(lens)
             .with_raw_size(size(8_280, 5_520))
             .with_image_size(size(8_256, 5_504))
@@ -2230,6 +2291,9 @@ mod tests {
             .with_capture_time(DateTime::new(2000, 1, 1, 0, 0, 0).unwrap())
             .with_orientation(Orientation::Rotate180)
             .with_exposure(Exposure::default().with_iso(1))
+            .with_camera_settings(
+                CameraSettings::default().with_raw_image_size(RawImageSize::Small),
+            )
             .with_lens(Lens::builder().model("A").build().unwrap())
             .with_raw_size(size(1, 1))
             .with_image_size(size(1, 1))
@@ -2244,6 +2308,7 @@ mod tests {
             .with_capture_time(z9.capture_time.unwrap())
             .with_orientation(z9.orientation)
             .with_exposure(z9.exposure.clone())
+            .with_camera_settings(z9.camera_settings.clone())
             .with_lens(z9.lens.clone().unwrap())
             .with_raw_size(z9.raw_size.unwrap())
             .with_image_size(z9.image_size.unwrap())
