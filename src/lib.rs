@@ -23,11 +23,11 @@
 //! that wrote the file, the capture time, the orientation, the exposure,
 //! with the focal length in 35 mm terms, the camera's settings (the white
 //! balance, the exposure program, the metering mode, the flash, the
-//! shutter, the image area, the raw image size and the colour space, in
-//! [`CameraSettings`], those that only a MakerNote records from Nikon's
-//! alone, Sony's not yet), the lens, the sizes of the raw data, which a
-//! JPEG lacks, and of the visible image, and where the camera focused
-//! ([`Metadata::focus`]). See the
+//! shutter, the electronic front curtain setting, the image area, the raw
+//! image size and the colour space, in [`CameraSettings`], those that only
+//! a MakerNote records from the plain tags of Nikon's and Sony's), the
+//! lens, the sizes of the raw data, which a JPEG lacks, and of the visible
+//! image, and where the camera focused ([`Metadata::focus`]). See the
 //! [roadmap](https://github.com/kuolas/raw-files/blob/master/docs/ROADMAP.md)
 //! for the plan and the
 //! [architecture](https://github.com/kuolas/raw-files/blob/master/docs/ARCHITECTURE.md)
@@ -210,10 +210,10 @@
 //! main one and, from the Nikon bodies that write one, such as the D70,
 //! the small JPEG its MakerNote points at. Its metadata is what its Exif
 //! segment records, read as in a raw file, with the picture's size as the
-//! image size and no raw size; from a Nikon camera, also what its
-//! MakerNote records, as in a NEF: what the Exif segment lacks, and the
-//! white balance setting, finer than the Exif segment's; and from a Nikon
-//! or a Sony camera the focus point. No other maker's
+//! image size and no raw size; from a Nikon or a Sony camera, also what
+//! its MakerNote records, as in a NEF or an ARW: what the Exif segment
+//! lacks, the camera settings and the focus point among it, and the white
+//! balance setting, finer than the Exif segment's. No other maker's
 //! MakerNote is read. These are checked on eight camera JPEGs from
 //! [Wikimedia Commons](https://commons.wikimedia.org/), of five Sony
 //! bodies, two Nikon bodies and a Canon; on three stripped JPEG files of

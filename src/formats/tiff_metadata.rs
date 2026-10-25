@@ -97,14 +97,18 @@
 //!   are `None` here: the white balance's colour temperature and
 //!   fine-tuning, the shutter, the electronic front curtain setting, the
 //!   image area and the raw image size. A format's MakerNote reader fills
-//!   them where its MakerNote records them, and may put the MakerNote's
-//!   white balance setting, finer than Exif's, in place of the mode read
-//!   here; Nikon's reader does, and Sony's does not yet. See #26. So that
-//!   a MakerNote's colour space never overrules Exif's, [`read`] also says
-//!   whether the Exif IFD holds a ColorSpace at all, of whatever type or
-//!   count, readable or not ([`Standard`]): only when it holds none may a
-//!   MakerNote give the colour space, as Nikon's raw files, which record
-//!   none in Exif, need.
+//!   them where its MakerNote records them, and puts the MakerNote's white
+//!   balance setting, finer than Exif's, in place of the mode read here
+//!   when the MakerNote names one, as Nikon's and Sony's readers both do.
+//!   So that a MakerNote's colour space never overrules Exif's, [`read`]
+//!   also says whether the Exif IFD keeps a ColorSpace entry, of any known
+//!   type and any count, whether or not it gives a colour space
+//!   ([`Standard`]): only when it keeps none may a MakerNote give the
+//!   colour space, as Nikon's raw files, which record none in Exif, need.
+//!   An entry the IFD's reader skips as damaged, of an unknown type, of a
+//!   length past 32 bits or with its value outside its block, the file or
+//!   a JPEG's Exif segment, counts as none, so the MakerNote may stand in,
+//!   as for any damaged value (ADR011).
 //! - A file without an Exif IFD has no capture time, no serial number, no
 //!   exposure, no lens, and none of the camera settings.
 //! - The orientation is IFD0's Orientation, read as the preview finder reads
@@ -147,7 +151,7 @@ use crate::container::tiff::tags::{
     OFFSET_TIME_ORIGINAL, PHOTOGRAPHIC_SENSITIVITY, RECOMMENDED_EXPOSURE_INDEX, SOFTWARE,
     SUB_SEC_TIME_ORIGINAL, WHITE_BALANCE,
 };
-use crate::container::tiff::types::SHORT;
+use crate::container::tiff::types::{LONG, SHORT};
 use crate::container::tiff::{Ifd, Tree, skip_damage};
 use crate::datetime::DateTime;
 use crate::error::Result;
@@ -362,19 +366,11 @@ fn focal_length_in_35mm_film<R: Read + Seek>(
 }
 
 /// The value of tag `tag` of `ifd`, when the tag is of type SHORT and
-/// holds exactly one value: the type and count the standard gives each
-/// Exif tag read this way, a single number or code such as the focal
-/// length in 35 mm terms or the metering mode, and that a MakerNote's
-/// reader holds its own such tags to, such as Nikon's shutter mode.
-///
-/// `None` when the tag is missing, of another type or of another count.
-/// The type is checked first ([`Ifd::entry_of_type`]), since [`Ifd::u32`]
-/// would take a LONG too; a tag the standard gives one value that holds
-/// several, or none, records nothing the reader can trust, so even its
-/// first value is not taken (ADR011).
-///
-/// One SHORT is held in its entry, so reading it reads nothing more from
-/// the file.
+/// holds exactly one value, as [`one_of_type`] reads it: the type and
+/// count the standard gives each Exif tag read this way, a single number
+/// or code such as the focal length in 35 mm terms or the metering mode,
+/// and that a MakerNote's reader holds its own such tags to, such as
+/// Nikon's shutter mode.
 ///
 /// # Errors
 ///
@@ -385,15 +381,59 @@ pub(crate) fn one_short<R: Read + Seek>(
     ifd: &Ifd,
     tag: u16,
 ) -> Result<Option<u16>> {
+    let value = one_of_type(src, ifd, tag, SHORT)?;
+    // A SHORT, widened to 32 bits, always fits back.
+    Ok(value.and_then(|value| u16::try_from(value).ok()))
+}
+
+/// The value of tag `tag` of `ifd`, when the tag is of type LONG and holds
+/// exactly one value, as [`one_of_type`] reads it: the type and count a
+/// MakerNote's reader holds its tags of one number to where the maker
+/// writes them as LONGs, such as each of Sony's settings tags of one
+/// number.
+///
+/// # Errors
+///
+/// `Io` when the reader fails. A value that cannot be read for any other
+/// reason is `None`.
+pub(crate) fn one_long<R: Read + Seek>(
+    src: &mut Source<R>,
+    ifd: &Ifd,
+    tag: u16,
+) -> Result<Option<u32>> {
+    one_of_type(src, ifd, tag, LONG)
+}
+
+/// The value of tag `tag` of `ifd`, widened to 32 bits, when the tag is of
+/// type `typ`, SHORT or LONG, and holds exactly one value: the one rule
+/// behind [`one_short`] and [`one_long`].
+///
+/// `None` when the tag is missing, of another type or of another count.
+/// The type is checked first ([`Ifd::entry_of_type`]), since [`Ifd::u32`]
+/// would take a SHORT, a LONG and an IFD alike; a tag of one value that
+/// holds several, or none, records nothing the reader can trust, so even
+/// its first value is not taken (ADR011).
+///
+/// One SHORT or one LONG is held in its entry, so reading it reads
+/// nothing more from the file.
+///
+/// # Errors
+///
+/// `Io` when the reader fails. A value that cannot be read for any other
+/// reason is `None`.
+fn one_of_type<R: Read + Seek>(
+    src: &mut Source<R>,
+    ifd: &Ifd,
+    tag: u16,
+    typ: u16,
+) -> Result<Option<u32>> {
     if ifd
-        .entry_of_type(tag, &[SHORT])
+        .entry_of_type(tag, &[typ])
         .is_none_or(|entry| entry.count() != 1)
     {
         return Ok(None);
     }
-    let value = skip_damage(ifd.u32(src, tag))?.flatten();
-    // A SHORT, widened to 32 bits, always fits back.
-    Ok(value.and_then(|value| u16::try_from(value).ok()))
+    Ok(skip_damage(ifd.u32(src, tag))?.flatten())
 }
 
 /// The ISO the picture was taken at, from the Exif IFD `exif`.
@@ -559,8 +599,7 @@ fn camera_settings<R: Read + Seek>(
         white_balance: WhiteBalance {
             mode: white_balance_mode(src, exif)?,
             // Only a maker's MakerNote records the colour temperature and
-            // the fine-tuning: Nikon's reader fills them, and Sony's does
-            // not yet. See #26
+            // the fine-tuning: Nikon's and Sony's readers fill them.
             kelvin: None,
             fine_tune: None,
         },
@@ -569,7 +608,9 @@ fn camera_settings<R: Read + Seek>(
         flash: one_short(src, exif, FLASH)?.and_then(flash),
         // Only a maker's MakerNote records these: Nikon's reader fills
         // all but the electronic front curtain setting, which Nikon does
-        // not record, and Sony's reader none yet. See #26
+        // not record, and Sony's reader that setting alone, since Sony
+        // records the others only in enciphered blocks or, for the raw
+        // size, in a code that does not tell APS-C from medium.
         shutter: None,
         electronic_front_curtain_setting: None,
         image_area: None,

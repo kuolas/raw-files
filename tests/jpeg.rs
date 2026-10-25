@@ -15,10 +15,10 @@
 //! the Exif segment's TIFF header, its preview and its values; and the
 //! damage and the limits that cost the MakerNote but not the file. Then
 //! the Sony MakerNote of a Sony camera's JPEG, read by IFD0's Make too,
-//! with its offsets counted from the Exif segment's TIFF header: its focus
-//! point, as recorded and kept only when its frame has the picture's
-//! shape, none where it records none, and the damage and the limits that
-//! cost the point but not the file. Then three real JPEGs of the
+//! with its offsets counted from the Exif segment's TIFF header: the
+//! camera settings it records, its focus point, as recorded and kept only
+//! when its frame has the picture's shape, none where it records none, and
+//! the damage and the limits that cost the point but not the file. Then three real JPEGs of the
 //! maintainer's own Z 9, in FX and in DX and 16:9 crop modes, committed
 //! with their images replaced by stubs and their personal fields zeroed (see
 //! [`support::fixtures`]), read whole from a path and from bytes: their
@@ -44,7 +44,9 @@ use raw_files::{
 };
 use support::arw::{
     ARW4_FOCUS_CENTER, ARW4_FOCUS_FRAME, ARW4_FOCUS_SIZE, ARW4_FULL_SIZE_JPEG,
-    FOCUS_LOCATION as SONY_FOCUS_LOCATION,
+    COLOR_TEMPERATURE as SONY_COLOR_TEMPERATURE,
+    ELECTRONIC_FRONT_CURTAIN as SONY_ELECTRONIC_FRONT_CURTAIN, FINE_TUNE as SONY_FINE_TUNE,
+    FOCUS_LOCATION as SONY_FOCUS_LOCATION, WHITE_BALANCE as SONY_WHITE_BALANCE,
 };
 use support::jpeg_builder::{
     Built, JpegBuilder, LONG, MP_ENTRY, MP_ENTRY_AT, MP_ENTRY_LEN, MP_INDEX_AT, MPF_ID,
@@ -1542,6 +1544,44 @@ fn a_sony_jpeg_gives_the_focus_point_its_makernote_records() {
 }
 
 #[test]
+fn a_sony_jpeg_gives_the_camera_settings_its_makernote_records() {
+    // The ILCE-7M3's JPEG, whose MakerNote also records a chosen colour
+    // temperature of 3200 K, a shift of three steps towards amber, which
+    // Sony stores as 3, and the electronic front curtain on: the settings
+    // as the Sony MakerNote reader gives them, the shift positive towards
+    // blue, beside the focus point. The Exif segment records no setting.
+    for order in ORDERS {
+        let file = ilce7m3_jpeg_with(order, SONY_MAKE, ILCE7M3_MAIN, |tiff, ifd| {
+            tiff.long(ifd, SONY_WHITE_BALANCE, &[1])
+                .slong(ifd, SONY_FINE_TUNE, &[3, 0])
+                .long(ifd, SONY_ELECTRONIC_FRONT_CURTAIN, &[1])
+                .long(ifd, SONY_COLOR_TEMPERATURE, &[3200]);
+        });
+        let step = |n| SignedRational::new(n, 1).unwrap();
+        let white_balance = WhiteBalance::default()
+            .with_mode(WhiteBalanceMode::Kelvin)
+            .with_kelvin(3200)
+            .with_fine_tune(FineTune::new(step(-3), step(0)));
+        let settings = CameraSettings::default()
+            .with_white_balance(white_balance)
+            .with_electronic_front_curtain_setting(true);
+        let metadata = sony_metadata(
+            SONY_MAKE,
+            ILCE7M3_MODEL,
+            ILCE7M3_MAIN,
+            Some(sony_focus(ILCE7M3_FOCUS_LOCATION)),
+        )
+        .with_camera_settings(settings);
+        assert_opens(
+            &file.built.bytes,
+            &sony_previews(&file, ILCE7M3_MAIN),
+            &metadata,
+            &format!("ILCE-7M3, {order:?}"),
+        );
+    }
+}
+
+#[test]
 fn a_sony_jpeg_gives_the_area_its_makernote_records() {
     // A JPEG whose MakerNote holds the ILCE-7M4 raw file's FocusLocation
     // and FocusFrameSize, in the file's byte order: the point with its
@@ -2401,15 +2441,19 @@ fn every_jpeg_sample_opens_with_its_previews() {
 /// recorded, on the ILCE-7M3, off centre in a frame of its picture's size,
 /// and on the ILCE-7RM2, at the centre; where there is none, a comment
 /// says why. The camera settings are those the Exif IFD records, with,
-/// on the two Nikon files, those their MakerNote records: every file gives
-/// sRGB, from its Exif ColorSpace; the G7 X records no ExposureProgram and
-/// the D5300 the ExposureProgram 0, "not defined", so neither gives an
-/// exposure program; the D5300 gives the fine-tuning `0, 0` of its
-/// 0x000B, while the D70's 0x000B holds one value, which gives none; and
-/// neither Nikon file gives a raw image size, since a JPEG holds no raw
-/// data. The settings only a MakerNote records are `None` on every Sony
-/// and Canon file, since the reader does not read Sony's MakerNote for
-/// them yet and reads no Canon MakerNote.
+/// on the Nikon and Sony files, those their MakerNote records: every file
+/// gives sRGB, from its Exif ColorSpace; the G7 X records no
+/// ExposureProgram and the D5300 the ExposureProgram 0, "not defined", so
+/// neither gives an exposure program; the D5300 gives the fine-tuning
+/// `0, 0` of its 0x000B, while the D70's 0x000B holds one value, which
+/// gives none; and neither Nikon file gives a raw image size, since a JPEG
+/// holds no raw data. The Sony files but the DSLR-A100's give the
+/// fine-tuning `0, 0` and the electronic front curtain setting their
+/// MakerNote records, off on the RX100M4 and on on the others, and the
+/// white balance mode of its WhiteBalance, shade on the RX100M4, as Exif
+/// says too, and auto on the others; the DSLR-A100's MakerNote records
+/// none of them. The settings only a MakerNote records are `None` on the
+/// Canon file, since the reader reads no Canon MakerNote.
 const METADATA: &[SampleMetadata] = &[
     // ILCE-7M3 (Wikimedia Commons Acanthodactylus_erythrurus_2025.jpg)
     SampleMetadata {
@@ -2446,12 +2490,15 @@ const METADATA: &[SampleMetadata] = &[
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
             kelvin: None,
-            fine_tune: None,
+            fine_tune: Some(SampleFineTune {
+                amber_blue: (0, 1),
+                green_magenta: (0, 1),
+            }),
             exposure_program: Some(ExposureProgram::Manual),
             metering_mode: Some(MeteringMode::MultiSegment),
             flash: Some((false, Some(FlashMode::Off))),
             shutter: None,
-            electronic_front_curtain_setting: None,
+            electronic_front_curtain_setting: Some(true),
             image_area: None,
             raw_image_size: None,
             color_space: Some(ColorSpace::Srgb),
@@ -2492,12 +2539,15 @@ const METADATA: &[SampleMetadata] = &[
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
             kelvin: None,
-            fine_tune: None,
+            fine_tune: Some(SampleFineTune {
+                amber_blue: (0, 1),
+                green_magenta: (0, 1),
+            }),
             exposure_program: Some(ExposureProgram::Program),
             metering_mode: Some(MeteringMode::MultiSegment),
             flash: Some((false, Some(FlashMode::Off))),
             shutter: None,
-            electronic_front_curtain_setting: None,
+            electronic_front_curtain_setting: Some(true),
             image_area: None,
             raw_image_size: None,
             color_space: Some(ColorSpace::Srgb),
@@ -2533,12 +2583,15 @@ const METADATA: &[SampleMetadata] = &[
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Shade),
             kelvin: None,
-            fine_tune: None,
+            fine_tune: Some(SampleFineTune {
+                amber_blue: (0, 1),
+                green_magenta: (0, 1),
+            }),
             exposure_program: Some(ExposureProgram::Program),
             metering_mode: Some(MeteringMode::MultiSegment),
             flash: Some((false, Some(FlashMode::Off))),
             shutter: None,
-            electronic_front_curtain_setting: None,
+            electronic_front_curtain_setting: Some(false),
             image_area: None,
             raw_image_size: None,
             color_space: Some(ColorSpace::Srgb),
@@ -2574,12 +2627,15 @@ const METADATA: &[SampleMetadata] = &[
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
             kelvin: None,
-            fine_tune: None,
+            fine_tune: Some(SampleFineTune {
+                amber_blue: (0, 1),
+                green_magenta: (0, 1),
+            }),
             exposure_program: Some(ExposureProgram::AperturePriority),
             metering_mode: Some(MeteringMode::MultiSegment),
             flash: Some((false, Some(FlashMode::Off))),
             shutter: None,
-            electronic_front_curtain_setting: None,
+            electronic_front_curtain_setting: Some(true),
             image_area: None,
             raw_image_size: None,
             color_space: Some(ColorSpace::Srgb),

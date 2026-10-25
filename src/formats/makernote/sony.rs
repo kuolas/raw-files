@@ -2,14 +2,16 @@
 
 //! The Sony MakerNote: where it lies in the file, how its directory is
 //! found, what is checked before anything in it is read, and the focus
-//! point read from it.
+//! point and the camera settings read from it.
 //!
 //! The MakerNote is a block of Sony's own metadata, the value of the
 //! MakerNote tag of the Exif IFD: a directory of Sony's tags, an IFD like
-//! the file's own, with the values it points at. raw-files reads it for one
-//! thing only, the point where the camera focused, which no standard tag
-//! records and which Sony keeps in plain tags of this directory. ADR012
-//! decided it, amending ADR011, under which no Sony MakerNote was read.
+//! the file's own, with the values it points at. raw-files reads it for
+//! what no standard tag records and Sony keeps in plain tags of this
+//! directory: the point where the camera focused, as ADR012 decided,
+//! amending ADR011, under which no Sony MakerNote was read; and the camera
+//! settings that only the MakerNote records, as ADR011's sections on the
+//! camera settings decided.
 //!
 //! Sony has written the block in several layouts, told apart by its first
 //! bytes:
@@ -77,7 +79,8 @@
 //! rule allows, [`Ifd::u32s`] reading LONG and IFD as well as SHORT and
 //! [`Ifd::bytes`] BYTE as well as UNDEFINED, so each reader first finds the
 //! tag's entry among the types its rule allows ([`Ifd::entry_of_type`]) and
-//! checks its count.
+//! checks its count. Signed numbers are read by [`Ifd::i32s`], which reads
+//! SLONG alone, so that a negative value is never read as a large one.
 //! The signatures are looked for in at most the block's first 12 bytes,
 //! never past its end. A block too short for its header or for the IFD's
 //! count, an IFD cut short by the block's end, one with no entries, and one
@@ -153,23 +156,134 @@
 //! point. The ILCE-7S's file is a manual-focus shot without FocusLocation
 //! (file 1582). No plain tag says whether focus was confirmed either, so
 //! [`Focus::in_focus`] is never set.
+//!
+//! # The camera settings
+//!
+//! The MakerNote also records how the camera was set for the picture,
+//! beyond what the Exif tags record (ADR011): the white balance setting
+//! itself, where Exif says only auto or the kind of light; the colour
+//! temperature of a chosen colour temperature or of a custom white
+//! balance; the photographer's fine-tuning of the white balance; and the
+//! electronic front curtain setting. Each comes
+//! from one plain tag of the MakerNote IFD, of the exact type and count its
+//! rule names, and a code gives a value only where a checked file shows
+//! what it means; anything else costs that value alone ([`camera_settings`]).
+//! The meaning of each code is ExifTool's, read in its published tag
+//! documentation, and confirmed on the public samples and on 32 frames the
+//! maintainer shot with an ILCE-7M2 under each setting, and two more
+//! under custom, as the ARW notes record them
+//! (`docs/formats/arw/makernote-and-metadata.md`, section 9.7). Sony's
+//! Imaging Edge Desktop was run on those frames as a reader to compare
+//! with. Every settings tag of every checked file lies inside the
+//! block, the A200's, the A700's and the A900's too, whose values of other
+//! tags run past it.
+//!
+//! The other settings stay as the Exif tags give them. The shutter used and
+//! whether the body shot in APS-C mode are recorded only in enciphered
+//! blocks, which are not read, so they are `None`; so is the raw size,
+//! since the plain Quality tag (0x202E) gives an APS-C raw the code of a
+//! medium one. The colour space is Exif's alone, which every checked Sony
+//! file records.
+//!
+//! **WhiteBalance** ([`WHITE_BALANCE`]) is one LONG, a code for the
+//! setting. On the ILCE-7M2's frames it is 0 under auto, 16 under
+//! daylight, 32 under cloudy, 48 under shade, 64 under tungsten, 80 under
+//! flash, 96 under each of the four fluorescent lamps, 112 under custom,
+//! 128 under underwater, and 1 under a chosen colour temperature; the
+//! public samples hold 0, 48 and 112 ([`white_balance_mode`]). ExifTool's
+//! documentation names 1 a colour temperature or a colour filter; no
+//! frame was shot with a colour filter, so whether one gives 1 too is
+//! unchecked. The setting takes the place of Exif's mode, which agrees
+//! with it on every file checked but under underwater, where Exif's
+//! WhiteBalance says auto. Any other code, or a tag of another shape,
+//! gives way to Exif's mode. The DSC-F828 and the DSC-R1 write no such tag,
+//! and the DSLR-A100 keeps it in a Minolta-format IFD of its own, which is
+//! not read, so their mode is Exif's.
+//!
+//! Two more tags would seem to record the white balance, and neither is
+//! read. 0xB054, which ExifTool's documentation also calls WhiteBalance,
+//! says auto on the ILCE-7S's file and the RX100M4's JPEG, both set to
+//! shade, and on the frames shot under shade and under a chosen colour
+//! temperature. 0x0112, which that documentation calls
+//! WhiteBalanceFineTune, holds the kind of fluorescent lamp: -1 to 2 under
+//! the four lamps, and 0 under every other setting and on every frame with
+//! a fine-tuning; Imaging Edge Desktop shows it in brackets after the
+//! setting, such as "Fluorescent (+1)".
+//!
+//! **ColorTemperature** ([`COLOR_TEMPERATURE`]) is one LONG, in kelvin.
+//! Under a chosen colour temperature it holds the one chosen: 5500 on the
+//! first frame shot under that setting and 3200 on the later ones. Under
+//! custom it holds the custom white balance's own temperature: 5500 on a
+//! frame shot with the camera's old custom white balance while the
+//! colour-temperature setting stood at 3200, and 6300 on one shot after a
+//! new custom white balance was measured, the value the camera showed for
+//! it; the ILCE-9M3's two public samples, shot under custom, hold 5500
+//! too. Under every other setting it holds 0 on every file checked, the
+//! public samples, the maintainer's own files and the frames, and 0 gives
+//! none. So it is read under whichever setting, as Nikon's is, and the
+//! white balance mode beside it says which colour temperature it is. It
+//! gives one only from 1 to 99,999 K, the bound Nikon's colour
+//! temperatures are held to too: a larger number is no temperature a
+//! camera is set to.
+//!
+//! The fine-tuning is a shift of the white balance along two axes, amber to
+//! blue and green to magenta. **WBShiftAB_GM** ([`FINE_TUNE`]) holds it as
+//! two SLONGs, whole steps, on every body checked but the DSLR-A100, A200,
+//! A700 and A900, the SLT-A55V, the NEX-5, the DSC-F828 and the DSC-R1,
+//! which write none; every public sample that writes it holds `0, 0`. On
+//! the ILCE-7M2's frames it holds `3, 0` on a frame whose picture is warmer
+//! than the one shot without a shift, `-3, 0` on a cooler one, `0, -3` on a
+//! greener one and `0, 3` on a more magenta one; Imaging Edge Desktop names
+//! three of those shifts A3, G3 and M3. So the first value runs from blue,
+//! negative, to amber, positive, and the second from green, negative, to
+//! magenta, positive. [`FineTune`] signs its amber to blue shift positive
+//! towards blue, so the first value is turned around and the second kept,
+//! each as a fraction over 1 ([`fine_tune_of`]). A recorded `0, 0` is a
+//! fine-tuning like any other.
+//!
+//! **ElectronicFrontCurtainShutter** ([`ELECTRONIC_FRONT_CURTAIN`]) is one
+//! LONG, the electronic front curtain setting: 0 off and 1 on, as the two
+//! frames shot with it off and the others show. The SLT-A99V, the ILCE-7S
+//! and every later body checked write it. It is the menu setting, not the
+//! shutter used: on four public samples it contradicts what an enciphered
+//! block says of the release, as ExifTool, run on the files as a reader to
+//! compare with, decodes it, so it never gives the shutter.
 
 use std::io::{Read, Seek};
 
-use super::MakerNoteBlock;
-use crate::container::tiff::types::{BYTE, SHORT, UNDEFINED};
+use super::{MakerNoteBlock, color_temperature};
+use crate::camera_settings::{CameraSettings, FineTune, WhiteBalanceMode};
+use crate::container::tiff::types::{BYTE, SHORT, SLONG, UNDEFINED};
 use crate::container::tiff::{Ifd, Tree, skip_damage};
 use crate::error::Result;
+use crate::formats::tiff_metadata::one_long;
 use crate::geometry::{Point, Size};
 use crate::io::Source;
 use crate::limits::Limits;
-use crate::metadata::Focus;
+use crate::metadata::{Focus, Metadata};
+use crate::rational::SignedRational;
 
 /// The manufacturer's name that a Sony camera's Make starts with, compared
 /// without regard to case: what a format's reader looks for in IFD0's Make
 /// before it takes a file for a Sony one, the ARW claim and the JPEG reader
 /// alike.
 pub(in crate::formats) const SONY: &[u8; 4] = b"SONY";
+
+/// The Sony MakerNote tag that records the white balance setting
+/// (WhiteBalance): one LONG, a code for the setting, such as 0 for auto,
+/// 48 for shade or 1 for a chosen colour temperature.
+pub(in crate::formats) const WHITE_BALANCE: u16 = 0x0115;
+
+/// The Sony MakerNote tag that records the white balance fine-tuning
+/// (WBShiftAB_GM): two SLONGs, whole steps, the shift from amber to blue,
+/// positive towards amber, then the one from green to magenta, positive
+/// towards magenta.
+pub(in crate::formats) const FINE_TUNE: u16 = 0x2014;
+
+/// The Sony MakerNote tag that records the electronic front curtain
+/// setting (ElectronicFrontCurtainShutter): one LONG, 0 off and 1 on. It is
+/// the menu setting, not the shutter used.
+pub(in crate::formats) const ELECTRONIC_FRONT_CURTAIN: u16 = 0x201A;
 
 /// The Sony MakerNote tag that records how the camera focused
 /// (FocusMode): one BYTE, 0 for manual focus, and 2, 3, 4, 6 or 7 for the
@@ -190,6 +304,12 @@ const FOCUS_FRAME_SIZE: u16 = 0x2037;
 /// The Sony MakerNote tag that repeats FocusLocation on the newest bodies
 /// (FocusLocation2): the same four SHORTs, with the same values.
 const FOCUS_LOCATION2: u16 = 0x204A;
+
+/// The Sony MakerNote tag that records a colour temperature, in kelvin
+/// (ColorTemperature): one LONG, the one chosen under a chosen colour
+/// temperature and the custom white balance's own under custom, and 0 when
+/// none was recorded.
+const COLOR_TEMPERATURE: u16 = 0xB021;
 
 /// The header of the DSLR-A100's MakerNote (`SONY DSC `, then three NULs),
 /// which ExifTool's documentation also lists for the DSC compacts' JPEG
@@ -300,6 +420,30 @@ fn ifd_start(head: &[u8]) -> Option<u64> {
     }
 }
 
+/// The metadata of a file whose Sony MakerNote is `makernote`: `metadata`,
+/// what the standard tags gave, with what the MakerNote records that they
+/// lack, the same in every format whose files carry it, raw or JPEG.
+///
+/// First the camera settings that only the MakerNote records, and the white
+/// balance setting, in place of the mode the Exif tags gave when the
+/// MakerNote names one, each by its own rule ([`camera_settings`]). Then
+/// the focus point, as recorded ([`focus`]), always read: the standard
+/// tags never give one, so it is not a value they may already hold. The
+/// other values are the standard tags' alone.
+///
+/// # Errors
+///
+/// `Io` when the reader fails. Nothing the block holds is an error.
+pub(in crate::formats) fn metadata<R: Read + Seek>(
+    src: &mut Source<R>,
+    makernote: &MakerNote,
+    mut metadata: Metadata,
+) -> Result<Metadata> {
+    metadata.camera_settings = camera_settings(src, makernote, metadata.camera_settings)?;
+    metadata.focus = focus(src, makernote)?;
+    Ok(metadata)
+}
+
 /// Where the camera focused, as `makernote` records it: the centre of the
 /// focus area and the frame it is measured in, from FocusLocation, and the
 /// area's size from FocusFrameSize when it records one. Whether focus was
@@ -323,10 +467,7 @@ fn ifd_start(head: &[u8]) -> Option<u64> {
 /// # Errors
 ///
 /// `Io` when the reader fails. Nothing the block holds is an error.
-pub(in crate::formats) fn focus<R: Read + Seek>(
-    src: &mut Source<R>,
-    makernote: &MakerNote,
-) -> Result<Option<Focus>> {
+fn focus<R: Read + Seek>(src: &mut Source<R>, makernote: &MakerNote) -> Result<Option<Focus>> {
     if manual_focus(src, makernote)? {
         return Ok(None);
     }
@@ -425,11 +566,162 @@ fn area<R: Read + Seek>(src: &mut Source<R>, makernote: &MakerNote) -> Result<Op
     Ok((width != 0 && height != 0).then_some(Size { width, height }))
 }
 
+/// How the camera was set for the picture: `settings`, what the standard
+/// tags gave, with what `makernote` records of the settings, each value
+/// read by its own rule, so that a damaged one costs only itself. A value
+/// is read only from a tag of the type and count its rule names, whose
+/// value lies inside the block, as every value read from the MakerNote
+/// IFD does; a missing tag, another type or count, or a code no rule
+/// names gives `None` for that value alone. See the
+/// [module documentation](self#the-camera-settings) for what each tag
+/// records, and on which files.
+///
+/// - **The white balance mode** is the one WhiteBalance's code names,
+///   exactly one LONG ([`white_balance_mode`]), in place of the one the
+///   Exif tags gave, which records only auto or the kind of light, and
+///   calls the underwater setting auto. When the MakerNote names none, the
+///   Exif tags' mode stays.
+/// - **The colour temperature** is ColorTemperature, exactly one LONG,
+///   from 1 to 99,999 K ([`color_temperature`]), under whichever white
+///   balance setting: the chosen colour temperature under that setting
+///   and the custom white balance's own under custom, as the files show.
+///   0, which every other setting holds on every file checked, records
+///   none, and a larger number is no temperature a camera is set to.
+/// - **The fine-tuning** is WBShiftAB_GM, exactly two SLONGs
+///   ([`fine_tune`]).
+/// - **The electronic front curtain setting** is
+///   ElectronicFrontCurtainShutter, exactly one LONG
+///   ([`electronic_front_curtain_setting`]).
+///
+/// The shutter used, the image area and the raw image size stay as
+/// `settings` has them, `None`: Sony records the first two only in
+/// enciphered blocks, and gives an APS-C raw the raw size code of a
+/// medium one. The exposure program, the metering mode, the flash and the
+/// colour space are the Exif tags' alone.
+///
+/// # Errors
+///
+/// `Io` when the reader fails. Nothing the block holds is an error.
+fn camera_settings<R: Read + Seek>(
+    src: &mut Source<R>,
+    makernote: &MakerNote,
+    mut settings: CameraSettings,
+) -> Result<CameraSettings> {
+    let ifd = &makernote.ifd;
+    let mode = one_long(src, ifd, WHITE_BALANCE)?.and_then(white_balance_mode);
+    if let Some(mode) = mode {
+        settings.white_balance.mode = Some(mode);
+    }
+    settings.white_balance.kelvin =
+        one_long(src, ifd, COLOR_TEMPERATURE)?.and_then(color_temperature);
+    settings.white_balance.fine_tune = fine_tune(src, makernote)?;
+    settings.electronic_front_curtain_setting =
+        one_long(src, ifd, ELECTRONIC_FRONT_CURTAIN)?.and_then(electronic_front_curtain_setting);
+    Ok(settings)
+}
+
+/// The white balance mode a WhiteBalance `code` names: 0
+/// [`Auto`](WhiteBalanceMode::Auto); 1, a chosen colour temperature,
+/// [`Kelvin`](WhiteBalanceMode::Kelvin); 16
+/// [`Daylight`](WhiteBalanceMode::Daylight); 32
+/// [`Cloudy`](WhiteBalanceMode::Cloudy); 48
+/// [`Shade`](WhiteBalanceMode::Shade); 64
+/// [`Tungsten`](WhiteBalanceMode::Tungsten); 80
+/// [`Flash`](WhiteBalanceMode::Flash); 96, each of the four fluorescent
+/// lamps, [`Fluorescent`](WhiteBalanceMode::Fluorescent); 112
+/// [`Custom`](WhiteBalanceMode::Custom); and 128
+/// [`Underwater`](WhiteBalanceMode::Underwater).
+///
+/// ExifTool's documentation names 1 a colour temperature or a colour
+/// filter; no checked file was shot with a colour filter, so that it
+/// writes 1 too is unchecked. `None` for every other code: a code grows
+/// into the table only once a file shows it, and until then the Exif tags'
+/// mode stands in its place.
+fn white_balance_mode(code: u32) -> Option<WhiteBalanceMode> {
+    Some(match code {
+        0 => WhiteBalanceMode::Auto,
+        1 => WhiteBalanceMode::Kelvin,
+        16 => WhiteBalanceMode::Daylight,
+        32 => WhiteBalanceMode::Cloudy,
+        48 => WhiteBalanceMode::Shade,
+        64 => WhiteBalanceMode::Tungsten,
+        80 => WhiteBalanceMode::Flash,
+        96 => WhiteBalanceMode::Fluorescent,
+        112 => WhiteBalanceMode::Custom,
+        128 => WhiteBalanceMode::Underwater,
+        _ => return None,
+    })
+}
+
+/// The white balance fine-tuning that `makernote`'s WBShiftAB_GM records,
+/// signed as [`FineTune`] signs it: its two SLONGs, whole steps, the shift
+/// from amber to blue and then the one from green to magenta
+/// ([`fine_tune_of`]). A recorded zero shift, `0, 0`, is a fine-tuning
+/// like any other.
+///
+/// `None` when the tag is missing, as on the bodies that write none, the
+/// DSLR-A100, A200, A700 and A900, the SLT-A55V, the NEX-5, the DSC-F828
+/// and the DSC-R1; when it is not of type SLONG, does not hold exactly two
+/// values, or stores them outside the block; and when [`fine_tune_of`]
+/// gives none for its values.
+///
+/// # Errors
+///
+/// `Io` when the reader fails. Nothing the block holds is an error.
+fn fine_tune<R: Read + Seek>(
+    src: &mut Source<R>,
+    makernote: &MakerNote,
+) -> Result<Option<FineTune>> {
+    let two_slongs = makernote
+        .ifd
+        .entry_of_type(FINE_TUNE, &[SLONG])
+        .is_some_and(|entry| entry.count() == 2);
+    if !two_slongs {
+        return Ok(None);
+    }
+    let values = skip_damage(makernote.ifd.i32s(src, FINE_TUNE))?.flatten();
+    let Some(&[blue_amber, green_magenta]) = values.as_deref() else {
+        return Ok(None);
+    };
+    Ok(fine_tune_of(blue_amber, green_magenta))
+}
+
+/// The fine-tuning of Sony's two values, `blue_amber` and `green_magenta`,
+/// whole steps, each as a fraction over 1: the first with its sign
+/// turned around, and the second as it is. Sony stores a shift towards
+/// amber and one towards magenta as positive, as frames shot on an
+/// ILCE-7M2 with a known shift show; [`FineTune`] signs each value as its
+/// axis is named, so its amber to blue shift is positive towards blue, and
+/// Sony's first value is turned around (ADR011).
+///
+/// `None` when the first value is `i32::MIN`, whose negation does not
+/// fit. No file checked holds it; the reader refuses it rather than make
+/// up a shift.
+fn fine_tune_of(blue_amber: i32, green_magenta: i32) -> Option<FineTune> {
+    let amber_blue = SignedRational::new(blue_amber.checked_neg()?, 1)?;
+    let green_magenta = SignedRational::new(green_magenta, 1)?;
+    Some(FineTune::new(amber_blue, green_magenta))
+}
+
+/// The electronic front curtain setting an ElectronicFrontCurtainShutter
+/// `code` records: 0 off, `false`, and 1 on, `true`. `None` for every other
+/// code, which no checked file holds.
+fn electronic_front_curtain_setting(code: u32) -> Option<bool> {
+    match code {
+        0 => Some(false),
+        1 => Some(true),
+        _ => None,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::camera_settings::{
+        ColorSpace, ExposureProgram, Flash, FlashMode, MeteringMode, WhiteBalance,
+    };
     use crate::container::tiff::tags::{MAKE, MAKER_NOTE};
-    use crate::container::tiff::types::{ASCII, SHORT, UNDEFINED};
+    use crate::container::tiff::types::{ASCII, SHORT, SSHORT, UNDEFINED};
     use crate::container::tiff::{Block, ifd_in, walk};
     use crate::error::ErrorKind;
     use crate::formats::testing::{Src, byte_order};
@@ -1470,6 +1762,511 @@ mod tests {
             .unwrap()
             .expect("a MakerNote");
         let err = focus(&mut src, &makernote).expect_err("the read fails");
+        assert_eq!(err.kind(), ErrorKind::Io, "{err:?}");
+    }
+
+    // The camera settings the MakerNote records. Each test starts from the
+    // settings the standard tags gave, empty unless it says so, so that a
+    // value it reads comes from the MakerNote.
+
+    /// The Sony MakerNote tag that ExifTool's documentation also calls
+    /// WhiteBalance (0xB054): one SHORT, which says auto on files set to
+    /// shade, and is never read.
+    const SECOND_WHITE_BALANCE: u16 = 0xB054;
+
+    /// The Sony MakerNote tag that ExifTool's documentation calls
+    /// WhiteBalanceFineTune (0x0112): one LONG, which holds the kind of
+    /// fluorescent lamp, not the fine-tuning, and is never read.
+    const FLUORESCENT_LAMP: u16 = 0x0112;
+
+    /// The Sony MakerNote tag that records the kind of raw and the JPEG
+    /// quality (Quality, 0x202E): two SHORTs, whose first value gives an
+    /// APS-C raw the code of a medium one, and which is never read.
+    const QUALITY: u16 = 0x202E;
+
+    /// The settings that the standard tags of a file set to daylight might
+    /// give: Exif's daylight white balance, aperture priority,
+    /// multi-segment metering, a flash that did not fire, set off, and
+    /// sRGB.
+    fn exif_settings() -> CameraSettings {
+        CameraSettings::default()
+            .with_white_balance(WhiteBalance::default().with_mode(WhiteBalanceMode::Daylight))
+            .with_exposure_program(ExposureProgram::AperturePriority)
+            .with_metering_mode(MeteringMode::MultiSegment)
+            .with_flash(Flash::new(false).with_mode(FlashMode::Off))
+            .with_color_space(ColorSpace::Srgb)
+    }
+
+    /// What [`camera_settings`] gives, from `settings`, for a Sony file in
+    /// byte order `order` whose headerless MakerNote holds what `tags` adds
+    /// to its IFD.
+    fn settings_from(
+        order: Order,
+        settings: CameraSettings,
+        tags: impl FnOnce(&mut TiffBuilder, IfdId),
+    ) -> CameraSettings {
+        let (mut src, makernote) = focus_file(order, b"", tags);
+        camera_settings(&mut src, &makernote, settings).unwrap()
+    }
+
+    /// As [`settings_from`], from the empty settings.
+    fn settings_of(order: Order, tags: impl FnOnce(&mut TiffBuilder, IfdId)) -> CameraSettings {
+        settings_from(order, CameraSettings::default(), tags)
+    }
+
+    /// The fine-tuning of `amber_blue` and `green_magenta` whole steps,
+    /// each over 1, as Sony's are read.
+    fn steps(amber_blue: i32, green_magenta: i32) -> FineTune {
+        let step = |n| SignedRational::new(n, 1).expect("a denominator of 1");
+        FineTune::new(step(amber_blue), step(green_magenta))
+    }
+
+    #[test]
+    fn each_white_balance_code_a_file_shows_gives_its_mode() {
+        // As the frames shot on the ILCE-7M2 record each setting.
+        let codes = [
+            (0, WhiteBalanceMode::Auto),
+            (1, WhiteBalanceMode::Kelvin),
+            (16, WhiteBalanceMode::Daylight),
+            (32, WhiteBalanceMode::Cloudy),
+            (48, WhiteBalanceMode::Shade),
+            (64, WhiteBalanceMode::Tungsten),
+            (80, WhiteBalanceMode::Flash),
+            (96, WhiteBalanceMode::Fluorescent),
+            (112, WhiteBalanceMode::Custom),
+            (128, WhiteBalanceMode::Underwater),
+        ];
+        for order in ORDERS {
+            for (code, mode) in codes {
+                let settings = settings_of(order, |builder, ifd| {
+                    builder.long(ifd, WHITE_BALANCE, &[code]);
+                });
+                assert_eq!(settings.white_balance.mode, Some(mode), "{order:?}, {code}");
+            }
+        }
+    }
+
+    #[test]
+    fn the_makernotes_white_balance_mode_takes_the_place_of_exifs() {
+        // Exif calls Sony's underwater setting auto; and a MakerNote's auto
+        // stands too.
+        for order in ORDERS {
+            for (exif, code, mode) in [
+                (WhiteBalanceMode::Auto, 128, WhiteBalanceMode::Underwater),
+                (WhiteBalanceMode::Daylight, 0, WhiteBalanceMode::Auto),
+                (WhiteBalanceMode::Daylight, 112, WhiteBalanceMode::Custom),
+            ] {
+                let exif_settings = CameraSettings::default()
+                    .with_white_balance(WhiteBalance::default().with_mode(exif));
+                let settings = settings_from(order, exif_settings, |builder, ifd| {
+                    builder.long(ifd, WHITE_BALANCE, &[code]);
+                });
+                assert_eq!(settings.white_balance.mode, Some(mode), "{order:?}, {code}");
+            }
+        }
+    }
+
+    #[test]
+    fn a_white_balance_code_no_file_shows_leaves_exifs_mode() {
+        // Codes between those named, past them, and the largest.
+        for order in ORDERS {
+            for code in [2, 15, 17, 113, 144, u32::MAX] {
+                let settings = settings_from(order, exif_settings(), |builder, ifd| {
+                    builder.long(ifd, WHITE_BALANCE, &[code]);
+                });
+                assert_eq!(settings, exif_settings(), "{order:?}, {code}");
+                let settings = settings_of(order, |builder, ifd| {
+                    builder.long(ifd, WHITE_BALANCE, &[code]);
+                });
+                assert_eq!(settings.white_balance.mode, None, "{order:?}, {code}");
+            }
+        }
+    }
+
+    #[test]
+    fn a_white_balance_of_another_shape_leaves_exifs_mode() {
+        // Shade as a SHORT, as an SLONG, and as two LONGs; and no tag.
+        for order in ORDERS {
+            for (what, white_balance) in [
+                (
+                    "a SHORT",
+                    &(|builder: &mut TiffBuilder, ifd| {
+                        builder.short(ifd, WHITE_BALANCE, &[48]);
+                    }) as Tags,
+                ),
+                ("an SLONG", &|builder, ifd| {
+                    builder.slong(ifd, WHITE_BALANCE, &[48]);
+                }),
+                ("two LONGs", &|builder, ifd| {
+                    builder.long(ifd, WHITE_BALANCE, &[48, 48]);
+                }),
+                // A MakerNote IFD of no entries is none, so a tag that
+                // means nothing here.
+                ("missing", &|builder, ifd| {
+                    builder.short(ifd, FIRST, &[48]);
+                }),
+            ] {
+                let settings = settings_from(order, exif_settings(), white_balance);
+                assert_eq!(settings, exif_settings(), "{order:?}, {what}");
+            }
+        }
+    }
+
+    #[test]
+    fn the_colour_temperature_is_read_under_any_white_balance_setting() {
+        // 3200 under a chosen colour temperature, as on the ILCE-7M2's
+        // later frames; 5500 and 6300 under custom, as on its custom
+        // frames; and a value above 0 under auto, shade, a code no file
+        // shows, or with no white balance tag at all, which no file
+        // checked holds but the rule reads all the same.
+        for order in ORDERS {
+            for (code, kelvin) in [
+                (Some(1), 3200),
+                (Some(112), 5500),
+                (Some(112), 6300),
+                (Some(0), 4000),
+                (Some(48), 7500),
+                (Some(2), 3200),
+                (None, 3200),
+            ] {
+                let settings = settings_of(order, |builder, ifd| {
+                    if let Some(code) = code {
+                        builder.long(ifd, WHITE_BALANCE, &[code]);
+                    }
+                    builder.long(ifd, COLOR_TEMPERATURE, &[kelvin]);
+                });
+                let found = settings.white_balance.kelvin;
+                assert_eq!(found, Some(kelvin), "{order:?}, {code:?}, {kelvin}");
+            }
+        }
+    }
+
+    #[test]
+    fn a_colour_temperature_of_zero_or_of_another_shape_gives_none() {
+        // Under a chosen colour temperature: 0, which records none, as
+        // every other setting holds on every file checked; a SHORT; an
+        // SLONG; and two LONGs.
+        for order in ORDERS {
+            for (what, kelvin) in [
+                (
+                    "zero",
+                    &(|builder: &mut TiffBuilder, ifd| {
+                        builder.long(ifd, COLOR_TEMPERATURE, &[0]);
+                    }) as Tags,
+                ),
+                ("a SHORT", &|builder, ifd| {
+                    builder.short(ifd, COLOR_TEMPERATURE, &[3200]);
+                }),
+                ("an SLONG", &|builder, ifd| {
+                    builder.slong(ifd, COLOR_TEMPERATURE, &[3200]);
+                }),
+                ("two LONGs", &|builder, ifd| {
+                    builder.long(ifd, COLOR_TEMPERATURE, &[3200, 3200]);
+                }),
+            ] {
+                let settings = settings_of(order, |builder, ifd| {
+                    builder.long(ifd, WHITE_BALANCE, &[1]);
+                    kelvin(builder, ifd);
+                });
+                assert_eq!(settings.white_balance.kelvin, None, "{order:?}, {what}");
+                let mode = settings.white_balance.mode;
+                assert_eq!(mode, Some(WhiteBalanceMode::Kelvin), "{order:?}, {what}");
+            }
+        }
+    }
+
+    #[test]
+    fn a_colour_temperature_past_99_999_kelvin_gives_none() {
+        // 99,999 K, the bound, is given; past it, numbers no camera is set
+        // to, up to the largest LONG, give none.
+        for order in ORDERS {
+            for (kelvin, found) in [(99_999, Some(99_999)), (100_000, None), (u32::MAX, None)] {
+                let settings = settings_of(order, |builder, ifd| {
+                    builder
+                        .long(ifd, WHITE_BALANCE, &[1])
+                        .long(ifd, COLOR_TEMPERATURE, &[kelvin]);
+                });
+                assert_eq!(settings.white_balance.kelvin, found, "{order:?}, {kelvin}");
+            }
+        }
+    }
+
+    #[test]
+    fn the_fine_tunings_first_value_is_turned_around_and_its_second_kept() {
+        // As the ILCE-7M2's frames record a shift of three steps towards
+        // amber, blue, green and magenta, and one along both axes.
+        for order in ORDERS {
+            for (stored, expected) in [
+                ([3, 0], steps(-3, 0)),
+                ([-3, 0], steps(3, 0)),
+                ([0, -3], steps(0, -3)),
+                ([0, 3], steps(0, 3)),
+                ([-7, 5], steps(7, 5)),
+            ] {
+                let settings = settings_of(order, |builder, ifd| {
+                    builder.slong(ifd, FINE_TUNE, &stored);
+                });
+                let fine_tune = settings.white_balance.fine_tune;
+                assert_eq!(fine_tune, Some(expected), "{order:?}, {stored:?}");
+            }
+        }
+    }
+
+    #[test]
+    fn a_recorded_zero_fine_tuning_is_a_fine_tuning() {
+        // As every public sample that writes the tag records it.
+        for order in ORDERS {
+            let settings = settings_of(order, |builder, ifd| {
+                builder.slong(ifd, FINE_TUNE, &[0, 0]);
+            });
+            assert_eq!(settings.white_balance.fine_tune, Some(steps(0, 0)));
+        }
+    }
+
+    #[test]
+    fn a_first_fine_tuning_value_that_cannot_be_turned_around_gives_none() {
+        // i32::MIN has no negation; the second value, kept as stored, may
+        // be anything.
+        for order in ORDERS {
+            let settings = settings_of(order, |builder, ifd| {
+                builder.slong(ifd, FINE_TUNE, &[i32::MIN, 0]);
+            });
+            assert_eq!(settings.white_balance.fine_tune, None, "{order:?}");
+            let settings = settings_of(order, |builder, ifd| {
+                builder.slong(ifd, FINE_TUNE, &[i32::MAX, i32::MIN]);
+            });
+            let expected = steps(-i32::MAX, i32::MIN);
+            assert_eq!(settings.white_balance.fine_tune, Some(expected));
+        }
+    }
+
+    #[test]
+    fn a_fine_tuning_of_another_shape_gives_none() {
+        // One SLONG, three, two LONGs, two SRATIONALs and two SSHORTs; and
+        // no tag, as on the bodies that write none.
+        for order in ORDERS {
+            let two_sshorts = [order.u16(3), order.u16(0)].concat();
+            let two_sshorts: [u8; 4] = two_sshorts.try_into().unwrap();
+            for (what, fine_tune) in [
+                (
+                    "one SLONG",
+                    &(|builder: &mut TiffBuilder, ifd| {
+                        builder.slong(ifd, FINE_TUNE, &[3]);
+                    }) as Tags,
+                ),
+                ("three SLONGs", &|builder, ifd| {
+                    builder.slong(ifd, FINE_TUNE, &[3, 0, 0]);
+                }),
+                ("two LONGs", &|builder, ifd| {
+                    builder.long(ifd, FINE_TUNE, &[3, 0]);
+                }),
+                ("two SRATIONALs", &|builder, ifd| {
+                    builder.srational(ifd, FINE_TUNE, &[(3, 1), (0, 1)]);
+                }),
+                ("two SSHORTs", &|builder, ifd| {
+                    let field = RawValue::Inline(two_sshorts);
+                    builder.raw(ifd, FINE_TUNE, SSHORT, 2, field);
+                }),
+                ("missing", &|builder, ifd| {
+                    builder.short(ifd, FIRST, &[3]);
+                }),
+            ] {
+                let settings = settings_of(order, fine_tune);
+                assert_eq!(settings.white_balance.fine_tune, None, "{order:?}, {what}");
+            }
+        }
+    }
+
+    #[test]
+    fn the_electronic_front_curtain_setting_is_off_at_0_and_on_at_1() {
+        for order in ORDERS {
+            for (code, setting) in [
+                (0, Some(false)),
+                (1, Some(true)),
+                (2, None),
+                (u32::MAX, None),
+            ] {
+                let settings = settings_of(order, |builder, ifd| {
+                    builder.long(ifd, ELECTRONIC_FRONT_CURTAIN, &[code]);
+                });
+                let found = settings.electronic_front_curtain_setting;
+                assert_eq!(found, setting, "{order:?}, {code}");
+            }
+        }
+    }
+
+    #[test]
+    fn an_electronic_front_curtain_setting_of_another_shape_gives_none() {
+        // On as a SHORT, a BYTE, an SLONG and two LONGs.
+        for order in ORDERS {
+            for (what, setting) in [
+                (
+                    "a SHORT",
+                    &(|builder: &mut TiffBuilder, ifd| {
+                        builder.short(ifd, ELECTRONIC_FRONT_CURTAIN, &[1]);
+                    }) as Tags,
+                ),
+                ("a BYTE", &|builder, ifd| {
+                    builder.byte(ifd, ELECTRONIC_FRONT_CURTAIN, &[1]);
+                }),
+                ("an SLONG", &|builder, ifd| {
+                    builder.slong(ifd, ELECTRONIC_FRONT_CURTAIN, &[1]);
+                }),
+                ("two LONGs", &|builder, ifd| {
+                    builder.long(ifd, ELECTRONIC_FRONT_CURTAIN, &[1, 1]);
+                }),
+            ] {
+                let settings = settings_of(order, setting);
+                let found = settings.electronic_front_curtain_setting;
+                assert_eq!(found, None, "{order:?}, {what}");
+            }
+        }
+    }
+
+    /// Adds to `ifd` every settings tag the reader reads, as a frame shot
+    /// on the ILCE-7M2 under a chosen colour temperature of 3200 K might
+    /// record them, shifted three steps towards amber, with the electronic
+    /// front curtain on.
+    fn settings_tags(builder: &mut TiffBuilder, ifd: IfdId) {
+        builder
+            .long(ifd, WHITE_BALANCE, &[1])
+            .slong(ifd, FINE_TUNE, &[3, 0])
+            .long(ifd, ELECTRONIC_FRONT_CURTAIN, &[1])
+            .long(ifd, COLOR_TEMPERATURE, &[3200]);
+    }
+
+    /// What [`settings_tags`] gives, from `settings`.
+    fn with_settings_tags(settings: CameraSettings) -> CameraSettings {
+        let white_balance = WhiteBalance::default()
+            .with_mode(WhiteBalanceMode::Kelvin)
+            .with_kelvin(3200)
+            .with_fine_tune(steps(-3, 0));
+        settings
+            .with_white_balance(white_balance)
+            .with_electronic_front_curtain_setting(true)
+    }
+
+    #[test]
+    fn the_settings_the_makernote_does_not_record_are_the_standard_tags() {
+        // The exposure program, the metering mode, the flash and the
+        // colour space stay as Exif gave them; and the shutter, the image
+        // area and the raw image size stay `None`, whatever Quality says.
+        for order in ORDERS {
+            let settings = settings_from(order, exif_settings(), |builder, ifd| {
+                settings_tags(builder, ifd);
+                builder.short(ifd, QUALITY, &[3, 2]);
+            });
+            assert_eq!(settings, with_settings_tags(exif_settings()), "{order:?}");
+            assert_eq!(settings.shutter, None);
+            assert_eq!(settings.image_area, None);
+            assert_eq!(settings.raw_image_size, None);
+        }
+    }
+
+    #[test]
+    fn tags_0xb054_and_0x0112_are_never_read() {
+        // 0xB054 saying custom (4) and 0x0112 holding a fluorescent lamp
+        // (1) change nothing, whether WhiteBalance gives a mode or not.
+        for order in ORDERS {
+            let unread = |builder: &mut TiffBuilder, ifd| {
+                builder
+                    .short(ifd, SECOND_WHITE_BALANCE, &[4])
+                    .long(ifd, FLUORESCENT_LAMP, &[1]);
+            };
+            let settings = settings_from(order, exif_settings(), unread);
+            assert_eq!(settings, exif_settings(), "{order:?}");
+            let settings = settings_from(order, exif_settings(), |builder, ifd| {
+                settings_tags(builder, ifd);
+                unread(builder, ifd);
+            });
+            assert_eq!(settings, with_settings_tags(exif_settings()), "{order:?}");
+        }
+    }
+
+    #[test]
+    fn a_fine_tuning_whose_value_runs_past_the_block_gives_none() {
+        // The fine-tuning's eight bytes are the block's last: a block one
+        // byte shorter drops the entry, and the values the entries hold
+        // are still read.
+        for order in ORDERS {
+            let (mut builder, _, exif) = sony(order);
+            let ifd = builder.ifd();
+            settings_tags(&mut builder, ifd);
+            let mut probe = builder.clone();
+            makernote_at(&mut probe, exif, UNDEFINED, 0, 0);
+            let block = probe.build().ifd_block(ifd);
+            let len = block.end - block.start;
+
+            let mut cut = builder.clone();
+            makernote_at(&mut cut, exif, UNDEFINED, len - 1, block.start);
+            let (mut src, found) = read_file(cut.build().bytes);
+            let found = found.expect("a MakerNote");
+            assert!(found.ifd.entry(FINE_TUNE).is_none(), "{order:?}");
+            let settings = camera_settings(&mut src, &found, exif_settings()).unwrap();
+            let mut expected = with_settings_tags(exif_settings());
+            expected.white_balance.fine_tune = None;
+            assert_eq!(settings, expected, "{order:?}");
+
+            // The control: the whole block gives it.
+            makernote_at(&mut builder, exif, UNDEFINED, len, block.start);
+            let (mut src, found) = read_file(builder.build().bytes);
+            let found = found.expect("a MakerNote");
+            let settings = camera_settings(&mut src, &found, exif_settings()).unwrap();
+            assert_eq!(settings, with_settings_tags(exif_settings()), "{order:?}");
+        }
+    }
+
+    #[test]
+    fn metadata_gives_the_makernotes_settings_and_focus_point() {
+        // The ILCE-7M4's focus tags beside the settings tags, read into
+        // metadata whose other values stay as the standard tags gave them.
+        for order in ORDERS {
+            let (mut src, makernote) = focus_file(order, b"", |builder, ifd| {
+                tags_7m4(builder, ifd, order);
+                settings_tags(builder, ifd);
+            });
+            let standard = Metadata::default()
+                .with_make("SONY")
+                .with_camera_settings(exif_settings());
+            let found = metadata(&mut src, &makernote, standard.clone()).unwrap();
+            let expected = standard
+                .with_camera_settings(with_settings_tags(exif_settings()))
+                .with_focus(focus_7m4());
+            assert_eq!(found, expected, "{order:?}");
+        }
+    }
+
+    #[test]
+    fn a_failure_of_the_reader_while_reading_the_settings_is_an_error() {
+        // A headerless MakerNote of two entries whose table ends just
+        // before FAR, so that the MakerNote is read, and the fine-tuning's
+        // value, stored out of line, starts at FAR, so that reading it
+        // fails.
+        let order = Order::Little;
+        let start = FAR - (2 + 2 * 12 + 4);
+        let (built, ifd) = far_file_with(order, start, |builder| {
+            let ifd = builder.ifd();
+            builder
+                .long(ifd, WHITE_BALANCE, &[0])
+                .slong(ifd, FINE_TUNE, &[3, 0]);
+            ifd
+        });
+        assert_eq!(built.ifd_block(ifd), start..FAR + 8);
+        // The file is sound, for a reader that does not fail.
+        let (mut src, found) = read_file(built.bytes.clone());
+        let found = found.expect("a MakerNote");
+        let settings = camera_settings(&mut src, &found, CameraSettings::default()).unwrap();
+        assert_eq!(settings.white_balance.fine_tune, Some(steps(-3, 0)));
+
+        let limits = Limits::default();
+        let mut src = Source::new(FailsFar(Cursor::new(built.bytes))).unwrap();
+        let file_block = Block::file(src.len());
+        let tree = walk(&mut src, &file_block, &limits).unwrap();
+        let makernote = read(&mut src, &tree, &limits)
+            .unwrap()
+            .expect("a MakerNote");
+        let err = camera_settings(&mut src, &makernote, CameraSettings::default())
+            .expect_err("the read fails");
         assert_eq!(err.kind(), ErrorKind::Io, "{err:?}");
     }
 }

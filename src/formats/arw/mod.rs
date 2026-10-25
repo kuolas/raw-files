@@ -33,9 +33,10 @@
 //!
 //! The search for the previews is in `previews.rs`. The metadata comes
 //! from the standard tags, through the reader the TIFF-based formats share,
-//! and the focus point, which no standard tag records, from Sony's
-//! MakerNote, read for that alone, through [`sony`], the reader of Sony's
-//! MakerNote shared with any other format whose files carry it.
+//! and what no standard tag records, the camera settings that only Sony's
+//! MakerNote records and the focus point, from that MakerNote, through
+//! [`sony`], the reader of Sony's MakerNote shared with any other format
+//! whose files carry it.
 
 mod previews;
 
@@ -140,31 +141,40 @@ fn claims<R: Read + Seek>(src: &mut Source<R>, tree: &Tree) -> Result<bool> {
 /// what the shared TIFF metadata reader reads from the standard tags: the
 /// camera, the capture time, the orientation, the exposure, the camera's
 /// settings, the lens and the sizes. When there is a MakerNote, it then
-/// gives the focus point, which no standard tag records ([`sony::focus`]).
+/// gives what no standard tag records ([`sony::metadata`]): the camera
+/// settings that only it records, its white balance setting in place of
+/// Exif's, and the focus point.
 ///
 /// # Errors
 ///
 /// As for [`sony::read`], [`previews::previews`],
-/// [`tiff_metadata::read`] and [`sony::focus`]: `Io` when the reader
+/// [`tiff_metadata::read`] and [`sony::metadata`]: `Io` when the reader
 /// fails. Nothing the file holds is an error here.
 fn parse<R: Read + Seek>(src: &mut Source<R>, tree: &Tree, limits: &Limits) -> Result<Parsed> {
     let makernote = sony::read(src, tree, limits)?;
     let previews = previews::previews(src, tree)?;
-    let mut metadata = tiff_metadata::read(src, tree)?.metadata;
-    if let Some(makernote) = &makernote {
-        metadata.focus = sony::focus(src, makernote)?;
-    }
+    let standard = tiff_metadata::read(src, tree)?.metadata;
+    let metadata = match &makernote {
+        Some(makernote) => sony::metadata(src, makernote, standard)?,
+        None => standard,
+    };
     Ok(Parsed { previews, metadata })
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::container::tiff::tags::{DNG_VERSION, MAKE, MAKER_NOTE};
-    use crate::formats::makernote::sony::{FOCUS_LOCATION, FOCUS_MODE};
+    use crate::camera_settings::{CameraSettings, FineTune, WhiteBalance, WhiteBalanceMode};
+    use crate::container::tiff::tags::{
+        DNG_VERSION, MAKE, MAKER_NOTE, WHITE_BALANCE as EXIF_WHITE_BALANCE,
+    };
+    use crate::formats::makernote::sony::{
+        ELECTRONIC_FRONT_CURTAIN, FINE_TUNE, FOCUS_LOCATION, FOCUS_MODE, WHITE_BALANCE,
+    };
     use crate::formats::testing::file;
     use crate::geometry::{Point, Size};
     use crate::metadata::Focus;
+    use crate::rational::SignedRational;
     use crate::tiff_builder::{IfdId, TiffBuilder};
 
     /// Whether the ARW reader claims the file that `build` describes.
@@ -330,5 +340,34 @@ mod tests {
         });
         let parsed = parse(&mut src, &tree, &Limits::default()).unwrap();
         assert_eq!(parsed.metadata.focus(), None);
+    }
+
+    #[test]
+    fn the_camera_settings_are_read_from_the_makernote() {
+        // Exif's auto white balance, and a MakerNote that records the
+        // underwater setting, which Exif calls auto, a shift of two steps
+        // towards amber and three towards magenta, and the electronic front
+        // curtain on.
+        let (mut src, tree) = file(|builder, ifd| {
+            let exif = builder.ifd();
+            let makernote = builder.ifd();
+            builder.ascii(ifd, MAKE, "SONY").exif(ifd, exif);
+            builder.short(exif, EXIF_WHITE_BALANCE, &[0]);
+            builder
+                .long(makernote, WHITE_BALANCE, &[128])
+                .slong(makernote, FINE_TUNE, &[2, 3])
+                .long(makernote, ELECTRONIC_FRONT_CURTAIN, &[1]);
+            builder.undefined_ifd(exif, MAKER_NOTE, makernote);
+        });
+        assert!(claims(&mut src, &tree).unwrap());
+        let parsed = parse(&mut src, &tree, &Limits::default()).unwrap();
+        let step = |n| SignedRational::new(n, 1).unwrap();
+        let white_balance = WhiteBalance::default()
+            .with_mode(WhiteBalanceMode::Underwater)
+            .with_fine_tune(FineTune::new(step(-2), step(3)));
+        let expected = CameraSettings::default()
+            .with_white_balance(white_balance)
+            .with_electronic_front_curtain_setting(true);
+        assert_eq!(parsed.metadata.camera_settings(), &expected);
     }
 }

@@ -39,7 +39,7 @@ use std::io::{Read, Seek};
 use std::ops::Range;
 
 use super::types::{
-    ASCII, BYTE, IFD, LONG, RATIONAL, SHORT, SRATIONAL, SSHORT, UNDEFINED, type_size,
+    ASCII, BYTE, IFD, LONG, RATIONAL, SHORT, SLONG, SRATIONAL, SSHORT, UNDEFINED, type_size,
 };
 use super::{Block, skip_damage};
 use crate::error::{Error, Result};
@@ -454,6 +454,29 @@ impl Ifd {
         let (shorts, _) = bytes.as_chunks::<2>();
         Ok(Some(
             shorts.iter().map(|&v| order.u16(v).cast_signed()).collect(),
+        ))
+    }
+
+    /// The values of tag `tag`, each a signed 32-bit number in the IFD's
+    /// byte order, when its type is SLONG; `None` when the tag is missing
+    /// or has another type. [`u32s`](Self::u32s) does not read SLONG, so
+    /// that a negative number is never read as a large one.
+    ///
+    /// # Errors
+    ///
+    /// As for [`u32s`](Self::u32s).
+    pub(crate) fn i32s<R: Read + Seek>(
+        &self,
+        src: &mut Source<R>,
+        tag: u16,
+    ) -> Result<Option<Vec<i32>>> {
+        let Some((_, bytes)) = self.value(src, tag, &[SLONG])? else {
+            return Ok(None);
+        };
+        let order = self.order;
+        let (longs, _) = bytes.as_chunks::<4>();
+        Ok(Some(
+            longs.iter().map(|&v| order.u32(v).cast_signed()).collect(),
         ))
     }
 
@@ -999,6 +1022,46 @@ mod tests {
                 assert_eq!(ifd.i16s(src, tag).unwrap(), None, "tag {tag:#06X}");
             }
             // And the unsigned reader does not read an SSHORT.
+            assert_eq!(ifd.u32s(src, 0x0001).unwrap(), None);
+        }
+    }
+
+    #[test]
+    fn i32s_reads_slong_only_in_both_byte_orders() {
+        for order in ORDERS {
+            let mut builder = TiffBuilder::new(order);
+            let ifd = builder.ifd();
+            builder
+                .raw(
+                    ifd,
+                    0x0001,
+                    SLONG,
+                    1,
+                    RawValue::Inline(order.u32((-3_i32).cast_unsigned())),
+                )
+                .slong(ifd, 0x0002, &[-3, 0, i32::MIN, i32::MAX])
+                .raw(ifd, 0x0003, SLONG, 0, RawValue::Inline([1, 2, 3, 4]))
+                .short(ifd, 0x0004, &[0xFFFF, 2])
+                .long(ifd, 0x0005, &[0xFFFF_FFFD])
+                .raw(ifd, 0x0006, SSHORT, 2, RawValue::Inline([0xFF; 4]));
+            let built = builder.build();
+            let (mut src, ifd, _) = read(order, &built, ifd);
+            let src = &mut src;
+            assert_eq!(ifd.invalid_entries(), 0);
+
+            assert_eq!(ifd.i32s(src, 0x0001).unwrap(), Some(vec![-3]));
+            assert_eq!(
+                ifd.i32s(src, 0x0002).unwrap(),
+                Some(vec![-3, 0, i32::MIN, i32::MAX])
+            );
+            // Count 0: an empty value, not a missing tag.
+            assert_eq!(ifd.i32s(src, 0x0003).unwrap(), Some(vec![]));
+            // A SHORT, a LONG or an SSHORT is not an SLONG, and is not
+            // read as one.
+            for tag in [0x0004, 0x0005, 0x0006, 0x0099] {
+                assert_eq!(ifd.i32s(src, tag).unwrap(), None, "tag {tag:#06X}");
+            }
+            // And the unsigned reader does not read an SLONG.
             assert_eq!(ifd.u32s(src, 0x0001).unwrap(), None);
         }
     }

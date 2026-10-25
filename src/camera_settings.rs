@@ -24,9 +24,15 @@
 //! fine-tuning, the shutter, the image area and, in a raw file, the raw
 //! image size; the white balance setting, finer than Exif's, in place of
 //! Exif's; and the colour space where the Exif tags record none, as in
-//! every Nikon raw file checked. Sony's MakerNote is not read for them
-//! yet, so on Sony files they are `None`, and so is the electronic front
-//! curtain setting, which only Sony records.
+//! every Nikon raw file checked. Sony's, in ARW files and their family and
+//! in the JPEGs of Sony cameras, gives the white balance's fine-tuning,
+//! the electronic front curtain setting, which only Sony records, and the
+//! colour temperature of a chosen colour temperature or a custom white
+//! balance; and the white balance setting in place of Exif's. On Sony
+//! files the shutter, the image area and the raw image size are `None`:
+//! Sony records the first two only in enciphered blocks, which raw-files
+//! does not read, and gives an APS-C raw the raw size code of a medium
+//! one.
 //!
 //! A program that uses raw-files can build these values for its own
 //! tests, without a camera file: [`CameraSettings`] and [`WhiteBalance`]
@@ -48,7 +54,8 @@ use crate::rational::SignedRational;
 /// the values a file's standard Exif tags record: the exposure program,
 /// the metering mode, the flash, the white balance mode and the colour
 /// space. The others, which only a maker's MakerNote records, it gives
-/// from Nikon's MakerNote; Sony's is not read for them yet, so they are
+/// from Nikon's MakerNote and Sony's, each those its MakerNote records in
+/// plain tags; the shutter, the image area and the raw image size are
 /// `None` for every Sony file. Each getter says where its value comes
 /// from.
 ///
@@ -186,8 +193,10 @@ impl CameraSettings {
     /// [`shutter`](Self::shutter) gives: a body may use another shutter,
     /// such as a silent electronic one, with the setting on.
     ///
-    /// No file gives it yet, since only Sony's MakerNote records it and
-    /// raw-files does not read it there.
+    /// Read from Sony's MakerNote, its ElectronicFrontCurtainShutter, 0 off
+    /// and 1 on, which the SLT-A99V, the ILCE-7S and every later Sony body
+    /// checked record; any other value gives `None`. Only Sony records it,
+    /// so a file of any other maker gives `None`.
     pub fn electronic_front_curtain_setting(&self) -> Option<bool> {
         self.electronic_front_curtain_setting
     }
@@ -362,15 +371,21 @@ impl WhiteBalance {
     /// temperature, written as its number, such as `3230K`, gives
     /// [`Kelvin`](WhiteBalanceMode::Kelvin). A text the table lacks gives
     /// way to Exif's mode, never to a guess from its letters. Sony's
-    /// MakerNote is not read for it yet. `None` when neither gives a mode:
-    /// for a light no mode stands for, such as Exif's standard light D65,
-    /// and when the camera records "unknown" or "other".
+    /// MakerNote records the setting as a code, which gives a mode only
+    /// where a file shows what the code means, such as
+    /// [`Underwater`](WhiteBalanceMode::Underwater), which Exif calls auto,
+    /// or [`Kelvin`](WhiteBalanceMode::Kelvin); any other code gives way to
+    /// Exif's mode. The Sony DSLR-A100 keeps its code where raw-files does
+    /// not read it, so its mode is Exif's. `None` when neither gives a
+    /// mode: for a light no mode stands for, such as Exif's standard light
+    /// D65, and when the camera records "unknown" or "other".
     pub fn mode(&self) -> Option<WhiteBalanceMode> {
         self.mode
     }
 
     /// The colour temperature the file records, in kelvin. A recorded 0
-    /// means that none was recorded, and is `None`.
+    /// means that none was recorded, and is `None`; so is a number above
+    /// 99,999 K, which is no temperature a camera is set to.
     ///
     /// What it means differs by maker, and only a maker's MakerNote records
     /// it. On Nikon, from its ColorTemperatureAuto, it is the colour
@@ -379,8 +394,17 @@ impl WhiteBalance {
     /// one a chosen colour temperature set, or the one a kind of light or a
     /// preset stands for. The D5, the D850, the D780 and the Z bodies
     /// checked record it; the Z 9 under every setting, while the D850 and
-    /// the Z fc write 0 under daylight. Sony's MakerNote is not read for it
-    /// yet.
+    /// the Z fc write 0 under daylight. The Nikon bodies before them record
+    /// a temperature only under a chosen colour temperature
+    /// ([`Kelvin`](WhiteBalanceMode::Kelvin)), as the number of their white
+    /// balance text, such as `3230K`, which gives it. On Sony, from its
+    /// ColorTemperature, it is the colour temperature the photographer
+    /// chose under a chosen colour temperature
+    /// ([`Kelvin`](WhiteBalanceMode::Kelvin)), and the custom white
+    /// balance's own under [`Custom`](WhiteBalanceMode::Custom), as the
+    /// files checked show; the [`mode`](Self::mode) beside it says which.
+    /// Under every other setting every Sony file checked records 0, which
+    /// gives `None`.
     pub fn kelvin(&self) -> Option<u32> {
         self.kelvin
     }
@@ -393,7 +417,10 @@ impl WhiteBalance {
     /// D810 on, of 4 on every file checked, and in whole steps before; the
     /// single value the D1 family, the D70, the D100 and the D200 record
     /// gives `None`, since no file shows which axis it is on or which way
-    /// its sign points. Sony's MakerNote is not read for it yet.
+    /// its sign points. Sony's records it along both axes, in whole steps,
+    /// on every Sony body checked but the DSLR-A100, A200, A700 and A900,
+    /// the SLT-A55V, the NEX-5, the DSC-F828 and the DSC-R1, which record
+    /// none and give `None`.
     pub fn fine_tune(&self) -> Option<FineTune> {
         self.fine_tune
     }
@@ -432,15 +459,17 @@ impl WhiteBalance {
 /// towards magenta and negative towards green. So a viewer can show or
 /// compare the shifts of any two files without knowing how each maker
 /// signs them. A maker that signs an axis the other way has its value
-/// turned around, its numerator negated: Nikon stores a shift towards
-/// green as positive, as frames shot with a known shift show, so its green
-/// to magenta value is negated.
+/// turned around, its numerator negated, as frames shot with a known shift
+/// show each maker's signs: Nikon stores a shift towards green as
+/// positive, so its green to magenta value is negated; and Sony stores a
+/// shift towards amber as positive, so its amber to blue value is negated.
 ///
 /// The shifts are [`SignedRational`]s with the denominator the file
 /// recorded, and the numerator too but for that sign, so a Nikon shift in
-/// quarter steps stays, for example, `-24/4`. How large a step is, no
-/// documentation checked says. A recorded zero shift is a real setting,
-/// not an unknown one.
+/// quarter steps stays, for example, `-24/4`; Sony records whole steps,
+/// each read over 1, such as `-3/1`. How large a step is, no documentation
+/// checked says. A recorded zero shift is a real setting, not an unknown
+/// one.
 ///
 /// A fine-tuning always has both shifts: a file that records a shift
 /// along one axis only gives no fine-tuning, since no file shows which

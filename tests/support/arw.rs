@@ -196,6 +196,16 @@ const DEFAULT_CROP_SIZE: u16 = 0xC620;
 const SUB_SEC_TIME_ORIGINAL: u16 = 0x9291;
 /// The maker's own block of metadata, as UNDEFINED bytes (MakerNote).
 const MAKER_NOTE: u16 = 0x927C;
+/// The Sony MakerNote tag that records the white balance setting, a code
+/// in one LONG (WhiteBalance), such as 1 for a chosen colour temperature.
+pub const WHITE_BALANCE: u16 = 0x0115;
+/// The Sony MakerNote tag that records the white balance fine-tuning, the
+/// shifts from amber to blue and from green to magenta in whole steps,
+/// positive towards amber and towards magenta, two SLONGs (WBShiftAB_GM).
+pub const FINE_TUNE: u16 = 0x2014;
+/// The Sony MakerNote tag that records the electronic front curtain
+/// setting, 0 off and 1 on, one LONG (ElectronicFrontCurtainShutter).
+pub const ELECTRONIC_FRONT_CURTAIN: u16 = 0x201A;
 /// The Sony MakerNote tag that records how the camera focused, one BYTE
 /// (FocusMode).
 pub const FOCUS_MODE: u16 = 0x201B;
@@ -211,6 +221,10 @@ const FILE_FORMAT: u16 = 0xB000;
 /// The Sony MakerNote tag that records the camera body by number, a SHORT
 /// (SonyModelID).
 const SONY_MODEL_ID: u16 = 0xB001;
+/// The Sony MakerNote tag that records the colour temperature of a chosen
+/// colour temperature or of a custom white balance, in kelvin, one LONG
+/// (ColorTemperature).
+pub const COLOR_TEMPERATURE: u16 = 0xB021;
 
 /// NewSubfileType of the full-resolution image.
 const FULL_RESOLUTION: u32 = 0;

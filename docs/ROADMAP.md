@@ -21,26 +21,29 @@ an SRF, SR2 or ARQ file of the same family, opens with the JPEG previews in
 its IFD0, IFD1 and, on newer bodies, IFD2, checked on test files laid out
 like each generation of the family and on 36 CC0 Sony-family files of the
 same site, 35 of which CI downloads. Both open with their metadata too,
-read from the standard TIFF and Exif tags and, on Nikon files, from the
-MakerNote fields that older bodies record only there, checked on the same
-files. Both give where the camera focused, read from the MakerNote, on
-Nikon mirrorless bodies, Nikon DSLRs in live view and Sony bodies from the
+read from the standard TIFF and Exif tags and from the MakerNote, for
+the camera settings that only it records and, on Nikon files, for the
+fields that older bodies record only there, checked on the same files. Both
+give where the camera focused, read from the MakerNote, on Nikon
+mirrorless bodies, Nikon DSLRs in live view and Sony bodies from the
 ILCE-7RM2 on, while a shot that records only an autofocus point's number
 gives none until the second step of milestone 4. A JPEG file, as a camera
 writes it beside its raw file or instead of it, opens with the file itself,
 the thumbnail of its Exif segment, the other images of its Multi-Picture
 Format (MPF) list and, from the Nikon bodies that write one, its
 MakerNote's small JPEG as previews, and with the metadata of its Exif
-segment, read as in a raw file, with no raw size. A Nikon camera's JPEG
-also gives what its MakerNote adds, as a NEF does, and a Nikon or Sony
-camera's JPEG gives the focus point, but only when its frame has the
-picture's shape. JPEG files are checked on test files built in code, on
+segment, read as in a raw file, with no raw size. A Nikon or Sony
+camera's JPEG also gives what its MakerNote adds, as a NEF or an ARW
+does, its focus point only when the point's frame has the picture's
+shape. JPEG files are checked on test files built in code, on
 three stripped JPEG files of the maintainer's own Z 9 and on the eight
 camera JPEGs of Wikimedia Commons that CI downloads, of five Sony bodies,
 two Nikon bodies and a Canon. Milestones 1, 2 and 5 all work;
-milestone 3 works except for the camera's settings that only Sony's
-MakerNote records, and milestone 4 works for the bodies that record a
-position. Any other file is refused with the `UnknownFormat` error.
+milestone 3 works but for the shutter used, the image area and the raw
+size of Sony bodies, which they record only in enciphered blocks or, for
+the raw size, in a tag that gives an APS-C raw the code of a medium one,
+and milestone 4 works for the bodies that record a position. Any other file is refused
+with the `UnknownFormat` error.
 
 The first release, version 0.1.0, is milestones 1 and 2: the embedded
 previews of NEF and ARW files. The second, 0.2.0, is most of milestone 3:
