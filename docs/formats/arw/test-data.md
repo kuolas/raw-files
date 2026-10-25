@@ -183,7 +183,8 @@ Which files record each setting; the values are in
 | White balance | Exif 0xA403 and 0x9208 | all 36 and the five JPEGs | none |
 | White balance | MakerNote 0x0115 | 33 and four JPEGs | 1351, 2346, 3221 and the A100 JPEG |
 | Colour temperature | MakerNote 0xB021 | 34 and the five JPEGs; 5500 on 7361 and 7364, 0 on the others | 1351, 3221 |
-| Fine-tuning | MakerNote 0x0112 | 33 and four JPEGs; 0 on every one | 1351, 2346, 3221 and the A100 JPEG |
+| Fine-tuning | MakerNote 0x2014 | 28 and four JPEGs; `0, 0` on every one | 964, 1351, 1457, 2271, 2346, 2521, 3221, 5858 and the A100 JPEG |
+| Fluorescent lamp | MakerNote 0x0112 | 33 and four JPEGs; 0 on every one | 1351, 2346, 3221 and the A100 JPEG |
 | Electronic front curtain setting | MakerNote 0x201A | 1310, 1311, 1541, 1542, 1582, 3012, 3015, 3251, 3255, 3751, 4466, 5418, 6736, 6929 to 6931, 6933, 6936, 7361, 7364, 7835, 8846 to 8850 and four JPEGs | 964, 1351, 1457, 2271, 2346, 2521, 3221, 4051, 5811, 5858 and the A100 JPEG |
 | Shutter used | none plain | none | all |
 | APS-C mode | none plain | none | all; the APS-C files are 1582, 6933, 6936, 7835 and 8848 to 8850 |
@@ -199,6 +200,27 @@ of values were kept: 3,161 ARW files and 1,972 camera JPEGs, none of
 them rewritten by a program; two more could not be read over the
 network. What they show is in
 [makernote-and-metadata.md](makernote-and-metadata.md#97-camera-settings).
+
+On 2026-10-25 the maintainer shot 32 frames of one scene with the same
+ILCE-7M2 for these values, one or more per white balance setting,
+fine-tuning, electronic front curtain setting and colour space, 30 of
+them as an ARW file and a JPEG, and six more later that day, each an
+ARW file and a JPEG, under auto and two custom white balances, one of
+them measured anew. They stay private; what the notes give
+of them is each setting and the values it was stored as. The same
+script read them, with 0x2014 added to the tags it reads; the
+table's fine-tuning row is from the files above, read again with it
+on the same day. As for the
+[NEF frames](../nef/test-data.md#24-files-checked-for-the-camera-settings),
+no note of the setting was kept while shooting, so each frame was
+matched to its setting by the order of the shots and by its tags, and
+the direction of each fine-tuning value was read from the average
+colour of the frame's JPEG against the frame shot without a shift.
+Sony's Imaging Edge Desktop, run afterwards on the fine-tuning frames
+as a reader to compare with, names the setting each holds, and agrees.
+ExifTool 13.55, run on these frames as a reader to compare with,
+showed which tag changed with the fine-tuning: 0x2014, which it calls
+WBShiftAB_GM.
 
 ## 3. What raw.pixls.us holds for Sony
 

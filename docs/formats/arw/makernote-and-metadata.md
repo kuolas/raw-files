@@ -215,11 +215,12 @@ milestone that needs the tag; "none" means nice-to-have. [P][1][2]
 | ID | Name | Enc. | Meaning | M |
 |---|---|---|---|---|
 | 0x0010 | CameraInfo | no | A-mount and NEX AF and lens data, the AF point among them by number; layout chosen by byte count | 4 (point numbers) |
-| 0x0112 | WhiteBalanceFineTune | no | u32; the white balance fine-tuning, 0 on every sample; [section 9.7](#97-camera-settings) [F] | 3 |
+| 0x0112 | WhiteBalanceFineTune | no | u32; despite the name, the kind of fluorescent lamp under a fluorescent white balance (-1 to 2), 0 otherwise; not the fine-tuning, which is 0x2014; [section 9.7](#97-camera-settings) [F] | none |
 | 0x0114 | CameraSettings | no | layout by count; aspect ratio, drive mode, a Sony-coded orientation | none |
 | 0x0115 | WhiteBalance | no | u32; the white balance setting: 0 auto, 16 daylight, 48 shade, 112 custom and others; not on the F828, R1 and A100 [F] | 3 |
 | 0x2001 | PreviewImage | no | a JPEG-file feature; absent from every ARW, SR2 and ARQ sample [F] | none |
 | 0x2010 | Tag2010 | yes | settings, a date string, aspect ratio; not written from the ILCE-7SM3 on [F] | none |
+| 0x2014 | WBShiftAB_GM | no | i32[2]; the white balance fine-tuning, amber to blue then green to magenta, positive towards amber and towards magenta; [section 9.7](#97-camera-settings) [F] | 3 |
 | 0x201A | ElectronicFrontCurtainShutter | no | u32; the electronic front curtain setting, 0 off, 1 on; not the shutter used [F] | 3 |
 | 0x201B | FocusMode | no | 0 manual, 2 AF-S, 3 AF-C, 4 AF-A, 6 DMF, 7 AF-D; [section 9.6](#96-focus-point) | 4 |
 | 0x201D | FlexibleSpotPosition | no | the spot chosen in Flexible Spot mode, on a 640 × 480 grid | none |
@@ -1156,8 +1157,8 @@ compare with. It reads the same value as the script for every tag both
 read, with three exceptions: it prints FullImageSize (0xB02B) width
 first, where the file stores the height first
 ([section 2](#2-key-tags)); it prints nothing for an ExposureMode
-(0xB041) of 65535 (the A100's); and on the A100 it finds the white
-balance and its fine-tuning in another IFD (below).
+(0xB041) of 65535 (the A100's); and on the A100 it finds 0x0115 and
+0x0112 in another IFD (below).
 Where this section reports a value that ExifTool decodes from a block
 the script does not read, enciphered or not, it is tagged **[S]**; none
 of ExifTool's code is in raw-files.
@@ -1170,8 +1171,8 @@ of ExifTool's code is in raw-files.
 | Metering mode | Exif 0x9207 MeteringMode | 0x202C MeteringMode2, not needed | Exif on every file |
 | Flash | Exif 0x9209 Flash | 0x2017 FlashAction | Exif on every file; 0x2017 on 26 files, of the SLT-A99V, the ILCE-7S and every later body |
 | White balance | Exif 0xA403 WhiteBalance, auto or manual, and 0x9208 LightSource | 0x0115 WhiteBalance | Exif on every file; 0x0115 on every file but the F828's, the R1's and the A100's |
-| Colour temperature | none | 0xB021 ColorTemperature | every file but the F828's and the R1's; 0 unless the white balance is custom |
-| White balance fine-tuning | none | 0x0112 WhiteBalanceFineTune | every file but the F828's, the R1's and the A100's; 0 on all |
+| Colour temperature | none | 0xB021 ColorTemperature | every file but the F828's and the R1's; 0 unless the white balance is custom or a chosen colour temperature |
+| White balance fine-tuning | none | 0x2014 WBShiftAB_GM | 28 files and four JPEGs, every body but the A100, A200, A700, A900, SLT-A55V, NEX-5, F828 and R1; `0, 0` on all |
 | Shutter used | none | enciphered only: 0x9050 and 0x9400 | none in plain form |
 | Electronic front curtain setting | none | 0x201A ElectronicFrontCurtainShutter | 26 files, of the SLT-A99V, the ILCE-7S and every later body |
 | Image area (APS-C mode) | none | enciphered only: 0x9050 and 0x9416 | none in plain form |
@@ -1214,6 +1215,8 @@ ILCE-7M3 and ILCE-7RM2 JPEGs, 48 on the ILCE-7S (file 1582) and the
 RX100M4 JPEG, and 112 on the ILCE-9M3 (files 7361, 7364) **[F]**. Exif
 agrees on every file: 0xA403 is 0 with 0x0115 0, and 1 with 48
 (LightSource 11, "shade") and with 112 (LightSource 255, "other").
+Frames shot for these values on the maintainer's ILCE-7M2 show every
+other code under its setting (below).
 
 0xB054, also called WhiteBalance by ExifTool, one SHORT with codes for
 auto, custom, daylight, cloudy, the kinds of fluorescent and
@@ -1232,15 +1235,26 @@ Exif gives auto on both **[F]**.
 **Colour temperature.** 0xB021 ColorTemperature, one LONG, in kelvin
 [P][1], is on every file but the F828's and the R1's. It is 5500 on the
 ILCE-9M3's two files, whose setting is custom, and 0 on all the others,
-under auto and under shade **[F]**: 0 means it was not recorded. What it
-holds under a colour-temperature setting is on no checked file.
+under auto and under shade **[F]**: 0 means it was not recorded. On
+frames shot for these values (below) it holds the chosen temperature
+under a colour-temperature setting and the custom white balance's own
+under custom, and 0 under every other setting.
 
-**White balance fine-tuning.** 0x0112 WhiteBalanceFineTune is one LONG
-**[F]**, which ExifTool documents as unsigned [P][1], on every file but
-the F828's, the R1's and the A100's, and 0 on all of them **[F]**. One
-value can hold only one axis; which one, which sign means which colour,
-and how a shift towards the negative side is written are shown by no
-file ([section 13](#13-open-questions)).
+**White balance fine-tuning.** 0x2014, which ExifTool calls
+WBShiftAB_GM [P][1], is two SLONGs: the shift from amber to blue, then
+from green to magenta **[F]**. It is on 28 files and four JPEGs, every
+body but the A100, A200, A700, A900, SLT-A55V, NEX-5, F828 and R1, and
+`0, 0` on all of them **[F]**. Frames shot with a known shift show that a
+positive value is a shift towards amber and towards magenta (below), as
+Sony's own Imaging Edge Desktop names it on them, the opposite of
+Nikon's signs
+([NEF notes](../nef/makernote-and-metadata.md#87-camera-settings)).
+0xB022, which ExifTool calls ColorCompensationFilter, repeats the
+second value on those frames. 0x0112, which ExifTool calls
+WhiteBalanceFineTune and documents as unsigned [P][1], is one LONG on
+every file but the F828's, the R1's and the A100's, and 0 on all of
+them **[F]**; despite its name it is not the fine-tuning, but the kind
+of fluorescent lamp (below).
 
 **Shutter.** Which shutter took the picture: the mechanical one, the
 electronic front curtain (an electronic start of the exposure and a
@@ -1345,6 +1359,57 @@ agree with the samples **[F]**: auto white balance on every one, with
 ColorSpace 1 with `R98`. The focal length in 35 mm terms is 0 on 1,627 of the ARW files
 and 1,625 of the JPEGs, presumably shots with manual lenses, as on the
 ILCE-7S sample [I]. Every MakerNote value lies inside the MakerNote.
+
+**Shots made for these values.** To see what each tag holds under each
+setting, the maintainer shot 32 frames of one scene with the ILCE-7M2
+on 2026-10-25, one or more per setting, 30 of them as an ARW file and
+a JPEG, and six more later that day for the custom white balance's
+colour temperature, all as an ARW file and a JPEG, and read them the
+same way
+([test-data.md](test-data.md#23-the-camera-settings-of-each-file))
+**[F]**:
+
+- **White balance:** 0x0115 is 0 under auto, 16 under daylight, 32
+  under cloudy, 48 under shade, 64 under tungsten, 96 under each of the
+  four fluorescent lamps, 80 under flash, 128 under underwater, 1 under
+  a chosen colour temperature and 112 under custom. Exif agrees, with
+  WhiteBalance 1 and LightSource 1, 10, 11, 3, 15 to 12, 4, 0 and 255,
+  except under underwater, where its WhiteBalance is 0, auto. 0xB054 is
+  5, 6, 14, 7 to 11, 15, 19 and 4 under daylight, cloudy, tungsten, the
+  fluorescent lamps, flash, underwater and custom, and 0 under auto,
+  shade and a colour temperature.
+- **0x0112 is the fluorescent lamp:** -1 (stored as the LONG
+  4294967295), 0, 1 and 2 under the four lamps whose Exif LightSource
+  is 15 (white), 14 (cool white), 13 (day white) and 12 (daylight
+  fluorescent), and 0 under every other setting and on the frames with
+  a fine-tuning. Sony's Imaging Edge Desktop, run on the frames as a
+  reader to compare with, shows it in brackets after the setting:
+  "Fluorescent (+1)" where 0x0112 is 1, "(0)" on every other frame
+  read with it.
+- **Colour temperature:** 0xB021 is 5500 on the first frame shot under
+  a chosen colour temperature and 3200 on the later ones. Under custom
+  it is the custom white balance's own temperature: 5500 under the
+  custom white balance stored in the camera, on the five frames shot
+  with it and on one shot hours later, and 6300, the value the camera
+  showed, once a new custom white balance was measured. It is 0 under
+  every other setting. The two public custom files hold 5500 too.
+- **Fine-tuning:** under custom, 0x2014 is `3, 0` on the frame Imaging
+  Edge Desktop shows as "A-B: A3", `0, -3` on the one it shows as "G-M:
+  G3" and `0, 3` on the one it shows as "G-M: M3"; `-3, 0` is on the
+  fourth. So a positive first value is a shift towards amber, and a
+  positive second value one towards magenta. The JPEGs agree: the one
+  at `3, 0` is warmer than the frame shot without a shift, at `-3, 0`
+  cooler, at `0, -3` greener and at `0, 3` more magenta, the colours
+  compared as for the
+  [NEF frames](../nef/test-data.md#24-files-checked-for-the-camera-settings).
+- **Electronic front curtain setting:** 0x201A is 0 on the two frames
+  shot with it off and 1 on all the others.
+- **Colour space:** set to Adobe RGB, the three frames have Exif
+  ColorSpace 65535 with InteropIndex `R03`.
+
+0x0115, 0x0112, 0xB021 and 0x201A are one LONG and 0x2014 two SLONGs on
+every frame, as on the public files, and every value lies inside the
+MakerNote **[F]**.
 
 ## 10. A100, SR2 and SRF
 
@@ -1479,7 +1544,8 @@ points specific to Sony metadata:
 **Milestone 3 needs no decryption and no deciphering.**
 
 raw-files decided this in [ADR011](../../architecture-decisions/adr011-metadata-from-standard-tags.md), which
-differs from the list below in three points. It reads no Sony MakerNote,
+differs from the list below in three points. It reads Sony's MakerNote
+only for the focus point and the camera settings, never for the lens,
 so the lens comes from the Exif tags alone (items 2 and 5): LensSpec adds
 no range the Exif tags lack and is the 35 mm equivalent on the RX100
 family ([section 9.5](#95-lens)), and ModelID waits for a caller who
@@ -1491,8 +1557,9 @@ is taken for damage.
 
 The focus point is decided in
 [ADR012](../../architecture-decisions/adr012-focus-points-as-the-camera-records-them.md),
-under which the MakerNote is read after all, for the focus point
-alone. Its IFD is found by bytes as in
+under which the MakerNote is read after all, for the focus point; the
+camera settings below are read from it too. Its IFD is found by bytes
+as in
 [section 1](#1-finding-the-makernote), only the values inside its
 declared length are read, and the tags read are FocusLocation,
 FocusLocation2 when FocusLocation gives nothing (absent, or not four
@@ -1536,7 +1603,14 @@ and decipher nothing [I]:
 - the white balance from 0x0115, which is finer than Exif's auto or
   manual, else from Exif's WhiteBalance and LightSource; never from
   0xB054, which says auto on two files set to shade;
-- the colour temperature from 0xB021 when it is above zero;
+- the colour temperature from 0xB021 when it is above zero, which the
+  files checked record only under a chosen colour temperature and a
+  custom white balance, and no more than 99,999 K, the bound Nikon's
+  five-digit white balance text sets, since a larger number is no
+  temperature a camera is set to;
+- the fine-tuning from 0x2014, each value signed as its axis is named,
+  positive towards blue and towards magenta, so the amber-blue value is
+  turned around;
 - the electronic front curtain setting from 0x201A, as a setting and
   never as the shutter used, which it contradicts on four of the 18
   files where an enciphered block shows whether the release was
@@ -1545,9 +1619,8 @@ and decipher nothing [I]:
   `R03` naming Adobe RGB when ColorSpace is 65535;
 - the software from IFD0.
 
-The fine-tuning stays unread until a file shows what 0x0112's sign and
-axis mean; the raw image size, because 0x202E cannot tell an APS-C raw
-from a medium one; and the shutter used and APS-C mode, because only
+The raw image size stays unread, because 0x202E cannot tell an APS-C
+raw from a medium one; and the shutter used and APS-C mode, because only
 enciphered blocks hold them. The A100's Minolta-format IFD stays unread
 too, so its white balance comes from Exif alone.
 
@@ -1625,14 +1698,17 @@ too, so its white balance comes from Exif alone.
 17. **A zero FocusFrameSize on an autofocus shot.** raw-files keeps the
     point without a size; the only samples with `0, 0, 0` are
     manual-focus shots (files 7361, 7364), which give no point anyway.
-18. **The fine-tuning's axis and sign.** 0x0112 is 0 on every sample;
-    which axis it records, which sign is which colour, and how a
-    negative shift is stored in a tag ExifTool documents as unsigned
-    would need a shot with a known shift each way.
-19. **The colour temperature under a set temperature.** 0xB021 is 0
-    under auto and shade and 5500 under a custom white balance; whether
-    it holds the chosen value when the photographer sets one in kelvin
-    is on no sample.
+18. **The fine-tuning's axis and sign.** Answered: the fine-tuning is
+    0x2014, two SLONGs, amber to blue then green to magenta, a positive
+    value towards amber and towards magenta; 0x0112 records the kind of
+    fluorescent lamp, as frames shot on the maintainer's ILCE-7M2 with a
+    known shift each way show ([section 9.7](#97-camera-settings)).
+    **[F]**
+19. **The colour temperature under a set temperature.** Answered: on
+    the maintainer's ILCE-7M2, 0xB021 holds the chosen value under a
+    colour-temperature setting, and the custom white balance's own
+    temperature under custom ([section 9.7](#97-camera-settings)).
+    **[F]**
 20. **What 0xB054 records.** It gives auto where 0x0115 and Exif give
     shade (files 1582 and the RX100M4 JPEG), and ExifTool's list for it
     has no shade; whether it is a second setting, a fallback or

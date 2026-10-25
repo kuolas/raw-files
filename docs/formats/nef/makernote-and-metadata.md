@@ -959,7 +959,7 @@ ExifTool decodes from a block the script does not read, it is tagged
 | Metering mode | Exif 0x9207 MeteringMode | none needed | Exif on every file |
 | Flash | Exif 0x9209 Flash | 0x0087 FlashMode | Exif on every file but the D1H's and the D1X's (files 5364, 1785, 1786); 0x0087 on every file but the E5700's (file 4456) |
 | White balance | Exif 0xA403 WhiteBalance, auto or manual, and 0x9208 LightSource | 0x0005 WhiteBalance, as text | 0x0005 on every file; Exif on every file but the D1H's, the D1X's and the E5700's |
-| Colour temperature | none | 0x004F ColorTemperatureAuto | the D5, D850, D780 and every Z body (19 files) |
+| Colour temperature | none | 0x004F ColorTemperatureAuto; under a chosen colour temperature, 0x0005's number too | 0x004F on the D5, D850, D780 and every Z body (19 files); a chosen temperature in 0x0005 on no file here, only on the frames shot for these values (below) |
 | White balance fine-tuning | none | 0x003F, else 0x000B, both WhiteBalanceFineTune | 0x000B on 21 NEF files and both JPEGs, 0x003F on 22 files from the D810 on; neither on the E5700 |
 | Shutter | none | 0x0034 ShutterMode | the Nikon 1 J1, D850, D780 and every Z body (19 files) |
 | Image area | none | 0x001B CropHiSpeed, its first value | the D200 and every later body but the Coolpix P7800 (28 NEF files and the D5300 JPEG) |
@@ -1018,20 +1018,22 @@ The Exif tags agree with it on every file that has both: 0xA403 is 0
 and LightSource 0 ("unknown") under every `AUTO` setting, and 0xA403 is
 1 under `SUNNY` (LightSource 9, "fine weather") and `SHADE`
 (LightSource 11, "shade") **[F]**. The D1H, D1X and E5700 write no Exif
-white balance, so 0x0005 is their only record of it. The texts for an
-incandescent, fluorescent, colour-temperature or preset setting, and
-for the later bodies' third auto setting, are on no checked file
-([section 11](#11-open-questions)).
+white balance, so 0x0005 is their only record of it. The texts of the
+other settings are on the maintainer's own files and on frames shot
+for these values (below): a chosen colour temperature is written as
+its number, such as `3230K`.
 
 **Colour temperature.** 0x004F ColorTemperatureAuto is one SHORT, in
 kelvin [P][1], on the D5, D850, D780 and every Z body (19 files). Under
 an `AUTO` setting it holds the temperature auto white balance chose:
 3050 to 7000 on 17 files. Under `SUNNY` it is 0 (the D850 and the Z fc,
-files 1835 and 8559) **[F]**: 0 means it was not recorded. What it
-holds under a colour-temperature or preset setting is on no checked
-file. No other plain tag, Exif or MakerNote, records a colour
-temperature on the older bodies: ExifTool reports none there
-**[S]**.
+files 1835 and 8559) **[F]**: 0 means it was not recorded. The
+maintainer's Z 9 records it under every setting, a chosen colour
+temperature and a preset included (below). No other plain tag, Exif
+or MakerNote, records the temperature the camera applied on the older
+bodies: ExifTool reports none there **[S]**. A chosen colour
+temperature is the exception, since 0x0005 records it as its number:
+the D600 writes `3230K` there with no 0x004F beside it (below).
 
 **White balance fine-tuning.** A shift of the white balance along two
 axes, amber to blue and green to magenta. Nikon writes it in two tags,
@@ -1045,11 +1047,17 @@ both called WhiteBalanceFineTune [P][1]:
   Z f, Z5II, Z50II and Z6III write it alone, without 0x000B **[F]**.
 
 Every checked value is zero: `0` or `0, 0` in 0x000B, `0/4, 0/4` in
-0x003F **[F]**. Which axis comes first, which sign means which colour,
-and the size of a step are documented nowhere and shown by no file
-([section 11](#11-open-questions)); the denominator 4 suggests quarter
-steps [I], and on the maintainer's own D7200 files 0x003F holds 0x000B's
-value in quarters (below). The E5700 writes neither tag **[F]**.
+0x003F **[F]**. Frames shot with a known shift show the axes (below):
+the first value is amber to blue, the second green to magenta, and a
+positive value is a shift towards blue and towards green **[F]**. That
+holds for the two values of 0x003F and of 0x000B; which axis and sign
+the single value of the oldest bodies has, no file shows. Both count
+the steps of the camera's fine-tuning menu: Nikon's NX Studio shows a
+0x003F of `-12/4, 8/4` as "A3.00, G2.00", so 0x003F counts them in
+quarters, and 0x000B in whole steps; on the maintainer's own D7200
+files 0x003F holds 0x000B's value in quarters (below). How large a
+menu step is, no documentation checked says. The E5700 writes neither
+tag **[F]**.
 
 **Shutter.** Which shutter took the picture: the mechanical one, the
 electronic front curtain (an electronic start of the exposure and a
@@ -1106,7 +1114,9 @@ small raw size. 0x003E ImageSizeRAW is one SHORT [F] with ExifTool's
 codes 1 large, 2 medium, 3 small [P][1]. It is 3 on the three small-raw
 samples, the D850, D810 and Z 6 (files 1835, 2036, 3587), and 1 on the
 19 other files that have it, from the D810 on **[F]**. No checked file
-is a medium raw. The size in pixels is CropArea's
+is a medium raw, and the Z 9 makes none: on firmware 5.30 its menu
+offers the large, medium and small sizes for the JPEG only, when it
+shoots a raw file and a JPEG together. The size in pixels is CropArea's
 ([section 8.4](#84-image-dimensions)).
 
 **Colour space.** The colour space the camera was set to for its JPEG
@@ -1171,8 +1181,9 @@ They add what the public samples lack **[F]**:
 - **Fine-tuning that is not zero:** 0x000B is `1, 0` on two D300s files,
   and `-6, 0` on 42 D7200 files and `-3, 0` on two. On every D7200 file
   with a Nikon MakerNote, 11,094 with one rewritten JPEG among them,
-  0x003F holds 0x000B's two values as fractions of four: `-24/4, 0/4` beside `-6, 0`. Which colour a negative value
-  means is still shown by no file.
+  0x003F holds 0x000B's two values as fractions of four: `-24/4, 0/4`
+  beside `-6, 0`. A negative first value is a shift towards amber
+  (below).
 - **The colour space:** none of these NEF files has an Exif ColorSpace
   either. 615 D3200 JPEGs have ColorSpace 65535 with InteropIndex `R03`,
   and every one has 0x001E 2, Adobe RGB; 5,179 have ColorSpace 1 with
@@ -1197,6 +1208,58 @@ They add what the public samples lack **[F]**:
   D3200, eight of the D7100, two of the D7200), Software names the
   program: Windows Photo Viewer (349), GIMP (49), Luminance HDR (20),
   Shotwell (5), ViewNX 2 (1) and darktable (1).
+
+**Shots made for these values.** To see what each tag holds under each
+setting, the maintainer shot frames of one scene on 2026-10-25, one or
+two per setting, and read them the same way
+([test-data.md](test-data.md#24-files-checked-for-the-camera-settings)):
+19 NEF files from a Z 9 on firmware `Ver.05.30`, and 19 NEF files from
+the D600, 14 of them with a JPEG of the same shot **[F]**.
+
+- **White balance texts:** the Z 9 writes `AUTO0`, `AUTO1`, `AUTO2` and
+  `NATURAL AUTO` under its four auto settings; `SUNNY`, `CLOUDY`,
+  `SHADE`, `INCANDESCENT`, `COOL WHT FL` (the one fluorescent lamp
+  tried) and `FLASH` under the kinds of light; `PRESET1` and `PRESET2`
+  under two of its preset slots. The D600 writes `AUTO1` and, under its
+  four preset slots, `PRESET1` to `PRESET4`, which NX Studio names
+  "Preset manual d-1" to "d-4". The Exif tags agree as on
+  the other files: WhiteBalance 0 under auto; 1 with LightSource 9, 10,
+  11, 3, 14 and 4 under the six kinds of light, and with LightSource 0
+  under a preset.
+- **A chosen colour temperature:** both bodies store it as its number,
+  the text `3230K`, with Exif WhiteBalance 1 and LightSource 0, and the
+  Z 9's 0x004F holds 3230. The number is the setting, so no table of
+  texts can list them all.
+- **Colour temperature:** the Z 9's 0x004F holds a temperature under
+  every setting: 5210 under `SUNNY`, 5990 under `CLOUDY`, 8000 under
+  `SHADE`, 3000 under `INCANDESCENT`, 4200 under `COOL WHT FL`, 5410
+  under `FLASH`, 5200 under both presets, 3230 under `3230K`, and 4550
+  to 4900 under auto. Under auto it moves with the fine-tuning: 4730
+  without a shift, 4900 shifted towards amber, 4550 towards blue. The
+  D850 and the Z fc write 0 under `SUNNY` (above); the D600 writes no
+  0x004F.
+- **Fine-tuning:** Nikon's NX Studio, run on the frames as a reader to
+  compare with, names each shift. On the Z 9, under `AUTO1`, 0x003F
+  holds `-12/4, 8/4` on the frame it shows as "A3.00, G2.00", with
+  0x004F 4900 beside the "4900K" it shows; `8/4, -8/4` is on a second
+  frame. On the D600, 0x000B holds `3, 0` on the frame it shows as
+  "Auto1, B3, 0", `-3, 0` on "Auto1, A3, 0", `0, 3` on "Preset manual
+  d-1, 0, G3" and `-3, 0` on "Preset manual d-4, A3, 0". So on both
+  bodies the first value runs from amber (negative) to blue (positive)
+  and the second from magenta (negative) to green (positive). The
+  camera's own pictures agree: the Z 9's frame at `-12/4, 8/4` is
+  warmer and greener than the frame shot without a shift, and its
+  frame at `8/4, -8/4` cooler and more magenta; the D600's JPEG at
+  `3, 0` is cooler than the one at `-3, 0`, and its preset frames at
+  `0, 3` and `0, -3` greener and more magenta. The pictures compared
+  are the D600's JPEGs and the full-size preview the Z 9 writes into
+  each NEF file.
+- **Colour space:** set to Adobe RGB, both bodies write 0x001E 2, and the
+  D600's JPEG has Exif ColorSpace 65535 with InteropIndex `R03`.
+- **Image area:** the D600 set to a DX crop writes CropHiSpeed 2, as the
+  Z6III's DX file does.
+
+Every value of these frames lies inside the MakerNote **[F]**.
 
 ## 9. Robustness pitfalls
 
@@ -1306,7 +1369,11 @@ and decrypt nothing [I]:
   finer than Exif's auto or manual, by a table of the texts files are
   known to hold, since a text like `COOL WHT FL` cannot be guessed,
   else from Exif's WhiteBalance and LightSource;
-- the colour temperature from 0x004F when it is above zero;
+- the colour temperature from 0x004F when it is above zero, else, under
+  a chosen colour temperature, from the number of 0x0005's text, such
+  as `3230K`, which is all the bodies without 0x004F record of a
+  temperature; either only up to 99,999 K, the five digits of that
+  text;
 - the fine-tuning from 0x003F, else from 0x000B;
 - the shutter from 0x0034;
 - the image area from CropHiSpeed's first value, with 0 giving none,
@@ -1447,22 +1514,28 @@ For milestone 3, keep the MakerNote out of the critical path.
     small raw, and how. The rule gives a 1:1 or 16:9 crop on one no focus
     point, since its CropArea counts stored pixels while AFInfo2's frame
     counts full-size ones, and scales a DX crop onto that CropArea.
-21. **The other white balance texts.** The public files show 0x0005 as
-    `AUTO`, `AUTO0`, `AUTO1`, `SUNNY`, `FLASH` and `SHADE`, and the
-    maintainer's own files add `CLOUDY`, `INCANDESCENT`, `PRESET` and
-    `COOL WHT FL` ([section 8.7](#87-camera-settings)). The texts for
-    the other fluorescent lamps, a colour temperature, underwater and
-    the later bodies' third auto setting, on the Z bodies above all,
-    need a shot with each.
-22. **The colour temperature under a manual setting.** 0x004F is 0
-    under `SUNNY`; whether it holds the chosen temperature when the
-    photographer sets one in kelvin is on no checked file.
-23. **The axes of the fine-tuning.** Which value of 0x000B and 0x003F is
-    amber to blue and which green to magenta, which sign is which
-    colour, and the size of a step: every public value is zero, and the
-    maintainer's non-zero ones (`-6, 0` on a D7200) come with no record
-    of the shift that was set. Shots with a known shift along each axis
-    would show them.
+21. **The other white balance texts.** Mostly answered: the public
+    files show 0x0005 as `AUTO`, `AUTO0`, `AUTO1`, `SUNNY`, `FLASH` and
+    `SHADE`, the maintainer's own files add `CLOUDY`, `INCANDESCENT`,
+    `PRESET` and `COOL WHT FL`, and frames shot on a Z 9 and a D600 add
+    `AUTO2`, `NATURAL AUTO`, `PRESET1` to `PRESET4` and a chosen colour
+    temperature as its number, such as `3230K`
+    ([section 8.7](#87-camera-settings)). **[F]** Still on no checked
+    file: the other fluorescent lamps, the Z 9's preset slots 5 and 6,
+    and whatever the bodies not checked write.
+22. **The colour temperature under a manual setting.** Answered for the
+    Z 9: it holds a temperature under every setting, 3230 under a chosen
+    3230 K and 5200 under a preset; the D850 and the Z fc write 0 under
+    `SUNNY` ([section 8.7](#87-camera-settings)). **[F]**
+23. **The axes of the fine-tuning.** Answered for the two values of
+    0x003F and 0x000B: the first is amber (negative) to blue (positive),
+    the second magenta (negative) to green (positive), as Nikon's NX
+    Studio names the shifts on frames shot on a Z 9 and a D600 with a
+    shift along each axis, and as their pictures show
+    ([section 8.7](#87-camera-settings)). **[F]** Both count the
+    menu's steps, 0x003F in quarters. Still open: the axis and sign of
+    the single value the D1 family, the D70, the D100 and the D200
+    write, and how large a menu step is.
 24. **The shutter of the older DSLRs.** No DSLR older than the D850
     writes 0x0034, nor any of the maintainer's six DSLRs, and none
     records the shutter in a block ExifTool decodes. Whether a DSLR in live view records it anywhere is open;
@@ -1476,7 +1549,8 @@ For milestone 3, keep the MakerNote out of the critical path.
     the maintainer's D7100 NEF files and one JPEG, so on a DX body it
     marks a 16:9 still too.
 26. **A medium raw.** 0x003E is 1 or 3 on the checked files; no medium
-    raw was checked.
+    raw was checked. The Z 9 makes none: its medium and small sizes are
+    for the JPEG only.
 27. **The D810's firmware.** Its Software says 1.12 and its encrypted
     ShotInfo, as ExifTool decodes it, 1.11d (file 2036). Which one a
     firmware update changes is open.

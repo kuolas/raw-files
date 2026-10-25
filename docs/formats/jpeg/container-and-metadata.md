@@ -470,13 +470,16 @@ lossless file, 72 on the HE and HE\* ones). [F]
   0x0062, 0x00A2); whether they come with the format or with the newer
   firmware, no public file can say. [I]
 - **ImageSizeRAW (0x003E) is 1 on the two full-size JPEGs and 2 on the
-  middle-size one** [F]: in a JPEG it follows the JPEG's own size on
-  these files, or the raw size the camera was set to beside it; a
-  JPEG-only shot at another size, and its raw counterpart, would tell
-  which. [I] On the maintainer's own D7200 JPEGs it is 1 on 4,310 and
-  0 on 506, presumably those taken without a raw, which points to the
-  raw size. [F][I] Quality (0x0004) is `FINE` or `BASIC`, the JPEG's
-  compression, where the NEF's says `RAW`. [F]
+  middle-size one** [F]: in a JPEG it follows the JPEG's own size. The
+  maintainer's 49 Z 9 shots of 2026-10-22 taken as a NEF and a JPEG
+  together, at the JPEG's large, medium and small sizes in each crop
+  mode, show it: the JPEG's 0x003E is 1, 2 or 3 as its size is large,
+  medium or small, while the NEF beside it holds 1 every time, the Z 9
+  making no medium or small raw. [F] On the maintainer's own D7200
+  JPEGs it is 1 on 4,310 and 0 on 506, presumably those taken without
+  a raw. [F][I] On neither body does a JPEG's 0x003E give a raw size.
+  Quality (0x0004) is `FINE` or `BASIC`, the JPEG's compression, where
+  the NEF's says `RAW`. [F]
 
 ## 11. The camera files, segment by segment
 
