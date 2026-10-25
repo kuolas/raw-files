@@ -24,12 +24,15 @@
 //! can be pasted into an issue without disclosing anything about the
 //! photos.
 //!
-//! For the camera settings that the Exif tags record, the exposure
-//! program, the metering mode, the flash, the white balance mode and the
-//! colour space, it counts, over the files of a section, how many have each
-//! setting and how many have each kind of it, by the name the library
-//! gives the kind, such as "Aperture priority", and how many flashes fired;
-//! as for the sizes, these are totals over the section, tied to no file.
+//! For each camera setting, from the exposure program to the colour space,
+//! it counts, over the files of a section, how many have the setting and
+//! how many have each kind of it, by the name the library gives the kind,
+//! such as "Aperture priority"; how many flashes fired; how many files had
+//! the electronic front curtain setting on and how many off; how many have
+//! each white balance fine-tuning, by its pair of shifts, such as
+//! `(-24/4, 0/4)`; and the lowest and the highest colour temperature
+//! recorded. As for the sizes, these are totals over the section, tied to
+//! no file.
 //!
 //! For the focus point, where the camera focused, it counts the files that
 //! have one, how many of those record that the camera confirmed focus, that
@@ -166,11 +169,21 @@ impl MetadataTally {
     }
 }
 
-/// How the camera was set for the files, as the Exif tags record it, in
-/// counts: for each setting, how many files have it, and how many have each
-/// of its kinds, by the name the library gives the kind, such as
-/// "Aperture priority". The settings that only a MakerNote records are not
-/// counted yet. See #26
+/// A fine-tuning's two shifts as the library gives them, amber to blue
+/// first, each signed as its axis is named and as its numerator and
+/// denominator, so that the counts sort.
+type Shifts = ((i32, i32), (i32, i32));
+
+/// How the camera was set for the files, in counts: for each setting, how
+/// many files have it, and how many have each of its kinds, by the name the
+/// library gives the kind, such as "Aperture priority". The flash is
+/// counted by whether it fired too. A setting the library names no kinds
+/// of is counted by what sets it apart instead: the electronic front
+/// curtain setting by whether it was on, and the fine-tuning by its pair
+/// of shifts, since a shift is a step the camera's menu offers, not a
+/// value of one picture. The colour temperature, a number, is given as the
+/// lowest and the highest any file records. Like every other count, these
+/// are totals over the files, tied to no file.
 #[derive(Default)]
 struct SettingsTally {
     exposure_program: usize,
@@ -186,6 +199,22 @@ struct SettingsTally {
     flash_without_mode: usize,
     white_balance_mode: usize,
     white_balance_modes: BTreeMap<&'static str, usize>,
+    /// Files with a colour temperature, and the lowest and the highest
+    /// recorded, `None` while no file has one.
+    kelvin: usize,
+    kelvin_range: Option<(u32, u32)>,
+    fine_tune: usize,
+    fine_tunes: BTreeMap<Shifts, usize>,
+    shutter: usize,
+    shutters: BTreeMap<&'static str, usize>,
+    /// Files with an electronic front curtain setting, of which
+    /// `electronic_front_curtain_on` had it on.
+    electronic_front_curtain: usize,
+    electronic_front_curtain_on: usize,
+    image_area: usize,
+    image_areas: BTreeMap<&'static str, usize>,
+    raw_image_size: usize,
+    raw_image_sizes: BTreeMap<&'static str, usize>,
     color_space: usize,
     color_spaces: BTreeMap<&'static str, usize>,
 }
@@ -226,11 +255,47 @@ impl SettingsTally {
                 None => self.flash_without_mode += 1,
             }
         }
-        if let Some(mode) = settings.white_balance().mode() {
+        let white_balance = settings.white_balance();
+        if let Some(mode) = white_balance.mode() {
             count(
                 &mut self.white_balance_mode,
                 &mut self.white_balance_modes,
                 mode.name(),
+            );
+        }
+        if let Some(kelvin) = white_balance.kelvin() {
+            self.kelvin += 1;
+            self.kelvin_range = Some(match self.kelvin_range {
+                Some((lowest, highest)) => (lowest.min(kelvin), highest.max(kelvin)),
+                None => (kelvin, kelvin),
+            });
+        }
+        if let Some(fine_tune) = white_balance.fine_tune() {
+            let (amber_blue, green_magenta) = (fine_tune.amber_blue(), fine_tune.green_magenta());
+            self.fine_tune += 1;
+            *self
+                .fine_tunes
+                .entry((
+                    (amber_blue.numerator, amber_blue.denominator),
+                    (green_magenta.numerator, green_magenta.denominator),
+                ))
+                .or_default() += 1;
+        }
+        if let Some(shutter) = settings.shutter() {
+            count(&mut self.shutter, &mut self.shutters, shutter.name());
+        }
+        if let Some(on) = settings.electronic_front_curtain_setting() {
+            self.electronic_front_curtain += 1;
+            self.electronic_front_curtain_on += usize::from(on);
+        }
+        if let Some(area) = settings.image_area() {
+            count(&mut self.image_area, &mut self.image_areas, area.name());
+        }
+        if let Some(size) = settings.raw_image_size() {
+            count(
+                &mut self.raw_image_size,
+                &mut self.raw_image_sizes,
+                size.name(),
             );
         }
         if let Some(color_space) = settings.color_space() {
@@ -449,6 +514,45 @@ impl Tally {
         println!(
             "files with a white balance mode: {}, by mode: {:?}",
             s.white_balance_mode, s.white_balance_modes
+        );
+        match s.kelvin_range {
+            Some((lowest, highest)) => println!(
+                "files with a colour temperature: {}, lowest: {lowest} K, highest: {highest} K",
+                s.kelvin
+            ),
+            None => println!("files with a colour temperature: {}", s.kelvin),
+        }
+        // Each pair as the library gives it, written as fractions, such as
+        // `(-24/4, 0/4): 3`, in the braces a map prints in.
+        let fine_tunes: Vec<String> = s
+            .fine_tunes
+            .iter()
+            .map(|(((ab_num, ab_den), (gm_num, gm_den)), count)| {
+                format!("({ab_num}/{ab_den}, {gm_num}/{gm_den}): {count}")
+            })
+            .collect();
+        println!(
+            "files with a white balance fine-tuning: {}, by shifts, amber to blue then green to magenta: {{{}}}",
+            s.fine_tune,
+            fine_tunes.join(", ")
+        );
+        println!(
+            "files with a shutter: {}, by shutter: {:?}",
+            s.shutter, s.shutters
+        );
+        println!(
+            "files with an electronic front curtain setting: {}, of which on: {}, off: {}",
+            s.electronic_front_curtain,
+            s.electronic_front_curtain_on,
+            s.electronic_front_curtain - s.electronic_front_curtain_on
+        );
+        println!(
+            "files with an image area: {}, by area: {:?}",
+            s.image_area, s.image_areas
+        );
+        println!(
+            "files with a raw image size: {}, by size: {:?}",
+            s.raw_image_size, s.raw_image_sizes
         );
         println!(
             "files with a colour space: {}, by colour space: {:?}",
@@ -789,6 +893,80 @@ fn every_file_of_the_local_corpus_opens_and_gives_a_whole_jpeg() {
             "some focus points of {format} files, scaled onto their largest preview, lie outside it"
         );
     }
+}
+
+#[test]
+fn the_settings_tally_counts_the_makernote_settings() {
+    use raw_files::{
+        CameraSettings, FineTune, ImageArea, RawImageSize, Shutter, SignedRational, WhiteBalance,
+    };
+
+    let shift = |numerator, denominator| SignedRational {
+        numerator,
+        denominator,
+    };
+    let zero = shift(0, 4);
+    let towards_amber = FineTune::new(shift(-24, 4), zero);
+    // Three files with a colour temperature each, neither the first the
+    // lowest nor the highest, so that both ends of the range must move;
+    // the first two with the same shift, the third with another; the
+    // electronic front curtain setting on, off and on, so that on and off
+    // differ in count. A fourth file has none of the settings.
+    let first = CameraSettings::default()
+        .with_white_balance(
+            WhiteBalance::default()
+                .with_kelvin(4_000)
+                .with_fine_tune(towards_amber),
+        )
+        .with_electronic_front_curtain_setting(true)
+        .with_shutter(Shutter::Mechanical)
+        .with_image_area(ImageArea::ApsC)
+        .with_raw_image_size(RawImageSize::Small);
+    let second = CameraSettings::default()
+        .with_white_balance(
+            WhiteBalance::default()
+                .with_kelvin(3_050)
+                .with_fine_tune(towards_amber),
+        )
+        .with_electronic_front_curtain_setting(false);
+    let third = CameraSettings::default()
+        .with_white_balance(
+            WhiteBalance::default()
+                .with_kelvin(5_200)
+                .with_fine_tune(FineTune::new(zero, zero)),
+        )
+        .with_electronic_front_curtain_setting(true);
+    let fourth = CameraSettings::default();
+    let mut tally = SettingsTally::default();
+    for settings in [first, second, third, fourth.clone()] {
+        tally.record(&Metadata::default().with_camera_settings(settings));
+    }
+
+    assert_eq!(tally.kelvin, 3);
+    assert_eq!(tally.kelvin_range, Some((3_050, 5_200)));
+
+    assert_eq!(tally.fine_tune, 3);
+    assert_eq!(
+        tally.fine_tunes,
+        BTreeMap::from([(((-24, 4), (0, 4)), 2), (((0, 4), (0, 4)), 1)])
+    );
+
+    assert_eq!(tally.electronic_front_curtain, 3);
+    assert_eq!(tally.electronic_front_curtain_on, 2);
+
+    assert_eq!(
+        (tally.shutter, tally.image_area, tally.raw_image_size),
+        (1, 1, 1)
+    );
+    assert_eq!(tally.shutters, BTreeMap::from([("Mechanical", 1)]));
+    assert_eq!(tally.image_areas, BTreeMap::from([("APS-C", 1)]));
+    assert_eq!(tally.raw_image_sizes, BTreeMap::from([("Small", 1)]));
+
+    // Files without a colour temperature leave the range empty.
+    let mut without_kelvin = SettingsTally::default();
+    without_kelvin.record(&Metadata::default().with_camera_settings(fourth));
+    assert_eq!(without_kelvin.kelvin, 0);
+    assert_eq!(without_kelvin.kelvin_range, None);
 }
 
 // The tests of `wholeness` and `main_image_end`, on JPEG files in
