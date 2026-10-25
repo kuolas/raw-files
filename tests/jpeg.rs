@@ -2105,7 +2105,7 @@ fn check_stripped_z9_jpeg(stripped: &StrippedZ9Jpeg) {
                 WhiteBalance::default()
                     .with_mode(WhiteBalanceMode::Auto)
                     .with_kelvin(stripped.kelvin)
-                    .with_fine_tune(FineTune::new(zero).with_green_magenta(zero)),
+                    .with_fine_tune(FineTune::new(zero, zero)),
             )
             .with_exposure_program(ExposureProgram::AperturePriority)
             .with_metering_mode(MeteringMode::MultiSegment)
@@ -2653,7 +2653,7 @@ const METADATA: &[SampleMetadata] = &[
             kelvin: None,
             fine_tune: Some(SampleFineTune {
                 amber_blue: (0, 1),
-                green_magenta: Some((0, 1)),
+                green_magenta: (0, 1),
             }),
             exposure_program: None,
             metering_mode: Some(MeteringMode::MultiSegment),
