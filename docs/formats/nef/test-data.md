@@ -332,6 +332,27 @@ found no Nikon MakerNote in 14 of the D3200's NEF files and seven of
 the D7100's. What these files show is in
 [makernote-and-metadata.md](makernote-and-metadata.md#87-camera-settings).
 
+On 2026-10-25 the maintainer shot frames of one scene for these values,
+one or two per white balance setting, fine-tuning, colour space and
+image area: 19 NEF files from a Z 9 on firmware `Ver.05.30`, and 19 NEF
+files from the D600, 14 of them with a JPEG. They stay private; what
+the notes give of them is each setting and the values it was stored
+as. The same script read them. No note of the setting was kept while
+shooting, so each frame was matched to its setting by the order of
+the shots and by what its Exif and MakerNote tags record. The
+direction of each fine-tuning value was read from the camera's own
+picture of the frame: the D600's JPEG, and the full-size JPEG preview
+inside each Z 9 NEF file, taken out with ExifTool. Each picture was
+scaled down to 90 by 60 pixels with macOS's `sips`, and its average
+red, green and blue compared with those of the frame shot just before
+without a shift (Z 9), or of the frame shifted the other way (D600): a
+shift towards amber raises red against blue, and one towards green
+raises green against red and blue together. The differences are large:
+red over blue went from 1.27 to 1.40 and to 1.17 on the Z 9's two
+shifted frames. Nikon's NX Studio, run afterwards on the fine-tuning
+frames as a reader to compare with, names the setting each holds, and
+agrees with every direction read from the colours.
+
 ## 3. What raw.pixls.us holds for Nikon
 
 Directory listings, 2026-10-10. **[P]** The data lives under

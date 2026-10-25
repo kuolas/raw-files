@@ -75,9 +75,12 @@ program, the metering mode, the flash, the shutter, the image area,
 the raw image size and the colour space, with the focal length in
 35 mm terms and the software that wrote the file. We checked where
 files record them on the 79 public sample files (35 Nikon raw files,
-36 of the Sony family and eight camera JPEGs) and, as counts only, on
-the maintainer's own files of six Nikon DSLRs and an ILCE-7M2; the
-format notes for [NEF](../formats/nef/makernote-and-metadata.md),
+36 of the Sony family and eight camera JPEGs), as counts only on the
+maintainer's own files of six Nikon DSLRs and an ILCE-7M2, and on
+frames the maintainer shot with a Z 9, a D600 and the ILCE-7M2 under
+each white balance setting and fine-tuning, to see what the tags hold
+under each; the format notes for
+[NEF](../formats/nef/makernote-and-metadata.md),
 [ARW](../formats/arw/makernote-and-metadata.md) and
 [JPEG](../formats/jpeg/container-and-metadata.md) hold the details.
 They showed:
@@ -94,14 +97,26 @@ They showed:
   ExifTool decodes it. No Nikon raw file writes Exif's ColorSpace.
 - **The rest is in plain MakerNote tags.** Nikon records the white
   balance setting as text, in words that cannot be guessed from one
-  another (`AUTO1`, `SUNNY`, `COOL WHT FL`), the colour temperature that
-  auto white balance chose (0 under the daylight setting, the only other
-  one the files show it under), a fine-tuning, the shutter used (on the
-  Nikon 1 J1, the D850, the D780 and the Z bodies), the image area
-  as a crop code, the raw size (from the D810 on) and the colour space.
-  Sony records the white balance setting, a colour temperature (0
-  unless the white balance is custom), a fine-tuning that is 0 on every
-  file, and its electronic front curtain setting.
+  another (`AUTO1`, `SUNNY`, `COOL WHT FL`), and a chosen colour
+  temperature as its number (`3230K`); the colour temperature of the
+  white balance it applied, under every setting on the Z 9 but only
+  under auto on the D850 and the Z fc, which write 0 under daylight; a
+  fine-tuning; the shutter used (on the Nikon 1 J1, the D850, the D780
+  and the Z bodies); the image area as a crop code; the raw size (from
+  the D810 on) and the colour space. Sony records the white balance
+  setting; a colour temperature, the one chosen under its
+  colour-temperature setting and the custom white balance's own under
+  custom, 0 under every other setting; a fine-tuning along both axes in
+  one tag, 0x2014, while 0x0112, which ExifTool's documentation names a
+  fine-tuning, holds the kind of fluorescent lamp; and its electronic
+  front curtain setting.
+- **The two makers sign the fine-tuning the opposite way.** A positive
+  value shifts towards blue and towards green on Nikon, towards amber
+  and towards magenta on Sony. Each maker's own software, run on the
+  frames shot with each shift as a reader to compare with, names the
+  shift each value records, and the camera's own pictures agree: they
+  are warmer, cooler, greener or more magenta than one shot without a
+  shift or with the opposite one.
 - **Some are only in enciphered or encrypted blocks.** The shutter a
   Sony body used and whether it shot in APS-C mode are only in
   enciphered blocks, as ExifTool, run on the files as a reader to
@@ -112,13 +127,14 @@ They showed:
   firmware version in Nikon's encrypted ShotInfo, as ExifTool decodes
   it, differs from IFD0's Software on the D810.
 - **The standard and MakerNote tags agree on the settings read here**,
-  with one exception: a program that rewrites a JPEG can set ColorSpace
-  to "uncalibrated" and leave the camera's MakerNote colour space
-  behind, as on 10 of the maintainer's rewritten JPEGs. Two MakerNote
-  tags left unread disagree: Nikon's flash mode (0x0087) says a flash
-  fired on hundreds of the maintainer's files whose Exif says it did
-  not, and a second Sony white balance tag (0xB054) says auto on two
-  files set to shade.
+  with two exceptions: Sony's underwater white balance, which its Exif
+  WhiteBalance calls auto; and a program that rewrites a JPEG can set
+  ColorSpace to "uncalibrated" and leave the camera's MakerNote colour
+  space behind, as on 10 of the maintainer's rewritten JPEGs. Two
+  MakerNote tags left unread disagree: Nikon's flash mode (0x0087) says
+  a flash fired on hundreds of the maintainer's files whose Exif says
+  it did not, and a second Sony white balance tag (0xB054) says auto on
+  two files set to shade.
 - **Files hold codes no table names.** ExposureProgram is 0, "not
   defined", on more than half of the maintainer's D3200, D3300 and
   D7100 files and on recent Z bodies' samples; Nikon's raw size is 0
@@ -242,17 +258,31 @@ consequence on maker-specific values below no longer describes in full.
   and from Exif's WhiteBalance and LightSource when the MakerNote gives
   none. Nikon's text is looked up in a table of the texts files are
   known to hold, whole, not by its first letters, and a text the table
-  lacks gives none; Sony's is 0x0115, never 0xB054. The modes form one
+  lacks gives none; a chosen colour temperature, a number followed by
+  `K`, is the one text read by its form, since no table could list
+  every number; Sony's is 0x0115, never 0xB054. The modes form one
   short list in neutral words (auto, daylight, cloudy, shade, tungsten,
   fluorescent, flash, underwater, custom, colour temperature), into
   which each maker's finer kinds fold.
-- **The colour temperature** is the one the MakerNote records, when it
-  is above zero; zero means not recorded. On Nikon (0x004F) it is the
-  temperature auto white balance chose, on Sony (0xB021) the one a
-  custom white balance set, so the mode beside it says which.
-- **The fine-tuning** is Nikon's shift along two axes (0x003F, else
-  0x000B), as stored, a recorded zero included. Sony's is none until a
-  file shows what its sign and its axis mean.
+- **The colour temperature** is the one the MakerNote records, from 1
+  to 99,999 K: zero means not recorded, and a larger number is no
+  temperature a camera is set to. On Nikon (0x004F) it is the colour
+  temperature of the white balance the camera applied, under whichever
+  setting the body records it. The Nikon bodies that write no 0x004F
+  record a temperature only when the photographer chose one, as the
+  number of the white balance text (`3230K`), so that number is the
+  colour temperature when 0x004F gives none; on the Z 9, which writes
+  both, they agree. On Sony (0xB021) it is the one the photographer
+  chose under the colour-temperature setting, and the custom white
+  balance's own under custom; the mode beside it says which.
+- **The fine-tuning** is the shift along two axes, amber to blue and
+  green to magenta, in the camera's own steps, a recorded zero
+  included: Nikon's 0x003F, else 0x000B when it holds both axes, and
+  Sony's 0x2014. Each value is signed as its axis is named, positive
+  towards blue and towards magenta, so the reader turns Nikon's
+  green-magenta value and Sony's amber-blue value around. The single
+  value the oldest Nikon bodies write in 0x000B gives none, since no
+  file shows its axis or its sign.
 - **The shutter used** is Nikon's 0x0034, whose auto codes give the
   shutter the camera chose; a movie code gives none. Sony's is none,
   since only an enciphered block records it. Sony's electronic front
@@ -301,6 +331,12 @@ Rejected for the camera settings:
   which shutter was used.
 - **Mapping Nikon's white balance texts by their first letters.** A text
   such as `COOL WHT FL` shows that they cannot be predicted.
+- **The fine-tuning signed as each maker signs it.** A viewer showing
+  or comparing two files' shifts would need to know, for each maker,
+  which way a positive value points.
+- **Sony's 0x0112 as the fine-tuning**, the tag ExifTool's
+  documentation names so. It records the kind of fluorescent lamp, and
+  stays 0 when the photographer shifts the white balance.
 - **Letting the MakerNote's colour space overrule Exif's.** A rewritten
   JPEG can keep a stale one.
 
@@ -339,10 +375,16 @@ Added on 2026-10-24 (#26).
 - A viewer gets most of the camera's settings from the NEF, ARW and JPEG
   files of the bodies checked. What only an enciphered block records
   stays `None` on every Sony file: the shutter used and APS-C mode;
-  Sony's raw size and fine-tuning do too. Nikon DSLRs before the D850
-  have no shutter, Nikon bodies before the D5 and D850 no colour
-  temperature, and the NEF files of the D1 family, the D70, the D100
-  and the Coolpix E5700 and P7800 no image area and no colour space.
+  Sony's raw size does too. Nikon DSLRs before the D850 have no shutter,
+  and the NEF files of the D1 family, the D70, the D100 and the Coolpix
+  E5700 and P7800 no image area and no colour space. Nikon bodies before
+  the D5 and D850 have a colour temperature only when the photographer
+  chose one, which their white balance text records as its number. The
+  D1 family, the D70, the D100 and the D200 have no fine-tuning, and
+  neither have the Sony bodies that write no 0x2014: the A100, A200,
+  A700, A900, A55, NEX-5, F828 and R1. A Sony file has a colour
+  temperature only under a chosen colour temperature or a custom white
+  balance, the only settings under which the files checked record one.
 - Nikon's table of white balance texts grows only from measured files:
   a text not in it yet gives way to Exif's white balance, which says
   only auto or the kind of light, and never to a guess from its
