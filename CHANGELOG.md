@@ -29,12 +29,23 @@ does.
   white balance mode, from Exif's auto or manual and the kind of light a
   manual one was set for, and the colour space, sRGB or, from the `R03`
   index of a DCF option file, Adobe RGB. A code Exif does not define, or
-  its "not defined" and "unknown", gives `None`. The other settings, which
-  only a maker's MakerNote records, are not read yet: the colour
+  its "not defined" and "unknown", gives `None`. NEF files and the JPEGs
+  of Nikon cameras give the other settings from Nikon's MakerNote: the
+  white balance setting, such as auto, a preset or a chosen colour
+  temperature, in place of Exif's when the MakerNote names one; the colour
+  temperature of the white balance the camera applied; the fine-tuning;
+  the shutter used; the image area; the raw image size, in a raw file
+  only; and the colour space, when the Exif tags record no ColorSpace, as
+  no Nikon raw file checked does. Each fine-tuning value is signed as its
+  axis is named, whatever the maker: `FineTune::amber_blue` is positive
+  towards blue and `FineTune::green_magenta` positive towards magenta, so
+  Nikon's green to magenta value, which it stores positive towards green,
+  is negated. The single fine-tuning value of the D1 family, the D70, the
+  D100 and the D200 gives `None`, since no file shows its axis. Sony's
+  MakerNote is not read for these settings yet: on Sony files the colour
   temperature, the fine-tuning, the shutter, the electronic front curtain
-  setting, the image area and the raw image size are `None` for every
-  file, and so is the colour space of a Nikon raw file, which records it,
-  if at all, only there.
+  setting, the image area and the raw image size are `None`, and the white
+  balance mode is Exif's.
 - `Exposure::focal_length_in_35mm_film` and `Metadata::software`, read
   from NEF, ARW and JPEG files. The first is the focal length in 35 mm
   terms the camera recorded, in whole millimetres, from Exif's

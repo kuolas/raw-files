@@ -93,13 +93,18 @@
 //!     any other ColorSpace, an "uncalibrated" one beside another index or
 //!     none, and no ColorSpace give `None` ([`color_space`]).
 //!
-//!   The other settings are recorded only in a maker's MakerNote, where no
-//!   format reads them yet, so they are `None`: the white balance's colour
-//!   temperature and fine-tuning, the shutter, the electronic front curtain
-//!   setting, the image area and the raw image size. Nor are the
-//!   MakerNote's white balance setting, finer than Exif's, and Nikon's
-//!   colour space, which its raw files record, if at all, only there, read
-//!   yet. See #26.
+//!   The other settings are recorded only in a maker's MakerNote, so they
+//!   are `None` here: the white balance's colour temperature and
+//!   fine-tuning, the shutter, the electronic front curtain setting, the
+//!   image area and the raw image size. A format's MakerNote reader fills
+//!   them where its MakerNote records them, and may put the MakerNote's
+//!   white balance setting, finer than Exif's, in place of the mode read
+//!   here; Nikon's reader does, and Sony's does not yet. See #26. So that
+//!   a MakerNote's colour space never overrules Exif's, [`read`] also says
+//!   whether the Exif IFD holds a ColorSpace at all, of whatever type or
+//!   count, readable or not ([`Standard`]): only when it holds none may a
+//!   MakerNote give the colour space, as Nikon's raw files, which record
+//!   none in Exif, need.
 //! - A file without an Exif IFD has no capture time, no serial number, no
 //!   exposure, no lens, and none of the camera settings.
 //! - The orientation is IFD0's Orientation, read as the preview finder reads
@@ -165,27 +170,41 @@ const MAX_TEXT_LEN: usize = 255;
 /// replaces with the real one when the file records it.
 const ISO_65535_OR_MORE: u32 = 65535;
 
-/// What [`read`] reads from the standard tags: the metadata, and whether
-/// its image size is a crop the raw IFD records, for a format whose own
-/// structures record a crop too.
+/// What [`read`] reads from the standard tags: the metadata, and, for a
+/// format whose own structures record the same values, whether the
+/// standard tags recorded two of them: the image size as a crop of the
+/// raw IFD's, and the colour space.
 ///
-/// A format's own crop, such as Nikon's crop area, may replace the raw size
-/// the image size otherwise falls back on, but never a default crop: the
-/// standard tags come first (ADR011). Comparing the image size with the raw
-/// size cannot tell the two apart, since a default crop may cover the whole
-/// raw.
-#[derive(Debug)]
+/// The standard tags come first (ADR011). A format's own crop, such as
+/// Nikon's crop area, may replace the raw size the image size otherwise
+/// falls back on, but never a default crop; comparing the image size with
+/// the raw size cannot tell the two apart, since a default crop may cover
+/// the whole raw. A format's own colour space, such as the one in Nikon's
+/// MakerNote, may stand in only where the Exif IFD holds no ColorSpace: a
+/// ColorSpace that gives none, such as a program's "uncalibrated", is
+/// still Exif's word, and a MakerNote the program left behind may describe
+/// a picture that is no longer there. The colour space `None` cannot tell
+/// the two apart.
+#[derive(Debug, Default)]
 pub(crate) struct Standard {
     /// The metadata, every value of it from the standard tags.
     pub(crate) metadata: Metadata,
     /// Whether the image size is the raw IFD's default crop; `false` when
     /// it is the raw size, or there is no image size.
     pub(crate) from_default_crop: bool,
+    /// Whether the Exif IFD keeps a ColorSpace entry, of any known type and
+    /// any count, whether or not it gives a colour space; `false` when
+    /// there is no Exif IFD, and when the IFD's reader skipped the entry
+    /// as damaged, of an unknown type, of a length past 32 bits or with its
+    /// value outside its block, the file or a JPEG's Exif segment
+    /// ([`Ifd::entry`]).
+    pub(crate) exif_records_color_space: bool,
 }
 
 /// Reads the metadata that `tree` records, the IFDs of a TIFF-based file
 /// in `src` or of the Exif segment of a JPEG file in `src`, with whether
-/// its image size is a default crop.
+/// its image size is a default crop and whether its Exif IFD holds a
+/// ColorSpace.
 ///
 /// See the [module documentation](self) for the rules.
 ///
@@ -230,6 +249,9 @@ pub(crate) fn read<R: Read + Seek>(src: &mut Source<R>, tree: &Tree) -> Result<S
     Ok(Standard {
         metadata,
         from_default_crop: default_crop.is_some(),
+        exif_records_color_space: tree
+            .exif()
+            .is_some_and(|exif| exif.entry(COLOR_SPACE).is_some()),
     })
 }
 
@@ -342,7 +364,8 @@ fn focal_length_in_35mm_film<R: Read + Seek>(
 /// The value of tag `tag` of `ifd`, when the tag is of type SHORT and
 /// holds exactly one value: the type and count the standard gives each
 /// Exif tag read this way, a single number or code such as the focal
-/// length in 35 mm terms or the metering mode.
+/// length in 35 mm terms or the metering mode, and that a MakerNote's
+/// reader holds its own such tags to, such as Nikon's shutter mode.
 ///
 /// `None` when the tag is missing, of another type or of another count.
 /// The type is checked first ([`Ifd::entry_of_type`]), since [`Ifd::u32`]
@@ -357,7 +380,11 @@ fn focal_length_in_35mm_film<R: Read + Seek>(
 ///
 /// `Io` when the reader fails. A value that cannot be read for any other
 /// reason is `None`.
-fn one_short<R: Read + Seek>(src: &mut Source<R>, ifd: &Ifd, tag: u16) -> Result<Option<u16>> {
+pub(crate) fn one_short<R: Read + Seek>(
+    src: &mut Source<R>,
+    ifd: &Ifd,
+    tag: u16,
+) -> Result<Option<u16>> {
     if ifd
         .entry_of_type(tag, &[SHORT])
         .is_none_or(|entry| entry.count() != 1)
@@ -516,7 +543,8 @@ const DCF_OPTION_FILE: &str = "R03";
 /// the white balance mode and the colour space, as the
 /// [module documentation](self) gives their rules.
 ///
-/// The other settings, which only a maker's MakerNote records, are `None`.
+/// The other settings, which only a maker's MakerNote records, are `None`,
+/// for a format's MakerNote reader to fill.
 ///
 /// # Errors
 ///
@@ -531,15 +559,17 @@ fn camera_settings<R: Read + Seek>(
         white_balance: WhiteBalance {
             mode: white_balance_mode(src, exif)?,
             // Only a maker's MakerNote records the colour temperature and
-            // the fine-tuning, and none is read for them yet. See #26
+            // the fine-tuning: Nikon's reader fills them, and Sony's does
+            // not yet. See #26
             kelvin: None,
             fine_tune: None,
         },
         exposure_program: one_short(src, exif, EXPOSURE_PROGRAM)?.and_then(exposure_program),
         metering_mode: one_short(src, exif, METERING_MODE)?.and_then(metering_mode),
         flash: one_short(src, exif, FLASH)?.and_then(flash),
-        // Only a maker's MakerNote records these, and none is read for
-        // them yet. See #26
+        // Only a maker's MakerNote records these: Nikon's reader fills
+        // all but the electronic front curtain setting, which Nikon does
+        // not record, and Sony's reader none yet. See #26
         shutter: None,
         electronic_front_curtain_setting: None,
         image_area: None,
@@ -2792,6 +2822,78 @@ mod tests {
             assert_eq!(no_image.count(), 1);
             let read = read(&mut src, &tree).unwrap().metadata.camera_settings;
             assert_eq!(read.color_space, Some(expected), "{code}");
+        }
+    }
+
+    #[test]
+    fn a_color_space_entry_in_the_exif_ifd_is_reported_whatever_it_holds() {
+        // Whether the Exif IFD holds a ColorSpace, of [`settings`]'s file
+        // with what `build` adds to that IFD.
+        let records = |build: fn(&mut TiffBuilder, IfdId)| {
+            let (mut src, tree) = testing::file(|builder, ifd| {
+                let exif = builder.ifd();
+                builder
+                    .exif(ifd, exif)
+                    .rational(exif, EXPOSURE_TIME, &[(10, 3200)]);
+                build(builder, exif);
+            });
+            read(&mut src, &tree).unwrap().exif_records_color_space
+        };
+        // sRGB, "uncalibrated" with no index, which gives no colour space,
+        // a code Exif does not define, a LONG and two SHORTs, which are
+        // not read: each is the Exif IFD's word on the colour space.
+        assert!(records(|builder, exif| {
+            builder.short(exif, COLOR_SPACE, &[1]);
+        }));
+        assert!(records(|builder, exif| {
+            builder.short(exif, COLOR_SPACE, &[65535]);
+        }));
+        assert!(records(|builder, exif| {
+            builder.short(exif, COLOR_SPACE, &[2]);
+        }));
+        assert!(records(|builder, exif| {
+            builder.long(exif, COLOR_SPACE, &[1]);
+        }));
+        assert!(records(|builder, exif| {
+            builder.short(exif, COLOR_SPACE, &[1, 1]);
+        }));
+        // No ColorSpace, as in every Nikon raw file checked.
+        assert!(!records(|_, _| {}));
+        // No Exif IFD at all.
+        let (mut src, tree) = testing::file(|builder, ifd| {
+            builder.short(ifd, COLOR_SPACE, &[1]);
+        });
+        assert!(!read(&mut src, &tree).unwrap().exif_records_color_space);
+    }
+
+    #[test]
+    fn a_color_space_entry_the_exif_ifd_skips_as_damaged_is_not_reported() {
+        // A ColorSpace of a type TIFF does not define, and one of four
+        // SHORTs whose value lies past the end of the file: the IFD's
+        // reader skips each, as any damaged entry, so the Exif IFD keeps
+        // no ColorSpace, and a MakerNote may stand in.
+        type Damage = fn(&mut TiffBuilder, IfdId);
+        let damaged: [(&str, Damage); 2] = [
+            ("unknown type", |builder, exif| {
+                builder.raw(exif, COLOR_SPACE, 99, 1, RawValue::Inline([1, 0, 0, 0]));
+            }),
+            ("past the file", |builder, exif| {
+                builder.raw(exif, COLOR_SPACE, SHORT, 4, RawValue::Offset(4096));
+            }),
+        ];
+        for (what, build) in damaged {
+            let (mut src, tree) = testing::file(|builder, ifd| {
+                let exif = builder.ifd();
+                builder
+                    .exif(ifd, exif)
+                    .rational(exif, EXPOSURE_TIME, &[(10, 3200)]);
+                build(builder, exif);
+            });
+            assert!(src.len() < 4096, "{what}");
+            let exif = tree.exif().expect("an Exif IFD");
+            assert_eq!(exif.invalid_entries(), 1, "{what}");
+            let standard = read(&mut src, &tree).unwrap();
+            assert!(!standard.exif_records_color_space, "{what}");
         }
     }
 

@@ -101,8 +101,11 @@
 //!   and the numbers are in that structure's byte order. It gives what it
 //!   gives a NEF: the serial number, the ISO, the lens's range and the
 //!   capture time's offset from UTC, each only when the standard tags
-//!   gave none, so that an Exif value always wins; and the focus point,
-//!   below.
+//!   gave none, so that an Exif value always wins; the camera settings
+//!   that only it records, but the raw image size, since a JPEG holds no
+//!   raw data, and its white balance setting, finer than Exif's, in place
+//!   of Exif's, and its colour space only when the Exif IFD holds no
+//!   ColorSpace; and the focus point, below.
 //! - **When the Make starts with `SONY`**, as the ARW claim first tests it,
 //!   the Sony MakerNote reader (`makernote/sony.rs`) reads it as it reads
 //!   an ARW's, for the focus point alone, below. Its offsets count from
@@ -214,13 +217,14 @@ fn claims<R: Read + Seek>(_: &mut Source<R>, segments: &Segments) -> Result<bool
 /// `limits`, and gives the standard metadata, the orientation among it,
 /// and the thumbnail's candidate. When IFD0's Make names Nikon, the Nikon
 /// MakerNote is read, within `limits`, and gives the values the standard
-/// tags lack, the focus point among them, placed on the picture, and the
-/// candidate of its preview; when it names Sony, the Sony MakerNote is
-/// read, within `limits`, and gives the focus point alone, as recorded
-/// ([`MakerNote::read`]). The MPF list, read within `limits` as well,
-/// gives a candidate for each image after the first. The shared finder
-/// checks them all, and the file itself joins them as a preview of its
-/// own, with its frame header's size, which is the metadata's image size.
+/// tags lack, the camera settings and the focus point among them, the
+/// point placed on the picture, and the candidate of its preview; when it
+/// names Sony, the Sony MakerNote is read, within `limits`, and gives the
+/// focus point alone, as recorded ([`MakerNote::read`]). The MPF list,
+/// read within `limits` as well, gives a candidate for each image after
+/// the first. The shared finder checks them all, and the file itself
+/// joins them as a preview of its own, with its frame header's size,
+/// which is the metadata's image size.
 /// A focus point is kept only when its frame has the picture's shape
 /// ([`same_shape`]); see the [module documentation](self).
 ///
@@ -250,24 +254,26 @@ fn parse<R: Read + Seek>(
     };
     let (standard, mut candidates, makernote) = match &tree {
         Some(tree) => (
-            tiff_metadata::read(src, tree)?.metadata,
+            tiff_metadata::read(src, tree)?,
             tiff_previews::tree_candidates(src, tree)?,
             MakerNote::read(src, tree, limits)?,
         ),
-        None => (Metadata::default(), Vec::new(), None),
+        None => (Standard::default(), Vec::new(), None),
     };
     // The picture's own size, whatever sizes the tree gives, and no raw
     // size: a JPEG holds no raw data. Set before the MakerNote's values
     // are read, so that its reader takes them for the JPEG's: with no raw
     // size, CropArea gives no image size, and a crop is placed on the
-    // picture's pixels.
+    // picture's pixels. Whether the Exif IFD holds a ColorSpace is kept as
+    // read, so that the MakerNote's colour space never overrules it.
     let standard = Standard {
         metadata: Metadata {
             raw_size: None,
             image_size: Some(size),
-            ..standard
+            ..standard.metadata
         },
         from_default_crop: false,
+        ..standard
     };
     let mut metadata = match &makernote {
         Some(MakerNote::Nikon(makernote)) => {
@@ -617,6 +623,37 @@ mod tests {
                     .with_metering_mode(MeteringMode::MultiSegment)
                     .with_color_space(ColorSpace::AdobeRgb),
                 "{make}"
+            );
+        }
+    }
+
+    #[test]
+    fn an_exif_color_space_keeps_the_nikon_makernotes_out() {
+        // A Nikon MakerNote whose IFD holds one entry, its ColorSpace, one
+        // SHORT 2, Adobe RGB. Beside an Exif ColorSpace that is
+        // "uncalibrated" with no index, as a program that rewrote the JPEG
+        // may leave it, the colour space is Exif's: none. Without an Exif
+        // ColorSpace, it is the MakerNote's.
+        let mut nikon = b"Nikon\0\x02\x11\0\0II\x2A\0\x08\0\0\0".to_vec();
+        nikon.extend_from_slice(&[0x01, 0, 0x1E, 0, 0x03, 0, 0x01, 0, 0, 0, 0x02, 0, 0, 0]);
+        nikon.extend_from_slice(&[0; 4]);
+        for (exif_color_space, expected) in [(true, None), (false, Some(ColorSpace::AdobeRgb))] {
+            let mut tiff = TiffBuilder::new(Order::Little);
+            let (ifd0, exif) = (tiff.ifd(), tiff.ifd());
+            tiff.ascii(ifd0, MAKE, "NIKON CORPORATION").exif(ifd0, exif);
+            if exif_color_space {
+                tiff.short(exif, COLOR_SPACE, &[65535]);
+            }
+            let makernote = tiff.blob(&nikon);
+            tiff.undefined_blob(exif, MAKER_NOTE, makernote);
+            let mut builder = JpegBuilder::new();
+            builder.exif(&tiff.build().bytes).frame(640, 480, 0xC0);
+            let (bytes, found) = read(&builder);
+            let mut src = Source::new(Cursor::new(bytes)).unwrap();
+            let parsed = parse(&mut src, &found, &Limits::default()).unwrap();
+            assert_eq!(
+                parsed.metadata.camera_settings.color_space, expected,
+                "Exif ColorSpace {exif_color_space}"
             );
         }
     }

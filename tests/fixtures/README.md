@@ -68,7 +68,9 @@ camera wrote them.
   MechanicalShutterCount); the MakerNote's encrypted blocks (ShotInfo,
   ColorBalance and LensData); the linearization table and the blocks of
   menu settings; the XMP packet; Artist, Copyright and UserComment; the
-  GPS IFD; and every other MakerNote value stored outside its entry.
+  GPS IFD; and every other MakerNote value stored outside its entry, the
+  white balance setting's text (0x0005) and the white balance
+  fine-tuning (0x003F) among them.
 
 Once they were stripped, the maintainer checked that no byte sequence of
 the removed serial numbers or shutter count remains in either file, that
@@ -162,12 +164,19 @@ placed on the same frame. The tests also check each JPEG's four
 previews, where the camera's layout puts them, and every value of its
 metadata.
 
-The tests check the camera settings that each file's Exif IFD records,
-the same on all five shots: aperture priority, multi-segment (Nikon's
-matrix) metering, a flash that did not fire, with no mode recorded, and
-auto white balance. The JPEG files record the colour space sRGB; the
-NEF files, like every Nikon raw file checked, record no ColorSpace, so
-they give none.
+The tests check every camera setting each file gives. From the Exif
+IFD, the same on all five shots: aperture priority, multi-segment
+(Nikon's matrix) metering, a flash that did not fire, with no mode
+recorded, and auto white balance, which the JPEG files' MakerNote
+confirms with `AUTO0`. From the MakerNote: the colour temperature auto
+white balance chose, which differs from shot to shot; the electronic
+shutter; and the image area of each crop mode, from CropHiSpeed. The NEF
+files also give the large raw size, and the JPEG files a recorded zero
+fine-tuning, `0/4, 0/4`; a JPEG gives no raw size, and the NEF files no
+fine-tuning, since the stripping removed it. The JPEG files record the
+colour space sRGB in their Exif IFD, which alone decides; the NEF files,
+like every Nikon raw file checked, record no ColorSpace there, so their
+MakerNote's sRGB is the one given.
 
 The tests also cut all five files at every length and overwrite each of
 their bytes, but, in the JPEG files, those of three spans of zeros that
