@@ -15,7 +15,9 @@
 //!   image size, the focus point, the camera settings that only it
 //!   records, such as the white balance setting and the shutter used, and
 //!   the values older bodies record only there.
-//! - [`sony`] reads Sony's MakerNote: the focus point.
+//! - [`sony`] reads Sony's MakerNote: the focus point, and the camera
+//!   settings that only it records, such as the white balance setting and
+//!   the electronic front curtain setting.
 //!
 //! What the readers share lives here, in a [`MakerNoteBlock`]: the
 //! MakerNote's block as the Exif IFD records it, where its bytes lie and

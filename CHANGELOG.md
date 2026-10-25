@@ -42,11 +42,21 @@ does.
   `FineTune::green_magenta` positive towards magenta, so Nikon's green to
   magenta value, which it stores positive towards green, is negated. The
   single fine-tuning value of the D1 family, the D70, the D100 and the
-  D200 gives `None`, since no file shows its axis. Sony's MakerNote is not
-  read for these settings yet: on Sony files the colour temperature, the
-  fine-tuning, the shutter, the electronic front curtain setting, the
-  image area and the raw image size are `None`, and the white balance mode
-  is Exif's.
+  D200 gives `None`, since no file shows its axis. ARW files, with the
+  SRF, SR2 and ARQ files of the family, and the JPEGs of Sony cameras give
+  settings from Sony's MakerNote too: the white balance setting, such as
+  auto, custom, underwater, which Exif calls auto, or a chosen colour
+  temperature, in place of Exif's when the MakerNote names one; the
+  colour temperature, the one chosen under that setting and the custom
+  white balance's own under custom; the fine-tuning, whose amber to blue
+  value, which Sony stores positive towards amber, is negated; and the
+  electronic front curtain setting, as the menu setting, never as the
+  shutter used. On Sony files the shutter used, the image area and the
+  raw image size are `None`, and so are the colour temperature under
+  every other white balance setting, where every Sony file checked
+  records 0, and the fine-tuning of the bodies that record none, the
+  DSLR-A100, A200, A700 and A900, the SLT-A55V, the NEX-5, the DSC-F828
+  and the DSC-R1. The DSLR-A100's white balance mode is Exif's.
 - `Exposure::focal_length_in_35mm_film` and `Metadata::software`, read
   from NEF, ARW and JPEG files. The first is the focal length in 35 mm
   terms the camera recorded, in whole millimetres, from Exif's

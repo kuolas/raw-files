@@ -72,9 +72,9 @@
 //! MakerNote that does not hold together, or in which a limit is crossed,
 //! costs what it would have given, as in a raw file: a Nikon MakerNote its
 //! values, its focus point and its preview, as in a NEF, and a Sony
-//! MakerNote its focus point, as in an ARW. An MPF list that does not hold
-//! together costs only its images. Only a failure of the reader is an
-//! error.
+//! MakerNote its camera settings and its focus point, as in an ARW. An MPF
+//! list that does not hold together costs only its images. Only a failure
+//! of the reader is an error.
 //!
 //! # The metadata
 //!
@@ -108,7 +108,9 @@
 //!   ColorSpace; and the focus point, below.
 //! - **When the Make starts with `SONY`**, as the ARW claim first tests it,
 //!   the Sony MakerNote reader (`makernote/sony.rs`) reads it as it reads
-//!   an ARW's, for the focus point alone, below. Its offsets count from
+//!   an ARW's. It gives what it gives an ARW: the camera settings that only
+//!   it records, its white balance setting, finer than Exif's, in place of
+//!   Exif's, and the focus point, below. Its offsets count from
 //!   the TIFF header of the structure that holds it, which in a JPEG is
 //!   the one inside the Exif segment, the base of the Exif IFD's offsets,
 //!   as the Sony camera JPEGs that ADR014 describes count them; its IFD
@@ -220,7 +222,8 @@ fn claims<R: Read + Seek>(_: &mut Source<R>, segments: &Segments) -> Result<bool
 /// tags lack, the camera settings and the focus point among them, the
 /// point placed on the picture, and the candidate of its preview; when it
 /// names Sony, the Sony MakerNote is read, within `limits`, and gives the
-/// focus point alone, as recorded ([`MakerNote::read`]). The MPF list,
+/// camera settings that only it records and the focus point, as recorded
+/// ([`MakerNote::read`]). The MPF list,
 /// read within `limits` as well, gives a candidate for each image after
 /// the first. The shared finder checks them all, and the file itself
 /// joins them as a preview of its own, with its frame header's size,
@@ -280,11 +283,7 @@ fn parse<R: Read + Seek>(
             candidates.extend(nikon::preview_candidate(src, makernote, limits)?);
             nikon::metadata(src, makernote, standard, Picture::Jpeg)?
         }
-        // Sony's gives the focus point alone, as in an ARW.
-        Some(MakerNote::Sony(makernote)) => Metadata {
-            focus: sony::focus(src, makernote)?,
-            ..standard.metadata
-        },
+        Some(MakerNote::Sony(makernote)) => sony::metadata(src, makernote, standard.metadata)?,
         None => standard.metadata,
     };
     metadata.focus = metadata
@@ -360,7 +359,7 @@ impl Maker {
 enum MakerNote {
     /// Nikon's: its values, its focus point and its preview.
     Nikon(nikon::MakerNote),
-    /// Sony's: its focus point.
+    /// Sony's: its camera settings and its focus point.
     Sony(sony::MakerNote),
 }
 

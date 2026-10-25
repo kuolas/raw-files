@@ -92,6 +92,8 @@ pub const LONG: u16 = 4;
 pub const RATIONAL: u16 = 5;
 /// The TIFF field type UNDEFINED: bytes the tag gives a meaning to.
 pub const UNDEFINED: u16 = 7;
+/// The TIFF field type SLONG: 32-bit signed integers.
+pub const SLONG: u16 = 9;
 /// The TIFF field type SRATIONAL: pairs of signed 32-bit integers,
 /// numerator first.
 pub const SRATIONAL: u16 = 10;
@@ -338,6 +340,16 @@ impl TiffBuilder {
         let order = self.order;
         let bytes = values.iter().flat_map(|&v| order.u32(v)).collect();
         self.entry(ifd, tag, LONG, values.len(), Value::Bytes(bytes))
+    }
+
+    /// Adds an SLONG entry.
+    pub fn slong(&mut self, ifd: IfdId, tag: u16, values: &[i32]) -> &mut Self {
+        let order = self.order;
+        let bytes = values
+            .iter()
+            .flat_map(|&v| order.u32(v.cast_unsigned()))
+            .collect();
+        self.entry(ifd, tag, SLONG, values.len(), Value::Bytes(bytes))
     }
 
     /// Adds a RATIONAL entry of `(numerator, denominator)` pairs.
