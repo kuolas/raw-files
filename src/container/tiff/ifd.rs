@@ -38,7 +38,9 @@
 use std::io::{Read, Seek};
 use std::ops::Range;
 
-use super::types::{ASCII, BYTE, IFD, LONG, RATIONAL, SHORT, SRATIONAL, UNDEFINED, type_size};
+use super::types::{
+    ASCII, BYTE, IFD, LONG, RATIONAL, SHORT, SRATIONAL, SSHORT, UNDEFINED, type_size,
+};
 use super::{Block, skip_damage};
 use crate::error::{Error, Result};
 use crate::io::{ByteOrder, Source, within};
@@ -430,6 +432,29 @@ impl Ifd {
             longs.iter().map(|&v| order.u32(v)).collect()
         };
         Ok(Some(values))
+    }
+
+    /// The values of tag `tag`, each a signed 16-bit number in the IFD's
+    /// byte order, when its type is SSHORT; `None` when the tag is missing
+    /// or has another type. [`u32s`](Self::u32s) does not read SSHORT, so
+    /// that a negative number is never read as a large one.
+    ///
+    /// # Errors
+    ///
+    /// As for [`u32s`](Self::u32s).
+    pub(crate) fn i16s<R: Read + Seek>(
+        &self,
+        src: &mut Source<R>,
+        tag: u16,
+    ) -> Result<Option<Vec<i16>>> {
+        let Some((_, bytes)) = self.value(src, tag, &[SSHORT])? else {
+            return Ok(None);
+        };
+        let order = self.order;
+        let (shorts, _) = bytes.as_chunks::<2>();
+        Ok(Some(
+            shorts.iter().map(|&v| order.u16(v).cast_signed()).collect(),
+        ))
     }
 
     /// The first value of tag `tag`, as [`u32s`](Self::u32s) reads it;
@@ -935,6 +960,46 @@ mod tests {
             assert_eq!(ifd.bytes(src, 0x0006).unwrap(), None);
             assert_eq!(ifd.ascii(src, 0x0099).unwrap(), None);
             assert_eq!(ifd.bytes(src, 0x0099).unwrap(), None);
+        }
+    }
+
+    #[test]
+    fn i16s_reads_sshort_only_in_both_byte_orders() {
+        for order in ORDERS {
+            let mut builder = TiffBuilder::new(order);
+            let ifd = builder.ifd();
+            let shorts: Vec<u8> = [-6_i16, 3, i16::MIN, i16::MAX]
+                .into_iter()
+                .flat_map(|v| order.u16(v.cast_unsigned()))
+                .collect();
+            builder.blob_at(512, &shorts);
+            let mut inline = [0; 4];
+            inline[..2].copy_from_slice(&order.u16((-1_i16).cast_unsigned()));
+            inline[2..].copy_from_slice(&order.u16(2));
+            builder
+                .raw(ifd, 0x0001, SSHORT, 2, RawValue::Inline(inline))
+                .raw(ifd, 0x0002, SSHORT, 4, RawValue::Offset(512))
+                .raw(ifd, 0x0003, SSHORT, 0, RawValue::Inline([1, 2, 3, 4]))
+                .short(ifd, 0x0004, &[0xFFFF, 2])
+                .long(ifd, 0x0005, &[1]);
+            let built = builder.build();
+            let (mut src, ifd, _) = read(order, &built, ifd);
+            let src = &mut src;
+            assert_eq!(ifd.invalid_entries(), 0);
+
+            assert_eq!(ifd.i16s(src, 0x0001).unwrap(), Some(vec![-1, 2]));
+            assert_eq!(
+                ifd.i16s(src, 0x0002).unwrap(),
+                Some(vec![-6, 3, i16::MIN, i16::MAX])
+            );
+            // Count 0: an empty value, not a missing tag.
+            assert_eq!(ifd.i16s(src, 0x0003).unwrap(), Some(vec![]));
+            // A SHORT or a LONG is not signed, and is not read as one.
+            for tag in [0x0004, 0x0005, 0x0099] {
+                assert_eq!(ifd.i16s(src, tag).unwrap(), None, "tag {tag:#06X}");
+            }
+            // And the unsigned reader does not read an SSHORT.
+            assert_eq!(ifd.u32s(src, 0x0001).unwrap(), None);
         }
     }
 

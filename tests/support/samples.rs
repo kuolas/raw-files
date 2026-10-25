@@ -237,9 +237,9 @@ pub struct SampleSettings {
 
 /// The white balance fine-tuning of a sample file, as the reader must give
 /// it ([`FineTune`](raw_files::FineTune)): the shift along the amber to
-/// blue axis, and the one along the green to magenta axis, `None` when the
-/// file records only the first, each fraction as stored, so `(-24, 4)` is
-/// not `(-6, 1)`.
+/// blue axis, and the one along the green to magenta axis, `None` when
+/// only the first is known, each fraction as the reader gives it, signed
+/// as its axis is named, and not reduced, so `(-24, 4)` is not `(-6, 1)`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct SampleFineTune {
     pub amber_blue: (i32, i32),

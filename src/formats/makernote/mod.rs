@@ -12,8 +12,9 @@
 //! Nikon's and Sony's, each by IFD0's Make.
 //!
 //! - [`nikon`] reads Nikon's MakerNote: its small preview JPEG, the visible
-//!   image size, the focus point, and the values older bodies record only
-//!   there.
+//!   image size, the focus point, the camera settings that only it
+//!   records, such as the white balance setting and the shutter used, and
+//!   the values older bodies record only there.
 //! - [`sony`] reads Sony's MakerNote: the focus point.
 //!
 //! What the readers share lives here, in a [`MakerNoteBlock`]: the
@@ -25,7 +26,8 @@
 //! has its IFD read through it too, with that structure's base and byte
 //! order. A layout with a TIFF header of its own, as Nikon's other one,
 //! takes only where the block's bytes lie, and reads its IFD from that
-//! header.
+//! header. One bound holds every colour temperature a MakerNote gives,
+//! whatever its maker: 1 to 99,999 K ([`color_temperature`]).
 
 use std::io::{Read, Seek};
 use std::ops::Range;
@@ -144,6 +146,21 @@ fn ifd_offset(base: u64, start: u64, skip: u64) -> Option<u32> {
         .checked_add(skip)
         .and_then(|at| at.checked_sub(base))
         .and_then(|offset| u32::try_from(offset).ok())
+}
+
+/// The highest colour temperature, in kelvin, that a MakerNote's value
+/// gives: 99,999 K, the largest number of five digits, the most that
+/// Nikon's white balance text may hold for a chosen colour temperature
+/// ([`nikon`]'s `MAX_KELVIN_DIGITS`).
+const MAX_KELVIN: u32 = 99_999;
+
+/// `kelvin`, a colour temperature a MakerNote records, when it records
+/// one: from 1 to [`MAX_KELVIN`]. 0, which a maker writes where it records
+/// no temperature, gives `None`, and so does a number past the bound,
+/// which is no temperature a camera is set to: the reader refuses it
+/// rather than report it.
+fn color_temperature(kelvin: u32) -> Option<u32> {
+    (1..=MAX_KELVIN).contains(&kelvin).then_some(kelvin)
 }
 
 #[cfg(test)]

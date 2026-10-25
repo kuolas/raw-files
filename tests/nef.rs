@@ -30,9 +30,10 @@ use std::collections::BTreeSet;
 use std::io::Cursor;
 
 use raw_files::{
-    CameraSettings, DateTime, Exposure, ExposureProgram, Flash, FlashMode, Focus, Format, Lens,
-    Limits, Metadata, MeteringMode, Options, Orientation, Point, Preview, PreviewFormat, Rational,
-    RawFile, SignedRational, Size, WhiteBalance, WhiteBalanceMode,
+    CameraSettings, ColorSpace, DateTime, Exposure, ExposureProgram, Flash, FlashMode, Focus,
+    Format, ImageArea, Lens, Limits, Metadata, MeteringMode, Options, Orientation, Point, Preview,
+    PreviewFormat, Rational, RawFile, RawImageSize, Shutter, SignedRational, Size, WhiteBalance,
+    WhiteBalanceMode,
 };
 use support::nef::{
     D1H_ISO, D1H_LENS, D1H_PREVIEW_JPEG, D1H_RAW, D1hBlobs, d1h_file, d1h_file_with,
@@ -47,8 +48,8 @@ use support::nef::{
     z6iii_file_with_blobs, z9_file, z9_file_with, z9_file_with_blobs,
 };
 use support::samples::{
-    Jpeg, Sample, SampleFocus, SampleLens, SampleMetadata, SampleSettings, SerialShape, check,
-    check_metadata, listed, sizes,
+    Jpeg, Sample, SampleFineTune, SampleFocus, SampleLens, SampleMetadata, SampleSettings,
+    SerialShape, check, check_metadata, listed, sizes,
 };
 use support::tiff_builder::{Built, Order};
 
@@ -547,6 +548,8 @@ fn the_z6iii_metadata_by_hand(orientation: Orientation) -> Option<Metadata> {
     let focus = Focus::new(as_size(Z6III_FOCUS_FRAME), Point { x, y })?
         .with_size(as_size(Z6III_FOCUS_AREA))?
         .with_in_focus(Z6III_IN_FOCUS);
+    // Its MakerNote's one settings tag is CropHiSpeed, whose crop setting,
+    // 17, FX 1:1, gives the image area.
     let metadata = Metadata::default()
         .with_make("NIKON CORPORATION")
         .with_model("NIKON Z6_3")
@@ -558,7 +561,8 @@ fn the_z6iii_metadata_by_hand(orientation: Orientation) -> Option<Metadata> {
         .with_lens(lens)
         .with_raw_size(as_size(Z6III_RAW))
         .with_image_size(as_size(Z6III_IMAGE))
-        .with_focus(focus);
+        .with_focus(focus)
+        .with_camera_settings(CameraSettings::default().with_image_area(ImageArea::Square));
     Some(metadata)
 }
 
@@ -695,11 +699,12 @@ fn the_d300_file_gives_what_its_exif_tags_lack_from_the_makernote() {
 
 /// The metadata of the D1H file, built as a caller's test would, through
 /// the public constructors and the `with_…` methods alone: what its
-/// standard tags give, with the ISO and the lens's range that its
-/// MakerNote alone records when `with_makernote`; `None` when a
-/// constructor refuses a value. It records no serial number, no offset
-/// from UTC, no orientation, no focal length in 35 mm terms and no focus
-/// point either way.
+/// standard tags give, with the ISO, the lens's range and the white
+/// balance setting, `SUNNY`, daylight, that its MakerNote alone records
+/// when `with_makernote`; `None` when a constructor refuses a value. It
+/// records no serial number, no offset from UTC, no orientation, no focal
+/// length in 35 mm terms, no focus point and no other camera setting
+/// either way.
 fn the_d1h_metadata_by_hand(with_makernote: bool) -> Option<Metadata> {
     let time = DateTime::new(2022, 3, 24, 10, 9, 27)?.with_subseconds(10_000_000, 2)?;
     let mut exposure = Exposure::default()
@@ -728,7 +733,10 @@ fn the_d1h_metadata_by_hand(with_makernote: bool) -> Option<Metadata> {
             .f_number_at_min_focal_length(Rational::new(at_min, at_min_d)?)
             .f_number_at_max_focal_length(Rational::new(at_max, at_max_d)?)
             .build()?;
-        metadata = metadata.with_lens(lens);
+        metadata = metadata.with_lens(lens).with_camera_settings(
+            CameraSettings::default()
+                .with_white_balance(WhiteBalance::default().with_mode(WhiteBalanceMode::Daylight)),
+        );
     }
     Some(metadata.with_exposure(exposure))
 }
@@ -1036,6 +1044,12 @@ struct StrippedZ9 {
     focus_frame: (u32, u32),
     focus_center: (u32, u32),
     focus_size: (u32, u32),
+    /// The colour temperature of the white balance the camera applied, in
+    /// kelvin: the MakerNote's ColorTemperatureAuto.
+    kelvin: u32,
+    /// The image area, from the crop setting of the MakerNote's
+    /// CropHiSpeed.
+    image_area: ImageArea,
 }
 
 /// The DX shot. CropHiSpeed `[2, 8280, 5520, 5408, 3608, 1436, 956]`
@@ -1054,6 +1068,8 @@ const STRIPPED_Z9_DX: StrippedZ9 = StrippedZ9 {
     focus_frame: (5392, 3592),
     focus_center: (415, 373),
     focus_size: (274, 305),
+    kelvin: 2830,
+    image_area: ImageArea::ApsC,
 };
 
 /// The 1:1 shot. CropHiSpeed `[17, 8280, 5520, 5520, 5520, 1380, 0]`
@@ -1073,6 +1089,8 @@ const STRIPPED_Z9_1X1: StrippedZ9 = StrippedZ9 {
     focus_frame: (5504, 5504),
     focus_center: (421, 424),
     focus_size: (291, 323),
+    kelvin: 2860,
+    image_area: ImageArea::Square,
 };
 
 /// Checks that the stripped Z 9 file `expected` names opens as a NEF with
@@ -1194,18 +1212,32 @@ fn check_stripped_z9(expected: &StrippedZ9) {
     // The frame is the picture's, so the point scales onto the full-size
     // preview as it is.
     assert_eq!(focus.frame(), as_size(expected.previews[3]), "{label}");
-    // The settings the Exif IFD records, the same on both shots: aperture
-    // priority, matrix metering, a Flash of 0, no flash fired and no mode
-    // recorded, and auto white balance. Like every Nikon raw file checked,
-    // they record no ColorSpace, so no colour space; the settings that only
-    // the MakerNote records are not read yet.
+    // The settings, the same on both shots but the colour temperature and
+    // the image area. From the Exif IFD: aperture priority, matrix
+    // metering, a Flash of 0, no flash fired and no mode recorded, and auto
+    // white balance. From the MakerNote: the colour temperature auto white
+    // balance chose; the electronic shutter; the image area of the crop;
+    // the large raw size; and, since the Exif IFD records no ColorSpace, as
+    // in every Nikon raw file checked, the MakerNote's colour space, sRGB.
+    // The stripping removed the MakerNote's WhiteBalance text and its
+    // fine-tuning, 0x003F, whose values are stored outside their entries,
+    // so the white balance mode is Exif's, and since the Z 9 writes no
+    // 0x000B, there is no fine-tuning.
     assert_eq!(
         metadata.camera_settings(),
         &CameraSettings::default()
-            .with_white_balance(WhiteBalance::default().with_mode(WhiteBalanceMode::Auto))
+            .with_white_balance(
+                WhiteBalance::default()
+                    .with_mode(WhiteBalanceMode::Auto)
+                    .with_kelvin(expected.kelvin),
+            )
             .with_exposure_program(ExposureProgram::AperturePriority)
             .with_metering_mode(MeteringMode::MultiSegment)
-            .with_flash(Flash::new(false)),
+            .with_flash(Flash::new(false))
+            .with_shutter(Shutter::Electronic)
+            .with_image_area(expected.image_area)
+            .with_raw_image_size(RawImageSize::Large)
+            .with_color_space(ColorSpace::Srgb),
         "{label}"
     );
 }
@@ -2216,13 +2248,19 @@ fn every_sample_of_the_other_nikon_bodies_opens_with_its_previews() {
 /// generated from each file's IFD0 and Exif IFD by the reader's rules too:
 /// every file records its firmware in Software, and all but the D1H's, the
 /// D1X's and the E5700's a FocalLengthIn35mmFilm. So were the camera
-/// settings, from each file's Exif IFD: no file records a ColorSpace, so
-/// none gives a colour space; the D1H and the D1X record no Flash and no
-/// WhiteBalance, and the E5700 no WhiteBalance; the Z5II and the Z6III
-/// record the ExposureProgram 0, "not defined", which gives no exposure
-/// program; and the D850 records the MeteringMode 255, "other". The
-/// settings only a MakerNote records are `None` on every file, since the
-/// reader does not read them yet.
+/// settings, from each file's Exif IFD and MakerNote, by the rules of
+/// ADR011. The white balance mode is the MakerNote's text on every file,
+/// the D1H's, the D1X's and the E5700's among them, which record no Exif
+/// WhiteBalance. No file records an Exif ColorSpace, so the colour space
+/// is the MakerNote's, which the bodies before the D200 and the Coolpix
+/// E5700 and P7800 do not record. The fine-tuning is 0x003F's, else that
+/// of a 0x000B of two values, so the bodies whose 0x000B holds one value,
+/// and the E5700, which writes neither, give none. The D850 and the Z fc
+/// record a colour temperature of 0 under daylight, which gives none. The
+/// D1H and the D1X record no Flash; the Z5II and the Z6III record the
+/// ExposureProgram 0, "not defined", which gives no exposure program; and
+/// the D850 records the MeteringMode 255, "other". No Nikon file gives the
+/// electronic front curtain setting, which only Sony records.
 const METADATA: &[SampleMetadata] = &[
     // Z 9, 14-bit lossless compression (raw.pixls.us 5146)
     SampleMetadata {
@@ -2261,16 +2299,19 @@ const METADATA: &[SampleMetadata] = &[
         }),
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
-            kelvin: None,
-            fine_tune: None,
+            kelvin: Some(4650),
+            fine_tune: Some(SampleFineTune {
+                amber_blue: (0, 4),
+                green_magenta: Some((0, 4)),
+            }),
             exposure_program: Some(ExposureProgram::Program),
             metering_mode: Some(MeteringMode::CenterWeighted),
             flash: Some((false, None)),
-            shutter: None,
+            shutter: Some(Shutter::Electronic),
             electronic_front_curtain_setting: None,
-            image_area: None,
-            raw_image_size: None,
-            color_space: None,
+            image_area: Some(ImageArea::FullFrame),
+            raw_image_size: Some(RawImageSize::Large),
+            color_space: Some(ColorSpace::Srgb),
         },
     },
     // Z 9, High Efficiency* (raw.pixls.us 5147)
@@ -2310,16 +2351,19 @@ const METADATA: &[SampleMetadata] = &[
         }),
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
-            kelvin: None,
-            fine_tune: None,
+            kelvin: Some(4630),
+            fine_tune: Some(SampleFineTune {
+                amber_blue: (0, 4),
+                green_magenta: Some((0, 4)),
+            }),
             exposure_program: Some(ExposureProgram::Program),
             metering_mode: Some(MeteringMode::CenterWeighted),
             flash: Some((false, None)),
-            shutter: None,
+            shutter: Some(Shutter::Electronic),
             electronic_front_curtain_setting: None,
-            image_area: None,
-            raw_image_size: None,
-            color_space: None,
+            image_area: Some(ImageArea::FullFrame),
+            raw_image_size: Some(RawImageSize::Large),
+            color_space: Some(ColorSpace::Srgb),
         },
     },
     // Z 9, High Efficiency (raw.pixls.us 5148)
@@ -2359,16 +2403,19 @@ const METADATA: &[SampleMetadata] = &[
         }),
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
-            kelvin: None,
-            fine_tune: None,
+            kelvin: Some(4630),
+            fine_tune: Some(SampleFineTune {
+                amber_blue: (0, 4),
+                green_magenta: Some((0, 4)),
+            }),
             exposure_program: Some(ExposureProgram::Program),
             metering_mode: Some(MeteringMode::CenterWeighted),
             flash: Some((false, None)),
-            shutter: None,
+            shutter: Some(Shutter::Electronic),
             electronic_front_curtain_setting: None,
-            image_area: None,
-            raw_image_size: None,
-            color_space: None,
+            image_area: Some(ImageArea::FullFrame),
+            raw_image_size: Some(RawImageSize::Large),
+            color_space: Some(ColorSpace::Srgb),
         },
     },
     // D1H, 12-bit uncompressed (raw.pixls.us 5364)
@@ -2399,7 +2446,7 @@ const METADATA: &[SampleMetadata] = &[
         image_size: Some((2012, 1324)),
         focus: None, // no AFInfo2: AFInfo holds a point number only
         settings: SampleSettings {
-            white_balance_mode: None,
+            white_balance_mode: Some(WhiteBalanceMode::Daylight),
             kelvin: None,
             fine_tune: None,
             exposure_program: Some(ExposureProgram::Manual),
@@ -2440,7 +2487,7 @@ const METADATA: &[SampleMetadata] = &[
         image_size: Some((4028, 1324)),
         focus: None, // no AFInfo2: AFInfo holds a point number only
         settings: SampleSettings {
-            white_balance_mode: None,
+            white_balance_mode: Some(WhiteBalanceMode::Auto),
             kelvin: None,
             fine_tune: None,
             exposure_program: Some(ExposureProgram::AperturePriority),
@@ -2481,7 +2528,7 @@ const METADATA: &[SampleMetadata] = &[
         image_size: Some((4028, 1324)),
         focus: None, // no AFInfo2: AFInfo holds a point number only
         settings: SampleSettings {
-            white_balance_mode: None,
+            white_balance_mode: Some(WhiteBalanceMode::Flash),
             kelvin: None,
             fine_tune: None,
             exposure_program: Some(ExposureProgram::Manual),
@@ -2614,7 +2661,7 @@ const METADATA: &[SampleMetadata] = &[
             electronic_front_curtain_setting: None,
             image_area: None,
             raw_image_size: None,
-            color_space: None,
+            color_space: Some(ColorSpace::AdobeRgb),
         },
     },
     // D300, 12-bit lossy (raw.pixls.us 928)
@@ -2650,7 +2697,10 @@ const METADATA: &[SampleMetadata] = &[
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
             kelvin: None,
-            fine_tune: None,
+            fine_tune: Some(SampleFineTune {
+                amber_blue: (0, 1),
+                green_magenta: Some((0, 1)),
+            }),
             exposure_program: Some(ExposureProgram::Manual),
             metering_mode: Some(MeteringMode::CenterWeighted),
             flash: Some((false, None)),
@@ -2658,7 +2708,7 @@ const METADATA: &[SampleMetadata] = &[
             electronic_front_curtain_setting: None,
             image_area: None,
             raw_image_size: None,
-            color_space: None,
+            color_space: Some(ColorSpace::Srgb),
         },
     },
     // D700, 12-bit lossy (raw.pixls.us 2255)
@@ -2694,7 +2744,10 @@ const METADATA: &[SampleMetadata] = &[
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
             kelvin: None,
-            fine_tune: None,
+            fine_tune: Some(SampleFineTune {
+                amber_blue: (0, 1),
+                green_magenta: Some((0, 1)),
+            }),
             exposure_program: Some(ExposureProgram::ShutterPriority),
             metering_mode: Some(MeteringMode::MultiSegment),
             flash: Some((false, None)),
@@ -2702,7 +2755,7 @@ const METADATA: &[SampleMetadata] = &[
             electronic_front_curtain_setting: None,
             image_area: None,
             raw_image_size: None,
-            color_space: None,
+            color_space: Some(ColorSpace::AdobeRgb),
         },
     },
     // D7000, 12-bit lossy (raw.pixls.us 961)
@@ -2743,7 +2796,10 @@ const METADATA: &[SampleMetadata] = &[
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
             kelvin: None,
-            fine_tune: None,
+            fine_tune: Some(SampleFineTune {
+                amber_blue: (0, 1),
+                green_magenta: Some((0, 1)),
+            }),
             exposure_program: Some(ExposureProgram::AperturePriority),
             metering_mode: Some(MeteringMode::MultiSegment),
             flash: Some((false, Some(FlashMode::Off))),
@@ -2751,7 +2807,7 @@ const METADATA: &[SampleMetadata] = &[
             electronic_front_curtain_setting: None,
             image_area: None,
             raw_image_size: None,
-            color_space: None,
+            color_space: Some(ColorSpace::Srgb),
         },
     },
     // D750, 12-bit lossy (raw.pixls.us 895)
@@ -2787,15 +2843,18 @@ const METADATA: &[SampleMetadata] = &[
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
             kelvin: None,
-            fine_tune: None,
+            fine_tune: Some(SampleFineTune {
+                amber_blue: (0, 4),
+                green_magenta: Some((0, 4)),
+            }),
             exposure_program: Some(ExposureProgram::AperturePriority),
             metering_mode: Some(MeteringMode::MultiSegment),
             flash: Some((true, Some(FlashMode::Fill))),
             shutter: None,
             electronic_front_curtain_setting: None,
-            image_area: None,
-            raw_image_size: None,
-            color_space: None,
+            image_area: Some(ImageArea::FullFrame),
+            raw_image_size: Some(RawImageSize::Large),
+            color_space: Some(ColorSpace::Srgb),
         },
     },
     // D810, 12-bit small raw (raw.pixls.us 2036)
@@ -2831,15 +2890,18 @@ const METADATA: &[SampleMetadata] = &[
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
             kelvin: None,
-            fine_tune: None,
+            fine_tune: Some(SampleFineTune {
+                amber_blue: (0, 4),
+                green_magenta: Some((0, 4)),
+            }),
             exposure_program: Some(ExposureProgram::Manual),
             metering_mode: Some(MeteringMode::MultiSegment),
             flash: Some((true, Some(FlashMode::Fill))),
             shutter: None,
             electronic_front_curtain_setting: None,
-            image_area: None,
-            raw_image_size: None,
-            color_space: None,
+            image_area: Some(ImageArea::FullFrame),
+            raw_image_size: Some(RawImageSize::Small),
+            color_space: Some(ColorSpace::Srgb),
         },
     },
     // D850, 12-bit lossless small raw (raw.pixls.us 1835)
@@ -2875,15 +2937,18 @@ const METADATA: &[SampleMetadata] = &[
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Daylight),
             kelvin: None,
-            fine_tune: None,
+            fine_tune: Some(SampleFineTune {
+                amber_blue: (0, 4),
+                green_magenta: Some((0, 4)),
+            }),
             exposure_program: Some(ExposureProgram::AperturePriority),
             metering_mode: Some(MeteringMode::Other),
             flash: Some((false, None)),
-            shutter: None,
+            shutter: Some(Shutter::Mechanical),
             electronic_front_curtain_setting: None,
-            image_area: None,
-            raw_image_size: None,
-            color_space: None,
+            image_area: Some(ImageArea::FullFrame),
+            raw_image_size: Some(RawImageSize::Small),
+            color_space: Some(ColorSpace::Srgb),
         },
     },
     // D780, 12-bit lossy (raw.pixls.us 3827)
@@ -2918,16 +2983,19 @@ const METADATA: &[SampleMetadata] = &[
         focus: None, // a viewfinder shot: a zero frame and only a point number
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
-            kelvin: None,
-            fine_tune: None,
+            kelvin: Some(4420),
+            fine_tune: Some(SampleFineTune {
+                amber_blue: (0, 4),
+                green_magenta: Some((0, 4)),
+            }),
             exposure_program: Some(ExposureProgram::AperturePriority),
             metering_mode: Some(MeteringMode::MultiSegment),
             flash: Some((false, None)),
-            shutter: None,
+            shutter: Some(Shutter::Mechanical),
             electronic_front_curtain_setting: None,
-            image_area: None,
-            raw_image_size: None,
-            color_space: None,
+            image_area: Some(ImageArea::FullFrame),
+            raw_image_size: Some(RawImageSize::Large),
+            color_space: Some(ColorSpace::Srgb),
         },
     },
     // Z 6, 12-bit small raw (raw.pixls.us 3587)
@@ -2967,16 +3035,19 @@ const METADATA: &[SampleMetadata] = &[
         }),
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
-            kelvin: None,
-            fine_tune: None,
+            kelvin: Some(3050),
+            fine_tune: Some(SampleFineTune {
+                amber_blue: (0, 4),
+                green_magenta: Some((0, 4)),
+            }),
             exposure_program: Some(ExposureProgram::AperturePriority),
             metering_mode: Some(MeteringMode::MultiSegment),
             flash: Some((false, None)),
-            shutter: None,
+            shutter: Some(Shutter::ElectronicFrontCurtain),
             electronic_front_curtain_setting: None,
-            image_area: None,
-            raw_image_size: None,
-            color_space: None,
+            image_area: Some(ImageArea::FullFrame),
+            raw_image_size: Some(RawImageSize::Small),
+            color_space: Some(ColorSpace::Srgb),
         },
     },
     // Z f, 14-bit (raw.pixls.us 6887)
@@ -3016,16 +3087,19 @@ const METADATA: &[SampleMetadata] = &[
         }),
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
-            kelvin: None,
-            fine_tune: None,
+            kelvin: Some(5750),
+            fine_tune: Some(SampleFineTune {
+                amber_blue: (0, 4),
+                green_magenta: Some((0, 4)),
+            }),
             exposure_program: Some(ExposureProgram::Manual),
             metering_mode: Some(MeteringMode::MultiSegment),
             flash: Some((false, None)),
-            shutter: None,
+            shutter: Some(Shutter::Mechanical),
             electronic_front_curtain_setting: None,
-            image_area: None,
-            raw_image_size: None,
-            color_space: None,
+            image_area: Some(ImageArea::FullFrame),
+            raw_image_size: Some(RawImageSize::Large),
+            color_space: Some(ColorSpace::Srgb),
         },
     },
     // Z6III, 14-bit, 3:2 (raw.pixls.us 7810)
@@ -3065,16 +3139,19 @@ const METADATA: &[SampleMetadata] = &[
         }),
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
-            kelvin: None,
-            fine_tune: None,
+            kelvin: Some(4910),
+            fine_tune: Some(SampleFineTune {
+                amber_blue: (0, 4),
+                green_magenta: Some((0, 4)),
+            }),
             exposure_program: None,
             metering_mode: Some(MeteringMode::MultiSegment),
             flash: Some((false, None)),
-            shutter: None,
+            shutter: Some(Shutter::ElectronicFrontCurtain),
             electronic_front_curtain_setting: None,
-            image_area: None,
-            raw_image_size: None,
-            color_space: None,
+            image_area: Some(ImageArea::ApsC),
+            raw_image_size: Some(RawImageSize::Large),
+            color_space: Some(ColorSpace::Srgb),
         },
     },
     // Z6III, 14-bit, 16:9 (raw.pixls.us 7809)
@@ -3114,16 +3191,19 @@ const METADATA: &[SampleMetadata] = &[
         }),
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
-            kelvin: None,
-            fine_tune: None,
+            kelvin: Some(4830),
+            fine_tune: Some(SampleFineTune {
+                amber_blue: (0, 4),
+                green_magenta: Some((0, 4)),
+            }),
             exposure_program: None,
             metering_mode: Some(MeteringMode::MultiSegment),
             flash: Some((false, None)),
-            shutter: None,
+            shutter: Some(Shutter::ElectronicFrontCurtain),
             electronic_front_curtain_setting: None,
-            image_area: None,
-            raw_image_size: None,
-            color_space: None,
+            image_area: Some(ImageArea::Wide),
+            raw_image_size: Some(RawImageSize::Large),
+            color_space: Some(ColorSpace::Srgb),
         },
     },
     // Z6III, 14-bit, 1:1 (raw.pixls.us 7808)
@@ -3163,16 +3243,19 @@ const METADATA: &[SampleMetadata] = &[
         }),
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
-            kelvin: None,
-            fine_tune: None,
+            kelvin: Some(4870),
+            fine_tune: Some(SampleFineTune {
+                amber_blue: (0, 4),
+                green_magenta: Some((0, 4)),
+            }),
             exposure_program: None,
             metering_mode: Some(MeteringMode::MultiSegment),
             flash: Some((false, None)),
-            shutter: None,
+            shutter: Some(Shutter::ElectronicFrontCurtain),
             electronic_front_curtain_setting: None,
-            image_area: None,
-            raw_image_size: None,
-            color_space: None,
+            image_area: Some(ImageArea::Square),
+            raw_image_size: Some(RawImageSize::Large),
+            color_space: Some(ColorSpace::Srgb),
         },
     },
     // Coolpix A, 14-bit lossy (raw.pixls.us 2238)
@@ -3205,7 +3288,10 @@ const METADATA: &[SampleMetadata] = &[
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
             kelvin: None,
-            fine_tune: None,
+            fine_tune: Some(SampleFineTune {
+                amber_blue: (0, 1),
+                green_magenta: Some((0, 1)),
+            }),
             exposure_program: Some(ExposureProgram::AperturePriority),
             metering_mode: Some(MeteringMode::CenterWeighted),
             flash: Some((false, None)),
@@ -3213,7 +3299,7 @@ const METADATA: &[SampleMetadata] = &[
             electronic_front_curtain_setting: None,
             image_area: None,
             raw_image_size: None,
-            color_space: None,
+            color_space: Some(ColorSpace::AdobeRgb),
         },
     },
     // Coolpix P7800, 12-bit, an NRW file (raw.pixls.us 1425)
@@ -3238,7 +3324,10 @@ const METADATA: &[SampleMetadata] = &[
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
             kelvin: None,
-            fine_tune: None,
+            fine_tune: Some(SampleFineTune {
+                amber_blue: (0, 1),
+                green_magenta: Some((0, 1)),
+            }),
             exposure_program: Some(ExposureProgram::Program),
             metering_mode: Some(MeteringMode::MultiSegment),
             flash: Some((false, Some(FlashMode::Off))),
@@ -3269,7 +3358,7 @@ const METADATA: &[SampleMetadata] = &[
         image_size: Some((2576, 1924)),
         focus: None, // no AFInfo2: AFInfo holds a point number only
         settings: SampleSettings {
-            white_balance_mode: None,
+            white_balance_mode: Some(WhiteBalanceMode::Auto),
             kelvin: None,
             fine_tune: None,
             exposure_program: Some(ExposureProgram::Program),
@@ -3315,15 +3404,18 @@ const METADATA: &[SampleMetadata] = &[
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
             kelvin: None,
-            fine_tune: None,
+            fine_tune: Some(SampleFineTune {
+                amber_blue: (0, 1),
+                green_magenta: Some((0, 1)),
+            }),
             exposure_program: Some(ExposureProgram::Manual),
             metering_mode: Some(MeteringMode::MultiSegment),
             flash: Some((false, None)),
-            shutter: None,
+            shutter: Some(Shutter::Electronic),
             electronic_front_curtain_setting: None,
             image_area: None,
             raw_image_size: None,
-            color_space: None,
+            color_space: Some(ColorSpace::AdobeRgb),
         },
     },
     // D5600, 12-bit lossy, live view (raw.pixls.us 1415)
@@ -3364,15 +3456,18 @@ const METADATA: &[SampleMetadata] = &[
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
             kelvin: None,
-            fine_tune: None,
+            fine_tune: Some(SampleFineTune {
+                amber_blue: (0, 4),
+                green_magenta: Some((0, 4)),
+            }),
             exposure_program: Some(ExposureProgram::AperturePriority),
             metering_mode: Some(MeteringMode::MultiSegment),
             flash: Some((false, Some(FlashMode::Off))),
             shutter: None,
             electronic_front_curtain_setting: None,
-            image_area: None,
-            raw_image_size: None,
-            color_space: None,
+            image_area: Some(ImageArea::ApsC),
+            raw_image_size: Some(RawImageSize::Large),
+            color_space: Some(ColorSpace::Srgb),
         },
     },
     // Z5II, 14-bit, 1:1 (raw.pixls.us 7735)
@@ -3407,16 +3502,19 @@ const METADATA: &[SampleMetadata] = &[
         focus: None, // auto-area mode: a mask of points only, zero frame
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
-            kelvin: None,
-            fine_tune: None,
+            kelvin: Some(4820),
+            fine_tune: Some(SampleFineTune {
+                amber_blue: (0, 4),
+                green_magenta: Some((0, 4)),
+            }),
             exposure_program: None,
             metering_mode: Some(MeteringMode::MultiSegment),
             flash: Some((false, None)),
-            shutter: None,
+            shutter: Some(Shutter::Mechanical),
             electronic_front_curtain_setting: None,
-            image_area: None,
-            raw_image_size: None,
-            color_space: None,
+            image_area: Some(ImageArea::Square),
+            raw_image_size: Some(RawImageSize::Large),
+            color_space: Some(ColorSpace::Srgb),
         },
     },
     // Z5II, 14-bit, 16:9 (raw.pixls.us 7736)
@@ -3451,16 +3549,19 @@ const METADATA: &[SampleMetadata] = &[
         focus: None, // auto-area mode: a mask of points only, zero frame
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
-            kelvin: None,
-            fine_tune: None,
+            kelvin: Some(4720),
+            fine_tune: Some(SampleFineTune {
+                amber_blue: (0, 4),
+                green_magenta: Some((0, 4)),
+            }),
             exposure_program: None,
             metering_mode: Some(MeteringMode::MultiSegment),
             flash: Some((false, None)),
-            shutter: None,
+            shutter: Some(Shutter::Mechanical),
             electronic_front_curtain_setting: None,
-            image_area: None,
-            raw_image_size: None,
-            color_space: None,
+            image_area: Some(ImageArea::Wide),
+            raw_image_size: Some(RawImageSize::Large),
+            color_space: Some(ColorSpace::Srgb),
         },
     },
     // Z50II, 14-bit, 1:1 (raw.pixls.us 7767)
@@ -3500,16 +3601,19 @@ const METADATA: &[SampleMetadata] = &[
         }),
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
-            kelvin: None,
-            fine_tune: None,
+            kelvin: Some(6590),
+            fine_tune: Some(SampleFineTune {
+                amber_blue: (0, 4),
+                green_magenta: Some((0, 4)),
+            }),
             exposure_program: Some(ExposureProgram::Manual),
             metering_mode: Some(MeteringMode::CenterWeighted),
             flash: Some((false, Some(FlashMode::Off))),
-            shutter: None,
+            shutter: Some(Shutter::ElectronicFrontCurtain),
             electronic_front_curtain_setting: None,
-            image_area: None,
-            raw_image_size: None,
-            color_space: None,
+            image_area: Some(ImageArea::ApsCSquare),
+            raw_image_size: Some(RawImageSize::Large),
+            color_space: Some(ColorSpace::Srgb),
         },
     },
     // Z50II, 14-bit, 16:9 (raw.pixls.us 7770)
@@ -3549,16 +3653,19 @@ const METADATA: &[SampleMetadata] = &[
         }),
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
-            kelvin: None,
-            fine_tune: None,
+            kelvin: Some(7000),
+            fine_tune: Some(SampleFineTune {
+                amber_blue: (0, 4),
+                green_magenta: Some((0, 4)),
+            }),
             exposure_program: Some(ExposureProgram::Manual),
             metering_mode: Some(MeteringMode::CenterWeighted),
             flash: Some((false, Some(FlashMode::Off))),
-            shutter: None,
+            shutter: Some(Shutter::ElectronicFrontCurtain),
             electronic_front_curtain_setting: None,
-            image_area: None,
-            raw_image_size: None,
-            color_space: None,
+            image_area: Some(ImageArea::ApsCWide),
+            raw_image_size: Some(RawImageSize::Large),
+            color_space: Some(ColorSpace::Srgb),
         },
     },
     // Z6III, 14-bit High Efficiency*, 1:1 (raw.pixls.us 7812)
@@ -3598,16 +3705,19 @@ const METADATA: &[SampleMetadata] = &[
         }),
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
-            kelvin: None,
-            fine_tune: None,
+            kelvin: Some(4820),
+            fine_tune: Some(SampleFineTune {
+                amber_blue: (0, 4),
+                green_magenta: Some((0, 4)),
+            }),
             exposure_program: None,
             metering_mode: Some(MeteringMode::MultiSegment),
             flash: Some((false, None)),
-            shutter: None,
+            shutter: Some(Shutter::ElectronicFrontCurtain),
             electronic_front_curtain_setting: None,
-            image_area: None,
-            raw_image_size: None,
-            color_space: None,
+            image_area: Some(ImageArea::Square),
+            raw_image_size: Some(RawImageSize::Large),
+            color_space: Some(ColorSpace::Srgb),
         },
     },
     // Z6III, 14-bit High Efficiency*, 16:9 (raw.pixls.us 7813)
@@ -3647,16 +3757,19 @@ const METADATA: &[SampleMetadata] = &[
         }),
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
-            kelvin: None,
-            fine_tune: None,
+            kelvin: Some(4740),
+            fine_tune: Some(SampleFineTune {
+                amber_blue: (0, 4),
+                green_magenta: Some((0, 4)),
+            }),
             exposure_program: None,
             metering_mode: Some(MeteringMode::MultiSegment),
             flash: Some((false, None)),
-            shutter: None,
+            shutter: Some(Shutter::ElectronicFrontCurtain),
             electronic_front_curtain_setting: None,
-            image_area: None,
-            raw_image_size: None,
-            color_space: None,
+            image_area: Some(ImageArea::Wide),
+            raw_image_size: Some(RawImageSize::Large),
+            color_space: Some(ColorSpace::Srgb),
         },
     },
     // D5, 14-bit lossy, live view (raw.pixls.us 2218)
@@ -3696,16 +3809,19 @@ const METADATA: &[SampleMetadata] = &[
         }),
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
-            kelvin: None,
-            fine_tune: None,
+            kelvin: Some(6020),
+            fine_tune: Some(SampleFineTune {
+                amber_blue: (0, 4),
+                green_magenta: Some((0, 4)),
+            }),
             exposure_program: Some(ExposureProgram::AperturePriority),
             metering_mode: Some(MeteringMode::MultiSegment),
             flash: Some((false, None)),
             shutter: None,
             electronic_front_curtain_setting: None,
-            image_area: None,
-            raw_image_size: None,
-            color_space: None,
+            image_area: Some(ImageArea::FullFrame),
+            raw_image_size: Some(RawImageSize::Large),
+            color_space: Some(ColorSpace::Srgb),
         },
     },
     // Z 30, 12-bit lossless, rotated (raw.pixls.us 5812)
@@ -3745,16 +3861,19 @@ const METADATA: &[SampleMetadata] = &[
         }),
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
-            kelvin: None,
-            fine_tune: None,
+            kelvin: Some(5240),
+            fine_tune: Some(SampleFineTune {
+                amber_blue: (0, 4),
+                green_magenta: Some((0, 4)),
+            }),
             exposure_program: Some(ExposureProgram::Manual),
             metering_mode: Some(MeteringMode::MultiSegment),
             flash: Some((false, None)),
-            shutter: None,
+            shutter: Some(Shutter::ElectronicFrontCurtain),
             electronic_front_curtain_setting: None,
-            image_area: None,
-            raw_image_size: None,
-            color_space: None,
+            image_area: Some(ImageArea::ApsC),
+            raw_image_size: Some(RawImageSize::Large),
+            color_space: Some(ColorSpace::AdobeRgb),
         },
     },
     // Z fc, 12-bit lossless, manual focus (raw.pixls.us 8559)
@@ -3790,15 +3909,18 @@ const METADATA: &[SampleMetadata] = &[
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Daylight),
             kelvin: None,
-            fine_tune: None,
+            fine_tune: Some(SampleFineTune {
+                amber_blue: (0, 4),
+                green_magenta: Some((0, 4)),
+            }),
             exposure_program: Some(ExposureProgram::Manual),
             metering_mode: Some(MeteringMode::MultiSegment),
             flash: Some((false, None)),
-            shutter: None,
+            shutter: Some(Shutter::ElectronicFrontCurtain),
             electronic_front_curtain_setting: None,
-            image_area: None,
-            raw_image_size: None,
-            color_space: None,
+            image_area: Some(ImageArea::ApsC),
+            raw_image_size: Some(RawImageSize::Large),
+            color_space: Some(ColorSpace::Srgb),
         },
     },
 ];

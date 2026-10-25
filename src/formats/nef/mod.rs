@@ -17,13 +17,13 @@
 //! files carry that MakerNote, is [`nikon`]: it reads the MakerNote once
 //! per file, finds the small preview the MakerNote points at, and reads
 //! what the MakerNote records that the standard tags lack:
-//! the visible image size, the focus point, and, on the older bodies whose
-//! standard tags lack them, the serial number, the ISO, the lens's range
-//! and the capture time's offset from UTC, from the time-zone setting of
-//! the camera's clock. The search for the previews is in `previews.rs`,
-//! and takes the MakerNote already read. The metadata comes from the
-//! standard tags, through the reader the TIFF-based formats share, and then
-//! from that MakerNote.
+//! the visible image size, the focus point, the camera settings that only
+//! it records, and, on the older bodies whose standard tags lack them, the
+//! serial number, the ISO, the lens's range and the capture time's offset
+//! from UTC, from the time-zone setting of the camera's clock. The search
+//! for the previews is in `previews.rs`, and takes the MakerNote already
+//! read. The metadata comes from the standard tags, through the reader the
+//! TIFF-based formats share, and then from that MakerNote.
 
 mod previews;
 
@@ -83,9 +83,13 @@ fn claims<R: Read + Seek>(src: &mut Source<R>, tree: &Tree) -> Result<bool> {
 /// and the lens's range when the standard tags gave none, as on bodies
 /// before the D780 and the Z 6, and the capture time's offset from UTC,
 /// from its WorldTime, when the standard tags gave a capture time without
-/// one, as on bodies before the D850; and it gives the focus point, from
-/// its AFInfo2, which no standard tag records, placed on CropArea on a
-/// crop, as on a raw file's picture ([`Picture::Raw`], [`nikon::metadata`]).
+/// one, as on bodies before the D850; it gives the camera settings that
+/// only it records, the raw image size among them, its white balance
+/// setting, when it names one, in place of Exif's, and its colour space
+/// when the Exif tags record none, as no Nikon raw file checked does; and
+/// it gives the focus point, from its AFInfo2, which no standard tag
+/// records, placed on CropArea on a crop, as on a raw file's picture
+/// ([`Picture::Raw`], [`nikon::metadata`]).
 ///
 /// # Errors
 ///

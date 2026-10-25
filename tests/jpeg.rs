@@ -37,9 +37,10 @@ use std::io::Cursor;
 use std::ops::Range;
 
 use raw_files::{
-    CameraSettings, ColorSpace, DateTime, ErrorKind, Exposure, ExposureProgram, Flash, FlashMode,
-    Focus, Format, Lens, Limits, Metadata, MeteringMode, Options, Orientation, Point, Preview,
-    PreviewFormat, Rational, RawFile, SignedRational, Size, WhiteBalance, WhiteBalanceMode,
+    CameraSettings, ColorSpace, DateTime, ErrorKind, Exposure, ExposureProgram, FineTune, Flash,
+    FlashMode, Focus, Format, ImageArea, Lens, Limits, Metadata, MeteringMode, Options,
+    Orientation, Point, Preview, PreviewFormat, Rational, RawFile, Shutter, SignedRational, Size,
+    WhiteBalance, WhiteBalanceMode,
 };
 use support::arw::{
     ARW4_FOCUS_CENTER, ARW4_FOCUS_FRAME, ARW4_FOCUS_SIZE, ARW4_FULL_SIZE_JPEG,
@@ -76,8 +77,8 @@ use support::nef::{
     nikon_makernote_with, z9_af_info2,
 };
 use support::samples::{
-    Jpeg, Sample, SampleFocus, SampleLens, SampleMetadata, SampleSettings, SerialShape, check,
-    check_metadata, listed,
+    Jpeg, Sample, SampleFineTune, SampleFocus, SampleLens, SampleMetadata, SampleSettings,
+    SerialShape, check, check_metadata, listed,
 };
 use support::tiff_builder::{EXIF_IFD, IfdId, Order, TiffBuilder};
 
@@ -924,11 +925,28 @@ fn nikon_previews(file: &NikonJpeg, main: (u16, u16)) -> Vec<Seen> {
     )
 }
 
-/// The metadata of a Z 9's JPEG that [`z9_jpeg`] lays out with a main
-/// image of `main`: every value [`camera_exif`] writes, the image size
-/// `main`, and the focus point `focus`.
-fn z9_metadata(main: (u16, u16), focus: Option<Focus>) -> Metadata {
-    let metadata = camera_metadata_without(&[]).with_image_size(size_of(main));
+/// `metadata` with the image area that the crop setting of `mode`'s
+/// CropHiSpeed gives, the one camera setting the Z 9's JPEGs built here
+/// record in their MakerNote: 11, FX uncropped, the full frame; 2, DX,
+/// APS-C; 17, FX 1:1, the square; and 6, the 16:9 crop.
+fn with_image_area(metadata: Metadata, mode: Z9Mode) -> Metadata {
+    let area = match mode {
+        Z9Mode::Fx => ImageArea::FullFrame,
+        Z9Mode::Dx => ImageArea::ApsC,
+        Z9Mode::Square => ImageArea::Square,
+        Z9Mode::Wide => ImageArea::Wide,
+    };
+    let settings = metadata.camera_settings().clone().with_image_area(area);
+    metadata.with_camera_settings(settings)
+}
+
+/// The metadata of a Z 9's JPEG that [`z9_jpeg`] lays out in mode `mode`
+/// with a main image of `main`: every value [`camera_exif`] writes, the
+/// image area of `mode`, the image size `main`, and the focus point
+/// `focus`.
+fn z9_metadata(mode: Z9Mode, main: (u16, u16), focus: Option<Focus>) -> Metadata {
+    let metadata =
+        with_image_area(camera_metadata_without(&[]), mode).with_image_size(size_of(main));
     match focus {
         Some(focus) => metadata.with_focus(focus),
         None => metadata,
@@ -981,7 +999,7 @@ fn a_nikon_jpeg_gives_the_focus_point_its_makernote_records() {
         assert_opens(
             &file.built.bytes,
             &nikon_previews(&file, MAIN),
-            &z9_metadata(MAIN, Some(recorded(Z9Mode::Fx))),
+            &z9_metadata(Z9Mode::Fx, MAIN, Some(recorded(Z9Mode::Fx))),
             &format!("Z 9, {order:?}, MakerNote {makernote_order:?}"),
         );
     }
@@ -1009,7 +1027,7 @@ fn the_exif_values_win_over_the_makernotes() {
         assert_opens(
             &file.built.bytes,
             &nikon_previews(&file, MAIN),
-            &z9_metadata(MAIN, Some(recorded(Z9Mode::Fx))),
+            &z9_metadata(Z9Mode::Fx, MAIN, Some(recorded(Z9Mode::Fx))),
             &format!("{order:?}, MakerNote {makernote_order:?}"),
         );
     }
@@ -1115,7 +1133,7 @@ fn an_export_cut_to_another_shape_gives_no_focus_point() {
             assert_opens(
                 &file.built.bytes,
                 &nikon_previews(&file, main),
-                &z9_metadata(main, focus),
+                &z9_metadata(Z9Mode::Fx, main, focus),
                 &format!("export of {main:?}, {order:?}"),
             );
         }
@@ -1164,7 +1182,7 @@ fn a_crop_mode_jpeg_places_its_point_on_its_pixels() {
             assert_opens(
                 &file.built.bytes,
                 &nikon_previews(&file, main),
-                &z9_metadata(main, Some(focus)),
+                &z9_metadata(mode, main, Some(focus)),
                 &format!("{mode:?} at {main:?}, {order:?}, MakerNote {makernote_order:?}"),
             );
         }
@@ -1188,7 +1206,7 @@ fn a_crop_mode_jpeg_that_cannot_be_placed_gives_no_focus_point() {
             assert_opens(
                 &file.built.bytes,
                 &nikon_previews(&file, main),
-                &z9_metadata(main, None),
+                &z9_metadata(mode, main, None),
                 &format!("{mode:?} at {main:?}, CropArea {crop_area}, {order:?}"),
             );
         }
@@ -1218,9 +1236,9 @@ fn makernote_with_everything(
 #[test]
 fn a_nikon_makernote_under_another_makers_make_is_not_read() {
     // A file of another make, whose Exif segment records no serial number,
-    // with a sound Nikon MakerNote that records one, a focus point and a
-    // preview: nothing of it is read. The same file with Nikon's Make reads
-    // all three.
+    // with a sound Nikon MakerNote that records one, a focus point, a
+    // preview and a crop setting: nothing of it is read. The same file with
+    // Nikon's Make reads all four, the crop setting as the image area.
     for order in ORDERS {
         let (block, at) = makernote_with_everything(order, |_, _| {});
         for make in ["Canon", "NIKON CORPORATION"] {
@@ -1238,7 +1256,7 @@ fn a_nikon_makernote_under_another_makers_make_is_not_read() {
             let mut metadata = camera_metadata_without(&[MAKE, BODY_SERIAL_NUMBER]).with_make(make);
             let mut previews = nikon_previews(&file, MAIN);
             if make != "Canon" {
-                metadata = metadata
+                metadata = with_image_area(metadata, Z9Mode::Fx)
                     .with_serial_number("7654321")
                     .with_focus(recorded(Z9Mode::Fx));
                 let start = file.makernote.start + at;
@@ -1401,8 +1419,8 @@ fn a_limit_crossed_inside_the_makernote_costs_the_makernote_only() {
     // the four tags of `makernote_with_everything` and 14 more of no
     // meaning, beside an Exif IFD of 14, the most any other IFD of the file
     // holds. With a limit of 20 entries the MakerNote gives its serial
-    // number, focus point and preview; with 19 it gives nothing, and the
-    // rest of the file is as without it.
+    // number, focus point, preview and image area; with 19 it gives
+    // nothing, and the rest of the file is as without it.
     let fillers = |inner: &mut TiffBuilder, ifd: IfdId| {
         for tag in 0x1000..0x100E {
             inner.undefined(ifd, tag, &[0; 4]);
@@ -1432,8 +1450,7 @@ fn a_limit_crossed_inside_the_makernote_costs_the_makernote_only() {
             ),
         );
         let without = camera_metadata_without(&[BODY_SERIAL_NUMBER]);
-        let with = without
-            .clone()
+        let with = with_image_area(without.clone(), Z9Mode::Fx)
             .with_serial_number("7654321")
             .with_focus(recorded(Z9Mode::Fx));
         for (entries, previews, metadata) in
@@ -1848,6 +1865,12 @@ struct StrippedZ9Jpeg {
     focus_center: (u32, u32),
     focus_size: (u32, u32),
     in_focus: bool,
+    /// The colour temperature of the white balance the camera applied, in
+    /// kelvin: the MakerNote's ColorTemperatureAuto.
+    kelvin: u32,
+    /// The image area, from the crop setting of the MakerNote's
+    /// CropHiSpeed.
+    image_area: ImageArea,
 }
 
 /// The FX shot, the camera's full output, at full size: CropHiSpeed
@@ -1880,6 +1903,8 @@ const STRIPPED_Z9_FX_JPEG: StrippedZ9Jpeg = StrippedZ9Jpeg {
     focus_center: (4225, 2614),
     focus_size: (406, 406),
     in_focus: true,
+    kelvin: 5670,
+    image_area: ImageArea::FullFrame,
 };
 
 /// The DX shot, at full size: CropHiSpeed `[2, 8280, 5520, 5408, 3608,
@@ -1913,6 +1938,8 @@ const STRIPPED_Z9_DX_JPEG: StrippedZ9Jpeg = StrippedZ9Jpeg {
     focus_center: (669, 469),
     focus_size: (148, 168),
     in_focus: true,
+    kelvin: 5300,
+    image_area: ImageArea::ApsC,
 };
 
 /// The 16:9 shot, at the middle size, 6192 by 3480, taken in portrait
@@ -1949,6 +1976,8 @@ const STRIPPED_Z9_16X9_JPEG: StrippedZ9Jpeg = StrippedZ9Jpeg {
     focus_center: (878, 4072),
     focus_size: (162, 178),
     in_focus: true,
+    kelvin: 6130,
+    image_area: ImageArea::Wide,
 };
 
 /// Checks that the stripped Z 9 JPEG `stripped` names, read whole from its
@@ -2056,17 +2085,33 @@ fn check_stripped_z9_jpeg(stripped: &StrippedZ9Jpeg) {
     )
     .with_in_focus(stripped.in_focus);
     assert_eq!(metadata.focus(), Some(focus), "{label}");
-    // The settings the Exif IFD records, the same on the three shots:
-    // aperture priority, matrix metering, a Flash of 0, no flash fired and
-    // no mode recorded, auto white balance, and the ColorSpace 1, sRGB. The
-    // settings that only the MakerNote records are not read yet.
+    // The settings, the same on the three shots but the colour
+    // temperature and the image area. From the Exif IFD: aperture
+    // priority, matrix metering, a Flash of 0, no flash fired and no mode
+    // recorded, and the ColorSpace 1, sRGB, which keeps the MakerNote's
+    // out. From the MakerNote: auto white balance, its text `AUTO0`, which
+    // Exif's auto agrees with; the colour temperature it chose; a recorded
+    // zero fine-tuning, `0/4, 0/4`; the electronic shutter; and the image
+    // area of the crop. A JPEG has no raw image size, whatever its
+    // MakerNote's ImageSizeRAW says.
+    let zero = SignedRational {
+        numerator: 0,
+        denominator: 4,
+    };
     assert_eq!(
         metadata.camera_settings(),
         &CameraSettings::default()
-            .with_white_balance(WhiteBalance::default().with_mode(WhiteBalanceMode::Auto))
+            .with_white_balance(
+                WhiteBalance::default()
+                    .with_mode(WhiteBalanceMode::Auto)
+                    .with_kelvin(stripped.kelvin)
+                    .with_fine_tune(FineTune::new(zero).with_green_magenta(zero)),
+            )
             .with_exposure_program(ExposureProgram::AperturePriority)
             .with_metering_mode(MeteringMode::MultiSegment)
             .with_flash(Flash::new(false))
+            .with_shutter(Shutter::Electronic)
+            .with_image_area(stripped.image_area)
             .with_color_space(ColorSpace::Srgb),
         "{label}"
     );
@@ -2355,11 +2400,16 @@ fn every_jpeg_sample_opens_with_its_previews() {
 /// (ADR014). The focus point is the one Sony's MakerNote records, as
 /// recorded, on the ILCE-7M3, off centre in a frame of its picture's size,
 /// and on the ILCE-7RM2, at the centre; where there is none, a comment
-/// says why. The camera settings are those the Exif IFD records: every
-/// file gives sRGB, the G7 X records no ExposureProgram and the D5300 the
-/// ExposureProgram 0, "not defined", so neither gives an exposure program,
-/// and the settings only a MakerNote records are `None` on every file,
-/// since the reader does not read them yet.
+/// says why. The camera settings are those the Exif IFD records, with,
+/// on the two Nikon files, those their MakerNote records: every file gives
+/// sRGB, from its Exif ColorSpace; the G7 X records no ExposureProgram and
+/// the D5300 the ExposureProgram 0, "not defined", so neither gives an
+/// exposure program; the D5300 gives the fine-tuning `0, 0` of its
+/// 0x000B, while the D70's 0x000B holds one value, which gives none; and
+/// neither Nikon file gives a raw image size, since a JPEG holds no raw
+/// data. The settings only a MakerNote records are `None` on every Sony
+/// and Canon file, since the reader does not read Sony's MakerNote for
+/// them yet and reads no Canon MakerNote.
 const METADATA: &[SampleMetadata] = &[
     // ILCE-7M3 (Wikimedia Commons Acanthodactylus_erythrurus_2025.jpg)
     SampleMetadata {
@@ -2601,7 +2651,10 @@ const METADATA: &[SampleMetadata] = &[
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
             kelvin: None,
-            fine_tune: None,
+            fine_tune: Some(SampleFineTune {
+                amber_blue: (0, 1),
+                green_magenta: Some((0, 1)),
+            }),
             exposure_program: None,
             metering_mode: Some(MeteringMode::MultiSegment),
             flash: Some((false, Some(FlashMode::Off))),

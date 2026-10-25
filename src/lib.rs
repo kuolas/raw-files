@@ -21,11 +21,13 @@
 //! Nikon and Sony cameras, from what the maker's MakerNote records that
 //! they lack: the camera's make, model and serial number, the software
 //! that wrote the file, the capture time, the orientation, the exposure,
-//! with the focal length in 35 mm terms, the camera's settings that Exif
-//! records (the exposure program, the metering mode, the flash, the white
-//! balance mode and the colour space, in [`CameraSettings`]), the lens, the
-//! sizes of the raw data, which a JPEG lacks, and of the visible image, and
-//! where the camera focused ([`Metadata::focus`]). See the
+//! with the focal length in 35 mm terms, the camera's settings (the white
+//! balance, the exposure program, the metering mode, the flash, the
+//! shutter, the image area, the raw image size and the colour space, in
+//! [`CameraSettings`], those that only a MakerNote records from Nikon's
+//! alone, Sony's not yet), the lens, the sizes of the raw data, which a
+//! JPEG lacks, and of the visible image, and where the camera focused
+//! ([`Metadata::focus`]). See the
 //! [roadmap](https://github.com/kuolas/raw-files/blob/master/docs/ROADMAP.md)
 //! for the plan and the
 //! [architecture](https://github.com/kuolas/raw-files/blob/master/docs/ARCHITECTURE.md)
@@ -209,8 +211,9 @@
 //! the small JPEG its MakerNote points at. Its metadata is what its Exif
 //! segment records, read as in a raw file, with the picture's size as the
 //! image size and no raw size; from a Nikon camera, also what its
-//! MakerNote records where the Exif segment records nothing, as in a NEF,
-//! and from a Nikon or a Sony camera the focus point. No other maker's
+//! MakerNote records, as in a NEF: what the Exif segment lacks, and the
+//! white balance setting, finer than the Exif segment's; and from a Nikon
+//! or a Sony camera the focus point. No other maker's
 //! MakerNote is read. These are checked on eight camera JPEGs from
 //! [Wikimedia Commons](https://commons.wikimedia.org/), of five Sony
 //! bodies, two Nikon bodies and a Canon; on three stripped JPEG files of

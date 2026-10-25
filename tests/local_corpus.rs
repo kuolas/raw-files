@@ -170,7 +170,7 @@ impl MetadataTally {
 /// counts: for each setting, how many files have it, and how many have each
 /// of its kinds, by the name the library gives the kind, such as
 /// "Aperture priority". The settings that only a MakerNote records are not
-/// counted, since the library does not read them yet.
+/// counted yet. See #26
 #[derive(Default)]
 struct SettingsTally {
     exposure_program: usize,

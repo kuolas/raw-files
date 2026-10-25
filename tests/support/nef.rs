@@ -427,7 +427,8 @@ pub const D1H_LENS: [(u32, u32); 4] = [(180, 10), (700, 10), (35, 10), (45, 10)]
 const D1H_AF_INFO: [u8; 4] = [1, 0, 1, 0];
 /// Nine more tags of the D1H file's MakerNote IFD, each with its ASCII
 /// text, less the NUL the builder adds: those of the public sample 5364,
-/// which the reader does not read. They make the MakerNote IFD, of 15
+/// which the reader does not read but the white balance setting, 0x0005,
+/// whose `SUNNY` gives daylight. They make the MakerNote IFD, of 15
 /// entries, longer than IFD0, of 14, the longest IFD outside it, as on the
 /// sample, whose MakerNote IFD holds 27 and IFD0 26.
 const D1H_TEXT_TAGS: [(u16, &str); 9] = [
