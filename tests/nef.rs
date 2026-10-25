@@ -2302,7 +2302,7 @@ const METADATA: &[SampleMetadata] = &[
             kelvin: Some(4650),
             fine_tune: Some(SampleFineTune {
                 amber_blue: (0, 4),
-                green_magenta: Some((0, 4)),
+                green_magenta: (0, 4),
             }),
             exposure_program: Some(ExposureProgram::Program),
             metering_mode: Some(MeteringMode::CenterWeighted),
@@ -2354,7 +2354,7 @@ const METADATA: &[SampleMetadata] = &[
             kelvin: Some(4630),
             fine_tune: Some(SampleFineTune {
                 amber_blue: (0, 4),
-                green_magenta: Some((0, 4)),
+                green_magenta: (0, 4),
             }),
             exposure_program: Some(ExposureProgram::Program),
             metering_mode: Some(MeteringMode::CenterWeighted),
@@ -2406,7 +2406,7 @@ const METADATA: &[SampleMetadata] = &[
             kelvin: Some(4630),
             fine_tune: Some(SampleFineTune {
                 amber_blue: (0, 4),
-                green_magenta: Some((0, 4)),
+                green_magenta: (0, 4),
             }),
             exposure_program: Some(ExposureProgram::Program),
             metering_mode: Some(MeteringMode::CenterWeighted),
@@ -2699,7 +2699,7 @@ const METADATA: &[SampleMetadata] = &[
             kelvin: None,
             fine_tune: Some(SampleFineTune {
                 amber_blue: (0, 1),
-                green_magenta: Some((0, 1)),
+                green_magenta: (0, 1),
             }),
             exposure_program: Some(ExposureProgram::Manual),
             metering_mode: Some(MeteringMode::CenterWeighted),
@@ -2746,7 +2746,7 @@ const METADATA: &[SampleMetadata] = &[
             kelvin: None,
             fine_tune: Some(SampleFineTune {
                 amber_blue: (0, 1),
-                green_magenta: Some((0, 1)),
+                green_magenta: (0, 1),
             }),
             exposure_program: Some(ExposureProgram::ShutterPriority),
             metering_mode: Some(MeteringMode::MultiSegment),
@@ -2798,7 +2798,7 @@ const METADATA: &[SampleMetadata] = &[
             kelvin: None,
             fine_tune: Some(SampleFineTune {
                 amber_blue: (0, 1),
-                green_magenta: Some((0, 1)),
+                green_magenta: (0, 1),
             }),
             exposure_program: Some(ExposureProgram::AperturePriority),
             metering_mode: Some(MeteringMode::MultiSegment),
@@ -2845,7 +2845,7 @@ const METADATA: &[SampleMetadata] = &[
             kelvin: None,
             fine_tune: Some(SampleFineTune {
                 amber_blue: (0, 4),
-                green_magenta: Some((0, 4)),
+                green_magenta: (0, 4),
             }),
             exposure_program: Some(ExposureProgram::AperturePriority),
             metering_mode: Some(MeteringMode::MultiSegment),
@@ -2892,7 +2892,7 @@ const METADATA: &[SampleMetadata] = &[
             kelvin: None,
             fine_tune: Some(SampleFineTune {
                 amber_blue: (0, 4),
-                green_magenta: Some((0, 4)),
+                green_magenta: (0, 4),
             }),
             exposure_program: Some(ExposureProgram::Manual),
             metering_mode: Some(MeteringMode::MultiSegment),
@@ -2939,7 +2939,7 @@ const METADATA: &[SampleMetadata] = &[
             kelvin: None,
             fine_tune: Some(SampleFineTune {
                 amber_blue: (0, 4),
-                green_magenta: Some((0, 4)),
+                green_magenta: (0, 4),
             }),
             exposure_program: Some(ExposureProgram::AperturePriority),
             metering_mode: Some(MeteringMode::Other),
@@ -2986,7 +2986,7 @@ const METADATA: &[SampleMetadata] = &[
             kelvin: Some(4420),
             fine_tune: Some(SampleFineTune {
                 amber_blue: (0, 4),
-                green_magenta: Some((0, 4)),
+                green_magenta: (0, 4),
             }),
             exposure_program: Some(ExposureProgram::AperturePriority),
             metering_mode: Some(MeteringMode::MultiSegment),
@@ -3038,7 +3038,7 @@ const METADATA: &[SampleMetadata] = &[
             kelvin: Some(3050),
             fine_tune: Some(SampleFineTune {
                 amber_blue: (0, 4),
-                green_magenta: Some((0, 4)),
+                green_magenta: (0, 4),
             }),
             exposure_program: Some(ExposureProgram::AperturePriority),
             metering_mode: Some(MeteringMode::MultiSegment),
@@ -3090,7 +3090,7 @@ const METADATA: &[SampleMetadata] = &[
             kelvin: Some(5750),
             fine_tune: Some(SampleFineTune {
                 amber_blue: (0, 4),
-                green_magenta: Some((0, 4)),
+                green_magenta: (0, 4),
             }),
             exposure_program: Some(ExposureProgram::Manual),
             metering_mode: Some(MeteringMode::MultiSegment),
@@ -3142,7 +3142,7 @@ const METADATA: &[SampleMetadata] = &[
             kelvin: Some(4910),
             fine_tune: Some(SampleFineTune {
                 amber_blue: (0, 4),
-                green_magenta: Some((0, 4)),
+                green_magenta: (0, 4),
             }),
             exposure_program: None,
             metering_mode: Some(MeteringMode::MultiSegment),
@@ -3194,7 +3194,7 @@ const METADATA: &[SampleMetadata] = &[
             kelvin: Some(4830),
             fine_tune: Some(SampleFineTune {
                 amber_blue: (0, 4),
-                green_magenta: Some((0, 4)),
+                green_magenta: (0, 4),
             }),
             exposure_program: None,
             metering_mode: Some(MeteringMode::MultiSegment),
@@ -3246,7 +3246,7 @@ const METADATA: &[SampleMetadata] = &[
             kelvin: Some(4870),
             fine_tune: Some(SampleFineTune {
                 amber_blue: (0, 4),
-                green_magenta: Some((0, 4)),
+                green_magenta: (0, 4),
             }),
             exposure_program: None,
             metering_mode: Some(MeteringMode::MultiSegment),
@@ -3290,7 +3290,7 @@ const METADATA: &[SampleMetadata] = &[
             kelvin: None,
             fine_tune: Some(SampleFineTune {
                 amber_blue: (0, 1),
-                green_magenta: Some((0, 1)),
+                green_magenta: (0, 1),
             }),
             exposure_program: Some(ExposureProgram::AperturePriority),
             metering_mode: Some(MeteringMode::CenterWeighted),
@@ -3326,7 +3326,7 @@ const METADATA: &[SampleMetadata] = &[
             kelvin: None,
             fine_tune: Some(SampleFineTune {
                 amber_blue: (0, 1),
-                green_magenta: Some((0, 1)),
+                green_magenta: (0, 1),
             }),
             exposure_program: Some(ExposureProgram::Program),
             metering_mode: Some(MeteringMode::MultiSegment),
@@ -3406,7 +3406,7 @@ const METADATA: &[SampleMetadata] = &[
             kelvin: None,
             fine_tune: Some(SampleFineTune {
                 amber_blue: (0, 1),
-                green_magenta: Some((0, 1)),
+                green_magenta: (0, 1),
             }),
             exposure_program: Some(ExposureProgram::Manual),
             metering_mode: Some(MeteringMode::MultiSegment),
@@ -3458,7 +3458,7 @@ const METADATA: &[SampleMetadata] = &[
             kelvin: None,
             fine_tune: Some(SampleFineTune {
                 amber_blue: (0, 4),
-                green_magenta: Some((0, 4)),
+                green_magenta: (0, 4),
             }),
             exposure_program: Some(ExposureProgram::AperturePriority),
             metering_mode: Some(MeteringMode::MultiSegment),
@@ -3505,7 +3505,7 @@ const METADATA: &[SampleMetadata] = &[
             kelvin: Some(4820),
             fine_tune: Some(SampleFineTune {
                 amber_blue: (0, 4),
-                green_magenta: Some((0, 4)),
+                green_magenta: (0, 4),
             }),
             exposure_program: None,
             metering_mode: Some(MeteringMode::MultiSegment),
@@ -3552,7 +3552,7 @@ const METADATA: &[SampleMetadata] = &[
             kelvin: Some(4720),
             fine_tune: Some(SampleFineTune {
                 amber_blue: (0, 4),
-                green_magenta: Some((0, 4)),
+                green_magenta: (0, 4),
             }),
             exposure_program: None,
             metering_mode: Some(MeteringMode::MultiSegment),
@@ -3604,7 +3604,7 @@ const METADATA: &[SampleMetadata] = &[
             kelvin: Some(6590),
             fine_tune: Some(SampleFineTune {
                 amber_blue: (0, 4),
-                green_magenta: Some((0, 4)),
+                green_magenta: (0, 4),
             }),
             exposure_program: Some(ExposureProgram::Manual),
             metering_mode: Some(MeteringMode::CenterWeighted),
@@ -3656,7 +3656,7 @@ const METADATA: &[SampleMetadata] = &[
             kelvin: Some(7000),
             fine_tune: Some(SampleFineTune {
                 amber_blue: (0, 4),
-                green_magenta: Some((0, 4)),
+                green_magenta: (0, 4),
             }),
             exposure_program: Some(ExposureProgram::Manual),
             metering_mode: Some(MeteringMode::CenterWeighted),
@@ -3708,7 +3708,7 @@ const METADATA: &[SampleMetadata] = &[
             kelvin: Some(4820),
             fine_tune: Some(SampleFineTune {
                 amber_blue: (0, 4),
-                green_magenta: Some((0, 4)),
+                green_magenta: (0, 4),
             }),
             exposure_program: None,
             metering_mode: Some(MeteringMode::MultiSegment),
@@ -3760,7 +3760,7 @@ const METADATA: &[SampleMetadata] = &[
             kelvin: Some(4740),
             fine_tune: Some(SampleFineTune {
                 amber_blue: (0, 4),
-                green_magenta: Some((0, 4)),
+                green_magenta: (0, 4),
             }),
             exposure_program: None,
             metering_mode: Some(MeteringMode::MultiSegment),
@@ -3812,7 +3812,7 @@ const METADATA: &[SampleMetadata] = &[
             kelvin: Some(6020),
             fine_tune: Some(SampleFineTune {
                 amber_blue: (0, 4),
-                green_magenta: Some((0, 4)),
+                green_magenta: (0, 4),
             }),
             exposure_program: Some(ExposureProgram::AperturePriority),
             metering_mode: Some(MeteringMode::MultiSegment),
@@ -3864,7 +3864,7 @@ const METADATA: &[SampleMetadata] = &[
             kelvin: Some(5240),
             fine_tune: Some(SampleFineTune {
                 amber_blue: (0, 4),
-                green_magenta: Some((0, 4)),
+                green_magenta: (0, 4),
             }),
             exposure_program: Some(ExposureProgram::Manual),
             metering_mode: Some(MeteringMode::MultiSegment),
@@ -3911,7 +3911,7 @@ const METADATA: &[SampleMetadata] = &[
             kelvin: None,
             fine_tune: Some(SampleFineTune {
                 amber_blue: (0, 4),
-                green_magenta: Some((0, 4)),
+                green_magenta: (0, 4),
             }),
             exposure_program: Some(ExposureProgram::Manual),
             metering_mode: Some(MeteringMode::MultiSegment),

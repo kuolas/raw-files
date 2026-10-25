@@ -969,7 +969,7 @@ fn fine_tune_of(
     let amber_blue = SignedRational::new(amber_blue, amber_blue_denominator)?;
     let green_magenta =
         SignedRational::new(magenta_green.checked_neg()?, magenta_green_denominator)?;
-    Some(FineTune::new(amber_blue).with_green_magenta(green_magenta))
+    Some(FineTune::new(amber_blue, green_magenta))
 }
 
 /// The shutter a ShutterMode `code` names: 0 the mechanical shutter, 16 the
@@ -5636,7 +5636,7 @@ mod tests {
             numerator,
             denominator,
         };
-        FineTune::new(fraction(amber_blue)).with_green_magenta(fraction(green_magenta))
+        FineTune::new(fraction(amber_blue), fraction(green_magenta))
     }
 
     /// Gives `ifd` the tag `tag` as one or two SSHORTs, `values`, which its

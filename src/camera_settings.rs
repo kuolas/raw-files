@@ -332,7 +332,7 @@ impl CameraSettings {
 /// let white_balance = WhiteBalance::default()
 ///     .with_mode(WhiteBalanceMode::Auto)
 ///     .with_kelvin(5_200)
-///     .with_fine_tune(FineTune::new(zero).with_green_magenta(zero));
+///     .with_fine_tune(FineTune::new(zero, zero));
 ///
 /// assert_eq!(white_balance.mode().map(WhiteBalanceMode::name), Some("Auto"));
 /// assert_eq!(white_balance.kelvin(), Some(5_200));
@@ -442,12 +442,11 @@ impl WhiteBalance {
 /// documentation checked says. A recorded zero shift is a real setting,
 /// not an unknown one.
 ///
-/// A fine-tuning always has its amber to blue shift; the green to magenta
-/// one is `None` when only the first is known. No file read so far gives
-/// that: the single value the oldest Nikon bodies record gives no
-/// fine-tuning at all, since no file shows its axis. There is no
-/// `Default`, since there is no empty fine-tuning: a file that records
-/// none gives `None` for [`WhiteBalance::fine_tune`].
+/// A fine-tuning always has both shifts: a file that records a shift
+/// along one axis only gives no fine-tuning, since no file shows which
+/// axis it is on. There is no `Default`, since there is no empty
+/// fine-tuning: a file that records none gives `None` for
+/// [`WhiteBalance::fine_tune`].
 ///
 /// # Examples
 ///
@@ -459,36 +458,25 @@ impl WhiteBalance {
 ///
 /// let shift = SignedRational { numerator: -24, denominator: 4 };
 /// let zero = SignedRational { numerator: 0, denominator: 4 };
-/// let fine_tune = FineTune::new(shift).with_green_magenta(zero);
+/// let fine_tune = FineTune::new(shift, zero);
 /// assert_eq!(fine_tune.amber_blue(), shift);
-/// assert_eq!(fine_tune.green_magenta(), Some(zero));
-/// assert_eq!(FineTune::new(shift).green_magenta(), None);
+/// assert_eq!(fine_tune.green_magenta(), zero);
 /// ```
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct FineTune {
     pub(crate) amber_blue: SignedRational,
-    pub(crate) green_magenta: Option<SignedRational>,
+    pub(crate) green_magenta: SignedRational,
 }
 
 impl FineTune {
     /// The fine-tuning with a shift of `amber_blue` along the amber to blue
-    /// axis and none recorded along the green to magenta one;
-    /// [`with_green_magenta`](Self::with_green_magenta) adds it.
+    /// axis and one of `green_magenta` along the green to magenta axis,
+    /// each signed as its getter is named and kept as given.
     #[must_use]
-    pub fn new(amber_blue: SignedRational) -> Self {
+    pub fn new(amber_blue: SignedRational, green_magenta: SignedRational) -> Self {
         Self {
             amber_blue,
-            green_magenta: None,
-        }
-    }
-
-    /// This fine-tuning with a shift of `green_magenta` along the green to
-    /// magenta axis, in place of any it had.
-    #[must_use]
-    pub fn with_green_magenta(self, green_magenta: SignedRational) -> Self {
-        Self {
-            green_magenta: Some(green_magenta),
-            ..self
+            green_magenta,
         }
     }
 
@@ -499,9 +487,8 @@ impl FineTune {
     }
 
     /// The shift along the green to magenta axis, in the camera's steps:
-    /// positive towards magenta, negative towards green; `None` when only
-    /// the amber to blue shift is known.
-    pub fn green_magenta(&self) -> Option<SignedRational> {
+    /// positive towards magenta, negative towards green.
+    pub fn green_magenta(&self) -> SignedRational {
         self.green_magenta
     }
 }
@@ -1054,7 +1041,7 @@ mod tests {
             kelvin: Some(5_200),
             fine_tune: Some(FineTune {
                 amber_blue: fraction(-24, 4),
-                green_magenta: Some(fraction(4, 4)),
+                green_magenta: fraction(4, 4),
             }),
         }
     }
@@ -1125,7 +1112,7 @@ mod tests {
         assert_eq!(white_balance.kelvin(), Some(5_200));
         let fine_tune = white_balance.fine_tune().unwrap();
         assert_eq!(fine_tune.amber_blue(), fraction(-24, 4));
-        assert_eq!(fine_tune.green_magenta(), Some(fraction(4, 4)));
+        assert_eq!(fine_tune.green_magenta(), fraction(4, 4));
     }
 
     #[test]
@@ -1219,7 +1206,7 @@ mod tests {
     fn each_white_balance_builder_sets_its_own_value_and_no_other() {
         let fine_tune = FineTune {
             amber_blue: fraction(1, 2),
-            green_magenta: None,
+            green_magenta: fraction(-1, 2),
         };
         for start in [WhiteBalance::default(), nikon_white_balance()] {
             let cases = [
@@ -1258,9 +1245,7 @@ mod tests {
                 WhiteBalance::default()
                     .with_mode(WhiteBalanceMode::Auto)
                     .with_kelvin(5_200)
-                    .with_fine_tune(
-                        FineTune::new(fraction(-24, 4)).with_green_magenta(fraction(4, 4)),
-                    ),
+                    .with_fine_tune(FineTune::new(fraction(-24, 4), fraction(4, 4))),
             )
             .with_exposure_program(ExposureProgram::AperturePriority)
             .with_metering_mode(MeteringMode::MultiSegment)
@@ -1303,29 +1288,24 @@ mod tests {
         let white_balance = WhiteBalance::default()
             .with_mode(WhiteBalanceMode::Daylight)
             .with_kelvin(1)
-            .with_fine_tune(FineTune::new(fraction(1, 1)))
+            .with_fine_tune(FineTune::new(fraction(1, 1), fraction(1, 1)))
             .with_mode(WhiteBalanceMode::Auto)
             .with_kelvin(5_200)
-            .with_fine_tune(FineTune::new(fraction(-24, 4)).with_green_magenta(fraction(4, 4)));
+            .with_fine_tune(FineTune::new(fraction(-24, 4), fraction(4, 4)));
         assert_eq!(white_balance, nikon_white_balance());
     }
 
     #[test]
-    fn a_fine_tune_starts_with_one_axis_and_takes_the_other() {
-        let one_axis = FineTune::new(fraction(-6, 1));
-        assert_eq!(one_axis.amber_blue(), fraction(-6, 1));
-        assert_eq!(one_axis.green_magenta(), None);
-
-        let both = one_axis.with_green_magenta(fraction(0, 4));
-        assert_eq!(both.amber_blue(), fraction(-6, 1));
-        assert_eq!(both.green_magenta(), Some(fraction(0, 4)));
-        // A second shift replaces the first, and the other axis is kept.
-        let replaced = both.with_green_magenta(fraction(2, 4));
-        assert_eq!(replaced.amber_blue(), fraction(-6, 1));
-        assert_eq!(replaced.green_magenta(), Some(fraction(2, 4)));
+    fn a_fine_tune_keeps_both_shifts_as_given() {
+        // Two different shifts, so that one given for the other is caught.
+        let fine_tune = FineTune::new(fraction(-6, 1), fraction(2, 4));
+        assert_eq!(fine_tune.amber_blue(), fraction(-6, 1));
+        assert_eq!(fine_tune.green_magenta(), fraction(2, 4));
         // As stored: -24/4 is not -6/1, and a zero shift is a value.
-        assert_ne!(FineTune::new(fraction(-24, 4)), one_axis);
-        assert_eq!(FineTune::new(fraction(0, 4)).amber_blue(), fraction(0, 4));
+        assert_ne!(FineTune::new(fraction(-24, 4), fraction(2, 4)), fine_tune);
+        let zero = FineTune::new(fraction(0, 4), fraction(0, 4));
+        assert_eq!(zero.amber_blue(), fraction(0, 4));
+        assert_eq!(zero.green_magenta(), fraction(0, 4));
     }
 
     #[test]
