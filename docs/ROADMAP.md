@@ -10,7 +10,10 @@ The repository, its license and its contribution process exist. The public
 API is the file handle (`RawFile` and `Options`) with the preview types
 (`Preview`, `PreviewFormat`, `Orientation`, `Size`), the metadata types
 (`Metadata`, `Exposure`, `Lens`, `LensBuilder`, `Focus`, `Point`,
-`DateTime`, `Rational` and `SignedRational`), `Format`, `Error`,
+`DateTime`, `Rational` and `SignedRational`), the camera settings types
+(`CameraSettings`, `WhiteBalance`, `FineTune`, `Flash`, and the enums
+`WhiteBalanceMode`, `ExposureProgram`, `MeteringMode`, `FlashMode`,
+`Shutter`, `ImageArea`, `RawImageSize` and `ColorSpace`), `Format`, `Error`,
 `ErrorKind`, `Result` and `Limits`. A Nikon NEF file opens with the JPEG
 previews in its IFD0, its SubIFDs and its MakerNote, checked on test files
 laid out like a Nikon Z 9's, a Z6III's, a D300's and a D1H's, on two
@@ -42,18 +45,20 @@ two Nikon bodies and a Canon. Milestones 1, 2 and 5 all work;
 milestone 3 works but for the shutter used, the image area and the raw
 size of Sony bodies, which they record only in enciphered blocks or, for
 the raw size, in a tag that gives an APS-C raw the code of a medium one,
-and milestone 4 works for the bodies that record a position. Any other file is refused
-with the `UnknownFormat` error.
+and milestone 4 works for the bodies that record a position. Any other
+file is refused with the `UnknownFormat` error.
 
 The first release, version 0.1.0, is milestones 1 and 2: the embedded
 previews of NEF and ARW files. The second, 0.2.0, is most of milestone 3:
 their basic metadata. The third, 0.3.0, is the first step of milestone 4: the
 focus point as the camera records it. The fourth, 0.4.0, is milestone 5,
 plain JPEG files ([#23](https://github.com/kuolas/raw-files/issues/23)).
-The next release completes milestone 3 with the camera's settings
-([#26](https://github.com/kuolas/raw-files/issues/26)), and the one
-after it is the second step of milestone 4: the mapping of a DSLR's
-autofocus point number to pixels.
+The fifth, 0.5.0, completes milestone 3 with the camera's settings
+([#26](https://github.com/kuolas/raw-files/issues/26)). The next release
+is the second step of milestone 4: the mapping of a DSLR's autofocus
+point number to pixels. Milestone 6 follows it: every value a file
+records, the ones that only enciphered or encrypted blocks hold among
+them ([#50](https://github.com/kuolas/raw-files/issues/50)).
 
 ## Milestones
 
@@ -71,8 +76,15 @@ autofocus point number to pixels.
    viewfinder, mapped to pixels through a table of the body's points.
 5. **Plain JPEG files.** Open the JPEG files a camera writes beside its
    raw files, for their Exif metadata and their previews.
-6. **Raw sensor data.** Decode the sensor data of NEF and ARW files.
-7. **Developed image.** Develop the sensor data to a linear image, plus the
+6. **Full metadata.** Every metadata value a file records, so that a
+   program needs no second reader beside raw-files: more capture
+   settings, how the camera processed its JPEG, the lens by name, the
+   author and copyright, the location, the XMP and IPTC fields, and what
+   a maker records only in enciphered or encrypted blocks, which needs a
+   decision of its own first
+   ([ADR016](architecture-decisions/adr016-full-metadata-before-raw-data.md)).
+7. **Raw sensor data.** Decode the sensor data of NEF and ARW files.
+8. **Developed image.** Develop the sensor data to a linear image, plus the
    colour model that converts it to a standard colour space; the creative
    edit stays with the application
    ([ADR010](architecture-decisions/adr010-decoding-ends-at-a-linear-image.md)).

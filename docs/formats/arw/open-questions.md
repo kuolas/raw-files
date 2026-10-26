@@ -66,7 +66,7 @@ answer Part 2.
    ([licences-and-references.md](licences-and-references.md)). These are
    legal questions, not engineering ones, and the same posture as NEF
    HE/HE\*.
-3. **Decryption and anti-circumvention.** Milestone 6 needs the SR2
+3. **Decryption and anti-circumvention.** Milestone 7 needs the SR2
    keystream for the levels and white balance of older files and for
    Sony's white level on all of them; the key is stored in the file. Does
    decrypting it count as circumventing a technological measure under
@@ -86,7 +86,7 @@ answer Part 2.
    - the A100 keeps its white balance in a Minolta MRW block, and where its
      levels are is unknown.
 
-   Which of these milestone 6 decodes, and whether the rest return a typed
+   Which of these milestone 7 decodes, and whether the rest return a typed
    unsupported error, is to be decided. The pages suggest SRF and ARQ
    later, and the MRW block and SRF key chain behind "unsupported" until
    there is demand.

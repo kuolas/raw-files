@@ -326,7 +326,7 @@ A5. **No next-IFD pointer in Sony MakerNotes and the SR2SubIFD.** In modern
     4051). **[F]** Milestone 3 needs no decryption: make, model,
     orientation, dates and the crop tags are plain in every file. **[F]**
 
-### Milestone 6: raw data
+### Milestone 7: raw data
 
 A6. **SR2Private as a bounded sub-slice (when relevant).** Black level,
     white level and white balance of every ARW 2.x and later file are in the

@@ -9,7 +9,8 @@ cited where it is used.
 
 These pages support the [roadmap](../../ROADMAP.md): ARW previews
 (milestone 2), then basic metadata (milestone 3), then focus points
-(milestone 4), then raw decoding (milestone 6).
+(milestone 4), then full metadata (milestone 6), then raw decoding
+(milestone 7).
 
 ## Status
 
@@ -43,7 +44,7 @@ was done and what it could not reach. The files checked are listed in
 |---|---|
 | [container-and-previews.md](container-and-previews.md) | The TIFF structure of each member of the family, where the embedded JPEGs are, and how to pick the largest (milestone 2) |
 | [makernote-and-metadata.md](makernote-and-metadata.md) | The Sony MakerNote, its two ciphers, SR2Private, and orientation, date, camera, size and lens (milestone 3) and the focus point (milestone 4) |
-| [raw-data.md](raw-data.md) | How the sensor data is stored: uncompressed, cRAW, 12-bit packed, ARW1, lossless tiles, M/S YCbCr, SR2, SRF, ARQ and the refused ARW 6.0 (milestone 6) |
+| [raw-data.md](raw-data.md) | How the sensor data is stored: uncompressed, cRAW, 12-bit packed, ARW1, lossless tiles, M/S YCbCr, SR2, SRF, ARQ and the refused ARW 6.0 (milestone 7) |
 | [security.md](security.md) | Past vulnerabilities in Sony parsers and the Sony additions to the NEF checklist |
 | [licences-and-references.md](licences-and-references.md) | Standards, existing implementations and their licences, what raw-files may reuse, and the legal questions |
 | [test-data.md](test-data.md) | Where sample files come from, which may be committed, a minimal body set, and the files checked |
@@ -166,7 +167,13 @@ the disagreement.
 - **Milestone 4, focus points:**
   - [makernote-and-metadata.md](makernote-and-metadata.md), the focus
     point section, with what the samples cover and what they do not.
-- **Milestone 6, raw decoding:**
+- **Milestone 6, full metadata:**
+  - [makernote-and-metadata.md](makernote-and-metadata.md), the key tags and
+    what each records, the camera settings, and the enciphered blocks with
+    what they hold.
+  - [open-questions.md](open-questions.md), for what must be decided before
+    an enciphered block is read.
+- **Milestone 7, raw decoding:**
   - [raw-data.md](raw-data.md).
   - [makernote-and-metadata.md](makernote-and-metadata.md), for SR2Private,
     the keystream, white balance and the levels.

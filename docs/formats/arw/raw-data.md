@@ -6,7 +6,7 @@ how decoders tell the layouts apart, the ARW1 and cRAW lossy schemes, the
 packed and uncompressed layouts, the lossless tiles and their YCbCr M/S
 variant, the ARW 6.0 codec that raw-files will refuse, the encrypted SRF
 data and the four-sample ARQ. It ends with the levels, the checks a decoder
-of untrusted input needs and a recommendation for milestone 6.
+of untrusted input needs and a recommendation for milestone 7.
 
 Back to [the ARW overview](README.md).
 
@@ -726,7 +726,7 @@ ignores it in favour of its table. [4][12][18] **[P]**
 ## ARW 6.0 (Compression 32766)
 
 **raw-files will detect and refuse these files** with a typed unsupported
-error for milestone 6, until two questions are decided: the provenance of
+error for milestone 7, until two questions are decided: the provenance of
 the 4096-entry curve that the file does not store, and the patent position.
 This is the same posture as Nikon's HE/HE\* (see
 [../nef/raw-data.md](../nef/raw-data.md)). Previews from ARW 6.0 files are
@@ -1260,7 +1260,7 @@ checklist ([../nef/raw-data.md](../nef/raw-data.md)) applies as well.
 
 ## Recommendation for raw-files
 
-For milestone 6: **[I]**
+For milestone 7: **[I]**
 
 - **First:**
   - uncompressed 16-bit words (Compression 1, B = 2·W·H), including the

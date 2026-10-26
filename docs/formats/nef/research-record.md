@@ -19,7 +19,7 @@ format that raw-files needs for three of the roadmap milestones:
 - milestone 1: find and return the largest embedded JPEG preview;
 - milestone 3: read basic metadata (orientation, capture date, camera,
   dimensions);
-- milestone 6: decode the raw sensor data.
+- milestone 7: decode the raw sensor data.
 
 The research also had to establish two practical points:
 
