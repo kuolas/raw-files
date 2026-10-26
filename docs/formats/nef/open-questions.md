@@ -126,8 +126,10 @@ and test-data.md describes the sample set that would answer Part 2.
 - **Truncation and padding.** How common truncated JPEGs or padding after the
   end-of-image marker are in real files. The Z 9 has neither: each JPEG ends
   with the end-of-image marker exactly at its declared length (files 5146 to
-  5148), as does every JPEG of the other 32 files of the CI set; other
-  bodies are open
+  5148), as does every JPEG of the other 32 files of the CI set. Of 4,942
+  files from the maintainer's D600 and D3200, none is truncated and nine
+  declare a length 513 bytes past the end-of-image marker, with leftover
+  bytes rather than padding after it; other bodies are open
   ([container-and-previews.md](container-and-previews.md)).
 - **Preview Exif.** Whether a SubIFD or PreviewIFD JPEG ever carries its own
   Exif APP1 with an Orientation. Not on the Z 9, whose JPEGs have no APP
