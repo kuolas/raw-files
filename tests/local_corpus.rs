@@ -53,7 +53,11 @@
 //! of a file that opens as JPEG, which is the whole file. Such a file must
 //! also hold its own image's end marker, after its first scan, not only
 //! its thumbnail's. Other data after the last end marker fails a RAW
-//! file's preview, and is only counted in a JPEG file's. The metadata
+//! file's preview, and is only counted in a JPEG file's; except that a
+//! NEF file's preview may end before its declared length in the shape
+//! the D600 and the D3200 sometimes write, a length 2 more than a
+//! multiple of 512 with up to 513 bytes of other data after the image's
+//! own end marker, which is counted as a preview that ends early. The metadata
 //! counts are printed for the reader of the output to judge, since what a
 //! folder's cameras record varies: a body that writes no serial number, or
 //! no sub-seconds, is not a failure of the library.
@@ -408,6 +412,13 @@ struct Tally {
     failures: BTreeMap<String, usize>,
     no_preview: usize,
     not_whole_jpeg: usize,
+    /// NEF files whose largest preview ends before its declared length in
+    /// the shape [`ends_early`] accepts: a whole JPEG with up to
+    /// [`LEFTOVERS_AFTER_END`] bytes of other data after its end marker.
+    /// Printed, not asserted: the D600 and the D3200 write such a preview
+    /// about once in 500 files, and a person reads the count, as every
+    /// other count here.
+    ends_early: usize,
     /// Files that opened as JPEG whose largest preview, the whole file,
     /// holds other data than padding after its last end marker. Printed,
     /// not asserted: the data belongs to the file.
@@ -455,7 +466,14 @@ impl Tally {
         println!("failures by kind: {:?}", self.failures);
         println!("no preview: {}", self.no_preview);
         println!("not a whole JPEG: {}", self.not_whole_jpeg);
-        // Only a file that opened as JPEG can have other data after the end.
+        // Only a NEF file's preview can end early, and only a file that
+        // opened as JPEG can have other data after the end.
+        if self.formats.contains_key(&Format::Nef) {
+            println!(
+                "previews that end before their declared length, by up to {LEFTOVERS_AFTER_END} bytes: {}",
+                self.ends_early
+            );
+        }
         if self.formats.contains_key(&Format::Jpeg) {
             println!(
                 "files with other data after the last end marker: {}",
@@ -635,6 +653,10 @@ fn walk(dir: &Path, visit: &mut impl FnMut(PathBuf)) -> usize {
 enum Wholeness {
     /// A whole JPEG: the end marker, then nothing but padding.
     Whole,
+    /// A whole JPEG in a NEF file's preview that ends before its declared
+    /// length in the shape [`ends_early`] accepts: its own end marker is
+    /// followed by other data, at most [`LEFTOVERS_AFTER_END`] bytes of it.
+    EndsEarly,
     /// A whole JPEG file whose last end marker is followed by data other
     /// than padding.
     OtherDataAfterEnd,
@@ -642,11 +664,46 @@ enum Wholeness {
     NotWhole,
 }
 
+/// How many bytes of other data may follow the end marker of a NEF file's
+/// preview before the preview is not whole. The D600 and the D3200 write,
+/// about once in 500 files, a preview whose declared length is 2 more
+/// than a multiple of 512 while the image ends 513 bytes earlier, with
+/// the write buffer's leftovers after it, as
+/// `docs/formats/nef/container-and-previews.md` records in its section
+/// on generational quirks; the image is whole and a decoder stops at the
+/// marker. One byte more is not a case any file has shown.
+const LEFTOVERS_AFTER_END: usize = 513;
+
+/// Whether `bytes`, a RAW file's preview of `format` that holds other
+/// data after its last end marker, has the shape of the D600's and the
+/// D3200's habit, and so ends early rather than failing. Three things
+/// must hold, each one a part of what those files show: the file is a
+/// NEF; the declared length is 2 more than a multiple of 512, as a count
+/// of 512-byte blocks plus 2 would be; and at most
+/// [`LEFTOVERS_AFTER_END`] bytes follow the image's own end marker, the
+/// one [`main_image_end`] finds by walking the segments from the start,
+/// so that, within this check, an end marker lying among the leftovers,
+/// which the write buffer may well hold, neither shortens the measure
+/// nor passes a longer overrun. (Leftovers that end in an end marker, or
+/// in one and then `FF` bytes, never reach this check: [`wholeness`]
+/// judges a RAW preview whole by its last end marker, as before.) A scan
+/// cut short and followed by leftovers that hold an end marker cannot be
+/// told from a whole one without decoding the image; the three
+/// conditions together make that a rare coincidence. Any other raw
+/// preview, and any other shape, stays as strict as before.
+fn ends_early(bytes: &[u8], format: Format) -> bool {
+    format == Format::Nef
+        && bytes.len() % 512 == 2
+        && main_image_end(bytes)
+            .is_some_and(|own_end| bytes.len() - (own_end + 2) <= LEFTOVERS_AFTER_END)
+}
+
 /// Whether `bytes`, the largest preview of a file that opened as `format`,
 /// are a whole JPEG: `expected_len` bytes long, as the preview says,
 /// starting with the start marker `FF D8 FF`, and holding the end marker
 /// `FF D9` with nothing after its last one but padding, or, in a file that
-/// opened as JPEG, with other data after it.
+/// opened as JPEG, with other data after it, or, in a NEF file's preview
+/// of the shape [`ends_early`] accepts, with leftovers after it.
 ///
 /// A file that opened as JPEG must also hold its own image's end marker,
 /// which [`main_image_end`] looks for after the image's first scan. Its
@@ -654,9 +711,11 @@ enum Wholeness {
 /// with an end marker of its own; a file cut inside its image, or whose
 /// bytes after the Exif segment were lost to zeros, still holds those, and
 /// a thumbnail's end marker must not stand for the image's. A RAW file's
-/// preview is checked by its last end marker alone: it is one JPEG that
-/// the reader found by its offset and length, and its last bytes are the
-/// ones that show whether that range holds all of it.
+/// preview is judged whole by its last end marker alone: it is one JPEG
+/// that the reader found by its offset and length, and its last bytes are
+/// the ones that show whether that range holds all of it. Only when other
+/// data follows that marker does [`ends_early`] look for the image's own
+/// end marker, to measure the leftovers from it.
 ///
 /// Two kinds of padding are known. Some Sony cameras write `FF` fill
 /// bytes after the end marker, inside the length the file declares: the
@@ -667,13 +726,16 @@ enum Wholeness {
 /// itself, every byte of it, which some Sony cameras pad with zeros after
 /// the last end marker, up to a multiple of 64 KiB. So zeros are padding
 /// too, for a file that opened as JPEG and only for one: no preview a RAW
-/// file embeds is known to end in zeros, so the check stays strict there.
+/// file embeds is known to end in zeros, so zeros there are other data,
+/// like any other byte.
 ///
 /// Since that preview is the whole file, other data after its last end
 /// marker, such as a record a website appends to the files it serves,
 /// belongs to the file, not to a range the reader chose: it is counted
 /// apart, not as a failure. In a RAW file's preview, other data is a
-/// failure.
+/// failure, unless the preview has the shape the D600 and the D3200
+/// write, which [`ends_early`] judges: then the preview ends early, which
+/// is counted apart too.
 fn wholeness(bytes: &[u8], expected_len: u64, format: Format) -> Wholeness {
     let starts_whole = u64::try_from(bytes.len()).is_ok_and(|len| len == expected_len)
         && bytes.starts_with(&[0xFF, 0xD8, 0xFF]);
@@ -689,18 +751,22 @@ fn wholeness(bytes: &[u8], expected_len: u64, format: Format) -> Wholeness {
         return Wholeness::NotWhole;
     };
     let is_padding = |byte: u8| byte == 0xFF || (byte == 0x00 && jpeg_file);
-    if bytes[end_marker + 2..].iter().all(|&byte| is_padding(byte)) {
+    let after_end = &bytes[end_marker + 2..];
+    if after_end.iter().all(|&byte| is_padding(byte)) {
         Wholeness::Whole
     } else if jpeg_file {
         Wholeness::OtherDataAfterEnd
+    } else if ends_early(bytes, format) {
+        Wholeness::EndsEarly
     } else {
         Wholeness::NotWhole
     }
 }
 
-/// Where the end marker of the image of a JPEG file, `bytes`, lies, or
-/// `None` when it has none. Walked here rather than asked of the library,
-/// so that the test does not take the library's word for it.
+/// Where the end marker of the image of `bytes`, a JPEG file or a RAW
+/// file's preview, lies, or `None` when it has none. Walked here rather
+/// than asked of the library, so that the test does not take the
+/// library's word for it.
 ///
 /// The walk goes from the start marker over the marker segments to the
 /// first scan header (SOS, `FF DA`): each segment is `FF`, its code and a
@@ -806,6 +872,7 @@ fn check(path: &Path, tally: &mut Tally) {
     match raw.read_preview(&preview) {
         Ok(bytes) => match wholeness(&bytes, preview.byte_len(), format) {
             Wholeness::Whole => {}
+            Wholeness::EndsEarly => tally.ends_early += 1,
             Wholeness::OtherDataAfterEnd => tally.other_data_after_end += 1,
             Wholeness::NotWhole => tally.not_whole_jpeg += 1,
         },
@@ -1125,16 +1192,82 @@ fn ff_fill_after_a_raw_previews_end_is_padding() {
     assert_eq!(wholeness_of(&bytes, Format::Nef), Wholeness::Whole);
 }
 
+/// `count` bytes of other data, neither `FF` nor zero, as a write
+/// buffer's leftovers might read.
+fn leftovers(count: usize) -> Vec<u8> {
+    (0..count).map(|i| 1 + (i % 254) as u8).collect()
+}
+
+/// A raw preview in the shape the D600 and the D3200 write: a whole JPEG,
+/// its scan padded so that the image's bytes plus `after` make a length
+/// `residue` more than a multiple of 512, then `after` as the leftovers.
+/// The nine files have `residue` 2, as a count of blocks plus 2 gives.
+fn preview_ending_early(after: &[u8], residue: usize) -> Vec<u8> {
+    let image = jpeg_file(SCAN);
+    let padding = (512 + residue - (image.len() + after.len()) % 512) % 512;
+    let mut bytes = jpeg_file(&[SCAN, &vec![0x12; padding]].concat());
+    bytes.extend_from_slice(after);
+    assert_eq!(bytes.len() % 512, residue);
+    bytes
+}
+
 #[test]
-fn zeros_after_a_raw_previews_end_are_not_padding() {
-    let mut bytes = jpeg_file(SCAN);
-    bytes.extend_from_slice(&[0x00; 64]);
+fn a_nef_preview_with_leftovers_after_its_end_ends_early_up_to_the_bound() {
+    // Zeros are other data in a raw preview, not padding, so they are
+    // leftovers too.
+    for count in [10, LEFTOVERS_AFTER_END] {
+        for after in [leftovers(count), vec![0x00; count]] {
+            let bytes = preview_ending_early(&after, 2);
+            assert_eq!(
+                wholeness_of(&bytes, Format::Nef),
+                Wholeness::EndsEarly,
+                "{count} bytes after the end"
+            );
+            // Another raw format's preview stays strict.
+            assert_eq!(wholeness_of(&bytes, Format::Arw), Wholeness::NotWhole);
+        }
+        // A JPEG file's own bytes after the end are other data, as before.
+        assert_eq!(
+            wholeness_of(&preview_ending_early(&leftovers(count), 2), Format::Jpeg),
+            Wholeness::OtherDataAfterEnd
+        );
+    }
+}
+
+#[test]
+fn a_nef_preview_with_more_leftovers_than_the_bound_is_not_whole() {
+    let bytes = preview_ending_early(&leftovers(LEFTOVERS_AFTER_END + 1), 2);
     assert_eq!(wholeness_of(&bytes, Format::Nef), Wholeness::NotWhole);
 }
 
 #[test]
-fn other_data_after_a_raw_previews_end_is_not_whole() {
-    let mut bytes = jpeg_file(SCAN);
-    bytes.extend_from_slice(b"other data");
-    assert_eq!(wholeness_of(&bytes, Format::Nef), Wholeness::NotWhole);
+fn a_nef_preview_whose_declared_length_is_not_2_past_a_block_is_not_whole() {
+    for residue in [1, 3] {
+        let bytes = preview_ending_early(&leftovers(LEFTOVERS_AFTER_END), residue);
+        assert_eq!(
+            wholeness_of(&bytes, Format::Nef),
+            Wholeness::NotWhole,
+            "a length {residue} more than a multiple of 512"
+        );
+    }
+}
+
+#[test]
+fn the_leftovers_are_measured_from_the_images_own_end_marker() {
+    // Leftovers that hold an end marker of their own, near their end:
+    // within the bound from the image's own marker they end early, and
+    // one byte beyond it they fail, though the last marker lies nearer.
+    for (count, expected) in [
+        (LEFTOVERS_AFTER_END, Wholeness::EndsEarly),
+        (LEFTOVERS_AFTER_END + 1, Wholeness::NotWhole),
+    ] {
+        let mut after = leftovers(count);
+        after.splice(count - 4..count - 2, [0xFF, 0xD9]);
+        let bytes = preview_ending_early(&after, 2);
+        assert_eq!(
+            wholeness_of(&bytes, Format::Nef),
+            expected,
+            "{count} bytes after the end"
+        );
+    }
 }

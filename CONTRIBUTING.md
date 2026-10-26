@@ -265,7 +265,12 @@ one file. A preview may end in padding after the image's end marker, as
 some Sony cameras write it: `FF` bytes in any file, and zeros in a JPEG
 file, whose largest preview is the whole file and must hold its own image's
 end marker, not only its thumbnail's. Other data there fails a RAW file's
-preview, and is only counted in a JPEG file. It fails on a folder it cannot
+preview, and is only counted in a JPEG file; except that a NEF file's
+preview may end before its declared length in the shape the D600 and
+the D3200 write about once in 500 files, a length 2 more than a
+multiple of 512 with up to 513 bytes of other data after the image's
+own end marker, which is counted as a preview that ends early. It fails
+on a folder it cannot
 read, that holds no file of a format raw-files reads, or that holds an entry
 it cannot read. Run it with `--release`, because it reads every file:
 
