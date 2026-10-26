@@ -156,8 +156,9 @@ and test-data.md describes the sample set that would answer Part 2.
 - **Focus point.** What no sample shows yet
   ([makernote-and-metadata.md](makernote-and-metadata.md#86-focus-point),
   its section 11):
-  - a DSLR in live view on a DX or 1.2x crop: the cropped or the full
-    frame;
+  - a DSLR in live view on a DX or 1.2x crop on a body with a CropArea:
+    the maintainer's D7200, which has none, records the cropped frame
+    in its 1.3x movie crop;
   - CropHiSpeed's sizes on uncropped files, after the D810's four-pixel
     difference under mode 11 (file 2036);
   - which bodies write FaceDetect (0x0021);
@@ -165,7 +166,13 @@ and test-data.md describes the sample set that would answer Part 2.
     at 1:1 on an FX body: scaled like DX or a window like 1:1;
   - where an aspect crop's window lies: centred, as raw-files assumes,
     or at CropHiSpeed's offsets, up to eight pixels away;
-  - whether a Z body records a crop mode on a small raw, and how.
+  - whether a Z body records a crop mode on a small raw, and how;
+  - the bit order of the mask of points used on every layout but the
+    39-point, measured on the maintainer's D600, and the 11-point,
+    which ExifTool documents
+    ([autofocus-points.md](autofocus-points.md));
+  - what the point fields of the 0101 and 03xx versions hold beside a
+    valid point, beyond their presence on the D850 and the D780.
 
 ### Raw data
 

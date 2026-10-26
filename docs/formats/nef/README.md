@@ -36,7 +36,11 @@ listed in the
 [JPEG test data](../jpeg/test-data.md#6-early-coolpix-files-checked-by-hand)).
 The tests check the previews of all 35, and test-data.md records them, but
 the containers of the 32 files of 25 other bodies are not yet written up
-in these pages. The raw data was not
+in these pages. On 26 October 2026 the autofocus points of a D600 were
+measured on 56 frames shot with the maintainer's own D600, read in
+Nikon's NX Studio as a reader to compare with
+([autofocus-points.md](autofocus-points.md)); the frames stay private
+and are cited by counts and frame numbers. The raw data was not
 checked, beyond the raw IFD's tags and the first bytes of the Z 9's strip.
 **Everything else has yet to be checked against sample files.** Byte
 offsets and formulas taken from other projects' source code should be
@@ -51,6 +55,7 @@ describes how the research was done and what it could not reach.
 |---|---|
 | [container-and-previews.md](container-and-previews.md) | The TIFF structure of a NEF, where the embedded JPEGs are, and how to pick the largest (milestone 1) |
 | [makernote-and-metadata.md](makernote-and-metadata.md) | The Nikon MakerNote, its encrypted blocks, and orientation, date, camera and size (milestone 3) and the focus point (milestone 4) |
+| [autofocus-points.md](autofocus-points.md) | The procedure by which a body's autofocus points are measured, and the record of each body measured, the D600 first (milestone 4) |
 | [raw-data.md](raw-data.md) | How the sensor data is stored: Huffman compression, packed layouts, small raws, HE/HE\* (milestone 7) |
 | [security.md](security.md) | Past vulnerabilities in NEF parsers and the checklist that follows from them |
 | [licences-and-references.md](licences-and-references.md) | Standards, existing implementations and their licences, and what raw-files may reuse |

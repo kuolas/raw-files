@@ -20,12 +20,17 @@ licences do not allow copying code; see [Licences](#licences)). Claims carry
 a confidence tag: **[P]** primary (specification, tag documentation or
 implementation source), **[S]** secondary (write-ups, forum posts, sample
 listings), **[I]** inferred, and **[F]** measured on a named sample file,
-cited by its raw.pixls.us id ("file 928"). The MakerNote layout and the
+cited by its raw.pixls.us id ("file 928"). A fact measured on the
+maintainer's own files, which stay private, says so and cites them by
+counts only, or by the frame numbers of a session. The MakerNote
+layout and the
 viewer metadata (sections 1, 2 and 8) were checked in October 2026 on 23
 CC0 files from the D1H to the Z6III, listed in
 [test-data.md](test-data.md#21-the-ci-set), and the focus point
 (section 8.6) on those and seven more CC0 files, listed in
-[test-data.md](test-data.md#23-files-checked-for-the-focus-point), and the
+[test-data.md](test-data.md#23-files-checked-for-the-focus-point), and on
+56 frames shot with the maintainer's own D600, recorded in
+[autofocus-points.md](autofocus-points.md), and the
 camera settings (section 8.7) on the 35 files of the CI set and two
 Nikon camera JPEGs, listed in
 [test-data.md](test-data.md#24-files-checked-for-the-camera-settings),
@@ -726,8 +731,8 @@ raw-files reads it or not:
 |---|---|---|---|
 | 0x00B7 AFInfo2, position fields | the size of a frame, the centre of the focus area and the area's size in that frame | mirrorless bodies, and DSLRs in live view **[F]** | read, at the versions of the table below |
 | 0x00B7 AFInfo2, in-focus byte | whether focus was confirmed: FocusResult on 04xx, ContrastDetectAFInFocus on 0100 and 0101 | Z 9, Z f, Z6III, Z50II, Z5II, D7000, D5600, D5, Coolpix A **[F]** | read; on 0100 the flag is byte 28, where ExifTool also lists a 20-byte AFPointsSelected that cannot fit in the 30-byte value |
-| 0x00B7 AFInfo2, point fields | the primary point's number, a mask of the points used, and the layout of points (FocusPointSchema) | DSLRs through the viewfinder, the Nikon 1 J1, the Z5II in auto-area mode **[F]** | not read: a number needs a table of the body's points, which no file carries |
-| 0x00B7 AFInfo2, AFPointsInFocus | a mask of the points in focus, version 0101 only (byte 48) [P] | the D850, one point **[F]** | not read: a mask, needs the same table |
+| 0x00B7 AFInfo2, point fields | the primary point's number, a mask of the points used, and the layout of points (FocusPointSchema) | DSLRs through the viewfinder, the Nikon 1 J1, the Z5II in auto-area mode **[F]** | a number is to be placed from a table of the body's points, measured by the project on frames shot with that body ([autofocus-points.md](autofocus-points.md)); the D600's is the first, and a body without a table is to give none, counted |
+| 0x00B7 AFInfo2, AFPointsInFocus | a mask of the points in focus, version 0101 only (byte 48) [P] | the D850, one point **[F]** | not read: a mask of version 0101, which needs a table of a body that writes that version |
 | 0x0088 AFInfo | 4 bytes: area mode, point number, mask of the points in focus [P] | the bodies without AFInfo2: D1H, D1X, D70, D100, D200, E5700, P7800 **[F]** | not read: a number only |
 | 0x0021 FaceDetect | a frame size and up to twelve face rectangles in it [P] | none of the 35 files **[F]** | not read: no sample |
 | 0x0007 FocusMode | an ASCII string [P][1]: `MANUAL`, or an AF mode padded with spaces to six characters (`AF-S  `, `AF-C  `, `AF-A  `) **[F]** | `MANUAL` on the D300 and D850, both viewfinder shots with a zero frame (files 928, 1835), and on the Z fc, which records a position under it (file 8559); an AF mode on every other file with the embedded MakerNote, the maintainer's Z 9 shots included **[F]** | read: `MANUAL`, after trimming, gives no focus point |
@@ -761,6 +766,31 @@ versions 0100, 0101, 0300, 0301, 0400, 0401 and 0402 (ADR012). The 0101
 offsets are checked on the D5's live-view file, the only one that fills
 them (file 2218), and version 0301, at the 03xx offsets, on the Z 30's
 and the Z fc's (files 5812, 8559).
+
+**The point fields.** Where each version keeps the layout code
+(FocusPointSchema), the primary point's number, the mask of the points
+used and, on one version, a mask of the points in focus, read in
+ExifTool's published tables [P][1] and checked on the files named. The
+offsets count from the start of the value; a mask's length is the one
+ExifTool lists for the layout or the body:
+
+| Version | Layout code | Primary point | Mask of points used | Mask of points in focus | Checked on |
+|---|---|---|---|---|---|
+| `0100` | 6 | 7 | 8, up to 7 bytes; the D600's 39 bits lie in the first five | none | 56 frames and 1,374 files of the maintainer's D600 (layout 3, the 39-point), and the maintainer's 3,568 D3200 files (layout 2, the 11-point, numbers 1 to 11) and 647 D300s, 400 D7100 and 6,277 D7200 files (layout 1, the 51-point) **[F]**; the D810 (layout 1, point 3, one bit), the D750 (point 1, one bit), the D700 (point 1, no bit) and the D300 (layout 0, point 0, manual focus) (files 2036, 895, 2255, 928) **[F]** |
+| `0101` | 6 | 68 | 8, up to 20 bytes by the layout | 48, up to 20 bytes | the D850: layout 7 (the 153-point), point 1, no bit, manual focus (file 1835) **[F]**; the D5 in live view: layout 0, point 0 (file 2218) **[F]** |
+| `0200` | 6 | 7 | 8, 29 bytes | none | the Nikon 1 J1: layout 4, point 1, one bit (file 2956) **[F]** |
+| `0300`, `0301` | 6 | 56 | 10, 7, 11 or 14 bytes by the layout | none | the D780: layout 1, point 34, 30 bits (file 3827) **[F]** |
+| `0400` to `0402` | none | none | 10, 51, 38 or 29 bytes by the body | none | the Z5II in auto-area mode: 28 bits (files 7735, 7736) **[F]** |
+
+The layout codes seen, with ExifTool's names for them [P][1]: 0, no
+layout, on every live-view and manual-focus file; 1, the 51-point
+layout; 2, the 11-point; 3, the 39-point; 4, the Nikon 1's; 7, the
+153-point. **[F]** The mask's bit order is bit number − 1, counting
+from the least significant bit of the first byte, on the D600's
+39-point layout, measured on 45 frames that each set exactly one bit
+([autofocus-points.md](autofocus-points.md#23-the-masks-bit-order))
+**[F]**; ExifTool documents that order for the 11-point layout [P][1];
+the other layouts are unmeasured.
 
 What the fields hold:
 
@@ -849,7 +879,25 @@ What the fields hold:
   above, with a detection method of 1 (contrast) on the D7000, D5600, D5
   and Coolpix A and 2 (hybrid) on the Z bodies, are the ones that fill them.
   **[F]** Mapping a point number to pixels needs a table of the body's
-  points, which no file carries (ADR012).
+  points, which no file carries (ADR012). raw-files is to measure such
+  tables itself, one body at a time, on frames shot with the body and
+  read in the maker's software. The D600's is measured: the record,
+  with the layout, the bit order, the box of 164x164 and the 39 centres
+  in the 6016x4016 output frame, is in
+  [autofocus-points.md](autofocus-points.md#2-nikon-d600). On a DX
+  frame the point placed from the table shifts by CropHiSpeed's
+  origin, (1040, 696) on the D600, within 2 pixels of where NX Studio
+  draws it. **[F]**
+- **A DSLR in live view on a crop records the cropped frame.** One of
+  the maintainer's D7200 files, shot in live view in the 1.3x movie
+  crop, CropHiSpeed `[10, 6016, 4016, 4840, 2712, 576, 248]`, records
+  an AFInfo2 frame of 4800x2696, 40 and 16 pixels less than the cropped
+  size CropHiSpeed records, while its 155 other live-view files,
+  uncropped, record 6000x4000 in a 6016x4016 raw; 168 of its 6,277
+  files are 1.3x stills, `[1, 6016, 4016, 4840, 3208, 576, 0]`, none
+  of them in live view. **[F]** The frame is the cropped picture, so
+  the point is placed as recorded. Whether a body with a CropArea does
+  the same is open ([section 11](#11-open-questions)).
 - **The coordinates flag (byte 7 of 03xx and 04xx)** is 1 on every
   sample with a position and 0 on the D780 viewfinder shot and the Z5II
   auto-area files. **[F]** ExifTool notes that on 04xx either the mask
@@ -875,7 +923,11 @@ What the fields hold:
 - **In a camera JPEG**, the D5300's AFInfo2 is version 0100 with a zero
   frame and area, a shot through the viewfinder, and the D70 JPEG writes
   only AFInfo (0x0088): neither gives a point. **[F]** No public Nikon
-  JPEG in the set records a position. A JPEG keeps a point only when its
+  JPEG in the set records a position. The 56 JPEGs of the maintainer's
+  D600 session carry the same AFInfo2 and CropHiSpeed as the NEF of the
+  same frame
+  ([autofocus-points.md](autofocus-points.md#22-what-the-body-writes)).
+  **[F]** A JPEG keeps a point only when its
   frame has the JPEG's aspect ratio, so that an export cropped to another
   shape, which may keep the camera's MakerNote, gives none
   ([ADR014](../../architecture-decisions/adr014-jpeg-files-as-a-format-of-their-own.md)),
@@ -911,10 +963,11 @@ and what raw-files gives; a row without a file is an open question
 | Mirrorless small raw | a position in the full frame | Z 6 3587 | the point, in the full frame |
 | Mirrorless, auto-area with only a mask | a mask | Z5II 7735, 7736 | none: needs a table of points |
 | DSLR in live view | a position | D7000 961, D5600 1415, D5 2218, Coolpix A 2238 | the point |
-| DSLR in live view on a DX or 1.2x crop | unknown: the cropped or the full frame | none | the point, by the crop rule; unchecked |
+| DSLR in live view on a crop | the cropped frame | none public; one of the maintainer's D7200 files, in the 1.3x movie crop | the point as recorded, in the cropped frame; unchecked on a body with a CropArea |
 | A `0101` body in live view | a position, at ExifTool's offsets | D5 2218 | the point; checked |
 | A `0301` body | a position, at the 03xx offsets | Z 30 5812, Z fc 8559 | the point, none on 8559, a manual-focus shot; checked |
-| DSLR through the viewfinder | a point number and a mask | D300 928, D700 2255, D750 895, D810 2036, D850 1835, D780 3827 | none: needs a table of points; 928 and 1835 are manual-focus shots, which get none in any case |
+| DSLR through the viewfinder, a body with a table | a point number and a mask | none public; the maintainer's D600 frames and files ([autofocus-points.md](autofocus-points.md#2-nikon-d600)) | the point placed from the table, and the points the mask names |
+| DSLR through the viewfinder, any other body | a point number and a mask | D300 928, D700 2255, D750 895, D810 2036, D850 1835, D780 3827 | none: no table for the body, to be counted; 928 and 1835 are manual-focus shots, which get none in any case |
 | Nikon 1 | a point number and a mask | J1 2956 | none: needs a table of points |
 | Bodies without AFInfo2 | AFInfo: a point number | D1H 5364, D70 2060, D100 2996, D200 8079, E5700 4456, P7800 1425 | none: needs a table of points |
 | Manual focus | FocusMode `MANUAL`; a zero frame through the viewfinder | D300 928, D850 1835 | none |
@@ -923,7 +976,7 @@ and what raw-files gives; a row without a file is an open question
 | A DX crop on a small raw | unknown | none | the point, scaled onto CropArea in stored pixels; unchecked |
 | A rotated (portrait) shot | a position in the landscape frame | Z 30 5812 | the point, in stored orientation; checked |
 | Face detection | FaceDetect | none | not read |
-| Camera JPEG through the viewfinder | a zero frame (`0100`) | the D5300 JPEG from Wikimedia Commons | none |
+| Camera JPEG through the viewfinder | a zero frame (`0100`) with a point number and a mask, as in the NEF of the same frame | the D5300 JPEG from Wikimedia Commons; the maintainer's D600 JPEGs | none for the D5300, which has no table; the D600's point to be placed from the table, as in its NEF |
 | Camera JPEG with a position | a position | none public | the point, when its frame has the JPEG's aspect ratio; unchecked on a public file |
 | Camera JPEG in a crop mode (DX, 1:1, 16:9), at any image size | a position in the full frame, no CropArea | none public; the maintainer's Z 9 shots | the point, placed on the JPEG's picture; unchecked on a public file |
 | Exported JPEG that keeps the camera's MakerNote | the camera's frame and position | none public | the point only when the frame has the export's aspect ratio |
@@ -1481,10 +1534,12 @@ For milestone 3, keep the MakerNote out of the critical path.
 11. **Version 0301.** Answered: it has the 03xx layout, 60 bytes with the
     position at the 0300 offsets, on the Z 30 and the Z fc (files 5812,
     8559). **[F]**
-12. **A DSLR in live view on a DX or 1.2x crop.** Whether AFInfo2's frame
-    is then the cropped output or the full one. The crop rule needs a
-    CropArea, which no checked DSLR before the D5 writes; a live-view
-    crop file from a D5, D750, D810 or D850 would show it.
+12. **A DSLR in live view on a crop.** Answered for the D7200: AFInfo2's
+    frame is the cropped output, 4800x2696 in its 1.3x movie crop, on
+    one of the maintainer's files ([section 8.6](#86-focus-point)).
+    **[F]** Whether a DX or 1.2x crop on a D5, D750, D810 or D850 does
+    the same, and whether a CropArea then counts the crop, is open; no
+    public file shows one.
 13. **Manual focus on a Z body.** Answered: the Z fc writes a position
     in AFInfo2 under FocusMode `MANUAL`, centre (2520, 1856) and area
     288x319 in its 5568x3712 frame (file 8559). raw-files gives no focus
@@ -1499,11 +1554,13 @@ For milestone 3, keep the MakerNote out of the critical path.
     is better told by the mode code, or by a difference larger than a
     border, than by unequal sizes.
 16. **Tables of autofocus points.** Turning a point number or mask into a
-    position needs a table of each body's points, and a decision on where
-    such tables may come from
-    ([ADR012](../../architecture-decisions/adr012-focus-points-as-the-camera-records-them.md)).
-    ExifTool's tables give the order of the points by number and, for
-    the 11-point layout only, the bit order of the mask. [P][1]
+    position needs a table of each body's points. The D600's is
+    measured on frames shot with the maintainer's own body, with the
+    bit order of its mask ([autofocus-points.md](autofocus-points.md))
+    **[F]**; every other body's waits for a session on that body by the
+    same procedure. ExifTool's published tables give the order of the
+    points by number and, for the 11-point layout only, the bit order of
+    the mask. [P][1]
 17. **FaceDetect.** Which bodies write 0x0021; none of the 35 checked
     files does.
 18. **Crops that cut both sides and change the aspect**, such as a DX
@@ -1514,7 +1571,12 @@ For milestone 3, keep the MakerNote out of the critical path.
     CropHiSpeed's own offsets, in stored pixels, differ from that by up to
     eight pixels (936 against 928 on the Z50II's 1:1 file, 312 against
     316 on the Z6III's 16:9 file); an off-centre shot near an edge of the
-    window, on one of those bodies, would show which is right.
+    window, on one of those bodies, would show which is right. On the
+    D600, a body without a CropArea, the point placed from the table on
+    a DX frame shifts by CropHiSpeed's origin, (1040, 696), which is the
+    centred window's origin to the pixel
+    ([autofocus-points.md](autofocus-points.md#26-the-control-frames)).
+    **[F]**
 20. **A crop on a small raw.** Whether a Z body records a crop mode on a
     small raw, and how. The rule gives a 1:1 or 16:9 crop on one no focus
     point, since its CropArea counts stored pixels while AFInfo2's frame
@@ -1565,6 +1627,17 @@ For milestone 3, keep the MakerNote out of the critical path.
     and many of the maintainer's own D3200, D3300, D7100, D7200 and D600
     files record "not defined"; whether another tag records the program
     or scene mode those shots used is open.
+30. **The mask's bit order on the other layouts.** Measured on the
+    39-point layout only, bit number − 1 from the least significant bit
+    of the first byte, and documented by ExifTool for the 11-point
+    [P][1]; the 51-point, the 153-point and the Nikon 1 layouts, and the
+    Z bodies' masks, are unmeasured. Frames with known points on such a
+    body would show it.
+31. **The point fields of the 0101 and 03xx versions.** Their offsets
+    are ExifTool's [P][1], checked for presence only: the D850 names
+    point 1 at byte 68 and the D780 point 34 at byte 56 (files 1835,
+    3827). What a 0101 body's mask of points in focus (byte 48) holds
+    beside a valid point is on no checked file.
 
 ## Sources
 
