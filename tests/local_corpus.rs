@@ -201,8 +201,8 @@ struct SettingsTally {
     white_balance_modes: BTreeMap<&'static str, usize>,
     /// Files with a colour temperature, and the lowest and the highest
     /// recorded, `None` while no file has one.
-    kelvin: usize,
-    kelvin_range: Option<(u32, u32)>,
+    color_temperature: usize,
+    color_temperature_range: Option<(u32, u32)>,
     fine_tune: usize,
     fine_tunes: BTreeMap<Shifts, usize>,
     shutter: usize,
@@ -263,11 +263,11 @@ impl SettingsTally {
                 mode.name(),
             );
         }
-        if let Some(kelvin) = white_balance.kelvin() {
-            self.kelvin += 1;
-            self.kelvin_range = Some(match self.kelvin_range {
-                Some((lowest, highest)) => (lowest.min(kelvin), highest.max(kelvin)),
-                None => (kelvin, kelvin),
+        if let Some(temperature) = white_balance.color_temperature() {
+            self.color_temperature += 1;
+            self.color_temperature_range = Some(match self.color_temperature_range {
+                Some((lowest, highest)) => (lowest.min(temperature), highest.max(temperature)),
+                None => (temperature, temperature),
             });
         }
         if let Some(fine_tune) = white_balance.fine_tune() {
@@ -515,12 +515,12 @@ impl Tally {
             "files with a white balance mode: {}, by mode: {:?}",
             s.white_balance_mode, s.white_balance_modes
         );
-        match s.kelvin_range {
+        match s.color_temperature_range {
             Some((lowest, highest)) => println!(
                 "files with a colour temperature: {}, lowest: {lowest} K, highest: {highest} K",
-                s.kelvin
+                s.color_temperature
             ),
-            None => println!("files with a colour temperature: {}", s.kelvin),
+            None => println!("files with a colour temperature: {}", s.color_temperature),
         }
         // Each pair as the library gives it, written as fractions, such as
         // `(-24/4, 0/4): 3`, in the braces a map prints in.
@@ -915,7 +915,7 @@ fn the_settings_tally_counts_the_makernote_settings() {
     let first = CameraSettings::default()
         .with_white_balance(
             WhiteBalance::default()
-                .with_kelvin(4_000)
+                .with_color_temperature(4_000)
                 .with_fine_tune(towards_amber),
         )
         .with_electronic_front_curtain_setting(true)
@@ -925,14 +925,14 @@ fn the_settings_tally_counts_the_makernote_settings() {
     let second = CameraSettings::default()
         .with_white_balance(
             WhiteBalance::default()
-                .with_kelvin(3_050)
+                .with_color_temperature(3_050)
                 .with_fine_tune(towards_amber),
         )
         .with_electronic_front_curtain_setting(false);
     let third = CameraSettings::default()
         .with_white_balance(
             WhiteBalance::default()
-                .with_kelvin(5_200)
+                .with_color_temperature(5_200)
                 .with_fine_tune(FineTune::new(zero, zero)),
         )
         .with_electronic_front_curtain_setting(true);
@@ -942,8 +942,8 @@ fn the_settings_tally_counts_the_makernote_settings() {
         tally.record(&Metadata::default().with_camera_settings(settings));
     }
 
-    assert_eq!(tally.kelvin, 3);
-    assert_eq!(tally.kelvin_range, Some((3_050, 5_200)));
+    assert_eq!(tally.color_temperature, 3);
+    assert_eq!(tally.color_temperature_range, Some((3_050, 5_200)));
 
     assert_eq!(tally.fine_tune, 3);
     assert_eq!(
@@ -963,10 +963,10 @@ fn the_settings_tally_counts_the_makernote_settings() {
     assert_eq!(tally.raw_image_sizes, BTreeMap::from([("Small", 1)]));
 
     // Files without a colour temperature leave the range empty.
-    let mut without_kelvin = SettingsTally::default();
-    without_kelvin.record(&Metadata::default().with_camera_settings(fourth));
-    assert_eq!(without_kelvin.kelvin, 0);
-    assert_eq!(without_kelvin.kelvin_range, None);
+    let mut without_color_temperature = SettingsTally::default();
+    without_color_temperature.record(&Metadata::default().with_camera_settings(fourth));
+    assert_eq!(without_color_temperature.color_temperature, 0);
+    assert_eq!(without_color_temperature.color_temperature_range, None);
 }
 
 // The tests of `wholeness` and `main_image_end`, on JPEG files in

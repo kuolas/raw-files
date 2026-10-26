@@ -1559,8 +1559,8 @@ fn a_sony_jpeg_gives_the_camera_settings_its_makernote_records() {
         });
         let step = |n| SignedRational::new(n, 1).unwrap();
         let white_balance = WhiteBalance::default()
-            .with_mode(WhiteBalanceMode::Kelvin)
-            .with_kelvin(3200)
+            .with_mode(WhiteBalanceMode::ColorTemperature)
+            .with_color_temperature(3200)
             .with_fine_tune(FineTune::new(step(-3), step(0)));
         let settings = CameraSettings::default()
             .with_white_balance(white_balance)
@@ -1907,7 +1907,7 @@ struct StrippedZ9Jpeg {
     in_focus: bool,
     /// The colour temperature of the white balance the camera applied, in
     /// kelvin: the MakerNote's ColorTemperatureAuto.
-    kelvin: u32,
+    color_temperature: u32,
     /// The image area, from the crop setting of the MakerNote's
     /// CropHiSpeed.
     image_area: ImageArea,
@@ -1943,7 +1943,7 @@ const STRIPPED_Z9_FX_JPEG: StrippedZ9Jpeg = StrippedZ9Jpeg {
     focus_center: (4225, 2614),
     focus_size: (406, 406),
     in_focus: true,
-    kelvin: 5670,
+    color_temperature: 5670,
     image_area: ImageArea::FullFrame,
 };
 
@@ -1978,7 +1978,7 @@ const STRIPPED_Z9_DX_JPEG: StrippedZ9Jpeg = StrippedZ9Jpeg {
     focus_center: (669, 469),
     focus_size: (148, 168),
     in_focus: true,
-    kelvin: 5300,
+    color_temperature: 5300,
     image_area: ImageArea::ApsC,
 };
 
@@ -2016,7 +2016,7 @@ const STRIPPED_Z9_16X9_JPEG: StrippedZ9Jpeg = StrippedZ9Jpeg {
     focus_center: (878, 4072),
     focus_size: (162, 178),
     in_focus: true,
-    kelvin: 6130,
+    color_temperature: 6130,
     image_area: ImageArea::Wide,
 };
 
@@ -2144,7 +2144,7 @@ fn check_stripped_z9_jpeg(stripped: &StrippedZ9Jpeg) {
             .with_white_balance(
                 WhiteBalance::default()
                     .with_mode(WhiteBalanceMode::Auto)
-                    .with_kelvin(stripped.kelvin)
+                    .with_color_temperature(stripped.color_temperature)
                     .with_fine_tune(FineTune::new(zero, zero)),
             )
             .with_exposure_program(ExposureProgram::AperturePriority)
@@ -2489,7 +2489,7 @@ const METADATA: &[SampleMetadata] = &[
         }),
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
-            kelvin: None,
+            color_temperature: None,
             fine_tune: Some(SampleFineTune {
                 amber_blue: (0, 1),
                 green_magenta: (0, 1),
@@ -2538,7 +2538,7 @@ const METADATA: &[SampleMetadata] = &[
         }),
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
-            kelvin: None,
+            color_temperature: None,
             fine_tune: Some(SampleFineTune {
                 amber_blue: (0, 1),
                 green_magenta: (0, 1),
@@ -2582,7 +2582,7 @@ const METADATA: &[SampleMetadata] = &[
         focus: None, // manual focus
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Shade),
-            kelvin: None,
+            color_temperature: None,
             fine_tune: Some(SampleFineTune {
                 amber_blue: (0, 1),
                 green_magenta: (0, 1),
@@ -2626,7 +2626,7 @@ const METADATA: &[SampleMetadata] = &[
         focus: None, // no FocusLocation: a point number only (AFPointSelected)
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
-            kelvin: None,
+            color_temperature: None,
             fine_tune: Some(SampleFineTune {
                 amber_blue: (0, 1),
                 green_magenta: (0, 1),
@@ -2662,7 +2662,7 @@ const METADATA: &[SampleMetadata] = &[
         focus: None, // no FocusLocation: only the A100's Minolta block, which is not read
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
-            kelvin: None,
+            color_temperature: None,
             fine_tune: None,
             exposure_program: Some(ExposureProgram::ShutterPriority),
             metering_mode: Some(MeteringMode::MultiSegment),
@@ -2706,7 +2706,7 @@ const METADATA: &[SampleMetadata] = &[
         focus: None, // a viewfinder shot: a zero frame and only a point number
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
-            kelvin: None,
+            color_temperature: None,
             fine_tune: Some(SampleFineTune {
                 amber_blue: (0, 1),
                 green_magenta: (0, 1),
@@ -2750,7 +2750,7 @@ const METADATA: &[SampleMetadata] = &[
         focus: None, // no AFInfo2: AFInfo holds a point number only
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
-            kelvin: None,
+            color_temperature: None,
             fine_tune: None,
             exposure_program: Some(ExposureProgram::Program),
             metering_mode: Some(MeteringMode::MultiSegment),
@@ -2783,7 +2783,7 @@ const METADATA: &[SampleMetadata] = &[
         focus: None, // the MakerNote of a maker no reader reads
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
-            kelvin: None,
+            color_temperature: None,
             fine_tune: None,
             exposure_program: None,
             metering_mode: Some(MeteringMode::MultiSegment),

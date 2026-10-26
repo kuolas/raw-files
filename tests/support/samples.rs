@@ -223,7 +223,7 @@ pub struct SampleMetadata {
 /// a value read later changes one line of a row.
 pub struct SampleSettings {
     pub white_balance_mode: Option<WhiteBalanceMode>,
-    pub kelvin: Option<u32>,
+    pub color_temperature: Option<u32>,
     pub fine_tune: Option<SampleFineTune>,
     pub exposure_program: Option<ExposureProgram>,
     pub metering_mode: Option<MeteringMode>,
@@ -432,8 +432,8 @@ pub fn check_metadata(expected: &SampleMetadata, format: Format) {
         "{label}: white balance mode"
     );
     assert_eq!(
-        white_balance.kelvin(),
-        expected.kelvin,
+        white_balance.color_temperature(),
+        expected.color_temperature,
         "{label}: white balance colour temperature"
     );
     assert_eq!(

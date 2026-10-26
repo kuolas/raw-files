@@ -1046,7 +1046,7 @@ struct StrippedZ9 {
     focus_size: (u32, u32),
     /// The colour temperature of the white balance the camera applied, in
     /// kelvin: the MakerNote's ColorTemperatureAuto.
-    kelvin: u32,
+    color_temperature: u32,
     /// The image area, from the crop setting of the MakerNote's
     /// CropHiSpeed.
     image_area: ImageArea,
@@ -1068,7 +1068,7 @@ const STRIPPED_Z9_DX: StrippedZ9 = StrippedZ9 {
     focus_frame: (5392, 3592),
     focus_center: (415, 373),
     focus_size: (274, 305),
-    kelvin: 2830,
+    color_temperature: 2830,
     image_area: ImageArea::ApsC,
 };
 
@@ -1089,7 +1089,7 @@ const STRIPPED_Z9_1X1: StrippedZ9 = StrippedZ9 {
     focus_frame: (5504, 5504),
     focus_center: (421, 424),
     focus_size: (291, 323),
-    kelvin: 2860,
+    color_temperature: 2860,
     image_area: ImageArea::Square,
 };
 
@@ -1229,7 +1229,7 @@ fn check_stripped_z9(expected: &StrippedZ9) {
             .with_white_balance(
                 WhiteBalance::default()
                     .with_mode(WhiteBalanceMode::Auto)
-                    .with_kelvin(expected.kelvin),
+                    .with_color_temperature(expected.color_temperature),
             )
             .with_exposure_program(ExposureProgram::AperturePriority)
             .with_metering_mode(MeteringMode::MultiSegment)
@@ -2299,7 +2299,7 @@ const METADATA: &[SampleMetadata] = &[
         }),
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
-            kelvin: Some(4650),
+            color_temperature: Some(4650),
             fine_tune: Some(SampleFineTune {
                 amber_blue: (0, 4),
                 green_magenta: (0, 4),
@@ -2351,7 +2351,7 @@ const METADATA: &[SampleMetadata] = &[
         }),
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
-            kelvin: Some(4630),
+            color_temperature: Some(4630),
             fine_tune: Some(SampleFineTune {
                 amber_blue: (0, 4),
                 green_magenta: (0, 4),
@@ -2403,7 +2403,7 @@ const METADATA: &[SampleMetadata] = &[
         }),
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
-            kelvin: Some(4630),
+            color_temperature: Some(4630),
             fine_tune: Some(SampleFineTune {
                 amber_blue: (0, 4),
                 green_magenta: (0, 4),
@@ -2447,7 +2447,7 @@ const METADATA: &[SampleMetadata] = &[
         focus: None, // no AFInfo2: AFInfo holds a point number only
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Daylight),
-            kelvin: None,
+            color_temperature: None,
             fine_tune: None,
             exposure_program: Some(ExposureProgram::Manual),
             metering_mode: Some(MeteringMode::MultiSegment),
@@ -2488,7 +2488,7 @@ const METADATA: &[SampleMetadata] = &[
         focus: None, // no AFInfo2: AFInfo holds a point number only
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
-            kelvin: None,
+            color_temperature: None,
             fine_tune: None,
             exposure_program: Some(ExposureProgram::AperturePriority),
             metering_mode: Some(MeteringMode::MultiSegment),
@@ -2529,7 +2529,7 @@ const METADATA: &[SampleMetadata] = &[
         focus: None, // no AFInfo2: AFInfo holds a point number only
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Flash),
-            kelvin: None,
+            color_temperature: None,
             fine_tune: None,
             exposure_program: Some(ExposureProgram::Manual),
             metering_mode: Some(MeteringMode::CenterWeighted),
@@ -2570,7 +2570,7 @@ const METADATA: &[SampleMetadata] = &[
         focus: None, // no AFInfo2: AFInfo holds a point number only
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Shade),
-            kelvin: None,
+            color_temperature: None,
             fine_tune: None,
             exposure_program: Some(ExposureProgram::AperturePriority),
             metering_mode: Some(MeteringMode::Spot),
@@ -2611,7 +2611,7 @@ const METADATA: &[SampleMetadata] = &[
         focus: None, // no AFInfo2: AFInfo holds a point number only
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
-            kelvin: None,
+            color_temperature: None,
             fine_tune: None,
             exposure_program: Some(ExposureProgram::AperturePriority),
             metering_mode: Some(MeteringMode::MultiSegment),
@@ -2652,7 +2652,7 @@ const METADATA: &[SampleMetadata] = &[
         focus: None, // no AFInfo2: AFInfo holds a point number only
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
-            kelvin: None,
+            color_temperature: None,
             fine_tune: None,
             exposure_program: Some(ExposureProgram::Manual),
             metering_mode: Some(MeteringMode::CenterWeighted),
@@ -2696,7 +2696,7 @@ const METADATA: &[SampleMetadata] = &[
         focus: None, // FocusMode MANUAL, and a zero frame
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
-            kelvin: None,
+            color_temperature: None,
             fine_tune: Some(SampleFineTune {
                 amber_blue: (0, 1),
                 green_magenta: (0, 1),
@@ -2743,7 +2743,7 @@ const METADATA: &[SampleMetadata] = &[
         focus: None, // a viewfinder shot: a zero frame and only a point number
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
-            kelvin: None,
+            color_temperature: None,
             fine_tune: Some(SampleFineTune {
                 amber_blue: (0, 1),
                 green_magenta: (0, 1),
@@ -2795,7 +2795,7 @@ const METADATA: &[SampleMetadata] = &[
         }),
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
-            kelvin: None,
+            color_temperature: None,
             fine_tune: Some(SampleFineTune {
                 amber_blue: (0, 1),
                 green_magenta: (0, 1),
@@ -2842,7 +2842,7 @@ const METADATA: &[SampleMetadata] = &[
         focus: None, // a viewfinder shot: a zero frame and only a point number
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
-            kelvin: None,
+            color_temperature: None,
             fine_tune: Some(SampleFineTune {
                 amber_blue: (0, 4),
                 green_magenta: (0, 4),
@@ -2889,7 +2889,7 @@ const METADATA: &[SampleMetadata] = &[
         focus: None, // a viewfinder shot: a zero frame and only a point number
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
-            kelvin: None,
+            color_temperature: None,
             fine_tune: Some(SampleFineTune {
                 amber_blue: (0, 4),
                 green_magenta: (0, 4),
@@ -2936,7 +2936,7 @@ const METADATA: &[SampleMetadata] = &[
         focus: None, // FocusMode MANUAL, and a zero frame
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Daylight),
-            kelvin: None,
+            color_temperature: None,
             fine_tune: Some(SampleFineTune {
                 amber_blue: (0, 4),
                 green_magenta: (0, 4),
@@ -2983,7 +2983,7 @@ const METADATA: &[SampleMetadata] = &[
         focus: None, // a viewfinder shot: a zero frame and only a point number
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
-            kelvin: Some(4420),
+            color_temperature: Some(4420),
             fine_tune: Some(SampleFineTune {
                 amber_blue: (0, 4),
                 green_magenta: (0, 4),
@@ -3035,7 +3035,7 @@ const METADATA: &[SampleMetadata] = &[
         }),
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
-            kelvin: Some(3050),
+            color_temperature: Some(3050),
             fine_tune: Some(SampleFineTune {
                 amber_blue: (0, 4),
                 green_magenta: (0, 4),
@@ -3087,7 +3087,7 @@ const METADATA: &[SampleMetadata] = &[
         }),
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
-            kelvin: Some(5750),
+            color_temperature: Some(5750),
             fine_tune: Some(SampleFineTune {
                 amber_blue: (0, 4),
                 green_magenta: (0, 4),
@@ -3139,7 +3139,7 @@ const METADATA: &[SampleMetadata] = &[
         }),
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
-            kelvin: Some(4910),
+            color_temperature: Some(4910),
             fine_tune: Some(SampleFineTune {
                 amber_blue: (0, 4),
                 green_magenta: (0, 4),
@@ -3191,7 +3191,7 @@ const METADATA: &[SampleMetadata] = &[
         }),
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
-            kelvin: Some(4830),
+            color_temperature: Some(4830),
             fine_tune: Some(SampleFineTune {
                 amber_blue: (0, 4),
                 green_magenta: (0, 4),
@@ -3243,7 +3243,7 @@ const METADATA: &[SampleMetadata] = &[
         }),
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
-            kelvin: Some(4870),
+            color_temperature: Some(4870),
             fine_tune: Some(SampleFineTune {
                 amber_blue: (0, 4),
                 green_magenta: (0, 4),
@@ -3287,7 +3287,7 @@ const METADATA: &[SampleMetadata] = &[
         }),
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
-            kelvin: None,
+            color_temperature: None,
             fine_tune: Some(SampleFineTune {
                 amber_blue: (0, 1),
                 green_magenta: (0, 1),
@@ -3323,7 +3323,7 @@ const METADATA: &[SampleMetadata] = &[
         focus: None, // no AFInfo2: AFInfo holds a point number only
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
-            kelvin: None,
+            color_temperature: None,
             fine_tune: Some(SampleFineTune {
                 amber_blue: (0, 1),
                 green_magenta: (0, 1),
@@ -3359,7 +3359,7 @@ const METADATA: &[SampleMetadata] = &[
         focus: None, // no AFInfo2: AFInfo holds a point number only
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
-            kelvin: None,
+            color_temperature: None,
             fine_tune: None,
             exposure_program: Some(ExposureProgram::Program),
             metering_mode: Some(MeteringMode::MultiSegment),
@@ -3403,7 +3403,7 @@ const METADATA: &[SampleMetadata] = &[
         focus: None, // version 0200: a point number only
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
-            kelvin: None,
+            color_temperature: None,
             fine_tune: Some(SampleFineTune {
                 amber_blue: (0, 1),
                 green_magenta: (0, 1),
@@ -3455,7 +3455,7 @@ const METADATA: &[SampleMetadata] = &[
         }),
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
-            kelvin: None,
+            color_temperature: None,
             fine_tune: Some(SampleFineTune {
                 amber_blue: (0, 4),
                 green_magenta: (0, 4),
@@ -3502,7 +3502,7 @@ const METADATA: &[SampleMetadata] = &[
         focus: None, // auto-area mode: a mask of points only, zero frame
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
-            kelvin: Some(4820),
+            color_temperature: Some(4820),
             fine_tune: Some(SampleFineTune {
                 amber_blue: (0, 4),
                 green_magenta: (0, 4),
@@ -3549,7 +3549,7 @@ const METADATA: &[SampleMetadata] = &[
         focus: None, // auto-area mode: a mask of points only, zero frame
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
-            kelvin: Some(4720),
+            color_temperature: Some(4720),
             fine_tune: Some(SampleFineTune {
                 amber_blue: (0, 4),
                 green_magenta: (0, 4),
@@ -3601,7 +3601,7 @@ const METADATA: &[SampleMetadata] = &[
         }),
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
-            kelvin: Some(6590),
+            color_temperature: Some(6590),
             fine_tune: Some(SampleFineTune {
                 amber_blue: (0, 4),
                 green_magenta: (0, 4),
@@ -3653,7 +3653,7 @@ const METADATA: &[SampleMetadata] = &[
         }),
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
-            kelvin: Some(7000),
+            color_temperature: Some(7000),
             fine_tune: Some(SampleFineTune {
                 amber_blue: (0, 4),
                 green_magenta: (0, 4),
@@ -3705,7 +3705,7 @@ const METADATA: &[SampleMetadata] = &[
         }),
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
-            kelvin: Some(4820),
+            color_temperature: Some(4820),
             fine_tune: Some(SampleFineTune {
                 amber_blue: (0, 4),
                 green_magenta: (0, 4),
@@ -3757,7 +3757,7 @@ const METADATA: &[SampleMetadata] = &[
         }),
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
-            kelvin: Some(4740),
+            color_temperature: Some(4740),
             fine_tune: Some(SampleFineTune {
                 amber_blue: (0, 4),
                 green_magenta: (0, 4),
@@ -3809,7 +3809,7 @@ const METADATA: &[SampleMetadata] = &[
         }),
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
-            kelvin: Some(6020),
+            color_temperature: Some(6020),
             fine_tune: Some(SampleFineTune {
                 amber_blue: (0, 4),
                 green_magenta: (0, 4),
@@ -3861,7 +3861,7 @@ const METADATA: &[SampleMetadata] = &[
         }),
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
-            kelvin: Some(5240),
+            color_temperature: Some(5240),
             fine_tune: Some(SampleFineTune {
                 amber_blue: (0, 4),
                 green_magenta: (0, 4),
@@ -3908,7 +3908,7 @@ const METADATA: &[SampleMetadata] = &[
         focus: None, // FocusMode MANUAL; AFInfo2 records a position, (2520, 1856) and 288 by 319, which the rule discards
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Daylight),
-            kelvin: None,
+            color_temperature: None,
             fine_tune: Some(SampleFineTune {
                 amber_blue: (0, 4),
                 green_magenta: (0, 4),

@@ -111,7 +111,7 @@ use crate::rational::SignedRational;
 ///     .with_white_balance(
 ///         WhiteBalance::default()
 ///             .with_mode(WhiteBalanceMode::Auto)
-///             .with_kelvin(5_200),
+///             .with_color_temperature(5_200),
 ///     )
 ///     .with_flash(Flash::new(false).with_mode(FlashMode::Off));
 ///
@@ -120,7 +120,7 @@ use crate::rational::SignedRational;
 ///     Some("Aperture priority")
 /// );
 /// assert_eq!(settings.metering_mode(), Some(MeteringMode::MultiSegment));
-/// assert_eq!(settings.white_balance().kelvin(), Some(5_200));
+/// assert_eq!(settings.white_balance().color_temperature(), Some(5_200));
 /// assert_eq!(settings.flash().map(|flash| flash.fired()), Some(false));
 /// assert_eq!(settings.shutter(), None);
 /// assert_eq!(settings.color_space(), None);
@@ -340,11 +340,11 @@ impl CameraSettings {
 /// let zero = SignedRational { numerator: 0, denominator: 4 };
 /// let white_balance = WhiteBalance::default()
 ///     .with_mode(WhiteBalanceMode::Auto)
-///     .with_kelvin(5_200)
+///     .with_color_temperature(5_200)
 ///     .with_fine_tune(FineTune::new(zero, zero));
 ///
 /// assert_eq!(white_balance.mode().map(WhiteBalanceMode::name), Some("Auto"));
-/// assert_eq!(white_balance.kelvin(), Some(5_200));
+/// assert_eq!(white_balance.color_temperature(), Some(5_200));
 /// assert_eq!(
 ///     white_balance.fine_tune().map(|fine_tune| fine_tune.amber_blue()),
 ///     Some(zero)
@@ -354,7 +354,7 @@ impl CameraSettings {
 #[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
 pub struct WhiteBalance {
     pub(crate) mode: Option<WhiteBalanceMode>,
-    pub(crate) kelvin: Option<u32>,
+    pub(crate) color_temperature: Option<u32>,
     pub(crate) fine_tune: Option<FineTune>,
 }
 
@@ -369,16 +369,16 @@ impl WhiteBalance {
     /// setting as text, which is looked up in a table of the texts files
     /// are known to hold, such as `AUTO1` or `COOL WHT FL`; a chosen colour
     /// temperature, written as its number, such as `3230K`, gives
-    /// [`Kelvin`](WhiteBalanceMode::Kelvin). A text the table lacks gives
-    /// way to Exif's mode, never to a guess from its letters. Sony's
-    /// MakerNote records the setting as a code, which gives a mode only
+    /// [`ColorTemperature`](WhiteBalanceMode::ColorTemperature). A text the
+    /// table lacks gives way to Exif's mode, never to a guess from its letters.
+    /// Sony's MakerNote records the setting as a code, which gives a mode only
     /// where a file shows what the code means, such as
-    /// [`Underwater`](WhiteBalanceMode::Underwater), which Exif calls auto,
-    /// or [`Kelvin`](WhiteBalanceMode::Kelvin); any other code gives way to
-    /// Exif's mode. The Sony DSLR-A100 keeps its code where raw-files does
-    /// not read it, so its mode is Exif's. `None` when neither gives a
-    /// mode: for a light no mode stands for, such as Exif's standard light
-    /// D65, and when the camera records "unknown" or "other".
+    /// [`Underwater`](WhiteBalanceMode::Underwater), which Exif calls auto, or
+    /// [`ColorTemperature`](WhiteBalanceMode::ColorTemperature); any other code
+    /// gives way to Exif's mode. The Sony DSLR-A100 keeps its code where
+    /// raw-files does not read it, so its mode is Exif's. `None` when neither
+    /// gives a mode: for a light no mode stands for, such as Exif's standard
+    /// light D65, and when the camera records "unknown" or "other".
     pub fn mode(&self) -> Option<WhiteBalanceMode> {
         self.mode
     }
@@ -396,17 +396,17 @@ impl WhiteBalance {
     /// checked record it; the Z 9 under every setting, while the D850 and
     /// the Z fc write 0 under daylight. The Nikon bodies before them record
     /// a temperature only under a chosen colour temperature
-    /// ([`Kelvin`](WhiteBalanceMode::Kelvin)), as the number of their white
-    /// balance text, such as `3230K`, which gives it. On Sony, from its
-    /// ColorTemperature, it is the colour temperature the photographer
-    /// chose under a chosen colour temperature
-    /// ([`Kelvin`](WhiteBalanceMode::Kelvin)), and the custom white
-    /// balance's own under [`Custom`](WhiteBalanceMode::Custom), as the
-    /// files checked show; the [`mode`](Self::mode) beside it says which.
-    /// Under every other setting every Sony file checked records 0, which
-    /// gives `None`.
-    pub fn kelvin(&self) -> Option<u32> {
-        self.kelvin
+    /// ([`ColorTemperature`](WhiteBalanceMode::ColorTemperature)), as the
+    /// number of their white balance text, such as `3230K`, which gives it.
+    /// On Sony, from its ColorTemperature, it is the colour temperature the
+    /// photographer chose under a chosen colour temperature
+    /// ([`ColorTemperature`](WhiteBalanceMode::ColorTemperature)), and the
+    /// custom white balance's own under [`Custom`](WhiteBalanceMode::Custom),
+    /// as the files checked show; the [`mode`](Self::mode) beside it says
+    /// which. Under every other setting every Sony file checked records 0,
+    /// which gives `None`.
+    pub fn color_temperature(&self) -> Option<u32> {
+        self.color_temperature
     }
 
     /// The photographer's shift of the white balance, a recorded zero shift
@@ -434,10 +434,10 @@ impl WhiteBalance {
     }
 
     /// Sets the colour temperature, in kelvin, in place of any set before;
-    /// [`kelvin`](Self::kelvin) reads it.
+    /// [`color_temperature`](Self::color_temperature) reads it.
     #[must_use]
-    pub fn with_kelvin(mut self, kelvin: u32) -> Self {
-        self.kelvin = Some(kelvin);
+    pub fn with_color_temperature(mut self, kelvin: u32) -> Self {
+        self.color_temperature = Some(kelvin);
         self
     }
 
@@ -772,7 +772,7 @@ impl fmt::Display for MeteringMode {
 /// use raw_files::WhiteBalanceMode;
 ///
 /// assert_eq!(WhiteBalanceMode::Shade.name(), "Shade");
-/// assert_eq!(WhiteBalanceMode::Kelvin.to_string(), "Color temperature");
+/// assert_eq!(WhiteBalanceMode::ColorTemperature.to_string(), "Color temperature");
 /// ```
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[non_exhaustive]
@@ -797,7 +797,7 @@ pub enum WhiteBalanceMode {
     /// Nikon's preset manual, Sony's custom.
     Custom,
     /// A colour temperature the photographer chose.
-    Kelvin,
+    ColorTemperature,
 }
 
 impl WhiteBalanceMode {
@@ -814,7 +814,7 @@ impl WhiteBalanceMode {
             WhiteBalanceMode::Flash => "Flash",
             WhiteBalanceMode::Underwater => "Underwater",
             WhiteBalanceMode::Custom => "Custom",
-            WhiteBalanceMode::Kelvin => "Color temperature",
+            WhiteBalanceMode::ColorTemperature => "Color temperature",
         }
     }
 }
@@ -1078,7 +1078,7 @@ mod tests {
     fn nikon_white_balance() -> WhiteBalance {
         WhiteBalance {
             mode: Some(WhiteBalanceMode::Auto),
-            kelvin: Some(5_200),
+            color_temperature: Some(5_200),
             fine_tune: Some(FineTune {
                 amber_blue: fraction(-24, 4),
                 green_magenta: fraction(4, 4),
@@ -1121,7 +1121,7 @@ mod tests {
 
         let white_balance = WhiteBalance::default();
         assert_eq!(white_balance.mode(), None);
-        assert_eq!(white_balance.kelvin(), None);
+        assert_eq!(white_balance.color_temperature(), None);
         assert_eq!(white_balance.fine_tune(), None);
     }
 
@@ -1149,7 +1149,7 @@ mod tests {
 
         let white_balance = nikon_white_balance();
         assert_eq!(white_balance.mode(), Some(WhiteBalanceMode::Auto));
-        assert_eq!(white_balance.kelvin(), Some(5_200));
+        assert_eq!(white_balance.color_temperature(), Some(5_200));
         let fine_tune = white_balance.fine_tune().unwrap();
         assert_eq!(fine_tune.amber_blue(), fraction(-24, 4));
         assert_eq!(fine_tune.green_magenta(), fraction(4, 4));
@@ -1251,16 +1251,16 @@ mod tests {
         for start in [WhiteBalance::default(), nikon_white_balance()] {
             let cases = [
                 (
-                    start.clone().with_mode(WhiteBalanceMode::Kelvin),
+                    start.clone().with_mode(WhiteBalanceMode::ColorTemperature),
                     WhiteBalance {
-                        mode: Some(WhiteBalanceMode::Kelvin),
+                        mode: Some(WhiteBalanceMode::ColorTemperature),
                         ..start.clone()
                     },
                 ),
                 (
-                    start.clone().with_kelvin(3_200),
+                    start.clone().with_color_temperature(3_200),
                     WhiteBalance {
-                        kelvin: Some(3_200),
+                        color_temperature: Some(3_200),
                         ..start.clone()
                     },
                 ),
@@ -1284,7 +1284,7 @@ mod tests {
             .with_white_balance(
                 WhiteBalance::default()
                     .with_mode(WhiteBalanceMode::Auto)
-                    .with_kelvin(5_200)
+                    .with_color_temperature(5_200)
                     .with_fine_tune(FineTune::new(fraction(-24, 4), fraction(4, 4))),
             )
             .with_exposure_program(ExposureProgram::AperturePriority)
@@ -1301,7 +1301,7 @@ mod tests {
     #[test]
     fn a_later_value_replaces_an_earlier_one() {
         let earlier = CameraSettings::default()
-            .with_white_balance(WhiteBalance::default().with_kelvin(1))
+            .with_white_balance(WhiteBalance::default().with_color_temperature(1))
             .with_exposure_program(ExposureProgram::Manual)
             .with_metering_mode(MeteringMode::Average)
             .with_flash(Flash::new(false))
@@ -1327,10 +1327,10 @@ mod tests {
 
         let white_balance = WhiteBalance::default()
             .with_mode(WhiteBalanceMode::Daylight)
-            .with_kelvin(1)
+            .with_color_temperature(1)
             .with_fine_tune(FineTune::new(fraction(1, 1), fraction(1, 1)))
             .with_mode(WhiteBalanceMode::Auto)
-            .with_kelvin(5_200)
+            .with_color_temperature(5_200)
             .with_fine_tune(FineTune::new(fraction(-24, 4), fraction(4, 4)));
         assert_eq!(white_balance, nikon_white_balance());
     }
@@ -1431,12 +1431,12 @@ mod tests {
             Flash,
             Underwater,
             Custom,
-            Kelvin,
+            ColorTemperature,
         ];
         for mode in all {
             match mode {
                 Auto | Daylight | Cloudy | Shade | Tungsten | Fluorescent | Flash | Underwater
-                | Custom | Kelvin => {}
+                | Custom | ColorTemperature => {}
             }
         }
         all

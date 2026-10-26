@@ -600,7 +600,7 @@ fn camera_settings<R: Read + Seek>(
             mode: white_balance_mode(src, exif)?,
             // Only a maker's MakerNote records the colour temperature and
             // the fine-tuning: Nikon's and Sony's readers fill them.
-            kelvin: None,
+            color_temperature: None,
             fine_tune: None,
         },
         exposure_program: one_short(src, exif, EXPOSURE_PROGRAM)?.and_then(exposure_program),
@@ -1273,7 +1273,7 @@ mod tests {
         );
         // No ColorSpace, and what only a MakerNote records is not read.
         assert_eq!(settings.color_space(), None);
-        assert_eq!(settings.white_balance().kelvin(), None);
+        assert_eq!(settings.white_balance().color_temperature(), None);
         assert_eq!(settings.shutter(), None);
         let lens = metadata.lens().unwrap();
         assert_eq!(lens.make(), Some("NIKON"));
