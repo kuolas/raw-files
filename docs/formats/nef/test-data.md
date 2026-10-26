@@ -277,6 +277,31 @@ stripped as [their README](../../../tests/fixtures/README.md) says, so
 that CI checks both rules, the scaling and the window, on real camera
 bytes.
 
+The point fields of a DSLR shot through the viewfinder, and the table
+of the D600's points, were measured on 2026-10-26 on 56 frames shot
+with the maintainer's own D600, recorded in
+[autofocus-points.md](autofocus-points.md#2-nikon-d600); the files
+stay private, and four files from three of them, stripped, are to be
+committed as
+fixtures, listed here and in the fixtures' README when they are. The
+exiv2 metadata listings of all 291 Nikon files of the raw.pixls.us
+catalogue, read on 2026-10-26 for presence only **[S]**, show which
+bodies name a point through the viewfinder, with the number of such
+files: the 51-point FX bodies D3 (6), D4 (6), D4S (7), D700 (6), D750
+(4), D800E (2), D810 (5) and D3X (1); the 51-point DX bodies D300S
+(5), D7100 (4), D7200 (4) and D7500 (4); the 39-point bodies D610 (4),
+D5200 (2), D5300 (2), D5500 (1), D5600 (2) and D7000 (1); the 11-point
+bodies D3100 (1), D3200 (1), D3400 (2), D3500 (1) and D5000 (2); the
+153-point D5 (1); and 13 Nikon 1 files. Every file of the D300, D500,
+D850, D6, D800, Df, D5100, D3300, D3000, D90 and D3S there is a
+manual-focus or live-view shot, the four D600 files name no point, and
+the Z bodies record positions but for the two Z5II auto-area masks. The
+bodies without AFInfo2, from the D1 to the D2Xs, the D40 to the D80,
+the D100, the D200, the D70 and the Coolpix bodies, name a point in
+AFInfo on 24 files. A table for any of them is measured by the
+procedure of [autofocus-points.md](autofocus-points.md#1-the-procedure);
+the listings settle only which bodies would use one.
+
 ### 2.4 Files checked for the camera settings
 
 The camera-settings facts tagged **[F]** in
