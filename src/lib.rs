@@ -123,6 +123,57 @@
 //! constructors of [`FineTune`] and [`Flash`], and the checked
 //! constructors, such as [`DateTime::new`]; [`Metadata`] shows how.
 //!
+//! Show how the camera was set ([`Metadata::camera_settings`]), as a
+//! viewer's information panel does; every setting is optional, and one the
+//! file does not record is left out:
+//!
+//! ```
+//! use raw_files::{
+//!     CameraSettings, ExposureProgram, MeteringMode, WhiteBalance,
+//!     WhiteBalanceMode,
+//! };
+//!
+//! /// The lines an information panel shows for the settings a file records.
+//! fn panel(settings: &CameraSettings) -> Vec<String> {
+//!     let mut lines = Vec::new();
+//!     if let Some(program) = settings.exposure_program() {
+//!         lines.push(format!("Exposure program: {program}"));
+//!     }
+//!     if let Some(mode) = settings.metering_mode() {
+//!         lines.push(format!("Metering: {mode}"));
+//!     }
+//!     let white_balance = settings.white_balance();
+//!     if let Some(mode) = white_balance.mode() {
+//!         lines.push(match white_balance.kelvin() {
+//!             Some(kelvin) => format!("White balance: {mode}, {kelvin} K"),
+//!             None => format!("White balance: {mode}"),
+//!         });
+//!     }
+//!     lines
+//! }
+//!
+//! // A file's settings: panel(file.metadata().camera_settings())
+//! let settings = CameraSettings::default()
+//!     .with_exposure_program(ExposureProgram::AperturePriority)
+//!     .with_metering_mode(MeteringMode::MultiSegment)
+//!     .with_white_balance(
+//!         WhiteBalance::default()
+//!             .with_mode(WhiteBalanceMode::Auto)
+//!             .with_kelvin(5_200),
+//!     );
+//! for line in panel(&settings) {
+//!     println!("{line}");
+//! }
+//! assert_eq!(
+//!     panel(&settings),
+//!     [
+//!         "Exposure program: Aperture priority",
+//!         "Metering: Multi-segment",
+//!         "White balance: Auto, 5200 K",
+//!     ]
+//! );
+//! ```
+//!
 //! Tell a raw file from the JPEG of the same shot by their names, before
 //! opening either, as a photo browser that shows the two as one picture
 //! does: [`Format::from_extension`] gives the format a name suggests, and

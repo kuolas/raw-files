@@ -11,21 +11,25 @@ files of the Sony-built Hasselblad bodies included, and the metadata a
 viewer or a file renamer needs next to them: the capture time, with
 sub-seconds and offset from UTC when recorded, the camera's make, model and
 serial number, the software that wrote the file, the lens, the exposure,
-with the focal length in 35 mm terms, the orientation, and the sizes of the
-raw data and of the visible image. It reads the JPEG files cameras write
-beside their raw files or instead of them in the same way: a JPEG's previews
-are the file itself and the smaller images it holds, and its metadata is the
-same, with the picture's size and no raw size. It gives the largest preview,
-or the smallest that fills a given size, with the orientation to show it in,
-and it never reads the raw data. It also reads where the camera focused, as
-the file records it: the centre of the focus area, the frame it is measured
-in and, when recorded, the area's size and whether the camera confirmed
-focus, ready to be scaled onto any preview. Nikon mirrorless bodies, Nikon
-DSLRs in live view and Sony bodies from the ILCE-7RM2 on record it, and
-their JPEGs are read for it as their raw files are. The shots that record
-only an autofocus point's number or a mask of points, such as a DSLR's
-through the viewfinder, give no focus point yet, and a shot in manual focus
-gives none; raw decoding comes later; see the [roadmap](docs/ROADMAP.md).
+with the focal length in 35 mm terms, the camera's settings (the white
+balance with its colour temperature and fine-tuning, the exposure program,
+the metering mode, the flash, the shutter, Sony's electronic front curtain
+setting, the image area, the raw image size and the colour space), the
+orientation, and the sizes of the raw data and of the visible image. It
+reads the JPEG files cameras write beside their raw files or instead of them
+in the same way: a JPEG's previews are the file itself and the smaller
+images it holds, and its metadata is the same, with the picture's size and
+no raw size. It gives the largest preview, or the smallest that fills a
+given size, with the orientation to show it in, and it never reads the raw
+data. It also reads where the camera focused, as the file records it: the
+centre of the focus area, the frame it is measured in and, when recorded,
+the area's size and whether the camera confirmed focus, ready to be scaled
+onto any preview. Nikon mirrorless bodies, Nikon DSLRs in live view and Sony
+bodies from the ILCE-7RM2 on record it, and their JPEGs are read for it as
+their raw files are. The shots that record only an autofocus point's number
+or a mask of points, such as a DSLR's through the viewfinder, give no focus
+point yet, and a shot in manual focus gives none; raw decoding comes later;
+see the [roadmap](docs/ROADMAP.md).
 
 ## Usage
 
@@ -115,6 +119,55 @@ fn main() {
 }
 ```
 
+Show how the camera was set, as a viewer's information panel does; every
+setting is optional, and one the file does not record is left out:
+
+```rust
+use raw_files::{CameraSettings, ExposureProgram, MeteringMode, WhiteBalance, WhiteBalanceMode};
+
+/// The lines an information panel shows for the settings a file records.
+fn panel(settings: &CameraSettings) -> Vec<String> {
+    let mut lines = Vec::new();
+    if let Some(program) = settings.exposure_program() {
+        lines.push(format!("Exposure program: {program}"));
+    }
+    if let Some(mode) = settings.metering_mode() {
+        lines.push(format!("Metering: {mode}"));
+    }
+    let white_balance = settings.white_balance();
+    if let Some(mode) = white_balance.mode() {
+        lines.push(match white_balance.kelvin() {
+            Some(kelvin) => format!("White balance: {mode}, {kelvin} K"),
+            None => format!("White balance: {mode}"),
+        });
+    }
+    lines
+}
+
+fn main() {
+    // A file's settings: panel(file.metadata().camera_settings())
+    let settings = CameraSettings::default()
+        .with_exposure_program(ExposureProgram::AperturePriority)
+        .with_metering_mode(MeteringMode::MultiSegment)
+        .with_white_balance(
+            WhiteBalance::default()
+                .with_mode(WhiteBalanceMode::Auto)
+                .with_kelvin(5_200),
+        );
+    for line in panel(&settings) {
+        println!("{line}");
+    }
+    assert_eq!(
+        panel(&settings),
+        [
+            "Exposure program: Aperture priority",
+            "Metering: Multi-segment",
+            "White balance: Auto, 5200 K",
+        ]
+    );
+}
+```
+
 Tell a raw file from the JPEG of the same shot by their names, before
 opening either, as a photo browser that shows the two as one picture does:
 
@@ -154,11 +207,12 @@ orientation to show it in. `preview_at_least` picks the smallest preview
 that fills a box. `Metadata` holds what the camera recorded about the
 picture, read when the file is opened; every value is optional, since not
 every camera records every one, and a damaged value is `None` on its own.
-`Focus` is where the camera focused, and its `scaled_to` places it on a
-preview. The `with_…` methods of `Metadata`, `Exposure`, `CameraSettings`
-and `WhiteBalance`, `Lens::builder` and the constructors, such as
-`Focus::new`, build every value without a file, for a program's tests.
-`Options` and `Limits` open an untrusted file with other caps. The API
+`Metadata::camera_settings` says how the camera was set, as a
+`CameraSettings`. `Focus` is where the camera focused, and its `scaled_to`
+places it on a preview. The `with_…` methods of `Metadata`, `Exposure`,
+`CameraSettings` and `WhiteBalance`, `Lens::builder` and the constructors,
+such as `Focus::new`, build every value without a file, for a program's
+tests. `Options` and `Limits` open an untrusted file with other caps. The API
 documentation is on [docs.rs](https://docs.rs/raw-files).
 
 ## Formats
@@ -168,28 +222,39 @@ documentation is on [docs.rs](https://docs.rs/raw-files).
   points at. The metadata comes from the standard TIFF and Exif tags and,
   for what Nikon bodies before 2018 record only there, from the MakerNote:
   the serial number, the ISO, the lens range and the time zone; the visible
-  image size is the crop area the MakerNote records. The focus point comes
-  from the MakerNote's AFInfo2 block, which mirrorless bodies and DSLRs in
-  live view fill in, and on a crop mode it is placed inside the cropped
-  picture. Previews and metadata are checked on 35 CC0 Nikon files from
-  raw.pixls.us that CI downloads, three of the Z 9 (lossless, HE and HE\*)
-  and 32 of 25 other bodies from the D1H to the Z5II, on test files laid
-  out like a Z 9's, a Z6III's, a D300's and a D1H's, and on two stripped
-  files of the maintainer's own Z 9.
+  image size is the crop area the MakerNote records. The MakerNote also
+  gives the camera settings that Exif lacks: the white balance setting,
+  finer than Exif's, the colour temperature, the fine-tuning, the shutter
+  used (on the bodies that record it), the image area, the raw image size
+  and, since no Nikon raw file records an Exif colour space, the colour
+  space. The focus point comes from the MakerNote's AFInfo2 block, which
+  mirrorless bodies and DSLRs in live view fill in, and on a crop mode it
+  is placed inside the cropped picture. Previews and metadata are checked
+  on 35 CC0 Nikon files from raw.pixls.us that CI downloads, three of the
+  Z 9 (lossless, HE and HE\*) and 32 of 25 other bodies from the D1H to the
+  Z5II, on test files laid out like a Z 9's, a Z6III's, a D300's and a
+  D1H's, and on two stripped files of the maintainer's own Z 9.
 - **Sony ARW**, with the SRF, SR2 and ARQ files of the same family and the
   ARW files of the Sony-built Hasselblad bodies. The previews are found in
   IFD0 and IFD1 and, on bodies from version 4.0 of Sony's format, the
-  full-size JPEG in IFD2. The metadata comes from the standard tags, and
-  the focus point, on the bodies from the ILCE-7RM2 on, from the
-  MakerNote's focus tags alone: the position from FocusLocation, or from
+  full-size JPEG in IFD2. The metadata comes from the standard tags and,
+  for the camera settings, from the MakerNote: the white balance setting,
+  finer than Exif's, the colour temperature under a chosen colour
+  temperature or a custom white balance, the fine-tuning and the
+  electronic front curtain setting (the menu setting, never the shutter
+  used). The shutter used, the image area (the APS-C mode) and the raw
+  image size stay unread, since Sony records the first two only in
+  enciphered blocks and gives an APS-C raw the size code of a medium one.
+  The focus point, on the bodies from the ILCE-7RM2 on, comes from the
+  MakerNote's focus tags: the position from FocusLocation, or from
   FocusLocation2 when that is missing, the area's size from FocusFrameSize
   from the ILCE-7SM3 on, and the focus mode, since a shot in manual focus
-  gives none; nothing else in the MakerNote is read. Most Sony bodies keep
-  their serial number in a form the library does not read, and of the
-  public samples only the ILCE-1 and the ILCE-7M5 give one. Previews and
-  metadata are checked on 36 CC0 Sony-family files from the same site, from
-  the DSC-F828's SRF to the A7 V's ARW 6.0, 35 of which CI downloads, and on
-  test files laid out like each generation.
+  gives none. Most Sony bodies keep their serial number in a form the
+  library does not read, and of the public samples only the ILCE-1 and the
+  ILCE-7M5 give one. Previews and metadata are checked on 36 CC0
+  Sony-family files from the same site, from the DSC-F828's SRF to the
+  A7 V's ARW 6.0, 35 of which CI downloads, and on test files laid out like
+  each generation.
 - **JPEG**, as a camera writes it beside its raw file or instead of it, or
   as an editor exports it. The previews are the file itself, the thumbnail
   in the Exif segment, the images that the Multi-Picture Format (MPF) list
@@ -199,18 +264,18 @@ documentation is on [docs.rs](https://docs.rs/raw-files).
   the picture's own, and there is no raw size. A Nikon camera's JPEG also
   gives what its MakerNote records where the Exif segment does not, as a NEF
   does, and the focus point, which on a crop mode (DX, 1:1, 16:9) is placed
-  on the picture; a Sony camera's JPEG gives the focus point its MakerNote
-  records, as an ARW does. No other maker's MakerNote is read. A focus point
-  is given only when its frame has the picture's shape, so an export cut to
-  another shape or turned upright gives none, except one cut from a Nikon
-  crop-mode JPEG, whose point may then be misplaced. A JPEG whose Exif
-  segment is missing or cannot be read still opens, with the file itself
-  and its MPF images as previews, its image size as the only value read
-  from it, and the default orientation, no transform. Previews and metadata
-  are checked on eight camera JPEGs from Wikimedia Commons that CI
-  downloads, of five Sony bodies, two Nikon bodies and a Canon, on JPEG
-  files built in the tests, and on three stripped JPEG files of the
-  maintainer's own Z 9.
+  on the picture; a Sony camera's JPEG gives what its MakerNote records, as
+  an ARW does: the camera settings above and the focus point. No other
+  maker's MakerNote is read. A focus point is given only when its frame has
+  the picture's shape, so an export cut to another shape or turned upright
+  gives none, except one cut from a Nikon crop-mode JPEG, whose point may
+  then be misplaced. A JPEG whose Exif segment is missing or cannot be read
+  still opens, with the file itself and its MPF images as previews, its
+  image size as the only value read from it, and the default orientation,
+  no transform. Previews and metadata are checked on eight camera JPEGs
+  from Wikimedia Commons that CI downloads, of five Sony bodies, two Nikon
+  bodies and a Canon, on JPEG files built in the tests, and on three
+  stripped JPEG files of the maintainer's own Z 9.
 
 Any other file, a DNG among them whatever its Make says, is refused with the
 `UnknownFormat` error.
