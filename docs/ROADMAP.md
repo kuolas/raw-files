@@ -6,73 +6,88 @@ requests live in the
 
 ## Where we are
 
-The repository, its license and its contribution process exist. The public
-API is the file handle (`RawFile` and `Options`) with the preview types
-(`Preview`, `PreviewFormat`, `Orientation`, `Size`), the metadata types
-(`Metadata`, `Exposure`, `Lens`, `LensBuilder`, `Focus`, `Point`,
-`DateTime`, `Rational` and `SignedRational`), the camera settings types
-(`CameraSettings`, `WhiteBalance`, `FineTune`, `Flash`, and the enums
-`WhiteBalanceMode`, `ExposureProgram`, `MeteringMode`, `FlashMode`,
-`Shutter`, `ImageArea`, `RawImageSize` and `ColorSpace`), `Format`, `Error`,
-`ErrorKind`, `Result` and `Limits`. A Nikon NEF file opens with the JPEG
-previews in its IFD0, its SubIFDs and its MakerNote, checked on test files
-laid out like a Nikon Z 9's, a Z6III's, a D300's and a D1H's, on two
-stripped files of the maintainer's own Z 9, and on the 35 CC0 Nikon files of
-raw.pixls.us that CI downloads: three of the Z 9 (lossless, HE and HE*),
-and 32 of 25 other bodies, from the D1H to the Z5II. A Sony ARW file, or
-an SRF, SR2 or ARQ file of the same family, opens with the JPEG previews in
-its IFD0, IFD1 and, on newer bodies, IFD2, checked on test files laid out
-like each generation of the family and on 36 CC0 Sony-family files of the
-same site, 35 of which CI downloads. Both open with their metadata too,
-read from the standard TIFF and Exif tags and from the MakerNote, for
-the camera settings that only it records and, on Nikon files, for the
-fields that older bodies record only there, checked on the same files. Both
-give where the camera focused, read from the MakerNote, on Nikon
-mirrorless bodies, Nikon DSLRs in live view and Sony bodies from the
-ILCE-7RM2 on, while a shot that records only an autofocus point's number
-gives none until the second step of milestone 4, which places it from a
-table of the body's points that the project measures itself. A JPEG
-file, as a camera
-writes it beside its raw file or instead of it, opens with the file itself,
-the thumbnail of its Exif segment, the other images of its Multi-Picture
-Format (MPF) list and, from the Nikon bodies that write one, its
-MakerNote's small JPEG as previews, and with the metadata of its Exif
-segment, read as in a raw file, with no raw size. A Nikon or Sony
-camera's JPEG also gives what its MakerNote adds, as a NEF or an ARW
-does, its focus point only when the point's frame has the picture's
-shape. JPEG files are checked on test files built in code, on
-three stripped JPEG files of the maintainer's own Z 9 and on the eight
-camera JPEGs of Wikimedia Commons that CI downloads, of five Sony bodies,
-two Nikon bodies and a Canon. Milestones 1, 2 and 5 all work;
-milestone 3 works as far as plain tags record it: the shutter used and
-the image area of Sony bodies, which they record only in enciphered
-blocks, wait for milestone 6, and their raw size is left out because a
-tag gives an APS-C raw the code of a medium one; and milestone 4 works
-for the bodies that record a position. Any other file is refused with
-the `UnknownFormat` error.
+The repository, its license and its contribution process exist, and
+five releases are out. What raw-files reads, milestone by milestone:
 
-The first release, version 0.1.0, is milestones 1 and 2: the embedded
-previews of NEF and ARW files. The second, 0.2.0, is most of milestone 3:
-their basic metadata. The third, 0.3.0, is the first step of milestone 4: the
-focus point as the camera records it. The fourth, 0.4.0, is milestone 5,
-plain JPEG files ([#23](https://github.com/kuolas/raw-files/issues/23)).
-The fifth, 0.5.0, completes milestone 3, as far as plain tags record
-it, with the camera's settings
-([#26](https://github.com/kuolas/raw-files/issues/26)). The next release
-is the second step of milestone 4: a DSLR's autofocus point, which a
-shot through the viewfinder names by number, placed on the picture
-from a table of the body's points, with the points the camera used and
-the body's layout beside it
-([#57](https://github.com/kuolas/raw-files/issues/57)). The tables are
-the project's own, measured on frames shot with the body and read in
-the maker's software, the Nikon D600's first, by a procedure that a
-contributor who owns another body can repeat; a body without a table
-gives none, and the format notes say so per body
-([ADR017](architecture-decisions/adr017-per-body-tables-measured-by-the-project.md),
-[ADR018](architecture-decisions/adr018-focus-points-placed-from-a-table-and-the-points-used.md)).
-Milestone 6 follows it: every value a file records, the ones that only
-enciphered or encrypted blocks hold among them
-([#50](https://github.com/kuolas/raw-files/issues/50)).
+- **Previews (milestones 1 and 2): done.** A Nikon NEF file opens with
+  the JPEG previews in its IFD0, its SubIFDs and its MakerNote. A Sony
+  ARW file, or an SRF, SR2 or ARQ file of the same family, opens with
+  the JPEG previews in its IFD0, IFD1 and, on newer bodies, IFD2.
+  Checked on test files laid out like a Nikon Z 9's, a Z6III's, a
+  D300's and a D1H's and like each generation of Sony's family, on two
+  stripped files of the maintainer's own Z 9, and on the CC0 files of
+  raw.pixls.us: 35 Nikon files, three of the Z 9 (lossless, HE and
+  HE\*) and 32 of 25 other bodies from the D1H to the Z5II, and 36
+  Sony-family files, all of which CI downloads but the large ARQ,
+  fetched on request.
+- **Basic metadata (milestone 3): done, as far as plain tags record
+  it.** Both formats open with their metadata, read from the standard
+  TIFF and Exif tags and from the MakerNote, for the camera settings
+  that only it records and, on Nikon files, for the fields that older
+  bodies record only there, checked on the same files. Not read: the
+  shutter used and the image area of Sony bodies, which they record
+  only in enciphered blocks and which wait for milestone 6, and their
+  raw image size, because a tag gives an APS-C raw the code of a
+  medium one.
+- **Focus points (milestone 4): the first step done.** Both formats
+  give where the camera focused, read from the MakerNote, on Nikon
+  mirrorless bodies, Nikon DSLRs in live view and Sony bodies from the
+  ILCE-7RM2 on. A shot that records only an autofocus point's number
+  gives none until the second step, which places it from a table of the
+  body's points that the project measures itself.
+- **Plain JPEG files (milestone 5): done.** A JPEG file, as a camera
+  writes it beside its raw file or instead of it, opens with the file
+  itself, the thumbnail of its Exif segment, the other images of its
+  Multi-Picture Format (MPF) list and, from the Nikon bodies that write
+  one, its MakerNote's small JPEG as previews, and with the metadata of
+  its Exif segment, read as in a raw file, with no raw size. A Nikon or
+  Sony camera's JPEG also gives what its MakerNote adds, as a NEF or an
+  ARW does, its focus point only when the point's frame has the
+  picture's shape. Checked on test files built in code, on three
+  stripped JPEG files of the maintainer's own Z 9 and on the eight
+  camera JPEGs of Wikimedia Commons that CI downloads, of five Sony
+  bodies, two Nikon bodies and a Canon.
+- **Full metadata (milestone 6), raw sensor data (milestone 7) and the
+  developed image (milestone 8): not
+  started.**
+
+Any other file is refused with the `UnknownFormat` error.
+
+The public API is the file handle (`RawFile` and `Options`) with the
+preview types (`Preview`, `PreviewFormat`, `Orientation`, `Size`), the
+metadata types (`Metadata`, `Exposure`, `Lens`, `LensBuilder`, `Focus`,
+`Point`, `DateTime`, `Rational` and `SignedRational`), the camera
+settings types (`CameraSettings`, `WhiteBalance`, `FineTune`, `Flash`,
+and the enums `WhiteBalanceMode`, `ExposureProgram`, `MeteringMode`,
+`FlashMode`, `Shutter`, `ImageArea`, `RawImageSize` and `ColorSpace`),
+`Format`, `Error`, `ErrorKind`, `Result` and `Limits`.
+
+### Releases
+
+- **0.1.0**: milestones 1 and 2, the embedded previews of NEF and ARW
+  files.
+- **0.2.0**: most of milestone 3, their basic metadata.
+- **0.3.0**: the first step of milestone 4, the focus point as the
+  camera records it.
+- **0.4.0**: milestone 5, plain JPEG files
+  ([#23](https://github.com/kuolas/raw-files/issues/23)).
+- **0.5.0**: milestone 3 completed, as far as plain tags record it, with
+  the camera's settings
+  ([#26](https://github.com/kuolas/raw-files/issues/26)).
+- **Next**: the second step of milestone 4, a DSLR's autofocus point,
+  which a shot through the viewfinder names by number, placed on the
+  picture from a table of the body's points, with the points the camera
+  used and the body's layout beside it
+  ([#57](https://github.com/kuolas/raw-files/issues/57)). The tables are
+  the project's own, measured on frames shot with the body and read in
+  the maker's software, the Nikon D600's first, by a procedure that a
+  contributor who owns another body can repeat; a body without a table
+  gives none, and the format notes say so per body
+  ([ADR017](architecture-decisions/adr017-per-body-tables-measured-by-the-project.md),
+  [ADR018](architecture-decisions/adr018-focus-points-placed-from-a-table-and-the-points-used.md)).
+- **Then**: milestone 6, every value a file records, the ones that only
+  enciphered or encrypted blocks hold among them
+  ([#50](https://github.com/kuolas/raw-files/issues/50)).
 
 ## Milestones
 
