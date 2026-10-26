@@ -321,8 +321,8 @@ checked, so milestones 2 and 3 need neither the keystream nor the cipher.
 
 ### 4.3 Out of scope for now: ARW 6.0
 
-raw-files detects Compression 32766 and returns a typed unsupported error
-for the raw data, as it does for Nikon HE and HE\* (see the
+When raw-files decodes raw data, it is to detect Compression 32766 and
+return a typed unsupported error for it, as for Nikon HE and HE\* (see the
 [NEF page](../nef/licences-and-references.md)). Previews and metadata from
 these files are fine: every ARW 6.0 file checked has a full-size JPEG in
 IFD2 (raw.pixls.us files 8846 to 8850). **[F]** Two questions have to be

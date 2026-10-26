@@ -241,7 +241,7 @@ milestone that needs the tag; "none" means nice-to-have. [P][1][2]
 | 0x9401 to 0x9406, 0x940C, 0x940E, 0x9416 | Tag94xx | yes | ISO, lens, focus and AF data, and in 0x9416 the APS-C mode flag; 0x9416 replaces 0x9405 from the ILCE-7SM3 on [F] | 6 |
 | 0xB000 | FileFormat | no | u8[4] format version | 3, 6, 7 |
 | 0xB001 | SonyModelID | no | u16 body identifier | 3, 6, 7 |
-| 0xB021 | ColorTemperature | no | u32; kelvin, 0 unless the white balance is custom on the samples [F] | 3 |
+| 0xB021 | ColorTemperature | no | u32; kelvin: the chosen temperature under the colour-temperature setting (0x0115 code 1) and the custom white balance's own under custom (code 112); 0 under every other setting on every file checked [F] | 3 |
 | 0xB027 | LensType | no | A-mount lens ID; 65535 for E-mount lenses | 3 (lens) |
 | 0xB028 | MinoltaMakerNote | no | A100 only: offset of a Minolta-format IFD; 0 means absent | none |
 | 0xB02A | LensSpec | no | 8 bytes: flags, BCD focal and aperture range, flags | 3 (lens) |

@@ -325,8 +325,11 @@ impl CameraSettings {
 /// a way that cannot be read. `WhiteBalance::default()` is the empty one,
 /// with every part `None`; a caller's tests set the parts they need with
 /// the `with_…` methods, each named after the method that reads the part
-/// back and each replacing any value set before. `WhiteBalance` is not
-/// `Copy`, so that a later part that cannot be copied does not break
+/// back and each replacing any value set before. The `with_…` methods
+/// store each value as given, so a test reads back even a colour
+/// temperature of 0; the readers' rules that a recorded 0 or a number
+/// above 99,999 K gives `None` are not the builders'. `WhiteBalance` is
+/// not `Copy`, so that a later part that cannot be copied does not break
 /// callers.
 ///
 /// # Examples
@@ -477,6 +480,14 @@ impl WhiteBalance {
 /// fine-tuning: a file that records none gives `None` for
 /// [`WhiteBalance::fine_tune`].
 ///
+/// # Equality
+///
+/// Two fine-tunings are equal when their shifts were stored the same way,
+/// so `-24/4` is not equal to `-6/1`, although they are the same shift.
+/// Compare the [`reduced`](SignedRational::reduced) forms of their shifts
+/// to compare the shifts by value. Their signs follow the axes' names
+/// whatever the maker, so the reduced shifts of any two files compare.
+///
 /// # Examples
 ///
 /// A shift of six steps towards amber and none along the other axis, in a
@@ -526,6 +537,9 @@ impl FineTune {
 ///
 /// Red-eye reduction and whether the flash's return light was detected,
 /// which Exif records beside them, are not given.
+///
+/// There is no `Default`, since a flash always says whether it fired: a
+/// file that records no flash gives `None` for [`CameraSettings::flash`].
 ///
 /// # Examples
 ///

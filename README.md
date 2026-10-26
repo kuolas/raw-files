@@ -295,7 +295,8 @@ Any other file, a DNG among them whatever its Make says, is refused with the
   cache, not the whole file; a preview's bytes are read only when asked for.
 - Pure Rust with no dependencies and no `unsafe` code. There is no serde
   feature, since that would be a dependency: the getters return text,
-  integers and small structs of integers.
+  integers, booleans, enums whose `name` gives their text, and small
+  structs of these.
 
 Pure Rust means no C or C++ library to build, link or ship, on macOS, Linux
 and Windows alike.

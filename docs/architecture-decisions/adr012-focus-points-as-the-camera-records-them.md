@@ -1,6 +1,10 @@
 # ADR012: Focus points as the camera records them
 
-- Status: Accepted
+- Status: Accepted; that the Sony MakerNote is read for the focus point
+  alone no longer describes the whole decision: the camera settings
+  sections of [ADR011](adr011-metadata-from-standard-tags.md), added to
+  that record in place, also read the white balance and other settings
+  from it
 - Amends: [ADR011](adr011-metadata-from-standard-tags.md), in one point:
   the Sony MakerNote is read, for the focus point alone
 - Date: 2026-10-19
