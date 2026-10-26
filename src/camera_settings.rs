@@ -580,9 +580,10 @@ impl Flash {
 
 /// How the flash was set to fire, in Exif's three modes.
 ///
-/// `FlashMode` is `#[non_exhaustive]`, so match on it with a wildcard arm.
-/// Its [`name`](Self::name)s, which `Display` writes too, are "Fill
-/// flash", "Flash off" and "Auto flash".
+/// `FlashMode` is `#[non_exhaustive]`, so match on it with a wildcard arm. It
+/// orders as its variants are listed, and a new variant is added after the
+/// existing ones, so an order once observed holds. Its [`name`](Self::name)s,
+/// which `Display` writes too, are "Fill flash", "Flash off" and "Auto flash".
 ///
 /// # Examples
 ///
@@ -592,7 +593,7 @@ impl Flash {
 /// assert_eq!(FlashMode::Fill.name(), "Fill flash");
 /// assert_eq!(FlashMode::Off.to_string(), "Flash off");
 /// ```
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[non_exhaustive]
 pub enum FlashMode {
     /// The flash fires for every picture: Exif's "compulsory flash
@@ -628,10 +629,12 @@ impl fmt::Display for FlashMode {
 /// A code that no variant names, Exif's 0, "not defined", included, gives
 /// `None`.
 ///
-/// `ExposureProgram` is `#[non_exhaustive]`, so match on it with a
-/// wildcard arm. Its [`name`](Self::name)s, which `Display` writes too,
-/// are "Manual", "Program", "Aperture priority", "Shutter priority",
-/// "Creative", "Action", "Portrait" and "Landscape".
+/// `ExposureProgram` is `#[non_exhaustive]`, so match on it with a wildcard
+/// arm. It orders as its variants are listed, and a new variant is added after
+/// the existing ones, so an order once observed holds. Its
+/// [`name`](Self::name)s, which `Display` writes too, are "Manual", "Program",
+/// "Aperture priority", "Shutter priority", "Creative", "Action", "Portrait"
+/// and "Landscape".
 ///
 /// # Examples
 ///
@@ -641,7 +644,7 @@ impl fmt::Display for FlashMode {
 /// assert_eq!(ExposureProgram::AperturePriority.name(), "Aperture priority");
 /// assert_eq!(ExposureProgram::Program.to_string(), "Program");
 /// ```
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[non_exhaustive]
 pub enum ExposureProgram {
     /// The photographer set the exposure.
@@ -692,10 +695,11 @@ impl fmt::Display for ExposureProgram {
 ///
 /// Exif's 0, "unknown", and a code that no variant names give `None`.
 ///
-/// `MeteringMode` is `#[non_exhaustive]`, so match on it with a wildcard
-/// arm. Its [`name`](Self::name)s, which `Display` writes too, are
-/// "Average", "Center-weighted average", "Spot", "Multi-spot",
-/// "Multi-segment", "Partial" and "Other".
+/// `MeteringMode` is `#[non_exhaustive]`, so match on it with a wildcard arm.
+/// It orders as its variants are listed, and a new variant is added after the
+/// existing ones, so an order once observed holds. Its [`name`](Self::name)s,
+/// which `Display` writes too, are "Average", "Center-weighted average",
+/// "Spot", "Multi-spot", "Multi-segment", "Partial" and "Other".
 ///
 /// # Examples
 ///
@@ -705,7 +709,7 @@ impl fmt::Display for ExposureProgram {
 /// assert_eq!(MeteringMode::MultiSegment.name(), "Multi-segment");
 /// assert_eq!(MeteringMode::CenterWeighted.to_string(), "Center-weighted average");
 /// ```
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[non_exhaustive]
 pub enum MeteringMode {
     /// The average of the whole frame.
@@ -755,10 +759,12 @@ impl fmt::Display for MeteringMode {
 /// [`Auto`](Self::Auto), every fluorescent lamp into
 /// [`Fluorescent`](Self::Fluorescent).
 ///
-/// `WhiteBalanceMode` is `#[non_exhaustive]`, so match on it with a
-/// wildcard arm. Its [`name`](Self::name)s, which `Display` writes too,
-/// are "Auto", "Daylight", "Cloudy", "Shade", "Tungsten", "Fluorescent",
-/// "Flash", "Underwater", "Custom" and "Color temperature".
+/// `WhiteBalanceMode` is `#[non_exhaustive]`, so match on it with a wildcard
+/// arm. It orders as its variants are listed, and a new variant is added after
+/// the existing ones, so an order once observed holds. Its
+/// [`name`](Self::name)s, which `Display` writes too, are "Auto", "Daylight",
+/// "Cloudy", "Shade", "Tungsten", "Fluorescent", "Flash", "Underwater",
+/// "Custom" and "Color temperature".
 ///
 /// # Examples
 ///
@@ -768,7 +774,7 @@ impl fmt::Display for MeteringMode {
 /// assert_eq!(WhiteBalanceMode::Shade.name(), "Shade");
 /// assert_eq!(WhiteBalanceMode::Kelvin.to_string(), "Color temperature");
 /// ```
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[non_exhaustive]
 pub enum WhiteBalanceMode {
     /// The camera chose the white balance, in any of its auto settings.
@@ -822,9 +828,11 @@ impl fmt::Display for WhiteBalanceMode {
 
 /// The shutter that took the picture.
 ///
-/// `Shutter` is `#[non_exhaustive]`, so match on it with a wildcard arm.
-/// Its [`name`](Self::name)s, which `Display` writes too, are
-/// "Mechanical", "Electronic" and "Electronic front curtain".
+/// `Shutter` is `#[non_exhaustive]`, so match on it with a wildcard arm. It
+/// orders as its variants are listed, and a new variant is added after the
+/// existing ones, so an order once observed holds. Its [`name`](Self::name)s,
+/// which `Display` writes too, are "Mechanical", "Electronic" and "Electronic
+/// front curtain".
 ///
 /// # Examples
 ///
@@ -837,7 +845,7 @@ impl fmt::Display for WhiteBalanceMode {
 ///     "Electronic front curtain"
 /// );
 /// ```
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[non_exhaustive]
 pub enum Shutter {
     /// The mechanical shutter, which starts and ends the exposure.
@@ -894,10 +902,11 @@ impl fmt::Display for Shutter {
 /// Sony body records its APS-C mode only in an enciphered block, which
 /// raw-files does not read.
 ///
-/// `ImageArea` is `#[non_exhaustive]`, so match on it with a wildcard arm.
-/// Its [`name`](Self::name)s, which `Display` writes too, are "Full
-/// frame", "APS-C", "1:1", "1:1 (APS-C)", "16:9", "16:9 (APS-C)", "5:4",
-/// "1.3x crop" and "2.7x crop".
+/// `ImageArea` is `#[non_exhaustive]`, so match on it with a wildcard arm. It
+/// orders as its variants are listed, and a new variant is added after the
+/// existing ones, so an order once observed holds. Its [`name`](Self::name)s,
+/// which `Display` writes too, are "Full frame", "APS-C", "1:1", "1:1 (APS-C)",
+/// "16:9", "16:9 (APS-C)", "5:4", "1.3x crop" and "2.7x crop".
 ///
 /// # Examples
 ///
@@ -907,7 +916,7 @@ impl fmt::Display for Shutter {
 /// assert_eq!(ImageArea::ApsC.name(), "APS-C");
 /// assert_eq!(ImageArea::ApsCSquare.to_string(), "1:1 (APS-C)");
 /// ```
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[non_exhaustive]
 pub enum ImageArea {
     /// The whole of a full-frame sensor.
@@ -959,9 +968,10 @@ impl fmt::Display for ImageArea {
 /// The raw size the camera was set to. Its size in pixels is
 /// [`Metadata::raw_size`](crate::Metadata::raw_size).
 ///
-/// `RawImageSize` is `#[non_exhaustive]`, so match on it with a wildcard
-/// arm. Its [`name`](Self::name)s, which `Display` writes too, are
-/// "Large", "Medium" and "Small".
+/// `RawImageSize` is `#[non_exhaustive]`, so match on it with a wildcard arm.
+/// It orders as its variants are listed, and a new variant is added after the
+/// existing ones, so an order once observed holds. Its [`name`](Self::name)s,
+/// which `Display` writes too, are "Large", "Medium" and "Small".
 ///
 /// # Examples
 ///
@@ -971,7 +981,7 @@ impl fmt::Display for ImageArea {
 /// assert_eq!(RawImageSize::Large.name(), "Large");
 /// assert_eq!(RawImageSize::Small.to_string(), "Small");
 /// ```
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[non_exhaustive]
 pub enum RawImageSize {
     /// The large raw size, the camera's largest.
@@ -1011,9 +1021,10 @@ impl fmt::Display for RawImageSize {
 /// means Adobe RGB is from ExifTool's published documentation of the tag,
 /// read as documentation, and the camera files checked agree.
 ///
-/// `ColorSpace` is `#[non_exhaustive]`, so match on it with a wildcard arm.
-/// Its [`name`](Self::name)s, which `Display` writes too, are "sRGB" and
-/// "Adobe RGB".
+/// `ColorSpace` is `#[non_exhaustive]`, so match on it with a wildcard arm. It
+/// orders as its variants are listed, and a new variant is added after the
+/// existing ones, so an order once observed holds. Its [`name`](Self::name)s,
+/// which `Display` writes too, are "sRGB" and "Adobe RGB".
 ///
 /// # Examples
 ///
@@ -1023,7 +1034,7 @@ impl fmt::Display for RawImageSize {
 /// assert_eq!(ColorSpace::Srgb.name(), "sRGB");
 /// assert_eq!(ColorSpace::AdobeRgb.to_string(), "Adobe RGB");
 /// ```
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[non_exhaustive]
 pub enum ColorSpace {
     /// sRGB.
@@ -1588,6 +1599,26 @@ mod tests {
             ColorSpace::name,
             &["sRGB", "Adobe RGB"],
         );
+    }
+
+    /// Checks that `all`, the variants in declaration order, is strictly
+    /// increasing.
+    fn assert_ordered<T: Copy + Ord + fmt::Debug>(all: &[T]) {
+        assert!(all.windows(2).all(|pair| pair[0] < pair[1]), "{all:?}");
+    }
+
+    #[test]
+    fn every_enum_orders_as_its_variants_are_listed() {
+        // A program may key a sorted map by these enums, and the order is
+        // a promise: a variant moved, or added before the others, fails.
+        assert_ordered(&all_flash_modes());
+        assert_ordered(&all_exposure_programs());
+        assert_ordered(&all_metering_modes());
+        assert_ordered(&all_white_balance_modes());
+        assert_ordered(&all_shutters());
+        assert_ordered(&all_image_areas());
+        assert_ordered(&all_raw_image_sizes());
+        assert_ordered(&all_color_spaces());
     }
 
     #[test]
