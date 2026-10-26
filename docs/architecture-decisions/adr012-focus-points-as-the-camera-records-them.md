@@ -1,7 +1,11 @@
 # ADR012: Focus points as the camera records them
 
-- Status: Accepted; that the Sony MakerNote is read for the focus point
-  alone no longer describes the whole decision: the camera settings
+- Status: Accepted; amended by [ADR018](adr018-focus-points-placed-from-a-table-and-the-points-used.md),
+  which places a point the camera names by number from a table of the
+  body's points, which this record left waiting for a decision on the
+  tables, and reports the points used with the area mode, which this
+  record rejected; and that the Sony MakerNote is read for the focus
+  point alone no longer describes the whole decision: the camera settings
   sections of [ADR011](adr011-metadata-from-standard-tags.md), added to
   that record in place, also read the white balance and other settings
   from it
