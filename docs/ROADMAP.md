@@ -42,18 +42,20 @@ shape. JPEG files are checked on test files built in code, on
 three stripped JPEG files of the maintainer's own Z 9 and on the eight
 camera JPEGs of Wikimedia Commons that CI downloads, of five Sony bodies,
 two Nikon bodies and a Canon. Milestones 1, 2 and 5 all work;
-milestone 3 works but for the shutter used, the image area and the raw
-size of Sony bodies, which they record only in enciphered blocks or, for
-the raw size, in a tag that gives an APS-C raw the code of a medium one,
-and milestone 4 works for the bodies that record a position. Any other
-file is refused with the `UnknownFormat` error.
+milestone 3 works as far as plain tags record it: the shutter used and
+the image area of Sony bodies, which they record only in enciphered
+blocks, wait for milestone 6, and their raw size is left out because a
+tag gives an APS-C raw the code of a medium one; and milestone 4 works
+for the bodies that record a position. Any other file is refused with
+the `UnknownFormat` error.
 
 The first release, version 0.1.0, is milestones 1 and 2: the embedded
 previews of NEF and ARW files. The second, 0.2.0, is most of milestone 3:
 their basic metadata. The third, 0.3.0, is the first step of milestone 4: the
 focus point as the camera records it. The fourth, 0.4.0, is milestone 5,
 plain JPEG files ([#23](https://github.com/kuolas/raw-files/issues/23)).
-The fifth, 0.5.0, completes milestone 3 with the camera's settings
+The fifth, 0.5.0, completes milestone 3, as far as plain tags record
+it, with the camera's settings
 ([#26](https://github.com/kuolas/raw-files/issues/26)). The next release
 is the second step of milestone 4: the mapping of a DSLR's autofocus
 point number to pixels. Milestone 6 follows it: every value a file

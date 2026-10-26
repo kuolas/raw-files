@@ -22,7 +22,7 @@ answer Part 2.
    - the ARW1 prefix code, published as an 18-entry table in dcraw, LibRaw
      and rawkit, reduces to a short rule, checked on files 2346 and 2271;
    - the inverse of the MakerNote cipher is computable from b³ mod 249
-     (and only extras need it);
+     (milestone 6 needs it, for what the enciphered tags hold);
    - the SR2 keystream is a formula with two constants.
 
    What remains:
@@ -66,13 +66,14 @@ answer Part 2.
    ([licences-and-references.md](licences-and-references.md)). These are
    legal questions, not engineering ones, and the same posture as NEF
    HE/HE\*.
-3. **Decryption and anti-circumvention.** Milestone 7 needs the SR2
-   keystream for the levels and white balance of older files and for
-   Sony's white level on all of them; the key is stored in the file. Does
-   decrypting it count as circumventing a technological measure under
-   DMCA-like laws? The question is untested; open decoders have done it for
-   about twenty years and no action against them was found
-   ([licences-and-references.md](licences-and-references.md),
+3. **Decryption and anti-circumvention.** Milestone 6 meets this question
+   first, for the encrypted SRF MakerNote IFDs and the enciphered tags.
+   Milestone 7 needs the SR2 keystream for the levels and white balance
+   of older files and for Sony's white level on all of them; the key is
+   stored in the file. Does decrypting it count as circumventing a
+   technological measure under DMCA-like laws? The question is untested;
+   open decoders have done it for about twenty years and no action against
+   them was found ([licences-and-references.md](licences-and-references.md),
    [raw-data.md](raw-data.md)). Milestones 2 and 3 need no decryption.
 4. **Scope for SRF, ARQ and the A100.** The one preview walk covers all of
    them. For raw data
@@ -255,8 +256,8 @@ answer Part 2.
 - **0x9050 layouts of the ILCE-9M3, ILCE-6700 and ILCE-1M2.** The values at
   the documented offsets are not plausible shutter counts in files 7361,
   7364 and 6736, and file 7835's block is mostly `FF` (219 of 256 bytes,
-  `FF` at the count offsets). Nice-to-have only
-  ([makernote-and-metadata.md](makernote-and-metadata.md)).
+  `FF` at the count offsets). It matters to milestone 6, which reads the
+  shutter count ([makernote-and-metadata.md](makernote-and-metadata.md)).
 - **Focus point.** What no sample shows yet
   ([makernote-and-metadata.md](makernote-and-metadata.md#96-focus-point),
   its section 13):

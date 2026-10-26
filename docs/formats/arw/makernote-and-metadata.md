@@ -228,7 +228,7 @@ milestone that needs the tag; "none" means nice-to-have. [P][1][2]
 | 0x2020 | AFPointsUsed | no | a mask of the points used | 4 (point numbers) |
 | 0x2022 | FocalPlaneAFPointsUsed | no | a mask of the on-sensor focus points used | 4 (point numbers) |
 | 0x2027 | FocusLocation | no | u16[4]: frame width and height, centre x and y of the focus area | 4 |
-| 0x2029 | RAWFileType | no | 0 compressed, 1 uncompressed, 2 lossless, 3 Compressed RAW 2 | 6; 7 (hint) |
+| 0x2029 | RAWFileType | no | 0 compressed, 1 uncompressed, 2 lossless, 3 Compressed RAW 2 | 6, 7 (hint) |
 | 0x202E | Quality | no | u16[2]; first value 1 RAW, 2 S-size, 3 M-size, 4 compressed, 5 compressed HQ; APS-C files say 3 too, and the ILCE-7M5 gives the compression whatever the size [F] | 3, 7 (hint) |
 | 0x202F | PixelShiftInfo | no | group ID and shot number; marks ARQ composites | none |
 | 0x2037 | FocusFrameSize | no | 6 bytes: the focus area's width and height and a third value | 4 |
@@ -446,7 +446,7 @@ the ILCE-7M5. [F] For the newest bodies the projects also disagree on the
   9050d for the ILCE-1M2 and 7M5 always. LibRaw has no ModelID for the
   ILCE-7RM6, so it falls back to 9050a there.
 
-### Shutter count (nice-to-have)
+### Shutter count (milestone 6)
 
 0x9050 holds the shutter count as a little-endian integer masked to 24 bits
 by ExifTool: at byte 0x32 in 9050a, 0x3A in 9050b and 9050c, and 0x0A in
@@ -670,7 +670,7 @@ decoder input for milestone 7 and are documented further in
 | 0x7031 to 0x7037 | lens corrections | i16 | vignetting, chromatic aberration, distortion: mode and parameters | 6 |
 | 0x7038 | SonyRawImageSize | u32[2] | width, height of the usable area of a tile-padded raw | 3, 7 |
 | 0x7310 | BlackLevel | u16[4] | plain copy, ARW 2.3.3 and later | 7 |
-| 0x7313 | WB_RGGBLevels | i16[4] | plain copy, ARW 2.3.3 and later | 7 |
+| 0x7313 | WB_RGGBLevels | i16[4] | plain copy, ARW 2.3.3 and later | 6, 7 |
 | 0x74C7 | SonyCropTopLeft | u32[2] | **(left, top)** | 3, 7 |
 | 0x74C8 | SonyCropSize | u32[2] | width, height | 3, 7 |
 | 0xC61D | WhiteLevel (DNG tag) | | ARW 2.3.3 and later | 7 |
@@ -1633,7 +1633,8 @@ too, so its white balance comes from Exif alone.
    otherwise from the decrypted SR2SubIFD; the white level 0x787F exists
    only in the SR2SubIFD. [F][I]
 2. Read 0x7010 SonyToneCurve (plain) for cRAW. [P]
-3. Do not implement the substitution cipher; nothing planned needs it. [I]
+3. Milestone 7 needs no substitution cipher; milestone 6 reads what the
+   enciphered tags hold once a decision on the cipher allows it. [I]
 4. Treat the A100's MRW block and the SRF key chain as optional, behind
    typed "unsupported" errors until there is demand. [I]
 
@@ -1658,7 +1659,7 @@ too, so its white balance comes from Exif alone.
    source of CC0 files is needed.
 6. **0x9050 layouts of the ILCE-9M3, ILCE-6700 and ILCE-1M2.** The values at
    the documented offsets are not plausible counts in files 7361, 7364 and
-   6736. Nice-to-have only.
+   6736. Milestone 6 needs them.
 7. **The 0x7240 + 6 link.** What Sony's software writes at 0x7240 in edited
    files, and whether a writer must keep the link to IFD2 or the raw
    SubIFD. No IDC-edited sample was available.
