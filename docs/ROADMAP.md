@@ -30,7 +30,9 @@ fields that older bodies record only there, checked on the same files. Both
 give where the camera focused, read from the MakerNote, on Nikon
 mirrorless bodies, Nikon DSLRs in live view and Sony bodies from the
 ILCE-7RM2 on, while a shot that records only an autofocus point's number
-gives none until the second step of milestone 4. A JPEG file, as a camera
+gives none until the second step of milestone 4, which places it from a
+table of the body's points that the project measures itself. A JPEG
+file, as a camera
 writes it beside its raw file or instead of it, opens with the file itself,
 the thumbnail of its Exif segment, the other images of its Multi-Picture
 Format (MPF) list and, from the Nikon bodies that write one, its
@@ -57,10 +59,20 @@ plain JPEG files ([#23](https://github.com/kuolas/raw-files/issues/23)).
 The fifth, 0.5.0, completes milestone 3, as far as plain tags record
 it, with the camera's settings
 ([#26](https://github.com/kuolas/raw-files/issues/26)). The next release
-is the second step of milestone 4: the mapping of a DSLR's autofocus
-point number to pixels. Milestone 6 follows it: every value a file
-records, the ones that only enciphered or encrypted blocks hold among
-them ([#50](https://github.com/kuolas/raw-files/issues/50)).
+is the second step of milestone 4: a DSLR's autofocus point, which a
+shot through the viewfinder names by number, placed on the picture
+from a table of the body's points, with the points the camera used and
+the body's layout beside it
+([#57](https://github.com/kuolas/raw-files/issues/57)). The tables are
+the project's own, measured on frames shot with the body and read in
+the maker's software, the Nikon D600's first, by a procedure that a
+contributor who owns another body can repeat; a body without a table
+gives none, and the format notes say so per body
+([ADR017](architecture-decisions/adr017-per-body-tables-measured-by-the-project.md),
+[ADR018](architecture-decisions/adr018-focus-points-placed-from-a-table-and-the-points-used.md)).
+Milestone 6 follows it: every value a file records, the ones that only
+enciphered or encrypted blocks hold among them
+([#50](https://github.com/kuolas/raw-files/issues/50)).
 
 ## Milestones
 
@@ -75,7 +87,9 @@ them ([#50](https://github.com/kuolas/raw-files/issues/50)).
    it on a preview, to judge sharpness where the photographer focused.
    First the position the camera records; then the shots that record only
    the number of an autofocus point, such as a DSLR's through the
-   viewfinder, mapped to pixels through a table of the body's points.
+   viewfinder, mapped to pixels through a table of the body's points,
+   measured by the project on that body
+   ([ADR017](architecture-decisions/adr017-per-body-tables-measured-by-the-project.md)).
 5. **Plain JPEG files.** Open the JPEG files a camera writes beside its
    raw files, for their Exif metadata and their previews.
 6. **Full metadata.** Every metadata value a file records, so that a
