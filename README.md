@@ -365,6 +365,41 @@ Everyone taking part is expected to follow the
   things are the way they are.
 - [CHANGELOG.md](CHANGELOG.md) — user-visible changes.
 
+## Acknowledgements
+
+- **Phil Harvey**, the creator of [ExifTool](https://exiftool.org/). Its
+  published tag documentation is where raw-files learnt most of what the
+  format notes record of the Nikon and Sony MakerNotes, and the program,
+  run on the sample files as an independent reader to compare with, has
+  checked what raw-files reads again and again. None of its code or
+  tables is in raw-files, which is written from the notes
+  ([ADR013](docs/architecture-decisions/adr013-clean-room-and-third-party-code.md)).
+- The **exiv2** project, whose [MakerNote documentation](https://exiv2.org/makernote.html)
+  the notes also draw on, and whose metadata listings on raw.pixls.us
+  say which version of a block each body writes.
+- **Laurent Clévy**, whose [NEF file format notes](http://lclevy.free.fr/nef/)
+  are the backbone of what the notes record of the NEF container, its
+  byte order, its IFD tree and where its previews sit, and whose Sony
+  raw notes serve the ARW pages the same way; and the other community
+  notes the format pages cite, the pixls.us forum threads, ozhiker's
+  Nikon tag notes and DPReview's article on Nikon's white balance
+  encryption among them.
+- The open-source decoders whose source was read to settle facts about
+  the formats, **dcraw**, **LibRaw**, **rawspeed**, **rawler** and
+  **libopenraw**. Reading them taught what a published description did
+  not say; none of their code was copied or translated, whatever its
+  licence, and every fact learnt from them went through the notes and a
+  sample file before it was coded
+  ([ADR013](docs/architecture-decisions/adr013-clean-room-and-third-party-code.md)).
+- [**raw.pixls.us**](https://raw.pixls.us/) and the photographers who gave
+  their raw files to it under CC0: the public samples that CI downloads,
+  and that the format notes cite file by file, are theirs.
+- **Wikimedia Commons** and the photographers whose camera JPEGs, under
+  CC0, public-domain dedications and CC BY licences, check the JPEG
+  reader;
+  [`tests/samples.tsv`](tests/samples.tsv) names each author whose
+  licence asks for credit.
+
 ## Trademarks
 
 Nikon and NEF, Sony and ARW, Hasselblad, and the other camera and format
