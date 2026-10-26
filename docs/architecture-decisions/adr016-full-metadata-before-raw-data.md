@@ -32,7 +32,9 @@ The rest falls into seven groups:
 2. how the camera processed its JPEG: Nikon's Picture Control, Sony's
    Creative Style, the dynamic range and noise reduction settings, and
    the scene modes many consumer bodies record only in their MakerNote;
-3. the lens by name, which some bodies record only as an identifier;
+3. the lens by name, which some bodies record only as an identifier
+   that a table of lenses names, Nikon's partly in its encrypted
+   LensData;
 4. authorship: the artist, the copyright and the comments;
 5. the location, from the GPS tags;
 6. XMP and IPTC: the rating, label, keywords, title and description a
@@ -42,14 +44,21 @@ The rest falls into seven groups:
    the shutter a Sony body used, whether it shot in APS-C mode, and the
    lens data in Nikon's encrypted records.
 
-Groups 1 to 6 sit in places raw-files already reads, or in standard
-blocks beside them: the TIFF and Exif tags, the plain MakerNote tags
-and records, the GPS directory, and the XMP and IPTC blocks. Group 7
-does not: [ADR011](adr011-metadata-from-standard-tags.md) reads nothing
+Most of groups 1 to 6 sits in places raw-files already reads, or in
+standard blocks beside them: the TIFF and Exif tags, the plain
+MakerNote tags and records, the GPS directory, and the XMP and IPTC
+blocks. Not all of it: the lens by name needs a table of lenses, and on
+Nikon part of the encrypted LensData; and XMP is XML, for which
+raw-files has no reader, and it has no dependencies: one it took would
+have to be pure Rust ([ADR007](adr007-pure-rust-cross-platform.md))
+under a permissive license
+([ADR002](adr002-license-mit-or-apache-2.md)). Group 7 is the
+enciphered and encrypted blocks themselves:
+[ADR011](adr011-metadata-from-standard-tags.md) reads nothing
 deciphered or decrypted, and
 [ADR013](adr013-clean-room-and-third-party-code.md) lets a fixed table,
-such as a cipher's, enter the code only once where it may come from is
-decided.
+such as a cipher's or a list of lenses, enter the code only once where
+it may come from is decided.
 
 The [roadmap](../ROADMAP.md) had raw sensor data next after the focus
 points, and then the developed image that
@@ -87,8 +96,8 @@ Rejected:
 
 - **Raw sensor data first**, as the roadmap had it. A program that
   shows, sorts and searches pictures would keep a second reader for the
-  metadata until both raw milestones were done, and the metadata is read
-  by the readers raw-files already has.
+  metadata until both raw milestones were done, and most of the metadata
+  is read by the readers raw-files already has.
 - **The plain values only, leaving the enciphered and encrypted blocks
   out for good.** A Sony body's shutter and its APS-C mode, and the lens
   of many Nikon files, would never be read, and a program would keep a
@@ -105,6 +114,10 @@ Rejected:
   it or the caller hands it in. Each group's issue settles its own.
 - How an enciphered or encrypted block is read: that is the decision the
   second point above calls for.
+- How XMP and IPTC are parsed, whether by a reader of raw-files' own or
+  through a dependency ([ADR002](adr002-license-mit-or-apache-2.md),
+  [ADR007](adr007-pure-rust-cross-platform.md)), and where a table of
+  lenses comes from ([ADR013](adr013-clean-room-and-third-party-code.md)).
 - The order of the groups within the milestone, and the order of the
   formats after NEF and ARW, which the roadmap keeps.
 - Anything about raw sensor data and the developed image, which
