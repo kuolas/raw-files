@@ -258,7 +258,7 @@ milestone that needs the tag. [P][1]
 | 0x0002 | ISO | u16[2] | `[0, ISO]` on most bodies before the D810; absent from the D810 on; four zero bytes of type UNDEFINED on the D700 (file 2255), `[0, 0]` on the E5700 (file 4456) **[F]** | 3 |
 | 0x0005 | WhiteBalance | string | the white balance setting, as upper-case text padded with spaces; on every checked body; values in [section 8.7](#87-camera-settings) **[F]** | 3, 6 |
 | 0x000B | WhiteBalanceFineTune | s16[1 or 2] | the white balance fine-tuning: one value from the D1H to the D200, two from the D300 on; not written by the Z 9, Z f, Z5II, Z50II and Z6III, which write 0x003F alone **[F]** | 3 |
-| 0x000C | WB_RBLevels | rational[4] | as-shot white-balance multipliers; LibRaw reads them as R, B, then two greens (ExifTool leaves the last two unidentified) | 7 |
+| 0x000C | WB_RBLevels | rational[4] | as-shot white-balance multipliers; LibRaw reads them as R, B, then two greens (ExifTool leaves the last two unidentified) | 6, 7 |
 | 0x0011 | PreviewIFD | IFD | sub-IFD with a small JPEG preview; offsets relative to MakerNote + 10 | 1 |
 | 0x001B | CropHiSpeed | u16[7] | crop mode and geometry; field order in [section 8.4](#84-image-dimensions) | 3, 4, 7 |
 | 0x001D | SerialNumber | string | the body's serial number; decryption key input. Seven digits on every checked DSLR and mirrorless body from the D300 on (eight on the Nikon 1 J1) and on the Coolpix A; seven spaces on the D200 (file 8079); absent before it and on the Coolpix E5700 and P7800 **[F]** | 3, 6, 7 |
@@ -498,13 +498,14 @@ bodies depend on 0x000C there too [P][7][8][9]. No report of an absent or wrong 
 but this is an absence of evidence rather than a proof. [I]
 
 Milestone 3 reads the white balance setting
-([section 8.7](#87-camera-settings)), not these multipliers; this section
-matters from milestone 7.
+([section 8.7](#87-camera-settings)), not these multipliers; milestone 6
+reads these multipliers as metadata and milestone 7 uses them to decode.
 
 ## 7. LensData and ShotInfo
 
-Neither is needed for previews, basic metadata or decoding. They are
-documented here so that nobody decrypts them by accident or unnecessarily.
+Neither is needed for previews, basic metadata or decoding. Milestone 6
+reads what they hold once a decision on the tables allows it. They are
+documented here so that nobody decrypts them by accident.
 
 **LensData (0x0098).** A version-prefixed block (0100 is 9 bytes, 0101 and
 0201 to 0203 are 15, 0204 is 16, 0400 to 0403 are 459 to 879, 0800 and 0801
@@ -1412,9 +1413,10 @@ For milestone 3, keep the MakerNote out of the critical path.
    key, the substitution tables have no settled provenance yet
    ([section 11](#11-open-questions)), and white balance for every body of
    interest is available in plain form (0x000C). Defer 0x0097, 0x0098 and
-   0x0091 to milestone 6, which reads what they hold once a decision on
-   the tables allows it, and 0x0097's white balance to milestone 7, only
-   if older-body white balance is required. [I]
+   0x0091 to milestone 6, which reads what they hold, 0x0097's white
+   balance multipliers among it, once a decision on the tables allows it;
+   milestone 7 uses those multipliers to decode, where older bodies
+   record them only there. [I]
 4. **Output size policy:** report the CropArea rectangle if present and
    plausible (inside the raw IFD dimensions); otherwise report the stored
    raw IFD dimensions and say in the API documentation that they may include
