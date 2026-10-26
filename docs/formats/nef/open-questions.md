@@ -23,7 +23,13 @@ and test-data.md describes the sample set that would answer Part 2.
    - per-body tables of autofocus points, which turn the point number of a
      DSLR shot through the viewfinder, a Nikon 1 shot or a Z body's
      auto-area mask into a position
-     ([makernote-and-metadata.md](makernote-and-metadata.md#86-focus-point)).
+     ([makernote-and-metadata.md](makernote-and-metadata.md#86-focus-point)):
+     decided, these are measured by the project on frames shot with the
+     body, by the procedure of
+     [autofocus-points.md](autofocus-points.md#1-the-procedure), and
+     taken from another project only by a decision made together with
+     it
+     ([ADR017](../../architecture-decisions/adr017-per-body-tables-measured-by-the-project.md)).
 
    The options are:
    - (a) treat them as format facts, transcribed from two independent sources
@@ -32,10 +38,12 @@ and test-data.md describes the sample set that would answer Part 2.
    - (c) a clean-room process, in which the person who reads the copyleft
      source is not the person who writes the code.
 
-   Per-body tables can always take route (b), though route (b) can check
-   a table of autofocus points only where a sample's point is known. The
-   decision needs to be recorded in an ADR before the first table enters
-   raw-files, which may be a table of autofocus points.
+   The tables of autofocus points are measured by the project (ADR017,
+   above), and the per-body facts the files themselves hold, the CFA
+   phase, the crop trims and the white levels, take route (b) as facts
+   of the format. The decision on the Huffman and substitution tables
+   needs to be recorded in an ADR before the first of them enters
+   raw-files.
 2. **HE / HE\*.** The recommendation is to detect these files and return an
    "unsupported" error ([raw-data.md](raw-data.md)). Implementing a decoder
    would touch the JPEG XS patent pool. That is a legal question, not an
