@@ -5,8 +5,9 @@ layouts, the tags that matter, the encrypted blocks and how they are
 decrypted, and where a viewer finds orientation, capture date, make, model
 and image size, where the camera recorded the point it focused on, and
 how the camera was set for the shot.
-It serves milestone 3 (basic metadata), milestone 4 (focus points) and,
-for the decoding-related tags, milestone 6 (raw data).
+It serves milestone 3 (basic metadata), milestone 4 (focus points),
+milestone 6 (full metadata) and, for the decoding-related tags, milestone 7
+(raw data).
 
 See [the NEF overview](README.md). The TIFF container and the preview JPEGs
 are in [container-and-previews.md](container-and-previews.md); decoding of
@@ -255,35 +256,35 @@ milestone that needs the tag. [P][1]
 |---|---|---|---|---|
 | 0x0001 | MakerNoteVersion | undef[4] | ASCII digits on some bodies, binary on others; do not rely on it | none |
 | 0x0002 | ISO | u16[2] | `[0, ISO]` on most bodies before the D810; absent from the D810 on; four zero bytes of type UNDEFINED on the D700 (file 2255), `[0, 0]` on the E5700 (file 4456) **[F]** | 3 |
-| 0x0005 | WhiteBalance | string | the white balance setting, as upper-case text padded with spaces; on every checked body; values in [section 8.7](#87-camera-settings) **[F]** | 3 |
+| 0x0005 | WhiteBalance | string | the white balance setting, as upper-case text padded with spaces; on every checked body; values in [section 8.7](#87-camera-settings) **[F]** | 3, 6 |
 | 0x000B | WhiteBalanceFineTune | s16[1 or 2] | the white balance fine-tuning: one value from the D1H to the D200, two from the D300 on; not written by the Z 9, Z f, Z5II, Z50II and Z6III, which write 0x003F alone **[F]** | 3 |
-| 0x000C | WB_RBLevels | rational[4] | as-shot white-balance multipliers; LibRaw reads them as R, B, then two greens (ExifTool leaves the last two unidentified) | 6 |
+| 0x000C | WB_RBLevels | rational[4] | as-shot white-balance multipliers; LibRaw reads them as R, B, then two greens (ExifTool leaves the last two unidentified) | 7 |
 | 0x0011 | PreviewIFD | IFD | sub-IFD with a small JPEG preview; offsets relative to MakerNote + 10 | 1 |
-| 0x001B | CropHiSpeed | u16[7] | crop mode and geometry; field order in [section 8.4](#84-image-dimensions) | 3, 4, 6 |
-| 0x001D | SerialNumber | string | the body's serial number; decryption key input. Seven digits on every checked DSLR and mirrorless body from the D300 on (eight on the Nikon 1 J1) and on the Coolpix A; seven spaces on the D200 (file 8079); absent before it and on the Coolpix E5700 and P7800 **[F]** | 3, 6 |
+| 0x001B | CropHiSpeed | u16[7] | crop mode and geometry; field order in [section 8.4](#84-image-dimensions) | 3, 4, 7 |
+| 0x001D | SerialNumber | string | the body's serial number; decryption key input. Seven digits on every checked DSLR and mirrorless body from the D300 on (eight on the Nikon 1 J1) and on the Coolpix A; seven spaces on the D200 (file 8079); absent before it and on the Coolpix E5700 and P7800 **[F]** | 3, 6, 7 |
 | 0x001E | ColorSpace | u16 | the colour space setting: 1 sRGB, 2 Adobe RGB, 4 BT.2100; from the D200 on, but not on the Coolpix P7800, while no checked NEF has the Exif ColorSpace **[F]** | 3 |
 | 0x0021 | FaceDetect | u16 | the size of a frame and up to twelve face rectangles in it; on none of the 30 checked files **[F]** | none |
-| 0x0024 | WorldTime | undef | the time zone and daylight saving setting of the camera's clock; layout in [section 8.2](#82-capture-date-and-time-zone) | 3 |
+| 0x0024 | WorldTime | undef | the time zone and daylight saving setting of the camera's clock; layout in [section 8.2](#82-capture-date-and-time-zone) | 3, 6 |
 | 0x0034 | ShutterMode | u16 | the shutter used: mechanical, electronic front curtain or electronic, and whether the camera chose it in its auto mode; on the Nikon 1 J1, D850, D780 and every Z body; codes in [section 8.7](#87-camera-settings) **[F]** | 3 |
 | 0x0037 | MechanicalShutterCount | u32 | newer bodies; mechanical frames only | none |
-| 0x003D | BlackLevel | u16[4] | per-channel black level, recorded at 14-bit scale | 6 |
-| 0x003E | ImageSizeRAW | u16 | the raw size setting: 1 large, 2 medium, 3 small; from the D750, D810 and D5600 on **[F]** | 3, 6 |
+| 0x003D | BlackLevel | u16[4] | per-channel black level, recorded at 14-bit scale | 7 |
+| 0x003E | ImageSizeRAW | u16 | the raw size setting: 1 large, 2 medium, 3 small; from the D750, D810 and D5600 on **[F]** | 3, 7 |
 | 0x003F | WhiteBalanceFineTune | srational[2] | the white balance fine-tuning as two fractions; from the D810 on **[F]** | 3 |
-| 0x0045 | CropArea | u16[4] | left, top, width, height of the output rectangle | 3, 4, 6 |
+| 0x0045 | CropArea | u16[4] | left, top, width, height of the output rectangle | 3, 4, 7 |
 | 0x004F | ColorTemperatureAuto | u16 | the colour temperature, in kelvin, that auto white balance chose; 0 under another setting; on the D5, D850, D780 and every Z body **[F]** | 3 |
-| 0x0051 | (unnamed, Z bodies) | undef | NEFCompression as a u16 at byte 10; byte order disputed (see the note below). Present on the Z 6 (2018) too, and on the Z f, Z6III, Z 9, Z5II and Z50II (files 3587, 6887, 7808 to 7810, 7812, 7813, 5146 to 5148, 7735, 7736, 7767, 7770); absent on the Z fc (2021) and Z 30 (2022), which write 0x0093 instead (files 8559, 5812). Byte 10, read as a u16 in the MakerNote's byte order, little-endian on the three Z 9 files, is 3 (lossless) on the Z 9's lossless file, 14 (HE\*) on its HE\* file and 13 (HE) on its HE file (files 5146 to 5148) **[F]** | 6 |
+| 0x0051 | (unnamed, Z bodies) | undef | NEFCompression as a u16 at byte 10; byte order disputed (see the note below). Present on the Z 6 (2018) too, and on the Z f, Z6III, Z 9, Z5II and Z50II (files 3587, 6887, 7808 to 7810, 7812, 7813, 5146 to 5148, 7735, 7736, 7767, 7770); absent on the Z fc (2021) and Z 30 (2022), which write 0x0093 instead (files 8559, 5812). Byte 10, read as a u16 in the MakerNote's byte order, little-endian on the three Z 9 files, is 3 (lossless) on the Z 9's lossless file, 14 (HE\*) on its HE\* file and 13 (HE) on its HE file (files 5146 to 5148) **[F]** | 6, 7 |
 | 0x0084 | Lens | rational[4] | the lens's shortest and longest focal length and the widest aperture at each; on every checked body with interchangeable lenses, from the D1H on; equal to Exif LensSpecification wherever both exist **[F]** | 3 |
 | 0x0088 | AFInfo | undef[4] | area mode, the number of the focus point and a mask of the points in focus; no position. The only focus data of the checked bodies without AFInfo2: the D1H, D70, D100, D200 and Coolpix E5700 and P7800, and written by no checked body that has AFInfo2 **[F]**; [section 8.6](#86-focus-point) | 4 |
-| 0x0091 | ShotInfo | undef | model-specific; encrypted for versions 02xx and 08xx | none |
-| 0x0093 | NEFCompression | u16 | compression hint; absent on the Z bodies checked but the Z fc and Z 30, which write 0x0051 instead, and on the D1H and E5700; present on the Z fc and Z 30, with the value 3 (lossless), where 0x0051 is absent (files 8559, 5812) **[F]** | 6 |
-| 0x0096 | NEFLinearizationTable | undef | curve and predictor seeds; unencrypted | 6 |
-| 0x008C | (older curve) | undef | fallback for 0x0096 | 6 |
-| 0x0097 | ColorBalance | undef | white balance on older bodies; encrypted from version 0200 | 6 |
-| 0x0098 | LensData | undef | lens description; encrypted from version 0201 | none |
-| 0x00A7 | ShutterCount | u32 | decryption key input | 3, 6 |
+| 0x0091 | ShotInfo | undef | model-specific; encrypted for versions 02xx and 08xx | 6 |
+| 0x0093 | NEFCompression | u16 | compression hint; absent on the Z bodies checked but the Z fc and Z 30, which write 0x0051 instead, and on the D1H and E5700; present on the Z fc and Z 30, with the value 3 (lossless), where 0x0051 is absent (files 8559, 5812) **[F]** | 6, 7 |
+| 0x0096 | NEFLinearizationTable | undef | curve and predictor seeds; unencrypted | 7 |
+| 0x008C | (older curve) | undef | fallback for 0x0096 | 7 |
+| 0x0097 | ColorBalance | undef | white balance on older bodies; encrypted from version 0200 | 6, 7 |
+| 0x0098 | LensData | undef | lens description; encrypted from version 0201 | 6 |
+| 0x00A7 | ShutterCount | u32 | decryption key input | 3, 6, 7 |
 | 0x00B7 | AFInfo2 | undef | where the camera focused: a block that starts with a four-character version, plain on every version; layouts in [section 8.6](#86-focus-point) | 4 |
 | 0x0E01 | NikonCaptureData | undef | Capture NX edit data (optional) | none |
-| 0x0E22 | NEFBitDepth | u16[4] | secondary bit-depth source | 6 |
+| 0x0E22 | NEFBitDepth | u16[4] | secondary bit-depth source | 6, 7 |
 
 Notes:
 
@@ -496,8 +497,9 @@ rawspeed and rawler contain no Z-specific white balance code (they read
 bodies depend on 0x000C there too [P][7][8][9]. No report of an absent or wrong 0x000C on a Z body was found,
 but this is an absence of evidence rather than a proof. [I]
 
-For milestone 3 white balance is not needed at all; this section matters
-from milestone 6.
+Milestone 3 reads the white balance setting
+([section 8.7](#87-camera-settings)), not these multipliers; this section
+matters from milestone 7.
 
 ## 7. LensData and ShotInfo
 
@@ -1410,8 +1412,9 @@ For milestone 3, keep the MakerNote out of the critical path.
    key, the substitution tables have no settled provenance yet
    ([section 11](#11-open-questions)), and white balance for every body of
    interest is available in plain form (0x000C). Defer 0x0097, 0x0098 and
-   0x0091 to milestone 6, and only if older-body white balance is required.
-   [I]
+   0x0091 to milestone 6, which reads what they hold once a decision on
+   the tables allows it, and 0x0097's white balance to milestone 7, only
+   if older-body white balance is required. [I]
 4. **Output size policy:** report the CropArea rectangle if present and
    plausible (inside the raw IFD dimensions); otherwise report the stored
    raw IFD dimensions and say in the API documentation that they may include
@@ -1432,8 +1435,8 @@ For milestone 3, keep the MakerNote out of the critical path.
    block is free for all uses; dcraw's licence is nevertheless described as
    ambiguous for the whole file elsewhere on this page. That is an input to
    the decision, not legal advice. raw-files needs an independent derivation,
-   a source it can use, or a recorded legal decision, before milestone 6
-   touches encrypted blocks. [10]
+   a source it can use, or a recorded legal decision, before any milestone
+   touches encrypted blocks, milestone 6 the first. [10]
 2. **Non-numeric serial handling.** Which of the four conventions in
    [section 5.1](#51-non-numeric-serial-numbers) is correct for a real
    lettered serial. Checking a D50-family and a D200 sample would settle it.

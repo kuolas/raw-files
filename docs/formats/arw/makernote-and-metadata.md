@@ -6,8 +6,8 @@ variants are told apart, the tags that matter, the two unrelated ciphers Sony
 uses, the SR2Private block that carries the decoding parameters, and where a
 viewer finds orientation, capture date, make, model, image size, lens and
 the point the camera focused on. It serves milestone 3 (basic metadata),
-milestone 4 (focus points) and, for the decoding-related tags, milestone 6
-(raw data).
+milestone 4 (focus points), milestone 6 (full metadata) and, for the
+decoding-related tags, milestone 7 (raw data).
 
 See [the ARW overview](README.md). The TIFF container and the preview JPEGs
 (milestone 2) are in [container-and-previews.md](container-and-previews.md);
@@ -215,11 +215,11 @@ milestone that needs the tag; "none" means nice-to-have. [P][1][2]
 | ID | Name | Enc. | Meaning | M |
 |---|---|---|---|---|
 | 0x0010 | CameraInfo | no | A-mount and NEX AF and lens data, the AF point among them by number; layout chosen by byte count | 4 (point numbers) |
-| 0x0112 | WhiteBalanceFineTune | no | u32; despite the name, the kind of fluorescent lamp under a fluorescent white balance (-1 to 2), 0 otherwise; not the fine-tuning, which is 0x2014; [section 9.7](#97-camera-settings) [F] | none |
+| 0x0112 | WhiteBalanceFineTune | no | u32; despite the name, the kind of fluorescent lamp under a fluorescent white balance (-1 to 2), 0 otherwise; not the fine-tuning, which is 0x2014; [section 9.7](#97-camera-settings) [F] | 6 |
 | 0x0114 | CameraSettings | no | layout by count; aspect ratio, drive mode, a Sony-coded orientation | none |
 | 0x0115 | WhiteBalance | no | u32; the white balance setting: 0 auto, 16 daylight, 48 shade, 112 custom and others; not on the F828, R1 and A100 [F] | 3 |
 | 0x2001 | PreviewImage | no | a JPEG-file feature; absent from every ARW, SR2 and ARQ sample [F] | none |
-| 0x2010 | Tag2010 | yes | settings, a date string, aspect ratio; not written from the ILCE-7SM3 on [F] | none |
+| 0x2010 | Tag2010 | yes | settings, a date string, aspect ratio; not written from the ILCE-7SM3 on [F] | 6 |
 | 0x2014 | WBShiftAB_GM | no | i32[2]; the white balance fine-tuning, amber to blue then green to magenta, positive towards amber and towards magenta; [section 9.7](#97-camera-settings) [F] | 3 |
 | 0x201A | ElectronicFrontCurtainShutter | no | u32; the electronic front curtain setting, 0 off, 1 on; not the shutter used [F] | 3 |
 | 0x201B | FocusMode | no | 0 manual, 2 AF-S, 3 AF-C, 4 AF-A, 6 DMF, 7 AF-D; [section 9.6](#96-focus-point) | 4 |
@@ -228,19 +228,19 @@ milestone that needs the tag; "none" means nice-to-have. [P][1][2]
 | 0x2020 | AFPointsUsed | no | a mask of the points used | 4 (point numbers) |
 | 0x2022 | FocalPlaneAFPointsUsed | no | a mask of the on-sensor focus points used | 4 (point numbers) |
 | 0x2027 | FocusLocation | no | u16[4]: frame width and height, centre x and y of the focus area | 4 |
-| 0x2029 | RAWFileType | no | 0 compressed, 1 uncompressed, 2 lossless, 3 Compressed RAW 2 | 6 (hint) |
-| 0x202E | Quality | no | u16[2]; first value 1 RAW, 2 S-size, 3 M-size, 4 compressed, 5 compressed HQ; APS-C files say 3 too, and the ILCE-7M5 gives the compression whatever the size [F] | 3, 6 (hint) |
+| 0x2029 | RAWFileType | no | 0 compressed, 1 uncompressed, 2 lossless, 3 Compressed RAW 2 | 6; 7 (hint) |
+| 0x202E | Quality | no | u16[2]; first value 1 RAW, 2 S-size, 3 M-size, 4 compressed, 5 compressed HQ; APS-C files say 3 too, and the ILCE-7M5 gives the compression whatever the size [F] | 3, 7 (hint) |
 | 0x202F | PixelShiftInfo | no | group ID and shot number; marks ARQ composites | none |
 | 0x2037 | FocusFrameSize | no | 6 bytes: the focus area's width and height and a third value | 4 |
 | 0x2044 | HiddenInfo | no | offset and size of an unknown block | none |
 | 0x204A | FocusLocation2 | no | u16[4], as FocusLocation | 4 |
 | 0x3000 | ShotInfo | no | includes a plain date string at byte 6 | none |
 | 0x900B | Tag900b | yes | face detection | none |
-| 0x9050 | Tag9050 | yes | shutter count, LensType2, internal serial, the shutter used and the APS-C mode flag; [section 9.7](#97-camera-settings) | none |
-| 0x9400 | Tag9400 | yes | sequence numbers, CameraOrientation, the shutter type on the RX100 bodies | none |
-| 0x9401 to 0x9406, 0x940C, 0x940E, 0x9416 | Tag94xx | yes | ISO, lens, focus and AF data, and in 0x9416 the APS-C mode flag; 0x9416 replaces 0x9405 from the ILCE-7SM3 on [F] | none |
-| 0xB000 | FileFormat | no | u8[4] format version | 3, 6 |
-| 0xB001 | SonyModelID | no | u16 body identifier | 3, 6 |
+| 0x9050 | Tag9050 | yes | shutter count, LensType2, internal serial, the shutter used and the APS-C mode flag; [section 9.7](#97-camera-settings) | 6 |
+| 0x9400 | Tag9400 | yes | sequence numbers, CameraOrientation, the shutter type on the RX100 bodies | 6 |
+| 0x9401 to 0x9406, 0x940C, 0x940E, 0x9416 | Tag94xx | yes | ISO, lens, focus and AF data, and in 0x9416 the APS-C mode flag; 0x9416 replaces 0x9405 from the ILCE-7SM3 on [F] | 6 |
+| 0xB000 | FileFormat | no | u8[4] format version | 3, 6, 7 |
+| 0xB001 | SonyModelID | no | u16 body identifier | 3, 6, 7 |
 | 0xB021 | ColorTemperature | no | u32; kelvin, 0 unless the white balance is custom on the samples [F] | 3 |
 | 0xB027 | LensType | no | A-mount lens ID; 65535 for E-mount lenses | 3 (lens) |
 | 0xB028 | MinoltaMakerNote | no | A100 only: offset of a Minolta-format IFD; 0 means absent | none |
@@ -350,8 +350,8 @@ This page calls the first "enciphered" (ExifTool's word) and the second
 
 | Scheme | Applies to | Key | Needed for |
 |---|---|---|---|
-| Byte substitution, b³ mod 249 | MakerNote 0x2010, 0x900B, 0x9050 and the 0x94xx tags | none | nothing raw-files plans: shutter count, aspect ratio, LensType2, MakerNote orientation |
-| XOR keystream | the SR2SubIFD (every ARW 2.x to 6.0 and SR2), SRF's MakerNote IFDs and SRF pixel data | 32 bits from the file | milestone 6 white balance, black and white level on files before ARW 2.3.3; the SR2SubIFD's own white level on every file |
+| Byte substitution, b³ mod 249 | MakerNote 0x2010, 0x900B, 0x9050 and the 0x94xx tags | none | milestone 6, once a decision on the cipher allows it: shutter count, aspect ratio, LensType2, MakerNote orientation, the shutter used and the APS-C mode |
+| XOR keystream | the SR2SubIFD (every ARW 2.x to 6.0 and SR2), SRF's MakerNote IFDs and SRF pixel data | 32 bits from the file | milestone 6, once a decision on the keystream allows it: what SRF's MakerNote IFDs hold; milestone 7 white balance, black and white level on files before ARW 2.3.3; the SR2SubIFD's own white level on every file |
 
 Both were checked on the samples:
 
@@ -660,21 +660,21 @@ plausible: black 512 on most bodies, 800 on the 1-inch RX100 and RX100M6,
 ## 7. Raw-relevant tags
 
 These live in the raw SubIFD (IFD0 tag 0x014A) unless noted. Most are
-decoder input for milestone 6 and are documented further in
+decoder input for milestone 7 and are documented further in
 [raw-data.md](raw-data.md); the crop tags also serve milestone 3.
 
 | Tag | Name | Type | Meaning and measured values | M |
 |---|---|---|---|---|
 | 0x7000 | SonyRawFileType | u16 | ExifTool: 0 uncompressed 14-bit, 1 uncompressed 12-bit, 2 compressed, 3 lossless, 4 lossless 2, 6 compressed 2. **The samples do not match** (below) | none |
-| 0x7010 | SonyToneCurve | u16[4] | four knots of the cRAW decompression curve | 6 |
-| 0x7031 to 0x7037 | lens corrections | i16 | vignetting, chromatic aberration, distortion: mode and parameters | none |
-| 0x7038 | SonyRawImageSize | u32[2] | width, height of the usable area of a tile-padded raw | 3, 6 |
-| 0x7310 | BlackLevel | u16[4] | plain copy, ARW 2.3.3 and later | 6 |
-| 0x7313 | WB_RGGBLevels | i16[4] | plain copy, ARW 2.3.3 and later | 6 |
-| 0x74C7 | SonyCropTopLeft | u32[2] | **(left, top)** | 3, 6 |
-| 0x74C8 | SonyCropSize | u32[2] | width, height | 3, 6 |
-| 0xC61D | WhiteLevel (DNG tag) | | ARW 2.3.3 and later | 6 |
-| 0xC61F, 0xC620 | DefaultCropOrigin, DefaultCropSize (DNG tags) | | ARW 2.3.3 and later | 3, 6 |
+| 0x7010 | SonyToneCurve | u16[4] | four knots of the cRAW decompression curve | 7 |
+| 0x7031 to 0x7037 | lens corrections | i16 | vignetting, chromatic aberration, distortion: mode and parameters | 6 |
+| 0x7038 | SonyRawImageSize | u32[2] | width, height of the usable area of a tile-padded raw | 3, 7 |
+| 0x7310 | BlackLevel | u16[4] | plain copy, ARW 2.3.3 and later | 7 |
+| 0x7313 | WB_RGGBLevels | i16[4] | plain copy, ARW 2.3.3 and later | 7 |
+| 0x74C7 | SonyCropTopLeft | u32[2] | **(left, top)** | 3, 7 |
+| 0x74C8 | SonyCropSize | u32[2] | width, height | 3, 7 |
+| 0xC61D | WhiteLevel (DNG tag) | | ARW 2.3.3 and later | 7 |
+| 0xC61F, 0xC620 | DefaultCropOrigin, DefaultCropSize (DNG tags) | | ARW 2.3.3 and later | 3, 7 |
 
 Sources: [2][4][10][15][16][17][18]; measurements [F] as cited below. The
 DNG BlackLevel tag (0xC61A) appears in no Sony file of the raw.pixls.us
@@ -1455,8 +1455,9 @@ MakerNote **[F]**.
 
 SRF needs no decryption for milestone 3: IFD0 has Make, Model and an Exif
 IFD with the dates, and IFD1 holds the preview JPEG. [S][24] The key
-chain matters only for white balance and the raw data (milestone 6, low
-priority). At the level metadata needs:
+chain matters for what the encrypted MakerNote IFDs hold (milestone 6),
+and for white balance and the raw data (milestone 7, low priority). At
+the level metadata needs:
 
 - The MakerNote is a chain of seven IFDs, SRF0 to SRF6. SRF0 is plain, with
   one entry (tag 0x0003) and a next pointer to SRF1. [P][2][F]
@@ -1624,7 +1625,7 @@ raw from a medium one; and the shutter used and APS-C mode, because only
 enciphered blocks hold them. The A100's Minolta-format IFD stays unread
 too, so its white balance comes from Exif alone.
 
-**Milestone 6 needs the SR2 keystream for older files.**
+**Milestone 7 needs the SR2 keystream for older files.**
 
 1. Implement the keystream of [section 6](#6-the-sr2-keystream); it is about
    twenty lines and needs no table. Read white balance and black level from

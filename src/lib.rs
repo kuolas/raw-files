@@ -239,8 +239,10 @@
 //! The [roadmap](https://github.com/kuolas/raw-files/blob/master/docs/ROADMAP.md)
 //! plans next the focus point of the shots that record only an autofocus
 //! point's number, such as a DSLR's through the viewfinder, mapped to
-//! pixels through a table of the body's points; then the raw sensor data;
-//! and last a developed linear image.
+//! pixels through a table of the body's points; then every metadata value
+//! a file records, the ones that only enciphered or encrypted blocks hold
+//! among them; then the raw sensor data; and last a developed linear
+//! image.
 
 // A fuzzing build compiles the reader for one caller, the fuzz entry points,
 // which use only part of it. What is unused there, and so which `expect`s
