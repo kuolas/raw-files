@@ -204,8 +204,9 @@ impl<R: Read + Seek> RawFile<R> {
     }
 
     /// What the camera recorded about the picture, read when the file was
-    /// opened: the camera, when the picture was taken, its exposure and
-    /// lens, and its sizes.
+    /// opened: the camera and the software that wrote the file, when the
+    /// picture was taken, its exposure, the camera's settings, the lens,
+    /// the orientation, the sizes and where the camera focused.
     ///
     /// Reading it reads nothing from the file, so it never fails. A value
     /// the file does not record, or records in a way that cannot be read,

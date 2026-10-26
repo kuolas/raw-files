@@ -205,9 +205,9 @@ neither. [I]
 HE and HE* are built on a licensed third-party codec (intoPIX TicoRAW, a
 JPEG XS variant) and JPEG XS has a royalty-bearing patent pool. [28][29]
 **[S]** Implementing a decoder may need a patent licence even though the
-copyright position is clean. raw-files detects these files and returns a clear
-unsupported error; see [security.md](security.md). Any future work on them
-needs legal advice first.
+copyright position is clean. When raw-files decodes raw data, it is to detect
+these files and return a clear unsupported error; see
+[security.md](security.md). Any future work on them needs legal advice first.
 
 ## 5. Community references
 

@@ -17,7 +17,7 @@ each: the context, what was decided, and what follows from it. They answer
 | [ADR009](adr009-public-api-shape.md) | The shape of the public API | Accepted |
 | [ADR010](adr010-decoding-ends-at-a-linear-image.md) | Decoding ends at a linear image | Accepted |
 | [ADR011](adr011-metadata-from-standard-tags.md) | Metadata comes from the standard tags | Accepted; amended by [ADR012](adr012-focus-points-as-the-camera-records-them.md), and in place for the camera settings |
-| [ADR012](adr012-focus-points-as-the-camera-records-them.md) | Focus points as the camera records them | Accepted |
+| [ADR012](adr012-focus-points-as-the-camera-records-them.md) | Focus points as the camera records them | Accepted; ADR011's camera settings sections read more of the Sony MakerNote |
 | [ADR013](adr013-clean-room-and-third-party-code.md) | Clean-room implementation and third-party code | Accepted |
 | [ADR014](adr014-jpeg-files-as-a-format-of-their-own.md) | JPEG files as a format of their own | Accepted |
 | [ADR015](adr015-the-focus-point-of-a-crop-mode-jpeg.md) | The focus point of a crop-mode JPEG | Accepted |

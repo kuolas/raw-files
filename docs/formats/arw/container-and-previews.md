@@ -626,12 +626,12 @@ Further observations:
 
 Rank by what is measured in the JPEG itself, never by slot, by tag
 dimensions (absent in IFD0 and IFD1, wrong on the A100), by byte length or
-by FileFormat. This is a design decision for milestone 2, not yet
-implemented in raw-files. A procedure of this shape (candidates from
-0x0201/0x0202 pairs and single strips, lossless SOFs rejected, ranking by
-SOF area) was **checked** by a throwaway script on the 36 sample files, and
-the role filter of step 3 was checked against the tags of every IFD in
-those files (section 7.2).
+by FileFormat. raw-files ranks previews this way: by the pixel area their
+JPEG frame header gives, and by byte length only between two of the same
+area. A procedure of this shape (candidates from 0x0201/0x0202 pairs and
+single strips, lossless SOFs rejected, ranking by SOF area) was **checked**
+by a throwaway script on the 36 sample files, and the role filter of step 3
+was checked against the tags of every IFD in those files (section 7.2).
 
 The steps restate the common approach in original pseudocode terms. They
 follow the NEF recommendation

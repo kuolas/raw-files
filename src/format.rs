@@ -55,10 +55,12 @@ pub enum Format {
     ///
     /// Its metadata is what its Exif segment records, read as in a raw
     /// file: the camera, its serial number, the capture time, the
-    /// exposure, the camera's settings, the lens and the orientation; from
-    /// a Nikon camera, also what its MakerNote records where the Exif
-    /// segment records nothing, as in a NEF. Its image size is the size of
-    /// the picture, and it has no raw size.
+    /// exposure, the camera's settings, the lens, the software and the
+    /// orientation; from a Nikon or a Sony camera, also what its MakerNote
+    /// records, as in a NEF or an ARW: what the Exif segment lacks, the
+    /// camera settings among it, and the white balance setting, finer than
+    /// the Exif segment's. Its image size is the size of the picture, and
+    /// it has no raw size.
     ///
     /// Its focus point comes from the MakerNote of a Nikon camera, placed
     /// on the picture on a crop mode, or of a Sony camera, as in an ARW. It
