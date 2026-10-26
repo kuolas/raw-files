@@ -16,9 +16,9 @@ The fifth release: the camera's settings beside the exposure, for a
 viewer's information panel, read from the Exif tags and from the plain
 tags of Nikon's and Sony's MakerNotes in NEF, ARW and JPEG files, and
 the focal length in 35 mm terms and the software that wrote the file.
-Nothing in 0.4.0's API was removed or changed in signature, though a
-file opened with a very low cap on its directories may now be refused
-(see Changed).
+Nothing in 0.4.0's API was removed or changed in signature, though
+with a very low cap on its directories a raw file may now be refused,
+and a JPEG lose its Exif metadata (see Changed).
 
 ### Added
 
@@ -65,7 +65,8 @@ file opened with a very low cap on its directories may now be refused
   only in enciphered blocks, and gives an APS-C raw the raw size code of
   a medium one. The DSLR-A100, A200, A700 and A900, the SLT-A55V, the
   NEX-5, the DSC-F828 and the DSC-R1 record no fine-tuning, and the
-  DSLR-A100's white balance mode is Exif's.
+  white balance mode of the DSLR-A100, the DSC-F828 and the DSC-R1 is
+  Exif's.
 - Every fine-tuning is signed as its getters are named, whatever the
   maker: `FineTune::amber_blue` is positive towards blue and
   `FineTune::green_magenta` positive towards magenta, so a viewer can
@@ -89,9 +90,12 @@ file opened with a very low cap on its directories may now be refused
 - The Exif IFD's Interoperability IFD, read for the colour space, counts
   as one more directory under `Limits::max_ifds`. A file that holds one,
   as most Sony-family sample files do, needs one directory more than
-  under 0.4.0, so a cap set just high enough for it then fails with
-  `LimitExceeded`; the default cap, 256, is far above what any file
-  checked needs.
+  under 0.4.0, so a cap set just high enough for it then fails a raw
+  file with `LimitExceeded`. A JPEG still opens, as for any cap crossed
+  in its Exif segment, but without what that segment holds: its Exif
+  metadata, the MakerNote's settings and focus point, and the Exif
+  thumbnail. The default cap, 256, is far above what any file checked
+  needs.
 
 ## [0.4.0] - 2026-10-23
 
