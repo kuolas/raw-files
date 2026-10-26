@@ -251,7 +251,7 @@
 
 use std::io::{Read, Seek};
 
-use super::{MakerNoteBlock, color_temperature};
+use super::{MakerNoteBlock, checked_color_temperature};
 use crate::camera_settings::{CameraSettings, FineTune, WhiteBalanceMode};
 use crate::container::tiff::types::{BYTE, SHORT, SLONG, UNDEFINED};
 use crate::container::tiff::{Ifd, Tree, skip_damage};
@@ -582,7 +582,7 @@ fn area<R: Read + Seek>(src: &mut Source<R>, makernote: &MakerNote) -> Result<Op
 ///   calls the underwater setting auto. When the MakerNote names none, the
 ///   Exif tags' mode stays.
 /// - **The colour temperature** is ColorTemperature, exactly one LONG,
-///   from 1 to 99,999 K ([`color_temperature`]), under whichever white
+///   from 1 to 99,999 K ([`checked_color_temperature`]), under whichever white
 ///   balance setting: the chosen colour temperature under that setting
 ///   and the custom white balance's own under custom, as the files show.
 ///   0, which every other setting holds on every file checked, records
@@ -612,8 +612,8 @@ fn camera_settings<R: Read + Seek>(
     if let Some(mode) = mode {
         settings.white_balance.mode = Some(mode);
     }
-    settings.white_balance.kelvin =
-        one_long(src, ifd, COLOR_TEMPERATURE)?.and_then(color_temperature);
+    settings.white_balance.color_temperature =
+        one_long(src, ifd, COLOR_TEMPERATURE)?.and_then(checked_color_temperature);
     settings.white_balance.fine_tune = fine_tune(src, makernote)?;
     settings.electronic_front_curtain_setting =
         one_long(src, ifd, ELECTRONIC_FRONT_CURTAIN)?.and_then(electronic_front_curtain_setting);
@@ -622,7 +622,7 @@ fn camera_settings<R: Read + Seek>(
 
 /// The white balance mode a WhiteBalance `code` names: 0
 /// [`Auto`](WhiteBalanceMode::Auto); 1, a chosen colour temperature,
-/// [`Kelvin`](WhiteBalanceMode::Kelvin); 16
+/// [`ColorTemperature`](WhiteBalanceMode::ColorTemperature); 16
 /// [`Daylight`](WhiteBalanceMode::Daylight); 32
 /// [`Cloudy`](WhiteBalanceMode::Cloudy); 48
 /// [`Shade`](WhiteBalanceMode::Shade); 64
@@ -640,7 +640,7 @@ fn camera_settings<R: Read + Seek>(
 fn white_balance_mode(code: u32) -> Option<WhiteBalanceMode> {
     Some(match code {
         0 => WhiteBalanceMode::Auto,
-        1 => WhiteBalanceMode::Kelvin,
+        1 => WhiteBalanceMode::ColorTemperature,
         16 => WhiteBalanceMode::Daylight,
         32 => WhiteBalanceMode::Cloudy,
         48 => WhiteBalanceMode::Shade,
@@ -1826,7 +1826,7 @@ mod tests {
         // As the frames shot on the ILCE-7M2 record each setting.
         let codes = [
             (0, WhiteBalanceMode::Auto),
-            (1, WhiteBalanceMode::Kelvin),
+            (1, WhiteBalanceMode::ColorTemperature),
             (16, WhiteBalanceMode::Daylight),
             (32, WhiteBalanceMode::Cloudy),
             (48, WhiteBalanceMode::Shade),
@@ -1920,7 +1920,7 @@ mod tests {
         // shows, or with no white balance tag at all, which no file
         // checked holds but the rule reads all the same.
         for order in ORDERS {
-            for (code, kelvin) in [
+            for (code, temperature) in [
                 (Some(1), 3200),
                 (Some(112), 5500),
                 (Some(112), 6300),
@@ -1933,10 +1933,14 @@ mod tests {
                     if let Some(code) = code {
                         builder.long(ifd, WHITE_BALANCE, &[code]);
                     }
-                    builder.long(ifd, COLOR_TEMPERATURE, &[kelvin]);
+                    builder.long(ifd, COLOR_TEMPERATURE, &[temperature]);
                 });
-                let found = settings.white_balance.kelvin;
-                assert_eq!(found, Some(kelvin), "{order:?}, {code:?}, {kelvin}");
+                let found = settings.white_balance.color_temperature;
+                assert_eq!(
+                    found,
+                    Some(temperature),
+                    "{order:?}, {code:?}, {temperature}"
+                );
             }
         }
     }
@@ -1947,7 +1951,7 @@ mod tests {
         // every other setting holds on every file checked; a SHORT; an
         // SLONG; and two LONGs.
         for order in ORDERS {
-            for (what, kelvin) in [
+            for (what, tag) in [
                 (
                     "zero",
                     &(|builder: &mut TiffBuilder, ifd| {
@@ -1966,11 +1970,18 @@ mod tests {
             ] {
                 let settings = settings_of(order, |builder, ifd| {
                     builder.long(ifd, WHITE_BALANCE, &[1]);
-                    kelvin(builder, ifd);
+                    tag(builder, ifd);
                 });
-                assert_eq!(settings.white_balance.kelvin, None, "{order:?}, {what}");
+                assert_eq!(
+                    settings.white_balance.color_temperature, None,
+                    "{order:?}, {what}"
+                );
                 let mode = settings.white_balance.mode;
-                assert_eq!(mode, Some(WhiteBalanceMode::Kelvin), "{order:?}, {what}");
+                assert_eq!(
+                    mode,
+                    Some(WhiteBalanceMode::ColorTemperature),
+                    "{order:?}, {what}"
+                );
             }
         }
     }
@@ -1980,13 +1991,19 @@ mod tests {
         // 99,999 K, the bound, is given; past it, numbers no camera is set
         // to, up to the largest LONG, give none.
         for order in ORDERS {
-            for (kelvin, found) in [(99_999, Some(99_999)), (100_000, None), (u32::MAX, None)] {
+            for (temperature, found) in [(99_999, Some(99_999)), (100_000, None), (u32::MAX, None)]
+            {
                 let settings = settings_of(order, |builder, ifd| {
-                    builder
-                        .long(ifd, WHITE_BALANCE, &[1])
-                        .long(ifd, COLOR_TEMPERATURE, &[kelvin]);
+                    builder.long(ifd, WHITE_BALANCE, &[1]).long(
+                        ifd,
+                        COLOR_TEMPERATURE,
+                        &[temperature],
+                    );
                 });
-                assert_eq!(settings.white_balance.kelvin, found, "{order:?}, {kelvin}");
+                assert_eq!(
+                    settings.white_balance.color_temperature, found,
+                    "{order:?}, {temperature}"
+                );
             }
         }
     }
@@ -2138,8 +2155,8 @@ mod tests {
     /// What [`settings_tags`] gives, from `settings`.
     fn with_settings_tags(settings: CameraSettings) -> CameraSettings {
         let white_balance = WhiteBalance::default()
-            .with_mode(WhiteBalanceMode::Kelvin)
-            .with_kelvin(3200)
+            .with_mode(WhiteBalanceMode::ColorTemperature)
+            .with_color_temperature(3200)
             .with_fine_tune(steps(-3, 0));
         settings
             .with_white_balance(white_balance)

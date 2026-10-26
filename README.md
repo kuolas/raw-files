@@ -136,8 +136,8 @@ fn panel(settings: &CameraSettings) -> Vec<String> {
     }
     let white_balance = settings.white_balance();
     if let Some(mode) = white_balance.mode() {
-        lines.push(match white_balance.kelvin() {
-            Some(kelvin) => format!("White balance: {mode}, {kelvin} K"),
+        lines.push(match white_balance.color_temperature() {
+            Some(temperature) => format!("White balance: {mode}, {temperature} K"),
             None => format!("White balance: {mode}"),
         });
     }
@@ -152,7 +152,7 @@ fn main() {
         .with_white_balance(
             WhiteBalance::default()
                 .with_mode(WhiteBalanceMode::Auto)
-                .with_kelvin(5_200),
+                .with_color_temperature(5_200),
         );
     for line in panel(&settings) {
         println!("{line}");

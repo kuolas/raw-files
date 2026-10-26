@@ -357,7 +357,7 @@
 use std::cmp::Ordering;
 use std::io::{Read, Seek};
 
-use super::{MakerNoteBlock, color_temperature};
+use super::{MakerNoteBlock, checked_color_temperature};
 use crate::camera_settings::{
     CameraSettings, ColorSpace, FineTune, ImageArea, RawImageSize, Shutter, WhiteBalanceMode,
 };
@@ -742,8 +742,8 @@ pub(in crate::formats) fn metadata<R: Read + Seek>(
 /// - **The colour temperature** is ColorTemperatureAuto, exactly one
 ///   SHORT, when above zero, under whichever white balance setting: 0
 ///   records none. Otherwise, as on the bodies that write no
-///   ColorTemperatureAuto, it is the number of a WhiteBalance text that
-///   records a chosen colour temperature, such as `3230K` ([`kelvin`]).
+///   ColorTemperatureAuto, it is the number of a WhiteBalance text that records
+///   a chosen colour temperature, such as `3230K` ([`color_temperature`]).
 /// - **The fine-tuning** is read from 0x003F, else from 0x000B
 ///   ([`fine_tune`]).
 /// - **The shutter used** is ShutterMode's code, exactly one SHORT
@@ -789,7 +789,7 @@ fn camera_settings<R: Read + Seek>(
     if let Some(mode) = white_balance.and_then(white_balance_of_text) {
         settings.white_balance.mode = Some(mode);
     }
-    settings.white_balance.kelvin = kelvin(src, makernote, white_balance)?;
+    settings.white_balance.color_temperature = color_temperature(src, makernote, white_balance)?;
     settings.white_balance.fine_tune = fine_tune(src, makernote)?;
     settings.shutter = one_short(src, ifd, SHUTTER_MODE)?.and_then(shutter);
     settings.image_area = crop_hi_speed.and_then(|crop| image_area(crop.mode));
@@ -807,8 +807,8 @@ fn camera_settings<R: Read + Seek>(
 /// records: ColorTemperatureAuto, exactly one SHORT, when it gives one;
 /// otherwise the number of `white_balance`, the WhiteBalance text as
 /// [`camera_settings`] read it, when that text records a chosen colour
-/// temperature ([`kelvin_of_text`]). Either gives one only from 1 to
-/// 99,999 K ([`color_temperature`]), so a ColorTemperatureAuto of 0, which
+/// temperature ([`kelvin_of_text`]). Either gives one only from 1 to 99,999 K
+/// ([`checked_color_temperature`]), so a ColorTemperatureAuto of 0, which
 /// records none, gives way to the text, and a text of `0K` gives none.
 ///
 /// ColorTemperatureAuto comes first, under whichever white balance
@@ -821,17 +821,17 @@ fn camera_settings<R: Read + Seek>(
 /// # Errors
 ///
 /// `Io` when the reader fails. Nothing the block holds is an error.
-fn kelvin<R: Read + Seek>(
+fn color_temperature<R: Read + Seek>(
     src: &mut Source<R>,
     makernote: &MakerNote,
     white_balance: Option<&str>,
 ) -> Result<Option<u32>> {
     let recorded = one_short(src, &makernote.ifd, COLOR_TEMPERATURE)?
-        .and_then(|kelvin| color_temperature(u32::from(kelvin)));
+        .and_then(|kelvin| checked_color_temperature(u32::from(kelvin)));
     Ok(recorded.or_else(|| {
         white_balance
             .and_then(kelvin_of_text)
-            .and_then(color_temperature)
+            .and_then(checked_color_temperature)
     }))
 }
 
@@ -847,8 +847,8 @@ fn kelvin<R: Read + Seek>(
 /// [`Flash`](WhiteBalanceMode::Flash); and `PRESET` and `PRESET1` to
 /// `PRESET4` [`Custom`](WhiteBalanceMode::Custom). A chosen colour
 /// temperature, written as its number, is the one text read by its form
-/// ([`kelvin_of_text`]), and gives [`Kelvin`](WhiteBalanceMode::Kelvin),
-/// whatever the number.
+/// ([`kelvin_of_text`]): whatever the number, it gives
+/// [`ColorTemperature`](WhiteBalanceMode::ColorTemperature).
 ///
 /// `None` for every other text, such as `PRESET5`, which no checked file
 /// holds: a text grows into the table only once a file shows it, and
@@ -863,7 +863,7 @@ fn white_balance_of_text(text: &str) -> Option<WhiteBalanceMode> {
         "COOL WHT FL" => WhiteBalanceMode::Fluorescent,
         "FLASH" => WhiteBalanceMode::Flash,
         "PRESET" | "PRESET1" | "PRESET2" | "PRESET3" | "PRESET4" => WhiteBalanceMode::Custom,
-        _ if kelvin_of_text(text).is_some() => WhiteBalanceMode::Kelvin,
+        _ if kelvin_of_text(text).is_some() => WhiteBalanceMode::ColorTemperature,
         _ => return None,
     })
 }
@@ -872,12 +872,12 @@ fn white_balance_of_text(text: &str) -> Option<WhiteBalanceMode> {
 /// temperature may have: the rule's own bound, past the four of every
 /// such text checked, such as `3230K`. Its largest number is the bound
 /// every colour temperature a MakerNote gives is held to
-/// ([`MAX_KELVIN`](super::MAX_KELVIN)).
+/// ([`MAX_COLOR_TEMPERATURE`](super::MAX_COLOR_TEMPERATURE)).
 const MAX_KELVIN_DIGITS: usize = 5;
 
 // The text's largest number is the shared bound, so that one bound holds
 // whatever a WhiteBalance text gives.
-const _: () = assert!(10_u32.pow(MAX_KELVIN_DIGITS as u32) - 1 == super::MAX_KELVIN);
+const _: () = assert!(10_u32.pow(MAX_KELVIN_DIGITS as u32) - 1 == super::MAX_COLOR_TEMPERATURE);
 
 /// The colour temperature that the WhiteBalance text `text`, as read,
 /// records as its number when the photographer chose one, as the Z 9 and
@@ -885,7 +885,7 @@ const _: () = assert!(10_u32.pow(MAX_KELVIN_DIGITS as u32) - 1 == super::MAX_KEL
 /// ASCII digits, then an upper-case `K`, and nothing else, so that `K`
 /// alone, `3230 K` and `3230k` give `None`. `0K` has the form and gives
 /// 0, which records no temperature: its caller judges the number
-/// ([`kelvin`]), while the form alone names the mode
+/// ([`color_temperature`]), while the form alone names the mode
 /// ([`white_balance_of_text`]).
 fn kelvin_of_text(text: &str) -> Option<u32> {
     let digits = text.strip_suffix('K')?;
@@ -5323,7 +5323,7 @@ mod tests {
             for (text, mode) in [
                 ("SUNNY", WhiteBalanceMode::Daylight),
                 ("PRESET1", WhiteBalanceMode::Custom),
-                ("3230K", WhiteBalanceMode::Kelvin),
+                ("3230K", WhiteBalanceMode::ColorTemperature),
             ] {
                 let read = white_balance_of(order, text, exif_shade);
                 assert_eq!(read, Some(mode), "{order:?}, {text:?}");
@@ -5336,7 +5336,11 @@ mod tests {
         for order in ORDERS {
             for text in ["3230K", "2500K", "10000K", "1K", "99999K"] {
                 let read = white_balance_of(order, text, exif_auto);
-                assert_eq!(read, Some(WhiteBalanceMode::Kelvin), "{order:?}, {text:?}");
+                assert_eq!(
+                    read,
+                    Some(WhiteBalanceMode::ColorTemperature),
+                    "{order:?}, {text:?}"
+                );
             }
         }
     }
@@ -5435,7 +5439,7 @@ mod tests {
         // The Z 9's frames: the temperature auto chose, and the one
         // applied under daylight, a preset and a chosen temperature.
         for order in ORDERS {
-            for (text, kelvin) in [
+            for (text, temperature) in [
                 ("AUTO1", 4730),
                 ("SUNNY", 5210),
                 ("PRESET1", 5200),
@@ -5446,12 +5450,12 @@ mod tests {
                     inner.ascii(ifd, WHITE_BALANCE, &padded(text)).short(
                         ifd,
                         COLOR_TEMPERATURE,
-                        &[kelvin],
+                        &[temperature],
                     );
                 });
                 assert_eq!(
-                    read.white_balance.kelvin,
-                    Some(u32::from(kelvin)),
+                    read.white_balance.color_temperature,
+                    Some(u32::from(temperature)),
                     "{order:?}, {text:?}"
                 );
             }
@@ -5469,7 +5473,7 @@ mod tests {
                     &[0],
                 );
             });
-            assert_eq!(read.white_balance.kelvin, None, "{order:?}");
+            assert_eq!(read.white_balance.color_temperature, None, "{order:?}");
             assert_eq!(read.white_balance.mode, Some(WhiteBalanceMode::Daylight));
         }
     }
@@ -5479,7 +5483,7 @@ mod tests {
         // As the D600 records a chosen 3230 K, by its text alone; and the
         // ends of the text's form, which counts leading zeros as digits.
         for order in ORDERS {
-            for (text, kelvin) in [
+            for (text, temperature) in [
                 ("3230K", 3230),
                 ("1K", 1),
                 ("99999K", 99_999),
@@ -5489,10 +5493,14 @@ mod tests {
                     inner.ascii(ifd, WHITE_BALANCE, &padded(text));
                 });
                 let what = format!("{order:?}, {text:?}");
-                assert_eq!(read.white_balance.kelvin, Some(kelvin), "{what}");
+                assert_eq!(
+                    read.white_balance.color_temperature,
+                    Some(temperature),
+                    "{what}"
+                );
                 assert_eq!(
                     read.white_balance.mode,
-                    Some(WhiteBalanceMode::Kelvin),
+                    Some(WhiteBalanceMode::ColorTemperature),
                     "{what}"
                 );
             }
@@ -5511,7 +5519,11 @@ mod tests {
                     &[4630],
                 );
             });
-            assert_eq!(read.white_balance.kelvin, Some(4630), "{order:?}");
+            assert_eq!(
+                read.white_balance.color_temperature,
+                Some(4630),
+                "{order:?}"
+            );
         }
     }
 
@@ -5536,7 +5548,11 @@ mod tests {
                     inner.ascii(ifd, WHITE_BALANCE, &padded("3230K"));
                     tag(inner, ifd);
                 });
-                assert_eq!(read.white_balance.kelvin, Some(3230), "{order:?}, {what}");
+                assert_eq!(
+                    read.white_balance.color_temperature,
+                    Some(3230),
+                    "{order:?}, {what}"
+                );
             }
         }
     }
@@ -5548,8 +5564,8 @@ mod tests {
         // none either, and without the tag there is none.
         for order in ORDERS {
             for (text, mode) in [
-                ("0K", Some(WhiteBalanceMode::Kelvin)),
-                ("00000K", Some(WhiteBalanceMode::Kelvin)),
+                ("0K", Some(WhiteBalanceMode::ColorTemperature)),
+                ("00000K", Some(WhiteBalanceMode::ColorTemperature)),
                 ("SUNNY", Some(WhiteBalanceMode::Daylight)),
                 ("123456K", None),
                 ("3230 K", None),
@@ -5559,7 +5575,7 @@ mod tests {
                     inner.ascii(ifd, WHITE_BALANCE, &padded(text));
                 });
                 let what = format!("{order:?}, {text:?}");
-                assert_eq!(read.white_balance.kelvin, None, "{what}");
+                assert_eq!(read.white_balance.color_temperature, None, "{what}");
                 assert_eq!(read.white_balance.mode, mode, "{what}");
             }
             // And with a tag of 0 beside `0K`.
@@ -5568,7 +5584,7 @@ mod tests {
                     .ascii(ifd, WHITE_BALANCE, &padded("0K"))
                     .short(ifd, COLOR_TEMPERATURE, &[0]);
             });
-            assert_eq!(read.white_balance.kelvin, None, "{order:?}");
+            assert_eq!(read.white_balance.color_temperature, None, "{order:?}");
         }
     }
 
@@ -5586,7 +5602,7 @@ mod tests {
         // value of another shape.
         let read = |settings: &CameraSettings| {
             (
-                settings.white_balance.kelvin,
+                settings.white_balance.color_temperature,
                 settings.shutter,
                 settings.raw_image_size,
                 settings.color_space,
@@ -6148,7 +6164,7 @@ mod tests {
                 .with_white_balance(
                     WhiteBalance::default()
                         .with_mode(WhiteBalanceMode::Auto)
-                        .with_kelvin(4630)
+                        .with_color_temperature(4630)
                         .with_fine_tune(shift((-12, 4), (-8, 4))),
                 )
                 .with_shutter(Shutter::Electronic)
