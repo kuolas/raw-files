@@ -10,54 +10,68 @@ does.
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-10-26
+
+The fifth release: the camera's settings beside the exposure, for a
+viewer's information panel, read from the Exif tags and from the plain
+tags of Nikon's and Sony's MakerNotes in NEF, ARW and JPEG files, and
+the focal length in 35 mm terms and the software that wrote the file.
+Nothing in 0.4.0's API was removed or changed in signature, though a
+file opened with a very low cap on its directories may now be refused
+(see Changed).
+
 ### Added
 
-- `CameraSettings`, which `Metadata::camera_settings` gives: how the
-  camera was set for the shot, for a viewer's information panel beside
-  the exposure. It holds the white balance (`WhiteBalance`: its mode, its
-  colour temperature and its fine-tuning, `FineTune`), the exposure
-  program, the metering mode, the flash (`Flash`: whether it fired and
-  its mode), the shutter used, Sony's electronic front curtain setting,
-  the image area, the raw image size and the colour space, each optional.
-  The enums `WhiteBalanceMode`, `ExposureProgram`, `MeteringMode`,
-  `FlashMode`, `Shutter`, `ImageArea`, `RawImageSize` and `ColorSpace`
-  name each setting's choices in words that fit any maker, with a `name`
-  that `Display` writes; they order as their variants are listed, so a
-  program can use them as sorted keys. A program's tests build these
-  values through their `with_…` methods, `Metadata::with_camera_settings`,
-  `FineTune::new`, which takes both shifts, and `Flash::new`. NEF, ARW and
-  JPEG files give the settings their Exif tags record: the exposure
-  program, the metering mode, the flash, the white balance mode, from
-  Exif's auto or manual and the kind of light a manual one was set for,
-  and the colour space, sRGB or, from the `R03` index of a DCF option
-  file, Adobe RGB. A code Exif does not define, or its "not defined" and
-  "unknown", gives `None`. NEF files and the JPEGs of Nikon cameras give
-  the other settings from Nikon's MakerNote: the white balance setting,
-  such as auto, a preset or a chosen colour temperature, in place of
-  Exif's when the MakerNote names one; the colour temperature of the white
-  balance the camera applied; the fine-tuning; the shutter used; the image
-  area; the raw image size, in a raw file only; and the colour space, when
-  the Exif tags record no ColorSpace, as no Nikon raw file checked does.
-  Each fine-tuning value is signed as its axis is named, whatever the
+- `Metadata::camera_settings` gives a `CameraSettings`: how the camera
+  was set for the shot, each value optional. It holds the white balance
+  (`WhiteBalance`: its mode, its colour temperature in kelvin and its
+  fine-tuning, `FineTune`), the exposure program, the metering mode, the
+  flash (`Flash`: whether it fired and its mode), the shutter used,
+  Sony's electronic front curtain setting, the image area, the raw image
+  size and the colour space. The enums `WhiteBalanceMode`,
+  `ExposureProgram`, `MeteringMode`, `FlashMode`, `Shutter`, `ImageArea`,
+  `RawImageSize` and `ColorSpace` name each setting's choices in words
+  that fit any maker, with a `name` that `Display` writes, and order as
+  their variants are listed, so a program can use them as sorted keys. A
+  program's tests build all of these through their `with_…` methods,
+  `Metadata::with_camera_settings`, `FineTune::new` and `Flash::new`.
+- NEF, ARW and JPEG files give the settings their Exif tags record: the
+  exposure program, the metering mode, the flash, the white balance mode,
+  from Exif's auto or manual and the kind of light a manual one was set
+  for, and the colour space, sRGB or, from the `R03` index of a DCF
+  option file, Adobe RGB. A code Exif does not define, or its "not
+  defined" and "unknown", gives `None`.
+- NEF files and the JPEGs of Nikon cameras give the rest from Nikon's
+  MakerNote: the white balance setting, such as a preset or a chosen
+  colour temperature, in place of Exif's when the MakerNote names one;
+  the colour temperature of the white balance the camera applied, which
+  the D5, the D850, the D780 and the Z bodies record, or, where that is
+  missing or 0, the number of a chosen colour temperature, such as
+  `3230K`, the one temperature older bodies record; the
+  fine-tuning; the shutter used; the image area; the raw image size, in a
+  raw file only; and the colour space, when Exif records none, as in
+  every Nikon raw file checked. The single fine-tuning value of the D1
+  family, the D70, the D100 and the D200 gives `None`, since no file
+  shows its axis.
+- ARW files, with the SRF, SR2 and ARQ files of the family, and the
+  JPEGs of Sony cameras give settings from Sony's MakerNote too: the
+  white balance setting, such as custom, or underwater, which Exif calls
+  auto, in place of Exif's when the MakerNote names one; the colour
+  temperature under a chosen colour temperature or a custom white
+  balance, the only settings under which the files checked record one;
+  the fine-tuning; and the electronic front curtain setting, the menu
+  setting, never the shutter used. The shutter used, the image area and
+  the raw image size are `None` on Sony files: Sony records the first two
+  only in enciphered blocks, and gives an APS-C raw the raw size code of
+  a medium one. The DSLR-A100, A200, A700 and A900, the SLT-A55V, the
+  NEX-5, the DSC-F828 and the DSC-R1 record no fine-tuning, and the
+  DSLR-A100's white balance mode is Exif's.
+- Every fine-tuning is signed as its getters are named, whatever the
   maker: `FineTune::amber_blue` is positive towards blue and
-  `FineTune::green_magenta` positive towards magenta, so Nikon's green to
-  magenta value, which it stores positive towards green, is negated. The
-  single fine-tuning value of the D1 family, the D70, the D100 and the
-  D200 gives `None`, since no file shows its axis. ARW files, with the
-  SRF, SR2 and ARQ files of the family, and the JPEGs of Sony cameras give
-  settings from Sony's MakerNote too: the white balance setting, such as
-  auto, custom, underwater, which Exif calls auto, or a chosen colour
-  temperature, in place of Exif's when the MakerNote names one; the
-  colour temperature, the one chosen under that setting and the custom
-  white balance's own under custom; the fine-tuning, whose amber to blue
-  value, which Sony stores positive towards amber, is negated; and the
-  electronic front curtain setting, as the menu setting, never as the
-  shutter used. On Sony files the shutter used, the image area and the
-  raw image size are `None`, and so are the colour temperature under
-  every other white balance setting, where every Sony file checked
-  records 0, and the fine-tuning of the bodies that record none, the
-  DSLR-A100, A200, A700 and A900, the SLT-A55V, the NEX-5, the DSC-F828
-  and the DSC-R1. The DSLR-A100's white balance mode is Exif's.
+  `FineTune::green_magenta` positive towards magenta, so a viewer can
+  show or compare two files' shifts without knowing how each maker signs
+  them. Every colour temperature is read from 1 to 99,999 K: a recorded
+  0, which means none was recorded, and a larger number give `None`.
 - `Exposure::focal_length_in_35mm_film` and `Metadata::software`, read
   from NEF, ARW and JPEG files. The first is the focal length in 35 mm
   terms the camera recorded, in whole millimetres, from Exif's
@@ -69,6 +83,15 @@ does.
   such as `Ver.01.00` or `ILCE-7M4 v2.00`, or the name of a program that
   rewrote the file. `Exposure::with_focal_length_in_35mm_film` and
   `Metadata::with_software` build them for a program's tests.
+
+### Changed
+
+- The Exif IFD's Interoperability IFD, read for the colour space, counts
+  as one more directory under `Limits::max_ifds`. A file that holds one,
+  as most Sony-family sample files do, needs one directory more than
+  under 0.4.0, so a cap set just high enough for it then fails with
+  `LimitExceeded`; the default cap, 256, is far above what any file
+  checked needs.
 
 ## [0.4.0] - 2026-10-23
 
@@ -232,7 +255,8 @@ files.
 - A DNG is of no known format, whatever camera maker its Make names:
   converters and the phones that write DNG keep the maker's name.
 
-[Unreleased]: https://github.com/kuolas/raw-files/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/kuolas/raw-files/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/kuolas/raw-files/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/kuolas/raw-files/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/kuolas/raw-files/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/kuolas/raw-files/compare/v0.1.0...v0.2.0
