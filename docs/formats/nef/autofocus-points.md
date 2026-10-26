@@ -11,9 +11,13 @@ tables in the code are to be written from these records.
 
 Every table is measured by the project, or by a contributor, on frames
 shot with the body itself and read in the maker's own software, run as
-a reader to compare with; nothing is transcribed from another project,
-whatever its licence
-([ADR013](../../architecture-decisions/adr013-clean-room-and-third-party-code.md)).
+a reader to compare with; no table is transcribed from another
+project on its licence alone, and one from another project would
+enter only by a decision made together with that project: that is the
+decision of
+[ADR017](../../architecture-decisions/adr017-per-body-tables-measured-by-the-project.md),
+built on the clean room of
+[ADR013](../../architecture-decisions/adr013-clean-room-and-third-party-code.md).
 The frames are the photographer's own and stay private; a record cites
 them by their number in the session and gives counts and values, never
 a personal field. Claims carry the confidence tags of the NEF notes

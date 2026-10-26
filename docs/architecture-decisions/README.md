@@ -22,6 +22,7 @@ each: the context, what was decided, and what follows from it. They answer
 | [ADR014](adr014-jpeg-files-as-a-format-of-their-own.md) | JPEG files as a format of their own | Accepted |
 | [ADR015](adr015-the-focus-point-of-a-crop-mode-jpeg.md) | The focus point of a crop-mode JPEG | Accepted |
 | [ADR016](adr016-full-metadata-before-raw-data.md) | Full metadata before raw data | Accepted |
+| [ADR017](adr017-per-body-tables-measured-by-the-project.md) | Per-body tables measured by the project | Accepted |
 
 ## When to write one
 
