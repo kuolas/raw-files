@@ -41,10 +41,10 @@ local choices belong in a code comment or the commit message instead.
 
 ## Changing a decision
 
-Records are not rewritten or deleted, with the one exception at the end
-of this section. A new decision that replaces an old one
-gets its own ADR; the old one's status becomes "Superseded by
-[ADRxxx](…)", linking to the new record.
+Records are not rewritten or deleted, with the two exceptions at the
+end of this section, a correction and an extension. A new decision that
+replaces an old one gets its own ADR; the old one's status becomes
+"Superseded by [ADRxxx](…)", linking to the new record.
 
 A new decision that changes part of an old one, and leaves the rest
 standing, gets its own ADR too. It says "Amends [ADRxxx](…)" next to its
@@ -57,9 +57,16 @@ covering what the old one left out, also gets its own ADR. It says
 "Builds on [ADRxxx](…)" next to its status, and the old record stays as
 it is, Accepted.
 
-The exception: a decision that extends an old one to more values of the
-same kind, by the same rule, may be added to the old record in place.
-The additions are sections of their own, under the old Context,
+The first exception: a correction leaves the decision as it was: a
+figure measured again, a term renamed in the code, a slip. It is made
+in the record itself, with no new record and no change of status, and
+the commit that makes it says why the record is corrected rather than
+superseded. ADR004's list of trailers, ADR011's rule for the ISO and
+ADR016's account of what its groups need were corrected this way.
+
+The second exception: a decision that extends an old one to more values
+of the same kind, by the same rule, may be added to the old record in
+place. The additions are sections of their own, under the old Context,
 Decision and Consequences, each with the date and the issue it was
 added in; they say which of the old sentences no longer describe the
 whole decision, and the old text stays as it was. The old record's
