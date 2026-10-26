@@ -24,16 +24,22 @@ Every claim carries a confidence tag:
 - **[F]** measured on a named sample file. Files are cited as "file 5146",
   the id of the file in the public raw.pixls.us collection; the files cited
   here are described under [Sample files](#sample-files), and their URLs and
-  SHA-256 hashes are in [test-data.md](test-data.md#21-the-ci-set).
+  SHA-256 hashes are in [test-data.md](test-data.md#21-the-ci-set). A fact
+  measured on the maintainer's own files, which stay private, says so and
+  cites them by counts only.
 
 Numbers in square brackets such as [3] refer to [Sources](#sources).
 
-**Only the Z 9 has been checked against sample files here.** The facts
-tagged **[F]** were measured on files 5146 to 5148, the three CC0 Z 9 files
-(lossless, HE\* and HE); every other body rests on the sources alone on
-this page. The previews of 32 more files, of 25 other bodies, are checked
-by the tests, and [test-data.md](test-data.md#21-the-ci-set) lists them;
-they are not yet written up here. Where
+**The Z 9 is the body checked against sample files throughout this
+page.** The facts tagged **[F]** were measured on files 5146 to 5148, the
+three CC0 Z 9 files (lossless, HE\* and HE), unless the tag names another
+file, as sections 1.4 and 2 do for the D1 family and the early Coolpix
+bodies, or the maintainer's own files, as section 5 does for a habit of
+the D600 and the D3200, a preview length that runs past the image; every
+other body rests on the sources alone on this page. The previews of 32
+more files, of 25 other bodies, are checked by the tests, and
+[test-data.md](test-data.md#21-the-ci-set) lists them; they are not yet
+written up here. Where
 a sample contradicts a source, this page follows the sample and records the
 disagreement. Where a primary source's text was read only in part or in
 summary, exact byte values should be confirmed on real NEFs (see
@@ -332,6 +338,24 @@ any process, not just baseline (section 7).
   follows section 7.1 skips all three: the empty ones have no bytes, and the
   grey image is not a JPEG (Compression 1, and its first bytes are not an
   SOI).
+- **D600 and D3200: a preview length that runs past the image.** On the
+  maintainer's own files, 1,374 from a D600 and 3,568 from a D3200, the
+  largest JPEG lies in SubIFD0 and ends with `FF D9` exactly at its
+  declared length, with no padding, on all but 2 and 7. On those nine
+  the declared length is 2 more than a multiple of 512, and 513 bytes
+  follow the end marker: not `FF` padding, not zeros, and not the bytes
+  that follow the preview in the file. On every one of the nine the
+  image itself, up to and including its end marker, is 1 byte longer
+  than a multiple of 512. **[F]** It reads as a slip of the firmware
+  when the image ends one byte into a 512-byte block: the count of
+  blocks plus 2 written as the length, with the write buffer's leftovers
+  after the image; a chance of about one in 512 per file, near the nine
+  in 4,942 seen. **[I]** The JPEG is whole, and a decoder stops at the
+  marker, so returning the declared bytes (section 7.1, step 7) is
+  right. A check that expects the end marker at the declared end, or
+  only padding after it, must allow for this shape on a NEF: a declared
+  length 2 more than a multiple of 512, with up to 513 bytes of other
+  data after the image's own end marker.
 - **Capture NX re-saves.** Nikon's editing software can rewrite files: a
   changed byte order, a different slot for the large JPEG (section 3), and
   Nikon-style MakerNotes copied from another camera. [23] [4] **[S]/[P]**
@@ -463,10 +487,12 @@ invalid) and leave the decision to the caller.
   returns garbage that may still pass a naive length check. [4] [11] **[P]**
 - The PreviewIFD is documented as often corrupted, so validate with SOI.
   [23] **[S]**
-- A tag-declared length is authoritative; no example of padding after the
-  end-of-image marker was found. **[I]** On the Z 9 each of the four JPEGs
-  ends with `FF D9` exactly at its declared length, with no padding and no
-  truncation (files 5146 to 5148). **[F]**
+- A tag-declared length is authoritative, but it can run past the image.
+  On the Z 9 each of the four JPEGs ends with `FF D9` exactly at its
+  declared length, with no padding and no truncation (files 5146 to
+  5148) **[F]**; the D600 and the D3200 sometimes declare a length 513
+  bytes past the end marker, with leftover bytes after it (section 5)
+  **[F]**. Return the declared bytes: a decoder stops at the marker.
 - Byte order differs between the outer file and the MakerNote; parse each in
   its own order. [4] **[P]** On the Z 9 both are `II` (files 5146 to 5148)
   **[F]**, so a file from it does not exercise this rule.
@@ -520,6 +546,9 @@ what they show.
    JPEG is in one piece, through 0x0201/0x0202.
 8. How common truncated JPEGs or padding after EOI are in real files. The
    Z 9 has neither: each JPEG ends with EOI exactly at its declared length.
+   Of 4,942 files from the maintainer's D600 and D3200, none is truncated
+   and nine declare a length 513 bytes past EOI, with leftover bytes
+   rather than padding after it (section 5).
 9. Whether a SubIFD or PreviewIFD JPEG ever has its own Exif APP1 with an
    Orientation. Not on the Z 9, whose JPEGs have no APP segment at all.
 10. Nikon tag 0xC7D5 (NikonNEFInfo): which IFD hosts it across bodies. Its
