@@ -10,6 +10,16 @@ does.
 
 ## [Unreleased]
 
+### Added
+
+- `Focus::origin` says where a focus point came from, as a `FocusOrigin`:
+  `Recorded`, a position the camera measured and wrote, which every point
+  the readers give is, or `Table`, a point the camera named by number
+  that raw-files placed from its table of the body's autofocus points.
+  `Focus::new` gives `Recorded`, `Focus::with_origin` sets another and
+  `Focus::scaled_to` keeps it; `FocusOrigin` has a `name` that `Display`
+  writes, "Recorded" and "Table", and orders as its variants are listed.
+
 ## [0.5.0] - 2026-10-26
 
 The fifth release: the camera's settings beside the exposure, for a

@@ -1078,6 +1078,7 @@ impl fmt::Display for ColorSpace {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::testing::{assert_names, assert_ordered};
 
     fn fraction(numerator: i32, denominator: i32) -> SignedRational {
         SignedRational {
@@ -1508,29 +1509,6 @@ mod tests {
         all
     }
 
-    /// Checks that `all`'s names are `expected`, in order, and so as many,
-    /// that `Display` writes each name, and that every name is distinct,
-    /// ASCII and in sentence case.
-    fn assert_names<T: Copy + fmt::Debug + fmt::Display>(
-        all: &[T],
-        name: fn(T) -> &'static str,
-        expected: &[&str],
-    ) {
-        let names: Vec<&str> = all.iter().map(|&value| name(value)).collect();
-        assert_eq!(names, expected);
-        for &value in all {
-            let text = name(value);
-            assert_eq!(value.to_string(), text, "{value:?}");
-            assert!(text.is_ascii(), "{value:?}");
-            // Sentence case: a capital first, or a digit. "sRGB" is the one
-            // name whose own spelling starts in lower case.
-            let capital = text.starts_with(|c: char| c.is_ascii_uppercase() || c.is_ascii_digit());
-            assert!(capital || text == "sRGB", "{value:?}");
-        }
-        let distinct: std::collections::HashSet<&str> = names.iter().copied().collect();
-        assert_eq!(distinct.len(), names.len(), "{names:?}");
-    }
-
     #[test]
     fn every_name_is_the_one_documented_and_display_writes_it() {
         // The names are stable once released: a program may show or store
@@ -1613,12 +1591,6 @@ mod tests {
             ColorSpace::name,
             &["sRGB", "Adobe RGB"],
         );
-    }
-
-    /// Checks that `all`, the variants in declaration order, is strictly
-    /// increasing.
-    fn assert_ordered<T: Copy + Ord + fmt::Debug>(all: &[T]) {
-        assert!(all.windows(2).all(|pair| pair[0] < pair[1]), "{all:?}");
     }
 
     #[test]

@@ -6,18 +6,21 @@
 //! camera records it as the centre of the focus area, the area's size when
 //! it records one, the frame the two are measured in, which has the
 //! previews' framing, and, when the file says, whether focus was confirmed.
-//! [`Focus`] holds them, and a caller's tests build one through its checked
+//! [`Focus`] holds them, with where the point came from, a
+//! [`FocusOrigin`], and a caller's tests build one through its checked
 //! constructors.
 //!
 //! [`Metadata::focus`](crate::Metadata::focus) gives the focus point of a
 //! file, if it records one.
 
+use std::fmt;
+
 use crate::geometry::{Point, Size};
 
 /// Where the camera's autofocus aimed, as the camera recorded it: the
 /// centre of the focus area, the area's size when the file records one,
-/// the frame the two are measured in, and whether the camera confirmed
-/// focus, when the file says.
+/// the frame the two are measured in, whether the camera confirmed focus,
+/// when the file says, and where the point came from.
 ///
 /// It is the camera's record, never an estimate from the pixels, and not
 /// proof of where the picture is sharpest: a body that focuses in front of
@@ -81,8 +84,10 @@ use crate::geometry::{Point, Size};
 ///
 /// # Equality
 ///
-/// Two values are equal when every value is the same as stored. There is
-/// no order: no order of focus records means anything, and sorting them
+/// Two values are equal when every value is the same as stored, the
+/// [`origin`](Self::origin) included: a point the camera recorded and one
+/// placed from a table at the same place are not equal. There is no
+/// order: no order of focus records means anything, and sorting them
 /// would suggest one. There is no `Default` either, since there is no
 /// empty focus: a file that records none gives `None`.
 ///
@@ -93,7 +98,7 @@ use crate::geometry::{Point, Size};
 /// preview:
 ///
 /// ```
-/// use raw_files::{Focus, Point, Size};
+/// use raw_files::{Focus, FocusOrigin, Point, Size};
 ///
 /// # fn main() {
 /// #     example().expect("every step accepts the Z 9's values");
@@ -108,6 +113,7 @@ use crate::geometry::{Point, Size};
 /// assert_eq!(on_preview.size(), Some(Size { width: 68, height: 75 }));
 /// assert_eq!(on_preview.frame(), Size { width: 1920, height: 1280 });
 /// assert_eq!(on_preview.in_focus(), Some(true));
+/// assert_eq!(on_preview.origin(), FocusOrigin::Recorded);
 /// # Some(())
 /// # }
 /// ```
@@ -138,14 +144,17 @@ pub struct Focus {
     center: Point,
     size: Option<Size>,
     in_focus: Option<bool>,
+    origin: FocusOrigin,
 }
 
 impl Focus {
-    /// The focus centred at `center`, measured in `frame`, with no area and
-    /// nothing said about whether the camera confirmed focus; `None` when
-    /// the centre cannot lie on the frame. [`with_size`](Self::with_size)
-    /// adds the area and [`with_in_focus`](Self::with_in_focus) whether
-    /// focus was confirmed.
+    /// The focus centred at `center`, measured in `frame`, with no area,
+    /// nothing said about whether the camera confirmed focus, and the
+    /// origin [`Recorded`](FocusOrigin::Recorded); `None` when the centre
+    /// cannot lie on the frame. [`with_size`](Self::with_size) adds the
+    /// area, [`with_in_focus`](Self::with_in_focus) whether focus was
+    /// confirmed, and [`with_origin`](Self::with_origin) sets another
+    /// origin.
     ///
     /// This is how the readers start every focus they return, and how a
     /// caller starts one for its tests. It gives `None` when:
@@ -165,6 +174,7 @@ impl Focus {
             center,
             size: None,
             in_focus: None,
+            origin: FocusOrigin::Recorded,
         })
     }
 
@@ -216,6 +226,18 @@ impl Focus {
         }
     }
 
+    /// This focus with where it came from, in place of what it had:
+    /// [`Table`](FocusOrigin::Table) for a point placed from a table of the
+    /// body's autofocus points, and [`Recorded`](FocusOrigin::Recorded)
+    /// for a position the camera measured and wrote.
+    ///
+    /// A focus built without it is `Recorded`, as [`new`](Self::new)
+    /// gives it.
+    #[must_use]
+    pub fn with_origin(self, origin: FocusOrigin) -> Self {
+        Self { origin, ..self }
+    }
+
     /// The size of the frame the centre and the area are measured in. It
     /// never has a zero side.
     pub fn frame(&self) -> Size {
@@ -254,10 +276,17 @@ impl Focus {
         self.in_focus
     }
 
+    /// Where this point came from; [`Recorded`](FocusOrigin::Recorded)
+    /// unless [`with_origin`](Self::with_origin) set another. The readers
+    /// give `Recorded` for every position a camera wrote.
+    pub fn origin(&self) -> FocusOrigin {
+        self.origin
+    }
+
     /// The same focus measured in `frame`, such as a preview's size: `None`
     /// when either side of `frame` is zero, and otherwise always a focus,
     /// whose frame is `frame` and whose [`in_focus`](Self::in_focus) is
-    /// this one's.
+    /// this one's. It keeps this one's [`origin`](Self::origin) too.
     ///
     /// The centre's x and the area's width are multiplied by the new width
     /// over the old, and y and the height by the heights, each rounded to
@@ -289,7 +318,7 @@ impl Focus {
         // most the new side: rounding cannot pass it, as the old side
         // scales to exactly the new one. The frame has no zero side either,
         // so this never gives `None`.
-        let mut focus = Self::new(frame, center)?;
+        let mut focus = Self::new(frame, center)?.with_origin(self.origin);
         if let Some(size) = self.size {
             let width = scale(size.width, self.frame.width, frame.width).max(1);
             let height = scale(size.height, self.frame.height, frame.height).max(1);
@@ -306,6 +335,67 @@ impl Focus {
             focus = focus.with_in_focus(in_focus);
         }
         Some(focus)
+    }
+}
+
+/// Where a focus point came from: a position the camera measured, or a
+/// point the camera named by number that raw-files placed from a table.
+///
+/// A viewer or a culler reads it to know what a [`Focus`] means and how
+/// far it may lie from where the camera focused. A recorded position is
+/// the camera's own measurement. A point placed from a table is where the
+/// viewfinder's point lies on the picture, measured by the project on
+/// frames shot with that body, to a few pixels. The two differ in error
+/// and in meaning, so every point says which it is, as the
+/// [decision to place focus points from a table](https://github.com/kuolas/raw-files/blob/master/docs/architecture-decisions/adr018-focus-points-placed-from-a-table-and-the-points-used.md)
+/// records.
+///
+/// `FocusOrigin` is `#[non_exhaustive]`, so match on it with a wildcard
+/// arm. It orders as its variants are listed, and a new variant is added
+/// after the existing ones, so an order once observed holds. Its
+/// [`name`](Self::name)s, which `Display` writes too, are "Recorded" and
+/// "Table".
+///
+/// # Examples
+///
+/// ```
+/// use raw_files::FocusOrigin;
+///
+/// assert_eq!(FocusOrigin::Recorded.name(), "Recorded");
+/// assert_eq!(FocusOrigin::Table.to_string(), "Table");
+/// ```
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[non_exhaustive]
+pub enum FocusOrigin {
+    /// A position the camera measured and wrote: a Nikon mirrorless
+    /// body's, a Nikon DSLR's in live view, a Sony body's with a
+    /// FocusLocation.
+    Recorded,
+    /// A point the camera named by number, placed by raw-files from its
+    /// table of the body's autofocus points, measured on frames shot with
+    /// that body and read in the maker's software: an estimate of where
+    /// the viewfinder's point lies on the picture, not a position the
+    /// camera measured. The
+    /// [format notes](https://github.com/kuolas/raw-files/blob/master/docs/formats/nef/autofocus-points.md)
+    /// record each body's table and its tolerance, a few pixels.
+    Table,
+}
+
+impl FocusOrigin {
+    /// The origin's name, for an information panel, such as "Table"; the
+    /// type's docs list them all.
+    pub fn name(self) -> &'static str {
+        match self {
+            FocusOrigin::Recorded => "Recorded",
+            FocusOrigin::Table => "Table",
+        }
+    }
+}
+
+impl fmt::Display for FocusOrigin {
+    /// Writes [`name`](FocusOrigin::name).
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.name())
     }
 }
 
@@ -350,7 +440,7 @@ fn trim(side: u32, center: u32, frame: u32) -> u32 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::testing::{point, size, z9_focus};
+    use crate::testing::{assert_names, assert_ordered, point, size, z9_focus};
 
     /// The focus a reader builds from these values, a step at a time: the
     /// centre in the frame, then the area when there is one, then whether
@@ -504,21 +594,48 @@ mod tests {
             .unwrap()
             .with_size(size(291, 323))
             .unwrap();
-        // `with_in_focus` never called is `None`.
+        // `with_in_focus` never called is `None`, and `with_origin` never
+        // called is `Recorded`.
+        let (recorded, table) = (FocusOrigin::Recorded, FocusOrigin::Table);
         let all = [
-            (unconfirmed.with_in_focus(true), Some(true)),
-            (unconfirmed.with_in_focus(false), Some(false)),
-            (unconfirmed, None),
+            (unconfirmed.with_in_focus(true), Some(true), recorded),
+            (unconfirmed.with_in_focus(false), Some(false), recorded),
+            (unconfirmed, None, recorded),
+            (unconfirmed.with_origin(table), None, table),
+            (unconfirmed.with_origin(recorded), None, recorded),
         ];
-        for (focus, in_focus) in all {
+        for (focus, in_focus, origin) in all {
             assert_eq!(focus.frame(), size(8_256, 5_504));
             assert_eq!(focus.center(), point(4_905, 2_461));
             assert_eq!(focus.size(), Some(size(291, 323)));
             assert_eq!(focus.in_focus(), in_focus);
+            assert_eq!(focus.origin(), origin);
         }
         let without_size = Focus::new(size(6_000, 4_000), point(3_000, 2_000)).unwrap();
         assert_eq!(without_size.size(), None);
         assert_eq!(without_size.in_focus(), None);
+        assert_eq!(without_size.origin(), recorded);
+    }
+
+    #[test]
+    fn a_focus_is_recorded_unless_told_otherwise() {
+        let focus = Focus::new(size(100, 100), point(50, 50)).unwrap();
+        assert_eq!(focus.origin(), FocusOrigin::Recorded);
+
+        let placed = focus.with_origin(FocusOrigin::Table);
+        assert_eq!(placed.origin(), FocusOrigin::Table);
+        assert_eq!(placed.frame(), size(100, 100));
+        assert_eq!(placed.center(), point(50, 50));
+        // The other builders keep it.
+        let placed = placed.with_size(size(10, 10)).unwrap().with_in_focus(true);
+        assert_eq!(placed.origin(), FocusOrigin::Table);
+
+        // A later origin replaces the earlier one.
+        let recorded = placed.with_origin(FocusOrigin::Recorded);
+        assert_eq!(recorded.origin(), FocusOrigin::Recorded);
+        assert_eq!(recorded.with_origin(FocusOrigin::Table), placed);
+
+        assert_eq!(z9_focus().origin(), FocusOrigin::Recorded);
     }
 
     #[test]
@@ -575,6 +692,21 @@ mod tests {
         assert_eq!(pixel.center(), point(1, 0));
         assert_eq!(pixel.size(), None);
         assert_eq!(pixel.in_focus(), Some(true));
+    }
+
+    #[test]
+    fn a_scaled_focus_keeps_its_origin() {
+        for origin in all_origins() {
+            let focus = z9_focus().with_origin(origin);
+            let preview = focus.scaled_to(size(1_920, 1_280)).unwrap();
+            assert_eq!(preview.origin(), origin, "{origin:?}");
+            assert_eq!(focus.scaled_to(focus.frame()), Some(focus));
+            // A point without an area or a confirmation keeps it too.
+            let bare = Focus::new(size(7, 3), point(6, 0))
+                .unwrap()
+                .with_origin(origin);
+            assert_eq!(bare.scaled_to(size(14, 6)).unwrap().origin(), origin);
+        }
     }
 
     #[test]
@@ -788,6 +920,9 @@ mod tests {
             built(frame, center, None, Some(true)),
             built(frame, center, area, Some(false)),
             built(frame, center, area, None),
+            // The same point, placed from a table.
+            built(frame, center, area, Some(true))
+                .map(|focus| focus.with_origin(FocusOrigin::Table)),
         ];
         let others: Vec<Focus> = others.into_iter().map(Option::unwrap).collect();
         for (place, other) in others.iter().enumerate() {
@@ -799,5 +934,33 @@ mod tests {
         all.extend(others.iter().copied());
         let set: std::collections::HashSet<Focus> = all.into_iter().collect();
         assert_eq!(set.len(), others.len() + 1);
+    }
+
+    // Every origin, in the order of its declaration. The `match` has no
+    // wildcard arm, so a variant added later does not compile until it is
+    // listed here too, and the test below then fails until its name is
+    // listed there.
+    fn all_origins() -> [FocusOrigin; 2] {
+        let all = [FocusOrigin::Recorded, FocusOrigin::Table];
+        for origin in all {
+            match origin {
+                FocusOrigin::Recorded | FocusOrigin::Table => {}
+            }
+        }
+        all
+    }
+
+    #[test]
+    fn every_name_is_the_one_documented_and_display_writes_it() {
+        // The names are stable once released: a program may show or store
+        // them, so a changed one fails here.
+        assert_names(&all_origins(), FocusOrigin::name, &["Recorded", "Table"]);
+    }
+
+    #[test]
+    fn origins_order_as_their_variants_are_listed() {
+        // A program may key a sorted map by the origin, and the order is a
+        // promise: a variant moved, or added before the others, fails.
+        assert_ordered(&all_origins());
     }
 }
