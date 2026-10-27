@@ -3,13 +3,17 @@
 //! What unit tests of any module share, whatever its layer: a reader that
 //! fails past the first block the source caches, as a disk or a network
 //! reader can fail, so that a test can tell a reader's failure from damage
-//! in the file; and the fixtures the tests of the focus, the metadata and
-//! the readers share: a size, a point and a Z 9's focus.
+//! in the file; the checks of an enum's names and order, that each name is
+//! the one documented, that `Display` writes it, that they are distinct,
+//! ASCII and in sentence case, and that the variants order as they are
+//! listed; and the fixtures the tests of the focus, the metadata and the
+//! readers share: a size, a point and a Z 9's focus.
 //!
 //! It stands at the crate's top, outside `container` and `formats`, so
 //! that tests of either may use it without a container module's tests
 //! depending on `formats`.
 
+use std::fmt;
 use std::io::{self, Cursor, Read, Seek, SeekFrom};
 
 use crate::focus::Focus;
@@ -39,6 +43,35 @@ impl Seek for FailsFar {
     fn seek(&mut self, pos: SeekFrom) -> io::Result<u64> {
         self.0.seek(pos)
     }
+}
+
+/// Checks that `all`'s names are `expected`, in order, and so as many,
+/// that `Display` writes each name, and that every name is distinct,
+/// ASCII and in sentence case.
+pub(crate) fn assert_names<T: Copy + fmt::Debug + fmt::Display>(
+    all: &[T],
+    name: fn(T) -> &'static str,
+    expected: &[&str],
+) {
+    let names: Vec<&str> = all.iter().map(|&value| name(value)).collect();
+    assert_eq!(names, expected);
+    for &value in all {
+        let text = name(value);
+        assert_eq!(value.to_string(), text, "{value:?}");
+        assert!(text.is_ascii(), "{value:?}");
+        // Sentence case: a capital first, or a digit. "sRGB" is the one
+        // name whose own spelling starts in lower case.
+        let capital = text.starts_with(|c: char| c.is_ascii_uppercase() || c.is_ascii_digit());
+        assert!(capital || text == "sRGB", "{value:?}");
+    }
+    let distinct: std::collections::HashSet<&str> = names.iter().copied().collect();
+    assert_eq!(distinct.len(), names.len(), "{names:?}");
+}
+
+/// Checks that `all`, the variants in declaration order, is strictly
+/// increasing.
+pub(crate) fn assert_ordered<T: Copy + Ord + fmt::Debug>(all: &[T]) {
+    assert!(all.windows(2).all(|pair| pair[0] < pair[1]), "{all:?}");
 }
 
 /// A size of `width` by `height` pixels.

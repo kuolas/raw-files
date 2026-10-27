@@ -346,8 +346,9 @@ mod readme {}
 #[path = "../tests/support/tiff_builder.rs"]
 mod tiff_builder;
 // The reader that fails past the first cached block, shared by the unit
-// tests of every module that reads a file, and the size, point and focus
-// fixtures the focus, metadata and reader tests share.
+// tests of every module that reads a file, the checks of an enum's names
+// and order, shared by the tests of every module with a named enum, and the
+// size, point and focus fixtures the focus, metadata and reader tests share.
 #[cfg(test)]
 mod testing;
 
@@ -358,7 +359,7 @@ pub use camera_settings::{
 pub use datetime::DateTime;
 pub use error::{Error, ErrorKind, Result};
 pub use file::RawFile;
-pub use focus::Focus;
+pub use focus::{Focus, FocusOrigin};
 pub use format::Format;
 pub use geometry::{Point, Size};
 pub use limits::Limits;
