@@ -365,12 +365,13 @@ use crate::container::tiff::tags::{JPEG_INTERCHANGE_FORMAT, JPEG_INTERCHANGE_FOR
 use crate::container::tiff::types::{LONG, SHORT, SRATIONAL, SSHORT, UNDEFINED};
 use crate::container::tiff::{Block, Ifd, Tree, ifd_in, parse_header, skip_damage};
 use crate::error::Result;
+use crate::focus::{Focus, scale};
 use crate::formats::tiff_metadata::{self, Standard, one_short};
 use crate::formats::tiff_previews::{self, Candidate};
 use crate::geometry::{Point, Size};
 use crate::io::{ByteOrder, Source};
 use crate::limits::Limits;
-use crate::metadata::{Focus, Lens, Metadata, scale};
+use crate::metadata::{Lens, Metadata};
 use crate::rational::{Rational, SignedRational};
 
 /// The Nikon MakerNote tag that records the ISO the picture was taken at

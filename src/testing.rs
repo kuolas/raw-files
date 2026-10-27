@@ -3,7 +3,8 @@
 //! What unit tests of any module share, whatever its layer: a reader that
 //! fails past the first block the source caches, as a disk or a network
 //! reader can fail, so that a test can tell a reader's failure from damage
-//! in the file.
+//! in the file; and the fixtures the tests of the focus, the metadata and
+//! the readers share: a size, a point and a Z 9's focus.
 //!
 //! It stands at the crate's top, outside `container` and `formats`, so
 //! that tests of either may use it without a container module's tests
@@ -11,6 +12,8 @@
 
 use std::io::{self, Cursor, Read, Seek, SeekFrom};
 
+use crate::focus::Focus;
+use crate::geometry::{Point, Size};
 use crate::io::BLOCK_SIZE;
 
 /// The first byte of the second block the source caches: a [`FailsFar`]
@@ -36,4 +39,24 @@ impl Seek for FailsFar {
     fn seek(&mut self, pos: SeekFrom) -> io::Result<u64> {
         self.0.seek(pos)
     }
+}
+
+/// A size of `width` by `height` pixels.
+pub(crate) fn size(width: u32, height: u32) -> Size {
+    Size { width, height }
+}
+
+/// The point `x` pixels from the left and `y` from the top.
+pub(crate) fn point(x: u32, y: u32) -> Point {
+    Point { x, y }
+}
+
+/// Where a Nikon Z 9 focused: a 291 × 323 area right of and above the
+/// centre of its 8256 × 5504 frame, with focus confirmed.
+pub(crate) fn z9_focus() -> Focus {
+    Focus::new(size(8_256, 5_504), point(4_905, 2_461))
+        .unwrap()
+        .with_size(size(291, 323))
+        .unwrap()
+        .with_in_focus(true)
 }

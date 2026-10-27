@@ -908,7 +908,7 @@ mod tests {
     use crate::formats::testing;
     use crate::limits::Limits;
     use crate::orientation::Orientation;
-    use crate::testing::{FAR, FailsFar};
+    use crate::testing::{FAR, FailsFar, size};
     use crate::tiff_builder::{
         ASCII, IfdId, LONG, Order, RATIONAL, RawValue, SHORT, SRATIONAL, TiffBuilder,
     };
@@ -3433,11 +3433,6 @@ mod tests {
                 }
             }
         })
-    }
-
-    /// A size of `width` by `height` pixels.
-    fn size(width: u32, height: u32) -> Size {
-        Size { width, height }
     }
 
     #[test]

@@ -306,6 +306,7 @@ mod container;
 mod datetime;
 mod error;
 mod file;
+mod focus;
 mod format;
 mod formats;
 // The entry points of the fuzz targets in `fuzz/`: compiled only with
@@ -345,7 +346,8 @@ mod readme {}
 #[path = "../tests/support/tiff_builder.rs"]
 mod tiff_builder;
 // The reader that fails past the first cached block, shared by the unit
-// tests of every module that reads a file.
+// tests of every module that reads a file, and the size, point and focus
+// fixtures the focus, metadata and reader tests share.
 #[cfg(test)]
 mod testing;
 
@@ -356,10 +358,11 @@ pub use camera_settings::{
 pub use datetime::DateTime;
 pub use error::{Error, ErrorKind, Result};
 pub use file::RawFile;
+pub use focus::Focus;
 pub use format::Format;
 pub use geometry::{Point, Size};
 pub use limits::Limits;
-pub use metadata::{Exposure, Focus, Lens, LensBuilder, Metadata};
+pub use metadata::{Exposure, Lens, LensBuilder, Metadata};
 pub use options::Options;
 pub use orientation::Orientation;
 pub use preview::{Preview, PreviewFormat};

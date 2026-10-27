@@ -256,11 +256,12 @@ use crate::camera_settings::{CameraSettings, FineTune, WhiteBalanceMode};
 use crate::container::tiff::types::{BYTE, SHORT, SLONG, UNDEFINED};
 use crate::container::tiff::{Ifd, Tree, skip_damage};
 use crate::error::Result;
+use crate::focus::Focus;
 use crate::formats::tiff_metadata::one_long;
 use crate::geometry::{Point, Size};
 use crate::io::Source;
 use crate::limits::Limits;
-use crate::metadata::{Focus, Metadata};
+use crate::metadata::Metadata;
 use crate::rational::SignedRational;
 
 /// The manufacturer's name that a Sony camera's Make starts with, compared

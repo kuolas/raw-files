@@ -18,10 +18,11 @@ use std::io::{Cursor, Read, Seek};
 
 use crate::container::jpeg::{mpf, probe, segments};
 use crate::container::tiff::{Block, Tree, walk};
+use crate::focus::Focus;
 use crate::geometry::Size;
 use crate::io::Source;
 use crate::limits::Limits;
-use crate::metadata::{Focus, Metadata};
+use crate::metadata::Metadata;
 use crate::options::Options;
 
 /// Reads `data` as a TIFF file: the walk with the default limits, header
