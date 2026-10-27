@@ -10,8 +10,10 @@
 //! exposure and the lens as the file records them, fractions with the
 //! numerator and denominator it stored, [`CameraSettings`] the camera's
 //! settings, [`Focus`] where the camera's autofocus aimed, as the camera
-//! recorded it, and [`FocusPoints`] the autofocus points it used.
-//! [`LensBuilder`] builds a lens a value at a time, for a caller's tests.
+//! recorded it, [`FocusPoints`] the autofocus points it used, and
+//! [`FocusLayout`] every autofocus point of the body, where raw-files has
+//! its table of them. [`LensBuilder`] builds a lens a value at a time, for
+//! a caller's tests.
 //!
 //! Every value is optional. A file may not record it, or may record it in a
 //! way that cannot be read, such as a tag of the wrong type; either way the
@@ -20,13 +22,13 @@
 //! A program that uses raw-files can build these values for its own tests,
 //! without a camera file: [`Metadata`], [`Exposure`] and [`CameraSettings`]
 //! through their `with_…` methods, a [`Lens`] through [`Lens::builder`],
-//! [`FocusPoints`] through their builders, and a [`Focus`], a [`DateTime`]
-//! and a [`Rational`] through their checked constructors. [`Metadata`]'s
-//! docs show how.
+//! [`FocusPoints`] through their builders, and a [`Focus`], a
+//! [`FocusLayout`], a [`DateTime`] and a [`Rational`] through their checked
+//! constructors. [`Metadata`]'s docs show how.
 
 use crate::camera_settings::CameraSettings;
 use crate::datetime::DateTime;
-use crate::focus::{Focus, FocusPoints};
+use crate::focus::{Focus, FocusLayout, FocusPoints};
 use crate::geometry::Size;
 use crate::orientation::Orientation;
 use crate::rational::{Rational, SignedRational};
@@ -34,7 +36,8 @@ use crate::rational::{Rational, SignedRational};
 /// What the camera recorded about a picture: the camera and the software
 /// that wrote the file, when the picture was taken, how to turn it upright,
 /// its exposure, how the camera was set, its lens, the sizes of its raw
-/// data and of its visible image, and where the camera focused.
+/// data and of its visible image, and where the camera focused, with the
+/// layout of the body's autofocus points where raw-files has its table.
 ///
 /// Every value is `None` when the file does not record it or records it in
 /// a way that cannot be read. A damaged value costs only itself, and a
@@ -161,6 +164,7 @@ pub struct Metadata {
     pub(crate) raw_size: Option<Size>,
     pub(crate) image_size: Option<Size>,
     pub(crate) focus_points: Option<FocusPoints>,
+    pub(crate) focus_layout: Option<FocusLayout>,
 }
 
 impl Metadata {
@@ -417,6 +421,53 @@ impl Metadata {
         self.focus_points.as_ref()
     }
 
+    /// The layout of the body's autofocus points (see [`FocusLayout`]):
+    /// every point the body has, each with its number, the centre of its
+    /// box and the box's size, in the frame of raw-files' table of that
+    /// body, the body's full-size output.
+    ///
+    /// The readers give a layout only from a table of the body's points,
+    /// for a body whose table is in raw-files, the body the file's Model
+    /// names. The
+    /// [NEF format notes](https://github.com/kuolas/raw-files/blob/master/docs/formats/nef/autofocus-points.md)
+    /// record each body measured, and the tables in raw-files are written
+    /// from those records, so a body the notes record has a layout only
+    /// when its table is in raw-files. It is `None` for every other body
+    /// and when the file names no Model. It is given whatever the shot, so a
+    /// manual-focus or live-view shot of such a body has it too, and its
+    /// frame is always the table's: on a shot in a crop mode, the points
+    /// of [`focus_points`](Self::focus_points) are in the crop's frame, not
+    /// in the layout's.
+    ///
+    /// # Examples
+    ///
+    /// Every point of the body, with the points the camera used marked,
+    /// matched by their numbers:
+    ///
+    /// ```no_run
+    /// use raw_files::{FocusPoint, RawFile};
+    ///
+    /// # fn main() -> raw_files::Result<()> {
+    /// let file = RawFile::open("photo.nef")?;
+    /// let metadata = file.metadata();
+    /// if let Some(layout) = metadata.focus_layout() {
+    ///     let used: Vec<u8> = metadata
+    ///         .focus_points()
+    ///         .map(|points| points.points().iter().filter_map(FocusPoint::number).collect())
+    ///         .unwrap_or_default();
+    ///     for point in layout.points() {
+    ///         let number = point.number();
+    ///         let mark = if used.contains(&number) { ", used" } else { "" };
+    ///         println!("point {number} at {}{mark}", point.center());
+    ///     }
+    /// }
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn focus_layout(&self) -> Option<FocusLayout> {
+        self.focus_layout
+    }
+
     /// Sets the camera's maker, in place of any set before;
     /// [`make`](Self::make) reads it.
     #[must_use]
@@ -525,6 +576,16 @@ impl Metadata {
     #[must_use]
     pub fn with_focus_points(mut self, points: FocusPoints) -> Self {
         self.focus_points = Some(points);
+        self
+    }
+
+    /// Sets the layout of the body's autofocus points, in place of any set
+    /// before; [`focus_layout`](Self::focus_layout) reads it. The focus and
+    /// the points are left as they were, as [`with_focus`](Self::with_focus)
+    /// and [`with_focus_points`](Self::with_focus_points) leave the layout.
+    #[must_use]
+    pub fn with_focus_layout(mut self, layout: FocusLayout) -> Self {
+        self.focus_layout = Some(layout);
         self
     }
 }
@@ -1009,7 +1070,8 @@ mod tests {
     use crate::camera_settings::{
         ColorSpace, ExposureProgram, MeteringMode, RawImageSize, Shutter,
     };
-    use crate::focus::{AfAreaMode, FocusOrigin, FocusPoint};
+    use crate::focus::{AfAreaMode, FocusOrigin, FocusPoint, LayoutPoint};
+    use crate::geometry::Point;
     use crate::testing::{point, size, z9_focus};
 
     fn fraction(numerator: u32, denominator: u32) -> Rational {
@@ -1331,7 +1393,8 @@ mod tests {
             .with_shutter(Shutter::ElectronicFrontCurtain)
     }
 
-    /// The metadata of a Z 9 picture, every value set and each one
+    /// The metadata of a Z 9 picture, every value set but the layout of the
+    /// body's autofocus points, which a Z 9 has none of, and each one
     /// different from the others, so that a getter reading the wrong value
     /// is caught.
     fn z9_metadata() -> Metadata {
@@ -1354,7 +1417,38 @@ mod tests {
                 height: 5_504,
             }),
             focus_points: Some(FocusPoints::from(z9_focus())),
+            focus_layout: None,
         }
+    }
+
+    /// Two points of the Nikon D600's layout, as the record of the
+    /// maintainer's D600 in the NEF format notes gives them: the centre
+    /// point, 1, and the top point of the leftmost column, 38.
+    static D600_POINTS: [LayoutPoint; 2] = [
+        LayoutPoint::new(1, D600_CENTRE, D600_BOX),
+        LayoutPoint::new(38, Point { x: 1_812, y: 1_705 }, D600_BOX),
+    ];
+
+    /// The D600's centre point alone.
+    static D600_CENTRE_POINT: [LayoutPoint; 1] = [LayoutPoint::new(1, D600_CENTRE, D600_BOX)];
+
+    /// Where the D600's centre point lies, and the box of every point.
+    const D600_CENTRE: Point = Point { x: 3_008, y: 2_007 };
+    const D600_BOX: Size = Size {
+        width: 164,
+        height: 164,
+    };
+
+    /// A made-up layout of two of the D600's points, in its 6016 × 4016
+    /// frame: unlike any other value of these tests.
+    fn d600_layout() -> FocusLayout {
+        FocusLayout::new("NIKON D600", size(6_016, 4_016), &D600_POINTS).unwrap()
+    }
+
+    /// A made-up layout of the D600's centre point alone: unlike
+    /// [`d600_layout`].
+    fn d600_centre_layout() -> FocusLayout {
+        FocusLayout::new("NIKON D600", size(6_016, 4_016), &D600_CENTRE_POINT).unwrap()
     }
 
     /// Two points placed from a table in a D600-sized frame, the second
@@ -1390,6 +1484,7 @@ mod tests {
         assert_eq!(metadata.image_size(), None);
         assert_eq!(metadata.focus(), None);
         assert_eq!(metadata.focus_points(), None);
+        assert_eq!(metadata.focus_layout(), None);
     }
 
     #[test]
@@ -1425,6 +1520,17 @@ mod tests {
         assert_eq!(metadata.focus(), Some(z9_focus()));
         assert_eq!(
             metadata.focus_points(),
+            Some(&FocusPoints::from(z9_focus()))
+        );
+        // A Z 9 has no layout; one set beside its values is read back.
+        assert_eq!(metadata.focus_layout(), None);
+        let with_layout = Metadata {
+            focus_layout: Some(d600_layout()),
+            ..z9_metadata()
+        };
+        assert_eq!(with_layout.focus_layout(), Some(d600_layout()));
+        assert_eq!(
+            with_layout.focus_points(),
             Some(&FocusPoints::from(z9_focus()))
         );
     }
@@ -1491,6 +1597,32 @@ mod tests {
             assert_eq!(points.primary().unwrap().number(), None, "{focus:?}");
             assert_eq!(metadata.focus(), Some(focus), "{focus:?}");
         }
+    }
+
+    #[test]
+    fn the_layout_and_the_points_used_are_set_apart() {
+        let (layout, list, z9) = (d600_layout(), two_points(), z9_focus());
+        // A layout alone gives no points and no focus.
+        let alone = Metadata::default().with_focus_layout(layout);
+        assert_eq!(alone.focus_layout(), Some(layout));
+        assert_eq!(alone.focus_points(), None);
+        assert_eq!(alone.focus(), None);
+        // A layout set after the points, or after the focus, leaves them.
+        let listed = Metadata::default()
+            .with_focus_points(list.clone())
+            .with_focus_layout(layout);
+        assert_eq!(listed.focus_points(), Some(&list));
+        assert_eq!(listed.focus_layout(), Some(layout));
+        let focused = Metadata::default().with_focus(z9).with_focus_layout(layout);
+        assert_eq!(focused.focus(), Some(z9));
+        assert_eq!(focused.focus_layout(), Some(layout));
+        // The points, or the focus, set after the layout leave it.
+        let listed_after = Metadata::default()
+            .with_focus_layout(layout)
+            .with_focus_points(list.clone());
+        assert_eq!(listed_after, listed);
+        let focused_after = Metadata::default().with_focus_layout(layout).with_focus(z9);
+        assert_eq!(focused_after, focused);
     }
 
     #[test]
@@ -1606,9 +1738,15 @@ mod tests {
         let settings = CameraSettings::default().with_color_space(ColorSpace::Srgb);
         // From the empty metadata, and from a full one whose every value
         // differs from the one set, so that a builder writing another
-        // value, or clearing one, is caught. The expected value is built
-        // field by field, not through the builders.
-        for start in [Metadata::default(), z9_metadata()] {
+        // value, or clearing one, is caught: the Z 9's, which has no
+        // layout, and the Z 9's with a layout, so that a builder clearing
+        // the layout is caught too. The expected value is built field by
+        // field, not through the builders.
+        let z9_with_layout = Metadata {
+            focus_layout: Some(d600_centre_layout()),
+            ..z9_metadata()
+        };
+        for start in [Metadata::default(), z9_metadata(), z9_with_layout] {
             let cases = [
                 (
                     start.clone().with_make("Nikon"),
@@ -1701,6 +1839,13 @@ mod tests {
                         ..start.clone()
                     },
                 ),
+                (
+                    start.clone().with_focus_layout(d600_layout()),
+                    Metadata {
+                        focus_layout: Some(d600_layout()),
+                        ..start.clone()
+                    },
+                ),
             ];
             for (place, (built, expected)) in cases.into_iter().enumerate() {
                 assert_eq!(built, expected, "builder {place} from {start:?}");
@@ -1708,8 +1853,9 @@ mod tests {
         }
     }
 
-    /// [`z9_metadata`] built through twelve of its thirteen builders, all
-    /// but [`Metadata::with_focus_points`], whose list `with_focus` makes.
+    /// [`z9_metadata`] built through twelve of its fourteen builders, all
+    /// but [`Metadata::with_focus_points`], whose list `with_focus` makes,
+    /// and [`Metadata::with_focus_layout`], since a Z 9 has no layout.
     fn z9_metadata_built() -> Metadata {
         let lens = Lens::builder()
             .model("NIKKOR Z 14-30mm f/4 S")
@@ -1750,6 +1896,14 @@ mod tests {
     fn every_builder_in_a_chain_equals_the_value_built_field_by_field() {
         assert_eq!(z9_exposure_built(), z9_exposure());
         assert_eq!(z9_metadata_built(), z9_metadata());
+        // The fourteenth builder at the end of the chain.
+        assert_eq!(
+            z9_metadata_built().with_focus_layout(d600_layout()),
+            Metadata {
+                focus_layout: Some(d600_layout()),
+                ..z9_metadata()
+            }
+        );
     }
 
     #[test]
@@ -1792,10 +1946,15 @@ mod tests {
             .with_lens(Lens::builder().model("A").build().unwrap())
             .with_raw_size(size(1, 1))
             .with_image_size(size(1, 1))
-            .with_focus_points(two_points());
-        // Every value of `earlier` differs from the Z 9's, so each builder
-        // below has one to replace.
-        let z9 = z9_metadata();
+            .with_focus_points(two_points())
+            .with_focus_layout(d600_centre_layout());
+        // Every value of `earlier` differs from the Z 9's, and its layout
+        // from the one set below, so each builder below has one to
+        // replace.
+        let z9 = Metadata {
+            focus_layout: Some(d600_layout()),
+            ..z9_metadata()
+        };
         let metadata = earlier
             .with_make("NIKON CORPORATION")
             .with_model("NIKON Z 9")
@@ -1808,7 +1967,8 @@ mod tests {
             .with_lens(z9.lens.clone().unwrap())
             .with_raw_size(z9.raw_size.unwrap())
             .with_image_size(z9.image_size.unwrap())
-            .with_focus(z9.focus().unwrap());
+            .with_focus(z9.focus().unwrap())
+            .with_focus_layout(d600_layout());
         assert_eq!(metadata, z9);
     }
 

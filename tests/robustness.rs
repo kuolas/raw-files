@@ -108,7 +108,9 @@ use std::hint::black_box;
 use std::ops::Range;
 use std::panic;
 
-use raw_files::{Focus, FocusPoints, Metadata, Rational, RawFile, SignedRational, Size};
+use raw_files::{
+    Focus, FocusLayout, FocusPoints, Metadata, Rational, RawFile, SignedRational, Size,
+};
 use support::arw::{ARW4_FULL_SIZE_JPEG, arw4_file, stub};
 use support::fixtures::{Z9_1X1, Z9_16X9_JPEG, Z9_DX, Z9_DX_JPEG, Z9_FX_JPEG, read_fixture};
 use support::jpeg_files::{
@@ -471,7 +473,7 @@ fn open_and_read_everything(bytes: &[u8]) -> bool {
 /// every form the library offers: each fraction shown, reduced and as a
 /// decimal; the capture time shown and taken apart; the focus point and
 /// the focus points shown, and scaled onto a small frame and onto their
-/// own.
+/// own; and the layout of the body's points shown.
 fn show_metadata(metadata: &Metadata, out: &mut String) {
     let _ = write!(
         out,
@@ -548,6 +550,9 @@ fn show_metadata(metadata: &Metadata, out: &mut String) {
             }
         }
     }
+    if let Some(layout) = metadata.focus_layout() {
+        show_focus_layout(layout, out);
+    }
 }
 
 /// A small preview's frame, to place a focus point on: IFD0's JPEG of the
@@ -580,6 +585,17 @@ fn show_focus_points(points: &FocusPoints, out: &mut String) {
         let center = point.center();
         let _ = write!(out, " ({}, {})", center.x, center.y);
     }
+}
+
+/// Writes `layout` to `out`: the model it is for and how many points it
+/// has.
+fn show_focus_layout(layout: FocusLayout, out: &mut String) {
+    let _ = write!(
+        out,
+        " layout of {}: {} points",
+        layout.model(),
+        layout.points().len()
+    );
 }
 
 /// Writes `fraction`, when there is one, to `out`: as stored, reduced, and
@@ -691,6 +707,7 @@ fn assert_all_but_the_capture_time(damaged: &Metadata, undamaged: &Metadata, wha
     assert_eq!(damaged.image_size(), undamaged.image_size(), "{what}");
     assert_eq!(damaged.focus(), undamaged.focus(), "{what}");
     assert_eq!(damaged.focus_points(), undamaged.focus_points(), "{what}");
+    assert_eq!(damaged.focus_layout(), undamaged.focus_layout(), "{what}");
 }
 
 /// A capture time that names no real date, in an otherwise undamaged file,

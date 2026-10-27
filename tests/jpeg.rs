@@ -2159,6 +2159,8 @@ fn check_stripped_z9_jpeg(stripped: &StrippedZ9Jpeg) {
     );
     assert_eq!(points.origin(), FocusOrigin::Recorded, "{label}");
     assert_eq!(points.area_mode(), stripped.area_mode, "{label}");
+    // No layout: raw-files has no table of the Z 9's points.
+    assert_eq!(metadata.focus_layout(), None, "{label}");
     // The settings, the same on the three shots but the colour
     // temperature and the image area. From the Exif IFD: aperture
     // priority, matrix metering, a Flash of 0, no flash fired and no mode
@@ -2525,6 +2527,7 @@ const METADATA: &[SampleMetadata] = &[
             primary_number: None,
             area_mode: None,
         }),
+        focus_layout: None,
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
             color_temperature: None,
@@ -2578,6 +2581,7 @@ const METADATA: &[SampleMetadata] = &[
             primary_number: None,
             area_mode: None,
         }),
+        focus_layout: None,
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
             color_temperature: None,
@@ -2622,6 +2626,7 @@ const METADATA: &[SampleMetadata] = &[
         raw_size: None,
         image_size: Some((5472, 3648)),
         focus: None, // manual focus
+        focus_layout: None,
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Shade),
             color_temperature: None,
@@ -2666,6 +2671,7 @@ const METADATA: &[SampleMetadata] = &[
         raw_size: None,
         image_size: Some((6000, 4000)),
         focus: None, // no FocusLocation: a point number only (AFPointSelected)
+        focus_layout: None,
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
             color_temperature: None,
@@ -2702,6 +2708,7 @@ const METADATA: &[SampleMetadata] = &[
         raw_size: None,
         image_size: Some((3872, 2592)),
         focus: None, // no FocusLocation: only the A100's Minolta block, which is not read
+        focus_layout: None,
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
             color_temperature: None,
@@ -2746,6 +2753,7 @@ const METADATA: &[SampleMetadata] = &[
         raw_size: None,
         image_size: Some((6000, 4000)),
         focus: None, // a viewfinder shot: a zero frame and only a point number
+        focus_layout: None,
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
             color_temperature: None,
@@ -2790,6 +2798,7 @@ const METADATA: &[SampleMetadata] = &[
         raw_size: None,
         image_size: Some((3008, 2000)),
         focus: None, // no AFInfo2: AFInfo holds a point number only
+        focus_layout: None,
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
             color_temperature: None,
@@ -2823,6 +2832,7 @@ const METADATA: &[SampleMetadata] = &[
         raw_size: None,
         image_size: Some((5472, 3648)),
         focus: None, // the MakerNote of a maker no reader reads
+        focus_layout: None,
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
             color_temperature: None,

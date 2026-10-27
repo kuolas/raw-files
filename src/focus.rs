@@ -16,9 +16,11 @@
 //! the camera was set to, an [`AfAreaMode`], and where they came from.
 //!
 //! [`Metadata::focus`](crate::Metadata::focus) gives the focus point of a
-//! file, if it records one, and
+//! file, if it records one,
 //! [`Metadata::focus_points`](crate::Metadata::focus_points) the points
-//! it used.
+//! it used, and [`Metadata::focus_layout`](crate::Metadata::focus_layout)
+//! every point of the body, a [`FocusLayout`] of [`LayoutPoint`]s, where
+//! raw-files has its table of them.
 
 use std::fmt;
 
@@ -828,11 +830,239 @@ impl From<Focus> for FocusPoints {
     }
 }
 
+/// One autofocus point of a body's layout, as a [`FocusLayout`] holds it:
+/// the camera's number for the point, the centre of its box and the box's
+/// size, in pixels of the layout's frame, by the rules of [`Focus`]'s
+/// coordinates.
+///
+/// The number is the one the camera writes for the point, such as one of 1
+/// to 39 on a body with 39 points, so a point of
+/// [`Metadata::focus_points`](crate::Metadata::focus_points) is found in
+/// the layout by its [`number`](FocusPoint::number). A point alone has no
+/// frame, so it is checked against one, and against the layout's other
+/// points, by [`FocusLayout::new`], not when it is built.
+///
+/// Two points are equal when the number, the centre and the size are the
+/// same. There is no order, as there is none for [`FocusPoint`], and no
+/// `Default`, since a point has a number and a box.
+///
+/// # Examples
+///
+/// The centre point of the Nikon D600's layout, from the record of the
+/// maintainer's D600 in the NEF format notes:
+///
+/// ```
+/// use raw_files::{LayoutPoint, Point, Size};
+///
+/// let centre = LayoutPoint::new(1, Point { x: 3008, y: 2007 }, Size { width: 164, height: 164 });
+/// assert_eq!(centre.number(), 1);
+/// assert_eq!(centre.center(), Point { x: 3008, y: 2007 });
+/// assert_eq!(centre.size(), Size { width: 164, height: 164 });
+/// ```
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct LayoutPoint {
+    number: u8,
+    center: Point,
+    size: Size,
+}
+
+impl LayoutPoint {
+    /// The point numbered `number`, with a box of `size` centred at
+    /// `center`, each stored as given: [`FocusLayout::new`] checks them
+    /// against the layout's frame and its other points.
+    ///
+    /// It is `const`, so that a layout's points can be written as a
+    /// `static` array, which [`FocusLayout::new`] borrows.
+    pub const fn new(number: u8, center: Point, size: Size) -> Self {
+        Self {
+            number,
+            center,
+            size,
+        }
+    }
+
+    /// The camera's number for the point, as it writes it in a file that
+    /// names the point.
+    pub fn number(&self) -> u8 {
+        self.number
+    }
+
+    /// The centre of the point's box, as its distances from the left and
+    /// top edges of the layout's frame.
+    pub fn center(&self) -> Point {
+        self.center
+    }
+
+    /// The width and height of the point's box.
+    pub fn size(&self) -> Size {
+        self.size
+    }
+}
+
+/// Where every autofocus point of a body lies on the picture, as
+/// raw-files' table of that body holds it: each point's number, as the
+/// camera writes it, the centre of its box and the box's size, each a
+/// [`LayoutPoint`], all in one frame, the body's full-size output. The
+/// table is measured by the project on frames shot with that body and
+/// read in the maker's software, as the
+/// [decision to measure per-body tables in the project](https://github.com/kuolas/raw-files/blob/master/docs/architecture-decisions/adr017-per-body-tables-measured-by-the-project.md)
+/// sets out.
+///
+/// A viewer draws from it the grid of points the photographer saw in the
+/// viewfinder, and marks on that grid the points of
+/// [`Metadata::focus_points`](crate::Metadata::focus_points), each found by
+/// its number with [`point`](Self::point). The centres and the boxes follow
+/// the rules of [`Focus`]'s coordinates: every centre lies on the frame,
+/// its edges included, and every box fits inside the frame around its
+/// centre.
+///
+/// The frame is the table's, whatever the shot. On a shot in a crop mode,
+/// a point of [`Metadata::focus_points`](crate::Metadata::focus_points)
+/// is in the crop's frame, while the layout stays in the body's full
+/// frame, as the
+/// [decision to report the points the camera used](https://github.com/kuolas/raw-files/blob/master/docs/architecture-decisions/adr018-focus-points-placed-from-a-table-and-the-points-used.md)
+/// says.
+///
+/// The readers give a layout only for a body whose table is in
+/// raw-files, and `None` for every other body. The
+/// [NEF format notes](https://github.com/kuolas/raw-files/blob/master/docs/formats/nef/autofocus-points.md)
+/// record each body measured, and the tables in raw-files are written
+/// from those records, so a body the notes record has a layout only when
+/// its table is in raw-files.
+///
+/// # Equality
+///
+/// Two layouts are equal when every value is the same: the model text,
+/// the frame and the points, compared by their values and in order, not by
+/// where they are stored, so two `static` arrays of the same points give
+/// equal layouts. There is no order, as there is none for [`Focus`]. There
+/// is no `Default` either, since a layout has a body and at least one
+/// point: a body without a table gives `None`.
+///
+/// # Examples
+///
+/// Three points of the Nikon D600's layout, from the record of the
+/// maintainer's D600 in the NEF format notes: the centre point, 1, the top
+/// point of the left one of the three middle columns, 13, and the top
+/// point of the leftmost column, 38, each with its 164 × 164 box, in the
+/// body's 6016 × 4016 frame. [`LayoutPoint::new`] is `const`, so the
+/// points can be a `static` array, which the layout borrows:
+///
+/// ```
+/// use raw_files::{FocusLayout, LayoutPoint, Point, Size};
+///
+/// const BOX: Size = Size { width: 164, height: 164 };
+/// static POINTS: [LayoutPoint; 3] = [
+///     LayoutPoint::new(1, Point { x: 3008, y: 2007 }, BOX),
+///     LayoutPoint::new(13, Point { x: 2768, y: 1503 }, BOX),
+///     LayoutPoint::new(38, Point { x: 1812, y: 1705 }, BOX),
+/// ];
+///
+/// # fn main() {
+/// #     example().expect("the layout accepts the D600's points");
+/// # }
+/// # fn example() -> Option<()> {
+/// let frame = Size { width: 6016, height: 4016 };
+/// let layout = FocusLayout::new("NIKON D600", frame, &POINTS)?;
+/// assert_eq!(layout.model(), "NIKON D600");
+/// assert_eq!(layout.frame(), frame);
+/// assert_eq!(layout.points().len(), 3);
+/// assert_eq!(
+///     layout.point(38).map(|point| point.center()),
+///     Some(Point { x: 1812, y: 1705 })
+/// );
+/// // The D600 has a point 2, but these three points leave it out.
+/// assert_eq!(layout.point(2), None);
+/// # Some(())
+/// # }
+/// ```
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct FocusLayout {
+    model: &'static str,
+    frame: Size,
+    points: &'static [LayoutPoint],
+}
+
+impl FocusLayout {
+    /// The layout of the body whose Model is `model`, its points `points`,
+    /// all in `frame`; `None` when the points cannot be a layout on that
+    /// frame, which is when:
+    ///
+    /// - either side of `frame` is zero;
+    /// - `points` is empty;
+    /// - a point's number is 0, which Nikon writes for no point, or is the
+    ///   number of another point;
+    /// - a point's centre lies outside the frame, by the rule of
+    ///   [`Focus::new`]: its x is more than the frame's width, or its y
+    ///   more than its height;
+    /// - a point's box has a zero side or does not fit inside the frame
+    ///   around its centre, by the rule of [`Focus::with_size`].
+    ///
+    /// The model is stored as given, and the points are borrowed, in the
+    /// order given, not copied, so a layout is `Copy`: a text, a frame and
+    /// a slice. This is how a caller builds a layout for its tests.
+    #[must_use]
+    pub fn new(model: &'static str, frame: Size, points: &'static [LayoutPoint]) -> Option<Self> {
+        if frame.width == 0 || frame.height == 0 || points.is_empty() {
+            return None;
+        }
+        // Whether a point of each number has been seen, indexed by the
+        // number: any `u8` indexes it, so one pass finds a number given
+        // twice without allocating.
+        let mut seen = [false; 256];
+        for point in points {
+            let number = usize::from(point.number);
+            let numbered = point.number != 0 && !seen[number];
+            if !(numbered && lies_on(frame, point.center, Some(point.size))) {
+                return None;
+            }
+            seen[number] = true;
+        }
+        Some(Self {
+            model,
+            frame,
+            points,
+        })
+    }
+
+    /// The Model the layout is for, as the camera writes it in the Model tag,
+    /// trimmed of padding as [`Metadata::model`](crate::Metadata::model) gives
+    /// it, such as `NIKON D600`.
+    pub fn model(&self) -> &'static str {
+        self.model
+    }
+
+    /// The size of the frame every point is measured in: the body's
+    /// full-size output, whatever the shot. It never has a zero side.
+    pub fn frame(&self) -> Size {
+        self.frame
+    }
+
+    /// Every point, in the order given to [`new`](Self::new). There is at
+    /// least one; each number is above 0 and no other point's, each centre
+    /// lies on the frame, and each box fits inside it around its centre.
+    pub fn points(&self) -> &'static [LayoutPoint] {
+        self.points
+    }
+
+    /// The point numbered `number`, or `None` when the layout has no point of
+    /// that number, as for 0, which no point has. A point of
+    /// [`Metadata::focus_points`](crate::Metadata::focus_points) is found here
+    /// by its [`number`](FocusPoint::number).
+    pub fn point(&self, number: u8) -> Option<LayoutPoint> {
+        self.points
+            .iter()
+            .find(|point| point.number == number)
+            .copied()
+    }
+}
+
 /// Whether a point centred at `center`, with an area of `size` when it has
 /// one, lies on the frame `frame`: whether [`Focus::new`] takes the centre
 /// and [`Focus::with_size`] the area. It asks those constructors rather
 /// than repeat their checks, so that the one rule a focus is checked by is
-/// the one a [`FocusPoints`] checks each of its points by.
+/// the one a [`FocusPoints`] and a [`FocusLayout`] check each of their
+/// points by.
 fn lies_on(frame: Size, center: Point, size: Option<Size>) -> bool {
     Focus::new(frame, center)
         .and_then(|focus| match size {
@@ -1900,5 +2130,283 @@ mod tests {
         // A program may key a sorted map by the mode, and the order is a
         // promise: a variant moved, or added before the others, fails.
         assert_ordered(&all_area_modes());
+    }
+
+    /// The D600's frame, its full-size output, and the box of every one of
+    /// its points, as the record of the maintainer's D600 in the NEF format
+    /// notes gives them.
+    const D600_FRAME: Size = Size {
+        width: 6_016,
+        height: 4_016,
+    };
+    const D600_BOX: Size = Size {
+        width: 164,
+        height: 164,
+    };
+
+    /// The D600's point `number`, centred at (x, y), with the D600's box.
+    const fn d600(number: u8, x: u32, y: u32) -> LayoutPoint {
+        LayoutPoint::new(number, Point { x, y }, D600_BOX)
+    }
+
+    /// Point 1, centred at (x, y), with a box `width` by `height`.
+    const fn first(x: u32, y: u32, width: u32, height: u32) -> LayoutPoint {
+        LayoutPoint::new(1, Point { x, y }, Size { width, height })
+    }
+
+    /// Three points of the D600's layout, from the same record: the centre
+    /// point, 1; the top point of the left one of the three middle columns,
+    /// 13; and the top point of the leftmost column, 38.
+    static D600_THREE: [LayoutPoint; 3] = [
+        d600(1, 3_008, 2_007),
+        d600(13, 2_768, 1_503),
+        d600(38, 1_812, 1_705),
+    ];
+
+    /// The layout of [`D600_THREE`] in the D600's frame.
+    fn d600_three() -> FocusLayout {
+        FocusLayout::new("NIKON D600", D600_FRAME, &D600_THREE).unwrap()
+    }
+
+    #[test]
+    fn a_layout_needs_a_frame_with_no_zero_side() {
+        // A point in the middle of a 2 by 2 frame, with a box of 2 by 2,
+        // fits it. No box fits a frame with a zero side either, so the
+        // frame's rule and the box's both refuse these.
+        static MIDDLE: [LayoutPoint; 1] = [first(1, 1, 2, 2)];
+        assert_eq!(FocusLayout::new("A", size(0, 2), &MIDDLE), None);
+        assert_eq!(FocusLayout::new("A", size(2, 0), &MIDDLE), None);
+        assert_eq!(FocusLayout::new("A", size(0, 0), &MIDDLE), None);
+        assert!(FocusLayout::new("A", size(2, 2), &MIDDLE).is_some());
+        for frame in [size(0, 4_016), size(6_016, 0)] {
+            let layout = FocusLayout::new("NIKON D600", frame, &D600_THREE);
+            assert_eq!(layout, None, "{frame:?}");
+        }
+    }
+
+    #[test]
+    fn a_layout_needs_at_least_one_point() {
+        assert_eq!(FocusLayout::new("NIKON D600", D600_FRAME, &[]), None);
+        static CENTRE: [LayoutPoint; 1] = [d600(1, 3_008, 2_007)];
+        let one = FocusLayout::new("NIKON D600", D600_FRAME, &CENTRE).unwrap();
+        assert_eq!(one.points(), CENTRE);
+    }
+
+    #[test]
+    fn a_layout_point_needs_a_number_above_zero_that_no_other_has() {
+        let new =
+            |points: &'static [LayoutPoint]| FocusLayout::new("NIKON D600", D600_FRAME, points);
+        // Nikon writes 0 for no point: refused alone, or after a good
+        // point.
+        static ZERO: [LayoutPoint; 1] = [d600(0, 3_008, 2_007)];
+        static ZERO_LAST: [LayoutPoint; 2] = [d600(1, 3_008, 2_007), d600(0, 2_768, 1_503)];
+        assert_eq!(new(&ZERO), None);
+        assert_eq!(new(&ZERO_LAST), None);
+        // A number given twice, at two places apart in the list, or as the
+        // same point twice in a row.
+        static APART: [LayoutPoint; 3] = [
+            d600(1, 3_008, 2_007),
+            d600(13, 2_768, 1_503),
+            d600(1, 1_812, 1_705),
+        ];
+        static TWICE: [LayoutPoint; 2] = [d600(38, 1_812, 1_705), d600(38, 1_812, 1_705)];
+        assert_eq!(new(&APART), None);
+        assert_eq!(new(&TWICE), None);
+        // Any other numbers, in any order, the largest included.
+        static ANY: [LayoutPoint; 3] = [
+            d600(255, 3_008, 2_007),
+            d600(2, 2_768, 1_503),
+            d600(1, 1_812, 1_705),
+        ];
+        assert_eq!(new(&ANY).map(|layout| layout.points()), Some(&ANY[..]));
+        assert!(new(&D600_THREE).is_some());
+    }
+
+    #[test]
+    fn a_layout_point_lies_inside_the_frame_by_the_rules_of_a_focus() {
+        // In a frame of 100 by 50: a centre off the frame, a box with a
+        // zero side, and a box that does not fit around its centre, each
+        // refused; at (50, 25), a box of 100 by 50 just fits, and one a
+        // pixel larger either way does not.
+        static OFF_ACROSS: [LayoutPoint; 1] = [first(101, 25, 2, 2)];
+        static OFF_DOWN: [LayoutPoint; 1] = [first(50, 51, 2, 2)];
+        static NO_WIDTH: [LayoutPoint; 1] = [first(50, 25, 0, 10)];
+        static NO_HEIGHT: [LayoutPoint; 1] = [first(50, 25, 10, 0)];
+        static TOO_WIDE: [LayoutPoint; 1] = [first(50, 25, 101, 50)];
+        static TOO_TALL: [LayoutPoint; 1] = [first(50, 25, 100, 51)];
+        static WHOLE: [LayoutPoint; 1] = [first(50, 25, 100, 50)];
+        let frame = size(100, 50);
+        for refused in [
+            &OFF_ACROSS,
+            &OFF_DOWN,
+            &NO_WIDTH,
+            &NO_HEIGHT,
+            &TOO_WIDE,
+            &TOO_TALL,
+        ] {
+            assert_eq!(FocusLayout::new("A", frame, refused), None, "{refused:?}");
+        }
+        assert!(FocusLayout::new("A", frame, &WHOLE).is_some());
+
+        // A point that does not fit costs the layout wherever it is in the
+        // list: here the last, one pixel past the D600's frame.
+        static LAST_OFF: [LayoutPoint; 3] = [
+            d600(1, 3_008, 2_007),
+            d600(13, 2_768, 1_503),
+            d600(38, 6_017, 1_705),
+        ];
+        assert_eq!(FocusLayout::new("NIKON D600", D600_FRAME, &LAST_OFF), None);
+
+        // On one axis, every frame from 1 to 8 pixels, every centre from 0
+        // to one past the frame and every box from 0 to two more than the
+        // frame; the other axis a frame of 3, the centre at 1 and a box of
+        // 2. A one-point layout is built exactly when `Focus::new` and
+        // `Focus::with_size` accept the same values: the edges are on the
+        // frame, and a box fits by half its side rounded up. Each point is
+        // leaked, to make the `'static` slice a layout borrows.
+        let (mut checked, mut built) = (0, 0);
+        for vertical in [false, true] {
+            for side in 1..=8_u32 {
+                for at in 0..=side + 1 {
+                    for area in 0..=side + 1 {
+                        let (frame, point) = if vertical {
+                            (size(3, side), first(1, at, 2, area))
+                        } else {
+                            (size(side, 3), first(at, 1, area, 2))
+                        };
+                        let points: &'static [LayoutPoint] = vec![point].leak();
+                        let layout = FocusLayout::new("A", frame, points);
+                        let focus = Focus::new(frame, point.center())
+                            .and_then(|focus| focus.with_size(point.size()));
+                        let context = format!("{frame:?}, {point:?}");
+                        assert_eq!(layout.is_some(), focus.is_some(), "{context}");
+                        built += usize::from(layout.is_some());
+                        checked += 1;
+                    }
+                }
+            }
+        }
+        // Every case was reached, on both axes, and some of each kind:
+        // (side + 2)² cases for each side, 380 on each axis.
+        assert_eq!(checked, 760);
+        assert!(built > 0 && built < checked, "{built} of {checked}");
+    }
+
+    #[test]
+    fn layout_getters_return_what_was_built() {
+        let layout = d600_three();
+        assert_eq!(layout.model(), "NIKON D600");
+        assert_eq!(layout.frame(), D600_FRAME);
+        assert_eq!(layout.points(), D600_THREE);
+        // The points are borrowed as given, in their order, not copied.
+        assert_eq!(layout.points().as_ptr(), D600_THREE.as_ptr());
+        let read: Vec<(u8, Point, Size)> = layout
+            .points()
+            .iter()
+            .map(|point| (point.number(), point.center(), point.size()))
+            .collect();
+        assert_eq!(
+            read,
+            [
+                (1, point(3_008, 2_007), size(164, 164)),
+                (13, point(2_768, 1_503), size(164, 164)),
+                (38, point(1_812, 1_705), size(164, 164)),
+            ]
+        );
+        // A point keeps what it was built with, even values no layout
+        // takes: a layout checks them.
+        let any = LayoutPoint::new(0, point(u32::MAX, 0), size(0, u32::MAX));
+        assert_eq!(
+            (any.number(), any.center(), any.size()),
+            (0, point(u32::MAX, 0), size(0, u32::MAX))
+        );
+    }
+
+    #[test]
+    fn a_layout_point_is_found_by_its_number() {
+        // The points out of number order too, so that the first point is
+        // not always the one asked for.
+        static SHUFFLED: [LayoutPoint; 3] = [
+            d600(38, 1_812, 1_705),
+            d600(1, 3_008, 2_007),
+            d600(13, 2_768, 1_503),
+        ];
+        let shuffled = FocusLayout::new("NIKON D600", D600_FRAME, &SHUFFLED).unwrap();
+        for layout in [d600_three(), shuffled] {
+            for (number, x, y) in [(1, 3_008, 2_007), (13, 2_768, 1_503), (38, 1_812, 1_705)] {
+                let found = layout.point(number);
+                assert_eq!(found, Some(d600(number, x, y)), "{number} in {layout:?}");
+            }
+            // No point is numbered 0, and these three leave out 2, 39 and
+            // every number past the D600's.
+            for number in [0, 2, 39, 255] {
+                assert_eq!(layout.point(number), None, "{number} in {layout:?}");
+            }
+        }
+    }
+
+    #[test]
+    fn layout_equality_is_by_every_value() {
+        // The same three points in another array: equal, for the points
+        // are compared by their values, not by where they are stored.
+        static AGAIN: [LayoutPoint; 3] = [
+            d600(1, 3_008, 2_007),
+            d600(13, 2_768, 1_503),
+            d600(38, 1_812, 1_705),
+        ];
+        let base = d600_three();
+        let again = FocusLayout::new("NIKON D600", D600_FRAME, &AGAIN).unwrap();
+        assert_ne!(AGAIN.as_ptr(), D600_THREE.as_ptr());
+        assert_eq!(base, again);
+
+        // One point's centre moved by a pixel, its number changed, its box
+        // changed; the points in another order; one point fewer.
+        static MOVED: [LayoutPoint; 3] = [
+            d600(1, 3_008, 2_007),
+            d600(13, 2_768, 1_503),
+            d600(38, 1_813, 1_705),
+        ];
+        static RENUMBERED: [LayoutPoint; 3] = [
+            d600(1, 3_008, 2_007),
+            d600(13, 2_768, 1_503),
+            d600(39, 1_812, 1_705),
+        ];
+        static RESIZED: [LayoutPoint; 3] = [
+            d600(1, 3_008, 2_007),
+            d600(13, 2_768, 1_503),
+            LayoutPoint::new(
+                38,
+                Point { x: 1_812, y: 1_705 },
+                Size {
+                    width: 164,
+                    height: 166,
+                },
+            ),
+        ];
+        static REORDERED: [LayoutPoint; 3] = [
+            d600(13, 2_768, 1_503),
+            d600(1, 3_008, 2_007),
+            d600(38, 1_812, 1_705),
+        ];
+        let others = [
+            FocusLayout::new("NIKON D610", D600_FRAME, &D600_THREE),
+            FocusLayout::new("NIKON D600", size(6_017, 4_016), &D600_THREE),
+            FocusLayout::new("NIKON D600", size(6_016, 4_017), &D600_THREE),
+            FocusLayout::new("NIKON D600", D600_FRAME, &MOVED),
+            FocusLayout::new("NIKON D600", D600_FRAME, &RENUMBERED),
+            FocusLayout::new("NIKON D600", D600_FRAME, &RESIZED),
+            FocusLayout::new("NIKON D600", D600_FRAME, &REORDERED),
+            FocusLayout::new("NIKON D600", D600_FRAME, &D600_THREE[..2]),
+        ];
+        let others: Vec<FocusLayout> = others.into_iter().map(Option::unwrap).collect();
+        for (place, other) in others.iter().enumerate() {
+            assert_ne!(&base, other, "value {place}");
+        }
+
+        let mut all = others.clone();
+        all.extend([base, again]);
+        all.extend(others.iter().copied());
+        let set: std::collections::HashSet<FocusLayout> = all.into_iter().collect();
+        assert_eq!(set.len(), others.len() + 1);
     }
 }

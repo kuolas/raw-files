@@ -44,6 +44,21 @@ does.
   under any detection method, and 207 tracking under contrast or hybrid
   detection. Any other code, or a DSLR code in live view, gives `None`.
   Sony files give no area mode.
+- `Metadata::focus_layout` gives the layout of the body's autofocus
+  points, as a `FocusLayout`: the Model it is for, the frame its points
+  are measured in, the body's full-size output, and every point, each a
+  `LayoutPoint` with the camera's number for it, the centre of its box
+  and the box's size; `FocusLayout::point` finds a point by its number,
+  so that a viewer can draw the grid and mark on it the points the
+  camera used. `FocusLayout::new` builds one from a `static` array of
+  points, which `LayoutPoint::new` can fill since it is `const`, and
+  refuses a frame with a zero side, no points, a number of 0 or one
+  given twice, and a point whose centre or box does not lie on the
+  frame by the rules of `Focus::new` and `Focus::with_size`; a program's
+  tests set it with `Metadata::with_focus_layout`. The readers give a
+  layout only from a table of the body's points; no body's table is in
+  raw-files with this change, so every file gives `None` until the first
+  table lands.
 
 ## [0.5.0] - 2026-10-26
 

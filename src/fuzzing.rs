@@ -18,7 +18,7 @@ use std::io::{Cursor, Read, Seek};
 
 use crate::container::jpeg::{mpf, probe, segments};
 use crate::container::tiff::{Block, Tree, walk};
-use crate::focus::{Focus, FocusPoints};
+use crate::focus::{Focus, FocusLayout, FocusPoints};
 use crate::geometry::Size;
 use crate::io::Source;
 use crate::limits::Limits;
@@ -164,8 +164,9 @@ pub fn open(data: &[u8]) {
 /// types do with values the reader built from arbitrary bytes is fuzzed
 /// too, not only the reading. The focus point and the focus points are
 /// read, then placed on a frame of 1 by 1 pixel and read again, since a
-/// tiny frame is where their rounding and trimming do the most. A `Debug`
-/// form of the whole covers whatever a later value adds.
+/// tiny frame is where their rounding and trimming do the most; the layout
+/// of the body's points is read as it is. A `Debug` form of the whole
+/// covers whatever a later value adds.
 fn read_metadata(metadata: &Metadata) {
     let _ = metadata.make();
     let _ = metadata.model();
@@ -231,6 +232,9 @@ fn read_metadata(metadata: &Metadata) {
             read_focus_points(&on_tiny);
         }
     }
+    if let Some(layout) = metadata.focus_layout() {
+        read_focus_layout(layout);
+    }
     let _ = format!("{metadata:?}");
 }
 
@@ -258,4 +262,18 @@ fn read_focus_points(points: &FocusPoints) {
     }
     let _ = points.primary();
     let _ = format!("{points:?}");
+}
+
+/// Asks `layout` for each of its values, each point's among them, the
+/// point numbered 1, and its `Debug` form, as a caller drawing it would.
+fn read_focus_layout(layout: FocusLayout) {
+    let _ = layout.model();
+    let _ = layout.frame();
+    for point in layout.points() {
+        let _ = point.number();
+        let _ = point.center();
+        let _ = point.size();
+    }
+    let _ = layout.point(1);
+    let _ = format!("{layout:?}");
 }

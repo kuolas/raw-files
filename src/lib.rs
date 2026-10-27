@@ -28,7 +28,9 @@
 //! a MakerNote records from the plain tags of Nikon's and Sony's), the
 //! lens, the sizes of the raw data, which a JPEG lacks, and of the visible
 //! image, and where the camera focused ([`Metadata::focus`]), with the
-//! autofocus points it used and the area mode ([`Metadata::focus_points`]).
+//! autofocus points it used and the area mode ([`Metadata::focus_points`]),
+//! and the layout of the body's autofocus points where raw-files has its
+//! table ([`Metadata::focus_layout`]).
 //! See the [roadmap](https://github.com/kuolas/raw-files/blob/master/docs/ROADMAP.md)
 //! for the plan and the
 //! [architecture](https://github.com/kuolas/raw-files/blob/master/docs/ARCHITECTURE.md)
@@ -123,7 +125,7 @@
 //! [`CameraSettings`] and [`WhiteBalance`], [`Lens::builder`], the
 //! constructors of [`FineTune`] and [`Flash`], the builders of
 //! [`FocusPoints`] and [`FocusPoint`], and the checked constructors, such
-//! as [`DateTime::new`]; [`Metadata`] shows how.
+//! as [`DateTime::new`] and [`FocusLayout::new`]; [`Metadata`] shows how.
 //!
 //! Show how the camera was set ([`Metadata::camera_settings`]), as a
 //! viewer's information panel does; every setting is optional, and one the
@@ -361,7 +363,9 @@ pub use camera_settings::{
 pub use datetime::DateTime;
 pub use error::{Error, ErrorKind, Result};
 pub use file::RawFile;
-pub use focus::{AfAreaMode, Focus, FocusOrigin, FocusPoint, FocusPoints};
+pub use focus::{
+    AfAreaMode, Focus, FocusLayout, FocusOrigin, FocusPoint, FocusPoints, LayoutPoint,
+};
 pub use format::Format;
 pub use geometry::{Point, Size};
 pub use limits::Limits;
