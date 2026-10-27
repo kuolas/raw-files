@@ -249,6 +249,9 @@ pub(crate) fn read<R: Read + Seek>(src: &mut Source<R>, tree: &Tree) -> Result<S
         image_size: default_crop.or(raw_size),
         // No standard tag records where the camera focused.
         focus_points: None,
+        // None of the standard tags holds a layout: the readers give one
+        // only from a table of the body's points.
+        focus_layout: None,
     };
     Ok(Standard {
         metadata,

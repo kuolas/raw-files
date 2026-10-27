@@ -182,7 +182,10 @@ pub fn check(sample: &Sample, format: Format) {
 /// millimetres. The capture time is its ISO 8601 form, as
 /// [`DateTime`](raw_files::DateTime) displays it. The focus point is the
 /// one the reader gives ([`SampleFocus`]), and so are the camera settings
-/// ([`SampleSettings`]).
+/// ([`SampleSettings`]). The layout of the body's autofocus points is the
+/// Model text of the layout the reader must give
+/// ([`FocusLayout::model`](raw_files::FocusLayout::model)), `None` when it
+/// must give none, as for every body that raw-files has no table of.
 ///
 /// The files are public, but the repository holds no camera's or lens's
 /// serial number, so a serial number is recorded by its shape alone and a
@@ -205,6 +208,7 @@ pub struct SampleMetadata {
     pub raw_size: Option<(u32, u32)>,
     pub image_size: Option<(u32, u32)>,
     pub focus: Option<SampleFocus>,
+    pub focus_layout: Option<&'static str>,
     pub settings: SampleSettings,
 }
 
@@ -461,6 +465,11 @@ pub fn check_metadata(expected: &SampleMetadata, format: Format) {
         )
     });
     assert_eq!(points, expected_points, "{label}: focus points");
+    assert_eq!(
+        metadata.focus_layout().map(|layout| layout.model()),
+        expected.focus_layout,
+        "{label}: focus layout"
+    );
 
     let settings = metadata.camera_settings();
     let expected = &expected.settings;
