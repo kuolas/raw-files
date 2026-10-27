@@ -157,6 +157,10 @@
 //! (file 1582). No plain tag says whether focus was confirmed either, so
 //! [`Focus::in_focus`] is never set.
 //!
+//! The point is given as a list of one, its primary ([`FocusPoints`]),
+//! with no area mode: AFAreaModeSetting is not read, since no file shot in
+//! a known mode has checked what its codes mean.
+//!
 //! # The camera settings
 //!
 //! The MakerNote also records how the camera was set for the picture,
@@ -256,7 +260,7 @@ use crate::camera_settings::{CameraSettings, FineTune, WhiteBalanceMode};
 use crate::container::tiff::types::{BYTE, SHORT, SLONG, UNDEFINED};
 use crate::container::tiff::{Ifd, Tree, skip_damage};
 use crate::error::Result;
-use crate::focus::Focus;
+use crate::focus::{Focus, FocusPoints};
 use crate::formats::tiff_metadata::one_long;
 use crate::geometry::{Point, Size};
 use crate::io::Source;
@@ -429,8 +433,10 @@ fn ifd_start(head: &[u8]) -> Option<u64> {
 /// balance setting, in place of the mode the Exif tags gave when the
 /// MakerNote names one, each by its own rule ([`camera_settings`]). Then
 /// the focus point, as recorded ([`focus`]), always read: the standard
-/// tags never give one, so it is not a value they may already hold. The
-/// other values are the standard tags' alone.
+/// tags never give one, so it is not a value they may already hold. It is
+/// given as a list of one point, the primary, with no area mode, since
+/// AFAreaModeSetting is not read. The other values are the standard tags'
+/// alone.
 ///
 /// # Errors
 ///
@@ -441,7 +447,7 @@ pub(in crate::formats) fn metadata<R: Read + Seek>(
     mut metadata: Metadata,
 ) -> Result<Metadata> {
     metadata.camera_settings = camera_settings(src, makernote, metadata.camera_settings)?;
-    metadata.focus = focus(src, makernote)?;
+    metadata.focus_points = focus(src, makernote)?.map(FocusPoints::from);
     Ok(metadata)
 }
 
@@ -725,6 +731,7 @@ mod tests {
     use crate::container::tiff::types::{ASCII, SHORT, SSHORT, UNDEFINED};
     use crate::container::tiff::{Block, ifd_in, walk};
     use crate::error::ErrorKind;
+    use crate::focus::FocusOrigin;
     use crate::formats::testing::{Src, byte_order};
     use crate::testing::{FAR, FailsFar};
     use crate::tiff_builder::{Built, IfdId, Order, RawValue, TiffBuilder};
@@ -2251,6 +2258,15 @@ mod tests {
                 .with_camera_settings(with_settings_tags(exif_settings()))
                 .with_focus(focus_7m4());
             assert_eq!(found, expected, "{order:?}");
+            // The point as a list of one, its primary, recorded, with no
+            // area mode.
+            let points = found.focus_points().expect("a list");
+            assert_eq!(points.points().len(), 1, "{order:?}");
+            assert_eq!(points.primary(), points.points().first(), "{order:?}");
+            assert_eq!(points.primary().unwrap().number(), None, "{order:?}");
+            assert_eq!(points.origin(), FocusOrigin::Recorded, "{order:?}");
+            assert_eq!(points.area_mode(), None, "{order:?}");
+            assert_eq!(found.focus(), Some(focus_7m4()), "{order:?}");
         }
     }
 

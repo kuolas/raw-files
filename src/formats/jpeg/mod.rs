@@ -154,7 +154,9 @@
 //! pixels. The DSLR-A100's MakerNote, of an older layout, holds no
 //! FocusLocation, and gives none.
 //!
-//! Then the point is kept only when its frame has the picture's aspect
+//! Each reader gives its point as a list of one, the primary, which the
+//! metadata holds as its focus points, with the area mode on a Nikon file.
+//! Then the list is kept only when its frame has the picture's aspect
 //! ratio, to within one pixel of rounding in either size ([`same_shape`]),
 //! in the stored orientation (ADR014). A camera's own JPEG passes, and so
 //! does an export scaled from it; an export cut to another shape, or turned
@@ -228,8 +230,9 @@ fn claims<R: Read + Seek>(_: &mut Source<R>, segments: &Segments) -> Result<bool
 /// the first. The shared finder checks them all, and the file itself
 /// joins them as a preview of its own, with its frame header's size,
 /// which is the metadata's image size.
-/// A focus point is kept only when its frame has the picture's shape
-/// ([`same_shape`]); see the [module documentation](self).
+/// The focus points, the primary among them, are kept only when their
+/// frame has the picture's shape ([`same_shape`]); see the
+/// [module documentation](self).
 ///
 /// # Errors
 ///
@@ -286,9 +289,9 @@ fn parse<R: Read + Seek>(
         Some(MakerNote::Sony(makernote)) => sony::metadata(src, makernote, standard.metadata)?,
         None => standard.metadata,
     };
-    metadata.focus = metadata
-        .focus
-        .filter(|focus| same_shape(focus.frame(), size));
+    metadata.focus_points = metadata
+        .focus_points
+        .filter(|points| same_shape(points.frame(), size));
     if let Some(index) = &segments.mpf {
         let images = mpf::images(src, index, limits)?;
         candidates.extend(images.into_iter().filter_map(|image| {
@@ -392,7 +395,7 @@ impl MakerNote {
     }
 }
 
-/// Whether a focus point measured in `frame` fits a JPEG whose picture is
+/// Whether focus points measured in `frame` fit a JPEG whose picture is
 /// `picture` pixels: whether `frame` has the picture's aspect ratio, to
 /// within one pixel of rounding in either of the two sizes (ADR014).
 ///

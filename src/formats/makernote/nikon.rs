@@ -91,14 +91,20 @@
 //! the centre and the area are SHORTs in the MakerNote's byte order. On
 //! every version read but 0300 and 0301, a byte says whether the camera
 //! confirmed focus: 1 for yes, 0 for a miss, and any other value says
-//! nothing. A focus point is given only when the value is at least as long
-//! as its version's layout, the frame and the area have no zero side, the
-//! centre lies on the frame, and the area fits inside the frame around it
-//! ([`Focus::new`], [`Focus::with_size`]). FocusMode, ASCII text, records
-//! how the camera focused: `MANUAL`, or an autofocus mode padded with
-//! spaces, such as `AF-S  `. When it reads exactly `MANUAL`, by the text
-//! rule, the file gives no focus point, whatever AFInfo2 holds: the point
-//! of a manual-focus shot is not one the camera focused on (ADR012).
+//! nothing. On every version read, byte 5 records the area mode, how the
+//! camera chose its points, by a code read with the detection method at
+//! byte 4: the codes that frames shot in a known mode confirmed, under the
+//! method recorded, name an [`AfAreaMode`] ([`area_mode`]), and any other
+//! names none. A focus point is given only when the value is at least as
+//! long as its version's layout, the frame and the area have no zero side,
+//! the centre lies on the frame, and the area fits inside the frame around
+//! it ([`Focus::new`], [`Focus::with_size`]); it is given as a list of one
+//! point, the primary, with the area mode ([`FocusPoints`]). FocusMode,
+//! ASCII text, records how the camera focused: `MANUAL`, or an autofocus
+//! mode padded with spaces, such as `AF-S  `. When it reads exactly
+//! `MANUAL`, by the text rule, the file gives no focus point, whatever
+//! AFInfo2 holds: the point of a manual-focus shot is not one the camera
+//! focused on (ADR012).
 //!
 //! On a crop mode, DX, 1:1 or 16:9, the point is not reported as recorded,
 //! for the frame AFInfo2 records stays the camera's full output while the
@@ -365,7 +371,7 @@ use crate::container::tiff::tags::{JPEG_INTERCHANGE_FORMAT, JPEG_INTERCHANGE_FOR
 use crate::container::tiff::types::{LONG, SHORT, SRATIONAL, SSHORT, UNDEFINED};
 use crate::container::tiff::{Block, Ifd, Tree, ifd_in, parse_header, skip_damage};
 use crate::error::Result;
-use crate::focus::{Focus, scale};
+use crate::focus::{AfAreaMode, Focus, FocusPoints, scale};
 use crate::formats::tiff_metadata::{self, Standard, one_short};
 use crate::formats::tiff_previews::{self, Candidate};
 use crate::geometry::{Point, Size};
@@ -655,12 +661,13 @@ pub(in crate::formats) fn preview_candidate<R: Read + Seek>(
 /// ColorSpace, and the raw image size only for a raw file's picture.
 /// CropHiSpeed is read once, for the image area and the focus point.
 /// Last, the focus point, from AFInfo2 and FocusMode, placed on the
-/// cropped picture by CropHiSpeed and CropArea on a crop ([`focus`]),
-/// always read: the standard tags never give one, so it is not a
-/// fallback. `picture` says, once, what a crop without a CropArea is
-/// placed on: nothing for a raw file's, whose point is then read as
-/// recorded, and for a JPEG's, its own pixels, of the image size
-/// `standard` gives. Every other value is the standard tags'.
+/// cropped picture by CropHiSpeed and CropArea on a crop, as a list of
+/// one point with AFInfo2's area mode ([`focus`]), always read: the
+/// standard tags never give one, so it is not a fallback. `picture` says,
+/// once, what a crop without a CropArea is placed on: nothing for a raw
+/// file's, whose point is then read as recorded, and for a JPEG's, its own
+/// pixels, of the image size `standard` gives. Every other value is the
+/// standard tags'.
 ///
 /// # Errors
 ///
@@ -718,7 +725,7 @@ pub(in crate::formats) fn metadata<R: Read + Seek>(
         Picture::Raw => None,
         Picture::Jpeg => metadata.image_size,
     };
-    metadata.focus = focus(src, makernote, crop_hi_speed, crop, pixels)?;
+    metadata.focus_points = focus(src, makernote, crop_hi_speed, crop, pixels)?;
     Ok(metadata)
 }
 
@@ -1208,7 +1215,9 @@ fn world_time<R: Read + Seek>(src: &mut Source<R>, makernote: &MakerNote) -> Res
 /// records, already read ([`crop_hi_speed`]), says the file is a crop, by
 /// `crop_area`, what CropArea gives, already read ([`crop_area`]), or,
 /// when the MakerNote holds no CropArea, on `pixels`, a JPEG's own pixels,
-/// when the file has them ([`in_crop`]).
+/// when the file has them ([`in_crop`]). The point is given as a list of
+/// one, the primary, with the area mode the record names, when it names
+/// one ([`area_mode`]).
 ///
 /// `None` when FocusMode records manual focus ([`manual_focus`]); when
 /// AFInfo2 is missing, is not of type UNDEFINED, stores its value outside
@@ -1229,7 +1238,7 @@ fn focus<R: Read + Seek>(
     crop: Option<CropHiSpeed>,
     crop_area: CropArea,
     pixels: Option<Size>,
-) -> Result<Option<Focus>> {
+) -> Result<Option<FocusPoints>> {
     let ifd = &makernote.ifd;
     // Without AFInfo2 there is nothing to place, so FocusMode is not read.
     if ifd.entry_of_type(AF_INFO2, &[UNDEFINED]).is_none() {
@@ -1243,7 +1252,11 @@ fn focus<R: Read + Seek>(
     let Some(record) = value.and_then(|value| af_info2_record(&value, order)) else {
         return Ok(None);
     };
-    Ok(in_crop(record, crop, crop_area, pixels))
+    let points = in_crop(record, crop, crop_area, pixels).map(FocusPoints::from);
+    Ok(points.map(|points| match record.area_mode {
+        Some(mode) => points.with_area_mode(mode),
+        None => points,
+    }))
 }
 
 /// What CropHiSpeed records of a crop: the crop setting, which gives the
@@ -1520,7 +1533,9 @@ fn manual_focus<R: Read + Seek>(src: &mut Source<R>, makernote: &MakerNote) -> R
 /// Each of the frame, the centre and the area is two SHORTs in the
 /// MakerNote's byte order, the width or x at its offset and the height or y
 /// two bytes after it. The offsets are those of ExifTool's published
-/// tables, confirmed on the public samples whose fields hold values.
+/// tables, confirmed on the public samples whose fields hold values. The
+/// area mode is not here: it is byte 5, read with the detection method at
+/// byte 4, on every version, which [`af_info2_record`] reads.
 #[derive(Clone, Copy, Debug)]
 struct Layout {
     /// How long a value of this version is, at least: the length of the
@@ -1578,7 +1593,8 @@ fn layout(version: &[u8]) -> Option<Layout> {
 
 /// What an AFInfo2 value records of the focus point, read but not yet
 /// checked: the frame, the centre of the focus area in it, the area's
-/// size, and whether focus was confirmed, on the versions that say.
+/// size, whether focus was confirmed, on the versions that say, and the
+/// area mode, when its code names one.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 struct FocusRecord {
     /// The frame the centre and the area are measured in.
@@ -1590,6 +1606,10 @@ struct FocusRecord {
     /// Whether focus was confirmed: `None` when the version has no byte
     /// for it, or the byte is neither 1 nor 0.
     in_focus: Option<bool>,
+    /// How the camera chose its points: `None` when the area-mode byte,
+    /// under the detection method recorded, holds a code [`area_mode`]
+    /// does not name.
+    area_mode: Option<AfAreaMode>,
 }
 
 impl FocusRecord {
@@ -1618,8 +1638,10 @@ impl FocusRecord {
 
 /// What the AFInfo2 value `value` records, its SHORTs in byte order
 /// `order`: the frame, the centre and the area at its version's
-/// [`layout`], and the in-focus byte, when the layout has one, as `true`
-/// for 1, `false` for 0, and nothing said for any other value.
+/// [`layout`]; the in-focus byte, when the layout has one, as `true` for 1,
+/// `false` for 0, and nothing said for any other value; and the area mode
+/// that byte 5 names under the detection method of byte 4, both the same
+/// on every version ([`area_mode`]).
 ///
 /// `None` when the version is not one read, or the value is shorter than
 /// its layout. The values are not checked here: [`in_crop`] checks them,
@@ -1642,12 +1664,65 @@ fn af_info2_record(value: &[u8], order: ByteOrder) -> Option<FocusRecord> {
             1 => Some(true),
             _ => None,
         });
+    // Every layout is longer than six bytes, so both bytes are always
+    // there.
+    let area_mode = match (value.get(4), value.get(5)) {
+        (Some(&detection), Some(&code)) => area_mode(detection, code),
+        _ => None,
+    };
     Some(FocusRecord {
         frame,
         center: Point { x, y },
         area,
         in_focus,
+        area_mode,
     })
+}
+
+/// The area mode, how the camera chose its points, that AFInfo2's
+/// area-mode byte, byte 5, names with the code `code`, read under the
+/// detection method that byte 4 records as `detection`; `None` for any
+/// other pair, whose meaning no file shot in a known mode has shown, as
+/// the decision to name only confirmed area modes requires (ADR018).
+///
+/// The detection method is how the camera found focus: 0 by phase
+/// detection, through a DSLR's viewfinder; 1 by contrast detection, in a
+/// DSLR's live view; and 2 by both, hybrid, on the mirrorless bodies.
+/// ExifTool's published documentation, read as documentation, gives byte 5
+/// two lists, told apart by that method. The codes a DSLR writes through
+/// the viewfinder mean one thing under phase detection and another under
+/// contrast detection, where 0 is plain contrast-detect, not a single
+/// point. The codes 193 and 197 are on both lists with one meaning, which
+/// is why they are named under any detection method. The code 207 is on
+/// the contrast-detect list and in the one list of version 04xx only, so
+/// it is named under contrast or hybrid detection, the detection the Z 9
+/// files record.
+///
+/// Named, each on frames shot in its mode, as the NEF format notes record:
+///
+/// - under phase detection, 0 [`Single`](AfAreaMode::Single), 5
+///   [`Dynamic`](AfAreaMode::Dynamic) and 8 [`Auto`](AfAreaMode::Auto),
+///   on the maintainer's D600 frames through the viewfinder, in
+///   single-point, dynamic-area and auto-area AF;
+/// - under any detection method, 193 [`Single`](AfAreaMode::Single), on
+///   the two Z 9 frames shot with a single point and committed as
+///   fixtures, both under hybrid detection, and 197
+///   [`Auto`](AfAreaMode::Auto), on the maintainer's Z 9 files shot in
+///   auto-area AF;
+/// - under contrast or hybrid detection, 207
+///   [`Tracking`](AfAreaMode::Tracking), on the maintainer's Z 9 files
+///   shot in 3D-tracking, under hybrid detection.
+///
+/// A DSLR code under contrast or hybrid detection, 207 under phase
+/// detection, or any other code gives `None`.
+fn area_mode(detection: u8, code: u8) -> Option<AfAreaMode> {
+    match (detection, code) {
+        (0, 0) | (_, 193) => Some(AfAreaMode::Single),
+        (0, 5) => Some(AfAreaMode::Dynamic),
+        (0, 8) | (_, 197) => Some(AfAreaMode::Auto),
+        (1 | 2, 207) => Some(AfAreaMode::Tracking),
+        _ => None,
+    }
 }
 
 /// The two SHORTs at `at` in `value`, in byte order `order`; `None` when
@@ -1696,6 +1771,7 @@ mod tests {
     use crate::container::tiff::{self, parse_ifd, walk};
     use crate::datetime::DateTime;
     use crate::error::ErrorKind;
+    use crate::focus::FocusOrigin;
     use crate::formats::testing::byte_order;
     use crate::jpeg_stub::jpeg_stub;
     use crate::testing::{FAR, FailsFar};
@@ -3613,7 +3689,7 @@ mod tests {
     /// The focus of a file in byte order `order` whose MakerNote holds what
     /// `tags` adds to its MakerNote IFD.
     fn focus_of(order: Order, tags: impl FnOnce(&mut TiffBuilder, IfdId)) -> Option<Focus> {
-        makernote_metadata(order, tags).focus
+        makernote_metadata(order, tags).focus()
     }
 
     /// The focus of a file in byte order `order` whose MakerNote holds the
@@ -3820,7 +3896,7 @@ mod tests {
             })
             .0;
             let metadata = exif_metadata(file, &block, |_, _| {});
-            assert_eq!(metadata.focus, Some(expected(Z9, Some(true))), "{file:?}");
+            assert_eq!(metadata.focus(), Some(expected(Z9, Some(true))), "{file:?}");
         }
     }
 
@@ -3892,12 +3968,12 @@ mod tests {
             // Declared one byte short: the value's last byte lies in the
             // file, after the block.
             let file = exif_file(order, &block, whole(&block) - 1, |_, _| {});
-            assert_eq!(metadata_of(file).focus, None, "{order:?}");
+            assert_eq!(metadata_of(file).focus(), None, "{order:?}");
 
             // The control: declared whole, the same bytes are used.
             let file = exif_file(order, &block, whole(&block), |_, _| {});
             assert_eq!(
-                metadata_of(file).focus,
+                metadata_of(file).focus(),
                 Some(expected(Z9, Some(true))),
                 "{order:?}"
             );
@@ -3914,7 +3990,7 @@ mod tests {
             });
             let block = retyped(order, block, entry, BYTE, 80);
             let metadata = exif_metadata(order, &block, |_, _| {});
-            assert_eq!(metadata.focus, None, "{order:?}");
+            assert_eq!(metadata.focus(), None, "{order:?}");
         }
     }
 
@@ -3977,7 +4053,181 @@ mod tests {
             });
             let block = retyped(order, block, entry, UNDEFINED, 7);
             let metadata = exif_metadata(order, &block, |_, _| {});
-            assert_eq!(metadata.focus, Some(expected(Z9, Some(true))), "{order:?}");
+            assert_eq!(
+                metadata.focus(),
+                Some(expected(Z9, Some(true))),
+                "{order:?}"
+            );
+        }
+    }
+
+    /// The focus points of a file in byte order `order` whose MakerNote
+    /// holds the AFInfo2 value `value`, as UNDEFINED, and no FocusMode.
+    fn points_from(order: Order, value: &[u8]) -> Option<FocusPoints> {
+        makernote_metadata(order, |inner, ifd| {
+            inner.undefined(ifd, AF_INFO2, value);
+        })
+        .focus_points
+    }
+
+    /// A record for each layout read: the Coolpix A's 0100, a made-up
+    /// 0101, the Z 6's 0300 and the Z 9's 0400.
+    const RECORDS: [(&str, Recorded); 4] = [
+        ("0100", COOLPIX_A),
+        ("0101", MADE_UP_0101),
+        ("0300", Z6),
+        ("0400", Z9),
+    ];
+
+    #[test]
+    fn the_area_mode_is_named_for_the_codes_checked_files_show() {
+        // Byte 5 on every version read, under the detection method byte 4
+        // records: 0 phase detection, 1 contrast detection, 2 hybrid. The
+        // codes that frames shot in a known mode confirmed name it: the
+        // DSLR codes only under phase detection, 193 and 197 under any,
+        // and 207 under contrast or hybrid detection, the lists that carry
+        // it. Any other names none: a DSLR code under contrast or hybrid
+        // detection; 207 under phase detection, whose list lacks it; the
+        // codes the public samples show in modes not named, 1 and 2 under
+        // detection 1 in the live view of the D7000, the Coolpix A, the
+        // D5600 and the D5, and 192, 196 and 199 under detection 2; and
+        // codes no file shows. The point is kept either way.
+        use AfAreaMode::{Auto, Dynamic, Single, Tracking};
+        let mut named = vec![(0, 0, Single), (0, 5, Dynamic), (0, 8, Auto)];
+        for detection in [0, 1, 2] {
+            named.extend([(detection, 193, Single), (detection, 197, Auto)]);
+        }
+        named.extend([(1, 207, Tracking), (2, 207, Tracking)]);
+        let mut unnamed = vec![(1, 0), (2, 0), (1, 5), (2, 8), (1, 4), (0, 207)];
+        unnamed.extend([1, 2, 3, 4, 9, 192, 196, 199, 255].map(|code| (0, code)));
+        unnamed.extend([1, 2, 192, 199].map(|code| (1, code)));
+        let codes = named
+            .into_iter()
+            .map(|(detection, code, mode)| (detection, code, Some(mode)))
+            .chain(
+                unnamed
+                    .into_iter()
+                    .map(|(detection, code)| (detection, code, None)),
+            );
+        for order in ORDERS {
+            for (version, recorded) in RECORDS {
+                for (detection, code, mode) in codes.clone() {
+                    let mut value = af_info2(order, version, recorded);
+                    value[4] = detection;
+                    value[5] = code;
+                    let label = format!("{order:?}, {version}, detection {detection}, code {code}");
+                    let points = points_from(order, &value).expect(&label);
+                    assert_eq!(points.area_mode(), mode, "{label}");
+                    assert_eq!(points.points().len(), 1, "{label}");
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn a_recorded_position_is_a_list_of_one_point() {
+        // One point with no number, the list's primary, in the recorded
+        // frame, recorded. `focus` is the list's primary by construction,
+        // so the tests above that check `focus` check the point. The
+        // builder writes zeros past the version, so bytes 4 and 5 are 0,
+        // code 0 under phase detection: single point.
+        for order in ORDERS {
+            for (version, recorded) in RECORDS {
+                let label = format!("{order:?}, {version}");
+                let metadata = makernote_metadata(order, |inner, ifd| {
+                    inner.undefined(ifd, AF_INFO2, &af_info2(order, version, recorded));
+                });
+                let points = metadata.focus_points().expect(&label);
+                let [only] = points.points() else {
+                    panic!("{label}: {points:?}");
+                };
+                assert_eq!(only.number(), None, "{label}");
+                assert!(
+                    points
+                        .primary()
+                        .is_some_and(|primary| std::ptr::eq(primary, only)),
+                    "{label}"
+                );
+                let [width, height] = recorded.frame.map(u32::from);
+                assert_eq!(points.frame(), Size { width, height }, "{label}");
+                assert_eq!(points.origin(), FocusOrigin::Recorded, "{label}");
+                assert_eq!(points.area_mode(), Some(AfAreaMode::Single), "{label}");
+            }
+        }
+    }
+
+    #[test]
+    fn a_crop_lists_the_placed_point() {
+        // A raw file's crop, placed on CropArea, moved or scaled, and a
+        // JPEG's DX crop, scaled onto its pixels: the list is the placed
+        // point alone, in the cropped picture's frame.
+        for order in ORDERS {
+            for (what, crop, version, recorded) in [
+                ("Z6III 1:1", Z6III_1X1, "0401", Z6III_ASPECT),
+                ("Z6III DX", Z6III_DX, "0401", Z6III_DX_RECORD),
+                ("Z50II 16:9", Z50II_16X9, "0402", Z50II_16X9_RECORD),
+            ] {
+                let block = crop_block(order, crop, &af_info2(order, version, recorded));
+                let [width, height] = crop.raw;
+                let raw = Size { width, height };
+                let file = raw_file_of(order, raw, &block, whole(&block), |_, _| {});
+                let metadata = metadata_of(file);
+                let placed = metadata.focus().expect(what);
+                let expected = FocusPoints::from(placed).with_area_mode(AfAreaMode::Single);
+                assert_eq!(
+                    metadata.focus_points(),
+                    Some(&expected),
+                    "{order:?}, {what}"
+                );
+                // Placed, so not in the frame AFInfo2 records.
+                let [width, height] = recorded.frame.map(u32::from);
+                assert_ne!(placed.frame(), Size { width, height }, "{order:?}, {what}");
+            }
+            let metadata =
+                jpeg_metadata(order, order, in_a_jpeg(Z9_DX), Z9_DX_CORNER, [4032, 2688]);
+            let placed = metadata.focus().expect("a JPEG's DX point");
+            assert_eq!(
+                placed.frame(),
+                Size {
+                    width: 4032,
+                    height: 2688
+                }
+            );
+            let expected = FocusPoints::from(placed).with_area_mode(AfAreaMode::Single);
+            assert_eq!(
+                metadata.focus_points(),
+                Some(&expected),
+                "{order:?}, JPEG DX"
+            );
+        }
+    }
+
+    #[test]
+    fn a_file_that_gives_no_focus_gives_no_points() {
+        for order in ORDERS {
+            // Manual focus beside the Z 9's AFInfo2.
+            let manual = makernote_metadata(order, |inner, ifd| {
+                inner.ascii(ifd, FOCUS_MODE, "MANUAL").undefined(
+                    ifd,
+                    AF_INFO2,
+                    &af_info2(order, "0400", Z9),
+                );
+            });
+            assert_eq!(manual.focus_points(), None, "{order:?}");
+            // A zero frame, as a DSLR writes through the viewfinder, beside
+            // an area mode that is named.
+            let viewfinder = Recorded {
+                frame: [0, 0],
+                center: [0, 0],
+                area: [0, 0],
+                in_focus: 0,
+            };
+            let mut value = af_info2(order, "0100", viewfinder);
+            value[5] = 8;
+            assert_eq!(points_from(order, &value), None, "{order:?}");
+            // No AFInfo2 at all.
+            let none = makernote_metadata(order, |_, _| {});
+            assert_eq!(none.focus_points(), None, "{order:?}");
         }
     }
 
@@ -4154,7 +4404,7 @@ mod tests {
         let size = Size { width, height };
         let metadata = metadata_of(raw_file_of(order, size, block, count, |_, _| {}));
         assert_eq!(metadata.raw_size, Some(size), "{order:?}");
-        metadata.focus
+        metadata.focus()
     }
 
     /// The focus of a file in byte order `order` that holds `crop` and an
@@ -4450,7 +4700,7 @@ mod tests {
             ] {
                 let metadata = metadata_of(with_makernote(order, UNDEFINED, &block, whole(&block)));
                 assert_eq!(metadata.raw_size, None, "{order:?}, {what}");
-                assert_eq!(metadata.focus, focus, "{order:?}, {what}");
+                assert_eq!(metadata.focus(), focus, "{order:?}, {what}");
             }
         }
     }
@@ -4933,7 +5183,7 @@ mod tests {
                 "{order:?}"
             );
             assert_eq!(
-                metadata.focus,
+                metadata.focus(),
                 Some(focus_at(
                     [4032, 4032],
                     [2015, 2016],
@@ -4992,7 +5242,7 @@ mod tests {
     /// The focus point of the JPEG [`jpeg_metadata`] reads, its file and
     /// its MakerNote both in byte order `order`.
     fn jpeg_focus(order: Order, crop: Crop, recorded: Recorded, pixels: [u32; 2]) -> Option<Focus> {
-        jpeg_metadata(order, order, crop, recorded, pixels).focus
+        jpeg_metadata(order, order, crop, recorded, pixels).focus()
     }
 
     #[test]
@@ -5029,7 +5279,7 @@ mod tests {
                 ([4032, 2688], middle),
             ] {
                 assert_eq!(
-                    jpeg_metadata(file, order, in_a_jpeg(Z9_DX), Z9_DX_CORNER, pixels).focus,
+                    jpeg_metadata(file, order, in_a_jpeg(Z9_DX), Z9_DX_CORNER, pixels).focus(),
                     Some(focus),
                     "{file:?}, MakerNote {order:?}, {pixels:?}"
                 );
@@ -5166,7 +5416,7 @@ mod tests {
                     Some(Size { width, height }),
                     "{order:?}, {what}"
                 );
-                assert_eq!(metadata.focus, focus, "{order:?}, {what}");
+                assert_eq!(metadata.focus(), focus, "{order:?}, {what}");
             }
         }
     }
@@ -6257,7 +6507,7 @@ mod tests {
         });
         // The file is sound, for a reader that does not fail.
         assert_eq!(
-            metadata_of(bytes.clone()).focus,
+            metadata_of(bytes.clone()).focus(),
             Some(expected(Z9, Some(true)))
         );
 

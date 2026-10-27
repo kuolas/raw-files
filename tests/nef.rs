@@ -30,10 +30,10 @@ use std::collections::BTreeSet;
 use std::io::Cursor;
 
 use raw_files::{
-    CameraSettings, ColorSpace, DateTime, Exposure, ExposureProgram, Flash, FlashMode, Focus,
-    Format, ImageArea, Lens, Limits, Metadata, MeteringMode, Options, Orientation, Point, Preview,
-    PreviewFormat, Rational, RawFile, RawImageSize, Shutter, SignedRational, Size, WhiteBalance,
-    WhiteBalanceMode,
+    AfAreaMode, CameraSettings, ColorSpace, DateTime, Exposure, ExposureProgram, Flash, FlashMode,
+    Focus, FocusOrigin, FocusPoints, Format, ImageArea, Lens, Limits, Metadata, MeteringMode,
+    Options, Orientation, Point, Preview, PreviewFormat, Rational, RawFile, RawImageSize, Shutter,
+    SignedRational, Size, WhiteBalance, WhiteBalanceMode,
 };
 use support::nef::{
     D1H_ISO, D1H_LENS, D1H_PREVIEW_JPEG, D1H_RAW, D1hBlobs, d1h_file, d1h_file_with,
@@ -330,6 +330,9 @@ fn assert_the_z9_metadata(built: &Built, orientation: Orientation, label: &str) 
             "{label}, from {how}"
         );
         assert_eq!(focus.in_focus(), Some(true), "{label}, from {how}");
+        // The focus points: that point alone, the primary, with no number,
+        // recorded, in the area mode 193 the fixture records, single point.
+        assert_the_z9_points(metadata, &format!("{label}, from {how}"));
         // The fixture writes no settings tag, so the settings are the empty
         // record: no value is made up.
         assert_eq!(
@@ -343,6 +346,26 @@ fn assert_the_z9_metadata(built: &Built, orientation: Orientation, label: &str) 
 /// `(width, height)` as a [`Size`].
 fn as_size((width, height): (u32, u32)) -> Size {
     Size { width, height }
+}
+
+/// Checks that `metadata`'s focus points are its focus alone, as a Z 9
+/// file in single-point AF gives them: one point, the primary, with no
+/// number, recorded, in the area mode single point, the code 193 that the
+/// Z 9's AFInfo2 records. The focus is the list's primary by
+/// construction, so the checks of the focus check the point. `label`
+/// names the file in a failure.
+fn assert_the_z9_points(metadata: &Metadata, label: &str) {
+    let points = metadata
+        .focus_points()
+        .unwrap_or_else(|| panic!("{label}: no focus points"));
+    assert_eq!(points.points().len(), 1, "{label}");
+    let primary = points
+        .primary()
+        .unwrap_or_else(|| panic!("{label}: no primary"));
+    assert_eq!(Some(primary), points.points().first(), "{label}");
+    assert_eq!(primary.number(), None, "{label}");
+    assert_eq!(points.origin(), FocusOrigin::Recorded, "{label}");
+    assert_eq!(points.area_mode(), Some(AfAreaMode::Single), "{label}");
 }
 
 #[test]
@@ -404,7 +427,8 @@ fn the_z9_metadata_by_hand(orientation: Orientation) -> Option<Metadata> {
             width: 8256,
             height: 5504,
         })
-        .with_focus(focus);
+        // The fixture's AFInfo2 records the area mode 193, single point.
+        .with_focus_points(FocusPoints::from(focus).with_area_mode(AfAreaMode::Single));
     Some(metadata)
 }
 
@@ -1212,6 +1236,9 @@ fn check_stripped_z9(expected: &StrippedZ9) {
     // The frame is the picture's, so the point scales onto the full-size
     // preview as it is.
     assert_eq!(focus.frame(), as_size(expected.previews[3]), "{label}");
+    // The focus points: that point alone, in the area mode 193 both files'
+    // AFInfo2 records, single point.
+    assert_the_z9_points(metadata, label);
     // The settings, the same on both shots but the colour temperature and
     // the image area. From the Exif IFD: aperture priority, matrix
     // metering, a Flash of 0, no flash fired and no mode recorded, and auto
@@ -2296,6 +2323,10 @@ const METADATA: &[SampleMetadata] = &[
             center: (4905, 2461),
             size: Some((291, 323)),
             in_focus: Some(true),
+            origin: FocusOrigin::Recorded,
+            points: 1,
+            primary_number: None,
+            area_mode: Some(AfAreaMode::Single), // code 193
         }),
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
@@ -2348,6 +2379,10 @@ const METADATA: &[SampleMetadata] = &[
             center: (4905, 2461),
             size: Some((291, 323)),
             in_focus: Some(true),
+            origin: FocusOrigin::Recorded,
+            points: 1,
+            primary_number: None,
+            area_mode: Some(AfAreaMode::Single), // code 193
         }),
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
@@ -2400,6 +2435,10 @@ const METADATA: &[SampleMetadata] = &[
             center: (4905, 2461),
             size: Some((291, 323)),
             in_focus: Some(true),
+            origin: FocusOrigin::Recorded,
+            points: 1,
+            primary_number: None,
+            area_mode: Some(AfAreaMode::Single), // code 193
         }),
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
@@ -2792,6 +2831,10 @@ const METADATA: &[SampleMetadata] = &[
             center: (2816, 2336),
             size: Some((408, 336)),
             in_focus: Some(true),
+            origin: FocusOrigin::Recorded,
+            points: 1,
+            primary_number: None,
+            area_mode: None, // code 1: no file shot in a known mode names it
         }),
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
@@ -3032,6 +3075,10 @@ const METADATA: &[SampleMetadata] = &[
             center: (3024, 1160),
             size: Some((285, 308)),
             in_focus: None,
+            origin: FocusOrigin::Recorded,
+            points: 1,
+            primary_number: None,
+            area_mode: Some(AfAreaMode::Single), // code 193
         }),
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
@@ -3084,6 +3131,10 @@ const METADATA: &[SampleMetadata] = &[
             center: (3023, 2016),
             size: Some((1859, 1452)),
             in_focus: Some(true),
+            origin: FocusOrigin::Recorded,
+            points: 1,
+            primary_number: None,
+            area_mode: None, // code 196: no file shot in a known mode names it
         }),
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
@@ -3136,6 +3187,10 @@ const METADATA: &[SampleMetadata] = &[
             center: (1991, 1328),
             size: Some((146, 161)),
             in_focus: Some(false),
+            origin: FocusOrigin::Recorded,
+            points: 1,
+            primary_number: None,
+            area_mode: None, // code 192: no file shot in a known mode names it
         }),
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
@@ -3188,6 +3243,10 @@ const METADATA: &[SampleMetadata] = &[
             center: (3023, 1700),
             size: Some((163, 174)),
             in_focus: Some(false),
+            origin: FocusOrigin::Recorded,
+            points: 1,
+            primary_number: None,
+            area_mode: None, // code 192: no file shot in a known mode names it
         }),
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
@@ -3240,6 +3299,10 @@ const METADATA: &[SampleMetadata] = &[
             center: (2015, 2016),
             size: Some((163, 174)),
             in_focus: Some(false),
+            origin: FocusOrigin::Recorded,
+            points: 1,
+            primary_number: None,
+            area_mode: None, // code 192: no file shot in a known mode names it
         }),
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
@@ -3284,6 +3347,10 @@ const METADATA: &[SampleMetadata] = &[
             center: (2464, 1632),
             size: Some((408, 336)),
             in_focus: Some(true),
+            origin: FocusOrigin::Recorded,
+            points: 1,
+            primary_number: None,
+            area_mode: None, // code 1: no file shot in a known mode names it
         }),
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
@@ -3452,6 +3519,10 @@ const METADATA: &[SampleMetadata] = &[
             center: (3368, 2000),
             size: Some((984, 816)),
             in_focus: Some(true),
+            origin: FocusOrigin::Recorded,
+            points: 1,
+            primary_number: None,
+            area_mode: None, // code 2: no file shot in a known mode names it
         }),
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
@@ -3598,6 +3669,10 @@ const METADATA: &[SampleMetadata] = &[
             center: (1864, 1868),
             size: Some((278, 276)),
             in_focus: Some(true),
+            origin: FocusOrigin::Recorded,
+            points: 1,
+            primary_number: None,
+            area_mode: Some(AfAreaMode::Tracking), // code 207
         }),
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
@@ -3650,6 +3725,10 @@ const METADATA: &[SampleMetadata] = &[
             center: (2789, 1573),
             size: Some((280, 280)),
             in_focus: Some(true),
+            origin: FocusOrigin::Recorded,
+            points: 1,
+            primary_number: None,
+            area_mode: Some(AfAreaMode::Tracking), // code 207
         }),
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
@@ -3702,6 +3781,10 @@ const METADATA: &[SampleMetadata] = &[
             center: (2015, 2016),
             size: Some((163, 174)),
             in_focus: Some(false),
+            origin: FocusOrigin::Recorded,
+            points: 1,
+            primary_number: None,
+            area_mode: None, // code 192: no file shot in a known mode names it
         }),
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
@@ -3754,6 +3837,10 @@ const METADATA: &[SampleMetadata] = &[
             center: (3023, 1700),
             size: Some((163, 174)),
             in_focus: Some(false),
+            origin: FocusOrigin::Recorded,
+            points: 1,
+            primary_number: None,
+            area_mode: None, // code 192: no file shot in a known mode names it
         }),
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
@@ -3806,6 +3893,10 @@ const METADATA: &[SampleMetadata] = &[
             center: (3077, 2427),
             size: Some((588, 500)),
             in_focus: Some(true),
+            origin: FocusOrigin::Recorded,
+            points: 1,
+            primary_number: None,
+            area_mode: None, // code 2: no file shot in a known mode names it
         }),
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
@@ -3858,6 +3949,10 @@ const METADATA: &[SampleMetadata] = &[
             center: (3776, 1741),
             size: Some((552, 552)),
             in_focus: None,
+            origin: FocusOrigin::Recorded,
+            points: 1,
+            primary_number: None,
+            area_mode: None, // code 199: no file shot in a known mode names it
         }),
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
