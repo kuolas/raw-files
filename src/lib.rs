@@ -27,8 +27,9 @@
 //! image size and the colour space, in [`CameraSettings`], those that only
 //! a MakerNote records from the plain tags of Nikon's and Sony's), the
 //! lens, the sizes of the raw data, which a JPEG lacks, and of the visible
-//! image, and where the camera focused ([`Metadata::focus`]). See the
-//! [roadmap](https://github.com/kuolas/raw-files/blob/master/docs/ROADMAP.md)
+//! image, and where the camera focused ([`Metadata::focus`]), with the
+//! autofocus points it used and the area mode ([`Metadata::focus_points`]).
+//! See the [roadmap](https://github.com/kuolas/raw-files/blob/master/docs/ROADMAP.md)
 //! for the plan and the
 //! [architecture](https://github.com/kuolas/raw-files/blob/master/docs/ARCHITECTURE.md)
 //! for how the code is laid out.
@@ -120,8 +121,9 @@
 //! A program's tests can build every metadata value without a file,
 //! through the `with_…` methods of [`Metadata`], [`Exposure`],
 //! [`CameraSettings`] and [`WhiteBalance`], [`Lens::builder`], the
-//! constructors of [`FineTune`] and [`Flash`], and the checked
-//! constructors, such as [`DateTime::new`]; [`Metadata`] shows how.
+//! constructors of [`FineTune`] and [`Flash`], the builders of
+//! [`FocusPoints`] and [`FocusPoint`], and the checked constructors, such
+//! as [`DateTime::new`]; [`Metadata`] shows how.
 //!
 //! Show how the camera was set ([`Metadata::camera_settings`]), as a
 //! viewer's information panel does; every setting is optional, and one the
@@ -359,7 +361,7 @@ pub use camera_settings::{
 pub use datetime::DateTime;
 pub use error::{Error, ErrorKind, Result};
 pub use file::RawFile;
-pub use focus::{Focus, FocusOrigin};
+pub use focus::{AfAreaMode, Focus, FocusOrigin, FocusPoint, FocusPoints};
 pub use format::Format;
 pub use geometry::{Point, Size};
 pub use limits::Limits;

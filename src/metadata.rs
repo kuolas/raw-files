@@ -9,9 +9,9 @@
 //! read when the file is opened; [`Exposure`] and [`Lens`] hold the
 //! exposure and the lens as the file records them, fractions with the
 //! numerator and denominator it stored, [`CameraSettings`] the camera's
-//! settings, and [`Focus`] where the camera's autofocus aimed, as the
-//! camera recorded it. [`LensBuilder`] builds a lens a value at a time, for
-//! a caller's tests.
+//! settings, [`Focus`] where the camera's autofocus aimed, as the camera
+//! recorded it, and [`FocusPoints`] the autofocus points it used.
+//! [`LensBuilder`] builds a lens a value at a time, for a caller's tests.
 //!
 //! Every value is optional. A file may not record it, or may record it in a
 //! way that cannot be read, such as a tag of the wrong type; either way the
@@ -20,12 +20,13 @@
 //! A program that uses raw-files can build these values for its own tests,
 //! without a camera file: [`Metadata`], [`Exposure`] and [`CameraSettings`]
 //! through their `with_…` methods, a [`Lens`] through [`Lens::builder`],
-//! and a [`Focus`], a [`DateTime`] and a [`Rational`] through their checked
-//! constructors. [`Metadata`]'s docs show how.
+//! [`FocusPoints`] through their builders, and a [`Focus`], a [`DateTime`]
+//! and a [`Rational`] through their checked constructors. [`Metadata`]'s
+//! docs show how.
 
 use crate::camera_settings::CameraSettings;
 use crate::datetime::DateTime;
-use crate::focus::Focus;
+use crate::focus::{Focus, FocusPoints};
 use crate::geometry::Size;
 use crate::orientation::Orientation;
 use crate::rational::{Rational, SignedRational};
@@ -134,6 +135,13 @@ use crate::rational::{Rational, SignedRational};
 ///     metadata.focus().map(|focus| focus.center()),
 ///     Some(Point { x: 4905, y: 2461 })
 /// );
+/// // The focus is a list of that one point, its primary.
+/// let points = metadata.focus_points()?;
+/// assert_eq!(points.points().len(), 1);
+/// assert_eq!(
+///     points.primary().map(|point| point.center()),
+///     Some(Point { x: 4905, y: 2461 })
+/// );
 /// assert_eq!(metadata.serial_number(), None);
 /// assert_eq!(metadata.exposure().f_number(), None);
 /// # Some(())
@@ -152,7 +160,7 @@ pub struct Metadata {
     pub(crate) lens: Option<Lens>,
     pub(crate) raw_size: Option<Size>,
     pub(crate) image_size: Option<Size>,
-    pub(crate) focus: Option<Focus>,
+    pub(crate) focus_points: Option<FocusPoints>,
 }
 
 impl Metadata {
@@ -290,7 +298,10 @@ impl Metadata {
     }
 
     /// Where the camera focused, as the file records it (see [`Focus`]):
-    /// the camera's own record only, never an estimate from the picture.
+    /// the camera's own record only, never an estimate from the picture. It
+    /// is the primary point of [`focus_points`](Self::focus_points) as a
+    /// [`Focus`], with the list's frame and origin, and `None` when there is
+    /// no list or the list names no primary.
     ///
     /// It is read on Nikon files, from the MakerNote's AFInfo2 block, as the
     /// camera recorded it. The exception, on a raw file, is a Nikon crop,
@@ -349,7 +360,61 @@ impl Metadata {
     /// # }
     /// ```
     pub fn focus(&self) -> Option<Focus> {
-        self.focus
+        self.focus_points.as_ref()?.primary_focus()
+    }
+
+    /// The autofocus points the camera used for the picture, in one frame
+    /// (see [`FocusPoints`]): each with its number when the file gives one,
+    /// the centre of its area, the area's size when recorded, and whether
+    /// the camera confirmed focus there when the file says; which of them
+    /// is the primary, the one [`focus`](Self::focus) reports; the area
+    /// mode, when a checked file names its code; and where the points came
+    /// from.
+    ///
+    /// The Nikon and Sony readers give the position the camera recorded,
+    /// the one [`focus`](Self::focus) gives, as a list of one point, its
+    /// primary: with no number, with the position's area and whether focus
+    /// was confirmed, and with the origin
+    /// [`Recorded`](crate::FocusOrigin::Recorded). On a Nikon file the area
+    /// mode is read from AFInfo2's area-mode byte, on every version
+    /// raw-files reads, and named for the codes that frames shot in a known
+    /// mode confirmed, under the detection method the file records: through
+    /// the viewfinder, by phase detection, 0
+    /// [`Single`](crate::AfAreaMode::Single), 5
+    /// [`Dynamic`](crate::AfAreaMode::Dynamic) and 8
+    /// [`Auto`](crate::AfAreaMode::Auto); under any detection method, 193
+    /// [`Single`](crate::AfAreaMode::Single) and 197
+    /// [`Auto`](crate::AfAreaMode::Auto); and under contrast or hybrid
+    /// detection, 207 [`Tracking`](crate::AfAreaMode::Tracking). Any other
+    /// code, or a DSLR code in live view, gives `None`.
+    /// On a Sony file the area mode is always `None`, since the codes of its
+    /// AFAreaModeSetting are not checked. It is `None` when
+    /// [`focus`](Self::focus) is, for the same reasons.
+    ///
+    /// # Examples
+    ///
+    /// Every point the camera used, the primary marked, and the area mode:
+    ///
+    /// ```no_run
+    /// use raw_files::RawFile;
+    ///
+    /// # fn main() -> raw_files::Result<()> {
+    /// let file = RawFile::open("photo.nef")?;
+    /// if let Some(points) = file.metadata().focus_points() {
+    ///     for point in points.points() {
+    ///         let primary = Some(point) == points.primary();
+    ///         let mark = if primary { ", the primary" } else { "" };
+    ///         println!("a point at {}{mark}", point.center());
+    ///     }
+    ///     if let Some(mode) = points.area_mode() {
+    ///         println!("area mode: {mode}");
+    ///     }
+    /// }
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn focus_points(&self) -> Option<&FocusPoints> {
+        self.focus_points.as_ref()
     }
 
     /// Sets the camera's maker, in place of any set before;
@@ -440,11 +505,26 @@ impl Metadata {
         self
     }
 
-    /// Sets where the camera focused, in place of any focus set before;
-    /// [`focus`](Self::focus) reads it.
+    /// Sets where the camera focused, as a list of that one point, in
+    /// place of any focus or list set before: the point with no number, as
+    /// the primary, in the focus's frame and with its origin, and no area
+    /// mode, as `FocusPoints::from(focus)` makes it.
+    /// [`focus`](Self::focus) reads the focus back as given, and
+    /// [`focus_points`](Self::focus_points) gives the list; a later
+    /// `with_focus` or [`with_focus_points`](Self::with_focus_points)
+    /// replaces it.
     #[must_use]
     pub fn with_focus(mut self, focus: Focus) -> Self {
-        self.focus = Some(focus);
+        self.focus_points = Some(FocusPoints::from(focus));
+        self
+    }
+
+    /// Sets the autofocus points the camera used, in place of any list or
+    /// focus set before; [`focus_points`](Self::focus_points) reads it, and
+    /// [`focus`](Self::focus) gives its primary.
+    #[must_use]
+    pub fn with_focus_points(mut self, points: FocusPoints) -> Self {
+        self.focus_points = Some(points);
         self
     }
 }
@@ -929,6 +1009,7 @@ mod tests {
     use crate::camera_settings::{
         ColorSpace, ExposureProgram, MeteringMode, RawImageSize, Shutter,
     };
+    use crate::focus::{AfAreaMode, FocusOrigin, FocusPoint};
     use crate::testing::{point, size, z9_focus};
 
     fn fraction(numerator: u32, denominator: u32) -> Rational {
@@ -1272,8 +1353,25 @@ mod tests {
                 width: 8_256,
                 height: 5_504,
             }),
-            focus: Some(z9_focus()),
+            focus_points: Some(FocusPoints::from(z9_focus())),
         }
+    }
+
+    /// Two points placed from a table in a D600-sized frame, the second
+    /// the primary, in auto area: a list unlike the Z 9's in every value.
+    fn two_points() -> FocusPoints {
+        FocusPoints::new(size(6_016, 4_016), FocusOrigin::Table)
+            .and_then(|list| list.with_point(FocusPoint::new(point(1_000, 1_000)).with_number(1)))
+            .and_then(|list| {
+                list.with_point(
+                    FocusPoint::new(point(3_008, 2_008))
+                        .with_number(21)
+                        .with_size(size(164, 164)),
+                )
+            })
+            .and_then(|list| list.with_primary(1))
+            .unwrap()
+            .with_area_mode(AfAreaMode::Auto)
     }
 
     #[test]
@@ -1291,6 +1389,7 @@ mod tests {
         assert_eq!(metadata.raw_size(), None);
         assert_eq!(metadata.image_size(), None);
         assert_eq!(metadata.focus(), None);
+        assert_eq!(metadata.focus_points(), None);
     }
 
     #[test]
@@ -1324,6 +1423,99 @@ mod tests {
             })
         );
         assert_eq!(metadata.focus(), Some(z9_focus()));
+        assert_eq!(
+            metadata.focus_points(),
+            Some(&FocusPoints::from(z9_focus()))
+        );
+    }
+
+    #[test]
+    fn focus_is_the_primary_of_the_points() {
+        let metadata = Metadata::default().with_focus_points(two_points());
+        let focus = Focus::new(size(6_016, 4_016), point(3_008, 2_008))
+            .and_then(|focus| focus.with_size(size(164, 164)))
+            .unwrap()
+            .with_origin(FocusOrigin::Table);
+        assert_eq!(metadata.focus(), Some(focus));
+        assert_eq!(metadata.focus_points(), Some(&two_points()));
+
+        // The first point as the primary gives that one instead.
+        let first = two_points().with_primary(0).unwrap();
+        let metadata = Metadata::default().with_focus_points(first);
+        let focus = Focus::new(size(6_016, 4_016), point(1_000, 1_000))
+            .unwrap()
+            .with_origin(FocusOrigin::Table);
+        assert_eq!(metadata.focus(), Some(focus));
+    }
+
+    #[test]
+    fn a_list_without_a_primary_gives_no_focus() {
+        let unmarked = FocusPoints::new(size(6_016, 4_016), FocusOrigin::Recorded)
+            .and_then(|list| list.with_point(FocusPoint::new(point(3_008, 2_008))))
+            .unwrap()
+            .with_area_mode(AfAreaMode::Single);
+        let metadata = Metadata::default().with_focus_points(unmarked.clone());
+        assert_eq!(metadata.focus(), None);
+        assert_eq!(metadata.focus_points(), Some(&unmarked));
+        // Nor does an empty list.
+        let empty = FocusPoints::new(size(6_016, 4_016), FocusOrigin::Recorded).unwrap();
+        let metadata = Metadata::default().with_focus_points(empty);
+        assert_eq!(metadata.focus(), None);
+        assert!(metadata.focus_points().is_some());
+    }
+
+    #[test]
+    fn with_focus_stores_a_list_of_that_one_point() {
+        let without_area = Focus::new(size(7, 3), point(6, 0)).unwrap();
+        for focus in [
+            z9_focus(),
+            z9_focus().with_origin(FocusOrigin::Table),
+            without_area,
+        ] {
+            let metadata = Metadata::default().with_focus(focus);
+            let points = metadata.focus_points().unwrap();
+            assert_eq!(points.frame(), focus.frame(), "{focus:?}");
+            assert_eq!(points.origin(), focus.origin(), "{focus:?}");
+            assert_eq!(points.area_mode(), None, "{focus:?}");
+            let only = FocusPoint::new(focus.center());
+            let only = match focus.size() {
+                Some(size) => only.with_size(size),
+                None => only,
+            };
+            let only = match focus.in_focus() {
+                Some(in_focus) => only.with_in_focus(in_focus),
+                None => only,
+            };
+            assert_eq!(points.points(), [only], "{focus:?}");
+            assert_eq!(points.primary(), Some(&only), "{focus:?}");
+            assert_eq!(points.primary().unwrap().number(), None, "{focus:?}");
+            assert_eq!(metadata.focus(), Some(focus), "{focus:?}");
+        }
+    }
+
+    #[test]
+    fn a_later_focus_or_list_replaces_the_earlier_one() {
+        let one = Focus::new(size(1, 1), point(0, 0)).unwrap();
+        let z9 = z9_focus();
+        let list = two_points();
+        // Each pair in turn, the later one kept whatever the earlier.
+        let by_focus = |metadata: Metadata| metadata.with_focus(z9);
+        let by_list = |metadata: Metadata| metadata.with_focus_points(list.clone());
+        for earlier in [
+            Metadata::default().with_focus(one),
+            Metadata::default().with_focus_points(list.clone().with_primary(0).unwrap()),
+        ] {
+            let focused = by_focus(earlier.clone());
+            assert_eq!(focused.focus(), Some(z9), "{earlier:?}");
+            assert_eq!(
+                focused.focus_points(),
+                Some(&FocusPoints::from(z9)),
+                "{earlier:?}"
+            );
+            let listed = by_list(earlier.clone());
+            assert_eq!(listed.focus_points(), Some(&list), "{earlier:?}");
+            assert_eq!(listed.focus(), list.primary_focus(), "{earlier:?}");
+        }
     }
 
     #[test]
@@ -1410,6 +1602,7 @@ mod tests {
             ..Exposure::default()
         };
         let focus = Focus::new(size(6_000, 4_000), point(3_000, 2_000)).unwrap();
+        let points = two_points();
         let settings = CameraSettings::default().with_color_space(ColorSpace::Srgb);
         // From the empty metadata, and from a full one whose every value
         // differs from the one set, so that a builder writing another
@@ -1497,7 +1690,14 @@ mod tests {
                 (
                     start.clone().with_focus(focus),
                     Metadata {
-                        focus: Some(focus),
+                        focus_points: Some(FocusPoints::from(focus)),
+                        ..start.clone()
+                    },
+                ),
+                (
+                    start.clone().with_focus_points(points.clone()),
+                    Metadata {
+                        focus_points: Some(points.clone()),
                         ..start.clone()
                     },
                 ),
@@ -1508,7 +1708,8 @@ mod tests {
         }
     }
 
-    /// [`z9_metadata`] built through the twelve builders.
+    /// [`z9_metadata`] built through twelve of its thirteen builders, all
+    /// but [`Metadata::with_focus_points`], whose list `with_focus` makes.
     fn z9_metadata_built() -> Metadata {
         let lens = Lens::builder()
             .model("NIKKOR Z 14-30mm f/4 S")
@@ -1591,7 +1792,7 @@ mod tests {
             .with_lens(Lens::builder().model("A").build().unwrap())
             .with_raw_size(size(1, 1))
             .with_image_size(size(1, 1))
-            .with_focus(Focus::new(size(1, 1), point(0, 0)).unwrap());
+            .with_focus_points(two_points());
         // Every value of `earlier` differs from the Z 9's, so each builder
         // below has one to replace.
         let z9 = z9_metadata();
@@ -1607,7 +1808,7 @@ mod tests {
             .with_lens(z9.lens.clone().unwrap())
             .with_raw_size(z9.raw_size.unwrap())
             .with_image_size(z9.image_size.unwrap())
-            .with_focus(z9.focus.unwrap());
+            .with_focus(z9.focus().unwrap());
         assert_eq!(metadata, z9);
     }
 

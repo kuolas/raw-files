@@ -10,8 +10,15 @@
 //! [`FocusOrigin`], and a caller's tests build one through its checked
 //! constructors.
 //!
+//! The camera may use several autofocus points for one picture, one of
+//! them the primary. [`FocusPoints`] holds them all, each a
+//! [`FocusPoint`], in one frame, with the primary marked, the area mode
+//! the camera was set to, an [`AfAreaMode`], and where they came from.
+//!
 //! [`Metadata::focus`](crate::Metadata::focus) gives the focus point of a
-//! file, if it records one.
+//! file, if it records one, and
+//! [`Metadata::focus_points`](crate::Metadata::focus_points) the points
+//! it used.
 
 use std::fmt;
 
@@ -310,25 +317,14 @@ impl Focus {
         if frame.width == 0 || frame.height == 0 {
             return None;
         }
-        let center = Point {
-            x: scale(self.center.x, self.frame.width, frame.width),
-            y: scale(self.center.y, self.frame.height, frame.height),
-        };
-        // The old centre is at most the old side, so the scaled one is at
-        // most the new side: rounding cannot pass it, as the old side
-        // scales to exactly the new one. The frame has no zero side either,
-        // so this never gives `None`.
+        let (center, size) = scaled_point(self.center, self.size, self.frame, frame);
+        // The scaled centre lies on the frame, which has no zero side, so
+        // this never gives `None`.
         let mut focus = Self::new(frame, center)?.with_origin(self.origin);
-        if let Some(size) = self.size {
-            let width = scale(size.width, self.frame.width, frame.width).max(1);
-            let height = scale(size.height, self.frame.height, frame.height).max(1);
-            let area = Size {
-                width: trim(width, center.x, frame.width),
-                height: trim(height, center.y, frame.height),
-            };
-            // The trimmed area fits, so `with_size` refuses it only for the
-            // zero side a centre on an edge leaves, and the focus then keeps
-            // its point without an area.
+        if let Some(area) = size {
+            // The scaled area fits around the centre, so `with_size` never
+            // refuses it; were it to, the focus would keep its point
+            // without an area.
             focus = focus.with_size(area).unwrap_or(focus);
         }
         if let Some(in_focus) = self.in_focus {
@@ -399,6 +395,453 @@ impl fmt::Display for FocusOrigin {
     }
 }
 
+/// How the camera chose its autofocus points for a picture: the area mode
+/// the photographer set, in words that fit any maker.
+///
+/// A viewer labels the points of [`FocusPoints`] with it: one point the
+/// photographer placed, a placed point that its neighbours stood in for
+/// while the subject left it, points the camera chose itself, or a subject
+/// the camera followed across the frame. A maker's code for a mode is named
+/// only once a file shot in a known mode shows what it means, as the codes
+/// of the camera settings are under the
+/// [decision to read the metadata from the standard tags](https://github.com/kuolas/raw-files/blob/master/docs/architecture-decisions/adr011-metadata-from-standard-tags.md),
+/// and any other code gives `None`;
+/// [`Metadata::focus_points`](crate::Metadata::focus_points) says which
+/// codes each reader names.
+///
+/// `AfAreaMode` is `#[non_exhaustive]`, so match on it with a wildcard
+/// arm. It orders as its variants are listed, and a new variant is added
+/// after the existing ones, so an order once observed holds. Its
+/// [`name`](Self::name)s, which `Display` writes too, are "Single point",
+/// "Dynamic area", "Auto area" and "Tracking".
+///
+/// # Examples
+///
+/// ```
+/// use raw_files::AfAreaMode;
+///
+/// assert_eq!(AfAreaMode::Single.name(), "Single point");
+/// assert_eq!(AfAreaMode::Auto.to_string(), "Auto area");
+/// ```
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[non_exhaustive]
+pub enum AfAreaMode {
+    /// One point, which the photographer placed: Nikon's single-point AF.
+    Single,
+    /// A point the photographer placed, with the points around it standing
+    /// in for it when the subject briefly leaves it: Nikon's dynamic-area
+    /// AF.
+    Dynamic,
+    /// Points the camera chose itself: Nikon's auto-area AF.
+    Auto,
+    /// A subject the camera followed from the point where focus started:
+    /// Nikon's 3D-tracking.
+    Tracking,
+}
+
+impl AfAreaMode {
+    /// The mode's name, for an information panel, such as "Auto area"; the
+    /// type's docs list them all.
+    pub fn name(self) -> &'static str {
+        match self {
+            AfAreaMode::Single => "Single point",
+            AfAreaMode::Dynamic => "Dynamic area",
+            AfAreaMode::Auto => "Auto area",
+            AfAreaMode::Tracking => "Tracking",
+        }
+    }
+}
+
+impl fmt::Display for AfAreaMode {
+    /// Writes [`name`](AfAreaMode::name).
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.name())
+    }
+}
+
+/// One autofocus point of a picture, as a [`FocusPoints`] holds it: its
+/// number, when the file gives one, the centre of its area, the area's size
+/// when the file records one, and whether the camera confirmed focus
+/// there, when the file says.
+///
+/// The number is the camera's own name for the point, such as one of 1 to
+/// 39 on a body with 39 points; a position the camera measured and wrote
+/// has none. The centre and the size are in pixels of the frame of the
+/// list that holds the point, by the rules of [`Focus`]'s coordinates. A
+/// point alone has no frame, so it is checked against one when it is
+/// added to a list, by [`FocusPoints::with_point`], not when it is built.
+///
+/// Two points are equal when every value is the same as stored. There is
+/// no order, as there is none for [`Focus`], and no `Default`, since a
+/// point has a centre.
+///
+/// # Examples
+///
+/// A point built a step at a time, and read back:
+///
+/// ```
+/// use raw_files::{FocusPoint, Point, Size};
+///
+/// let point = FocusPoint::new(Point { x: 3008, y: 2008 })
+///     .with_number(21)
+///     .with_size(Size { width: 164, height: 164 })
+///     .with_in_focus(true);
+/// assert_eq!(point.number(), Some(21));
+/// assert_eq!(point.center(), Point { x: 3008, y: 2008 });
+/// assert_eq!(point.size(), Some(Size { width: 164, height: 164 }));
+/// assert_eq!(point.in_focus(), Some(true));
+///
+/// let bare = FocusPoint::new(Point { x: 3008, y: 2008 });
+/// assert_eq!((bare.number(), bare.size(), bare.in_focus()), (None, None, None));
+/// ```
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct FocusPoint {
+    number: Option<u8>,
+    center: Point,
+    size: Option<Size>,
+    in_focus: Option<bool>,
+}
+
+impl FocusPoint {
+    /// The point centred at `center`, with no number, no area and nothing
+    /// said about whether the camera confirmed focus there.
+    /// [`with_number`](Self::with_number),
+    /// [`with_size`](Self::with_size) and
+    /// [`with_in_focus`](Self::with_in_focus) add them.
+    ///
+    /// Any centre is accepted: [`FocusPoints::with_point`] checks it
+    /// against the list's frame.
+    pub fn new(center: Point) -> Self {
+        Self {
+            number: None,
+            center,
+            size: None,
+            in_focus: None,
+        }
+    }
+
+    /// This point with the camera's number for it, in place of any it had;
+    /// [`number`](Self::number) reads it.
+    #[must_use]
+    pub fn with_number(self, number: u8) -> Self {
+        Self {
+            number: Some(number),
+            ..self
+        }
+    }
+
+    /// This point with an area of `size` around its centre, in place of any
+    /// it had; [`size`](Self::size) reads it.
+    ///
+    /// The size is stored as given: [`FocusPoints::with_point`] refuses a
+    /// point whose area has a zero side or does not fit around its centre
+    /// in the list's frame, by the rule of [`Focus::with_size`].
+    #[must_use]
+    pub fn with_size(self, size: Size) -> Self {
+        Self {
+            size: Some(size),
+            ..self
+        }
+    }
+
+    /// This point with whether the camera confirmed focus there, in place
+    /// of what it had: `true` when the file records that the camera found
+    /// focus, and `false` when it records a miss;
+    /// [`in_focus`](Self::in_focus) reads it.
+    #[must_use]
+    pub fn with_in_focus(self, in_focus: bool) -> Self {
+        Self {
+            in_focus: Some(in_focus),
+            ..self
+        }
+    }
+
+    /// The camera's number for the point, or `None` when the file gives
+    /// none, as for a position the camera measured.
+    pub fn number(&self) -> Option<u8> {
+        self.number
+    }
+
+    /// The centre of the point's area, as its distances from the left and
+    /// top edges of the frame of the list that holds it.
+    pub fn center(&self) -> Point {
+        self.center
+    }
+
+    /// The width and height of the point's area, or `None` when the file
+    /// records no size.
+    pub fn size(&self) -> Option<Size> {
+        self.size
+    }
+
+    /// Whether the camera confirmed focus at this point: `Some(true)` when
+    /// it records that it found focus, `Some(false)` when it records a
+    /// miss, and `None` when the file does not say.
+    pub fn in_focus(&self) -> Option<bool> {
+        self.in_focus
+    }
+}
+
+/// The autofocus points the camera used for a picture: every point, each a
+/// [`FocusPoint`], in the one frame they are all measured in; which of them
+/// is the primary, the point [`Metadata::focus`](crate::Metadata::focus)
+/// reports; the area mode the camera was set to, when the file names it;
+/// and where the points came from.
+///
+/// A viewer draws the points over a preview, marks the primary and labels
+/// them with the [`AfAreaMode`]; a caller that wants only one point reads
+/// [`Metadata::focus`](crate::Metadata::focus) instead. The frame and the
+/// points follow the rules of [`Focus`]: the frame has the framing of the
+/// previews and no zero side, every centre lies on the frame, its edges
+/// included, and every area fits inside the frame around its centre.
+/// [`scaled_to`](Self::scaled_to) places the points on a preview. They are
+/// in the order they were added, and the [`origin`](Self::origin) is the
+/// whole list's.
+///
+/// A list has one point for a recorded position: the readers give the
+/// position the camera recorded as a list of that one point, its primary,
+/// with no number and the origin [`Recorded`](FocusOrigin::Recorded).
+///
+/// # Equality
+///
+/// Two lists are equal when every value is the same as stored: the frame,
+/// the points in order, the primary, the area mode and the origin. There
+/// is no order, as there is none for [`Focus`]. There is no `Default`
+/// either, since a list has a frame: a file that records no point gives
+/// `None`, and a list built for a test starts from its frame and its
+/// origin ([`new`](Self::new)).
+///
+/// # Examples
+///
+/// Two points in a 6016 × 4016 frame, the second the primary, in auto
+/// area, placed on a 1504 × 1004 preview:
+///
+/// ```
+/// use raw_files::{AfAreaMode, FocusOrigin, FocusPoint, FocusPoints, Point, Size};
+///
+/// # fn main() {
+/// #     example().expect("every step accepts these values");
+/// # }
+/// # fn example() -> Option<()> {
+/// let frame = Size { width: 6016, height: 4016 };
+/// let area = Size { width: 164, height: 164 };
+/// let points = FocusPoints::new(frame, FocusOrigin::Recorded)?
+///     .with_point(FocusPoint::new(Point { x: 2008, y: 1340 }).with_size(area))?
+///     .with_point(
+///         FocusPoint::new(Point { x: 3008, y: 2008 })
+///             .with_size(area)
+///             .with_in_focus(true),
+///     )?
+///     .with_primary(1)?
+///     .with_area_mode(AfAreaMode::Auto);
+///
+/// let on_preview = points.scaled_to(Size { width: 1504, height: 1004 })?;
+/// let centres: Vec<Point> = on_preview.points().iter().map(FocusPoint::center).collect();
+/// assert_eq!(centres, [Point { x: 502, y: 335 }, Point { x: 752, y: 502 }]);
+/// assert_eq!(
+///     on_preview.primary().map(FocusPoint::center),
+///     Some(Point { x: 752, y: 502 })
+/// );
+/// assert_eq!(on_preview.area_mode(), Some(AfAreaMode::Auto));
+/// assert_eq!(on_preview.origin(), FocusOrigin::Recorded);
+/// # Some(())
+/// # }
+/// ```
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct FocusPoints {
+    frame: Size,
+    points: Vec<FocusPoint>,
+    primary: Option<usize>,
+    area_mode: Option<AfAreaMode>,
+    origin: FocusOrigin,
+}
+
+impl FocusPoints {
+    /// An empty list of points measured in `frame`, which came from
+    /// `origin`, with no primary and no area mode; `None` when either side
+    /// of `frame` is zero. [`with_point`](Self::with_point) adds the
+    /// points, [`with_primary`](Self::with_primary) marks the primary and
+    /// [`with_area_mode`](Self::with_area_mode) sets the area mode.
+    ///
+    /// This is how a caller starts a list for its tests. A file whose
+    /// list would be empty gives none instead.
+    #[must_use]
+    pub fn new(frame: Size, origin: FocusOrigin) -> Option<Self> {
+        if frame.width == 0 || frame.height == 0 {
+            return None;
+        }
+        Some(Self {
+            frame,
+            points: Vec::new(),
+            primary: None,
+            area_mode: None,
+            origin,
+        })
+    }
+
+    /// This list with `point` added after the others; `None` when the
+    /// point cannot lie on the frame, which is when:
+    ///
+    /// - its centre lies outside the frame, by the rule of [`Focus::new`]:
+    ///   its x is more than the frame's width, or its y more than its
+    ///   height;
+    /// - it has an area, and the area has a zero side or does not fit
+    ///   inside the frame around the centre, by the rule of
+    ///   [`Focus::with_size`].
+    ///
+    /// The list is taken by value, so a refused point costs the whole list:
+    /// `None` is the whole answer, and a caller that wants to keep the list
+    /// without the point clones it first.
+    #[must_use]
+    pub fn with_point(mut self, point: FocusPoint) -> Option<Self> {
+        if !lies_on(self.frame, point.center, point.size) {
+            return None;
+        }
+        self.points.push(point);
+        Some(self)
+    }
+
+    /// This list with the point at `index`, counted from 0 in the order the
+    /// points were added, marked as the primary, the one
+    /// [`Metadata::focus`](crate::Metadata::focus) reports, in place of any
+    /// marked before; `None` when `index` is not that of a point added so far.
+    #[must_use]
+    pub fn with_primary(mut self, index: usize) -> Option<Self> {
+        if index >= self.points.len() {
+            return None;
+        }
+        self.primary = Some(index);
+        Some(self)
+    }
+
+    /// This list with the area mode `mode`, in place of any it had;
+    /// [`area_mode`](Self::area_mode) reads it.
+    #[must_use]
+    pub fn with_area_mode(mut self, mode: AfAreaMode) -> Self {
+        self.area_mode = Some(mode);
+        self
+    }
+
+    /// The size of the frame every point is measured in. It never has a
+    /// zero side.
+    pub fn frame(&self) -> Size {
+        self.frame
+    }
+
+    /// Where the points came from, the same for the whole list: a
+    /// position the camera measured, or points placed from a table of the
+    /// body's points.
+    pub fn origin(&self) -> FocusOrigin {
+        self.origin
+    }
+
+    /// Every point, in the order they were added. Each centre lies on the
+    /// frame, and each area fits inside it around its centre.
+    pub fn points(&self) -> &[FocusPoint] {
+        &self.points
+    }
+
+    /// The primary point, the one [`Metadata::focus`](crate::Metadata::focus)
+    /// reports, or `None` when no point is marked as the primary.
+    pub fn primary(&self) -> Option<&FocusPoint> {
+        self.points.get(self.primary?)
+    }
+
+    /// How the camera chose its points, or `None` when the file does not
+    /// name the mode in a code raw-files knows.
+    pub fn area_mode(&self) -> Option<AfAreaMode> {
+        self.area_mode
+    }
+
+    /// The same list measured in `frame`, such as a preview's size: `None`
+    /// when either side of `frame` is zero, and otherwise always a list,
+    /// whose frame is `frame`, with the same points in the same order, the
+    /// same primary, the same area mode and the same origin.
+    ///
+    /// Each point is scaled as [`Focus::scaled_to`] scales one, by the same
+    /// rounding and the same trimming: the centre lands where it rounds to,
+    /// on the new frame, an area that rounds to nothing keeps a side of one
+    /// pixel, an area too large to fit around the centre is trimmed to fit,
+    /// and an area that cannot fit at all, around a centre on an edge,
+    /// becomes `None`. Its number and whether focus was confirmed are kept.
+    ///
+    /// Each call rounds to whole pixels. To place the points on several
+    /// frames, scale them from the list as read each time, not from one
+    /// already scaled, so that they are not rounded twice.
+    #[must_use]
+    pub fn scaled_to(&self, frame: Size) -> Option<Self> {
+        let mut scaled = Self::new(frame, self.origin)?;
+        scaled.points.reserve(self.points.len());
+        for point in &self.points {
+            let (center, size) = scaled_point(point.center, point.size, self.frame, frame);
+            // Every scaled centre lies on the frame, and every area kept
+            // fits around it, so `with_point` refuses none: the `?` never
+            // returns.
+            scaled = scaled.with_point(FocusPoint {
+                center,
+                size,
+                ..*point
+            })?;
+        }
+        scaled.primary = self.primary;
+        scaled.area_mode = self.area_mode;
+        Some(scaled)
+    }
+
+    /// The primary point as a [`Focus`], in this list's frame and with its
+    /// origin: what [`Metadata::focus`](crate::Metadata::focus) gives. `None`
+    /// when no point is the primary.
+    pub(crate) fn primary_focus(&self) -> Option<Focus> {
+        let point = self.primary()?;
+        // `with_point` checked the point by the rules `Focus::new` and
+        // `Focus::with_size` apply, in this frame, which has no zero side,
+        // so neither refuses it: the two `?`s below never return.
+        let mut focus = Focus::new(self.frame, point.center)?.with_origin(self.origin);
+        if let Some(size) = point.size {
+            focus = focus.with_size(size)?;
+        }
+        if let Some(in_focus) = point.in_focus {
+            focus = focus.with_in_focus(in_focus);
+        }
+        Some(focus)
+    }
+}
+
+impl From<Focus> for FocusPoints {
+    /// A list of one point, `focus`'s: in its frame and with its origin,
+    /// the point with no number, `focus`'s centre, area and whether focus
+    /// was confirmed, as the primary, and no area mode. A single point is
+    /// a list of one.
+    fn from(focus: Focus) -> Self {
+        Self {
+            frame: focus.frame,
+            points: vec![FocusPoint {
+                number: None,
+                center: focus.center,
+                size: focus.size,
+                in_focus: focus.in_focus,
+            }],
+            primary: Some(0),
+            area_mode: None,
+            origin: focus.origin,
+        }
+    }
+}
+
+/// Whether a point centred at `center`, with an area of `size` when it has
+/// one, lies on the frame `frame`: whether [`Focus::new`] takes the centre
+/// and [`Focus::with_size`] the area. It asks those constructors rather
+/// than repeat their checks, so that the one rule a focus is checked by is
+/// the one a [`FocusPoints`] checks each of its points by.
+fn lies_on(frame: Size, center: Point, size: Option<Size>) -> bool {
+    Focus::new(frame, center)
+        .and_then(|focus| match size {
+            Some(size) => focus.with_size(size),
+            None => Some(focus),
+        })
+        .is_some()
+}
+
 /// Whether an area `side` pixels across, centred at `center`, lies inside
 /// a frame `frame` pixels across, on one axis: from `center - side / 2` to
 /// `center + side / 2` lies between 0 and `frame`, that is, `side` is at
@@ -415,12 +858,12 @@ fn fits(center: u32, side: u32, frame: u32) -> bool {
 /// nearest whole number, a half rounding up.
 ///
 /// The product and the half of `old` added to it fit in 64 bits for any
-/// `u32`s. `old` must not be zero, for it divides: here it is a side of a
-/// [`Focus`]'s frame, which never is, and the Nikon MakerNote's reader,
-/// which sizes a crop's window to a JPEG's shape with it, refuses a JPEG
-/// side of zero first. A result too large for a `u32`, which a value on
-/// the old frame cannot give but a window's side can, saturates, at
-/// `u32::MAX`.
+/// `u32`s. `old` must not be zero, for it divides: here it is a side of
+/// the frame of a [`Focus`] or of a [`FocusPoints`], which never is, and
+/// the Nikon MakerNote's reader, which sizes a crop's window to a JPEG's
+/// shape with it, refuses a JPEG side of zero first. A result too large
+/// for a `u32`, which a value on the old frame cannot give but a window's
+/// side can, saturates, at `u32::MAX`.
 pub(crate) fn scale(value: u32, old: u32, new: u32) -> u32 {
     let old = u64::from(old);
     let scaled = (u64::from(value) * u64::from(new) + old / 2) / old;
@@ -435,6 +878,42 @@ pub(crate) fn scale(value: u32, old: u32, new: u32) -> u32 {
 fn trim(side: u32, center: u32, frame: u32) -> u32 {
     let room = 2 * u64::from(center.min(frame.saturating_sub(center)));
     u32::try_from(u64::from(side).min(room)).unwrap_or(u32::MAX)
+}
+
+/// A point centred at `center`, with an area of `size` when it has one,
+/// measured in the frame `old`, measured in the frame `new` instead, by
+/// the rule of [`Focus::scaled_to`], which [`FocusPoints::scaled_to`]
+/// shares: the centre's x and the area's width multiplied by the new width
+/// over the old, and y and the height by the heights, each rounded to the
+/// nearest pixel, a half rounding up ([`scale`]); an area side that rounds
+/// to nothing kept at one pixel; and the area then trimmed on each axis,
+/// by as little as it takes, to fit around the centre ([`trim`]). The area
+/// is `None` when a side is left with no room, as for a centre on an edge
+/// of `new`.
+///
+/// The centre lies on `new`: the old centre is at most the old side, so
+/// the scaled one is at most the new side, since rounding cannot pass it,
+/// the old side scaling to exactly the new one. An area kept fits around
+/// it by the rule of [`fits`].
+///
+/// `old` must have no zero side, for [`scale`] divides by its sides: it is
+/// the frame of a [`Focus`] or of a [`FocusPoints`], which never has one.
+/// The callers refuse a `new` with a zero side before they call it.
+fn scaled_point(center: Point, size: Option<Size>, old: Size, new: Size) -> (Point, Option<Size>) {
+    let center = Point {
+        x: scale(center.x, old.width, new.width),
+        y: scale(center.y, old.height, new.height),
+    };
+    let size = size.and_then(|size| {
+        let width = scale(size.width, old.width, new.width).max(1);
+        let height = scale(size.height, old.height, new.height).max(1);
+        let area = Size {
+            width: trim(width, center.x, new.width),
+            height: trim(height, center.y, new.height),
+        };
+        (area.width != 0 && area.height != 0).then_some(area)
+    });
+    (center, size)
 }
 
 #[cfg(test)]
@@ -962,5 +1441,464 @@ mod tests {
         // A program may key a sorted map by the origin, and the order is a
         // promise: a variant moved, or added before the others, fails.
         assert_ordered(&all_origins());
+    }
+
+    /// The list in `frame`, which came from `origin`, of `points`, each
+    /// added in turn; `None` when a step refuses one.
+    fn list_of(frame: Size, origin: FocusOrigin, points: &[FocusPoint]) -> Option<FocusPoints> {
+        points
+            .iter()
+            .try_fold(FocusPoints::new(frame, origin)?, |list, &point| {
+                list.with_point(point)
+            })
+    }
+
+    /// The point `focus` describes: its centre, its area and whether focus
+    /// was confirmed, with no number. Built field by field, apart from the
+    /// `From` that turns a focus into a list.
+    fn point_of(focus: Focus) -> FocusPoint {
+        FocusPoint {
+            number: None,
+            center: focus.center(),
+            size: focus.size(),
+            in_focus: focus.in_focus(),
+        }
+    }
+
+    #[test]
+    fn a_list_needs_a_frame_with_no_zero_side() {
+        for origin in all_origins() {
+            assert_eq!(FocusPoints::new(size(0, 100), origin), None);
+            assert_eq!(FocusPoints::new(size(100, 0), origin), None);
+            assert_eq!(FocusPoints::new(size(0, 0), origin), None);
+            // A new list is empty, with no primary and no area mode.
+            let list = FocusPoints::new(size(1, 1), origin).unwrap();
+            assert_eq!(list.frame(), size(1, 1));
+            assert_eq!(list.origin(), origin);
+            assert!(list.points().is_empty());
+            assert_eq!(list.primary(), None);
+            assert_eq!(list.area_mode(), None);
+        }
+    }
+
+    #[test]
+    fn a_point_off_the_frame_or_with_an_area_that_does_not_fit_is_refused() {
+        let list = || FocusPoints::new(size(100, 50), FocusOrigin::Recorded).unwrap();
+        // The far edges are on the frame; one pixel past them is not.
+        assert!(list().with_point(FocusPoint::new(point(100, 50))).is_some());
+        assert_eq!(list().with_point(FocusPoint::new(point(101, 0))), None);
+        assert_eq!(list().with_point(FocusPoint::new(point(0, 51))), None);
+        // An area needs no zero side, and must fit around its centre: at
+        // (50, 25), 100 by 50 just fits, and a pixel more on either side
+        // does not.
+        let middle = FocusPoint::new(point(50, 25));
+        assert_eq!(list().with_point(middle.with_size(size(0, 10))), None);
+        assert_eq!(list().with_point(middle.with_size(size(10, 0))), None);
+        assert!(list().with_point(middle.with_size(size(100, 50))).is_some());
+        assert_eq!(list().with_point(middle.with_size(size(101, 50))), None);
+        assert_eq!(list().with_point(middle.with_size(size(100, 51))), None);
+        // A refused point costs the list it was offered to; a clone made
+        // before keeps the points added so far.
+        let one = list().with_point(middle).unwrap();
+        assert_eq!(one.clone().with_point(FocusPoint::new(point(101, 0))), None);
+        assert_eq!(one.points(), [middle]);
+        // Near the largest `u32`, as for a focus: every centre is on the
+        // frame, and no area fits around one on its far edges.
+        const MAX: u32 = u32::MAX;
+        let largest = FocusPoints::new(size(MAX, MAX), FocusOrigin::Recorded).unwrap();
+        let corner = FocusPoint::new(point(MAX, MAX));
+        assert!(largest.clone().with_point(corner).is_some());
+        assert_eq!(largest.with_point(corner.with_size(size(1, 1))), None);
+    }
+
+    #[test]
+    fn a_point_is_added_exactly_when_a_focus_of_it_could_be_built() {
+        // On one axis, every frame from 1 to 8 pixels, every centre from 0
+        // to one past the frame, and no area or every area from 0 to two
+        // more than the frame; the other axis a frame of 3, the centre at
+        // 1 and an area of 1. A point is added exactly when `Focus::new`
+        // and `Focus::with_size` accept the same values.
+        let (mut checked, mut added) = (0, 0);
+        for vertical in [false, true] {
+            for side in 1..=8_u32 {
+                for at in 0..=side + 1 {
+                    for area in std::iter::once(None).chain((0..=side + 1).map(Some)) {
+                        let (frame, center, area) = if vertical {
+                            (size(3, side), point(1, at), area.map(|area| size(1, area)))
+                        } else {
+                            (size(side, 3), point(at, 1), area.map(|area| size(area, 1)))
+                        };
+                        let mut offered = FocusPoint::new(center).with_in_focus(true);
+                        if let Some(area) = area {
+                            offered = offered.with_size(area);
+                        }
+                        let list = list_of(frame, FocusOrigin::Recorded, &[offered]);
+                        let focus = built(frame, center, area, Some(true));
+                        let context = format!("{frame:?}, {center:?}, {area:?}");
+                        assert_eq!(list.is_some(), focus.is_some(), "{context}");
+                        if let Some(list) = list {
+                            assert_eq!(list.points(), [offered], "{context}");
+                            added += 1;
+                        }
+                        checked += 1;
+                    }
+                }
+            }
+        }
+        // Every case was reached, on both axes, and some of each kind.
+        assert_eq!(checked, 864);
+        assert!(added > 0 && added < checked, "{added} of {checked}");
+    }
+
+    #[test]
+    fn the_primary_is_the_index_of_a_point_added_so_far() {
+        let first = FocusPoint::new(point(10, 10));
+        let second = FocusPoint::new(point(20, 20)).with_number(2);
+        let empty = FocusPoints::new(size(100, 100), FocusOrigin::Recorded).unwrap();
+        assert_eq!(empty.clone().with_primary(0), None);
+        let list = list_of(size(100, 100), FocusOrigin::Recorded, &[first, second]).unwrap();
+        assert_eq!(list.primary(), None);
+        assert_eq!(list.clone().with_primary(2), None);
+        assert_eq!(list.clone().with_primary(usize::MAX), None);
+        assert_eq!(
+            list.clone().with_primary(0).unwrap().primary(),
+            Some(&first)
+        );
+        let marked = list.with_primary(1).unwrap();
+        assert_eq!(marked.primary(), Some(&second));
+        // A later primary replaces the earlier one, and a point added
+        // after it leaves it as it was.
+        assert_eq!(
+            marked.clone().with_primary(0).unwrap().primary(),
+            Some(&first)
+        );
+        let longer = marked.with_point(FocusPoint::new(point(30, 30))).unwrap();
+        assert_eq!(longer.primary(), Some(&second));
+        assert_eq!(longer.points().len(), 3);
+    }
+
+    #[test]
+    fn a_later_area_mode_replaces_the_earlier_one() {
+        let list = list_of(
+            size(100, 100),
+            FocusOrigin::Table,
+            &[FocusPoint::new(point(50, 50))],
+        )
+        .and_then(|list| list.with_primary(0))
+        .unwrap();
+        for mode in all_area_modes() {
+            let set = list
+                .clone()
+                .with_area_mode(AfAreaMode::Tracking)
+                .with_area_mode(mode);
+            assert_eq!(set.area_mode(), Some(mode), "{mode:?}");
+            // Nothing else changes.
+            assert_eq!(set.frame(), list.frame(), "{mode:?}");
+            assert_eq!(set.points(), list.points(), "{mode:?}");
+            assert_eq!(set.primary(), list.primary(), "{mode:?}");
+            assert_eq!(set.origin(), FocusOrigin::Table, "{mode:?}");
+        }
+    }
+
+    #[test]
+    fn a_point_reads_back_what_was_built_and_a_later_value_replaces_an_earlier_one() {
+        let bare = FocusPoint::new(point(3_008, 2_008));
+        assert_eq!(bare.number(), None);
+        assert_eq!(bare.center(), point(3_008, 2_008));
+        assert_eq!(bare.size(), None);
+        assert_eq!(bare.in_focus(), None);
+        let full = bare
+            .with_number(1)
+            .with_size(size(1, 1))
+            .with_in_focus(false)
+            .with_number(21)
+            .with_size(size(164, 164))
+            .with_in_focus(true);
+        assert_eq!(full.number(), Some(21));
+        assert_eq!(full.center(), point(3_008, 2_008));
+        assert_eq!(full.size(), Some(size(164, 164)));
+        assert_eq!(full.in_focus(), Some(true));
+        // A size is stored as given, even one no frame takes: a list
+        // checks it when the point is added.
+        assert_eq!(
+            bare.with_size(size(0, u32::MAX)).size(),
+            Some(size(0, u32::MAX))
+        );
+    }
+
+    #[test]
+    fn a_focus_is_a_list_of_one_point_its_primary() {
+        let bare = Focus::new(size(7, 3), point(6, 0)).unwrap();
+        for origin in all_origins() {
+            for focus in [z9_focus(), z9_focus().with_in_focus(false), bare] {
+                let focus = focus.with_origin(origin);
+                let list = FocusPoints::from(focus);
+                let only = point_of(focus);
+                assert_eq!(list.frame(), focus.frame(), "{focus:?}");
+                assert_eq!(list.origin(), origin, "{focus:?}");
+                assert_eq!(list.points(), [only], "{focus:?}");
+                assert_eq!(list.primary(), Some(&only), "{focus:?}");
+                assert_eq!(list.area_mode(), None, "{focus:?}");
+                // The same list as the builders make, and its primary is
+                // the focus given.
+                let built =
+                    list_of(focus.frame(), origin, &[only]).and_then(|built| built.with_primary(0));
+                assert_eq!(built.as_ref(), Some(&list), "{focus:?}");
+                assert_eq!(list.primary_focus(), Some(focus), "{focus:?}");
+            }
+        }
+    }
+
+    #[test]
+    fn the_primary_focus_is_the_primary_point_in_the_lists_frame_with_its_origin() {
+        let first = FocusPoint::new(point(100, 100)).with_number(1);
+        let second = FocusPoint::new(point(4_905, 2_461))
+            .with_number(2)
+            .with_size(size(291, 323))
+            .with_in_focus(true);
+        for origin in all_origins() {
+            let list = list_of(size(8_256, 5_504), origin, &[first, second])
+                .unwrap()
+                .with_area_mode(AfAreaMode::Auto);
+            // No primary, no focus.
+            assert_eq!(list.primary_focus(), None, "{origin:?}");
+            let on_second = list.clone().with_primary(1).unwrap().primary_focus();
+            assert_eq!(
+                on_second,
+                Some(z9_focus().with_origin(origin)),
+                "{origin:?}"
+            );
+            let on_first = list.with_primary(0).unwrap().primary_focus().unwrap();
+            assert_eq!(on_first.frame(), size(8_256, 5_504), "{origin:?}");
+            assert_eq!(on_first.center(), point(100, 100), "{origin:?}");
+            assert_eq!(on_first.size(), None, "{origin:?}");
+            assert_eq!(on_first.in_focus(), None, "{origin:?}");
+            assert_eq!(on_first.origin(), origin, "{origin:?}");
+        }
+    }
+
+    #[test]
+    fn a_list_scales_onto_a_preview() {
+        // The Z 9's point, as `a_z9_focus_scales_onto_its_preview` scales
+        // it, and a second point at the frame's middle with no area.
+        let list = list_of(
+            size(8_256, 5_504),
+            FocusOrigin::Recorded,
+            &[
+                FocusPoint::new(point(4_128, 2_752)).with_number(5),
+                point_of(z9_focus()),
+            ],
+        )
+        .and_then(|list| list.with_primary(1))
+        .unwrap()
+        .with_area_mode(AfAreaMode::Single);
+        let preview = list.scaled_to(size(1_920, 1_280)).unwrap();
+        assert_eq!(preview.frame(), size(1_920, 1_280));
+        assert_eq!(
+            preview.points(),
+            [
+                FocusPoint::new(point(960, 640)).with_number(5),
+                FocusPoint::new(point(1_141, 572))
+                    .with_size(size(68, 75))
+                    .with_in_focus(true),
+            ]
+        );
+        assert_eq!(preview.primary(), preview.points().get(1));
+        assert_eq!(preview.area_mode(), Some(AfAreaMode::Single));
+        assert_eq!(preview.origin(), FocusOrigin::Recorded);
+    }
+
+    #[test]
+    fn a_list_scaled_to_its_own_frame_is_unchanged_and_to_a_zero_side_is_none() {
+        for origin in all_origins() {
+            let list = FocusPoints::from(z9_focus().with_origin(origin))
+                .with_area_mode(AfAreaMode::Dynamic)
+                .with_point(FocusPoint::new(point(8_256, 0)).with_number(3))
+                .unwrap();
+            assert_eq!(
+                list.scaled_to(list.frame()),
+                Some(list.clone()),
+                "{origin:?}"
+            );
+            assert_eq!(list.scaled_to(size(0, 1_280)), None, "{origin:?}");
+            assert_eq!(list.scaled_to(size(1_920, 0)), None, "{origin:?}");
+            assert_eq!(list.scaled_to(size(0, 0)), None, "{origin:?}");
+        }
+        // A list without points or a primary scales too.
+        let empty = FocusPoints::new(size(7, 3), FocusOrigin::Recorded).unwrap();
+        let scaled = empty.scaled_to(size(14, 6)).unwrap();
+        assert!(scaled.points().is_empty());
+        assert_eq!(scaled.primary(), None);
+        assert_eq!(scaled.frame(), size(14, 6));
+    }
+
+    #[test]
+    fn a_list_scales_each_point_as_a_focus_is_scaled() {
+        // Across, every frame from 1 to 8 pixels and every focus that can be
+        // built on it, every centre and no area or every area that fits,
+        // down a frame of 3 with the centre at 1 and an area of 1. Each is
+        // the primary of a list beside a numbered point without an area,
+        // and the list is scaled to frames from 1 by 8 to 8 by 1: each of
+        // its points is the focus it describes, scaled.
+        let mut checked = 0;
+        for old in 1..=8_u32 {
+            for center in 0..=old {
+                for area in std::iter::once(None).chain((1..=old).map(Some)) {
+                    let frame = size(old, 3);
+                    let area = area.map(|side| size(side, 1));
+                    let Some(focus) = built(frame, point(center, 1), area, Some(true)) else {
+                        continue;
+                    };
+                    let points = [
+                        FocusPoint::new(point(old - center, 2)).with_number(9),
+                        point_of(focus).with_number(7),
+                    ];
+                    let list = list_of(frame, FocusOrigin::Table, &points)
+                        .and_then(|list| list.with_primary(1))
+                        .unwrap()
+                        .with_area_mode(AfAreaMode::Dynamic);
+                    for new in 1..=8_u32 {
+                        let target = size(new, 9 - new);
+                        let context = format!("{list:?} to {target:?}");
+                        let scaled = list.scaled_to(target).expect(&context);
+                        assert_eq!(scaled.frame(), target, "{context}");
+                        assert_eq!(scaled.origin(), FocusOrigin::Table, "{context}");
+                        assert_eq!(scaled.area_mode(), Some(AfAreaMode::Dynamic), "{context}");
+                        assert_eq!(scaled.points().len(), 2, "{context}");
+                        assert_eq!(scaled.primary(), scaled.points().get(1), "{context}");
+                        for (got, was) in scaled.points().iter().zip(&points) {
+                            let as_focus = built(frame, was.center(), was.size(), was.in_focus())
+                                .and_then(|focus| focus.scaled_to(target))
+                                .expect(&context);
+                            let number = was.number().expect("numbered");
+                            assert_eq!(*got, point_of(as_focus).with_number(number), "{context}");
+                        }
+                        assert_eq!(
+                            scaled.primary_focus(),
+                            focus.with_origin(FocusOrigin::Table).scaled_to(target),
+                            "{context}"
+                        );
+                        checked += 1;
+                    }
+                }
+            }
+        }
+        // Every case was reached: 144 starting focuses, each scaled 8
+        // ways.
+        assert_eq!(checked, 1_152);
+    }
+
+    #[test]
+    fn focus_points_equality_is_by_every_value_and_collects_in_a_set() {
+        use AfAreaMode::{Auto, Single};
+        use FocusOrigin::{Recorded, Table};
+        let (a, b) = (
+            FocusPoint::new(point(10, 10)),
+            FocusPoint::new(point(20, 20)),
+        );
+        let list = |frame, origin, points: &[FocusPoint], primary, mode| {
+            let mut list = list_of(frame, origin, points).unwrap();
+            if let Some(primary) = primary {
+                list = list.with_primary(primary).unwrap();
+            }
+            if let Some(mode) = mode {
+                list = list.with_area_mode(mode);
+            }
+            list
+        };
+        let frame = size(100, 100);
+        let base = list(frame, Recorded, &[a, b], Some(0), Some(Single));
+        assert_eq!(base, list(frame, Recorded, &[a, b], Some(0), Some(Single)));
+        let others = [
+            list(size(101, 100), Recorded, &[a, b], Some(0), Some(Single)),
+            list(size(100, 101), Recorded, &[a, b], Some(0), Some(Single)),
+            list(frame, Table, &[a, b], Some(0), Some(Single)),
+            // The same points in the other order.
+            list(frame, Recorded, &[b, a], Some(0), Some(Single)),
+            list(frame, Recorded, &[a], Some(0), Some(Single)),
+            list(frame, Recorded, &[a, b, a], Some(0), Some(Single)),
+            list(frame, Recorded, &[a, b], Some(1), Some(Single)),
+            list(frame, Recorded, &[a, b], None, Some(Single)),
+            list(frame, Recorded, &[a, b], Some(0), Some(Auto)),
+            list(frame, Recorded, &[a, b], Some(0), None),
+            // A point that differs in one value.
+            list(
+                frame,
+                Recorded,
+                &[a.with_number(1), b],
+                Some(0),
+                Some(Single),
+            ),
+            list(
+                frame,
+                Recorded,
+                &[a, FocusPoint::new(point(20, 21))],
+                Some(0),
+                Some(Single),
+            ),
+            list(
+                frame,
+                Recorded,
+                &[a.with_size(size(2, 2)), b],
+                Some(0),
+                Some(Single),
+            ),
+            list(
+                frame,
+                Recorded,
+                &[a.with_in_focus(false), b],
+                Some(0),
+                Some(Single),
+            ),
+        ];
+        for (place, other) in others.iter().enumerate() {
+            assert_ne!(&base, other, "value {place}");
+        }
+
+        let mut all = others.to_vec();
+        all.extend([base.clone(), base.clone()]);
+        all.extend(others.iter().cloned());
+        let set: std::collections::HashSet<FocusPoints> = all.into_iter().collect();
+        assert_eq!(set.len(), others.len() + 1);
+    }
+
+    // Every area mode, in the order of its declaration. The `match` has no
+    // wildcard arm, so a variant added later does not compile until it is
+    // listed here too, and the tests below then fail until its name is
+    // listed there.
+    fn all_area_modes() -> [AfAreaMode; 4] {
+        let all = [
+            AfAreaMode::Single,
+            AfAreaMode::Dynamic,
+            AfAreaMode::Auto,
+            AfAreaMode::Tracking,
+        ];
+        for mode in all {
+            match mode {
+                AfAreaMode::Single
+                | AfAreaMode::Dynamic
+                | AfAreaMode::Auto
+                | AfAreaMode::Tracking => {}
+            }
+        }
+        all
+    }
+
+    #[test]
+    fn every_area_mode_name_is_the_one_documented_and_display_writes_it() {
+        // The names are stable once released: a program may show or store
+        // them, so a changed one fails here.
+        assert_names(
+            &all_area_modes(),
+            AfAreaMode::name,
+            &["Single point", "Dynamic area", "Auto area", "Tracking"],
+        );
+    }
+
+    #[test]
+    fn area_modes_order_as_their_variants_are_listed() {
+        // A program may key a sorted map by the mode, and the order is a
+        // promise: a variant moved, or added before the others, fails.
+        assert_ordered(&all_area_modes());
     }
 }

@@ -19,6 +19,31 @@ does.
   `Focus::new` gives `Recorded`, `Focus::with_origin` sets another and
   `Focus::scaled_to` keeps it; `FocusOrigin` has a `name` that `Display`
   writes, "Recorded" and "Table", and orders as its variants are listed.
+- `Metadata::focus_points` gives the autofocus points the camera used,
+  as a `FocusPoints`: every point in one frame, each a `FocusPoint` with
+  its number when the file gives one, its centre, its area when recorded
+  and whether focus was confirmed when the file says; which of them is
+  the primary, which `Metadata::focus` gives as a `Focus`; the area mode,
+  an `AfAreaMode`, "Single point", "Dynamic area", "Auto area" or
+  "Tracking", with a `name` that `Display` writes, ordered as its
+  variants are listed; and where the points came from.
+  `FocusPoints::scaled_to` places every point on a preview as
+  `Focus::scaled_to` places one. A program's tests build a list with
+  `FocusPoints::new`, `with_point`, `with_primary` and `with_area_mode`,
+  each point with `FocusPoint::new` and its `with_number`, `with_size`
+  and `with_in_focus`, or a list of one point from a `Focus` with `From`,
+  and set it with `Metadata::with_focus_points`; `Metadata::with_focus`
+  sets a list of that one point.
+- NEF, ARW and JPEG files give the position the camera recorded as a
+  list of one point, the primary, with no number. Nikon files give the
+  area mode from AFInfo2's area-mode byte, on every version read, for
+  the codes that frames shot in a known mode confirmed, under the
+  detection method the file records: the DSLR codes 0 single point, 5
+  dynamic area and 8 auto area under phase detection, through the
+  viewfinder; the mirrorless codes 193 single point and 197 auto area
+  under any detection method, and 207 tracking under contrast or hybrid
+  detection. Any other code, or a DSLR code in live view, gives `None`.
+  Sony files give no area mode.
 
 ## [0.5.0] - 2026-10-26
 

@@ -919,8 +919,33 @@ What the fields hold:
   in manual focus; 1 on the D7000 and Coolpix A and 2 on the D5600 and
   D5, in live view. [P][1] **[F]**
   The area size follows the mode: 291x323 on the Z 9, 1859x1452 for the
-  Z f's wide area, 984x816 on the D5600. **[F]** raw-files does not
-  report the mode.
+  Z f's wide area, 984x816 on the D5600. **[F]**
+  ExifTool's published documentation gives byte 5 two lists, told apart
+  by the detection method at byte 4: under phase detection, 0 single
+  area, 1 to 18 the other viewfinder modes, dynamic-area, group-area,
+  wide single-area and auto-area among them (8 auto-area), 128 to 131,
+  and the mirrorless codes 192 to 197 and 199; under contrast detection, 0 plain contrast-detect, 1 to
+  4 its area modes, 128 to 131, and the mirrorless codes 192 to 208,
+  207 3D-tracking among them, which the phase-detect list lacks;
+  version 04xx has the mirrorless list alone [P][1]. The maintainer's
+  D600 frames agree: 0, 5 and 8 came with detection 0 through the
+  viewfinder, and the live-view frames wrote 4 with detection 1
+  ([autofocus-points.md](autofocus-points.md#22-what-the-body-writes))
+  **[F]**. raw-files names the mode, on every version, only for the
+  codes that frames shot in a known mode confirmed, under the detection
+  method the file records, and gives none for any other code, such as
+  192, 196, 199, 1 or 2
+  ([ADR018](../../architecture-decisions/adr018-focus-points-placed-from-a-table-and-the-points-used.md)):
+  under phase detection, 0 single point, 5 dynamic area and 8 auto-area
+  on the maintainer's D600 session **[F]**; 193 single point and 197
+  auto-area under any detection method, on which the two lists agree
+  (193 on the two Z 9 frames shot with a single point and committed as
+  fixtures ([`tests/fixtures/`](../../../tests/fixtures/README.md)), 197
+  on the maintainer's Z 9 files, 99 of which carry it and were shot in
+  auto-area) **[F]**; and 207 3D-tracking under contrast or hybrid
+  detection, the lists that carry it (on the maintainer's Z 9 files,
+  8,877 of which carry it and were shot in 3D-tracking, under hybrid
+  detection), counts only **[F]**.
 - **Every AFInfo2 and CropHiSpeed value lies inside the MakerNote's
   declared length** on every checked file. **[F]**
 - **In a camera JPEG**, the D5300's AFInfo2 is version 0100 with a zero

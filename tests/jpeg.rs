@@ -37,10 +37,10 @@ use std::io::Cursor;
 use std::ops::Range;
 
 use raw_files::{
-    CameraSettings, ColorSpace, DateTime, ErrorKind, Exposure, ExposureProgram, FineTune, Flash,
-    FlashMode, Focus, Format, ImageArea, Lens, Limits, Metadata, MeteringMode, Options,
-    Orientation, Point, Preview, PreviewFormat, Rational, RawFile, Shutter, SignedRational, Size,
-    WhiteBalance, WhiteBalanceMode,
+    AfAreaMode, CameraSettings, ColorSpace, DateTime, ErrorKind, Exposure, ExposureProgram,
+    FineTune, Flash, FlashMode, Focus, FocusOrigin, FocusPoints, Format, ImageArea, Lens, Limits,
+    Metadata, MeteringMode, Options, Orientation, Point, Preview, PreviewFormat, Rational, RawFile,
+    Shutter, SignedRational, Size, WhiteBalance, WhiteBalanceMode,
 };
 use support::arw::{
     ARW4_FOCUS_CENTER, ARW4_FOCUS_FRAME, ARW4_FOCUS_SIZE, ARW4_FULL_SIZE_JPEG,
@@ -910,6 +910,13 @@ fn recorded(mode: Z9Mode) -> Focus {
     confirmed(frame, center, area)
 }
 
+/// The focus points of a Z 9's JPEG built here whose focus point is
+/// `focus`: that point alone, the primary, in the area mode its AFInfo2
+/// records, 193, single point.
+fn z9_points(focus: Focus) -> FocusPoints {
+    FocusPoints::from(focus).with_area_mode(AfAreaMode::Single)
+}
+
 /// The previews of the Nikon JPEG `file`, laid out with the MPF index and
 /// its two images and a main image of `main`, smallest first: the
 /// thumbnail, the two MPF images and the file, all turned by IFD0's
@@ -945,12 +952,12 @@ fn with_image_area(metadata: Metadata, mode: Z9Mode) -> Metadata {
 /// The metadata of a Z 9's JPEG that [`z9_jpeg`] lays out in mode `mode`
 /// with a main image of `main`: every value [`camera_exif`] writes, the
 /// image area of `mode`, the image size `main`, and the focus point
-/// `focus`.
+/// `focus`, as the focus points [`z9_points`] gives.
 fn z9_metadata(mode: Z9Mode, main: (u16, u16), focus: Option<Focus>) -> Metadata {
     let metadata =
         with_image_area(camera_metadata_without(&[]), mode).with_image_size(size_of(main));
     match focus {
-        Some(focus) => metadata.with_focus(focus),
+        Some(focus) => metadata.with_focus_points(z9_points(focus)),
         None => metadata,
     }
 }
@@ -1260,7 +1267,7 @@ fn a_nikon_makernote_under_another_makers_make_is_not_read() {
             if make != "Canon" {
                 metadata = with_image_area(metadata, Z9Mode::Fx)
                     .with_serial_number("7654321")
-                    .with_focus(recorded(Z9Mode::Fx));
+                    .with_focus_points(z9_points(recorded(Z9Mode::Fx)));
                 let start = file.makernote.start + at;
                 let preview = start..start + to_u64(jpeg_stub(640, 424, 0xC0).len());
                 previews.insert(
@@ -1454,7 +1461,7 @@ fn a_limit_crossed_inside_the_makernote_costs_the_makernote_only() {
         let without = camera_metadata_without(&[BODY_SERIAL_NUMBER]);
         let with = with_image_area(without.clone(), Z9Mode::Fx)
             .with_serial_number("7654321")
-            .with_focus(recorded(Z9Mode::Fx));
+            .with_focus_points(z9_points(recorded(Z9Mode::Fx)));
         for (entries, previews, metadata) in
             [(20, read, with), (19, nikon_previews(&file, MAIN), without)]
         {
@@ -1905,6 +1912,9 @@ struct StrippedZ9Jpeg {
     focus_center: (u32, u32),
     focus_size: (u32, u32),
     in_focus: bool,
+    /// The area mode the reader names from AFInfo2's byte 5, under the
+    /// detection method at byte 4, `None` for a code it does not name.
+    area_mode: Option<AfAreaMode>,
     /// The colour temperature of the white balance the camera applied, in
     /// kelvin: the MakerNote's ColorTemperatureAuto.
     color_temperature: u32,
@@ -1943,6 +1953,8 @@ const STRIPPED_Z9_FX_JPEG: StrippedZ9Jpeg = StrippedZ9Jpeg {
     focus_center: (4225, 2614),
     focus_size: (406, 406),
     in_focus: true,
+    // Code 207, 3D-tracking.
+    area_mode: Some(AfAreaMode::Tracking),
     color_temperature: 5670,
     image_area: ImageArea::FullFrame,
 };
@@ -1978,6 +1990,8 @@ const STRIPPED_Z9_DX_JPEG: StrippedZ9Jpeg = StrippedZ9Jpeg {
     focus_center: (669, 469),
     focus_size: (148, 168),
     in_focus: true,
+    // Code 192, which no file shot in a known mode names.
+    area_mode: None,
     color_temperature: 5300,
     image_area: ImageArea::ApsC,
 };
@@ -2016,6 +2030,8 @@ const STRIPPED_Z9_16X9_JPEG: StrippedZ9Jpeg = StrippedZ9Jpeg {
     focus_center: (878, 4072),
     focus_size: (162, 178),
     in_focus: true,
+    // Code 192, which no file shot in a known mode names.
+    area_mode: None,
     color_temperature: 6130,
     image_area: ImageArea::Wide,
 };
@@ -2125,6 +2141,24 @@ fn check_stripped_z9_jpeg(stripped: &StrippedZ9Jpeg) {
     )
     .with_in_focus(stripped.in_focus);
     assert_eq!(metadata.focus(), Some(focus), "{label}");
+    // The focus points: that point alone, the primary, with no number,
+    // recorded, in the area mode the file's AFInfo2 records.
+    let points = metadata
+        .focus_points()
+        .unwrap_or_else(|| panic!("{label}: no focus points"));
+    let mut expected = FocusPoints::from(focus);
+    if let Some(mode) = stripped.area_mode {
+        expected = expected.with_area_mode(mode);
+    }
+    assert_eq!(points, &expected, "{label}");
+    assert_eq!(points.points().len(), 1, "{label}");
+    assert_eq!(
+        points.primary().and_then(|primary| primary.number()),
+        None,
+        "{label}"
+    );
+    assert_eq!(points.origin(), FocusOrigin::Recorded, "{label}");
+    assert_eq!(points.area_mode(), stripped.area_mode, "{label}");
     // The settings, the same on the three shots but the colour
     // temperature and the image area. From the Exif IFD: aperture
     // priority, matrix metering, a Flash of 0, no flash fired and no mode
@@ -2486,6 +2520,10 @@ const METADATA: &[SampleMetadata] = &[
             center: (1783, 1804),
             size: None,
             in_focus: None,
+            origin: FocusOrigin::Recorded,
+            points: 1,
+            primary_number: None,
+            area_mode: None,
         }),
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
@@ -2535,6 +2573,10 @@ const METADATA: &[SampleMetadata] = &[
             center: (3976, 2652),
             size: None,
             in_focus: None,
+            origin: FocusOrigin::Recorded,
+            points: 1,
+            primary_number: None,
+            area_mode: None,
         }),
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),

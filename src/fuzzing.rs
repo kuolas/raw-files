@@ -18,7 +18,7 @@ use std::io::{Cursor, Read, Seek};
 
 use crate::container::jpeg::{mpf, probe, segments};
 use crate::container::tiff::{Block, Tree, walk};
-use crate::focus::Focus;
+use crate::focus::{Focus, FocusPoints};
 use crate::geometry::Size;
 use crate::io::Source;
 use crate::limits::Limits;
@@ -128,9 +128,9 @@ pub fn jpeg_segments(data: &[u8]) {
 /// Opens `data` as a camera file, a RAW file or a JPEG, as a caller would,
 /// with the default options, then asks it everything the handle answers:
 /// its format, every value of its metadata, formatted as a caller would
-/// print it, its largest preview and the focus point placed on it, the
-/// smallest preview at least 1 by 1, and the bytes of every preview, read
-/// into one buffer.
+/// print it, its largest preview and the focus point and the focus points
+/// placed on it, the smallest preview at least 1 by 1, and the bytes of
+/// every preview, read into one buffer.
 ///
 /// Whatever `data` holds, this must return, never panic, and do so in
 /// bounded time and memory. What it reads is thrown away: an error is an
@@ -147,6 +147,11 @@ pub fn open(data: &[u8]) {
     {
         read_focus(&on_preview);
     }
+    if let (Some(points), Some(preview)) = (file.metadata().focus_points(), largest)
+        && let Some(on_preview) = points.scaled_to(preview.size())
+    {
+        read_focus_points(&on_preview);
+    }
     let _ = file.preview_at_least(1, 1);
     let mut buf = Vec::new();
     for preview in file.previews().to_vec() {
@@ -157,10 +162,10 @@ pub fn open(data: &[u8]) {
 /// Asks `metadata` for every value, and formats, reduces and converts
 /// each time and fraction as a caller showing it would, so that what those
 /// types do with values the reader built from arbitrary bytes is fuzzed
-/// too, not only the reading. The focus point is read, then placed on a
-/// frame of 1 by 1 pixel and read again, since a tiny frame is where its
-/// rounding and trimming do the most. A `Debug` form of the whole covers
-/// whatever a later value adds.
+/// too, not only the reading. The focus point and the focus points are
+/// read, then placed on a frame of 1 by 1 pixel and read again, since a
+/// tiny frame is where their rounding and trimming do the most. A `Debug`
+/// form of the whole covers whatever a later value adds.
 fn read_metadata(metadata: &Metadata) {
     let _ = metadata.make();
     let _ = metadata.model();
@@ -210,14 +215,20 @@ fn read_metadata(metadata: &Metadata) {
     }
     let _ = metadata.raw_size();
     let _ = metadata.image_size();
+    let tiny = Size {
+        width: 1,
+        height: 1,
+    };
     if let Some(focus) = metadata.focus() {
         read_focus(&focus);
-        let tiny = Size {
-            width: 1,
-            height: 1,
-        };
         if let Some(on_tiny) = focus.scaled_to(tiny) {
             read_focus(&on_tiny);
+        }
+    }
+    if let Some(points) = metadata.focus_points() {
+        read_focus_points(points);
+        if let Some(on_tiny) = points.scaled_to(tiny) {
+            read_focus_points(&on_tiny);
         }
     }
     let _ = format!("{metadata:?}");
@@ -231,4 +242,20 @@ fn read_focus(focus: &Focus) {
     let _ = focus.size();
     let _ = focus.in_focus();
     let _ = format!("{focus:?}");
+}
+
+/// Asks `points` for each of its values, each point's and its primary's
+/// among them, and its `Debug` form, as a caller showing them would.
+fn read_focus_points(points: &FocusPoints) {
+    let _ = points.frame();
+    let _ = points.origin();
+    let _ = points.area_mode().map(|mode| mode.to_string());
+    for point in points.points() {
+        let _ = point.number();
+        let _ = point.center();
+        let _ = point.size();
+        let _ = point.in_focus();
+    }
+    let _ = points.primary();
+    let _ = format!("{points:?}");
 }

@@ -14,9 +14,9 @@ use std::env;
 use std::path::{Path, PathBuf};
 
 use raw_files::{
-    ColorSpace, ExposureProgram, FlashMode, Format, ImageArea, MeteringMode, Orientation, Preview,
-    PreviewFormat, Rational, RawFile, RawImageSize, Shutter, SignedRational, Size,
-    WhiteBalanceMode,
+    AfAreaMode, ColorSpace, ExposureProgram, FlashMode, FocusOrigin, FocusPoint, Format, ImageArea,
+    MeteringMode, Orientation, Preview, PreviewFormat, Rational, RawFile, RawImageSize, Shutter,
+    SignedRational, Size, WhiteBalanceMode,
 };
 
 /// The path of the sample file `name`, or `None`, with a note on stderr,
@@ -255,11 +255,23 @@ pub struct SampleFineTune {
 /// gives, not always the one the file records: on a Nikon crop mode it is
 /// the cropped picture, the size of the MakerNote's CropArea, and the
 /// centre and the area are placed in it.
+///
+/// Then what the reader gives of the autofocus points
+/// ([`FocusPoints`](raw_files::FocusPoints)), whose primary the point above
+/// is, by construction, so that the values above check it: where they
+/// came from; how many there are, the length of the list; the primary's
+/// number, `None` when the file gives it none, as for a recorded position;
+/// and the area mode, `None` when the file names none in a code raw-files
+/// knows.
 pub struct SampleFocus {
     pub frame: (u32, u32),
     pub center: (u32, u32),
     pub size: Option<(u32, u32)>,
     pub in_focus: Option<bool>,
+    pub origin: FocusOrigin,
+    pub points: usize,
+    pub primary_number: Option<u8>,
+    pub area_mode: Option<AfAreaMode>,
 }
 
 /// The shape of a serial number, in place of its text: how many bytes
@@ -422,6 +434,33 @@ pub fn check_metadata(expected: &SampleMetadata, format: Format) {
         .as_ref()
         .map(|focus| (focus.frame, focus.center, focus.size, focus.in_focus));
     assert_eq!(focus, expected_focus, "{label}: focus");
+
+    // The points: a list exactly when there is a focus. `focus` is the
+    // list's primary by construction, so the row's `focus` values above
+    // check the primary.
+    let points = metadata.focus_points();
+    assert_eq!(
+        points.is_some(),
+        metadata.focus().is_some(),
+        "{label}: focus points beside the focus"
+    );
+    let points = points.map(|points| {
+        (
+            points.origin(),
+            points.points().len(),
+            points.primary().and_then(FocusPoint::number),
+            points.area_mode(),
+        )
+    });
+    let expected_points = expected.focus.as_ref().map(|focus| {
+        (
+            focus.origin,
+            focus.points,
+            focus.primary_number,
+            focus.area_mode,
+        )
+    });
+    assert_eq!(points, expected_points, "{label}: focus points");
 
     let settings = metadata.camera_settings();
     let expected = &expected.settings;

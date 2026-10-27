@@ -15,9 +15,9 @@ use std::collections::BTreeSet;
 use std::io::Cursor;
 
 use raw_files::{
-    CameraSettings, ColorSpace, Exposure, ExposureProgram, FlashMode, Focus, Format, Lens,
-    MeteringMode, Orientation, Point, PreviewFormat, Rational, RawFile, SignedRational, Size,
-    WhiteBalanceMode,
+    CameraSettings, ColorSpace, Exposure, ExposureProgram, FlashMode, FocusOrigin, Format, Lens,
+    Metadata, MeteringMode, Orientation, Point, PreviewFormat, Rational, RawFile, SignedRational,
+    Size, WhiteBalanceMode,
 };
 use support::arw::{
     A100_JPEG, A100_RAW_AS_COUNT, A100_TAG_SIZE, ARW4_FOCUS_CENTER, ARW4_FOCUS_FRAME,
@@ -277,12 +277,18 @@ fn assert_the_arw4_lens(lens: Option<&Lens>, label: &str) {
     );
 }
 
-/// Checks that `focus` is the one the ARW 4 files' MakerNote records: a
-/// frame of 7008 by 4672 pixels with the centre at (3832, 2102) and an
-/// area of 350 by 351, as given, and nothing said about whether focus was
-/// confirmed; `label` names the file in a failure.
-fn assert_the_arw4_focus(focus: Option<Focus>, label: &str) {
-    let focus = focus.unwrap_or_else(|| panic!("{label}: no focus point"));
+/// Checks that `metadata`'s focus is the one the ARW 4 files' MakerNote
+/// records: a frame of 7008 by 4672 pixels with the centre at (3832, 2102)
+/// and an area of 350 by 351, as given, and nothing said about whether
+/// focus was confirmed; and that its focus points are that point alone, as
+/// the primary, with no number, recorded, with no area mode, since Sony's
+/// is not read. The focus is the list's primary by construction, so the
+/// checks of the focus check the point. `label` names the file in a
+/// failure.
+fn assert_the_arw4_focus(metadata: &Metadata, label: &str) {
+    let focus = metadata
+        .focus()
+        .unwrap_or_else(|| panic!("{label}: no focus point"));
     let (width, height) = wide(ARW4_FOCUS_FRAME);
     let (x, y) = wide(ARW4_FOCUS_CENTER);
     let (area_width, area_height) = wide(ARW4_FOCUS_SIZE);
@@ -290,6 +296,18 @@ fn assert_the_arw4_focus(focus: Option<Focus>, label: &str) {
     assert_eq!(focus.center(), Point { x, y }, "{label}");
     assert_eq!(focus.size(), Some(size(area_width, area_height)), "{label}");
     assert_eq!(focus.in_focus(), None, "{label}");
+
+    let points = metadata
+        .focus_points()
+        .unwrap_or_else(|| panic!("{label}: no focus points"));
+    assert_eq!(points.points().len(), 1, "{label}");
+    let primary = points
+        .primary()
+        .unwrap_or_else(|| panic!("{label}: no primary"));
+    assert_eq!(Some(primary), points.points().first(), "{label}");
+    assert_eq!(primary.number(), None, "{label}");
+    assert_eq!(points.origin(), FocusOrigin::Recorded, "{label}");
+    assert_eq!(points.area_mode(), None, "{label}");
 }
 
 #[test]
@@ -318,7 +336,7 @@ fn the_arw4_file_gives_every_value_its_fixture_records() {
             assert_eq!(metadata.image_size(), Some(size(7008, 4672)), "{label}");
             // From the MakerNote, in the stored orientation whatever the
             // Orientation says.
-            assert_the_arw4_focus(metadata.focus(), &label);
+            assert_the_arw4_focus(metadata, &label);
             // The fixture writes no settings tag, so the settings are the
             // empty record.
             assert_eq!(
@@ -444,11 +462,12 @@ fn every_layout_gives_the_metadata_its_fixture_records() {
             if has_exposure_lens_and_focus {
                 assert_the_arw4_exposure(metadata.exposure(), &label);
                 assert_the_arw4_lens(metadata.lens(), &label);
-                assert_the_arw4_focus(metadata.focus(), &label);
+                assert_the_arw4_focus(metadata, &label);
             } else {
                 assert_eq!(metadata.exposure(), &Exposure::default(), "{label}");
                 assert_eq!(metadata.lens(), None, "{label}");
                 assert_eq!(metadata.focus(), None, "{label}");
+                assert_eq!(metadata.focus_points(), None, "{label}");
             }
             assert_eq!(metadata.raw_size(), raw_size, "{label}");
             assert_eq!(metadata.image_size(), image_size, "{label}");
@@ -1755,6 +1774,10 @@ const METADATA: &[SampleMetadata] = &[
             center: (2662, 2000),
             size: None,
             in_focus: None,
+            origin: FocusOrigin::Recorded,
+            points: 1,
+            primary_number: None,
+            area_mode: None,
         }),
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
@@ -1804,6 +1827,10 @@ const METADATA: &[SampleMetadata] = &[
             center: (2493, 1808),
             size: None,
             in_focus: None,
+            origin: FocusOrigin::Recorded,
+            points: 1,
+            primary_number: None,
+            area_mode: None,
         }),
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
@@ -1988,6 +2015,10 @@ const METADATA: &[SampleMetadata] = &[
             center: (1824, 1824),
             size: None,
             in_focus: None,
+            origin: FocusOrigin::Recorded,
+            points: 1,
+            primary_number: None,
+            area_mode: None,
         }),
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
@@ -2037,6 +2068,10 @@ const METADATA: &[SampleMetadata] = &[
             center: (2736, 936),
             size: None,
             in_focus: None,
+            origin: FocusOrigin::Recorded,
+            points: 1,
+            primary_number: None,
+            area_mode: None,
         }),
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
@@ -2119,6 +2154,10 @@ const METADATA: &[SampleMetadata] = &[
             center: (3976, 1911),
             size: None,
             in_focus: None,
+            origin: FocusOrigin::Recorded,
+            points: 1,
+            primary_number: None,
+            area_mode: None,
         }),
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
@@ -2259,6 +2298,10 @@ const METADATA: &[SampleMetadata] = &[
             center: (4320, 2880),
             size: Some((1026, 912)),
             in_focus: None,
+            origin: FocusOrigin::Recorded,
+            points: 1,
+            primary_number: None,
+            area_mode: None,
         }),
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
@@ -2308,6 +2351,10 @@ const METADATA: &[SampleMetadata] = &[
             center: (2120, 1180),
             size: Some((92, 94)),
             in_focus: None,
+            origin: FocusOrigin::Recorded,
+            points: 1,
+            primary_number: None,
+            area_mode: None,
         }),
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
@@ -2434,6 +2481,10 @@ const METADATA: &[SampleMetadata] = &[
             center: (3096, 2064),
             size: Some((135, 138)),
             in_focus: None,
+            origin: FocusOrigin::Recorded,
+            points: 1,
+            primary_number: None,
+            area_mode: None,
         }),
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
@@ -2483,6 +2534,10 @@ const METADATA: &[SampleMetadata] = &[
             center: (3832, 2102),
             size: Some((350, 351)),
             in_focus: None,
+            origin: FocusOrigin::Recorded,
+            points: 1,
+            primary_number: None,
+            area_mode: None,
         }),
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
@@ -2532,6 +2587,10 @@ const METADATA: &[SampleMetadata] = &[
             center: (3482, 2306),
             size: Some((350, 351)),
             in_focus: None,
+            origin: FocusOrigin::Recorded,
+            points: 1,
+            primary_number: None,
+            area_mode: None,
         }),
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
@@ -2581,6 +2640,10 @@ const METADATA: &[SampleMetadata] = &[
             center: (3591, 2306),
             size: Some((350, 351)),
             in_focus: None,
+            origin: FocusOrigin::Recorded,
+            points: 1,
+            primary_number: None,
+            area_mode: None,
         }),
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
@@ -2630,6 +2693,10 @@ const METADATA: &[SampleMetadata] = &[
             center: (2304, 1529),
             size: Some((230, 231)),
             in_focus: None,
+            origin: FocusOrigin::Recorded,
+            points: 1,
+            primary_number: None,
+            area_mode: None,
         }),
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
@@ -2679,6 +2746,10 @@ const METADATA: &[SampleMetadata] = &[
             center: (2275, 1516),
             size: Some((230, 231)),
             in_focus: None,
+            origin: FocusOrigin::Recorded,
+            points: 1,
+            primary_number: None,
+            area_mode: None,
         }),
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
@@ -2816,6 +2887,10 @@ const METADATA: &[SampleMetadata] = &[
             center: (2808, 1872),
             size: Some((1386, 998)),
             in_focus: None,
+            origin: FocusOrigin::Recorded,
+            points: 1,
+            primary_number: None,
+            area_mode: None,
         }),
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
@@ -2868,6 +2943,10 @@ const METADATA: &[SampleMetadata] = &[
             center: (3504, 2336),
             size: Some((745, 594)),
             in_focus: None,
+            origin: FocusOrigin::Recorded,
+            points: 1,
+            primary_number: None,
+            area_mode: None,
         }),
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
@@ -2920,6 +2999,10 @@ const METADATA: &[SampleMetadata] = &[
             center: (3504, 2336),
             size: Some((745, 594)),
             in_focus: None,
+            origin: FocusOrigin::Recorded,
+            points: 1,
+            primary_number: None,
+            area_mode: None,
         }),
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
@@ -2972,6 +3055,10 @@ const METADATA: &[SampleMetadata] = &[
             center: (2304, 1536),
             size: Some((490, 390)),
             in_focus: None,
+            origin: FocusOrigin::Recorded,
+            points: 1,
+            primary_number: None,
+            area_mode: None,
         }),
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
@@ -3024,6 +3111,10 @@ const METADATA: &[SampleMetadata] = &[
             center: (2304, 1536),
             size: Some((490, 390)),
             in_focus: None,
+            origin: FocusOrigin::Recorded,
+            points: 1,
+            primary_number: None,
+            area_mode: None,
         }),
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
@@ -3076,6 +3167,10 @@ const METADATA: &[SampleMetadata] = &[
             center: (2304, 1536),
             size: Some((490, 390)),
             in_focus: None,
+            origin: FocusOrigin::Recorded,
+            points: 1,
+            primary_number: None,
+            area_mode: None,
         }),
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
@@ -3130,6 +3225,10 @@ const LARGE_METADATA: &[SampleMetadata] = &[
             center: (3976, 1911),
             size: None,
             in_focus: None,
+            origin: FocusOrigin::Recorded,
+            points: 1,
+            primary_number: None,
+            area_mode: None,
         }),
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
