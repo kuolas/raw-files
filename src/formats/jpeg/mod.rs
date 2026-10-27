@@ -425,7 +425,7 @@ mod tests {
     };
     use crate::error::ErrorKind;
     use crate::jpeg_builder::JpegBuilder;
-    use crate::testing::{FAR, FailsFar};
+    use crate::testing::{FAR, FailsFar, size};
     use crate::tiff_builder::{Order, TiffBuilder};
     use std::io::Cursor;
 
@@ -655,11 +655,6 @@ mod tests {
                 "Exif ColorSpace {exif_color_space}"
             );
         }
-    }
-
-    /// `width` by `height`, as a size.
-    fn size(width: u32, height: u32) -> Size {
-        Size { width, height }
     }
 
     #[test]

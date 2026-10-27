@@ -168,12 +168,12 @@ mod tests {
     use crate::container::tiff::tags::{
         DNG_VERSION, MAKE, MAKER_NOTE, WHITE_BALANCE as EXIF_WHITE_BALANCE,
     };
+    use crate::focus::Focus;
     use crate::formats::makernote::sony::{
         ELECTRONIC_FRONT_CURTAIN, FINE_TUNE, FOCUS_LOCATION, FOCUS_MODE, WHITE_BALANCE,
     };
     use crate::formats::testing::file;
     use crate::geometry::{Point, Size};
-    use crate::metadata::Focus;
     use crate::rational::SignedRational;
     use crate::tiff_builder::{IfdId, TiffBuilder};
 
