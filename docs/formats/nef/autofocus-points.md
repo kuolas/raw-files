@@ -339,6 +339,41 @@ JPEG:
 - frame 42, auto-area: the mask of points used, 12 bits, with the
   primary among them.
 
+### 2.8 What the reader gives on my own files
+
+The local corpus test, which runs the reader over a folder of camera
+files and prints counts only
+([CONTRIBUTING.md](../../../CONTRIBUTING.md#code-style-and-checks)),
+gives the same counts on the session's 56 NEF files as on its 56
+JPEGs **[F]**:
+
+- 54 files with a focus point: 50 placed from the table, and the 4
+  live-view frames' recorded positions. The 2 manual-focus frames give
+  none.
+- Every file has the layout of 39 points, and every point placed from
+  the table is a point of that layout, with its box, moved into the
+  window on the 3 DX frames (49 to 51), whose JPEG is the window's size,
+  3936x2624.
+- Lists of the points used: 51 of one point, 47 of them placed from the
+  table and the 4 recorded, and one each of 12, 13 and 9 points, the
+  auto-area frames; 85 points in all, 81 of them with a number.
+- Area modes: single point on 45 lists, dynamic area on 2, auto area
+  on 3; none on the 4 live-view frames, whose code the reader does not
+  name.
+
+On 23 NEF and 16 JPEG files I shot with my D600 outside the session,
+every NEF gives a point: 22 placed from the table, 2 of them DX frames
+in the window, and 1 recorded in live view. 15 of the JPEGs give one,
+the 2 DX JPEGs in the window. The 16th, a Medium JPEG of 4512x3008,
+gives none: its shape, exactly 3:2, is further from the table's
+6016x4016 frame than the one pixel of rounding by which a JPEG's
+point must fit its picture
+([ADR014](../../architecture-decisions/adr014-jpeg-files-as-a-format-of-their-own.md)),
+while a Small JPEG of 3008x2008, half the frame, keeps its point. 19 of
+the NEF files record area-mode code 9 under phase detection, read with
+ExifTool, run as a reader to compare with; no frame of the session
+wrote it, so their lists name no mode. **[F]**
+
 ## 3. Bodies without a table
 
 Every other body gives no point for a shot that names one, since
@@ -363,6 +398,14 @@ have a point number on 1,339 and none on 35 (34 through the viewfinder,
 number (23 single-point, 36 dynamic-area), so the mask is not always
 written beside the number; its 13 auto-area files, and the session's
 three, set between 2 and 16 bits. **[F]**
+
+Run over my own files, the reader gives these bodies no layout and no
+point placed from a table. Of 263 D7200 NEF files, 3 give
+a point, the positions recorded by live-view shots. Of 223 Z 9 NEF
+files, 192 give a recorded position; the 31 without one are 27
+manual-focus shots and 4 3D-tracking shots that record no position. Of
+the 82 JPEGs I shot beside 82 of those NEF files, 55 give one, as those
+NEF files do. **[F]**
 
 A table for the 51-point bodies, the 11-point bodies or the Z 9's
 mask-only shots needs a session on that body by the procedure of

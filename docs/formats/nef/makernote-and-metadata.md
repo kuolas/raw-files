@@ -957,7 +957,11 @@ What the fields hold:
   only AFInfo (0x0088): neither gives a point. **[F]** No public Nikon
   JPEG in the set records a position. The 56 JPEGs of my D600 session
   carry the same AFInfo2 and CropHiSpeed as the NEF of the same frame
-  ([autofocus-points.md](autofocus-points.md#22-what-the-body-writes)).
+  ([autofocus-points.md](autofocus-points.md#22-what-the-body-writes)),
+  and the reader gives them the same points as the NEF files: 54 with
+  a point, 50 of them placed from the table, the 3 DX JPEGs' in the
+  crop's window
+  ([autofocus-points.md](autofocus-points.md#28-what-the-reader-gives-on-my-own-files)).
   **[F]** So a D600 JPEG gives the point its NEF gives, placed from the
   table; on a DX frame only when the JPEG's size is the crop's window,
   3936x2624, its full image size, since a smaller DX JPEG is unmeasured
@@ -966,7 +970,10 @@ What the fields hold:
   shape, which may keep the camera's MakerNote, gives none
   ([ADR014](../../architecture-decisions/adr014-jpeg-files-as-a-format-of-their-own.md)),
   except an export cut from a crop-mode JPEG, whose point is placed on
-  the export's own pixels (below).
+  the export's own pixels (below). That rule leaves out my D600's Medium
+  JPEG, 4512x3008, exactly 3:2, whose shape is further from the
+  table's 6016x4016 frame than its one pixel of rounding, while the
+  Small JPEG, 3008x2008, half the frame, keeps its point. **[F]**
 - **In a camera JPEG shot in a crop mode**, my Z 9 records the raw
   file's AFInfo2 and CropHiSpeed, with the full 8256x5504 frame, at
   every image size, and no CropArea; its full-size JPEG is the raw
