@@ -2,7 +2,9 @@
 
 The substantial decisions that shape raw-files live here, one short record
 each: the context, what was decided, and what follows from it. They answer
-"why is it like this?" for anyone reading the code later.
+"why is it like this?" for anyone reading the code later. The records
+speak for the project; where one cites my own shots, it is me, Alvaro
+Kuolas, who maintains raw-files.
 
 | ADR | Title | Status |
 |---|---|---|
@@ -23,7 +25,8 @@ each: the context, what was decided, and what follows from it. They answer
 | [ADR015](adr015-the-focus-point-of-a-crop-mode-jpeg.md) | The focus point of a crop-mode JPEG | Accepted |
 | [ADR016](adr016-full-metadata-before-raw-data.md) | Full metadata before raw data | Accepted |
 | [ADR017](adr017-per-body-tables-measured-by-the-project.md) | Per-body tables measured by the project | Accepted |
-| [ADR018](adr018-focus-points-placed-from-a-table-and-the-points-used.md) | Focus points placed from a table, and the points used | Accepted; amends [ADR012](adr012-focus-points-as-the-camera-records-them.md) |
+| [ADR018](adr018-focus-points-placed-from-a-table-and-the-points-used.md) | Focus points placed from a table, and the points used | Accepted; amends [ADR012](adr012-focus-points-as-the-camera-records-them.md); amended by [ADR019](adr019-the-frame-of-a-placed-focus-point-on-a-crop.md) |
+| [ADR019](adr019-the-frame-of-a-placed-focus-point-on-a-crop.md) | The frame of a placed focus point on a crop | Accepted; amends [ADR018](adr018-focus-points-placed-from-a-table-and-the-points-used.md) |
 
 ## When to write one
 
