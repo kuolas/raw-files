@@ -104,7 +104,7 @@ pixels is enough; what matters is that the error is known.
 
 Measured on 2026-10-26 on 56 frames shot with the maintainer's own
 D600, RAW + JPEG Fine Large, a 35 mm f/1.8 lens, one static scene, and
-read in Nikon NX Studio 4.0.0.3002, run as a reader to compare with.
+read in Nikon NX Studio 1.10.0, run as a reader to compare with.
 The frames are numbered 1 to 56 in the session's order. Every value
 below was read from the files' bytes with a script written from the
 notes and, for the box, from the NX Studio screenshots measured as
