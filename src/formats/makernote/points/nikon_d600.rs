@@ -17,7 +17,14 @@
 //! and the 56 frames of the session are committed in
 //! `tests/fixtures/nikon-d600/`, stripped of their pixels and personal
 //! fields, so that the table can be checked on them: every frame gives the
-//! table's layout, and frame 4, a shot with point 38, its place.
+//! table's layout, and every frame shot through the viewfinder in autofocus
+//! the points it names, placed from the table, frame 4, a shot with point
+//! 38, among them.
+//!
+//! Beside the points, the table carries what the same frames' bytes show
+//! of the way a file names them: layout code 3, a mask whose bit number − 1
+//! stands for each point, and the DX crop, on which frames 49 and 50 put
+//! their points where the table's place, less CropHiSpeed's origin, says.
 //!
 //! Each point's name, in the comment beside it, is its row in the
 //! viewfinder, A at the top to E at the bottom, and its column, 1 at the
@@ -27,7 +34,7 @@
 //! documentation and confirmed on the frames: 1 is the centre, 13 the top
 //! of the inner columns' left one and 38 the top of the leftmost column.
 
-use super::{PointTable, Provenance};
+use super::{BitOrder, PointTable, Provenance};
 use crate::focus::LayoutPoint;
 use crate::geometry::{Point, Size};
 
@@ -81,7 +88,8 @@ static POINTS: [LayoutPoint; 39] = [
 ];
 
 /// The D600's table: its Model, its full-size output frame and its 39
-/// points, with where they come from.
+/// points, with what its record confirms of the way a file names them, and
+/// where they come from.
 pub(super) static TABLE: PointTable = PointTable {
     model: "NIKON D600",
     frame: Size {
@@ -89,6 +97,17 @@ pub(super) static TABLE: PointTable = PointTable {
         height: 4016,
     },
     points: &POINTS,
+    // Every frame through the viewfinder with a point number writes layout
+    // code 3 (section 2.2 of the record).
+    layout_code: 3,
+    // On all 45 single-point frames with a point number, exactly one bit
+    // is set, bit number − 1 (section 2.3).
+    bit_order: BitOrder::NumberLessOne,
+    // The DX crop, CropHiSpeed's setting 2: frames 49 and 50 put points 38
+    // and 27 within 2 pixels of the table's place less CropHiSpeed's
+    // origin, (1040, 696), in the 3936 by 2624 picture of the NEF's
+    // preview and the JPEG alike (section 2.6).
+    crop_codes: &[2],
     provenance: Provenance {
         shot_by: "Alvaro Kuolas",
         measured_by: "Alvaro Kuolas",

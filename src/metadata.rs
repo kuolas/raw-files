@@ -312,13 +312,28 @@ impl Metadata {
     /// any that CropHiSpeed records with a CropArea: there the point is
     /// placed inside the cropped picture, by the sides the crop cuts, as the
     /// [NEF format notes](https://github.com/kuolas/raw-files/blob/master/docs/formats/nef/makernote-and-metadata.md)
-    /// describe. DX, 1:1 and 16:9 are the checked cases. It is `None` on a
-    /// Nikon file that records no position, such as a DSLR shot through the
-    /// viewfinder, which records only an autofocus point's number, and on a
-    /// manual-focus shot. It is `None` too when the AFInfo2 version is one
-    /// raw-files does not know, and on a crop whose point cannot be placed
-    /// on the cropped picture: a 1:1 or 16:9 crop on a small raw, or a crop
-    /// whose CropArea cannot be used.
+    /// describe. DX, 1:1 and 16:9 are the checked cases.
+    ///
+    /// A Nikon DSLR shot through the viewfinder records no position, only
+    /// the number of an autofocus point. For a body whose table of points
+    /// raw-files has, the Nikon D600, that point is placed from the table,
+    /// in the body's full-size output frame, with the origin
+    /// [`Table`](crate::FocusOrigin::Table) and [`in_focus`](Focus::in_focus)
+    /// `None`, since the file does not say whether focus was confirmed
+    /// there. On a crop that the body's table was checked on, with frames
+    /// shot in that crop, the D600's DX crop, it is placed in the crop's
+    /// window, the middle of the table's frame that the crop keeps: the
+    /// frame less the crop's left and top margins, which the file records,
+    /// cut from both sides. It is `None` when the window leaves it out, and
+    /// any other crop gives `None`.
+    ///
+    /// It is `None` on a Nikon file that records no position and names no
+    /// point that raw-files can place, such as a shot through the
+    /// viewfinder of a body without a table, and on a manual-focus shot.
+    /// It is `None` too when the AFInfo2 version is one raw-files does not
+    /// know, and on a crop whose point cannot be placed on the cropped
+    /// picture: a 1:1 or 16:9 crop on a small raw, or a crop whose CropArea
+    /// cannot be used.
     ///
     /// On Sony files it is read from the MakerNote's FocusLocation, on the
     /// bodies from the ILCE-7RM2 on, as the camera recorded it and as the
@@ -337,10 +352,16 @@ impl Metadata {
     /// A [`Format::Jpeg`](crate::Format::Jpeg) file of a Nikon or a Sony
     /// camera gives the point as its raw file would. A Nikon crop-mode JPEG
     /// (DX, 1:1 or 16:9), which has no CropArea, has its point placed on the
-    /// JPEG's own picture. A JPEG's point is given only when its frame has
+    /// JPEG's own picture; a point placed from a table on a crop is given
+    /// only when the JPEG's size is the crop's window, which on the D600 is
+    /// the full image size. A JPEG's point is given only when its frame has
     /// the picture's shape, so an export cut to another shape, or turned
     /// upright, gives `None`; the exception is an export cut from a Nikon
-    /// crop-mode JPEG, whose point may be misplaced.
+    /// crop-mode JPEG, whose point may be misplaced. The same rule gives a
+    /// D600 Medium JPEG, 4512x3008, `None`: its shape, exactly 3:2, is
+    /// further from the 6016x4016 frame than the one pixel of rounding the
+    /// rule allows, while a Small JPEG, 3008x2008, half the frame, keeps
+    /// its point.
     ///
     /// # Examples
     ///
@@ -379,11 +400,24 @@ impl Metadata {
     /// the one [`focus`](Self::focus) gives, as a list of one point, its
     /// primary: with no number, with the position's area and whether focus
     /// was confirmed, and with the origin
-    /// [`Recorded`](crate::FocusOrigin::Recorded). On a Nikon file the area
-    /// mode is read from AFInfo2's area-mode byte, on every version
-    /// raw-files reads, and named for the codes that frames shot in a known
-    /// mode confirmed, under the detection method the file records: through
-    /// the viewfinder, by phase detection, 0
+    /// [`Recorded`](crate::FocusOrigin::Recorded).
+    ///
+    /// For a point that the Nikon reader places from a table of the body's
+    /// points, on a shot through a DSLR's viewfinder, the list is every
+    /// point of the table that the file's record of the points used, one
+    /// bit per point, names, and the primary, whether that record names it
+    /// or not, in number order: each with its number, the table's centre
+    /// and box, and `None` for [`in_focus`](crate::FocusPoint::in_focus),
+    /// with the origin [`Table`](crate::FocusOrigin::Table). When the file
+    /// writes no such record, or one that names no point of the table, the
+    /// list is the primary alone. On a crop, the points are in the crop's
+    /// window, the frame of [`focus`](Self::focus), and a point the window
+    /// leaves out is not in the list.
+    ///
+    /// On a Nikon file the area mode is read from AFInfo2's area-mode byte,
+    /// on every version raw-files reads, and named for the codes that
+    /// frames shot in a known mode confirmed, under the detection method
+    /// the file records: through the viewfinder, by phase detection, 0
     /// [`Single`](crate::AfAreaMode::Single), 5
     /// [`Dynamic`](crate::AfAreaMode::Dynamic) and 8
     /// [`Auto`](crate::AfAreaMode::Auto); under any detection method, 193

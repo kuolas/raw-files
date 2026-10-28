@@ -72,12 +72,13 @@
 //! tag records. Mirrorless bodies, and DSLRs in live view, fill in a
 //! position in pixels: the size of a frame, the centre of the focus area
 //! in that frame, and the area's width and height. A DSLR shot through the
-//! viewfinder records a zero frame instead, and only the number of an
-//! autofocus point, which only a table of the body's points, carried by no
-//! file, could place in pixels (public samples 928 and 1835): it gives no
-//! focus point. The layout of the body's points, which every file of a
-//! body whose table is in raw-files ([`points`](super::points)), the D600,
-//! has whatever the shot
+//! viewfinder records a zero frame and area instead, and names its points
+//! by number, which only a table of the body's points, carried by no file,
+//! places in pixels (public samples 928 and 1835): a body with a table
+//! gives them placed from it, as a later paragraph says, and any other
+//! body no focus point. The layout of the body's points, which every file
+//! of a body whose table is in raw-files ([`points`]), the D600, has
+//! whatever the shot
 //! ([`Metadata::focus_layout`](crate::Metadata::focus_layout)), is not
 //! this reader's to give: detection gives it from the Model alone,
 //! whatever the MakerNote holds, even when it cannot be read.
@@ -100,16 +101,16 @@
 //! camera chose its points, by a code read with the detection method at
 //! byte 4: the codes that frames shot in a known mode confirmed, under the
 //! method recorded, name an [`AfAreaMode`] ([`area_mode`]), and any other
-//! names none. A focus point is given only when the value is at least as
-//! long as its version's layout, the frame and the area have no zero side,
-//! the centre lies on the frame, and the area fits inside the frame around
-//! it ([`Focus::new`], [`Focus::with_size`]); it is given as a list of one
-//! point, the primary, with the area mode ([`FocusPoints`]). FocusMode,
-//! ASCII text, records how the camera focused: `MANUAL`, or an autofocus
-//! mode padded with spaces, such as `AF-S  `. When it reads exactly
-//! `MANUAL`, by the text rule, the file gives no focus point, whatever
-//! AFInfo2 holds: the point of a manual-focus shot is not one the camera
-//! focused on (ADR012).
+//! names none. A recorded position is given only when the value is at
+//! least as long as its version's layout, the frame and the area have no
+//! zero side, the centre lies on the frame, and the area fits inside the
+//! frame around it ([`Focus::new`], [`Focus::with_size`]); it is given as
+//! a list of one point, the primary, with the area mode ([`FocusPoints`]).
+//! FocusMode, ASCII text, records how the camera focused: `MANUAL`, or an
+//! autofocus mode padded with spaces, such as `AF-S  `. When it reads
+//! exactly `MANUAL`, by the text rule, the file gives no focus point,
+//! whatever AFInfo2 holds: the point of a manual-focus shot is not one the
+//! camera focused on (ADR012).
 //!
 //! On a crop mode, DX, 1:1 or 16:9, the point is not reported as recorded,
 //! for the frame AFInfo2 records stays the camera's full output while the
@@ -175,6 +176,43 @@
 //! is placed on the JPEG's pixels, and a raw file, which has none of its
 //! own, gives its point as recorded. Whether the point placed so fits the
 //! JPEG's picture is for the JPEG reader to judge (ADR014).
+//!
+//! A record whose frame or area has a zero side records no position, and
+//! the points it names are placed from the table of the body the file's
+//! Model names, by the decision to place a point that the camera names by
+//! number from the body's table (ADR018). They are read on version 0100
+//! alone, where the D600's frames checked them: the layout code
+//! (FocusPointSchema) at byte 6, the primary point's number at byte 7 and
+//! the mask of the points used in the seven bytes 8 to 14, its bit k being
+//! bit k % 8 of byte 8 + k / 8; the other versions keep them at offsets of
+//! their own, which are not read. Points are placed only when FocusMode is
+//! not `MANUAL`, the version is 0100, the Model has a table, the layout
+//! code is the table's, 3 on the D600, and the primary's number is a point
+//! of the table, 1 to 39 on the D600; any other such record gives no focus
+//! point. The focus point is then the primary's centre and box, as the
+//! table gives them, in the table's frame, from a table
+//! ([`FocusOrigin::Table`]), with nothing said of whether focus was
+//! confirmed: version 0100's in-focus byte is the contrast-detect result,
+//! 0 on every viewfinder frame of the D600's, in focus or not. The list
+//! holds every point of the table whose bit the mask sets, by the table's
+//! bit order, number − 1 on the D600, and the primary, whether the mask
+//! sets its bit or not, in number order, each with its number; a set bit
+//! the table lacks is skipped, and an empty mask gives the primary alone.
+//! The area mode is read as for a position. On a crop, whose CropHiSpeed
+//! records a cropped size that differs from its original size, points are
+//! placed only when the table's record confirms the crop's setting: the
+//! DX crop, 2, on the D600. Then the frame is the crop's window, the
+//! table's frame less twice CropHiSpeed's origin, its sixth and seventh
+//! values, on each side, 3936 by 2624 on a D600 DX frame; every centre
+//! moves back by that origin and every box is kept, by the decision to
+//! measure a placed point on a crop in the crop's window (ADR019). A point
+//! whose centre or box the window leaves out is dropped, and when the
+//! primary is, the file gives no focus point. In a JPEG the window must be
+//! the JPEG's own size, as it is on the D600 at full image size, so that a
+//! crop-mode JPEG at a smaller size gives none; an uncropped JPEG takes the
+//! table's frame, which the JPEG reader holds to the picture's shape.
+//! CropArea plays no part in it. A record of a position is read by the
+//! rules above, whatever it names.
 //!
 //! The MakerNote also records how the camera was set for the picture,
 //! beyond what the Exif tags record (ADR011): the white balance setting
@@ -368,6 +406,7 @@
 use std::cmp::Ordering;
 use std::io::{Read, Seek};
 
+use super::points::{self, PointTable};
 use super::{MakerNoteBlock, checked_color_temperature};
 use crate::camera_settings::{
     CameraSettings, ColorSpace, FineTune, ImageArea, RawImageSize, Shutter, WhiteBalanceMode,
@@ -376,7 +415,7 @@ use crate::container::tiff::tags::{JPEG_INTERCHANGE_FORMAT, JPEG_INTERCHANGE_FOR
 use crate::container::tiff::types::{LONG, SHORT, SRATIONAL, SSHORT, UNDEFINED};
 use crate::container::tiff::{Block, Ifd, Tree, ifd_in, parse_header, skip_damage};
 use crate::error::Result;
-use crate::focus::{AfAreaMode, Focus, FocusPoints, scale};
+use crate::focus::{AfAreaMode, Focus, FocusOrigin, FocusPoint, FocusPoints, lies_on, scale};
 use crate::formats::tiff_metadata::{self, Standard, one_short};
 use crate::formats::tiff_previews::{self, Candidate};
 use crate::geometry::{Point, Size};
@@ -665,16 +704,21 @@ pub(in crate::formats) fn preview_candidate<R: Read + Seek>(
 /// ([`camera_settings`]): the colour space only when the Exif IFD holds no
 /// ColorSpace, and the raw image size only for a raw file's picture.
 /// CropHiSpeed is read once, for the image area and the focus point.
-/// Then the focus point, from AFInfo2 and FocusMode, placed on the
-/// cropped picture by CropHiSpeed and CropArea on a crop, as a list of
-/// one point with AFInfo2's area mode ([`focus`]), always read: the
-/// standard tags never give one, so it is not a fallback. `picture` says,
+/// The table of the body's autofocus points is found from the Model the
+/// standard tags give, matched exactly as [`points::find`] matches it:
+/// none for a body without a table, or a file without a Model. Then the
+/// focus points, from AFInfo2 and FocusMode, with AFInfo2's
+/// area mode ([`focus`]), always read: the standard tags never give one,
+/// so it is not a fallback. A recorded position is placed on the cropped
+/// picture by CropHiSpeed and CropArea on a crop, as a list of one point;
+/// the points a record with no position names are placed from the table,
+/// in the crop's window on a crop that CropHiSpeed records. `picture` says,
 /// once, what a crop without a CropArea is placed on: nothing for a raw
 /// file's, whose point is then read as recorded, and for a JPEG's, its own
-/// pixels, of the image size `standard` gives. Every other value is the
-/// standard tags', and the layout of the body's autofocus points is not
-/// given here: detection gives it from the Model alone, whatever the
-/// MakerNote holds.
+/// pixels, of the image size `standard` gives, which a placed point's
+/// window must equal. Every other value is the standard tags', and the
+/// layout of the body's autofocus points is not given here: detection
+/// gives it from the Model alone, whatever the MakerNote holds.
 ///
 /// # Errors
 ///
@@ -732,7 +776,9 @@ pub(in crate::formats) fn metadata<R: Read + Seek>(
         Picture::Raw => None,
         Picture::Jpeg => metadata.image_size,
     };
-    metadata.focus_points = focus(src, makernote, crop_hi_speed, crop, pixels)?;
+    // The table that places the points a viewfinder shot names.
+    let table = metadata.model.as_deref().and_then(points::find);
+    metadata.focus_points = focus(src, makernote, crop_hi_speed, crop, pixels, table)?;
     Ok(metadata)
 }
 
@@ -1216,22 +1262,33 @@ fn world_time<R: Read + Seek>(src: &mut Source<R>, makernote: &MakerNote) -> Res
 }
 
 /// Where the camera's autofocus aimed, as `makernote`'s AFInfo2 records
-/// it: the centre of the focus area, the area's size and the frame the two
-/// are measured in, with whether focus was confirmed on the versions that
-/// say, placed on the cropped picture when `crop`, what CropHiSpeed
-/// records, already read ([`crop_hi_speed`]), says the file is a crop, by
-/// `crop_area`, what CropArea gives, already read ([`crop_area`]), or,
-/// when the MakerNote holds no CropArea, on `pixels`, a JPEG's own pixels,
-/// when the file has them ([`in_crop`]). The point is given as a list of
-/// one, the primary, with the area mode the record names, when it names
-/// one ([`area_mode`]).
+/// it, with the area mode the record names, when it names one
+/// ([`area_mode`]).
+///
+/// A record of a position, whose frame and area have no zero side
+/// ([`FocusRecord::records_position`]), gives the centre of the focus area,
+/// the area's size and the frame the two are measured in, with whether
+/// focus was confirmed on the versions that say, placed on the cropped
+/// picture when `crop`, what CropHiSpeed records, already read
+/// ([`crop_hi_speed`]), says the file is a crop, by `crop_area`, what
+/// CropArea gives, already read ([`crop_area`]), or, when the MakerNote
+/// holds no CropArea, on `pixels`, a JPEG's own pixels, when the file has
+/// them ([`in_crop`]). The point is given as a list of one, the primary.
+///
+/// A record with a zero side, as a shot through a DSLR's viewfinder
+/// writes, gives the points it names ([`NamedPoints`]), placed from
+/// `table`, the table of the body the file's Model names, when there is
+/// one ([`placed`]), with their frame on a crop set by `crop` and checked
+/// against `pixels`; CropArea plays no part there.
 ///
 /// `None` when FocusMode records manual focus ([`manual_focus`]); when
 /// AFInfo2 is missing, is not of type UNDEFINED, stores its value outside
-/// the block, or holds a value [`af_info2_record`] gives none for; or when
-/// [`in_crop`] gives none, because [`FocusRecord::focus`] refuses the
-/// record as recorded or the record cannot be placed on the cropped
-/// picture.
+/// the block, or holds a value [`af_info2_record`] gives none for; for a
+/// position, when [`in_crop`] gives none, because [`FocusRecord::focus`]
+/// refuses the record as recorded or the record cannot be placed on the
+/// cropped picture; and with no position, when the record names no points,
+/// as every version but 0100 does here, there is no table, or [`placed`]
+/// gives none.
 ///
 /// See the [module documentation](self) for what AFInfo2 and CropHiSpeed
 /// are.
@@ -1245,6 +1302,7 @@ fn focus<R: Read + Seek>(
     crop: Option<CropHiSpeed>,
     crop_area: CropArea,
     pixels: Option<Size>,
+    table: Option<&PointTable>,
 ) -> Result<Option<FocusPoints>> {
     let ifd = &makernote.ifd;
     // Without AFInfo2 there is nothing to place, so FocusMode is not read.
@@ -1259,7 +1317,14 @@ fn focus<R: Read + Seek>(
     let Some(record) = value.and_then(|value| af_info2_record(&value, order)) else {
         return Ok(None);
     };
-    let points = in_crop(record, crop, crop_area, pixels).map(FocusPoints::from);
+    let points = if record.records_position() {
+        in_crop(record, crop, crop_area, pixels).map(FocusPoints::from)
+    } else {
+        record
+            .named
+            .zip(table)
+            .and_then(|(named, table)| placed(named, table, crop, pixels))
+    };
     Ok(points.map(|points| match record.area_mode {
         Some(mode) => points.with_area_mode(mode),
         None => points,
@@ -1267,9 +1332,11 @@ fn focus<R: Read + Seek>(
 }
 
 /// What CropHiSpeed records of a crop: the crop setting, which gives the
-/// image area ([`image_area`]), and the size of the picture before the
-/// crop and after it, in the sensor's pixels, which [`in_crop`] only
-/// compares with each other. Where the crop starts is not used.
+/// image area ([`image_area`]) and says which crop a point placed from a
+/// table may be placed on ([`placed_frame`]); the size of the picture
+/// before the crop and after it, in the sensor's pixels, which [`in_crop`]
+/// and [`placed_frame`] only compare with each other; and where the crop
+/// starts, which only a point placed from a table moves by.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 struct CropHiSpeed {
     /// The crop setting, its first value, such as 11 for FX uncropped.
@@ -1278,6 +1345,10 @@ struct CropHiSpeed {
     original: Size,
     /// The cropped width and height.
     cropped: Size,
+    /// The crop's left column and top row, its sixth and seventh values:
+    /// (1040, 696) on a D600 DX frame, the origin of the centred window of
+    /// its 6016 by 4016 output frame, in output pixels, (0, 0) uncropped.
+    origin: Point,
 }
 
 impl CropHiSpeed {
@@ -1352,8 +1423,8 @@ fn crop_hi_speed<R: Read + Seek>(
             original_height,
             cropped_width,
             cropped_height,
-            _left,
-            _top,
+            left,
+            top,
         ],
     ) = values.as_deref()
     else {
@@ -1369,6 +1440,7 @@ fn crop_hi_speed<R: Read + Seek>(
             width: cropped_width,
             height: cropped_height,
         },
+        origin: Point { x: left, y: top },
     }))
 }
 
@@ -1518,6 +1590,114 @@ fn shifted(value: u32, frame: u32, window: u32) -> Option<u32> {
     value.checked_sub(frame.checked_sub(window)? / 2)
 }
 
+/// The points that `named`, what a record with no position names, names,
+/// placed from `table`, the table of the body the file's Model names, by
+/// the decision to place a point that the camera names by number from the
+/// body's table (ADR018); `None` when they cannot be placed.
+///
+/// The record names points of the table only when its layout code is the
+/// table's; any other code, such as 0 on a manual-focus or live-view shot,
+/// names none. The list then holds every point of the table that is the
+/// primary, the one whose number is `named`'s, or whose bit the mask sets
+/// ([`PointTable::bit`]), in the table's order, which is number order;
+/// each with its number, the table's centre and box, nothing said of
+/// whether focus was confirmed, since version 0100's in-focus byte is the
+/// contrast-detect result, and the origin [`FocusOrigin::Table`]. So a set
+/// bit the table lacks is skipped; an empty mask, or one that names no
+/// point of the table, gives the primary alone; and a mask that leaves out
+/// the primary's own bit gives its points and the primary. The primary is
+/// marked: `None` when the table has no point of its number, as for 0,
+/// which names none, or a number past the table.
+///
+/// The frame is the table's, or on a crop the crop's window, into which
+/// every centre moves back by CropHiSpeed's origin, the box kept
+/// ([`placed_frame`]). A point that no longer lies on the window by the
+/// rule every focus point is checked by ([`lies_on`]), its centre outside
+/// it or its box across an edge, is dropped; the primary dropped costs the
+/// whole list.
+fn placed(
+    named: NamedPoints,
+    table: &PointTable,
+    crop: Option<CropHiSpeed>,
+    pixels: Option<Size>,
+) -> Option<FocusPoints> {
+    if named.layout_code != table.layout_code() {
+        return None;
+    }
+    let (frame, origin) = placed_frame(table, crop, pixels)?;
+    let mut points = FocusPoints::new(frame, FocusOrigin::Table)?;
+    let mut primary = None;
+    for point in table.points() {
+        let number = point.number();
+        let is_primary = number == named.primary;
+        if !is_primary && !table.bit(number).is_some_and(|bit| named.marks(bit)) {
+            continue;
+        }
+        let (center, size) = (point.center(), point.size());
+        // A centre left or above the window lies outside it, as one past
+        // its right or bottom edge does.
+        let (Some(x), Some(y)) = (
+            center.x.checked_sub(origin.x),
+            center.y.checked_sub(origin.y),
+        ) else {
+            continue;
+        };
+        let center = Point { x, y };
+        if !lies_on(frame, center, Some(size)) {
+            continue;
+        }
+        if is_primary {
+            primary = Some(points.points().len());
+        }
+        // `lies_on` is the rule `with_point` checks, so it refuses none
+        // here: the `?` never returns.
+        points = points.with_point(FocusPoint::new(center).with_number(number).with_size(size))?;
+    }
+    points.with_primary(primary?)
+}
+
+/// The frame of the points placed from `table`, and the origin their
+/// centres move back by: on a file that is no crop, whose CropHiSpeed,
+/// `crop`, records a cropped size equal to its original size or is
+/// missing, the table's frame, the body's full-size output, and no move.
+///
+/// On a crop, only when the table's record confirms the crop's setting
+/// ([`PointTable::confirms_crop`]): the crop's window, the table's frame
+/// less twice CropHiSpeed's origin on each side, 3936 by 2624 on a D600 DX
+/// frame, and that origin, by the decision to measure a placed point on a
+/// crop in the crop's window (ADR019). In a JPEG, whose own size is
+/// `pixels`, the window must be that size, which on the D600 is the full
+/// image size: a crop-mode JPEG at a smaller size gives none (ADR018). An
+/// uncropped JPEG keeps the table's frame at any size, which the JPEG
+/// reader then holds to the picture's shape.
+///
+/// `None` on a crop the record does not confirm, for an origin too large
+/// for the frame, and for a JPEG whose size is not the window's. A window
+/// with a zero side, which no list can be measured in, is refused by
+/// [`FocusPoints::new`].
+fn placed_frame(
+    table: &PointTable,
+    crop: Option<CropHiSpeed>,
+    pixels: Option<Size>,
+) -> Option<(Size, Point)> {
+    let frame = table.frame();
+    let Some(crop) = crop.filter(|crop| crop.cropped != crop.original) else {
+        return Some((frame, Point { x: 0, y: 0 }));
+    };
+    if !table.confirms_crop(crop.mode) {
+        return None;
+    }
+    let origin = crop.origin;
+    let window = Size {
+        width: frame.width.checked_sub(origin.x.checked_mul(2)?)?,
+        height: frame.height.checked_sub(origin.y.checked_mul(2)?)?,
+    };
+    if pixels.is_some_and(|pixels| pixels != window) {
+        return None;
+    }
+    Some((window, origin))
+}
+
 /// Whether `makernote`'s FocusMode records manual focus: whether it is of
 /// type ASCII and reads `MANUAL`, exactly, by the rule every text value of
 /// the metadata is read by ([`tiff_metadata::text`]), which cuts it at its
@@ -1543,6 +1723,12 @@ fn manual_focus<R: Read + Seek>(src: &mut Source<R>, makernote: &MakerNote) -> R
 /// tables, confirmed on the public samples whose fields hold values. The
 /// area mode is not here: it is byte 5, read with the detection method at
 /// byte 4, on every version, which [`af_info2_record`] reads.
+///
+/// The points a record with no position names, the layout code, the
+/// primary point's number and the mask of the points used, are read on
+/// version 0100 alone, where a table's frames checked them: the other
+/// versions keep them at offsets of their own, which the NEF notes record
+/// and no table yet checks.
 #[derive(Clone, Copy, Debug)]
 struct Layout {
     /// How long a value of this version is, at least: the length of the
@@ -1557,6 +1743,10 @@ struct Layout {
     /// The byte that says whether focus was confirmed, on the versions
     /// that have one.
     in_focus: Option<usize>,
+    /// The layout code, followed by the primary point's number and the
+    /// mask of the points used ([`NamedPoints`]), on the version read for
+    /// them, 0100.
+    named: Option<usize>,
 }
 
 /// The layout of AFInfo2 version `version`, its first four bytes: `None`
@@ -1572,6 +1762,7 @@ fn layout(version: &[u8]) -> Option<Layout> {
             center: 20,
             area: 24,
             in_focus: Some(28),
+            named: Some(6),
         }),
         b"0101" => Some(Layout {
             min_len: 84,
@@ -1579,6 +1770,7 @@ fn layout(version: &[u8]) -> Option<Layout> {
             center: 74,
             area: 78,
             in_focus: Some(82),
+            named: None,
         }),
         b"0300" | b"0301" => Some(Layout {
             min_len: 60,
@@ -1586,6 +1778,7 @@ fn layout(version: &[u8]) -> Option<Layout> {
             center: 46,
             area: 50,
             in_focus: None,
+            named: None,
         }),
         b"0400" | b"0401" | b"0402" => Some(Layout {
             min_len: 80,
@@ -1593,6 +1786,7 @@ fn layout(version: &[u8]) -> Option<Layout> {
             center: 66,
             area: 70,
             in_focus: Some(74),
+            named: None,
         }),
         _ => None,
     }
@@ -1600,8 +1794,9 @@ fn layout(version: &[u8]) -> Option<Layout> {
 
 /// What an AFInfo2 value records of the focus point, read but not yet
 /// checked: the frame, the centre of the focus area in it, the area's
-/// size, whether focus was confirmed, on the versions that say, and the
-/// area mode, when its code names one.
+/// size, whether focus was confirmed, on the versions that say, the area
+/// mode, when its code names one, and, on the version read for them, the
+/// points the record names.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 struct FocusRecord {
     /// The frame the centre and the area are measured in.
@@ -1617,18 +1812,33 @@ struct FocusRecord {
     /// under the detection method recorded, holds a code [`area_mode`]
     /// does not name.
     area_mode: Option<AfAreaMode>,
+    /// The points the record names, read on version 0100 alone: what a
+    /// record with no position gives, placed from a table.
+    named: Option<NamedPoints>,
 }
 
 impl FocusRecord {
+    /// Whether the record records a position: whether its frame and its
+    /// area have no zero side. A shot through a DSLR's viewfinder writes a
+    /// zero frame and area, and names its points instead
+    /// ([`NamedPoints`]). A record of a position is checked further, as
+    /// recorded, by [`focus`](Self::focus), and one that fails gives no
+    /// point, whatever it names.
+    fn records_position(self) -> bool {
+        let Self { frame, area, .. } = self;
+        frame.width != 0 && frame.height != 0 && area.width != 0 && area.height != 0
+    }
+
     /// The focus point this record describes: `None` when [`Focus::new`]
     /// or [`Focus::with_size`] refuses it, for a frame or an area with a
     /// zero side, which is how a shot through a DSLR's viewfinder says it
     /// records no position, a centre outside the frame, or an area that
     /// does not fit inside the frame around its centre.
     ///
-    /// [`in_crop`] calls it on the record as recorded, on every file, and
-    /// on a crop that keeps one side again, on the record moved into the
-    /// cropped picture.
+    /// [`in_crop`] calls it on the record as recorded, on every record of
+    /// a position ([`records_position`](Self::records_position)), and on a
+    /// crop that keeps one side again, on the record moved into the cropped
+    /// picture.
     fn focus(self) -> Option<Focus> {
         // An area that `with_size` refuses costs the whole focus, not only
         // the area. A zero side is how a Nikon file says it records no
@@ -1646,13 +1856,15 @@ impl FocusRecord {
 /// What the AFInfo2 value `value` records, its SHORTs in byte order
 /// `order`: the frame, the centre and the area at its version's
 /// [`layout`]; the in-focus byte, when the layout has one, as `true` for 1,
-/// `false` for 0, and nothing said for any other value; and the area mode
+/// `false` for 0, and nothing said for any other value; the area mode
 /// that byte 5 names under the detection method of byte 4, both the same
-/// on every version ([`area_mode`]).
+/// on every version ([`area_mode`]); and, when the layout keeps them, on
+/// version 0100, the points the record names ([`named_points`]).
 ///
 /// `None` when the version is not one read, or the value is shorter than
-/// its layout. The values are not checked here: [`in_crop`] checks them,
-/// as recorded, with [`FocusRecord::focus`], before it places them.
+/// its layout. The values are not checked here: [`in_crop`] checks a
+/// position, as recorded, with [`FocusRecord::focus`], before it places
+/// it, and [`placed`] the points named against the body's table.
 fn af_info2_record(value: &[u8], order: ByteOrder) -> Option<FocusRecord> {
     let layout = layout(value.get(..4)?)?;
     if value.len() < layout.min_len {
@@ -1677,12 +1889,58 @@ fn af_info2_record(value: &[u8], order: ByteOrder) -> Option<FocusRecord> {
         (Some(&detection), Some(&code)) => area_mode(detection, code),
         _ => None,
     };
+    let named = layout.named.and_then(|at| named_points(value, at));
     Some(FocusRecord {
         frame,
         center: Point { x, y },
         area,
         in_focus,
         area_mode,
+        named,
+    })
+}
+
+/// What a record with no position names of the points the camera used: a
+/// shot through a DSLR's viewfinder writes the layout of points the
+/// numbers belong to, the primary point's number and a mask of the points
+/// used, which only a table of the body's points places ([`placed`]).
+/// Read on version 0100 alone ([`Layout::named`]), where the D600's frames
+/// checked them.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct NamedPoints {
+    /// The layout code, AFInfo2's FocusPointSchema, byte 6: 3 for the
+    /// D600's 39 points, and 0, no layout, on a live-view or manual-focus
+    /// shot.
+    layout_code: u8,
+    /// The primary point's number, byte 7: the point the camera focused
+    /// on, and 0 for none.
+    primary: u8,
+    /// The mask of the points used, bytes 8 to 14, whose bits the table's
+    /// bit order ties to its points ([`PointTable::bit`]).
+    mask: [u8; points::MASK_LEN],
+}
+
+impl NamedPoints {
+    /// Whether the mask sets bit `bit`, counted from the least significant
+    /// bit of its first byte: bit `bit % 8` of byte `bit / 8`. `false` for
+    /// a bit past the mask.
+    fn marks(self, bit: usize) -> bool {
+        self.mask
+            .get(bit / 8)
+            .is_some_and(|&byte| (byte >> (bit % 8)) & 1 == 1)
+    }
+}
+
+/// The points that the AFInfo2 value `value` names at `at`, where its
+/// layout keeps them ([`Layout::named`]): the layout code at `at`, the
+/// primary point's number after it, and the mask of the points used after
+/// that; `None` when they do not all lie inside the value.
+fn named_points(value: &[u8], at: usize) -> Option<NamedPoints> {
+    let (&[layout_code, primary], rest) = value.get(at..)?.split_first_chunk::<2>()?;
+    Some(NamedPoints {
+        layout_code,
+        primary,
+        mask: *rest.first_chunk()?,
     })
 }
 
@@ -1777,7 +2035,6 @@ mod tests {
     use crate::container::tiff::{self, parse_ifd, walk};
     use crate::datetime::DateTime;
     use crate::error::ErrorKind;
-    use crate::focus::FocusOrigin;
     use crate::formats::testing::byte_order;
     use crate::jpeg_stub::jpeg_stub;
     use crate::testing::{FAR, FailsFar};
@@ -4221,7 +4478,8 @@ mod tests {
             });
             assert_eq!(manual.focus_points(), None, "{order:?}");
             // A zero frame, as a DSLR writes through the viewfinder, beside
-            // an area mode that is named.
+            // an area mode that is named, in a file with no Model, so no
+            // table to place a point from.
             let viewfinder = Recorded {
                 frame: [0, 0],
                 center: [0, 0],
@@ -4237,63 +4495,585 @@ mod tests {
         }
     }
 
+    /// A record of no position: a zero frame, centre and area, and an
+    /// in-focus byte of 0, as a D600 shot through the viewfinder writes it.
+    const NO_POSITION: Recorded = Recorded {
+        frame: [0, 0],
+        center: [0, 0],
+        area: [0, 0],
+        in_focus: 0,
+    };
+
+    /// `value`, an AFInfo2 value, naming points where version 0100 keeps
+    /// them, written out here apart from [`Layout`]: the layout code
+    /// `layout_code` at byte 6, the primary point `primary` at byte 7, and
+    /// the mask's `bits` set in bytes 8 to 14, bit k as bit k % 8 of byte
+    /// 8 + k / 8.
+    fn naming(mut value: Vec<u8>, layout_code: u8, primary: u8, bits: &[usize]) -> Vec<u8> {
+        value[6] = layout_code;
+        value[7] = primary;
+        for &bit in bits {
+            value[8 + bit / 8] |= 1 << (bit % 8);
+        }
+        value
+    }
+
+    /// An AFInfo2 value of version `version`, one of those read, in byte
+    /// order `order`, that records no position and names points as
+    /// [`naming`] writes them, with detection method 0 and area mode 0.
+    fn viewfinder(
+        order: Order,
+        version: &str,
+        layout_code: u8,
+        primary: u8,
+        bits: &[usize],
+    ) -> Vec<u8> {
+        naming(
+            af_info2(order, version, NO_POSITION),
+            layout_code,
+            primary,
+            bits,
+        )
+    }
+
     /// The AFInfo2 value, version 0100, in byte order `order`, of a D600
     /// shot through the viewfinder in single-point autofocus with point 38,
     /// as frame 4 of the D600 session in the NEF notes records it: detection
     /// method 0, area mode 0, layout code 3, primary point 38, bit 37 of the
     /// mask set, and a zero frame and area.
     fn d600_viewfinder(order: Order) -> Vec<u8> {
-        let zero = Recorded {
-            frame: [0, 0],
-            center: [0, 0],
-            area: [0, 0],
-            in_focus: 0,
-        };
-        let mut value = af_info2(order, "0100", zero);
-        value[6] = 3;
-        value[7] = 38;
-        value[8 + 37 / 8] = 1 << (37 % 8);
-        value
+        viewfinder(order, "0100", 3, 38, &[37])
     }
 
-    /// The metadata of a raw file in byte order `order` whose IFD0's Model
-    /// is `model` and whose MakerNote holds what `tags` adds to its
-    /// MakerNote IFD.
-    fn model_metadata(
+    /// The D600's CropHiSpeed with the crop off, as its FX frames record it.
+    const D600_FX: [u16; 7] = [0, 6080, 4028, 6080, 4028, 0, 0];
+
+    /// The D600's CropHiSpeed in the DX crop, as frames 49 to 51 record it.
+    const D600_DX: [u16; 7] = [2, 6080, 4028, 3968, 2636, 1040, 696];
+
+    /// The D600's DX CropHiSpeed with the origin (`left`, `top`) and the
+    /// cropped size its window would have, so that a test can move the
+    /// window.
+    fn d600_dx_at(left: u16, top: u16) -> [u16; 7] {
+        [
+            2,
+            6080,
+            4028,
+            6016_u16.saturating_sub(left.saturating_mul(2)),
+            4016_u16.saturating_sub(top.saturating_mul(2)),
+            left,
+            top,
+        ]
+    }
+
+    /// A file in byte order `order` that holds no raw data, whose IFD0's
+    /// Model is `model` and whose MakerNote holds the FocusMode
+    /// `focus_mode`, the AFInfo2 value `af_info2` and, when given, the
+    /// CropHiSpeed `crop_hi_speed`, as SHORTs.
+    fn shot_file(
         order: Order,
         model: &str,
-        tags: impl FnOnce(&mut TiffBuilder, IfdId),
-    ) -> Metadata {
-        let block = tags_block(order, tags).0;
+        focus_mode: &str,
+        af_info2: &[u8],
+        crop_hi_speed: Option<[u16; 7]>,
+    ) -> Vec<u8> {
+        let block = tags_block(order, |inner, ifd| {
+            inner.ascii(ifd, FOCUS_MODE, focus_mode);
+            if let Some(values) = crop_hi_speed {
+                inner.short(ifd, CROP_HI_SPEED, &values);
+            }
+            inner.undefined(ifd, AF_INFO2, af_info2);
+        })
+        .0;
         let count = whole(&block);
-        metadata_of(nikon_file_with(
-            order,
-            AT,
-            &block,
-            TAIL,
-            |builder, ifd0, exif| {
-                builder.ascii(ifd0, MODEL, model);
-                entry_at(builder, exif, MAKER_NOTE, UNDEFINED, AT, count);
-            },
-        ))
+        nikon_file_with(order, AT, &block, TAIL, |builder, ifd0, exif| {
+            builder.ascii(ifd0, MODEL, model);
+            entry_at(builder, exif, MAKER_NOTE, UNDEFINED, AT, count);
+        })
+    }
+
+    /// The metadata of the file [`shot_file`] builds, read as a raw file,
+    /// in autofocus, `AF-S  `.
+    fn shot(
+        order: Order,
+        model: &str,
+        af_info2: &[u8],
+        crop_hi_speed: Option<[u16; 7]>,
+    ) -> Metadata {
+        metadata_of(shot_file(order, model, "AF-S  ", af_info2, crop_hi_speed))
+    }
+
+    /// The metadata of the file [`shot_file`] builds for a D600, in
+    /// autofocus, read as a JPEG whose frame header gives `pixels`.
+    fn d600_jpeg(
+        order: Order,
+        af_info2: &[u8],
+        crop_hi_speed: Option<[u16; 7]>,
+        pixels: [u32; 2],
+    ) -> Metadata {
+        let file = shot_file(order, "NIKON D600", "AF-S  ", af_info2, crop_hi_speed);
+        jpeg_metadata_of(file, pixels)
+    }
+
+    /// The box of every D600 point, 164 by 164.
+    const D600_BOX: Size = Size {
+        width: 164,
+        height: 164,
+    };
+
+    /// The points placed from a table in a frame of `frame`: each of
+    /// `points`, its number and its centre, in that order, with the D600's
+    /// box and nothing said of focus; the one numbered `primary` the
+    /// primary; the area mode `mode`; the origin a table. Built here from
+    /// the record's values in the NEF notes, apart from [`placed`].
+    fn placed_list(
+        frame: [u32; 2],
+        points: &[(u8, [u32; 2])],
+        primary: u8,
+        mode: AfAreaMode,
+    ) -> FocusPoints {
+        let [width, height] = frame;
+        let mut list = FocusPoints::new(Size { width, height }, FocusOrigin::Table).unwrap();
+        for &(number, [x, y]) in points {
+            let point = FocusPoint::new(Point { x, y })
+                .with_number(number)
+                .with_size(D600_BOX);
+            list = list.with_point(point).expect("a point on the frame");
+        }
+        let index = points
+            .iter()
+            .position(|&(number, _)| number == primary)
+            .expect("the primary among the points");
+        list.with_primary(index).unwrap().with_area_mode(mode)
+    }
+
+    /// Point 38, B1, at (1812, 1705) in the D600's 6016 by 4016 frame, as
+    /// the record in the NEF notes gives it.
+    const B1: (u8, [u32; 2]) = (38, [1812, 1705]);
+
+    #[test]
+    fn a_d600_viewfinder_shot_gives_the_point_it_names_placed_from_the_table() {
+        // Frame 4 of the D600 session: a viewfinder shot that names point
+        // 38, with the crop off or no CropHiSpeed at all. The point is
+        // placed from the table, in its 6016 by 4016 frame, with the box
+        // of 164 by 164, from a table, and nothing said of focus, though
+        // the in-focus byte reads 0; the list is that point, numbered, the
+        // primary, single point.
+        let frame = Size {
+            width: 6016,
+            height: 4016,
+        };
+        let expected = Focus::new(frame, Point { x: 1812, y: 1705 })
+            .and_then(|focus| focus.with_size(D600_BOX))
+            .unwrap()
+            .with_origin(FocusOrigin::Table);
+        for order in ORDERS {
+            for crop in [Some(D600_FX), None] {
+                let what = format!("{order:?}, {crop:?}");
+                let metadata = shot(order, "NIKON D600", &d600_viewfinder(order), crop);
+                assert_eq!(metadata.focus(), Some(expected), "{what}");
+                assert_eq!(
+                    metadata.focus_points(),
+                    Some(&placed_list([6016, 4016], &[B1], 38, AfAreaMode::Single)),
+                    "{what}"
+                );
+            }
+        }
     }
 
     #[test]
-    fn a_d600_viewfinder_shot_gives_no_focus_point() {
-        // Frame 4 of the D600 session: a viewfinder shot that names point
-        // 38. The file gives no focus point, since the reader does not
-        // place a named point.
+    fn a_zero_side_of_the_frame_or_the_area_alone_names_the_points() {
+        // Any zero side says the record records no position, and the
+        // points it names are placed: the frame's width or height, or the
+        // area's, with the other values a valid position's.
+        let valid = Recorded {
+            frame: [6016, 4016],
+            center: [343, 343],
+            area: [540, 540],
+            in_focus: 1,
+        };
         for order in ORDERS {
-            let metadata = model_metadata(order, "NIKON D600", |inner, ifd| {
-                inner.ascii(ifd, FOCUS_MODE, "AF-S  ").undefined(
-                    ifd,
-                    AF_INFO2,
-                    &d600_viewfinder(order),
+            for (what, recorded) in [
+                (
+                    "frame width",
+                    Recorded {
+                        frame: [0, 4016],
+                        ..valid
+                    },
+                ),
+                (
+                    "frame height",
+                    Recorded {
+                        frame: [6016, 0],
+                        ..valid
+                    },
+                ),
+                (
+                    "area width",
+                    Recorded {
+                        area: [0, 540],
+                        ..valid
+                    },
+                ),
+                (
+                    "area height",
+                    Recorded {
+                        area: [540, 0],
+                        ..valid
+                    },
+                ),
+            ] {
+                let value = naming(af_info2(order, "0100", recorded), 3, 38, &[37]);
+                let metadata = shot(order, "NIKON D600", &value, Some(D600_FX));
+                assert_eq!(
+                    metadata.focus_points(),
+                    Some(&placed_list([6016, 4016], &[B1], 38, AfAreaMode::Single)),
+                    "{order:?}, {what}"
                 );
-            });
-            assert_eq!(metadata.focus(), None, "{order:?}");
+            }
+        }
+    }
+
+    #[test]
+    fn a_record_of_a_position_keeps_the_recorded_path_whatever_it_names() {
+        // A live-view record of a D600, frame 54's position, beside the
+        // bytes of a viewfinder shot naming point 38: the position, as
+        // recorded. The same with its centre off the frame: no point, the
+        // named one not placed in its stead.
+        let live_view = Recorded {
+            frame: [6016, 4016],
+            center: [343, 343],
+            area: [540, 540],
+            in_focus: 1,
+        };
+        let off_frame = Recorded {
+            center: [7000, 343],
+            ..live_view
+        };
+        for order in ORDERS {
+            let value = naming(af_info2(order, "0100", live_view), 3, 38, &[37]);
+            let metadata = shot(order, "NIKON D600", &value, Some(D600_FX));
+            let focus = Some(expected(live_view, Some(true)));
+            assert_eq!(metadata.focus(), focus, "{order:?}");
+            assert_eq!(
+                metadata.focus_points(),
+                focus
+                    .map(FocusPoints::from)
+                    .map(|points| points.with_area_mode(AfAreaMode::Single))
+                    .as_ref(),
+                "{order:?}"
+            );
+            let value = naming(af_info2(order, "0100", off_frame), 3, 38, &[37]);
+            let metadata = shot(order, "NIKON D600", &value, Some(D600_FX));
             assert_eq!(metadata.focus_points(), None, "{order:?}");
         }
+    }
+
+    #[test]
+    fn a_named_point_is_placed_only_under_every_condition() {
+        // Each condition failing alone, beside frame 4's bytes, gives no
+        // point and no list: manual focus; version 0101, with the same
+        // bytes where 0100 keeps them; a Model without a table, the D610,
+        // whose layout is the D600's; layout code 2, the 11-point layout,
+        // or 0, none; the number 0, none, 40, one past the table, or 255.
+        for order in ORDERS {
+            let mut cases = vec![
+                (
+                    "manual focus",
+                    metadata_of(shot_file(
+                        order,
+                        "NIKON D600",
+                        "MANUAL",
+                        &d600_viewfinder(order),
+                        Some(D600_FX),
+                    )),
+                ),
+                (
+                    "version 0101",
+                    shot(
+                        order,
+                        "NIKON D600",
+                        &viewfinder(order, "0101", 3, 38, &[37]),
+                        Some(D600_FX),
+                    ),
+                ),
+                (
+                    "no table",
+                    shot(order, "NIKON D610", &d600_viewfinder(order), Some(D600_FX)),
+                ),
+            ];
+            for (what, code) in [("layout code 2", 2), ("layout code 0", 0)] {
+                let value = viewfinder(order, "0100", code, 38, &[37]);
+                cases.push((what, shot(order, "NIKON D600", &value, Some(D600_FX))));
+            }
+            for (what, number) in [("number 0", 0), ("number 40", 40), ("number 255", 255)] {
+                let value = viewfinder(order, "0100", 3, number, &[]);
+                cases.push((what, shot(order, "NIKON D600", &value, Some(D600_FX))));
+            }
+            for (what, metadata) in cases {
+                assert_eq!(metadata.focus(), None, "{order:?}, {what}");
+                assert_eq!(metadata.focus_points(), None, "{order:?}, {what}");
+            }
+        }
+    }
+
+    #[test]
+    fn the_mask_names_the_points_used_in_number_order() {
+        let d600 = |order, primary, bits: &[usize]| {
+            shot(
+                order,
+                "NIKON D600",
+                &viewfinder(order, "0100", 3, primary, bits),
+                Some(D600_FX),
+            )
+        };
+        for order in ORDERS {
+            // Frame 44, auto-area: area mode 8, primary point 4, nine bits
+            // set out of number order. The list is the nine points in
+            // number order, centres from the record.
+            let mut value = viewfinder(order, "0100", 3, 4, &[3, 8, 13, 17, 20, 23, 26, 29, 38]);
+            value[5] = 8;
+            let metadata = shot(order, "NIKON D600", &value, Some(D600_FX));
+            let frame_44 = [
+                (4, [3008, 2258]),
+                (9, [3247, 2258]),
+                (14, [2768, 2258]),
+                (18, [3486, 2308]),
+                (21, [3724, 2308]),
+                (24, [3963, 2308]),
+                (27, [4203, 2308]),
+                (30, [2529, 2308]),
+                (39, [1812, 2308]),
+            ];
+            assert_eq!(
+                metadata.focus_points(),
+                Some(&placed_list([6016, 4016], &frame_44, 4, AfAreaMode::Auto)),
+                "{order:?}, frame 44"
+            );
+            // Every bit of the seven bytes set: the table's 39 points, in
+            // number order, and the 17 bits past them skipped.
+            let every_bit: Vec<usize> = (0..56).collect();
+            let points = d600(order, 38, &every_bit).focus_points().cloned();
+            let points = points.expect("every point");
+            let numbers: Vec<Option<u8>> = points.points().iter().map(FocusPoint::number).collect();
+            assert_eq!(numbers, (1..=39).map(Some).collect::<Vec<_>>(), "{order:?}");
+            assert_eq!(points.primary().and_then(FocusPoint::number), Some(38));
+            // An empty mask, or one whose bits the table lacks: the primary
+            // alone.
+            let alone = placed_list([6016, 4016], &[B1], 38, AfAreaMode::Single);
+            for bits in [&[][..], &[39, 47, 55]] {
+                let metadata = d600(order, 38, bits);
+                assert_eq!(metadata.focus_points(), Some(&alone), "{order:?}, {bits:?}");
+            }
+            // A mask without the primary's own bit: its points and the
+            // primary, in number order.
+            let metadata = d600(order, 38, &[0, 38]);
+            let expected = placed_list(
+                [6016, 4016],
+                &[(1, [3008, 2007]), B1, (39, [1812, 2308])],
+                38,
+                AfAreaMode::Single,
+            );
+            assert_eq!(metadata.focus_points(), Some(&expected), "{order:?}");
+            assert_eq!(
+                metadata.focus().map(|focus| focus.center()),
+                Some(Point { x: 1812, y: 1705 }),
+                "{order:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_dx_crop_places_the_points_in_the_crop_window() {
+        // CropHiSpeed's DX crop, setting 2 with the origin (1040, 696): the
+        // frame is the window, 6016 - 2 * 1040 by 4016 - 2 * 696, 3936 by
+        // 2624, and every centre moves back by the origin, the box kept.
+        // Frame 49's point 38 lands at (772, 1009) and frame 50's point 27
+        // at (3163, 1612); a list of points 1, 27 and 38 moves whole.
+        for order in ORDERS {
+            for (primary, bits, points) in [
+                (38, &[37][..], &[(38, [772, 1009])][..]),
+                (27, &[26], &[(27, [3163, 1612])]),
+                (
+                    1,
+                    &[0, 26, 37],
+                    &[(1, [1968, 1311]), (27, [3163, 1612]), (38, [772, 1009])],
+                ),
+            ] {
+                let value = viewfinder(order, "0100", 3, primary, bits);
+                let metadata = shot(order, "NIKON D600", &value, Some(D600_DX));
+                assert_eq!(
+                    metadata.focus_points(),
+                    Some(&placed_list(
+                        [3936, 2624],
+                        points,
+                        primary,
+                        AfAreaMode::Single
+                    )),
+                    "{order:?}, point {primary}"
+                );
+            }
+            // Setting 2 with the two sizes equal is no crop: the table's
+            // frame.
+            let no_crop = [2, 6080, 4028, 6080, 4028, 1040, 696];
+            let metadata = shot(order, "NIKON D600", &d600_viewfinder(order), Some(no_crop));
+            assert_eq!(
+                metadata.focus_points(),
+                Some(&placed_list([6016, 4016], &[B1], 38, AfAreaMode::Single)),
+                "{order:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_crop_the_table_does_not_confirm_gives_no_placed_point() {
+        // The D600's record confirms the DX crop alone, setting 2: any
+        // other crop setting with the DX crop's sizes and origin gives no
+        // point, 1.3x, 16:9, 1:1 and the others CropHiSpeed records.
+        for order in ORDERS {
+            for code in [0, 1, 6, 9, 10, 11, 12, 17, 18] {
+                let [_, rest @ ..] = D600_DX;
+                let mut crop = [code; 7];
+                crop[1..].copy_from_slice(&rest);
+                let metadata = shot(order, "NIKON D600", &d600_viewfinder(order), Some(crop));
+                assert_eq!(metadata.focus_points(), None, "{order:?}, setting {code}");
+            }
+        }
+    }
+
+    #[test]
+    fn a_point_the_crop_window_leaves_out_is_dropped() {
+        for order in ORDERS {
+            // The window moved to the origin (1740, 696), 2536 by 2624:
+            // point 38 at (72, 1009), whose box of 164 crosses the left
+            // edge, and point 25 at (2463, 1311), whose box crosses the
+            // right one, are dropped; points 1 and 11 stay.
+            let value = viewfinder(order, "0100", 3, 1, &[10, 24, 37]);
+            let metadata = shot(order, "NIKON D600", &value, Some(d600_dx_at(1740, 696)));
+            let expected = placed_list(
+                [2536, 2624],
+                &[(1, [1268, 1311]), (11, [1028, 1311])],
+                1,
+                AfAreaMode::Single,
+            );
+            assert_eq!(metadata.focus_points(), Some(&expected), "{order:?}");
+            // At the origin (1730, 696), point 38's box reaches the left
+            // edge exactly, at (82, 1009), and is kept.
+            let value = viewfinder(order, "0100", 3, 1, &[37]);
+            let metadata = shot(order, "NIKON D600", &value, Some(d600_dx_at(1730, 696)));
+            let expected = placed_list(
+                [2556, 2624],
+                &[(1, [1278, 1311]), (38, [82, 1009])],
+                1,
+                AfAreaMode::Single,
+            );
+            assert_eq!(metadata.focus_points(), Some(&expected), "{order:?}");
+            // At the origin (1900, 696), point 38's centre lies left of the
+            // window: dropped.
+            let metadata = shot(order, "NIKON D600", &value, Some(d600_dx_at(1900, 696)));
+            let expected = placed_list([2216, 2624], &[(1, [1108, 1311])], 1, AfAreaMode::Single);
+            assert_eq!(metadata.focus_points(), Some(&expected), "{order:?}");
+            // The primary dropped, by its box or by its centre: no point.
+            for left in [1740, 1900] {
+                let metadata = shot(
+                    order,
+                    "NIKON D600",
+                    &d600_viewfinder(order),
+                    Some(d600_dx_at(left, 696)),
+                );
+                assert_eq!(metadata.focus_points(), None, "{order:?}, {left}");
+            }
+        }
+    }
+
+    #[test]
+    fn a_crop_window_with_no_room_gives_no_placed_point() {
+        // An origin of half the frame leaves a window with a zero side,
+        // and one past it no window; the largest SHORTs, too.
+        for order in ORDERS {
+            for (left, top) in [(3008, 696), (3009, 696), (1040, 2008), (1040, 2009)] {
+                let value = viewfinder(order, "0100", 3, 1, &[0]);
+                let metadata = shot(order, "NIKON D600", &value, Some(d600_dx_at(left, top)));
+                assert_eq!(metadata.focus_points(), None, "{order:?}, {left}, {top}");
+            }
+            let largest = [2, 6080, 4028, 3968, 2636, u16::MAX, u16::MAX];
+            let metadata = shot(order, "NIKON D600", &d600_viewfinder(order), Some(largest));
+            assert_eq!(metadata.focus_points(), None, "{order:?}");
+        }
+    }
+
+    #[test]
+    fn a_d600_jpeg_gives_the_point_its_raw_file_gives() {
+        for order in ORDERS {
+            // Uncropped, at full size and at a quarter of it: the table's
+            // frame, whatever the JPEG's size; the JPEG reader holds it to
+            // the picture's shape.
+            for pixels in [[6016, 4016], [1504, 1004]] {
+                let metadata = d600_jpeg(order, &d600_viewfinder(order), Some(D600_FX), pixels);
+                assert_eq!(
+                    metadata.focus_points(),
+                    Some(&placed_list([6016, 4016], &[B1], 38, AfAreaMode::Single)),
+                    "{order:?}, {pixels:?}"
+                );
+            }
+            // In DX at full size, the window's 3936 by 2624: frame 49's
+            // point, as in its NEF.
+            let metadata = d600_jpeg(order, &d600_viewfinder(order), Some(D600_DX), [3936, 2624]);
+            assert_eq!(
+                metadata.focus_points(),
+                Some(&placed_list(
+                    [3936, 2624],
+                    &[(38, [772, 1009])],
+                    38,
+                    AfAreaMode::Single
+                )),
+                "{order:?}"
+            );
+            // In DX at a smaller size, or a pixel off the window: none.
+            for pixels in [[2944, 1968], [1968, 1312], [3936, 2625], [3935, 2624]] {
+                let metadata = d600_jpeg(order, &d600_viewfinder(order), Some(D600_DX), pixels);
+                assert_eq!(metadata.focus_points(), None, "{order:?}, {pixels:?}");
+            }
+        }
+    }
+
+    #[test]
+    fn points_named_past_the_value_give_none_and_never_a_panic() {
+        // A version 0100 value cut short of its 30 bytes, by 7 or more,
+        // gives no record at all; the named points read at byte 6 need 9
+        // bytes there.
+        for order in ORDERS {
+            let value = d600_viewfinder(order);
+            for len in [23, 15, 8, 4] {
+                let metadata = shot(order, "NIKON D600", &value[..len], Some(D600_FX));
+                assert_eq!(metadata.focus_points(), None, "{order:?}, {len}");
+            }
+            // Every byte after the version set: a position that does not
+            // hold. With a zero frame and area besides: layout code 255,
+            // which names nothing.
+            let mut garbage = value.clone();
+            garbage[4..].fill(0xFF);
+            assert_eq!(
+                shot(order, "NIKON D600", &garbage, Some(D600_FX)).focus_points(),
+                None,
+                "{order:?}"
+            );
+            garbage[16..28].fill(0);
+            assert_eq!(
+                shot(order, "NIKON D600", &garbage, Some(D600_FX)).focus_points(),
+                None,
+                "{order:?}"
+            );
+        }
+        let value = d600_viewfinder(Order::Little);
+        assert_eq!(named_points(&value[..14], 6), None);
+        assert_eq!(named_points(&value, usize::MAX), None);
+        let named = named_points(&value[..15], 6).expect("nine bytes from 6");
+        assert_eq!((named.layout_code, named.primary), (3, 38));
+        assert!(named.marks(37));
+        assert!(!named.marks(36));
+        assert!(!named.marks(56));
+        assert!(!named.marks(usize::MAX));
     }
 
     /// What a crop test's file holds besides AFInfo2: the size of its raw

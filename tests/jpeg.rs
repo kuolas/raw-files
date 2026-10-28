@@ -1047,7 +1047,8 @@ fn an_older_nikon_jpeg_takes_what_its_exif_lacks_from_its_makernote() {
     // The D5300's JPEG records no serial number, lens range or offset from
     // UTC in its Exif segment: the MakerNote gives them, the offset from
     // its WorldTime's zone. Its AFInfo2 records a zero frame, a shot
-    // through the viewfinder: no focus point.
+    // through the viewfinder, and raw-files has no table of the D5300's
+    // points: no focus point.
     for order in ORDERS {
         let file = d5300_jpeg(order);
         let metadata = camera_metadata_without(&D5300_LOST)
@@ -2752,7 +2753,7 @@ const METADATA: &[SampleMetadata] = &[
         }),
         raw_size: None,
         image_size: Some((6000, 4000)),
-        focus: None, // a viewfinder shot: a zero frame and only a point number
+        focus: None, // a viewfinder shot that names a point: no table for this body
         focus_layout: None,
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),

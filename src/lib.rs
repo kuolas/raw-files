@@ -278,26 +278,30 @@
 //!
 //! Nikon mirrorless bodies, Nikon DSLRs in live view and Sony bodies from
 //! the ILCE-7RM2 on record where they focused as a position, which
-//! [`Metadata::focus`] gives, from a raw file or a JPEG alike. A shot that
-//! records at most the number of an autofocus point or a mask of the
-//! points used, such as a Nikon DSLR's through the viewfinder or a Sony
-//! body's before the ILCE-7RM2, gives `None`, and so does a shot in manual
-//! focus. A Nikon JPEG shot in a crop mode (DX, 1:1, 16:9) records its
-//! point in the camera's full output, and the point is placed on the
-//! JPEG's picture. A JPEG gives its point only when the point's frame has
-//! the picture's shape, so an export cut to another shape or turned
-//! upright gives `None`; one cut from a Nikon crop-mode JPEG is the
-//! exception, and its point may be misplaced.
+//! [`Metadata::focus`] gives, from a raw file or a JPEG alike. A Nikon
+//! DSLR's shot through the viewfinder records only the number of an
+//! autofocus point, which raw-files places from its table of the body's
+//! points where it has one, the Nikon D600's, with the points the camera
+//! used ([`Metadata::focus_points`]) and the origin
+//! [`FocusOrigin::Table`]. Any other shot that records at most the number
+//! of an autofocus point or the points used, one bit per point, such as one
+//! through the viewfinder of a body without a table or a Sony body's before
+//! the ILCE-7RM2, gives `None`, and so does a shot in manual focus. A Nikon
+//! JPEG shot in a crop mode (DX, 1:1, 16:9) records its point in the
+//! camera's full output, and the point is placed on the JPEG's picture. A
+//! JPEG gives its point only when the point's frame has the picture's
+//! shape, so an export cut to another shape or turned upright gives
+//! `None`; one cut from a Nikon crop-mode JPEG is the exception, and its
+//! point may be misplaced.
 //!
 //! # What comes next
 //!
 //! The [roadmap](https://github.com/kuolas/raw-files/blob/master/docs/ROADMAP.md)
-//! plans next the focus point of the shots that record only an autofocus
-//! point's number, such as a DSLR's through the viewfinder, mapped to
-//! pixels through a table of the body's points; then every metadata value
-//! a file records, the ones that only enciphered or encrypted blocks hold
-//! among them; then the raw sensor data; and last a developed linear
-//! image.
+//! plans next the tables of more bodies' autofocus points, each added as
+//! it is measured, so that the shots through those bodies' viewfinders
+//! give their points too; then every metadata value a file records, the
+//! ones that only enciphered or encrypted blocks hold among them; then the
+//! raw sensor data; and last a developed linear image.
 
 // A fuzzing build compiles the reader for one caller, the fuzz entry points,
 // which use only part of it. What is unused there, and so which `expect`s

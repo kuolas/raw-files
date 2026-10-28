@@ -316,7 +316,12 @@ in `tests/fixtures/nikon-d600/`, whose
 frame with what it shows and its SHA-256. A test opens every frame and
 checks what the reader gives it: every frame, whatever the shot, gives
 the layout of the D600's 39 points from the table in the code, by its
-Model, and the point a frame names by number is not placed on it. The
+Model; every frame shot through the viewfinder in autofocus gives the
+points it names placed from the table, the primary as its focus point,
+in the 3936x2624 window of the crop on a DX frame; the manual-focus
+frames give none; and the live-view frames give the position they
+record. The expected values were computed from the bytes and this
+record's table, not from the reader. The
 NX Studio screenshots stay private; the readings taken from them are in
 sections 2.4 to 2.6.
 
@@ -334,9 +339,9 @@ stripped, is still to be committed beside its NEF:
 
 ## 3. Bodies without a table
 
-Every other body is to give no point for a shot that names one, with
-the reason counted. What my own files of other Nikon bodies record,
-read with the same script, as counts only **[F]**:
+Every other body gives no point for a shot that names one, since
+raw-files has no table for it. What my own files of other Nikon bodies
+record, read with the same script, as counts only **[F]**:
 
 | Body | Files | AFInfo2, layout | With a point number | Without | Live view |
 |---|---|---|---|---|---|

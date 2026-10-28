@@ -30,12 +30,14 @@ they stay private. What raw-files reads, milestone by milestone:
   only in enciphered blocks and which wait for milestone 6, and their
   raw image size, because a tag gives an APS-C raw the code of a
   medium one.
-- **Focus points (milestone 4): the first step done.** Both formats
-  give where the camera focused, read from the MakerNote, on Nikon
-  mirrorless bodies, Nikon DSLRs in live view and Sony bodies from the
-  ILCE-7RM2 on. A shot that records only an autofocus point's number
-  gives none until the second step, which places it from a table of the
-  body's points that the project measures itself.
+- **Focus points (milestone 4): the first step done, the second under
+  way.** Both formats give where the camera focused, read from the
+  MakerNote, on Nikon mirrorless bodies, Nikon DSLRs in live view and
+  Sony bodies from the ILCE-7RM2 on. A shot that records only an
+  autofocus point's number gives none, except on the Nikon D600, the
+  first body whose table of points the project has measured: its shots
+  through the viewfinder give their points placed from that table.
+  Further bodies join as their tables are measured.
 - **Plain JPEG files (milestone 5): done.** A JPEG file, as a camera
   writes it beside its raw file or instead of it, opens with the file
   itself, the thumbnail of its Exif segment, the other images of its
