@@ -135,8 +135,8 @@ and test-data.md describes the sample set that would answer Part 2.
   end-of-image marker are in real files. The Z 9 has neither: each JPEG ends
   with the end-of-image marker exactly at its declared length (files 5146 to
   5148), as does every JPEG of the other 32 files of the CI set. Of 4,942
-  files from the maintainer's D600 and D3200, none is truncated and nine
-  declare a length 513 bytes past the end-of-image marker, with leftover
+  files from my D600 and D3200, none is truncated and nine declare
+  a length 513 bytes past the end-of-image marker, with leftover
   bytes rather than padding after it; other bodies are open
   ([container-and-previews.md](container-and-previews.md)).
 - **Preview Exif.** Whether a SubIFD or PreviewIFD JPEG ever carries its own
@@ -165,8 +165,8 @@ and test-data.md describes the sample set that would answer Part 2.
   ([makernote-and-metadata.md](makernote-and-metadata.md#86-focus-point),
   its section 11):
   - a DSLR in live view on a DX or 1.2x crop on a body with a CropArea:
-    the maintainer's D7200, which has none, records the cropped frame
-    in its 1.3x movie crop;
+    my D7200, which has none, records the cropped frame in its 1.3x
+    movie crop;
   - CropHiSpeed's sizes on uncropped files, after the D810's four-pixel
     difference under mode 11 (file 2036);
   - which bodies write FaceDetect (0x0021);
@@ -176,9 +176,8 @@ and test-data.md describes the sample set that would answer Part 2.
     or at CropHiSpeed's offsets, up to eight pixels away;
   - whether a Z body records a crop mode on a small raw, and how;
   - the bit order of the mask of points used on every layout but the
-    39-point, measured on the maintainer's D600, and the 11-point,
-    which ExifTool documents
-    ([autofocus-points.md](autofocus-points.md));
+    39-point, measured on my D600, and the 11-point, which ExifTool
+    documents ([autofocus-points.md](autofocus-points.md));
   - what the point fields of the 0101 and 03xx versions hold beside a
     valid point, beyond their presence on the D850 and the D780.
 

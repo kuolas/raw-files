@@ -86,9 +86,8 @@ affects; [test-data.md](test-data.md) describes the files.
   JPEG from a Z body, or from a DSLR in live view, under a usable
   licence, would. [F]
 - **A Nikon JPEG shot in a crop mode, on a public file.** What such a
-  JPEG records is known from the maintainer's own Z 9 shots only (part
-  4); a public one, from a Z body or a DSLR in live view, would check
-  it. [I]
+  JPEG records is known from my own Z 9 shots only (part 4); a public
+  one, from a Z body or a DSLR in live view, would check it. [I]
 - **The Sony PreviewImage pointer.** The ILCE-6000's MakerNote tag 0x2001
   points into its MPF image, outside the Exif segment, and is dropped.
   Whether other Sony bodies write it, and where it points, is unchecked;
@@ -104,14 +103,12 @@ affects; [test-data.md](test-data.md) describes the files.
   is 1 on the full-size files and 2 on the middle-size one, so it follows
   either the JPEG's size or the raw size set beside it. A JPEG-only shot
   at a smaller size, and a RAW+JPEG pair at different sizes, would tell
-  which; the maintainer's own D7200 JPEGs, with 0 on 506 of them, point
-  to the raw size
+  which; my own D7200 JPEGs, with 0 on 506 of them, point to the raw size
   ([section 10](container-and-metadata.md#10-makernotes-in-a-jpeg)). [F]
 - **An Adobe RGB camera JPEG and a fired flash.** All eight files are
   sRGB (`R98`, or no InteropIndex on the D70's), and the flash
   fired on none, so neither InteropIndex `R03` nor a fired Flash value
-  is checked on a public JPEG; the maintainer's own D3200 JPEGs show
-  `R03`. [F]
+  is checked on a public JPEG; my own D3200 JPEGs show `R03`. [F]
 
 ## 3. Sources not consulted
 
@@ -140,15 +137,15 @@ affects; [test-data.md](test-data.md) describes the files.
   [F]
 - **A camera JPEG can hold a MakerNote preview**: the D70's PreviewIFD
   holds a 564×372 JPEG inside the declared MakerNote. [F]
-- **What a Nikon JPEG records in a crop mode.** Shots made with the
-  maintainer's Z 9, as a JPEG and a raw file of each picture, in the
-  DX, 1:1 and 16:9 modes and at the camera's three image sizes, record
-  AFInfo2's full 8256×5504 frame in every JPEG, with the raw file's
-  centre and area, no CropArea, and the raw file's CropHiSpeed. The
-  full-size JPEG is the raw file's CropArea; at the smaller sizes the DX
-  JPEGs are exactly 3:2, which the 5392×3592 full-size picture is not.
-  So the aspect rule alone drops the point of every aspect-ratio crop
-  and of the full-size DX crop, and the point is first placed on the
+- **What a Nikon JPEG records in a crop mode.** Shots made with my
+  Z 9, as a JPEG and a raw file of each picture, in the DX, 1:1 and
+  16:9 modes and at the camera's three image sizes, record AFInfo2's
+  full 8256×5504 frame in every JPEG, with the raw file's centre and
+  area, no CropArea, and the raw file's CropHiSpeed. The full-size
+  JPEG is the raw file's CropArea; at the smaller sizes the DX JPEGs
+  are exactly 3:2, which the 5392×3592 full-size picture is not. So
+  the aspect rule alone drops the point of every aspect-ratio crop and
+  of the full-size DX crop, and the point is first placed on the
   JPEG's picture
   ([ADR015](../../architecture-decisions/adr015-the-focus-point-of-a-crop-mode-jpeg.md)).
   On the same shots, the FX and DX JPEGs at the smaller sizes, whose

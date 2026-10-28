@@ -7,7 +7,9 @@ requests live in the
 ## Where we are
 
 The repository, its license and its contribution process exist, and
-five releases are out. What raw-files reads, milestone by milestone:
+five releases are out. Where this roadmap says *my own* files, it is me,
+Alvaro Kuolas, who maintains raw-files, writing about my own cameras:
+they stay private. What raw-files reads, milestone by milestone:
 
 - **Previews (milestones 1 and 2): done.** A Nikon NEF file opens with
   the JPEG previews in its IFD0, its SubIFDs and its MakerNote. A Sony
@@ -15,11 +17,10 @@ five releases are out. What raw-files reads, milestone by milestone:
   the JPEG previews in its IFD0, IFD1 and, on newer bodies, IFD2.
   Checked on test files laid out like a Nikon Z 9's, a Z6III's, a
   D300's and a D1H's and like each generation of Sony's family, on two
-  stripped files of the maintainer's own Z 9, and on the CC0 files of
-  raw.pixls.us: 35 Nikon files, three of the Z 9 (lossless, HE and
-  HE\*) and 32 of 25 other bodies from the D1H to the Z5II, and 36
-  Sony-family files, all of which CI downloads but the large ARQ,
-  fetched on request.
+  stripped files of my own Z 9, and on the CC0 files of raw.pixls.us:
+  35 Nikon files, three of the Z 9 (lossless, HE and HE\*) and 32 of
+  25 other bodies from the D1H to the Z5II, and 36 Sony-family files,
+  all of which CI downloads but the large ARQ, fetched on request.
 - **Basic metadata (milestone 3): done, as far as plain tags record
   it.** Both formats open with their metadata, read from the standard
   TIFF and Exif tags and from the MakerNote, for the camera settings
@@ -44,9 +45,9 @@ five releases are out. What raw-files reads, milestone by milestone:
   Sony camera's JPEG also gives what its MakerNote adds, as a NEF or an
   ARW does, its focus point only when the point's frame has the
   picture's shape. Checked on test files built in code, on three
-  stripped JPEG files of the maintainer's own Z 9 and on the eight
-  camera JPEGs of Wikimedia Commons that CI downloads, of five Sony
-  bodies, two Nikon bodies and a Canon.
+  stripped JPEG files of my own Z 9 and on the eight camera JPEGs of
+  Wikimedia Commons that CI downloads, of five Sony bodies, two Nikon
+  bodies and a Canon.
 - **Full metadata (milestone 6), raw sensor data (milestone 7) and the
   developed image (milestone 8): not
   started.**

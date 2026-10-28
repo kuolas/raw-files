@@ -271,10 +271,10 @@
 //! balance setting, finer than the Exif segment's. No other maker's
 //! MakerNote is read. These are checked on eight camera JPEGs from
 //! [Wikimedia Commons](https://commons.wikimedia.org/), of five Sony
-//! bodies, two Nikon bodies and a Canon; on three stripped JPEG files of
-//! the maintainer's own Z 9, one in FX and two in the DX and 16:9 crop
-//! modes, which check where a crop mode's focus point is placed; and on
-//! JPEG files built in the tests.
+//! bodies, two Nikon bodies and a Canon; on three stripped JPEG files from
+//! a Nikon Z 9, one in FX and two in the DX and 16:9 crop modes, which
+//! check where a crop mode's focus point is placed; and on JPEG files
+//! built in the tests.
 //!
 //! Nikon mirrorless bodies, Nikon DSLRs in live view and Sony bodies from
 //! the ILCE-7RM2 on record where they focused as a position, which

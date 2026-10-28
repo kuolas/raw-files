@@ -1,13 +1,13 @@
 # JPEG: test data
 
 The JPEG tests combine small fixtures built in code, small fixtures
-stripped from the maintainer's own camera JPEGs, and camera-original
-JPEGs published on Wikimedia Commons, which `scripts/fetch-samples.sh`
-downloads and checks against a hash, in CI as on a contributor's
-machine. This page lists the sources, the eight Commons files, how they
-were chosen and how they are downloaded, the fixtures, and the early
-Coolpix files that were checked by hand without joining the samples.
-Back to [the JPEG overview](README.md).
+stripped from my own camera JPEGs, and camera-original JPEGs published
+on Wikimedia Commons, which `scripts/fetch-samples.sh` downloads and
+checks against a hash, in CI as on a contributor's machine. This page
+lists the sources, the eight Commons files, how they were chosen and
+how they are downloaded, the fixtures, and the early Coolpix files
+that were checked by hand without joining the samples. Back to
+[the JPEG overview](README.md).
 
 Confidence tags: **[P]** primary (read on the file's page or in the
 specification), **[S]** secondary, **[I]** inferred, **[F]** measured on
@@ -22,7 +22,7 @@ retrieved in October 2026.
 | raw.pixls.us | CC0, but raw files only; it holds no camera JPEGs. [2] **[S]** | Not a source of JPEG files. |
 | Camera makers' sample galleries | All rights reserved or non-commercial terms, as usually stated; the terms of each were not read. [I] | No. |
 | Stock-photo sites (Unsplash, Pexels, Pixabay) | Licences of their own, not Creative Commons, and their downloads are re-encoded. [S] | No. |
-| Files the maintainer made | The maintainer's to licence. | Yes, as stripped fixtures (section 4.2), with provenance in [`tests/fixtures/README.md`](../../../tests/fixtures/README.md). |
+| Files I made | Mine to licence. | Yes, as stripped fixtures (section 4.2), with provenance in [`tests/fixtures/README.md`](../../../tests/fixtures/README.md). |
 | Fixtures built in code | The project's own, MIT OR Apache-2.0. | Built by the tests; nothing to commit. |
 
 The repository never holds a file whose licence is unclear, however small.
@@ -150,8 +150,8 @@ the files left out (a JFIF segment first, an editor's XMP, a missing
 MakerNote, a size that is not native, flagged MakerNote offsets) and its
 warning about the D70 file's IFD1 are recorded on these pages tagged
 **[S]**. The facts about the eight files tagged **[F]** come from walking
-their bytes with the maintainer's own script. None of ExifTool's code or
-printed text is copied into the repository.
+their bytes with my own script. None of ExifTool's code or printed
+text is copied into the repository.
 
 Left out: three camera-original files under CC BY-SA (an ILCE-7RM3, a
 DSC-RX100M5A and an SLT-A99V), since raw-files uses no share-alike
@@ -166,8 +166,8 @@ was not exhaustive. [S]
 ## 4. Fixtures
 
 The JPEG reader's tests use three kinds of fixture: files built in code,
-three files stripped from the maintainer's own camera JPEGs, and damaged
-copies of both. This section says what each kind is for; the tests' own
+three files stripped from my own camera JPEGs, and damaged copies of
+both. This section says what each kind is for; the tests' own
 documentation says what each file holds.
 
 ### 4.1 Built in code
@@ -186,12 +186,12 @@ its picture. Some of these are tests of the segment walk alone, in
 `src/container/jpeg/mod.rs`, and the rest open whole files, in
 `tests/jpeg.rs`.
 
-### 4.2 Stripped from the maintainer's own camera JPEGs
+### 4.2 Stripped from my own camera JPEGs
 
-Three JPEGs from the maintainer's own Nikon Z 9, taken on 2026-10-22,
-are committed in `tests/fixtures/`: one in FX, the camera's full output,
-at full size, 8256×5504; one in DX crop mode at full size, 5392×3592; and
-one in 16:9 crop mode at the middle size, 6192×3480, taken in portrait
+Three JPEGs from my own Nikon Z 9, taken on 2026-10-22, are committed
+in `tests/fixtures/`: one in FX, the camera's full output, at full
+size, 8256×5504; one in DX crop mode at full size, 5392×3592; and one
+in 16:9 crop mode at the middle size, 6192×3480, taken in portrait
 orientation and stored with Orientation 8. A script stripped them. The
 Exif segment is kept as the camera wrote it, with the serial numbers,
 the shutter counts, the time the camera was switched on, the MakerNote's
@@ -226,13 +226,11 @@ fixtures, in `fuzz/seeds/jpeg_segments/` (see
 - **A portrait picture**: every file has orientation 1. [F]
 - **A camera crop mode**, a Nikon JPEG with a CropArea, and a Nikon JPEG
   with a focus position: the D5300 shot through the viewfinder, and the
-  D70 writes no AFInfo2. [F] The maintainer's own Z 9 shots show the
-  crop modes
+  D70 writes no AFInfo2. [F] My own Z 9 shots show the crop modes
   ([ADR015](../../architecture-decisions/adr015-the-focus-point-of-a-crop-mode-jpeg.md)).
 - **Fujifilm, Panasonic, Canon focus data and phones.** [S]
 - **Some camera settings.** All eight files are sRGB and none had its
-  flash fire; the maintainer's Z 9 fixtures add a Nikon JPEG at a
-  smaller image size
+  flash fire; my Z 9 fixtures add a Nikon JPEG at a smaller image size
   ([container-and-metadata.md](container-and-metadata.md#10-makernotes-in-a-jpeg)). [F]
 
 See [open-questions.md](open-questions.md) for what these gaps leave

@@ -173,9 +173,9 @@
 //! rule names, and a code gives a value only where a checked file shows
 //! what it means; anything else costs that value alone ([`camera_settings`]).
 //! The meaning of each code is ExifTool's, read in its published tag
-//! documentation, and confirmed on the public samples and on 32 frames the
-//! maintainer shot with an ILCE-7M2 under each setting, and two more
-//! under custom, as the ARW notes record them
+//! documentation, and confirmed on the public samples and on 32 frames
+//! I shot with an ILCE-7M2 under each setting, and two more under custom,
+//! as the ARW notes record them
 //! (`docs/formats/arw/makernote-and-metadata.md`, section 9.7). Sony's
 //! Imaging Edge Desktop was run on those frames as a reader to compare
 //! with. Every settings tag of every checked file lies inside the
@@ -223,9 +223,9 @@
 //! new custom white balance was measured, the value the camera showed for
 //! it; the ILCE-9M3's two public samples, shot under custom, hold 5500
 //! too. Under every other setting it holds 0 on every file checked, the
-//! public samples, the maintainer's own files and the frames, and 0 gives
-//! none. So it is read under whichever setting, as Nikon's is, and the
-//! white balance mode beside it says which colour temperature it is. It
+//! public samples, my own files and the frames, and 0 gives none. So
+//! it is read under whichever setting, as Nikon's is, and the white
+//! balance mode beside it says which colour temperature it is. It
 //! gives one only from 1 to 99,999 K, the bound Nikon's colour
 //! temperatures are held to too: a larger number is no temperature a
 //! camera is set to.

@@ -20,16 +20,15 @@ licences do not allow copying code; see [Licences](#licences)). Claims carry
 a confidence tag: **[P]** primary (specification, tag documentation or
 implementation source), **[S]** secondary (write-ups, forum posts, sample
 listings), **[I]** inferred, and **[F]** measured on a named sample file,
-cited by its raw.pixls.us id ("file 928"). A fact measured on the
-maintainer's own files, which stay private, says so and cites them by
-counts only, or by the frame numbers of a session. The MakerNote
-layout and the
-viewer metadata (sections 1, 2 and 8) were checked in October 2026 on 23
-CC0 files from the D1H to the Z6III, listed in
-[test-data.md](test-data.md#21-the-ci-set), and the focus point
-(section 8.6) on those and seven more CC0 files, listed in
+cited by its raw.pixls.us id ("file 928"). A fact measured on my own
+files, which stay private, says so and cites them by counts only, or by
+the frame numbers of a session. The MakerNote layout and the viewer
+metadata (sections 1, 2 and 8) were checked in October 2026 on 23 CC0
+files from the D1H to the Z6III, listed in
+[test-data.md](test-data.md#21-the-ci-set), and the focus point (section
+8.6) on those and seven more CC0 files, listed in
 [test-data.md](test-data.md#23-files-checked-for-the-focus-point), and on
-56 frames shot with the maintainer's own D600, recorded in
+56 frames shot with my own D600, recorded in
 [autofocus-points.md](autofocus-points.md), and the
 camera settings (section 8.7) on the 35 files of the CI set and two
 Nikon camera JPEGs, listed in
@@ -735,7 +734,7 @@ raw-files reads it or not:
 | 0x00B7 AFInfo2, AFPointsInFocus | a mask of the points in focus, version 0101 only (byte 48) [P] | the D850, one point **[F]** | not read: a mask of version 0101, which needs a table of a body that writes that version |
 | 0x0088 AFInfo | 4 bytes: area mode, point number, mask of the points in focus [P] | the bodies without AFInfo2: D1H, D1X, D70, D100, D200, E5700, P7800 **[F]** | not read: a number only |
 | 0x0021 FaceDetect | a frame size and up to twelve face rectangles in it [P] | none of the 35 files **[F]** | not read: no sample |
-| 0x0007 FocusMode | an ASCII string [P][1]: `MANUAL`, or an AF mode padded with spaces to six characters (`AF-S  `, `AF-C  `, `AF-A  `) **[F]** | `MANUAL` on the D300 and D850, both viewfinder shots with a zero frame (files 928, 1835), and on the Z fc, which records a position under it (file 8559); an AF mode on every other file with the embedded MakerNote, the maintainer's Z 9 shots included **[F]** | read: `MANUAL`, after trimming, gives no focus point |
+| 0x0007 FocusMode | an ASCII string [P][1]: `MANUAL`, or an AF mode padded with spaces to six characters (`AF-S  `, `AF-C  `, `AF-A  `) **[F]** | `MANUAL` on the D300 and D850, both viewfinder shots with a zero frame (files 928, 1835), and on the Z fc, which records a position under it (file 8559); an AF mode on every other file with the embedded MakerNote, my Z 9 shots included **[F]** | read: `MANUAL`, after trimming, gives no focus point |
 | 0x0085 ManualFocusDistance, 0x00B9 AFTune, the area modes in the MenuSettings blocks | settings, not a position [P] | not looked for | not read |
 
 **AFInfo2 layouts.** The value is UNDEFINED and starts with a version in
@@ -776,7 +775,7 @@ ExifTool lists for the layout or the body:
 
 | Version | Layout code | Primary point | Mask of points used | Mask of points in focus | Checked on |
 |---|---|---|---|---|---|
-| `0100` | 6 | 7 | 8, up to 7 bytes; the D600's 39 bits lie in the first five | none | 56 frames and 1,374 files of the maintainer's D600 (layout 3, the 39-point), and the maintainer's 3,568 D3200 files (layout 2, the 11-point, numbers 1 to 11) and 647 D300s, 400 D7100 and 6,277 D7200 files (layout 1, the 51-point) **[F]**; the D810 (layout 1, point 3, one bit), the D750 (point 1, one bit), the D700 (point 1, no bit) and the D300 (layout 0, point 0, manual focus) (files 2036, 895, 2255, 928) **[F]** |
+| `0100` | 6 | 7 | 8, up to 7 bytes; the D600's 39 bits lie in the first five | none | 56 frames and 1,374 files of my D600 (layout 3, the 39-point), and my 3,568 D3200 files (layout 2, the 11-point, numbers 1 to 11) and 647 D300s, 400 D7100 and 6,277 D7200 files (layout 1, the 51-point) **[F]**; the D810 (layout 1, point 3, one bit), the D750 (point 1, one bit), the D700 (point 1, no bit) and the D300 (layout 0, point 0, manual focus) (files 2036, 895, 2255, 928) **[F]** |
 | `0101` | 6 | 68 | 8, up to 20 bytes by the layout | 48, up to 20 bytes | the D850: layout 7 (the 153-point), point 1, no bit, manual focus (file 1835) **[F]**; the D5 in live view: layout 0, point 0 (file 2218) **[F]** |
 | `0200` | 6 | 7 | 8, 29 bytes | none | the Nikon 1 J1: layout 4, point 1, one bit (file 2956) **[F]** |
 | `0300`, `0301` | 6 | 56 | 10, 7, 11 or 14 bytes by the layout | none | the D780: layout 1, point 34, 30 bits (file 3827) **[F]** |
@@ -818,11 +817,11 @@ What the fields hold:
   these files cannot tell how the values relate to the crop.
 - **A DX crop records fractions of the cropped picture; an aspect crop
   records positions in the full frame.** Thirteen shots made for this
-  check with the maintainer's Z 9 tell the two apart: two frames in each
-  of FX, DX, 1:1 and 16:9 with a single point placed in the top-left
-  corner of the picture, and five earlier frames of the same modes with
-  the same values. One DX and one 1:1 frame are committed, stripped of
-  their pixels and personal fields, as fixtures
+  check with my Z 9 tell the two apart: two frames in each of FX, DX,
+  1:1 and 16:9 with a single point placed in the top-left corner of
+  the picture, and five earlier frames of the same modes with the same
+  values. One DX and one 1:1 frame are committed, stripped of their
+  pixels and personal fields, as fixtures
   ([`tests/fixtures/`](../../../tests/fixtures/README.md)). In the
   8256x5504 frame they record:
 
@@ -892,9 +891,9 @@ What the fields hold:
   area mode is decided in
   [ADR018](../../architecture-decisions/adr018-focus-points-placed-from-a-table-and-the-points-used.md).
 - **A DSLR in live view on a crop records the cropped frame.** One of
-  the maintainer's D7200 files, shot in live view in the 1.3x movie
-  crop, CropHiSpeed `[10, 6016, 4016, 4840, 2712, 576, 248]`, records
-  an AFInfo2 frame of 4800x2696, 40 and 16 pixels less than the cropped
+  my D7200 files, shot in live view in the 1.3x movie crop,
+  CropHiSpeed `[10, 6016, 4016, 4840, 2712, 576, 248]`, records an
+  AFInfo2 frame of 4800x2696, 40 and 16 pixels less than the cropped
   size CropHiSpeed records, while its 155 other live-view files,
   uncropped, record 6000x4000 in a 6016x4016 raw; 168 of its 6,277
   files are 1.3x stills, `[1, 6016, 4016, 4840, 3208, 576, 0]`, none
@@ -927,9 +926,9 @@ What the fields hold:
   and the mirrorless codes 192 to 197 and 199; under contrast detection, 0 plain contrast-detect, 1 to
   4 its area modes, 128 to 131, and the mirrorless codes 192 to 208,
   207 3D-tracking among them, which the phase-detect list lacks;
-  version 04xx has the mirrorless list alone [P][1]. The maintainer's
-  D600 frames agree: 0, 5 and 8 came with detection 0 through the
-  viewfinder, and the live-view frames wrote 4 with detection 1
+  version 04xx has the mirrorless list alone [P][1]. My D600 frames
+  agree: 0, 5 and 8 came with detection 0 through the viewfinder, and
+  the live-view frames wrote 4 with detection 1
   ([autofocus-points.md](autofocus-points.md#22-what-the-body-writes))
   **[F]**. raw-files names the mode, on every version, only for the
   codes that frames shot in a known mode confirmed, under the detection
@@ -937,23 +936,21 @@ What the fields hold:
   192, 196, 199, 1 or 2
   ([ADR018](../../architecture-decisions/adr018-focus-points-placed-from-a-table-and-the-points-used.md)):
   under phase detection, 0 single point, 5 dynamic area and 8 auto-area
-  on the maintainer's D600 session **[F]**; 193 single point and 197
-  auto-area under any detection method, on which the two lists agree
-  (193 on the two Z 9 frames shot with a single point and committed as
-  fixtures ([`tests/fixtures/`](../../../tests/fixtures/README.md)), 197
-  on the maintainer's Z 9 files, 99 of which carry it and were shot in
-  auto-area) **[F]**; and 207 3D-tracking under contrast or hybrid
-  detection, the lists that carry it (on the maintainer's Z 9 files,
-  8,877 of which carry it and were shot in 3D-tracking, under hybrid
-  detection), counts only **[F]**.
+  on my D600 session **[F]**; 193 single point and 197 auto-area under
+  any detection method, on which the two lists agree (193 on the two
+  Z 9 frames shot with a single point and committed as fixtures
+  ([`tests/fixtures/`](../../../tests/fixtures/README.md)), 197 on my
+  Z 9 files, 99 of which carry it and were shot in auto-area) **[F]**;
+  and 207 3D-tracking under contrast or hybrid detection, the lists
+  that carry it (on my Z 9 files, 8,877 of which carry it and were
+  shot in 3D-tracking, under hybrid detection), counts only **[F]**.
 - **Every AFInfo2 and CropHiSpeed value lies inside the MakerNote's
   declared length** on every checked file. **[F]**
 - **In a camera JPEG**, the D5300's AFInfo2 is version 0100 with a zero
   frame and area, a shot through the viewfinder, and the D70 JPEG writes
   only AFInfo (0x0088): neither gives a point. **[F]** No public Nikon
-  JPEG in the set records a position. The 56 JPEGs of the maintainer's
-  D600 session carry the same AFInfo2 and CropHiSpeed as the NEF of the
-  same frame
+  JPEG in the set records a position. The 56 JPEGs of my D600 session
+  carry the same AFInfo2 and CropHiSpeed as the NEF of the same frame
   ([autofocus-points.md](autofocus-points.md#22-what-the-body-writes)).
   **[F]** A JPEG keeps a point only when its
   frame has the JPEG's aspect ratio, so that an export cropped to another
@@ -961,9 +958,9 @@ What the fields hold:
   ([ADR014](../../architecture-decisions/adr014-jpeg-files-as-a-format-of-their-own.md)),
   except an export cut from a crop-mode JPEG, whose point is placed on
   the export's own pixels (below).
-- **In a camera JPEG shot in a crop mode**, the maintainer's Z 9 records
-  the raw file's AFInfo2 and CropHiSpeed, with the full 8256x5504 frame,
-  at every image size, and no CropArea; its full-size JPEG is the raw
+- **In a camera JPEG shot in a crop mode**, my Z 9 records the raw
+  file's AFInfo2 and CropHiSpeed, with the full 8256x5504 frame, at
+  every image size, and no CropArea; its full-size JPEG is the raw
   file's CropArea (5392x3592, 5504x5504, 8256x4640), and its DX JPEGs at
   the smaller sizes are exactly 3:2. **[F]** raw-files places such a
   point on the JPEG's picture, as on CropArea in a raw file: a DX crop's
@@ -985,16 +982,16 @@ and what raw-files gives; a row without a file is an open question
 | Shot | What the file records | CC0 files | raw-files gives |
 |---|---|---|---|
 | Mirrorless, single point, pinpoint, wide area or 3D-tracking | a position | Z 6 3587, Z 9 5146 to 5148, Z f 6887, Z6III 7808 to 7810, 7812, 7813, Z50II 7767, 7770 | the point |
-| Mirrorless on a DX crop | a position, scaled into the full frame | Z6III 7810; the maintainer's Z 9 shots, off-centre, one DX frame committed stripped | the point, scaled onto the crop |
-| Mirrorless on an aspect crop (1:1, 16:9) | a position in the full frame | Z6III 7808, 7809, 7812, 7813, Z50II 7767, 7770; the maintainer's Z 9 shots, off-centre, one 1:1 frame committed stripped | the point, moved into the window |
+| Mirrorless on a DX crop | a position, scaled into the full frame | Z6III 7810; my Z 9 shots, off-centre, one DX frame committed stripped | the point, scaled onto the crop |
+| Mirrorless on an aspect crop (1:1, 16:9) | a position in the full frame | Z6III 7808, 7809, 7812, 7813, Z50II 7767, 7770; my Z 9 shots, off-centre, one 1:1 frame committed stripped | the point, moved into the window |
 | A DX crop at 1:1 or 16:9 on an FX body | unknown | none | the point, scaled; unchecked |
 | Mirrorless small raw | a position in the full frame | Z 6 3587 | the point, in the full frame |
 | Mirrorless, auto-area with only a mask | a mask | Z5II 7735, 7736 | none: needs a table of points |
 | DSLR in live view | a position | D7000 961, D5600 1415, D5 2218, Coolpix A 2238 | the point |
-| DSLR in live view on a crop | the cropped frame | none public; one of the maintainer's D7200 files, in the 1.3x movie crop | the point as recorded, in the cropped frame; unchecked on a body with a CropArea |
+| DSLR in live view on a crop | the cropped frame | none public; one of my D7200 files, in the 1.3x movie crop | the point as recorded, in the cropped frame; unchecked on a body with a CropArea |
 | A `0101` body in live view | a position, at ExifTool's offsets | D5 2218 | the point; checked |
 | A `0301` body | a position, at the 03xx offsets | Z 30 5812, Z fc 8559 | the point, none on 8559, a manual-focus shot; checked |
-| DSLR through the viewfinder, a body with a table | a point number and a mask | none public; the maintainer's D600 frames and files ([autofocus-points.md](autofocus-points.md#2-nikon-d600)) | the point to be placed from the table, with the points the mask names, as decided in [ADR018](../../architecture-decisions/adr018-focus-points-placed-from-a-table-and-the-points-used.md) |
+| DSLR through the viewfinder, a body with a table | a point number and a mask | none public; my D600 frames and files ([autofocus-points.md](autofocus-points.md#2-nikon-d600)) | the point to be placed from the table, with the points the mask names, as decided in [ADR018](../../architecture-decisions/adr018-focus-points-placed-from-a-table-and-the-points-used.md) |
 | DSLR through the viewfinder, any other body | a point number and a mask | D300 928, D700 2255, D750 895, D810 2036, D850 1835, D780 3827 | none: no table for the body, to be counted; 928 and 1835 are manual-focus shots, which get none in any case |
 | Nikon 1 | a point number and a mask | J1 2956 | none: needs a table of points |
 | Bodies without AFInfo2 | AFInfo: a point number | D1H 5364, D70 2060, D100 2996, D200 8079, E5700 4456, P7800 1425 | none: needs a table of points |
@@ -1004,9 +1001,9 @@ and what raw-files gives; a row without a file is an open question
 | A DX crop on a small raw | unknown | none | the point, scaled onto CropArea in stored pixels; unchecked |
 | A rotated (portrait) shot | a position in the landscape frame | Z 30 5812 | the point, in stored orientation; checked |
 | Face detection | FaceDetect | none | not read |
-| Camera JPEG through the viewfinder | a zero frame (`0100`) with a point number and a mask, as in the NEF of the same frame | the D5300 JPEG from Wikimedia Commons; the maintainer's D600 JPEGs | none for the D5300, which has no table; the D600's point to be placed from the table, as in its NEF |
+| Camera JPEG through the viewfinder | a zero frame (`0100`) with a point number and a mask, as in the NEF of the same frame | the D5300 JPEG from Wikimedia Commons; my D600 JPEGs | none for the D5300, which has no table; the D600's point to be placed from the table, as in its NEF |
 | Camera JPEG with a position | a position | none public | the point, when its frame has the JPEG's aspect ratio; unchecked on a public file |
-| Camera JPEG in a crop mode (DX, 1:1, 16:9), at any image size | a position in the full frame, no CropArea | none public; the maintainer's Z 9 shots | the point, placed on the JPEG's picture; unchecked on a public file |
+| Camera JPEG in a crop mode (DX, 1:1, 16:9), at any image size | a position in the full frame, no CropArea | none public; my Z 9 shots | the point, placed on the JPEG's picture; unchecked on a public file |
 | Exported JPEG that keeps the camera's MakerNote | the camera's frame and position | none public | the point only when the frame has the export's aspect ratio |
 
 ### 8.7 Camera settings
@@ -1103,21 +1100,21 @@ and LightSource 0 ("unknown") under every `AUTO` setting, and 0xA403 is
 1 under `SUNNY` (LightSource 9, "fine weather") and `SHADE`
 (LightSource 11, "shade") **[F]**. The D1H, D1X and E5700 write no Exif
 white balance, so 0x0005 is their only record of it. The texts of the
-other settings are on the maintainer's own files and on frames shot
-for these values (below): a chosen colour temperature is written as
-its number, such as `3230K`.
+other settings are on my own files and on frames shot for these values
+(below): a chosen colour temperature is written as its number, such as
+`3230K`.
 
 **Colour temperature.** 0x004F ColorTemperatureAuto is one SHORT, in
 kelvin [P][1], on the D5, D850, D780 and every Z body (19 files). Under
 an `AUTO` setting it holds the temperature auto white balance chose:
 3050 to 7000 on 17 files. Under `SUNNY` it is 0 (the D850 and the Z fc,
-files 1835 and 8559) **[F]**: 0 means it was not recorded. The
-maintainer's Z 9 records it under every setting, a chosen colour
-temperature and a preset included (below). No other plain tag, Exif
-or MakerNote, records the temperature the camera applied on the older
-bodies: ExifTool reports none there **[S]**. A chosen colour
-temperature is the exception, since 0x0005 records it as its number:
-the D600 writes `3230K` there with no 0x004F beside it (below).
+files 1835 and 8559) **[F]**: 0 means it was not recorded. My Z 9
+records it under every setting, a chosen colour temperature and a
+preset included (below). No other plain tag, Exif or MakerNote,
+records the temperature the camera applied on the older bodies:
+ExifTool reports none there **[S]**. A chosen colour temperature is
+the exception, since 0x0005 records it as its number: the D600 writes
+`3230K` there with no 0x004F beside it (below).
 
 **White balance fine-tuning.** A shift of the white balance along two
 axes, amber to blue and green to magenta. Nikon writes it in two tags,
@@ -1138,10 +1135,9 @@ holds for the two values of 0x003F and of 0x000B; which axis and sign
 the single value of the oldest bodies has, no file shows. Both count
 the steps of the camera's fine-tuning menu: Nikon's NX Studio shows a
 0x003F of `-12/4, 8/4` as "A3.00, G2.00", so 0x003F counts them in
-quarters, and 0x000B in whole steps; on the maintainer's own D7200
-files 0x003F holds 0x000B's value in quarters (below). How large a
-menu step is, no documentation checked says. The E5700 writes neither
-tag **[F]**.
+quarters, and 0x000B in whole steps; on my own D7200 files 0x003F
+holds 0x000B's value in quarters (below). How large a menu step is, no
+documentation checked says. The E5700 writes neither tag **[F]**.
 
 **Shutter.** Which shutter took the picture: the mechanical one, the
 electronic front curtain (an electronic start of the exposure and a
@@ -1225,8 +1221,8 @@ the Nikon 1 J1 (`Ver.1.40`), with two digits before the point on the
 D780 and the Z bodies (`Ver.01.00`, `Ver.02.00` on the Z 6, `Ver.01.70`
 on the Z fc); the Coolpix E5700 and P7800 write `E5700v1.1` and
 `COOLPIX P7800  V1.0`, with two spaces. No checked file carries an
-editor's name; on the maintainer's own JPEGs that a program rewrote, it
-names that program (below). ShotInfo (0x0091) has a FirmwareVersion of its own: on
+editor's name; on my own JPEGs that a program rewrote, it names that
+program (below). ShotInfo (0x0091) has a FirmwareVersion of its own: on
 none of the 36 files that have ShotInfo does it hold readable text
 where ExifTool documents it, and ExifTool decodes it from the encrypted
 block ([section 7](#7-lensdata-and-shotinfo)) [P][1]. Its decoded value
@@ -1246,10 +1242,9 @@ firmware: beside them the Z 6's Software is `Ver.02.00` and the Z 9's
 is not known; byte 10 of 0x0051 is the compression
 ([section 2](#2-key-tags)).
 
-**On the maintainer's own files.** The maintainer's own raw files and
-camera JPEGs of six Nikon DSLRs, the D300s, D3200, D3300, D600, D7100
-and D7200, were read the same way on 2026-10-24 and are given here as
-counts only
+**On my own files.** My own raw files and camera JPEGs of six Nikon
+DSLRs, the D300s, D3200, D3300, D600, D7100 and D7200, were read the
+same way on 2026-10-24 and are given here as counts only
 ([test-data.md](test-data.md#24-files-checked-for-the-camera-settings)).
 They add what the public samples lack **[F]**:
 
@@ -1294,8 +1289,8 @@ They add what the public samples lack **[F]**:
   Shotwell (5), ViewNX 2 (1) and darktable (1).
 
 **Shots made for these values.** To see what each tag holds under each
-setting, the maintainer shot frames of one scene on 2026-10-25, one or
-two per setting, and read them the same way
+setting, I shot frames of one scene on 2026-10-25, one or two per
+setting, and read them the same way
 ([test-data.md](test-data.md#24-files-checked-for-the-camera-settings)):
 19 NEF files from a Z 9 on firmware `Ver.05.30`, and 19 NEF files from
 the D600, 14 of them with a JPEG of the same shot **[F]**.
@@ -1564,10 +1559,9 @@ For milestone 3, keep the MakerNote out of the critical path.
     8559). **[F]**
 12. **A DSLR in live view on a crop.** Answered for the D7200: AFInfo2's
     frame is the cropped output, 4800x2696 in its 1.3x movie crop, on
-    one of the maintainer's files ([section 8.6](#86-focus-point)).
-    **[F]** Whether a DX or 1.2x crop on a D5, D750, D810 or D850 does
-    the same, and whether a CropArea then counts the crop, is open; no
-    public file shows one.
+    one of my files ([section 8.6](#86-focus-point)). **[F]** Whether a DX
+    or 1.2x crop on a D5, D750, D810 or D850 does the same, and whether a
+    CropArea then counts the crop, is open; no public file shows one.
 13. **Manual focus on a Z body.** Answered: the Z fc writes a position
     in AFInfo2 under FocusMode `MANUAL`, centre (2520, 1856) and area
     288x319 in its 5568x3712 frame (file 8559). raw-files gives no focus
@@ -1583,10 +1577,10 @@ For milestone 3, keep the MakerNote out of the critical path.
     border, than by unequal sizes.
 16. **Tables of autofocus points.** Turning a point number or mask into a
     position needs a table of each body's points. The D600's is
-    measured on frames shot with the maintainer's own body, with the
-    bit order of its mask ([autofocus-points.md](autofocus-points.md))
-    **[F]**; every other body's waits for a session on that body by the
-    same procedure. ExifTool's published tables give the order of the
+    measured on frames shot with my own body, with the bit order of
+    its mask ([autofocus-points.md](autofocus-points.md)) **[F]**;
+    every other body's waits for a session on that body by the same
+    procedure. ExifTool's published tables give the order of the
     points by number and, for the 11-point layout only, the bit order of
     the mask. [P][1]
 17. **FaceDetect.** Which bodies write 0x0021; none of the 35 checked
@@ -1611,9 +1605,9 @@ For milestone 3, keep the MakerNote out of the critical path.
     counts full-size ones, and scales a DX crop onto that CropArea.
 21. **The other white balance texts.** Mostly answered: the public
     files show 0x0005 as `AUTO`, `AUTO0`, `AUTO1`, `SUNNY`, `FLASH` and
-    `SHADE`, the maintainer's own files add `CLOUDY`, `INCANDESCENT`,
-    `PRESET` and `COOL WHT FL`, and frames shot on a Z 9 and a D600 add
-    `AUTO2`, `NATURAL AUTO`, `PRESET1` to `PRESET4` and a chosen colour
+    `SHADE`, my own files add `CLOUDY`, `INCANDESCENT`, `PRESET` and
+    `COOL WHT FL`, and frames shot on a Z 9 and a D600 add `AUTO2`,
+    `NATURAL AUTO`, `PRESET1` to `PRESET4` and a chosen colour
     temperature as its number, such as `3230K`
     ([section 8.7](#87-camera-settings)). **[F]** Still on no checked
     file: the other fluorescent lamps, the Z 9's preset slots 5 and 6,
@@ -1632,17 +1626,17 @@ For milestone 3, keep the MakerNote out of the critical path.
     the single value the D1 family, the D70, the D100 and the D200
     write, and how large a menu step is.
 24. **The shutter of the older DSLRs.** No DSLR older than the D850
-    writes 0x0034, nor any of the maintainer's six DSLRs, and none
-    records the shutter in a block ExifTool decodes. Whether a DSLR in live view records it anywhere is open;
-    so is which
-    bodies write the codes 48, 64 and 96, which no checked file holds.
+    writes 0x0034, nor any of my six DSLRs, and none records the
+    shutter in a block ExifTool decodes. Whether a DSLR in live view
+    records it anywhere is open; so is which bodies write the codes
+    48, 64 and 96, which no checked file holds.
 25. **CropHiSpeed's other codes.** 3 (5:4), 4 (3:2), 8 (2.7x) and the
     movie codes other than 9 and 10 are on no checked file; 1 (1.3x) and 10
-    are only on the maintainer's D7200 files, where 10, which ExifTool
-    names "1.3x movie crop", is on still NEF files and JPEGs. 9, which ExifTool names
+    are only on my D7200 files, where 10, which ExifTool names "1.3x
+    movie crop", is on still NEF files and JPEGs. 9, which ExifTool names
     for movies, is a 16:9 still on the Z50II (file 7770) and on one of
-    the maintainer's D7100 NEF files and one JPEG, so on a DX body it
-    marks a 16:9 still too.
+    my D7100 NEF files and one JPEG, so on a DX body it marks a 16:9
+    still too.
 26. **A medium raw.** 0x003E is 1 or 3 on the checked files; no medium
     raw was checked. The Z 9 makes none: its medium and small sizes are
     for the JPEG only.
@@ -1652,9 +1646,9 @@ For milestone 3, keep the MakerNote out of the critical path.
 28. **What 0x0051 and 0x0056 number.** Their leading digits are not the
     body's firmware ([section 8.7](#87-camera-settings)).
 29. **ExposureProgram 0.** The Z5II and Z6III files, the D5300 JPEG
-    and many of the maintainer's own D3200, D3300, D7100, D7200 and D600
-    files record "not defined"; whether another tag records the program
-    or scene mode those shots used is open.
+    and many of my own D3200, D3300, D7100, D7200 and D600 files
+    record "not defined"; whether another tag records the program or
+    scene mode those shots used is open.
 30. **The mask's bit order on the other layouts.** Measured on the
     39-point layout only, bit number − 1 from the least significant bit
     of the first byte, and documented by ExifTool for the 11-point

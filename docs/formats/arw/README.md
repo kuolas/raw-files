@@ -7,6 +7,10 @@ here comes from the TIFF and Exif standards, community documentation, the
 source code of existing raw decoders and the bytes of sample files, each
 cited where it is used.
 
+Where these notes say *I* or *my own* files, it is me, Alvaro Kuolas, who
+maintains raw-files, writing about my own cameras and shots: they stay
+private, and are cited by counts or by frame numbers.
+
 These pages support the [roadmap](../../ROADMAP.md): ARW previews
 (milestone 2), then basic metadata (milestone 3), then focus points
 (milestone 4), then full metadata (milestone 6), then raw decoding

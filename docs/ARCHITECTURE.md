@@ -7,6 +7,9 @@ any structural change.
 
 raw-files is one Rust crate (edition 2024): a library, with no binary. Its
 fuzz targets are a second crate, in `fuzz/`, that is never published.
+Where the comments in the code and the tests say *I* or *my own*, it is me,
+Alvaro Kuolas, who maintains raw-files, writing about my own cameras and
+shots: they stay private, and are cited by counts or by frame numbers.
 
 | File | Holds | May depend on |
 |---|---|---|
@@ -57,7 +60,7 @@ fuzz targets are a second crate, in `fuzz/`, that is never published.
 | `tests/support/arw.rs` | the Sony fixtures: files laid out like each generation of Sony's RAW family (ARW 4 with a lossless or a medium raw, ARW 2, ARQ, SR2, SRF, and the A100's ARW 1.0), with stub JPEGs and stand-in raw data, in either byte order, each with where its JPEGs and raw data are, its camera in IFD0, the size of its raw data on every layout but the A100's, and, on the ARW 4 files, a capture time, an exposure, a lens, a default crop inside a raw size padded to whole tiles, and a headerless MakerNote with the focus tags FocusMode, FocusLocation and FocusFrameSize, as the ILCE-7M4 samples write them, whose tags, values and FocusFrameSize bytes the Sony JPEG fixtures share, for integration tests | `tests/support/tiff_builder.rs`, `tests/support/jpeg_stub.rs` |
 | `tests/support/samples.rs` | where the downloaded sample files of `tests/samples.tsv` are found: `RAW_FILES_SAMPLES` or `raw-samples/`, with a note on stderr when a file is absent; the files the list names of one format, each with its tier, read from the list compiled in, whose header and columns it checks; the types of the tables of what each sample must give, its previews and its metadata, its focus point, with the origin, the number of points, the primary's number and the area mode of its focus points, the Model of the layout of the body's autofocus points it must give, and its camera settings among it, and the checks that a sample opens with exactly its previews, each read whole, and gives exactly its metadata, every value compared, the focus point, the focus points, the layout's Model, and every camera setting among them, and serial numbers by their shape alone; for integration tests | the library |
 | `tests/support/fixtures.rs` | where the committed files of `tests/fixtures/` are found, under the crate's root, their names, and the reading of one, which fails rather than skips when a file is missing; for integration tests | — (`std` only) |
-| `tests/fixtures/` | two real NEF files of the maintainer's own Z 9, in DX and 1:1 crop modes, with their pixels and personal fields removed and their structure and values kept; three real JPEG files of the same camera, in FX and in DX and 16:9 crop modes, with their images replaced by stubs, their personal fields zeroed in place and their Exif segment otherwise as the camera wrote it; and a README that records their provenance: how they were made, what was kept, replaced and removed, their licence and their SHA-256. Not in the published package, like the integration tests that read them | — |
+| `tests/fixtures/` | two real NEF files of my own Z 9, in DX and 1:1 crop modes, with their pixels and personal fields removed and their structure and values kept; three real JPEG files of the same camera, in FX and in DX and 16:9 crop modes, with their images replaced by stubs, their personal fields zeroed in place and their Exif segment otherwise as the camera wrote it; and a README that records their provenance: how they were made, what was kept, replaced and removed, their licence and their SHA-256. Not in the published package, like the integration tests that read them | — |
 | `tests/tiff_builder.rs` | tests only: the fixture builder checked from outside the crate, which keeps `tests/support/` compiled | `tests/support` |
 | `tests/jpeg_stub.rs` | tests only: the stub JPEG checked from outside the crate | `tests/support` |
 | `tests/jpeg_builder.rs` | tests only: the JPEG file builder checked from outside the crate: its layout, its lengths and identifiers, the positions it reports, and the MPF index it writes, in both byte orders, every offset landing on an image's SOI, and damaged as a test asks | `tests/support` |
@@ -118,9 +121,9 @@ the Z6III's, the D300's and the D1H's, and `tests/support/arw.rs`, one for each
 generation of Sony's family; and the whole JPEG files, built with the JPEG
 file builder, in `tests/support/jpeg_files.rs`, which the JPEG reader's
 tests, the robustness tests and the fuzz seeds share. Five real files are
-committed, in `tests/fixtures/`: NEF shots of the maintainer's own Z 9 in
-DX and 1:1 crop modes, stripped of their pixels and personal fields, and
-JPEG shots of the same camera in FX and in DX and 16:9 crop modes, their
+committed, in `tests/fixtures/`: NEF shots of my own Z 9 in DX and 1:1
+crop modes, stripped of their pixels and personal fields, and JPEG
+shots of the same camera in FX and in DX and 16:9 crop modes, their
 images replaced by stubs and their personal fields zeroed, whose README
 records how they were made and what was removed; a test never skips
 them. The other real files are not committed: `tests/samples.tsv` pins the

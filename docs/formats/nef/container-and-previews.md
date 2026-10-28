@@ -25,8 +25,8 @@ Every claim carries a confidence tag:
   the id of the file in the public raw.pixls.us collection; the files cited
   here are described under [Sample files](#sample-files), and their URLs and
   SHA-256 hashes are in [test-data.md](test-data.md#21-the-ci-set). A fact
-  measured on the maintainer's own files, which stay private, says so and
-  cites them by counts only.
+  measured on my own files, which stay private, says so and cites them
+  by counts only.
 
 Numbers in square brackets such as [3] refer to [Sources](#sources).
 
@@ -34,10 +34,10 @@ Numbers in square brackets such as [3] refer to [Sources](#sources).
 page.** The facts tagged **[F]** were measured on files 5146 to 5148, the
 three CC0 Z 9 files (lossless, HE\* and HE), unless the tag names another
 file, as sections 1.4 and 2 do for the D1 family and the early Coolpix
-bodies, or the maintainer's own files, as section 5 does for a habit of
-the D600 and the D3200, a preview length that runs past the image; every
-other body rests on the sources alone on this page. The previews of 32
-more files, of 25 other bodies, are checked by the tests, and
+bodies, or my own files, as section 5 does for a habit of the D600 and
+the D3200, a preview length that runs past the image; every other body
+rests on the sources alone on this page. The previews of 32 more
+files, of 25 other bodies, are checked by the tests, and
 [test-data.md](test-data.md#21-the-ci-set) lists them; they are not yet
 written up here. Where
 a sample contradicts a source, this page follows the sample and records the
@@ -338,11 +338,11 @@ any process, not just baseline (section 7).
   follows section 7.1 skips all three: the empty ones have no bytes, and the
   grey image is not a JPEG (Compression 1, and its first bytes are not an
   SOI).
-- **D600 and D3200: a preview length that runs past the image.** On the
-  maintainer's own files, 1,374 from a D600 and 3,568 from a D3200, the
-  largest JPEG lies in SubIFD0 and ends with `FF D9` exactly at its
-  declared length, with no padding, on all but 2 and 7. On those nine
-  the declared length is 2 more than a multiple of 512, and 513 bytes
+- **D600 and D3200: a preview length that runs past the image.** On my
+  own files, 1,374 from a D600 and 3,568 from a D3200, the largest
+  JPEG lies in SubIFD0 and ends with `FF D9` exactly at its declared
+  length, with no padding, on all but 2 and 7. On those nine the
+  declared length is 2 more than a multiple of 512, and 513 bytes
   follow the end marker: not `FF` padding, not zeros, and not the bytes
   that follow the preview in the file. On every one of the nine the
   image itself, up to and including its end marker, is 1 byte longer
@@ -546,9 +546,9 @@ what they show.
    JPEG is in one piece, through 0x0201/0x0202.
 8. How common truncated JPEGs or padding after EOI are in real files. The
    Z 9 has neither: each JPEG ends with EOI exactly at its declared length.
-   Of 4,942 files from the maintainer's D600 and D3200, none is truncated
-   and nine declare a length 513 bytes past EOI, with leftover bytes
-   rather than padding after it (section 5).
+   Of 4,942 files from my D600 and D3200, none is truncated and nine
+   declare a length 513 bytes past EOI, with leftover bytes rather
+   than padding after it (section 5).
 9. Whether a SubIFD or PreviewIFD JPEG ever has its own Exif APP1 with an
    Orientation. Not on the Z 9, whose JPEGs have no APP segment at all.
 10. Nikon tag 0xC7D5 (NikonNEFInfo): which IFD hosts it across bodies. Its

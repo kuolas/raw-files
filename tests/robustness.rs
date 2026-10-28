@@ -20,16 +20,16 @@
 //! range and holds the file's only JPEG, and an ILCE-7M4's ARW 4, with its
 //! MakerNote, which records the focus point, each in both byte orders.
 //! They damage five real files too, committed with their pixels and
-//! personal fields removed or zeroed: two NEF shots of the maintainer's
-//! own Z 9 in DX and 1:1 crop modes, and three JPEG shots of the same
-//! camera in FX and in DX and 16:9 crop modes, the last in portrait
-//! orientation, whose Exif segment is the camera's own; they hold the
-//! camera's own layout of tags, in little-endian byte order, where the
-//! fixtures only imitate it. And they damage the JPEG files the JPEG
-//! reader's tests open, whose segments the walk reads before the Exif
-//! segment's TIFF structure and the MPF index: one with no Exif segment,
-//! one with zeros after its end, one whose Exif segment holds IFD0 and
-//! IFD1's thumbnail, a camera's, whose Exif segment holds every value the
+//! personal fields removed or zeroed: two NEF shots of my own Z 9 in DX
+//! and 1:1 crop modes, and three JPEG shots of the same camera in FX and
+//! in DX and 16:9 crop modes, the last in portrait orientation, whose
+//! Exif segment is the camera's own; they hold the camera's own layout of
+//! tags, in little-endian byte order, where the fixtures only imitate
+//! it. And they damage the JPEG files the JPEG reader's tests open,
+//! whose segments the walk reads before the Exif segment's TIFF
+//! structure and the MPF index: one with no Exif segment, one with
+//! zeros after its end, one whose Exif segment holds IFD0 and IFD1's
+//! thumbnail, a camera's, whose Exif segment holds every value the
 //! metadata reads and whose MPF index lists two images after its main
 //! one, a camera's with a JFIF segment first, whose Exif segment holds
 //! only IFD0's orientation and IFD1's thumbnail, and five Nikon cameras'
@@ -145,9 +145,9 @@ struct Fixture {
 /// and the D300 fixtures, with Orientation 8, in both byte orders; the D1H
 /// fixture, which records no orientation, in both byte orders; the
 /// ARW 4 fixture, with Orientation 8, in both byte orders; the five files
-/// stripped from the maintainer's own Z 9 shots, as they are committed: two
-/// NEF files in DX and 1:1 crop modes, and three JPEG files in FX and in DX
-/// and 16:9 crop modes; and the JPEG files: without Exif, with
+/// stripped from my own Z 9 shots, as they are committed: two NEF
+/// files in DX and 1:1 crop modes, and three JPEG files in FX and in
+/// DX and 16:9 crop modes; and the JPEG files: without Exif, with
 /// zeros after its end, and, in both byte orders, with an Exif segment, a
 /// camera's with every value the metadata reads, a camera's with a JFIF
 /// segment first, whose Exif segment holds only the orientation and the

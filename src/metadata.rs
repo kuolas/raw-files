@@ -1421,9 +1421,9 @@ mod tests {
         }
     }
 
-    /// Two points of the Nikon D600's layout, as the record of the
-    /// maintainer's D600 in the NEF format notes gives them: the centre
-    /// point, 1, and the top point of the leftmost column, 38.
+    /// Two points of the Nikon D600's layout, as the record of my
+    /// D600 in the NEF format notes gives them: the centre point, 1,
+    /// and the top point of the leftmost column, 38.
     static D600_POINTS: [LayoutPoint; 2] = [
         LayoutPoint::new(1, D600_CENTRE, D600_BOX),
         LayoutPoint::new(38, Point { x: 1_812, y: 1_705 }, D600_BOX),

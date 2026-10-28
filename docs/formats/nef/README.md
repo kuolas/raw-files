@@ -5,6 +5,10 @@ public sources. Nikon publishes no specification, so everything here comes from
 the TIFF and Exif standards, community documentation and the source code of
 existing raw decoders, each cited where it is used.
 
+Where these notes say *I* or *my own* files, it is me, Alvaro Kuolas, who
+maintains raw-files, writing about my own cameras and shots: they stay
+private, and are cited by counts or by frame numbers.
+
 These pages support the [roadmap](../../ROADMAP.md): NEF previews first, then
 basic metadata, then full metadata, then raw decoding.
 
@@ -37,12 +41,11 @@ listed in the
 The tests check the previews of all 35, and test-data.md records them, but
 the containers of the 32 files of 25 other bodies are not yet written up
 in these pages. On 26 October 2026 the autofocus points of a D600 were
-measured on 56 frames shot with the maintainer's own D600, read in
-Nikon's NX Studio as a reader to compare with
-([autofocus-points.md](autofocus-points.md)); the frames stay private
-and are cited by counts and frame numbers. The raw data was not
-checked, beyond the raw IFD's tags and the first bytes of the Z 9's strip.
-**Everything else has yet to be checked against sample files.** Byte
+measured on 56 frames shot with my own D600, read in Nikon's NX Studio as a
+reader to compare with ([autofocus-points.md](autofocus-points.md)); the
+frames stay private and are cited by counts and frame numbers. The raw data
+was not checked, beyond the raw IFD's tags and the first bytes of the Z 9's
+strip. **Everything else has yet to be checked against sample files.** Byte
 offsets and formulas taken from other projects' source code should be
 checked against that source and against real files before they are
 hard-coded. [open-questions.md](open-questions.md)

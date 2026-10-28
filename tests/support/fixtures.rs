@@ -1,14 +1,15 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 //! Where the integration tests find the files committed in
-//! `tests/fixtures/`: two NEF files from the maintainer's own Z 9, in DX
-//! and 1:1 crop modes, with their pixels and personal fields removed and
-//! their structure and values kept, and three JPEG files from the same
-//! camera, in FX and in DX and 16:9 crop modes, with their images replaced
-//! by stubs and their personal fields zeroed and their Exif segment kept
-//! as the camera wrote it, as `tests/fixtures/README.md` says.
-//! Unlike the downloaded samples, they are in the repository, so a test
-//! never skips one: a missing fixture is a failure.
+//! `tests/fixtures/`: two NEF files from my own Z 9, in DX and 1:1
+//! crop modes, with their pixels and personal fields removed and
+//! their structure and values kept, and three JPEG files from the
+//! same camera, in FX and in DX and 16:9 crop modes, with their
+//! images replaced by stubs and their personal fields zeroed and
+//! their Exif segment kept as the camera wrote it, as
+//! `tests/fixtures/README.md` says. Unlike the downloaded samples,
+//! they are in the repository, so a test never skips one: a missing
+//! fixture is a failure.
 
 use std::path::{Path, PathBuf};
 

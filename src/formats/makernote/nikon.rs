@@ -114,24 +114,24 @@
 //! 7809, 7810, 7767 and 7770). What the values mean on the cropped picture
 //! depends on what the crop cut. A DX crop, which cuts both sides, records
 //! fractions of the cropped picture; a crop that keeps one side, 1:1 or
-//! 16:9, records positions in the full frame. Shots made with the
-//! maintainer's Z 9, with the point in the top-left corner of the picture,
-//! showed it, with the same single point of 291 by 323 at (502, 424) in FX.
-//! The DX shot records (636, 572) and an area of 420 by 468, which, scaled
-//! onto its 5392 by 3592 picture, are (415, 373) and 274 by 305, near the
-//! corner and about the FX area. The 1:1 shot records (1797, 424), which is
-//! (421, 424) in its 5504 by 5504 window of the frame, and the 16:9 shot
-//! (502, 715), which is (502, 283) in its 8256 by 4640 window, both with
-//! the FX area. CropHiSpeed tells a crop apart: its cropped size differs
-//! from its original size on a crop, and equals it on every other file
-//! checked but the D810's, below. The record is checked first as recorded,
-//! in the full frame, as on any file: one that does not hold there gives no
-//! focus point on a crop either. On a crop, the frame becomes CropArea's
-//! size. A DX crop's point is scaled onto it as [`Focus::scaled_to`]
-//! scales: the centre and the area are each rounded to the nearest pixel,
-//! a half rounding up. An area that rounding leaves a pixel too wide for
-//! its centre is trimmed to fit, and an area side that rounds to nothing
-//! is kept at one pixel. A centre that rounds onto an edge of the picture
+//! 16:9, records positions in the full frame. Shots made with my Z 9, with
+//! the point in the top-left corner of the picture, showed it, with the
+//! same single point of 291 by 323 at (502, 424) in FX. The DX shot records
+//! (636, 572) and an area of 420 by 468, which, scaled onto its 5392 by
+//! 3592 picture, are (415, 373) and 274 by 305, near the corner and about
+//! the FX area. The 1:1 shot records (1797, 424), which is (421, 424) in
+//! its 5504 by 5504 window of the frame, and the 16:9 shot (502, 715),
+//! which is (502, 283) in its 8256 by 4640 window, both with the FX area.
+//! CropHiSpeed tells a crop apart: its cropped size differs from its
+//! original size on a crop, and equals it on every other file checked but
+//! the D810's, below. The record is checked first as recorded, in the full
+//! frame, as on any file: one that does not hold there gives no focus point
+//! on a crop either. On a crop, the frame becomes CropArea's size. A DX
+//! crop's point is scaled onto it as [`Focus::scaled_to`] scales: the
+//! centre and the area are each rounded to the nearest pixel, a half
+//! rounding up. An area that rounding leaves a pixel too wide for its
+//! centre is trimmed to fit, and an area side that rounds to nothing is
+//! kept at one pixel. A centre that rounds onto an edge of the picture
 //! keeps the point without an area. A 1:1 or 16:9 crop's centre moves
 //! back by the window's origin, half the difference between the frame and
 //! CropArea, keeping the area. That window holds only when CropArea's
@@ -150,8 +150,8 @@
 //!
 //! A JPEG shot in a crop mode records the same AFInfo2 and CropHiSpeed as
 //! the raw file of the same shot, with the frame still the full output at
-//! every image size, and no CropArea: shots made with the maintainer's Z 9
-//! showed it, in each crop mode and at each of its three image sizes. Its
+//! every image size, and no CropArea: shots made with my Z 9 showed
+//! it, in each crop mode and at each of its three image sizes. Its
 //! picture is the JPEG's own pixels, of the size its frame header gives,
 //! which the metadata's image size holds, and its point is placed on them
 //! as a raw file's is placed on CropArea (ADR015). A DX crop's point is
@@ -182,17 +182,17 @@
 //! where a checked file, or a standard, shows what it means; anything else
 //! costs that value alone. The meaning of each code is ExifTool's, read
 //! in its published tag documentation and confirmed on the public samples
-//! and on frames the maintainer shot for these values with a Z 9 and a
-//! D600, as the NEF notes record them (`docs/formats/nef/`, section 8.7
-//! of the notes on the MakerNote).
+//! and on frames I shot for these values with a Z 9 and a D600, as
+//! the NEF notes record them (`docs/formats/nef/`, section 8.7 of the
+//! notes on the MakerNote).
 //!
 //! WhiteBalance is ASCII text, an upper-case word padded with spaces, read
 //! by the text rule. Its words cannot be guessed from one another, `COOL
 //! WHT FL` for a cool white fluorescent lamp, so each is looked up whole
 //! in a table of the texts checked files hold. The public samples show
-//! `AUTO`, `AUTO0`, `AUTO1`, `SUNNY`, `FLASH` and `SHADE`; the
-//! maintainer's own files add `CLOUDY`, `INCANDESCENT`, `PRESET` and `COOL
-//! WHT FL`; and the frames shot on the Z 9 and the D600 add `AUTO2`,
+//! `AUTO`, `AUTO0`, `AUTO1`, `SUNNY`, `FLASH` and `SHADE`; my
+//! own files add `CLOUDY`, `INCANDESCENT`, `PRESET` and `COOL WHT
+//! FL`; and the frames shot on the Z 9 and the D600 add `AUTO2`,
 //! `NATURAL AUTO` and `PRESET1` to `PRESET4`, with Exif's white balance
 //! agreeing with each. A colour temperature the photographer chose is
 //! written as its number, `3230K` on both bodies, which no table could
@@ -204,14 +204,14 @@
 //! ColorTemperatureAuto is one SHORT, in kelvin: the colour temperature of
 //! the white balance the camera applied. The D5, the D850, the D780 and
 //! the Z bodies write it, 3050 to 7000 under auto on 17 public samples;
-//! the maintainer's Z 9 writes it under every setting, 5210 under daylight,
-//! 5200 under a preset and 3230 under a chosen 3230 K; the D850 and the
-//! Z fc write 0 under daylight (samples 1835 and 8559), which records
+//! my Z 9 writes it under every setting, 5210 under daylight, 5200
+//! under a preset and 3230 under a chosen 3230 K; the D850 and the Z
+//! fc write 0 under daylight (samples 1835 and 8559), which records
 //! none. The bodies before them write none, and the WhiteBalance text is
 //! all they record of a temperature: the number of a chosen one, `3230K`
-//! on the maintainer's D600. So when ColorTemperatureAuto gives none, the
-//! colour temperature is that number, when the text records one; on the
-//! Z 9, which writes both, they agree. A colour temperature is given only
+//! on my D600. So when ColorTemperatureAuto gives none, the colour
+//! temperature is that number, when the text records one; on the Z 9,
+//! which writes both, they agree. A colour temperature is given only
 //! from 1 to 99,999 K, the largest number the text's five digits hold.
 //!
 //! The fine-tuning is a shift of the white balance along two axes, amber
@@ -248,16 +248,16 @@
 //! 1:1 crops of FX and DX; 6, the 16:9 crop; 9, which ExifTool's
 //! documentation names a DX movie's 16:9 crop, on the Z50II's 16:9 still
 //! and a D7100's; and 1 and 10, the 1.3x crop and the 1.3x movie crop, on
-//! the maintainer's D7200 files, stills all of them. 0, "off", gives none:
-//! the D700, FX, and the D300, DX, both write it, so it does not say which
+//! my D7200 files, stills all of them. 0, "off", gives none: the D700,
+//! FX, and the D300, DX, both write it, so it does not say which
 //! sensor the body has.
 //!
 //! ImageSizeRAW is one SHORT, the raw size the camera was set to: 1 large,
 //! on 19 of the 22 public samples that write it, and 3 small, on the other
 //! three, small raws (samples 1835, 2036 and 3587). No checked raw file is
 //! a medium one, so 2 gives none. In a JPEG, ImageSizeRAW follows the
-//! JPEG's own size, as the maintainer's Z 9 shots taken as a NEF and a
-//! JPEG together show, so a JPEG's picture ([`Picture::Jpeg`]) gives none:
+//! JPEG's own size, as my Z 9 shots taken as a NEF and a JPEG
+//! together show, so a JPEG's picture ([`Picture::Jpeg`]) gives none:
 //! a JPEG holds no raw data (ADR014).
 //!
 //! ColorSpace is one SHORT, the colour space of the camera's JPEG output:
@@ -265,9 +265,9 @@
 //! Coolpix P7800 write; 4, BT.2100, gives none. It is read only when the
 //! Exif IFD holds no ColorSpace, as no checked NEF file does: a program
 //! that rewrites a JPEG may set Exif's to "uncalibrated" and leave the
-//! camera's MakerNote behind, as on 10 of the maintainer's rewritten
-//! JPEGs, so where Exif records one, it alone decides. An Exif entry the
-//! TIFF reader skips as damaged, of an unknown type, of a length past 32
+//! camera's MakerNote behind, as on 10 of my rewritten JPEGs, so
+//! where Exif records one, it alone decides. An Exif entry the TIFF
+//! reader skips as damaged, of an unknown type, of a length past 32
 //! bits or with its value outside its block, the file or a JPEG's Exif
 //! segment, counts as none, as any damaged value does (ADR011).
 //!
@@ -1702,16 +1702,15 @@ fn af_info2_record(value: &[u8], order: ByteOrder) -> Option<FocusRecord> {
 ///
 /// - under phase detection, 0 [`Single`](AfAreaMode::Single), 5
 ///   [`Dynamic`](AfAreaMode::Dynamic) and 8 [`Auto`](AfAreaMode::Auto),
-///   on the maintainer's D600 frames through the viewfinder, in
-///   single-point, dynamic-area and auto-area AF;
+///   on my D600 frames through the viewfinder, in single-point,
+///   dynamic-area and auto-area AF;
 /// - under any detection method, 193 [`Single`](AfAreaMode::Single), on
 ///   the two Z 9 frames shot with a single point and committed as
 ///   fixtures, both under hybrid detection, and 197
-///   [`Auto`](AfAreaMode::Auto), on the maintainer's Z 9 files shot in
-///   auto-area AF;
+///   [`Auto`](AfAreaMode::Auto), on my Z 9 files shot in auto-area AF;
 /// - under contrast or hybrid detection, 207
-///   [`Tracking`](AfAreaMode::Tracking), on the maintainer's Z 9 files
-///   shot in 3D-tracking, under hybrid detection.
+///   [`Tracking`](AfAreaMode::Tracking), on my Z 9 files shot in
+///   3D-tracking, under hybrid detection.
 ///
 /// A DSLR code under contrast or hybrid detection, 207 under phase
 /// detection, or any other code gives `None`.
@@ -4284,32 +4283,29 @@ mod tests {
         crop_area: Some([10, 6, 4528, 3018]),
     };
 
-    /// The Z 9's FX mode, which is no crop, as shots made with the
-    /// maintainer's Z 9 record it.
+    /// The Z 9's FX mode, which is no crop, as shots made with my Z 9
+    /// record it.
     const Z9_FX: Crop = Crop {
         raw: [8280, 5520],
         crop_hi_speed: Some([11, 8280, 5520, 8280, 5520, 0, 0]),
         crop_area: Some([12, 8, 8256, 5504]),
     };
 
-    /// The Z 9's DX crop, as shots made with the maintainer's Z 9 record
-    /// it.
+    /// The Z 9's DX crop, as shots made with my Z 9 record it.
     const Z9_DX: Crop = Crop {
         raw: [5408, 3608],
         crop_hi_speed: Some([2, 8280, 5520, 5408, 3608, 1436, 956]),
         crop_area: Some([8, 8, 5392, 3592]),
     };
 
-    /// The Z 9's 1:1 crop, as shots made with the maintainer's Z 9 record
-    /// it.
+    /// The Z 9's 1:1 crop, as shots made with my Z 9 record it.
     const Z9_1X1: Crop = Crop {
         raw: [5520, 5520],
         crop_hi_speed: Some([17, 8280, 5520, 5520, 5520, 1380, 0]),
         crop_area: Some([8, 8, 5504, 5504]),
     };
 
-    /// The Z 9's 16:9 crop, as shots made with the maintainer's Z 9 record
-    /// it.
+    /// The Z 9's 16:9 crop, as shots made with my Z 9 record it.
     const Z9_16X9: Crop = Crop {
         raw: [8280, 4656],
         crop_hi_speed: Some([6, 8280, 5520, 8280, 4656, 0, 432]),
@@ -4351,9 +4347,9 @@ mod tests {
         in_focus: 1,
     };
 
-    /// The records of the shots made with the maintainer's Z 9, version
-    /// 0400, with a single point placed in the top-left corner of the
-    /// picture in each mode: FX, DX, 1:1 and 16:9.
+    /// The records of the shots made with my Z 9, version 0400, with
+    /// a single point placed in the top-left corner of the picture in
+    /// each mode: FX, DX, 1:1 and 16:9.
     const Z9_FX_CORNER: Recorded = Recorded {
         frame: [8256, 5504],
         center: [502, 424],
@@ -4497,8 +4493,8 @@ mod tests {
 
     #[test]
     fn the_z9_shots_with_the_point_in_the_corner_keep_it_there_on_every_crop() {
-        // Shots made with the maintainer's Z 9, a single point placed in
-        // the top-left corner of the picture in each mode. FX is no crop,
+        // Shots made with my Z 9, a single point placed in the
+        // top-left corner of the picture in each mode. FX is no crop,
         // and is read as recorded. The DX shot, scaled onto its 5392 by
         // 3592 CropArea, lies as near the corner as FX, with about its
         // area; the 1:1 and 16:9 shots, moved back by 1376 across and 432

@@ -18,17 +18,17 @@
 //! with its offsets counted from the Exif segment's TIFF header: the
 //! camera settings it records, its focus point, as recorded and kept only
 //! when its frame has the picture's shape, none where it records none, and
-//! the damage and the limits that cost the point but not the file. Then three real JPEGs of the
-//! maintainer's own Z 9, in FX and in DX and 16:9 crop modes, committed
-//! with their images replaced by stubs and their personal fields zeroed (see
-//! [`support::fixtures`]), read whole from a path and from bytes: their
-//! previews, every value of their metadata, the camera settings among
-//! them, and their focus points, as recorded in FX, scaled onto the DX
-//! picture and moved into the 16:9 window. Then eight camera JPEGs of
-//! Wikimedia Commons, too large to commit, when they have been downloaded
-//! (see [`support::samples::path`]): the previews each gives, and its
-//! metadata, every value of it, the focus point and the camera settings
-//! among them.
+//! the damage and the limits that cost the point but not the file. Then
+//! three real JPEGs of my own Z 9, in FX and in DX and 16:9 crop modes,
+//! committed with their images replaced by stubs and their personal
+//! fields zeroed (see [`support::fixtures`]), read whole from a path and
+//! from bytes: their previews, every value of their metadata, the camera
+//! settings among them, and their focus points, as recorded in FX, scaled
+//! onto the DX picture and moved into the 16:9 window. Then eight camera
+//! JPEGs of Wikimedia Commons, too large to commit, when they have been
+//! downloaded (see [`support::samples::path`]): the previews each gives,
+//! and its metadata, every value of it, the focus point and the camera
+//! settings among them.
 
 mod support;
 
@@ -1153,8 +1153,8 @@ fn an_export_cut_to_another_shape_gives_no_focus_point() {
 fn a_crop_mode_jpeg_places_its_point_on_its_pixels() {
     // The Z 9's crop modes, whose JPEGs hold no CropArea and record their
     // point in the full frame of 8256 by 5504, at each size, as the NEF
-    // notes record the maintainer's shots with a single point in the
-    // top-left corner of the picture (ADR015):
+    // notes record my shots with a single point in the top-left
+    // corner of the picture (ADR015):
     //
     // - DX scales the recorded (636, 572), 420 by 468, onto the JPEG: at
     //   full size, the raw file's CropArea, 5392 by 3592, that is the raw
@@ -1862,10 +1862,10 @@ fn a_limit_crossed_inside_the_sony_makernote_costs_its_focus_point_only() {
     }
 }
 
-// Three real files, committed. Three JPEGs of the maintainer's own Z 9,
-// shot in FX, in DX crop mode and in 16:9 crop mode, with every image
-// replaced by a stub JPEG of its size and their personal fields zeroed in
-// place, their Exif segment otherwise as the camera wrote it
+// Three real files, committed. Three JPEGs of my own Z 9, shot in FX,
+// in DX crop mode and in 16:9 crop mode, with every image replaced by
+// a stub JPEG of its size and their personal fields zeroed in place,
+// their Exif segment otherwise as the camera wrote it
 // (`tests/fixtures/README.md`). They hold what the files built in code only
 // imitate: the camera's own Exif segment, every tag at the camera's
 // offset, with its MakerNote, IFD1's thumbnail, and the MPF list of the

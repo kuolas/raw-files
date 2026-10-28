@@ -3,7 +3,9 @@
 The files a fuzz target starts from. A fuzzer finds a valid file header only
 by luck, and from an empty corpus it never builds a big-endian TIFF one, so
 each target is given a few valid files to mutate. The seeds are committed;
-the corpus the fuzzer writes is not.
+the corpus the fuzzer writes is not. Where this page says *my own*, it is
+me, Alvaro Kuolas, who maintains raw-files, as
+[`tests/fixtures/README.md`](../../tests/fixtures/README.md) says.
 
 - `tiff_walk/` seeds the `tiff_walk` target with the test fixtures of the
   TIFF reader, three layouts in both byte orders.
@@ -35,9 +37,9 @@ the corpus the fuzzer writes is not.
   inside that segment, a Nikon MakerNote of the headerless layout, a Sony
   MakerNote and the camera's MPF index share. Beside
   these files built in code are the three real JPEGs committed in
-  [`tests/fixtures/`](../../tests/fixtures/README.md), shots of the
-  maintainer's own Z 9 in FX and in DX and 16:9 crop modes with their
-  images replaced by stubs and their personal fields zeroed, copied as
+  [`tests/fixtures/`](../../tests/fixtures/README.md), shots of my own
+  Z 9 in FX and in DX and 16:9 crop modes with their images
+  replaced by stubs and their personal fields zeroed, copied as
   they are, the camera's own Exif segment and Nikon MakerNote in
   little-endian byte order.
 - `open/` seeds the `open` target with the integration tests' fixtures of
@@ -47,11 +49,11 @@ the corpus the fuzzer writes is not.
   4.0 with a lossless and with a medium raw, ARW 2.x, ARQ, SR2, SRF and
   the A100), in both byte orders; and, beside these fixtures built
   in code, the two real files committed in
-  [`tests/fixtures/`](../../tests/fixtures/README.md), shots of the
-  maintainer's own Z 9 in DX and 1:1 crop modes with their pixels and
-  personal fields removed, copied as they are. The target also takes the
-  `tiff_walk/` and `jpeg_segments/` seeds as further corpus directories,
-  since a plain TIFF file and a JPEG file are also something it must open.
+  [`tests/fixtures/`](../../tests/fixtures/README.md), shots of my own
+  Z 9 in DX and 1:1 crop modes with their pixels and personal fields
+  removed, copied as they are. The target also takes the `tiff_walk/`
+  and `jpeg_segments/` seeds as further corpus directories, since a
+  plain TIFF file and a JPEG file are also something it must open.
 
 The files are generated from the fixtures in
 `src/container/tiff/robustness.rs`, the stubs in

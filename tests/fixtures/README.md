@@ -18,19 +18,20 @@ camera wrote.
 
 ## Where they come from
 
-The maintainer took the two NEF pictures with their own Z 9 on
-2026-10-19, one in DX crop mode and one in 1:1, with a single autofocus
-point placed in the top-left corner of the picture. They were taken to
-tell apart the two ways a crop mode records its focus point: as a
-fraction of the cropped picture, which the reader scales, or as a
-position in the full frame, which the reader shifts into the cropped
-window. A point near the centre lands in the same place either way, and
-every public sample of a crop mode has its point near the centre, so no
-public sample can tell the two apart.
+Where this page says *I*, it is me, Alvaro Kuolas, who maintains raw-files,
+writing about my own camera.
 
-The maintainer took the three JPEG pictures with the same camera on
-2026-10-22, to check what a camera JPEG records in each crop mode and
-image size
+I took the two NEF pictures with my own Z 9 on 2026-10-19, one in DX crop
+mode and one in 1:1, with a single autofocus point placed in the top-left
+corner of the picture. They were taken to tell apart the two ways a crop
+mode records its focus point: as a fraction of the cropped picture, which
+the reader scales, or as a position in the full frame, which the reader
+shifts into the cropped window. A point near the centre lands in the same
+place either way, and every public sample of a crop mode has its point near
+the centre, so no public sample can tell the two apart.
+
+I took the three JPEG pictures with the same camera on 2026-10-22, to
+check what a camera JPEG records in each crop mode and image size
 ([ADR015](../../docs/architecture-decisions/adr015-the-focus-point-of-a-crop-mode-jpeg.md)):
 one in FX, the camera's full output, at full size; one in DX crop mode at
 full size; and one in 16:9 crop mode at the middle size, taken in
@@ -72,8 +73,8 @@ camera wrote them.
   white balance setting's text (0x0005) and the white balance
   fine-tuning (0x003F) among them.
 
-Once they were stripped, the maintainer checked that no byte sequence of
-the removed serial numbers or shutter count remains in either file, that
+Once they were stripped, I checked that no byte sequence of the
+removed serial numbers or shutter count remains in either file, that
 neither holds a run of six or more digits, and that the focus fields,
 CropHiSpeed, CropArea and the raw size are those of the camera's file.
 
@@ -114,17 +115,16 @@ fields zeroed in place. Each is 69,998 bytes.
 - **Dropped:** the XMP segment, and the zeros the camera wrote before
   each MPF image.
 
-Once they were stripped, the maintainer checked that no byte sequence of
-the zeroed serial numbers or shutter count remains in any of the three
-files, as text or as a binary number in either byte order, nor the bytes
-of the time the camera was switched on; that every
-GPS value is zero and no XMP is left; that the Exif segment differs from
-the camera's only inside the zeroed values and the thumbnail; that no run
-of six or more digits remains outside the capture times but the
-four-digit version fields that MakerNote blocks start with; and that
-every image keeps its frame size, and the focus fields, CropHiSpeed,
-FocusMode, the orientation, the exposure, the capture times and the lens
-are those of the camera's file.
+Once they were stripped, I checked that no byte sequence of the zeroed
+serial numbers or shutter count remains in any of the three files, as
+text or as a binary number in either byte order, nor the bytes of the
+time the camera was switched on; that every GPS value is zero and no XMP
+is left; that the Exif segment differs from the camera's only inside the
+zeroed values and the thumbnail; that no run of six or more digits
+remains outside the capture times but the four-digit version fields that
+MakerNote blocks start with; and that every image keeps its frame size,
+and the focus fields, CropHiSpeed, FocusMode, the orientation, the
+exposure, the capture times and the lens are those of the camera's file.
 
 ## What they test
 
@@ -186,11 +186,11 @@ the end of the Exif segment; and the fuzzer starts from copies of them.
 
 ## Licence and changes
 
-The maintainer, who took the photographs, publishes these files under
-the repository's licence, MIT OR Apache-2.0, at your option.
+I, who took the photographs, publish these files under the
+repository's licence, MIT OR Apache-2.0, at your option.
 
 The NEF files were made on 2026-10-20, the JPEG files on 2026-10-22.
-Only the maintainer can regenerate them, from the camera's original
-files, which are not public; that is why this page records how they were
-made and what was removed. A change to any file changes its SHA-256
-above, which must then be updated in the same change.
+Only I can regenerate them, from the camera's original files, which
+are not public; that is why this page records how they were made and
+what was removed. A change to any file changes its SHA-256 above,
+which must then be updated in the same change.

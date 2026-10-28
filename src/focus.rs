@@ -849,7 +849,7 @@ impl From<Focus> for FocusPoints {
 /// # Examples
 ///
 /// The centre point of the Nikon D600's layout, from the record of the
-/// maintainer's D600 in the NEF format notes:
+/// Nikon D600 in the NEF format notes:
 ///
 /// ```
 /// use raw_files::{LayoutPoint, Point, Size};
@@ -942,9 +942,9 @@ impl LayoutPoint {
 /// # Examples
 ///
 /// Three points of the Nikon D600's layout, from the record of the
-/// maintainer's D600 in the NEF format notes: the centre point, 1, the top
-/// point of the left one of the three middle columns, 13, and the top
-/// point of the leftmost column, 38, each with its 164 × 164 box, in the
+/// Nikon D600 in the NEF format notes: the centre point, 1, the top point
+/// of the left one of the three middle columns, 13, and the top point
+/// of the leftmost column, 38, each with its 164 × 164 box, in the
 /// body's 6016 × 4016 frame. [`LayoutPoint::new`] is `const`, so the
 /// points can be a `static` array, which the layout borrows:
 ///
@@ -2133,8 +2133,8 @@ mod tests {
     }
 
     /// The D600's frame, its full-size output, and the box of every one of
-    /// its points, as the record of the maintainer's D600 in the NEF format
-    /// notes gives them.
+    /// its points, as the record of my D600 in the NEF format notes
+    /// gives them.
     const D600_FRAME: Size = Size {
         width: 6_016,
         height: 4_016,
