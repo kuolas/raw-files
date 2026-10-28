@@ -730,7 +730,7 @@ raw-files reads it or not:
 |---|---|---|---|
 | 0x00B7 AFInfo2, position fields | the size of a frame, the centre of the focus area and the area's size in that frame | mirrorless bodies, and DSLRs in live view **[F]** | read, at the versions of the table below |
 | 0x00B7 AFInfo2, in-focus byte | whether focus was confirmed: FocusResult on 04xx, ContrastDetectAFInFocus on 0100 and 0101 | Z 9, Z f, Z6III, Z50II, Z5II, D7000, D5600, D5, Coolpix A **[F]** | read; on 0100 the flag is byte 28, where ExifTool also lists a 20-byte AFPointsSelected that cannot fit in the 30-byte value |
-| 0x00B7 AFInfo2, point fields | the primary point's number, a mask of the points used, and the layout of points (FocusPointSchema) | DSLRs through the viewfinder, the Nikon 1 J1, the Z5II in auto-area mode **[F]** | a number is to be placed from a table of the body's points, measured by the project on frames shot with that body ([autofocus-points.md](autofocus-points.md), [ADR017](../../architecture-decisions/adr017-per-body-tables-measured-by-the-project.md)); the D600's is the first, and a body without a table is to give none, counted |
+| 0x00B7 AFInfo2, point fields | the primary point's number, a mask of the points used, and the layout of points (FocusPointSchema) | DSLRs through the viewfinder, the Nikon 1 J1, the Z5II in auto-area mode **[F]** | read on `0100` alone, in a record with no position: the number is placed from a table of the body's points, measured by the project on frames shot with that body ([autofocus-points.md](autofocus-points.md), [ADR017](../../architecture-decisions/adr017-per-body-tables-measured-by-the-project.md)), with the points the mask names ([ADR018](../../architecture-decisions/adr018-focus-points-placed-from-a-table-and-the-points-used.md)); the D600's is the only table, and every other body gives none; the other versions' point fields are not read |
 | 0x00B7 AFInfo2, AFPointsInFocus | a mask of the points in focus, version 0101 only (byte 48) [P] | the D850, one point **[F]** | not read: a mask of version 0101, which needs a table of a body that writes that version |
 | 0x0088 AFInfo | 4 bytes: area mode, point number, mask of the points in focus [P] | the bodies without AFInfo2: D1H, D1X, D70, D100, D200, E5700, P7800 **[F]** | not read: a number only |
 | 0x0021 FaceDetect | a frame size and up to twelve face rectangles in it [P] | none of the 35 files **[F]** | not read: no sample |
@@ -878,7 +878,7 @@ What the fields hold:
   above, with a detection method of 1 (contrast) on the D7000, D5600, D5
   and Coolpix A and 2 (hybrid) on the Z bodies, are the ones that fill them.
   **[F]** Mapping a point number to pixels needs a table of the body's
-  points, which no file carries (ADR012). raw-files is to measure such
+  points, which no file carries (ADR012). raw-files measures such
   tables itself, one body at a time, on frames shot with the body and
   read in the maker's software. The D600's is measured: the record,
   with the layout, the bit order, the box of 164x164 and the 39 centres
@@ -889,7 +889,13 @@ What the fields hold:
   draws it. **[F]** How a named point is placed from the table, under
   which conditions, and how the points used are reported with the
   area mode is decided in
-  [ADR018](../../architecture-decisions/adr018-focus-points-placed-from-a-table-and-the-points-used.md).
+  [ADR018](../../architecture-decisions/adr018-focus-points-placed-from-a-table-and-the-points-used.md),
+  and the frame of a placed point on a crop, the crop's window, 3936x2624
+  on a D600 DX frame, in
+  [ADR019](../../architecture-decisions/adr019-the-frame-of-a-placed-focus-point-on-a-crop.md).
+  raw-files places the D600's point so, from version `0100`'s layout
+  code, primary point and mask: in the 6016x4016 frame, or in that
+  window on the DX crop, the one crop the record confirms.
 - **A DSLR in live view on a crop records the cropped frame.** One of
   my D7200 files, shot in live view in the 1.3x movie crop,
   CropHiSpeed `[10, 6016, 4016, 4840, 2712, 576, 248]`, records an
@@ -952,7 +958,10 @@ What the fields hold:
   JPEG in the set records a position. The 56 JPEGs of my D600 session
   carry the same AFInfo2 and CropHiSpeed as the NEF of the same frame
   ([autofocus-points.md](autofocus-points.md#22-what-the-body-writes)).
-  **[F]** A JPEG keeps a point only when its
+  **[F]** So a D600 JPEG gives the point its NEF gives, placed from the
+  table; on a DX frame only when the JPEG's size is the crop's window,
+  3936x2624, its full image size, since a smaller DX JPEG is unmeasured
+  (ADR019). A JPEG keeps a point only when its
   frame has the JPEG's aspect ratio, so that an export cropped to another
   shape, which may keep the camera's MakerNote, gives none
   ([ADR014](../../architecture-decisions/adr014-jpeg-files-as-a-format-of-their-own.md)),
@@ -991,8 +1000,8 @@ and what raw-files gives; a row without a file is an open question
 | DSLR in live view on a crop | the cropped frame | none public; one of my D7200 files, in the 1.3x movie crop | the point as recorded, in the cropped frame; unchecked on a body with a CropArea |
 | A `0101` body in live view | a position, at ExifTool's offsets | D5 2218 | the point; checked |
 | A `0301` body | a position, at the 03xx offsets | Z 30 5812, Z fc 8559 | the point, none on 8559, a manual-focus shot; checked |
-| DSLR through the viewfinder, a body with a table | a point number and a mask | none among the public samples; my D600 frames, all 56 committed stripped, and my D600 files ([autofocus-points.md](autofocus-points.md#2-nikon-d600)) | the point to be placed from the table, with the points the mask names, as decided in [ADR018](../../architecture-decisions/adr018-focus-points-placed-from-a-table-and-the-points-used.md) |
-| DSLR through the viewfinder, any other body | a point number and a mask | D300 928, D700 2255, D750 895, D810 2036, D850 1835, D780 3827 | none: no table for the body, to be counted; 928 and 1835 are manual-focus shots, which get none in any case |
+| DSLR through the viewfinder, a body with a table | a point number and a mask | none among the public samples; my D600 frames, all 56 committed stripped, and my D600 files ([autofocus-points.md](autofocus-points.md#2-nikon-d600)) | the point placed from the table, with the points the mask names and the area mode, as decided in [ADR018](../../architecture-decisions/adr018-focus-points-placed-from-a-table-and-the-points-used.md), in the crop's window on a DX frame ([ADR019](../../architecture-decisions/adr019-the-frame-of-a-placed-focus-point-on-a-crop.md)); checked on the 56 frames |
+| DSLR through the viewfinder, any other body | a point number and a mask | D300 928, D700 2255, D750 895, D810 2036, D850 1835, D780 3827 | none: no table for the body; 928 and 1835 are manual-focus shots, which get none in any case |
 | Nikon 1 | a point number and a mask | J1 2956 | none: needs a table of points |
 | Bodies without AFInfo2 | AFInfo: a point number | D1H 5364, D70 2060, D100 2996, D200 8079, E5700 4456, P7800 1425 | none: needs a table of points |
 | Manual focus | FocusMode `MANUAL`; a zero frame through the viewfinder | D300 928, D850 1835 | none |
@@ -1001,7 +1010,7 @@ and what raw-files gives; a row without a file is an open question
 | A DX crop on a small raw | unknown | none | the point, scaled onto CropArea in stored pixels; unchecked |
 | A rotated (portrait) shot | a position in the landscape frame | Z 30 5812 | the point, in stored orientation; checked |
 | Face detection | FaceDetect | none | not read |
-| Camera JPEG through the viewfinder | a zero frame (`0100`) with a point number and a mask, as in the NEF of the same frame | the D5300 JPEG from Wikimedia Commons; my D600 JPEGs | none for the D5300, which has no table; the D600's point to be placed from the table, as in its NEF |
+| Camera JPEG through the viewfinder | a zero frame (`0100`) with a point number and a mask, as in the NEF of the same frame | the D5300 JPEG from Wikimedia Commons; my D600 JPEGs | none for the D5300, which has no table; the D600's point placed from the table, as in its NEF, on a DX frame only at the size of the crop's window, its full image size; unchecked on a committed JPEG |
 | Camera JPEG with a position | a position | none public | the point, when its frame has the JPEG's aspect ratio; unchecked on a public file |
 | Camera JPEG in a crop mode (DX, 1:1, 16:9), at any image size | a position in the full frame, no CropArea | none public; my Z 9 shots | the point, placed on the JPEG's picture; unchecked on a public file |
 | Exported JPEG that keeps the camera's MakerNote | the camera's frame and position | none public | the point only when the frame has the export's aspect ratio |

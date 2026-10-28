@@ -67,16 +67,20 @@ use crate::geometry::{Point, Size};
 /// # Which files record one
 ///
 /// Nikon mirrorless bodies, Nikon DSLRs in live view, and Sony bodies from
-/// the ILCE-7RM2 on record a position. A DSLR shot through the viewfinder
-/// and older bodies record only the number of an autofocus point, and a
-/// Nikon mirrorless body in some auto-area modes only a mask of the points
-/// it used, which the library does not map to pixels; a shot in manual
-/// focus records none that means anything. Those files give no `Focus`.
+/// the ILCE-7RM2 on record a position. A Nikon DSLR shot through the
+/// viewfinder records only the number of an autofocus point, which the
+/// library places in pixels from its table of the body's points, for a
+/// body whose table it has, the Nikon D600: such a `Focus` has the
+/// [`origin`](Self::origin) [`Table`](FocusOrigin::Table). The same shot
+/// of any other body, the older bodies, which record only a point's
+/// number, and a Nikon mirrorless body in some auto-area modes, which
+/// records only the points it used, one bit per point, give no `Focus`; nor
+/// does a shot in manual focus, which records none that means anything.
 ///
 /// On Nikon files, [`Metadata::focus`](crate::Metadata::focus) is read from
 /// the MakerNote's AFInfo2 block, as the camera recorded it but placed
-/// inside the cropped picture on a crop, and is `None` for a manual-focus
-/// shot.
+/// inside the cropped picture on a crop, or placed from the body's table,
+/// and is `None` for a manual-focus shot.
 /// On Sony files it is read from the MakerNote's FocusLocation, on the
 /// bodies from the ILCE-7RM2 on, in the frame the camera framed the
 /// picture in: the picture at an aspect-ratio setting, and, on a medium or
@@ -371,9 +375,9 @@ pub enum FocusOrigin {
     Recorded,
     /// A point the camera named by number, placed by raw-files from its
     /// table of the body's autofocus points, measured on frames shot with
-    /// that body and read in the maker's software: an estimate of where
-    /// the viewfinder's point lies on the picture, not a position the
-    /// camera measured. The
+    /// that body and read in the maker's software, such as a Nikon D600's
+    /// point through the viewfinder: an estimate of where the viewfinder's
+    /// point lies on the picture, not a position the camera measured. The
     /// [format notes](https://github.com/kuolas/raw-files/blob/master/docs/formats/nef/autofocus-points.md)
     /// record each body's table and its tolerance, a few pixels.
     Table,
@@ -602,7 +606,11 @@ impl FocusPoint {
 ///
 /// A list has one point for a recorded position: the readers give the
 /// position the camera recorded as a list of that one point, its primary,
-/// with no number and the origin [`Recorded`](FocusOrigin::Recorded).
+/// with no number and the origin [`Recorded`](FocusOrigin::Recorded). A
+/// list placed from a table of the body's points has a point for each
+/// point the camera used, each with its number, and the origin
+/// [`Table`](FocusOrigin::Table);
+/// [`Metadata::focus_points`](crate::Metadata::focus_points) says which.
 ///
 /// # Equality
 ///
@@ -1069,8 +1077,9 @@ impl FocusLayout {
 /// and [`Focus::with_size`] the area. It asks those constructors rather
 /// than repeat their checks, so that the one rule a focus is checked by is
 /// the one a [`FocusPoints`] and a [`FocusLayout`] check each of their
-/// points by.
-fn lies_on(frame: Size, center: Point, size: Option<Size>) -> bool {
+/// points by, and the one by which the Nikon MakerNote's reader drops a
+/// point placed from a table that the crop's window leaves out.
+pub(crate) fn lies_on(frame: Size, center: Point, size: Option<Size>) -> bool {
     Focus::new(frame, center)
         .and_then(|focus| match size {
             Some(size) => focus.with_size(size),

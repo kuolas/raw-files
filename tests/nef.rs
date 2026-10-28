@@ -21,11 +21,13 @@
 //! Then the 56 real files of the session on which my own D600's
 //! autofocus points were measured, committed stripped the same way: what
 //! the reader gives each frame, the layout of the D600's points from its
-//! table, its orientation, its image area and the focus point of its
-//! live-view frames among it; and, on frame 4, shot through the
-//! viewfinder with one point, its previews and every value of its
-//! metadata, with no focus point for the point the file names, and the
-//! layout it gives with its MakerNote missing or unreadable. Then 35
+//! table, its orientation, its image area and its focus points among it:
+//! the points a frame shot through the viewfinder names, placed from the
+//! table, in the crop's window on a DX frame, and the position a live-view
+//! frame records; and, on frame 4, shot through the viewfinder with one
+//! point, its previews and every value of its metadata, the point it names
+//! placed from the table among them, and the layout it gives with its
+//! MakerNote missing or unreadable. Then 35
 //! real files too large to commit, three of the
 //! Z 9 and 32 of 25 other bodies, when they have been downloaded (see
 //! [`support::samples::path`]): the previews each gives, and its
@@ -39,8 +41,8 @@ use std::io::Cursor;
 
 use raw_files::{
     AfAreaMode, CameraSettings, ColorSpace, DateTime, Exposure, ExposureProgram, FineTune, Flash,
-    FlashMode, Focus, FocusOrigin, FocusPoints, Format, ImageArea, Lens, Limits, Metadata,
-    MeteringMode, Options, Orientation, Point, Preview, PreviewFormat, Rational, RawFile,
+    FlashMode, Focus, FocusOrigin, FocusPoint, FocusPoints, Format, ImageArea, Lens, Limits,
+    Metadata, MeteringMode, Options, Orientation, Point, Preview, PreviewFormat, Rational, RawFile,
     RawImageSize, Shutter, SignedRational, Size, WhiteBalance, WhiteBalanceMode,
 };
 use support::nef::{
@@ -1304,19 +1306,31 @@ fn the_stripped_z9_1x1_file_gives_its_previews_metadata_and_shifted_focus_point(
 // so that what the NEF notes' record of the session reads from the files'
 // bytes can be checked on them (`docs/formats/nef/autofocus-points.md`,
 // section 2). Every frame gives the layout of the D600's points from the
-// table raw-files holds, written from that record.
+// table raw-files holds, written from that record, and every frame shot
+// through the viewfinder in autofocus the points it names, placed from it.
+
+/// What the reader gives of a D600 frame's focus.
+#[derive(Clone, Copy, Debug)]
+enum D600Focus {
+    /// No focus point and no list: a manual-focus frame, whose AFInfo2
+    /// names no point.
+    ManualFocus,
+    /// The points a viewfinder frame names, placed from the table: the
+    /// frame they are measured in, the primary's number, the area mode,
+    /// and every point's number and centre, in number order, each with the
+    /// box of 164 by 164, from a table and with nothing said of focus.
+    Placed((u32, u32), u8, AfAreaMode, &'static [(u8, (u32, u32))]),
+    /// The position a live-view frame records: the centre of its area in
+    /// the 6016 by 4016 frame and whether the camera confirmed focus there.
+    LiveView((u32, u32), bool),
+}
+
+use D600Focus::{LiveView, ManualFocus, Placed};
 
 /// One frame of the D600 session, as the reader gives it: its number in
 /// the session; the orientation IFD0 records; the image area that the crop
-/// setting of the MakerNote's CropHiSpeed names; and, on a live-view frame
-/// only, the focus point AFInfo2 records, the centre of its area in the
-/// 6016 by 4016 frame and whether the camera confirmed focus there.
-type D600Frame = (
-    u8,
-    Orientation,
-    Option<ImageArea>,
-    Option<((u32, u32), bool)>,
-);
+/// setting of the MakerNote's CropHiSpeed names; and its focus.
+type D600Frame = (u8, Orientation, Option<ImageArea>, D600Focus);
 
 /// A D600 frame shot in landscape orientation: Orientation 1.
 const D600_LANDSCAPE: Orientation = Orientation::NoTransforms;
@@ -1332,87 +1346,409 @@ const D600_FX: Option<ImageArea> = None;
 /// CropHiSpeed's crop setting 2, the DX crop.
 const D600_DX: Option<ImageArea> = Some(ImageArea::ApsC);
 
-/// The 56 frames of the D600 session, in order.
+/// The frame of the points placed on an FX frame: the D600's full-size
+/// output, the table's frame.
+const D600_FULL: (u32, u32) = (6016, 4016);
+
+/// The frame of the points placed on a DX frame: the crop's window, the
+/// table's frame less twice CropHiSpeed's origin, (1040, 696), on each
+/// side.
+const D600_WINDOW: (u32, u32) = (3936, 2624);
+
+/// The 56 frames of the D600 session, in order. The point numbers, the
+/// layout code, the area mode, the mask's bits, FocusMode and CropHiSpeed
+/// were read from each file's bytes with a script written from the notes,
+/// and each point's centre is the record's, from the table of the NEF
+/// notes (`docs/formats/nef/autofocus-points.md`, section 2.4), less
+/// CropHiSpeed's origin on a DX frame: none of it is read from the
+/// reader.
 const D600_SESSION: [D600Frame; 56] = [
     // Frames 1 to 39: single-point AF through the viewfinder, one frame
     // per point, in landscape and FX. AFInfo2 names the point by its
-    // number, with a zero frame and area, and the reader does not place a
-    // point it names by number: it gives none.
-    (1, D600_LANDSCAPE, D600_FX, None),
-    (2, D600_LANDSCAPE, D600_FX, None),
-    (3, D600_LANDSCAPE, D600_FX, None),
-    (4, D600_LANDSCAPE, D600_FX, None),
-    (5, D600_LANDSCAPE, D600_FX, None),
-    (6, D600_LANDSCAPE, D600_FX, None),
-    (7, D600_LANDSCAPE, D600_FX, None),
-    (8, D600_LANDSCAPE, D600_FX, None),
-    (9, D600_LANDSCAPE, D600_FX, None),
-    (10, D600_LANDSCAPE, D600_FX, None),
-    (11, D600_LANDSCAPE, D600_FX, None),
-    (12, D600_LANDSCAPE, D600_FX, None),
-    (13, D600_LANDSCAPE, D600_FX, None),
-    (14, D600_LANDSCAPE, D600_FX, None),
-    (15, D600_LANDSCAPE, D600_FX, None),
-    (16, D600_LANDSCAPE, D600_FX, None),
-    (17, D600_LANDSCAPE, D600_FX, None),
-    (18, D600_LANDSCAPE, D600_FX, None),
-    (19, D600_LANDSCAPE, D600_FX, None),
-    (20, D600_LANDSCAPE, D600_FX, None),
-    (21, D600_LANDSCAPE, D600_FX, None),
-    (22, D600_LANDSCAPE, D600_FX, None),
-    (23, D600_LANDSCAPE, D600_FX, None),
-    (24, D600_LANDSCAPE, D600_FX, None),
-    (25, D600_LANDSCAPE, D600_FX, None),
-    (26, D600_LANDSCAPE, D600_FX, None),
-    (27, D600_LANDSCAPE, D600_FX, None),
-    (28, D600_LANDSCAPE, D600_FX, None),
-    (29, D600_LANDSCAPE, D600_FX, None),
-    (30, D600_LANDSCAPE, D600_FX, None),
-    (31, D600_LANDSCAPE, D600_FX, None),
-    (32, D600_LANDSCAPE, D600_FX, None),
-    (33, D600_LANDSCAPE, D600_FX, None),
-    (34, D600_LANDSCAPE, D600_FX, None),
-    (35, D600_LANDSCAPE, D600_FX, None),
-    (36, D600_LANDSCAPE, D600_FX, None),
-    (37, D600_LANDSCAPE, D600_FX, None),
-    (38, D600_LANDSCAPE, D600_FX, None),
-    (39, D600_LANDSCAPE, D600_FX, None),
+    // number, with layout code 3, one bit of the mask set, the point's,
+    // and a zero frame and area: the point, placed from the table.
+    (
+        1,
+        D600_LANDSCAPE,
+        D600_FX,
+        Placed(D600_FULL, 13, AfAreaMode::Single, &[(13, (2768, 1503))]),
+    ),
+    (
+        2,
+        D600_LANDSCAPE,
+        D600_FX,
+        Placed(D600_FULL, 3, AfAreaMode::Single, &[(3, (3008, 1503))]),
+    ),
+    (
+        3,
+        D600_LANDSCAPE,
+        D600_FX,
+        Placed(D600_FULL, 8, AfAreaMode::Single, &[(8, (3247, 1503))]),
+    ),
+    (
+        4,
+        D600_LANDSCAPE,
+        D600_FX,
+        Placed(D600_FULL, 38, AfAreaMode::Single, &[(38, (1812, 1705))]),
+    ),
+    (
+        5,
+        D600_LANDSCAPE,
+        D600_FX,
+        Placed(D600_FULL, 35, AfAreaMode::Single, &[(35, (2050, 1705))]),
+    ),
+    (
+        6,
+        D600_LANDSCAPE,
+        D600_FX,
+        Placed(D600_FULL, 32, AfAreaMode::Single, &[(32, (2289, 1705))]),
+    ),
+    (
+        7,
+        D600_LANDSCAPE,
+        D600_FX,
+        Placed(D600_FULL, 29, AfAreaMode::Single, &[(29, (2529, 1705))]),
+    ),
+    (
+        8,
+        D600_LANDSCAPE,
+        D600_FX,
+        Placed(D600_FULL, 12, AfAreaMode::Single, &[(12, (2768, 1755))]),
+    ),
+    (
+        9,
+        D600_LANDSCAPE,
+        D600_FX,
+        Placed(D600_FULL, 2, AfAreaMode::Single, &[(2, (3008, 1755))]),
+    ),
+    (
+        10,
+        D600_LANDSCAPE,
+        D600_FX,
+        Placed(D600_FULL, 7, AfAreaMode::Single, &[(7, (3247, 1755))]),
+    ),
+    (
+        11,
+        D600_LANDSCAPE,
+        D600_FX,
+        Placed(D600_FULL, 17, AfAreaMode::Single, &[(17, (3486, 1705))]),
+    ),
+    (
+        12,
+        D600_LANDSCAPE,
+        D600_FX,
+        Placed(D600_FULL, 20, AfAreaMode::Single, &[(20, (3724, 1705))]),
+    ),
+    (
+        13,
+        D600_LANDSCAPE,
+        D600_FX,
+        Placed(D600_FULL, 23, AfAreaMode::Single, &[(23, (3963, 1705))]),
+    ),
+    (
+        14,
+        D600_LANDSCAPE,
+        D600_FX,
+        Placed(D600_FULL, 26, AfAreaMode::Single, &[(26, (4203, 1705))]),
+    ),
+    (
+        15,
+        D600_LANDSCAPE,
+        D600_FX,
+        Placed(D600_FULL, 37, AfAreaMode::Single, &[(37, (1812, 2007))]),
+    ),
+    (
+        16,
+        D600_LANDSCAPE,
+        D600_FX,
+        Placed(D600_FULL, 34, AfAreaMode::Single, &[(34, (2050, 2007))]),
+    ),
+    (
+        17,
+        D600_LANDSCAPE,
+        D600_FX,
+        Placed(D600_FULL, 31, AfAreaMode::Single, &[(31, (2289, 2007))]),
+    ),
+    (
+        18,
+        D600_LANDSCAPE,
+        D600_FX,
+        Placed(D600_FULL, 28, AfAreaMode::Single, &[(28, (2529, 2007))]),
+    ),
+    (
+        19,
+        D600_LANDSCAPE,
+        D600_FX,
+        Placed(D600_FULL, 11, AfAreaMode::Single, &[(11, (2768, 2007))]),
+    ),
+    (
+        20,
+        D600_LANDSCAPE,
+        D600_FX,
+        Placed(D600_FULL, 1, AfAreaMode::Single, &[(1, (3008, 2007))]),
+    ),
+    (
+        21,
+        D600_LANDSCAPE,
+        D600_FX,
+        Placed(D600_FULL, 6, AfAreaMode::Single, &[(6, (3247, 2007))]),
+    ),
+    (
+        22,
+        D600_LANDSCAPE,
+        D600_FX,
+        Placed(D600_FULL, 16, AfAreaMode::Single, &[(16, (3486, 2007))]),
+    ),
+    (
+        23,
+        D600_LANDSCAPE,
+        D600_FX,
+        Placed(D600_FULL, 19, AfAreaMode::Single, &[(19, (3724, 2007))]),
+    ),
+    (
+        24,
+        D600_LANDSCAPE,
+        D600_FX,
+        Placed(D600_FULL, 22, AfAreaMode::Single, &[(22, (3963, 2007))]),
+    ),
+    (
+        25,
+        D600_LANDSCAPE,
+        D600_FX,
+        Placed(D600_FULL, 25, AfAreaMode::Single, &[(25, (4203, 2007))]),
+    ),
+    (
+        26,
+        D600_LANDSCAPE,
+        D600_FX,
+        Placed(D600_FULL, 39, AfAreaMode::Single, &[(39, (1812, 2308))]),
+    ),
+    (
+        27,
+        D600_LANDSCAPE,
+        D600_FX,
+        Placed(D600_FULL, 36, AfAreaMode::Single, &[(36, (2050, 2308))]),
+    ),
+    (
+        28,
+        D600_LANDSCAPE,
+        D600_FX,
+        Placed(D600_FULL, 33, AfAreaMode::Single, &[(33, (2289, 2308))]),
+    ),
+    (
+        29,
+        D600_LANDSCAPE,
+        D600_FX,
+        Placed(D600_FULL, 30, AfAreaMode::Single, &[(30, (2529, 2308))]),
+    ),
+    (
+        30,
+        D600_LANDSCAPE,
+        D600_FX,
+        Placed(D600_FULL, 14, AfAreaMode::Single, &[(14, (2768, 2258))]),
+    ),
+    (
+        31,
+        D600_LANDSCAPE,
+        D600_FX,
+        Placed(D600_FULL, 4, AfAreaMode::Single, &[(4, (3008, 2258))]),
+    ),
+    (
+        32,
+        D600_LANDSCAPE,
+        D600_FX,
+        Placed(D600_FULL, 9, AfAreaMode::Single, &[(9, (3247, 2258))]),
+    ),
+    (
+        33,
+        D600_LANDSCAPE,
+        D600_FX,
+        Placed(D600_FULL, 18, AfAreaMode::Single, &[(18, (3486, 2308))]),
+    ),
+    (
+        34,
+        D600_LANDSCAPE,
+        D600_FX,
+        Placed(D600_FULL, 21, AfAreaMode::Single, &[(21, (3724, 2308))]),
+    ),
+    (
+        35,
+        D600_LANDSCAPE,
+        D600_FX,
+        Placed(D600_FULL, 24, AfAreaMode::Single, &[(24, (3963, 2308))]),
+    ),
+    (
+        36,
+        D600_LANDSCAPE,
+        D600_FX,
+        Placed(D600_FULL, 27, AfAreaMode::Single, &[(27, (4203, 2308))]),
+    ),
+    (
+        37,
+        D600_LANDSCAPE,
+        D600_FX,
+        Placed(D600_FULL, 15, AfAreaMode::Single, &[(15, (2768, 2510))]),
+    ),
+    (
+        38,
+        D600_LANDSCAPE,
+        D600_FX,
+        Placed(D600_FULL, 5, AfAreaMode::Single, &[(5, (3008, 2510))]),
+    ),
+    (
+        39,
+        D600_LANDSCAPE,
+        D600_FX,
+        Placed(D600_FULL, 10, AfAreaMode::Single, &[(10, (3247, 2510))]),
+    ),
     // Frames 40 and 41: points 1 and 13 shot again, the same as the
     // single-point frames.
-    (40, D600_LANDSCAPE, D600_FX, None),
-    (41, D600_LANDSCAPE, D600_FX, None),
-    // Frames 42 to 44: auto-area AF, whose AFInfo2 names a primary point
-    // by its number and marks the points used in its mask, with a zero
-    // frame: no point either.
-    (42, D600_LANDSCAPE, D600_FX, None),
-    (43, D600_LANDSCAPE, D600_FX, None),
-    (44, D600_LANDSCAPE, D600_FX, None),
+    (
+        40,
+        D600_LANDSCAPE,
+        D600_FX,
+        Placed(D600_FULL, 1, AfAreaMode::Single, &[(1, (3008, 2007))]),
+    ),
+    (
+        41,
+        D600_LANDSCAPE,
+        D600_FX,
+        Placed(D600_FULL, 13, AfAreaMode::Single, &[(13, (2768, 1503))]),
+    ),
+    // Frames 42 to 44: auto-area AF, area mode 8, whose AFInfo2 names a
+    // primary point by its number and marks the points used in its mask,
+    // 12, 13 and 9 of them, the primary among them: every point the mask
+    // names, placed.
+    (
+        42,
+        D600_LANDSCAPE,
+        D600_FX,
+        Placed(
+            D600_FULL,
+            22,
+            AfAreaMode::Auto,
+            &[
+                (6, (3247, 2007)),
+                (7, (3247, 1755)),
+                (17, (3486, 1705)),
+                (19, (3724, 2007)),
+                (20, (3724, 1705)),
+                (22, (3963, 2007)),
+                (23, (3963, 1705)),
+                (25, (4203, 2007)),
+                (29, (2529, 1705)),
+                (32, (2289, 1705)),
+                (35, (2050, 1705)),
+                (38, (1812, 1705)),
+            ],
+        ),
+    ),
+    (
+        43,
+        D600_LANDSCAPE,
+        D600_FX,
+        Placed(
+            D600_FULL,
+            22,
+            AfAreaMode::Auto,
+            &[
+                (1, (3008, 2007)),
+                (2, (3008, 1755)),
+                (12, (2768, 1755)),
+                (17, (3486, 1705)),
+                (19, (3724, 2007)),
+                (20, (3724, 1705)),
+                (22, (3963, 2007)),
+                (23, (3963, 1705)),
+                (29, (2529, 1705)),
+                (32, (2289, 1705)),
+                (35, (2050, 1705)),
+                (37, (1812, 2007)),
+                (38, (1812, 1705)),
+            ],
+        ),
+    ),
+    (
+        44,
+        D600_LANDSCAPE,
+        D600_FX,
+        Placed(
+            D600_FULL,
+            4,
+            AfAreaMode::Auto,
+            &[
+                (4, (3008, 2258)),
+                (9, (3247, 2258)),
+                (14, (2768, 2258)),
+                (18, (3486, 2308)),
+                (21, (3724, 2308)),
+                (24, (3963, 2308)),
+                (27, (4203, 2308)),
+                (30, (2529, 2308)),
+                (39, (1812, 2308)),
+            ],
+        ),
+    ),
     // Frames 45 and 46: manual focus. FocusMode reads `MANUAL`, and
-    // AFInfo2 names no point and records a zero frame: no point.
-    (45, D600_LANDSCAPE, D600_FX, None),
-    (46, D600_LANDSCAPE, D600_FX, None),
+    // AFInfo2 names no point, layout code 0 and number 0, and records a
+    // zero frame: no point.
+    (45, D600_LANDSCAPE, D600_FX, ManualFocus),
+    (46, D600_LANDSCAPE, D600_FX, ManualFocus),
     // Frames 47 and 48: points 13 and 38 with the camera turned, which
     // IFD0 records as Orientation 8; AFInfo2 holds the same bytes as in
-    // landscape.
-    (47, D600_PORTRAIT, D600_FX, None),
-    (48, D600_PORTRAIT, D600_FX, None),
+    // landscape, and the point is placed in the stored orientation.
+    (
+        47,
+        D600_PORTRAIT,
+        D600_FX,
+        Placed(D600_FULL, 13, AfAreaMode::Single, &[(13, (2768, 1503))]),
+    ),
+    (
+        48,
+        D600_PORTRAIT,
+        D600_FX,
+        Placed(D600_FULL, 38, AfAreaMode::Single, &[(38, (1812, 1705))]),
+    ),
     // Frames 49 and 50: points 38 and 27 in the DX crop, which
-    // CropHiSpeed records as `[2, 6080, 4028, 3968, 2636, 1040, 696]`.
-    (49, D600_LANDSCAPE, D600_DX, None),
-    (50, D600_LANDSCAPE, D600_DX, None),
-    // Frames 51 and 52: dynamic-area AF over 21 points, in AF-C, whose
-    // AFInfo2 names the point chosen by its number; 51 in the DX crop.
-    (51, D600_LANDSCAPE, D600_DX, None),
-    (52, D600_LANDSCAPE, D600_FX, None),
+    // CropHiSpeed records as `[2, 6080, 4028, 3968, 2636, 1040, 696]`:
+    // placed in the crop's window, 3936 by 2624, each centre moved back by
+    // the origin, (1040, 696).
+    (
+        49,
+        D600_LANDSCAPE,
+        D600_DX,
+        Placed(D600_WINDOW, 38, AfAreaMode::Single, &[(38, (772, 1009))]),
+    ),
+    (
+        50,
+        D600_LANDSCAPE,
+        D600_DX,
+        Placed(D600_WINDOW, 27, AfAreaMode::Single, &[(27, (3163, 1612))]),
+    ),
+    // Frames 51 and 52: dynamic-area AF over 21 points, in AF-C, area mode
+    // 5, whose AFInfo2 names the point chosen by its number and sets its
+    // bit; 51 in the DX crop.
+    (
+        51,
+        D600_LANDSCAPE,
+        D600_DX,
+        Placed(D600_WINDOW, 1, AfAreaMode::Dynamic, &[(1, (1968, 1311))]),
+    ),
+    (
+        52,
+        D600_LANDSCAPE,
+        D600_FX,
+        Placed(D600_FULL, 1, AfAreaMode::Dynamic, &[(1, (3008, 2007))]),
+    ),
     // Frames 53 to 56: live view, the focus area moved to the four limits
     // of its travel: bottom left, top left, top right and bottom right.
     // AFInfo2 records the area as a position, which the reader gives as
     // recorded: a 6016 by 4016 frame, an area of 540 by 540 and these
     // centres, with the in-focus byte 1.
-    (53, D600_LANDSCAPE, D600_FX, Some(((343, 3673), true))),
-    (54, D600_LANDSCAPE, D600_FX, Some(((343, 343), true))),
-    (55, D600_LANDSCAPE, D600_FX, Some(((5671, 343), true))),
-    (56, D600_LANDSCAPE, D600_FX, Some(((5671, 3673), true))),
+    (53, D600_LANDSCAPE, D600_FX, LiveView((343, 3673), true)),
+    (54, D600_LANDSCAPE, D600_FX, LiveView((343, 343), true)),
+    (55, D600_LANDSCAPE, D600_FX, LiveView((5671, 343), true)),
+    (56, D600_LANDSCAPE, D600_FX, LiveView((5671, 3673), true)),
 ];
 
 #[test]
@@ -1435,7 +1771,7 @@ fn every_frame_of_the_d600_session_gives_what_its_bytes_record() {
         .collect();
     assert_eq!(committed, listed);
 
-    for &(frame, orientation, image_area, live_view) in &D600_SESSION {
+    for &(frame, orientation, image_area, focus) in &D600_SESSION {
         let name = support::fixtures::d600_frame(frame);
         let label = name.as_str();
         let file = RawFile::open(support::fixtures::fixture(label))
@@ -1458,37 +1794,89 @@ fn every_frame_of_the_d600_session_gives_what_its_bytes_record() {
         assert_eq!(layout.model(), "NIKON D600", "{label}");
         assert_eq!(layout.frame(), as_size((6016, 4016)), "{label}");
         assert_eq!(layout.points().len(), 39, "{label}");
-        let Some(((x, y), in_focus)) = live_view else {
+        check_d600_focus(label, metadata, focus);
+    }
+}
+
+/// Checks that the focus point and the focus points `metadata` gives are
+/// `focus`, for the D600 frame `label`.
+fn check_d600_focus(label: &str, metadata: &Metadata, focus: D600Focus) {
+    match focus {
+        ManualFocus => {
             assert_eq!(metadata.focus(), None, "{label}");
             assert_eq!(metadata.focus_points(), None, "{label}");
-            continue;
-        };
-        let focus = metadata
-            .focus()
-            .unwrap_or_else(|| panic!("{label}: no focus point"));
-        assert_eq!(focus.frame(), as_size((6016, 4016)), "{label}");
-        assert_eq!(focus.center(), Point { x, y }, "{label}");
-        assert_eq!(focus.size(), Some(as_size((540, 540))), "{label}");
-        assert_eq!(focus.in_focus(), Some(in_focus), "{label}");
-        assert_eq!(focus.origin(), FocusOrigin::Recorded, "{label}");
-        // The focus points: that point alone, the primary, with no number.
-        // AFInfo2 records detection method 1, live view, with area mode 4,
-        // a code the reader names under no detection method: no area mode.
-        let points = metadata
-            .focus_points()
-            .unwrap_or_else(|| panic!("{label}: no focus points"));
-        assert_eq!(points.frame(), focus.frame(), "{label}");
-        assert_eq!(points.origin(), FocusOrigin::Recorded, "{label}");
-        assert_eq!(points.area_mode(), None, "{label}");
-        assert_eq!(points.points().len(), 1, "{label}");
-        let primary = points
-            .primary()
-            .unwrap_or_else(|| panic!("{label}: no primary"));
-        assert_eq!(Some(primary), points.points().first(), "{label}");
-        assert_eq!(primary.number(), None, "{label}");
-        assert_eq!(primary.center(), focus.center(), "{label}");
-        assert_eq!(primary.size(), focus.size(), "{label}");
-        assert_eq!(primary.in_focus(), focus.in_focus(), "{label}");
+        }
+        Placed(frame, primary_number, mode, points) => {
+            // The primary, as a focus point: the table's centre, moved on a
+            // DX frame, with its box, from a table, and nothing said of
+            // focus, though the in-focus byte reads 0.
+            let &(_, (x, y)) = points
+                .iter()
+                .find(|(number, _)| *number == primary_number)
+                .unwrap_or_else(|| panic!("{label}: the primary is not among the points"));
+            let focus = metadata
+                .focus()
+                .unwrap_or_else(|| panic!("{label}: no focus point"));
+            assert_eq!(focus.frame(), as_size(frame), "{label}");
+            assert_eq!(focus.center(), Point { x, y }, "{label}");
+            assert_eq!(focus.size(), Some(as_size((164, 164))), "{label}");
+            assert_eq!(focus.in_focus(), None, "{label}");
+            assert_eq!(focus.origin(), FocusOrigin::Table, "{label}");
+            // Every point the mask names, and the primary, in number order,
+            // each numbered, with its box and nothing said of focus.
+            let list = metadata
+                .focus_points()
+                .unwrap_or_else(|| panic!("{label}: no focus points"));
+            assert_eq!(list.frame(), as_size(frame), "{label}");
+            assert_eq!(list.origin(), FocusOrigin::Table, "{label}");
+            assert_eq!(list.area_mode(), Some(mode), "{label}");
+            let placed: Vec<(u8, (u32, u32))> = list
+                .points()
+                .iter()
+                .map(|point| {
+                    let number = point
+                        .number()
+                        .unwrap_or_else(|| panic!("{label}: a point without a number"));
+                    assert_eq!(point.size(), Some(as_size((164, 164))), "{label}");
+                    assert_eq!(point.in_focus(), None, "{label}");
+                    (number, (point.center().x, point.center().y))
+                })
+                .collect();
+            assert_eq!(placed, points, "{label}");
+            let primary = list
+                .primary()
+                .unwrap_or_else(|| panic!("{label}: no primary"));
+            assert_eq!(primary.number(), Some(primary_number), "{label}");
+        }
+        LiveView((x, y), in_focus) => {
+            let focus = metadata
+                .focus()
+                .unwrap_or_else(|| panic!("{label}: no focus point"));
+            assert_eq!(focus.frame(), as_size((6016, 4016)), "{label}");
+            assert_eq!(focus.center(), Point { x, y }, "{label}");
+            assert_eq!(focus.size(), Some(as_size((540, 540))), "{label}");
+            assert_eq!(focus.in_focus(), Some(in_focus), "{label}");
+            assert_eq!(focus.origin(), FocusOrigin::Recorded, "{label}");
+            // The focus points: that point alone, the primary, with no
+            // number. AFInfo2 records detection method 1, live view, with
+            // area mode 4, a code the reader names under no detection
+            // method: no area mode.
+            let points = metadata
+                .focus_points()
+                .unwrap_or_else(|| panic!("{label}: no focus points"));
+            assert_eq!(points.frame(), focus.frame(), "{label}");
+            assert_eq!(points.origin(), FocusOrigin::Recorded, "{label}");
+            assert_eq!(points.area_mode(), None, "{label}");
+            assert_eq!(points.points().len(), 1, "{label}");
+            let primary = points
+                .primary()
+                .unwrap_or_else(|| panic!("{label}: no primary"));
+            assert_eq!(Some(primary), points.points().first(), "{label}");
+            assert_eq!(primary.number(), None, "{label}");
+            assert_eq!(primary.center(), focus.center(), "{label}");
+            assert_eq!(primary.size(), focus.size(), "{label}");
+            assert_eq!(primary.in_focus(), focus.in_focus(), "{label}");
+        }
     }
 }
 
@@ -1496,12 +1884,12 @@ fn every_frame_of_the_d600_session_gives_what_its_bytes_record() {
 /// with the single point 38, B1 in the record, the top of the leftmost
 /// column, opens with its three JPEG previews, smallest first, each a stub
 /// JPEG of 122 bytes that reads whole, and gives every value of its
-/// metadata that the session's test above does not check: point 38 of
-/// the layout among them, far from the centre, where a wrong table or a
-/// wrong frame shows. Its values were read from the file's bytes, not from
-/// the reader.
+/// metadata: point 38 placed from the table among them, and point 38 of
+/// the layout, far from the centre, where a wrong table, a wrong bit order
+/// or a wrong frame shows. Its values were read from the file's bytes and
+/// the record in the NEF notes, not from the reader.
 #[test]
-fn the_d600_frame_4_gives_its_previews_metadata_and_point_38_of_the_layout() {
+fn the_d600_frame_4_gives_its_previews_metadata_and_point_38_placed_from_the_table() {
     let name = support::fixtures::d600_frame(4);
     let label = name.as_str();
     let mut file = RawFile::open(support::fixtures::fixture(label)).unwrap();
@@ -1596,20 +1984,39 @@ fn the_d600_frame_4_gives_its_previews_metadata_and_point_38_of_the_layout() {
         Some(as_size((6080, 4028))),
         "{label}"
     );
-    // AFInfo2 names point 38 in layout 3, with bit 37 of its mask set and
-    // a zero frame, and the reader does not place a point named by number,
-    // so there is no focus point, which the session's test checks. Point
-    // 38 of the D600's layout, from its table: at (1812, 1705), with a box
-    // of 164 by 164, in the 6016 by 4016 frame, as the record in the NEF
-    // notes gives it.
+    // AFInfo2 names point 38 in layout 3, with bit 37 of its mask set,
+    // area mode 0 under detection method 0, single point, and a zero frame
+    // and area. The point is placed from the table: at (1812, 1705), with a
+    // box of 164 by 164, in the 6016 by 4016 frame, as the record in the
+    // NEF notes gives it, from a table, and with nothing said of focus,
+    // though the in-focus byte reads 0. The list is that point alone,
+    // numbered 38, the primary.
+    let frame = as_size((6016, 4016));
+    let point_38 = Point { x: 1812, y: 1705 };
+    let placed = Focus::new(frame, point_38)
+        .and_then(|focus| focus.with_size(as_size((164, 164))))
+        .map(|focus| focus.with_origin(FocusOrigin::Table));
+    assert_eq!(metadata.focus(), placed, "{label}");
+    let points = FocusPoints::new(frame, FocusOrigin::Table)
+        .and_then(|points| {
+            points.with_point(
+                FocusPoint::new(point_38)
+                    .with_number(38)
+                    .with_size(as_size((164, 164))),
+            )
+        })
+        .and_then(|points| points.with_primary(0))
+        .map(|points| points.with_area_mode(AfAreaMode::Single));
+    assert_eq!(metadata.focus_points(), points.as_ref(), "{label}");
+    // Point 38 of the D600's layout, from its table, at the same place.
     let layout = metadata
         .focus_layout()
         .unwrap_or_else(|| panic!("{label}: no layout"));
-    let point_38 = layout
+    let layout_38 = layout
         .point(38)
         .unwrap_or_else(|| panic!("{label}: no point 38"));
-    assert_eq!(point_38.center(), Point { x: 1812, y: 1705 }, "{label}");
-    assert_eq!(point_38.size(), as_size((164, 164)), "{label}");
+    assert_eq!(layout_38.center(), point_38, "{label}");
+    assert_eq!(layout_38.size(), as_size((164, 164)), "{label}");
     // The settings. From the Exif IFD: aperture priority, matrix metering,
     // auto white balance, and a Flash of 16, the flash off by the
     // camera's setting and not fired. From the MakerNote: the fine-tuning
@@ -3208,7 +3615,7 @@ const METADATA: &[SampleMetadata] = &[
         }),
         raw_size: Some((4288, 2844)),
         image_size: Some((4288, 2844)),
-        focus: None, // a viewfinder shot: a zero frame and only a point number
+        focus: None, // a viewfinder shot that names a point: no table for this body
         focus_layout: None,
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
@@ -3313,7 +3720,7 @@ const METADATA: &[SampleMetadata] = &[
         }),
         raw_size: Some((6032, 4032)),
         image_size: Some((6032, 4032)),
-        focus: None, // a viewfinder shot: a zero frame and only a point number
+        focus: None, // a viewfinder shot that names a point: no table for this body
         focus_layout: None,
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
@@ -3361,7 +3768,7 @@ const METADATA: &[SampleMetadata] = &[
         }),
         raw_size: Some((3680, 2456)),
         image_size: Some((3680, 2456)),
-        focus: None, // a viewfinder shot: a zero frame and only a point number
+        focus: None, // a viewfinder shot that names a point: no table for this body
         focus_layout: None,
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
@@ -3457,7 +3864,7 @@ const METADATA: &[SampleMetadata] = &[
         }),
         raw_size: Some((6064, 4040)),
         image_size: Some((6048, 4024)),
-        focus: None, // a viewfinder shot: a zero frame and only a point number
+        focus: None, // a viewfinder shot that names a point: no table for this body
         focus_layout: None,
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),

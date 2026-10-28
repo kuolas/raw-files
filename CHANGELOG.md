@@ -13,9 +13,9 @@ does.
 ### Added
 
 - `Focus::origin` says where a focus point came from, as a `FocusOrigin`:
-  `Recorded`, a position the camera measured and wrote, which every point
-  the readers give is, or `Table`, a point the camera named by number
-  that raw-files placed from its table of the body's autofocus points.
+  `Recorded`, a position the camera measured and wrote, or `Table`, a
+  point the camera named by number that raw-files placed from its table
+  of the body's autofocus points.
   `Focus::new` gives `Recorded`, `Focus::with_origin` sets another and
   `Focus::scaled_to` keeps it; `FocusOrigin` has a `name` that `Display`
   writes, "Recorded" and "Table", and orders as its variants are listed.
@@ -64,8 +64,24 @@ does.
   depends on the Model alone, so a file whose MakerNote is missing or
   cannot be read, such as an editor's re-save, gives it too. The table was
   measured by the project on frames shot with a D600 and read in Nikon's
-  NX Studio, as the NEF notes record it. A shot through the viewfinder,
-  which names its point by number, gives the layout and no focus point.
+  NX Studio, as the NEF notes record it.
+- NEF and JPEG files of the Nikon D600 shot through the viewfinder give
+  the autofocus point the camera names by number, placed from that
+  table. `Metadata::focus` gives the point's centre and its box of
+  164x164 in the 6016x4016 frame, with the origin `Table` and nothing
+  said of whether focus was confirmed; `Metadata::focus_points` gives
+  every point the file's record of the points used, one bit per point,
+  names, and the primary, each with its number, in number order, with
+  the area mode: single point, dynamic area or auto area. On the DX crop
+  the points are placed in the crop's window, 3936x2624, the size of the
+  NEF's full-size preview and of its JPEG; a crop-mode JPEG at a smaller
+  size gives none.
+  A Medium JPEG, 4512x3008, gives none either: its shape, exactly 3:2,
+  is further from the 6016x4016 frame than the one pixel of rounding by
+  which a JPEG's point must fit its picture; a Small JPEG, 3008x2008,
+  half the frame, keeps its point. A shot through the viewfinder of any
+  other body gives no focus point, since raw-files has no table of its
+  points.
 
 ## [0.5.0] - 2026-10-26
 

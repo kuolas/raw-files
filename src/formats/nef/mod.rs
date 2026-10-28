@@ -87,9 +87,12 @@ fn claims<R: Read + Seek>(src: &mut Source<R>, tree: &Tree) -> Result<bool> {
 /// only it records, the raw image size among them, its white balance
 /// setting, when it names one, in place of Exif's, and its colour space
 /// when the Exif tags record none, as no Nikon raw file checked does; and
-/// it gives the focus point, from its AFInfo2, which no standard tag
-/// records, placed on CropArea on a crop, as on a raw file's picture
-/// ([`Picture::Raw`], [`nikon::metadata`]).
+/// it gives the focus points, from its AFInfo2, which no standard tag
+/// records: a recorded position, placed on CropArea on a crop, as on a
+/// raw file's picture, or the points a shot through the viewfinder names
+/// by number, placed from the table of the body's points, in the crop's
+/// window on a crop the table confirms ([`Picture::Raw`],
+/// [`nikon::metadata`]).
 ///
 /// # Errors
 ///

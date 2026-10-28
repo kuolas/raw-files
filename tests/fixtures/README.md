@@ -237,19 +237,21 @@ them.
 The tests open every frame and check what the reader gives it: the
 model, the orientation, the image area that CropHiSpeed names, the
 layout of the D600's 39 points, which the D600's table in the code
-gives every frame by its Model, whatever the shot, no focus point on
-the frames shot through the viewfinder or in manual focus, which name
-their point by number or name none, and on the four live-view frames
-the point AFInfo2 records. On frame 4, shot through the viewfinder with
-point 38, they check every value too: its three previews, each a stub;
+gives every frame by its Model, whatever the shot; on the frames shot
+through the viewfinder in autofocus, which name their points by number,
+those points placed from the table, in the crop's window on the DX
+frames; no focus point on the manual-focus frames, which name none; and
+on the four live-view frames the point AFInfo2 records. On frame 4, shot
+through the viewfinder with point 38, they check every value too: its three previews, each a stub;
 the capture time, with the offset from UTC that WorldTime gives, since
 the D600 writes no OffsetTimeOriginal; the exposure; the lens's range,
 which only the MakerNote records; the sizes; the camera settings, from
 the Exif IFD aperture priority, multi-segment metering, a flash set off
 that did not fire and auto white balance, and from the MakerNote a
 recorded zero fine-tuning (0x000B), whose two values fit in their entry
-and so were kept, and sRGB; and, in the layout, point 38 at
-(1812, 1705) with its box of 164 by 164. It gives no colour
+and so were kept, and sRGB; and point 38 at (1812, 1705) with its box of 164 by 164,
+placed from the table as its focus point and in the layout. It gives
+no colour
 temperature, shutter, image area or raw size: the D600 writes no
 ColorTemperatureAuto, ShutterMode or ImageSizeRAW, the stripping
 removed the white balance text, and CropHiSpeed's crop setting, 0,

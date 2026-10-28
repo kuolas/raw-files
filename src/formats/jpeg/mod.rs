@@ -143,7 +143,12 @@
 //! scaled onto them, a 1:1 or 16:9 crop's moved into the centred window of
 //! the recorded frame that has the JPEG's shape. A JPEG whose MakerNote
 //! holds a CropArea gives no point on a crop, since it has no raw size to
-//! check CropArea against.
+//! check CropArea against. A JPEG shot through a DSLR's viewfinder, of a
+//! body whose table of points raw-files has, the D600, gives the points its
+//! AFInfo2 names placed from the table, as its raw file does (ADR018): in
+//! the table's frame, or on a crop in the crop's window, and then only
+//! when the JPEG's own size is that window's, so that a crop-mode JPEG at
+//! a smaller size gives none (ADR019).
 //!
 //! The Sony MakerNote reader gives the point as it gives an ARW's (ADR012):
 //! the frame and the centre from FocusLocation, or FocusLocation2 without
@@ -154,11 +159,12 @@
 //! pixels. The DSLR-A100's MakerNote, of an older layout, holds no
 //! FocusLocation, and gives none.
 //!
-//! Each reader gives its point as a list of one, the primary, which the
-//! metadata holds as its focus points, with the area mode on a Nikon file.
-//! Then the list is kept only when its frame has the picture's aspect
-//! ratio, to within one pixel of rounding in either size ([`same_shape`]),
-//! in the stored orientation (ADR014). A camera's own JPEG passes, and so
+//! Each reader gives its point as a list of one, the primary, or, placed
+//! from a table, the points the file names, which the metadata holds as
+//! its focus points, with the area mode on a Nikon file. Then the list is
+//! kept only when its frame has the picture's aspect ratio, to within one
+//! pixel of rounding in either size ([`same_shape`]), in the stored
+//! orientation (ADR014). A camera's own JPEG passes, and so
 //! does an export scaled from it; an export cut to another shape, or turned
 //! upright in its pixels, which may keep the camera's MakerNote, gives no
 //! point. The rule applies to whatever point the MakerNote reader gave, so
@@ -221,15 +227,16 @@ fn claims<R: Read + Seek>(_: &mut Source<R>, segments: &Segments) -> Result<bool
 /// `limits`, and gives the standard metadata, the orientation among it,
 /// and the thumbnail's candidate. When IFD0's Make names Nikon, the Nikon
 /// MakerNote is read, within `limits`, and gives the values the standard
-/// tags lack, the camera settings and the focus point among them, the
-/// point placed on the picture, and the candidate of its preview; when it
-/// names Sony, the Sony MakerNote is read, within `limits`, and gives the
-/// camera settings that only it records and the focus point, as recorded
-/// ([`MakerNote::read`]). The MPF list,
-/// read within `limits` as well, gives a candidate for each image after
-/// the first. The shared finder checks them all, and the file itself
-/// joins them as a preview of its own, with its frame header's size,
-/// which is the metadata's image size.
+/// tags lack, the camera settings and the focus points among them, a
+/// recorded position, placed on the picture, or the points a shot through
+/// the viewfinder names, placed from the table of the body's points, and
+/// the candidate of its preview; when it names Sony, the Sony MakerNote
+/// is read, within `limits`, and gives the camera settings that only it
+/// records and the focus point, as recorded ([`MakerNote::read`]). The
+/// MPF list, read within `limits` as well, gives a candidate for each
+/// image after the first. The shared finder checks them all, and the
+/// file itself joins them as a preview of its own, with its frame
+/// header's size, which is the metadata's image size.
 /// The focus points, the primary among them, are kept only when their
 /// frame has the picture's shape ([`same_shape`]); see the
 /// [module documentation](self).

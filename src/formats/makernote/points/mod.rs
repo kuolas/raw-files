@@ -48,6 +48,21 @@
 //! that the file's layout code names, and none when the file names none,
 //! as [`Metadata::focus_layout`](crate::Metadata::focus_layout) states;
 //! only a body with one layout gives it from the Model alone.
+//!
+//! So a table carries, beside its points, what its record confirms of the
+//! way a file names them, which the Nikon MakerNote's reader needs to place
+//! a point that a shot through the viewfinder names: the layout code the
+//! body writes for the table's layout; the order in which the mask of the
+//! points used names each point by a bit ([`BitOrder`]); and the crop
+//! settings on which the record's crop frames confirm that a point moves
+//! into the crop's window by CropHiSpeed's origin, as the
+//! [decision on the frame of a placed point on a crop](https://github.com/kuolas/raw-files/blob/master/docs/architecture-decisions/adr019-the-frame-of-a-placed-focus-point-on-a-crop.md)
+//! (ADR019) measures it. A crop the record does not confirm gives no placed
+//! point. A body whose uncropped files record a CropHiSpeed cropped size
+//! other than the original, as the D810's do, four pixels short in width
+//! ([`super::nikon`]), would have those files read as a crop when a named
+//! point is placed, so check the body's uncropped CropHiSpeed before
+//! adding its table.
 
 use crate::focus::{FocusLayout, LayoutPoint};
 use crate::geometry::Size;
@@ -58,9 +73,45 @@ mod nikon_d600;
 /// file in this folder that is not listed here fails the tests.
 static TABLES: [&PointTable; 1] = [&nikon_d600::TABLE];
 
+/// How long the mask of the points used is, in bytes: the seven bytes 8 to
+/// 14 of AFInfo2 version 0100, which a shot through a DSLR's viewfinder
+/// writes beside the number of the point it names. Every bit a table's
+/// [`BitOrder`] gives one of its points lies in these bytes, which the
+/// table tests check.
+pub(in crate::formats) const MASK_LEN: usize = 7;
+
+/// How a file's mask of the points used names a table's points: which bit
+/// of the mask stands for which point. The bits are counted from the least
+/// significant bit of the mask's first byte, so that bit k is bit k % 8 of
+/// byte k / 8.
+///
+/// It is a fact of the body's layout, read off the frames of the body's
+/// record where exactly one bit is set, the single-point frames, as the
+/// procedure in the NEF notes says: no file names its order.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(in crate::formats) enum BitOrder {
+    /// Point n is bit n − 1: point 1 is the least significant bit of the
+    /// first byte, point 9 the least significant of the second. The D600's
+    /// order, on all 45 of its record's single-point frames with a point
+    /// number (section 2.3 of the record).
+    NumberLessOne,
+}
+
+impl BitOrder {
+    /// The bit that stands for point `number`, counted as the type's
+    /// documentation says; `None` for a number no bit stands for, such as
+    /// 0, which no point has. Whether the bit lies in the mask's
+    /// [`MASK_LEN`] bytes is the reader's to check, as it reads them.
+    fn bit(self, number: u8) -> Option<usize> {
+        match self {
+            BitOrder::NumberLessOne => usize::from(number).checked_sub(1),
+        }
+    }
+}
+
 /// One body's table of autofocus points: the body's Model, the frame the
-/// points are measured in and every point, with where the values come
-/// from.
+/// points are measured in and every point, with what the body's record
+/// confirms of the way a file names them, and where the values come from.
 #[derive(Debug)]
 pub(in crate::formats) struct PointTable {
     /// The body's Model, as the camera writes it in the Model tag, trimmed
@@ -73,6 +124,20 @@ pub(in crate::formats) struct PointTable {
     /// Every point, in number order, from 1: its number as the camera
     /// writes it, the centre of its box and the box's size, in `frame`.
     points: &'static [LayoutPoint],
+    /// The layout code the body writes beside a point number of this
+    /// layout, AFInfo2's FocusPointSchema: 3 on every D600 frame through
+    /// the viewfinder with a point number (section 2.2 of its record). A
+    /// file names a point of this table only under this code, since one
+    /// Model can carry two layouts.
+    layout_code: u8,
+    /// How the mask of the points used names each point by a bit.
+    bit_order: BitOrder,
+    /// The crop settings, CropHiSpeed's first value, on which the record's
+    /// crop frames confirm that a point moves into the crop's window by
+    /// CropHiSpeed's origin: 2, the DX crop, on the D600, whose frames 49
+    /// and 50 put their points within 2 pixels of there (section 2.6 of
+    /// its record). A file on any other crop gives no placed point.
+    crop_codes: &'static [u32],
     /// Where the table's values come from.
     #[cfg_attr(
         not(test),
@@ -129,6 +194,36 @@ impl PointTable {
     /// ([`layout`]), never a panic.
     fn layout(&'static self) -> Option<FocusLayout> {
         FocusLayout::new(self.model, self.frame, self.points)
+    }
+
+    /// The frame every point is measured in: the body's full-size output.
+    pub(in crate::formats) fn frame(&self) -> Size {
+        self.frame
+    }
+
+    /// Every point, in number order, from 1, as the table tests check.
+    pub(in crate::formats) fn points(&self) -> &'static [LayoutPoint] {
+        self.points
+    }
+
+    /// The layout code a file writes beside a point number of this table.
+    pub(in crate::formats) fn layout_code(&self) -> u8 {
+        self.layout_code
+    }
+
+    /// The bit of the mask of the points used that stands for point
+    /// `number`, by the table's [`BitOrder`]; `None` for a number no bit
+    /// stands for. Every point of the table has a bit of its own inside the
+    /// mask's [`MASK_LEN`] bytes, which the table tests check.
+    pub(in crate::formats) fn bit(&self, number: u8) -> Option<usize> {
+        self.bit_order.bit(number)
+    }
+
+    /// Whether the table's record confirms that a point moves into the
+    /// crop's window on the crop whose setting, CropHiSpeed's first value,
+    /// is `code`.
+    pub(in crate::formats) fn confirms_crop(&self, code: u32) -> bool {
+        self.crop_codes.contains(&code)
     }
 }
 
@@ -272,6 +367,85 @@ mod tests {
                  {} frame",
                 table.frame
             );
+        }
+    }
+
+    /// How many points the layout of each layout code a table carries has,
+    /// as ExifTool's published tag documentation names the layouts, read as
+    /// documentation, and as the frames of each table's record confirm: 3,
+    /// the 39-point layout, the D600's, whose 39 single-point frames name
+    /// 39 points. A new table's code is added here from the same sources.
+    const POINTS_BY_LAYOUT_CODE: [(u8, usize); 1] = [(3, 39)];
+
+    /// Every table has as many points as its layout code's layout: a table
+    /// that lost a point, or that is filed under another layout's code,
+    /// would place the numbers a file names on the wrong layout.
+    #[test]
+    fn every_tables_point_count_is_its_layout_codes() {
+        for table in TABLES {
+            let model = table.model;
+            let count = POINTS_BY_LAYOUT_CODE
+                .iter()
+                .find(|(code, _)| *code == table.layout_code)
+                .map(|&(_, count)| count)
+                .unwrap_or_else(|| {
+                    panic!(
+                        "{model}: no point count for layout code {}: add it to \
+                         POINTS_BY_LAYOUT_CODE from the documentation and the frames",
+                        table.layout_code
+                    )
+                });
+            assert_eq!(
+                table.points.len(),
+                count,
+                "{model}: layout code {} has {count} points",
+                table.layout_code
+            );
+        }
+    }
+
+    /// Every point of every table has a bit of the mask of the points used
+    /// of its own, inside the mask's [`MASK_LEN`] bytes: a point without
+    /// one could never be read from a file's mask, and two points on one
+    /// bit could not be told apart.
+    #[test]
+    fn every_tables_points_have_a_bit_each_inside_the_mask() {
+        for table in TABLES {
+            let model = table.model;
+            let mut bits = BTreeSet::new();
+            for point in table.points {
+                let number = point.number();
+                let bit = table
+                    .bit(number)
+                    .unwrap_or_else(|| panic!("{model}: no bit for point {number}"));
+                assert!(
+                    bit < MASK_LEN * 8,
+                    "{model}: point {number}'s bit {bit} lies past the {MASK_LEN} bytes of the mask"
+                );
+                assert!(
+                    bits.insert(bit),
+                    "{model}: point {number}'s bit {bit} stands for another point too"
+                );
+            }
+        }
+    }
+
+    /// The D600's table carries what its record confirms of the way a file
+    /// names its points, by values written here from the record rather than
+    /// read from the table: layout code 3; point 1 on bit 0, point 13 on
+    /// bit 12 and point 38 on bit 37, the bits frames 20, 1 and 4 set; and
+    /// the DX crop alone, setting 2, of the crops CropHiSpeed records.
+    #[test]
+    fn the_d600_table_names_its_points_as_its_record_confirms() {
+        let d600 = find("NIKON D600").expect("the D600's table");
+        assert_eq!(d600.layout_code(), 3);
+        for (number, bit) in [(1, 0), (13, 12), (38, 37)] {
+            assert_eq!(d600.bit(number), Some(bit), "point {number}");
+        }
+        assert_eq!(d600.bit(0), None);
+        assert!(d600.confirms_crop(2));
+        for code in [0, 1, 6, 9, 10, 11, 12, 17, 18] {
+            assert!(!d600.confirms_crop(code), "crop setting {code}");
         }
     }
 
