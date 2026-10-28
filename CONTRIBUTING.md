@@ -251,13 +251,22 @@ One test is ignored by default: it runs the reader over a folder of your own
 camera files, RAW and JPEG, and prints counts only, never a path, the value
 of a make, model, software, serial number, time, exposure or lens, or where
 the camera focused, so its output can go into an issue. It counts each file
-under the format its extension names, in one section per format. It checks
-that every file opens, that every one has a preview, that the largest
-preview is a whole JPEG, that the metadata gives the preview's orientation,
-and that every focus point lies inside its frame, area included, both as
-read and once placed on the largest preview; it counts how many files have
-each metadata field and a focus point, how many previews of each size they
-hold, and, for each camera setting, how many files have each kind of it,
+under the format its extension names, in one section per format, and skips
+the AppleDouble files, whose name starts with `._`, which macOS writes
+beside each file on a disk such as an exFAT one, saying how many it
+skipped. It checks that every file opens, that every one has a preview,
+that the largest preview is a whole JPEG, that the metadata gives the
+preview's orientation, and that every focus point, and every point of a
+list of the points the camera used, lies inside its frame, area included,
+both as read and once placed on the largest preview; and that the focus
+point, the list and the layout of the body's points agree: the focus point
+is the list's primary, a recorded position is a list of one point, and
+points placed from a table are points of the layout for the file's Model.
+It counts how many files have each metadata field and a focus point, how
+many previews of each size they hold, the focus points by origin, recorded
+or placed from a table, the lists by number of points and by area mode, and
+the files with a layout, with and without a focus point; and, for each
+camera setting, how many files have each kind of it,
 such as aperture priority, auto white balance or a white balance
 fine-tuning of `(-24/4, 0/4)`, for the colour temperature its range, and
 how many flashes fired: totals over the files of a format, never tied to

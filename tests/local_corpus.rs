@@ -13,7 +13,11 @@
 //!
 //! It walks the folder and its subfolders, opens every file whose extension
 //! names a format raw-files reads, and reads the metadata, the previews and
-//! the largest preview's bytes of each. It counts each file under the
+//! the largest preview's bytes of each. It skips, and counts, the
+//! AppleDouble files among them: a file whose name starts with `._`, which
+//! macOS writes beside a file to hold its extended attributes on a disk
+//! that cannot, such as one formatted exFAT, and which is no photo though
+//! it keeps the photo's extension. It counts each file under the
 //! format its extension names, failures included, and prints one section
 //! of counts for each format the folder holds; a section also counts the
 //! formats its files opened as, so that a renamed file shows. It prints
@@ -38,8 +42,29 @@
 //! have one, how many of those record that the camera confirmed focus, that
 //! it missed, or neither, the sizes of the frames the points are measured
 //! in, how many different sizes the focus areas have, and how many frames
-//! are not the file's image size. It never prints where a point lies or how
-//! large one area is.
+//! are not the file's image size. It counts the focus points by their
+//! origin too, by the name the library gives it: "Recorded" for a position
+//! the camera measured, "Table" for a point placed from the table of the
+//! body's autofocus points.
+//!
+//! For the autofocus points the camera used, it counts the files with a
+//! list of them and how many of those mark a primary, how many files have
+//! each number of points in their list, how many points the lists hold and
+//! how many of those have a number, the lists by area mode, by the name
+//! the library gives the mode, such as "Auto area", and the lists of one
+//! point placed from a table. For the layout of the body's autofocus
+//! points, it counts the files with one, by its number of points, and the
+//! files with one but no focus point. Two of these counts each gather cases
+//! the library gives alike, which the output cannot tell apart: a list of
+//! one point placed from a table is a single-point shot or a shot whose
+//! mask of the points used names no point beside the primary, and a file
+//! with a layout and no focus point is a manual-focus shot, a shot that
+//! names point 0, a crop the body's table does not confirm, a crop-mode
+//! JPEG smaller than the crop's window, a JPEG cut to another shape than
+//! the frame's, such as the D600's Medium JPEG, which the JPEG shape rule
+//! refuses, or a file whose MakerNote is missing or cannot be read, since
+//! the layout comes from the Model alone. It never prints where a point
+//! lies, how large one area is, or a point's number.
 //!
 //! It fails when the folder cannot be read or holds no file of a format
 //! raw-files reads, and otherwise unless every entry could be read and, in
@@ -47,7 +72,17 @@
 //! every largest preview is a whole JPEG, every file's metadata gives the
 //! orientation its largest preview carries, and every focus point lies
 //! inside its frame, its area included, both as read and once placed on the
-//! largest preview. A whole JPEG starts with its start marker and ends with
+//! largest preview, as does every point of a list of the points used. Nor
+//! may the focus point, the list and the layout disagree: every list must
+//! mark a primary, and the focus point must be that primary, in the list's
+//! frame and with its origin; every recorded position must be a list of
+//! one point without a number; and every list placed from a table must
+//! come with a layout, for the Model the file names, and hold points of
+//! that layout, numbered in rising order, each with the layout's box and
+//! the layout's centre, moved on a crop into the centred window that is
+//! the list's frame. These hold by how the library builds a list, and the
+//! test checks them by hand rather than taking the library's word for it.
+//! A whole JPEG starts with its start marker and ends with
 //! its end marker, followed by nothing but the padding some Sony cameras
 //! write: `FF` bytes, in any format, and zeros, only in the largest preview
 //! of a file that opens as JPEG, which is the whole file. Such a file must
@@ -70,7 +105,9 @@ use std::io::{self, Read, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
-use raw_files::{DateTime, Focus, Format, Metadata, RawFile, Size};
+use raw_files::{
+    DateTime, FocusLayout, FocusOrigin, FocusPoints, Format, Metadata, Point, RawFile, Size,
+};
 
 /// A file that counts the bytes its reads return, into a counter the caller
 /// keeps, so that the count is still there once the library owns the file.
@@ -312,13 +349,75 @@ impl SettingsTally {
     }
 }
 
-/// What the files say about where the camera focused, in counts. No
-/// centre and no area size is printed: the area sizes are kept only to
-/// count how many different ones there are.
+/// What the files say about where the camera focused, in counts: the
+/// focus point, the list of the points the camera used and the layout of
+/// the body's points. No centre, no area size and no point number is
+/// printed: the area sizes are kept only to count how many different ones
+/// there are.
 #[derive(Default)]
 struct FocusTally {
     with_point: usize,
     without_point: usize,
+    /// Focus points by where they came from, by the name the library gives
+    /// the origin, such as "Table".
+    origins: BTreeMap<&'static str, usize>,
+    /// Files with a list of the points the camera used, of which
+    /// `with_primary` mark a primary; `list_sizes` counts the files with
+    /// each number of points in their list.
+    with_list: usize,
+    with_primary: usize,
+    list_sizes: BTreeMap<usize, usize>,
+    /// Points over every list, of which `numbered_points` have a number.
+    list_points: usize,
+    numbered_points: usize,
+    /// Lists by area mode, by the name the library gives the mode, and the
+    /// lists without one.
+    area_modes: BTreeMap<&'static str, usize>,
+    without_area_mode: usize,
+    /// Lists placed from a table that hold one point: a shot whose mask
+    /// names no point beside the primary, or a single-point shot. The
+    /// library gives both the same list, so they are counted together.
+    single_placed: usize,
+    /// Files with a layout of the body's points; `layout_sizes` counts the
+    /// files whose layout has each number of points.
+    with_layout: usize,
+    layout_sizes: BTreeMap<usize, usize>,
+    /// Files with a layout and no focus point: a body with a table whose
+    /// file names no point the library places, which a manual-focus shot,
+    /// a point number of 0, a crop the table does not confirm, a
+    /// crop-mode JPEG smaller than the crop's window, a JPEG cut to
+    /// another shape than the frame's, such as the D600's Medium JPEG,
+    /// which the JPEG shape rule refuses, and a file whose MakerNote is
+    /// missing or cannot be read all give alike, so they are counted
+    /// together.
+    layout_without_point: usize,
+    /// Files whose list and focus point disagree: a list without a
+    /// primary, or a focus point that is not the list's primary, in its
+    /// frame and with its origin. The focus point is the list's primary,
+    /// so this must stay zero.
+    list_not_focus: usize,
+    /// Files whose recorded position is not a list of one point without
+    /// a number, as the library gives every recorded position: this must
+    /// stay zero.
+    recorded_not_one_point: usize,
+    /// Files whose points are placed from a table and have no layout: the
+    /// list and the layout come from the same table, so this must stay
+    /// zero.
+    placed_without_layout: usize,
+    /// Files whose layout is not for the Model they name: the library
+    /// finds the table by the Model, so this must stay zero.
+    layout_not_for_model: usize,
+    /// Files whose points placed from a table are not the layout's, as
+    /// [`placed_from`] checks them: this must stay zero.
+    placed_not_from_layout: usize,
+    /// Files with a point of their list outside the list's frame, area
+    /// included, checked by hand as for `outside_frame`: this must stay
+    /// zero.
+    list_outside_frame: usize,
+    /// Files whose list could not be placed on their largest preview, or
+    /// has a point outside it once placed, area included: as for
+    /// `not_scaled` and `scaled_outside_frame`, this must stay zero.
+    list_scaled_outside_frame: usize,
     /// Files whose camera confirmed focus; `missed` and `unknown` count
     /// the ones that record a miss and the ones that do not say.
     confirmed: usize,
@@ -350,11 +449,23 @@ struct FocusTally {
 impl FocusTally {
     /// Counts what `metadata` says about the focus.
     fn record(&mut self, metadata: &Metadata) {
+        let layout = metadata.focus_layout();
+        if let Some(layout) = layout {
+            self.with_layout += 1;
+            *self.layout_sizes.entry(layout.points().len()).or_default() += 1;
+            self.layout_without_point += usize::from(metadata.focus().is_none());
+            self.layout_not_for_model += usize::from(metadata.model() != Some(layout.model()));
+        }
+        if let Some(list) = metadata.focus_points() {
+            self.record_list(list, layout);
+        }
+        self.list_not_focus += usize::from(!list_gives_focus(metadata));
         let Some(focus) = metadata.focus() else {
             self.without_point += 1;
             return;
         };
         self.with_point += 1;
+        *self.origins.entry(focus.origin().name()).or_default() += 1;
         match focus.in_focus() {
             Some(true) => self.confirmed += 1,
             Some(false) => self.missed += 1,
@@ -365,38 +476,155 @@ impl FocusTally {
         if let Some(size) = focus.size() {
             self.area_sizes.insert((size.width, size.height));
         }
-        self.outside_frame += usize::from(!lies_inside(&focus, frame));
+        self.outside_frame += usize::from(!lies_inside(focus.center(), focus.size(), frame));
         self.frame_not_image_size += usize::from(metadata.image_size() != Some(frame));
     }
 
-    /// Places `focus` on a largest preview of size `preview` and counts
-    /// whether that worked and kept the point inside the preview.
-    fn record_scaled(&mut self, focus: &Focus, preview: Size) {
-        match focus.scaled_to(preview) {
-            Some(scaled) => {
-                self.scaled_outside_frame += usize::from(!lies_inside(&scaled, preview));
+    /// Counts what `list`, a file's list of the points the camera used,
+    /// holds, and checks it against `layout`, the file's layout of the
+    /// body's points, when its points are placed from a table.
+    fn record_list(&mut self, list: &FocusPoints, layout: Option<FocusLayout>) {
+        let points = list.points();
+        self.with_list += 1;
+        self.with_primary += usize::from(list.primary().is_some());
+        *self.list_sizes.entry(points.len()).or_default() += 1;
+        self.list_points += points.len();
+        self.numbered_points += points
+            .iter()
+            .filter(|point| point.number().is_some())
+            .count();
+        match list.area_mode() {
+            Some(mode) => *self.area_modes.entry(mode.name()).or_default() += 1,
+            None => self.without_area_mode += 1,
+        }
+        self.list_outside_frame += usize::from(
+            !points
+                .iter()
+                .all(|point| lies_inside(point.center(), point.size(), list.frame())),
+        );
+        match list.origin() {
+            FocusOrigin::Recorded => {
+                let one_point = matches!(points, [point] if point.number().is_none());
+                self.recorded_not_one_point += usize::from(!one_point);
             }
-            None => self.not_scaled += 1,
+            FocusOrigin::Table => {
+                self.single_placed += usize::from(points.len() == 1);
+                match layout {
+                    Some(layout) => {
+                        self.placed_not_from_layout += usize::from(!placed_from(list, &layout));
+                    }
+                    None => self.placed_without_layout += 1,
+                }
+            }
+            // An origin added to the library after this test is counted
+            // above by its name and checked no further.
+            _ => {}
+        }
+    }
+
+    /// Places the focus point and the list of `metadata` on a largest
+    /// preview of size `preview`, and counts whether that worked and kept
+    /// every point inside the preview.
+    fn record_scaled(&mut self, metadata: &Metadata, preview: Size) {
+        if let Some(focus) = metadata.focus() {
+            match focus.scaled_to(preview) {
+                Some(scaled) => {
+                    self.scaled_outside_frame +=
+                        usize::from(!lies_inside(scaled.center(), scaled.size(), preview));
+                }
+                None => self.not_scaled += 1,
+            }
+        }
+        if let Some(list) = metadata.focus_points() {
+            let inside = list.scaled_to(preview).is_some_and(|scaled| {
+                scaled
+                    .points()
+                    .iter()
+                    .all(|point| lies_inside(point.center(), point.size(), preview))
+            });
+            self.list_scaled_outside_frame += usize::from(!inside);
         }
     }
 }
 
-/// Whether the centre of `focus` lies inside `frame`, edges included, and
-/// so does its area around the centre when it has one: on each axis, from
-/// the centre less half the side, rounded up, to the centre plus that half
+/// Whether `metadata`'s focus point is its list's primary, as
+/// `Metadata::focus` documents: both absent, or the focus point at the
+/// primary's centre, with its area and whether focus was confirmed, in the
+/// list's frame and with its origin. A list without a primary, which gives
+/// no focus point, does not pass.
+fn list_gives_focus(metadata: &Metadata) -> bool {
+    match (metadata.focus(), metadata.focus_points()) {
+        (None, None) => true,
+        (Some(focus), Some(list)) => list.primary().is_some_and(|primary| {
+            focus.center() == primary.center()
+                && focus.size() == primary.size()
+                && focus.in_focus() == primary.in_focus()
+                && focus.frame() == list.frame()
+                && focus.origin() == list.origin()
+        }),
+        _ => false,
+    }
+}
+
+/// Whether the points of `list`, placed from a table, are points of
+/// `layout`, the body's layout from the same table, as
+/// `Metadata::focus_points` and `Metadata::focus_layout` document: each
+/// with a number, in rising order, and with the layout's box, its centre
+/// the layout's moved by the origin of the centred window that the list's
+/// frame is in the layout's frame. On a file that is no crop the two
+/// frames are the same and nothing moves; on a crop the window is the
+/// layout's frame less twice the origin on each side, so the difference
+/// of the two frames is even on both axes and the origin is half of it.
+/// Written out here, as `lies_inside` is, so that the test does not take
+/// the library's word for it.
+fn placed_from(list: &FocusPoints, layout: &FocusLayout) -> bool {
+    let (window, frame) = (list.frame(), layout.frame());
+    let (Some(across), Some(down)) = (
+        frame.width.checked_sub(window.width),
+        frame.height.checked_sub(window.height),
+    ) else {
+        return false;
+    };
+    if across % 2 != 0 || down % 2 != 0 {
+        return false;
+    }
+    let origin = Point {
+        x: across / 2,
+        y: down / 2,
+    };
+    // No point is numbered 0, so every first number rises above it.
+    let mut previous = 0;
+    list.points().iter().all(|point| {
+        let Some(number) = point.number() else {
+            return false;
+        };
+        let rises = number > previous;
+        previous = number;
+        rises
+            && layout.point(number).is_some_and(|table| {
+                let center = table.center();
+                point.size() == Some(table.size())
+                    && center.x.checked_sub(origin.x) == Some(point.center().x)
+                    && center.y.checked_sub(origin.y) == Some(point.center().y)
+            })
+    })
+}
+
+/// Whether `center` lies inside `frame`, edges included, and so does the
+/// area of `size` around it when there is one: on each axis, from the
+/// centre less half the side, rounded up, to the centre plus that half
 /// lies between 0 and the frame's side. Written out here, from the rule
 /// that `Focus::new` and `Focus::with_size` document, rather than asked
 /// of the library, so that the test does not take the library's word for
 /// it.
-fn lies_inside(focus: &Focus, frame: Size) -> bool {
-    let center = focus.center();
+fn lies_inside(center: Point, size: Option<Size>, frame: Size) -> bool {
     let fits = |center: u32, side: u32, frame: u32| {
         let half = side.div_ceil(2);
         half <= center && u64::from(center) + u64::from(half) <= u64::from(frame)
     };
     center.x <= frame.width
         && center.y <= frame.height
-        && focus.size().is_none_or(|size| {
+        && size.is_none_or(|size| {
             fits(center.x, size.width, frame.width) && fits(center.y, size.height, frame.height)
         })
 }
@@ -581,12 +809,42 @@ impl Tally {
             "files with a focus point: {}, without: {}",
             f.with_point, f.without_point
         );
+        println!("focus points by origin: {:?}", f.origins);
         println!(
             "focus confirmed: true {}, false {}, unknown {}",
             f.confirmed, f.missed, f.unknown
         );
         println!("focus frames: {:?}", f.frames);
         println!("distinct focus area sizes: {}", f.area_sizes.len());
+        println!(
+            "files with a list of the focus points used: {}, of which with a primary: {}",
+            f.with_list, f.with_primary
+        );
+        println!(
+            "files by number of points in their list: {:?}",
+            f.list_sizes
+        );
+        println!(
+            "points in the lists: {}, of which with a number: {}",
+            f.list_points, f.numbered_points
+        );
+        println!(
+            "lists of one point placed from a table, a single-point shot or a mask naming no other point, which the library does not tell apart: {}",
+            f.single_placed
+        );
+        println!(
+            "lists with an area mode: {}, by mode: {:?}",
+            f.with_list - f.without_area_mode,
+            f.area_modes
+        );
+        println!(
+            "files with a layout of the body's autofocus points: {}, by number of points: {:?}",
+            f.with_layout, f.layout_sizes
+        );
+        println!(
+            "files with a layout and no focus point, from manual focus, a point number of 0, a crop the table does not confirm, a crop-mode JPEG smaller than the crop, a JPEG cut to another shape or a MakerNote missing or unreadable, which the library does not tell apart: {}",
+            f.layout_without_point
+        );
         println!(
             "files whose focus point lies outside its frame, area included: {}",
             f.outside_frame
@@ -602,6 +860,34 @@ impl Tally {
         println!(
             "files whose focus point, scaled onto their largest preview, lies outside it, area included: {}",
             f.scaled_outside_frame
+        );
+        println!(
+            "files whose focus point is not their list's primary, or whose list has none: {}",
+            f.list_not_focus
+        );
+        println!(
+            "files whose recorded position is not a list of one point without a number: {}",
+            f.recorded_not_one_point
+        );
+        println!(
+            "files with points placed from a table and no layout: {}",
+            f.placed_without_layout
+        );
+        println!(
+            "files whose layout is not for the Model they name: {}",
+            f.layout_not_for_model
+        );
+        println!(
+            "files whose points placed from a table are not their layout's: {}",
+            f.placed_not_from_layout
+        );
+        println!(
+            "files with a point of their list outside the list's frame, area included: {}",
+            f.list_outside_frame
+        );
+        println!(
+            "files whose list could not be scaled onto their largest preview, or lies outside it once scaled, area included: {}",
+            f.list_scaled_outside_frame
         );
         println!(
             "files whose metadata orientation differs from their largest preview's: {}",
@@ -858,9 +1144,7 @@ fn check(path: &Path, tally: &mut Tally) {
     if preview.orientation() != raw.metadata().orientation() {
         tally.orientation_disagreements += 1;
     }
-    if let Some(focus) = raw.metadata().focus() {
-        tally.focus.record_scaled(&focus, preview.size());
-    }
+    tally.focus.record_scaled(raw.metadata(), preview.size());
     *tally
         .sizes
         .entry((preview.width(), preview.height()))
@@ -901,11 +1185,23 @@ fn every_file_of_the_local_corpus_opens_and_gives_a_whole_jpeg() {
         panic!("the folder RAW_FILES_LOCAL_CORPUS names cannot be read: {error}");
     }
     let mut paths = Vec::new();
+    let mut apple_double = 0;
     let unreadable_entries = walk(Path::new(&dir), &mut |path| {
         let format = path
             .extension()
             .and_then(|ext| Format::from_extension(&ext.to_string_lossy()));
-        if let Some(format) = format {
+        let Some(format) = format else {
+            return;
+        };
+        // macOS writes a file's extended attributes, on a disk that cannot
+        // hold them, to a file of the same name with `._` before it: not a
+        // photo, though its extension names a format.
+        if path
+            .file_name()
+            .is_some_and(|name| name.to_string_lossy().starts_with("._"))
+        {
+            apple_double += 1;
+        } else {
             paths.push((format, path));
         }
     });
@@ -921,6 +1217,9 @@ fn every_file_of_the_local_corpus_opens_and_gives_a_whole_jpeg() {
     println!(
         "files of a format raw-files reads: {}",
         tallies.values().map(|tally| tally.seen).sum::<usize>()
+    );
+    println!(
+        "AppleDouble files skipped, whose name starts with `._` and whose extension names a format: {apple_double}"
     );
     println!("entries that could not be read: {unreadable_entries}");
     for (format, tally) in &tallies {
@@ -958,6 +1257,35 @@ fn every_file_of_the_local_corpus_opens_and_gives_a_whole_jpeg() {
         assert_eq!(
             tally.focus.scaled_outside_frame, 0,
             "some focus points of {format} files, scaled onto their largest preview, lie outside it"
+        );
+        let f = &tally.focus;
+        assert_eq!(
+            f.list_outside_frame, 0,
+            "some {format} files have a point of their list outside the list's frame"
+        );
+        assert_eq!(
+            f.list_scaled_outside_frame, 0,
+            "some {format} files' list could not be scaled onto their largest preview, or lies outside it"
+        );
+        assert_eq!(
+            f.list_not_focus, 0,
+            "some {format} files' focus point is not their list's primary"
+        );
+        assert_eq!(
+            f.recorded_not_one_point, 0,
+            "some recorded positions of {format} files are not a list of one point without a number"
+        );
+        assert_eq!(
+            f.placed_without_layout, 0,
+            "some {format} files have points placed from a table and no layout"
+        );
+        assert_eq!(
+            f.layout_not_for_model, 0,
+            "some {format} files' layout is not for the Model they name"
+        );
+        assert_eq!(
+            f.placed_not_from_layout, 0,
+            "some {format} files' points placed from a table are not their layout's"
         );
     }
 }
@@ -1034,6 +1362,206 @@ fn the_settings_tally_counts_the_makernote_settings() {
     without_color_temperature.record(&Metadata::default().with_camera_settings(fourth));
     assert_eq!(without_color_temperature.color_temperature, 0);
     assert_eq!(without_color_temperature.color_temperature_range, None);
+}
+
+/// Three points of a 39-point layout in a 6016 × 4016 frame, from the
+/// record of the Nikon D600 in the NEF format notes: 1, the centre, 13 and
+/// 38, each with its 164 × 164 box.
+static THREE_POINTS: [raw_files::LayoutPoint; 3] = {
+    use raw_files::LayoutPoint;
+    const BOX: Size = Size {
+        width: 164,
+        height: 164,
+    };
+    [
+        LayoutPoint::new(1, Point { x: 3008, y: 2007 }, BOX),
+        LayoutPoint::new(13, Point { x: 2768, y: 1503 }, BOX),
+        LayoutPoint::new(38, Point { x: 1812, y: 1705 }, BOX),
+    ]
+};
+
+/// A list placed from a table in `frame`: one point for each number and
+/// centre of `points`, in their order, each with the 164 × 164 box, the
+/// one at index `primary` the primary.
+fn placed_list(frame: Size, points: &[(u8, Point)], primary: usize) -> FocusPoints {
+    use raw_files::FocusPoint;
+    let size = Size {
+        width: 164,
+        height: 164,
+    };
+    let mut list = FocusPoints::new(frame, FocusOrigin::Table).unwrap();
+    for &(number, center) in points {
+        list = list
+            .with_point(FocusPoint::new(center).with_number(number).with_size(size))
+            .unwrap();
+    }
+    list.with_primary(primary).unwrap()
+}
+
+#[test]
+fn the_focus_tally_counts_the_lists_and_layouts_and_checks_them_against_each_other() {
+    use raw_files::{AfAreaMode, Focus, FocusPoint};
+
+    let full = Size {
+        width: 6016,
+        height: 4016,
+    };
+    let layout = FocusLayout::new("NIKON D600", full, &THREE_POINTS).unwrap();
+    let d600 = || {
+        Metadata::default()
+            .with_model("NIKON D600")
+            .with_focus_layout(layout)
+    };
+    // An auto-area shot naming points 13 and 38, the primary 38; a DX
+    // shot naming 38 alone, in the 3936 × 2624 window of origin
+    // (1040, 696); a recorded position on a body without a table; and a
+    // shot of the body with a table that names no point.
+    let auto_area = placed_list(
+        full,
+        &[
+            (13, Point { x: 2768, y: 1503 }),
+            (38, Point { x: 1812, y: 1705 }),
+        ],
+        1,
+    )
+    .with_area_mode(AfAreaMode::Auto);
+    let window = Size {
+        width: 3936,
+        height: 2624,
+    };
+    let dx = placed_list(window, &[(38, Point { x: 772, y: 1009 })], 0)
+        .with_area_mode(AfAreaMode::Single);
+    let recorded = Focus::new(full, Point { x: 343, y: 343 })
+        .unwrap()
+        .with_size(Size {
+            width: 540,
+            height: 540,
+        })
+        .unwrap();
+    let files = [
+        d600().with_focus_points(auto_area),
+        d600().with_focus_points(dx),
+        Metadata::default().with_focus(recorded),
+        d600(),
+    ];
+    let mut tally = FocusTally::default();
+    for metadata in &files {
+        tally.record(metadata);
+        tally.record_scaled(metadata, full);
+    }
+
+    assert_eq!((tally.with_point, tally.without_point), (3, 1));
+    assert_eq!(
+        tally.origins,
+        BTreeMap::from([("Recorded", 1), ("Table", 2)])
+    );
+    assert_eq!((tally.with_list, tally.with_primary), (3, 3));
+    assert_eq!(tally.list_sizes, BTreeMap::from([(1, 2), (2, 1)]));
+    assert_eq!((tally.list_points, tally.numbered_points), (4, 3));
+    assert_eq!(tally.single_placed, 1);
+    assert_eq!(
+        tally.area_modes,
+        BTreeMap::from([("Auto area", 1), ("Single point", 1)])
+    );
+    assert_eq!(tally.without_area_mode, 1);
+    assert_eq!(
+        (tally.with_layout, tally.layout_sizes.clone()),
+        (3, BTreeMap::from([(3, 3)]))
+    );
+    assert_eq!(tally.layout_without_point, 1);
+    let failures = |tally: &FocusTally| {
+        [
+            tally.list_not_focus,
+            tally.recorded_not_one_point,
+            tally.placed_without_layout,
+            tally.layout_not_for_model,
+            tally.placed_not_from_layout,
+            tally.list_outside_frame,
+            tally.list_scaled_outside_frame,
+        ]
+    };
+    assert_eq!(failures(&tally), [0; 7]);
+
+    // Each of these breaks one rule, and is counted under it alone. The
+    // rules of the points inside the frame and the preview cannot be
+    // broken here: `FocusPoints::with_point` refuses such a point.
+    let one = |center| [(38, center)];
+    let at_38 = Point { x: 1812, y: 1705 };
+    let unmarked = FocusPoints::new(full, FocusOrigin::Table)
+        .unwrap()
+        .with_point(FocusPoint::new(at_38).with_number(38).with_size(Size {
+            width: 164,
+            height: 164,
+        }))
+        .unwrap();
+    let two_recorded = FocusPoints::new(full, FocusOrigin::Recorded)
+        .unwrap()
+        .with_point(FocusPoint::new(at_38))
+        .unwrap()
+        .with_point(FocusPoint::new(at_38))
+        .unwrap()
+        .with_primary(0)
+        .unwrap();
+    let numbered_recorded = FocusPoints::new(full, FocusOrigin::Recorded)
+        .unwrap()
+        .with_point(FocusPoint::new(at_38).with_number(38))
+        .unwrap()
+        .with_primary(0)
+        .unwrap();
+    let off_by_one = Point { x: 1813, y: 1705 };
+    let out_of_order = placed_list(full, &[(38, at_38), (13, Point { x: 2768, y: 1503 })], 0);
+    // A window whose difference from the frame is odd across, which no
+    // origin gives.
+    let odd_window = Size {
+        width: 3937,
+        height: 2624,
+    };
+    let broken: [(Metadata, usize); 9] = [
+        (d600().with_focus_points(unmarked), 0),
+        (Metadata::default().with_focus_points(two_recorded), 1),
+        (Metadata::default().with_focus_points(numbered_recorded), 1),
+        (
+            Metadata::default().with_focus_points(placed_list(full, &one(at_38), 0)),
+            2,
+        ),
+        (
+            Metadata::default()
+                .with_model("NIKON D610")
+                .with_focus_layout(layout),
+            3,
+        ),
+        (
+            d600().with_focus_points(placed_list(full, &one(off_by_one), 0)),
+            4,
+        ),
+        (d600().with_focus_points(out_of_order), 4),
+        (
+            d600().with_focus_points(placed_list(odd_window, &one(Point { x: 772, y: 1009 }), 0)),
+            4,
+        ),
+        (
+            d600().with_focus_points(
+                FocusPoints::new(full, FocusOrigin::Table)
+                    .unwrap()
+                    .with_point(FocusPoint::new(at_38).with_size(Size {
+                        width: 164,
+                        height: 164,
+                    }))
+                    .unwrap()
+                    .with_primary(0)
+                    .unwrap(),
+            ),
+            4,
+        ),
+    ];
+    for (index, (metadata, rule)) in broken.iter().enumerate() {
+        let mut tally = FocusTally::default();
+        tally.record(metadata);
+        tally.record_scaled(metadata, full);
+        let mut expected = [0; 7];
+        expected[*rule] = 1;
+        assert_eq!(failures(&tally), expected, "broken file {index}");
+    }
 }
 
 // The tests of `wholeness` and `main_image_end`, on JPEG files in
