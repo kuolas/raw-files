@@ -426,18 +426,28 @@ impl Metadata {
     /// box and the box's size, in the frame of raw-files' table of that
     /// body, the body's full-size output.
     ///
-    /// The readers give a layout only from a table of the body's points,
-    /// for a body whose table is in raw-files, the body the file's Model
-    /// names. The
+    /// A file has a layout only from a table of the body's points, for a
+    /// body whose table is in raw-files, the body the file's Model names.
+    /// The
     /// [NEF format notes](https://github.com/kuolas/raw-files/blob/master/docs/formats/nef/autofocus-points.md)
     /// record each body measured, and the tables in raw-files are written
     /// from those records, so a body the notes record has a layout only
     /// when its table is in raw-files. It is `None` for every other body
-    /// and when the file names no Model. It is given whatever the shot, so a
-    /// manual-focus or live-view shot of such a body has it too, and its
-    /// frame is always the table's: on a shot in a crop mode, the points
-    /// of [`focus_points`](Self::focus_points) are in the crop's frame, not
-    /// in the layout's.
+    /// and when the file names no Model.
+    ///
+    /// A body with one layout, such as the Nikon D600, gives it from the
+    /// Model alone, whatever the shot and whatever the file's MakerNote
+    /// holds, so a manual-focus or live-view shot of such a body has it
+    /// too, as does a file whose MakerNote is missing or cannot be read,
+    /// such as an editor's re-save that keeps the Model. A body whose
+    /// files name one of several layouts, each by its own layout code, as
+    /// the Nikon D780's files name its 51 points through the viewfinder or
+    /// its 81 points in live view, will give the layout that the file's
+    /// layout code names, and `None` when the file names none.
+    ///
+    /// The layout's frame is always the table's: on a shot in a crop mode,
+    /// the points of [`focus_points`](Self::focus_points) are in the
+    /// crop's frame, not in the layout's.
     ///
     /// # Examples
     ///

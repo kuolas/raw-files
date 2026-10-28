@@ -20,9 +20,13 @@
 //! which the reader scales onto the DX crop and moves into the 1:1 window.
 //! Then the 56 real files of the session on which my own D600's
 //! autofocus points were measured, committed stripped the same way: what
-//! the reader gives each frame, with no table of the D600's points, its
-//! orientation, its image area and the focus point of its live-view
-//! frames among it. Then 35 real files too large to commit, three of the
+//! the reader gives each frame, the layout of the D600's points from its
+//! table, its orientation, its image area and the focus point of its
+//! live-view frames among it; and, on frame 4, shot through the
+//! viewfinder with one point, its previews and every value of its
+//! metadata, with no focus point for the point the file names, and the
+//! layout it gives with its MakerNote missing or unreadable. Then 35
+//! real files too large to commit, three of the
 //! Z 9 and 32 of 25 other bodies, when they have been downloaded (see
 //! [`support::samples::path`]): the previews each gives, and its
 //! metadata, every value of it, the focus point and the camera settings
@@ -34,10 +38,10 @@ use std::collections::BTreeSet;
 use std::io::Cursor;
 
 use raw_files::{
-    AfAreaMode, CameraSettings, ColorSpace, DateTime, Exposure, ExposureProgram, Flash, FlashMode,
-    Focus, FocusOrigin, FocusPoints, Format, ImageArea, Lens, Limits, Metadata, MeteringMode,
-    Options, Orientation, Point, Preview, PreviewFormat, Rational, RawFile, RawImageSize, Shutter,
-    SignedRational, Size, WhiteBalance, WhiteBalanceMode,
+    AfAreaMode, CameraSettings, ColorSpace, DateTime, Exposure, ExposureProgram, FineTune, Flash,
+    FlashMode, Focus, FocusOrigin, FocusPoints, Format, ImageArea, Lens, Limits, Metadata,
+    MeteringMode, Options, Orientation, Point, Preview, PreviewFormat, Rational, RawFile,
+    RawImageSize, Shutter, SignedRational, Size, WhiteBalance, WhiteBalanceMode,
 };
 use support::nef::{
     D1H_ISO, D1H_LENS, D1H_PREVIEW_JPEG, D1H_RAW, D1hBlobs, d1h_file, d1h_file_with,
@@ -1299,8 +1303,8 @@ fn the_stripped_z9_1x1_file_gives_its_previews_metadata_and_shifted_focus_point(
 // their structure and values kept (`tests/fixtures/nikon-d600/README.md`),
 // so that what the NEF notes' record of the session reads from the files'
 // bytes can be checked on them (`docs/formats/nef/autofocus-points.md`,
-// section 2). raw-files holds no table of the D600's points, so the test
-// records what the reader gives each frame without one.
+// section 2). Every frame gives the layout of the D600's points from the
+// table raw-files holds, written from that record.
 
 /// One frame of the D600 session, as the reader gives it: its number in
 /// the session; the orientation IFD0 records; the image area that the crop
@@ -1445,8 +1449,15 @@ fn every_frame_of_the_d600_session_gives_what_its_bytes_record() {
             image_area,
             "{label}"
         );
-        // No layout: raw-files has no table of the D600's points.
-        assert_eq!(metadata.focus_layout(), None, "{label}");
+        // The D600's layout, from its table, by the Model, whatever the
+        // shot: through the viewfinder, in live view, in manual focus, in
+        // portrait orientation or in the DX crop.
+        let layout = metadata
+            .focus_layout()
+            .unwrap_or_else(|| panic!("{label}: no layout"));
+        assert_eq!(layout.model(), "NIKON D600", "{label}");
+        assert_eq!(layout.frame(), as_size((6016, 4016)), "{label}");
+        assert_eq!(layout.points().len(), 39, "{label}");
         let Some(((x, y), in_focus)) = live_view else {
             assert_eq!(metadata.focus(), None, "{label}");
             assert_eq!(metadata.focus_points(), None, "{label}");
@@ -1478,6 +1489,212 @@ fn every_frame_of_the_d600_session_gives_what_its_bytes_record() {
         assert_eq!(primary.center(), focus.center(), "{label}");
         assert_eq!(primary.size(), focus.size(), "{label}");
         assert_eq!(primary.in_focus(), focus.in_focus(), "{label}");
+    }
+}
+
+/// Checks that frame 4 of the D600 session, shot through the viewfinder
+/// with the single point 38, B1 in the record, the top of the leftmost
+/// column, opens with its three JPEG previews, smallest first, each a stub
+/// JPEG of 122 bytes that reads whole, and gives every value of its
+/// metadata that the session's test above does not check: point 38 of
+/// the layout among them, far from the centre, where a wrong table or a
+/// wrong frame shows. Its values were read from the file's bytes, not from
+/// the reader.
+#[test]
+fn the_d600_frame_4_gives_its_previews_metadata_and_point_38_of_the_layout() {
+    let name = support::fixtures::d600_frame(4);
+    let label = name.as_str();
+    let mut file = RawFile::open(support::fixtures::fixture(label)).unwrap();
+
+    // The MakerNote's preview, SubIFD2's and SubIFD0's, each replaced by a
+    // stub of 122 bytes with the original's frame header. IFD0's thumbnail
+    // is no JPEG but 160 by 120 uncompressed pixels, which the stripping
+    // replaced by 64 zero bytes, and is not a preview.
+    assert_eq!(
+        sizes(file.previews()),
+        [(570, 375), (1632, 1080), (6016, 4016)],
+        "{label}"
+    );
+    let previews = file.previews().to_vec();
+    for preview in &previews {
+        let size = (preview.width(), preview.height());
+        assert_eq!(preview.format(), PreviewFormat::Jpeg, "{label} {size:?}");
+        assert_eq!(
+            preview.orientation(),
+            Orientation::NoTransforms,
+            "{label} {size:?}"
+        );
+        assert_eq!(preview.byte_len(), 122, "{label} {size:?}");
+        let bytes = file.read_preview(preview).unwrap();
+        assert_eq!(bytes.len(), 122, "{label} {size:?}");
+        assert_eq!(bytes[..3], [0xFF, 0xD8, 0xFF], "{label} {size:?}");
+        assert_eq!(bytes[bytes.len() - 2..], [0xFF, 0xD9], "{label} {size:?}");
+    }
+    assert_eq!(file.largest_preview(), previews.last().copied(), "{label}");
+
+    let metadata = file.metadata();
+    assert_eq!(metadata.make(), Some("NIKON CORPORATION"), "{label}");
+    // The firmware the D600 ran, `Ver.1.04 ` with its space trimmed.
+    assert_eq!(metadata.software(), Some("Ver.1.04"), "{label}");
+    // The D600 writes its serial number only in the MakerNote's
+    // SerialNumber, which the stripping removed.
+    assert_eq!(metadata.serial_number(), None, "{label}");
+    // DateTimeOriginal and SubSecTimeOriginal, with the offset from
+    // WorldTime, -180 minutes with daylight saving time off, since the
+    // D600 writes no OffsetTimeOriginal.
+    assert_eq!(
+        metadata
+            .capture_time()
+            .map(|time| time.to_string())
+            .as_deref(),
+        Some("2026-10-26T13:15:08.10-03:00"),
+        "{label}"
+    );
+    // The exposure as stored: ISO 2200, 1/40 s at f/4 and 35 mm, 35 mm in
+    // 35 mm terms on the full-frame body, with no compensation.
+    let exposure = metadata.exposure();
+    assert_eq!(exposure.iso(), Some(2200), "{label}");
+    assert_eq!(exposure.exposure_time(), Some(fraction(10, 400)), "{label}");
+    assert_eq!(exposure.f_number(), Some(fraction(40, 10)), "{label}");
+    assert_eq!(exposure.focal_length(), Some(fraction(350, 10)), "{label}");
+    assert_eq!(exposure.focal_length_in_35mm_film(), Some(35), "{label}");
+    assert_eq!(
+        exposure.exposure_bias(),
+        Some(SignedRational {
+            numerator: 0,
+            denominator: 6,
+        }),
+        "{label}"
+    );
+    // The D600's Exif IFD names no lens, so the lens is the MakerNote's
+    // range alone, that of a 35 mm f/1.8 prime.
+    let lens = metadata
+        .lens()
+        .unwrap_or_else(|| panic!("{label}: no lens"));
+    assert_eq!(
+        (lens.make(), lens.model(), lens.serial_number()),
+        (None, None, None),
+        "{label}"
+    );
+    assert_eq!(lens.min_focal_length(), Some(fraction(350, 10)), "{label}");
+    assert_eq!(lens.max_focal_length(), Some(fraction(350, 10)), "{label}");
+    assert_eq!(
+        lens.f_number_at_min_focal_length(),
+        Some(fraction(18, 10)),
+        "{label}"
+    );
+    assert_eq!(
+        lens.f_number_at_max_focal_length(),
+        Some(fraction(18, 10)),
+        "{label}"
+    );
+    // The raw SubIFD's size; with no default crop and no CropArea, the
+    // image size is the raw size.
+    assert_eq!(metadata.raw_size(), Some(as_size((6080, 4028))), "{label}");
+    assert_eq!(
+        metadata.image_size(),
+        Some(as_size((6080, 4028))),
+        "{label}"
+    );
+    // AFInfo2 names point 38 in layout 3, with bit 37 of its mask set and
+    // a zero frame, and the reader does not place a point named by number,
+    // so there is no focus point, which the session's test checks. Point
+    // 38 of the D600's layout, from its table: at (1812, 1705), with a box
+    // of 164 by 164, in the 6016 by 4016 frame, as the record in the NEF
+    // notes gives it.
+    let layout = metadata
+        .focus_layout()
+        .unwrap_or_else(|| panic!("{label}: no layout"));
+    let point_38 = layout
+        .point(38)
+        .unwrap_or_else(|| panic!("{label}: no point 38"));
+    assert_eq!(point_38.center(), Point { x: 1812, y: 1705 }, "{label}");
+    assert_eq!(point_38.size(), as_size((164, 164)), "{label}");
+    // The settings. From the Exif IFD: aperture priority, matrix metering,
+    // auto white balance, and a Flash of 16, the flash off by the
+    // camera's setting and not fired. From the MakerNote: the fine-tuning
+    // 0x000B records, no shift, whole steps; and, since the Exif IFD
+    // records no ColorSpace, the MakerNote's colour space, sRGB. The
+    // stripping removed the WhiteBalance text, so the mode is Exif's; the
+    // D600 writes no ColorTemperatureAuto, ShutterMode or ImageSizeRAW,
+    // and CropHiSpeed's crop setting, 0, names no image area.
+    let zero = SignedRational {
+        numerator: 0,
+        denominator: 1,
+    };
+    assert_eq!(
+        metadata.camera_settings(),
+        &CameraSettings::default()
+            .with_white_balance(
+                WhiteBalance::default()
+                    .with_mode(WhiteBalanceMode::Auto)
+                    .with_fine_tune(FineTune::new(zero, zero)),
+            )
+            .with_exposure_program(ExposureProgram::AperturePriority)
+            .with_metering_mode(MeteringMode::MultiSegment)
+            .with_flash(Flash::new(false).with_mode(FlashMode::Off))
+            .with_color_space(ColorSpace::Srgb),
+        "{label}"
+    );
+}
+
+/// Checks that frame 4 of the D600 session gives the layout of the D600's
+/// points when its MakerNote is missing, as after an editor drops it on a
+/// re-save, and when it cannot be read, its inner TIFF header zeroed: the
+/// layout depends on the Model alone. Neither file gives a focus point,
+/// which only the MakerNote records.
+#[test]
+fn the_d600_frame_4_gives_the_layout_without_a_readable_makernote() {
+    let name = support::fixtures::d600_frame(4);
+    let label = name.as_str();
+    let bytes = support::fixtures::read_fixture(label);
+    // The one place each pattern starts in the file.
+    let only = |pattern: &[u8]| {
+        let mut starts = bytes
+            .windows(pattern.len())
+            .enumerate()
+            .filter(|(_, window)| *window == pattern)
+            .map(|(start, _)| start);
+        let start = starts.next().expect("the pattern is in the file");
+        assert_eq!(
+            starts.next(),
+            None,
+            "{label}: the pattern is in the file twice"
+        );
+        start
+    };
+    // The MakerNote's block: Nikon's signature, the version 2.10, then the
+    // inner TIFF header, big-endian, as the D600 writes it.
+    let block = only(b"Nikon\0\x02\x10\0\0MM\0\x2A");
+    // The MakerNote's entry in the Exif IFD: tag 0x927C, of type UNDEFINED,
+    // big-endian.
+    let entry = only(&[0x92, 0x7C, 0x00, 0x07]);
+    let mut unreadable = bytes.clone();
+    unreadable[block + 10..block + 14].fill(0);
+    let mut missing = bytes;
+    // Another tag, which no reader reads, still in tag order.
+    missing[entry + 1] = 0x7D;
+    for (what, bytes) in [("unreadable", unreadable), ("missing", missing)] {
+        let file = RawFile::from_bytes(&bytes).unwrap();
+        let metadata = file.metadata();
+        assert_eq!(metadata.model(), Some("NIKON D600"), "{label}, {what}");
+        assert_eq!(metadata.focus(), None, "{label}, {what}");
+        assert_eq!(metadata.focus_points(), None, "{label}, {what}");
+        let layout = metadata
+            .focus_layout()
+            .unwrap_or_else(|| panic!("{label}, {what}: no layout"));
+        assert_eq!(layout.model(), "NIKON D600", "{label}, {what}");
+        assert_eq!(layout.frame(), as_size((6016, 4016)), "{label}, {what}");
+        assert_eq!(layout.points().len(), 39, "{label}, {what}");
+        let point_38 = layout
+            .point(38)
+            .unwrap_or_else(|| panic!("{label}, {what}: no point 38"));
+        assert_eq!(
+            point_38.center(),
+            Point { x: 1812, y: 1705 },
+            "{label}, {what}"
+        );
+        assert_eq!(point_38.size(), as_size((164, 164)), "{label}, {what}");
     }
 }
 

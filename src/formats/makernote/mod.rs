@@ -15,6 +15,10 @@
 //!   image size, the focus point, the camera settings that only it
 //!   records, such as the white balance setting and the shutter used, and
 //!   the values older bodies record only there.
+//! - [`points`] holds the tables of a body's autofocus points, measured by
+//!   the project, which no file records: detection gives every file whose
+//!   Model names a body with a table that body's layout of points, after
+//!   the format's reader, whatever the file's MakerNote holds.
 //! - [`sony`] reads Sony's MakerNote: the focus point, and the camera
 //!   settings that only it records, such as the white balance setting and
 //!   the electronic front curtain setting.
@@ -41,6 +45,7 @@ use crate::io::Source;
 use crate::limits::Limits;
 
 pub(in crate::formats) mod nikon;
+pub(in crate::formats) mod points;
 pub(in crate::formats) mod sony;
 
 /// A MakerNote's block as the TIFF structure that holds it records it:

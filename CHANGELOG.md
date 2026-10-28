@@ -56,9 +56,16 @@ does.
   given twice, and a point whose centre or box does not lie on the
   frame by the rules of `Focus::new` and `Focus::with_size`; a program's
   tests set it with `Metadata::with_focus_layout`. The readers give a
-  layout only from a table of the body's points; no body's table is in
-  raw-files with this change, so every file gives `None` until the first
-  table lands.
+  layout only from a table of the body's points, and `None` for a body
+  whose table is not in raw-files.
+- NEF and JPEG files of the Nikon D600 give its layout of 39 autofocus
+  points (`Metadata::focus_layout`), whatever the shot: through the
+  viewfinder, in live view, in manual focus or on a crop. The layout
+  depends on the Model alone, so a file whose MakerNote is missing or
+  cannot be read, such as an editor's re-save, gives it too. The table was
+  measured by the project on frames shot with a D600 and read in Nikon's
+  NX Studio, as the NEF notes record it. A shot through the viewfinder,
+  which names its point by number, gives the layout and no focus point.
 
 ## [0.5.0] - 2026-10-26
 

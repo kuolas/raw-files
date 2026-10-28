@@ -7,7 +7,10 @@ Where that point lies on the picture depends on the body's layout of
 points, which no file carries. This page holds what raw-files knows of
 those layouts: the procedure by which a body's points are measured, and
 the record of each body measured so far, one section per body. The
-tables in the code are to be written from these records.
+tables in the code are written from these records, each from its
+body's record alone: the D600's
+([`src/formats/makernote/points/nikon_d600.rs`](../../../src/formats/makernote/points/nikon_d600.rs))
+from section 2.
 
 Every table is measured by the project, or by a contributor, on frames
 shot with the body itself and read in the maker's own software, run as
@@ -307,15 +310,20 @@ pixels and personal fields as the Z 9 fixtures were
 in `tests/fixtures/nikon-d600/`, whose
 [manifest](../../../tests/fixtures/nikon-d600/README.md) lists each
 frame with what it shows and its SHA-256. A test opens every frame and
-checks what the reader gives it. The NX Studio screenshots stay
-private; the readings taken from them are in sections 2.4 to 2.6.
+checks what the reader gives it: every frame, whatever the shot, gives
+the layout of the D600's 39 points from the table in the code, by its
+Model, and the point a frame names by number is not placed on it. The
+NX Studio screenshots stay private; the readings taken from them are in
+sections 2.4 to 2.6.
 
 Three of the frames serve the table's tests, and the JPEG of frame 4,
 stripped, is still to be committed beside its NEF:
 
 - frame 4, point 38 (B1, the top-left of the outer columns), as a NEF
   and as its JPEG: a single point far from the centre, where a wrong
-  table, a wrong bit order or a wrong frame shows, on both paths;
+  table, a wrong bit order or a wrong frame shows, on both paths; its
+  NEF's test checks every value of its metadata, the layout's point 38
+  at (1812, 1705) with its box of 164 by 164 among them;
 - frame 49, point 38 in DX: the shift into the crop;
 - frame 42, auto-area: the mask of points used, 12 bits, with the
   primary among them.
