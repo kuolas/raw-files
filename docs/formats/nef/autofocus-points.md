@@ -278,10 +278,14 @@ again, read identically to their originals. **[F]**
   output frame, in output pixels, with no correction for the border:
   CropHiSpeed's cropped size, 3968x2636, counts 32 and 12 pixels that
   the 3936x2624 picture does not have, as the raw image's 6080x4028
-  counts 64 and 12 that the 6016x4016 output does not.
+  counts 64 and 12 that the 6016x4016 output does not. The DX
+  frames' NEF files hold a picture of the window's size too: on
+  frames 49 to 51 the full-size preview is 3936x2624, as is the JPEG.
   So a point placed from the table on a DX frame shifts by
   CropHiSpeed's origin, the rule of
-  [ADR018](../../architecture-decisions/adr018-focus-points-placed-from-a-table-and-the-points-used.md).
+  [ADR018](../../architecture-decisions/adr018-focus-points-placed-from-a-table-and-the-points-used.md),
+  and is measured in that window, 3936x2624, in the NEF as in the JPEG
+  ([ADR019](../../architecture-decisions/adr019-the-frame-of-a-placed-focus-point-on-a-crop.md)).
   **[F]** Whether the shift is CropHiSpeed's
   origin on other bodies is a fact per body, which the two crop frames
   of the procedure check; the D7200's 1.3x files record other offsets

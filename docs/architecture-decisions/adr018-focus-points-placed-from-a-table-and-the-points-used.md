@@ -1,6 +1,9 @@
 # ADR018: Focus points placed from a table, and the points used
 
-- Status: Accepted
+- Status: Accepted; amended by [ADR019](adr019-the-frame-of-a-placed-focus-point-on-a-crop.md),
+  which measures a placed point on a crop in the crop window, the
+  table's frame less twice CropHiSpeed's origin, in a raw file as in a
+  JPEG, where this record took CropHiSpeed's cropped size in a raw file
 - Amends: [ADR012](adr012-focus-points-as-the-camera-records-them.md),
   in two points: a point the camera names by number is placed from a
   table of the body's points, which that record left waiting for a
