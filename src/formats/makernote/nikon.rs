@@ -100,7 +100,7 @@
 //! nothing. On every version read, byte 5 records the area mode, how the
 //! camera chose its points, by a code read with the detection method at
 //! byte 4: the codes that frames shot in a known mode confirmed, under the
-//! method recorded, name an [`AfAreaMode`] ([`area_mode`]), and any other
+//! method recorded, name a [`FocusAreaMode`] ([`area_mode`]), and any other
 //! names none. A recorded position is given only when the value is at
 //! least as long as its version's layout, the frame and the area have no
 //! zero side, the centre lies on the frame, and the area fits inside the
@@ -415,7 +415,7 @@ use crate::container::tiff::tags::{JPEG_INTERCHANGE_FORMAT, JPEG_INTERCHANGE_FOR
 use crate::container::tiff::types::{LONG, SHORT, SRATIONAL, SSHORT, UNDEFINED};
 use crate::container::tiff::{Block, Ifd, Tree, ifd_in, parse_header, skip_damage};
 use crate::error::Result;
-use crate::focus::{AfAreaMode, Focus, FocusOrigin, FocusPoint, FocusPoints, lies_on, scale};
+use crate::focus::{Focus, FocusAreaMode, FocusOrigin, FocusPoint, FocusPoints, lies_on, scale};
 use crate::formats::tiff_metadata::{self, Standard, one_short};
 use crate::formats::tiff_previews::{self, Candidate};
 use crate::geometry::{Point, Size};
@@ -1811,7 +1811,7 @@ struct FocusRecord {
     /// How the camera chose its points: `None` when the area-mode byte,
     /// under the detection method recorded, holds a code [`area_mode`]
     /// does not name.
-    area_mode: Option<AfAreaMode>,
+    area_mode: Option<FocusAreaMode>,
     /// The points the record names, read on version 0100 alone: what a
     /// record with no position gives, placed from a table.
     named: Option<NamedPoints>,
@@ -1965,26 +1965,26 @@ fn named_points(value: &[u8], at: usize) -> Option<NamedPoints> {
 ///
 /// Named, each on frames shot in its mode, as the NEF format notes record:
 ///
-/// - under phase detection, 0 [`Single`](AfAreaMode::Single), 5
-///   [`Dynamic`](AfAreaMode::Dynamic) and 8 [`Auto`](AfAreaMode::Auto),
+/// - under phase detection, 0 [`Single`](FocusAreaMode::Single), 5
+///   [`Dynamic`](FocusAreaMode::Dynamic) and 8 [`Auto`](FocusAreaMode::Auto),
 ///   on my D600 frames through the viewfinder, in single-point,
 ///   dynamic-area and auto-area AF;
-/// - under any detection method, 193 [`Single`](AfAreaMode::Single), on
+/// - under any detection method, 193 [`Single`](FocusAreaMode::Single), on
 ///   the two Z 9 frames shot with a single point and committed as
 ///   fixtures, both under hybrid detection, and 197
-///   [`Auto`](AfAreaMode::Auto), on my Z 9 files shot in auto-area AF;
+///   [`Auto`](FocusAreaMode::Auto), on my Z 9 files shot in auto-area AF;
 /// - under contrast or hybrid detection, 207
-///   [`Tracking`](AfAreaMode::Tracking), on my Z 9 files shot in
+///   [`Tracking`](FocusAreaMode::Tracking), on my Z 9 files shot in
 ///   3D-tracking, under hybrid detection.
 ///
 /// A DSLR code under contrast or hybrid detection, 207 under phase
 /// detection, or any other code gives `None`.
-fn area_mode(detection: u8, code: u8) -> Option<AfAreaMode> {
+fn area_mode(detection: u8, code: u8) -> Option<FocusAreaMode> {
     match (detection, code) {
-        (0, 0) | (_, 193) => Some(AfAreaMode::Single),
-        (0, 5) => Some(AfAreaMode::Dynamic),
-        (0, 8) | (_, 197) => Some(AfAreaMode::Auto),
-        (1 | 2, 207) => Some(AfAreaMode::Tracking),
+        (0, 0) | (_, 193) => Some(FocusAreaMode::Single),
+        (0, 5) => Some(FocusAreaMode::Dynamic),
+        (0, 8) | (_, 197) => Some(FocusAreaMode::Auto),
+        (1 | 2, 207) => Some(FocusAreaMode::Tracking),
         _ => None,
     }
 }
@@ -4355,7 +4355,7 @@ mod tests {
         // detection 1 in the live view of the D7000, the Coolpix A, the
         // D5600 and the D5, and 192, 196 and 199 under detection 2; and
         // codes no file shows. The point is kept either way.
-        use AfAreaMode::{Auto, Dynamic, Single, Tracking};
+        use FocusAreaMode::{Auto, Dynamic, Single, Tracking};
         let mut named = vec![(0, 0, Single), (0, 5, Dynamic), (0, 8, Auto)];
         for detection in [0, 1, 2] {
             named.extend([(detection, 193, Single), (detection, 197, Auto)]);
@@ -4414,7 +4414,7 @@ mod tests {
                 let [width, height] = recorded.frame.map(u32::from);
                 assert_eq!(points.frame(), Size { width, height }, "{label}");
                 assert_eq!(points.origin(), FocusOrigin::Recorded, "{label}");
-                assert_eq!(points.area_mode(), Some(AfAreaMode::Single), "{label}");
+                assert_eq!(points.area_mode(), Some(FocusAreaMode::Single), "{label}");
             }
         }
     }
@@ -4436,7 +4436,7 @@ mod tests {
                 let file = raw_file_of(order, raw, &block, whole(&block), |_, _| {});
                 let metadata = metadata_of(file);
                 let placed = metadata.focus().expect(what);
-                let expected = FocusPoints::from(placed).with_area_mode(AfAreaMode::Single);
+                let expected = FocusPoints::from(placed).with_area_mode(FocusAreaMode::Single);
                 assert_eq!(
                     metadata.focus_points(),
                     Some(&expected),
@@ -4456,7 +4456,7 @@ mod tests {
                     height: 2688
                 }
             );
-            let expected = FocusPoints::from(placed).with_area_mode(AfAreaMode::Single);
+            let expected = FocusPoints::from(placed).with_area_mode(FocusAreaMode::Single);
             assert_eq!(
                 metadata.focus_points(),
                 Some(&expected),
@@ -4630,7 +4630,7 @@ mod tests {
         frame: [u32; 2],
         points: &[(u8, [u32; 2])],
         primary: u8,
-        mode: AfAreaMode,
+        mode: FocusAreaMode,
     ) -> FocusPoints {
         let [width, height] = frame;
         let mut list = FocusPoints::new(Size { width, height }, FocusOrigin::Table).unwrap();
@@ -4674,7 +4674,7 @@ mod tests {
                 assert_eq!(metadata.focus(), Some(expected), "{what}");
                 assert_eq!(
                     metadata.focus_points(),
-                    Some(&placed_list([6016, 4016], &[B1], 38, AfAreaMode::Single)),
+                    Some(&placed_list([6016, 4016], &[B1], 38, FocusAreaMode::Single)),
                     "{what}"
                 );
             }
@@ -4727,7 +4727,7 @@ mod tests {
                 let metadata = shot(order, "NIKON D600", &value, Some(D600_FX));
                 assert_eq!(
                     metadata.focus_points(),
-                    Some(&placed_list([6016, 4016], &[B1], 38, AfAreaMode::Single)),
+                    Some(&placed_list([6016, 4016], &[B1], 38, FocusAreaMode::Single)),
                     "{order:?}, {what}"
                 );
             }
@@ -4759,7 +4759,7 @@ mod tests {
                 metadata.focus_points(),
                 focus
                     .map(FocusPoints::from)
-                    .map(|points| points.with_area_mode(AfAreaMode::Single))
+                    .map(|points| points.with_area_mode(FocusAreaMode::Single))
                     .as_ref(),
                 "{order:?}"
             );
@@ -4847,7 +4847,12 @@ mod tests {
             ];
             assert_eq!(
                 metadata.focus_points(),
-                Some(&placed_list([6016, 4016], &frame_44, 4, AfAreaMode::Auto)),
+                Some(&placed_list(
+                    [6016, 4016],
+                    &frame_44,
+                    4,
+                    FocusAreaMode::Auto
+                )),
                 "{order:?}, frame 44"
             );
             // Every bit of the seven bytes set: the table's 39 points, in
@@ -4860,7 +4865,7 @@ mod tests {
             assert_eq!(points.primary().and_then(FocusPoint::number), Some(38));
             // An empty mask, or one whose bits the table lacks: the primary
             // alone.
-            let alone = placed_list([6016, 4016], &[B1], 38, AfAreaMode::Single);
+            let alone = placed_list([6016, 4016], &[B1], 38, FocusAreaMode::Single);
             for bits in [&[][..], &[39, 47, 55]] {
                 let metadata = d600(order, 38, bits);
                 assert_eq!(metadata.focus_points(), Some(&alone), "{order:?}, {bits:?}");
@@ -4872,7 +4877,7 @@ mod tests {
                 [6016, 4016],
                 &[(1, [3008, 2007]), B1, (39, [1812, 2308])],
                 38,
-                AfAreaMode::Single,
+                FocusAreaMode::Single,
             );
             assert_eq!(metadata.focus_points(), Some(&expected), "{order:?}");
             assert_eq!(
@@ -4908,7 +4913,7 @@ mod tests {
                         [3936, 2624],
                         points,
                         primary,
-                        AfAreaMode::Single
+                        FocusAreaMode::Single
                     )),
                     "{order:?}, point {primary}"
                 );
@@ -4919,7 +4924,7 @@ mod tests {
             let metadata = shot(order, "NIKON D600", &d600_viewfinder(order), Some(no_crop));
             assert_eq!(
                 metadata.focus_points(),
-                Some(&placed_list([6016, 4016], &[B1], 38, AfAreaMode::Single)),
+                Some(&placed_list([6016, 4016], &[B1], 38, FocusAreaMode::Single)),
                 "{order:?}"
             );
         }
@@ -4954,7 +4959,7 @@ mod tests {
                 [2536, 2624],
                 &[(1, [1268, 1311]), (11, [1028, 1311])],
                 1,
-                AfAreaMode::Single,
+                FocusAreaMode::Single,
             );
             assert_eq!(metadata.focus_points(), Some(&expected), "{order:?}");
             // At the origin (1730, 696), point 38's box reaches the left
@@ -4965,13 +4970,14 @@ mod tests {
                 [2556, 2624],
                 &[(1, [1278, 1311]), (38, [82, 1009])],
                 1,
-                AfAreaMode::Single,
+                FocusAreaMode::Single,
             );
             assert_eq!(metadata.focus_points(), Some(&expected), "{order:?}");
             // At the origin (1900, 696), point 38's centre lies left of the
             // window: dropped.
             let metadata = shot(order, "NIKON D600", &value, Some(d600_dx_at(1900, 696)));
-            let expected = placed_list([2216, 2624], &[(1, [1108, 1311])], 1, AfAreaMode::Single);
+            let expected =
+                placed_list([2216, 2624], &[(1, [1108, 1311])], 1, FocusAreaMode::Single);
             assert_eq!(metadata.focus_points(), Some(&expected), "{order:?}");
             // The primary dropped, by its box or by its centre: no point.
             for left in [1740, 1900] {
@@ -5012,7 +5018,7 @@ mod tests {
                 let metadata = d600_jpeg(order, &d600_viewfinder(order), Some(D600_FX), pixels);
                 assert_eq!(
                     metadata.focus_points(),
-                    Some(&placed_list([6016, 4016], &[B1], 38, AfAreaMode::Single)),
+                    Some(&placed_list([6016, 4016], &[B1], 38, FocusAreaMode::Single)),
                     "{order:?}, {pixels:?}"
                 );
             }
@@ -5025,7 +5031,7 @@ mod tests {
                     [3936, 2624],
                     &[(38, [772, 1009])],
                     38,
-                    AfAreaMode::Single
+                    FocusAreaMode::Single
                 )),
                 "{order:?}"
             );

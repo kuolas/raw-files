@@ -368,7 +368,7 @@ pub use datetime::DateTime;
 pub use error::{Error, ErrorKind, Result};
 pub use file::RawFile;
 pub use focus::{
-    AfAreaMode, Focus, FocusLayout, FocusOrigin, FocusPoint, FocusPoints, LayoutPoint,
+    Focus, FocusAreaMode, FocusLayout, FocusOrigin, FocusPoint, FocusPoints, LayoutPoint,
 };
 pub use format::Format;
 pub use geometry::{Point, Size};

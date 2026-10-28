@@ -418,12 +418,12 @@ impl Metadata {
     /// on every version raw-files reads, and named for the codes that
     /// frames shot in a known mode confirmed, under the detection method
     /// the file records: through the viewfinder, by phase detection, 0
-    /// [`Single`](crate::AfAreaMode::Single), 5
-    /// [`Dynamic`](crate::AfAreaMode::Dynamic) and 8
-    /// [`Auto`](crate::AfAreaMode::Auto); under any detection method, 193
-    /// [`Single`](crate::AfAreaMode::Single) and 197
-    /// [`Auto`](crate::AfAreaMode::Auto); and under contrast or hybrid
-    /// detection, 207 [`Tracking`](crate::AfAreaMode::Tracking). Any other
+    /// [`Single`](crate::FocusAreaMode::Single), 5
+    /// [`Dynamic`](crate::FocusAreaMode::Dynamic) and 8
+    /// [`Auto`](crate::FocusAreaMode::Auto); under any detection method, 193
+    /// [`Single`](crate::FocusAreaMode::Single) and 197
+    /// [`Auto`](crate::FocusAreaMode::Auto); and under contrast or hybrid
+    /// detection, 207 [`Tracking`](crate::FocusAreaMode::Tracking). Any other
     /// code, or a DSLR code in live view, gives `None`.
     /// On a Sony file the area mode is always `None`, since the codes of its
     /// AFAreaModeSetting are not checked. It is `None` when
@@ -1114,7 +1114,7 @@ mod tests {
     use crate::camera_settings::{
         ColorSpace, ExposureProgram, MeteringMode, RawImageSize, Shutter,
     };
-    use crate::focus::{AfAreaMode, FocusOrigin, FocusPoint, LayoutPoint};
+    use crate::focus::{FocusAreaMode, FocusOrigin, FocusPoint, LayoutPoint};
     use crate::geometry::Point;
     use crate::testing::{point, size, z9_focus};
 
@@ -1509,7 +1509,7 @@ mod tests {
             })
             .and_then(|list| list.with_primary(1))
             .unwrap()
-            .with_area_mode(AfAreaMode::Auto)
+            .with_area_mode(FocusAreaMode::Auto)
     }
 
     #[test]
@@ -1603,7 +1603,7 @@ mod tests {
         let unmarked = FocusPoints::new(size(6_016, 4_016), FocusOrigin::Recorded)
             .and_then(|list| list.with_point(FocusPoint::new(point(3_008, 2_008))))
             .unwrap()
-            .with_area_mode(AfAreaMode::Single);
+            .with_area_mode(FocusAreaMode::Single);
         let metadata = Metadata::default().with_focus_points(unmarked.clone());
         assert_eq!(metadata.focus(), None);
         assert_eq!(metadata.focus_points(), Some(&unmarked));

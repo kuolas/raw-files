@@ -1400,7 +1400,7 @@ fn placed_list(frame: Size, points: &[(u8, Point)], primary: usize) -> FocusPoin
 
 #[test]
 fn the_focus_tally_counts_the_lists_and_layouts_and_checks_them_against_each_other() {
-    use raw_files::{AfAreaMode, Focus, FocusPoint};
+    use raw_files::{Focus, FocusAreaMode, FocusPoint};
 
     let full = Size {
         width: 6016,
@@ -1424,13 +1424,13 @@ fn the_focus_tally_counts_the_lists_and_layouts_and_checks_them_against_each_oth
         ],
         1,
     )
-    .with_area_mode(AfAreaMode::Auto);
+    .with_area_mode(FocusAreaMode::Auto);
     let window = Size {
         width: 3936,
         height: 2624,
     };
     let dx = placed_list(window, &[(38, Point { x: 772, y: 1009 })], 0)
-        .with_area_mode(AfAreaMode::Single);
+        .with_area_mode(FocusAreaMode::Single);
     let recorded = Focus::new(full, Point { x: 343, y: 343 })
         .unwrap()
         .with_size(Size {
