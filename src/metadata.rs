@@ -22,7 +22,7 @@
 //! A program that uses raw-files can build these values for its own tests,
 //! without a camera file: [`Metadata`], [`Exposure`] and [`CameraSettings`]
 //! through their `with_…` methods, a [`Lens`] through [`Lens::builder`],
-//! [`FocusPoints`] through their builders, and a [`Focus`], a
+//! [`FocusPoints`] through their `with_…` methods, and a [`Focus`], a
 //! [`FocusLayout`], a [`DateTime`] and a [`Rational`] through their checked
 //! constructors. [`Metadata`]'s docs show how.
 
@@ -439,8 +439,8 @@ impl Metadata {
     /// # fn main() -> raw_files::Result<()> {
     /// let file = RawFile::open("photo.nef")?;
     /// if let Some(points) = file.metadata().focus_points() {
-    ///     for point in points.points() {
-    ///         let primary = Some(point) == points.primary();
+    ///     for (index, point) in points.points().iter().enumerate() {
+    ///         let primary = points.primary_index() == Some(index);
     ///         let mark = if primary { ", the primary" } else { "" };
     ///         println!("a point at {}{mark}", point.center());
     ///     }
@@ -603,7 +603,7 @@ impl Metadata {
     /// Sets where the camera focused, as a list of that one point, in
     /// place of any focus or list set before: the point with no number, as
     /// the primary, in the focus's frame and with its origin, and no area
-    /// mode, as `FocusPoints::from(focus)` makes it.
+    /// mode, as [`FocusPoints::from(focus)`](FocusPoints::from) makes it.
     /// [`focus`](Self::focus) reads the focus back as given, and
     /// [`focus_points`](Self::focus_points) gives the list; a later
     /// `with_focus` or [`with_focus_points`](Self::with_focus_points)

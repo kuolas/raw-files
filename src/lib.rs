@@ -122,10 +122,10 @@
 //!
 //! A program's tests can build every metadata value without a file,
 //! through the `with_…` methods of [`Metadata`], [`Exposure`],
-//! [`CameraSettings`] and [`WhiteBalance`], [`Lens::builder`], the
-//! constructors of [`FineTune`] and [`Flash`], the builders of
-//! [`FocusPoints`] and [`FocusPoint`], and the checked constructors, such
-//! as [`DateTime::new`] and [`FocusLayout::new`]; [`Metadata`] shows how.
+//! [`CameraSettings`], [`WhiteBalance`], [`FocusPoints`] and
+//! [`FocusPoint`], [`Lens::builder`], the constructors of [`FineTune`] and
+//! [`Flash`], and the checked constructors, such as [`DateTime::new`] and
+//! [`FocusLayout::new`]; [`Metadata`] shows how.
 //!
 //! Show how the camera was set ([`Metadata::camera_settings`]), as a
 //! viewer's information panel does; every setting is optional, and one the

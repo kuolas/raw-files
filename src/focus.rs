@@ -517,6 +517,7 @@ impl FocusPoint {
     ///
     /// Any centre is accepted: [`FocusPoints::with_point`] checks it
     /// against the list's frame.
+    #[must_use]
     pub fn new(center: Point) -> Self {
         Self {
             number: None,
@@ -623,8 +624,10 @@ impl FocusPoint {
 ///
 /// # Examples
 ///
-/// Two points in a 6016 × 4016 frame, the second the primary, in auto
-/// area, placed on a 1504 × 1004 preview:
+/// Two points of a Nikon D600 shot in auto area, as a list placed from
+/// its table holds them: points 1 and 13, in number order, each with its
+/// 164 × 164 box at its place in the body's 6016 × 4016 frame, the second
+/// the primary; then placed on a 1504 × 1004 preview:
 ///
 /// ```
 /// use raw_files::{FocusAreaMode, FocusOrigin, FocusPoint, FocusPoints, Point, Size};
@@ -635,25 +638,22 @@ impl FocusPoint {
 /// # fn example() -> Option<()> {
 /// let frame = Size { width: 6016, height: 4016 };
 /// let area = Size { width: 164, height: 164 };
-/// let points = FocusPoints::new(frame, FocusOrigin::Recorded)?
-///     .with_point(FocusPoint::new(Point { x: 2008, y: 1340 }).with_size(area))?
-///     .with_point(
-///         FocusPoint::new(Point { x: 3008, y: 2008 })
-///             .with_size(area)
-///             .with_in_focus(true),
-///     )?
+/// let points = FocusPoints::new(frame, FocusOrigin::Table)?
+///     .with_point(FocusPoint::new(Point { x: 3008, y: 2007 }).with_number(1).with_size(area))?
+///     .with_point(FocusPoint::new(Point { x: 2768, y: 1503 }).with_number(13).with_size(area))?
 ///     .with_primary(1)?
 ///     .with_area_mode(FocusAreaMode::Auto);
 ///
 /// let on_preview = points.scaled_to(Size { width: 1504, height: 1004 })?;
 /// let centres: Vec<Point> = on_preview.points().iter().map(FocusPoint::center).collect();
-/// assert_eq!(centres, [Point { x: 502, y: 335 }, Point { x: 752, y: 502 }]);
+/// assert_eq!(centres, [Point { x: 752, y: 502 }, Point { x: 692, y: 376 }]);
+/// assert_eq!(on_preview.primary().and_then(FocusPoint::number), Some(13));
 /// assert_eq!(
-///     on_preview.primary().map(FocusPoint::center),
-///     Some(Point { x: 752, y: 502 })
+///     on_preview.primary().and_then(FocusPoint::size),
+///     Some(Size { width: 41, height: 41 })
 /// );
 /// assert_eq!(on_preview.area_mode(), Some(FocusAreaMode::Auto));
-/// assert_eq!(on_preview.origin(), FocusOrigin::Recorded);
+/// assert_eq!(on_preview.origin(), FocusOrigin::Table);
 /// # Some(())
 /// # }
 /// ```
@@ -715,6 +715,8 @@ impl FocusPoints {
     /// points were added, marked as the primary, the one
     /// [`Metadata::focus`](crate::Metadata::focus) reports, in place of any
     /// marked before; `None` when `index` is not that of a point added so far.
+    /// [`primary_index`](Self::primary_index) reads the index back, and
+    /// [`primary`](Self::primary) the point.
     #[must_use]
     pub fn with_primary(mut self, index: usize) -> Option<Self> {
         if index >= self.points.len() {
@@ -755,6 +757,47 @@ impl FocusPoints {
     /// reports, or `None` when no point is marked as the primary.
     pub fn primary(&self) -> Option<&FocusPoint> {
         self.points.get(self.primary?)
+    }
+
+    /// Where the primary point is in [`points`](Self::points), counted
+    /// from 0 in the order the points were added, as
+    /// [`with_primary`](Self::with_primary) takes it, or `None` when no
+    /// point is marked as the primary.
+    ///
+    /// A viewer that draws every point and marks the primary compares each
+    /// point's place with this index, not the point with
+    /// [`primary`](Self::primary): two points of a list can hold the same
+    /// values, and only the index says which of them is the primary.
+    ///
+    /// # Examples
+    ///
+    /// Points 1 and 13 of a Nikon D600, the second the primary, each
+    /// marked by its place in the list:
+    ///
+    /// ```
+    /// use raw_files::{FocusOrigin, FocusPoint, FocusPoints, Point, Size};
+    ///
+    /// # fn main() {
+    /// #     example().expect("every step accepts these values");
+    /// # }
+    /// # fn example() -> Option<()> {
+    /// let frame = Size { width: 6016, height: 4016 };
+    /// let points = FocusPoints::new(frame, FocusOrigin::Table)?
+    ///     .with_point(FocusPoint::new(Point { x: 3008, y: 2007 }).with_number(1))?
+    ///     .with_point(FocusPoint::new(Point { x: 2768, y: 1503 }).with_number(13))?;
+    /// assert_eq!(points.primary_index(), None);
+    ///
+    /// let points = points.with_primary(1)?;
+    /// assert_eq!(points.primary_index(), Some(1));
+    /// let marks: Vec<bool> = (0..points.points().len())
+    ///     .map(|index| points.primary_index() == Some(index))
+    ///     .collect();
+    /// assert_eq!(marks, [false, true]);
+    /// # Some(())
+    /// # }
+    /// ```
+    pub fn primary_index(&self) -> Option<usize> {
+        self.primary
     }
 
     /// How the camera chose its points, or `None` when the file does not
@@ -881,6 +924,7 @@ impl LayoutPoint {
     ///
     /// It is `const`, so that a layout's points can be written as a
     /// `static` array, which [`FocusLayout::new`] borrows.
+    #[must_use]
     pub const fn new(number: u8, center: Point, size: Size) -> Self {
         Self {
             number,
@@ -1825,6 +1869,25 @@ mod tests {
         let longer = marked.with_point(FocusPoint::new(point(30, 30))).unwrap();
         assert_eq!(longer.primary(), Some(&second));
         assert_eq!(longer.points().len(), 3);
+    }
+
+    #[test]
+    fn the_primary_index_tells_the_primary_apart_from_equal_points() {
+        let twin = FocusPoint::new(point(10, 10)).with_number(1);
+        let list = list_of(size(100, 100), FocusOrigin::Table, &[twin, twin, twin]).unwrap();
+        assert_eq!(list.primary_index(), None);
+        for index in 0..3 {
+            let marked = list.clone().with_primary(index).unwrap();
+            assert_eq!(marked.primary_index(), Some(index), "{index}");
+            // Every point equals the primary, so only the index says which
+            // of them it is.
+            assert_eq!(marked.primary(), Some(&twin), "{index}");
+            let scaled = marked.scaled_to(size(50, 50)).unwrap();
+            assert_eq!(scaled.primary_index(), Some(index), "{index}");
+        }
+        // A later primary replaces the earlier one.
+        let remarked = list.with_primary(2).unwrap().with_primary(0).unwrap();
+        assert_eq!(remarked.primary_index(), Some(0));
     }
 
     #[test]
