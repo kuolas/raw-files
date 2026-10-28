@@ -3,7 +3,8 @@
 Real files that a camera wrote, small enough to commit, that the tests
 read as they are: five from a Nikon Z 9, two NEF files and three JPEG
 files, listed below, and the 56 NEF files of a session shot with a
-Nikon D600, in [`nikon-d600/`](nikon-d600/README.md), which lists them.
+Nikon D600 with the JPEG of one of its frames, in
+[`nikon-d600/`](nikon-d600/README.md), which lists them.
 Every other fixture is built in code.
 
 | File | Crop mode | Frame | SHA-256 |
@@ -192,8 +193,9 @@ own D600 on 2026-10-26, RAW + JPEG, to measure where the body's
 autofocus points lie on the picture, as the NEF notes record
 ([autofocus-points.md](../../docs/formats/nef/autofocus-points.md#2-nikon-d600)).
 The whole session is committed, so that every value the record reads
-from the files' bytes can be checked on them; the NEF files only, not
-the JPEGs. The folder's README lists each frame with what it shows and
+from the files' bytes can be checked on them: the NEF files, and of the
+JPEGs only frame 4's, beside its NEF, so that the point is checked on
+the JPEG too. The folder's README lists each file with what it shows and
 its SHA-256.
 
 Each file is stripped by the rules of the Z 9's NEF files, adapted to
@@ -234,6 +236,50 @@ more digits remains; and that every value kept is the camera's, byte
 for byte, AFInfo2, FocusMode, CropHiSpeed and the orientation among
 them.
 
+Frame 4's JPEG is stripped by the rules of the Z 9's JPEG files, and is
+69,876 bytes.
+
+- **Kept:** the start of the image (SOI); the Exif segment, all 65,536
+  bytes of it, in the camera's big-endian byte order: IFD0 (Make, Model,
+  Orientation, Software, DateTime, the resolution tags and the pointers
+  to the Exif and GPS IFDs), the Exif IFD (the exposure, the capture
+  times with their fractions of a second, ColorSpace and the other
+  shooting settings it records), the GPS IFD's one entry and the
+  Interoperability IFD, IFD1, and the MakerNote, in its layout with an
+  embedded TIFF header, with all 56 of its entries, FocusMode,
+  CropHiSpeed, Lens, AFInfo2, the white balance setting's text and the
+  PreviewIFD among them; and the MPF segment, whose index lists the main
+  image and one smaller one.
+- **Replaced:** every image by the stub JPEG of 122 bytes with no image
+  in it, whose frame header keeps the original's size: the main image,
+  6016 by 4016, after the kept segments; IFD1's thumbnail, 160 by 120,
+  and the MakerNote's preview, 570 by 375, each written where it was,
+  the rest of the length declared for it zeros, so that nothing in the
+  Exif segment moves; and the MPF image, 1632 by 1080, written after the
+  main image, the MPF index giving the stub's offset and size.
+- **Zeroed in place**, each value's bytes set to zero with its tag,
+  type, count and offset kept: the camera's serial number (the
+  MakerNote's SerialNumber); the shutter count (the MakerNote's
+  ShutterCount); the time the camera was switched on (the MakerNote's
+  PowerUpTime); the MakerNote's encrypted blocks (ShotInfo, ColorBalance
+  and LensData); Artist, Copyright and UserComment; and the GPS IFD's
+  one value, its version. The D600 writes no BodySerialNumber,
+  LensSerialNumber or MechanicalShutterCount.
+- **Dropped:** the XMP segment, and the zeros the camera wrote before
+  the MPF image.
+
+Once it was stripped, I checked it as the Z 9's JPEG files were
+checked, with every part of Artist, Copyright and UserComment among the
+byte sequences that must not remain; no run of six or more digits
+remains outside the capture times at all. I checked it once more with
+a second walk of its structure, sharing no code with the stripping:
+that none of those sequences, nor a run of digits from the camera's XMP
+segment, remains; that every zeroed value and the GPS value is zero;
+that only the Exif and MPF segments are kept, with no XMP text left;
+that every image is a stub of the camera's frame size, with no 16-byte
+stretch of the camera's images, taken every 512 bytes, left in the
+file; and that every other value is the camera's, byte for byte.
+
 The tests open every frame and check what the reader gives it: the
 model, the orientation, the image area that CropHiSpeed names, the
 layout of the D600's 39 points, which the D600's table in the code
@@ -255,10 +301,25 @@ no colour
 temperature, shutter, image area or raw size: the D600 writes no
 ColorTemperatureAuto, ShutterMode or ImageSizeRAW, the stripping
 removed the white balance text, and CropHiSpeed's crop setting, 0,
-names no image area. The tests that cut files
-at every length and overwrite their bytes take frame 4, which stands
-for the others' layout, and the fuzzer starts from copies of frames 4,
-42 and 49.
+names no image area.
+
+On frame 4's JPEG they check every value too, as on the Z 9's JPEG
+files: its four previews, the thumbnail, the MakerNote's preview, the
+MPF image and the file itself, each where the camera's layout puts it;
+the NEF's capture time, exposure and lens's range; the image size of
+its frame header, 6016 by 4016, and no raw size; the NEF's camera
+settings, with the colour space sRGB from the Exif IFD's ColorSpace,
+which the NEF lacks, and the white balance text `AUTO1`, which the JPEG
+keeps and which agrees with Exif's auto; and point 38 placed from the
+table where the NEF's is, at (1812, 1705) with its box of 164 by 164 in
+the 6016 by 4016 frame, which is the JPEG's own size, as its focus
+point and in the layout.
+
+The tests that cut files at every length and overwrite their bytes take
+frame 4, which stands for the others' layout, and its JPEG, whose bytes
+they overwrite but in the spans of zeros they skip in the Z 9's JPEG
+files and the zeros after the MakerNote preview's stub; and the fuzzer
+starts from copies of frames 4, 42 and 49 and of frame 4's JPEG.
 
 ## Licence and changes
 
@@ -266,7 +327,8 @@ I, who took the photographs, publish these files under the
 repository's licence, MIT OR Apache-2.0, at your option.
 
 The Z 9's NEF files were made on 2026-10-20, its JPEG files on
-2026-10-22, and the D600's NEF files on 2026-10-27. Only I can
+2026-10-22, the D600's NEF files on 2026-10-27, and its JPEG on
+2026-10-28. Only I can
 regenerate them, from the camera's original files, which are not
 public; that is why this page records how they were made and what was
 removed. A change to any file changes its SHA-256, above or in

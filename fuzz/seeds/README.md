@@ -36,12 +36,16 @@ me, Alvaro Kuolas, who maintains raw-files, as
   an Exif segment comes in both byte orders, which the TIFF structure
   inside that segment, a Nikon MakerNote of the headerless layout, a Sony
   MakerNote and the camera's MPF index share. Beside
-  these files built in code are the three real JPEGs committed in
-  [`tests/fixtures/`](../../tests/fixtures/README.md), shots of my own
-  Z 9 in FX and in DX and 16:9 crop modes with their images
+  these files built in code are the four real JPEGs committed in
+  [`tests/fixtures/`](../../tests/fixtures/README.md) with their images
   replaced by stubs and their personal fields zeroed, copied as
-  they are, the camera's own Exif segment and Nikon MakerNote in
-  little-endian byte order.
+  they are: shots of my own Z 9 in FX and in DX and 16:9 crop modes,
+  the camera's own Exif segment and Nikon MakerNote in little-endian
+  byte order; and frame 4 of the session on which my own D600's
+  autofocus points were measured, named `nikon-d600-frame-04.jpg`, the
+  camera's own Exif segment and Nikon MakerNote in big-endian byte
+  order, whose MakerNote names its point by number and holds a
+  preview.
 - `open/` seeds the `open` target with the integration tests' fixtures of
   the RAW formats: files laid out like the NEF of a Nikon Z 9, of a Z6III
   on a 1:1 crop, of a D300 and of a D1H, whose MakerNote is of the

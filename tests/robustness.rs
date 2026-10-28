@@ -19,7 +19,7 @@
 //! counted from the start of the file, records the ISO and the lens's
 //! range and holds the file's only JPEG, and an ILCE-7M4's ARW 4, with its
 //! MakerNote, which records the focus point, each in both byte orders.
-//! They damage six real files too, committed with their pixels and
+//! They damage seven real files too, committed with their pixels and
 //! personal fields removed or zeroed: two NEF shots of my own Z 9 in DX
 //! and 1:1 crop modes, and three JPEG shots of the same camera in FX and
 //! in DX and 16:9 crop modes, the last in portrait orientation, whose
@@ -27,14 +27,14 @@
 //! tags, in little-endian byte order, where the fixtures only imitate
 //! it; and frame 4 of the session on which my own D600's autofocus
 //! points were measured, a NEF shot through the viewfinder whose
-//! MakerNote names its point by number, in the camera's own big-endian
-//! layout. The other 55 frames of that session share its layout, so one
-//! stands for them all and keeps the sweeps short. And they damage the
-//! JPEG files the JPEG reader's tests open, whose segments the walk
-//! reads before the Exif segment's TIFF structure and the MPF index:
-//! one with no Exif segment, one with
-//! zeros after its end, one whose Exif segment holds IFD0 and IFD1's
-//! thumbnail, a camera's, whose Exif segment holds every value the
+//! MakerNote names its point by number, and the camera's JPEG of the
+//! same shot, whose MakerNote holds a preview, both in the camera's own
+//! big-endian layout. The other 55 frames of that session share the
+//! NEF's layout, so one stands for them all and keeps the sweeps short.
+//! And they damage the JPEG files the JPEG reader's tests open, whose
+//! segments the walk reads before the Exif segment's TIFF structure and
+//! the MPF index: one with no Exif segment, one with zeros after its end,
+//! one whose Exif segment holds IFD0 and IFD1's thumbnail, a camera's, whose Exif segment holds every value the
 //! metadata reads and whose MPF index lists two images after its main
 //! one, a camera's with a JFIF segment first, whose Exif segment holds
 //! only IFD0's orientation and IFD1's thumbnail, and five Nikon cameras'
@@ -77,28 +77,33 @@
 //! that: in the zeros, at each tile's start and around it, and just short
 //! of the end. That keeps the whole file to a few seconds in a debug build.
 //!
-//! The three stripped JPEG files are 69,998 bytes each, most of them the
-//! camera's Exif segment of 65,536 bytes, kept whole so that no offset in
-//! it moves. Three spans of it are zeros, which nothing parses when the
-//! file is opened: the value of the MakerNote's ShotInfo entry, 35,785
-//! bytes, an enciphered block that no reader reads, which the stripping
-//! zeroed; the zeros after IFD1's stub thumbnail, up to the length IFD1
-//! declares for it, 10,559 to 12,664 bytes, which the stripping wrote, and
-//! which the preview finder never reaches, as it stops at the stub's frame
-//! header, and reading the preview copies without looking at them; and
-//! the zeros the camera wrote after that length, up to the end of the
-//! segment, 12,876 to 14,981 bytes, at which no offset points and which
-//! the walk over the segments steps over by the segment's length. So each
-//! of the three is cut at every length, and overwritten byte by byte
-//! everywhere but in those three spans, which the test finds from the
-//! file's own structure ([`stripped_jpeg_unread`]) and checks are zeros:
-//! every segment header, every IFD, every value a reader reads, the MPF
-//! segment and every stub are still overwritten. That keeps the three
-//! files to about 17 seconds in a debug build, most of the run;
-//! overwriting every byte of them took more than two minutes.
+//! The four stripped JPEG files are 69,998 bytes each for the Z 9 and
+//! 69,876 bytes for the D600, most of them the camera's Exif segment of
+//! 65,536 bytes, kept whole so that no offset in it moves. Three spans of
+//! it are zeros, which nothing parses when the file is opened, and a
+//! fourth in the D600's: the value of the MakerNote's ShotInfo entry,
+//! 35,785 bytes on the Z 9 and 10,494 on the D600, an enciphered block
+//! that no reader reads, which the stripping zeroed; the zeros after
+//! IFD1's stub thumbnail, up to the length IFD1 declares for it, 10,559
+//! to 12,664 bytes on the Z 9 and 9,008 on the D600, and on the D600 the
+//! zeros after the stub of the MakerNote's preview, up to the length its
+//! PreviewIFD declares for it, 24,821 bytes, which the stripping wrote,
+//! and which the preview finder never reaches, as it stops at the stub's
+//! frame header, and reading the preview copies without looking at them;
+//! and the zeros the camera wrote after IFD1's length, up to the end of
+//! the segment, 12,876 to 14,981 bytes on the Z 9 and 16,952 on the
+//! D600, at which no offset points and which the walk over the segments
+//! steps over by the segment's length. So each of the four is cut at
+//! every length, and overwritten byte by byte everywhere but in those
+//! spans, which the test finds from the file's own structure
+//! ([`stripped_jpeg_unread`]) and checks are zeros: every segment header,
+//! every IFD, every value a reader reads, the MPF segment and every stub
+//! are still overwritten. That keeps the four files to about 25 seconds
+//! in a debug build, most of the run; overwriting every byte of the three
+//! Z 9 files alone took more than two minutes.
 //!
 //! Every other file is swept whole: the two stripped Z 9 NEF files are
-//! 4,270 bytes each and the D600 frame 2,452 bytes, their raw data
+//! 4,270 bytes each and the D600 frame's NEF 2,452 bytes, their raw data
 //! replaced by 64 bytes, and the largest JPEG file built in code, the one
 //! with zeros after its end, is 4,218 bytes.
 //!
@@ -119,7 +124,8 @@ use raw_files::{
 };
 use support::arw::{ARW4_FULL_SIZE_JPEG, arw4_file, stub};
 use support::fixtures::{
-    Z9_1X1, Z9_16X9_JPEG, Z9_DX, Z9_DX_JPEG, Z9_FX_JPEG, d600_frame, read_fixture,
+    D600_FRAME_4_JPEG, Z9_1X1, Z9_16X9_JPEG, Z9_DX, Z9_DX_JPEG, Z9_FX_JPEG, d600_frame,
+    read_fixture,
 };
 use support::jpeg_files::{
     CAMERA_MAKE, ILCE7M3_MAIN, MAIN, Z9Mode, a100_jpeg, camera_jpeg, camera_jpeg_with_metadata,
@@ -155,14 +161,14 @@ struct Fixture {
 /// ARW 4 fixture, with Orientation 8, in both byte orders; the five files
 /// stripped from my own Z 9 shots, as they are committed: two NEF
 /// files in DX and 1:1 crop modes, and three JPEG files in FX and in
-/// DX and 16:9 crop modes; frame 4 of my own D600 session, as it is
-/// committed; and the JPEG files: without Exif, with zeros after its
-/// end, and, in both byte orders, with an Exif segment, a
-/// camera's with every value the metadata reads, a camera's with a JFIF
-/// segment first, whose Exif segment holds only the orientation and the
-/// thumbnail, the Nikon JPEGs of a Z 9 in FX and on a 1:1 crop, of a
-/// D5300, of a D70 and laid out as a D1H's would be, and the Sony JPEGs of
-/// an ILCE-7M3, an ILCE-7M4 and a DSLR-A100.
+/// DX and 16:9 crop modes; frame 4 of my own D600 session, its NEF and
+/// its JPEG, as they are committed; and the JPEG files: without Exif,
+/// with zeros after its end, and, in both byte orders, with an Exif
+/// segment, a camera's with every value the metadata reads, a camera's
+/// with a JFIF segment first, whose Exif segment holds only the
+/// orientation and the thumbnail, the Nikon JPEGs of a Z 9 in FX and on a
+/// 1:1 crop, of a D5300, of a D70 and laid out as a D1H's would be, and
+/// the Sony JPEGs of an ILCE-7M3, an ILCE-7M4 and a DSLR-A100.
 fn fixtures() -> Vec<Fixture> {
     let mut fixtures = Vec::new();
     for order in ORDERS {
@@ -259,6 +265,7 @@ fn fixtures() -> Vec<Fixture> {
         ("Z 9 FX JPEG, stripped", Z9_FX_JPEG),
         ("Z 9 DX JPEG, stripped", Z9_DX_JPEG),
         ("Z 9 16:9 JPEG, stripped", Z9_16X9_JPEG),
+        ("D600 frame 4 JPEG, stripped", D600_FRAME_4_JPEG),
     ] {
         let bytes = read_fixture(file);
         fixtures.push(Fixture {
@@ -335,18 +342,21 @@ fn fixtures() -> Vec<Fixture> {
     fixtures
 }
 
-/// The spans of a JPEG stripped from a Z 9 shot that hold only zeros and
-/// that no reader parses, found from the file's own structure: the value
-/// of the MakerNote's ShotInfo entry (tag 0x0091), an enciphered block
-/// that no reader reads, zeroed in place by the stripping; the zeros after
-/// IFD1's stub thumbnail, up to the length IFD1 declares for it, which the
-/// stripping kept so that no offset moves; and the zeros the camera wrote
-/// after that length, up to the end of the Exif segment, which no offset
-/// in the segment points at. The entries that point at the first two
-/// spans, and the stub itself, stay outside them.
+/// The spans of a stripped camera JPEG, one of my own Z 9's or the D600's,
+/// that hold only zeros and that no reader parses, found from the file's
+/// own structure: the value of the MakerNote's ShotInfo entry (tag
+/// 0x0091), an enciphered block that no reader reads, zeroed in place by
+/// the stripping; the zeros after IFD1's stub thumbnail, up to the length
+/// IFD1 declares for it, and, in a MakerNote with a PreviewIFD (tag
+/// 0x0011), as the D600's has, the zeros after that preview's stub, up to
+/// the length the PreviewIFD declares for it, both of which the stripping
+/// kept so that no offset moves; and the zeros the camera wrote after
+/// IFD1's length, up to the end of the Exif segment, which no offset in
+/// the segment points at. The entries that point at these spans, and the
+/// stubs themselves, stay outside them.
 ///
-/// Panics when the file is not laid out as a stripped Z 9 JPEG is, or a
-/// span holds a byte that is not zero: a mistake in the fixture.
+/// Panics when the file is not laid out as a stripped camera JPEG is, or
+/// a span holds a byte that is not zero: a mistake in the fixture.
 fn stripped_jpeg_unread(bytes: &[u8]) -> Vec<Range<usize>> {
     // The Exif segment follows SOI, and its TIFF structure follows the
     // segment's marker, its length and `Exif` with two zero bytes. The
@@ -361,28 +371,26 @@ fn stripped_jpeg_unread(bytes: &[u8]) -> Vec<Range<usize>> {
     let thumbnail = exif.at_offset(exif.field(ifd1, 0x0201));
     let declared = thumbnail + usize::try_from(exif.field(ifd1, 0x0202)).unwrap();
     assert!(declared <= segment_end, "{declared} past {segment_end}");
-    // The stub ends at its first end-of-image marker: no other byte pair of
-    // a stub is `FF D9`.
-    assert_eq!(bytes[thumbnail..thumbnail + 3], [0xFF, 0xD8, 0xFF]);
-    let stub_end = thumbnail
-        + bytes[thumbnail..declared]
-            .windows(2)
-            .position(|pair| pair == [0xFF, 0xD9])
-            .unwrap()
-        + 2;
     // The MakerNote: `Nikon`, a zero byte, its version and two zero bytes,
     // then a TIFF header of its own, from which its offsets count.
     let makernote = exif.field(exif.field(ifd0, 0x8769), 0x927C);
     let at = exif.at_offset(makernote);
     assert_eq!(bytes[at..at + 6], *b"Nikon\0");
     let inner = Tiff::at(bytes, at + 10);
-    let shot_info = inner.at_offset(inner.field(inner.u32(4), 0x0091));
-    let shot_info_len = usize::try_from(inner.count(inner.u32(4), 0x0091)).unwrap();
-    let spans = vec![
+    let makernote_ifd = inner.u32(4);
+    let shot_info = inner.at_offset(inner.field(makernote_ifd, 0x0091));
+    let shot_info_len = usize::try_from(inner.count(makernote_ifd, 0x0091)).unwrap();
+    let mut spans = vec![
         shot_info..shot_info + shot_info_len,
-        stub_end..declared,
+        stub_end(bytes, thumbnail, declared)..declared,
         declared..segment_end,
     ];
+    if inner.has(makernote_ifd, 0x0011) {
+        let preview_ifd = inner.field(makernote_ifd, 0x0011);
+        let preview = inner.at_offset(inner.field(preview_ifd, 0x0201));
+        let preview_declared = preview + usize::try_from(inner.field(preview_ifd, 0x0202)).unwrap();
+        spans.push(stub_end(bytes, preview, preview_declared)..preview_declared);
+    }
     for span in &spans {
         assert!(
             bytes[span.clone()].iter().all(|&byte| byte == 0),
@@ -390,6 +398,19 @@ fn stripped_jpeg_unread(bytes: &[u8]) -> Vec<Range<usize>> {
         );
     }
     spans
+}
+
+/// Where the stub JPEG that starts at `start` in `bytes` ends: just past
+/// its first end-of-image marker, before `declared`, the end of the length
+/// declared for it. No other byte pair of a stub is `FF D9`.
+fn stub_end(bytes: &[u8], start: usize, declared: usize) -> usize {
+    assert_eq!(bytes[start..start + 3], [0xFF, 0xD8, 0xFF]);
+    start
+        + bytes[start..declared]
+            .windows(2)
+            .position(|pair| pair == [0xFF, 0xD9])
+            .unwrap()
+        + 2
 }
 
 /// A TIFF structure inside a file: where its header lies, and its byte
@@ -443,11 +464,22 @@ impl<'a> Tiff<'a> {
         }
     }
 
-    /// Where the entry of `tag` lies in the IFD at `ifd`, from the header.
-    fn entry(&self, ifd: u32, tag: u16) -> u32 {
+    /// Where the entry of `tag` lies in the IFD at `ifd`, from the header,
+    /// if it has one.
+    fn find(&self, ifd: u32, tag: u16) -> Option<u32> {
         (0..u32::from(self.u16(ifd)))
             .map(|index| ifd + 2 + 12 * index)
             .find(|&entry| self.u16(entry) == tag)
+    }
+
+    /// Whether the IFD at `ifd` has an entry of `tag`.
+    fn has(&self, ifd: u32, tag: u16) -> bool {
+        self.find(ifd, tag).is_some()
+    }
+
+    /// Where the entry of `tag` lies in the IFD at `ifd`, from the header.
+    fn entry(&self, ifd: u32, tag: u16) -> u32 {
+        self.find(ifd, tag)
             .unwrap_or_else(|| panic!("no tag {tag:#06X} in the IFD at {ifd}"))
     }
 

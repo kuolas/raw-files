@@ -119,7 +119,7 @@ from the files' bytes with a script written from the notes and, for
 the box, from the NX Studio screenshots measured as section 1 says.
 The 56 NEF files are committed, stripped of their pixels and personal
 fields, so that every value read from their bytes can be checked on
-them (section 2.7). **[F]**
+them, with the JPEG of frame 4 (section 2.7). **[F]**
 
 ### 2.1 The session
 
@@ -311,7 +311,8 @@ again, read identically to their originals. **[F]**
 The whole session is committed: the 56 NEF files, stripped of their
 pixels and personal fields as the Z 9 fixtures were
 ([`tests/fixtures/`](../../../tests/fixtures/README.md#the-d600-session)),
-in `tests/fixtures/nikon-d600/`, whose
+and the JPEG of frame 4, stripped as the Z 9's JPEGs were, in
+`tests/fixtures/nikon-d600/`, whose
 [manifest](../../../tests/fixtures/nikon-d600/README.md) lists each
 frame with what it shows and its SHA-256. A test opens every frame and
 checks what the reader gives it: every frame, whatever the shot, gives
@@ -325,14 +326,15 @@ record's table, not from the reader. The
 NX Studio screenshots stay private; the readings taken from them are in
 sections 2.4 to 2.6.
 
-Three of the frames serve the table's tests, and the JPEG of frame 4,
-stripped, is still to be committed beside its NEF:
+Three of the frames serve the table's tests, frame 4 also as its
+JPEG:
 
 - frame 4, point 38 (B1, the top-left of the outer columns), as a NEF
   and as its JPEG: a single point far from the centre, where a wrong
-  table, a wrong bit order or a wrong frame shows, on both paths; its
-  NEF's test checks every value of its metadata, the layout's point 38
-  at (1812, 1705) with its box of 164 by 164 among them;
+  table, a wrong bit order or a wrong frame shows, on both paths; the
+  tests of its NEF and of its JPEG check every value of their metadata,
+  point 38 at (1812, 1705) with its box of 164 by 164, as the focus
+  point and in the layout, among them;
 - frame 49, point 38 in DX: the shift into the crop;
 - frame 42, auto-area: the mask of points used, 12 bits, with the
   primary among them.

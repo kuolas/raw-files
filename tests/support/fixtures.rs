@@ -8,7 +8,8 @@
 //! images replaced by stubs and their personal fields zeroed and
 //! their Exif segment kept as the camera wrote it; and the 56 NEF
 //! files of the session on which the autofocus points of my own D600
-//! were measured, stripped as the Z 9's are, in `nikon-d600/`; as
+//! were measured, stripped as the Z 9's are, with the JPEG of frame 4,
+//! stripped as the Z 9's JPEGs are, in `nikon-d600/`; as
 //! `tests/fixtures/README.md` says. Unlike the downloaded samples,
 //! they are in the repository, so a test never skips one: a missing
 //! fixture is a failure.
@@ -43,6 +44,12 @@ pub const Z9_16X9_JPEG: &str = "nikon-z9-16x9.jpg";
 pub fn d600_frame(frame: u8) -> String {
     format!("nikon-d600/frame-{frame:02}.nef")
 }
+
+/// The camera's JPEG of frame 4 of the D600 session, the shot whose NEF
+/// is `d600_frame(4)`, made through the viewfinder with the single point
+/// 38, whose point the reader places from the D600's table as on the
+/// NEF.
+pub const D600_FRAME_4_JPEG: &str = "nikon-d600/frame-04.jpg";
 
 /// The path of the committed fixture `name`, in `tests/fixtures/` under
 /// the crate's root.
