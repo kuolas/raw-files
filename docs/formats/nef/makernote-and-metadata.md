@@ -991,7 +991,7 @@ and what raw-files gives; a row without a file is an open question
 | DSLR in live view on a crop | the cropped frame | none public; one of my D7200 files, in the 1.3x movie crop | the point as recorded, in the cropped frame; unchecked on a body with a CropArea |
 | A `0101` body in live view | a position, at ExifTool's offsets | D5 2218 | the point; checked |
 | A `0301` body | a position, at the 03xx offsets | Z 30 5812, Z fc 8559 | the point, none on 8559, a manual-focus shot; checked |
-| DSLR through the viewfinder, a body with a table | a point number and a mask | none public; my D600 frames and files ([autofocus-points.md](autofocus-points.md#2-nikon-d600)) | the point to be placed from the table, with the points the mask names, as decided in [ADR018](../../architecture-decisions/adr018-focus-points-placed-from-a-table-and-the-points-used.md) |
+| DSLR through the viewfinder, a body with a table | a point number and a mask | none among the public samples; my D600 frames, all 56 committed stripped, and my D600 files ([autofocus-points.md](autofocus-points.md#2-nikon-d600)) | the point to be placed from the table, with the points the mask names, as decided in [ADR018](../../architecture-decisions/adr018-focus-points-placed-from-a-table-and-the-points-used.md) |
 | DSLR through the viewfinder, any other body | a point number and a mask | D300 928, D700 2255, D750 895, D810 2036, D850 1835, D780 3827 | none: no table for the body, to be counted; 928 and 1835 are manual-focus shots, which get none in any case |
 | Nikon 1 | a point number and a mask | J1 2956 | none: needs a table of points |
 | Bodies without AFInfo2 | AFInfo: a point number | D1H 5364, D70 2060, D100 2996, D200 8079, E5700 4456, P7800 1425 | none: needs a table of points |

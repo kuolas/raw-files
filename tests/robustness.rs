@@ -19,15 +19,20 @@
 //! counted from the start of the file, records the ISO and the lens's
 //! range and holds the file's only JPEG, and an ILCE-7M4's ARW 4, with its
 //! MakerNote, which records the focus point, each in both byte orders.
-//! They damage five real files too, committed with their pixels and
+//! They damage six real files too, committed with their pixels and
 //! personal fields removed or zeroed: two NEF shots of my own Z 9 in DX
 //! and 1:1 crop modes, and three JPEG shots of the same camera in FX and
 //! in DX and 16:9 crop modes, the last in portrait orientation, whose
 //! Exif segment is the camera's own; they hold the camera's own layout of
 //! tags, in little-endian byte order, where the fixtures only imitate
-//! it. And they damage the JPEG files the JPEG reader's tests open,
-//! whose segments the walk reads before the Exif segment's TIFF
-//! structure and the MPF index: one with no Exif segment, one with
+//! it; and frame 4 of the session on which my own D600's autofocus
+//! points were measured, a NEF shot through the viewfinder whose
+//! MakerNote names its point by number, in the camera's own big-endian
+//! layout. The other 55 frames of that session share its layout, so one
+//! stands for them all and keeps the sweeps short. And they damage the
+//! JPEG files the JPEG reader's tests open, whose segments the walk
+//! reads before the Exif segment's TIFF structure and the MPF index:
+//! one with no Exif segment, one with
 //! zeros after its end, one whose Exif segment holds IFD0 and IFD1's
 //! thumbnail, a camera's, whose Exif segment holds every value the
 //! metadata reads and whose MPF index lists two images after its main
@@ -92,9 +97,10 @@
 //! files to about 17 seconds in a debug build, most of the run;
 //! overwriting every byte of them took more than two minutes.
 //!
-//! Every other file is swept whole: the two stripped NEF files are 4,270
-//! bytes each, their raw data replaced by 64 bytes, and the largest JPEG
-//! file built in code, the one with zeros after its end, is 4,218 bytes.
+//! Every other file is swept whole: the two stripped Z 9 NEF files are
+//! 4,270 bytes each and the D600 frame 2,452 bytes, their raw data
+//! replaced by 64 bytes, and the largest JPEG file built in code, the one
+//! with zeros after its end, is 4,218 bytes.
 //!
 //! A last test damages one value only, the capture time, in each of the
 //! RAW files, and checks that the file gives every other value exactly as the
@@ -112,7 +118,9 @@ use raw_files::{
     Focus, FocusLayout, FocusPoints, Metadata, Rational, RawFile, SignedRational, Size,
 };
 use support::arw::{ARW4_FULL_SIZE_JPEG, arw4_file, stub};
-use support::fixtures::{Z9_1X1, Z9_16X9_JPEG, Z9_DX, Z9_DX_JPEG, Z9_FX_JPEG, read_fixture};
+use support::fixtures::{
+    Z9_1X1, Z9_16X9_JPEG, Z9_DX, Z9_DX_JPEG, Z9_FX_JPEG, d600_frame, read_fixture,
+};
 use support::jpeg_files::{
     CAMERA_MAKE, ILCE7M3_MAIN, MAIN, Z9Mode, a100_jpeg, camera_jpeg, camera_jpeg_with_metadata,
     d1h_jpeg, d70_jpeg, d5300_jpeg, exif_jpeg, ilce7m3_jpeg, ilce7m4_jpeg, padded_jpeg, plain_jpeg,
@@ -147,8 +155,9 @@ struct Fixture {
 /// ARW 4 fixture, with Orientation 8, in both byte orders; the five files
 /// stripped from my own Z 9 shots, as they are committed: two NEF
 /// files in DX and 1:1 crop modes, and three JPEG files in FX and in
-/// DX and 16:9 crop modes; and the JPEG files: without Exif, with
-/// zeros after its end, and, in both byte orders, with an Exif segment, a
+/// DX and 16:9 crop modes; frame 4 of my own D600 session, as it is
+/// committed; and the JPEG files: without Exif, with zeros after its
+/// end, and, in both byte orders, with an Exif segment, a
 /// camera's with every value the metadata reads, a camera's with a JFIF
 /// segment first, whose Exif segment holds only the orientation and the
 /// thumbnail, the Nikon JPEGs of a Z 9 in FX and on a 1:1 crop, of a
@@ -232,8 +241,12 @@ fn fixtures() -> Vec<Fixture> {
             unread: Vec::new(),
         });
     }
-    for (name, file) in [("Z 9 DX, stripped", Z9_DX), ("Z 9 1:1, stripped", Z9_1X1)] {
-        let bytes = read_fixture(file);
+    for (name, file) in [
+        ("Z 9 DX, stripped", Z9_DX.to_owned()),
+        ("Z 9 1:1, stripped", Z9_1X1.to_owned()),
+        ("D600 frame 4, stripped", d600_frame(4)),
+    ] {
+        let bytes = read_fixture(&file);
         fixtures.push(Fixture {
             name: name.to_owned(),
             sweep_end: bytes.len(),

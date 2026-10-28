@@ -3,10 +3,12 @@
 //! Where the integration tests find the files committed in
 //! `tests/fixtures/`: two NEF files from my own Z 9, in DX and 1:1
 //! crop modes, with their pixels and personal fields removed and
-//! their structure and values kept, and three JPEG files from the
+//! their structure and values kept; three JPEG files from the
 //! same camera, in FX and in DX and 16:9 crop modes, with their
 //! images replaced by stubs and their personal fields zeroed and
-//! their Exif segment kept as the camera wrote it, as
+//! their Exif segment kept as the camera wrote it; and the 56 NEF
+//! files of the session on which the autofocus points of my own D600
+//! were measured, stripped as the Z 9's are, in `nikon-d600/`; as
 //! `tests/fixtures/README.md` says. Unlike the downloaded samples,
 //! they are in the repository, so a test never skips one: a missing
 //! fixture is a failure.
@@ -33,6 +35,14 @@ pub const Z9_DX_JPEG: &str = "nikon-z9-dx.jpg";
 /// orientation, whose focus point the reader moves into the centred window
 /// of the recorded frame that has the JPEG's shape.
 pub const Z9_16X9_JPEG: &str = "nikon-z9-16x9.jpg";
+
+/// The name of frame `frame` of the D600 session, numbered 1 to 56 in
+/// the order the frames were shot, as the NEF notes' record of the
+/// session numbers them: `nikon-d600/frame-04.nef` for frame 4, for
+/// [`fixture`] and [`read_fixture`].
+pub fn d600_frame(frame: u8) -> String {
+    format!("nikon-d600/frame-{frame:02}.nef")
+}
 
 /// The path of the committed fixture `name`, in `tests/fixtures/` under
 /// the crate's root.

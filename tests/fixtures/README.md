@@ -1,9 +1,10 @@
 # Test fixtures
 
-Five real files from a Nikon Z 9, two NEF files and three JPEG files,
-small enough to commit, that the tests read as they are. Every other
-fixture is built in code; these five are the only files here that a
-camera wrote.
+Real files that a camera wrote, small enough to commit, that the tests
+read as they are: five from a Nikon Z 9, two NEF files and three JPEG
+files, listed below, and the 56 NEF files of a session shot with a
+Nikon D600, in [`nikon-d600/`](nikon-d600/README.md), which lists them.
+Every other fixture is built in code.
 
 | File | Crop mode | Frame | SHA-256 |
 |---|---|---|---|
@@ -19,7 +20,7 @@ camera wrote.
 ## Where they come from
 
 Where this page says *I*, it is me, Alvaro Kuolas, who maintains raw-files,
-writing about my own camera.
+writing about my own cameras.
 
 I took the two NEF pictures with my own Z 9 on 2026-10-19, one in DX crop
 mode and one in 1:1, with a single autofocus point placed in the top-left
@@ -41,7 +42,7 @@ a crop mode or in portrait orientation.
 
 ## What was kept, replaced and removed
 
-### The NEF files
+### The Z 9's NEF files
 
 Each file is the camera's file with its pixels and personal fields
 removed, and its structure and the values the reader reads kept as the
@@ -78,7 +79,7 @@ removed serial numbers or shutter count remains in either file, that
 neither holds a run of six or more digits, and that the focus fields,
 CropHiSpeed, CropArea and the raw size are those of the camera's file.
 
-### The JPEG files
+### The Z 9's JPEG files
 
 Each file keeps the camera's Exif segment, all 65,536 bytes of it, with
 every IFD, value and offset where the camera put them, so that the reader
@@ -184,13 +185,73 @@ no reader parses, the zeroed ShotInfo, the padding after the thumbnail's
 stub and the camera's zeros after the thumbnail's declared length, up to
 the end of the Exif segment; and the fuzzer starts from copies of them.
 
+## The D600 session
+
+I shot the 56 frames of [`nikon-d600/`](nikon-d600/README.md) with my
+own D600 on 2026-10-26, RAW + JPEG, to measure where the body's
+autofocus points lie on the picture, as the NEF notes record
+([autofocus-points.md](../../docs/formats/nef/autofocus-points.md#2-nikon-d600)).
+The whole session is committed, so that every value the record reads
+from the files' bytes can be checked on them; the NEF files only, not
+the JPEGs. The folder's README lists each frame with what it shows and
+its SHA-256.
+
+Each file is stripped by the rules of the Z 9's NEF files, adapted to
+the D600's layout, and all 56 come out alike, 2,452 bytes each.
+
+- **Kept:** the TIFF header, in the camera's big-endian byte order, and
+  IFD0 (Make, Model, Orientation, Software, DateTime, DateTimeOriginal,
+  the pointers to the SubIFDs and the Exif IFD, and the small tags); the
+  three SubIFDs with their tags; the Exif IFD but for UserComment: the
+  exposure, the capture times with their fractions of a second, and the
+  other shooting settings it records; and the MakerNote, in its layout with an embedded
+  TIFF header, with 31 of its 60 entries: every entry whose value fits
+  in the entry itself but ShutterCount, and FocusMode, CropHiSpeed, Lens,
+  AFInfo2 and the PreviewIFD, whose entries are kept but its resolution,
+  stored outside its entries. The D600 writes no CropArea, no lens tags
+  in the Exif IFD and no Interoperability IFD.
+- **Replaced:** IFD0's thumbnail, an uncompressed RGB image of 160 by
+  120, and the raw data, the pixels, each by 64 zero bytes; and every
+  JPEG (SubIFD0's full-size one, 6016 by 4016, or 3936 by 2624 in DX,
+  SubIFD2's of 1632 by 1080 and the MakerNote's preview of 570 by 375)
+  by the stub JPEG of 122 bytes with no image in it, whose frame header
+  keeps the original's size.
+- **Removed:** the camera's serial number (the MakerNote's
+  SerialNumber); the shutter count (the MakerNote's ShutterCount); the
+  time the camera was switched on (the MakerNote's PowerUpTime); the
+  MakerNote's encrypted blocks (ShotInfo, ColorBalance and LensData);
+  the linearization table and the blocks of settings; the XMP packet;
+  Artist, Copyright and UserComment; the GPS IFD; and every other
+  MakerNote value stored outside its entry, the white balance setting's
+  text (0x0005) among them.
+
+Once they were stripped, I checked on each of the 56 files that no byte
+sequence of the removed serial number, shutter count or switch-on time
+remains, as text or as a binary number in either byte order, nor the
+text of Artist, Copyright or UserComment; that it holds no GPS IFD, no
+XMP, no owner's name and no serial number tag; that no run of six or
+more digits remains; and that every value kept is the camera's, byte
+for byte, AFInfo2, FocusMode, CropHiSpeed and the orientation among
+them.
+
+The tests open every frame and check what the reader gives it: the
+model, the orientation, the image area that CropHiSpeed names, no focus
+point on the frames shot through the viewfinder or in manual focus,
+which name their point by number or name none, and on the four
+live-view frames the point AFInfo2 records. The tests that cut files
+at every length and overwrite their bytes take frame 4, which stands
+for the others' layout, and the fuzzer starts from copies of frames 4,
+42 and 49.
+
 ## Licence and changes
 
 I, who took the photographs, publish these files under the
 repository's licence, MIT OR Apache-2.0, at your option.
 
-The NEF files were made on 2026-10-20, the JPEG files on 2026-10-22.
-Only I can regenerate them, from the camera's original files, which
-are not public; that is why this page records how they were made and
-what was removed. A change to any file changes its SHA-256 above,
-which must then be updated in the same change.
+The Z 9's NEF files were made on 2026-10-20, its JPEG files on
+2026-10-22, and the D600's NEF files on 2026-10-27. Only I can
+regenerate them, from the camera's original files, which are not
+public; that is why this page records how they were made and what was
+removed. A change to any file changes its SHA-256, above or in
+[`nikon-d600/README.md`](nikon-d600/README.md), which must then be
+updated in the same change.

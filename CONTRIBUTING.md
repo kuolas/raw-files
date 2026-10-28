@@ -486,9 +486,8 @@ frames the NEF notes' procedure lists, RAW + JPEG
 ([autofocus-points.md](docs/formats/nef/autofocus-points.md#1-the-procedure)),
 and open an issue naming the body. The maintainer will say where to
 send them, measure them, write the record and the table, and credit
-you in both. The frames stay private, except the few committed as
-fixtures, which are published under the repository's licence with
-your agreement.
+you in both. With your agreement, the frames are committed stripped of
+their pixels and personal fields, under the repository's licence.
 
 To measure a body yourself, follow the whole procedure
 ([autofocus-points.md](docs/formats/nef/autofocus-points.md#1-the-procedure)):
@@ -497,11 +496,11 @@ the page lists, read every frame in the maker's software with its
 focus-point display on, measure the screenshots by pixel, and check
 the controls. Then write the body's record on that page, as the D600's
 is written, with the readings and their tolerance; the table in the
-code, with its provenance; and the stripped frames the record names as
-fixtures, with their expected values in the tests. In the pull request
-say which software and version you ran, and that the frames are your
-own: the ones committed as fixtures are licensed as the repository's
-fixtures are ([tests/fixtures/README.md](tests/fixtures/README.md)).
+code, with its provenance; and the frames, stripped of their pixels
+and personal fields, with their expected values in the tests. In the
+pull request say which software and version you ran, and that the
+frames are your own: they are licensed as the repository's fixtures
+are ([tests/fixtures/README.md](tests/fixtures/README.md)).
 The maintainer checks the table against your frames before it enters,
 so keep them, and expect to be asked for them.
 

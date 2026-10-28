@@ -12,10 +12,14 @@
 //! whose MakerNote records what the Z 9's standard tags hold, and of a
 //! D1H, whose MakerNote, of the headerless layout, holds its only JPEG,
 //! and one like each generation of Sony's family, in both byte orders;
-//! and from the two real files committed in `tests/fixtures/`, shots of
-//! my own Z 9 in DX and 1:1 crop modes with their pixels and personal
-//! fields removed, copied as they are, in their own little-endian
-//! byte order.
+//! and from real files committed in `tests/fixtures/` with their pixels
+//! and personal fields removed, copied as they are: two shots of my own
+//! Z 9 in DX and 1:1 crop modes, in their own little-endian byte order,
+//! and three frames of the session on which my own D600's autofocus
+//! points were measured, in their own big-endian byte order: frame 4, a
+//! single point far from the centre, frame 42, auto-area, whose
+//! AFInfo2 marks 12 points used, and frame 49, a single point in the DX
+//! crop.
 //!
 //! Likewise, a fuzzer builds an Exif segment that holds a TIFF structure,
 //! or an MPF segment that holds an index, only by luck. So the
@@ -55,7 +59,9 @@ use std::path::{Path, PathBuf};
 use support::arw::{
     a100_file, arq_file, arw2_file, arw4_file, arw4_medium_file, sr2_file, srf_file,
 };
-use support::fixtures::{Z9_1X1, Z9_16X9_JPEG, Z9_DX, Z9_DX_JPEG, Z9_FX_JPEG, read_fixture};
+use support::fixtures::{
+    Z9_1X1, Z9_16X9_JPEG, Z9_DX, Z9_DX_JPEG, Z9_FX_JPEG, d600_frame, read_fixture,
+};
 use support::jpeg_files::{
     CAMERA_MAKE, ILCE7M3_MAIN, MAIN, Z9Mode, a100_jpeg, camera_jpeg, camera_jpeg_with_metadata,
     d1h_jpeg, d70_jpeg, d5300_jpeg, exif_jpeg, ilce7m3_jpeg, ilce7m4_jpeg, padded_jpeg, plain_jpeg,
@@ -86,7 +92,8 @@ fn in_both_orders(layouts: &[Layout]) -> Vec<(String, Vec<u8>)> {
 
 /// The RAW fixtures as starting inputs for the `open` target: each file
 /// name with the bytes of the fixture it holds, in both byte orders for
-/// those built in code, and once for the two stripped Z 9 files.
+/// those built in code, and once for the two stripped Z 9 files and the
+/// three stripped D600 frames.
 fn open_seeds() -> Vec<(String, Vec<u8>)> {
     let mut seeds = in_both_orders(&[
         ("nikon-z9", "nef", |order| z9_file(order, 1).bytes),
@@ -107,6 +114,12 @@ fn open_seeds() -> Vec<(String, Vec<u8>)> {
     // committed by.
     for name in [Z9_DX, Z9_1X1] {
         seeds.push((name.to_owned(), read_fixture(name)));
+    }
+    // The D600 frames lie in a folder of their own, so the folder's name
+    // goes into the seed's: `nikon-d600-frame-04.nef`.
+    for frame in [4, 42, 49] {
+        let name = d600_frame(frame);
+        seeds.push((name.replace('/', "-"), read_fixture(&name)));
     }
     seeds
 }

@@ -18,10 +18,15 @@
 //! removed (see [`support::fixtures`]): their previews, every value of
 //! their metadata, the camera settings among them, and their focus points,
 //! which the reader scales onto the DX crop and moves into the 1:1 window.
-//! Then 35 real files too large to commit, three of the Z 9 and 32 of 25
-//! other bodies, when they have been downloaded (see
-//! [`support::samples::path`]): the previews each gives, and its metadata,
-//! every value of it, the focus point and the camera settings among them.
+//! Then the 56 real files of the session on which my own D600's
+//! autofocus points were measured, committed stripped the same way: what
+//! the reader gives each frame, with no table of the D600's points, its
+//! orientation, its image area and the focus point of its live-view
+//! frames among it. Then 35 real files too large to commit, three of the
+//! Z 9 and 32 of 25 other bodies, when they have been downloaded (see
+//! [`support::samples::path`]): the previews each gives, and its
+//! metadata, every value of it, the focus point and the camera settings
+//! among them.
 
 mod support;
 
@@ -1286,6 +1291,194 @@ fn the_stripped_z9_dx_file_gives_its_previews_metadata_and_scaled_focus_point() 
 #[test]
 fn the_stripped_z9_1x1_file_gives_its_previews_metadata_and_shifted_focus_point() {
     check_stripped_z9(&STRIPPED_Z9_1X1);
+}
+
+// Real files, committed: the 56 frames of the session on which the
+// autofocus points of my own D600 were measured, numbered 1 to 56 in the
+// order they were shot, stripped of their pixels and personal fields with
+// their structure and values kept (`tests/fixtures/nikon-d600/README.md`),
+// so that what the NEF notes' record of the session reads from the files'
+// bytes can be checked on them (`docs/formats/nef/autofocus-points.md`,
+// section 2). raw-files holds no table of the D600's points, so the test
+// records what the reader gives each frame without one.
+
+/// One frame of the D600 session, as the reader gives it: its number in
+/// the session; the orientation IFD0 records; the image area that the crop
+/// setting of the MakerNote's CropHiSpeed names; and, on a live-view frame
+/// only, the focus point AFInfo2 records, the centre of its area in the
+/// 6016 by 4016 frame and whether the camera confirmed focus there.
+type D600Frame = (
+    u8,
+    Orientation,
+    Option<ImageArea>,
+    Option<((u32, u32), bool)>,
+);
+
+/// A D600 frame shot in landscape orientation: Orientation 1.
+const D600_LANDSCAPE: Orientation = Orientation::NoTransforms;
+
+/// A D600 frame shot with the camera turned, its picture stored as the
+/// sensor saw it: Orientation 8.
+const D600_PORTRAIT: Orientation = Orientation::Rotate270;
+
+/// CropHiSpeed's crop setting 0, the crop off, which names no image area,
+/// since FX and DX bodies both write it.
+const D600_FX: Option<ImageArea> = None;
+
+/// CropHiSpeed's crop setting 2, the DX crop.
+const D600_DX: Option<ImageArea> = Some(ImageArea::ApsC);
+
+/// The 56 frames of the D600 session, in order.
+const D600_SESSION: [D600Frame; 56] = [
+    // Frames 1 to 39: single-point AF through the viewfinder, one frame
+    // per point, in landscape and FX. AFInfo2 names the point by its
+    // number, with a zero frame and area, and the reader does not place a
+    // point it names by number: it gives none.
+    (1, D600_LANDSCAPE, D600_FX, None),
+    (2, D600_LANDSCAPE, D600_FX, None),
+    (3, D600_LANDSCAPE, D600_FX, None),
+    (4, D600_LANDSCAPE, D600_FX, None),
+    (5, D600_LANDSCAPE, D600_FX, None),
+    (6, D600_LANDSCAPE, D600_FX, None),
+    (7, D600_LANDSCAPE, D600_FX, None),
+    (8, D600_LANDSCAPE, D600_FX, None),
+    (9, D600_LANDSCAPE, D600_FX, None),
+    (10, D600_LANDSCAPE, D600_FX, None),
+    (11, D600_LANDSCAPE, D600_FX, None),
+    (12, D600_LANDSCAPE, D600_FX, None),
+    (13, D600_LANDSCAPE, D600_FX, None),
+    (14, D600_LANDSCAPE, D600_FX, None),
+    (15, D600_LANDSCAPE, D600_FX, None),
+    (16, D600_LANDSCAPE, D600_FX, None),
+    (17, D600_LANDSCAPE, D600_FX, None),
+    (18, D600_LANDSCAPE, D600_FX, None),
+    (19, D600_LANDSCAPE, D600_FX, None),
+    (20, D600_LANDSCAPE, D600_FX, None),
+    (21, D600_LANDSCAPE, D600_FX, None),
+    (22, D600_LANDSCAPE, D600_FX, None),
+    (23, D600_LANDSCAPE, D600_FX, None),
+    (24, D600_LANDSCAPE, D600_FX, None),
+    (25, D600_LANDSCAPE, D600_FX, None),
+    (26, D600_LANDSCAPE, D600_FX, None),
+    (27, D600_LANDSCAPE, D600_FX, None),
+    (28, D600_LANDSCAPE, D600_FX, None),
+    (29, D600_LANDSCAPE, D600_FX, None),
+    (30, D600_LANDSCAPE, D600_FX, None),
+    (31, D600_LANDSCAPE, D600_FX, None),
+    (32, D600_LANDSCAPE, D600_FX, None),
+    (33, D600_LANDSCAPE, D600_FX, None),
+    (34, D600_LANDSCAPE, D600_FX, None),
+    (35, D600_LANDSCAPE, D600_FX, None),
+    (36, D600_LANDSCAPE, D600_FX, None),
+    (37, D600_LANDSCAPE, D600_FX, None),
+    (38, D600_LANDSCAPE, D600_FX, None),
+    (39, D600_LANDSCAPE, D600_FX, None),
+    // Frames 40 and 41: points 1 and 13 shot again, the same as the
+    // single-point frames.
+    (40, D600_LANDSCAPE, D600_FX, None),
+    (41, D600_LANDSCAPE, D600_FX, None),
+    // Frames 42 to 44: auto-area AF, whose AFInfo2 names a primary point
+    // by its number and marks the points used in its mask, with a zero
+    // frame: no point either.
+    (42, D600_LANDSCAPE, D600_FX, None),
+    (43, D600_LANDSCAPE, D600_FX, None),
+    (44, D600_LANDSCAPE, D600_FX, None),
+    // Frames 45 and 46: manual focus. FocusMode reads `MANUAL`, and
+    // AFInfo2 names no point and records a zero frame: no point.
+    (45, D600_LANDSCAPE, D600_FX, None),
+    (46, D600_LANDSCAPE, D600_FX, None),
+    // Frames 47 and 48: points 13 and 38 with the camera turned, which
+    // IFD0 records as Orientation 8; AFInfo2 holds the same bytes as in
+    // landscape.
+    (47, D600_PORTRAIT, D600_FX, None),
+    (48, D600_PORTRAIT, D600_FX, None),
+    // Frames 49 and 50: points 38 and 27 in the DX crop, which
+    // CropHiSpeed records as `[2, 6080, 4028, 3968, 2636, 1040, 696]`.
+    (49, D600_LANDSCAPE, D600_DX, None),
+    (50, D600_LANDSCAPE, D600_DX, None),
+    // Frames 51 and 52: dynamic-area AF over 21 points, in AF-C, whose
+    // AFInfo2 names the point chosen by its number; 51 in the DX crop.
+    (51, D600_LANDSCAPE, D600_DX, None),
+    (52, D600_LANDSCAPE, D600_FX, None),
+    // Frames 53 to 56: live view, the focus area moved to the four limits
+    // of its travel: bottom left, top left, top right and bottom right.
+    // AFInfo2 records the area as a position, which the reader gives as
+    // recorded: a 6016 by 4016 frame, an area of 540 by 540 and these
+    // centres, with the in-focus byte 1.
+    (53, D600_LANDSCAPE, D600_FX, Some(((343, 3673), true))),
+    (54, D600_LANDSCAPE, D600_FX, Some(((343, 343), true))),
+    (55, D600_LANDSCAPE, D600_FX, Some(((5671, 343), true))),
+    (56, D600_LANDSCAPE, D600_FX, Some(((5671, 3673), true))),
+];
+
+#[test]
+fn every_frame_of_the_d600_session_gives_what_its_bytes_record() {
+    // The table lists every frame once, in order, and the folder holds
+    // those frames and no other.
+    let numbers: Vec<u8> = D600_SESSION.iter().map(|row| row.0).collect();
+    assert_eq!(numbers, (1..=56).collect::<Vec<u8>>());
+    let dir = support::fixtures::fixture("nikon-d600");
+    let mut committed: Vec<String> = std::fs::read_dir(&dir)
+        .unwrap_or_else(|error| panic!("{}: {error}", dir.display()))
+        .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
+        .filter(|name| name.ends_with(".nef"))
+        .map(|name| format!("nikon-d600/{name}"))
+        .collect();
+    committed.sort();
+    let listed: Vec<String> = numbers
+        .iter()
+        .map(|&frame| support::fixtures::d600_frame(frame))
+        .collect();
+    assert_eq!(committed, listed);
+
+    for &(frame, orientation, image_area, live_view) in &D600_SESSION {
+        let name = support::fixtures::d600_frame(frame);
+        let label = name.as_str();
+        let file = RawFile::open(support::fixtures::fixture(label))
+            .unwrap_or_else(|error| panic!("{label}: {error}"));
+        assert_eq!(file.format(), Format::Nef, "{label}");
+        let metadata = file.metadata();
+        assert_eq!(metadata.model(), Some("NIKON D600"), "{label}");
+        assert_eq!(metadata.orientation(), orientation, "{label}");
+        assert_eq!(
+            metadata.camera_settings().image_area(),
+            image_area,
+            "{label}"
+        );
+        // No layout: raw-files has no table of the D600's points.
+        assert_eq!(metadata.focus_layout(), None, "{label}");
+        let Some(((x, y), in_focus)) = live_view else {
+            assert_eq!(metadata.focus(), None, "{label}");
+            assert_eq!(metadata.focus_points(), None, "{label}");
+            continue;
+        };
+        let focus = metadata
+            .focus()
+            .unwrap_or_else(|| panic!("{label}: no focus point"));
+        assert_eq!(focus.frame(), as_size((6016, 4016)), "{label}");
+        assert_eq!(focus.center(), Point { x, y }, "{label}");
+        assert_eq!(focus.size(), Some(as_size((540, 540))), "{label}");
+        assert_eq!(focus.in_focus(), Some(in_focus), "{label}");
+        assert_eq!(focus.origin(), FocusOrigin::Recorded, "{label}");
+        // The focus points: that point alone, the primary, with no number.
+        // AFInfo2 records detection method 1, live view, with area mode 4,
+        // a code the reader names under no detection method: no area mode.
+        let points = metadata
+            .focus_points()
+            .unwrap_or_else(|| panic!("{label}: no focus points"));
+        assert_eq!(points.frame(), focus.frame(), "{label}");
+        assert_eq!(points.origin(), FocusOrigin::Recorded, "{label}");
+        assert_eq!(points.area_mode(), None, "{label}");
+        assert_eq!(points.points().len(), 1, "{label}");
+        let primary = points
+            .primary()
+            .unwrap_or_else(|| panic!("{label}: no primary"));
+        assert_eq!(Some(primary), points.points().first(), "{label}");
+        assert_eq!(primary.number(), None, "{label}");
+        assert_eq!(primary.center(), focus.center(), "{label}");
+        assert_eq!(primary.size(), focus.size(), "{label}");
+        assert_eq!(primary.in_focus(), focus.in_focus(), "{label}");
+    }
 }
 
 // Real files, downloaded: 35 NEF files of raw.pixls.us, all CC0, the
