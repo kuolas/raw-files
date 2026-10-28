@@ -356,7 +356,7 @@ impl Focus {
 /// arm. It orders as its variants are listed, and a new variant is added
 /// after the existing ones, so an order once observed holds. Its
 /// [`name`](Self::name)s, which `Display` writes too, are "Recorded" and
-/// "Table".
+/// "Placed from a table".
 ///
 /// # Examples
 ///
@@ -364,7 +364,7 @@ impl Focus {
 /// use raw_files::FocusOrigin;
 ///
 /// assert_eq!(FocusOrigin::Recorded.name(), "Recorded");
-/// assert_eq!(FocusOrigin::Table.to_string(), "Table");
+/// assert_eq!(FocusOrigin::Table.to_string(), "Placed from a table");
 /// ```
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[non_exhaustive]
@@ -384,12 +384,12 @@ pub enum FocusOrigin {
 }
 
 impl FocusOrigin {
-    /// The origin's name, for an information panel, such as "Table"; the
-    /// type's docs list them all.
+    /// The origin's name, for an information panel, such as "Placed from
+    /// a table"; the type's docs list them all.
     pub fn name(self) -> &'static str {
         match self {
             FocusOrigin::Recorded => "Recorded",
-            FocusOrigin::Table => "Table",
+            FocusOrigin::Table => "Placed from a table",
         }
     }
 }
@@ -1679,7 +1679,11 @@ mod tests {
     fn every_name_is_the_one_documented_and_display_writes_it() {
         // The names are stable once released: a program may show or store
         // them, so a changed one fails here.
-        assert_names(&all_origins(), FocusOrigin::name, &["Recorded", "Table"]);
+        assert_names(
+            &all_origins(),
+            FocusOrigin::name,
+            &["Recorded", "Placed from a table"],
+        );
     }
 
     #[test]
