@@ -44,8 +44,8 @@
 //! in, how many different sizes the focus areas have, and how many frames
 //! are not the file's image size. It counts the focus points by their
 //! origin too, by the name the library gives it: "Recorded" for a position
-//! the camera measured, "Table" for a point placed from the table of the
-//! body's autofocus points.
+//! the camera measured, "Placed from a table" for a point placed from the
+//! table of the body's autofocus points.
 //!
 //! For the autofocus points the camera used, it counts the files with a
 //! list of them and how many of those mark a primary, how many files have
@@ -359,7 +359,7 @@ struct FocusTally {
     with_point: usize,
     without_point: usize,
     /// Focus points by where they came from, by the name the library gives
-    /// the origin, such as "Table".
+    /// the origin, such as "Placed from a table".
     origins: BTreeMap<&'static str, usize>,
     /// Files with a list of the points the camera used, of which
     /// `with_primary` mark a primary; `list_sizes` counts the files with
@@ -1453,7 +1453,7 @@ fn the_focus_tally_counts_the_lists_and_layouts_and_checks_them_against_each_oth
     assert_eq!((tally.with_point, tally.without_point), (3, 1));
     assert_eq!(
         tally.origins,
-        BTreeMap::from([("Recorded", 1), ("Table", 2)])
+        BTreeMap::from([("Recorded", 1), ("Placed from a table", 2)])
     );
     assert_eq!((tally.with_list, tally.with_primary), (3, 3));
     assert_eq!(tally.list_sizes, BTreeMap::from([(1, 2), (2, 1)]));

@@ -18,7 +18,8 @@ does.
   of the body's autofocus points.
   `Focus::new` gives `Recorded`, `Focus::with_origin` sets another and
   `Focus::scaled_to` keeps it; `FocusOrigin` has a `name` that `Display`
-  writes, "Recorded" and "Table", and orders as its variants are listed.
+  writes, "Recorded" and "Placed from a table", and orders as its
+  variants are listed.
 - `Metadata::focus_points` gives the autofocus points the camera used,
   as a `FocusPoints`: every point in one frame, each a `FocusPoint` with
   its number when the file gives one, its centre, its area when recorded
