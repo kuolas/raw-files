@@ -2,19 +2,23 @@
 
 The 56 NEF files of the session on which I measured the autofocus points
 of my own Nikon D600, on 2026-10-26: one frame per point in single-point
-autofocus, then the control frames, in the order they were shot. The NEF
-notes record the session, what each frame shows and every reading made
-from it ([autofocus-points.md](../../../docs/formats/nef/autofocus-points.md#2-nikon-d600)),
-and number the frames 1 to 56 as this page does. Each file is the
+autofocus, then the control frames, in the order they were shot; and
+the camera's JPEG of frame 4. The NEF notes record the session, what
+each frame shows and every reading made from it
+([autofocus-points.md](../../../docs/formats/nef/autofocus-points.md#2-nikon-d600)),
+and number the frames 1 to 56 as this page does. Each NEF file is the
 camera's NEF with its pixels and personal fields removed and its
-structure and values kept;
+structure and values kept, 2,452 bytes; the JPEG is the camera's JPEG
+with its images replaced by stubs and its personal fields zeroed, its
+Exif segment otherwise as the camera wrote it, 69,876 bytes;
 [the fixtures' README](../README.md#the-d600-session) says how they were
 stripped and checked, under which licence they are published, and who
 *I* is.
 
 Frames 4, 42 and 49, in bold, are the three that the record chooses to
 check the table of the D600's points with: a single point far from the
-centre, where a wrong table, a wrong bit order or a wrong frame shows;
+centre, where a wrong table, a wrong bit order or a wrong frame shows,
+as a NEF and as its JPEG;
 an auto-area frame, whose mask marks 12 points used, the primary among
 them; and a single point in the DX crop, which shifts into the crop.
 
@@ -24,6 +28,7 @@ them; and a single point in the DX crop, which shifts into the crop.
 | 2 | `frame-02.nef` | `AK6_7568.NEF` | single point 3 | `d0230841586c0ce773ec80ccdb0844adc63fac085fd5fb372c2e9518a54b36b1` |
 | 3 | `frame-03.nef` | `AK6_7569.NEF` | single point 8 | `41f1f8d4694d24f1d3d8c4f1d60366057c2f7fc98fdc9ca23d022c348c7e0448` |
 | 4 | `frame-04.nef` | `AK6_7570.NEF` | **single point 38** (the table's tests) | `6cf5c10f3db3f072a92853bf4f89067c8adc656bced6723b9ceefaa58c83558b` |
+| 4 | `frame-04.jpg` | `AK6_7570.JPG` | **single point 38**, the camera's JPEG of the same shot (the table's tests) | `59ccd4c4c8248cf97824a64c118f1b84439e1104ac1e94c841872bccdcbb032c` |
 | 5 | `frame-05.nef` | `AK6_7571.NEF` | single point 35 | `78d31f7eb3377d4a7a6cc3ce993a4866195757f2fd621c2785b8868194ff9545` |
 | 6 | `frame-06.nef` | `AK6_7572.NEF` | single point 32 | `ebb5b028f6181a023a2dd53494ff6b87845e3f6d812c5c3203f32353c6323857` |
 | 7 | `frame-07.nef` | `AK6_7573.NEF` | single point 29 | `8e7e3daf57559b3b957e273392f2de461781b12ebc98ab6bbf7c759c627d9be1` |

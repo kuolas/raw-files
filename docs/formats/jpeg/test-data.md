@@ -166,7 +166,7 @@ was not exhaustive. [S]
 ## 4. Fixtures
 
 The JPEG reader's tests use three kinds of fixture: files built in code,
-three files stripped from my own camera JPEGs, and damaged copies of
+four files stripped from my own camera JPEGs, and damaged copies of
 both. This section says what each kind is for; the tests' own
 documentation says what each file holds.
 
@@ -204,15 +204,30 @@ They are published under MIT OR Apache-2.0 like the other fixtures, with
 their provenance and SHA-256 in
 [`tests/fixtures/README.md`](../../../tests/fixtures/README.md). [F]
 
+The JPEG of frame 4 of the session on which my own D600's autofocus
+points were measured, shot on 2026-10-26 through the viewfinder with
+the single point 38, is committed beside its NEF in
+`tests/fixtures/nikon-d600/`, stripped the same way: the camera's full
+output, 6016×4016, with Orientation 1, whose MakerNote's preview,
+570×375, and one MPF image, 1632×1080, become stubs too. It is 69,876
+bytes, 65,536 of them the Exif segment, which the D600 writes in
+big-endian byte order. Its AFInfo2 names the point by number, which the
+reader places from the D600's table as on the NEF
+([autofocus-points.md](../nef/autofocus-points.md#2-nikon-d600)); its
+provenance and SHA-256 are in
+[the session's manifest](../../../tests/fixtures/nikon-d600/README.md).
+[F]
+
 ### 4.3 Corrupted variants
 
 As for NEF and ARW, the robustness tests (`tests/robustness.rs`) cut
 every JPEG fixture short at every length and overwrite its bytes one at a
-time, and expect an error or a result, never a panic. On the three
+time, and expect an error or a result, never a panic. On the four
 stripped files the overwriting skips three spans of zeros that no
 reader parses: the MakerNote's zeroed ShotInfo, the padding after the
 thumbnail's stub, and the camera's zeros after the thumbnail's declared
-length, up to the end of the Exif segment.
+length, up to the end of the Exif segment; and, on the D600's, a
+fourth, the padding after the MakerNote preview's stub.
 The fuzz targets `jpeg_segments` and `open` start from copies of the
 fixtures, in `fuzz/seeds/jpeg_segments/` (see
 [security.md](security.md)).
