@@ -29,6 +29,17 @@
 //! format the crate recognises, and the error says which container the
 //! file is.
 //!
+//! Detection then gives the file the layout of its body's autofocus
+//! points, from the table that `makernote::points` holds for the body the
+//! Model names. A body with one layout gives it from the Model alone,
+//! whatever the format and whatever the file's MakerNote holds, so it is
+//! looked up here, once, after any format's reader: a file whose
+//! MakerNote is missing or cannot be read, such as an editor's re-save
+//! that keeps the Model, has it too. A body whose files name one of
+//! several layouts, each by its own layout code, will give the layout
+//! that the file's layout code names, as
+//! [`Metadata::focus_layout`](crate::Metadata::focus_layout) states.
+//!
 //! The TIFF list holds NEF and ARW, in that order. A Nikon file is
 //! recognised by its IFD0's Make, and opens with its previews, which the
 //! NEF reader finds with the shared finder, and its metadata, which it
@@ -62,6 +73,8 @@ mod tiff_metadata;
 mod tiff_previews;
 
 use std::io::{Read, Seek};
+
+use makernote::points;
 
 use crate::container::Structure;
 use crate::container::jpeg::Segments;
@@ -183,7 +196,8 @@ pub(super) fn make_starts_with<R: Read + Seek>(
 /// structure `structure`, and reads the file with the first format of that
 /// container's list that claims it.
 ///
-/// Returns the format and what its reader found.
+/// Returns the format and what its reader found, with the layout of the
+/// autofocus points of the body the Model names ([`points::layout`]).
 ///
 /// # Errors
 ///
@@ -207,7 +221,10 @@ pub(crate) fn detect<R: Read + Seek>(
             JPEG_UNCLAIMED,
         ),
     };
-    found.ok_or_else(|| Error::unknown_format(unclaimed))
+    let (format, mut parsed) = found.ok_or_else(|| Error::unknown_format(unclaimed))?;
+    // The layout depends on the Model alone, so no format's reader sets it.
+    parsed.metadata.focus_layout = parsed.metadata.model.as_deref().and_then(points::layout);
+    Ok((format, parsed))
 }
 
 /// Finds the format of the file in `src`, whose structure is `structure`,
@@ -276,12 +293,14 @@ pub(super) mod testing {
 mod tests {
     use super::testing::{self, Src};
     use super::*;
-    use crate::container::tiff::tags::{DNG_PRIVATE_DATA, ORIENTATION};
+    use crate::container::tiff::tags::{DNG_PRIVATE_DATA, MAKER_NOTE, MODEL, ORIENTATION};
     use crate::error::{Error, ErrorKind};
+    use crate::focus::FocusLayout;
+    use crate::geometry::{Point, Size};
     use crate::jpeg_builder::JpegBuilder;
     use crate::orientation::Orientation;
     use crate::preview::PreviewFormat;
-    use crate::tiff_builder::{ASCII, IfdId, RawValue, TiffBuilder};
+    use crate::tiff_builder::{ASCII, IfdId, Order, RawValue, TiffBuilder};
     use std::io::Cursor;
 
     /// A one-IFD TIFF file whose Make is `make`, read into a source and a
@@ -606,5 +625,154 @@ mod tests {
         .expect_err("the Make is too long");
         assert_eq!(err.kind(), ErrorKind::LimitExceeded, "{err:?}");
         assert_eq!(err.offset(), Some(4096));
+    }
+
+    /// What a Nikon file's Exif IFD holds as its MakerNote in the tests of
+    /// the layout: none at all, as in an editor's re-save that drops it; a
+    /// block that starts with Nikon's signature but whose inner TIFF header
+    /// cannot be read, so that the reader reads no MakerNote; and one the
+    /// reader reads, whose IFD holds only its version.
+    const MAKERNOTES: [(&str, Option<&[u8]>); 3] = [
+        ("no MakerNote", None),
+        (
+            "an unreadable MakerNote",
+            Some(b"Nikon\0\x02\x11\0\0XX\0\0\0\0\0\0\0\0\0\0"),
+        ),
+        (
+            "a readable MakerNote",
+            Some(b"Nikon\0\x02\x11\0\0II\x2A\0\x08\0\0\0\x01\0\x01\0\x07\0\x04\0\0\0\x30\x32\x31\x31\0\0\0\0"),
+        ),
+    ];
+
+    /// The TIFF structure of a Nikon file whose IFD0's Model is `model`,
+    /// when there is one, and whose Exif IFD holds `makernote` as its
+    /// MakerNote, when there is one.
+    fn nikon_tiff(model: Option<&str>, makernote: Option<&[u8]>) -> Vec<u8> {
+        let mut tiff = TiffBuilder::new(Order::Little);
+        let (ifd0, exif) = (tiff.ifd(), tiff.ifd());
+        tiff.ascii(ifd0, MAKE, "NIKON CORPORATION").exif(ifd0, exif);
+        if let Some(model) = model {
+            tiff.ascii(ifd0, MODEL, model);
+        }
+        if let Some(makernote) = makernote {
+            let block = tiff.blob(makernote);
+            tiff.undefined_blob(exif, MAKER_NOTE, block);
+        }
+        tiff.build().bytes
+    }
+
+    /// The format and the metadata detection gives the file `bytes`, read
+    /// as opening a file reads it.
+    fn detected_metadata(bytes: Vec<u8>) -> (Format, Metadata) {
+        let mut src = Source::new(Cursor::new(bytes)).unwrap();
+        let structure = Structure::read(&mut src, &Limits::default()).unwrap();
+        let (format, parsed) = detect(&mut src, &structure, &Limits::default()).unwrap();
+        (format, parsed.metadata)
+    }
+
+    /// The metadata of the Nikon file whose Model is `model` and whose
+    /// MakerNote is `makernote`, as a NEF file and as a JPEG file whose
+    /// Exif segment holds the same TIFF structure, each with its format,
+    /// which is checked.
+    fn nikon_files(model: Option<&str>, makernote: Option<&[u8]>) -> [(Format, Metadata); 2] {
+        let tiff = nikon_tiff(model, makernote);
+        let mut jpeg = JpegBuilder::new();
+        jpeg.exif(&tiff).frame(640, 480, 0xC0);
+        let files = [
+            detected_metadata(tiff),
+            detected_metadata(jpeg.build().bytes),
+        ];
+        assert_eq!([files[0].0, files[1].0], [Format::Nef, Format::Jpeg]);
+        files
+    }
+
+    /// Checks that `layout` is the D600's, by values written here from the
+    /// record in the NEF notes rather than read from the table: its Model,
+    /// its 6016 by 4016 frame, its 39 points, and point 38, B1, the top of
+    /// the leftmost column, at (1812, 1705) with a box of 164 by 164.
+    fn assert_the_d600_layout(layout: Option<FocusLayout>, what: &str) {
+        let layout = layout.unwrap_or_else(|| panic!("{what}: no layout"));
+        assert_eq!(layout.model(), "NIKON D600", "{what}");
+        assert_eq!(
+            layout.frame(),
+            Size {
+                width: 6016,
+                height: 4016
+            },
+            "{what}"
+        );
+        assert_eq!(layout.points().len(), 39, "{what}");
+        let point_38 = layout
+            .point(38)
+            .unwrap_or_else(|| panic!("{what}: no point 38"));
+        assert_eq!(point_38.center(), Point { x: 1812, y: 1705 }, "{what}");
+        assert_eq!(
+            point_38.size(),
+            Size {
+                width: 164,
+                height: 164
+            },
+            "{what}"
+        );
+    }
+
+    #[test]
+    fn a_file_of_a_body_with_a_table_gives_its_layout_whatever_its_makernote() {
+        // The layout depends on the Model alone: a D600 file gives it with
+        // no MakerNote, with one that cannot be read and with one that
+        // can, as a NEF file and as a JPEG file alike.
+        for (what, makernote) in MAKERNOTES {
+            for (format, metadata) in nikon_files(Some("NIKON D600"), makernote) {
+                let what = format!("{format:?}, {what}");
+                assert_eq!(metadata.model(), Some("NIKON D600"), "{what}");
+                assert_the_d600_layout(metadata.focus_layout(), &what);
+            }
+        }
+    }
+
+    #[test]
+    fn a_body_without_a_table_gives_no_layout() {
+        // The D610, whose layout is the D600's but whose table raw-files
+        // does not have, the Z 9, a Model that only starts with the D600's,
+        // and no Model at all, whatever the MakerNote holds.
+        for model in [
+            Some("NIKON D610"),
+            Some("NIKON Z 9"),
+            Some("NIKON D6000"),
+            None,
+        ] {
+            for (what, makernote) in MAKERNOTES {
+                for (format, metadata) in nikon_files(model, makernote) {
+                    let what = format!("{model:?}, {format:?}, {what}");
+                    assert_eq!(metadata.model(), model, "{what}");
+                    assert_eq!(metadata.focus_layout(), None, "{what}");
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn the_layout_is_found_by_the_model_as_trimmed() {
+        // The Model padded with spaces, or cut by a NUL before more text,
+        // is the D600's once the text rule has trimmed it, as
+        // `Metadata::model` gives it; in lower case, or with a space
+        // inside, it is another Model's.
+        for (model, layout) in [
+            ("NIKON D600   ", true),
+            ("NIKON D600\0SPARE", true),
+            ("   NIKON D600", true),
+            ("nikon d600", false),
+            ("NIKON  D600", false),
+        ] {
+            for (format, metadata) in nikon_files(Some(model), None) {
+                let what = format!("{model:?}, {format:?}");
+                if layout {
+                    assert_eq!(metadata.model(), Some("NIKON D600"), "{what}");
+                    assert_the_d600_layout(metadata.focus_layout(), &what);
+                } else {
+                    assert_eq!(metadata.focus_layout(), None, "{what}");
+                }
+            }
+        }
     }
 }

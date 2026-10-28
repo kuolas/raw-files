@@ -287,7 +287,11 @@ pixels and personal fields as
 [the fixtures' README](../../../tests/fixtures/README.md#the-d600-session)
 says, and [their manifest](../../../tests/fixtures/nikon-d600/README.md)
 lists each frame with what it shows and its SHA-256; the JPEG of frame
-4 is still to be committed. The exiv2 metadata listings of all 291
+4 is still to be committed. CI checks the D600's table on them, on real
+camera bytes: every frame's Model gives the layout of the D600's 39
+points, and on frame 4, whose AFInfo2 names point 38 in layout 3 with
+bit 37 of its mask set, the test checks that point's place in the
+layout, (1812, 1705). The exiv2 metadata listings of all 291
 Nikon files of the raw.pixls.us catalogue, read on 2026-10-26 for
 presence only **[S]**, show which
 bodies name a point through the viewfinder, with the number of such

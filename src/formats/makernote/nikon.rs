@@ -75,7 +75,12 @@
 //! viewfinder records a zero frame instead, and only the number of an
 //! autofocus point, which only a table of the body's points, carried by no
 //! file, could place in pixels (public samples 928 and 1835): it gives no
-//! focus point.
+//! focus point. The layout of the body's points, which every file of a
+//! body whose table is in raw-files ([`points`](super::points)), the D600,
+//! has whatever the shot
+//! ([`Metadata::focus_layout`](crate::Metadata::focus_layout)), is not
+//! this reader's to give: detection gives it from the Model alone,
+//! whatever the MakerNote holds, even when it cannot be read.
 //! The position is the centre of the area, not its corner: the Coolpix A,
 //! focusing at the middle of its 4928 by 3264 frame, records (2464, 1632)
 //! (sample 2238). The frame is the camera's full-size output, not the
@@ -660,14 +665,16 @@ pub(in crate::formats) fn preview_candidate<R: Read + Seek>(
 /// ([`camera_settings`]): the colour space only when the Exif IFD holds no
 /// ColorSpace, and the raw image size only for a raw file's picture.
 /// CropHiSpeed is read once, for the image area and the focus point.
-/// Last, the focus point, from AFInfo2 and FocusMode, placed on the
+/// Then the focus point, from AFInfo2 and FocusMode, placed on the
 /// cropped picture by CropHiSpeed and CropArea on a crop, as a list of
 /// one point with AFInfo2's area mode ([`focus`]), always read: the
 /// standard tags never give one, so it is not a fallback. `picture` says,
 /// once, what a crop without a CropArea is placed on: nothing for a raw
 /// file's, whose point is then read as recorded, and for a JPEG's, its own
 /// pixels, of the image size `standard` gives. Every other value is the
-/// standard tags'.
+/// standard tags', and the layout of the body's autofocus points is not
+/// given here: detection gives it from the Model alone, whatever the
+/// MakerNote holds.
 ///
 /// # Errors
 ///
@@ -1762,7 +1769,7 @@ mod tests {
     use crate::container::tiff::tags::{
         BODY_SERIAL_NUMBER, COLOR_SPACE as EXIF_COLOR_SPACE, DATE_TIME_ORIGINAL,
         DEFAULT_CROP_ORIGIN, DEFAULT_CROP_SIZE, EXPOSURE_PROGRAM, IMAGE_LENGTH, IMAGE_WIDTH,
-        INTEROP_INDEX, LENS_MODEL, LENS_SPECIFICATION, LIGHT_SOURCE, MAKE, MAKER_NOTE,
+        INTEROP_INDEX, LENS_MODEL, LENS_SPECIFICATION, LIGHT_SOURCE, MAKE, MAKER_NOTE, MODEL,
         OFFSET_TIME_ORIGINAL, PHOTOGRAPHIC_SENSITIVITY, PHOTOMETRIC_INTERPRETATION,
         SUB_SEC_TIME_ORIGINAL, WHITE_BALANCE as EXIF_WHITE_BALANCE,
     };
@@ -4227,6 +4234,65 @@ mod tests {
             // No AFInfo2 at all.
             let none = makernote_metadata(order, |_, _| {});
             assert_eq!(none.focus_points(), None, "{order:?}");
+        }
+    }
+
+    /// The AFInfo2 value, version 0100, in byte order `order`, of a D600
+    /// shot through the viewfinder in single-point autofocus with point 38,
+    /// as frame 4 of the D600 session in the NEF notes records it: detection
+    /// method 0, area mode 0, layout code 3, primary point 38, bit 37 of the
+    /// mask set, and a zero frame and area.
+    fn d600_viewfinder(order: Order) -> Vec<u8> {
+        let zero = Recorded {
+            frame: [0, 0],
+            center: [0, 0],
+            area: [0, 0],
+            in_focus: 0,
+        };
+        let mut value = af_info2(order, "0100", zero);
+        value[6] = 3;
+        value[7] = 38;
+        value[8 + 37 / 8] = 1 << (37 % 8);
+        value
+    }
+
+    /// The metadata of a raw file in byte order `order` whose IFD0's Model
+    /// is `model` and whose MakerNote holds what `tags` adds to its
+    /// MakerNote IFD.
+    fn model_metadata(
+        order: Order,
+        model: &str,
+        tags: impl FnOnce(&mut TiffBuilder, IfdId),
+    ) -> Metadata {
+        let block = tags_block(order, tags).0;
+        let count = whole(&block);
+        metadata_of(nikon_file_with(
+            order,
+            AT,
+            &block,
+            TAIL,
+            |builder, ifd0, exif| {
+                builder.ascii(ifd0, MODEL, model);
+                entry_at(builder, exif, MAKER_NOTE, UNDEFINED, AT, count);
+            },
+        ))
+    }
+
+    #[test]
+    fn a_d600_viewfinder_shot_gives_no_focus_point() {
+        // Frame 4 of the D600 session: a viewfinder shot that names point
+        // 38. The file gives no focus point, since the reader does not
+        // place a named point.
+        for order in ORDERS {
+            let metadata = model_metadata(order, "NIKON D600", |inner, ifd| {
+                inner.ascii(ifd, FOCUS_MODE, "AF-S  ").undefined(
+                    ifd,
+                    AF_INFO2,
+                    &d600_viewfinder(order),
+                );
+            });
+            assert_eq!(metadata.focus(), None, "{order:?}");
+            assert_eq!(metadata.focus_points(), None, "{order:?}");
         }
     }
 

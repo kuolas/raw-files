@@ -776,6 +776,11 @@ fn an_impossible_capture_time_costs_only_the_capture_time() {
             read_fixture(Z9_1X1),
             "2026:10:19 19:26:52",
         ),
+        (
+            "D600 frame 4, stripped".to_owned(),
+            read_fixture(&d600_frame(4)),
+            "2026:10:26 13:15:08",
+        ),
     ]);
     for (name, undamaged_bytes, time) in fixtures {
         let undamaged = RawFile::from_bytes(&undamaged_bytes).unwrap();

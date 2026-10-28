@@ -930,6 +930,13 @@ impl LayoutPoint {
 /// from those records, so a body the notes record has a layout only when
 /// its table is in raw-files.
 ///
+/// A body with one layout, such as the Nikon D600, gives it from the
+/// file's Model alone, whatever the file. A body whose files name one of
+/// several layouts, each by its own layout code, as the Nikon D780's files
+/// name its 51 points through the viewfinder or its 81 points in live
+/// view, will give the layout that the file's layout code names, and
+/// `None` when the file names none.
+///
 /// # Equality
 ///
 /// Two layouts are equal when every value is the same: the model text,
