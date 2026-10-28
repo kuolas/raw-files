@@ -281,12 +281,15 @@ bytes.
 The point fields of a DSLR shot through the viewfinder, and the table
 of the D600's points, were measured on 2026-10-26 on 56 frames shot
 with my own D600, recorded in
-[autofocus-points.md](autofocus-points.md#2-nikon-d600); the files
-stay private, and four files from three of them, stripped, are to be
-committed as
-fixtures, listed here and in the fixtures' README when they are. The
-exiv2 metadata listings of all 291 Nikon files of the raw.pixls.us
-catalogue, read on 2026-10-26 for presence only **[S]**, show which
+[autofocus-points.md](autofocus-points.md#2-nikon-d600). The 56 NEF
+files are committed in `tests/fixtures/nikon-d600/`, stripped of their
+pixels and personal fields as
+[the fixtures' README](../../../tests/fixtures/README.md#the-d600-session)
+says, and [their manifest](../../../tests/fixtures/nikon-d600/README.md)
+lists each frame with what it shows and its SHA-256; the JPEG of frame
+4 is still to be committed. The exiv2 metadata listings of all 291
+Nikon files of the raw.pixls.us catalogue, read on 2026-10-26 for
+presence only **[S]**, show which
 bodies name a point through the viewfinder, with the number of such
 files: the 51-point FX bodies D3 (6), D4 (6), D4S (7), D700 (6), D750
 (4), D800E (2), D810 (5) and D3X (1); the 51-point DX bodies D300S

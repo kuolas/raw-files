@@ -43,7 +43,9 @@ the containers of the 32 files of 25 other bodies are not yet written up
 in these pages. On 26 October 2026 the autofocus points of a D600 were
 measured on 56 frames shot with my own D600, read in Nikon's NX Studio as a
 reader to compare with ([autofocus-points.md](autofocus-points.md)); the
-frames stay private and are cited by counts and frame numbers. The raw data
+frames are committed stripped of their pixels and personal fields
+([test-data.md](test-data.md#23-files-checked-for-the-focus-point)) and
+are cited by counts and frame numbers. The raw data
 was not checked, beyond the raw IFD's tags and the first bytes of the Z 9's
 strip. **Everything else has yet to be checked against sample files.** Byte
 offsets and formulas taken from other projects' source code should be

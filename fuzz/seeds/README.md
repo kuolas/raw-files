@@ -48,12 +48,15 @@ me, Alvaro Kuolas, who maintains raw-files, as
   headerless layout, and one like each generation of Sony's family (ARW
   4.0 with a lossless and with a medium raw, ARW 2.x, ARQ, SR2, SRF and
   the A100), in both byte orders; and, beside these fixtures built
-  in code, the two real files committed in
-  [`tests/fixtures/`](../../tests/fixtures/README.md), shots of my own
-  Z 9 in DX and 1:1 crop modes with their pixels and personal fields
-  removed, copied as they are. The target also takes the `tiff_walk/`
-  and `jpeg_segments/` seeds as further corpus directories, since a
-  plain TIFF file and a JPEG file are also something it must open.
+  in code, five real files committed in
+  [`tests/fixtures/`](../../tests/fixtures/README.md) with their pixels
+  and personal fields removed, copied as they are: shots of my own Z 9
+  in DX and 1:1 crop modes, and frames 4, 42 and 49 of the session on
+  which my own D600's autofocus points were measured, named
+  `nikon-d600-frame-04.nef` and so on. The target also takes the
+  `tiff_walk/` and `jpeg_segments/` seeds as further corpus
+  directories, since a plain TIFF file and a JPEG file are also
+  something it must open.
 
 The files are generated from the fixtures in
 `src/container/tiff/robustness.rs`, the stubs in

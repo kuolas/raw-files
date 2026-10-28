@@ -18,9 +18,11 @@ decision of
 [ADR017](../../architecture-decisions/adr017-per-body-tables-measured-by-the-project.md),
 built on the clean room of
 [ADR013](../../architecture-decisions/adr013-clean-room-and-third-party-code.md).
-The frames are the photographer's own and stay private; a record cites
-them by their number in the session and gives counts and values, never
-a personal field. Claims carry the confidence tags of the NEF notes
+The frames are the photographer's own; with the photographer's
+agreement they are committed stripped of their pixels and personal
+fields, which never enter the repository, and a record cites them by
+their number in the session and gives counts and values, never a
+personal field. Claims carry the confidence tags of the NEF notes
 ([README.md](README.md#confidence-tags)): **[F]** measured on the
 frames named, **[P]** stated in published documentation, **[I]**
 inferred.
@@ -40,7 +42,8 @@ shoot the frames (steps 1 and 2) and send them to the project, which
 measures them, writes the record and the table, and credits the
 photographer in both; or do the whole procedure and submit the record,
 the table and the fixtures, which the project then checks against the
-frames before the table enters. Shooting the frames needs no code and
+frames before the table enters. Either way the frames are committed,
+stripped, as step 7 says. Shooting the frames needs no code and
 no measuring, only the body and an hour; it is the contribution that
 matters, since no table exists without it. The contributing guide says
 how to get in touch
@@ -84,16 +87,19 @@ how to get in touch
    where exactly one bit is set.
 7. **Write the record** in this page, as section 2 is written: the
    session, what the body writes, the bit order, the table with its
-   readings, the calibration, the control frames, and the frames chosen
-   as fixtures. Write the table file in the code with its provenance,
-   register it, strip one single-point frame with its JPEG, one crop
-   frame and one auto-area frame as fixtures
-   ([`tests/fixtures/`](../../../tests/fixtures/README.md)), add their
-   expected values, and run the tests. In the pull request say which
-   software and version was run, and cite the frames as your own. A
-   record names who shot the frames and who measured them; the frames
-   stay private except the fixtures, which are published under the
-   repository's licence with the photographer's agreement.
+   readings, the calibration, the control frames, and the fixtures.
+   Write the table file in the code with its provenance and register
+   it. Strip every frame of the session of its pixels and personal
+   fields and commit it as a fixture
+   ([`tests/fixtures/`](../../../tests/fixtures/README.md)), with the
+   JPEG of one single-point frame; add the expected values of every
+   frame, and the table's tests on that single-point frame, a crop frame
+   and an auto-area frame; and run the tests. In the pull request say
+   which software and version was run, and cite the frames as your own.
+   A record names who shot the frames and who measured them; the frames
+   are committed stripped, under the repository's licence, with the
+   photographer's agreement, and their pixels and personal fields
+   never are.
 
 What the record must give a reader: enough to repeat the measurement
 and to judge its error. A viewer that draws the point draws a box far
@@ -108,7 +114,9 @@ Studio 1.10.0, run as a reader to compare with. The frames are
 numbered 1 to 56 in the session's order. Every value below was read
 from the files' bytes with a script written from the notes and, for
 the box, from the NX Studio screenshots measured as section 1 says.
-**[F]**
+The 56 NEF files are committed, stripped of their pixels and personal
+fields, so that every value read from their bytes can be checked on
+them (section 2.7). **[F]**
 
 ### 2.1 The session
 
@@ -291,13 +299,19 @@ again, read identically to their originals. **[F]**
   ([ADR012](../../architecture-decisions/adr012-focus-points-as-the-camera-records-them.md)).
   **[F]**
 
-### 2.7 The frames chosen as fixtures
+### 2.7 The fixtures
 
-Four files from three frames serve as test fixtures once stripped of
-their pixels and
-personal fields, as the Z 9 fixtures were
-([`tests/fixtures/`](../../../tests/fixtures/README.md)); their names and
-hashes are recorded there when they are committed:
+The whole session is committed: the 56 NEF files, stripped of their
+pixels and personal fields as the Z 9 fixtures were
+([`tests/fixtures/`](../../../tests/fixtures/README.md#the-d600-session)),
+in `tests/fixtures/nikon-d600/`, whose
+[manifest](../../../tests/fixtures/nikon-d600/README.md) lists each
+frame with what it shows and its SHA-256. A test opens every frame and
+checks what the reader gives it. The NX Studio screenshots stay
+private; the readings taken from them are in sections 2.4 to 2.6.
+
+Three of the frames serve the table's tests, and the JPEG of frame 4,
+stripped, is still to be committed beside its NEF:
 
 - frame 4, point 38 (B1, the top-left of the outer columns), as a NEF
   and as its JPEG: a single point far from the centre, where a wrong
