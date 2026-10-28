@@ -28,9 +28,10 @@ Confidence tags: **[P]** primary (verified from the primary page or API),
 - hand-built fixtures: an IFD skeleton, a MakerNote and a tiny JPEG;
 - fixtures stripped from a CC0 sample: pixel data removed, the structure
   kept;
-- fixtures stripped from the maintainer's own shots: pixel data and
-  personal fields removed, the structure and values kept, with their
-  provenance in [`tests/fixtures/README.md`](../../../tests/fixtures/README.md);
+- fixtures stripped from my own shots: pixel data and personal
+  fields removed, the structure and values kept, with their
+  provenance in
+  [`tests/fixtures/README.md`](../../../tests/fixtures/README.md);
 - corrupted variants of those (section 5);
 - minimal reproducers for bugs, each added with its fix.
 
@@ -256,9 +257,9 @@ when CropArea's kept side equals the frame's, which holds on every crop
 file here with a position.
 
 The shots that tell the two kinds of crop apart were made for this check
-with the maintainer's Z 9; raw.pixls.us holds one file per camera and
-mode and does not tell its crop modes apart, so they are not hosted
-there. Each records a single point placed in the top-left corner:
+with my Z 9; raw.pixls.us holds one file per camera and mode and does
+not tell its crop modes apart, so they are not hosted there. Each
+records a single point placed in the top-left corner:
 
 | Frames | Mode | Recorded in 8256x5504 | Focus point by ADR012's rules |
 |---|---|---|---|
@@ -279,7 +280,7 @@ bytes.
 
 The point fields of a DSLR shot through the viewfinder, and the table
 of the D600's points, were measured on 2026-10-26 on 56 frames shot
-with the maintainer's own D600, recorded in
+with my own D600, recorded in
 [autofocus-points.md](autofocus-points.md#2-nikon-d600); the files
 stay private, and four files from three of them, stripped, are to be
 committed as
@@ -335,11 +336,10 @@ Which files record each setting; the values are in
 | Focal length in 35 mm terms | Exif 0xA405 | 31 and both JPEGs | 1785, 1786, 4456, 5364 |
 | Software | IFD0 0x0131 | all 35 and both JPEGs | none |
 
-The maintainer's own files, which stay private, were read on 2026-10-24
-with the same script, and only counts and the distributions of values
-were kept: no file name, date or single file's values. They are the
-raw files and the camera JPEGs of six Nikon DSLRs, and the JPEGs that
-a program later rewrote:
+My own files, which stay private, were read on 2026-10-24 with the same
+script, and only counts and the distributions of values were kept: no file
+name, date or single file's values. They are the raw files and the camera
+JPEGs of six Nikon DSLRs, and the JPEGs that a program later rewrote:
 
 | Body | NEF | Camera JPEG | Rewritten JPEG |
 |---|---|---|---|
@@ -357,17 +357,16 @@ found no Nikon MakerNote in 14 of the D3200's NEF files and seven of
 the D7100's. What these files show is in
 [makernote-and-metadata.md](makernote-and-metadata.md#87-camera-settings).
 
-On 2026-10-25 the maintainer shot frames of one scene for these values,
-one or two per white balance setting, fine-tuning, colour space and
-image area: 19 NEF files from a Z 9 on firmware `Ver.05.30`, and 19 NEF
-files from the D600, 14 of them with a JPEG. They stay private; what
-the notes give of them is each setting and the values it was stored
-as. The same script read them. No note of the setting was kept while
-shooting, so each frame was matched to its setting by the order of
-the shots and by what its Exif and MakerNote tags record. The
-direction of each fine-tuning value was read from the camera's own
-picture of the frame: the D600's JPEG, and the full-size JPEG preview
-inside each Z 9 NEF file, taken out with ExifTool. Each picture was
+On 2026-10-25 I shot frames of one scene for these values, one or two per
+white balance setting, fine-tuning, colour space and image area: 19 NEF
+files from a Z 9 on firmware `Ver.05.30`, and 19 NEF files from the D600,
+14 of them with a JPEG. They stay private; what the notes give of them is
+each setting and the values it was stored as. The same script read them. No
+note of the setting was kept while shooting, so each frame was matched to
+its setting by the order of the shots and by what its Exif and MakerNote
+tags record. The direction of each fine-tuning value was read from the
+camera's own picture of the frame: the D600's JPEG, and the full-size JPEG
+preview inside each Z 9 NEF file, taken out with ExifTool. Each picture was
 scaled down to 90 by 60 pixels with macOS's `sips`, and its average
 red, green and blue compared with those of the frame shot just before
 without a shift (Z 9), or of the frame shifted the other way (D600): a
@@ -457,11 +456,11 @@ needs:
 
 Write the fixture generator as a test helper or small script in the
 repository, so that anyone can regenerate the fixture. The one exception
-is a fixture derived from a file that is not public, such as one of the
-maintainer's own shots: no script in the repository could regenerate it,
-since the file it comes from is not there, so it may be committed as a
-binary file when a text file next to it says how it was made and what
-was removed. Where a binary fixture is committed, that text file records
+is a fixture derived from a file that is not public, such as one of my
+own shots: no script in the repository could regenerate it, since the
+file it comes from is not there, so it may be committed as a binary
+file when a text file next to it says how it was made and what was
+removed. Where a binary fixture is committed, that text file records
 the provenance:
 
 - how it was made (generated, or derived from which sample);

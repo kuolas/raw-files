@@ -13,14 +13,13 @@
 //! headerless layout, with its offsets counted from the start of the file,
 //! holds the file's only JPEG and the ISO and the lens's range that its
 //! Exif tags lack; and the damage and the limits that cost that MakerNote
-//! what it gives, but not the file. Then two real files of the
-//! maintainer's own Z 9, in DX and 1:1 crop modes, committed with their
-//! pixels and personal fields removed (see [`support::fixtures`]): their
-//! previews, every value of their metadata, the camera settings among
-//! them, and their focus points, which
-//! the reader scales onto the DX crop and moves into the 1:1 window. Then
-//! 35 real files too large to commit, three of the Z 9 and 32 of 25 other
-//! bodies, when they have been downloaded (see
+//! what it gives, but not the file. Then two real files of my own Z 9, in
+//! DX and 1:1 crop modes, committed with their pixels and personal fields
+//! removed (see [`support::fixtures`]): their previews, every value of
+//! their metadata, the camera settings among them, and their focus points,
+//! which the reader scales onto the DX crop and moves into the 1:1 window.
+//! Then 35 real files too large to commit, three of the Z 9 and 32 of 25
+//! other bodies, when they have been downloaded (see
 //! [`support::samples::path`]): the previews each gives, and its metadata,
 //! every value of it, the focus point and the camera settings among them.
 
@@ -1046,9 +1045,9 @@ fn a_limit_crossed_inside_the_d1h_makernote_costs_the_makernote_only() {
     }
 }
 
-// Two real files, committed. Two shots of the maintainer's own Z 9, in DX
-// and 1:1 crop modes, with a single focus point placed in the top-left
-// corner of the picture, stripped of their pixels and personal fields with
+// Two real files, committed. Two shots of my own Z 9, in DX and 1:1
+// crop modes, with a single focus point placed in the top-left corner
+// of the picture, stripped of their pixels and personal fields with
 // their structure and values kept (`tests/fixtures/README.md`). Their
 // point lies far enough from the centre to tell a crop the reader scales
 // from one it shifts, which no public sample's point does.
@@ -1157,7 +1156,7 @@ fn check_stripped_z9(expected: &StrippedZ9) {
     let metadata = file.metadata();
     assert_eq!(metadata.make(), Some("NIKON CORPORATION"), "{label}");
     assert_eq!(metadata.model(), Some("NIKON Z 9"), "{label}");
-    // The firmware the maintainer's Z 9 ran.
+    // The firmware my Z 9 ran.
     assert_eq!(metadata.software(), Some("Ver.05.30"), "{label}");
     // The stripping removed BodySerialNumber and the MakerNote's
     // SerialNumber.

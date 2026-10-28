@@ -102,13 +102,13 @@ pixels is enough; what matters is that the error is known.
 
 ## 2. Nikon D600
 
-Measured on 2026-10-26 on 56 frames shot with the maintainer's own
-D600, RAW + JPEG Fine Large, a 35 mm f/1.8 lens, one static scene, and
-read in Nikon NX Studio 1.10.0, run as a reader to compare with.
-The frames are numbered 1 to 56 in the session's order. Every value
-below was read from the files' bytes with a script written from the
-notes and, for the box, from the NX Studio screenshots measured as
-section 1 says. **[F]**
+Measured on 2026-10-26 on 56 frames shot with my own D600, RAW + JPEG
+Fine Large, a 35 mm f/1.8 lens, one static scene, and read in Nikon NX
+Studio 1.10.0, run as a reader to compare with. The frames are
+numbered 1 to 56 in the session's order. Every value below was read
+from the files' bytes with a script written from the notes and, for
+the box, from the NX Studio screenshots measured as section 1 says.
+**[F]**
 
 ### 2.1 The session
 
@@ -309,8 +309,8 @@ hashes are recorded there when they are committed:
 ## 3. Bodies without a table
 
 Every other body is to give no point for a shot that names one, with
-the reason counted. What the maintainer's own files of other Nikon bodies
-record, read with the same script, as counts only **[F]**:
+the reason counted. What my own files of other Nikon bodies record,
+read with the same script, as counts only **[F]**:
 
 | Body | Files | AFInfo2, layout | With a point number | Without | Live view |
 |---|---|---|---|---|---|

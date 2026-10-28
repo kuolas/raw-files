@@ -206,8 +206,8 @@ in IFD0's Software [P][3]:
   follows: `R98` a DCF basic file, `THM` a DCF thumbnail, `R03` a DCF
   option file (4.6.8.1.1, p. 92) [P][3]. A DCF option file is in Adobe
   RGB, in ExifTool's documentation of the tag [S][6], and the files
-  agree: all 615 of the maintainer's own D3200 JPEGs with ColorSpace
-  65535 and `R03` record Adobe RGB in Nikon's 0x001E
+  agree: all 615 of my own D3200 JPEGs with ColorSpace 65535 and `R03`
+  record Adobe RGB in Nikon's 0x001E
   ([NEF notes](../nef/makernote-and-metadata.md#87-camera-settings))
   **[F]**, and so does the A900 raw file's settings block, as ExifTool
   decodes it
@@ -231,12 +231,11 @@ in IFD0's Software [P][3]:
   DSC-RX100M4 file only, with LightSource 11 (shade). InteropIndex is
   `R98` on seven files. On the D70 file the Interoperability pointer
   leads to IFD1 (section 6), which holds no InteropIndex.
-- **On the maintainer's own JPEGs that a program rewrote** (425, from
-  three Nikon DSLRs), Software names that program, not the camera:
-  Windows Photo Viewer, GIMP, Luminance HDR, Shotwell, ViewNX 2 and
-  darktable. 32 of them have ColorSpace 65535 with no InteropIndex,
-  and 10 of those still hold the camera's sRGB in the MakerNote, which
-  no longer describes the picture
+- **On my own JPEGs that a program rewrote** (425, from three Nikon DSLRs),
+  Software names that program, not the camera: Windows Photo Viewer, GIMP,
+  Luminance HDR, Shotwell, ViewNX 2 and darktable. 32 of them have
+  ColorSpace 65535 with no InteropIndex, and 10 of those still hold the
+  camera's sRGB in the MakerNote, which no longer describes the picture
   ([NEF notes](../nef/makernote-and-metadata.md#87-camera-settings)).
   [F]
 
@@ -448,12 +447,12 @@ five Sony files they are the tags the
 [NEF notes](../nef/makernote-and-metadata.md#87-camera-settings) and the
 [ARW notes](../arw/makernote-and-metadata.md#97-camera-settings) record,
 with the values listed there. [F] The three stripped Z 9 JPEGs of the
-[fixtures](../../../tests/fixtures/README.md), shot with the
-maintainer's own Z 9 on firmware `Ver.05.30` and made public as
-fixtures, keep the camera's MakerNote whole, all 75 entries, beside the
-two stripped NEF files of the same body and firmware and the Z 9 NEF
-samples of raw.pixls.us (firmware `Ver.01.00`, 73 entries on the
-lossless file, 72 on the HE and HE\* ones). [F]
+[fixtures](../../../tests/fixtures/README.md), shot with my own Z 9 on
+firmware `Ver.05.30` and made public as fixtures, keep the camera's
+MakerNote whole, all 75 entries, beside the two stripped NEF files of
+the same body and firmware and the Z 9 NEF samples of raw.pixls.us
+(firmware `Ver.01.00`, 73 entries on the lossless file, 72 on the HE
+and HE\* ones). [F]
 
 - Every settings tag of the NEF notes is in the JPEG, with the NEF's
   types: WhiteBalance (`AUTO0`), WhiteBalanceFineTune (0x003F),
@@ -470,16 +469,15 @@ lossless file, 72 on the HE and HE\* ones). [F]
   0x0062, 0x00A2); whether they come with the format or with the newer
   firmware, no public file can say. [I]
 - **ImageSizeRAW (0x003E) is 1 on the two full-size JPEGs and 2 on the
-  middle-size one** [F]: in a JPEG it follows the JPEG's own size. The
-  maintainer's 49 Z 9 shots of 2026-10-22 taken as a NEF and a JPEG
-  together, at the JPEG's large, medium and small sizes in each crop
-  mode, show it: the JPEG's 0x003E is 1, 2 or 3 as its size is large,
-  medium or small, while the NEF beside it holds 1 every time, the Z 9
-  making no medium or small raw. [F] On the maintainer's own D7200
-  JPEGs it is 1 on 4,310 and 0 on 506, presumably those taken without
-  a raw. [F][I] On neither body does a JPEG's 0x003E give a raw size.
-  Quality (0x0004) is `FINE` or `BASIC`, the JPEG's compression, where
-  the NEF's says `RAW`. [F]
+  middle-size one** [F]: in a JPEG it follows the JPEG's own size. My
+  49 Z 9 shots of 2026-10-22 taken as a NEF and a JPEG together, at
+  the JPEG's large, medium and small sizes in each crop mode, show it:
+  the JPEG's 0x003E is 1, 2 or 3 as its size is large, medium or
+  small, while the NEF beside it holds 1 every time, the Z 9 making no
+  medium or small raw. [F] On my own D7200 JPEGs it is 1 on 4,310 and
+  0 on 506, presumably those taken without a raw. [F][I] On neither
+  body does a JPEG's 0x003E give a raw size. Quality (0x0004) is `FINE` or
+  `BASIC`, the JPEG's compression, where the NEF's says `RAW`. [F]
 
 ## 11. The camera files, segment by segment
 
@@ -601,7 +599,7 @@ decided, as steps. [I]
     **[P]**
 [5] The eight camera-original JPEGs from Wikimedia Commons listed in
     [test-data.md](test-data.md#2-the-sample-files), walked byte by byte
-    with a script of the maintainer's own in October 2026. **[F]**
+    with a script of my own in October 2026. **[F]**
 [6] ExifTool, EXIF tags, https://exiftool.org/TagNames/EXIF.html, read
     as documentation. **[S]**
 

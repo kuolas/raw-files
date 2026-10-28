@@ -13,8 +13,8 @@
 //! D1H, whose MakerNote, of the headerless layout, holds its only JPEG,
 //! and one like each generation of Sony's family, in both byte orders;
 //! and from the two real files committed in `tests/fixtures/`, shots of
-//! the maintainer's own Z 9 in DX and 1:1 crop modes with their pixels and
-//! personal fields removed, copied as they are, in their own little-endian
+//! my own Z 9 in DX and 1:1 crop modes with their pixels and personal
+//! fields removed, copied as they are, in their own little-endian
 //! byte order.
 //!
 //! Likewise, a fuzzer builds an Exif segment that holds a TIFF structure,
@@ -33,10 +33,10 @@
 //! whose MakerNote records a focus point, and a DSLR-A100's, with no MPF
 //! index; the Exif segment's TIFF structure and the MPF index in both
 //! byte orders. And from the three real JPEGs committed in
-//! `tests/fixtures/`, shots of the maintainer's own Z 9 in FX and in DX
-//! and 16:9 crop modes with their images replaced by stubs and their
-//! personal fields zeroed, copied as they are, the camera's own Exif
-//! segment in its little-endian byte order. The `open` target takes these
+//! `tests/fixtures/`, shots of my own Z 9 in FX and in DX and 16:9
+//! crop modes with their images replaced by stubs and their personal
+//! fields zeroed, copied as they are, the camera's own Exif segment
+//! in its little-endian byte order. The `open` target takes these
 //! seeds too, as JPEG files are something it must open, and reaches the
 //! Nikon and Sony MakerNote readers through them.
 //!

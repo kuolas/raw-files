@@ -222,6 +222,9 @@ documentation is on [docs.rs](https://docs.rs/raw-files).
 
 ## Formats
 
+Where this README says *my own* files, it is me, Alvaro Kuolas, who maintains
+raw-files, writing about my own cameras: they stay private.
+
 **Nikon NEF**, with the NRW files of Coolpix cameras.
 
 - **Previews**: found in IFD0, in its SubIFDs and in the small preview
@@ -241,7 +244,7 @@ documentation is on [docs.rs](https://docs.rs/raw-files).
 - **Checked on**: 35 CC0 Nikon files from raw.pixls.us that CI downloads,
   three of the Z 9 (lossless, HE and HE\*) and 32 of 25 other bodies from
   the D1H to the Z5II; test files laid out like a Z 9's, a Z6III's, a
-  D300's and a D1H's; and two stripped files of the maintainer's own Z 9.
+  D300's and a D1H's; and two stripped files of my own Z 9.
 
 **Sony ARW**, with the SRF, SR2 and ARQ files of the same family and the
 ARW files of the Sony-built Hasselblad bodies.
@@ -291,8 +294,7 @@ as an editor exports it.
   default orientation, no transform.
 - **Checked on**: eight camera JPEGs from Wikimedia Commons that CI
   downloads, of five Sony bodies, two Nikon bodies and a Canon; JPEG files
-  built in the tests; and three stripped JPEG files of the maintainer's
-  own Z 9.
+  built in the tests; and three stripped JPEG files of my own Z 9.
 
 Any other file, a DNG among them whatever its Make says, is refused with the
 `UnknownFormat` error.

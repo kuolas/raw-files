@@ -489,7 +489,7 @@ const UNDEFINED: u16 = 7;
 /// A mode a Nikon Z 9 takes a picture in, as its MakerNote records it in
 /// its JPEGs, for [`z9_jpeg`]: the camera's full output, FX, or one of its
 /// crops. The values of each are those the NEF notes record of shots made
-/// with the maintainer's Z 9, and of the public Z 9 samples for FX.
+/// with my Z 9, and of the public Z 9 samples for FX.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Z9Mode {
     /// No crop: the full 8256 by 5504 output.
@@ -533,8 +533,8 @@ impl Z9Mode {
     /// What the mode's AFInfo2 records, in the full frame of 8256 by 5504:
     /// the frame, the centre and the area, each width or x first. On FX,
     /// the point of the public Z 9 samples 5146 to 5148; on a crop, the
-    /// point of the maintainer's shot with a single point in the top-left
-    /// corner of the picture.
+    /// point of my shot with a single point in the top-left corner of
+    /// the picture.
     pub fn recorded(self) -> [(u32, u32); 3] {
         let frame = Z9_FOCUS_FRAME;
         match self {

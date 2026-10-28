@@ -1215,8 +1215,8 @@ ILCE-7M3 and ILCE-7RM2 JPEGs, 48 on the ILCE-7S (file 1582) and the
 RX100M4 JPEG, and 112 on the ILCE-9M3 (files 7361, 7364) **[F]**. Exif
 agrees on every file: 0xA403 is 0 with 0x0115 0, and 1 with 48
 (LightSource 11, "shade") and with 112 (LightSource 255, "other").
-Frames shot for these values on the maintainer's ILCE-7M2 show every
-other code under its setting (below).
+Frames shot for these values on my ILCE-7M2 show every other code
+under its setting (below).
 
 0xB054, also called WhiteBalance by ExifTool, one SHORT with codes for
 auto, custom, daylight, cloudy, the kinds of fluorescent and
@@ -1349,9 +1349,8 @@ after it **[F]**. A reader that reads only values inside the MakerNote
 drops them. None of them is a setting: every settings tag of those
 files lies inside **[F]**.
 
-**On the maintainer's own files.** 3,161 ARW files and 1,972 camera
-JPEGs of the maintainer's own ILCE-7M2, read the same way on 2026-10-24
-and given as counts only
+**On my own files.** 3,161 ARW files and 1,972 camera JPEGs of my own
+ILCE-7M2, read the same way on 2026-10-24 and given as counts only
 ([test-data.md](test-data.md#23-the-camera-settings-of-each-file)),
 agree with the samples **[F]**: auto white balance on every one, with
 0x0115, 0xB054, 0xB021 and 0x0112 all 0; 0x201A 1 on every one; no
@@ -1361,9 +1360,9 @@ and 1,625 of the JPEGs, presumably shots with manual lenses, as on the
 ILCE-7S sample [I]. Every MakerNote value lies inside the MakerNote.
 
 **Shots made for these values.** To see what each tag holds under each
-setting, the maintainer shot 32 frames of one scene with the ILCE-7M2
-on 2026-10-25, one or more per setting, 30 of them as an ARW file and
-a JPEG, and six more later that day for the custom white balance's
+setting, I shot 32 frames of one scene with the ILCE-7M2 on
+2026-10-25, one or more per setting, 30 of them as an ARW file and a
+JPEG, and six more later that day for the custom white balance's
 colour temperature, all as an ARW file and a JPEG, and read them the
 same way
 ([test-data.md](test-data.md#23-the-camera-settings-of-each-file))
@@ -1703,11 +1702,10 @@ too, so its white balance comes from Exif alone.
 18. **The fine-tuning's axis and sign.** Answered: the fine-tuning is
     0x2014, two SLONGs, amber to blue then green to magenta, a positive
     value towards amber and towards magenta; 0x0112 records the kind of
-    fluorescent lamp, as frames shot on the maintainer's ILCE-7M2 with a
-    known shift each way show ([section 9.7](#97-camera-settings)).
-    **[F]**
+    fluorescent lamp, as frames shot on my ILCE-7M2 with a known shift
+    each way show ([section 9.7](#97-camera-settings)). **[F]**
 19. **The colour temperature under a set temperature.** Answered: on
-    the maintainer's ILCE-7M2, 0xB021 holds the chosen value under a
+    my ILCE-7M2, 0xB021 holds the chosen value under a
     colour-temperature setting, and the custom white balance's own
     temperature under custom ([section 9.7](#97-camera-settings)).
     **[F]**

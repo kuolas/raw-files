@@ -194,23 +194,21 @@ Which files record each setting; the values are in
 | Focal length in 35 mm terms | Exif 0xA405 | 34 and the five JPEGs; 0 on 1582 | 1351, 3221 |
 | Software | IFD0 0x0131 | 34 and the five JPEGs | 1351, 3221 |
 
-The maintainer's own ILCE-7M2 files, which stay private, were read on
-2026-10-24 with the same script, and only counts and the distributions
-of values were kept: 3,161 ARW files and 1,972 camera JPEGs, none of
-them rewritten by a program; two more could not be read over the
-network. What they show is in
+My own ILCE-7M2 files, which stay private, were read on 2026-10-24 with
+the same script, and only counts and the distributions of values were
+kept: 3,161 ARW files and 1,972 camera JPEGs, none of them rewritten by a
+program; two more could not be read over the network. What they show is in
 [makernote-and-metadata.md](makernote-and-metadata.md#97-camera-settings).
 
-On 2026-10-25 the maintainer shot 32 frames of one scene with the same
-ILCE-7M2 for these values, one or more per white balance setting,
-fine-tuning, electronic front curtain setting and colour space, 30 of
-them as an ARW file and a JPEG, and six more later that day, each an
-ARW file and a JPEG, under auto and two custom white balances, one of
-them measured anew. They stay private; what the notes give
-of them is each setting and the values it was stored as. The same
-script read them, with 0x2014 added to the tags it reads; the
-table's fine-tuning row is from the files above, read again with it
-on the same day. As for the
+On 2026-10-25 I shot 32 frames of one scene with the same ILCE-7M2 for
+these values, one or more per white balance setting, fine-tuning,
+electronic front curtain setting and colour space, 30 of them as an
+ARW file and a JPEG, and six more later that day, each an ARW file and
+a JPEG, under auto and two custom white balances, one of them measured
+anew. They stay private; what the notes give of them is each setting
+and the values it was stored as. The same script read them, with
+0x2014 added to the tags it reads; the table's fine-tuning row is from
+the files above, read again with it on the same day. As for the
 [NEF frames](../nef/test-data.md#24-files-checked-for-the-camera-settings),
 no note of the setting was kept while shooting, so each frame was
 matched to its setting by the order of the shots and by its tags, and

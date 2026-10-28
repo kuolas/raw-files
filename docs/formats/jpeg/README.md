@@ -7,6 +7,10 @@ T.81), JFIF (ITU-T T.871), Exif (CIPA DC-008) and the Multi-Picture Format
 (CIPA DC-007). These pages cite them by section, and check them against
 camera-original JPEG files.
 
+Where these notes say *I* or *my own* files, it is me, Alvaro Kuolas, who
+maintains raw-files, writing about my own cameras and shots: they stay
+private, and are cited by counts or by frame numbers.
+
 These pages support the [roadmap](../../ROADMAP.md)'s milestone for plain
 JPEG files: a JPEG opens as a format of its own, with its metadata, its
 previews and, when the camera recorded one that fits its picture, its focus
@@ -31,8 +35,8 @@ they are not downloaded
 ([test-data.md](test-data.md#6-early-coolpix-files-checked-by-hand)).
 [open-questions.md](open-questions.md) lists what is still unknown,
 among it the orientation of the small images on a portrait picture on a
-public file. What a Nikon JPEG records in a crop mode is known from the
-maintainer's own Z 9 shots, not from a public file.
+public file. What a Nikon JPEG records in a crop mode is known from
+shots I made with my own Z 9, not from a public file.
 
 ## Pages
 
