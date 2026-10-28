@@ -13,7 +13,7 @@
 //! The camera may use several autofocus points for one picture, one of
 //! them the primary. [`FocusPoints`] holds them all, each a
 //! [`FocusPoint`], in one frame, with the primary marked, the area mode
-//! the camera was set to, an [`AfAreaMode`], and where they came from.
+//! the camera was set to, a [`FocusAreaMode`], and where they came from.
 //!
 //! [`Metadata::focus`](crate::Metadata::focus) gives the focus point of a
 //! file, if it records one,
@@ -415,7 +415,7 @@ impl fmt::Display for FocusOrigin {
 /// [`Metadata::focus_points`](crate::Metadata::focus_points) says which
 /// codes each reader names.
 ///
-/// `AfAreaMode` is `#[non_exhaustive]`, so match on it with a wildcard
+/// `FocusAreaMode` is `#[non_exhaustive]`, so match on it with a wildcard
 /// arm. It orders as its variants are listed, and a new variant is added
 /// after the existing ones, so an order once observed holds. Its
 /// [`name`](Self::name)s, which `Display` writes too, are "Single point",
@@ -424,14 +424,14 @@ impl fmt::Display for FocusOrigin {
 /// # Examples
 ///
 /// ```
-/// use raw_files::AfAreaMode;
+/// use raw_files::FocusAreaMode;
 ///
-/// assert_eq!(AfAreaMode::Single.name(), "Single point");
-/// assert_eq!(AfAreaMode::Auto.to_string(), "Auto area");
+/// assert_eq!(FocusAreaMode::Single.name(), "Single point");
+/// assert_eq!(FocusAreaMode::Auto.to_string(), "Auto area");
 /// ```
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[non_exhaustive]
-pub enum AfAreaMode {
+pub enum FocusAreaMode {
     /// One point, which the photographer placed: Nikon's single-point AF.
     Single,
     /// A point the photographer placed, with the points around it standing
@@ -445,21 +445,21 @@ pub enum AfAreaMode {
     Tracking,
 }
 
-impl AfAreaMode {
+impl FocusAreaMode {
     /// The mode's name, for an information panel, such as "Auto area"; the
     /// type's docs list them all.
     pub fn name(self) -> &'static str {
         match self {
-            AfAreaMode::Single => "Single point",
-            AfAreaMode::Dynamic => "Dynamic area",
-            AfAreaMode::Auto => "Auto area",
-            AfAreaMode::Tracking => "Tracking",
+            FocusAreaMode::Single => "Single point",
+            FocusAreaMode::Dynamic => "Dynamic area",
+            FocusAreaMode::Auto => "Auto area",
+            FocusAreaMode::Tracking => "Tracking",
         }
     }
 }
 
-impl fmt::Display for AfAreaMode {
-    /// Writes [`name`](AfAreaMode::name).
+impl fmt::Display for FocusAreaMode {
+    /// Writes [`name`](FocusAreaMode::name).
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(self.name())
     }
@@ -595,7 +595,7 @@ impl FocusPoint {
 /// and where the points came from.
 ///
 /// A viewer draws the points over a preview, marks the primary and labels
-/// them with the [`AfAreaMode`]; a caller that wants only one point reads
+/// them with the [`FocusAreaMode`]; a caller that wants only one point reads
 /// [`Metadata::focus`](crate::Metadata::focus) instead. The frame and the
 /// points follow the rules of [`Focus`]: the frame has the framing of the
 /// previews and no zero side, every centre lies on the frame, its edges
@@ -627,7 +627,7 @@ impl FocusPoint {
 /// area, placed on a 1504 × 1004 preview:
 ///
 /// ```
-/// use raw_files::{AfAreaMode, FocusOrigin, FocusPoint, FocusPoints, Point, Size};
+/// use raw_files::{FocusAreaMode, FocusOrigin, FocusPoint, FocusPoints, Point, Size};
 ///
 /// # fn main() {
 /// #     example().expect("every step accepts these values");
@@ -643,7 +643,7 @@ impl FocusPoint {
 ///             .with_in_focus(true),
 ///     )?
 ///     .with_primary(1)?
-///     .with_area_mode(AfAreaMode::Auto);
+///     .with_area_mode(FocusAreaMode::Auto);
 ///
 /// let on_preview = points.scaled_to(Size { width: 1504, height: 1004 })?;
 /// let centres: Vec<Point> = on_preview.points().iter().map(FocusPoint::center).collect();
@@ -652,7 +652,7 @@ impl FocusPoint {
 ///     on_preview.primary().map(FocusPoint::center),
 ///     Some(Point { x: 752, y: 502 })
 /// );
-/// assert_eq!(on_preview.area_mode(), Some(AfAreaMode::Auto));
+/// assert_eq!(on_preview.area_mode(), Some(FocusAreaMode::Auto));
 /// assert_eq!(on_preview.origin(), FocusOrigin::Recorded);
 /// # Some(())
 /// # }
@@ -662,7 +662,7 @@ pub struct FocusPoints {
     frame: Size,
     points: Vec<FocusPoint>,
     primary: Option<usize>,
-    area_mode: Option<AfAreaMode>,
+    area_mode: Option<FocusAreaMode>,
     origin: FocusOrigin,
 }
 
@@ -727,7 +727,7 @@ impl FocusPoints {
     /// This list with the area mode `mode`, in place of any it had;
     /// [`area_mode`](Self::area_mode) reads it.
     #[must_use]
-    pub fn with_area_mode(mut self, mode: AfAreaMode) -> Self {
+    pub fn with_area_mode(mut self, mode: FocusAreaMode) -> Self {
         self.area_mode = Some(mode);
         self
     }
@@ -759,7 +759,7 @@ impl FocusPoints {
 
     /// How the camera chose its points, or `None` when the file does not
     /// name the mode in a code raw-files knows.
-    pub fn area_mode(&self) -> Option<AfAreaMode> {
+    pub fn area_mode(&self) -> Option<FocusAreaMode> {
         self.area_mode
     }
 
@@ -1835,7 +1835,7 @@ mod tests {
         for mode in all_area_modes() {
             let set = list
                 .clone()
-                .with_area_mode(AfAreaMode::Tracking)
+                .with_area_mode(FocusAreaMode::Tracking)
                 .with_area_mode(mode);
             assert_eq!(set.area_mode(), Some(mode), "{mode:?}");
             // Nothing else changes.
@@ -1905,7 +1905,7 @@ mod tests {
         for origin in all_origins() {
             let list = list_of(size(8_256, 5_504), origin, &[first, second])
                 .unwrap()
-                .with_area_mode(AfAreaMode::Auto);
+                .with_area_mode(FocusAreaMode::Auto);
             // No primary, no focus.
             assert_eq!(list.primary_focus(), None, "{origin:?}");
             let on_second = list.clone().with_primary(1).unwrap().primary_focus();
@@ -1937,7 +1937,7 @@ mod tests {
         )
         .and_then(|list| list.with_primary(1))
         .unwrap()
-        .with_area_mode(AfAreaMode::Single);
+        .with_area_mode(FocusAreaMode::Single);
         let preview = list.scaled_to(size(1_920, 1_280)).unwrap();
         assert_eq!(preview.frame(), size(1_920, 1_280));
         assert_eq!(
@@ -1950,7 +1950,7 @@ mod tests {
             ]
         );
         assert_eq!(preview.primary(), preview.points().get(1));
-        assert_eq!(preview.area_mode(), Some(AfAreaMode::Single));
+        assert_eq!(preview.area_mode(), Some(FocusAreaMode::Single));
         assert_eq!(preview.origin(), FocusOrigin::Recorded);
     }
 
@@ -1958,7 +1958,7 @@ mod tests {
     fn a_list_scaled_to_its_own_frame_is_unchanged_and_to_a_zero_side_is_none() {
         for origin in all_origins() {
             let list = FocusPoints::from(z9_focus().with_origin(origin))
-                .with_area_mode(AfAreaMode::Dynamic)
+                .with_area_mode(FocusAreaMode::Dynamic)
                 .with_point(FocusPoint::new(point(8_256, 0)).with_number(3))
                 .unwrap();
             assert_eq!(
@@ -2002,14 +2002,18 @@ mod tests {
                     let list = list_of(frame, FocusOrigin::Table, &points)
                         .and_then(|list| list.with_primary(1))
                         .unwrap()
-                        .with_area_mode(AfAreaMode::Dynamic);
+                        .with_area_mode(FocusAreaMode::Dynamic);
                     for new in 1..=8_u32 {
                         let target = size(new, 9 - new);
                         let context = format!("{list:?} to {target:?}");
                         let scaled = list.scaled_to(target).expect(&context);
                         assert_eq!(scaled.frame(), target, "{context}");
                         assert_eq!(scaled.origin(), FocusOrigin::Table, "{context}");
-                        assert_eq!(scaled.area_mode(), Some(AfAreaMode::Dynamic), "{context}");
+                        assert_eq!(
+                            scaled.area_mode(),
+                            Some(FocusAreaMode::Dynamic),
+                            "{context}"
+                        );
                         assert_eq!(scaled.points().len(), 2, "{context}");
                         assert_eq!(scaled.primary(), scaled.points().get(1), "{context}");
                         for (got, was) in scaled.points().iter().zip(&points) {
@@ -2036,7 +2040,7 @@ mod tests {
 
     #[test]
     fn focus_points_equality_is_by_every_value_and_collects_in_a_set() {
-        use AfAreaMode::{Auto, Single};
+        use FocusAreaMode::{Auto, Single};
         use FocusOrigin::{Recorded, Table};
         let (a, b) = (
             FocusPoint::new(point(10, 10)),
@@ -2112,19 +2116,19 @@ mod tests {
     // wildcard arm, so a variant added later does not compile until it is
     // listed here too, and the tests below then fail until its name is
     // listed there.
-    fn all_area_modes() -> [AfAreaMode; 4] {
+    fn all_area_modes() -> [FocusAreaMode; 4] {
         let all = [
-            AfAreaMode::Single,
-            AfAreaMode::Dynamic,
-            AfAreaMode::Auto,
-            AfAreaMode::Tracking,
+            FocusAreaMode::Single,
+            FocusAreaMode::Dynamic,
+            FocusAreaMode::Auto,
+            FocusAreaMode::Tracking,
         ];
         for mode in all {
             match mode {
-                AfAreaMode::Single
-                | AfAreaMode::Dynamic
-                | AfAreaMode::Auto
-                | AfAreaMode::Tracking => {}
+                FocusAreaMode::Single
+                | FocusAreaMode::Dynamic
+                | FocusAreaMode::Auto
+                | FocusAreaMode::Tracking => {}
             }
         }
         all
@@ -2136,7 +2140,7 @@ mod tests {
         // them, so a changed one fails here.
         assert_names(
             &all_area_modes(),
-            AfAreaMode::name,
+            FocusAreaMode::name,
             &["Single point", "Dynamic area", "Auto area", "Tracking"],
         );
     }

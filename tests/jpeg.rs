@@ -42,10 +42,10 @@ use std::io::Cursor;
 use std::ops::Range;
 
 use raw_files::{
-    AfAreaMode, CameraSettings, ColorSpace, DateTime, ErrorKind, Exposure, ExposureProgram,
-    FineTune, Flash, FlashMode, Focus, FocusOrigin, FocusPoint, FocusPoints, Format, ImageArea,
-    Lens, Limits, Metadata, MeteringMode, Options, Orientation, Point, Preview, PreviewFormat,
-    Rational, RawFile, Shutter, SignedRational, Size, WhiteBalance, WhiteBalanceMode,
+    CameraSettings, ColorSpace, DateTime, ErrorKind, Exposure, ExposureProgram, FineTune, Flash,
+    FlashMode, Focus, FocusAreaMode, FocusOrigin, FocusPoint, FocusPoints, Format, ImageArea, Lens,
+    Limits, Metadata, MeteringMode, Options, Orientation, Point, Preview, PreviewFormat, Rational,
+    RawFile, Shutter, SignedRational, Size, WhiteBalance, WhiteBalanceMode,
 };
 use support::arw::{
     ARW4_FOCUS_CENTER, ARW4_FOCUS_FRAME, ARW4_FOCUS_SIZE, ARW4_FULL_SIZE_JPEG,
@@ -919,7 +919,7 @@ fn recorded(mode: Z9Mode) -> Focus {
 /// `focus`: that point alone, the primary, in the area mode its AFInfo2
 /// records, 193, single point.
 fn z9_points(focus: Focus) -> FocusPoints {
-    FocusPoints::from(focus).with_area_mode(AfAreaMode::Single)
+    FocusPoints::from(focus).with_area_mode(FocusAreaMode::Single)
 }
 
 /// The previews of the Nikon JPEG `file`, laid out with the MPF index and
@@ -1921,7 +1921,7 @@ struct StrippedZ9Jpeg {
     in_focus: bool,
     /// The area mode the reader names from AFInfo2's byte 5, under the
     /// detection method at byte 4, `None` for a code it does not name.
-    area_mode: Option<AfAreaMode>,
+    area_mode: Option<FocusAreaMode>,
     /// The colour temperature of the white balance the camera applied, in
     /// kelvin: the MakerNote's ColorTemperatureAuto.
     color_temperature: u32,
@@ -1961,7 +1961,7 @@ const STRIPPED_Z9_FX_JPEG: StrippedZ9Jpeg = StrippedZ9Jpeg {
     focus_size: (406, 406),
     in_focus: true,
     // Code 207, 3D-tracking.
-    area_mode: Some(AfAreaMode::Tracking),
+    area_mode: Some(FocusAreaMode::Tracking),
     color_temperature: 5670,
     image_area: ImageArea::FullFrame,
 };
@@ -2326,7 +2326,7 @@ fn the_d600_frame_4_jpeg_gives_its_previews_metadata_and_point_38_placed_from_th
             points.with_point(FocusPoint::new(point_38).with_number(38).with_size(box_164))
         })
         .and_then(|points| points.with_primary(0))
-        .map(|points| points.with_area_mode(AfAreaMode::Single));
+        .map(|points| points.with_area_mode(FocusAreaMode::Single));
     assert_eq!(metadata.focus_points(), points.as_ref(), "{label}");
     // The D600's layout of 39 points, from its table, by the Model, its
     // point 38 at the same place.

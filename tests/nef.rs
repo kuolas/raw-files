@@ -40,8 +40,8 @@ use std::collections::BTreeSet;
 use std::io::Cursor;
 
 use raw_files::{
-    AfAreaMode, CameraSettings, ColorSpace, DateTime, Exposure, ExposureProgram, FineTune, Flash,
-    FlashMode, Focus, FocusOrigin, FocusPoint, FocusPoints, Format, ImageArea, Lens, Limits,
+    CameraSettings, ColorSpace, DateTime, Exposure, ExposureProgram, FineTune, Flash, FlashMode,
+    Focus, FocusAreaMode, FocusOrigin, FocusPoint, FocusPoints, Format, ImageArea, Lens, Limits,
     Metadata, MeteringMode, Options, Orientation, Point, Preview, PreviewFormat, Rational, RawFile,
     RawImageSize, Shutter, SignedRational, Size, WhiteBalance, WhiteBalanceMode,
 };
@@ -377,7 +377,7 @@ fn assert_the_z9_points(metadata: &Metadata, label: &str) {
     assert_eq!(Some(primary), points.points().first(), "{label}");
     assert_eq!(primary.number(), None, "{label}");
     assert_eq!(points.origin(), FocusOrigin::Recorded, "{label}");
-    assert_eq!(points.area_mode(), Some(AfAreaMode::Single), "{label}");
+    assert_eq!(points.area_mode(), Some(FocusAreaMode::Single), "{label}");
 }
 
 #[test]
@@ -440,7 +440,7 @@ fn the_z9_metadata_by_hand(orientation: Orientation) -> Option<Metadata> {
             height: 5504,
         })
         // The fixture's AFInfo2 records the area mode 193, single point.
-        .with_focus_points(FocusPoints::from(focus).with_area_mode(AfAreaMode::Single));
+        .with_focus_points(FocusPoints::from(focus).with_area_mode(FocusAreaMode::Single));
     Some(metadata)
 }
 
@@ -1319,7 +1319,7 @@ enum D600Focus {
     /// frame they are measured in, the primary's number, the area mode,
     /// and every point's number and centre, in number order, each with the
     /// box of 164 by 164, from a table and with nothing said of focus.
-    Placed((u32, u32), u8, AfAreaMode, &'static [(u8, (u32, u32))]),
+    Placed((u32, u32), u8, FocusAreaMode, &'static [(u8, (u32, u32))]),
     /// The position a live-view frame records: the centre of its area in
     /// the 6016 by 4016 frame and whether the camera confirmed focus there.
     LiveView((u32, u32), bool),
@@ -1371,235 +1371,235 @@ const D600_SESSION: [D600Frame; 56] = [
         1,
         D600_LANDSCAPE,
         D600_FX,
-        Placed(D600_FULL, 13, AfAreaMode::Single, &[(13, (2768, 1503))]),
+        Placed(D600_FULL, 13, FocusAreaMode::Single, &[(13, (2768, 1503))]),
     ),
     (
         2,
         D600_LANDSCAPE,
         D600_FX,
-        Placed(D600_FULL, 3, AfAreaMode::Single, &[(3, (3008, 1503))]),
+        Placed(D600_FULL, 3, FocusAreaMode::Single, &[(3, (3008, 1503))]),
     ),
     (
         3,
         D600_LANDSCAPE,
         D600_FX,
-        Placed(D600_FULL, 8, AfAreaMode::Single, &[(8, (3247, 1503))]),
+        Placed(D600_FULL, 8, FocusAreaMode::Single, &[(8, (3247, 1503))]),
     ),
     (
         4,
         D600_LANDSCAPE,
         D600_FX,
-        Placed(D600_FULL, 38, AfAreaMode::Single, &[(38, (1812, 1705))]),
+        Placed(D600_FULL, 38, FocusAreaMode::Single, &[(38, (1812, 1705))]),
     ),
     (
         5,
         D600_LANDSCAPE,
         D600_FX,
-        Placed(D600_FULL, 35, AfAreaMode::Single, &[(35, (2050, 1705))]),
+        Placed(D600_FULL, 35, FocusAreaMode::Single, &[(35, (2050, 1705))]),
     ),
     (
         6,
         D600_LANDSCAPE,
         D600_FX,
-        Placed(D600_FULL, 32, AfAreaMode::Single, &[(32, (2289, 1705))]),
+        Placed(D600_FULL, 32, FocusAreaMode::Single, &[(32, (2289, 1705))]),
     ),
     (
         7,
         D600_LANDSCAPE,
         D600_FX,
-        Placed(D600_FULL, 29, AfAreaMode::Single, &[(29, (2529, 1705))]),
+        Placed(D600_FULL, 29, FocusAreaMode::Single, &[(29, (2529, 1705))]),
     ),
     (
         8,
         D600_LANDSCAPE,
         D600_FX,
-        Placed(D600_FULL, 12, AfAreaMode::Single, &[(12, (2768, 1755))]),
+        Placed(D600_FULL, 12, FocusAreaMode::Single, &[(12, (2768, 1755))]),
     ),
     (
         9,
         D600_LANDSCAPE,
         D600_FX,
-        Placed(D600_FULL, 2, AfAreaMode::Single, &[(2, (3008, 1755))]),
+        Placed(D600_FULL, 2, FocusAreaMode::Single, &[(2, (3008, 1755))]),
     ),
     (
         10,
         D600_LANDSCAPE,
         D600_FX,
-        Placed(D600_FULL, 7, AfAreaMode::Single, &[(7, (3247, 1755))]),
+        Placed(D600_FULL, 7, FocusAreaMode::Single, &[(7, (3247, 1755))]),
     ),
     (
         11,
         D600_LANDSCAPE,
         D600_FX,
-        Placed(D600_FULL, 17, AfAreaMode::Single, &[(17, (3486, 1705))]),
+        Placed(D600_FULL, 17, FocusAreaMode::Single, &[(17, (3486, 1705))]),
     ),
     (
         12,
         D600_LANDSCAPE,
         D600_FX,
-        Placed(D600_FULL, 20, AfAreaMode::Single, &[(20, (3724, 1705))]),
+        Placed(D600_FULL, 20, FocusAreaMode::Single, &[(20, (3724, 1705))]),
     ),
     (
         13,
         D600_LANDSCAPE,
         D600_FX,
-        Placed(D600_FULL, 23, AfAreaMode::Single, &[(23, (3963, 1705))]),
+        Placed(D600_FULL, 23, FocusAreaMode::Single, &[(23, (3963, 1705))]),
     ),
     (
         14,
         D600_LANDSCAPE,
         D600_FX,
-        Placed(D600_FULL, 26, AfAreaMode::Single, &[(26, (4203, 1705))]),
+        Placed(D600_FULL, 26, FocusAreaMode::Single, &[(26, (4203, 1705))]),
     ),
     (
         15,
         D600_LANDSCAPE,
         D600_FX,
-        Placed(D600_FULL, 37, AfAreaMode::Single, &[(37, (1812, 2007))]),
+        Placed(D600_FULL, 37, FocusAreaMode::Single, &[(37, (1812, 2007))]),
     ),
     (
         16,
         D600_LANDSCAPE,
         D600_FX,
-        Placed(D600_FULL, 34, AfAreaMode::Single, &[(34, (2050, 2007))]),
+        Placed(D600_FULL, 34, FocusAreaMode::Single, &[(34, (2050, 2007))]),
     ),
     (
         17,
         D600_LANDSCAPE,
         D600_FX,
-        Placed(D600_FULL, 31, AfAreaMode::Single, &[(31, (2289, 2007))]),
+        Placed(D600_FULL, 31, FocusAreaMode::Single, &[(31, (2289, 2007))]),
     ),
     (
         18,
         D600_LANDSCAPE,
         D600_FX,
-        Placed(D600_FULL, 28, AfAreaMode::Single, &[(28, (2529, 2007))]),
+        Placed(D600_FULL, 28, FocusAreaMode::Single, &[(28, (2529, 2007))]),
     ),
     (
         19,
         D600_LANDSCAPE,
         D600_FX,
-        Placed(D600_FULL, 11, AfAreaMode::Single, &[(11, (2768, 2007))]),
+        Placed(D600_FULL, 11, FocusAreaMode::Single, &[(11, (2768, 2007))]),
     ),
     (
         20,
         D600_LANDSCAPE,
         D600_FX,
-        Placed(D600_FULL, 1, AfAreaMode::Single, &[(1, (3008, 2007))]),
+        Placed(D600_FULL, 1, FocusAreaMode::Single, &[(1, (3008, 2007))]),
     ),
     (
         21,
         D600_LANDSCAPE,
         D600_FX,
-        Placed(D600_FULL, 6, AfAreaMode::Single, &[(6, (3247, 2007))]),
+        Placed(D600_FULL, 6, FocusAreaMode::Single, &[(6, (3247, 2007))]),
     ),
     (
         22,
         D600_LANDSCAPE,
         D600_FX,
-        Placed(D600_FULL, 16, AfAreaMode::Single, &[(16, (3486, 2007))]),
+        Placed(D600_FULL, 16, FocusAreaMode::Single, &[(16, (3486, 2007))]),
     ),
     (
         23,
         D600_LANDSCAPE,
         D600_FX,
-        Placed(D600_FULL, 19, AfAreaMode::Single, &[(19, (3724, 2007))]),
+        Placed(D600_FULL, 19, FocusAreaMode::Single, &[(19, (3724, 2007))]),
     ),
     (
         24,
         D600_LANDSCAPE,
         D600_FX,
-        Placed(D600_FULL, 22, AfAreaMode::Single, &[(22, (3963, 2007))]),
+        Placed(D600_FULL, 22, FocusAreaMode::Single, &[(22, (3963, 2007))]),
     ),
     (
         25,
         D600_LANDSCAPE,
         D600_FX,
-        Placed(D600_FULL, 25, AfAreaMode::Single, &[(25, (4203, 2007))]),
+        Placed(D600_FULL, 25, FocusAreaMode::Single, &[(25, (4203, 2007))]),
     ),
     (
         26,
         D600_LANDSCAPE,
         D600_FX,
-        Placed(D600_FULL, 39, AfAreaMode::Single, &[(39, (1812, 2308))]),
+        Placed(D600_FULL, 39, FocusAreaMode::Single, &[(39, (1812, 2308))]),
     ),
     (
         27,
         D600_LANDSCAPE,
         D600_FX,
-        Placed(D600_FULL, 36, AfAreaMode::Single, &[(36, (2050, 2308))]),
+        Placed(D600_FULL, 36, FocusAreaMode::Single, &[(36, (2050, 2308))]),
     ),
     (
         28,
         D600_LANDSCAPE,
         D600_FX,
-        Placed(D600_FULL, 33, AfAreaMode::Single, &[(33, (2289, 2308))]),
+        Placed(D600_FULL, 33, FocusAreaMode::Single, &[(33, (2289, 2308))]),
     ),
     (
         29,
         D600_LANDSCAPE,
         D600_FX,
-        Placed(D600_FULL, 30, AfAreaMode::Single, &[(30, (2529, 2308))]),
+        Placed(D600_FULL, 30, FocusAreaMode::Single, &[(30, (2529, 2308))]),
     ),
     (
         30,
         D600_LANDSCAPE,
         D600_FX,
-        Placed(D600_FULL, 14, AfAreaMode::Single, &[(14, (2768, 2258))]),
+        Placed(D600_FULL, 14, FocusAreaMode::Single, &[(14, (2768, 2258))]),
     ),
     (
         31,
         D600_LANDSCAPE,
         D600_FX,
-        Placed(D600_FULL, 4, AfAreaMode::Single, &[(4, (3008, 2258))]),
+        Placed(D600_FULL, 4, FocusAreaMode::Single, &[(4, (3008, 2258))]),
     ),
     (
         32,
         D600_LANDSCAPE,
         D600_FX,
-        Placed(D600_FULL, 9, AfAreaMode::Single, &[(9, (3247, 2258))]),
+        Placed(D600_FULL, 9, FocusAreaMode::Single, &[(9, (3247, 2258))]),
     ),
     (
         33,
         D600_LANDSCAPE,
         D600_FX,
-        Placed(D600_FULL, 18, AfAreaMode::Single, &[(18, (3486, 2308))]),
+        Placed(D600_FULL, 18, FocusAreaMode::Single, &[(18, (3486, 2308))]),
     ),
     (
         34,
         D600_LANDSCAPE,
         D600_FX,
-        Placed(D600_FULL, 21, AfAreaMode::Single, &[(21, (3724, 2308))]),
+        Placed(D600_FULL, 21, FocusAreaMode::Single, &[(21, (3724, 2308))]),
     ),
     (
         35,
         D600_LANDSCAPE,
         D600_FX,
-        Placed(D600_FULL, 24, AfAreaMode::Single, &[(24, (3963, 2308))]),
+        Placed(D600_FULL, 24, FocusAreaMode::Single, &[(24, (3963, 2308))]),
     ),
     (
         36,
         D600_LANDSCAPE,
         D600_FX,
-        Placed(D600_FULL, 27, AfAreaMode::Single, &[(27, (4203, 2308))]),
+        Placed(D600_FULL, 27, FocusAreaMode::Single, &[(27, (4203, 2308))]),
     ),
     (
         37,
         D600_LANDSCAPE,
         D600_FX,
-        Placed(D600_FULL, 15, AfAreaMode::Single, &[(15, (2768, 2510))]),
+        Placed(D600_FULL, 15, FocusAreaMode::Single, &[(15, (2768, 2510))]),
     ),
     (
         38,
         D600_LANDSCAPE,
         D600_FX,
-        Placed(D600_FULL, 5, AfAreaMode::Single, &[(5, (3008, 2510))]),
+        Placed(D600_FULL, 5, FocusAreaMode::Single, &[(5, (3008, 2510))]),
     ),
     (
         39,
         D600_LANDSCAPE,
         D600_FX,
-        Placed(D600_FULL, 10, AfAreaMode::Single, &[(10, (3247, 2510))]),
+        Placed(D600_FULL, 10, FocusAreaMode::Single, &[(10, (3247, 2510))]),
     ),
     // Frames 40 and 41: points 1 and 13 shot again, the same as the
     // single-point frames.
@@ -1607,13 +1607,13 @@ const D600_SESSION: [D600Frame; 56] = [
         40,
         D600_LANDSCAPE,
         D600_FX,
-        Placed(D600_FULL, 1, AfAreaMode::Single, &[(1, (3008, 2007))]),
+        Placed(D600_FULL, 1, FocusAreaMode::Single, &[(1, (3008, 2007))]),
     ),
     (
         41,
         D600_LANDSCAPE,
         D600_FX,
-        Placed(D600_FULL, 13, AfAreaMode::Single, &[(13, (2768, 1503))]),
+        Placed(D600_FULL, 13, FocusAreaMode::Single, &[(13, (2768, 1503))]),
     ),
     // Frames 42 to 44: auto-area AF, area mode 8, whose AFInfo2 names a
     // primary point by its number and marks the points used in its mask,
@@ -1626,7 +1626,7 @@ const D600_SESSION: [D600Frame; 56] = [
         Placed(
             D600_FULL,
             22,
-            AfAreaMode::Auto,
+            FocusAreaMode::Auto,
             &[
                 (6, (3247, 2007)),
                 (7, (3247, 1755)),
@@ -1650,7 +1650,7 @@ const D600_SESSION: [D600Frame; 56] = [
         Placed(
             D600_FULL,
             22,
-            AfAreaMode::Auto,
+            FocusAreaMode::Auto,
             &[
                 (1, (3008, 2007)),
                 (2, (3008, 1755)),
@@ -1675,7 +1675,7 @@ const D600_SESSION: [D600Frame; 56] = [
         Placed(
             D600_FULL,
             4,
-            AfAreaMode::Auto,
+            FocusAreaMode::Auto,
             &[
                 (4, (3008, 2258)),
                 (9, (3247, 2258)),
@@ -1701,13 +1701,13 @@ const D600_SESSION: [D600Frame; 56] = [
         47,
         D600_PORTRAIT,
         D600_FX,
-        Placed(D600_FULL, 13, AfAreaMode::Single, &[(13, (2768, 1503))]),
+        Placed(D600_FULL, 13, FocusAreaMode::Single, &[(13, (2768, 1503))]),
     ),
     (
         48,
         D600_PORTRAIT,
         D600_FX,
-        Placed(D600_FULL, 38, AfAreaMode::Single, &[(38, (1812, 1705))]),
+        Placed(D600_FULL, 38, FocusAreaMode::Single, &[(38, (1812, 1705))]),
     ),
     // Frames 49 and 50: points 38 and 27 in the DX crop, which
     // CropHiSpeed records as `[2, 6080, 4028, 3968, 2636, 1040, 696]`:
@@ -1717,13 +1717,18 @@ const D600_SESSION: [D600Frame; 56] = [
         49,
         D600_LANDSCAPE,
         D600_DX,
-        Placed(D600_WINDOW, 38, AfAreaMode::Single, &[(38, (772, 1009))]),
+        Placed(D600_WINDOW, 38, FocusAreaMode::Single, &[(38, (772, 1009))]),
     ),
     (
         50,
         D600_LANDSCAPE,
         D600_DX,
-        Placed(D600_WINDOW, 27, AfAreaMode::Single, &[(27, (3163, 1612))]),
+        Placed(
+            D600_WINDOW,
+            27,
+            FocusAreaMode::Single,
+            &[(27, (3163, 1612))],
+        ),
     ),
     // Frames 51 and 52: dynamic-area AF over 21 points, in AF-C, area mode
     // 5, whose AFInfo2 names the point chosen by its number and sets its
@@ -1732,13 +1737,13 @@ const D600_SESSION: [D600Frame; 56] = [
         51,
         D600_LANDSCAPE,
         D600_DX,
-        Placed(D600_WINDOW, 1, AfAreaMode::Dynamic, &[(1, (1968, 1311))]),
+        Placed(D600_WINDOW, 1, FocusAreaMode::Dynamic, &[(1, (1968, 1311))]),
     ),
     (
         52,
         D600_LANDSCAPE,
         D600_FX,
-        Placed(D600_FULL, 1, AfAreaMode::Dynamic, &[(1, (3008, 2007))]),
+        Placed(D600_FULL, 1, FocusAreaMode::Dynamic, &[(1, (3008, 2007))]),
     ),
     // Frames 53 to 56: live view, the focus area moved to the four limits
     // of its travel: bottom left, top left, top right and bottom right.
@@ -2006,7 +2011,7 @@ fn the_d600_frame_4_gives_its_previews_metadata_and_point_38_placed_from_the_tab
             )
         })
         .and_then(|points| points.with_primary(0))
-        .map(|points| points.with_area_mode(AfAreaMode::Single));
+        .map(|points| points.with_area_mode(FocusAreaMode::Single));
     assert_eq!(metadata.focus_points(), points.as_ref(), "{label}");
     // Point 38 of the D600's layout, from its table, at the same place.
     let layout = metadata
@@ -3152,7 +3157,7 @@ const METADATA: &[SampleMetadata] = &[
             origin: FocusOrigin::Recorded,
             points: 1,
             primary_number: None,
-            area_mode: Some(AfAreaMode::Single), // code 193
+            area_mode: Some(FocusAreaMode::Single), // code 193
         }),
         focus_layout: None,
         settings: SampleSettings {
@@ -3209,7 +3214,7 @@ const METADATA: &[SampleMetadata] = &[
             origin: FocusOrigin::Recorded,
             points: 1,
             primary_number: None,
-            area_mode: Some(AfAreaMode::Single), // code 193
+            area_mode: Some(FocusAreaMode::Single), // code 193
         }),
         focus_layout: None,
         settings: SampleSettings {
@@ -3266,7 +3271,7 @@ const METADATA: &[SampleMetadata] = &[
             origin: FocusOrigin::Recorded,
             points: 1,
             primary_number: None,
-            area_mode: Some(AfAreaMode::Single), // code 193
+            area_mode: Some(FocusAreaMode::Single), // code 193
         }),
         focus_layout: None,
         settings: SampleSettings {
@@ -3920,7 +3925,7 @@ const METADATA: &[SampleMetadata] = &[
             origin: FocusOrigin::Recorded,
             points: 1,
             primary_number: None,
-            area_mode: Some(AfAreaMode::Single), // code 193
+            area_mode: Some(FocusAreaMode::Single), // code 193
         }),
         focus_layout: None,
         settings: SampleSettings {
@@ -4526,7 +4531,7 @@ const METADATA: &[SampleMetadata] = &[
             origin: FocusOrigin::Recorded,
             points: 1,
             primary_number: None,
-            area_mode: Some(AfAreaMode::Tracking), // code 207
+            area_mode: Some(FocusAreaMode::Tracking), // code 207
         }),
         focus_layout: None,
         settings: SampleSettings {
@@ -4583,7 +4588,7 @@ const METADATA: &[SampleMetadata] = &[
             origin: FocusOrigin::Recorded,
             points: 1,
             primary_number: None,
-            area_mode: Some(AfAreaMode::Tracking), // code 207
+            area_mode: Some(FocusAreaMode::Tracking), // code 207
         }),
         focus_layout: None,
         settings: SampleSettings {

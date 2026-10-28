@@ -124,7 +124,7 @@ for a body with a table, the body's layout.
   bit the table lacks is skipped and counted, never a reason to give
   none. For a recorded position the list is that one point. On a crop
   every point of the list shifts as the primary does.
-- **The area mode is reported in neutral words**, as `AfAreaMode`:
+- **The area mode is reported in neutral words**, as `FocusAreaMode`:
   single point, dynamic area, group area, auto area, tracking, wide
   area, pinpoint, named only for a code a checked file shows, as the
   camera settings are

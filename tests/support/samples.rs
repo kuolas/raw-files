@@ -14,9 +14,9 @@ use std::env;
 use std::path::{Path, PathBuf};
 
 use raw_files::{
-    AfAreaMode, ColorSpace, ExposureProgram, FlashMode, FocusOrigin, FocusPoint, Format, ImageArea,
-    MeteringMode, Orientation, Preview, PreviewFormat, Rational, RawFile, RawImageSize, Shutter,
-    SignedRational, Size, WhiteBalanceMode,
+    ColorSpace, ExposureProgram, FlashMode, FocusAreaMode, FocusOrigin, FocusPoint, Format,
+    ImageArea, MeteringMode, Orientation, Preview, PreviewFormat, Rational, RawFile, RawImageSize,
+    Shutter, SignedRational, Size, WhiteBalanceMode,
 };
 
 /// The path of the sample file `name`, or `None`, with a note on stderr,
@@ -275,7 +275,7 @@ pub struct SampleFocus {
     pub origin: FocusOrigin,
     pub points: usize,
     pub primary_number: Option<u8>,
-    pub area_mode: Option<AfAreaMode>,
+    pub area_mode: Option<FocusAreaMode>,
 }
 
 /// The shape of a serial number, in place of its text: how many bytes

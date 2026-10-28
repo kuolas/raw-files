@@ -24,7 +24,7 @@ does.
   its number when the file gives one, its centre, its area when recorded
   and whether focus was confirmed when the file says; which of them is
   the primary, which `Metadata::focus` gives as a `Focus`; the area mode,
-  an `AfAreaMode`, "Single point", "Dynamic area", "Auto area" or
+  a `FocusAreaMode`, "Single point", "Dynamic area", "Auto area" or
   "Tracking", with a `name` that `Display` writes, ordered as its
   variants are listed; and where the points came from.
   `FocusPoints::scaled_to` places every point on a preview as
