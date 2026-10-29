@@ -10,6 +10,19 @@ does.
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-10-29
+
+The sixth release: a DSLR's autofocus point, which a shot through the
+viewfinder names only by number, placed on the picture from raw-files'
+own table of the body's points, the Nikon D600's first; and the focus
+API at its full shape, with where a point came from, the points the
+camera used with the area mode, and the layout of the body's points.
+The API is also made more consistent before more is built on it, which
+changes some of 0.5.0's signatures: `Focus::new` takes the origin,
+`RawFile::preview_at_least` a `Size`, `Limits` names its setters
+`with_…` and reads its caps back, and `Preview::width` and
+`Preview::height` are gone (see Changed and Removed).
+
 ### Added
 
 - `Focus::origin` says where a focus point came from, as a `FocusOrigin`:
@@ -361,7 +374,8 @@ files.
 - A DNG is of no known format, whatever camera maker its Make names:
   converters and the phones that write DNG keep the maker's name.
 
-[Unreleased]: https://github.com/kuolas/raw-files/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/kuolas/raw-files/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/kuolas/raw-files/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/kuolas/raw-files/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/kuolas/raw-files/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/kuolas/raw-files/compare/v0.2.0...v0.3.0
