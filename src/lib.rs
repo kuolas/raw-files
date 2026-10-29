@@ -120,6 +120,55 @@
 //! # }
 //! ```
 //!
+//! Say where a focus point came from ([`FocusPoints::origin`]), as a
+//! viewer's caption does: recorded by the camera, or named by number and
+//! placed from a table of the body's points; with the area mode the camera
+//! was set to ([`Metadata::focus_points`]):
+//!
+//! ```
+//! use raw_files::{
+//!     Focus, FocusAreaMode, FocusOrigin, FocusPoint, FocusPoints, Metadata, Point, Size,
+//! };
+//!
+//! /// A caption for the point the camera focused on, if the file names one.
+//! fn caption(metadata: &Metadata) -> Option<String> {
+//!     let points = metadata.focus_points()?;
+//!     let primary = points.primary()?;
+//!     let point = match primary.number() {
+//!         Some(number) => format!("point {number} at {}", primary.center()),
+//!         None => format!("at {}", primary.center()),
+//!     };
+//!     Some(match points.area_mode() {
+//!         Some(mode) => format!("{}: {point}, {mode}", points.origin()),
+//!         None => format!("{}: {point}", points.origin()),
+//!     })
+//! }
+//!
+//! // A Nikon Z 9 records the position it focused at.
+//! let frame = Size { width: 8256, height: 5504 };
+//! let recorded = Focus::new(frame, Point { x: 4905, y: 2461 })
+//!     .expect("the centre lies on the frame");
+//! let z9 = Metadata::default().with_focus(recorded);
+//! assert_eq!(caption(&z9).as_deref(), Some("Recorded: at (4905, 2461)"));
+//!
+//! // A Nikon D600 shot through the viewfinder names point 38, which
+//! // raw-files places from its table of the D600's points.
+//! let frame = Size { width: 6016, height: 4016 };
+//! let point_38 = FocusPoint::new(Point { x: 1812, y: 1705 })
+//!     .with_number(38)
+//!     .with_size(Size { width: 164, height: 164 });
+//! let placed = FocusPoints::new(frame, FocusOrigin::Table)
+//!     .and_then(|points| points.with_point(point_38))
+//!     .and_then(|points| points.with_primary(0))
+//!     .expect("the point lies on the frame")
+//!     .with_area_mode(FocusAreaMode::Single);
+//! let d600 = Metadata::default().with_focus_points(placed);
+//! assert_eq!(
+//!     caption(&d600).as_deref(),
+//!     Some("Placed from a table: point 38 at (1812, 1705), Single point"),
+//! );
+//! ```
+//!
 //! A program's tests can build every metadata value without a file,
 //! through the `with_…` methods of [`Metadata`], [`Exposure`],
 //! [`CameraSettings`], [`WhiteBalance`], [`FocusPoints`] and
@@ -258,7 +307,10 @@
 //! point, not the raw data, each checked on the public-domain (CC0) sample
 //! files of [raw.pixls.us](https://raw.pixls.us/): 35 Nikon files, from
 //! the D1H to the Z5II, and 36 Sony-family files, from the DSC-F828 to the
-//! ILCE-7M5.
+//! ILCE-7M5. A focus point placed from a table, which no public sample
+//! gives, is checked on the 56 frames of the Nikon D600 session that the
+//! NEF format notes record, stripped of their pixels and committed with
+//! the tests.
 //!
 //! A JPEG file's previews are the file itself, the thumbnail of its Exif
 //! segment, the images its Multi-Picture Format (MPF) list holds after the
@@ -273,8 +325,9 @@
 //! [Wikimedia Commons](https://commons.wikimedia.org/), of five Sony
 //! bodies, two Nikon bodies and a Canon; on three stripped JPEG files from
 //! a Nikon Z 9, one in FX and two in the DX and 16:9 crop modes, which
-//! check where a crop mode's focus point is placed; and on JPEG files
-//! built in the tests.
+//! check where a crop mode's focus point is placed; on a stripped JPEG
+//! file from that Nikon D600 session, which checks a point placed from a
+//! table; and on JPEG files built in the tests.
 //!
 //! Nikon mirrorless bodies, Nikon DSLRs in live view and Sony bodies from
 //! the ILCE-7RM2 on record where they focused as a position, which

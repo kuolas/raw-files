@@ -21,20 +21,30 @@ fuller RAW decoding is planned.
   fine-tuning, the exposure program, the metering mode, the flash, the
   shutter, Sony's electronic front curtain setting, the image area, the
   raw image size and the colour space.
-- **The focus point.** Where the camera focused, as the file records it:
-  the centre of the focus area, the frame it is measured in and, when
-  recorded, the area's size and whether the camera confirmed focus, ready
-  to be scaled onto any preview. Nikon mirrorless bodies, Nikon DSLRs in
-  live view and Sony bodies from the ILCE-7RM2 on record it, and their
-  JPEGs are read for it as their raw files are.
+- **The focus point.** Where the camera focused: the centre of the focus
+  area, the frame it is measured in and, when recorded, the area's size
+  and whether the camera confirmed focus, ready to be scaled onto any
+  preview, with where the point came from. Nikon mirrorless bodies, Nikon
+  DSLRs in live view and Sony bodies from the ILCE-7RM2 on record its
+  position. A Nikon DSLR shot through the viewfinder names only the
+  number of an autofocus point, which raw-files places on the picture
+  from its own table of the body's points, measured on frames shot with
+  that body: the Nikon D600 is the first body with a table, and further
+  bodies join as their tables are measured. Beside the focus point come
+  the autofocus points the camera used, the primary among them, with the
+  area mode, and, for a body with a table, the layout of all its points,
+  for a viewer to draw. Camera JPEGs are read for all of it as their raw
+  files are, except that, through the viewfinder, a D600 Medium JPEG,
+  and a D600 DX JPEG smaller than the crop's full size, give no point.
 - **JPEG files.** The JPEG files cameras write beside their raw files or
   instead of them, read in the same way: a JPEG's previews are the file
   itself and the smaller images it holds, and its metadata is the same,
   with the picture's size and no raw size.
-- **Not yet.** A shot that records only an autofocus point's number or a
-  mask of points, such as a DSLR's through the viewfinder, gives no focus
-  point, and a shot in manual focus gives none; raw decoding comes later.
-  See the [roadmap](docs/ROADMAP.md).
+- **Not yet.** A shot through the viewfinder of a body without a table
+  gives no focus point, nor does a Nikon mirrorless shot that records
+  only a mask of the points used, a shot with a Sony body before the
+  ILCE-7RM2, or a shot in manual focus; raw decoding comes later. See the
+  [roadmap](docs/ROADMAP.md).
 
 ## Usage
 
@@ -121,6 +131,54 @@ fn main() {
         .with_model("NIKON Z 9")
         .with_focus(focus);
     assert_eq!(metadata.focus(), Some(focus));
+}
+```
+
+Say where a focus point came from, as a viewer's caption does: recorded by
+the camera, or named by number and placed from a table of the body's
+points, with the area mode the camera was set to:
+
+```rust
+use raw_files::{Focus, FocusAreaMode, FocusOrigin, FocusPoint, FocusPoints, Metadata, Point, Size};
+
+/// A caption for the point the camera focused on, if the file names one.
+fn caption(metadata: &Metadata) -> Option<String> {
+    let points = metadata.focus_points()?;
+    let primary = points.primary()?;
+    let point = match primary.number() {
+        Some(number) => format!("point {number} at {}", primary.center()),
+        None => format!("at {}", primary.center()),
+    };
+    Some(match points.area_mode() {
+        Some(mode) => format!("{}: {point}, {mode}", points.origin()),
+        None => format!("{}: {point}", points.origin()),
+    })
+}
+
+fn main() {
+    // A Nikon Z 9 records the position it focused at.
+    let frame = Size { width: 8256, height: 5504 };
+    let recorded = Focus::new(frame, Point { x: 4905, y: 2461 })
+        .expect("the centre lies on the frame");
+    let z9 = Metadata::default().with_focus(recorded);
+    assert_eq!(caption(&z9).as_deref(), Some("Recorded: at (4905, 2461)"));
+
+    // A Nikon D600 shot through the viewfinder names point 38, which
+    // raw-files places from its table of the D600's points.
+    let frame = Size { width: 6016, height: 4016 };
+    let point_38 = FocusPoint::new(Point { x: 1812, y: 1705 })
+        .with_number(38)
+        .with_size(Size { width: 164, height: 164 });
+    let placed = FocusPoints::new(frame, FocusOrigin::Table)
+        .and_then(|points| points.with_point(point_38))
+        .and_then(|points| points.with_primary(0))
+        .expect("the point lies on the frame")
+        .with_area_mode(FocusAreaMode::Single);
+    let d600 = Metadata::default().with_focus_points(placed);
+    assert_eq!(
+        caption(&d600).as_deref(),
+        Some("Placed from a table: point 38 at (1812, 1705), Single point"),
+    );
 }
 ```
 
@@ -214,11 +272,18 @@ picture, read when the file is opened; every value is optional, since not
 every camera records every one, and a damaged value is `None` on its own.
 `Metadata::camera_settings` says how the camera was set, as a
 `CameraSettings`. `Focus` is where the camera focused, and its `scaled_to`
-places it on a preview. The `with_…` methods of `Metadata`, `Exposure`,
-`CameraSettings` and `WhiteBalance`, `Lens::builder` and the constructors,
-such as `Focus::new`, build every value without a file, for a program's
-tests. `Options` and `Limits` open an untrusted file with other caps. The API
-documentation is on [docs.rs](https://docs.rs/raw-files).
+places it on a preview; `Focus::origin` says, as a `FocusOrigin`, whether
+the camera recorded the position or raw-files placed it from a table of
+the body's points. `Metadata::focus_points` gives the autofocus points the
+camera used, a `FocusPoints` of `FocusPoint`s with the primary among them
+and the `FocusAreaMode`, and `Metadata::focus_layout` the body's
+`FocusLayout` of `LayoutPoint`s, where raw-files has its table. The
+`with_…` methods of `Metadata`, `Exposure`, `CameraSettings`,
+`WhiteBalance`, `FocusPoints` and `FocusPoint`, `Lens::builder` and the
+constructors, such as `Focus::new` and `FocusLayout::new`, build every
+value without a file, for a program's tests. `Options` and `Limits` open
+an untrusted file with other caps. The API documentation is on
+[docs.rs](https://docs.rs/raw-files).
 
 ## Formats
 
@@ -239,12 +304,18 @@ raw-files, writing about my own cameras: they stay private.
   record it), the image area, the raw image size and, since no Nikon raw
   file records an Exif colour space, the colour space.
 - **Focus point**: from the MakerNote's AFInfo2 block, which mirrorless
-  bodies and DSLRs in live view fill in; on a crop mode it is placed
-  inside the cropped picture.
+  bodies and DSLRs in live view fill in with a position; on a crop mode
+  it is placed inside the cropped picture. A D600 shot through the
+  viewfinder names its point by number, with a mask of the points used,
+  and the points are placed from the D600's table, in the crop's window
+  on a DX frame. The area mode is named for the codes that frames shot
+  in a known mode confirmed.
 - **Checked on**: 35 CC0 Nikon files from raw.pixls.us that CI downloads,
   three of the Z 9 (lossless, HE and HE\*) and 32 of 25 other bodies from
   the D1H to the Z5II; test files laid out like a Z 9's, a Z6III's, a
-  D300's and a D1H's; and two stripped files of my own Z 9.
+  D300's and a D1H's; two stripped files of my own Z 9; and the 56
+  frames, stripped of their pixels, on which I measured the autofocus
+  points of my own D600.
 
 **Sony ARW**, with the SRF, SR2 and ARQ files of the same family and the
 ARW files of the Sony-built Hasselblad bodies.
@@ -287,14 +358,19 @@ as an editor exports it.
   an export cut to another shape or turned upright gives none, except one
   cut from a Nikon crop-mode JPEG, whose point may then be misplaced.
   The point of a Nikon crop-mode JPEG (DX, 1:1, 16:9) is placed on the
-  picture.
+  picture. A D600 JPEG shot through the viewfinder gives its points
+  placed from the table, as its NEF does, on a DX frame only at the
+  crop's full size; a Medium JPEG, 4512x3008, gives none, since its
+  shape, exactly 3:2, misses the table's frame by more than a pixel
+  ([#62](https://github.com/kuolas/raw-files/issues/62)).
 - **A damaged Exif segment**: a JPEG whose Exif segment is missing or
   cannot be read still opens, with the file itself and its MPF images as
   previews, its image size as the only value read from it, and the
   default orientation, no transform.
 - **Checked on**: eight camera JPEGs from Wikimedia Commons that CI
   downloads, of five Sony bodies, two Nikon bodies and a Canon; JPEG files
-  built in the tests; and three stripped JPEG files of my own Z 9.
+  built in the tests; and three stripped JPEG files of my own Z 9 and
+  one of my own D600.
 
 Any other file, a DNG among them whatever its Make says, is refused with the
 `UnknownFormat` error.
