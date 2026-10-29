@@ -1653,7 +1653,7 @@ fn placed(
         // here: the `?` never returns.
         points = points.with_point(FocusPoint::new(center).with_number(number).with_size(size))?;
     }
-    points.with_primary(primary?)
+    points.with_primary_index(primary?)
 }
 
 /// The frame of the points placed from `table`, and the origin their
@@ -4644,7 +4644,7 @@ mod tests {
             .iter()
             .position(|&(number, _)| number == primary)
             .expect("the primary among the points");
-        list.with_primary(index).unwrap().with_area_mode(mode)
+        list.with_primary_index(index).unwrap().with_area_mode(mode)
     }
 
     /// Point 38, B1, at (1812, 1705) in the D600's 6016 by 4016 frame, as

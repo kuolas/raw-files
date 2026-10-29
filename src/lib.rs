@@ -159,7 +159,7 @@
 //!     .with_size(Size { width: 164, height: 164 });
 //! let placed = FocusPoints::new(frame, FocusOrigin::Table)
 //!     .and_then(|points| points.with_point(point_38))
-//!     .and_then(|points| points.with_primary(0))
+//!     .and_then(|points| points.with_primary_index(0))
 //!     .expect("the point lies on the frame")
 //!     .with_area_mode(FocusAreaMode::Single);
 //! let d600 = Metadata::default().with_focus_points(placed);
@@ -421,7 +421,7 @@ pub use datetime::DateTime;
 pub use error::{Error, ErrorKind, Result};
 pub use file::RawFile;
 pub use focus::{
-    Focus, FocusAreaMode, FocusLayout, FocusOrigin, FocusPoint, FocusPoints, LayoutPoint,
+    Focus, FocusAreaMode, FocusLayout, FocusLayoutPoint, FocusOrigin, FocusPoint, FocusPoints,
 };
 pub use format::Format;
 pub use geometry::{Point, Size};

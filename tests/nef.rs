@@ -2010,7 +2010,7 @@ fn the_d600_frame_4_gives_its_previews_metadata_and_point_38_placed_from_the_tab
                     .with_size(as_size((164, 164))),
             )
         })
-        .and_then(|points| points.with_primary(0))
+        .and_then(|points| points.with_primary_index(0))
         .map(|points| points.with_area_mode(FocusAreaMode::Single));
     assert_eq!(metadata.focus_points(), points.as_ref(), "{label}");
     // Point 38 of the D600's layout, from its table, at the same place.

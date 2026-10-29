@@ -31,11 +31,12 @@ does.
   variants are listed; and where the points came from.
   `FocusPoints::scaled_to` places every point on a preview as
   `Focus::scaled_to` places one. A program's tests build a list with
-  `FocusPoints::new`, `with_point`, `with_primary` and `with_area_mode`,
-  each point with `FocusPoint::new` and its `with_number`, `with_size`
-  and `with_in_focus`, or a list of one point from a `Focus` with `From`,
-  and set it with `Metadata::with_focus_points`; `Metadata::with_focus`
-  sets a list of that one point.
+  `FocusPoints::new`, `with_point`, `with_primary_index` and
+  `with_area_mode`, each point with `FocusPoint::new` and its
+  `with_number`, `with_size` and `with_in_focus`, or a list of one point
+  from a `Focus` with `From`, and set it with
+  `Metadata::with_focus_points`; `Metadata::with_focus` sets a list of
+  that one point.
 - NEF, ARW and JPEG files give the position the camera recorded as a
   list of one point, the primary, with no number. Nikon files give the
   area mode from AFInfo2's area-mode byte, on every version read, for
@@ -49,15 +50,15 @@ does.
 - `Metadata::focus_layout` gives the layout of the body's autofocus
   points, as a `FocusLayout`: the Model it is for, the frame its points
   are measured in, the body's full-size output, and every point, each a
-  `LayoutPoint` with the camera's number for it, the centre of its box
-  and the box's size; `FocusLayout::point` finds a point by its number,
-  so that a viewer can draw the grid and mark on it the points the
-  camera used. `FocusLayout::new` builds one from a `static` array of
-  points, which `LayoutPoint::new` can fill since it is `const`, and
-  refuses a frame with a zero side, no points, a number of 0, one given
-  twice or points out of rising number order, and a point whose centre
-  or box does not lie on the frame by the rules of `Focus::new` and
-  `Focus::with_size`; a program's tests set it with
+  `FocusLayoutPoint` with the camera's number for it, the centre of its
+  box and the box's size; `FocusLayout::point` finds a point by its
+  number, so that a viewer can draw the grid and mark on it the points
+  the camera used. `FocusLayout::new` builds one from a `static` array
+  of points, which `FocusLayoutPoint::new` can fill since it is `const`,
+  and refuses a frame with a zero side, no points, a number of 0, one
+  given twice or points out of rising number order, and a point whose
+  centre or box does not lie on the frame by the rules of `Focus::new`
+  and `Focus::with_size`; a program's tests set it with
   `Metadata::with_focus_layout`. The readers give a
   layout only from a table of the body's points, and `None` for a body
   whose table is not in raw-files.
