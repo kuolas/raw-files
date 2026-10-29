@@ -390,8 +390,15 @@ any process, not just baseline (section 7).
 
 Rank by what is measured in the JPEG itself, never by slot, tag dimensions
 (often absent or zero) or tag-claimed type. raw-files implements these
-steps in its preview finder, shared with ARW, and its tests run it on files
-5146 to 5148, which give the four JPEGs of section 4 in size order. **[F]**
+steps in its preview finder, shared with ARW, except where it follows the
+ARW steps instead: it skips every IFD that is raw by role, not only the
+CFA and Compression 34713 IFDs of step 2, and takes a preview stored as
+exactly one strip, not as several contiguous ones (step 2); a preview
+must start `FF D8 FF` (step 4); and a candidate without a SOF is dropped
+rather than ranked last (step 6)
+([the ARW open questions](../arw/open-questions.md#5-questions-settled-by-a-decision-or-by-the-code)).
+Its tests run it on files 5146 to 5148, which give the four JPEGs of
+section 4 in size order. **[F]**
 They also run it on the 32 files of 25 other bodies listed in
 [test-data.md](test-data.md#21-the-ci-set), which give the previews listed
 there. **[F]**
