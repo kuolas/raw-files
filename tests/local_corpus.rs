@@ -1383,7 +1383,7 @@ static THREE_POINTS: [raw_files::LayoutPoint; 3] = {
 /// A list placed from a table in `frame`: one point for each number and
 /// centre of `points`, in their order, each with the 164 × 164 box, the
 /// one at index `primary` the primary.
-fn placed_list(frame: Size, points: &[(u8, Point)], primary: usize) -> FocusPoints {
+fn placed_list(frame: Size, points: &[(u16, Point)], primary: usize) -> FocusPoints {
     use raw_files::FocusPoint;
     let size = Size {
         width: 164,

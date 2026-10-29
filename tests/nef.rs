@@ -1319,7 +1319,7 @@ enum D600Focus {
     /// frame they are measured in, the primary's number, the area mode,
     /// and every point's number and centre, in number order, each with the
     /// box of 164 by 164, from a table and with nothing said of focus.
-    Placed((u32, u32), u8, FocusAreaMode, &'static [(u8, (u32, u32))]),
+    Placed((u32, u32), u16, FocusAreaMode, &'static [(u16, (u32, u32))]),
     /// The position a live-view frame records: the centre of its area in
     /// the 6016 by 4016 frame and whether the camera confirmed focus there.
     LiveView((u32, u32), bool),
@@ -1835,7 +1835,7 @@ fn check_d600_focus(label: &str, metadata: &Metadata, focus: D600Focus) {
             assert_eq!(list.frame(), as_size(frame), "{label}");
             assert_eq!(list.origin(), FocusOrigin::Table, "{label}");
             assert_eq!(list.area_mode(), Some(mode), "{label}");
-            let placed: Vec<(u8, (u32, u32))> = list
+            let placed: Vec<(u16, (u32, u32))> = list
                 .points()
                 .iter()
                 .map(|point| {

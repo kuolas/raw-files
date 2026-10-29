@@ -274,7 +274,7 @@ pub struct SampleFocus {
     pub in_focus: Option<bool>,
     pub origin: FocusOrigin,
     pub points: usize,
-    pub primary_number: Option<u8>,
+    pub primary_number: Option<u16>,
     pub area_mode: Option<FocusAreaMode>,
 }
 

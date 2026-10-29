@@ -102,7 +102,7 @@ impl BitOrder {
     /// documentation says; `None` for a number no bit stands for, such as
     /// 0, which no point has. Whether the bit lies in the mask's
     /// [`MASK_LEN`] bytes is the reader's to check, as it reads them.
-    fn bit(self, number: u8) -> Option<usize> {
+    fn bit(self, number: u16) -> Option<usize> {
         match self {
             BitOrder::NumberLessOne => usize::from(number).checked_sub(1),
         }
@@ -187,11 +187,11 @@ impl PointTable {
     /// [`FocusLayout::new`].
     ///
     /// It is `Some` for every registered table, which the table tests
-    /// check: a frame with no zero side, every number above 0 and given
-    /// once, every centre and box on the frame, among checks that go
-    /// further than [`FocusLayout::new`]'s, such as numbers that run from
-    /// 1 to the count. So a table that fails them gives a file no layout
-    /// ([`layout`]), never a panic.
+    /// check: a frame with no zero side, every number above 0 and above
+    /// the one before it, every centre and box on the frame, among checks
+    /// that go further than [`FocusLayout::new`]'s, such as numbers that
+    /// run from 1 to the count. So a table that fails them gives a file no
+    /// layout ([`layout`]), never a panic.
     fn layout(&'static self) -> Option<FocusLayout> {
         FocusLayout::new(self.model, self.frame, self.points)
     }
@@ -215,7 +215,7 @@ impl PointTable {
     /// `number`, by the table's [`BitOrder`]; `None` for a number no bit
     /// stands for. Every point of the table has a bit of its own inside the
     /// mask's [`MASK_LEN`] bytes, which the table tests check.
-    pub(in crate::formats) fn bit(&self, number: u8) -> Option<usize> {
+    pub(in crate::formats) fn bit(&self, number: u16) -> Option<usize> {
         self.bit_order.bit(number)
     }
 
@@ -304,9 +304,9 @@ mod tests {
 
     /// Every registered table can be a layout, by the checks of
     /// [`FocusLayout::new`]: a frame with no zero side, at least one point,
-    /// every number above 0 and given once, every centre on the frame and
-    /// every box inside it. So the reader, which gives `None` for a table
-    /// that fails them, gives every registered body its layout.
+    /// every number above 0 and above the one before it, every centre on
+    /// the frame and every box inside it. So the reader, which gives `None`
+    /// for a table that fails them, gives every registered body its layout.
     #[test]
     fn every_table_is_a_layout() {
         for table in TABLES {

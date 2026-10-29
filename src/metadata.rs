@@ -495,7 +495,7 @@ impl Metadata {
     /// let file = RawFile::open("photo.nef")?;
     /// let metadata = file.metadata();
     /// if let Some(layout) = metadata.focus_layout() {
-    ///     let used: Vec<u8> = metadata
+    ///     let used: Vec<u16> = metadata
     ///         .focus_points()
     ///         .map(|points| points.points().iter().filter_map(FocusPoint::number).collect())
     ///         .unwrap_or_default();

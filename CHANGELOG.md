@@ -54,10 +54,11 @@ does.
   so that a viewer can draw the grid and mark on it the points the
   camera used. `FocusLayout::new` builds one from a `static` array of
   points, which `LayoutPoint::new` can fill since it is `const`, and
-  refuses a frame with a zero side, no points, a number of 0 or one
-  given twice, and a point whose centre or box does not lie on the
-  frame by the rules of `Focus::new` and `Focus::with_size`; a program's
-  tests set it with `Metadata::with_focus_layout`. The readers give a
+  refuses a frame with a zero side, no points, a number of 0, one given
+  twice or points out of rising number order, and a point whose centre
+  or box does not lie on the frame by the rules of `Focus::new` and
+  `Focus::with_size`; a program's tests set it with
+  `Metadata::with_focus_layout`. The readers give a
   layout only from a table of the body's points, and `None` for a body
   whose table is not in raw-files.
 - NEF and JPEG files of the Nikon D600 give its layout of 39 autofocus
