@@ -16,10 +16,9 @@ does.
   `Recorded`, a position the camera measured and wrote, or `Table`, a
   point the camera named by number that raw-files placed from its table
   of the body's autofocus points.
-  `Focus::new` gives `Recorded`, `Focus::with_origin` sets another and
-  `Focus::scaled_to` keeps it; `FocusOrigin` has a `name` that `Display`
-  writes, "Recorded" and "Placed from a table", and orders as its
-  variants are listed.
+  `Focus::new` takes it (see Changed) and `Focus::scaled_to` keeps it;
+  `FocusOrigin` has a `name` that `Display` writes, "Recorded" and
+  "Placed from a table", and orders as its variants are listed.
 - `Metadata::focus_points` gives the autofocus points the camera used,
   as a `FocusPoints`: every point in one frame, each a `FocusPoint` with
   its number when the file gives one, its centre, its area when recorded
@@ -86,6 +85,15 @@ does.
   half the frame, keeps its point. A shot through the viewfinder of any
   other body gives no focus point, since raw-files has no table of its
   points.
+
+### Changed
+
+- `Focus::new` takes where the point came from, a `FocusOrigin`, as its
+  third argument, so that every focus value says where it came from
+  when it is built. A program that built a focus with 0.5.0's
+  `Focus::new(frame, center)` writes
+  `Focus::new(frame, center, FocusOrigin::Recorded)` for the same
+  value.
 
 ## [0.5.0] - 2026-10-26
 

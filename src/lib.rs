@@ -146,7 +146,7 @@
 //!
 //! // A Nikon Z 9 records the position it focused at.
 //! let frame = Size { width: 8256, height: 5504 };
-//! let recorded = Focus::new(frame, Point { x: 4905, y: 2461 })
+//! let recorded = Focus::new(frame, Point { x: 4905, y: 2461 }, FocusOrigin::Recorded)
 //!     .expect("the centre lies on the frame");
 //! let z9 = Metadata::default().with_focus(recorded);
 //! assert_eq!(caption(&z9).as_deref(), Some("Recorded: at (4905, 2461)"));

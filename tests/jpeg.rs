@@ -902,7 +902,7 @@ fn a_nefs_embedded_jpeg_saved_alone_opens_as_a_jpeg() {
 fn confirmed(frame: (u32, u32), center: (u32, u32), area: (u32, u32)) -> Focus {
     let size = |(width, height)| Size { width, height };
     let (x, y) = center;
-    Focus::new(size(frame), Point { x, y })
+    Focus::new(size(frame), Point { x, y }, FocusOrigin::Recorded)
         .and_then(|focus| focus.with_size(size(area)))
         .expect("a usable focus point")
         .with_in_focus(true)
@@ -1493,6 +1493,7 @@ fn sony_focus([width, height, x, y]: [u16; 4]) -> Focus {
             x: u32::from(x),
             y: u32::from(y),
         },
+        FocusOrigin::Recorded,
     )
     .expect("a usable focus point")
 }
@@ -2317,9 +2318,8 @@ fn the_d600_frame_4_jpeg_gives_its_previews_metadata_and_point_38_placed_from_th
     let frame = size_of((6016, 4016));
     let point_38 = Point { x: 1812, y: 1705 };
     let box_164 = size_of((164, 164));
-    let placed = Focus::new(frame, point_38)
-        .and_then(|focus| focus.with_size(box_164))
-        .map(|focus| focus.with_origin(FocusOrigin::Table));
+    let placed =
+        Focus::new(frame, point_38, FocusOrigin::Table).and_then(|focus| focus.with_size(box_164));
     assert_eq!(metadata.focus(), placed, "{label}");
     let points = FocusPoints::new(frame, FocusOrigin::Table)
         .and_then(|points| {

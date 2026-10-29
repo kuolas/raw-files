@@ -16,7 +16,7 @@
 use std::fmt;
 use std::io::{self, Cursor, Read, Seek, SeekFrom};
 
-use crate::focus::Focus;
+use crate::focus::{Focus, FocusOrigin};
 use crate::geometry::{Point, Size};
 use crate::io::BLOCK_SIZE;
 
@@ -85,9 +85,16 @@ pub(crate) fn point(x: u32, y: u32) -> Point {
 }
 
 /// Where a Nikon Z 9 focused: a 291 × 323 area right of and above the
-/// centre of its 8256 × 5504 frame, with focus confirmed.
+/// centre of its 8256 × 5504 frame, with focus confirmed, as the camera
+/// recorded it.
 pub(crate) fn z9_focus() -> Focus {
-    Focus::new(size(8_256, 5_504), point(4_905, 2_461))
+    z9_focus_from(FocusOrigin::Recorded)
+}
+
+/// The Z 9's focus of [`z9_focus`], from `origin`, for the tests that
+/// check a value of each origin.
+pub(crate) fn z9_focus_from(origin: FocusOrigin) -> Focus {
+    Focus::new(size(8_256, 5_504), point(4_905, 2_461), origin)
         .unwrap()
         .with_size(size(291, 323))
         .unwrap()

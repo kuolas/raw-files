@@ -120,11 +120,11 @@ fn main() -> raw_files::Result<()> {
 Build the same values without a camera file, as a program's tests do:
 
 ```rust
-use raw_files::{Focus, Metadata, Point, Size};
+use raw_files::{Focus, FocusOrigin, Metadata, Point, Size};
 
 fn main() {
     let frame = Size { width: 8256, height: 5504 };
-    let focus = Focus::new(frame, Point { x: 4905, y: 2461 })
+    let focus = Focus::new(frame, Point { x: 4905, y: 2461 }, FocusOrigin::Recorded)
         .expect("the centre lies on the frame")
         .with_in_focus(true);
     let metadata = Metadata::default()
@@ -158,7 +158,7 @@ fn caption(metadata: &Metadata) -> Option<String> {
 fn main() {
     // A Nikon Z 9 records the position it focused at.
     let frame = Size { width: 8256, height: 5504 };
-    let recorded = Focus::new(frame, Point { x: 4905, y: 2461 })
+    let recorded = Focus::new(frame, Point { x: 4905, y: 2461 }, FocusOrigin::Recorded)
         .expect("the centre lies on the frame");
     let z9 = Metadata::default().with_focus(recorded);
     assert_eq!(caption(&z9).as_deref(), Some("Recorded: at (4905, 2461)"));
