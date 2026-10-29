@@ -84,7 +84,7 @@ mod tests {
         let sizes: Vec<(u32, u32)> = parsed
             .previews
             .iter()
-            .map(|p| (p.width(), p.height()))
+            .map(|p| (p.size().width, p.size().height))
             .collect();
         assert_eq!(sizes, [(160, 120), (1620, 1080)]);
     }
@@ -108,7 +108,10 @@ mod tests {
         let makernote = super::nikon::read(&mut src, &tree, &Limits::default()).unwrap();
         let previews =
             super::previews(&mut src, &tree, makernote.as_ref(), &Limits::default()).unwrap();
-        let sizes: Vec<(u32, u32)> = previews.iter().map(|p| (p.width(), p.height())).collect();
+        let sizes: Vec<(u32, u32)> = previews
+            .iter()
+            .map(|p| (p.size().width, p.size().height))
+            .collect();
         assert_eq!(sizes, [(160, 120)]);
     }
 }

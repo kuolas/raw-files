@@ -1131,7 +1131,7 @@ fn check(path: &Path, tally: &mut Tally) {
     for preview in raw.previews() {
         *tally
             .preview_sizes
-            .entry((preview.width(), preview.height()))
+            .entry((preview.size().width, preview.size().height))
             .or_default() += 1;
     }
     tally.metadata.record(raw.metadata());
@@ -1147,7 +1147,7 @@ fn check(path: &Path, tally: &mut Tally) {
     tally.focus.record_scaled(raw.metadata(), preview.size());
     *tally
         .sizes
-        .entry((preview.width(), preview.height()))
+        .entry((preview.size().width, preview.size().height))
         .or_default() += 1;
     *tally
         .orientations

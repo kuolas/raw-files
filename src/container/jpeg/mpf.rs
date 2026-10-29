@@ -455,9 +455,9 @@ mod tests {
         // The MP Index IFD has 3 entries.
         for order in ORDERS {
             let built = back_to_back(order).build();
-            let limits = Limits::default().max_ifd_entries(2);
+            let limits = Limits::default().with_max_ifd_entries(2);
             assert_eq!(images_within(&built.bytes, &limits), []);
-            let limits = Limits::default().max_ifd_entries(3);
+            let limits = Limits::default().with_max_ifd_entries(3);
             assert_eq!(images_within(&built.bytes, &limits), built.mpf_images());
         }
     }

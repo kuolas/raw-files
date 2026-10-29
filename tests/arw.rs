@@ -544,9 +544,13 @@ fn the_largest_preview_is_ifd2s_on_the_arw4_file_and_ifd0s_on_the_arw2_file() {
 fn a_preview_at_least_2000_by_1500_on_the_arw4_file_is_ifd2s() {
     let (built, blobs) = arw4_file(Order::Little, 1);
     let file = RawFile::from_bytes(&built.bytes).unwrap();
-    let preview = file.preview_at_least(2000, 1500).unwrap();
+    let box_2000_by_1500 = Size {
+        width: 2000,
+        height: 1500,
+    };
+    let preview = file.preview_at_least(box_2000_by_1500).unwrap();
     assert_eq!(
-        (preview.width(), preview.height()),
+        (preview.size().width, preview.size().height),
         wide(ARW4_FULL_SIZE_JPEG)
     );
     assert_eq!(

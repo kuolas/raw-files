@@ -1130,9 +1130,9 @@ mod tests {
         // The sound IFD holds two entries; the walk is not limited.
         for order in ORDERS {
             let (built, _) = sound_file(order, b"");
-            let limits = Limits::default().max_ifd_entries(2);
+            let limits = Limits::default().with_max_ifd_entries(2);
             assert!(read_with(built.bytes.clone(), &limits).1.is_some());
-            let limits = Limits::default().max_ifd_entries(1);
+            let limits = Limits::default().with_max_ifd_entries(1);
             assert!(read_with(built.bytes, &limits).1.is_none(), "{order:?}");
         }
     }

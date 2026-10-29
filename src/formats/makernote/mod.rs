@@ -381,7 +381,7 @@ mod tests {
             let found = block.ifd_at(&mut src, 0, &limits).unwrap();
             let found = found.expect("an IFD");
             assert_eq!(found.u32(&mut src, SECOND).unwrap(), Some(8), "{order:?}");
-            let limits = Limits::default().max_ifd_entries(1);
+            let limits = Limits::default().with_max_ifd_entries(1);
             let found = block.ifd_at(&mut src, 0, &limits).unwrap();
             assert!(found.is_none(), "{order:?}");
         }

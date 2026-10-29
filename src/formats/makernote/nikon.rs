@@ -2573,7 +2573,7 @@ mod tests {
             let (bytes, _, _) = headerless_file(order, b"Not an IFD at all\0", None);
             for limits in [
                 Limits::default(),
-                Limits::default().max_ifd_entries(u32::MAX),
+                Limits::default().with_max_ifd_entries(u32::MAX),
             ] {
                 let mut src = Source::new(Cursor::new(bytes.clone())).unwrap();
                 let file_block = tiff::Block::file(src.len());
@@ -2761,9 +2761,9 @@ mod tests {
         // The MakerNote IFD holds two entries, the PreviewIFD two.
         let block = block(Order::Little, Change::Nothing);
         let bytes = with_block(Order::Little, &block);
-        let found = try_candidate(bytes.clone(), &Limits::default().max_ifd_entries(2));
+        let found = try_candidate(bytes.clone(), &Limits::default().with_max_ifd_entries(2));
         assert_eq!(found.unwrap(), Some(block.candidate(AT)));
-        let found = try_candidate(bytes, &Limits::default().max_ifd_entries(1));
+        let found = try_candidate(bytes, &Limits::default().with_max_ifd_entries(1));
         assert_eq!(found.unwrap(), None);
     }
 

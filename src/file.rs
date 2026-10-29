@@ -13,6 +13,7 @@ use crate::container::Structure;
 use crate::error::{Error, Result};
 use crate::format::Format;
 use crate::formats;
+use crate::geometry::Size;
 use crate::io::Source;
 use crate::limits::Limits;
 use crate::metadata::Metadata;
@@ -55,12 +56,12 @@ use crate::preview::{self, Preview};
 /// ```no_run
 /// use std::fs;
 ///
-/// use raw_files::RawFile;
+/// use raw_files::{RawFile, Size};
 ///
 /// fn main() -> raw_files::Result<()> {
 ///     let mut file = RawFile::open("DSC_0001.NEF")?;
 ///     println!("a {} file", file.format());
-///     let Some(preview) = file.preview_at_least(1024, 768) else {
+///     let Some(preview) = file.preview_at_least(Size { width: 1024, height: 768 }) else {
 ///         println!("no previews");
 ///         return Ok(());
 ///     };
@@ -241,17 +242,18 @@ impl<R: Read + Seek> RawFile<R> {
         self.previews.last().copied()
     }
 
-    /// The smallest preview at least `width` by `height` pixels, for
-    /// filling a box of that size without reading more than it needs.
+    /// The smallest preview at least `size`, as wide as its width and as
+    /// tall as its height, for filling a box of that size without reading
+    /// more than it needs.
     ///
     /// The comparison uses the size as stored, before the preview's
     /// [`orientation`](Preview::orientation) is applied: for a box that the
-    /// orientation turns, swap `width` and `height`. When no preview is that
-    /// large, the largest is returned, so asking for more than the file
-    /// holds still gives the best there is. `None` only when the file has no
-    /// previews.
-    pub fn preview_at_least(&self, width: u32, height: u32) -> Option<Preview> {
-        preview::at_least(&self.previews, width, height)
+    /// orientation turns, ask for the box turned, its height as the width
+    /// and its width as the height. When no preview is that large, the
+    /// largest is returned, so asking for more than the file holds still
+    /// gives the best there is. `None` only when the file has no previews.
+    pub fn preview_at_least(&self, size: Size) -> Option<Preview> {
+        preview::at_least(&self.previews, size)
     }
 
     /// Reads the bytes of `preview`, exactly as they are stored in the
@@ -290,7 +292,7 @@ impl<R: Read + Seek> RawFile<R> {
     /// limits are: `max_preview_bytes` cannot make such a preview fit.
     pub fn read_preview_into(&mut self, preview: &Preview, buf: &mut Vec<u8>) -> Result<()> {
         let offset = preview.byte_range().start;
-        if preview.byte_len() > self.limits.preview_bytes() {
+        if preview.byte_len() > self.limits.max_preview_bytes() {
             buf.clear();
             return Err(Error::limit(
                 "the preview is longer than max_preview_bytes allows",
@@ -326,6 +328,7 @@ mod tests {
     use crate::error::ErrorKind;
     use crate::orientation::Orientation;
     use crate::preview::PreviewFormat;
+    use crate::testing::size;
     use crate::tiff_builder::{Order, TiffBuilder};
 
     /// A JPEG preview of `width` by `height` pixels, `length` bytes at
@@ -392,7 +395,7 @@ mod tests {
         let (bytes, at) = file_with_blob();
         let file = handle(Cursor::new(bytes), three(at), Limits::default());
         assert_eq!(file.largest_preview(), file.previews().last().copied());
-        assert_eq!(file.largest_preview().map(|p| p.width()), Some(1_620));
+        assert_eq!(file.largest_preview().map(|p| p.size().width), Some(1_620));
     }
 
     #[test]
@@ -401,16 +404,19 @@ mod tests {
         let file = handle(Cursor::new(bytes), Vec::new(), Limits::default());
         assert!(file.previews().is_empty());
         assert_eq!(file.largest_preview(), None);
-        assert_eq!(file.preview_at_least(0, 0), None);
+        assert_eq!(file.preview_at_least(size(0, 0)), None);
     }
 
     #[test]
     fn preview_at_least_gives_the_smallest_that_fits_or_the_largest() {
         let (bytes, at) = file_with_blob();
         let file = handle(Cursor::new(bytes), three(at), Limits::default());
-        let width = |p: Option<Preview>| p.map(|p| p.width());
-        assert_eq!(width(file.preview_at_least(300, 200)), Some(640));
-        assert_eq!(width(file.preview_at_least(4_000, 3_000)), Some(1_620));
+        let width = |p: Option<Preview>| p.map(|p| p.size().width);
+        assert_eq!(width(file.preview_at_least(size(300, 200))), Some(640));
+        assert_eq!(
+            width(file.preview_at_least(size(4_000, 3_000))),
+            Some(1_620)
+        );
     }
 
     #[test]
@@ -468,7 +474,7 @@ mod tests {
     fn a_preview_over_the_limit_is_refused_before_allocating() {
         let (bytes, at) = file_with_blob();
         let len = u64::try_from(BLOB.len()).unwrap();
-        let limits = Limits::default().max_preview_bytes(4);
+        let limits = Limits::default().with_max_preview_bytes(4);
         // Both far longer than the buffer's capacity, so reading either
         // would grow it: the blob, which lies in the file and would be read
         // whole without the limit, and a preview longer than the file.
@@ -496,7 +502,7 @@ mod tests {
         let mut file = handle(
             Cursor::new(bytes),
             vec![blob],
-            Limits::default().max_preview_bytes(len),
+            Limits::default().with_max_preview_bytes(len),
         );
         assert_eq!(file.read_preview(&blob).unwrap(), BLOB);
     }

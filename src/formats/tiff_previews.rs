@@ -402,7 +402,10 @@ mod tests {
     /// The stored size of each preview, in order: each test gives its JPEGs
     /// distinct sizes, so these name them.
     fn sizes(previews: &[Preview]) -> Vec<(u32, u32)> {
-        previews.iter().map(|p| (p.width(), p.height())).collect()
+        previews
+            .iter()
+            .map(|p| (p.size().width, p.size().height))
+            .collect()
     }
 
     /// An IFD holding only an ImageWidth, so that it can be read.
@@ -482,7 +485,7 @@ mod tests {
 
             assert_eq!(previews.len(), 1, "{order:?}");
             let preview = previews[0];
-            assert_eq!((preview.width(), preview.height()), (640, 480));
+            assert_eq!((preview.size().width, preview.size().height), (640, 480));
             assert_eq!(preview.byte_range().start, built.blob_offset(blob));
             assert_eq!(preview.byte_len(), stub_len());
             assert_eq!(preview.format(), PreviewFormat::Jpeg);

@@ -94,6 +94,23 @@ does.
   `Focus::new(frame, center)` writes
   `Focus::new(frame, center, FocusOrigin::Recorded)` for the same
   value.
+- `RawFile::preview_at_least` takes the box as a `Size`, as
+  `Focus::scaled_to` takes a frame, so that a size has one form across
+  the API: `preview_at_least(Size { width: 1024, height: 768 })` for
+  0.5.0's `preview_at_least(1024, 768)`.
+- The setters of `Limits` are named after the cap they set, as every
+  `with_…` method is: `with_max_ifds`, `with_max_ifd_entries`,
+  `with_max_ifd_depth` and `with_max_preview_bytes`. The names they had,
+  `max_ifds`, `max_ifd_entries`, `max_ifd_depth` and
+  `max_preview_bytes`, now read each cap back and take no argument, so
+  0.5.0's `Limits::default().max_ifds(64)`, which is
+  `Limits::default().with_max_ifds(64)` now, fails to compile rather
+  than set nothing.
+
+### Removed
+
+- `Preview::width` and `Preview::height`: `Preview::size` gives both,
+  as `preview.size().width` and `preview.size().height`.
 
 ## [0.5.0] - 2026-10-26
 

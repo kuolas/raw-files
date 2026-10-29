@@ -152,7 +152,10 @@ pub fn open(data: &[u8]) {
     {
         read_focus_points(&on_preview);
     }
-    let _ = file.preview_at_least(1, 1);
+    let _ = file.preview_at_least(Size {
+        width: 1,
+        height: 1,
+    });
     let mut buf = Vec::new();
     for preview in file.previews().to_vec() {
         let _ = file.read_preview_into(&preview, &mut buf);
