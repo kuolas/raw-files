@@ -1,6 +1,9 @@
 # ADR019: The frame of a placed focus point on a crop
 
-- Status: Accepted
+- Status: Accepted; amended by [ADR020](adr020-each-crops-window-in-the-table.md),
+  which keeps each crop's window in the body's table and places a file
+  on the crop only when CropHiSpeed's origin is that window's centred
+  origin
 - Amends: [ADR018](adr018-focus-points-placed-from-a-table-and-the-points-used.md),
   in one point: the frame that a point placed from a table takes on a
   crop in a raw file, which that record set at CropHiSpeed's cropped

@@ -26,7 +26,8 @@ Kuolas, who maintains raw-files.
 | [ADR016](adr016-full-metadata-before-raw-data.md) | Full metadata before raw data | Accepted |
 | [ADR017](adr017-per-body-tables-measured-by-the-project.md) | Per-body tables measured by the project | Accepted |
 | [ADR018](adr018-focus-points-placed-from-a-table-and-the-points-used.md) | Focus points placed from a table, and the points used | Accepted; amends [ADR012](adr012-focus-points-as-the-camera-records-them.md); amended by [ADR019](adr019-the-frame-of-a-placed-focus-point-on-a-crop.md) |
-| [ADR019](adr019-the-frame-of-a-placed-focus-point-on-a-crop.md) | The frame of a placed focus point on a crop | Accepted; amends [ADR018](adr018-focus-points-placed-from-a-table-and-the-points-used.md) |
+| [ADR019](adr019-the-frame-of-a-placed-focus-point-on-a-crop.md) | The frame of a placed focus point on a crop | Accepted; amends [ADR018](adr018-focus-points-placed-from-a-table-and-the-points-used.md); amended by [ADR020](adr020-each-crops-window-in-the-table.md) |
+| [ADR020](adr020-each-crops-window-in-the-table.md) | Each crop's window in the table | Accepted; amends [ADR019](adr019-the-frame-of-a-placed-focus-point-on-a-crop.md) |
 
 ## When to write one
 
