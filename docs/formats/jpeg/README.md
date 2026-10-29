@@ -11,10 +11,11 @@ Where these notes say *I* or *my own* files, it is me, Alvaro Kuolas, who
 maintains raw-files, writing about my own cameras and shots: they stay
 private, and are cited by counts or by frame numbers.
 
-These pages support the [roadmap](../../ROADMAP.md)'s milestone for plain
-JPEG files: a JPEG opens as a format of its own, with its metadata, its
-previews and, when the camera recorded one that fits its picture, its focus
-point. Why raw-files reads JPEG files, and how, is decided in
+These pages support JPEG files, which the [roadmap](../../ROADMAP.md)
+lists as a format beside NEF and ARW: a JPEG opens as a format of its
+own, with its metadata, its previews and, when the camera recorded one
+that fits its picture, its focus point. Why raw-files reads JPEG files,
+and how, is decided in
 [ADR014](../../architecture-decisions/adr014-jpeg-files-as-a-format-of-their-own.md),
 and how the focus point of a Nikon JPEG shot in a crop mode is placed on
 its picture, in

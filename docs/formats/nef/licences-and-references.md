@@ -45,10 +45,10 @@ published by community projects (section 5) and read from sample files.
 DNG carries a patent licence: royalty-free and worldwide for compliant
 readers and writers, with a required notice in distributed implementations,
 revocable if the licensee sues Adobe over DNG. [10] **[P]** The notice only
-matters if raw-files ever reads or writes DNG (the roadmap lists DNG as a
-possible later format); it does not apply to plain NEF. The page does not
-state the licence of the DNG SDK source, so raw-files would not copy from it
-without checking.
+matters if raw-files ever reads or writes DNG (the roadmap lists DNG
+first among the formats still to come); it does not apply to plain
+NEF. The page does not state the licence of the DNG SDK source, so
+raw-files would not copy from it without checking.
 
 The standards give the container (IFD structure, entry types, SubIFDs, the
 Exif IFD, the MakerNote tag). They say nothing about Nikon's MakerNote
@@ -196,9 +196,9 @@ unsettled. Three options, to be decided by the maintainers:
 We suggest (b) for per-body tables, which also keeps them small
 and verifiable, and a decision between (a) and (c) before any Huffman or
 decryption table is committed. Until that decision is recorded in an ADR,
-we suggest committing neither table. The milestones that need them (raw sensor data,
-encrypted metadata) come after previews and basic metadata, which need
-neither. [I]
+we suggest committing neither table. Raw sensor data and the encrypted
+part of full metadata need them; previews and the metadata raw-files
+reads from the plain tags need neither. [I]
 
 ### 4.3 Out of scope: HE and HE*
 

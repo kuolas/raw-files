@@ -9,8 +9,10 @@ Where these notes say *I* or *my own* files, it is me, Alvaro Kuolas, who
 maintains raw-files, writing about my own cameras and shots: they stay
 private, and are cited by counts or by frame numbers.
 
-These pages support the [roadmap](../../ROADMAP.md): NEF previews first, then
-basic metadata, then full metadata, then raw decoding.
+These pages support the [roadmap](../../ROADMAP.md)'s capabilities for NEF
+files: previews; metadata, both what raw-files reads from the plain
+tags and full metadata, which is still open; focus points; and raw
+sensor data.
 
 ## Status
 
@@ -58,10 +60,10 @@ describes how the research was done and what it could not reach.
 
 | Page | Read it for |
 |---|---|
-| [container-and-previews.md](container-and-previews.md) | The TIFF structure of a NEF, where the embedded JPEGs are, and how to pick the largest (milestone 1) |
-| [makernote-and-metadata.md](makernote-and-metadata.md) | The Nikon MakerNote, its encrypted blocks, and orientation, date, camera and size (milestone 3) and the focus point (milestone 4) |
-| [autofocus-points.md](autofocus-points.md) | The procedure by which a body's autofocus points are measured, and the record of each body measured, the D600 first (milestone 4) |
-| [raw-data.md](raw-data.md) | How the sensor data is stored: Huffman compression, packed layouts, small raws, HE/HE\* (milestone 7) |
+| [container-and-previews.md](container-and-previews.md) | The TIFF structure of a NEF, where the embedded JPEGs are, and how to pick the largest (previews) |
+| [makernote-and-metadata.md](makernote-and-metadata.md) | The Nikon MakerNote, its encrypted blocks, and orientation, date, camera and size (metadata) and the focus point (focus points) |
+| [autofocus-points.md](autofocus-points.md) | The procedure by which a body's autofocus points are measured, and the record of each body measured, the D600 first (focus points) |
+| [raw-data.md](raw-data.md) | How the sensor data is stored: Huffman compression, packed layouts, small raws, HE/HE\* (raw sensor data) |
 | [security.md](security.md) | Past vulnerabilities in NEF parsers and the checklist that follows from them |
 | [licences-and-references.md](licences-and-references.md) | Standards, existing implementations and their licences, and what raw-files may reuse |
 | [test-data.md](test-data.md) | Where sample files come from, which may be committed, and which bodies to cover |
@@ -126,26 +128,26 @@ the disagreement.
   exist but are immature. The mature ones can be read for understanding only
   (see [licences-and-references.md](licences-and-references.md)).
 
-## Where to start, by milestone
+## Where to start, by capability
 
-- **Milestone 1, NEF previews:**
+- **NEF previews:**
   - [container-and-previews.md](container-and-previews.md), especially its
     recommended selection algorithm.
   - [security.md](security.md) checklist items on offsets, IFD loops and
     allocation.
-- **Milestone 3, basic metadata:**
+- **Metadata:**
   - [makernote-and-metadata.md](makernote-and-metadata.md), the viewer
     metadata section.
-- **Milestone 4, focus points:**
-  - [makernote-and-metadata.md](makernote-and-metadata.md), the focus
-    point section, with what the samples cover and what they do not.
-- **Milestone 6, full metadata:**
+- **Full metadata:**
   - [makernote-and-metadata.md](makernote-and-metadata.md), the key tags and
     what each records, the camera settings, and the encrypted blocks with
     what they hold.
   - [open-questions.md](open-questions.md), for what must be decided before
     an encrypted block is read.
-- **Milestone 7, raw decoding:**
+- **Focus points:**
+  - [makernote-and-metadata.md](makernote-and-metadata.md), the focus
+    point section, with what the samples cover and what they do not.
+- **Raw sensor data:**
   - [raw-data.md](raw-data.md).
   - [makernote-and-metadata.md](makernote-and-metadata.md), for black level,
     white balance and decryption.

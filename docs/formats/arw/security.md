@@ -257,13 +257,14 @@ The NEF checklist items 1 to 14 apply to ARW unchanged and are not repeated.
 The items below add what Sony files need. **They are numbered A1 onwards**
 so they cannot be confused with the NEF items, and they refer to them as
 "NEF item n". Each names the structure, the rule and the evidence; "(when
-relevant)" means the item applies once the milestone that introduces the
-feature lands (see [the roadmap](../../ROADMAP.md)). Structures are
-described in [container-and-previews.md](container-and-previews.md),
+relevant)" means the item applies once raw-files reads the structure it
+names, for one of the capabilities of [the roadmap](../../ROADMAP.md).
+Structures are described in
+[container-and-previews.md](container-and-previews.md),
 [makernote-and-metadata.md](makernote-and-metadata.md) and
 [raw-data.md](raw-data.md).
 
-### Milestone 2: previews
+### Previews
 
 A1. **Walk the whole IFD0 chain, with a visited set.** From FileFormat 4.0
     on, the chain is IFD0 → IFD1 → IFD2 and the full-size JPEG is in IFD2;
@@ -314,7 +315,7 @@ A4. **Read NewSubfileType as `u32` and never narrow it.** Measured values
     it. **[F]** Treat any other value as "role unknown" rather than an
     index. Evidence: CVE-2026-88387 (section 1.4).
 
-### Milestone 3: metadata
+### Metadata
 
 A5. **No next-IFD pointer in Sony MakerNotes and the SR2SubIFD.** In modern
     files the four bytes after the entries are value data (values such as
@@ -323,10 +324,11 @@ A5. **No next-IFD pointer in Sony MakerNotes and the SR2SubIFD.** In modern
     these IFDs, and do not require sorted tags. The A100 MakerNote has the
     12-byte `SONY DSC` header (file 2346); every other sampled ARW, SR2 and
     ARQ MakerNote is headerless, including the Hasselblad Lunar (file
-    4051). **[F]** Milestone 3 needs no decryption: make, model,
-    orientation, dates and the crop tags are plain in every file. **[F]**
+    4051). **[F]** The metadata raw-files reads needs no decryption:
+    make, model, orientation, dates and the crop tags are plain in every
+    file. **[F]**
 
-### Milestone 7: raw data
+### Raw sensor data
 
 A6. **SR2Private as a bounded sub-slice (when relevant).** Black level,
     white level and white balance of every ARW 2.x and later file are in the
@@ -470,11 +472,12 @@ A15. **SRF key chain: never hard-code 200896 without bounds (when
      them must fail soft. Evidence: CVE-2020-35535; LibRaw 02e24bf and the
      2019 series; rawler #574.
 
-### Not planned
+### Full metadata
 
-A16. **Enciphered MakerNote blocks (0x2010, 0x9050, 0x94xx).** No milestone
-     needs them: they hold extras such as shutter count and aspect ratio.
-     If they are ever read: pick the layout only from checked data, require
+A16. **Enciphered MakerNote blocks (0x2010, 0x9050, 0x94xx) (when
+     relevant).** Full metadata needs them, for values such as the shutter
+     count and the aspect ratio, once a decision on the cipher allows it.
+     When they are read: pick the layout only from checked data, require
      every fixed offset to be inside the block before reading, and treat a
      short or unknown block as absent. Layout selection is fragile: the A7
      V writes 0x9400 version byte 0x41, which LibRaw does not know; the
@@ -487,7 +490,7 @@ A16. **Enciphered MakerNote blocks (0x2010, 0x9050, 0x94xx).** No milestone
      byte and cannot go out of range. Evidence: LibRaw ba673ca, c2e8a90,
      the 0.18.2 shift fix.
 
-### All milestones
+### All capabilities
 
 A17. **Fuzz the Sony paths explicitly.** Extend the NEF item 14 targets
      with seeds for: an IFD0 chain with IFD2 and a 0x7240 link back into it,

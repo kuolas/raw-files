@@ -156,8 +156,9 @@ where panics are unacceptable, which is the gap raw-files aims to close. [10]
 ## 3. Checklist and how raw-files applies it
 
 Each item names the bug class, the raw-files rule that prevents it, and the
-CVEs that motivated it. Items marked "when relevant" apply once the milestone
-that introduces the feature lands (see [the roadmap](../../ROADMAP.md)).
+CVEs that motivated it. Items marked "when relevant" apply once
+raw-files reads the part of the file they concern, such as the raw
+sensor data or an encrypted block (see [the roadmap](../../ROADMAP.md)).
 
 1. **Bound every offset and length from the file.** Check
    `offset + len <= available` with `checked_add`, against both the file and

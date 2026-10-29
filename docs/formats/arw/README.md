@@ -11,10 +11,10 @@ Where these notes say *I* or *my own* files, it is me, Alvaro Kuolas, who
 maintains raw-files, writing about my own cameras and shots: they stay
 private, and are cited by counts or by frame numbers.
 
-These pages support the [roadmap](../../ROADMAP.md): ARW previews
-(milestone 2), then basic metadata (milestone 3), then focus points
-(milestone 4), then full metadata (milestone 6), then raw decoding
-(milestone 7).
+These pages support four of the capabilities of the
+[roadmap](../../ROADMAP.md) for ARW files: previews, metadata, focus
+points and raw sensor data. Full metadata, every metadata value a file
+records, is the open part of metadata.
 
 ## Status
 
@@ -46,9 +46,9 @@ was done and what it could not reach. The files checked are listed in
 
 | Page | Read it for |
 |---|---|
-| [container-and-previews.md](container-and-previews.md) | The TIFF structure of each member of the family, where the embedded JPEGs are, and how to pick the largest (milestone 2) |
-| [makernote-and-metadata.md](makernote-and-metadata.md) | The Sony MakerNote, its two ciphers, SR2Private, and orientation, date, camera, size and lens (milestone 3) and the focus point (milestone 4) |
-| [raw-data.md](raw-data.md) | How the sensor data is stored: uncompressed, cRAW, 12-bit packed, ARW1, lossless tiles, M/S YCbCr, SR2, SRF, ARQ and the refused ARW 6.0 (milestone 7) |
+| [container-and-previews.md](container-and-previews.md) | The TIFF structure of each member of the family, where the embedded JPEGs are, and how to pick the largest (previews) |
+| [makernote-and-metadata.md](makernote-and-metadata.md) | The Sony MakerNote, its two ciphers, SR2Private, and orientation, date, camera, size and lens (metadata) and the focus point (focus points) |
+| [raw-data.md](raw-data.md) | How the sensor data is stored: uncompressed, cRAW, 12-bit packed, ARW1, lossless tiles, M/S YCbCr, SR2, SRF, ARQ and the refused ARW 6.0 (raw sensor data) |
 | [security.md](security.md) | Past vulnerabilities in Sony parsers and the Sony additions to the NEF checklist |
 | [licences-and-references.md](licences-and-references.md) | Standards, existing implementations and their licences, what raw-files may reuse, and the legal questions |
 | [test-data.md](test-data.md) | Where sample files come from, which may be committed, a minimal body set, and the files checked |
@@ -108,8 +108,8 @@ the disagreement.
 - **Viewer metadata is plain.** Orientation, capture date, make, model and
   the crop tags come from IFD0, the Exif IFD and the raw SubIFD, plus the
   plain MakerNote tags 0xB000 and 0xB001 (and 0xB027 and 0xB02A for the
-  lens). Milestones 2 and 3 need **no decryption and no deciphering** on any
-  checked file [F]
+  lens). The previews and the metadata raw-files reads need **no
+  decryption and no deciphering** on any checked file [F]
   ([makernote-and-metadata.md](makernote-and-metadata.md)).
 - **The focus point is plain too.** FocusLocation (0x2027) gives the
   frame and the centre of the focus area on every checked body from the
@@ -142,8 +142,8 @@ the disagreement.
   (`11 22 33 44` on every checked ARW) [F]. Plain copies of black level and
   white balance exist from ARW 2.3.3 on; white level 0x787F exists only in
   the encrypted block [F]. The keystream is a short formula with no table.
-  The MakerNote's separate byte-substitution cipher (b³ mod 249) hides only
-  extras such as the shutter count, which no milestone needs.
+  The MakerNote's separate byte-substitution cipher (b³ mod 249) hides
+  values that only full metadata needs, such as the shutter count.
 - **No mature ARW implementation can be copied into raw-files.** dcraw,
   LibRaw, rawspeed, rawler, libopenraw, ExifTool and exiv2 are read for
   understanding only. Graphite's rawkit is labelled MIT OR Apache-2.0, but
@@ -156,28 +156,28 @@ the disagreement.
   only as extracted tables, is the hard case
   ([open-questions.md](open-questions.md)).
 
-## Where to start, by milestone
+## Where to start, by capability
 
-- **Milestone 2, ARW previews:**
+- **Previews:**
   - [container-and-previews.md](container-and-previews.md), especially its
     recommended algorithm and the expected results on the checked files.
-  - [security.md](security.md), the milestone 2 items and the NEF checklist
+  - [security.md](security.md), the preview items and the NEF checklist
     items they build on (offsets, IFD loops, allocation).
   - [test-data.md](test-data.md), for the smaller set of files that covers
     preview tests.
-- **Milestone 3, basic metadata:**
+- **Metadata:**
   - [makernote-and-metadata.md](makernote-and-metadata.md), the viewer
     metadata section and its recommendation.
-- **Milestone 4, focus points:**
-  - [makernote-and-metadata.md](makernote-and-metadata.md), the focus
-    point section, with what the samples cover and what they do not.
-- **Milestone 6, full metadata:**
+- **Full metadata:**
   - [makernote-and-metadata.md](makernote-and-metadata.md), the key tags and
     what each records, the camera settings, and the enciphered blocks with
     what they hold.
   - [open-questions.md](open-questions.md), for what must be decided before
     an enciphered block is read.
-- **Milestone 7, raw decoding:**
+- **Focus points:**
+  - [makernote-and-metadata.md](makernote-and-metadata.md), the focus
+    point section, with what the samples cover and what they do not.
+- **Raw sensor data:**
   - [raw-data.md](raw-data.md).
   - [makernote-and-metadata.md](makernote-and-metadata.md), for SR2Private,
     the keystream, white balance and the levels.
@@ -206,7 +206,7 @@ not repeat what the two formats share:
   SHA-256 apply here too.
 
 Two things differ: ARW needs no built-in Huffman tables (lossless tiles
-carry their own) and no MakerNote cipher for anything a milestone needs, and
+carry their own) and no MakerNote cipher for anything but full metadata, and
 the ARW pages were checked against sample files from the start, while the
 NEF pages were desk research first and have so far been checked on the Z 9
 only.

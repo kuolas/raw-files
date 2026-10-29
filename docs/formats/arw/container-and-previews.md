@@ -7,8 +7,8 @@ FileFormat 4.0 or later, a full-size JPEG in a third IFD of the IFD0 chain.
 The older relatives SRF, SR2 and the A100's ARW 1.0, the computer-made ARQ
 and the Hasselblad Lunar use the same container with variations. This page
 describes where the JPEGs are, how implementations tell them apart, and the
-algorithm raw-files should use to return the largest, which is milestone 2
-of the [roadmap](../../ROADMAP.md).
+algorithm raw-files should use to return the largest, for the previews of
+the [roadmap](../../ROADMAP.md).
 
 Back to [the ARW overview](README.md).
 

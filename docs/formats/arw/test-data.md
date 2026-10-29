@@ -346,7 +346,7 @@ names `3 3 1 0` ARW 2.3.1, and so on. "Why" says what the file exercises.
 
 These 25 files total about 690 MiB; the ARQ adds 325 MiB. **[F]**
 
-For **preview-only tests** (milestone 2), eleven files are enough, about
+For **preview-only tests**, eleven files are enough, about
 220 MiB: 1351, 3221, 2346, 2521, 1457, 3015, 1582, 5418, 4466, 7364 and
 8850. They cover the SRF and SR2 layouts, the A100, padding after EOI, a
 non-standard preview size, IFD2 on ARW 4.0, raw tiles that begin like a
