@@ -735,7 +735,10 @@ impl FocusPoints {
     }
 
     /// Every point, in the order they were added. Each centre lies on the
-    /// frame, and each area fits inside it around its centre.
+    /// frame, and each area fits inside it around its centre. It is a
+    /// slice: iterate it to draw every point, or index it with
+    /// [`primary_index`](Self::primary_index) to find the primary among
+    /// them.
     pub fn points(&self) -> &[FocusPoint] {
         &self.points
     }
@@ -963,6 +966,27 @@ impl FocusLayoutPoint {
 /// frame, as the
 /// [decision to report the points the camera used](https://github.com/kuolas/raw-files/blob/master/docs/architecture-decisions/adr018-focus-points-placed-from-a-table-and-the-points-used.md)
 /// says.
+///
+/// So the layout has the previews' framing only on a shot that is not a
+/// crop, where a viewer places each point on a preview by scaling it, as
+/// [`Focus::scaled_to`] scales a focus. On a crop, the picture, and so
+/// every preview, has the framing of the centred window of the table's
+/// frame that the crop keeps, and the window's size is the frame of
+/// [`Metadata::focus_points`](crate::Metadata::focus_points) when the
+/// file gives points placed from the table, whose
+/// [`origin`](FocusPoints::origin) is [`Table`](FocusOrigin::Table). A
+/// point of the layout lies in that window at its centre less half the
+/// difference between the two frames, across and down, and one whose box
+/// the window does not hold whole is not on the picture: on the Nikon
+/// D600's DX crop, the window is 3936 × 2624, and point 38, at
+/// (1812, 1705) in the table's 6016 × 4016 frame, lies at (772, 1009) in
+/// it. A preview smaller than the window then takes the point scaled from
+/// the window, as a focus is scaled. A crop shot whose file gives no
+/// points placed from the table, such as one in manual focus, a crop-mode
+/// JPEG smaller than the window or a shot in live view, which records its
+/// position in a frame of its own, gives no way to find the window;
+/// [issue #65](https://github.com/kuolas/raw-files/issues/65) proposes a
+/// method that places the layout on the picture.
 ///
 /// The readers give a layout only for a body whose table is in
 /// raw-files, and `None` for every other body. The

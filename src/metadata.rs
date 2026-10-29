@@ -426,8 +426,11 @@ impl Metadata {
     /// detection, 207 [`Tracking`](crate::FocusAreaMode::Tracking). Any other
     /// code, or a DSLR code in live view, gives `None`.
     /// On a Sony file the area mode is always `None`, since the codes of its
-    /// AFAreaModeSetting are not checked. It is `None` when
-    /// [`focus`](Self::focus) is, for the same reasons.
+    /// AFAreaModeSetting are not checked.
+    ///
+    /// The list is `None` when the file records no focus point that
+    /// raw-files reads, for the reasons [`focus`](Self::focus) gives; every
+    /// list the readers give has a primary.
     ///
     /// # Examples
     ///
@@ -481,7 +484,8 @@ impl Metadata {
     ///
     /// The layout's frame is always the table's: on a shot in a crop mode,
     /// the points of [`focus_points`](Self::focus_points) are in the
-    /// crop's frame, not in the layout's.
+    /// crop's frame, not in the layout's, and [`FocusLayout`] says how to
+    /// place the layout on such a shot's picture.
     ///
     /// # Examples
     ///
