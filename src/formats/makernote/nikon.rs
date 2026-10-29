@@ -1845,7 +1845,8 @@ impl FocusRecord {
         // position; and an area of no zero side that does not fit around
         // the centre is a record that cannot be used, which gives no focus
         // on every format, as ADR012 decides.
-        let focus = Focus::new(self.frame, self.center)?.with_size(self.area)?;
+        let focus =
+            Focus::new(self.frame, self.center, FocusOrigin::Recorded)?.with_size(self.area)?;
         Some(match self.in_focus {
             Some(in_focus) => focus.with_in_focus(in_focus),
             None => focus,
@@ -3935,14 +3936,18 @@ mod tests {
         let [width, height] = recorded.frame.map(u32::from);
         let [x, y] = recorded.center.map(u32::from);
         let [area_width, area_height] = recorded.area.map(u32::from);
-        let focus = Focus::new(Size { width, height }, Point { x, y })
-            .and_then(|focus| {
-                focus.with_size(Size {
-                    width: area_width,
-                    height: area_height,
-                })
+        let focus = Focus::new(
+            Size { width, height },
+            Point { x, y },
+            FocusOrigin::Recorded,
+        )
+        .and_then(|focus| {
+            focus.with_size(Size {
+                width: area_width,
+                height: area_height,
             })
-            .expect("a usable record");
+        })
+        .expect("a usable record");
         match in_focus {
             Some(in_focus) => focus.with_in_focus(in_focus),
             None => focus,
@@ -4663,10 +4668,9 @@ mod tests {
             width: 6016,
             height: 4016,
         };
-        let expected = Focus::new(frame, Point { x: 1812, y: 1705 })
+        let expected = Focus::new(frame, Point { x: 1812, y: 1705 }, FocusOrigin::Table)
             .and_then(|focus| focus.with_size(D600_BOX))
-            .unwrap()
-            .with_origin(FocusOrigin::Table);
+            .unwrap();
         for order in ORDERS {
             for crop in [Some(D600_FX), None] {
                 let what = format!("{order:?}, {crop:?}");
@@ -5976,7 +5980,7 @@ mod tests {
             width: 400,
             height: 400,
         };
-        let point = Focus::new(frame, Point { x: 0, y: 200 })
+        let point = Focus::new(frame, Point { x: 0, y: 200 }, FocusOrigin::Recorded)
             .expect("a centre on the frame")
             .with_in_focus(true);
         for order in ORDERS {

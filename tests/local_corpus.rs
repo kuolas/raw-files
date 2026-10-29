@@ -1431,7 +1431,7 @@ fn the_focus_tally_counts_the_lists_and_layouts_and_checks_them_against_each_oth
     };
     let dx = placed_list(window, &[(38, Point { x: 772, y: 1009 })], 0)
         .with_area_mode(FocusAreaMode::Single);
-    let recorded = Focus::new(full, Point { x: 343, y: 343 })
+    let recorded = Focus::new(full, Point { x: 343, y: 343 }, FocusOrigin::Recorded)
         .unwrap()
         .with_size(Size {
             width: 540,

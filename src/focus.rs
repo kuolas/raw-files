@@ -106,9 +106,9 @@ use crate::geometry::{Point, Size};
 ///
 /// # Examples
 ///
-/// A Nikon Z 9's record, built a step at a time, the centre first, then
-/// the area and whether focus was confirmed, and placed on a 1920 × 1280
-/// preview:
+/// A Nikon Z 9's record, built a step at a time, the centre and where it
+/// came from first, then the area and whether focus was confirmed, and
+/// placed on a 1920 × 1280 preview:
 ///
 /// ```
 /// use raw_files::{Focus, FocusOrigin, Point, Size};
@@ -118,7 +118,7 @@ use crate::geometry::{Point, Size};
 /// # }
 /// # fn example() -> Option<()> {
 /// let frame = Size { width: 8256, height: 5504 };
-/// let focus = Focus::new(frame, Point { x: 4905, y: 2461 })?
+/// let focus = Focus::new(frame, Point { x: 4905, y: 2461 }, FocusOrigin::Recorded)?
 ///     .with_size(Size { width: 291, height: 323 })?
 ///     .with_in_focus(true);
 /// let on_preview = focus.scaled_to(Size { width: 1920, height: 1280 })?;
@@ -161,33 +161,33 @@ pub struct Focus {
 }
 
 impl Focus {
-    /// The focus centred at `center`, measured in `frame`, with no area,
-    /// nothing said about whether the camera confirmed focus, and the
-    /// origin [`Recorded`](FocusOrigin::Recorded); `None` when the centre
-    /// cannot lie on the frame. [`with_size`](Self::with_size) adds the
-    /// area, [`with_in_focus`](Self::with_in_focus) whether focus was
-    /// confirmed, and [`with_origin`](Self::with_origin) sets another
-    /// origin.
+    /// The focus centred at `center`, measured in `frame`, with where it
+    /// came from, `origin`, no area and nothing said about whether the
+    /// camera confirmed focus; `None` when the centre cannot lie on the
+    /// frame.
+    /// [`with_size`](Self::with_size) adds the area and
+    /// [`with_in_focus`](Self::with_in_focus) whether focus was confirmed.
     ///
     /// This is how the readers start every focus they return, and how a
-    /// caller starts one for its tests. It gives `None` when:
+    /// caller starts one for its tests. The origin is given here, and only
+    /// here, so that every focus says where it came from as soon as it is
+    /// built: [`Recorded`](FocusOrigin::Recorded) for a position the camera
+    /// measured and wrote, and [`Table`](FocusOrigin::Table) for a point
+    /// placed from a table of the body's autofocus points. It gives `None`
+    /// when:
     ///
     /// - either side of `frame` is zero;
     /// - `center` lies outside the frame: its x is more than the frame's
     ///   width, or its y more than its height. The edges are on the frame,
     ///   so a centre at x = width, on its right edge, is accepted.
     #[must_use]
-    pub fn new(frame: Size, center: Point) -> Option<Self> {
-        if frame.width == 0 || frame.height == 0 {
-            return None;
-        }
-        let center_on_frame = center.x <= frame.width && center.y <= frame.height;
-        center_on_frame.then_some(Self {
+    pub fn new(frame: Size, center: Point, origin: FocusOrigin) -> Option<Self> {
+        center_lies_on(frame, center).then_some(Self {
             frame,
             center,
             size: None,
             in_focus: None,
-            origin: FocusOrigin::Recorded,
+            origin,
         })
     }
 
@@ -206,19 +206,16 @@ impl Focus {
     ///
     /// A focus is `Copy`, and a refused area leaves the one it was offered
     /// to as it was, so whoever builds a focus chooses what an area that
-    /// cannot be used costs. `Focus::new(frame, center)?.with_size(size)?`
-    /// gives no focus at all, and `focus.with_size(size).unwrap_or(focus)`
-    /// keeps the point without an area. The readers choose by what the
+    /// cannot be used costs.
+    /// `Focus::new(frame, center, origin)?.with_size(size)?` gives no
+    /// focus at all, and `focus.with_size(size).unwrap_or(focus)` keeps
+    /// the point without an area. The readers choose by what the
     /// file means by an area with a zero side: no focus where the format
     /// writes it to say that it recorded no position, and the point alone
     /// where it writes it to say only that it recorded no size.
     #[must_use]
     pub fn with_size(self, size: Size) -> Option<Self> {
-        let size_fits = size.width != 0
-            && size.height != 0
-            && fits(self.center.x, size.width, self.frame.width)
-            && fits(self.center.y, size.height, self.frame.height);
-        size_fits.then_some(Self {
+        area_lies_on(self.frame, self.center, size).then_some(Self {
             size: Some(size),
             ..self
         })
@@ -237,18 +234,6 @@ impl Focus {
             in_focus: Some(in_focus),
             ..self
         }
-    }
-
-    /// This focus with where it came from, in place of what it had:
-    /// [`Table`](FocusOrigin::Table) for a point placed from a table of the
-    /// body's autofocus points, and [`Recorded`](FocusOrigin::Recorded)
-    /// for a position the camera measured and wrote.
-    ///
-    /// A focus built without it is `Recorded`, as [`new`](Self::new)
-    /// gives it.
-    #[must_use]
-    pub fn with_origin(self, origin: FocusOrigin) -> Self {
-        Self { origin, ..self }
     }
 
     /// The size of the frame the centre and the area are measured in. It
@@ -289,9 +274,10 @@ impl Focus {
         self.in_focus
     }
 
-    /// Where this point came from; [`Recorded`](FocusOrigin::Recorded)
-    /// unless [`with_origin`](Self::with_origin) set another. The readers
-    /// give `Recorded` for every position a camera wrote.
+    /// Where this point came from, as [`new`](Self::new) was given it. The
+    /// readers give [`Recorded`](FocusOrigin::Recorded) for every position
+    /// a camera wrote, and [`Table`](FocusOrigin::Table) for every point
+    /// placed from a table.
     pub fn origin(&self) -> FocusOrigin {
         self.origin
     }
@@ -326,7 +312,7 @@ impl Focus {
         let (center, size) = scaled_point(self.center, self.size, self.frame, frame);
         // The scaled centre lies on the frame, which has no zero side, so
         // this never gives `None`.
-        let mut focus = Self::new(frame, center)?.with_origin(self.origin);
+        let mut focus = Self::new(frame, center, self.origin)?;
         if let Some(area) = size {
             // The scaled area fits around the centre, so `with_size` never
             // refuses it; were it to, the focus would keep its point
@@ -850,7 +836,7 @@ impl FocusPoints {
         // `with_point` checked the point by the rules `Focus::new` and
         // `Focus::with_size` apply, in this frame, which has no zero side,
         // so neither refuses it: the two `?`s below never return.
-        let mut focus = Focus::new(self.frame, point.center)?.with_origin(self.origin);
+        let mut focus = Focus::new(self.frame, point.center, self.origin)?;
         if let Some(size) = point.size {
             focus = focus.with_size(size)?;
         }
@@ -1129,18 +1115,33 @@ impl FocusLayout {
 
 /// Whether a point centred at `center`, with an area of `size` when it has
 /// one, lies on the frame `frame`: whether [`Focus::new`] takes the centre
-/// and [`Focus::with_size`] the area. It asks those constructors rather
-/// than repeat their checks, so that the one rule a focus is checked by is
-/// the one a [`FocusPoints`] and a [`FocusLayout`] check each of their
-/// points by, and the one by which the Nikon MakerNote's reader drops a
-/// point placed from a table that the crop's window leaves out.
+/// and [`Focus::with_size`] the area. It runs the same checks as those
+/// constructors, [`center_lies_on`] and [`area_lies_on`], so that the one
+/// rule a focus is checked by is the one a [`FocusPoints`] and a
+/// [`FocusLayout`] check each of their points by, and the one by which the
+/// Nikon MakerNote's reader drops a point placed from a table that the
+/// crop's window leaves out.
 pub(crate) fn lies_on(frame: Size, center: Point, size: Option<Size>) -> bool {
-    Focus::new(frame, center)
-        .and_then(|focus| match size {
-            Some(size) => focus.with_size(size),
-            None => Some(focus),
-        })
-        .is_some()
+    center_lies_on(frame, center) && size.is_none_or(|size| area_lies_on(frame, center, size))
+}
+
+/// Whether a centre at `center` lies on the frame `frame`, the rule of
+/// [`Focus::new`]: the frame has no zero side, and the centre is no
+/// further across than the frame's width and no further down than its
+/// height, so that a centre on an edge lies on it.
+fn center_lies_on(frame: Size, center: Point) -> bool {
+    frame.width != 0 && frame.height != 0 && center.x <= frame.width && center.y <= frame.height
+}
+
+/// Whether an area of `size` around a centre at `center` lies on the frame
+/// `frame`, the rule of [`Focus::with_size`]: the area has no zero side,
+/// and it fits inside the frame around the centre across and down
+/// ([`fits`]).
+fn area_lies_on(frame: Size, center: Point, size: Size) -> bool {
+    size.width != 0
+        && size.height != 0
+        && fits(center.x, size.width, frame.width)
+        && fits(center.y, size.height, frame.height)
 }
 
 /// Whether an area `side` pixels across, centred at `center`, lies inside
@@ -1220,19 +1221,20 @@ fn scaled_point(center: Point, size: Option<Size>, old: Size, new: Size) -> (Poi
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::testing::{assert_names, assert_ordered, point, size, z9_focus};
+    use crate::testing::{assert_names, assert_ordered, point, size, z9_focus, z9_focus_from};
 
     /// The focus a reader builds from these values, a step at a time: the
-    /// centre in the frame, then the area when there is one, then whether
-    /// focus was confirmed when that is known. `None` when a step refuses
-    /// its value.
-    fn built(
+    /// centre in the frame, from `origin`, then the area when there is
+    /// one, then whether focus was confirmed when that is known. `None`
+    /// when a step refuses its value.
+    fn built_from(
+        origin: FocusOrigin,
         frame: Size,
         center: Point,
         area: Option<Size>,
         in_focus: Option<bool>,
     ) -> Option<Focus> {
-        let mut focus = Focus::new(frame, center)?;
+        let mut focus = Focus::new(frame, center, origin)?;
         if let Some(area) = area {
             focus = focus.with_size(area)?;
         }
@@ -1242,24 +1244,56 @@ mod tests {
         Some(focus)
     }
 
+    /// The focus [`built_from`] builds from these values, as the camera
+    /// recorded it.
+    fn built(
+        frame: Size,
+        center: Point,
+        area: Option<Size>,
+        in_focus: Option<bool>,
+    ) -> Option<Focus> {
+        built_from(FocusOrigin::Recorded, frame, center, area, in_focus)
+    }
+
+    /// `focus` built again from `origin`, its other values the same.
+    fn again_from(origin: FocusOrigin, focus: Focus) -> Focus {
+        let (frame, center) = (focus.frame(), focus.center());
+        built_from(origin, frame, center, focus.size(), focus.in_focus()).unwrap()
+    }
+
     #[test]
     fn a_focus_needs_a_frame_with_no_zero_side() {
         // Refused even with the centre at 0, which lies on both edges of a
         // zero side.
-        assert_eq!(Focus::new(size(0, 100), point(0, 0)), None);
-        assert_eq!(Focus::new(size(100, 0), point(0, 0)), None);
-        assert_eq!(Focus::new(size(0, 0), point(0, 0)), None);
-        assert!(Focus::new(size(1, 1), point(0, 0)).is_some());
+        assert_eq!(
+            Focus::new(size(0, 100), point(0, 0), FocusOrigin::Recorded),
+            None
+        );
+        assert_eq!(
+            Focus::new(size(100, 0), point(0, 0), FocusOrigin::Recorded),
+            None
+        );
+        assert_eq!(
+            Focus::new(size(0, 0), point(0, 0), FocusOrigin::Recorded),
+            None
+        );
+        assert!(Focus::new(size(1, 1), point(0, 0), FocusOrigin::Recorded).is_some());
     }
 
     #[test]
     fn a_focus_needs_its_centre_on_the_frame() {
         let frame = size(100, 50);
-        assert_eq!(Focus::new(frame, point(101, 0)), None);
-        assert_eq!(Focus::new(frame, point(0, 51)), None);
-        assert_eq!(Focus::new(frame, point(101, 51)), None);
+        assert_eq!(
+            Focus::new(frame, point(101, 0), FocusOrigin::Recorded),
+            None
+        );
+        assert_eq!(Focus::new(frame, point(0, 51), FocusOrigin::Recorded), None);
+        assert_eq!(
+            Focus::new(frame, point(101, 51), FocusOrigin::Recorded),
+            None
+        );
         // The far edges are on the frame.
-        assert!(Focus::new(frame, point(100, 50)).is_some());
+        assert!(Focus::new(frame, point(100, 50), FocusOrigin::Recorded).is_some());
     }
 
     #[test]
@@ -1267,7 +1301,7 @@ mod tests {
         let frame = size(100, 50);
         let corners = [point(0, 0), point(100, 50), point(0, 50), point(100, 0)];
         for center in corners.into_iter().chain([point(99, 49)]) {
-            let focus = Focus::new(frame, center);
+            let focus = Focus::new(frame, center, FocusOrigin::Recorded);
             assert_eq!(focus.map(|focus| focus.center()), Some(center));
         }
     }
@@ -1276,18 +1310,18 @@ mod tests {
     fn no_area_fits_around_a_centre_on_an_edge() {
         let frame = size(100, 100);
         for center in [point(0, 50), point(100, 50), point(50, 0), point(50, 100)] {
-            let focus = Focus::new(frame, center).unwrap();
+            let focus = Focus::new(frame, center, FocusOrigin::Recorded).unwrap();
             assert_eq!(focus.with_size(size(1, 1)), None, "{center:?}");
             // One pixel in from the edge, an area of 2 fits.
             let inward = point(center.x.clamp(1, 99), center.y.clamp(1, 99));
-            let focus = Focus::new(frame, inward).unwrap();
+            let focus = Focus::new(frame, inward, FocusOrigin::Recorded).unwrap();
             assert!(focus.with_size(size(2, 2)).is_some(), "{inward:?}");
         }
     }
 
     #[test]
     fn a_focus_area_needs_no_zero_side() {
-        let focus = Focus::new(size(100, 100), point(50, 50)).unwrap();
+        let focus = Focus::new(size(100, 100), point(50, 50), FocusOrigin::Recorded).unwrap();
         assert_eq!(focus.with_size(size(0, 10)), None);
         assert_eq!(focus.with_size(size(10, 0)), None);
         assert!(focus.with_size(size(10, 10)).is_some());
@@ -1309,10 +1343,10 @@ mod tests {
         ];
         let frame = size(100, 100);
         for (side, at, accepted) in cases {
-            let across = Focus::new(frame, point(at, 50)).unwrap();
+            let across = Focus::new(frame, point(at, 50), FocusOrigin::Recorded).unwrap();
             let across = across.with_size(size(side, 1));
             assert_eq!(across.is_some(), accepted, "width {side} at x = {at}");
-            let down = Focus::new(frame, point(50, at)).unwrap();
+            let down = Focus::new(frame, point(50, at), FocusOrigin::Recorded).unwrap();
             let down = down.with_size(size(1, side));
             assert_eq!(down.is_some(), accepted, "height {side} at y = {at}");
         }
@@ -1323,10 +1357,12 @@ mod tests {
         let (frame, center) = (size(100, 100), point(50, 50));
         let empty = size(0, 10);
         // With `?` on every step, the whole focus is refused.
-        let whole = || Focus::new(frame, center)?.with_size(empty);
+        let whole = || Focus::new(frame, center, FocusOrigin::Recorded)?.with_size(empty);
         assert_eq!(whole(), None);
         // Falling back to the focus before the area keeps the point alone.
-        let focus = Focus::new(frame, center).unwrap().with_in_focus(true);
+        let focus = Focus::new(frame, center, FocusOrigin::Recorded)
+            .unwrap()
+            .with_in_focus(true);
         let point_only = focus.with_size(empty).unwrap_or(focus);
         assert_eq!(point_only.center(), center);
         assert_eq!(point_only.size(), None);
@@ -1370,19 +1406,29 @@ mod tests {
 
     #[test]
     fn focus_getters_return_what_was_built() {
-        let unconfirmed = Focus::new(size(8_256, 5_504), point(4_905, 2_461))
-            .unwrap()
-            .with_size(size(291, 323))
-            .unwrap();
-        // `with_in_focus` never called is `None`, and `with_origin` never
-        // called is `Recorded`.
+        let unconfirmed = |origin| {
+            Focus::new(size(8_256, 5_504), point(4_905, 2_461), origin)
+                .unwrap()
+                .with_size(size(291, 323))
+                .unwrap()
+        };
+        // `with_in_focus` never called is `None`, and the origin is the one
+        // `new` was given.
         let (recorded, table) = (FocusOrigin::Recorded, FocusOrigin::Table);
         let all = [
-            (unconfirmed.with_in_focus(true), Some(true), recorded),
-            (unconfirmed.with_in_focus(false), Some(false), recorded),
-            (unconfirmed, None, recorded),
-            (unconfirmed.with_origin(table), None, table),
-            (unconfirmed.with_origin(recorded), None, recorded),
+            (
+                unconfirmed(recorded).with_in_focus(true),
+                Some(true),
+                recorded,
+            ),
+            (
+                unconfirmed(recorded).with_in_focus(false),
+                Some(false),
+                recorded,
+            ),
+            (unconfirmed(recorded), None, recorded),
+            (unconfirmed(table), None, table),
+            (unconfirmed(table).with_in_focus(true), Some(true), table),
         ];
         for (focus, in_focus, origin) in all {
             assert_eq!(focus.frame(), size(8_256, 5_504));
@@ -1391,36 +1437,42 @@ mod tests {
             assert_eq!(focus.in_focus(), in_focus);
             assert_eq!(focus.origin(), origin);
         }
-        let without_size = Focus::new(size(6_000, 4_000), point(3_000, 2_000)).unwrap();
+        let without_size = Focus::new(
+            size(6_000, 4_000),
+            point(3_000, 2_000),
+            FocusOrigin::Recorded,
+        )
+        .unwrap();
         assert_eq!(without_size.size(), None);
         assert_eq!(without_size.in_focus(), None);
         assert_eq!(without_size.origin(), recorded);
     }
 
     #[test]
-    fn a_focus_is_recorded_unless_told_otherwise() {
-        let focus = Focus::new(size(100, 100), point(50, 50)).unwrap();
-        assert_eq!(focus.origin(), FocusOrigin::Recorded);
-
-        let placed = focus.with_origin(FocusOrigin::Table);
-        assert_eq!(placed.origin(), FocusOrigin::Table);
-        assert_eq!(placed.frame(), size(100, 100));
-        assert_eq!(placed.center(), point(50, 50));
-        // The other builders keep it.
-        let placed = placed.with_size(size(10, 10)).unwrap().with_in_focus(true);
-        assert_eq!(placed.origin(), FocusOrigin::Table);
-
-        // A later origin replaces the earlier one.
-        let recorded = placed.with_origin(FocusOrigin::Recorded);
-        assert_eq!(recorded.origin(), FocusOrigin::Recorded);
-        assert_eq!(recorded.with_origin(FocusOrigin::Table), placed);
-
+    fn a_focus_keeps_the_origin_it_was_built_from() {
+        for origin in all_origins() {
+            let focus = Focus::new(size(100, 100), point(50, 50), origin).unwrap();
+            assert_eq!(focus.origin(), origin, "{origin:?}");
+            assert_eq!(focus.frame(), size(100, 100), "{origin:?}");
+            assert_eq!(focus.center(), point(50, 50), "{origin:?}");
+            // The other builders keep it.
+            let built = focus.with_size(size(10, 10)).unwrap().with_in_focus(true);
+            assert_eq!(built.origin(), origin, "{origin:?}");
+            // It has no part in what `new` refuses.
+            assert_eq!(Focus::new(size(0, 100), point(0, 0), origin), None);
+            assert_eq!(Focus::new(size(100, 50), point(101, 0), origin), None);
+            assert!(Focus::new(size(100, 50), point(100, 50), origin).is_some());
+        }
         assert_eq!(z9_focus().origin(), FocusOrigin::Recorded);
+        assert_eq!(
+            z9_focus_from(FocusOrigin::Table).origin(),
+            FocusOrigin::Table
+        );
     }
 
     #[test]
     fn a_later_area_or_confirmation_replaces_the_earlier_one() {
-        let focus = Focus::new(size(100, 100), point(50, 50))
+        let focus = Focus::new(size(100, 100), point(50, 50), FocusOrigin::Recorded)
             .unwrap()
             .with_size(size(10, 10))
             .unwrap()
@@ -1455,11 +1507,11 @@ mod tests {
     fn a_focus_scaled_to_its_own_frame_is_unchanged() {
         let z9 = z9_focus();
         assert_eq!(z9.scaled_to(z9.frame()), Some(z9));
-        let odd = Focus::new(size(7, 3), point(6, 0))
+        let odd = Focus::new(size(7, 3), point(6, 0), FocusOrigin::Recorded)
             .unwrap()
             .with_in_focus(false);
         assert_eq!(odd.scaled_to(odd.frame()), Some(odd));
-        let corner = Focus::new(size(7, 3), point(7, 3)).unwrap();
+        let corner = Focus::new(size(7, 3), point(7, 3), FocusOrigin::Recorded).unwrap();
         assert_eq!(corner.scaled_to(corner.frame()), Some(corner));
     }
 
@@ -1477,14 +1529,12 @@ mod tests {
     #[test]
     fn a_scaled_focus_keeps_its_origin() {
         for origin in all_origins() {
-            let focus = z9_focus().with_origin(origin);
+            let focus = z9_focus_from(origin);
             let preview = focus.scaled_to(size(1_920, 1_280)).unwrap();
             assert_eq!(preview.origin(), origin, "{origin:?}");
             assert_eq!(focus.scaled_to(focus.frame()), Some(focus));
             // A point without an area or a confirmation keeps it too.
-            let bare = Focus::new(size(7, 3), point(6, 0))
-                .unwrap()
-                .with_origin(origin);
+            let bare = Focus::new(size(7, 3), point(6, 0), origin).unwrap();
             assert_eq!(bare.scaled_to(size(14, 6)).unwrap().origin(), origin);
         }
     }
@@ -1701,8 +1751,7 @@ mod tests {
             built(frame, center, area, Some(false)),
             built(frame, center, area, None),
             // The same point, placed from a table.
-            built(frame, center, area, Some(true))
-                .map(|focus| focus.with_origin(FocusOrigin::Table)),
+            built_from(FocusOrigin::Table, frame, center, area, Some(true)),
         ];
         let others: Vec<Focus> = others.into_iter().map(Option::unwrap).collect();
         for (place, other) in others.iter().enumerate() {
@@ -1956,10 +2005,10 @@ mod tests {
 
     #[test]
     fn a_focus_is_a_list_of_one_point_its_primary() {
-        let bare = Focus::new(size(7, 3), point(6, 0)).unwrap();
+        let bare = Focus::new(size(7, 3), point(6, 0), FocusOrigin::Recorded).unwrap();
         for origin in all_origins() {
             for focus in [z9_focus(), z9_focus().with_in_focus(false), bare] {
-                let focus = focus.with_origin(origin);
+                let focus = again_from(origin, focus);
                 let list = FocusPoints::from(focus);
                 let only = point_of(focus);
                 assert_eq!(list.frame(), focus.frame(), "{focus:?}");
@@ -1991,11 +2040,7 @@ mod tests {
             // No primary, no focus.
             assert_eq!(list.primary_focus(), None, "{origin:?}");
             let on_second = list.clone().with_primary_index(1).unwrap().primary_focus();
-            assert_eq!(
-                on_second,
-                Some(z9_focus().with_origin(origin)),
-                "{origin:?}"
-            );
+            assert_eq!(on_second, Some(z9_focus_from(origin)), "{origin:?}");
             let on_first = list.with_primary_index(0).unwrap().primary_focus().unwrap();
             assert_eq!(on_first.frame(), size(8_256, 5_504), "{origin:?}");
             assert_eq!(on_first.center(), point(100, 100), "{origin:?}");
@@ -2039,7 +2084,7 @@ mod tests {
     #[test]
     fn a_list_scaled_to_its_own_frame_is_unchanged_and_to_a_zero_side_is_none() {
         for origin in all_origins() {
-            let list = FocusPoints::from(z9_focus().with_origin(origin))
+            let list = FocusPoints::from(z9_focus_from(origin))
                 .with_area_mode(FocusAreaMode::Dynamic)
                 .with_point(FocusPoint::new(point(8_256, 0)).with_number(3))
                 .unwrap();
@@ -2107,7 +2152,7 @@ mod tests {
                         }
                         assert_eq!(
                             scaled.primary_focus(),
-                            focus.with_origin(FocusOrigin::Table).scaled_to(target),
+                            again_from(FocusOrigin::Table, focus).scaled_to(target),
                             "{context}"
                         );
                         checked += 1;
@@ -2411,7 +2456,7 @@ mod tests {
                         };
                         let points: &'static [FocusLayoutPoint] = vec![point].leak();
                         let layout = FocusLayout::new("A", frame, points);
-                        let focus = Focus::new(frame, point.center())
+                        let focus = Focus::new(frame, point.center(), FocusOrigin::Recorded)
                             .and_then(|focus| focus.with_size(point.size()));
                         let context = format!("{frame:?}, {point:?}");
                         assert_eq!(layout.is_some(), focus.is_some(), "{context}");

@@ -260,7 +260,7 @@ use crate::camera_settings::{CameraSettings, FineTune, WhiteBalanceMode};
 use crate::container::tiff::types::{BYTE, SHORT, SLONG, UNDEFINED};
 use crate::container::tiff::{Ifd, Tree, skip_damage};
 use crate::error::Result;
-use crate::focus::{Focus, FocusPoints};
+use crate::focus::{Focus, FocusOrigin, FocusPoints};
 use crate::formats::tiff_metadata::one_long;
 use crate::geometry::{Point, Size};
 use crate::io::Source;
@@ -482,7 +482,9 @@ fn focus<R: Read + Seek>(src: &mut Source<R>, makernote: &MakerNote) -> Result<O
     if found.is_none() {
         found = location(src, makernote, FOCUS_LOCATION2)?;
     }
-    let Some(focus) = found.and_then(|(frame, center)| Focus::new(frame, center)) else {
+    let Some(focus) =
+        found.and_then(|(frame, center)| Focus::new(frame, center, FocusOrigin::Recorded))
+    else {
         return Ok(None);
     };
     // An area that `with_size` refuses costs the whole point: `area` gives
@@ -1314,7 +1316,12 @@ mod tests {
     fn expected(frame: [u16; 2], center: [u16; 2], area: Option<[u16; 2]>) -> Focus {
         let [width, height] = frame.map(u32::from);
         let [x, y] = center.map(u32::from);
-        let focus = Focus::new(Size { width, height }, Point { x, y }).expect("a usable centre");
+        let focus = Focus::new(
+            Size { width, height },
+            Point { x, y },
+            FocusOrigin::Recorded,
+        )
+        .expect("a usable centre");
         match area.map(|area| area.map(u32::from)) {
             Some([width, height]) => focus
                 .with_size(Size { width, height })

@@ -90,8 +90,8 @@ use crate::rational::{Rational, SignedRational};
 ///
 /// ```
 /// use raw_files::{
-///     CameraSettings, DateTime, Exposure, Focus, Lens, Metadata, MeteringMode, Point, Rational,
-///     Size,
+///     CameraSettings, DateTime, Exposure, Focus, FocusOrigin, Lens, Metadata, MeteringMode, Point,
+///     Rational, Size,
 /// };
 ///
 /// # fn main() {
@@ -105,7 +105,7 @@ use crate::rational::{Rational, SignedRational};
 ///     .with_iso(64)
 ///     .with_exposure_time(Rational::new(10, 3200)?);
 /// let frame = Size { width: 8256, height: 5504 };
-/// let focus = Focus::new(frame, Point { x: 4905, y: 2461 })?
+/// let focus = Focus::new(frame, Point { x: 4905, y: 2461 }, FocusOrigin::Recorded)?
 ///     .with_size(Size { width: 291, height: 323 })?
 ///     .with_in_focus(true);
 /// let metadata = Metadata::default()
@@ -1116,7 +1116,7 @@ mod tests {
     };
     use crate::focus::{FocusAreaMode, FocusLayoutPoint, FocusOrigin, FocusPoint};
     use crate::geometry::Point;
-    use crate::testing::{point, size, z9_focus};
+    use crate::testing::{point, size, z9_focus, z9_focus_from};
 
     fn fraction(numerator: u32, denominator: u32) -> Rational {
         Rational {
@@ -1583,19 +1583,17 @@ mod tests {
     #[test]
     fn focus_is_the_primary_of_the_points() {
         let metadata = Metadata::default().with_focus_points(two_points());
-        let focus = Focus::new(size(6_016, 4_016), point(3_008, 2_008))
+        let focus = Focus::new(size(6_016, 4_016), point(3_008, 2_008), FocusOrigin::Table)
             .and_then(|focus| focus.with_size(size(164, 164)))
-            .unwrap()
-            .with_origin(FocusOrigin::Table);
+            .unwrap();
         assert_eq!(metadata.focus(), Some(focus));
         assert_eq!(metadata.focus_points(), Some(&two_points()));
 
         // The first point as the primary gives that one instead.
         let first = two_points().with_primary_index(0).unwrap();
         let metadata = Metadata::default().with_focus_points(first);
-        let focus = Focus::new(size(6_016, 4_016), point(1_000, 1_000))
-            .unwrap()
-            .with_origin(FocusOrigin::Table);
+        let focus =
+            Focus::new(size(6_016, 4_016), point(1_000, 1_000), FocusOrigin::Table).unwrap();
         assert_eq!(metadata.focus(), Some(focus));
     }
 
@@ -1617,12 +1615,8 @@ mod tests {
 
     #[test]
     fn with_focus_stores_a_list_of_that_one_point() {
-        let without_area = Focus::new(size(7, 3), point(6, 0)).unwrap();
-        for focus in [
-            z9_focus(),
-            z9_focus().with_origin(FocusOrigin::Table),
-            without_area,
-        ] {
+        let without_area = Focus::new(size(7, 3), point(6, 0), FocusOrigin::Recorded).unwrap();
+        for focus in [z9_focus(), z9_focus_from(FocusOrigin::Table), without_area] {
             let metadata = Metadata::default().with_focus(focus);
             let points = metadata.focus_points().unwrap();
             assert_eq!(points.frame(), focus.frame(), "{focus:?}");
@@ -1672,7 +1666,7 @@ mod tests {
 
     #[test]
     fn a_later_focus_or_list_replaces_the_earlier_one() {
-        let one = Focus::new(size(1, 1), point(0, 0)).unwrap();
+        let one = Focus::new(size(1, 1), point(0, 0), FocusOrigin::Recorded).unwrap();
         let z9 = z9_focus();
         let list = two_points();
         // Each pair in turn, the later one kept whatever the earlier.
@@ -1778,7 +1772,12 @@ mod tests {
             iso: Some(100),
             ..Exposure::default()
         };
-        let focus = Focus::new(size(6_000, 4_000), point(3_000, 2_000)).unwrap();
+        let focus = Focus::new(
+            size(6_000, 4_000),
+            point(3_000, 2_000),
+            FocusOrigin::Recorded,
+        )
+        .unwrap();
         let points = two_points();
         let settings = CameraSettings::default().with_color_space(ColorSpace::Srgb);
         // From the empty metadata, and from a full one whose every value

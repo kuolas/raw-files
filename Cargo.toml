@@ -1,6 +1,6 @@
 [package]
 name = "raw-files"
-version = "0.5.0"
+version = "0.6.0"
 authors = ["Alvaro Kuolas <kuolas@gmail.com>"]
 edition = "2024"
 rust-version = "1.95"

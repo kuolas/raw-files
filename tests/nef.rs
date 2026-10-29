@@ -419,9 +419,13 @@ fn the_z9_metadata_by_hand(orientation: Orientation) -> Option<Metadata> {
         .f_number_at_max_focal_length(Rational::new(400, 100)?)
         .build()?;
     let (x, y) = Z9_FOCUS_CENTER;
-    let focus = Focus::new(as_size(Z9_FOCUS_FRAME), Point { x, y })?
-        .with_size(as_size(Z9_FOCUS_AREA))?
-        .with_in_focus(true);
+    let focus = Focus::new(
+        as_size(Z9_FOCUS_FRAME),
+        Point { x, y },
+        FocusOrigin::Recorded,
+    )?
+    .with_size(as_size(Z9_FOCUS_AREA))?
+    .with_in_focus(true);
     let metadata = Metadata::default()
         .with_make("NIKON CORPORATION")
         .with_model("NIKON Z 9")
@@ -583,9 +587,13 @@ fn the_z6iii_metadata_by_hand(orientation: Orientation) -> Option<Metadata> {
         .f_number_at_max_focal_length(Rational::new(630, 100)?)
         .build()?;
     let (x, y) = Z6III_FOCUS_CENTER;
-    let focus = Focus::new(as_size(Z6III_FOCUS_FRAME), Point { x, y })?
-        .with_size(as_size(Z6III_FOCUS_AREA))?
-        .with_in_focus(Z6III_IN_FOCUS);
+    let focus = Focus::new(
+        as_size(Z6III_FOCUS_FRAME),
+        Point { x, y },
+        FocusOrigin::Recorded,
+    )?
+    .with_size(as_size(Z6III_FOCUS_AREA))?
+    .with_in_focus(Z6III_IN_FOCUS);
     // Its MakerNote's one settings tag is CropHiSpeed, whose crop setting,
     // 17, FX 1:1, gives the image area.
     let metadata = Metadata::default()
@@ -1998,9 +2006,8 @@ fn the_d600_frame_4_gives_its_previews_metadata_and_point_38_placed_from_the_tab
     // numbered 38, the primary.
     let frame = as_size((6016, 4016));
     let point_38 = Point { x: 1812, y: 1705 };
-    let placed = Focus::new(frame, point_38)
-        .and_then(|focus| focus.with_size(as_size((164, 164))))
-        .map(|focus| focus.with_origin(FocusOrigin::Table));
+    let placed = Focus::new(frame, point_38, FocusOrigin::Table)
+        .and_then(|focus| focus.with_size(as_size((164, 164))));
     assert_eq!(metadata.focus(), placed, "{label}");
     let points = FocusPoints::new(frame, FocusOrigin::Table)
         .and_then(|points| {
