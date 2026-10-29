@@ -1629,7 +1629,7 @@ fn placed(
     let mut primary = None;
     for point in table.points() {
         let number = point.number();
-        let is_primary = number == named.primary;
+        let is_primary = number == u16::from(named.primary);
         if !is_primary && !table.bit(number).is_some_and(|bit| named.marks(bit)) {
             continue;
         }
@@ -4628,8 +4628,8 @@ mod tests {
     /// the record's values in the NEF notes, apart from [`placed`].
     fn placed_list(
         frame: [u32; 2],
-        points: &[(u8, [u32; 2])],
-        primary: u8,
+        points: &[(u16, [u32; 2])],
+        primary: u16,
         mode: FocusAreaMode,
     ) -> FocusPoints {
         let [width, height] = frame;
@@ -4649,7 +4649,7 @@ mod tests {
 
     /// Point 38, B1, at (1812, 1705) in the D600's 6016 by 4016 frame, as
     /// the record in the NEF notes gives it.
-    const B1: (u8, [u32; 2]) = (38, [1812, 1705]);
+    const B1: (u16, [u32; 2]) = (38, [1812, 1705]);
 
     #[test]
     fn a_d600_viewfinder_shot_gives_the_point_it_names_placed_from_the_table() {
@@ -4860,7 +4860,8 @@ mod tests {
             let every_bit: Vec<usize> = (0..56).collect();
             let points = d600(order, 38, &every_bit).focus_points().cloned();
             let points = points.expect("every point");
-            let numbers: Vec<Option<u8>> = points.points().iter().map(FocusPoint::number).collect();
+            let numbers: Vec<Option<u16>> =
+                points.points().iter().map(FocusPoint::number).collect();
             assert_eq!(numbers, (1..=39).map(Some).collect::<Vec<_>>(), "{order:?}");
             assert_eq!(points.primary().and_then(FocusPoint::number), Some(38));
             // An empty mask, or one whose bits the table lacks: the primary
@@ -4912,7 +4913,7 @@ mod tests {
                     Some(&placed_list(
                         [3936, 2624],
                         points,
-                        primary,
+                        u16::from(primary),
                         FocusAreaMode::Single
                     )),
                     "{order:?}, point {primary}"

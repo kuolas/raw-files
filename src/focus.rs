@@ -502,7 +502,7 @@ impl fmt::Display for FocusAreaMode {
 /// ```
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct FocusPoint {
-    number: Option<u8>,
+    number: Option<u16>,
     center: Point,
     size: Option<Size>,
     in_focus: Option<bool>,
@@ -530,7 +530,7 @@ impl FocusPoint {
     /// This point with the camera's number for it, in place of any it had;
     /// [`number`](Self::number) reads it.
     #[must_use]
-    pub fn with_number(self, number: u8) -> Self {
+    pub fn with_number(self, number: u16) -> Self {
         Self {
             number: Some(number),
             ..self
@@ -565,7 +565,7 @@ impl FocusPoint {
 
     /// The camera's number for the point, or `None` when the file gives
     /// none, as for a position the camera measured.
-    pub fn number(&self) -> Option<u8> {
+    pub fn number(&self) -> Option<u16> {
         self.number
     }
 
@@ -912,7 +912,7 @@ impl From<Focus> for FocusPoints {
 /// ```
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct LayoutPoint {
-    number: u8,
+    number: u16,
     center: Point,
     size: Size,
 }
@@ -925,7 +925,7 @@ impl LayoutPoint {
     /// It is `const`, so that a layout's points can be written as a
     /// `static` array, which [`FocusLayout::new`] borrows.
     #[must_use]
-    pub const fn new(number: u8, center: Point, size: Size) -> Self {
+    pub const fn new(number: u16, center: Point, size: Size) -> Self {
         Self {
             number,
             center,
@@ -935,7 +935,7 @@ impl LayoutPoint {
 
     /// The camera's number for the point, as it writes it in a file that
     /// names the point.
-    pub fn number(&self) -> u8 {
+    pub fn number(&self) -> u16 {
         self.number
     }
 
@@ -963,10 +963,11 @@ impl LayoutPoint {
 /// A viewer draws from it the grid of points the photographer saw in the
 /// viewfinder, and marks on that grid the points of
 /// [`Metadata::focus_points`](crate::Metadata::focus_points), each found by
-/// its number with [`point`](Self::point). The centres and the boxes follow
-/// the rules of [`Focus`]'s coordinates: every centre lies on the frame,
-/// its edges included, and every box fits inside the frame around its
-/// centre.
+/// its number with [`point`](Self::point). The points are in rising order
+/// of their numbers, each number above 0 and given once. The centres and
+/// the boxes follow the rules of [`Focus`]'s coordinates: every centre
+/// lies on the frame, its edges included, and every box fits inside the
+/// frame around its centre.
 ///
 /// The frame is the table's, whatever the shot. On a shot in a crop mode,
 /// a point of [`Metadata::focus_points`](crate::Metadata::focus_points)
@@ -1049,8 +1050,9 @@ impl FocusLayout {
     ///
     /// - either side of `frame` is zero;
     /// - `points` is empty;
-    /// - a point's number is 0, which Nikon writes for no point, or is the
-    ///   number of another point;
+    /// - a point's number is 0, which Nikon writes for no point, or is not
+    ///   greater than the number of the point before it, so the points are
+    ///   in rising order of their numbers and no number is given twice;
     /// - a point's centre lies outside the frame, by the rule of
     ///   [`Focus::new`]: its x is more than the frame's width, or its y
     ///   more than its height;
@@ -1065,17 +1067,16 @@ impl FocusLayout {
         if frame.width == 0 || frame.height == 0 || points.is_empty() {
             return None;
         }
-        // Whether a point of each number has been seen, indexed by the
-        // number: any `u8` indexes it, so one pass finds a number given
-        // twice without allocating.
-        let mut seen = [false; 256];
+        // Each number must be greater than the one before it, the first
+        // greater than 0, which Nikon writes for no point: so no number is
+        // 0 or given twice, and `point` can search the points by number.
+        let mut before = 0;
         for point in points {
-            let number = usize::from(point.number);
-            let numbered = point.number != 0 && !seen[number];
+            let numbered = point.number > before;
             if !(numbered && lies_on(frame, point.center, Some(point.size))) {
                 return None;
             }
-            seen[number] = true;
+            before = point.number;
         }
         Some(Self {
             model,
@@ -1097,9 +1098,11 @@ impl FocusLayout {
         self.frame
     }
 
-    /// Every point, in the order given to [`new`](Self::new). There is at
-    /// least one; each number is above 0 and no other point's, each centre
-    /// lies on the frame, and each box fits inside it around its centre.
+    /// Every point, in rising order of their numbers, as given to
+    /// [`new`](Self::new). There is at least one; each number is above 0
+    /// and above the number before it, so no two points share one; each
+    /// centre lies on the frame, and each box fits inside it around its
+    /// centre.
     pub fn points(&self) -> &'static [LayoutPoint] {
         self.points
     }
@@ -1108,10 +1111,12 @@ impl FocusLayout {
     /// that number, as for 0, which no point has. A point of
     /// [`Metadata::focus_points`](crate::Metadata::focus_points) is found here
     /// by its [`number`](FocusPoint::number).
-    pub fn point(&self, number: u8) -> Option<LayoutPoint> {
+    pub fn point(&self, number: u16) -> Option<LayoutPoint> {
+        // `new` takes the points only in rising order of their numbers.
         self.points
-            .iter()
-            .find(|point| point.number == number)
+            .binary_search_by_key(&number, |point| point.number)
+            .ok()
+            .and_then(|index| self.points.get(index))
             .copied()
     }
 }
@@ -2232,7 +2237,7 @@ mod tests {
     };
 
     /// The D600's point `number`, centred at (x, y), with the D600's box.
-    const fn d600(number: u8, x: u32, y: u32) -> LayoutPoint {
+    const fn d600(number: u16, x: u32, y: u32) -> LayoutPoint {
         LayoutPoint::new(number, Point { x, y }, D600_BOX)
     }
 
@@ -2299,14 +2304,45 @@ mod tests {
         static TWICE: [LayoutPoint; 2] = [d600(38, 1_812, 1_705), d600(38, 1_812, 1_705)];
         assert_eq!(new(&APART), None);
         assert_eq!(new(&TWICE), None);
-        // Any other numbers, in any order, the largest included.
-        static ANY: [LayoutPoint; 3] = [
-            d600(255, 3_008, 2_007),
-            d600(2, 2_768, 1_503),
+        // Any other rising numbers, with gaps, the largest included, and
+        // numbers past a byte: 257 is not 1, though their low bytes agree,
+        // and is refused when given twice.
+        static ANY: [LayoutPoint; 4] = [
             d600(1, 1_812, 1_705),
+            d600(2, 2_768, 1_503),
+            d600(257, 2_768, 1_503),
+            d600(u16::MAX, 3_008, 2_007),
         ];
         assert_eq!(new(&ANY).map(|layout| layout.points()), Some(&ANY[..]));
+        static TWICE_PAST_A_BYTE: [LayoutPoint; 3] = [
+            d600(1, 3_008, 2_007),
+            d600(257, 2_768, 1_503),
+            d600(257, 1_812, 1_705),
+        ];
+        assert_eq!(new(&TWICE_PAST_A_BYTE), None);
         assert!(new(&D600_THREE).is_some());
+    }
+
+    #[test]
+    fn a_layout_lists_its_points_in_rising_number_order() {
+        let new =
+            |points: &'static [LayoutPoint]| FocusLayout::new("NIKON D600", D600_FRAME, points);
+        // Two points the wrong way round, one out of place among three,
+        // and the largest number before a small one.
+        static FALLING: [LayoutPoint; 2] = [d600(2, 3_008, 2_007), d600(1, 2_768, 1_503)];
+        static ONE_OUT: [LayoutPoint; 3] = [
+            d600(13, 2_768, 1_503),
+            d600(1, 3_008, 2_007),
+            d600(38, 1_812, 1_705),
+        ];
+        static LARGEST_FIRST: [LayoutPoint; 2] =
+            [d600(u16::MAX, 3_008, 2_007), d600(257, 2_768, 1_503)];
+        assert_eq!(new(&FALLING), None);
+        assert_eq!(new(&ONE_OUT), None);
+        assert_eq!(new(&LARGEST_FIRST), None);
+        // The same points in rising order.
+        static RISING: [LayoutPoint; 2] = [d600(1, 2_768, 1_503), d600(2, 3_008, 2_007)];
+        assert!(new(&RISING).is_some());
     }
 
     #[test]
@@ -2387,7 +2423,7 @@ mod tests {
         assert_eq!(layout.points(), D600_THREE);
         // The points are borrowed as given, in their order, not copied.
         assert_eq!(layout.points().as_ptr(), D600_THREE.as_ptr());
-        let read: Vec<(u8, Point, Size)> = layout
+        let read: Vec<(u16, Point, Size)> = layout
             .points()
             .iter()
             .map(|point| (point.number(), point.center(), point.size()))
@@ -2411,23 +2447,46 @@ mod tests {
 
     #[test]
     fn a_layout_point_is_found_by_its_number() {
-        // The points out of number order too, so that the first point is
-        // not always the one asked for.
-        static SHUFFLED: [LayoutPoint; 3] = [
-            d600(38, 1_812, 1_705),
+        let layout = d600_three();
+        for (number, x, y) in [(1, 3_008, 2_007), (13, 2_768, 1_503), (38, 1_812, 1_705)] {
+            let found = layout.point(number);
+            assert_eq!(found, Some(d600(number, x, y)), "{number}");
+        }
+        // No point is numbered 0, and these three leave out 2, 39 and
+        // every number past the D600's, 257 among them, whose low byte is
+        // 1's.
+        for number in [0, 2, 39, 255, 257, u16::MAX] {
+            assert_eq!(layout.point(number), None, "{number}");
+        }
+
+        // Every layout of the first one to seven of these points, so that
+        // the point asked for is first, last and between, in layouts of
+        // an odd and an even count: each of its points is found, with its
+        // own centre, and no other number is, those before the first,
+        // between two points and past the last among them.
+        static SPREAD: [LayoutPoint; 7] = [
             d600(1, 3_008, 2_007),
-            d600(13, 2_768, 1_503),
+            d600(2, 2_768, 1_503),
+            d600(13, 1_812, 1_705),
+            d600(38, 3_008, 1_503),
+            d600(255, 2_768, 2_007),
+            d600(257, 1_812, 1_503),
+            d600(u16::MAX, 3_008, 1_705),
         ];
-        let shuffled = FocusLayout::new("NIKON D600", D600_FRAME, &SHUFFLED).unwrap();
-        for layout in [d600_three(), shuffled] {
-            for (number, x, y) in [(1, 3_008, 2_007), (13, 2_768, 1_503), (38, 1_812, 1_705)] {
-                let found = layout.point(number);
-                assert_eq!(found, Some(d600(number, x, y)), "{number} in {layout:?}");
+        let absent = [0, 3, 12, 14, 39, 254, 256, 258, u16::MAX - 1];
+        for count in 1..=SPREAD.len() {
+            let points = &SPREAD[..count];
+            let layout = FocusLayout::new("NIKON D600", D600_FRAME, points).unwrap();
+            for point in points {
+                let number = point.number();
+                assert_eq!(layout.point(number), Some(*point), "{number} of {count}");
             }
-            // No point is numbered 0, and these three leave out 2, 39 and
-            // every number past the D600's.
-            for number in [0, 2, 39, 255] {
-                assert_eq!(layout.point(number), None, "{number} in {layout:?}");
+            for point in &SPREAD[count..] {
+                let number = point.number();
+                assert_eq!(layout.point(number), None, "{number} past {count}");
+            }
+            for number in absent {
+                assert_eq!(layout.point(number), None, "{number} in {count}");
             }
         }
     }
@@ -2447,7 +2506,7 @@ mod tests {
         assert_eq!(base, again);
 
         // One point's centre moved by a pixel, its number changed, its box
-        // changed; the points in another order; one point fewer.
+        // changed; one point fewer.
         static MOVED: [LayoutPoint; 3] = [
             d600(1, 3_008, 2_007),
             d600(13, 2_768, 1_503),
@@ -2470,11 +2529,6 @@ mod tests {
                 },
             ),
         ];
-        static REORDERED: [LayoutPoint; 3] = [
-            d600(13, 2_768, 1_503),
-            d600(1, 3_008, 2_007),
-            d600(38, 1_812, 1_705),
-        ];
         let others = [
             FocusLayout::new("NIKON D610", D600_FRAME, &D600_THREE),
             FocusLayout::new("NIKON D600", size(6_017, 4_016), &D600_THREE),
@@ -2482,7 +2536,6 @@ mod tests {
             FocusLayout::new("NIKON D600", D600_FRAME, &MOVED),
             FocusLayout::new("NIKON D600", D600_FRAME, &RENUMBERED),
             FocusLayout::new("NIKON D600", D600_FRAME, &RESIZED),
-            FocusLayout::new("NIKON D600", D600_FRAME, &REORDERED),
             FocusLayout::new("NIKON D600", D600_FRAME, &D600_THREE[..2]),
         ];
         let others: Vec<FocusLayout> = others.into_iter().map(Option::unwrap).collect();
