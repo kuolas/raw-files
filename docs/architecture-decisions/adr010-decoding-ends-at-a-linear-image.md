@@ -57,8 +57,8 @@ Rejected:
 
 ## Consequences
 
-- The roadmap's last milestone is a developed linear image and its colour
-  model; there is no editing-pipeline milestone.
+- The roadmap's capabilities end at a developed linear image and its
+  colour model; none of them is an editing pipeline.
 - Editors build their pipeline on the linear image, and can keep old edits
   rendering the same because the algorithms underneath do not change.
 - An editor's white-balance control stays interactive: a new white is a new

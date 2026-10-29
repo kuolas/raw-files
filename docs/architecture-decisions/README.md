@@ -61,11 +61,13 @@ covering what the old one left out, also gets its own ADR. It says
 it is, Accepted.
 
 The first exception: a correction leaves the decision as it was: a
-figure measured again, a term renamed in the code, a slip. It is made
-in the record itself, with no new record and no change of status, and
-the commit that makes it says why the record is corrected rather than
-superseded. ADR004's list of trailers, ADR011's rule for the ISO and
-ADR016's account of what its groups need were corrected this way.
+figure measured again, a term renamed in the code or the roadmap, a
+slip. It is made in the record itself, with no new record and no change
+of status, and the commit that makes it says why the record is
+corrected rather than superseded. ADR004's list of trailers, ADR011's
+rule for the ISO, ADR016's account of what its groups need, and the
+words ADR010 and ADR016 used for the roadmap's milestones, which it now
+calls capabilities, were corrected this way.
 
 The second exception: a decision that extends an old one to more values
 of the same kind, by the same rule, may be added to the old record in
