@@ -7,9 +7,10 @@ requests live in the
 ## Where we are
 
 The repository, its license and its contribution process exist, and
-five releases are out. Where this roadmap says *my own* files, it is me,
-Alvaro Kuolas, who maintains raw-files, writing about my own cameras:
-they stay private. What raw-files reads, milestone by milestone:
+the releases so far are listed below. Where this roadmap says *my own*
+files, it is me, Alvaro Kuolas, who maintains raw-files, writing about
+my own cameras: they stay private. What raw-files reads, milestone by
+milestone:
 
 - **Previews (milestones 1 and 2): done.** A Nikon NEF file opens with
   the JPEG previews in its IFD0, its SubIFDs and its MakerNote. A Sony
@@ -30,14 +31,18 @@ they stay private. What raw-files reads, milestone by milestone:
   only in enciphered blocks and which wait for milestone 6, and their
   raw image size, because a tag gives an APS-C raw the code of a
   medium one.
-- **Focus points (milestone 4): the first step done, the second under
-  way.** Both formats give where the camera focused, read from the
-  MakerNote, on Nikon mirrorless bodies, Nikon DSLRs in live view and
-  Sony bodies from the ILCE-7RM2 on. A shot that records only an
+- **Focus points (milestone 4): the first step done, the second done for
+  its first body.** Both formats give where the camera focused, read
+  from the MakerNote, on Nikon mirrorless bodies, Nikon DSLRs in live
+  view and Sony bodies from the ILCE-7RM2 on, with the points the camera
+  used and, on Nikon files, the area mode. A shot that records only an
   autofocus point's number gives none, except on the Nikon D600, the
   first body whose table of points the project has measured: its shots
-  through the viewfinder give their points placed from that table.
-  Further bodies join as their tables are measured.
+  through the viewfinder give their points placed from that table, and
+  its files the layout of its 39 points. Checked on the 56 frames,
+  stripped of their pixels, on which I measured my own D600's points.
+  There is no schedule for further bodies: one joins when I have it at
+  hand, or when a contributor sends RAW + JPEG frames of it to measure.
 - **Plain JPEG files (milestone 5): done.** A JPEG file, as a camera
   writes it beside its raw file or instead of it, opens with the file
   itself, the thumbnail of its Exif segment, the other images of its
@@ -58,8 +63,10 @@ Any other file is refused with the `UnknownFormat` error.
 
 The public API is the file handle (`RawFile` and `Options`) with the
 preview types (`Preview`, `PreviewFormat`, `Orientation`, `Size`), the
-metadata types (`Metadata`, `Exposure`, `Lens`, `LensBuilder`, `Focus`,
-`Point`, `DateTime`, `Rational` and `SignedRational`), the camera
+metadata types (`Metadata`, `Exposure`, `Lens`, `LensBuilder`, `Point`,
+`DateTime`, `Rational` and `SignedRational`), the focus types (`Focus`,
+`FocusOrigin`, `FocusPoints`, `FocusPoint`, `FocusAreaMode`,
+`FocusLayout` and `LayoutPoint`), the camera
 settings types (`CameraSettings`, `WhiteBalance`, `FineTune`, `Flash`,
 and the enums `WhiteBalanceMode`, `ExposureProgram`, `MeteringMode`,
 `FlashMode`, `Shutter`, `ImageArea`, `RawImageSize` and `ColorSpace`),
@@ -77,10 +84,10 @@ and the enums `WhiteBalanceMode`, `ExposureProgram`, `MeteringMode`,
 - **0.5.0**: milestone 3 completed, as far as plain tags record it, with
   the camera's settings
   ([#26](https://github.com/kuolas/raw-files/issues/26)).
-- **Next**: the second step of milestone 4, a DSLR's autofocus point,
-  which a shot through the viewfinder names by number, placed on the
-  picture from a table of the body's points, with the points the camera
-  used and the body's layout beside it
+- **0.6.0**: the second step of milestone 4 for its first body, a
+  DSLR's autofocus point, which a shot through the viewfinder names by
+  number, placed on the picture from a table of the body's points, with
+  the points the camera used and the body's layout beside it
   ([#57](https://github.com/kuolas/raw-files/issues/57)). The tables are
   the project's own, measured on frames shot with the body and read in
   the maker's software, the Nikon D600's first, by a procedure that a
@@ -88,7 +95,7 @@ and the enums `WhiteBalanceMode`, `ExposureProgram`, `MeteringMode`,
   gives none, and the format notes say so per body
   ([ADR017](architecture-decisions/adr017-per-body-tables-measured-by-the-project.md),
   [ADR018](architecture-decisions/adr018-focus-points-placed-from-a-table-and-the-points-used.md)).
-- **Then**: milestone 6, every value a file records, the ones that only
+- **Next**: milestone 6, every value a file records, the ones that only
   enciphered or encrypted blocks hold among them
   ([#50](https://github.com/kuolas/raw-files/issues/50)).
 
