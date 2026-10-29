@@ -86,7 +86,7 @@ mod tests {
         let sizes: Vec<(u32, u32)> = parsed
             .previews
             .iter()
-            .map(|p| (p.width(), p.height()))
+            .map(|p| (p.size().width, p.size().height))
             .collect();
         assert_eq!(sizes, [(1616, 1080), (7008, 4672)]);
     }

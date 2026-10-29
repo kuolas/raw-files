@@ -135,7 +135,7 @@ fn a_missing_file_is_an_io_error_that_converts_back() {
 #[test]
 fn options_with_room_for_the_file_still_find_no_format() {
     let bytes = one_ifd(Some("Canon"));
-    let options = Options::new().limits(Limits::default().max_ifds(1));
+    let options = Options::new().limits(Limits::default().with_max_ifds(1));
     let err = options.from_bytes(&bytes).unwrap_err();
     assert_eq!(err.kind(), ErrorKind::UnknownFormat);
 }
@@ -147,7 +147,7 @@ fn the_options_limits_reach_the_walk() {
     let err = RawFile::from_bytes(&bytes).unwrap_err();
     assert_eq!(err.kind(), ErrorKind::UnknownFormat);
     // One IFD allowed: the walk stops at the second.
-    let options = Options::new().limits(Limits::default().max_ifds(1));
+    let options = Options::new().limits(Limits::default().with_max_ifds(1));
     let err = options.from_bytes(&bytes).unwrap_err();
     assert_eq!(err.kind(), ErrorKind::LimitExceeded);
     let err = options.from_reader(Cursor::new(&bytes)).unwrap_err();

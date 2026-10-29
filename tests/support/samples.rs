@@ -113,7 +113,10 @@ pub struct Sample {
 
 /// The stored size of each preview, in order.
 pub fn sizes(previews: &[Preview]) -> Vec<(u32, u32)> {
-    previews.iter().map(|p| (p.width(), p.height())).collect()
+    previews
+        .iter()
+        .map(|p| (p.size().width, p.size().height))
+        .collect()
 }
 
 /// Checks that `sample` opens as `format` with exactly its expected
@@ -138,7 +141,7 @@ pub fn check(sample: &Sample, format: Format) {
 
     let previews = file.previews().to_vec();
     for (preview, jpeg) in previews.iter().zip(sample.previews) {
-        let size = (preview.width(), preview.height());
+        let size = preview.size();
         assert_eq!(preview.format(), PreviewFormat::Jpeg, "{label} {size:?}");
         assert_eq!(
             preview.orientation(),

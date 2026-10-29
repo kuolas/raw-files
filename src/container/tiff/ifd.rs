@@ -158,7 +158,7 @@ pub(crate) fn parse_ifd<R: Read + Seek>(
     if count == 0 {
         return Err(Error::malformed("an IFD with no entries", offset));
     }
-    if u32::from(count) > limits.ifd_entries() {
+    if u32::from(count) > limits.max_ifd_entries() {
         return Err(Error::limit(
             "an IFD has more entries than the limit allows",
             offset,
@@ -1327,10 +1327,10 @@ mod tests {
             let built = builder.build();
             let at = built.ifd_offset(ifd);
 
-            let limits = Limits::default().max_ifd_entries(3);
+            let limits = Limits::default().with_max_ifd_entries(3);
             let (ifd, _) = try_read(order, &built.bytes, 0, at, &limits).unwrap();
             assert_eq!(ifd.len(), 3);
-            let limits = Limits::default().max_ifd_entries(2);
+            let limits = Limits::default().with_max_ifd_entries(2);
             assert_error(
                 try_read(order, &built.bytes, 0, at, &limits),
                 ErrorKind::LimitExceeded,

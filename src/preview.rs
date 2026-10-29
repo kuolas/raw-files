@@ -78,20 +78,9 @@ impl Preview {
         }
     }
 
-    /// The number of pixel columns, as stored, read from the JPEG's frame
-    /// header rather than from the file's tags.
-    pub fn width(&self) -> u32 {
-        self.width
-    }
-
-    /// The number of pixel rows, as stored, read from the JPEG's frame
-    /// header rather than from the file's tags.
-    pub fn height(&self) -> u32 {
-        self.height
-    }
-
-    /// The width and height together, as stored, before the
-    /// [`orientation`](Self::orientation) is applied.
+    /// The width and height in pixels, as stored, before the
+    /// [`orientation`](Self::orientation) is applied, read from the JPEG's
+    /// frame header rather than from the file's tags.
     pub fn size(&self) -> Size {
         Size {
             width: self.width,
@@ -181,18 +170,18 @@ pub(crate) fn sort(previews: &mut [Preview]) {
     });
 }
 
-/// The smallest preview at least `width` by `height`, from `previews`
-/// already ordered by [`sort`].
+/// The smallest preview at least `size`, as wide as its width and as tall
+/// as its height, from `previews` already ordered by [`sort`].
 ///
 /// The comparison uses the stored size, before the orientation is applied:
 /// the caller knows the orientation and can swap its box, and the preview
 /// chosen is the same bytes either way. When none is large enough, the
 /// largest is returned, so a caller asking for more than the file has still
 /// gets the best there is. `None` only when there are no previews.
-pub(crate) fn at_least(previews: &[Preview], width: u32, height: u32) -> Option<Preview> {
+pub(crate) fn at_least(previews: &[Preview], size: Size) -> Option<Preview> {
     previews
         .iter()
-        .find(|preview| preview.width >= width && preview.height >= height)
+        .find(|preview| preview.width >= size.width && preview.height >= size.height)
         .or(previews.last())
         .copied()
 }
@@ -200,6 +189,7 @@ pub(crate) fn at_least(previews: &[Preview], width: u32, height: u32) -> Option<
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::testing::size;
 
     /// A JPEG preview of `width` by `height` pixels, `length` bytes at
     /// `offset`, upright.
@@ -230,8 +220,6 @@ mod tests {
             PreviewFormat::Jpeg,
             Orientation::Rotate90,
         );
-        assert_eq!(preview.width(), 640);
-        assert_eq!(preview.height(), 480);
         assert_eq!(
             preview.size(),
             Size {
@@ -323,28 +311,37 @@ mod tests {
     #[test]
     fn at_least_gives_the_smallest_that_fits() {
         // Both 640 × 480 and 1620 × 1080 fit; the smaller is chosen.
-        assert_eq!(at_least(&sorted(), 300, 200).map(|p| p.offset), Some(2));
+        assert_eq!(
+            at_least(&sorted(), size(300, 200)).map(|p| p.offset),
+            Some(2)
+        );
     }
 
     #[test]
     fn at_least_accepts_an_exact_fit() {
-        assert_eq!(at_least(&sorted(), 640, 480).map(|p| p.offset), Some(2));
+        assert_eq!(
+            at_least(&sorted(), size(640, 480)).map(|p| p.offset),
+            Some(2)
+        );
     }
 
     #[test]
     fn at_least_falls_back_to_the_largest() {
-        assert_eq!(at_least(&sorted(), 4_000, 3_000).map(|p| p.offset), Some(3));
+        assert_eq!(
+            at_least(&sorted(), size(4_000, 3_000)).map(|p| p.offset),
+            Some(3)
+        );
     }
 
     #[test]
     fn at_least_of_nothing_is_none() {
-        assert_eq!(at_least(&[], 0, 0), None);
-        assert_eq!(at_least(&[], 640, 480), None);
+        assert_eq!(at_least(&[], size(0, 0)), None);
+        assert_eq!(at_least(&[], size(640, 480)), None);
     }
 
     #[test]
     fn at_least_zero_gives_the_smallest() {
-        assert_eq!(at_least(&sorted(), 0, 0).map(|p| p.offset), Some(1));
+        assert_eq!(at_least(&sorted(), size(0, 0)).map(|p| p.offset), Some(1));
     }
 
     #[test]
@@ -353,6 +350,9 @@ mod tests {
         // is too narrow, so the larger preview is chosen.
         let mut previews = [preview(1, 10, 480, 640), preview(2, 20, 1_620, 1_080)];
         sort(&mut previews);
-        assert_eq!(at_least(&previews, 640, 480).map(|p| p.offset), Some(2));
+        assert_eq!(
+            at_least(&previews, size(640, 480)).map(|p| p.offset),
+            Some(2)
+        );
     }
 }

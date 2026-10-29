@@ -400,7 +400,7 @@ impl<R: Read + Seek> Walker<'_, R> {
         if self.visited.contains_key(&at) {
             return Ok(false);
         }
-        if self.attempts >= self.limits.ifds() {
+        if self.attempts >= self.limits.max_ifds() {
             return Err(Error::limit("more IFDs than the limit allows", at));
         }
         self.attempts += 1;
@@ -465,7 +465,7 @@ impl<R: Read + Seek> Walker<'_, R> {
     ///
     /// `Io` if the reader fails.
     fn children(&mut self, parent: usize, depth: u32) -> Result<Option<Children>> {
-        if depth >= self.limits.ifd_depth() {
+        if depth >= self.limits.max_ifd_depth() {
             return Ok(None);
         }
         let Some((_, ifd)) = self.ifds.get(parent) else {
@@ -866,7 +866,7 @@ mod tests {
             }
             for (what, built) in files {
                 // The cap allows IFD0 alone: trying any link would cross it.
-                let (_, tree) = try_walk(&built.bytes, &Limits::default().max_ifds(1))
+                let (_, tree) = try_walk(&built.bytes, &Limits::default().with_max_ifds(1))
                     .unwrap_or_else(|err| panic!("{what} ({order:?}): {err:?}"));
                 assert_eq!(locations(&tree), [Location::Ifd0], "{what} ({order:?})");
             }
@@ -906,7 +906,7 @@ mod tests {
                 ],
             ),
         ] {
-            let limits = Limits::default().max_ifd_depth(cap);
+            let limits = Limits::default().with_max_ifd_depth(cap);
             let (mut src, tree) = try_walk(&built.bytes, &limits).unwrap();
             assert_eq!(ids(&mut src, &tree), expected, "cap {cap}");
         }
@@ -932,15 +932,16 @@ mod tests {
             builder.next(ifd1, Some(ifd2));
             let built = builder.build();
 
-            let (mut src, tree) = try_walk(&built.bytes, &Limits::default().max_ifds(10)).unwrap();
+            let (mut src, tree) =
+                try_walk(&built.bytes, &Limits::default().with_max_ifds(10)).unwrap();
             assert_eq!(ids(&mut src, &tree), [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
             assert_error(
-                try_walk(&built.bytes, &Limits::default().max_ifds(9)),
+                try_walk(&built.bytes, &Limits::default().with_max_ifds(9)),
                 ErrorKind::LimitExceeded,
                 built.ifd_offset(ifd2),
             );
             assert_error(
-                try_walk(&built.bytes, &Limits::default().max_ifds(0)),
+                try_walk(&built.bytes, &Limits::default().with_max_ifds(0)),
                 ErrorKind::LimitExceeded,
                 built.ifd_offset(ifd0),
             );
@@ -958,10 +959,10 @@ mod tests {
             builder.subifds_raw(ifd0, &[1024, 1040, 1056]);
             let built = builder.build();
 
-            let (_, tree) = try_walk(&built.bytes, &Limits::default().max_ifds(4)).unwrap();
+            let (_, tree) = try_walk(&built.bytes, &Limits::default().with_max_ifds(4)).unwrap();
             assert_eq!(locations(&tree), [Location::Ifd0]);
             assert_error(
-                try_walk(&built.bytes, &Limits::default().max_ifds(3)),
+                try_walk(&built.bytes, &Limits::default().with_max_ifds(3)),
                 ErrorKind::LimitExceeded,
                 1056,
             );
@@ -1116,7 +1117,7 @@ mod tests {
             assert_error(
                 try_walk(
                     &builder.build().bytes,
-                    &Limits::default().max_ifd_entries(1),
+                    &Limits::default().with_max_ifd_entries(1),
                 ),
                 ErrorKind::LimitExceeded,
                 8,
@@ -1247,8 +1248,9 @@ mod tests {
                 builder.exif(ifd0, exif).long(exif, INTEROP_IFD, &[link]);
                 // The cap allows IFD0 and the Exif IFD alone: trying the
                 // link would cross it.
-                let (_, tree) = try_walk(&builder.build().bytes, &Limits::default().max_ifds(2))
-                    .unwrap_or_else(|err| panic!("{link} ({order:?}): {err:?}"));
+                let (_, tree) =
+                    try_walk(&builder.build().bytes, &Limits::default().with_max_ifds(2))
+                        .unwrap_or_else(|err| panic!("{link} ({order:?}): {err:?}"));
                 assert_eq!(
                     locations(&tree),
                     [Location::Ifd0, Location::Exif],
@@ -1424,7 +1426,7 @@ mod tests {
                 }
                 // The cap allows IFD0, the position and the Exif IFD: the
                 // tag does not try the position again.
-                let limits = Limits::default().max_ifds(3);
+                let limits = Limits::default().with_max_ifds(3);
                 let (_, tree) = try_walk(&builder.build().bytes, &limits)
                     .unwrap_or_else(|err| panic!("{case} ({order:?}): {err:?}"));
                 assert_eq!(
@@ -1463,19 +1465,21 @@ mod tests {
             let built = builder.build();
             let bytes = placed(&built);
 
-            let (mut src, tree) = try_walk(&built.bytes, &Limits::default().max_ifds(4)).unwrap();
+            let (mut src, tree) =
+                try_walk(&built.bytes, &Limits::default().with_max_ifds(4)).unwrap();
             assert_eq!(ids(&mut src, &tree), [0, 1, 2, 3], "{order:?}");
             assert_error(
-                try_walk(&built.bytes, &Limits::default().max_ifds(3)),
+                try_walk(&built.bytes, &Limits::default().with_max_ifds(3)),
                 ErrorKind::LimitExceeded,
                 built.ifd_offset(interop),
             );
 
             // Inside a file, the error is at the IFD's position in it.
-            let (mut src, tree) = try_walk_at(&bytes, POS, &Limits::default().max_ifds(4)).unwrap();
+            let (mut src, tree) =
+                try_walk_at(&bytes, POS, &Limits::default().with_max_ifds(4)).unwrap();
             assert_eq!(ids(&mut src, &tree), [0, 1, 2, 3], "{order:?}");
             assert_error(
-                try_walk_at(&bytes, POS, &Limits::default().max_ifds(3)),
+                try_walk_at(&bytes, POS, &Limits::default().with_max_ifds(3)),
                 ErrorKind::LimitExceeded,
                 POS + built.ifd_offset(interop),
             );
@@ -1794,7 +1798,7 @@ mod tests {
                     // The cap allows IFD0 alone: trying any link would
                     // cross it.
                     let bytes = placed(&builder.build());
-                    let (_, tree) = try_walk_at(&bytes, POS, &Limits::default().max_ifds(1))
+                    let (_, tree) = try_walk_at(&bytes, POS, &Limits::default().with_max_ifds(1))
                         .unwrap_or_else(|err| panic!("{link:?} at {at} ({order:?}): {err:?}"));
                     assert_eq!(
                         locations(&tree),
@@ -1833,11 +1837,12 @@ mod tests {
             let built = builder.build();
             let bytes = placed(&built);
 
-            let (mut src, tree) = try_walk_at(&bytes, POS, &Limits::default().max_ifds(3)).unwrap();
+            let (mut src, tree) =
+                try_walk_at(&bytes, POS, &Limits::default().with_max_ifds(3)).unwrap();
             assert_eq!(ids(&mut src, &tree), [0, 1, 2]);
             for (cap, crosses) in [(2, ifd1), (1, sub), (0, ifd0)] {
                 assert_error(
-                    try_walk_at(&bytes, POS, &Limits::default().max_ifds(cap)),
+                    try_walk_at(&bytes, POS, &Limits::default().with_max_ifds(cap)),
                     ErrorKind::LimitExceeded,
                     POS + built.ifd_offset(crosses),
                 );
@@ -1905,7 +1910,7 @@ mod tests {
                     };
                     // The cap allows IFD0 alone: trying any link would
                     // cross it.
-                    let limits = Limits::default().max_ifds(1);
+                    let limits = Limits::default().with_max_ifds(1);
                     let (mut src, tree) = try_walk_at_the_end(builder.build().bytes, &limits)
                         .unwrap_or_else(|err| panic!("{link:?} at {at} ({order:?}): {err:?}"));
                     assert_eq!(tree.ifd0().block().base(), NEAR_THE_END);

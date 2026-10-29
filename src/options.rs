@@ -24,7 +24,8 @@ use crate::limits::Limits;
 /// ```
 /// use raw_files::{ErrorKind, Limits, Options};
 ///
-/// let options = Options::new().limits(Limits::default().max_preview_bytes(16 * 1024 * 1024));
+/// let limits = Limits::default().with_max_preview_bytes(16 * 1024 * 1024);
+/// let options = Options::new().limits(limits);
 /// let err = options.from_bytes(b"not a RAW file").unwrap_err();
 /// assert_eq!(err.kind(), ErrorKind::UnknownFormat);
 /// ```

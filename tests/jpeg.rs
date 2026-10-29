@@ -146,7 +146,7 @@ type Seen = (Range<u64>, (u32, u32), PreviewFormat, Orientation);
 fn seen(preview: &Preview) -> Seen {
     (
         preview.byte_range(),
-        (preview.width(), preview.height()),
+        (preview.size().width, preview.size().height),
         preview.format(),
         preview.orientation(),
     )
@@ -451,7 +451,7 @@ fn a_camera_jpeg_lists_the_file_the_thumbnail_and_the_mpf_images() {
         assert_eq!(bytes[..2], [0xFF, 0xD8], "{range:?}");
         assert_eq!(bytes, built.bytes[start..end], "{range:?}");
     }
-    let at_least = file.preview_at_least(1000, 700).unwrap();
+    let at_least = file.preview_at_least(size_of((1000, 700))).unwrap();
     assert_eq!(at_least.byte_range(), built.mpf_image(1));
     assert_eq!(at_least.size(), size_of(MPF_IMAGES[1]));
 }
@@ -721,7 +721,7 @@ fn a_limit_crossed_inside_the_exif_segment_costs_its_metadata_only() {
     for (options, label) in [
         (Options::new(), "default limits"),
         (
-            Options::new().limits(Limits::default().max_ifds(EXIF_IFDS)),
+            Options::new().limits(Limits::default().with_max_ifds(EXIF_IFDS)),
             "max_ifds at the segment's IFDs",
         ),
     ] {
@@ -736,7 +736,7 @@ fn a_limit_crossed_inside_the_exif_segment_costs_its_metadata_only() {
 
     // Walking the segment needs `EXIF_IFDS` IFDs, so one fewer crosses the
     // limit: the segment's values and thumbnail are lost, not the file.
-    let options = Options::new().limits(Limits::default().max_ifds(EXIF_IFDS - 1));
+    let options = Options::new().limits(Limits::default().with_max_ifds(EXIF_IFDS - 1));
     let previews = expected(
         &[
             (built.mpf_image(0), MPF_IMAGES[0]),
@@ -1472,7 +1472,7 @@ fn a_limit_crossed_inside_the_makernote_costs_the_makernote_only() {
             [(20, read, with), (19, nikon_previews(&file, MAIN), without)]
         {
             assert_opens_with(
-                &Options::new().limits(Limits::default().max_ifd_entries(entries)),
+                &Options::new().limits(Limits::default().with_max_ifd_entries(entries)),
                 &file.built.bytes,
                 &previews,
                 &metadata,
@@ -1859,7 +1859,7 @@ fn a_limit_crossed_inside_the_sony_makernote_costs_its_focus_point_only() {
         assert_eq!(u16_in(&file.built.bytes, file.makernote_ifd, order), 12);
         for (entries, focus) in [(12, Some(sony_focus(ILCE7M3_FOCUS_LOCATION))), (11, None)] {
             assert_opens_with(
-                &Options::new().limits(Limits::default().max_ifd_entries(entries)),
+                &Options::new().limits(Limits::default().with_max_ifd_entries(entries)),
                 &file.built.bytes,
                 &sony_previews(&file, ILCE7M3_MAIN),
                 &sony_metadata(SONY_MAKE, ILCE7M3_MODEL, ILCE7M3_MAIN, focus),
@@ -2082,15 +2082,15 @@ fn open_stripped_jpeg(
     assert_eq!(Some(largest), previews.last().copied(), "{label}");
     assert_eq!(largest.byte_range(), 0..to_u64(bytes.len()), "{label}");
     for preview in &previews {
-        let size = (preview.width(), preview.height());
+        let size = preview.size();
         let read = file.read_preview(preview).unwrap();
         if *preview == largest {
             assert_eq!(read, bytes, "{label} {size:?}");
             continue;
         }
         let stub = jpeg_stub(
-            u16::try_from(size.0).unwrap(),
-            u16::try_from(size.1).unwrap(),
+            u16::try_from(size.width).unwrap(),
+            u16::try_from(size.height).unwrap(),
             0xC0,
         );
         assert_eq!(read[..stub.len()], stub[..], "{label} {size:?}");

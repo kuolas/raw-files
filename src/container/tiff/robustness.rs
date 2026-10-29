@@ -236,9 +236,9 @@ fn seeds_dir() -> PathBuf {
 /// Limits far below the defaults, which the fixtures still fit.
 fn small_limits() -> Limits {
     Limits::default()
-        .max_ifds(8)
-        .max_ifd_entries(16)
-        .max_ifd_depth(2)
+        .with_max_ifds(8)
+        .with_max_ifd_entries(16)
+        .with_max_ifd_depth(2)
 }
 
 /// Limits that `fixture` does not fit, one at a time: one IFD fewer than
@@ -249,16 +249,16 @@ fn tight_limits(fixture: &Fixture) -> Vec<(&'static str, Limits)> {
     let ifds = u32::try_from(fixture.ifds.len()).unwrap();
     let entries = fixture.entry_counts().into_iter().max().unwrap();
     let mut sets = vec![
-        ("one IFD fewer", Limits::default().max_ifds(ifds - 1)),
+        ("one IFD fewer", Limits::default().with_max_ifds(ifds - 1)),
         (
             "one entry fewer",
-            Limits::default().max_ifd_entries(u32::from(entries) - 1),
+            Limits::default().with_max_ifd_entries(u32::from(entries) - 1),
         ),
     ];
     if fixture.depth > 0 {
         sets.push((
             "one level fewer",
-            Limits::default().max_ifd_depth(fixture.depth - 1),
+            Limits::default().with_max_ifd_depth(fixture.depth - 1),
         ));
     }
     sets
@@ -318,8 +318,8 @@ fn check(bytes: &[u8], limits: &Limits, what: impl Fn() -> String) -> Option<usi
 /// Asserts that `tree` is within `limits`: in the number of IFDs, the
 /// entries of each and the depth of each SubIFD.
 fn assert_within(tree: &Tree, limits: &Limits, what: &impl Fn() -> String) {
-    let max_ifds = usize::try_from(limits.ifds()).unwrap();
-    let max_entries = usize::try_from(limits.ifd_entries()).unwrap();
+    let max_ifds = usize::try_from(limits.max_ifds()).unwrap();
+    let max_entries = usize::try_from(limits.max_ifd_entries()).unwrap();
     assert!(
         tree.len() <= max_ifds,
         "{}: a tree of length {}",
@@ -348,7 +348,7 @@ fn assert_within(tree: &Tree, limits: &Limits, what: &impl Fn() -> String) {
             }
         };
         assert!(
-            depth <= limits.ifd_depth(),
+            depth <= limits.max_ifd_depth(),
             "{}: depth {depth} at {i}",
             what()
         );
