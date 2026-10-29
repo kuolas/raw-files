@@ -897,9 +897,12 @@ What the fields hold:
   which conditions, and how the points used are reported with the
   area mode is decided in
   [ADR018](../../architecture-decisions/adr018-focus-points-placed-from-a-table-and-the-points-used.md),
-  and the frame of a placed point on a crop, the crop's window, 3936x2624
+  the frame of a placed point on a crop, the crop's window, 3936x2624
   on a D600 DX frame, in
-  [ADR019](../../architecture-decisions/adr019-the-frame-of-a-placed-focus-point-on-a-crop.md).
+  [ADR019](../../architecture-decisions/adr019-the-frame-of-a-placed-focus-point-on-a-crop.md),
+  and the window's size, kept in the table and checked against
+  CropHiSpeed's origin, in
+  [ADR020](../../architecture-decisions/adr020-each-crops-window-in-the-table.md).
   raw-files places the D600's point so, from version `0100`'s layout
   code, primary point and mask: in the 6016x4016 frame, or in that
   window on the DX crop, the one crop the record confirms.

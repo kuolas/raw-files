@@ -201,11 +201,15 @@
 //! The area mode is read as for a position. On a crop, whose CropHiSpeed
 //! records a cropped size that differs from its original size, points are
 //! placed only when the table's record confirms the crop's setting: the
-//! DX crop, 2, on the D600. Then the frame is the crop's window, the
-//! table's frame less twice CropHiSpeed's origin, its sixth and seventh
-//! values, on each side, 3936 by 2624 on a D600 DX frame; every centre
+//! DX crop, 2, on the D600. Then the frame is the crop's window, of the
+//! size the record measured, 3936 by 2624 on a D600 DX frame, centred in
+//! the table's frame, so that its origin is (1040, 696); every centre
 //! moves back by that origin and every box is kept, by the decision to
-//! measure a placed point on a crop in the crop's window (ADR019). A point
+//! measure a placed point on a crop in the crop's window (ADR019).
+//! CropHiSpeed's origin, its sixth and seventh values, must be the
+//! window's, as on every D600 DX frame; a file whose origin is not
+//! records the crop elsewhere in the frame and gives no focus point, by
+//! the decision to keep each crop's window in the table (ADR020). A point
 //! whose centre or box the window leaves out is dropped, and when the
 //! primary is, the file gives no focus point. In a JPEG the window must be
 //! the JPEG's own size, as it is on the D600 at full image size, so that a
@@ -1336,7 +1340,8 @@ fn focus<R: Read + Seek>(
 /// table may be placed on ([`placed_frame`]); the size of the picture
 /// before the crop and after it, in the sensor's pixels, which [`in_crop`]
 /// and [`placed_frame`] only compare with each other; and where the crop
-/// starts, which only a point placed from a table moves by.
+/// starts, which a point placed from a table requires to be its window's
+/// centred origin ([`placed_frame`]).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 struct CropHiSpeed {
     /// The crop setting, its first value, such as 11 for FX uncropped.
@@ -1345,9 +1350,11 @@ struct CropHiSpeed {
     original: Size,
     /// The cropped width and height.
     cropped: Size,
-    /// The crop's left column and top row, its sixth and seventh values:
-    /// (1040, 696) on a D600 DX frame, the origin of the centred window of
-    /// its 6016 by 4016 output frame, in output pixels, (0, 0) uncropped.
+    /// The crop's left column and top row, its sixth and seventh values,
+    /// in the sensor's pixels: (1040, 696) on a D600 DX frame, (0, 0)
+    /// uncropped. On the D600 it is also the origin of the DX picture's
+    /// window centred in the 6016 by 4016 output, which a point placed from
+    /// a table requires of it ([`placed_frame`]).
     origin: Point,
 }
 
@@ -1587,7 +1594,14 @@ fn window_of_shape(frame: Size, cut: Cut, pixels: Size) -> Option<Size> {
 /// is longer than the frame, or the position lies before the window's
 /// start.
 fn shifted(value: u32, frame: u32, window: u32) -> Option<u32> {
-    value.checked_sub(frame.checked_sub(window)? / 2)
+    value.checked_sub(centred_origin(frame, window)?)
+}
+
+/// Where a window `window` pixels long starts when centred on a side
+/// `frame` pixels long: half of `frame - window`, rounded down. `None`
+/// when the window is longer than the frame.
+fn centred_origin(frame: u32, window: u32) -> Option<u32> {
+    Some(frame.checked_sub(window)? / 2)
 }
 
 /// The points that `named`, what a record with no position names, names,
@@ -1610,7 +1624,7 @@ fn shifted(value: u32, frame: u32, window: u32) -> Option<u32> {
 /// which names none, or a number past the table.
 ///
 /// The frame is the table's, or on a crop the crop's window, into which
-/// every centre moves back by CropHiSpeed's origin, the box kept
+/// every centre moves back by the window's origin, the box kept
 /// ([`placed_frame`]). A point that no longer lies on the window by the
 /// rule every focus point is checked by ([`lies_on`]), its centre outside
 /// it or its box across an edge, is dropped; the primary dropped costs the
@@ -1661,20 +1675,24 @@ fn placed(
 /// `crop`, records a cropped size equal to its original size or is
 /// missing, the table's frame, the body's full-size output, and no move.
 ///
-/// On a crop, only when the table's record confirms the crop's setting
-/// ([`PointTable::confirms_crop`]): the crop's window, the table's frame
-/// less twice CropHiSpeed's origin on each side, 3936 by 2624 on a D600 DX
-/// frame, and that origin, by the decision to measure a placed point on a
-/// crop in the crop's window (ADR019). In a JPEG, whose own size is
-/// `pixels`, the window must be that size, which on the D600 is the full
-/// image size: a crop-mode JPEG at a smaller size gives none (ADR018). An
-/// uncropped JPEG keeps the table's frame at any size, which the JPEG
-/// reader then holds to the picture's shape.
+/// On a crop, only when the table's record confirms the crop's setting:
+/// the crop's window, the size the record measured
+/// ([`PointTable::crop_window`]), 3936 by 2624 on a D600 DX frame, and its
+/// origin centred in the table's frame, half of the frame less the window
+/// on each axis, (1040, 696) on the D600, by the decisions to measure a
+/// placed point on a crop in the crop's window (ADR019) and to keep each
+/// crop's window in the table (ADR020). CropHiSpeed's origin must be that
+/// origin: one that is not records a crop placed elsewhere in the frame
+/// than the record's frames show, which the window cannot be trusted on.
+/// In a JPEG, whose own size is `pixels`, the window must be that size,
+/// which on the D600 is the full image size: a crop-mode JPEG at a smaller
+/// size gives none (ADR018). An uncropped JPEG keeps the table's frame at
+/// any size, which the JPEG reader then holds to the picture's shape.
 ///
-/// `None` on a crop the record does not confirm, for an origin too large
-/// for the frame, and for a JPEG whose size is not the window's. A window
-/// with a zero side, which no list can be measured in, is refused by
-/// [`FocusPoints::new`].
+/// `None` on a crop the record does not confirm, for a CropHiSpeed origin
+/// other than the window's, for a window that does not fit the frame,
+/// which the table tests rule out, and for a JPEG whose size is not the
+/// window's.
 fn placed_frame(
     table: &PointTable,
     crop: Option<CropHiSpeed>,
@@ -1684,15 +1702,12 @@ fn placed_frame(
     let Some(crop) = crop.filter(|crop| crop.cropped != crop.original) else {
         return Some((frame, Point { x: 0, y: 0 }));
     };
-    if !table.confirms_crop(crop.mode) {
-        return None;
-    }
-    let origin = crop.origin;
-    let window = Size {
-        width: frame.width.checked_sub(origin.x.checked_mul(2)?)?,
-        height: frame.height.checked_sub(origin.y.checked_mul(2)?)?,
+    let window = table.crop_window(crop.mode)?;
+    let origin = Point {
+        x: centred_origin(frame.width, window.width)?,
+        y: centred_origin(frame.height, window.height)?,
     };
-    if pixels.is_some_and(|pixels| pixels != window) {
+    if crop.origin != origin || pixels.is_some_and(|pixels| pixels != window) {
         return None;
     }
     Some((window, origin))
@@ -4556,19 +4571,56 @@ mod tests {
     /// The D600's CropHiSpeed in the DX crop, as frames 49 to 51 record it.
     const D600_DX: [u16; 7] = [2, 6080, 4028, 3968, 2636, 1040, 696];
 
-    /// The D600's DX CropHiSpeed with the origin (`left`, `top`) and the
-    /// cropped size its window would have, so that a test can move the
-    /// window.
-    fn d600_dx_at(left: u16, top: u16) -> [u16; 7] {
-        [
+    /// The D600's DX CropHiSpeed with its origin moved to (`left`, `top`),
+    /// its sizes kept.
+    fn d600_dx_at(left: u32, top: u32) -> CropHiSpeed {
+        CropHiSpeed {
+            mode: 2,
+            original: Size {
+                width: 6080,
+                height: 4028,
+            },
+            cropped: Size {
+                width: 3968,
+                height: 2636,
+            },
+            origin: Point { x: left, y: top },
+        }
+    }
+
+    /// The points that the D600's table places for a viewfinder shot that
+    /// names `primary` and sets the mask's `bits`, on the crop `crop`, as
+    /// if the table's record confirmed the DX crop, setting 2, in a window
+    /// of `window` instead of 3936 by 2624, so that a test can place points
+    /// in a window no body has, in a raw file. The list is given the area
+    /// mode single point, as the reader gives it.
+    fn placed_in_window(
+        window: [u32; 2],
+        crop: CropHiSpeed,
+        primary: u8,
+        bits: &[usize],
+    ) -> Option<FocusPoints> {
+        let [width, height] = window;
+        // A table's crops are `'static`; each call leaks the few bytes of
+        // one, which a test can afford.
+        let crops = Box::leak(Box::new([points::ConfirmedCrop::new(
             2,
-            6080,
-            4028,
-            6016_u16.saturating_sub(left.saturating_mul(2)),
-            4016_u16.saturating_sub(top.saturating_mul(2)),
-            left,
-            top,
-        ]
+            Size { width, height },
+        )]));
+        let table = points::find("NIKON D600")
+            .expect("the D600's table")
+            .with_crops(crops);
+        let mut mask = [0; points::MASK_LEN];
+        for &bit in bits {
+            mask[bit / 8] |= 1 << (bit % 8);
+        }
+        let named = NamedPoints {
+            layout_code: 3,
+            primary,
+            mask,
+        };
+        super::placed(named, &table, Some(crop), None)
+            .map(|points| points.with_area_mode(FocusAreaMode::Single))
     }
 
     /// A file in byte order `order` that holds no raw data, whose IFD0's
@@ -4953,63 +5005,102 @@ mod tests {
 
     #[test]
     fn a_point_the_crop_window_leaves_out_is_dropped() {
-        for order in ORDERS {
-            // The window moved to the origin (1740, 696), 2536 by 2624:
-            // point 38 at (72, 1009), whose box of 164 crosses the left
-            // edge, and point 25 at (2463, 1311), whose box crosses the
-            // right one, are dropped; points 1 and 11 stay.
-            let value = viewfinder(order, "0100", 3, 1, &[10, 24, 37]);
-            let metadata = shot(order, "NIKON D600", &value, Some(d600_dx_at(1740, 696)));
-            let expected = placed_list(
-                [2536, 2624],
-                &[(1, [1268, 1311]), (11, [1028, 1311])],
-                1,
-                FocusAreaMode::Single,
-            );
-            assert_eq!(metadata.focus_points(), Some(&expected), "{order:?}");
-            // At the origin (1730, 696), point 38's box reaches the left
-            // edge exactly, at (82, 1009), and is kept.
-            let value = viewfinder(order, "0100", 3, 1, &[37]);
-            let metadata = shot(order, "NIKON D600", &value, Some(d600_dx_at(1730, 696)));
-            let expected = placed_list(
-                [2556, 2624],
-                &[(1, [1278, 1311]), (38, [82, 1009])],
-                1,
-                FocusAreaMode::Single,
-            );
-            assert_eq!(metadata.focus_points(), Some(&expected), "{order:?}");
-            // At the origin (1900, 696), point 38's centre lies left of the
-            // window: dropped.
-            let metadata = shot(order, "NIKON D600", &value, Some(d600_dx_at(1900, 696)));
-            let expected =
-                placed_list([2216, 2624], &[(1, [1108, 1311])], 1, FocusAreaMode::Single);
-            assert_eq!(metadata.focus_points(), Some(&expected), "{order:?}");
-            // The primary dropped, by its box or by its centre: no point.
-            for left in [1740, 1900] {
-                let metadata = shot(
-                    order,
-                    "NIKON D600",
-                    &d600_viewfinder(order),
-                    Some(d600_dx_at(left, 696)),
-                );
-                assert_eq!(metadata.focus_points(), None, "{order:?}, {left}");
-            }
-        }
+        // No point of the D600's table lies outside its DX window, so these
+        // windows are narrower than any the D600 has, each centred in the
+        // frame with CropHiSpeed's origin at its own.
+        //
+        // A window of 2536 by 2624, at the origin (1740, 696): point 38 at
+        // (72, 1009), whose box of 164 crosses the left edge, and point 25
+        // at (2463, 1311), whose box crosses the right one, are dropped;
+        // points 1 and 11 stay.
+        let narrow = d600_dx_at(1740, 696);
+        let expected = placed_list(
+            [2536, 2624],
+            &[(1, [1268, 1311]), (11, [1028, 1311])],
+            1,
+            FocusAreaMode::Single,
+        );
+        assert_eq!(
+            placed_in_window([2536, 2624], narrow, 1, &[10, 24, 37]),
+            Some(expected)
+        );
+        // A window of 2556 by 2624, at the origin (1730, 696): point 38's
+        // box reaches the left edge exactly, at (82, 1009), and is kept.
+        let expected = placed_list(
+            [2556, 2624],
+            &[(1, [1278, 1311]), (38, [82, 1009])],
+            1,
+            FocusAreaMode::Single,
+        );
+        assert_eq!(
+            placed_in_window([2556, 2624], d600_dx_at(1730, 696), 1, &[37]),
+            Some(expected)
+        );
+        // A window of 2216 by 2624, at the origin (1900, 696): point 38's
+        // centre lies left of the window, dropped.
+        let narrowest = d600_dx_at(1900, 696);
+        let expected = placed_list([2216, 2624], &[(1, [1108, 1311])], 1, FocusAreaMode::Single);
+        assert_eq!(
+            placed_in_window([2216, 2624], narrowest, 1, &[37]),
+            Some(expected)
+        );
+        // The primary dropped, by its box or by its centre: no point.
+        assert_eq!(placed_in_window([2536, 2624], narrow, 38, &[37]), None);
+        assert_eq!(placed_in_window([2216, 2624], narrowest, 38, &[37]), None);
     }
 
     #[test]
     fn a_crop_window_with_no_room_gives_no_placed_point() {
-        // An origin of half the frame leaves a window with a zero side,
-        // and one past it no window; the largest SHORTs, too.
+        // A window with a zero side, which no list can be measured in, and
+        // one wider or taller than the frame, which has no origin: no
+        // point. Each CropHiSpeed records the window's centred origin, with
+        // 0 on a side where the window is longer than the frame, so that
+        // the window alone is at fault. The table tests keep such a window out of
+        // every table.
+        for (window, crop) in [
+            ([0, 2624], d600_dx_at(3008, 696)),
+            ([3936, 0], d600_dx_at(1040, 2008)),
+            ([6018, 2624], d600_dx_at(0, 696)),
+            ([3936, 4018], d600_dx_at(1040, 0)),
+        ] {
+            assert_eq!(placed_in_window(window, crop, 1, &[0]), None, "{window:?}");
+        }
+    }
+
+    #[test]
+    fn a_crop_whose_origin_is_not_the_windows_gives_no_placed_point() {
+        // The D600's DX window is 3936 by 2624, centred at (1040, 696),
+        // the origin every DX frame's CropHiSpeed records. A CropHiSpeed
+        // with another origin records the crop elsewhere in the frame, so
+        // the window measured on the frames does not hold for it: no
+        // point, in a raw file or in a JPEG of the window's size. The
+        // origins are a pixel off on each side; (1024, 690), the centred
+        // origin of CropHiSpeed's cropped size, 3968 by 2636, which counts
+        // the sensor's border; a top of 0, as a crop at the top of the
+        // frame would record; and the largest SHORTs.
         for order in ORDERS {
-            for (left, top) in [(3008, 696), (3009, 696), (1040, 2008), (1040, 2009)] {
-                let value = viewfinder(order, "0100", 3, 1, &[0]);
-                let metadata = shot(order, "NIKON D600", &value, Some(d600_dx_at(left, top)));
-                assert_eq!(metadata.focus_points(), None, "{order:?}, {left}, {top}");
+            for (left, top) in [
+                (1041, 696),
+                (1039, 696),
+                (1040, 697),
+                (1040, 695),
+                (1024, 690),
+                (1040, 0),
+                (u16::MAX, u16::MAX),
+            ] {
+                let mut crop = D600_DX;
+                crop[5] = left;
+                crop[6] = top;
+                let value = d600_viewfinder(order);
+                let metadata = shot(order, "NIKON D600", &value, Some(crop));
+                assert_eq!(metadata.focus_points(), None, "{order:?}, ({left}, {top})");
+                let metadata = d600_jpeg(order, &value, Some(crop), [3936, 2624]);
+                assert_eq!(
+                    metadata.focus_points(),
+                    None,
+                    "{order:?}, ({left}, {top}) JPEG"
+                );
             }
-            let largest = [2, 6080, 4028, 3968, 2636, u16::MAX, u16::MAX];
-            let metadata = shot(order, "NIKON D600", &d600_viewfinder(order), Some(largest));
-            assert_eq!(metadata.focus_points(), None, "{order:?}");
         }
     }
 
