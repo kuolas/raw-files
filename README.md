@@ -437,7 +437,8 @@ Everyone taking part is expected to follow the
 ## Documentation
 
 - [CONTRIBUTING.md](CONTRIBUTING.md) — how to build, test and send a change.
-- [docs/ROADMAP.md](docs/ROADMAP.md) — what is planned, in what order.
+- [docs/ROADMAP.md](docs/ROADMAP.md) — what raw-files aims for,
+  what it reads so far, and what comes next.
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — how the code is structured.
 - [docs/architecture-decisions/](docs/architecture-decisions/README.md) — why
   things are the way they are.
