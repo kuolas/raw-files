@@ -23,8 +23,9 @@
 //!
 //! Beside the points, the table carries what the same frames' bytes show
 //! of the way a file names them: layout code 3, a mask whose bit number − 1
-//! stands for each point, and the DX crop, on which frames 49 and 50 put
-//! their points where the table's place, less CropHiSpeed's origin, says.
+//! stands for each point, and the DX crop, whose 3936 by 2624 window lies
+//! centred in the frame: frames 49 and 50 put their points where the
+//! table's place, less the window's origin, says.
 //!
 //! Each point's name, in the comment beside it, is its row in the
 //! viewfinder, A at the top to E at the bottom, and its column, 1 at the
@@ -34,7 +35,7 @@
 //! documentation and confirmed on the frames: 1 is the centre, 13 the top
 //! of the inner columns' left one and 38 the top of the leftmost column.
 
-use super::{BitOrder, PointTable, Provenance};
+use super::{BitOrder, ConfirmedCrop, PointTable, Provenance};
 use crate::focus::FocusLayoutPoint;
 use crate::geometry::{Point, Size};
 
@@ -103,11 +104,18 @@ pub(super) static TABLE: PointTable = PointTable {
     // On all 45 single-point frames with a point number, exactly one bit
     // is set, bit number − 1 (section 2.3).
     bit_order: BitOrder::NumberLessOne,
-    // The DX crop, CropHiSpeed's setting 2: frames 49 and 50 put points 38
-    // and 27 within 2 pixels of the table's place less CropHiSpeed's
-    // origin, (1040, 696), in the 3936 by 2624 picture of the NEF's
-    // preview and the JPEG alike (section 2.6).
-    crop_codes: &[2],
+    // The DX crop, CropHiSpeed's setting 2: frames 49 to 51's full-size
+    // previews and JPEGs are 3936 by 2624, and frames 49 and 50 put points
+    // 38 and 27 within 2 pixels of the table's place less (1040, 696),
+    // the origin of that window centred in the frame, which CropHiSpeed
+    // records too (section 2.6).
+    crops: &[ConfirmedCrop {
+        code: 2,
+        window: Size {
+            width: 3936,
+            height: 2624,
+        },
+    }],
     provenance: Provenance {
         shot_by: "Alvaro Kuolas",
         measured_by: "Alvaro Kuolas",

@@ -1351,8 +1351,8 @@ const D600_DX: Option<ImageArea> = Some(ImageArea::ApsC);
 const D600_FULL: (u32, u32) = (6016, 4016);
 
 /// The frame of the points placed on a DX frame: the crop's window, the
-/// table's frame less twice CropHiSpeed's origin, (1040, 696), on each
-/// side.
+/// size of frames 49 to 51's previews and JPEGs, centred in the table's
+/// frame at CropHiSpeed's origin, (1040, 696).
 const D600_WINDOW: (u32, u32) = (3936, 2624);
 
 /// The 56 frames of the D600 session, in order. The point numbers, the

@@ -53,11 +53,15 @@
 //! way a file names them, which the Nikon MakerNote's reader needs to place
 //! a point that a shot through the viewfinder names: the layout code the
 //! body writes for the table's layout; the order in which the mask of the
-//! points used names each point by a bit ([`BitOrder`]); and the crop
-//! settings on which the record's crop frames confirm that a point moves
-//! into the crop's window by CropHiSpeed's origin, as the
+//! points used names each point by a bit ([`BitOrder`]); and the crops
+//! the record's crop frames confirm, each with the size of its window
+//! ([`ConfirmedCrop`]). A point on such a crop moves into the crop's
+//! window, as the
 //! [decision on the frame of a placed point on a crop](https://github.com/kuolas/raw-files/blob/master/docs/architecture-decisions/adr019-the-frame-of-a-placed-focus-point-on-a-crop.md)
-//! (ADR019) measures it. A crop the record does not confirm gives no placed
+//! (ADR019) measures it, and the window is the size the record measured,
+//! centred in the table's frame, as the
+//! [decision to keep each crop's window in the table](https://github.com/kuolas/raw-files/blob/master/docs/architecture-decisions/adr020-each-crops-window-in-the-table.md)
+//! (ADR020) sets out. A crop the record does not confirm gives no placed
 //! point. A body whose uncropped files record a CropHiSpeed cropped size
 //! other than the original, as the D810's do, four pixels short in width
 //! ([`super::nikon`]), would have those files read as a crop when a named
@@ -132,12 +136,12 @@ pub(in crate::formats) struct PointTable {
     layout_code: u8,
     /// How the mask of the points used names each point by a bit.
     bit_order: BitOrder,
-    /// The crop settings, CropHiSpeed's first value, on which the record's
-    /// crop frames confirm that a point moves into the crop's window by
-    /// CropHiSpeed's origin: 2, the DX crop, on the D600, whose frames 49
-    /// and 50 put their points within 2 pixels of there (section 2.6 of
-    /// its record). A file on any other crop gives no placed point.
-    crop_codes: &'static [u32],
+    /// The crops the record's crop frames confirm, each with its window:
+    /// on the D600, the DX crop, setting 2, in a 3936 by 2624 window,
+    /// where frames 49 and 50 put their points within 2 pixels of the
+    /// table's place (section 2.6 of its record). A file on any other crop
+    /// gives no placed point.
+    crops: &'static [ConfirmedCrop],
     /// Where the table's values come from.
     #[cfg_attr(
         not(test),
@@ -150,10 +154,43 @@ pub(in crate::formats) struct PointTable {
     provenance: Provenance,
 }
 
+/// A crop that a body's record confirms a named point can be placed on:
+/// the crop's setting, as CropHiSpeed's first value records it, and the
+/// size of the crop's picture in the body's output, the window that a
+/// point placed on the crop is measured in.
+///
+/// The window is measured on the record's crop frames, as the size of
+/// their full-size previews and JPEGs, and lies centred in the table's
+/// frame, which the frames confirm. No tag gives it: CropHiSpeed's cropped
+/// size counts the sensor's pixels, the border of the stored raw data
+/// among them, 3968 by 2636 on a D600 DX frame against a 3936 by 2624
+/// picture. A file whose CropHiSpeed origin is not the window's, half of
+/// the frame less the window on each axis, gives no placed point
+/// (ADR020).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(in crate::formats) struct ConfirmedCrop {
+    /// The crop setting, CropHiSpeed's first value: 2, the DX crop, on the
+    /// D600.
+    code: u32,
+    /// The size of the crop's picture, in the pixels of the table's frame:
+    /// 3936 by 2624 for the D600's DX crop.
+    window: Size,
+}
+
+impl ConfirmedCrop {
+    /// The crop of setting `code` whose picture is `window`, for tests
+    /// that place points in a window no body has.
+    #[cfg(test)]
+    pub(in crate::formats) const fn new(code: u32, window: Size) -> ConfirmedCrop {
+        ConfirmedCrop { code, window }
+    }
+}
+
 /// Where a table's values come from, as the body's record in the NEF notes
 /// gives it: a record for readers of the table, which the table tests
 /// check is filled in and whose frames they check are committed.
 #[derive(Debug)]
+#[cfg_attr(test, derive(Clone, Copy))]
 #[cfg_attr(
     not(test),
     expect(
@@ -219,11 +256,24 @@ impl PointTable {
         self.bit_order.bit(number)
     }
 
-    /// Whether the table's record confirms that a point moves into the
-    /// crop's window on the crop whose setting, CropHiSpeed's first value,
-    /// is `code`.
-    pub(in crate::formats) fn confirms_crop(&self, code: u32) -> bool {
-        self.crop_codes.contains(&code)
+    /// The window of the crop whose setting, CropHiSpeed's first value, is
+    /// `code`, in the pixels of the table's frame, as the table's record
+    /// measured it; `None` for a crop the record does not confirm. Every
+    /// window fits the frame, and the frame less the window is even on
+    /// each axis, so that it can be centred to the pixel, which the table
+    /// tests check.
+    pub(in crate::formats) fn crop_window(&self, code: u32) -> Option<Size> {
+        self.crops
+            .iter()
+            .find(|crop| crop.code == code)
+            .map(|crop| crop.window)
+    }
+
+    /// This table with `crops` as its confirmed crops, for tests that place
+    /// points in a window no body has.
+    #[cfg(test)]
+    pub(in crate::formats) fn with_crops(&self, crops: &'static [ConfirmedCrop]) -> PointTable {
+        PointTable { crops, ..*self }
     }
 }
 
@@ -430,11 +480,46 @@ mod tests {
         }
     }
 
+    /// Every table's confirmed crops are each confirmed once, and each
+    /// window has no zero side, fits the frame, and leaves an even margin,
+    /// the frame less the window, on each axis: a window that does not fit
+    /// could hold no point, and one with an odd margin cannot be centred
+    /// to the pixel, so no file's CropHiSpeed could ever match it.
+    #[test]
+    fn every_tables_crop_windows_fit_its_frame_centred() {
+        for table in TABLES {
+            let model = table.model;
+            let mut codes = BTreeSet::new();
+            for crop in table.crops {
+                let ConfirmedCrop { code, window } = *crop;
+                assert!(codes.insert(code), "{model}: crop setting {code} twice");
+                assert!(
+                    window.width > 0 && window.height > 0,
+                    "{model}: crop setting {code}'s window {window} has a zero side"
+                );
+                for (side, frame, window) in [
+                    ("width", table.frame.width, window.width),
+                    ("height", table.frame.height, window.height),
+                ] {
+                    let margin = frame.checked_sub(window).unwrap_or_else(|| {
+                        panic!("{model}: crop setting {code}'s window is longer than the frame in {side}")
+                    });
+                    assert!(
+                        margin % 2 == 0,
+                        "{model}: crop setting {code}'s window leaves an odd margin in {side}, \
+                         {margin} pixels, so it cannot be centred"
+                    );
+                }
+            }
+        }
+    }
+
     /// The D600's table carries what its record confirms of the way a file
     /// names its points, by values written here from the record rather than
     /// read from the table: layout code 3; point 1 on bit 0, point 13 on
     /// bit 12 and point 38 on bit 37, the bits frames 20, 1 and 4 set; and
-    /// the DX crop alone, setting 2, of the crops CropHiSpeed records.
+    /// the DX crop alone, setting 2, of the crops CropHiSpeed records, in
+    /// the 3936 by 2624 window of frames 49 to 51's previews and JPEGs.
     #[test]
     fn the_d600_table_names_its_points_as_its_record_confirms() {
         let d600 = find("NIKON D600").expect("the D600's table");
@@ -443,9 +528,15 @@ mod tests {
             assert_eq!(d600.bit(number), Some(bit), "point {number}");
         }
         assert_eq!(d600.bit(0), None);
-        assert!(d600.confirms_crop(2));
+        assert_eq!(
+            d600.crop_window(2),
+            Some(Size {
+                width: 3936,
+                height: 2624
+            })
+        );
         for code in [0, 1, 6, 9, 10, 11, 12, 17, 18] {
-            assert!(!d600.confirms_crop(code), "crop setting {code}");
+            assert_eq!(d600.crop_window(code), None, "crop setting {code}");
         }
     }
 

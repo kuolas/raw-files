@@ -62,7 +62,9 @@ how to get in touch
    - a frame or two in portrait orientation, to show that the point is
      drawn turned with the picture and the file's bytes do not change;
    - two frames in a crop mode (DX on an FX body) with points near
-     opposite corners, to measure how a point shifts into the crop;
+     opposite corners, to measure how a point shifts into the crop,
+     and the size of the crop's picture, its window, which their
+     full-size previews and JPEGs give;
    - two or three frames in auto-area mode, which record several points
      at once, to check the mask of points used against the display;
    - a frame or two in a dynamic-area mode;
@@ -83,7 +85,8 @@ how to get in touch
 5. **Check the controls**: the live-view frames against the area their
    file records, the repeats against their originals, the portrait
    frames against the landscape readings turned, the crop frames against
-   the crop tag's origin, the auto-area frames against their masks.
+   the origin of their window centred in the frame, which the crop tag
+   must record too, the auto-area frames against their masks.
 6. **Read the files' bytes**: the point number, the layout code, the
    mask and the focus mode of every frame, with a script written from
    the notes. The mask's bit order is read off the single-point frames,
@@ -275,9 +278,11 @@ again, read identically to their originals. **[F]**
 - **DX crop (frames 49 and 50).** Points 38 and 27 land on the
   3936x2624 DX picture at (770, 1009) and (3162, 1613): their
   positions in the table less (1042, 696) and (1041, 695), that is,
-  within 2 pixels of CropHiSpeed's origin (1040, 696), which is
-  ((6016 − 3936) / 2, (4016 − 2624) / 2): the centred window of the
-  output frame, in output pixels, with no correction for the border:
+  within 2 pixels of CropHiSpeed's origin (1040, 696), which, though
+  CropHiSpeed counts the sensor's pixels, is also
+  ((6016 − 3936) / 2, (4016 − 2624) / 2): the origin of the window
+  centred in the output frame, in output pixels, with no correction for
+  the border:
   CropHiSpeed's cropped size, 3968x2636, counts 32 and 12 pixels that
   the 3936x2624 picture does not have, as the raw image's 6080x4028
   counts 64 and 12 that the 6016x4016 output does not. The DX
@@ -288,9 +293,20 @@ again, read identically to their originals. **[F]**
   [ADR018](../../architecture-decisions/adr018-focus-points-placed-from-a-table-and-the-points-used.md),
   and is measured in that window, 3936x2624, in the NEF as in the JPEG
   ([ADR019](../../architecture-decisions/adr019-the-frame-of-a-placed-focus-point-on-a-crop.md)).
-  **[F]** Whether the shift is CropHiSpeed's
-  origin on other bodies is a fact per body, which the two crop frames
-  of the procedure check; the D7200's 1.3x files record other offsets
+  **[F]** In sensor pixels the DX crop lies 16 pixels left of the
+  centre, 1040 + 3968 / 2 = 3024 against 6080 / 2 = 3040, while the
+  picture lies centred in the output: the left and top borders trimmed
+  from the full frame and from the crop are the same, and the full
+  frame loses 64 pixels across where the crop loses 32. So the frames
+  cannot tell a shift by CropHiSpeed's origin from one to the window
+  centred in the output, and the table keeps the window's size,
+  3936x2624, measured on the frames; a file is placed on the crop only
+  when CropHiSpeed's origin is that window's centred origin
+  ([ADR020](../../architecture-decisions/adr020-each-crops-window-in-the-table.md)).
+  **[I]** Whether the window lies centred, and CropHiSpeed records its
+  origin, on other bodies is a fact per body, which the two crop
+  frames of the procedure check; the D7200's 1.3x files record an
+  origin that is not centred
   ([makernote-and-metadata.md](makernote-and-metadata.md#86-focus-point)).
 - **Auto-area (frames 42 to 44).** Area mode 8; primary points 22, 22
   and 4; masks of 12, 13 and 9 bits. NX Studio draws one box per bit,
