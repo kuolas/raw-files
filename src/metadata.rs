@@ -1114,7 +1114,7 @@ mod tests {
     use crate::camera_settings::{
         ColorSpace, ExposureProgram, MeteringMode, RawImageSize, Shutter,
     };
-    use crate::focus::{FocusAreaMode, FocusOrigin, FocusPoint, LayoutPoint};
+    use crate::focus::{FocusAreaMode, FocusLayoutPoint, FocusOrigin, FocusPoint};
     use crate::geometry::Point;
     use crate::testing::{point, size, z9_focus};
 
@@ -1468,13 +1468,14 @@ mod tests {
     /// Two points of the Nikon D600's layout, as the record of my
     /// D600 in the NEF format notes gives them: the centre point, 1,
     /// and the top point of the leftmost column, 38.
-    static D600_POINTS: [LayoutPoint; 2] = [
-        LayoutPoint::new(1, D600_CENTRE, D600_BOX),
-        LayoutPoint::new(38, Point { x: 1_812, y: 1_705 }, D600_BOX),
+    static D600_POINTS: [FocusLayoutPoint; 2] = [
+        FocusLayoutPoint::new(1, D600_CENTRE, D600_BOX),
+        FocusLayoutPoint::new(38, Point { x: 1_812, y: 1_705 }, D600_BOX),
     ];
 
     /// The D600's centre point alone.
-    static D600_CENTRE_POINT: [LayoutPoint; 1] = [LayoutPoint::new(1, D600_CENTRE, D600_BOX)];
+    static D600_CENTRE_POINT: [FocusLayoutPoint; 1] =
+        [FocusLayoutPoint::new(1, D600_CENTRE, D600_BOX)];
 
     /// Where the D600's centre point lies, and the box of every point.
     const D600_CENTRE: Point = Point { x: 3_008, y: 2_007 };
@@ -1507,7 +1508,7 @@ mod tests {
                         .with_size(size(164, 164)),
                 )
             })
-            .and_then(|list| list.with_primary(1))
+            .and_then(|list| list.with_primary_index(1))
             .unwrap()
             .with_area_mode(FocusAreaMode::Auto)
     }
@@ -1590,7 +1591,7 @@ mod tests {
         assert_eq!(metadata.focus_points(), Some(&two_points()));
 
         // The first point as the primary gives that one instead.
-        let first = two_points().with_primary(0).unwrap();
+        let first = two_points().with_primary_index(0).unwrap();
         let metadata = Metadata::default().with_focus_points(first);
         let focus = Focus::new(size(6_016, 4_016), point(1_000, 1_000))
             .unwrap()
@@ -1679,7 +1680,7 @@ mod tests {
         let by_list = |metadata: Metadata| metadata.with_focus_points(list.clone());
         for earlier in [
             Metadata::default().with_focus(one),
-            Metadata::default().with_focus_points(list.clone().with_primary(0).unwrap()),
+            Metadata::default().with_focus_points(list.clone().with_primary_index(0).unwrap()),
         ] {
             let focused = by_focus(earlier.clone());
             assert_eq!(focused.focus(), Some(z9), "{earlier:?}");

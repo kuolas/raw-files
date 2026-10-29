@@ -2325,7 +2325,7 @@ fn the_d600_frame_4_jpeg_gives_its_previews_metadata_and_point_38_placed_from_th
         .and_then(|points| {
             points.with_point(FocusPoint::new(point_38).with_number(38).with_size(box_164))
         })
-        .and_then(|points| points.with_primary(0))
+        .and_then(|points| points.with_primary_index(0))
         .map(|points| points.with_area_mode(FocusAreaMode::Single));
     assert_eq!(metadata.focus_points(), points.as_ref(), "{label}");
     // The D600's layout of 39 points, from its table, by the Model, its

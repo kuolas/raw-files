@@ -19,8 +19,8 @@
 //! file, if it records one,
 //! [`Metadata::focus_points`](crate::Metadata::focus_points) the points
 //! it used, and [`Metadata::focus_layout`](crate::Metadata::focus_layout)
-//! every point of the body, a [`FocusLayout`] of [`LayoutPoint`]s, where
-//! raw-files has its table of them.
+//! every point of the body, a [`FocusLayout`] of [`FocusLayoutPoint`]s,
+//! where raw-files has its table of them.
 
 use std::fmt;
 
@@ -641,7 +641,7 @@ impl FocusPoint {
 /// let points = FocusPoints::new(frame, FocusOrigin::Table)?
 ///     .with_point(FocusPoint::new(Point { x: 3008, y: 2007 }).with_number(1).with_size(area))?
 ///     .with_point(FocusPoint::new(Point { x: 2768, y: 1503 }).with_number(13).with_size(area))?
-///     .with_primary(1)?
+///     .with_primary_index(1)?
 ///     .with_area_mode(FocusAreaMode::Auto);
 ///
 /// let on_preview = points.scaled_to(Size { width: 1504, height: 1004 })?;
@@ -670,8 +670,9 @@ impl FocusPoints {
     /// An empty list of points measured in `frame`, which came from
     /// `origin`, with no primary and no area mode; `None` when either side
     /// of `frame` is zero. [`with_point`](Self::with_point) adds the
-    /// points, [`with_primary`](Self::with_primary) marks the primary and
-    /// [`with_area_mode`](Self::with_area_mode) sets the area mode.
+    /// points, [`with_primary_index`](Self::with_primary_index) marks the
+    /// primary and [`with_area_mode`](Self::with_area_mode) sets the area
+    /// mode.
     ///
     /// This is how a caller starts a list for its tests. A file whose
     /// list would be empty gives none instead.
@@ -718,7 +719,7 @@ impl FocusPoints {
     /// [`primary_index`](Self::primary_index) reads the index back, and
     /// [`primary`](Self::primary) the point.
     #[must_use]
-    pub fn with_primary(mut self, index: usize) -> Option<Self> {
+    pub fn with_primary_index(mut self, index: usize) -> Option<Self> {
         if index >= self.points.len() {
             return None;
         }
@@ -761,8 +762,8 @@ impl FocusPoints {
 
     /// Where the primary point is in [`points`](Self::points), counted
     /// from 0 in the order the points were added, as
-    /// [`with_primary`](Self::with_primary) takes it, or `None` when no
-    /// point is marked as the primary.
+    /// [`with_primary_index`](Self::with_primary_index) takes it, or `None`
+    /// when no point is marked as the primary.
     ///
     /// A viewer that draws every point and marks the primary compares each
     /// point's place with this index, not the point with
@@ -787,7 +788,7 @@ impl FocusPoints {
     ///     .with_point(FocusPoint::new(Point { x: 2768, y: 1503 }).with_number(13))?;
     /// assert_eq!(points.primary_index(), None);
     ///
-    /// let points = points.with_primary(1)?;
+    /// let points = points.with_primary_index(1)?;
     /// assert_eq!(points.primary_index(), Some(1));
     /// let marks: Vec<bool> = (0..points.points().len())
     ///     .map(|index| points.primary_index() == Some(index))
@@ -903,21 +904,22 @@ impl From<Focus> for FocusPoints {
 /// Nikon D600 in the NEF format notes:
 ///
 /// ```
-/// use raw_files::{LayoutPoint, Point, Size};
+/// use raw_files::{FocusLayoutPoint, Point, Size};
 ///
-/// let centre = LayoutPoint::new(1, Point { x: 3008, y: 2007 }, Size { width: 164, height: 164 });
+/// let size = Size { width: 164, height: 164 };
+/// let centre = FocusLayoutPoint::new(1, Point { x: 3008, y: 2007 }, size);
 /// assert_eq!(centre.number(), 1);
 /// assert_eq!(centre.center(), Point { x: 3008, y: 2007 });
 /// assert_eq!(centre.size(), Size { width: 164, height: 164 });
 /// ```
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub struct LayoutPoint {
+pub struct FocusLayoutPoint {
     number: u16,
     center: Point,
     size: Size,
 }
 
-impl LayoutPoint {
+impl FocusLayoutPoint {
     /// The point numbered `number`, with a box of `size` centred at
     /// `center`, each stored as given: [`FocusLayout::new`] checks them
     /// against the layout's frame and its other points.
@@ -954,7 +956,7 @@ impl LayoutPoint {
 /// Where every autofocus point of a body lies on the picture, as
 /// raw-files' table of that body holds it: each point's number, as the
 /// camera writes it, the centre of its box and the box's size, each a
-/// [`LayoutPoint`], all in one frame, the body's full-size output. The
+/// [`FocusLayoutPoint`], all in one frame, the body's full-size output. The
 /// table is measured by the project on frames shot with that body and
 /// read in the maker's software, as the
 /// [decision to measure per-body tables in the project](https://github.com/kuolas/raw-files/blob/master/docs/architecture-decisions/adr017-per-body-tables-measured-by-the-project.md)
@@ -1005,17 +1007,17 @@ impl LayoutPoint {
 /// Nikon D600 in the NEF format notes: the centre point, 1, the top point
 /// of the left one of the three middle columns, 13, and the top point
 /// of the leftmost column, 38, each with its 164 × 164 box, in the
-/// body's 6016 × 4016 frame. [`LayoutPoint::new`] is `const`, so the
+/// body's 6016 × 4016 frame. [`FocusLayoutPoint::new`] is `const`, so the
 /// points can be a `static` array, which the layout borrows:
 ///
 /// ```
-/// use raw_files::{FocusLayout, LayoutPoint, Point, Size};
+/// use raw_files::{FocusLayout, FocusLayoutPoint, Point, Size};
 ///
 /// const BOX: Size = Size { width: 164, height: 164 };
-/// static POINTS: [LayoutPoint; 3] = [
-///     LayoutPoint::new(1, Point { x: 3008, y: 2007 }, BOX),
-///     LayoutPoint::new(13, Point { x: 2768, y: 1503 }, BOX),
-///     LayoutPoint::new(38, Point { x: 1812, y: 1705 }, BOX),
+/// static POINTS: [FocusLayoutPoint; 3] = [
+///     FocusLayoutPoint::new(1, Point { x: 3008, y: 2007 }, BOX),
+///     FocusLayoutPoint::new(13, Point { x: 2768, y: 1503 }, BOX),
+///     FocusLayoutPoint::new(38, Point { x: 1812, y: 1705 }, BOX),
 /// ];
 ///
 /// # fn main() {
@@ -1040,7 +1042,7 @@ impl LayoutPoint {
 pub struct FocusLayout {
     model: &'static str,
     frame: Size,
-    points: &'static [LayoutPoint],
+    points: &'static [FocusLayoutPoint],
 }
 
 impl FocusLayout {
@@ -1063,7 +1065,11 @@ impl FocusLayout {
     /// order given, not copied, so a layout is `Copy`: a text, a frame and
     /// a slice. This is how a caller builds a layout for its tests.
     #[must_use]
-    pub fn new(model: &'static str, frame: Size, points: &'static [LayoutPoint]) -> Option<Self> {
+    pub fn new(
+        model: &'static str,
+        frame: Size,
+        points: &'static [FocusLayoutPoint],
+    ) -> Option<Self> {
         if frame.width == 0 || frame.height == 0 || points.is_empty() {
             return None;
         }
@@ -1103,7 +1109,7 @@ impl FocusLayout {
     /// and above the number before it, so no two points share one; each
     /// centre lies on the frame, and each box fits inside it around its
     /// centre.
-    pub fn points(&self) -> &'static [LayoutPoint] {
+    pub fn points(&self) -> &'static [FocusLayoutPoint] {
         self.points
     }
 
@@ -1111,7 +1117,7 @@ impl FocusLayout {
     /// that number, as for 0, which no point has. A point of
     /// [`Metadata::focus_points`](crate::Metadata::focus_points) is found here
     /// by its [`number`](FocusPoint::number).
-    pub fn point(&self, number: u16) -> Option<LayoutPoint> {
+    pub fn point(&self, number: u16) -> Option<FocusLayoutPoint> {
         // `new` takes the points only in rising order of their numbers.
         self.points
             .binary_search_by_key(&number, |point| point.number)
@@ -1854,21 +1860,21 @@ mod tests {
         let first = FocusPoint::new(point(10, 10));
         let second = FocusPoint::new(point(20, 20)).with_number(2);
         let empty = FocusPoints::new(size(100, 100), FocusOrigin::Recorded).unwrap();
-        assert_eq!(empty.clone().with_primary(0), None);
+        assert_eq!(empty.clone().with_primary_index(0), None);
         let list = list_of(size(100, 100), FocusOrigin::Recorded, &[first, second]).unwrap();
         assert_eq!(list.primary(), None);
-        assert_eq!(list.clone().with_primary(2), None);
-        assert_eq!(list.clone().with_primary(usize::MAX), None);
+        assert_eq!(list.clone().with_primary_index(2), None);
+        assert_eq!(list.clone().with_primary_index(usize::MAX), None);
         assert_eq!(
-            list.clone().with_primary(0).unwrap().primary(),
+            list.clone().with_primary_index(0).unwrap().primary(),
             Some(&first)
         );
-        let marked = list.with_primary(1).unwrap();
+        let marked = list.with_primary_index(1).unwrap();
         assert_eq!(marked.primary(), Some(&second));
         // A later primary replaces the earlier one, and a point added
         // after it leaves it as it was.
         assert_eq!(
-            marked.clone().with_primary(0).unwrap().primary(),
+            marked.clone().with_primary_index(0).unwrap().primary(),
             Some(&first)
         );
         let longer = marked.with_point(FocusPoint::new(point(30, 30))).unwrap();
@@ -1882,7 +1888,7 @@ mod tests {
         let list = list_of(size(100, 100), FocusOrigin::Table, &[twin, twin, twin]).unwrap();
         assert_eq!(list.primary_index(), None);
         for index in 0..3 {
-            let marked = list.clone().with_primary(index).unwrap();
+            let marked = list.clone().with_primary_index(index).unwrap();
             assert_eq!(marked.primary_index(), Some(index), "{index}");
             // Every point equals the primary, so only the index says which
             // of them it is.
@@ -1891,7 +1897,11 @@ mod tests {
             assert_eq!(scaled.primary_index(), Some(index), "{index}");
         }
         // A later primary replaces the earlier one.
-        let remarked = list.with_primary(2).unwrap().with_primary(0).unwrap();
+        let remarked = list
+            .with_primary_index(2)
+            .unwrap()
+            .with_primary_index(0)
+            .unwrap();
         assert_eq!(remarked.primary_index(), Some(0));
     }
 
@@ -1902,7 +1912,7 @@ mod tests {
             FocusOrigin::Table,
             &[FocusPoint::new(point(50, 50))],
         )
-        .and_then(|list| list.with_primary(0))
+        .and_then(|list| list.with_primary_index(0))
         .unwrap();
         for mode in all_area_modes() {
             let set = list
@@ -1959,8 +1969,8 @@ mod tests {
                 assert_eq!(list.area_mode(), None, "{focus:?}");
                 // The same list as the builders make, and its primary is
                 // the focus given.
-                let built =
-                    list_of(focus.frame(), origin, &[only]).and_then(|built| built.with_primary(0));
+                let built = list_of(focus.frame(), origin, &[only])
+                    .and_then(|built| built.with_primary_index(0));
                 assert_eq!(built.as_ref(), Some(&list), "{focus:?}");
                 assert_eq!(list.primary_focus(), Some(focus), "{focus:?}");
             }
@@ -1980,13 +1990,13 @@ mod tests {
                 .with_area_mode(FocusAreaMode::Auto);
             // No primary, no focus.
             assert_eq!(list.primary_focus(), None, "{origin:?}");
-            let on_second = list.clone().with_primary(1).unwrap().primary_focus();
+            let on_second = list.clone().with_primary_index(1).unwrap().primary_focus();
             assert_eq!(
                 on_second,
                 Some(z9_focus().with_origin(origin)),
                 "{origin:?}"
             );
-            let on_first = list.with_primary(0).unwrap().primary_focus().unwrap();
+            let on_first = list.with_primary_index(0).unwrap().primary_focus().unwrap();
             assert_eq!(on_first.frame(), size(8_256, 5_504), "{origin:?}");
             assert_eq!(on_first.center(), point(100, 100), "{origin:?}");
             assert_eq!(on_first.size(), None, "{origin:?}");
@@ -2007,7 +2017,7 @@ mod tests {
                 point_of(z9_focus()),
             ],
         )
-        .and_then(|list| list.with_primary(1))
+        .and_then(|list| list.with_primary_index(1))
         .unwrap()
         .with_area_mode(FocusAreaMode::Single);
         let preview = list.scaled_to(size(1_920, 1_280)).unwrap();
@@ -2072,7 +2082,7 @@ mod tests {
                         point_of(focus).with_number(7),
                     ];
                     let list = list_of(frame, FocusOrigin::Table, &points)
-                        .and_then(|list| list.with_primary(1))
+                        .and_then(|list| list.with_primary_index(1))
                         .unwrap()
                         .with_area_mode(FocusAreaMode::Dynamic);
                     for new in 1..=8_u32 {
@@ -2121,7 +2131,7 @@ mod tests {
         let list = |frame, origin, points: &[FocusPoint], primary, mode| {
             let mut list = list_of(frame, origin, points).unwrap();
             if let Some(primary) = primary {
-                list = list.with_primary(primary).unwrap();
+                list = list.with_primary_index(primary).unwrap();
             }
             if let Some(mode) = mode {
                 list = list.with_area_mode(mode);
@@ -2237,19 +2247,19 @@ mod tests {
     };
 
     /// The D600's point `number`, centred at (x, y), with the D600's box.
-    const fn d600(number: u16, x: u32, y: u32) -> LayoutPoint {
-        LayoutPoint::new(number, Point { x, y }, D600_BOX)
+    const fn d600(number: u16, x: u32, y: u32) -> FocusLayoutPoint {
+        FocusLayoutPoint::new(number, Point { x, y }, D600_BOX)
     }
 
     /// Point 1, centred at (x, y), with a box `width` by `height`.
-    const fn first(x: u32, y: u32, width: u32, height: u32) -> LayoutPoint {
-        LayoutPoint::new(1, Point { x, y }, Size { width, height })
+    const fn first(x: u32, y: u32, width: u32, height: u32) -> FocusLayoutPoint {
+        FocusLayoutPoint::new(1, Point { x, y }, Size { width, height })
     }
 
     /// Three points of the D600's layout, from the same record: the centre
     /// point, 1; the top point of the left one of the three middle columns,
     /// 13; and the top point of the leftmost column, 38.
-    static D600_THREE: [LayoutPoint; 3] = [
+    static D600_THREE: [FocusLayoutPoint; 3] = [
         d600(1, 3_008, 2_007),
         d600(13, 2_768, 1_503),
         d600(38, 1_812, 1_705),
@@ -2265,7 +2275,7 @@ mod tests {
         // A point in the middle of a 2 by 2 frame, with a box of 2 by 2,
         // fits it. No box fits a frame with a zero side either, so the
         // frame's rule and the box's both refuse these.
-        static MIDDLE: [LayoutPoint; 1] = [first(1, 1, 2, 2)];
+        static MIDDLE: [FocusLayoutPoint; 1] = [first(1, 1, 2, 2)];
         assert_eq!(FocusLayout::new("A", size(0, 2), &MIDDLE), None);
         assert_eq!(FocusLayout::new("A", size(2, 0), &MIDDLE), None);
         assert_eq!(FocusLayout::new("A", size(0, 0), &MIDDLE), None);
@@ -2279,42 +2289,43 @@ mod tests {
     #[test]
     fn a_layout_needs_at_least_one_point() {
         assert_eq!(FocusLayout::new("NIKON D600", D600_FRAME, &[]), None);
-        static CENTRE: [LayoutPoint; 1] = [d600(1, 3_008, 2_007)];
+        static CENTRE: [FocusLayoutPoint; 1] = [d600(1, 3_008, 2_007)];
         let one = FocusLayout::new("NIKON D600", D600_FRAME, &CENTRE).unwrap();
         assert_eq!(one.points(), CENTRE);
     }
 
     #[test]
     fn a_layout_point_needs_a_number_above_zero_that_no_other_has() {
-        let new =
-            |points: &'static [LayoutPoint]| FocusLayout::new("NIKON D600", D600_FRAME, points);
+        let new = |points: &'static [FocusLayoutPoint]| {
+            FocusLayout::new("NIKON D600", D600_FRAME, points)
+        };
         // Nikon writes 0 for no point: refused alone, or after a good
         // point.
-        static ZERO: [LayoutPoint; 1] = [d600(0, 3_008, 2_007)];
-        static ZERO_LAST: [LayoutPoint; 2] = [d600(1, 3_008, 2_007), d600(0, 2_768, 1_503)];
+        static ZERO: [FocusLayoutPoint; 1] = [d600(0, 3_008, 2_007)];
+        static ZERO_LAST: [FocusLayoutPoint; 2] = [d600(1, 3_008, 2_007), d600(0, 2_768, 1_503)];
         assert_eq!(new(&ZERO), None);
         assert_eq!(new(&ZERO_LAST), None);
         // A number given twice, at two places apart in the list, or as the
         // same point twice in a row.
-        static APART: [LayoutPoint; 3] = [
+        static APART: [FocusLayoutPoint; 3] = [
             d600(1, 3_008, 2_007),
             d600(13, 2_768, 1_503),
             d600(1, 1_812, 1_705),
         ];
-        static TWICE: [LayoutPoint; 2] = [d600(38, 1_812, 1_705), d600(38, 1_812, 1_705)];
+        static TWICE: [FocusLayoutPoint; 2] = [d600(38, 1_812, 1_705), d600(38, 1_812, 1_705)];
         assert_eq!(new(&APART), None);
         assert_eq!(new(&TWICE), None);
         // Any other rising numbers, with gaps, the largest included, and
         // numbers past a byte: 257 is not 1, though their low bytes agree,
         // and is refused when given twice.
-        static ANY: [LayoutPoint; 4] = [
+        static ANY: [FocusLayoutPoint; 4] = [
             d600(1, 1_812, 1_705),
             d600(2, 2_768, 1_503),
             d600(257, 2_768, 1_503),
             d600(u16::MAX, 3_008, 2_007),
         ];
         assert_eq!(new(&ANY).map(|layout| layout.points()), Some(&ANY[..]));
-        static TWICE_PAST_A_BYTE: [LayoutPoint; 3] = [
+        static TWICE_PAST_A_BYTE: [FocusLayoutPoint; 3] = [
             d600(1, 3_008, 2_007),
             d600(257, 2_768, 1_503),
             d600(257, 1_812, 1_705),
@@ -2325,23 +2336,24 @@ mod tests {
 
     #[test]
     fn a_layout_lists_its_points_in_rising_number_order() {
-        let new =
-            |points: &'static [LayoutPoint]| FocusLayout::new("NIKON D600", D600_FRAME, points);
+        let new = |points: &'static [FocusLayoutPoint]| {
+            FocusLayout::new("NIKON D600", D600_FRAME, points)
+        };
         // Two points the wrong way round, one out of place among three,
         // and the largest number before a small one.
-        static FALLING: [LayoutPoint; 2] = [d600(2, 3_008, 2_007), d600(1, 2_768, 1_503)];
-        static ONE_OUT: [LayoutPoint; 3] = [
+        static FALLING: [FocusLayoutPoint; 2] = [d600(2, 3_008, 2_007), d600(1, 2_768, 1_503)];
+        static ONE_OUT: [FocusLayoutPoint; 3] = [
             d600(13, 2_768, 1_503),
             d600(1, 3_008, 2_007),
             d600(38, 1_812, 1_705),
         ];
-        static LARGEST_FIRST: [LayoutPoint; 2] =
+        static LARGEST_FIRST: [FocusLayoutPoint; 2] =
             [d600(u16::MAX, 3_008, 2_007), d600(257, 2_768, 1_503)];
         assert_eq!(new(&FALLING), None);
         assert_eq!(new(&ONE_OUT), None);
         assert_eq!(new(&LARGEST_FIRST), None);
         // The same points in rising order.
-        static RISING: [LayoutPoint; 2] = [d600(1, 2_768, 1_503), d600(2, 3_008, 2_007)];
+        static RISING: [FocusLayoutPoint; 2] = [d600(1, 2_768, 1_503), d600(2, 3_008, 2_007)];
         assert!(new(&RISING).is_some());
     }
 
@@ -2351,13 +2363,13 @@ mod tests {
         // zero side, and a box that does not fit around its centre, each
         // refused; at (50, 25), a box of 100 by 50 just fits, and one a
         // pixel larger either way does not.
-        static OFF_ACROSS: [LayoutPoint; 1] = [first(101, 25, 2, 2)];
-        static OFF_DOWN: [LayoutPoint; 1] = [first(50, 51, 2, 2)];
-        static NO_WIDTH: [LayoutPoint; 1] = [first(50, 25, 0, 10)];
-        static NO_HEIGHT: [LayoutPoint; 1] = [first(50, 25, 10, 0)];
-        static TOO_WIDE: [LayoutPoint; 1] = [first(50, 25, 101, 50)];
-        static TOO_TALL: [LayoutPoint; 1] = [first(50, 25, 100, 51)];
-        static WHOLE: [LayoutPoint; 1] = [first(50, 25, 100, 50)];
+        static OFF_ACROSS: [FocusLayoutPoint; 1] = [first(101, 25, 2, 2)];
+        static OFF_DOWN: [FocusLayoutPoint; 1] = [first(50, 51, 2, 2)];
+        static NO_WIDTH: [FocusLayoutPoint; 1] = [first(50, 25, 0, 10)];
+        static NO_HEIGHT: [FocusLayoutPoint; 1] = [first(50, 25, 10, 0)];
+        static TOO_WIDE: [FocusLayoutPoint; 1] = [first(50, 25, 101, 50)];
+        static TOO_TALL: [FocusLayoutPoint; 1] = [first(50, 25, 100, 51)];
+        static WHOLE: [FocusLayoutPoint; 1] = [first(50, 25, 100, 50)];
         let frame = size(100, 50);
         for refused in [
             &OFF_ACROSS,
@@ -2373,7 +2385,7 @@ mod tests {
 
         // A point that does not fit costs the layout wherever it is in the
         // list: here the last, one pixel past the D600's frame.
-        static LAST_OFF: [LayoutPoint; 3] = [
+        static LAST_OFF: [FocusLayoutPoint; 3] = [
             d600(1, 3_008, 2_007),
             d600(13, 2_768, 1_503),
             d600(38, 6_017, 1_705),
@@ -2397,7 +2409,7 @@ mod tests {
                         } else {
                             (size(side, 3), first(at, 1, area, 2))
                         };
-                        let points: &'static [LayoutPoint] = vec![point].leak();
+                        let points: &'static [FocusLayoutPoint] = vec![point].leak();
                         let layout = FocusLayout::new("A", frame, points);
                         let focus = Focus::new(frame, point.center())
                             .and_then(|focus| focus.with_size(point.size()));
@@ -2438,7 +2450,7 @@ mod tests {
         );
         // A point keeps what it was built with, even values no layout
         // takes: a layout checks them.
-        let any = LayoutPoint::new(0, point(u32::MAX, 0), size(0, u32::MAX));
+        let any = FocusLayoutPoint::new(0, point(u32::MAX, 0), size(0, u32::MAX));
         assert_eq!(
             (any.number(), any.center(), any.size()),
             (0, point(u32::MAX, 0), size(0, u32::MAX))
@@ -2464,7 +2476,7 @@ mod tests {
         // an odd and an even count: each of its points is found, with its
         // own centre, and no other number is, those before the first,
         // between two points and past the last among them.
-        static SPREAD: [LayoutPoint; 7] = [
+        static SPREAD: [FocusLayoutPoint; 7] = [
             d600(1, 3_008, 2_007),
             d600(2, 2_768, 1_503),
             d600(13, 1_812, 1_705),
@@ -2495,7 +2507,7 @@ mod tests {
     fn layout_equality_is_by_every_value() {
         // The same three points in another array: equal, for the points
         // are compared by their values, not by where they are stored.
-        static AGAIN: [LayoutPoint; 3] = [
+        static AGAIN: [FocusLayoutPoint; 3] = [
             d600(1, 3_008, 2_007),
             d600(13, 2_768, 1_503),
             d600(38, 1_812, 1_705),
@@ -2507,20 +2519,20 @@ mod tests {
 
         // One point's centre moved by a pixel, its number changed, its box
         // changed; one point fewer.
-        static MOVED: [LayoutPoint; 3] = [
+        static MOVED: [FocusLayoutPoint; 3] = [
             d600(1, 3_008, 2_007),
             d600(13, 2_768, 1_503),
             d600(38, 1_813, 1_705),
         ];
-        static RENUMBERED: [LayoutPoint; 3] = [
+        static RENUMBERED: [FocusLayoutPoint; 3] = [
             d600(1, 3_008, 2_007),
             d600(13, 2_768, 1_503),
             d600(39, 1_812, 1_705),
         ];
-        static RESIZED: [LayoutPoint; 3] = [
+        static RESIZED: [FocusLayoutPoint; 3] = [
             d600(1, 3_008, 2_007),
             d600(13, 2_768, 1_503),
-            LayoutPoint::new(
+            FocusLayoutPoint::new(
                 38,
                 Point { x: 1_812, y: 1_705 },
                 Size {

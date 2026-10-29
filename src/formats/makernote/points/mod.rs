@@ -64,7 +64,7 @@
 //! point is placed, so check the body's uncropped CropHiSpeed before
 //! adding its table.
 
-use crate::focus::{FocusLayout, LayoutPoint};
+use crate::focus::{FocusLayout, FocusLayoutPoint};
 use crate::geometry::Size;
 
 mod nikon_d600;
@@ -123,7 +123,7 @@ pub(in crate::formats) struct PointTable {
     frame: Size,
     /// Every point, in number order, from 1: its number as the camera
     /// writes it, the centre of its box and the box's size, in `frame`.
-    points: &'static [LayoutPoint],
+    points: &'static [FocusLayoutPoint],
     /// The layout code the body writes beside a point number of this
     /// layout, AFInfo2's FocusPointSchema: 3 on every D600 frame through
     /// the viewfinder with a point number (section 2.2 of its record). A
@@ -202,7 +202,7 @@ impl PointTable {
     }
 
     /// Every point, in number order, from 1, as the table tests check.
-    pub(in crate::formats) fn points(&self) -> &'static [LayoutPoint] {
+    pub(in crate::formats) fn points(&self) -> &'static [FocusLayoutPoint] {
         self.points
     }
 

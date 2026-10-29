@@ -171,7 +171,7 @@ fn main() {
         .with_size(Size { width: 164, height: 164 });
     let placed = FocusPoints::new(frame, FocusOrigin::Table)
         .and_then(|points| points.with_point(point_38))
-        .and_then(|points| points.with_primary(0))
+        .and_then(|points| points.with_primary_index(0))
         .expect("the point lies on the frame")
         .with_area_mode(FocusAreaMode::Single);
     let d600 = Metadata::default().with_focus_points(placed);
@@ -277,7 +277,7 @@ the camera recorded the position or raw-files placed it from a table of
 the body's points. `Metadata::focus_points` gives the autofocus points the
 camera used, a `FocusPoints` of `FocusPoint`s with the primary among them
 and the `FocusAreaMode`, and `Metadata::focus_layout` the body's
-`FocusLayout` of `LayoutPoint`s, where raw-files has its table. The
+`FocusLayout` of `FocusLayoutPoint`s, where raw-files has its table. The
 `with_…` methods of `Metadata`, `Exposure`, `CameraSettings`,
 `WhiteBalance`, `FocusPoints` and `FocusPoint`, `Lens::builder` and the
 constructors, such as `Focus::new` and `FocusLayout::new`, build every

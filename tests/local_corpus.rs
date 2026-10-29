@@ -1367,16 +1367,16 @@ fn the_settings_tally_counts_the_makernote_settings() {
 /// Three points of a 39-point layout in a 6016 × 4016 frame, from the
 /// record of the Nikon D600 in the NEF format notes: 1, the centre, 13 and
 /// 38, each with its 164 × 164 box.
-static THREE_POINTS: [raw_files::LayoutPoint; 3] = {
-    use raw_files::LayoutPoint;
+static THREE_POINTS: [raw_files::FocusLayoutPoint; 3] = {
+    use raw_files::FocusLayoutPoint;
     const BOX: Size = Size {
         width: 164,
         height: 164,
     };
     [
-        LayoutPoint::new(1, Point { x: 3008, y: 2007 }, BOX),
-        LayoutPoint::new(13, Point { x: 2768, y: 1503 }, BOX),
-        LayoutPoint::new(38, Point { x: 1812, y: 1705 }, BOX),
+        FocusLayoutPoint::new(1, Point { x: 3008, y: 2007 }, BOX),
+        FocusLayoutPoint::new(13, Point { x: 2768, y: 1503 }, BOX),
+        FocusLayoutPoint::new(38, Point { x: 1812, y: 1705 }, BOX),
     ]
 };
 
@@ -1395,7 +1395,7 @@ fn placed_list(frame: Size, points: &[(u16, Point)], primary: usize) -> FocusPoi
             .with_point(FocusPoint::new(center).with_number(number).with_size(size))
             .unwrap();
     }
-    list.with_primary(primary).unwrap()
+    list.with_primary_index(primary).unwrap()
 }
 
 #[test]
@@ -1500,13 +1500,13 @@ fn the_focus_tally_counts_the_lists_and_layouts_and_checks_them_against_each_oth
         .unwrap()
         .with_point(FocusPoint::new(at_38))
         .unwrap()
-        .with_primary(0)
+        .with_primary_index(0)
         .unwrap();
     let numbered_recorded = FocusPoints::new(full, FocusOrigin::Recorded)
         .unwrap()
         .with_point(FocusPoint::new(at_38).with_number(38))
         .unwrap()
-        .with_primary(0)
+        .with_primary_index(0)
         .unwrap();
     let off_by_one = Point { x: 1813, y: 1705 };
     let out_of_order = placed_list(full, &[(38, at_38), (13, Point { x: 2768, y: 1503 })], 0);
@@ -1548,7 +1548,7 @@ fn the_focus_tally_counts_the_lists_and_layouts_and_checks_them_against_each_oth
                         height: 164,
                     }))
                     .unwrap()
-                    .with_primary(0)
+                    .with_primary_index(0)
                     .unwrap(),
             ),
             4,

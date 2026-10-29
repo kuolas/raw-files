@@ -66,7 +66,7 @@ preview types (`Preview`, `PreviewFormat`, `Orientation`, `Size`), the
 metadata types (`Metadata`, `Exposure`, `Lens`, `LensBuilder`, `Point`,
 `DateTime`, `Rational` and `SignedRational`), the focus types (`Focus`,
 `FocusOrigin`, `FocusPoints`, `FocusPoint`, `FocusAreaMode`,
-`FocusLayout` and `LayoutPoint`), the camera
+`FocusLayout` and `FocusLayoutPoint`), the camera
 settings types (`CameraSettings`, `WhiteBalance`, `FineTune`, `Flash`,
 and the enums `WhiteBalanceMode`, `ExposureProgram`, `MeteringMode`,
 `FlashMode`, `Shutter`, `ImageArea`, `RawImageSize` and `ColorSpace`),
