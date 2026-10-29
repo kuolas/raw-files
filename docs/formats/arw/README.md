@@ -52,7 +52,7 @@ was done and what it could not reach. The files checked are listed in
 | [security.md](security.md) | Past vulnerabilities in Sony parsers and the Sony additions to the NEF checklist |
 | [licences-and-references.md](licences-and-references.md) | Standards, existing implementations and their licences, what raw-files may reuse, and the legal questions |
 | [test-data.md](test-data.md) | Where sample files come from, which may be committed, a minimal body set, and the files checked |
-| [open-questions.md](open-questions.md) | Decisions to take, facts still to establish, and what the samples settled |
+| [open-questions.md](open-questions.md) | Decisions to take, facts still to establish, and what the samples, a decision or the code settled |
 | [research-record.md](research-record.md) | How this documentation was researched and checked, and its limits |
 
 ## Confidence tags
@@ -195,8 +195,9 @@ not repeat what the two formats share:
   whole IFD0 next-IFD chain and rejects lossless SOF markers, so the ARW
   one adds a single new rule: skip IFDs that are raw by role. It also
   states explicitly that the largest JPEG on ARW 4.0 and later is in IFD2,
-  which only a whole-chain walk reaches. Two smaller differences remain
-  (see [open-questions.md](open-questions.md)).
+  which only a whole-chain walk reaches. Two smaller differences remained,
+  and raw-files' one finder takes the ARW rule in both (see
+  [open-questions.md](open-questions.md#5-questions-settled-by-a-decision-or-by-the-code)).
   Orientation is handled the same way in both: return the JPEG unchanged
   and report IFD0's tag separately.
 - **Security.** The NEF checklist items 1 to 14 apply to ARW unchanged;

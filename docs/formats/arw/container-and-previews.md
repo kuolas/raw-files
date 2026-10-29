@@ -640,8 +640,9 @@ which already walks the whole IFD0 next-IFD chain and rejects lossless SOF
 markers. The one new rule is the role filter of step 3; the points
 specific to ARW files are marked **(ARW)**. Steps 6 and 8 are slightly
 stricter than the NEF steps (`FF D8 FF` required; candidates without a SOF
-dropped rather than ranked last); a shared finder must settle that (see
-[open-questions.md](open-questions.md)).
+dropped rather than ranked last); raw-files' one finder for both formats
+takes the ARW steps (see
+[open-questions.md](open-questions.md#5-questions-settled-by-a-decision-or-by-the-code)).
 
 ### 7.1 Algorithm
 

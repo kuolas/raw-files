@@ -5,9 +5,10 @@ decisions for the maintainers. Part 2 lists facts that sample files can
 establish, collected from the pages' own open questions with duplicates
 merged. Part 3 lists sources that were not read or could not be reached.
 Part 4 lists questions that the sample checks have already settled, so
-readers can see what moved from open to settled. Each item names the page it
-affects; [test-data.md](test-data.md) describes the samples that would
-answer Part 2.
+readers can see what moved from open to settled, and Part 5 the decisions
+of Part 1 that a decision record or the code has settled. Each item names
+the page it affects; [test-data.md](test-data.md) describes the samples
+that would answer Part 2.
 
 ## 1. Decisions for the maintainers
 
@@ -36,13 +37,10 @@ answer Part 2.
    - **the ARW 6.0 delinearisation curve, the hard case**: 4096 entries,
      not in the file, construction unknown, and published only as tables
      extracted from existing decoders (LibRaw's embedded table, under its
-     own licence, and an unlicensed write-up's);
-   - tables of autofocus points, which turn the point number that the
-     A-mount, NEX and early ILCE bodies record into a position; no open source of
-     them is known
-     ([makernote-and-metadata.md](makernote-and-metadata.md#96-focus-point)).
+     own licence, and an unlicensed write-up's).
 
-   The options are, as for NEF:
+   The tables of autofocus points are settled (Part 5). The options for
+   the rest are, as for NEF:
    - (a) treat a short table as a format fact, transcribed from two
      independent sources with provenance recorded;
    - (b) derive it from sample files;
@@ -122,48 +120,6 @@ answer Part 2.
      R1.
    - **Corrupt data.** Decode what can be decoded and count bad blocks and
      range violations, or fail the file?
-6. **Size and framing for metadata.** Which "image dimensions" to
-   report: the stored size, the visible size from DefaultCrop, the
-   in-camera framing from SonyCrop, or 0x7038's usable area. The page
-   recommends the stored size, DefaultCrop as the visible size and SonyCrop
-   as an optional framing, with no per-body trim table
-   ([makernote-and-metadata.md](makernote-and-metadata.md)).
-7. **Test-data strategy.** The proposal is to download CC0 samples from
-   raw.pixls.us in CI, pinned by SHA-256, and commit only small fixtures
-   ([test-data.md](test-data.md)):
-   - a minimal set of 25 files, about 690 MiB, with a preview-only subset
-     of eleven files, about 220 MiB;
-   - the one ARQ (325 MiB) in an opt-in large tier;
-   - the server ignores range requests, so even a preview test fetches the
-     whole file.
-
-   Whether that download volume is acceptable in CI, or the set should be
-   smaller, is to be decided.
-8. **One preview finder for NEF and ARW?** The NEF algorithm already
-   walks the whole IFD0 chain and rejects lossless SOF markers; the ARW
-   finder adds a role filter that skips raw IFDs
-   ([container-and-previews.md](container-and-previews.md),
-   [../nef/container-and-previews.md](../nef/container-and-previews.md)).
-   A shared finder must settle two remaining divergences:
-   - **Candidates without a SOF.** NEF step 6 ranks them after every
-     candidate with a SOF, by byte length; ARW step 8 drops them.
-   - **The SOI test.** NEF requires `FF D8` and makes the third `FF`
-     optional; ARW requires `FF D8 FF`.
-
-   Whether the role filter is safe for NEF needs checking against NEF
-   samples.
-9. **How strict the SubIFD check should be.** The reader follows a SubIFD
-   pointer only when its target parses as an IFD with every entry of a
-   known type and inside the file, the rule of
-   [container-and-previews.md](container-and-previews.md) §7.1 step 2 that
-   rejects the A100's raw-data pointer. The same rule drops a real SubIFD
-   with one entry of a vendor-private type, or one whose out-of-line value
-   lies past the end of a truncated file, even when its preview is still
-   readable; chain IFDs and the Exif IFD are kept with such entries. A
-   looser rule (reject only when few or no entries can be read) would
-   also reject the A100's pointer, whose entry types are garbage. The
-   strict rule is the documented one and stays until the sample and
-   corpus checks show it losing a preview.
 
 ## 2. Facts to establish from sample files
 
@@ -452,3 +408,73 @@ SHA-256 are in [test-data.md](test-data.md#files-checked).
   inside the source frame's unchanged container (files 3255, 3251)
   ([raw-data.md](raw-data.md),
   [container-and-previews.md](container-and-previews.md)).
+
+## 5. Questions settled by a decision or by the code
+
+Each of these was a decision for the maintainers in Part 1. A decision
+record or the code of raw-files has answered it; each names what did.
+
+- **Tables of autofocus points**, which turn the point number that the
+  A-mount, NEX and early ILCE bodies record into a position
+  ([makernote-and-metadata.md](makernote-and-metadata.md#96-focus-point)):
+  no open source of them is known, and none is needed. The project
+  measures each table on frames shot with the body, by the procedure of
+  [the NEF notes](../nef/autofocus-points.md#1-the-procedure), and takes
+  one from another project only by a decision made together with it
+  ([ADR017](../../architecture-decisions/adr017-per-body-tables-measured-by-the-project.md)).
+  The other data of Part 1's decision 1 stays open.
+- **Size and framing for metadata.** Which "image dimensions" to report:
+  the stored size, the visible size from DefaultCrop, the in-camera
+  framing from SonyCrop, or 0x7038's usable area. The decision to read
+  the metadata from the standard tags settles the sizes
+  ([ADR011](../../architecture-decisions/adr011-metadata-from-standard-tags.md)):
+  the raw size is the stored size of the raw data, and the image size is
+  the default crop (DefaultCropSize) when it lies inside the stored size,
+  else the stored size. Neither Sony's aspect-ratio crop (SonyCrop), nor
+  a per-body trim table, nor the Exif pixel dimensions gives the image
+  size, and it falls back to the stored size, not to 0x7038's usable
+  area. The recommendation of
+  [makernote-and-metadata.md](makernote-and-metadata.md#12-recommendation-for-raw-files)
+  also offered SonyCrop as the in-camera framing; that framing and
+  0x7038's usable area are values the file records, for full metadata,
+  every metadata value a file records, to read
+  ([the roadmap](../../ROADMAP.md)).
+- **Test-data strategy.** The proposal was to download CC0 samples from
+  raw.pixls.us in CI, pinned by SHA-256, and commit only small fixtures
+  ([test-data.md](test-data.md)), with a minimal set of 25 files and the
+  one ARQ (325 MiB) in an opt-in large tier; the server ignores range
+  requests, so even a preview test fetches the whole file. The sample
+  list ([tests/samples.tsv](../../../tests/samples.tsv)) does so with 35
+  files of the Sony family and the ARQ in the large tier, and CI keeps
+  the files in a cache that a workflow on `master` fills, so a pull
+  request downloads nothing unless it changes the list
+  ([CONTRIBUTING.md](../../../CONTRIBUTING.md)). The set is larger than
+  the proposed minimal one, and a pull request that leaves the list alone
+  downloads none of it.
+- **One preview finder for NEF and ARW.** The NEF algorithm walks the
+  whole IFD0 chain and rejects lossless SOF markers, and the ARW one
+  adds a role filter that skips raw IFDs
+  ([container-and-previews.md](container-and-previews.md),
+  [../nef/container-and-previews.md](../nef/container-and-previews.md)).
+  One finder serves NEF, ARW and JPEG files
+  ([src/formats/tiff_previews.rs](../../../src/formats/tiff_previews.rs)),
+  with the role filter on every format and the ARW rule in both
+  divergences: a candidate without a SOF is dropped, where NEF step 6
+  ranks it last, and a preview must start `FF D8 FF`, where NEF makes
+  the third `FF` optional. ExifTool 13.55, run as a reader to compare
+  with on the 35 NEF and NRW files of the sample list, finds 66 IFDs of
+  the TIFF tree that declare a JPEG, and the role filter skips none of
+  them.
+- **How strict the SubIFD check should be.** The reader follows a SubIFD
+  pointer only when its target parses as an IFD with every entry of a
+  known type and inside the file, the rule of
+  [container-and-previews.md](container-and-previews.md) §7.1 step 2 that
+  rejects the A100's raw-data pointer, and the reader's walk applies that
+  rule ([src/container/tiff/walk.rs](../../../src/container/tiff/walk.rs)).
+  The same rule drops a real SubIFD with one entry of a vendor-private
+  type, or one whose out-of-line value lies past the end of a truncated
+  file, even when its preview is still readable; chain IFDs and the Exif
+  IFD are kept with such entries. A looser rule (reject only when few or
+  no entries can be read) would also reject the A100's pointer, whose
+  entry types are garbage. A sample or corpus check that shows the strict
+  rule losing a preview would reopen the question.
