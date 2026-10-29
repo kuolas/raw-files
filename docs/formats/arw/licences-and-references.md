@@ -295,7 +295,7 @@ formula, so no table needs to be copied.
 | cRAW tone curve | Yes, four knots in tag 0x7010 | Built by rule in every decoder | No table |
 | Lossless JPEG Huffman tables | Yes, a DHT segment in every tile | ITU-T T.81 | No table |
 | Per-body crops, black and white levels, CFA pattern | Mostly (DefaultCrop, 0x7038, 0x7310, 0x787F, 0xC61D, CFAPattern); older bodies need fallbacks | rawspeed's `cameras.xml`, dcraw and LibRaw | Derive from samples (option (b) below) |
-| Colour matrices | Sony's 0x7800 exists, meaning unconfirmed (its rows sum to about 1024 on file 1542 **[F]**) | Adobe-derived per-body matrices in dcraw, LibRaw, rawspeed and rawkit | Needed only for rendering, which the roadmap leaves open; defer [I] |
+| Colour matrices | Sony's 0x7800 exists, meaning unconfirmed (its rows sum to about 1024 on file 1542 **[F]**) | Adobe-derived per-body matrices in dcraw, LibRaw, rawspeed and rawkit | Needed only for the developed image's colour model; defer [I] |
 | YCbCr to RGB for the M and S modes | No | LibRaw uses ITU-R BT.601 | BT.601 is a public standard [I] |
 | ARW 6.0 delinearisation curve, 4096 entries | **No** | LibRaw (an embedded table, LGPL or CDDL); arw6_decode (a table extracted from an official decoder's output, unlicensed) | The hard case; see section 4.3 |
 
@@ -308,16 +308,15 @@ ARW we suggest [I]:
   since each is a rule or a formula that the code computes;
 - option (b) for per-body values, checked against the files in
   [test-data.md](test-data.md#files-checked);
-- no colour matrices until the roadmap decides that raw-files renders
-  colour;
+- no colour matrices until work on the developed image starts and
+  where they may come from is decided;
 - for the ARW 6.0 curve, no decision until section 4.3's questions are
   answered, and no table committed in the meantime.
 
-The milestones that need any of this (raw sensor data, milestone 7) come
-after ARW previews (milestone 2) and basic metadata (milestone 3). The
-metadata that milestone 3 needs is stored in plain form in every file
-checked, so milestones 2 and 3 need neither the keystream nor the cipher.
-**[F]**
+Raw sensor data needs most of this, and full metadata the cipher inverse
+and the keystream. ARW previews need none of it, and neither does the
+metadata raw-files reads, which is stored in plain form in every file
+checked. **[F]**
 
 ### 4.3 Out of scope for now: ARW 6.0
 
@@ -430,7 +429,7 @@ was confirmed on samples. These points were not [33]:
 - Whether PRONOM's DROID tool identifies ARW 4.0 and later files at all; a
   run on raw.pixls.us files 4466, 7361 and 8846 would show it.
 - The provenance policy for per-body values and colour matrices (section
-  4.2), to be recorded in an ADR before milestone 7.
+  4.2), to be recorded in an ADR before raw-files decodes raw sensor data.
 
 ## Sources
 

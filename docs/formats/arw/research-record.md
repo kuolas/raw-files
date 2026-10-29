@@ -17,12 +17,11 @@ folder.
 
 The question was to gather everything publicly known about Sony's ARW format
 and its relatives (SRF, SR2, ARQ) that raw-files needs for three of the
-roadmap milestones:
+roadmap's capabilities:
 
-- milestone 2: find and return the largest embedded JPEG preview;
-- milestone 3: read basic metadata (orientation, capture date, camera,
-  dimensions);
-- milestone 7: decode the raw sensor data.
+- previews: find and return the largest embedded JPEG preview;
+- metadata: read the orientation, capture date, camera and dimensions;
+- raw sensor data: decode it.
 
 The research also had to establish three practical points:
 

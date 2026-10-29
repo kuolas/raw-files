@@ -5,12 +5,13 @@ SR2 and SRF files and the DSLR-A100's ARW 1.0): where it is and how its
 variants are told apart, the tags that matter, the two unrelated ciphers Sony
 uses, the SR2Private block that carries the decoding parameters, and where a
 viewer finds orientation, capture date, make, model, image size, lens and
-the point the camera focused on. It serves milestone 3 (basic metadata),
-milestone 4 (focus points), milestone 6 (full metadata) and, for the
-decoding-related tags, milestone 7 (raw data).
+the point the camera focused on. It serves three of the
+[roadmap](../../ROADMAP.md)'s capabilities: metadata, both what
+raw-files reads from the plain tags and full metadata; focus points;
+and, for the decoding-related tags, raw sensor data.
 
 See [the ARW overview](README.md). The TIFF container and the preview JPEGs
-(milestone 2) are in [container-and-previews.md](container-and-previews.md);
+are in [container-and-previews.md](container-and-previews.md);
 decoding of the sensor data is in [raw-data.md](raw-data.md); parser
 hardening is in [security.md](security.md).
 
@@ -209,51 +210,61 @@ IDs are MakerNote tags unless stated. Types are as documented by ExifTool;
 read integers from the bytes at the declared count rather than trusting the
 declared type (see [section 11](#11-robustness-pitfalls)). "Enc." says
 whether the block is enciphered with the substitution cipher of
-[section 4](#4-the-makernote-substitution-cipher). "M" is the roadmap
-milestone that needs the tag; "none" means nice-to-have. [P][1][2]
+[section 4](#4-the-makernote-substitution-cipher). "Used for" names the
+capabilities of the [roadmap](../../ROADMAP.md) that use the tag:
+"metadata" is what a viewer or a file renamer needs next to the
+preview, read from the plain tags
+([section 12](#12-recommendation-for-raw-files) says which of them
+raw-files reads), and "full metadata" the rest of what the file
+records, the open part of metadata; "raw data" is raw sensor data;
+"none" marks a tag that holds nothing for a caller of an ARW file, an
+offset to data nothing reads or a tag no ARW holds. [P][1][2]
 
-| ID | Name | Enc. | Meaning | M |
+| ID | Name | Enc. | Meaning | Used for |
 |---|---|---|---|---|
-| 0x0010 | CameraInfo | no | A-mount and NEX AF and lens data, the AF point among them by number; layout chosen by byte count | 4 (point numbers) |
-| 0x0112 | WhiteBalanceFineTune | no | u32; despite the name, the kind of fluorescent lamp under a fluorescent white balance (-1 to 2), 0 otherwise; not the fine-tuning, which is 0x2014; [section 9.7](#97-camera-settings) [F] | 6 |
-| 0x0114 | CameraSettings | no | layout by count; aspect ratio, drive mode, a Sony-coded orientation | none |
-| 0x0115 | WhiteBalance | no | u32; the white balance setting: 0 auto, 16 daylight, 48 shade, 112 custom and others; not on the F828, R1 and A100 [F] | 3 |
+| 0x0010 | CameraInfo | no | A-mount and NEX AF and lens data, the AF point among them by number; layout chosen by byte count | focus points (point numbers) |
+| 0x0112 | WhiteBalanceFineTune | no | u32; despite the name, the kind of fluorescent lamp under a fluorescent white balance (-1 to 2), 0 otherwise; not the fine-tuning, which is 0x2014; [section 9.7](#97-camera-settings) [F] | full metadata |
+| 0x0114 | CameraSettings | no | layout by count; aspect ratio, drive mode, a Sony-coded orientation | full metadata |
+| 0x0115 | WhiteBalance | no | u32; the white balance setting: 0 auto, 16 daylight, 48 shade, 112 custom and others; not on the F828, R1 and A100 [F] | metadata |
 | 0x2001 | PreviewImage | no | a JPEG-file feature; absent from every ARW, SR2 and ARQ sample [F] | none |
-| 0x2010 | Tag2010 | yes | settings, a date string, aspect ratio; not written from the ILCE-7SM3 on [F] | 6 |
-| 0x2014 | WBShiftAB_GM | no | i32[2]; the white balance fine-tuning, amber to blue then green to magenta, positive towards amber and towards magenta; [section 9.7](#97-camera-settings) [F] | 3 |
-| 0x201A | ElectronicFrontCurtainShutter | no | u32; the electronic front curtain setting, 0 off, 1 on; not the shutter used [F] | 3 |
-| 0x201B | FocusMode | no | 0 manual, 2 AF-S, 3 AF-C, 4 AF-A, 6 DMF, 7 AF-D; [section 9.6](#96-focus-point) | 4 |
-| 0x201D | FlexibleSpotPosition | no | the spot chosen in Flexible Spot mode, on a 640 × 480 grid | none |
-| 0x201E | AFPointSelected | no | the selected point or zone, by number | 4 (point numbers) |
-| 0x2020 | AFPointsUsed | no | a mask of the points used | 4 (point numbers) |
-| 0x2022 | FocalPlaneAFPointsUsed | no | a mask of the on-sensor focus points used | 4 (point numbers) |
-| 0x2027 | FocusLocation | no | u16[4]: frame width and height, centre x and y of the focus area | 4 |
-| 0x2029 | RAWFileType | no | 0 compressed, 1 uncompressed, 2 lossless, 3 Compressed RAW 2 | 6, 7 (hint) |
-| 0x202E | Quality | no | u16[2]; first value 1 RAW, 2 S-size, 3 M-size, 4 compressed, 5 compressed HQ; APS-C files say 3 too, and the ILCE-7M5 gives the compression whatever the size [F] | 3, 7 (hint) |
-| 0x202F | PixelShiftInfo | no | group ID and shot number; marks ARQ composites | none |
-| 0x2037 | FocusFrameSize | no | 6 bytes: the focus area's width and height and a third value | 4 |
+| 0x2010 | Tag2010 | yes | settings, a date string, aspect ratio; not written from the ILCE-7SM3 on [F] | full metadata |
+| 0x2014 | WBShiftAB_GM | no | i32[2]; the white balance fine-tuning, amber to blue then green to magenta, positive towards amber and towards magenta; [section 9.7](#97-camera-settings) [F] | metadata |
+| 0x201A | ElectronicFrontCurtainShutter | no | u32; the electronic front curtain setting, 0 off, 1 on; not the shutter used [F] | metadata |
+| 0x201B | FocusMode | no | 0 manual, 2 AF-S, 3 AF-C, 4 AF-A, 6 DMF, 7 AF-D; [section 9.6](#96-focus-point) | focus points |
+| 0x201D | FlexibleSpotPosition | no | the spot chosen in Flexible Spot mode, on a 640 × 480 grid | full metadata |
+| 0x201E | AFPointSelected | no | the selected point or zone, by number | focus points (point numbers) |
+| 0x2020 | AFPointsUsed | no | a mask of the points used | focus points (point numbers) |
+| 0x2022 | FocalPlaneAFPointsUsed | no | a mask of the on-sensor focus points used | focus points (point numbers) |
+| 0x2027 | FocusLocation | no | u16[4]: frame width and height, centre x and y of the focus area | focus points |
+| 0x2029 | RAWFileType | no | 0 compressed, 1 uncompressed, 2 lossless, 3 Compressed RAW 2 | full metadata, raw data (hint) |
+| 0x202E | Quality | no | u16[2]; first value 1 RAW, 2 S-size, 3 M-size, 4 compressed, 5 compressed HQ; APS-C files say 3 too, and the ILCE-7M5 gives the compression whatever the size [F] | metadata, raw data (hint) |
+| 0x202F | PixelShiftInfo | no | group ID and shot number; marks ARQ composites | full metadata |
+| 0x2037 | FocusFrameSize | no | 6 bytes: the focus area's width and height and a third value | focus points |
 | 0x2044 | HiddenInfo | no | offset and size of an unknown block | none |
-| 0x204A | FocusLocation2 | no | u16[4], as FocusLocation | 4 |
-| 0x3000 | ShotInfo | no | includes a plain date string at byte 6 | none |
-| 0x900B | Tag900b | yes | face detection | none |
-| 0x9050 | Tag9050 | yes | shutter count, LensType2, internal serial, the shutter used and the APS-C mode flag; [section 9.7](#97-camera-settings) | 6 |
-| 0x9400 | Tag9400 | yes | sequence numbers, CameraOrientation, the shutter type on the RX100 bodies | 6 |
-| 0x9401 to 0x9406, 0x940C, 0x940E, 0x9416 | Tag94xx | yes | ISO, lens, focus and AF data, and in 0x9416 the APS-C mode flag; 0x9416 replaces 0x9405 from the ILCE-7SM3 on [F] | 6 |
-| 0xB000 | FileFormat | no | u8[4] format version | 3, 6, 7 |
-| 0xB001 | SonyModelID | no | u16 body identifier | 3, 6, 7 |
-| 0xB021 | ColorTemperature | no | u32; kelvin: the chosen temperature under the colour-temperature setting (0x0115 code 1) and the custom white balance's own under custom (code 112); 0 under every other setting on every file checked [F] | 3 |
-| 0xB027 | LensType | no | A-mount lens ID; 65535 for E-mount lenses | 3 (lens) |
-| 0xB028 | MinoltaMakerNote | no | A100 only: offset of a Minolta-format IFD; 0 means absent | none |
-| 0xB02A | LensSpec | no | 8 bytes: flags, BCD focal and aperture range, flags | 3 (lens) |
-| 0xB02B | FullImageSize | no | u32[2], **height first**; the camera's output size | 3 (cross-check) |
-| 0xB02C | PreviewImageSize | no | u32[2], height first; the IFD0 preview's size | 2 (cross-check) |
-| 0xB054 | WhiteBalance | no | u16; a second white balance code, "auto" on two samples set to shade; not the setting [F] | none |
+| 0x204A | FocusLocation2 | no | u16[4], as FocusLocation | focus points |
+| 0x3000 | ShotInfo | no | includes a plain date string at byte 6 | full metadata |
+| 0x900B | Tag900b | yes | face detection | full metadata |
+| 0x9050 | Tag9050 | yes | shutter count, LensType2, internal serial, the shutter used and the APS-C mode flag; [section 9.7](#97-camera-settings) | full metadata |
+| 0x9400 | Tag9400 | yes | sequence numbers, CameraOrientation, the shutter type on the RX100 bodies | full metadata |
+| 0x9401 to 0x9406, 0x940C, 0x940E, 0x9416 | Tag94xx | yes | ISO, lens, focus and AF data, and in 0x9416 the APS-C mode flag; 0x9416 replaces 0x9405 from the ILCE-7SM3 on [F] | full metadata |
+| 0xB000 | FileFormat | no | u8[4] format version | metadata, full metadata, raw data |
+| 0xB001 | SonyModelID | no | u16 body identifier | metadata, full metadata, raw data |
+| 0xB021 | ColorTemperature | no | u32; kelvin: the chosen temperature under the colour-temperature setting (0x0115 code 1) and the custom white balance's own under custom (code 112); 0 under every other setting on every file checked [F] | metadata |
+| 0xB027 | LensType | no | A-mount lens ID; 65535 for E-mount lenses | metadata (lens) |
+| 0xB028 | MinoltaMakerNote | no | A100 only: offset of a Minolta-format IFD; 0 means absent | full metadata |
+| 0xB02A | LensSpec | no | 8 bytes: flags, BCD focal and aperture range, flags | metadata (lens) |
+| 0xB02B | FullImageSize | no | u32[2], **height first**; the camera's output size | metadata (cross-check) |
+| 0xB02C | PreviewImageSize | no | u32[2], height first; the IFD0 preview's size | previews (cross-check) |
+| 0xB054 | WhiteBalance | no | u16; a second white balance code, "auto" on two samples set to shade; not the setting [F] | full metadata |
 
 Notes:
 
-- **Essential for milestone 3:** 0xB000 and 0xB001, plus 0xB027 and 0xB02A
-  if the API reports a lens. Everything else is optional, and nothing in the
-  table needs deciphering for milestone 3. [P][F]
+- **Essential for metadata, as the research saw it:** 0xB000 and
+  0xB001, plus 0xB027 and 0xB02A if the API reports a lens. raw-files
+  reads none of them, since the standard tags give the camera and the
+  lens ([section 12](#12-recommendation-for-raw-files)). Everything else
+  is optional for metadata, and no tag the table marks for it needs
+  deciphering. [P][F]
 - **0x2029 and 0x202E** agree with their ExifTool meanings on the samples:
   0x2029 is 0 on a compressed ILCE-7RM2 file (1310), 1 on uncompressed
   files (1311, 1542), 2 on lossless files (4466, 6929, 8848) and 3 on both
@@ -350,8 +361,8 @@ This page calls the first "enciphered" (ExifTool's word) and the second
 
 | Scheme | Applies to | Key | Needed for |
 |---|---|---|---|
-| Byte substitution, b³ mod 249 | MakerNote 0x2010, 0x900B, 0x9050 and the 0x94xx tags | none | milestone 6, once a decision on the cipher allows it: shutter count, aspect ratio, LensType2, MakerNote orientation, the shutter used and the APS-C mode |
-| XOR keystream | the SR2SubIFD (every ARW 2.x to 6.0 and SR2), SRF's MakerNote IFDs and SRF pixel data | 32 bits from the file | milestone 6, once a decision on the keystream allows it: what SRF's MakerNote IFDs hold; milestone 7 white balance, black and white level on files before ARW 2.3.3; the SR2SubIFD's own white level on every file |
+| Byte substitution, b³ mod 249 | MakerNote 0x2010, 0x900B, 0x9050 and the 0x94xx tags | none | full metadata, once a decision on the cipher allows it: shutter count, aspect ratio, LensType2, MakerNote orientation, the shutter used and the APS-C mode |
+| XOR keystream | the SR2SubIFD (every ARW 2.x to 6.0 and SR2), SRF's MakerNote IFDs and SRF pixel data | 32 bits from the file | full metadata, once a decision on the keystream allows it: what SRF's MakerNote IFDs and the SR2SubIFD hold; raw data, for white balance, black and white level on files before ARW 2.3.3 and for the SR2SubIFD's own white level on every file |
 
 Both were checked on the samples:
 
@@ -446,7 +457,7 @@ the ILCE-7M5. [F] For the newest bodies the projects also disagree on the
   9050d for the ILCE-1M2 and 7M5 always. LibRaw has no ModelID for the
   ILCE-7RM6, so it falls back to 9050a there.
 
-### Shutter count (milestone 6)
+### Shutter count (full metadata)
 
 0x9050 holds the shutter count as a little-endian integer masked to 24 bits
 by ExifTool: at byte 0x32 in 9050a, 0x3A in 9050b and 9050c, and 0x0A in
@@ -660,21 +671,22 @@ plausible: black 512 on most bodies, 800 on the 1-inch RX100 and RX100M6,
 ## 7. Raw-relevant tags
 
 These live in the raw SubIFD (IFD0 tag 0x014A) unless noted. Most are
-decoder input for milestone 7 and are documented further in
-[raw-data.md](raw-data.md); the crop tags also serve milestone 3.
+decoder input for raw sensor data and are documented further in
+[raw-data.md](raw-data.md); the crop tags also serve metadata. The last
+column is as in [section 2](#2-key-tags).
 
-| Tag | Name | Type | Meaning and measured values | M |
+| Tag | Name | Type | Meaning and measured values | Used for |
 |---|---|---|---|---|
-| 0x7000 | SonyRawFileType | u16 | ExifTool: 0 uncompressed 14-bit, 1 uncompressed 12-bit, 2 compressed, 3 lossless, 4 lossless 2, 6 compressed 2. **The samples do not match** (below) | none |
-| 0x7010 | SonyToneCurve | u16[4] | four knots of the cRAW decompression curve | 7 |
-| 0x7031 to 0x7037 | lens corrections | i16 | vignetting, chromatic aberration, distortion: mode and parameters | 6 |
-| 0x7038 | SonyRawImageSize | u32[2] | width, height of the usable area of a tile-padded raw | 3, 7 |
-| 0x7310 | BlackLevel | u16[4] | plain copy, ARW 2.3.3 and later | 7 |
-| 0x7313 | WB_RGGBLevels | i16[4] | plain copy, ARW 2.3.3 and later | 6, 7 |
-| 0x74C7 | SonyCropTopLeft | u32[2] | **(left, top)** | 3, 7 |
-| 0x74C8 | SonyCropSize | u32[2] | width, height | 3, 7 |
-| 0xC61D | WhiteLevel (DNG tag) | | ARW 2.3.3 and later | 7 |
-| 0xC61F, 0xC620 | DefaultCropOrigin, DefaultCropSize (DNG tags) | | ARW 2.3.3 and later | 3, 7 |
+| 0x7000 | SonyRawFileType | u16 | ExifTool: 0 uncompressed 14-bit, 1 uncompressed 12-bit, 2 compressed, 3 lossless, 4 lossless 2, 6 compressed 2. **The samples do not match** (below) | full metadata |
+| 0x7010 | SonyToneCurve | u16[4] | four knots of the cRAW decompression curve | raw data |
+| 0x7031 to 0x7037 | lens corrections | i16 | vignetting, chromatic aberration, distortion: mode and parameters | full metadata |
+| 0x7038 | SonyRawImageSize | u32[2] | width, height of the usable area of a tile-padded raw | metadata, raw data |
+| 0x7310 | BlackLevel | u16[4] | plain copy, ARW 2.3.3 and later | raw data |
+| 0x7313 | WB_RGGBLevels | i16[4] | plain copy, ARW 2.3.3 and later | full metadata, raw data |
+| 0x74C7 | SonyCropTopLeft | u32[2] | **(left, top)** | metadata, raw data |
+| 0x74C8 | SonyCropSize | u32[2] | width, height | metadata, raw data |
+| 0xC61D | WhiteLevel (DNG tag) | | ARW 2.3.3 and later | raw data |
+| 0xC61F, 0xC620 | DefaultCropOrigin, DefaultCropSize (DNG tags) | | ARW 2.3.3 and later | metadata, raw data |
 
 Sources: [2][4][10][15][16][17][18]; measurements [F] as cited below. The
 DNG BlackLevel tag (0xC61A) appears in no Sony file of the raw.pixls.us
@@ -800,8 +812,8 @@ What the decoders do, and where they disagree: [P][9][10][14][15][16][17]
 
 The MakerNote also has 0xB021 ColorTemperature and a white balance mode and
 fine-tune; these are settings, not multipliers. [P][2] They are described
-in [section 9.7](#97-camera-settings); the multipliers are not needed for
-milestone 3.
+in [section 9.7](#97-camera-settings); full metadata reads the
+multipliers, and raw decoding uses them.
 
 ## 9. Viewer metadata
 
@@ -948,7 +960,7 @@ includes masked or unused columns and, on lossless files, padding to whole
 3. **SonyRawImageSize** (0x7038), from ARW 4.0: the usable area of a
    tile-padded raw, still larger than the default crop. [F]
 4. **A per-body trim.** dcraw and LibRaw trim by raw width (for example 24
-   columns off 6048-wide bodies). Do not carry such a table for milestone 3.
+   columns off 6048-wide bodies). Do not carry such a table for metadata.
    [P][12][14]
 
 Other size tags, useful as cross-checks: [F]
@@ -1010,15 +1022,16 @@ which write no Exif range, on the A-mount lenses of the A55 and A99 (964,
 RX100 family LensSpec holds the **35 mm-equivalent** focal
 lengths, 28 to 100 mm on the RX100 (5811) and 24 to 200 mm on the RX100M6
 (3012, 3015), where Exif gives the real ones (10.4 to 37.1 mm and 9 to
-72 mm). The A100 (2346) has no 0xB02A. So for milestone 3, report the
+72 mm). The A100 (2346) has no 0xB02A. So for metadata, report the
 lens from the Exif tags only: LensModel when present and not `----`, and
 the LensSpecification range. FNumber and FocalLength are `0/10` with the
 manual lens (1582), which means unknown. [F] ([ADR011](../../architecture-decisions/adr011-metadata-from-standard-tags.md))
 
 ### 9.6 Focus point
 
-Where the camera focused, which milestone 4 reports so that a viewer can
-judge sharpness at that point. raw-files decided what it reports in
+Where the camera focused, which raw-files reports as its focus points so
+that a viewer can judge sharpness at that point. raw-files decided what
+it reports in
 [ADR012](../../architecture-decisions/adr012-focus-points-as-the-camera-records-them.md);
 this section is the record behind it. Tag meanings are ExifTool's [P][1];
 every value was read on the 36 files of
@@ -1167,8 +1180,8 @@ of ExifTool's code is in raw-files.
 
 | Setting | Standard tag | MakerNote tag | Checked files |
 |---|---|---|---|
-| Exposure program | Exif 0x8822 ExposureProgram | 0xB041 ExposureMode, not needed | Exif on every file |
-| Metering mode | Exif 0x9207 MeteringMode | 0x202C MeteringMode2, not needed | Exif on every file |
+| Exposure program | Exif 0x8822 ExposureProgram | 0xB041 ExposureMode, not needed for the setting | Exif on every file |
+| Metering mode | Exif 0x9207 MeteringMode | 0x202C MeteringMode2, not needed for the setting | Exif on every file |
 | Flash | Exif 0x9209 Flash | 0x2017 FlashAction | Exif on every file; 0x2017 on 26 files, of the SLT-A99V, the ILCE-7S and every later body |
 | White balance | Exif 0xA403 WhiteBalance, auto or manual, and 0x9208 LightSource | 0x0115 WhiteBalance | Exif on every file; 0x0115 on every file but the F828's, the R1's and the A100's |
 | Colour temperature | none | 0xB021 ColorTemperature | every file but the F828's and the R1's; 0 unless the white balance is custom or a chosen colour temperature |
@@ -1452,11 +1465,11 @@ MakerNote **[F]**.
 
 ### DSC-F828 and DSC-V3 (SRF)
 
-SRF needs no decryption for milestone 3: IFD0 has Make, Model and an Exif
+SRF needs no decryption for metadata: IFD0 has Make, Model and an Exif
 IFD with the dates, and IFD1 holds the preview JPEG. [S][24] The key
-chain matters for what the encrypted MakerNote IFDs hold (milestone 6),
-and for white balance and the raw data (milestone 7, low priority). At
-the level metadata needs:
+chain matters for what the encrypted MakerNote IFDs hold (full
+metadata), and for white balance and the raw data (raw sensor data, low
+priority). At the level metadata needs:
 
 - The MakerNote is a chain of seven IFDs, SRF0 to SRF6. SRF0 is plain, with
   one entry (tag 0x0003) and a next pointer to SRF1. [P][2][F]
@@ -1541,7 +1554,7 @@ points specific to Sony metadata:
 
 ## 12. Recommendation for raw-files
 
-**Milestone 3 needs no decryption and no deciphering.**
+**The metadata raw-files reads needs no decryption and no deciphering.**
 
 raw-files decided this in [ADR011](../../architecture-decisions/adr011-metadata-from-standard-tags.md), which
 differs from the list below in three points. It reads Sony's MakerNote
@@ -1624,7 +1637,7 @@ raw from a medium one; and the shutter used and APS-C mode, because only
 enciphered blocks hold them. The A100's Minolta-format IFD stays unread
 too, so its white balance comes from Exif alone.
 
-**Milestone 7 needs the SR2 keystream for older files.**
+**Raw sensor data needs the SR2 keystream for older files.**
 
 1. Implement the keystream of [section 6](#6-the-sr2-keystream); it is about
    twenty lines and needs no table. Read white balance and black level from
@@ -1632,8 +1645,8 @@ too, so its white balance comes from Exif alone.
    otherwise from the decrypted SR2SubIFD; the white level 0x787F exists
    only in the SR2SubIFD. [F][I]
 2. Read 0x7010 SonyToneCurve (plain) for cRAW. [P]
-3. Milestone 7 needs no substitution cipher; milestone 6 reads what the
-   enciphered tags hold once a decision on the cipher allows it. [I]
+3. Raw sensor data needs no substitution cipher; full metadata reads what
+   the enciphered tags hold once a decision on the cipher allows it. [I]
 4. Treat the A100's MRW block and the SRF key chain as optional, behind
    typed "unsupported" errors until there is demand. [I]
 
@@ -1658,7 +1671,7 @@ too, so its white balance comes from Exif alone.
    source of CC0 files is needed.
 6. **0x9050 layouts of the ILCE-9M3, ILCE-6700 and ILCE-1M2.** The values at
    the documented offsets are not plausible counts in files 7361, 7364 and
-   6736. Milestone 6 needs them.
+   6736. Full metadata needs them.
 7. **The 0x7240 + 6 link.** What Sony's software writes at 0x7240 in edited
    files, and whether a writer must keep the link to IFD2 or the raw
    SubIFD. No IDC-edited sample was available.

@@ -14,12 +14,12 @@ before they are relied on. The disclosure covers the whole folder.
 ## Question
 
 The question was to gather everything publicly known about the Nikon NEF
-format that raw-files needs for three of the roadmap milestones:
+format that raw-files needs for three of the roadmap's capabilities:
 
-- milestone 1: find and return the largest embedded JPEG preview;
-- milestone 3: read basic metadata (orientation, capture date, camera,
-  dimensions);
-- milestone 7: decode the raw sensor data.
+- previews: find and return the largest embedded JPEG preview;
+- metadata: read orientation, capture date, camera and dimensions from
+  the plain tags;
+- raw sensor data: decode the raw sensor data.
 
 The research also had to establish two practical points:
 

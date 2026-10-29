@@ -22,7 +22,7 @@ answer Part 2.
    - the ARW1 prefix code, published as an 18-entry table in dcraw, LibRaw
      and rawkit, reduces to a short rule, checked on files 2346 and 2271;
    - the inverse of the MakerNote cipher is computable from b³ mod 249
-     (milestone 6 needs it, for what the enciphered tags hold);
+     (full metadata needs it, for what the enciphered tags hold);
    - the SR2 keystream is a formula with two constants.
 
    What remains:
@@ -66,15 +66,17 @@ answer Part 2.
    ([licences-and-references.md](licences-and-references.md)). These are
    legal questions, not engineering ones, and the same posture as NEF
    HE/HE\*.
-3. **Decryption and anti-circumvention.** Milestone 6 meets this question
-   first, for the encrypted SRF MakerNote IFDs and the enciphered tags.
-   Milestone 7 needs the SR2 keystream for the levels and white balance
-   of older files and for Sony's white level on all of them; the key is
-   stored in the file. Does decrypting it count as circumventing a
-   technological measure under DMCA-like laws? The question is untested;
-   open decoders have done it for about twenty years and no action against
-   them was found ([licences-and-references.md](licences-and-references.md),
-   [raw-data.md](raw-data.md)). Milestones 2 and 3 need no decryption.
+3. **Decryption and anti-circumvention.** Full metadata meets this
+   question first, for the encrypted SRF MakerNote IFDs and the
+   enciphered tags. Raw sensor data needs the SR2 keystream for the
+   levels and white balance of older files and for Sony's white level on
+   all of them; the key is stored in the file. Does decrypting it count
+   as circumventing a technological measure under DMCA-like laws? The
+   question is untested; open decoders have done it for about twenty
+   years and no action against them was found
+   ([licences-and-references.md](licences-and-references.md),
+   [raw-data.md](raw-data.md)). Previews and the metadata raw-files reads
+   need no decryption.
 4. **Scope for SRF, ARQ and the A100.** The one preview walk covers all of
    them. For raw data
    ([raw-data.md](raw-data.md),
@@ -87,10 +89,10 @@ answer Part 2.
    - the A100 keeps its white balance in a Minolta MRW block, and where its
      levels are is unknown.
 
-   Which of these milestone 7 decodes, and whether the rest return a typed
-   unsupported error, is to be decided. The pages suggest SRF and ARQ
-   later, and the MRW block and SRF key chain behind "unsupported" until
-   there is demand.
+   Which of these raw-files decodes for raw sensor data, and whether the
+   rest return a typed unsupported error, is to be decided. The pages
+   suggest SRF and ARQ later, and the MRW block and SRF key chain behind
+   "unsupported" until there is demand.
 5. **Strictness and output where implementations disagree.** One
    behaviour should be picked and tested for each
    ([raw-data.md](raw-data.md),
@@ -120,7 +122,7 @@ answer Part 2.
      R1.
    - **Corrupt data.** Decode what can be decoded and count bad blocks and
      range violations, or fail the file?
-6. **Size and framing for milestone 3.** Which "image dimensions" to
+6. **Size and framing for metadata.** Which "image dimensions" to
    report: the stored size, the visible size from DefaultCrop, the
    in-camera framing from SonyCrop, or 0x7038's usable area. The page
    recommends the stored size, DefaultCrop as the visible size and SonyCrop
@@ -256,7 +258,7 @@ answer Part 2.
 - **0x9050 layouts of the ILCE-9M3, ILCE-6700 and ILCE-1M2.** The values at
   the documented offsets are not plausible shutter counts in files 7361,
   7364 and 6736, and file 7835's block is mostly `FF` (219 of 256 bytes,
-  `FF` at the count offsets). It matters to milestone 6, which reads the
+  `FF` at the count offsets). It matters to full metadata, for the
   shutter count ([makernote-and-metadata.md](makernote-and-metadata.md)).
 - **Focus point.** What no sample shows yet
   ([makernote-and-metadata.md](makernote-and-metadata.md#96-focus-point),
