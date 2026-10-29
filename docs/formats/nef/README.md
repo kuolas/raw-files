@@ -67,7 +67,7 @@ describes how the research was done and what it could not reach.
 | [security.md](security.md) | Past vulnerabilities in NEF parsers and the checklist that follows from them |
 | [licences-and-references.md](licences-and-references.md) | Standards, existing implementations and their licences, and what raw-files may reuse |
 | [test-data.md](test-data.md) | Where sample files come from, which may be committed, and which bodies to cover |
-| [open-questions.md](open-questions.md) | Decisions to take and facts still to establish |
+| [open-questions.md](open-questions.md) | Decisions to take, facts still to establish, and what the samples, a decision or the code settled |
 | [research-record.md](research-record.md) | How this documentation was researched, and its limits |
 
 ## Confidence tags

@@ -3,8 +3,9 @@
 What the [NEF documentation](README.md) does not yet settle. Part 1 lists
 decisions for the maintainers. Part 2 lists facts that sample files can
 establish. Part 3 lists sources that were never read. Part 4 lists questions
-that sample files have already settled. Each item names the page it affects,
-and test-data.md describes the sample set that would answer Part 2.
+that sample files have already settled, and Part 5 the decisions of Part 1
+that a decision record or the code has settled. Each item names the page it
+affects, and test-data.md describes the sample set that would answer Part 2.
 
 ## 1. Decisions for the maintainers
 
@@ -20,38 +21,27 @@ and test-data.md describes the sample set that would answer Part 2.
    - the two 256-byte substitution tables used by the MakerNote cipher
      ([makernote-and-metadata.md](makernote-and-metadata.md)).
    - per-body tables: CFA phase, crop trims and white levels.
-   - per-body tables of autofocus points, which turn the point number of a
-     DSLR shot through the viewfinder, a Nikon 1 shot or a Z body's
-     auto-area mask into a position
-     ([makernote-and-metadata.md](makernote-and-metadata.md#86-focus-point)):
-     decided, these are measured by the project on frames shot with the
-     body, by the procedure of
-     [autofocus-points.md](autofocus-points.md#1-the-procedure), and
-     taken from another project only by a decision made together with
-     it
-     ([ADR017](../../architecture-decisions/adr017-per-body-tables-measured-by-the-project.md)).
 
-   The options are:
+   The tables of autofocus points are settled (Part 5). The options for
+   the rest are:
    - (a) treat them as format facts, transcribed from two independent sources
      with provenance recorded;
    - (b) derive them from sample files;
    - (c) a clean-room process, in which the person who reads the copyleft
      source is not the person who writes the code.
 
-   The tables of autofocus points are measured by the project (ADR017,
-   above), and the per-body facts the files themselves hold, the CFA
-   phase, the crop trims and the white levels, take route (b) as facts
-   of the format. The decision on the Huffman and substitution tables
-   needs to be recorded in an ADR before the first of them enters
-   raw-files.
+   The per-body facts the files themselves hold, the CFA phase, the crop
+   trims and the white levels, take route (b) as facts of the format. The
+   decision on the Huffman and substitution tables needs to be recorded in
+   an ADR before the first of them enters raw-files.
 2. **HE / HE\*.** The recommendation is to detect these files and return an
    "unsupported" error ([raw-data.md](raw-data.md)). Implementing a decoder
    would touch the JPEG XS patent pool. That is a legal question, not an
    engineering one.
-3. **Byte-order mismatch.** Nikon software can leave a NEF whose MakerNote
-   byte order differs from the file's. The question is whether to tolerate
-   that for previews and metadata (recommended) and to reject it for raw
-   decoding. rawler rejects it.
+3. **Byte-order mismatch in raw decoding.** Nikon software can leave a NEF
+   whose MakerNote byte order differs from the file's. Previews and
+   metadata tolerate it (Part 5); the question is whether to reject it for
+   raw decoding, as rawler does.
 4. **Serial-number parsing for decryption.** Implementations differ when the
    serial contains non-digits:
    - dcraw folds each non-digit in as `c % 10`.
@@ -61,9 +51,7 @@ and test-data.md describes the sample set that would answer Part 2.
 
    One behaviour should be picked and tested
    ([makernote-and-metadata.md](makernote-and-metadata.md)).
-5. **Test data strategy.** The proposal is to download large samples in CI,
-   pinned by SHA-256, and commit only tiny fixtures ([test-data.md](test-data.md)).
-6. **Strictness on corrupt data.** Implementations differ in three places
+5. **Strictness on corrupt data.** Implementations differ in three places
    ([raw-data.md](raw-data.md)):
    - how they clamp the curve index;
    - whether they reject a curve whose anchor points do not tile the range;
@@ -274,3 +262,36 @@ details are in
 - **Crop area on recent bodies**: the D850, D780 and Z bodies write 0x0045
   CropArea, and it is the visible image inside the stored raw (files 1835,
   3827, 3587, 6887, 7808 to 7810, 5146 to 5148).
+
+## 5. Questions settled by a decision or by the code
+
+Each of these was a decision for the maintainers in Part 1. A decision
+record or the code of raw-files has answered it; each names what did.
+
+- **Tables of autofocus points**, which turn the point number of a DSLR
+  shot through the viewfinder, a Nikon 1 shot or a Z body's auto-area
+  mask into a position
+  ([makernote-and-metadata.md](makernote-and-metadata.md#86-focus-point)):
+  the project measures each table on frames shot with the body, by the
+  procedure of [autofocus-points.md](autofocus-points.md#1-the-procedure),
+  and takes one from another project only by a decision made together
+  with it
+  ([ADR017](../../architecture-decisions/adr017-per-body-tables-measured-by-the-project.md)).
+  The other data of Part 1's decision 1 stays open.
+- **Byte-order mismatch, for previews and metadata.** The question was
+  whether to tolerate a MakerNote whose byte order differs from the
+  file's for previews and metadata, as recommended. The reader takes
+  every number inside the MakerNote in the byte order of the MakerNote's
+  own header
+  ([src/formats/makernote/nikon.rs](../../../src/formats/makernote/nikon.rs)),
+  so such a file gives the same previews and the same metadata as one
+  whose orders agree, which the tests check on a MakerNote written in the
+  other byte order ([tests/nef.rs](../../../tests/nef.rs)). Whether raw
+  decoding rejects it stays open in Part 1.
+- **Test data strategy.** The proposal was to download large samples in
+  CI, pinned by SHA-256, and commit only tiny fixtures
+  ([test-data.md](test-data.md)). The sample list
+  ([tests/samples.tsv](../../../tests/samples.tsv)) does so with 35 Nikon
+  raw files, and CI keeps the files in a cache that a workflow on
+  `master` fills, so a pull request downloads nothing unless it changes
+  the list ([CONTRIBUTING.md](../../../CONTRIBUTING.md)).
