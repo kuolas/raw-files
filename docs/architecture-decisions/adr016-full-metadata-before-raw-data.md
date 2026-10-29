@@ -69,8 +69,9 @@ needs all of the metadata.
 ## Decision
 
 We will read **every metadata value a file of a format raw-files reads
-records**, plain, enciphered or encrypted, as a roadmap milestone of its
-own, "Full metadata", after the focus points and before raw sensor data.
+records**, plain, enciphered or encrypted, as work of its own on the
+roadmap, "Full metadata", after the focus points and before raw sensor
+data.
 NEF and ARW files, and the camera JPEGs that carry the same blocks, are
 its first files.
 
@@ -96,14 +97,15 @@ Rejected:
 
 - **Raw sensor data first**, as the roadmap had it. A program that
   shows, sorts and searches pictures would keep a second reader for the
-  metadata until both raw milestones were done, and most of the metadata
-  is read by the readers raw-files already has.
+  metadata until raw-files decoded the raw sensor data and developed
+  the image, and most of the metadata is read by the readers
+  raw-files already has.
 - **The plain values only, leaving the enciphered and encrypted blocks
   out for good.** A Sony body's shutter and its APS-C mode, and the lens
   of many Nikon files, would never be read, and a program would keep a
   second reader for them.
-- **Leaving the rest to other libraries.** That is the second reader the
-  milestone is meant to remove.
+- **Leaving the rest to other libraries.** That is the second reader
+  full metadata is meant to remove.
 
 ## What this decision does not cover
 
@@ -118,16 +120,15 @@ Rejected:
   through a dependency ([ADR002](adr002-license-mit-or-apache-2.md),
   [ADR007](adr007-pure-rust-cross-platform.md)), and where a table of
   lenses comes from ([ADR013](adr013-clean-room-and-third-party-code.md)).
-- The order of the groups within the milestone, and the order of the
+- The order of the groups within full metadata, and the order of the
   formats after NEF and ARW, which the roadmap keeps.
 - Anything about raw sensor data and the developed image, which
   [ADR010](adr010-decoding-ends-at-a-linear-image.md) decides.
 
 ## Consequences
 
-- Raw sensor data and the developed image come after this milestone.
-  The roadmap gains "Full metadata" between the focus points and raw
-  sensor data, and its later milestones move down by one.
+- Raw sensor data and the developed image come after full metadata,
+  which the roadmap names as the next work.
 - A program can drop its second metadata reader group by group, as each
   lands.
 - The API grows by many values, each optional, which can be added
