@@ -357,11 +357,14 @@
 //! # What comes next
 //!
 //! The [roadmap](https://github.com/kuolas/raw-files/blob/master/docs/ROADMAP.md)
-//! plans next the tables of more bodies' autofocus points, each added as
-//! it is measured, so that the shots through those bodies' viewfinders
-//! give their points too; then every metadata value a file records, the
-//! ones that only enciphered or encrypted blocks hold among them; then the
-//! raw sensor data; and last a developed linear image.
+//! plans next every metadata value a file records, the ones that only
+//! enciphered or encrypted blocks hold among them; then the raw sensor
+//! data; and last a developed linear image. No other body's table of
+//! autofocus points is planned: one is added when frames shot with that
+//! body have been measured, by the
+//! [procedure](https://github.com/kuolas/raw-files/blob/master/docs/formats/nef/autofocus-points.md#1-the-procedure)
+//! the NEF format notes describe, so that the shots through its
+//! viewfinder give their points too.
 
 // A fuzzing build compiles the reader for one caller, the fuzz entry points,
 // which use only part of it. What is unused there, and so which `expect`s
