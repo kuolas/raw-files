@@ -145,8 +145,10 @@ bytes: detection method 0 at byte 4, the area mode at byte 5, the
 layout code (FocusPointSchema) 3, the 39-point layout, at byte 6, the
 primary point's number at byte 7, a mask of the points used in the
 seven bytes 8 to 14, a zero frame and area in bytes 16 to 27, and 0 in
-the in-focus byte 28. FocusMode is `AF-S  ` or `AF-C  `; what a
-manual-focus or live-view shot writes instead is in section 2.6.
+the in-focus byte 28. FocusMode is `AF-S  ` or `AF-C  `. A
+manual-focus shot writes `MANUAL` and names no point; a live-view shot
+keeps FocusMode `AF-S  ` and records a position instead of a point
+number. Section 2.6 gives what each writes.
 CropHiSpeed is
 `[0, 6080, 4028, 6080, 4028, 0, 0]` with the crop off and
 `[2, 6080, 4028, 3968, 2636, 1040, 696]` in DX. The raw image is
@@ -300,9 +302,9 @@ again, read identically to their originals. **[F]**
 - **Manual focus (frames 45 and 46).** FocusMode `MANUAL`, layout code
   0, area mode 0, point number 0, an empty mask and a zero frame: a
   manual-focus shot names no point at all. **[F]**
-- **Live view (frames 53 to 56).** Detection method 1, area mode 4,
-  layout code 0, point number 0, and a recorded position, which the
-  existing rules for a recorded position give
+- **Live view (frames 53 to 56).** FocusMode `AF-S  `, detection
+  method 1, area mode 4, layout code 0, point number 0, and a recorded
+  position, which the existing rules for a recorded position give
   ([ADR012](../../architecture-decisions/adr012-focus-points-as-the-camera-records-them.md)).
   **[F]**
 
