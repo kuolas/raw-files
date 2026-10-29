@@ -19,18 +19,25 @@
 //! read when the file is opened, from the standard TIFF and Exif tags, in a
 //! JPEG those of its Exif segment, and, in the raw files and the JPEGs of
 //! Nikon and Sony cameras, from what the maker's MakerNote records that
-//! they lack: the camera's make, model and serial number, the software
-//! that wrote the file, the capture time, the orientation, the exposure,
-//! with the focal length in 35 mm terms, the camera's settings (the white
-//! balance, the exposure program, the metering mode, the flash, the
-//! shutter, the electronic front curtain setting, the image area, the raw
-//! image size and the colour space, in [`CameraSettings`], those that only
-//! a MakerNote records from the plain tags of Nikon's and Sony's), the
-//! lens, the sizes of the raw data, which a JPEG lacks, and of the visible
-//! image, and where the camera focused ([`Metadata::focus`]), with the
-//! autofocus points it used and the area mode ([`Metadata::focus_points`]),
-//! and the layout of the body's autofocus points where raw-files has its
-//! table ([`Metadata::focus_layout`]).
+//! they lack:
+//!
+//! - the camera's make, model and serial number, and the software that
+//!   wrote the file;
+//! - the capture time and the orientation;
+//! - the exposure, with the focal length in 35 mm terms, and the lens;
+//! - the camera's settings, in [`CameraSettings`]: the white balance, the
+//!   exposure program, the metering mode, the flash, the shutter, the
+//!   electronic front curtain setting, the image area, the raw image size
+//!   and the colour space: from the Exif tags and, for those only a
+//!   MakerNote records, from the plain tags of Nikon's and Sony's
+//!   MakerNotes;
+//! - the sizes of the raw data, which a JPEG lacks, and of the visible
+//!   image;
+//! - where the camera focused ([`Metadata::focus`]), the autofocus points
+//!   it used, with the area mode ([`Metadata::focus_points`]), and the
+//!   layout of the body's autofocus points where raw-files has its table
+//!   ([`Metadata::focus_layout`]).
+//!
 //! See the [roadmap](https://github.com/kuolas/raw-files/blob/master/docs/ROADMAP.md)
 //! for the plan and the
 //! [architecture](https://github.com/kuolas/raw-files/blob/master/docs/ARCHITECTURE.md)
