@@ -48,6 +48,75 @@ It is the project's one list of what is broken, deferred or wanted.
 For anything bigger than a small fix, please open or find an issue **before**
 you start, so we can agree on the approach before you spend time on it.
 
+### Labels
+
+The maintainer labels each new issue, so there is nothing for you to pick
+when you open one. They sort the tracker by what an issue is, where it
+belongs, what kind of work it needs and whether it can start; an issue
+often has several.
+
+What it is:
+
+- `bug` — something doesn't work, or gives a wrong result. The *Bug report*
+  form adds it.
+- `enhancement` — a new feature or a change in behaviour. The *Feature
+  request* form adds it.
+
+Where it belongs, by the format or part of the library it touches:
+
+- `nef` — Nikon NEF and NRW files.
+- `arw` — Sony ARW files.
+- `jpeg` — camera JPEG files and the JPEG container, with its Exif and MPF
+  segments.
+- `tiff` — the TIFF container the RAW formats are built on.
+- `makernote` — the MakerNote blocks, where each camera maker records data
+  of its own.
+- `metadata` — capture data and camera settings, read through the
+  `Metadata` API.
+- `focus` — focus points, and the layouts of a camera's autofocus points.
+- `preview` — the previews embedded in a file, and choosing among them.
+- `ci` — the CI workflows, the git hooks and the scripts in `scripts/`.
+- `docs` — documentation: `docs/`, the READMEs and the API docs.
+
+What kind of work it is:
+
+- `security` — hardening the readers against hostile files, or a
+  vulnerability once it has been disclosed. Report a vulnerability
+  privately first, as [Security issues](#security-issues) says.
+- `performance` — speed, memory use or allocations.
+- `testing` — tests, fixtures, sample files and fuzzing.
+- `accessibility` — a barrier for people with disabilities, for example in
+  the documentation.
+- `camera-support` — a camera body or file variant the readers do not
+  handle yet.
+
+Whether it can start:
+
+- `needs-samples` — waits on sample files or test shots from a camera. If
+  you own that camera, this is where you can help most: the issue says
+  which files or shots it needs.
+- `needs-decision` — waits on a decision about how the library should
+  behave. Comments on the issue help make it.
+- `breaking-change` — changes the public API, so it waits for a release
+  that breaks the API anyway.
+
+Where to start:
+
+- `good first issue` — small and well defined, a good way into the
+  project.
+
+After an issue is opened:
+
+- `question` — work waits on more information, usually from whoever
+  opened the issue. Despite its name, it does not mark an issue that asks
+  a question.
+- `help wanted` — the maintainer would welcome someone taking it on,
+  though it may be bigger than a good first issue.
+- `duplicate` — another issue already covers it; it is closed with a link
+  to that one.
+- `invalid` — not a problem in raw-files; it is closed with the reason.
+- `wontfix` — decided against; it is closed, and the issue says why.
+
 ## Security issues
 
 Please **don't** report security problems in a public issue. See
