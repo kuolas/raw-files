@@ -342,6 +342,18 @@ A few conventions:
   crate has no dependencies, and the crate docs say so. The items about
   macros, collections, iterators, smart pointers and destructors have
   nothing to apply to yet.
+- **Values are changed with `with_…` methods.** A value a caller reads,
+  such as `Metadata`, `Exposure` or `Lens`, starts from `default()`, and
+  each of its values is set by a `with_…` method named after the getter
+  that reads it back: `with_model` sets what `model()` returns. A value
+  whose parts mean nothing alone, such as `FocusPoints`, which needs a
+  frame and an origin, or `Flash`, which needs whether it fired, has no
+  `default()`: its constructor takes those parts, its `with_…` methods
+  set the rest, and where a file may not record it, the getter that
+  gives it returns an `Option`, as `Metadata::focus_points` and
+  `CameraSettings::flash` do. A builder whose last call does the work,
+  such as `Options`, which ends in `open`, `from_bytes` or `from_reader`,
+  names its setters without the prefix, as `std::fs::OpenOptions` does.
 
 ## Fuzzing
 
