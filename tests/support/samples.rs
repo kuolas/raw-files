@@ -112,11 +112,8 @@ pub struct Sample {
 }
 
 /// The stored size of each preview, in order.
-pub fn sizes(previews: &[Preview]) -> Vec<(u32, u32)> {
-    previews
-        .iter()
-        .map(|p| (p.size().width, p.size().height))
-        .collect()
+pub fn sizes(previews: &[Preview]) -> Vec<Size> {
+    previews.iter().map(Preview::size).collect()
 }
 
 /// Checks that `sample` opens as `format` with exactly its expected
@@ -132,10 +129,13 @@ pub fn check(sample: &Sample, format: Format) {
     let label = sample.file;
     let mut file = RawFile::open(&path).unwrap();
     assert_eq!(file.format(), format, "{label}");
-    let expected_sizes: Vec<(u32, u32)> = sample
+    let expected_sizes: Vec<Size> = sample
         .previews
         .iter()
-        .map(|jpeg| (jpeg.width, jpeg.height))
+        .map(|jpeg| Size {
+            width: jpeg.width,
+            height: jpeg.height,
+        })
         .collect();
     assert_eq!(sizes(file.previews()), expected_sizes, "{label}");
 

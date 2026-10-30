@@ -65,9 +65,12 @@ use support::tiff_builder::{Built, Order};
 
 const ORDERS: [Order; 2] = [Order::Little, Order::Big];
 
-/// `size` as a preview reports it.
-fn wide((width, height): (u16, u16)) -> (u32, u32) {
-    (u32::from(width), u32::from(height))
+/// A `(width, height)` pair of `u16`s as a [`Size`].
+fn size_of((width, height): (u16, u16)) -> Size {
+    Size {
+        width: u32::from(width),
+        height: u32::from(height),
+    }
 }
 
 /// The length of the stub JPEG of `size`.
@@ -104,7 +107,7 @@ fn assert_the_four_jpegs(built: &Built, blobs: Z9Blobs, jpegs: FourJpegs, label:
         ("reader", from_reader.format(), from_reader.previews()),
     ] {
         assert_eq!(format, Format::Nef, "{label}, from {how}");
-        assert_eq!(sizes(previews), jpegs.map(wide), "{label}, from {how}");
+        assert_eq!(sizes(previews), jpegs.map(size_of), "{label}, from {how}");
         let expected = [
             (built.blob_offset(blobs.ifd0_jpeg), ifd0_jpeg),
             (
@@ -148,7 +151,7 @@ fn reading_the_makernote_preview_returns_exactly_the_stubs_bytes() {
     let built = z9_file(Order::Big, 1);
     let mut file = RawFile::from_reader(Cursor::new(built.bytes)).unwrap();
     let preview = file.previews()[1];
-    assert_eq!(preview.size(), as_size(wide(PREVIEW_JPEG)));
+    assert_eq!(preview.size(), size_of(PREVIEW_JPEG));
     assert_eq!(file.read_preview(&preview).unwrap(), stub(PREVIEW_JPEG));
 }
 
@@ -156,14 +159,14 @@ fn reading_the_makernote_preview_returns_exactly_the_stubs_bytes() {
 fn the_largest_preview_is_the_full_size_jpeg_and_at_least_picks_the_smallest_that_fits() {
     let built = z9_file(Order::Little, 1);
     let file = RawFile::from_bytes(&built.bytes).unwrap();
-    let size = |preview: Option<Preview>| preview.map(|p| (p.size().width, p.size().height));
+    let size = |preview: Option<Preview>| preview.map(|p| p.size());
     let at_least = |width, height| size(file.preview_at_least(Size { width, height }));
-    assert_eq!(size(file.largest_preview()), Some(wide(FULL_SIZE_JPEG)));
-    assert_eq!(at_least(1000, 600), Some(wide(MEDIUM_JPEG)));
-    assert_eq!(at_least(600, 400), Some(wide(PREVIEW_JPEG)));
-    assert_eq!(at_least(100, 100), Some(wide(IFD0_JPEG)));
+    assert_eq!(size(file.largest_preview()), Some(size_of(FULL_SIZE_JPEG)));
+    assert_eq!(at_least(1000, 600), Some(size_of(MEDIUM_JPEG)));
+    assert_eq!(at_least(600, 400), Some(size_of(PREVIEW_JPEG)));
+    assert_eq!(at_least(100, 100), Some(size_of(IFD0_JPEG)));
     // Wider than any preview: none fits, so the largest is given.
-    assert_eq!(at_least(9000, 100), Some(wide(FULL_SIZE_JPEG)));
+    assert_eq!(at_least(9000, 100), Some(size_of(FULL_SIZE_JPEG)));
 }
 
 #[test]
@@ -544,11 +547,7 @@ fn the_z6iii_file_gives_its_focus_point_on_the_cropped_picture() {
         assert_eq!(focus.in_focus(), Some(Z6III_IN_FOCUS), "{order:?}");
         // The frame is the picture's, so the point scales onto the square
         // previews as it is.
-        assert_eq!(
-            focus.frame(),
-            as_size(wide(Z6III_FULL_SIZE_JPEG)),
-            "{order:?}"
-        );
+        assert_eq!(focus.frame(), size_of(Z6III_FULL_SIZE_JPEG), "{order:?}");
         // No layout: raw-files has no table of the Z6III's points.
         assert_eq!(metadata.focus_layout(), None, "{order:?}");
     }
@@ -630,7 +629,7 @@ fn the_d300_file_opens_as_nef_with_its_two_jpegs_smallest_first() {
         let previews = file.previews();
         assert_eq!(
             sizes(previews),
-            [wide(D300_PREVIEW_JPEG), wide(D300_FULL_SIZE_JPEG)],
+            [size_of(D300_PREVIEW_JPEG), size_of(D300_FULL_SIZE_JPEG)],
             "{order:?}"
         );
         let expected = [
@@ -796,7 +795,7 @@ fn assert_the_d1h_file(
         .expect("every value of the D1H fixture is one the constructors accept");
     let start = built.blob_offset(blobs.preview_jpeg);
     let len = stub_len(D1H_PREVIEW_JPEG);
-    let expected_previews: Vec<_> = [(start..start + len, wide(D1H_PREVIEW_JPEG))]
+    let expected_previews: Vec<_> = [(start..start + len, size_of(D1H_PREVIEW_JPEG))]
         .into_iter()
         .filter(|_| preview)
         .collect();
@@ -821,7 +820,7 @@ fn assert_the_d1h_file(
         assert_eq!(format, Format::Nef, "{label}, from {how}");
         let found: Vec<_> = previews
             .iter()
-            .map(|p| (p.byte_range(), (p.size().width, p.size().height)))
+            .map(|p| (p.byte_range(), p.size()))
             .collect();
         assert_eq!(found, expected_previews, "{label}, from {how}");
         for preview in previews {
@@ -1143,7 +1142,11 @@ fn check_stripped_z9(expected: &StrippedZ9) {
 
     // The stripping replaced each JPEG by a stub of 122 bytes with the
     // original's frame header, so each keeps its size.
-    assert_eq!(sizes(file.previews()), expected.previews, "{label}");
+    assert_eq!(
+        sizes(file.previews()),
+        expected.previews.map(as_size),
+        "{label}"
+    );
     let previews = file.previews().to_vec();
     for preview in &previews {
         let size = preview.size();
@@ -1900,7 +1903,7 @@ fn the_d600_frame_4_gives_its_previews_metadata_and_point_38_placed_from_the_tab
     // replaced by 64 zero bytes, and is not a preview.
     assert_eq!(
         sizes(file.previews()),
-        [(570, 375), (1632, 1080), (6016, 4016)],
+        [(570, 375), (1632, 1080), (6016, 4016)].map(as_size),
         "{label}"
     );
     let previews = file.previews().to_vec();

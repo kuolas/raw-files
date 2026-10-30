@@ -39,9 +39,12 @@ const SUB_IFDS: u16 = 0x014A;
 /// The entries an IFD may have under the default limits.
 const DEFAULT_MAX_IFD_ENTRIES: u16 = 1000;
 
-/// `size` as a preview reports it.
-fn wide((width, height): (u16, u16)) -> (u32, u32) {
-    (u32::from(width), u32::from(height))
+/// A `(width, height)` pair of `u16`s as a [`Size`].
+fn size_of((width, height): (u16, u16)) -> Size {
+    Size {
+        width: u32::from(width),
+        height: u32::from(height),
+    }
 }
 
 /// The length of the stub JPEG of `size`.
@@ -56,7 +59,7 @@ fn stub_len(size: (u16, u16)) -> u64 {
 fn assert_previews(built: &Built, expected: &[(BlobId, (u16, u16))], label: &str) {
     let from_bytes = RawFile::from_bytes(&built.bytes).unwrap();
     let from_reader = RawFile::from_reader(Cursor::new(built.bytes.clone())).unwrap();
-    let expected_sizes: Vec<(u32, u32)> = expected.iter().map(|&(_, size)| wide(size)).collect();
+    let expected_sizes: Vec<Size> = expected.iter().map(|&(_, size)| size_of(size)).collect();
     for (how, format, previews) in [
         ("bytes", from_bytes.format(), from_bytes.previews()),
         ("reader", from_reader.format(), from_reader.previews()),
@@ -179,7 +182,7 @@ fn the_a100s_ifd0_preview_is_sized_from_its_frame_header_not_its_tags() {
         );
         let file = RawFile::from_bytes(&built.bytes).unwrap();
         assert!(
-            !sizes(file.previews()).contains(&wide(A100_TAG_SIZE)),
+            !sizes(file.previews()).contains(&size_of(A100_TAG_SIZE)),
             "{order:?}"
         );
     }
@@ -288,12 +291,14 @@ fn assert_the_arw4_focus(metadata: &Metadata, label: &str) {
     let focus = metadata
         .focus()
         .unwrap_or_else(|| panic!("{label}: no focus point"));
-    let (width, height) = wide(ARW4_FOCUS_FRAME);
-    let (x, y) = wide(ARW4_FOCUS_CENTER);
-    let (area_width, area_height) = wide(ARW4_FOCUS_SIZE);
-    assert_eq!(focus.frame(), size(width, height), "{label}");
-    assert_eq!(focus.center(), Point { x, y }, "{label}");
-    assert_eq!(focus.size(), Some(size(area_width, area_height)), "{label}");
+    let (x, y) = ARW4_FOCUS_CENTER;
+    let center = Point {
+        x: u32::from(x),
+        y: u32::from(y),
+    };
+    assert_eq!(focus.frame(), size_of(ARW4_FOCUS_FRAME), "{label}");
+    assert_eq!(focus.center(), center, "{label}");
+    assert_eq!(focus.size(), Some(size_of(ARW4_FOCUS_SIZE)), "{label}");
     assert_eq!(focus.in_focus(), None, "{label}");
 
     let points = metadata
@@ -548,10 +553,7 @@ fn a_preview_at_least_2000_by_1500_on_the_arw4_file_is_ifd2s() {
         height: 1500,
     };
     let preview = file.preview_at_least(box_2000_by_1500).unwrap();
-    assert_eq!(
-        (preview.size().width, preview.size().height),
-        wide(ARW4_FULL_SIZE_JPEG)
-    );
+    assert_eq!(preview.size(), size_of(ARW4_FULL_SIZE_JPEG));
     assert_eq!(
         preview.byte_range().start,
         built.blob_offset(blobs.ifd2_jpeg.unwrap())
