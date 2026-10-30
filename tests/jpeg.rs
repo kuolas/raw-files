@@ -120,12 +120,7 @@ const PIXEL_X_DIMENSION: u16 = 0xA002;
 /// (PixelYDimension).
 const PIXEL_Y_DIMENSION: u16 = 0xA003;
 
-/// `size` as a preview reports it.
-fn wide((width, height): (u16, u16)) -> (u32, u32) {
-    (u32::from(width), u32::from(height))
-}
-
-/// `size` as the metadata reports it.
+/// A `(width, height)` pair of `u16`s as a [`Size`].
 fn size_of((width, height): (u16, u16)) -> Size {
     Size {
         width: u32::from(width),
@@ -140,13 +135,13 @@ fn to_u64(n: usize) -> u64 {
 
 /// A preview as the tests compare it: where its bytes are, its size, its
 /// format and its orientation.
-type Seen = (Range<u64>, (u32, u32), PreviewFormat, Orientation);
+type Seen = (Range<u64>, Size, PreviewFormat, Orientation);
 
 /// `preview` as the tests compare it.
 fn seen(preview: &Preview) -> Seen {
     (
         preview.byte_range(),
-        (preview.size().width, preview.size().height),
+        preview.size(),
         preview.format(),
         preview.orientation(),
     )
@@ -157,7 +152,14 @@ fn seen(preview: &Preview) -> Seen {
 fn expected(jpegs: &[(Range<u64>, (u16, u16))], orientation: Orientation) -> Vec<Seen> {
     jpegs
         .iter()
-        .map(|(range, size)| (range.clone(), wide(*size), PreviewFormat::Jpeg, orientation))
+        .map(|(range, size)| {
+            (
+                range.clone(),
+                size_of(*size),
+                PreviewFormat::Jpeg,
+                orientation,
+            )
+        })
         .collect()
 }
 
@@ -1274,7 +1276,7 @@ fn a_nikon_makernote_under_another_makers_make_is_not_read() {
                     1,
                     (
                         preview,
-                        wide(PREVIEW_JPEG),
+                        size_of(PREVIEW_JPEG),
                         PreviewFormat::Jpeg,
                         Orientation::Rotate90,
                     ),
@@ -1453,7 +1455,7 @@ fn a_limit_crossed_inside_the_makernote_costs_the_makernote_only() {
             1,
             (
                 preview,
-                wide(PREVIEW_JPEG),
+                size_of(PREVIEW_JPEG),
                 PreviewFormat::Jpeg,
                 Orientation::Rotate90,
             ),
