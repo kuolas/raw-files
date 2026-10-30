@@ -106,7 +106,7 @@ use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
 use raw_files::{
-    DateTime, FocusLayout, FocusOrigin, FocusPoints, Format, Metadata, Point, RawFile, Size,
+    DateTime, FocusLayout, FocusOrigin, FocusPoints, Format, Lens, Metadata, Point, RawFile, Size,
 };
 
 /// A file that counts the bytes its reads return, into a counter the caller
@@ -181,7 +181,9 @@ impl MetadataTally {
         self.focal_length_in_35mm_film +=
             usize::from(exposure.focal_length_in_35mm_film().is_some());
         self.exposure_bias += usize::from(exposure.exposure_bias().is_some());
-        if let Some(lens) = metadata.lens() {
+        // A lens with no value is a file that describes none.
+        let lens = metadata.lens();
+        if *lens != Lens::default() {
             self.lens += 1;
             self.lens_model += usize::from(lens.model().is_some());
             self.lens_focal_range +=

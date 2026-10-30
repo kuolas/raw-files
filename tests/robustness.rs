@@ -552,22 +552,21 @@ fn show_metadata(metadata: &Metadata, out: &mut String) {
         show_fraction(fraction, out);
     }
     show_signed_fraction(exposure.exposure_bias(), out);
-    if let Some(lens) = metadata.lens() {
-        let _ = write!(
-            out,
-            " {:?} {:?} {:?}",
-            lens.make(),
-            lens.model(),
-            lens.serial_number()
-        );
-        for fraction in [
-            lens.min_focal_length(),
-            lens.max_focal_length(),
-            lens.f_number_at_min_focal_length(),
-            lens.f_number_at_max_focal_length(),
-        ] {
-            show_fraction(fraction, out);
-        }
+    let lens = metadata.lens();
+    let _ = write!(
+        out,
+        " {:?} {:?} {:?}",
+        lens.make(),
+        lens.model(),
+        lens.serial_number()
+    );
+    for fraction in [
+        lens.min_focal_length(),
+        lens.max_focal_length(),
+        lens.f_number_at_min_focal_length(),
+        lens.f_number_at_max_focal_length(),
+    ] {
+        show_fraction(fraction, out);
     }
     for size in [metadata.raw_size(), metadata.image_size()]
         .into_iter()

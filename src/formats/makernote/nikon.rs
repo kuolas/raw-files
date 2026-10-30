@@ -425,7 +425,7 @@ use crate::formats::tiff_previews::{self, Candidate};
 use crate::geometry::{Point, Size};
 use crate::io::{ByteOrder, Source};
 use crate::limits::Limits;
-use crate::metadata::{Lens, Metadata};
+use crate::metadata::Metadata;
 use crate::rational::{Rational, SignedRational};
 
 /// The Nikon MakerNote tag that records the ISO the picture was taken at
@@ -696,11 +696,10 @@ pub(in crate::formats) fn preview_candidate<R: Read + Seek>(
 /// serial number ([`serial_number`]), the ISO ([`iso`]), the lens's range
 /// ([`lens_range`]) and the capture time's offset from UTC
 /// ([`world_time`]): a range fills a lens whose standard tags gave no
-/// value of its range, keeping their make, model and serial number, or
-/// makes a lens of the range alone when they described none; an offset is
-/// given only to a capture time the standard tags gave, one whose
-/// OffsetTimeOriginal is missing or could not be read, and only within
-/// the bound every offset is held to
+/// value of its range, keeping their make, model and serial number; an
+/// offset is given only to a capture time the standard tags gave, one
+/// whose OffsetTimeOriginal is missing or could not be read, and only
+/// within the bound every offset is held to
 /// ([`DateTime::with_offset_minutes`](crate::datetime::DateTime::with_offset_minutes)).
 /// Then the camera settings that only the MakerNote records, and the white
 /// balance setting, finer than Exif's, in place of the mode the Exif tags
@@ -751,9 +750,8 @@ pub(in crate::formats) fn metadata<R: Read + Seek>(
     if metadata.exposure.iso.is_none() {
         metadata.exposure.iso = iso(src, makernote)?;
     }
-    if !metadata.lens.as_ref().is_some_and(Lens::has_range) {
-        let range = lens_range(src, makernote)?;
-        metadata.lens = Lens::with_range(metadata.lens.take(), range);
+    if !metadata.lens.has_range() {
+        metadata.lens.set_range(lens_range(src, makernote)?);
     }
     // An offset belongs to a time: without a capture time, WorldTime gives
     // nothing.
@@ -1206,7 +1204,8 @@ fn iso<R: Read + Seek>(src: &mut Source<R>, makernote: &MakerNote) -> Result<Opt
 
 /// The lens's range that `makernote`'s Lens tag records: its shortest and
 /// longest focal length, then the f-number at each, in the order of the
-/// Exif LensSpecification, as [`Lens::from_parts`] takes them.
+/// Exif LensSpecification, as
+/// [`Lens::set_range`](crate::metadata::Lens::set_range) takes them.
 ///
 /// The tag must be of type RATIONAL, hold exactly four values and store
 /// them inside the block; otherwise all four are `None`. Each value is
@@ -2043,9 +2042,9 @@ mod tests {
     use crate::container::tiff::tags::{
         BODY_SERIAL_NUMBER, COLOR_SPACE as EXIF_COLOR_SPACE, DATE_TIME_ORIGINAL,
         DEFAULT_CROP_ORIGIN, DEFAULT_CROP_SIZE, EXPOSURE_PROGRAM, IMAGE_LENGTH, IMAGE_WIDTH,
-        INTEROP_INDEX, LENS_MODEL, LENS_SPECIFICATION, LIGHT_SOURCE, MAKE, MAKER_NOTE, MODEL,
-        OFFSET_TIME_ORIGINAL, PHOTOGRAPHIC_SENSITIVITY, PHOTOMETRIC_INTERPRETATION,
-        SUB_SEC_TIME_ORIGINAL, WHITE_BALANCE as EXIF_WHITE_BALANCE,
+        INTEROP_INDEX, LENS_MAKE, LENS_MODEL, LENS_SERIAL_NUMBER, LENS_SPECIFICATION, LIGHT_SOURCE,
+        MAKE, MAKER_NOTE, MODEL, OFFSET_TIME_ORIGINAL, PHOTOGRAPHIC_SENSITIVITY,
+        PHOTOMETRIC_INTERPRETATION, SUB_SEC_TIME_ORIGINAL, WHITE_BALANCE as EXIF_WHITE_BALANCE,
     };
     use crate::container::tiff::types::{BYTE, IFD, RATIONAL, SRATIONAL, SSHORT};
     use crate::container::tiff::{self, parse_ifd, walk};
@@ -2053,6 +2052,7 @@ mod tests {
     use crate::error::ErrorKind;
     use crate::formats::testing::byte_order;
     use crate::jpeg_stub::jpeg_stub;
+    use crate::metadata::Lens;
     use crate::testing::{FAR, FailsFar};
     use crate::tiff_builder::{ASCII, IfdId, Order, RawValue, TiffBuilder};
     use std::io::Cursor;
@@ -3108,8 +3108,8 @@ mod tests {
         values.map(|(numerator, denominator)| Rational::known(numerator, denominator))
     }
 
-    /// The four fractions of `lens`'s range, in the order
-    /// [`Lens::from_parts`] takes them.
+    /// The four fractions of `lens`'s range, in the order of the Exif
+    /// LensSpecification.
     fn range_of(lens: &Lens) -> [Option<Rational>; 4] {
         [
             lens.min_focal_length(),
@@ -3407,12 +3407,12 @@ mod tests {
     }
 
     #[test]
-    fn without_an_exif_lens_the_makernotes_range_makes_one() {
+    fn without_an_exif_lens_the_makernotes_range_fills_the_lens() {
         for order in ORDERS {
             let metadata = makernote_metadata(order, |inner, ifd| {
                 inner.rational(ifd, LENS, &D300_LENS);
             });
-            let lens = metadata.lens.expect("a lens");
+            let lens = metadata.lens;
             assert_eq!(range_of(&lens), known(D300_LENS), "{order:?}");
             assert_eq!(
                 (lens.make(), lens.model(), lens.serial_number()),
@@ -3423,10 +3423,10 @@ mod tests {
     }
 
     #[test]
-    fn without_a_lens_in_either_there_is_none() {
+    fn without_a_lens_in_either_the_lens_is_empty() {
         for order in ORDERS {
             let metadata = makernote_metadata(order, |_, _| {});
-            assert_eq!(metadata.lens, None, "{order:?}");
+            assert_eq!(metadata.lens, Lens::default(), "{order:?}");
         }
     }
 
@@ -3441,7 +3441,7 @@ mod tests {
                 });
                 let block = retyped(order, block, entry, typ, count);
                 let metadata = exif_metadata(order, &block, |_, _| {});
-                assert_eq!(metadata.lens, None, "{order:?}, type {typ}");
+                assert_eq!(metadata.lens, Lens::default(), "{order:?}, type {typ}");
             }
         }
     }
@@ -3464,11 +3464,11 @@ mod tests {
             // Declared one byte short: the last fraction's last byte lies
             // in the file, after the block.
             let file = exif_file(order, &block, whole(&block) - 1, |_, _| {});
-            assert_eq!(metadata_of(file).lens, None, "{order:?}");
+            assert_eq!(metadata_of(file).lens, Lens::default(), "{order:?}");
 
             // The control: declared whole, the same bytes are used.
             let file = exif_file(order, &block, whole(&block), |_, _| {});
-            let lens = metadata_of(file).lens.expect("a lens");
+            let lens = metadata_of(file).lens;
             assert_eq!(range_of(&lens), known(D300_LENS), "{order:?}");
         }
     }
@@ -3483,7 +3483,7 @@ mod tests {
             let metadata = exif_metadata(order, &block, |builder, exif| {
                 builder.rational(exif, LENS_SPECIFICATION, &EXIF_LENS);
             });
-            let lens = metadata.lens.expect("a lens");
+            let lens = metadata.lens;
             assert_eq!(range_of(&lens), known(EXIF_LENS), "{order:?}");
         }
     }
@@ -3500,7 +3500,7 @@ mod tests {
             let metadata = exif_metadata(order, &block, |builder, exif| {
                 builder.rational(exif, LENS_SPECIFICATION, &exif_range);
             });
-            let lens = metadata.lens.expect("a lens");
+            let lens = metadata.lens;
             assert_eq!(range_of(&lens), known(exif_range), "{order:?}");
         }
     }
@@ -3518,10 +3518,40 @@ mod tests {
             let metadata = exif_metadata(order, &block, |builder, exif| {
                 builder.ascii(exif, LENS_MODEL, "1 NIKKOR VR 10-30mm f/3.5-5.6");
             });
-            let lens = metadata.lens.expect("a lens");
+            let lens = metadata.lens;
             assert_eq!(
                 lens.model(),
                 Some("1 NIKKOR VR 10-30mm f/3.5-5.6"),
+                "{order:?}"
+            );
+            assert_eq!(range_of(&lens), known(j1_range), "{order:?}");
+        }
+    }
+
+    #[test]
+    fn an_exif_lens_without_a_range_keeps_its_texts_beside_the_makernotes_range() {
+        // The make and serial number too, not only the model, stay as the
+        // Exif tags give them when the MakerNote fills the range.
+        for order in ORDERS {
+            let j1_range = [(100, 10), (300, 10), (35, 10), (56, 10)];
+            let block = tags_block(order, |inner, ifd| {
+                inner.rational(ifd, LENS, &j1_range);
+            })
+            .0;
+            let metadata = exif_metadata(order, &block, |builder, exif| {
+                builder
+                    .ascii(exif, LENS_MAKE, "Nikon")
+                    .ascii(exif, LENS_MODEL, "1 NIKKOR VR 10-30mm f/3.5-5.6")
+                    .ascii(exif, LENS_SERIAL_NUMBER, "20012345");
+            });
+            let lens = metadata.lens;
+            assert_eq!(
+                (lens.make(), lens.model(), lens.serial_number()),
+                (
+                    Some("Nikon"),
+                    Some("1 NIKKOR VR 10-30mm f/3.5-5.6"),
+                    Some("20012345")
+                ),
                 "{order:?}"
             );
             assert_eq!(range_of(&lens), known(j1_range), "{order:?}");
@@ -3534,7 +3564,7 @@ mod tests {
             let metadata = makernote_metadata(order, |inner, ifd| {
                 inner.rational(ifd, LENS, &D300_LENS[..3]);
             });
-            assert_eq!(metadata.lens, None, "{order:?}");
+            assert_eq!(metadata.lens, Lens::default(), "{order:?}");
         }
     }
 
@@ -3547,7 +3577,7 @@ mod tests {
                 let metadata = makernote_metadata(order, |inner, ifd| {
                     inner.rational(ifd, LENS, &values);
                 });
-                let lens = metadata.lens.expect("a lens");
+                let lens = metadata.lens;
                 assert_eq!(
                     range_of(&lens),
                     [
@@ -3575,7 +3605,7 @@ mod tests {
             let metadata = exif_metadata(file, &block, |_, _| {});
             assert_eq!(metadata.exposure.iso, Some(200), "{file:?}");
             assert_eq!(metadata.serial_number.as_deref(), Some(SERIAL), "{file:?}");
-            let lens = metadata.lens.expect("a lens");
+            let lens = metadata.lens;
             assert_eq!(range_of(&lens), known(D300_LENS), "{file:?}");
         }
     }

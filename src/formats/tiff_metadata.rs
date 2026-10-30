@@ -65,7 +65,8 @@
 //!   denominator is zero, as a 0/0 for a value the camera did not know
 //!   ([`Rational::known`]). A LensModel made only of `-` characters, which
 //!   Sony writes for a manual lens, names no lens and is `None`. A file
-//!   whose lens tags give no value has no lens ([`lens`]).
+//!   whose lens tags give no value gives a lens with every value `None`
+//!   ([`lens`]).
 //! - The camera settings that Exif records come from tags of the Exif IFD,
 //!   each exactly one SHORT, as the standard gives them ([`one_short`]),
 //!   and each code Exif defines and a variant names gives that variant;
@@ -231,7 +232,7 @@ pub(crate) fn read<R: Read + Seek>(src: &mut Source<R>, tree: &Tree) -> Result<S
             None,
             Exposure::default(),
             CameraSettings::default(),
-            None,
+            Lens::default(),
         ),
     };
     let (raw_size, default_crop) = sizes(src, tree)?;
@@ -509,8 +510,8 @@ fn signed_rational<R: Read + Seek>(
 /// The lens the picture was taken with, from the Exif IFD `exif`: its
 /// LensMake, LensModel and LensSerialNumber, read by the rule [`text`]
 /// gives, and its range from the LensSpecification, as
-/// [`lens_specification`] reads it. `None` when none of them gives a
-/// value ([`Lens::from_parts`]).
+/// [`lens_specification`] reads it. A file with none of these tags, or
+/// none that can be read, gives a lens with every value `None`.
 ///
 /// A LensModel made only of `-` characters is `None`: Sony writes `----`
 /// for a manual lens, as on the public ILCE-7S sample 1582, and that names
@@ -521,20 +522,18 @@ fn signed_rational<R: Read + Seek>(
 ///
 /// `Io` when the reader fails. A value that cannot be read for any other
 /// reason is `None`, and costs no other value.
-fn lens<R: Read + Seek>(src: &mut Source<R>, exif: &Ifd) -> Result<Option<Lens>> {
+fn lens<R: Read + Seek>(src: &mut Source<R>, exif: &Ifd) -> Result<Lens> {
     let make = text(src, exif, LENS_MAKE)?;
     let model = text(src, exif, LENS_MODEL)?.filter(|model| !model.chars().all(|c| c == '-'));
     let serial_number = text(src, exif, LENS_SERIAL_NUMBER)?;
-    let [min_focal, max_focal, f_number_at_min, f_number_at_max] = lens_specification(src, exif)?;
-    Ok(Lens::from_parts(
+    let mut lens = Lens {
         make,
         model,
         serial_number,
-        min_focal,
-        max_focal,
-        f_number_at_min,
-        f_number_at_max,
-    ))
+        ..Lens::default()
+    };
+    lens.set_range(lens_specification(src, exif)?);
+    Ok(lens)
 }
 
 /// The lens's range, from the Exif IFD `exif`'s LensSpecification: its
@@ -1121,8 +1120,8 @@ mod tests {
 
     /// The lens of the Z 9 file, as [`EXIF_TEXT`] and
     /// [`Z9_LENS_SPECIFICATION`] record it, with `change` made to its
-    /// values in the order [`Lens::from_parts`] takes them.
-    fn z9_lens_with(change: impl FnOnce(&mut LensValues)) -> Option<Lens> {
+    /// values.
+    fn z9_lens_with(change: impl FnOnce(&mut LensValues)) -> Lens {
         let mut values = LensValues {
             make: Some("NIKON".to_owned()),
             model: Some("NIKKOR Z 14-30mm f/4 S".to_owned()),
@@ -1139,7 +1138,7 @@ mod tests {
     }
 
     /// The lens of the Z 9 file, every value read.
-    fn z9_lens() -> Option<Lens> {
+    fn z9_lens() -> Lens {
         z9_lens_with(|_| {})
     }
 
@@ -1154,7 +1153,7 @@ mod tests {
     }
 
     impl LensValues {
-        /// No value: the lens of a file that describes none.
+        /// No value: the values of a file that describes no lens.
         fn none() -> Self {
             Self {
                 make: None,
@@ -1164,19 +1163,16 @@ mod tests {
             }
         }
 
-        /// The lens these values describe, as [`Lens::from_parts`] builds
-        /// it for the readers.
-        fn lens(self) -> Option<Lens> {
-            let [min, max, f_min, f_max] = self.range;
-            Lens::from_parts(
-                self.make,
-                self.model,
-                self.serial_number,
-                min,
-                max,
-                f_min,
-                f_max,
-            )
+        /// The lens these values describe.
+        fn lens(self) -> Lens {
+            let mut lens = Lens {
+                make: self.make,
+                model: self.model,
+                serial_number: self.serial_number,
+                ..Lens::default()
+            };
+            lens.set_range(self.range);
+            lens
         }
     }
 
@@ -1197,7 +1193,7 @@ mod tests {
     }
 
     /// The Z 9 file's metadata with the lens `lens` instead of its own.
-    fn z9_expected_with_lens(lens: Option<Lens>) -> Metadata {
+    fn z9_expected_with_lens(lens: Lens) -> Metadata {
         Metadata {
             lens,
             ..z9_expected()
@@ -1206,7 +1202,7 @@ mod tests {
 
     /// The lens read from a file whose Exif IFD holds only what `build`
     /// adds, given the builder and the Exif IFD's ID.
-    fn lens(build: impl FnOnce(&mut TiffBuilder, IfdId)) -> Option<Lens> {
+    fn lens(build: impl FnOnce(&mut TiffBuilder, IfdId)) -> Lens {
         let (mut src, tree) = testing::file(|builder, ifd| {
             let exif = builder.ifd();
             builder.exif(ifd, exif);
@@ -1278,7 +1274,7 @@ mod tests {
         assert_eq!(settings.color_space(), None);
         assert_eq!(settings.white_balance().color_temperature(), None);
         assert_eq!(settings.shutter(), None);
-        let lens = metadata.lens().unwrap();
+        let lens = metadata.lens();
         assert_eq!(lens.make(), Some("NIKON"));
         // Read whole, without the NULs that pad it, nor the spaces that pad
         // the serial number.
@@ -2355,12 +2351,12 @@ mod tests {
             metadata,
             z9_expected_with_lens(z9_lens_with(|lens| lens.model = None))
         );
-        // With no other lens tag, as on that sample, there is no lens.
+        // With no other lens tag, as on that sample, the lens has no value.
         for model in ["----", "-", " -- "] {
             let read = lens(|builder, exif| {
                 builder.ascii(exif, LENS_MODEL, model);
             });
-            assert_eq!(read, None, "{model:?}");
+            assert_eq!(read, Lens::default(), "{model:?}");
         }
     }
 
@@ -2370,11 +2366,7 @@ mod tests {
             let read = lens(|builder, exif| {
                 builder.ascii(exif, LENS_MODEL, model);
             });
-            assert_eq!(
-                read.as_ref().and_then(Lens::model),
-                Some(model),
-                "{model:?}"
-            );
+            assert_eq!(read.model(), Some(model), "{model:?}");
         }
     }
 
@@ -2410,7 +2402,7 @@ mod tests {
                 values.len()
             );
         }
-        // With no other lens tag there is no lens.
+        // With no other lens tag the lens has no value.
         let read = lens(|builder, exif| {
             builder.rational(
                 exif,
@@ -2418,7 +2410,7 @@ mod tests {
                 &[(140, 10), (300, 10), (400, 100)],
             );
         });
-        assert_eq!(read, None);
+        assert_eq!(read, Lens::default());
     }
 
     #[test]
@@ -2489,7 +2481,7 @@ mod tests {
     }
 
     #[test]
-    fn a_lens_with_only_a_serial_number_is_a_lens() {
+    fn a_lens_with_only_a_serial_number_keeps_it() {
         let read = lens(|builder, exif| {
             builder.ascii(exif, LENS_SERIAL_NUMBER, "12345678  ");
         });
@@ -2498,17 +2490,16 @@ mod tests {
             ..LensValues::none()
         };
         assert_eq!(read, expected.lens());
-        assert!(read.is_some());
     }
 
     #[test]
-    fn an_exif_ifd_without_lens_tags_gives_no_lens() {
+    fn an_exif_ifd_without_lens_tags_gives_an_empty_lens() {
         // An IFD without entries is damage and not read at all, so the Exif
         // IFD holds a tag other than the lens's.
         let read = lens(|builder, exif| {
             builder.ascii(exif, DATE_TIME_ORIGINAL, "2022:02:05 13:46:41");
         });
-        assert_eq!(read, None);
+        assert_eq!(read, Lens::default());
     }
 
     /// The InteroperabilityVersion, a tag of the Interoperability IFD the

@@ -274,7 +274,7 @@ fn assert_the_z9_metadata(built: &Built, orientation: Orientation, label: &str) 
         );
         // The lens, its model read whole through the NULs that pad it and
         // its serial number trimmed of the spaces that pad it.
-        let lens = metadata.lens().unwrap();
+        let lens = metadata.lens();
         assert_eq!(lens.make(), Some("NIKON"), "{label}, from {how}");
         assert_eq!(lens.model(), Some(LENS_MODEL_Z14_30), "{label}, from {how}");
         assert_eq!(
@@ -401,15 +401,14 @@ fn the_z9_metadata_by_hand(orientation: Orientation) -> Option<Metadata> {
         .with_focal_length(Rational::new(180, 10)?)
         .with_focal_length_in_35mm_film(18)
         .with_exposure_bias(SignedRational::new(0, 6)?);
-    let lens = Lens::builder()
-        .make("NIKON")
-        .model(LENS_MODEL_Z14_30)
-        .serial_number("12345678")
-        .min_focal_length(Rational::new(140, 10)?)
-        .max_focal_length(Rational::new(300, 10)?)
-        .f_number_at_min_focal_length(Rational::new(400, 100)?)
-        .f_number_at_max_focal_length(Rational::new(400, 100)?)
-        .build()?;
+    let lens = Lens::default()
+        .with_make("NIKON")
+        .with_model(LENS_MODEL_Z14_30)
+        .with_serial_number("12345678")
+        .with_min_focal_length(Rational::new(140, 10)?)
+        .with_max_focal_length(Rational::new(300, 10)?)
+        .with_f_number_at_min_focal_length(Rational::new(400, 100)?)
+        .with_f_number_at_max_focal_length(Rational::new(400, 100)?);
     let (x, y) = Z9_FOCUS_CENTER;
     let focus = Focus::new(
         as_size(Z9_FOCUS_FRAME),
@@ -569,15 +568,14 @@ fn the_z6iii_metadata_by_hand(orientation: Orientation) -> Option<Metadata> {
         .with_focal_length(Rational::new(860, 10)?)
         .with_focal_length_in_35mm_film(111)
         .with_exposure_bias(SignedRational::new(0, 6)?);
-    let lens = Lens::builder()
-        .make("NIKON")
-        .model(LENS_MODEL_Z24_200)
-        .serial_number("23456789")
-        .min_focal_length(Rational::new(240, 10)?)
-        .max_focal_length(Rational::new(2000, 10)?)
-        .f_number_at_min_focal_length(Rational::new(400, 100)?)
-        .f_number_at_max_focal_length(Rational::new(630, 100)?)
-        .build()?;
+    let lens = Lens::default()
+        .with_make("NIKON")
+        .with_model(LENS_MODEL_Z24_200)
+        .with_serial_number("23456789")
+        .with_min_focal_length(Rational::new(240, 10)?)
+        .with_max_focal_length(Rational::new(2000, 10)?)
+        .with_f_number_at_min_focal_length(Rational::new(400, 100)?)
+        .with_f_number_at_max_focal_length(Rational::new(630, 100)?);
     let (x, y) = Z6III_FOCUS_CENTER;
     let focus = Focus::new(
         as_size(Z6III_FOCUS_FRAME),
@@ -700,7 +698,7 @@ fn the_d300_file_gives_what_its_exif_tags_lack_from_the_makernote() {
             );
             // No lens tag in the Exif IFD: a lens of the MakerNote's range
             // alone, with no name and no serial number.
-            let lens = metadata.lens().unwrap();
+            let lens = metadata.lens();
             assert_eq!(
                 (lens.make(), lens.model(), lens.serial_number()),
                 (None, None, None),
@@ -767,12 +765,11 @@ fn the_d1h_metadata_by_hand(with_makernote: bool) -> Option<Metadata> {
             (at_min, at_min_d),
             (at_max, at_max_d),
         ] = D1H_LENS;
-        let lens = Lens::builder()
-            .min_focal_length(Rational::new(min, min_d)?)
-            .max_focal_length(Rational::new(max, max_d)?)
-            .f_number_at_min_focal_length(Rational::new(at_min, at_min_d)?)
-            .f_number_at_max_focal_length(Rational::new(at_max, at_max_d)?)
-            .build()?;
+        let lens = Lens::default()
+            .with_min_focal_length(Rational::new(min, min_d)?)
+            .with_max_focal_length(Rational::new(max, max_d)?)
+            .with_f_number_at_min_focal_length(Rational::new(at_min, at_min_d)?)
+            .with_f_number_at_max_focal_length(Rational::new(at_max, at_max_d)?);
         metadata = metadata.with_lens(lens).with_camera_settings(
             CameraSettings::default()
                 .with_white_balance(WhiteBalance::default().with_mode(WhiteBalanceMode::Daylight)),
@@ -908,7 +905,7 @@ fn the_d1h_file_gives_what_its_exif_tags_lack_from_its_headerless_makernote() {
         );
         // No lens tag in the Exif IFD: a lens of the MakerNote's range
         // alone, with no name and no serial number.
-        let lens = metadata.lens().unwrap();
+        let lens = metadata.lens();
         assert_eq!(
             (lens.make(), lens.model(), lens.serial_number()),
             (None, None, None),
@@ -1209,9 +1206,7 @@ fn check_stripped_z9(expected: &StrippedZ9) {
     // The lens from the Exif IFD: a LensMake that is empty, which gives no
     // make, a model, no serial number, since the stripping removed it, and
     // the range of a 50 mm f/1.4 prime.
-    let lens = metadata
-        .lens()
-        .unwrap_or_else(|| panic!("{label}: no lens"));
+    let lens = metadata.lens();
     assert_eq!(
         (lens.make(), lens.model(), lens.serial_number()),
         (None, Some("50mm f/1.4G"), None),
@@ -1961,9 +1956,7 @@ fn the_d600_frame_4_gives_its_previews_metadata_and_point_38_placed_from_the_tab
     );
     // The D600's Exif IFD names no lens, so the lens is the MakerNote's
     // range alone, that of a 35 mm f/1.8 prime.
-    let lens = metadata
-        .lens()
-        .unwrap_or_else(|| panic!("{label}: no lens"));
+    let lens = metadata.lens();
     assert_eq!(
         (lens.make(), lens.model(), lens.serial_number()),
         (None, None, None),

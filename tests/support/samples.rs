@@ -185,10 +185,12 @@ pub fn check(sample: &Sample, format: Format) {
 /// millimetres. The capture time is its ISO 8601 form, as
 /// [`DateTime`](raw_files::DateTime) displays it. The focus point is the
 /// one the reader gives ([`SampleFocus`]), and so are the camera settings
-/// ([`SampleSettings`]). The layout of the body's autofocus points is the
-/// Model text of the layout the reader must give
-/// ([`FocusLayout::model`](raw_files::FocusLayout::model)), `None` when it
-/// must give none, as for every body that raw-files has no table of.
+/// ([`SampleSettings`]). The lens is `None` where the file describes none,
+/// which the reader gives as a lens with every value `None`. The layout of
+/// the body's autofocus points is the Model text of the layout the reader
+/// must give ([`FocusLayout::model`](raw_files::FocusLayout::model)),
+/// `None` when it must give none, as for every body that raw-files has no
+/// table of.
 ///
 /// The files are public, but the repository holds no camera's or lens's
 /// serial number, so a serial number is recorded by its shape alone and a
@@ -386,22 +388,21 @@ pub fn check_metadata(expected: &SampleMetadata, format: Format) {
         "{label}: exposure bias"
     );
 
-    let lens = metadata.lens().map(|lens| {
-        (
-            lens.make(),
-            lens.model(),
-            lens.serial_number().is_some(),
-            [
-                lens.min_focal_length(),
-                lens.max_focal_length(),
-                lens.f_number_at_min_focal_length(),
-                lens.f_number_at_max_focal_length(),
-            ]
-            .map(|value| value.map(stored)),
-        )
-    });
-    let expected_lens = expected.lens.as_ref().map(|lens| {
-        (
+    let lens = metadata.lens();
+    let lens = (
+        lens.make(),
+        lens.model(),
+        lens.serial_number().is_some(),
+        [
+            lens.min_focal_length(),
+            lens.max_focal_length(),
+            lens.f_number_at_min_focal_length(),
+            lens.f_number_at_max_focal_length(),
+        ]
+        .map(|value| value.map(stored)),
+    );
+    let expected_lens = match &expected.lens {
+        Some(lens) => (
             lens.make,
             lens.model,
             lens.serial_number,
@@ -411,8 +412,9 @@ pub fn check_metadata(expected: &SampleMetadata, format: Format) {
                 lens.f_number_at_min_focal_length,
                 lens.f_number_at_max_focal_length,
             ],
-        )
-    });
+        ),
+        None => (None, None, false, [None; 4]),
+    };
     assert_eq!(lens, expected_lens, "{label}: lens");
 
     let size = |size: Size| (size.width, size.height);

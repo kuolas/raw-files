@@ -89,8 +89,8 @@ ever complete for every body. What each gives so far:
 
 The public API is the file handle (`RawFile` and `Options`) with the
 preview types (`Preview`, `PreviewFormat`, `Orientation`, `Size`), the
-metadata types (`Metadata`, `Exposure`, `Lens`, `LensBuilder`, `Point`,
-`DateTime`, `Rational` and `SignedRational`), the focus types (`Focus`,
+metadata types (`Metadata`, `Exposure`, `Lens`, `Point`, `DateTime`,
+`Rational` and `SignedRational`), the focus types (`Focus`,
 `FocusOrigin`, `FocusPoints`, `FocusPoint`, `FocusAreaMode`,
 `FocusLayout` and `FocusLayoutPoint`), the camera
 settings types (`CameraSettings`, `WhiteBalance`, `FineTune`, `Flash`,
