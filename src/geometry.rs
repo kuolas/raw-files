@@ -47,6 +47,14 @@ pub struct Size {
     pub height: u32,
 }
 
+impl Size {
+    /// How many pixels an image of this size has. It is a `u64`, so it
+    /// cannot overflow: two `u32`s multiplied always fit.
+    pub(crate) fn area(self) -> u64 {
+        u64::from(self.width) * u64::from(self.height)
+    }
+}
+
 impl fmt::Display for Size {
     /// Writes the width, a plain `x` and the height, with no spaces:
     /// `8256x5504`.
@@ -128,6 +136,17 @@ mod tests {
                 height: 640
             }
         );
+    }
+
+    #[test]
+    fn area_is_the_number_of_pixels() {
+        let size = |width, height| Size { width, height };
+        assert_eq!(size(640, 480).area(), 307_200);
+        assert_eq!(size(0, 480).area(), 0);
+        // 65537 × 65537 is past 2^32: computed in u32 it would wrap to
+        // 131073.
+        assert_eq!(size(65_537, 65_537).area(), 4_295_098_369);
+        assert_eq!(size(u32::MAX, u32::MAX).area(), 18_446_744_065_119_617_025);
     }
 
     #[test]

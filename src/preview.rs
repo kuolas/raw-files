@@ -47,32 +47,29 @@ use crate::{Orientation, Size};
 pub struct Preview {
     offset: u64,
     length: u64,
-    width: u32,
-    height: u32,
+    size: Size,
     format: PreviewFormat,
     orientation: Orientation,
 }
 
 impl Preview {
     /// A preview of `length` bytes starting at byte `offset` of the file,
-    /// `width` by `height` pixels as stored, in `format`, shown upright by
-    /// applying `orientation`.
+    /// `size` pixels as stored, in `format`, shown upright by applying
+    /// `orientation`.
     ///
     /// The caller has checked that `offset + length` lies inside the file,
     /// so the sum does not overflow.
     pub(crate) fn new(
         offset: u64,
         length: u64,
-        width: u32,
-        height: u32,
+        size: Size,
         format: PreviewFormat,
         orientation: Orientation,
     ) -> Self {
         Self {
             offset,
             length,
-            width,
-            height,
+            size,
             format,
             orientation,
         }
@@ -82,10 +79,7 @@ impl Preview {
     /// [`orientation`](Self::orientation) is applied, read from the JPEG's
     /// frame header rather than from the file's tags.
     pub fn size(&self) -> Size {
-        Size {
-            width: self.width,
-            height: self.height,
-        }
+        self.size
     }
 
     /// How the preview's bytes are encoded.
@@ -159,15 +153,10 @@ impl PreviewFormat {
 
 /// Orders `previews` smallest first: by pixel area, then by byte length.
 ///
-/// The area is computed in `u64`, so it cannot overflow. The sort is
-/// stable: previews equal in both keep their order.
+/// The area is a `u64`, so it cannot overflow. The sort is stable:
+/// previews equal in both keep their order.
 pub(crate) fn sort(previews: &mut [Preview]) {
-    previews.sort_by_key(|preview| {
-        (
-            u64::from(preview.width) * u64::from(preview.height),
-            preview.length,
-        )
-    });
+    previews.sort_by_key(|preview| (preview.size.area(), preview.length));
 }
 
 /// The smallest preview at least `size`, as wide as its width and as tall
@@ -181,7 +170,7 @@ pub(crate) fn sort(previews: &mut [Preview]) {
 pub(crate) fn at_least(previews: &[Preview], size: Size) -> Option<Preview> {
     previews
         .iter()
-        .find(|preview| preview.width >= size.width && preview.height >= size.height)
+        .find(|preview| preview.size.width >= size.width && preview.size.height >= size.height)
         .or(previews.last())
         .copied()
 }
@@ -197,8 +186,7 @@ mod tests {
         Preview::new(
             offset,
             length,
-            width,
-            height,
+            size(width, height),
             PreviewFormat::Jpeg,
             Orientation::NoTransforms,
         )
@@ -215,18 +203,11 @@ mod tests {
         let preview = Preview::new(
             100,
             2_000,
-            640,
-            480,
+            size(640, 480),
             PreviewFormat::Jpeg,
             Orientation::Rotate90,
         );
-        assert_eq!(
-            preview.size(),
-            Size {
-                width: 640,
-                height: 480
-            }
-        );
+        assert_eq!(preview.size(), size(640, 480));
         assert_eq!(preview.format(), PreviewFormat::Jpeg);
         assert_eq!(preview.orientation(), Orientation::Rotate90);
         assert_eq!(preview.byte_range(), 100..2_100);
@@ -342,6 +323,17 @@ mod tests {
     #[test]
     fn at_least_zero_gives_the_smallest() {
         assert_eq!(at_least(&sorted(), size(0, 0)).map(|p| p.offset), Some(1));
+    }
+
+    #[test]
+    fn at_least_needs_the_height_as_well_as_the_width() {
+        // 640 × 480 is wide enough for 300 × 1000 but not tall enough, so
+        // 1620 × 1080 is chosen. Sizes ordered by width and then by height
+        // would put 640 × 480 at or above 300 × 1000 and choose it.
+        assert_eq!(
+            at_least(&sorted(), size(300, 1_000)).map(|p| p.offset),
+            Some(3)
+        );
     }
 
     #[test]

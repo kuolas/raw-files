@@ -52,9 +52,12 @@ mod tests {
         JPEG_INTERCHANGE_FORMAT, JPEG_INTERCHANGE_FORMAT_LENGTH, MAKE, NEW_SUBFILE_TYPE,
     };
     use crate::container::tiff::{Block, walk};
+    use crate::geometry::Size;
     use crate::io::Source;
     use crate::jpeg_stub::jpeg_stub;
     use crate::limits::Limits;
+    use crate::preview::Preview;
+    use crate::testing::size;
     use crate::tiff_builder::{IfdId, Order, TiffBuilder};
     use std::io::Cursor;
 
@@ -83,11 +86,7 @@ mod tests {
         let tree = walk(&mut src, &file_block, &Limits::default()).unwrap();
 
         let parsed = super::super::parse(&mut src, &tree, &Limits::default()).unwrap();
-        let sizes: Vec<(u32, u32)> = parsed
-            .previews
-            .iter()
-            .map(|p| (p.size().width, p.size().height))
-            .collect();
-        assert_eq!(sizes, [(1616, 1080), (7008, 4672)]);
+        let sizes: Vec<Size> = parsed.previews.iter().map(Preview::size).collect();
+        assert_eq!(sizes, [size(1616, 1080), size(7008, 4672)]);
     }
 }

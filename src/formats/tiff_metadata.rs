@@ -793,9 +793,6 @@ fn color_space<R: Read + Seek>(
 /// `Io` when the reader fails. A value that cannot be read for any other
 /// reason costs only what it would have given.
 fn sizes<R: Read + Seek>(src: &mut Source<R>, tree: &Tree) -> Result<(Option<Size>, Option<Size>)> {
-    // The pixels of a size, which cannot overflow: two `u32`s multiplied
-    // fit in a `u64`.
-    let pixels = |size: Size| u64::from(size.width) * u64::from(size.height);
     let mut largest: Option<(&Ifd, Size)> = None;
     for (location, ifd) in tree.iter() {
         if location.holds_no_image() {
@@ -808,7 +805,7 @@ fn sizes<R: Read + Seek>(src: &mut Source<R>, tree: &Tree) -> Result<(Option<Siz
             continue;
         };
         // Only a larger one replaces it, so the first wins a tie.
-        if largest.is_none_or(|(_, best)| pixels(raw) > pixels(best)) {
+        if largest.is_none_or(|(_, best)| raw.area() > best.area()) {
             largest = Some((ifd, raw));
         }
     }

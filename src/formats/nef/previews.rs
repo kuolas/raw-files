@@ -53,9 +53,12 @@ mod tests {
         JPEG_INTERCHANGE_FORMAT, JPEG_INTERCHANGE_FORMAT_LENGTH, MAKE,
     };
     use crate::container::tiff::{Block, walk};
+    use crate::geometry::Size;
     use crate::io::Source;
     use crate::jpeg_stub::jpeg_stub;
     use crate::limits::Limits;
+    use crate::preview::Preview;
+    use crate::testing::size;
     use crate::tiff_builder::{IfdId, Order, TiffBuilder};
     use std::io::Cursor;
 
@@ -81,12 +84,8 @@ mod tests {
         let tree = walk(&mut src, &file_block, &Limits::default()).unwrap();
 
         let parsed = super::super::parse(&mut src, &tree, &Limits::default()).unwrap();
-        let sizes: Vec<(u32, u32)> = parsed
-            .previews
-            .iter()
-            .map(|p| (p.size().width, p.size().height))
-            .collect();
-        assert_eq!(sizes, [(160, 120), (1620, 1080)]);
+        let sizes: Vec<Size> = parsed.previews.iter().map(Preview::size).collect();
+        assert_eq!(sizes, [size(160, 120), size(1620, 1080)]);
     }
 
     #[test]
@@ -108,10 +107,7 @@ mod tests {
         let makernote = super::nikon::read(&mut src, &tree, &Limits::default()).unwrap();
         let previews =
             super::previews(&mut src, &tree, makernote.as_ref(), &Limits::default()).unwrap();
-        let sizes: Vec<(u32, u32)> = previews
-            .iter()
-            .map(|p| (p.size().width, p.size().height))
-            .collect();
-        assert_eq!(sizes, [(160, 120)]);
+        let sizes: Vec<Size> = previews.iter().map(Preview::size).collect();
+        assert_eq!(sizes, [size(160, 120)]);
     }
 }

@@ -337,8 +337,7 @@ mod tests {
         Preview::new(
             offset,
             length,
-            width,
-            height,
+            size(width, height),
             PreviewFormat::Jpeg,
             Orientation::NoTransforms,
         )
@@ -395,7 +394,10 @@ mod tests {
         let (bytes, at) = file_with_blob();
         let file = handle(Cursor::new(bytes), three(at), Limits::default());
         assert_eq!(file.largest_preview(), file.previews().last().copied());
-        assert_eq!(file.largest_preview().map(|p| p.size().width), Some(1_620));
+        assert_eq!(
+            file.largest_preview().map(|p| p.size()),
+            Some(size(1_620, 1_080))
+        );
     }
 
     #[test]
@@ -411,11 +413,14 @@ mod tests {
     fn preview_at_least_gives_the_smallest_that_fits_or_the_largest() {
         let (bytes, at) = file_with_blob();
         let file = handle(Cursor::new(bytes), three(at), Limits::default());
-        let width = |p: Option<Preview>| p.map(|p| p.size().width);
-        assert_eq!(width(file.preview_at_least(size(300, 200))), Some(640));
+        let preview_size = |p: Option<Preview>| p.map(|p| p.size());
         assert_eq!(
-            width(file.preview_at_least(size(4_000, 3_000))),
-            Some(1_620)
+            preview_size(file.preview_at_least(size(300, 200))),
+            Some(size(640, 480))
+        );
+        assert_eq!(
+            preview_size(file.preview_at_least(size(4_000, 3_000))),
+            Some(size(1_620, 1_080))
         );
     }
 
