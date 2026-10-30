@@ -313,8 +313,7 @@ fn parse<R: Read + Seek>(
     previews.push(Preview::new(
         0,
         src.len(),
-        size.width,
-        size.height,
+        size,
         PreviewFormat::Jpeg,
         metadata.orientation,
     ));

@@ -80,6 +80,7 @@ use crate::container::tiff::tags::{
 };
 use crate::container::tiff::{Block, Ifd, Tree, skip_damage};
 use crate::error::Result;
+use crate::geometry::Size;
 use crate::io::{Source, within};
 use crate::orientation::Orientation;
 use crate::preview::{Preview, PreviewFormat};
@@ -233,8 +234,10 @@ pub(crate) fn check<R: Read + Seek>(
         previews.push(Preview::new(
             candidate.offset,
             candidate.length,
-            u32::from(frame.width),
-            u32::from(frame.height),
+            Size {
+                width: u32::from(frame.width),
+                height: u32::from(frame.height),
+            },
             PreviewFormat::Jpeg,
             orientation,
         ));
@@ -367,7 +370,7 @@ mod tests {
     use crate::formats::testing::byte_order;
     use crate::jpeg_stub::jpeg_stub;
     use crate::limits::Limits;
-    use crate::testing::{FAR, FailsFar};
+    use crate::testing::{FAR, FailsFar, size};
     use crate::tiff_builder::{BlobId, Built, IfdId, Order, RawValue, SHORT, TiffBuilder};
     use std::io::Cursor;
     use std::ops::Range;
@@ -401,11 +404,8 @@ mod tests {
 
     /// The stored size of each preview, in order: each test gives its JPEGs
     /// distinct sizes, so these name them.
-    fn sizes(previews: &[Preview]) -> Vec<(u32, u32)> {
-        previews
-            .iter()
-            .map(|p| (p.size().width, p.size().height))
-            .collect()
+    fn sizes(previews: &[Preview]) -> Vec<Size> {
+        previews.iter().map(Preview::size).collect()
     }
 
     /// An IFD holding only an ImageWidth, so that it can be read.
@@ -485,7 +485,7 @@ mod tests {
 
             assert_eq!(previews.len(), 1, "{order:?}");
             let preview = previews[0];
-            assert_eq!((preview.size().width, preview.size().height), (640, 480));
+            assert_eq!(preview.size(), size(640, 480));
             assert_eq!(preview.byte_range().start, built.blob_offset(blob));
             assert_eq!(preview.byte_len(), stub_len());
             assert_eq!(preview.format(), PreviewFormat::Jpeg);
@@ -528,7 +528,7 @@ mod tests {
             let previews = found(&builder.build().bytes);
             assert_eq!(
                 sizes(&previews),
-                [(160, 120), (1620, 1080), (640, 480)],
+                [size(160, 120), size(1620, 1080), size(640, 480)],
                 "{order:?}"
             );
         }
@@ -568,7 +568,7 @@ mod tests {
             builder.short(ifd, PHOTOMETRIC_INTERPRETATION, &[6]);
             builder.short(ifd, BITS_PER_SAMPLE, &[8, 8, 8]);
         });
-        assert_eq!(sizes(&previews), [(640, 480)]);
+        assert_eq!(sizes(&previews), [size(640, 480)]);
     }
 
     #[test]
@@ -594,7 +594,7 @@ mod tests {
         let previews = one_ifd(|builder, ifd| {
             builder.long(ifd, NEW_SUBFILE_TYPE, &[1]);
         });
-        assert_eq!(sizes(&previews), [(640, 480)]);
+        assert_eq!(sizes(&previews), [size(640, 480)]);
     }
 
     #[test]
@@ -606,7 +606,11 @@ mod tests {
             let blob = one_strip(&mut builder, ifd0, 640, 480);
             let built = builder.build();
             let previews = found(&built.bytes);
-            assert_eq!(sizes(&previews), [(640, 480)], "compression {compression}");
+            assert_eq!(
+                sizes(&previews),
+                [size(640, 480)],
+                "compression {compression}"
+            );
             assert_eq!(previews[0].byte_range().start, built.blob_offset(blob));
             assert_eq!(previews[0].byte_len(), stub_len());
         }
@@ -648,7 +652,7 @@ mod tests {
             one_strip(builder, ifd, 320, 240);
             jpeg(builder, ifd, 640, 480);
         });
-        assert_eq!(sizes(&previews), [(640, 480)]);
+        assert_eq!(sizes(&previews), [size(640, 480)]);
     }
 
     #[test]
@@ -660,7 +664,7 @@ mod tests {
         builder.long_blob(sub, JPEG_INTERCHANGE_FORMAT, blob);
         builder.long_blob_len(sub, JPEG_INTERCHANGE_FORMAT_LENGTH, blob);
         builder.subifds(ifd0, &[sub]);
-        assert_eq!(sizes(&found(&builder.build().bytes)), [(640, 480)]);
+        assert_eq!(sizes(&found(&builder.build().bytes)), [size(640, 480)]);
     }
 
     #[test]
@@ -675,7 +679,7 @@ mod tests {
             length: stub_len(),
         };
         let previews = found_with(&built.bytes, &[extra]);
-        assert_eq!(sizes(&previews), [(160, 120), (640, 480)]);
+        assert_eq!(sizes(&previews), [size(160, 120), size(640, 480)]);
         assert_eq!(previews[1].byte_range().start, extra.offset);
         assert_eq!(previews[1].byte_len(), extra.length);
     }
@@ -694,7 +698,7 @@ mod tests {
         };
         let previews = found_with(&built.bytes, &[extra]);
         // The tree's came first, and wins.
-        assert_eq!(sizes(&previews), [(640, 480)]);
+        assert_eq!(sizes(&previews), [size(640, 480)]);
         assert_eq!(previews[0].byte_len(), stub_len());
     }
 
@@ -712,7 +716,7 @@ mod tests {
             length: stub_len(),
         };
         let previews = found_with(&built.bytes, &[extra]);
-        assert_eq!(sizes(&previews), [(640, 480)]);
+        assert_eq!(sizes(&previews), [size(640, 480)]);
         assert_eq!(previews[0].byte_len(), stub_len());
     }
 
@@ -757,8 +761,7 @@ mod tests {
             [Preview::new(
                 baseline,
                 stub_len(),
-                640,
-                480,
+                size(640, 480),
                 PreviewFormat::Jpeg,
                 Orientation::Rotate90,
             )]
@@ -808,7 +811,7 @@ mod tests {
             let ifd0 = builder.ifd();
             jpeg(&mut builder, ifd0, 640, 480);
             let built = builder.build();
-            assert_eq!(sizes(&found(&built.bytes)), [(640, 480)], "{order:?}");
+            assert_eq!(sizes(&found(&built.bytes)), [size(640, 480)], "{order:?}");
             let short = built.truncated(built.bytes.len() - 2);
             assert_eq!(found(&short), [], "{order:?}");
         }
@@ -832,7 +835,7 @@ mod tests {
         jpeg_with_marker(&mut builder, ifd0, 512, 256, 0xC3);
         jpeg(&mut builder, sub, 640, 480);
         builder.subifds(ifd0, &[sub]);
-        assert_eq!(sizes(&found(&builder.build().bytes)), [(640, 480)]);
+        assert_eq!(sizes(&found(&builder.build().bytes)), [size(640, 480)]);
     }
 
     #[test]
@@ -865,7 +868,7 @@ mod tests {
         jpeg(&mut builder, sub, 640, 480);
         builder.subifds(ifd0, &[sub]);
         let previews = found(&builder.build().bytes);
-        assert_eq!(sizes(&previews), [(640, 480)]);
+        assert_eq!(sizes(&previews), [size(640, 480)]);
         assert_eq!(previews[0].orientation(), Orientation::NoTransforms);
     }
 
@@ -877,7 +880,7 @@ mod tests {
             let previews = one_ifd(|builder, ifd| {
                 builder.long(ifd, ORIENTATION, &[value]);
             });
-            assert_eq!(sizes(&previews), [(640, 480)], "{value}");
+            assert_eq!(sizes(&previews), [size(640, 480)], "{value}");
             assert_eq!(
                 previews[0].orientation(),
                 Orientation::NoTransforms,
@@ -897,7 +900,7 @@ mod tests {
         jpeg(&mut builder, sub, 160, 120);
         builder.subifds(ifd0, &[sub]);
         let previews = found(&builder.build().bytes);
-        assert_eq!(sizes(&previews), [(1620, 1080), (160, 120)]);
+        assert_eq!(sizes(&previews), [size(1620, 1080), size(160, 120)]);
     }
 
     /// More SHORTs than the 1 MiB one tag value may take: a value that lies
@@ -926,7 +929,7 @@ mod tests {
             builder.subifds(ifd0, &[sub]);
             assert_eq!(
                 sizes(&found(&builder.build().bytes)),
-                [(160, 120)],
+                [size(160, 120)],
                 "{order:?}"
             );
         }
@@ -949,7 +952,7 @@ mod tests {
             builder.subifds(ifd0, &[sub]);
             assert_eq!(
                 sizes(&found(&builder.build().bytes)),
-                [(640, 480)],
+                [size(640, 480)],
                 "{order:?}"
             );
         }
@@ -965,7 +968,7 @@ mod tests {
             jpeg(&mut builder, sub, 640, 480);
             builder.subifds(ifd0, &[sub]);
             let previews = found(&builder.build().bytes);
-            assert_eq!(sizes(&previews), [(640, 480)], "{order:?}");
+            assert_eq!(sizes(&previews), [size(640, 480)], "{order:?}");
             assert_eq!(
                 previews[0].orientation(),
                 Orientation::NoTransforms,
@@ -995,7 +998,7 @@ mod tests {
         for (case, builder) in [("tag", tag), ("probe", probe)] {
             let bytes = builder.build().bytes;
             // The file is sound, for a reader that does not fail.
-            assert_eq!(sizes(&found(&bytes)), [(640, 480)], "{case}");
+            assert_eq!(sizes(&found(&bytes)), [size(640, 480)], "{case}");
 
             let mut src = Source::new(FailsFar(Cursor::new(bytes))).unwrap();
             let file_block = Block::file(src.len());
@@ -1059,7 +1062,7 @@ mod tests {
             decoy(&mut bytes, at);
 
             let previews = found_in(&bytes, 0..POS + len_of(&built));
-            assert_eq!(sizes(&previews), [(160, 120)], "{order:?}");
+            assert_eq!(sizes(&previews), [size(160, 120)], "{order:?}");
             assert_eq!(previews[0].byte_range().start, POS + at, "{order:?}");
             assert_eq!(previews[0].byte_len(), stub_len(), "{order:?}");
         }
@@ -1081,7 +1084,7 @@ mod tests {
             decoy(&mut bytes, at);
 
             let previews = found_in(&bytes, 0..POS + len_of(&built));
-            assert_eq!(sizes(&previews), [(640, 480)], "{order:?}");
+            assert_eq!(sizes(&previews), [size(640, 480)], "{order:?}");
             assert_eq!(previews[0].byte_range().start, POS + at, "{order:?}");
             assert_eq!(previews[0].byte_len(), stub_len(), "{order:?}");
         }
@@ -1102,7 +1105,11 @@ mod tests {
             let bytes = placed(&built, 100);
 
             for (end, expected, what) in [
-                (len, &[(640, 480)][..], "ending exactly at the bounds' end"),
+                (
+                    len,
+                    &[size(640, 480)][..],
+                    "ending exactly at the bounds' end",
+                ),
                 (len - 1, &[], "ending one byte past it"),
                 (at, &[], "wholly past it"),
             ] {

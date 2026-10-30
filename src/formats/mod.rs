@@ -336,8 +336,10 @@ mod tests {
             previews: vec![Preview::new(
                 offset,
                 1,
-                1,
-                1,
+                Size {
+                    width: 1,
+                    height: 1,
+                },
                 PreviewFormat::Jpeg,
                 Orientation::NoTransforms,
             )],
