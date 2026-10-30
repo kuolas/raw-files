@@ -2091,18 +2091,27 @@ mod tests {
     }
 
     #[test]
-    fn an_unknown_f_number_is_none() {
-        // Sony's ILCE-7S with a manual lens, as on the public sample 1582.
-        let metadata = z9_except(F_NUMBER, |builder, _, exif| {
-            builder.rational(exif, F_NUMBER, &[(0, 10)]);
-        });
-        assert_eq!(
-            metadata,
-            z9_expected_with(Exposure {
-                f_number: None,
-                ..z9_exposure()
-            })
-        );
+    fn a_fraction_of_zero_is_none() {
+        type Unset = fn(&mut Exposure);
+        let unknown: [(u16, (u32, u32), Unset); 3] = [
+            (EXPOSURE_TIME, (0, 1), |exposure| {
+                exposure.exposure_time = None
+            }),
+            // These two as Sony's ILCE-7S with a manual lens records them,
+            // on the public sample 1582.
+            (F_NUMBER, (0, 10), |exposure| exposure.f_number = None),
+            (FOCAL_LENGTH, (0, 10), |exposure| {
+                exposure.focal_length = None
+            }),
+        ];
+        for (tag, value, unset) in unknown {
+            let mut expected = z9_exposure();
+            unset(&mut expected);
+            let metadata = z9_except(tag, |builder, _, exif| {
+                builder.rational(exif, tag, &[value]);
+            });
+            assert_eq!(metadata, z9_expected_with(expected), "{tag:#06X}");
+        }
     }
 
     #[test]

@@ -3489,6 +3489,25 @@ mod tests {
     }
 
     #[test]
+    fn an_exif_lens_range_of_zeros_gives_the_makernotes() {
+        // Four unknown values, written as 0/0 and as a zero over a
+        // denominator, give no range, so the MakerNote's is read.
+        for zero in [(0, 0), (0, 10)] {
+            for order in ORDERS {
+                let block = tags_block(order, |inner, ifd| {
+                    inner.rational(ifd, LENS, &D300_LENS);
+                })
+                .0;
+                let metadata = exif_metadata(order, &block, |builder, exif| {
+                    builder.rational(exif, LENS_SPECIFICATION, &[zero; 4]);
+                });
+                let lens = metadata.lens;
+                assert_eq!(range_of(&lens), known(D300_LENS), "{zero:?}, {order:?}");
+            }
+        }
+    }
+
+    #[test]
     fn an_exif_lens_range_with_one_known_value_wins_whole() {
         // Not merged value by value: the three unknown values stay unknown.
         for order in ORDERS {
