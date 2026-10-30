@@ -695,19 +695,27 @@ impl Exposure {
     ///
     /// For a file, 65535 means 65535 or more: Exif records that value for
     /// any higher sensitivity, and it is kept when the file records no
-    /// exact one.
+    /// exact one. A recorded 0 means the camera did not know it, and the
+    /// readers give `None`, unless another of the file's sensitivity tags
+    /// gives the ISO.
     pub fn iso(&self) -> Option<u32> {
         self.iso
     }
 
     /// How long the shutter was open, in seconds, as stored, such as
     /// 10/3200 for 1/320 s.
+    ///
+    /// A recorded 0 means the camera did not know it, and the readers give
+    /// `None`.
     pub fn exposure_time(&self) -> Option<Rational> {
         self.exposure_time
     }
 
     /// The f-number the picture was taken at, as stored, such as 900/100
     /// for f/9.
+    ///
+    /// A recorded 0 means the camera did not know it, as with the manual
+    /// lens of the public ILCE-7S sample 1582, and the readers give `None`.
     pub fn f_number(&self) -> Option<Rational> {
         self.f_number
     }
@@ -716,6 +724,9 @@ impl Exposure {
     /// stored: the lens's actual focal length, not its 35 mm equivalent,
     /// which [`focal_length_in_35mm_film`](Self::focal_length_in_35mm_film)
     /// gives.
+    ///
+    /// A recorded 0 means the camera did not know it, as with the manual
+    /// lens of the public ILCE-7S sample 1582, and the readers give `None`.
     pub fn focal_length(&self) -> Option<Rational> {
         self.focal_length
     }
@@ -801,7 +812,9 @@ impl Exposure {
 /// with every value `None`. Focal lengths are in millimetres, the lens's
 /// actual ones, not their 35 mm equivalents; apertures are f-numbers. Both
 /// are fractions as stored, and a zero, which a file writes for a value it
-/// does not know, is read as `None`.
+/// does not know, is read as `None`, unless the file is a Nikon one whose
+/// Exif gives none of the four: they are then read from Nikon's
+/// MakerNote.
 ///
 /// `Lens::default()` is an empty one, with every value `None`. A caller's
 /// tests start from it and set the values they need with the `with_…`
@@ -920,18 +933,33 @@ impl Lens {
 
     /// The shortest focal length of the lens, in millimetres, as stored,
     /// such as 140/10 for 14 mm.
+    ///
+    /// A recorded 0 means the camera did not know it, and the readers give
+    /// `None`, unless the file is a Nikon one whose Exif gives none of the
+    /// lens's four range values: the four are then read from Nikon's
+    /// MakerNote.
     pub fn min_focal_length(&self) -> Option<Rational> {
         self.min_focal_length
     }
 
     /// The longest focal length of the lens, in millimetres, as stored;
     /// equal to the shortest on a prime lens.
+    ///
+    /// A recorded 0 means the camera did not know it, and the readers give
+    /// `None`, unless the file is a Nikon one whose Exif gives none of the
+    /// lens's four range values: the four are then read from Nikon's
+    /// MakerNote.
     pub fn max_focal_length(&self) -> Option<Rational> {
         self.max_focal_length
     }
 
     /// The widest aperture at the shortest focal length, as an f-number
     /// stored as a fraction, such as 400/100 for f/4.
+    ///
+    /// A recorded 0 means the camera did not know it, and the readers give
+    /// `None`, unless the file is a Nikon one whose Exif gives none of the
+    /// lens's four range values: the four are then read from Nikon's
+    /// MakerNote.
     pub fn f_number_at_min_focal_length(&self) -> Option<Rational> {
         self.f_number_at_min_focal_length
     }
@@ -939,6 +967,11 @@ impl Lens {
     /// The widest aperture at the longest focal length, as an f-number
     /// stored as a fraction; on a lens whose aperture does not change as
     /// it zooms, the same as at the shortest.
+    ///
+    /// A recorded 0 means the camera did not know it, and the readers give
+    /// `None`, unless the file is a Nikon one whose Exif gives none of the
+    /// lens's four range values: the four are then read from Nikon's
+    /// MakerNote.
     pub fn f_number_at_max_focal_length(&self) -> Option<Rational> {
         self.f_number_at_max_focal_length
     }
