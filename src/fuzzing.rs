@@ -201,17 +201,16 @@ fn read_metadata(metadata: &Metadata) {
         let _ = bias.reduced();
         let _ = bias.to_f64();
     }
-    if let Some(lens) = metadata.lens() {
-        let _ = lens.make();
-        let _ = lens.model();
-        let _ = lens.serial_number();
-        fractions.extend([
-            lens.min_focal_length(),
-            lens.max_focal_length(),
-            lens.f_number_at_min_focal_length(),
-            lens.f_number_at_max_focal_length(),
-        ]);
-    }
+    let lens = metadata.lens();
+    let _ = lens.make();
+    let _ = lens.model();
+    let _ = lens.serial_number();
+    fractions.extend([
+        lens.min_focal_length(),
+        lens.max_focal_length(),
+        lens.f_number_at_min_focal_length(),
+        lens.f_number_at_max_focal_length(),
+    ]);
     for fraction in fractions.into_iter().flatten() {
         let _ = fraction.to_string();
         let _ = fraction.reduced();

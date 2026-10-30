@@ -83,7 +83,7 @@
 //! if let (Some(make), Some(model)) = (metadata.make(), metadata.model()) {
 //!     println!("camera: {make} {model}");
 //! }
-//! if let Some(name) = metadata.lens().and_then(|lens| lens.model()) {
+//! if let Some(name) = metadata.lens().model() {
 //!     println!("lens: {name}");
 //! }
 //! let exposure = metadata.exposure();
@@ -177,10 +177,10 @@
 //! ```
 //!
 //! A program's tests can build every metadata value without a file,
-//! through the `with_…` methods of [`Metadata`], [`Exposure`],
+//! through the `with_…` methods of [`Metadata`], [`Exposure`], [`Lens`],
 //! [`CameraSettings`], [`WhiteBalance`], [`FocusPoints`] and
-//! [`FocusPoint`], [`Lens::builder`], the constructors of [`FineTune`] and
-//! [`Flash`], and the checked constructors, such as [`DateTime::new`] and
+//! [`FocusPoint`], the constructors of [`FineTune`] and [`Flash`], and the
+//! checked constructors, such as [`DateTime::new`] and
 //! [`FocusLayout::new`]; [`Metadata`] shows how.
 //!
 //! Show how the camera was set ([`Metadata::camera_settings`]), as a
@@ -436,7 +436,7 @@ pub use focus::{
 pub use format::Format;
 pub use geometry::{Point, Size};
 pub use limits::Limits;
-pub use metadata::{Exposure, Lens, LensBuilder, Metadata};
+pub use metadata::{Exposure, Lens, Metadata};
 pub use options::Options;
 pub use orientation::Orientation;
 pub use preview::{Preview, PreviewFormat};

@@ -252,8 +252,7 @@ fn size(width: u32, height: u32) -> Size {
 /// Checks that `lens` is the one the ARW 4 files record: the model
 /// `FE 50mm F2.5 G`, a 50 mm prime at f/2.5, with no make and no serial
 /// number; `label` names the file in a failure.
-fn assert_the_arw4_lens(lens: Option<&Lens>, label: &str) {
-    let lens = lens.unwrap_or_else(|| panic!("{label}: no lens"));
+fn assert_the_arw4_lens(lens: &Lens, label: &str) {
     let fraction = |numerator, denominator| {
         Some(Rational {
             numerator,
@@ -467,7 +466,7 @@ fn every_layout_gives_the_metadata_its_fixture_records() {
                 assert_the_arw4_focus(metadata, &label);
             } else {
                 assert_eq!(metadata.exposure(), &Exposure::default(), "{label}");
-                assert_eq!(metadata.lens(), None, "{label}");
+                assert_eq!(metadata.lens(), &Lens::default(), "{label}");
                 assert_eq!(metadata.focus(), None, "{label}");
                 assert_eq!(metadata.focus_points(), None, "{label}");
             }

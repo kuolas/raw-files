@@ -282,29 +282,25 @@ fn camera_metadata_without(lost: &[u16]) -> Metadata {
             exposure.with_focal_length_in_35mm_film(u32::from(FOCAL_MILLIMETRES_IN_35MM_FILM));
     }
     let [lens_make, lens_model, lens_serial_number] = LENS;
-    let mut lens = Lens::builder();
+    let mut lens = Lens::default();
     if kept(LENS_MAKE) {
-        lens = lens.make(lens_make);
+        lens = lens.with_make(lens_make);
     }
     if kept(LENS_MODEL) {
-        lens = lens.model(lens_model);
+        lens = lens.with_model(lens_model);
     }
     if kept(LENS_SERIAL_NUMBER) {
-        lens = lens.serial_number(lens_serial_number);
+        lens = lens.with_serial_number(lens_serial_number);
     }
     if kept(LENS_SPECIFICATION) {
         let [shortest, longest, at_shortest, at_longest] = LENS_RANGE.map(fraction);
         lens = lens
-            .min_focal_length(shortest)
-            .max_focal_length(longest)
-            .f_number_at_min_focal_length(at_shortest)
-            .f_number_at_max_focal_length(at_longest);
+            .with_min_focal_length(shortest)
+            .with_max_focal_length(longest)
+            .with_f_number_at_min_focal_length(at_shortest)
+            .with_f_number_at_max_focal_length(at_longest);
     }
-    metadata = metadata.with_exposure(exposure);
-    match lens.build() {
-        Some(lens) => metadata.with_lens(lens),
-        None => metadata,
-    }
+    metadata.with_exposure(exposure).with_lens(lens)
 }
 
 /// The little-endian 16-bit number at `at` in `bytes`.
@@ -407,7 +403,7 @@ fn a_jpeg_without_exif_opens_with_the_file_as_its_one_preview() {
     assert_eq!(read.model(), None);
     assert_eq!(read.capture_time(), None);
     assert_eq!(read.exposure().exposure_time(), None);
-    assert_eq!(read.lens(), None);
+    assert_eq!(read.lens(), &Lens::default());
     assert_eq!(read.focus(), None);
 }
 
@@ -511,7 +507,7 @@ fn a_camera_jpeg_gives_every_value_its_exif_segment_records() {
         Some(EXPOSURE_BIAS)
     );
     assert_eq!(stored(exposure.focal_length()), Some(FOCAL_MILLIMETRES));
-    let lens = read.lens().expect("a lens");
+    let lens = read.lens();
     assert_eq!(
         [lens.make(), lens.model(), lens.serial_number()],
         LENS.map(Some)
@@ -985,13 +981,11 @@ fn capture_time_at(offset: Option<i16>) -> DateTime {
 /// longest focal length, then the f-number at each.
 fn lens_of_range(range: [(u32, u32); 4]) -> Lens {
     let [shortest, longest, at_shortest, at_longest] = range.map(fraction);
-    Lens::builder()
-        .min_focal_length(shortest)
-        .max_focal_length(longest)
-        .f_number_at_min_focal_length(at_shortest)
-        .f_number_at_max_focal_length(at_longest)
-        .build()
-        .unwrap()
+    Lens::default()
+        .with_min_focal_length(shortest)
+        .with_max_focal_length(longest)
+        .with_f_number_at_min_focal_length(at_shortest)
+        .with_f_number_at_max_focal_length(at_longest)
 }
 
 /// The pairs of byte orders the Nikon JPEGs are built in: the Exif
@@ -2140,16 +2134,16 @@ fn check_stripped_z9_jpeg(stripped: &StrippedZ9Jpeg) {
     // The lens from the Exif IFD: a LensMake that is empty gives no make,
     // and the LensSerialNumber, empty and then zeroed, no serial number.
     let [shortest, longest, at_shortest, at_longest] = stripped.lens_range.map(fraction);
-    let mut lens = Lens::builder()
-        .model(stripped.lens_model)
-        .min_focal_length(shortest)
-        .max_focal_length(longest)
-        .f_number_at_min_focal_length(at_shortest)
-        .f_number_at_max_focal_length(at_longest);
+    let mut lens = Lens::default()
+        .with_model(stripped.lens_model)
+        .with_min_focal_length(shortest)
+        .with_max_focal_length(longest)
+        .with_f_number_at_min_focal_length(at_shortest)
+        .with_f_number_at_max_focal_length(at_longest);
     if let Some(make) = stripped.lens_make {
-        lens = lens.make(make);
+        lens = lens.with_make(make);
     }
-    assert_eq!(metadata.lens(), Some(&lens.build().unwrap()), "{label}");
+    assert_eq!(metadata.lens(), &lens, "{label}");
     // A JPEG holds no raw data, and its image size is its frame header's.
     assert_eq!(metadata.raw_size(), None, "{label}");
     assert_eq!(
@@ -2292,14 +2286,12 @@ fn the_d600_frame_4_jpeg_gives_its_previews_metadata_and_point_38_placed_from_th
     );
     // The D600's Exif IFD names no lens, so the lens is the MakerNote's
     // range alone, that of a 35 mm f/1.8 prime.
-    let lens = Lens::builder()
-        .min_focal_length(fraction((350, 10)))
-        .max_focal_length(fraction((350, 10)))
-        .f_number_at_min_focal_length(fraction((18, 10)))
-        .f_number_at_max_focal_length(fraction((18, 10)))
-        .build()
-        .unwrap();
-    assert_eq!(metadata.lens(), Some(&lens), "{label}");
+    let lens = Lens::default()
+        .with_min_focal_length(fraction((350, 10)))
+        .with_max_focal_length(fraction((350, 10)))
+        .with_f_number_at_min_focal_length(fraction((18, 10)))
+        .with_f_number_at_max_focal_length(fraction((18, 10)));
+    assert_eq!(metadata.lens(), &lens, "{label}");
     // A JPEG holds no raw data, and its image size is its frame header's.
     assert_eq!(metadata.raw_size(), None, "{label}");
     assert_eq!(

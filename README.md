@@ -82,7 +82,7 @@ fn main() -> raw_files::Result<()> {
     if let (Some(make), Some(model)) = (metadata.make(), metadata.model()) {
         println!("camera: {make} {model}");
     }
-    if let Some(name) = metadata.lens().and_then(|lens| lens.model()) {
+    if let Some(name) = metadata.lens().model() {
         println!("lens: {name}");
     }
     Ok(())
@@ -278,10 +278,10 @@ the body's points. `Metadata::focus_points` gives the autofocus points the
 camera used, a `FocusPoints` of `FocusPoint`s with the primary among them
 and the `FocusAreaMode`, and `Metadata::focus_layout` the body's
 `FocusLayout` of `FocusLayoutPoint`s, where raw-files has its table. The
-`with_…` methods of `Metadata`, `Exposure`, `CameraSettings`,
-`WhiteBalance`, `FocusPoints` and `FocusPoint`, `Lens::builder` and the
-constructors, such as `Focus::new` and `FocusLayout::new`, build every
-value without a file, for a program's tests. `Options` and `Limits` open
+`with_…` methods of `Metadata`, `Exposure`, `Lens`, `CameraSettings`,
+`WhiteBalance`, `FocusPoints` and `FocusPoint` and the constructors,
+such as `Focus::new` and `FocusLayout::new`, build every value without
+a file, for a program's tests. `Options` and `Limits` open
 an untrusted file with other caps. The API documentation is on
 [docs.rs](https://docs.rs/raw-files).
 

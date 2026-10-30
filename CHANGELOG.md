@@ -10,6 +10,29 @@ does.
 
 ## [Unreleased]
 
+### Changed
+
+- `Metadata::lens` gives a `&Lens`, as `Metadata::exposure` gives a
+  `&Exposure`, instead of an `Option<&Lens>`. A file that describes no
+  lens gives a lens whose every value is `None`, as `Lens::default()`
+  is, so 0.6.0's `metadata.lens().and_then(|lens| lens.model())` is
+  `metadata.lens().model()` now, and an `if let Some(lens)` on it fails
+  to compile rather than change meaning. A program that asked whether
+  the file describes a lens at all, with 0.6.0's
+  `metadata.lens().is_some()`, compares with the empty lens:
+  `*metadata.lens() != Lens::default()`.
+- `Lens` is built as `Exposure` is, from the empty `Lens::default()`
+  through `with_make`, `with_model`, `with_serial_number`,
+  `with_min_focal_length`, `with_max_focal_length`,
+  `with_f_number_at_min_focal_length` and
+  `with_f_number_at_max_focal_length`, each storing its value as given.
+
+### Removed
+
+- `LensBuilder` and `Lens::builder`: a program's tests start from
+  `Lens::default()` and write `.with_model(…)` for `.model(…)`, and so
+  on for every value, with no `build()` call and no `?` after it.
+
 ## [0.6.0] - 2026-10-29
 
 The sixth release: a DSLR's autofocus point, which a shot through the
