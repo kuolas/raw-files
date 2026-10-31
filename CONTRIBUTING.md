@@ -431,12 +431,15 @@ A few conventions:
 - **Values are changed with `with_…` methods.** A value a caller reads,
   such as `Metadata`, `Exposure` or `Lens`, starts from `default()`, and
   each of its values is set by a `with_…` method named after the getter
-  that reads it back: `with_model` sets what `model()` returns. A value
-  whose parts mean nothing alone, such as `FocusPoints`, which needs a
-  frame and an origin, or `Flash`, which needs whether it fired, has no
-  `default()`: its constructor takes those parts, its `with_…` methods
-  set the rest, and where a file may not record it, the getter that
-  gives it returns an `Option`, as `Metadata::focus_points` and
+  that reads it back: `with_iso` sets what `iso()` returns. A value that
+  raw-files computes from others when it is read has no `with_…` method:
+  its docs name the method that sets the value it is read from
+  ([ADR021](docs/architecture-decisions/adr021-what-the-file-records-and-what-raw-files-reads-into-it.md)).
+  A value whose parts mean nothing alone, such as `FocusPoints`, which
+  needs a frame and an origin, or `Flash`, which needs whether it fired,
+  has no `default()`: its constructor takes those parts, its `with_…`
+  methods set the rest, and where a file may not record it, the getter
+  that gives it returns an `Option`, as `Metadata::focus_points` and
   `CameraSettings::flash` do. A builder whose last call does the work,
   such as `Options`, which ends in `open`, `from_bytes` or `from_reader`,
   names its setters without the prefix, as `std::fs::OpenOptions` does.

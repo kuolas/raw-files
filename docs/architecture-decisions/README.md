@@ -28,6 +28,7 @@ Kuolas, who maintains raw-files.
 | [ADR018](adr018-focus-points-placed-from-a-table-and-the-points-used.md) | Focus points placed from a table, and the points used | Accepted; amends [ADR012](adr012-focus-points-as-the-camera-records-them.md); amended by [ADR019](adr019-the-frame-of-a-placed-focus-point-on-a-crop.md) |
 | [ADR019](adr019-the-frame-of-a-placed-focus-point-on-a-crop.md) | The frame of a placed focus point on a crop | Accepted; amends [ADR018](adr018-focus-points-placed-from-a-table-and-the-points-used.md); amended by [ADR020](adr020-each-crops-window-in-the-table.md) |
 | [ADR020](adr020-each-crops-window-in-the-table.md) | Each crop's window in the table | Accepted; amends [ADR019](adr019-the-frame-of-a-placed-focus-point-on-a-crop.md) |
+| [ADR021](adr021-what-the-file-records-and-what-raw-files-reads-into-it.md) | What the file records and what raw-files reads into it | Accepted |
 
 ## When to write one
 
