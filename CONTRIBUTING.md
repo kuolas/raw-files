@@ -1,8 +1,9 @@
 # Contributing to raw-files
 
 Thanks for your interest! raw-files is a camera RAW library written in pure
-Rust. It is at a very early stage, so ideas, bug reports, sample files and
-small fixes are all welcome.
+Rust. It is at a very early stage, so ideas, bug reports and sample files are
+the help it needs most. Changes to the code and docs come from contributors;
+see [Becoming a contributor](#becoming-a-contributor).
 
 This page is the one place the project's rules live. It is short on purpose;
 if something here is unclear, that is a bug in this page, and an issue about it
@@ -100,18 +101,12 @@ Whether it can start:
 - `breaking-change` — changes the public API, so it waits for a release
   that breaks the API anyway.
 
-Where to start:
-
-- `good first issue` — small and well defined, a good way into the
-  project.
-
 After an issue is opened:
 
 - `question` — work waits on more information, usually from whoever
   opened the issue. Despite its name, it does not mark an issue that asks
   a question.
-- `help wanted` — the maintainer would welcome someone taking it on,
-  though it may be bigger than a good first issue.
+- `help wanted` — the maintainer would welcome a contributor taking it on.
 - `duplicate` — another issue already covers it; it is closed with a link
   to that one.
 - `invalid` — not a problem in raw-files; it is closed with the reason.
@@ -121,6 +116,28 @@ After an issue is opened:
 
 Please **don't** report security problems in a public issue. See
 [SECURITY.md](SECURITY.md) for how to report them privately.
+
+## Becoming a contributor
+
+Pull requests come from contributors. While the project is young, a pull
+request from someone who is not one yet is closed with a link to this section,
+however good the change. Sample files and test shots are welcome from anyone,
+through an issue.
+
+You become a contributor by taking part first:
+
+1. **Start in [Discussions](https://github.com/kuolas/raw-files/discussions).**
+   Say who you are and what brings you to the project.
+2. **Use the library** on your own files, from your own cameras.
+3. **Report what you find**: bug reports and feature requests that come from
+   that use, through the issue forms.
+
+A contributor also has a public GitHub profile with a visible record of
+activity, such as projects, issues and reviews, so the maintainer can see how
+they work.
+
+After you have taken part this way for a while, the maintainer invites you to
+work on an issue. Agree on the approach in that issue before you start.
 
 ## Making a change
 
@@ -579,7 +596,8 @@ send them, measure them, write the record and the table, and credit
 you in both. With your agreement, the frames are committed stripped of
 their pixels and personal fields, under the repository's licence.
 
-To measure a body yourself, follow the whole procedure
+A contributor ([Becoming a contributor](#becoming-a-contributor)) can
+also measure a body themselves, following the whole procedure
 ([autofocus-points.md](docs/formats/nef/autofocus-points.md#1-the-procedure)):
 shoot one frame per point in single-point mode and the control frames
 the page lists, read every frame in the maker's software with its
