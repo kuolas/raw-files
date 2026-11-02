@@ -188,7 +188,8 @@ pub fn check(sample: &Sample, format: Format) {
 /// ([`SampleSettings`]). The lens is `None` where the file describes none,
 /// which the reader gives as a lens with every value `None`. The layout of
 /// the body's autofocus points is the Model text of the layout the reader
-/// must give ([`FocusLayout::model`](raw_files::FocusLayout::model)),
+/// must give
+/// ([`FocusLayout::recorded_model`](raw_files::FocusLayout::recorded_model)),
 /// `None` when it must give none, as for every body that raw-files has no
 /// table of.
 ///
@@ -336,11 +337,19 @@ pub fn check_metadata(expected: &SampleMetadata, format: Format) {
     let file = RawFile::open(&path).unwrap();
     assert_eq!(file.format(), format, "{label}");
     let metadata = file.metadata();
-    assert_eq!(metadata.make(), expected.make, "{label}: make");
-    assert_eq!(metadata.model(), expected.model, "{label}: model");
+    assert_eq!(
+        metadata.camera().recorded_make(),
+        expected.make,
+        "{label}: make"
+    );
+    assert_eq!(
+        metadata.camera().recorded_model(),
+        expected.model,
+        "{label}: model"
+    );
     assert_eq!(metadata.software(), expected.software, "{label}: software");
     assert_eq!(
-        metadata.serial_number().map(SerialShape::of),
+        metadata.camera().serial_number().map(SerialShape::of),
         expected.serial_number,
         "{label}: serial number"
     );
@@ -471,7 +480,9 @@ pub fn check_metadata(expected: &SampleMetadata, format: Format) {
     });
     assert_eq!(points, expected_points, "{label}: focus points");
     assert_eq!(
-        metadata.focus_layout().map(|layout| layout.model()),
+        metadata
+            .focus_layout()
+            .map(|layout| layout.recorded_model()),
         expected.focus_layout,
         "{label}: focus layout"
     );

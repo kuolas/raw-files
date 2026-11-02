@@ -322,11 +322,15 @@ fn the_arw4_file_gives_every_value_its_fixture_records() {
             let (built, _) = arw4_file(order, value);
             let file = RawFile::from_reader(Cursor::new(built.bytes)).unwrap();
             let metadata = file.metadata();
-            assert_eq!(metadata.make(), Some("SONY"), "{label}");
-            assert_eq!(metadata.model(), Some("ILCE-7M4"), "{label}");
+            assert_eq!(metadata.camera().recorded_make(), Some("SONY"), "{label}");
+            assert_eq!(
+                metadata.camera().recorded_model(),
+                Some("ILCE-7M4"),
+                "{label}"
+            );
             assert_eq!(metadata.software(), Some("ILCE-7M4 v2.00"), "{label}");
             // Like the sample it copies, the file records no serial number.
-            assert_eq!(metadata.serial_number(), None, "{label}");
+            assert_eq!(metadata.camera().serial_number(), None, "{label}");
             let time = metadata.capture_time().unwrap();
             assert_eq!(time.to_string(), "2023-10-19T16:13:48.776+02:00", "{label}");
             assert_eq!(time.nanosecond(), 776_000_000, "{label}");
@@ -456,10 +460,10 @@ fn every_layout_gives_the_metadata_its_fixture_records() {
             let file = RawFile::from_bytes(&built.bytes).unwrap();
             assert_eq!(file.format(), Format::Arw, "{label}");
             let metadata = file.metadata();
-            assert_eq!(metadata.make(), Some("SONY"), "{label}");
-            assert_eq!(metadata.model(), Some(model), "{label}");
+            assert_eq!(metadata.camera().recorded_make(), Some("SONY"), "{label}");
+            assert_eq!(metadata.camera().recorded_model(), Some(model), "{label}");
             assert_eq!(metadata.software(), software, "{label}");
-            assert_eq!(metadata.serial_number(), None, "{label}");
+            assert_eq!(metadata.camera().serial_number(), None, "{label}");
             assert_eq!(
                 metadata.capture_time().map(|t| t.to_string()).as_deref(),
                 time,

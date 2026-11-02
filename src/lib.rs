@@ -80,7 +80,8 @@
 //! if let Some(time) = metadata.capture_time() {
 //!     println!("taken {time}");
 //! }
-//! if let (Some(make), Some(model)) = (metadata.make(), metadata.model()) {
+//! let camera = metadata.camera();
+//! if let (Some(make), Some(model)) = (camera.recorded_make(), camera.recorded_model()) {
 //!     println!("camera: {make} {model}");
 //! }
 //! if let Some(name) = metadata.lens().model() {
@@ -177,8 +178,8 @@
 //! ```
 //!
 //! A program's tests can build every metadata value without a file,
-//! through the `with_…` methods of [`Metadata`], [`Exposure`], [`Lens`],
-//! [`CameraSettings`], [`WhiteBalance`], [`FocusPoints`] and
+//! through the `with_…` methods of [`Metadata`], [`Camera`], [`Exposure`],
+//! [`Lens`], [`CameraSettings`], [`WhiteBalance`], [`FocusPoints`] and
 //! [`FocusPoint`], the constructors of [`FineTune`] and [`Flash`], and the
 //! checked constructors, such as [`DateTime::new`] and
 //! [`FocusLayout::new`]; [`Metadata`] shows how.
@@ -372,6 +373,7 @@
 // builds keep both lints, and CI checks those.
 #![cfg_attr(fuzzing, allow(dead_code, unfulfilled_lint_expectations))]
 
+mod camera;
 mod camera_settings;
 mod container;
 mod datetime;
@@ -423,6 +425,7 @@ mod tiff_builder;
 #[cfg(test)]
 mod testing;
 
+pub use camera::Camera;
 pub use camera_settings::{
     CameraSettings, ColorSpace, ExposureProgram, FineTune, Flash, FlashMode, ImageArea,
     MeteringMode, RawImageSize, Shutter, WhiteBalance, WhiteBalanceMode,

@@ -223,7 +223,12 @@ pub(crate) fn detect<R: Read + Seek>(
     };
     let (format, mut parsed) = found.ok_or_else(|| Error::unknown_format(unclaimed))?;
     // The layout depends on the Model alone, so no format's reader sets it.
-    parsed.metadata.focus_layout = parsed.metadata.model.as_deref().and_then(points::layout);
+    parsed.metadata.focus_layout = parsed
+        .metadata
+        .camera
+        .recorded_model
+        .as_deref()
+        .and_then(points::layout);
     Ok((format, parsed))
 }
 
@@ -694,7 +699,7 @@ mod tests {
     /// the leftmost column, at (1812, 1705) with a box of 164 by 164.
     fn assert_the_d600_layout(layout: Option<FocusLayout>, what: &str) {
         let layout = layout.unwrap_or_else(|| panic!("{what}: no layout"));
-        assert_eq!(layout.model(), "NIKON D600", "{what}");
+        assert_eq!(layout.recorded_model(), "NIKON D600", "{what}");
         assert_eq!(
             layout.frame(),
             Size {
@@ -726,7 +731,11 @@ mod tests {
         for (what, makernote) in MAKERNOTES {
             for (format, metadata) in nikon_files(Some("NIKON D600"), makernote) {
                 let what = format!("{format:?}, {what}");
-                assert_eq!(metadata.model(), Some("NIKON D600"), "{what}");
+                assert_eq!(
+                    metadata.camera().recorded_model(),
+                    Some("NIKON D600"),
+                    "{what}"
+                );
                 assert_the_d600_layout(metadata.focus_layout(), &what);
             }
         }
@@ -746,7 +755,7 @@ mod tests {
             for (what, makernote) in MAKERNOTES {
                 for (format, metadata) in nikon_files(model, makernote) {
                     let what = format!("{model:?}, {format:?}, {what}");
-                    assert_eq!(metadata.model(), model, "{what}");
+                    assert_eq!(metadata.camera().recorded_model(), model, "{what}");
                     assert_eq!(metadata.focus_layout(), None, "{what}");
                 }
             }
@@ -757,8 +766,8 @@ mod tests {
     fn the_layout_is_found_by_the_model_as_trimmed() {
         // The Model padded with spaces, or cut by a NUL before more text,
         // is the D600's once the text rule has trimmed it, as
-        // `Metadata::model` gives it; in lower case, or with a space
-        // inside, it is another Model's.
+        // `Camera::recorded_model` gives it; in lower case, or with a
+        // space inside, it is another Model's.
         for (model, layout) in [
             ("NIKON D600   ", true),
             ("NIKON D600\0SPARE", true),
@@ -769,7 +778,11 @@ mod tests {
             for (format, metadata) in nikon_files(Some(model), None) {
                 let what = format!("{model:?}, {format:?}");
                 if layout {
-                    assert_eq!(metadata.model(), Some("NIKON D600"), "{what}");
+                    assert_eq!(
+                        metadata.camera().recorded_model(),
+                        Some("NIKON D600"),
+                        "{what}"
+                    );
                     assert_the_d600_layout(metadata.focus_layout(), &what);
                 } else {
                     assert_eq!(metadata.focus_layout(), None, "{what}");

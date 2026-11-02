@@ -106,7 +106,8 @@ use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
 use raw_files::{
-    DateTime, FocusLayout, FocusOrigin, FocusPoints, Format, Lens, Metadata, Point, RawFile, Size,
+    Camera, DateTime, FocusLayout, FocusOrigin, FocusPoints, Format, Lens, Metadata, Point,
+    RawFile, Size,
 };
 
 /// A file that counts the bytes its reads return, into a counter the caller
@@ -163,10 +164,10 @@ struct MetadataTally {
 impl MetadataTally {
     /// Counts what `metadata` has.
     fn record(&mut self, metadata: &Metadata) {
-        self.make += usize::from(metadata.make().is_some());
-        self.model += usize::from(metadata.model().is_some());
+        self.make += usize::from(metadata.camera().recorded_make().is_some());
+        self.model += usize::from(metadata.camera().recorded_model().is_some());
         self.software += usize::from(metadata.software().is_some());
-        self.serial_number += usize::from(metadata.serial_number().is_some());
+        self.serial_number += usize::from(metadata.camera().serial_number().is_some());
         if let Some(time) = metadata.capture_time() {
             self.capture_time += 1;
             self.with_subseconds += usize::from(time.subsecond_digits() > 0);
@@ -456,7 +457,8 @@ impl FocusTally {
             self.with_layout += 1;
             *self.layout_sizes.entry(layout.points().len()).or_default() += 1;
             self.layout_without_point += usize::from(metadata.focus().is_none());
-            self.layout_not_for_model += usize::from(metadata.model() != Some(layout.model()));
+            self.layout_not_for_model +=
+                usize::from(metadata.camera().recorded_model() != Some(layout.recorded_model()));
         }
         if let Some(list) = metadata.focus_points() {
             self.record_list(list, layout);
@@ -1411,7 +1413,7 @@ fn the_focus_tally_counts_the_lists_and_layouts_and_checks_them_against_each_oth
     let layout = FocusLayout::new("NIKON D600", full, &THREE_POINTS).unwrap();
     let d600 = || {
         Metadata::default()
-            .with_model("NIKON D600")
+            .with_camera(Camera::default().with_recorded_model("NIKON D600"))
             .with_focus_layout(layout)
     };
     // An auto-area shot naming points 13 and 38, the primary 38; a DX
@@ -1528,7 +1530,7 @@ fn the_focus_tally_counts_the_lists_and_layouts_and_checks_them_against_each_oth
         ),
         (
             Metadata::default()
-                .with_model("NIKON D610")
+                .with_camera(Camera::default().with_recorded_model("NIKON D610"))
                 .with_focus_layout(layout),
             3,
         ),

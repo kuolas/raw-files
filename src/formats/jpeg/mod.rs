@@ -569,7 +569,10 @@ mod tests {
         assert_eq!(err.kind(), ErrorKind::Io, "{make}: {err:?}");
         let parsed = parsed_when_the_makernote_fails("Canon", block)
             .expect("another make's MakerNote is not read");
-        assert_eq!(parsed.metadata.make.as_deref(), Some("Canon"));
+        assert_eq!(
+            parsed.metadata.camera.recorded_make.as_deref(),
+            Some("Canon")
+        );
     }
 
     #[test]

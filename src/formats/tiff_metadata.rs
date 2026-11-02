@@ -140,6 +140,7 @@
 
 use std::io::{Read, Seek};
 
+use crate::camera::Camera;
 use crate::camera_settings::{
     CameraSettings, ColorSpace, ExposureProgram, Flash, FlashMode, MeteringMode, WhiteBalance,
     WhiteBalanceMode,
@@ -237,10 +238,12 @@ pub(crate) fn read<R: Read + Seek>(src: &mut Source<R>, tree: &Tree) -> Result<S
     };
     let (raw_size, default_crop) = sizes(src, tree)?;
     let metadata = Metadata {
-        make: text(src, ifd0, MAKE)?,
-        model: text(src, ifd0, MODEL)?,
+        camera: Camera {
+            recorded_make: text(src, ifd0, MAKE)?,
+            recorded_model: text(src, ifd0, MODEL)?,
+            serial_number,
+        },
         software: text(src, ifd0, SOFTWARE)?,
-        serial_number,
         capture_time,
         orientation: tiff_previews::orientation(src, tree)?,
         exposure,
@@ -1173,13 +1176,21 @@ mod tests {
         }
     }
 
+    /// The camera the Z 9 file names: its Make, its Model and its serial
+    /// number.
+    fn z9_camera() -> Camera {
+        Camera {
+            recorded_make: Some("NIKON CORPORATION".to_owned()),
+            recorded_model: Some("NIKON Z 9".to_owned()),
+            serial_number: Some("1234567".to_owned()),
+        }
+    }
+
     /// What the Z 9 file gives, every value read.
     fn z9_expected() -> Metadata {
         Metadata {
-            make: Some("NIKON CORPORATION".to_owned()),
-            model: Some("NIKON Z 9".to_owned()),
+            camera: z9_camera(),
             software: Some("Ver.01.00".to_owned()),
-            serial_number: Some("1234567".to_owned()),
             capture_time: z9_time(Some(b"85"), Some(b"-05:00")),
             orientation: Orientation::Rotate270,
             exposure: z9_exposure(),
@@ -1240,7 +1251,7 @@ mod tests {
         let (mut src, tree) = testing::file(|builder, ifd| {
             builder.ascii(ifd, MAKE, make);
         });
-        read(&mut src, &tree).unwrap().metadata.make
+        read(&mut src, &tree).unwrap().metadata.camera.recorded_make
     }
 
     #[test]
@@ -1392,12 +1403,15 @@ mod tests {
                 builder.ascii(ifd0, MODEL, &"M".repeat(len));
             })
         };
-        assert_eq!(model(255).model, Some("M".repeat(255)));
+        assert_eq!(model(255).camera.recorded_model, Some("M".repeat(255)));
         // Too long, and costs only the model.
         assert_eq!(
             model(256),
             Metadata {
-                model: None,
+                camera: Camera {
+                    recorded_model: None,
+                    ..z9_camera()
+                },
                 ..z9_expected()
             }
         );
@@ -1418,7 +1432,7 @@ mod tests {
             let count = u32::try_from(bytes.len()).unwrap();
             builder.raw(ifd, MAKE, ASCII, count, RawValue::Offset(4096));
         });
-        read(&mut src, &tree).unwrap().metadata.make
+        read(&mut src, &tree).unwrap().metadata.camera.recorded_make
     }
 
     #[test]
@@ -1512,8 +1526,9 @@ mod tests {
         assert_eq!(
             metadata,
             Metadata {
-                make: Some("SONY".to_owned()),
-                model: Some("DSC-F828".to_owned()),
+                camera: Camera::default()
+                    .with_recorded_make("SONY")
+                    .with_recorded_model("DSC-F828"),
                 orientation: Orientation::Rotate90,
                 ..Metadata::default()
             }
@@ -1574,7 +1589,10 @@ mod tests {
                     builder.byte(ifd0, MODEL, b"NIKON Z 9\0");
                 },
                 Metadata {
-                    model: None,
+                    camera: Camera {
+                        recorded_model: None,
+                        ..z9_camera()
+                    },
                     ..z9_expected()
                 },
             ),
@@ -1603,7 +1621,10 @@ mod tests {
                 MAKE,
                 |builder, ifd0, _| too_long(builder, ifd0, MAKE),
                 Metadata {
-                    make: None,
+                    camera: Camera {
+                        recorded_make: None,
+                        ..z9_camera()
+                    },
                     ..z9_expected()
                 },
             ),
@@ -1614,7 +1635,10 @@ mod tests {
                     builder.ascii(exif, BODY_SERIAL_NUMBER, &"1".repeat(256));
                 },
                 Metadata {
-                    serial_number: None,
+                    camera: Camera {
+                        serial_number: None,
+                        ..z9_camera()
+                    },
                     ..z9_expected()
                 },
             ),
@@ -2995,7 +3019,7 @@ mod tests {
         };
         change(&mut settings);
         Metadata {
-            make: Some("SONY".to_owned()),
+            camera: Camera::default().with_recorded_make("SONY"),
             exposure: Exposure {
                 exposure_time: Some(fraction(10, 3200)),
                 ..Exposure::default()
@@ -3563,7 +3587,7 @@ mod tests {
             assert_eq!(
                 metadata,
                 Metadata {
-                    make: Some("SONY".to_owned()),
+                    camera: Camera::default().with_recorded_make("SONY"),
                     orientation: Orientation::Rotate90,
                     raw_size: Some(RAW),
                     image_size: Some(RAW),

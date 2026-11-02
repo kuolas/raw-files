@@ -79,7 +79,8 @@ fn main() -> raw_files::Result<()> {
     if let Some(time) = metadata.capture_time() {
         println!("taken {time}");
     }
-    if let (Some(make), Some(model)) = (metadata.make(), metadata.model()) {
+    let camera = metadata.camera();
+    if let (Some(make), Some(model)) = (camera.recorded_make(), camera.recorded_model()) {
         println!("camera: {make} {model}");
     }
     if let Some(name) = metadata.lens().model() {
@@ -120,7 +121,7 @@ fn main() -> raw_files::Result<()> {
 Build the same values without a camera file, as a program's tests do:
 
 ```rust
-use raw_files::{Focus, FocusOrigin, Metadata, Point, Size};
+use raw_files::{Camera, Focus, FocusOrigin, Metadata, Point, Size};
 
 fn main() {
     let frame = Size { width: 8256, height: 5504 };
@@ -128,7 +129,7 @@ fn main() {
         .expect("the centre lies on the frame")
         .with_in_focus(true);
     let metadata = Metadata::default()
-        .with_model("NIKON Z 9")
+        .with_camera(Camera::default().with_recorded_model("NIKON Z 9"))
         .with_focus(focus);
     assert_eq!(metadata.focus(), Some(focus));
 }

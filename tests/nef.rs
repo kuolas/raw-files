@@ -40,10 +40,10 @@ use std::collections::BTreeSet;
 use std::io::Cursor;
 
 use raw_files::{
-    CameraSettings, ColorSpace, DateTime, Exposure, ExposureProgram, FineTune, Flash, FlashMode,
-    Focus, FocusAreaMode, FocusOrigin, FocusPoint, FocusPoints, Format, ImageArea, Lens, Limits,
-    Metadata, MeteringMode, Options, Orientation, Point, Preview, PreviewFormat, Rational, RawFile,
-    RawImageSize, Shutter, SignedRational, Size, WhiteBalance, WhiteBalanceMode,
+    Camera, CameraSettings, ColorSpace, DateTime, Exposure, ExposureProgram, FineTune, Flash,
+    FlashMode, Focus, FocusAreaMode, FocusOrigin, FocusPoint, FocusPoints, Format, ImageArea, Lens,
+    Limits, Metadata, MeteringMode, Options, Orientation, Point, Preview, PreviewFormat, Rational,
+    RawFile, RawImageSize, Shutter, SignedRational, Size, WhiteBalance, WhiteBalanceMode,
 };
 use support::nef::{
     D1H_ISO, D1H_LENS, D1H_PREVIEW_JPEG, D1H_RAW, D1hBlobs, d1h_file, d1h_file_with,
@@ -203,11 +203,15 @@ fn assert_the_z9_metadata(built: &Built, orientation: Orientation, label: &str) 
         ("reader", from_reader.metadata(), from_reader.previews()),
     ] {
         assert_eq!(
-            metadata.make(),
+            metadata.camera().recorded_make(),
             Some("NIKON CORPORATION"),
             "{label}, from {how}"
         );
-        assert_eq!(metadata.model(), Some("NIKON Z 9"), "{label}, from {how}");
+        assert_eq!(
+            metadata.camera().recorded_model(),
+            Some("NIKON Z 9"),
+            "{label}, from {how}"
+        );
         // Read through the NULs that pad it.
         assert_eq!(
             metadata.software(),
@@ -215,7 +219,7 @@ fn assert_the_z9_metadata(built: &Built, orientation: Orientation, label: &str) 
             "{label}, from {how}"
         );
         assert_eq!(
-            metadata.serial_number(),
+            metadata.camera().serial_number(),
             Some("1234567"),
             "{label}, from {how}"
         );
@@ -420,11 +424,13 @@ fn the_z9_metadata_by_hand(orientation: Orientation) -> Option<Metadata> {
     )?
     .with_size(as_size(Z9_FOCUS_AREA))?
     .with_in_focus(true);
+    let camera = Camera::default()
+        .with_recorded_make("NIKON CORPORATION")
+        .with_recorded_model("NIKON Z 9")
+        .with_serial_number("1234567");
     let metadata = Metadata::default()
-        .with_make("NIKON CORPORATION")
-        .with_model("NIKON Z 9")
+        .with_camera(camera)
         .with_software("Ver.01.00")
-        .with_serial_number("1234567")
         .with_capture_time(time)
         .with_orientation(orientation)
         .with_exposure(exposure)
@@ -531,8 +537,16 @@ fn the_z6iii_file_gives_its_focus_point_on_the_cropped_picture() {
         let built = z6iii_file(order, 1);
         let file = RawFile::from_bytes(&built.bytes).unwrap();
         let metadata = file.metadata();
-        assert_eq!(metadata.make(), Some("NIKON CORPORATION"), "{order:?}");
-        assert_eq!(metadata.model(), Some("NIKON Z6_3"), "{order:?}");
+        assert_eq!(
+            metadata.camera().recorded_make(),
+            Some("NIKON CORPORATION"),
+            "{order:?}"
+        );
+        assert_eq!(
+            metadata.camera().recorded_model(),
+            Some("NIKON Z6_3"),
+            "{order:?}"
+        );
         assert_eq!(metadata.raw_size(), Some(as_size(Z6III_RAW)), "{order:?}");
         assert_eq!(
             metadata.image_size(),
@@ -585,11 +599,13 @@ fn the_z6iii_metadata_by_hand(orientation: Orientation) -> Option<Metadata> {
     .with_in_focus(Z6III_IN_FOCUS);
     // Its MakerNote's one settings tag is CropHiSpeed, whose crop setting,
     // 17, FX 1:1, gives the image area.
+    let camera = Camera::default()
+        .with_recorded_make("NIKON CORPORATION")
+        .with_recorded_model("NIKON Z6_3")
+        .with_serial_number("2345678");
     let metadata = Metadata::default()
-        .with_make("NIKON CORPORATION")
-        .with_model("NIKON Z6_3")
+        .with_camera(camera)
         .with_software("Ver.01.00")
-        .with_serial_number("2345678")
         .with_capture_time(time)
         .with_orientation(orientation)
         .with_exposure(exposure)
@@ -662,13 +678,21 @@ fn the_d300_file_gives_what_its_exif_tags_lack_from_the_makernote() {
             let built = d300_file(order, value);
             let file = RawFile::from_bytes(&built.bytes).unwrap();
             let metadata = file.metadata();
-            assert_eq!(metadata.make(), Some("NIKON CORPORATION"), "{label}");
-            assert_eq!(metadata.model(), Some("NIKON D300"), "{label}");
+            assert_eq!(
+                metadata.camera().recorded_make(),
+                Some("NIKON CORPORATION"),
+                "{label}"
+            );
+            assert_eq!(
+                metadata.camera().recorded_model(),
+                Some("NIKON D300"),
+                "{label}"
+            );
             // Trimmed of the trailing space the D300 writes.
             assert_eq!(metadata.software(), Some("Ver.1.10"), "{label}");
             // No BodySerialNumber in the Exif IFD: the MakerNote's.
             assert_eq!(
-                metadata.serial_number(),
+                metadata.camera().serial_number(),
                 Some(D300_SERIAL_NUMBER),
                 "{label}"
             );
@@ -749,9 +773,11 @@ fn the_d1h_metadata_by_hand(with_makernote: bool) -> Option<Metadata> {
         .with_f_number(Rational::new(45, 10)?)
         .with_focal_length(Rational::new(600, 10)?)
         .with_exposure_bias(SignedRational::new(4, 6)?);
+    let camera = Camera::default()
+        .with_recorded_make("NIKON CORPORATION")
+        .with_recorded_model("NIKON D1H");
     let mut metadata = Metadata::default()
-        .with_make("NIKON CORPORATION")
-        .with_model("NIKON D1H")
+        .with_camera(camera)
         .with_software("Ver.1.00")
         .with_capture_time(time)
         .with_raw_size(as_size(D1H_RAW))
@@ -918,7 +944,7 @@ fn the_d1h_file_gives_what_its_exif_tags_lack_from_its_headerless_makernote() {
         assert_eq!(lens.f_number_at_max_focal_length(), f_at_max, "{order:?}");
         // No serial number in either, no WorldTime, and AFInfo's point
         // number alone, no AFInfo2.
-        assert_eq!(metadata.serial_number(), None, "{order:?}");
+        assert_eq!(metadata.camera().serial_number(), None, "{order:?}");
         assert_eq!(
             metadata.capture_time().unwrap().offset_minutes(),
             None,
@@ -1165,13 +1191,21 @@ fn check_stripped_z9(expected: &StrippedZ9) {
     assert_eq!(file.largest_preview(), previews.last().copied(), "{label}");
 
     let metadata = file.metadata();
-    assert_eq!(metadata.make(), Some("NIKON CORPORATION"), "{label}");
-    assert_eq!(metadata.model(), Some("NIKON Z 9"), "{label}");
+    assert_eq!(
+        metadata.camera().recorded_make(),
+        Some("NIKON CORPORATION"),
+        "{label}"
+    );
+    assert_eq!(
+        metadata.camera().recorded_model(),
+        Some("NIKON Z 9"),
+        "{label}"
+    );
     // The firmware my Z 9 ran.
     assert_eq!(metadata.software(), Some("Ver.05.30"), "{label}");
     // The stripping removed BodySerialNumber and the MakerNote's
     // SerialNumber.
-    assert_eq!(metadata.serial_number(), None, "{label}");
+    assert_eq!(metadata.camera().serial_number(), None, "{label}");
     assert_eq!(
         metadata
             .capture_time()
@@ -1781,7 +1815,11 @@ fn every_frame_of_the_d600_session_gives_what_its_bytes_record() {
             .unwrap_or_else(|error| panic!("{label}: {error}"));
         assert_eq!(file.format(), Format::Nef, "{label}");
         let metadata = file.metadata();
-        assert_eq!(metadata.model(), Some("NIKON D600"), "{label}");
+        assert_eq!(
+            metadata.camera().recorded_model(),
+            Some("NIKON D600"),
+            "{label}"
+        );
         assert_eq!(metadata.orientation(), orientation, "{label}");
         assert_eq!(
             metadata.camera_settings().image_area(),
@@ -1794,7 +1832,7 @@ fn every_frame_of_the_d600_session_gives_what_its_bytes_record() {
         let layout = metadata
             .focus_layout()
             .unwrap_or_else(|| panic!("{label}: no layout"));
-        assert_eq!(layout.model(), "NIKON D600", "{label}");
+        assert_eq!(layout.recorded_model(), "NIKON D600", "{label}");
         assert_eq!(layout.frame(), as_size((6016, 4016)), "{label}");
         assert_eq!(layout.points().len(), 39, "{label}");
         check_d600_focus(label, metadata, focus);
@@ -1924,12 +1962,16 @@ fn the_d600_frame_4_gives_its_previews_metadata_and_point_38_placed_from_the_tab
     assert_eq!(file.largest_preview(), previews.last().copied(), "{label}");
 
     let metadata = file.metadata();
-    assert_eq!(metadata.make(), Some("NIKON CORPORATION"), "{label}");
+    assert_eq!(
+        metadata.camera().recorded_make(),
+        Some("NIKON CORPORATION"),
+        "{label}"
+    );
     // The firmware the D600 ran, `Ver.1.04 ` with its space trimmed.
     assert_eq!(metadata.software(), Some("Ver.1.04"), "{label}");
     // The D600 writes its serial number only in the MakerNote's
     // SerialNumber, which the stripping removed.
-    assert_eq!(metadata.serial_number(), None, "{label}");
+    assert_eq!(metadata.camera().serial_number(), None, "{label}");
     // DateTimeOriginal and SubSecTimeOriginal, with the offset from
     // WorldTime, -180 minutes with daylight saving time off, since the
     // D600 writes no OffsetTimeOriginal.
@@ -2084,13 +2126,17 @@ fn the_d600_frame_4_gives_the_layout_without_a_readable_makernote() {
     for (what, bytes) in [("unreadable", unreadable), ("missing", missing)] {
         let file = RawFile::from_bytes(&bytes).unwrap();
         let metadata = file.metadata();
-        assert_eq!(metadata.model(), Some("NIKON D600"), "{label}, {what}");
+        assert_eq!(
+            metadata.camera().recorded_model(),
+            Some("NIKON D600"),
+            "{label}, {what}"
+        );
         assert_eq!(metadata.focus(), None, "{label}, {what}");
         assert_eq!(metadata.focus_points(), None, "{label}, {what}");
         let layout = metadata
             .focus_layout()
             .unwrap_or_else(|| panic!("{label}, {what}: no layout"));
-        assert_eq!(layout.model(), "NIKON D600", "{label}, {what}");
+        assert_eq!(layout.recorded_model(), "NIKON D600", "{label}, {what}");
         assert_eq!(layout.frame(), as_size((6016, 4016)), "{label}, {what}");
         assert_eq!(layout.points().len(), 39, "{label}, {what}");
         let point_38 = layout
