@@ -16,14 +16,14 @@ does.
   `&Exposure`, instead of an `Option<&Lens>`. A file that describes no
   lens gives a lens whose every value is `None`, as `Lens::default()`
   is, so 0.6.0's `metadata.lens().and_then(|lens| lens.model())` is
-  `metadata.lens().model()` now, and an `if let Some(lens)` on it fails
-  to compile rather than change meaning. A program that asked whether
-  the file describes a lens at all, with 0.6.0's
+  `metadata.lens().recorded_model()` now, and an `if let Some(lens)` on
+  it fails to compile rather than change meaning. A program that asked
+  whether the file describes a lens at all, with 0.6.0's
   `metadata.lens().is_some()`, compares with the empty lens:
   `*metadata.lens() != Lens::default()`.
 - `Lens` is built as `Exposure` is, from the empty `Lens::default()`
-  through `with_make`, `with_model`, `with_serial_number`,
-  `with_min_focal_length`, `with_max_focal_length`,
+  through `with_recorded_make`, `with_recorded_model`,
+  `with_serial_number`, `with_min_focal_length`, `with_max_focal_length`,
   `with_f_number_at_min_focal_length` and
   `with_f_number_at_max_focal_length`, each storing its value as given.
 - `Metadata::make`, `Metadata::model` and `Metadata::serial_number` move
@@ -39,12 +39,18 @@ does.
 - `FocusLayout::model` is `FocusLayout::recorded_model`: its text is the
   Model as the file records it, such as `NIKON D600`, as
   `Camera::recorded_model` gives it.
+- `Lens::make` and `Lens::model` are `Lens::recorded_make` and
+  `Lens::recorded_model`, with their setters `with_recorded_make` and
+  `with_recorded_model`: they give the text as the file records it, as
+  `Camera`'s do, and leave the plain words for the lens's name that a
+  table of lenses is to give. 0.6.0's `lens.model()` is
+  `lens.recorded_model()`.
 
 ### Removed
 
 - `LensBuilder` and `Lens::builder`: a program's tests start from
-  `Lens::default()` and write `.with_model(…)` for `.model(…)`, and so
-  on for every value, with no `build()` call and no `?` after it.
+  `Lens::default()` and write `.with_recorded_model(…)` for `.model(…)`,
+  and so on for every value, with no `build()` call and no `?` after it.
 
 ## [0.6.0] - 2026-10-29
 

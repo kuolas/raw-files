@@ -137,8 +137,8 @@ impl Seek for CountingReader {
 /// files that share one and are never printed.
 #[derive(Default)]
 struct MetadataTally {
-    make: usize,
-    model: usize,
+    recorded_make: usize,
+    recorded_model: usize,
     software: usize,
     serial_number: usize,
     capture_time: usize,
@@ -151,7 +151,7 @@ struct MetadataTally {
     focal_length_in_35mm_film: usize,
     exposure_bias: usize,
     lens: usize,
-    lens_model: usize,
+    lens_recorded_model: usize,
     lens_focal_range: usize,
     raw_sizes: BTreeMap<(u32, u32), usize>,
     image_sizes: BTreeMap<(u32, u32), usize>,
@@ -164,8 +164,8 @@ struct MetadataTally {
 impl MetadataTally {
     /// Counts what `metadata` has.
     fn record(&mut self, metadata: &Metadata) {
-        self.make += usize::from(metadata.camera().recorded_make().is_some());
-        self.model += usize::from(metadata.camera().recorded_model().is_some());
+        self.recorded_make += usize::from(metadata.camera().recorded_make().is_some());
+        self.recorded_model += usize::from(metadata.camera().recorded_model().is_some());
         self.software += usize::from(metadata.software().is_some());
         self.serial_number += usize::from(metadata.camera().serial_number().is_some());
         if let Some(time) = metadata.capture_time() {
@@ -186,7 +186,7 @@ impl MetadataTally {
         let lens = metadata.lens();
         if *lens != Lens::default() {
             self.lens += 1;
-            self.lens_model += usize::from(lens.model().is_some());
+            self.lens_recorded_model += usize::from(lens.recorded_model().is_some());
             self.lens_focal_range +=
                 usize::from(lens.min_focal_length().is_some() && lens.max_focal_length().is_some());
         }
@@ -718,8 +718,8 @@ impl Tally {
         println!("largest-preview sizes: {:?}", self.sizes);
         println!("largest-preview orientations: {:?}", self.orientations);
         println!(
-            "files with a make: {}, a model: {}, software: {}, a serial number: {}",
-            m.make, m.model, m.software, m.serial_number
+            "files with a recorded make: {}, a recorded model: {}, software: {}, a serial number: {}",
+            m.recorded_make, m.recorded_model, m.software, m.serial_number
         );
         println!(
             "files with a capture time: {}, of which with sub-seconds: {}, with an offset from UTC: {}",
@@ -739,8 +739,8 @@ impl Tally {
             m.exposure_bias
         );
         println!(
-            "files with a lens: {}, of which with a model: {}, with a focal-length range: {}",
-            m.lens, m.lens_model, m.lens_focal_range
+            "files with a lens: {}, of which with a recorded model: {}, with a focal-length range: {}",
+            m.lens, m.lens_recorded_model, m.lens_focal_range
         );
         println!("raw sizes: {:?}", m.raw_sizes);
         println!("image sizes: {:?}", m.image_sizes);

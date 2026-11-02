@@ -526,12 +526,13 @@ fn signed_rational<R: Read + Seek>(
 /// `Io` when the reader fails. A value that cannot be read for any other
 /// reason is `None`, and costs no other value.
 fn lens<R: Read + Seek>(src: &mut Source<R>, exif: &Ifd) -> Result<Lens> {
-    let make = text(src, exif, LENS_MAKE)?;
-    let model = text(src, exif, LENS_MODEL)?.filter(|model| !model.chars().all(|c| c == '-'));
+    let recorded_make = text(src, exif, LENS_MAKE)?;
+    let recorded_model =
+        text(src, exif, LENS_MODEL)?.filter(|model| !model.chars().all(|c| c == '-'));
     let serial_number = text(src, exif, LENS_SERIAL_NUMBER)?;
     let mut lens = Lens {
-        make,
-        model,
+        recorded_make,
+        recorded_model,
         serial_number,
         ..Lens::default()
     };
@@ -1123,8 +1124,8 @@ mod tests {
     /// values.
     fn z9_lens_with(change: impl FnOnce(&mut LensValues)) -> Lens {
         let mut values = LensValues {
-            make: Some("NIKON".to_owned()),
-            model: Some("NIKKOR Z 14-30mm f/4 S".to_owned()),
+            recorded_make: Some("NIKON".to_owned()),
+            recorded_model: Some("NIKKOR Z 14-30mm f/4 S".to_owned()),
             serial_number: Some("12345678".to_owned()),
             range: [
                 Some(fraction(140, 10)),
@@ -1144,8 +1145,8 @@ mod tests {
 
     /// The values a [`Lens`] is built from, for a test to change one.
     struct LensValues {
-        make: Option<String>,
-        model: Option<String>,
+        recorded_make: Option<String>,
+        recorded_model: Option<String>,
         serial_number: Option<String>,
         /// The shortest and longest focal length, then the f-number at
         /// each.
@@ -1156,8 +1157,8 @@ mod tests {
         /// No value: the values of a file that describes no lens.
         fn none() -> Self {
             Self {
-                make: None,
-                model: None,
+                recorded_make: None,
+                recorded_model: None,
                 serial_number: None,
                 range: [None; 4],
             }
@@ -1166,8 +1167,8 @@ mod tests {
         /// The lens these values describe.
         fn lens(self) -> Lens {
             let mut lens = Lens {
-                make: self.make,
-                model: self.model,
+                recorded_make: self.recorded_make,
+                recorded_model: self.recorded_model,
                 serial_number: self.serial_number,
                 ..Lens::default()
             };
@@ -1283,10 +1284,10 @@ mod tests {
         assert_eq!(settings.white_balance().color_temperature(), None);
         assert_eq!(settings.shutter(), None);
         let lens = metadata.lens();
-        assert_eq!(lens.make(), Some("NIKON"));
+        assert_eq!(lens.recorded_make(), Some("NIKON"));
         // Read whole, without the NULs that pad it, nor the spaces that pad
         // the serial number.
-        assert_eq!(lens.model(), Some("NIKKOR Z 14-30mm f/4 S"));
+        assert_eq!(lens.recorded_model(), Some("NIKKOR Z 14-30mm f/4 S"));
         assert_eq!(lens.serial_number(), Some("12345678"));
         assert_eq!(lens.min_focal_length(), Some(fraction(140, 10)));
         assert_eq!(lens.max_focal_length(), Some(fraction(300, 10)));
@@ -1738,7 +1739,7 @@ mod tests {
                 "a LensMake too long to read",
                 LENS_MAKE,
                 |builder, _, exif| too_long(builder, exif, LENS_MAKE),
-                z9_expected_with_lens(z9_lens_with(|lens| lens.make = None)),
+                z9_expected_with_lens(z9_lens_with(|lens| lens.recorded_make = None)),
             ),
             (
                 "a LensModel that is not text",
@@ -1746,7 +1747,7 @@ mod tests {
                 |builder, _, exif| {
                     builder.undefined(exif, LENS_MODEL, b"NIKKOR Z 14-30mm f/4 S\0");
                 },
-                z9_expected_with_lens(z9_lens_with(|lens| lens.model = None)),
+                z9_expected_with_lens(z9_lens_with(|lens| lens.recorded_model = None)),
             ),
             (
                 "a LensSerialNumber of 256 bytes",
@@ -2339,7 +2340,7 @@ mod tests {
         });
         assert_eq!(
             metadata,
-            z9_expected_with_lens(z9_lens_with(|lens| lens.make = None))
+            z9_expected_with_lens(z9_lens_with(|lens| lens.recorded_make = None))
         );
     }
 
@@ -2359,7 +2360,7 @@ mod tests {
                 );
         });
         let expected = LensValues {
-            model: Some("VR 24-120mm f/4G".to_owned()),
+            recorded_model: Some("VR 24-120mm f/4G".to_owned()),
             range: [
                 Some(fraction(240, 10)),
                 Some(fraction(1200, 10)),
@@ -2379,7 +2380,7 @@ mod tests {
         });
         assert_eq!(
             metadata,
-            z9_expected_with_lens(z9_lens_with(|lens| lens.model = None))
+            z9_expected_with_lens(z9_lens_with(|lens| lens.recorded_model = None))
         );
         // With no other lens tag, as on that sample, the lens has no value.
         for model in ["----", "-", " -- "] {
@@ -2396,7 +2397,7 @@ mod tests {
             let read = lens(|builder, exif| {
                 builder.ascii(exif, LENS_MODEL, model);
             });
-            assert_eq!(read.model(), Some(model), "{model:?}");
+            assert_eq!(read.recorded_model(), Some(model), "{model:?}");
         }
     }
 
@@ -2408,7 +2409,7 @@ mod tests {
                 .ascii(exif, LENS_SERIAL_NUMBER, "--");
         });
         let expected = LensValues {
-            make: Some("----".to_owned()),
+            recorded_make: Some("----".to_owned()),
             serial_number: Some("--".to_owned()),
             ..LensValues::none()
         };
