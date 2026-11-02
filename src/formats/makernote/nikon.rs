@@ -744,8 +744,8 @@ pub(in crate::formats) fn metadata<R: Read + Seek>(
     if !from_default_crop && let CropArea::Size(image) = crop {
         metadata.image_size = Some(image);
     }
-    if metadata.serial_number.is_none() {
-        metadata.serial_number = serial_number(src, makernote)?;
+    if metadata.camera.serial_number.is_none() {
+        metadata.camera.serial_number = serial_number(src, makernote)?;
     }
     if metadata.exposure.iso.is_none() {
         metadata.exposure.iso = iso(src, makernote)?;
@@ -779,7 +779,11 @@ pub(in crate::formats) fn metadata<R: Read + Seek>(
         Picture::Jpeg => metadata.image_size,
     };
     // The table that places the points a viewfinder shot names.
-    let table = metadata.model.as_deref().and_then(points::find);
+    let table = metadata
+        .camera
+        .recorded_model
+        .as_deref()
+        .and_then(points::find);
     metadata.focus_points = focus(src, makernote, crop_hi_speed, crop, pixels, table)?;
     Ok(metadata)
 }
@@ -2371,7 +2375,11 @@ mod tests {
             );
             let standard = tiff_metadata::read(&mut src, &tree).unwrap();
             let metadata = metadata(&mut src, &makernote, standard, Picture::Raw).unwrap();
-            assert_eq!(metadata.serial_number.as_deref(), Some(SERIAL), "{order:?}");
+            assert_eq!(
+                metadata.camera.serial_number.as_deref(),
+                Some(SERIAL),
+                "{order:?}"
+            );
         }
     }
 
@@ -3172,7 +3180,11 @@ mod tests {
             let metadata = makernote_metadata(order, |inner, ifd| {
                 inner.ascii(ifd, SERIAL_NUMBER, SERIAL);
             });
-            assert_eq!(metadata.serial_number.as_deref(), Some(SERIAL), "{order:?}");
+            assert_eq!(
+                metadata.camera.serial_number.as_deref(),
+                Some(SERIAL),
+                "{order:?}"
+            );
         }
     }
 
@@ -3180,7 +3192,7 @@ mod tests {
     fn without_a_serial_number_in_either_there_is_none() {
         for order in ORDERS {
             let metadata = makernote_metadata(order, |_, _| {});
-            assert_eq!(metadata.serial_number, None, "{order:?}");
+            assert_eq!(metadata.camera.serial_number, None, "{order:?}");
         }
     }
 
@@ -3198,7 +3210,7 @@ mod tests {
                 let count = u32::try_from(bytes.len()).unwrap();
                 let block = retyped(order, block, entry, typ, count);
                 let metadata = exif_metadata(order, &block, |_, _| {});
-                assert_eq!(metadata.serial_number, None, "{order:?}, type {typ}");
+                assert_eq!(metadata.camera.serial_number, None, "{order:?}, type {typ}");
             }
         }
     }
@@ -3216,12 +3228,12 @@ mod tests {
             // Declared one byte short: the NUL lies in the file, after the
             // block.
             let file = exif_file(order, &block, whole(&block) - 1, |_, _| {});
-            assert_eq!(metadata_of(file).serial_number, None, "{order:?}");
+            assert_eq!(metadata_of(file).camera.serial_number, None, "{order:?}");
 
             // The control: declared whole, the same bytes are used.
             let file = exif_file(order, &block, whole(&block), |_, _| {});
             assert_eq!(
-                metadata_of(file).serial_number.as_deref(),
+                metadata_of(file).camera.serial_number.as_deref(),
                 Some(SERIAL),
                 "{order:?}"
             );
@@ -3265,7 +3277,7 @@ mod tests {
                 builder.ascii(exif, BODY_SERIAL_NUMBER, EXIF_SERIAL);
             });
             assert_eq!(
-                metadata.serial_number.as_deref(),
+                metadata.camera.serial_number.as_deref(),
                 Some(EXIF_SERIAL),
                 "{order:?}"
             );
@@ -3279,7 +3291,7 @@ mod tests {
         let metadata = makernote_metadata(Order::Big, |inner, ifd| {
             inner.ascii(ifd, SERIAL_NUMBER, "       ");
         });
-        assert_eq!(metadata.serial_number, None);
+        assert_eq!(metadata.camera.serial_number, None);
     }
 
     #[test]
@@ -3287,7 +3299,7 @@ mod tests {
         let metadata = makernote_metadata(Order::Big, |inner, ifd| {
             inner.ascii(ifd, SERIAL_NUMBER, "ABC123");
         });
-        assert_eq!(metadata.serial_number.as_deref(), Some("ABC123"));
+        assert_eq!(metadata.camera.serial_number.as_deref(), Some("ABC123"));
     }
 
     #[test]
@@ -3623,7 +3635,11 @@ mod tests {
             .0;
             let metadata = exif_metadata(file, &block, |_, _| {});
             assert_eq!(metadata.exposure.iso, Some(200), "{file:?}");
-            assert_eq!(metadata.serial_number.as_deref(), Some(SERIAL), "{file:?}");
+            assert_eq!(
+                metadata.camera.serial_number.as_deref(),
+                Some(SERIAL),
+                "{file:?}"
+            );
             let lens = metadata.lens;
             assert_eq!(range_of(&lens), known(D300_LENS), "{file:?}");
         }

@@ -119,9 +119,10 @@ impl BitOrder {
 #[derive(Debug)]
 pub(in crate::formats) struct PointTable {
     /// The body's Model, as the camera writes it in the Model tag, trimmed
-    /// of padding as [`Metadata::model`](crate::Metadata::model) gives it,
+    /// of padding as
+    /// [`Camera::recorded_model`](crate::Camera::recorded_model) gives it,
     /// such as `NIKON D600`: what [`find`] matches a file's Model against.
-    model: &'static str,
+    recorded_model: &'static str,
     /// The frame every point is measured in: the body's full-size output,
     /// the size of its full-size JPEG.
     frame: Size,
@@ -230,7 +231,7 @@ impl PointTable {
     /// run from 1 to the count. So a table that fails them gives a file no
     /// layout ([`layout`]), never a panic.
     fn layout(&'static self) -> Option<FocusLayout> {
-        FocusLayout::new(self.model, self.frame, self.points)
+        FocusLayout::new(self.recorded_model, self.frame, self.points)
     }
 
     /// The frame every point is measured in: the body's full-size output.
@@ -277,21 +278,25 @@ impl PointTable {
     }
 }
 
-/// The table of the body whose Model is `model`, matched exactly against
-/// the table's Model, such as `NIKON D600`; `None` for a body without a
-/// table. `model` is the file's Model as
-/// [`Metadata::model`](crate::Metadata::model) gives it, trimmed of
-/// padding.
-pub(in crate::formats) fn find(model: &str) -> Option<&'static PointTable> {
-    TABLES.iter().copied().find(|table| table.model == model)
+/// The table of the body whose Model is `recorded_model`, matched exactly
+/// against the table's Model, such as `NIKON D600`; `None` for a body
+/// without a table. `recorded_model` is the file's Model as
+/// [`Camera::recorded_model`](crate::Camera::recorded_model) gives it,
+/// trimmed of padding.
+pub(in crate::formats) fn find(recorded_model: &str) -> Option<&'static PointTable> {
+    TABLES
+        .iter()
+        .copied()
+        .find(|table| table.recorded_model == recorded_model)
 }
 
-/// The layout of the autofocus points of the body whose Model is `model`,
-/// as [`Metadata::focus_layout`](crate::Metadata::focus_layout) gives it:
-/// its table's ([`find`]); `None` for a body without a table. Detection
-/// gives it to every file, whatever its format, from the Model alone.
-pub(in crate::formats) fn layout(model: &str) -> Option<FocusLayout> {
-    find(model).and_then(PointTable::layout)
+/// The layout of the autofocus points of the body whose Model is
+/// `recorded_model`, as
+/// [`Metadata::focus_layout`](crate::Metadata::focus_layout) gives it: its
+/// table's ([`find`]); `None` for a body without a table. Detection gives
+/// it to every file, whatever its format, from the Model alone.
+pub(in crate::formats) fn layout(recorded_model: &str) -> Option<FocusLayout> {
+    find(recorded_model).and_then(PointTable::layout)
 }
 
 #[cfg(test)]
@@ -329,8 +334,10 @@ mod tests {
     #[test]
     fn every_table_file_is_registered_under_its_models_name() {
         let files = table_files();
-        let registered: BTreeSet<String> =
-            TABLES.iter().map(|table| file_name(table.model)).collect();
+        let registered: BTreeSet<String> = TABLES
+            .iter()
+            .map(|table| file_name(table.recorded_model))
+            .collect();
         assert_eq!(
             registered.len(),
             TABLES.len(),
@@ -360,7 +367,7 @@ mod tests {
     #[test]
     fn every_table_is_a_layout() {
         for table in TABLES {
-            let model = table.model;
+            let model = table.recorded_model;
             assert!(
                 table.frame.width > 0 && table.frame.height > 0,
                 "{model}: a side of the frame is zero"
@@ -368,7 +375,7 @@ mod tests {
             let layout = table
                 .layout()
                 .unwrap_or_else(|| panic!("{model}: the points are not a layout on the frame"));
-            assert_eq!(layout.model(), model);
+            assert_eq!(layout.recorded_model(), model);
             assert_eq!(layout.frame(), table.frame);
             assert_eq!(layout.points(), table.points);
         }
@@ -389,7 +396,7 @@ mod tests {
             assert_eq!(
                 numbers, expected,
                 "{}: the points are not numbered 1 to their count, in order",
-                table.model
+                table.recorded_model
             );
         }
     }
@@ -401,7 +408,7 @@ mod tests {
     #[test]
     fn every_tables_point_1_lies_at_the_frames_centre() {
         for table in TABLES {
-            let model = table.model;
+            let model = table.recorded_model;
             let first = table
                 .points
                 .first()
@@ -433,7 +440,7 @@ mod tests {
     #[test]
     fn every_tables_point_count_is_its_layout_codes() {
         for table in TABLES {
-            let model = table.model;
+            let model = table.recorded_model;
             let count = POINTS_BY_LAYOUT_CODE
                 .iter()
                 .find(|(code, _)| *code == table.layout_code)
@@ -461,7 +468,7 @@ mod tests {
     #[test]
     fn every_tables_points_have_a_bit_each_inside_the_mask() {
         for table in TABLES {
-            let model = table.model;
+            let model = table.recorded_model;
             let mut bits = BTreeSet::new();
             for point in table.points {
                 let number = point.number();
@@ -488,7 +495,7 @@ mod tests {
     #[test]
     fn every_tables_crop_windows_fit_its_frame_centred() {
         for table in TABLES {
-            let model = table.model;
+            let model = table.recorded_model;
             let mut codes = BTreeSet::new();
             for crop in table.crops {
                 let ConfirmedCrop { code, window } = *crop;
@@ -562,7 +569,7 @@ mod tests {
             );
         }
         for table in TABLES {
-            let model = table.model;
+            let model = table.recorded_model;
             let Provenance {
                 shot_by,
                 measured_by,
@@ -609,13 +616,14 @@ mod tests {
 
     /// [`find`] gives a registered table for its Model, exactly as written,
     /// and none for another Model, for the same Model with other case or
-    /// padding, which [`Metadata::model`](crate::Metadata::model) never
+    /// padding, which
+    /// [`Camera::recorded_model`](crate::Camera::recorded_model) never
     /// gives, or for none at all.
     #[test]
     fn find_matches_the_model_exactly() {
         for table in TABLES {
-            let found = find(table.model).map(|found| found.model);
-            assert_eq!(found, Some(table.model));
+            let found = find(table.recorded_model).map(|found| found.recorded_model);
+            assert_eq!(found, Some(table.recorded_model));
         }
         let d600 = find("NIKON D600").expect("the D600's table");
         assert_eq!(

@@ -26,6 +26,19 @@ does.
   `with_min_focal_length`, `with_max_focal_length`,
   `with_f_number_at_min_focal_length` and
   `with_f_number_at_max_focal_length`, each storing its value as given.
+- `Metadata::make`, `Metadata::model` and `Metadata::serial_number` move
+  to a `Camera`, which `Metadata::camera` gives as `Metadata::lens` gives
+  a `Lens`: they are `Camera::recorded_make`, `Camera::recorded_model`
+  and `Camera::serial_number` there. The first two give the text as the
+  file records it, cleaned as before, so 0.6.0's `metadata.model()` is
+  `metadata.camera().recorded_model()` now. A program's tests build a
+  camera from `Camera::default()` through `with_recorded_make`,
+  `with_recorded_model` and `with_serial_number` and set it with
+  `Metadata::with_camera`, in place of 0.6.0's `Metadata::with_make`,
+  `Metadata::with_model` and `Metadata::with_serial_number`.
+- `FocusLayout::model` is `FocusLayout::recorded_model`: its text is the
+  Model as the file records it, such as `NIKON D600`, as
+  `Camera::recorded_model` gives it.
 
 ### Removed
 

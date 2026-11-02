@@ -1004,7 +1004,7 @@ impl FocusLayoutPoint {
 ///
 /// # Equality
 ///
-/// Two layouts are equal when every value is the same: the model text,
+/// Two layouts are equal when every value is the same: the Model text,
 /// the frame and the points, compared by their values and in order, not by
 /// where they are stored, so two `static` arrays of the same points give
 /// equal layouts. There is no order, as there is none for [`Focus`]. There
@@ -1036,7 +1036,7 @@ impl FocusLayoutPoint {
 /// # fn example() -> Option<()> {
 /// let frame = Size { width: 6016, height: 4016 };
 /// let layout = FocusLayout::new("NIKON D600", frame, &POINTS)?;
-/// assert_eq!(layout.model(), "NIKON D600");
+/// assert_eq!(layout.recorded_model(), "NIKON D600");
 /// assert_eq!(layout.frame(), frame);
 /// assert_eq!(layout.points().len(), 3);
 /// assert_eq!(
@@ -1050,15 +1050,15 @@ impl FocusLayoutPoint {
 /// ```
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct FocusLayout {
-    model: &'static str,
+    recorded_model: &'static str,
     frame: Size,
     points: &'static [FocusLayoutPoint],
 }
 
 impl FocusLayout {
-    /// The layout of the body whose Model is `model`, its points `points`,
-    /// all in `frame`; `None` when the points cannot be a layout on that
-    /// frame, which is when:
+    /// The layout of the body whose Model is `recorded_model`, its points
+    /// `points`, all in `frame`; `None` when the points cannot be a layout
+    /// on that frame, which is when:
     ///
     /// - either side of `frame` is zero;
     /// - `points` is empty;
@@ -1071,12 +1071,12 @@ impl FocusLayout {
     /// - a point's box has a zero side or does not fit inside the frame
     ///   around its centre, by the rule of [`Focus::with_size`].
     ///
-    /// The model is stored as given, and the points are borrowed, in the
+    /// The Model is stored as given, and the points are borrowed, in the
     /// order given, not copied, so a layout is `Copy`: a text, a frame and
     /// a slice. This is how a caller builds a layout for its tests.
     #[must_use]
     pub fn new(
-        model: &'static str,
+        recorded_model: &'static str,
         frame: Size,
         points: &'static [FocusLayoutPoint],
     ) -> Option<Self> {
@@ -1095,17 +1095,18 @@ impl FocusLayout {
             before = point.number;
         }
         Some(Self {
-            model,
+            recorded_model,
             frame,
             points,
         })
     }
 
-    /// The Model the layout is for, as the camera writes it in the Model tag,
-    /// trimmed of padding as [`Metadata::model`](crate::Metadata::model) gives
-    /// it, such as `NIKON D600`.
-    pub fn model(&self) -> &'static str {
-        self.model
+    /// The Model the layout is for, as the camera writes it in the Model
+    /// tag, trimmed of padding as
+    /// [`Camera::recorded_model`](crate::Camera::recorded_model) gives it,
+    /// such as `NIKON D600`.
+    pub fn recorded_model(&self) -> &'static str {
+        self.recorded_model
     }
 
     /// The size of the frame every point is measured in: the body's
@@ -2499,7 +2500,7 @@ mod tests {
     #[test]
     fn layout_getters_return_what_was_built() {
         let layout = d600_three();
-        assert_eq!(layout.model(), "NIKON D600");
+        assert_eq!(layout.recorded_model(), "NIKON D600");
         assert_eq!(layout.frame(), D600_FRAME);
         assert_eq!(layout.points(), D600_THREE);
         // The points are borrowed as given, in their order, not copied.

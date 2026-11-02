@@ -726,6 +726,7 @@ fn electronic_front_curtain_setting(code: u32) -> Option<bool> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::camera::Camera;
     use crate::camera_settings::{
         ColorSpace, ExposureProgram, Flash, FlashMode, MeteringMode, WhiteBalance,
     };
@@ -2258,7 +2259,7 @@ mod tests {
                 settings_tags(builder, ifd);
             });
             let standard = Metadata::default()
-                .with_make("SONY")
+                .with_camera(Camera::default().with_recorded_make("SONY"))
                 .with_camera_settings(exif_settings());
             let found = metadata(&mut src, &makernote, standard.clone()).unwrap();
             let expected = standard

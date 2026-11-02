@@ -92,7 +92,7 @@ static POINTS: [FocusLayoutPoint; 39] = [
 /// points, with what its record confirms of the way a file names them, and
 /// where they come from.
 pub(super) static TABLE: PointTable = PointTable {
-    model: "NIKON D600",
+    recorded_model: "NIKON D600",
     frame: Size {
         width: 6016,
         height: 4016,

@@ -42,10 +42,11 @@ use std::io::Cursor;
 use std::ops::Range;
 
 use raw_files::{
-    CameraSettings, ColorSpace, DateTime, ErrorKind, Exposure, ExposureProgram, FineTune, Flash,
-    FlashMode, Focus, FocusAreaMode, FocusOrigin, FocusPoint, FocusPoints, Format, ImageArea, Lens,
-    Limits, Metadata, MeteringMode, Options, Orientation, Point, Preview, PreviewFormat, Rational,
-    RawFile, Shutter, SignedRational, Size, WhiteBalance, WhiteBalanceMode,
+    Camera, CameraSettings, ColorSpace, DateTime, ErrorKind, Exposure, ExposureProgram, FineTune,
+    Flash, FlashMode, Focus, FocusAreaMode, FocusOrigin, FocusPoint, FocusPoints, Format,
+    ImageArea, Lens, Limits, Metadata, MeteringMode, Options, Orientation, Point, Preview,
+    PreviewFormat, Rational, RawFile, Shutter, SignedRational, Size, WhiteBalance,
+    WhiteBalanceMode,
 };
 use support::arw::{
     ARW4_FOCUS_CENTER, ARW4_FOCUS_FRAME, ARW4_FOCUS_SIZE, ARW4_FULL_SIZE_JPEG,
@@ -245,18 +246,19 @@ fn fraction((numerator, denominator): (u32, u32)) -> Rational {
 /// its offset.
 fn camera_metadata_without(lost: &[u16]) -> Metadata {
     let kept = |tag: u16| !lost.contains(&tag);
-    let mut metadata = main_metadata(Orientation::Rotate90);
+    let mut camera = Camera::default();
     if kept(MAKE) {
-        metadata = metadata.with_make(CAMERA_MAKE);
+        camera = camera.with_recorded_make(CAMERA_MAKE);
     }
     if kept(MODEL) {
-        metadata = metadata.with_model(CAMERA_MODEL);
-    }
-    if kept(SOFTWARE) {
-        metadata = metadata.with_software(CAMERA_SOFTWARE);
+        camera = camera.with_recorded_model(CAMERA_MODEL);
     }
     if kept(BODY_SERIAL_NUMBER) {
-        metadata = metadata.with_serial_number(CAMERA_SERIAL_NUMBER);
+        camera = camera.with_serial_number(CAMERA_SERIAL_NUMBER);
+    }
+    let mut metadata = main_metadata(Orientation::Rotate90).with_camera(camera);
+    if kept(SOFTWARE) {
+        metadata = metadata.with_software(CAMERA_SOFTWARE);
     }
     if kept(DATE_TIME_ORIGINAL) {
         metadata = metadata.with_capture_time(capture_time());
@@ -401,8 +403,8 @@ fn a_jpeg_without_exif_opens_with_the_file_as_its_one_preview() {
     assert_eq!(read.image_size(), Some(size_of(MAIN)));
     assert_eq!(read.raw_size(), None);
     assert_eq!(read.orientation(), Orientation::NoTransforms);
-    assert_eq!(read.make(), None);
-    assert_eq!(read.model(), None);
+    assert_eq!(read.camera().recorded_make(), None);
+    assert_eq!(read.camera().recorded_model(), None);
     assert_eq!(read.capture_time(), None);
     assert_eq!(read.exposure().exposure_time(), None);
     assert_eq!(read.lens(), &Lens::default());
@@ -489,9 +491,9 @@ fn a_camera_jpeg_gives_every_value_its_exif_segment_records() {
     // gives them; and no focus point, which no standard tag records.
     let file = RawFile::from_bytes(&built.bytes).unwrap();
     let read = file.metadata();
-    assert_eq!(read.make(), Some(CAMERA_MAKE));
-    assert_eq!(read.model(), Some(CAMERA_MODEL));
-    assert_eq!(read.serial_number(), Some(CAMERA_SERIAL_NUMBER));
+    assert_eq!(read.camera().recorded_make(), Some(CAMERA_MAKE));
+    assert_eq!(read.camera().recorded_model(), Some(CAMERA_MODEL));
+    assert_eq!(read.camera().serial_number(), Some(CAMERA_SERIAL_NUMBER));
     assert_eq!(read.capture_time(), Some(capture_time()));
     assert_eq!(
         read.capture_time().map(|time| time.to_string()).as_deref(),
@@ -952,6 +954,12 @@ fn with_image_area(metadata: Metadata, mode: Z9Mode) -> Metadata {
     metadata.with_camera_settings(settings)
 }
 
+/// `metadata` with `change` made to its camera, its other values kept.
+fn with_camera_changed(metadata: Metadata, change: impl FnOnce(Camera) -> Camera) -> Metadata {
+    let camera = change(metadata.camera().clone());
+    metadata.with_camera(camera)
+}
+
 /// The metadata of a Z 9's JPEG that [`z9_jpeg`] lays out in mode `mode`
 /// with a main image of `main`: every value [`camera_exif`] writes, the
 /// image area of `mode`, the image size `main`, and the focus point
@@ -1052,12 +1060,14 @@ fn an_older_nikon_jpeg_takes_what_its_exif_lacks_from_its_makernote() {
     // points: no focus point.
     for order in ORDERS {
         let file = d5300_jpeg(order);
-        let metadata = camera_metadata_without(&D5300_LOST)
-            .with_model(D5300_MODEL)
-            .with_serial_number(D5300_SERIAL_NUMBER)
-            .with_capture_time(capture_time_at(Some(D5300_TIME_ZONE)))
-            .with_lens(lens_of_range(D5300_LENS))
-            .with_image_size(size_of(D5300_MAIN));
+        let metadata = with_camera_changed(camera_metadata_without(&D5300_LOST), |camera| {
+            camera
+                .with_recorded_model(D5300_MODEL)
+                .with_serial_number(D5300_SERIAL_NUMBER)
+        })
+        .with_capture_time(capture_time_at(Some(D5300_TIME_ZONE)))
+        .with_lens(lens_of_range(D5300_LENS))
+        .with_image_size(size_of(D5300_MAIN));
         assert_eq!(metadata.exposure().iso(), Some(u32::from(D5300_ISO)));
         assert_opens(
             &file.built.bytes,
@@ -1073,10 +1083,11 @@ fn an_older_nikon_jpeg_takes_what_its_exif_lacks_from_its_makernote() {
 /// MakerNote the ISO and the lens's range, which its Exif segment lacks.
 /// Its MakerNote records no time zone and no AFInfo2.
 fn d70_metadata() -> Metadata {
-    let metadata = camera_metadata_without(&D70_LOST);
+    let metadata = with_camera_changed(camera_metadata_without(&D70_LOST), |camera| {
+        camera.with_recorded_model(D70_MODEL)
+    });
     let exposure = metadata.exposure().clone().with_iso(u32::from(D70_ISO));
     metadata
-        .with_model(D70_MODEL)
         .with_exposure(exposure)
         .with_capture_time(capture_time_at(None))
         .with_lens(lens_of_range(D300_LENS))
@@ -1264,12 +1275,16 @@ fn a_nikon_makernote_under_another_makers_make_is_not_read() {
                 &block,
                 block.len(),
             );
-            let mut metadata = camera_metadata_without(&[MAKE, BODY_SERIAL_NUMBER]).with_make(make);
+            let mut metadata = with_camera_changed(
+                camera_metadata_without(&[MAKE, BODY_SERIAL_NUMBER]),
+                |camera| camera.with_recorded_make(make),
+            );
             let mut previews = nikon_previews(&file, MAIN);
             if make != "Canon" {
-                metadata = with_image_area(metadata, Z9Mode::Fx)
-                    .with_serial_number("7654321")
-                    .with_focus_points(z9_points(recorded(Z9Mode::Fx)));
+                metadata = with_camera_changed(with_image_area(metadata, Z9Mode::Fx), |camera| {
+                    camera.with_serial_number("7654321")
+                })
+                .with_focus_points(z9_points(recorded(Z9Mode::Fx)));
                 let start = file.makernote.start + at;
                 let preview = start..start + to_u64(jpeg_stub(640, 424, 0xC0).len());
                 previews.insert(
@@ -1310,11 +1325,13 @@ fn d1h_previews(file: &NikonJpeg, preview: Range<u64>, read: bool) -> Vec<Seen> 
 /// its MakerNote alone records. Its MakerNote records no time zone and no
 /// AFInfo2.
 fn d1h_metadata(make: &str, read: bool) -> Metadata {
-    let metadata = camera_metadata_without(&D1H_LOST)
-        .with_make(make)
-        .with_model(D1H_MODEL)
-        .with_capture_time(capture_time_at(None))
-        .with_image_size(size_of(D1H_MAIN));
+    let metadata = with_camera_changed(camera_metadata_without(&D1H_LOST), |camera| {
+        camera
+            .with_recorded_make(make)
+            .with_recorded_model(D1H_MODEL)
+    })
+    .with_capture_time(capture_time_at(None))
+    .with_image_size(size_of(D1H_MAIN));
     if !read {
         return metadata;
     }
@@ -1378,7 +1395,9 @@ fn a_headerless_nikon_makernotes_offsets_count_from_the_exif_segments_tiff_heade
         assert_opens(
             bytes,
             &d1h_previews(&file, preview, true),
-            &d1h_metadata(CAMERA_MAKE, true).with_serial_number("7654321"),
+            &with_camera_changed(d1h_metadata(CAMERA_MAKE, true), |camera| {
+                camera.with_serial_number("7654321")
+            }),
             &format!("{order:?}"),
         );
     }
@@ -1461,9 +1480,10 @@ fn a_limit_crossed_inside_the_makernote_costs_the_makernote_only() {
             ),
         );
         let without = camera_metadata_without(&[BODY_SERIAL_NUMBER]);
-        let with = with_image_area(without.clone(), Z9Mode::Fx)
-            .with_serial_number("7654321")
-            .with_focus_points(z9_points(recorded(Z9Mode::Fx)));
+        let with = with_camera_changed(with_image_area(without.clone(), Z9Mode::Fx), |camera| {
+            camera.with_serial_number("7654321")
+        })
+        .with_focus_points(z9_points(recorded(Z9Mode::Fx)));
         for (entries, previews, metadata) in
             [(20, read, with), (19, nikon_previews(&file, MAIN), without)]
         {
@@ -1515,10 +1535,10 @@ fn sony_previews(file: &SonyJpeg, main: (u16, u16)) -> Vec<Seen> {
 /// [`camera_exif`] writes but [`SONY_LOST`], that Make and Model, the image
 /// size `main`, and the focus point `focus`.
 fn sony_metadata(make: &str, model: &str, main: (u16, u16), focus: Option<Focus>) -> Metadata {
-    let metadata = camera_metadata_without(&SONY_LOST)
-        .with_make(make)
-        .with_model(model)
-        .with_image_size(size_of(main));
+    let metadata = with_camera_changed(camera_metadata_without(&SONY_LOST), |camera| {
+        camera.with_recorded_make(make).with_recorded_model(model)
+    })
+    .with_image_size(size_of(main));
     match focus {
         Some(focus) => metadata.with_focus(focus),
         None => metadata,
@@ -2106,12 +2126,20 @@ fn check_stripped_z9_jpeg(stripped: &StrippedZ9Jpeg) {
     let label = stripped.file;
     let file = open_stripped_jpeg(stripped.file, &stripped.previews, stripped.orientation);
     let metadata = file.metadata();
-    assert_eq!(metadata.make(), Some(stripped.make), "{label}");
-    assert_eq!(metadata.model(), Some(stripped.model), "{label}");
+    assert_eq!(
+        metadata.camera().recorded_make(),
+        Some(stripped.make),
+        "{label}"
+    );
+    assert_eq!(
+        metadata.camera().recorded_model(),
+        Some(stripped.model),
+        "{label}"
+    );
     assert_eq!(metadata.software(), Some(stripped.software), "{label}");
     // The stripping zeroed BodySerialNumber and the MakerNote's
     // SerialNumber in place, so neither gives a serial number.
-    assert_eq!(metadata.serial_number(), None, "{label}");
+    assert_eq!(metadata.camera().serial_number(), None, "{label}");
     assert_eq!(
         metadata
             .capture_time()
@@ -2253,13 +2281,21 @@ fn the_d600_frame_4_jpeg_gives_its_previews_metadata_and_point_38_placed_from_th
     );
 
     let metadata = file.metadata();
-    assert_eq!(metadata.make(), Some("NIKON CORPORATION"), "{label}");
-    assert_eq!(metadata.model(), Some("NIKON D600"), "{label}");
+    assert_eq!(
+        metadata.camera().recorded_make(),
+        Some("NIKON CORPORATION"),
+        "{label}"
+    );
+    assert_eq!(
+        metadata.camera().recorded_model(),
+        Some("NIKON D600"),
+        "{label}"
+    );
     // The firmware the D600 ran, `Ver.1.04 ` with its space trimmed.
     assert_eq!(metadata.software(), Some("Ver.1.04"), "{label}");
     // The D600 writes its serial number only in the MakerNote's
     // SerialNumber, which the stripping zeroed in place.
-    assert_eq!(metadata.serial_number(), None, "{label}");
+    assert_eq!(metadata.camera().serial_number(), None, "{label}");
     // DateTimeOriginal and SubSecTimeOriginal, with the offset from
     // WorldTime, -180 minutes with daylight saving time off, since the
     // D600 writes no OffsetTimeOriginal: the NEF's capture time.
@@ -2327,7 +2363,7 @@ fn the_d600_frame_4_jpeg_gives_its_previews_metadata_and_point_38_placed_from_th
     let layout = metadata
         .focus_layout()
         .unwrap_or_else(|| panic!("{label}: no layout"));
-    assert_eq!(layout.model(), "NIKON D600", "{label}");
+    assert_eq!(layout.recorded_model(), "NIKON D600", "{label}");
     assert_eq!(layout.frame(), frame, "{label}");
     assert_eq!(layout.points().len(), 39, "{label}");
     let layout_38 = layout

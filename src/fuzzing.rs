@@ -171,9 +171,10 @@ pub fn open(data: &[u8]) {
 /// of the body's points is read as it is. A `Debug` form of the whole
 /// covers whatever a later value adds.
 fn read_metadata(metadata: &Metadata) {
-    let _ = metadata.make();
-    let _ = metadata.model();
-    let _ = metadata.serial_number();
+    let camera = metadata.camera();
+    let _ = camera.recorded_make();
+    let _ = camera.recorded_model();
+    let _ = camera.serial_number();
     if let Some(time) = metadata.capture_time() {
         let _ = time.to_string();
         let _ = (
@@ -269,7 +270,7 @@ fn read_focus_points(points: &FocusPoints) {
 /// Asks `layout` for each of its values, each point's among them, the
 /// point numbered 1, and its `Debug` form, as a caller drawing it would.
 fn read_focus_layout(layout: FocusLayout) {
-    let _ = layout.model();
+    let _ = layout.recorded_model();
     let _ = layout.frame();
     for point in layout.points() {
         let _ = point.number();

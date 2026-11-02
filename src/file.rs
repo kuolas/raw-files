@@ -226,7 +226,8 @@ impl<R: Read + Seek> RawFile<R> {
     ///     if let Some(time) = metadata.capture_time() {
     ///         println!("taken at {time}");
     ///     }
-    ///     if let (Some(make), Some(model)) = (metadata.make(), metadata.model()) {
+    ///     let camera = metadata.camera();
+    ///     if let (Some(make), Some(model)) = (camera.recorded_make(), camera.recorded_model()) {
     ///         println!("with a {make} {model}");
     ///     }
     ///     Ok(())
@@ -325,6 +326,7 @@ impl<R> fmt::Debug for RawFile<R> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::camera::Camera;
     use crate::error::ErrorKind;
     use crate::orientation::Orientation;
     use crate::preview::PreviewFormat;
@@ -434,11 +436,9 @@ mod tests {
     #[test]
     fn metadata_is_the_one_the_reader_found() {
         let (bytes, _) = file_with_blob();
-        let metadata = Metadata {
-            model: Some("NIKON Z 9".to_owned()),
-            orientation: Orientation::Rotate90,
-            ..Metadata::default()
-        };
+        let metadata = Metadata::default()
+            .with_camera(Camera::default().with_recorded_model("NIKON Z 9"))
+            .with_orientation(Orientation::Rotate90);
         let parsed = formats::Parsed {
             previews: Vec::new(),
             metadata: metadata.clone(),

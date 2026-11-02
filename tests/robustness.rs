@@ -523,9 +523,9 @@ fn show_metadata(metadata: &Metadata, out: &mut String) {
     let _ = write!(
         out,
         "{:?} {:?} {:?} {:?}",
-        metadata.make(),
-        metadata.model(),
-        metadata.serial_number(),
+        metadata.camera().recorded_make(),
+        metadata.camera().recorded_model(),
+        metadata.camera().serial_number(),
         metadata.orientation()
     );
     if let Some(time) = metadata.capture_time() {
@@ -637,7 +637,7 @@ fn show_focus_layout(layout: FocusLayout, out: &mut String) {
     let _ = write!(
         out,
         " layout of {}: {} points",
-        layout.model(),
+        layout.recorded_model(),
         layout.points().len()
     );
 }
@@ -741,9 +741,7 @@ fn a_file_with_a_byte_overwritten_opens_or_fails_without_a_panic() {
 fn assert_all_but_the_capture_time(damaged: &Metadata, undamaged: &Metadata, what: &str) {
     assert_eq!(damaged.capture_time(), None, "{what}");
     assert!(undamaged.capture_time().is_some(), "{what}");
-    assert_eq!(damaged.make(), undamaged.make(), "{what}");
-    assert_eq!(damaged.model(), undamaged.model(), "{what}");
-    assert_eq!(damaged.serial_number(), undamaged.serial_number(), "{what}");
+    assert_eq!(damaged.camera(), undamaged.camera(), "{what}");
     assert_eq!(damaged.orientation(), undamaged.orientation(), "{what}");
     assert_eq!(damaged.exposure(), undamaged.exposure(), "{what}");
     assert_eq!(damaged.lens(), undamaged.lens(), "{what}");
