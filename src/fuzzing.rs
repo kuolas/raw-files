@@ -203,8 +203,8 @@ fn read_metadata(metadata: &Metadata) {
         let _ = bias.to_f64();
     }
     let lens = metadata.lens();
-    let _ = lens.make();
-    let _ = lens.model();
+    let _ = lens.recorded_make();
+    let _ = lens.recorded_model();
     let _ = lens.serial_number();
     fractions.extend([
         lens.min_focal_length(),

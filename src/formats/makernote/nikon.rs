@@ -696,10 +696,10 @@ pub(in crate::formats) fn preview_candidate<R: Read + Seek>(
 /// serial number ([`serial_number`]), the ISO ([`iso`]), the lens's range
 /// ([`lens_range`]) and the capture time's offset from UTC
 /// ([`world_time`]): a range fills a lens whose standard tags gave no
-/// value of its range, keeping their make, model and serial number; an
-/// offset is given only to a capture time the standard tags gave, one
-/// whose OffsetTimeOriginal is missing or could not be read, and only
-/// within the bound every offset is held to
+/// value of its range, keeping their recorded make and model and their
+/// serial number; an offset is given only to a capture time the standard
+/// tags gave, one whose OffsetTimeOriginal is missing or could not be
+/// read, and only within the bound every offset is held to
 /// ([`DateTime::with_offset_minutes`](crate::datetime::DateTime::with_offset_minutes)).
 /// Then the camera settings that only the MakerNote records, and the white
 /// balance setting, finer than Exif's, in place of the mode the Exif tags
@@ -3427,7 +3427,11 @@ mod tests {
             let lens = metadata.lens;
             assert_eq!(range_of(&lens), known(D300_LENS), "{order:?}");
             assert_eq!(
-                (lens.make(), lens.model(), lens.serial_number()),
+                (
+                    lens.recorded_make(),
+                    lens.recorded_model(),
+                    lens.serial_number()
+                ),
                 (None, None, None),
                 "{order:?}"
             );
@@ -3551,7 +3555,7 @@ mod tests {
             });
             let lens = metadata.lens;
             assert_eq!(
-                lens.model(),
+                lens.recorded_model(),
                 Some("1 NIKKOR VR 10-30mm f/3.5-5.6"),
                 "{order:?}"
             );
@@ -3577,7 +3581,11 @@ mod tests {
             });
             let lens = metadata.lens;
             assert_eq!(
-                (lens.make(), lens.model(), lens.serial_number()),
+                (
+                    lens.recorded_make(),
+                    lens.recorded_model(),
+                    lens.serial_number()
+                ),
                 (
                     Some("Nikon"),
                     Some("1 NIKKOR VR 10-30mm f/3.5-5.6"),

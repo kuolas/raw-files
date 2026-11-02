@@ -83,7 +83,7 @@ fn main() -> raw_files::Result<()> {
     if let (Some(make), Some(model)) = (camera.recorded_make(), camera.recorded_model()) {
         println!("camera: {make} {model}");
     }
-    if let Some(name) = metadata.lens().model() {
+    if let Some(name) = metadata.lens().recorded_model() {
         println!("lens: {name}");
     }
     Ok(())

@@ -556,8 +556,8 @@ fn show_metadata(metadata: &Metadata, out: &mut String) {
     let _ = write!(
         out,
         " {:?} {:?} {:?}",
-        lens.make(),
-        lens.model(),
+        lens.recorded_make(),
+        lens.recorded_model(),
         lens.serial_number()
     );
     for fraction in [

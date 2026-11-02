@@ -390,7 +390,7 @@ fn camera_exif_built<T>(
 /// it, of the type the Exif standard gives it.
 fn camera_value(tiff: &mut TiffBuilder, ifd: IfdId, tag: u16) {
     let [date_time, subseconds, offset] = CAPTURE_TIME;
-    let [lens_make, lens_model, lens_serial_number] = LENS;
+    let [lens_recorded_make, lens_recorded_model, lens_serial_number] = LENS;
     match tag {
         MAKE => tiff.ascii(ifd, MAKE, CAMERA_MAKE),
         MODEL => tiff.ascii(ifd, MODEL, CAMERA_MODEL),
@@ -405,8 +405,8 @@ fn camera_value(tiff: &mut TiffBuilder, ifd: IfdId, tag: u16) {
         EXPOSURE_BIAS_VALUE => tiff.srational(ifd, tag, &[EXPOSURE_BIAS]),
         FOCAL_LENGTH => tiff.rational(ifd, tag, &[FOCAL_MILLIMETRES]),
         FOCAL_LENGTH_IN_35MM_FILM => tiff.short(ifd, tag, &[FOCAL_MILLIMETRES_IN_35MM_FILM]),
-        LENS_MAKE => tiff.ascii(ifd, tag, lens_make),
-        LENS_MODEL => tiff.ascii(ifd, tag, lens_model),
+        LENS_MAKE => tiff.ascii(ifd, tag, lens_recorded_make),
+        LENS_MODEL => tiff.ascii(ifd, tag, lens_recorded_model),
         LENS_SERIAL_NUMBER => tiff.ascii(ifd, tag, lens_serial_number),
         LENS_SPECIFICATION => tiff.rational(ifd, tag, &LENS_RANGE),
         _ => panic!("no camera value for tag {tag:#06X}"),

@@ -262,8 +262,8 @@ fn assert_the_arw4_lens(lens: &Lens, label: &str) {
             denominator,
         })
     };
-    assert_eq!(lens.make(), None, "{label}");
-    assert_eq!(lens.model(), Some("FE 50mm F2.5 G"), "{label}");
+    assert_eq!(lens.recorded_make(), None, "{label}");
+    assert_eq!(lens.recorded_model(), Some("FE 50mm F2.5 G"), "{label}");
     assert_eq!(lens.serial_number(), None, "{label}");
     assert_eq!(lens.min_focal_length(), fraction(500, 10), "{label}");
     assert_eq!(lens.max_focal_length(), fraction(500, 10), "{label}");
@@ -1557,8 +1557,8 @@ const METADATA: &[SampleMetadata] = &[
     // SLT-A55 (raw.pixls.us 964)
     SampleMetadata {
         file: "sony-slt-a55.arw",
-        make: Some("SONY"),
-        model: Some("SLT-A55V"),
+        recorded_make: Some("SONY"),
+        recorded_model: Some("SLT-A55V"),
         software: Some("SLT-A55V v1.10"),
         serial_number: None,
         capture_time: Some("2015-08-21T17:35:57"),
@@ -1570,8 +1570,8 @@ const METADATA: &[SampleMetadata] = &[
         focal_length_in_35mm_film: Some(15),
         exposure_bias: Some((0, 10)),
         lens: Some(SampleLens {
-            make: None,
-            model: Some("28-80mm F3.5-5.6"),
+            recorded_make: None,
+            recorded_model: Some("28-80mm F3.5-5.6"),
             serial_number: false,
             min_focal_length: Some((280, 10)),
             max_focal_length: Some((800, 10)),
@@ -1599,8 +1599,8 @@ const METADATA: &[SampleMetadata] = &[
     // ILCE-7RM2 (raw.pixls.us 1310)
     SampleMetadata {
         file: "sony-ilce-7rm2-compressed.arw",
-        make: Some("SONY"),
-        model: Some("ILCE-7RM2"),
+        recorded_make: Some("SONY"),
+        recorded_model: Some("ILCE-7RM2"),
         software: Some("ILCE-7RM2 v3.30"),
         serial_number: None,
         capture_time: Some("2017-04-06T18:44:31"),
@@ -1612,8 +1612,8 @@ const METADATA: &[SampleMetadata] = &[
         focal_length_in_35mm_film: Some(51),
         exposure_bias: Some((0, 10)),
         lens: Some(SampleLens {
-            make: None,
-            model: Some("FE 24-70mm F2.8 GM"),
+            recorded_make: None,
+            recorded_model: Some("FE 24-70mm F2.8 GM"),
             serial_number: false,
             min_focal_length: Some((240, 10)),
             max_focal_length: Some((700, 10)),
@@ -1644,8 +1644,8 @@ const METADATA: &[SampleMetadata] = &[
     // ILCE-7RM2 (raw.pixls.us 1311)
     SampleMetadata {
         file: "sony-ilce-7rm2-uncompressed.arw",
-        make: Some("SONY"),
-        model: Some("ILCE-7RM2"),
+        recorded_make: Some("SONY"),
+        recorded_model: Some("ILCE-7RM2"),
         software: Some("ILCE-7RM2 v3.30"),
         serial_number: None,
         capture_time: Some("2017-04-06T18:45:20"),
@@ -1657,8 +1657,8 @@ const METADATA: &[SampleMetadata] = &[
         focal_length_in_35mm_film: Some(51),
         exposure_bias: Some((0, 10)),
         lens: Some(SampleLens {
-            make: None,
-            model: Some("FE 24-70mm F2.8 GM"),
+            recorded_make: None,
+            recorded_model: Some("FE 24-70mm F2.8 GM"),
             serial_number: false,
             min_focal_length: Some((240, 10)),
             max_focal_length: Some((700, 10)),
@@ -1689,8 +1689,8 @@ const METADATA: &[SampleMetadata] = &[
     // DSC-F828 (raw.pixls.us 1351)
     SampleMetadata {
         file: "sony-dsc-f828.srf",
-        make: Some("SONY"),
-        model: Some("DSC-F828"),
+        recorded_make: Some("SONY"),
+        recorded_model: Some("DSC-F828"),
         software: None,
         serial_number: None,
         capture_time: Some("2017-03-27T15:02:34"),
@@ -1723,8 +1723,8 @@ const METADATA: &[SampleMetadata] = &[
     // NEX-5 (raw.pixls.us 1457)
     SampleMetadata {
         file: "sony-nex-5.arw",
-        make: Some("SONY"),
-        model: Some("NEX-5"),
+        recorded_make: Some("SONY"),
+        recorded_model: Some("NEX-5"),
         software: Some("NEX-5 Ver.05"),
         serial_number: None,
         capture_time: Some("2015-09-24T09:28:02"),
@@ -1736,8 +1736,8 @@ const METADATA: &[SampleMetadata] = &[
         focal_length_in_35mm_film: Some(27),
         exposure_bias: Some((0, 10)),
         lens: Some(SampleLens {
-            make: None,
-            model: Some("E 18-55mm F3.5-5.6 OSS"),
+            recorded_make: None,
+            recorded_model: Some("E 18-55mm F3.5-5.6 OSS"),
             serial_number: false,
             min_focal_length: Some((180, 10)),
             max_focal_length: Some((550, 10)),
@@ -1765,8 +1765,8 @@ const METADATA: &[SampleMetadata] = &[
     // ILCE-9 (raw.pixls.us 1541)
     SampleMetadata {
         file: "sony-ilce-9-compressed.arw",
-        make: Some("SONY"),
-        model: Some("ILCE-9"),
+        recorded_make: Some("SONY"),
+        recorded_model: Some("ILCE-9"),
         software: Some("ILCE-9 v1.00"),
         serial_number: None,
         capture_time: Some("2017-06-25T16:02:57+02:00"),
@@ -1778,8 +1778,8 @@ const METADATA: &[SampleMetadata] = &[
         focal_length_in_35mm_film: Some(55),
         exposure_bias: Some((0, 10)),
         lens: Some(SampleLens {
-            make: None,
-            model: Some("FE 55mm F1.8 ZA"),
+            recorded_make: None,
+            recorded_model: Some("FE 55mm F1.8 ZA"),
             serial_number: false,
             min_focal_length: Some((550, 10)),
             max_focal_length: Some((550, 10)),
@@ -1819,8 +1819,8 @@ const METADATA: &[SampleMetadata] = &[
     // ILCE-9 (raw.pixls.us 1542)
     SampleMetadata {
         file: "sony-ilce-9-uncompressed.arw",
-        make: Some("SONY"),
-        model: Some("ILCE-9"),
+        recorded_make: Some("SONY"),
+        recorded_model: Some("ILCE-9"),
         software: Some("ILCE-9 v1.00"),
         serial_number: None,
         capture_time: Some("2017-06-25T16:04:05+02:00"),
@@ -1832,8 +1832,8 @@ const METADATA: &[SampleMetadata] = &[
         focal_length_in_35mm_film: Some(55),
         exposure_bias: Some((0, 10)),
         lens: Some(SampleLens {
-            make: None,
-            model: Some("FE 55mm F1.8 ZA"),
+            recorded_make: None,
+            recorded_model: Some("FE 55mm F1.8 ZA"),
             serial_number: false,
             min_focal_length: Some((550, 10)),
             max_focal_length: Some((550, 10)),
@@ -1873,8 +1873,8 @@ const METADATA: &[SampleMetadata] = &[
     // ILCE-7S (raw.pixls.us 1582)
     SampleMetadata {
         file: "sony-ilce-7s.arw",
-        make: Some("SONY"),
-        model: Some("ILCE-7S"),
+        recorded_make: Some("SONY"),
+        recorded_model: Some("ILCE-7S"),
         software: Some("ILCE-7S v3.20"),
         serial_number: None,
         capture_time: Some("2017-07-13T16:58:28"),
@@ -1910,8 +1910,8 @@ const METADATA: &[SampleMetadata] = &[
     // DSLR-A200 (raw.pixls.us 2271)
     SampleMetadata {
         file: "sony-dslr-a200.arw",
-        make: Some("SONY"),
-        model: Some("DSLR-A200"),
+        recorded_make: Some("SONY"),
+        recorded_model: Some("DSLR-A200"),
         software: Some("DSLR-A200 v1.00"),
         serial_number: None,
         capture_time: Some("2017-11-17T22:44:20"),
@@ -1944,8 +1944,8 @@ const METADATA: &[SampleMetadata] = &[
     // DSLR-A100 (raw.pixls.us 2346)
     SampleMetadata {
         file: "sony-dslr-a100.arw",
-        make: Some("SONY"),
-        model: Some("DSLR-A100"),
+        recorded_make: Some("SONY"),
+        recorded_model: Some("DSLR-A100"),
         software: Some("DSLR-A100 v1.04"),
         serial_number: None,
         capture_time: Some("2018-02-19T17:55:25"),
@@ -1978,8 +1978,8 @@ const METADATA: &[SampleMetadata] = &[
     // DSLR-A700 (raw.pixls.us 2521)
     SampleMetadata {
         file: "sony-dslr-a700.arw",
-        make: Some("SONY"),
-        model: Some("DSLR-A700"),
+        recorded_make: Some("SONY"),
+        recorded_model: Some("DSLR-A700"),
         software: Some("DSLR-A700 v04"),
         serial_number: None,
         capture_time: Some("2014-04-18T15:53:21"),
@@ -2012,8 +2012,8 @@ const METADATA: &[SampleMetadata] = &[
     // DSC-RX100M6 (raw.pixls.us 3012)
     SampleMetadata {
         file: "sony-dsc-rx100m6-1x1.arw",
-        make: Some("SONY"),
-        model: Some("DSC-RX100M6"),
+        recorded_make: Some("SONY"),
+        recorded_model: Some("DSC-RX100M6"),
         software: Some("DSC-RX100M6 v1.00"),
         serial_number: None,
         capture_time: Some("2019-03-06T14:33:05+01:00"),
@@ -2025,8 +2025,8 @@ const METADATA: &[SampleMetadata] = &[
         focal_length_in_35mm_film: Some(163),
         exposure_bias: Some((0, 10)),
         lens: Some(SampleLens {
-            make: None,
-            model: None,
+            recorded_make: None,
+            recorded_model: None,
             serial_number: false,
             min_focal_length: Some((900, 100)),
             max_focal_length: Some((7200, 100)),
@@ -2066,8 +2066,8 @@ const METADATA: &[SampleMetadata] = &[
     // DSC-RX100M6 (raw.pixls.us 3015)
     SampleMetadata {
         file: "sony-dsc-rx100m6-16x9.arw",
-        make: Some("SONY"),
-        model: Some("DSC-RX100M6"),
+        recorded_make: Some("SONY"),
+        recorded_model: Some("DSC-RX100M6"),
         software: Some("DSC-RX100M6 v1.00"),
         serial_number: None,
         capture_time: Some("2019-03-06T14:32:40+01:00"),
@@ -2079,8 +2079,8 @@ const METADATA: &[SampleMetadata] = &[
         focal_length_in_35mm_film: Some(163),
         exposure_bias: Some((0, 10)),
         lens: Some(SampleLens {
-            make: None,
-            model: None,
+            recorded_make: None,
+            recorded_model: None,
             serial_number: false,
             min_focal_length: Some((900, 100)),
             max_focal_length: Some((7200, 100)),
@@ -2120,8 +2120,8 @@ const METADATA: &[SampleMetadata] = &[
     // DSC-R1 (raw.pixls.us 3221)
     SampleMetadata {
         file: "sony-dsc-r1.sr2",
-        make: Some("SONY"),
-        model: Some("DSC-R1"),
+        recorded_make: Some("SONY"),
+        recorded_model: Some("DSC-R1"),
         software: None,
         serial_number: None,
         capture_time: Some("2019-06-17T18:45:07"),
@@ -2154,8 +2154,8 @@ const METADATA: &[SampleMetadata] = &[
     // ILCE-7RM3 (raw.pixls.us 3251)
     SampleMetadata {
         file: "sony-ilce-7rm3-pixel-shift.arw",
-        make: Some("SONY"),
-        model: Some("ILCE-7RM3"),
+        recorded_make: Some("SONY"),
+        recorded_model: Some("ILCE-7RM3"),
         software: Some("ILCE-7RM3 v3.00"),
         serial_number: None,
         capture_time: Some("2019-07-12T09:41:02-04:00"),
@@ -2167,8 +2167,8 @@ const METADATA: &[SampleMetadata] = &[
         focal_length_in_35mm_film: Some(24),
         exposure_bias: Some((0, 10)),
         lens: Some(SampleLens {
-            make: None,
-            model: Some("FE 24mm F1.4 GM"),
+            recorded_make: None,
+            recorded_model: Some("FE 24mm F1.4 GM"),
             serial_number: false,
             min_focal_length: Some((240, 10)),
             max_focal_length: Some((240, 10)),
@@ -2208,8 +2208,8 @@ const METADATA: &[SampleMetadata] = &[
     // SLT-A99 (raw.pixls.us 3751)
     SampleMetadata {
         file: "sony-slt-a99.arw",
-        make: Some("SONY"),
-        model: Some("SLT-A99V"),
+        recorded_make: Some("SONY"),
+        recorded_model: Some("SLT-A99V"),
         software: Some("SLT-A99V v1.02"),
         serial_number: None,
         capture_time: Some("2019-10-26T15:58:28"),
@@ -2221,8 +2221,8 @@ const METADATA: &[SampleMetadata] = &[
         focal_length_in_35mm_film: Some(85),
         exposure_bias: Some((7, 10)),
         lens: Some(SampleLens {
-            make: None,
-            model: Some("85mm F1.4 ZA"),
+            recorded_make: None,
+            recorded_model: Some("85mm F1.4 ZA"),
             serial_number: false,
             min_focal_length: Some((850, 10)),
             max_focal_length: Some((850, 10)),
@@ -2253,8 +2253,8 @@ const METADATA: &[SampleMetadata] = &[
     // Hasselblad Lunar (raw.pixls.us 4051)
     SampleMetadata {
         file: "hasselblad-lunar.arw",
-        make: Some("HASSELBLAD"),
-        model: Some("Lunar"),
+        recorded_make: Some("HASSELBLAD"),
+        recorded_model: Some("Lunar"),
         software: Some("Lunar v1.02"),
         serial_number: None,
         capture_time: Some("2016-05-31T15:21:03"),
@@ -2266,8 +2266,8 @@ const METADATA: &[SampleMetadata] = &[
         focal_length_in_35mm_film: Some(61),
         exposure_bias: Some((0, 10)),
         lens: Some(SampleLens {
-            make: None,
-            model: Some("E 18-55mm F3.5-5.6 OSS"),
+            recorded_make: None,
+            recorded_model: Some("E 18-55mm F3.5-5.6 OSS"),
             serial_number: false,
             min_focal_length: Some((180, 10)),
             max_focal_length: Some((550, 10)),
@@ -2298,8 +2298,8 @@ const METADATA: &[SampleMetadata] = &[
     // ILCE-1 (raw.pixls.us 4466)
     SampleMetadata {
         file: "sony-ilce-1-lossless.arw",
-        make: Some("SONY"),
-        model: Some("ILCE-1"),
+        recorded_make: Some("SONY"),
+        recorded_model: Some("ILCE-1"),
         software: Some("ILCE-1 v1.00"),
         serial_number: Some(SerialShape {
             len: 8,
@@ -2314,8 +2314,8 @@ const METADATA: &[SampleMetadata] = &[
         focal_length_in_35mm_film: Some(135),
         exposure_bias: Some((10, 10)),
         lens: Some(SampleLens {
-            make: None,
-            model: Some("FE 135mm F1.8 GM"),
+            recorded_make: None,
+            recorded_model: Some("FE 135mm F1.8 GM"),
             serial_number: false,
             min_focal_length: Some((1350, 10)),
             max_focal_length: Some((1350, 10)),
@@ -2355,8 +2355,8 @@ const METADATA: &[SampleMetadata] = &[
     // ILCE-7SM3 (raw.pixls.us 5418)
     SampleMetadata {
         file: "sony-ilce-7sm3.arw",
-        make: Some("SONY"),
-        model: Some("ILCE-7SM3"),
+        recorded_make: Some("SONY"),
+        recorded_model: Some("ILCE-7SM3"),
         software: Some("ILCE-7SM3 v2.01"),
         serial_number: None,
         capture_time: Some("2022-04-10T17:25:57.888+08:00"),
@@ -2368,8 +2368,8 @@ const METADATA: &[SampleMetadata] = &[
         focal_length_in_35mm_film: Some(53),
         exposure_bias: Some((-3, 10)),
         lens: Some(SampleLens {
-            make: None,
-            model: Some("FE 24-105mm F4 G OSS"),
+            recorded_make: None,
+            recorded_model: Some("FE 24-105mm F4 G OSS"),
             serial_number: false,
             min_focal_length: Some((240, 10)),
             max_focal_length: Some((1050, 10)),
@@ -2409,8 +2409,8 @@ const METADATA: &[SampleMetadata] = &[
     // DSC-RX100 (raw.pixls.us 5811)
     SampleMetadata {
         file: "sony-dsc-rx100.arw",
-        make: Some("SONY"),
-        model: Some("DSC-RX100"),
+        recorded_make: Some("SONY"),
+        recorded_model: Some("DSC-RX100"),
         software: Some("DSC-RX100 v1.00"),
         serial_number: None,
         capture_time: Some("2012-12-24T12:27:30"),
@@ -2422,8 +2422,8 @@ const METADATA: &[SampleMetadata] = &[
         focal_length_in_35mm_film: Some(28),
         exposure_bias: Some((0, 10)),
         lens: Some(SampleLens {
-            make: None,
-            model: None,
+            recorded_make: None,
+            recorded_model: None,
             serial_number: false,
             min_focal_length: Some((1040, 100)),
             max_focal_length: Some((3710, 100)),
@@ -2454,8 +2454,8 @@ const METADATA: &[SampleMetadata] = &[
     // DSLR-A900 (raw.pixls.us 5858)
     SampleMetadata {
         file: "sony-dslr-a900.arw",
-        make: Some("SONY"),
-        model: Some("DSLR-A900"),
+        recorded_make: Some("SONY"),
+        recorded_model: Some("DSLR-A900"),
         software: Some("DSLR-A900 v2.00"),
         serial_number: None,
         capture_time: Some("2022-08-14T19:36:44"),
@@ -2488,8 +2488,8 @@ const METADATA: &[SampleMetadata] = &[
     // ILCE-6700 (raw.pixls.us 6736)
     SampleMetadata {
         file: "sony-ilce-6700-lossless.arw",
-        make: Some("SONY"),
-        model: Some("ILCE-6700"),
+        recorded_make: Some("SONY"),
+        recorded_model: Some("ILCE-6700"),
         software: Some("ILCE-6700 v1.00"),
         serial_number: None,
         capture_time: Some("2023-08-01T17:00:23.272+01:00"),
@@ -2501,8 +2501,8 @@ const METADATA: &[SampleMetadata] = &[
         focal_length_in_35mm_film: Some(24),
         exposure_bias: Some((0, 10)),
         lens: Some(SampleLens {
-            make: None,
-            model: Some("E 16-55mm F2.8 G"),
+            recorded_make: None,
+            recorded_model: Some("E 16-55mm F2.8 G"),
             serial_number: false,
             min_focal_length: Some((160, 10)),
             max_focal_length: Some((550, 10)),
@@ -2542,8 +2542,8 @@ const METADATA: &[SampleMetadata] = &[
     // ILCE-7M4 (raw.pixls.us 6929)
     SampleMetadata {
         file: "sony-ilce-7m4-lossless-l.arw",
-        make: Some("SONY"),
-        model: Some("ILCE-7M4"),
+        recorded_make: Some("SONY"),
+        recorded_model: Some("ILCE-7M4"),
         software: Some("ILCE-7M4 v2.00"),
         serial_number: None,
         capture_time: Some("2023-10-19T16:13:48.776+02:00"),
@@ -2555,8 +2555,8 @@ const METADATA: &[SampleMetadata] = &[
         focal_length_in_35mm_film: Some(50),
         exposure_bias: Some((0, 10)),
         lens: Some(SampleLens {
-            make: None,
-            model: Some("FE 50mm F2.5 G"),
+            recorded_make: None,
+            recorded_model: Some("FE 50mm F2.5 G"),
             serial_number: false,
             min_focal_length: Some((500, 10)),
             max_focal_length: Some((500, 10)),
@@ -2596,8 +2596,8 @@ const METADATA: &[SampleMetadata] = &[
     // ILCE-7M4 (raw.pixls.us 6930)
     SampleMetadata {
         file: "sony-ilce-7m4-lossless-m.arw",
-        make: Some("SONY"),
-        model: Some("ILCE-7M4"),
+        recorded_make: Some("SONY"),
+        recorded_model: Some("ILCE-7M4"),
         software: Some("ILCE-7M4 v2.00"),
         serial_number: None,
         capture_time: Some("2023-10-19T16:14:16.647+02:00"),
@@ -2609,8 +2609,8 @@ const METADATA: &[SampleMetadata] = &[
         focal_length_in_35mm_film: Some(50),
         exposure_bias: Some((0, 10)),
         lens: Some(SampleLens {
-            make: None,
-            model: Some("FE 50mm F2.5 G"),
+            recorded_make: None,
+            recorded_model: Some("FE 50mm F2.5 G"),
             serial_number: false,
             min_focal_length: Some((500, 10)),
             max_focal_length: Some((500, 10)),
@@ -2650,8 +2650,8 @@ const METADATA: &[SampleMetadata] = &[
     // ILCE-7M4 (raw.pixls.us 6931)
     SampleMetadata {
         file: "sony-ilce-7m4-lossless-s.arw",
-        make: Some("SONY"),
-        model: Some("ILCE-7M4"),
+        recorded_make: Some("SONY"),
+        recorded_model: Some("ILCE-7M4"),
         software: Some("ILCE-7M4 v2.00"),
         serial_number: None,
         capture_time: Some("2023-10-19T16:15:00.101+02:00"),
@@ -2663,8 +2663,8 @@ const METADATA: &[SampleMetadata] = &[
         focal_length_in_35mm_film: Some(50),
         exposure_bias: Some((0, 10)),
         lens: Some(SampleLens {
-            make: None,
-            model: Some("FE 50mm F2.5 G"),
+            recorded_make: None,
+            recorded_model: Some("FE 50mm F2.5 G"),
             serial_number: false,
             min_focal_length: Some((500, 10)),
             max_focal_length: Some((500, 10)),
@@ -2704,8 +2704,8 @@ const METADATA: &[SampleMetadata] = &[
     // ILCE-7M4 (raw.pixls.us 6933)
     SampleMetadata {
         file: "sony-ilce-7m4-uncompressed-apsc.arw",
-        make: Some("SONY"),
-        model: Some("ILCE-7M4"),
+        recorded_make: Some("SONY"),
+        recorded_model: Some("ILCE-7M4"),
         software: Some("ILCE-7M4 v2.00"),
         serial_number: None,
         capture_time: Some("2023-10-19T16:16:39.709+02:00"),
@@ -2717,8 +2717,8 @@ const METADATA: &[SampleMetadata] = &[
         focal_length_in_35mm_film: Some(75),
         exposure_bias: Some((0, 10)),
         lens: Some(SampleLens {
-            make: None,
-            model: Some("FE 50mm F2.5 G"),
+            recorded_make: None,
+            recorded_model: Some("FE 50mm F2.5 G"),
             serial_number: false,
             min_focal_length: Some((500, 10)),
             max_focal_length: Some((500, 10)),
@@ -2758,8 +2758,8 @@ const METADATA: &[SampleMetadata] = &[
     // ILCE-7M4 (raw.pixls.us 6936)
     SampleMetadata {
         file: "sony-ilce-7m4-compressed-apsc.arw",
-        make: Some("SONY"),
-        model: Some("ILCE-7M4"),
+        recorded_make: Some("SONY"),
+        recorded_model: Some("ILCE-7M4"),
         software: Some("ILCE-7M4 v2.00"),
         serial_number: None,
         capture_time: Some("2023-10-19T16:18:54.794+02:00"),
@@ -2771,8 +2771,8 @@ const METADATA: &[SampleMetadata] = &[
         focal_length_in_35mm_film: Some(75),
         exposure_bias: Some((0, 10)),
         lens: Some(SampleLens {
-            make: None,
-            model: Some("FE 50mm F2.5 G"),
+            recorded_make: None,
+            recorded_model: Some("FE 50mm F2.5 G"),
             serial_number: false,
             min_focal_length: Some((500, 10)),
             max_focal_length: Some((500, 10)),
@@ -2812,8 +2812,8 @@ const METADATA: &[SampleMetadata] = &[
     // ILCE-9M3 (raw.pixls.us 7361)
     SampleMetadata {
         file: "sony-ilce-9m3-compressed.arw",
-        make: Some("SONY"),
-        model: Some("ILCE-9M3"),
+        recorded_make: Some("SONY"),
+        recorded_model: Some("ILCE-9M3"),
         software: Some("ILCE-9M3 v1.00"),
         serial_number: None,
         capture_time: Some("2024-03-26T12:47:24.654+00:00"),
@@ -2825,8 +2825,8 @@ const METADATA: &[SampleMetadata] = &[
         focal_length_in_35mm_film: Some(55),
         exposure_bias: Some((0, 10)),
         lens: Some(SampleLens {
-            make: None,
-            model: Some("FE 55mm F1.8 ZA"),
+            recorded_make: None,
+            recorded_model: Some("FE 55mm F1.8 ZA"),
             serial_number: false,
             min_focal_length: Some((550, 10)),
             max_focal_length: Some((550, 10)),
@@ -2857,8 +2857,8 @@ const METADATA: &[SampleMetadata] = &[
     // ILCE-9M3 (raw.pixls.us 7364)
     SampleMetadata {
         file: "sony-ilce-9m3-lossless-s.arw",
-        make: Some("SONY"),
-        model: Some("ILCE-9M3"),
+        recorded_make: Some("SONY"),
+        recorded_model: Some("ILCE-9M3"),
         software: Some("ILCE-9M3 v1.00"),
         serial_number: None,
         capture_time: Some("2024-03-26T12:47:59.397+00:00"),
@@ -2870,8 +2870,8 @@ const METADATA: &[SampleMetadata] = &[
         focal_length_in_35mm_film: Some(55),
         exposure_bias: Some((0, 10)),
         lens: Some(SampleLens {
-            make: None,
-            model: Some("FE 55mm F1.8 ZA"),
+            recorded_make: None,
+            recorded_model: Some("FE 55mm F1.8 ZA"),
             serial_number: false,
             min_focal_length: Some((550, 10)),
             max_focal_length: Some((550, 10)),
@@ -2902,8 +2902,8 @@ const METADATA: &[SampleMetadata] = &[
     // ILCE-1M2 (raw.pixls.us 7835)
     SampleMetadata {
         file: "sony-ilce-1m2-lossy-apsc.arw",
-        make: Some("SONY"),
-        model: Some("ILCE-1M2"),
+        recorded_make: Some("SONY"),
+        recorded_model: Some("ILCE-1M2"),
         software: Some("ILCE-1M2 v2.00"),
         serial_number: None,
         capture_time: Some("2025-05-09T09:36:24.457+01:00"),
@@ -2915,8 +2915,8 @@ const METADATA: &[SampleMetadata] = &[
         focal_length_in_35mm_film: Some(199),
         exposure_bias: Some((0, 10)),
         lens: Some(SampleLens {
-            make: None,
-            model: Some("FE 70-200mm F2.8 GM OSS II"),
+            recorded_make: None,
+            recorded_model: Some("FE 70-200mm F2.8 GM OSS II"),
             serial_number: false,
             min_focal_length: Some((700, 10)),
             max_focal_length: Some((2000, 10)),
@@ -2956,8 +2956,8 @@ const METADATA: &[SampleMetadata] = &[
     // ILCE-7M5 (raw.pixls.us 8846)
     SampleMetadata {
         file: "sony-ilce-7m5-compressed-hq.arw",
-        make: Some("SONY"),
-        model: Some("ILCE-7M5"),
+        recorded_make: Some("SONY"),
+        recorded_model: Some("ILCE-7M5"),
         software: Some("ILCE-7M5 v1.00"),
         serial_number: Some(SerialShape {
             len: 8,
@@ -2972,8 +2972,8 @@ const METADATA: &[SampleMetadata] = &[
         focal_length_in_35mm_film: Some(24),
         exposure_bias: Some((3, 10)),
         lens: Some(SampleLens {
-            make: None,
-            model: Some("24-70mm F2.8 DG DN II | Art 024"),
+            recorded_make: None,
+            recorded_model: Some("24-70mm F2.8 DG DN II | Art 024"),
             serial_number: false,
             min_focal_length: Some((240, 10)),
             max_focal_length: Some((700, 10)),
@@ -3013,8 +3013,8 @@ const METADATA: &[SampleMetadata] = &[
     // ILCE-7M5 (raw.pixls.us 8847)
     SampleMetadata {
         file: "sony-ilce-7m5-compressed.arw",
-        make: Some("SONY"),
-        model: Some("ILCE-7M5"),
+        recorded_make: Some("SONY"),
+        recorded_model: Some("ILCE-7M5"),
         software: Some("ILCE-7M5 v1.00"),
         serial_number: Some(SerialShape {
             len: 8,
@@ -3029,8 +3029,8 @@ const METADATA: &[SampleMetadata] = &[
         focal_length_in_35mm_film: Some(24),
         exposure_bias: Some((3, 10)),
         lens: Some(SampleLens {
-            make: None,
-            model: Some("24-70mm F2.8 DG DN II | Art 024"),
+            recorded_make: None,
+            recorded_model: Some("24-70mm F2.8 DG DN II | Art 024"),
             serial_number: false,
             min_focal_length: Some((240, 10)),
             max_focal_length: Some((700, 10)),
@@ -3070,8 +3070,8 @@ const METADATA: &[SampleMetadata] = &[
     // ILCE-7M5 (raw.pixls.us 8848)
     SampleMetadata {
         file: "sony-ilce-7m5-lossless-apsc.arw",
-        make: Some("SONY"),
-        model: Some("ILCE-7M5"),
+        recorded_make: Some("SONY"),
+        recorded_model: Some("ILCE-7M5"),
         software: Some("ILCE-7M5 v1.00"),
         serial_number: Some(SerialShape {
             len: 8,
@@ -3086,8 +3086,8 @@ const METADATA: &[SampleMetadata] = &[
         focal_length_in_35mm_film: Some(36),
         exposure_bias: Some((3, 10)),
         lens: Some(SampleLens {
-            make: None,
-            model: Some("24-70mm F2.8 DG DN II | Art 024"),
+            recorded_make: None,
+            recorded_model: Some("24-70mm F2.8 DG DN II | Art 024"),
             serial_number: false,
             min_focal_length: Some((240, 10)),
             max_focal_length: Some((700, 10)),
@@ -3127,8 +3127,8 @@ const METADATA: &[SampleMetadata] = &[
     // ILCE-7M5 (raw.pixls.us 8849)
     SampleMetadata {
         file: "sony-ilce-7m5-compressed-hq-apsc.arw",
-        make: Some("SONY"),
-        model: Some("ILCE-7M5"),
+        recorded_make: Some("SONY"),
+        recorded_model: Some("ILCE-7M5"),
         software: Some("ILCE-7M5 v1.00"),
         serial_number: Some(SerialShape {
             len: 8,
@@ -3143,8 +3143,8 @@ const METADATA: &[SampleMetadata] = &[
         focal_length_in_35mm_film: Some(36),
         exposure_bias: Some((3, 10)),
         lens: Some(SampleLens {
-            make: None,
-            model: Some("24-70mm F2.8 DG DN II | Art 024"),
+            recorded_make: None,
+            recorded_model: Some("24-70mm F2.8 DG DN II | Art 024"),
             serial_number: false,
             min_focal_length: Some((240, 10)),
             max_focal_length: Some((700, 10)),
@@ -3184,8 +3184,8 @@ const METADATA: &[SampleMetadata] = &[
     // ILCE-7M5 (raw.pixls.us 8850)
     SampleMetadata {
         file: "sony-ilce-7m5-compressed-apsc.arw",
-        make: Some("SONY"),
-        model: Some("ILCE-7M5"),
+        recorded_make: Some("SONY"),
+        recorded_model: Some("ILCE-7M5"),
         software: Some("ILCE-7M5 v1.00"),
         serial_number: Some(SerialShape {
             len: 8,
@@ -3200,8 +3200,8 @@ const METADATA: &[SampleMetadata] = &[
         focal_length_in_35mm_film: Some(36),
         exposure_bias: Some((3, 10)),
         lens: Some(SampleLens {
-            make: None,
-            model: Some("24-70mm F2.8 DG DN II | Art 024"),
+            recorded_make: None,
+            recorded_model: Some("24-70mm F2.8 DG DN II | Art 024"),
             serial_number: false,
             min_focal_length: Some((240, 10)),
             max_focal_length: Some((700, 10)),
@@ -3246,8 +3246,8 @@ const LARGE_METADATA: &[SampleMetadata] = &[
     // ILCE-7RM3 (raw.pixls.us 3255), large tier
     SampleMetadata {
         file: "sony-ilce-7rm3.arq",
-        make: Some("SONY"),
-        model: Some("ILCE-7RM3"),
+        recorded_make: Some("SONY"),
+        recorded_model: Some("ILCE-7RM3"),
         software: Some("ILCE-7RM3 v3.00"),
         serial_number: None,
         capture_time: Some("2019-07-12T09:41:02-04:00"),
@@ -3259,8 +3259,8 @@ const LARGE_METADATA: &[SampleMetadata] = &[
         focal_length_in_35mm_film: Some(24),
         exposure_bias: Some((0, 10)),
         lens: Some(SampleLens {
-            make: None,
-            model: Some("FE 24mm F1.4 GM"),
+            recorded_make: None,
+            recorded_model: Some("FE 24mm F1.4 GM"),
             serial_number: false,
             min_focal_length: Some((240, 10)),
             max_focal_length: Some((240, 10)),

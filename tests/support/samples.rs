@@ -198,8 +198,8 @@ pub fn check(sample: &Sample, format: Format) {
 /// lens's by whether there is one.
 pub struct SampleMetadata {
     pub file: &'static str,
-    pub make: Option<&'static str>,
-    pub model: Option<&'static str>,
+    pub recorded_make: Option<&'static str>,
+    pub recorded_model: Option<&'static str>,
     pub software: Option<&'static str>,
     pub serial_number: Option<SerialShape>,
     pub capture_time: Option<&'static str>,
@@ -302,11 +302,11 @@ impl SerialShape {
     }
 }
 
-/// What the lens of a sample file must be: its make and model, whether it
-/// has a serial number, and its range, each fraction as stored.
+/// What the lens of a sample file must be: its recorded make and model,
+/// whether it has a serial number, and its range, each fraction as stored.
 pub struct SampleLens {
-    pub make: Option<&'static str>,
-    pub model: Option<&'static str>,
+    pub recorded_make: Option<&'static str>,
+    pub recorded_model: Option<&'static str>,
     pub serial_number: bool,
     pub min_focal_length: Option<(u32, u32)>,
     pub max_focal_length: Option<(u32, u32)>,
@@ -339,13 +339,13 @@ pub fn check_metadata(expected: &SampleMetadata, format: Format) {
     let metadata = file.metadata();
     assert_eq!(
         metadata.camera().recorded_make(),
-        expected.make,
-        "{label}: make"
+        expected.recorded_make,
+        "{label}: recorded make"
     );
     assert_eq!(
         metadata.camera().recorded_model(),
-        expected.model,
-        "{label}: model"
+        expected.recorded_model,
+        "{label}: recorded model"
     );
     assert_eq!(metadata.software(), expected.software, "{label}: software");
     assert_eq!(
@@ -399,8 +399,8 @@ pub fn check_metadata(expected: &SampleMetadata, format: Format) {
 
     let lens = metadata.lens();
     let lens = (
-        lens.make(),
-        lens.model(),
+        lens.recorded_make(),
+        lens.recorded_model(),
         lens.serial_number().is_some(),
         [
             lens.min_focal_length(),
@@ -412,8 +412,8 @@ pub fn check_metadata(expected: &SampleMetadata, format: Format) {
     );
     let expected_lens = match &expected.lens {
         Some(lens) => (
-            lens.make,
-            lens.model,
+            lens.recorded_make,
+            lens.recorded_model,
             lens.serial_number,
             [
                 lens.min_focal_length,

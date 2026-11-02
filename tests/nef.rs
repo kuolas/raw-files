@@ -282,8 +282,12 @@ fn assert_the_z9_metadata(built: &Built, orientation: Orientation, label: &str) 
         // The lens, its model read whole through the NULs that pad it and
         // its serial number trimmed of the spaces that pad it.
         let lens = metadata.lens();
-        assert_eq!(lens.make(), Some("NIKON"), "{label}, from {how}");
-        assert_eq!(lens.model(), Some(LENS_MODEL_Z14_30), "{label}, from {how}");
+        assert_eq!(lens.recorded_make(), Some("NIKON"), "{label}, from {how}");
+        assert_eq!(
+            lens.recorded_model(),
+            Some(LENS_MODEL_Z14_30),
+            "{label}, from {how}"
+        );
         assert_eq!(
             lens.serial_number(),
             Some("12345678"),
@@ -409,8 +413,8 @@ fn the_z9_metadata_by_hand(orientation: Orientation) -> Option<Metadata> {
         .with_focal_length_in_35mm_film(18)
         .with_exposure_bias(SignedRational::new(0, 6)?);
     let lens = Lens::default()
-        .with_make("NIKON")
-        .with_model(LENS_MODEL_Z14_30)
+        .with_recorded_make("NIKON")
+        .with_recorded_model(LENS_MODEL_Z14_30)
         .with_serial_number("12345678")
         .with_min_focal_length(Rational::new(140, 10)?)
         .with_max_focal_length(Rational::new(300, 10)?)
@@ -582,8 +586,8 @@ fn the_z6iii_metadata_by_hand(orientation: Orientation) -> Option<Metadata> {
         .with_focal_length_in_35mm_film(111)
         .with_exposure_bias(SignedRational::new(0, 6)?);
     let lens = Lens::default()
-        .with_make("NIKON")
-        .with_model(LENS_MODEL_Z24_200)
+        .with_recorded_make("NIKON")
+        .with_recorded_model(LENS_MODEL_Z24_200)
         .with_serial_number("23456789")
         .with_min_focal_length(Rational::new(240, 10)?)
         .with_max_focal_length(Rational::new(2000, 10)?)
@@ -723,7 +727,11 @@ fn the_d300_file_gives_what_its_exif_tags_lack_from_the_makernote() {
             // alone, with no name and no serial number.
             let lens = metadata.lens();
             assert_eq!(
-                (lens.make(), lens.model(), lens.serial_number()),
+                (
+                    lens.recorded_make(),
+                    lens.recorded_model(),
+                    lens.serial_number()
+                ),
                 (None, None, None),
                 "{label}"
             );
@@ -932,7 +940,11 @@ fn the_d1h_file_gives_what_its_exif_tags_lack_from_its_headerless_makernote() {
         // alone, with no name and no serial number.
         let lens = metadata.lens();
         assert_eq!(
-            (lens.make(), lens.model(), lens.serial_number()),
+            (
+                lens.recorded_make(),
+                lens.recorded_model(),
+                lens.serial_number()
+            ),
             (None, None, None),
             "{order:?}"
         );
@@ -1245,7 +1257,11 @@ fn check_stripped_z9(expected: &StrippedZ9) {
     // the range of a 50 mm f/1.4 prime.
     let lens = metadata.lens();
     assert_eq!(
-        (lens.make(), lens.model(), lens.serial_number()),
+        (
+            lens.recorded_make(),
+            lens.recorded_model(),
+            lens.serial_number()
+        ),
         (None, Some("50mm f/1.4G"), None),
         "{label}"
     );
@@ -2003,7 +2019,11 @@ fn the_d600_frame_4_gives_its_previews_metadata_and_point_38_placed_from_the_tab
     // range alone, that of a 35 mm f/1.8 prime.
     let lens = metadata.lens();
     assert_eq!(
-        (lens.make(), lens.model(), lens.serial_number()),
+        (
+            lens.recorded_make(),
+            lens.recorded_model(),
+            lens.serial_number()
+        ),
         (None, None, None),
         "{label}"
     );
@@ -3164,8 +3184,8 @@ const METADATA: &[SampleMetadata] = &[
     // Z 9, 14-bit lossless compression (raw.pixls.us 5146)
     SampleMetadata {
         file: "nikon-z9-lossless.nef",
-        make: Some("NIKON CORPORATION"),
-        model: Some("NIKON Z 9"),
+        recorded_make: Some("NIKON CORPORATION"),
+        recorded_model: Some("NIKON Z 9"),
         software: Some("Ver.01.00"),
         serial_number: Some(SerialShape {
             len: 7,
@@ -3180,8 +3200,8 @@ const METADATA: &[SampleMetadata] = &[
         focal_length_in_35mm_film: Some(18),
         exposure_bias: Some((0, 6)),
         lens: Some(SampleLens {
-            make: Some("NIKON"),
-            model: Some("NIKKOR Z 14-30mm f/4 S"),
+            recorded_make: Some("NIKON"),
+            recorded_model: Some("NIKKOR Z 14-30mm f/4 S"),
             serial_number: true,
             min_focal_length: Some((140, 10)),
             max_focal_length: Some((300, 10)),
@@ -3221,8 +3241,8 @@ const METADATA: &[SampleMetadata] = &[
     // Z 9, High Efficiency* (raw.pixls.us 5147)
     SampleMetadata {
         file: "nikon-z9-he-star.nef",
-        make: Some("NIKON CORPORATION"),
-        model: Some("NIKON Z 9"),
+        recorded_make: Some("NIKON CORPORATION"),
+        recorded_model: Some("NIKON Z 9"),
         software: Some("Ver.01.00"),
         serial_number: Some(SerialShape {
             len: 7,
@@ -3237,8 +3257,8 @@ const METADATA: &[SampleMetadata] = &[
         focal_length_in_35mm_film: Some(18),
         exposure_bias: Some((0, 6)),
         lens: Some(SampleLens {
-            make: Some("NIKON"),
-            model: Some("NIKKOR Z 14-30mm f/4 S"),
+            recorded_make: Some("NIKON"),
+            recorded_model: Some("NIKKOR Z 14-30mm f/4 S"),
             serial_number: true,
             min_focal_length: Some((140, 10)),
             max_focal_length: Some((300, 10)),
@@ -3278,8 +3298,8 @@ const METADATA: &[SampleMetadata] = &[
     // Z 9, High Efficiency (raw.pixls.us 5148)
     SampleMetadata {
         file: "nikon-z9-he.nef",
-        make: Some("NIKON CORPORATION"),
-        model: Some("NIKON Z 9"),
+        recorded_make: Some("NIKON CORPORATION"),
+        recorded_model: Some("NIKON Z 9"),
         software: Some("Ver.01.00"),
         serial_number: Some(SerialShape {
             len: 7,
@@ -3294,8 +3314,8 @@ const METADATA: &[SampleMetadata] = &[
         focal_length_in_35mm_film: Some(18),
         exposure_bias: Some((0, 6)),
         lens: Some(SampleLens {
-            make: Some("NIKON"),
-            model: Some("NIKKOR Z 14-30mm f/4 S"),
+            recorded_make: Some("NIKON"),
+            recorded_model: Some("NIKKOR Z 14-30mm f/4 S"),
             serial_number: true,
             min_focal_length: Some((140, 10)),
             max_focal_length: Some((300, 10)),
@@ -3335,8 +3355,8 @@ const METADATA: &[SampleMetadata] = &[
     // D1H, 12-bit uncompressed (raw.pixls.us 5364)
     SampleMetadata {
         file: "nikon-d1h-12bit-uncompressed.nef",
-        make: Some("NIKON CORPORATION"),
-        model: Some("NIKON D1H"),
+        recorded_make: Some("NIKON CORPORATION"),
+        recorded_model: Some("NIKON D1H"),
         software: Some("Ver.1.00"),
         serial_number: None,
         capture_time: Some("2022-03-24T10:09:27.01"),
@@ -3348,8 +3368,8 @@ const METADATA: &[SampleMetadata] = &[
         focal_length_in_35mm_film: None,
         exposure_bias: Some((4, 6)),
         lens: Some(SampleLens {
-            make: None,
-            model: None,
+            recorded_make: None,
+            recorded_model: None,
             serial_number: false,
             min_focal_length: Some((180, 10)),
             max_focal_length: Some((700, 10)),
@@ -3377,8 +3397,8 @@ const METADATA: &[SampleMetadata] = &[
     // D1X, 12-bit lossy (raw.pixls.us 1785)
     SampleMetadata {
         file: "nikon-d1x-12bit-lossy.nef",
-        make: Some("NIKON CORPORATION"),
-        model: Some("NIKON D1X"),
+        recorded_make: Some("NIKON CORPORATION"),
+        recorded_model: Some("NIKON D1X"),
         software: Some("Ver.1.01"),
         serial_number: None,
         capture_time: Some("2004-07-30T12:23:24.51"),
@@ -3390,8 +3410,8 @@ const METADATA: &[SampleMetadata] = &[
         focal_length_in_35mm_film: None,
         exposure_bias: Some((0, 6)),
         lens: Some(SampleLens {
-            make: None,
-            model: None,
+            recorded_make: None,
+            recorded_model: None,
             serial_number: false,
             min_focal_length: Some((120, 10)),
             max_focal_length: Some((240, 10)),
@@ -3419,8 +3439,8 @@ const METADATA: &[SampleMetadata] = &[
     // D1X, 12-bit uncompressed (raw.pixls.us 1786)
     SampleMetadata {
         file: "nikon-d1x-12bit-uncompressed.nef",
-        make: Some("NIKON CORPORATION"),
-        model: Some("NIKON D1X"),
+        recorded_make: Some("NIKON CORPORATION"),
+        recorded_model: Some("NIKON D1X"),
         software: Some("Ver.1.01"),
         serial_number: None,
         capture_time: Some("2006-07-22T20:31:52.61"),
@@ -3432,8 +3452,8 @@ const METADATA: &[SampleMetadata] = &[
         focal_length_in_35mm_film: None,
         exposure_bias: Some((0, 6)),
         lens: Some(SampleLens {
-            make: None,
-            model: None,
+            recorded_make: None,
+            recorded_model: None,
             serial_number: false,
             min_focal_length: Some((180, 10)),
             max_focal_length: Some((700, 10)),
@@ -3461,8 +3481,8 @@ const METADATA: &[SampleMetadata] = &[
     // D100, 12-bit uncompressed (raw.pixls.us 2996)
     SampleMetadata {
         file: "nikon-d100-12bit-uncompressed.nef",
-        make: Some("NIKON CORPORATION"),
-        model: Some("NIKON D100"),
+        recorded_make: Some("NIKON CORPORATION"),
+        recorded_model: Some("NIKON D100"),
         software: Some("Ver.2.00"),
         serial_number: None,
         capture_time: Some("2013-08-02T19:12:06.20"),
@@ -3474,8 +3494,8 @@ const METADATA: &[SampleMetadata] = &[
         focal_length_in_35mm_film: Some(135),
         exposure_bias: Some((-6, 6)),
         lens: Some(SampleLens {
-            make: None,
-            model: None,
+            recorded_make: None,
+            recorded_model: None,
             serial_number: false,
             min_focal_length: Some((700, 10)),
             max_focal_length: Some((3000, 10)),
@@ -3503,8 +3523,8 @@ const METADATA: &[SampleMetadata] = &[
     // D70, 12-bit lossy (raw.pixls.us 2060)
     SampleMetadata {
         file: "nikon-d70-12bit-lossy.nef",
-        make: Some("NIKON CORPORATION"),
-        model: Some("NIKON D70"),
+        recorded_make: Some("NIKON CORPORATION"),
+        recorded_model: Some("NIKON D70"),
         software: Some("Ver.2.00"),
         serial_number: None,
         capture_time: Some("2017-09-02T16:55:01.80"),
@@ -3516,8 +3536,8 @@ const METADATA: &[SampleMetadata] = &[
         focal_length_in_35mm_film: Some(75),
         exposure_bias: Some((0, 6)),
         lens: Some(SampleLens {
-            make: None,
-            model: None,
+            recorded_make: None,
+            recorded_model: None,
             serial_number: false,
             min_focal_length: Some((500, 10)),
             max_focal_length: Some((500, 10)),
@@ -3545,8 +3565,8 @@ const METADATA: &[SampleMetadata] = &[
     // D200, 12-bit lossy (raw.pixls.us 8079)
     SampleMetadata {
         file: "nikon-d200-12bit-lossy.nef",
-        make: Some("NIKON CORPORATION"),
-        model: Some("NIKON D200"),
+        recorded_make: Some("NIKON CORPORATION"),
+        recorded_model: Some("NIKON D200"),
         software: Some("Ver.2.00"),
         serial_number: None,
         capture_time: Some("2007-10-13T10:27:30.16"),
@@ -3558,8 +3578,8 @@ const METADATA: &[SampleMetadata] = &[
         focal_length_in_35mm_film: Some(105),
         exposure_bias: Some((0, 6)),
         lens: Some(SampleLens {
-            make: None,
-            model: None,
+            recorded_make: None,
+            recorded_model: None,
             serial_number: false,
             min_focal_length: Some((180, 10)),
             max_focal_length: Some((2000, 10)),
@@ -3587,8 +3607,8 @@ const METADATA: &[SampleMetadata] = &[
     // D300, 12-bit lossy (raw.pixls.us 928)
     SampleMetadata {
         file: "nikon-d300-12bit-lossy.nef",
-        make: Some("NIKON CORPORATION"),
-        model: Some("NIKON D300"),
+        recorded_make: Some("NIKON CORPORATION"),
+        recorded_model: Some("NIKON D300"),
         software: Some("Ver.1.10"),
         serial_number: Some(SerialShape {
             len: 7,
@@ -3603,8 +3623,8 @@ const METADATA: &[SampleMetadata] = &[
         focal_length_in_35mm_film: Some(75),
         exposure_bias: Some((0, 6)),
         lens: Some(SampleLens {
-            make: None,
-            model: None,
+            recorded_make: None,
+            recorded_model: None,
             serial_number: false,
             min_focal_length: Some((180, 10)),
             max_focal_length: Some((700, 10)),
@@ -3635,8 +3655,8 @@ const METADATA: &[SampleMetadata] = &[
     // D700, 12-bit lossy (raw.pixls.us 2255)
     SampleMetadata {
         file: "nikon-d700-12bit-lossy.nef",
-        make: Some("NIKON CORPORATION"),
-        model: Some("NIKON D700"),
+        recorded_make: Some("NIKON CORPORATION"),
+        recorded_model: Some("NIKON D700"),
         software: Some("Ver.1.03"),
         serial_number: Some(SerialShape {
             len: 7,
@@ -3651,8 +3671,8 @@ const METADATA: &[SampleMetadata] = &[
         focal_length_in_35mm_film: Some(20),
         exposure_bias: Some((0, 6)),
         lens: Some(SampleLens {
-            make: None,
-            model: None,
+            recorded_make: None,
+            recorded_model: None,
             serial_number: false,
             min_focal_length: Some((200, 10)),
             max_focal_length: Some((200, 10)),
@@ -3683,8 +3703,8 @@ const METADATA: &[SampleMetadata] = &[
     // D7000, 12-bit lossy (raw.pixls.us 961)
     SampleMetadata {
         file: "nikon-d7000-12bit-lossy.nef",
-        make: Some("NIKON CORPORATION"),
-        model: Some("NIKON D7000"),
+        recorded_make: Some("NIKON CORPORATION"),
+        recorded_model: Some("NIKON D7000"),
         software: Some("Ver.1.05"),
         serial_number: Some(SerialShape {
             len: 7,
@@ -3699,8 +3719,8 @@ const METADATA: &[SampleMetadata] = &[
         focal_length_in_35mm_film: Some(75),
         exposure_bias: Some((0, 6)),
         lens: Some(SampleLens {
-            make: None,
-            model: None,
+            recorded_make: None,
+            recorded_model: None,
             serial_number: false,
             min_focal_length: Some((500, 10)),
             max_focal_length: Some((500, 10)),
@@ -3740,8 +3760,8 @@ const METADATA: &[SampleMetadata] = &[
     // D750, 12-bit lossy (raw.pixls.us 895)
     SampleMetadata {
         file: "nikon-d750-12bit-lossy.nef",
-        make: Some("NIKON CORPORATION"),
-        model: Some("NIKON D750"),
+        recorded_make: Some("NIKON CORPORATION"),
+        recorded_model: Some("NIKON D750"),
         software: Some("Ver.1.10"),
         serial_number: Some(SerialShape {
             len: 7,
@@ -3756,8 +3776,8 @@ const METADATA: &[SampleMetadata] = &[
         focal_length_in_35mm_film: Some(35),
         exposure_bias: Some((0, 6)),
         lens: Some(SampleLens {
-            make: None,
-            model: None,
+            recorded_make: None,
+            recorded_model: None,
             serial_number: false,
             min_focal_length: Some((350, 10)),
             max_focal_length: Some((350, 10)),
@@ -3788,8 +3808,8 @@ const METADATA: &[SampleMetadata] = &[
     // D810, 12-bit small raw (raw.pixls.us 2036)
     SampleMetadata {
         file: "nikon-d810-12bit-small.nef",
-        make: Some("NIKON CORPORATION"),
-        model: Some("NIKON D810"),
+        recorded_make: Some("NIKON CORPORATION"),
+        recorded_model: Some("NIKON D810"),
         software: Some("Ver.1.12"),
         serial_number: Some(SerialShape {
             len: 7,
@@ -3804,8 +3824,8 @@ const METADATA: &[SampleMetadata] = &[
         focal_length_in_35mm_film: Some(50),
         exposure_bias: Some((0, 6)),
         lens: Some(SampleLens {
-            make: None,
-            model: None,
+            recorded_make: None,
+            recorded_model: None,
             serial_number: false,
             min_focal_length: Some((500, 10)),
             max_focal_length: Some((500, 10)),
@@ -3836,8 +3856,8 @@ const METADATA: &[SampleMetadata] = &[
     // D850, 12-bit lossless small raw (raw.pixls.us 1835)
     SampleMetadata {
         file: "nikon-d850-12bit-lossless-small.nef",
-        make: Some("NIKON CORPORATION"),
-        model: Some("NIKON D850"),
+        recorded_make: Some("NIKON CORPORATION"),
+        recorded_model: Some("NIKON D850"),
         software: Some("Ver.1.00"),
         serial_number: Some(SerialShape {
             len: 7,
@@ -3852,8 +3872,8 @@ const METADATA: &[SampleMetadata] = &[
         focal_length_in_35mm_film: Some(35),
         exposure_bias: Some((0, 6)),
         lens: Some(SampleLens {
-            make: None,
-            model: None,
+            recorded_make: None,
+            recorded_model: None,
             serial_number: false,
             min_focal_length: Some((350, 10)),
             max_focal_length: Some((350, 10)),
@@ -3884,8 +3904,8 @@ const METADATA: &[SampleMetadata] = &[
     // D780, 12-bit lossy (raw.pixls.us 3827)
     SampleMetadata {
         file: "nikon-d780-12bit-lossy.nef",
-        make: Some("NIKON CORPORATION"),
-        model: Some("NIKON D780"),
+        recorded_make: Some("NIKON CORPORATION"),
+        recorded_model: Some("NIKON D780"),
         software: Some("Ver.01.00"),
         serial_number: Some(SerialShape {
             len: 7,
@@ -3900,8 +3920,8 @@ const METADATA: &[SampleMetadata] = &[
         focal_length_in_35mm_film: Some(70),
         exposure_bias: Some((0, 6)),
         lens: Some(SampleLens {
-            make: None,
-            model: Some("VR 24-120mm f/4G"),
+            recorded_make: None,
+            recorded_model: Some("VR 24-120mm f/4G"),
             serial_number: false,
             min_focal_length: Some((240, 10)),
             max_focal_length: Some((1200, 10)),
@@ -3932,8 +3952,8 @@ const METADATA: &[SampleMetadata] = &[
     // Z 6, 12-bit small raw (raw.pixls.us 3587)
     SampleMetadata {
         file: "nikon-z6-12bit-small.nef",
-        make: Some("NIKON CORPORATION"),
-        model: Some("NIKON Z 6"),
+        recorded_make: Some("NIKON CORPORATION"),
+        recorded_model: Some("NIKON Z 6"),
         software: Some("Ver.02.00"),
         serial_number: Some(SerialShape {
             len: 7,
@@ -3948,8 +3968,8 @@ const METADATA: &[SampleMetadata] = &[
         focal_length_in_35mm_film: Some(52),
         exposure_bias: Some((0, 6)),
         lens: Some(SampleLens {
-            make: Some("NIKON"),
-            model: Some("NIKKOR Z 24-70mm f/4 S"),
+            recorded_make: Some("NIKON"),
+            recorded_model: Some("NIKKOR Z 24-70mm f/4 S"),
             serial_number: true,
             min_focal_length: Some((240, 10)),
             max_focal_length: Some((700, 10)),
@@ -3989,8 +4009,8 @@ const METADATA: &[SampleMetadata] = &[
     // Z f, 14-bit (raw.pixls.us 6887)
     SampleMetadata {
         file: "nikon-zf-14bit.nef",
-        make: Some("NIKON CORPORATION"),
-        model: Some("NIKON Z f"),
+        recorded_make: Some("NIKON CORPORATION"),
+        recorded_model: Some("NIKON Z f"),
         software: Some("Ver.01.00"),
         serial_number: Some(SerialShape {
             len: 7,
@@ -4005,8 +4025,8 @@ const METADATA: &[SampleMetadata] = &[
         focal_length_in_35mm_film: Some(150),
         exposure_bias: Some((0, 6)),
         lens: Some(SampleLens {
-            make: None,
-            model: Some("TAMRON 35-150mm F/2-2.8 Di III VXD A058Z"),
+            recorded_make: None,
+            recorded_model: Some("TAMRON 35-150mm F/2-2.8 Di III VXD A058Z"),
             serial_number: true,
             min_focal_length: Some((350, 10)),
             max_focal_length: Some((1500, 10)),
@@ -4046,8 +4066,8 @@ const METADATA: &[SampleMetadata] = &[
     // Z6III, 14-bit, 3:2 (raw.pixls.us 7810)
     SampleMetadata {
         file: "nikon-z6iii-14bit-3x2.nef",
-        make: Some("NIKON CORPORATION"),
-        model: Some("NIKON Z6_3"),
+        recorded_make: Some("NIKON CORPORATION"),
+        recorded_model: Some("NIKON Z6_3"),
         software: Some("Ver.01.00"),
         serial_number: Some(SerialShape {
             len: 7,
@@ -4062,8 +4082,8 @@ const METADATA: &[SampleMetadata] = &[
         focal_length_in_35mm_film: Some(129),
         exposure_bias: Some((0, 6)),
         lens: Some(SampleLens {
-            make: Some("NIKON"),
-            model: Some("NIKKOR Z 24-200mm f/4-6.3 VR"),
+            recorded_make: Some("NIKON"),
+            recorded_model: Some("NIKKOR Z 24-200mm f/4-6.3 VR"),
             serial_number: true,
             min_focal_length: Some((240, 10)),
             max_focal_length: Some((2000, 10)),
@@ -4103,8 +4123,8 @@ const METADATA: &[SampleMetadata] = &[
     // Z6III, 14-bit, 16:9 (raw.pixls.us 7809)
     SampleMetadata {
         file: "nikon-z6iii-14bit-16x9.nef",
-        make: Some("NIKON CORPORATION"),
-        model: Some("NIKON Z6_3"),
+        recorded_make: Some("NIKON CORPORATION"),
+        recorded_model: Some("NIKON Z6_3"),
         software: Some("Ver.01.00"),
         serial_number: Some(SerialShape {
             len: 7,
@@ -4119,8 +4139,8 @@ const METADATA: &[SampleMetadata] = &[
         focal_length_in_35mm_film: Some(86),
         exposure_bias: Some((0, 6)),
         lens: Some(SampleLens {
-            make: Some("NIKON"),
-            model: Some("NIKKOR Z 24-200mm f/4-6.3 VR"),
+            recorded_make: Some("NIKON"),
+            recorded_model: Some("NIKKOR Z 24-200mm f/4-6.3 VR"),
             serial_number: true,
             min_focal_length: Some((240, 10)),
             max_focal_length: Some((2000, 10)),
@@ -4160,8 +4180,8 @@ const METADATA: &[SampleMetadata] = &[
     // Z6III, 14-bit, 1:1 (raw.pixls.us 7808)
     SampleMetadata {
         file: "nikon-z6iii-14bit-1x1.nef",
-        make: Some("NIKON CORPORATION"),
-        model: Some("NIKON Z6_3"),
+        recorded_make: Some("NIKON CORPORATION"),
+        recorded_model: Some("NIKON Z6_3"),
         software: Some("Ver.01.00"),
         serial_number: Some(SerialShape {
             len: 7,
@@ -4176,8 +4196,8 @@ const METADATA: &[SampleMetadata] = &[
         focal_length_in_35mm_film: Some(111),
         exposure_bias: Some((0, 6)),
         lens: Some(SampleLens {
-            make: Some("NIKON"),
-            model: Some("NIKKOR Z 24-200mm f/4-6.3 VR"),
+            recorded_make: Some("NIKON"),
+            recorded_model: Some("NIKKOR Z 24-200mm f/4-6.3 VR"),
             serial_number: true,
             min_focal_length: Some((240, 10)),
             max_focal_length: Some((2000, 10)),
@@ -4217,8 +4237,8 @@ const METADATA: &[SampleMetadata] = &[
     // Coolpix A, 14-bit lossy (raw.pixls.us 2238)
     SampleMetadata {
         file: "nikon-coolpix-a-14bit-lossy.nef",
-        make: Some("NIKON CORPORATION"),
-        model: Some("COOLPIX A"),
+        recorded_make: Some("NIKON CORPORATION"),
+        recorded_model: Some("COOLPIX A"),
         software: Some("Ver.1.12"),
         serial_number: Some(SerialShape {
             len: 7,
@@ -4266,8 +4286,8 @@ const METADATA: &[SampleMetadata] = &[
     // Coolpix P7800, 12-bit, an NRW file (raw.pixls.us 1425)
     SampleMetadata {
         file: "nikon-coolpix-p7800-12bit.nrw",
-        make: Some("NIKON"),
-        model: Some("COOLPIX P7800"),
+        recorded_make: Some("NIKON"),
+        recorded_model: Some("COOLPIX P7800"),
         software: Some("COOLPIX P7800  V1.0"),
         serial_number: None,
         capture_time: Some("2017-05-20T11:55:14"),
@@ -4303,8 +4323,8 @@ const METADATA: &[SampleMetadata] = &[
     // E5700, 12-bit uncompressed (raw.pixls.us 4456)
     SampleMetadata {
         file: "nikon-e5700-12bit-uncompressed.nef",
-        make: Some("NIKON"),
-        model: Some("E5700"),
+        recorded_make: Some("NIKON"),
+        recorded_model: Some("E5700"),
         software: Some("E5700v1.1"),
         serial_number: None,
         capture_time: Some("2008-01-15T11:15:41"),
@@ -4337,8 +4357,8 @@ const METADATA: &[SampleMetadata] = &[
     // Nikon 1 J1, 12-bit lossy (raw.pixls.us 2956)
     SampleMetadata {
         file: "nikon-1-j1-12bit-lossy.nef",
-        make: Some("NIKON CORPORATION"),
-        model: Some("NIKON 1 J1"),
+        recorded_make: Some("NIKON CORPORATION"),
+        recorded_model: Some("NIKON 1 J1"),
         software: Some("Ver.1.40"),
         serial_number: Some(SerialShape {
             len: 8,
@@ -4353,8 +4373,8 @@ const METADATA: &[SampleMetadata] = &[
         focal_length_in_35mm_film: Some(51),
         exposure_bias: Some((0, 6)),
         lens: Some(SampleLens {
-            make: None,
-            model: Some("1 NIKKOR VR 10-30mm f/3.5-5.6"),
+            recorded_make: None,
+            recorded_model: Some("1 NIKKOR VR 10-30mm f/3.5-5.6"),
             serial_number: false,
             min_focal_length: Some((100, 10)),
             max_focal_length: Some((300, 10)),
@@ -4385,8 +4405,8 @@ const METADATA: &[SampleMetadata] = &[
     // D5600, 12-bit lossy, live view (raw.pixls.us 1415)
     SampleMetadata {
         file: "nikon-d5600-12bit-lossy.nef",
-        make: Some("NIKON CORPORATION"),
-        model: Some("NIKON D5600"),
+        recorded_make: Some("NIKON CORPORATION"),
+        recorded_model: Some("NIKON D5600"),
         software: Some("Ver.1.00"),
         serial_number: Some(SerialShape {
             len: 7,
@@ -4401,8 +4421,8 @@ const METADATA: &[SampleMetadata] = &[
         focal_length_in_35mm_film: Some(25),
         exposure_bias: Some((0, 6)),
         lens: Some(SampleLens {
-            make: None,
-            model: None,
+            recorded_make: None,
+            recorded_model: None,
             serial_number: false,
             min_focal_length: Some((170, 10)),
             max_focal_length: Some((700, 10)),
@@ -4442,8 +4462,8 @@ const METADATA: &[SampleMetadata] = &[
     // Z5II, 14-bit, 1:1 (raw.pixls.us 7735)
     SampleMetadata {
         file: "nikon-z5ii-14bit-1x1.nef",
-        make: Some("NIKON CORPORATION"),
-        model: Some("NIKON Z5_2"),
+        recorded_make: Some("NIKON CORPORATION"),
+        recorded_model: Some("NIKON Z5_2"),
         software: Some("Ver.01.00"),
         serial_number: Some(SerialShape {
             len: 7,
@@ -4458,8 +4478,8 @@ const METADATA: &[SampleMetadata] = &[
         focal_length_in_35mm_film: Some(31),
         exposure_bias: Some((0, 6)),
         lens: Some(SampleLens {
-            make: Some("NIKON"),
-            model: Some("NIKKOR Z 24-70mm f/4 S"),
+            recorded_make: Some("NIKON"),
+            recorded_model: Some("NIKKOR Z 24-70mm f/4 S"),
             serial_number: true,
             min_focal_length: Some((240, 10)),
             max_focal_length: Some((700, 10)),
@@ -4490,8 +4510,8 @@ const METADATA: &[SampleMetadata] = &[
     // Z5II, 14-bit, 16:9 (raw.pixls.us 7736)
     SampleMetadata {
         file: "nikon-z5ii-14bit-16x9.nef",
-        make: Some("NIKON CORPORATION"),
-        model: Some("NIKON Z5_2"),
+        recorded_make: Some("NIKON CORPORATION"),
+        recorded_model: Some("NIKON Z5_2"),
         software: Some("Ver.01.00"),
         serial_number: Some(SerialShape {
             len: 7,
@@ -4506,8 +4526,8 @@ const METADATA: &[SampleMetadata] = &[
         focal_length_in_35mm_film: Some(24),
         exposure_bias: Some((0, 6)),
         lens: Some(SampleLens {
-            make: Some("NIKON"),
-            model: Some("NIKKOR Z 24-70mm f/4 S"),
+            recorded_make: Some("NIKON"),
+            recorded_model: Some("NIKKOR Z 24-70mm f/4 S"),
             serial_number: true,
             min_focal_length: Some((240, 10)),
             max_focal_length: Some((700, 10)),
@@ -4538,8 +4558,8 @@ const METADATA: &[SampleMetadata] = &[
     // Z50II, 14-bit, 1:1 (raw.pixls.us 7767)
     SampleMetadata {
         file: "nikon-z50ii-14bit-1x1.nef",
-        make: Some("NIKON CORPORATION"),
-        model: Some("NIKON Z50_2"),
+        recorded_make: Some("NIKON CORPORATION"),
+        recorded_model: Some("NIKON Z50_2"),
         software: Some("Ver.01.00"),
         serial_number: Some(SerialShape {
             len: 7,
@@ -4554,8 +4574,8 @@ const METADATA: &[SampleMetadata] = &[
         focal_length_in_35mm_film: Some(45),
         exposure_bias: Some((0, 6)),
         lens: Some(SampleLens {
-            make: Some("NIKON"),
-            model: Some("NIKKOR Z DX 16-50mm f/3.5-6.3 VR"),
+            recorded_make: Some("NIKON"),
+            recorded_model: Some("NIKKOR Z DX 16-50mm f/3.5-6.3 VR"),
             serial_number: true,
             min_focal_length: Some((160, 10)),
             max_focal_length: Some((500, 10)),
@@ -4595,8 +4615,8 @@ const METADATA: &[SampleMetadata] = &[
     // Z50II, 14-bit, 16:9 (raw.pixls.us 7770)
     SampleMetadata {
         file: "nikon-z50ii-14bit-16x9.nef",
-        make: Some("NIKON CORPORATION"),
-        model: Some("NIKON Z50_2"),
+        recorded_make: Some("NIKON CORPORATION"),
+        recorded_model: Some("NIKON Z50_2"),
         software: Some("Ver.01.00"),
         serial_number: Some(SerialShape {
             len: 7,
@@ -4611,8 +4631,8 @@ const METADATA: &[SampleMetadata] = &[
         focal_length_in_35mm_film: Some(36),
         exposure_bias: Some((0, 6)),
         lens: Some(SampleLens {
-            make: Some("NIKON"),
-            model: Some("NIKKOR Z DX 16-50mm f/3.5-6.3 VR"),
+            recorded_make: Some("NIKON"),
+            recorded_model: Some("NIKKOR Z DX 16-50mm f/3.5-6.3 VR"),
             serial_number: true,
             min_focal_length: Some((160, 10)),
             max_focal_length: Some((500, 10)),
@@ -4652,8 +4672,8 @@ const METADATA: &[SampleMetadata] = &[
     // Z6III, 14-bit High Efficiency*, 1:1 (raw.pixls.us 7812)
     SampleMetadata {
         file: "nikon-z6iii-14bit-1x1-he-star.nef",
-        make: Some("NIKON CORPORATION"),
-        model: Some("NIKON Z6_3"),
+        recorded_make: Some("NIKON CORPORATION"),
+        recorded_model: Some("NIKON Z6_3"),
         software: Some("Ver.01.00"),
         serial_number: Some(SerialShape {
             len: 7,
@@ -4668,8 +4688,8 @@ const METADATA: &[SampleMetadata] = &[
         focal_length_in_35mm_film: Some(111),
         exposure_bias: Some((0, 6)),
         lens: Some(SampleLens {
-            make: Some("NIKON"),
-            model: Some("NIKKOR Z 24-200mm f/4-6.3 VR"),
+            recorded_make: Some("NIKON"),
+            recorded_model: Some("NIKKOR Z 24-200mm f/4-6.3 VR"),
             serial_number: true,
             min_focal_length: Some((240, 10)),
             max_focal_length: Some((2000, 10)),
@@ -4709,8 +4729,8 @@ const METADATA: &[SampleMetadata] = &[
     // Z6III, 14-bit High Efficiency*, 16:9 (raw.pixls.us 7813)
     SampleMetadata {
         file: "nikon-z6iii-14bit-16x9-he-star.nef",
-        make: Some("NIKON CORPORATION"),
-        model: Some("NIKON Z6_3"),
+        recorded_make: Some("NIKON CORPORATION"),
+        recorded_model: Some("NIKON Z6_3"),
         software: Some("Ver.01.00"),
         serial_number: Some(SerialShape {
             len: 7,
@@ -4725,8 +4745,8 @@ const METADATA: &[SampleMetadata] = &[
         focal_length_in_35mm_film: Some(86),
         exposure_bias: Some((0, 6)),
         lens: Some(SampleLens {
-            make: Some("NIKON"),
-            model: Some("NIKKOR Z 24-200mm f/4-6.3 VR"),
+            recorded_make: Some("NIKON"),
+            recorded_model: Some("NIKKOR Z 24-200mm f/4-6.3 VR"),
             serial_number: true,
             min_focal_length: Some((240, 10)),
             max_focal_length: Some((2000, 10)),
@@ -4766,8 +4786,8 @@ const METADATA: &[SampleMetadata] = &[
     // D5, 14-bit lossy, live view (raw.pixls.us 2218)
     SampleMetadata {
         file: "nikon-d5-14bit-lossy.nef",
-        make: Some("NIKON CORPORATION"),
-        model: Some("NIKON D5"),
+        recorded_make: Some("NIKON CORPORATION"),
+        recorded_model: Some("NIKON D5"),
         software: Some("Ver.1.20"),
         serial_number: Some(SerialShape {
             len: 7,
@@ -4782,8 +4802,8 @@ const METADATA: &[SampleMetadata] = &[
         focal_length_in_35mm_film: Some(14),
         exposure_bias: Some((6, 6)),
         lens: Some(SampleLens {
-            make: None,
-            model: None,
+            recorded_make: None,
+            recorded_model: None,
             serial_number: false,
             min_focal_length: Some((140, 10)),
             max_focal_length: Some((240, 10)),
@@ -4823,8 +4843,8 @@ const METADATA: &[SampleMetadata] = &[
     // Z 30, 12-bit lossless, rotated (raw.pixls.us 5812)
     SampleMetadata {
         file: "nikon-z30-12bit-lossless.nef",
-        make: Some("NIKON CORPORATION"),
-        model: Some("NIKON Z 30"),
+        recorded_make: Some("NIKON CORPORATION"),
+        recorded_model: Some("NIKON Z 30"),
         software: Some("Ver.01.00"),
         serial_number: Some(SerialShape {
             len: 7,
@@ -4839,8 +4859,8 @@ const METADATA: &[SampleMetadata] = &[
         focal_length_in_35mm_film: Some(75),
         exposure_bias: Some((0, 6)),
         lens: Some(SampleLens {
-            make: Some("NIKON"),
-            model: Some("NIKKOR Z DX 16-50mm f/3.5-6.3 VR"),
+            recorded_make: Some("NIKON"),
+            recorded_model: Some("NIKKOR Z DX 16-50mm f/3.5-6.3 VR"),
             serial_number: true,
             min_focal_length: Some((160, 10)),
             max_focal_length: Some((500, 10)),
@@ -4880,8 +4900,8 @@ const METADATA: &[SampleMetadata] = &[
     // Z fc, 12-bit lossless, manual focus (raw.pixls.us 8559)
     SampleMetadata {
         file: "nikon-zfc-12bit-lossless.nef",
-        make: Some("NIKON CORPORATION"),
-        model: Some("NIKON Z fc"),
+        recorded_make: Some("NIKON CORPORATION"),
+        recorded_model: Some("NIKON Z fc"),
         software: Some("Ver.01.70"),
         serial_number: Some(SerialShape {
             len: 7,
@@ -4896,8 +4916,8 @@ const METADATA: &[SampleMetadata] = &[
         focal_length_in_35mm_film: Some(69),
         exposure_bias: Some((0, 6)),
         lens: Some(SampleLens {
-            make: None,
-            model: Some("18-70mm f/3.5-4.5G"),
+            recorded_make: None,
+            recorded_model: Some("18-70mm f/3.5-4.5G"),
             serial_number: false,
             min_focal_length: Some((180, 10)),
             max_focal_length: Some((700, 10)),

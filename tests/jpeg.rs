@@ -285,13 +285,13 @@ fn camera_metadata_without(lost: &[u16]) -> Metadata {
         exposure =
             exposure.with_focal_length_in_35mm_film(u32::from(FOCAL_MILLIMETRES_IN_35MM_FILM));
     }
-    let [lens_make, lens_model, lens_serial_number] = LENS;
+    let [lens_recorded_make, lens_recorded_model, lens_serial_number] = LENS;
     let mut lens = Lens::default();
     if kept(LENS_MAKE) {
-        lens = lens.with_make(lens_make);
+        lens = lens.with_recorded_make(lens_recorded_make);
     }
     if kept(LENS_MODEL) {
-        lens = lens.with_model(lens_model);
+        lens = lens.with_recorded_model(lens_recorded_model);
     }
     if kept(LENS_SERIAL_NUMBER) {
         lens = lens.with_serial_number(lens_serial_number);
@@ -513,7 +513,11 @@ fn a_camera_jpeg_gives_every_value_its_exif_segment_records() {
     assert_eq!(stored(exposure.focal_length()), Some(FOCAL_MILLIMETRES));
     let lens = read.lens();
     assert_eq!(
-        [lens.make(), lens.model(), lens.serial_number()],
+        [
+            lens.recorded_make(),
+            lens.recorded_model(),
+            lens.serial_number()
+        ],
         LENS.map(Some)
     );
     assert_eq!(
@@ -1906,8 +1910,8 @@ struct StrippedZ9Jpeg {
     /// The file's name in `tests/fixtures/`.
     file: &'static str,
     /// IFD0's Make, Model and Software.
-    make: &'static str,
-    model: &'static str,
+    recorded_make: &'static str,
+    recorded_model: &'static str,
     software: &'static str,
     /// The capture time, as [`DateTime`] displays it: DateTimeOriginal,
     /// SubSecTimeOriginal and OffsetTimeOriginal.
@@ -1921,8 +1925,8 @@ struct StrippedZ9Jpeg {
     exposure_bias: (i32, i32),
     /// The lens from the Exif IFD: its make, its model, and its range, the
     /// shortest and the longest focal length, then the f-number at each.
-    lens_make: Option<&'static str>,
-    lens_model: &'static str,
+    lens_recorded_make: Option<&'static str>,
+    lens_recorded_model: &'static str,
     lens_range: [(u32, u32); 4],
     /// IFD0's Orientation, which turns every preview.
     orientation: Orientation,
@@ -1953,8 +1957,8 @@ struct StrippedZ9Jpeg {
 /// the frame of 8256 by 5504, which is the JPEG's own size.
 const STRIPPED_Z9_FX_JPEG: StrippedZ9Jpeg = StrippedZ9Jpeg {
     file: support::fixtures::Z9_FX_JPEG,
-    make: "NIKON CORPORATION",
-    model: "NIKON Z 9",
+    recorded_make: "NIKON CORPORATION",
+    recorded_model: "NIKON Z 9",
     software: "Ver.05.30",
     capture_time: "2026-10-22T09:26:56.75-03:00",
     exposure_time: (10, 2500),
@@ -1963,8 +1967,8 @@ const STRIPPED_Z9_FX_JPEG: StrippedZ9Jpeg = StrippedZ9Jpeg {
     focal_length: (700, 10),
     focal_length_in_35mm_film: 70,
     exposure_bias: (0, 6),
-    lens_make: None,
-    lens_model: "VR 70-300mm f/4.5-5.6E",
+    lens_recorded_make: None,
+    lens_recorded_model: "VR 70-300mm f/4.5-5.6E",
     lens_range: [(700, 10), (3000, 10), (450, 100), (560, 100)],
     orientation: Orientation::NoTransforms,
     previews: [
@@ -1990,8 +1994,8 @@ const STRIPPED_Z9_FX_JPEG: StrippedZ9Jpeg = StrippedZ9Jpeg {
 /// onto the JPEG's 5392 by 3592, each rounded to the nearest pixel.
 const STRIPPED_Z9_DX_JPEG: StrippedZ9Jpeg = StrippedZ9Jpeg {
     file: support::fixtures::Z9_DX_JPEG,
-    make: "NIKON CORPORATION",
-    model: "NIKON Z 9",
+    recorded_make: "NIKON CORPORATION",
+    recorded_model: "NIKON Z 9",
     software: "Ver.05.30",
     capture_time: "2026-10-22T09:40:59.19-03:00",
     exposure_time: (10, 2000),
@@ -2000,8 +2004,8 @@ const STRIPPED_Z9_DX_JPEG: StrippedZ9Jpeg = StrippedZ9Jpeg {
     focal_length: (780, 10),
     focal_length_in_35mm_film: 117,
     exposure_bias: (0, 6),
-    lens_make: None,
-    lens_model: "VR 70-300mm f/4.5-5.6E",
+    lens_recorded_make: None,
+    lens_recorded_model: "VR 70-300mm f/4.5-5.6E",
     lens_range: [(700, 10), (3000, 10), (450, 100), (560, 100)],
     orientation: Orientation::NoTransforms,
     previews: [
@@ -2030,8 +2034,8 @@ const STRIPPED_Z9_DX_JPEG: StrippedZ9Jpeg = StrippedZ9Jpeg {
 /// the reader moves y back to 4072 and keeps the area, 162 by 178.
 const STRIPPED_Z9_16X9_JPEG: StrippedZ9Jpeg = StrippedZ9Jpeg {
     file: support::fixtures::Z9_16X9_JPEG,
-    make: "NIKON CORPORATION",
-    model: "NIKON Z 9",
+    recorded_make: "NIKON CORPORATION",
+    recorded_model: "NIKON Z 9",
     software: "Ver.05.30",
     capture_time: "2026-10-22T19:17:01.01-03:00",
     exposure_time: (10, 200),
@@ -2040,8 +2044,8 @@ const STRIPPED_Z9_16X9_JPEG: StrippedZ9Jpeg = StrippedZ9Jpeg {
     focal_length: (700, 10),
     focal_length_in_35mm_film: 70,
     exposure_bias: (0, 6),
-    lens_make: None,
-    lens_model: "VR 70-300mm f/4.5-5.6E",
+    lens_recorded_make: None,
+    lens_recorded_model: "VR 70-300mm f/4.5-5.6E",
     lens_range: [(700, 10), (3000, 10), (450, 100), (560, 100)],
     orientation: Orientation::Rotate270,
     previews: [
@@ -2128,12 +2132,12 @@ fn check_stripped_z9_jpeg(stripped: &StrippedZ9Jpeg) {
     let metadata = file.metadata();
     assert_eq!(
         metadata.camera().recorded_make(),
-        Some(stripped.make),
+        Some(stripped.recorded_make),
         "{label}"
     );
     assert_eq!(
         metadata.camera().recorded_model(),
-        Some(stripped.model),
+        Some(stripped.recorded_model),
         "{label}"
     );
     assert_eq!(metadata.software(), Some(stripped.software), "{label}");
@@ -2165,13 +2169,13 @@ fn check_stripped_z9_jpeg(stripped: &StrippedZ9Jpeg) {
     // and the LensSerialNumber, empty and then zeroed, no serial number.
     let [shortest, longest, at_shortest, at_longest] = stripped.lens_range.map(fraction);
     let mut lens = Lens::default()
-        .with_model(stripped.lens_model)
+        .with_recorded_model(stripped.lens_recorded_model)
         .with_min_focal_length(shortest)
         .with_max_focal_length(longest)
         .with_f_number_at_min_focal_length(at_shortest)
         .with_f_number_at_max_focal_length(at_longest);
-    if let Some(make) = stripped.lens_make {
-        lens = lens.with_make(make);
+    if let Some(make) = stripped.lens_recorded_make {
+        lens = lens.with_recorded_make(make);
     }
     assert_eq!(metadata.lens(), &lens, "{label}");
     // A JPEG holds no raw data, and its image size is its frame header's.
@@ -2684,8 +2688,8 @@ const METADATA: &[SampleMetadata] = &[
     // ILCE-7M3 (Wikimedia Commons Acanthodactylus_erythrurus_2025.jpg)
     SampleMetadata {
         file: "sony-ilce-7m3.jpg",
-        make: Some("SONY"),
-        model: Some("ILCE-7M3"),
+        recorded_make: Some("SONY"),
+        recorded_model: Some("ILCE-7M3"),
         software: Some("ILCE-7M3 v4.01"),
         serial_number: None,
         capture_time: Some("2025-06-05T10:47:33+01:00"),
@@ -2697,8 +2701,8 @@ const METADATA: &[SampleMetadata] = &[
         focal_length_in_35mm_film: Some(24),
         exposure_bias: Some((0, 10)),
         lens: Some(SampleLens {
-            make: None,
-            model: Some("16mm F1.4 DC DN | Contemporary 017"),
+            recorded_make: None,
+            recorded_model: Some("16mm F1.4 DC DN | Contemporary 017"),
             serial_number: false,
             min_focal_length: Some((160, 10)),
             max_focal_length: Some((160, 10)),
@@ -2738,8 +2742,8 @@ const METADATA: &[SampleMetadata] = &[
     // ILCE-7RM2 (Wikimedia Commons Ulpu_Pajari_puhumassa_vastaanotettuaan_tiedonjulkistamisen_valtionpalkinnon_2.jpg)
     SampleMetadata {
         file: "sony-ilce-7rm2.jpg",
-        make: Some("SONY"),
-        model: Some("ILCE-7RM2"),
+        recorded_make: Some("SONY"),
+        recorded_model: Some("ILCE-7RM2"),
         software: Some("ILCE-7RM2 v4.00"),
         serial_number: None,
         capture_time: Some("2026-06-08T20:03:02"),
@@ -2751,8 +2755,8 @@ const METADATA: &[SampleMetadata] = &[
         focal_length_in_35mm_film: Some(105),
         exposure_bias: Some((0, 10)),
         lens: Some(SampleLens {
-            make: None,
-            model: Some("FE 24-105mm F4 G OSS"),
+            recorded_make: None,
+            recorded_model: Some("FE 24-105mm F4 G OSS"),
             serial_number: false,
             min_focal_length: Some((240, 10)),
             max_focal_length: Some((1050, 10)),
@@ -2792,8 +2796,8 @@ const METADATA: &[SampleMetadata] = &[
     // DSC-RX100M4 (Wikimedia Commons 여의도한강공원샛강생태공원문화다리_09.jpg)
     SampleMetadata {
         file: "sony-dsc-rx100m4.jpg",
-        make: Some("SONY"),
-        model: Some("DSC-RX100M4"),
+        recorded_make: Some("SONY"),
+        recorded_model: Some("DSC-RX100M4"),
         software: Some("DSC-RX100M4 v2.00"),
         serial_number: None,
         capture_time: Some("2019-11-19T10:51:00"),
@@ -2805,8 +2809,8 @@ const METADATA: &[SampleMetadata] = &[
         focal_length_in_35mm_film: Some(24),
         exposure_bias: Some((0, 10)),
         lens: Some(SampleLens {
-            make: None,
-            model: None,
+            recorded_make: None,
+            recorded_model: None,
             serial_number: false,
             min_focal_length: Some((880, 100)),
             max_focal_length: Some((2570, 100)),
@@ -2837,8 +2841,8 @@ const METADATA: &[SampleMetadata] = &[
     // ILCE-6000 (Wikimedia Commons 140319_MS_Queen_Elizabeth_Kobe_Japan01o.JPG)
     SampleMetadata {
         file: "sony-ilce-6000.jpg",
-        make: Some("SONY"),
-        model: Some("ILCE-6000"),
+        recorded_make: Some("SONY"),
+        recorded_model: Some("ILCE-6000"),
         software: Some("ILCE-6000 v1.00"),
         serial_number: None,
         capture_time: Some("2014-03-19T07:55:02"),
@@ -2850,8 +2854,8 @@ const METADATA: &[SampleMetadata] = &[
         focal_length_in_35mm_film: Some(36),
         exposure_bias: Some((-3, 10)),
         lens: Some(SampleLens {
-            make: None,
-            model: Some("E 16-70mm F4 ZA OSS"),
+            recorded_make: None,
+            recorded_model: Some("E 16-70mm F4 ZA OSS"),
             serial_number: false,
             min_focal_length: Some((160, 10)),
             max_focal_length: Some((700, 10)),
@@ -2882,8 +2886,8 @@ const METADATA: &[SampleMetadata] = &[
     // DSLR-A100 (Wikimedia Commons "Krone"_flag_on_line_5_tram_(2564030031).jpg)
     SampleMetadata {
         file: "sony-dslr-a100.jpg",
-        make: Some("SONY"),
-        model: Some("DSLR-A100"),
+        recorded_make: Some("SONY"),
+        recorded_model: Some("DSLR-A100"),
         software: Some("DSLR-A100 v1.04"),
         serial_number: None,
         capture_time: Some("2008-06-09T15:44:33"),
@@ -2916,8 +2920,8 @@ const METADATA: &[SampleMetadata] = &[
     // NIKON D5300 (Wikimedia Commons "Tours"_French_restaurant_in_Omotesando.JPG)
     SampleMetadata {
         file: "nikon-d5300.jpg",
-        make: Some("NIKON CORPORATION"),
-        model: Some("NIKON D5300"),
+        recorded_make: Some("NIKON CORPORATION"),
+        recorded_model: Some("NIKON D5300"),
         software: Some("Ver.1.02"),
         serial_number: Some(SerialShape {
             len: 7,
@@ -2932,8 +2936,8 @@ const METADATA: &[SampleMetadata] = &[
         focal_length_in_35mm_film: Some(27),
         exposure_bias: Some((0, 6)),
         lens: Some(SampleLens {
-            make: None,
-            model: None,
+            recorded_make: None,
+            recorded_model: None,
             serial_number: false,
             min_focal_length: Some((180, 10)),
             max_focal_length: Some((550, 10)),
@@ -2964,8 +2968,8 @@ const METADATA: &[SampleMetadata] = &[
     // NIKON D70 (Wikimedia Commons "Stadswandeling".JPG)
     SampleMetadata {
         file: "nikon-d70.jpg",
-        make: Some("NIKON CORPORATION"),
-        model: Some("NIKON D70"),
+        recorded_make: Some("NIKON CORPORATION"),
+        recorded_model: Some("NIKON D70"),
         software: Some("Ver.1.02"),
         serial_number: None,
         capture_time: Some("2009-06-07T11:52:30"),
@@ -2977,8 +2981,8 @@ const METADATA: &[SampleMetadata] = &[
         focal_length_in_35mm_film: Some(93),
         exposure_bias: Some((0, 6)),
         lens: Some(SampleLens {
-            make: None,
-            model: None,
+            recorded_make: None,
+            recorded_model: None,
             serial_number: false,
             min_focal_length: Some((280, 10)),
             max_focal_length: Some((800, 10)),
@@ -3006,8 +3010,8 @@ const METADATA: &[SampleMetadata] = &[
     // Canon PowerShot G7 X (Wikimedia Commons DC-3_OH-LCH_at_EFJM_20160717.jpg)
     SampleMetadata {
         file: "canon-powershot-g7x.jpg",
-        make: Some("Canon"),
-        model: Some("Canon PowerShot G7 X"),
+        recorded_make: Some("Canon"),
+        recorded_model: Some("Canon PowerShot G7 X"),
         software: None,
         serial_number: None,
         capture_time: Some("2016-07-17T17:30:26"),
