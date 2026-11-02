@@ -21,6 +21,16 @@ does.
   listed. `make()` is read from the recorded Make each time it is asked
   for, with no setter of its own, so a program's tests set the recorded
   text with `with_recorded_make`.
+- `Camera::model` gives the name the maker sells the body under, without
+  the brand, spelled as the maker writes it, such as `Z6III` for a file
+  whose Model is `NIKON Z6_3` and `α7 II` for `ILCE-7M2`. It comes from
+  raw-files' table of the bodies the notes on camera names list with
+  their evidence: the Nikon D600, Z 9, Z 6, Z 30, Z f, Z fc, Z50II, Z5II
+  and Z6III, and the Sony α1, α1 II, α6000, α6700, α7 II, α7 III, α7 IV,
+  α7 V, α7R II, α7R III, α7S, α7S III, α9 and α9 III. Any other body
+  gives `None`, never the recorded text, which `recorded_model` still
+  gives. `model()` is read from the recorded make and Model each time it
+  is asked for, with no setter of its own.
 
 ### Changed
 

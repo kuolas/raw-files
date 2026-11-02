@@ -44,7 +44,7 @@ use std::ops::Range;
 use raw_files::{
     Camera, CameraSettings, ColorSpace, DateTime, ErrorKind, Exposure, ExposureProgram, FineTune,
     Flash, FlashMode, Focus, FocusAreaMode, FocusOrigin, FocusPoint, FocusPoints, Format,
-    ImageArea, Lens, Limits, Metadata, MeteringMode, Options, Orientation, Point, Preview,
+    ImageArea, Lens, Limits, Make, Metadata, MeteringMode, Options, Orientation, Point, Preview,
     PreviewFormat, Rational, RawFile, Shutter, SignedRational, Size, WhiteBalance,
     WhiteBalanceMode,
 };
@@ -1909,6 +1909,10 @@ fn a_limit_crossed_inside_the_sony_makernote_costs_its_focus_point_only() {
 struct StrippedZ9Jpeg {
     /// The file's name in `tests/fixtures/`.
     file: &'static str,
+    /// The maker the reader recognises from the Make, and the name the Make
+    /// and the Model give.
+    make: Make,
+    model: &'static str,
     /// IFD0's Make, Model and Software.
     recorded_make: &'static str,
     recorded_model: &'static str,
@@ -1957,6 +1961,8 @@ struct StrippedZ9Jpeg {
 /// the frame of 8256 by 5504, which is the JPEG's own size.
 const STRIPPED_Z9_FX_JPEG: StrippedZ9Jpeg = StrippedZ9Jpeg {
     file: support::fixtures::Z9_FX_JPEG,
+    make: Make::Nikon,
+    model: "Z 9",
     recorded_make: "NIKON CORPORATION",
     recorded_model: "NIKON Z 9",
     software: "Ver.05.30",
@@ -1994,6 +2000,8 @@ const STRIPPED_Z9_FX_JPEG: StrippedZ9Jpeg = StrippedZ9Jpeg {
 /// onto the JPEG's 5392 by 3592, each rounded to the nearest pixel.
 const STRIPPED_Z9_DX_JPEG: StrippedZ9Jpeg = StrippedZ9Jpeg {
     file: support::fixtures::Z9_DX_JPEG,
+    make: Make::Nikon,
+    model: "Z 9",
     recorded_make: "NIKON CORPORATION",
     recorded_model: "NIKON Z 9",
     software: "Ver.05.30",
@@ -2034,6 +2042,8 @@ const STRIPPED_Z9_DX_JPEG: StrippedZ9Jpeg = StrippedZ9Jpeg {
 /// the reader moves y back to 4072 and keeps the area, 162 by 178.
 const STRIPPED_Z9_16X9_JPEG: StrippedZ9Jpeg = StrippedZ9Jpeg {
     file: support::fixtures::Z9_16X9_JPEG,
+    make: Make::Nikon,
+    model: "Z 9",
     recorded_make: "NIKON CORPORATION",
     recorded_model: "NIKON Z 9",
     software: "Ver.05.30",
@@ -2140,6 +2150,8 @@ fn check_stripped_z9_jpeg(stripped: &StrippedZ9Jpeg) {
         Some(stripped.recorded_model),
         "{label}"
     );
+    assert_eq!(metadata.camera().make(), Some(stripped.make), "{label}");
+    assert_eq!(metadata.camera().model(), Some(stripped.model), "{label}");
     assert_eq!(metadata.software(), Some(stripped.software), "{label}");
     // The stripping zeroed BodySerialNumber and the MakerNote's
     // SerialNumber in place, so neither gives a serial number.
@@ -2295,6 +2307,8 @@ fn the_d600_frame_4_jpeg_gives_its_previews_metadata_and_point_38_placed_from_th
         Some("NIKON D600"),
         "{label}"
     );
+    assert_eq!(metadata.camera().make(), Some(Make::Nikon), "{label}");
+    assert_eq!(metadata.camera().model(), Some("D600"), "{label}");
     // The firmware the D600 ran, `Ver.1.04 ` with its space trimmed.
     assert_eq!(metadata.software(), Some("Ver.1.04"), "{label}");
     // The D600 writes its serial number only in the MakerNote's
@@ -2688,6 +2702,8 @@ const METADATA: &[SampleMetadata] = &[
     // ILCE-7M3 (Wikimedia Commons Acanthodactylus_erythrurus_2025.jpg)
     SampleMetadata {
         file: "sony-ilce-7m3.jpg",
+        make: Some(Make::Sony),
+        model: Some("α7 III"),
         recorded_make: Some("SONY"),
         recorded_model: Some("ILCE-7M3"),
         software: Some("ILCE-7M3 v4.01"),
@@ -2742,6 +2758,8 @@ const METADATA: &[SampleMetadata] = &[
     // ILCE-7RM2 (Wikimedia Commons Ulpu_Pajari_puhumassa_vastaanotettuaan_tiedonjulkistamisen_valtionpalkinnon_2.jpg)
     SampleMetadata {
         file: "sony-ilce-7rm2.jpg",
+        make: Some(Make::Sony),
+        model: Some("α7R II"),
         recorded_make: Some("SONY"),
         recorded_model: Some("ILCE-7RM2"),
         software: Some("ILCE-7RM2 v4.00"),
@@ -2796,6 +2814,8 @@ const METADATA: &[SampleMetadata] = &[
     // DSC-RX100M4 (Wikimedia Commons 여의도한강공원샛강생태공원문화다리_09.jpg)
     SampleMetadata {
         file: "sony-dsc-rx100m4.jpg",
+        make: Some(Make::Sony),
+        model: None,
         recorded_make: Some("SONY"),
         recorded_model: Some("DSC-RX100M4"),
         software: Some("DSC-RX100M4 v2.00"),
@@ -2841,6 +2861,8 @@ const METADATA: &[SampleMetadata] = &[
     // ILCE-6000 (Wikimedia Commons 140319_MS_Queen_Elizabeth_Kobe_Japan01o.JPG)
     SampleMetadata {
         file: "sony-ilce-6000.jpg",
+        make: Some(Make::Sony),
+        model: Some("α6000"),
         recorded_make: Some("SONY"),
         recorded_model: Some("ILCE-6000"),
         software: Some("ILCE-6000 v1.00"),
@@ -2886,6 +2908,8 @@ const METADATA: &[SampleMetadata] = &[
     // DSLR-A100 (Wikimedia Commons "Krone"_flag_on_line_5_tram_(2564030031).jpg)
     SampleMetadata {
         file: "sony-dslr-a100.jpg",
+        make: Some(Make::Sony),
+        model: None,
         recorded_make: Some("SONY"),
         recorded_model: Some("DSLR-A100"),
         software: Some("DSLR-A100 v1.04"),
@@ -2920,6 +2944,8 @@ const METADATA: &[SampleMetadata] = &[
     // NIKON D5300 (Wikimedia Commons "Tours"_French_restaurant_in_Omotesando.JPG)
     SampleMetadata {
         file: "nikon-d5300.jpg",
+        make: Some(Make::Nikon),
+        model: None,
         recorded_make: Some("NIKON CORPORATION"),
         recorded_model: Some("NIKON D5300"),
         software: Some("Ver.1.02"),
@@ -2968,6 +2994,8 @@ const METADATA: &[SampleMetadata] = &[
     // NIKON D70 (Wikimedia Commons "Stadswandeling".JPG)
     SampleMetadata {
         file: "nikon-d70.jpg",
+        make: Some(Make::Nikon),
+        model: None,
         recorded_make: Some("NIKON CORPORATION"),
         recorded_model: Some("NIKON D70"),
         software: Some("Ver.1.02"),
@@ -3010,6 +3038,8 @@ const METADATA: &[SampleMetadata] = &[
     // Canon PowerShot G7 X (Wikimedia Commons DC-3_OH-LCH_at_EFJM_20160717.jpg)
     SampleMetadata {
         file: "canon-powershot-g7x.jpg",
+        make: Some(Make::Canon),
+        model: None,
         recorded_make: Some("Canon"),
         recorded_model: Some("Canon PowerShot G7 X"),
         software: None,

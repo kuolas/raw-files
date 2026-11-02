@@ -52,6 +52,15 @@ A maker is recognised from its whole Make text, case included; any
 other text, such as `Sony` or `NIKON` followed by more words, names no
 maker.
 
+Which maker's reader opens a file is decided by a looser test: a Make
+that starts with `NIKON` or `SONY`, in any case, once trimmed, or, in a
+raw file that holds Sony's private pointer, `HASSELBLAD`. A file whose
+Make is, say, `Nikon` is read as a Nikon file and has no maker here. None of the samples, the fixtures or my own files read for this
+page writes such a text. The local corpus test counts, in each format's
+section, the files whose recorded Make names no maker, so such a file
+shows there; its text enters this table from that file, by the rule of
+this page.
+
 | Make text | Files | Name | Maker's document |
 |---|---|---|---|
 | `NIKON CORPORATION` | every Nikon raw sample but the two below, the D5300 and D70 camera JPEGs, the fixtures of my own D600 and Z 9 | Nikon | [nikon.com](https://www.nikon.com/), title "Nikon" |

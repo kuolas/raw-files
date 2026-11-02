@@ -333,41 +333,42 @@ one format only, and one file, the 325 MiB ARQ, is fetched only with
 on `master` keeps filled, so a pull request downloads nothing unless it
 changes the list.
 
-One test is ignored by default: it runs the reader over a folder of your own
-camera files, RAW and JPEG, and prints counts only, never a path, the value
-of a make, model, software, serial number, time, exposure or lens, or where
-the camera focused, so its output can go into an issue. It counts each file
-under the format its extension names, in one section per format, and skips
-the AppleDouble files, whose name starts with `._`, which macOS writes
-beside each file on a disk such as an exFAT one, saying how many it
-skipped. It checks that every file opens, that every one has a preview,
-that the largest preview is a whole JPEG, that the metadata gives the
-preview's orientation, and that every focus point, and every point of a
-list of the points the camera used, lies inside its frame, area included,
-both as read and once placed on the largest preview; and that the focus
-point, the list and the layout of the body's points agree: the focus point
-is the list's primary, a recorded position is a list of one point, and
-points placed from a table are points of the layout for the file's Model.
-It counts how many files have each metadata field and a focus point, how
-many previews of each size they hold, the focus points by origin, recorded
-or placed from a table, the lists by number of points and by area mode, and
-the files with a layout, with and without a focus point; and, for each
-camera setting, how many files have each kind of it,
-such as aperture priority, auto white balance or a white balance
-fine-tuning of `(-24/4, 0/4)`, for the colour temperature its range, and
-how many flashes fired: totals over the files of a format, never tied to
-one file. A preview may end in padding after the image's end marker, as
-some Sony cameras write it: `FF` bytes in any file, and zeros in a JPEG
-file, whose largest preview is the whole file and must hold its own image's
-end marker, not only its thumbnail's. Other data there fails a RAW file's
-preview, and is only counted in a JPEG file; except that a NEF file's
-preview may end before its declared length in the shape the D600 and
-the D3200 write about once in 500 files, a length 2 more than a
-multiple of 512 with up to 513 bytes of other data after the image's
-own end marker, which is counted as a preview that ends early. It fails
-on a folder it cannot
-read, that holds no file of a format raw-files reads, or that holds an entry
-it cannot read. Run it with `--release`, because it reads every file:
+One test is ignored by default: it runs the reader over a folder of your
+own camera files, RAW and JPEG, and prints counts only, never a path, the
+text of a make, model or software as the file records it, the value of a
+serial number, time, exposure or lens, or where the camera focused, so its
+output can go into an issue. It counts each file under the format its
+extension names, in one section per format, and skips the AppleDouble
+files, whose name starts with `._`, which macOS writes beside each file on
+a disk such as an exFAT one, saying how many it skipped. It checks that
+every file opens, that every one has a preview, that the largest preview is
+a whole JPEG, that the metadata gives the preview's orientation, and that
+every focus point, and every point of a list of the points the camera used,
+lies inside its frame, area included, both as read and once placed on the
+largest preview; and that the focus point, the list and the layout of the
+body's points agree: the focus point is the list's primary, a recorded
+position is a list of one point, and points placed from a table are points
+of the layout for the file's Model. It counts how many files have each
+metadata field and a focus point, the files by maker, and those with a
+model's name or a recorded Model without one, how many previews of each
+size they hold, the focus points by origin, recorded or placed from a
+table, the lists by number of points and by area mode, and the files with a
+layout, with and without a focus point; and, for each camera setting, how
+many files have each kind of it, such as aperture priority, auto white
+balance or a white balance fine-tuning of `(-24/4, 0/4)`, for the colour
+temperature its range, and how many flashes fired: totals over the files of
+a format, never tied to one file. A preview may end in padding after the
+image's end marker, as some Sony cameras write it: `FF` bytes in any file,
+and zeros in a JPEG file, whose largest preview is the whole file and must
+hold its own image's end marker, not only its thumbnail's. Other data there
+fails a RAW file's preview, and is only counted in a JPEG file; except that
+a NEF file's preview may end before its declared length in the shape the
+D600 and the D3200 write about once in 500 files, a length 2 more than a
+multiple of 512 with up to 513 bytes of other data after the image's own
+end marker, which is counted as a preview that ends early. It fails on a
+folder it cannot read, that holds no file of a format raw-files reads, or
+that holds an entry it cannot read. Run it with `--release`, because it
+reads every file:
 
 ```sh
 RAW_FILES_LOCAL_CORPUS=/path/to/photos cargo test --release --test local_corpus -- --ignored --nocapture
