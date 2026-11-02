@@ -790,4 +790,22 @@ mod tests {
             }
         }
     }
+
+    #[test]
+    fn a_make_the_nef_claim_takes_need_not_name_a_maker() {
+        // The NEF claim takes a Make that starts with NIKON in any case,
+        // as the JPEG reader's choice of MakerNote does through the same
+        // `make_starts_with`, while `Camera::make` knows only the whole
+        // texts files have shown (ADR022): such a file opens as a NEF with
+        // no maker.
+        for make in ["Nikon", "NIKON CORP"] {
+            let mut tiff = TiffBuilder::new(Order::Little);
+            let (ifd0, exif) = (tiff.ifd(), tiff.ifd());
+            tiff.ascii(ifd0, MAKE, make).exif(ifd0, exif);
+            let (format, metadata) = detected_metadata(tiff.build().bytes);
+            assert_eq!(format, Format::Nef, "{make}");
+            assert_eq!(metadata.camera().recorded_make(), Some(make), "{make}");
+            assert_eq!(metadata.camera().make(), None, "{make}");
+        }
+    }
 }
