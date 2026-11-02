@@ -22,11 +22,14 @@
 //! of counts for each format the folder holds; a section also counts the
 //! formats its files opened as, so that a renamed file shows. It prints
 //! counts only: how many files opened, how many have each metadata field,
-//! how many previews the files have, and how the sizes are distributed; it
-//! never prints a path, a file name, or the value of a make, model,
-//! software, serial number, capture time, exposure or lens, so its output
-//! can be pasted into an issue without disclosing anything about the
-//! photos.
+//! how many have each maker, by the name the library gives it, such as
+//! "Nikon", and how many a recorded Make that names none, how many have a
+//! model's name from the library's table and how many a recorded Model but
+//! no name, how many previews the files have, and how the sizes are
+//! distributed; it never prints a path, a file name, the text of a make,
+//! model or software as the file records it, or the value of a serial
+//! number, capture time, exposure or lens, so its output can be pasted
+//! into an issue without disclosing anything about the photos.
 //!
 //! For each camera setting, from the exposure program to the colour space,
 //! it counts, over the files of a section, how many have the setting and
@@ -134,9 +137,19 @@ impl Seek for CountingReader {
 /// How many files have each metadata field, and how the sizes are
 /// distributed. Counts only: no value of a text, a time, an exposure or a
 /// lens is kept, apart from the capture times, which are kept to count the
-/// files that share one and are never printed.
+/// files that share one and are never printed. The makers are counted by
+/// the name the library gives each, such as "Nikon", as the camera
+/// settings are by the names of their kinds.
 #[derive(Default)]
 struct MetadataTally {
+    /// Files by the maker the library recognises from their recorded
+    /// Make, and files whose recorded Make names no maker.
+    makers: BTreeMap<&'static str, usize>,
+    make_without_maker: usize,
+    /// Files with a name from the library's table, and files with a
+    /// recorded Model but no name.
+    model: usize,
+    recorded_model_without_model: usize,
     recorded_make: usize,
     recorded_model: usize,
     software: usize,
@@ -164,10 +177,21 @@ struct MetadataTally {
 impl MetadataTally {
     /// Counts what `metadata` has.
     fn record(&mut self, metadata: &Metadata) {
-        self.recorded_make += usize::from(metadata.camera().recorded_make().is_some());
-        self.recorded_model += usize::from(metadata.camera().recorded_model().is_some());
+        let camera = metadata.camera();
+        match (camera.make(), camera.recorded_make()) {
+            (Some(make), _) => *self.makers.entry(make.name()).or_default() += 1,
+            (None, Some(_)) => self.make_without_maker += 1,
+            (None, None) => {}
+        }
+        match (camera.model(), camera.recorded_model()) {
+            (Some(_), _) => self.model += 1,
+            (None, Some(_)) => self.recorded_model_without_model += 1,
+            (None, None) => {}
+        }
+        self.recorded_make += usize::from(camera.recorded_make().is_some());
+        self.recorded_model += usize::from(camera.recorded_model().is_some());
         self.software += usize::from(metadata.software().is_some());
-        self.serial_number += usize::from(metadata.camera().serial_number().is_some());
+        self.serial_number += usize::from(camera.serial_number().is_some());
         if let Some(time) = metadata.capture_time() {
             self.capture_time += 1;
             self.with_subseconds += usize::from(time.subsecond_digits() > 0);
@@ -720,6 +744,14 @@ impl Tally {
         println!(
             "files with a recorded make: {}, a recorded model: {}, software: {}, a serial number: {}",
             m.recorded_make, m.recorded_model, m.software, m.serial_number
+        );
+        println!(
+            "files by maker: {:?}, with a recorded make that names no maker: {}",
+            m.makers, m.make_without_maker
+        );
+        println!(
+            "files with a model's name: {}, with a recorded model but no name: {}",
+            m.model, m.recorded_model_without_model
         );
         println!(
             "files with a capture time: {}, of which with sub-seconds: {}, with an offset from UTC: {}",
@@ -1366,6 +1398,38 @@ fn the_settings_tally_counts_the_makernote_settings() {
     without_color_temperature.record(&Metadata::default().with_camera_settings(fourth));
     assert_eq!(without_color_temperature.color_temperature, 0);
     assert_eq!(without_color_temperature.color_temperature_range, None);
+}
+
+#[test]
+fn the_metadata_tally_counts_the_makers_and_the_names() {
+    // Two Nikon bodies, one with a name and one without; a Sony body with
+    // a name; a Make that names no maker, with a Model; a Model alone,
+    // which gives neither a maker nor a name; and a file with neither.
+    let cameras = [
+        Camera::default()
+            .with_recorded_make("NIKON CORPORATION")
+            .with_recorded_model("NIKON Z 9"),
+        Camera::default()
+            .with_recorded_make("NIKON CORPORATION")
+            .with_recorded_model("NIKON D7200"),
+        Camera::default()
+            .with_recorded_make("SONY")
+            .with_recorded_model("ILCE-7M2"),
+        Camera::default()
+            .with_recorded_make("Sony")
+            .with_recorded_model("ILCE-7M2"),
+        Camera::default().with_recorded_model("NIKON Z 9"),
+        Camera::default(),
+    ];
+    let mut tally = MetadataTally::default();
+    for camera in cameras {
+        tally.record(&Metadata::default().with_camera(camera));
+    }
+    assert_eq!(tally.makers, BTreeMap::from([("Nikon", 2), ("Sony", 1)]));
+    assert_eq!(tally.make_without_maker, 1);
+    assert_eq!(tally.model, 2);
+    assert_eq!(tally.recorded_model_without_model, 3);
+    assert_eq!((tally.recorded_make, tally.recorded_model), (4, 5));
 }
 
 /// Three points of a 39-point layout in a 6016 × 4016 frame, from the

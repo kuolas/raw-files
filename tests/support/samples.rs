@@ -15,8 +15,8 @@ use std::path::{Path, PathBuf};
 
 use raw_files::{
     ColorSpace, ExposureProgram, FlashMode, FocusAreaMode, FocusOrigin, FocusPoint, Format,
-    ImageArea, MeteringMode, Orientation, Preview, PreviewFormat, Rational, RawFile, RawImageSize,
-    Shutter, SignedRational, Size, WhiteBalanceMode,
+    ImageArea, Make, MeteringMode, Orientation, Preview, PreviewFormat, Rational, RawFile,
+    RawImageSize, Shutter, SignedRational, Size, WhiteBalanceMode,
 };
 
 /// The path of the sample file `name`, or `None`, with a note on stderr,
@@ -179,7 +179,11 @@ pub fn check(sample: &Sample, format: Format) {
 
 /// What a sample file of `tests/samples.tsv` must give as its metadata:
 /// every value of [`Metadata`](raw_files::Metadata), `None` where the file
-/// must give none. Fractions are the numerator and denominator as stored,
+/// must give none. The camera's maker is the [`Make`] the reader recognises
+/// from the recorded Make, and its model the name raw-files' table gives
+/// for the maker and the recorded Model, `None` for every body the table
+/// does not hold, as [`Camera::model`](raw_files::Camera::model) gives
+/// them. Fractions are the numerator and denominator as stored,
 /// so `(10, 3200)` is not `(1, 320)`. The software is its text, as the
 /// reader cleans it, and the focal length in 35 mm terms its whole
 /// millimetres. The capture time is its ISO 8601 form, as
@@ -198,6 +202,8 @@ pub fn check(sample: &Sample, format: Format) {
 /// lens's by whether there is one.
 pub struct SampleMetadata {
     pub file: &'static str,
+    pub make: Option<Make>,
+    pub model: Option<&'static str>,
     pub recorded_make: Option<&'static str>,
     pub recorded_model: Option<&'static str>,
     pub software: Option<&'static str>,
@@ -337,6 +343,8 @@ pub fn check_metadata(expected: &SampleMetadata, format: Format) {
     let file = RawFile::open(&path).unwrap();
     assert_eq!(file.format(), format, "{label}");
     let metadata = file.metadata();
+    assert_eq!(metadata.camera().make(), expected.make, "{label}: make");
+    assert_eq!(metadata.camera().model(), expected.model, "{label}: model");
     assert_eq!(
         metadata.camera().recorded_make(),
         expected.recorded_make,

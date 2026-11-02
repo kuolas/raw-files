@@ -8,7 +8,10 @@
 //! records them, and [`Metadata::camera`](crate::Metadata::camera) gives
 //! them for a file. From the maker's text, raw-files recognises the maker
 //! as a [`Make`], such as [`Make::Nikon`] from `NIKON CORPORATION`, which
-//! [`Camera::make`] gives.
+//! [`Camera::make`] gives; and from the maker and the model's text
+//! together, the name the maker sells the body under, such as `Z6III` from
+//! `NIKON Z6_3`, which [`Camera::model`] gives for the bodies raw-files'
+//! table of names holds.
 //!
 //! Every value is optional. A file may not record it, or may record it in
 //! a way that cannot be read, such as a tag of the wrong type; either way
@@ -22,7 +25,8 @@ use std::fmt;
 
 /// The camera body a picture was taken with, as the file names it: its
 /// maker and its model as the file records them, and its serial number;
-/// and its maker as raw-files recognises it from the recorded text.
+/// and its maker and the name it sells the body under, as raw-files reads
+/// them from the recorded texts.
 ///
 /// The recorded maker and model are the file's text, cleaned as every text
 /// value is and nothing more: cut at the first NUL character, trimmed of
@@ -34,9 +38,13 @@ use std::fmt;
 ///
 /// From the recorded maker, raw-files recognises the camera's maker, a
 /// [`Make`] that [`make`](Self::make) gives, such as [`Make::Nikon`] from
-/// `NIKON CORPORATION`. It is read from the recorded text each time it is
-/// asked for, so it has no `with_…` method of its own: a test sets the
-/// recorded text, and gets the maker that a file with that text gives.
+/// `NIKON CORPORATION`; and from the maker and the recorded model
+/// together, the name the maker sells the body under, which
+/// [`model`](Self::model) gives, such as `Z6III` from `NIKON Z6_3`, for
+/// the bodies raw-files' table of names holds and for no other. Each is
+/// read from the recorded texts each time it is asked for, so neither has
+/// a `with_…` method of its own: a test sets the recorded texts, and gets
+/// the maker and the name that a file with those texts gives.
 ///
 /// Every value is `None` when the file does not record it or records it in
 /// a way that cannot be read; a damaged value costs only itself.
@@ -90,6 +98,7 @@ use std::fmt;
 ///     .with_recorded_model("NIKON Z 9")
 ///     .with_serial_number("3001234");
 /// assert_eq!(z9.make(), Some(Make::Nikon));
+/// assert_eq!(z9.model(), Some("Z 9"));
 /// assert_eq!(z9.recorded_make(), Some("NIKON CORPORATION"));
 /// assert_eq!(z9.recorded_model(), Some("NIKON Z 9"));
 /// assert_eq!(z9.serial_number(), Some("3001234"));
@@ -98,6 +107,8 @@ use std::fmt;
 ///
 /// let model_alone = Camera::default().with_recorded_model("NIKON D600");
 /// assert_eq!(model_alone.make(), None);
+/// // The name needs the maker too.
+/// assert_eq!(model_alone.model(), None);
 /// assert_eq!(model_alone.recorded_make(), None);
 /// assert_eq!(model_alone.recorded_model(), Some("NIKON D600"));
 /// assert_eq!(model_alone.serial_number(), None);
@@ -143,6 +154,77 @@ impl Camera {
         self.recorded_make.as_deref().and_then(Make::from_recorded)
     }
 
+    /// The name the camera's maker sells the body under, such as `Z6III`
+    /// for a file whose Model is `NIKON Z6_3`, or `α7 II` for `ILCE-7M2`.
+    /// The brand is not part of it: [`make`](Self::make) gives that, and a
+    /// program that shows the camera joins the two, as in `Nikon Z6III`.
+    ///
+    /// The name is spelled as its maker writes it in its own documents,
+    /// with its spaces and its case, such as `Z 9` with a space and `Z6III`
+    /// without one, and with Sony's Greek letter α, so it is not always
+    /// ASCII; a program that needs ASCII uses
+    /// [`recorded_model`](Self::recorded_model).
+    ///
+    /// It comes from raw-files' table of names, looked up by the maker and
+    /// the whole recorded Model text together, case included. The table
+    /// holds the bodies that the
+    /// [notes on camera names](https://github.com/kuolas/raw-files/blob/master/docs/formats/camera-names.md)
+    /// list, each with a file that shows its Model text and the maker's
+    /// document that gives its name. `None` when the file records no Make
+    /// that raw-files recognises or no Model, and for any body the table
+    /// does not hold; never the recorded text in its place, so that a
+    /// program can tell a name from a code, and shows the text where it
+    /// wants to with `model().or(recorded_model())`.
+    ///
+    /// It is read each time it is asked for, from what
+    /// [`with_recorded_make`](Self::with_recorded_make) and
+    /// [`with_recorded_model`](Self::with_recorded_model) set, and has no
+    /// `with_…` method of its own: a test sets the recorded texts of a body
+    /// the table holds, and gets the name that a file with those texts
+    /// gives.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use raw_files::Camera;
+    ///
+    /// let z6iii = Camera::default()
+    ///     .with_recorded_make("NIKON CORPORATION")
+    ///     .with_recorded_model("NIKON Z6_3");
+    /// assert_eq!(z6iii.model(), Some("Z6III"));
+    /// if let (Some(make), Some(model)) = (z6iii.make(), z6iii.model()) {
+    ///     assert_eq!(format!("{make} {model}"), "Nikon Z6III");
+    /// }
+    ///
+    /// // A body the table does not hold has no name; a program that wants
+    /// // the recorded text in its place asks for it.
+    /// let d7200 = Camera::default()
+    ///     .with_recorded_make("NIKON CORPORATION")
+    ///     .with_recorded_model("NIKON D7200");
+    /// assert_eq!(d7200.model(), None);
+    /// assert_eq!(d7200.model().or(d7200.recorded_model()), Some("NIKON D7200"));
+    /// ```
+    ///
+    /// A file's camera, by its maker's names where raw-files has them and
+    /// by the recorded text where it has none:
+    ///
+    /// ```no_run
+    /// use raw_files::RawFile;
+    ///
+    /// # fn main() -> raw_files::Result<()> {
+    /// let file = RawFile::open("photo.arw")?;
+    /// let camera = file.metadata().camera();
+    /// match (camera.make(), camera.model()) {
+    ///     (Some(make), Some(model)) => println!("camera: {make} {model}"),
+    ///     _ => println!("camera: {}", camera.recorded_model().unwrap_or("not recorded")),
+    /// }
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn model(&self) -> Option<&'static str> {
+        marketing_name(self.make()?, self.recorded_model.as_deref()?)
+    }
+
     /// The camera's maker as the file records it, such as
     /// `NIKON CORPORATION`: IFD0's Make, cleaned of padding by the reader
     /// as every text value is, or as given to
@@ -169,8 +251,10 @@ impl Camera {
     }
 
     /// Sets the camera's maker as the file records it, in place of any set
-    /// before; [`recorded_make`](Self::recorded_make) reads it, and
-    /// [`make`](Self::make) reads the maker from it too.
+    /// before; [`recorded_make`](Self::recorded_make) reads it,
+    /// [`make`](Self::make) reads the maker from it, and
+    /// [`model`](Self::model) reads the name from it and the recorded model
+    /// together.
     #[must_use]
     pub fn with_recorded_make(mut self, make: impl Into<String>) -> Self {
         self.recorded_make = Some(make.into());
@@ -178,7 +262,9 @@ impl Camera {
     }
 
     /// Sets the camera's model as the file records it, in place of any set
-    /// before; [`recorded_model`](Self::recorded_model) reads it.
+    /// before; [`recorded_model`](Self::recorded_model) reads it, and
+    /// [`model`](Self::model) reads the name from it and the recorded make
+    /// together.
     #[must_use]
     pub fn with_recorded_model(mut self, model: impl Into<String>) -> Self {
         self.recorded_model = Some(model.into());
@@ -292,8 +378,168 @@ impl fmt::Display for Make {
     }
 }
 
+/// One body's name, as its maker sells it, by the maker and the Model text
+/// the body's files record.
+struct Name {
+    /// The maker, as [`Make::from_recorded`] recognises it from the Make
+    /// text the body's files record.
+    make: Make,
+    /// The whole Model text the body's files record, cleaned of padding as
+    /// [`Camera::recorded_model`] gives it, such as `NIKON Z6_3`.
+    recorded_model: &'static str,
+    /// The name, as its maker writes it, without the brand, such as
+    /// `Z6III`.
+    name: &'static str,
+}
+
+/// The name of every body raw-files names, by its maker and its recorded
+/// Model text, in the order the notes on camera names
+/// (`docs/formats/camera-names.md`) list them, Nikon's bodies and then
+/// Sony's. The notes record, for every entry, a file that shows its Model
+/// text and the maker's document that gives its name, and an entry needs
+/// both
+/// ([the decision to take names as their makers write them](https://github.com/kuolas/raw-files/blob/master/docs/architecture-decisions/adr022-names-as-their-makers-write-them.md),
+/// ADR022). Each name is copied from the notes as they write it, its
+/// spaces plain U+0020 spaces and Sony's α the Greek small letter alpha,
+/// U+03B1.
+static NAMES: &[Name] = &[
+    // Nikon's D600 User's Manual, page 326.
+    Name {
+        make: Make::Nikon,
+        recorded_model: "NIKON D600",
+        name: "D600",
+    },
+    // Nikon's Z 9 Reference Guide, page 951, its online manual and its
+    // product pages.
+    Name {
+        make: Make::Nikon,
+        recorded_model: "NIKON Z 9",
+        name: "Z 9",
+    },
+    // The Z bodies below: each one's online manual and product page.
+    Name {
+        make: Make::Nikon,
+        recorded_model: "NIKON Z 6",
+        name: "Z 6",
+    },
+    Name {
+        make: Make::Nikon,
+        recorded_model: "NIKON Z 30",
+        name: "Z 30",
+    },
+    Name {
+        make: Make::Nikon,
+        recorded_model: "NIKON Z f",
+        name: "Z f",
+    },
+    Name {
+        make: Make::Nikon,
+        recorded_model: "NIKON Z fc",
+        name: "Z fc",
+    },
+    Name {
+        make: Make::Nikon,
+        recorded_model: "NIKON Z50_2",
+        name: "Z50II",
+    },
+    Name {
+        make: Make::Nikon,
+        recorded_model: "NIKON Z5_2",
+        name: "Z5II",
+    },
+    Name {
+        make: Make::Nikon,
+        recorded_model: "NIKON Z6_3",
+        name: "Z6III",
+    },
+    // Sony's bodies: each one's page in Sony's photo gallery.
+    Name {
+        make: Make::Sony,
+        recorded_model: "ILCE-1",
+        name: "α1",
+    },
+    Name {
+        make: Make::Sony,
+        recorded_model: "ILCE-1M2",
+        name: "α1 II",
+    },
+    Name {
+        make: Make::Sony,
+        recorded_model: "ILCE-6000",
+        name: "α6000",
+    },
+    Name {
+        make: Make::Sony,
+        recorded_model: "ILCE-6700",
+        name: "α6700",
+    },
+    Name {
+        make: Make::Sony,
+        recorded_model: "ILCE-7M2",
+        name: "α7 II",
+    },
+    Name {
+        make: Make::Sony,
+        recorded_model: "ILCE-7M3",
+        name: "α7 III",
+    },
+    Name {
+        make: Make::Sony,
+        recorded_model: "ILCE-7M4",
+        name: "α7 IV",
+    },
+    Name {
+        make: Make::Sony,
+        recorded_model: "ILCE-7M5",
+        name: "α7 V",
+    },
+    Name {
+        make: Make::Sony,
+        recorded_model: "ILCE-7RM2",
+        name: "α7R II",
+    },
+    Name {
+        make: Make::Sony,
+        recorded_model: "ILCE-7RM3",
+        name: "α7R III",
+    },
+    Name {
+        make: Make::Sony,
+        recorded_model: "ILCE-7S",
+        name: "α7S",
+    },
+    Name {
+        make: Make::Sony,
+        recorded_model: "ILCE-7SM3",
+        name: "α7S III",
+    },
+    Name {
+        make: Make::Sony,
+        recorded_model: "ILCE-9",
+        name: "α9",
+    },
+    Name {
+        make: Make::Sony,
+        recorded_model: "ILCE-9M3",
+        name: "α9 III",
+    },
+];
+
+/// The name of the body of `make` whose files record the Model text
+/// `recorded_model`, matched whole and with its case, or `None` for a body
+/// [`NAMES`] does not hold.
+fn marketing_name(make: Make, recorded_model: &str) -> Option<&'static str> {
+    NAMES
+        .iter()
+        .find(|entry| entry.make == make && entry.recorded_model == recorded_model)
+        .map(|entry| entry.name)
+}
+
 #[cfg(test)]
 mod tests {
+    use std::collections::BTreeSet;
+    use std::path::Path;
+
     use super::*;
     use crate::testing::{assert_names, assert_ordered};
 
@@ -520,5 +766,201 @@ mod tests {
         assert_eq!(sony.make(), Some(Make::Sony));
         let unknown = sony.with_recorded_make("Sony");
         assert_eq!(unknown.make(), None);
+    }
+
+    #[test]
+    fn every_recorded_model_is_named_once_for_its_maker() {
+        // A Model text listed twice for one maker would give the first
+        // entry's name and hide the second's.
+        let mut seen = BTreeSet::new();
+        for entry in NAMES {
+            assert!(
+                seen.insert((entry.make, entry.recorded_model)),
+                "{} {:?} is listed twice",
+                entry.make,
+                entry.recorded_model
+            );
+        }
+    }
+
+    #[test]
+    fn every_name_is_written_as_a_name_without_its_brand() {
+        // Not empty, with no space at either end and no two together, each
+        // space a plain one, and without its maker's name before it in any
+        // case: the brand is `make()`'s, and a name that began with it
+        // would show twice when a program joins the two.
+        for entry in NAMES {
+            let (name, model) = (entry.name, entry.recorded_model);
+            assert!(!name.is_empty(), "{model:?}: an empty name");
+            assert_eq!(name, name.trim(), "{model:?}: spaces at an end");
+            assert!(!name.contains("  "), "{model:?}: two spaces together");
+            assert!(
+                name.chars().filter(|c| c.is_whitespace()).all(|c| c == ' '),
+                "{model:?}: a space other than U+0020"
+            );
+            assert!(
+                !name
+                    .to_lowercase()
+                    .starts_with(&entry.make.name().to_lowercase()),
+                "{model:?}: the name {name:?} starts with its maker's"
+            );
+        }
+    }
+
+    #[test]
+    fn the_name_needs_the_maker_and_the_model() {
+        // A Model text another maker might write gives no name under it,
+        // and neither text gives one alone.
+        let model_alone = Camera::default().with_recorded_model("ILCE-7M2");
+        assert_eq!(model_alone.model(), None);
+        let other_maker = model_alone.clone().with_recorded_make("NIKON CORPORATION");
+        assert_eq!(other_maker.model(), None);
+        assert_eq!(Camera::default().with_recorded_make("SONY").model(), None);
+        let sony = model_alone.with_recorded_make("SONY");
+        assert_eq!(sony.model(), Some("α7 II"));
+    }
+
+    #[test]
+    fn the_name_needs_the_whole_model_text_case_included() {
+        // As the maker is recognised: a text in another case, part of a
+        // text or more than it, and a text with the padding a reader trims,
+        // which the setter stores as given.
+        let cases = [
+            ("SONY", "ILCE-7M2 "),
+            ("SONY", " ILCE-7M2"),
+            ("SONY", "ilce-7m2"),
+            ("SONY", "ILCE-7M"),
+            ("SONY", "ILCE-7M2V"),
+            ("NIKON CORPORATION", "NIKON Z 9 "),
+            ("NIKON CORPORATION", "NIKON Z9"),
+            ("NIKON CORPORATION", "nikon z 9"),
+            ("NIKON CORPORATION", "Z 9"),
+        ];
+        for (make, model) in cases {
+            let camera = Camera::default()
+                .with_recorded_make(make)
+                .with_recorded_model(model);
+            assert_eq!(camera.model(), None, "{make:?} {model:?}");
+        }
+    }
+
+    #[test]
+    fn the_name_is_read_from_the_recorded_texts_each_time() {
+        assert_eq!(Camera::default().model(), None);
+        let z9 = Camera::default()
+            .with_recorded_make("NIKON CORPORATION")
+            .with_recorded_model("NIKON Z 9");
+        assert_eq!(z9.model(), Some("Z 9"));
+        // No name is kept beside the texts: a new text gives its own.
+        let z6iii = z9.with_recorded_model("NIKON Z6_3");
+        assert_eq!(z6iii.model(), Some("Z6III"));
+        let unlisted = z6iii.with_recorded_model("NIKON D7200");
+        assert_eq!(unlisted.model(), None);
+        let sony = unlisted
+            .with_recorded_make("SONY")
+            .with_recorded_model("ILCE-9M3");
+        assert_eq!(sony.model(), Some("α9 III"));
+        let unknown = sony.with_recorded_make("Sony");
+        assert_eq!(unknown.model(), None);
+    }
+
+    /// The rows of the table under the heading `## {heading}` of the notes
+    /// on camera names, in their order: each row's first cell, a text in
+    /// backticks, and its third, the name. No cell before the name holds a
+    /// `|`, so a row splits on it.
+    fn rows_under(notes: &str, heading: &str) -> Vec<(String, String)> {
+        let mut rows = Vec::new();
+        let mut inside = false;
+        for line in notes.lines() {
+            if let Some(title) = line.strip_prefix("## ") {
+                inside = title == heading;
+                continue;
+            }
+            if !inside || !line.starts_with('|') {
+                continue;
+            }
+            let cells: Vec<&str> = line.split('|').map(str::trim).collect();
+            // The header, whose first cell names the column, and the line
+            // under it; every other line of the table is a row.
+            if line.starts_with("|---") || cells.get(1).is_some_and(|cell| cell.ends_with(" text"))
+            {
+                continue;
+            }
+            let (Some(text), Some(name)) = (cells.get(1), cells.get(3)) else {
+                panic!("a row with fewer than three cells: {line}");
+            };
+            let text = text
+                .strip_prefix('`')
+                .and_then(|cell| cell.strip_suffix('`'))
+                .unwrap_or_else(|| panic!("a row whose first cell is not in backticks: {line}"));
+            rows.push((text.to_owned(), (*name).to_owned()));
+        }
+        assert!(!rows.is_empty(), "no rows under \"## {heading}\"");
+        rows
+    }
+
+    /// The notes on camera names, or `None` in the packaged crate, which
+    /// leaves `docs/` out. The skip is keyed on `fuzz/Cargo.toml`, which
+    /// the repository has and the packaged crate leaves out too, as the
+    /// tables of autofocus points key theirs, so that a renamed or deleted
+    /// notes page fails instead of silently skipping.
+    fn notes() -> Option<String> {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let fuzz_manifest = root.join("fuzz/Cargo.toml");
+        if !fuzz_manifest.is_file() {
+            eprintln!(
+                "notes skipped: {} does not exist, as in the packaged crate",
+                fuzz_manifest.display()
+            );
+            return None;
+        }
+        let path = root.join("docs/formats/camera-names.md");
+        let notes = std::fs::read_to_string(&path)
+            .unwrap_or_else(|error| panic!("{}: {error}", path.display()));
+        Some(notes)
+    }
+
+    #[test]
+    fn the_table_holds_the_bodies_the_notes_list_in_their_order() {
+        let Some(notes) = notes() else {
+            return;
+        };
+        let mut listed = Vec::new();
+        for (heading, make) in [
+            ("3. Nikon bodies", Make::Nikon),
+            ("4. Sony bodies", Make::Sony),
+        ] {
+            for (model, name) in rows_under(&notes, heading) {
+                listed.push((make, model, name));
+            }
+        }
+        let table: Vec<(Make, String, String)> = NAMES
+            .iter()
+            .map(|entry| {
+                (
+                    entry.make,
+                    entry.recorded_model.to_owned(),
+                    entry.name.to_owned(),
+                )
+            })
+            .collect();
+        // Both ways, and in order: every row is an entry with its name, and
+        // every entry a row.
+        assert_eq!(table, listed);
+    }
+
+    #[test]
+    fn the_make_texts_are_the_ones_the_notes_list_in_their_order() {
+        let Some(notes) = notes() else {
+            return;
+        };
+        // Both ways, and in order: every row of the makers' table is a text
+        // a maker is recognised from, with that maker's name, and every
+        // such text a row.
+        let texts: Vec<(String, String)> = MAKE_TEXTS
+            .iter()
+            .map(|&(text, make)| (text.to_owned(), make.name().to_owned()))
+            .collect();
+        assert_eq!(texts, rows_under(&notes, "2. Makers"));
     }
 }

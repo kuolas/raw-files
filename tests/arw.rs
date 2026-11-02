@@ -16,8 +16,8 @@ use std::io::Cursor;
 
 use raw_files::{
     CameraSettings, ColorSpace, Exposure, ExposureProgram, FlashMode, FocusOrigin, Format, Lens,
-    Metadata, MeteringMode, Orientation, Point, PreviewFormat, Rational, RawFile, SignedRational,
-    Size, WhiteBalanceMode,
+    Make, Metadata, MeteringMode, Orientation, Point, PreviewFormat, Rational, RawFile,
+    SignedRational, Size, WhiteBalanceMode,
 };
 use support::arw::{
     A100_JPEG, A100_RAW_AS_COUNT, A100_TAG_SIZE, ARW4_FOCUS_CENTER, ARW4_FOCUS_FRAME,
@@ -1557,6 +1557,8 @@ const METADATA: &[SampleMetadata] = &[
     // SLT-A55 (raw.pixls.us 964)
     SampleMetadata {
         file: "sony-slt-a55.arw",
+        make: Some(Make::Sony),
+        model: None,
         recorded_make: Some("SONY"),
         recorded_model: Some("SLT-A55V"),
         software: Some("SLT-A55V v1.10"),
@@ -1599,6 +1601,8 @@ const METADATA: &[SampleMetadata] = &[
     // ILCE-7RM2 (raw.pixls.us 1310)
     SampleMetadata {
         file: "sony-ilce-7rm2-compressed.arw",
+        make: Some(Make::Sony),
+        model: Some("α7R II"),
         recorded_make: Some("SONY"),
         recorded_model: Some("ILCE-7RM2"),
         software: Some("ILCE-7RM2 v3.30"),
@@ -1644,6 +1648,8 @@ const METADATA: &[SampleMetadata] = &[
     // ILCE-7RM2 (raw.pixls.us 1311)
     SampleMetadata {
         file: "sony-ilce-7rm2-uncompressed.arw",
+        make: Some(Make::Sony),
+        model: Some("α7R II"),
         recorded_make: Some("SONY"),
         recorded_model: Some("ILCE-7RM2"),
         software: Some("ILCE-7RM2 v3.30"),
@@ -1689,6 +1695,8 @@ const METADATA: &[SampleMetadata] = &[
     // DSC-F828 (raw.pixls.us 1351)
     SampleMetadata {
         file: "sony-dsc-f828.srf",
+        make: Some(Make::Sony),
+        model: None,
         recorded_make: Some("SONY"),
         recorded_model: Some("DSC-F828"),
         software: None,
@@ -1723,6 +1731,8 @@ const METADATA: &[SampleMetadata] = &[
     // NEX-5 (raw.pixls.us 1457)
     SampleMetadata {
         file: "sony-nex-5.arw",
+        make: Some(Make::Sony),
+        model: None,
         recorded_make: Some("SONY"),
         recorded_model: Some("NEX-5"),
         software: Some("NEX-5 Ver.05"),
@@ -1765,6 +1775,8 @@ const METADATA: &[SampleMetadata] = &[
     // ILCE-9 (raw.pixls.us 1541)
     SampleMetadata {
         file: "sony-ilce-9-compressed.arw",
+        make: Some(Make::Sony),
+        model: Some("α9"),
         recorded_make: Some("SONY"),
         recorded_model: Some("ILCE-9"),
         software: Some("ILCE-9 v1.00"),
@@ -1819,6 +1831,8 @@ const METADATA: &[SampleMetadata] = &[
     // ILCE-9 (raw.pixls.us 1542)
     SampleMetadata {
         file: "sony-ilce-9-uncompressed.arw",
+        make: Some(Make::Sony),
+        model: Some("α9"),
         recorded_make: Some("SONY"),
         recorded_model: Some("ILCE-9"),
         software: Some("ILCE-9 v1.00"),
@@ -1873,6 +1887,8 @@ const METADATA: &[SampleMetadata] = &[
     // ILCE-7S (raw.pixls.us 1582)
     SampleMetadata {
         file: "sony-ilce-7s.arw",
+        make: Some(Make::Sony),
+        model: Some("α7S"),
         recorded_make: Some("SONY"),
         recorded_model: Some("ILCE-7S"),
         software: Some("ILCE-7S v3.20"),
@@ -1910,6 +1926,8 @@ const METADATA: &[SampleMetadata] = &[
     // DSLR-A200 (raw.pixls.us 2271)
     SampleMetadata {
         file: "sony-dslr-a200.arw",
+        make: Some(Make::Sony),
+        model: None,
         recorded_make: Some("SONY"),
         recorded_model: Some("DSLR-A200"),
         software: Some("DSLR-A200 v1.00"),
@@ -1944,6 +1962,8 @@ const METADATA: &[SampleMetadata] = &[
     // DSLR-A100 (raw.pixls.us 2346)
     SampleMetadata {
         file: "sony-dslr-a100.arw",
+        make: Some(Make::Sony),
+        model: None,
         recorded_make: Some("SONY"),
         recorded_model: Some("DSLR-A100"),
         software: Some("DSLR-A100 v1.04"),
@@ -1978,6 +1998,8 @@ const METADATA: &[SampleMetadata] = &[
     // DSLR-A700 (raw.pixls.us 2521)
     SampleMetadata {
         file: "sony-dslr-a700.arw",
+        make: Some(Make::Sony),
+        model: None,
         recorded_make: Some("SONY"),
         recorded_model: Some("DSLR-A700"),
         software: Some("DSLR-A700 v04"),
@@ -2012,6 +2034,8 @@ const METADATA: &[SampleMetadata] = &[
     // DSC-RX100M6 (raw.pixls.us 3012)
     SampleMetadata {
         file: "sony-dsc-rx100m6-1x1.arw",
+        make: Some(Make::Sony),
+        model: None,
         recorded_make: Some("SONY"),
         recorded_model: Some("DSC-RX100M6"),
         software: Some("DSC-RX100M6 v1.00"),
@@ -2066,6 +2090,8 @@ const METADATA: &[SampleMetadata] = &[
     // DSC-RX100M6 (raw.pixls.us 3015)
     SampleMetadata {
         file: "sony-dsc-rx100m6-16x9.arw",
+        make: Some(Make::Sony),
+        model: None,
         recorded_make: Some("SONY"),
         recorded_model: Some("DSC-RX100M6"),
         software: Some("DSC-RX100M6 v1.00"),
@@ -2120,6 +2146,8 @@ const METADATA: &[SampleMetadata] = &[
     // DSC-R1 (raw.pixls.us 3221)
     SampleMetadata {
         file: "sony-dsc-r1.sr2",
+        make: Some(Make::Sony),
+        model: None,
         recorded_make: Some("SONY"),
         recorded_model: Some("DSC-R1"),
         software: None,
@@ -2154,6 +2182,8 @@ const METADATA: &[SampleMetadata] = &[
     // ILCE-7RM3 (raw.pixls.us 3251)
     SampleMetadata {
         file: "sony-ilce-7rm3-pixel-shift.arw",
+        make: Some(Make::Sony),
+        model: Some("α7R III"),
         recorded_make: Some("SONY"),
         recorded_model: Some("ILCE-7RM3"),
         software: Some("ILCE-7RM3 v3.00"),
@@ -2208,6 +2238,8 @@ const METADATA: &[SampleMetadata] = &[
     // SLT-A99 (raw.pixls.us 3751)
     SampleMetadata {
         file: "sony-slt-a99.arw",
+        make: Some(Make::Sony),
+        model: None,
         recorded_make: Some("SONY"),
         recorded_model: Some("SLT-A99V"),
         software: Some("SLT-A99V v1.02"),
@@ -2253,6 +2285,8 @@ const METADATA: &[SampleMetadata] = &[
     // Hasselblad Lunar (raw.pixls.us 4051)
     SampleMetadata {
         file: "hasselblad-lunar.arw",
+        make: Some(Make::Hasselblad),
+        model: None,
         recorded_make: Some("HASSELBLAD"),
         recorded_model: Some("Lunar"),
         software: Some("Lunar v1.02"),
@@ -2298,6 +2332,8 @@ const METADATA: &[SampleMetadata] = &[
     // ILCE-1 (raw.pixls.us 4466)
     SampleMetadata {
         file: "sony-ilce-1-lossless.arw",
+        make: Some(Make::Sony),
+        model: Some("α1"),
         recorded_make: Some("SONY"),
         recorded_model: Some("ILCE-1"),
         software: Some("ILCE-1 v1.00"),
@@ -2355,6 +2391,8 @@ const METADATA: &[SampleMetadata] = &[
     // ILCE-7SM3 (raw.pixls.us 5418)
     SampleMetadata {
         file: "sony-ilce-7sm3.arw",
+        make: Some(Make::Sony),
+        model: Some("α7S III"),
         recorded_make: Some("SONY"),
         recorded_model: Some("ILCE-7SM3"),
         software: Some("ILCE-7SM3 v2.01"),
@@ -2409,6 +2447,8 @@ const METADATA: &[SampleMetadata] = &[
     // DSC-RX100 (raw.pixls.us 5811)
     SampleMetadata {
         file: "sony-dsc-rx100.arw",
+        make: Some(Make::Sony),
+        model: None,
         recorded_make: Some("SONY"),
         recorded_model: Some("DSC-RX100"),
         software: Some("DSC-RX100 v1.00"),
@@ -2454,6 +2494,8 @@ const METADATA: &[SampleMetadata] = &[
     // DSLR-A900 (raw.pixls.us 5858)
     SampleMetadata {
         file: "sony-dslr-a900.arw",
+        make: Some(Make::Sony),
+        model: None,
         recorded_make: Some("SONY"),
         recorded_model: Some("DSLR-A900"),
         software: Some("DSLR-A900 v2.00"),
@@ -2488,6 +2530,8 @@ const METADATA: &[SampleMetadata] = &[
     // ILCE-6700 (raw.pixls.us 6736)
     SampleMetadata {
         file: "sony-ilce-6700-lossless.arw",
+        make: Some(Make::Sony),
+        model: Some("α6700"),
         recorded_make: Some("SONY"),
         recorded_model: Some("ILCE-6700"),
         software: Some("ILCE-6700 v1.00"),
@@ -2542,6 +2586,8 @@ const METADATA: &[SampleMetadata] = &[
     // ILCE-7M4 (raw.pixls.us 6929)
     SampleMetadata {
         file: "sony-ilce-7m4-lossless-l.arw",
+        make: Some(Make::Sony),
+        model: Some("α7 IV"),
         recorded_make: Some("SONY"),
         recorded_model: Some("ILCE-7M4"),
         software: Some("ILCE-7M4 v2.00"),
@@ -2596,6 +2642,8 @@ const METADATA: &[SampleMetadata] = &[
     // ILCE-7M4 (raw.pixls.us 6930)
     SampleMetadata {
         file: "sony-ilce-7m4-lossless-m.arw",
+        make: Some(Make::Sony),
+        model: Some("α7 IV"),
         recorded_make: Some("SONY"),
         recorded_model: Some("ILCE-7M4"),
         software: Some("ILCE-7M4 v2.00"),
@@ -2650,6 +2698,8 @@ const METADATA: &[SampleMetadata] = &[
     // ILCE-7M4 (raw.pixls.us 6931)
     SampleMetadata {
         file: "sony-ilce-7m4-lossless-s.arw",
+        make: Some(Make::Sony),
+        model: Some("α7 IV"),
         recorded_make: Some("SONY"),
         recorded_model: Some("ILCE-7M4"),
         software: Some("ILCE-7M4 v2.00"),
@@ -2704,6 +2754,8 @@ const METADATA: &[SampleMetadata] = &[
     // ILCE-7M4 (raw.pixls.us 6933)
     SampleMetadata {
         file: "sony-ilce-7m4-uncompressed-apsc.arw",
+        make: Some(Make::Sony),
+        model: Some("α7 IV"),
         recorded_make: Some("SONY"),
         recorded_model: Some("ILCE-7M4"),
         software: Some("ILCE-7M4 v2.00"),
@@ -2758,6 +2810,8 @@ const METADATA: &[SampleMetadata] = &[
     // ILCE-7M4 (raw.pixls.us 6936)
     SampleMetadata {
         file: "sony-ilce-7m4-compressed-apsc.arw",
+        make: Some(Make::Sony),
+        model: Some("α7 IV"),
         recorded_make: Some("SONY"),
         recorded_model: Some("ILCE-7M4"),
         software: Some("ILCE-7M4 v2.00"),
@@ -2812,6 +2866,8 @@ const METADATA: &[SampleMetadata] = &[
     // ILCE-9M3 (raw.pixls.us 7361)
     SampleMetadata {
         file: "sony-ilce-9m3-compressed.arw",
+        make: Some(Make::Sony),
+        model: Some("α9 III"),
         recorded_make: Some("SONY"),
         recorded_model: Some("ILCE-9M3"),
         software: Some("ILCE-9M3 v1.00"),
@@ -2857,6 +2913,8 @@ const METADATA: &[SampleMetadata] = &[
     // ILCE-9M3 (raw.pixls.us 7364)
     SampleMetadata {
         file: "sony-ilce-9m3-lossless-s.arw",
+        make: Some(Make::Sony),
+        model: Some("α9 III"),
         recorded_make: Some("SONY"),
         recorded_model: Some("ILCE-9M3"),
         software: Some("ILCE-9M3 v1.00"),
@@ -2902,6 +2960,8 @@ const METADATA: &[SampleMetadata] = &[
     // ILCE-1M2 (raw.pixls.us 7835)
     SampleMetadata {
         file: "sony-ilce-1m2-lossy-apsc.arw",
+        make: Some(Make::Sony),
+        model: Some("α1 II"),
         recorded_make: Some("SONY"),
         recorded_model: Some("ILCE-1M2"),
         software: Some("ILCE-1M2 v2.00"),
@@ -2956,6 +3016,8 @@ const METADATA: &[SampleMetadata] = &[
     // ILCE-7M5 (raw.pixls.us 8846)
     SampleMetadata {
         file: "sony-ilce-7m5-compressed-hq.arw",
+        make: Some(Make::Sony),
+        model: Some("α7 V"),
         recorded_make: Some("SONY"),
         recorded_model: Some("ILCE-7M5"),
         software: Some("ILCE-7M5 v1.00"),
@@ -3013,6 +3075,8 @@ const METADATA: &[SampleMetadata] = &[
     // ILCE-7M5 (raw.pixls.us 8847)
     SampleMetadata {
         file: "sony-ilce-7m5-compressed.arw",
+        make: Some(Make::Sony),
+        model: Some("α7 V"),
         recorded_make: Some("SONY"),
         recorded_model: Some("ILCE-7M5"),
         software: Some("ILCE-7M5 v1.00"),
@@ -3070,6 +3134,8 @@ const METADATA: &[SampleMetadata] = &[
     // ILCE-7M5 (raw.pixls.us 8848)
     SampleMetadata {
         file: "sony-ilce-7m5-lossless-apsc.arw",
+        make: Some(Make::Sony),
+        model: Some("α7 V"),
         recorded_make: Some("SONY"),
         recorded_model: Some("ILCE-7M5"),
         software: Some("ILCE-7M5 v1.00"),
@@ -3127,6 +3193,8 @@ const METADATA: &[SampleMetadata] = &[
     // ILCE-7M5 (raw.pixls.us 8849)
     SampleMetadata {
         file: "sony-ilce-7m5-compressed-hq-apsc.arw",
+        make: Some(Make::Sony),
+        model: Some("α7 V"),
         recorded_make: Some("SONY"),
         recorded_model: Some("ILCE-7M5"),
         software: Some("ILCE-7M5 v1.00"),
@@ -3184,6 +3252,8 @@ const METADATA: &[SampleMetadata] = &[
     // ILCE-7M5 (raw.pixls.us 8850)
     SampleMetadata {
         file: "sony-ilce-7m5-compressed-apsc.arw",
+        make: Some(Make::Sony),
+        model: Some("α7 V"),
         recorded_make: Some("SONY"),
         recorded_model: Some("ILCE-7M5"),
         software: Some("ILCE-7M5 v1.00"),
@@ -3246,6 +3316,8 @@ const LARGE_METADATA: &[SampleMetadata] = &[
     // ILCE-7RM3 (raw.pixls.us 3255), large tier
     SampleMetadata {
         file: "sony-ilce-7rm3.arq",
+        make: Some(Make::Sony),
+        model: Some("α7R III"),
         recorded_make: Some("SONY"),
         recorded_model: Some("ILCE-7RM3"),
         software: Some("ILCE-7RM3 v3.00"),

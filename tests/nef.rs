@@ -42,8 +42,8 @@ use std::io::Cursor;
 use raw_files::{
     Camera, CameraSettings, ColorSpace, DateTime, Exposure, ExposureProgram, FineTune, Flash,
     FlashMode, Focus, FocusAreaMode, FocusOrigin, FocusPoint, FocusPoints, Format, ImageArea, Lens,
-    Limits, Metadata, MeteringMode, Options, Orientation, Point, Preview, PreviewFormat, Rational,
-    RawFile, RawImageSize, Shutter, SignedRational, Size, WhiteBalance, WhiteBalanceMode,
+    Limits, Make, Metadata, MeteringMode, Options, Orientation, Point, Preview, PreviewFormat,
+    Rational, RawFile, RawImageSize, Shutter, SignedRational, Size, WhiteBalance, WhiteBalanceMode,
 };
 use support::nef::{
     D1H_ISO, D1H_LENS, D1H_PREVIEW_JPEG, D1H_RAW, D1hBlobs, d1h_file, d1h_file_with,
@@ -1213,6 +1213,8 @@ fn check_stripped_z9(expected: &StrippedZ9) {
         Some("NIKON Z 9"),
         "{label}"
     );
+    assert_eq!(metadata.camera().make(), Some(Make::Nikon), "{label}");
+    assert_eq!(metadata.camera().model(), Some("Z 9"), "{label}");
     // The firmware my Z 9 ran.
     assert_eq!(metadata.software(), Some("Ver.05.30"), "{label}");
     // The stripping removed BodySerialNumber and the MakerNote's
@@ -1836,6 +1838,8 @@ fn every_frame_of_the_d600_session_gives_what_its_bytes_record() {
             Some("NIKON D600"),
             "{label}"
         );
+        assert_eq!(metadata.camera().make(), Some(Make::Nikon), "{label}");
+        assert_eq!(metadata.camera().model(), Some("D600"), "{label}");
         assert_eq!(metadata.orientation(), orientation, "{label}");
         assert_eq!(
             metadata.camera_settings().image_area(),
@@ -3184,6 +3188,8 @@ const METADATA: &[SampleMetadata] = &[
     // Z 9, 14-bit lossless compression (raw.pixls.us 5146)
     SampleMetadata {
         file: "nikon-z9-lossless.nef",
+        make: Some(Make::Nikon),
+        model: Some("Z 9"),
         recorded_make: Some("NIKON CORPORATION"),
         recorded_model: Some("NIKON Z 9"),
         software: Some("Ver.01.00"),
@@ -3241,6 +3247,8 @@ const METADATA: &[SampleMetadata] = &[
     // Z 9, High Efficiency* (raw.pixls.us 5147)
     SampleMetadata {
         file: "nikon-z9-he-star.nef",
+        make: Some(Make::Nikon),
+        model: Some("Z 9"),
         recorded_make: Some("NIKON CORPORATION"),
         recorded_model: Some("NIKON Z 9"),
         software: Some("Ver.01.00"),
@@ -3298,6 +3306,8 @@ const METADATA: &[SampleMetadata] = &[
     // Z 9, High Efficiency (raw.pixls.us 5148)
     SampleMetadata {
         file: "nikon-z9-he.nef",
+        make: Some(Make::Nikon),
+        model: Some("Z 9"),
         recorded_make: Some("NIKON CORPORATION"),
         recorded_model: Some("NIKON Z 9"),
         software: Some("Ver.01.00"),
@@ -3355,6 +3365,8 @@ const METADATA: &[SampleMetadata] = &[
     // D1H, 12-bit uncompressed (raw.pixls.us 5364)
     SampleMetadata {
         file: "nikon-d1h-12bit-uncompressed.nef",
+        make: Some(Make::Nikon),
+        model: None,
         recorded_make: Some("NIKON CORPORATION"),
         recorded_model: Some("NIKON D1H"),
         software: Some("Ver.1.00"),
@@ -3397,6 +3409,8 @@ const METADATA: &[SampleMetadata] = &[
     // D1X, 12-bit lossy (raw.pixls.us 1785)
     SampleMetadata {
         file: "nikon-d1x-12bit-lossy.nef",
+        make: Some(Make::Nikon),
+        model: None,
         recorded_make: Some("NIKON CORPORATION"),
         recorded_model: Some("NIKON D1X"),
         software: Some("Ver.1.01"),
@@ -3439,6 +3453,8 @@ const METADATA: &[SampleMetadata] = &[
     // D1X, 12-bit uncompressed (raw.pixls.us 1786)
     SampleMetadata {
         file: "nikon-d1x-12bit-uncompressed.nef",
+        make: Some(Make::Nikon),
+        model: None,
         recorded_make: Some("NIKON CORPORATION"),
         recorded_model: Some("NIKON D1X"),
         software: Some("Ver.1.01"),
@@ -3481,6 +3497,8 @@ const METADATA: &[SampleMetadata] = &[
     // D100, 12-bit uncompressed (raw.pixls.us 2996)
     SampleMetadata {
         file: "nikon-d100-12bit-uncompressed.nef",
+        make: Some(Make::Nikon),
+        model: None,
         recorded_make: Some("NIKON CORPORATION"),
         recorded_model: Some("NIKON D100"),
         software: Some("Ver.2.00"),
@@ -3523,6 +3541,8 @@ const METADATA: &[SampleMetadata] = &[
     // D70, 12-bit lossy (raw.pixls.us 2060)
     SampleMetadata {
         file: "nikon-d70-12bit-lossy.nef",
+        make: Some(Make::Nikon),
+        model: None,
         recorded_make: Some("NIKON CORPORATION"),
         recorded_model: Some("NIKON D70"),
         software: Some("Ver.2.00"),
@@ -3565,6 +3585,8 @@ const METADATA: &[SampleMetadata] = &[
     // D200, 12-bit lossy (raw.pixls.us 8079)
     SampleMetadata {
         file: "nikon-d200-12bit-lossy.nef",
+        make: Some(Make::Nikon),
+        model: None,
         recorded_make: Some("NIKON CORPORATION"),
         recorded_model: Some("NIKON D200"),
         software: Some("Ver.2.00"),
@@ -3607,6 +3629,8 @@ const METADATA: &[SampleMetadata] = &[
     // D300, 12-bit lossy (raw.pixls.us 928)
     SampleMetadata {
         file: "nikon-d300-12bit-lossy.nef",
+        make: Some(Make::Nikon),
+        model: None,
         recorded_make: Some("NIKON CORPORATION"),
         recorded_model: Some("NIKON D300"),
         software: Some("Ver.1.10"),
@@ -3655,6 +3679,8 @@ const METADATA: &[SampleMetadata] = &[
     // D700, 12-bit lossy (raw.pixls.us 2255)
     SampleMetadata {
         file: "nikon-d700-12bit-lossy.nef",
+        make: Some(Make::Nikon),
+        model: None,
         recorded_make: Some("NIKON CORPORATION"),
         recorded_model: Some("NIKON D700"),
         software: Some("Ver.1.03"),
@@ -3703,6 +3729,8 @@ const METADATA: &[SampleMetadata] = &[
     // D7000, 12-bit lossy (raw.pixls.us 961)
     SampleMetadata {
         file: "nikon-d7000-12bit-lossy.nef",
+        make: Some(Make::Nikon),
+        model: None,
         recorded_make: Some("NIKON CORPORATION"),
         recorded_model: Some("NIKON D7000"),
         software: Some("Ver.1.05"),
@@ -3760,6 +3788,8 @@ const METADATA: &[SampleMetadata] = &[
     // D750, 12-bit lossy (raw.pixls.us 895)
     SampleMetadata {
         file: "nikon-d750-12bit-lossy.nef",
+        make: Some(Make::Nikon),
+        model: None,
         recorded_make: Some("NIKON CORPORATION"),
         recorded_model: Some("NIKON D750"),
         software: Some("Ver.1.10"),
@@ -3808,6 +3838,8 @@ const METADATA: &[SampleMetadata] = &[
     // D810, 12-bit small raw (raw.pixls.us 2036)
     SampleMetadata {
         file: "nikon-d810-12bit-small.nef",
+        make: Some(Make::Nikon),
+        model: None,
         recorded_make: Some("NIKON CORPORATION"),
         recorded_model: Some("NIKON D810"),
         software: Some("Ver.1.12"),
@@ -3856,6 +3888,8 @@ const METADATA: &[SampleMetadata] = &[
     // D850, 12-bit lossless small raw (raw.pixls.us 1835)
     SampleMetadata {
         file: "nikon-d850-12bit-lossless-small.nef",
+        make: Some(Make::Nikon),
+        model: None,
         recorded_make: Some("NIKON CORPORATION"),
         recorded_model: Some("NIKON D850"),
         software: Some("Ver.1.00"),
@@ -3904,6 +3938,8 @@ const METADATA: &[SampleMetadata] = &[
     // D780, 12-bit lossy (raw.pixls.us 3827)
     SampleMetadata {
         file: "nikon-d780-12bit-lossy.nef",
+        make: Some(Make::Nikon),
+        model: None,
         recorded_make: Some("NIKON CORPORATION"),
         recorded_model: Some("NIKON D780"),
         software: Some("Ver.01.00"),
@@ -3952,6 +3988,8 @@ const METADATA: &[SampleMetadata] = &[
     // Z 6, 12-bit small raw (raw.pixls.us 3587)
     SampleMetadata {
         file: "nikon-z6-12bit-small.nef",
+        make: Some(Make::Nikon),
+        model: Some("Z 6"),
         recorded_make: Some("NIKON CORPORATION"),
         recorded_model: Some("NIKON Z 6"),
         software: Some("Ver.02.00"),
@@ -4009,6 +4047,8 @@ const METADATA: &[SampleMetadata] = &[
     // Z f, 14-bit (raw.pixls.us 6887)
     SampleMetadata {
         file: "nikon-zf-14bit.nef",
+        make: Some(Make::Nikon),
+        model: Some("Z f"),
         recorded_make: Some("NIKON CORPORATION"),
         recorded_model: Some("NIKON Z f"),
         software: Some("Ver.01.00"),
@@ -4066,6 +4106,8 @@ const METADATA: &[SampleMetadata] = &[
     // Z6III, 14-bit, 3:2 (raw.pixls.us 7810)
     SampleMetadata {
         file: "nikon-z6iii-14bit-3x2.nef",
+        make: Some(Make::Nikon),
+        model: Some("Z6III"),
         recorded_make: Some("NIKON CORPORATION"),
         recorded_model: Some("NIKON Z6_3"),
         software: Some("Ver.01.00"),
@@ -4123,6 +4165,8 @@ const METADATA: &[SampleMetadata] = &[
     // Z6III, 14-bit, 16:9 (raw.pixls.us 7809)
     SampleMetadata {
         file: "nikon-z6iii-14bit-16x9.nef",
+        make: Some(Make::Nikon),
+        model: Some("Z6III"),
         recorded_make: Some("NIKON CORPORATION"),
         recorded_model: Some("NIKON Z6_3"),
         software: Some("Ver.01.00"),
@@ -4180,6 +4224,8 @@ const METADATA: &[SampleMetadata] = &[
     // Z6III, 14-bit, 1:1 (raw.pixls.us 7808)
     SampleMetadata {
         file: "nikon-z6iii-14bit-1x1.nef",
+        make: Some(Make::Nikon),
+        model: Some("Z6III"),
         recorded_make: Some("NIKON CORPORATION"),
         recorded_model: Some("NIKON Z6_3"),
         software: Some("Ver.01.00"),
@@ -4237,6 +4283,8 @@ const METADATA: &[SampleMetadata] = &[
     // Coolpix A, 14-bit lossy (raw.pixls.us 2238)
     SampleMetadata {
         file: "nikon-coolpix-a-14bit-lossy.nef",
+        make: Some(Make::Nikon),
+        model: None,
         recorded_make: Some("NIKON CORPORATION"),
         recorded_model: Some("COOLPIX A"),
         software: Some("Ver.1.12"),
@@ -4286,6 +4334,8 @@ const METADATA: &[SampleMetadata] = &[
     // Coolpix P7800, 12-bit, an NRW file (raw.pixls.us 1425)
     SampleMetadata {
         file: "nikon-coolpix-p7800-12bit.nrw",
+        make: Some(Make::Nikon),
+        model: None,
         recorded_make: Some("NIKON"),
         recorded_model: Some("COOLPIX P7800"),
         software: Some("COOLPIX P7800  V1.0"),
@@ -4323,6 +4373,8 @@ const METADATA: &[SampleMetadata] = &[
     // E5700, 12-bit uncompressed (raw.pixls.us 4456)
     SampleMetadata {
         file: "nikon-e5700-12bit-uncompressed.nef",
+        make: Some(Make::Nikon),
+        model: None,
         recorded_make: Some("NIKON"),
         recorded_model: Some("E5700"),
         software: Some("E5700v1.1"),
@@ -4357,6 +4409,8 @@ const METADATA: &[SampleMetadata] = &[
     // Nikon 1 J1, 12-bit lossy (raw.pixls.us 2956)
     SampleMetadata {
         file: "nikon-1-j1-12bit-lossy.nef",
+        make: Some(Make::Nikon),
+        model: None,
         recorded_make: Some("NIKON CORPORATION"),
         recorded_model: Some("NIKON 1 J1"),
         software: Some("Ver.1.40"),
@@ -4405,6 +4459,8 @@ const METADATA: &[SampleMetadata] = &[
     // D5600, 12-bit lossy, live view (raw.pixls.us 1415)
     SampleMetadata {
         file: "nikon-d5600-12bit-lossy.nef",
+        make: Some(Make::Nikon),
+        model: None,
         recorded_make: Some("NIKON CORPORATION"),
         recorded_model: Some("NIKON D5600"),
         software: Some("Ver.1.00"),
@@ -4462,6 +4518,8 @@ const METADATA: &[SampleMetadata] = &[
     // Z5II, 14-bit, 1:1 (raw.pixls.us 7735)
     SampleMetadata {
         file: "nikon-z5ii-14bit-1x1.nef",
+        make: Some(Make::Nikon),
+        model: Some("Z5II"),
         recorded_make: Some("NIKON CORPORATION"),
         recorded_model: Some("NIKON Z5_2"),
         software: Some("Ver.01.00"),
@@ -4510,6 +4568,8 @@ const METADATA: &[SampleMetadata] = &[
     // Z5II, 14-bit, 16:9 (raw.pixls.us 7736)
     SampleMetadata {
         file: "nikon-z5ii-14bit-16x9.nef",
+        make: Some(Make::Nikon),
+        model: Some("Z5II"),
         recorded_make: Some("NIKON CORPORATION"),
         recorded_model: Some("NIKON Z5_2"),
         software: Some("Ver.01.00"),
@@ -4558,6 +4618,8 @@ const METADATA: &[SampleMetadata] = &[
     // Z50II, 14-bit, 1:1 (raw.pixls.us 7767)
     SampleMetadata {
         file: "nikon-z50ii-14bit-1x1.nef",
+        make: Some(Make::Nikon),
+        model: Some("Z50II"),
         recorded_make: Some("NIKON CORPORATION"),
         recorded_model: Some("NIKON Z50_2"),
         software: Some("Ver.01.00"),
@@ -4615,6 +4677,8 @@ const METADATA: &[SampleMetadata] = &[
     // Z50II, 14-bit, 16:9 (raw.pixls.us 7770)
     SampleMetadata {
         file: "nikon-z50ii-14bit-16x9.nef",
+        make: Some(Make::Nikon),
+        model: Some("Z50II"),
         recorded_make: Some("NIKON CORPORATION"),
         recorded_model: Some("NIKON Z50_2"),
         software: Some("Ver.01.00"),
@@ -4672,6 +4736,8 @@ const METADATA: &[SampleMetadata] = &[
     // Z6III, 14-bit High Efficiency*, 1:1 (raw.pixls.us 7812)
     SampleMetadata {
         file: "nikon-z6iii-14bit-1x1-he-star.nef",
+        make: Some(Make::Nikon),
+        model: Some("Z6III"),
         recorded_make: Some("NIKON CORPORATION"),
         recorded_model: Some("NIKON Z6_3"),
         software: Some("Ver.01.00"),
@@ -4729,6 +4795,8 @@ const METADATA: &[SampleMetadata] = &[
     // Z6III, 14-bit High Efficiency*, 16:9 (raw.pixls.us 7813)
     SampleMetadata {
         file: "nikon-z6iii-14bit-16x9-he-star.nef",
+        make: Some(Make::Nikon),
+        model: Some("Z6III"),
         recorded_make: Some("NIKON CORPORATION"),
         recorded_model: Some("NIKON Z6_3"),
         software: Some("Ver.01.00"),
@@ -4786,6 +4854,8 @@ const METADATA: &[SampleMetadata] = &[
     // D5, 14-bit lossy, live view (raw.pixls.us 2218)
     SampleMetadata {
         file: "nikon-d5-14bit-lossy.nef",
+        make: Some(Make::Nikon),
+        model: None,
         recorded_make: Some("NIKON CORPORATION"),
         recorded_model: Some("NIKON D5"),
         software: Some("Ver.1.20"),
@@ -4843,6 +4913,8 @@ const METADATA: &[SampleMetadata] = &[
     // Z 30, 12-bit lossless, rotated (raw.pixls.us 5812)
     SampleMetadata {
         file: "nikon-z30-12bit-lossless.nef",
+        make: Some(Make::Nikon),
+        model: Some("Z 30"),
         recorded_make: Some("NIKON CORPORATION"),
         recorded_model: Some("NIKON Z 30"),
         software: Some("Ver.01.00"),
@@ -4900,6 +4972,8 @@ const METADATA: &[SampleMetadata] = &[
     // Z fc, 12-bit lossless, manual focus (raw.pixls.us 8559)
     SampleMetadata {
         file: "nikon-zfc-12bit-lossless.nef",
+        make: Some(Make::Nikon),
+        model: Some("Z fc"),
         recorded_make: Some("NIKON CORPORATION"),
         recorded_model: Some("NIKON Z fc"),
         software: Some("Ver.01.70"),
