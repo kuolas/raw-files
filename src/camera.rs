@@ -6,7 +6,9 @@
 //! each in a text tag of the file's first directory, IFD0, and on many
 //! bodies its serial number. [`Camera`] holds the three as the file
 //! records them, and [`Metadata::camera`](crate::Metadata::camera) gives
-//! them for a file.
+//! them for a file. From the maker's text, raw-files recognises the maker
+//! as a [`Make`], such as [`Make::Nikon`] from `NIKON CORPORATION`, which
+//! [`Camera::make`] gives.
 //!
 //! Every value is optional. A file may not record it, or may record it in
 //! a way that cannot be read, such as a tag of the wrong type; either way
@@ -16,16 +18,25 @@
 //! without a camera file, through its `with_…` methods. [`Camera`]'s docs
 //! show how.
 
+use std::fmt;
+
 /// The camera body a picture was taken with, as the file names it: its
-/// maker and its model as the file records them, and its serial number.
+/// maker and its model as the file records them, and its serial number;
+/// and its maker as raw-files recognises it from the recorded text.
 ///
-/// The maker and the model are the file's text, cleaned as every text value
-/// is and nothing more: cut at the first NUL character, trimmed of spaces
-/// at both ends, with any bytes that are not UTF-8 replaced by U+FFFD, and
-/// `None` when nothing is left or when the text before the NUL is longer
-/// than 255 bytes. So a program gets the text that another reader of the
-/// same file shows, such as `NIKON CORPORATION` and `NIKON Z 9` from a
-/// Nikon Z 9, or `SONY` and `ILCE-7M4` from a Sony ILCE-7M4.
+/// The recorded maker and model are the file's text, cleaned as every text
+/// value is and nothing more: cut at the first NUL character, trimmed of
+/// spaces at both ends, with any bytes that are not UTF-8 replaced by
+/// U+FFFD, and `None` when nothing is left or when the text before the NUL
+/// is longer than 255 bytes. So a program gets the text that another reader
+/// of the same file shows, such as `NIKON CORPORATION` and `NIKON Z 9` from
+/// a Nikon Z 9, or `SONY` and `ILCE-7M4` from a Sony ILCE-7M4.
+///
+/// From the recorded maker, raw-files recognises the camera's maker, a
+/// [`Make`] that [`make`](Self::make) gives, such as [`Make::Nikon`] from
+/// `NIKON CORPORATION`. It is read from the recorded text each time it is
+/// asked for, so it has no `with_…` method of its own: a test sets the
+/// recorded text, and gets the maker that a file with that text gives.
 ///
 /// Every value is `None` when the file does not record it or records it in
 /// a way that cannot be read; a damaged value costs only itself.
@@ -72,12 +83,13 @@
 /// the metadata, and build a camera whose file records its model alone:
 ///
 /// ```
-/// use raw_files::{Camera, Metadata};
+/// use raw_files::{Camera, Make, Metadata};
 ///
 /// let z9 = Camera::default()
 ///     .with_recorded_make("NIKON CORPORATION")
 ///     .with_recorded_model("NIKON Z 9")
 ///     .with_serial_number("3001234");
+/// assert_eq!(z9.make(), Some(Make::Nikon));
 /// assert_eq!(z9.recorded_make(), Some("NIKON CORPORATION"));
 /// assert_eq!(z9.recorded_model(), Some("NIKON Z 9"));
 /// assert_eq!(z9.serial_number(), Some("3001234"));
@@ -85,6 +97,7 @@
 /// assert_eq!(metadata.camera(), &z9);
 ///
 /// let model_alone = Camera::default().with_recorded_model("NIKON D600");
+/// assert_eq!(model_alone.make(), None);
 /// assert_eq!(model_alone.recorded_make(), None);
 /// assert_eq!(model_alone.recorded_model(), Some("NIKON D600"));
 /// assert_eq!(model_alone.serial_number(), None);
@@ -100,6 +113,36 @@ pub struct Camera {
 }
 
 impl Camera {
+    /// The camera's maker, such as [`Make::Nikon`], as raw-files recognises
+    /// it from the Make text the file records, which
+    /// [`recorded_make`](Self::recorded_make) gives. `None` when the file
+    /// records no Make, or a text raw-files does not recognise; [`Make`]
+    /// says which texts it does.
+    ///
+    /// It is read each time it is asked for, from what
+    /// [`with_recorded_make`](Self::with_recorded_make) sets, and has no
+    /// `with_…` method of its own: a test sets the recorded text, and gets
+    /// the maker that a file with that text gives.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use raw_files::{Camera, Make};
+    ///
+    /// let z9 = Camera::default().with_recorded_make("NIKON CORPORATION");
+    /// assert_eq!(z9.make(), Some(Make::Nikon));
+    /// if let Some(make) = z9.make() {
+    ///     assert_eq!(format!("{make}"), "Nikon");
+    /// }
+    ///
+    /// // The maker's name is not a text a file records.
+    /// let unknown = Camera::default().with_recorded_make("Nikon");
+    /// assert_eq!(unknown.make(), None);
+    /// ```
+    pub fn make(&self) -> Option<Make> {
+        self.recorded_make.as_deref().and_then(Make::from_recorded)
+    }
+
     /// The camera's maker as the file records it, such as
     /// `NIKON CORPORATION`: IFD0's Make, cleaned of padding by the reader
     /// as every text value is, or as given to
@@ -126,7 +169,8 @@ impl Camera {
     }
 
     /// Sets the camera's maker as the file records it, in place of any set
-    /// before; [`recorded_make`](Self::recorded_make) reads it.
+    /// before; [`recorded_make`](Self::recorded_make) reads it, and
+    /// [`make`](Self::make) reads the maker from it too.
     #[must_use]
     pub fn with_recorded_make(mut self, make: impl Into<String>) -> Self {
         self.recorded_make = Some(make.into());
@@ -150,9 +194,108 @@ impl Camera {
     }
 }
 
+/// The maker of a camera, as raw-files recognises it from the Make text a
+/// file records, such as [`Nikon`](Self::Nikon) from `NIKON CORPORATION`;
+/// [`Camera::make`] gives it.
+///
+/// Each maker's name is spelled as the maker writes its own name in its
+/// own published documents, as the
+/// [decision to take names as their makers write them](https://github.com/kuolas/raw-files/blob/master/docs/architecture-decisions/adr022-names-as-their-makers-write-them.md)
+/// sets out. Its [`name`](Self::name)s, which `Display` writes too, are
+/// "Nikon", "Sony", "Hasselblad" and "Canon".
+///
+/// A maker is recognised only from a Make text a file has been seen to
+/// write, matched whole and with its case, so any other text, such as
+/// `Sony` or `nikon`, gives none. Each variant names its texts; the
+/// [notes on camera names](https://github.com/kuolas/raw-files/blob/master/docs/formats/camera-names.md)
+/// list the files that show each text and the maker's documents behind
+/// each name.
+///
+/// Which maker's reader opens a file is decided otherwise, by a looser
+/// test of the same text: a Make that starts with `NIKON` or `SONY`,
+/// whatever its case, once trimmed, or, in a raw file that holds Sony's
+/// private pointer, `HASSELBLAD`. So a file whose Make is `Nikon` is read
+/// as a Nikon file, with the values Nikon's MakerNote records, and still
+/// gives no maker here.
+///
+/// `Make` is `#[non_exhaustive]`, so match on it with a wildcard arm: more
+/// makers are added as files show their Make texts. It orders as its
+/// variants are listed, and a new variant is added after the existing ones,
+/// so an order once observed holds.
+///
+/// # Examples
+///
+/// ```
+/// use raw_files::{Camera, Make};
+///
+/// let camera = Camera::default().with_recorded_make("SONY");
+/// let label = match camera.make() {
+///     Some(Make::Nikon) => "a Nikon".to_owned(),
+///     Some(make) => format!("a camera by {make}"),
+///     None => "a camera by a maker raw-files does not recognise".to_owned(),
+/// };
+/// assert_eq!(label, "a camera by Sony");
+/// assert_eq!(Make::Hasselblad.name(), "Hasselblad");
+/// ```
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[non_exhaustive]
+pub enum Make {
+    /// Nikon: the Make text `NIKON CORPORATION`, which every Nikon body
+    /// checked writes but two Coolpix compacts, the E5700 and the P7800,
+    /// which write `NIKON`.
+    Nikon,
+    /// Sony: the Make text `SONY`, which every Sony body checked writes.
+    Sony,
+    /// Hasselblad: the Make text `HASSELBLAD`, which its Lunar writes.
+    Hasselblad,
+    /// Canon: the Make text `Canon`, which its PowerShot G7 X writes.
+    Canon,
+}
+
+impl Make {
+    /// The maker's name, for an information panel: "Nikon", "Sony",
+    /// "Hasselblad" or "Canon".
+    pub fn name(self) -> &'static str {
+        match self {
+            Make::Nikon => "Nikon",
+            Make::Sony => "Sony",
+            Make::Hasselblad => "Hasselblad",
+            Make::Canon => "Canon",
+        }
+    }
+
+    /// The maker whose Make text `text` is, matched whole and with its
+    /// case, or `None` for a text no maker is recognised from.
+    pub(crate) fn from_recorded(text: &str) -> Option<Make> {
+        MAKE_TEXTS
+            .iter()
+            .find(|&&(recorded, _)| recorded == text)
+            .map(|&(_, make)| make)
+    }
+}
+
+/// Every Make text a maker is recognised from, with its maker, in the
+/// order the notes on camera names (`docs/formats/camera-names.md`,
+/// section 2) list them, each one a text a file the notes name records.
+static MAKE_TEXTS: [(&str, Make); 5] = [
+    ("NIKON CORPORATION", Make::Nikon),
+    ("NIKON", Make::Nikon),
+    ("SONY", Make::Sony),
+    ("HASSELBLAD", Make::Hasselblad),
+    ("Canon", Make::Canon),
+];
+
+impl fmt::Display for Make {
+    /// Writes [`name`](Make::name).
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.name())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::testing::{assert_names, assert_ordered};
 
     /// The camera of a Z 9 file, every value set, each one different from
     /// the others, so that a getter reading the wrong value is caught.
@@ -287,5 +430,95 @@ mod tests {
             .into_iter()
             .collect();
         assert_eq!(cameras.len(), 2);
+    }
+
+    // Every variant of `Make`, in the order of its declaration. The
+    // `match` has no wildcard arm, so a variant added later does not
+    // compile until it is listed here too, and the test below then fails
+    // until its name is listed there.
+
+    fn all_makes() -> [Make; 4] {
+        let all = [Make::Nikon, Make::Sony, Make::Hasselblad, Make::Canon];
+        for make in all {
+            match make {
+                Make::Nikon | Make::Sony | Make::Hasselblad | Make::Canon => {}
+            }
+        }
+        all
+    }
+
+    #[test]
+    fn every_make_name_is_the_one_documented_and_display_writes_it() {
+        // The names are stable once released: a program may show or store
+        // them, so a changed one fails here.
+        assert_names(
+            &all_makes(),
+            Make::name,
+            &["Nikon", "Sony", "Hasselblad", "Canon"],
+        );
+    }
+
+    #[test]
+    fn makes_order_as_their_variants_are_listed() {
+        // A program may key a sorted map by the maker, and the order is a
+        // promise: a variant moved, or added before the others, fails.
+        assert_ordered(&all_makes());
+    }
+
+    #[test]
+    fn every_make_text_of_the_notes_gives_its_maker() {
+        // Every Make text the notes on camera names list, as the files
+        // show it, set as the recorded make.
+        let cases = [
+            ("NIKON CORPORATION", Make::Nikon),
+            ("NIKON", Make::Nikon),
+            ("SONY", Make::Sony),
+            ("HASSELBLAD", Make::Hasselblad),
+            ("Canon", Make::Canon),
+        ];
+        for (text, make) in cases {
+            let camera = Camera::default().with_recorded_make(text);
+            assert_eq!(camera.make(), Some(make), "{text:?}");
+        }
+    }
+
+    #[test]
+    fn any_other_make_text_gives_no_maker() {
+        // A maker is recognised from its whole text, case included: a
+        // text in another case, a maker's name, a part of a text or more
+        // than it, another field's text, and a text with the padding a
+        // reader trims, which the setter stores as given.
+        let texts = [
+            "Sony",
+            "sony",
+            "nikon",
+            "Nikon",
+            "NIKON CORP",
+            "NIKON CORPORATION INC",
+            " SONY",
+            "SONY ",
+            "",
+            "CANON",
+            "Hasselblad",
+            "NIKON Z 9",
+        ];
+        for text in texts {
+            let camera = Camera::default().with_recorded_make(text);
+            assert_eq!(camera.make(), None, "{text:?}");
+        }
+    }
+
+    #[test]
+    fn the_maker_is_read_from_the_recorded_make_each_time() {
+        assert_eq!(Camera::default().make(), None);
+        // A model alone gives no maker, even one that is a Make text.
+        assert_eq!(Camera::default().with_recorded_model("NIKON").make(), None);
+        let nikon = Camera::default().with_recorded_make("NIKON CORPORATION");
+        assert_eq!(nikon.make(), Some(Make::Nikon));
+        // No maker is kept beside the text: a new text gives its own.
+        let sony = nikon.with_recorded_make("SONY");
+        assert_eq!(sony.make(), Some(Make::Sony));
+        let unknown = sony.with_recorded_make("Sony");
+        assert_eq!(unknown.make(), None);
     }
 }

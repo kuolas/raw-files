@@ -10,6 +10,18 @@ does.
 
 ## [Unreleased]
 
+### Added
+
+- `Camera::make` gives the camera's maker as a `Make`, `Nikon`, `Sony`,
+  `Hasselblad` or `Canon`, recognised from the whole Make text the file
+  records, case included: `NIKON CORPORATION` and `NIKON` are Nikon,
+  `SONY` Sony, `HASSELBLAD` Hasselblad and `Canon` Canon, and any other
+  text gives `None`. `Make` has a `name` that `Display` writes, spelled
+  as each maker writes its own name, and orders as its variants are
+  listed. `make()` is read from the recorded Make each time it is asked
+  for, with no setter of its own, so a program's tests set the recorded
+  text with `with_recorded_make`.
+
 ### Changed
 
 - `Metadata::lens` gives a `&Lens`, as `Metadata::exposure` gives a

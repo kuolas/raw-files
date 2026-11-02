@@ -425,7 +425,7 @@ mod tiff_builder;
 #[cfg(test)]
 mod testing;
 
-pub use camera::Camera;
+pub use camera::{Camera, Make};
 pub use camera_settings::{
     CameraSettings, ColorSpace, ExposureProgram, FineTune, Flash, FlashMode, ImageArea,
     MeteringMode, RawImageSize, Shutter, WhiteBalance, WhiteBalanceMode,
