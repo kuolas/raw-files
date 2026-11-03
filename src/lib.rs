@@ -21,8 +21,10 @@
 //! Nikon and Sony cameras, from what the maker's MakerNote records that
 //! they lack:
 //!
-//! - the camera's make, model and serial number, and the software that
-//!   wrote the file;
+//! - the camera's make, model and serial number as the file records them,
+//!   with the maker raw-files recognises in them and, for the bodies it
+//!   names, the name the body is sold under, in a [`Camera`]; and the
+//!   software that wrote the file;
 //! - the capture time and the orientation;
 //! - the exposure, with the focal length in 35 mm terms, and the lens;
 //! - the camera's settings, in [`CameraSettings`]: the white balance, the

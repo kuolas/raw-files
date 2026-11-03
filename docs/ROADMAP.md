@@ -42,9 +42,12 @@ ever complete for every body. What each gives so far:
   Multi-Picture Format (MPF) list and, from the Nikon bodies that
   write one, its MakerNote's small JPEG.
 - **Metadata.** What a viewer or a file renamer needs next to the
-  preview: capture time, camera make, model and serial number, lens,
-  exposure, orientation, image sizes, and how the camera was set (white
-  balance, exposure program, metering, flash, shutter, image area).
+  preview: capture time, camera make, model and serial number (with the
+  maker raw-files recognises in them and, for the bodies the
+  [notes on camera names](formats/camera-names.md) list, the name the
+  body is sold under), lens, exposure, orientation, image sizes, and
+  how the camera was set (white balance, exposure program, metering,
+  flash, shutter, image area).
   Read from the standard TIFF and Exif tags and from the MakerNote, for
   the camera settings that only it records and, on Nikon files, for the
   fields that older bodies record only there. A JPEG file's metadata
