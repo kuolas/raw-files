@@ -322,9 +322,10 @@ raw-files, writing about my own cameras: they stay private.
 - **Checked on**: 35 CC0 Nikon files from raw.pixls.us that CI downloads,
   three of the Z 9 (lossless, HE and HE\*) and 32 of 25 other bodies from
   the D1H to the Z5II; test files laid out like a Z 9's, a Z6III's, a
-  D300's and a D1H's; two stripped files of my own Z 9; and the 56
-  frames, stripped of their pixels, on which I measured the autofocus
-  points of my own D600.
+  D300's and a D1H's; two stripped files of my own Z 9; the 56 frames,
+  stripped of their pixels, on which I measured the autofocus points of
+  my own D600; and the NEF of one more D600 frame, shot as a pair with
+  a Medium JPEG.
 
 **Sony ARW**, with the SRF, SR2 and ARQ files of the same family and the
 ARW files of the Sony-built Hasselblad bodies.
