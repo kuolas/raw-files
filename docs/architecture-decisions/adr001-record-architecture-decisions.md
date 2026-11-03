@@ -2,8 +2,8 @@
 
 - Status: Accepted
 - Date: 2026-10-10
-- Revision: 2, 2026-11-03
-- Issue: #80
+- Revision: 3, 2026-11-03
+- Issue: #80; the stub of a folded record #81
 
 ## Context
 
@@ -73,6 +73,9 @@ Rejected:
 - **A revision as a new file beside the old one:** every link names a file,
   so each revision would move them all, and two files per number bring the
   old answers back.
+- **Deleting a folded record's file**, as this record first had it: the
+  documentation of a published release links to the records on the
+  default branch, so its links would break.
 
 ## Consequences
 

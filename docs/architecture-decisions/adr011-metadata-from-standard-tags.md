@@ -2,8 +2,8 @@
 
 - Status: Accepted
 - Date: 2026-10-15
-- Revision: 2, 2026-10-24
-- Issue: #13; the camera settings #26
+- Revision: 2, 2026-10-25
+- Issue: #13; the camera settings #26, revised in #51
 
 ## Context
 
@@ -284,6 +284,9 @@ Rejected:
   files record them in plain form.
 - **The Sony MakerNote** for the lens range and the model ID. It adds no
   range the Exif tags lack, and gives the wrong one on the RX100 family.
+- **Reading no Sony MakerNote at all**, as this record first had it. The
+  focus point ([ADR012](adr012-focus-points-as-the-camera-records-them.md))
+  and the camera settings that only the MakerNote records need it.
 - **Falling back on DateTimeDigitized or DateTime** for the capture time.
   Every sample has DateTimeOriginal, and IFD0's DateTime is the time of
   the last edit.
