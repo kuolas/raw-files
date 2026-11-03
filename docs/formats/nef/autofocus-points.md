@@ -65,6 +65,10 @@ how to get in touch
      opposite corners, to measure how a point shifts into the crop,
      and the size of the crop's picture, its window, which their
      full-size previews and JPEGs give;
+   - two frames RAW + JPEG at each smaller JPEG size the body offers
+     (Medium and Small), uncropped, to measure which part of the frame
+     each size's picture shows: a size whose picture is not the whole
+     frame scaled is a window of it, as a crop's is;
    - two or three frames in auto-area mode, which record several points
      at once, to check the mask of points used against the display;
    - a frame or two in a dynamic-area mode;
@@ -86,7 +90,11 @@ how to get in touch
    file records, the repeats against their originals, the portrait
    frames against the landscape readings turned, the crop frames against
    the origin of their window centred in the frame, which the crop tag
-   must record too, the auto-area frames against their masks.
+   must record too, the auto-area frames against their masks. Fit each
+   JPEG of a smaller size onto the full-size preview of its own raw
+   file, with a scale and an offset on each axis, as section 2.9 does:
+   the part of the frame it covers is the size's window, which must lie
+   centred and have the JPEG's shape.
 6. **Read the files' bytes**: the point number, the layout code, the
    mask and the focus mode of every frame, with a script written from
    the notes. The mask's bit order is read off the single-point frames,
@@ -122,7 +130,9 @@ from the files' bytes with a script written from the notes and, for
 the box, from the NX Studio screenshots measured as section 1 says.
 The 56 NEF files are committed, stripped of their pixels and personal
 fields, so that every value read from their bytes can be checked on
-them, with the JPEG of frame 4 (section 2.7). **[F]**
+them, with the JPEG of frame 4 (section 2.7). **[F]** Section 2.9
+records what the D600's smaller JPEG sizes show of the frame, measured
+on RAW+JPEG pairs I shot on 2026-11-03, outside the session.
 
 ### 2.1 The session
 
@@ -173,7 +183,8 @@ detection method 0, with the 39-point layout: two JPEGs alone, at the
 Medium and Small sizes, and six RAW+JPEG pairs, whose NEF and JPEG
 carry the same values. **[F]** ExifTool's published documentation
 lists 9 under phase detection as 3D-tracking [P][1], which the frames
-confirm. **[F]**
+confirm. **[F]** The six pairs also measure the JPEG sizes (section
+2.9).
 
 ### 2.3 The mask's bit order
 
@@ -366,6 +377,16 @@ JPEG:
 - frame 42, auto-area: the mask of points used, 12 bits, with the
   primary among them.
 
+Three files of the pairs of section 2.9 are committed beside the
+session, stripped the same ways, in `tests/fixtures/nikon-d600-jpeg-sizes/`,
+whose [manifest](../../../tests/fixtures/nikon-d600-jpeg-sizes/README.md)
+lists them with their SHA-256: frame 7856's NEF and its Medium JPEG,
+and frame 7858's Small JPEG, each shot in 3D-tracking with point 1.
+The tests check that the NEF and the Small JPEG give point 1 at
+(3008, 2007) in the 6016x4016 frame, and the Medium JPEG at
+(3005, 2002) in the 6010x4006 window, each with the area mode
+`Tracking`.
+
 ### 2.8 What the reader gives on my own files
 
 The local corpus test, which runs the reader over a folder of camera
@@ -390,13 +411,16 @@ JPEGs **[F]**:
 
 On 23 NEF and 16 JPEG files I shot with my D600 outside the session,
 every NEF gives a point: 22 placed from the table, 2 of them DX frames
-in the window, and 1 recorded in live view. 15 of the JPEGs give one,
-the 2 DX JPEGs in the window. The 16th, a Medium JPEG of 4512x3008,
-gives none: its shape, exactly 3:2, is further from the table's
-6016x4016 frame than the one pixel of rounding by which a JPEG's
-point must fit its picture
+in the window, and 1 recorded in live view. 15 of the JPEGs gave one
+when I counted them, the 2 DX JPEGs in the window. The 16th, a Medium
+JPEG of 4512x3008, gave none: its shape, exactly 3:2, is further from
+the table's 6016x4016 frame than the one pixel of rounding by which a
+JPEG's point must fit its picture
 ([ADR014](../../architecture-decisions/adr014-jpeg-files-as-a-format-of-their-own.md)),
-while a Small JPEG of 3008x2008, half the frame, keeps its point. 19 of
+while a Small JPEG of 3008x2008, half the frame, kept its point. The
+table now keeps the window of the frame that a Medium JPEG shows,
+which has its shape, and places such a JPEG's points in it (section
+2.9); those 16 files have not been counted again. 19 of
 the NEF files record area-mode code 9 under phase detection, read with
 ExifTool, run as a reader to compare with. **[F]** Which mode they were
 shot in is not recorded beside the code. The frames of section 2.2
@@ -404,11 +428,81 @@ confirm the code as 3D-tracking, so these files' lists take that mode,
 `Tracking`, from the code alone; the reader has not been run on them
 again to see it.
 
-On the eight 3D-tracking frames of section 2.2, the reader gives every
-one of the six NEF files a point placed from the table and a list
-whose area mode is `Tracking`. Of the eight JPEGs, the five at the Large and
-Small sizes give the same; the three at the Medium size, 4512x3008,
-give no point, as above. **[F]**
+On the folder of the frames I shot on 2026-11-03, 7846 to 7859, 6 NEF
+and 14 JPEG files, the reader gives every file a point placed from the
+table, and every list holds points of the layout: the 6 NEF files and
+the 7 JPEGs at the Large and Small sizes in the 6016x4016 frame, and
+the 7 JPEGs at the Medium size in the 6010x4006 window of section 2.9.
+The lists of the 6 NEF files and of the 8 JPEGs of the 3D-tracking
+frames of section 2.2 take the area mode `Tracking`; the other 6 JPEGs,
+shot in auto-area and single-point modes, take `Auto area` on 4 and
+`Single point` on 2. **[F]**
+
+### 2.9 The JPEG sizes
+
+The D600 writes its JPEG at three sizes: Large, 6016x4016, the
+table's frame; Medium, 4512x3008; and Small, 3008x2008. **[F]** The
+table is read on the session's Large JPEGs (section 2.4), so a point
+placed on a smaller JPEG must be measured in the part of the frame
+that the smaller picture shows. The Small JPEG is half the frame on
+both axes. The Medium JPEG is exactly 3:2, where three quarters of the
+frame would be 4512x3012, so its size alone cannot tell whether its
+picture is the whole frame scaled more down than across, or a part of
+the frame scaled evenly.
+
+I shot six RAW+JPEG pairs with my own D600 on 2026-11-03, outside the
+session, frames 7854 to 7859 by the camera's numbering: two each at the
+Large, Medium and Small sizes, of one static scene, with an AF-S Nikkor
+50mm f/1.4G at f/1.4, through the viewfinder in 3D-tracking with the
+centre point, point 1 (the frames of section 2.2). Each JPEG was fitted
+onto the full-size preview of its own NEF, 6016x4016 with the framing
+of the Large JPEG, which exiv2, run as a reader, extracted: a script
+written for this measurement matched small patches of the two pictures
+by phase correlation, to a fraction of a pixel, and fitted a scale and
+an offset on each axis to the matches, 158 to 1,122 patches a frame,
+with residuals of about 0.05 pixels. **[F]**
+
+| Frames | Size | Part of the 6016x4016 frame the JPEG shows | Scale |
+|---|---|---|---|
+| 7854, 7855 | Large, 6016x4016 | the whole frame, to within 0.03 pixels | 1.00000 |
+| 7856, 7857 | Medium, 4512x3008 | x 2.90 to 6013.06, y 4.54 to 4011.40: 6010.2x4006.9 | 0.75072 on both axes |
+| 7858, 7859 | Small, 3008x2008 | the whole frame, to within 0.05 pixels | 0.50000 |
+
+The Medium bounds are the mean of the two frames, which agree to 0.05
+pixels. **[F]** So the Medium JPEG is not the whole frame scaled more
+in height than in width, nor a picture scaled by 0.75 with 4 rows cut
+from it: it is a window of the frame, 6010.2x4006.9 frame pixels, 3:2,
+centred to within 0.06 pixels (2.90 left and 2.94 right, 4.54 above
+and 4.60 below), scaled evenly. **[F]** No tag records the window:
+the Medium JPEG carries the same AFInfo2 and CropHiSpeed as its NEF
+(section 2.2), CropHiSpeed recording no crop.
+
+The table keeps that window as a whole number of frame pixels, centred
+to the pixel: 6010x4006, at the origin (3, 5), the nearest such window
+to the measured one
+([ADR020](../../architecture-decisions/adr020-each-crops-window-in-the-table.md)).
+A point placed in it and scaled onto the Medium JPEG lands within 0.08
+of a Medium pixel across and 0.35 down of where the measured window
+puts it, anywhere in the frame; the window of 6012x4008 at (2, 4),
+exactly 3:2, would land up to 0.71 across and 0.45 down, and the whole
+frame up to 2.2 across and 3.5 down. **[I]** The JPEG reader keeps the
+point, since 6010x4006 has the JPEG's shape to within its one pixel of
+rounding: 6010 × 3008 and 4006 × 4512 differ by 3,008, within the
+longest side, 6,010, where the whole frame's products differ by 24,064.
+**[F]** The Large and Small JPEGs show the whole frame and take the
+table's frame. No DX frame was shot at a smaller size, so a DX JPEG
+smaller than the crop's window still gives no point (section 2.6).
+
+An indirect estimate, from the JPEG-only frames 7846 to 7853 shot the
+same day with the same lens and settings, 5 Medium and 3 Small, fitted
+each JPEG onto the 1632x1080 preview it embeds, and took that preview
+to show the same part of the frame at every size. It gave a Medium
+window about 1.5 pixels wider, 6011.7x4008. The embedded preview's own
+window differs between the two batches, though: on the Small JPEGs its
+margin is 5.4 frame pixels on the JPEG-only frames and 2.1 on the
+pairs. So that method is indirect, and the window is the pairs'
+direct fit alone; the difference is within the table's tolerance of
+±3 frame pixels (section 2.5). **[F]**
 
 ## 3. Bodies without a table
 

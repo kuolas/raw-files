@@ -53,6 +53,34 @@ impl Size {
     pub(crate) fn area(self) -> u64 {
         u64::from(self.width) * u64::from(self.height)
     }
+
+    /// Whether focus points measured in a frame of this size fit a picture
+    /// of `picture` pixels: whether this size has the picture's aspect
+    /// ratio, to within one pixel of rounding in either of the two sizes,
+    /// the rule a JPEG's points are held to (ADR014).
+    ///
+    /// That is when the frame's width times the picture's height and the
+    /// frame's height times the picture's width differ by at most the longest
+    /// of the four sides. When one of the two sizes is the other scaled, each
+    /// side rounded to the nearest pixel, the products differ by at most half
+    /// the sum of the other size's two sides, which is within the longest
+    /// side: a 640 by 427 frame, 3:2 rounded, against a 6000 by 4000 picture
+    /// differs by 2,000, within 6,000. A picture cut to another shape, or
+    /// turned upright in its pixels, does not pass. Both sizes are in the
+    /// stored orientation: Orientation turns neither.
+    ///
+    /// The products are of two `u32`s, which a `u64` always holds, so nothing
+    /// here can overflow.
+    ///
+    /// The tables of a body's points hold the window of each JPEG size they
+    /// list to this rule against the size, in their tests, so that the
+    /// points placed in such a window are kept.
+    pub(crate) fn same_shape(self, picture: Size) -> bool {
+        let [fw, fh, pw, ph] =
+            [self.width, self.height, picture.width, picture.height].map(u64::from);
+        let longest = fw.max(fh).max(pw).max(ph);
+        (fw * ph).abs_diff(fh * pw) <= longest
+    }
 }
 
 impl fmt::Display for Size {
@@ -113,6 +141,51 @@ impl fmt::Display for Point {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::testing::size;
+
+    #[test]
+    fn a_frame_of_the_pictures_shape_has_its_shape() {
+        for (frame, picture) in [
+            // The same size, and a frame twice the picture's.
+            (size(8256, 5504), size(8256, 5504)),
+            (size(8256, 5504), size(4128, 2752)),
+            // A 3:2 frame rounded to 640 by 427: 640 x 4000 and 427 x 6000
+            // differ by 2,000, within the longest side, 6,000, which a
+            // tolerance of the frame's longer side, 640, would refuse; and
+            // the other way round.
+            (size(640, 427), size(6000, 4000)),
+            (size(6000, 4000), size(640, 427)),
+            // A 1:1 window of a Z 9's frame, on a JPEG of its middle size.
+            (size(5504, 5504), size(4128, 4128)),
+            // 3 x 3 and 2 x 3 differ by 3, exactly the longest side.
+            (size(3, 2), size(3, 3)),
+        ] {
+            assert!(frame.same_shape(picture), "{frame:?}, {picture:?}");
+        }
+    }
+
+    #[test]
+    fn a_frame_of_another_shape_has_not_the_pictures() {
+        for (frame, picture) in [
+            // A landscape frame on a portrait picture, as on an export
+            // turned upright in its pixels or cut to portrait.
+            (size(8256, 5504), size(5504, 8256)),
+            (size(8256, 5504), size(3648, 5472)),
+            // A landscape frame on a square export.
+            (size(8256, 5504), size(1742, 1742)),
+            // 7 x 4 and 5 x 4 differ by 8, one more than the longest side.
+            (size(7, 5), size(4, 4)),
+        ] {
+            assert!(!frame.same_shape(picture), "{frame:?}, {picture:?}");
+        }
+    }
+
+    #[test]
+    fn the_largest_sides_do_not_overflow() {
+        let largest = size(u32::MAX, u32::MAX);
+        assert!(largest.same_shape(largest));
+        assert!(!largest.same_shape(size(1, u32::MAX)));
+    }
 
     #[test]
     fn construction_and_equality() {

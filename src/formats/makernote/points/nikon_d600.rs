@@ -25,7 +25,12 @@
 //! of the way a file names them: layout code 3, a mask whose bit number − 1
 //! stands for each point, and the DX crop, whose 3936 by 2624 window lies
 //! centred in the frame: frames 49 and 50 put their points where the
-//! table's place, less the window's origin, says.
+//! table's place, less the window's origin, says. It also carries the
+//! Medium JPEG's size, 4512 by 3008, whose picture shows the 6010 by 4006
+//! window centred in the frame, as I measured it on RAW+JPEG pairs shot
+//! on 2026-11-03, outside the session (section 2.9 of the record); the
+//! frame and the Medium JPEG of one such pair, and the Small JPEG of
+//! another, are committed in `tests/fixtures/nikon-d600-jpeg-sizes/`.
 //!
 //! Each point's name, in the comment beside it, is its row in the
 //! viewfinder, A at the top to E at the bottom, and its column, 1 at the
@@ -35,7 +40,7 @@
 //! documentation and confirmed on the frames: 1 is the centre, 13 the top
 //! of the inner columns' left one and 38 the top of the leftmost column.
 
-use super::{BitOrder, ConfirmedCrop, PointTable, Provenance};
+use super::{BitOrder, ConfirmedCrop, ConfirmedJpegSize, PointTable, Provenance};
 use crate::focus::FocusLayoutPoint;
 use crate::geometry::{Point, Size};
 
@@ -114,6 +119,23 @@ pub(super) static TABLE: PointTable = PointTable {
         window: Size {
             width: 3936,
             height: 2624,
+        },
+    }],
+    // The Medium JPEG, 4512 by 3008: fitted onto its own NEF's full-size
+    // preview, the two Medium pairs of my 2026-11-03 frames show the
+    // window from 2.90 to 6013.06 across and from 4.54 to 4011.40 down,
+    // scaled by 0.75072 on both axes, where the Large and Small JPEGs show
+    // the whole frame. 6010 by 4006, centred at (3, 5), is the nearest
+    // whole-pixel window centred in the frame, and puts every point within
+    // 0.35 of a Medium pixel of the measured place (section 2.9).
+    jpeg_sizes: &[ConfirmedJpegSize {
+        size: Size {
+            width: 4512,
+            height: 3008,
+        },
+        window: Size {
+            width: 6010,
+            height: 4006,
         },
     }],
     provenance: Provenance {

@@ -78,6 +78,27 @@ does.
   `Lens::default()` and write `.with_recorded_model(…)` for `.model(…)`,
   and so on for every value, with no `build()` call and no `?` after it.
 
+### Fixed
+
+- A Nikon D600 JPEG at the Medium size, 4512x3008, shot through the
+  viewfinder ([#62](https://github.com/kuolas/raw-files/issues/62)),
+  gives the autofocus points it names, placed from the
+  D600's table, where it gave none: its picture is not the whole
+  6016x4016 frame scaled, but the 6010x4006 window centred in it, which
+  the table now holds for that size, as measured on RAW+JPEG pairs. The
+  frame of `Metadata::focus` and `Metadata::focus_points` is that
+  window, 6010x4006, every centre moved back by its origin, (3, 5), so
+  that a point scaled from that frame onto the JPEG lands where the
+  camera's picture shows it; the NEF of the same shot
+  still gives the 6016x4016 frame, and `Metadata::focus_layout` stays
+  in it, as on a crop. A DX JPEG at a smaller size still gives none.
+  An export of a D600 JPEG cut or scaled to exactly 4512x3008 is read
+  as a Medium JPEG, its points placed in the window, by far misplaced
+  on a cut; an export scaled from a Medium JPEG to another size gives
+  none, unless it is small enough, about 750 pixels tall or less, for
+  the whole frame to pass the shape rule, when its point is placed in
+  the whole frame, off by under a pixel.
+
 ## [0.6.0] - 2026-10-29
 
 The sixth release: a DSLR's autofocus point, which a shot through the

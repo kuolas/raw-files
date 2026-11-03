@@ -982,10 +982,17 @@ What the fields hold:
   shape, which may keep the camera's MakerNote, gives none
   ([ADR014](../../architecture-decisions/adr014-jpeg-files-as-a-format-of-their-own.md)),
   except an export cut from a crop-mode JPEG, whose point is placed on
-  the export's own pixels (below). That rule leaves out my D600's Medium
-  JPEG, 4512x3008, exactly 3:2, whose shape is further from the
-  table's 6016x4016 frame than its one pixel of rounding, while the
-  Small JPEG, 3008x2008, half the frame, keeps its point. **[F]**
+  the export's own pixels (below), and an export of a D600 JPEG cut or
+  scaled to exactly 4512x3008, which is read as a Medium JPEG (next
+  sentences), its point by far misplaced on a cut. My D600's Medium JPEG, 4512x3008,
+  exactly 3:2, would fail that rule against the table's 6016x4016
+  frame, but its picture is not the whole frame: it shows the 6010x4006
+  window centred in it, which the table keeps for that size, and its
+  points are placed in that window, which has its shape
+  ([autofocus-points.md](autofocus-points.md#29-the-jpeg-sizes),
+  [ADR020](../../architecture-decisions/adr020-each-crops-window-in-the-table.md)).
+  The Small JPEG, 3008x2008, is the whole frame at half its size, and
+  takes the table's frame. **[F]**
 - **In a camera JPEG shot in a crop mode**, my Z 9 records the raw
   file's AFInfo2 and CropHiSpeed, with the full 8256x5504 frame, at
   every image size, and no CropArea; its full-size JPEG is the raw
@@ -1029,7 +1036,7 @@ and what raw-files gives; a row without a file is an open question
 | A DX crop on a small raw | unknown | none | the point, scaled onto CropArea in stored pixels; unchecked |
 | A rotated (portrait) shot | a position in the landscape frame | Z 30 5812 | the point, in stored orientation; checked |
 | Face detection | FaceDetect | none | not read |
-| Camera JPEG through the viewfinder | a zero frame (`0100`) with a point number and a mask, as in the NEF of the same frame | the D5300 JPEG from Wikimedia Commons; my D600 JPEGs | none for the D5300, which has no table; the D600's point placed from the table, as in its NEF, on a DX frame only at the size of the crop's window, its full image size, and not on a Medium JPEG, 4512x3008, whose shape, exactly 3:2, is further from the frame's than the one pixel of rounding a JPEG's point is allowed ([autofocus-points.md](autofocus-points.md#28-what-the-reader-gives-on-my-own-files)); checked on the committed JPEG of frame 4 |
+| Camera JPEG through the viewfinder | a zero frame (`0100`) with a point number and a mask, as in the NEF of the same frame | the D5300 JPEG from Wikimedia Commons; my D600 JPEGs | none for the D5300, which has no table; the D600's point placed from the table, as in its NEF, on a DX frame only at the size of the crop's window, its full image size, and on a Medium JPEG, 4512x3008, in the 6010x4006 window of the frame its picture shows ([autofocus-points.md](autofocus-points.md#29-the-jpeg-sizes)); checked on the committed JPEG of frame 4 and on a committed Medium and Small JPEG |
 | Camera JPEG with a position | a position | none public | the point, when its frame has the JPEG's aspect ratio; unchecked on a public file |
 | Camera JPEG in a crop mode (DX, 1:1, 16:9), at any image size | a position in the full frame, no CropArea | none public; my Z 9 shots | the point, placed on the JPEG's picture; unchecked on a public file |
 | Exported JPEG that keeps the camera's MakerNote | the camera's frame and position | none public | the point only when the frame has the export's aspect ratio |

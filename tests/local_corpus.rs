@@ -64,10 +64,10 @@
 //! with a layout and no focus point is a manual-focus shot, a shot that
 //! names point 0, a crop the body's table does not confirm, a crop-mode
 //! JPEG smaller than the crop's window, a JPEG cut to another shape than
-//! the frame's, such as the D600's Medium JPEG, which the JPEG shape rule
-//! refuses, or a file whose MakerNote is missing or cannot be read, since
-//! the layout comes from the Model alone. It never prints where a point
-//! lies, how large one area is, or a point's number.
+//! the frame's, which the JPEG shape rule refuses, or a file whose
+//! MakerNote is missing or cannot be read, since the layout comes from the
+//! Model alone. It never prints where a point lies, how large one area is,
+//! or a point's number.
 //!
 //! It fails when the folder cannot be read or holds no file of a format
 //! raw-files reads, and otherwise unless every entry could be read and, in
@@ -82,9 +82,11 @@
 //! one point without a number; and every list placed from a table must
 //! come with a layout, for the Model the file names, and hold points of
 //! that layout, numbered in rising order, each with the layout's box and
-//! the layout's centre, moved on a crop into the centred window that is
-//! the list's frame. These hold by how the library builds a list, and the
-//! test checks them by hand rather than taking the library's word for it.
+//! the layout's centre, moved on a crop, or on a JPEG whose size shows a
+//! window of the frame, such as the D600's Medium JPEG, into the centred
+//! window that is the list's frame. These hold by how the library builds
+//! a list, and the test checks them by hand rather than taking the
+//! library's word for it.
 //! A whole JPEG starts with its start marker and ends with
 //! its end marker, followed by nothing but the padding some Sony cameras
 //! write: `FF` bytes, in any format, and zeros, only in the largest preview
@@ -413,10 +415,9 @@ struct FocusTally {
     /// file names no point the library places, which a manual-focus shot,
     /// a point number of 0, a crop the table does not confirm, a
     /// crop-mode JPEG smaller than the crop's window, a JPEG cut to
-    /// another shape than the frame's, such as the D600's Medium JPEG,
-    /// which the JPEG shape rule refuses, and a file whose MakerNote is
-    /// missing or cannot be read all give alike, so they are counted
-    /// together.
+    /// another shape than the frame's, which the JPEG shape rule refuses,
+    /// and a file whose MakerNote is missing or cannot be read all give
+    /// alike, so they are counted together.
     layout_without_point: usize,
     /// Files whose list and focus point disagree: a list without a
     /// primary, or a focus point that is not the list's primary, in its
@@ -600,9 +601,11 @@ fn list_gives_focus(metadata: &Metadata) -> bool {
 /// with a number, in rising order, and with the layout's box, its centre
 /// the layout's moved by the origin of the centred window that the list's
 /// frame is in the layout's frame. On a file that is no crop the two
-/// frames are the same and nothing moves; on a crop the window is the
-/// layout's frame less twice the origin on each side, so the difference
-/// of the two frames is even on both axes and the origin is half of it.
+/// frames are the same and nothing moves; on a crop, or on a JPEG whose
+/// size shows a window of the frame, such as the D600's Medium JPEG, the
+/// window is the layout's frame less twice the origin on each side, so
+/// the difference of the two frames is even on both axes and the origin
+/// is half of it.
 /// Written out here, as `lies_inside` is, so that the test does not take
 /// the library's word for it.
 fn placed_from(list: &FocusPoints, layout: &FocusLayout) -> bool {

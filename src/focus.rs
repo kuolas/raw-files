@@ -965,13 +965,19 @@ impl FocusLayoutPoint {
 /// is in the crop's frame, while the layout stays in the body's full
 /// frame, as the
 /// [decision to report the points the camera used](https://github.com/kuolas/raw-files/blob/master/docs/architecture-decisions/adr018-focus-points-placed-from-a-table-and-the-points-used.md)
+/// says. So it does on a JPEG of a size whose picture shows a window of
+/// the frame rather than the whole of it, such as the Nikon D600's Medium
+/// JPEG, as the
+/// [decision to keep a JPEG size's window in the table](https://github.com/kuolas/raw-files/blob/master/docs/architecture-decisions/adr020-each-crops-window-in-the-table.md)
 /// says.
 ///
 /// So the layout has the previews' framing only on a shot that is not a
-/// crop, where a viewer places each point on a preview by scaling it, as
-/// [`Focus::scaled_to`] scales a focus. On a crop, the picture, and so
-/// every preview, has the framing of the centred window of the table's
-/// frame that the crop keeps, and the window's size is the frame of
+/// crop, in a file whose picture shows the whole frame, where a viewer
+/// places each point on a preview by scaling it, as [`Focus::scaled_to`]
+/// scales a focus. On a crop, the picture, and so every preview, has the
+/// framing of the centred window of the table's frame that the crop
+/// keeps, as a JPEG of such a size has the framing of the window that its
+/// size shows, and the window's size is the frame of
 /// [`Metadata::focus_points`](crate::Metadata::focus_points) when the
 /// file gives points placed from the table, whose
 /// [`origin`](FocusPoints::origin) is [`Table`](FocusOrigin::Table). A
@@ -980,11 +986,15 @@ impl FocusLayoutPoint {
 /// the window does not hold whole is not on the picture: on the Nikon
 /// D600's DX crop, the window is 3936 × 2624, and point 38, at
 /// (1812, 1705) in the table's 6016 × 4016 frame, lies at (772, 1009) in
-/// it. A preview smaller than the window then takes the point scaled from
-/// the window, as a focus is scaled. A crop shot whose file gives no
+/// it. On the D600's Medium JPEG, 4512 × 3008, the window is 6010 × 4006,
+/// and point 38 lies at (1809, 1700) in it. A preview smaller than the
+/// window then takes the point scaled from the window, as a focus is
+/// scaled. A crop shot whose file gives no
 /// points placed from the table, such as one in manual focus, a crop-mode
 /// JPEG smaller than the window or a shot in live view, which records its
-/// position in a frame of its own, gives no way to find the window;
+/// position in a frame of its own, gives no way to find the window, and
+/// nor does a D600 Medium JPEG shot so: its layout stays in the
+/// 6016 × 4016 frame while its picture shows the 6010 × 4006 window;
 /// [issue #65](https://github.com/kuolas/raw-files/issues/65) proposes a
 /// method that places the layout on the picture.
 ///

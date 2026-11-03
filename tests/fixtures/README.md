@@ -2,10 +2,12 @@
 
 Real files that a camera wrote, small enough to commit, that the tests
 read as they are: five from a Nikon Z 9, two NEF files and three JPEG
-files, listed below, and the 56 NEF files of a session shot with a
+files, listed below; the 56 NEF files of a session shot with a
 Nikon D600 with the JPEG of one of its frames, in
-[`nikon-d600/`](nikon-d600/README.md), which lists them.
-Every other fixture is built in code.
+[`nikon-d600/`](nikon-d600/README.md), which lists them; and a NEF
+file and two JPEG files of the same D600 at its smaller JPEG sizes, in
+[`nikon-d600-jpeg-sizes/`](nikon-d600-jpeg-sizes/README.md), which
+lists them. Every other fixture is built in code.
 
 | File | Crop mode | Frame | SHA-256 |
 |---|---|---|---|
@@ -321,16 +323,55 @@ they overwrite but in the spans of zeros they skip in the Z 9's JPEG
 files and the zeros after the MakerNote preview's stub; and the fuzzer
 starts from copies of frames 4, 42 and 49 and of frame 4's JPEG.
 
+## The D600's JPEG sizes
+
+I shot six RAW+JPEG pairs with the same D600 on 2026-11-03, two at each
+of its JPEG sizes, to measure which part of the frame each size's
+picture shows, as the NEF notes record
+([autofocus-points.md](../../docs/formats/nef/autofocus-points.md#29-the-jpeg-sizes)):
+the Medium JPEG, 4512x3008, shows a window of the 6016x4016 frame, not
+the whole of it, and the D600's table keeps that window. Three of their
+files are committed in
+[`nikon-d600-jpeg-sizes/`](nikon-d600-jpeg-sizes/README.md), which
+lists them with their SHA-256: frame 7856's NEF and its Medium JPEG,
+and frame 7858's Small JPEG, so that the point is checked in the window
+of the Medium JPEG, in the whole frame on the Small one, and in the
+whole frame on the NEF of a Medium shot.
+
+The NEF is stripped by the rules of the session's NEF files, above, and
+is 2,452 bytes, with 31 of its MakerNote's 60 entries; each JPEG by the
+rules of frame 4's JPEG, above, and is 69,876 bytes, its main image a
+stub of its own size, 4512 by 3008 or 3008 by 2008. Once they were
+stripped, I checked them as the session's files were checked: the NEF
+with the checks of the session's NEF files, and each JPEG with both
+walks of frame 4's, the stripping's and the second one that shares no
+code with it. No byte sequence of the removed or zeroed serial number,
+shutter count, switch-on time, Artist, Copyright or UserComment
+remains, no run of six or more digits remains outside the capture
+times, and every value kept is the camera's, AFInfo2, FocusMode and
+CropHiSpeed among them.
+
+The tests open each file and check that the NEF gives point 1 placed
+from the table at (3008, 2007) in the table's 6016 by 4016 frame, as
+every NEF does whatever size its JPEG was shot at; that the Medium JPEG
+gives it at (3005, 2002) in the 6010 by 4006 window, its centre moved
+back by the window's origin, (3, 5); and that the Small JPEG gives it
+at (3008, 2007) in the 6016 by 4016 frame; each with its box of 164 by
+164, from a table, as the primary of a list of that point alone, with
+the area mode `Tracking`, and with the layout of the D600's 39 points.
+
 ## Licence and changes
 
 I, who took the photographs, publish these files under the
 repository's licence, MIT OR Apache-2.0, at your option.
 
 The Z 9's NEF files were made on 2026-10-20, its JPEG files on
-2026-10-22, the D600's NEF files on 2026-10-27, and its JPEG on
-2026-10-28. Only I can
+2026-10-22, the D600's NEF files on 2026-10-27, its JPEG on
+2026-10-28, and the files of `nikon-d600-jpeg-sizes/` on 2026-11-03.
+Only I can
 regenerate them, from the camera's original files, which are not
 public; that is why this page records how they were made and what was
-removed. A change to any file changes its SHA-256, above or in
-[`nikon-d600/README.md`](nikon-d600/README.md), which must then be
-updated in the same change.
+removed. A change to any file changes its SHA-256, above, in
+[`nikon-d600/README.md`](nikon-d600/README.md) or in
+[`nikon-d600-jpeg-sizes/README.md`](nikon-d600-jpeg-sizes/README.md),
+which must then be updated in the same change.

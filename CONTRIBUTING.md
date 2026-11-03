@@ -606,10 +606,15 @@ also measure a body themselves, following the whole procedure
 shoot one frame per point in single-point mode and the control frames
 the page lists, read every frame in the maker's software with its
 focus-point display on, measure the screenshots by pixel, and check
-the controls. Then write the body's record on that page, as the D600's
-is written, with the readings and their tolerance; the table in the
-code, with its provenance; and the frames, stripped of their pixels
-and personal fields, with their expected values in the tests. In the
+the controls. The controls include RAW + JPEG frames at each smaller
+JPEG size the body offers: fit each such JPEG onto the full-size
+preview of its own raw file, with a scale and an offset on each axis,
+to find which part of the frame it shows, since a size whose picture
+is a window of the frame, as the D600's Medium JPEG is, needs that
+window in the table. Then write the body's record on that page, as the
+D600's is written, with the readings and their tolerance; the table in
+the code, with its provenance; and the frames, stripped of their
+pixels and personal fields, with their expected values in the tests. In the
 pull request say which software and version you ran, and that the
 frames are your own: they are licensed as the repository's fixtures
 are ([tests/fixtures/README.md](tests/fixtures/README.md)).

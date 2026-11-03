@@ -62,8 +62,14 @@
 //! centred in the table's frame, as the
 //! [decision to keep each crop's window in the table](https://github.com/kuolas/raw-files/blob/master/docs/architecture-decisions/adr020-each-crops-window-in-the-table.md)
 //! (ADR020) sets out. A crop the record does not confirm gives no placed
-//! point. A body whose uncropped files record a CropHiSpeed cropped size
-//! other than the original, as the D810's do, four pixels short in width
+//! point. The table also carries the sizes of the body's JPEGs whose
+//! picture is not the whole frame scaled, each with the window of the
+//! frame it shows ([`ConfirmedJpegSize`]): a point in an uncropped JPEG
+//! of such a size moves into that window, centred in the table's frame,
+//! as the same decision sets out.
+//! A JPEG of a size the table does not list takes the whole frame. A body
+//! whose uncropped files record a CropHiSpeed cropped size other than the
+//! original, as the D810's do, four pixels short in width
 //! ([`super::nikon`]), would have those files read as a crop when a named
 //! point is placed, so check the body's uncropped CropHiSpeed before
 //! adding its table.
@@ -143,6 +149,12 @@ pub(in crate::formats) struct PointTable {
     /// table's place (section 2.6 of its record). A file on any other crop
     /// gives no placed point.
     crops: &'static [ConfirmedCrop],
+    /// The sizes of the body's JPEGs that show a window of the frame
+    /// rather than the whole of it, each with its window: on the D600,
+    /// the Medium JPEG, 4512 by 3008, in a 6010 by 4006 window, as its
+    /// record's RAW+JPEG pairs measure it (section 2.9 of its record). A
+    /// JPEG of any other size shows the whole frame.
+    jpeg_sizes: &'static [ConfirmedJpegSize],
     /// Where the table's values come from.
     #[cfg_attr(
         not(test),
@@ -184,6 +196,40 @@ impl ConfirmedCrop {
     #[cfg(test)]
     pub(in crate::formats) const fn new(code: u32, window: Size) -> ConfirmedCrop {
         ConfirmedCrop { code, window }
+    }
+}
+
+/// A size of the body's uncropped JPEGs whose picture is not the whole
+/// frame scaled, as the body's record measures it: the JPEG's size, as
+/// its frame header gives it, and the window of the table's frame that
+/// its picture shows, scaled down, in which a point placed on such a JPEG
+/// is measured.
+///
+/// The window is measured on the record's RAW+JPEG pairs at that size, by
+/// fitting each JPEG onto the full-size preview of its own raw file, and
+/// lies centred in the table's frame, which the pairs confirm. No tag
+/// gives it, and the JPEG's shape alone does not: the D600's Medium JPEG,
+/// 4512 by 3008, shows a 6010 by 4006 window of its 6016 by 4016 frame,
+/// not the whole frame, which would be 4512 by 3012 at that scale.
+/// A JPEG of a size the table does not list takes the whole frame, as the
+/// Large and Small JPEGs of the D600, 6016 by 4016 and 3008 by 2008, do
+/// (ADR020).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(in crate::formats) struct ConfirmedJpegSize {
+    /// The JPEG's size, as its frame header gives it: 4512 by 3008 for
+    /// the D600's Medium JPEG.
+    size: Size,
+    /// The window of the frame its picture shows, in the pixels of the
+    /// table's frame: 6010 by 4006 for the D600's Medium JPEG.
+    window: Size,
+}
+
+impl ConfirmedJpegSize {
+    /// The JPEG size `size` whose picture shows `window`, for tests that
+    /// place points in a window no body has.
+    #[cfg(test)]
+    pub(in crate::formats) const fn new(size: Size, window: Size) -> ConfirmedJpegSize {
+        ConfirmedJpegSize { size, window }
     }
 }
 
@@ -270,11 +316,37 @@ impl PointTable {
             .map(|crop| crop.window)
     }
 
+    /// The window of the frame that an uncropped JPEG of `size`, as its
+    /// frame header gives it, shows, in the pixels of the table's frame, as
+    /// the table's record measured it; `None` for a size whose picture is
+    /// the whole frame, or that the record did not measure. Every window
+    /// fits the frame, can be centred to the pixel and has the shape of
+    /// its JPEG size, which the table tests check.
+    pub(in crate::formats) fn jpeg_window(&self, size: Size) -> Option<Size> {
+        self.jpeg_sizes
+            .iter()
+            .find(|jpeg| jpeg.size == size)
+            .map(|jpeg| jpeg.window)
+    }
+
     /// This table with `crops` as its confirmed crops, for tests that place
     /// points in a window no body has.
     #[cfg(test)]
     pub(in crate::formats) fn with_crops(&self, crops: &'static [ConfirmedCrop]) -> PointTable {
         PointTable { crops, ..*self }
+    }
+
+    /// This table with `jpeg_sizes` as its confirmed JPEG sizes, for tests
+    /// that place points in a window no body has.
+    #[cfg(test)]
+    pub(in crate::formats) fn with_jpeg_sizes(
+        &self,
+        jpeg_sizes: &'static [ConfirmedJpegSize],
+    ) -> PointTable {
+        PointTable {
+            jpeg_sizes,
+            ..*self
+        }
     }
 }
 
@@ -500,23 +572,58 @@ mod tests {
             for crop in table.crops {
                 let ConfirmedCrop { code, window } = *crop;
                 assert!(codes.insert(code), "{model}: crop setting {code} twice");
+                let what = format!("{model}: crop setting {code}'s window");
+                assert_fits_centred(&what, table.frame, window);
+            }
+        }
+    }
+
+    /// Checks that `window`, which `what` names, has no zero side, fits
+    /// `frame` and leaves an even margin, the frame less the window, on
+    /// each axis, so that it can be centred to the pixel.
+    fn assert_fits_centred(what: &str, frame: Size, window: Size) {
+        assert!(
+            window.width > 0 && window.height > 0,
+            "{what} {window} has a zero side"
+        );
+        for (side, frame, window) in [
+            ("width", frame.width, window.width),
+            ("height", frame.height, window.height),
+        ] {
+            let margin = frame
+                .checked_sub(window)
+                .unwrap_or_else(|| panic!("{what} is longer than the frame in {side}"));
+            assert!(
+                margin % 2 == 0,
+                "{what} leaves an odd margin in {side}, {margin} pixels, so it cannot be \
+                 centred"
+            );
+        }
+    }
+
+    /// Every table's confirmed JPEG sizes are each confirmed once, and each
+    /// window fits the frame centred, as a crop's window must; and has the
+    /// shape of its JPEG size, by the rule the JPEG reader holds a JPEG's
+    /// points to ([`Size::same_shape`]): a window of another shape would give
+    /// points that the reader then refuses, so the size would gain
+    /// nothing.
+    #[test]
+    fn every_tables_jpeg_windows_fit_its_frame_centred_in_their_jpegs_shape() {
+        for table in TABLES {
+            let model = table.recorded_model;
+            let mut sizes = BTreeSet::new();
+            for jpeg in table.jpeg_sizes {
+                let ConfirmedJpegSize { size, window } = *jpeg;
                 assert!(
-                    window.width > 0 && window.height > 0,
-                    "{model}: crop setting {code}'s window {window} has a zero side"
+                    sizes.insert((size.width, size.height)),
+                    "{model}: JPEG size {size} twice"
                 );
-                for (side, frame, window) in [
-                    ("width", table.frame.width, window.width),
-                    ("height", table.frame.height, window.height),
-                ] {
-                    let margin = frame.checked_sub(window).unwrap_or_else(|| {
-                        panic!("{model}: crop setting {code}'s window is longer than the frame in {side}")
-                    });
-                    assert!(
-                        margin % 2 == 0,
-                        "{model}: crop setting {code}'s window leaves an odd margin in {side}, \
-                         {margin} pixels, so it cannot be centred"
-                    );
-                }
+                let what = format!("{model}: JPEG size {size}'s window");
+                assert_fits_centred(&what, table.frame, window);
+                assert!(
+                    window.same_shape(size),
+                    "{what} {window} has not the JPEG's shape"
+                );
             }
         }
     }
@@ -526,7 +633,11 @@ mod tests {
     /// read from the table: layout code 3; point 1 on bit 0, point 13 on
     /// bit 12 and point 38 on bit 37, the bits frames 20, 1 and 4 set; and
     /// the DX crop alone, setting 2, of the crops CropHiSpeed records, in
-    /// the 3936 by 2624 window of frames 49 to 51's previews and JPEGs.
+    /// the 3936 by 2624 window of frames 49 to 51's previews and JPEGs; and
+    /// the Medium JPEG alone, 4512 by 3008, of the JPEG sizes, in the 6010
+    /// by 4006 window that the RAW+JPEG pairs of section 2.9 measure: the
+    /// Large and Small JPEGs show the whole frame, and a size a pixel off
+    /// the Medium one, or the Medium size turned, is no size of the D600.
     #[test]
     fn the_d600_table_names_its_points_as_its_record_confirms() {
         let d600 = find("NIKON D600").expect("the D600's table");
@@ -544,6 +655,21 @@ mod tests {
         );
         for code in [0, 1, 6, 9, 10, 11, 12, 17, 18] {
             assert_eq!(d600.crop_window(code), None, "crop setting {code}");
+        }
+        let size = |width, height| Size { width, height };
+        assert_eq!(d600.jpeg_window(size(4512, 3008)), Some(size(6010, 4006)));
+        for (width, height) in [
+            (6016, 4016),
+            (3008, 2008),
+            (4512, 3012),
+            (4511, 3008),
+            (3008, 4512),
+        ] {
+            assert_eq!(
+                d600.jpeg_window(size(width, height)),
+                None,
+                "{width} by {height}"
+            );
         }
     }
 
