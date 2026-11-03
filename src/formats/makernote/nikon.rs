@@ -205,11 +205,11 @@
 //! size the record measured, 3936 by 2624 on a D600 DX frame, centred in
 //! the table's frame, so that its origin is (1040, 696); every centre
 //! moves back by that origin and every box is kept, by the decision to
-//! measure a placed point on a crop in the crop's window (ADR019).
+//! measure a placed point on a crop in the crop's window (ADR018).
 //! CropHiSpeed's origin, its sixth and seventh values, must be the
 //! window's, as on every D600 DX frame; a file whose origin is not
 //! records the crop elsewhere in the frame and gives no focus point, by
-//! the decision to keep each crop's window in the table (ADR020). A point
+//! the decision to keep each crop's window in the table (ADR018). A point
 //! whose centre or box the window leaves out is dropped, and when the
 //! primary is, the file gives no focus point. In a JPEG the window must be
 //! the JPEG's own size, as it is on the D600 at full image size, so that a
@@ -222,7 +222,7 @@
 //! Its points are then placed as on a crop: the frame is that window, every
 //! centre moves back by its origin, (3, 5), and a point the window leaves
 //! out is dropped, by the decision to keep a JPEG size's window in the
-//! table (ADR020). Its Large and Small JPEGs, 6016 by 4016 and 3008 by
+//! table (ADR018). Its Large and Small JPEGs, 6016 by 4016 and 3008 by
 //! 2008, show the whole frame, and take it. CropArea plays no part in it.
 //! A record of a position is read by the rules above, whatever it names.
 //!
@@ -1692,7 +1692,7 @@ fn placed(
 /// showing a window of the frame ([`PointTable::jpeg_window`]), that
 /// window, 6010 by 4006 on a D600 Medium JPEG, and its origin centred in
 /// the table's frame, (3, 5) on the D600, by the decision to keep a JPEG
-/// size's window in the table (ADR020). A JPEG of any other size, which
+/// size's window in the table (ADR018). A JPEG of any other size, which
 /// the JPEG reader then holds to the picture's shape, and a raw file,
 /// which has no `pixels`, keep the table's frame.
 ///
@@ -1701,8 +1701,8 @@ fn placed(
 /// ([`PointTable::crop_window`]), 3936 by 2624 on a D600 DX frame, and its
 /// origin centred in the table's frame, half of the frame less the window
 /// on each axis, (1040, 696) on the D600, by the decisions to measure a
-/// placed point on a crop in the crop's window (ADR019) and to keep each
-/// crop's window in the table (ADR020). CropHiSpeed's origin must be that
+/// placed point on a crop in the crop's window and to keep each crop's
+/// window in the table (ADR018). CropHiSpeed's origin must be that
 /// origin: one that is not records a crop placed elsewhere in the frame
 /// than the record's frames show, which the window cannot be trusted on.
 /// In a JPEG, whose own size is `pixels`, the window must be that size,

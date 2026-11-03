@@ -148,10 +148,10 @@
 //! AFInfo2 names placed from the table, as its raw file does (ADR018): in
 //! the table's frame, or on a crop in the crop's window, and then only
 //! when the JPEG's own size is that window's, so that a crop-mode JPEG at
-//! a smaller size gives none (ADR019). An uncropped JPEG of a size that
-//! the table lists as showing a window of the frame, the D600's Medium
-//! JPEG, 4512 by 3008, gives them in that window, 6010 by 4006, which
-//! has the JPEG's shape where the whole frame has not (ADR020).
+//! a smaller size gives none. An uncropped JPEG of a size that the table
+//! lists as showing a window of the frame, the D600's Medium JPEG, 4512
+//! by 3008, gives them in that window, 6010 by 4006, which has the JPEG's
+//! shape where the whole frame has not (ADR018).
 //!
 //! The Sony MakerNote reader gives the point as it gives an ARW's (ADR012):
 //! the frame and the centre from FocusLocation, or FocusLocation2 without
@@ -181,7 +181,7 @@
 //! their shape, and is misplaced if the cut changed the shape (ADR015).
 //! Nor can it refuse an export of a D600 JPEG cut or scaled to exactly
 //! the Medium size: it is read as a Medium JPEG, its points placed in the
-//! Medium window, by far misplaced on a cut (ADR020).
+//! Medium window, by far misplaced on a cut (ADR018).
 
 use std::io::{Read, Seek};
 

@@ -963,12 +963,10 @@ impl FocusLayoutPoint {
 /// The frame is the table's, whatever the shot. On a shot in a crop mode,
 /// a point of [`Metadata::focus_points`](crate::Metadata::focus_points)
 /// is in the crop's frame, while the layout stays in the body's full
-/// frame, as the
-/// [decision to report the points the camera used](https://github.com/kuolas/raw-files/blob/master/docs/architecture-decisions/adr018-focus-points-placed-from-a-table-and-the-points-used.md)
-/// says. So it does on a JPEG of a size whose picture shows a window of
-/// the frame rather than the whole of it, such as the Nikon D600's Medium
-/// JPEG, as the
-/// [decision to keep a JPEG size's window in the table](https://github.com/kuolas/raw-files/blob/master/docs/architecture-decisions/adr020-each-crops-window-in-the-table.md)
+/// frame, and the same holds on a JPEG of a size whose picture shows a
+/// window of the frame rather than the whole of it, such as the Nikon
+/// D600's Medium JPEG, as the
+/// [decision to report the points the camera used, and to keep each crop's and JPEG size's window in the table](https://github.com/kuolas/raw-files/blob/master/docs/architecture-decisions/adr018-focus-points-placed-from-a-table-and-the-points-used.md)
 /// says.
 ///
 /// So the layout has the previews' framing only on a shot that is not a

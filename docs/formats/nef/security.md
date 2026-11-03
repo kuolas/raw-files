@@ -238,7 +238,7 @@ sensor data or an encrypted block (see [the roadmap](../../ROADMAP.md)).
 14. **Lints and fuzzing.** ADR008 deliberately does not enable
     `clippy::indexing_slicing`, because it flags every bounds-checked slice.
     Enabling `clippy::arithmetic_side_effects` would be a lint-policy change
-    needing an ADR that amends ADR008, which keeps lints in `Cargo.toml` and
+    needing a revision of ADR008, which keeps lints in `Cargo.toml` and
     rejected `indexing_slicing` for noise. Until then the no-panic rule
     rests on the following: tests on truncated and corrupted input (see
     [test-data.md](test-data.md)), and `cargo-fuzz` targets for the container

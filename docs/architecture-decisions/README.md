@@ -19,16 +19,16 @@ Kuolas, who maintains raw-files.
 | [ADR008](adr008-lints-and-panics.md) | No unsafe code, a few extra lints, no panics on malformed input | Accepted |
 | [ADR009](adr009-public-api-shape.md) | The shape of the public API | Accepted |
 | [ADR010](adr010-decoding-ends-at-a-linear-image.md) | Decoding ends at a linear image | Accepted |
-| [ADR011](adr011-metadata-from-standard-tags.md) | Metadata comes from the standard tags | Accepted; amended by [ADR012](adr012-focus-points-as-the-camera-records-them.md), and in place for the camera settings |
-| [ADR012](adr012-focus-points-as-the-camera-records-them.md) | Focus points as the camera records them | Accepted; amended by [ADR018](adr018-focus-points-placed-from-a-table-and-the-points-used.md); ADR011's camera settings sections read more of the Sony MakerNote |
+| [ADR011](adr011-metadata-from-standard-tags.md) | Metadata comes from the standard tags | Accepted |
+| [ADR012](adr012-focus-points-as-the-camera-records-them.md) | Focus points as the camera records them | Accepted |
 | [ADR013](adr013-clean-room-and-third-party-code.md) | Clean-room implementation and third-party code | Accepted |
 | [ADR014](adr014-jpeg-files-as-a-format-of-their-own.md) | JPEG files as a format of their own | Accepted |
 | [ADR015](adr015-the-focus-point-of-a-crop-mode-jpeg.md) | The focus point of a crop-mode JPEG | Accepted |
 | [ADR016](adr016-full-metadata-before-raw-data.md) | Full metadata before raw data | Accepted |
 | [ADR017](adr017-per-body-tables-measured-by-the-project.md) | Per-body tables measured by the project | Accepted |
-| [ADR018](adr018-focus-points-placed-from-a-table-and-the-points-used.md) | Focus points placed from a table, and the points used | Accepted; amends [ADR012](adr012-focus-points-as-the-camera-records-them.md); amended by [ADR019](adr019-the-frame-of-a-placed-focus-point-on-a-crop.md) |
-| [ADR019](adr019-the-frame-of-a-placed-focus-point-on-a-crop.md) | The frame of a placed focus point on a crop | Accepted; amends [ADR018](adr018-focus-points-placed-from-a-table-and-the-points-used.md); amended by [ADR020](adr020-each-crops-window-in-the-table.md) |
-| [ADR020](adr020-each-crops-window-in-the-table.md) | Each crop's and JPEG size's window in the table | Accepted; amends [ADR019](adr019-the-frame-of-a-placed-focus-point-on-a-crop.md) |
+| [ADR018](adr018-focus-points-placed-from-a-table-and-the-points-used.md) | Focus points placed from a table, and the points used | Accepted |
+| [ADR019](adr019-the-frame-of-a-placed-focus-point-on-a-crop.md) | The frame of a placed focus point on a crop | Folded into [ADR018](adr018-focus-points-placed-from-a-table-and-the-points-used.md) |
+| [ADR020](adr020-each-crops-window-in-the-table.md) | Each crop's and JPEG size's window in the table | Folded into [ADR018](adr018-focus-points-placed-from-a-table-and-the-points-used.md) |
 | [ADR021](adr021-what-the-file-records-and-what-raw-files-reads-into-it.md) | What the file records and what raw-files reads into it | Accepted |
 | [ADR022](adr022-names-as-their-makers-write-them.md) | Names as their makers write them | Accepted |
 
@@ -68,7 +68,10 @@ decision and its reasons.
   request where it was decided. A solution left behind, and an alternative
   weighed for the change, become Rejected bullets saying why.
 - **Two records, one problem:** fold one into the other, keeping every
-  reason, and delete it; its number is not reused, and the table above says
+  reason. The folded record's file stays at its old path as a stub, its
+  title and one sentence linking the record it went into, since the
+  documentation of a published release links to the records on the
+  default branch; its number is not reused, and the table above says
   where it went.
 - **New problem:** a new record, numbered as in "Creating an ADR". When its
   answer rests on another record's decision, it says "Builds on
@@ -83,9 +86,3 @@ Every change to a record greps the tree for its number (`git grep -n
 ADRnnn`) and rechecks each sentence that cites it, in the same pull
 request: a citation says what the record decided, so a new answer can
 leave a citing sentence wrong.
-
-Records written before this rule that amend another with a record of
-their own, such as ADR018, ADR019 and ADR020, keep their "Amends" lines
-until each is folded into the record whose problem it answers. ADR011,
-which grew in dated sections, keeps them until its next change rewrites
-it as one current answer.

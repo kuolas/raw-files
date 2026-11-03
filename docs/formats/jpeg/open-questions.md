@@ -19,7 +19,7 @@ affects; [test-data.md](test-data.md) describes the files.
    and an export of a D600 JPEG cut or scaled to exactly the Medium
    size, 4512x3008, is read as a Medium JPEG, its points placed in the
    window of the frame that the D600's table keeps for that size
-   ([ADR020](../../architecture-decisions/adr020-each-crops-window-in-the-table.md)).
+   ([ADR018](../../architecture-decisions/adr018-focus-points-placed-from-a-table-and-the-points-used.md)).
    Whether other evidence (an editor's XMP, a JFIF
    segment, the Software tag) should refuse more points is left out of
    that decision; such marks did not tell whether the pixels kept the
