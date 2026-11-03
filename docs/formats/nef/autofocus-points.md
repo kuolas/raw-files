@@ -166,6 +166,15 @@ code 0; 5 (dynamic area, 21 points) on 2; 8 (auto-area) on 3; 4 on the
 for these codes, read in its published tag documentation [P][1], and
 match the modes the frames were shot in. **[F]**
 
+No frame of the session was shot in 3D-tracking. Eight frames I shot
+in 3D-tracking on 2026-11-03, outside the session, through the
+viewfinder (frames 7852 to 7859), write area-mode code 9 under
+detection method 0, with the 39-point layout: two JPEGs alone, at the
+Medium and Small sizes, and six RAW+JPEG pairs, whose NEF and JPEG
+carry the same values. **[F]** ExifTool's published documentation
+lists 9 under phase detection as 3D-tracking [P][1], which the frames
+confirm. **[F]**
+
 ### 2.3 The mask's bit order
 
 On all 45 single-point frames with a point number exactly one bit of
@@ -389,8 +398,17 @@ point must fit its picture
 ([ADR014](../../architecture-decisions/adr014-jpeg-files-as-a-format-of-their-own.md)),
 while a Small JPEG of 3008x2008, half the frame, keeps its point. 19 of
 the NEF files record area-mode code 9 under phase detection, read with
-ExifTool, run as a reader to compare with; no frame of the session
-wrote it, so their lists name no mode. **[F]**
+ExifTool, run as a reader to compare with. **[F]** Which mode they were
+shot in is not recorded beside the code. The frames of section 2.2
+confirm the code as 3D-tracking, so these files' lists take that mode,
+`Tracking`, from the code alone; the reader has not been run on them
+again to see it.
+
+On the eight 3D-tracking frames of section 2.2, the reader gives every
+one of the six NEF files a point placed from the table and a list
+whose area mode is `Tracking`. Of the eight JPEGs, the five at the Large and
+Small sizes give the same; the three at the Medium size, 4512x3008,
+give no point, as above. **[F]**
 
 ## 3. Bodies without a table
 

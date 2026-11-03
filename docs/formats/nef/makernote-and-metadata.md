@@ -938,12 +938,13 @@ What the fields hold:
   ExifTool's published documentation gives byte 5 two lists, told apart
   by the detection method at byte 4: under phase detection, 0 single
   area, 1 to 18 the other viewfinder modes, dynamic-area, group-area,
-  wide single-area and auto-area among them (8 auto-area), 128 to 131,
-  and the mirrorless codes 192 to 197 and 199; under contrast detection, 0 plain contrast-detect, 1 to
-  4 its area modes, 128 to 131, and the mirrorless codes 192 to 208,
+  wide single-area, auto-area and 3D-tracking among them (8 auto-area,
+  9 3D-tracking), 128 to 131, and the mirrorless codes 192 to 197 and
+  199; under contrast detection, 0 plain contrast-detect, 1 to 4 its
+  area modes, 128 to 131, and the mirrorless codes 192 to 208,
   207 3D-tracking among them, which the phase-detect list lacks;
   version 04xx has the mirrorless list alone [P][1]. My D600 frames
-  agree: 0, 5 and 8 came with detection 0 through the viewfinder, and
+  agree: 0, 5, 8 and 9 came with detection 0 through the viewfinder, and
   the live-view frames wrote 4 with detection 1
   ([autofocus-points.md](autofocus-points.md#22-what-the-body-writes))
   **[F]**. raw-files names the mode, on every version, only for the
@@ -952,7 +953,8 @@ What the fields hold:
   192, 196, 199, 1 or 2
   ([ADR018](../../architecture-decisions/adr018-focus-points-placed-from-a-table-and-the-points-used.md)):
   under phase detection, 0 single point, 5 dynamic area and 8 auto-area
-  on my D600 session **[F]**; 193 single point and 197 auto-area under
+  on my D600 session, and 9 3D-tracking on eight D600 frames I shot in
+  that mode outside it **[F]**; 193 single point and 197 auto-area under
   any detection method, on which the two lists agree (193 on the two
   Z 9 frames shot with a single point and committed as fixtures
   ([`tests/fixtures/`](../../../tests/fixtures/README.md)), 197 on my

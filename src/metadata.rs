@@ -400,9 +400,10 @@ impl Metadata {
     /// frames shot in a known mode confirmed, under the detection method
     /// the file records: through the viewfinder, by phase detection, 0
     /// [`Single`](crate::FocusAreaMode::Single), 5
-    /// [`Dynamic`](crate::FocusAreaMode::Dynamic) and 8
-    /// [`Auto`](crate::FocusAreaMode::Auto); under any detection method, 193
-    /// [`Single`](crate::FocusAreaMode::Single) and 197
+    /// [`Dynamic`](crate::FocusAreaMode::Dynamic), 8
+    /// [`Auto`](crate::FocusAreaMode::Auto) and 9
+    /// [`Tracking`](crate::FocusAreaMode::Tracking); under any detection
+    /// method, 193 [`Single`](crate::FocusAreaMode::Single) and 197
     /// [`Auto`](crate::FocusAreaMode::Auto); and under contrast or hybrid
     /// detection, 207 [`Tracking`](crate::FocusAreaMode::Tracking). Any other
     /// code, or a DSLR code in live view, gives `None`.

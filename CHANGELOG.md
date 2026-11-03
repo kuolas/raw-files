@@ -67,6 +67,10 @@ does.
   `Camera`'s do, and leave the plain words for the lens's name that a
   table of lenses is to give. 0.6.0's `lens.model()` is
   `lens.recorded_model()`.
+- Nikon files name the DSLR area-mode code 9 under phase detection,
+  through the viewfinder, as `FocusAreaMode::Tracking`: D600 frames shot
+  in 3D-tracking write it. `FocusPoints::area_mode` gave `None` for such
+  a file before.
 
 ### Removed
 
