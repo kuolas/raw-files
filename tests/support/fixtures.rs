@@ -9,10 +9,11 @@
 //! their Exif segment kept as the camera wrote it; and the 56 NEF
 //! files of the session on which the autofocus points of my own D600
 //! were measured, stripped as the Z 9's are, with the JPEG of frame 4,
-//! stripped as the Z 9's JPEGs are, in `nikon-d600/`; as
-//! `tests/fixtures/README.md` says. Unlike the downloaded samples,
-//! they are in the repository, so a test never skips one: a missing
-//! fixture is a failure.
+//! stripped as the Z 9's JPEGs are, in `nikon-d600/`; and a NEF file and
+//! two JPEG files of my D600 at its smaller JPEG sizes, stripped the same
+//! ways, in `nikon-d600-jpeg-sizes/`; as `tests/fixtures/README.md` says.
+//! Unlike the downloaded samples, they are in the repository, so a test
+//! never skips one: a missing fixture is a failure.
 
 use std::path::{Path, PathBuf};
 
@@ -50,6 +51,22 @@ pub fn d600_frame(frame: u8) -> String {
 /// 38, whose point the reader places from the D600's table as on the
 /// NEF.
 pub const D600_FRAME_4_JPEG: &str = "nikon-d600/frame-04.jpg";
+
+/// The NEF of frame 7856, a D600 shot through the viewfinder in
+/// 3D-tracking with point 1, RAW + JPEG at the Medium size, whose point
+/// the reader places from the D600's table in the table's frame.
+pub const D600_7856_NEF: &str = "nikon-d600-jpeg-sizes/frame-7856.nef";
+
+/// The camera's Medium JPEG of frame 7856, 4512 by 3008, the shot whose
+/// NEF is [`D600_7856_NEF`], whose point the reader places in the window
+/// of the frame that the D600's table lists for that size.
+pub const D600_7856_MEDIUM_JPEG: &str = "nikon-d600-jpeg-sizes/frame-7856-medium.jpg";
+
+/// The camera's Small JPEG of frame 7858, 3008 by 2008, a D600 shot
+/// through the viewfinder in 3D-tracking with point 1, half the frame,
+/// whose point the reader places from the D600's table in the table's
+/// frame.
+pub const D600_7858_SMALL_JPEG: &str = "nikon-d600-jpeg-sizes/frame-7858-small.jpg";
 
 /// The path of the committed fixture `name`, in `tests/fixtures/` under
 /// the crate's root.

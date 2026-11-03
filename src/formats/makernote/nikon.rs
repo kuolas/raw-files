@@ -213,10 +213,18 @@
 //! whose centre or box the window leaves out is dropped, and when the
 //! primary is, the file gives no focus point. In a JPEG the window must be
 //! the JPEG's own size, as it is on the D600 at full image size, so that a
-//! crop-mode JPEG at a smaller size gives none; an uncropped JPEG takes the
-//! table's frame, which the JPEG reader holds to the picture's shape.
-//! CropArea plays no part in it. A record of a position is read by the
-//! rules above, whatever it names.
+//! crop-mode JPEG at a smaller size gives none. An uncropped JPEG takes the
+//! table's frame, which the JPEG reader holds to the picture's shape,
+//! unless the table lists its size as one whose picture shows a window of
+//! the frame: the D600's Medium JPEG, 4512 by 3008, shows the 6010 by 4006
+//! window centred in the 6016 by 4016 frame, as I measured it by fitting
+//! the Medium JPEGs of RAW+JPEG pairs onto their NEF's full-size preview.
+//! Its points are then placed as on a crop: the frame is that window, every
+//! centre moves back by its origin, (3, 5), and a point the window leaves
+//! out is dropped, by the decision to keep a JPEG size's window in the
+//! table (ADR020). Its Large and Small JPEGs, 6016 by 4016 and 3008 by
+//! 2008, show the whole frame, and take it. CropArea plays no part in it.
+//! A record of a position is read by the rules above, whatever it names.
 //!
 //! The MakerNote also records how the camera was set for the picture,
 //! beyond what the Exif tags record (ADR011): the white balance setting
@@ -718,8 +726,9 @@ pub(in crate::formats) fn preview_candidate<R: Read + Seek>(
 /// in the crop's window on a crop that CropHiSpeed records. `picture` says,
 /// once, what a crop without a CropArea is placed on: nothing for a raw
 /// file's, whose point is then read as recorded, and for a JPEG's, its own
-/// pixels, of the image size `standard` gives, which a placed point's
-/// window must equal. Every other value is the standard tags', and the
+/// pixels, of the image size `standard` gives, which a point placed on a
+/// crop must have as its window, and which picks the window of a JPEG size
+/// that the table lists. Every other value is the standard tags', and the
 /// layout of the body's autofocus points is not given here: detection
 /// gives it from the Model alone, whatever the MakerNote holds.
 ///
@@ -1286,7 +1295,8 @@ fn world_time<R: Read + Seek>(src: &mut Source<R>, makernote: &MakerNote) -> Res
 /// writes, gives the points it names ([`NamedPoints`]), placed from
 /// `table`, the table of the body the file's Model names, when there is
 /// one ([`placed`]), with their frame on a crop set by `crop` and checked
-/// against `pixels`; CropArea plays no part there.
+/// against `pixels`, and on an uncropped JPEG set by `pixels` when the
+/// table lists that size; CropArea plays no part there.
 ///
 /// `None` when FocusMode records manual focus ([`manual_focus`]); when
 /// AFInfo2 is missing, is not of type UNDEFINED, stores its value outside
@@ -1626,8 +1636,9 @@ fn centred_origin(frame: u32, window: u32) -> Option<u32> {
 /// marked: `None` when the table has no point of its number, as for 0,
 /// which names none, or a number past the table.
 ///
-/// The frame is the table's, or on a crop the crop's window, into which
-/// every centre moves back by the window's origin, the box kept
+/// The frame is the table's, or on a crop the crop's window, or on an
+/// uncropped JPEG of a size the table lists the window that size shows,
+/// into which every centre moves back by the window's origin, the box kept
 /// ([`placed_frame`]). A point that no longer lies on the window by the
 /// rule every focus point is checked by ([`lies_on`]), its centre outside
 /// it or its box across an edge, is dropped; the primary dropped costs the
@@ -1676,7 +1687,14 @@ fn placed(
 /// The frame of the points placed from `table`, and the origin their
 /// centres move back by: on a file that is no crop, whose CropHiSpeed,
 /// `crop`, records a cropped size equal to its original size or is
-/// missing, the table's frame, the body's full-size output, and no move.
+/// missing, the table's frame, the body's full-size output, and no move;
+/// but in a JPEG whose own size, `pixels`, is one the table lists as
+/// showing a window of the frame ([`PointTable::jpeg_window`]), that
+/// window, 6010 by 4006 on a D600 Medium JPEG, and its origin centred in
+/// the table's frame, (3, 5) on the D600, by the decision to keep a JPEG
+/// size's window in the table (ADR020). A JPEG of any other size, which
+/// the JPEG reader then holds to the picture's shape, and a raw file,
+/// which has no `pixels`, keep the table's frame.
 ///
 /// On a crop, only when the table's record confirms the crop's setting:
 /// the crop's window, the size the record measured
@@ -1689,31 +1707,36 @@ fn placed(
 /// than the record's frames show, which the window cannot be trusted on.
 /// In a JPEG, whose own size is `pixels`, the window must be that size,
 /// which on the D600 is the full image size: a crop-mode JPEG at a smaller
-/// size gives none (ADR018). An uncropped JPEG keeps the table's frame at
-/// any size, which the JPEG reader then holds to the picture's shape.
+/// size gives none (ADR018), whatever JPEG sizes the table lists.
 ///
 /// `None` on a crop the record does not confirm, for a CropHiSpeed origin
 /// other than the window's, for a window that does not fit the frame,
-/// which the table tests rule out, and for a JPEG whose size is not the
-/// window's.
+/// which the table tests rule out, and on a crop for a JPEG whose size is
+/// not the window's.
 fn placed_frame(
     table: &PointTable,
     crop: Option<CropHiSpeed>,
     pixels: Option<Size>,
 ) -> Option<(Size, Point)> {
     let frame = table.frame();
-    let Some(crop) = crop.filter(|crop| crop.cropped != crop.original) else {
-        return Some((frame, Point { x: 0, y: 0 }));
+    let centred = |window: Size| {
+        Some(Point {
+            x: centred_origin(frame.width, window.width)?,
+            y: centred_origin(frame.height, window.height)?,
+        })
     };
-    let window = table.crop_window(crop.mode)?;
-    let origin = Point {
-        x: centred_origin(frame.width, window.width)?,
-        y: centred_origin(frame.height, window.height)?,
-    };
-    if crop.origin != origin || pixels.is_some_and(|pixels| pixels != window) {
-        return None;
+    match crop.filter(|crop| crop.cropped != crop.original) {
+        Some(crop) => {
+            let window = table.crop_window(crop.mode)?;
+            let origin = centred(window)?;
+            let confirmed = crop.origin == origin && pixels.is_none_or(|pixels| pixels == window);
+            confirmed.then_some((window, origin))
+        }
+        None => match pixels.and_then(|pixels| table.jpeg_window(pixels)) {
+            Some(window) => Some((window, centred(window)?)),
+            None => Some((frame, Point { x: 0, y: 0 })),
+        },
     }
-    Some((window, origin))
 }
 
 /// Whether `makernote`'s FocusMode records manual focus: whether it is of
@@ -5183,10 +5206,20 @@ mod tests {
     #[test]
     fn a_d600_jpeg_gives_the_point_its_raw_file_gives() {
         for order in ORDERS {
-            // Uncropped, at full size and at a quarter of it: the table's
-            // frame, whatever the JPEG's size; the JPEG reader holds it to
-            // the picture's shape.
-            for pixels in [[6016, 4016], [1504, 1004]] {
+            // Uncropped, at full size, the Large JPEG's, at half of it, the
+            // Small JPEG's, and at a quarter of it: the table's frame, as at
+            // every size the table does not list; the JPEG reader holds it
+            // to the picture's shape. So do sizes a pixel off the Medium
+            // JPEG's, 4512 by 3008, which the table lists, and the 4512 by
+            // 3012 of the whole frame scaled as the Medium JPEG is.
+            for pixels in [
+                [6016, 4016],
+                [3008, 2008],
+                [1504, 1004],
+                [4512, 3012],
+                [4511, 3008],
+                [4512, 3009],
+            ] {
                 let metadata = d600_jpeg(order, &d600_viewfinder(order), Some(D600_FX), pixels);
                 assert_eq!(
                     metadata.focus_points(),
@@ -5213,6 +5246,121 @@ mod tests {
                 assert_eq!(metadata.focus_points(), None, "{order:?}, {pixels:?}");
             }
         }
+    }
+
+    #[test]
+    fn a_d600_medium_jpeg_places_the_points_in_its_window() {
+        // The Medium JPEG, 4512 by 3008, shows the 6010 by 4006 window
+        // centred in the 6016 by 4016 frame, at the origin (3, 5): the
+        // frame is the window, and every centre moves back by the origin,
+        // the box kept. Point 38 lands at (1809, 1700), point 1 at (3005,
+        // 2002) and point 27 at (4200, 2303), with the crop off or no
+        // CropHiSpeed at all.
+        for order in ORDERS {
+            for crop in [Some(D600_FX), None] {
+                let what = format!("{order:?}, {crop:?}");
+                let metadata = d600_jpeg(order, &d600_viewfinder(order), crop, [4512, 3008]);
+                assert_eq!(
+                    metadata.focus_points(),
+                    Some(&placed_list(
+                        [6010, 4006],
+                        &[(38, [1809, 1700])],
+                        38,
+                        FocusAreaMode::Single
+                    )),
+                    "{what}"
+                );
+                let value = viewfinder(order, "0100", 3, 1, &[0, 26, 37]);
+                let metadata = d600_jpeg(order, &value, crop, [4512, 3008]);
+                assert_eq!(
+                    metadata.focus_points(),
+                    Some(&placed_list(
+                        [6010, 4006],
+                        &[(1, [3005, 2002]), (27, [4200, 2303]), (38, [1809, 1700])],
+                        1,
+                        FocusAreaMode::Single
+                    )),
+                    "{what}"
+                );
+                // The same record read as a raw file, which has no pixels
+                // of its own: the table's frame.
+                let metadata = shot(order, "NIKON D600", &d600_viewfinder(order), crop);
+                assert_eq!(
+                    metadata.focus_points(),
+                    Some(&placed_list([6016, 4016], &[B1], 38, FocusAreaMode::Single)),
+                    "{what}, raw"
+                );
+            }
+            // A DX crop-mode JPEG at the Medium JPEG's size: the crop's
+            // window is 3936 by 2624, not the JPEG's size, so none, as at
+            // any smaller size.
+            let metadata = d600_jpeg(order, &d600_viewfinder(order), Some(D600_DX), [4512, 3008]);
+            assert_eq!(metadata.focus_points(), None, "{order:?}, DX");
+        }
+    }
+
+    /// The points that the D600's table places for a viewfinder shot that
+    /// names `primary` and sets the mask's `bits`, with no CropHiSpeed, as
+    /// a file that is no crop, in a JPEG of `pixels`, as if the table's
+    /// record listed that size as showing a window of `window` of the
+    /// frame, so that a test can place points in a window no body has. The
+    /// list is given the area mode single point, as the reader gives it.
+    fn placed_on_jpeg(
+        pixels: [u32; 2],
+        window: [u32; 2],
+        primary: u8,
+        bits: &[usize],
+    ) -> Option<FocusPoints> {
+        let [width, height] = window;
+        let [pixels_width, pixels_height] = pixels;
+        let pixels = Size {
+            width: pixels_width,
+            height: pixels_height,
+        };
+        // A table's JPEG sizes are `'static`; each call leaks the few bytes
+        // of one, which a test can afford.
+        let jpeg_sizes = Box::leak(Box::new([points::ConfirmedJpegSize::new(
+            pixels,
+            Size { width, height },
+        )]));
+        let table = points::find("NIKON D600")
+            .expect("the D600's table")
+            .with_jpeg_sizes(jpeg_sizes);
+        let mut mask = [0; points::MASK_LEN];
+        for &bit in bits {
+            mask[bit / 8] |= 1 << (bit % 8);
+        }
+        let named = NamedPoints {
+            layout_code: 3,
+            primary,
+            mask,
+        };
+        super::placed(named, &table, None, Some(pixels))
+            .map(|points| points.with_area_mode(FocusAreaMode::Single))
+    }
+
+    #[test]
+    fn a_point_a_jpeg_sizes_window_leaves_out_is_dropped() {
+        // No point of the D600's table lies outside its Medium JPEG's
+        // window, so this window is narrower than any the D600 has: 2536 by
+        // 2624, centred in the frame at the origin (1740, 696), shown by a
+        // JPEG of half its size. Point 38 at (72, 1009), whose box of 164
+        // crosses the left edge, and point 25 at (2463, 1311), whose box
+        // crosses the right one, are dropped; points 1 and 11 stay.
+        let expected = placed_list(
+            [2536, 2624],
+            &[(1, [1268, 1311]), (11, [1028, 1311])],
+            1,
+            FocusAreaMode::Single,
+        );
+        assert_eq!(
+            placed_on_jpeg([1268, 1312], [2536, 2624], 1, &[10, 24, 37]),
+            Some(expected)
+        );
+        // The primary dropped: no point.
+        assert_eq!(placed_on_jpeg([1268, 1312], [2536, 2624], 38, &[37]), None);
+        // A window wider than the frame has no origin: no point.
+        assert_eq!(placed_on_jpeg([3009, 2008], [6018, 4016], 1, &[0]), None);
     }
 
     #[test]

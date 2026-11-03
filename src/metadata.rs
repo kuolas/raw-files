@@ -337,12 +337,19 @@ impl Metadata {
     /// only when the JPEG's size is the crop's window, which on the D600 is
     /// the full image size. A JPEG's point is given only when its frame has
     /// the picture's shape, so an export cut to another shape, or turned
-    /// upright, gives `None`; the exception is an export cut from a Nikon
-    /// crop-mode JPEG, whose point may be misplaced. The same rule gives a
-    /// D600 Medium JPEG, 4512x3008, `None`: its shape, exactly 3:2, is
-    /// further from the 6016x4016 frame than the one pixel of rounding the
-    /// rule allows, while a Small JPEG, 3008x2008, half the frame, keeps
-    /// its point.
+    /// upright, gives `None`. The exceptions are an export cut from a Nikon
+    /// crop-mode JPEG, and an export of a D600 JPEG cut or scaled to
+    /// exactly the Medium size, which is read as a Medium JPEG: their
+    /// points may be misplaced, by far on a cut. A D600 Medium JPEG,
+    /// 4512x3008, whose picture shows the 6010x4006 window centred in the
+    /// 6016x4016 frame rather than the whole frame, gives the point placed
+    /// from the table in that window, its frame 6010x4006, which has the
+    /// JPEG's shape; a Small JPEG, 3008x2008, half the frame, gives it in
+    /// the 6016x4016 frame. An export scaled from a Medium JPEG to another
+    /// size takes the whole frame, since the window is kept for the Medium
+    /// size alone: it gives `None` unless it is about 750 pixels tall or
+    /// less, where the shape rule's rounding passes the whole frame and the
+    /// point lands under a pixel off.
     ///
     /// # Examples
     ///
@@ -466,8 +473,10 @@ impl Metadata {
     ///
     /// The layout's frame is always the table's: on a shot in a crop mode,
     /// the points of [`focus_points`](Self::focus_points) are in the
-    /// crop's frame, not in the layout's, and [`FocusLayout`] says how to
-    /// place the layout on such a shot's picture.
+    /// crop's frame, not in the layout's, as they are in the window of the
+    /// frame that a JPEG of some sizes shows, such as the Nikon D600's
+    /// Medium JPEG, and [`FocusLayout`] says how to place the layout on
+    /// such a shot's picture.
     ///
     /// # Examples
     ///

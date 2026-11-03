@@ -28,11 +28,13 @@
 //! frame 4 of the session on which my own D600's autofocus points were
 //! measured, committed stripped the same way: its previews, every value
 //! of its metadata, and the point it names by number, placed from the
-//! D600's table where its NEF places it. Then eight camera
-//! JPEGs of Wikimedia Commons, too large to commit, when they have been
-//! downloaded (see [`support::samples::path`]): the previews each gives,
-//! and its metadata, every value of it, the focus point and the camera
-//! settings among them.
+//! D600's table where its NEF places it; and a Medium and a Small JPEG
+//! of my D600, whose point is placed in the window of the frame the
+//! Medium JPEG shows, and in the whole frame on the Small one. Then eight
+//! camera JPEGs of Wikimedia Commons, too large to commit, when they have
+//! been downloaded (see [`support::samples::path`]): the previews each
+//! gives, and its metadata, every value of it, the focus point and the
+//! camera settings among them.
 
 mod support;
 
@@ -2413,6 +2415,77 @@ fn the_d600_frame_4_jpeg_gives_its_previews_metadata_and_point_38_placed_from_th
             .with_flash(Flash::new(false).with_mode(FlashMode::Off))
             .with_color_space(ColorSpace::Srgb),
         "{label}"
+    );
+}
+
+/// Checks that the D600 JPEG `label`, of `pixels` as its frame header
+/// gives it, shot through the viewfinder in 3D-tracking with point 1,
+/// gives that point placed from the D600's table at `center` in `frame`,
+/// with its box of 164 by 164, from a table and nothing said of focus,
+/// as the primary of a list of that point alone, numbered 1, with the area
+/// mode `Tracking`; and the layout of the D600's 39 points in the table's
+/// frame. AFInfo2 records area mode 9 under detection method 0, layout
+/// code 3, primary point 1 and bit 0 of the mask, and CropHiSpeed records
+/// no crop, as in the NEF of the same shot.
+fn check_d600_jpeg_point_1(label: &str, pixels: (u16, u16), frame: (u16, u16), center: Point) {
+    let file = RawFile::open(support::fixtures::fixture(label))
+        .unwrap_or_else(|error| panic!("{label}: {error}"));
+    assert_eq!(file.format(), Format::Jpeg, "{label}");
+    let metadata = file.metadata();
+    assert_eq!(
+        metadata.camera().recorded_model(),
+        Some("NIKON D600"),
+        "{label}"
+    );
+    assert_eq!(metadata.raw_size(), None, "{label}");
+    assert_eq!(metadata.image_size(), Some(size_of(pixels)), "{label}");
+    let frame = size_of(frame);
+    let box_164 = size_of((164, 164));
+    let placed =
+        Focus::new(frame, center, FocusOrigin::Table).and_then(|focus| focus.with_size(box_164));
+    assert_eq!(metadata.focus(), placed, "{label}");
+    let points = FocusPoints::new(frame, FocusOrigin::Table)
+        .and_then(|points| {
+            points.with_point(FocusPoint::new(center).with_number(1).with_size(box_164))
+        })
+        .and_then(|points| points.with_primary_index(0))
+        .map(|points| points.with_area_mode(FocusAreaMode::Tracking));
+    assert_eq!(metadata.focus_points(), points.as_ref(), "{label}");
+    let layout = metadata
+        .focus_layout()
+        .unwrap_or_else(|| panic!("{label}: no layout"));
+    assert_eq!(layout.frame(), size_of((6016, 4016)), "{label}");
+    assert_eq!(layout.points().len(), 39, "{label}");
+}
+
+/// The Medium JPEG of frame 7856, 4512 by 3008, which I shot with my own
+/// D600 on 2026-11-03, shows the 6010 by 4006 window centred in the
+/// table's 6016 by 4016 frame, as the D600's record measures it on its
+/// NEF's full-size preview: point 1, at (3008, 2007) in the table, is
+/// placed in that window, less its origin, (3, 5), at (3005, 2002). The
+/// JPEG reader keeps the point, since the window has the JPEG's shape
+/// within its rounding, where the whole frame has not.
+#[test]
+fn the_d600_medium_jpeg_gives_point_1_placed_in_its_window() {
+    check_d600_jpeg_point_1(
+        support::fixtures::D600_7856_MEDIUM_JPEG,
+        (4512, 3008),
+        (6010, 4006),
+        Point { x: 3005, y: 2002 },
+    );
+}
+
+/// The Small JPEG of frame 7858, 3008 by 2008, which I shot with my own
+/// D600 on 2026-11-03, shows the whole frame at half its size: point 1 is
+/// placed in the table's 6016 by 4016 frame, at (3008, 2007), as in the
+/// NEF.
+#[test]
+fn the_d600_small_jpeg_gives_point_1_placed_in_the_tables_frame() {
+    check_d600_jpeg_point_1(
+        support::fixtures::D600_7858_SMALL_JPEG,
+        (3008, 2008),
+        (6016, 4016),
+        Point { x: 3008, y: 2007 },
     );
 }
 

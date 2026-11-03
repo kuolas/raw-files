@@ -15,7 +15,12 @@ affects; [test-data.md](test-data.md) describes the files.
    ratio, which an export cropped to the same shape passes with its point
    in the wrong place. A crop-mode JPEG that an editor cut again, keeping
    the MakerNote and adding no CropArea, passes it whatever its new shape
-   ([ADR015](../../architecture-decisions/adr015-the-focus-point-of-a-crop-mode-jpeg.md)). Whether other evidence (an editor's XMP, a JFIF
+   ([ADR015](../../architecture-decisions/adr015-the-focus-point-of-a-crop-mode-jpeg.md)),
+   and an export of a D600 JPEG cut or scaled to exactly the Medium
+   size, 4512x3008, is read as a Medium JPEG, its points placed in the
+   window of the frame that the D600's table keeps for that size
+   ([ADR020](../../architecture-decisions/adr020-each-crops-window-in-the-table.md)).
+   Whether other evidence (an editor's XMP, a JFIF
    segment, the Software tag) should refuse more points is left out of
    that decision; such marks did not tell whether the pixels kept the
    camera's framing. Affects

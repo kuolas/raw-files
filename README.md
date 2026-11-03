@@ -34,8 +34,8 @@ fuller RAW decoding is planned.
   the autofocus points the camera used, the primary among them, with the
   area mode, and, for a body with a table, the layout of all its points,
   for a viewer to draw. Camera JPEGs are read for all of it as their raw
-  files are, except that, through the viewfinder, a D600 Medium JPEG,
-  and a D600 DX JPEG smaller than the crop's full size, give no point.
+  files are, except that, through the viewfinder, a D600 DX JPEG smaller
+  than the crop's full size gives no point.
 - **JPEG files.** The JPEG files cameras write beside their raw files or
   instead of them, read in the same way: a JPEG's previews are the file
   itself and the smaller images it holds, and its metadata is the same,
@@ -361,13 +361,14 @@ as an editor exports it.
   focus point. No other maker's MakerNote is read.
 - **Focus point**: given only when its frame has the picture's shape, so
   an export cut to another shape or turned upright gives none, except one
-  cut from a Nikon crop-mode JPEG, whose point may then be misplaced.
+  cut from a Nikon crop-mode JPEG, and one of a D600 JPEG cut or scaled
+  to exactly the Medium size, 4512x3008, which is read as a Medium JPEG,
+  whose points may then be misplaced, by far on a cut.
   The point of a Nikon crop-mode JPEG (DX, 1:1, 16:9) is placed on the
   picture. A D600 JPEG shot through the viewfinder gives its points
   placed from the table, as its NEF does, on a DX frame only at the
-  crop's full size; a Medium JPEG, 4512x3008, gives none, since its
-  shape, exactly 3:2, misses the table's frame by more than a pixel
-  ([#62](https://github.com/kuolas/raw-files/issues/62)).
+  crop's full size; a Medium JPEG, 4512x3008, whose picture shows a
+  6010x4006 window of the 6016x4016 frame, gives them in that window.
 - **A damaged Exif segment**: a JPEG whose Exif segment is missing or
   cannot be read still opens, with the file itself and its MPF images as
   previews, its image size as the only value read from it, and the
@@ -375,7 +376,7 @@ as an editor exports it.
 - **Checked on**: eight camera JPEGs from Wikimedia Commons that CI
   downloads, of five Sony bodies, two Nikon bodies and a Canon; JPEG files
   built in the tests; and three stripped JPEG files of my own Z 9 and
-  one of my own D600.
+  three of my own D600.
 
 Any other file, a DNG among them whatever its Make says, is refused with the
 `UnknownFormat` error.

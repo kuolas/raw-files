@@ -27,7 +27,9 @@
 //! frame records; and, on frame 4, shot through the viewfinder with one
 //! point, its previews and every value of its metadata, the point it names
 //! placed from the table among them, and the layout it gives with its
-//! MakerNote missing or unreadable. Then 35
+//! MakerNote missing or unreadable; and the NEF of a frame I shot with my
+//! D600 later, RAW + JPEG at the Medium size, whose point is placed in the
+//! table's frame whatever its JPEG's size. Then 35
 //! real files too large to commit, three of the
 //! Z 9 and 32 of 25 other bodies, when they have been downloaded (see
 //! [`support::samples::path`]): the previews each gives, and its
@@ -1939,6 +1941,41 @@ fn check_d600_focus(label: &str, metadata: &Metadata, focus: D600Focus) {
             assert_eq!(primary.in_focus(), focus.in_focus(), "{label}");
         }
     }
+}
+
+/// Checks that the NEF of frame 7856, which I shot with my own D600 on
+/// 2026-11-03 through the viewfinder in 3D-tracking with point 1, RAW +
+/// JPEG at the Medium size, gives that point placed from the table in the
+/// table's 6016 by 4016 frame, as every NEF does whatever size its JPEG
+/// is shot at, the layout of the D600's points, and the area mode
+/// `Tracking`: AFInfo2 records area mode 9 under detection method 0,
+/// layout code 3, primary point 1 and bit 0 of the mask, and CropHiSpeed
+/// records no crop. Its values were read from the file's bytes and the
+/// record in the NEF notes, not from the reader.
+#[test]
+fn the_d600_frame_7856_gives_point_1_placed_in_the_tables_frame_in_3d_tracking() {
+    let label = support::fixtures::D600_7856_NEF;
+    let file = RawFile::open(support::fixtures::fixture(label))
+        .unwrap_or_else(|error| panic!("{label}: {error}"));
+    assert_eq!(file.format(), Format::Nef, "{label}");
+    let metadata = file.metadata();
+    assert_eq!(
+        metadata.camera().recorded_model(),
+        Some("NIKON D600"),
+        "{label}"
+    );
+    assert_eq!(metadata.orientation(), D600_LANDSCAPE, "{label}");
+    assert_eq!(metadata.camera_settings().image_area(), D600_FX, "{label}");
+    let layout = metadata
+        .focus_layout()
+        .unwrap_or_else(|| panic!("{label}: no layout"));
+    assert_eq!(layout.frame(), as_size(D600_FULL), "{label}");
+    assert_eq!(layout.points().len(), 39, "{label}");
+    check_d600_focus(
+        label,
+        metadata,
+        Placed(D600_FULL, 1, FocusAreaMode::Tracking, &[(1, (3008, 2007))]),
+    );
 }
 
 /// Checks that frame 4 of the D600 session, shot through the viewfinder

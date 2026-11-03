@@ -166,7 +166,7 @@ was not exhaustive. [S]
 ## 4. Fixtures
 
 The JPEG reader's tests use three kinds of fixture: files built in code,
-four files stripped from my own camera JPEGs, and damaged copies of
+six files stripped from my own camera JPEGs, and damaged copies of
 both. This section says what each kind is for; the tests' own
 documentation says what each file holds.
 
@@ -218,11 +218,23 @@ provenance and SHA-256 are in
 [the session's manifest](../../../tests/fixtures/nikon-d600/README.md).
 [F]
 
+Two JPEGs of my own D600 at its smaller sizes, shot on 2026-11-03
+through the viewfinder in 3D-tracking with point 1, are committed with
+the NEF of the first in `tests/fixtures/nikon-d600-jpeg-sizes/`,
+stripped the same way: frame 7856's Medium JPEG, 4512×3008, and frame
+7858's Small JPEG, 3008×2008, each 69,876 bytes. The reader places the
+Medium JPEG's point in the window of the frame that the D600's table
+keeps for that size, and the Small JPEG's in the whole frame
+([autofocus-points.md](../nef/autofocus-points.md#29-the-jpeg-sizes));
+their provenance and SHA-256 are in
+[their manifest](../../../tests/fixtures/nikon-d600-jpeg-sizes/README.md).
+[F]
+
 ### 4.3 Corrupted variants
 
 As for NEF and ARW, the robustness tests (`tests/robustness.rs`) cut
 every JPEG fixture short at every length and overwrite its bytes one at a
-time, and expect an error or a result, never a panic. On the four
+time, and expect an error or a result, never a panic. On the six
 stripped files the overwriting skips three spans of zeros that no
 reader parses: the MakerNote's zeroed ShotInfo, the padding after the
 thumbnail's stub, and the camera's zeros after the thumbnail's declared

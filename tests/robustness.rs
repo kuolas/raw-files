@@ -19,7 +19,7 @@
 //! counted from the start of the file, records the ISO and the lens's
 //! range and holds the file's only JPEG, and an ILCE-7M4's ARW 4, with its
 //! MakerNote, which records the focus point, each in both byte orders.
-//! They damage seven real files too, committed with their pixels and
+//! They damage ten real files too, committed with their pixels and
 //! personal fields removed or zeroed: two NEF shots of my own Z 9 in DX
 //! and 1:1 crop modes, and three JPEG shots of the same camera in FX and
 //! in DX and 16:9 crop modes, the last in portrait orientation, whose
@@ -29,8 +29,11 @@
 //! points were measured, a NEF shot through the viewfinder whose
 //! MakerNote names its point by number, and the camera's JPEG of the
 //! same shot, whose MakerNote holds a preview, both in the camera's own
-//! big-endian layout. The other 55 frames of that session share the
-//! NEF's layout, so one stands for them all and keeps the sweeps short.
+//! big-endian layout; and frame 7856 of my own D600, its NEF and its
+//! Medium JPEG, whose points the reader places in the window of the frame
+//! that the D600's table keeps for that size, and frame 7858's Small
+//! JPEG. The other 55 frames of that session share the NEF's layout, so
+//! one stands for them all and keeps the sweeps short.
 //! And they damage the JPEG files the JPEG reader's tests open, whose
 //! segments the walk reads before the Exif segment's TIFF structure and
 //! the MPF index: one with no Exif segment, one with zeros after its end,
@@ -77,35 +80,35 @@
 //! that: in the zeros, at each tile's start and around it, and just short
 //! of the end. That keeps the whole file to a few seconds in a debug build.
 //!
-//! The four stripped JPEG files are 69,998 bytes each for the Z 9 and
-//! 69,876 bytes for the D600, most of them the camera's Exif segment of
+//! The six stripped JPEG files are 69,998 bytes each for the Z 9 and 69,876
+//! bytes each for the D600, most of them the camera's Exif segment of
 //! 65,536 bytes, kept whole so that no offset in it moves. Three spans of
-//! it are zeros, which nothing parses when the file is opened, and a
-//! fourth in the D600's: the value of the MakerNote's ShotInfo entry,
-//! 35,785 bytes on the Z 9 and 10,494 on the D600, an enciphered block
-//! that no reader reads, which the stripping zeroed; the zeros after
-//! IFD1's stub thumbnail, up to the length IFD1 declares for it, 10,559
-//! to 12,664 bytes on the Z 9 and 9,008 on the D600, and on the D600 the
-//! zeros after the stub of the MakerNote's preview, up to the length its
-//! PreviewIFD declares for it, 24,821 bytes, which the stripping wrote,
-//! and which the preview finder never reaches, as it stops at the stub's
-//! frame header, and reading the preview copies without looking at them;
-//! and the zeros the camera wrote after IFD1's length, up to the end of
-//! the segment, 12,876 to 14,981 bytes on the Z 9 and 16,952 on the
-//! D600, at which no offset points and which the walk over the segments
-//! steps over by the segment's length. So each of the four is cut at
-//! every length, and overwritten byte by byte everywhere but in those
+//! it are zeros, which nothing parses when the file is opened, and a fourth
+//! in the D600's: the value of the MakerNote's ShotInfo entry, 35,785 bytes
+//! on the Z 9 and 10,494 on the D600, an enciphered block that no reader
+//! reads, which the stripping zeroed; the zeros after IFD1's stub
+//! thumbnail, up to the length IFD1 declares for it, 10,559 to 12,664 bytes
+//! on the Z 9 and 8,975 to 9,017 on the D600, and on the D600 the zeros
+//! after the stub of the MakerNote's preview, up to the length its
+//! PreviewIFD declares for it, 24,821 to 24,941 bytes, which the stripping
+//! wrote, and which the preview finder never reaches, as it stops at the
+//! stub's frame header, and reading the preview copies without looking at
+//! them; and the zeros the camera wrote after IFD1's length, up to the end
+//! of the segment, 12,876 to 14,981 bytes on the Z 9 and 16,865 to 16,952
+//! on the D600, at which no offset points and which the walk over the
+//! segments steps over by the segment's length. So each of the six is cut
+//! at every length, and overwritten byte by byte everywhere but in those
 //! spans, which the test finds from the file's own structure
 //! ([`stripped_jpeg_unread`]) and checks are zeros: every segment header,
 //! every IFD, every value a reader reads, the MPF segment and every stub
-//! are still overwritten. That keeps the four files to about 25 seconds
-//! in a debug build, most of the run; overwriting every byte of the three
-//! Z 9 files alone took more than two minutes.
+//! are still overwritten. That keeps the six files to about 40 seconds in a
+//! debug build, most of the run; overwriting every byte of the three Z 9
+//! files alone took more than two minutes.
 //!
 //! Every other file is swept whole: the two stripped Z 9 NEF files are
-//! 4,270 bytes each and the D600 frame's NEF 2,452 bytes, their raw data
-//! replaced by 64 bytes, and the largest JPEG file built in code, the one
-//! with zeros after its end, is 4,218 bytes.
+//! 4,270 bytes each and the two D600 frames' NEF files 2,452 bytes each,
+//! their raw data replaced by 64 bytes, and the largest JPEG file built in
+//! code, the one with zeros after its end, is 4,218 bytes.
 //!
 //! A last test damages one value only, the capture time, in each of the
 //! RAW files, and checks that the file gives every other value exactly as the
@@ -124,8 +127,8 @@ use raw_files::{
 };
 use support::arw::{ARW4_FULL_SIZE_JPEG, arw4_file, stub};
 use support::fixtures::{
-    D600_FRAME_4_JPEG, Z9_1X1, Z9_16X9_JPEG, Z9_DX, Z9_DX_JPEG, Z9_FX_JPEG, d600_frame,
-    read_fixture,
+    D600_7856_MEDIUM_JPEG, D600_7856_NEF, D600_7858_SMALL_JPEG, D600_FRAME_4_JPEG, Z9_1X1,
+    Z9_16X9_JPEG, Z9_DX, Z9_DX_JPEG, Z9_FX_JPEG, d600_frame, read_fixture,
 };
 use support::jpeg_files::{
     CAMERA_MAKE, ILCE7M3_MAIN, MAIN, Z9Mode, a100_jpeg, camera_jpeg, camera_jpeg_with_metadata,
@@ -162,7 +165,8 @@ struct Fixture {
 /// stripped from my own Z 9 shots, as they are committed: two NEF
 /// files in DX and 1:1 crop modes, and three JPEG files in FX and in
 /// DX and 16:9 crop modes; frame 4 of my own D600 session, its NEF and
-/// its JPEG, as they are committed; and the JPEG files: without Exif,
+/// its JPEG, and frame 7856's NEF and Medium JPEG and frame 7858's Small
+/// JPEG of my own D600, as they are committed; and the JPEG files: without Exif,
 /// with zeros after its end, and, in both byte orders, with an Exif
 /// segment, a camera's with every value the metadata reads, a camera's
 /// with a JFIF segment first, whose Exif segment holds only the
@@ -251,6 +255,7 @@ fn fixtures() -> Vec<Fixture> {
         ("Z 9 DX, stripped", Z9_DX.to_owned()),
         ("Z 9 1:1, stripped", Z9_1X1.to_owned()),
         ("D600 frame 4, stripped", d600_frame(4)),
+        ("D600 frame 7856, stripped", D600_7856_NEF.to_owned()),
     ] {
         let bytes = read_fixture(&file);
         fixtures.push(Fixture {
@@ -266,6 +271,11 @@ fn fixtures() -> Vec<Fixture> {
         ("Z 9 DX JPEG, stripped", Z9_DX_JPEG),
         ("Z 9 16:9 JPEG, stripped", Z9_16X9_JPEG),
         ("D600 frame 4 JPEG, stripped", D600_FRAME_4_JPEG),
+        (
+            "D600 frame 7856 Medium JPEG, stripped",
+            D600_7856_MEDIUM_JPEG,
+        ),
+        ("D600 frame 7858 Small JPEG, stripped", D600_7858_SMALL_JPEG),
     ] {
         let bytes = read_fixture(file);
         fixtures.push(Fixture {

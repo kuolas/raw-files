@@ -116,7 +116,7 @@ raw-files reads three formats, and refuses any other file with the
 - **JPEG**, as a camera writes it beside its raw file or instead of it
   ([ADR014](architecture-decisions/adr014-jpeg-files-as-a-format-of-their-own.md)).
   Checked on test files built in code, on three stripped JPEG files of
-  my own Z 9 and on the eight camera JPEGs of Wikimedia Commons that CI
+  my own Z 9 and three of my own D600, and on the eight camera JPEGs of Wikimedia Commons that CI
   downloads, of five Sony bodies, two Nikon bodies and a Canon.
 
 Other formats come in this order:

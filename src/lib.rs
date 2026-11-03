@@ -339,7 +339,9 @@
 //! a Nikon Z 9, one in FX and two in the DX and 16:9 crop modes, which
 //! check where a crop mode's focus point is placed; on a stripped JPEG
 //! file from that Nikon D600 session, which checks a point placed from a
-//! table; and on JPEG files built in the tests.
+//! table; on two stripped JPEG files of the same D600 at its Medium and
+//! Small sizes, which check a point placed in the window of the frame a
+//! JPEG size shows; and on JPEG files built in the tests.
 //!
 //! Nikon mirrorless bodies, Nikon DSLRs in live view and Sony bodies from
 //! the ILCE-7RM2 on record where they focused as a position, which
@@ -356,8 +358,10 @@
 //! camera's full output, and the point is placed on the JPEG's picture. A
 //! JPEG gives its point only when the point's frame has the picture's
 //! shape, so an export cut to another shape or turned upright gives
-//! `None`; one cut from a Nikon crop-mode JPEG is the exception, and its
-//! point may be misplaced.
+//! `None`. The exceptions are an export cut from a Nikon crop-mode JPEG,
+//! and one of a D600 JPEG cut or scaled to exactly the Medium size,
+//! 4512x3008, which is read as a Medium JPEG: their points may be
+//! misplaced, by far on a cut.
 //!
 //! # What comes next
 //!

@@ -148,7 +148,10 @@
 //! AFInfo2 names placed from the table, as its raw file does (ADR018): in
 //! the table's frame, or on a crop in the crop's window, and then only
 //! when the JPEG's own size is that window's, so that a crop-mode JPEG at
-//! a smaller size gives none (ADR019).
+//! a smaller size gives none (ADR019). An uncropped JPEG of a size that
+//! the table lists as showing a window of the frame, the D600's Medium
+//! JPEG, 4512 by 3008, gives them in that window, 6010 by 4006, which
+//! has the JPEG's shape where the whole frame has not (ADR020).
 //!
 //! The Sony MakerNote reader gives the point as it gives an ARW's (ADR012):
 //! the frame and the centre from FocusLocation, or FocusLocation2 without
@@ -163,14 +166,22 @@
 //! from a table, the points the file names, which the metadata holds as
 //! its focus points, with the area mode on a Nikon file. Then the list is
 //! kept only when its frame has the picture's aspect ratio, to within one
-//! pixel of rounding in either size ([`same_shape`]), in the stored
-//! orientation (ADR014). A camera's own JPEG passes, and so
-//! does an export scaled from it; an export cut to another shape, or turned
-//! upright in its pixels, which may keep the camera's MakerNote, gives no
-//! point. The rule applies to whatever point the MakerNote reader gave, so
-//! it cannot refuse a Nikon crop-mode JPEG cut again: its point is placed
-//! on the export's own pixels, a window of their shape, and is misplaced
-//! if the cut changed the shape (ADR015).
+//! pixel of rounding in either size ([`Size::same_shape`]), in the stored
+//! orientation (ADR014). A camera's own JPEG passes, and so does an
+//! export scaled from it, except from a JPEG whose points the table
+//! places in the window of its size, such as the D600's Medium JPEG: the
+//! window is kept for that size alone, so a scaled export takes the whole
+//! frame, of another shape, and gives no point, unless it is about 750
+//! pixels tall or less, where the rule's rounding passes the whole frame
+//! and the point lands under a pixel off. An export cut to another
+//! shape, or turned upright in its pixels, which may keep the camera's
+//! MakerNote, gives no point. The rule applies to whatever point the
+//! MakerNote reader gave, so it cannot refuse a Nikon crop-mode JPEG cut
+//! again: its point is placed on the export's own pixels, a window of
+//! their shape, and is misplaced if the cut changed the shape (ADR015).
+//! Nor can it refuse an export of a D600 JPEG cut or scaled to exactly
+//! the Medium size: it is read as a Medium JPEG, its points placed in the
+//! Medium window, by far misplaced on a cut (ADR020).
 
 use std::io::{Read, Seek};
 
@@ -238,7 +249,7 @@ fn claims<R: Read + Seek>(_: &mut Source<R>, segments: &Segments) -> Result<bool
 /// file itself joins them as a preview of its own, with its frame
 /// header's size, which is the metadata's image size.
 /// The focus points, the primary among them, are kept only when their
-/// frame has the picture's shape ([`same_shape`]); see the
+/// frame has the picture's shape ([`Size::same_shape`]); see the
 /// [module documentation](self).
 ///
 /// # Errors
@@ -298,7 +309,7 @@ fn parse<R: Read + Seek>(
     };
     metadata.focus_points = metadata
         .focus_points
-        .filter(|points| same_shape(points.frame(), size));
+        .filter(|points| points.frame().same_shape(size));
     if let Some(index) = &segments.mpf {
         let images = mpf::images(src, index, limits)?;
         candidates.extend(images.into_iter().filter_map(|image| {
@@ -401,29 +412,6 @@ impl MakerNote {
     }
 }
 
-/// Whether focus points measured in `frame` fit a JPEG whose picture is
-/// `picture` pixels: whether `frame` has the picture's aspect ratio, to
-/// within one pixel of rounding in either of the two sizes (ADR014).
-///
-/// That is when the frame's width times the picture's height and the
-/// frame's height times the picture's width differ by at most the longest
-/// of the four sides. When one of the two sizes is the other scaled, each
-/// side rounded to the nearest pixel, the products differ by at most half
-/// the sum of the other size's two sides, which is within the longest
-/// side: a 640 by 427 frame, 3:2 rounded, against a 6000 by 4000 picture
-/// differs by 2,000, within 6,000. A picture cut to another shape, or
-/// turned upright in its pixels, does not pass. Both sizes are in the
-/// stored orientation: Orientation turns neither.
-///
-/// The products are of two `u32`s, which a `u64` always holds, so nothing
-/// here can overflow.
-fn same_shape(frame: Size, picture: Size) -> bool {
-    let [fw, fh, pw, ph] =
-        [frame.width, frame.height, picture.width, picture.height].map(u64::from);
-    let longest = fw.max(fh).max(pw).max(ph);
-    (fw * ph).abs_diff(fh * pw) <= longest
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -434,7 +422,7 @@ mod tests {
     };
     use crate::error::ErrorKind;
     use crate::jpeg_builder::JpegBuilder;
-    use crate::testing::{FAR, FailsFar, size};
+    use crate::testing::{FAR, FailsFar};
     use crate::tiff_builder::{Order, TiffBuilder};
     use std::io::Cursor;
 
@@ -667,49 +655,5 @@ mod tests {
                 "Exif ColorSpace {exif_color_space}"
             );
         }
-    }
-
-    #[test]
-    fn a_frame_of_the_pictures_shape_has_its_shape() {
-        for (frame, picture) in [
-            // The same size, and a frame twice the picture's.
-            (size(8256, 5504), size(8256, 5504)),
-            (size(8256, 5504), size(4128, 2752)),
-            // A 3:2 frame rounded to 640 by 427: 640 x 4000 and 427 x 6000
-            // differ by 2,000, within the longest side, 6,000, which a
-            // tolerance of the frame's longer side, 640, would refuse; and
-            // the other way round.
-            (size(640, 427), size(6000, 4000)),
-            (size(6000, 4000), size(640, 427)),
-            // A 1:1 window of a Z 9's frame, on a JPEG of its middle size.
-            (size(5504, 5504), size(4128, 4128)),
-            // 3 x 3 and 2 x 3 differ by 3, exactly the longest side.
-            (size(3, 2), size(3, 3)),
-        ] {
-            assert!(same_shape(frame, picture), "{frame:?}, {picture:?}");
-        }
-    }
-
-    #[test]
-    fn a_frame_of_another_shape_has_not_the_pictures() {
-        for (frame, picture) in [
-            // A landscape frame on a portrait picture, as on an export
-            // turned upright in its pixels or cut to portrait.
-            (size(8256, 5504), size(5504, 8256)),
-            (size(8256, 5504), size(3648, 5472)),
-            // A landscape frame on a square export.
-            (size(8256, 5504), size(1742, 1742)),
-            // 7 x 4 and 5 x 4 differ by 8, one more than the longest side.
-            (size(7, 5), size(4, 4)),
-        ] {
-            assert!(!same_shape(frame, picture), "{frame:?}, {picture:?}");
-        }
-    }
-
-    #[test]
-    fn the_largest_sides_do_not_overflow() {
-        let largest = size(u32::MAX, u32::MAX);
-        assert!(same_shape(largest, largest));
-        assert!(!same_shape(largest, size(1, u32::MAX)));
     }
 }
