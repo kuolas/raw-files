@@ -263,8 +263,12 @@ build: Pin the Rust toolchain for CI
 Add a README
 ```
 
-Git's own subjects (`Revert "…"`, `fixup! …`, `squash! …`) are accepted as
-they are; for a revert, add the reason to the body.
+Git's own subjects (`Revert "…"`, `Reapply "…"`, `fixup! …`, `squash! …`,
+`amend! …`, and the merge subjects git and GitHub write, such as
+`Merge branch '…'`) are accepted as git writes them; for a revert, add the
+reason to the body. Only a subject that starts the way git writes it is
+exempt: `Revert stuff.` is checked like any other subject. The rule on
+authorship holds for these subjects too.
 
 ## AI-assisted contributions
 
@@ -543,7 +547,8 @@ error instead.
 
 To skip them once, set `SKIP_HOOKS=1` (for example `SKIP_HOOKS=1 git push`).
 
-If you change a hook or a script, keep it executable in git:
+If you change `commit-msg`, run `scripts/test-hooks.sh`; CI runs it too. If
+you change a hook or a script, keep it executable in git:
 `git update-index --chmod=+x <file>`. CI checks this.
 
 ## Clean room and third-party code

@@ -1,6 +1,7 @@
 #!/bin/sh
 # commit-msg — check a commit message against CONTRIBUTING.md §Commit messages.
-# CI runs this same file over every commit of a pull request.
+# CI runs this same file over every commit of a pull request, with
+# COMMIT_MSG_STORED=1; scripts/test-hooks.sh tests it.
 #
 # The grammar is GNOME's: `component: Summary` — at most one tag, a capitalised
 # summary, no trailing period, a blank second line, a ~72-char subject and
@@ -16,12 +17,33 @@ if [ -n "${SKIP_HOOKS:-}" ]; then
 fi
 
 msg_file="$1"
-subject="$(head -n 1 "$msg_file")"
 
-# Let git's own housekeeping subjects through untouched.
-case "$subject" in
-	Merge\ *|Revert\ *|fixup!\ *|squash!\ *|amend!\ *|"#"*|"") exit 0 ;;
-esac
+# Every check below judges the message as git will store it, not the raw
+# file: git runs this hook before it cleans the message up. So, as
+# `git commit --cleanup=strip` would: everything from the scissors line down
+# is cut off (`git commit -v` appends the diff below it, and a diff is not a
+# body: its long lines, its quoted trailers), comment lines are dropped,
+# trailing whitespace is stripped from every line, and leading blank lines
+# go (trailing ones go with `$(…)`). Otherwise a trailing space hides the
+# subject's period, and a leading blank or comment line leaves an empty
+# subject that skips every check.
+#
+# A stored message (COMMIT_MSG_STORED, set by CI) keeps its `#` and scissors
+# lines: `git commit -m` and `-F` clean up whitespace only, so `#12 Fix the
+# crash` can be a stored subject, and dropping it would judge the wrong line,
+# or none. At commit time the hook cannot tell `-m` from the editor, and
+# drops them as the editor does; so a `-m` subject starting with `#` is
+# refused or judged by the line after it. Write `Issue #12` instead, or put
+# a component tag first.
+uncommented() {
+	if [ -n "${COMMIT_MSG_STORED:-}" ]; then
+		cat "$msg_file"
+	else
+		sed '/^# -\{24\} >8 -\{24\}$/,$d' "$msg_file" | grep -v '^#' || true
+	fi
+}
+message="$(uncommented | sed 's/[[:space:]]*$//' | awk 'NF || seen { seen = 1; print }')"
+subject="$(printf '%s\n' "$message" | head -n 1)"
 
 fail() {
 	printf 'commit-msg: %s\n\n  %s\n\nSee CONTRIBUTING.md §Commit messages. Bypass once: SKIP_HOOKS=1 git commit\n' \
@@ -29,10 +51,31 @@ fail() {
 	exit 1
 }
 
-# The message as git will store it: comment lines dropped, and everything from
-# the scissors line down cut off — `git commit -v` appends the diff below it,
-# and a diff is not a body (its long lines, its quoted trailers).
-body="$(sed '/^# -\{24\} >8 -\{24\}$/,$d' "$msg_file" | grep -v '^#' || true)"
+# An empty message: git aborts the commit itself, so there is nothing to judge.
+[ -n "$message" ] || exit 0
+
+# A commit is authored by whoever committed it. No assistant/model/tool
+# attribution, in any casing or spelling, in a trailer or a footer. This holds
+# for every message, git's own subjects below included: only the grammar is
+# waived for them. `git revert` commits without running this hook, so for a
+# revert it is CI, running this file over the stored message, that applies it.
+if printf '%s\n' "$message" | grep -qiE '(co-authored-by:.*(claude|anthropic|copilot|cursor|gpt|gemini|codeium|devin)|generated with.*(claude|anthropic|copilot|cursor|gemini))'; then
+	fail 'tool named as co-author or "Generated with" footer — a tool is not an author; disclose AI help with an Assisted-by: trailer'
+fi
+
+# Git's own subjects skip the grammar and trailer checks below, in the shapes
+# git (and GitHub's merge button) write them, never any subject that merely
+# starts with the word: "Revert stuff" or "Merge everything" is a person's
+# subject and is judged. Git writes `Reapply "…"` when it reverts a revert.
+case "$subject" in
+	"Merge branch '"* | "Merge branches '"* | \
+		"Merge remote-tracking branch '"* | "Merge remote-tracking branches '"* | \
+		"Merge tag '"* | "Merge tags '"* | "Merge commit '"* | "Merge commits '"* | \
+		"Merge pull request #"* | \
+		'Revert "'* | 'Reapply "'* | "fixup! "* | "squash! "* | "amend! "*)
+		exit 0
+		;;
+esac
 
 # Issue reference, as GitHub resolves it: #N, owner/repo#N, or a full URL.
 issue_ref='(#[0-9]+|[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+#[0-9]+|https://[^[:space:]]+)'
@@ -51,17 +94,33 @@ case "$first" in
 	[ "$summary" != "$subject" ] || fail 'nothing after the component tag'
 	;;
 esac
-if ! printf '%s' "$summary" | grep -qE '^[^[:space:]]'; then
+# A tag glued to its summary (`ui:fix the thing`, `fix(ui):thing`) does not
+# end in ':', so the case above misses it: a lower-case word, perhaps with a
+# part in parentheses, one colon, then a letter. Tags are lower-case words;
+# a capitalised one is a name such as Exif's `EXIF:Orientation`. Anything
+# else around the colon is no tag either: `Vec::new`, a backticked word, a
+# URL, a time or ratio (`10:30`, `16:9`), a drive (`C:\Users`), a file and
+# line (`src/lib.rs:42`). A tab is no separator: the words here are split
+# at spaces, so a tab would hide a tag and its summary.
+tab="$(printf '\t')"
+case "$subject" in
+*"$tab"*) fail 'the subject holds a tab — separate words with spaces' ;;
+esac
+if printf '%s' "$first" | grep -qE '^[a-z][a-z0-9_.+/-]*(\([^)]*\))?:[A-Za-z]' ||
+	! printf '%s' "$summary" | grep -qE '^[^[:space:]]'; then
 	fail 'one space after the component tag, then the summary'
 fi
 word="${summary%% *}"
 case "$word" in
 *:) fail 'one component tag at most (GNOME: "prefix the first line with one tag")' ;;
 esac
-# A plain lower-case word ("fix", "add") is refused. GNOME
+# A plain lower-case word ("fix", "add") is refused, an apostrophe (straight
+# or typographic) or one trailing punctuation mark included ("don't",
+# "don’t", "add,", "fix."). GNOME
 # capitalises the summary; an identifier keeps its case, and is told apart
-# by what makes it code — `_`, `()`, `::`, a digit, a capital, backticks.
-if printf '%s' "$word" | grep -qE '^[a-z]+$'; then
+# by what makes it code — `_`, `()`, `::`, a digit, a capital, backticks,
+# or a hyphen (a crate name such as `raw-files`).
+if printf '%s' "$word" | grep -qE "^[a-z][a-z'’]*[,;.!?]?\$"; then
 	fail "summary starts with the lower-case word '$word' — GNOME capitalises it ('sound: Fix label alignments'); write an identifier as it appears in code, or in backticks"
 fi
 
@@ -69,7 +128,7 @@ if printf '%s' "$subject" | grep -qE '\.$'; then
 	fail 'subject ends with a period'
 fi
 
-if [ -n "$(printf '%s\n' "$body" | sed -n 2p)" ]; then
+if [ -n "$(printf '%s\n' "$message" | sed -n 2p)" ]; then
 	fail 'the second line must be blank — subject, blank line, then the body'
 fi
 
@@ -82,22 +141,16 @@ fi
 # a pasted log line or a long identifier is a legitimate exception, and a
 # hook that refuses those gets bypassed. Lines without a space (a URL, a
 # path) cannot be wrapped and are left alone.
-long=$(printf '%s\n' "$body" | awk 'NR > 1 && length($0) > 75 && / / { n++ } END { print n + 0 }')
+long=$(printf '%s\n' "$message" | awk 'NR > 1 && length($0) > 75 && / / { n++ } END { print n + 0 }')
 if [ "$long" -gt 0 ]; then
 	echo "commit-msg: note — ${long} body line(s) over 75 chars (GNOME wraps the body at 75)" >&2
-fi
-
-# A commit is authored by whoever committed it. No assistant/model/tool
-# attribution, in any casing or spelling, in a trailer or a footer.
-if printf '%s\n' "$body" | grep -qiE '(co-authored-by:.*(claude|anthropic|copilot|cursor|gpt|gemini|codeium|devin)|generated with.*(claude|anthropic|copilot|cursor|gemini))'; then
-	fail 'tool named as co-author or "Generated with" footer — a tool is not an author; disclose AI help with an Assisted-by: trailer'
 fi
 
 # Trailer checks read the TRAILER BLOCK (the final paragraph), never the whole
 # body: a wrapped sentence can easily start a line with "Fixes:", and a hard
 # check that fires on prose is a hook people learn to bypass. git's own parser
 # draws that line for us.
-trailers="$(printf '%s\n' "$body" | git interpret-trailers --parse --no-divider 2>/dev/null || true)"
+trailers="$(printf '%s\n' "$message" | git interpret-trailers --parse --no-divider 2>/dev/null || true)"
 
 malformed() {
 	printf 'commit-msg: malformed trailer — %s\n\ngot:\n\n%s\n' "$1" "$2" >&2
