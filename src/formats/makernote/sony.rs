@@ -8,10 +8,10 @@
 //! MakerNote tag of the Exif IFD: a directory of Sony's tags, an IFD like
 //! the file's own, with the values it points at. raw-files reads it for
 //! what no standard tag records and Sony keeps in plain tags of this
-//! directory: the point where the camera focused, as ADR012 decided,
-//! amending ADR011, under which no Sony MakerNote was read; and the camera
-//! settings that only the MakerNote records, as ADR011's sections on the
-//! camera settings decided.
+//! directory: the point where the camera focused, as the decision on
+//! focus points decided (ADR012); and the camera settings that only the
+//! MakerNote records, by the decision to read the standard tags first and
+//! a maker's MakerNote only where they record nothing (ADR011).
 //!
 //! Sony has written the block in several layouts, told apart by its first
 //! bytes:

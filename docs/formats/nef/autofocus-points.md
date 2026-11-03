@@ -309,10 +309,9 @@ again, read identically to their originals. **[F]**
   frames' NEF files hold a picture of the window's size too: on
   frames 49 to 51 the full-size preview is 3936x2624, as is the JPEG.
   So a point placed from the table on a DX frame shifts by
-  CropHiSpeed's origin, the rule of
-  [ADR018](../../architecture-decisions/adr018-focus-points-placed-from-a-table-and-the-points-used.md),
-  and is measured in that window, 3936x2624, in the NEF as in the JPEG
-  ([ADR019](../../architecture-decisions/adr019-the-frame-of-a-placed-focus-point-on-a-crop.md)).
+  CropHiSpeed's origin and is measured in that window, 3936x2624, in the
+  NEF as in the JPEG
+  ([ADR018](../../architecture-decisions/adr018-focus-points-placed-from-a-table-and-the-points-used.md)).
   **[F]** In sensor pixels the DX crop lies 16 pixels left of the
   centre, 1040 + 3968 / 2 = 3024 against 6080 / 2 = 3040, while the
   picture lies centred in the output: the left and top borders trimmed
@@ -322,7 +321,7 @@ again, read identically to their originals. **[F]**
   centred in the output, and the table keeps the window's size,
   3936x2624, measured on the frames; a file is placed on the crop only
   when CropHiSpeed's origin is that window's centred origin
-  ([ADR020](../../architecture-decisions/adr020-each-crops-window-in-the-table.md)).
+  ([ADR018](../../architecture-decisions/adr018-focus-points-placed-from-a-table-and-the-points-used.md)).
   **[I]** Whether the window lies centred, and CropHiSpeed records its
   origin, on other bodies is a fact per body, which the two crop
   frames of the procedure check; the D7200's 1.3x files record an
@@ -480,7 +479,7 @@ the Medium JPEG carries the same AFInfo2 and CropHiSpeed as its NEF
 The table keeps that window as a whole number of frame pixels, centred
 to the pixel: 6010x4006, at the origin (3, 5), the nearest such window
 to the measured one
-([ADR020](../../architecture-decisions/adr020-each-crops-window-in-the-table.md)).
+([ADR018](../../architecture-decisions/adr018-focus-points-placed-from-a-table-and-the-points-used.md)).
 A point placed in it and scaled onto the Medium JPEG lands within 0.08
 of a Medium pixel across and 0.35 down of where the measured window
 puts it, anywhere in the frame; the window of 6012x4008 at (2, 4),

@@ -1,18 +1,11 @@
 # ADR012: Focus points as the camera records them
 
-- Status: Accepted; amended by [ADR018](adr018-focus-points-placed-from-a-table-and-the-points-used.md),
-  which places a point the camera names by number from a table of the
-  body's points, which this record left waiting for a decision on the
-  tables, and reports the points used with the area mode, which this
-  record rejected; and that the Sony MakerNote is read for the focus
-  point alone no longer describes the whole decision: the camera settings
-  sections of [ADR011](adr011-metadata-from-standard-tags.md), added to
-  that record in place, also read the white balance and other settings
-  from it
-- Amends: [ADR011](adr011-metadata-from-standard-tags.md), in one point:
-  the Sony MakerNote is read, for the focus point alone
+- Status: Accepted
+- Builds on: [ADR011](adr011-metadata-from-standard-tags.md), metadata
+  from the standard tags
 - Date: 2026-10-19
-- Issue: #25
+- Revision: 2, 2026-10-26
+- Issue: #25; the points named by number and the points used #57
 
 ## Context
 
@@ -42,7 +35,7 @@ which no file carries.
 We read what the public-domain (CC0) sample files of
 [raw.pixls.us](https://raw.pixls.us/) record: 30 Nikon files from the D1H
 to the Z5II and 36 Sony-family files from the DSC-F828 to the ILCE-7M5.
-To these we added 13 shots made for this check with the maintainer's
+To these we added 13 shots made for this check with my
 Z 9, in its FX, DX, 1:1 and 16:9 modes, with the focus point placed in
 the top-left corner of the picture.
 Where the fields lie inside each block comes from ExifTool's published
@@ -143,9 +136,13 @@ We will report a focus point wherever the file records one, and none
 only where the file records none or what it records cannot be used. A
 position in pixels is reported as the camera recorded it. The number of
 an autofocus point is reported by mapping it to pixels through a table
-of that body's points. No file carries such a table, so the mapping
-waits for a decision on where such tables may come from, and a body
-without a table gives none.
+of that body's points. No file carries such a table: the project
+measures one per body
+([ADR017](adr017-per-body-tables-measured-by-the-project.md)), a point
+is placed from it as
+[ADR018](adr018-focus-points-placed-from-a-table-and-the-points-used.md)
+decides, building on this record, and a body without a table gives
+none.
 
 - **Only what the file records.** `Metadata::focus` holds the camera's
   record and nothing estimated from the picture. A position found by
@@ -182,13 +179,15 @@ without a table gives none.
   frame's, as on every crop sample with a position; otherwise, as on a
   small raw, whose CropArea counts stored pixels, the point cannot be
   placed and the file gives none.
-- **Sony: the MakerNote is read, for the focus point alone.** raw-files
+- **Sony: the MakerNote is read for the focus point.** raw-files
   finds the Sony MakerNote's directory, with no header or after one of
   Sony's 12-byte headers, and reads FocusLocation, FocusLocation2 when
   FocusLocation is absent, FocusFrameSize and FocusMode. Nothing else in
-  it is read and nothing is deciphered. This changes one point of
-  [ADR011](adr011-metadata-from-standard-tags.md), which read no Sony
-  MakerNote.
+  it is read for the focus point, and nothing is deciphered; the camera
+  settings that only the MakerNote records are read from it too, by the
+  rule of [ADR011](adr011-metadata-from-standard-tags.md): the standard
+  tags first, and a manufacturer's MakerNote only where nothing standard
+  records the value.
 - **Whether focus was confirmed** is Nikon's FocusResult on the 04xx
   versions and ContrastDetectAFInFocus on 0100 and 0101: 1 is yes, 0 is
   no, any other value unknown. Version 03xx and Sony files do not say.
@@ -201,7 +200,10 @@ without a table gives none.
   the ILCE-7S; the SLT-A99V also writes a mask of its points, file 3751)
   record the number of an autofocus point, or a mask of the points used,
   and no position. Until raw-files has a table for a body, its files give
-  none.
+  none; with one, the point is placed from it, and the points used are
+  reported with the area mode, as
+  [ADR018](adr018-focus-points-placed-from-a-table-and-the-points-used.md)
+  decides.
 - **No focus point** when the file records none: the Sony files with
   neither a FocusLocation nor a point number in a plain tag (among the
   samples, the RX100, the Hasselblad Lunar, whose focus data lies only in
@@ -227,7 +229,8 @@ Rejected:
 
 - **Mapping point numbers without a decision on the tables.** Open data
   for the layouts exists, but taking a per-body table into raw-files
-  needs its own decision on where such tables may come from.
+  needs its own decision on where such tables may come from, which
+  [ADR017](adr017-per-body-tables-measured-by-the-project.md) takes.
 - **Coordinates in the frame of the image size.** On a Sony aspect-ratio
   file the previews show the camera's framing, not the default crop, and
   a caller could not place the point on them.
@@ -256,8 +259,13 @@ Rejected:
   beside it: a point the camera did not focus on, which a caller would
   measure for nothing, and a maker's value in a type shared by every
   format.
-- **Exposing the area mode, point numbers or masks.** No caller needs
-  them; they can be added without breaking the API.
+- **Leaving out the area mode, point numbers and masks**, as this record
+  first did, since no caller needed them and they could be added without
+  breaking the API. A viewer that draws where the camera focused wants
+  every point the camera used, with the primary marked, and the area
+  mode to label them, so they are reported, as
+  [ADR018](adr018-focus-points-placed-from-a-table-and-the-points-used.md)
+  decides.
 
 ## What this decision does not cover
 

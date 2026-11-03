@@ -56,17 +56,14 @@
 //! points used names each point by a bit ([`BitOrder`]); and the crops
 //! the record's crop frames confirm, each with the size of its window
 //! ([`ConfirmedCrop`]). A point on such a crop moves into the crop's
-//! window, as the
-//! [decision on the frame of a placed point on a crop](https://github.com/kuolas/raw-files/blob/master/docs/architecture-decisions/adr019-the-frame-of-a-placed-focus-point-on-a-crop.md)
-//! (ADR019) measures it, and the window is the size the record measured,
-//! centred in the table's frame, as the
-//! [decision to keep each crop's window in the table](https://github.com/kuolas/raw-files/blob/master/docs/architecture-decisions/adr020-each-crops-window-in-the-table.md)
-//! (ADR020) sets out. A crop the record does not confirm gives no placed
-//! point. The table also carries the sizes of the body's JPEGs whose
-//! picture is not the whole frame scaled, each with the window of the
-//! frame it shows ([`ConfirmedJpegSize`]): a point in an uncropped JPEG
-//! of such a size moves into that window, centred in the table's frame,
-//! as the same decision sets out.
+//! window, whose size the record measured, centred in the table's frame,
+//! as the decision to place focus points from a table (ADR018) sets out.
+//! A crop the record does not confirm gives no placed point. The table
+//! also carries the sizes of the body's JPEGs whose picture is not the
+//! whole frame scaled, each with the window of the frame it shows
+//! ([`ConfirmedJpegSize`]): a point in an uncropped JPEG of such a size
+//! moves into that window, centred in the table's frame, as the same
+//! decision sets out.
 //! A JPEG of a size the table does not list takes the whole frame. A body
 //! whose uncropped files record a CropHiSpeed cropped size other than the
 //! original, as the D810's do, four pixels short in width
@@ -179,7 +176,7 @@ pub(in crate::formats) struct PointTable {
 /// among them, 3968 by 2636 on a D600 DX frame against a 3936 by 2624
 /// picture. A file whose CropHiSpeed origin is not the window's, half of
 /// the frame less the window on each axis, gives no placed point
-/// (ADR020).
+/// (ADR018).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(in crate::formats) struct ConfirmedCrop {
     /// The crop setting, CropHiSpeed's first value: 2, the DX crop, on the
@@ -213,7 +210,7 @@ impl ConfirmedCrop {
 /// not the whole frame, which would be 4512 by 3012 at that scale.
 /// A JPEG of a size the table does not list takes the whole frame, as the
 /// Large and Small JPEGs of the D600, 6016 by 4016 and 3008 by 2008, do
-/// (ADR020).
+/// (ADR018).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(in crate::formats) struct ConfirmedJpegSize {
     /// The JPEG's size, as its frame header gives it: 4512 by 3008 for

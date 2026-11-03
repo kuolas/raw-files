@@ -17,8 +17,8 @@ rewritten, and a changed decision gets a new number that supersedes the old
 record or amends part of it. raw-files is at an early stage, and its
 decisions grow as the files it reads teach more. Under that rule a decision
 whose substance held still gained a new record each time it grew: the frame
-of a point placed from a table is decided by ADR018, amended by ADR019,
-which ADR020 amends in turn, so a reader had to read three records, in
+of a point placed from a table was decided by ADR018, amended by ADR019,
+which ADR020 amended in turn, so a reader had to read three records, in
 order, to learn one answer; and ADR011 gained sections that a reader had to
 weigh against the text above them.
 
@@ -46,7 +46,10 @@ spirit, a new record would only make it harder to read.
   Rejected bullets saying why. The old text stays in git history and in
   each release's tag.
 - **Two records, one problem:** one is folded into the other, every reason
-  kept, and deleted; its number is not reused.
+  kept. Its file is left at its old path as a stub, its title and one
+  sentence linking the record it went into, since the documentation of a
+  published release links to the records on the default branch; its
+  number is not reused.
 - **New problem:** a new record with a new number, which says "Builds on"
   a record whose decision its answer rests on. **Problem gone:** the
   record's status becomes Deprecated, with one line saying why. A number
@@ -86,9 +89,3 @@ read from its file's history (`git log -p`) or from the tag of a release.
 The documentation of a published release links to the records on the
 default branch, so it shows their current answer, which a record's
 revision line dates.
-
-The records written before this rule that amend another with a record of
-their own, such as ADR018, ADR019 and ADR020, keep their "Amends" lines
-until each is folded into the record whose problem it answers; ADR011,
-which grew in dated sections, keeps them until its next change rewrites it
-as one current answer.

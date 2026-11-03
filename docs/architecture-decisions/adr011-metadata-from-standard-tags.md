@@ -1,10 +1,8 @@
 # ADR011: Metadata comes from the standard tags
 
-- Status: Accepted; amended by
-  [ADR012](adr012-focus-points-as-the-camera-records-them.md), which reads
-  the Sony MakerNote for the focus point, and in place on 2026-10-24 to
-  read the camera's settings (the sections "The camera settings" below)
+- Status: Accepted
 - Date: 2026-10-15
+- Revision: 2, 2026-10-24
 - Issue: #13; the camera settings #26
 
 ## Context
@@ -67,17 +65,15 @@ ILCE-7M5. They showed:
   the longest text value is 65 bytes, and a manual lens on a Sony body
   is named `----` (file 1582).
 
-### The camera settings
-
-Added on 2026-10-24 (#26). Beside the exposure, a viewer's information
+Beside the exposure, a viewer's information
 panel shows how the camera was set: the white balance, the exposure
 program, the metering mode, the flash, the shutter, the image area,
 the raw image size and the colour space, with the focal length in
 35 mm terms and the software that wrote the file. We checked where
 files record them on the 79 public sample files (35 Nikon raw files,
-36 of the Sony family and eight camera JPEGs), as counts only on the
-maintainer's own files of six Nikon DSLRs and an ILCE-7M2, and on
-frames the maintainer shot with a Z 9, a D600 and the ILCE-7M2 under
+36 of the Sony family and eight camera JPEGs), as counts only on my
+own files of six Nikon DSLRs and an ILCE-7M2, and on frames I shot
+with a Z 9, a D600 and the ILCE-7M2 under
 each white balance setting and fine-tuning, to see what the tags hold
 under each; the format notes for
 [NEF](../formats/nef/makernote-and-metadata.md),
@@ -92,7 +88,7 @@ They showed:
   balance says only auto or manual, with the kind of light in a tag of
   its own. Its ColorSpace says only sRGB or "uncalibrated"; Adobe RGB
   is named by the InteropIndex `R03` of a DCF option file, which
-  Nikon's own colour space tag confirms on all 615 of the maintainer's
+  Nikon's own colour space tag confirms on all 615 of my
   D3200 JPEGs that have it, and the A900's settings block too, as
   ExifTool decodes it. No Nikon raw file writes Exif's ColorSpace.
 - **The rest is in plain MakerNote tags.** Nikon records the white
@@ -130,15 +126,15 @@ They showed:
   with two exceptions: Sony's underwater white balance, which its Exif
   WhiteBalance calls auto; and a program that rewrites a JPEG can set
   ColorSpace to "uncalibrated" and leave the camera's MakerNote colour
-  space behind, as on 10 of the maintainer's rewritten JPEGs. Two
+  space behind, as on 10 of my rewritten JPEGs. Two
   MakerNote tags left unread disagree: Nikon's flash mode (0x0087) says
-  a flash fired on hundreds of the maintainer's files whose Exif says
+  a flash fired on hundreds of my files whose Exif says
   it did not, and a second Sony white balance tag (0xB054) says auto on
   two files set to shade.
 - **Files hold codes no table names.** ExposureProgram is 0, "not
-  defined", on more than half of the maintainer's D3200, D3300 and
+  defined", on more than half of my D3200, D3300 and
   D7100 files and on recent Z bodies' samples; Nikon's raw size is 0
-  on 506 of the maintainer's D7200 JPEGs, presumably shot without a
+  on 506 of my D7200 JPEGs, presumably shot without a
   raw. Exif defines exposure
   programs 1 to 8; ExifTool's documentation lists a 9, "bulb", which
   Exif does not define and no checked file holds.
@@ -149,8 +145,9 @@ They showed:
 
 ## Decision
 
-We will read the metadata from the standard tags, and from a
-manufacturer's MakerNote only where nothing standard records it.
+We will read the metadata, the camera's settings among it, from the
+standard tags, and from a manufacturer's plain MakerNote tags only where
+nothing standard records a value; nothing is deciphered or decrypted.
 
 - **Read when the file is opened.** `open` reads the metadata together
   with the file's structure, and `RawFile::metadata` returns it without
@@ -160,15 +157,22 @@ manufacturer's MakerNote only where nothing standard records it.
   `open` already reads to find the previews.
 - **A damaged field costs only that field.** A field whose tag is
   missing, of an unexpected type, out of range or unreadable is `None`,
-  and the file still opens; only an I/O error is passed up.
+  and the file still opens; only an I/O error is passed up. So does a
+  camera setting: a missing tag, a wrong type or count, a value outside
+  the MakerNote, or a code no table names gives `None`. A code is named
+  only where a standard or a measured file gives its meaning.
 - **The standard tags come first.** IFD0, the Exif IFD and the raw IFD
   give every field. On NEF, the MakerNote (in the layout the preview
   reader already reads) gives the visible image size from CropArea, and,
   only when the standard tags give no value for it, the serial number,
   the ISO, the lens range and the offset from UTC. An Exif value always
   wins. The older Nikon MakerNote layouts (the D1 family and the earliest
-  Coolpix bodies) are not read; their files get the Exif fields only. No
-  Sony MakerNote is read. Nothing is deciphered.
+  Coolpix bodies) are not read; their files get the Exif fields only. The
+  Sony MakerNote gives none of these fields: it is read for the focus
+  point, as
+  [ADR012](adr012-focus-points-as-the-camera-records-them.md) decides.
+  On Nikon and Sony files alike, the MakerNote is read too for the camera
+  settings below that no standard tag records. Nothing is deciphered.
 - **The capture time is DateTimeOriginal**, with its own sub-seconds
   (SubSecTimeOriginal) and offset from UTC (OffsetTimeOriginal). When
   OffsetTimeOriginal gives no offset, because it is missing or cannot be
@@ -203,49 +207,6 @@ manufacturer's MakerNote only where nothing standard records it.
   ends; an empty result, a value longer than 255 bytes, or a lens named
   only with `-` characters is `None`. Bytes that are not UTF-8 become
   U+FFFD.
-
-Rejected:
-
-- **Reading the metadata on request** (`metadata(&mut self) ->
-  Result<Metadata>`). Every caller would handle an error for data that is
-  already in memory.
-- **An error per field** (getters returning `Result<Option<T>>`), to tell
-  "not recorded" from "damaged". No caller needs the difference, and
-  every caller would pay for it.
-- **The standard tags and CropArea only.** A decade of Nikon bodies would
-  have no serial number and no lens range, and some no ISO, although the
-  files record them in plain form.
-- **The Sony MakerNote** for the lens range and the model ID. It adds no
-  range the Exif tags lack, and gives the wrong one on the RX100 family.
-- **Falling back on DateTimeDigitized or DateTime** for the capture time.
-  Every sample has DateTimeOriginal, and IFD0's DateTime is the time of
-  the last edit.
-- **A separate label for an offset taken from WorldTime.** The files show
-  that it is the same offset.
-- **Reducing fractions when read, or floating-point values.** Both lose
-  what the file recorded, and a renamer would have to turn 0.003125 back
-  into `1/320`.
-- **Trimming only trailing spaces, with no length limit**, as other
-  readers do. A leading space is padding too, and the longest measured
-  value has 65 bytes, so text past 255 bytes is taken for damage.
-- **Deciphering Sony's enciphered block** for older serial numbers. Its
-  tables have no settled provenance.
-
-### The camera settings
-
-Added on 2026-10-24 (#26). We will read the camera's settings by the
-rule above: the standard tags first, a manufacturer's plain MakerNote
-tag where no standard tag records the value, and nothing deciphered or
-decrypted. This extends the decision above. The MakerNote is read for
-these settings on Nikon and Sony files, beyond what "The standard tags
-come first" lists, and maker-specific values (a crop mode, as the
-image area; the shutter; the raw size) enter the API, which the
-consequence on maker-specific values below no longer describes in full.
-
-- **A damaged value costs only itself**, as above: a missing tag, a
-  wrong type or count, a value outside the MakerNote, or a code no
-  table names gives `None`. A code is named only where a standard or a
-  measured file gives its meaning.
 - **The exposure program, the metering mode and the flash come from Exif
   alone**, with Exif's codes: the programs 1 to 8, the metering modes 1
   to 6 and 255, "other"; 0, "not defined" or "unknown", gives none. The
@@ -310,8 +271,32 @@ consequence on maker-specific values below no longer describes in full.
   text: the camera's firmware, or the program that last wrote the file.
   Exif's CameraFirmware is not read, since no checked file writes it.
 
-Rejected for the camera settings:
+Rejected:
 
+- **Reading the metadata on request** (`metadata(&mut self) ->
+  Result<Metadata>`). Every caller would handle an error for data that is
+  already in memory.
+- **An error per field** (getters returning `Result<Option<T>>`), to tell
+  "not recorded" from "damaged". No caller needs the difference, and
+  every caller would pay for it.
+- **The standard tags and CropArea only.** A decade of Nikon bodies would
+  have no serial number and no lens range, and some no ISO, although the
+  files record them in plain form.
+- **The Sony MakerNote** for the lens range and the model ID. It adds no
+  range the Exif tags lack, and gives the wrong one on the RX100 family.
+- **Falling back on DateTimeDigitized or DateTime** for the capture time.
+  Every sample has DateTimeOriginal, and IFD0's DateTime is the time of
+  the last edit.
+- **A separate label for an offset taken from WorldTime.** The files show
+  that it is the same offset.
+- **Reducing fractions when read, or floating-point values.** Both lose
+  what the file recorded, and a renamer would have to turn 0.003125 back
+  into `1/320`.
+- **Trimming only trailing spaces, with no length limit**, as other
+  readers do. A leading space is padding too, and the longest measured
+  value has 65 bytes, so text past 255 bytes is taken for damage.
+- **Deciphering Sony's enciphered block** for older serial numbers. Its
+  tables have no settled provenance.
 - **Deciphering the Sony blocks that record the shutter used and APS-C
   mode, or decrypting Nikon's ShotInfo** for its firmware and image
   area. Their tables have no settled provenance, as for the serial
@@ -361,17 +346,14 @@ Rejected for the camera settings:
   D850's small raw (file 1835), whose menu size is 4128×2752.
 - The image size is the default crop, not the aspect ratio chosen in the
   camera, which Sony records only in tags of its own.
-- Maker-specific values (Sony's model ID, Nikon's shutter count or crop
-  mode) are not in the API; they can be added later without breaking it.
+- Some maker-specific values enter the API, in the camera settings: a
+  crop mode, as the image area; the shutter; the raw size. Others (Sony's
+  model ID, Nikon's shutter count) are not in the API; they can be added
+  later without breaking it.
 - DNG files, which use the same standard tags and the same default crop,
   will use the same reader; a new format fills the same `Metadata`.
 - `DateTime` converts to other crates' date types only through its
   getters until a caller needs a conversion feature.
-
-### The camera settings
-
-Added on 2026-10-24 (#26).
-
 - A viewer gets most of the camera's settings from the NEF, ARW and JPEG
   files of the bodies checked. What only an enciphered block records
   stays `None` on every Sony file: the shutter used and APS-C mode;

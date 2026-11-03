@@ -83,8 +83,8 @@ its first files.
   recorded in the format notes, from the bytes of a file, before any code
   ([ADR013](adr013-clean-room-and-third-party-code.md)).
 - **The enciphered and encrypted blocks are part of the goal.** What
-  only they record is read once a decision of its own, which amends
-  [ADR011](adr011-metadata-from-standard-tags.md), allows it. That
+  only they record is read once a decision of its own allows it, and
+  [ADR011](adr011-metadata-from-standard-tags.md) is revised with it. That
   decision first settles where each cipher's or key's table comes from,
   under [ADR013](adr013-clean-room-and-third-party-code.md), and how a
   value read through it is checked against the files. Until then such a

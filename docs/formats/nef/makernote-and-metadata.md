@@ -893,16 +893,12 @@ What the fields hold:
   [autofocus-points.md](autofocus-points.md#2-nikon-d600). On a DX
   frame the point placed from the table shifts by CropHiSpeed's
   origin, (1040, 696) on the D600, within 2 pixels of where NX Studio
-  draws it. **[F]** How a named point is placed from the table, under
-  which conditions, and how the points used are reported with the
-  area mode is decided in
-  [ADR018](../../architecture-decisions/adr018-focus-points-placed-from-a-table-and-the-points-used.md),
-  the frame of a placed point on a crop, the crop's window, 3936x2624
-  on a D600 DX frame, in
-  [ADR019](../../architecture-decisions/adr019-the-frame-of-a-placed-focus-point-on-a-crop.md),
-  and the window's size, kept in the table and checked against
-  CropHiSpeed's origin, in
-  [ADR020](../../architecture-decisions/adr020-each-crops-window-in-the-table.md).
+  draws it. **[F]** How a named point is placed from the table and
+  under which conditions, its frame on a crop, the crop's window,
+  3936x2624 on a D600 DX frame, whose size the table keeps and checks
+  against CropHiSpeed's origin, and how the points used are reported
+  with the area mode are decided in
+  [ADR018](../../architecture-decisions/adr018-focus-points-placed-from-a-table-and-the-points-used.md).
   raw-files places the D600's point so, from version `0100`'s layout
   code, primary point and mask: in the 6016x4016 frame, or in that
   window on the DX crop, the one crop the record confirms.
@@ -977,7 +973,7 @@ What the fields hold:
   **[F]** So a D600 JPEG gives the point its NEF gives, placed from the
   table; on a DX frame only when the JPEG's size is the crop's window,
   3936x2624, its full image size, since a smaller DX JPEG is unmeasured
-  (ADR019). A JPEG keeps a point only when its
+  (ADR018). A JPEG keeps a point only when its
   frame has the JPEG's aspect ratio, so that an export cropped to another
   shape, which may keep the camera's MakerNote, gives none
   ([ADR014](../../architecture-decisions/adr014-jpeg-files-as-a-format-of-their-own.md)),
@@ -990,7 +986,7 @@ What the fields hold:
   window centred in it, which the table keeps for that size, and its
   points are placed in that window, which has its shape
   ([autofocus-points.md](autofocus-points.md#29-the-jpeg-sizes),
-  [ADR020](../../architecture-decisions/adr020-each-crops-window-in-the-table.md)).
+  [ADR018](../../architecture-decisions/adr018-focus-points-placed-from-a-table-and-the-points-used.md)).
   The Small JPEG, 3008x2008, is the whole frame at half its size, and
   takes the table's frame. **[F]**
 - **In a camera JPEG shot in a crop mode**, my Z 9 records the raw
@@ -1470,9 +1466,8 @@ a table of the body's points.
 
 For the camera settings of [section 8.7](#87-camera-settings),
 [ADR011](../../architecture-decisions/adr011-metadata-from-standard-tags.md)
-decides, in its sections on them, what this list recommends: read the
-Exif tags first and the plain MakerNote tags where Exif has no value,
-and decrypt nothing [I]:
+decides what this list recommends: read the Exif tags first and the
+plain MakerNote tags where Exif has no value, and decrypt nothing [I]:
 
 - the exposure program, the metering mode, the flash and the focal
   length in 35 mm terms from Exif alone. Every body that lacks them in
