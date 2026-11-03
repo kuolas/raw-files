@@ -14,9 +14,13 @@ fuller RAW decoding is planned.
   and it never reads the raw data.
 - **Metadata.** What a viewer or a file renamer needs next to a preview:
   the capture time, with sub-seconds and offset from UTC when recorded;
-  the camera's make, model and serial number; the software that wrote the
-  file; the lens; the exposure, with the focal length in 35 mm terms; the
-  orientation; and the sizes of the raw data and of the visible image.
+  the camera's make, model and serial number as the file records them,
+  with the maker raw-files recognises in them, such as Nikon, and, for
+  the bodies the [notes on camera names](docs/formats/camera-names.md)
+  list, the name the body is sold under, such as Z6III; the software
+  that wrote the file; the lens; the exposure, with the focal length in
+  35 mm terms; the orientation; and the sizes of the raw data and of the
+  visible image.
 - **Camera settings.** The white balance with its colour temperature and
   fine-tuning, the exposure program, the metering mode, the flash, the
   shutter, Sony's electronic front curtain setting, the image area, the

@@ -164,8 +164,9 @@ pub struct Metadata {
 impl Metadata {
     /// The camera the picture was taken with, as the file names it (see
     /// [`Camera`]): its maker and model as the file records them, and its
-    /// serial number. Always present, though each of its values is
-    /// optional.
+    /// serial number; and, from those texts, the maker and the name the
+    /// body is sold under, as [`Camera::make`] and [`Camera::model`] give
+    /// them. Always present, though each of its values is optional.
     pub fn camera(&self) -> &Camera {
         &self.camera
     }
