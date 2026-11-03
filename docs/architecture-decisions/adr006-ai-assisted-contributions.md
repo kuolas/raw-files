@@ -65,5 +65,5 @@ relies on honesty — undisclosed use cannot be detected reliably — so review
 quality remains the real safeguard; maintainers may decline contributions the
 submitter cannot explain.
 
-If Fedora revises its policy, this ADR is not edited in place; a new ADR
-decides whether to follow.
+If Fedora revises its policy, this record is revised to decide whether to
+follow.

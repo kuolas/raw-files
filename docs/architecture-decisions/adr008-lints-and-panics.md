@@ -17,7 +17,7 @@ In `Cargo.toml`:
 
 - **`unsafe_code = "forbid"`.** Our own code contains no `unsafe`, and no
   `#[allow]` can override that; dependencies may contain it. A real need for
-  `unsafe` (for example a SIMD decoder) needs a new ADR.
+  `unsafe` (for example a SIMD decoder) needs this record revised.
 - **`missing_docs = "warn"`.** Every public item is documented: for a
   library, the API documentation is part of what it ships.
 - **Clippy `dbg_macro`, `todo`, `unimplemented` warn** — with CI's

@@ -1,7 +1,8 @@
 # Architecture Decision Records
 
 The substantial decisions that shape raw-files live here, one short record
-each: the context, what was decided, and what follows from it. They answer
+per problem, kept current: the context, what was decided, and what follows
+from it. They answer
 "why is it like this?" for anyone reading the code later. The records
 speak for the project; where one cites my own shots, it is me, Alvaro
 Kuolas, who maintains raw-files.
@@ -27,7 +28,7 @@ Kuolas, who maintains raw-files.
 | [ADR017](adr017-per-body-tables-measured-by-the-project.md) | Per-body tables measured by the project | Accepted |
 | [ADR018](adr018-focus-points-placed-from-a-table-and-the-points-used.md) | Focus points placed from a table, and the points used | Accepted; amends [ADR012](adr012-focus-points-as-the-camera-records-them.md); amended by [ADR019](adr019-the-frame-of-a-placed-focus-point-on-a-crop.md) |
 | [ADR019](adr019-the-frame-of-a-placed-focus-point-on-a-crop.md) | The frame of a placed focus point on a crop | Accepted; amends [ADR018](adr018-focus-points-placed-from-a-table-and-the-points-used.md); amended by [ADR020](adr020-each-crops-window-in-the-table.md) |
-| [ADR020](adr020-each-crops-window-in-the-table.md) | Each crop's window in the table | Accepted; amends [ADR019](adr019-the-frame-of-a-placed-focus-point-on-a-crop.md) |
+| [ADR020](adr020-each-crops-window-in-the-table.md) | Each crop's and JPEG size's window in the table | Accepted; amends [ADR019](adr019-the-frame-of-a-placed-focus-point-on-a-crop.md) |
 | [ADR021](adr021-what-the-file-records-and-what-raw-files-reads-into-it.md) | What the file records and what raw-files reads into it | Accepted |
 | [ADR022](adr022-names-as-their-makers-write-them.md) | Names as their makers write them | Accepted |
 
@@ -47,36 +48,44 @@ local choices belong in a code comment or the commit message instead.
 
 ## Changing a decision
 
-Records are not rewritten or deleted, with the two exceptions at the
-end of this section, a correction and an extension. A new decision that
-replaces an old one gets its own ADR; the old one's status becomes
-"Superseded by [ADRxxx](…)", linking to the new record.
+There is one record per problem, and it states the current answer. When
+the answer to a problem changes, whether the decision grows, is corrected
+or is reversed, its record changes with it, so that a reader finds the
+answer in one place rather than piecing it together from a record and the
+records that amend it: while a decision holds, in substance or in spirit,
+a new record would only make it harder to read. The text a record had
+before stays in git history and in each release's tag. ADR001 is the
+decision and its reasons.
 
-A new decision that changes part of an old one, and leaves the rest
-standing, gets its own ADR too. It says "Amends [ADRxxx](…)" next to its
-status and names the point it changes; the old one's status becomes
-"Accepted; amended by [ADRyyy](…)", so that a reader of the old record
-finds the change.
+- **Same problem, small change** (a renamed term, a figure measured again,
+  a moved file, a slip): edit the record in place, with no new revision.
+- **Same problem, a decision grown or a new solution** (the decision
+  extended to more values or cases, or another answer in its place):
+  rewrite the record in place and raise its revision. The header keeps
+  `- Date:`, when the problem was first decided, and gains a line under
+  it, `- Revision: N, YYYY-MM-DD`, with N at 2 the first time and the date
+  the change was decided; the `- Issue:` line names the issue or pull
+  request where it was decided. A solution left behind, and an alternative
+  weighed for the change, become Rejected bullets saying why.
+- **Two records, one problem:** fold one into the other, keeping every
+  reason, and delete it; its number is not reused, and the table above says
+  where it went.
+- **New problem:** a new record, numbered as in "Creating an ADR". When its
+  answer rests on another record's decision, it says "Builds on
+  [ADRxxx](…)" next to its status, and both stay Accepted.
+- **Problem gone:** the record's status becomes Deprecated, with one line
+  saying why. A number is never reused.
 
-A new decision that builds on an old one without contradicting it, by
-covering what the old one left out, also gets its own ADR. It says
-"Builds on [ADRxxx](…)" next to its status, and the old record stays as
-it is, Accepted.
+A record keeps its file name when its title changes, since every link
+names the file.
 
-The first exception: a correction leaves the decision as it was: a
-figure measured again, a term renamed in the code or the roadmap, a
-slip. It is made in the record itself, with no new record and no change
-of status, and the commit that makes it says why the record is
-corrected rather than superseded. ADR004's list of trailers, ADR011's
-rule for the ISO, ADR016's account of what its groups need, and the
-words ADR010 and ADR016 used for the roadmap's milestones, which it now
-calls capabilities, were corrected this way.
+Every change to a record greps the tree for its number (`git grep -n
+ADRnnn`) and rechecks each sentence that cites it, in the same pull
+request: a citation says what the record decided, so a new answer can
+leave a citing sentence wrong.
 
-The second exception: a decision that extends an old one to more values
-of the same kind, by the same rule, may be added to the old record in
-place. The additions are sections of their own, under the old Context,
-Decision and Consequences, each with the date and the issue it was
-added in; they say which of the old sentences no longer describe the
-whole decision, and the old text stays as it was. The old record's
-status names the addition. ADR011 was extended this way for the
-camera's settings.
+Records written before this rule that amend another with a record of
+their own, such as ADR018, ADR019 and ADR020, keep their "Amends" lines
+until each is folded into the record whose problem it answers. ADR011,
+which grew in dated sections, keeps them until its next change rewrites
+it as one current answer.
