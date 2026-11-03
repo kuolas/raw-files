@@ -1,8 +1,9 @@
 # ADR000: [Short noun phrase, e.g. "Parse from a byte slice"]
 
-- Status: Proposed <!-- Proposed | Accepted | Rejected | Deprecated | Superseded by [ADRxxx](adrxxx-….md) -->
+- Status: Proposed <!-- Proposed | Accepted | Rejected | Deprecated -->
 - Date: YYYY-MM-DD
-- Issue: #N <!-- optional: the issue or PR where it was discussed -->
+- Revision: N, YYYY-MM-DD <!-- optional: omit until the decision grows or changes; N is 2 the first time, dated when that change was decided -->
+- Issue: #N <!-- optional: the issue or PR where it was discussed, or where the last revision was decided -->
 
 ## Context
 

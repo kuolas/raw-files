@@ -301,7 +301,15 @@ Each is a decision of its own, which builds on this one.
 - An export that keeps the shape of the camera's picture keeps its focus
   point, which scales with the picture. An export cropped to the same
   shape, or a square picture turned upright, cannot be told from the
-  camera's own picture, and its point is in the wrong place.
+  camera's own picture, and its point is in the wrong place. A JPEG
+  whose points the body's table places in a window of the frame, kept
+  for its size alone
+  ([ADR020](adr020-each-crops-window-in-the-table.md)), is the
+  exception both ways: an export scaled from it to another size takes
+  the whole frame, and keeps its point only when small enough for the
+  rule's rounding to pass the whole frame, about 750 pixels tall on the
+  D600's Medium JPEG; and an export of a larger JPEG cut or scaled to
+  exactly that size is read as such a JPEG.
 - A Nikon JPEG shot in a crop mode gives a point when, after the crop
   rule of [ADR012](adr012-focus-points-as-the-camera-records-them.md),
   its frame fits the picture. What such a JPEG records is not checked on

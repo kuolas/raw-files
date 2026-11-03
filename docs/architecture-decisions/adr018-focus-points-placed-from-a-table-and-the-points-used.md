@@ -108,9 +108,13 @@ for a body with a table, the body's layout.
   point.
 - **In a JPEG a placed point takes the path of a recorded one**, with
   the table's frame standing in for the recorded frame, except on a
-  crop: a placed point is in full-size output pixels, so it shifts as
-  above, where a recorded DX point, in fractions of the picture, is
-  scaled by [ADR015](adr015-the-focus-point-of-a-crop-mode-jpeg.md).
+  crop and in a JPEG of a size whose picture the body's table records
+  as a window of the frame, where the frame is that window
+  ([ADR020](adr020-each-crops-window-in-the-table.md)): a placed point
+  is in full-size output pixels, so it moves by that window's origin,
+  as it shifts on a crop above, where a recorded DX point, in fractions
+  of the picture, is scaled by
+  [ADR015](adr015-the-focus-point-of-a-crop-mode-jpeg.md).
   The aspect-ratio rule of
   [ADR014](adr014-jpeg-files-as-a-format-of-their-own.md) then applies
   to the placed frame unchanged.

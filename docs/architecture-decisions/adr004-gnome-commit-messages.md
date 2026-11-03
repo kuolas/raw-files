@@ -25,5 +25,5 @@ trailers, as CONTRIBUTING.md describes.
 
 History reads as plain sentences and the bar for new contributors is low.
 Nothing can be generated from commit messages, so the changelog and version
-numbers stay manual. Switching later would need a new ADR and a change to
-CONTRIBUTING.md.
+numbers stay manual. Switching later would need this record revised and a
+change to CONTRIBUTING.md.

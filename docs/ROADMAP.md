@@ -128,7 +128,8 @@ Other formats come in this order:
 Here too the work aims first at mirrorless bodies, so Canon's CR3,
 the format of its EOS R bodies, comes before CR2. DNG comes first: CR3
 is the more complex format to read.
-The order is a plan, not a promise; a change of direction gets an ADR.
+The order is a plan, not a promise; a change of direction is recorded in
+the architecture decisions.
 
 ## Releases
 

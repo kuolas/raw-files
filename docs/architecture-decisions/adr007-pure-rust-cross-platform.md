@@ -39,4 +39,4 @@ linking a native library, and no build script that compiles native code.
   needs a license compatible with MIT OR Apache-2.0
   ([ADR002](adr002-license-mit-or-apache-2.md)).
 - Every dependency must be pure Rust too; one that links a native library
-  needs a new ADR.
+  needs this record revised.
