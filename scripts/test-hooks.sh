@@ -40,6 +40,17 @@ accepts() { printf '%b' "$1" > "$M"; "$HOOK" "$M" > /dev/null 2>&1; }
 refuses() { printf '%b' "$1" > "$M"; ! "$HOOK" "$M" > /dev/null 2>&1; }
 # A message as git stored it, as CI reads it with `git log --format=%B`.
 stored_refuses() { printf '%b' "$1" > "$M"; ! COMMIT_MSG_STORED=1 "$HOOK" "$M" > /dev/null 2>&1; }
+# Accepted, with or without the note on a trailer outside the house set.
+notes_trailer() {
+	local err
+	printf '%b' "$1" > "$M"
+	err="$("$HOOK" "$M" 2>&1 > /dev/null)" && grep -q 'unsanctioned trailer' <<< "$err"
+}
+no_trailer_note() {
+	local err
+	printf '%b' "$1" > "$M"
+	err="$("$HOOK" "$M" 2>&1 > /dev/null)" && ! grep -q 'unsanctioned trailer' <<< "$err"
+}
 
 echo '# The grammar'
 check "accepts 'component: Summary' with Closes: and Assisted-by:" \
@@ -63,6 +74,16 @@ check "refuses a Generated-with footer" \
 printf 'nef: find it.\n' > "$M"
 skipped() { SKIP_HOOKS=1 "$HOOK" "$M" > /dev/null; }
 check "lets SKIP_HOOKS through" skipped
+
+echo '# Trailer keys in any casing, as GitHub reads them'
+check "refuses 'closes: two'" refuses 'nef: Fix it\n\nBody.\n\ncloses: two\n'
+check "refuses 'FIXES: two'" refuses 'nef: Fix it\n\nBody.\n\nFIXES: two\n'
+check "refuses 'issue: two'" refuses 'nef: Fix it\n\nBody.\n\nissue: two\n'
+check "accepts 'fixes: #12'" accepts 'nef: Fix it\n\nBody.\n\nfixes: #12\n'
+check "notes 'Reviewed-by:'" notes_trailer 'nef: Fix it\n\nBody.\n\nReviewed-by: Someone\n'
+check "notes 'reviewed-by:'" notes_trailer 'nef: Fix it\n\nBody.\n\nreviewed-by: Someone\n'
+check "does not note 'assisted-by:'" no_trailer_note 'nef: Fix it\n\nBody.\n\nassisted-by: Claude\n'
+check "does not note 'Assisted-by:'" no_trailer_note 'nef: Fix it\n\nBody.\n\nAssisted-by: Claude\n'
 
 echo '# Git'"'"'s own subjects: exempt from the grammar, not from the attribution rule'
 check "accepts a revert as git writes it" accepts 'Revert "nef: Fix it"\n\nThis reverts commit 0123abc.\n'
@@ -119,6 +140,19 @@ check "refuses 'don't do this' with a typographic apostrophe" \
 check "refuses 'add, remove things'" refuses 'add, remove things\n'
 check "refuses 'fix. the thing' after a tag" refuses 'nef: fix. the thing\n'
 check "accepts a hyphenated crate name" accepts 'raw-files builds on Windows\n'
+
+echo '# The same answers in any locale'
+# A Turkish locale folds I and i differently. These cases bite only where
+# one is installed; elsewhere they are skipped.
+tr_locale="$(locale -a 2> /dev/null | grep -m 1 -i '^tr_TR' || true)"
+if [ -n "$tr_locale" ]; then
+	turkish() { LC_ALL="$tr_locale" "$@"; }
+	check "refuses 'FIXES: two' in $tr_locale" turkish refuses 'nef: Fix it\n\nBody.\n\nFIXES: two\n'
+	check "refuses a lower-case summary in $tr_locale" turkish refuses 'nef: find the preview\n'
+	check "refuses 'ui:fix the thing' in $tr_locale" turkish refuses 'ui:fix the thing\n'
+else
+	echo "SKIP  no Turkish locale installed"
+fi
 
 echo '# Installed in a repository'
 C="$W/clone"

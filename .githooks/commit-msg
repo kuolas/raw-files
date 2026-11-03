@@ -11,6 +11,14 @@
 # Bypass once:  SKIP_HOOKS=1 git commit …
 set -eu
 
+# Read the message as bytes, whatever your locale: in a Turkish one,
+# `grep -i` does not fold I and i, and a range such as `[a-z]` can hold
+# other letters, so every check would answer differently there. Lengths
+# then count bytes, so a line with accented letters gets the 75-column
+# note a little early; it is only a note.
+LC_ALL=C
+export LC_ALL
+
 if [ -n "${SKIP_HOOKS:-}" ]; then
 	echo "commit-msg: skipped (SKIP_HOOKS set)"
 	exit 0
@@ -161,8 +169,9 @@ malformed() {
 # references it (a series of commits toward one issue, none of which
 # closes it). All three take an issue reference, checked strictly: a
 # reference nothing can resolve reads as an answer while linking nothing.
-bad="$(printf '%s\n' "$trailers" | grep -E '^(Closes|Fixes|Issue):' |
-	grep -vE "^(Closes|Fixes|Issue): $issue_ref\$" || true)"
+# Keys in any casing: GitHub reads `closes: #12` as `Closes: #12`.
+bad="$(printf '%s\n' "$trailers" | grep -iE '^(Closes|Fixes|Issue):' |
+	grep -viE "^(Closes|Fixes|Issue): $issue_ref\$" || true)"
 [ -z "$bad" ] || malformed 'Closes:, Fixes: and Issue: take an issue reference:
 
   Closes: #12
@@ -176,10 +185,12 @@ house='Closes:, Fixes:, Issue:, Assisted-by:'
 
 # Anything else in the trailer block: warn, never block. A genuinely new trailer
 # is a CONTRIBUTING change rather than a typo, and the cost of a false positive
-# here is a bypassed hook — worse than the typo it would have caught.
+# here is a bypassed hook — worse than the typo it would have caught. Keys
+# in any casing here too, so `reviewed-by:` is noted and `assisted-by:` is
+# not.
 unsanctioned="$(printf '%s\n' "$trailers" \
-	| grep -E '^[A-Z][A-Za-z-]+(-[A-Za-z]+)*: ' \
-	| grep -vE "^($sanctioned): " || true)"
+	| grep -E '^[A-Za-z][A-Za-z-]+(-[A-Za-z]+)*: ' \
+	| grep -viE "^($sanctioned): " || true)"
 if [ -n "$unsanctioned" ]; then
 	printf 'commit-msg: note — unsanctioned trailer(s) (house set: %s):\n%s\n' \
 		"$house" "$unsanctioned" >&2
