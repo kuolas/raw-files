@@ -63,12 +63,45 @@ fail() {
 [ -n "$message" ] || exit 0
 
 # A commit is authored by whoever committed it. No assistant/model/tool
-# attribution, in any casing or spelling, in a trailer or a footer. This holds
+# attribution, in any casing, in a trailer or a footer. This holds
 # for every message, git's own subjects below included: only the grammar is
 # waived for them. `git revert` commits without running this hook, so for a
 # revert it is CI, running this file over the stored message, that applies it.
-if printf '%s\n' "$message" | grep -qiE '(co-authored-by:.*(claude|anthropic|copilot|cursor|gpt|gemini|codeium|devin)|generated with.*(claude|anthropic|copilot|cursor|gemini))'; then
-	fail 'tool named as co-author or "Generated with" footer — a tool is not an author; disclose AI help with an Assisted-by: trailer'
+#
+# A person may be a co-author, so a line is refused only where it names a
+# tool. Both rules read lines that start with `Co-authored-by:` or
+# `Generated with`, as a trailer or footer does, and match a tool's name as
+# a whole word (no letter or digit on either side), so `egptech.org` passes.
+#
+# A `Co-authored-by:` line is a tool's when:
+#   - its login ends in `[bot]`, which is never a person: GitHub writes
+#     `claude[bot]`, `copilot-swe-agent[bot]`, `google-labs-jules[bot]`;
+#   - its name, before the `<`, is a tool's. Claude and Devin are also
+#     people's first names, so they count only as the tools write them
+#     (`Claude Code`, `Claude Opus 4`, `Devin AI`);
+#   - its address is one a tool writes, such as `noreply@anthropic.com`.
+#     A whole domain is not enough: the people who make a tool have
+#     addresses there too, and may be co-authors.
+# A `Generated with` line is a tool's when a tool is named anywhere after
+# those words (`Generated with the help of Claude Code`). `Cursor` counts
+# only with its capital, since a byte parser's prose says "generated with
+# cursor reads".
+word_start='(^|[^[:alnum:]])'
+word_end='([^[:alnum:]]|$)'
+tool='(anthropic|openai|chatgpt|gpt(-?[0-9][0-9a-z.]*)?|copilot|gemini|codeium|codex|aider|opencode|codebuff)'
+tool_name="(${tool}|cursor|claude[- ](code|opus|sonnet|haiku|fable|ai|[0-9])|devin[- ]ai)"
+tool_mail='<(noreply@anthropic\.com|cursoragent@cursor\.com|aider@aider\.chat|amp@ampcode\.com|noreply@opencode\.ai|noreply@codebuff\.com)>'
+coauthors="$(printf '%s\n' "$message" | grep -iE '^co-authored-by:' || true)"
+coauthor_names="$(printf '%s\n' "$coauthors" | sed 's/^[^:]*://; s/<.*//')"
+if printf '%s\n' "$coauthors" | grep -qF '[bot]' ||
+	printf '%s\n' "$coauthor_names" | grep -qiE "${word_start}${tool_name}${word_end}" ||
+	printf '%s\n' "$coauthors" | grep -qiE "$tool_mail"; then
+	fail 'tool named as co-author — a tool is not an author; disclose AI help with an Assisted-by: trailer'
+fi
+generated="$(printf '%s\n' "$message" | grep -iE '^[^[:alnum:]]*generated with ' || true)"
+if printf '%s\n' "$generated" | grep -qiE "${word_start}(${tool}|claude|devin)${word_end}" ||
+	printf '%s\n' "$generated" | grep -qE "${word_start}Cursor${word_end}"; then
+	fail '"Generated with" footer naming a tool — a tool is not an author; disclose AI help with an Assisted-by: trailer'
 fi
 
 # Git's own subjects skip the grammar and trailer checks below, in the shapes

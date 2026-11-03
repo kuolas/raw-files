@@ -75,6 +75,62 @@ printf 'nef: find it.\n' > "$M"
 skipped() { SKIP_HOOKS=1 "$HOOK" "$M" > /dev/null; }
 check "lets SKIP_HOOKS through" skipped
 
+echo '# Authorship: a tool is refused, a person or prose is not'
+check "refuses Claude with Anthropic's address" \
+	refuses 'nef: Fix it\n\nCo-authored-by: Claude <noreply@anthropic.com>\n'
+check "refuses a named Claude model" \
+	refuses 'nef: Fix it\n\nCo-authored-by: Claude Opus 4 <someone@example.invalid>\n'
+check "refuses Devin AI" \
+	refuses 'nef: Fix it\n\nCo-authored-by: Devin AI <158243242+devin-ai-integration[bot]@users.noreply.github.com>\n'
+check "refuses Copilot's bot" \
+	refuses 'nef: Fix it\n\nCo-authored-by: copilot-swe-agent[bot] <198982749+Copilot@users.noreply.github.com>\n'
+check "refuses ChatGPT" refuses 'nef: Fix it\n\nCo-authored-by: ChatGPT <someone@example.invalid>\n'
+check "refuses a GPT model" refuses 'nef: Fix it\n\nco-authored-by: GPT-4o <someone@example.invalid>\n'
+check "refuses Cursor's agent" \
+	refuses 'nef: Fix it\n\nCo-authored-by: Cursor Agent <cursoragent@cursor.com>\n'
+check "refuses Gemini's bot" \
+	refuses 'nef: Fix it\n\nCo-authored-by: gemini-code-assist[bot] <176961590+gemini-code-assist[bot]@users.noreply.github.com>\n'
+check "refuses 'Generated with GitHub Copilot'" \
+	refuses 'nef: Fix it\n\nBody.\n\nGenerated with GitHub Copilot\n'
+check "refuses 'Generated with ChatGPT'" refuses 'nef: Fix it\n\nBody.\n\nGenerated with ChatGPT\n'
+check "refuses claude[bot], as GitHub writes it" \
+	refuses 'nef: Fix it\n\nCo-authored-by: claude[bot] <209825114+claude[bot]@users.noreply.github.com>\n'
+check "refuses any [bot] login" \
+	refuses 'nef: Fix it\n\nCo-authored-by: google-labs-jules[bot] <161369871+google-labs-jules[bot]@users.noreply.github.com>\n'
+check "refuses Devin AI by its name alone" \
+	refuses 'nef: Fix it\n\nCo-authored-by: Devin AI <someone@example.invalid>\n'
+check "refuses Cursor by its name alone" \
+	refuses 'nef: Fix it\n\nCo-authored-by: Cursor Agent <someone@example.invalid>\n'
+check "refuses aider" \
+	refuses 'nef: Fix it\n\nCo-authored-by: aider (some-model) <aider@aider.chat>\n'
+check "refuses opencode by its name" \
+	refuses 'nef: Fix it\n\nCo-authored-by: opencode (some-model) <ai@local>\n'
+check "refuses Amp by its address" refuses 'nef: Fix it\n\nCo-authored-by: Amp <amp@ampcode.com>\n'
+check "refuses Codebuff" refuses 'nef: Fix it\n\nCo-authored-by: Codebuff <noreply@codebuff.com>\n'
+check "refuses 'Generated with Google Gemini'" \
+	refuses 'nef: Fix it\n\nBody.\n\nGenerated with Google Gemini\n'
+check "refuses 'Generated with the help of Claude Code'" \
+	refuses 'nef: Fix it\n\nBody.\n\nGenerated with the help of Claude Code\n'
+check "refuses 'Generated with assistance from ChatGPT'" \
+	refuses 'nef: Fix it\n\nBody.\n\nGenerated with assistance from ChatGPT\n'
+check "refuses 'Generated with Cursor'" refuses 'nef: Fix it\n\nBody.\n\nGenerated with Cursor\n'
+check "accepts a person at a tool maker's domain" \
+	accepts 'nef: Fix it\n\nCo-authored-by: Jane Doe <jane@anthropic.com>\nCo-authored-by: John Doe <john.doe@openai.com>\n'
+check "accepts a person whose handle holds a tool's name" \
+	accepts 'nef: Fix it\n\nCo-authored-by: Jane Doe <12345+cursor-jane@users.noreply.github.com>\n'
+check "accepts wrapped prose about cursor reads" \
+	accepts 'nef: Read offsets\n\nThe offsets in the IFD chain are all\ngenerated with cursor reads, never seeks.\n'
+check "accepts a person named Claude" \
+	accepts 'nef: Fix it\n\nCo-authored-by: Claude Monet <claude@example.org>\n'
+check "accepts a domain holding a tool's letters" \
+	accepts 'nef: Fix it\n\nCo-authored-by: Jane Doe <jane@egptech.org>\n'
+check "accepts prose saying 'generated with a cursor'" \
+	accepts 'nef: Read the offsets in order\n\nOffsets are generated with a cursor over the file.\n'
+check "  and the same at the start of a line" \
+	accepts 'nef: Read the offsets in order\n\nGenerated with a cursor over the file, the offsets\nare read in order.\n'
+check "accepts prose naming the rule" \
+	accepts 'hooks: Explain the rule\n\nThe hook refuses a Co-authored-by: line naming Claude Code.\n'
+
 echo '# Trailer keys in any casing, as GitHub reads them'
 check "refuses 'closes: two'" refuses 'nef: Fix it\n\nBody.\n\ncloses: two\n'
 check "refuses 'FIXES: two'" refuses 'nef: Fix it\n\nBody.\n\nFIXES: two\n'
