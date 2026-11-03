@@ -293,11 +293,11 @@ Rejected:
   scaled onto the NEF's own preview is off by up to 25 pixels, and a
   raw file and its JPEG give the same point in two frames.
 - **CropHiSpeed's cropped size less a border measured per body.** One
-  more number for each body's record to measure and keep, beside the
-  window that the crop frames measure directly. It was first rejected
-  because the window follows from the origin the record already
-  confirms, a reason that no longer holds: the window is measured and
-  the origin checked against it.
+  more number for each body's record to measure and keep. It was first
+  rejected because the window follows from the origin the record
+  already confirms, a reason that no longer holds now that the window is
+  measured and the origin checked against it; the measured window is
+  kept instead.
 - **The window from CropHiSpeed's origin alone**, the table's frame
   less twice the origin, as this record next had it. It holds on the
   D600, but one tag value decides the shift and the frame unchecked,
