@@ -156,6 +156,19 @@ the architecture decisions.
   gives none, and the format notes say so per body
   ([ADR017](architecture-decisions/adr017-per-body-tables-measured-by-the-project.md),
   [ADR018](architecture-decisions/adr018-focus-points-placed-from-a-table-and-the-points-used.md)).
+- **0.7.0**: metadata, the camera's maker and the name the body is
+  sold under, spelled as its maker writes it, from the project's own
+  table of names, beside the texts the file records
+  ([#49](https://github.com/kuolas/raw-files/issues/49),
+  [ADR021](architecture-decisions/adr021-what-the-file-records-and-what-raw-files-reads-into-it.md),
+  [ADR022](architecture-decisions/adr022-names-as-their-makers-write-them.md));
+  the camera's and the lens's values as plain values, as the
+  exposure's are ([#33](https://github.com/kuolas/raw-files/issues/33));
+  and focus points, a D600 Medium JPEG's points placed in the window
+  of the frame its picture shows
+  ([#62](https://github.com/kuolas/raw-files/issues/62)), and a D600's
+  3D-tracking area mode named
+  ([#63](https://github.com/kuolas/raw-files/issues/63)).
 - **Next**: full metadata, every value a file records, the ones that
   only enciphered or encrypted blocks hold among them
   ([#50](https://github.com/kuolas/raw-files/issues/50)).

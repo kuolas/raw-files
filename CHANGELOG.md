@@ -10,6 +10,19 @@ does.
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-11-03
+
+The seventh release: the camera's maker and the name the body is sold
+under, beside the Make and Model texts the file records, from
+raw-files' own table of names; the camera's and the lens's values as
+plain values, as the exposure's are; and a D600 Medium JPEG's
+autofocus points, placed in the window of the frame its picture shows,
+and a D600's 3D-tracking area mode named. This changes some of 0.6.0's
+signatures: the camera's values move from `Metadata` to a `Camera`,
+`Metadata::lens` gives a `&Lens`, the recorded texts are named
+`recorded_make` and `recorded_model`, and `LensBuilder` is gone (see
+Changed and Removed).
+
 ### Added
 
 - `Camera::make` gives the camera's maker as a `Make`, `Nikon`, `Sony`,
@@ -463,7 +476,8 @@ files.
 - A DNG is of no known format, whatever camera maker its Make names:
   converters and the phones that write DNG keep the maker's name.
 
-[Unreleased]: https://github.com/kuolas/raw-files/compare/v0.6.0...HEAD
+[Unreleased]: https://github.com/kuolas/raw-files/compare/v0.7.0...HEAD
+[0.7.0]: https://github.com/kuolas/raw-files/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/kuolas/raw-files/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/kuolas/raw-files/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/kuolas/raw-files/compare/v0.3.0...v0.4.0
