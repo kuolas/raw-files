@@ -58,7 +58,9 @@ does.
 - Opening a file now also reads IFD0's GPS IFD, after the chain of
   directories, so that its entries can be listed; an IFD it shares with
   the chain stays there. On most older NEFs this reads one more 64 KiB
-  block.
+  block. The GPS IFD counts towards `Limits::max_ifds`, so with a cap
+  set at a file's count of directories under 0.7.0, a raw file may now
+  be refused, and a JPEG lose what its Exif segment holds.
 - Opening an ARW now also reads the table of Sony's private directory,
   SR2Private, at the offset IFD0's DNGPrivateData holds, so that its
   entries can be listed; its values are read only when asked for. On
