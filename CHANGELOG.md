@@ -30,6 +30,15 @@ does.
   denominator kept, and text as its bytes, which `Value::text` cleans as
   the metadata's text is cleaned, without its 255-byte limit. A value is
   read from the file each time it is asked for.
+- `Entry::name` gives the name a published standard gives the entry's
+  tag in its kind of directory, such as `DateTimeOriginal` for tag
+  0x9003 of the Exif IFD: TIFF 6.0's, Exif 3.1's, DCF 2.0's for the
+  Interoperability IFD, CIPA DC-007's for the Multi-Picture index and
+  the DNG specification's for the four DNG tags raw-files reads, 218 in
+  all, spelled as each document spells them, each recorded with its
+  document and page in `docs/formats/tag-names.md`. A tag no such
+  document names in that kind of directory has none, as an Exif tag
+  written in IFD0 has none there.
 - `Limits::max_value_bytes`, set with `with_max_value_bytes`, bounds the
   bytes one entry's value may take, 1 MiB by default, the bound the
   metadata's values already have; a longer value fails only its own

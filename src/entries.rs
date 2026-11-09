@@ -9,12 +9,15 @@
 //! file keeps every entry of every directory it walks, as an [`Entry`] of
 //! an [`Entries`]; an entry's [`Value`] is read only when asked for, as a
 //! preview's bytes are. A [`Directory`] names which directory an entry lies
-//! in, and a [`FieldType`] how its values are stored.
+//! in, and a [`FieldType`] how its values are stored; an entry's tag has
+//! the name a published standard gives it, where one does (`names`).
 //!
 //! An entry the directory's reader could not check is left out and counted
 //! per directory: one whose type is none of those [`FieldType`] names, whose
 //! length overflows, or whose value lies outside the file or the part of it
 //! the directory was read in. So every entry listed can be read.
+
+mod names;
 
 use std::fmt;
 use std::io::{Read, Seek};
@@ -264,6 +267,19 @@ impl Entry {
     /// value of the type.
     pub fn value_len(&self) -> u32 {
         self.entry.value_len()
+    }
+
+    /// The name a published standard gives the entry's tag in its kind of
+    /// directory, such as "DateTimeOriginal" for tag 0x9003 of the Exif
+    /// IFD, spelled as the standard spells it; `None` when none does.
+    ///
+    /// The names are those of TIFF 6.0, Exif 3.1, DCF 2.0 for the
+    /// Interoperability IFD, CIPA DC-007 for the Multi-Picture index, and
+    /// the DNG specification for the four DNG tags raw-files reads. A tag a
+    /// standard names in one kind of directory has no name in another: an
+    /// Exif tag that a camera writes in IFD0 has none there.
+    pub fn name(&self) -> Option<&'static str> {
+        names::name(self.directory, self.tag())
     }
 
     /// Where the value's bytes lie in the file; `None` when the entry holds

@@ -269,8 +269,9 @@ impl<R: Read + Seek> RawFile<R> {
     /// fn main() -> raw_files::Result<()> {
     ///     let mut file = RawFile::open("DSC_0001.NEF")?;
     ///     for entry in file.entries() {
+    ///         let name = entry.name().unwrap_or("");
     ///         println!(
-    ///             "{} 0x{:04X} {} x {}",
+    ///             "{} 0x{:04X} {name} {} x {}",
     ///             entry.directory(),
     ///             entry.tag(),
     ///             entry.field_type(),
@@ -668,6 +669,9 @@ mod tests {
             assert_eq!(directories, [Directory::Ifd(0), Directory::Exif]);
             assert_eq!(file.entries().len(), 6, "{order:?}");
             let time = file.entries().entry(Directory::Exif, 0x9003).unwrap();
+            assert_eq!(time.name(), Some("DateTimeOriginal"));
+            let pointer = file.entries().entry(Directory::Ifd(0), 0x8769).unwrap();
+            assert_eq!(pointer.name(), Some("Exif IFD Pointer"));
             let value = file.read_value(&time).unwrap();
             assert_eq!(value.text().as_deref(), Some("2026:11:09 10:11:12"));
             let metering = file.entries().entry(Directory::Exif, 0x9207).unwrap();
