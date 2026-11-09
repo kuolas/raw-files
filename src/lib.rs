@@ -387,6 +387,7 @@ mod camera;
 mod camera_settings;
 mod container;
 mod datetime;
+mod entries;
 mod error;
 mod file;
 mod focus;
@@ -441,6 +442,7 @@ pub use camera_settings::{
     MeteringMode, RawImageSize, Shutter, WhiteBalance, WhiteBalanceMode,
 };
 pub use datetime::DateTime;
+pub use entries::{Directory, Entries, Entry, FieldType, Value};
 pub use error::{Error, ErrorKind, Result};
 pub use file::RawFile;
 pub use focus::{

@@ -9,6 +9,9 @@
 //! takes a fraction for a number or a number for text. TIFF 6.0 defines
 //! types 1 to 12, TIFF Technical Note 1 adds type 13, and Exif 3.0 adds
 //! type 129, text in UTF-8; an entry of any other type cannot be read.
+//! [`FieldType`](crate::FieldType) holds the whole table, with each type's
+//! size; these constants are the codes the readers compare an entry's type
+//! with, one for each type a reader takes.
 
 /// Field type BYTE: 8-bit unsigned integers.
 pub(crate) const BYTE: u16 = 1;
@@ -20,8 +23,6 @@ pub(crate) const SHORT: u16 = 3;
 pub(crate) const LONG: u16 = 4;
 /// Field type RATIONAL: pairs of LONGs, numerator first.
 pub(crate) const RATIONAL: u16 = 5;
-/// Field type SBYTE: 8-bit signed integers.
-pub(crate) const SBYTE: u16 = 6;
 /// Field type UNDEFINED: bytes that the tag gives a meaning to.
 pub(crate) const UNDEFINED: u16 = 7;
 /// Field type SSHORT: 16-bit signed integers.
@@ -30,42 +31,5 @@ pub(crate) const SSHORT: u16 = 8;
 pub(crate) const SLONG: u16 = 9;
 /// Field type SRATIONAL: pairs of SLONGs, numerator first.
 pub(crate) const SRATIONAL: u16 = 10;
-/// Field type FLOAT: 32-bit IEEE floating point.
-pub(crate) const FLOAT: u16 = 11;
-/// Field type DOUBLE: 64-bit IEEE floating point.
-pub(crate) const DOUBLE: u16 = 12;
 /// Field type IFD: the offsets of IFDs, as LONGs (TIFF Technical Note 1).
 pub(crate) const IFD: u16 = 13;
-/// Field type UTF-8: text in UTF-8, ending in a NUL, with no byte order
-/// mark, its count in bytes (Exif 3.0, kept by Exif 3.1, section 4.6.2).
-pub(crate) const UTF8: u16 = 129;
-
-/// The size in bytes of one value of field type `typ`, or `None` for a type
-/// that neither TIFF 6.0 (types 1 to 12), TIFF Technical Note 1 (type 13)
-/// nor Exif (type 129) defines.
-pub(super) fn type_size(typ: u16) -> Option<u32> {
-    match typ {
-        BYTE | ASCII | SBYTE | UNDEFINED | UTF8 => Some(1),
-        SHORT | SSHORT => Some(2),
-        LONG | SLONG | FLOAT | IFD => Some(4),
-        RATIONAL | SRATIONAL | DOUBLE => Some(8),
-        _ => None,
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn type_sizes() {
-        let sizes = [1, 1, 2, 4, 8, 1, 1, 2, 4, 8, 4, 8, 4];
-        for (typ, size) in (1..=13).zip(sizes) {
-            assert_eq!(type_size(typ), Some(size), "type {typ}");
-        }
-        assert_eq!(type_size(129), Some(1));
-        for typ in [0, 14, 99, 128, 130, u16::MAX] {
-            assert_eq!(type_size(typ), None, "type {typ}");
-        }
-    }
-}
