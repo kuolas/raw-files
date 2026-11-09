@@ -82,10 +82,12 @@ bodies. They showed:
   my files and one more block on 89 of the 245 public ones, and, to
   read every value, its 36,864-byte tag 0x7250 too, 26 to 65 KB more
   (26 to 31 KB on my files) on 672 of the 745 files.
-- **Damage is rare and local.** 22 public files have a damaged entry,
+- **Damage is rare and local.** 17 public files have a damaged entry,
   most of them a value past the end of its MakerNote's stated length
-  (Sony DSLR-A200 to A900, Coolpix NRW, COOLSCAN scanners), and 2 more
-  a directory that cannot be read (the DSLR-A100's); of my own files,
+  (Sony DSLR-A200 to A900, COOLSCAN scanners), and 9 a directory that
+  cannot be read: the DSLR-A100's, a SubIFD of junk in one file opened
+  as JPEG, and the MakerNote's preview IFD that four Coolpix NRWs and
+  the two COOLSCANs put wholly past that length; of my own files,
   2 JPEGs have such a directory, and none has a damaged entry. No file
   has a
   count or an offset that overflows, a type TIFF does not define (but in
