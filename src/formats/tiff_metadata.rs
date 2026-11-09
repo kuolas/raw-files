@@ -156,6 +156,7 @@ use crate::container::tiff::tags::{
 use crate::container::tiff::types::{LONG, SHORT};
 use crate::container::tiff::{Ifd, Tree, skip_damage};
 use crate::datetime::DateTime;
+use crate::entries::clean_text;
 use crate::error::Result;
 use crate::formats::tiff_previews;
 use crate::geometry::Size;
@@ -296,13 +297,7 @@ pub(crate) fn text<R: Read + Seek>(
     if bytes.len() > MAX_TEXT_LEN {
         return Ok(None);
     }
-    let start = bytes.iter().position(|&b| b != b' ').unwrap_or(bytes.len());
-    let end = bytes
-        .iter()
-        .rposition(|&b| b != b' ')
-        .map_or(start, |i| i + 1);
-    let text = bytes.get(start..end).unwrap_or_default();
-    Ok((!text.is_empty()).then(|| String::from_utf8_lossy(text).into_owned()))
+    Ok(clean_text(&bytes))
 }
 
 /// When the picture was taken, from the Exif IFD `exif`: its

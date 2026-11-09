@@ -38,10 +38,9 @@
 use std::io::{Read, Seek};
 use std::ops::Range;
 
-use super::types::{
-    ASCII, BYTE, IFD, LONG, RATIONAL, SHORT, SLONG, SRATIONAL, SSHORT, UNDEFINED, type_size,
-};
+use super::types::{ASCII, BYTE, IFD, LONG, RATIONAL, SHORT, SLONG, SRATIONAL, SSHORT, UNDEFINED};
 use super::{Block, skip_damage};
+use crate::entries::FieldType;
 use crate::error::{Error, Result};
 use crate::io::{ByteOrder, Source, within};
 use crate::limits::Limits;
@@ -80,19 +79,19 @@ pub(crate) struct Ifd {
 
 /// An entry of an [`Ifd`]: a field type that is known, and a value that lies
 /// inside the IFD's block and the file.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub(crate) struct Entry {
     tag: u16,
-    typ: u16,
+    field_type: FieldType,
     count: u32,
     /// The length of the value in bytes: `count` values of the size of
-    /// `typ`.
+    /// `field_type`.
     len: u32,
     value: Value,
 }
 
 /// Where the value of an [`Entry`] is.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 enum Value {
     /// In the entry's value field, as written: the first `len` bytes are the
     /// value, and `len` is at most 4.
@@ -294,11 +293,11 @@ pub(crate) fn ifd_in<R: Read + Seek>(
 fn parse_entry(raw: &[u8; 12], inside: &Block, order: ByteOrder) -> Option<Entry> {
     let [t0, t1, y0, y1, c0, c1, c2, c3, f0, f1, f2, f3] = *raw;
     let tag = order.u16([t0, t1]);
-    let typ = order.u16([y0, y1]);
+    let field_type = FieldType::from_code(order.u16([y0, y1]))?;
     let count = order.u32([c0, c1, c2, c3]);
     let field = [f0, f1, f2, f3];
 
-    let len = count.checked_mul(type_size(typ)?)?;
+    let len = count.checked_mul(field_type.size())?;
     let value = if len <= 4 {
         Value::Inline(field)
     } else {
@@ -310,7 +309,7 @@ fn parse_entry(raw: &[u8; 12], inside: &Block, order: ByteOrder) -> Option<Entry
     };
     Some(Entry {
         tag,
-        typ,
+        field_type,
         count,
         len,
         value,
@@ -369,10 +368,6 @@ impl Ifd {
     }
 
     /// The entries that can be read, in the order of the file.
-    #[cfg_attr(
-        not(test),
-        expect(dead_code, reason = "nothing reads this accessor yet")
-    )]
     pub(crate) fn entries(&self) -> &[Entry] {
         &self.entries
     }
@@ -409,7 +404,7 @@ impl Ifd {
     /// tag always mean the first occurrence, and a value reader would read
     /// that one.
     pub(crate) fn entry_of_type(&self, tag: u16, types: &[u16]) -> Option<&Entry> {
-        self.entry(tag).filter(|entry| types.contains(&entry.typ))
+        self.entry(tag).filter(|entry| types.contains(&entry.typ()))
     }
 
     /// The values of tag `tag`, widened to 32 bits, when its type is SHORT,
@@ -428,7 +423,7 @@ impl Ifd {
             return Ok(None);
         };
         let order = self.order;
-        let values = if entry.typ == SHORT {
+        let values = if entry.typ() == SHORT {
             let (shorts, _) = bytes.as_chunks::<2>();
             shorts.iter().map(|&v| u32::from(order.u16(v))).collect()
         } else {
@@ -644,27 +639,22 @@ impl Ifd {
     }
 }
 
-// The format readers read an entry's count, value offset and byte range,
-// which reads its value length; nothing reads its tag or its type yet.
-// Each `expect` fails the build once its accessor has a caller, so it is
-// then removed rather than left behind.
 impl Entry {
     /// The entry's tag.
-    #[cfg_attr(
-        not(test),
-        expect(dead_code, reason = "nothing reads this accessor yet")
-    )]
     pub(crate) fn tag(&self) -> u16 {
         self.tag
     }
 
-    /// The entry's field type, one of the types 1 to 13 or 129.
-    #[cfg_attr(
-        not(test),
-        expect(dead_code, reason = "nothing reads this accessor yet")
-    )]
+    /// The entry's field type.
+    pub(crate) fn field_type(&self) -> FieldType {
+        self.field_type
+    }
+
+    /// The code of the entry's field type, one of the types 1 to 13 or 129,
+    /// which the readers compare with the constants of
+    /// [`types`](super::types).
     pub(crate) fn typ(&self) -> u16 {
-        self.typ
+        self.field_type.code()
     }
 
     /// The number of values, as written.
@@ -700,7 +690,7 @@ impl Entry {
     /// The value of a kept entry lies inside its IFD's block and the file,
     /// so the range does too.
     pub(crate) fn byte_range(&self) -> Option<Range<u64>> {
-        if !matches!(self.typ, UNDEFINED | BYTE) {
+        if !matches!(self.typ(), UNDEFINED | BYTE) {
             return None;
         }
         let start = self.value_offset()?;
@@ -750,7 +740,10 @@ impl Entry {
 mod tests {
     use super::*;
     use crate::ErrorKind;
-    use crate::container::tiff::types::{DOUBLE, UTF8};
+    /// The code of field type DOUBLE, which no reader takes.
+    const DOUBLE: u16 = 12;
+    /// The code of field type UTF-8, which no reader takes.
+    const UTF8: u16 = 129;
     use crate::testing::{FAR, FailsFar};
     use crate::tiff_builder::{Built, IfdId, Order, RawValue, TiffBuilder};
     use std::io::Cursor;
@@ -1915,7 +1908,7 @@ mod tests {
             let built = builder.build();
             let (mut src, ifd, _) = read(order, &built, ifd);
             let [bytes, doubles, shorts] =
-                [0x0001, 0x0002, 0x0003].map(|tag| ifd.entry(tag).unwrap().clone());
+                [0x0001, 0x0002, 0x0003].map(|tag| *ifd.entry(tag).unwrap());
 
             // At the cap, read whole; a byte over it, refused at the value.
             assert_eq!(bytes.read(&mut src, 100).unwrap().len(), 100);
@@ -1940,7 +1933,7 @@ mod tests {
         let ifd = builder.ifd();
         builder.short(ifd, 0x0001, &[0x0102, 0x0304]);
         let (_, parsed, _) = read(Order::Little, &builder.build(), ifd);
-        let entry = parsed.entry(0x0001).unwrap().clone();
+        let entry = *parsed.entry(0x0001).unwrap();
         let mut empty = open(&[]);
         assert!(empty.bytes(0, 1).is_err());
         assert_eq!(entry.read(&mut empty, 0).unwrap(), [2, 1, 4, 3]);
@@ -2137,7 +2130,7 @@ mod tests {
         let block = Block::file(src.len());
         let (ifd, _) =
             parse_ifd(&mut src, &block, at, byte_order(order), &Limits::default()).unwrap();
-        ifd.entry(tag).cloned()
+        ifd.entry(tag).copied()
     }
 
     /// A file in byte order `order` whose IFD0 has one entry, of tag

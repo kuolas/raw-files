@@ -40,7 +40,7 @@ const BLOCKS: usize = 4;
 const SMALL_READ: u64 = 4096;
 
 /// The order of the bytes in a file's multi-byte values, set by its header.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub(crate) enum ByteOrder {
     /// Least significant byte first (TIFF `II`).
     Little,
@@ -62,6 +62,14 @@ impl ByteOrder {
         match self {
             ByteOrder::Little => u32::from_le_bytes(bytes),
             ByteOrder::Big => u32::from_be_bytes(bytes),
+        }
+    }
+
+    /// The value of these eight bytes in this order.
+    pub(crate) fn u64(self, bytes: [u8; 8]) -> u64 {
+        match self {
+            ByteOrder::Little => u64::from_le_bytes(bytes),
+            ByteOrder::Big => u64::from_be_bytes(bytes),
         }
     }
 }
