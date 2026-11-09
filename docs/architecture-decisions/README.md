@@ -31,6 +31,7 @@ Kuolas, who maintains raw-files.
 | [ADR020](adr020-each-crops-window-in-the-table.md) | Each crop's and JPEG size's window in the table | Folded into [ADR018](adr018-focus-points-placed-from-a-table-and-the-points-used.md) |
 | [ADR021](adr021-what-the-file-records-and-what-raw-files-reads-into-it.md) | What the file records and what raw-files reads into it | Accepted |
 | [ADR022](adr022-names-as-their-makers-write-them.md) | Names as their makers write them | Accepted |
+| [ADR023](adr023-every-entry-a-file-records.md) | Every entry a file records | Accepted |
 
 ## When to write one
 
