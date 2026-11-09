@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 //! The file handle on arbitrary bytes: opening, detection, the metadata,
-//! the focus point placed on a preview, the previews and reading each one.
+//! the focus point placed on a preview, the previews and reading each one,
+//! and the entries and reading each one's value.
 
 #![no_main]
 

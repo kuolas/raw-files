@@ -18,6 +18,7 @@ use std::io::{Cursor, Read, Seek};
 
 use crate::container::jpeg::{mpf, probe, segments};
 use crate::container::tiff::{Block, Tree, walk};
+use crate::entries::{Entries, Entry, Value};
 use crate::focus::{Focus, FocusLayout, FocusPoints};
 use crate::geometry::Size;
 use crate::io::Source;
@@ -44,13 +45,22 @@ pub fn tiff_walk(data: &[u8]) {
 }
 
 /// Reads every value of every IFD of `tree` through each accessor, as a
-/// number, as text and as bytes, whatever the tag and its type.
+/// number, as text and as bytes, whatever the tag and its type; then
+/// lists the tree's entries, as opening a file does, and reads and
+/// formats each one's value under the default cap.
 fn read_values<R: Read + Seek>(src: &mut Source<R>, tree: &Tree) {
     for (_, ifd) in tree.iter() {
         for tag in ifd.tags() {
             let _ = ifd.u32s(src, tag);
             let _ = ifd.ascii(src, tag);
             let _ = ifd.bytes(src, tag);
+        }
+    }
+    let cap = Limits::default().max_value_bytes();
+    for entry in &Entries::of_tree(tree) {
+        read_entry(entry);
+        if let Ok(value) = entry.read(src, cap) {
+            read_value(&value);
         }
     }
 }
@@ -129,8 +139,9 @@ pub fn jpeg_segments(data: &[u8]) {
 /// with the default options, then asks it everything the handle answers:
 /// its format, every value of its metadata, formatted as a caller would
 /// print it, its largest preview and the focus point and the focus points
-/// placed on it, the smallest preview at least 1 by 1, and the bytes of
-/// every preview, read into one buffer.
+/// placed on it, the smallest preview at least 1 by 1, the bytes of every
+/// preview, read into one buffer, and every entry, with its value read
+/// and formatted.
 ///
 /// Whatever `data` holds, this must return, never panic, and do so in
 /// bounded time and memory. What it reads is thrown away: an error is an
@@ -160,6 +171,38 @@ pub fn open(data: &[u8]) {
     for preview in file.previews().to_vec() {
         let _ = file.read_preview_into(&preview, &mut buf);
     }
+    let entries = file.entries().clone();
+    for directory in entries.directories() {
+        let _ = (directory.to_string(), entries.skipped(directory));
+        let _ = entries.in_directory(directory).count();
+    }
+    for entry in &entries {
+        read_entry(entry);
+        let _ = entries.entry(entry.directory(), entry.tag());
+        if let Ok(value) = file.read_value(entry) {
+            read_value(&value);
+        }
+    }
+}
+
+/// Asks `entry` for each of its values and its `Debug` form, as a caller
+/// listing it would.
+fn read_entry(entry: &Entry) {
+    let _ = entry.directory().to_string();
+    let _ = (entry.tag(), entry.name(), entry.count(), entry.value_len());
+    let _ = entry.field_type().to_string();
+    let _ = entry.byte_range();
+    let _ = format!("{entry:?}");
+}
+
+/// Asks `value` for each of its forms, as a caller showing it would: its
+/// type, its length, its bytes, its text and its `Debug` form.
+fn read_value(value: &Value) {
+    let _ = value.field_type();
+    let _ = (value.len(), value.is_empty());
+    let _ = value.bytes();
+    let _ = value.text();
+    let _ = format!("{value:?}");
 }
 
 /// Asks `metadata` for every value, and formats, reduces and converts

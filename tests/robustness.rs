@@ -123,7 +123,8 @@ use std::ops::Range;
 use std::panic;
 
 use raw_files::{
-    Focus, FocusLayout, FocusPoints, Metadata, Rational, RawFile, SignedRational, Size,
+    Entry, Focus, FocusLayout, FocusPoints, Metadata, Rational, RawFile, SignedRational, Size,
+    Value,
 };
 use support::arw::{ARW4_FULL_SIZE_JPEG, arw4_file, stub};
 use support::fixtures::{
@@ -508,20 +509,63 @@ impl<'a> Tiff<'a> {
 
 /// Opens `bytes` and, when that succeeds, reads everything a caller can
 /// read from the file: every value of its metadata, in every form the
-/// library gives it, and every preview. Returns whether the file opened.
+/// library gives it, every preview, and every entry with its value, shown.
+/// Returns whether the file opened.
 ///
-/// Reading a preview may fail; it must not panic.
+/// Reading a preview or an entry's value may fail; it must not panic.
 fn open_and_read_everything(bytes: &[u8]) -> bool {
     let Ok(mut file) = RawFile::from_bytes(bytes) else {
         return false;
     };
     let mut seen = String::new();
     show_metadata(file.metadata(), &mut seen);
-    black_box(seen);
     for preview in file.previews().to_vec() {
         let _ = black_box(file.read_preview(&preview));
     }
+    let entries = file.entries().clone();
+    for directory in entries.directories() {
+        let _ = write!(seen, "{directory} {}", entries.skipped(directory));
+    }
+    for entry in &entries {
+        show_entry(entry, &mut seen);
+        if let Ok(value) = file.read_value(entry) {
+            show_value(&value, &mut seen);
+        }
+    }
+    black_box(seen);
     true
+}
+
+/// Writes everything `entry` says of itself to `out`.
+fn show_entry(entry: &Entry, out: &mut String) {
+    let _ = write!(
+        out,
+        "{} {:#06X} {:?} {} {} {} {:?} {entry:?}",
+        entry.directory(),
+        entry.tag(),
+        entry.name(),
+        entry.field_type(),
+        entry.count(),
+        entry.value_len(),
+        entry.byte_range(),
+    );
+}
+
+/// Writes `value` to `out` in the forms the library gives it: its type,
+/// its length, its bytes' length and its text where it has them. The
+/// value itself goes to `black_box` rather than through `Debug`: a
+/// MakerNote's is a hundred kilobytes, written for every damaged copy.
+fn show_value(value: &Value, out: &mut String) {
+    let _ = write!(
+        out,
+        "{} {} {} {:?} {:?}",
+        value.field_type(),
+        value.len(),
+        value.is_empty(),
+        value.bytes().map(<[u8]>::len),
+        value.text(),
+    );
+    black_box(value);
 }
 
 /// Writes every value of `metadata` to `out`, through every getter and in
