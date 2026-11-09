@@ -525,6 +525,22 @@ mod tests {
     }
 
     #[test]
+    fn a_utf8_entry_counts_where_any_type_does_and_is_no_text() {
+        // Exif 3.0 lets a camera write its Make in UTF-8. Whether the typed
+        // values read such text is not decided: the Make is read as ASCII
+        // only, so a UTF-8 Make names no maker. A DNGVersion counts by its
+        // presence, of any type the IFD reader keeps, UTF-8 now among them.
+        let (mut src, tree) = testing::file(|builder, ifd| {
+            builder
+                .raw(ifd, MAKE, 129, 6, RawValue::Offset(512))
+                .raw(ifd, DNG_VERSION, 129, 1, RawValue::Inline([0; 4]))
+                .blob_at(512, b"NIKON\0");
+        });
+        assert!(!make_starts_with(&mut src, &tree, b"NIKON").unwrap());
+        assert!(is_dng(&tree));
+    }
+
+    #[test]
     fn a_file_without_a_dng_version_is_not_a_dng() {
         let (_, tree) = file("SONY");
         assert!(!is_dng(&tree));
