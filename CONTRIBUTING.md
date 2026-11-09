@@ -490,11 +490,11 @@ cargo +nightly fuzz run jpeg_segments fuzz/corpus/jpeg_segments fuzz/seeds/jpeg_
 ```
 
 The target `open`, which opens the input as a caller would and reads its
-metadata, its focus point placed on a preview, and every preview it finds,
-has seeds of its own, fixtures of the Nikon and Sony layouts, and takes
-the TIFF ones and the JPEG ones too, since a plain TIFF file and a JPEG
-file are also something it must open; libFuzzer takes several corpus
-directories:
+metadata, its focus point placed on a preview, every preview it finds,
+and every entry of its directories with its value, has seeds of its own,
+fixtures of the Nikon and Sony layouts, and takes the TIFF ones and the
+JPEG ones too, since a plain TIFF file and a JPEG file are also
+something it must open; libFuzzer takes several corpus directories:
 
 ```sh
 mkdir -p fuzz/corpus/open
