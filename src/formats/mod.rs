@@ -80,6 +80,7 @@ use crate::container::Structure;
 use crate::container::jpeg::Segments;
 use crate::container::tiff::Tree;
 use crate::container::tiff::tags::{DNG_VERSION, MAKE};
+use crate::entries::Entries;
 use crate::error::{Error, Result};
 use crate::format::Format;
 use crate::io::Source;
@@ -88,14 +89,21 @@ use crate::metadata::Metadata;
 use crate::preview::Preview;
 
 /// What a format's reader found in a file: its previews, in the order it
-/// found them, and its metadata. The file handle sorts the previews and
-/// keeps both.
+/// found them, its metadata and the entries of its directories. The file
+/// handle sorts the previews and keeps all three.
 pub(crate) struct Parsed {
     /// The file's embedded previews, unsorted.
     pub previews: Vec<Preview>,
     /// What the camera recorded about the picture, which a format reads
     /// from the same tree it reads the previews from.
     pub metadata: Metadata,
+    /// Every entry of every directory the reader walked, listed from the
+    /// same tree, which is walked once.
+    #[cfg_attr(
+        not(test),
+        expect(dead_code, reason = "the file handle keeps no entries yet")
+    )]
+    pub entries: Entries,
 }
 
 /// One format the crate can detect, as two functions over `S`, the
@@ -349,6 +357,7 @@ mod tests {
                 Orientation::NoTransforms,
             )],
             metadata: Metadata::default(),
+            entries: Entries::new(),
         }
     }
 

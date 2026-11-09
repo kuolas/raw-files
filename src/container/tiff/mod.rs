@@ -37,4 +37,4 @@ mod walk;
 pub(crate) use block::Block;
 pub(crate) use header::parse_header;
 pub(crate) use ifd::{Entry, Ifd, ifd_in, parse_ifd};
-pub(crate) use walk::{Tree, skip_damage, walk};
+pub(crate) use walk::{Location, Tree, skip_damage, walk};

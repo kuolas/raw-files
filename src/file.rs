@@ -173,6 +173,7 @@ impl<R: Read + Seek> RawFile<R> {
         let formats::Parsed {
             mut previews,
             metadata,
+            entries: _,
         } = parsed;
         preview::sort(&mut previews);
         Self {
@@ -327,6 +328,7 @@ impl<R> fmt::Debug for RawFile<R> {
 mod tests {
     use super::*;
     use crate::camera::Camera;
+    use crate::entries::Entries;
     use crate::error::ErrorKind;
     use crate::orientation::Orientation;
     use crate::preview::PreviewFormat;
@@ -356,6 +358,7 @@ mod tests {
         let parsed = formats::Parsed {
             previews,
             metadata: Metadata::default(),
+            entries: Entries::new(),
         };
         RawFile::from_parts(Source::new(reader).unwrap(), Format::Nef, parsed, limits)
     }
@@ -442,6 +445,7 @@ mod tests {
         let parsed = formats::Parsed {
             previews: Vec::new(),
             metadata: metadata.clone(),
+            entries: Entries::new(),
         };
         let file = RawFile::from_parts(
             Source::new(Cursor::new(bytes)).unwrap(),

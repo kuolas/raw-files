@@ -192,6 +192,7 @@ use super::tiff_previews::{self, Candidate};
 use super::{FormatSpec, JPEG_UNCLAIMED, Parsed, make_starts_with};
 use crate::container::jpeg::{Frame, Segments, mpf};
 use crate::container::tiff::{Tree, skip_damage, walk};
+use crate::entries::Entries;
 use crate::error::{Error, Result};
 use crate::format::Format;
 use crate::geometry::Size;
@@ -328,7 +329,14 @@ fn parse<R: Read + Seek>(
         PreviewFormat::Jpeg,
         metadata.orientation,
     ));
-    Ok(Parsed { previews, metadata })
+    // The entries of the same tree, walked once; none when the Exif
+    // segment does not walk, as it then gives no metadata.
+    let entries = tree.as_ref().map_or_else(Entries::new, Entries::of_tree);
+    Ok(Parsed {
+        previews,
+        metadata,
+        entries,
+    })
 }
 
 /// A maker whose MakerNote the JPEG reader reads, as IFD0's Make names it.
@@ -420,6 +428,7 @@ mod tests {
     use crate::container::tiff::tags::{
         COLOR_SPACE, INTEROP_INDEX, MAKE, MAKER_NOTE, METERING_MODE,
     };
+    use crate::entries::Directory;
     use crate::error::ErrorKind;
     use crate::jpeg_builder::JpegBuilder;
     use crate::testing::{FAR, FailsFar};
@@ -654,6 +663,47 @@ mod tests {
                 parsed.metadata.camera_settings.color_space, expected,
                 "Exif ColorSpace {exif_color_space}"
             );
+        }
+    }
+
+    #[test]
+    fn the_entries_are_those_of_the_exif_tree_or_none() {
+        let mut tiff = TiffBuilder::new(Order::Big);
+        let (ifd0, exif, interop, gps) = (tiff.ifd(), tiff.ifd(), tiff.ifd(), tiff.ifd());
+        tiff.ascii(ifd0, MAKE, "Canon")
+            .exif(ifd0, exif)
+            .gps(ifd0, gps)
+            .interop(exif, interop)
+            .short(exif, METERING_MODE, &[5])
+            .ascii(interop, INTEROP_INDEX, "R98")
+            .byte(gps, 0x0000, &[2, 3, 0, 0]);
+        let exif_bytes = tiff.build().bytes;
+        // Bytes that are not a TIFF header: the segment does not walk.
+        let not_tiff = b"no TIFF header here".to_vec();
+        for (segment, expected) in [
+            (
+                Some(&exif_bytes),
+                &[
+                    Directory::Ifd(0),
+                    Directory::Exif,
+                    Directory::Interop,
+                    Directory::Gps,
+                ][..],
+            ),
+            (Some(&not_tiff), &[]),
+            (None, &[]),
+        ] {
+            let mut builder = JpegBuilder::new();
+            if let Some(segment) = segment {
+                builder.exif(segment);
+            }
+            builder.frame(640, 480, 0xC0);
+            let (bytes, found) = read(&builder);
+            let mut src = Source::new(Cursor::new(bytes)).unwrap();
+            let parsed = parse(&mut src, &found, &Limits::default()).unwrap();
+            let directories: Vec<Directory> = parsed.entries.directories().collect();
+            assert_eq!(directories, expected, "{segment:?}");
+            assert_eq!(parsed.entries.is_empty(), expected.is_empty());
         }
     }
 }

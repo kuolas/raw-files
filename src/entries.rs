@@ -20,7 +20,7 @@ use std::fmt;
 use std::io::{Read, Seek};
 use std::ops::Range;
 
-use crate::container::tiff::{self, Ifd};
+use crate::container::tiff::{self, Ifd, Location, Tree};
 use crate::error::Result;
 use crate::io::{ByteOrder, Source};
 
@@ -539,7 +539,6 @@ struct Found {
 
 impl Entries {
     /// No entries, from no directory.
-    #[cfg_attr(not(test), expect(dead_code, reason = "nothing lists the entries yet"))]
     pub(crate) fn new() -> Self {
         Self {
             entries: Vec::new(),
@@ -547,10 +546,39 @@ impl Entries {
         }
     }
 
+    /// The entries of every directory of `tree`, in the order the walk
+    /// found them, each named by the link that led to it: the chain's by
+    /// their step along it, the SubIFDs numbered in the order they come,
+    /// and the Exif, GPS and Interoperability IFDs by their kind.
+    ///
+    /// An IFD the walk reached through two links is in the tree once, at
+    /// the first, and so is listed once, under that name.
+    pub(crate) fn of_tree(tree: &Tree) -> Self {
+        let mut entries = Self::new();
+        let mut subifds: u32 = 0;
+        for (location, ifd) in tree.iter() {
+            let directory = match location {
+                Location::Ifd0 => Directory::Ifd(0),
+                Location::Chain(step) => Directory::Ifd(step),
+                Location::Sub { .. } => {
+                    let directory = Directory::SubIfd(subifds);
+                    // At most `Limits::max_ifds` IFDs, a `u32`: this cannot
+                    // overflow.
+                    subifds = subifds.saturating_add(1);
+                    directory
+                }
+                Location::Exif => Directory::Exif,
+                Location::Gps => Directory::Gps,
+                Location::Interop => Directory::Interop,
+            };
+            entries.push(directory, ifd);
+        }
+        entries
+    }
+
     /// Adds the entries of `ifd`, a directory found as `directory`, after
     /// those of the directories added before, with the number its reader
     /// left out.
-    #[cfg_attr(not(test), expect(dead_code, reason = "nothing lists the entries yet"))]
     pub(crate) fn push(&mut self, directory: Directory, ifd: &Ifd) {
         let start = self.entries.len();
         let order = ifd.order();
@@ -637,7 +665,7 @@ impl<'a> IntoIterator for &'a Entries {
 mod tests {
     use super::*;
     use crate::ErrorKind;
-    use crate::container::tiff::{Block, parse_ifd};
+    use crate::container::tiff::{Block, parse_ifd, walk};
     use crate::limits::Limits;
     use crate::testing::assert_ordered;
     use crate::tiff_builder::{Built, IfdId, Order, RawValue, TiffBuilder};
@@ -1030,6 +1058,110 @@ mod tests {
             assert_eq!(entries.entry(Directory::Exif, 2), None, "{what}");
             assert_eq!(entries.entry(Directory::Interop, 1), None, "{what}");
         }
+    }
+
+    /// The entries of the TIFF file `built`, walked as a file is opened.
+    fn walked(built: &Built) -> Entries {
+        let mut src = source(&built.bytes);
+        let block = Block::file(src.len());
+        Entries::of_tree(&walk(&mut src, &block, &Limits::default()).unwrap())
+    }
+
+    /// The directories of `entries`, in order, each with the first value of
+    /// its tag 0x0100, which tells the test's IFDs apart.
+    fn directories_and_ids(entries: &Entries, built: &Built) -> Vec<(Directory, u16)> {
+        let mut src = source(&built.bytes);
+        entries
+            .directories()
+            .map(|directory| {
+                let id = match entries
+                    .entry(directory, 0x0100)
+                    .map(|e| e.read(&mut src, 64))
+                {
+                    Some(Ok(Value::Short(v))) => v.first().copied().unwrap_or(u16::MAX),
+                    _ => u16::MAX,
+                };
+                (directory, id)
+            })
+            .collect()
+    }
+
+    #[test]
+    fn a_tree_is_listed_in_walk_order_its_subifds_numbered_depth_first() {
+        for order in ORDERS {
+            // IFD0 with SubIFDs a and b, a with its own SubIFD c; its Exif
+            // and GPS IFDs; IFD1 with a SubIFD d; the Exif IFD's
+            // Interoperability IFD.
+            let mut builder = TiffBuilder::new(order);
+            let [ifd0, a, b, c, exif, gps, ifd1, d, interop] =
+                [0, 1, 2, 3, 4, 5, 6, 7, 8].map(|id| {
+                    let ifd = builder.ifd();
+                    builder.short(ifd, 0x0100, &[id]);
+                    ifd
+                });
+            builder.subifds(ifd0, &[a, b]).subifds(a, &[c]);
+            builder
+                .exif(ifd0, exif)
+                .gps(ifd0, gps)
+                .interop(exif, interop);
+            builder.next(ifd0, Some(ifd1)).subifds(ifd1, &[d]);
+            let built = builder.build();
+            let entries = walked(&built);
+            assert_eq!(
+                directories_and_ids(&entries, &built),
+                [
+                    (Directory::Ifd(0), 0),
+                    (Directory::SubIfd(0), 1),
+                    (Directory::SubIfd(1), 3),
+                    (Directory::SubIfd(2), 2),
+                    (Directory::Exif, 4),
+                    (Directory::Ifd(1), 6),
+                    (Directory::SubIfd(3), 7),
+                    (Directory::Interop, 8),
+                    (Directory::Gps, 5),
+                ],
+                "{order:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_gps_ifd_shared_with_the_chain_is_listed_once_in_the_chain() {
+        for order in ORDERS {
+            let mut builder = TiffBuilder::new(order);
+            let [ifd0, ifd1] = [0, 1].map(|id| {
+                let ifd = builder.ifd();
+                builder.short(ifd, 0x0100, &[id]);
+                ifd
+            });
+            builder.next(ifd0, Some(ifd1)).gps(ifd0, ifd1);
+            let built = builder.build();
+            let entries = walked(&built);
+            assert_eq!(
+                directories_and_ids(&entries, &built),
+                [(Directory::Ifd(0), 0), (Directory::Ifd(1), 1)],
+                "{order:?}"
+            );
+            assert_eq!(entries.in_directory(Directory::Gps).count(), 0);
+        }
+    }
+
+    #[test]
+    fn a_tree_lists_each_directorys_skipped_entries() {
+        let mut builder = TiffBuilder::new(Order::Little);
+        let (ifd0, exif) = (builder.ifd(), builder.ifd());
+        builder.exif(ifd0, exif).short(exif, 0x9207, &[5]);
+        builder
+            .raw(exif, 0x0001, 99, 1, RawValue::Inline([0; 4]))
+            .raw(exif, 0x0002, 3, 8, RawValue::Offset(0xFFFF_0000));
+        let entries = walked(&builder.build());
+        assert_eq!(entries.skipped(Directory::Ifd(0)), 0);
+        assert_eq!(entries.skipped(Directory::Exif), 2);
+        let tags: Vec<u16> = entries
+            .in_directory(Directory::Exif)
+            .map(Entry::tag)
+            .collect();
+        assert_eq!(tags, [0x9207]);
     }
 
     #[test]
