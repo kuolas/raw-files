@@ -99,8 +99,9 @@ impl Limits {
     }
 
     /// Sets how many bytes the value of one entry may take, which is the
-    /// most that `read_value` will allocate, in place of the cap set
-    /// before; [`max_value_bytes`](Self::max_value_bytes) reads it.
+    /// most that [`RawFile::read_value`](crate::RawFile::read_value) reads
+    /// into memory, in place of the cap set before;
+    /// [`max_value_bytes`](Self::max_value_bytes) reads it.
     #[must_use]
     pub fn with_max_value_bytes(mut self, n: u64) -> Self {
         self.max_value_bytes = n;
@@ -130,8 +131,9 @@ impl Limits {
     }
 
     /// How many bytes the value of one entry may take at most, which is
-    /// the most that `read_value` will allocate. A longer value fails only
-    /// its own read.
+    /// the most that [`RawFile::read_value`](crate::RawFile::read_value)
+    /// reads into memory; decoding a value of numbers holds as much again
+    /// while it runs. A longer value fails only its own read.
     ///
     /// The default holds every value measured on camera files, the largest
     /// a whole MakerNote of under 1,000,000 bytes.

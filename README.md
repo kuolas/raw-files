@@ -44,6 +44,12 @@ fuller RAW decoding is planned.
   instead of them, read in the same way: a JPEG's previews are the file
   itself and the smaller images it holds, and its metadata is the same,
   with the picture's size and no raw size.
+- **Every entry.** Every entry of the TIFF directories raw-files walks,
+  as the file records it: the IFDs, the SubIFDs, the Exif, GPS and
+  Interoperability IFDs and a JPEG's Multi-Picture index, each with its
+  directory, tag, type and count, its value read on request; a damaged
+  entry is left out and counted. The Nikon and Sony MakerNotes come
+  next.
 - **Not yet.** A shot through the viewfinder of a body without a table
   gives no focus point, nor does a Nikon mirrorless shot that records
   only a mask of the points used, a shot with a Sony body before the
@@ -398,7 +404,9 @@ Any other file, a DNG among them whatever its Make says, is refused with the
   inside its Exif or MPF segment costs what that segment holds, not the file.
 - The format comes from the file's content, never from its name.
 - Opening reads the structure and each preview's frame header through a block
-  cache, not the whole file; a preview's bytes are read only when asked for.
+  cache, not the whole file; a preview's bytes, and an entry's value, are
+  read only when asked for, an entry's value under `Limits`' cap for one
+  value.
 - Pure Rust with no dependencies and no `unsafe` code. There is no serde
   feature, since that would be a dependency: the getters return text,
   integers, booleans, enums whose `name` gives their text, and small

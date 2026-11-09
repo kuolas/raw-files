@@ -223,7 +223,7 @@ impl fmt::Display for FieldType {
 /// type, how many values it holds and where they lie.
 ///
 /// An `Entry` describes the value; it does not hold it.
-/// `RawFile::read_value` reads it. Like a
+/// [`RawFile::read_value`](crate::RawFile::read_value) reads it. Like a
 /// [`Preview`](crate::Preview), an entry is a small `Copy` value that only
 /// a file gives.
 ///
@@ -283,7 +283,6 @@ impl Entry {
     /// # Errors
     ///
     /// As for [`tiff::Entry::read`].
-    #[cfg_attr(not(test), expect(dead_code, reason = "nothing reads values yet"))]
     pub(crate) fn read<R: Read + Seek>(&self, src: &mut Source<R>, cap: u64) -> Result<Value> {
         let bytes = self.entry.read(src, cap)?;
         Ok(Value::decode(self.field_type(), self.order, bytes))
@@ -513,7 +512,7 @@ pub(crate) fn clean_text(bytes: &[u8]) -> Option<String> {
 /// directory, in the order it lists its entries, which need not be sorted
 /// by tag.
 ///
-/// `RawFile::entries` gives them. A tag that a
+/// [`RawFile::entries`](crate::RawFile::entries) gives them. A tag that a
 /// directory lists twice is listed twice; [`entry`](Self::entry) finds the
 /// first, as raw-files' own readers do.
 ///

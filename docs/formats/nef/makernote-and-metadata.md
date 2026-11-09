@@ -1695,10 +1695,11 @@ MakerNote out of the critical path:
 
 ## 12. The directories a file holds
 
-raw-files will give every entry of every TIFF directory it walks, as
-the file records it
-([ADR023](../../architecture-decisions/adr023-every-entry-a-file-records.md)).
-This section lists what NEF files hold: the directories, how many
+raw-files gives every entry of every TIFF directory it walks, as the
+file records it
+([ADR023](../../architecture-decisions/adr023-every-entry-a-file-records.md)):
+IFD0, the SubIFDs and the Exif and GPS IFDs; the MakerNote's
+directories are still to come. This section lists what NEF files hold: the directories, how many
 entries each has and of which types, the largest values, the entries a
 reader has to leave out, and the encrypted records. The tag names the
 view will give are in [the tag names](../tag-names.md).
@@ -1775,7 +1776,7 @@ with StripOffsets. **[F]**
 
 ### 12.3 Entries a reader leaves out
 
-The view will leave out a damaged entry and count it in its directory
+The view leaves out a damaged entry and counts it in its directory
 (ADR023). On the NEF files: **[F]**
 
 | Directory | What | Tags | Files, public / mine |
