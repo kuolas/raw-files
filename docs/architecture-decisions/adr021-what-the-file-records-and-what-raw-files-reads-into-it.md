@@ -109,8 +109,8 @@ Rejected:
 - Where each name comes from, and what evidence a table of names needs:
   a decision of its own.
 - Every entry a file records, with those raw-files does not name,
-  beside the typed values: whether raw-files gives such a view is a
-  question for full metadata (#50).
+  beside the typed values: a view of its own, which
+  [ADR023](adr023-every-entry-a-file-records.md) decides.
 - Which values are read into something of their own: each group of full
   metadata decides its own, by this rule.
 
