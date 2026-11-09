@@ -251,7 +251,10 @@ fn claims<R: Read + Seek>(_: &mut Source<R>, segments: &Segments) -> Result<bool
 /// header's size, which is the metadata's image size.
 /// The focus points, the primary among them, are kept only when their
 /// frame has the picture's shape ([`Size::same_shape`]); see the
-/// [module documentation](self).
+/// [module documentation](self). The entries are those of the Exif
+/// segment's tree, then those of the MakerNote's directories, Nikon's
+/// MakerNote IFD and PreviewIFD or Sony's MakerNote IFD
+/// ([`MakerNote::add_entries`]), then the MP Index IFD's.
 ///
 /// # Errors
 ///
@@ -312,9 +315,12 @@ fn parse<R: Read + Seek>(
         .focus_points
         .filter(|points| points.frame().same_shape(size));
     // The entries of the Exif segment's tree, walked once, none when it
-    // does not walk, as it then gives no metadata; then the MP Index IFD's,
-    // which the MPF segment holds apart from it.
+    // does not walk, as it then gives no metadata; then the MakerNote's;
+    // then the MP Index IFD's, which the MPF segment holds apart from it.
     let mut entries = tree.as_ref().map_or_else(Entries::new, Entries::of_tree);
+    if let Some(makernote) = &makernote {
+        makernote.add_entries(&mut entries);
+    }
     let index = match &segments.mpf {
         Some(block) => mpf::index(src, block, limits)?,
         None => None,
@@ -422,6 +428,16 @@ impl MakerNote {
             Some(Maker::Sony) => sony::read(src, tree, limits)?.map(MakerNote::Sony),
             None => None,
         })
+    }
+
+    /// Adds the MakerNote's directories to `entries`, as its maker's reader
+    /// lists them: Nikon's MakerNote IFD and PreviewIFD, Sony's MakerNote
+    /// IFD.
+    fn add_entries(&self, entries: &mut Entries) {
+        match self {
+            MakerNote::Nikon(makernote) => makernote.add_entries(entries),
+            MakerNote::Sony(makernote) => makernote.add_entries(entries),
+        }
     }
 }
 
@@ -741,6 +757,132 @@ mod tests {
             assert!(parsed.entries.entry(Directory::MpIndex, 0xB002).is_some());
             // The large thumbnail is still a preview.
             assert_eq!(parsed.previews.len(), 2, "Exif {with_exif}");
+        }
+    }
+
+    /// The MakerNote layouts the JPEG tests build into an Exif segment.
+    #[derive(Clone, Copy, Debug)]
+    enum Layout {
+        /// Nikon's, with a TIFF header of its own after `Nikon\0`, its
+        /// version and two NULs: a MakerNote IFD whose 0x0011 leads to a
+        /// PreviewIFD.
+        NikonEmbedded,
+        /// Nikon's of the early Coolpix bodies: a bare MakerNote IFD whose
+        /// offsets count from the segment's TIFF header, its block running
+        /// through its PreviewIFD.
+        NikonHeaderless,
+        /// Sony's, its IFD after the `SONY DSC` header, its offsets counted
+        /// from the segment's TIFF header.
+        Sony,
+    }
+
+    /// The four SHORTs the tests' MakerNote IFDs store out of line under
+    /// tag 0x0102, so that reading them back takes the right base.
+    const SHORTS: [u16; 4] = [10, 20, 30, 40];
+
+    /// The bytes of an Exif segment's TIFF structure in byte order
+    /// `order`, under IFD0's Make `make`, whose Exif IFD holds a MakerNote
+    /// of layout `layout`: an IFD of a SHORT under 0x0101 and [`SHORTS`]
+    /// under 0x0102, with, for Nikon, a PreviewIFD of one SHORT.
+    fn exif_with_makernote(order: Order, make: &str, layout: Layout) -> Vec<u8> {
+        let mut tiff = TiffBuilder::new(order);
+        let (ifd0, exif) = (tiff.ifd(), tiff.ifd());
+        tiff.ascii(ifd0, MAKE, make).exif(ifd0, exif);
+        tiff.short(exif, METERING_MODE, &[5]);
+        match layout {
+            Layout::NikonEmbedded => {
+                let mut inner = TiffBuilder::new(order);
+                let (makernote, preview) = (inner.ifd(), inner.ifd());
+                inner
+                    .short(makernote, 0x0101, &[7])
+                    .short(makernote, 0x0102, &SHORTS)
+                    .ifd_pointer(makernote, 0x0011, preview)
+                    .short(preview, 0x0103, &[6]);
+                let mut block = b"Nikon\0\x02\x11\0\0".to_vec();
+                block.extend_from_slice(&inner.build().bytes);
+                let blob = tiff.blob(&block);
+                tiff.undefined_blob(exif, MAKER_NOTE, blob);
+            }
+            Layout::NikonHeaderless => {
+                let (makernote, preview) = (tiff.ifd(), tiff.ifd());
+                tiff.short(makernote, 0x0101, &[7])
+                    .short(makernote, 0x0102, &SHORTS)
+                    .ifd_pointer(makernote, 0x0011, preview)
+                    .short(preview, 0x0103, &[6]);
+                let end = tiff.blob(&[0; 4]);
+                tiff.block_through(makernote, end)
+                    .undefined_ifd(exif, MAKER_NOTE, makernote);
+            }
+            Layout::Sony => {
+                let makernote = tiff.ifd();
+                tiff.prefix(makernote, b"SONY DSC \0\0\0")
+                    .short(makernote, 0x0101, &[7])
+                    .short(makernote, 0x0102, &SHORTS);
+                tiff.undefined_ifd(exif, MAKER_NOTE, makernote);
+            }
+        }
+        tiff.build().bytes
+    }
+
+    #[test]
+    fn a_makernotes_directories_come_after_the_exif_tree_and_before_the_mp_index() {
+        let nikon = [Directory::MakerNote, Directory::MakerNoteSub(0x0011)];
+        for order in [Order::Little, Order::Big] {
+            for (make, layout, makers) in [
+                ("NIKON CORPORATION", Layout::NikonEmbedded, &nikon[..]),
+                ("NIKON", Layout::NikonHeaderless, &nikon[..]),
+                ("SONY", Layout::Sony, &[Directory::MakerNote][..]),
+                // Another maker's Make: the MakerNote is the Exif entry's
+                // bytes alone.
+                ("Canon", Layout::Sony, &[][..]),
+            ] {
+                let mut builder = JpegBuilder::new();
+                // A comment first, so that the segment's TIFF header lies
+                // well into the file.
+                builder
+                    .segment(0xFE, &[0x20; 300])
+                    .exif(&exif_with_makernote(order, make, layout))
+                    .mpf(Order::Big)
+                    .mpf_image(640, 424, &[], 1);
+                let (bytes, found) = read(&builder);
+                let mut src = Source::new(Cursor::new(bytes)).unwrap();
+                let parsed = parse(&mut src, &found, &Limits::default()).unwrap();
+                let entries = &parsed.entries;
+                let mut expected = vec![Directory::Ifd(0), Directory::Exif];
+                expected.extend_from_slice(makers);
+                expected.push(Directory::MpIndex);
+                let what = format!("{order:?}, {make}, {layout:?}");
+                assert_eq!(
+                    entries.directories().collect::<Vec<_>>(),
+                    expected,
+                    "{what}"
+                );
+                if makers.is_empty() {
+                    continue;
+                }
+                let tags: Vec<u16> = entries
+                    .in_directory(Directory::MakerNote)
+                    .map(crate::Entry::tag)
+                    .collect();
+                let expected_tags: &[u16] = match layout {
+                    Layout::Sony => &[0x0101, 0x0102],
+                    _ => &[0x0011, 0x0101, 0x0102],
+                };
+                assert_eq!(tags, expected_tags, "{what}");
+                // Read from the base its layout counts from: the inner
+                // header, or the segment's TIFF header.
+                let shorts = entries.entry(Directory::MakerNote, 0x0102).unwrap();
+                assert_eq!(
+                    shorts.read(&mut src, 64).unwrap(),
+                    crate::Value::Short(SHORTS.to_vec()),
+                    "{what}"
+                );
+                if makers.len() == 2 {
+                    let preview = entries.entry(Directory::MakerNoteSub(0x0011), 0x0103);
+                    let value = preview.unwrap().read(&mut src, 64).unwrap();
+                    assert_eq!(value, crate::Value::Short(vec![6]), "{what}");
+                }
+            }
         }
     }
 }
