@@ -18,7 +18,7 @@
 //!   give and reads the image's width and height from it.
 //! - [`segments`] reads a JPEG file: it keeps the file's frame header, its
 //!   Exif segment and its MPF segment, the parts a reader of the file needs.
-//! - [`mpf::images`] reads the MPF segment's index: where the images the
+//! - [`mpf::index`] reads the MPF segment's index: where the images the
 //!   file holds after its first one lie, such as its large thumbnails.
 //!
 //! # Marker segments

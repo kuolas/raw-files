@@ -10,7 +10,8 @@
 //! and Table 9, pp. 30 to 31). A decoder reads the first image and stops
 //! at its EOI, so the others are found only through the index that the
 //! first image carries. They are previews of the file (ADR014), checked as
-//! every preview is; [`images`] says where they lie.
+//! every preview is; [`index`] says where they lie, and gives the MP
+//! Index IFD itself, whose entries the raw view lists.
 //!
 //! # Where the index lies
 //!
@@ -62,7 +63,7 @@
 //!
 //! # What is kept
 //!
-//! [`images`] gives, for each entry in the order of the value, the range
+//! [`index`] gives, for each entry in the order of the value, the range
 //! from the MP header's position plus the entry's offset, over the
 //! entry's size. It leaves out:
 //!
@@ -106,11 +107,11 @@
 //! Only a failure of the reader is an error. Whatever else the segment
 //! holds costs only the images it touches, as damage costs the MakerNote
 //! readers only their own block ([`skip_damage`]): an MP header that
-//! cannot be read, an MP Index IFD that cannot be read or has more entries
-//! than the limit allows, or an MPEntry that is missing, of a type other
-//! than UNDEFINED or of a length that is not a multiple of 16, so not laid
-//! out as entries, gives no images; an entry that cannot give a range
-//! gives none.
+//! cannot be read, or an MP Index IFD that cannot be read or has more
+//! entries than the limit allows, gives no index; an MPEntry that is
+//! missing, of a type other than UNDEFINED or of a length that is not a
+//! multiple of 16, so not laid out as entries, gives the index with no
+//! images; an entry that cannot give a range gives none.
 //!
 //! [`segments`]: super::segments
 
@@ -118,7 +119,7 @@ use std::io::{Read, Seek};
 use std::ops::Range;
 
 use crate::container::tiff::types::UNDEFINED;
-use crate::container::tiff::{Block, ifd_in, parse_header, skip_damage};
+use crate::container::tiff::{Block, Ifd, ifd_in, parse_header, skip_damage};
 use crate::error::Result;
 use crate::io::{ByteOrder, Source};
 use crate::limits::Limits;
@@ -132,39 +133,66 @@ const MP_ENTRY: u16 = 0xB002;
 /// bytes each, then two entry numbers of 2 bytes (DC-007 Figure 7, p. 13).
 const ENTRY_LEN: usize = 16;
 
-/// The byte ranges in the file of the images that the MPF index in `mpf`
-/// lists after the file's first image, in the order of their entries; see
-/// the [module documentation](self).
+/// The MPF index of a JPEG file, as [`index`] reads it.
+#[derive(Clone, Debug)]
+pub(crate) struct Index {
+    /// The MP Index IFD, read inside the MPF segment.
+    pub(crate) ifd: Ifd,
+    /// The byte ranges in the file of the images the index lists after the
+    /// file's first image, in the order of their entries.
+    pub(crate) images: Vec<Range<u64>>,
+}
+
+/// The MPF index in `mpf`: its MP Index IFD, and the byte ranges in the
+/// file of the images it lists after the file's first image, in the order
+/// of their entries; see the [module documentation](self).
 ///
 /// `mpf` is the block [`segments`](super::segments) gives: its base is the
 /// MP header, and its bounds run from there to the end of the MPF segment.
 /// A range may run past the end of the file, be empty, or hold no image:
-/// the preview finder checks each one, as every candidate. An index that
-/// does not hold together gives no ranges.
+/// the preview finder checks each one, as every candidate. An MP header or
+/// an MP Index IFD that cannot be read gives no index, and an MPEntry that
+/// does not hold together gives the index with no ranges.
 ///
 /// # Errors
 ///
 /// `Io` when the reader fails. Nothing the segment holds is an error.
-pub(crate) fn images<R: Read + Seek>(
+pub(crate) fn index<R: Read + Seek>(
     src: &mut Source<R>,
     mpf: &Block,
     limits: &Limits,
-) -> Result<Vec<Range<u64>>> {
+) -> Result<Option<Index>> {
     let Some(header) = skip_damage(parse_header(src, mpf))? else {
-        return Ok(Vec::new());
+        return Ok(None);
     };
-    let Some(index) = ifd_in(src, mpf, header.ifd0, header.order, limits)? else {
-        return Ok(Vec::new());
+    let Some(ifd) = ifd_in(src, mpf, header.ifd0, header.order, limits)? else {
+        return Ok(None);
     };
+    let images = listed_images(src, mpf, &ifd)?;
+    Ok(Some(Index { ifd, images }))
+}
+
+/// The ranges of the images that `ifd`, the MP Index IFD of `mpf`, lists
+/// after the file's first image; none when its MPEntry is missing, of a
+/// type its rule does not allow, or cannot be read.
+///
+/// # Errors
+///
+/// `Io` when the reader fails.
+fn listed_images<R: Read + Seek>(
+    src: &mut Source<R>,
+    mpf: &Block,
+    ifd: &Ifd,
+) -> Result<Vec<Range<u64>>> {
     // The value readers take BYTE as well as UNDEFINED; MPEntry's rule
     // allows UNDEFINED only.
-    if index.entry_of_type(MP_ENTRY, &[UNDEFINED]).is_none() {
+    if ifd.entry_of_type(MP_ENTRY, &[UNDEFINED]).is_none() {
         return Ok(Vec::new());
     }
-    let Some(value) = skip_damage(index.bytes(src, MP_ENTRY))?.flatten() else {
+    let Some(value) = skip_damage(ifd.bytes(src, MP_ENTRY))?.flatten() else {
         return Ok(Vec::new());
     };
-    Ok(ranges(mpf, header.order, &value))
+    Ok(ranges(mpf, ifd.order(), &value))
 }
 
 /// The ranges of the images that `value`, MPEntry's value in byte order
@@ -233,6 +261,16 @@ mod tests {
             .expect("a JPEG file")
             .mpf
             .expect("an MPF segment")
+    }
+
+    /// The images of the index in `mpf`, as [`index`] reads it within
+    /// `limits`: none when there is no index.
+    fn images<R: Read + Seek>(
+        src: &mut Source<R>,
+        mpf: &Block,
+        limits: &Limits,
+    ) -> Result<Vec<Range<u64>>> {
+        Ok(index(src, mpf, limits)?.map_or_else(Vec::new, |index| index.images))
     }
 
     /// The images of the file `bytes`, read within `limits`, from the MPF
@@ -468,6 +506,52 @@ mod tests {
             let mut builder = back_to_back(order);
             builder.mpf_entry_tag(0xB00F);
             assert_eq!(images_of(&builder.build().bytes), []);
+        }
+    }
+
+    #[test]
+    fn an_mp_entry_that_does_not_hold_together_still_gives_the_index() {
+        // The MP Index IFD holds MPFVersion, NumberOfImages and MPEntry:
+        // with MPEntry missing or of a type its rule does not allow, the
+        // index is still read, with its IFD and no images.
+        for order in ORDERS {
+            let mut missing = back_to_back(order);
+            missing.mpf_entry_tag(0xB00F);
+            let mut of_type_byte = back_to_back(order);
+            of_type_byte.mpf_entry_type(1);
+            for (case, builder) in [("missing", missing), ("BYTE", of_type_byte)] {
+                let bytes = builder.build().bytes;
+                let block = mpf_block(&bytes);
+                let mut src = Source::new(Cursor::new(&bytes[..])).unwrap();
+                let found = index(&mut src, &block, &Limits::default())
+                    .unwrap()
+                    .expect("the index");
+                assert!(found.images.is_empty(), "{case} ({order:?})");
+                let tags: Vec<u16> = found.ifd.entries().iter().map(|e| e.tag()).collect();
+                assert_eq!(tags.len(), 3, "{case} ({order:?})");
+                assert!(tags.contains(&0xB000), "{case} ({order:?})");
+            }
+        }
+    }
+
+    #[test]
+    fn an_mp_header_or_index_ifd_that_cannot_be_read_gives_no_index() {
+        for order in ORDERS {
+            let mut builder = back_to_back(order);
+            builder.mpf_header(*b"XX\0\x2A\0\0\0\x08");
+            let bytes = builder.build().bytes;
+            let block = mpf_block(&bytes);
+            let mut src = Source::new(Cursor::new(&bytes[..])).unwrap();
+            assert!(
+                index(&mut src, &block, &Limits::default())
+                    .unwrap()
+                    .is_none()
+            );
+            let limits = Limits::default().with_max_ifd_entries(2);
+            let bytes = back_to_back(order).build().bytes;
+            let block = mpf_block(&bytes);
+            let mut src = Source::new(Cursor::new(&bytes[..])).unwrap();
+            assert!(index(&mut src, &block, &limits).unwrap().is_none());
         }
     }
 
