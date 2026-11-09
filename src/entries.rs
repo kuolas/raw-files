@@ -47,6 +47,29 @@ use crate::io::{ByteOrder, Source};
 /// `Display` writes the name a viewer shows: "IFD0", "SubIFD0", "Exif",
 /// "GPS", "Interop", "MakerNote", "MakerNote 0x0011", "Private" and
 /// "MP Index".
+///
+/// # Examples
+///
+/// ```
+/// use raw_files::Directory;
+///
+/// /// The heading a viewer shows above a directory's entries.
+/// fn heading(directory: Directory) -> String {
+///     match directory {
+///         Directory::MakerNote | Directory::MakerNoteSub(_) => {
+///             format!("{directory} (the maker's own tags)")
+///         }
+///         _ => directory.to_string(),
+///     }
+/// }
+///
+/// assert_eq!(heading(Directory::Ifd(0)), "IFD0");
+/// assert_eq!(heading(Directory::SubIfd(2)), "SubIFD2");
+/// assert_eq!(
+///     heading(Directory::MakerNoteSub(0x0011)),
+///     "MakerNote 0x0011 (the maker's own tags)",
+/// );
+/// ```
 #[non_exhaustive]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Directory {
@@ -116,6 +139,22 @@ impl fmt::Display for Directory {
 /// `Display` writes the type's [`name`](Self::name) as the standards write
 /// it, such as "SHORT" or "UTF-8"; [`Ifd`](Self::Ifd), which none of the
 /// standards raw-files follows names, is "IFD".
+///
+/// # Examples
+///
+/// An entry's type and count give the length of its value, and whether it
+/// fits in the entry itself, four bytes, or lies elsewhere in the file:
+///
+/// ```
+/// use raw_files::FieldType;
+///
+/// let rational = FieldType::from_code(5).expect("code 5 is RATIONAL");
+/// assert_eq!(rational.to_string(), "RATIONAL");
+/// // Three RATIONALs, such as GPS latitude's degrees, minutes and
+/// // seconds, take 24 bytes: too many to fit in the entry.
+/// assert_eq!(3 * rational.size(), 24);
+/// assert_eq!(2 * FieldType::Short.size(), 4);
+/// ```
 #[non_exhaustive]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum FieldType {
@@ -264,6 +303,40 @@ impl fmt::Display for FieldType {
 /// Every entry listed has been checked when the file was opened: its type
 /// is one [`FieldType`] names, its length did not overflow, and its value
 /// lies inside the file.
+///
+/// # Examples
+///
+/// Describe the Exif IFD's MakerNote entry, and borrow its bytes, the
+/// maker's own block, from the file held in memory rather than read them
+/// again:
+///
+/// ```no_run
+/// use std::fs;
+///
+/// use raw_files::{Directory, RawFile};
+///
+/// fn main() -> raw_files::Result<()> {
+///     let bytes = fs::read("DSC_0001.NEF")?;
+///     let file = RawFile::from_bytes(&bytes)?;
+///     if let Some(entry) = file.entries().entry(Directory::Exif, 0x927C) {
+///         println!(
+///             "{} {} x {}",
+///             entry.name().unwrap_or("?"),
+///             entry.field_type(),
+///             entry.count(),
+///         );
+///         let block = entry.byte_range().and_then(|range| {
+///             let start = usize::try_from(range.start).ok()?;
+///             let end = usize::try_from(range.end).ok()?;
+///             bytes.get(start..end)
+///         });
+///         if let Some(block) = block {
+///             println!("{} bytes borrowed, none read", block.len());
+///         }
+///     }
+///     Ok(())
+/// }
+/// ```
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct Entry {
     directory: Directory,
@@ -345,6 +418,39 @@ impl Entry {
 /// [`text`](Self::text) cleans them.
 ///
 /// New variants may be added with new field types.
+///
+/// # Examples
+///
+/// A short form of a value, for a list of entries:
+///
+/// ```
+/// use raw_files::Value;
+///
+/// fn summary(value: &Value) -> String {
+///     if let Some(text) = value.text() {
+///         return text;
+///     }
+///     match value {
+///         Value::Short(numbers) => format!("{numbers:?}"),
+///         Value::Rational(pairs) => {
+///             let fractions: Vec<String> = pairs.iter().map(|(n, d)| format!("{n}/{d}")).collect();
+///             fractions.join(" ")
+///         }
+///         _ => match value.bytes() {
+///             Some(bytes) => format!("{} bytes", bytes.len()),
+///             None => format!("{} values", value.len()),
+///         },
+///     }
+/// }
+///
+/// let model = Value::Ascii(b"NIKON Z 9\0".to_vec());
+/// assert_eq!(summary(&model), "NIKON Z 9");
+/// assert_eq!(summary(&Value::Short(vec![1])), "[1]");
+/// // A zero denominator is kept, as the file records it.
+/// assert_eq!(summary(&Value::Rational(vec![(28, 10), (0, 0)])), "28/10 0/0");
+/// assert_eq!(summary(&Value::Undefined(vec![0; 6])), "6 bytes");
+/// assert_eq!(summary(&Value::Double(vec![0.5, 1.5])), "2 values");
+/// ```
 #[non_exhaustive]
 #[derive(Clone, Debug, PartialEq)]
 pub enum Value {
@@ -565,6 +671,29 @@ pub(crate) fn clean_text(bytes: &[u8]) -> Option<String> {
 ///
 /// An entry that could not be checked when the file was opened is left
 /// out, and [`skipped`](Self::skipped) counts it.
+///
+/// # Examples
+///
+/// Say how many entries each directory lists, and how many it left out:
+///
+/// ```no_run
+/// use raw_files::RawFile;
+///
+/// fn main() -> raw_files::Result<()> {
+///     let file = RawFile::open("DSC_0001.NEF")?;
+///     let entries = file.entries();
+///     // From a Z 9: "IFD0: 22 entries, 0 left out", then the SubIFDs, Exif
+///     // and the rest.
+///     for directory in entries.directories() {
+///         println!(
+///             "{directory}: {} entries, {} left out",
+///             entries.in_directory(directory).len(),
+///             entries.skipped(directory),
+///         );
+///     }
+///     Ok(())
+/// }
+/// ```
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Entries {
     entries: Vec<Entry>,

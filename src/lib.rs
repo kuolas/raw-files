@@ -192,10 +192,10 @@
 //!
 //! A program's tests can build every metadata value without a file,
 //! through the `with_…` methods of [`Metadata`], [`Camera`], [`Exposure`],
-//! [`Lens`], [`CameraSettings`], [`WhiteBalance`], [`FocusPoints`] and
-//! [`FocusPoint`], the constructors of [`FineTune`] and [`Flash`], and the
-//! checked constructors, such as [`DateTime::new`] and
-//! [`FocusLayout::new`]; [`Metadata`] shows how.
+//! [`Lens`], [`CameraSettings`], [`WhiteBalance`], [`Flash`], [`DateTime`],
+//! [`Focus`], [`FocusPoints`] and [`FocusPoint`], the constructors of
+//! [`FineTune`] and [`Flash`], and the checked constructors, such as
+//! [`DateTime::new`] and [`FocusLayout::new`]; [`Metadata`] shows how.
 //!
 //! Show how the camera was set ([`Metadata::camera_settings`]), as a
 //! viewer's information panel does; every setting is optional, and one the
@@ -248,6 +248,34 @@
 //! );
 //! ```
 //!
+//! List every entry of the maker's own directory, the MakerNote, as the
+//! file records it ([`RawFile::entries`]), though no standard names its
+//! tags; say how many entries could not be read; and read one standard
+//! entry's value ([`RawFile::read_value`]):
+//!
+//! ```no_run
+//! use raw_files::{Directory, RawFile};
+//!
+//! # fn main() -> raw_files::Result<()> {
+//! let mut file = RawFile::open("photo.nef")?;
+//! let entries = file.entries();
+//! for entry in entries.in_directory(Directory::MakerNote) {
+//!     println!("0x{:04X} {} x {}", entry.tag(), entry.field_type(), entry.count());
+//! }
+//! let left_out = entries.skipped(Directory::MakerNote);
+//! if left_out > 0 {
+//!     println!("{left_out} entries could not be read");
+//! }
+//! // IFD0's Model (tag 0x0110), as text.
+//! if let Some(model) = entries.entry(Directory::Ifd(0), 0x0110) {
+//!     if let Some(text) = file.read_value(&model)?.text() {
+//!         println!("Model: {text}");
+//!     }
+//! }
+//! # Ok(())
+//! # }
+//! ```
+//!
 //! Tell a raw file from the JPEG of the same shot by their names, before
 //! opening either, as a photo browser that shows the two as one picture
 //! does: [`Format::from_extension`] gives the format a name suggests, and
@@ -294,16 +322,16 @@
 //!   previews are the file itself and the images after the main one.
 //! - An untrusted file cannot make the library allocate or walk without
 //!   bound. [`Limits`] caps the directories visited, their entries, their
-//!   nesting and the size of a preview, with defaults that suit untrusted
-//!   input. A cap the walk cannot go on without (the first directory's
-//!   size, the total number of directories, a preview larger than allowed
-//!   when it is read) fails with
-//!   [`LimitExceeded`](ErrorKind::LimitExceeded). A directory past the first
-//!   that crosses a cap, or one nested deeper than allowed, is left out as a
-//!   damaged one is, so the file still opens with what was reachable. In a
-//!   JPEG file, a cap crossed inside its Exif or MPF segment, the first
-//!   directory's size included, costs what that segment holds, not the
-//!   file.
+//!   nesting, the size of a preview and that of an entry's value, with
+//!   defaults that suit untrusted input. A cap the walk cannot go on
+//!   without (the first directory's size, the total number of directories)
+//!   fails with [`LimitExceeded`](ErrorKind::LimitExceeded), and so does
+//!   reading a preview or an entry's value larger than allowed, which fails
+//!   that read alone. A directory past the first that crosses a cap, or one
+//!   nested deeper than allowed, is left out as a damaged one is, so the
+//!   file still opens with what was reachable. In a JPEG file, a cap
+//!   crossed inside its Exif or MPF segment, the first directory's size
+//!   included, costs what that segment holds, not the file.
 //! - The format comes from the file's content, never from its name. A
 //!   renamed file opens as what it is, and a DNG is refused the same way
 //!   even when its Make names Nikon or Sony. [`Format::from_extension`]
@@ -311,12 +339,17 @@
 //!   before opening anything.
 //! - Opening reads the structure and the frame header of each preview
 //!   through a block cache, a few blocks rather than the whole file, and a
-//!   preview's bytes only when asked for.
+//!   preview's bytes only when asked for. Listing the entries reads
+//!   nothing more; [`RawFile::read_value`] reads an entry's value each time
+//!   it is asked for.
 //! - The crate is pure Rust with no dependencies outside the standard
 //!   library, and it contains no `unsafe` code: it forbids it. So there is
 //!   no serde feature either: a caller that stores metadata serialises what
 //!   the getters return, which is text, integers, booleans, enums whose
-//!   `name` gives their text, and small structs of these.
+//!   `name` gives their text, and small structs of these; an
+//!   [`Orientation`] gives its Exif number, a [`PreviewFormat`] its MIME
+//!   type, a [`Directory`] its text through `Display`, and a [`Value`]
+//!   holds its numbers or bytes in a vector.
 //!
 //! # Formats
 //!

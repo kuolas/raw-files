@@ -104,13 +104,14 @@ ever complete for every body. What each gives so far:
 
 The public API is the file handle (`RawFile` and `Options`) with the
 preview types (`Preview`, `PreviewFormat`, `Orientation`, `Size`), the
-metadata types (`Metadata`, `Exposure`, `Lens`, `Point`, `DateTime`,
-`Rational` and `SignedRational`), the focus types (`Focus`,
-`FocusOrigin`, `FocusPoints`, `FocusPoint`, `FocusAreaMode`,
-`FocusLayout` and `FocusLayoutPoint`), the camera
-settings types (`CameraSettings`, `WhiteBalance`, `FineTune`, `Flash`,
-and the enums `WhiteBalanceMode`, `ExposureProgram`, `MeteringMode`,
-`FlashMode`, `Shutter`, `ImageArea`, `RawImageSize` and `ColorSpace`),
+metadata types (`Metadata`, `Camera`, `Make`, `Exposure`, `Lens`,
+`Point`, `DateTime`, `Rational` and `SignedRational`), the focus types
+(`Focus`, `FocusOrigin`, `FocusPoints`, `FocusPoint`, `FocusAreaMode`,
+`FocusLayout` and `FocusLayoutPoint`), the camera settings types
+(`CameraSettings`, `WhiteBalance`, `FineTune`, `Flash`, and the enums
+`WhiteBalanceMode`, `ExposureProgram`, `MeteringMode`, `FlashMode`,
+`Shutter`, `ImageArea`, `RawImageSize` and `ColorSpace`), the raw view's
+types (`Entries`, `Entry`, `Directory`, `FieldType` and `Value`),
 `Format`, `Error`, `ErrorKind`, `Result` and `Limits`.
 
 ## Formats

@@ -247,6 +247,33 @@ fn main() {
 }
 ```
 
+List every entry of the maker's own directory, the MakerNote, as the file
+records it, though no standard names its tags; say how many entries could
+not be read; and read one standard entry's value:
+
+```rust,no_run
+use raw_files::{Directory, RawFile};
+
+fn main() -> raw_files::Result<()> {
+    let mut file = RawFile::open("photo.nef")?;
+    let entries = file.entries();
+    for entry in entries.in_directory(Directory::MakerNote) {
+        println!("0x{:04X} {} x {}", entry.tag(), entry.field_type(), entry.count());
+    }
+    let left_out = entries.skipped(Directory::MakerNote);
+    if left_out > 0 {
+        println!("{left_out} entries could not be read");
+    }
+    // IFD0's Model (tag 0x0110), as text.
+    if let Some(model) = entries.entry(Directory::Ifd(0), 0x0110) {
+        if let Some(text) = file.read_value(&model)?.text() {
+            println!("Model: {text}");
+        }
+    }
+    Ok(())
+}
+```
+
 Tell a raw file from the JPEG of the same shot by their names, before
 opening either, as a photo browser that shows the two as one picture does:
 
@@ -293,12 +320,17 @@ the camera recorded the position or raw-files placed it from a table of
 the body's points. `Metadata::focus_points` gives the autofocus points the
 camera used, a `FocusPoints` of `FocusPoint`s with the primary among them
 and the `FocusAreaMode`, and `Metadata::focus_layout` the body's
-`FocusLayout` of `FocusLayoutPoint`s, where raw-files has its table. The
-`with_…` methods of `Metadata`, `Exposure`, `Lens`, `CameraSettings`,
-`WhiteBalance`, `FocusPoints` and `FocusPoint` and the constructors,
-such as `Focus::new` and `FocusLayout::new`, build every value without
-a file, for a program's tests. `Options` and `Limits` open
-an untrusted file with other caps. The API documentation is on
+`FocusLayout` of `FocusLayoutPoint`s, where raw-files has its table.
+`RawFile::entries` gives every entry of the TIFF directories raw-files
+walks, an `Entries` of `Entry`s, each with its `Directory`, tag,
+`FieldType` and count, and `RawFile::read_value` reads one's `Value`. The
+`with_…` methods of `Metadata`, `Camera`, `Exposure`, `Lens`,
+`CameraSettings`, `WhiteBalance`, `Flash`, `DateTime`, `Focus`,
+`FocusPoints` and `FocusPoint` and the constructors, such as
+`Focus::new` and `FocusLayout::new`, build every metadata value without
+a file, for a program's tests; an `Entry` comes only from a file.
+`Options` and `Limits` open an untrusted file with other caps. The API
+documentation is on
 [docs.rs](https://docs.rs/raw-files).
 
 ## Formats
@@ -405,13 +437,16 @@ Any other file, a DNG among them whatever its Make says, is refused with the
   inside its Exif or MPF segment costs what that segment holds, not the file.
 - The format comes from the file's content, never from its name.
 - Opening reads the structure and each preview's frame header through a block
-  cache, not the whole file; a preview's bytes, and an entry's value, are
-  read only when asked for, an entry's value under `Limits`' cap for one
+  cache, not the whole file; a preview's bytes are read only when asked
+  for. Listing the entries reads nothing more; `read_value` reads an
+  entry's value each time it is asked for, under `Limits`' cap for one
   value.
 - Pure Rust with no dependencies and no `unsafe` code. There is no serde
   feature, since that would be a dependency: the getters return text,
   integers, booleans, enums whose `name` gives their text, and small
-  structs of these.
+  structs of these; `Orientation` gives its Exif number,
+  `PreviewFormat` its MIME type, `Directory` its text through `Display`,
+  and `Value` holds its numbers or bytes in a vector.
 
 Pure Rust means no C or C++ library to build, link or ship, on macOS, Linux
 and Windows alike.
