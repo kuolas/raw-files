@@ -1742,11 +1742,11 @@ raw-files gives every entry of every TIFF directory it walks, as the
 file records it
 ([ADR023](../../architecture-decisions/adr023-every-entry-a-file-records.md)):
 IFD0 and the directories chained after it, the SubIFD and the Exif, GPS
-and Interoperability IFDs; the MakerNote's and SR2Private's are still
-to come. This section lists what ARW-family files hold: the directories, how
-many entries each has and of which types, the largest values, the
+and Interoperability IFDs; the MakerNote's and SR2Private's are still to
+come. This section lists what ARW-family files hold: the directories,
+how many entries each has and of which types, the largest values, the
 entries a reader has to leave out, and the enciphered records. The tag
-names the view will give are in [the tag names](../tag-names.md).
+names the view gives are in [the tag names](../tag-names.md).
 
 The numbers were taken on 3 November 2026 with a walker of my own,
 written from the TIFF 6.0 and Exif standards and these notes, and with

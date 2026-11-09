@@ -587,11 +587,11 @@ file records it
 ([ADR023](../../architecture-decisions/adr023-every-entry-a-file-records.md)):
 in a JPEG, the directories of the Exif segment (section 4) and the
 Multi-Picture Format's index IFD (section 7); the MakerNote's, in the
-layouts raw-files reads (section 10), are still to come. This section lists what
-camera JPEGs hold: the directories, how many entries each has and of
-which types, the largest values, the entries a reader has to leave out,
-and the encrypted and enciphered records. The tag names the view will
-give are in [the tag names](../tag-names.md).
+layouts raw-files reads (section 10), are still to come. This section
+lists what camera JPEGs hold: the directories, how many entries each has
+and of which types, the largest values, the entries a reader has to
+leave out, and the encrypted and enciphered records. The tag names the
+view gives are in [the tag names](../tag-names.md).
 
 The numbers were taken on 3 November 2026 with a walker of my own,
 written from the TIFF 6.0 and Exif standards and these notes, and with

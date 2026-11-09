@@ -1698,11 +1698,12 @@ MakerNote out of the critical path:
 raw-files gives every entry of every TIFF directory it walks, as the
 file records it
 ([ADR023](../../architecture-decisions/adr023-every-entry-a-file-records.md)):
-IFD0, the SubIFDs and the Exif and GPS IFDs; the MakerNote's
-directories are still to come. This section lists what NEF files hold: the directories, how many
-entries each has and of which types, the largest values, the entries a
-reader has to leave out, and the encrypted records. The tag names the
-view will give are in [the tag names](../tag-names.md).
+IFD0, the SubIFDs and the Exif and GPS IFDs; the MakerNote's directories
+are still to come. This section lists what NEF files hold: the
+directories, how many entries each has and of which types, the largest
+values, the entries a reader has to leave out, and the encrypted
+records. The tag names the view gives are in
+[the tag names](../tag-names.md).
 
 The numbers were taken on 3 November 2026 with a walker of my own,
 written from the TIFF 6.0 and Exif standards and these notes, and with

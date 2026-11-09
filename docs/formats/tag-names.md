@@ -1,13 +1,13 @@
 # Tag names
 
 Every entry of a TIFF directory is a tag number, a type, a count and a
-value. raw-files will give every entry it walks, as the file records it
+value. raw-files gives every entry it walks, as the file records it
 ([ADR023](../architecture-decisions/adr023-every-entry-a-file-records.md)),
 and a name for an entry's tag where a published standard gives that tag
 a name in that kind of directory. This page records every such name,
 with the document and the place in it that gives the name, and the
-field types the entries can have. The table of names in the code will
-be written from this page and from nothing else
+field types the entries can have. The table of names in the code is
+written from this page and from nothing else
 ([ADR013](../architecture-decisions/adr013-clean-room-and-third-party-code.md)).
 
 Where this page says *my own* files, it is me, Alvaro Kuolas, who
@@ -116,11 +116,12 @@ Exif uses eight of them (1 to 5, 7, 9 and 10) and adds one of its own
 - **No file writes it.** None of the 18,464 files walked for the raw
   view on 3 November 2026 has an entry of type 129.
 - **Type 13, an IFD, is in neither document.** raw-files already
-  accepts it for the SubIFDs tag, and the view will read it as a type
-  of its own
+  accepts it for the SubIFDs tag, and the view reads it as a type of
+  its own
   ([ADR023](../architecture-decisions/adr023-every-entry-a-file-records.md));
-  but no document read defines it, so this page gives it no name.
-  None of those 18,464 files has an entry of type 13.
+  but no document read defines it, so this page gives it no name. The
+  view writes it as "IFD", raw-files' own word for it, not a
+  document's. None of those 18,464 files has an entry of type 13.
 
 ## 3. The IFD chain and the SubIFDs
 
@@ -425,7 +426,7 @@ give such entries by number only.
 
 These tags were found in the standard directories (section 1 gives the
 files and the date) and are named by none of the documents read, so
-raw-files will give them by number only. A tag a document names in one
+raw-files gives them by number only. A tag a document names in one
 kind of directory has no name in another. "Public" and "mine" are file
 counts per format.
 
