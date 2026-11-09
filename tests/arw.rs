@@ -27,7 +27,8 @@ use support::arw::{
 };
 use support::samples::{
     Jpeg, Sample, SampleEntries, SampleFineTune, SampleFocus, SampleLens, SampleMetadata,
-    SampleSettings, SerialShape, check, check_entries, check_metadata, listed, sizes,
+    SampleSettings, SerialShape, check, check_enciphered, check_entries, check_metadata, listed,
+    sizes,
 };
 use support::tiff_builder::{BlobId, Built, Order};
 
@@ -3928,5 +3929,13 @@ const ENTRIES: &[SampleEntries] = &[
 fn every_samples_entries_are_its_directories_with_their_counts() {
     for expected in ENTRIES {
         check_entries(expected);
+    }
+}
+
+#[test]
+fn an_enciphered_record_is_given_byte_for_byte() {
+    // Tag 0x9050, which Sony enciphers whole by its substitution cipher.
+    if let Some(bytes) = check_enciphered("sony-ilce-7m4-lossless-l.arw", 0x9050) {
+        assert!(!bytes.is_empty());
     }
 }

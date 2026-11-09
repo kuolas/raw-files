@@ -61,7 +61,8 @@ use support::nef::{
 };
 use support::samples::{
     Jpeg, Sample, SampleEntries, SampleFineTune, SampleFocus, SampleLens, SampleMetadata,
-    SampleSettings, SerialShape, check, check_entries, check_metadata, listed, sizes,
+    SampleSettings, SerialShape, check, check_enciphered, check_entries, check_metadata, listed,
+    sizes,
 };
 use support::tiff_builder::{Built, Order};
 
@@ -5587,5 +5588,15 @@ const ENTRIES: &[SampleEntries] = &[
 fn every_samples_entries_are_its_directories_with_their_counts() {
     for expected in ENTRIES {
         check_entries(expected);
+    }
+}
+
+#[test]
+fn an_enciphered_record_is_given_byte_for_byte() {
+    // ShotInfo (0x0091), which Nikon enciphers past its four-digit version
+    // on versions 02xx and 08xx; the Z 9 writes 0805, which stays plain.
+    if let Some(bytes) = check_enciphered("nikon-z9-lossless.nef", 0x0091) {
+        assert_eq!(bytes.get(..4), Some(&b"0805"[..]));
+        assert_eq!(bytes.len(), 62_151);
     }
 }

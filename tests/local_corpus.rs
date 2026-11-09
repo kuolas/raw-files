@@ -70,11 +70,11 @@
 //! or a point's number.
 //!
 //! For the entries of the files' directories, it counts, for each
-//! directory, by the name the library gives it, such as "Exif" or
-//! "SubIFD1", how many files have it and how many entries it lists and
-//! leaves out over them, and how many entries have each field type, by
-//! its name, such as "SHORT"; and it reads every entry's value. It never
-//! prints a tag or a value.
+//! directory, by the name the library gives it, such as "Exif",
+//! "SubIFD1" or "MakerNote 0x0011", how many files have it and how many
+//! entries it lists and leaves out over them, and how many entries have
+//! each field type, by its name, such as "SHORT"; and it reads every
+//! entry's value. It never prints a tag or a value.
 //!
 //! It fails when the folder cannot be read or holds no file of a format
 //! raw-files reads, and otherwise unless every entry of the folder could be

@@ -638,3 +638,43 @@ pub fn check_entries(expected: &SampleEntries) {
         assert!(serial.count() > 0, "{label}: serial");
     }
 }
+
+/// Checks that the entry of `tag` in the MakerNote of the sample `name`,
+/// a record its maker enciphers, is a plain UNDEFINED entry, lying inside
+/// the MakerNote's bytes, whose value the raw view gives byte for byte as
+/// the file stores it, neither marked nor deciphered (ADR023); returns
+/// those bytes, or `None` when the sample has not been downloaded. That
+/// the offset counts from the right base the unit tests check, and the
+/// sample metadata tests, which read the same MakerNote IFD.
+pub fn check_enciphered(name: &str, tag: u16) -> Option<Vec<u8>> {
+    let path = path(name)?;
+    let stored = std::fs::read(&path).unwrap();
+    let mut file = RawFile::open(&path).unwrap();
+    let entry = file
+        .entries()
+        .entry(Directory::MakerNote, tag)
+        .unwrap_or_else(|| panic!("{name}: no MakerNote entry {tag:#06X}"));
+    assert_eq!(entry.field_type(), FieldType::Undefined, "{name}");
+    let range = entry.byte_range().expect("stored out of line");
+    // Inside the MakerNote's own bytes, the Exif IFD's 0x927C entry's
+    // value, which the standard walk located apart from the MakerNote's
+    // reader: a base counted wrongly would most likely leave them.
+    let makernote = file
+        .entries()
+        .entry(Directory::Exif, 0x927C)
+        .and_then(|entry| entry.byte_range())
+        .expect("the MakerNote's bytes");
+    assert!(
+        makernote.start <= range.start && range.end <= makernote.end,
+        "{name}: {range:?} outside the MakerNote, {makernote:?}"
+    );
+    let range = usize::try_from(range.start).unwrap()..usize::try_from(range.end).unwrap();
+    let value = file.read_value(&entry).unwrap();
+    assert_eq!(value.bytes(), stored.get(range), "{name}");
+    assert_eq!(
+        value.len(),
+        usize::try_from(entry.count()).unwrap(),
+        "{name}"
+    );
+    value.bytes().map(<[u8]>::to_vec)
+}
