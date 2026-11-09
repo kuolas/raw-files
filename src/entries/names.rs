@@ -29,6 +29,8 @@ pub(super) fn name(directory: Directory, tag: u16) -> Option<&'static str> {
         Directory::Gps => GPS,
         Directory::Interop => INTEROP,
         Directory::MpIndex => MP_INDEX,
+        // A maker's own directories: no standard names their tags.
+        Directory::MakerNote | Directory::MakerNoteSub(_) | Directory::Private => return None,
     };
     let at = table.binary_search_by_key(&tag, |&(tag, _)| tag).ok()?;
     table.get(at).map(|&(_, name)| name)
@@ -347,6 +349,13 @@ mod tests {
             (Directory::SubIfd(0), 0xC7D5),
             (Directory::Ifd(0), 0xC61D),
             (Directory::MpIndex, 0xB005),
+            // A maker's directories, whatever the tag: not even one a
+            // standard names elsewhere, as Make in IFD0.
+            (Directory::MakerNote, 0x010F),
+            (Directory::MakerNote, 0x0011),
+            (Directory::MakerNoteSub(0x0011), 0x0201),
+            (Directory::Private, 0x7200),
+            (Directory::Private, 0x0100),
         ] {
             assert_eq!(name(directory, tag), None, "{directory} {tag:#06X}");
         }

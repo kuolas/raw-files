@@ -5099,11 +5099,12 @@ fn the_sample_list_and_the_tables_of_previews_metadata_and_entries_name_the_same
 }
 
 /// The entries of every Nikon sample, each directory in the order the
-/// reader finds it with its entries listed and left out. The counts were
+/// reader finds it with its entries listed and left out, the MakerNote IFD
+/// and its PreviewIFD after the standard directories. The counts were
 /// checked on 9 November 2026 against a walker of my own, written from the
 /// TIFF 6.0 and Exif standards and the format notes, which found the same
 /// directories with the same number of entries in each, though it lists
-/// IFD1 before the SubIFDs.
+/// some in another order.
 const ENTRIES: &[SampleEntries] = &[
     SampleEntries {
         file: "nikon-z9-lossless.nef",
@@ -5117,6 +5118,8 @@ const ENTRIES: &[SampleEntries] = &[
             ("SubIFD5", 14, 0),
             ("Exif", 41, 0),
             ("GPS", 11, 0),
+            ("MakerNote", 73, 0),
+            ("MakerNote 0x0011", 7, 0),
         ],
     },
     SampleEntries {
@@ -5131,6 +5134,8 @@ const ENTRIES: &[SampleEntries] = &[
             ("SubIFD5", 14, 0),
             ("Exif", 41, 0),
             ("GPS", 11, 0),
+            ("MakerNote", 72, 0),
+            ("MakerNote 0x0011", 7, 0),
         ],
     },
     SampleEntries {
@@ -5145,6 +5150,8 @@ const ENTRIES: &[SampleEntries] = &[
             ("SubIFD5", 14, 0),
             ("Exif", 41, 0),
             ("GPS", 11, 0),
+            ("MakerNote", 72, 0),
+            ("MakerNote 0x0011", 7, 0),
         ],
     },
     SampleEntries {
@@ -5154,6 +5161,8 @@ const ENTRIES: &[SampleEntries] = &[
             ("SubIFD0", 17, 0),
             ("Exif", 18, 0),
             ("GPS", 1, 0),
+            ("MakerNote", 27, 0),
+            ("MakerNote 0x0011", 7, 0),
         ],
     },
     SampleEntries {
@@ -5163,6 +5172,8 @@ const ENTRIES: &[SampleEntries] = &[
             ("SubIFD0", 17, 0),
             ("Exif", 18, 0),
             ("GPS", 1, 0),
+            ("MakerNote", 28, 0),
+            ("MakerNote 0x0011", 7, 0),
         ],
     },
     SampleEntries {
@@ -5172,11 +5183,19 @@ const ENTRIES: &[SampleEntries] = &[
             ("SubIFD0", 17, 0),
             ("Exif", 18, 0),
             ("GPS", 1, 0),
+            ("MakerNote", 27, 0),
+            ("MakerNote 0x0011", 7, 0),
         ],
     },
     SampleEntries {
         file: "nikon-d100-12bit-uncompressed.nef",
-        directories: &[("IFD0", 24, 0), ("SubIFD0", 17, 0), ("Exif", 32, 0)],
+        directories: &[
+            ("IFD0", 24, 0),
+            ("SubIFD0", 17, 0),
+            ("Exif", 32, 0),
+            ("MakerNote", 32, 0),
+            ("MakerNote 0x0011", 7, 0),
+        ],
     },
     SampleEntries {
         file: "nikon-d70-12bit-lossy.nef",
@@ -5185,6 +5204,8 @@ const ENTRIES: &[SampleEntries] = &[
             ("SubIFD0", 8, 0),
             ("SubIFD1", 18, 0),
             ("Exif", 31, 0),
+            ("MakerNote", 43, 0),
+            ("MakerNote 0x0011", 7, 0),
         ],
     },
     SampleEntries {
@@ -5195,6 +5216,8 @@ const ENTRIES: &[SampleEntries] = &[
             ("SubIFD1", 17, 0),
             ("Exif", 32, 0),
             ("GPS", 1, 0),
+            ("MakerNote", 54, 0),
+            ("MakerNote 0x0011", 7, 0),
         ],
     },
     SampleEntries {
@@ -5205,6 +5228,8 @@ const ENTRIES: &[SampleEntries] = &[
             ("SubIFD1", 17, 0),
             ("Exif", 32, 0),
             ("GPS", 1, 0),
+            ("MakerNote", 52, 0),
+            ("MakerNote 0x0011", 7, 0),
         ],
     },
     SampleEntries {
@@ -5215,6 +5240,8 @@ const ENTRIES: &[SampleEntries] = &[
             ("SubIFD1", 17, 0),
             ("Exif", 31, 0),
             ("GPS", 1, 0),
+            ("MakerNote", 54, 0),
+            ("MakerNote 0x0011", 7, 0),
         ],
     },
     SampleEntries {
@@ -5225,6 +5252,8 @@ const ENTRIES: &[SampleEntries] = &[
             ("SubIFD1", 17, 0),
             ("Exif", 33, 0),
             ("GPS", 1, 0),
+            ("MakerNote", 57, 0),
+            ("MakerNote 0x0011", 7, 0),
         ],
     },
     SampleEntries {
@@ -5236,6 +5265,8 @@ const ENTRIES: &[SampleEntries] = &[
             ("SubIFD2", 8, 0),
             ("Exif", 33, 0),
             ("GPS", 1, 0),
+            ("MakerNote", 65, 0),
+            ("MakerNote 0x0011", 7, 0),
         ],
     },
     SampleEntries {
@@ -5247,6 +5278,8 @@ const ENTRIES: &[SampleEntries] = &[
             ("SubIFD2", 8, 0),
             ("Exif", 33, 0),
             ("GPS", 1, 0),
+            ("MakerNote", 64, 0),
+            ("MakerNote 0x0011", 7, 0),
         ],
     },
     SampleEntries {
@@ -5258,6 +5291,8 @@ const ENTRIES: &[SampleEntries] = &[
             ("SubIFD2", 8, 0),
             ("Exif", 36, 0),
             ("GPS", 1, 0),
+            ("MakerNote", 76, 0),
+            ("MakerNote 0x0011", 7, 0),
         ],
     },
     SampleEntries {
@@ -5269,6 +5304,8 @@ const ENTRIES: &[SampleEntries] = &[
             ("SubIFD2", 8, 0),
             ("Exif", 40, 0),
             ("GPS", 1, 0),
+            ("MakerNote", 75, 0),
+            ("MakerNote 0x0011", 7, 0),
         ],
     },
     SampleEntries {
@@ -5282,6 +5319,8 @@ const ENTRIES: &[SampleEntries] = &[
             ("SubIFD4", 17, 0),
             ("Exif", 40, 0),
             ("GPS", 1, 0),
+            ("MakerNote", 76, 0),
+            ("MakerNote 0x0011", 7, 0),
         ],
     },
     SampleEntries {
@@ -5296,6 +5335,8 @@ const ENTRIES: &[SampleEntries] = &[
             ("SubIFD5", 14, 0),
             ("Exif", 41, 0),
             ("GPS", 1, 0),
+            ("MakerNote", 79, 0),
+            ("MakerNote 0x0011", 7, 0),
         ],
     },
     SampleEntries {
@@ -5310,6 +5351,8 @@ const ENTRIES: &[SampleEntries] = &[
             ("SubIFD5", 14, 0),
             ("Exif", 41, 0),
             ("GPS", 1, 0),
+            ("MakerNote", 81, 0),
+            ("MakerNote 0x0011", 7, 0),
         ],
     },
     SampleEntries {
@@ -5324,6 +5367,8 @@ const ENTRIES: &[SampleEntries] = &[
             ("SubIFD5", 14, 0),
             ("Exif", 41, 0),
             ("GPS", 1, 0),
+            ("MakerNote", 81, 0),
+            ("MakerNote 0x0011", 7, 0),
         ],
     },
     SampleEntries {
@@ -5338,6 +5383,8 @@ const ENTRIES: &[SampleEntries] = &[
             ("SubIFD5", 14, 0),
             ("Exif", 41, 0),
             ("GPS", 1, 0),
+            ("MakerNote", 81, 0),
+            ("MakerNote 0x0011", 7, 0),
         ],
     },
     SampleEntries {
@@ -5348,6 +5395,8 @@ const ENTRIES: &[SampleEntries] = &[
             ("SubIFD1", 17, 0),
             ("Exif", 33, 0),
             ("GPS", 1, 0),
+            ("MakerNote", 54, 0),
+            ("MakerNote 0x0011", 7, 0),
         ],
     },
     SampleEntries {
@@ -5358,6 +5407,8 @@ const ENTRIES: &[SampleEntries] = &[
             ("SubIFD1", 17, 0),
             ("Exif", 30, 0),
             ("GPS", 13, 0),
+            ("MakerNote", 56, 0),
+            ("MakerNote 0x0011", 7, 0),
         ],
     },
     SampleEntries {
@@ -5367,6 +5418,8 @@ const ENTRIES: &[SampleEntries] = &[
             ("SubIFD0", 18, 0),
             ("SubIFD1", 18, 0),
             ("Exif", 13, 0),
+            ("MakerNote", 22, 0),
+            ("MakerNote 0x0011", 7, 0),
         ],
     },
     SampleEntries {
@@ -5376,6 +5429,8 @@ const ENTRIES: &[SampleEntries] = &[
             ("SubIFD0", 8, 0),
             ("SubIFD1", 17, 0),
             ("Exif", 33, 0),
+            ("MakerNote", 47, 0),
+            ("MakerNote 0x0011", 7, 0),
         ],
     },
     SampleEntries {
@@ -5387,6 +5442,8 @@ const ENTRIES: &[SampleEntries] = &[
             ("SubIFD2", 8, 0),
             ("Exif", 34, 0),
             ("GPS", 1, 0),
+            ("MakerNote", 66, 0),
+            ("MakerNote 0x0011", 7, 0),
         ],
     },
     SampleEntries {
@@ -5401,6 +5458,8 @@ const ENTRIES: &[SampleEntries] = &[
             ("SubIFD5", 14, 0),
             ("Exif", 41, 0),
             ("GPS", 1, 0),
+            ("MakerNote", 82, 0),
+            ("MakerNote 0x0011", 7, 0),
         ],
     },
     SampleEntries {
@@ -5415,6 +5474,8 @@ const ENTRIES: &[SampleEntries] = &[
             ("SubIFD5", 14, 0),
             ("Exif", 41, 0),
             ("GPS", 1, 0),
+            ("MakerNote", 82, 0),
+            ("MakerNote 0x0011", 7, 0),
         ],
     },
     SampleEntries {
@@ -5429,6 +5490,8 @@ const ENTRIES: &[SampleEntries] = &[
             ("SubIFD5", 14, 0),
             ("Exif", 41, 0),
             ("GPS", 1, 0),
+            ("MakerNote", 83, 0),
+            ("MakerNote 0x0011", 7, 0),
         ],
     },
     SampleEntries {
@@ -5443,6 +5506,8 @@ const ENTRIES: &[SampleEntries] = &[
             ("SubIFD5", 14, 0),
             ("Exif", 41, 0),
             ("GPS", 1, 0),
+            ("MakerNote", 83, 0),
+            ("MakerNote 0x0011", 7, 0),
         ],
     },
     SampleEntries {
@@ -5457,6 +5522,8 @@ const ENTRIES: &[SampleEntries] = &[
             ("SubIFD5", 14, 0),
             ("Exif", 41, 0),
             ("GPS", 1, 0),
+            ("MakerNote", 81, 0),
+            ("MakerNote 0x0011", 7, 0),
         ],
     },
     SampleEntries {
@@ -5471,6 +5538,8 @@ const ENTRIES: &[SampleEntries] = &[
             ("SubIFD5", 14, 0),
             ("Exif", 41, 0),
             ("GPS", 1, 0),
+            ("MakerNote", 81, 0),
+            ("MakerNote 0x0011", 7, 0),
         ],
     },
     SampleEntries {
@@ -5482,6 +5551,8 @@ const ENTRIES: &[SampleEntries] = &[
             ("SubIFD2", 8, 0),
             ("Exif", 36, 0),
             ("GPS", 1, 0),
+            ("MakerNote", 69, 0),
+            ("MakerNote 0x0011", 7, 0),
         ],
     },
     SampleEntries {
@@ -5493,6 +5564,8 @@ const ENTRIES: &[SampleEntries] = &[
             ("SubIFD2", 8, 0),
             ("Exif", 40, 0),
             ("GPS", 1, 0),
+            ("MakerNote", 75, 0),
+            ("MakerNote 0x0011", 7, 0),
         ],
     },
     SampleEntries {
@@ -5504,6 +5577,8 @@ const ENTRIES: &[SampleEntries] = &[
             ("SubIFD2", 8, 0),
             ("Exif", 40, 0),
             ("GPS", 1, 0),
+            ("MakerNote", 75, 0),
+            ("MakerNote 0x0011", 7, 0),
         ],
     },
 ];
