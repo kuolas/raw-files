@@ -68,17 +68,18 @@ ever complete for every body. What each gives so far:
   sensor data
   ([ADR016](architecture-decisions/adr016-full-metadata-before-raw-data.md)).
 
-  Full metadata will begin with **every entry a file records**: each
-  entry of the TIFF directories raw-files will walk (the IFDs, the Exif,
-  GPS and Interoperability IFDs, the Nikon and Sony MakerNotes, Sony's
-  SR2Private and a JPEG's Multi-Picture index), with its directory,
-  tag number, type and value as the file records it, and the name a
-  published standard gives the tag
+  Full metadata begins with **every entry a file records**, which
+  raw-files gives: each entry of the TIFF directories it walks (the
+  IFDs, the SubIFDs, the Exif, GPS and Interoperability IFDs, the Nikon
+  and Sony MakerNotes, Nikon's preview IFD, Sony's SR2Private and a
+  JPEG's Multi-Picture index), with its directory, tag number, type and
+  value as the file records it, and the name a published standard
+  gives the tag
   ([ADR023](architecture-decisions/adr023-every-entry-a-file-records.md),
   [the tag names](formats/tag-names.md)). The groups of values come
-  after it, each read from the same directories; enciphered and
-  encrypted records will be given only as their bytes until the
-  decision on reading them.
+  next, each read from the same directories; enciphered and encrypted
+  records are given only as their bytes until the decision on reading
+  them.
 - **Focus points.** Where the camera focused, in coordinates that place
   it on a preview, to judge sharpness where the photographer focused.
   Read from the MakerNote, on Nikon mirrorless bodies, Nikon DSLRs in
@@ -182,8 +183,16 @@ the architecture decisions.
   ([#62](https://github.com/kuolas/raw-files/issues/62)), and a D600's
   3D-tracking area mode named
   ([#63](https://github.com/kuolas/raw-files/issues/63)).
-- **Next**: full metadata, every value a file records, the ones that
-  only enciphered or encrypted blocks hold among them
+- **0.8.0**: metadata, every entry a file records, the first step of
+  full metadata: each entry of the TIFF directories raw-files walks,
+  the Nikon and Sony MakerNotes' among them, as the file records it,
+  with the name a published standard gives its tag and its value read
+  when asked for
+  ([#50](https://github.com/kuolas/raw-files/issues/50),
+  [ADR023](architecture-decisions/adr023-every-entry-a-file-records.md)).
+- **Next**: more of full metadata, the values a file records read
+  group by group, the ones that only enciphered or encrypted blocks
+  hold among them
   ([#50](https://github.com/kuolas/raw-files/issues/50)).
 
 ## Open questions

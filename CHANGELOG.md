@@ -10,6 +10,17 @@ does.
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-11-09
+
+The eighth release, the first step towards full metadata: every entry
+of the TIFF directories raw-files walks in a NEF, ARW or camera JPEG,
+a Nikon or Sony MakerNote's among them, as the file records it, with
+the name a published standard gives each standard tag, and any
+entry's value read when asked for. Nothing in 0.7.0's API was removed
+or changed in signature, though opening a file now also reads its GPS
+IFD, which counts towards the cap on directories, and, in an ARW, the
+table of Sony's private directory (see Changed).
+
 ### Added
 
 - `RawFile::entries` gives every entry of every TIFF directory of the
@@ -536,7 +547,8 @@ files.
 - A DNG is of no known format, whatever camera maker its Make names:
   converters and the phones that write DNG keep the maker's name.
 
-[Unreleased]: https://github.com/kuolas/raw-files/compare/v0.7.0...HEAD
+[Unreleased]: https://github.com/kuolas/raw-files/compare/v0.8.0...HEAD
+[0.8.0]: https://github.com/kuolas/raw-files/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/kuolas/raw-files/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/kuolas/raw-files/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/kuolas/raw-files/compare/v0.4.0...v0.5.0
