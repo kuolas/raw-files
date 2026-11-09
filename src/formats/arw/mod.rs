@@ -43,10 +43,10 @@ mod previews;
 use std::io::{Read, Seek};
 
 use super::{FormatSpec, Parsed, is_dng, make_starts_with, tiff_metadata};
-use crate::container::tiff::Tree;
 use crate::container::tiff::tags::DNG_PRIVATE_DATA;
 use crate::container::tiff::types::BYTE;
-use crate::entries::Entries;
+use crate::container::tiff::{Entry, Ifd, Tree, ifd_in};
+use crate::entries::{Directory, Entries};
 use crate::error::Result;
 use crate::format::Format;
 use crate::formats::makernote::sony::{self, SONY};
@@ -126,11 +126,55 @@ fn claims<R: Read + Seek>(src: &mut Source<R>, tree: &Tree) -> Result<bool> {
     // DNG version, the other half of the Hasselblad rule, was ruled out
     // above for every Make. The pointer is tested first because it costs
     // no read, and the Make was read once already.
-    let sony_pointer = tree
-        .ifd0()
-        .entry_of_type(DNG_PRIVATE_DATA, &[BYTE])
-        .is_some_and(|entry| entry.count() == 4);
+    let sony_pointer = private_pointer(tree).is_some();
     Ok(sony_pointer && make_starts_with(src, tree, HASSELBLAD)?)
+}
+
+/// IFD0's pointer to Sony's private directory, SR2Private, when it has the
+/// shape Sony writes it in: the DNGPrivateData entry (0xC634), four bytes
+/// of type BYTE, which the entry holds itself. A DNG's DNGPrivateData, a
+/// block of a maker's own data of any length, is not one.
+fn private_pointer(tree: &Tree) -> Option<&Entry> {
+    tree.ifd0()
+        .entry_of_type(DNG_PRIVATE_DATA, &[BYTE])
+        .filter(|entry| entry.count() == 4)
+}
+
+/// Sony's private directory, SR2Private, of the file in `src` whose IFDs
+/// are `tree`, read within `limits`: the IFD at the offset IFD0's pointer
+/// holds ([`private_pointer`]), its four bytes read as one number in the
+/// file's byte order, an ordinary IFD whose offsets count from the start
+/// of the file, as IFD0's do. `None` when the file has no such pointer, or
+/// it leads to no IFD that holds together inside the file, or to one with
+/// an entry that cannot be read. That last is the walk's rule for a
+/// SubIFD, and for the same file: the DSLR-A100's pointer leads to a
+/// Minolta MRW block, whose first bytes count 19,712 entries, more than
+/// the default limits allow, and which, under limits that allow them,
+/// reads as entries of types TIFF does not define. No SR2Private measured
+/// has an entry that cannot be read.
+///
+/// Only its table is read. Its entries locate the SR2SubIFD, which is
+/// encrypted, and hold the key; that directory is not parsed.
+///
+/// # Errors
+///
+/// `Io` when the reader fails. Nothing the file holds is an error.
+fn private_ifd<R: Read + Seek>(
+    src: &mut Source<R>,
+    tree: &Tree,
+    limits: &Limits,
+) -> Result<Option<Ifd>> {
+    let Some(pointer) = private_pointer(tree) else {
+        return Ok(None);
+    };
+    // Four bytes, which the entry holds: no read of the file.
+    let Ok(field) = <[u8; 4]>::try_from(pointer.read(src, 4)?) else {
+        return Ok(None);
+    };
+    let ifd0 = tree.ifd0();
+    let order = ifd0.order();
+    let private = ifd_in(src, ifd0.block(), order.u32(field), order, limits)?;
+    Ok(private.filter(|ifd| ifd.invalid_entries() == 0))
 }
 
 /// Reads the previews and the metadata of a file that [`claims`]
@@ -144,25 +188,37 @@ fn claims<R: Read + Seek>(src: &mut Source<R>, tree: &Tree) -> Result<bool> {
 /// settings, the lens and the sizes. When there is a MakerNote, it then
 /// gives what no standard tag records ([`sony::metadata`]): the camera
 /// settings that only it records, its white balance setting in place of
-/// Exif's, and the focus point.
+/// Exif's, and the focus point. The entries are those of every directory
+/// of the tree, then the MakerNote IFD's
+/// ([`MakerNote::add_entries`](sony::MakerNote::add_entries)), then those
+/// of Sony's private directory, SR2Private, read within `limits` too
+/// ([`private_ifd`]).
 ///
 /// # Errors
 ///
-/// As for [`sony::read`], [`previews::previews`],
+/// As for [`sony::read`], [`private_ifd`], [`previews::previews`],
 /// [`tiff_metadata::read`] and [`sony::metadata`]: `Io` when the reader
 /// fails. Nothing the file holds is an error here.
 fn parse<R: Read + Seek>(src: &mut Source<R>, tree: &Tree, limits: &Limits) -> Result<Parsed> {
     let makernote = sony::read(src, tree, limits)?;
+    let private = private_ifd(src, tree, limits)?;
     let previews = previews::previews(src, tree)?;
     let standard = tiff_metadata::read(src, tree)?.metadata;
+    let mut entries = Entries::of_tree(tree);
     let metadata = match &makernote {
-        Some(makernote) => sony::metadata(src, makernote, standard)?,
+        Some(makernote) => {
+            makernote.add_entries(&mut entries);
+            sony::metadata(src, makernote, standard)?
+        }
         None => standard,
     };
+    if let Some(private) = &private {
+        entries.push(Directory::Private, private);
+    }
     Ok(Parsed {
         previews,
         metadata,
-        entries: Entries::of_tree(tree),
+        entries,
     })
 }
 
@@ -173,15 +229,20 @@ mod tests {
     use crate::container::tiff::tags::{
         DNG_VERSION, MAKE, MAKER_NOTE, WHITE_BALANCE as EXIF_WHITE_BALANCE,
     };
-    use crate::entries::Directory;
+    use crate::container::tiff::types::UNDEFINED;
+    use crate::container::tiff::{Block, walk};
+    use crate::entries::Value;
     use crate::focus::Focus;
     use crate::formats::makernote::sony::{
         ELECTRONIC_FRONT_CURTAIN, FINE_TUNE, FOCUS_LOCATION, FOCUS_MODE, WHITE_BALANCE,
     };
-    use crate::formats::testing::file;
+    use crate::formats::testing::{Src, file};
     use crate::geometry::{Point, Size};
     use crate::rational::SignedRational;
-    use crate::tiff_builder::{IfdId, TiffBuilder};
+    use crate::tiff_builder::{IfdId, Order, RawValue, TiffBuilder};
+    use std::io::Cursor;
+
+    const ORDERS: [Order; 2] = [Order::Little, Order::Big];
 
     /// Whether the ARW reader claims the file that `build` describes.
     fn claimed(build: impl FnOnce(&mut TiffBuilder, IfdId)) -> bool {
@@ -397,5 +458,146 @@ mod tests {
         assert!(entries.entry(Directory::Ifd(0), MAKE).is_some());
         assert!(entries.entry(Directory::Exif, 0x9207).is_some());
         assert!(entries.entry(Directory::Gps, 0x0000).is_some());
+    }
+
+    /// The SR2Private tags the tests give the private directory: where the
+    /// SR2SubIFD lies, its length and its key, as Sony writes them.
+    const SR2_SUB_IFD_OFFSET: u16 = 0x7200;
+    const SR2_SUB_IFD_LENGTH: u16 = 0x7201;
+    const SR2_SUB_IFD_KEY: u16 = 0x7221;
+
+    /// Where the tests' pointer to Sony's private directory leads.
+    #[derive(Clone, Copy, Debug)]
+    enum Target {
+        /// The private directory.
+        Private,
+        /// The start of a Minolta MRW block, as on the DSLR-A100: its first
+        /// two bytes, `\0M`, read as an entry count, announce 19,712 or 77
+        /// entries. Zeros follow, entries of type 0, which TIFF does not
+        /// define, far enough for either table, so that only the limits,
+        /// or the entries' types, refuse it.
+        Mrw,
+        /// This offset.
+        At(u32),
+    }
+
+    /// A Sony file in byte order `order` whose IFD0 points, with Sony's
+    /// four bytes, at `target`, and holds a private directory with the
+    /// SR2SubIFD's offset, length and key; and whose Exif IFD holds a
+    /// headerless MakerNote of one entry. A source of it, and its tree.
+    fn with_private(order: Order, target: Target) -> (Src, Tree) {
+        with_private_typed(order, target, BYTE)
+    }
+
+    /// As [`with_private`], with a pointer of type `typ`, four bytes long.
+    fn with_private_typed(order: Order, target: Target, typ: u16) -> (Src, Tree) {
+        let mut builder = TiffBuilder::new(order);
+        let (ifd0, exif, makernote, private) =
+            (builder.ifd(), builder.ifd(), builder.ifd(), builder.ifd());
+        builder.ascii(ifd0, MAKE, "SONY").exif(ifd0, exif);
+        builder.short(makernote, FOCUS_MODE, &[3]);
+        builder.undefined_ifd(exif, MAKER_NOTE, makernote);
+        builder
+            .long(private, SR2_SUB_IFD_OFFSET, &[0x0001_0000])
+            .long(private, SR2_SUB_IFD_LENGTH, &[56_958])
+            .undefined(private, SR2_SUB_IFD_KEY, &[0x11, 0x22, 0x33, 0x44]);
+        let mrw = builder.blob(&[b"\0MRM".as_slice(), &[0; 19_712 * 12 + 4]].concat());
+        // The pointer's four bytes move nothing, so a copy with a stand-in
+        // gives where the private directory and the MRW block lie.
+        let mut probe = builder.clone();
+        probe.byte(ifd0, DNG_PRIVATE_DATA, &[0; 4]);
+        let layout = probe.build();
+        let at = match target {
+            Target::Private => u32::try_from(layout.ifd_offset(private)).unwrap(),
+            Target::Mrw => u32::try_from(layout.blob_offset(mrw)).unwrap(),
+            Target::At(at) => at,
+        };
+        builder.raw(
+            ifd0,
+            DNG_PRIVATE_DATA,
+            typ,
+            4,
+            RawValue::Inline(order.u32(at)),
+        );
+        let mut src = Source::new(Cursor::new(builder.build().bytes)).unwrap();
+        let block = Block::file(src.len());
+        let tree = walk(&mut src, &block, &Limits::default()).unwrap();
+        (src, tree)
+    }
+
+    #[test]
+    fn the_makernote_ifd_and_the_private_directory_follow_the_trees() {
+        for order in ORDERS {
+            let (mut src, tree) = with_private(order, Target::Private);
+            assert!(claims(&mut src, &tree).unwrap(), "{order:?}");
+            let parsed = parse(&mut src, &tree, &Limits::default()).unwrap();
+            let entries = &parsed.entries;
+            assert_eq!(
+                entries.directories().collect::<Vec<_>>(),
+                [
+                    Directory::Ifd(0),
+                    Directory::Exif,
+                    Directory::MakerNote,
+                    Directory::Private
+                ],
+                "{order:?}"
+            );
+            let tags: Vec<u16> = entries
+                .in_directory(Directory::Private)
+                .map(crate::Entry::tag)
+                .collect();
+            assert_eq!(
+                tags,
+                [SR2_SUB_IFD_OFFSET, SR2_SUB_IFD_LENGTH, SR2_SUB_IFD_KEY],
+                "{order:?}"
+            );
+            assert_eq!(entries.skipped(Directory::Private), 0, "{order:?}");
+            // The key's bytes, as recorded; the SR2SubIFD is not parsed.
+            let key = entries.entry(Directory::Private, SR2_SUB_IFD_KEY).unwrap();
+            assert_eq!(
+                key.read(&mut src, 64).unwrap(),
+                Value::Undefined(vec![0x11, 0x22, 0x33, 0x44]),
+                "{order:?}"
+            );
+            let offset = entries.entry(Directory::Private, SR2_SUB_IFD_OFFSET);
+            let offset = offset.unwrap().read(&mut src, 64).unwrap();
+            assert_eq!(offset, Value::Long(vec![0x0001_0000]), "{order:?}");
+        }
+    }
+
+    #[test]
+    fn a_pointer_that_leads_to_no_ifd_gives_no_private_directory_alone() {
+        // The MRW block, under the default limits and none; an offset past
+        // the end of the file. The MakerNote is listed all the same.
+        for order in ORDERS {
+            for (target, limits) in [
+                (Target::Mrw, Limits::default()),
+                (Target::Mrw, Limits::unlimited()),
+                (Target::At(u32::MAX), Limits::default()),
+            ] {
+                let (mut src, tree) = with_private(order, target);
+                let parsed = parse(&mut src, &tree, &limits).unwrap();
+                assert_eq!(
+                    parsed.entries.directories().collect::<Vec<_>>(),
+                    [Directory::Ifd(0), Directory::Exif, Directory::MakerNote],
+                    "{order:?}, {target:?}, {limits:?}"
+                );
+                let focus_mode = parsed.entries.entry(Directory::MakerNote, FOCUS_MODE);
+                assert!(focus_mode.is_some(), "{order:?}, {target:?}");
+            }
+        }
+    }
+
+    #[test]
+    fn a_pointer_not_in_sonys_shape_is_not_followed() {
+        // Four bytes that lead to the private directory, but of type
+        // UNDEFINED, not BYTE.
+        for order in ORDERS {
+            let (mut src, tree) = with_private_typed(order, Target::Private, UNDEFINED);
+            let parsed = parse(&mut src, &tree, &Limits::default()).unwrap();
+            let found = parsed.entries.directories().collect::<Vec<_>>();
+            assert!(!found.contains(&Directory::Private), "{order:?}");
+            assert!(found.contains(&Directory::MakerNote), "{order:?}");
+        }
     }
 }

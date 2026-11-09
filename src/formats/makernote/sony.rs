@@ -73,7 +73,11 @@
 //! lie inside the block with its count and its whole entry table, and
 //! every entry whose value lies outside the block is dropped, as an entry
 //! whose value lies outside the file is, so every value read from it lies
-//! inside the block.
+//! inside the block. The raw view lists the IFD's entries as the directory
+//! `MakerNote` ([`Directory`]), with the entries dropped
+//! counted; among them the records Sony enciphers, such as 0x2010 and
+//! 0x9050, which are plain UNDEFINED entries whose bytes the view gives as
+//! recorded, neither marked nor deciphered (ADR023).
 //! A value is read only in the shape its tag's rule allows, its type and
 //! its number of values: the value readers accept more types than a tag's
 //! rule allows, [`Ifd::u32s`] reading LONG and IFD as well as SHORT and
@@ -259,6 +263,7 @@ use super::{MakerNoteBlock, checked_color_temperature};
 use crate::camera_settings::{CameraSettings, FineTune, WhiteBalanceMode};
 use crate::container::tiff::types::{BYTE, SHORT, SLONG, UNDEFINED};
 use crate::container::tiff::{Ifd, Tree, skip_damage};
+use crate::entries::{Directory, Entries};
 use crate::error::Result;
 use crate::focus::{Focus, FocusOrigin, FocusPoints};
 use crate::formats::tiff_metadata::one_long;
@@ -380,6 +385,15 @@ pub(in crate::formats) struct MakerNote {
     /// the file, which every offset found inside the block is checked
     /// against.
     ifd: Ifd,
+}
+
+impl MakerNote {
+    /// Adds the MakerNote IFD to `entries`, as the directory `MakerNote`.
+    /// Its next-IFD pointer is never followed: on most files the slot holds
+    /// the first value instead, and an SRF file's chain is enciphered.
+    pub(in crate::formats) fn add_entries(&self, entries: &mut Entries) {
+        entries.push(Directory::MakerNote, &self.ifd);
+    }
 }
 
 /// The Sony MakerNote of the file in `src`, whose IFDs are `tree`, read
@@ -880,6 +894,99 @@ mod tests {
                 let found = found.expect("a MakerNote");
                 assert_sound(&mut src, &found, &built, ifd, order);
             }
+        }
+    }
+
+    /// The entries `makernote` adds to the raw view, alone.
+    fn view_of(makernote: &MakerNote) -> Entries {
+        let mut entries = Entries::new();
+        makernote.add_entries(&mut entries);
+        entries
+    }
+
+    /// The tags `entries` lists in the MakerNote, in order.
+    fn makernote_tags(entries: &Entries) -> Vec<u16> {
+        entries
+            .in_directory(Directory::MakerNote)
+            .map(crate::Entry::tag)
+            .collect()
+    }
+
+    #[test]
+    fn the_view_lists_the_makernote_ifd_in_every_layout() {
+        // At the block's start, and 12 bytes in after each header; the
+        // value stored out of line counted from the file's header.
+        let layouts: [&[u8]; 6] = [
+            b"",
+            b"SONY DSC \0\0\0",
+            b"SONY CAM \0\0\0",
+            b"SONY MOBILE?",
+            b"\0\0SONY PIC\0?",
+            b"VHAB     \0??",
+        ];
+        for prefix in layouts {
+            for order in ORDERS {
+                let (built, _) = sound_file(order, prefix);
+                let (mut src, found) = read_file(built.bytes);
+                let view = view_of(&found.expect("a MakerNote"));
+                let what = format!("{prefix:?}, {order:?}");
+                let directories: Vec<Directory> = view.directories().collect();
+                assert_eq!(directories, [Directory::MakerNote], "{what}");
+                assert_eq!(makernote_tags(&view), [FIRST, SECOND], "{what}");
+                assert_eq!(view.skipped(Directory::MakerNote), 0, "{what}");
+                let second = view.entry(Directory::MakerNote, SECOND).unwrap();
+                assert_eq!(
+                    second.read(&mut src, 64).unwrap(),
+                    crate::Value::Short(SHORTS.to_vec()),
+                    "{what}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn a_makernote_value_past_its_declared_length_is_skipped_and_counted() {
+        // SHORTS, stored out of line, are the block's last 8 bytes: a
+        // MakerNote declared one byte short leaves them out, as the
+        // DSLR-A200 to A900 leave five of their values.
+        for order in ORDERS {
+            let (whole, makernote) = sound_file(order, b"");
+            let len =
+                u32::try_from(whole.ifd_block(makernote).end - whole.ifd_block(makernote).start)
+                    .unwrap();
+            for (count, skipped) in [(len - 1, 1), (len, 0)] {
+                let (mut builder, _, exif) = sony(order);
+                let ifd = sound_ifd(&mut builder, b"");
+                builder.undefined_ifd_declaring(exif, MAKER_NOTE, ifd, count);
+                let (_, found) = read_file(builder.build().bytes);
+                let view = view_of(&found.expect("a MakerNote"));
+                let what = format!("{order:?}, declared {count} bytes");
+                assert_eq!(view.skipped(Directory::MakerNote), skipped, "{what}");
+                let listed = if skipped == 0 {
+                    vec![FIRST, SECOND]
+                } else {
+                    vec![FIRST]
+                };
+                assert_eq!(makernote_tags(&view), listed, "{what}");
+            }
+        }
+    }
+
+    #[test]
+    fn the_makernotes_next_ifd_pointer_is_never_followed() {
+        // A next-IFD pointer that leads to a sound IFD after the block.
+        for order in ORDERS {
+            let (mut builder, _, exif) = sony(order);
+            let makernote = sound_ifd(&mut builder, b"");
+            let next = builder.ifd();
+            builder.short(next, THIRD, &[3]).short(next, FOURTH, &[4]);
+            builder
+                .next(makernote, Some(next))
+                .undefined_ifd(exif, MAKER_NOTE, makernote);
+            let (_, found) = read_file(builder.build().bytes);
+            let view = view_of(&found.expect("a MakerNote"));
+            assert_eq!(view.directories().count(), 1, "{order:?}");
+            assert_eq!(makernote_tags(&view), [FIRST, SECOND], "{order:?}");
         }
     }
 
