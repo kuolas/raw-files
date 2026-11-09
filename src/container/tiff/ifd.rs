@@ -52,6 +52,10 @@ use crate::limits::Limits;
 /// [`Limits`]: the tags read through these accessors are numbers and short
 /// texts, far below it. A longer value is a payload, such as a preview,
 /// which has its own path and its own limit.
+///
+/// [`Limits::max_value_bytes`] bounds the values a caller reads through the
+/// raw view, and its default is this same number, so that a value is
+/// readable through one path whenever it is through the other.
 const MAX_VALUE_LEN: u32 = 1024 * 1024;
 
 /// An IFD read by [`parse_ifd`]: the entries that can be read, and how many
@@ -805,6 +809,14 @@ mod tests {
             })
             .flatten()
             .collect()
+    }
+
+    #[test]
+    fn the_default_value_cap_is_the_accessors_cap() {
+        assert_eq!(
+            Limits::default().max_value_bytes(),
+            u64::from(MAX_VALUE_LEN)
+        );
     }
 
     #[test]
