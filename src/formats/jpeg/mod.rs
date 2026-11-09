@@ -40,7 +40,7 @@
 //!   gives (CIPA DC-007 5.2.3.3.3, p. 16), whatever the type of image the
 //!   entry names. These images lie after the main image, outside the
 //!   segment that lists them, so they are bounded by the file alone
-//!   ([`mpf::images`]).
+//!   ([`mpf::index`]).
 //! - **The JPEG of the Nikon MakerNote's PreviewIFD**, in a file whose
 //!   MakerNote the reader reads ([below](#the-metadata)), as the D70's
 //!   JPEGs hold one of 564 by 372 pixels. The MakerNote reader finds it as
@@ -192,7 +192,7 @@ use super::tiff_previews::{self, Candidate};
 use super::{FormatSpec, JPEG_UNCLAIMED, Parsed, make_starts_with};
 use crate::container::jpeg::{Frame, Segments, mpf};
 use crate::container::tiff::{Tree, skip_damage, walk};
-use crate::entries::Entries;
+use crate::entries::{Directory, Entries};
 use crate::error::{Error, Result};
 use crate::format::Format;
 use crate::geometry::Size;
@@ -311,9 +311,17 @@ fn parse<R: Read + Seek>(
     metadata.focus_points = metadata
         .focus_points
         .filter(|points| points.frame().same_shape(size));
-    if let Some(index) = &segments.mpf {
-        let images = mpf::images(src, index, limits)?;
-        candidates.extend(images.into_iter().filter_map(|image| {
+    // The entries of the Exif segment's tree, walked once, none when it
+    // does not walk, as it then gives no metadata; then the MP Index IFD's,
+    // which the MPF segment holds apart from it.
+    let mut entries = tree.as_ref().map_or_else(Entries::new, Entries::of_tree);
+    let index = match &segments.mpf {
+        Some(block) => mpf::index(src, block, limits)?,
+        None => None,
+    };
+    if let Some(index) = index {
+        entries.push(Directory::MpIndex, &index.ifd);
+        candidates.extend(index.images.into_iter().filter_map(|image| {
             Some(Candidate {
                 offset: image.start,
                 length: image.end.checked_sub(image.start)?,
@@ -329,9 +337,6 @@ fn parse<R: Read + Seek>(
         PreviewFormat::Jpeg,
         metadata.orientation,
     ));
-    // The entries of the same tree, walked once; none when the Exif
-    // segment does not walk, as it then gives no metadata.
-    let entries = tree.as_ref().map_or_else(Entries::new, Entries::of_tree);
     Ok(Parsed {
         previews,
         metadata,
@@ -704,6 +709,38 @@ mod tests {
             let directories: Vec<Directory> = parsed.entries.directories().collect();
             assert_eq!(directories, expected, "{segment:?}");
             assert_eq!(parsed.entries.is_empty(), expected.is_empty());
+        }
+    }
+
+    #[test]
+    fn the_mp_index_is_listed_after_the_exif_tree_with_or_without_it() {
+        let mut tiff = TiffBuilder::new(Order::Little);
+        let (ifd0, exif) = (tiff.ifd(), tiff.ifd());
+        tiff.ascii(ifd0, MAKE, "Canon").exif(ifd0, exif);
+        tiff.short(exif, METERING_MODE, &[5]);
+        let exif_bytes = tiff.build().bytes;
+        for (with_exif, expected) in [
+            (
+                true,
+                &[Directory::Ifd(0), Directory::Exif, Directory::MpIndex][..],
+            ),
+            (false, &[Directory::MpIndex]),
+        ] {
+            let mut builder = JpegBuilder::new();
+            if with_exif {
+                builder.exif(&exif_bytes);
+            }
+            builder.mpf(Order::Big).mpf_image(640, 424, &[], 1);
+            let (bytes, found) = read(&builder);
+            let mut src = Source::new(Cursor::new(bytes)).unwrap();
+            let parsed = parse(&mut src, &found, &Limits::default()).unwrap();
+            let directories: Vec<Directory> = parsed.entries.directories().collect();
+            assert_eq!(directories, expected, "Exif {with_exif}");
+            // MPFVersion, NumberOfImages and MPEntry.
+            assert_eq!(parsed.entries.in_directory(Directory::MpIndex).count(), 3);
+            assert!(parsed.entries.entry(Directory::MpIndex, 0xB002).is_some());
+            // The large thumbnail is still a preview.
+            assert_eq!(parsed.previews.len(), 2, "Exif {with_exif}");
         }
     }
 }

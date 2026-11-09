@@ -121,7 +121,7 @@ pub fn jpeg_segments(data: &[u8]) {
         read_values(&mut src, &tree);
     }
     if let Some(index) = &found.mpf {
-        let _ = mpf::images(&mut src, index, &limits);
+        let _ = mpf::index(&mut src, index, &limits);
     }
 }
 
