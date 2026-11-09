@@ -30,6 +30,9 @@ does.
   an unknown type, a length that overflows, or a value outside the file
   or the part of it the directory was read in. Reading the entries reads
   nothing from the file.
+  `Directory` writes the name a viewer shows through `Display`, such as
+  `IFD0` or `MakerNote 0x0011`, and `FieldType` has a `name` that
+  `Display` writes, such as `SHORT`, spelled as the standards write it.
 - `RawFile::read_value` reads an entry's value, as a `Value` with one
   variant per field type, its numbers in the byte order of the entry's
   directory, fractions as numerator and denominator pairs with a zero

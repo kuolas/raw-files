@@ -113,9 +113,9 @@ impl fmt::Display for Directory {
 ///
 /// New variants may be added if a standard defines more types.
 ///
-/// `Display` writes the type's name as the standards write it, such as
-/// "SHORT" or "UTF-8"; [`Ifd`](Self::Ifd), which none of the standards
-/// raw-files follows names, is "IFD".
+/// `Display` writes the type's [`name`](Self::name) as the standards write
+/// it, such as "SHORT" or "UTF-8"; [`Ifd`](Self::Ifd), which none of the
+/// standards raw-files follows names, is "IFD".
 #[non_exhaustive]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum FieldType {
@@ -214,8 +214,20 @@ impl FieldType {
         }
     }
 
-    /// The type's name, as [`Display`](fmt::Display) writes it.
-    fn name(self) -> &'static str {
+    /// The type's name as the standards write it, for a viewer that lists
+    /// entries: "SHORT", "RATIONAL" or "UTF-8"; [`Ifd`](Self::Ifd), which
+    /// none of the standards raw-files follows names, is "IFD".
+    /// [`Display`](fmt::Display) writes the same.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use raw_files::FieldType;
+    ///
+    /// assert_eq!(FieldType::SRational.name(), "SRATIONAL");
+    /// assert_eq!(FieldType::Utf8.to_string(), FieldType::Utf8.name());
+    /// ```
+    pub fn name(self) -> &'static str {
         match self {
             Self::Byte => "BYTE",
             Self::Ascii => "ASCII",
@@ -763,6 +775,7 @@ mod tests {
         for (i, field_type) in TYPES.into_iter().enumerate() {
             assert_eq!(field_type.code(), codes[i], "{field_type:?}");
             assert_eq!(field_type.size(), sizes[i], "{field_type:?}");
+            assert_eq!(field_type.name(), names[i], "{field_type:?}");
             assert_eq!(field_type.to_string(), names[i], "{field_type:?}");
             assert_eq!(FieldType::from_code(codes[i]), Some(field_type));
         }
