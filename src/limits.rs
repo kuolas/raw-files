@@ -34,6 +34,7 @@ pub struct Limits {
     max_ifd_entries: u32,
     max_ifd_depth: u32,
     max_preview_bytes: u64,
+    max_value_bytes: u64,
 }
 
 impl Default for Limits {
@@ -43,6 +44,7 @@ impl Default for Limits {
             max_ifd_entries: 1_000,
             max_ifd_depth: 5,
             max_preview_bytes: 128 * 1024 * 1024,
+            max_value_bytes: 1024 * 1024,
         }
     }
 }
@@ -58,6 +60,7 @@ impl Limits {
             max_ifd_entries: u32::MAX,
             max_ifd_depth: u32::MAX,
             max_preview_bytes: u64::MAX,
+            max_value_bytes: u64::MAX,
         }
     }
 
@@ -95,6 +98,15 @@ impl Limits {
         self
     }
 
+    /// Sets how many bytes the value of one entry may take, which is the
+    /// most that `read_value` will allocate, in place of the cap set
+    /// before; [`max_value_bytes`](Self::max_value_bytes) reads it.
+    #[must_use]
+    pub fn with_max_value_bytes(mut self, n: u64) -> Self {
+        self.max_value_bytes = n;
+        self
+    }
+
     /// How many IFDs, the directories of a TIFF-based file, are visited
     /// per file at most.
     pub fn max_ifds(&self) -> u32 {
@@ -116,6 +128,16 @@ impl Limits {
     pub fn max_preview_bytes(&self) -> u64 {
         self.max_preview_bytes
     }
+
+    /// How many bytes the value of one entry may take at most, which is
+    /// the most that `read_value` will allocate. A longer value fails only
+    /// its own read.
+    ///
+    /// The default holds every value measured on camera files, the largest
+    /// a whole MakerNote of under 1,000,000 bytes.
+    pub fn max_value_bytes(&self) -> u64 {
+        self.max_value_bytes
+    }
 }
 
 #[cfg(test)]
@@ -129,6 +151,7 @@ mod tests {
         assert_eq!(limits.max_ifd_entries(), 1_000);
         assert_eq!(limits.max_ifd_depth(), 5);
         assert_eq!(limits.max_preview_bytes(), 128 * 1024 * 1024);
+        assert_eq!(limits.max_value_bytes(), 1024 * 1024);
     }
 
     #[test]
@@ -144,6 +167,10 @@ mod tests {
             limits.max_preview_bytes(),
             Limits::default().max_preview_bytes()
         );
+        assert_eq!(
+            limits.max_value_bytes(),
+            Limits::default().max_value_bytes()
+        );
         assert_ne!(limits, Limits::default());
     }
 
@@ -156,6 +183,10 @@ mod tests {
         assert_eq!(
             limits.max_preview_bytes(),
             Limits::default().max_preview_bytes()
+        );
+        assert_eq!(
+            limits.max_value_bytes(),
+            Limits::default().max_value_bytes()
         );
         assert_ne!(limits, Limits::default());
     }
@@ -173,6 +204,10 @@ mod tests {
             limits.max_preview_bytes(),
             Limits::default().max_preview_bytes()
         );
+        assert_eq!(
+            limits.max_value_bytes(),
+            Limits::default().max_value_bytes()
+        );
         assert_ne!(limits, Limits::default());
     }
 
@@ -186,6 +221,27 @@ mod tests {
             Limits::default().max_ifd_entries()
         );
         assert_eq!(limits.max_ifd_depth(), Limits::default().max_ifd_depth());
+        assert_eq!(
+            limits.max_value_bytes(),
+            Limits::default().max_value_bytes()
+        );
+        assert_ne!(limits, Limits::default());
+    }
+
+    #[test]
+    fn with_max_value_bytes_changes_only_its_cap() {
+        let limits = Limits::default().with_max_value_bytes(7);
+        assert_eq!(limits.max_value_bytes(), 7);
+        assert_eq!(limits.max_ifds(), Limits::default().max_ifds());
+        assert_eq!(
+            limits.max_ifd_entries(),
+            Limits::default().max_ifd_entries()
+        );
+        assert_eq!(limits.max_ifd_depth(), Limits::default().max_ifd_depth());
+        assert_eq!(
+            limits.max_preview_bytes(),
+            Limits::default().max_preview_bytes()
+        );
         assert_ne!(limits, Limits::default());
     }
 
@@ -197,15 +253,17 @@ mod tests {
             .with_max_ifds(1)
             .with_max_ifd_entries(2)
             .with_max_ifd_depth(3)
-            .with_max_preview_bytes(4);
+            .with_max_preview_bytes(4)
+            .with_max_value_bytes(5);
         assert_eq!(
             (
                 limits.max_ifds(),
                 limits.max_ifd_entries(),
                 limits.max_ifd_depth(),
-                limits.max_preview_bytes()
+                limits.max_preview_bytes(),
+                limits.max_value_bytes()
             ),
-            (1, 2, 3, 4)
+            (1, 2, 3, 4, 5)
         );
         assert_eq!(limits.clone(), limits);
     }
@@ -217,5 +275,6 @@ mod tests {
         assert_eq!(limits.max_ifd_entries(), u32::MAX);
         assert_eq!(limits.max_ifd_depth(), u32::MAX);
         assert_eq!(limits.max_preview_bytes(), u64::MAX);
+        assert_eq!(limits.max_value_bytes(), u64::MAX);
     }
 }
