@@ -658,7 +658,7 @@ impl Entry {
         self.tag
     }
 
-    /// The entry's field type, one of the types 1 to 13.
+    /// The entry's field type, one of the types 1 to 13 or 129.
     #[cfg_attr(
         not(test),
         expect(dead_code, reason = "nothing reads this accessor yet")
@@ -750,7 +750,7 @@ impl Entry {
 mod tests {
     use super::*;
     use crate::ErrorKind;
-    use crate::container::tiff::types::DOUBLE;
+    use crate::container::tiff::types::{DOUBLE, UTF8};
     use crate::testing::{FAR, FailsFar};
     use crate::tiff_builder::{Built, IfdId, Order, RawValue, TiffBuilder};
     use std::io::Cursor;
@@ -1867,6 +1867,37 @@ mod tests {
             let err = result.expect_err("the value is over the cap");
             assert_eq!(err.kind(), ErrorKind::LimitExceeded, "{err:?}");
             assert_eq!(err.offset(), Some(u64::from(at)), "{err:?}");
+        }
+    }
+
+    #[test]
+    fn a_utf8_entry_is_kept_and_no_typed_reader_takes_it() {
+        for order in ORDERS {
+            // Exif 3.0's UTF-8 type, inline and out of line: "é" is two
+            // bytes, and the NUL is counted.
+            let at = 256;
+            let mut builder = TiffBuilder::new(order);
+            let ifd = builder.ifd();
+            builder
+                .raw(ifd, 0x010F, UTF8, 3, RawValue::Inline([0xC3, 0xA9, 0, 0]))
+                .raw(ifd, 0x0110, UTF8, 6, RawValue::Offset(at));
+            builder.blob_at(u64::from(at), b"Z \xC3\xA9t\0");
+            let built = builder.build();
+            let (mut src, ifd, _) = read(order, &built, ifd);
+            let src = &mut src;
+            assert_eq!(ifd.invalid_entries(), 0, "{order:?}");
+            for (tag, expected) in [(0x010F, &b"\xC3\xA9\0"[..]), (0x0110, b"Z \xC3\xA9t\0")] {
+                let entry = ifd.entry(tag).expect("kept");
+                assert_eq!(entry.typ(), UTF8);
+                assert_eq!(entry.read(src, 16).unwrap(), expected, "{order:?}");
+                // Every typed reader checks the type, and UTF-8 is none of
+                // theirs: the text readers take ASCII only.
+                assert_eq!(ifd.ascii(src, tag).unwrap(), None);
+                assert_eq!(ifd.ascii_bytes(src, tag).unwrap(), None);
+                assert_eq!(ifd.bytes(src, tag).unwrap(), None);
+                assert_eq!(ifd.u32s(src, tag).unwrap(), None);
+                assert_eq!(entry.byte_range(), None);
+            }
         }
     }
 

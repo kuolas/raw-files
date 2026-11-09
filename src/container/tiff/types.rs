@@ -7,8 +7,8 @@
 //! a number, a fraction, text, or bytes that only the tag gives a meaning
 //! to. A reader checks the type before it reads a value, so that it never
 //! takes a fraction for a number or a number for text. TIFF 6.0 defines
-//! types 1 to 12 and TIFF Technical Note 1 adds type 13; an entry of any
-//! other type cannot be read.
+//! types 1 to 12, TIFF Technical Note 1 adds type 13, and Exif 3.0 adds
+//! type 129, text in UTF-8; an entry of any other type cannot be read.
 
 /// Field type BYTE: 8-bit unsigned integers.
 pub(crate) const BYTE: u16 = 1;
@@ -36,13 +36,16 @@ pub(crate) const FLOAT: u16 = 11;
 pub(crate) const DOUBLE: u16 = 12;
 /// Field type IFD: the offsets of IFDs, as LONGs (TIFF Technical Note 1).
 pub(crate) const IFD: u16 = 13;
+/// Field type UTF-8: text in UTF-8, ending in a NUL, with no byte order
+/// mark, its count in bytes (Exif 3.0, kept by Exif 3.1, section 4.6.2).
+pub(crate) const UTF8: u16 = 129;
 
 /// The size in bytes of one value of field type `typ`, or `None` for a type
-/// that neither TIFF 6.0 (types 1 to 12) nor TIFF Technical Note 1 (type
-/// 13) defines.
+/// that neither TIFF 6.0 (types 1 to 12), TIFF Technical Note 1 (type 13)
+/// nor Exif (type 129) defines.
 pub(super) fn type_size(typ: u16) -> Option<u32> {
     match typ {
-        BYTE | ASCII | SBYTE | UNDEFINED => Some(1),
+        BYTE | ASCII | SBYTE | UNDEFINED | UTF8 => Some(1),
         SHORT | SSHORT => Some(2),
         LONG | SLONG | FLOAT | IFD => Some(4),
         RATIONAL | SRATIONAL | DOUBLE => Some(8),
@@ -60,7 +63,8 @@ mod tests {
         for (typ, size) in (1..=13).zip(sizes) {
             assert_eq!(type_size(typ), Some(size), "type {typ}");
         }
-        for typ in [0, 14, 99, u16::MAX] {
+        assert_eq!(type_size(129), Some(1));
+        for typ in [0, 14, 99, 128, 130, u16::MAX] {
             assert_eq!(type_size(typ), None, "type {typ}");
         }
     }
