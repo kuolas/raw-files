@@ -3468,11 +3468,12 @@ fn the_sample_list_and_the_tables_of_previews_metadata_and_entries_name_the_same
 }
 
 /// The entries of every Sony-family sample, each directory in the order the
-/// reader finds it with its entries listed and left out. The counts were
-/// checked on 9 November 2026 against a walker of my own, written from the
-/// TIFF 6.0 and Exif standards and the format notes, which found the same
-/// directories with the same number of entries in each, though it lists
-/// IFD1 before the SubIFDs.
+/// reader finds it with its entries listed and left out, the MakerNote IFD
+/// and the private directory, SR2Private, after the standard directories.
+/// The counts were checked on 9 November 2026 against a walker of my own,
+/// written from the TIFF 6.0 and Exif standards and the format notes,
+/// which found the same directories with the same number of entries in
+/// each, though it lists some in another order.
 const ENTRIES: &[SampleEntries] = &[
     SampleEntries {
         file: "sony-slt-a55.arw",
@@ -3483,6 +3484,8 @@ const ENTRIES: &[SampleEntries] = &[
             ("IFD1", 12, 0),
             ("Interop", 2, 0),
             ("GPS", 18, 0),
+            ("MakerNote", 33, 0),
+            ("Private", 10, 0),
         ],
     },
     SampleEntries {
@@ -3493,6 +3496,8 @@ const ENTRIES: &[SampleEntries] = &[
             ("Exif", 38, 0),
             ("IFD1", 16, 0),
             ("Interop", 2, 0),
+            ("MakerNote", 96, 0),
+            ("Private", 9, 0),
         ],
     },
     SampleEntries {
@@ -3503,11 +3508,18 @@ const ENTRIES: &[SampleEntries] = &[
             ("Exif", 38, 0),
             ("IFD1", 16, 0),
             ("Interop", 2, 0),
+            ("MakerNote", 96, 0),
+            ("Private", 9, 0),
         ],
     },
     SampleEntries {
         file: "sony-dsc-f828.srf",
-        directories: &[("IFD0", 18, 0), ("Exif", 20, 0), ("IFD1", 6, 0)],
+        directories: &[
+            ("IFD0", 18, 0),
+            ("Exif", 20, 0),
+            ("IFD1", 6, 0),
+            ("MakerNote", 1, 0),
+        ],
     },
     SampleEntries {
         file: "sony-nex-5.arw",
@@ -3517,6 +3529,8 @@ const ENTRIES: &[SampleEntries] = &[
             ("Exif", 37, 0),
             ("IFD1", 12, 0),
             ("Interop", 2, 0),
+            ("MakerNote", 34, 0),
+            ("Private", 10, 0),
         ],
     },
     SampleEntries {
@@ -3527,6 +3541,8 @@ const ENTRIES: &[SampleEntries] = &[
             ("Exif", 41, 0),
             ("IFD1", 14, 0),
             ("Interop", 2, 0),
+            ("MakerNote", 99, 0),
+            ("Private", 9, 0),
         ],
     },
     SampleEntries {
@@ -3537,6 +3553,8 @@ const ENTRIES: &[SampleEntries] = &[
             ("Exif", 41, 0),
             ("IFD1", 14, 0),
             ("Interop", 2, 0),
+            ("MakerNote", 99, 0),
+            ("Private", 9, 0),
         ],
     },
     SampleEntries {
@@ -3547,6 +3565,8 @@ const ENTRIES: &[SampleEntries] = &[
             ("Exif", 37, 0),
             ("IFD1", 14, 0),
             ("Interop", 2, 0),
+            ("MakerNote", 93, 0),
+            ("Private", 9, 0),
         ],
     },
     SampleEntries {
@@ -3557,6 +3577,8 @@ const ENTRIES: &[SampleEntries] = &[
             ("Exif", 33, 0),
             ("IFD1", 11, 0),
             ("Interop", 2, 0),
+            ("MakerNote", 21, 5),
+            ("Private", 9, 0),
         ],
     },
     SampleEntries {
@@ -3566,6 +3588,7 @@ const ENTRIES: &[SampleEntries] = &[
             ("Exif", 37, 0),
             ("IFD1", 11, 0),
             ("Interop", 2, 0),
+            ("MakerNote", 28, 0),
         ],
     },
     SampleEntries {
@@ -3576,6 +3599,8 @@ const ENTRIES: &[SampleEntries] = &[
             ("Exif", 34, 0),
             ("IFD1", 11, 0),
             ("Interop", 2, 0),
+            ("MakerNote", 23, 5),
+            ("Private", 9, 0),
         ],
     },
     SampleEntries {
@@ -3586,6 +3611,8 @@ const ENTRIES: &[SampleEntries] = &[
             ("Exif", 40, 0),
             ("IFD1", 16, 0),
             ("Interop", 2, 0),
+            ("MakerNote", 98, 0),
+            ("Private", 9, 0),
         ],
     },
     SampleEntries {
@@ -3596,6 +3623,8 @@ const ENTRIES: &[SampleEntries] = &[
             ("Exif", 40, 0),
             ("IFD1", 16, 0),
             ("Interop", 2, 0),
+            ("MakerNote", 98, 0),
+            ("Private", 9, 0),
         ],
     },
     SampleEntries {
@@ -3606,6 +3635,8 @@ const ENTRIES: &[SampleEntries] = &[
             ("Exif", 31, 0),
             ("IFD1", 11, 0),
             ("Interop", 2, 0),
+            ("MakerNote", 19, 0),
+            ("Private", 6, 0),
         ],
     },
     SampleEntries {
@@ -3616,6 +3647,8 @@ const ENTRIES: &[SampleEntries] = &[
             ("Exif", 41, 0),
             ("IFD1", 14, 0),
             ("Interop", 2, 0),
+            ("MakerNote", 101, 0),
+            ("Private", 9, 0),
         ],
     },
     SampleEntries {
@@ -3626,6 +3659,8 @@ const ENTRIES: &[SampleEntries] = &[
             ("Exif", 41, 0),
             ("IFD1", 14, 0),
             ("Interop", 2, 0),
+            ("MakerNote", 101, 0),
+            ("Private", 9, 0),
         ],
     },
     SampleEntries {
@@ -3637,6 +3672,8 @@ const ENTRIES: &[SampleEntries] = &[
             ("IFD1", 14, 0),
             ("Interop", 2, 0),
             ("GPS", 4, 0),
+            ("MakerNote", 89, 0),
+            ("Private", 9, 0),
         ],
     },
     SampleEntries {
@@ -3647,6 +3684,8 @@ const ENTRIES: &[SampleEntries] = &[
             ("Exif", 37, 0),
             ("IFD1", 14, 0),
             ("Interop", 2, 0),
+            ("MakerNote", 76, 0),
+            ("Private", 9, 0),
         ],
     },
     SampleEntries {
@@ -3659,6 +3698,8 @@ const ENTRIES: &[SampleEntries] = &[
             ("IFD2", 16, 0),
             ("Interop", 2, 0),
             ("GPS", 4, 0),
+            ("MakerNote", 105, 0),
+            ("Private", 9, 0),
         ],
     },
     SampleEntries {
@@ -3670,6 +3711,8 @@ const ENTRIES: &[SampleEntries] = &[
             ("IFD1", 14, 0),
             ("IFD2", 16, 0),
             ("Interop", 2, 0),
+            ("MakerNote", 104, 0),
+            ("Private", 9, 0),
         ],
     },
     SampleEntries {
@@ -3680,6 +3723,8 @@ const ENTRIES: &[SampleEntries] = &[
             ("Exif", 37, 0),
             ("IFD1", 14, 0),
             ("Interop", 2, 0),
+            ("MakerNote", 78, 0),
+            ("Private", 9, 0),
         ],
     },
     SampleEntries {
@@ -3690,6 +3735,8 @@ const ENTRIES: &[SampleEntries] = &[
             ("Exif", 34, 0),
             ("IFD1", 11, 0),
             ("Interop", 2, 0),
+            ("MakerNote", 28, 5),
+            ("Private", 10, 0),
         ],
     },
     SampleEntries {
@@ -3701,6 +3748,8 @@ const ENTRIES: &[SampleEntries] = &[
             ("IFD1", 14, 0),
             ("IFD2", 16, 0),
             ("Interop", 2, 0),
+            ("MakerNote", 111, 0),
+            ("Private", 9, 0),
         ],
     },
     SampleEntries {
@@ -3712,6 +3761,8 @@ const ENTRIES: &[SampleEntries] = &[
             ("IFD1", 14, 0),
             ("IFD2", 16, 0),
             ("Interop", 2, 0),
+            ("MakerNote", 112, 0),
+            ("Private", 9, 0),
         ],
     },
     SampleEntries {
@@ -3723,6 +3774,8 @@ const ENTRIES: &[SampleEntries] = &[
             ("IFD1", 14, 0),
             ("IFD2", 16, 0),
             ("Interop", 2, 0),
+            ("MakerNote", 112, 0),
+            ("Private", 9, 0),
         ],
     },
     SampleEntries {
@@ -3734,6 +3787,8 @@ const ENTRIES: &[SampleEntries] = &[
             ("IFD1", 14, 0),
             ("IFD2", 16, 0),
             ("Interop", 2, 0),
+            ("MakerNote", 112, 0),
+            ("Private", 9, 0),
         ],
     },
     SampleEntries {
@@ -3745,6 +3800,8 @@ const ENTRIES: &[SampleEntries] = &[
             ("IFD1", 14, 0),
             ("IFD2", 16, 0),
             ("Interop", 2, 0),
+            ("MakerNote", 112, 0),
+            ("Private", 9, 0),
         ],
     },
     SampleEntries {
@@ -3756,6 +3813,8 @@ const ENTRIES: &[SampleEntries] = &[
             ("IFD1", 14, 0),
             ("IFD2", 16, 0),
             ("Interop", 2, 0),
+            ("MakerNote", 112, 0),
+            ("Private", 9, 0),
         ],
     },
     SampleEntries {
@@ -3767,6 +3826,8 @@ const ENTRIES: &[SampleEntries] = &[
             ("IFD1", 16, 0),
             ("IFD2", 16, 0),
             ("Interop", 2, 0),
+            ("MakerNote", 115, 0),
+            ("Private", 9, 0),
         ],
     },
     SampleEntries {
@@ -3778,6 +3839,8 @@ const ENTRIES: &[SampleEntries] = &[
             ("IFD1", 16, 0),
             ("IFD2", 16, 0),
             ("Interop", 2, 0),
+            ("MakerNote", 115, 0),
+            ("Private", 9, 0),
         ],
     },
     SampleEntries {
@@ -3790,6 +3853,8 @@ const ENTRIES: &[SampleEntries] = &[
             ("IFD2", 16, 0),
             ("Interop", 2, 0),
             ("GPS", 11, 0),
+            ("MakerNote", 116, 0),
+            ("Private", 9, 0),
         ],
     },
     SampleEntries {
@@ -3801,6 +3866,8 @@ const ENTRIES: &[SampleEntries] = &[
             ("IFD1", 14, 0),
             ("IFD2", 16, 0),
             ("Interop", 2, 0),
+            ("MakerNote", 116, 0),
+            ("Private", 9, 0),
         ],
     },
     SampleEntries {
@@ -3812,6 +3879,8 @@ const ENTRIES: &[SampleEntries] = &[
             ("IFD1", 14, 0),
             ("IFD2", 16, 0),
             ("Interop", 2, 0),
+            ("MakerNote", 116, 0),
+            ("Private", 9, 0),
         ],
     },
     SampleEntries {
@@ -3823,6 +3892,8 @@ const ENTRIES: &[SampleEntries] = &[
             ("IFD1", 14, 0),
             ("IFD2", 16, 0),
             ("Interop", 2, 0),
+            ("MakerNote", 116, 0),
+            ("Private", 9, 0),
         ],
     },
     SampleEntries {
@@ -3834,6 +3905,8 @@ const ENTRIES: &[SampleEntries] = &[
             ("IFD1", 14, 0),
             ("IFD2", 16, 0),
             ("Interop", 2, 0),
+            ("MakerNote", 116, 0),
+            ("Private", 9, 0),
         ],
     },
     SampleEntries {
@@ -3845,6 +3918,8 @@ const ENTRIES: &[SampleEntries] = &[
             ("IFD1", 14, 0),
             ("IFD2", 16, 0),
             ("Interop", 2, 0),
+            ("MakerNote", 116, 0),
+            ("Private", 9, 0),
         ],
     },
 ];
