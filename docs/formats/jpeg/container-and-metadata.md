@@ -7,7 +7,8 @@ those segments as far as raw-files reads them: the marker segments and the
 frame header of the JPEG standard, the JFIF segment, the Exif segment with
 the TIFF structure inside it and its thumbnail, and the Multi-Picture
 Format segment that lists the larger previews. It ends with the way
-raw-files reads a JPEG file and the traps on the way. Back to
+raw-files reads a JPEG file, the traps on the way, and what the
+directories of camera JPEGs hold. Back to
 [the JPEG overview](README.md).
 
 ## How to read this page
@@ -48,6 +49,7 @@ the file and says so.
 - [11. The camera files, segment by segment](#11-the-camera-files-segment-by-segment)
 - [12. Recommendation for raw-files](#12-recommendation-for-raw-files)
 - [13. Pitfalls](#13-pitfalls)
+- [14. The directories a file holds](#14-the-directories-a-file-holds)
 - [Sources](#sources)
 
 ## 1. Marker segments
@@ -577,6 +579,149 @@ decided, as steps. [I]
 - **An export may keep the camera's MakerNote** with a focus frame that no
   longer matches its pixels; see
   [ADR014](../../architecture-decisions/adr014-jpeg-files-as-a-format-of-their-own.md). [I]
+
+## 14. The directories a file holds
+
+raw-files will give every entry of every TIFF directory it walks, as
+the file records it
+([ADR023](../../architecture-decisions/adr023-every-entry-a-file-records.md)):
+in a JPEG, the directories of the Exif segment (section 4), the
+MakerNote's in the layouts raw-files reads (section 10), and the
+Multi-Picture Format's index IFD (section 7). This section lists what
+camera JPEGs hold: the directories, how many entries each has and of
+which types, the largest values, the entries a reader has to leave out,
+and the encrypted and enciphered records. The tag names the view will
+give are in [the tag names](../tag-names.md).
+
+The numbers were taken on 3 November 2026 with a walker of my own,
+written from the TIFF 6.0 and Exif standards and these notes, and with
+a counting program over raw-files' own `open`; no other reader was run.
+They cover 5,960 files: the 14 JPEGs of the test fixtures and
+`raw-samples/`; 9 files of raw.pixls.us that raw-files opens as JPEG,
+7 `.raw` and 2 `.dng` files, none of them a camera's own JPEG, since
+raw.pixls.us collects raw files; and, as counts only, 5,937 JPEGs of my
+own, from Nikon, Sony, Canon and Fujifilm bodies (99 of them my Z 9's).
+"Public" below is the first two groups. **[F]** In this
+section, **[F]** marks a count over these files rather than a fact
+of one named file.
+
+### 14.1 The directories
+
+| Directory | Files | Entries, min / median / max | Types seen |
+|---|---|---|---|
+| IFD0 | 5,860 | 3 / 12 / 50 | BYTE, ASCII, SHORT, LONG, RATIONAL, UNDEFINED, SRATIONAL, DOUBLE |
+| Exif | 5,860 | 1 / 37 / 49 | ASCII, SHORT, LONG, RATIONAL, UNDEFINED, SLONG, SRATIONAL |
+| IFD1 | 5,800 | 6 / 7 / 15 | ASCII, SHORT, LONG, RATIONAL |
+| Interoperability | 5,766 | 1 / 2 / 4 | ASCII, SHORT, UNDEFINED |
+| GPS | 2,640 | 1 / 1 / 11 | BYTE, ASCII, SHORT, RATIONAL |
+| Nikon MakerNote | 2,501 | 42 / 57 / 75 | BYTE, ASCII, SHORT, LONG, RATIONAL, UNDEFINED, SSHORT, SRATIONAL |
+| Nikon MakerNote preview IFD (0x0011) | 1,343 | 7 / 7 / 7 | SHORT, LONG, RATIONAL |
+| Sony MakerNote | 505 | 28 / 95 / 102 | BYTE, ASCII, SHORT, LONG, RATIONAL, UNDEFINED, SSHORT, SLONG, SRATIONAL |
+| MP Index | 2,393 | 3 / 3 / 3 | LONG, UNDEFINED |
+
+- **The Exif segment** is in 5,860 files; the 100 others have none.
+  No camera JPEG has a SubIFD; one raw.pixls.us file opened as JPEG has
+  a "SubIFD" of 540 entries of types TIFF does not define (14.3).
+  **[F]**
+- **The MakerNote** is walked on 2,501 Nikon files (in the
+  embedded-TIFF layout) and 505 Sony files (behind the `SONY DSC`
+  header); 2,837 files of other makers, Canon's and Fujifilm's among
+  them, have a MakerNote no notes describe, and 117 have none. The Sony
+  MakerNote's next-IFD slot holds its first value on 504 files, and is
+  not followed. **[F]**
+- **The MP Index** is in the 2,393 files with a Multi-Picture Format
+  segment; no file has an MP Attribute IFD. **[F]**
+- **No entry has the types SBYTE, FLOAT, IFD (13) or Exif's UTF-8
+  (129).** **[F]**
+- **A file holds 104 entries** (the median; at most 163, and 615 in
+  the damaged raw.pixls.us file) **and about 8 KB of values** (8,046
+  bytes, the median; at most 38,337), not counting the MakerNote entry
+  itself. **[F]**
+
+### 14.2 The largest values
+
+| Directory | Tag | Type | Largest | Median | Files with 256 bytes or more, public / mine |
+|---|---|---|---|---|---|
+| Exif | 0x927C MakerNote | UNDEFINED | 44,000 | 14,360 | 21 / 5,822 |
+| Nikon MakerNote | 0x0091 ShotInfo | UNDEFINED | 35,785 | 11,168 | 8 / 2,440 |
+| Sony MakerNote | 0x940E | UNDEFINED | 12,288 | 12,288 | 3 / 500 |
+| IFD0 | 0x0111 StripOffsets | LONG (1,908 values) | 7,632 | 7,632 | 1 / 0 |
+| Sony MakerNote | 0x9411 | UNDEFINED | 6,656 | 6,656 | 1 / 0 |
+| Sony MakerNote | 0x2010 | UNDEFINED | 6,604 | 6,556 | 4 / 500 |
+| Sony MakerNote | 0x9401 | UNDEFINED | 4,096 | 4,096 | 4 / 500 |
+| Sony MakerNote | 0x9410 | UNDEFINED | 3,656 | 3,656 | 1 / 0 |
+| Sony MakerNote | 0x9405 | UNDEFINED | 2,300 | 2,048 | 4 / 500 |
+| IFD0, Exif | 0xEA1C | UNDEFINED | 2,060 | 2,060 | 0 / 78 |
+
+The ten largest values, sizes in bytes. **[F]**
+
+- **No value inside the segment passes 64 KiB**, since the Exif
+  segment itself holds at most 65,533 bytes (section 4), far under the 1 MiB cap on one value
+  ([ADR023](../../architecture-decisions/adr023-every-entry-a-file-records.md)).
+  The one larger value a camera JPEG declares, a Sony MakerNote's
+  0x2001, lies outside the segment (14.3).
+
+### 14.3 Entries a reader leaves out
+
+The view will leave out a damaged entry or directory and count it
+(ADR023). On the JPEG files: **[F]**
+
+| Directory | What | Files, public / mine |
+|---|---|---|
+| Sony MakerNote | 0x2001, declared 549,518 bytes, lies outside the Exif segment | 1 / 0 (the ILCE-6000 file, section 10) |
+| Interoperability | the pointer to it leaves the Exif segment | 0 / 1 |
+| Nikon MakerNote preview IFD | more than 1,000 entries | 0 / 1 |
+| SubIFD | 540 entries of tags 0x2000 and 0xA000, of types TIFF does not define | 1 / 0 (a raw.pixls.us file) |
+
+- **The D70 file's Interoperability pointer leads to IFD1** (section
+  6), which the walk has already listed in IFD0's chain; the view will keep
+  IFD1 there and list no Interoperability IFD for that file. **[F]**
+- **Irregular but readable, and kept:** tags out of ascending order in
+  every Sony MakerNote, in the Exif IFD of 10 of my files and in IFD1
+  of 1; a tag written twice in IFD1 of 1 of my files (5 tags); a value
+  at an odd offset in IFD0, the Exif IFD or a Nikon MakerNote of at
+  most 6 files. 5,439 of the 5,960 files have no
+  irregularity of any kind. **[F]**
+- **No file has** a count or an offset that overflows or a value past
+  the end of the file. **[F]**
+
+### 14.4 The encrypted and enciphered records
+
+As in the raw files, these records are plain UNDEFINED entries to a
+TIFF reader; the view will give their bytes as recorded and will not
+mark them
+([ADR023](../../architecture-decisions/adr023-every-entry-a-file-records.md)).
+**[F]**
+
+- **Nikon's ShotInfo, ColorBalance and LensData**, encrypted by their
+  version as the
+  [NEF notes](../nef/makernote-and-metadata.md#4-encrypted-blocks)
+  describe: plain on the D70 file (ShotInfo and ColorBalance 0103,
+  LensData 0101); encrypted on the D5300 file (ShotInfo 0229,
+  ColorBalance 0219, LensData 0204) and on all 2,493 of my Nikon JPEGs
+  (ShotInfo 0216 to 0236 and, on the Z 9, 0805; ColorBalance 0212 to
+  0224 and 0803; LensData 0204 and 0802). The records of the six
+  stripped D600 and Z 9 fixtures carry no version.
+- **Sony's enciphered records**, by tag as the
+  [ARW notes](../arw/makernote-and-metadata.md#4-the-makernote-substitution-cipher)
+  describe: 0x2010, 0x9050, 0x9400 to 0x9406, 0x940C and 0x940E, each
+  on 503 or 504 of the 505 Sony JPEGs.
+
+### 14.5 What the view will leave out
+
+- **Segments that are not TIFF directories** (section 5): XMP (3
+  public files, 2,122 of mine), FlashPix extensions (2,139 of mine),
+  ICC profiles (16), Photoshop segments holding IPTC resources (10),
+  JFIF (2 public, 142 of mine), Adobe (4) and comments (1). XMP and
+  IPTC are for full metadata's group for them. **[F]**
+- **Other makers' MakerNotes**, on 2,837 files: the view will give
+  their bytes through the Exif IFD's 0x927C entry, and will walk none
+  of them until notes describe them.
+- **Nikon's short-header layout** of the earliest Coolpix JPEGs
+  ([NEF notes](../nef/makernote-and-metadata.md#in-a-jpeg-file)),
+  which raw-files does not read; none is among the files counted here.
+- **The content of the encrypted and enciphered records**: their bytes
+  only, until a decision allows reading them (ADR016).
 
 ## Sources
 

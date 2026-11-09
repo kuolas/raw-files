@@ -64,6 +64,7 @@ of MakerNote tag 0xB000 where it matters ("3 3 3 0").
 - [11. Robustness pitfalls](#11-robustness-pitfalls)
 - [12. Recommendation for raw-files](#12-recommendation-for-raw-files)
 - [13. Open questions](#13-open-questions)
+- [14. The directories a file holds](#14-the-directories-a-file-holds)
 - [Sources](#sources)
 
 ## Licences
@@ -1734,6 +1735,162 @@ too, so its white balance comes from Exif alone.
     not the size, on every sample, all of them large or APS-C;
     whether a medium or small raw of that body says so anywhere plain
     is open.
+
+## 14. The directories a file holds
+
+raw-files will give every entry of every TIFF directory it walks, as
+the file records it
+([ADR023](../../architecture-decisions/adr023-every-entry-a-file-records.md)).
+This section lists what ARW-family files hold: the directories, how
+many entries each has and of which types, the largest values, the
+entries a reader has to leave out, and the enciphered records. The tag
+names the view will give are in [the tag names](../tag-names.md).
+
+The numbers were taken on 3 November 2026 with a walker of my own,
+written from the TIFF 6.0 and Exif standards and these notes, and with
+a counting program over raw-files' own `open`; no other reader was run.
+They cover 745 files: the 36 ARW-family files of the test fixtures and
+`raw-samples/`, every one of the 209 ARW, SR2, SRF and ARQ files of
+raw.pixls.us, and, as counts only, 500 ARW files of my own ILCE-7M2.
+**[F]** In this
+section, **[F]** marks a count over these files rather than a fact
+of one named file.
+
+### 14.1 The directories
+
+| Directory | Files | Entries, min / median / max | Types seen |
+|---|---|---|---|
+| IFD0 | 745 | 16 / 18 / 24 | BYTE, ASCII, SHORT, LONG, RATIONAL, UNDEFINED |
+| IFD1 | 745 | 6 / 14 / 16 | ASCII, SHORT, LONG, RATIONAL |
+| IFD2 | 94 | 16 / 16 / 16 | ASCII, SHORT, LONG, RATIONAL |
+| SubIFD | 741, one each | 19 / 27 / 48 | BYTE, SHORT, LONG, RATIONAL, UNDEFINED, SSHORT |
+| Exif | 745 | 20 / 38 / 46 | ASCII, SHORT, LONG, RATIONAL, UNDEFINED, SRATIONAL |
+| Interoperability | 743 | 2 / 2 / 2 | ASCII, UNDEFINED |
+| MakerNote | 745 | 1 / 94 / 116 | BYTE, ASCII, SHORT, LONG, RATIONAL, UNDEFINED, SSHORT, SLONG, SRATIONAL |
+| SR2Private | 741 | 6 / 9 / 10 | SHORT, LONG, UNDEFINED |
+| GPS | 34 | 4 / 11 / 18 | BYTE, ASCII, SHORT, RATIONAL |
+
+- **IFD2 is on 94 public files** and none of my ILCE-7M2's; **the GPS IFD on 34 public files** and none of
+  mine. No SubIFD holds another, and no directory lies more than two
+  links from IFD0. **[F]**
+- **The MakerNote** is headerless on 741 files, behind the `SONY DSC`
+  header on the 2 DSLR-A100 files, and the head of an SRF chain, with
+  one entry, on the 2 DSC-F828 SRF files ([section 1](#1-finding-the-makernote)).
+  Its next-IFD slot holds the first value on 712 files, and nothing
+  that parses as an IFD on 2; it is not followed. **[F]**
+- **SR2Private**, which IFD0's DNGPrivateData (0xC634) points to
+  ([section 5](#5-sr2private-and-the-sr2subifd)), is on 741 files.
+  raw-files checks 0xC634's type and count but does not walk SR2Private
+  yet; the raw view will. On the 2 DSLR-A100 files 0xC634 points at a
+  Minolta MRW block, which no TIFF reader can parse (more than 1,000
+  entries), and the walk leaves it out. **[F]**
+- **No entry has the types SBYTE, FLOAT, DOUBLE, IFD (13) or Exif's
+  UTF-8 (129).** **[F]**
+- **A file holds 202 entries** (the median; at most 281) **and about
+  74 KB of values** (74,067 bytes, the median; at most 81,263), not
+  counting the MakerNote entry itself. **[F]**
+
+### 14.2 The largest values
+
+| Directory | Tag | Type | Largest | Median | Files with 256 bytes or more, public / mine |
+|---|---|---|---|---|---|
+| Exif | 0x927C MakerNote | UNDEFINED | 697,564 | 37,288 | 245 / 500 |
+| SR2Private | 0x7250 | SHORT (18,432 values) | 36,864 | 36,864 | 239 / 500 |
+| MakerNote | 0x0020 | UNDEFINED | 20,480 | 19,154 | 27 / 0 |
+| MakerNote | 0x0010 CameraInfo | UNDEFINED | 15,360 | 6,118 | 27 / 0 |
+| MakerNote | 0x940E | UNDEFINED | 12,288 | 12,288 | 183 / 500 |
+| MakerNote | 0x9401 | UNDEFINED | 7,840 | 4,096 | 212 / 500 |
+| MakerNote | 0x2010 | UNDEFINED | 6,855 | 6,556 | 118 / 500 |
+| MakerNote | 0x9411 | UNDEFINED | 6,656 | 6,656 | 29 / 0 |
+| MakerNote | 0x940F | UNDEFINED | 4,464 | 2,048 | 183 / 500 |
+| MakerNote | 0x9416 | UNDEFINED | 4,416 | 4,416 | 94 / 0 |
+
+The ten largest values, sizes in bytes. Next come IFD0's XMP packet
+(0x02BC, 4,096 bytes on 152 public files) and the MakerNote's 0x0018
+(4,096). **[F]**
+
+- **Apart from the MakerNote entry** (up to 697,564 bytes), **no value
+  passes 64 KiB**, and none passes the 1 MiB cap on one value
+  ([ADR023](../../architecture-decisions/adr023-every-entry-a-file-records.md)).
+  The largest is SR2Private's tag 0x7250, 18,432 SHORTs from the RX100
+  and A99 on (5,120 on the A200 to the SLT-A55,
+  [section 5](#5-sr2private-and-the-sr2subifd)). Opening a file will
+  read only SR2Private's table; reading every value when the file is
+  opened, which ADR023 rejects, would add 26 to 31 KB on my files,
+  most of it this tag.
+- **The longest ASCII value** is the MakerNote's 0x2003, 256 bytes; no
+  RATIONAL entry has more than 6 values.
+
+### 14.3 Entries a reader leaves out
+
+The view will leave out a damaged entry and count it in its directory
+(ADR023). On the ARW-family files: **[F]**
+
+| Directory | What | Tags | Files, public / mine |
+|---|---|---|---|
+| MakerNote | a value past the MakerNote's declared length | 0x2003, 0xB020, 0xB02A, 0xB02B, 0xB02C | 14 / 0 (DSLR-A200 to A900) |
+| SR2Private, SubIFD | a pointer at bytes that are no IFD (more than 1,000 entries) | whole directory | 2 / 0 (DSLR-A100) |
+
+- **None of my 500 files has a damaged entry or directory.** **[F]**
+- **Irregular but readable, and kept:** tags out of ascending order,
+  in the MakerNote and the raw SubIFD of nearly every file, mine
+  included, and in the Exif IFD of 2 public files; a value at an odd
+  offset in the MakerNote of 27 public files. Since Sony writes its
+  tags out of order, only 2 of the 745 files have no irregularity of
+  any kind. **[F]**
+- **No file has** a count or an offset that overflows, a value past the
+  end of the file, a type TIFF does not define, or a loop. **[F]**
+
+### 14.4 The enciphered records
+
+The MakerNote records that the substitution cipher of
+[section 4](#4-the-makernote-substitution-cipher) enciphers are plain
+UNDEFINED entries to a TIFF reader. The view will give their bytes as
+recorded and will not mark them
+([ADR023](../../architecture-decisions/adr023-every-entry-a-file-records.md)).
+Sony enciphers them by tag, on every body that writes them, so no
+version needs reading; by the tags of sections 2 and 4, on these files:
+**[F]**
+
+| Tag | Files (of 745) | Bytes, min / median / max |
+|---|---|---|
+| 0x9400 | 712 | 153 / 556 / 562 |
+| 0x9401 | 712 | 4,096 / 4,096 / 7,840 |
+| 0x9402 | 712 | 400 / 400 / 400 |
+| 0x9404 | 712 | 100 / 556 / 1,500 |
+| 0x940C | 712 | 64 / 64 / 64 |
+| 0x9050 | 707 | 256 / 944 / 3,072 |
+| 0x940E | 683 | 10,752 / 12,288 / 12,288 |
+| 0x9406 | 678 | 64 / 64 / 64 |
+| 0x2010 | 618 | 6,352 / 6,556 / 6,855 |
+| 0x9403 | 618 | 400 / 1,000 / 1,000 |
+| 0x9405 | 618 | 1,770 / 2,048 / 2,300 |
+| 0x9416 | 94 | 4,416 / 4,416 / 4,416 |
+| 0x900B | 13 | 400 / 400 / 400 |
+
+Every one of my 500 files has each of them but 0x9416 and 0x900B.
+**[F]**
+
+### 14.5 What the view will leave out
+
+- **The SR2SubIFD**, behind SR2Private's 0x7200 and 0x7201, is
+  encrypted as a whole, so no entry of it can be listed: 741 files,
+  11,932 to 62,112 bytes (56,958 the median), none past the end of the
+  file. The view will give SR2Private's entries that locate it, and the
+  block waits for the decision on decrypting (ADR016). **[F]**
+- **The SRF chain** of the DSC-F828's SRF files: its IFDs after the
+  first, SRF1 to SRF6, are encrypted with a chain of keys that starts
+  at a fixed place in the MakerNote
+  ([section 10](#10-a100-sr2-and-srf)), and wait with the SR2SubIFD.
+- **The DSLR-A100's Minolta blocks**: the MRW block 0xC634 points to and
+  the Minolta-format IFD of MakerNote tag 0xB028 are not TIFF
+  directories the view will walk; their entries' bytes only.
+- **The XMP packet** (IFD0 0x02BC, on 152 public files and none of
+  mine) and **an IPTC entry** (0x83BB, one public file): their bytes
+  only; XMP and IPTC are parsed by full metadata's group for them.
+  **[F]**
+- **The content of the enciphered records**: their bytes only, until a
+  decision allows deciphering them (ADR016).
 
 ## Sources
 

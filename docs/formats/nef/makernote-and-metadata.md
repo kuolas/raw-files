@@ -67,6 +67,7 @@ and described in the [JPEG notes](../jpeg/README.md).
 - [9. Robustness pitfalls](#9-robustness-pitfalls)
 - [10. Recommendation for raw-files](#10-recommendation-for-raw-files)
 - [11. Open questions](#11-open-questions)
+- [12. The directories a file holds](#12-the-directories-a-file-holds)
 - [Sources](#sources)
 
 ## Licences
@@ -1691,6 +1692,136 @@ MakerNote out of the critical path:
     point 1 at byte 68 and the D780 point 34 at byte 56 (files 1835,
     3827). What a 0101 body's mask of points in focus (byte 48) holds
     beside a valid point is on no checked file.
+
+## 12. The directories a file holds
+
+raw-files will give every entry of every TIFF directory it walks, as
+the file records it
+([ADR023](../../architecture-decisions/adr023-every-entry-a-file-records.md)).
+This section lists what NEF files hold: the directories, how many
+entries each has and of which types, the largest values, the entries a
+reader has to leave out, and the encrypted records. The tag names the
+view will give are in [the tag names](../tag-names.md).
+
+The numbers were taken on 3 November 2026 with a walker of my own,
+written from the TIFF 6.0 and Exif standards and these notes, and with
+a counting program over raw-files' own `open`; no other reader was run.
+They cover 11,759 NEF and NRW files: the 94 of the test fixtures and
+`raw-samples/`, every one of the 289 NEF and NRW files of raw.pixls.us,
+and, as counts only, 11,376 of my own: every NEF of my Z 9 (8,976) and
+up to 500 each of my D300s, D3200, D600, D7100 and D7200. **[F]** In this
+section, **[F]** marks a count over these files rather than a fact
+of one named file.
+
+### 12.1 The directories
+
+| Directory | Files | Entries, min / median / max | Types seen |
+|---|---|---|---|
+| IFD0 | 11,759 | 18 / 22 / 28 | BYTE, ASCII, SHORT, LONG, RATIONAL, UNDEFINED |
+| SubIFDs | 11,759, one to six each | 8 / 14 / 19 | BYTE, SHORT, LONG, RATIONAL, UNDEFINED |
+| Exif | 11,759 | 2 / 41 / 41 | ASCII, SHORT, LONG, RATIONAL, UNDEFINED, SRATIONAL |
+| MakerNote | 11,759 | 5 / 80 / 84 | BYTE, ASCII, SHORT, LONG, RATIONAL, UNDEFINED, SSHORT, SRATIONAL |
+| MakerNote preview IFD (0x0011) | 11,755 | 5 / 7 / 7 | SHORT, LONG, RATIONAL |
+| GPS | 11,670 | 1 / 1 / 13 | BYTE, ASCII, RATIONAL |
+
+- **No NEF has an IFD1 or an Interoperability IFD**, and no SubIFD
+  holds another: every SubIFD is one link from IFD0, and no directory
+  lies more than three links from it (IFD0, Exif, MakerNote, preview
+  IFD). No SubIFD, Exif or MakerNote next-IFD pointer leads anywhere.
+  **[F]**
+- **The MakerNote** is in the embedded-TIFF layout on 11,752 files and
+  headerless on 7, all of them D1-family files; no NEF has the short-header layout
+  ([section 1](#1-finding-the-makernote)). **[F]**
+- **The GPS IFD is on every one of my files**, on 263 of the 289
+  raw.pixls.us files and on 31 of the 94 fixtures, most often with a
+  single entry. raw-files does not walk it yet; the raw view will, after
+  IFD0's chain. **[F]**
+- **No entry has the types SBYTE, SLONG, FLOAT, DOUBLE, IFD (13) or
+  Exif's UTF-8 (129).** **[F]**
+- **A file holds 228 entries** (the median; at most 238) **and about
+  100 KB of values** (100,440 bytes, the median; at most 104,718), not
+  counting the MakerNote entry itself, whose content is its own
+  entries. **[F]**
+
+### 12.2 The largest values
+
+| Directory | Tag | Type | Largest | Median | Files with 256 bytes or more, public / mine |
+|---|---|---|---|---|---|
+| Exif | 0x927C MakerNote | UNDEFINED | 993,826 | 119,480 | 383 / 11,376 |
+| MakerNote | 0x0014 | UNDEFINED | 66,596 | 452 | 13 / 0 |
+| MakerNote | 0x0091 ShotInfo | UNDEFINED | 65,472 | 63,397 | 306 / 11,376 |
+| IFD0 | 0x02BC (XMP) | BYTE | 34,816 | 32,768 | 227 / 10,876 |
+| MakerNote | 0x00BC | UNDEFINED | 14,430 | 7,700 | 119 / 1,900 |
+| MakerNote | 0x0100 | UNDEFINED | 10,493 | 10,477 | 5 / 0 |
+| MakerNote | 0x0010 | UNDEFINED | 8,918 | 3,342 | 11 / 0 |
+| IFD0 | 0x8773 (ICC profile) | UNDEFINED | 8,684 | 8,684 | 2 / 0 |
+| MakerNote | 0x008C | UNDEFINED | 8,256 | 578 | 301 / 11,376 |
+| SubIFD | 0x0111 StripOffsets | LONG (1,231 values) | 4,924 | 1,148 | 29 / 0 |
+
+The ten largest values, sizes in bytes; StripByteCounts (0x0117) ties
+with StripOffsets. **[F]**
+
+- **The MakerNote entry is the largest value of all**, up to 993,826
+  bytes on the Nikon 1 bodies, whose preview IFD's JPEG lies inside it;
+  the view will give its content as its own entries, and its bytes too.
+- **Apart from the MakerNote entry, only one value passes 64 KiB**, the
+  66,596 bytes of tag 0x0014 on a Coolpix NRW. **None passes 1 MiB**,
+  the cap on one value, though the MakerNote entry's 993,826 bytes come
+  within 6% of it
+  ([ADR023](../../architecture-decisions/adr023-every-entry-a-file-records.md)).
+  ShotInfo is 63,397 bytes on every Z 9 file, and the XMP packet 32,768.
+- **The largest arrays** are IFD0's XMP (34,816 BYTEs) and a SubIFD's
+  StripOffsets (1,231 LONGs). No RATIONAL entry has more than 6 values,
+  no ASCII entry more than 65 bytes.
+
+### 12.3 Entries a reader leaves out
+
+The view will leave out a damaged entry and count it in its directory
+(ADR023). On the NEF files: **[F]**
+
+| Directory | What | Tags | Files, public / mine |
+|---|---|---|---|
+| MakerNote preview IFD | a value past the MakerNote's declared length | 0x011A, 0x011B | 6 / 0 (Coolpix NRW and COOLSCAN files) |
+| MakerNote | a value past the MakerNote's declared length | 0x0E01 | 2 / 0 (COOLSCAN files) |
+
+- **None of my 11,376 files has a damaged entry or directory**, nor any
+  of the fixtures; 11,743 of the 11,759 files have no irregularity of
+  any kind. **[F]**
+- **Irregular but readable, and kept:** a value at an odd offset, which
+  TIFF asks to be even (in the MakerNotes of 8 public files, IFD0 of 7,
+  the Exif IFD of 1 and a SubIFD of 1); tags out of ascending order in the
+  MakerNote of 2 public files. **[F]**
+- **No file has** a count or an offset that overflows, a value past the
+  end of the file, a type TIFF does not define, a loop, or a directory
+  of more than 1,000 entries. **[F]**
+
+### 12.4 The encrypted records
+
+ShotInfo, ColorBalance and LensData are plain UNDEFINED entries to a
+TIFF reader; whether each is encrypted depends on the four-digit
+version at its start ([section 4](#4-encrypted-blocks)). The view will
+give their bytes as recorded and will not mark them
+([ADR023](../../architecture-decisions/adr023-every-entry-a-file-records.md)).
+By the rule of section 4, on these files: **[F]**
+
+| Record | Plain versions | Encrypted versions | Files with no version |
+|---|---|---|---|
+| 0x0091 ShotInfo | 0100, 0102, 0103, 0400, 0600: 31 public files | 02xx (0204 to 0246) and 08xx (0800 to 0811): 272 public files and all 11,376 of mine (0805 on every Z 9 file) | 13 public |
+| 0x0097 ColorBalance | 0100, 0102, 0103: 7 public files | 0204 to 0228, 0400 to 0405, 0500, 0502, 0601, 0800 to 0803: 295 public files and all of mine (0803 on every Z 9 file) | none |
+| 0x0098 LensData | 0100, 0101: 7 public files | 0201 to 0204, 0401 to 0403, 0800 to 0802: 288 public files and all of mine (0802 on every Z 9 file) | none |
+
+### 12.5 What the view will leave out
+
+- **The content of the encrypted records**: their bytes only, until a
+  decision allows decrypting them (ADR016).
+- **The XMP packet** (IFD0 0x02BC, on 227 public files and 10,876 of
+  mine) and **the ICC profile** (0x8773, 2 public files): their bytes
+  only; XMP is parsed by full metadata's group for XMP and IPTC. No NEF
+  has an IPTC (0x83BB) or Photoshop (0x8649) entry. **[F]**
+- **Capture NX's edit records** (0x0E01): their bytes only.
+- **Scanner NEFs** of the COOLSCAN, which open as NEF; their directories
+  are walked as any NEF's, and their entries past the MakerNote's end
+  are left out as above.
 
 ## Sources
 
