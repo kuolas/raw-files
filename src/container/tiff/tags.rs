@@ -113,6 +113,10 @@ pub(crate) const EXIF_IFD: u16 = 0x8769;
 /// "not defined".
 pub(crate) const EXPOSURE_PROGRAM: u16 = 0x8822;
 
+/// The offset of IFD0's GPS IFD (GPS Info IFD Pointer), the directory
+/// that holds where the picture was taken, as Exif's GPS tags record it.
+pub(crate) const GPS_IFD: u16 = 0x8825;
+
 /// The sensitivity the picture was taken at, as a SHORT or a LONG
 /// (PhotographicSensitivity, called ISOSpeedRatings before Exif 2.3), read
 /// from the Exif IFD: the ISO. Exif writes 65535 for a sensitivity of 65535

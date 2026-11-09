@@ -5,24 +5,30 @@
 //!
 //! A TIFF-based RAW file holds several images, such as a thumbnail, one or
 //! more JPEG previews and the raw sensor data, and each is described by its
-//! own IFD. The IFDs reach each other through four kinds of link: the
+//! own IFD. The IFDs reach each other through five kinds of link: the
 //! next-IFD pointer at the end of an IFD, which chains IFD0 to IFD1, IFD1 to
 //! IFD2, and so on; the SubIFDs tag (0x014A), an array of offsets of child
 //! IFDs, which may have SubIFDs of their own; IFD0's Exif IFD tag (0x8769),
-//! the offset of the IFD that holds the capture metadata; and the Exif
-//! IFD's Interoperability IFD tag (0xA005), the offset of the IFD that
-//! names the rule the file follows, and so whether it is in Adobe RGB.
-//! [`walk`] follows these links from IFD0 and returns every IFD it finds as
-//! a [`Tree`], each with the [`Location`] it was found at.
+//! the offset of the IFD that holds the capture metadata; IFD0's GPS IFD
+//! tag (0x8825), the offset of the IFD that holds where the picture was
+//! taken; and the Exif IFD's Interoperability IFD tag (0xA005), the offset
+//! of the IFD that names the rule the file follows, and so whether it is in
+//! Adobe RGB. [`walk`] follows these links from IFD0 and returns every IFD
+//! it finds as a [`Tree`], each with the [`Location`] it was found at.
 //!
-//! The Interoperability IFD is tried last, after IFD0's whole chain. The
-//! Nikon D70 writes one IFD that is both its IFD1, which holds the
-//! thumbnail, and its Interoperability IFD. Tried last, the
-//! Interoperability IFD tag finds that IFD already in the tree as IFD1,
-//! where it stays, so the preview finder, which never asks the
-//! Interoperability IFD, still finds the thumbnail there. The tree also
-//! keeps where the tag led, and [`Tree::interop`] gives that IFD wherever
-//! it lies, so an InteropIndex in an IFD shared with the chain is not lost.
+//! The Interoperability IFD and the GPS IFD are tried last, after IFD0's
+//! whole chain, the Interoperability IFD first, so that its place does not
+//! depend on whether the file has a GPS IFD, and an IFD both tags lead to
+//! is the Interoperability IFD. The Nikon D70 writes one IFD that is both
+//! its IFD1, which holds the thumbnail, and its Interoperability IFD. Tried
+//! last, the Interoperability IFD tag finds that IFD already in the tree as
+//! IFD1, where it stays, so the preview finder, which never asks the
+//! Interoperability IFD, still finds the thumbnail there. The tree also keeps where the tag led, and
+//! [`Tree::interop`] gives that IFD wherever it lies, so an InteropIndex in
+//! an IFD shared with the chain is not lost. The GPS IFD tag is treated the
+//! same way, and [`Tree::gps`] gives its IFD wherever it lies: a GPS IFD
+//! tried after the chain can neither take an IFD's place in it nor move a
+//! preview.
 //!
 //! The walk reads a TIFF structure inside a [`Block`]: its base, where the
 //! TIFF header lies and every link counts from, and its bounds, the range
@@ -63,24 +69,24 @@
 //! offer, and the walk fails. Past IFD0, damage costs only the part of the
 //! tree it touches. An IFD that cannot be parsed, one outside the bounds
 //! among them, ends the chain if it is a chain IFD, and is left out if it is
-//! a SubIFD, the Exif IFD or the Interoperability IFD; a link whose tag
-//! value cannot be read is not followed. No IFD can start inside the 8-byte
-//! header, so a link into it, one whose offset is below 8, is not tried: it
-//! is neither parsed nor counted against the total cap, and a chain that
-//! reaches it ends; nor is a link whose position would pass the largest
-//! offset. A SubIFD must also be wholly sound, with every entry of a known
-//! type and inside the bounds and the file, or it is left out: the Sony
-//! DSLR-A100 writes the offset of its raw data in the SubIFDs tag, and the
-//! bytes there are not an IFD. Only a failure of the reader itself stops the
-//! walk, as does the total cap.
+//! a SubIFD, the Exif IFD, the GPS IFD or the Interoperability IFD; a link
+//! whose tag value cannot be read is not followed. No IFD can start inside
+//! the 8-byte header, so a link into it, one whose offset is below 8, is
+//! not tried: it is neither parsed nor counted against the total cap, and a
+//! chain that reaches it ends; nor is a link whose position would pass the
+//! largest offset. A SubIFD must also be wholly sound, with every entry of
+//! a known type and inside the bounds and the file, or it is left out: the
+//! Sony DSLR-A100 writes the offset of its raw data in the SubIFDs tag, and
+//! the bytes there are not an IFD. Only a failure of the reader itself
+//! stops the walk, as does the total cap.
 //!
 //! The walk follows nothing else: not the next-IFD pointers of SubIFDs or of
-//! the Exif IFD, unless IFD0's chain itself reaches that IFD, nor that of
-//! the Interoperability IFD; not the SubIFDs of the Exif IFD or of the
-//! Interoperability IFD; not the Exif IFD tag of any IFD but IFD0; and not
-//! the Interoperability IFD tag of any IFD but the Exif IFD. The walk runs
-//! in a loop over an explicit stack, not by recursion, so a file cannot make
-//! it use more call stack however it nests its IFDs.
+//! the Exif IFD, unless IFD0's chain itself reaches that IFD, nor those of
+//! the GPS and Interoperability IFDs; not the SubIFDs of the Exif, GPS or
+//! Interoperability IFD; not the Exif IFD tag or the GPS IFD tag of any IFD
+//! but IFD0; and not the Interoperability IFD tag of any IFD but the Exif
+//! IFD. The walk runs in a loop over an explicit stack, not by recursion,
+//! so a file cannot make it use more call stack however it nests its IFDs.
 
 use std::collections::BTreeMap;
 use std::io::{Read, Seek};
@@ -88,7 +94,7 @@ use std::mem;
 use std::vec;
 
 use super::header::HEADER_LEN;
-use super::tags::{EXIF_IFD, INTEROP_IFD, SUB_IFDS};
+use super::tags::{EXIF_IFD, GPS_IFD, INTEROP_IFD, SUB_IFDS};
 use super::{Block, Ifd, parse_header, parse_ifd};
 use crate::error::{Error, ErrorKind, Result};
 use crate::io::{ByteOrder, Source};
@@ -116,6 +122,10 @@ pub(crate) enum Location {
     },
     /// IFD0's Exif IFD, through its Exif IFD tag (0x8769).
     Exif,
+    /// IFD0's GPS IFD, through its GPS IFD tag (0x8825). An IFD the walk
+    /// found first through another link keeps that location, where
+    /// [`Tree::gps`] finds it.
+    Gps,
     /// The Exif IFD's Interoperability IFD, through its Interoperability
     /// IFD tag (0xA005), when the Exif IFD is in the tree at
     /// [`Exif`](Self::Exif). An IFD the walk found first through another
@@ -125,16 +135,16 @@ pub(crate) enum Location {
 
 impl Location {
     /// Whether the IFD at this location never holds an image: the Exif IFD
-    /// holds the capture metadata, and the Interoperability IFD names the
-    /// rule the file follows. The preview finder and the search for the raw
-    /// size skip both.
+    /// holds the capture metadata, the GPS IFD where the picture was taken,
+    /// and the Interoperability IFD names the rule the file follows. The
+    /// preview finder and the search for the raw size skip all three.
     ///
     /// An IFD found first at another location stays there, and is asked: the
     /// Nikon D70's IFD1, which is also its Interoperability IFD, lies at
     /// `Chain(1)` and holds the thumbnail.
     pub(crate) fn holds_no_image(self) -> bool {
         match self {
-            Self::Exif | Self::Interop => true,
+            Self::Exif | Self::Gps | Self::Interop => true,
             Self::Ifd0 | Self::Chain(_) | Self::Sub { .. } => false,
         }
     }
@@ -147,13 +157,17 @@ impl Location {
 /// IFD0; then IFD0's SubIFDs, depth first, each followed by its own
 /// SubIFDs, in the order of the SubIFDs arrays; then IFD0's Exif IFD; then
 /// IFD1 and its SubIFDs in the same way, IFD2 and its SubIFDs, and so on
-/// along the chain; and last the Exif IFD's Interoperability IFD. IFD0 is
-/// always first, and an IFD appears once, at the first location it was
-/// found at.
+/// along the chain; and last the Exif IFD's Interoperability IFD, then
+/// IFD0's GPS IFD. IFD0 is always first, and an IFD appears once, at the
+/// first location it was found at.
 #[derive(Clone, Debug)]
 pub(crate) struct Tree {
     /// Never empty: IFD0 is always the first.
     ifds: Vec<(Location, Ifd)>,
+    /// The position in `ifds` of the IFD that IFD0's GPS IFD tag leads to,
+    /// wherever the walk placed it; `None` when the tag leads to no IFD of
+    /// the tree.
+    gps: Option<usize>,
     /// The position in `ifds` of the IFD that the Exif IFD's
     /// Interoperability IFD tag leads to, wherever the walk placed it;
     /// `None` when the tag leads to no IFD of the tree.
@@ -163,9 +177,9 @@ pub(crate) struct Tree {
 // The NEF reader's claim reads IFD0, the preview finder goes through every
 // IFD of the tree, the metadata and MakerNote readers read the Exif IFD,
 // and the metadata reader reads the Interoperability IFD; nothing reads
-// the number of IFDs or an IFD by its position yet. Each `expect` fails
-// the build once its method has a caller, so it is then removed rather
-// than left behind.
+// the GPS IFD, the number of IFDs or an IFD by its position yet. Each
+// `expect` fails the build once its method has a caller, so it is then
+// removed rather than left behind.
 impl Tree {
     /// IFD0, the IFD the header points to.
     pub(crate) fn ifd0(&self) -> &Ifd {
@@ -206,6 +220,18 @@ impl Tree {
             .map(|(_, ifd)| ifd)
     }
 
+    /// The IFD that IFD0's GPS IFD tag leads to, wherever the walk placed
+    /// it: at [`Location::Gps`] when the walk found it first through that
+    /// tag, and otherwise at the location where it found it before, as
+    /// [`interop`](Self::interop) gives the Interoperability IFD.
+    ///
+    /// `None` when IFD0 has no GPS IFD tag or one that cannot be read or
+    /// followed, and when the IFD the tag leads to is not in the tree.
+    #[cfg_attr(not(test), expect(dead_code, reason = "nothing reads this method yet"))]
+    pub(crate) fn gps(&self) -> Option<&Ifd> {
+        self.gps.and_then(|i| self.ifds.get(i)).map(|(_, ifd)| ifd)
+    }
+
     /// The number of IFDs in the tree, at least 1.
     #[cfg_attr(not(test), expect(dead_code, reason = "nothing reads this method yet"))]
     pub(crate) fn len(&self) -> usize {
@@ -222,9 +248,9 @@ impl Tree {
 
 /// Walks the IFDs of the TIFF structure in `src` that `block` holds: reads
 /// its header at the block's base, then IFD0, its chain of next IFDs, the
-/// SubIFDs of each of those, recursively, IFD0's Exif IFD and its
-/// Interoperability IFD, counting every link from the base and reading
-/// every IFD inside the bounds.
+/// SubIFDs of each of those, recursively, IFD0's Exif IFD, the Exif IFD's
+/// Interoperability IFD and IFD0's GPS IFD, counting every link from the base
+/// and reading every IFD inside the bounds.
 ///
 /// See the [module documentation](self) for what is followed, what is left
 /// out and the order of the tree.
@@ -306,8 +332,11 @@ pub(crate) fn walk<R: Read + Seek>(
         step = step.saturating_add(1);
     }
 
-    // The Interoperability IFD comes last, so that an IFD it shares with
-    // the chain, as the D70's IFD1, keeps its place in the chain.
+    // The Interoperability and GPS IFDs come last, so that an IFD they
+    // share with the chain, as the D70's IFD1, keeps its place in the
+    // chain; the Interoperability IFD first, so that its place does not
+    // depend on whether the file has a GPS IFD, and an IFD both tags lead
+    // to is the Interoperability IFD.
     let link = match walker
         .ifds
         .iter()
@@ -316,24 +345,13 @@ pub(crate) fn walk<R: Read + Seek>(
         Some((_, exif)) => skip_damage(exif.u32(walker.src, INTEROP_IFD))?.flatten(),
         None => None,
     };
-    let interop = match link.and_then(|link| walker.target(link)) {
-        Some(at) => match walker.candidate(at)? {
-            Some((ifd, _)) => {
-                // Nothing is walked after it, so its next-IFD pointer is
-                // not needed: `visited` keeps the 0 that `claim` recorded.
-                walker.ifds.push((Location::Interop, ifd));
-                Some(walker.ifds.len() - 1)
-            }
-            // Tried before, or not an IFD. One tried before and kept in the
-            // tree is found by its position, where it lies once; one left
-            // out, or that cannot be parsed, is not in the tree.
-            None => walker.ifds.iter().position(|(_, ifd)| ifd.offset() == at),
-        },
-        None => None,
-    };
+    let interop = walker.last(link, Location::Interop)?;
+    let link = skip_damage(walker.ifds[0].1.u32(walker.src, GPS_IFD))?.flatten();
+    let gps = walker.last(link, Location::Gps)?;
 
     Ok(Tree {
         ifds: walker.ifds,
+        gps,
         interop,
     })
 }
@@ -350,9 +368,9 @@ struct Walker<'a, R> {
     /// the chain has yet to follow, as written: an offset from the base. The
     /// pointer is kept only for an IFD in the tree: 0 when the IFD could not
     /// be parsed, when it is a SubIFD the walk left out, when it is IFD0,
-    /// whose pointer the chain starts from, when it is the Interoperability
-    /// IFD, tried once the chain has ended, and once the chain has gone on
-    /// from it.
+    /// whose pointer the chain starts from, when it is the GPS or the
+    /// Interoperability IFD, tried once the chain has ended, and once the
+    /// chain has gone on from it.
     visited: BTreeMap<u64, u32>,
     /// How many IFDs the walk has tried to parse: the size of `visited`, at
     /// most [`Limits::max_ifds`].
@@ -423,6 +441,34 @@ impl<R: Read + Seek> Walker<'_, R> {
             return Ok(None);
         }
         skip_damage(parse_ifd(self.src, self.block, at, self.order, self.limits))
+    }
+
+    /// Follows `link`, an offset as written, to an IFD tried once the chain
+    /// has ended, and adds it to the tree at `location`, alone: its
+    /// next-IFD pointer and its SubIFDs are not followed. Returns the IFD's
+    /// position in the tree: the new one, or where the walk placed it
+    /// before through another link; `None` when there is no link, when it
+    /// cannot be followed, or when the IFD it leads to is not in the tree.
+    ///
+    /// # Errors
+    ///
+    /// As for [`candidate`](Self::candidate).
+    fn last(&mut self, link: Option<u32>, location: Location) -> Result<Option<usize>> {
+        let Some(at) = link.and_then(|link| self.target(link)) else {
+            return Ok(None);
+        };
+        Ok(match self.candidate(at)? {
+            Some((ifd, _)) => {
+                // Nothing is walked after it, so its next-IFD pointer is
+                // not needed: `visited` keeps the 0 that `claim` recorded.
+                self.ifds.push((location, ifd));
+                Some(self.ifds.len() - 1)
+            }
+            // Tried before, or not an IFD. One tried before and kept in the
+            // tree is found by its position, where it lies once; one left
+            // out, or that cannot be parsed, is not in the tree.
+            None => self.ifds.iter().position(|(_, ifd)| ifd.offset() == at),
+        })
     }
 
     /// Adds `ifd`, at depth 0, to the tree at `location`, then its SubIFDs,
@@ -625,6 +671,7 @@ mod tests {
         let (_, tree) = walked(&builder.build());
         assert_eq!(tree.len(), 2);
         assert!(tree.exif().is_none());
+        assert!(tree.gps().is_none());
         assert!(tree.interop().is_none());
     }
 
@@ -1153,11 +1200,31 @@ mod tests {
                 [15, 16, 17].map(|id| ifd(&mut builder, id));
             let [interop_of_ifd0, interop_of_sub, interop_of_ifd1] =
                 [18, 19, 20].map(|id| ifd(&mut builder, id));
+            let gps = ifd(&mut builder, 5);
+            let [
+                after_gps,
+                gps_sub,
+                gps_of_gps,
+                gps_of_ifd1,
+                gps_of_sub,
+                gps_of_exif,
+            ] = [21, 22, 23, 24, 25, 26].map(|id| ifd(&mut builder, id));
             builder
                 .subifds(ifd0, &[sub])
                 .exif(ifd0, exif)
                 .next(ifd0, Some(ifd1))
-                .interop(exif, interop);
+                .interop(exif, interop)
+                .gps(ifd0, gps);
+            // The GPS IFD's next IFD, SubIFDs and own GPS IFD; the GPS IFDs
+            // of IFD1, of a SubIFD and of the Exif IFD.
+            builder
+                .next(gps, Some(after_gps))
+                .subifds(gps, &[gps_sub])
+                .gps(gps, gps_of_gps);
+            builder
+                .gps(ifd1, gps_of_ifd1)
+                .gps(sub, gps_of_sub)
+                .gps(exif, gps_of_exif);
             // A SubIFD's next IFD; the Exif IFD's SubIFDs and next IFD; the
             // Exif IFDs of IFD1 and of a SubIFD.
             builder.next(sub, Some(after_sub));
@@ -1177,7 +1244,7 @@ mod tests {
                 .interop(sub, interop_of_sub)
                 .interop(ifd1, interop_of_ifd1);
             let (mut src, tree) = walked(&builder.build());
-            assert_eq!(ids(&mut src, &tree), [0, 1, 2, 3, 4]);
+            assert_eq!(ids(&mut src, &tree), [0, 1, 2, 3, 4, 5]);
         }
     }
 
@@ -1215,6 +1282,112 @@ mod tests {
             let found = tree.interop().unwrap();
             assert_eq!(found.offset(), built.ifd_offset(interop));
             assert_eq!(found.u32(&mut src, ID).unwrap(), Some(5));
+        }
+    }
+
+    #[test]
+    fn the_gps_ifd_comes_last_after_the_interoperability_ifd() {
+        for order in ORDERS {
+            // IFD0 with a SubIFD a, its Exif IFD and its GPS IFD G, written
+            // first; IFD1 along the chain; the Exif IFD's Interoperability
+            // IFD I.
+            let mut builder = TiffBuilder::new(order);
+            let ifd0 = ifd(&mut builder, 0);
+            let [gps, a, exif, ifd1, interop] = [5, 1, 2, 3, 4].map(|id| ifd(&mut builder, id));
+            builder.subifds(ifd0, &[a]).exif(ifd0, exif).gps(ifd0, gps);
+            builder.next(ifd0, Some(ifd1)).interop(exif, interop);
+            let built = builder.build();
+            let (mut src, tree) = walked(&built);
+
+            assert!(built.ifd_offset(gps) < built.ifd_offset(a));
+            assert_eq!(ids(&mut src, &tree), [0, 1, 2, 3, 4, 5], "{order:?}");
+            assert_eq!(
+                locations(&tree),
+                [
+                    Location::Ifd0,
+                    Location::Sub {
+                        parent: 0,
+                        index: 0
+                    },
+                    Location::Exif,
+                    Location::Chain(1),
+                    Location::Interop,
+                    Location::Gps,
+                ],
+                "{order:?}"
+            );
+            let found = tree.gps().expect("the GPS IFD");
+            assert_eq!(found.offset(), built.ifd_offset(gps), "{order:?}");
+            assert_eq!(tree.interop().unwrap().offset(), built.ifd_offset(interop));
+        }
+    }
+
+    #[test]
+    fn an_ifd_both_the_gps_and_the_interoperability_ifd_is_the_interoperability_ifd() {
+        for order in ORDERS {
+            // IFD0's GPS IFD tag and the Exif IFD's Interoperability IFD tag
+            // lead to one IFD: it is placed as the Interoperability IFD, and
+            // the GPS tag finds it there.
+            let mut builder = TiffBuilder::new(order);
+            let ifd0 = ifd(&mut builder, 0);
+            let [exif, shared] = [1, 2].map(|id| ifd(&mut builder, id));
+            builder
+                .exif(ifd0, exif)
+                .interop(exif, shared)
+                .gps(ifd0, shared);
+            let built = builder.build();
+            let (_, tree) = walked(&built);
+            assert_eq!(
+                locations(&tree),
+                [Location::Ifd0, Location::Exif, Location::Interop],
+                "{order:?}"
+            );
+            let at = built.ifd_offset(shared);
+            assert_eq!(tree.interop().unwrap().offset(), at, "{order:?}");
+            assert_eq!(tree.gps().unwrap().offset(), at, "{order:?}");
+        }
+    }
+
+    #[test]
+    fn a_gps_ifd_shared_with_a_chain_ifd_stays_in_the_chain() {
+        for order in ORDERS {
+            // IFD0's next-IFD pointer and its GPS IFD tag both lead to IFD1,
+            // which leads on to IFD2: IFD1 stays in the chain, once, and is
+            // still the GPS IFD. Its preview, if it held one, is still
+            // found there.
+            let mut builder = TiffBuilder::new(order);
+            let ifd0 = ifd(&mut builder, 0);
+            let [ifd1, ifd2] = [1, 2].map(|id| ifd(&mut builder, id));
+            builder.gps(ifd0, ifd1);
+            builder.next(ifd0, Some(ifd1)).next(ifd1, Some(ifd2));
+            let built = builder.build();
+            let (mut src, tree) = walked(&built);
+            assert_eq!(ids(&mut src, &tree), [0, 1, 2], "{order:?}");
+            assert_eq!(
+                locations(&tree),
+                [Location::Ifd0, Location::Chain(1), Location::Chain(2)],
+                "{order:?}"
+            );
+            let found = tree.gps().expect("IFD1");
+            assert_eq!(found.offset(), built.ifd_offset(ifd1), "{order:?}");
+        }
+    }
+
+    #[test]
+    fn a_gps_ifd_that_cannot_be_read_is_left_out() {
+        for order in ORDERS {
+            for link in [0xFFFF_0000, 1024, 4] {
+                // IFD0 → IFD1; IFD0's GPS IFD tag points past the end of the
+                // file, at bytes that are not an IFD, or into the header.
+                let mut builder = TiffBuilder::new(order);
+                let ifd0 = ifd(&mut builder, 0);
+                let ifd1 = ifd(&mut builder, 1);
+                builder.next(ifd0, Some(ifd1)).long(ifd0, GPS_IFD, &[link]);
+                builder.blob_at(1024, &[0xFF; 32]);
+                let (mut src, tree) = walked(&builder.build());
+                assert_eq!(ids(&mut src, &tree), [0, 1], "{link:#X} ({order:?})");
+                assert!(tree.gps().is_none(), "{link:#X} ({order:?})");
+            }
         }
     }
 
@@ -1440,8 +1613,9 @@ mod tests {
     }
 
     #[test]
-    fn only_the_exif_and_interoperability_ifds_hold_no_image() {
+    fn only_the_exif_gps_and_interoperability_ifds_hold_no_image() {
         assert!(Location::Exif.holds_no_image());
+        assert!(Location::Gps.holds_no_image());
         assert!(Location::Interop.holds_no_image());
         let sub = Location::Sub {
             parent: 0,

@@ -1734,8 +1734,7 @@ of one named file.
   ([section 1](#1-finding-the-makernote)). **[F]**
 - **The GPS IFD is on every one of my files**, on 263 of the 289
   raw.pixls.us files and on 31 of the 94 fixtures, most often with a
-  single entry. raw-files does not walk it yet; the raw view will, after
-  IFD0's chain. **[F]**
+  single entry. raw-files walks it after IFD0's chain. **[F]**
 - **No entry has the types SBYTE, SLONG, FLOAT, DOUBLE, IFD (13) or
   Exif's UTF-8 (129).** **[F]**
 - **A file holds 228 entries** (the median; at most 238) **and about
