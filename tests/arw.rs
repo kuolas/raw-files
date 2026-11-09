@@ -26,8 +26,8 @@ use support::arw::{
     srf_file, stub,
 };
 use support::samples::{
-    Jpeg, Sample, SampleFineTune, SampleFocus, SampleLens, SampleMetadata, SampleSettings,
-    SerialShape, check, check_metadata, listed, sizes,
+    Jpeg, Sample, SampleEntries, SampleFineTune, SampleFocus, SampleLens, SampleMetadata,
+    SampleSettings, SerialShape, check, check_entries, check_metadata, listed, sizes,
 };
 use support::tiff_builder::{BlobId, Built, Order};
 
@@ -3415,7 +3415,7 @@ fn the_hasselblad_lunar_sample_opens_as_a_sony_file() {
 }
 
 #[test]
-fn the_sample_list_and_the_tables_of_previews_and_metadata_name_the_same_sony_files() {
+fn the_sample_list_and_the_tables_of_previews_metadata_and_entries_name_the_same_sony_files() {
     // The list is compiled in, so this runs without any download.
     let listed = listed("arw");
 
@@ -3433,7 +3433,24 @@ fn the_sample_list_and_the_tables_of_previews_and_metadata_name_the_same_sony_fi
                 .map(|expected| (expected.file, "large")),
         )
         .collect();
-    for (what, tables) in [("previews", previews), ("metadata", metadata)] {
+    // One table of entries for both tiers, each file under its own.
+    let large = |file| LARGE_SAMPLES.iter().any(|sample| sample.file == file);
+    let entries: Vec<(&str, &str)> = ENTRIES
+        .iter()
+        .map(|expected| {
+            let tier = if large(expected.file) {
+                "large"
+            } else {
+                "normal"
+            };
+            (expected.file, tier)
+        })
+        .collect();
+    for (what, tables) in [
+        ("previews", previews),
+        ("metadata", metadata),
+        ("entries", entries),
+    ] {
         let expected: BTreeSet<(&str, &str)> = tables.iter().copied().collect();
         assert_eq!(
             expected.len(),
@@ -3447,5 +3464,394 @@ fn the_sample_list_and_the_tables_of_previews_and_metadata_name_the_same_sony_fi
             "listed without expected {what}: {unexpected:?}; \
              expected {what} but not listed: {unlisted:?}"
         );
+    }
+}
+
+/// The entries of every Sony-family sample, each directory in the order the
+/// reader finds it with its entries listed and left out. The counts were
+/// checked on 9 November 2026 against a walker of my own, written from the
+/// TIFF 6.0 and Exif standards and the format notes, which found the same
+/// directories with the same number of entries in each, though it lists
+/// IFD1 before the SubIFDs.
+const ENTRIES: &[SampleEntries] = &[
+    SampleEntries {
+        file: "sony-slt-a55.arw",
+        directories: &[
+            ("IFD0", 19, 0),
+            ("SubIFD0", 21, 0),
+            ("Exif", 37, 0),
+            ("IFD1", 12, 0),
+            ("Interop", 2, 0),
+            ("GPS", 18, 0),
+        ],
+    },
+    SampleEntries {
+        file: "sony-ilce-7rm2-compressed.arw",
+        directories: &[
+            ("IFD0", 20, 0),
+            ("SubIFD0", 27, 0),
+            ("Exif", 38, 0),
+            ("IFD1", 16, 0),
+            ("Interop", 2, 0),
+        ],
+    },
+    SampleEntries {
+        file: "sony-ilce-7rm2-uncompressed.arw",
+        directories: &[
+            ("IFD0", 20, 0),
+            ("SubIFD0", 27, 0),
+            ("Exif", 38, 0),
+            ("IFD1", 16, 0),
+            ("Interop", 2, 0),
+        ],
+    },
+    SampleEntries {
+        file: "sony-dsc-f828.srf",
+        directories: &[("IFD0", 18, 0), ("Exif", 20, 0), ("IFD1", 6, 0)],
+    },
+    SampleEntries {
+        file: "sony-nex-5.arw",
+        directories: &[
+            ("IFD0", 18, 0),
+            ("SubIFD0", 21, 0),
+            ("Exif", 37, 0),
+            ("IFD1", 12, 0),
+            ("Interop", 2, 0),
+        ],
+    },
+    SampleEntries {
+        file: "sony-ilce-9-compressed.arw",
+        directories: &[
+            ("IFD0", 19, 0),
+            ("SubIFD0", 35, 0),
+            ("Exif", 41, 0),
+            ("IFD1", 14, 0),
+            ("Interop", 2, 0),
+        ],
+    },
+    SampleEntries {
+        file: "sony-ilce-9-uncompressed.arw",
+        directories: &[
+            ("IFD0", 19, 0),
+            ("SubIFD0", 35, 0),
+            ("Exif", 41, 0),
+            ("IFD1", 14, 0),
+            ("Interop", 2, 0),
+        ],
+    },
+    SampleEntries {
+        file: "sony-ilce-7s.arw",
+        directories: &[
+            ("IFD0", 18, 0),
+            ("SubIFD0", 27, 0),
+            ("Exif", 37, 0),
+            ("IFD1", 14, 0),
+            ("Interop", 2, 0),
+        ],
+    },
+    SampleEntries {
+        file: "sony-dslr-a200.arw",
+        directories: &[
+            ("IFD0", 16, 0),
+            ("SubIFD0", 21, 0),
+            ("Exif", 33, 0),
+            ("IFD1", 11, 0),
+            ("Interop", 2, 0),
+        ],
+    },
+    SampleEntries {
+        file: "sony-dslr-a100.arw",
+        directories: &[
+            ("IFD0", 22, 0),
+            ("Exif", 37, 0),
+            ("IFD1", 11, 0),
+            ("Interop", 2, 0),
+        ],
+    },
+    SampleEntries {
+        file: "sony-dslr-a700.arw",
+        directories: &[
+            ("IFD0", 16, 0),
+            ("SubIFD0", 21, 0),
+            ("Exif", 34, 0),
+            ("IFD1", 11, 0),
+            ("Interop", 2, 0),
+        ],
+    },
+    SampleEntries {
+        file: "sony-dsc-rx100m6-1x1.arw",
+        directories: &[
+            ("IFD0", 21, 0),
+            ("SubIFD0", 35, 0),
+            ("Exif", 40, 0),
+            ("IFD1", 16, 0),
+            ("Interop", 2, 0),
+        ],
+    },
+    SampleEntries {
+        file: "sony-dsc-rx100m6-16x9.arw",
+        directories: &[
+            ("IFD0", 21, 0),
+            ("SubIFD0", 35, 0),
+            ("Exif", 40, 0),
+            ("IFD1", 16, 0),
+            ("Interop", 2, 0),
+        ],
+    },
+    SampleEntries {
+        file: "sony-dsc-r1.sr2",
+        directories: &[
+            ("IFD0", 18, 0),
+            ("SubIFD0", 19, 0),
+            ("Exif", 31, 0),
+            ("IFD1", 11, 0),
+            ("Interop", 2, 0),
+        ],
+    },
+    SampleEntries {
+        file: "sony-ilce-7rm3-pixel-shift.arw",
+        directories: &[
+            ("IFD0", 19, 0),
+            ("SubIFD0", 35, 0),
+            ("Exif", 41, 0),
+            ("IFD1", 14, 0),
+            ("Interop", 2, 0),
+        ],
+    },
+    SampleEntries {
+        file: "sony-ilce-7rm3.arq",
+        directories: &[
+            ("IFD0", 19, 0),
+            ("SubIFD0", 35, 0),
+            ("Exif", 41, 0),
+            ("IFD1", 14, 0),
+            ("Interop", 2, 0),
+        ],
+    },
+    SampleEntries {
+        file: "sony-slt-a99.arw",
+        directories: &[
+            ("IFD0", 19, 0),
+            ("SubIFD0", 27, 0),
+            ("Exif", 38, 0),
+            ("IFD1", 14, 0),
+            ("Interop", 2, 0),
+            ("GPS", 4, 0),
+        ],
+    },
+    SampleEntries {
+        file: "hasselblad-lunar.arw",
+        directories: &[
+            ("IFD0", 18, 0),
+            ("SubIFD0", 21, 0),
+            ("Exif", 37, 0),
+            ("IFD1", 14, 0),
+            ("Interop", 2, 0),
+        ],
+    },
+    SampleEntries {
+        file: "sony-ilce-1-lossless.arw",
+        directories: &[
+            ("IFD0", 22, 0),
+            ("SubIFD0", 40, 0),
+            ("Exif", 46, 0),
+            ("IFD1", 16, 0),
+            ("IFD2", 16, 0),
+            ("Interop", 2, 0),
+            ("GPS", 4, 0),
+        ],
+    },
+    SampleEntries {
+        file: "sony-ilce-7sm3.arw",
+        directories: &[
+            ("IFD0", 19, 0),
+            ("SubIFD0", 35, 0),
+            ("Exif", 45, 0),
+            ("IFD1", 14, 0),
+            ("IFD2", 16, 0),
+            ("Interop", 2, 0),
+        ],
+    },
+    SampleEntries {
+        file: "sony-dsc-rx100.arw",
+        directories: &[
+            ("IFD0", 18, 0),
+            ("SubIFD0", 21, 0),
+            ("Exif", 37, 0),
+            ("IFD1", 14, 0),
+            ("Interop", 2, 0),
+        ],
+    },
+    SampleEntries {
+        file: "sony-dslr-a900.arw",
+        directories: &[
+            ("IFD0", 20, 0),
+            ("SubIFD0", 21, 0),
+            ("Exif", 34, 0),
+            ("IFD1", 11, 0),
+            ("Interop", 2, 0),
+        ],
+    },
+    SampleEntries {
+        file: "sony-ilce-6700-lossless.arw",
+        directories: &[
+            ("IFD0", 19, 0),
+            ("SubIFD0", 40, 0),
+            ("Exif", 45, 0),
+            ("IFD1", 14, 0),
+            ("IFD2", 16, 0),
+            ("Interop", 2, 0),
+        ],
+    },
+    SampleEntries {
+        file: "sony-ilce-7m4-lossless-l.arw",
+        directories: &[
+            ("IFD0", 19, 0),
+            ("SubIFD0", 40, 0),
+            ("Exif", 45, 0),
+            ("IFD1", 14, 0),
+            ("IFD2", 16, 0),
+            ("Interop", 2, 0),
+        ],
+    },
+    SampleEntries {
+        file: "sony-ilce-7m4-lossless-m.arw",
+        directories: &[
+            ("IFD0", 19, 0),
+            ("SubIFD0", 44, 0),
+            ("Exif", 45, 0),
+            ("IFD1", 14, 0),
+            ("IFD2", 16, 0),
+            ("Interop", 2, 0),
+        ],
+    },
+    SampleEntries {
+        file: "sony-ilce-7m4-lossless-s.arw",
+        directories: &[
+            ("IFD0", 19, 0),
+            ("SubIFD0", 44, 0),
+            ("Exif", 45, 0),
+            ("IFD1", 14, 0),
+            ("IFD2", 16, 0),
+            ("Interop", 2, 0),
+        ],
+    },
+    SampleEntries {
+        file: "sony-ilce-7m4-uncompressed-apsc.arw",
+        directories: &[
+            ("IFD0", 19, 0),
+            ("SubIFD0", 35, 0),
+            ("Exif", 45, 0),
+            ("IFD1", 14, 0),
+            ("IFD2", 16, 0),
+            ("Interop", 2, 0),
+        ],
+    },
+    SampleEntries {
+        file: "sony-ilce-7m4-compressed-apsc.arw",
+        directories: &[
+            ("IFD0", 19, 0),
+            ("SubIFD0", 35, 0),
+            ("Exif", 45, 0),
+            ("IFD1", 14, 0),
+            ("IFD2", 16, 0),
+            ("Interop", 2, 0),
+        ],
+    },
+    SampleEntries {
+        file: "sony-ilce-9m3-compressed.arw",
+        directories: &[
+            ("IFD0", 21, 0),
+            ("SubIFD0", 39, 0),
+            ("Exif", 45, 0),
+            ("IFD1", 16, 0),
+            ("IFD2", 16, 0),
+            ("Interop", 2, 0),
+        ],
+    },
+    SampleEntries {
+        file: "sony-ilce-9m3-lossless-s.arw",
+        directories: &[
+            ("IFD0", 21, 0),
+            ("SubIFD0", 48, 0),
+            ("Exif", 45, 0),
+            ("IFD1", 16, 0),
+            ("IFD2", 16, 0),
+            ("Interop", 2, 0),
+        ],
+    },
+    SampleEntries {
+        file: "sony-ilce-1m2-lossy-apsc.arw",
+        directories: &[
+            ("IFD0", 20, 0),
+            ("SubIFD0", 39, 0),
+            ("Exif", 45, 0),
+            ("IFD1", 14, 0),
+            ("IFD2", 16, 0),
+            ("Interop", 2, 0),
+            ("GPS", 11, 0),
+        ],
+    },
+    SampleEntries {
+        file: "sony-ilce-7m5-compressed-hq.arw",
+        directories: &[
+            ("IFD0", 19, 0),
+            ("SubIFD0", 39, 0),
+            ("Exif", 46, 0),
+            ("IFD1", 14, 0),
+            ("IFD2", 16, 0),
+            ("Interop", 2, 0),
+        ],
+    },
+    SampleEntries {
+        file: "sony-ilce-7m5-compressed.arw",
+        directories: &[
+            ("IFD0", 19, 0),
+            ("SubIFD0", 39, 0),
+            ("Exif", 46, 0),
+            ("IFD1", 14, 0),
+            ("IFD2", 16, 0),
+            ("Interop", 2, 0),
+        ],
+    },
+    SampleEntries {
+        file: "sony-ilce-7m5-lossless-apsc.arw",
+        directories: &[
+            ("IFD0", 19, 0),
+            ("SubIFD0", 44, 0),
+            ("Exif", 46, 0),
+            ("IFD1", 14, 0),
+            ("IFD2", 16, 0),
+            ("Interop", 2, 0),
+        ],
+    },
+    SampleEntries {
+        file: "sony-ilce-7m5-compressed-hq-apsc.arw",
+        directories: &[
+            ("IFD0", 19, 0),
+            ("SubIFD0", 39, 0),
+            ("Exif", 46, 0),
+            ("IFD1", 14, 0),
+            ("IFD2", 16, 0),
+            ("Interop", 2, 0),
+        ],
+    },
+    SampleEntries {
+        file: "sony-ilce-7m5-compressed-apsc.arw",
+        directories: &[
+            ("IFD0", 19, 0),
+            ("SubIFD0", 39, 0),
+            ("Exif", 46, 0),
+            ("IFD1", 14, 0),
+            ("IFD2", 16, 0),
+            ("Interop", 2, 0),
+        ],
+    },
+];
+
+#[test]
+fn every_samples_entries_are_its_directories_with_their_counts() {
+    for expected in ENTRIES {
+        check_entries(expected);
     }
 }

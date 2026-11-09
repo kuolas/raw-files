@@ -60,8 +60,8 @@ use support::nef::{
     z6iii_file_with_blobs, z9_file, z9_file_with, z9_file_with_blobs,
 };
 use support::samples::{
-    Jpeg, Sample, SampleFineTune, SampleFocus, SampleLens, SampleMetadata, SampleSettings,
-    SerialShape, check, check_metadata, listed, sizes,
+    Jpeg, Sample, SampleEntries, SampleFineTune, SampleFocus, SampleLens, SampleMetadata,
+    SampleSettings, SerialShape, check, check_entries, check_metadata, listed, sizes,
 };
 use support::tiff_builder::{Built, Order};
 
@@ -5066,7 +5066,7 @@ fn every_nikon_sample_gives_its_metadata() {
 }
 
 #[test]
-fn the_sample_list_and_the_tables_of_previews_and_metadata_name_the_same_nikon_files() {
+fn the_sample_list_and_the_tables_of_previews_metadata_and_entries_name_the_same_nikon_files() {
     // The list is compiled in, so this runs without any download.
     let listed = listed("nef");
 
@@ -5076,7 +5076,12 @@ fn the_sample_list_and_the_tables_of_previews_and_metadata_name_the_same_nikon_f
         .map(|sample| sample.file)
         .collect();
     let metadata: Vec<&str> = METADATA.iter().map(|expected| expected.file).collect();
-    for (what, files) in [("previews", previews), ("metadata", metadata)] {
+    let entries: Vec<&str> = ENTRIES.iter().map(|expected| expected.file).collect();
+    for (what, files) in [
+        ("previews", previews),
+        ("metadata", metadata),
+        ("entries", entries),
+    ] {
         let expected: BTreeSet<(&str, &str)> = files.iter().map(|&file| (file, "normal")).collect();
         assert_eq!(
             expected.len(),
@@ -5090,5 +5095,422 @@ fn the_sample_list_and_the_tables_of_previews_and_metadata_name_the_same_nikon_f
             "listed without expected {what}: {unexpected:?}; \
              expected {what} but not listed: {unlisted:?}"
         );
+    }
+}
+
+/// The entries of every Nikon sample, each directory in the order the
+/// reader finds it with its entries listed and left out. The counts were
+/// checked on 9 November 2026 against a walker of my own, written from the
+/// TIFF 6.0 and Exif standards and the format notes, which found the same
+/// directories with the same number of entries in each, though it lists
+/// IFD1 before the SubIFDs.
+const ENTRIES: &[SampleEntries] = &[
+    SampleEntries {
+        file: "nikon-z9-lossless.nef",
+        directories: &[
+            ("IFD0", 22, 0),
+            ("SubIFD0", 8, 0),
+            ("SubIFD1", 19, 0),
+            ("SubIFD2", 8, 0),
+            ("SubIFD3", 14, 0),
+            ("SubIFD4", 14, 0),
+            ("SubIFD5", 14, 0),
+            ("Exif", 41, 0),
+            ("GPS", 11, 0),
+        ],
+    },
+    SampleEntries {
+        file: "nikon-z9-he-star.nef",
+        directories: &[
+            ("IFD0", 22, 0),
+            ("SubIFD0", 8, 0),
+            ("SubIFD1", 19, 0),
+            ("SubIFD2", 8, 0),
+            ("SubIFD3", 14, 0),
+            ("SubIFD4", 14, 0),
+            ("SubIFD5", 14, 0),
+            ("Exif", 41, 0),
+            ("GPS", 11, 0),
+        ],
+    },
+    SampleEntries {
+        file: "nikon-z9-he.nef",
+        directories: &[
+            ("IFD0", 22, 0),
+            ("SubIFD0", 8, 0),
+            ("SubIFD1", 19, 0),
+            ("SubIFD2", 8, 0),
+            ("SubIFD3", 14, 0),
+            ("SubIFD4", 14, 0),
+            ("SubIFD5", 14, 0),
+            ("Exif", 41, 0),
+            ("GPS", 11, 0),
+        ],
+    },
+    SampleEntries {
+        file: "nikon-d1h-12bit-uncompressed.nef",
+        directories: &[
+            ("IFD0", 26, 0),
+            ("SubIFD0", 17, 0),
+            ("Exif", 18, 0),
+            ("GPS", 1, 0),
+        ],
+    },
+    SampleEntries {
+        file: "nikon-d1x-12bit-lossy.nef",
+        directories: &[
+            ("IFD0", 26, 0),
+            ("SubIFD0", 17, 0),
+            ("Exif", 18, 0),
+            ("GPS", 1, 0),
+        ],
+    },
+    SampleEntries {
+        file: "nikon-d1x-12bit-uncompressed.nef",
+        directories: &[
+            ("IFD0", 26, 0),
+            ("SubIFD0", 17, 0),
+            ("Exif", 18, 0),
+            ("GPS", 1, 0),
+        ],
+    },
+    SampleEntries {
+        file: "nikon-d100-12bit-uncompressed.nef",
+        directories: &[("IFD0", 24, 0), ("SubIFD0", 17, 0), ("Exif", 32, 0)],
+    },
+    SampleEntries {
+        file: "nikon-d70-12bit-lossy.nef",
+        directories: &[
+            ("IFD0", 24, 0),
+            ("SubIFD0", 8, 0),
+            ("SubIFD1", 18, 0),
+            ("Exif", 31, 0),
+        ],
+    },
+    SampleEntries {
+        file: "nikon-d200-12bit-lossy.nef",
+        directories: &[
+            ("IFD0", 25, 0),
+            ("SubIFD0", 8, 0),
+            ("SubIFD1", 17, 0),
+            ("Exif", 32, 0),
+            ("GPS", 1, 0),
+        ],
+    },
+    SampleEntries {
+        file: "nikon-d300-12bit-lossy.nef",
+        directories: &[
+            ("IFD0", 27, 0),
+            ("SubIFD0", 8, 0),
+            ("SubIFD1", 17, 0),
+            ("Exif", 32, 0),
+            ("GPS", 1, 0),
+        ],
+    },
+    SampleEntries {
+        file: "nikon-d700-12bit-lossy.nef",
+        directories: &[
+            ("IFD0", 27, 0),
+            ("SubIFD0", 8, 0),
+            ("SubIFD1", 17, 0),
+            ("Exif", 31, 0),
+            ("GPS", 1, 0),
+        ],
+    },
+    SampleEntries {
+        file: "nikon-d7000-12bit-lossy.nef",
+        directories: &[
+            ("IFD0", 27, 0),
+            ("SubIFD0", 8, 0),
+            ("SubIFD1", 17, 0),
+            ("Exif", 33, 0),
+            ("GPS", 1, 0),
+        ],
+    },
+    SampleEntries {
+        file: "nikon-d750-12bit-lossy.nef",
+        directories: &[
+            ("IFD0", 28, 0),
+            ("SubIFD0", 8, 0),
+            ("SubIFD1", 17, 0),
+            ("SubIFD2", 8, 0),
+            ("Exif", 33, 0),
+            ("GPS", 1, 0),
+        ],
+    },
+    SampleEntries {
+        file: "nikon-d810-12bit-small.nef",
+        directories: &[
+            ("IFD0", 28, 0),
+            ("SubIFD0", 8, 0),
+            ("SubIFD1", 17, 0),
+            ("SubIFD2", 8, 0),
+            ("Exif", 33, 0),
+            ("GPS", 1, 0),
+        ],
+    },
+    SampleEntries {
+        file: "nikon-d850-12bit-lossless-small.nef",
+        directories: &[
+            ("IFD0", 28, 0),
+            ("SubIFD0", 8, 0),
+            ("SubIFD1", 17, 0),
+            ("SubIFD2", 8, 0),
+            ("Exif", 36, 0),
+            ("GPS", 1, 0),
+        ],
+    },
+    SampleEntries {
+        file: "nikon-d780-12bit-lossy.nef",
+        directories: &[
+            ("IFD0", 28, 0),
+            ("SubIFD0", 8, 0),
+            ("SubIFD1", 19, 0),
+            ("SubIFD2", 8, 0),
+            ("Exif", 40, 0),
+            ("GPS", 1, 0),
+        ],
+    },
+    SampleEntries {
+        file: "nikon-z6-12bit-small.nef",
+        directories: &[
+            ("IFD0", 28, 0),
+            ("SubIFD0", 8, 0),
+            ("SubIFD1", 19, 0),
+            ("SubIFD2", 8, 0),
+            ("SubIFD3", 14, 0),
+            ("SubIFD4", 17, 0),
+            ("Exif", 40, 0),
+            ("GPS", 1, 0),
+        ],
+    },
+    SampleEntries {
+        file: "nikon-zf-14bit.nef",
+        directories: &[
+            ("IFD0", 22, 0),
+            ("SubIFD0", 8, 0),
+            ("SubIFD1", 19, 0),
+            ("SubIFD2", 8, 0),
+            ("SubIFD3", 14, 0),
+            ("SubIFD4", 14, 0),
+            ("SubIFD5", 14, 0),
+            ("Exif", 41, 0),
+            ("GPS", 1, 0),
+        ],
+    },
+    SampleEntries {
+        file: "nikon-z6iii-14bit-3x2.nef",
+        directories: &[
+            ("IFD0", 22, 0),
+            ("SubIFD0", 8, 0),
+            ("SubIFD1", 19, 0),
+            ("SubIFD2", 8, 0),
+            ("SubIFD3", 14, 0),
+            ("SubIFD4", 14, 0),
+            ("SubIFD5", 14, 0),
+            ("Exif", 41, 0),
+            ("GPS", 1, 0),
+        ],
+    },
+    SampleEntries {
+        file: "nikon-z6iii-14bit-16x9.nef",
+        directories: &[
+            ("IFD0", 22, 0),
+            ("SubIFD0", 8, 0),
+            ("SubIFD1", 19, 0),
+            ("SubIFD2", 8, 0),
+            ("SubIFD3", 14, 0),
+            ("SubIFD4", 14, 0),
+            ("SubIFD5", 14, 0),
+            ("Exif", 41, 0),
+            ("GPS", 1, 0),
+        ],
+    },
+    SampleEntries {
+        file: "nikon-z6iii-14bit-1x1.nef",
+        directories: &[
+            ("IFD0", 22, 0),
+            ("SubIFD0", 8, 0),
+            ("SubIFD1", 19, 0),
+            ("SubIFD2", 8, 0),
+            ("SubIFD3", 14, 0),
+            ("SubIFD4", 14, 0),
+            ("SubIFD5", 14, 0),
+            ("Exif", 41, 0),
+            ("GPS", 1, 0),
+        ],
+    },
+    SampleEntries {
+        file: "nikon-coolpix-a-14bit-lossy.nef",
+        directories: &[
+            ("IFD0", 25, 0),
+            ("SubIFD0", 8, 0),
+            ("SubIFD1", 17, 0),
+            ("Exif", 33, 0),
+            ("GPS", 1, 0),
+        ],
+    },
+    SampleEntries {
+        file: "nikon-coolpix-p7800-12bit.nrw",
+        directories: &[
+            ("IFD0", 21, 0),
+            ("SubIFD0", 8, 0),
+            ("SubIFD1", 17, 0),
+            ("Exif", 30, 0),
+            ("GPS", 13, 0),
+        ],
+    },
+    SampleEntries {
+        file: "nikon-e5700-12bit-uncompressed.nef",
+        directories: &[
+            ("IFD0", 26, 0),
+            ("SubIFD0", 18, 0),
+            ("SubIFD1", 18, 0),
+            ("Exif", 13, 0),
+        ],
+    },
+    SampleEntries {
+        file: "nikon-1-j1-12bit-lossy.nef",
+        directories: &[
+            ("IFD0", 25, 0),
+            ("SubIFD0", 8, 0),
+            ("SubIFD1", 17, 0),
+            ("Exif", 33, 0),
+        ],
+    },
+    SampleEntries {
+        file: "nikon-d5600-12bit-lossy.nef",
+        directories: &[
+            ("IFD0", 28, 0),
+            ("SubIFD0", 8, 0),
+            ("SubIFD1", 17, 0),
+            ("SubIFD2", 8, 0),
+            ("Exif", 34, 0),
+            ("GPS", 1, 0),
+        ],
+    },
+    SampleEntries {
+        file: "nikon-z5ii-14bit-1x1.nef",
+        directories: &[
+            ("IFD0", 22, 0),
+            ("SubIFD0", 8, 0),
+            ("SubIFD1", 19, 0),
+            ("SubIFD2", 8, 0),
+            ("SubIFD3", 14, 0),
+            ("SubIFD4", 14, 0),
+            ("SubIFD5", 14, 0),
+            ("Exif", 41, 0),
+            ("GPS", 1, 0),
+        ],
+    },
+    SampleEntries {
+        file: "nikon-z5ii-14bit-16x9.nef",
+        directories: &[
+            ("IFD0", 22, 0),
+            ("SubIFD0", 8, 0),
+            ("SubIFD1", 19, 0),
+            ("SubIFD2", 8, 0),
+            ("SubIFD3", 14, 0),
+            ("SubIFD4", 14, 0),
+            ("SubIFD5", 14, 0),
+            ("Exif", 41, 0),
+            ("GPS", 1, 0),
+        ],
+    },
+    SampleEntries {
+        file: "nikon-z50ii-14bit-1x1.nef",
+        directories: &[
+            ("IFD0", 22, 0),
+            ("SubIFD0", 8, 0),
+            ("SubIFD1", 19, 0),
+            ("SubIFD2", 8, 0),
+            ("SubIFD3", 14, 0),
+            ("SubIFD4", 14, 0),
+            ("SubIFD5", 14, 0),
+            ("Exif", 41, 0),
+            ("GPS", 1, 0),
+        ],
+    },
+    SampleEntries {
+        file: "nikon-z50ii-14bit-16x9.nef",
+        directories: &[
+            ("IFD0", 22, 0),
+            ("SubIFD0", 8, 0),
+            ("SubIFD1", 19, 0),
+            ("SubIFD2", 8, 0),
+            ("SubIFD3", 14, 0),
+            ("SubIFD4", 14, 0),
+            ("SubIFD5", 14, 0),
+            ("Exif", 41, 0),
+            ("GPS", 1, 0),
+        ],
+    },
+    SampleEntries {
+        file: "nikon-z6iii-14bit-1x1-he-star.nef",
+        directories: &[
+            ("IFD0", 22, 0),
+            ("SubIFD0", 8, 0),
+            ("SubIFD1", 19, 0),
+            ("SubIFD2", 8, 0),
+            ("SubIFD3", 14, 0),
+            ("SubIFD4", 14, 0),
+            ("SubIFD5", 14, 0),
+            ("Exif", 41, 0),
+            ("GPS", 1, 0),
+        ],
+    },
+    SampleEntries {
+        file: "nikon-z6iii-14bit-16x9-he-star.nef",
+        directories: &[
+            ("IFD0", 22, 0),
+            ("SubIFD0", 8, 0),
+            ("SubIFD1", 19, 0),
+            ("SubIFD2", 8, 0),
+            ("SubIFD3", 14, 0),
+            ("SubIFD4", 14, 0),
+            ("SubIFD5", 14, 0),
+            ("Exif", 41, 0),
+            ("GPS", 1, 0),
+        ],
+    },
+    SampleEntries {
+        file: "nikon-d5-14bit-lossy.nef",
+        directories: &[
+            ("IFD0", 28, 0),
+            ("SubIFD0", 8, 0),
+            ("SubIFD1", 17, 0),
+            ("SubIFD2", 8, 0),
+            ("Exif", 36, 0),
+            ("GPS", 1, 0),
+        ],
+    },
+    SampleEntries {
+        file: "nikon-z30-12bit-lossless.nef",
+        directories: &[
+            ("IFD0", 28, 0),
+            ("SubIFD0", 8, 0),
+            ("SubIFD1", 19, 0),
+            ("SubIFD2", 8, 0),
+            ("Exif", 40, 0),
+            ("GPS", 1, 0),
+        ],
+    },
+    SampleEntries {
+        file: "nikon-zfc-12bit-lossless.nef",
+        directories: &[
+            ("IFD0", 28, 0),
+            ("SubIFD0", 8, 0),
+            ("SubIFD1", 19, 0),
+            ("SubIFD2", 8, 0),
+            ("Exif", 40, 0),
+            ("GPS", 1, 0),
+        ],
+    },
+];
+
+#[test]
+fn every_samples_entries_are_its_directories_with_their_counts() {
+    for expected in ENTRIES {
+        check_entries(expected);
     }
 }

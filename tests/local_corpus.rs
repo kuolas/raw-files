@@ -69,9 +69,17 @@
 //! Model alone. It never prints where a point lies, how large one area is,
 //! or a point's number.
 //!
+//! For the entries of the files' directories, it counts, for each
+//! directory, by the name the library gives it, such as "Exif" or
+//! "SubIFD1", how many files have it and how many entries it lists and
+//! leaves out over them, and how many entries have each field type, by
+//! its name, such as "SHORT"; and it reads every entry's value. It never
+//! prints a tag or a value.
+//!
 //! It fails when the folder cannot be read or holds no file of a format
-//! raw-files reads, and otherwise unless every entry could be read and, in
-//! every format's section, every file opened, every file has a preview,
+//! raw-files reads, and otherwise unless every entry of the folder could be
+//! read and, in every format's section, every file opened, every file has
+//! a preview, every entry's value could be read,
 //! every largest preview is a whole JPEG, every file's metadata gives the
 //! orientation its largest preview carries, and every focus point lies
 //! inside its frame, its area included, both as read and once placed on the
@@ -375,6 +383,52 @@ impl SettingsTally {
                 color_space.name(),
             );
         }
+    }
+}
+
+/// What the entries of a section's files hold, counted: for each
+/// directory, by the name the library gives it, such as "Exif", how many
+/// files have it and how many entries it lists and leaves out over them;
+/// how many entries have each field type; and how many values could not be
+/// read under the default cap. No tag, no value, no file.
+#[derive(Default)]
+struct EntriesTally {
+    /// Per directory: the files with it, its entries listed and its
+    /// entries left out, over those files.
+    directories: BTreeMap<String, (usize, usize, u64)>,
+    types: BTreeMap<String, usize>,
+    unreadable_values: usize,
+}
+
+impl EntriesTally {
+    /// Counts the entries of `raw` and reads every value.
+    fn record<R: Read + Seek>(&mut self, raw: &mut RawFile<R>) {
+        let entries = raw.entries().clone();
+        for directory in entries.directories() {
+            let counts = self.directories.entry(directory.to_string()).or_default();
+            counts.0 += 1;
+            counts.1 += entries.in_directory(directory).count();
+            counts.2 += u64::from(entries.skipped(directory));
+        }
+        for entry in &entries {
+            *self
+                .types
+                .entry(entry.field_type().to_string())
+                .or_default() += 1;
+            if raw.read_value(entry).is_err() {
+                self.unreadable_values += 1;
+            }
+        }
+    }
+
+    fn print(&self) {
+        for (directory, (files, listed, skipped)) in &self.directories {
+            println!(
+                "directory {directory}: in {files} files, {listed} entries listed, {skipped} left out"
+            );
+        }
+        println!("entries by field type: {:?}", self.types);
+        println!("values that could not be read: {}", self.unreadable_values);
     }
 }
 
@@ -694,6 +748,7 @@ struct Tally {
     metadata: MetadataTally,
     settings: SettingsTally,
     focus: FocusTally,
+    entries: EntriesTally,
     /// Files whose metadata gives an orientation other than their largest
     /// preview's: both come from the same tag, so this must stay zero.
     orientation_disagreements: usize,
@@ -744,6 +799,7 @@ impl Tally {
         println!("sizes of all previews: {:?}", self.preview_sizes);
         println!("largest-preview sizes: {:?}", self.sizes);
         println!("largest-preview orientations: {:?}", self.orientations);
+        self.entries.print();
         println!(
             "files with a recorded make: {}, a recorded model: {}, software: {}, a serial number: {}",
             m.recorded_make, m.recorded_model, m.software, m.serial_number
@@ -1176,6 +1232,7 @@ fn check(path: &Path, tally: &mut Tally) {
     tally.metadata.record(raw.metadata());
     tally.settings.record(raw.metadata());
     tally.focus.record(raw.metadata());
+    tally.entries.record(&mut raw);
     let Some(preview) = raw.largest_preview() else {
         tally.no_preview += 1;
         return;
@@ -1277,6 +1334,10 @@ fn every_file_of_the_local_corpus_opens_and_gives_a_whole_jpeg() {
             "some {format} files failed to open or read"
         );
         assert_eq!(tally.no_preview, 0, "some {format} files have no preview");
+        assert_eq!(
+            tally.entries.unreadable_values, 0,
+            "some values of {format} files' entries could not be read"
+        );
         assert_eq!(
             tally.orientation_disagreements, 0,
             "some {format} files' metadata orientation differs from their preview's"
