@@ -31,6 +31,7 @@ use std::io::{Read, Seek};
 
 use super::{FormatSpec, Parsed, is_dng, make_starts_with, tiff_metadata};
 use crate::container::tiff::Tree;
+use crate::entries::Entries;
 use crate::error::Result;
 use crate::format::Format;
 use crate::formats::makernote::nikon::{self, NIKON, Picture};
@@ -107,13 +108,18 @@ fn parse<R: Read + Seek>(src: &mut Source<R>, tree: &Tree, limits: &Limits) -> R
         Some(makernote) => nikon::metadata(src, makernote, standard, Picture::Raw)?,
         None => standard.metadata,
     };
-    Ok(Parsed { previews, metadata })
+    Ok(Parsed {
+        previews,
+        metadata,
+        entries: Entries::of_tree(tree),
+    })
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::container::tiff::tags::{DNG_PRIVATE_DATA, DNG_VERSION, MAKE};
+    use crate::entries::Directory;
     use crate::formats::testing::file;
     use crate::tiff_builder::{IfdId, TiffBuilder};
 
@@ -165,5 +171,27 @@ mod tests {
         assert!(claims(&mut src, &tree).unwrap());
         let parsed = parse(&mut src, &tree, &Limits::default()).unwrap();
         assert!(parsed.previews.is_empty());
+    }
+
+    #[test]
+    fn the_entries_are_those_of_every_directory_of_the_tree() {
+        let (mut src, tree) = file(|builder, ifd0| {
+            let (exif, gps) = (builder.ifd(), builder.ifd());
+            builder
+                .ascii(ifd0, MAKE, "NIKON CORPORATION")
+                .exif(ifd0, exif)
+                .gps(ifd0, gps)
+                .short(exif, 0x9207, &[5])
+                .byte(gps, 0x0000, &[2, 3, 0, 0]);
+        });
+        let parsed = parse(&mut src, &tree, &Limits::default()).unwrap();
+        let entries = &parsed.entries;
+        assert_eq!(
+            entries.directories().collect::<Vec<_>>(),
+            [Directory::Ifd(0), Directory::Exif, Directory::Gps]
+        );
+        assert!(entries.entry(Directory::Ifd(0), MAKE).is_some());
+        assert!(entries.entry(Directory::Exif, 0x9207).is_some());
+        assert!(entries.entry(Directory::Gps, 0x0000).is_some());
     }
 }
