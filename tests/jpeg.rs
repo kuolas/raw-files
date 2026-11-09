@@ -3182,11 +3182,12 @@ fn the_sample_list_and_the_tables_of_previews_metadata_and_entries_name_the_same
 }
 
 /// The entries of every camera JPEG sample, each directory in the order the
-/// reader finds it with its entries listed and left out. The counts were
-/// checked on 9 November 2026 against a walker of my own, written from the
-/// TIFF 6.0 and Exif standards and the format notes, which found the same
-/// directories with the same number of entries in each, though it lists
-/// IFD1 before the SubIFDs.
+/// reader finds it with its entries listed and left out, a Nikon or Sony
+/// MakerNote's directories after the Exif segment's and before the MP
+/// Index. The counts were checked on 9 November 2026 against a walker of my
+/// own, written from the TIFF 6.0 and Exif standards and the format notes,
+/// which found the same directories with the same number of entries in
+/// each, though it lists some in another order.
 const ENTRIES: &[SampleEntries] = &[
     SampleEntries {
         file: "sony-ilce-7m3.jpg",
@@ -3196,6 +3197,7 @@ const ENTRIES: &[SampleEntries] = &[
             ("IFD1", 13, 0),
             ("Interop", 2, 0),
             ("GPS", 4, 0),
+            ("MakerNote", 102, 0),
             ("MP Index", 3, 0),
         ],
     },
@@ -3206,6 +3208,7 @@ const ENTRIES: &[SampleEntries] = &[
             ("Exif", 38, 0),
             ("IFD1", 13, 0),
             ("Interop", 2, 0),
+            ("MakerNote", 97, 0),
             ("MP Index", 3, 0),
         ],
     },
@@ -3216,6 +3219,7 @@ const ENTRIES: &[SampleEntries] = &[
             ("Exif", 37, 0),
             ("IFD1", 15, 0),
             ("Interop", 2, 0),
+            ("MakerNote", 93, 0),
             ("MP Index", 3, 0),
         ],
     },
@@ -3226,6 +3230,7 @@ const ENTRIES: &[SampleEntries] = &[
             ("Exif", 38, 0),
             ("IFD1", 13, 0),
             ("Interop", 2, 0),
+            ("MakerNote", 93, 1),
             ("MP Index", 3, 0),
         ],
     },
@@ -3236,6 +3241,7 @@ const ENTRIES: &[SampleEntries] = &[
             ("Exif", 36, 0),
             ("IFD1", 8, 0),
             ("Interop", 2, 0),
+            ("MakerNote", 28, 0),
         ],
     },
     SampleEntries {
@@ -3246,12 +3252,19 @@ const ENTRIES: &[SampleEntries] = &[
             ("IFD1", 7, 0),
             ("Interop", 2, 0),
             ("GPS", 1, 0),
+            ("MakerNote", 58, 0),
             ("MP Index", 3, 0),
         ],
     },
     SampleEntries {
         file: "nikon-d70.jpg",
-        directories: &[("IFD0", 10, 0), ("Exif", 39, 0), ("IFD1", 7, 0)],
+        directories: &[
+            ("IFD0", 10, 0),
+            ("Exif", 39, 0),
+            ("IFD1", 7, 0),
+            ("MakerNote", 42, 0),
+            ("MakerNote 0x0011", 7, 0),
+        ],
     },
     SampleEntries {
         file: "canon-powershot-g7x.jpg",
