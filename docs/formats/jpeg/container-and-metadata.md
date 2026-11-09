@@ -586,8 +586,10 @@ raw-files gives every entry of every TIFF directory it walks, as the
 file records it
 ([ADR023](../../architecture-decisions/adr023-every-entry-a-file-records.md)):
 in a JPEG, the directories of the Exif segment (section 4) and the
-Multi-Picture Format's index IFD (section 7); the MakerNote's, in the
-layouts raw-files reads (section 10), are still to come. This section
+Multi-Picture Format's index IFD (section 7); and a Nikon or Sony
+MakerNote's, in the layouts raw-files reads (section 10), listed after
+the segment's directories and before the index: the MakerNote IFD as
+`MakerNote` and Nikon's preview IFD as `MakerNote 0x0011`. This section
 lists what camera JPEGs hold: the directories, how many entries each has
 and of which types, the largest values, the entries a reader has to
 leave out, and the encrypted and enciphered records. The tag names the
@@ -625,10 +627,10 @@ of one named file.
   **[F]**
 - **The MakerNote** is walked on 2,501 Nikon files (in the
   embedded-TIFF layout) and 505 Sony files (behind the `SONY DSC`
-  header); 2,837 files of other makers, Canon's and Fujifilm's among
-  them, have a MakerNote no notes describe, and 117 have none. The Sony
-  MakerNote's next-IFD slot holds its first value on 504 files, and is
-  not followed. **[F]**
+  header), and raw-files lists each of them; 2,837 files of other
+  makers, Canon's and Fujifilm's among them, have a MakerNote no notes
+  describe, and 117 have none. The Sony MakerNote's next-IFD slot holds
+  its first value on 504 files, and is not followed. **[F]**
 - **The MP Index** is in the 2,393 files with a Multi-Picture Format
   segment; no file has an MP Attribute IFD. **[F]**
 - **No entry has the types SBYTE, FLOAT, IFD (13) or Exif's UTF-8
@@ -689,8 +691,8 @@ JPEG files: **[F]**
 ### 14.4 The encrypted and enciphered records
 
 As in the raw files, these records are plain UNDEFINED entries to a
-TIFF reader; the view will give their bytes as recorded and will not
-mark them
+TIFF reader; the view gives their bytes as recorded and does not mark
+them
 ([ADR023](../../architecture-decisions/adr023-every-entry-a-file-records.md)).
 **[F]**
 
@@ -708,16 +710,16 @@ mark them
   describe: 0x2010, 0x9050, 0x9400 to 0x9406, 0x940C and 0x940E, each
   on 503 or 504 of the 505 Sony JPEGs.
 
-### 14.5 What the view will leave out
+### 14.5 What the view leaves out
 
 - **Segments that are not TIFF directories** (section 5): XMP (3
   public files, 2,122 of mine), FlashPix extensions (2,139 of mine),
   ICC profiles (16), Photoshop segments holding IPTC resources (10),
   JFIF (2 public, 142 of mine), Adobe (4) and comments (1). XMP and
   IPTC are for full metadata's group for them. **[F]**
-- **Other makers' MakerNotes**, on 2,837 files: the view will give
-  their bytes through the Exif IFD's 0x927C entry, and will walk none
-  of them until notes describe them.
+- **Other makers' MakerNotes**, on 2,837 files: the view gives their
+  bytes through the Exif IFD's 0x927C entry, and walks none of them
+  until notes describe them.
 - **Nikon's short-header layout** of the earliest Coolpix JPEGs
   ([NEF notes](../nef/makernote-and-metadata.md#in-a-jpeg-file)),
   which raw-files does not read; none is among the files counted here.

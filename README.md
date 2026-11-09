@@ -46,10 +46,11 @@ fuller RAW decoding is planned.
   with the picture's size and no raw size.
 - **Every entry.** Every entry of the TIFF directories raw-files walks,
   as the file records it: the IFDs, the SubIFDs, the Exif, GPS and
-  Interoperability IFDs and a JPEG's Multi-Picture index, each with its
+  Interoperability IFDs, the Nikon and Sony MakerNotes, Nikon's preview
+  IFD, Sony's SR2Private and a JPEG's Multi-Picture index, each with its
   directory, tag, type and count and the name a published standard gives
   its tag, its value read on request; a damaged entry is left out and
-  counted. The Nikon and Sony MakerNotes come next.
+  counted. Enciphered records are given as their bytes.
 - **Not yet.** A shot through the viewfinder of a body without a table
   gives no focus point, nor does a Nikon mirrorless shot that records
   only a mask of the points used, a shot with a Sony body before the

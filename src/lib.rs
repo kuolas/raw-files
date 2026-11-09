@@ -41,10 +41,11 @@
 //!   ([`Metadata::focus_layout`]).
 //!
 //! Beneath those values, [`RawFile::entries`] gives every entry of the TIFF
-//! directories the file holds that raw-files walks, as the file records
-//! it: each [`Entry`] with its [`Directory`], tag, [`FieldType`] and count,
-//! in the file's order; [`RawFile::read_value`] reads one's [`Value`] when
-//! asked for, under [`Limits::max_value_bytes`].
+//! directories the file holds that raw-files walks, a Nikon or Sony
+//! MakerNote's among them, as the file records it: each [`Entry`] with its
+//! [`Directory`], tag, [`FieldType`] and count, in the file's order;
+//! [`RawFile::read_value`] reads one's [`Value`] when asked for, under
+//! [`Limits::max_value_bytes`].
 //!
 //! See the [roadmap](https://github.com/kuolas/raw-files/blob/master/docs/ROADMAP.md)
 //! for the plan and the

@@ -1698,11 +1698,12 @@ MakerNote out of the critical path:
 raw-files gives every entry of every TIFF directory it walks, as the
 file records it
 ([ADR023](../../architecture-decisions/adr023-every-entry-a-file-records.md)):
-IFD0, the SubIFDs and the Exif and GPS IFDs; the MakerNote's directories
-are still to come. This section lists what NEF files hold: the
-directories, how many entries each has and of which types, the largest
-values, the entries a reader has to leave out, and the encrypted
-records. The tag names the view gives are in
+IFD0, the SubIFDs, the Exif and GPS IFDs, and the MakerNote IFD and its
+preview IFD, which the view calls `MakerNote` and `MakerNote 0x0011`
+after the MakerNote tag that points to it. This section lists what NEF
+files hold: the directories, how many entries each has and of which
+types, the largest values, the entries a reader has to leave out, and
+the encrypted records. The tag names the view gives are in
 [the tag names](../tag-names.md).
 
 The numbers were taken on 3 November 2026 with a walker of my own,
@@ -1733,7 +1734,15 @@ of one named file.
   **[F]**
 - **The MakerNote** is in the embedded-TIFF layout on 11,752 files and
   headerless on 7, all of them D1-family files; no NEF has the short-header layout
-  ([section 1](#1-finding-the-makernote)). **[F]**
+  ([section 1](#1-finding-the-makernote)). raw-files lists it in both
+  layouts. **[F]**
+- **The preview IFD** is on 11,755 files, but raw-files lists it on
+  11,749: on 4 Coolpix NRW files (P6000, P7000, P7100, B700) and the 2
+  COOLSCAN files, the whole IFD lies past the length the MakerNote
+  declares. raw-files reads the MakerNote's IFDs and its JPEG only
+  inside that length ([section 9](#9-robustness-pitfalls), item 1), so
+  it gives no small preview there, and the view does not list the IFD
+  ([12.3](#123-entries-a-reader-leaves-out)). **[F]**
 - **The GPS IFD is on every one of my files**, on 263 of the 289
   raw.pixls.us files and on 31 of the 94 fixtures, most often with a
   single entry. raw-files walks it after IFD0's chain. **[F]**
@@ -1764,7 +1773,7 @@ with StripOffsets. **[F]**
 
 - **The MakerNote entry is the largest value of all**, up to 993,826
   bytes on the Nikon 1 bodies, whose preview IFD's JPEG lies inside it;
-  the view will give its content as its own entries, and its bytes too.
+  the view gives its content as its own entries, and its bytes too.
 - **Apart from the MakerNote entry, only one value passes 64 KiB**, the
   66,596 bytes of tag 0x0014 on a Coolpix NRW. **None passes 1 MiB**,
   the cap on one value, though the MakerNote entry's 993,826 bytes come
@@ -1778,12 +1787,13 @@ with StripOffsets. **[F]**
 ### 12.3 Entries a reader leaves out
 
 The view leaves out a damaged entry and counts it in its directory
-(ADR023). On the NEF files: **[F]**
+(ADR023), and a directory that does not lie where its reader allows is
+not listed at all. On the NEF files: **[F]**
 
 | Directory | What | Tags | Files, public / mine |
 |---|---|---|---|
-| MakerNote preview IFD | a value past the MakerNote's declared length | 0x011A, 0x011B | 6 / 0 (Coolpix NRW and COOLSCAN files) |
-| MakerNote | a value past the MakerNote's declared length | 0x0E01 | 2 / 0 (COOLSCAN files) |
+| MakerNote | a value past the MakerNote's declared length, left out and counted | 0x0E01 | 2 / 0 (COOLSCAN files) |
+| MakerNote preview IFD | the whole IFD past the MakerNote's declared length: not listed | whole directory, whose 0x011A and 0x011B values lie further out | 6 / 0 (Coolpix NRW and COOLSCAN files) |
 
 - **None of my 11,376 files has a damaged entry or directory**, nor any
   of the fixtures; 11,743 of the 11,759 files have no irregularity of
@@ -1800,8 +1810,8 @@ The view leaves out a damaged entry and counts it in its directory
 
 ShotInfo, ColorBalance and LensData are plain UNDEFINED entries to a
 TIFF reader; whether each is encrypted depends on the four-digit
-version at its start ([section 4](#4-encrypted-blocks)). The view will
-give their bytes as recorded and will not mark them
+version at its start ([section 4](#4-encrypted-blocks)). The view gives
+their bytes as recorded and does not mark them
 ([ADR023](../../architecture-decisions/adr023-every-entry-a-file-records.md)).
 By the rule of section 4, on these files: **[F]**
 
@@ -1811,7 +1821,7 @@ By the rule of section 4, on these files: **[F]**
 | 0x0097 ColorBalance | 0100, 0102, 0103: 7 public files | 0204 to 0228, 0400 to 0405, 0500, 0502, 0601, 0800 to 0803: 295 public files and all of mine (0803 on every Z 9 file) | none |
 | 0x0098 LensData | 0100, 0101: 7 public files | 0201 to 0204, 0401 to 0403, 0800 to 0802: 288 public files and all of mine (0802 on every Z 9 file) | none |
 
-### 12.5 What the view will leave out
+### 12.5 What the view leaves out
 
 - **The content of the encrypted records**: their bytes only, until a
   decision allows decrypting them (ADR016).
@@ -1821,8 +1831,8 @@ By the rule of section 4, on these files: **[F]**
   has an IPTC (0x83BB) or Photoshop (0x8649) entry. **[F]**
 - **Capture NX's edit records** (0x0E01): their bytes only.
 - **Scanner NEFs** of the COOLSCAN, which open as NEF; their directories
-  are walked as any NEF's, and their entries past the MakerNote's end
-  are left out as above.
+  are walked as any NEF's, and their entry and preview IFD past the
+  MakerNote's end are left out as above.
 
 ## Sources
 

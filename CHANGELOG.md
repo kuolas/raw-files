@@ -15,7 +15,13 @@ does.
 - `RawFile::entries` gives every entry of every TIFF directory of the
   file that raw-files walks, as the file records it, in an `Entries`:
   IFD0 and the directories chained after it, the SubIFDs, the Exif, GPS
-  and Interoperability IFDs, and a JPEG's Multi-Picture Format index.
+  and Interoperability IFDs, a Nikon or Sony MakerNote's IFD in the
+  layouts raw-files reads, in a raw file or a JPEG, with Nikon's preview
+  IFD, an ARW's private directory, SR2Private, and a JPEG's
+  Multi-Picture Format index. A record the maker enciphers is an entry
+  like any other, whose bytes are given as stored, neither marked nor
+  deciphered; no standard names a maker's tags, so those entries have
+  no name.
   Each `Entry` gives its `Directory`, its tag, its `FieldType`, its count
   and where its value lies; `Entries` lists them directory by directory
   in the order they were found, looks one up by directory and tag, the
@@ -50,6 +56,11 @@ does.
   directories, so that its entries can be listed; an IFD it shares with
   the chain stays there. On most older NEFs this reads one more 64 KiB
   block.
+- Opening an ARW now also reads the table of Sony's private directory,
+  SR2Private, at the offset IFD0's DNGPrivateData holds, so that its
+  entries can be listed; its values are read only when asked for. On
+  89 of the 245 public ARW-family files measured this reads one more
+  64 KiB block.
 - An entry of Exif 3.0's UTF-8 type (129) is kept, where it was left out
   as one of an unknown type. The metadata still reads text only from
   ASCII entries.

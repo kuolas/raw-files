@@ -419,8 +419,9 @@ publishes its tags, and a name only another reader's tables give is
 not taken (ADR023). The format notes for
 [NEF](nef/makernote-and-metadata.md#2-key-tags) and
 [ARW](arw/makernote-and-metadata.md#2-key-tags) describe the MakerNote
-tags they use, and those descriptions stay in the notes; raw-files will
-give such entries by number only.
+tags they use, and those descriptions stay in the notes; raw-files gives
+such entries by number only, in the directories `MakerNote`,
+`MakerNote 0x0011` and `Private`.
 
 ## 9. Tags no document names
 

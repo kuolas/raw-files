@@ -250,8 +250,11 @@ impl<R: Read + Seek> RawFile<R> {
     ///
     /// The directories are those of a NEF's or an ARW's TIFF structure, or
     /// of a JPEG's Exif segment: IFD0 and the directories chained after it,
-    /// the SubIFDs, and the Exif, GPS and Interoperability IFDs; and a
-    /// JPEG's Multi-Picture Format index. Each entry was checked when the
+    /// the SubIFDs, and the Exif, GPS and Interoperability IFDs; then a
+    /// Nikon or Sony MakerNote's IFD, with Nikon's preview IFD, and an ARW's
+    /// private directory, SR2Private; and a JPEG's Multi-Picture Format
+    /// index. Records a maker enciphers are entries like any other, whose
+    /// bytes are given as stored. Each entry was checked when the
     /// file was opened; one that could not be is left out, and counted by
     /// [`Entries::skipped`].
     ///
