@@ -10,6 +10,7 @@ use std::io::{Cursor, Read, Seek};
 use std::path::Path;
 
 use crate::container::Structure;
+use crate::entries::{Entries, Entry, Value};
 use crate::error::{Error, Result};
 use crate::format::Format;
 use crate::formats;
@@ -21,7 +22,8 @@ use crate::options::Options;
 use crate::preview::{self, Preview};
 
 /// An open camera file: its format, its previews, what the camera recorded
-/// about the picture, and the reader to fetch a preview's bytes from.
+/// about the picture, every entry of its directories, and the reader to
+/// fetch a preview's bytes or an entry's value from.
 ///
 /// It opens the camera files raw-files reads: RAW files, such as Nikon's
 /// NEF and Sony's ARW, and the JPEG files cameras write beside them or
@@ -31,11 +33,11 @@ use crate::preview::{self, Preview};
 ///
 /// Opening reads only the file's structure, through a cache of 64 KiB
 /// blocks, so a few blocks rather than the whole file, and finds the
-/// previews and the metadata; no preview or raw data is read until asked
-/// for. The previews are listed with their sizes, and a preview's bytes are
-/// read only when asked for, so showing a preview costs the structure plus
-/// that preview, whether the file is on a disk, on a network share or in
-/// memory.
+/// previews, the metadata and the entries; no preview, entry's value or raw
+/// data is read until asked for. The previews are listed with their sizes,
+/// and a preview's bytes are read only when asked for, so showing a preview
+/// costs the structure plus that preview, whether the file is on a disk, on
+/// a network share or in memory.
 ///
 /// `R` is any reader that can seek: a [`File`] from [`open`](Self::open),
 /// a `Cursor<&[u8]>` from [`from_bytes`](Self::from_bytes), or anything
@@ -82,6 +84,7 @@ pub struct RawFile<R> {
     /// Smallest first, as [`preview::sort`] orders them.
     previews: Vec<Preview>,
     metadata: Metadata,
+    entries: Entries,
     limits: Limits,
 }
 
@@ -168,12 +171,13 @@ impl<R: Read + Seek> RawFile<R> {
     }
 
     /// The handle over `src`, of format `format`, with what its reader
-    /// found in `parsed`: the previews, in any order, and the metadata.
+    /// found in `parsed`: the previews, in any order, the metadata and the
+    /// entries.
     fn from_parts(src: Source<R>, format: Format, parsed: formats::Parsed, limits: Limits) -> Self {
         let formats::Parsed {
             mut previews,
             metadata,
-            entries: _,
+            entries,
         } = parsed;
         preview::sort(&mut previews);
         Self {
@@ -181,6 +185,7 @@ impl<R: Read + Seek> RawFile<R> {
             format,
             previews,
             metadata,
+            entries,
             limits,
         }
     }
@@ -236,6 +241,97 @@ impl<R: Read + Seek> RawFile<R> {
     /// ```
     pub fn metadata(&self) -> &Metadata {
         &self.metadata
+    }
+
+    /// Every entry of every TIFF directory of the file that raw-files walks,
+    /// as the file records it: its directory, tag, field type and count,
+    /// and where its value lies, beneath the values
+    /// [`metadata`](Self::metadata) reads from them.
+    ///
+    /// The directories are those of a NEF's or an ARW's TIFF structure, or
+    /// of a JPEG's Exif segment: IFD0 and the directories chained after it,
+    /// the SubIFDs, and the Exif, GPS and Interoperability IFDs; and a
+    /// JPEG's Multi-Picture Format index. Each entry was checked when the
+    /// file was opened; one that could not be is left out, and counted by
+    /// [`Entries::skipped`].
+    ///
+    /// Reading the entries reads nothing from the file, so it never fails;
+    /// [`read_value`](Self::read_value) reads an entry's value.
+    ///
+    /// # Examples
+    ///
+    /// List every entry, then print when the picture was taken, as the
+    /// Exif IFD's DateTimeOriginal (tag 0x9003) records it:
+    ///
+    /// ```no_run
+    /// use raw_files::{Directory, RawFile};
+    ///
+    /// fn main() -> raw_files::Result<()> {
+    ///     let mut file = RawFile::open("DSC_0001.NEF")?;
+    ///     for entry in file.entries() {
+    ///         println!(
+    ///             "{} 0x{:04X} {} x {}",
+    ///             entry.directory(),
+    ///             entry.tag(),
+    ///             entry.field_type(),
+    ///             entry.count(),
+    ///         );
+    ///     }
+    ///     if let Some(entry) = file.entries().entry(Directory::Exif, 0x9003) {
+    ///         if let Some(text) = file.read_value(&entry)?.text() {
+    ///             println!("taken at {text}");
+    ///         }
+    ///     }
+    ///     Ok(())
+    /// }
+    /// ```
+    pub fn entries(&self) -> &Entries {
+        &self.entries
+    }
+
+    /// Reads the value of `entry`, as the file records it, in the byte order
+    /// of its directory.
+    ///
+    /// A value the entry holds itself, of four bytes or fewer, is read from
+    /// the entry, without touching the reader. Any other is read from the
+    /// file each time it is asked for: at most [`Limits::max_value_bytes`]
+    /// bytes are read into memory, and a value of numbers, such as SHORTs or
+    /// RATIONALs, is decoded into a vector of as many bytes again, so the
+    /// most held at once is twice the cap. Bytes and text are kept as read.
+    ///
+    /// # Errors
+    ///
+    /// `LimitExceeded` if the value is longer than
+    /// [`Limits::max_value_bytes`] allows, at the value's offset, before
+    /// anything is allocated or read; `Malformed` if the value does not lie
+    /// inside this file, which happens when `entry` came from another file,
+    /// since an `Entry` is `Copy` and carries no tie to its file, while the
+    /// value of an entry of another file that does lie inside this one is
+    /// read from this file; `Io` if the reader fails, as it does when the
+    /// file has shrunk since it was opened.
+    ///
+    /// # Examples
+    ///
+    /// Print the camera's Make as text, and the GPS version as numbers:
+    ///
+    /// ```no_run
+    /// use raw_files::{Directory, RawFile, Value};
+    ///
+    /// fn main() -> raw_files::Result<()> {
+    ///     let mut file = RawFile::open("DSC_0001.NEF")?;
+    ///     if let Some(make) = file.entries().entry(Directory::Ifd(0), 0x010F) {
+    ///         println!("{:?}", file.read_value(&make)?.text());
+    ///     }
+    ///     if let Some(version) = file.entries().entry(Directory::Gps, 0x0000) {
+    ///         if let Value::Byte(bytes) = file.read_value(&version)? {
+    ///             println!("GPS version {bytes:?}");
+    ///         }
+    ///     }
+    ///     Ok(())
+    /// }
+    /// ```
+    pub fn read_value(&mut self, entry: &Entry) -> Result<Value> {
+        entry.read(&mut self.src, self.limits.max_value_bytes())
     }
 
     /// The largest preview, the last of [`previews`](Self::previews), or
@@ -312,14 +408,16 @@ impl<R: Read + Seek> RawFile<R> {
     }
 }
 
-/// Shows the format, the previews and the metadata; never the reader, which
-/// need not be `Debug`.
+/// Shows the format, the previews, the metadata and the number of
+/// entries; never the reader, which need not be `Debug`, nor each entry,
+/// which would bury the rest.
 impl<R> fmt::Debug for RawFile<R> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("RawFile")
             .field("format", &self.format)
             .field("previews", &self.previews)
             .field("metadata", &self.metadata)
+            .field("entries", &self.entries.len())
             .finish_non_exhaustive()
     }
 }
@@ -328,7 +426,7 @@ impl<R> fmt::Debug for RawFile<R> {
 mod tests {
     use super::*;
     use crate::camera::Camera;
-    use crate::entries::Entries;
+    use crate::entries::{Directory, Entries};
     use crate::error::ErrorKind;
     use crate::orientation::Orientation;
     use crate::preview::PreviewFormat;
@@ -545,6 +643,94 @@ mod tests {
         assert_eq!(reader.into_inner(), bytes);
     }
 
+    /// A NEF in byte order `order`: IFD0 with its Make and its Exif IFD,
+    /// which holds DateTimeOriginal (0x9003) and an UNDEFINED value of
+    /// `undefined` bytes (0x927C), with an ExposureTime held in its entry.
+    fn nef(order: Order, undefined: usize) -> Vec<u8> {
+        let mut builder = TiffBuilder::new(order);
+        let (ifd0, exif) = (builder.ifd(), builder.ifd());
+        builder
+            .ascii(ifd0, 0x010F, "NIKON CORPORATION")
+            .exif(ifd0, exif)
+            .rational(exif, 0x829A, &[(1, 250)])
+            .ascii(exif, 0x9003, "2026:11:09 10:11:12")
+            .short(exif, 0x9207, &[5])
+            .undefined(exif, 0x927C, &vec![0xAB; undefined]);
+        builder.build().bytes
+    }
+
+    #[test]
+    fn the_entries_are_the_files_and_their_values_are_read_on_request() {
+        for order in [Order::Little, Order::Big] {
+            let bytes = nef(order, 64);
+            let mut file = RawFile::from_bytes(&bytes).unwrap();
+            let directories: Vec<Directory> = file.entries().directories().collect();
+            assert_eq!(directories, [Directory::Ifd(0), Directory::Exif]);
+            assert_eq!(file.entries().len(), 6, "{order:?}");
+            let time = file.entries().entry(Directory::Exif, 0x9003).unwrap();
+            let value = file.read_value(&time).unwrap();
+            assert_eq!(value.text().as_deref(), Some("2026:11:09 10:11:12"));
+            let metering = file.entries().entry(Directory::Exif, 0x9207).unwrap();
+            assert_eq!(file.read_value(&metering).unwrap(), Value::Short(vec![5]));
+            let undefined = file.entries().entry(Directory::Exif, 0x927C).unwrap();
+            assert_eq!(
+                file.read_value(&undefined).unwrap(),
+                Value::Undefined(vec![0xAB; 64])
+            );
+        }
+    }
+
+    #[test]
+    fn a_value_is_read_up_to_the_value_cap_and_refused_past_it() {
+        let bytes = nef(Order::Little, 1000);
+        let limits = |n| Limits::default().with_max_value_bytes(n);
+        let mut file = Options::new()
+            .limits(limits(1000))
+            .from_bytes(&bytes)
+            .unwrap();
+        let undefined = file.entries().entry(Directory::Exif, 0x927C).unwrap();
+        assert_eq!(file.read_value(&undefined).unwrap().len(), 1000);
+
+        let mut file = Options::new()
+            .limits(limits(999))
+            .from_bytes(&bytes)
+            .unwrap();
+        let err = file.read_value(&undefined).unwrap_err();
+        assert_eq!(err.kind(), ErrorKind::LimitExceeded, "{err:?}");
+        assert_eq!(err.offset(), Some(undefined.byte_range().unwrap().start));
+        // The cap bounds one value, not the file: the others still read,
+        // and a value held in its entry is never refused.
+        let mut file = Options::new().limits(limits(0)).from_bytes(&bytes).unwrap();
+        let metering = file.entries().entry(Directory::Exif, 0x9207).unwrap();
+        assert_eq!(file.read_value(&metering).unwrap(), Value::Short(vec![5]));
+    }
+
+    #[test]
+    fn the_default_value_cap_reads_a_value_of_a_whole_makernote() {
+        // A Nikon 1 NEF's MakerNote entry, the largest value measured on
+        // camera files: 993,826 bytes.
+        let bytes = nef(Order::Big, 993_826);
+        let mut file = RawFile::from_bytes(&bytes).unwrap();
+        let makernote = file.entries().entry(Directory::Exif, 0x927C).unwrap();
+        assert_eq!(file.read_value(&makernote).unwrap().len(), 993_826);
+    }
+
+    #[test]
+    fn an_entry_whose_value_lies_outside_this_file_is_malformed() {
+        // An entry of a longer file, read through the handle of a shorter
+        // one, as a `Copy` entry can be.
+        let long = nef(Order::Little, 4000);
+        let short = nef(Order::Little, 8);
+        let undefined = RawFile::from_bytes(&long)
+            .unwrap()
+            .entries()
+            .entry(Directory::Exif, 0x927C)
+            .unwrap();
+        let mut file = RawFile::from_bytes(&short).unwrap();
+        let err = file.read_value(&undefined).unwrap_err();
+        assert_eq!(err.kind(), ErrorKind::Malformed, "{err:?}");
+    }
+
     /// A reader that is not `Debug`.
     struct Opaque(Cursor<Vec<u8>>);
 
@@ -570,6 +756,7 @@ mod tests {
             "{text}"
         );
         assert!(text.contains("width: 1620"), "{text}");
+        assert!(text.contains("entries: 0"), "{text}");
         assert!(text.ends_with(", .. }"), "{text}");
     }
 }

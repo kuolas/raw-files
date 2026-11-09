@@ -99,10 +99,6 @@ pub(crate) struct Parsed {
     pub metadata: Metadata,
     /// Every entry of every directory the reader walked, listed from the
     /// same tree, which is walked once.
-    #[cfg_attr(
-        not(test),
-        expect(dead_code, reason = "the file handle keeps no entries yet")
-    )]
     pub entries: Entries,
 }
 

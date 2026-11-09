@@ -1738,10 +1738,12 @@ too, so its white balance comes from Exif alone.
 
 ## 14. The directories a file holds
 
-raw-files will give every entry of every TIFF directory it walks, as
-the file records it
-([ADR023](../../architecture-decisions/adr023-every-entry-a-file-records.md)).
-This section lists what ARW-family files hold: the directories, how
+raw-files gives every entry of every TIFF directory it walks, as the
+file records it
+([ADR023](../../architecture-decisions/adr023-every-entry-a-file-records.md)):
+IFD0 and the directories chained after it, the SubIFD and the Exif, GPS
+and Interoperability IFDs; the MakerNote's and SR2Private's are still
+to come. This section lists what ARW-family files hold: the directories, how
 many entries each has and of which types, the largest values, the
 entries a reader has to leave out, and the enciphered records. The tag
 names the view will give are in [the tag names](../tag-names.md).
@@ -1823,7 +1825,7 @@ The ten largest values, sizes in bytes. Next come IFD0's XMP packet
 
 ### 14.3 Entries a reader leaves out
 
-The view will leave out a damaged entry and count it in its directory
+The view leaves out a damaged entry and counts it in its directory
 (ADR023). On the ARW-family files: **[F]**
 
 | Directory | What | Tags | Files, public / mine |

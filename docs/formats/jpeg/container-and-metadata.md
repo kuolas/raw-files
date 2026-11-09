@@ -582,12 +582,12 @@ decided, as steps. [I]
 
 ## 14. The directories a file holds
 
-raw-files will give every entry of every TIFF directory it walks, as
-the file records it
+raw-files gives every entry of every TIFF directory it walks, as the
+file records it
 ([ADR023](../../architecture-decisions/adr023-every-entry-a-file-records.md)):
-in a JPEG, the directories of the Exif segment (section 4), the
-MakerNote's in the layouts raw-files reads (section 10), and the
-Multi-Picture Format's index IFD (section 7). This section lists what
+in a JPEG, the directories of the Exif segment (section 4) and the
+Multi-Picture Format's index IFD (section 7); the MakerNote's, in the
+layouts raw-files reads (section 10), are still to come. This section lists what
 camera JPEGs hold: the directories, how many entries each has and of
 which types, the largest values, the entries a reader has to leave out,
 and the encrypted and enciphered records. The tag names the view will
@@ -663,8 +663,9 @@ The ten largest values, sizes in bytes. **[F]**
 
 ### 14.3 Entries a reader leaves out
 
-The view will leave out a damaged entry or directory and count it
-(ADR023). On the JPEG files: **[F]**
+The view leaves out a damaged entry and counts it in its directory,
+and a directory that cannot be read is not listed (ADR023). On the
+JPEG files: **[F]**
 
 | Directory | What | Files, public / mine |
 |---|---|---|
@@ -674,8 +675,8 @@ The view will leave out a damaged entry or directory and count it
 | SubIFD | 540 entries of tags 0x2000 and 0xA000, of types TIFF does not define | 1 / 0 (a raw.pixls.us file) |
 
 - **The D70 file's Interoperability pointer leads to IFD1** (section
-  6), which the walk has already listed in IFD0's chain; the view will keep
-  IFD1 there and list no Interoperability IFD for that file. **[F]**
+  6), which the walk has already listed in IFD0's chain; the view keeps
+  IFD1 there and lists no Interoperability IFD for that file. **[F]**
 - **Irregular but readable, and kept:** tags out of ascending order in
   every Sony MakerNote, in the Exif IFD of 10 of my files and in IFD1
   of 1; a tag written twice in IFD1 of 1 of my files (5 tags); a value

@@ -10,6 +10,41 @@ does.
 
 ## [Unreleased]
 
+### Added
+
+- `RawFile::entries` gives every entry of every TIFF directory of the
+  file that raw-files walks, as the file records it, in an `Entries`:
+  IFD0 and the directories chained after it, the SubIFDs, the Exif, GPS
+  and Interoperability IFDs, and a JPEG's Multi-Picture Format index.
+  Each `Entry` gives its `Directory`, its tag, its `FieldType`, its count
+  and where its value lies; `Entries` lists them directory by directory
+  in the order they were found, looks one up by directory and tag, the
+  first when a tag is repeated, and counts per directory the entries
+  left out because they could not be checked when the file was opened:
+  an unknown type, a length that overflows, or a value outside the file
+  or the part of it the directory was read in. Reading the entries reads
+  nothing from the file.
+- `RawFile::read_value` reads an entry's value, as a `Value` with one
+  variant per field type, its numbers in the byte order of the entry's
+  directory, fractions as numerator and denominator pairs with a zero
+  denominator kept, and text as its bytes, which `Value::text` cleans as
+  the metadata's text is cleaned, without its 255-byte limit. A value is
+  read from the file each time it is asked for.
+- `Limits::max_value_bytes`, set with `with_max_value_bytes`, bounds the
+  bytes one entry's value may take, 1 MiB by default, the bound the
+  metadata's values already have; a longer value fails only its own
+  read, with `LimitExceeded`.
+
+### Changed
+
+- Opening a file now also reads IFD0's GPS IFD, after the chain of
+  directories, so that its entries can be listed; an IFD it shares with
+  the chain stays there. On most older NEFs this reads one more 64 KiB
+  block.
+- An entry of Exif 3.0's UTF-8 type (129) is kept, where it was left out
+  as one of an unknown type. The metadata still reads text only from
+  ASCII entries.
+
 ## [0.7.0] - 2026-11-03
 
 The seventh release: the camera's maker and the name the body is sold
