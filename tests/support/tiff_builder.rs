@@ -102,6 +102,8 @@ pub const SRATIONAL: u16 = 10;
 pub const SUB_IFDS: u16 = 0x014A;
 /// The Exif IFD tag: the offset of the Exif IFD.
 pub const EXIF_IFD: u16 = 0x8769;
+/// The GPS IFD tag: the offset of the GPS IFD, in IFD0.
+pub const GPS_IFD: u16 = 0x8825;
 /// The Interoperability IFD tag: the offset of the Interoperability IFD,
 /// in the Exif IFD.
 pub const INTEROP_IFD: u16 = 0xA005;
@@ -437,6 +439,12 @@ impl TiffBuilder {
     /// Adds an Exif IFD entry (0x8769), a LONG for the offset of `child`.
     pub fn exif(&mut self, ifd: IfdId, child: IfdId) -> &mut Self {
         self.ifd_pointer(ifd, EXIF_IFD, child)
+    }
+
+    /// Adds a GPS IFD entry (0x8825), a LONG for the offset of `child`: in
+    /// IFD0, the offset of its GPS IFD.
+    pub fn gps(&mut self, ifd: IfdId, child: IfdId) -> &mut Self {
+        self.ifd_pointer(ifd, GPS_IFD, child)
     }
 
     /// Adds an Interoperability IFD entry (0xA005), a LONG for the offset

@@ -9,9 +9,10 @@
 //! its first directory, IFD0, starts. Both byte orders are accepted: files
 //! in the wild use both. The directories the header leads to, IFD0 and on,
 //! are read by the [`ifd`] module, and found by the [`mod@walk`] module:
-//! IFD0's chain of next IFDs, their SubIFDs, IFD0's Exif IFD and its
-//! Interoperability IFD. The [`tags`] module names the tags the crate
-//! reads, and the [`types`] module the field types of their values.
+//! IFD0's chain of next IFDs, their SubIFDs, IFD0's Exif and GPS IFDs and
+//! the Exif IFD's Interoperability IFD. The [`tags`] module names the tags
+//! the crate reads, and the [`types`] module the field types of their
+//! values.
 //!
 //! This module is the container's face to the rest of the crate: it
 //! re-exports what the format modules use, and the split into files below
