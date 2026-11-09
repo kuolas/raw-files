@@ -171,7 +171,8 @@ handle, with each value read only when it is asked for.
   6.0, Exif, DCF for the Interoperability IFD, CIPA DC-007 for the
   Multi-Picture index, and the DNG specification for the DNG tags
   raw-files reads. The names, each with its document and section, are
-  recorded in the format notes before any code holds them ([ADR013](adr013-clean-room-and-third-party-code.md)). A
+  recorded in [the tag names](../formats/tag-names.md) before any code
+  holds them ([ADR013](adr013-clean-room-and-third-party-code.md)). A
   MakerNote tag, and any tag no such document names, has none.
 - **As recorded, nothing redacted.** The view gives serial numbers, GPS
   entries and the owner's, artist's and copyright texts as the file
