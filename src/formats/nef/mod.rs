@@ -72,10 +72,10 @@ fn claims<R: Read + Seek>(src: &mut Source<R>, tree: &Tree) -> Result<bool> {
 /// Reads the previews and the metadata of a NEF file that [`claims`]
 /// accepted.
 ///
-/// The MakerNote is read first, once for the whole file. The previews are
-/// the JPEGs that IFD0 and the SubIFDs declare, found by the shared TIFF
-/// preview finder over the whole tree, and the one the MakerNote points
-/// at; the MakerNote and its preview are read within `limits`. The
+/// The MakerNote is read first, once for the whole file, with its
+/// PreviewIFD, within `limits`. The previews are the JPEGs that IFD0 and
+/// the SubIFDs declare, found by the shared TIFF preview finder over the
+/// whole tree, and the one the MakerNote's PreviewIFD declares. The
 /// metadata is what the shared TIFF metadata reader reads from the
 /// standard tags: the camera, the capture time, the orientation, the
 /// exposure, the camera's settings, the lens and the sizes. When there is
@@ -93,7 +93,9 @@ fn claims<R: Read + Seek>(src: &mut Source<R>, tree: &Tree) -> Result<bool> {
 /// raw file's picture, or the points a shot through the viewfinder names
 /// by number, placed from the table of the body's points, in the crop's
 /// window on a crop the table confirms ([`Picture::Raw`],
-/// [`nikon::metadata`]).
+/// [`nikon::metadata`]). The entries are those of every directory of the
+/// tree, then the MakerNote IFD's and its PreviewIFD's
+/// ([`MakerNote::add_entries`](nikon::MakerNote::add_entries)).
 ///
 /// # Errors
 ///
@@ -102,23 +104,27 @@ fn claims<R: Read + Seek>(src: &mut Source<R>, tree: &Tree) -> Result<bool> {
 /// reader fails. Nothing the file holds is an error here.
 fn parse<R: Read + Seek>(src: &mut Source<R>, tree: &Tree, limits: &Limits) -> Result<Parsed> {
     let makernote = nikon::read(src, tree, limits)?;
-    let previews = previews::previews(src, tree, makernote.as_ref(), limits)?;
+    let previews = previews::previews(src, tree, makernote.as_ref())?;
     let standard = tiff_metadata::read(src, tree)?;
+    let mut entries = Entries::of_tree(tree);
     let metadata = match &makernote {
-        Some(makernote) => nikon::metadata(src, makernote, standard, Picture::Raw)?,
+        Some(makernote) => {
+            makernote.add_entries(&mut entries);
+            nikon::metadata(src, makernote, standard, Picture::Raw)?
+        }
         None => standard.metadata,
     };
     Ok(Parsed {
         previews,
         metadata,
-        entries: Entries::of_tree(tree),
+        entries,
     })
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::container::tiff::tags::{DNG_PRIVATE_DATA, DNG_VERSION, MAKE};
+    use crate::container::tiff::tags::{DNG_PRIVATE_DATA, DNG_VERSION, MAKE, MAKER_NOTE};
     use crate::entries::Directory;
     use crate::formats::testing::file;
     use crate::tiff_builder::{IfdId, TiffBuilder};
@@ -193,5 +199,46 @@ mod tests {
         assert!(entries.entry(Directory::Ifd(0), MAKE).is_some());
         assert!(entries.entry(Directory::Exif, 0x9207).is_some());
         assert!(entries.entry(Directory::Gps, 0x0000).is_some());
+    }
+
+    #[test]
+    fn the_makernote_ifd_and_its_preview_ifd_follow_the_trees_directories() {
+        // A MakerNote of the headerless layout, which the file's own builder
+        // writes, its block running through its PreviewIFD.
+        let (mut src, tree) = file(|builder, ifd0| {
+            let (exif, gps, makernote, preview) =
+                (builder.ifd(), builder.ifd(), builder.ifd(), builder.ifd());
+            builder
+                .ascii(ifd0, MAKE, "NIKON CORPORATION")
+                .exif(ifd0, exif)
+                .gps(ifd0, gps)
+                .byte(gps, 0x0000, &[2, 3, 0, 0]);
+            builder
+                .short(makernote, 0x0002, &[0, 200])
+                .ifd_pointer(makernote, 0x0011, preview)
+                .short(preview, 0x0103, &[6]);
+            let end = builder.blob(&[0; 4]);
+            builder
+                .block_through(makernote, end)
+                .undefined_ifd(exif, MAKER_NOTE, makernote);
+        });
+        let parsed = parse(&mut src, &tree, &Limits::default()).unwrap();
+        let entries = &parsed.entries;
+        assert_eq!(
+            entries.directories().collect::<Vec<_>>(),
+            [
+                Directory::Ifd(0),
+                Directory::Exif,
+                Directory::Gps,
+                Directory::MakerNote,
+                Directory::MakerNoteSub(0x0011),
+            ]
+        );
+        assert!(entries.entry(Directory::MakerNote, 0x0002).is_some());
+        assert!(
+            entries
+                .entry(Directory::MakerNoteSub(0x0011), 0x0103)
+                .is_some()
+        );
     }
 }

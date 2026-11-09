@@ -302,7 +302,7 @@ fn parse<R: Read + Seek>(
     };
     let mut metadata = match &makernote {
         Some(MakerNote::Nikon(makernote)) => {
-            candidates.extend(nikon::preview_candidate(src, makernote, limits)?);
+            candidates.extend(nikon::preview_candidate(src, makernote)?);
             nikon::metadata(src, makernote, standard, Picture::Jpeg)?
         }
         Some(MakerNote::Sony(makernote)) => sony::metadata(src, makernote, standard.metadata)?,

@@ -411,9 +411,12 @@
 //! fault, and says nothing about the MakerNote.
 //!
 //! The MakerNote is read once per file, into a [`MakerNote`]: its block
-//! found and checked, its MakerNote IFD parsed. Every use of the MakerNote
-//! then reads from that same structure, so that none of them finds, checks
-//! or parses the block again.
+//! found and checked, its MakerNote IFD and its PreviewIFD parsed. Every
+//! use of the MakerNote then reads from that same structure, so that none
+//! of them finds, checks or parses the block again: the preview, the
+//! metadata, and the raw view, which lists both IFDs' entries as the
+//! directories `MakerNote` and `MakerNoteSub(0x0011)`
+//! ([`Directory`]).
 
 use std::cmp::Ordering;
 use std::io::{Read, Seek};
@@ -426,6 +429,7 @@ use crate::camera_settings::{
 use crate::container::tiff::tags::{JPEG_INTERCHANGE_FORMAT, JPEG_INTERCHANGE_FORMAT_LENGTH};
 use crate::container::tiff::types::{LONG, SHORT, SRATIONAL, SSHORT, UNDEFINED};
 use crate::container::tiff::{Block, Ifd, Tree, ifd_in, parse_header, skip_damage};
+use crate::entries::{Directory, Entries};
 use crate::error::Result;
 use crate::focus::{Focus, FocusAreaMode, FocusOrigin, FocusPoint, FocusPoints, lies_on, scale};
 use crate::formats::tiff_metadata::{self, Standard, one_short};
@@ -583,13 +587,36 @@ pub(in crate::formats) struct MakerNote {
     /// is the inner header's, which may differ from the file's, or the
     /// Exif IFD's: the order of every number inside the block.
     ifd: Ifd,
+    /// The PreviewIFD, which the MakerNote IFD's entry 0x0011 points to,
+    /// read in the same block, with the same base and byte order; `None`
+    /// when that entry is missing, is not one number the entry holds, or
+    /// leads to no IFD that holds together inside the block. Read with the
+    /// MakerNote IFD, so that the preview and the raw view both take it
+    /// from here.
+    preview: Option<Ifd>,
+}
+
+impl MakerNote {
+    /// Adds the MakerNote's directories to `entries`: the MakerNote IFD,
+    /// then the PreviewIFD, under the tag of the entry that points to it,
+    /// only when the MakerNote IFD was added, not already listed as a
+    /// directory at the same position, so that no PreviewIFD is listed
+    /// without its MakerNote.
+    pub(in crate::formats) fn add_entries(&self, entries: &mut Entries) {
+        if entries.push(Directory::MakerNote, &self.ifd)
+            && let Some(preview) = &self.preview
+        {
+            entries.push(Directory::MakerNoteSub(PREVIEW_IFD), preview);
+        }
+    }
 }
 
 /// The Nikon MakerNote of the file in `src`, whose IFDs are `tree`, read
 /// within `limits`, for a file that its format's reader has taken for a
-/// Nikon one by its Make; `None` when the file has no Exif IFD, no
-/// MakerNote, a MakerNote of the short-header layout, which is not read,
-/// or one whose inner header or MakerNote IFD does not hold together.
+/// Nikon one by its Make, with its PreviewIFD when it has one
+/// ([`preview_ifd`]); `None` when the file has no Exif IFD, no MakerNote,
+/// a MakerNote of the short-header layout, which is not read, or one whose
+/// inner header or MakerNote IFD does not hold together.
 ///
 /// The Make is not looked at here: the caller has. A block that starts
 /// with the signature is of the embedded layout or none; any other block
@@ -619,7 +646,31 @@ pub(in crate::formats) fn read<R: Read + Seek>(
         // the Exif IFD's base and order.
         block.ifd_at(src, 0, limits)?
     };
-    Ok(ifd.map(|ifd| MakerNote { ifd }))
+    let Some(ifd) = ifd else {
+        return Ok(None);
+    };
+    let preview = preview_ifd(src, &ifd, limits)?;
+    Ok(Some(MakerNote { ifd, preview }))
+}
+
+/// The PreviewIFD of the MakerNote whose IFD is `ifd`, read within
+/// `limits`: the IFD at the offset its entry 0x0011 holds, counted from the
+/// MakerNote's base, in its byte order, inside its block; `None` when the
+/// entry is missing, of a type no number is read from, or stored out of
+/// line, or the IFD does not hold together inside the block.
+///
+/// # Errors
+///
+/// `Io` when the reader fails. Nothing the block holds is an error.
+fn preview_ifd<R: Read + Seek>(
+    src: &mut Source<R>,
+    ifd: &Ifd,
+    limits: &Limits,
+) -> Result<Option<Ifd>> {
+    let Some(pointer) = inline_u32(src, ifd, PREVIEW_IFD)? else {
+        return Ok(None);
+    };
+    ifd_in(src, ifd.block(), pointer, ifd.order(), limits)
 }
 
 /// The MakerNote IFD of `block`, a block of the embedded layout, which
@@ -655,9 +706,9 @@ fn embedded_ifd<R: Read + Seek>(
 }
 
 /// Where the preview JPEG of `makernote` is, as a candidate for the shared
-/// finder, with its absolute offset, read within `limits`; `None` when the
-/// MakerNote has no PreviewIFD, or one whose structure does not hold
-/// together.
+/// finder, with its absolute offset: the JPEG its PreviewIFD declares, read
+/// with the MakerNote; `None` when the MakerNote has no PreviewIFD, or one
+/// that does not declare a JPEG inside the block.
 ///
 /// See the [module documentation](self) for the checks.
 ///
@@ -667,24 +718,18 @@ fn embedded_ifd<R: Read + Seek>(
 pub(in crate::formats) fn preview_candidate<R: Read + Seek>(
     src: &mut Source<R>,
     makernote: &MakerNote,
-    limits: &Limits,
 ) -> Result<Option<Candidate>> {
-    let ifd = &makernote.ifd;
-    let block = ifd.block();
-    let Some(pointer) = inline_u32(src, ifd, PREVIEW_IFD)? else {
+    let Some(preview) = &makernote.preview else {
         return Ok(None);
     };
-    let Some(preview) = ifd_in(src, block, pointer, ifd.order(), limits)? else {
-        return Ok(None);
-    };
-    let offset = inline_u32(src, &preview, JPEG_INTERCHANGE_FORMAT)?;
-    let length = inline_u32(src, &preview, JPEG_INTERCHANGE_FORMAT_LENGTH)?;
+    let offset = inline_u32(src, preview, JPEG_INTERCHANGE_FORMAT)?;
+    let length = inline_u32(src, preview, JPEG_INTERCHANGE_FORMAT_LENGTH)?;
     let (Some(offset), Some(length)) = (offset, length) else {
         return Ok(None);
     };
 
     // An empty JPEG is passed on: the finder drops it with the others.
-    Ok(tiff_previews::candidate(block, offset, length))
+    Ok(tiff_previews::candidate(preview.block(), offset, length))
 }
 
 /// The metadata of the file whose MakerNote is `makernote` and whose
@@ -2077,6 +2122,7 @@ mod tests {
     use crate::container::tiff::types::{BYTE, IFD, RATIONAL, SRATIONAL, SSHORT};
     use crate::container::tiff::{self, parse_ifd, walk};
     use crate::datetime::DateTime;
+    use crate::entries::Value;
     use crate::error::ErrorKind;
     use crate::formats::testing::byte_order;
     use crate::jpeg_stub::jpeg_stub;
@@ -2299,8 +2345,8 @@ mod tests {
     }
 
     /// The MakerNote's preview candidate in the file in `src`, whose IFDs
-    /// are `tree`: what [`read`] and then [`preview_candidate`] return,
-    /// each under `limits`.
+    /// are `tree`: what [`read`], under `limits`, and then
+    /// [`preview_candidate`] return.
     fn read_candidate<R: Read + Seek>(
         src: &mut Source<R>,
         tree: &Tree,
@@ -2309,7 +2355,7 @@ mod tests {
         let Some(makernote) = read(src, tree, limits)? else {
             return Ok(None);
         };
-        preview_candidate(src, &makernote, limits)
+        preview_candidate(src, &makernote)
     }
 
     /// The MakerNote's preview candidate in the file `bytes`, whose IFDs
@@ -2528,7 +2574,7 @@ mod tests {
                 "{order:?}"
             );
             assert_eq!(makernote.ifd.order(), byte_order(order), "{order:?}");
-            let found = preview_candidate(&mut src, &makernote, &Limits::default()).unwrap();
+            let found = preview_candidate(&mut src, &makernote).unwrap();
             assert_eq!(found, Some(expected), "{order:?}");
             let start = usize::try_from(expected.offset).unwrap();
             assert_eq!(bytes[start..start + 3], [0xFF, 0xD8, 0xFF], "{order:?}");
@@ -2552,7 +2598,7 @@ mod tests {
                 .expect("a MakerNote");
             let block = tiff::Block::new(POS, POS + range.start..POS + range.end);
             assert_eq!(makernote.ifd.block(), &block, "{order:?}");
-            let found = preview_candidate(&mut src, &makernote, &Limits::default()).unwrap();
+            let found = preview_candidate(&mut src, &makernote).unwrap();
             assert_eq!(
                 found,
                 Some(Candidate {
@@ -2603,7 +2649,7 @@ mod tests {
             // no preview.
             let (bytes, _, _) = headerless_file(order, b"", Some(2 + 24));
             let (mut src, makernote, standard) = read_file(bytes);
-            let found = preview_candidate(&mut src, &makernote, &Limits::default()).unwrap();
+            let found = preview_candidate(&mut src, &makernote).unwrap();
             assert_eq!(found, None, "{order:?}");
             let metadata = metadata(&mut src, &makernote, standard, Picture::Raw).unwrap();
             assert_eq!(metadata.exposure.iso, Some(200), "{order:?}");
@@ -2812,6 +2858,234 @@ mod tests {
         assert_eq!(found.unwrap(), Some(block.candidate(AT)));
         let found = try_candidate(bytes, &Limits::default().with_max_ifd_entries(1));
         assert_eq!(found.unwrap(), None);
+    }
+
+    /// The entries `makernote` adds to the raw view, alone.
+    fn view_of(makernote: &MakerNote) -> Entries {
+        let mut entries = Entries::new();
+        makernote.add_entries(&mut entries);
+        entries
+    }
+
+    /// The tags `entries` lists in `directory`, in order.
+    fn tags_in(entries: &Entries, directory: Directory) -> Vec<u16> {
+        entries
+            .in_directory(directory)
+            .map(crate::Entry::tag)
+            .collect()
+    }
+
+    /// The MakerNote of the file `bytes`, walked at position `pos` of a
+    /// larger file as [`placed`] places it, or as the whole file at 0: a
+    /// source of the file and the MakerNote, which must be read.
+    fn makernote_at(bytes: &[u8], pos: u64) -> (Source<Cursor<Vec<u8>>>, MakerNote) {
+        let (mut src, tree) = if pos == 0 {
+            let mut src = Source::new(Cursor::new(bytes.to_vec())).unwrap();
+            let file_block = tiff::Block::file(src.len());
+            let tree = walk(&mut src, &file_block, &Limits::default()).unwrap();
+            (src, tree)
+        } else {
+            assert_eq!(pos, POS);
+            placed(bytes)
+        };
+        let makernote = read(&mut src, &tree, &Limits::default())
+            .unwrap()
+            .expect("a MakerNote");
+        (src, makernote)
+    }
+
+    /// The Nikon PreviewIFD, as the raw view names it.
+    const PREVIEW: Directory = Directory::MakerNoteSub(PREVIEW_IFD);
+
+    #[test]
+    fn the_view_lists_the_makernote_ifd_then_its_preview_ifd() {
+        // The embedded layout, whose offsets count from its inner header
+        // wherever the block lies, in both byte orders.
+        for order in ORDERS {
+            for pos in [0, POS] {
+                let block = block(order, Change::Nothing);
+                let (mut src, makernote) = makernote_at(&with_block(order, &block), pos);
+                let view = view_of(&makernote);
+                let what = format!("{order:?}, {pos}");
+                let directories: Vec<Directory> = view.directories().collect();
+                assert_eq!(directories, [Directory::MakerNote, PREVIEW], "{what}");
+                assert_eq!(
+                    tags_in(&view, Directory::MakerNote),
+                    [MAKER_NOTE_VERSION, PREVIEW_IFD],
+                    "{what}"
+                );
+                assert_eq!(
+                    tags_in(&view, PREVIEW),
+                    [JPEG_INTERCHANGE_FORMAT, JPEG_INTERCHANGE_FORMAT_LENGTH],
+                    "{what}"
+                );
+                assert_eq!(view.skipped(Directory::MakerNote), 0, "{what}");
+                assert_eq!(view.skipped(PREVIEW), 0, "{what}");
+                // Values as written: the version, and the JPEG's offset
+                // counted from the inner header.
+                let mut value = |directory, tag| {
+                    let entry = view.entry(directory, tag).expect("an entry");
+                    entry.read(&mut src, 64).unwrap()
+                };
+                assert_eq!(
+                    value(Directory::MakerNote, MAKER_NOTE_VERSION),
+                    Value::Undefined(b"0211".to_vec()),
+                    "{what}"
+                );
+                let offset = u32::try_from(block.jpeg - HEADER_AT).unwrap();
+                assert_eq!(
+                    value(PREVIEW, JPEG_INTERCHANGE_FORMAT),
+                    Value::Long(vec![offset]),
+                    "{what}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn a_makernote_value_stored_out_of_line_lies_where_its_base_says() {
+        // The serial number, counted from the inner header: read from the
+        // start of the file or of the structure, it would miss.
+        for order in ORDERS {
+            for pos in [0, POS] {
+                let tags = tags_block(order, |inner, ifd| {
+                    inner.ascii(ifd, SERIAL_NUMBER, SERIAL);
+                })
+                .0;
+                let file = exif_file(order, &tags, whole(&tags), |_, _| {});
+                let (mut src, makernote) = makernote_at(&file, pos);
+                let view = view_of(&makernote);
+                let entry = view
+                    .entry(Directory::MakerNote, SERIAL_NUMBER)
+                    .expect("the serial number");
+                let range = entry.byte_range().expect("stored out of line");
+                let block = makernote.ifd.block();
+                assert!(block.bounds().start + HEADER_AT <= range.start, "{order:?}");
+                assert!(range.end <= block.bounds().end, "{order:?}");
+                let mut text = SERIAL.as_bytes().to_vec();
+                text.push(0);
+                assert_eq!(entry.read(&mut src, 64).unwrap(), Value::Ascii(text));
+            }
+        }
+    }
+
+    #[test]
+    fn a_headerless_makernote_and_its_preview_ifd_are_listed() {
+        // Offsets counted from the header of the structure that holds the
+        // MakerNote, in its byte order, wherever that structure lies.
+        for order in ORDERS {
+            for pos in [0, POS] {
+                let (bytes, _, expected) = headerless_file(order, b"", None);
+                let (mut src, makernote) = makernote_at(&bytes, pos);
+                let view = view_of(&makernote);
+                let what = format!("{order:?}, {pos}");
+                assert_eq!(
+                    tags_in(&view, Directory::MakerNote),
+                    [ISO, PREVIEW_IFD],
+                    "{what}"
+                );
+                assert_eq!(
+                    tags_in(&view, PREVIEW),
+                    [JPEG_INTERCHANGE_FORMAT, JPEG_INTERCHANGE_FORMAT_LENGTH],
+                    "{what}"
+                );
+                let iso = view.entry(Directory::MakerNote, ISO).unwrap();
+                assert_eq!(iso.read(&mut src, 64).unwrap(), Value::Short(vec![0, 200]));
+                let jpeg = view.entry(PREVIEW, JPEG_INTERCHANGE_FORMAT).unwrap();
+                let offset = u32::try_from(expected.offset).unwrap();
+                assert_eq!(jpeg.read(&mut src, 64).unwrap(), Value::Long(vec![offset]));
+            }
+        }
+    }
+
+    #[test]
+    fn a_value_past_the_makernotes_declared_length_is_skipped_and_counted() {
+        for order in ORDERS {
+            // In the MakerNote IFD: the serial number's last byte lies
+            // past the length the MakerNote's entry declares.
+            let tags = tags_block(order, |inner, ifd| {
+                inner.ascii(ifd, SERIAL_NUMBER, SERIAL);
+            })
+            .0;
+            for (count, skipped) in [(whole(&tags) - 1, 1), (whole(&tags), 0)] {
+                let file = exif_file(order, &tags, count, |_, _| {});
+                let (_, makernote) = makernote_at(&file, 0);
+                let view = view_of(&makernote);
+                let what = format!("{order:?}, declared {count} bytes");
+                assert_eq!(view.skipped(Directory::MakerNote), skipped, "{what}");
+                let listed = if skipped == 0 {
+                    vec![MAKER_NOTE_VERSION, SERIAL_NUMBER]
+                } else {
+                    vec![MAKER_NOTE_VERSION]
+                };
+                assert_eq!(tags_in(&view, Directory::MakerNote), listed, "{what}");
+            }
+
+            // In the PreviewIFD: its first entry's value lies just past the
+            // block, inside the file.
+            let block = block(order, Change::JpegOffsetPastTheBlockFirst);
+            let (_, makernote) = makernote_at(&with_block(order, &block), 0);
+            let view = view_of(&makernote);
+            assert_eq!(view.skipped(PREVIEW), 1, "{order:?}");
+            assert_eq!(view.skipped(Directory::MakerNote), 0, "{order:?}");
+            assert_eq!(
+                tags_in(&view, PREVIEW),
+                [JPEG_INTERCHANGE_FORMAT, JPEG_INTERCHANGE_FORMAT_LENGTH],
+                "{order:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_makernote_without_a_preview_ifd_is_listed_alone() {
+        // The pointer stored out of line leads to no PreviewIFD, but is an
+        // entry of the MakerNote IFD like any other.
+        for order in ORDERS {
+            let block = block(order, Change::PointerOutOfLine);
+            let (_, makernote) = makernote_at(&with_block(order, &block), 0);
+            let view = view_of(&makernote);
+            let directories: Vec<Directory> = view.directories().collect();
+            assert_eq!(directories, [Directory::MakerNote], "{order:?}");
+            assert_eq!(
+                tags_in(&view, Directory::MakerNote),
+                [MAKER_NOTE_VERSION, PREVIEW_IFD],
+                "{order:?}"
+            );
+            assert_eq!(view.in_directory(PREVIEW).len(), 0, "{order:?}");
+        }
+    }
+
+    #[test]
+    fn a_makernote_ifd_already_listed_takes_its_preview_ifd_with_it() {
+        // A MakerNote IFD at the position of a directory listed before it,
+        // as a damaged file may point its MakerNote at IFD1: neither it nor
+        // the PreviewIFD it leads to is listed, so that no PreviewIFD is
+        // listed without its MakerNote.
+        for order in ORDERS {
+            let block = block(order, Change::Nothing);
+            let (_, makernote) = makernote_at(&with_block(order, &block), 0);
+            let mut entries = Entries::new();
+            entries.push(Directory::Ifd(1), &makernote.ifd);
+            makernote.add_entries(&mut entries);
+            let directories: Vec<Directory> = entries.directories().collect();
+            assert_eq!(directories, [Directory::Ifd(1)], "{order:?}");
+        }
+    }
+
+    #[test]
+    fn a_preview_ifd_that_is_the_makernote_ifd_is_listed_once() {
+        // A PreviewIFD pointer that leads back to the MakerNote IFD: one
+        // directory, two links, listed under the first.
+        for order in ORDERS {
+            let mut block = block(order, Change::Nothing);
+            let at = block.pointer_at();
+            block.put_u32(at, u32::try_from(block.makernote - HEADER_AT).unwrap());
+            let (_, makernote) = makernote_at(&with_block(order, &block), 0);
+            assert!(makernote.preview.is_some(), "{order:?}");
+            let view = view_of(&makernote);
+            let directories: Vec<Directory> = view.directories().collect();
+            assert_eq!(directories, [Directory::MakerNote], "{order:?}");
+        }
     }
 
     /// The raw size of the files the CropArea tests build: the Z 9's.

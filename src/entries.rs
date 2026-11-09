@@ -38,13 +38,15 @@ use crate::io::{ByteOrder, Source};
 ///
 /// A directory reached through two links, such as an IFD1 that is also the
 /// Interoperability IFD, is listed once, under the first that led to it:
-/// the chain, the SubIFDs and the Exif IFD are followed before the GPS and
-/// Interoperability IFDs.
+/// the chain, the SubIFDs and the Exif IFD are followed before the
+/// Interoperability and GPS IFDs, and those before the MakerNote's
+/// directories and the private one.
 ///
 /// New variants may be added as raw-files reads more kinds of directory.
 ///
 /// `Display` writes the name a viewer shows: "IFD0", "SubIFD0", "Exif",
-/// "GPS", "Interop" and "MP Index".
+/// "GPS", "Interop", "MakerNote", "MakerNote 0x0011", "Private" and
+/// "MP Index".
 #[non_exhaustive]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Directory {
@@ -67,6 +69,20 @@ pub enum Directory {
     /// The Interoperability IFD, which the Exif IFD's tag 0xA005 points
     /// to: the rule the file follows.
     Interop,
+    /// The MakerNote IFD, the directory of a camera maker's own tags that
+    /// the Exif IFD's MakerNote entry (0x927C) holds, in the layouts
+    /// raw-files reads: Nikon's and Sony's. Whose it is, the file's
+    /// [`Camera::make`](crate::Camera::make) says. No standard names its
+    /// tags, so its entries have no [`name`](Entry::name).
+    MakerNote,
+    /// A directory that an entry of the MakerNote IFD points to, by that
+    /// entry's tag: Nikon's PreviewIFD, which holds where the MakerNote's
+    /// small preview lies, is `MakerNoteSub(0x0011)`.
+    MakerNoteSub(u16),
+    /// The private directory that IFD0's DNGPrivateData entry (0xC634)
+    /// points to in a Sony RAW file, called SR2Private: where Sony's
+    /// encrypted directory of decoding values lies, and the key to it.
+    Private,
     /// The MP Index IFD of a JPEG file's Multi-Picture Format segment: the
     /// images the file holds.
     MpIndex,
@@ -80,6 +96,9 @@ impl fmt::Display for Directory {
             Self::Exif => f.write_str("Exif"),
             Self::Gps => f.write_str("GPS"),
             Self::Interop => f.write_str("Interop"),
+            Self::MakerNote => f.write_str("MakerNote"),
+            Self::MakerNoteSub(tag) => write!(f, "MakerNote {tag:#06X}"),
+            Self::Private => f.write_str("Private"),
             Self::MpIndex => f.write_str("MP Index"),
         }
     }
@@ -546,6 +565,9 @@ pub struct Entries {
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 struct Found {
     directory: Directory,
+    /// Where the directory lies in the file: the position of its entry
+    /// count.
+    offset: u64,
     /// Its entries' positions in [`Entries::entries`].
     entries: Range<usize>,
     /// How many of its entries were left out.
@@ -593,8 +615,18 @@ impl Entries {
 
     /// Adds the entries of `ifd`, a directory found as `directory`, after
     /// those of the directories added before, with the number its reader
-    /// left out.
-    pub(crate) fn push(&mut self, directory: Directory, ifd: &Ifd) {
+    /// left out; nothing when a directory added before lies at the same
+    /// position in the file, so that a directory two links lead to is
+    /// listed once, under the first. Whether it was added: a reader lists
+    /// the directories a skipped one leads to only when it was.
+    pub(crate) fn push(&mut self, directory: Directory, ifd: &Ifd) -> bool {
+        if self
+            .directories
+            .iter()
+            .any(|found| found.offset == ifd.offset())
+        {
+            return false;
+        }
         let start = self.entries.len();
         let order = ifd.order();
         self.entries
@@ -605,9 +637,11 @@ impl Entries {
             }));
         self.directories.push(Found {
             directory,
+            offset: ifd.offset(),
             entries: start..self.entries.len(),
             skipped: ifd.invalid_entries(),
         });
+        true
     }
 
     /// Every entry, in the file's order.
@@ -754,13 +788,29 @@ mod tests {
             Directory::Exif,
             Directory::Gps,
             Directory::Interop,
+            Directory::MakerNote,
+            Directory::MakerNoteSub(0x0011),
+            Directory::MakerNoteSub(0x00B7),
+            Directory::Private,
             Directory::MpIndex,
         ];
         let names: Vec<String> = all.iter().map(ToString::to_string).collect();
         assert_eq!(
             names,
             [
-                "IFD0", "IFD1", "IFD12", "SubIFD0", "SubIFD3", "Exif", "GPS", "Interop", "MP Index"
+                "IFD0",
+                "IFD1",
+                "IFD12",
+                "SubIFD0",
+                "SubIFD3",
+                "Exif",
+                "GPS",
+                "Interop",
+                "MakerNote",
+                "MakerNote 0x0011",
+                "MakerNote 0x00B7",
+                "Private",
+                "MP Index"
             ]
         );
         assert_ordered(&all);
@@ -1177,6 +1227,39 @@ mod tests {
             .map(Entry::tag)
             .collect();
         assert_eq!(tags, [0x9207]);
+    }
+
+    #[test]
+    fn a_directory_at_a_position_already_listed_is_not_listed_again() {
+        // The same IFD reached as the Exif IFD and as a MakerNote IFD: kept
+        // under the first; another IFD after it is still added.
+        let (built, ifd) = file_of(&[Value::Short(vec![1])], Order::Little);
+        let mut entries = entries_of(&built, ifd, Directory::Exif, Order::Little);
+        let mut src = source(&built.bytes);
+        let block = Block::file(src.len());
+        let at = built.ifd_offset(ifd);
+        let (same, _) =
+            parse_ifd(&mut src, &block, at, ByteOrder::Little, &Limits::default()).unwrap();
+        assert!(!entries.push(Directory::MakerNote, &same));
+        assert_eq!(entries.directories().collect::<Vec<_>>(), [Directory::Exif]);
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries.in_directory(Directory::MakerNote).len(), 0);
+
+        let mut builder = TiffBuilder::new(Order::Little);
+        let (first, second) = (builder.ifd(), builder.ifd());
+        builder.short(first, 1, &[1]).short(second, 2, &[2]);
+        let built = builder.build();
+        let mut entries = entries_of(&built, first, Directory::Exif, Order::Little);
+        let mut src = source(&built.bytes);
+        let block = Block::file(src.len());
+        let at = built.ifd_offset(second);
+        let (other, _) =
+            parse_ifd(&mut src, &block, at, ByteOrder::Little, &Limits::default()).unwrap();
+        assert!(entries.push(Directory::MakerNote, &other));
+        assert_eq!(
+            entries.directories().collect::<Vec<_>>(),
+            [Directory::Exif, Directory::MakerNote]
+        );
     }
 
     #[test]
