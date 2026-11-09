@@ -67,6 +67,18 @@ ever complete for every body. What each gives so far:
   blocks, which needs a decision of its own first. It comes before raw
   sensor data
   ([ADR016](architecture-decisions/adr016-full-metadata-before-raw-data.md)).
+
+  Full metadata will begin with **every entry a file records**: each
+  entry of the TIFF directories raw-files will walk (the IFDs, the Exif,
+  GPS and Interoperability IFDs, the Nikon and Sony MakerNotes, Sony's
+  SR2Private and a JPEG's Multi-Picture index), with its directory,
+  tag number, type and value as the file records it, and the name a
+  published standard gives the tag
+  ([ADR023](architecture-decisions/adr023-every-entry-a-file-records.md),
+  [the tag names](formats/tag-names.md)). The groups of values come
+  after it, each read from the same directories; enciphered and
+  encrypted records will be given only as their bytes until the
+  decision on reading them.
 - **Focus points.** Where the camera focused, in coordinates that place
   it on a preview, to judge sharpness where the photographer focused.
   Read from the MakerNote, on Nikon mirrorless bodies, Nikon DSLRs in
