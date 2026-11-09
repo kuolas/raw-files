@@ -14,9 +14,9 @@ use std::env;
 use std::path::{Path, PathBuf};
 
 use raw_files::{
-    ColorSpace, ExposureProgram, FlashMode, FocusAreaMode, FocusOrigin, FocusPoint, Format,
-    ImageArea, Make, MeteringMode, Orientation, Preview, PreviewFormat, Rational, RawFile,
-    RawImageSize, Shutter, SignedRational, Size, WhiteBalanceMode,
+    ColorSpace, Directory, ExposureProgram, FieldType, FlashMode, FocusAreaMode, FocusOrigin,
+    FocusPoint, Format, ImageArea, Make, MeteringMode, Orientation, Preview, PreviewFormat,
+    Rational, RawFile, RawImageSize, Shutter, SignedRational, Size, WhiteBalanceMode,
 };
 
 /// The path of the sample file `name`, or `None`, with a note on stderr,
@@ -552,4 +552,89 @@ pub fn check_metadata(expected: &SampleMetadata, format: Format) {
         expected.color_space,
         "{label}: colour space"
     );
+}
+
+/// What a sample file of `tests/samples.tsv` must give as its entries:
+/// each directory, in the order the reader found it, by the name the
+/// library gives it, with the number of its entries listed and the number
+/// left out.
+pub struct SampleEntries {
+    pub file: &'static str,
+    pub directories: &'static [(&'static str, usize, u32)],
+}
+
+/// Checks that `expected`'s file lists exactly its directories, in order,
+/// with their counts; that every entry's value reads under the default
+/// cap, the whole MakerNote's included; and that the entries agree with the
+/// typed values read from them: IFD0's Make and Model are the recorded make
+/// and model, the Exif IFD's DateTimeOriginal names the capture time's
+/// year, and ExifVersion is four bytes of digits. The serial number is
+/// checked by presence, type and count only, never by its value. Does
+/// nothing when the file has not been downloaded.
+pub fn check_entries(expected: &SampleEntries) {
+    let Some(path) = path(expected.file) else {
+        return;
+    };
+    let label = expected.file;
+    let mut file = RawFile::open(&path).unwrap();
+    let entries = file.entries().clone();
+    let found: Vec<(String, usize, u32)> = entries
+        .directories()
+        .map(|d| {
+            (
+                d.to_string(),
+                entries.in_directory(d).count(),
+                entries.skipped(d),
+            )
+        })
+        .collect();
+    let want: Vec<(String, usize, u32)> = expected
+        .directories
+        .iter()
+        .map(|&(name, listed, skipped)| (name.to_string(), listed, skipped))
+        .collect();
+    assert_eq!(found, want, "{label}");
+
+    for entry in &entries {
+        let value = file.read_value(entry);
+        assert!(value.is_ok(), "{label}: {entry:?}: {:?}", value.err());
+    }
+
+    let text = |file: &mut RawFile<std::fs::File>, directory, tag| -> Option<String> {
+        let entry = entries.entry(directory, tag)?;
+        file.read_value(&entry).unwrap().text()
+    };
+    let camera = file.metadata().camera().clone();
+    assert_eq!(
+        text(&mut file, Directory::Ifd(0), 0x010F).as_deref(),
+        camera.recorded_make(),
+        "{label}: Make"
+    );
+    assert_eq!(
+        text(&mut file, Directory::Ifd(0), 0x0110).as_deref(),
+        camera.recorded_model(),
+        "{label}: Model"
+    );
+    if let Some(time) = file.metadata().capture_time() {
+        let original = text(&mut file, Directory::Exif, 0x9003).expect("DateTimeOriginal");
+        assert_eq!(
+            original.get(..4),
+            Some(&*time.year().to_string()),
+            "{label}"
+        );
+    }
+    if let Some(version) = entries.entry(Directory::Exif, 0x9000) {
+        assert_eq!(version.name(), Some("ExifVersion"), "{label}");
+        let value = file.read_value(&version).unwrap();
+        assert_eq!(value.field_type(), FieldType::Undefined, "{label}");
+        let bytes = value.bytes().unwrap();
+        assert!(
+            bytes.len() == 4 && bytes.iter().all(u8::is_ascii_digit),
+            "{label}"
+        );
+    }
+    if let Some(serial) = entries.entry(Directory::Exif, 0xA431) {
+        assert_eq!(serial.field_type(), FieldType::Ascii, "{label}: serial");
+        assert!(serial.count() > 0, "{label}: serial");
+    }
 }

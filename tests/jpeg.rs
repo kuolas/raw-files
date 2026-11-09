@@ -87,8 +87,8 @@ use support::nef::{
     nikon_makernote_with, z9_af_info2,
 };
 use support::samples::{
-    Jpeg, Sample, SampleFineTune, SampleFocus, SampleLens, SampleMetadata, SampleSettings,
-    SerialShape, check, check_metadata, listed,
+    Jpeg, Sample, SampleEntries, SampleFineTune, SampleFocus, SampleLens, SampleMetadata,
+    SampleSettings, SerialShape, check, check_entries, check_metadata, listed,
 };
 use support::tiff_builder::{EXIF_IFD, IfdId, Order, TiffBuilder};
 
@@ -3154,12 +3154,17 @@ fn every_jpeg_sample_gives_its_metadata() {
 }
 
 #[test]
-fn the_sample_list_and_the_tables_of_previews_and_metadata_name_the_same_jpeg_files() {
+fn the_sample_list_and_the_tables_of_previews_metadata_and_entries_name_the_same_jpeg_files() {
     // The list is compiled in, so this runs without any download.
     let listed = listed("jpeg");
     let previews: Vec<&str> = SAMPLES.iter().map(|sample| sample.file).collect();
     let metadata: Vec<&str> = METADATA.iter().map(|expected| expected.file).collect();
-    for (what, files) in [("previews", previews), ("metadata", metadata)] {
+    let entries: Vec<&str> = ENTRIES.iter().map(|expected| expected.file).collect();
+    for (what, files) in [
+        ("previews", previews),
+        ("metadata", metadata),
+        ("entries", entries),
+    ] {
         let expected: BTreeSet<(&str, &str)> = files.iter().map(|&file| (file, "normal")).collect();
         assert_eq!(
             expected.len(),
@@ -3173,5 +3178,97 @@ fn the_sample_list_and_the_tables_of_previews_and_metadata_name_the_same_jpeg_fi
             "listed without expected {what}: {unexpected:?}; \
              expected {what} but not listed: {unlisted:?}"
         );
+    }
+}
+
+/// The entries of every camera JPEG sample, each directory in the order the
+/// reader finds it with its entries listed and left out. The counts were
+/// checked on 9 November 2026 against a walker of my own, written from the
+/// TIFF 6.0 and Exif standards and the format notes, which found the same
+/// directories with the same number of entries in each, though it lists
+/// IFD1 before the SubIFDs.
+const ENTRIES: &[SampleEntries] = &[
+    SampleEntries {
+        file: "sony-ilce-7m3.jpg",
+        directories: &[
+            ("IFD0", 13, 0),
+            ("Exif", 41, 0),
+            ("IFD1", 13, 0),
+            ("Interop", 2, 0),
+            ("GPS", 4, 0),
+            ("MP Index", 3, 0),
+        ],
+    },
+    SampleEntries {
+        file: "sony-ilce-7rm2.jpg",
+        directories: &[
+            ("IFD0", 12, 0),
+            ("Exif", 38, 0),
+            ("IFD1", 13, 0),
+            ("Interop", 2, 0),
+            ("MP Index", 3, 0),
+        ],
+    },
+    SampleEntries {
+        file: "sony-dsc-rx100m4.jpg",
+        directories: &[
+            ("IFD0", 14, 0),
+            ("Exif", 37, 0),
+            ("IFD1", 15, 0),
+            ("Interop", 2, 0),
+            ("MP Index", 3, 0),
+        ],
+    },
+    SampleEntries {
+        file: "sony-ilce-6000.jpg",
+        directories: &[
+            ("IFD0", 12, 0),
+            ("Exif", 38, 0),
+            ("IFD1", 13, 0),
+            ("Interop", 2, 0),
+            ("MP Index", 3, 0),
+        ],
+    },
+    SampleEntries {
+        file: "sony-dslr-a100.jpg",
+        directories: &[
+            ("IFD0", 12, 0),
+            ("Exif", 36, 0),
+            ("IFD1", 8, 0),
+            ("Interop", 2, 0),
+        ],
+    },
+    SampleEntries {
+        file: "nikon-d5300.jpg",
+        directories: &[
+            ("IFD0", 11, 0),
+            ("Exif", 41, 0),
+            ("IFD1", 7, 0),
+            ("Interop", 2, 0),
+            ("GPS", 1, 0),
+            ("MP Index", 3, 0),
+        ],
+    },
+    SampleEntries {
+        file: "nikon-d70.jpg",
+        directories: &[("IFD0", 10, 0), ("Exif", 39, 0), ("IFD1", 7, 0)],
+    },
+    SampleEntries {
+        file: "canon-powershot-g7x.jpg",
+        directories: &[
+            ("IFD0", 13, 0),
+            ("Exif", 35, 0),
+            ("IFD1", 6, 0),
+            ("Interop", 4, 0),
+            ("GPS", 1, 0),
+            ("MP Index", 3, 0),
+        ],
+    },
+];
+
+#[test]
+fn every_samples_entries_are_its_directories_with_their_counts() {
+    for expected in ENTRIES {
+        check_entries(expected);
     }
 }
