@@ -629,7 +629,7 @@ impl Ifd {
     }
 
     /// The first entry with tag `tag` and its value's bytes, when its type is
-    /// one of `types`.
+    /// one of `types`, read under [`MAX_VALUE_LEN`].
     fn value<R: Read + Seek>(
         &self,
         src: &mut Source<R>,
@@ -639,20 +639,7 @@ impl Ifd {
         let Some(entry) = self.entry_of_type(tag, types) else {
             return Ok(None);
         };
-        let bytes = match entry.value {
-            Value::Inline(field) => {
-                let mut bytes = field.to_vec();
-                // At most 4 for an inline value, so this only shortens.
-                bytes.truncate(usize::try_from(entry.len).unwrap_or(usize::MAX));
-                bytes
-            }
-            Value::At(at) => {
-                if entry.len > MAX_VALUE_LEN {
-                    return Err(Error::limit("a tag value is longer than 1 MiB", at));
-                }
-                src.bytes(at, u64::from(entry.len))?
-            }
-        };
+        let bytes = entry.read(src, u64::from(MAX_VALUE_LEN))?;
         Ok(Some((entry, bytes)))
     }
 }
@@ -719,6 +706,43 @@ impl Entry {
         let start = self.value_offset()?;
         let end = start.checked_add(u64::from(self.value_len()))?;
         Some(start..end)
+    }
+
+    /// The bytes of the entry's value, as the file stores them, from `src`,
+    /// the source its IFD was read from: what every value reader of an
+    /// [`Ifd`] reads, and the raw view's values too.
+    ///
+    /// A value held in the entry itself, at most four bytes, is served from
+    /// the entry without touching `src`, and never refused. A value stored
+    /// out of line is read only when its length is at most `cap` bytes, so
+    /// the most this allocates is `cap` bytes, or four.
+    ///
+    /// # Errors
+    ///
+    /// `LimitExceeded` if the value is stored out of line and is longer than
+    /// `cap`, at the value's offset, before anything is read; `Malformed` if
+    /// the value does not lie inside the file `src` reads, which cannot
+    /// happen for the source the entry was read from; `Io` if the reader
+    /// fails, as it does when the file has shrunk since its length was
+    /// taken.
+    pub(crate) fn read<R: Read + Seek>(&self, src: &mut Source<R>, cap: u64) -> Result<Vec<u8>> {
+        match self.value {
+            Value::Inline(field) => {
+                let mut bytes = field.to_vec();
+                // At most 4 for an inline value, so this only shortens.
+                bytes.truncate(usize::try_from(self.len).unwrap_or(usize::MAX));
+                Ok(bytes)
+            }
+            Value::At(at) => {
+                if u64::from(self.len) > cap {
+                    return Err(Error::limit(
+                        "a tag value is longer than the limit allows",
+                        at,
+                    ));
+                }
+                src.bytes(at, u64::from(self.len))
+            }
+        }
     }
 }
 
@@ -1844,6 +1868,51 @@ mod tests {
             assert_eq!(err.kind(), ErrorKind::LimitExceeded, "{err:?}");
             assert_eq!(err.offset(), Some(u64::from(at)), "{err:?}");
         }
+    }
+
+    #[test]
+    fn an_entry_is_read_under_the_cap_it_is_given() {
+        for order in ORDERS {
+            let at = 512;
+            let mut builder = TiffBuilder::new(order);
+            let ifd = builder.ifd();
+            builder
+                .raw(ifd, 0x0001, UNDEFINED, 100, RawValue::Offset(at))
+                .raw(ifd, 0x0002, DOUBLE, 2, RawValue::Offset(at))
+                .short(ifd, 0x0003, &[7, 8]);
+            builder.pad_to(u64::from(at) + 100);
+            let built = builder.build();
+            let (mut src, ifd, _) = read(order, &built, ifd);
+            let [bytes, doubles, shorts] =
+                [0x0001, 0x0002, 0x0003].map(|tag| ifd.entry(tag).unwrap().clone());
+
+            // At the cap, read whole; a byte over it, refused at the value.
+            assert_eq!(bytes.read(&mut src, 100).unwrap().len(), 100);
+            let err = bytes.read(&mut src, 99).unwrap_err();
+            assert_eq!(err.kind(), ErrorKind::LimitExceeded, "{err:?}");
+            assert_eq!(err.offset(), Some(u64::from(at)), "{err:?}");
+            // Any type, DOUBLE among them, which no typed reader takes.
+            assert_eq!(doubles.read(&mut src, 16).unwrap().len(), 16);
+            assert!(doubles.read(&mut src, 15).is_err());
+            // A value held in the entry is never refused, whatever the cap.
+            let expected: Vec<u8> = [order.u16(7), order.u16(8)].concat();
+            assert_eq!(shorts.read(&mut src, 0).unwrap(), expected);
+        }
+    }
+
+    #[test]
+    fn an_inline_value_is_read_without_touching_the_reader() {
+        // The entry is read from its file, and its value then through a
+        // source over no bytes, where every read fails: only the entry can
+        // serve it.
+        let mut builder = TiffBuilder::new(Order::Little);
+        let ifd = builder.ifd();
+        builder.short(ifd, 0x0001, &[0x0102, 0x0304]);
+        let (_, parsed, _) = read(Order::Little, &builder.build(), ifd);
+        let entry = parsed.entry(0x0001).unwrap().clone();
+        let mut empty = open(&[]);
+        assert!(empty.bytes(0, 1).is_err());
+        assert_eq!(entry.read(&mut empty, 0).unwrap(), [2, 1, 4, 3]);
     }
 
     /// A file in byte order `order` whose IFD, at 8, holds two SHORTs, which
