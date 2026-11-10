@@ -10,6 +10,26 @@ does.
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-11-10
+
+The ninth release, the second step towards full metadata: who made a
+picture and where it was taken. `Metadata::authorship` gives the
+artist, the copyright notice, the photographer, the editor, the title,
+the description and the comment, `Camera::owner_name` the name of the
+camera's owner, and `Metadata::location` the position, with the
+altitude, the GPS time, the image direction and the map datum. Each is
+given as the file records it, a person's name and the place a picture
+was taken among them, with nothing hidden and no option to hide it: a
+program that shows or shares them decides what to keep. A GPS IFD is
+no location: many cameras write one that holds only its version, and a
+file has a location only when it records a sound position. No file
+checked records a photographer, an editor, a title or the name of a
+camera's owner, so those readers are checked on built files only.
+Nothing in 0.8.0's API was removed or changed in signature; a NEF or
+ARW whose Make is of type UTF-8 is now read where it was refused, and
+a camera JPEG's MakerNote with it, and, on the NEFs checked, opening
+one that records a position reads one more block (see Changed).
+
 ### Added
 
 - `Metadata::authorship` gives who made the picture and what they wrote
@@ -64,6 +84,15 @@ does.
   capture time, which Exif gives as ASCII alone, are read only from
   type ASCII, as is every text of a maker's MakerNote. No file checked
   writes the UTF-8 type, so no value read from one changes.
+- Opening a file whose GPS IFD records a position now reads the
+  location's values. On the NEFs checked they lie past the blocks
+  opening read before, so opening reads one more 64 KiB block: 448 KiB
+  in all on a Nikon Z 9's NEF, where 0.8.0 read 384 KiB, and one more
+  block on each of the 6 NEFs of raw.pixls.us that record a position.
+  On the ARW and JPEG files checked, and on the files without a
+  position, it reads nothing more, and neither do the authorship's
+  texts. No `Limits` cap counts these reads; each value is read under
+  the bound on any one value, as every value of the metadata is.
 
 ## [0.8.0] - 2026-11-09
 
@@ -602,7 +631,8 @@ files.
 - A DNG is of no known format, whatever camera maker its Make names:
   converters and the phones that write DNG keep the maker's name.
 
-[Unreleased]: https://github.com/kuolas/raw-files/compare/v0.8.0...HEAD
+[Unreleased]: https://github.com/kuolas/raw-files/compare/v0.9.0...HEAD
+[0.9.0]: https://github.com/kuolas/raw-files/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/kuolas/raw-files/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/kuolas/raw-files/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/kuolas/raw-files/compare/v0.5.0...v0.6.0
