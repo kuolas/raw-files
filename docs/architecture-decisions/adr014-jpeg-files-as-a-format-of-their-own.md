@@ -32,7 +32,7 @@ as [ADR009](adr009-public-api-shape.md) has every capability succeed or
 fail on its own; a JPEG, which is neither a TIFF structure nor a raw
 file, records the same metadata and holds previews of its own. Until a
 format is read, `open` refuses its files with the `UnknownFormat`
-error, the one for a file whose format raw-files does not recognise.
+error, the one for a file whose format raw-files does not recognize.
 
 What a JPEG file holds is set out in public standards:
 
@@ -63,7 +63,7 @@ What a JPEG file holds is set out in public standards:
   sizes.
 
 We read eight camera-original JPEGs published on Wikimedia Commons under
-open licences, one from each of eight bodies, checked byte by byte to be
+open licenses, one from each of eight bodies, checked byte by byte to be
 as the camera wrote them:
 
 | Body | File on Wikimedia Commons |
@@ -98,8 +98,8 @@ They showed:
   samples only the A100's has, and counts its offsets from the TIFF
   header inside the Exif segment, as an ARW counts them from the start of
   the file. Read that way, the ILCE-7M3 records its focus point off
-  centre, at (1783, 1804) in a frame of 3936×2624, the size of its
-  picture, and the ILCE-7RM2 at the exact centre (3976, 2652) of
+  center, at (1783, 1804) in a frame of 3936×2624, the size of its
+  picture, and the ILCE-7RM2 at the exact center (3976, 2652) of
   7952×5304.
 - **The D70's MakerNote holds a preview too.** Its PreviewIFD holds a
   JPEG of 564×372 pixels, inside the length the MakerNote declares; the
@@ -136,7 +136,7 @@ same handle and into the same types as a raw file, and report from it
 what the file records about its own picture.
 
 - **Detected by its content: the container first, then the format.**
-  `open` recognises the container by the file's first bytes and builds
+  `open` recognizes the container by the file's first bytes and builds
   its structure, and the formats that container can hold are then asked
   whether the structure is theirs. A file whose container raw-files does
   not know, or that no format claims, is refused with the `UnknownFormat`
@@ -158,7 +158,7 @@ what the file records about its own picture.
   file or a JPEG.
 - **The first Exif segment holds the metadata.** It is the first APP1
   segment before the scan whose payload starts with `Exif` and two zero
-  bytes, wherever it lies; a later one is skipped, as XMP, colour
+  bytes, wherever it lies; a later one is skipped, as XMP, color
   profiles and every other application segment are.
 - **The Exif segment is a bounded block.** Its TIFF structure is read
   with the position of its header as the base of every offset, and every
@@ -279,7 +279,7 @@ Each is a decision of its own, which builds on this one.
 - `Format::from_extension("jpg")` returns `Some(Format::Jpeg)` where it
   returned `None`. A program that took any known extension for a raw file
   must switch to `Format::is_raw`; the changelog says so, since a check of
-  the API's signatures cannot see a change of behaviour.
+  the API's signatures cannot see a change of behavior.
 - Opening a JPEG reads its segments up to the scan, the Exif and MPF
   segments, and the start of each MPF image up to its frame header, which
   can lie after the image's own application segments: one to three

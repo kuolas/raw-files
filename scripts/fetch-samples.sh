@@ -2,7 +2,7 @@
 # fetch-samples.sh — download the real sample files that the tests read when
 # they are present (CONTRIBUTING.md §Code style and checks). The list is
 # tests/samples.tsv: one file per line, pinned by its SHA-256, each with the
-# site it comes from, its id there, its tier, its licence and its URL.
+# site it comes from, its id there, its tier, its license and its URL.
 # Without the files, those tests skip.
 #
 #   scripts/fetch-samples.sh                     # every file of the normal tier
@@ -69,7 +69,7 @@ sha256() {
 }
 
 header=$(head -n 1 "$list")
-if [ "$header" != "$(printf 'source\tid\tformat\tfile\ttier\tsha256\tlicence\turl')" ]; then
+if [ "$header" != "$(printf 'source\tid\tformat\tfile\ttier\tsha256\tlicense\turl')" ]; then
 	printf 'fetch-samples: %s does not start with the expected header line\n' "$list" >&2
 	exit 2
 fi

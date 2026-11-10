@@ -15,7 +15,7 @@ fuller RAW decoding is planned.
 - **Metadata.** What a viewer or a file renamer needs next to a preview:
   the capture time, with sub-seconds and offset from UTC when recorded;
   the camera's make, model, serial number and owner's name as the file
-  records them, with the maker raw-files recognises in them, such as
+  records them, with the maker raw-files recognizes in them, such as
   Nikon, and, for the bodies the
   [notes on camera names](docs/formats/camera-names.md) list, the name
   the body is sold under, such as Z6III; the software
@@ -27,11 +27,11 @@ fuller RAW decoding is planned.
   the camera faced and the map datum; the lens; the exposure, with the
   focal length in 35 mm terms; the orientation; and the sizes of the raw
   data and of the visible image.
-- **Camera settings.** The white balance with its colour temperature and
+- **Camera settings.** The white balance with its color temperature and
   fine-tuning, the exposure program, the metering mode, the flash, the
   shutter, Sony's electronic front curtain setting, the image area, the
-  raw image size and the colour space.
-- **The focus point.** Where the camera focused: the centre of the focus
+  raw image size and the color space.
+- **The focus point.** Where the camera focused: the center of the focus
   area, the frame it is measured in and, when recorded, the area's size
   and whether the camera confirmed focus, ready to be scaled onto any
   preview, with where the point came from. Nikon mirrorless bodies, Nikon
@@ -147,7 +147,7 @@ use raw_files::{Camera, Focus, FocusOrigin, Metadata, Point, Size};
 fn main() {
     let frame = Size { width: 8256, height: 5504 };
     let focus = Focus::new(frame, Point { x: 4905, y: 2461 }, FocusOrigin::Recorded)
-        .expect("the centre lies on the frame")
+        .expect("the center lies on the frame")
         .with_in_focus(true);
     let metadata = Metadata::default()
         .with_camera(Camera::default().with_recorded_model("NIKON Z 9"))
@@ -181,7 +181,7 @@ fn main() {
     // A Nikon Z 9 records the position it focused at.
     let frame = Size { width: 8256, height: 5504 };
     let recorded = Focus::new(frame, Point { x: 4905, y: 2461 }, FocusOrigin::Recorded)
-        .expect("the centre lies on the frame");
+        .expect("the center lies on the frame");
     let z9 = Metadata::default().with_focus(recorded);
     assert_eq!(caption(&z9).as_deref(), Some("Recorded: at (4905, 2461)"));
 
@@ -357,10 +357,10 @@ raw-files, writing about my own cameras: they stay private.
   number, the ISO, the lens range and the time zone. The visible image
   size is the crop area the MakerNote records.
 - **Camera settings**: the MakerNote also gives the settings that Exif
-  lacks: the white balance setting, finer than Exif's, the colour
+  lacks: the white balance setting, finer than Exif's, the color
   temperature, the fine-tuning, the shutter used (on the bodies that
   record it), the image area, the raw image size and, since no Nikon raw
-  file records an Exif colour space, the colour space.
+  file records an Exif color space, the color space.
 - **Focus point**: from the MakerNote's AFInfo2 block, which mirrorless
   bodies and DSLRs in live view fill in with a position; on a crop mode
   it is placed inside the cropped picture. A D600 shot through the
@@ -387,7 +387,7 @@ ARW files of the Sony-built Hasselblad bodies.
   picture as `SONY DSC`, a text the camera writes by itself, which gives
   no description.
 - **Camera settings**: from the MakerNote: the white balance setting,
-  finer than Exif's, the colour temperature under a chosen colour
+  finer than Exif's, the color temperature under a chosen color
   temperature or a custom white balance, the fine-tuning and the
   electronic front curtain setting (the menu setting, never the shutter
   used). The shutter used, the image area (the APS-C mode) and the raw
@@ -511,10 +511,10 @@ Everyone taking part is expected to follow the
   things are the way they are.
 - [CHANGELOG.md](CHANGELOG.md) — user-visible changes.
 
-## Acknowledgements
+## Acknowledgments
 
 - **Phil Harvey**, the creator of [ExifTool](https://exiftool.org/). Its
-  published tag documentation is where raw-files learnt most of what the
+  published tag documentation is where raw-files learned most of what the
   format notes record of the Nikon and Sony MakerNotes, and the program,
   run on the sample files as an independent reader to compare with, has
   checked what raw-files reads again and again. None of its code or
@@ -534,17 +534,17 @@ Everyone taking part is expected to follow the
   the formats, **dcraw**, **LibRaw**, **rawspeed**, **rawler** and
   **libopenraw**. Reading them taught what a published description did
   not say; none of their code was copied or translated, whatever its
-  licence, and every fact learnt from them went through the notes and a
+  license, and every fact learned from them went through the notes and a
   sample file before it was coded
   ([ADR013](docs/architecture-decisions/adr013-clean-room-and-third-party-code.md)).
 - [**raw.pixls.us**](https://raw.pixls.us/) and the photographers who gave
   their raw files to it under CC0: the public samples that CI downloads,
   and that the format notes cite file by file, are theirs.
 - **Wikimedia Commons** and the photographers whose camera JPEGs, under
-  CC0, public-domain dedications and CC BY licences, check the JPEG
+  CC0, public-domain dedications and CC BY licenses, check the JPEG
   reader;
   [`tests/samples.tsv`](tests/samples.tsv) names each author whose
-  licence asks for credit.
+  license asks for credit.
 
 ## Trademarks
 

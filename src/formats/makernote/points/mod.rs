@@ -5,7 +5,7 @@
 //!
 //! A Nikon DSLR shot through the viewfinder names the autofocus point the
 //! camera used by its number, and records no position for it. A table
-//! gives, for one body, every point's number, the centre of the box the
+//! gives, for one body, every point's number, the center of the box the
 //! maker's software draws for it and the box's size, all in the body's
 //! full-size output frame. Every file whose Model names a body with a
 //! table is given the table as the layout of the body's points, a
@@ -56,13 +56,13 @@
 //! points used names each point by a bit ([`BitOrder`]); and the crops
 //! the record's crop frames confirm, each with the size of its window
 //! ([`ConfirmedCrop`]). A point on such a crop moves into the crop's
-//! window, whose size the record measured, centred in the table's frame,
+//! window, whose size the record measured, centered in the table's frame,
 //! as the decision to place focus points from a table (ADR018) sets out.
 //! A crop the record does not confirm gives no placed point. The table
 //! also carries the sizes of the body's JPEGs whose picture is not the
 //! whole frame scaled, each with the window of the frame it shows
 //! ([`ConfirmedJpegSize`]): a point in an uncropped JPEG of such a size
-//! moves into that window, centred in the table's frame, as the same
+//! moves into that window, centered in the table's frame, as the same
 //! decision sets out.
 //! A JPEG of a size the table does not list takes the whole frame. A body
 //! whose uncropped files record a CropHiSpeed cropped size other than the
@@ -130,7 +130,7 @@ pub(in crate::formats) struct PointTable {
     /// the size of its full-size JPEG.
     frame: Size,
     /// Every point, in number order, from 1: its number as the camera
-    /// writes it, the centre of its box and the box's size, in `frame`.
+    /// writes it, the center of its box and the box's size, in `frame`.
     points: &'static [FocusLayoutPoint],
     /// The layout code the body writes beside a point number of this
     /// layout, AFInfo2's FocusPointSchema: 3 on every D600 frame through
@@ -170,7 +170,7 @@ pub(in crate::formats) struct PointTable {
 /// point placed on the crop is measured in.
 ///
 /// The window is measured on the record's crop frames, as the size of
-/// their full-size previews and JPEGs, and lies centred in the table's
+/// their full-size previews and JPEGs, and lies centered in the table's
 /// frame, which the frames confirm. No tag gives it: CropHiSpeed's cropped
 /// size counts the sensor's pixels, the border of the stored raw data
 /// among them, 3968 by 2636 on a D600 DX frame against a 3936 by 2624
@@ -204,7 +204,7 @@ impl ConfirmedCrop {
 ///
 /// The window is measured on the record's RAW+JPEG pairs at that size, by
 /// fitting each JPEG onto the full-size preview of its own raw file, and
-/// lies centred in the table's frame, which the pairs confirm. No tag
+/// lies centered in the table's frame, which the pairs confirm. No tag
 /// gives it, and the JPEG's shape alone does not: the D600's Medium JPEG,
 /// 4512 by 3008, shows a 6010 by 4006 window of its 6016 by 4016 frame,
 /// not the whole frame, which would be 4512 by 3012 at that scale.
@@ -269,7 +269,7 @@ impl PointTable {
     ///
     /// It is `Some` for every registered table, which the table tests
     /// check: a frame with no zero side, every number above 0 and above
-    /// the one before it, every centre and box on the frame, among checks
+    /// the one before it, every center and box on the frame, among checks
     /// that go further than [`FocusLayout::new`]'s, such as numbers that
     /// run from 1 to the count. So a table that fails them gives a file no
     /// layout ([`layout`]), never a panic.
@@ -304,7 +304,7 @@ impl PointTable {
     /// `code`, in the pixels of the table's frame, as the table's record
     /// measured it; `None` for a crop the record does not confirm. Every
     /// window fits the frame, and the frame less the window is even on
-    /// each axis, so that it can be centred to the pixel, which the table
+    /// each axis, so that it can be centered to the pixel, which the table
     /// tests check.
     pub(in crate::formats) fn crop_window(&self, code: u32) -> Option<Size> {
         self.crops
@@ -317,7 +317,7 @@ impl PointTable {
     /// frame header gives it, shows, in the pixels of the table's frame, as
     /// the table's record measured it; `None` for a size whose picture is
     /// the whole frame, or that the record did not measure. Every window
-    /// fits the frame, can be centred to the pixel and has the shape of
+    /// fits the frame, can be centered to the pixel and has the shape of
     /// its JPEG size, which the table tests check.
     pub(in crate::formats) fn jpeg_window(&self, size: Size) -> Option<Size> {
         self.jpeg_sizes
@@ -430,7 +430,7 @@ mod tests {
 
     /// Every registered table can be a layout, by the checks of
     /// [`FocusLayout::new`]: a frame with no zero side, at least one point,
-    /// every number above 0 and above the one before it, every centre on
+    /// every number above 0 and above the one before it, every center on
     /// the frame and every box inside it. So the reader, which gives `None`
     /// for a table that fails them, gives every registered body its layout.
     #[test]
@@ -470,10 +470,10 @@ mod tests {
         }
     }
 
-    /// Every table's point 1 lies within 3 pixels of its frame's centre on
-    /// each axis: Nikon numbers the centre point 1 on every layout the NEF
+    /// Every table's point 1 lies within 3 pixels of its frame's center on
+    /// each axis: Nikon numbers the center point 1 on every layout the NEF
     /// notes record, and a frame of the wrong size, or a table read in
-    /// another frame, moves the centre away from it.
+    /// another frame, moves the center away from it.
     #[test]
     fn every_tables_point_1_lies_at_the_frames_center() {
         for table in TABLES {
@@ -489,7 +489,7 @@ mod tests {
             let off_y = (2 * i64::from(center.y) - i64::from(table.frame.height)).abs();
             assert!(
                 off_x <= 6 && off_y <= 6,
-                "{model}: point 1 at {center} is more than 3 pixels from the centre of the \
+                "{model}: point 1 at {center} is more than 3 pixels from the center of the \
                  {} frame",
                 table.frame
             );
@@ -559,7 +559,7 @@ mod tests {
     /// Every table's confirmed crops are each confirmed once, and each
     /// window has no zero side, fits the frame, and leaves an even margin,
     /// the frame less the window, on each axis: a window that does not fit
-    /// could hold no point, and one with an odd margin cannot be centred
+    /// could hold no point, and one with an odd margin cannot be centered
     /// to the pixel, so no file's CropHiSpeed could ever match it.
     #[test]
     fn every_tables_crop_windows_fit_its_frame_centered() {
@@ -577,7 +577,7 @@ mod tests {
 
     /// Checks that `window`, which `what` names, has no zero side, fits
     /// `frame` and leaves an even margin, the frame less the window, on
-    /// each axis, so that it can be centred to the pixel.
+    /// each axis, so that it can be centered to the pixel.
     fn assert_fits_centered(what: &str, frame: Size, window: Size) {
         assert!(
             window.width > 0 && window.height > 0,
@@ -593,13 +593,13 @@ mod tests {
             assert!(
                 margin % 2 == 0,
                 "{what} leaves an odd margin in {side}, {margin} pixels, so it cannot be \
-                 centred"
+                 centered"
             );
         }
     }
 
     /// Every table's confirmed JPEG sizes are each confirmed once, and each
-    /// window fits the frame centred, as a crop's window must; and has the
+    /// window fits the frame centered, as a crop's window must; and has the
     /// shape of its JPEG size, by the rule the JPEG reader holds a JPEG's
     /// points to ([`Size::same_shape`]): a window of another shape would give
     /// points that the reader then refuses, so the size would gain

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! The Sony ARW reader: how the crate recognises a Sony RAW file, and how
+//! The Sony ARW reader: how the crate recognizes a Sony RAW file, and how
 //! it finds the file's previews and reads its metadata.
 //!
 //! Sony's RAW files are one family. Every Sony body since 2006 writes ARW;

@@ -11,7 +11,7 @@ of known shortcuts, a status page, a work log).
 
 ## Decision
 
-We will track all of it as GitHub issues, labelled from GitHub's default set
+We will track all of it as GitHub issues, labeled from GitHub's default set
 (`bug`, `enhancement`, `documentation`, `good first issue`, `help wanted`).
 There is no in-repo register, status page or work log.
 

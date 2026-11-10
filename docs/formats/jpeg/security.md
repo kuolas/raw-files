@@ -37,7 +37,7 @@ Rust records in section 1.6 show that they happen.
 | CVE-2021-37622, CVE-2021-37623 | Exiv2 0.27.4 and earlier, JPEG segment walk | Endless loop (CWE-835) | The walk that prints a JPEG's structure looped forever on crafted input; the advisories do not say which field failed to advance. Published 2021-08-09. [1][5] | P |
 | CVE-2025-55304 | Exiv2 0.28.5 and earlier, JPEG metadata reading | Quadratic time (CWE-407) | Reading the ICC profile of a crafted JPEG took quadratic time. Published 2025-08-29. [1][5] | P |
 | CVE-2022-25851 | jpeg-js before 0.4.4 | Endless loop (CWE-835) | A crafted input made the decoder loop forever. Published 2022-06-10. [1] | P |
-| CVE-2025-14177 | PHP `getimagesize()`, 8.1 to 8.5 before their fixes | Uninitialised memory returned (CWE-125) | Read in several chunks, an APPn segment's buffer was overwritten without moving forward, and old heap contents were returned. Published 2025-12-27. [1] | P |
+| CVE-2025-14177 | PHP `getimagesize()`, 8.1 to 8.5 before their fixes | Uninitialized memory returned (CWE-125) | Read in several chunks, an APPn segment's buffer was overwritten without moving forward, and old heap contents were returned. Published 2025-12-27. [1] | P |
 
 ### 1.2 The IFDs inside the Exif segment
 

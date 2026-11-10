@@ -12,8 +12,8 @@ affects, and test-data.md describes the sample set that would answer Part 2.
 1. **Provenance of format data tables.** Raw decoding needs data that is
    published in copyleft projects and in dcraw, whose header states that
    all its code outside a single restricted (Foveon) block is free for all
-   uses; dcraw's licence is still described as ambiguous for the whole file
-   ([licences-and-references.md](licences-and-references.md)). That is an
+   uses; dcraw's license is still described as ambiguous for the whole file
+   ([licenses-and-references.md](licenses-and-references.md)). That is an
    input to the decision, not legal advice. The data:
    - the symbol lists of the six NEF Huffman tables
      ([raw-data.md](raw-data.md)). Their structure, the counts per code
@@ -49,7 +49,7 @@ affects, and test-data.md describes the sample set that would answer Part 2.
      otherwise.
    - ExifTool and exiv2 also use 0x22 and 0x60.
 
-   One behaviour should be picked and tested
+   One behavior should be picked and tested
    ([makernote-and-metadata.md](makernote-and-metadata.md)).
 5. **Strictness on corrupt data.** Implementations differ in three places
    ([raw-data.md](raw-data.md)):
@@ -134,7 +134,7 @@ affects, and test-data.md describes the sample set that would answer Part 2.
   open
   ([container-and-previews.md](container-and-previews.md)).
 - **Z 9 SubIFDs without a preview.** What the Z 9's 384×256 uncompressed
-  8-bit grey SubIFD and its two empty SubIFDs (width, height and strip
+  8-bit gray SubIFD and its two empty SubIFDs (width, height and strip
   length 0) are for (files 5146 to 5148). A preview finder skips all three
   ([container-and-previews.md](container-and-previews.md)).
 
@@ -160,7 +160,7 @@ affects, and test-data.md describes the sample set that would answer Part 2.
   - which bodies write FaceDetect (0x0021);
   - crops that cut both sides and change the aspect, such as a DX crop
     at 1:1 on an FX body: scaled like DX or a window like 1:1;
-  - where an aspect crop's window lies: centred, as raw-files assumes,
+  - where an aspect crop's window lies: centered, as raw-files assumes,
     or at CropHiSpeed's offsets, up to eight pixels away;
   - whether a Z body records a crop mode on a small raw, and how;
   - the bit order of the mask of points used on every layout but the

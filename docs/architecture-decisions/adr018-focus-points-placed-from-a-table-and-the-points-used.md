@@ -34,7 +34,7 @@ those frames and my other files show, as counts:
   auto-area shot sets between 2 and 16, the primary among them. On 59
   of the D600's 1,374 files the mask is empty beside a number. A
   manual-focus shot writes layout 0, number 0 and an empty mask.
-- **The table places a point to a few pixels.** The 39 centres, read
+- **The table places a point to a few pixels.** The 39 centers, read
   in the maker's software, are good to about 2 pixels, in the body's
   full-size output frame: 6016x4016 on the D600, the size of its
   full-size preview and of its JPEG, not the 6080x4028 of its stored
@@ -44,7 +44,7 @@ those frames and my other files show, as counts:
 - **On a DX crop the point shifts by the crop's origin.** Two frames in
   DX, frames 49 and 50 of the record, put their points, 38 and 27,
   within 2 pixels of the table's position less CropHiSpeed's origin,
-  (1040, 696), which on the D600 is the centred window's. The raw
+  (1040, 696), which on the D600 is the centered window's. The raw
   file's CropHiSpeed counts a border that the picture does not have, 32
   pixels of width and 12 of height on the D600 (3968x2636 against the
   3936x2624 picture), as the raw size of every Nikon body without a
@@ -86,7 +86,7 @@ committed stripped in
 [`tests/fixtures/nikon-d600/`](../../tests/fixtures/nikon-d600/README.md),
 the NEF's full-size preview is 3936x2624, and so is the JPEG of the same
 frame. That is the table's frame less twice CropHiSpeed's origin, 6016 −
-2 × 1040 by 4016 − 2 × 696: the crop's picture is the centred window of
+2 × 1040 by 4016 − 2 × 696: the crop's picture is the centered window of
 the output frame at that origin, the window into which frames 49 and 50
 confirmed the shift, and the raw file holds a picture of that size in
 its own preview. The window's size is a fact the record's crop frames
@@ -105,8 +105,8 @@ CropHiSpeed counts the sensor's pixels, not the output's. On the D600
 it records an original size of 6080x4028 and a DX crop of 3968x2636 at
 (1040, 696), while the output is 6016x4016 and the DX picture
 3936x2624. In the sensor's pixels the DX crop lies 16 pixels left of
-the centre (1040 + 3968 / 2 = 3024, against 6080 / 2 = 3040), and in
-the output's the DX picture lies centred, 1040 pixels from either edge.
+the center (1040 + 3968 / 2 = 3024, against 6080 / 2 = 3040), and in
+the output's the DX picture lies centered, 1040 pixels from either edge.
 Both hold because the camera trims the same left and top border from
 the full frame and from the crop, within the frames' 2 pixels, but more
 on the right of the full frame: 64 pixels across, where the crop loses
@@ -116,7 +116,7 @@ satisfies both exactly.
 
 Taking the window from the origin alone makes one tag value decide both
 the shift and the frame, and nothing checks it. My own D7200 files show
-that a recorded origin need not be the centred one: its 1.3x stills
+that a recorded origin need not be the centered one: its 1.3x stills
 record `[1, 6016, 4016, 4840, 3208, 576, 0]`, a crop 808 rows shorter
 than the frame at a top of 0
 ([makernote-and-metadata.md](../formats/nef/makernote-and-metadata.md#86-focus-point)).
@@ -152,9 +152,9 @@ offset on each axis
 ([autofocus-points.md](../formats/nef/autofocus-points.md#29-the-jpeg-sizes)).
 The Large JPEGs are the preview, and the Small JPEGs the whole frame at
 exactly half its size. The Medium JPEGs show a window of the frame,
-6010.2x4006.9 frame pixels, 3:2, centred to within 0.06 pixels, scaled
+6010.2x4006.9 frame pixels, 3:2, centered to within 0.06 pixels, scaled
 evenly by 0.75072; the two frames agree to 0.05 pixels. So a Medium
-JPEG is to the frame what a full-size DX JPEG is: a centred window of
+JPEG is to the frame what a full-size DX JPEG is: a centered window of
 it, of a size that the record measures and no tag records.
 
 ## Decision
@@ -167,7 +167,7 @@ a size whose picture is a window of the frame, a placed point is
 measured in that window, which the body's table keeps.
 
 - **A named point is placed from the table.** When a file's record has
-  a zero frame or area and names a point, the point's centre and box
+  a zero frame or area and names a point, the point's center and box
   are the table's, in the table's frame, the body's full-size output.
   The point says it came from a table: `Focus::origin` is `Table`,
   against `Recorded` for a position the camera measured. Whether focus
@@ -186,10 +186,10 @@ measured in that window, which the body's table keeps.
   it, the size of their full-size previews and JPEGs; a JPEG size's
   window is the part of the frame its picture shows, a whole number of
   the frame's pixels on each side, as the record measures it on
-  RAW+JPEG pairs at that size. Every window lies centred in the table's
+  RAW+JPEG pairs at that size. Every window lies centered in the table's
   frame, at an origin of half of the frame less the window on each
   axis, which the record's frames confirm. The table's tests refuse a
-  window that cannot be centred to the pixel, the frame less the window
+  window that cannot be centered to the pixel, the frame less the window
   being odd, or that does not fit the frame, and a JPEG size's window
   that has not its size's shape by ADR014's rule.
 - **On a crop the point moves into the crop's window.** The window is a
@@ -198,8 +198,8 @@ measured in that window, which the body's table keeps.
   procedure, as the D600's does, and whose previews and JPEGs show the
   window's size; a table whose record does not gives no placed point on
   a crop. On a crop it confirms, a point is placed only when the file's
-  CropHiSpeed origin is that window's centred origin, and is then
-  measured in that window, in a raw file as in a JPEG: its centre moves
+  CropHiSpeed origin is that window's centered origin, and is then
+  measured in that window, in a raw file as in a JPEG: its center moves
   by that origin and its box is kept. A file whose CropHiSpeed records another origin,
   for a crop setting the table confirms, gives no placed point. On
   every file that gives one, the window is still the table's frame less
@@ -208,12 +208,12 @@ measured in that window, which the body's table keeps.
   source of it.
 - **A JPEG of a size the table lists**, when it is no crop, has a point
   placed from the table measured in that size's window, moved back by
-  its centred origin, as a point placed on a crop is: the window is the
+  its centered origin, as a point placed on a crop is: the window is the
   frame, and every box is kept. A JPEG of a size the table does not
   list, and a raw file, take the table's frame. A crop-mode JPEG is
   placed on its crop alone, whatever its size: a size's window is
   measured uncropped.
-- **A point the window leaves out is dropped**: a point whose centre
+- **A point the window leaves out is dropped**: a point whose center
   leaves the window, or whose box crosses the window's edge, as every
   point's box must fit inside its frame; and the primary dropped costs
   the focus point.
@@ -231,14 +231,14 @@ measured in that window, which the body's table keeps.
   to the placed frame, or the window, unchanged.
 - **On the D600**, the table lists the DX crop, setting 2, with its
   window, 3936x2624 at (1040, 696), and the Medium JPEG, 4512x3008,
-  with the window 6010x4006 at (3, 5): the window centred to the pixel
+  with the window 6010x4006 at (3, 5): the window centered to the pixel
   nearest the measured one. A point placed in it and scaled onto the
   JPEG lands within 0.08 of a Medium pixel across and 0.35 down of
   where the measured window puts it, anywhere in the frame, well within
   the table's own tolerance of 3 frame pixels.
 - **The points the camera used are reported**, through
   `Metadata::focus_points`: every point, each with its number when the
-  file gives one, its centre, its box and whether focus was confirmed
+  file gives one, its center, its box and whether focus was confirmed
   when the file says; which of them is the primary, the one
   `Metadata::focus` reports; and the area mode. For a placed point the
   list is one point per set bit of the mask whose number the table has,
@@ -254,14 +254,14 @@ measured in that window, which the body's table keeps.
   ([ADR011](adr011-metadata-from-standard-tags.md)); any other code
   gives no mode.
 - **A body with a table gives its layout**, through
-  `Metadata::focus_layout`: every point's number, centre and box in the
+  `Metadata::focus_layout`: every point's number, center and box in the
   table's frame, whatever the shot, so that a viewer can draw the grid;
   a body without a table gives none.
 - **`Metadata::focus` keeps its shape and meaning** for every file that
   had a point: a recorded position is reported as before, with origin
   `Recorded`, and `Focus` stays `Copy`. A placed point is still the
   camera's record, read through the table, and nothing estimated from
-  the picture: a position found by analysing the pixels is a different
+  the picture: a position found by analyzing the pixels is a different
   value with a name of its own, as ADR012 says.
 
 Rejected:
@@ -277,7 +277,7 @@ Rejected:
   two layouts under one Model would misplace every number of the other
   layout, and
   a body whose later firmware changed its layout would be misread.
-- **Clamping a number beyond the table to the centre, or to the last
+- **Clamping a number beyond the table to the center, or to the last
   point.** A wrong point placed with confidence; none, counted, tells
   the truth.
 - **Reporting whether a placed point was in focus from version 0100's
@@ -301,7 +301,7 @@ Rejected:
 - **The window from CropHiSpeed's origin alone**, the table's frame
   less twice the origin, as this record next had it. It holds on the
   D600, but one tag value decides the shift and the frame unchecked,
-  and a raw file whose origin is not centred, as the D7200's 1.3x
+  and a raw file whose origin is not centered, as the D7200's 1.3x
   stills record, would give a point in a frame of the wrong size
   without a sign.
 - **Half the frame less CropHiSpeed's cropped size.** That size counts
@@ -321,7 +321,7 @@ Rejected:
   whole numbers in the table, and in the frame that a focus point and
   a list of points give a caller, which the public API measures in
   whole pixels, for a gain far below the table's tolerance.
-- **A rule for every JPEG of exactly 3:2**, mapping it to the centred
+- **A rule for every JPEG of exactly 3:2**, mapping it to the centered
   3:2 window of the frame, as a crop-mode JPEG's window is found from
   the JPEG's shape
   ([ADR015](adr015-the-focus-point-of-a-crop-mode-jpeg.md)). It needs
@@ -351,7 +351,7 @@ Rejected:
   crop's window, which frames shot in that crop at that size would
   measure; such a JPEG gives no placed point until frames at those
   sizes are measured, by this record's rule or another.
-- A crop or a JPEG size whose picture is not centred in the output, or
+- A crop or a JPEG size whose picture is not centered in the output, or
   a JPEG size not scaled evenly: none is known. Its record would
   measure where the window lies, and a decision would say how the
   table keeps that.
@@ -395,7 +395,7 @@ Rejected:
 - A D600 DX NEF and its JPEG give the same placed point in the same
   frame, 3936x2624, the size of the NEF's full-size preview, so a
   point scaled onto that preview lands where the table puts it.
-- On the D600, every DX frame records (1040, 696), the centred origin
+- On the D600, every DX frame records (1040, 696), the centered origin
   of the 3936x2624 window, so the check against the window costs no DX
   file its point.
 - A raw file whose CropHiSpeed origin differs from the window's, by a
@@ -414,7 +414,7 @@ Rejected:
   window the table keeps; an export cut to another shape gives none,
   as ADR014 says.
 - A D600 Medium JPEG shot through the viewfinder gives its points,
-  measured in the 6010x4006 window, every centre the table's less
+  measured in the 6010x4006 window, every center the table's less
   (3, 5); a caller that scales a point from that frame onto the JPEG
   finds it where the picture shows the point. A NEF and its Medium JPEG
   give the same point in two frames, the table's and the window, where

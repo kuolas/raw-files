@@ -112,7 +112,7 @@ impl fmt::Display for Size {
 ///
 /// # Examples
 ///
-/// The centre of a stored image, half its width from the left edge and
+/// The center of a stored image, half its width from the left edge and
 /// half its height from the top:
 ///
 /// ```

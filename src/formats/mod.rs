@@ -26,7 +26,7 @@
 //! format is asked. Only the formats that container can hold are then
 //! asked, in the order of its list, and the first that claims the file
 //! reads it. A file that no format of its container claims is of no
-//! format the crate recognises, and the error says which container the
+//! format the crate recognizes, and the error says which container the
 //! file is.
 //!
 //! Detection then gives the file the layout of its body's autofocus
@@ -41,13 +41,13 @@
 //! [`Metadata::focus_layout`](crate::Metadata::focus_layout) states.
 //!
 //! The TIFF list holds NEF and ARW, in that order. A Nikon file is
-//! recognised by its IFD0's Make, and opens with its previews, which the
+//! recognized by its IFD0's Make, and opens with its previews, which the
 //! NEF reader finds with the shared finder, and its metadata, which it
-//! reads with the shared reader. A Sony file is recognised by its IFD0's
+//! reads with the shared reader. A Sony file is recognized by its IFD0's
 //! Make too, helped for a Hasselblad Make by the pointer to Sony's private
 //! directory, and opens with its previews and its metadata, which the ARW
 //! reader finds and reads the same way. A TIFF file no format claims is of
-//! no format the crate recognises.
+//! no format the crate recognizes.
 //!
 //! The JPEG list holds JPEG. A JPEG file is claimed when its first frame
 //! header gives the picture's size and is not lossless, and opens with its
@@ -58,9 +58,9 @@
 //! reader, its image size the picture's, and then, when IFD0's Make names
 //! Nikon or Sony, from its MakerNote with that maker's reader, as a NEF's
 //! or an ARW's ([`make_starts_with`] reads that Make too). A JPEG file no
-//! format claims is of no format the crate recognises.
+//! format claims is of no format the crate recognizes.
 //!
-//! A DNG is of no format the crate recognises either, whatever its Make
+//! A DNG is of no format the crate recognizes either, whatever its Make
 //! says: converters and the phones that write DNG keep the maker's name in
 //! the Make, so each reader refuses a DNG before it looks at the Make
 //! ([`is_dng`]), and [`make_starts_with`] reads the Make for them.
@@ -220,7 +220,7 @@ pub(crate) fn detect<R: Read + Seek>(
     let (found, unclaimed) = match structure {
         Structure::Tiff(tree) => (
             first_claim(&tiff_specs(), src, tree, limits)?,
-            "the file is a TIFF file, but not of a format this version recognises",
+            "the file is a TIFF file, but not of a format this version recognizes",
         ),
         Structure::Jpeg(segments) => (
             first_claim(&jpeg_specs(), src, segments, limits)?,
@@ -439,7 +439,7 @@ mod tests {
         assert_eq!(err.offset(), None, "{err:?}");
         assert_eq!(
             err.to_string(),
-            "the file is a TIFF file, but not of a format this version recognises"
+            "the file is a TIFF file, but not of a format this version recognizes"
         );
     }
 

@@ -10,6 +10,13 @@ does.
 
 ## [Unreleased]
 
+### Changed
+
+- The `UnknownFormat` error for a TIFF file of an unknown format has a
+  message that ends in "recognizes". It ended in "recognises". The docs
+  and the messages are now spelled the American way, as the API's
+  names are.
+
 ## [0.9.0] - 2026-11-10
 
 The ninth release, the second step towards full metadata: who made a
@@ -181,7 +188,7 @@ Changed and Removed).
 ### Added
 
 - `Camera::make` gives the camera's maker as a `Make`, `Nikon`, `Sony`,
-  `Hasselblad` or `Canon`, recognised from the whole Make text the file
+  `Hasselblad` or `Canon`, recognized from the whole Make text the file
   records, case included: `NIKON CORPORATION` and `NIKON` are Nikon,
   `SONY` Sony, `HASSELBLAD` Hasselblad and `Canon` Canon, and any other
   text gives `None`. `Make` has a `name` that `Display` writes, spelled
@@ -252,10 +259,10 @@ Changed and Removed).
   viewfinder ([#62](https://github.com/kuolas/raw-files/issues/62)),
   gives the autofocus points it names, placed from the
   D600's table, where it gave none: its picture is not the whole
-  6016x4016 frame scaled, but the 6010x4006 window centred in it, which
+  6016x4016 frame scaled, but the 6010x4006 window centered in it, which
   the table now holds for that size, as measured on RAW+JPEG pairs. The
   frame of `Metadata::focus` and `Metadata::focus_points` is that
-  window, 6010x4006, every centre moved back by its origin, (3, 5), so
+  window, 6010x4006, every center moved back by its origin, (3, 5), so
   that a point scaled from that frame onto the JPEG lands where the
   camera's picture shows it; the NEF of the same shot
   still gives the 6016x4016 frame, and `Metadata::focus_layout` stays
@@ -291,7 +298,7 @@ changes some of 0.5.0's signatures: `Focus::new` takes the origin,
   "Placed from a table", and orders as its variants are listed.
 - `Metadata::focus_points` gives the autofocus points the camera used,
   as a `FocusPoints`: every point in one frame, each a `FocusPoint` with
-  its number when the file gives one, its centre, its area when recorded
+  its number when the file gives one, its center, its area when recorded
   and whether focus was confirmed when the file says; which of them is
   the primary, which `Metadata::focus` gives as a `Focus` and
   `FocusPoints::primary_index` by its place in the list; the area mode,
@@ -319,14 +326,14 @@ changes some of 0.5.0's signatures: `Focus::new` takes the origin,
 - `Metadata::focus_layout` gives the layout of the body's autofocus
   points, as a `FocusLayout`: the Model it is for, the frame its points
   are measured in, the body's full-size output, and every point, each a
-  `FocusLayoutPoint` with the camera's number for it, the centre of its
+  `FocusLayoutPoint` with the camera's number for it, the center of its
   box and the box's size; `FocusLayout::point` finds a point by its
   number, so that a viewer can draw the grid and mark on it the points
   the camera used. `FocusLayout::new` builds one from a `static` array
   of points, which `FocusLayoutPoint::new` can fill since it is `const`,
   and refuses a frame with a zero side, no points, a number of 0, one
   given twice or points out of rising number order, and a point whose
-  centre or box does not lie on the frame by the rules of `Focus::new`
+  center or box does not lie on the frame by the rules of `Focus::new`
   and `Focus::with_size`; a program's tests set it with
   `Metadata::with_focus_layout`. The readers give a
   layout only from a table of the body's points, and `None` for a body
@@ -340,7 +347,7 @@ changes some of 0.5.0's signatures: `Focus::new` takes the origin,
   NX Studio, as the NEF notes record it.
 - NEF and JPEG files of the Nikon D600 shot through the viewfinder give
   the autofocus point the camera names by number, placed from that
-  table. `Metadata::focus` gives the point's centre and its box of
+  table. `Metadata::focus` gives the point's center and its box of
   164x164 in the 6016x4016 frame, with the origin `Table` and nothing
   said of whether focus was confirmed; `Metadata::focus_points` gives
   every point the file's record of the points used, one bit per point,
@@ -396,11 +403,11 @@ and a JPEG lose its Exif metadata (see Changed).
 
 - `Metadata::camera_settings` gives a `CameraSettings`: how the camera
   was set for the shot, each value optional. It holds the white balance
-  (`WhiteBalance`: its mode, its colour temperature in kelvin and its
+  (`WhiteBalance`: its mode, its color temperature in kelvin and its
   fine-tuning, `FineTune`), the exposure program, the metering mode, the
   flash (`Flash`: whether it fired and its mode), the shutter used,
   Sony's electronic front curtain setting, the image area, the raw image
-  size and the colour space. The enums `WhiteBalanceMode`,
+  size and the color space. The enums `WhiteBalanceMode`,
   `ExposureProgram`, `MeteringMode`, `FlashMode`, `Shutter`, `ImageArea`,
   `RawImageSize` and `ColorSpace` name each setting's choices in words
   that fit any maker, with a `name` that `Display` writes, and order as
@@ -410,26 +417,26 @@ and a JPEG lose its Exif metadata (see Changed).
 - NEF, ARW and JPEG files give the settings their Exif tags record: the
   exposure program, the metering mode, the flash, the white balance mode,
   from Exif's auto or manual and the kind of light a manual one was set
-  for, and the colour space, sRGB or, from the `R03` index of a DCF
+  for, and the color space, sRGB or, from the `R03` index of a DCF
   option file, Adobe RGB. A code Exif does not define, or its "not
   defined" and "unknown", gives `None`.
 - NEF files and the JPEGs of Nikon cameras give the rest from Nikon's
   MakerNote: the white balance setting, such as a preset or a chosen
-  colour temperature, in place of Exif's when the MakerNote names one;
-  the colour temperature of the white balance the camera applied, which
+  color temperature, in place of Exif's when the MakerNote names one;
+  the color temperature of the white balance the camera applied, which
   the D5, the D850, the D780 and the Z bodies record, or, where that is
-  missing or 0, the number of a chosen colour temperature, such as
+  missing or 0, the number of a chosen color temperature, such as
   `3230K`, the one temperature older bodies record; the
   fine-tuning; the shutter used; the image area; the raw image size, in a
-  raw file only; and the colour space, when Exif records none, as in
+  raw file only; and the color space, when Exif records none, as in
   every Nikon raw file checked. The single fine-tuning value of the D1
   family, the D70, the D100 and the D200 gives `None`, since no file
   shows its axis.
 - ARW files, with the SRF, SR2 and ARQ files of the family, and the
   JPEGs of Sony cameras give settings from Sony's MakerNote too: the
   white balance setting, such as custom, or underwater, which Exif calls
-  auto, in place of Exif's when the MakerNote names one; the colour
-  temperature under a chosen colour temperature or a custom white
+  auto, in place of Exif's when the MakerNote names one; the color
+  temperature under a chosen color temperature or a custom white
   balance, the only settings under which the files checked record one;
   the fine-tuning; and the electronic front curtain setting, the menu
   setting, never the shutter used. The shutter used, the image area and
@@ -443,11 +450,11 @@ and a JPEG lose its Exif metadata (see Changed).
   maker: `FineTune::amber_blue` is positive towards blue and
   `FineTune::green_magenta` positive towards magenta, so a viewer can
   show or compare two files' shifts without knowing how each maker signs
-  them. Every colour temperature is read from 1 to 99,999 K: a recorded
+  them. Every color temperature is read from 1 to 99,999 K: a recorded
   0, which means none was recorded, and a larger number give `None`.
 - `Exposure::focal_length_in_35mm_film` and `Metadata::software`, read
   from NEF, ARW and JPEG files. The first is the focal length in 35 mm
-  terms the camera recorded, in whole millimetres, from Exif's
+  terms the camera recorded, in whole millimeters, from Exif's
   FocalLengthIn35mmFilm: the focal length that would give the same field
   of view on a full-frame camera, so that pictures from bodies with
   different sensor sizes compare; a recorded 0, which a camera writes when
@@ -459,7 +466,7 @@ and a JPEG lose its Exif metadata (see Changed).
 
 ### Changed
 
-- The Exif IFD's Interoperability IFD, read for the colour space, counts
+- The Exif IFD's Interoperability IFD, read for the color space, counts
   as one more directory under `Limits::max_ifds`. A file that holds one,
   as most Sony-family sample files do, needs one directory more than
   under 0.4.0, so a cap set just high enough for it then fails a raw
@@ -482,7 +489,7 @@ a JPEG now succeeds (see Changed).
 
 - JPEG files open, as `Format::Jpeg`: the pictures a camera writes beside
   its raw files or instead of them, and the JPEGs an editor exports,
-  recognised by their content like every other format. A program gets
+  recognized by their content like every other format. A program gets
   from one what it gets from a raw file. Its previews are the file itself
   and the smaller images it holds: the Exif thumbnail, the images of its
   Multi-Picture Format (MPF) list and, from Nikon bodies such as the D70,
@@ -535,7 +542,7 @@ that a program can build every metadata value in its own tests.
 ### Added
 
 - `Metadata::focus`, where the camera focused, as it recorded it: the
-  centre of the focus area, the area's size when the file records one,
+  center of the focus area, the area's size when the file records one,
   the frame the two are measured in, and whether the camera confirmed
   focus, with the `Focus` and `Point` types; `Focus::new`, `with_size`
   and `with_in_focus` build one, and `Focus::scaled_to` places it on any
@@ -608,7 +615,7 @@ files.
 - `Error`, with an `ErrorKind` category and the byte offset when known,
   and the `Result` alias.
 - `Limits`, the caps on what a file can make the library walk or allocate.
-- `Orientation`, the EXIF orientation a viewer must apply to a preview, and
+- `Orientation`, the Exif orientation a viewer must apply to a preview, and
   `Size`, a width and height in pixels.
 - `Preview`, one embedded preview: where its bytes are in the file, its
   size, format and orientation; and `PreviewFormat`, how its bytes are

@@ -45,17 +45,17 @@ showed:
 - **Nikon records a position in pixels in its AFInfo2 tag** (MakerNote
   tag 0x00B7), a plain value, not encrypted, that starts with a
   four-character version. Each version has its own layout, and at its
-  offsets lie the size of a frame, the centre of the focus area and the
+  offsets lie the size of a frame, the center of the focus area and the
   area's width and height, in the MakerNote's byte order, and, on most
   versions, a byte saying whether focus was confirmed. The samples hold
   versions 0100, 0101, 0200, 0300, 0400, 0401 and 0402; the metadata
-  listings of the raw.pixls.us catalogue add 0301 (D6, Z 5, Z 6II, Z 7II,
+  listings of the raw.pixls.us catalog add 0301 (D6, Z 5, Z 6II, Z 7II,
   Z 30 and Z fc) and, besides the Nikon 1's 0200 and 0201, no other.
   Mirrorless bodies fill in the position (Z 6, Z 9, Z f, Z6III and
   Z50II: files 3587, 5146 to 5148, 6887, 7808 to 7810, 7812, 7813, 7767
   and 7770), and so do DSLRs in live view (D7000, D5600 and
   Coolpix A: files 961, 1415 and 2238).
-- **The position is the centre of the area.** On the Coolpix A it is
+- **The position is the center of the area.** On the Coolpix A it is
   exactly half the frame: (2464, 1632) in 4928×3264 (file 2238).
 - **The frame is the camera's full-size output, not the stored raw.** On
   the Z 9 it is 8256×5504, the size of the visible image and of the
@@ -73,14 +73,14 @@ showed:
   (file 2036).
 - **A DX crop is scaled into the frame; an aspect crop is a window in
   it.** On every CC0 crop file the point lies within 12 pixels of the
-  centre, which cannot tell the two apart; the Z 9 shots can. With the
-  point in the top-left corner, the FX shot records the centre (502, 424)
+  center, which cannot tell the two apart; the Z 9 shots can. With the
+  point in the top-left corner, the FX shot records the center (502, 424)
   and an area of 291×323 in 8256×5504. The DX shot records (636, 572)
   and 420×468: shifted by the DX window's origin it would lie outside
   the picture, while scaled onto the 5392×3592 crop it is (415, 373) and
   274×305, near the corner and about the FX area. The 1:1 shot records
   (1797, 424) and the 16:9 shot (502, 715), both with the FX area of
-  291×323: shifted by the centred window's origin they are (421, 424) in
+  291×323: shifted by the centered window's origin they are (421, 424) in
   5504×5504 and (502, 283) in 8256×4640, as near the corner as in FX,
   while scaled they would move to 22 % and 13 % of the way in and their
   single point would shrink. So a crop that keeps the aspect of the full
@@ -101,15 +101,15 @@ showed:
   MakerNote is not read.
 - **Sony records a position in its FocusLocation tag** (0x2027), four
   numbers in a plain tag of the MakerNote, outside its enciphered blocks:
-  the frame's width and height and the centre's x and y. Every sample
+  the frame's width and height and the center's x and y. Every sample
   from the ILCE-7RM2 (2015) on has it; the ILCE-7S, the NEX-5, the
   RX100, the A-mount bodies, the Hasselblad Lunar and the older formats
   do not. Bodies from the ILCE-7SM3 (2020) on add the area's width and
   height in FocusFrameSize (0x2037), and the ILCE-9M3, ILCE-1M2 and
   ILCE-7M5 repeat the location in FocusLocation2 (0x204A), with the same
   values.
-- **The position is the centre there too.** ExifTool describes the
-  focus area as centred on FocusLocation; several autofocus shots with a
+- **The position is the center there too.** ExifTool describes the
+  focus area as centered on FocusLocation; several autofocus shots with a
   recorded area sit at exactly half the frame, such as the ILCE-1's
   (4320, 2880) in 8640×5760 with a 1026×912 area and the ILCE-6700's
   (files 4466 and 6736); and the ILCE-7RM3's location agrees with the
@@ -121,7 +121,7 @@ showed:
   the ILCE-7M4's medium and small raws the frame is the full-size
   7008×4672, larger than the stored image (files 6930 and 6931).
 - **A Sony shot in manual focus still records a location**: the exact
-  centre of the frame, with FocusMode (0x201B) 0, on the ILCE-7RM2 and
+  center of the frame, with FocusMode (0x201B) 0, on the ILCE-7RM2 and
   the ILCE-9M3 (files 1310, 1311, 7361 and 7364).
 - **Whether focus was confirmed** is recorded by Nikon's versions 0100,
   0101 and 04xx; the Z6III samples record a miss beside a valid point.
@@ -146,9 +146,9 @@ none.
 
 - **Only what the file records.** `Metadata::focus` holds the camera's
   record and nothing estimated from the picture. A position found by
-  analysing the pixels, by any method, is a different value and gets a
+  analyzing the pixels, by any method, is a different value and gets a
   name of its own, so that a caller always knows which one it has.
-- **What it is.** `Metadata::focus` returns a `Focus`: the centre of the
+- **What it is.** `Metadata::focus` returns a `Focus`: the center of the
   focus area as a `Point`, the area's size when the file records one,
   the frame the two are measured in, and whether the camera confirmed
   focus, when the file says. Coordinates count pixels from the left and
@@ -171,9 +171,9 @@ none.
   except on a crop: when CropHiSpeed's cropped size differs from its
   original size and the file has a CropArea, the frame becomes
   CropArea's width and height. If both sides of the crop are smaller
-  (DX), the centre and the area are scaled onto it on each axis, rounded
+  (DX), the center and the area are scaled onto it on each axis, rounded
   to the nearest pixel. If one side is kept (1:1, 16:9), the crop is a
-  centred window: the centre moves back on the cut axis by half the
+  centered window: the center moves back on the cut axis by half the
   difference between the recorded frame and CropArea, and the area is
   kept. That holds only when CropArea's kept side equals the recorded
   frame's, as on every crop sample with a position; otherwise, as on a
@@ -208,7 +208,7 @@ none.
   neither a FocusLocation nor a point number in a plain tag (among the
   samples, the RX100, the Hasselblad Lunar, whose focus data lies only in
   an enciphered block, and the SR2 and SRF files), and a Sony shot in
-  manual focus, whose location is the frame's centre with no focusing
+  manual focus, whose location is the frame's center with no focusing
   behind it. A Nikon shot whose FocusMode, trimmed of its padding, is
   `MANUAL` gives none for the same reason, whatever AFInfo2 holds. A side
   of the frame or of the area that is zero is how a Nikon file says it
@@ -217,8 +217,8 @@ none.
   without a size.
 - **None either when what the file records cannot be used**, on every
   format: a value shorter than its layout, a frame with a zero side, a
-  centre outside the frame, or an area that does not fit inside the
-  frame around its centre.
+  center outside the frame, or an area that does not fit inside the
+  frame around its center.
 - **Read when the file is opened, inside the MakerNote.** A value is
   read only when it lies inside the MakerNote's declared length; Sony's
   offsets count from the start of the file, Nikon's from the MakerNote's
@@ -245,8 +245,8 @@ Rejected:
   image size on every Nikon file with a CropArea, but values the file
   records would change where no crop makes it necessary: the Z 6 small
   raw keeps its 6048×4024.
-- **A rectangle (left, top, width, height)** in place of a centre and a
-  size. It converts the stored centre, and holds nothing when the size is
+- **A rectangle (left, top, width, height)** in place of a center and a
+  size. It converts the stored center, and holds nothing when the size is
   absent.
 - **Fractions of the frame.** Floating-point values lose `Eq` and `Hash`
   and the values the file recorded.

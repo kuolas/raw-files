@@ -48,7 +48,7 @@ The options were:
 - the getters `make` and `model` kept for the text as recorded, with
   `maker` and `marketing_name` beside them for the names;
 - one getter giving a pair, the text with the name read into it;
-- a display adaptor, as `std::path::Path::display` is, that formats the
+- a display adapter, as `std::path::Path::display` is, that formats the
   text as a name;
 - the name under the plain word, and the text under a word that says it
   is the file's.
@@ -97,7 +97,7 @@ Rejected:
   return a wrapper that each caller opens to reach either value, and
   values with nothing read into them would either take the wrapper too
   or have a different shape.
-- **A display adaptor.** It formats a value but gives none to compare
+- **A display adapter.** It formats a value but gives none to compare
   or match on: a program could not ask whether a camera is a Nikon
   without comparing text.
 - **The recorded text in place of a name raw-files cannot read.** A

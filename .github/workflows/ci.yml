@@ -175,7 +175,7 @@ jobs:
       # published on crates.io, so that a change that would break callers of
       # the last release is caught before it is merged. It catches many
       # breaking changes, such as a removed or renamed item, but not all: a
-      # changed type or behaviour is still for review to find. The verdict
+      # changed type or behavior is still for review to find. The verdict
       # depends on the version in Cargo.toml: while it is still the published
       # one, adding public items passes and removing one fails. The pull
       # request that makes the first breaking change of a release raises the

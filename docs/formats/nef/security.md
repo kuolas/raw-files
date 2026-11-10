@@ -178,7 +178,7 @@ sensor data or an encrypted block (see [the roadmap](../../ROADMAP.md)).
    Parsing must terminate on any input. (CVE-2017-11338, CVE-2018-20030,
    CVE-2007-6351.)
 3. **Check entry size arithmetic.** Compute `count * type_size` with
-   `checked_mul`, cap `count`, and honour the rule that values of four bytes
+   `checked_mul`, cap `count`, and honor the rule that values of four bytes
    or fewer are stored inline. (CVE-2007-2645, CVE-2016-6328.)
 4. **Skip bad entries; do not fail the file.** A single malformed entry is
    skipped, so a damaged or editor-relocated MakerNote costs metadata, not
@@ -201,7 +201,7 @@ sensor data or an encrypted block (see [the roadmap](../../ROADMAP.md)).
    and the Foveon/X3F bugs CVE-2017-6890 and CVE-2020-35531.)
 7. **Validate strides against the strip size (when relevant).** For packed
    and padded layouts compute the stride from validated tags, require
-   `rows * stride <= strip bytes` per strip, and honour each strip's own
+   `rows * stride <= strip bytes` per strip, and honor each strip's own
    offset. Derive the layout from several agreeing facts rather than one
    tag. (CVE-2026-5342, in the padded 12-bit loader, was this bug.)
 8. **Bounds-check the 0x0096 block field by field (when relevant).** Header
@@ -224,7 +224,7 @@ sensor data or an encrypted block (see [the roadmap](../../ROADMAP.md)).
     a typed unsupported error. Never fall through to the Huffman path.
     LibRaw performs this check only on a handful of models [11] **[P]**, and
     decodes noise on other bodies [12] **[S]**. raw-files runs the check on every file. See
-    [licences-and-references.md](licences-and-references.md) for why HE is
+    [licenses-and-references.md](licenses-and-references.md) for why HE is
     out of scope.
 12. **Treat the embedded JPEG as opaque.** For previews, check that the
     declared range holds a start-of-image marker and walk markers with length

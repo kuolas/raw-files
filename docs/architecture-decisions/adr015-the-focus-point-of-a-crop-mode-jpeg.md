@@ -20,7 +20,7 @@ a raw file's point is placed on the picture: the tag CropHiSpeed tells
 a crop apart, and CropArea, which records the visible rectangle of the
 stored raw data, gives the picture's size. A DX crop's point is scaled
 onto CropArea, since a DX crop records fractions of its picture; an
-aspect crop's point moves back by the origin of the centred window that
+aspect crop's point moves back by the origin of the centered window that
 CropArea is in the full frame, since it records positions in that frame.
 Without a CropArea, a crop is read as recorded.
 
@@ -35,7 +35,7 @@ JPEG and a raw file of the same picture, in each crop mode and at each
 of the camera's three image sizes, show what such a JPEG records:
 
 - **The frame stays the full output at every crop and size.** AFInfo2's
-  frame is 8256×5504 in every JPEG, with the same centre and area as in
+  frame is 8256×5504 in every JPEG, with the same center and area as in
   the raw file of the same shot; it is not scaled to the smaller sizes.
 - **The JPEG holds no CropArea.** Each raw file holds one, and its
   CropHiSpeed is the JPEG's, at every size.
@@ -68,13 +68,13 @@ when its MakerNote records a crop and holds no CropArea. The JPEG's
 frame header gives the picture, as it gives the image size.
 
 - **A crop that cuts both sides (DX)** records fractions of its picture:
-  the centre and the area are scaled onto the JPEG's frame, as onto
+  the center and the area are scaled onto the JPEG's frame, as onto
   CropArea in a raw file, rounded to the nearest pixel; the frame becomes
   the JPEG's size.
 - **A crop that keeps one side (1:1, 16:9)** records positions in the
-  full frame: its picture is the centred window of the recorded frame
+  full frame: its picture is the centered window of the recorded frame
   that has the frame's length on the side the crop keeps and the JPEG's
-  shape, its other side rounded to the nearest pixel. The centre moves
+  shape, its other side rounded to the nearest pixel. The center moves
   back by the window's origin, half the difference between the frame and
   the window on the cut side, rounded down, and the area is kept, as in a
   raw file; the frame becomes the window. A window that would be longer

@@ -18,7 +18,7 @@
 //! JPEG stream, starting with the start-of-image marker and a lossless
 //! frame header; a medium or small raw is a YCbCr image, as IFD2's JPEG
 //! is. The shared TIFF preview finder keeps them out twice over: its rule
-//! that an IFD describing raw data (by its colour filter array, its samples
+//! that an IFD describing raw data (by its color filter array, its samples
 //! wider than 8 bits, its tiles or its full-resolution role) points at no
 //! preview, and its rejection of lossless JPEG streams behind that rule.
 //!

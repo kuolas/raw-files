@@ -11,7 +11,7 @@
 /// The rule the file follows, as text (InteroperabilityIndex), read from
 /// the Interoperability IFD, the one IFD where tag 0x0001 has this meaning:
 /// `R98` for a DCF basic file and `R03` for a DCF option file, which is how
-/// a file in Adobe RGB names its colour space when its ColorSpace says only
+/// a file in Adobe RGB names its color space when its ColorSpace says only
 /// "uncalibrated".
 pub(crate) const INTEROP_INDEX: u16 = 0x0001;
 
@@ -38,7 +38,7 @@ pub(crate) const GPS_LONGITUDE: u16 = 0x0004;
 /// and 3 below.
 pub(crate) const GPS_ALTITUDE_REF: u16 = 0x0005;
 
-/// The altitude in metres (GPSAltitude), as one fraction of type
+/// The altitude in meters (GPSAltitude), as one fraction of type
 /// RATIONAL, read from the GPS IFD.
 pub(crate) const GPS_ALTITUDE: u16 = 0x0006;
 
@@ -85,7 +85,7 @@ pub(crate) const BITS_PER_SAMPLE: u16 = 0x0102;
 pub(crate) const COMPRESSION: u16 = 0x0103;
 
 /// What the image's samples mean (PhotometricInterpretation): RGB, YCbCr,
-/// a colour filter array of sensor data, and so on.
+/// a color filter array of sensor data, and so on.
 pub(crate) const PHOTOMETRIC_INTERPRETATION: u16 = 0x0106;
 
 /// What the picture shows, as free text (ImageDescription), read from
@@ -106,7 +106,7 @@ pub(crate) const MODEL: u16 = 0x0110;
 pub(crate) const STRIP_OFFSETS: u16 = 0x0111;
 
 /// What a viewer must do to the stored pixels to show the image upright
-/// (Orientation): one of the eight EXIF values.
+/// (Orientation): one of the eight Exif values.
 pub(crate) const ORIENTATION: u16 = 0x0112;
 
 /// How many bytes each strip of the image's data takes, one value per
@@ -210,7 +210,7 @@ pub(crate) const OFFSET_TIME_ORIGINAL: u16 = 0x9011;
 pub(crate) const EXPOSURE_BIAS_VALUE: u16 = 0x9204;
 
 /// How the camera metered the light, as a SHORT (MeteringMode), read from
-/// the Exif IFD: 1 to 6 for average, centre-weighted average, spot,
+/// the Exif IFD: 1 to 6 for average, center-weighted average, spot,
 /// multi-spot, pattern and partial metering, and 255 for another mode; 0
 /// is "unknown".
 pub(crate) const METERING_MODE: u16 = 0x9207;
@@ -228,7 +228,7 @@ pub(crate) const LIGHT_SOURCE: u16 = 0x9208;
 /// reserved.
 pub(crate) const FLASH: u16 = 0x9209;
 
-/// The focal length the picture was taken at, in millimetres, as a
+/// The focal length the picture was taken at, in millimeters, as a
 /// fraction of type RATIONAL (FocalLength), read from the Exif IFD: the
 /// lens's actual focal length, such as 180/10, not its 35 mm equivalent.
 pub(crate) const FOCAL_LENGTH: u16 = 0x920A;
@@ -247,7 +247,7 @@ pub(crate) const SUB_SEC_TIME_ORIGINAL: u16 = 0x9291;
 /// block's bytes.
 pub(crate) const MAKER_NOTE: u16 = 0x927C;
 
-/// The colour space of the picture, as a SHORT (ColorSpace), read from the
+/// The color space of the picture, as a SHORT (ColorSpace), read from the
 /// Exif IFD: 1 for sRGB, and 65535, "uncalibrated", for any other, which
 /// the [`INTEROP_INDEX`] may then name.
 pub(crate) const COLOR_SPACE: u16 = 0xA001;
@@ -264,7 +264,7 @@ pub(crate) const INTEROP_IFD: u16 = 0xA005;
 /// light then in [`LIGHT_SOURCE`].
 pub(crate) const WHITE_BALANCE: u16 = 0xA403;
 
-/// The focal length in 35 mm terms, in whole millimetres, as a SHORT
+/// The focal length in 35 mm terms, in whole millimeters, as a SHORT
 /// (FocalLengthIn35mmFilm), read from the Exif IFD: the focal length that
 /// would give the same field of view on a 35 mm film camera, such as 75
 /// for 50 mm on a DX body. Exif writes 0 for one the camera did not know.
@@ -280,7 +280,7 @@ pub(crate) const BODY_SERIAL_NUMBER: u16 = 0xA431;
 
 /// The lens's range, as four fractions of type RATIONAL
 /// (LensSpecification), read from the Exif IFD: its shortest and longest
-/// focal length in millimetres, then the f-number of its widest aperture at
+/// focal length in millimeters, then the f-number of its widest aperture at
 /// each, such as 140/10, 300/10, 400/100 and 400/100 for a 14-30 mm f/4. A
 /// value of 0/0 is one the camera did not know.
 pub(crate) const LENS_SPECIFICATION: u16 = 0xA432;

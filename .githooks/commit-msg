@@ -3,7 +3,7 @@
 # CI runs this same file over every commit of a pull request, with
 # COMMIT_MSG_STORED=1; scripts/test-hooks.sh tests it.
 #
-# The grammar is GNOME's: `component: Summary` — at most one tag, a capitalised
+# The grammar is GNOME's: `component: Summary` — at most one tag, a capitalized
 # summary, no trailing period, a blank second line, a ~72-char subject and
 # 75-char body lines (notes, not refusals), no tool attribution, and strict
 # issue references for Closes:/Fixes:/Issue: (other trailers only warn).
@@ -138,7 +138,7 @@ esac
 # A tag glued to its summary (`ui:fix the thing`, `fix(ui):thing`) does not
 # end in ':', so the case above misses it: a lower-case word, perhaps with a
 # part in parentheses, one colon, then a letter. Tags are lower-case words;
-# a capitalised one is a name such as Exif's `EXIF:Orientation`. Anything
+# a capitalized one is a name such as ExifTool's `EXIF:Orientation`. Anything
 # else around the colon is no tag either: `Vec::new`, a backticked word, a
 # URL, a time or ratio (`10:30`, `16:9`), a drive (`C:\Users`), a file and
 # line (`src/lib.rs:42`). A tab is no separator: the words here are split
@@ -158,11 +158,11 @@ esac
 # A plain lower-case word ("fix", "add") is refused, an apostrophe (straight
 # or typographic) or one trailing punctuation mark included ("don't",
 # "don’t", "add,", "fix."). GNOME
-# capitalises the summary; an identifier keeps its case, and is told apart
+# capitalizes the summary; an identifier keeps its case, and is told apart
 # by what makes it code — `_`, `()`, `::`, a digit, a capital, backticks,
 # or a hyphen (a crate name such as `raw-files`).
 if printf '%s' "$word" | grep -qE "^[a-z][a-z'’]*[,;.!?]?\$"; then
-	fail "summary starts with the lower-case word '$word' — GNOME capitalises it ('sound: Fix label alignments'); write an identifier as it appears in code, or in backticks"
+	fail "summary starts with the lower-case word '$word' — GNOME capitalizes it ('sound: Fix label alignments'); write an identifier as it appears in code, or in backticks"
 fi
 
 if printf '%s' "$subject" | grep -qE '\.$'; then

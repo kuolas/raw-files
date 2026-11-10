@@ -15,7 +15,7 @@
 //! `new` too, and every unsigned one of the exposure and the lens through
 //! a stricter check of their own, which also refuses a zero numerator:
 //! Exif writes a zero for such a value the camera did not know. The
-//! fractions of a location, its degrees, minutes, seconds and metres, are
+//! fractions of a location, its degrees, minutes, seconds and meters, are
 //! the exception: a zero is a real value there, and the location's own
 //! types check them.
 
@@ -73,7 +73,7 @@ impl Rational {
     /// return no zero unsigned fraction for the exposure or the lens, since
     /// Exif writes a zero for such a value the camera did not know, and
     /// they read it as `None`; in a [`Location`](crate::Location), whose
-    /// degrees, minutes, seconds and metres may be zero, they keep it.
+    /// degrees, minutes, seconds and meters may be zero, they keep it.
     ///
     /// The fields are public, so a struct literal can still hold any two
     /// numbers, unchecked: that is why every method still gives a result,

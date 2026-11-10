@@ -42,7 +42,7 @@ a walker of the project's own, written from the TIFF 6.0 and Exif
 standards and the project's format notes, and with a counting program
 over raw-files' own `open`. The files were 18,464 NEF, ARW and camera
 JPEGs: the test fixtures, every NEF and ARW-family file of the
-public-domain [raw.pixls.us](https://raw.pixls.us/) catalogue, and, as
+public-domain [raw.pixls.us](https://raw.pixls.us/) catalog, and, as
 counts only, my own: every NEF of a Z 9 and a sample of five other Nikon
 bodies' NEFs, an ILCE-7M2 and the JPEGs of Nikon, Sony, Canon and Fujifilm
 bodies. They showed:

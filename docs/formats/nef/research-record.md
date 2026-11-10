@@ -24,7 +24,7 @@ format that raw-files needs for three of the roadmap's capabilities:
 The research also had to establish two practical points:
 
 - which existing references raw-files may learn from or reuse under its
-  MIT OR Apache-2.0 licence;
+  MIT OR Apache-2.0 license;
 - what test data exists, and what has gone wrong in other NEF parsers.
 
 ## Method
@@ -56,7 +56,7 @@ The pages cite their sources individually. By kind:
 - **Specifications and standards:**
   - CIPA's Exif page;
   - Adobe's DNG specification page;
-  - the ISO catalogue entry for TIFF/EP;
+  - the ISO catalog entry for TIFF/EP;
   - TIFF 6.0 mirrors;
   - Nikon's online camera manuals.
 - **Tag references:**
@@ -78,7 +78,7 @@ The pages cite their sources individually. By kind:
   - discussions on pixls.us, the LibRaw forum and project issue trackers.
 - **Registries:**
   - NVD records for every cited CVE;
-  - crates.io and GitHub metadata for licences;
+  - crates.io and GitHub metadata for licenses;
   - raw.pixls.us directory listings.
 
 ## Access problems

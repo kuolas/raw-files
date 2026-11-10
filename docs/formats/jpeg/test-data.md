@@ -14,18 +14,18 @@ specification), **[S]** secondary, **[I]** inferred, **[F]** measured on
 the file. Numbers in brackets point to the [Sources](#sources) at the end,
 retrieved in October 2026.
 
-## 1. Sources and their licence status
+## 1. Sources and their license status
 
-| Source | Licence status | Commit to the repository? |
+| Source | License status | Commit to the repository? |
 |---|---|---|
-| Wikimedia Commons | A licence per file, stated on its page: CC0, public-domain dedications, CC BY, CC BY-SA and others. Commons keeps the uploaded file as it was uploaded; only its scaled copies are re-encoded. [1] **[P]** / **[S]** | No: the files are several megabytes each. CC0, public-domain and CC BY files are downloaded, pinned by SHA-256, with the author and licence recorded for CC BY (section 2). CC BY-SA files are not used. |
+| Wikimedia Commons | A license per file, stated on its page: CC0, public-domain dedications, CC BY, CC BY-SA and others. Commons keeps the uploaded file as it was uploaded; only its scaled copies are re-encoded. [1] **[P]** / **[S]** | No: the files are several megabytes each. CC0, public-domain and CC BY files are downloaded, pinned by SHA-256, with the author and license recorded for CC BY (section 2). CC BY-SA files are not used. |
 | raw.pixls.us | CC0, but raw files only; it holds no camera JPEGs. [2] **[S]** | Not a source of JPEG files. |
 | Camera makers' sample galleries | All rights reserved or non-commercial terms, as usually stated; the terms of each were not read. [I] | No. |
-| Stock-photo sites (Unsplash, Pexels, Pixabay) | Licences of their own, not Creative Commons, and their downloads are re-encoded. [S] | No. |
-| Files I made | Mine to licence. | Yes, as stripped fixtures (section 4.2), with provenance in [`tests/fixtures/README.md`](../../../tests/fixtures/README.md). |
+| Stock-photo sites (Unsplash, Pexels, Pixabay) | Licenses of their own, not Creative Commons, and their downloads are re-encoded. [S] | No. |
+| Files I made | Mine to license. | Yes, as stripped fixtures (section 4.2), with provenance in [`tests/fixtures/README.md`](../../../tests/fixtures/README.md). |
 | Fixtures built in code | The project's own, MIT OR Apache-2.0. | Built by the tests; nothing to commit. |
 
-The repository never holds a file whose licence is unclear, however small.
+The repository never holds a file whose license is unclear, however small.
 
 ## 2. The sample files
 
@@ -33,12 +33,12 @@ Eight camera-original JPEGs, one per body, chosen to cover the Sony and
 Nikon MakerNotes, a Multi-Picture Format segment with one image and with
 two, a file with none, Sony's padding after the last image, and a maker
 whose MakerNote raw-files does not read. Each was downloaded from its
-original upload and walked byte by byte (section 3). Licences and
+original upload and walked byte by byte (section 3). Licenses and
 authors are as shown on each file's page, read when the files were
 chosen, on 21 October 2026, and checked again on each file page on 22
 October 2026, when they joined the downloaded set. [P]
 
-| Body (firmware) | File on Wikimedia Commons | Licence, author | Bytes | SHA-256 |
+| Body (firmware) | File on Wikimedia Commons | License, author | Bytes | SHA-256 |
 |---|---|---|---|---|
 | Sony ILCE-7M3 (v4.01) | [`Acanthodactylus_erythrurus_2025.jpg`](https://commons.wikimedia.org/wiki/File:Acanthodactylus_erythrurus_2025.jpg) | CC0, Bernatburriel | 8,323,072 | `9c0f5a9f3c5dc3070ab6a6eb45d535a943e94a4842fc5632cccc31324077531c` |
 | Sony ILCE-7RM2 (v4.00) | [`Ulpu_Pajari_puhumassa_vastaanotettuaan_tiedonjulkistamisen_valtionpalkinnon_2.jpg`](https://commons.wikimedia.org/wiki/File:Ulpu_Pajari_puhumassa_vastaanotettuaan_tiedonjulkistamisen_valtionpalkinnon_2.jpg) | CC BY 4.0, Heikki Kastemaa | 13,762,560 | `0364ad38f5822045d3aaa289eb4ce60fbd0ef06ae5b2f523a4d55be5b5a6b7af` |
@@ -53,33 +53,33 @@ What each covers [F]:
 
 | File | Covers |
 |---|---|
-| ILCE-7M3 | Sony MakerNote with the `SONY DSC` header; FocusLocation off centre, (1783, 1804) in a 3936×2624 frame, the size of its picture (the camera's M size); a camera XMP segment; MPF 1616×1080; 28,938 bytes of zeros after the last image |
-| ILCE-7RM2 | FocusLocation at the exact centre, (3976, 2652) of 7952×5304; zeros after the last image |
-| DSC-RX100M4 | FocusMode 0, manual focus, with a location at the centre: no focus point; no padding |
+| ILCE-7M3 | Sony MakerNote with the `SONY DSC` header; FocusLocation off center, (1783, 1804) in a 3936×2624 frame, the size of its picture (the camera's M size); a camera XMP segment; MPF 1616×1080; 28,938 bytes of zeros after the last image |
+| ILCE-7RM2 | FocusLocation at the exact center, (3976, 2652) of 7952×5304; zeros after the last image |
+| DSC-RX100M4 | FocusMode 0, manual focus, with a location at the center: no focus point; no padding |
 | ILCE-6000 | No FocusLocation: no focus point; a MakerNote entry (tag 0x2001) that points outside the Exif segment, into the MPF image |
 | DSLR-A100 | The `SONY DSC` header before an IFD of 28 entries in an older layout; big-endian; no MPF |
 | D5300 | Nikon MakerNote with its embedded TIFF header; AFInfo2 version 0100 with a zero frame, shot through the viewfinder: no focus point; the Exif segment one byte short of its maximum length; MPF with two images, 640×424 and 1620×1080 |
 | D70 | Nikon MakerNote version 0210 with a PreviewIFD JPEG of 564×372; a 128×85 thumbnail; IFD1 shared with the Interoperability IFD; two DQT and four DHT segments; no MPF |
 | G7 X | A MakerNote no reader reads; MPF 1620×1080 after 12 bytes that are not zeros |
 
-What the file pages say of the licences, as checked on 22 October 2026
+What the file pages say of the licenses, as checked on 22 October 2026
 [P]:
 
-- **ILCE-6000**: the page offers three licences to choose from, the GNU
+- **ILCE-6000**: the page offers three licenses to choose from, the GNU
   Free Documentation License 1.2 or later, CC BY-SA 3.0 and CC BY 2.5.
   raw-files uses the file under CC BY 2.5, with attribution to
   663highland.
 - **DSC-RX100M4**: CC BY 4.0, credited to Sunghyun, with the author's own
   site given as the source. Commons marks the file as not yet reviewed
-  by a licence reviewer, and its Exif Artist and Copyright fields name
+  by a license reviewer, and its Exif Artist and Copyright fields name
   someone other than the person credited. It is kept, since it is only
   downloaded and never committed, with this status recorded here; it
-  will be dropped if a review rejects its licence.
+  will be dropped if a review rejects its license.
 - **ILCE-7RM2**: the page says the camera was lent to the author, who is
   credited; the permission is confirmed through Wikimedia's volunteer
   response team.
 - **G7 X** and **DSLR-A100**: both came from Flickr, and the review of
-  each Flickr licence on Commons confirms CC BY 2.0.
+  each Flickr license on Commons confirms CC BY 2.0.
 - **D70**: released into the public domain by its copyright holder,
   Charles Henri, a weaker statement than CC0.
 - **ILCE-7M3** and **D5300**: CC0, by Bernatburriel and by Syced.
@@ -89,7 +89,7 @@ What the file pages say of the licences, as checked on 22 October 2026
 [`tests/samples.tsv`](../../../tests/samples.tsv), the list of every
 downloaded sample, names each of the eight with the source `commons`,
 its Commons file name as its id, the format `jpeg`, the name it is saved
-under, its SHA-256, its licence, with the author for CC BY, and the URL
+under, its SHA-256, its license, with the author for CC BY, and the URL
 of its original upload. `scripts/fetch-samples.sh jpeg` downloads them,
 about 60 MiB, into `raw-samples/`, or the directory `RAW_FILES_SAMPLES`
 names, with the other samples; CI does the same. It sends Commons a
@@ -121,7 +121,7 @@ offline. [F]
 ## 3. How the files were chosen
 
 Commons was searched for JPEGs written by Sony bodies first, then by
-other makers, with a CC0, public-domain or CC BY licence. [1] Each
+other makers, with a CC0, public-domain or CC BY license. [1] Each
 candidate was downloaded from its original upload (`upload.wikimedia.org`,
 with a descriptive User-Agent, which Wikimedia asks for, and pausing
 between downloads, since quick successive downloads failed without an
@@ -159,7 +159,7 @@ data; files whose pixel size is not a native one (cropped or resized);
 and a CC0 SLT-A57 file whose MakerNote offsets ExifTool flags as possibly
 moved by an editor. [P][S]
 
-Not found with a usable licence: camera-original JPEGs from Fujifilm,
+Not found with a usable license: camera-original JPEGs from Fujifilm,
 Panasonic and phones; the categories searched held none, and the search
 was not exhaustive. [S]
 
@@ -291,11 +291,11 @@ Photoshop or XMP segment, or tables laid out otherwise, and are not
 evidence for these pages, except one, cited below for what an editor
 did to it.
 
-The files the notes cite are listed here. Licences and authors are as
+The files the notes cite are listed here. Licenses and authors are as
 Commons' file information gave them, read through its API on 23 October
 2026. [P]
 
-| Body (firmware) | File on Wikimedia Commons | Licence, author | MakerNote | SHA-256 |
+| Body (firmware) | File on Wikimedia Commons | License, author | MakerNote | SHA-256 |
 |---|---|---|---|---|
 | E700 (v982p-71) | [`Pokfulam_Service_Reservoir_1.jpg`](https://commons.wikimedia.org/wiki/File:Pokfulam_Service_Reservoir_1.jpg) | CC BY-SA 3.0, Minghong | short header | `924ff0608031c2e7176fc095eaa2eda3f647a54177a30512d8e3d8e7cc26f737` |
 | E800 (v984-75) | [`MIKI-eki.jpg`](https://commons.wikimedia.org/wiki/File:MIKI-eki.jpg) | public domain, released by its author, Deer in alcove | short header | `3a9c59bc9b0a8bed98302661a751d4001e6631fbde3055b93077862c78878882` |
@@ -326,7 +326,7 @@ Where every camera-original file read of a body or a firmware version
 is under CC BY-SA, as for the E700, E885, E995 and E4500 and the
 E5000's v1.6, a file under CC BY-SA is cited; why such a file may be
 cited is in
-[licences-and-references.md](licences-and-references.md#3-the-sample-files-licences).
+[licenses-and-references.md](licenses-and-references.md#3-the-sample-files-licenses).
 The E950 file `Bat_Week_2019_in_Utah_(48918908978).jpg` records
 orientation 6 where the other E950 files record 1, which a viewer can
 change in place without moving any byte; its segments and its MakerNote

@@ -1,6 +1,6 @@
 # NEF: test data
 
-Real NEF files are large and their licences vary, so the raw-files tests
+Real NEF files are large and their licenses vary, so the raw-files tests
 combine small committed fixtures that we build ourselves with larger public
 samples that CI downloads and checks against a hash. This page lists the
 sources, the rules for what may be committed, a minimal set of camera bodies,
@@ -10,20 +10,20 @@ Confidence tags: **[P]** primary (verified from the primary page or API),
 **[S]** secondary, **[I]** inferred. Numbers in brackets point to the
 [Sources](#sources) at the end, retrieved in October 2026.
 
-## 1. Sources and their licence status
+## 1. Sources and their license status
 
-| Source | Licence status | Commit to the repository? |
+| Source | License status | Commit to the repository? |
 |---|---|---|
-| raw.pixls.us | The upload form asks contributors to release files under CC0. The site also offers a view of "non-CC0 samples", so the archive is mixed, and files inherited from rawsamples.ch were originally largely CC BY-NC-SA. The file listing carries no per-file licence. [1][2] **[P]** / **[S]** | Only a file whose licence you confirmed as CC0 through the site's licence view, and only if small. Normally download in CI instead (section 2). |
+| raw.pixls.us | The upload form asks contributors to release files under CC0. The site also offers a view of "non-CC0 samples", so the archive is mixed, and files inherited from rawsamples.ch were originally largely CC BY-NC-SA. The file listing carries no per-file license. [1][2] **[P]** / **[S]** | Only a file whose license you confirmed as CC0 through the site's license view, and only if small. Normally download in CI instead (section 2). |
 | rawsamples.ch (the earlier archive) | Mostly CC BY-NC-SA 2.5 CH per contributor; the site was damaged in 2016 and replaced by raw.pixls.us. [3] **[S]** | No. The non-commercial and share-alike terms do not fit `MIT OR Apache-2.0`. |
 | Camera-review galleries (Imaging Resource, DPReview) | Proprietary, all rights reserved; terms not read. [I] | No, and do not redistribute. Manual experiments only. |
-| ExifTool sample images | No licence stated. The site says they are JPEG-only, with the main image replaced "to avoid copyright problems". The repository's `t/images` likewise states none. [4] **[P]** | No. Treat as unlicensed; use locally if at all. |
-| Fuzzing corpora from other projects | Seeds come from those projects' test data, so their licences are unknown. [5] **[S]** | No. Generate our own corpus from our own fixtures. |
-| Files you made yourself | Yours to licence. | Yes, if small, with provenance recorded (section 5.1). |
+| ExifTool sample images | No license stated. The site says they are JPEG-only, with the main image replaced "to avoid copyright problems". The repository's `t/images` likewise states none. [4] **[P]** | No. Treat as unlicensed; use locally if at all. |
+| Fuzzing corpora from other projects | Seeds come from those projects' test data, so their licenses are unknown. [5] **[S]** | No. Generate our own corpus from our own fixtures. |
+| Files you made yourself | Yours to license. | Yes, if small, with provenance recorded (section 5.1). |
 
 ## 2. What is committed and what is downloaded
 
-**Committed** (small, a few KB each, licence clear):
+**Committed** (small, a few KB each, license clear):
 
 - hand-built fixtures: an IFD skeleton, a MakerNote and a tiny JPEG;
 - fixtures stripped from a CC0 sample: pixel data removed, the structure
@@ -41,17 +41,17 @@ Confidence tags: **[P]** primary (verified from the primary page or API),
   The site publishes a `filelist.sha256`; CI records the hash of each file
   it uses in the repository and fails if the download differs. [1] **[P]**
 - Before adding a file to the list, check its CC0 status in the site's
-  licence view and note that in the list entry.
+  license view and note that in the list entry.
 - Tests that need these files are skipped, not failed, when they are absent,
   so contributors can run the suite offline.
 
-The repository never holds a file whose licence is unclear, however small.
+The repository never holds a file whose license is unclear, however small.
 
 ### 2.1 The CI set
 
 The files CI downloads are listed in
 [`tests/samples.tsv`](../../../tests/samples.tsv), the source of truth for
-their names, hashes, licences and URLs; `scripts/fetch-samples.sh`
+their names, hashes, licenses and URLs; `scripts/fetch-samples.sh`
 downloads them and checks each hash, and the tests in `tests/nef.rs` read
 the NEF files among them, for their previews and their metadata
 ([section 2.2](#22-files-checked-for-metadata)). The Sony files of the
@@ -61,7 +61,7 @@ and the camera JPEGs on the
 the NEF files are the three Z 9 files of raw.pixls.us, one per
 compression mode, and 32 files of 25 other bodies, listed after them:
 
-| Id | Body | Compression | SHA-256 | Licence |
+| Id | Body | Compression | SHA-256 | License |
 |---|---|---|---|---|
 | 5146 | Z 9 | Lossless | `99d0fe24a38f0f7623aeab21440d266a5ac09f9665cf5283f590337e84323c38` | CC0 |
 | 5147 | Z 9 | HE* | `e113deb305d84153b26251ce259d1f839be1f36b048cbe83a4548cbda806c0f5` | CC0 |
@@ -93,8 +93,8 @@ embedded MakerNote, three small raws (D810, D850, Z 6), two DSLRs in live view
 (files 7812 and 7813), the 1:1 and 16:9 crops of the Z5II and the
 Z50II, a rotated shot (Z 30), a Z body in manual focus (Z fc), and
 three compacts, one of them an NRW file (Coolpix P7800). Each is CC0 in
-the site's catalogue, and its SHA-256 matched the catalogue's before it
-was read. "Mode" is the catalogue's label; on the D1X files the
+the site's catalog, and its SHA-256 matched the catalog's before it
+was read. "Mode" is the catalog's label; on the D1X files the
 "(3.0422960725076)" is the stored aspect ratio, 4028/1324. **[P]** On the
 Z5II, Z50II and Z6III files its "8bit" is not the files': they hold
 14-bit raw data, compressed as HE, or as HE\* on files 7812 and 7813, as
@@ -110,7 +110,7 @@ reader gives the same. Each
 JPEG is in one piece, through 0x0201 and 0x0202, and ends with the
 end-of-image marker exactly at its declared length. **[F]**
 
-| Id | Body | Mode | Previews | SHA-256 | Licence |
+| Id | Body | Mode | Previews | SHA-256 | License |
 |---|---|---|---|---|---|
 | 5364 | D1H | 12bit 12bit uncompressed (3:2) | One, its only JPEG: a 570x375 preview (24,567 bytes at 3688) in the PreviewIFD of its headerless MakerNote, whose offsets count from the file's own TIFF header. The reader reads that layout, so the file gives that preview, and the ISO and the lens range the MakerNote records, which its Exif tags lack. `MM` | `d110b80a8b10a3a67b5cd1c15ef33f1a6397557b73d5d3f4e565739f0c072571` | CC0 |
 | 1785 | D1X | 12bit 12bit compressed (3.0422960725076) | One, its only JPEG: a 570x375 preview (27,540 bytes at 4878) in the PreviewIFD of its headerless MakerNote, ending exactly at the MakerNote's declared end. The raw is lossy (Compression 34713, NEFCompression 1, type 1). `MM` | `ff80b83537a909e6adabeb091a12e4d5c83993e011672705366e7de39601695b` | CC0 |
@@ -126,7 +126,7 @@ end-of-image marker exactly at its declared length. **[F]**
 | 1835 | D850 | 12bit 12bit compressed (Lossless) (3:2) | Three: 640x424, 1620x1080 and 4128x2752, smaller than its 6216x4136 raw. `II` | `31b7fe298a5c91694c6ca8b3284a0a016e572a02c3964b502d4732e8e9283da8` | CC0 |
 | 3827 | D780 | 12bit 12bit compressed (Lossy (type 2)) (3:2) | Three: 640x424, 1620x1080 and 6048x4024. `II` | `986488947e552af25c6824667aed5a1622140a581dc57efd4b00f0b55b5e4ae0` | CC0 |
 | 3587 | Z 6 | 12bit 12bit compressed (3:2) | Three: 640x424, 1620x1080 and 3024x2016, smaller than its 4548x3030 raw; a 12-bit 758x505 SubIFD and an empty one are not previews. `II` | `f0ab08da469ee205f2bc08efd9005778c64cdcb064893cee03768e32e5da1a36` | CC0 |
-| 6887 | Z f | 8bit 8bit lossy compressed (3:2) | Four, as on the Z 9: 160x120 in IFD0, 640x424, 1620x1080 and 6048x4032; a 384x256 grey SubIFD and two empty ones are not previews. `II` | `98d6ca8e6c98048ca7ffed68ccaeda7b2b9f03807f0d320d97d5678db21748c2` | CC0 |
+| 6887 | Z f | 8bit 8bit lossy compressed (3:2) | Four, as on the Z 9: 160x120 in IFD0, 640x424, 1620x1080 and 6048x4032; a 384x256 gray SubIFD and two empty ones are not previews. `II` | `98d6ca8e6c98048ca7ffed68ccaeda7b2b9f03807f0d320d97d5678db21748c2` | CC0 |
 | 7810 | Z6III | 8bit compressed (3:2) | Four: 160x120, 640x424, 1620x1080 and 3984x2656, from a 4000x2672 raw. `II` | `a8fa2cacadcf9dc85475ebcf37fcc32614072bc155e39d01491cb9e293c1343d` | CC0 |
 | 7809 | Z6III | 8bit compressed (16:9) | Four: 160x120, then 640x360, 1920x1080 and 6048x3400, 16:9 like its 6064x3416 raw. `II` | `890e6bf952bf87d37491f8a6bd7bbfae3c464e08063767d57bf0d97d588d30df` | CC0 |
 | 7808 | Z6III | 8bit compressed (1:1) | Four: 160x120, then 480x480, 1080x1080 and 4032x4032, square, from a 4048x4040 raw. `II` | `da2fd1a263bb9985776d8c40aa2bdcb89dd7d8cc55bfa44dd851727c43709af8` | CC0 |
@@ -177,7 +177,7 @@ that is little-endian, aspect-ratio crops from three mirrorless bodies,
 a DSLR in live view at version 0101, the first files at version 0301, a
 Z body in manual focus and a rotated shot:
 
-| Id | Body | Mode | SHA-256 | Licence |
+| Id | Body | Mode | SHA-256 | License |
 |---|---|---|---|---|
 | 1415 | D5600 | 12bit 12bit compressed (Lossy (type 2)) (3:2) | `82e15f02c4037820e80f14bacfacdc52ea29721b3c70d2cf08b237b50ce8db05` | CC0 |
 | 7735 | Z5II | 8bit compressed (1:1) | `465aba7a444c013063b3a85d7dca1595e4ce1c77fdd115b781b952d490af7258` | CC0 |
@@ -201,26 +201,26 @@ give from it:
 
 | Id | Body | AFInfo2 | What the file records | Focus point by ADR012's rules |
 |---|---|---|---|---|
-| 5146 | Z 9 | `0400` | frame 8256x5504, centre (4905, 2461), area 291x323, in focus: yes | as recorded |
-| 5147 | Z 9 | `0400` | frame 8256x5504, centre (4905, 2461), area 291x323, in focus: yes | as recorded |
-| 5148 | Z 9 | `0400` | frame 8256x5504, centre (4905, 2461), area 291x323, in focus: yes | as recorded |
-| 6887 | Z f | `0401` | frame 6048x4032, centre (3023, 2016), area 1859x1452, in focus: yes | as recorded |
-| 7808 | Z6III | `0401` | frame 6048x4032, centre (3023, 2016), area 163x174, in focus: no | frame 4032x4032, centre (2015, 2016), area 163x174, moved into the window |
-| 7812 | Z6III | `0401` | frame 6048x4032, centre (3023, 2016), area 163x174, in focus: no | frame 4032x4032, centre (2015, 2016), area 163x174, moved into the window |
-| 7809 | Z6III | `0401` | frame 6048x4032, centre (3023, 2016), area 163x174, in focus: no | frame 6048x3400, centre (3023, 1700), area 163x174, moved into the window |
-| 7813 | Z6III | `0401` | frame 6048x4032, centre (3023, 2016), area 163x174, in focus: no | frame 6048x3400, centre (3023, 1700), area 163x174, moved into the window |
-| 7810 | Z6III | `0401` | frame 6048x4032, centre (3023, 2016), area 222x245, in focus: no | frame 3984x2656, centre (1991, 1328), area 146x161, scaled onto CropArea |
-| 7767 | Z50II | `0402` | frame 5568x3712, centre (2792, 1868), area 278x276, in focus: yes | frame 3712x3712, centre (1864, 1868), area 278x276, moved into the window |
-| 7770 | Z50II | `0402` | frame 5568x3712, centre (2789, 1865), area 280x280, in focus: yes | frame 5568x3128, centre (2789, 1573), area 280x280, moved into the window |
+| 5146 | Z 9 | `0400` | frame 8256x5504, center (4905, 2461), area 291x323, in focus: yes | as recorded |
+| 5147 | Z 9 | `0400` | frame 8256x5504, center (4905, 2461), area 291x323, in focus: yes | as recorded |
+| 5148 | Z 9 | `0400` | frame 8256x5504, center (4905, 2461), area 291x323, in focus: yes | as recorded |
+| 6887 | Z f | `0401` | frame 6048x4032, center (3023, 2016), area 1859x1452, in focus: yes | as recorded |
+| 7808 | Z6III | `0401` | frame 6048x4032, center (3023, 2016), area 163x174, in focus: no | frame 4032x4032, center (2015, 2016), area 163x174, moved into the window |
+| 7812 | Z6III | `0401` | frame 6048x4032, center (3023, 2016), area 163x174, in focus: no | frame 4032x4032, center (2015, 2016), area 163x174, moved into the window |
+| 7809 | Z6III | `0401` | frame 6048x4032, center (3023, 2016), area 163x174, in focus: no | frame 6048x3400, center (3023, 1700), area 163x174, moved into the window |
+| 7813 | Z6III | `0401` | frame 6048x4032, center (3023, 2016), area 163x174, in focus: no | frame 6048x3400, center (3023, 1700), area 163x174, moved into the window |
+| 7810 | Z6III | `0401` | frame 6048x4032, center (3023, 2016), area 222x245, in focus: no | frame 3984x2656, center (1991, 1328), area 146x161, scaled onto CropArea |
+| 7767 | Z50II | `0402` | frame 5568x3712, center (2792, 1868), area 278x276, in focus: yes | frame 3712x3712, center (1864, 1868), area 278x276, moved into the window |
+| 7770 | Z50II | `0402` | frame 5568x3712, center (2789, 1865), area 280x280, in focus: yes | frame 5568x3128, center (2789, 1573), area 280x280, moved into the window |
 | 7735 | Z5II | `0402` | zero frame; a mask only (auto-area) | none |
 | 7736 | Z5II | `0402` | zero frame; a mask only (auto-area) | none |
-| 3587 | Z 6 | `0300` | frame 6048x4024, centre (3024, 1160), area 285x308, in focus: not recorded | as recorded |
-| 5812 | Z 30 | `0301` | frame 5568x3712, centre (3776, 1741), area 552x552, in focus: not recorded; Orientation 8 | as recorded, in stored orientation |
-| 8559 | Z fc | `0301` | frame 5568x3712, centre (2520, 1856), area 288x319, in focus: not recorded; FocusMode `MANUAL` | none |
-| 1415 | D5600 | `0100` | frame 6000x4000, centre (3368, 2000), area 984x816, in focus: yes | as recorded |
-| 961 | D7000 | `0100` | frame 4928x3264, centre (2816, 2336), area 408x336, in focus: yes | as recorded |
-| 2238 | Coolpix A | `0100` | frame 4928x3264, centre (2464, 1632), area 408x336, in focus: yes | as recorded |
-| 2218 | D5 | `0101` | frame 5568x3712, centre (3077, 2427), area 588x500, in focus: yes | as recorded |
+| 3587 | Z 6 | `0300` | frame 6048x4024, center (3024, 1160), area 285x308, in focus: not recorded | as recorded |
+| 5812 | Z 30 | `0301` | frame 5568x3712, center (3776, 1741), area 552x552, in focus: not recorded; Orientation 8 | as recorded, in stored orientation |
+| 8559 | Z fc | `0301` | frame 5568x3712, center (2520, 1856), area 288x319, in focus: not recorded; FocusMode `MANUAL` | none |
+| 1415 | D5600 | `0100` | frame 6000x4000, center (3368, 2000), area 984x816, in focus: yes | as recorded |
+| 961 | D7000 | `0100` | frame 4928x3264, center (2816, 2336), area 408x336, in focus: yes | as recorded |
+| 2238 | Coolpix A | `0100` | frame 4928x3264, center (2464, 1632), area 408x336, in focus: yes | as recorded |
+| 2218 | D5 | `0101` | frame 5568x3712, center (3077, 2427), area 588x500, in focus: yes | as recorded |
 | 928 | D300 | `0100` | zero frame; primary point 0; FocusMode `MANUAL` | none |
 | 2255 | D700 | `0100` | zero frame; primary point 1 | none |
 | 895 | D750 | `0100` | zero frame; primary point 1 | none |
@@ -263,10 +263,10 @@ records a single point placed in the top-left corner:
 
 | Frames | Mode | Recorded in 8256x5504 | Focus point by ADR012's rules |
 |---|---|---|---|
-| 9907, 9911 | FX | centre (502, 424), area 291x323 | as recorded |
-| 9908, 9912 | DX | centre (636, 572), area 420x468 | frame 5392x3592, centre (415, 373), area 274x305, scaled onto CropArea |
-| 9909, 9913 | 1:1 | centre (1797, 424), area 291x323 | frame 5504x5504, centre (421, 424), area 291x323, moved into the window |
-| 9910, 9914 | 16:9 | centre (502, 715), area 291x323 | frame 8256x4640, centre (502, 283), area 291x323, moved into the window |
+| 9907, 9911 | FX | center (502, 424), area 291x323 | as recorded |
+| 9908, 9912 | DX | center (636, 572), area 420x468 | frame 5392x3592, center (415, 373), area 274x305, scaled onto CropArea |
+| 9909, 9913 | 1:1 | center (1797, 424), area 291x323 | frame 5504x5504, center (421, 424), area 291x323, moved into the window |
+| 9910, 9914 | 16:9 | center (502, 715), area 291x323 | frame 8256x4640, center (502, 283), area 291x323, moved into the window |
 
 Five earlier frames of the same modes (9902 to 9906) record the same
 values. All are in focus (FocusResult 1), and their CropHiSpeed and
@@ -295,7 +295,7 @@ points it names, placed from the table, in the crop's window on the DX
 frames; on frame 4, whose AFInfo2 names point 38 in layout 3 with bit
 37 of its mask set, the tests check that point's place in the layout
 and as the focus point, (1812, 1705), on the NEF and on its JPEG. The exiv2 metadata listings of all 291
-Nikon files of the raw.pixls.us catalogue, read on 2026-10-26 for
+Nikon files of the raw.pixls.us catalog, read on 2026-10-26 for
 presence only **[S]**, show which
 bodies name a point through the viewfinder, with the number of such
 files: the 51-point FX bodies D3 (6), D4 (6), D4S (7), D700 (6), D750
@@ -335,14 +335,14 @@ Which files record each setting; the values are in
 | Flash | Exif 0x9209 | 32 and both JPEGs | 1785, 1786, 5364 |
 | White balance | MakerNote 0x0005 | all 35 and both JPEGs | none |
 | White balance | Exif 0xA403 and 0x9208 | 31 and both JPEGs | 1785, 1786, 4456, 5364 |
-| Colour temperature | MakerNote 0x004F | 1835, 2218, 3587, 3827, 5146 to 5148, 5812, 6887, 7735, 7736, 7767, 7770, 7808 to 7810, 7812, 7813, 8559; 0 on 1835 and 8559 | the 16 others and both JPEGs |
+| Color temperature | MakerNote 0x004F | 1835, 2218, 3587, 3827, 5146 to 5148, 5812, 6887, 7735, 7736, 7767, 7770, 7808 to 7810, 7812, 7813, 8559; 0 on 1835 and 8559 | the 16 others and both JPEGs |
 | Fine-tuning | MakerNote 0x003F | 895, 1415, 1835, 2036, 2218, 3587, 3827, 5146 to 5148, 5812, 6887, 7735, 7736, 7767, 7770, 7808 to 7810, 7812, 7813, 8559 | the 13 others and both JPEGs |
 | Fine-tuning | MakerNote 0x000B | 21 and both JPEGs | 4456, 5146 to 5148, 6887, 7735, 7736, 7767, 7770, 7808 to 7810, 7812, 7813 |
 | Shutter | MakerNote 0x0034 | 1835, 2956, 3587, 3827, 5146 to 5148, 5812, 6887, 7735, 7736, 7767, 7770, 7808 to 7810, 7812, 7813, 8559 | the 16 others and both JPEGs |
 | Image area | MakerNote 0x001B | 28 and the D5300 JPEG; 0 ("off") on 928, 961, 2238, 2255, 2956, 8079 and the D5300 JPEG | 1425, 1785, 1786, 2060, 2996, 4456, 5364 and the D70 JPEG |
 | Raw image size | MakerNote 0x003E | 895, 1415, 1835, 2036, 2218, 3587, 3827, 5146 to 5148, 5812, 6887, 7735, 7736, 7767, 7770, 7808 to 7810, 7812, 7813, 8559 | the 13 others and both JPEGs |
-| Colour space | Exif 0xA001 | both JPEGs | all 35 |
-| Colour space | MakerNote 0x001E | 28 and the D5300 JPEG | 1425, 1785, 1786, 2060, 2996, 4456, 5364 and the D70 JPEG |
+| Color space | Exif 0xA001 | both JPEGs | all 35 |
+| Color space | MakerNote 0x001E | 28 and the D5300 JPEG | 1425, 1785, 1786, 2060, 2996, 4456, 5364 and the D70 JPEG |
 | Focal length in 35 mm terms | Exif 0xA405 | 31 and both JPEGs | 1785, 1786, 4456, 5364 |
 | Software | IFD0 0x0131 | all 35 and both JPEGs | none |
 
@@ -368,7 +368,7 @@ the D7100's. What these files show is in
 [makernote-and-metadata.md](makernote-and-metadata.md#87-camera-settings).
 
 On 2026-10-25 I shot frames of one scene for these values, one or two per
-white balance setting, fine-tuning, colour space and image area: 19 NEF
+white balance setting, fine-tuning, color space and image area: 19 NEF
 files from a Z 9 on firmware `Ver.05.30`, and 19 NEF files from the D600,
 14 of them with a JPEG. They stay private; what the notes give of them is
 each setting and the values it was stored as. The same script read them. No
@@ -385,7 +385,7 @@ raises green against red and blue together. The differences are large:
 red over blue went from 1.27 to 1.40 and to 1.17 on the Z 9's two
 shifted frames. Nikon's NX Studio, run afterwards on the fine-tuning
 frames as a reader to compare with, names the setting each holds, and
-agrees with every direction read from the colours.
+agrees with every direction read from the colors.
 
 ## 3. What raw.pixls.us holds for Nikon
 
@@ -413,7 +413,7 @@ D2Xs, D5300, Z5_2, Z6_3, Z50_2, Z fc and COOLPIX P1100). [1]
 
 ## 4. Recommended minimal body set
 
-Verify the licence flag for every file before adding it. "Why" says what the
+Verify the license flag for every file before adding it. "Why" says what the
 body exercises.
 
 | Generation | Body | Why |
@@ -457,7 +457,7 @@ needs:
    relative to the MakerNote's inner header, which is the easiest thing to
    get wrong, so cover it explicitly.
 3. **Preview JPEG.** A valid JPEG of a few dozen bytes to a few hundred
-   (a small solid-colour image). Make fixtures with several JPEGs of
+   (a small solid-color image). Make fixtures with several JPEGs of
    different sizes and put the largest in a different slot each time, so
    tests prove the choice is by measured size and not by position.
 4. **Stripped real file.** From a CC0 sample, copy the headers and IFDs and
@@ -474,9 +474,9 @@ removed. Where a binary fixture is committed, that text file records
 the provenance:
 
 - how it was made (generated, or derived from which sample);
-- for a derived fixture, the sample's name, source URL, SHA-256 and licence
+- for a derived fixture, the sample's name, source URL, SHA-256 and license
   as checked, or, for a file that is not public, who made it and the
-  licence they give it;
+  license they give it;
 - what was removed, and what was kept;
 - the date, and what the fixture is meant to exercise.
 
@@ -540,7 +540,7 @@ the file name, hash and the exact command used.
 [3] darktable, "rawsamples.ch replacement" (2017) —
     https://www.darktable.org/2017/01/rawsamples-ch-replacement/ **[S]**
 [4] ExifTool, sample images — https://exiftool.org/sample_images.html **[P]**
-[5] OSS-Fuzz, LibRaw project and enrolment overview —
+[5] OSS-Fuzz, LibRaw project and enrollment overview —
     https://github.com/google/oss-fuzz/tree/master/projects/libraw ,
     https://github.blog/open-source/how-to-squash-bugs-by-enrolling-in-oss-fuzz/
     **[S]**

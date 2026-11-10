@@ -34,7 +34,7 @@ const BLOCKS: usize = 4;
 /// The longest read that [`Source::bytes`] serves from the block cache.
 ///
 /// Tag values and headers are a few bytes to a few KiB, read many times from
-/// the same neighbourhood, so they are worth caching. A longer read is a
+/// the same neighborhood, so they are worth caching. A longer read is a
 /// payload, read once: caching it would only evict the directories around
 /// it. Being far below `BLOCK_SIZE`, a cached read spans at most two blocks.
 const SMALL_READ: u64 = 4096;

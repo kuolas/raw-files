@@ -136,9 +136,9 @@ nor the Hasselblad Lunar, which contains no "SONY" string at all (file
 4051) **[F]**. The 0xB000 entry itself lies at bytes 884 to 1,356 in files
 with FileFormat up to `3 3 1 0` and at bytes 5,458 to 5,584 in files with
 FileFormat `3 3 3 0` and later (for example 5,484 in file 1541) **[F]**.
-ExifTool recognises ARW from IFD0 (Make "SONY", NewSubfileType 1,
+ExifTool recognizes ARW from IFD0 (Make "SONY", NewSubfileType 1,
 Compression 6) in Exif.pm and switches to SR2 when it meets FileFormat
-`1 0 0 0`; it recognises ARQ by extension only [2] [1] [7] **[P]**.
+`1 0 0 0`; it recognizes ARQ by extension only [2] [1] [7] **[P]**.
 raw-files does not need to tell the formats apart to find a preview: one
 walk serves all of them (section 7).
 
@@ -407,12 +407,12 @@ Notes:
 3. **IFD2** holds the full-size JPEG from FileFormat 4.0 on (section 3.1).
 4. **SubIFDs** never hold a JPEG in Sony files: the single SubIFD is always
    the raw. A walker must still visit them, both because a rewritten file
-   might differ and because the raw IFD has to be recognised and skipped.
+   might differ and because the raw IFD has to be recognized and skipped.
 5. **MPF.** No embedded JPEG in any checked file has an APP segment of any
    kind, so none carries MPF data, Exif or an Orientation of its own; every one
    starts `FF D8 FF DB` (all files) **[F]**. A comment in ExifTool's Sony.pm,
    written about tag 0x2001 in Sony JPEG files, notes that the corresponding
-   bytes of ARW previews are `FF D8 FF DB`, a quantisation table straight after
+   bytes of ARW previews are `FF D8 FF DB`, a quantization table straight after
    SOI [1] **[P]**; 0x2001 itself does not occur in ARW files. Sony JPEG files
    do use MPF for their preview [27] **[S]**.
 6. **No hidden JPEGs.** A whole-file byte scan for DCT JPEG headers outside
@@ -612,8 +612,8 @@ Further observations:
 | Project | Method for ARW | Conf. |
 |---|---|---|
 | ExifTool | extracts each location under its own name (PreviewImage, ThumbnailImage, JpgFromRaw, IDCPreviewImage, the MakerNote previews); does not choose a largest; validates image data, repairs the A100 thumbnail offset, and drops the A100 duplicate | [2] [4] [5] **[P]** |
-| Exiv2 | collects `Exif.Image` (IFD0), `Exif.Thumbnail` (IFD1), `Exif.Image2` (IFD2), `Exif.SubImage1` to 4, `Exif.SonyMinolta` (A100) and strip-based loaders for groups with NewSubfileType 1; checks offset plus size against the file; makes no SOI check of its own, but reads dimensions by opening each candidate's bytes through `ImageFactory`, which identifies the format by its magic bytes (`FF D8` for JPEG) and so drops a candidate that no Exiv2 image class recognises; sorts by width times height; does not read MakerNote 0x2001, whose offset lies outside the MakerNote [35] | [8] **[P]**; [35] **[S]** |
-| LibRaw | parses all IFDs in the chain and the SubIFDs; for an IFD with 0x0201 and no BitsPerSample it reads the JPEG header for width, height and bits; picks the IFD maximising width times height divided by (bits squared plus 1) among IFDs that are not the raw and not CFA or linear-raw photometric; checks offsets against the file size only when an option is set; keeps a deduplicated list of all thumbnails; its raw selection skips the "Sony RGB preview" profile, which is IFD2 | [10] **[P]**; that IFD2 wins its ranking is **[I]** |
+| Exiv2 | collects `Exif.Image` (IFD0), `Exif.Thumbnail` (IFD1), `Exif.Image2` (IFD2), `Exif.SubImage1` to 4, `Exif.SonyMinolta` (A100) and strip-based loaders for groups with NewSubfileType 1; checks offset plus size against the file; makes no SOI check of its own, but reads dimensions by opening each candidate's bytes through `ImageFactory`, which identifies the format by its magic bytes (`FF D8` for JPEG) and so drops a candidate that no Exiv2 image class recognizes; sorts by width times height; does not read MakerNote 0x2001, whose offset lies outside the MakerNote [35] | [8] **[P]**; [35] **[S]** |
+| LibRaw | parses all IFDs in the chain and the SubIFDs; for an IFD with 0x0201 and no BitsPerSample it reads the JPEG header for width, height and bits; picks the IFD maximizing width times height divided by (bits squared plus 1) among IFDs that are not the raw and not CFA or linear-raw photometric; checks offsets against the file size only when an option is set; keeps a deduplicated list of all thumbnails; its raw selection skips the "Sony RGB preview" profile, which is IFD2 | [10] **[P]**; that IFD2 wins its ranking is **[I]** |
 | rawler (dnglab) | `preview_image` reads IFD0's 0x0201/0x0202 only, so on 4.0 and later files it returns the 1616x1080 preview, not IFD2's | [12] **[P]**; the consequence **[I]** |
 | rawspeed | no preview extraction | [13] **[P]** |
 | libopenraw | walks every non-raw IFD and its SubIFDs; treats NewSubfileType absent or 1 as a preview; for Compression 6 or 7 or 0x0201 data **uses ImageWidth and ImageLength when present** and parses the JPEG only when they are absent; disables SubIFD parsing for the A100 | [14] **[P]**; that it would report the A100's 640x480 JPEG as 3872x2592 is **[I]** |
@@ -686,7 +686,7 @@ takes the ARW steps (see
    truncation policy as for NEF.
 6. **Check SOI.** The first three bytes must be `FF D8 FF`. Exiv2 has no
    explicit check, though opening the bytes to read the dimensions drops
-   data that is not recognisably a JPEG or another known format [8];
+   data that is not recognizably a JPEG or another known format [8];
    raw-files should check explicitly. Optionally, for the A100 thumbnail only,
    apply ExifTool's repair (section 5); since the thumbnail is the smallest
    image, skipping it is also acceptable.
@@ -700,7 +700,7 @@ takes the ARW steps (see
    markers. Handle markers without a length (`01`, `D0` to `D7`), and give
    up at SOS (`DA`) or EOI without a SOF. The NEF recommendation carries
    the same rejection. **(ARW)** On ARW it matters in practice: it is the
-   second line of defence behind step 3.
+   second line of defense behind step 3.
 8. **Rank.** Largest SOF area wins; break ties by the larger byte length.
    A candidate without a valid SOF is not a preview: drop it.
 9. **Return the bytes unmodified**, as declared by the tags (they may
@@ -829,7 +829,7 @@ invalid) and leave the rotation to the caller, as for NEF.
    MakerNotes as headerless [3] [9] **[P]**, while LibRaw's comment labels
    its `SONY` branch "DSLR-A100" [10] **[P]**. Settled by file 2346: the
    A100's ARW MakerNote has the 12-byte header **[F]**.
-4. **The Hasselblad MakerNote header.** ExifTool recognises a
+4. **The Hasselblad MakerNote header.** ExifTool recognizes a
    `VHAB     \0` header for Hasselblad models [3] **[P]**; the Lunar's
    MakerNote is headerless (file 4051) **[F]**. Whether any Hasselblad raw
    uses the header is open.
@@ -929,7 +929,7 @@ c10cc500 (10 October 2026), libopenraw f18f7c81 (4 October 2026), Graphite
 [18] ExifTool `-v` dumps in the same repository: SONY_A9_DSC04458.txt (ExifTool 12.41), RAW_SONY_A100.txt, RAW_SONY_R1.txt, RAW_SONY_DSC-F828.SRF.txt (ExifTool 11.52) — https://github.com/lclevy/sony_raw
 [19] PRONOM fmt/191 (ARW 1.x), fmt/1127 (ARW 2.x), fmt/1126 (SR2) — https://www.nationalarchives.gov.uk/PRONOM/fmt/191.xml , https://www.nationalarchives.gov.uk/PRONOM/fmt/1127.xml , https://www.nationalarchives.gov.uk/PRONOM/fmt/1126.xml
 [20] ExifTool issue 195, "Sony ARW 4.0 tags" (2023) — https://github.com/exiftool/exiftool/issues/195
-[21] raw.pixls.us catalogue and its exiv2 dumps of the 209 Sony-family files (233 dumps, counting 24 non-ARW Hasselblad files in the catalogue's Sony listing), one per file at `https://raw.pixls.us/getfile.php/<id>/exif/<name>.exif.txt` — https://raw.pixls.us/json/getrepository.php?set=all ; for example the ILCE-1 compressed file 4465: https://raw.pixls.us/getfile.php/4465/exif/A1_full_compressed.ARW.exif.txt
+[21] raw.pixls.us catalog and its exiv2 dumps of the 209 Sony-family files (233 dumps, counting 24 non-ARW Hasselblad files in the catalog's Sony listing), one per file at `https://raw.pixls.us/getfile.php/<id>/exif/<name>.exif.txt` — https://raw.pixls.us/json/getrepository.php?set=all ; for example the ILCE-1 compressed file 4465: https://raw.pixls.us/getfile.php/4465/exif/A1_full_compressed.ARW.exif.txt
 [22] raw.pixls.us exiv2 dump of ZV-1M2 file 8461 — https://raw.pixls.us/getfile.php/8461/exif/_DSC5498.ARW.exif.txt
 [23] Lightroom Queen forum, "Sony A1 support" (2021) — https://lightroomqueen.com/community/threads/sony-a1-support.42388/
 [24] Adobe Community, "Can I use the large embedded previews created by Sony A1" (2021) — https://community.adobe.com/t5/lightroom-classic-bugs/p-can-i-use-the-large-embedded-previews-created-by-sony-a1/idi-p/12389496
@@ -953,7 +953,7 @@ c10cc500 (10 October 2026), libopenraw f18f7c81 (4 October 2026), Graphite
 ### Sample files
 
 All CC0, from https://raw.pixls.us/ ; the SHA-256 was checked before any
-parsing. Mode is the catalogue's label.
+parsing. Mode is the catalog's label.
 
 | id | Body | Mode | SHA-256 | URL |
 |---|---|---|---|---|

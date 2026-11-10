@@ -30,4 +30,4 @@
 ## Left open (optional)
 
 <!-- Follow-ups this change leaves behind, one per line, each with its issue
-     number (e.g. "ARW previews ignore EXIF orientation — #34"). -->
+     number (e.g. "ARW previews ignore Exif orientation — #34"). -->

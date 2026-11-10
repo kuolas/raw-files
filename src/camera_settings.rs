@@ -5,7 +5,7 @@
 //! Beside the exposure, a viewer's information panel shows how the camera
 //! was set for the shot: the white balance, the exposure program, the
 //! metering mode, the flash, the shutter, the image area, the raw image
-//! size and the colour space. [`CameraSettings`] holds them all, and
+//! size and the color space. [`CameraSettings`] holds them all, and
 //! [`Metadata::camera_settings`](crate::Metadata::camera_settings) gives
 //! them for a file. [`WhiteBalance`], [`FineTune`] and [`Flash`] hold the
 //! settings made of several parts; each enum, such as [`ExposureProgram`],
@@ -18,16 +18,16 @@
 //!
 //! NEF, ARW and JPEG files give the settings that their standard Exif tags
 //! record: the exposure program, the metering mode, the flash, the white
-//! balance mode and the colour space. The others are recorded only in a
+//! balance mode and the color space. The others are recorded only in a
 //! maker's own tags, its MakerNote. Nikon's, in NEF files and in the JPEGs
-//! of Nikon cameras, gives the white balance's colour temperature and
+//! of Nikon cameras, gives the white balance's color temperature and
 //! fine-tuning, the shutter, the image area and, in a raw file, the raw
 //! image size; the white balance setting, finer than Exif's, in place of
-//! Exif's; and the colour space where the Exif tags record none, as in
+//! Exif's; and the color space where the Exif tags record none, as in
 //! every Nikon raw file checked. Sony's, in ARW files and their family and
 //! in the JPEGs of Sony cameras, gives the white balance's fine-tuning,
 //! the electronic front curtain setting, which only Sony records, and the
-//! colour temperature of a chosen colour temperature or a custom white
+//! color temperature of a chosen color temperature or a custom white
 //! balance; and the white balance setting in place of Exif's. On Sony
 //! files the shutter, the image area and the raw image size are `None`:
 //! Sony records the first two only in enciphered blocks, which raw-files
@@ -45,14 +45,14 @@ use crate::rational::SignedRational;
 
 /// How the camera was set for a picture: its white balance, exposure
 /// program, metering mode, flash, shutter, image area, raw image size and
-/// colour space, for a viewer's information panel beside the exposure.
+/// color space, for a viewer's information panel beside the exposure.
 ///
 /// Every value is `None` when the file does not record it or records it in
 /// a way that cannot be read, such as a code that no variant names. A
 /// damaged value costs only itself.
 /// [`Metadata::camera_settings`](crate::Metadata::camera_settings) gives
 /// the values a file's standard Exif tags record: the exposure program,
-/// the metering mode, the flash, the white balance mode and the colour
+/// the metering mode, the flash, the white balance mode and the color
 /// space. The others, which only a maker's MakerNote records, it gives
 /// from Nikon's MakerNote and Sony's, each those its MakerNote records in
 /// plain tags; the shutter, the image area and the raw image size are
@@ -229,7 +229,7 @@ impl CameraSettings {
         self.raw_image_size
     }
 
-    /// The colour space the camera was set to, such as sRGB.
+    /// The color space the camera was set to, such as sRGB.
     ///
     /// Read from Exif's ColorSpace, with the Interoperability IFD's index
     /// for Adobe RGB, as [`ColorSpace`] says. Only when the Exif tags hold
@@ -309,7 +309,7 @@ impl CameraSettings {
         self
     }
 
-    /// Sets the colour space, in place of any set before;
+    /// Sets the color space, in place of any set before;
     /// [`color_space`](Self::color_space) reads it.
     #[must_use]
     pub fn with_color_space(mut self, color_space: ColorSpace) -> Self {
@@ -318,7 +318,7 @@ impl CameraSettings {
     }
 }
 
-/// The white balance the camera was set to: its mode, the colour
+/// The white balance the camera was set to: its mode, the color
 /// temperature the file records, and the photographer's fine-tuning.
 ///
 /// Every part is `None` when the file does not record it or records it in
@@ -326,7 +326,7 @@ impl CameraSettings {
 /// with every part `None`; a caller's tests set the parts they need with
 /// the `with_…` methods, each named after the method that reads the part
 /// back and each replacing any value set before. The `with_…` methods
-/// store each value as given, so a test reads back even a colour
+/// store each value as given, so a test reads back even a color
 /// temperature of 0; the readers' rules that a recorded 0 or a number
 /// above 99,999 K gives `None` are not the builders'. `WhiteBalance` is
 /// not `Copy`, so that a later part that cannot be copied does not break
@@ -334,7 +334,7 @@ impl CameraSettings {
 ///
 /// # Examples
 ///
-/// A Nikon body's auto white balance, with the colour temperature it chose
+/// A Nikon body's auto white balance, with the color temperature it chose
 /// and no shift:
 ///
 /// ```
@@ -370,7 +370,7 @@ impl WhiteBalance {
     /// manual, and, for a manual one, from its LightSource, the kind of
     /// light it was set for, such as shade. Nikon's MakerNote records the
     /// setting as text, which is looked up in a table of the texts files
-    /// are known to hold, such as `AUTO1` or `COOL WHT FL`; a chosen colour
+    /// are known to hold, such as `AUTO1` or `COOL WHT FL`; a chosen color
     /// temperature, written as its number, such as `3230K`, gives
     /// [`ColorTemperature`](WhiteBalanceMode::ColorTemperature). A text the
     /// table lacks gives way to Exif's mode, never to a guess from its letters.
@@ -386,23 +386,23 @@ impl WhiteBalance {
         self.mode
     }
 
-    /// The colour temperature the file records, in kelvin. A recorded 0
+    /// The color temperature the file records, in kelvin. A recorded 0
     /// means that none was recorded, and is `None`; so is a number above
     /// 99,999 K, which is no temperature a camera is set to.
     ///
     /// What it means differs by maker, and only a maker's MakerNote records
-    /// it. On Nikon, from its ColorTemperatureAuto, it is the colour
+    /// it. On Nikon, from its ColorTemperatureAuto, it is the color
     /// temperature of the white balance the camera applied, under any
     /// [`mode`](Self::mode): the temperature auto white balance chose, the
-    /// one a chosen colour temperature set, or the one a kind of light or a
+    /// one a chosen color temperature set, or the one a kind of light or a
     /// preset stands for. The D5, the D850, the D780 and the Z bodies
     /// checked record it; the Z 9 under every setting, while the D850 and
     /// the Z fc write 0 under daylight. The Nikon bodies before them record
-    /// a temperature only under a chosen colour temperature
+    /// a temperature only under a chosen color temperature
     /// ([`ColorTemperature`](WhiteBalanceMode::ColorTemperature)), as the
     /// number of their white balance text, such as `3230K`, which gives it.
-    /// On Sony, from its ColorTemperature, it is the colour temperature the
-    /// photographer chose under a chosen colour temperature
+    /// On Sony, from its ColorTemperature, it is the color temperature the
+    /// photographer chose under a chosen color temperature
     /// ([`ColorTemperature`](WhiteBalanceMode::ColorTemperature)), and the
     /// custom white balance's own under [`Custom`](WhiteBalanceMode::Custom),
     /// as the files checked show; the [`mode`](Self::mode) beside it says
@@ -436,7 +436,7 @@ impl WhiteBalance {
         self
     }
 
-    /// Sets the colour temperature, in kelvin, in place of any set before;
+    /// Sets the color temperature, in kelvin, in place of any set before;
     /// [`color_temperature`](Self::color_temperature) reads it.
     #[must_use]
     pub fn with_color_temperature(mut self, kelvin: u32) -> Self {
@@ -728,7 +728,7 @@ impl fmt::Display for ExposureProgram {
 pub enum MeteringMode {
     /// The average of the whole frame.
     Average,
-    /// The whole frame, weighted toward its centre: Exif's centre-weighted
+    /// The whole frame, weighted toward its center: Exif's center-weighted
     /// average.
     CenterWeighted,
     /// A small spot of the frame.
@@ -807,10 +807,10 @@ pub enum WhiteBalanceMode {
     Flash,
     /// Under water.
     Underwater,
-    /// A white balance measured from a reference, such as a grey card:
+    /// A white balance measured from a reference, such as a gray card:
     /// Nikon's preset manual, Sony's custom.
     Custom,
-    /// A colour temperature the photographer chose.
+    /// A color temperature the photographer chose.
     ColorTemperature,
 }
 
@@ -948,9 +948,9 @@ pub enum ImageArea {
     ApsCWide,
     /// A 5:4 crop: a picture 5 wide for 4 high.
     FiveByFour,
-    /// A 1.3x crop: the centre of the sensor, by a crop factor of 1.3.
+    /// A 1.3x crop: the center of the sensor, by a crop factor of 1.3.
     Crop1_3x,
-    /// A 2.7x crop: the centre of the sensor, by a crop factor of 2.7.
+    /// A 2.7x crop: the center of the sensor, by a crop factor of 2.7.
     Crop2_7x,
 }
 
@@ -1025,9 +1025,9 @@ impl fmt::Display for RawImageSize {
     }
 }
 
-/// The colour space the camera was set to.
+/// The color space the camera was set to.
 ///
-/// Exif's ColorSpace names sRGB alone; for any other colour space it says
+/// Exif's ColorSpace names sRGB alone; for any other color space it says
 /// "uncalibrated". A file in Adobe RGB then names it in its
 /// Interoperability IFD, with the index `R03` of a DCF option file, so
 /// "uncalibrated" with that index is [`AdobeRgb`](Self::AdobeRgb), and
@@ -1058,7 +1058,7 @@ pub enum ColorSpace {
 }
 
 impl ColorSpace {
-    /// The colour space's name, for an information panel: "sRGB" or "Adobe
+    /// The color space's name, for an information panel: "sRGB" or "Adobe
     /// RGB".
     pub fn name(self) -> &'static str {
         match self {

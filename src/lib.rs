@@ -22,7 +22,7 @@
 //! they lack:
 //!
 //! - the camera's make, model, serial number and owner's name as the
-//!   file records them, with the maker raw-files recognises in them and,
+//!   file records them, with the maker raw-files recognizes in them and,
 //!   for the bodies it names, the name the body is sold under, in a
 //!   [`Camera`]; and the software that wrote the file;
 //! - who made the picture and what they wrote about it, in an
@@ -38,7 +38,7 @@
 //! - the camera's settings, in [`CameraSettings`]: the white balance, the
 //!   exposure program, the metering mode, the flash, the shutter, the
 //!   electronic front curtain setting, the image area, the raw image size
-//!   and the colour space: from the Exif tags and, for those only a
+//!   and the color space: from the Exif tags and, for those only a
 //!   MakerNote records, from the plain tags of Nikon's and Sony's
 //!   MakerNotes;
 //! - the sizes of the raw data, which a JPEG lacks, and of the visible
@@ -176,7 +176,7 @@
 //! // A Nikon Z 9 records the position it focused at.
 //! let frame = Size { width: 8256, height: 5504 };
 //! let recorded = Focus::new(frame, Point { x: 4905, y: 2461 }, FocusOrigin::Recorded)
-//!     .expect("the centre lies on the frame");
+//!     .expect("the center lies on the frame");
 //! let z9 = Metadata::default().with_focus(recorded);
 //! assert_eq!(caption(&z9).as_deref(), Some("Recorded: at (4905, 2461)"));
 //!
@@ -352,7 +352,7 @@
 //!   it is asked for.
 //! - The crate is pure Rust with no dependencies outside the standard
 //!   library, and it contains no `unsafe` code: it forbids it. So there is
-//!   no serde feature either: a caller that stores metadata serialises what
+//!   no serde feature either: a caller that stores metadata serializes what
 //!   the getters return, which is text, integers, booleans, enums whose
 //!   `name` gives their text, and small structs of these; an
 //!   [`Orientation`] gives its Exif number, a [`PreviewFormat`] its MIME

@@ -1,7 +1,7 @@
-# ARW: licences and references
+# ARW: licenses and references
 
 Sony publishes no specification for ARW or its relatives SR2, SRF and ARQ,
-and almost every mature implementation is under a copyleft licence. This
+and almost every mature implementation is under a copyleft license. This
 page records what we may learn from, what we may reuse, where the format is
 documented, and which legal questions are still open. Back to
 [the ARW overview](README.md).
@@ -31,9 +31,9 @@ for how to stay on the safe side; anything with legal weight needs a lawyer.
 - Sony's developer offering is the Camera Remote SDK, for remote control,
   live view and fetching captured images. Version 2.02.00 (2026-06-10) added
   the ILCE-7RM6; 2.01.00 (2026-02-03) added the ILCE-7M5 and DSC-RX1RM3. It
-  is distributed per region on application, under a click-through licence.
+  is distributed per region on application, under a click-through license.
   [1] **[P]**
-- That licence is limited, non-exclusive and non-transferable, forbids
+- That license is limited, non-exclusive and non-transferable, forbids
   reverse engineering, decompiling or disassembling the licensed materials,
   and lets Sony terminate it. [2] **[P]** Nothing in the SDK describes the
   file format. Its terms are contractual, and raw-files neither uses nor
@@ -86,30 +86,30 @@ signatures. [I]
 
 | Standard | Relevance to ARW | State and availability | Conf. |
 |---|---|---|---|
-| TIFF 6.0 (Adobe, 1992) | The container: the IFD chain, the SubIFD, strips, tiles, the Compression tag | Unchanged since 1992; availability as on the [NEF page](../nef/licences-and-references.md) [8] | S |
+| TIFF 6.0 (Adobe, 1992) | The container: the IFD chain, the SubIFD, strips, tiles, the Compression tag | Unchanged since 1992; availability as on the [NEF page](../nef/licenses-and-references.md) [8] | S |
 | TIFF/EP, ISO 12234-2:2001 | CFAPattern and CFARepeatPatternDim in the raw SubIFD | Paid ISO document [9]. None of the 36 files checked declares TIFFEPStandardID (0x9216) or DNGVersion in IFD0 **[F]** | S, F |
 | Exif, CIPA DC-008 | The Exif IFD, the MakerNote pointer, OffsetTime\*, BodySerialNumber | Current is **Exif 3.1** (DC-008-Translation-2026), published 2026-01-30; free from CIPA [10] | P |
-| ITU-T T.81 (lossless process) | Lossless Compressed raw: Compression 7, tiled, each tile a SOF3 lossless JPEG; also the M and S YCbCr modes | Offered by the ITU only for a fee; the W3C hosts the CCITT publication of 1992 (see the [JPEG notes](../jpeg/licences-and-references.md#1-the-standards)) [11]; patents on the 1992 lossless process have long expired [I] | P, I |
-| DNG 1.7.1.0 (Adobe) | ARW is not DNG, but borrows DNGPrivateData (0xC634) to point at the SR2Private IFD, and writes DefaultCropOrigin, DefaultCropSize and WhiteLevel (0xC61D) in the raw SubIFD | Free PDF and SDK; patent licence as described on the NEF page [12] | P |
-| SMPTE RDD 34:2015, "LLVC – Low Latency Video Codec for Network Transfer" | A possible ancestor of the ARW 6.0 codec (section 5) | Free PDF; a registered disclosure document, not a standard; Sony is the proponent, and IP enquiries go to Sony [13] | P (document), I (link) |
+| ITU-T T.81 (lossless process) | Lossless Compressed raw: Compression 7, tiled, each tile a SOF3 lossless JPEG; also the M and S YCbCr modes | Offered by the ITU only for a fee; the W3C hosts the CCITT publication of 1992 (see the [JPEG notes](../jpeg/licenses-and-references.md#1-the-standards)) [11]; patents on the 1992 lossless process have long expired [I] | P, I |
+| DNG 1.7.1.0 (Adobe) | ARW is not DNG, but borrows DNGPrivateData (0xC634) to point at the SR2Private IFD, and writes DefaultCropOrigin, DefaultCropSize and WhiteLevel (0xC61D) in the raw SubIFD | Free PDF and SDK; patent license as described on the NEF page [12] | P |
+| SMPTE RDD 34:2015, "LLVC – Low Latency Video Codec for Network Transfer" | A possible ancestor of the ARW 6.0 codec (section 5) | Free PDF; a registered disclosure document, not a standard; Sony is the proponent, and IP inquiries go to Sony [13] | P (document), I (link) |
 | JPEG XS, ISO/IEC 21122 | A possible technical relative of the ARW 6.0 codec | Paid ISO document; a patent pool exists [36] | I |
 
 ## 3. Implementations
 
 "Dependency candidate" and "Read only, no copying" mean what they mean on
-the [NEF page](../nef/licences-and-references.md): the first is compatible
+the [NEF page](../nef/licenses-and-references.md): the first is compatible
 with the raw-files `MIT OR Apache-2.0` (see
 [ADR002](../../architecture-decisions/adr002-license-mit-or-apache-2.md))
 and worth evaluating; the second means we may learn facts from it but copy
 neither code nor tables. SPDX identifiers are as reported by each project's
-repository, licence file, or crates.io; coverage is what we read in the
+repository, license file, or crates.io; coverage is what we read in the
 source.
 
-| Project | Language | Licence (SPDX) | ARW coverage | Reuse status |
+| Project | Language | License (SPDX) | ARW coverage | Reuse status |
 |---|---|---|---|---|
 | dcraw 9.28 | C | Custom, no SPDX; the header frees all code outside the Foveon functions "for all uses" (see the NEF page) [14] | SRF, SR2 decryption, ARW1, cRAW, the 0x7010 tone curve; no lossless, no ARW 6.0 | Read only, no copying |
 | LibRaw | C++ | LGPL-2.1-only OR CDDL-1.0 per the README; the GitHub API reports NOASSERTION [15] | SRF, SR2, ARW1, cRAW, lossless, M and S YCbCr, ARQ; ARW 6.0 on master only (section 3.4) | Read only, no copying |
-| rawspeed | C++ | LGPL-2.1 per GitHub; source headers say 2.1 or any later version [16] | Compression 1, 7 (CFA only) and 32767; SRF and SR2 recognised; no 32766 | Read only, no copying |
+| rawspeed | C++ | LGPL-2.1 per GitHub; source headers say 2.1 or any later version [16] | Compression 1, 7 (CFA only) and 32767; SRF and SR2 recognized; no 32766 | Read only, no copying |
 | rawler / dnglab | Rust | LGPL-2.1 [17] | SRF, A100, Compression 1, 7 and 32767; 32766 refused as unsupported (the decompressor is an unreachable stub) | Read only, no copying |
 | rawloader | Rust | LGPL-2.1 [18] | SRF, A100, Compression 1 and 32767; no lossless | Read only, no copying |
 | imagepipe, quickraw | Rust | LGPL-3.0-only, LGPL-2.1 [19] | Pipelines over the above | Read only, no copying |
@@ -124,24 +124,24 @@ source.
 | jpgfromraw (formerly `arwtojpg`) | Rust | MIT [26] | Walks the whole IFD0 chain, keeps the largest JPEG, bounds-checks offsets | Permissive; worth reading for previews |
 | imagemeta | Go | MIT [27] | Sony MakerNote decoding; its README aims at ExifTool parity | Permissive label; tables probably follow ExifTool's [I] |
 | exif-py (ExifRead) | Python | BSD-3-Clause [28] | A Sony MakerNote module | Permissive |
-| rawpy | Python | MIT for the wrapper; bundles LibRaw [29] | Whatever LibRaw does | Not pure Rust; the bundle carries LibRaw's licence |
+| rawpy | Python | MIT for the wrapper; bundles LibRaw [29] | Whatever LibRaw does | Not pure Rust; the bundle carries LibRaw's license |
 | rawkit (Graphite) | Rust | MIT OR Apache-2.0 [30] | Single-strip uncompressed, 12-bit cRAW, A100 ARW1 (stops at a `todo!()`); IFD0 preview on master only; no lossless, ARW 6.0, SR2, SRF or ARQ | Permissive label; see section 3.3 |
-| arw6_decode (abbradar) | Python | None: no licence file, so all rights reserved [31] | A reference ARW 6.0 decoder with a prose description | Do not read or copy until it is licensed; only its README was read |
+| arw6_decode (abbradar) | Python | None: no license file, so all rights reserved [31] | A reference ARW 6.0 decoder with a prose description | Do not read or copy until it is licensed; only its README was read |
 | image-rs `tiff` and `image`, `kamadak-exif`, `zune-jpeg`, `nom-exif`, `little_exif` | Rust | As on the NEF page [19] | Generic TIFF, Exif and JPEG; no Sony MakerNote; `image` does not decode ARW | Dependency candidates, as for NEF |
 
 The small Rust crates listed on the NEF page (`rawlib`, `jpgfromraw-lib`,
 `fpexif` and the copyleft ones) apply here unchanged. Two more were found:
 `rawbit` 0.1.18 (MIT; Sony support not checked) and `gamut-exif` 1.0.0
 (MIT OR Apache-2.0; an Exif 3.0 parser, Sony not checked). Both are unvetted.
-[19] **[P]** (licences)
+[19] **[P]** (licenses)
 
-All licences above were read from the GitHub API, the crates.io API or the
-project's licence file in October 2026. **[P]**
+All licenses above were read from the GitHub API, the crates.io API or the
+project's license file in October 2026. **[P]**
 
-### 3.1 Where sources disagree about a licence
+### 3.1 Where sources disagree about a license
 
 - **ExifTool.** The README and exiftool.org say ExifTool may be used under
-  the same terms as Perl itself, the Artistic Licence or the GPL; that is
+  the same terms as Perl itself, the Artistic License or the GPL; that is
   `GPL-1.0-or-later OR Artistic-1.0-Perl`. The repository's `LICENSE` file,
   however, is the GPL-3.0 text, and the GitHub API reports GPL-3.0. [21]
   **[P]** The NEF page records the first reading, from the README, and so
@@ -164,14 +164,14 @@ project's licence file in October 2026. **[P]**
 
 ### 3.2 Why "read only" is the rule
 
-The reasons on the [NEF page](../nef/licences-and-references.md) apply
+The reasons on the [NEF page](../nef/licenses-and-references.md) apply
 unchanged: ADR002 excludes GPL, LGPL and MPL dependencies, translating
-copyleft code into Rust does not escape its licence, and the selection and
+copyleft code into Rust does not escape its license, and the selection and
 arrangement of a tag table is expression even where each tag ID is a fact.
 
 ### 3.3 rawkit's provenance
 
-rawkit is the only permissively labelled Rust code that decodes ARW raw
+rawkit is the only permissively labeled Rust code that decodes ARW raw
 data, so where it came from matters. It lives in the Graphite repository
 under `libraries/rawkit`; we read master at commit 7477cd2fab (2026-10-10).
 Its one crates.io release is 0.1.0, published 2024-11-03, with about 1,250
@@ -185,7 +185,7 @@ We compared it with dcraw 9.28. [14][30] **[P]**
   column and row order and the overflow check follow dcraw too.
 - The cRAW decoder follows dcraw's routine step for step: the row buffer
   and loop bound, the bit positions of the block fields, the clamp, the
-  curve lookup and the correction that interleaves the two colours.
+  curve lookup and the correction that interleaves the two colors.
 - The tone-curve builder for tag 0x7010 is dcraw's.
 - A list of 22 camera makers appears in exactly the order of dcraw's list.
 - No source header, README, Cargo metadata, commit message or PR
@@ -202,7 +202,7 @@ so LibRaw as the direct source cannot be excluded for the decoders, but the
 maker list points to dcraw. [I] dcraw's header leaves all code outside the
 Foveon functions free for all uses [14] **[P]**, so this is a question of
 attribution and of what raw-files may learn from, not a finding of a
-licence breach. [I]
+license breach. [I]
 
 For raw-files [I]:
 
@@ -215,13 +215,13 @@ For raw-files [I]:
   file without a bound, which
   [ADR008](../../architecture-decisions/adr008-lints-and-panics.md)
   rules out. [30] **[P]**
-- Its per-body colour matrices equal the Adobe-derived values in dcraw,
+- Its per-body color matrices equal the Adobe-derived values in dcraw,
   LibRaw and rawspeed for the four bodies compared (ILCE-7M3, ILCE-6000,
   ZV-E1, ILCE-7RM5); its DSLR-A100 matrix differs from all three by one in
   three entries, source unknown. [30] **[P]** (values), **[I]** (source)
 - Its tests download three files (ILCE-7M3, ILCE-7RM4, ILCE-6000) from
   Graphite's server and compare the output with LibRaw's, bit for bit,
-  behind an opt-in feature. The licence of those files is not stated. [30]
+  behind an opt-in feature. The license of those files is not stated. [30]
   **[P]**
 
 ### 3.4 ARW 6.0: who decodes it
@@ -243,7 +243,7 @@ separates the two modes, and Lossless Compressed stays Compression 7
 - **rawspeed** PR #972, which describes itself as clean-room work from the
   decoder's observed input and output with substantial AI assistance, was
   closed unmerged on 2026-09-13. [16] **[P]**
-- **dnglab** PR #825 is open. It ports arw6_decode, which has no licence,
+- **dnglab** PR #825 is open. It ports arw6_decode, which has no license,
   with AI assistance; rawler's main branch refuses Compression 32766 as
   unsupported (no camera file defines its "arw6" mode), and its ARW 6.0
   decompressor is an `unimplemented!()` stub that is unreachable today.
@@ -264,7 +264,7 @@ The tables of section 4.2 still wait for a decision of their own.
 ### 4.1 Facts and expression
 
 The working rules in section 4.1 of the
-[NEF page](../nef/licences-and-references.md) apply unchanged: learn facts
+[NEF page](../nef/licenses-and-references.md) apply unchanged: learn facts
 from several independent sources, record them in our own words with a
 source and a tag, write code from this documentation rather than from
 copyleft source, prefer a sample file to any single implementation, and
@@ -295,9 +295,9 @@ formula, so no table needs to be copied.
 | cRAW tone curve | Yes, four knots in tag 0x7010 | Built by rule in every decoder | No table |
 | Lossless JPEG Huffman tables | Yes, a DHT segment in every tile | ITU-T T.81 | No table |
 | Per-body crops, black and white levels, CFA pattern | Mostly (DefaultCrop, 0x7038, 0x7310, 0x787F, 0xC61D, CFAPattern); older bodies need fallbacks | rawspeed's `cameras.xml`, dcraw and LibRaw | Derive from samples (option (b) below) |
-| Colour matrices | Sony's 0x7800 exists, meaning unconfirmed (its rows sum to about 1024 on file 1542 **[F]**) | Adobe-derived per-body matrices in dcraw, LibRaw, rawspeed and rawkit | Needed only for the developed image's colour model; defer [I] |
+| Color matrices | Sony's 0x7800 exists, meaning unconfirmed (its rows sum to about 1024 on file 1542 **[F]**) | Adobe-derived per-body matrices in dcraw, LibRaw, rawspeed and rawkit | Needed only for the developed image's color model; defer [I] |
 | YCbCr to RGB for the M and S modes | No | LibRaw uses ITU-R BT.601 | BT.601 is a public standard [I] |
-| ARW 6.0 delinearisation curve, 4096 entries | **No** | LibRaw (an embedded table, LGPL or CDDL); arw6_decode (a table extracted from an official decoder's output, unlicensed) | The hard case; see section 4.3 |
+| ARW 6.0 delinearization curve, 4096 entries | **No** | LibRaw (an embedded table, LGPL or CDDL); arw6_decode (a table extracted from an official decoder's output, unlicensed) | The hard case; see section 4.3 |
 
 The three options on the NEF page remain: (a) treat a short table as a
 format fact and transcribe it from at least two sources, (b) derive it from
@@ -308,7 +308,7 @@ ARW we suggest [I]:
   since each is a rule or a formula that the code computes;
 - option (b) for per-body values, checked against the files in
   [test-data.md](test-data.md#files-checked);
-- no colour matrices until work on the developed image starts and
+- no color matrices until work on the developed image starts and
   where they may come from is decided;
 - for the ARW 6.0 curve, no decision until section 4.3's questions are
   answered, and no table committed in the meantime.
@@ -322,7 +322,7 @@ checked. **[F]**
 
 When raw-files decodes raw data, it is to detect Compression 32766 and
 return a typed unsupported error for it, as for Nikon HE and HE\* (see the
-[NEF page](../nef/licences-and-references.md)). Previews and metadata from
+[NEF page](../nef/licenses-and-references.md)). Previews and metadata from
 these files are fine: every ARW 6.0 file checked has a full-size JPEG in
 IFD2 (raw.pixls.us files 8846 to 8850). **[F]** Two questions have to be
 answered before a decoder is written:
@@ -348,8 +348,8 @@ answered before a decoder is written:
 - **cRAW.** Sony's US 2007/0223824 A1, granted as **US 8,023,748 B2**
   (2011-09-20; inventors Fumiaki Kato and Ken Nakajima; priority JP
   2006-050170 of 2006-02-27), describes in its first embodiment the cRAW
-  block: 16 same-colour pixels, the maximum and minimum with their
-  positions, and the other 14 as 7-bit quantised differences, in 128 bits.
+  block: 16 same-color pixels, the maximum and minimum with their
+  positions, and the other 14 as 7-bit quantized differences, in 128 bits.
   Google Patents lists it as "Expired – Fee Related". [32] **[S]** A related
   Sony patent, US 8,013,910 B2 (priority 2007-05-24, same inventors), has
   the same status. [32] **[S]** The status of the European counterpart,
@@ -362,7 +362,7 @@ answered before a decoder is written:
   and arw6_decode calls the format "LLVC v3". [15][31] **[P]** LLVC is
   Sony's name for a line-based wavelet video codec disclosed as SMPTE RDD
   34:2015 (5/3 lifting, 16-line units, 128-bit words, variable-length
-  coding), and RDD 34 directs intellectual-property enquiries to Sony. [13]
+  coding), and RDD 34 directs intellectual-property inquiries to Sony. [13]
   **[P]** That ARW 6.0 descends from LLVC is **[I]**: the names and the
   structure match, but no Sony document confirms it. If the codec also uses
   JPEG XS techniques, the JPEG XS patent pool may be relevant, as it is for
@@ -384,10 +384,10 @@ Read these for facts and cite them; do not copy their tables or prose.
 | ExifTool Sony tag pages [21] | Tag IDs and values: FileFormat up to ARW 6.0, SonyModelID, RAWFileType, Quality, SR2Private, SRF tags, deciphered blocks | Licensed as ExifTool; tag text is expression; the best single reference |
 | Laurent Clévy, "Description of Sony RAW file formats (SRF, SR2, ARW and ARQ)", `lclevy/sony_raw`, v0.55 (2026-05-24) [33] | Format history, a body-to-version table up to the A7 V, TIFF trees for SRF, SR2, ARW 1.0 and ARW 4.0, ARQ notes, ExifTool dumps of four bodies | GPL-3.0 documentation: read for facts, copy no prose, tables or diagrams; "work in progress", with known errors (section 6.1) |
 | RawDigger, "Detecting posterization in Sony cRAW/ARW2 files" (2014) [34] | The clearest prose description of the cRAW block | Commercial vendor (the LibRaw authors) |
-| H. G. Dietz, "Sony ARW2 compression: artifacts and credible repair", IS&T Electronic Imaging 2016 [35] | An academic analysis of the cRAW mapping and its artefacts | The paper's repair tool, KARWY, states no licence yet |
-| `sony_arw` README in the FLIF raw-tools hosted on MIT's stuff.mit.edu server [35] | Notes from re-encoding cRAW losslessly | Licence GPL-3.0-or-later (MIT here is the hosting university, not the licence); it speaks of 8-bit differences where the patent, dcraw and RawDigger say 7 bits, and 7-bit deltas fit the blocks measured on all 15 cRAW files **[F]** |
+| H. G. Dietz, "Sony ARW2 compression: artifacts and credible repair", IS&T Electronic Imaging 2016 [35] | An academic analysis of the cRAW mapping and its artifacts | The paper's repair tool, KARWY, states no license yet |
+| `sony_arw` README in the FLIF raw-tools hosted on MIT's stuff.mit.edu server [35] | Notes from re-encoding cRAW losslessly | License GPL-3.0-or-later (MIT here is the hosting university, not the license); it speaks of 8-bit differences where the patent, dcraw and RawDigger say 7 bits, and 7-bit deltas fit the blocks measured on all 15 cRAW files **[F]** |
 | SMPTE RDD 34:2015 [13] | Sony's LLVC wavelet codec | See section 5 |
-| Lloyd Chambers (diglloyd) and Jim Kasson blogs [35] | Visible cRAW artefacts, 12-bit and 14-bit modes on various bodies | Opinionated blogs; facts secondary |
+| Lloyd Chambers (diglloyd) and Jim Kasson blogs [35] | Visible cRAW artifacts, 12-bit and 14-bit modes on various bodies | Opinionated blogs; facts secondary |
 | exiv2 Sony tag page [22] | Sony tag names as exiv2 knows them | Licensed as exiv2 |
 | fileformat.com ARW page [35] | Nothing: it calls ARW uncompressed and quotes 1 to 2 GB files | **Unreliable**; do not cite for facts |
 
@@ -428,14 +428,14 @@ was confirmed on samples. These points were not [33]:
 - The status of EP 1841233 A1, the European counterpart of the cRAW patent.
 - Whether PRONOM's DROID tool identifies ARW 4.0 and later files at all; a
   run on raw.pixls.us files 4466, 7361 and 8846 would show it.
-- The provenance policy for per-body values and colour matrices (section
+- The provenance policy for per-body values and color matrices (section
   4.2), to be recorded in an ADR before raw-files decodes raw sensor data.
 
 ## Sources
 
 [1] Sony, Camera Remote SDK page —
     https://support.d-imaging.sony.co.jp/app/sdk/en/index.html **[P]**
-[2] Sony, SDK and Camera Remote Command licence agreements —
+[2] Sony, SDK and Camera Remote Command license agreements —
     https://support.d-imaging.sony.co.jp/app/sdk/licenseagreement_d/en.html ,
     https://support.d-imaging.sony.co.jp/app/cameraremotecommand/licenseagreement/en.html
     **[P]**
@@ -490,18 +490,18 @@ was confirmed on samples. These points were not [33]:
     https://github.com/pedrocr/rawloader **[P]**
 [19] crates.io API, per-crate pages (imagepipe, quickraw, rexiv2,
     exiftool-rs, rawbit, gamut-exif and the crates named on the NEF page) —
-    https://crates.io/api/v1/crates/<name> **[P]** (licences)
+    https://crates.io/api/v1/crates/<name> **[P]** (licenses)
 [20] libopenraw — https://gitlab.freedesktop.org/libopenraw/libopenraw ,
     `src/sony.rs` (main, 2026-10-05) **[P]**
 [21] ExifTool — README
     https://raw.githubusercontent.com/exiftool/exiftool/master/README ;
     home page https://exiftool.org/ ; Sony tags
-    https://exiftool.org/TagNames/Sony.html ; licence metadata
+    https://exiftool.org/TagNames/Sony.html ; license metadata
     https://api.github.com/repos/exiftool/exiftool/license **[P]**
 [22] Exiv2 — LICENSE.txt
     https://raw.githubusercontent.com/Exiv2/exiv2/main/LICENSE.txt ;
     repository https://github.com/Exiv2/exiv2 **[P]**
-[23] GitHub licence API for libexif, darktable and RawTherapee —
+[23] GitHub license API for libexif, darktable and RawTherapee —
     https://api.github.com/repos/<owner>/<repo>/license **[P]**
 [24] metadata-extractor — https://github.com/drewnoakes/metadata-extractor
     (main, 6f037943c0) **[P]**
@@ -515,7 +515,7 @@ was confirmed on samples. These points were not [33]:
     (master, 7477cd2fab, 2026-10-10), its commit history and PRs #1757,
     #2088, #2659 and #4208 **[P]**
 [31] abbradar, arw6_decode, README only —
-    https://github.com/abbradar/arw6_decode **[P]** (no licence)
+    https://github.com/abbradar/arw6_decode **[P]** (no license)
 [32] Google Patents — US 8,023,748 B2
     https://patents.google.com/patent/US20070223824A1/en ; US 8,013,910 B2
     https://patents.google.com/patent/US8013910B2/en **[S]** (read through a

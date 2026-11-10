@@ -24,7 +24,7 @@ its picture, in
 ## Status
 
 These pages were written in October 2026 from the four specifications, in
-the editions listed in [licences-and-references.md](licences-and-references.md),
+the editions listed in [licenses-and-references.md](licenses-and-references.md),
 and checked against eight camera-original JPEGs from Wikimedia Commons, of
 Sony, Nikon and Canon bodies, listed in
 [test-data.md](test-data.md#2-the-sample-files); what they show is tagged
@@ -45,7 +45,7 @@ shots I made with my own Z 9, not from a public file.
 |---|---|
 | [container-and-metadata.md](container-and-metadata.md) | The marker segments, the frame header, the JFIF, Exif and Multi-Picture Format segments, the thumbnail, what lies after the last image, and how raw-files reads a JPEG |
 | [security.md](security.md) | Past vulnerabilities in JPEG and Exif parsers and the checklist that follows from them |
-| [licences-and-references.md](licences-and-references.md) | Where the standards are published and on what terms, the sample files' licences, and the clean-room rule |
+| [licenses-and-references.md](licenses-and-references.md) | Where the standards are published and on what terms, the sample files' licenses, and the clean-room rule |
 | [test-data.md](test-data.md) | The sample files, how they were chosen, the fixtures, and what the samples do not cover |
 | [open-questions.md](open-questions.md) | Decisions to take and facts still to establish |
 
@@ -65,7 +65,7 @@ Claims carry a tag:
   on sample files.
 - **[F]**: measured on a named sample file. Files are cited by body ("the
   ILCE-7M3 file"), and [test-data.md](test-data.md#2-the-sample-files)
-  lists each with its Commons name, licence and SHA-256; the early
+  lists each with its Commons name, license and SHA-256; the early
   Coolpix files checked by hand are listed the same way in
   [test-data.md](test-data.md#6-early-coolpix-files-checked-by-hand).
 
@@ -110,7 +110,7 @@ and record the disagreement.
   and 10, then the NEF and ARW MakerNote pages.
 - **Tests**: [test-data.md](test-data.md).
 
-## Licence hygiene
+## License hygiene
 
 raw-files is MIT OR Apache-2.0 ([ADR002](../../architecture-decisions/adr002-license-mit-or-apache-2.md))
 and a clean-room implementation ([ADR013](../../architecture-decisions/adr013-clean-room-and-third-party-code.md)).

@@ -43,7 +43,7 @@ ever complete for every body. What each gives so far:
   write one, its MakerNote's small JPEG.
 - **Metadata.** What a viewer or a file renamer needs next to the
   preview: capture time, camera make, model, serial number and owner's
-  name (with the maker raw-files recognises in them and, for the bodies
+  name (with the maker raw-files recognizes in them and, for the bodies
   the [notes on camera names](formats/camera-names.md) list, the name
   the body is sold under), who made the picture (artist, copyright
   notice, photographer, editor, title, description and comment), where
@@ -92,7 +92,7 @@ ever complete for every body. What each gives so far:
   the files the format notes count, or on built files for the texts no
   measured file records: the photographer, the editor, the title and
   the camera's owner. **More capture settings** come next, such as the
-  focus mode, stabilisation and the image quality.
+  focus mode, stabilization and the image quality.
 - **Focus points.** Where the camera focused, in coordinates that place
   it on a preview, to judge sharpness where the photographer focused.
   Read from the MakerNote, on Nikon mirrorless bodies, Nikon DSLRs in
@@ -113,7 +113,7 @@ ever complete for every body. What each gives so far:
 - **Raw sensor data.** The sensor data of a raw file, decoded. Not
   started.
 - **Developed image.** The sensor data developed to a linear image,
-  plus the colour model that converts it to a standard colour space.
+  plus the color model that converts it to a standard color space.
   Not started.
 
 The public API is the file handle (`RawFile` and `Options`) with the

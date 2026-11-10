@@ -114,7 +114,7 @@ six SubIFDs, three of which hold no preview:
 | SubIFD0 | 0x014A, first offset | The full-size JPEG, 8256x5504: NewSubfileType 1, Compression 6, 0x0201/0x0202 | **[F]** |
 | SubIFD1 | 0x014A, second offset | The raw data: NewSubfileType 0, Compression 34713, Photometric 32803, 8280x5520, 14 bits, one strip (see [raw-data.md](raw-data.md#where-the-raw-data-lives)) | **[F]** |
 | SubIFD2 | 0x014A, third offset | The second JPEG, 1620x1080: NewSubfileType 1, Compression 6, 0x0201/0x0202 | **[F]** |
-| SubIFD3 | 0x014A, fourth offset | An uncompressed 8-bit grey image, 384x256: NewSubfileType 1, Compression 1, Photometric 1 (BlackIsZero), one sample per pixel, one strip of 98,304 bytes; purpose unknown (section 5) | **[F]** |
+| SubIFD3 | 0x014A, fourth offset | An uncompressed 8-bit gray image, 384x256: NewSubfileType 1, Compression 1, Photometric 1 (BlackIsZero), one sample per pixel, one strip of 98,304 bytes; purpose unknown (section 5) | **[F]** |
 | SubIFD4 | 0x014A, fifth offset | An empty image: NewSubfileType 1, Compression 34713, Photometric 1, width and height 0, BitsPerSample 12, strip offset and length 0 | **[F]** |
 | SubIFD5 | 0x014A, sixth offset | An empty image, as SubIFD4 but with Compression 1 and BitsPerSample 8 | **[F]** |
 | Exif IFD | tag 0x8769 | The MakerNote (tag 0x927C), in the embedded-TIFF-header layout, version 0211 (section 2) | **[F]** |
@@ -130,7 +130,7 @@ components, and is stored in one piece through 0x0201/0x0202 (section 4).
 |---|---|---|---|
 | 0x00FE | NewSubfileType | 0 full resolution; 1 reduced resolution; 2 single page; 4 mask; 8 depth map; 16 enhanced; 0xFFFFFFFF invalid. The Nikon PreviewIFD table also lists 0x10001 ("alternate reduced") [1] | **[P]** [2] |
 | 0x0103 | Compression | 1 uncompressed; 6 old-style JPEG; 7 JPEG; 34713 Nikon NEF compressed. Value 32769 is handled by dcraw as a packed layout with pad bytes [34] | **[P]** [2]; 32769 handling **[P]** [34]; which bodies write it **[I]** |
-| 0x0106 | PhotometricInterpretation | 32803 colour filter array (raw); 2 RGB; 6 YCbCr | 32803 **[P]** [2]; 2 and 6 are standard TIFF **[I]** |
+| 0x0106 | PhotometricInterpretation | 32803 color filter array (raw); 2 RGB; 6 YCbCr | 32803 **[P]** [2]; 2 and 6 are standard TIFF **[I]** |
 | 0x0111, 0x0117 | StripOffsets, StripByteCounts | A JPEG may be stored as a strip | **[P]** [3] |
 | 0x0201, 0x0202 | JPEGInterchangeFormat, ...Length | Offset and length of a JPEG | **[P]** [2] |
 | 0x0112 | Orientation | See section 8 | **[P]** |
@@ -199,7 +199,7 @@ this page. [3] [23] **[P]/[S]**
 | PreviewImage | MakerNote PreviewIFD (tag 0x0011), own 0x0201/0x0202 | 640x424 or smaller; the smallest of the JPEGs. On the Z 9, 640x424 but not the smallest: IFD0's JPEG is smaller | **[S]**; Z 9 **[F]** |
 | ThumbnailTIFF | IFD0 | 160x120 uncompressed RGB, not a JPEG; on the Z 9 a 160x120 JPEG (note 1) | **[S]** [15]; Z 9 **[F]** |
 
-One forum snippet, for a file labelled only "D75" (the body is not
+One forum snippet, for a file labeled only "D75" (the body is not
 identified further), shows exactly this set: JpgFromRaw 6016x4016, OtherImage
 1620x1080, PreviewImage 640x424, ThumbnailTIFF 160x120. [23] **[S]**
 
@@ -292,11 +292,11 @@ any process, not just baseline (section 7).
   1786 but not for the whole family: file 1785's raw is compressed
   (Compression 34713, NEFCompression 1, lossy type 1). **[F]** The D1X's
   MakerNote is headerless and big-endian, like the file (files 1785 and
-  1786), as the D1's is (file 201, which is not in the CI set: its licence
+  1786), as the D1's is (file 201, which is not in the CI set: its license
   is CC BY-NC-SA 4.0). **[F]**
 - **D100.** Its raw data may be uncompressed even though the TIFF
   Compression says compressed. [1] **[P]** Do not use Compression to classify
-  the raw IFD; use the JPEG signature to recognise previews.
+  the raw IFD; use the JPEG signature to recognize previews.
 - **E2 and E3.** LibRaw adjusts its loading for models starting with "E"
   [8] **[P]**; no preview facts were found.
 - **Coolpix NRW** (P6000, P7000 and others). The same TIFF family, with a
@@ -331,12 +331,12 @@ any process, not just baseline (section 7).
   lossless file only (files 5146 to 5148). **[F]**
 - **Z 9 SubIFDs that hold no preview.** After the two JPEG SubIFDs and the
   raw one, the Z 9 has three more (section 1.2). **[F]** SubIFD3 is an
-  uncompressed 8-bit grey image of 384x256 (Photometric 1, one strip of
+  uncompressed 8-bit gray image of 384x256 (Photometric 1, one strip of
   exactly 384 × 256 = 98,304 bytes, which begins with zero bytes); SubIFD4
   and SubIFD5 are empty images whose width, height, strip offset and strip
   length are all 0. What any of the three is for is unknown. A finder that
   follows section 7.1 skips all three: the empty ones have no bytes, and the
-  grey image is not a JPEG (Compression 1, and its first bytes are not an
+  gray image is not a JPEG (Compression 1, and its first bytes are not an
   SOI).
 - **D600 and D3200: a preview length that runs past the image.** On my
   own files, 1,374 from a D600 and 3,568 from a D3200, the largest
@@ -563,7 +563,7 @@ what they show.
 11. Which IFD hosts NikonScanIFD (0x0E10) in a Coolscan file, and whether
     such files can ever contain a JPEG.
 12. Whether the Z 6III follows the 1620x1080 second-JPEG pattern.
-13. What the Z 9's 384x256 uncompressed grey SubIFD and its two empty
+13. What the Z 9's 384x256 uncompressed gray SubIFD and its two empty
     SubIFDs are for (section 5), and whether other Z bodies have them.
 
 ## Sources
@@ -621,4 +621,4 @@ cite were checked by hand on 23 October 2026, by a walk of their Exif
 segment, MakerNote and PreviewIFD written for the purpose; they are not
 samples, and the
 [JPEG test data](../jpeg/test-data.md#6-early-coolpix-files-checked-by-hand)
-lists them with their licences and SHA-256 hashes.
+lists them with their licenses and SHA-256 hashes.

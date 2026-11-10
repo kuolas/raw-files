@@ -22,7 +22,7 @@ use std::path::{Path, PathBuf};
 pub const Z9_DX: &str = "nikon-z9-dx.nef";
 
 /// The Z 9 file shot in 1:1 crop mode, whose focus point the reader moves
-/// into the centred window the cropped picture is.
+/// into the centered window the cropped picture is.
 pub const Z9_1X1: &str = "nikon-z9-1x1.nef";
 
 /// The Z 9 JPEG shot in FX, the camera's full output, at full size, whose
@@ -34,7 +34,7 @@ pub const Z9_FX_JPEG: &str = "nikon-z9-fx.jpg";
 pub const Z9_DX_JPEG: &str = "nikon-z9-dx.jpg";
 
 /// The Z 9 JPEG shot in 16:9 crop mode at the middle size, in portrait
-/// orientation, whose focus point the reader moves into the centred window
+/// orientation, whose focus point the reader moves into the centered window
 /// of the recorded frame that has the JPEG's shape.
 pub const Z9_16X9_JPEG: &str = "nikon-z9-16x9.jpg";
 

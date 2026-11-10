@@ -3,7 +3,7 @@
 //! Where the camera's autofocus aimed.
 //!
 //! A viewer can mark on a preview the place where the camera focused. The
-//! camera records it as the centre of the focus area, the area's size when
+//! camera records it as the center of the focus area, the area's size when
 //! it records one, the frame the two are measured in, which has the
 //! previews' framing, and, when the file says, whether focus was confirmed.
 //! [`Focus`] holds them, with where the point came from, a
@@ -27,7 +27,7 @@ use std::fmt;
 use crate::geometry::{Point, Size};
 
 /// Where the camera's autofocus aimed, as the camera recorded it: the
-/// centre of the focus area, the area's size when the file records one,
+/// center of the focus area, the area's size when the file records one,
 /// the frame the two are measured in, whether the camera confirmed focus,
 /// when the file says, and where the point came from.
 ///
@@ -38,16 +38,16 @@ use crate::geometry::{Point, Size};
 ///
 /// # Coordinates
 ///
-/// The centre is a [`Point`], and the frame and the area are [`Size`]s,
+/// The center is a [`Point`], and the frame and the area are [`Size`]s,
 /// all in pixels and in the orientation of the stored image, like every
 /// size and preview the library reports: a viewer that rotates a preview
 /// to show it upright rotates the point with it.
 ///
-/// The centre is a distance from the frame's left and top edges, so the
+/// The center is a distance from the frame's left and top edges, so the
 /// middle of the frame is at (width / 2, height / 2), as the cameras
 /// record it: a Nikon Coolpix A focusing at the middle of its 4928 × 3264
 /// frame records (2464, 1632), as on the raw.pixls.us sample 2238. An area
-/// `w` × `h` centred at (x, y) spans from x - w / 2 to x + w / 2 across
+/// `w` × `h` centered at (x, y) spans from x - w / 2 to x + w / 2 across
 /// and from y - h / 2 to y + h / 2 down. The values are whole numbers, as
 /// the cameras store them; to place the focus in fractions of the frame,
 /// divide x and the area's width by the [`frame`](Self::frame)'s width,
@@ -106,7 +106,7 @@ use crate::geometry::{Point, Size};
 ///
 /// # Examples
 ///
-/// A Nikon Z 9's record, built a step at a time, the centre and where it
+/// A Nikon Z 9's record, built a step at a time, the center and where it
 /// came from first, then the area and whether focus was confirmed, and
 /// placed on a 1920 × 1280 preview:
 ///
@@ -161,9 +161,9 @@ pub struct Focus {
 }
 
 impl Focus {
-    /// The focus centred at `center`, measured in `frame`, with where it
+    /// The focus centered at `center`, measured in `frame`, with where it
     /// came from, `origin`, no area and nothing said about whether the
-    /// camera confirmed focus; `None` when the centre cannot lie on the
+    /// camera confirmed focus; `None` when the center cannot lie on the
     /// frame.
     /// [`with_size`](Self::with_size) adds the area and
     /// [`with_in_focus`](Self::with_in_focus) whether focus was confirmed.
@@ -179,7 +179,7 @@ impl Focus {
     /// - either side of `frame` is zero;
     /// - `center` lies outside the frame: its x is more than the frame's
     ///   width, or its y more than its height. The edges are on the frame,
-    ///   so a centre at x = width, on its right edge, is accepted.
+    ///   so a center at x = width, on its right edge, is accepted.
     #[must_use]
     pub fn new(frame: Size, center: Point, origin: FocusOrigin) -> Option<Self> {
         center_lies_on(frame, center).then_some(Self {
@@ -191,17 +191,17 @@ impl Focus {
         })
     }
 
-    /// This focus with an area of `size` around its centre, in place of
+    /// This focus with an area of `size` around its center, in place of
     /// any area it had; `None` when the area cannot lie on the frame
-    /// around the centre, which is when:
+    /// around the center, which is when:
     ///
     /// - either side of `size` is zero;
-    /// - the area does not fit inside the frame around its centre. An area
-    ///   `w` pixels wide centred at x spans from x - w / 2 to x + w / 2,
+    /// - the area does not fit inside the frame around its center. An area
+    ///   `w` pixels wide centered at x spans from x - w / 2 to x + w / 2,
     ///   which must lie between 0 and the frame's width; in whole numbers,
     ///   `w` is at most 2 × x and at most 2 × (width - x). The same holds
     ///   down, for the height, y and the frame's height. So an area 10
-    ///   pixels wide fits a centre from x = 5 to x = width - 5, and one 11
+    ///   pixels wide fits a center from x = 5 to x = width - 5, and one 11
     ///   pixels wide, whose half is 5.5, from x = 6 to x = width - 6.
     ///
     /// A focus is `Copy`, and a refused area leaves the one it was offered
@@ -236,20 +236,20 @@ impl Focus {
         }
     }
 
-    /// The size of the frame the centre and the area are measured in. It
+    /// The size of the frame the center and the area are measured in. It
     /// never has a zero side.
     pub fn frame(&self) -> Size {
         self.frame
     }
 
-    /// The centre of the focus area, as its distances from the left and top
+    /// The center of the focus area, as its distances from the left and top
     /// edges of the frame. It always lies within the frame, from 0 to the
     /// frame's width across and from 0 to its height down, the edges
     /// included.
     ///
-    /// A caller reading the pixel at the centre takes the pixel at column x
-    /// and row y; for a centre on the right edge, x = width, that is the
-    /// last column, x - 1, and likewise the last row, y - 1, for a centre
+    /// A caller reading the pixel at the center takes the pixel at column x
+    /// and row y; for a center on the right edge, x = width, that is the
+    /// last column, x - 1, and likewise the last row, y - 1, for a center
     /// on the bottom edge, y = height.
     pub fn center(&self) -> Point {
         self.center
@@ -259,7 +259,7 @@ impl Focus {
     /// records no size.
     ///
     /// It never has a zero side, and it fits inside the frame around the
-    /// centre: across, from x - width / 2 to x + width / 2 lies between 0
+    /// center: across, from x - width / 2 to x + width / 2 lies between 0
     /// and the frame's width, so the width is at most 2 × x and at most
     /// 2 × (frame width - x); down, the same holds for the height, y and
     /// the frame's height.
@@ -287,19 +287,19 @@ impl Focus {
     /// whose frame is `frame` and whose [`in_focus`](Self::in_focus) is
     /// this one's. It keeps this one's [`origin`](Self::origin) too.
     ///
-    /// The centre's x and the area's width are multiplied by the new width
+    /// The center's x and the area's width are multiplied by the new width
     /// over the old, and y and the height by the heights, each rounded to
-    /// the nearest pixel, a half rounding up, so the centre stays within the
+    /// the nearest pixel, a half rounding up, so the center stays within the
     /// new frame, from 0 to its width and height. An area that rounds to
     /// nothing keeps a side of one pixel.
     ///
-    /// Rounding can leave the area too large to fit around the centre.
-    /// The centre is kept where it rounded to, and the area is trimmed on
+    /// Rounding can leave the area too large to fit around the center.
+    /// The center is kept where it rounded to, and the area is trimmed on
     /// that axis, by as little as it takes, to fit by the rule of
-    /// [`with_size`](Self::with_size). A centre on an edge of the frame
+    /// [`with_size`](Self::with_size). A center on an edge of the frame
     /// leaves no room for an area on that axis, and the size becomes
     /// `None`; on a frame only a few pixels across, rounding often puts the
-    /// centre there.
+    /// center there.
     ///
     /// Each call rounds to whole pixels. To place the focus on several
     /// frames, scale it from the focus as read each time, not from one
@@ -310,11 +310,11 @@ impl Focus {
             return None;
         }
         let (center, size) = scaled_point(self.center, self.size, self.frame, frame);
-        // The scaled centre lies on the frame, which has no zero side, so
+        // The scaled center lies on the frame, which has no zero side, so
         // this never gives `None`.
         let mut focus = Self::new(frame, center, self.origin)?;
         if let Some(area) = size {
-            // The scaled area fits around the centre, so `with_size` never
+            // The scaled area fits around the center, so `with_size` never
             // refuses it; were it to, the focus would keep its point
             // without an area.
             focus = focus.with_size(area).unwrap_or(focus);
@@ -391,7 +391,7 @@ impl fmt::Display for FocusOrigin {
 /// the photographer set, in words that fit any maker.
 ///
 /// A viewer labels the points of [`FocusPoints`] with it: one point the
-/// photographer placed, a placed point that its neighbours stood in for
+/// photographer placed, a placed point that its neighbors stood in for
 /// while the subject left it, points the camera chose itself, or a subject
 /// the camera followed across the frame. A maker's code for a mode is named
 /// only once a file shot in a known mode shows what it means, as the codes
@@ -452,20 +452,20 @@ impl fmt::Display for FocusAreaMode {
 }
 
 /// One autofocus point of a picture, as a [`FocusPoints`] holds it: its
-/// number, when the file gives one, the centre of its area, the area's size
+/// number, when the file gives one, the center of its area, the area's size
 /// when the file records one, and whether the camera confirmed focus
 /// there, when the file says.
 ///
 /// The number is the camera's own name for the point, such as one of 1 to
 /// 39 on a body with 39 points; a position the camera measured and wrote
-/// has none. The centre and the size are in pixels of the frame of the
+/// has none. The center and the size are in pixels of the frame of the
 /// list that holds the point, by the rules of [`Focus`]'s coordinates. A
 /// point alone has no frame, so it is checked against one when it is
 /// added to a list, by [`FocusPoints::with_point`], not when it is built.
 ///
 /// Two points are equal when every value is the same as stored. There is
 /// no order, as there is none for [`Focus`], and no `Default`, since a
-/// point has a centre.
+/// point has a center.
 ///
 /// # Examples
 ///
@@ -495,13 +495,13 @@ pub struct FocusPoint {
 }
 
 impl FocusPoint {
-    /// The point centred at `center`, with no number, no area and nothing
+    /// The point centered at `center`, with no number, no area and nothing
     /// said about whether the camera confirmed focus there.
     /// [`with_number`](Self::with_number),
     /// [`with_size`](Self::with_size) and
     /// [`with_in_focus`](Self::with_in_focus) add them.
     ///
-    /// Any centre is accepted: [`FocusPoints::with_point`] checks it
+    /// Any center is accepted: [`FocusPoints::with_point`] checks it
     /// against the list's frame.
     #[must_use]
     pub fn new(center: Point) -> Self {
@@ -523,11 +523,11 @@ impl FocusPoint {
         }
     }
 
-    /// This point with an area of `size` around its centre, in place of any
+    /// This point with an area of `size` around its center, in place of any
     /// it had; [`size`](Self::size) reads it.
     ///
     /// The size is stored as given: [`FocusPoints::with_point`] refuses a
-    /// point whose area has a zero side or does not fit around its centre
+    /// point whose area has a zero side or does not fit around its center
     /// in the list's frame, by the rule of [`Focus::with_size`].
     #[must_use]
     pub fn with_size(self, size: Size) -> Self {
@@ -555,7 +555,7 @@ impl FocusPoint {
         self.number
     }
 
-    /// The centre of the point's area, as its distances from the left and
+    /// The center of the point's area, as its distances from the left and
     /// top edges of the frame of the list that holds it.
     pub fn center(&self) -> Point {
         self.center
@@ -585,8 +585,8 @@ impl FocusPoint {
 /// them with the [`FocusAreaMode`]; a caller that wants only one point reads
 /// [`Metadata::focus`](crate::Metadata::focus) instead. The frame and the
 /// points follow the rules of [`Focus`]: the frame has the framing of the
-/// previews and no zero side, every centre lies on the frame, its edges
-/// included, and every area fits inside the frame around its centre.
+/// previews and no zero side, every center lies on the frame, its edges
+/// included, and every area fits inside the frame around its center.
 /// [`scaled_to`](Self::scaled_to) places the points on a preview. They are
 /// in the order they were added, and the [`origin`](Self::origin) is the
 /// whole list's.
@@ -679,11 +679,11 @@ impl FocusPoints {
     /// This list with `point` added after the others; `None` when the
     /// point cannot lie on the frame, which is when:
     ///
-    /// - its centre lies outside the frame, by the rule of [`Focus::new`]:
+    /// - its center lies outside the frame, by the rule of [`Focus::new`]:
     ///   its x is more than the frame's width, or its y more than its
     ///   height;
     /// - it has an area, and the area has a zero side or does not fit
-    ///   inside the frame around the centre, by the rule of
+    ///   inside the frame around the center, by the rule of
     ///   [`Focus::with_size`].
     ///
     /// The list is taken by value, so a refused point costs the whole list:
@@ -734,8 +734,8 @@ impl FocusPoints {
         self.origin
     }
 
-    /// Every point, in the order they were added. Each centre lies on the
-    /// frame, and each area fits inside it around its centre. It is a
+    /// Every point, in the order they were added. Each center lies on the
+    /// frame, and each area fits inside it around its center. It is a
     /// slice: iterate it to draw every point, or index it with
     /// [`primary_index`](Self::primary_index) to find the primary among
     /// them.
@@ -802,10 +802,10 @@ impl FocusPoints {
     /// same primary, the same area mode and the same origin.
     ///
     /// Each point is scaled as [`Focus::scaled_to`] scales one, by the same
-    /// rounding and the same trimming: the centre lands where it rounds to,
+    /// rounding and the same trimming: the center lands where it rounds to,
     /// on the new frame, an area that rounds to nothing keeps a side of one
-    /// pixel, an area too large to fit around the centre is trimmed to fit,
-    /// and an area that cannot fit at all, around a centre on an edge,
+    /// pixel, an area too large to fit around the center is trimmed to fit,
+    /// and an area that cannot fit at all, around a center on an edge,
     /// becomes `None`. Its number and whether focus was confirmed are kept.
     ///
     /// Each call rounds to whole pixels. To place the points on several
@@ -817,7 +817,7 @@ impl FocusPoints {
         scaled.points.reserve(self.points.len());
         for point in &self.points {
             let (center, size) = scaled_point(point.center, point.size, self.frame, frame);
-            // Every scaled centre lies on the frame, and every area kept
+            // Every scaled center lies on the frame, and every area kept
             // fits around it, so `with_point` refuses none: the `?` never
             // returns.
             scaled = scaled.with_point(FocusPoint {
@@ -852,7 +852,7 @@ impl FocusPoints {
 
 impl From<Focus> for FocusPoints {
     /// A list of one point, `focus`'s: in its frame and with its origin,
-    /// the point with no number, `focus`'s centre, area and whether focus
+    /// the point with no number, `focus`'s center, area and whether focus
     /// was confirmed, as the primary, and no area mode. A single point is
     /// a list of one.
     fn from(focus: Focus) -> Self {
@@ -872,7 +872,7 @@ impl From<Focus> for FocusPoints {
 }
 
 /// One autofocus point of a body's layout, as a [`FocusLayout`] holds it:
-/// the camera's number for the point, the centre of its box and the box's
+/// the camera's number for the point, the center of its box and the box's
 /// size, in pixels of the layout's frame, by the rules of [`Focus`]'s
 /// coordinates.
 ///
@@ -883,13 +883,13 @@ impl From<Focus> for FocusPoints {
 /// frame, so it is checked against one, and against the layout's other
 /// points, by [`FocusLayout::new`], not when it is built.
 ///
-/// Two points are equal when the number, the centre and the size are the
+/// Two points are equal when the number, the center and the size are the
 /// same. There is no order, as there is none for [`FocusPoint`], and no
 /// `Default`, since a point has a number and a box.
 ///
 /// # Examples
 ///
-/// The centre point of the Nikon D600's layout, from the record of the
+/// The center point of the Nikon D600's layout, from the record of the
 /// Nikon D600 in the NEF format notes:
 ///
 /// ```
@@ -909,7 +909,7 @@ pub struct FocusLayoutPoint {
 }
 
 impl FocusLayoutPoint {
-    /// The point numbered `number`, with a box of `size` centred at
+    /// The point numbered `number`, with a box of `size` centered at
     /// `center`, each stored as given: [`FocusLayout::new`] checks them
     /// against the layout's frame and its other points.
     ///
@@ -930,7 +930,7 @@ impl FocusLayoutPoint {
         self.number
     }
 
-    /// The centre of the point's box, as its distances from the left and
+    /// The center of the point's box, as its distances from the left and
     /// top edges of the layout's frame.
     pub fn center(&self) -> Point {
         self.center
@@ -944,7 +944,7 @@ impl FocusLayoutPoint {
 
 /// Where every autofocus point of a body lies on the picture, as
 /// raw-files' table of that body holds it: each point's number, as the
-/// camera writes it, the centre of its box and the box's size, each a
+/// camera writes it, the center of its box and the box's size, each a
 /// [`FocusLayoutPoint`], all in one frame, the body's full-size output. The
 /// table is measured by the project on frames shot with that body and
 /// read in the maker's software, as the
@@ -955,10 +955,10 @@ impl FocusLayoutPoint {
 /// viewfinder, and marks on that grid the points of
 /// [`Metadata::focus_points`](crate::Metadata::focus_points), each found by
 /// its number with [`point`](Self::point). The points are in rising order
-/// of their numbers, each number above 0 and given once. The centres and
-/// the boxes follow the rules of [`Focus`]'s coordinates: every centre
+/// of their numbers, each number above 0 and given once. The centers and
+/// the boxes follow the rules of [`Focus`]'s coordinates: every center
 /// lies on the frame, its edges included, and every box fits inside the
-/// frame around its centre.
+/// frame around its center.
 ///
 /// The frame is the table's, whatever the shot. On a shot in a crop mode,
 /// a point of [`Metadata::focus_points`](crate::Metadata::focus_points)
@@ -973,13 +973,13 @@ impl FocusLayoutPoint {
 /// crop, in a file whose picture shows the whole frame, where a viewer
 /// places each point on a preview by scaling it, as [`Focus::scaled_to`]
 /// scales a focus. On a crop, the picture, and so every preview, has the
-/// framing of the centred window of the table's frame that the crop
+/// framing of the centered window of the table's frame that the crop
 /// keeps, as a JPEG of such a size has the framing of the window that its
 /// size shows, and the window's size is the frame of
 /// [`Metadata::focus_points`](crate::Metadata::focus_points) when the
 /// file gives points placed from the table, whose
 /// [`origin`](FocusPoints::origin) is [`Table`](FocusOrigin::Table). A
-/// point of the layout lies in that window at its centre less half the
+/// point of the layout lies in that window at its center less half the
 /// difference between the two frames, across and down, and one whose box
 /// the window does not hold whole is not on the picture: on the Nikon
 /// D600's DX crop, the window is 3936 × 2624, and point 38, at
@@ -1022,7 +1022,7 @@ impl FocusLayoutPoint {
 /// # Examples
 ///
 /// Three points of the Nikon D600's layout, from the record of the
-/// Nikon D600 in the NEF format notes: the centre point, 1, the top point
+/// Nikon D600 in the NEF format notes: the center point, 1, the top point
 /// of the left one of the three middle columns, 13, and the top point
 /// of the leftmost column, 38, each with its 164 × 164 box, in the
 /// body's 6016 × 4016 frame. [`FocusLayoutPoint::new`] is `const`, so the
@@ -1073,11 +1073,11 @@ impl FocusLayout {
     /// - a point's number is 0, which Nikon writes for no point, or is not
     ///   greater than the number of the point before it, so the points are
     ///   in rising order of their numbers and no number is given twice;
-    /// - a point's centre lies outside the frame, by the rule of
+    /// - a point's center lies outside the frame, by the rule of
     ///   [`Focus::new`]: its x is more than the frame's width, or its y
     ///   more than its height;
     /// - a point's box has a zero side or does not fit inside the frame
-    ///   around its centre, by the rule of [`Focus::with_size`].
+    ///   around its center, by the rule of [`Focus::with_size`].
     ///
     /// The Model is stored as given, and the points are borrowed, in the
     /// order given, not copied, so a layout is `Copy`: a text, a frame and
@@ -1126,8 +1126,8 @@ impl FocusLayout {
     /// Every point, in rising order of their numbers, as given to
     /// [`new`](Self::new). There is at least one; each number is above 0
     /// and above the number before it, so no two points share one; each
-    /// centre lies on the frame, and each box fits inside it around its
-    /// centre.
+    /// center lies on the frame, and each box fits inside it around its
+    /// center.
     pub fn points(&self) -> &'static [FocusLayoutPoint] {
         self.points
     }
@@ -1146,8 +1146,8 @@ impl FocusLayout {
     }
 }
 
-/// Whether a point centred at `center`, with an area of `size` when it has
-/// one, lies on the frame `frame`: whether [`Focus::new`] takes the centre
+/// Whether a point centered at `center`, with an area of `size` when it has
+/// one, lies on the frame `frame`: whether [`Focus::new`] takes the center
 /// and [`Focus::with_size`] the area. It runs the same checks as those
 /// constructors, [`center_lies_on`] and [`area_lies_on`], so that the one
 /// rule a focus is checked by is the one a [`FocusPoints`] and a
@@ -1158,17 +1158,17 @@ pub(crate) fn lies_on(frame: Size, center: Point, size: Option<Size>) -> bool {
     center_lies_on(frame, center) && size.is_none_or(|size| area_lies_on(frame, center, size))
 }
 
-/// Whether a centre at `center` lies on the frame `frame`, the rule of
-/// [`Focus::new`]: the frame has no zero side, and the centre is no
+/// Whether a center at `center` lies on the frame `frame`, the rule of
+/// [`Focus::new`]: the frame has no zero side, and the center is no
 /// further across than the frame's width and no further down than its
-/// height, so that a centre on an edge lies on it.
+/// height, so that a center on an edge lies on it.
 fn center_lies_on(frame: Size, center: Point) -> bool {
     frame.width != 0 && frame.height != 0 && center.x <= frame.width && center.y <= frame.height
 }
 
-/// Whether an area of `size` around a centre at `center` lies on the frame
+/// Whether an area of `size` around a center at `center` lies on the frame
 /// `frame`, the rule of [`Focus::with_size`]: the area has no zero side,
-/// and it fits inside the frame around the centre across and down
+/// and it fits inside the frame around the center across and down
 /// ([`fits`]).
 fn area_lies_on(frame: Size, center: Point, size: Size) -> bool {
     size.width != 0
@@ -1177,7 +1177,7 @@ fn area_lies_on(frame: Size, center: Point, size: Size) -> bool {
         && fits(center.y, size.height, frame.height)
 }
 
-/// Whether an area `side` pixels across, centred at `center`, lies inside
+/// Whether an area `side` pixels across, centered at `center`, lies inside
 /// a frame `frame` pixels across, on one axis: from `center - side / 2` to
 /// `center + side / 2` lies between 0 and `frame`, that is, `side` is at
 /// most `2 * center` and at most `2 * (frame - center)`. Half the side is
@@ -1205,28 +1205,28 @@ pub(crate) fn scale(value: u32, old: u32, new: u32) -> u32 {
     u32::try_from(scaled).unwrap_or(u32::MAX)
 }
 
-/// `side`, shortened as little as it takes for an area centred at `center`
+/// `side`, shortened as little as it takes for an area centered at `center`
 /// to fit a frame `frame` pixels across by the rule of [`fits`]: to no more
-/// than twice the smaller of `center` and `frame - center`, the centre's
-/// distances from the two edges. Zero when the centre is on either edge,
+/// than twice the smaller of `center` and `frame - center`, the center's
+/// distances from the two edges. Zero when the center is on either edge,
 /// at 0 or at `frame`, where no area fits.
 fn trim(side: u32, center: u32, frame: u32) -> u32 {
     let room = 2 * u64::from(center.min(frame.saturating_sub(center)));
     u32::try_from(u64::from(side).min(room)).unwrap_or(u32::MAX)
 }
 
-/// A point centred at `center`, with an area of `size` when it has one,
+/// A point centered at `center`, with an area of `size` when it has one,
 /// measured in the frame `old`, measured in the frame `new` instead, by
 /// the rule of [`Focus::scaled_to`], which [`FocusPoints::scaled_to`]
-/// shares: the centre's x and the area's width multiplied by the new width
+/// shares: the center's x and the area's width multiplied by the new width
 /// over the old, and y and the height by the heights, each rounded to the
 /// nearest pixel, a half rounding up ([`scale`]); an area side that rounds
 /// to nothing kept at one pixel; and the area then trimmed on each axis,
-/// by as little as it takes, to fit around the centre ([`trim`]). The area
-/// is `None` when a side is left with no room, as for a centre on an edge
+/// by as little as it takes, to fit around the center ([`trim`]). The area
+/// is `None` when a side is left with no room, as for a center on an edge
 /// of `new`.
 ///
-/// The centre lies on `new`: the old centre is at most the old side, so
+/// The center lies on `new`: the old center is at most the old side, so
 /// the scaled one is at most the new side, since rounding cannot pass it,
 /// the old side scaling to exactly the new one. An area kept fits around
 /// it by the rule of [`fits`].
@@ -1257,7 +1257,7 @@ mod tests {
     use crate::testing::{assert_names, assert_ordered, point, size, z9_focus, z9_focus_from};
 
     /// The focus a reader builds from these values, a step at a time: the
-    /// centre in the frame, from `origin`, then the area when there is
+    /// center in the frame, from `origin`, then the area when there is
     /// one, then whether focus was confirmed when that is known. `None`
     /// when a step refuses its value.
     fn built_from(
@@ -1296,7 +1296,7 @@ mod tests {
 
     #[test]
     fn a_focus_needs_a_frame_with_no_zero_side() {
-        // Refused even with the centre at 0, which lies on both edges of a
+        // Refused even with the center at 0, which lies on both edges of a
         // zero side.
         assert_eq!(
             Focus::new(size(0, 100), point(0, 0), FocusOrigin::Recorded),
@@ -1362,8 +1362,8 @@ mod tests {
 
     #[test]
     fn a_focus_area_fits_around_its_center_by_half_its_side_rounded_up() {
-        // In a frame of 100, an area of 10 (half 5) fits a centre from 5 to
-        // 95, and one of 11 (half 6) from 6 to 94: (side, centre, accepted).
+        // In a frame of 100, an area of 10 (half 5) fits a center from 5 to
+        // 95, and one of 11 (half 6) from 6 to 94: (side, center, accepted).
         let cases = [
             (10, 5, true),
             (10, 4, false),
@@ -1409,16 +1409,16 @@ mod tests {
         let new = |x, y, area: Option<u32>| {
             built(frame, point(x, y), area.map(|side| size(side, side)), None).is_some()
         };
-        // No `u32` lies past a frame of MAX, so every centre is on it, the
-        // far edges included; no area fits around a centre there.
+        // No `u32` lies past a frame of MAX, so every center is on it, the
+        // far edges included; no area fits around a center there.
         assert!(new(MAX - 1, MAX - 1, None));
         assert!(new(MAX, 0, None));
         assert!(new(0, MAX, None));
         assert!(new(MAX, MAX, None));
         assert!(!new(MAX, MAX, Some(1)));
 
-        // An area of MAX - 1, half 2^31 - 1, fits a centre from 2^31 - 1 to
-        // 2^31; past that, the centre plus the half overflows a u32.
+        // An area of MAX - 1, half 2^31 - 1, fits a center from 2^31 - 1 to
+        // 2^31; past that, the center plus the half overflows a u32.
         let half = (MAX - 1) / 2;
         assert!(new(half, half, Some(MAX - 1)));
         assert!(new(half + 1, half + 1, Some(MAX - 1)));
@@ -1426,7 +1426,7 @@ mod tests {
         assert!(!new(half + 2, half, Some(MAX - 1)));
         assert!(!new(half, half + 2, Some(MAX - 1)));
 
-        // An area of MAX, half 2^31, fits no centre.
+        // An area of MAX, half 2^31, fits no center.
         assert!(!new(half, half, Some(MAX)));
         assert!(!new(half + 1, half + 1, Some(MAX)));
 
@@ -1612,7 +1612,7 @@ mod tests {
 
     #[test]
     fn a_scaled_focus_keeps_its_center_and_trims_its_area_to_fit() {
-        // The area rounds to 3, and the centre to 2, which an area of 3
+        // The area rounds to 3, and the center to 2, which an area of 3
         // (half 2) would overflow in a frame of 3: the area is trimmed to 2.
         let focus = built(size(4, 4), point(2, 2), Some(size(4, 4)), None).unwrap();
         let scaled = focus.scaled_to(size(3, 3)).unwrap();
@@ -1669,10 +1669,10 @@ mod tests {
 
     #[test]
     fn a_scaled_focus_always_satisfies_the_rules_of_its_builders() {
-        // On one axis, every frame from 1 to 12 pixels, every centre on it,
+        // On one axis, every frame from 1 to 12 pixels, every center on it,
         // edges included, no area and every area `with_size` accepts around
         // it, scaled to every frame from 1 to 12 pixels. The other axis
-        // stays a frame of 3 with the centre at 1 and an area of 1.
+        // stays a frame of 3 with the center at 1 and an area of 1.
         let mut checked = 0;
         for vertical in [false, true] {
             let on_axis = |frame: u32, center: u32, area: Option<u32>| {
@@ -1742,7 +1742,7 @@ mod tests {
 
                             // The area, at least 1, trimmed only as far as
                             // it must be to fit, and dropped only for a
-                            // centre on an edge.
+                            // center on an edge.
                             match (area, got_area) {
                                 (None, got) => assert_eq!(got, None, "{context}"),
                                 (Some(side), Some(got)) => {
@@ -1840,7 +1840,7 @@ mod tests {
             })
     }
 
-    /// The point `focus` describes: its centre, its area and whether focus
+    /// The point `focus` describes: its center, its area and whether focus
     /// was confirmed, with no number. Built field by field, apart from the
     /// `From` that turns a focus into a list.
     fn point_of(focus: Focus) -> FocusPoint {
@@ -1875,7 +1875,7 @@ mod tests {
         assert!(list().with_point(FocusPoint::new(point(100, 50))).is_some());
         assert_eq!(list().with_point(FocusPoint::new(point(101, 0))), None);
         assert_eq!(list().with_point(FocusPoint::new(point(0, 51))), None);
-        // An area needs no zero side, and must fit around its centre: at
+        // An area needs no zero side, and must fit around its center: at
         // (50, 25), 100 by 50 just fits, and a pixel more on either side
         // does not.
         let middle = FocusPoint::new(point(50, 25));
@@ -1889,7 +1889,7 @@ mod tests {
         let one = list().with_point(middle).unwrap();
         assert_eq!(one.clone().with_point(FocusPoint::new(point(101, 0))), None);
         assert_eq!(one.points(), [middle]);
-        // Near the largest `u32`, as for a focus: every centre is on the
+        // Near the largest `u32`, as for a focus: every center is on the
         // frame, and no area fits around one on its far edges.
         const MAX: u32 = u32::MAX;
         let largest = FocusPoints::new(size(MAX, MAX), FocusOrigin::Recorded).unwrap();
@@ -1900,9 +1900,9 @@ mod tests {
 
     #[test]
     fn a_point_is_added_exactly_when_a_focus_of_it_could_be_built() {
-        // On one axis, every frame from 1 to 8 pixels, every centre from 0
+        // On one axis, every frame from 1 to 8 pixels, every center from 0
         // to one past the frame, and no area or every area from 0 to two
-        // more than the frame; the other axis a frame of 3, the centre at
+        // more than the frame; the other axis a frame of 3, the center at
         // 1 and an area of 1. A point is added exactly when `Focus::new`
         // and `Focus::with_size` accept the same values.
         let (mut checked, mut added) = (0, 0);
@@ -2141,8 +2141,8 @@ mod tests {
     #[test]
     fn a_list_scales_each_point_as_a_focus_is_scaled() {
         // Across, every frame from 1 to 8 pixels and every focus that can be
-        // built on it, every centre and no area or every area that fits,
-        // down a frame of 3 with the centre at 1 and an area of 1. Each is
+        // built on it, every center and no area or every area that fits,
+        // down a frame of 3 with the center at 1 and an area of 1. Each is
         // the primary of a list beside a numbered point without an area,
         // and the list is scaled to frames from 1 by 8 to 8 by 1: each of
         // its points is the focus it describes, scaled.
@@ -2324,17 +2324,17 @@ mod tests {
         height: 164,
     };
 
-    /// The D600's point `number`, centred at (x, y), with the D600's box.
+    /// The D600's point `number`, centered at (x, y), with the D600's box.
     const fn d600(number: u16, x: u32, y: u32) -> FocusLayoutPoint {
         FocusLayoutPoint::new(number, Point { x, y }, D600_BOX)
     }
 
-    /// Point 1, centred at (x, y), with a box `width` by `height`.
+    /// Point 1, centered at (x, y), with a box `width` by `height`.
     const fn first(x: u32, y: u32, width: u32, height: u32) -> FocusLayoutPoint {
         FocusLayoutPoint::new(1, Point { x, y }, Size { width, height })
     }
 
-    /// Three points of the D600's layout, from the same record: the centre
+    /// Three points of the D600's layout, from the same record: the center
     /// point, 1; the top point of the left one of the three middle columns,
     /// 13; and the top point of the leftmost column, 38.
     static D600_THREE: [FocusLayoutPoint; 3] = [
@@ -2437,8 +2437,8 @@ mod tests {
 
     #[test]
     fn a_layout_point_lies_inside_the_frame_by_the_rules_of_a_focus() {
-        // In a frame of 100 by 50: a centre off the frame, a box with a
-        // zero side, and a box that does not fit around its centre, each
+        // In a frame of 100 by 50: a center off the frame, a box with a
+        // zero side, and a box that does not fit around its center, each
         // refused; at (50, 25), a box of 100 by 50 just fits, and one a
         // pixel larger either way does not.
         static OFF_ACROSS: [FocusLayoutPoint; 1] = [first(101, 25, 2, 2)];
@@ -2470,9 +2470,9 @@ mod tests {
         ];
         assert_eq!(FocusLayout::new("NIKON D600", D600_FRAME, &LAST_OFF), None);
 
-        // On one axis, every frame from 1 to 8 pixels, every centre from 0
+        // On one axis, every frame from 1 to 8 pixels, every center from 0
         // to one past the frame and every box from 0 to two more than the
-        // frame; the other axis a frame of 3, the centre at 1 and a box of
+        // frame; the other axis a frame of 3, the center at 1 and a box of
         // 2. A one-point layout is built exactly when `Focus::new` and
         // `Focus::with_size` accept the same values: the edges are on the
         // frame, and a box fits by half its side rounded up. Each point is
@@ -2552,7 +2552,7 @@ mod tests {
         // Every layout of the first one to seven of these points, so that
         // the point asked for is first, last and between, in layouts of
         // an odd and an even count: each of its points is found, with its
-        // own centre, and no other number is, those before the first,
+        // own center, and no other number is, those before the first,
         // between two points and past the last among them.
         static SPREAD: [FocusLayoutPoint; 7] = [
             d600(1, 3_008, 2_007),
@@ -2595,7 +2595,7 @@ mod tests {
         assert_ne!(AGAIN.as_ptr(), D600_THREE.as_ptr());
         assert_eq!(base, again);
 
-        // One point's centre moved by a pixel, its number changed, its box
+        // One point's center moved by a pixel, its number changed, its box
         // changed; one point fewer.
         static MOVED: [FocusLayoutPoint; 3] = [
             d600(1, 3_008, 2_007),

@@ -314,23 +314,23 @@ impl Metadata {
     /// How the camera was set for the picture (see [`CameraSettings`]),
     /// for a viewer's information panel beside the exposure: the white
     /// balance, the exposure program, the metering mode, the flash, the
-    /// shutter, the image area, the raw image size and the colour space.
+    /// shutter, the image area, the raw image size and the color space.
     /// Always present, though each of its values is optional: `None` when
     /// the file does not record it or records it in a way that cannot be
     /// read, a damaged value costing only itself.
     ///
     /// NEF, ARW and JPEG files give the settings that their standard Exif
     /// tags record: the exposure program, the metering mode, the flash, the
-    /// white balance mode and the colour space. NEF files and the JPEGs of
+    /// white balance mode and the color space. NEF files and the JPEGs of
     /// Nikon cameras give, from Nikon's MakerNote, the white balance
-    /// setting, finer than Exif's, in place of Exif's, the colour
+    /// setting, finer than Exif's, in place of Exif's, the color
     /// temperature, the fine-tuning, the shutter, the image area, in a NEF
-    /// file alone the raw image size, and the colour space where Exif
+    /// file alone the raw image size, and the color space where Exif
     /// records none, as in every NEF file checked; Nikon records no
     /// electronic front curtain setting. ARW files and the JPEGs of Sony
     /// cameras give, from Sony's MakerNote, the white balance setting in
     /// place of Exif's, the fine-tuning, the electronic front curtain
-    /// setting and the colour temperature of a chosen colour temperature
+    /// setting and the color temperature of a chosen color temperature
     /// or a custom white balance, and no shutter, image area or raw image
     /// size, which Sony does not record in a form raw-files reads. Each
     /// getter of [`CameraSettings`] says where its value comes from. A
@@ -440,7 +440,7 @@ impl Metadata {
     /// crop-mode JPEG, and an export of a D600 JPEG cut or scaled to
     /// exactly the Medium size, which is read as a Medium JPEG: their
     /// points may be misplaced, by far on a cut. A D600 Medium JPEG,
-    /// 4512x3008, whose picture shows the 6010x4006 window centred in the
+    /// 4512x3008, whose picture shows the 6010x4006 window centered in the
     /// 6016x4016 frame rather than the whole frame, gives the point placed
     /// from the table in that window, its frame 6010x4006, which has the
     /// JPEG's shape; a Small JPEG, 3008x2008, half the frame, gives it in
@@ -477,7 +477,7 @@ impl Metadata {
 
     /// The autofocus points the camera used for the picture, in one frame
     /// (see [`FocusPoints`]): each with its number when the file gives one,
-    /// the centre of its area, the area's size when recorded, and whether
+    /// the center of its area, the area's size when recorded, and whether
     /// the camera confirmed focus there when the file says; which of them
     /// is the primary, the one [`focus`](Self::focus) reports; the area
     /// mode, when a checked file names its code; and where the points came
@@ -493,7 +493,7 @@ impl Metadata {
     /// points, on a shot through a DSLR's viewfinder, the list is every
     /// point of the table that the file's record of the points used, one
     /// bit per point, names, and the primary, whether that record names it
-    /// or not, in number order: each with its number, the table's centre
+    /// or not, in number order: each with its number, the table's center
     /// and box, and `None` for [`in_focus`](crate::FocusPoint::in_focus),
     /// with the origin [`Table`](crate::FocusOrigin::Table). When the file
     /// writes no such record, or one that names no point of the table, the
@@ -547,7 +547,7 @@ impl Metadata {
     }
 
     /// The layout of the body's autofocus points (see [`FocusLayout`]):
-    /// every point the body has, each with its number, the centre of its
+    /// every point the body has, each with its number, the center of its
     /// box and the box's size, in the frame of raw-files' table of that
     /// body, the body's full-size output.
     ///
@@ -815,7 +815,7 @@ impl Exposure {
         self.f_number
     }
 
-    /// The focal length the picture was taken at, in millimetres, as
+    /// The focal length the picture was taken at, in millimeters, as
     /// stored: the lens's actual focal length, not its 35 mm equivalent,
     /// which [`focal_length_in_35mm_film`](Self::focal_length_in_35mm_film)
     /// gives.
@@ -827,7 +827,7 @@ impl Exposure {
     }
 
     /// The focal length in 35 mm terms the camera recorded, in whole
-    /// millimetres: the focal length that would give the same field of
+    /// millimeters: the focal length that would give the same field of
     /// view on a 35 mm film (full-frame) camera, so that pictures from
     /// bodies with different sensor sizes compare, such as 75 for a 50 mm
     /// lens on a Nikon DX body. It is Exif's FocalLengthIn35mmFilm.
@@ -868,7 +868,7 @@ impl Exposure {
         self
     }
 
-    /// Sets the focal length, in millimetres, in place of any set before;
+    /// Sets the focal length, in millimeters, in place of any set before;
     /// [`focal_length`](Self::focal_length) reads it.
     #[must_use]
     pub fn with_focal_length(mut self, millimeters: Rational) -> Self {
@@ -876,7 +876,7 @@ impl Exposure {
         self
     }
 
-    /// Sets the focal length in 35 mm terms, in whole millimetres, in place
+    /// Sets the focal length in 35 mm terms, in whole millimeters, in place
     /// of any set before;
     /// [`focal_length_in_35mm_film`](Self::focal_length_in_35mm_film) reads
     /// it.
@@ -904,7 +904,7 @@ impl Exposure {
 ///
 /// Every value is `None` when the file does not record it or records it in
 /// a way that cannot be read; a file that describes no lens gives a lens
-/// with every value `None`. Focal lengths are in millimetres, the lens's
+/// with every value `None`. Focal lengths are in millimeters, the lens's
 /// actual ones, not their 35 mm equivalents; apertures are f-numbers. Both
 /// are fractions as stored, and a zero, which a file writes for a value it
 /// does not know, is read as `None`, unless the file is a Nikon one whose
@@ -1031,7 +1031,7 @@ impl Lens {
         self.serial_number.as_deref()
     }
 
-    /// The shortest focal length of the lens, in millimetres, as stored,
+    /// The shortest focal length of the lens, in millimeters, as stored,
     /// such as 140/10 for 14 mm.
     ///
     /// A recorded 0 means the camera did not know it, and the readers give
@@ -1042,7 +1042,7 @@ impl Lens {
         self.min_focal_length
     }
 
-    /// The longest focal length of the lens, in millimetres, as stored;
+    /// The longest focal length of the lens, in millimeters, as stored;
     /// equal to the shortest on a prime lens.
     ///
     /// A recorded 0 means the camera did not know it, and the readers give
@@ -1101,7 +1101,7 @@ impl Lens {
         self
     }
 
-    /// Sets the shortest focal length of the lens, in millimetres, in place
+    /// Sets the shortest focal length of the lens, in millimeters, in place
     /// of any set before; [`min_focal_length`](Self::min_focal_length)
     /// reads it.
     #[must_use]
@@ -1110,7 +1110,7 @@ impl Lens {
         self
     }
 
-    /// Sets the longest focal length of the lens, in millimetres, in place
+    /// Sets the longest focal length of the lens, in millimeters, in place
     /// of any set before; [`max_focal_length`](Self::max_focal_length)
     /// reads it.
     #[must_use]
@@ -1546,18 +1546,18 @@ mod tests {
     }
 
     /// Two points of the Nikon D600's layout, as the record of my
-    /// D600 in the NEF format notes gives them: the centre point, 1,
+    /// D600 in the NEF format notes gives them: the center point, 1,
     /// and the top point of the leftmost column, 38.
     static D600_POINTS: [FocusLayoutPoint; 2] = [
         FocusLayoutPoint::new(1, D600_CENTER, D600_BOX),
         FocusLayoutPoint::new(38, Point { x: 1_812, y: 1_705 }, D600_BOX),
     ];
 
-    /// The D600's centre point alone.
+    /// The D600's center point alone.
     static D600_CENTER_POINT: [FocusLayoutPoint; 1] =
         [FocusLayoutPoint::new(1, D600_CENTER, D600_BOX)];
 
-    /// Where the D600's centre point lies, and the box of every point.
+    /// Where the D600's center point lies, and the box of every point.
     const D600_CENTER: Point = Point { x: 3_008, y: 2_007 };
     const D600_BOX: Size = Size {
         width: 164,
@@ -1570,7 +1570,7 @@ mod tests {
         FocusLayout::new("NIKON D600", size(6_016, 4_016), &D600_POINTS).unwrap()
     }
 
-    /// A made-up layout of the D600's centre point alone: unlike
+    /// A made-up layout of the D600's center point alone: unlike
     /// [`d600_layout`].
     fn d600_center_layout() -> FocusLayout {
         FocusLayout::new("NIKON D600", size(6_016, 4_016), &D600_CENTER_POINT).unwrap()

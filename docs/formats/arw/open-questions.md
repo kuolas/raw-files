@@ -15,9 +15,9 @@ that would answer Part 2.
 1. **Provenance of data a decoder must bring itself.** Raw decoding needs
    some data that the file does not carry
    ([raw-data.md](raw-data.md),
-   [licences-and-references.md](licences-and-references.md)). Most of it
+   [licenses-and-references.md](licenses-and-references.md)). Most of it
    is published in copyleft projects and in dcraw, whose header frees all
-   its code outside the Foveon functions for all uses but whose licence is
+   its code outside the Foveon functions for all uses but whose license is
    still described as informal. That is an input to the decision, not legal
    advice. Unlike NEF, most items reduce to a rule or a formula:
    - the ARW1 prefix code, published as an 18-entry table in dcraw, LibRaw
@@ -30,14 +30,14 @@ that would answer Part 2.
    - per-body crops, black and white level fallbacks and CFA patterns for
      older bodies without crop tags, which dcraw and LibRaw trim by raw
      width and rawspeed lists per body;
-   - colour matrices: every decoder uses Adobe-derived per-body matrices,
+   - color matrices: every decoder uses Adobe-derived per-body matrices,
      and the meaning of Sony's own 0x7800 is unknown;
    - YCbCr to RGB coefficients for the M and S sizes, if raw-files ever
      converts them (LibRaw uses BT.601, a public standard);
-   - **the ARW 6.0 delinearisation curve, the hard case**: 4096 entries,
+   - **the ARW 6.0 delinearization curve, the hard case**: 4096 entries,
      not in the file, construction unknown, and published only as tables
      extracted from existing decoders (LibRaw's embedded table, under its
-     own licence, and an unlicensed write-up's).
+     own license, and an unlicensed write-up's).
 
    The tables of autofocus points are settled (Part 5). The options for
    the rest are, as for NEF:
@@ -58,10 +58,10 @@ that would answer Part 2.
    ([raw-data.md](raw-data.md), [security.md](security.md)). Lifting the
    refusal needs two answers: where the curve comes from (decision 1), and
    the patent position. The stream's names suggest Sony's LLVC wavelet
-   codec, disclosed as SMPTE RDD 34:2015, which directs IP enquiries to
+   codec, disclosed as SMPTE RDD 34:2015, which directs IP inquiries to
    Sony; that link is an inference, and the JPEG XS patent pool may be
    relevant if the codec uses JPEG XS techniques
-   ([licences-and-references.md](licences-and-references.md)). These are
+   ([licenses-and-references.md](licenses-and-references.md)). These are
    legal questions, not engineering ones, and the same posture as NEF
    HE/HE\*.
 3. **Decryption and anti-circumvention.** Full metadata meets this
@@ -72,7 +72,7 @@ that would answer Part 2.
    as circumventing a technological measure under DMCA-like laws? The
    question is untested; open decoders have done it for about twenty
    years and no action against them was found
-   ([licences-and-references.md](licences-and-references.md),
+   ([licenses-and-references.md](licenses-and-references.md),
    [raw-data.md](raw-data.md)). Previews and the metadata raw-files reads
    need no decryption.
 4. **Scope for SRF, ARQ and the A100.** The one preview walk covers all of
@@ -80,7 +80,7 @@ that would answer Part 2.
    ([raw-data.md](raw-data.md),
    [makernote-and-metadata.md](makernote-and-metadata.md)):
    - SRF serves two bodies from 2003–2004, encrypts the image, has a
-     four-colour CFA according to the decoders, and its SRF2 to SRF6
+     four-color CFA according to the decoders, and its SRF2 to SRF6
      IFDs were not located;
    - ARQ is a desktop-software product of hundreds of megabytes (a 16-shot
      file is about 2 GB);
@@ -92,7 +92,7 @@ that would answer Part 2.
    suggest SRF and ARQ later, and the MRW block and SRF key chain behind
    "unsupported" until there is demand.
 5. **Strictness and output where implementations disagree.** One
-   behaviour should be picked and tested for each
+   behavior should be picked and tested for each
    ([raw-data.md](raw-data.md),
    [makernote-and-metadata.md](makernote-and-metadata.md)):
    - **White level.** SR2SubIFD 0x787F says 15360 and the plain DNG tag
@@ -114,8 +114,8 @@ that would answer Part 2.
    - **M/S output form.** A three-channel YCbCr image flagged as
      white-balanced, or an RGB conversion (LibRaw and rawler convert, with
      different black levels)? The pages suggest YCbCr with any conversion
-     labelled approximate.
-   - **Black-level channel order** on non-RGGB bodies: fixed colour order
+     labeled approximate.
+   - **Black-level channel order** on non-RGGB bodies: fixed color order
      (LibRaw) or CFA position (rawspeed, rawler). They differ only on the
      R1.
    - **Corrupt data.** Decode what can be decoded and count bad blocks and
@@ -188,7 +188,7 @@ that would answer Part 2.
   ([container-and-previews.md](container-and-previews.md)).
 - **Format identification.** Whether PRONOM's DROID tool identifies ARW 4.0
   and later files at all; a run on files 4466, 7361 and 8846 would show it
-  ([licences-and-references.md](licences-and-references.md)).
+  ([licenses-and-references.md](licenses-and-references.md)).
 
 ### MakerNote and metadata
 
@@ -278,12 +278,12 @@ that would answer Part 2.
   (ILCE-1 continuous or silent shutter) ([raw-data.md](raw-data.md)).
 - **ARW 6.0 stream.** The meaning of the tile-stream header bytes 4 to 7
   and 12 to 15 on the ILCE-7M5; the ILCE-7RM6's tile layout (2×2?) and
-  stream tag (`0000`?), from dnglab's RawDB files after a licence check;
-  whether Compressed and Compressed (HQ) differ only in quantiser choice
+  stream tag (`0000`?), from dnglab's RawDB files after a license check;
+  whether Compressed and Compressed (HQ) differ only in quantizer choice
   ([raw-data.md](raw-data.md), [test-data.md](test-data.md)).
 - **ColorMatrix 0x7800.** What it maps; compare with Adobe's matrix for the
   ILCE-9 (file 1542) ([raw-data.md](raw-data.md)).
-- **The ILCE-7 file.** Its bit depth and codec, since its catalogue label
+- **The ILCE-7 file.** Its bit depth and codec, since its catalog label
   and file name disagree ([test-data.md](test-data.md)).
 
 ### Security
@@ -304,12 +304,12 @@ listed under the pages above.
 - **File 8845** (ILCE-7M5, full frame, lossless). Whether it has the same
   structure as the APS-C lossless file 8848, so it can join the minimal set
   ([test-data.md](test-data.md)).
-- **The catalogue's licence field.** Whether it can change after upload;
+- **The catalog's license field.** Whether it can change after upload;
   compare the `set=noncc0` view at intervals ([test-data.md](test-data.md)).
 - **Stable ids and URLs.** Whether raw.pixls.us ids and download URLs stay
-  put; compare the catalogue's URLs with `filelist.sha256` paths at
+  put; compare the catalog's URLs with `filelist.sha256` paths at
   intervals ([test-data.md](test-data.md)).
-- **dnglab's RawDB files.** The licence of its ILCE-7RM6 and DSC-RX10M5
+- **dnglab's RawDB files.** The license of its ILCE-7RM6 and DSC-RX10M5
   files, the only public source for the ILCE-7RM6's ARW 6.0 layout
   ([test-data.md](test-data.md)).
 
@@ -317,13 +317,13 @@ listed under the pages above.
 
 - **Sony.** No public specification or decoding SDK was found. The Camera
   Remote SDK is for remote control, is distributed on application under a
-  licence that forbids reverse engineering, and describes no file format;
-  it was not used ([licences-and-references.md](licences-and-references.md)).
+  license that forbids reverse engineering, and describes no file format;
+  it was not used ([licenses-and-references.md](licenses-and-references.md)).
 - **Not reachable.** The ExifTool forum was unavailable; claims from it
   rest on search extracts and are tagged [S]. dcraw's original site did not
   respond, so every page read dcraw 9.28 from a mirror not verified against
   the original ([security.md](security.md)).
-  The per-file licences in dnglab's RawDB could not be read, because the site
+  The per-file licenses in dnglab's RawDB could not be read, because the site
   is a JavaScript application ([test-data.md](test-data.md)).
 - **Read only through search extracts or summaries.** Sony's support
   article on 12-bit modes and its Pixel Shift Multi Shooting and RAW Driver
@@ -334,14 +334,14 @@ listed under the pages above.
   ([security.md](security.md)); the LibRaw 0.18.2 release tarball, which
   may differ from its git tag ([security.md](security.md)); the status of
   EP 1841233, the European counterpart of the cRAW patent
-  ([licences-and-references.md](licences-and-references.md)).
-- **Read in part, deliberately.** arw6_decode has no licence, so only its
+  ([licenses-and-references.md](licenses-and-references.md)).
+- **Read in part, deliberately.** arw6_decode has no license, so only its
   README was read; LibRaw's ARW 6.0 decoder was read for its header,
   identifiers and the curve's shape only; SMPTE RDD 34 was read for pages 1
-  to 8 ([licences-and-references.md](licences-and-references.md),
+  to 8 ([licenses-and-references.md](licenses-and-references.md),
   [raw-data.md](raw-data.md)).
 - **Paid standards.** ISO 12234-2 (TIFF/EP) and ISO/IEC 21122 (JPEG XS)
-  were not read ([licences-and-references.md](licences-and-references.md)).
+  were not read ([licenses-and-references.md](licenses-and-references.md)).
 - **Samples not used.** The nine non-CC0 Sony files on raw.pixls.us,
   including the only DSLR-A850 file, were not downloaded, and bodies
   absent from the site (ILCE-7RM6, DSC-V3, the Hasselblad Stellar, HV and

@@ -1,7 +1,7 @@
-# NEF: licences and references
+# NEF: licenses and references
 
 Nikon publishes no open specification for NEF, and almost every mature
-implementation is under a copyleft licence. This page records what we may
+implementation is under a copyleft license. This page records what we may
 learn from, what we may reuse, and where the format is documented. Back to
 [the NEF overview](README.md).
 
@@ -38,16 +38,16 @@ published by community projects (section 5) and read from sample files.
 |---|---|---|---|
 | TIFF 6.0 (Adobe, 1992) | Unchanged since 1992 | Free PDF mirrors; copying the document commercially needs Adobe's permission, which does not restrict implementing the format [5] | S |
 | TIFF/EP, ISO 12234-2:2001 | NEF's nominal base; edition 1, confirmed in 2026 per the ISO listing | Paid (the ISO store charges CHF 204); only the front matter is public [6] | S |
-| Exif, CIPA DC-008 | 2.31 (2016), 2.32 (2019), 3.0 (2023, adds a UTF-8 type), DC-008-2024; current is **Exif 3.1** (DC-008-Translation-2026), published 2026-01-30 [7][8] | Free download from CIPA, which states no licence terms | P (3.1), S (earlier) |
-| JPEG, ITU-T T.81 | Covers baseline and lossless processes | Offered by the ITU only for a fee; the W3C hosts the CCITT publication of 1992 (see the [JPEG notes](../jpeg/licences-and-references.md#1-the-standards)) [9] | P |
+| Exif, CIPA DC-008 | 2.31 (2016), 2.32 (2019), 3.0 (2023, adds a UTF-8 type), DC-008-2024; current is **Exif 3.1** (DC-008-Translation-2026), published 2026-01-30 [7][8] | Free download from CIPA, which states no license terms | P (3.1), S (earlier) |
+| JPEG, ITU-T T.81 | Covers baseline and lossless processes | Offered by the ITU only for a fee; the W3C hosts the CCITT publication of 1992 (see the [JPEG notes](../jpeg/licenses-and-references.md#1-the-standards)) [9] | P |
 | DNG 1.7.1.0 (Adobe, September 2023) | Not used by NEF itself | Free PDF and SDK [10] | P |
 
-DNG carries a patent licence: royalty-free and worldwide for compliant
+DNG carries a patent license: royalty-free and worldwide for compliant
 readers and writers, with a required notice in distributed implementations,
 revocable if the licensee sues Adobe over DNG. [10] **[P]** The notice only
 matters if raw-files ever reads or writes DNG (the roadmap lists DNG
 first among the formats still to come); it does not apply to plain
-NEF. The page does not state the licence of the DNG SDK source, so
+NEF. The page does not state the license of the DNG SDK source, so
 raw-files would not copy from it without checking.
 
 The standards give the container (IFD structure, entry types, SubIFDs, the
@@ -56,13 +56,13 @@ contents or the raw data encoding.
 
 ## 3. Implementations
 
-"Dependency candidate" means the licence is compatible with the raw-files
+"Dependency candidate" means the license is compatible with the raw-files
 `MIT OR Apache-2.0` (see ADR002) and the project is worth evaluating.
 "Read only, no copying" means we may study it to understand facts about the
 format but copy neither code nor tables. SPDX identifiers are as reported by
 each project's repository or by crates.io.
 
-| Project | Language | Licence (SPDX) | NEF coverage | Reuse status |
+| Project | Language | License (SPDX) | NEF coverage | Reuse status |
 |---|---|---|---|---|
 | dcraw | C | Custom, no SPDX: restricted Foveon code requires source release or GPL-2.0-or-later; ambiguous for the whole file [11][12] | Decode, lossy and lossless; no HE | Read only, no copying |
 | LibRaw | C++ | LGPL-2.1-only OR CDDL-1.0 [13] | Full decode, previews, metadata; HE/HE* not decoded | Read only, no copying |
@@ -83,11 +83,11 @@ each project's repository or by crates.io.
 | `little_exif` | Rust | MIT OR Apache-2.0 (version entry; crate-level record empty) [21] | Exif read and write; NEF not listed | Dependency candidate, little relevance |
 | rawkit (Graphite) | Rust | MIT OR Apache-2.0 [21] | Sony ARW only; no NEF | Permissive, but nothing to reuse for NEF |
 
-All licences above were read from the GitHub API, the crates.io API or the
-repository's licence file in October 2026. **[P]** except where noted. The
+All licenses above were read from the GitHub API, the crates.io API or the
+repository's license file in October 2026. **[P]** except where noted. The
 `image` crate is `MIT OR Apache-2.0` but does not decode NEF.
 
-Licence identifiers are as reported by each project's GitHub licence
+License identifiers are as reported by each project's GitHub license
 metadata or LICENSE file. Whether the GPL and LGPL entries are "-only" or
 "-or-later" was not checked against source headers (rawspeed's source
 headers are reported as LGPL-2.1-or-later).
@@ -95,21 +95,21 @@ headers are reported as LGPL-2.1-or-later).
 ### 3.1 Why "read only" is the rule
 
 - ADR002 accepts only dependencies compatible with both raw-files
-  licences; a GPL, LGPL or MPL dependency is excluded.
+  licenses; a GPL, LGPL or MPL dependency is excluded.
 - Translating LGPL code into Rust is a derivative work, so it does not
-  escape the licence.
+  escape the license.
 - ExifTool's prose and the selection and arrangement of its tables are
   expression; individual tag IDs and value meanings are facts (see section
   4.1). The crate `revelo-exiftool-tables` (GPL-1.0-or-later OR
-  Artistic-1.0-Perl) shows how that licence spreads to anything derived from
+  Artistic-1.0-Perl) shows how that license spreads to anything derived from
   the tables as a whole. [17] **[P]**
 
 ### 3.2 Small Rust crates that touch NEF
 
 Crates.io has several small crates for NEF thumbnails or metadata. Their
-licences are permissive but their maturity is low and unvetted. [17]
+licenses are permissive but their maturity is low and unvetted. [17]
 
-| Crate | Licence | Note |
+| Crate | License | Note |
 |---|---|---|
 | `rawlib` 0.7.1 | MIT | RAW thumbnail extractor; very few downloads |
 | `jpgfromraw-lib` 0.7.2 | MIT | Embedded JPEG extraction |
@@ -120,7 +120,7 @@ licences are permissive but their maturity is low and unvetted. [17]
 | `zenraw` | AGPL-3.0 or commercial | Wraps other decoders; read only |
 | `rsraw` / `rsraw-sys` | LibRaw bindings | C FFI, not pure Rust; excluded |
 
-Licence information is **[P]**; maturity is **[I]**.
+License information is **[P]**; maturity is **[I]**.
 
 ### 3.3 Release facts worth knowing
 
@@ -169,7 +169,7 @@ copyleft projects and in dcraw. dcraw carries both the Huffman data
 (`nikon_tree`) and the cipher tables (`xlat`) outside its single restricted
 (Foveon) block, and its header states that all other code "remains free for
 all uses". [11] **[P]** That sits beside the earlier description of dcraw's
-licence as ambiguous for the whole file, and is an input to the decision
+license as ambiguous for the whole file, and is an input to the decision
 below, not legal advice. The third kind lives in copyleft projects.
 
 | Data | Where it is published | Why it is awkward |
@@ -204,7 +204,7 @@ reads from the plain tags need neither. [I]
 
 HE and HE* are built on a licensed third-party codec (intoPIX TicoRAW, a
 JPEG XS variant) and JPEG XS has a royalty-bearing patent pool. [28][29]
-**[S]** Implementing a decoder may need a patent licence even though the
+**[S]** Implementing a decoder may need a patent license even though the
 copyright position is clean. When raw-files decodes raw data, it is to detect
 these files and return a clear unsupported error; see
 [security.md](security.md). Any future work on them needs legal advice first.
@@ -218,7 +218,7 @@ cite them; do not copy their tables or prose.
 |---|---|---|
 | ExifTool Nikon tag pages [22] | Tag names, types, value meanings, sub-block layouts, compression value names | Licensed as ExifTool; tag text is expression |
 | exiv2 MakerNote page [23] | The Nikon MakerNote layouts and offset bases | Licensed as exiv2 |
-| Laurent Clévy, "Nikon NEF" notes (version 0.31, 2009) [24] | The container, the 0x0096 linearisation block, early bodies; the usual community reference | Old; reachable over plain HTTP only |
+| Laurent Clévy, "Nikon NEF" notes (version 0.31, 2009) [24] | The container, the 0x0096 linearization block, early bodies; the usual community reference | Old; reachable over plain HTTP only |
 | Leon Plickat, "Decoding Nikon NEF Files" [25] | A readable walkthrough of the lossless scheme and the curve | Does not map version bytes to bodies |
 | Bill Claff, Photons to Photos, NEF compression [26] | Per-body compression modes and curve sizes | Does not give version bytes |
 | RawDigger, "Nikon small raw internals" [27] | How the YCbCr small-raw (sNEF) files are laid out | Describes D4S and D810 |
@@ -267,7 +267,7 @@ cite them; do not copy their tables or prose.
 [16] dnglab / rawler repository — https://github.com/dnglab/dnglab **[P]**
 [17] crates.io API, per-crate pages (rawler, rawloader, imagepipe,
     quickraw, rexiv2, revelo-exiftool-tables and the crates in 3.2) —
-    https://crates.io/api/v1/crates/<name> **[P]** (licences)
+    https://crates.io/api/v1/crates/<name> **[P]** (licenses)
 [18] ExifTool home page and repository metadata —
     https://exiftool.org/index.html ,
     https://api.github.com/repos/exiftool/exiftool **[P]**

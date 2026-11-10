@@ -41,14 +41,14 @@ title; or a manual in PDF, with the name checked on the page given.
 Where a maker's documents spell a name differently, the name its
 product pages give is the one taken, and the other spellings are
 recorded beside it (ADR022). No name is taken from another reader's
-table, a retailer, a review or an encyclopaedia.
+table, a retailer, a review or an encyclopedia.
 
 **The characters.** Every space in a name is an ordinary space, U+0020,
 as on the pages read. Sony's α is the Greek small letter alpha, U+03B1.
 
 ## 2. Makers
 
-A maker is recognised from its whole Make text, case included; any
+A maker is recognized from its whole Make text, case included; any
 other text, such as `Sony` or `NIKON` followed by more words, names no
 maker.
 
