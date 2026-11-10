@@ -943,8 +943,8 @@ fn color_space<R: Read + Seek>(
 /// reason costs only what it would have given.
 fn sizes<R: Read + Seek>(src: &mut Source<R>, tree: &Tree) -> Result<(Option<Size>, Option<Size>)> {
     let mut largest: Option<(&Ifd, Size)> = None;
-    for (location, ifd) in tree.iter() {
-        if location.holds_no_image() {
+    for (link, ifd) in tree.iter() {
+        if link.holds_no_image() {
             continue;
         }
         if skip_damage(tiff_previews::is_raw(src, ifd))? != Some(true) {
@@ -3554,9 +3554,7 @@ mod tests {
             // IFD0, the Exif IFD and IFD1, which is not also placed as an
             // Interoperability IFD: the Exif IFD alone holds no image.
             assert_eq!(tree.iter().count(), 3);
-            let no_image = tree
-                .iter()
-                .filter(|(location, _)| location.holds_no_image());
+            let no_image = tree.iter().filter(|(link, _)| link.holds_no_image());
             assert_eq!(no_image.count(), 1);
             let read = read(&mut src, &tree).unwrap().metadata.camera_settings;
             assert_eq!(read.color_space, Some(expected), "{code}");

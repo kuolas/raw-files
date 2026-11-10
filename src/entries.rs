@@ -23,7 +23,7 @@ use std::fmt;
 use std::io::{Read, Seek};
 use std::ops::Range;
 
-use crate::container::tiff::{self, Ifd, Location, Tree};
+use crate::container::tiff::{self, Ifd, Link, Tree};
 use crate::error::Result;
 use crate::io::{ByteOrder, Source};
 
@@ -734,20 +734,20 @@ impl Entries {
     pub(crate) fn of_tree(tree: &Tree) -> Self {
         let mut entries = Self::new();
         let mut subifds: u32 = 0;
-        for (location, ifd) in tree.iter() {
-            let directory = match location {
-                Location::Ifd0 => Directory::Ifd(0),
-                Location::Chain(step) => Directory::Ifd(step),
-                Location::Sub { .. } => {
+        for (link, ifd) in tree.iter() {
+            let directory = match link {
+                Link::Ifd0 => Directory::Ifd(0),
+                Link::Chain(step) => Directory::Ifd(step),
+                Link::Sub { .. } => {
                     let directory = Directory::SubIfd(subifds);
                     // At most `Limits::max_ifds` IFDs, a `u32`: this cannot
                     // overflow.
                     subifds = subifds.saturating_add(1);
                     directory
                 }
-                Location::Exif => Directory::Exif,
-                Location::Gps => Directory::Gps,
-                Location::Interop => Directory::Interop,
+                Link::Exif => Directory::Exif,
+                Link::Gps => Directory::Gps,
+                Link::Interop => Directory::Interop,
             };
             entries.push(directory, ifd);
         }

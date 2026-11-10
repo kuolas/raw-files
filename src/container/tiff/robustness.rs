@@ -43,7 +43,7 @@ use std::panic;
 use std::path::{Path, PathBuf};
 
 use super::Block;
-use super::walk::{Location, Tree, walk};
+use super::walk::{Link, Tree, walk};
 use crate::error::{Error, Result};
 use crate::io::Source;
 use crate::limits::Limits;
@@ -328,26 +328,17 @@ fn assert_within(tree: &Tree, limits: &Limits, what: &impl Fn() -> String) {
         tree.len()
     );
     let mut depths: Vec<u32> = Vec::new();
-    for (i, (location, ifd)) in tree.iter().enumerate() {
-        assert_eq!(
-            i == 0,
-            location == Location::Ifd0,
-            "{}: {location:?} at {i}",
-            what()
-        );
+    for (i, (link, ifd)) in tree.iter().enumerate() {
+        assert_eq!(i == 0, link == Link::Ifd0, "{}: {link:?} at {i}", what());
         assert!(
             ifd.len() <= max_entries,
             "{}: {} entries at {i}",
             what(),
             ifd.len()
         );
-        let depth = match location {
-            Location::Ifd0
-            | Location::Chain(_)
-            | Location::Exif
-            | Location::Gps
-            | Location::Interop => 0,
-            Location::Sub { parent, .. } => {
+        let depth = match link {
+            Link::Ifd0 | Link::Chain(_) | Link::Exif | Link::Gps | Link::Interop => 0,
+            Link::Sub { parent, .. } => {
                 assert!(parent < i, "{}: parent {parent} of {i}", what());
                 depths[parent] + 1
             }
