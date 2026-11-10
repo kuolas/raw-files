@@ -5,7 +5,8 @@
   public API; [ADR011](adr011-metadata-from-standard-tags.md), metadata
   from the standard tags
 - Date: 2026-10-30
-- Issue: #49
+- Revision: 2, 2026-11-10
+- Issue: #49; a text to show #104
 
 ## Context
 
@@ -53,6 +54,19 @@ The options were:
 - the name under the plain word, and the text under a word that says it
   is the file's.
 
+The table of names holds only the bodies that a file and a maker's
+document show. So `model` is `None` for most files
+([#104](https://github.com/kuolas/raw-files/issues/104)). A program that
+shows a camera to a person still wants a text for every file that
+records a Model. Built by each caller, that text goes wrong:
+`model().or(recorded_model())` drops the maker's name, and a caller who
+adds it gets `Nikon NIKON D7200`. The options for a text to show were:
+
+- the getters as they are, each caller joining them;
+- the two words swapped, the recorded text under the plain word;
+- `Display` for `Camera`;
+- a getter of its own, named `display_name` or `name`.
+
 ## Decision
 
 We will give **the value a person reads under the plain word, and the
@@ -79,9 +93,14 @@ under, which raw-files reads from the text that `recorded_model` gives.
   of a body's autofocus points is: a body whose files name one of
   several layouts by a code recorded elsewhere needs that code.
 - **A value raw-files cannot read is `None`**, never the recorded text
-  in its place. A program that shows the text where no name is known
-  says so in one call, such as `model().or(recorded_model())`, and can
-  tell the two apart.
+  in its place, so that a program can tell a name from a code.
+- **A text to show a person is a value of its own.** It is the maker's
+  names, joined by a space, where raw-files has both, such as
+  `Nikon Z6III`. Otherwise it is the recorded Model, such as
+  `NIKON D7200`. So the plain word still never gives a code, and no
+  caller joins a maker's name to a recorded text by hand. A camera's is
+  `display_name`, `None` when the file records no Model. It is computed
+  when it is read, as the point above on values read from others says.
 
 Rejected:
 
@@ -103,6 +122,19 @@ Rejected:
 - **The recorded text in place of a name raw-files cannot read.** A
   program could not tell a name from a code: `NIKON Z6_3` would look
   like a name.
+- **Swapping the two words for a text to show**, the recorded text
+  under the plain word. The maker, a `Make`, and the body's name would
+  lose the plain word. And a caller who shows the maker and the model
+  would still join them by hand.
+- **Leaving the text to show to each caller.**
+  `model().or(recorded_model())` drops the maker's name. A caller who
+  adds it gets `Nikon NIKON D7200` on a body the table does not hold.
+- **`Display` for `Camera`.** It always writes a text, so it cannot say
+  that nothing is recorded. And no other struct of optional values,
+  such as `Lens` or `Exposure`, has one.
+- **The getter for a text to show named `name`.** The records keep
+  "name" for what the maker sells the body under. This text may be a
+  code.
 
 ## What this decision does not cover
 
@@ -111,8 +143,9 @@ Rejected:
 - Every entry a file records, with those raw-files does not name,
   beside the typed values: a view of its own, which
   [ADR023](adr023-every-entry-a-file-records.md) decides.
-- Which values are read into something of their own: each group of full
-  metadata decides its own, by this rule.
+- Which values are read into something of their own, and which need a
+  text to show: each group of full metadata decides its own, by this
+  rule.
 
 ## Consequences
 
@@ -123,7 +156,9 @@ Rejected:
 - A program's tests set only the recorded text, and get the values
   raw-files reads from it. A test cannot set a name for a body raw-files
   has no name for; it picks a body that has one.
-- A name for a body raw-files does not list is `None`, and a program
-  shows what it chooses in its place, the recorded text or nothing.
+- A name for a body raw-files does not list is `None`. A program that
+  shows a camera to a person reads `display_name`, which gives the
+  recorded Model in its place. A program that must tell a name from a
+  code reads `model`.
 - Each group of full metadata names its values by this rule, so a
   program meets the same two words for every value that has both.

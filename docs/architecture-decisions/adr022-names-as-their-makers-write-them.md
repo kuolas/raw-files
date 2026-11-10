@@ -64,8 +64,8 @@ recorded in the format notes before the code, on a page of their own
 - **The spelling as written.** The name keeps the maker's case, spaces
   and letters: NIKKOR in capitals, Z 9 with its space and Z6III without
   one, α7 II with the Greek letter α. Nothing is recased or made
-  uniform across a maker's line. The brand is not part of the name: a
-  program joins the two
+  uniform across a maker's line. The brand is not part of the name: the
+  camera's text to show joins the two
   ([ADR021](adr021-what-the-file-records-and-what-raw-files-reads-into-it.md)).
 - **The maker by its whole text.** A maker is recognized from a Make
   text a file has shown, matched whole and with its case, as the white
