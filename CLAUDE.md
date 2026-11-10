@@ -22,6 +22,7 @@ RUSTDOCFLAGS="--cfg test -D warnings" cargo doc --workspace --no-deps --document
 
 ## Reminders
 
+- Everything the project writes follows CONTRIBUTING.md §Writing.
 - Commit messages follow CONTRIBUTING.md §Commit messages; run
   `scripts/install-hooks.sh` once so the `commit-msg` hook checks them.
 - Keep history linear: rebase, never merge; every commit builds and passes
