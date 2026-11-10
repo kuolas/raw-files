@@ -7,13 +7,14 @@
 //! the camera's make and model, the software that wrote the file and the
 //! orientation in IFD0, the capture time, the body's serial number, the
 //! exposure, the lens and some of the camera's settings in the Exif IFD,
-//! with the Interoperability IFD for the colour space, and the sizes in the
-//! IFD of the raw data. So [`read`] reads them once, over the tree, for
-//! every format, and a format adds only what its own structures record and
-//! the standard tags lack (ADR011, which chose the standard tags first). The
-//! JPEG reader shares it too, over the tree of a JPEG file's Exif segment,
-//! and then decides the sizes itself: the picture's own size in place of
-//! the ones read here, and no raw size (ADR014).
+//! with the Interoperability IFD for the colour space, where the picture
+//! was taken in the GPS IFD, and the sizes in the IFD of the raw data. So
+//! [`read`] reads them once, over the tree, for every format, and a format
+//! adds only what its own structures record and the standard tags lack
+//! (ADR011, which chose the standard tags first). The JPEG reader shares
+//! it too, over the tree of a JPEG file's Exif segment, and then decides
+//! the sizes itself: the picture's own size in place of the ones read
+//! here, and no raw size (ADR014).
 //!
 //! The rules:
 //!
@@ -57,6 +58,29 @@
 //!   8-byte code, of type UNDEFINED, when that code is `ASCII`; under any
 //!   other code, and when the value holds no more than its code, it is
 //!   `None` ([`comment`]). Nothing is read from a MakerNote.
+//! - The location is read from the GPS IFD the walk found, wherever it
+//!   placed it ([`location`]). It needs a sound position: GPSLatitudeRef
+//!   `N` or `S` and GPSLongitudeRef `E` or `W`, each read by the text rule
+//!   and nothing else, and GPSLatitude and GPSLongitude, each exactly three
+//!   RATIONALs, degrees, minutes and seconds as stored, with no zero
+//!   denominator, minutes and seconds below 60, and no more than 90° of
+//!   latitude or 180° of longitude. Without one there is no location, and
+//!   no other GPS value is read. A zero is a real value of every GPS
+//!   fraction: 0 seconds, 0 metres and 0° are kept. The other parts each
+//!   need both their tags, of the type and count Exif gives, and a part
+//!   whose tags are missing or damaged is `None` alone: the altitude,
+//!   GPSAltitude, one RATIONAL, above its reference for a GPSAltitudeRef,
+//!   one BYTE, of 0 or 2 and below it for 1 or 3, without naming the
+//!   surface it is measured from; the GPS time, GPSDateStamp, `YYYY:MM:DD`
+//!   of type ASCII, and GPSTimeStamp, three RATIONALs with whole hours and
+//!   minutes and the seconds over a power of ten up to 10⁹, whose zeros
+//!   are the digits of the fraction kept, a date and time that exist, in
+//!   UTC ([`DateTime::from_gps`]); the image direction, GPSImgDirection,
+//!   one RATIONAL below 360°, from the north GPSImgDirectionRef names, `T`
+//!   true or `M` magnetic, with no default; and the map datum,
+//!   GPSMapDatum, of type ASCII as Exif gives it, read by the text rule,
+//!   `None` when blank, as the Z 9 writes it. GPSVersionID, GPSStatus and the
+//!   other GPS tags are not read.
 //! - The capture time is the Exif DateTimeOriginal, with its own fraction
 //!   of a second (SubSecTimeOriginal) and offset from UTC
 //!   (OffsetTimeOriginal), each of type ASCII; [`DateTime::from_exif`]
@@ -137,7 +161,7 @@
 //!   as for any damaged value (ADR011).
 //! - A file without an Exif IFD has no capture time, no serial number, no
 //!   exposure, no lens, none of the camera settings, and no photographer,
-//!   editor, title or comment.
+//!   editor, title or comment. A file without a GPS IFD has no location.
 //! - The orientation is IFD0's Orientation, read as the preview finder reads
 //!   it ([`tiff_previews::orientation`]), so that the metadata and the
 //!   previews never disagree.
@@ -175,13 +199,15 @@ use crate::camera_settings::{
 use crate::container::tiff::tags::{
     ARTIST, BODY_SERIAL_NUMBER, CAMERA_OWNER_NAME, COLOR_SPACE, COPYRIGHT, DATE_TIME_ORIGINAL,
     DEFAULT_CROP_ORIGIN, DEFAULT_CROP_SIZE, EXPOSURE_BIAS_VALUE, EXPOSURE_PROGRAM, EXPOSURE_TIME,
-    F_NUMBER, FLASH, FOCAL_LENGTH, FOCAL_LENGTH_IN_35MM_FILM, IMAGE_DESCRIPTION, IMAGE_EDITOR,
-    IMAGE_LENGTH, IMAGE_TITLE, IMAGE_WIDTH, INTEROP_INDEX, ISO_SPEED, LENS_MAKE, LENS_MODEL,
-    LENS_SERIAL_NUMBER, LENS_SPECIFICATION, LIGHT_SOURCE, MAKE, METERING_MODE, MODEL,
+    F_NUMBER, FLASH, FOCAL_LENGTH, FOCAL_LENGTH_IN_35MM_FILM, GPS_ALTITUDE, GPS_ALTITUDE_REF,
+    GPS_DATE_STAMP, GPS_IMG_DIRECTION, GPS_IMG_DIRECTION_REF, GPS_LATITUDE, GPS_LATITUDE_REF,
+    GPS_LONGITUDE, GPS_LONGITUDE_REF, GPS_MAP_DATUM, GPS_TIME_STAMP, IMAGE_DESCRIPTION,
+    IMAGE_EDITOR, IMAGE_LENGTH, IMAGE_TITLE, IMAGE_WIDTH, INTEROP_INDEX, ISO_SPEED, LENS_MAKE,
+    LENS_MODEL, LENS_SERIAL_NUMBER, LENS_SPECIFICATION, LIGHT_SOURCE, MAKE, METERING_MODE, MODEL,
     OFFSET_TIME_ORIGINAL, PHOTOGRAPHER, PHOTOGRAPHIC_SENSITIVITY, RECOMMENDED_EXPOSURE_INDEX,
     SOFTWARE, SUB_SEC_TIME_ORIGINAL, USER_COMMENT, WHITE_BALANCE,
 };
-use crate::container::tiff::types::{LONG, SHORT, UNDEFINED};
+use crate::container::tiff::types::{BYTE, LONG, RATIONAL, SHORT, UNDEFINED};
 use crate::container::tiff::{Ifd, Tree, skip_damage};
 use crate::datetime::DateTime;
 use crate::entries::clean_text;
@@ -189,6 +215,7 @@ use crate::error::Result;
 use crate::formats::tiff_previews;
 use crate::geometry::Size;
 use crate::io::Source;
+use crate::location::{Altitude, Direction, Latitude, Location, Longitude, North};
 use crate::metadata::{Exposure, Lens, Metadata};
 use crate::rational::{Rational, SignedRational};
 
@@ -293,6 +320,10 @@ pub(crate) fn read<R: Read + Seek>(src: &mut Source<R>, tree: &Tree) -> Result<S
         },
         software: ascii_or_utf8_text(src, ifd0, SOFTWARE)?,
         authorship: authorship(src, tree)?,
+        location: match tree.gps() {
+            Some(gps) => location(src, gps)?,
+            None => None,
+        },
         capture_time,
         orientation: tiff_previews::orientation(src, tree)?,
         exposure,
@@ -450,6 +481,141 @@ fn comment<R: Read + Seek>(src: &mut Source<R>, exif: &Ifd) -> Result<Option<Str
     Ok(bytes.strip_prefix(ASCII_CODE).and_then(clean_text))
 }
 
+/// Where the picture was taken, from the GPS IFD `gps`: its position, with
+/// the altitude, the GPS time, the image direction and the map datum.
+///
+/// The position needs GPSLatitudeRef `N` or `S` and GPSLongitudeRef `E` or
+/// `W`, each read by [`text`], and GPSLatitude and GPSLongitude, each
+/// exactly three RATIONALs ([`exact_rationals`]) that [`Latitude`] or
+/// [`Longitude`] accepts; without one there is no location, and no other
+/// GPS value is read. The other parts each need both their tags, and a
+/// part whose tags are missing or damaged is `None` alone:
+///
+/// - the altitude, GPSAltitude, exactly one RATIONAL with a denominator
+///   above zero, above its reference for a GPSAltitudeRef of 0 or 2 and
+///   below it for 1 or 3, exactly one BYTE ([`one_byte`]);
+/// - the time, GPSDateStamp, of type ASCII, and GPSTimeStamp, exactly
+///   three RATIONALs, as [`DateTime::from_gps`] reads them;
+/// - the image direction, GPSImgDirection, exactly one RATIONAL that
+///   [`Direction`] accepts, below 360°, from the north GPSImgDirectionRef
+///   names, read by [`text`]: `T` true, `M` magnetic, and no default;
+/// - the map datum, GPSMapDatum, read by [`text`]; blank is `None`.
+///
+/// GPSVersionID, GPSStatus and the other GPS tags are not read.
+///
+/// # Errors
+///
+/// `Io` when the reader fails. A value that cannot be read for any other
+/// reason is `None`, and costs no other value.
+fn location<R: Read + Seek>(src: &mut Source<R>, gps: &Ifd) -> Result<Option<Location>> {
+    let latitude = match text(src, gps, GPS_LATITUDE_REF)?.as_deref() {
+        Some("N") => Latitude::north,
+        Some("S") => Latitude::south,
+        _ => return Ok(None),
+    };
+    let Some(latitude) = exact_rationals::<_, 3>(src, gps, GPS_LATITUDE)?
+        .and_then(|[degrees, minutes, seconds]| latitude(degrees, minutes, seconds))
+    else {
+        return Ok(None);
+    };
+    let longitude = match text(src, gps, GPS_LONGITUDE_REF)?.as_deref() {
+        Some("E") => Longitude::east,
+        Some("W") => Longitude::west,
+        _ => return Ok(None),
+    };
+    let Some(longitude) = exact_rationals::<_, 3>(src, gps, GPS_LONGITUDE)?
+        .and_then(|[degrees, minutes, seconds]| longitude(degrees, minutes, seconds))
+    else {
+        return Ok(None);
+    };
+
+    let altitude = match one_byte(src, gps, GPS_ALTITUDE_REF)? {
+        Some(0 | 2) => {
+            exact_rationals::<_, 1>(src, gps, GPS_ALTITUDE)?.and_then(|[m]| Altitude::above(m))
+        }
+        Some(1 | 3) => {
+            exact_rationals::<_, 1>(src, gps, GPS_ALTITUDE)?.and_then(|[m]| Altitude::below(m))
+        }
+        _ => None,
+    };
+    let time = match skip_damage(gps.ascii_bytes(src, GPS_DATE_STAMP))?.flatten() {
+        Some(date) => exact_rationals::<_, 3>(src, gps, GPS_TIME_STAMP)?.and_then(|time| {
+            DateTime::from_gps(
+                &date,
+                time.map(|fraction| (fraction.numerator, fraction.denominator)),
+            )
+        }),
+        None => None,
+    };
+    let north = match text(src, gps, GPS_IMG_DIRECTION_REF)?.as_deref() {
+        Some("T") => Some(North::True),
+        Some("M") => Some(North::Magnetic),
+        _ => None,
+    };
+    let image_direction = match north {
+        Some(north) => exact_rationals::<_, 1>(src, gps, GPS_IMG_DIRECTION)?
+            .and_then(|[degrees]| Direction::new(degrees, north)),
+        None => None,
+    };
+    Ok(Some(Location {
+        altitude,
+        time,
+        image_direction,
+        map_datum: text(src, gps, GPS_MAP_DATUM)?,
+        ..Location::new(latitude, longitude)
+    }))
+}
+
+/// The `N` fractions of tag `tag` of `ifd`, as stored, a zero denominator
+/// included, when the tag is of type RATIONAL and holds exactly `N`
+/// values; `None` when it is missing, of another type or of another
+/// count.
+///
+/// The type and count are checked before the value is read, so a tag of
+/// another count costs no read.
+///
+/// # Errors
+///
+/// `Io` when the reader fails. A value that cannot be read for any other
+/// reason is `None`.
+fn exact_rationals<R: Read + Seek, const N: usize>(
+    src: &mut Source<R>,
+    ifd: &Ifd,
+    tag: u16,
+) -> Result<Option<[Rational; N]>> {
+    if !holds(ifd, tag, RATIONAL, N) {
+        return Ok(None);
+    }
+    let pairs = skip_damage(ifd.rationals(src, tag))?.flatten();
+    Ok(pairs
+        .and_then(|pairs| <[(u32, u32); N]>::try_from(pairs).ok())
+        .map(|pairs| {
+            pairs.map(|(numerator, denominator)| Rational {
+                numerator,
+                denominator,
+            })
+        }))
+}
+
+/// The value of tag `tag` of `ifd`, when the tag is of type BYTE and holds
+/// exactly one value; `None` when it is missing, of another type or of
+/// another count. One BYTE is held in its entry, so reading it reads
+/// nothing more from the file.
+///
+/// # Errors
+///
+/// `Io` when the reader fails. A value that cannot be read for any other
+/// reason is `None`.
+fn one_byte<R: Read + Seek>(src: &mut Source<R>, ifd: &Ifd, tag: u16) -> Result<Option<u8>> {
+    // `bytes` reads UNDEFINED as well as BYTE; Exif gives BYTE alone.
+    if !holds(ifd, tag, BYTE, 1) {
+        return Ok(None);
+    }
+    Ok(skip_damage(ifd.bytes(src, tag))?
+        .flatten()
+        .and_then(|bytes| bytes.first().copied()))
+}
+
 /// When the picture was taken, from the Exif IFD `exif`: its
 /// DateTimeOriginal, with its SubSecTimeOriginal and OffsetTimeOriginal
 /// when the file records them, all three of type ASCII, as
@@ -579,13 +745,20 @@ fn one_of_type<R: Read + Seek>(
     tag: u16,
     typ: u16,
 ) -> Result<Option<u32>> {
-    if ifd
-        .entry_of_type(tag, &[typ])
-        .is_none_or(|entry| entry.count() != 1)
-    {
+    if !holds(ifd, tag, typ, 1) {
         return Ok(None);
     }
     Ok(skip_damage(ifd.u32(src, tag))?.flatten())
+}
+
+/// Whether tag `tag` of `ifd` is of type `typ` and holds exactly `count`
+/// values: what every reader of a tag of fixed shape checks before it
+/// reads, so that a tag of another type or count gives nothing and costs
+/// no read (ADR011). The type is checked through [`Ifd::entry_of_type`],
+/// since the value readers take more types than a tag's rule allows.
+fn holds(ifd: &Ifd, tag: u16, typ: u16, count: usize) -> bool {
+    ifd.entry_of_type(tag, &[typ])
+        .is_some_and(|entry| usize::try_from(entry.count()).ok() == Some(count))
 }
 
 /// The ISO the picture was taken at, from the Exif IFD `exif`.
@@ -689,12 +862,12 @@ fn lens<R: Read + Seek>(src: &mut Source<R>, exif: &Ifd) -> Result<Lens> {
 /// shortest and longest focal length, then the f-number at each, in the
 /// order the tag stores them.
 ///
-/// The tag must be of type RATIONAL and hold exactly four values; with any
-/// other count it describes no range the reader can trust, and all four
-/// are `None`. Each value is `None` when its numerator or its denominator
-/// is zero ([`Rational::known`]): Exif writes 0/0 for a value the camera
-/// did not know, such as the apertures of a lens that does not report
-/// them.
+/// The tag must be of type RATIONAL and hold exactly four values, as
+/// [`exact_rationals`] reads them; with any other count it describes no
+/// range the reader can trust, and all four are `None`, without a read.
+/// Each value is `None` when its numerator or its denominator is zero
+/// ([`Rational::known`]): Exif writes 0/0 for a value the camera did not
+/// know, such as the apertures of a lens that does not report them.
 ///
 /// # Errors
 ///
@@ -704,12 +877,10 @@ fn lens_specification<R: Read + Seek>(
     src: &mut Source<R>,
     exif: &Ifd,
 ) -> Result<[Option<Rational>; 4]> {
-    let values = skip_damage(exif.rationals(src, LENS_SPECIFICATION))?.flatten();
-    let Some(&[first, second, third, fourth]) = values.as_deref() else {
-        return Ok([None; 4]);
-    };
-    Ok([first, second, third, fourth]
-        .map(|(numerator, denominator)| Rational::known(numerator, denominator)))
+    let values = exact_rationals::<_, 4>(src, exif, LENS_SPECIFICATION)?;
+    Ok(values.map_or([None; 4], |values| {
+        values.map(|value| Rational::known(value.numerator, value.denominator))
+    }))
 }
 
 /// The ColorSpace Exif writes for sRGB.
@@ -2430,7 +2601,7 @@ mod tests {
                 z9_expected_with_lens(z9_lens_with(|lens| lens.serial_number = None)),
             ),
             (
-                "a LensSpecification too long to read",
+                "a LensSpecification of more values than one tag may take",
                 LENS_SPECIFICATION,
                 |builder, _, exif| too_long_of(builder, exif, LENS_SPECIFICATION, RATIONAL, 8),
                 z9_expected_with_lens(z9_lens_with(|lens| lens.range = [None; 4])),
@@ -4322,6 +4493,691 @@ mod tests {
             let tree = walk(&mut src, &file_block, &Limits::default()).unwrap();
             let err = read(&mut src, &tree).expect_err("the read fails");
             assert_eq!(err.kind(), ErrorKind::Io, "{label}: {err:?}");
+        }
+    }
+
+    /// The GPS tags the reader never reads, written by the files below as
+    /// cameras write them: GPSVersionID, GPSSatellites, GPSStatus,
+    /// GPSMeasureMode and GPSDifferential.
+    const GPS_VERSION_ID: u16 = 0x0000;
+    const GPS_SATELLITES: u16 = 0x0008;
+    const GPS_STATUS: u16 = 0x0009;
+    const GPS_MEASURE_MODE: u16 = 0x000A;
+    const GPS_DIFFERENTIAL: u16 = 0x001E;
+
+    /// A value of a GPS tag, as the builder writes it.
+    #[derive(Clone, Copy, Debug)]
+    enum Gps {
+        Byte(&'static [u8]),
+        Ascii(&'static str),
+        Rationals(&'static [(u32, u32)]),
+        Short(&'static [u16]),
+    }
+
+    /// The GPS IFD a Nikon camera writes with a position, in the form the
+    /// NEF notes record: degrees and minutes with four decimals and no
+    /// seconds, an altitude above the reference, the time with seconds
+    /// over 100, the satellites and a datum of 16 spaces, in 17 bytes. The
+    /// position is the Eiffel Tower's; the time is made up.
+    const NIKON_GPS: [(u16, Gps); 11] = [
+        (GPS_VERSION_ID, Gps::Byte(&[2, 3, 0, 0])),
+        (GPS_LATITUDE_REF, Gps::Ascii("N")),
+        (
+            GPS_LATITUDE,
+            Gps::Rationals(&[(48, 1), (514_933, 10_000), (0, 1)]),
+        ),
+        (GPS_LONGITUDE_REF, Gps::Ascii("E")),
+        (
+            GPS_LONGITUDE,
+            Gps::Rationals(&[(2, 1), (176_700, 10_000), (0, 1)]),
+        ),
+        (GPS_ALTITUDE_REF, Gps::Byte(&[0])),
+        (GPS_ALTITUDE, Gps::Rationals(&[(35_050, 1000)])),
+        (
+            GPS_TIME_STAMP,
+            Gps::Rationals(&[(8, 1), (20, 1), (3_045, 100)]),
+        ),
+        (GPS_SATELLITES, Gps::Ascii("07")),
+        (GPS_MAP_DATUM, Gps::Ascii("                ")),
+        (GPS_DATE_STAMP, Gps::Ascii("2024:05:01")),
+    ];
+
+    /// The GPS IFD a Sony camera writes with a fix, in the form the ARW
+    /// notes record: degrees, minutes and seconds with three decimals, no
+    /// altitude, the time with seconds over 1000, the status `A`, the
+    /// measure mode, the datum `WGS-84` and the differential correction.
+    /// The position is the Statue of Liberty's; the time is made up.
+    const SONY_GPS: [(u16, Gps); 10] = [
+        (GPS_VERSION_ID, Gps::Byte(&[2, 3, 0, 0])),
+        (GPS_LATITUDE_REF, Gps::Ascii("N")),
+        (
+            GPS_LATITUDE,
+            Gps::Rationals(&[(40, 1), (41, 1), (21_400, 1000)]),
+        ),
+        (GPS_LONGITUDE_REF, Gps::Ascii("W")),
+        (
+            GPS_LONGITUDE,
+            Gps::Rationals(&[(74, 1), (2, 1), (40_200, 1000)]),
+        ),
+        (
+            GPS_TIME_STAMP,
+            Gps::Rationals(&[(13, 1), (5, 1), (21_450, 1000)]),
+        ),
+        (GPS_STATUS, Gps::Ascii("A")),
+        (GPS_MEASURE_MODE, Gps::Ascii("2")),
+        (GPS_MAP_DATUM, Gps::Ascii("WGS-84")),
+        (GPS_DATE_STAMP, Gps::Ascii("2024:05:01")),
+    ];
+
+    /// A phone's GPS IFD: whole seconds, no time, and an altitude
+    /// reference without an altitude. The position is the Sydney Opera
+    /// House's.
+    const PHONE_GPS: [(u16, Gps); 6] = [
+        (GPS_VERSION_ID, Gps::Byte(&[2, 2, 0, 0])),
+        (GPS_LATITUDE_REF, Gps::Ascii("S")),
+        (GPS_LATITUDE, Gps::Rationals(&[(33, 1), (51, 1), (25, 1)])),
+        (GPS_LONGITUDE_REF, Gps::Ascii("E")),
+        (GPS_LONGITUDE, Gps::Rationals(&[(151, 1), (12, 1), (55, 1)])),
+        (GPS_ALTITUDE_REF, Gps::Byte(&[0])),
+    ];
+
+    /// The four entries a Sony camera without a fix writes: the version,
+    /// the status `V`, the datum and the differential correction.
+    const SONY_NO_FIX_GPS: [(u16, Gps); 4] = [
+        (GPS_VERSION_ID, Gps::Byte(&[2, 3, 0, 0])),
+        (GPS_STATUS, Gps::Ascii("V")),
+        (GPS_MAP_DATUM, Gps::Ascii("WGS-84")),
+        (GPS_DIFFERENTIAL, Gps::Short(&[0])),
+    ];
+
+    /// The GPS IFD of the Coolpix files the NEF notes list: every position
+    /// tag, the altitude, the time and the image direction, with blank
+    /// references and zero denominators, and a blank datum of 10 bytes.
+    const COOLPIX_GPS: [(u16, Gps); 12] = [
+        (GPS_VERSION_ID, Gps::Byte(&[2, 3, 0, 0])),
+        (GPS_LATITUDE_REF, Gps::Ascii(" ")),
+        (GPS_LATITUDE, Gps::Rationals(&[(0, 0); 3])),
+        (GPS_LONGITUDE_REF, Gps::Ascii(" ")),
+        (GPS_LONGITUDE, Gps::Rationals(&[(0, 0); 3])),
+        (GPS_ALTITUDE_REF, Gps::Byte(&[0])),
+        (GPS_ALTITUDE, Gps::Rationals(&[(0, 0)])),
+        (GPS_TIME_STAMP, Gps::Rationals(&[(0, 0); 3])),
+        (GPS_IMG_DIRECTION_REF, Gps::Ascii(" ")),
+        (GPS_IMG_DIRECTION, Gps::Rationals(&[(0, 0)])),
+        (GPS_MAP_DATUM, Gps::Ascii("         ")),
+        (GPS_DATE_STAMP, Gps::Ascii("          ")),
+    ];
+
+    /// Both byte orders.
+    const ORDERS: [Order; 2] = [Order::Little, Order::Big];
+
+    /// Writes `tags` into the GPS IFD `gps`.
+    fn write_gps(builder: &mut TiffBuilder, gps: IfdId, tags: &[(u16, Gps)]) {
+        for &(tag, value) in tags {
+            match value {
+                Gps::Byte(values) => builder.byte(gps, tag, values),
+                Gps::Ascii(text) => builder.ascii(gps, tag, text),
+                Gps::Rationals(values) => builder.rational(gps, tag, values),
+                Gps::Short(values) => builder.short(gps, tag, values),
+            };
+        }
+    }
+
+    /// `tags` with tag `tag` set to `value`, added when it is not there,
+    /// or left out when `value` is `None`.
+    fn with_gps(tags: &[(u16, Gps)], tag: u16, value: Option<Gps>) -> Vec<(u16, Gps)> {
+        let mut tags: Vec<_> = tags.iter().copied().filter(|&(t, _)| t != tag).collect();
+        tags.extend(value.map(|value| (tag, value)));
+        tags
+    }
+
+    /// The metadata of a file in byte order `order` whose IFD0 holds a
+    /// Make and links to a GPS IFD holding `tags`.
+    fn gps_file(order: Order, tags: &[(u16, Gps)]) -> Metadata {
+        let mut builder = TiffBuilder::new(order);
+        let (ifd0, gps) = (builder.ifd(), builder.ifd());
+        builder
+            .ascii(ifd0, MAKE, "NIKON CORPORATION")
+            .gps(ifd0, gps);
+        write_gps(&mut builder, gps, tags);
+        read_bytes(builder.build().bytes)
+    }
+
+    /// The location `tags` give, in both byte orders, which must agree.
+    fn location_of(tags: &[(u16, Gps)]) -> Option<Location> {
+        let [little, big] = ORDERS.map(|order| gps_file(order, tags).location);
+        assert_eq!(little, big, "{tags:?}");
+        little
+    }
+
+    /// The location [`NIKON_GPS`] records.
+    fn nikon_location() -> Location {
+        Location {
+            altitude: Altitude::above(fraction(35_050, 1000)),
+            time: DateTime::new(2024, 5, 1, 8, 20, 30)
+                .and_then(|time| time.with_subseconds(450_000_000, 2))
+                .and_then(|time| time.with_offset_minutes(0)),
+            ..Location::new(
+                Latitude::north(fraction(48, 1), fraction(514_933, 10_000), fraction(0, 1))
+                    .unwrap(),
+                Longitude::east(fraction(2, 1), fraction(176_700, 10_000), fraction(0, 1)).unwrap(),
+            )
+        }
+    }
+
+    #[test]
+    fn a_location_is_read_from_each_makers_gps_ifd() {
+        assert_eq!(location_of(&NIKON_GPS), Some(nikon_location()));
+        let sony = Location {
+            time: DateTime::new(2024, 5, 1, 13, 5, 21)
+                .and_then(|time| time.with_subseconds(450_000_000, 3))
+                .and_then(|time| time.with_offset_minutes(0)),
+            map_datum: Some("WGS-84".to_owned()),
+            ..Location::new(
+                Latitude::north(fraction(40, 1), fraction(41, 1), fraction(21_400, 1000)).unwrap(),
+                Longitude::west(fraction(74, 1), fraction(2, 1), fraction(40_200, 1000)).unwrap(),
+            )
+        };
+        assert_eq!(location_of(&SONY_GPS), Some(sony));
+        let phone = Location::new(
+            Latitude::south(fraction(33, 1), fraction(51, 1), fraction(25, 1)).unwrap(),
+            Longitude::east(fraction(151, 1), fraction(12, 1), fraction(55, 1)).unwrap(),
+        );
+        assert_eq!(location_of(&PHONE_GPS), Some(phone));
+        // The Nikon time keeps its two digits and the Sony time its three.
+        let nikon_time = location_of(&NIKON_GPS).and_then(|location| location.time());
+        assert_eq!(
+            nikon_time.map(|time| time.to_string()).as_deref(),
+            Some("2024-05-01T08:20:30.45+00:00")
+        );
+    }
+
+    #[test]
+    fn a_gps_ifd_without_a_sound_position_gives_no_location() {
+        // No GPS IFD at all.
+        for order in ORDERS {
+            let mut builder = TiffBuilder::new(order);
+            let ifd0 = builder.ifd();
+            builder.ascii(ifd0, MAKE, "NIKON CORPORATION");
+            assert_eq!(read_bytes(builder.build().bytes).location, None);
+        }
+        let cases: [(&str, Vec<(u16, Gps)>); 18] = [
+            ("the version alone", NIKON_GPS[..1].to_vec()),
+            ("a Sony camera without a fix", SONY_NO_FIX_GPS.to_vec()),
+            ("the Coolpix blanks", COOLPIX_GPS.to_vec()),
+            (
+                "no latitude reference",
+                with_gps(&NIKON_GPS, GPS_LATITUDE_REF, None),
+            ),
+            (
+                "no longitude reference",
+                with_gps(&NIKON_GPS, GPS_LONGITUDE_REF, None),
+            ),
+            ("no latitude", with_gps(&NIKON_GPS, GPS_LATITUDE, None)),
+            ("no longitude", with_gps(&NIKON_GPS, GPS_LONGITUDE, None)),
+            (
+                "a latitude reference X",
+                with_gps(&NIKON_GPS, GPS_LATITUDE_REF, Some(Gps::Ascii("X"))),
+            ),
+            (
+                "a longitude reference N",
+                with_gps(&NIKON_GPS, GPS_LONGITUDE_REF, Some(Gps::Ascii("N"))),
+            ),
+            (
+                "a lower-case reference",
+                with_gps(&NIKON_GPS, GPS_LATITUDE_REF, Some(Gps::Ascii("n"))),
+            ),
+            (
+                "a reference of two letters",
+                with_gps(&NIKON_GPS, GPS_LATITUDE_REF, Some(Gps::Ascii("NS"))),
+            ),
+            (
+                "a reference of type BYTE",
+                with_gps(&NIKON_GPS, GPS_LATITUDE_REF, Some(Gps::Byte(b"N\0"))),
+            ),
+            (
+                "two RATIONALs for a coordinate",
+                with_gps(
+                    &NIKON_GPS,
+                    GPS_LATITUDE,
+                    Some(Gps::Rationals(&[(48, 1), (514_933, 10_000)])),
+                ),
+            ),
+            (
+                "four RATIONALs for a coordinate",
+                with_gps(
+                    &NIKON_GPS,
+                    GPS_LONGITUDE,
+                    Some(Gps::Rationals(&[(2, 1), (17, 1), (40, 1), (0, 1)])),
+                ),
+            ),
+            (
+                "SHORTs in place of RATIONALs",
+                with_gps(&NIKON_GPS, GPS_LATITUDE, Some(Gps::Short(&[48, 51, 29]))),
+            ),
+            (
+                "a zero denominator",
+                with_gps(
+                    &NIKON_GPS,
+                    GPS_LONGITUDE,
+                    Some(Gps::Rationals(&[(2, 1), (176_700, 0), (0, 1)])),
+                ),
+            ),
+            (
+                "minutes of 60",
+                with_gps(
+                    &NIKON_GPS,
+                    GPS_LATITUDE,
+                    Some(Gps::Rationals(&[(48, 1), (600_000, 10_000), (0, 1)])),
+                ),
+            ),
+            (
+                "a latitude past 90 degrees",
+                with_gps(
+                    &NIKON_GPS,
+                    GPS_LATITUDE,
+                    Some(Gps::Rationals(&[(90, 1), (1, 10_000), (0, 1)])),
+                ),
+            ),
+        ];
+        for (label, tags) in cases {
+            assert_eq!(location_of(&tags), None, "{label}");
+        }
+    }
+
+    #[test]
+    fn the_altitude_needs_both_its_tags() {
+        let altitude = |reference: Option<Gps>, altitude: Option<Gps>| {
+            let tags = with_gps(&NIKON_GPS, GPS_ALTITUDE_REF, reference);
+            let tags = with_gps(&tags, GPS_ALTITUDE, altitude);
+            location_of(&tags)
+                .expect("the position is sound")
+                .altitude()
+        };
+        let metres = Some(Gps::Rationals(&[(35_050, 1000)]));
+        let above = Altitude::above(fraction(35_050, 1000));
+        let below = Altitude::below(fraction(35_050, 1000));
+        assert_eq!(altitude(Some(Gps::Byte(&[0])), metres), above);
+        assert_eq!(altitude(Some(Gps::Byte(&[1])), metres), below);
+        assert_eq!(altitude(Some(Gps::Byte(&[2])), metres), above);
+        assert_eq!(altitude(Some(Gps::Byte(&[3])), metres), below);
+        // Zero metres is a real altitude.
+        assert_eq!(
+            altitude(Some(Gps::Byte(&[0])), Some(Gps::Rationals(&[(0, 1)]))),
+            Altitude::above(fraction(0, 1))
+        );
+        for (label, reference, metres) in [
+            ("a reference of 4", Some(Gps::Byte(&[4])), metres),
+            ("a reference of 255", Some(Gps::Byte(&[255])), metres),
+            ("no reference", None, metres),
+            ("no altitude", Some(Gps::Byte(&[1])), None),
+            ("a reference of two BYTEs", Some(Gps::Byte(&[0, 0])), metres),
+            ("a reference of type SHORT", Some(Gps::Short(&[0])), metres),
+            (
+                "a zero denominator",
+                Some(Gps::Byte(&[0])),
+                Some(Gps::Rationals(&[(35, 0)])),
+            ),
+            (
+                "two RATIONALs",
+                Some(Gps::Byte(&[0])),
+                Some(Gps::Rationals(&[(35, 1), (1, 1)])),
+            ),
+        ] {
+            assert_eq!(altitude(reference, metres), None, "{label}");
+        }
+    }
+
+    #[test]
+    fn the_gps_time_needs_a_date_and_time_that_exist() {
+        let time = |date: Option<Gps>, stamp: Option<Gps>| {
+            let tags = with_gps(&NIKON_GPS, GPS_DATE_STAMP, date);
+            let tags = with_gps(&tags, GPS_TIME_STAMP, stamp);
+            location_of(&tags)
+                .expect("the position is sound")
+                .time()
+                .map(|time| time.to_string())
+        };
+        let date = Some(Gps::Ascii("2024:05:01"));
+        let stamp = |seconds: (u32, u32)| {
+            // Leaked so that the slice lives as long as the constants'.
+            let values: &'static [(u32, u32)] = Box::leak(Box::new([(8, 1), (20, 1), seconds]));
+            Some(Gps::Rationals(values))
+        };
+        for (seconds, expected) in [
+            ((30, 1), "2024-05-01T08:20:30+00:00"),
+            ((305, 10), "2024-05-01T08:20:30.5+00:00"),
+            ((3_000, 100), "2024-05-01T08:20:30.00+00:00"),
+            ((30_450, 1000), "2024-05-01T08:20:30.450+00:00"),
+            ((0, 1), "2024-05-01T08:20:00+00:00"),
+            (
+                (599_999_999, 10_000_000),
+                "2024-05-01T08:20:59.9999999+00:00",
+            ),
+            (
+                (1_000_000_000, 1_000_000_000),
+                "2024-05-01T08:20:01.000000000+00:00",
+            ),
+        ] {
+            assert_eq!(
+                time(date, stamp(seconds)).as_deref(),
+                Some(expected),
+                "{seconds:?}"
+            );
+        }
+        // The date is cleaned as every text: padding spaces are dropped.
+        assert_eq!(
+            time(Some(Gps::Ascii(" 2024:05:01 ")), stamp((30, 1))).as_deref(),
+            Some("2024-05-01T08:20:30+00:00")
+        );
+        let whole = |hours: (u32, u32), minutes: (u32, u32)| {
+            let values: &'static [(u32, u32)] = Box::leak(Box::new([hours, minutes, (30, 1)]));
+            Some(Gps::Rationals(values))
+        };
+        for (label, date, stamp) in [
+            ("seconds over 3", date, stamp((91, 3))),
+            ("seconds over 0", date, stamp((30, 0))),
+            ("seconds over 20", date, stamp((600, 20))),
+            ("a second of 60", date, stamp((60, 1))),
+            ("a second of 60.000", date, stamp((60_000, 1000))),
+            ("an hour of 24", date, whole((24, 1), (0, 1))),
+            ("a minute of 60", date, whole((8, 1), (60, 1))),
+            ("an hour over 10", date, whole((80, 10), (20, 1))),
+            ("minutes over 100", date, whole((8, 1), (2_000, 100))),
+            ("an hour past a byte", date, whole((264, 1), (20, 1))),
+            (
+                "a blank date",
+                Some(Gps::Ascii("          ")),
+                stamp((30, 1)),
+            ),
+            ("a date of NULs", Some(Gps::Ascii("")), stamp((30, 1))),
+            (
+                "30 February",
+                Some(Gps::Ascii("2024:02:30")),
+                stamp((30, 1)),
+            ),
+            (
+                "a date with dashes",
+                Some(Gps::Ascii("2024-05-01")),
+                stamp((30, 1)),
+            ),
+            (
+                "a date and a time",
+                Some(Gps::Ascii("2024:05:01 08:20:30")),
+                stamp((30, 1)),
+            ),
+            ("no date", None, stamp((30, 1))),
+            ("no time stamp", date, None),
+            (
+                "two RATIONALs",
+                date,
+                Some(Gps::Rationals(&[(8, 1), (20, 1)])),
+            ),
+        ] {
+            assert_eq!(time(date, stamp), None, "{label}");
+        }
+    }
+
+    #[test]
+    fn the_image_direction_needs_both_its_tags() {
+        let direction = |reference: Option<Gps>, degrees: Option<Gps>| {
+            let tags = with_gps(&NIKON_GPS, GPS_IMG_DIRECTION_REF, reference);
+            let tags = with_gps(&tags, GPS_IMG_DIRECTION, degrees);
+            location_of(&tags)
+                .expect("the position is sound")
+                .image_direction()
+        };
+        let degrees = Some(Gps::Rationals(&[(27_550, 100)]));
+        assert_eq!(
+            direction(Some(Gps::Ascii("M")), degrees),
+            Direction::new(fraction(27_550, 100), North::Magnetic)
+        );
+        assert_eq!(
+            direction(
+                Some(Gps::Ascii("T")),
+                Some(Gps::Rationals(&[(35_999, 100)]))
+            ),
+            Direction::new(fraction(35_999, 100), North::True)
+        );
+        assert_eq!(
+            direction(Some(Gps::Ascii("T")), Some(Gps::Rationals(&[(0, 1)]))),
+            Direction::new(fraction(0, 1), North::True)
+        );
+        for (label, reference, degrees) in [
+            ("no reference", None, degrees),
+            ("a blank reference", Some(Gps::Ascii(" ")), degrees),
+            ("a reference X", Some(Gps::Ascii("X")), degrees),
+            ("no direction", Some(Gps::Ascii("T")), None),
+            (
+                "360 degrees",
+                Some(Gps::Ascii("T")),
+                Some(Gps::Rationals(&[(360, 1)])),
+            ),
+            (
+                "a zero denominator",
+                Some(Gps::Ascii("M")),
+                Some(Gps::Rationals(&[(90, 0)])),
+            ),
+            (
+                "two RATIONALs",
+                Some(Gps::Ascii("M")),
+                Some(Gps::Rationals(&[(90, 1), (0, 1)])),
+            ),
+        ] {
+            assert_eq!(direction(reference, degrees), None, "{label}");
+        }
+    }
+
+    #[test]
+    fn the_map_datum_is_cleaned_text_and_none_when_blank() {
+        let datum = |value: Option<Gps>| {
+            location_of(&with_gps(&NIKON_GPS, GPS_MAP_DATUM, value))
+                .expect("the position is sound")
+                .map_datum()
+                .map(str::to_owned)
+        };
+        assert_eq!(datum(Some(Gps::Ascii("WGS-84"))).as_deref(), Some("WGS-84"));
+        assert_eq!(
+            datum(Some(Gps::Ascii(" TOKYO  "))).as_deref(),
+            Some("TOKYO")
+        );
+        // Nikon's 17 bytes of spaces, the Coolpix files' 10, and no datum.
+        assert_eq!(datum(Some(Gps::Ascii("                "))), None);
+        assert_eq!(datum(Some(Gps::Ascii("         "))), None);
+        assert_eq!(datum(None), None);
+        // Exif gives the datum as ASCII alone.
+        assert_eq!(datum(Some(Gps::Byte(b"WGS-84\0"))), None);
+        let utf8 = ORDERS.map(|order| {
+            let mut builder = TiffBuilder::new(order);
+            let (ifd0, gps) = (builder.ifd(), builder.ifd());
+            builder.gps(ifd0, gps);
+            write_gps(
+                &mut builder,
+                gps,
+                &with_gps(&NIKON_GPS, GPS_MAP_DATUM, None),
+            );
+            builder.utf8(gps, GPS_MAP_DATUM, "WGS-84");
+            read_bytes(builder.build().bytes)
+                .location
+                .unwrap()
+                .map_datum
+        });
+        assert_eq!(utf8, [None, None]);
+        let long = ORDERS.map(|order| {
+            let mut builder = TiffBuilder::new(order);
+            let (ifd0, gps) = (builder.ifd(), builder.ifd());
+            builder.gps(ifd0, gps);
+            write_gps(
+                &mut builder,
+                gps,
+                &with_gps(&NIKON_GPS, GPS_MAP_DATUM, None),
+            );
+            builder.ascii(gps, GPS_MAP_DATUM, &"W".repeat(MAX_TEXT_LEN + 1));
+            read_bytes(builder.build().bytes)
+                .location
+                .unwrap()
+                .map_datum
+        });
+        assert_eq!(long, [None, None]);
+    }
+
+    #[test]
+    fn the_gps_ifd_is_found_wherever_the_walk_placed_it_and_nothing_else_is_read_from_it() {
+        // A GPS IFD that is also IFD1, as an IFD shared with the chain:
+        // its position is still read.
+        for order in ORDERS {
+            let mut builder = TiffBuilder::new(order);
+            let (ifd0, gps) = (builder.ifd(), builder.ifd());
+            builder
+                .ascii(ifd0, MAKE, "NIKON CORPORATION")
+                .next(ifd0, Some(gps))
+                .gps(ifd0, gps);
+            write_gps(&mut builder, gps, &NIKON_GPS);
+            let metadata = read_bytes(builder.build().bytes);
+            assert_eq!(metadata.location, Some(nikon_location()), "{order:?}");
+        }
+        // The GPS tags in IFD0 or in the Exif IFD are not a location.
+        for order in ORDERS {
+            let mut builder = TiffBuilder::new(order);
+            let (ifd0, exif) = (builder.ifd(), builder.ifd());
+            builder.exif(ifd0, exif);
+            write_gps(
+                &mut builder,
+                exif,
+                &with_gps(&NIKON_GPS, GPS_VERSION_ID, None),
+            );
+            let metadata = read_bytes(builder.build().bytes);
+            assert_eq!(metadata.location, None, "{order:?}");
+        }
+    }
+
+    #[test]
+    fn a_damaged_gps_value_costs_only_itself() {
+        // Every part of a location in the Z 9 file, each part damaged in
+        // turn: a text longer than one value may take, which the reader
+        // reads and refuses, or a fraction of another type or count. Only
+        // that part is lost; the position, the other parts and every value
+        // outside the GPS IFD stay.
+        let tags = with_gps(&NIKON_GPS, GPS_MAP_DATUM, Some(Gps::Ascii("WGS-84")));
+        let tags = with_gps(&tags, GPS_IMG_DIRECTION_REF, Some(Gps::Ascii("T")));
+        let tags = with_gps(&tags, GPS_IMG_DIRECTION, Some(Gps::Rationals(&[(275, 1)])));
+        let whole = Location {
+            image_direction: Direction::new(fraction(275, 1), North::True),
+            map_datum: Some("WGS-84".to_owned()),
+            ..nikon_location()
+        };
+        type Damage = fn(&mut TiffBuilder, IfdId, u16);
+        type Lose = fn(&mut Location);
+        let too_long: Damage = |builder, gps, tag| too_long_of(builder, gps, tag, ASCII, 1);
+        let short: Damage = |builder, gps, tag| {
+            builder.short(gps, tag, &[35]);
+        };
+        let two: Damage = |builder, gps, tag| {
+            builder.rational(gps, tag, &[(8, 1), (20, 1)]);
+        };
+        let cases: [(u16, Damage, Lose); 7] = [
+            (GPS_MAP_DATUM, too_long, |l| l.map_datum = None),
+            (GPS_DATE_STAMP, too_long, |l| l.time = None),
+            (GPS_IMG_DIRECTION_REF, too_long, |l| {
+                l.image_direction = None
+            }),
+            (GPS_ALTITUDE, short, |l| l.altitude = None),
+            (GPS_ALTITUDE_REF, short, |l| l.altitude = None),
+            (GPS_TIME_STAMP, two, |l| l.time = None),
+            (GPS_IMG_DIRECTION, two, |l| l.image_direction = None),
+        ];
+        let (sound, z9) = (
+            read_bytes(z9_bytes_except(0, |builder, ifd0, _| {
+                let gps = builder.ifd();
+                builder.gps(ifd0, gps);
+                write_gps(builder, gps, &tags);
+            })),
+            z9_file(),
+        );
+        assert_eq!(sound.location, Some(whole.clone()));
+        for (damaged, damage, lose) in cases {
+            let metadata = read_bytes(z9_bytes_except(0, |builder, ifd0, _| {
+                let gps = builder.ifd();
+                builder.gps(ifd0, gps);
+                write_gps(builder, gps, &with_gps(&tags, damaged, None));
+                damage(builder, gps, damaged);
+            }));
+            let mut expected = whole.clone();
+            lose(&mut expected);
+            assert_eq!(metadata.location, Some(expected), "{damaged:#06X}");
+            assert_eq!(
+                Metadata {
+                    location: None,
+                    ..metadata
+                },
+                z9,
+                "{damaged:#06X}"
+            );
+        }
+        // A damaged reference costs the location, and nothing else.
+        for damaged in [GPS_LATITUDE_REF, GPS_LONGITUDE_REF] {
+            let metadata = read_bytes(z9_bytes_except(0, |builder, ifd0, _| {
+                let gps = builder.ifd();
+                builder.gps(ifd0, gps);
+                write_gps(builder, gps, &with_gps(&tags, damaged, None));
+                too_long(builder, gps, damaged);
+            }));
+            assert_eq!(metadata, z9, "{damaged:#06X}");
+        }
+    }
+
+    #[test]
+    fn a_failure_of_the_reader_reading_a_gps_value_is_the_readers_error() {
+        let far = u32::try_from(2 * FAR).unwrap();
+        // Each value stored far away, longer than four bytes and so not
+        // held in its entry, in the little-endian order of the Z 9 file.
+        let rationals = |values: &[(u32, u32)]| -> Vec<u8> {
+            values
+                .iter()
+                .flat_map(|&(n, d)| n.to_le_bytes().into_iter().chain(d.to_le_bytes()))
+                .collect()
+        };
+        let values: [(u16, u16, Vec<u8>); 7] = [
+            (
+                GPS_LATITUDE,
+                RATIONAL,
+                rationals(&[(48, 1), (51, 1), (0, 1)]),
+            ),
+            (
+                GPS_LONGITUDE,
+                RATIONAL,
+                rationals(&[(2, 1), (17, 1), (0, 1)]),
+            ),
+            (GPS_ALTITUDE, RATIONAL, rationals(&[(35, 1)])),
+            (
+                GPS_TIME_STAMP,
+                RATIONAL,
+                rationals(&[(8, 1), (20, 1), (30, 1)]),
+            ),
+            (GPS_IMG_DIRECTION, RATIONAL, rationals(&[(275, 1)])),
+            (GPS_MAP_DATUM, ASCII, b"WGS-84\0".to_vec()),
+            (GPS_DATE_STAMP, ASCII, b"2024:05:01\0".to_vec()),
+        ];
+        let tags = with_gps(&NIKON_GPS, GPS_IMG_DIRECTION_REF, Some(Gps::Ascii("T")));
+        let tags = with_gps(&tags, GPS_IMG_DIRECTION, Some(Gps::Rationals(&[(275, 1)])));
+        for (tag, typ, value) in values {
+            let size = if typ == RATIONAL { 8 } else { 1 };
+            let count = u32::try_from(value.len()).unwrap() / size;
+            let bytes = z9_bytes_except(0, |builder, ifd0, _| {
+                let gps = builder.ifd();
+                builder.gps(ifd0, gps).blob_at(2 * FAR, &value);
+                write_gps(builder, gps, &with_gps(&tags, tag, None));
+                builder.raw(gps, tag, typ, count, RawValue::Offset(far));
+            });
+            // The file is sound, for a reader that does not fail.
+            let sound = read_bytes(bytes.clone());
+            assert!(sound.location.is_some(), "{tag:#06X}");
+
+            let mut src = Source::new(FailsFar(Cursor::new(bytes))).unwrap();
+            let file_block = Block::file(src.len());
+            let tree = walk(&mut src, &file_block, &Limits::default()).unwrap();
+            let err = read(&mut src, &tree).expect_err("the read fails");
+            assert_eq!(err.kind(), ErrorKind::Io, "{tag:#06X}: {err:?}");
         }
     }
 }

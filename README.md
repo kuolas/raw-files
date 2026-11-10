@@ -20,9 +20,12 @@ fuller RAW decoding is planned.
   list, the name the body is sold under, such as Z6III; the software
   that wrote the file; who made the picture and what they wrote about
   it, from the artist and the copyright notice to the title, the
-  description and the comment, as the file records them; the lens; the
-  exposure, with the focal length in 35 mm terms; the orientation; and
-  the sizes of the raw data and of the visible image.
+  description and the comment, as the file records them; where the
+  picture was taken, its latitude and longitude as the file records them
+  and in decimal degrees, with the altitude, the GPS time, the direction
+  the camera faced and the map datum; the lens; the exposure, with the
+  focal length in 35 mm terms; the orientation; and the sizes of the raw
+  data and of the visible image.
 - **Camera settings.** The white balance with its colour temperature and
   fine-tuning, the exposure program, the metering mode, the flash, the
   shutter, Sony's electronic front curtain setting, the image area, the
@@ -316,8 +319,10 @@ that fills a box. `Metadata` holds what the camera recorded about the
 picture, read when the file is opened; every value is optional, since not
 every camera records every one, and a damaged value is `None` on its own.
 `Metadata::authorship` gives who made the picture and what they wrote
-about it, as an `Authorship`, and `Metadata::camera_settings` says how
-the camera was set, as a `CameraSettings`. `Focus` is where the camera
+about it, as an `Authorship`; `Metadata::location` where it was taken, a
+`Location` of a `Latitude` and a `Longitude` with an `Altitude`, the GPS
+time and a `Direction` from a `North`; and `Metadata::camera_settings`
+how the camera was set, as a `CameraSettings`. `Focus` is where the camera
 focused, and its `scaled_to` places it on a preview; `Focus::origin`
 says, as a `FocusOrigin`, whether the camera recorded the position or
 raw-files placed it from a table of the body's points. `Metadata::focus_points` gives the autofocus points the
@@ -327,10 +332,11 @@ and the `FocusAreaMode`, and `Metadata::focus_layout` the body's
 `RawFile::entries` gives every entry of the TIFF directories raw-files
 walks, an `Entries` of `Entry`s, each with its `Directory`, tag,
 `FieldType` and count, and `RawFile::read_value` reads one's `Value`. The
-`with_…` methods of `Metadata`, `Camera`, `Authorship`, `Exposure`,
-`Lens`, `CameraSettings`, `WhiteBalance`, `Flash`, `DateTime`, `Focus`,
-`FocusPoints` and `FocusPoint` and the constructors, such as
-`Focus::new` and `FocusLayout::new`, build every metadata value without
+`with_…` methods of `Metadata`, `Camera`, `Authorship`, `Location`,
+`Exposure`, `Lens`, `CameraSettings`, `WhiteBalance`, `Flash`,
+`DateTime`, `Focus`, `FocusPoints` and `FocusPoint` and the
+constructors, such as `Focus::new`, `FocusLayout::new` and
+`Latitude::north`, build every metadata value without
 a file, for a program's tests; an `Entry` comes only from a file.
 `Options` and `Limits` open an untrusted file with other caps. The API
 documentation is on

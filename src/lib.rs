@@ -29,6 +29,10 @@
 //!   [`Authorship`]: the artist, the copyright notice, the photographer,
 //!   the editor, the title, the description and the comment, as the file
 //!   records them;
+//! - where the picture was taken, in a [`Location`]: its latitude and
+//!   longitude as the file records them, with decimal degrees for a map,
+//!   and the altitude, the GPS time, the direction the camera faced and
+//!   the map datum ([`Metadata::location`]);
 //! - the capture time and the orientation;
 //! - the exposure, with the focal length in 35 mm terms, and the lens;
 //! - the camera's settings, in [`CameraSettings`]: the white balance, the

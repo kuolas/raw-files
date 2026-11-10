@@ -9,7 +9,8 @@ use std::fs::File;
 use std::io::{self, Cursor};
 
 use raw_files::{
-    Authorship, Camera, ErrorKind, Focus, Format, Limits, Metadata, Options, Point, RawFile,
+    Altitude, Authorship, Camera, DateTime, Direction, ErrorKind, Focus, Format, Latitude, Limits,
+    Location, Longitude, Metadata, North, Options, Point, Rational, RawFile,
 };
 use support::jpeg_builder::JpegBuilder;
 use support::tiff_builder::{Order, TiffBuilder};
@@ -58,6 +59,31 @@ fn with_authorship(make: &str) -> Vec<u8> {
     }
     builder.undefined(exif, USER_COMMENT, b"ASCII\0\0\0Painted at dawn   ");
     builder.utf8(exif, CAMERA_OWNER_NAME, "Paul Cézanne");
+    builder.build().bytes
+}
+
+/// A TIFF file whose IFD0 holds the Make `make` and links to a GPS IFD
+/// that records every part of a location, in the form a Sony camera
+/// writes it, with the image direction and an altitude below its
+/// reference: the Statue of Liberty's position and a made-up time.
+fn with_location(make: &str) -> Vec<u8> {
+    let mut builder = TiffBuilder::new(Order::Big);
+    let (ifd0, gps) = (builder.ifd(), builder.ifd());
+    builder.ascii(ifd0, MAKE, make).gps(ifd0, gps);
+    builder
+        .byte(gps, 0x0000, &[2, 3, 0, 0]) // GPSVersionID
+        .ascii(gps, 0x0001, "N") // GPSLatitudeRef
+        .rational(gps, 0x0002, &[(40, 1), (41, 1), (21_400, 1000)]) // GPSLatitude
+        .ascii(gps, 0x0003, "W") // GPSLongitudeRef
+        .rational(gps, 0x0004, &[(74, 1), (2, 1), (40_200, 1000)]) // GPSLongitude
+        .byte(gps, 0x0005, &[1]) // GPSAltitudeRef
+        .rational(gps, 0x0006, &[(2_500, 1000)]) // GPSAltitude
+        .rational(gps, 0x0007, &[(13, 1), (5, 1), (21_450, 1000)]) // GPSTimeStamp
+        .ascii(gps, 0x0009, "A") // GPSStatus
+        .ascii(gps, 0x0010, "T") // GPSImgDirectionRef
+        .rational(gps, 0x0011, &[(4_550, 100)]) // GPSImgDirection
+        .ascii(gps, 0x0012, "WGS-84") // GPSMapDatum
+        .ascii(gps, 0x001D, "2024:05:01"); // GPSDateStamp
     builder.build().bytes
 }
 
@@ -239,6 +265,35 @@ fn an_authorship_and_a_camera_built_by_hand_equal_what_open_reads() {
 }
 
 #[test]
+fn a_location_built_by_hand_equals_what_open_reads() {
+    let fraction = |numerator, denominator| Rational::new(numerator, denominator).unwrap();
+    let expected = Location::new(
+        Latitude::north(fraction(40, 1), fraction(41, 1), fraction(21_400, 1000)).unwrap(),
+        Longitude::west(fraction(74, 1), fraction(2, 1), fraction(40_200, 1000)).unwrap(),
+    )
+    .with_altitude(Altitude::below(fraction(2_500, 1000)).unwrap())
+    .with_time(
+        DateTime::new(2024, 5, 1, 13, 5, 21)
+            .and_then(|time| time.with_subseconds(450_000_000, 3))
+            .and_then(|time| time.with_offset_minutes(0))
+            .unwrap(),
+    )
+    .with_image_direction(Direction::new(fraction(4_550, 100), North::True).unwrap())
+    .with_map_datum("WGS-84");
+    let mut jpeg = JpegBuilder::new();
+    jpeg.jfif().exif(&with_location("SONY"));
+    for (bytes, format) in [
+        (with_location("NIKON CORPORATION"), Format::Nef),
+        (with_location("SONY"), Format::Arw),
+        (jpeg.build().bytes, Format::Jpeg),
+    ] {
+        let file = RawFile::from_bytes(&bytes).unwrap();
+        assert_eq!(file.format(), format);
+        assert_eq!(file.metadata().location(), Some(&expected), "{format:?}");
+    }
+}
+
+#[test]
 fn metadata_values_are_send_and_sync() {
     // A culler reads the metadata of many files on a pool of threads.
     fn assert_send<T: Send>() {}
@@ -249,4 +304,6 @@ fn metadata_values_are_send_and_sync() {
     assert_sync::<Focus>();
     assert_send::<Point>();
     assert_sync::<Point>();
+    assert_send::<Location>();
+    assert_sync::<Location>();
 }

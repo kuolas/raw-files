@@ -176,8 +176,8 @@ pub(crate) struct Tree {
 
 // The NEF reader's claim reads IFD0, the preview finder goes through every
 // IFD of the tree, the metadata and MakerNote readers read the Exif IFD,
-// and the metadata reader reads the Interoperability IFD; nothing reads
-// the GPS IFD, the number of IFDs or an IFD by its position yet. Each
+// and the metadata reader reads the Interoperability IFD and the GPS IFD;
+// nothing reads the number of IFDs or an IFD by its position yet. Each
 // `expect` fails the build once its method has a caller, so it is then
 // removed rather than left behind.
 impl Tree {
@@ -227,7 +227,6 @@ impl Tree {
     ///
     /// `None` when IFD0 has no GPS IFD tag or one that cannot be read or
     /// followed, and when the IFD the tag leads to is not in the tree.
-    #[cfg_attr(not(test), expect(dead_code, reason = "nothing reads this method yet"))]
     pub(crate) fn gps(&self) -> Option<&Ifd> {
         self.gps.and_then(|i| self.ifds.get(i)).map(|(_, ifd)| ifd)
     }

@@ -12,9 +12,12 @@
 //! into a decimal with `to_f64`. Each type's `new` refuses a fraction with
 //! a zero denominator, which is no number, so that a caller can build its
 //! own for its tests. The readers build every signed fraction through
-//! `new` too, and every unsigned one through a stricter check of their
-//! own, which also refuses a zero numerator: Exif writes a zero for a
-//! value the camera did not know.
+//! `new` too, and every unsigned one of the exposure and the lens through
+//! a stricter check of their own, which also refuses a zero numerator:
+//! Exif writes a zero for such a value the camera did not know. The
+//! fractions of a location, its degrees, minutes, seconds and metres, are
+//! the exception: a zero is a real value there, and the location's own
+//! types check them.
 
 use std::fmt;
 
@@ -67,8 +70,10 @@ impl Rational {
     /// denominator is refused because the fraction would be no number. A
     /// zero numerator is kept: for a fraction a caller builds, zero is a
     /// real value, such as an angle of 0° or a distance of 0. The readers
-    /// never return a zero unsigned fraction, since Exif writes a zero for
-    /// a value the camera did not know, and they read it as `None`.
+    /// return no zero unsigned fraction for the exposure or the lens, since
+    /// Exif writes a zero for such a value the camera did not know, and
+    /// they read it as `None`; in a [`Location`](crate::Location), whose
+    /// degrees, minutes, seconds and metres may be zero, they keep it.
     ///
     /// The fields are public, so a struct literal can still hold any two
     /// numbers, unchecked: that is why every method still gives a result,
@@ -102,8 +107,9 @@ impl Rational {
     /// gives a value: as [`new`](Self::new) builds it, and also `None` when
     /// the numerator is zero.
     ///
-    /// This is how the readers build every unsigned fraction they read.
-    /// Exif writes a zero for a value the camera did not know: an f-number
+    /// This is how the readers build every unsigned fraction of the
+    /// exposure and the lens. Exif writes a zero for a value the camera did
+    /// not know: an f-number
     /// of 0/10 from a lens that does not report its aperture, as on the
     /// public ILCE-7S sample 1582, or a lens range of 0/0. That suits every
     /// unsigned fraction the library reads, such as an exposure time, an

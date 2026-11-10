@@ -32,6 +32,25 @@ does.
   is and held to 255 bytes, `None` when blank; `Camera::with_owner_name`
   sets it. It names whoever owns the body, not whoever took the
   picture.
+- `Metadata::location` gives where the picture was taken, in a
+  `Location`, read from the GPS IFD of NEF, ARW and JPEG files alike: a
+  position, a `Latitude` and a `Longitude`, each the degrees, minutes
+  and seconds the file records as fractions with its hemisphere, and
+  `to_degrees` for signed decimal degrees; and, when the file records
+  them, the `Altitude`, above or below its reference without naming the
+  surface, the GPS time in UTC with the fraction of a second the file
+  records, the image direction, a `Direction` from true or magnetic
+  `North`, and the map datum. A GPS IFD without a sound position gives
+  no location: both reference letters and both coordinates must name a
+  place, so a GPS IFD of only its version, a Sony file without a fix and
+  a Coolpix file's blank tags give none. Each other part needs both its
+  tags, and a damaged one costs only itself; a GPS time needs a date and
+  time that exist. Everything is given as recorded, nothing rounded or
+  hidden. GPSVersionID, GPSStatus and the other GPS tags are not read;
+  the view of every entry gives them. `Metadata::with_location`,
+  `Location::new` and its `with_…` methods, and the checked
+  constructors of the coordinates, the altitude and the direction build
+  one for a program's tests.
 
 ### Changed
 
