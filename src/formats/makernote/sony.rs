@@ -1699,7 +1699,7 @@ mod tests {
     }
 
     #[test]
-    fn a_centre_on_the_far_edge_is_kept_and_one_past_it_gives_none() {
+    fn a_center_on_the_far_edge_is_kept_and_one_past_it_gives_none() {
         for order in ORDERS {
             for center in [[7008, 2102], [3832, 4672], [7008, 4672], [0, 0]] {
                 assert_eq!(
@@ -1769,7 +1769,7 @@ mod tests {
     }
 
     #[test]
-    fn an_area_that_does_not_fit_around_the_centre_gives_none() {
+    fn an_area_that_does_not_fit_around_the_center_gives_none() {
         // At (3832, 2102) in 7008 by 4672, an area fits up to twice the
         // distance to the nearer edge: 2 × (7008 - 3832) = 6352 wide and
         // 2 × 2102 = 4204 high.
@@ -2036,7 +2036,7 @@ mod tests {
     }
 
     #[test]
-    fn the_colour_temperature_is_read_under_any_white_balance_setting() {
+    fn the_color_temperature_is_read_under_any_white_balance_setting() {
         // 3200 under a chosen colour temperature, as on the ILCE-7M2's
         // later frames; 5500 and 6300 under custom, as on its custom
         // frames; and a value above 0 under auto, shade, a code no file
@@ -2069,7 +2069,7 @@ mod tests {
     }
 
     #[test]
-    fn a_colour_temperature_of_zero_or_of_another_shape_gives_none() {
+    fn a_color_temperature_of_zero_or_of_another_shape_gives_none() {
         // Under a chosen colour temperature: 0, which records none, as
         // every other setting holds on every file checked; a SHORT; an
         // SLONG; and two LONGs.
@@ -2110,7 +2110,7 @@ mod tests {
     }
 
     #[test]
-    fn a_colour_temperature_past_99_999_kelvin_gives_none() {
+    fn a_color_temperature_past_99_999_kelvin_gives_none() {
         // 99,999 K, the bound, is given; past it, numbers no camera is set
         // to, up to the largest LONG, give none.
         for order in ORDERS {

@@ -119,9 +119,9 @@ impl fmt::Display for Size {
 /// use raw_files::{Point, Size};
 ///
 /// let stored = Size { width: 8256, height: 5504 };
-/// let centre = Point { x: stored.width / 2, y: stored.height / 2 };
-/// assert_eq!(centre, Point { x: 4128, y: 2752 });
-/// assert_eq!(centre.to_string(), "(4128, 2752)");
+/// let center = Point { x: stored.width / 2, y: stored.height / 2 };
+/// assert_eq!(center, Point { x: 4128, y: 2752 });
+/// assert_eq!(center.to_string(), "(4128, 2752)");
 /// ```
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Point {

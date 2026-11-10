@@ -141,8 +141,8 @@ use crate::geometry::{Point, Size};
 /// let focus = file.metadata().focus();
 /// if let (Some(focus), Some(preview)) = (focus, file.largest_preview()) {
 ///     if let Some(focus) = focus.scaled_to(preview.size()) {
-///         let centre = focus.center();
-///         println!("focused at {centre} on the preview");
+///         let center = focus.center();
+///         println!("focused at {center} on the preview");
 ///         if let Some(size) = focus.size() {
 ///             println!("on an area of {size} pixels");
 ///         }
@@ -631,8 +631,8 @@ impl FocusPoint {
 ///     .with_area_mode(FocusAreaMode::Auto);
 ///
 /// let on_preview = points.scaled_to(Size { width: 1504, height: 1004 })?;
-/// let centres: Vec<Point> = on_preview.points().iter().map(FocusPoint::center).collect();
-/// assert_eq!(centres, [Point { x: 752, y: 502 }, Point { x: 692, y: 376 }]);
+/// let centers: Vec<Point> = on_preview.points().iter().map(FocusPoint::center).collect();
+/// assert_eq!(centers, [Point { x: 752, y: 502 }, Point { x: 692, y: 376 }]);
 /// assert_eq!(on_preview.primary().and_then(FocusPoint::number), Some(13));
 /// assert_eq!(
 ///     on_preview.primary().and_then(FocusPoint::size),
@@ -896,10 +896,10 @@ impl From<Focus> for FocusPoints {
 /// use raw_files::{FocusLayoutPoint, Point, Size};
 ///
 /// let size = Size { width: 164, height: 164 };
-/// let centre = FocusLayoutPoint::new(1, Point { x: 3008, y: 2007 }, size);
-/// assert_eq!(centre.number(), 1);
-/// assert_eq!(centre.center(), Point { x: 3008, y: 2007 });
-/// assert_eq!(centre.size(), Size { width: 164, height: 164 });
+/// let point = FocusLayoutPoint::new(1, Point { x: 3008, y: 2007 }, size);
+/// assert_eq!(point.number(), 1);
+/// assert_eq!(point.center(), Point { x: 3008, y: 2007 });
+/// assert_eq!(point.size(), Size { width: 164, height: 164 });
 /// ```
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct FocusLayoutPoint {
@@ -1314,7 +1314,7 @@ mod tests {
     }
 
     #[test]
-    fn a_focus_needs_its_centre_on_the_frame() {
+    fn a_focus_needs_its_center_on_the_frame() {
         let frame = size(100, 50);
         assert_eq!(
             Focus::new(frame, point(101, 0), FocusOrigin::Recorded),
@@ -1340,7 +1340,7 @@ mod tests {
     }
 
     #[test]
-    fn no_area_fits_around_a_centre_on_an_edge() {
+    fn no_area_fits_around_a_center_on_an_edge() {
         let frame = size(100, 100);
         for center in [point(0, 50), point(100, 50), point(50, 0), point(50, 100)] {
             let focus = Focus::new(frame, center, FocusOrigin::Recorded).unwrap();
@@ -1361,7 +1361,7 @@ mod tests {
     }
 
     #[test]
-    fn a_focus_area_fits_around_its_centre_by_half_its_side_rounded_up() {
+    fn a_focus_area_fits_around_its_center_by_half_its_side_rounded_up() {
         // In a frame of 100, an area of 10 (half 5) fits a centre from 5 to
         // 95, and one of 11 (half 6) from 6 to 94: (side, centre, accepted).
         let cases = [
@@ -1611,7 +1611,7 @@ mod tests {
     }
 
     #[test]
-    fn a_scaled_focus_keeps_its_centre_and_trims_its_area_to_fit() {
+    fn a_scaled_focus_keeps_its_center_and_trims_its_area_to_fit() {
         // The area rounds to 3, and the centre to 2, which an area of 3
         // (half 2) would overflow in a frame of 3: the area is trimmed to 2.
         let focus = built(size(4, 4), point(2, 2), Some(size(4, 4)), None).unwrap();
@@ -2367,9 +2367,9 @@ mod tests {
     #[test]
     fn a_layout_needs_at_least_one_point() {
         assert_eq!(FocusLayout::new("NIKON D600", D600_FRAME, &[]), None);
-        static CENTRE: [FocusLayoutPoint; 1] = [d600(1, 3_008, 2_007)];
-        let one = FocusLayout::new("NIKON D600", D600_FRAME, &CENTRE).unwrap();
-        assert_eq!(one.points(), CENTRE);
+        static CENTER: [FocusLayoutPoint; 1] = [d600(1, 3_008, 2_007)];
+        let one = FocusLayout::new("NIKON D600", D600_FRAME, &CENTER).unwrap();
+        assert_eq!(one.points(), CENTER);
     }
 
     #[test]

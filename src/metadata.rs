@@ -460,8 +460,8 @@ impl Metadata {
     /// # fn main() -> raw_files::Result<()> {
     /// let file = RawFile::open("photo.nef")?;
     /// if let Some(focus) = file.metadata().focus() {
-    ///     let (centre, frame) = (focus.center(), focus.frame());
-    ///     println!("focused at {centre} on a frame of {frame} pixels");
+    ///     let (center, frame) = (focus.center(), focus.frame());
+    ///     println!("focused at {center} on a frame of {frame} pixels");
     ///     match focus.in_focus() {
     ///         Some(true) => println!("in focus"),
     ///         Some(false) => println!("missed focus"),
@@ -871,8 +871,8 @@ impl Exposure {
     /// Sets the focal length, in millimetres, in place of any set before;
     /// [`focal_length`](Self::focal_length) reads it.
     #[must_use]
-    pub fn with_focal_length(mut self, millimetres: Rational) -> Self {
-        self.focal_length = Some(millimetres);
+    pub fn with_focal_length(mut self, millimeters: Rational) -> Self {
+        self.focal_length = Some(millimeters);
         self
     }
 
@@ -881,8 +881,8 @@ impl Exposure {
     /// [`focal_length_in_35mm_film`](Self::focal_length_in_35mm_film) reads
     /// it.
     #[must_use]
-    pub fn with_focal_length_in_35mm_film(mut self, millimetres: u32) -> Self {
-        self.focal_length_in_35mm_film = Some(millimetres);
+    pub fn with_focal_length_in_35mm_film(mut self, millimeters: u32) -> Self {
+        self.focal_length_in_35mm_film = Some(millimeters);
         self
     }
 
@@ -1105,8 +1105,8 @@ impl Lens {
     /// of any set before; [`min_focal_length`](Self::min_focal_length)
     /// reads it.
     #[must_use]
-    pub fn with_min_focal_length(mut self, millimetres: Rational) -> Self {
-        self.min_focal_length = Some(millimetres);
+    pub fn with_min_focal_length(mut self, millimeters: Rational) -> Self {
+        self.min_focal_length = Some(millimeters);
         self
     }
 
@@ -1114,8 +1114,8 @@ impl Lens {
     /// of any set before; [`max_focal_length`](Self::max_focal_length)
     /// reads it.
     #[must_use]
-    pub fn with_max_focal_length(mut self, millimetres: Rational) -> Self {
-        self.max_focal_length = Some(millimetres);
+    pub fn with_max_focal_length(mut self, millimeters: Rational) -> Self {
+        self.max_focal_length = Some(millimeters);
         self
     }
 
@@ -1549,16 +1549,16 @@ mod tests {
     /// D600 in the NEF format notes gives them: the centre point, 1,
     /// and the top point of the leftmost column, 38.
     static D600_POINTS: [FocusLayoutPoint; 2] = [
-        FocusLayoutPoint::new(1, D600_CENTRE, D600_BOX),
+        FocusLayoutPoint::new(1, D600_CENTER, D600_BOX),
         FocusLayoutPoint::new(38, Point { x: 1_812, y: 1_705 }, D600_BOX),
     ];
 
     /// The D600's centre point alone.
-    static D600_CENTRE_POINT: [FocusLayoutPoint; 1] =
-        [FocusLayoutPoint::new(1, D600_CENTRE, D600_BOX)];
+    static D600_CENTER_POINT: [FocusLayoutPoint; 1] =
+        [FocusLayoutPoint::new(1, D600_CENTER, D600_BOX)];
 
     /// Where the D600's centre point lies, and the box of every point.
-    const D600_CENTRE: Point = Point { x: 3_008, y: 2_007 };
+    const D600_CENTER: Point = Point { x: 3_008, y: 2_007 };
     const D600_BOX: Size = Size {
         width: 164,
         height: 164,
@@ -1572,8 +1572,8 @@ mod tests {
 
     /// A made-up layout of the D600's centre point alone: unlike
     /// [`d600_layout`].
-    fn d600_centre_layout() -> FocusLayout {
-        FocusLayout::new("NIKON D600", size(6_016, 4_016), &D600_CENTRE_POINT).unwrap()
+    fn d600_center_layout() -> FocusLayout {
+        FocusLayout::new("NIKON D600", size(6_016, 4_016), &D600_CENTER_POINT).unwrap()
     }
 
     /// Two points placed from a table in a D600-sized frame, the second
@@ -1879,7 +1879,7 @@ mod tests {
         // the layout is caught too. The expected value is built field by
         // field, not through the builders.
         let z9_with_layout = Metadata {
-            focus_layout: Some(d600_centre_layout()),
+            focus_layout: Some(d600_center_layout()),
             ..z9_metadata()
         };
         for start in [Metadata::default(), z9_metadata(), z9_with_layout] {
@@ -2101,7 +2101,7 @@ mod tests {
             .with_raw_size(size(1, 1))
             .with_image_size(size(1, 1))
             .with_focus_points(two_points())
-            .with_focus_layout(d600_centre_layout());
+            .with_focus_layout(d600_center_layout());
         // Every value of `earlier` differs from the Z 9's, and its layout
         // from the one set below, so each builder below has one to
         // replace.

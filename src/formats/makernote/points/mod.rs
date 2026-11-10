@@ -475,7 +475,7 @@ mod tests {
     /// notes record, and a frame of the wrong size, or a table read in
     /// another frame, moves the centre away from it.
     #[test]
-    fn every_tables_point_1_lies_at_the_frames_centre() {
+    fn every_tables_point_1_lies_at_the_frames_center() {
         for table in TABLES {
             let model = table.recorded_model;
             let first = table
@@ -562,7 +562,7 @@ mod tests {
     /// could hold no point, and one with an odd margin cannot be centred
     /// to the pixel, so no file's CropHiSpeed could ever match it.
     #[test]
-    fn every_tables_crop_windows_fit_its_frame_centred() {
+    fn every_tables_crop_windows_fit_its_frame_centered() {
         for table in TABLES {
             let model = table.recorded_model;
             let mut codes = BTreeSet::new();
@@ -570,7 +570,7 @@ mod tests {
                 let ConfirmedCrop { code, window } = *crop;
                 assert!(codes.insert(code), "{model}: crop setting {code} twice");
                 let what = format!("{model}: crop setting {code}'s window");
-                assert_fits_centred(&what, table.frame, window);
+                assert_fits_centered(&what, table.frame, window);
             }
         }
     }
@@ -578,7 +578,7 @@ mod tests {
     /// Checks that `window`, which `what` names, has no zero side, fits
     /// `frame` and leaves an even margin, the frame less the window, on
     /// each axis, so that it can be centred to the pixel.
-    fn assert_fits_centred(what: &str, frame: Size, window: Size) {
+    fn assert_fits_centered(what: &str, frame: Size, window: Size) {
         assert!(
             window.width > 0 && window.height > 0,
             "{what} {window} has a zero side"
@@ -605,7 +605,7 @@ mod tests {
     /// points that the reader then refuses, so the size would gain
     /// nothing.
     #[test]
-    fn every_tables_jpeg_windows_fit_its_frame_centred_in_their_jpegs_shape() {
+    fn every_tables_jpeg_windows_fit_its_frame_centered_in_their_jpegs_shape() {
         for table in TABLES {
             let model = table.recorded_model;
             let mut sizes = BTreeSet::new();
@@ -616,7 +616,7 @@ mod tests {
                     "{model}: JPEG size {size} twice"
                 );
                 let what = format!("{model}: JPEG size {size}'s window");
-                assert_fits_centred(&what, table.frame, window);
+                assert_fits_centered(&what, table.frame, window);
                 assert!(
                     window.same_shape(size),
                     "{what} {window} has not the JPEG's shape"

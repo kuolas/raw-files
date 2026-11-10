@@ -1652,13 +1652,13 @@ fn window_of_shape(frame: Size, cut: Cut, pixels: Size) -> Option<Size> {
 /// is longer than the frame, or the position lies before the window's
 /// start.
 fn shifted(value: u32, frame: u32, window: u32) -> Option<u32> {
-    value.checked_sub(centred_origin(frame, window)?)
+    value.checked_sub(centered_origin(frame, window)?)
 }
 
 /// Where a window `window` pixels long starts when centred on a side
 /// `frame` pixels long: half of `frame - window`, rounded down. `None`
 /// when the window is longer than the frame.
-fn centred_origin(frame: u32, window: u32) -> Option<u32> {
+fn centered_origin(frame: u32, window: u32) -> Option<u32> {
     Some(frame.checked_sub(window)? / 2)
 }
 
@@ -1764,21 +1764,21 @@ fn placed_frame(
     pixels: Option<Size>,
 ) -> Option<(Size, Point)> {
     let frame = table.frame();
-    let centred = |window: Size| {
+    let centered = |window: Size| {
         Some(Point {
-            x: centred_origin(frame.width, window.width)?,
-            y: centred_origin(frame.height, window.height)?,
+            x: centered_origin(frame.width, window.width)?,
+            y: centered_origin(frame.height, window.height)?,
         })
     };
     match crop.filter(|crop| crop.cropped != crop.original) {
         Some(crop) => {
             let window = table.crop_window(crop.mode)?;
-            let origin = centred(window)?;
+            let origin = centered(window)?;
             let confirmed = crop.origin == origin && pixels.is_none_or(|pixels| pixels == window);
             confirmed.then_some((window, origin))
         }
         None => match pixels.and_then(|pixels| table.jpeg_window(pixels)) {
-            Some(window) => Some((window, centred(window)?)),
+            Some(window) => Some((window, centered(window)?)),
             None => Some((frame, Point { x: 0, y: 0 })),
         },
     }
@@ -6299,12 +6299,12 @@ mod tests {
             crop_area: Some([8, 8, 4128, 4128]),
             ..Z9_1X1
         };
-        let centred = Recorded {
+        let centered = Recorded {
             center: [4128, 2752],
             ..Z9_1X1_CORNER
         };
         for order in ORDERS {
-            for recorded in [Z9_1X1_CORNER, centred] {
+            for recorded in [Z9_1X1_CORNER, centered] {
                 assert_eq!(
                     crop_focus(order, crop, "0400", recorded),
                     None,
@@ -6485,7 +6485,7 @@ mod tests {
     }
 
     #[test]
-    fn a_dx_crop_whose_centre_lies_outside_the_recorded_frame_gives_none() {
+    fn a_dx_crop_whose_center_lies_outside_the_recorded_frame_gives_none() {
         // A centre at x = 8257, one pixel past the right edge of the 8256
         // frame, which `Focus::new` refuses as recorded. On the Z 9's DX
         // CropArea it would scale past the right edge anyway, to 5393; on
@@ -6548,7 +6548,7 @@ mod tests {
     }
 
     #[test]
-    fn a_dx_crop_that_rounds_the_centre_onto_an_edge_keeps_the_point_alone() {
+    fn a_dx_crop_that_rounds_the_center_onto_an_edge_keeps_the_point_alone() {
         // A 1000 by 1000 frame scaled onto a 400 by 400 CropArea, by 0.4:
         // a centre 1 across, with an area 2 wide, which fits as recorded,
         // rounds to (1 × 400 + 500) / 1000 = 0, on the left edge, where no
@@ -7025,7 +7025,7 @@ mod tests {
     }
 
     #[test]
-    fn a_chosen_colour_temperature_is_read_by_its_form() {
+    fn a_chosen_color_temperature_is_read_by_its_form() {
         for order in ORDERS {
             for text in ["3230K", "2500K", "10000K", "1K", "99999K"] {
                 let read = white_balance_of(order, text, exif_auto);
@@ -7128,7 +7128,7 @@ mod tests {
     }
 
     #[test]
-    fn a_colour_temperature_above_zero_is_read_under_any_white_balance() {
+    fn a_color_temperature_above_zero_is_read_under_any_white_balance() {
         // The Z 9's frames: the temperature auto chose, and the one
         // applied under daylight, a preset and a chosen temperature.
         for order in ORDERS {
@@ -7156,7 +7156,7 @@ mod tests {
     }
 
     #[test]
-    fn a_colour_temperature_of_zero_is_none() {
+    fn a_color_temperature_of_zero_is_none() {
         // As the D850 and the Z fc write it under daylight.
         for order in ORDERS {
             let read = settings_of(order, |inner, ifd| {
@@ -7172,7 +7172,7 @@ mod tests {
     }
 
     #[test]
-    fn without_a_colour_temperature_tag_a_chosen_one_is_read_from_the_text() {
+    fn without_a_color_temperature_tag_a_chosen_one_is_read_from_the_text() {
         // As the D600 records a chosen 3230 K, by its text alone; and the
         // ends of the text's form, which counts leading zeros as digits.
         for order in ORDERS {
@@ -7201,7 +7201,7 @@ mod tests {
     }
 
     #[test]
-    fn the_colour_temperature_tag_wins_over_the_text() {
+    fn the_color_temperature_tag_wins_over_the_text() {
         // The Z 9 writes both, and they agree; were they to differ, the
         // temperature the camera applied is the tag's.
         for order in ORDERS {
@@ -7221,7 +7221,7 @@ mod tests {
     }
 
     #[test]
-    fn a_colour_temperature_tag_that_gives_none_gives_way_to_the_text() {
+    fn a_color_temperature_tag_that_gives_none_gives_way_to_the_text() {
         // 0, which records none, and a LONG and two SHORTs, which are not
         // read: each costs only itself, and the text stands in.
         let unusable: [(&str, Tags); 3] = [
@@ -7251,7 +7251,7 @@ mod tests {
     }
 
     #[test]
-    fn a_text_of_zero_kelvin_or_of_another_form_gives_no_colour_temperature() {
+    fn a_text_of_zero_kelvin_or_of_another_form_gives_no_color_temperature() {
         // `0K` has the form of a chosen colour temperature, and names the
         // mode, but records no temperature; a text of another form records
         // none either, and without the tag there is none.

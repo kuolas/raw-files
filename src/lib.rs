@@ -137,8 +137,8 @@
 //!     .and_then(|(preview, focus)| focus.scaled_to(preview.size()));
 //! match on_preview {
 //!     Some(focus) => {
-//!         let (centre, frame) = (focus.center(), focus.frame());
-//!         println!("focused at {centre} on the {frame} preview");
+//!         let (center, frame) = (focus.center(), focus.frame());
+//!         println!("focused at {center} on the {frame} preview");
 //!         if let Some(size) = focus.size() {
 //!             println!("measure sharpness in the {size} area around it");
 //!         }
