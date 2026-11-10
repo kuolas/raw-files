@@ -28,10 +28,15 @@
 //!   cut at the first NUL, `None` when longer than 255 bytes, trimmed of
 //!   spaces at both ends, `None` when nothing is left, and with bytes that
 //!   are not UTF-8 replaced by U+FFFD. The texts Exif 3.1 gives as "ASCII
-//!   or UTF-8", the make, the model, the software and the lens's make and
-//!   model, are read from a value of either type by that rule
-//!   ([`ascii_or_utf8_text`]); the serial numbers, which Exif gives as
-//!   ASCII alone, as every MakerNote text, only from type ASCII.
+//!   or UTF-8", the make, the model, the software, the lens's make and
+//!   model, the camera's owner, the artist, the copyright notice, the
+//!   photographer, the editor and the title, are read from a value of
+//!   either type by that rule ([`ascii_or_utf8_text`]), and so is the
+//!   description, as free text without the 255-byte limit (below); the
+//!   serial numbers, which Exif gives as ASCII alone, as every MakerNote
+//!   text, only from type ASCII.
+//! - The camera's owner is the Exif CameraOwnerName, read by that rule, as
+//!   a fact of the camera beside its serial number.
 //! - The software is IFD0's Software, as written and cleaned by that rule:
 //!   the camera's firmware version, such as `Ver.1.10` from the D300's
 //!   `Ver.1.10 `, or the name of the program that last wrote the file.
@@ -168,13 +173,13 @@ use crate::camera_settings::{
     WhiteBalanceMode,
 };
 use crate::container::tiff::tags::{
-    ARTIST, BODY_SERIAL_NUMBER, COLOR_SPACE, COPYRIGHT, DATE_TIME_ORIGINAL, DEFAULT_CROP_ORIGIN,
-    DEFAULT_CROP_SIZE, EXPOSURE_BIAS_VALUE, EXPOSURE_PROGRAM, EXPOSURE_TIME, F_NUMBER, FLASH,
-    FOCAL_LENGTH, FOCAL_LENGTH_IN_35MM_FILM, IMAGE_DESCRIPTION, IMAGE_EDITOR, IMAGE_LENGTH,
-    IMAGE_TITLE, IMAGE_WIDTH, INTEROP_INDEX, ISO_SPEED, LENS_MAKE, LENS_MODEL, LENS_SERIAL_NUMBER,
-    LENS_SPECIFICATION, LIGHT_SOURCE, MAKE, METERING_MODE, MODEL, OFFSET_TIME_ORIGINAL,
-    PHOTOGRAPHER, PHOTOGRAPHIC_SENSITIVITY, RECOMMENDED_EXPOSURE_INDEX, SOFTWARE,
-    SUB_SEC_TIME_ORIGINAL, USER_COMMENT, WHITE_BALANCE,
+    ARTIST, BODY_SERIAL_NUMBER, CAMERA_OWNER_NAME, COLOR_SPACE, COPYRIGHT, DATE_TIME_ORIGINAL,
+    DEFAULT_CROP_ORIGIN, DEFAULT_CROP_SIZE, EXPOSURE_BIAS_VALUE, EXPOSURE_PROGRAM, EXPOSURE_TIME,
+    F_NUMBER, FLASH, FOCAL_LENGTH, FOCAL_LENGTH_IN_35MM_FILM, IMAGE_DESCRIPTION, IMAGE_EDITOR,
+    IMAGE_LENGTH, IMAGE_TITLE, IMAGE_WIDTH, INTEROP_INDEX, ISO_SPEED, LENS_MAKE, LENS_MODEL,
+    LENS_SERIAL_NUMBER, LENS_SPECIFICATION, LIGHT_SOURCE, MAKE, METERING_MODE, MODEL,
+    OFFSET_TIME_ORIGINAL, PHOTOGRAPHER, PHOTOGRAPHIC_SENSITIVITY, RECOMMENDED_EXPOSURE_INDEX,
+    SOFTWARE, SUB_SEC_TIME_ORIGINAL, USER_COMMENT, WHITE_BALANCE,
 };
 use crate::container::tiff::types::{LONG, SHORT, UNDEFINED};
 use crate::container::tiff::{Ifd, Tree, skip_damage};
@@ -259,28 +264,32 @@ pub(crate) struct Standard {
 /// reason is `None`, and costs no other value.
 pub(crate) fn read<R: Read + Seek>(src: &mut Source<R>, tree: &Tree) -> Result<Standard> {
     let ifd0 = tree.ifd0();
-    let (serial_number, capture_time, exposure, camera_settings, lens) = match tree.exif() {
-        Some(exif) => (
-            text(src, exif, BODY_SERIAL_NUMBER)?,
-            capture_time(src, exif)?,
-            exposure(src, exif)?,
-            camera_settings(src, exif, tree.interop())?,
-            lens(src, exif)?,
-        ),
-        None => (
-            None,
-            None,
-            Exposure::default(),
-            CameraSettings::default(),
-            Lens::default(),
-        ),
-    };
+    let (serial_number, owner_name, capture_time, exposure, camera_settings, lens) =
+        match tree.exif() {
+            Some(exif) => (
+                text(src, exif, BODY_SERIAL_NUMBER)?,
+                ascii_or_utf8_text(src, exif, CAMERA_OWNER_NAME)?,
+                capture_time(src, exif)?,
+                exposure(src, exif)?,
+                camera_settings(src, exif, tree.interop())?,
+                lens(src, exif)?,
+            ),
+            None => (
+                None,
+                None,
+                None,
+                Exposure::default(),
+                CameraSettings::default(),
+                Lens::default(),
+            ),
+        };
     let (raw_size, default_crop) = sizes(src, tree)?;
     let metadata = Metadata {
         camera: Camera {
             recorded_make: ascii_or_utf8_text(src, ifd0, MAKE)?,
             recorded_model: ascii_or_utf8_text(src, ifd0, MODEL)?,
             serial_number,
+            owner_name,
         },
         software: ascii_or_utf8_text(src, ifd0, SOFTWARE)?,
         authorship: authorship(src, tree)?,
@@ -1320,6 +1329,7 @@ mod tests {
             recorded_make: Some("NIKON CORPORATION".to_owned()),
             recorded_model: Some("NIKON Z 9".to_owned()),
             serial_number: Some("1234567".to_owned()),
+            owner_name: None,
         }
     }
 
@@ -1587,7 +1597,7 @@ mod tests {
     /// holds to 255 bytes, each with its tag, where it is read from and
     /// what reads it back. The description, of either type too, is free
     /// text, and is checked beside them where the rules agree.
-    const ASCII_OR_UTF8_TEXTS: [(u16, In, GetText); 10] = [
+    const ASCII_OR_UTF8_TEXTS: [(u16, In, GetText); 11] = [
         (MAKE, In::Ifd0, |m| m.camera().recorded_make()),
         (MODEL, In::Ifd0, |m| m.camera().recorded_model()),
         (SOFTWARE, In::Ifd0, |m| m.software()),
@@ -1598,6 +1608,7 @@ mod tests {
         (PHOTOGRAPHER, In::Exif, |m| m.authorship().photographer()),
         (IMAGE_EDITOR, In::Exif, |m| m.authorship().editor()),
         (IMAGE_TITLE, In::Exif, |m| m.authorship().title()),
+        (CAMERA_OWNER_NAME, In::Exif, |m| m.camera().owner_name()),
     ];
 
     /// The description, with its tag, where it is read from and what
@@ -2017,7 +2028,7 @@ mod tests {
     }
 
     #[test]
-    fn a_failure_of_the_reader_reading_an_authorship_text_is_the_readers_error() {
+    fn a_failure_of_the_reader_reading_an_authorship_text_or_the_owner_is_the_readers_error() {
         let far = u32::try_from(2 * FAR).unwrap();
         let texts = [
             (ARTIST, In::Ifd0, ASCII, &b"Claude Monet\0"[..]),
@@ -2037,6 +2048,7 @@ mod tests {
                 UNDEFINED,
                 b"ASCII\0\0\0Painted at dawn",
             ),
+            (CAMERA_OWNER_NAME, In::Exif, ASCII, b"Paul Cezanne\0"),
         ];
         for (tag, at, typ, value) in texts {
             // The value stored far away, longer than four bytes and so not
@@ -2048,9 +2060,9 @@ mod tests {
                 builder.raw(ifd, tag, typ, count, RawValue::Offset(far));
             });
             // The file is sound, for a reader that does not fail.
-            assert_ne!(
-                read_bytes(bytes.clone()).authorship,
-                Authorship::default(),
+            let sound = read_bytes(bytes.clone());
+            assert!(
+                sound.authorship != Authorship::default() || sound.camera.owner_name.is_some(),
                 "{tag:#06X}"
             );
 
@@ -2236,7 +2248,7 @@ mod tests {
             change(&mut expected.camera_settings);
             expected
         }
-        let cases: [(&str, u16, Change, Metadata); 24] = [
+        let cases: [(&str, u16, Change, Metadata); 25] = [
             (
                 "a Model that is not text",
                 MODEL,
@@ -2282,6 +2294,12 @@ mod tests {
                     },
                     ..z9_expected()
                 },
+            ),
+            (
+                "an owner's name too long to read",
+                CAMERA_OWNER_NAME,
+                |builder, _, exif| too_long(builder, exif, CAMERA_OWNER_NAME),
+                z9_expected(),
             ),
             (
                 "a serial number of 256 bytes",

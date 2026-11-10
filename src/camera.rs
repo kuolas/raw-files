@@ -3,9 +3,9 @@
 //! The camera a picture was taken with.
 //!
 //! A camera names itself in the file it writes: its maker and its model,
-//! each in a text tag of the file's first directory, IFD0, and on many
-//! bodies its serial number. [`Camera`] holds the three as the file
-//! records them, and [`Metadata::camera`](crate::Metadata::camera) gives
+//! each in a text tag of the file's first directory, IFD0, on many bodies
+//! its serial number, and on some its owner's name. [`Camera`] holds the
+//! four as the file records them, and [`Metadata::camera`](crate::Metadata::camera) gives
 //! them for a file. From the maker's text, raw-files recognises the maker
 //! as a [`Make`], such as [`Make::Nikon`] from `NIKON CORPORATION`, which
 //! [`Camera::make`] gives; and from the maker and the model's text
@@ -24,7 +24,8 @@
 use std::fmt;
 
 /// The camera body a picture was taken with, as the file names it: its
-/// maker and its model as the file records them, and its serial number;
+/// maker and its model as the file records them, its serial number and its
+/// owner's name;
 /// and its maker and the name it sells the body under, as raw-files reads
 /// them from the recorded texts.
 ///
@@ -121,6 +122,7 @@ pub struct Camera {
     pub(crate) recorded_make: Option<String>,
     pub(crate) recorded_model: Option<String>,
     pub(crate) serial_number: Option<String>,
+    pub(crate) owner_name: Option<String>,
 }
 
 impl Camera {
@@ -250,6 +252,23 @@ impl Camera {
         self.serial_number.as_deref()
     }
 
+    /// The name of the camera's owner, as the file records it: the Exif
+    /// CameraOwnerName, of type ASCII or UTF-8, cleaned of padding by the
+    /// reader as every text value is, or as given to
+    /// [`with_owner_name`](Self::with_owner_name).
+    ///
+    /// It names whoever owns the body, set once in the camera, not
+    /// whoever took the picture, which
+    /// [`Authorship::artist`](crate::Authorship::artist) and
+    /// [`Authorship::photographer`](crate::Authorship::photographer) give.
+    /// Exif says it shall in principle not be rewritten. Few bodies record
+    /// one, and a blank field, as a camera writes one its owner has not
+    /// set, is `None`. raw-files gives it as the file records it, with no
+    /// option to hide it.
+    pub fn owner_name(&self) -> Option<&str> {
+        self.owner_name.as_deref()
+    }
+
     /// Sets the camera's maker as the file records it, in place of any set
     /// before; [`recorded_make`](Self::recorded_make) reads it,
     /// [`make`](Self::make) reads the maker from it, and
@@ -276,6 +295,14 @@ impl Camera {
     #[must_use]
     pub fn with_serial_number(mut self, serial_number: impl Into<String>) -> Self {
         self.serial_number = Some(serial_number.into());
+        self
+    }
+
+    /// Sets the name of the camera's owner, in place of any set before;
+    /// [`owner_name`](Self::owner_name) reads it.
+    #[must_use]
+    pub fn with_owner_name(mut self, owner_name: impl Into<String>) -> Self {
+        self.owner_name = Some(owner_name.into());
         self
     }
 }
@@ -550,6 +577,7 @@ mod tests {
             recorded_make: Some("NIKON CORPORATION".to_owned()),
             recorded_model: Some("NIKON Z 9".to_owned()),
             serial_number: Some("3001234".to_owned()),
+            owner_name: Some("Claude Monet".to_owned()),
         }
     }
 
@@ -559,6 +587,7 @@ mod tests {
         assert_eq!(camera.recorded_make(), None);
         assert_eq!(camera.recorded_model(), None);
         assert_eq!(camera.serial_number(), None);
+        assert_eq!(camera.owner_name(), None);
     }
 
     #[test]
@@ -567,6 +596,7 @@ mod tests {
         assert_eq!(camera.recorded_make(), Some("NIKON CORPORATION"));
         assert_eq!(camera.recorded_model(), Some("NIKON Z 9"));
         assert_eq!(camera.serial_number(), Some("3001234"));
+        assert_eq!(camera.owner_name(), Some("Claude Monet"));
     }
 
     #[test]
@@ -598,6 +628,13 @@ mod tests {
                         ..start.clone()
                     },
                 ),
+                (
+                    start.clone().with_owner_name("Berthe Morisot"),
+                    Camera {
+                        owner_name: Some("Berthe Morisot".to_owned()),
+                        ..start.clone()
+                    },
+                ),
             ];
             for (place, (built, expected)) in cases.into_iter().enumerate() {
                 assert_eq!(built, expected, "builder {place} from {start:?}");
@@ -610,7 +647,8 @@ mod tests {
         let built = Camera::default()
             .with_recorded_make("NIKON CORPORATION")
             .with_recorded_model("NIKON Z 9")
-            .with_serial_number("3001234");
+            .with_serial_number("3001234")
+            .with_owner_name("Claude Monet");
         assert_eq!(built, z9_camera());
     }
 
@@ -619,12 +657,14 @@ mod tests {
         let earlier = Camera::default()
             .with_recorded_make("A")
             .with_recorded_model("A")
-            .with_serial_number("A");
+            .with_serial_number("A")
+            .with_owner_name("A");
         // The Z 9's values, each set after an earlier one.
         let camera = earlier
             .with_recorded_make("NIKON CORPORATION")
             .with_recorded_model("NIKON Z 9")
-            .with_serial_number("3001234");
+            .with_serial_number("3001234")
+            .with_owner_name("Claude Monet");
         assert_eq!(camera, z9_camera());
     }
 
@@ -633,22 +673,31 @@ mod tests {
         let make = String::from("NIKON CORPORATION");
         let model = String::from("NIKON Z 9");
         let serial_number = String::from("3001234");
-        let addresses = [make.as_ptr(), model.as_ptr(), serial_number.as_ptr()];
+        let owner_name = String::from("Claude Monet");
+        let addresses = [
+            make.as_ptr(),
+            model.as_ptr(),
+            serial_number.as_ptr(),
+            owner_name.as_ptr(),
+        ];
         let camera = Camera::default()
             .with_recorded_make(make)
             .with_recorded_model(model)
-            .with_serial_number(serial_number);
+            .with_serial_number(serial_number)
+            .with_owner_name(owner_name);
         let texts = [
             camera.recorded_make(),
             camera.recorded_model(),
             camera.serial_number(),
+            camera.owner_name(),
         ];
         assert_eq!(
             texts,
             [
                 Some("NIKON CORPORATION"),
                 Some("NIKON Z 9"),
-                Some("3001234")
+                Some("3001234"),
+                Some("Claude Monet")
             ]
         );
         // The very texts given, not copies of them.

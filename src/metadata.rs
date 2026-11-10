@@ -1436,6 +1436,7 @@ mod tests {
             recorded_make: Some("NIKON CORPORATION".to_owned()),
             recorded_model: Some("NIKON Z 9".to_owned()),
             serial_number: Some("3001234".to_owned()),
+            owner_name: Some("Paul Cézanne".to_owned()),
         }
     }
 
@@ -1990,6 +1991,7 @@ mod tests {
                 recorded_make: Some("A".to_owned()),
                 recorded_model: Some("A".to_owned()),
                 serial_number: Some("A".to_owned()),
+                owner_name: Some("A".to_owned()),
             })
             .with_software("A")
             .with_authorship(Authorship::default().with_title("A"))

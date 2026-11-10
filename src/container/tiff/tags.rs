@@ -222,6 +222,10 @@ pub(crate) const WHITE_BALANCE: u16 = 0xA403;
 /// for 50 mm on a DX body. Exif writes 0 for one the camera did not know.
 pub(crate) const FOCAL_LENGTH_IN_35MM_FILM: u16 = 0xA405;
 
+/// The owner of the camera, as text (CameraOwnerName), read from the Exif
+/// IFD: set in the camera, and in principle never rewritten.
+pub(crate) const CAMERA_OWNER_NAME: u16 = 0xA430;
+
 /// The serial number of the camera body, as text (BodySerialNumber), read
 /// from the Exif IFD.
 pub(crate) const BODY_SERIAL_NUMBER: u16 = 0xA431;
