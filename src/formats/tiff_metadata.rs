@@ -36,6 +36,22 @@
 //!   the camera's firmware version, such as `Ver.1.10` from the D300's
 //!   `Ver.1.10 `, or the name of the program that last wrote the file.
 //!   Exif 3.0's CameraFirmware, which no checked file writes, is not read.
+//! - The authorship is seven texts ([`authorship`]): the artist, the
+//!   copyright notice and the description from IFD0's Artist, Copyright
+//!   and ImageDescription, never from the copies Sony writes in IFD1 and
+//!   IFD2; the photographer, the editor and the title from the Exif IFD's
+//!   Photographer, ImageEditor and ImageTitle; and the comment from its
+//!   UserComment. Each but the comment is of type ASCII or UTF-8, as Exif
+//!   3.1 gives them. The artist, the copyright notice, the photographer,
+//!   the editor and the title are read by the text rule above. The
+//!   description and the comment are free text, cleaned by that rule but
+//!   with no limit of 255 bytes, only the cap on any one value, so their
+//!   line breaks are kept. A description that is a text a camera writes
+//!   by itself, `SONY DSC`, matched whole once cleaned, is `None`
+//!   ([`description`]). The comment is the text after UserComment's
+//!   8-byte code, of type UNDEFINED, when that code is `ASCII`; under any
+//!   other code, and when the value holds no more than its code, it is
+//!   `None` ([`comment`]). Nothing is read from a MakerNote.
 //! - The capture time is the Exif DateTimeOriginal, with its own fraction
 //!   of a second (SubSecTimeOriginal) and offset from UTC
 //!   (OffsetTimeOriginal), each of type ASCII; [`DateTime::from_exif`]
@@ -115,7 +131,8 @@
 //!   a JPEG's Exif segment, counts as none, so the MakerNote may stand in,
 //!   as for any damaged value (ADR011).
 //! - A file without an Exif IFD has no capture time, no serial number, no
-//!   exposure, no lens, and none of the camera settings.
+//!   exposure, no lens, none of the camera settings, and no photographer,
+//!   editor, title or comment.
 //! - The orientation is IFD0's Orientation, read as the preview finder reads
 //!   it ([`tiff_previews::orientation`]), so that the metadata and the
 //!   previews never disagree.
@@ -144,20 +161,22 @@
 
 use std::io::{Read, Seek};
 
+use crate::authorship::Authorship;
 use crate::camera::Camera;
 use crate::camera_settings::{
     CameraSettings, ColorSpace, ExposureProgram, Flash, FlashMode, MeteringMode, WhiteBalance,
     WhiteBalanceMode,
 };
 use crate::container::tiff::tags::{
-    BODY_SERIAL_NUMBER, COLOR_SPACE, DATE_TIME_ORIGINAL, DEFAULT_CROP_ORIGIN, DEFAULT_CROP_SIZE,
-    EXPOSURE_BIAS_VALUE, EXPOSURE_PROGRAM, EXPOSURE_TIME, F_NUMBER, FLASH, FOCAL_LENGTH,
-    FOCAL_LENGTH_IN_35MM_FILM, IMAGE_LENGTH, IMAGE_WIDTH, INTEROP_INDEX, ISO_SPEED, LENS_MAKE,
-    LENS_MODEL, LENS_SERIAL_NUMBER, LENS_SPECIFICATION, LIGHT_SOURCE, MAKE, METERING_MODE, MODEL,
-    OFFSET_TIME_ORIGINAL, PHOTOGRAPHIC_SENSITIVITY, RECOMMENDED_EXPOSURE_INDEX, SOFTWARE,
-    SUB_SEC_TIME_ORIGINAL, WHITE_BALANCE,
+    ARTIST, BODY_SERIAL_NUMBER, COLOR_SPACE, COPYRIGHT, DATE_TIME_ORIGINAL, DEFAULT_CROP_ORIGIN,
+    DEFAULT_CROP_SIZE, EXPOSURE_BIAS_VALUE, EXPOSURE_PROGRAM, EXPOSURE_TIME, F_NUMBER, FLASH,
+    FOCAL_LENGTH, FOCAL_LENGTH_IN_35MM_FILM, IMAGE_DESCRIPTION, IMAGE_EDITOR, IMAGE_LENGTH,
+    IMAGE_TITLE, IMAGE_WIDTH, INTEROP_INDEX, ISO_SPEED, LENS_MAKE, LENS_MODEL, LENS_SERIAL_NUMBER,
+    LENS_SPECIFICATION, LIGHT_SOURCE, MAKE, METERING_MODE, MODEL, OFFSET_TIME_ORIGINAL,
+    PHOTOGRAPHER, PHOTOGRAPHIC_SENSITIVITY, RECOMMENDED_EXPOSURE_INDEX, SOFTWARE,
+    SUB_SEC_TIME_ORIGINAL, USER_COMMENT, WHITE_BALANCE,
 };
-use crate::container::tiff::types::{LONG, SHORT};
+use crate::container::tiff::types::{LONG, SHORT, UNDEFINED};
 use crate::container::tiff::{Ifd, Tree, skip_damage};
 use crate::datetime::DateTime;
 use crate::entries::clean_text;
@@ -175,6 +194,21 @@ use crate::rational::{Rational, SignedRational};
 /// a lens model, so a longer one than this is not a name or a serial
 /// number a camera wrote.
 const MAX_TEXT_LEN: usize = 255;
+
+/// The texts that cameras write in ImageDescription by themselves, whatever
+/// the picture shows, each as the whole text once cleaned: none is a
+/// description.
+///
+/// Only a text measured files show a camera writes joins the list. Older
+/// Sony bodies write `SONY DSC`: in 9 bytes, or padded with spaces to 32,
+/// on 23 public ARW files and in a public sample JPEG of the DSLR-A100, as
+/// the ARW notes (section 9.8) and the JPEG notes (section 4) list. Newer
+/// Sony bodies write 32 spaces, which are no text.
+const PLACEHOLDER_DESCRIPTIONS: [&str; 1] = ["SONY DSC"];
+
+/// The 8 bytes that start a UserComment whose text is ASCII: the code
+/// `ASCII` and three NULs (Exif 3.1, 4.6.4 and Table 4).
+const ASCII_CODE: &[u8; 8] = b"ASCII\0\0\0";
 
 /// The PhotographicSensitivity that Exif writes for a sensitivity of 65535
 /// or more: a least value, which a RecommendedExposureIndex or an ISOSpeed
@@ -249,6 +283,7 @@ pub(crate) fn read<R: Read + Seek>(src: &mut Source<R>, tree: &Tree) -> Result<S
             serial_number,
         },
         software: ascii_or_utf8_text(src, ifd0, SOFTWARE)?,
+        authorship: authorship(src, tree)?,
         capture_time,
         orientation: tiff_previews::orientation(src, tree)?,
         exposure,
@@ -326,6 +361,84 @@ fn short_text(bytes: Option<Vec<u8>>) -> Option<String> {
     bytes
         .filter(|bytes| bytes.len() <= MAX_TEXT_LEN)
         .and_then(|bytes| clean_text(&bytes))
+}
+
+/// Who made the picture and what they wrote about it, from `tree`: the
+/// artist, the copyright notice and the description from IFD0, and the
+/// photographer, the editor, the title and the comment from the Exif IFD.
+///
+/// IFD0's texts are read from IFD0 alone: the copies Sony writes in IFD1
+/// and IFD2 are not read. The artist, the copyright notice, the
+/// photographer, the editor and the title are read by
+/// [`ascii_or_utf8_text`]; the description by [`description`] and the
+/// comment by [`comment`], as free text. A file without an Exif IFD gives
+/// no photographer, editor, title or comment.
+///
+/// # Errors
+///
+/// `Io` when the reader fails. A value that cannot be read for any other
+/// reason is `None`, and costs no other value.
+fn authorship<R: Read + Seek>(src: &mut Source<R>, tree: &Tree) -> Result<Authorship> {
+    let ifd0 = tree.ifd0();
+    let mut authorship = Authorship {
+        artist: ascii_or_utf8_text(src, ifd0, ARTIST)?,
+        copyright: ascii_or_utf8_text(src, ifd0, COPYRIGHT)?,
+        description: description(src, ifd0)?,
+        ..Authorship::default()
+    };
+    if let Some(exif) = tree.exif() {
+        authorship.photographer = ascii_or_utf8_text(src, exif, PHOTOGRAPHER)?;
+        authorship.editor = ascii_or_utf8_text(src, exif, IMAGE_EDITOR)?;
+        authorship.title = ascii_or_utf8_text(src, exif, IMAGE_TITLE)?;
+        authorship.comment = comment(src, exif)?;
+    }
+    Ok(authorship)
+}
+
+/// What the picture shows, from IFD0 `ifd0`'s ImageDescription, of type
+/// ASCII or UTF-8: free text, cut at its first NUL and cleaned as every
+/// text is, with no limit of 255 bytes, only the cap on any one value, and
+/// with its line breaks kept.
+///
+/// `None` when the cleaned text is one of [`PLACEHOLDER_DESCRIPTIONS`],
+/// whole, whatever the camera's Make: a text a camera writes by itself is
+/// no description. A longer text that holds one, such as `SONY DSC` and a
+/// caption, is a description.
+///
+/// # Errors
+///
+/// `Io` when the reader fails. A value that cannot be read for any other
+/// reason, such as one longer than the cap, is `None`.
+fn description<R: Read + Seek>(src: &mut Source<R>, ifd0: &Ifd) -> Result<Option<String>> {
+    let Some(bytes) = skip_damage(ifd0.text_bytes(src, IMAGE_DESCRIPTION))?.flatten() else {
+        return Ok(None);
+    };
+    Ok(clean_text(&bytes).filter(|text| !PLACEHOLDER_DESCRIPTIONS.contains(&text.as_str())))
+}
+
+/// A comment on the picture, from the Exif IFD `exif`'s UserComment, of
+/// type UNDEFINED: the text after its 8-byte code when the code is
+/// [`ASCII_CODE`], cut at its first NUL and cleaned as every text is, with
+/// no limit of 255 bytes, only the cap on any one value, and with its line
+/// breaks kept.
+///
+/// `None` under any other code: the undefined code of eight NULs, `JIS`,
+/// `UNICODE`, which Exif defines as UTF-8, and a code Exif does not list;
+/// and when the value is no longer than its code, or of another type.
+///
+/// # Errors
+///
+/// `Io` when the reader fails. A value that cannot be read for any other
+/// reason, such as one longer than the cap, is `None`.
+fn comment<R: Read + Seek>(src: &mut Source<R>, exif: &Ifd) -> Result<Option<String>> {
+    // `bytes` reads BYTE as well as UNDEFINED; Exif gives UNDEFINED alone.
+    if exif.entry_of_type(USER_COMMENT, &[UNDEFINED]).is_none() {
+        return Ok(None);
+    }
+    let Some(bytes) = skip_damage(exif.bytes(src, USER_COMMENT))?.flatten() else {
+        return Ok(None);
+    };
+    Ok(bytes.strip_prefix(ASCII_CODE).and_then(clean_text))
 }
 
 /// When the picture was taken, from the Exif IFD `exif`: its
@@ -1470,16 +1583,28 @@ mod tests {
     /// the same rule.
     type GetText = fn(&Metadata) -> Option<&str>;
 
-    /// The five texts read before the authorship that Exif 3.1 gives as
-    /// "ASCII or UTF-8", each with its tag, where it is read from and what
-    /// reads it back.
-    const ASCII_OR_UTF8_TEXTS: [(u16, In, GetText); 5] = [
+    /// The texts that Exif 3.1 gives as "ASCII or UTF-8" and the reader
+    /// holds to 255 bytes, each with its tag, where it is read from and
+    /// what reads it back. The description, of either type too, is free
+    /// text, and is checked beside them where the rules agree.
+    const ASCII_OR_UTF8_TEXTS: [(u16, In, GetText); 10] = [
         (MAKE, In::Ifd0, |m| m.camera().recorded_make()),
         (MODEL, In::Ifd0, |m| m.camera().recorded_model()),
         (SOFTWARE, In::Ifd0, |m| m.software()),
         (LENS_MAKE, In::Exif, |m| m.lens().recorded_make()),
         (LENS_MODEL, In::Exif, |m| m.lens().recorded_model()),
+        (ARTIST, In::Ifd0, |m| m.authorship().artist()),
+        (COPYRIGHT, In::Ifd0, |m| m.authorship().copyright()),
+        (PHOTOGRAPHER, In::Exif, |m| m.authorship().photographer()),
+        (IMAGE_EDITOR, In::Exif, |m| m.authorship().editor()),
+        (IMAGE_TITLE, In::Exif, |m| m.authorship().title()),
     ];
+
+    /// The description, with its tag, where it is read from and what
+    /// reads it back, as [`ASCII_OR_UTF8_TEXTS`] lists the others.
+    const DESCRIPTION: (u16, In, GetText) = (IMAGE_DESCRIPTION, In::Ifd0, |m| {
+        m.authorship().description()
+    });
 
     /// The texts Exif 3.1 gives as ASCII alone that the reader reads from
     /// the standard tags, each with its tag and what reads it back: the
@@ -1505,7 +1630,7 @@ mod tests {
     fn a_text_exif_gives_as_ascii_or_utf8_is_read_from_either_type() {
         // A name with letters past ASCII, which only UTF-8 can hold, padded
         // as the cameras pad their ASCII texts.
-        for (tag, at, get) in ASCII_OR_UTF8_TEXTS {
+        for (tag, at, get) in ASCII_OR_UTF8_TEXTS.into_iter().chain([DESCRIPTION]) {
             let ascii = with_text(at, |builder, ifd| {
                 builder.ascii(ifd, tag, "  Zeiss Ikon ");
             });
@@ -1519,7 +1644,7 @@ mod tests {
 
     #[test]
     fn a_text_of_another_type_is_none() {
-        for (tag, at, get) in ASCII_OR_UTF8_TEXTS {
+        for (tag, at, get) in ASCII_OR_UTF8_TEXTS.into_iter().chain([DESCRIPTION]) {
             for metadata in [
                 with_text(at, |builder, ifd| {
                     builder.undefined(ifd, tag, b"Zeiss Ikon\0");
@@ -1534,8 +1659,19 @@ mod tests {
     }
 
     #[test]
-    fn a_utf8_text_keeps_the_255_byte_limit_counted_as_stored() {
+    fn a_text_keeps_the_255_byte_limit_counted_as_stored() {
         for (tag, at, get) in ASCII_OR_UTF8_TEXTS {
+            let ascii = |len| {
+                with_text(at, |builder, ifd| {
+                    builder.ascii(ifd, tag, &"M".repeat(len));
+                })
+            };
+            assert_eq!(
+                get(&ascii(255)),
+                Some("M".repeat(255).as_str()),
+                "{tag:#06X}"
+            );
+            assert_eq!(get(&ascii(256)), None, "{tag:#06X}");
             // "é" is two bytes: 127 of them and one more byte are 255.
             let kept = format!("{}e", "é".repeat(127));
             let metadata = with_text(at, |builder, ifd| {
@@ -1547,6 +1683,382 @@ mod tests {
                 builder.utf8(ifd, tag, &refused);
             });
             assert_eq!(get(&metadata), None, "{tag:#06X}");
+        }
+    }
+
+    /// The authorship read from a file whose IFD0 holds what `ifd0` adds
+    /// and whose Exif IFD holds what `exif` adds, given the builder and
+    /// that IFD's ID.
+    fn authorship_of(
+        ifd0: impl FnOnce(&mut TiffBuilder, IfdId),
+        exif: impl FnOnce(&mut TiffBuilder, IfdId),
+    ) -> Authorship {
+        let (mut src, tree) = testing::file(|builder, ifd| {
+            let exif_ifd = builder.ifd();
+            builder.exif(ifd, exif_ifd);
+            ifd0(builder, ifd);
+            exif(builder, exif_ifd);
+        });
+        read(&mut src, &tree).unwrap().metadata.authorship
+    }
+
+    /// The artist read from a file whose IFD0's Artist is `artist`, as
+    /// ASCII with the NUL the builder adds.
+    fn artist(artist: &str) -> Option<String> {
+        authorship_of(
+            |builder, ifd0| {
+                builder.ascii(ifd0, ARTIST, artist);
+            },
+            |_, _| {},
+        )
+        .artist
+    }
+
+    /// The description read from a file whose IFD0's ImageDescription is
+    /// `description`, as ASCII with the NUL the builder adds.
+    fn description_of(description: &str) -> Option<String> {
+        authorship_of(
+            |builder, ifd0| {
+                builder.ascii(ifd0, IMAGE_DESCRIPTION, description);
+            },
+            |_, _| {},
+        )
+        .description
+    }
+
+    /// The comment read from a file whose Exif IFD's UserComment is
+    /// `bytes`, of type UNDEFINED.
+    fn comment_of(bytes: &[u8]) -> Option<String> {
+        authorship_of(
+            |_, _| {},
+            |builder, exif| {
+                builder.undefined(exif, USER_COMMENT, bytes);
+            },
+        )
+        .comment
+    }
+
+    /// `text` after the code `code`, padded with `pad` to 36 bytes, as
+    /// Nikon stores a UserComment in 44 bytes.
+    fn nikon_comment(code: &[u8; 8], text: &str, pad: u8) -> Vec<u8> {
+        let mut bytes = code.to_vec();
+        bytes.extend_from_slice(text.as_bytes());
+        bytes.resize(44, pad);
+        bytes
+    }
+
+    #[test]
+    fn a_file_with_every_authorship_text_gives_each_in_its_place() {
+        let authorship = authorship_of(
+            |builder, ifd0| {
+                builder
+                    .ascii(ifd0, ARTIST, "Claude Monet")
+                    .ascii(ifd0, COPYRIGHT, "Copyright Claude Monet")
+                    .ascii(ifd0, IMAGE_DESCRIPTION, "The port of Le Havre");
+            },
+            |builder, exif| {
+                builder
+                    .ascii(exif, PHOTOGRAPHER, "Camille Pissarro")
+                    .ascii(exif, IMAGE_EDITOR, "Alfred Sisley")
+                    .utf8(exif, IMAGE_TITLE, "Impression, soleil levant")
+                    .undefined(exif, USER_COMMENT, b"ASCII\0\0\0Painted at dawn");
+            },
+        );
+        assert_eq!(
+            authorship,
+            Authorship::default()
+                .with_artist("Claude Monet")
+                .with_copyright("Copyright Claude Monet")
+                .with_photographer("Camille Pissarro")
+                .with_editor("Alfred Sisley")
+                .with_title("Impression, soleil levant")
+                .with_description("The port of Le Havre")
+                .with_comment("Painted at dawn")
+        );
+    }
+
+    #[test]
+    fn an_artist_is_read_from_the_fields_nikon_and_sony_write() {
+        // Nikon's 37 bytes, with the builder's NUL: unset, a NUL first or
+        // all spaces; set, the text padded with spaces.
+        let nikon = |text: &str| format!("{text:<36}");
+        assert_eq!(artist(&nikon("\0")), None);
+        assert_eq!(artist(&nikon("")), None);
+        assert_eq!(
+            artist(&nikon("Claude Monet")).as_deref(),
+            Some("Claude Monet")
+        );
+        // Sony's: exactly the text and its NUL.
+        assert_eq!(artist("Claude Monet").as_deref(), Some("Claude Monet"));
+        // A painter's name past ASCII, in UTF-8.
+        let utf8 = authorship_of(
+            |builder, ifd0| {
+                builder.utf8(ifd0, ARTIST, "Édouard Manet");
+            },
+            |_, _| {},
+        );
+        assert_eq!(utf8.artist(), Some("Édouard Manet"));
+    }
+
+    #[test]
+    fn a_description_is_free_text_with_its_line_breaks() {
+        let long = "A".repeat(300);
+        assert_eq!(description_of(&long), Some(long.clone()));
+        let utf8 = authorship_of(
+            |builder, ifd0| {
+                builder.utf8(ifd0, IMAGE_DESCRIPTION, &"é".repeat(300));
+            },
+            |_, _| {},
+        );
+        assert_eq!(utf8.description(), Some("é".repeat(300).as_str()));
+        assert_eq!(
+            description_of("  The port of Le Havre\r\nat sunrise\n  ").as_deref(),
+            Some("The port of Le Havre\r\nat sunrise\n")
+        );
+        // Newer Sony bodies' 32 spaces are no text.
+        assert_eq!(description_of(&" ".repeat(31)), None);
+    }
+
+    #[test]
+    fn a_cameras_placeholder_is_no_description() {
+        // In 9 bytes, as the DSLR-A200 to A900 write it, and padded with
+        // spaces to 32, as the DSLR-A100, the NEX and SLT bodies do.
+        assert_eq!(description_of("SONY DSC"), None);
+        assert_eq!(description_of(&format!("{:<31}", "SONY DSC")), None);
+        // Whatever the Make: the file says nothing of it here.
+        let in_utf8 = authorship_of(
+            |builder, ifd0| {
+                builder.utf8(ifd0, IMAGE_DESCRIPTION, "SONY DSC");
+            },
+            |_, _| {},
+        );
+        assert_eq!(in_utf8.description(), None);
+        // Matched whole and with its case: inside a longer text, or in
+        // another case, it is a description.
+        assert_eq!(
+            description_of("SONY DSC The port of Le Havre").as_deref(),
+            Some("SONY DSC The port of Le Havre")
+        );
+        assert_eq!(description_of("Sony DSC").as_deref(), Some("Sony DSC"));
+    }
+
+    #[test]
+    fn ifd0s_texts_are_read_from_ifd0_alone() {
+        // Sony copies ImageDescription, Artist and Copyright into IFD1 and
+        // IFD2; a file holding them in IFD1 alone gives none.
+        let (mut src, tree) = testing::file(|builder, ifd0| {
+            let ifd1 = builder.ifd();
+            builder
+                .next(ifd0, Some(ifd1))
+                .short(ifd0, ORIENTATION, &[1]);
+            builder
+                .ascii(ifd1, IMAGE_DESCRIPTION, "The port of Le Havre")
+                .ascii(ifd1, ARTIST, "Claude Monet")
+                .ascii(ifd1, COPYRIGHT, "Copyright Claude Monet");
+        });
+        let metadata = read(&mut src, &tree).unwrap().metadata;
+        assert_eq!(metadata.authorship(), &Authorship::default());
+    }
+
+    #[test]
+    fn the_exif_texts_are_not_read_from_ifd0() {
+        let authorship = authorship_of(
+            |builder, ifd0| {
+                builder
+                    .ascii(ifd0, PHOTOGRAPHER, "Camille Pissarro")
+                    .ascii(ifd0, IMAGE_EDITOR, "Alfred Sisley")
+                    .ascii(ifd0, IMAGE_TITLE, "Impression, soleil levant")
+                    .undefined(ifd0, USER_COMMENT, b"ASCII\0\0\0Painted at dawn");
+            },
+            |_, _| {},
+        );
+        assert_eq!(authorship, Authorship::default());
+    }
+
+    #[test]
+    fn a_comment_under_the_ascii_code_is_its_text() {
+        // Nikon's 44 bytes: the text ending at a NUL, or padded with
+        // spaces; unset, 36 NULs or 36 spaces.
+        let text = "Painted at dawn";
+        assert_eq!(
+            comment_of(&nikon_comment(ASCII_CODE, text, 0)).as_deref(),
+            Some(text)
+        );
+        assert_eq!(
+            comment_of(&nikon_comment(ASCII_CODE, &format!("{text}\0junk"), b' ')).as_deref(),
+            Some(text)
+        );
+        assert_eq!(
+            comment_of(&nikon_comment(ASCII_CODE, text, b' ')).as_deref(),
+            Some(text)
+        );
+        assert_eq!(comment_of(&nikon_comment(ASCII_CODE, "", 0)), None);
+        assert_eq!(comment_of(&nikon_comment(ASCII_CODE, "", b' ')), None);
+        // Free text: past 255 bytes, with its line breaks.
+        let long = format!("{}\n{}", "A".repeat(200), "B".repeat(200));
+        let mut bytes = ASCII_CODE.to_vec();
+        bytes.extend_from_slice(long.as_bytes());
+        assert_eq!(comment_of(&bytes), Some(long));
+    }
+
+    #[test]
+    fn a_comment_under_any_other_code_is_none() {
+        // The undefined code of eight NULs, JIS, UNICODE, and a code Exif
+        // does not list, each followed by a text.
+        for code in [
+            b"\0\0\0\0\0\0\0\0",
+            b"JIS\0\0\0\0\0",
+            b"UNICODE\0",
+            b"ASCII\0\0X",
+            b"ascii\0\0\0",
+        ] {
+            assert_eq!(
+                comment_of(&nikon_comment(code, "Painted at dawn", 0)),
+                None,
+                "{code:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_comment_no_longer_than_its_code_or_of_another_type_is_none() {
+        assert_eq!(comment_of(b"ASCII\0\0"), None);
+        assert_eq!(comment_of(ASCII_CODE), None);
+        assert_eq!(comment_of(b""), None);
+        for metadata in [
+            with_text(In::Exif, |builder, exif| {
+                builder.ascii(exif, USER_COMMENT, "ASCII\0\0\0Painted at dawn");
+            }),
+            with_text(In::Exif, |builder, exif| {
+                builder.byte(exif, USER_COMMENT, b"ASCII\0\0\0Painted at dawn");
+            }),
+        ] {
+            assert_eq!(metadata.authorship().comment(), None);
+        }
+    }
+
+    #[test]
+    fn a_damaged_authorship_text_costs_no_other_value() {
+        type Damage = fn(&mut TiffBuilder, IfdId, IfdId);
+        let texts: [(u16, Damage); 7] = [
+            (ARTIST, |builder, ifd0, _| too_long(builder, ifd0, ARTIST)),
+            (COPYRIGHT, |builder, ifd0, _| {
+                too_long(builder, ifd0, COPYRIGHT)
+            }),
+            (IMAGE_DESCRIPTION, |builder, ifd0, _| {
+                too_long(builder, ifd0, IMAGE_DESCRIPTION);
+            }),
+            (PHOTOGRAPHER, |builder, _, exif| {
+                too_long(builder, exif, PHOTOGRAPHER)
+            }),
+            (IMAGE_EDITOR, |builder, _, exif| {
+                too_long(builder, exif, IMAGE_EDITOR)
+            }),
+            (IMAGE_TITLE, |builder, _, exif| {
+                too_long(builder, exif, IMAGE_TITLE)
+            }),
+            (USER_COMMENT, |builder, _, exif| {
+                too_long_of(builder, exif, USER_COMMENT, UNDEFINED, 1);
+            }),
+        ];
+        let whole = Authorship::default()
+            .with_artist("Claude Monet")
+            .with_copyright("Copyright Claude Monet")
+            .with_description("The port of Le Havre")
+            .with_photographer("Camille Pissarro")
+            .with_editor("Alfred Sisley")
+            .with_title("Impression, soleil levant")
+            .with_comment("Painted at dawn");
+        for (damaged, damage) in texts {
+            let metadata = z9_except(0, |builder, ifd0, exif| {
+                let add = |tag| tag != damaged;
+                if add(ARTIST) {
+                    builder.ascii(ifd0, ARTIST, "Claude Monet");
+                }
+                if add(COPYRIGHT) {
+                    builder.ascii(ifd0, COPYRIGHT, "Copyright Claude Monet");
+                }
+                if add(IMAGE_DESCRIPTION) {
+                    builder.ascii(ifd0, IMAGE_DESCRIPTION, "The port of Le Havre");
+                }
+                if add(PHOTOGRAPHER) {
+                    builder.ascii(exif, PHOTOGRAPHER, "Camille Pissarro");
+                }
+                if add(IMAGE_EDITOR) {
+                    builder.ascii(exif, IMAGE_EDITOR, "Alfred Sisley");
+                }
+                if add(IMAGE_TITLE) {
+                    builder.ascii(exif, IMAGE_TITLE, "Impression, soleil levant");
+                }
+                if add(USER_COMMENT) {
+                    builder.undefined(exif, USER_COMMENT, b"ASCII\0\0\0Painted at dawn");
+                }
+                damage(builder, ifd0, exif);
+            });
+            let mut expected = whole.clone();
+            match damaged {
+                ARTIST => expected.artist = None,
+                COPYRIGHT => expected.copyright = None,
+                IMAGE_DESCRIPTION => expected.description = None,
+                PHOTOGRAPHER => expected.photographer = None,
+                IMAGE_EDITOR => expected.editor = None,
+                IMAGE_TITLE => expected.title = None,
+                _ => expected.comment = None,
+            }
+            assert_eq!(
+                metadata,
+                Metadata {
+                    authorship: expected,
+                    ..z9_expected()
+                },
+                "{damaged:#06X}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_failure_of_the_reader_reading_an_authorship_text_is_the_readers_error() {
+        let far = u32::try_from(2 * FAR).unwrap();
+        let texts = [
+            (ARTIST, In::Ifd0, ASCII, &b"Claude Monet\0"[..]),
+            (COPYRIGHT, In::Ifd0, ASCII, b"Copyright Claude Monet\0"),
+            (
+                IMAGE_DESCRIPTION,
+                In::Ifd0,
+                ASCII,
+                b"The port of Le Havre\0",
+            ),
+            (PHOTOGRAPHER, In::Exif, UTF8, b"Camille Pissarro\0"),
+            (IMAGE_EDITOR, In::Exif, UTF8, b"Alfred Sisley\0"),
+            (IMAGE_TITLE, In::Exif, UTF8, b"Impression, soleil levant\0"),
+            (
+                USER_COMMENT,
+                In::Exif,
+                UNDEFINED,
+                b"ASCII\0\0\0Painted at dawn",
+            ),
+        ];
+        for (tag, at, typ, value) in texts {
+            // The value stored far away, longer than four bytes and so not
+            // held in its entry.
+            let count = u32::try_from(value.len()).unwrap();
+            let bytes = z9_bytes_except(tag, |builder, ifd0, exif| {
+                builder.blob_at(2 * FAR, value);
+                let ifd = if matches!(at, In::Ifd0) { ifd0 } else { exif };
+                builder.raw(ifd, tag, typ, count, RawValue::Offset(far));
+            });
+            // The file is sound, for a reader that does not fail.
+            assert_ne!(
+                read_bytes(bytes.clone()).authorship,
+                Authorship::default(),
+                "{tag:#06X}"
+            );
+
+            let mut src = Source::new(FailsFar(Cursor::new(bytes))).unwrap();
+            let file_block = Block::file(src.len());
+            let tree = walk(&mut src, &file_block, &Limits::default()).unwrap();
+            let err = read(&mut src, &tree).expect_err("the read fails");
+            assert_eq!(err.kind(), ErrorKind::Io, "{tag:#06X}: {err:?}");
         }
     }
 

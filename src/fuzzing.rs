@@ -220,6 +220,16 @@ fn read_metadata(metadata: &Metadata) {
     let _ = camera.recorded_make();
     let _ = camera.recorded_model();
     let _ = camera.serial_number();
+    let authorship = metadata.authorship();
+    let _ = (
+        authorship.artist(),
+        authorship.copyright(),
+        authorship.photographer(),
+        authorship.editor(),
+        authorship.title(),
+        authorship.description(),
+        authorship.comment(),
+    );
     if let Some(time) = metadata.capture_time() {
         let _ = time.to_string();
         let _ = (

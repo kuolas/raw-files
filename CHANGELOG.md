@@ -10,6 +10,24 @@ does.
 
 ## [Unreleased]
 
+### Added
+
+- `Metadata::authorship` gives who made the picture and what they wrote
+  about it, in an `Authorship`: the artist, the copyright notice and the
+  description from IFD0's Artist, Copyright and ImageDescription, and
+  the photographer, the editor, the title and the comment from the Exif
+  IFD's Photographer, ImageEditor, ImageTitle and UserComment, in NEF,
+  ARW and JPEG files alike. Each text is given as the file records it,
+  cleaned as every text is and nothing hidden; a blank field, as a
+  camera writes one its owner has not set, is `None`. The description
+  and the comment are free text, with no 255-byte limit and their line
+  breaks kept. `SONY DSC`, which older Sony bodies write as the
+  description of every picture, gives none. The comment is read only
+  under UserComment's `ASCII` character code. Sony's copies of IFD0's
+  texts in IFD1 and IFD2 are not read, nor anything in a MakerNote.
+  `Metadata::with_authorship` and the `with_…` methods of `Authorship`
+  build one for a program's tests.
+
 ### Changed
 
 - The camera's Make and Model, the Software, and the lens's LensMake

@@ -40,6 +40,11 @@ pub(crate) const COMPRESSION: u16 = 0x0103;
 /// a colour filter array of sensor data, and so on.
 pub(crate) const PHOTOMETRIC_INTERPRETATION: u16 = 0x0106;
 
+/// What the picture shows, as free text (ImageDescription), read from
+/// IFD0: a description its author wrote, or a text some cameras write by
+/// themselves whatever the picture, such as `SONY DSC`.
+pub(crate) const IMAGE_DESCRIPTION: u16 = 0x010E;
+
 /// The manufacturer of the camera that wrote the file, as text (Make), read
 /// from IFD0: what tells one vendor's files from another's.
 pub(crate) const MAKE: u16 = 0x010F;
@@ -65,6 +70,10 @@ pub(crate) const STRIP_BYTE_COUNTS: u16 = 0x0117;
 /// there, such as `Ver.01.00`, and a program that rewrites the file its own
 /// name.
 pub(crate) const SOFTWARE: u16 = 0x0131;
+
+/// The name of the main person who made the picture, as text (Artist),
+/// read from IFD0.
+pub(crate) const ARTIST: u16 = 0x013B;
 
 /// The width in pixels of each tile of an image stored in tiles
 /// (TileWidth).
@@ -93,6 +102,10 @@ pub(crate) const JPEG_INTERCHANGE_FORMAT: u16 = 0x0201;
 /// [`JPEG_INTERCHANGE_FORMAT`] points at takes
 /// (JPEGInterchangeFormatLength).
 pub(crate) const JPEG_INTERCHANGE_FORMAT_LENGTH: u16 = 0x0202;
+
+/// The copyright notice of whoever holds the rights to the picture, as
+/// text (Copyright), read from IFD0.
+pub(crate) const COPYRIGHT: u16 = 0x8298;
 
 /// How long the shutter was open, in seconds, as a fraction of type
 /// RATIONAL (ExposureTime), read from the Exif IFD, such as 10/3200 for
@@ -172,6 +185,11 @@ pub(crate) const FLASH: u16 = 0x9209;
 /// lens's actual focal length, such as 180/10, not its 35 mm equivalent.
 pub(crate) const FOCAL_LENGTH: u16 = 0x920A;
 
+/// A comment on the picture (UserComment), read from the Exif IFD: of
+/// type UNDEFINED, 8 bytes naming the characters that follow, then the
+/// text.
+pub(crate) const USER_COMMENT: u16 = 0x9286;
+
 /// The fraction of a second of the capture time, as text holding its
 /// digits alone (SubSecTimeOriginal), read from the Exif IFD.
 pub(crate) const SUB_SEC_TIME_ORIGINAL: u16 = 0x9291;
@@ -226,6 +244,17 @@ pub(crate) const LENS_MODEL: u16 = 0xA434;
 /// The serial number of the lens, as text (LensSerialNumber), read from
 /// the Exif IFD.
 pub(crate) const LENS_SERIAL_NUMBER: u16 = 0xA435;
+
+/// The picture's title, as text (ImageTitle), read from the Exif IFD.
+pub(crate) const IMAGE_TITLE: u16 = 0xA436;
+
+/// The name of the photographer, as text (Photographer), read from the
+/// Exif IFD.
+pub(crate) const PHOTOGRAPHER: u16 = 0xA437;
+
+/// The name of the main person who edited the picture, as text
+/// (ImageEditor), read from the Exif IFD.
+pub(crate) const IMAGE_EDITOR: u16 = 0xA438;
 
 /// The version of the DNG specification a DNG file follows (DNGVersion),
 /// read from IFD0: present in every DNG and in the DNG-based files of some
