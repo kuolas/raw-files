@@ -241,6 +241,108 @@ in IFD0's Software [P][3]:
   ([NEF notes](../nef/makernote-and-metadata.md#87-camera-settings)).
   [F]
 
+**Who made the picture.** IFD0 records the artist in 0x013B Artist,
+the copyright notice in 0x8298 Copyright and a description in 0x010E
+ImageDescription; the Exif IFD a comment in 0x9286 UserComment, the
+camera's owner in 0xA430 CameraOwnerName and, since Exif 3.0, the
+title, the photographer and the editor in 0xA436 ImageTitle, 0xA437
+Photographer and 0xA438 ImageEditor. Each is of type ASCII or UTF-8,
+its count including the NUL that ends it, except UserComment: it is
+UNDEFINED, needs no NUL, and starts with 8 bytes naming its
+characters, `ASCII` and three NULs, `JIS` (ISO-2022-JP), `UNICODE`
+(UTF-8), or eight NULs for undefined text, whose characters Exif
+leaves to the reader's locale. A tag kept free for a comment should
+hold the code `ASCII` and spaces. [P][3] (4.6.4 and Tables 4 and 5,
+pp. 29 to 31; 4.6.5.4.1, 4.6.5.4.6 and 4.6.5.4.7, pp. 41 to 43;
+4.6.6.4.2, p. 49; 4.6.6.9.2 and 4.6.6.9.8 to 4.6.6.9.10, pp. 79 to 81)
+The [NEF](../nef/makernote-and-metadata.md#88-authorship) and
+[ARW](../arw/makernote-and-metadata.md#98-authorship) notes say what
+Nikon's and Sony's raw files hold in these tags.
+
+- **On the eight camera files** [F]: the D5300 and D70 files have no
+  Artist and no Copyright, and a UserComment of 44 bytes, the code
+  `ASCII` and spaces. Four of the five Sony files have an
+  ImageDescription of 32 spaces, with a copy in IFD1, and the A100
+  file one of `SONY DSC` padded with spaces to 30 bytes; all five have
+  a UserComment of 64 bytes, the undefined code and NULs, and the
+  RX100M4 file has an Artist and a Copyright, with copies in IFD1.
+  The G7 X file has an ImageDescription of 32 spaces, an Artist, a
+  Copyright and a CameraOwnerName of one NUL each, and a UserComment
+  of 264 bytes, the undefined code and NULs.
+- **On more files** **[F]**, where **[F]** marks a count over the
+  files named here rather than a fact of one named file: counted on 9
+  November 2026 with a counting program of my own over raw-files' own
+  view of every entry ([section 14](#14-the-directories-a-file-holds)),
+  written from Exif 3.1, with no other reader run, on the 9 JPEGs of
+  raw.pixls.us and,
+  as counts only, 24,607 of my own: 274 from my Z 9, 16,792 from
+  folders of six Nikon DSLRs' pictures, 1,974 from my ILCE-7M2, 5,345
+  from Canon and Fujifilm cameras, and 222 a program exported or
+  rewrote.
+  - Every text is plain ASCII: of type ASCII, NUL-terminated, with no
+    byte above 0x7F and nothing after the NUL. No JPEG uses the UTF-8
+    type.
+  - Nikon's JPEGs carry the fixed fields of its raw files: Artist in 37
+    bytes and Copyright in 55, a NUL first or all spaces when unset,
+    on 8,850 of my Z 9's and DSLRs' JPEGs (all but one in those
+    lengths), with text on 4,744; and a UserComment of 44 bytes,
+    `ASCII` and 36 bytes of NULs, spaces or text, text on 3,022 of the
+    DSLRs' JPEGs. Nikon's camera JPEGs have no ImageDescription. Of the
+    Nikon JPEGs a program exported or rewrote, 151 hold comment text.
+  - Sony's JPEGs, like its raw files, have an ImageDescription of 32
+    spaces in IFD0 and IFD1, and a UserComment of 64 bytes, the
+    undefined code and NULs: on all 1,974 of my ILCE-7M2's.
+  - A Canon DSLR writes an Artist, a Copyright and a CameraOwnerName
+    of one NUL (137 files), and Canon cameras a UserComment of 264
+    bytes, the undefined code and NULs (805 files). Fujifilm compacts
+    write a Copyright of four spaces (4,534 files). Of the 9
+    raw.pixls.us files, the phone's below has a Copyright and an
+    ImageDescription of one NUL, and none has a UserComment.
+  - A program's texts can be long: 42 JPEGs of mine that a program
+    rewrote, with no Make, hold an ImageDescription of 153 to 177
+    bytes, with control characters, and a UserComment (code `ASCII`)
+    of 160 to 184; 8 more that a program rewrote have a description of
+    text.
+  - No JPEG has text in CameraOwnerName, Photographer, ImageEditor or
+    ImageTitle, or a UserComment under the `JIS` or `UNICODE` code, or
+    text under the undefined one.
+- raw-files will read these texts as in a raw file, as
+  [ADR011](../../architecture-decisions/adr011-metadata-from-standard-tags.md)
+  decides: IFD0's from IFD0 alone, not from IFD1; the comment only
+  under the `ASCII` code; `SONY DSC` as no description. A comment
+  segment (COM, section 1) and XMP (section 5) are not read for them.
+  [I]
+
+**Where it was taken.** The GPS IFD, which IFD0's 0x8825 points to,
+records the position, the altitude, the GPS time in UTC, the image
+direction and the map datum, beside tags about the receiver; the
+[NEF notes](../nef/makernote-and-metadata.md#89-location) describe
+them, with Exif 3.1's sections. [P][3] (Table 14, pp. 82 to 83;
+4.6.7, pp. 82 to 91)
+
+- **On the eight camera files** [F]: the D5300 and G7 X files have a
+  GPS IFD of a single entry, its version (2.3.0.0); the ILCE-7M3 file
+  one of four, the version, the status `V`, measurement interrupted,
+  the datum `WGS-84` and the differential correction 0. None records a
+  position.
+- **On more files** **[F]**, the same sets as above: a phone's file
+  among the raw.pixls.us files (a Samsung SM-G973U; the catalogue lists
+  it as a DNG, but its bytes are a JPEG's), of GPS version 2.2.0.0,
+  records a position in whole seconds (`d/1, m/1, s/1`) and
+  GPSAltitudeRef without GPSAltitude, and no time or datum. My Z 9's
+  JPEGs record a position on 262 of 274, as its NEFs do; my DSLRs'
+  JPEGs (16,060), the Canon DSLR's (137) and 35 rewritten Nikon files
+  have a GPS IFD of only its version; my ILCE-7M2's JPEGs have no GPS
+  IFD. Every GPS entry is of the type and count Exif gives.
+- raw-files will give a location only where both references and both
+  coordinates are sound, as
+  [ADR011](../../architecture-decisions/adr011-metadata-from-standard-tags.md)
+  decides; a GPS IFD of only a version, or without a fix, gives none,
+  and a reference without its altitude gives no altitude. [I]
+
+Every text and GPS value counted lies inside the blocks raw-files'
+`open` already reads. [F]
+
 ## 5. Other application segments
 
 - **XMP** is another APP1 segment, whose payload starts with

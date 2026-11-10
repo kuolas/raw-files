@@ -4,8 +4,9 @@ This page describes the Sony MakerNote found in ARW files (and in the older
 SR2 and SRF files and the DSLR-A100's ARW 1.0): where it is and how its
 variants are told apart, the tags that matter, the two unrelated ciphers Sony
 uses, the SR2Private block that carries the decoding parameters, and where a
-viewer finds orientation, capture date, make, model, image size, lens and
-the point the camera focused on. It serves three of the
+viewer finds orientation, capture date, make, model, image size, lens,
+the point the camera focused on, how the camera was set, and who made the
+picture and where it was taken. It serves three of the
 [roadmap](../../ROADMAP.md)'s capabilities: metadata, both what
 raw-files reads from the plain tags and full metadata; focus points;
 and, for the decoding-related tags, raw sensor data.
@@ -818,9 +819,10 @@ multipliers, and raw decoding uses them.
 
 ## 9. Viewer metadata
 
-Everything a viewer needs next to the preview comes from IFD0, the Exif IFD
-and the raw SubIFD, plus two plain MakerNote tags for identification and
-lens. **No decryption or deciphering is needed** on any sample: Make, Model,
+Everything a viewer needs next to the preview comes from IFD0, the Exif IFD,
+the raw SubIFD and, for the location, the GPS IFD
+([section 9.9](#99-location)), plus two plain MakerNote tags for
+identification and lens. **No decryption or deciphering is needed** on any sample: Make, Model,
 Orientation, dates, 0xB000, 0xB001 and the crop tags are plain in every
 file. [F] The focus point is a plain MakerNote tag too
 ([section 9.6](#96-focus-point)), and so are most of the camera
@@ -1424,6 +1426,105 @@ same way
 every frame, as on the public files, and every value lies inside the
 MakerNote **[F]**.
 
+### 9.8 Authorship
+
+Who made the picture and what was written about it. Exif records the
+artist in IFD0's 0x013B Artist, the copyright notice in 0x8298
+Copyright and a description in 0x010E ImageDescription; a comment in
+the Exif IFD's 0x9286 UserComment; and, since Exif 3.0, the
+photographer, the editor and the title in 0xA437 Photographer, 0xA438
+ImageEditor and 0xA436 ImageTitle, beside the camera's owner in 0xA430
+CameraOwnerName. Each is of type ASCII or UTF-8, except UserComment,
+which is UNDEFINED and starts with 8 bytes naming its characters:
+`ASCII` and three NULs, `JIS`, `UNICODE` (UTF-8), or eight NULs for
+undefined text, which Exif leaves to the reader's locale. [P][30]
+(4.6.4 and Tables 4 and 5, pp. 29 to 30; 4.6.5.4.1, 4.6.5.4.6 and
+4.6.5.4.7, pp. 41 to 43; 4.6.6.4.2, p. 49; 4.6.6.9.2 and 4.6.6.9.8 to
+4.6.6.9.10, pp. 79 to 81) The
+[NEF notes](../nef/makernote-and-metadata.md#88-authorship) give the
+same tags as Nikon writes them.
+
+The numbers below and in [section 9.9](#99-location) were taken on 9
+November 2026 with a counting program of my own over raw-files' own
+view of every entry ([section 14](#14-the-directories-a-file-holds)),
+written from Exif 3.1; no other reader was run. They cover the 209 ARW
+files of raw.pixls.us (208 Sony, 1 Hasselblad) and, as counts only,
+3,217 ARW files of my own, 3,161 of them from my ILCE-7M2. **[F]** In
+sections 9.8 and 9.9, **[F]** marks a count over these files rather
+than a fact of one named file.
+
+- **Every text is plain ASCII**: of type ASCII, NUL-terminated, with
+  no byte above 0x7F and nothing after the NUL. No ARW uses the UTF-8
+  type. **[F]**
+- **Every file has an ImageDescription in IFD0, nearly always 32
+  spaces**, with copies of 32 spaces in IFD1 (on 184 public files and
+  every one of mine) and in IFD2 (on 78 public files). Older
+  bodies write `SONY DSC` in IFD0 instead, on 23 public files: in 9
+  bytes on the DSLR-A200, A230, A290, A300, A330, A350, A380, A390,
+  A700, A850 and A900, padded with spaces to 32 on the DSLR-A100,
+  A450, A500, A550, A560 and A580, the NEX-3, NEX-5 and NEX-C3, and
+  the SLT-A33, A35 and A55V. **[F]**
+- **Artist and Copyright are there only when the artist is set**, on
+  43 public files and none of mine, each in IFD0 with a copy in IFD1,
+  and each exactly as long as its text and NUL: Artist text on all 43
+  (9 to 31 bytes), Copyright text on 25 and a lone NUL on 18. **[F]**
+- **UserComment is 64 bytes, the undefined code and NULs**, on 207 of
+  the public files and every one of mine. No ARW has text in it, or
+  another code. **[F]**
+- **No ARW has CameraOwnerName, Photographer, ImageEditor or
+  ImageTitle.** **[F]**
+
+raw-files will read these texts into a value of their own, and the
+owner with the camera, as
+[ADR011](../../architecture-decisions/adr011-metadata-from-standard-tags.md)
+decides: IFD0's texts from IFD0 alone, not from the copies in IFD1 and
+IFD2; each text cleaned as every text is, from either type where Exif
+allows both; the description and the comment without the 255-byte
+limit; the comment only under the `ASCII` code. `SONY DSC` is a text
+the camera writes by itself, so it gives no description. The
+photographer, the editor, the title and the owner can be checked on
+built files only, since no file here records one. **[I]**
+
+### 9.9 Location
+
+Exif records where the picture was taken in the GPS IFD, which IFD0's
+0x8825 points to; the
+[NEF notes](../nef/makernote-and-metadata.md#89-location) describe its
+tags, with Exif 3.1's sections. Beside the position, Sony writes
+GPSStatus (0x0009, `A` when the receiver is measuring and `V` when the
+measurement is interrupted), GPSMeasureMode (0x000A, `2` or `3` for a
+two- or three-dimensional measurement) and GPSDifferential (0x001E, 0
+without differential correction). [P][30] (Table 14, pp. 82 to 83;
+4.6.7.1.10 and 4.6.7.1.11, p. 86; 4.6.7.1.31, p. 91)
+
+- **A GPS IFD is on 30 public files and none of mine**; my ILCE-7M2
+  writes no GPS pointer. Each GPS IFD is of version 2.3.0.0. **[F]**
+- **A body without a fix writes four entries**: the version, the status
+  `V`, the datum `WGS-84` and the differential correction 0, on 13
+  public files (ILCE-7RM3, ILCE-7RM4A, ILCE-1, ILCE-7C, SLT-A99V). They
+  record no position. **[F]**
+- **A position is on 17 public files** (ILCE-1M2, ILCE-7CM2, ILCA-99M2,
+  SLT-A55V, SLT-A77V). Each writes the latitude and longitude as
+  degrees, minutes and seconds with three decimals (`d/1, m/1,
+  s/1000`), the GPS time with seconds over 1000, the date, the status
+  `A`, the measure mode (`2` on 15, `3` on 2), the datum `WGS-84` and
+  the differential correction 0. Two add the altitude, with the
+  reference 0, the precision, the speed and the track. None writes the
+  image direction or the satellites. **[F]**
+- **Every GPS entry is of the type and count Exif gives**, every GPS
+  IFD sorted by tag with no tag twice, and no entry left out. **[F]**
+
+raw-files will give a location only where both references and both
+coordinates are sound, as
+[ADR011](../../architecture-decisions/adr011-metadata-from-standard-tags.md)
+decides, with the altitude, the time and the datum beside it; a body
+without a fix gives none, though it records a datum. The status, the
+measure mode, the differential correction, the precision, the speed
+and the track stay in the view of every entry. **[I]**
+
+Every text and GPS value counted lies inside the blocks raw-files'
+`open` already reads. **[F]**
+
 ## 10. A100, SR2 and SRF
 
 ### DSLR-A100 (ARW 1.0)
@@ -1965,6 +2066,10 @@ Retrieved October 2026.
 - [27] ExifTool, MakerNote types — https://exiftool.org/makernote_types.html
 - [28] ExifTool, EXIF tags — https://exiftool.org/TagNames/EXIF.html
 - [29] ExifTool, Minolta tags — https://exiftool.org/TagNames/Minolta.html
+- [30] CIPA DC-008-Translation-2026, "Exchangeable image file format for
+  digital still cameras: Exif Version 3.1" (January 2026), read
+  November 2026 —
+  https://www.cipa.jp/std/documents/download_e.html?CIPA_DC-008-2026-E
 
 ### Sample files
 
