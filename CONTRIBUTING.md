@@ -215,6 +215,20 @@ without testing; commits that touch only docs are skipped unless you pass
 `--all`. For a fork, pass the base explicitly: `scripts/check-series.sh
 upstream/master`. If `master` moves before the merge, rebase and run it again.
 
+## Writing
+
+These rules hold for everything the project writes: the docs, the
+comments, the CHANGELOG, commit messages, pull requests and issues.
+
+- **One claim per sentence**, of about 25 words at most. An exception
+  gets a sentence of its own.
+- **A list or a table** where a sentence would count things off.
+- **One home for each rule.** State it once, and link to it from the
+  other places that need it.
+- **The API's own names.** Write `RawFile::entries`, not "the view of
+  every entry". A term of the project's own is defined where it is
+  first used.
+
 ## Commit messages
 
 We follow the
@@ -240,8 +254,9 @@ Closes: #12
     period**, and stays within about **72 characters**.
 - **A blank second line**, always.
 - **Body:** plain prose wrapped at 75 columns, explaining *why* the change is
-  needed — the diff already shows *how*. If the commit fixes a bug introduced
-  by an earlier commit, name it in the body as `64aee44 ("tiff: Read IFDs
+  needed — the diff already shows *how*. It is written as
+  [Writing](#writing) says. If the commit fixes a bug introduced by an
+  earlier commit, name it in the body as `64aee44 ("tiff: Read IFDs
   lazily")`, using the hash on `master`.
 - **Issue references** go in the last paragraph, one per line:
   - `Closes: #12` or `Fixes: #12` closes the issue when the commit reaches
