@@ -82,7 +82,7 @@ use crate::rational::Rational;
 /// assert_eq!(location.latitude().minutes(), Rational::new(514_933, 10_000)?);
 /// assert!((location.latitude().to_degrees() - 48.858_22).abs() < 1e-5);
 /// assert!((location.longitude().to_degrees() - 2.294_5).abs() < 1e-5);
-/// assert_eq!(location.altitude().map(|altitude| altitude.to_meters()), Some(35.0));
+/// assert_eq!(location.altitude().map(Altitude::to_meters), Some(35.0));
 /// assert_eq!(location.map_datum(), None);
 /// # Some(())
 /// # }
@@ -329,7 +329,7 @@ impl Latitude {
     /// The latitude in decimal degrees, negative to the south, as a map
     /// takes it: the degrees, plus the minutes over 60 and the seconds
     /// over 3600. 48° 51.4933′ north gives about 48.85822.
-    pub fn to_degrees(&self) -> f64 {
+    pub fn to_degrees(self) -> f64 {
         signed(self.angle.to_degrees(), self.south)
     }
 }
@@ -422,7 +422,7 @@ impl Longitude {
     /// The longitude in decimal degrees, negative to the west, as a map
     /// takes it: the degrees, plus the minutes over 60 and the seconds
     /// over 3600.
-    pub fn to_degrees(&self) -> f64 {
+    pub fn to_degrees(self) -> f64 {
         signed(self.angle.to_degrees(), self.west)
     }
 }
@@ -502,7 +502,7 @@ impl Altitude {
     }
 
     /// The altitude in metres as a decimal, negative below the reference.
-    pub fn to_meters(&self) -> f64 {
+    pub fn to_meters(self) -> f64 {
         signed(self.meters.to_f64(), self.below)
     }
 }
