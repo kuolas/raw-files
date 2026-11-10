@@ -6,7 +6,7 @@
 //! each in a text tag of the file's first directory, IFD0, on many bodies
 //! its serial number, and on some its owner's name. [`Camera`] holds the
 //! four as the file records them, and [`Metadata::camera`](crate::Metadata::camera) gives
-//! them for a file. From the maker's text, raw-files recognises the maker
+//! them for a file. From the maker's text, raw-files recognizes the maker
 //! as a [`Make`], such as [`Make::Nikon`] from `NIKON CORPORATION`, which
 //! [`Camera::make`] gives; and from the maker and the model's text
 //! together, the name the maker sells the body under, such as `Z6III` from
@@ -37,7 +37,7 @@ use std::fmt;
 /// of the same file shows, such as `NIKON CORPORATION` and `NIKON Z 9` from
 /// a Nikon Z 9, or `SONY` and `ILCE-7M4` from a Sony ILCE-7M4.
 ///
-/// From the recorded maker, raw-files recognises the camera's maker, a
+/// From the recorded maker, raw-files recognizes the camera's maker, a
 /// [`Make`] that [`make`](Self::make) gives, such as [`Make::Nikon`] from
 /// `NIKON CORPORATION`; and from the maker and the recorded model
 /// together, the name the maker sells the body under, which
@@ -126,10 +126,10 @@ pub struct Camera {
 }
 
 impl Camera {
-    /// The camera's maker, such as [`Make::Nikon`], as raw-files recognises
+    /// The camera's maker, such as [`Make::Nikon`], as raw-files recognizes
     /// it from the Make text the file records, which
     /// [`recorded_make`](Self::recorded_make) gives. `None` when the file
-    /// records no Make, or a text raw-files does not recognise; [`Make`]
+    /// records no Make, or a text raw-files does not recognize; [`Make`]
     /// says which texts it does.
     ///
     /// It is read each time it is asked for, from what
@@ -173,7 +173,7 @@ impl Camera {
     /// [notes on camera names](https://github.com/kuolas/raw-files/blob/master/docs/formats/camera-names.md)
     /// list, each with a file that shows its Model text and the maker's
     /// document that gives its name. `None` when the file records no Make
-    /// that raw-files recognises or no Model, and for any body the table
+    /// that raw-files recognizes or no Model, and for any body the table
     /// does not hold; never the recorded text in its place, so that a
     /// program can tell a name from a code, and shows the text where it
     /// wants to with `model().or(recorded_model())`.
@@ -307,7 +307,7 @@ impl Camera {
     }
 }
 
-/// The maker of a camera, as raw-files recognises it from the Make text a
+/// The maker of a camera, as raw-files recognizes it from the Make text a
 /// file records, such as [`Nikon`](Self::Nikon) from `NIKON CORPORATION`;
 /// [`Camera::make`] gives it.
 ///
@@ -317,7 +317,7 @@ impl Camera {
 /// sets out. Its [`name`](Self::name)s, which `Display` writes too, are
 /// "Nikon", "Sony", "Hasselblad" and "Canon".
 ///
-/// A maker is recognised only from a Make text a file has been seen to
+/// A maker is recognized only from a Make text a file has been seen to
 /// write, matched whole and with its case, so any other text, such as
 /// `Sony` or `nikon`, gives none. Each variant names its texts; the
 /// [notes on camera names](https://github.com/kuolas/raw-files/blob/master/docs/formats/camera-names.md)
@@ -345,7 +345,7 @@ impl Camera {
 /// let label = match camera.make() {
 ///     Some(Make::Nikon) => "a Nikon".to_owned(),
 ///     Some(make) => format!("a camera by {make}"),
-///     None => "a camera by a maker raw-files does not recognise".to_owned(),
+///     None => "a camera by a maker raw-files does not recognize".to_owned(),
 /// };
 /// assert_eq!(label, "a camera by Sony");
 /// assert_eq!(Make::Hasselblad.name(), "Hasselblad");
@@ -378,7 +378,7 @@ impl Make {
     }
 
     /// The maker whose Make text `text` is, matched whole and with its
-    /// case, or `None` for a text no maker is recognised from.
+    /// case, or `None` for a text no maker is recognized from.
     pub(crate) fn from_recorded(text: &str) -> Option<Make> {
         MAKE_TEXTS
             .iter()
@@ -387,7 +387,7 @@ impl Make {
     }
 }
 
-/// Every Make text a maker is recognised from, with its maker, in the
+/// Every Make text a maker is recognized from, with its maker, in the
 /// order the notes on camera names (`docs/formats/camera-names.md`,
 /// section 2) list them, each one a text a file the notes name records.
 static MAKE_TEXTS: [(&str, Make); 5] = [
@@ -408,7 +408,7 @@ impl fmt::Display for Make {
 /// One body's name, as its maker sells it, by the maker and the Model text
 /// the body's files record.
 struct Name {
-    /// The maker, as [`Make::from_recorded`] recognises it from the Make
+    /// The maker, as [`Make::from_recorded`] recognizes it from the Make
     /// text the body's files record.
     make: Make,
     /// The whole Model text the body's files record, cleaned of padding as
@@ -779,7 +779,7 @@ mod tests {
 
     #[test]
     fn any_other_make_text_gives_no_maker() {
-        // A maker is recognised from its whole text, case included: a
+        // A maker is recognized from its whole text, case included: a
         // text in another case, a maker's name, a part of a text or more
         // than it, another field's text, and a text with the padding a
         // reader trims, which the setter stores as given.
@@ -871,7 +871,7 @@ mod tests {
 
     #[test]
     fn the_name_needs_the_whole_model_text_case_included() {
-        // As the maker is recognised: a text in another case, part of a
+        // As the maker is recognized: a text in another case, part of a
         // text or more than it, and a text with the padding a reader trims,
         // which the setter stores as given.
         let cases = [
@@ -1004,7 +1004,7 @@ mod tests {
             return;
         };
         // Both ways, and in order: every row of the makers' table is a text
-        // a maker is recognised from, with that maker's name, and every
+        // a maker is recognized from, with that maker's name, and every
         // such text a row.
         let texts: Vec<(String, String)> = MAKE_TEXTS
             .iter()

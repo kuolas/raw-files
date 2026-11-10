@@ -125,10 +125,10 @@ pub const OFFSET_TIME_ORIGINAL: u16 = 0x9011;
 /// The exposure compensation in EV, in the Exif IFD (ExposureBiasValue).
 pub const EXPOSURE_BIAS_VALUE: u16 = 0x9204;
 
-/// The focal length in millimetres, in the Exif IFD (FocalLength).
+/// The focal length in millimeters, in the Exif IFD (FocalLength).
 pub const FOCAL_LENGTH: u16 = 0x920A;
 
-/// The focal length in 35 mm terms, in whole millimetres, in the Exif IFD
+/// The focal length in 35 mm terms, in whole millimeters, in the Exif IFD
 /// (FocalLengthIn35mmFilm).
 pub const FOCAL_LENGTH_IN_35MM_FILM: u16 = 0xA405;
 
@@ -531,7 +531,7 @@ impl Z9Mode {
     }
 
     /// What the mode's AFInfo2 records, in the full frame of 8256 by 5504:
-    /// the frame, the centre and the area, each width or x first. On FX,
+    /// the frame, the center and the area, each width or x first. On FX,
     /// the point of the public Z 9 samples 5146 to 5148; on a crop, the
     /// point of my shot with a single point in the top-left corner of
     /// the picture.
@@ -896,8 +896,8 @@ pub const ILCE7M3_MODEL: &str = "ILCE-7M3";
 /// ILCE-7M3's JPEG on Wikimedia Commons.
 pub const ILCE7M3_MAIN: (u16, u16) = (3936, 2624);
 /// The FocusLocation of the ILCE-7M3's JPEG on Wikimedia Commons, as ADR014
-/// records it: the frame, the JPEG's own size, then the centre, off
-/// centre.
+/// records it: the frame, the JPEG's own size, then the center, off
+/// center.
 pub const ILCE7M3_FOCUS_LOCATION: [u16; 4] = [3936, 2624, 1783, 1804];
 
 /// A JPEG laid out as the Sony ILCE-7M3's, in byte order `order`, with a
@@ -968,7 +968,7 @@ pub const RX100M4_MAIN: (u16, u16) = (5472, 3648);
 /// a DSC-RX100M4 shot in manual focus: IFD0's Model [`RX100M4_MODEL`], a
 /// main image of [`RX100M4_MAIN`], and a MakerNote that holds FocusMode 0,
 /// manual focus, one BYTE, and the FocusLocation of the frame's exact
-/// centre, as the DSC-RX100M4's JPEG on Wikimedia Commons records them.
+/// center, as the DSC-RX100M4's JPEG on Wikimedia Commons records them.
 pub fn rx100m4_jpeg(order: Order) -> SonyJpeg {
     let (width, height) = RX100M4_MAIN;
     sony_jpeg(

@@ -50,7 +50,7 @@ was done and what it could not reach. The files checked are listed in
 | [makernote-and-metadata.md](makernote-and-metadata.md) | The Sony MakerNote, its two ciphers, SR2Private, and orientation, date, camera, size and lens (metadata) and the focus point (focus points) |
 | [raw-data.md](raw-data.md) | How the sensor data is stored: uncompressed, cRAW, 12-bit packed, ARW1, lossless tiles, M/S YCbCr, SR2, SRF, ARQ and the refused ARW 6.0 (raw sensor data) |
 | [security.md](security.md) | Past vulnerabilities in Sony parsers and the Sony additions to the NEF checklist |
-| [licences-and-references.md](licences-and-references.md) | Standards, existing implementations and their licences, what raw-files may reuse, and the legal questions |
+| [licenses-and-references.md](licenses-and-references.md) | Standards, existing implementations and their licenses, what raw-files may reuse, and the legal questions |
 | [test-data.md](test-data.md) | Where sample files come from, which may be committed, a minimal body set, and the files checked |
 | [open-questions.md](open-questions.md) | Decisions to take, facts still to establish, and what the samples, a decision or the code settled |
 | [research-record.md](research-record.md) | How this documentation was researched and checked, and its limits |
@@ -112,7 +112,7 @@ the disagreement.
   decryption and no deciphering** on any checked file [F]
   ([makernote-and-metadata.md](makernote-and-metadata.md)).
 - **The focus point is plain too.** FocusLocation (0x2027) gives the
-  frame and the centre of the focus area on every checked body from the
+  frame and the center of the focus area on every checked body from the
   ILCE-7RM2 (2015) on, and FocusFrameSize (0x2037) the area's size from
   the ILCE-7SM3 (2020) on; the frame has the framing of the previews,
   which on an aspect-ratio file is not the default crop [F]. Older bodies
@@ -146,10 +146,10 @@ the disagreement.
   values that only full metadata needs, such as the shutter count.
 - **No mature ARW implementation can be copied into raw-files.** dcraw,
   LibRaw, rawspeed, rawler, libopenraw, ExifTool and exiv2 are read for
-  understanding only. Graphite's rawkit is labelled MIT OR Apache-2.0, but
+  understanding only. Graphite's rawkit is labeled MIT OR Apache-2.0, but
   its ARW1 table, cRAW loop and tone-curve builder match dcraw element for
   element [P] (that they were translated is [I]), and it panics on
-  unexpected input ([licences-and-references.md](licences-and-references.md)).
+  unexpected input ([licenses-and-references.md](licenses-and-references.md)).
 - **Few tables need a decision.** Unlike NEF, the ARW1 prefix code, the
   cipher inverse and the keystream reduce to rules or formulas, and per-body
   crops and levels can be derived from samples. The ARW 6.0 curve, published
@@ -202,7 +202,7 @@ not repeat what the two formats share:
   and report IFD0's tag separately.
 - **Security.** The NEF checklist items 1 to 14 apply to ARW unchanged;
   [security.md](security.md) adds Sony-specific items numbered A1 onwards.
-- **Licences and test data.** The NEF rules on reading copyleft sources,
+- **Licenses and test data.** The NEF rules on reading copyleft sources,
   the options for data tables, and downloading samples in CI pinned by
   SHA-256 apply here too.
 
@@ -212,13 +212,13 @@ the ARW pages were checked against sample files from the start, while the
 NEF pages were desk research first and have so far been checked on the Z 9
 only.
 
-## Licence hygiene
+## License hygiene
 
 raw-files is MIT OR Apache-2.0 ([ADR002](../../architecture-decisions/adr002-license-mit-or-apache-2.md)).
 These pages restate algorithms in prose or in original pseudocode. They copy
 no code and no wholesale data tables: the ARW1 prefix code is given as a
 rule, the MakerNote cipher's inverse and the SR2 keystream as formulas, and
-no tone curve, delinearisation curve or per-body table is reproduced.
+no tone curve, delinearization curve or per-body table is reproduced.
 Quotations stay under fifteen words; individual facts such as tag IDs,
 offsets, value meanings and per-body values are cited to their source. Keep
 it that way when extending them.

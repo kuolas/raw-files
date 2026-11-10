@@ -281,7 +281,7 @@ fn assert_the_arw4_lens(lens: &Lens, label: &str) {
 }
 
 /// Checks that `metadata`'s focus is the one the ARW 4 files' MakerNote
-/// records: a frame of 7008 by 4672 pixels with the centre at (3832, 2102)
+/// records: a frame of 7008 by 4672 pixels with the center at (3832, 2102)
 /// and an area of 350 by 351, as given, and nothing said about whether
 /// focus was confirmed; and that its focus points are that point alone, as
 /// the primary, with no number, recorded, with no area mode, since Sony's
@@ -1539,13 +1539,13 @@ const LARGE_SAMPLES: &[Sample] = &[
 /// script written apart from the reader: the DSC-R1 and the DSLR-A900
 /// record an "uncalibrated" ColorSpace with the index `R03`, which gives
 /// Adobe RGB, and the DSLR-A100 one with an empty index, which gives no
-/// colour space. The white balance mode is the MakerNote's WhiteBalance
+/// color space. The white balance mode is the MakerNote's WhiteBalance
 /// on every file that records one: custom on the two files of the
 /// ILCE-9M3, whose Exif records a manual white balance for the LightSource
 /// 255, "other", which gives no mode, and shade on the ILCE-7S; the
 /// DSC-F828 and the DSC-R1 record none, and the DSLR-A100 records it where
 /// the reader does not read it, so theirs is Exif's auto. The ILCE-9M3
-/// records the colour temperature 5500 under custom, its custom white
+/// records the color temperature 5500 under custom, its custom white
 /// balance's own, and every other file 0, which gives none. The
 /// fine-tuning is `0, 0` on every file that records one; the DSLR-A100,
 /// A200, A700 and A900, the SLT-A55, the NEX-5, the DSC-F828 and the

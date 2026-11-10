@@ -28,7 +28,7 @@
 //!   a directory of Sony's tags at the start of its block, without a
 //!   header, with its values inside the block, holding FocusMode 3 (AF-C),
 //!   one BYTE; FocusLocation, four SHORTs, a frame of 7008 by 4672 pixels
-//!   and a centre at (3832, 2102); FocusFrameSize, six UNDEFINED bytes that
+//!   and a center at (3832, 2102); FocusFrameSize, six UNDEFINED bytes that
 //!   hold the area's 350 by 351 pixels and a third number, 257, as 16-bit
 //!   numbers in the file's byte order; FileFormat, the four BYTEs 4, 0, 1,
 //!   0; and SonyModelID 388, a SHORT. These are the values of the public
@@ -42,7 +42,7 @@
 //!   defines it), YCbCr samples (PhotometricInterpretation 6) of 8 bits
 //!   each, three per pixel, subsampled 2 by 1. The raw SubIFD is a
 //!   lossless raw: the full-resolution image (NewSubfileType 0) of 14-bit
-//!   samples of a colour filter array (PhotometricInterpretation 32803),
+//!   samples of a color filter array (PhotometricInterpretation 32803),
 //!   with Compression 7. Its ImageWidth and ImageLength, SHORTs, say 7168 by
 //!   5120 pixels, and its default crop, LONGs, starts at DefaultCropOrigin
 //!   12, 8 and is DefaultCropSize 7008 by 4672 pixels, the size of IFD2's
@@ -55,7 +55,7 @@
 //! - [`arw4_medium_file`] is the same file, with the same metadata, shot as
 //!   a medium raw. Its MakerNote is the lossless file's, a simplification:
 //!   the medium raw sample 6930 records the same frame and area, the
-//!   full-size ones, with its centre elsewhere. IFD2's JPEG is 4608 by
+//!   full-size ones, with its center elsewhere. IFD2's JPEG is 4608 by
 //!   3072 pixels, and the raw SubIFD holds YCbCr samples
 //!   (PhotometricInterpretation 6, the same as IFD2's) of 15 bits each,
 //!   three per pixel, in the same lossless tiles. Its
@@ -65,18 +65,18 @@
 //! - [`arw2_file`] is a file of an ARW 2 body, an SLT-A99V's: IFD0 and IFD1
 //!   as above, with that Model and IFD0's Software `SLT-A99V v1.02`, the
 //!   public SLT-A99V sample's, and no IFD2. The raw SubIFD is the
-//!   full-resolution image, 6024 by 4024 pixels, of 12-bit colour filter
+//!   full-resolution image, 6024 by 4024 pixels, of 12-bit color filter
 //!   array samples, with Sony's compressed raw (Compression 32767), in one
 //!   strip of 64 bytes that are not a JPEG stream and stand for the raw
 //!   data.
 //! - [`arq_file`] is a pixel-shift composite that Sony's software made from
 //!   the frames of an ILCE-7RM3: an ARW 2 file, whose IFD0's Software is
 //!   `ILCE-7RM3 v3.00`, the public ARQ sample's, and whose raw SubIFD holds
-//!   linear raw data (PhotometricInterpretation 32892), every colour at
+//!   linear raw data (PhotometricInterpretation 32892), every color at
 //!   every pixel, four 16-bit samples per pixel, uncompressed.
 //! - [`sr2_file`] is a file of the DSC-R1: IFD0 declares a JPEG of 640 by
 //!   424 pixels and IFD1 the thumbnail, both reduced-resolution images
-//!   with Compression 6; the raw SubIFD is 14-bit colour filter array
+//!   with Compression 6; the raw SubIFD is 14-bit color filter array
 //!   samples, uncompressed, in one strip of 64 bytes.
 //! - [`srf_file`] is a file of the DSC-F828, whose IFD0 describes the raw
 //!   data rather than an image a reader can use: 3360 by 2460 pixels of
@@ -175,9 +175,9 @@ const DATE_TIME_ORIGINAL: u16 = 0x9003;
 const OFFSET_TIME_ORIGINAL: u16 = 0x9011;
 /// The exposure compensation in EV, as an SRATIONAL (ExposureBiasValue).
 const EXPOSURE_BIAS_VALUE: u16 = 0x9204;
-/// The focal length in millimetres, as a RATIONAL (FocalLength).
+/// The focal length in millimeters, as a RATIONAL (FocalLength).
 const FOCAL_LENGTH: u16 = 0x920A;
-/// The focal length in 35 mm terms, in whole millimetres, as a SHORT
+/// The focal length in 35 mm terms, in whole millimeters, as a SHORT
 /// (FocalLengthIn35mmFilm).
 const FOCAL_LENGTH_IN_35MM_FILM: u16 = 0xA405;
 /// The lens's focal and aperture range, as four RATIONALs
@@ -197,7 +197,7 @@ const SUB_SEC_TIME_ORIGINAL: u16 = 0x9291;
 /// The maker's own block of metadata, as UNDEFINED bytes (MakerNote).
 const MAKER_NOTE: u16 = 0x927C;
 /// The Sony MakerNote tag that records the white balance setting, a code
-/// in one LONG (WhiteBalance), such as 1 for a chosen colour temperature.
+/// in one LONG (WhiteBalance), such as 1 for a chosen color temperature.
 pub const WHITE_BALANCE: u16 = 0x0115;
 /// The Sony MakerNote tag that records the white balance fine-tuning, the
 /// shifts from amber to blue and from green to magenta in whole steps,
@@ -210,7 +210,7 @@ pub const ELECTRONIC_FRONT_CURTAIN: u16 = 0x201A;
 /// (FocusMode).
 pub const FOCUS_MODE: u16 = 0x201B;
 /// The Sony MakerNote tag that records where the camera focused, a frame's
-/// width and height and the centre's x and y, four SHORTs (FocusLocation).
+/// width and height and the center's x and y, four SHORTs (FocusLocation).
 pub const FOCUS_LOCATION: u16 = 0x2027;
 /// The Sony MakerNote tag that records the focus area's width and height,
 /// then a third number, as six UNDEFINED bytes (FocusFrameSize).
@@ -221,8 +221,8 @@ const FILE_FORMAT: u16 = 0xB000;
 /// The Sony MakerNote tag that records the camera body by number, a SHORT
 /// (SonyModelID).
 const SONY_MODEL_ID: u16 = 0xB001;
-/// The Sony MakerNote tag that records the colour temperature of a chosen
-/// colour temperature or of a custom white balance, in kelvin, one LONG
+/// The Sony MakerNote tag that records the color temperature of a chosen
+/// color temperature or of a custom white balance, in kelvin, one LONG
 /// (ColorTemperature).
 pub const COLOR_TEMPERATURE: u16 = 0xB021;
 
@@ -242,9 +242,9 @@ const SONY_RAW: u16 = 32767;
 const RGB: u16 = 2;
 /// PhotometricInterpretation of YCbCr samples.
 const YCBCR: u16 = 6;
-/// PhotometricInterpretation of a colour filter array, raw sensor data.
+/// PhotometricInterpretation of a color filter array, raw sensor data.
 const CFA: u16 = 32803;
-/// PhotometricInterpretation of linear raw data, every colour at every
+/// PhotometricInterpretation of linear raw data, every color at every
 /// pixel.
 const LINEAR_RAW: u16 = 32892;
 /// The baseline frame header's marker, SOF0.
@@ -287,7 +287,7 @@ pub const MEDIUM_CROP_SIZE: [u32; 2] = [4608, 3072];
 /// its FocusLocation, the width then the height: that of the public
 /// ILCE-7M4 sample 6929.
 pub const ARW4_FOCUS_FRAME: (u16, u16) = (7008, 4672);
-/// The centre of the focus area in [`ARW4_FOCUS_FRAME`], x then y, as the
+/// The center of the focus area in [`ARW4_FOCUS_FRAME`], x then y, as the
 /// FocusLocation of the sample 6929 records it.
 pub const ARW4_FOCUS_CENTER: (u16, u16) = (3832, 2102);
 /// The focus area's width and height, as the FocusFrameSize of the sample
@@ -362,7 +362,7 @@ pub struct ArwBlobs {
 }
 
 /// The ARW 4 layout with a lossless raw, in byte order `order`, with
-/// IFD0's Orientation `orientation` (an EXIF value, 1 to 8).
+/// IFD0's Orientation `orientation` (an Exif value, 1 to 8).
 pub fn arw4_file(order: Order, orientation: u16) -> (Built, ArwBlobs) {
     arw4(order, orientation, ARW4_FULL_SIZE_JPEG, |builder, raw| {
         builder
@@ -392,7 +392,7 @@ pub fn arw4_medium_file(order: Order) -> (Built, ArwBlobs) {
 }
 
 /// The ARW 2 layout, in byte order `order`, with IFD0's Orientation
-/// `orientation` (an EXIF value, 1 to 8).
+/// `orientation` (an Exif value, 1 to 8).
 pub fn arw2_file(order: Order, orientation: u16) -> (Built, ArwBlobs) {
     arw2(
         order,

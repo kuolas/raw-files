@@ -39,13 +39,13 @@
 //! never prints a coordinate, an altitude, a time or a datum: they name
 //! places. The files with a GPS IFD are counted with the directories.
 //!
-//! For each camera setting, from the exposure program to the colour space,
+//! For each camera setting, from the exposure program to the color space,
 //! it counts, over the files of a section, how many have the setting and
 //! how many have each kind of it, by the name the library gives the kind,
 //! such as "Aperture priority"; how many flashes fired; how many files had
 //! the electronic front curtain setting on and how many off; how many have
 //! each white balance fine-tuning, by its pair of shifts, such as
-//! `(-24/4, 0/4)`; and the lowest and the highest colour temperature
+//! `(-24/4, 0/4)`; and the lowest and the highest color temperature
 //! recorded. As for the sizes, these are totals over the section, tied to
 //! no file.
 //!
@@ -98,8 +98,8 @@
 //! one point without a number; and every list placed from a table must
 //! come with a layout, for the Model the file names, and hold points of
 //! that layout, numbered in rising order, each with the layout's box and
-//! the layout's centre, moved on a crop, or on a JPEG whose size shows a
-//! window of the frame, such as the D600's Medium JPEG, into the centred
+//! the layout's center, moved on a crop, or on a JPEG whose size shows a
+//! window of the frame, such as the D600's Medium JPEG, into the centered
 //! window that is the list's frame. These hold by how the library builds
 //! a list, and the test checks them by hand rather than taking the
 //! library's word for it.
@@ -160,7 +160,7 @@ impl Seek for CountingReader {
 /// settings are by the names of their kinds.
 #[derive(Default)]
 struct MetadataTally {
-    /// Files by the maker the library recognises from their recorded
+    /// Files by the maker the library recognizes from their recorded
     /// Make, and files whose recorded Make names no maker.
     makers: BTreeMap<&'static str, usize>,
     make_without_maker: usize,
@@ -320,7 +320,7 @@ type Shifts = ((i32, i32), (i32, i32));
 /// of is counted by what sets it apart instead: the electronic front
 /// curtain setting by whether it was on, and the fine-tuning by its pair
 /// of shifts, since a shift is a step the camera's menu offers, not a
-/// value of one picture. The colour temperature, a number, is given as the
+/// value of one picture. The color temperature, a number, is given as the
 /// lowest and the highest any file records. Like every other count, these
 /// are totals over the files, tied to no file.
 #[derive(Default)]
@@ -338,7 +338,7 @@ struct SettingsTally {
     flash_without_mode: usize,
     white_balance_mode: usize,
     white_balance_modes: BTreeMap<&'static str, usize>,
-    /// Files with a colour temperature, and the lowest and the highest
+    /// Files with a color temperature, and the lowest and the highest
     /// recorded, `None` while no file has one.
     color_temperature: usize,
     color_temperature_range: Option<(u32, u32)>,
@@ -495,7 +495,7 @@ impl EntriesTally {
 
 /// What the files say about where the camera focused, in counts: the
 /// focus point, the list of the points the camera used and the layout of
-/// the body's points. No centre, no area size and no point number is
+/// the body's points. No center, no area size and no point number is
 /// printed: the area sizes are kept only to count how many different ones
 /// there are.
 #[derive(Default)]
@@ -693,7 +693,7 @@ impl FocusTally {
 
 /// Whether `metadata`'s focus point is its list's primary, as
 /// `Metadata::focus` documents: both absent, or the focus point at the
-/// primary's centre, with its area and whether focus was confirmed, in the
+/// primary's center, with its area and whether focus was confirmed, in the
 /// list's frame and with its origin. A list without a primary, which gives
 /// no focus point, does not pass.
 fn list_gives_focus(metadata: &Metadata) -> bool {
@@ -713,8 +713,8 @@ fn list_gives_focus(metadata: &Metadata) -> bool {
 /// Whether the points of `list`, placed from a table, are points of
 /// `layout`, the body's layout from the same table, as
 /// `Metadata::focus_points` and `Metadata::focus_layout` document: each
-/// with a number, in rising order, and with the layout's box, its centre
-/// the layout's moved by the origin of the centred window that the list's
+/// with a number, in rising order, and with the layout's box, its center
+/// the layout's moved by the origin of the centered window that the list's
 /// frame is in the layout's frame. On a file that is no crop the two
 /// frames are the same and nothing moves; on a crop, or on a JPEG whose
 /// size shows a window of the frame, such as the D600's Medium JPEG, the
@@ -758,7 +758,7 @@ fn placed_from(list: &FocusPoints, layout: &FocusLayout) -> bool {
 
 /// Whether `center` lies inside `frame`, edges included, and so does the
 /// area of `size` around it when there is one: on each axis, from the
-/// centre less half the side, rounded up, to the centre plus that half
+/// center less half the side, rounded up, to the center plus that half
 /// lies between 0 and the frame's side. Written out here, from the rule
 /// that `Focus::new` and `Focus::with_size` document, rather than asked
 /// of the library, so that the test does not take the library's word for
@@ -931,10 +931,10 @@ impl Tally {
         );
         match s.color_temperature_range {
             Some((lowest, highest)) => println!(
-                "files with a colour temperature: {}, lowest: {lowest} K, highest: {highest} K",
+                "files with a color temperature: {}, lowest: {lowest} K, highest: {highest} K",
                 s.color_temperature
             ),
-            None => println!("files with a colour temperature: {}", s.color_temperature),
+            None => println!("files with a color temperature: {}", s.color_temperature),
         }
         // Each pair as the library gives it, written as fractions, such as
         // `(-24/4, 0/4): 3`, in the braces a map prints in.
@@ -969,7 +969,7 @@ impl Tally {
             s.raw_image_size, s.raw_image_sizes
         );
         println!(
-            "files with a colour space: {}, by colour space: {:?}",
+            "files with a color space: {}, by color space: {:?}",
             s.color_space, s.color_spaces
         );
         let f = &self.focus;
@@ -1475,7 +1475,7 @@ fn the_settings_tally_counts_the_makernote_settings() {
     };
     let zero = shift(0, 4);
     let towards_amber = FineTune::new(shift(-24, 4), zero);
-    // Three files with a colour temperature each, neither the first the
+    // Three files with a color temperature each, neither the first the
     // lowest nor the highest, so that both ends of the range must move;
     // the first two with the same shift, the third with another; the
     // electronic front curtain setting on, off and on, so that on and off
@@ -1530,7 +1530,7 @@ fn the_settings_tally_counts_the_makernote_settings() {
     assert_eq!(tally.image_areas, BTreeMap::from([("APS-C", 1)]));
     assert_eq!(tally.raw_image_sizes, BTreeMap::from([("Small", 1)]));
 
-    // Files without a colour temperature leave the range empty.
+    // Files without a color temperature leave the range empty.
     let mut without_color_temperature = SettingsTally::default();
     without_color_temperature.record(&Metadata::default().with_camera_settings(fourth));
     assert_eq!(without_color_temperature.color_temperature, 0);
@@ -1640,7 +1640,7 @@ fn the_metadata_tally_counts_a_location_and_each_of_its_parts() {
 }
 
 /// Three points of a 39-point layout in a 6016 × 4016 frame, from the
-/// record of the Nikon D600 in the NEF format notes: 1, the centre, 13 and
+/// record of the Nikon D600 in the NEF format notes: 1, the center, 13 and
 /// 38, each with its 164 × 164 box.
 static THREE_POINTS: [raw_files::FocusLayoutPoint; 3] = {
     use raw_files::FocusLayoutPoint;
@@ -1656,7 +1656,7 @@ static THREE_POINTS: [raw_files::FocusLayoutPoint; 3] = {
 };
 
 /// A list placed from a table in `frame`: one point for each number and
-/// centre of `points`, in their order, each with the 164 × 164 box, the
+/// center of `points`, in their order, each with the 164 × 164 box, the
 /// one at index `primary` the primary.
 fn placed_list(frame: Size, points: &[(u16, Point)], primary: usize) -> FocusPoints {
     use raw_files::FocusPoint;

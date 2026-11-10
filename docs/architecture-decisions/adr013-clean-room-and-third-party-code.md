@@ -19,10 +19,10 @@ read them, such as dcraw, LibRaw, rawspeed, rawler, ExifTool and exiv2.
 Most of that source code is under a copyleft license, the GPL or the LGPL,
 some under two licenses at the reader's choice, some under terms of its
 own, and some under none. The format notes in [docs/formats](../formats/)
-record what raw-files has learnt from these sources, each fact with its
+record what raw-files has learned from these sources, each fact with its
 source and how well it is confirmed, and their license pages
-([NEF](../formats/nef/licences-and-references.md),
-[ARW](../formats/arw/licences-and-references.md)) set out how each source
+([NEF](../formats/nef/licenses-and-references.md),
+[ARW](../formats/arw/licenses-and-references.md)) set out how each source
 may be used, with the caution that they are a project's reading of the
 licenses, not legal advice.
 
@@ -69,13 +69,13 @@ We will build raw-files as a clean-room implementation.
 
 - **Facts come from documentation, from sample files and from what other
   programs report, and are recorded before they are coded.** A fact about
-  a format is learnt from a published description, from reading files,
+  a format is learned from a published description, from reading files,
   from another program's output, or from reading another project's source
   code, and written into the format notes in our own words, with its
   source and a confidence tag. Where a fact can be checked on a sample
   file, it is, and the file is named. The code is written from the notes.
-  A fact learnt from documentation may be coded before a file confirms it,
-  and the notes say so; a fact learnt only from another project's source
+  A fact learned from documentation may be coded before a file confirms it,
+  and the notes say so; a fact learned only from another project's source
   code is coded once a file confirms it.
 - **No code, comment or table is copied or translated from another
   project's source code**, whatever its license: copyleft, dual, custom or

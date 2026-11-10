@@ -660,7 +660,7 @@ const SMALL_FRAME: Size = Size {
     height: 120,
 };
 
-/// Writes `focus` to `out`: its frame, its centre, its size and whether
+/// Writes `focus` to `out`: its frame, its center, its size and whether
 /// focus was confirmed.
 fn show_focus(focus: Focus, out: &mut String) {
     let (frame, center) = (focus.frame(), focus.center());
@@ -676,7 +676,7 @@ fn show_focus(focus: Focus, out: &mut String) {
     );
 }
 
-/// Writes `points` to `out`: how many there are and each one's centre.
+/// Writes `points` to `out`: how many there are and each one's center.
 fn show_focus_points(points: &FocusPoints, out: &mut String) {
     let _ = write!(out, " {} points:", points.points().len());
     for point in points.points() {

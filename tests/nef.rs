@@ -330,7 +330,7 @@ fn assert_the_z9_metadata(built: &Built, orientation: Orientation, label: &str) 
         assert_eq!(metadata.raw_size(), Some(raw), "{label}, from {how}");
         assert_eq!(metadata.image_size(), Some(image), "{label}, from {how}");
         // The focus point, from the MakerNote's AFInfo2, as recorded: the
-        // centre and the area in the camera's full-size frame, with focus
+        // center and the area in the camera's full-size frame, with focus
         // confirmed.
         let focus = metadata.focus().unwrap();
         assert_eq!(
@@ -1097,7 +1097,7 @@ fn a_limit_crossed_inside_the_d1h_makernote_costs_the_makernote_only() {
 // crop modes, with a single focus point placed in the top-left corner
 // of the picture, stripped of their pixels and personal fields with
 // their structure and values kept (`tests/fixtures/README.md`). Their
-// point lies far enough from the centre to tell a crop the reader scales
+// point lies far enough from the center to tell a crop the reader scales
 // from one it shifts, which no public sample's point does.
 
 /// What one of the two stripped Z 9 files must give, beside what both
@@ -1118,12 +1118,12 @@ struct StrippedZ9 {
     /// The four previews, smallest first: IFD0's, the MakerNote's,
     /// SubIFD2's and SubIFD0's.
     previews: [(u32, u32); 4],
-    /// The frame, the centre and the size of the focus point the reader
+    /// The frame, the center and the size of the focus point the reader
     /// gives, on the cropped picture.
     focus_frame: (u32, u32),
     focus_center: (u32, u32),
     focus_size: (u32, u32),
-    /// The colour temperature of the white balance the camera applied, in
+    /// The color temperature of the white balance the camera applied, in
     /// kelvin: the MakerNote's ColorTemperatureAuto.
     color_temperature: u32,
     /// The image area, from the crop setting of the MakerNote's
@@ -1132,7 +1132,7 @@ struct StrippedZ9 {
 }
 
 /// The DX shot. CropHiSpeed `[2, 8280, 5520, 5408, 3608, 1436, 956]`
-/// records a crop that cuts both sides, so the centre (636, 572) and the
+/// records a crop that cuts both sides, so the center (636, 572) and the
 /// area 420 by 468 that AFInfo2 records in the full 8256 by 5504 frame are
 /// fractions of the cropped picture, and the reader scales them onto
 /// CropArea's 5392 by 3592, each rounded to the nearest pixel.
@@ -1152,9 +1152,9 @@ const STRIPPED_Z9_DX: StrippedZ9 = StrippedZ9 {
 };
 
 /// The 1:1 shot. CropHiSpeed `[17, 8280, 5520, 5520, 5520, 1380, 0]`
-/// records a crop that keeps the height, so the centre (1797, 424) that
+/// records a crop that keeps the height, so the center (1797, 424) that
 /// AFInfo2 records in the full 8256 by 5504 frame is a position in that
-/// frame, of which CropArea's 5504 by 5504 is the centred window: the
+/// frame, of which CropArea's 5504 by 5504 is the centered window: the
 /// reader moves x back by the window's origin, (8256 - 5504) / 2 = 1376,
 /// and keeps the area, 291 by 323.
 const STRIPPED_Z9_1X1: StrippedZ9 = StrippedZ9 {
@@ -1312,13 +1312,13 @@ fn check_stripped_z9(expected: &StrippedZ9) {
     assert_the_z9_points(metadata, label);
     // No layout: raw-files has no table of the Z 9's points.
     assert_eq!(metadata.focus_layout(), None, "{label}");
-    // The settings, the same on both shots but the colour temperature and
+    // The settings, the same on both shots but the color temperature and
     // the image area. From the Exif IFD: aperture priority, matrix
     // metering, a Flash of 0, no flash fired and no mode recorded, and auto
-    // white balance. From the MakerNote: the colour temperature auto white
+    // white balance. From the MakerNote: the color temperature auto white
     // balance chose; the electronic shutter; the image area of the crop;
     // the large raw size; and, since the Exif IFD records no ColorSpace, as
-    // in every Nikon raw file checked, the MakerNote's colour space, sRGB.
+    // in every Nikon raw file checked, the MakerNote's color space, sRGB.
     // The stripping removed the MakerNote's WhiteBalance text and its
     // fine-tuning, 0x003F, whose values are stored outside their entries,
     // so the white balance mode is Exif's, and since the Z 9 writes no
@@ -1370,10 +1370,10 @@ enum D600Focus {
     ManualFocus,
     /// The points a viewfinder frame names, placed from the table: the
     /// frame they are measured in, the primary's number, the area mode,
-    /// and every point's number and centre, in number order, each with the
+    /// and every point's number and center, in number order, each with the
     /// box of 164 by 164, from a table and with nothing said of focus.
     Placed((u32, u32), u16, FocusAreaMode, &'static [(u16, (u32, u32))]),
-    /// The position a live-view frame records: the centre of its area in
+    /// The position a live-view frame records: the center of its area in
     /// the 6016 by 4016 frame and whether the camera confirmed focus there.
     LiveView((u32, u32), bool),
 }
@@ -1404,14 +1404,14 @@ const D600_DX: Option<ImageArea> = Some(ImageArea::ApsC);
 const D600_FULL: (u32, u32) = (6016, 4016);
 
 /// The frame of the points placed on a DX frame: the crop's window, the
-/// size of frames 49 to 51's previews and JPEGs, centred in the table's
+/// size of frames 49 to 51's previews and JPEGs, centered in the table's
 /// frame at CropHiSpeed's origin, (1040, 696).
 const D600_WINDOW: (u32, u32) = (3936, 2624);
 
 /// The 56 frames of the D600 session, in order. The point numbers, the
 /// layout code, the area mode, the mask's bits, FocusMode and CropHiSpeed
 /// were read from each file's bytes with a script written from the notes,
-/// and each point's centre is the record's, from the table of the NEF
+/// and each point's center is the record's, from the table of the NEF
 /// notes (`docs/formats/nef/autofocus-points.md`, section 2.4), less
 /// CropHiSpeed's origin on a DX frame: none of it is read from the
 /// reader.
@@ -1764,7 +1764,7 @@ const D600_SESSION: [D600Frame; 56] = [
     ),
     // Frames 49 and 50: points 38 and 27 in the DX crop, which
     // CropHiSpeed records as `[2, 6080, 4028, 3968, 2636, 1040, 696]`:
-    // placed in the crop's window, 3936 by 2624, each centre moved back by
+    // placed in the crop's window, 3936 by 2624, each center moved back by
     // the origin, (1040, 696).
     (
         49,
@@ -1802,7 +1802,7 @@ const D600_SESSION: [D600Frame; 56] = [
     // of its travel: bottom left, top left, top right and bottom right.
     // AFInfo2 records the area as a position, which the reader gives as
     // recorded: a 6016 by 4016 frame, an area of 540 by 540 and these
-    // centres, with the in-focus byte 1.
+    // centers, with the in-focus byte 1.
     (53, D600_LANDSCAPE, D600_FX, LiveView((343, 3673), true)),
     (54, D600_LANDSCAPE, D600_FX, LiveView((343, 343), true)),
     (55, D600_LANDSCAPE, D600_FX, LiveView((5671, 343), true)),
@@ -1871,7 +1871,7 @@ fn check_d600_focus(label: &str, metadata: &Metadata, focus: D600Focus) {
             assert_eq!(metadata.focus_points(), None, "{label}");
         }
         Placed(frame, primary_number, mode, points) => {
-            // The primary, as a focus point: the table's centre, moved on a
+            // The primary, as a focus point: the table's center, moved on a
             // DX frame, with its box, from a table, and nothing said of
             // focus, though the in-focus byte reads 0.
             let &(_, (x, y)) = points
@@ -1984,7 +1984,7 @@ fn the_d600_frame_7856_gives_point_1_placed_in_the_tables_frame_in_3d_tracking()
 /// column, opens with its three JPEG previews, smallest first, each a stub
 /// JPEG of 122 bytes that reads whole, and gives every value of its
 /// metadata: point 38 placed from the table among them, and point 38 of
-/// the layout, far from the centre, where a wrong table, a wrong bit order
+/// the layout, far from the center, where a wrong table, a wrong bit order
 /// or a wrong frame shows. Its values were read from the file's bytes and
 /// the record in the NEF notes, not from the reader.
 #[test]
@@ -2125,7 +2125,7 @@ fn the_d600_frame_4_gives_its_previews_metadata_and_point_38_placed_from_the_tab
     // auto white balance, and a Flash of 16, the flash off by the
     // camera's setting and not fired. From the MakerNote: the fine-tuning
     // 0x000B records, no shift, whole steps; and, since the Exif IFD
-    // records no ColorSpace, the MakerNote's colour space, sRGB. The
+    // records no ColorSpace, the MakerNote's color space, sRGB. The
     // stripping removed the WhiteBalance text, so the mode is Exif's; the
     // D600 writes no ColorTemperatureAuto, ShutterMode or ImageSizeRAW,
     // and CropHiSpeed's crop setting, 0, names no image area.
@@ -3212,12 +3212,12 @@ fn every_sample_of_the_other_nikon_bodies_opens_with_its_previews() {
 /// settings, from each file's Exif IFD and MakerNote, by the rules of
 /// ADR011. The white balance mode is the MakerNote's text on every file,
 /// the D1H's, the D1X's and the E5700's among them, which record no Exif
-/// WhiteBalance. No file records an Exif ColorSpace, so the colour space
+/// WhiteBalance. No file records an Exif ColorSpace, so the color space
 /// is the MakerNote's, which the bodies before the D200 and the Coolpix
 /// E5700 and P7800 do not record. The fine-tuning is 0x003F's, else that
 /// of a 0x000B of two values, so the bodies whose 0x000B holds one value,
 /// and the E5700, which writes neither, give none. The D850 and the Z fc
-/// record a colour temperature of 0 under daylight, which gives none. The
+/// record a color temperature of 0 under daylight, which gives none. The
 /// D1H and the D1X record no Flash; the Z5II and the Z6III record the
 /// ExposureProgram 0, "not defined", which gives no exposure program; and
 /// the D850 records the MeteringMode 255, "other". No Nikon file gives the

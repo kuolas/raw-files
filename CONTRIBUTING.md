@@ -60,7 +60,7 @@ What it is:
 
 - `bug` — something doesn't work, or gives a wrong result. The *Bug report*
   form adds it.
-- `enhancement` — a new feature or a change in behaviour. The *Feature
+- `enhancement` — a new feature or a change in behavior. The *Feature
   request* form adds it.
 
 Where it belongs, by the format or part of the library it touches:
@@ -164,7 +164,7 @@ maintainer's own. The flow:
    last one. This is what keeps `git bisect` useful, and it is the one rule
    that cannot be fixed after the fact. A few habits that make it easy:
 
-   - Keep refactoring and behaviour changes in separate commits.
+   - Keep refactoring and behavior changes in separate commits.
    - Put tests and docs in the same commit as the change that needs them.
    - Fix a mistake from an earlier commit with `git commit --fixup=<sha>` and
      fold it in with `git rebase -i --autosquash origin/master`, rather than
@@ -381,7 +381,7 @@ size they hold, the focus points by origin, recorded or placed from a
 table, the lists by number of points and by area mode, and the files with a
 layout, with and without a focus point; and, for each camera setting, how
 many files have each kind of it, such as aperture priority, auto white
-balance or a white balance fine-tuning of `(-24/4, 0/4)`, for the colour
+balance or a white balance fine-tuning of `(-24/4, 0/4)`, for the color
 temperature its range, and how many flashes fired: totals over the files of
 a format, never tied to one file. A preview may end in padding after the
 image's end marker, as some Sony cameras write it: `FF` bytes in any file,
@@ -409,7 +409,7 @@ is merged only when all of its checks pass.
 CI also compares the crate's public API with the newest version on crates.io,
 with `cargo-semver-checks`, so that a change that would break callers of the
 last release is caught before it is merged. It catches many breaking changes,
-such as a removed or renamed item, but not all: a changed type or behaviour
+such as a removed or renamed item, but not all: a changed type or behavior
 is still for review to find. A breaking change is allowed only once the
 version in `Cargo.toml` has been raised to one that permits it: before 1.0,
 the minor number, as the versioning promise in `CHANGELOG.md` says. So the
@@ -433,7 +433,7 @@ A few conventions:
   the parser the smallest input that shows the problem.
 - **A user-visible change adds a line to [CHANGELOG.md](CHANGELOG.md)** under
   `[Unreleased]`, in the same pull request. For a library, user-visible means
-  anything a caller can see: the public API, its behaviour, a newly supported
+  anything a caller can see: the public API, its behavior, a newly supported
   camera, the minimum Rust version. Internal refactors and docs changes don't
   need one.
 - **Comments describe the code as it is**, not its history ("added in v0.2"
@@ -589,7 +589,7 @@ In short:
 - **Never copy or translate code, comments or tables from another
   project's source**, whatever its license (dcraw, LibRaw, rawspeed,
   rawler, ExifTool, exiv2 and the like). Reading their source to settle a
-  fact is fine; what you learnt goes through the notes and a sample file
+  fact is fine; what you learned goes through the notes and a sample file
   like any other fact, and is coded once a file confirms it. Where you
   can, let someone else write the code for a part whose source you have
   read. Never take a program apart: no firmware or software is
@@ -615,7 +615,7 @@ and where that point lies on the picture is in no file: it takes a
 table of the body's points. Such a table enters raw-files only when
 measured by the project or by a contributor on that body, on frames
 shot with it and read in the maker's own software; none is taken from
-another project on its licence alone
+another project on its license alone
 ([ADR017](docs/architecture-decisions/adr017-per-body-tables-measured-by-the-project.md)).
 A body without a table gives no point for such a shot.
 
@@ -625,7 +625,7 @@ frames the NEF notes' procedure lists, RAW + JPEG
 and open an issue naming the body. The maintainer will say where to
 send them, measure them, write the record and the table, and credit
 you in both. With your agreement, the frames are committed stripped of
-their pixels and personal fields, under the repository's licence.
+their pixels and personal fields, under the repository's license.
 
 A contributor ([Becoming a contributor](#becoming-a-contributor)) can
 also measure a body themselves, following the whole procedure

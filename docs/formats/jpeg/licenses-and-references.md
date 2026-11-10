@@ -1,9 +1,9 @@
-# JPEG: licences and references
+# JPEG: licenses and references
 
 Unlike a raw format, a JPEG file is described by published standards:
 the JPEG standard itself, JFIF, Exif and the Multi-Picture Format. This
 page records where each is published and on what terms, how the sample
-files' licences are honoured, and how these notes keep to the clean-room
+files' licenses are honored, and how these notes keep to the clean-room
 rule. Back to [the JPEG overview](README.md).
 
 Confidence tags: **[P]** primary (read on the publisher's page or in the
@@ -19,7 +19,7 @@ October 2026.
 |---|---|---|---|
 | JPEG: ITU-T T.81, the same text as ISO/IEC 10918-1 | T.81 (09/92), ISO/IEC 10918-1:1993 | The ITU offers it only for a fee; its page says it "is only available through payment". The W3C hosts the CCITT publication of 1992, which is the copy these notes read. ISO sells 10918-1. [1][2] | P |
 | JFIF: ITU-T T.871, the same text as ISO/IEC 10918-5 | T.871 (05/2011), ISO/IEC 10918-5:2012 | Free from the ITU, listed among its freely available items. [3] | P |
-| Exif: CIPA DC-008, technically equivalent to JEITA CP-3451H | Exif 3.1, CIPA DC-008-Translation-2026 (January 2026) | Free from CIPA, after accepting a disclaimer of CIPA's liability in a download form; it states no licence terms for implementing it. CIPA lists DC-008-2026 and DC-008-2024 (Exif 3.0). [4] | P |
+| Exif: CIPA DC-008, technically equivalent to JEITA CP-3451H | Exif 3.1, CIPA DC-008-Translation-2026 (January 2026) | Free from CIPA, after accepting a disclaimer of CIPA's liability in a download form; it states no license terms for implementing it. CIPA lists DC-008-2026 and DC-008-2024 (Exif 3.0). [4] | P |
 | Multi-Picture Format: CIPA DC-007 | CIPA DC-007-Translation-2026 (its revision history lists 2009, 2021 and 2025) | Free from CIPA, through the same download form. [5] | P |
 
 These standards describe the container and the metadata. raw-files
@@ -35,7 +35,7 @@ advisories that [security.md](security.md) cites, and the ExifTool output
 described below. [I] Under the clean-room
 rule ([ADR013](../../architecture-decisions/adr013-clean-room-and-third-party-code.md)),
 no code, comment or table is taken from a JPEG or Exif library, whatever
-its licence.
+its license.
 
 ExifTool was run on the first 300 KB of each candidate sample, as an
 independent reader, while the samples were chosen
@@ -50,7 +50,7 @@ Every fact tagged **[F]** comes from the files' bytes, read with a
 script written for the purpose. None of ExifTool's code or printed text
 is copied into the repository. [I]
 
-## 3. The sample files' licences
+## 3. The sample files' licenses
 
 The eight Commons files ([test-data.md](test-data.md#2-the-sample-files))
 are under CC0, a public-domain dedication, CC BY 2.0, CC BY 2.5 or CC BY
@@ -60,23 +60,23 @@ are under CC0, a public-domain dedication, CC BY 2.0, CC BY 2.5 or CC BY
   in the public domain by its author, a dedication that Commons records
   but that is weaker than CC0. [S][6]
 - **CC BY** asks that a copy or adaptation credit the author, link the
-  licence and say whether it was changed. [S][7] raw-files does not
+  license and say whether it was changed. [S][7] raw-files does not
   redistribute the files: `scripts/fetch-samples.sh` downloads them from
   Commons, in CI as elsewhere, pinned by their SHA-256. test-data.md
-  records each file's author and licence all the same, as the list of
+  records each file's author and license all the same, as the list of
   samples, `tests/samples.tsv`, does, so that the credit travels with any
   reference to the file. [I] The ILCE-6000 file's page offers it under
-  three licences, and raw-files takes CC BY 2.5 of them. [P][6]
+  three licenses, and raw-files takes CC BY 2.5 of them. [P][6]
 - **CC BY-SA** files are not used, since share-alike terms would follow
   any adaptation of the data. [I]
 - **The early Coolpix files checked by hand**
   ([test-data.md](test-data.md#6-early-coolpix-files-checked-by-hand))
   are not samples: nothing downloads them, and the repository holds
-  nothing of theirs but their names, licences and hashes and facts about
+  nothing of theirs but their names, licenses and hashes and facts about
   their structure, such as where a MakerNote lies and what its offsets
-  count from. Facts are not the work a licence covers, so some of them
+  count from. Facts are not the work a license covers, so some of them
   are cited although they are under CC BY-SA, where no file of that body
-  under another licence was found; each is credited all the same. [I]
+  under another license was found; each is credited all the same. [I]
 - Commons keeps each upload byte for byte, and a later upload can replace
   the file behind the same name; the SHA-256 pin makes the download
   script notice, deleting the file it downloaded and failing, in CI as
@@ -115,7 +115,7 @@ are under CC0, a public-domain dedication, CC BY 2.0, CC BY 2.5 or CC BY
     "Commons:Reusing content outside Wikimedia",
     https://commons.wikimedia.org/wiki/Commons:Reusing_content_outside_Wikimedia
     **[P]** / **[S]**
-[7] Creative Commons, the licence deeds of CC0 1.0, CC BY 2.0, 2.5 and
+[7] Creative Commons, the license deeds of CC0 1.0, CC BY 2.0, 2.5 and
     4.0, https://creativecommons.org/publicdomain/zero/1.0/ ,
     https://creativecommons.org/licenses/by/2.0/ ,
     https://creativecommons.org/licenses/by/2.5/ ,

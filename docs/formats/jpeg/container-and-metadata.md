@@ -23,7 +23,7 @@ Claims carry a confidence tag:
 - **[F]**: measured on a named sample file: one of the eight
   camera-original JPEGs from Wikimedia Commons, cited by body ("the
   ILCE-7M3 file"), which [test-data.md](test-data.md#2-the-sample-files)
-  lists with its file name, licence and SHA-256; or on the early
+  lists with its file name, license and SHA-256; or on the early
   Coolpix files checked by hand, which
   [test-data.md](test-data.md#6-early-coolpix-files-checked-by-hand)
   lists the same way.
@@ -71,7 +71,7 @@ by a code that says what comes next. [P][1] (B.1.1.2, p. 31)
   [P][1] (B.1.1.4, p. 33; Table B.9, p. 44)
 - **The order.** A file holds SOI, one frame and EOI. Before the frame
   header, and before each scan's header, may come any number of table and
-  miscellaneous segments, in any order: quantisation tables (DQT,
+  miscellaneous segments, in any order: quantization tables (DQT,
   `FF DB`), Huffman tables (DHT, `FF C4`), arithmetic-coding conditions
   (DAC, `FF CC`), the restart interval (DRI, `FF DD`), comments (COM,
   `FF FE`) and application segments (APP0 to APP15, `FF E0` to `FF EF`).
@@ -193,15 +193,15 @@ in IFD0's Software [P][3]:
 | Setting | Tag | Values | Exif 3.1 |
 |---|---|---|---|
 | Exposure program | 0x8822 ExposureProgram, SHORT | 0 not defined, 1 manual, 2 normal program, 3 aperture priority, 4 shutter priority, 5 creative, 6 action, 7 portrait, 8 landscape; others reserved | 4.6.6.7.3, p. 55 |
-| Metering mode | 0x9207 MeteringMode, SHORT | 0 unknown, 1 average, 2 centre-weighted average, 3 spot, 4 multi-spot, 5 pattern, 6 partial, 255 other | 4.6.6.7.19, p. 60 |
-| Kind of light | 0x9208 LightSource, SHORT | 0 unknown, 1 daylight, 2 fluorescent, 3 tungsten, 4 flash, 9 fine weather, 10 cloudy weather, 11 shade, 12 to 16 five kinds of fluorescent lamp, 17 to 23 standard lights A, B, C, D55, D65, D75, D50, 24 ISO studio tungsten, 25 to 29 five kinds of light source and 30 to 34 five kinds of LED by colour temperature, 255 other | 4.6.6.7.20, pp. 60 to 61 |
+| Metering mode | 0x9207 MeteringMode, SHORT | 0 unknown, 1 average, 2 center-weighted average, 3 spot, 4 multi-spot, 5 pattern, 6 partial, 255 other | 4.6.6.7.19, p. 60 |
+| Kind of light | 0x9208 LightSource, SHORT | 0 unknown, 1 daylight, 2 fluorescent, 3 tungsten, 4 flash, 9 fine weather, 10 cloudy weather, 11 shade, 12 to 16 five kinds of fluorescent lamp, 17 to 23 standard lights A, B, C, D55, D65, D75, D50, 24 ISO studio tungsten, 25 to 29 five kinds of light source and 30 to 34 five kinds of LED by color temperature, 255 other | 4.6.6.7.20, pp. 60 to 61 |
 | Flash | 0x9209 Flash, SHORT, bits | bit 0 fired; bits 1 and 2 whether return light was detected; bits 3 and 4 the mode: unknown, compulsory firing, compulsory suppression, auto; bit 5 no flash function; bit 6 red-eye reduction | 4.6.6.7.21 and Figure 19, pp. 61 to 62 |
 | White balance | 0xA403 WhiteBalance, SHORT | 0 auto, 1 manual | 4.6.6.7.37, p. 69 |
-| Focal length in 35 mm terms | 0xA405 FocalLengthIn35mmFilm, SHORT, in millimetres | 0 unknown | 4.6.6.7.39, p. 70 |
-| Colour space | 0xA001 ColorSpace, SHORT | 1 sRGB, 0xFFFF uncalibrated: any colour space but sRGB | 4.6.6.2.1, p. 47 |
+| Focal length in 35 mm terms | 0xA405 FocalLengthIn35mmFilm, SHORT, in millimeters | 0 unknown | 4.6.6.7.39, p. 70 |
+| Color space | 0xA001 ColorSpace, SHORT | 1 sRGB, 0xFFFF uncalibrated: any color space but sRGB | 4.6.6.2.1, p. 47 |
 | Software | IFD0 0x0131 Software, ASCII or UTF-8 | the name and version of the software or firmware that generated the image | 4.6.5.4.4, p. 42 |
 
-- **A colour space other than sRGB is named elsewhere.** ColorSpace says
+- **A color space other than sRGB is named elsewhere.** ColorSpace says
   only sRGB or "uncalibrated". The Interoperability IFD, which the Exif
   IFD points to with tag 0xA005 (4.6.3.3.1, p. 29), holds
   InteroperabilityIndex (0x0001, ASCII), which names the rule the file
@@ -326,7 +326,7 @@ them, with Exif 3.1's sections. [P][3] (Table 14, pp. 82 to 83;
   the datum `WGS-84` and the differential correction 0. None records a
   position.
 - **On more files** **[F]**, the same sets as above: a phone's file
-  among the raw.pixls.us files (a Samsung SM-G973U; the catalogue lists
+  among the raw.pixls.us files (a Samsung SM-G973U; the catalog lists
   it as a DNG, but its bytes are a JPEG's), of GPS version 2.2.0.0,
   records a position in whole seconds (`d/1, m/1, s/1`) and
   GPSAltitudeRef without GPSAltitude, and no time or datum. My Z 9's
@@ -357,9 +357,9 @@ Every text and GPS value counted lies inside the blocks raw-files'
   extension data (`FPXR`) and the Multi-Picture Format (`MPF`), section 7.
   [P][3] (4.7.3, pp. 106 to 107; 4.7.4, p. 110) Exif also places JUMBF
   data in APP11 (4.7.5), and lets makers add segments of their own (4.5.5
-  and 4.5.6, pp. 22 to 25). [P][3] Colour profiles (ICC) are also carried
+  and 4.5.6, pp. 22 to 25). [P][3] Color profiles (ICC) are also carried
   in APP2 segments; that specification was not read. [I]
-- Exif asks that all quantisation tables be in one DQT segment and all
+- Exif asks that all quantization tables be in one DQT segment and all
   Huffman tables in one DHT segment; the D70 file writes two DQT and four
   DHT segments. [P][3] (4.7.1.2 and 4.7.1.3, pp. 100 to 101) [F] Nothing
   raw-files does depends on it.
@@ -608,7 +608,7 @@ and each MPF image up to its frame header takes one to three blocks of
 What [ADR014](../../architecture-decisions/adr014-jpeg-files-as-a-format-of-their-own.md)
 decided, as steps. [I]
 
-1. **Recognise the container.** A file whose first bytes are `FF D8 FF`
+1. **Recognize the container.** A file whose first bytes are `FF D8 FF`
    is a JPEG.
 2. **Walk the segments** from SOI, one step per fill byte or marker:
    skip fill bytes; take a stand-alone marker as it is; for any other
@@ -647,7 +647,7 @@ decided, as steps. [I]
    orientation. Before that, a Nikon JPEG shot in a crop mode, whose
    MakerNote records a crop and holds no CropArea, has its point placed
    on the JPEG's own picture: a DX crop's scaled onto the JPEG's frame,
-   a 1:1 or 16:9 crop's moved into the centred window of the recorded
+   a 1:1 or 16:9 crop's moved into the centered window of the recorded
    frame that has the JPEG's shape
    ([ADR015](../../architecture-decisions/adr015-the-focus-point-of-a-crop-mode-jpeg.md)).
 

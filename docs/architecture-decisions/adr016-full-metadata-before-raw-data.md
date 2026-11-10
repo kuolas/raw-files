@@ -21,7 +21,7 @@ file as a reader to compare with, lists about 45 metadata fields beyond
 the file's name and size, of which raw-files gives about 18, and an XMP
 and IPTC tab of about 35 more, of which it gives none. Sony's Imaging
 Edge Desktop shows the same kinds of fields for an ARW file. A viewer's
-information panel, or a catalogue that sorts and searches by these
+information panel, or a catalog that sorts and searches by these
 fields, has to read the rest with a second library beside raw-files.
 
 The rest falls into seven groups:

@@ -6,16 +6,16 @@ JPEG sizes shows: the NEF and the Medium JPEG of frame 7856, and the
 Small JPEG of frame 7858, numbered as the camera numbers its files.
 The NEF notes record the pairs, how each JPEG was fitted onto its own
 NEF's full-size preview, and what each size shows: the Large and Small
-JPEGs the whole frame, the Medium JPEG the 6010x4006 window centred in
+JPEGs the whole frame, the Medium JPEG the 6010x4006 window centered in
 it
 ([autofocus-points.md](../../../docs/formats/nef/autofocus-points.md#29-the-jpeg-sizes)).
 
 Both frames were shot through the viewfinder in 3D-tracking, AF-C, with
-the centre point, point 1, of one static scene, with an AF-S Nikkor
+the center point, point 1, of one static scene, with an AF-S Nikkor
 50mm f/1.4G at f/1.4. The NEF is stripped as the session's NEF files
 are, 2,452 bytes; each JPEG as the session's JPEG of frame 4 is, 69,876
 bytes; [the fixtures' README](../README.md#the-d600s-jpeg-sizes) says
-how they were stripped and checked, under which licence they are
+how they were stripped and checked, under which license they are
 published, and who *I* is.
 
 | File | Camera's file name | Size | Shot | SHA-256 |

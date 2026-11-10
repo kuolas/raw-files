@@ -26,7 +26,7 @@ roadmap's capabilities:
 The research also had to establish three practical points:
 
 - which existing references raw-files may learn from or reuse under its
-  MIT OR Apache-2.0 licence, and which legal questions are open;
+  MIT OR Apache-2.0 license, and which legal questions are open;
 - what test data exists, and which of it may be committed or downloaded;
 - what has gone wrong in other Sony parsers.
 
@@ -40,15 +40,15 @@ The research also had to establish three practical points:
   by guesswork; where a sample file settles it, the page names the file.
 - Algorithms are restated in prose or original pseudocode.
 - Copy no code and no wholesale data tables (such as the ARW1 code table,
-  the MakerNote cipher's inverse table, or any tone or delinearisation
+  the MakerNote cipher's inverse table, or any tone or delinearization
   curve); individual facts such as tag IDs, offsets, value meanings and
   per-body values are cited to their source.
 - Quotations stay under fifteen words.
 - No code from a copyleft project was adapted, for the pages or for the
   checks.
 - Sample files come from raw.pixls.us only, and only files that its
-  catalogue lists as CC0. Each file's SHA-256 was checked against the
-  catalogue before any parsing.
+  catalog lists as CC0. Each file's SHA-256 was checked against the
+  catalog before any parsing.
 - Structure and algorithm checks used throwaway scripts written from the
   pages' own prose. They are not committed. No external decoder or ExifTool
   was run on the files, so no measurement depends on another
@@ -80,7 +80,7 @@ settled.
 The pages cite their sources individually. By kind:
 
 - **Specifications and standards:**
-  - TIFF 6.0 (an ITU mirror) and the ISO catalogue entry for TIFF/EP;
+  - TIFF 6.0 (an ITU mirror) and the ISO catalog entry for TIFF/EP;
   - CIPA's Exif page;
   - Adobe's DNG specification page;
   - ITU-T T.81;
@@ -89,7 +89,7 @@ The pages cite their sources individually. By kind:
 - **Sony:**
   - camera help guides and a support article on 12-bit modes;
   - Imaging Edge and Pixel Shift Multi Shooting pages;
-  - the Camera Remote SDK page and its licence.
+  - the Camera Remote SDK page and its license.
 - **Tag references:**
   - ExifTool's Sony and EXIF tag pages and its `Sony.pm`, `Exif.pm`,
     `MakerNotes.pm`, `SonyIDC.pm`, `Minolta.pm`, `MinoltaRaw.pm`,
@@ -108,7 +108,7 @@ The pages cite their sources individually. By kind:
   - Laurent Clévy's Sony notes (v0.55, 2026) and the ExifTool dumps
     published with them;
   - RawDigger's description of cRAW, and Henry Dietz's paper on its
-    artefacts;
+    artifacts;
   - the README of arw6_decode;
   - discussions on pixls.us, the Adobe and Lightroom Queen forums, the
     ExifTool forum (through search extracts), and project issue trackers.
@@ -116,10 +116,10 @@ The pages cite their sources individually. By kind:
   - NVD records, Exiv2's GitHub advisories, OSS-Fuzz vulnerability records
     and the RustSec advisory database;
   - the LibRaw and rawspeed commit histories;
-  - crates.io and GitHub metadata for licences;
+  - crates.io and GitHub metadata for licenses;
   - Google Patents records for the cRAW patents.
 - **Sample data:**
-  - the raw.pixls.us catalogue, its hash list and the exiv2 dumps it
+  - the raw.pixls.us catalog, its hash list and the exiv2 dumps it
     publishes per file, used to choose files rather than as evidence;
   - the 36 CC0 files listed in [test-data.md](test-data.md#files-checked).
 
@@ -135,10 +135,10 @@ The pages cite their sources individually. By kind:
   read dcraw 9.28 from a mirror that was not verified against the original
   ([security.md](security.md)).
 - **Not readable.** dnglab's RawDB is a JavaScript application whose
-  per-file licences could not be read.
+  per-file licenses could not be read.
 - **Not opened.** ZDI's advisory pages, the OSS-Fuzz issue tracker and the
   LibRaw 0.18.2 release tarball.
-- **Not read, deliberately.** arw6_decode has no licence, so only its
+- **Not read, deliberately.** arw6_decode has no license, so only its
   README was read. LibRaw's ARW 6.0 decoder was read for its header,
   identifiers and the curve's shape only.
 - **Read in part.** SMPTE RDD 34 (pages 1 to 8). Paid standards (ISO
@@ -160,7 +160,7 @@ On the sample files, with the throwaway scripts described above:
   capture order on four bodies (ILCE-7M4, ILCE-9, ILCE-7RM2, ILCE-7M5). The
   inverse exponent 55 was checked by computation for all 256 byte values.
 - **cRAW block layout.** Over 500,000 blocks in 15 files: no block has its
-  maximum below its minimum or its two indices equal, same-colour jumps across
+  maximum below its minimum or its two indices equal, same-color jumps across
   block boundaries are small, and every cRAW width is a multiple of 32. The
   tone-curve builder gives 17,204 at the top code with the common knots.
 - **ARW1.** File 2346 decodes as 3881 columns by 2608 rows, consuming all
@@ -194,8 +194,8 @@ From the sources:
 
 - **No pixel comparison.** No decoded output was compared with a reference
   decoder. "Checked" means that the data decode consistently with the
-  description (all bytes consumed, values in range, neighbouring
-  same-colour pixels close), not that they are bit-exact.
+  description (all bytes consumed, values in range, neighboring
+  same-color pixels close), not that they are bit-exact.
 - **No code in raw-files.** The check scripts were throwaway, so nothing
   here has been exercised by raw-files' own code or tests.
 - **No fuzzing.** The robustness advice comes from other projects' history.
@@ -217,7 +217,7 @@ Follow the same rules:
 
 When a sample file settles an open question or adds an [F] claim:
 
-- use a file that the raw.pixls.us catalogue lists as CC0, and check its
+- use a file that the raw.pixls.us catalog lists as CC0, and check its
   SHA-256 before parsing;
 - name the file by its id, give its URL and SHA-256 in the page's Sources,
   and add it to [test-data.md](test-data.md#files-checked) if it is new;

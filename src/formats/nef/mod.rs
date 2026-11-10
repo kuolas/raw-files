@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! The Nikon NEF reader: how the crate recognises a NEF file, and how it
+//! The Nikon NEF reader: how the crate recognizes a NEF file, and how it
 //! finds the file's previews and reads its metadata.
 //!
 //! A NEF file is a TIFF file written by a Nikon camera, with Nikon's own
@@ -8,7 +8,7 @@
 //! file is a NEF when the Make tag of its IFD0, which names the camera's
 //! manufacturer, names Nikon, and the file is not a DNG: a DNG converted
 //! from a NEF keeps Nikon's name in its Make, but it is Adobe's format. The
-//! NRW files of Coolpix cameras are the same TIFF family and are recognised
+//! NRW files of Coolpix cameras are the same TIFF family and are recognized
 //! the same way. The file's name is never looked at, and neither is the
 //! image IFD0 describes, which differs between bodies and does not tell a
 //! Nikon file from another.
@@ -86,7 +86,7 @@ fn claims<R: Read + Seek>(src: &mut Source<R>, tree: &Tree) -> Result<bool> {
 /// from its WorldTime, when the standard tags gave a capture time without
 /// one, as on bodies before the D850; it gives the camera settings that
 /// only it records, the raw image size among them, its white balance
-/// setting, when it names one, in place of Exif's, and its colour space
+/// setting, when it names one, in place of Exif's, and its color space
 /// when the Exif tags record none, as no Nikon raw file checked does; and
 /// it gives the focus points, from its AFInfo2, which no standard tag
 /// records: a recorded position, placed on CropArea on a crop, as on a

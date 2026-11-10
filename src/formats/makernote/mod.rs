@@ -32,7 +32,7 @@
 //! has its IFD read through it too, with that structure's base and byte
 //! order. A layout with a TIFF header of its own, as Nikon's other one,
 //! takes only where the block's bytes lie, and reads its IFD from that
-//! header. One bound holds every colour temperature a MakerNote gives,
+//! header. One bound holds every color temperature a MakerNote gives,
 //! whatever its maker: 1 to 99,999 K ([`checked_color_temperature`]).
 
 use std::io::{Read, Seek};
@@ -155,13 +155,13 @@ fn ifd_offset(base: u64, start: u64, skip: u64) -> Option<u32> {
         .and_then(|offset| u32::try_from(offset).ok())
 }
 
-/// The highest colour temperature, in kelvin, that a MakerNote's value
+/// The highest color temperature, in kelvin, that a MakerNote's value
 /// gives: 99,999 K, the largest number of five digits, the most that
-/// Nikon's white balance text may hold for a chosen colour temperature
+/// Nikon's white balance text may hold for a chosen color temperature
 /// ([`nikon`]'s `MAX_KELVIN_DIGITS`).
 const MAX_COLOR_TEMPERATURE: u32 = 99_999;
 
-/// `kelvin`, a colour temperature a MakerNote records, when it records
+/// `kelvin`, a color temperature a MakerNote records, when it records
 /// one: from 1 to [`MAX_COLOR_TEMPERATURE`]. 0, which a maker writes where it
 /// records no temperature, gives `None`, and so does a number past the bound,
 /// which is no temperature a camera is set to: the reader refuses it rather

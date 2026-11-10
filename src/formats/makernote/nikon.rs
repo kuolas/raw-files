@@ -70,7 +70,7 @@
 //!
 //! AFInfo2 records where the camera's autofocus aimed, which no standard
 //! tag records. Mirrorless bodies, and DSLRs in live view, fill in a
-//! position in pixels: the size of a frame, the centre of the focus area
+//! position in pixels: the size of a frame, the center of the focus area
 //! in that frame, and the area's width and height. A DSLR shot through the
 //! viewfinder records a zero frame and area instead, and names its points
 //! by number, which only a table of the body's points, carried by no file,
@@ -82,7 +82,7 @@
 //! ([`Metadata::focus_layout`](crate::Metadata::focus_layout)), is not
 //! this reader's to give: detection gives it from the Model alone,
 //! whatever the MakerNote holds, even when it cannot be read.
-//! The position is the centre of the area, not its corner: the Coolpix A,
+//! The position is the center of the area, not its corner: the Coolpix A,
 //! focusing at the middle of its 4928 by 3264 frame, records (2464, 1632)
 //! (sample 2238). The frame is the camera's full-size output, not the
 //! stored raw: 8256 by 5504 on the Z 9, inside an 8280 by 5520 raw
@@ -94,7 +94,7 @@
 //! publish them. It is read at the exact versions 0100, 0101, 0300, 0301,
 //! 0400, 0401 and 0402; any other, such as the Nikon 1's 0200, gives no
 //! focus point, since its fields may lie elsewhere (ADR012). The frame,
-//! the centre and the area are SHORTs in the MakerNote's byte order. On
+//! the center and the area are SHORTs in the MakerNote's byte order. On
 //! every version read but 0300 and 0301, a byte says whether the camera
 //! confirmed focus: 1 for yes, 0 for a miss, and any other value says
 //! nothing. On every version read, byte 5 records the area mode, how the
@@ -103,7 +103,7 @@
 //! method recorded, name a [`FocusAreaMode`] ([`area_mode`]), and any other
 //! names none. A recorded position is given only when the value is at
 //! least as long as its version's layout, the frame and the area have no
-//! zero side, the centre lies on the frame, and the area fits inside the
+//! zero side, the center lies on the frame, and the area fits inside the
 //! frame around it ([`Focus::new`], [`Focus::with_size`]); it is given as
 //! a list of one point, the primary, with the area mode ([`FocusPoints`]).
 //! FocusMode, ASCII text, records how the camera focused: `MANUAL`, or an
@@ -134,11 +134,11 @@
 //! frame, as on any file: one that does not hold there gives no focus point
 //! on a crop either. On a crop, the frame becomes CropArea's size. A DX
 //! crop's point is scaled onto it as [`Focus::scaled_to`] scales: the
-//! centre and the area are each rounded to the nearest pixel, a half
+//! center and the area are each rounded to the nearest pixel, a half
 //! rounding up. An area that rounding leaves a pixel too wide for its
-//! centre is trimmed to fit, and an area side that rounds to nothing is
-//! kept at one pixel. A centre that rounds onto an edge of the picture
-//! keeps the point without an area. A 1:1 or 16:9 crop's centre moves
+//! center is trimmed to fit, and an area side that rounds to nothing is
+//! kept at one pixel. A center that rounds onto an edge of the picture
+//! keeps the point without an area. A 1:1 or 16:9 crop's center moves
 //! back by the window's origin, half the difference between the frame and
 //! CropArea, keeping the area. That window holds only when CropArea's
 //! kept side equals the frame's: a small raw's CropArea counts stored
@@ -162,10 +162,10 @@
 //! which the metadata's image size holds, and its point is placed on them
 //! as a raw file's is placed on CropArea (ADR015). A DX crop's point is
 //! scaled onto the JPEG's size, which becomes the frame. A 1:1 or 16:9
-//! crop's picture is the centred window of the recorded frame that has the
+//! crop's picture is the centered window of the recorded frame that has the
 //! frame's length on the side the crop keeps and the JPEG's shape: its cut
 //! side is the kept length times the JPEG's cut side over its kept side,
-//! rounded to the nearest pixel, a half rounding up. The centre moves back
+//! rounded to the nearest pixel, a half rounding up. The center moves back
 //! by that window's origin, the area is kept, and the window becomes the
 //! frame, as with CropArea; a window longer than the frame on the cut side
 //! gives no focus point. A JPEG whose MakerNote holds a CropArea is read by
@@ -189,7 +189,7 @@
 //! not `MANUAL`, the version is 0100, the Model has a table, the layout
 //! code is the table's, 3 on the D600, and the primary's number is a point
 //! of the table, 1 to 39 on the D600; any other such record gives no focus
-//! point. The focus point is then the primary's centre and box, as the
+//! point. The focus point is then the primary's center and box, as the
 //! table gives them, in the table's frame, from a table
 //! ([`FocusOrigin::Table`]), with nothing said of whether focus was
 //! confirmed: version 0100's in-focus byte is the contrast-detect result,
@@ -202,25 +202,25 @@
 //! records a cropped size that differs from its original size, points are
 //! placed only when the table's record confirms the crop's setting: the
 //! DX crop, 2, on the D600. Then the frame is the crop's window, of the
-//! size the record measured, 3936 by 2624 on a D600 DX frame, centred in
-//! the table's frame, so that its origin is (1040, 696); every centre
+//! size the record measured, 3936 by 2624 on a D600 DX frame, centered in
+//! the table's frame, so that its origin is (1040, 696); every center
 //! moves back by that origin and every box is kept, by the decision to
 //! measure a placed point on a crop in the crop's window (ADR018).
 //! CropHiSpeed's origin, its sixth and seventh values, must be the
 //! window's, as on every D600 DX frame; a file whose origin is not
 //! records the crop elsewhere in the frame and gives no focus point, by
 //! the decision to keep each crop's window in the table (ADR018). A point
-//! whose centre or box the window leaves out is dropped, and when the
+//! whose center or box the window leaves out is dropped, and when the
 //! primary is, the file gives no focus point. In a JPEG the window must be
 //! the JPEG's own size, as it is on the D600 at full image size, so that a
 //! crop-mode JPEG at a smaller size gives none. An uncropped JPEG takes the
 //! table's frame, which the JPEG reader holds to the picture's shape,
 //! unless the table lists its size as one whose picture shows a window of
 //! the frame: the D600's Medium JPEG, 4512 by 3008, shows the 6010 by 4006
-//! window centred in the 6016 by 4016 frame, as I measured it by fitting
+//! window centered in the 6016 by 4016 frame, as I measured it by fitting
 //! the Medium JPEGs of RAW+JPEG pairs onto their NEF's full-size preview.
 //! Its points are then placed as on a crop: the frame is that window, every
-//! centre moves back by its origin, (3, 5), and a point the window leaves
+//! center moves back by its origin, (3, 5), and a point the window leaves
 //! out is dropped, by the decision to keep a JPEG size's window in the
 //! table (ADR018). Its Large and Small JPEGs, 6016 by 4016 and 3008 by
 //! 2008, show the whole frame, and take it. CropArea plays no part in it.
@@ -228,11 +228,11 @@
 //!
 //! The MakerNote also records how the camera was set for the picture,
 //! beyond what the Exif tags record (ADR011): the white balance setting
-//! itself, where Exif says only auto or the kind of light; the colour
+//! itself, where Exif says only auto or the kind of light; the color
 //! temperature of the white balance the camera applied; the
 //! photographer's fine-tuning of it; the shutter used; the part of the
 //! sensor the picture uses; the raw size the camera was set to; and the
-//! colour space of its JPEG output. Each comes from one tag, of the exact
+//! color space of its JPEG output. Each comes from one tag, of the exact
 //! type and count its rule names, and a code or a text gives a value only
 //! where a checked file, or a standard, shows what it means; anything else
 //! costs that value alone. The meaning of each code is ExifTool's, read
@@ -249,14 +249,14 @@
 //! own files add `CLOUDY`, `INCANDESCENT`, `PRESET` and `COOL WHT
 //! FL`; and the frames shot on the Z 9 and the D600 add `AUTO2`,
 //! `NATURAL AUTO` and `PRESET1` to `PRESET4`, with Exif's white balance
-//! agreeing with each. A colour temperature the photographer chose is
+//! agreeing with each. A color temperature the photographer chose is
 //! written as its number, `3230K` on both bodies, which no table could
 //! list, so it is read by its form: one to five digits and an upper-case
 //! `K`. A text the table lacks, such as one of the Z 9's preset slots 5
 //! and 6, which no checked file shows, gives way to the white balance the
 //! Exif tags record, never to a guess from its letters.
 //!
-//! ColorTemperatureAuto is one SHORT, in kelvin: the colour temperature of
+//! ColorTemperatureAuto is one SHORT, in kelvin: the color temperature of
 //! the white balance the camera applied. The D5, the D850, the D780 and
 //! the Z bodies write it, 3050 to 7000 under auto on 17 public samples;
 //! my Z 9 writes it under every setting, 5210 under daylight, 5200
@@ -264,9 +264,9 @@
 //! fc write 0 under daylight (samples 1835 and 8559), which records
 //! none. The bodies before them write none, and the WhiteBalance text is
 //! all they record of a temperature: the number of a chosen one, `3230K`
-//! on my D600. So when ColorTemperatureAuto gives none, the colour
+//! on my D600. So when ColorTemperatureAuto gives none, the color
 //! temperature is that number, when the text records one; on the Z 9,
-//! which writes both, they agree. A colour temperature is given only
+//! which writes both, they agree. A color temperature is given only
 //! from 1 to 99,999 K, the largest number the text's five digits hold.
 //!
 //! The fine-tuning is a shift of the white balance along two axes, amber
@@ -315,7 +315,7 @@
 //! together show, so a JPEG's picture ([`Picture::Jpeg`]) gives none:
 //! a JPEG holds no raw data (ADR014).
 //!
-//! ColorSpace is one SHORT, the colour space of the camera's JPEG output:
+//! ColorSpace is one SHORT, the color space of the camera's JPEG output:
 //! 1 sRGB and 2 Adobe RGB, which the D200 and every later body but the
 //! Coolpix P7800 write; 4, BT.2100, gives none. It is read only when the
 //! Exif IFD holds no ColorSpace, as no checked NEF file does: a program
@@ -447,7 +447,7 @@ const ISO: u16 = 0x0002;
 
 /// The Nikon MakerNote tag that records the white balance setting
 /// (WhiteBalance), as ASCII text: an upper-case word, such as `AUTO1` or
-/// `SUNNY`, padded with spaces, or a chosen colour temperature as its
+/// `SUNNY`, padded with spaces, or a chosen color temperature as its
 /// number, such as `3230K`.
 const WHITE_BALANCE: u16 = 0x0005;
 
@@ -478,7 +478,7 @@ const CROP_HI_SPEED: u16 = 0x001B;
 /// (SerialNumber), as ASCII text.
 const SERIAL_NUMBER: u16 = 0x001D;
 
-/// The Nikon MakerNote tag that records the colour space the camera was
+/// The Nikon MakerNote tag that records the color space the camera was
 /// set to for its JPEG output (ColorSpace): one SHORT, 1 sRGB, 2 Adobe RGB.
 const COLOR_SPACE: u16 = 0x001E;
 
@@ -510,7 +510,7 @@ const FINE_TUNE: u16 = 0x003F;
 /// top row, width and height.
 const CROP_AREA: u16 = 0x0045;
 
-/// The Nikon MakerNote tag that records the colour temperature of the
+/// The Nikon MakerNote tag that records the color temperature of the
 /// white balance the camera applied, in kelvin (ColorTemperatureAuto): one
 /// SHORT, 0 when none was recorded.
 const COLOR_TEMPERATURE: u16 = 0x004F;
@@ -523,7 +523,7 @@ const LENS: u16 = 0x0084;
 /// The Nikon MakerNote tag that records where the camera's autofocus
 /// aimed (AFInfo2): an UNDEFINED value that starts with its version, four
 /// ASCII digits, and holds, at offsets each version sets, the size of a
-/// frame, the centre of the focus area and the area's width and height,
+/// frame, the center of the focus area and the area's width and height,
 /// as SHORTs in the MakerNote's byte order, and on most versions a byte
 /// saying whether focus was confirmed.
 const AF_INFO2: u16 = 0x00B7;
@@ -757,7 +757,7 @@ pub(in crate::formats) fn preview_candidate<R: Read + Seek>(
 /// Then the camera settings that only the MakerNote records, and the white
 /// balance setting, finer than Exif's, in place of the mode the Exif tags
 /// gave when the MakerNote names one, each by its own rule
-/// ([`camera_settings`]): the colour space only when the Exif IFD holds no
+/// ([`camera_settings`]): the color space only when the Exif IFD holds no
 /// ColorSpace, and the raw image size only for a raw file's picture.
 /// CropHiSpeed is read once, for the image area and the focus point.
 /// The table of the body's autofocus points is found from the Model the
@@ -860,11 +860,11 @@ pub(in crate::formats) fn metadata<R: Read + Seek>(
 ///   cuts it at its first NUL and trims the spaces that pad it. When the
 ///   tag is missing, is not of type ASCII, stores its value outside the
 ///   block or names no mode, the Exif tags' mode stays.
-/// - **The colour temperature** is ColorTemperatureAuto, exactly one
+/// - **The color temperature** is ColorTemperatureAuto, exactly one
 ///   SHORT, when above zero, under whichever white balance setting: 0
 ///   records none. Otherwise, as on the bodies that write no
 ///   ColorTemperatureAuto, it is the number of a WhiteBalance text that records
-///   a chosen colour temperature, such as `3230K` ([`color_temperature`]).
+///   a chosen color temperature, such as `3230K` ([`color_temperature`]).
 /// - **The fine-tuning** is read from 0x003F, else from 0x000B
 ///   ([`fine_tune`]).
 /// - **The shutter used** is ShutterMode's code, exactly one SHORT
@@ -876,7 +876,7 @@ pub(in crate::formats) fn metadata<R: Read + Seek>(
 ///   ([`raw_image_size`]), for a raw file's picture alone: in a JPEG,
 ///   whose `picture` is [`Picture::Jpeg`], the tag follows the JPEG's own
 ///   size, and a JPEG holds no raw data, so it gives none (ADR014).
-/// - **The colour space** is ColorSpace's code, exactly one SHORT
+/// - **The color space** is ColorSpace's code, exactly one SHORT
 ///   ([`color_space`]), only when the Exif IFD keeps no ColorSpace entry,
 ///   of any known type and any count, `exif_records_color_space` being
 ///   `false`, as in every Nikon raw file checked. Where the Exif IFD keeps
@@ -904,7 +904,7 @@ fn camera_settings<R: Read + Seek>(
     picture: Picture,
 ) -> Result<CameraSettings> {
     let ifd = &makernote.ifd;
-    // Read once, for the white balance mode and the colour temperature.
+    // Read once, for the white balance mode and the color temperature.
     let white_balance = tiff_metadata::text(src, ifd, WHITE_BALANCE)?;
     let white_balance = white_balance.as_deref();
     if let Some(mode) = white_balance.and_then(white_balance_of_text) {
@@ -924,10 +924,10 @@ fn camera_settings<R: Read + Seek>(
     Ok(settings)
 }
 
-/// The colour temperature, in kelvin, of the white balance `makernote`
+/// The color temperature, in kelvin, of the white balance `makernote`
 /// records: ColorTemperatureAuto, exactly one SHORT, when it gives one;
 /// otherwise the number of `white_balance`, the WhiteBalance text as
-/// [`camera_settings`] read it, when that text records a chosen colour
+/// [`camera_settings`] read it, when that text records a chosen color
 /// temperature ([`kelvin_of_text`]). Either gives one only from 1 to 99,999 K
 /// ([`checked_color_temperature`]), so a ColorTemperatureAuto of 0, which
 /// records none, gives way to the text, and a text of `0K` gives none.
@@ -966,7 +966,7 @@ fn color_temperature<R: Read + Seek>(
 /// [`Tungsten`](WhiteBalanceMode::Tungsten); `COOL WHT FL`
 /// [`Fluorescent`](WhiteBalanceMode::Fluorescent); `FLASH`
 /// [`Flash`](WhiteBalanceMode::Flash); and `PRESET` and `PRESET1` to
-/// `PRESET4` [`Custom`](WhiteBalanceMode::Custom). A chosen colour
+/// `PRESET4` [`Custom`](WhiteBalanceMode::Custom). A chosen color
 /// temperature, written as its number, is the one text read by its form
 /// ([`kelvin_of_text`]): whatever the number, it gives
 /// [`ColorTemperature`](WhiteBalanceMode::ColorTemperature).
@@ -989,10 +989,10 @@ fn white_balance_of_text(text: &str) -> Option<WhiteBalanceMode> {
     })
 }
 
-/// The most digits a WhiteBalance text that records a chosen colour
+/// The most digits a WhiteBalance text that records a chosen color
 /// temperature may have: the rule's own bound, past the four of every
 /// such text checked, such as `3230K`. Its largest number is the bound
-/// every colour temperature a MakerNote gives is held to
+/// every color temperature a MakerNote gives is held to
 /// ([`MAX_COLOR_TEMPERATURE`](super::MAX_COLOR_TEMPERATURE)).
 const MAX_KELVIN_DIGITS: usize = 5;
 
@@ -1000,7 +1000,7 @@ const MAX_KELVIN_DIGITS: usize = 5;
 // whatever a WhiteBalance text gives.
 const _: () = assert!(10_u32.pow(MAX_KELVIN_DIGITS as u32) - 1 == super::MAX_COLOR_TEMPERATURE);
 
-/// The colour temperature that the WhiteBalance text `text`, as read,
+/// The color temperature that the WhiteBalance text `text`, as read,
 /// records as its number when the photographer chose one, as the Z 9 and
 /// the D600 write it, `3230K` for 3230 K: one to [`MAX_KELVIN_DIGITS`]
 /// ASCII digits, then an upper-case `K`, and nothing else, so that `K`
@@ -1150,7 +1150,7 @@ fn raw_image_size(code: u16) -> Option<RawImageSize> {
     })
 }
 
-/// The colour space a ColorSpace `code` of the MakerNote names: 1
+/// The color space a ColorSpace `code` of the MakerNote names: 1
 /// [`Srgb`](ColorSpace::Srgb) and 2 [`AdobeRgb`](ColorSpace::AdobeRgb).
 /// `None` for 4, BT.2100, which no variant names and no checked file
 /// holds, and for every other code.
@@ -1327,7 +1327,7 @@ fn world_time<R: Read + Seek>(src: &mut Source<R>, makernote: &MakerNote) -> Res
 /// ([`area_mode`]).
 ///
 /// A record of a position, whose frame and area have no zero side
-/// ([`FocusRecord::records_position`]), gives the centre of the focus area,
+/// ([`FocusRecord::records_position`]), gives the center of the focus area,
 /// the area's size and the frame the two are measured in, with whether
 /// focus was confirmed on the versions that say, placed on the cropped
 /// picture when `crop`, what CropHiSpeed records, already read
@@ -1399,7 +1399,7 @@ fn focus<R: Read + Seek>(
 /// before the crop and after it, in the sensor's pixels, which [`in_crop`]
 /// and [`placed_frame`] only compare with each other; and where the crop
 /// starts, which a point placed from a table requires to be its window's
-/// centred origin ([`placed_frame`]).
+/// centered origin ([`placed_frame`]).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 struct CropHiSpeed {
     /// The crop setting, its first value, such as 11 for FX uncropped.
@@ -1411,7 +1411,7 @@ struct CropHiSpeed {
     /// The crop's left column and top row, its sixth and seventh values,
     /// in the sensor's pixels: (1040, 696) on a D600 DX frame, (0, 0)
     /// uncropped. On the D600 it is also the origin of the DX picture's
-    /// window centred in the 6016 by 4016 output, which a point placed from
+    /// window centered in the 6016 by 4016 output, which a point placed from
     /// a table requires of it ([`placed_frame`]).
     origin: Point,
 }
@@ -1515,7 +1515,7 @@ fn crop_hi_speed<R: Read + Seek>(
 /// cannot be placed.
 ///
 /// The record is checked first, as recorded, in its own frame, by
-/// [`FocusRecord::focus`], on a crop as on any other file. A centre outside
+/// [`FocusRecord::focus`], on a crop as on any other file. A center outside
 /// the recorded frame, or an area that does not fit around it there, gives
 /// none, even where placing it on the cropped picture would move it inside.
 ///
@@ -1530,7 +1530,7 @@ fn crop_hi_speed<R: Read + Seek>(
 /// 2036), has no picture to place the record on, and is read as recorded.
 /// A crop whose CropArea cannot be used, or could not be checked against
 /// a raw size, as in any JPEG, has a picture whose size is not known, and
-/// gives none. What happens to the centre and the area depends on what the
+/// gives none. What happens to the center and the area depends on what the
 /// crop cut ([`CropHiSpeed::cut`]), as the module documentation shows:
 ///
 /// - **A crop that cuts both sides** (DX) records fractions of the
@@ -1539,28 +1539,28 @@ fn crop_hi_speed<R: Read + Seek>(
 ///   the width multiplied by the picture's width over the frame's, y and
 ///   the height by the heights, each rounded to the nearest pixel, a half
 ///   rounding up, and the frame becomes the picture's size. An area that
-///   rounding leaves a pixel too wide for its centre is trimmed to fit,
-///   and an area side that rounds to nothing keeps one pixel. A centre
+///   rounding leaves a pixel too wide for its center is trimmed to fit,
+///   and an area side that rounds to nothing keeps one pixel. A center
 ///   that rounds onto an edge of the picture leaves no room for an area,
 ///   and keeps the point without one.
 /// - **A crop that keeps one side** (1:1, 16:9), whose cropped size
 ///   equals the original on exactly one side and is smaller on the other,
 ///   records positions in the full frame, of which the cropped picture is
-///   the centred window. The window is CropArea; on a JPEG's pixels, it
+///   the centered window. The window is CropArea; on a JPEG's pixels, it
 ///   is the frame's length on the side the crop keeps, and on the side it
 ///   cuts, the kept length times the JPEG's cut side over its kept side
 ///   ([`window_of_shape`]), so that the window has the JPEG's shape in the
-///   frame's pixels. The centre moves back on each axis by the window's
+///   frame's pixels. The center moves back on each axis by the window's
 ///   origin, half the difference between the frame and the window, rounded
 ///   down ([`shifted`]), the area is kept, and the frame becomes the
 ///   window. That holds only when the window's kept side equals the
 ///   frame's, as a JPEG's does by its making: on a small raw, CropArea
 ///   counts stored pixels and the frame the full output, the window cannot
 ///   be placed, and the file gives none. A window side larger than the
-///   frame's, or a centre that would move past the window's left or top
+///   frame's, or a center that would move past the window's left or top
 ///   edge, gives none too. The moved record is checked again by
-///   [`FocusRecord::focus`], in the window: a centre past its right or
-///   bottom edge, or an area that no longer fits around the moved centre,
+///   [`FocusRecord::focus`], in the window: a center past its right or
+///   bottom edge, or an area that no longer fits around the moved center,
 ///   gives none.
 ///
 /// A CropHiSpeed that fits neither shape, such as one whose cropped size
@@ -1603,7 +1603,7 @@ fn in_crop(
     {
         return None;
     }
-    // `Focus` cannot move its centre, so the moved point is built anew,
+    // `Focus` cannot move its center, so the moved point is built anew,
     // with the area and the in-focus byte as recorded.
     FocusRecord {
         frame: window,
@@ -1616,7 +1616,7 @@ fn in_crop(
     .focus()
 }
 
-/// The centred window of the recorded frame `frame` that a crop which cut
+/// The centered window of the recorded frame `frame` that a crop which cut
 /// one side, `cut`, shows on a JPEG of `pixels`: the frame's length on the
 /// side the crop keeps, and on the side it cuts, that length times the
 /// JPEG's cut side over its kept side, rounded to the nearest pixel, a
@@ -1647,7 +1647,7 @@ fn window_of_shape(frame: Size, cut: Cut, pixels: Size) -> Option<Size> {
 }
 
 /// `value`, a position on an axis `frame` pixels long, as a position in
-/// the centred window `window` pixels long on it: less the window's
+/// the centered window `window` pixels long on it: less the window's
 /// origin, half of `frame - window`, rounded down. `None` when the window
 /// is longer than the frame, or the position lies before the window's
 /// start.
@@ -1655,7 +1655,7 @@ fn shifted(value: u32, frame: u32, window: u32) -> Option<u32> {
     value.checked_sub(centered_origin(frame, window)?)
 }
 
-/// Where a window `window` pixels long starts when centred on a side
+/// Where a window `window` pixels long starts when centered on a side
 /// `frame` pixels long: half of `frame - window`, rounded down. `None`
 /// when the window is longer than the frame.
 fn centered_origin(frame: u32, window: u32) -> Option<u32> {
@@ -1672,7 +1672,7 @@ fn centered_origin(frame: u32, window: u32) -> Option<u32> {
 /// names none. The list then holds every point of the table that is the
 /// primary, the one whose number is `named`'s, or whose bit the mask sets
 /// ([`PointTable::bit`]), in the table's order, which is number order;
-/// each with its number, the table's centre and box, nothing said of
+/// each with its number, the table's center and box, nothing said of
 /// whether focus was confirmed, since version 0100's in-focus byte is the
 /// contrast-detect result, and the origin [`FocusOrigin::Table`]. So a set
 /// bit the table lacks is skipped; an empty mask, or one that names no
@@ -1683,9 +1683,9 @@ fn centered_origin(frame: u32, window: u32) -> Option<u32> {
 ///
 /// The frame is the table's, or on a crop the crop's window, or on an
 /// uncropped JPEG of a size the table lists the window that size shows,
-/// into which every centre moves back by the window's origin, the box kept
+/// into which every center moves back by the window's origin, the box kept
 /// ([`placed_frame`]). A point that no longer lies on the window by the
-/// rule every focus point is checked by ([`lies_on`]), its centre outside
+/// rule every focus point is checked by ([`lies_on`]), its center outside
 /// it or its box across an edge, is dropped; the primary dropped costs the
 /// whole list.
 fn placed(
@@ -1707,7 +1707,7 @@ fn placed(
             continue;
         }
         let (center, size) = (point.center(), point.size());
-        // A centre left or above the window lies outside it, as one past
+        // A center left or above the window lies outside it, as one past
         // its right or bottom edge does.
         let (Some(x), Some(y)) = (
             center.x.checked_sub(origin.x),
@@ -1730,12 +1730,12 @@ fn placed(
 }
 
 /// The frame of the points placed from `table`, and the origin their
-/// centres move back by: on a file that is no crop, whose CropHiSpeed,
+/// centers move back by: on a file that is no crop, whose CropHiSpeed,
 /// `crop`, records a cropped size equal to its original size or is
 /// missing, the table's frame, the body's full-size output, and no move;
 /// but in a JPEG whose own size, `pixels`, is one the table lists as
 /// showing a window of the frame ([`PointTable::jpeg_window`]), that
-/// window, 6010 by 4006 on a D600 Medium JPEG, and its origin centred in
+/// window, 6010 by 4006 on a D600 Medium JPEG, and its origin centered in
 /// the table's frame, (3, 5) on the D600, by the decision to keep a JPEG
 /// size's window in the table (ADR018). A JPEG of any other size, which
 /// the JPEG reader then holds to the picture's shape, and a raw file,
@@ -1744,7 +1744,7 @@ fn placed(
 /// On a crop, only when the table's record confirms the crop's setting:
 /// the crop's window, the size the record measured
 /// ([`PointTable::crop_window`]), 3936 by 2624 on a D600 DX frame, and its
-/// origin centred in the table's frame, half of the frame less the window
+/// origin centered in the table's frame, half of the frame less the window
 /// on each axis, (1040, 696) on the D600, by the decisions to measure a
 /// placed point on a crop in the crop's window and to keep each crop's
 /// window in the table (ADR018). CropHiSpeed's origin must be that
@@ -1803,7 +1803,7 @@ fn manual_focus<R: Read + Seek>(src: &mut Source<R>, makernote: &MakerNote) -> R
 /// the start of the value, of the fields read, and the shortest value that
 /// version writes.
 ///
-/// Each of the frame, the centre and the area is two SHORTs in the
+/// Each of the frame, the center and the area is two SHORTs in the
 /// MakerNote's byte order, the width or x at its offset and the height or y
 /// two bytes after it. The offsets are those of ExifTool's published
 /// tables, confirmed on the public samples whose fields hold values. The
@@ -1822,7 +1822,7 @@ struct Layout {
     min_len: usize,
     /// The frame's width, then its height.
     frame: usize,
-    /// The centre's x, then its y.
+    /// The center's x, then its y.
     center: usize,
     /// The area's width, then its height.
     area: usize,
@@ -1839,7 +1839,7 @@ struct Layout {
 /// for any version but the exact ones read, 0100, 0101, 0300, 0301, 0400,
 /// 0401 and 0402. A version that shares its first two digits with these,
 /// such as 0200 or a future 0403, may have moved its fields, and is not
-/// read at the offsets of its neighbours (ADR012).
+/// read at the offsets of its neighbors (ADR012).
 fn layout(version: &[u8]) -> Option<Layout> {
     match version {
         b"0100" => Some(Layout {
@@ -1879,15 +1879,15 @@ fn layout(version: &[u8]) -> Option<Layout> {
 }
 
 /// What an AFInfo2 value records of the focus point, read but not yet
-/// checked: the frame, the centre of the focus area in it, the area's
+/// checked: the frame, the center of the focus area in it, the area's
 /// size, whether focus was confirmed, on the versions that say, the area
 /// mode, when its code names one, and, on the version read for them, the
 /// points the record names.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 struct FocusRecord {
-    /// The frame the centre and the area are measured in.
+    /// The frame the center and the area are measured in.
     frame: Size,
-    /// The centre of the focus area.
+    /// The center of the focus area.
     center: Point,
     /// The focus area's width and height.
     area: Size,
@@ -1918,8 +1918,8 @@ impl FocusRecord {
     /// The focus point this record describes: `None` when [`Focus::new`]
     /// or [`Focus::with_size`] refuses it, for a frame or an area with a
     /// zero side, which is how a shot through a DSLR's viewfinder says it
-    /// records no position, a centre outside the frame, or an area that
-    /// does not fit inside the frame around its centre.
+    /// records no position, a center outside the frame, or an area that
+    /// does not fit inside the frame around its center.
     ///
     /// [`in_crop`] calls it on the record as recorded, on every record of
     /// a position ([`records_position`](Self::records_position)), and on a
@@ -1929,7 +1929,7 @@ impl FocusRecord {
         // An area that `with_size` refuses costs the whole focus, not only
         // the area. A zero side is how a Nikon file says it records no
         // position; and an area of no zero side that does not fit around
-        // the centre is a record that cannot be used, which gives no focus
+        // the center is a record that cannot be used, which gives no focus
         // on every format, as ADR012 decides.
         let focus =
             Focus::new(self.frame, self.center, FocusOrigin::Recorded)?.with_size(self.area)?;
@@ -1941,7 +1941,7 @@ impl FocusRecord {
 }
 
 /// What the AFInfo2 value `value` records, its SHORTs in byte order
-/// `order`: the frame, the centre and the area at its version's
+/// `order`: the frame, the center and the area at its version's
 /// [`layout`]; the in-focus byte, when the layout has one, as `true` for 1,
 /// `false` for 0, and nothing said for any other value; the area mode
 /// that byte 5 names under the detection method of byte 4, both the same
@@ -3104,7 +3104,7 @@ mod tests {
         height: 5504,
     };
 
-    /// The PhotometricInterpretation of a colour filter array: raw data, as
+    /// The PhotometricInterpretation of a color filter array: raw data, as
     /// the preview finder takes it.
     const CFA: u16 = 32803;
 
@@ -4183,7 +4183,7 @@ mod tests {
     }
 
     /// Where a test's AFInfo2 value puts each field: the value's length,
-    /// then the byte offsets of the frame, the centre, the area and the
+    /// then the byte offsets of the frame, the center, the area and the
     /// in-focus byte, as the NEF notes' table gives them for each version.
     /// Written out here, apart from [`layout`], so that a wrong offset there
     /// reads a field from the wrong place.
@@ -4244,7 +4244,7 @@ mod tests {
     }
 
     /// What an AFInfo2 value records: the frame's width and height, the
-    /// centre's x and y, the area's width and height, and the in-focus
+    /// center's x and y, the area's width and height, and the in-focus
     /// byte, written only where the version has one.
     #[derive(Clone, Copy, Debug)]
     struct Recorded {
@@ -4264,7 +4264,7 @@ mod tests {
     };
 
     /// A record for version 0101, made up, since no public sample fills in
-    /// its position: a D850-sized frame, off-centre, confirmed.
+    /// its position: a D850-sized frame, off-center, confirmed.
     const MADE_UP_0101: Recorded = Recorded {
         frame: [8256, 5504],
         center: [3000, 2000],
@@ -4497,21 +4497,21 @@ mod tests {
                     },
                 ),
                 (
-                    "a centre right of the frame",
+                    "a center right of the frame",
                     Recorded {
                         center: [8257, 2461],
                         ..Z9
                     },
                 ),
                 (
-                    "a centre below the frame",
+                    "a center below the frame",
                     Recorded {
                         center: [4905, 5505],
                         ..Z9
                     },
                 ),
                 // An area 291 pixels wide needs 146 on each side of the
-                // centre, and one 323 high 162 above and below it.
+                // center, and one 323 high 162 above and below it.
                 (
                     "an area past the left edge",
                     Recorded {
@@ -4558,7 +4558,7 @@ mod tests {
     fn a_byte_swapped_af_info2_gives_none() {
         // As in the other byte order from the MakerNote's: the Coolpix A's
         // frame reads as 16403 by 49164, the Z 9's as 16416 by 32789, and
-        // each centre then lies outside it.
+        // each center then lies outside it.
         for (order, swapped) in [(Order::Little, Order::Big), (Order::Big, Order::Little)] {
             for (version, recorded) in [("0100", COOLPIX_A), ("0400", Z9)] {
                 let value = af_info2(swapped, version, recorded);
@@ -4888,7 +4888,7 @@ mod tests {
         }
     }
 
-    /// A record of no position: a zero frame, centre and area, and an
+    /// A record of no position: a zero frame, center and area, and an
     /// in-focus byte of 0, as a D600 shot through the viewfinder writes it.
     const NO_POSITION: Recorded = Recorded {
         frame: [0, 0],
@@ -5052,7 +5052,7 @@ mod tests {
     };
 
     /// The points placed from a table in a frame of `frame`: each of
-    /// `points`, its number and its centre, in that order, with the D600's
+    /// `points`, its number and its center, in that order, with the D600's
     /// box and nothing said of focus; the one numbered `primary` the
     /// primary; the area mode `mode`; the origin a table. Built here from
     /// the record's values in the NEF notes, apart from [`placed`].
@@ -5167,7 +5167,7 @@ mod tests {
     fn a_record_of_a_position_keeps_the_recorded_path_whatever_it_names() {
         // A live-view record of a D600, frame 54's position, beside the
         // bytes of a viewfinder shot naming point 38: the position, as
-        // recorded. The same with its centre off the frame: no point, the
+        // recorded. The same with its center off the frame: no point, the
         // named one not placed in its stead.
         let live_view = Recorded {
             frame: [6016, 4016],
@@ -5259,7 +5259,7 @@ mod tests {
         for order in ORDERS {
             // Frame 44, auto-area: area mode 8, primary point 4, nine bits
             // set out of number order. The list is the nine points in
-            // number order, centres from the record.
+            // number order, centers from the record.
             let mut value = viewfinder(order, "0100", 3, 4, &[3, 8, 13, 17, 20, 23, 26, 29, 38]);
             value[5] = 8;
             let metadata = shot(order, "NIKON D600", &value, Some(D600_FX));
@@ -5322,7 +5322,7 @@ mod tests {
     fn a_dx_crop_places_the_points_in_the_crop_window() {
         // CropHiSpeed's DX crop, setting 2 with the origin (1040, 696): the
         // frame is the window, 6016 - 2 * 1040 by 4016 - 2 * 696, 3936 by
-        // 2624, and every centre moves back by the origin, the box kept.
+        // 2624, and every center moves back by the origin, the box kept.
         // Frame 49's point 38 lands at (772, 1009) and frame 50's point 27
         // at (3163, 1612); a list of points 1, 27 and 38 moves whole.
         for order in ORDERS {
@@ -5379,7 +5379,7 @@ mod tests {
     #[test]
     fn a_point_the_crop_window_leaves_out_is_dropped() {
         // No point of the D600's table lies outside its DX window, so these
-        // windows are narrower than any the D600 has, each centred in the
+        // windows are narrower than any the D600 has, each centered in the
         // frame with CropHiSpeed's origin at its own.
         //
         // A window of 2536 by 2624, at the origin (1740, 696): point 38 at
@@ -5410,14 +5410,14 @@ mod tests {
             Some(expected)
         );
         // A window of 2216 by 2624, at the origin (1900, 696): point 38's
-        // centre lies left of the window, dropped.
+        // center lies left of the window, dropped.
         let narrowest = d600_dx_at(1900, 696);
         let expected = placed_list([2216, 2624], &[(1, [1108, 1311])], 1, FocusAreaMode::Single);
         assert_eq!(
             placed_in_window([2216, 2624], narrowest, 1, &[37]),
             Some(expected)
         );
-        // The primary dropped, by its box or by its centre: no point.
+        // The primary dropped, by its box or by its center: no point.
         assert_eq!(placed_in_window([2536, 2624], narrow, 38, &[37]), None);
         assert_eq!(placed_in_window([2216, 2624], narrowest, 38, &[37]), None);
     }
@@ -5426,7 +5426,7 @@ mod tests {
     fn a_crop_window_with_no_room_gives_no_placed_point() {
         // A window with a zero side, which no list can be measured in, and
         // one wider or taller than the frame, which has no origin: no
-        // point. Each CropHiSpeed records the window's centred origin, with
+        // point. Each CropHiSpeed records the window's centered origin, with
         // 0 on a side where the window is longer than the frame, so that
         // the window alone is at fault. The table tests keep such a window out of
         // every table.
@@ -5442,12 +5442,12 @@ mod tests {
 
     #[test]
     fn a_crop_whose_origin_is_not_the_windows_gives_no_placed_point() {
-        // The D600's DX window is 3936 by 2624, centred at (1040, 696),
+        // The D600's DX window is 3936 by 2624, centered at (1040, 696),
         // the origin every DX frame's CropHiSpeed records. A CropHiSpeed
         // with another origin records the crop elsewhere in the frame, so
         // the window measured on the frames does not hold for it: no
         // point, in a raw file or in a JPEG of the window's size. The
-        // origins are a pixel off on each side; (1024, 690), the centred
+        // origins are a pixel off on each side; (1024, 690), the centered
         // origin of CropHiSpeed's cropped size, 3968 by 2636, which counts
         // the sensor's border; a top of 0, as a crop at the top of the
         // frame would record; and the largest SHORTs.
@@ -5525,8 +5525,8 @@ mod tests {
     #[test]
     fn a_d600_medium_jpeg_places_the_points_in_its_window() {
         // The Medium JPEG, 4512 by 3008, shows the 6010 by 4006 window
-        // centred in the 6016 by 4016 frame, at the origin (3, 5): the
-        // frame is the window, and every centre moves back by the origin,
+        // centered in the 6016 by 4016 frame, at the origin (3, 5): the
+        // frame is the window, and every center moves back by the origin,
         // the box kept. Point 38 lands at (1809, 1700), point 1 at (3005,
         // 2002) and point 27 at (4200, 2303), with the crop off or no
         // CropHiSpeed at all.
@@ -5617,7 +5617,7 @@ mod tests {
     fn a_point_a_jpeg_sizes_window_leaves_out_is_dropped() {
         // No point of the D600's table lies outside its Medium JPEG's
         // window, so this window is narrower than any the D600 has: 2536 by
-        // 2624, centred in the frame at the origin (1740, 696), shown by a
+        // 2624, centered in the frame at the origin (1740, 696), shown by a
         // JPEG of half its size. Point 38 at (72, 1009), whose box of 164
         // crosses the left edge, and point 25 at (2463, 1311), whose box
         // crosses the right one, are dropped; points 1 and 11 stay.
@@ -5885,11 +5885,11 @@ mod tests {
     #[test]
     fn the_crop_samples_give_the_point_on_the_cropped_picture() {
         // On each, the frame becomes CropArea's size. The 1:1 and 16:9
-        // crops keep one side: the centre moves back on the other axis by
+        // crops keep one side: the center moves back on the other axis by
         // half the difference between the frame and CropArea, 1008 across
         // on the Z6III's 1:1 and 316 down on its 16:9, 928 and 292 on the
         // Z50II's, and the area is kept. The DX crop cuts both sides, and
-        // the centre and the area are scaled onto CropArea.
+        // the center and the area are scaled onto CropArea.
         for order in ORDERS {
             for (what, crop, version, recorded, focus) in [
                 (
@@ -5986,7 +5986,7 @@ mod tests {
         // The D810 records a cropped width four pixels short of its
         // original on an uncropped file, and writes no CropArea (public
         // sample 2036); it records no position, so the record beside it is
-        // made up, a centred point in its 7360 by 4912 frame.
+        // made up, a centered point in its 7360 by 4912 frame.
         let d810 = Crop {
             raw: [7380, 4928],
             crop_hi_speed: Some([11, 7384, 4928, 7380, 4928, 0, 0]),
@@ -6292,7 +6292,7 @@ mod tests {
         // The Z 9's 1:1 CropHiSpeed with a small raw's CropArea, which
         // counts stored pixels: 4128 high, not the frame's 5504, so the
         // window cannot be placed. The corner shot would move past the
-        // window's edge anyway; a centred point would not, and gives none
+        // window's edge anyway; a centered point would not, and gives none
         // all the same.
         let crop = Crop {
             raw: [4140, 4140],
@@ -6369,7 +6369,7 @@ mod tests {
                 None,
                 "{order:?}, wider than the frame"
             );
-            // A centre 100 pixels in, which the 1:1 window's origin, 1376
+            // A center 100 pixels in, which the 1:1 window's origin, 1376
             // pixels in, would take below zero.
             let left = Recorded {
                 center: [100, 424],
@@ -6454,12 +6454,12 @@ mod tests {
 
     #[test]
     fn a_dx_crop_trims_an_area_that_rounding_leaves_a_pixel_too_wide() {
-        // The Z 9's DX crop, with a centre 146 across and an area 292 wide,
+        // The Z 9's DX crop, with a center 146 across and an area 292 wide,
         // which fits the frame as recorded: half of 292 is 146. Scaled onto
         // the 5392 by 3592 CropArea, x is (146 × 5392 + 4128) / 8256 = 95
         // and the width (292 × 5392 + 4128) / 8256 = 191, whose half
         // rounds up to 96, one more than 95: the width is trimmed to 190,
-        // twice the centre's distance from the left edge. Down, the corner
+        // twice the center's distance from the left edge. Down, the corner
         // shot's (572 × 3592 + 2752) / 5504 = 373 and (468 × 3592 + 2752)
         // / 5504 = 305 fit as they are.
         let near_the_edge = Recorded {
@@ -6486,7 +6486,7 @@ mod tests {
 
     #[test]
     fn a_dx_crop_whose_center_lies_outside_the_recorded_frame_gives_none() {
-        // A centre at x = 8257, one pixel past the right edge of the 8256
+        // A center at x = 8257, one pixel past the right edge of the 8256
         // frame, which `Focus::new` refuses as recorded. On the Z 9's DX
         // CropArea it would scale past the right edge anyway, to 5393; on
         // a small raw's CropArea, 4044 wide, it would scale to (8257 × 4044
@@ -6520,7 +6520,7 @@ mod tests {
 
     #[test]
     fn a_dx_crop_whose_area_does_not_fit_as_recorded_gives_none() {
-        // A centre 145 across with an area 291 wide: half of 291 rounds up
+        // A center 145 across with an area 291 wide: half of 291 rounds up
         // to 146, one more than 145, so the area does not fit the frame as
         // recorded. Scaled onto the Z 9's DX CropArea first, it would:
         // (145 × 5392 + 4128) / 8256 = 95 and (291 × 5392 + 4128) / 8256 =
@@ -6550,7 +6550,7 @@ mod tests {
     #[test]
     fn a_dx_crop_that_rounds_the_center_onto_an_edge_keeps_the_point_alone() {
         // A 1000 by 1000 frame scaled onto a 400 by 400 CropArea, by 0.4:
-        // a centre 1 across, with an area 2 wide, which fits as recorded,
+        // a center 1 across, with an area 2 wide, which fits as recorded,
         // rounds to (1 × 400 + 500) / 1000 = 0, on the left edge, where no
         // area fits, and the point is kept without one. Down, (500 × 400 +
         // 500) / 1000 = 200.
@@ -6570,7 +6570,7 @@ mod tests {
             height: 400,
         };
         let point = Focus::new(frame, Point { x: 0, y: 200 }, FocusOrigin::Recorded)
-            .expect("a centre on the frame")
+            .expect("a center on the frame")
             .with_in_focus(true);
         for order in ORDERS {
             assert_eq!(
@@ -6583,7 +6583,7 @@ mod tests {
 
     #[test]
     fn a_crop_whose_area_no_longer_fits_gives_none() {
-        // The 16:9 shot's centre, 715 down, with an area 900 high, which
+        // The 16:9 shot's center, 715 down, with an area 900 high, which
         // fits the full frame: moved back to 283, the 450 above it would
         // leave the window. The control, the shot's own 323, fits.
         for order in ORDERS {
@@ -6732,7 +6732,7 @@ mod tests {
     #[test]
     fn a_jpegs_aspect_crop_is_moved_into_the_window_of_its_shape() {
         // A 1:1 or 16:9 crop records a position in the full 8256 by 5504
-        // frame. The JPEG's picture is the centred window of that frame
+        // frame. The JPEG's picture is the centered window of that frame
         // with the frame's length on the kept side and the JPEG's shape.
         // On 1:1, the height is kept: the window is 5504 times the JPEG's
         // width over its height wide, 5504 at every size, so 5504 by 5504,
@@ -7045,7 +7045,7 @@ mod tests {
             "PRESET5", "AUTO3",
             // The table's texts in other cases, or cut short: no prefix
             // or case rule.
-            "Auto1", "SUN", "PRESET1X", // Near a colour temperature, but not its form.
+            "Auto1", "SUN", "PRESET1X", // Near a color temperature, but not its form.
             "K", "123456K", "3230k", "3230 K", "K3230", "32.5K",
         ];
         for order in ORDERS {
@@ -7252,7 +7252,7 @@ mod tests {
 
     #[test]
     fn a_text_of_zero_kelvin_or_of_another_form_gives_no_color_temperature() {
-        // `0K` has the form of a chosen colour temperature, and names the
+        // `0K` has the form of a chosen color temperature, and names the
         // mode, but records no temperature; a text of another form records
         // none either, and without the tag there is none.
         for order in ORDERS {
@@ -7761,7 +7761,7 @@ mod tests {
 
     #[test]
     fn an_exif_color_space_keeps_the_makernotes_out() {
-        // Each Exif ColorSpace, as the closure adds it, and the colour
+        // Each Exif ColorSpace, as the closure adds it, and the color
         // space it gives: sRGB; "uncalibrated" without the index `R03`,
         // as a program that rewrote a JPEG may leave it; and one of
         // another type, which gives none. The MakerNote's Adobe RGB is

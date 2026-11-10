@@ -85,7 +85,7 @@ pub(crate) fn point(x: u32, y: u32) -> Point {
 }
 
 /// Where a Nikon Z 9 focused: a 291 × 323 area right of and above the
-/// centre of its 8256 × 5504 frame, with focus confirmed, as the camera
+/// center of its 8256 × 5504 frame, with focus confirmed, as the camera
 /// recorded it.
 pub(crate) fn z9_focus() -> Focus {
     z9_focus_from(FocusOrigin::Recorded)

@@ -18,7 +18,7 @@ the sensor data is in [raw-data.md](raw-data.md).
 Nikon publishes no specification for any of this. Everything below comes
 from the Exif and TIFF standards, the tag documentation of ExifTool and
 exiv2, and the source of existing decoders, read as references only (their
-licences do not allow copying code; see [Licences](#licences)). Claims carry
+licenses do not allow copying code; see [Licenses](#licenses)). Claims carry
 a confidence tag: **[P]** primary (specification, tag documentation or
 implementation source), **[S]** secondary (write-ups, forum posts, sample
 listings), **[I]** inferred, and **[F]** measured on a named sample file,
@@ -71,10 +71,10 @@ and described in the [JPEG notes](../jpeg/README.md).
 - [12. The directories a file holds](#12-the-directories-a-file-holds)
 - [Sources](#sources)
 
-## Licences
+## Licenses
 
 Every mature NEF implementation is GPL, LGPL, CDDL or Artistic licensed
-(licences incompatible with the raw-files MIT OR Apache-2.0 licence, or
+(licenses incompatible with the raw-files MIT OR Apache-2.0 license, or
 ambiguous in dcraw's case). This page therefore restates algorithms in prose
 and cites the two decryption tables by location only; do not paste code or
 tables from those projects into raw-files. [P]
@@ -115,7 +115,7 @@ low-priority. [I]
    layout, IFD at + 0.
 3. Otherwise the MakerNote is not Nikon's; ignore it.
 
-The three implementations differ on how they recognise the embedded layout:
+The three implementations differ on how they recognize the embedded layout:
 exiv2 tests for the TIFF magic at offset 10, LibRaw tests the version byte at
 offset 6, ExifTool tests the `Nikon\0\2` prefix. They agree on real files;
 testing all of the conditions above is the robust choice. [P][6][7][4]
@@ -203,7 +203,7 @@ The two older layouts appear in the JPEGs of early Coolpix bodies.
 Camera-original JPEGs of eleven of them on Wikimedia Commons were read
 byte by byte, as evidence checked by hand rather than as samples; the
 [JPEG test data](../jpeg/test-data.md#6-early-coolpix-files-checked-by-hand)
-lists them with their licences. Every one is little-endian, Exif segment
+lists them with their licenses. Every one is little-endian, Exif segment
 and MakerNote alike. **[F]**
 
 - **The headerless layout**, in all 18 files of the E990 (firmware v1.0
@@ -273,7 +273,7 @@ sensor data. [P][1]
 | 0x0011 | PreviewIFD | IFD | sub-IFD with a small JPEG preview; offsets relative to MakerNote + 10 | previews |
 | 0x001B | CropHiSpeed | u16[7] | crop mode and geometry; field order in [section 8.4](#84-image-dimensions) | metadata, focus points, raw data |
 | 0x001D | SerialNumber | string | the body's serial number; decryption key input. Seven digits on every checked DSLR and mirrorless body from the D300 on (eight on the Nikon 1 J1) and on the Coolpix A; seven spaces on the D200 (file 8079); absent before it and on the Coolpix E5700 and P7800 **[F]** | metadata, full metadata, raw data |
-| 0x001E | ColorSpace | u16 | the colour space setting: 1 sRGB, 2 Adobe RGB, 4 BT.2100; from the D200 on, but not on the Coolpix P7800, while no checked NEF has the Exif ColorSpace **[F]** | metadata |
+| 0x001E | ColorSpace | u16 | the color space setting: 1 sRGB, 2 Adobe RGB, 4 BT.2100; from the D200 on, but not on the Coolpix P7800, while no checked NEF has the Exif ColorSpace **[F]** | metadata |
 | 0x0021 | FaceDetect | u16 | the size of a frame and up to twelve face rectangles in it; on none of the 30 checked files **[F]** | full metadata |
 | 0x0024 | WorldTime | undef | the time zone and daylight saving setting of the camera's clock; layout in [section 8.2](#82-capture-date-and-time-zone) | metadata, full metadata |
 | 0x0034 | ShutterMode | u16 | the shutter used: mechanical, electronic front curtain or electronic, and whether the camera chose it in its auto mode; on the Nikon 1 J1, D850, D780 and every Z body; codes in [section 8.7](#87-camera-settings) **[F]** | metadata |
@@ -282,7 +282,7 @@ sensor data. [P][1]
 | 0x003E | ImageSizeRAW | u16 | the raw size setting: 1 large, 2 medium, 3 small; from the D750, D810 and D5600 on **[F]** | metadata, raw data |
 | 0x003F | WhiteBalanceFineTune | srational[2] | the white balance fine-tuning as two fractions; from the D810 on **[F]** | metadata |
 | 0x0045 | CropArea | u16[4] | left, top, width, height of the output rectangle | metadata, focus points, raw data |
-| 0x004F | ColorTemperatureAuto | u16 | the colour temperature, in kelvin, of the white balance the camera applied: the Z 9 records it under every setting, the D850 and the Z fc write 0 under daylight; on the D5, D850, D780 and every Z body **[F]** | metadata |
+| 0x004F | ColorTemperatureAuto | u16 | the color temperature, in kelvin, of the white balance the camera applied: the Z 9 records it under every setting, the D850 and the Z fc write 0 under daylight; on the D5, D850, D780 and every Z body **[F]** | metadata |
 | 0x0051 | (unnamed, Z bodies) | undef | NEFCompression as a u16 at byte 10; byte order disputed (see the note below). Present on the Z 6 (2018) too, and on the Z f, Z6III, Z 9, Z5II and Z50II (files 3587, 6887, 7808 to 7810, 7812, 7813, 5146 to 5148, 7735, 7736, 7767, 7770); absent on the Z fc (2021) and Z 30 (2022), which write 0x0093 instead (files 8559, 5812). Byte 10, read as a u16 in the MakerNote's byte order, little-endian on the three Z 9 files, is 3 (lossless) on the Z 9's lossless file, 14 (HE\*) on its HE\* file and 13 (HE) on its HE file (files 5146 to 5148) **[F]** | full metadata, raw data |
 | 0x0084 | Lens | rational[4] | the lens's shortest and longest focal length and the widest aperture at each; on every checked body with interchangeable lenses, from the D1H on; equal to Exif LensSpecification wherever both exist **[F]** | metadata |
 | 0x0088 | AFInfo | undef[4] | area mode, the number of the focus point and a mask of the points in focus; no position. The only focus data of the checked bodies without AFInfo2: the D1H, D70, D100, D200 and Coolpix E5700 and P7800, and written by no checked body that has AFInfo2 **[F]**; [section 8.6](#86-focus-point) | focus points |
@@ -303,7 +303,7 @@ Notes:
   0x0037 is mechanical-only. The decryption key uses 0x00A7. [P][1]
 - Byte 10 of 0x0051 is read in the MakerNote's byte order by LibRaw, while
   only rawler forces little-endian; the sources disagree. [P][7][9]
-- 0x0014 holds Coolpix colour data (2560-byte or 1280-byte variants, or an
+- 0x0014 holds Coolpix color data (2560-byte or 1280-byte variants, or an
   "NRW" block on P-series cameras) and is irrelevant to NEF DSLRs. [P][1]
 - Capture NX data (0x0E01) is a sequence of records that can carry a white
   balance adjustment, a custom white balance and a flip; one implementation
@@ -420,7 +420,7 @@ Procedure:
 Where the tables live (cite only; do not copy them): ExifTool's
 `Nikon.pm` (the array named `@xlat`) [3], exiv2's `nikonmn_int.cpp` and
 `makernote_int.cpp` [6], LibRaw's `nikon.cpp` [7], and dcraw's `dcraw.c`
-[10]. All of these are under licences incompatible with that of raw-files, or
+[10]. All of these are under licenses incompatible with that of raw-files, or
 ambiguous in dcraw's case; see [Open questions](#11-open-questions).
 
 Consequences for the parser:
@@ -447,7 +447,7 @@ Most serial numbers are digits only. On some bodies (the D50 family and a
 few others) tag 0x001D is not numeric, and the surveyed implementations
 disagree on what to do. [P]
 
-| Project | Behaviour |
+| Project | Behavior |
 |---|---|
 | ExifTool and exiv2 | key byte 0x22 (34) if the model is a D50-family body, otherwise 0x60 (96) [3][6] |
 | LibRaw | stops at the first non-digit; uses 34 if the model is "D50" (or ends in D50 after a non-alphanumeric character), otherwise 96; this value replaces the low byte of the serial number as the index into T0 [7] |
@@ -455,7 +455,7 @@ disagree on what to do. [P]
 
 ExifTool and exiv2 use the same constants as LibRaw, but dcraw can derive a
 different key for a serial that contains letters. All four agree for
-all-digit serials. Which behaviour is correct for a real body with a
+all-digit serials. Which behavior is correct for a real body with a
 lettered serial (the ExifTool comments attribute the 0x60 case to the D200
 and D40X) is not settled. [P][I]
 
@@ -469,7 +469,7 @@ Sources, in the order raw-files should try them: [P][7][8][9][16]
    rawler use 0x000C first and fall back to 0x0097 only when 0x000C is
    absent. LibRaw reads both tags and a later tag may override an earlier
    one, so precedence there is implementation-defined. If a green value is
-   zero or missing, treat green as 1.0 and normalise to it. The tag is
+   zero or missing, treat green as 1.0 and normalize to it. The tag is
    present on most NEFs, including the Z bodies. [P][3][7][8][9]
 2. **MakerNote 0x0097** (ColorBalance), used when 0x000C is absent, with a
    per-version layout. Decryption is required from version 0200 on.
@@ -496,7 +496,7 @@ bases (ExifTool from the start of the decrypted segment, LibRaw from inside
 a 324-byte block after skipping 284 bytes), so offsets in different rows
 are not directly comparable. [P] ExifTool names the channel orders RBGG
 (0100), RGGB (0102, 0205 and others), RGBG (0103), and GRBG for the
-0209/0211/0212/0214 to 0217 group. Normalise to a fixed order and divide by
+0209/0211/0212/0214 to 0217 group. Normalize to a fixed order and divide by
 the first green. [P][3]
 
 ### The Z-series answer
@@ -532,7 +532,7 @@ numbers, which LibRaw turns into a rotation flag at version-specific
 offsets; this is the only orientation-like data in the MakerNote and it is
 angle data, not the Exif Orientation value. ExifTool drops an oversized
 ShotInfo (above 64 KB, seen on the Z 6III) when copying it into an Exif
-segment; that is a size limit, not a judgement that the block is corrupt.
+segment; that is a size limit, not a judgment that the block is corrupt.
 The lesson is that the block can be that large, so cap allocations.
 [P][1][3][7]
 
@@ -738,7 +738,7 @@ raw-files reads it or not:
 
 | Source | What it holds | Checked files | raw-files |
 |---|---|---|---|
-| 0x00B7 AFInfo2, position fields | the size of a frame, the centre of the focus area and the area's size in that frame | mirrorless bodies, and DSLRs in live view **[F]** | read, at the versions of the table below |
+| 0x00B7 AFInfo2, position fields | the size of a frame, the center of the focus area and the area's size in that frame | mirrorless bodies, and DSLRs in live view **[F]** | read, at the versions of the table below |
 | 0x00B7 AFInfo2, in-focus byte | whether focus was confirmed: FocusResult on 04xx, ContrastDetectAFInFocus on 0100 and 0101 | Z 9, Z f, Z6III, Z50II, Z5II, D7000, D5600, D5, Coolpix A **[F]** | read; on 0100 the flag is byte 28, where ExifTool also lists a 20-byte AFPointsSelected that cannot fit in the 30-byte value |
 | 0x00B7 AFInfo2, point fields | the primary point's number, a mask of the points used, and the layout of points (FocusPointSchema) | DSLRs through the viewfinder, the Nikon 1 J1, the Z5II in auto-area mode **[F]** | read on `0100` alone, in a record with no position: the number is placed from a table of the body's points, measured by the project on frames shot with that body ([autofocus-points.md](autofocus-points.md), [ADR017](../../architecture-decisions/adr017-per-body-tables-measured-by-the-project.md)), with the points the mask names ([ADR018](../../architecture-decisions/adr018-focus-points-placed-from-a-table-and-the-points-used.md)); the D600's is the only table, and every other body gives none; the other versions' point fields are not read |
 | 0x00B7 AFInfo2, AFPointsInFocus | a mask of the points in focus, version 0101 only (byte 48) [P] | the D850, one point **[F]** | not read: a mask of version 0101, which needs a table of a body that writes that version |
@@ -755,7 +755,7 @@ frame, and the Z 9, little-endian, 8256x5504; the other order gives
 nonsense (16403x49164, 16416x32789) (files 2238, 5146). **[F]** Byte
 offsets from the start of the value:
 
-| Version | Length | Detection | Area mode | Point schema | Coordinates flag | Frame W, H | Centre X, Y | Area W, H | In focus | Bodies |
+| Version | Length | Detection | Area mode | Point schema | Coordinates flag | Frame W, H | Center X, Y | Area W, H | In focus | Bodies |
 |---|---|---|---|---|---|---|---|---|---|---|
 | `0100` | 30 | 4 | 5 | 6 | none | 16, 18 | 20, 22 | 24, 26 | 28 | DSLRs from the D3 and D300 (2007) and the D90 (2008) up to the D4S, D750, D810, D7200, D5500, D5600 and Df, and the Coolpix A [S]; samples: D300, D700, D750, D810, D7000, D5600, Coolpix A **[F]** |
 | `0101` | 84 | 4 | 5 | 6 | none | 70, 72 | 74, 76 | 78, 80 | 82 | D5, D500, D850, D3400, D3500, D7500 [P][S]; samples: D850, a viewfinder shot, and D5, in live view **[F]** |
@@ -765,7 +765,7 @@ offsets from the start of the value:
 
 ExifTool groups the tables by the first two digits (0100; 0101 and later
 01xx; 02xx; 03xx; 04xx). [P][1] The versions by body come from the exiv2
-metadata listings of all 291 Nikon files of the raw.pixls.us catalogue
+metadata listings of all 291 Nikon files of the raw.pixls.us catalog
 (October 2026), which show these seven versions besides the Nikon 1's
 and no other; the bodies before the D3 and every Coolpix but the A have
 no AFInfo2 there. [S][22] Those listings decode only the 0100 offsets,
@@ -803,7 +803,7 @@ the other layouts are unmeasured.
 
 What the fields hold:
 
-- **The centre of the area, not its corner.** ExifTool's 0100 and 0101
+- **The center of the area, not its corner.** ExifTool's 0100 and 0101
   tables say so [P][1]; on the Coolpix A it is exactly half the frame,
   (2464, 1632) in 4928x3264 (file 2238), and on the Z f (3023, 2016) in
   6048x4032 (file 6887). **[F]**
@@ -823,7 +823,7 @@ What the fields hold:
   and 3984x2656 (files 7808, 7809, 7810; 7812 and 7813 repeat 7808 and
   7809); the Z50II's 1:1 and 16:9 files record its 5568x3712 frame with
   CropArea 3712x3712 and 5568x3128 (files 7767, 7770). **[F]** On every
-  one of them the point lies within 12 pixels of the frame's centre, so
+  one of them the point lies within 12 pixels of the frame's center, so
   these files cannot tell how the values relate to the crop.
 - **A DX crop records fractions of the cropped picture; an aspect crop
   records positions in the full frame.** Thirteen shots made for this
@@ -835,7 +835,7 @@ What the fields hold:
   ([`tests/fixtures/`](../../../tests/fixtures/README.md)). In the
   8256x5504 frame they record:
 
-  | Mode | CropHiSpeed | CropArea | Centre, area recorded | Scaled onto CropArea | Shifted by the centred window |
+  | Mode | CropHiSpeed | CropArea | Center, area recorded | Scaled onto CropArea | Shifted by the centered window |
   |---|---|---|---|---|---|
   | FX | `[11, 8280, 5520, 8280, 5520, 0, 0]` | 8256x5504 | (502, 424), 291x323 | the same | the same |
   | DX | `[2, 8280, 5520, 5408, 3608, 1436, 956]` | 5392x3592 | (636, 572), 420x468 | **(415, 373), 274x305** | (-796, -384): outside the picture |
@@ -878,9 +878,9 @@ What the fields hold:
 - **In stored orientation**, like the sizes and previews raw-files
   reports. The Z 30's shot, rotated (Orientation 8, 270 degrees clockwise
   to view), records the landscape frame 5568x3712, and the position in
-  it, centre (3776, 1741) and area 552x552 (file 5812). **[F]**
+  it, center (3776, 1741) and area 552x552 (file 5812). **[F]**
 - **A DSLR shot through the viewfinder records no position.** The frame,
-  centre and area are zero on the D300, D700, D750, D810, D850 and D780,
+  center and area are zero on the D300, D700, D750, D810, D850 and D780,
   and only the point fields are filled in: primary point 3 on the D810,
   34 on the D780, with 30 bits of its mask set (files 928, 2255, 895,
   2036, 1835, 3827). ExifTool's 0100 and 0101 tables call the position
@@ -891,7 +891,7 @@ What the fields hold:
   points, which no file carries (ADR012). raw-files measures such
   tables itself, one body at a time, on frames shot with the body and
   read in the maker's software. The D600's is measured: the record,
-  with the layout, the bit order, the box of 164x164 and the 39 centres
+  with the layout, the bit order, the box of 164x164 and the 39 centers
   in the 6016x4016 output frame, is in
   [autofocus-points.md](autofocus-points.md#2-nikon-d600). On a DX
   frame the point placed from the table shifts by CropHiSpeed's
@@ -986,7 +986,7 @@ What the fields hold:
   sentences), its point by far misplaced on a cut. My D600's Medium JPEG, 4512x3008,
   exactly 3:2, would fail that rule against the table's 6016x4016
   frame, but its picture is not the whole frame: it shows the 6010x4006
-  window centred in it, which the table keeps for that size, and its
+  window centered in it, which the table keeps for that size, and its
   points are placed in that window, which has its shape
   ([autofocus-points.md](autofocus-points.md#29-the-jpeg-sizes),
   [ADR018](../../architecture-decisions/adr018-focus-points-placed-from-a-table-and-the-points-used.md)).
@@ -999,7 +999,7 @@ What the fields hold:
   the smaller sizes are exactly 3:2. **[F]** raw-files places such a
   point on the JPEG's picture, as on CropArea in a raw file: a DX crop's
   scaled onto the JPEG's frame, a 1:1 or 16:9 crop's moved into the
-  centred window of the frame that has the JPEG's shape
+  centered window of the frame that has the JPEG's shape
   ([ADR015](../../architecture-decisions/adr015-the-focus-point-of-a-crop-mode-jpeg.md)).
   In a JPEG, a CropHiSpeed whose sizes differ on a file that is no crop,
   as the D810's cropped width four pixels short does, reads as a crop of
@@ -1016,8 +1016,8 @@ and what raw-files gives; a row without a file is an open question
 | Shot | What the file records | CC0 files | raw-files gives |
 |---|---|---|---|
 | Mirrorless, single point, pinpoint, wide area or 3D-tracking | a position | Z 6 3587, Z 9 5146 to 5148, Z f 6887, Z6III 7808 to 7810, 7812, 7813, Z50II 7767, 7770 | the point |
-| Mirrorless on a DX crop | a position, scaled into the full frame | Z6III 7810; my Z 9 shots, off-centre, one DX frame committed stripped | the point, scaled onto the crop |
-| Mirrorless on an aspect crop (1:1, 16:9) | a position in the full frame | Z6III 7808, 7809, 7812, 7813, Z50II 7767, 7770; my Z 9 shots, off-centre, one 1:1 frame committed stripped | the point, moved into the window |
+| Mirrorless on a DX crop | a position, scaled into the full frame | Z6III 7810; my Z 9 shots, off-center, one DX frame committed stripped | the point, scaled onto the crop |
+| Mirrorless on an aspect crop (1:1, 16:9) | a position in the full frame | Z6III 7808, 7809, 7812, 7813, Z50II 7767, 7770; my Z 9 shots, off-center, one 1:1 frame committed stripped | the point, moved into the window |
 | A DX crop at 1:1 or 16:9 on an FX body | unknown | none | the point, scaled; unchecked |
 | Mirrorless small raw | a position in the full frame | Z 6 3587 | the point, in the full frame |
 | Mirrorless, auto-area with only a mask | a mask | Z5II 7735, 7736 | none: needs a table of points |
@@ -1045,7 +1045,7 @@ and what raw-files gives; a row without a file is an open question
 How the photographer set the camera for the shot, which a viewer shows
 in its information panel beside the exposure: the white balance, the
 exposure program, the metering mode, the flash, the shutter, the image
-area, the raw image size and the colour space, and with them the focal
+area, the raw image size and the color space, and with them the focal
 length in 35 mm terms and the software that wrote the file. The Exif
 tags record some of these on almost every body. Nikon records the rest
 only in its MakerNote, a few of them only in blocks that are encrypted
@@ -1074,12 +1074,12 @@ ExifTool decodes from a block the script does not read, it is tagged
 | Metering mode | Exif 0x9207 MeteringMode | none needed | Exif on every file |
 | Flash | Exif 0x9209 Flash | 0x0087 FlashMode | Exif on every file but the D1H's and the D1X's (files 5364, 1785, 1786); 0x0087 on every file but the E5700's (file 4456) |
 | White balance | Exif 0xA403 WhiteBalance, auto or manual, and 0x9208 LightSource | 0x0005 WhiteBalance, as text | 0x0005 on every file; Exif on every file but the D1H's, the D1X's and the E5700's |
-| Colour temperature | none | 0x004F ColorTemperatureAuto; under a chosen colour temperature, 0x0005's number too | 0x004F on the D5, D850, D780 and every Z body (19 files); a chosen temperature in 0x0005 on no file here, only on the frames shot for these values (below) |
+| Color temperature | none | 0x004F ColorTemperatureAuto; under a chosen color temperature, 0x0005's number too | 0x004F on the D5, D850, D780 and every Z body (19 files); a chosen temperature in 0x0005 on no file here, only on the frames shot for these values (below) |
 | White balance fine-tuning | none | 0x003F, else 0x000B, both WhiteBalanceFineTune | 0x000B on 21 NEF files and both JPEGs, 0x003F on 22 files from the D810 on; neither on the E5700 |
 | Shutter | none | 0x0034 ShutterMode | the Nikon 1 J1, D850, D780 and every Z body (19 files) |
 | Image area | none | 0x001B CropHiSpeed, its first value | the D200 and every later body but the Coolpix P7800 (28 NEF files and the D5300 JPEG) |
 | Raw image size | none | 0x003E ImageSizeRAW | the D750, D810, D5600 and every later body (22 files) |
-| Colour space | Exif 0xA001 ColorSpace | 0x001E ColorSpace | Exif on no NEF file and on both JPEGs; 0x001E on the D200 and every later body but the Coolpix P7800 (28 NEF files and the D5300 JPEG) |
+| Color space | Exif 0xA001 ColorSpace | 0x001E ColorSpace | Exif on no NEF file and on both JPEGs; 0x001E on the D200 and every later body but the Coolpix P7800 (28 NEF files and the D5300 JPEG) |
 | Focal length in 35 mm terms | Exif 0xA405 FocalLengthIn35mmFilm | none | Exif on every file but the D1H's, the D1X's and the E5700's |
 | Software | IFD0 0x0131 Software | ShotInfo's FirmwareVersion, encrypted | IFD0 on every file |
 
@@ -1090,7 +1090,7 @@ and the D70 JPEG, 3 (aperture priority) on 11, 4 (shutter priority) on
 the D700 (file 2255), and 0, "not defined", on the seven Z5II and Z6III
 files (7735, 7736, 7808 to 7810, 7812, 7813) and the D5300 JPEG: a
 recent body writes 0 too. MeteringMode is 5 (multi-segment) on 24 NEF
-files and both JPEGs, 2 (centre-weighted average) on nine files (928,
+files and both JPEGs, 2 (center-weighted average) on nine files (928,
 1786, 2238, 5146 to 5148, 7767, 7770, 8079), 3 (spot) on the D100
 (file 2996) and 255 ("other") on the D850 (file 1835) **[F]**, perhaps
 for its highlight-weighted metering, which Exif has no code for [I].
@@ -1111,8 +1111,8 @@ is the only record of the flash, and it says 0 even on the D1X file
 whose white balance is set to `FLASH` (file 1786) **[F]**.
 
 **White balance.** The photographer chooses auto white balance, a kind
-of light (daylight, shade, incandescent and so on), a colour
-temperature, or a preset measured from a grey card, and may shift the
+of light (daylight, shade, incandescent and so on), a color
+temperature, or a preset measured from a gray card, and may shift the
 result (the fine-tuning below). Exif records only whether it was auto
 (0xA403: 0 auto, 1 manual) and, in a tag of its own, the kind of light
 (0x9208 LightSource) [P][2]. Nikon's 0x0005 records the setting itself,
@@ -1135,18 +1135,18 @@ and LightSource 0 ("unknown") under every `AUTO` setting, and 0xA403 is
 (LightSource 11, "shade") **[F]**. The D1H, D1X and E5700 write no Exif
 white balance, so 0x0005 is their only record of it. The texts of the
 other settings are on my own files and on frames shot for these values
-(below): a chosen colour temperature is written as its number, such as
+(below): a chosen color temperature is written as its number, such as
 `3230K`.
 
-**Colour temperature.** 0x004F ColorTemperatureAuto is one SHORT, in
+**Color temperature.** 0x004F ColorTemperatureAuto is one SHORT, in
 kelvin [P][1], on the D5, D850, D780 and every Z body (19 files). Under
 an `AUTO` setting it holds the temperature auto white balance chose:
 3050 to 7000 on 17 files. Under `SUNNY` it is 0 (the D850 and the Z fc,
 files 1835 and 8559) **[F]**: 0 means it was not recorded. My Z 9
-records it under every setting, a chosen colour temperature and a
+records it under every setting, a chosen color temperature and a
 preset included (below). No other plain tag, Exif or MakerNote,
 records the temperature the camera applied on the older bodies:
-ExifTool reports none there **[S]**. A chosen colour temperature is
+ExifTool reports none there **[S]**. A chosen color temperature is
 the exception, since 0x0005 records it as its number: the D600 writes
 `3230K` there with no 0x004F beside it (below).
 
@@ -1233,7 +1233,7 @@ offers the large, medium and small sizes for the JPEG only, when it
 shoots a raw file and a JPEG together. The size in pixels is CropArea's
 ([section 8.4](#84-image-dimensions)).
 
-**Colour space.** The colour space the camera was set to for its JPEG
+**Color space.** The color space the camera was set to for its JPEG
 output, sRGB or Adobe RGB. No checked NEF file has the Exif ColorSpace
 (0xA001) or an InteropIndex; both JPEGs have ColorSpace 1, sRGB
 **[F]**. 0x001E ColorSpace is one SHORT with ExifTool's codes 1 sRGB,
@@ -1241,10 +1241,10 @@ output, sRGB or Adobe RGB. No checked NEF file has the Exif ColorSpace
 Z 30 and D200 (files 2238, 2255, 2956, 5812, 8079), 1 on the other 23
 NEF files that have it and on the D5300 JPEG **[F]**. The NEF files
 of the bodies before the D200 and of the Coolpix E5700 and P7800
-record a colour space nowhere in plain form (seven files).
+record a color space nowhere in plain form (seven files).
 
 **Focal length in 35 mm terms.** Exif 0xA405 FocalLengthIn35mmFilm
-[P][2], one SHORT in millimetres, is on every file but the D1H's, the
+[P][2], one SHORT in millimeters, is on every file but the D1H's, the
 D1X's and the E5700's, and is never 0 on a Nikon file **[F]**.
 
 **Software and firmware.** IFD0's Software (0x0131) is on every
@@ -1297,7 +1297,7 @@ They add what the public samples lack **[F]**:
   0x003F holds 0x000B's two values as fractions of four: `-24/4, 0/4`
   beside `-6, 0`. A negative first value is a shift towards amber
   (below).
-- **The colour space:** none of these NEF files has an Exif ColorSpace
+- **The color space:** none of these NEF files has an Exif ColorSpace
   either. 615 D3200 JPEGs have ColorSpace 65535 with InteropIndex `R03`,
   and every one has 0x001E 2, Adobe RGB; 5,179 have ColorSpace 1 with
   `R98` and 660 ColorSpace 1 with no Interoperability IFD, all with
@@ -1339,11 +1339,11 @@ the D600, 14 of them with a JPEG of the same shot **[F]**.
   the other files: WhiteBalance 0 under auto; 1 with LightSource 9, 10,
   11, 3, 14 and 4 under the six kinds of light, and with LightSource 0
   under a preset.
-- **A chosen colour temperature:** both bodies store it as its number,
+- **A chosen color temperature:** both bodies store it as its number,
   the text `3230K`, with Exif WhiteBalance 1 and LightSource 0, and the
   Z 9's 0x004F holds 3230. The number is the setting, so no table of
   texts can list them all.
-- **Colour temperature:** the Z 9's 0x004F holds a temperature under
+- **Color temperature:** the Z 9's 0x004F holds a temperature under
   every setting: 5210 under `SUNNY`, 5990 under `CLOUDY`, 8000 under
   `SHADE`, 3000 under `INCANDESCENT`, 4200 under `COOL WHT FL`, 5410
   under `FLASH`, 5200 under both presets, 3230 under `3230K`, and 4550
@@ -1367,7 +1367,7 @@ the D600, 14 of them with a JPEG of the same shot **[F]**.
   `0, 3` and `0, -3` greener and more magenta. The pictures compared
   are the D600's JPEGs and the full-size preview the Z 9 writes into
   each NEF file.
-- **Colour space:** set to Adobe RGB, both bodies write 0x001E 2, and the
+- **Color space:** set to Adobe RGB, both bodies write 0x001E 2, and the
   D600's JPEG has Exif ColorSpace 65535 with InteropIndex `R03`.
 - **Image area:** the D600 set to a DX crop writes CropHiSpeed 2, as the
   Z6III's DX file does.
@@ -1447,7 +1447,7 @@ Exif records where the picture was taken in the GPS IFD, which IFD0's
 3.1); the latitude and longitude, each a reference letter (`N` or `S`,
 `E` or `W`, ASCII, count 2) and three RATIONALs, degrees, minutes and
 seconds (0x0001 to 0x0004); the altitude, GPSAltitudeRef (0x0005,
-BYTE) and GPSAltitude (0x0006, a RATIONAL in metres); the time,
+BYTE) and GPSAltitude (0x0006, a RATIONAL in meters); the time,
 GPSTimeStamp (0x0007, three RATIONALs, in UTC) with GPSDateStamp
 (0x001D, `YYYY:MM:DD`, ASCII, count 11); the image direction,
 GPSImgDirectionRef (0x0010, `T` true or `M` magnetic north) and
@@ -1548,8 +1548,8 @@ The points specific to the MakerNote:
 8. **Odd bodies.** D1 (big-endian headerless MakerNote); D100 (own
    uncompressed path, NEFCompression 2 with a conflicting TIFF tag); D200
    (no next-IFD pointer); Coolpix NRW files (no 0x0096); D3 and D810
-   (14-bit versus 16-bit and mislabelled uncompressed data); D780, Z 6 and
-   Z 7 (curve header 0x44 0x40, bit depth two bits lower than labelled);
+   (14-bit versus 16-bit and mislabeled uncompressed data); D780, Z 6 and
+   Z 7 (curve header 0x44 0x40, bit depth two bits lower than labeled);
    Z bodies (compression in 0x0051, at byte 10 on the Z 9 and later,
    but in 0x0093 on the Z fc and Z 30, which write no 0x0051);
    Z 9 and later (HE and HE* undecodable).
@@ -1566,7 +1566,7 @@ which follows the recommendation below with these changes. From the
 samples: the MakerNote also gives the serial number, the ISO and the lens
 range when the Exif tags lack them
 ([section 8.5](#85-serial-number-iso-and-lens)), and WorldTime gives the
-offset from UTC as a plain offset, not a labelled home zone
+offset from UTC as a plain offset, not a labeled home zone
 ([section 8.2](#82-capture-date-and-time-zone)). And by choice: text is
 trimmed of spaces at both ends, not only trailing ones as in
 [section 8.3](#83-make-and-model), and a value over 255 bytes is taken
@@ -1605,8 +1605,8 @@ plain MakerNote tags where Exif has no value, and decrypt nothing [I]:
   finer than Exif's auto or manual, by a table of the texts files are
   known to hold, since a text like `COOL WHT FL` cannot be guessed,
   else from Exif's WhiteBalance and LightSource;
-- the colour temperature from 0x004F when it is above zero, else, under
-  a chosen colour temperature, from the number of 0x0005's text, such
+- the color temperature from 0x004F when it is above zero, else, under
+  a chosen color temperature, from the number of 0x0005's text, such
   as `3230K`, which is all the bodies without 0x004F record of a
   temperature; either only up to 99,999 K, the five digits of that
   text;
@@ -1617,7 +1617,7 @@ plain MakerNote tags where Exif has no value, and decrypt nothing [I]:
   movie codes too, except 9 and 10, which DX bodies write on stills: 9
   for the APS-C 16:9 crop, 10 for the 1.3x crop;
 - the raw image size from 0x003E;
-- the colour space from Exif whenever it records ColorSpace, 65535
+- the color space from Exif whenever it records ColorSpace, 65535
   without `R03` included, and from 0x001E only when it records none,
   since a program that rewrites a JPEG can leave the camera's 0x001E
   behind;
@@ -1656,11 +1656,11 @@ MakerNote out of the critical path:
    raw IFD dimensions and say in the API documentation that they may include
    border pixels. Do not guess from Exif PixelXDimension. [I]
 5. **Time policy:** prefer 0x9011 when it parses; otherwise offer the
-   WorldTime zone clearly labelled as a home-zone fallback, or none. [I]
+   WorldTime zone clearly labeled as a home-zone fallback, or none. [I]
 6. **Tests:** cover all three layouts, an inner byte order different from
    the outer one, a truncated MakerNote, an unset clock, a 0x0045 outside the
    raw dimensions, and NUL-terminated and space-padded Make/Model strings.
-   Use files from raw.pixls.us (check each file's licence) for the main
+   Use files from raw.pixls.us (check each file's license) for the main
    cases. [I]
 
 ## 11. Open questions
@@ -1668,7 +1668,7 @@ MakerNote out of the critical path:
 1. **Provenance of the decryption tables.** The two 256-byte tables are
    published in GPL, LGPL, CDDL and Artistic projects and in dcraw, whose
    header states that all of its code outside a single restricted (Foveon)
-   block is free for all uses; dcraw's licence is nevertheless described as
+   block is free for all uses; dcraw's license is nevertheless described as
    ambiguous for the whole file elsewhere on this page. That is an input to
    the decision, not legal advice. raw-files needs an independent derivation,
    a source it can use, or a recorded legal decision, before any
@@ -1679,7 +1679,7 @@ MakerNote out of the critical path:
 3. **ColorBalance version 08xx (Z bodies).** Whether any Z body lacks
    0x000C, and whether the encrypted block holds anything useful.
 4. **BlackLevel (0x003D) channel order.** LibRaw reads the four values in
-   fixed colour order R, G1, G2, B regardless of the CFA layout. rawspeed and
+   fixed color order R, G1, G2, B regardless of the CFA layout. rawspeed and
    rawler read them by position after assuming an RGGB pattern. The two agree
    only on RGGB. In rawspeed's camera list every non-RGGB Nikon is a
    pre-2010 body, so there may be no practical difference, but which body
@@ -1709,7 +1709,7 @@ MakerNote out of the critical path:
 9. **Bodies that write NEFCompression 5 and 6.** Labels are known, bodies
     are not.
 10. **The 0101 position.** Answered: ExifTool's offsets (70 to 82) hold
-    the frame, the centre, the area and the in-focus byte on the D5's
+    the frame, the center, the area and the in-focus byte on the D5's
     live-view file: 5568x3712, (3077, 2427), 588x500, in focus (file 2218)
     ([section 8.6](#86-focus-point)). **[F]**
 11. **Version 0301.** Answered: it has the 03xx layout, 60 bytes with the
@@ -1721,7 +1721,7 @@ MakerNote out of the critical path:
     or 1.2x crop on a D5, D750, D810 or D850 does the same, and whether a
     CropArea then counts the crop, is open; no public file shows one.
 13. **Manual focus on a Z body.** Answered: the Z fc writes a position
-    in AFInfo2 under FocusMode `MANUAL`, centre (2520, 1856) and area
+    in AFInfo2 under FocusMode `MANUAL`, center (2520, 1856) and area
     288x319 in its 5568x3712 frame (file 8559). raw-files gives no focus
     point for it, as for the two DSLR viewfinder shots in manual focus
     (files 928, 1835). **[F]**
@@ -1746,15 +1746,15 @@ MakerNote out of the critical path:
 18. **Crops that cut both sides and change the aspect**, such as a DX
     crop at 1:1 or 16:9 on an FX body: whether they are scaled like DX or
     windows like 1:1. The rule scales them; no sample shows one.
-19. **Where an aspect crop's window lies.** raw-files centres it, at
+19. **Where an aspect crop's window lies.** raw-files centers it, at
     half the difference between the recorded frame and CropArea.
     CropHiSpeed's own offsets, in stored pixels, differ from that by up to
     eight pixels (936 against 928 on the Z50II's 1:1 file, 312 against
-    316 on the Z6III's 16:9 file); an off-centre shot near an edge of the
+    316 on the Z6III's 16:9 file); an off-center shot near an edge of the
     window, on one of those bodies, would show which is right. On the
     D600, a body without a CropArea, the point placed from the table on
     a DX frame shifts by CropHiSpeed's origin, (1040, 696), which is the
-    centred window's origin to the pixel
+    centered window's origin to the pixel
     ([autofocus-points.md](autofocus-points.md#26-the-control-frames)).
     **[F]**
 20. **A crop on a small raw.** Whether a Z body records a crop mode on a
@@ -1765,12 +1765,12 @@ MakerNote out of the critical path:
     files show 0x0005 as `AUTO`, `AUTO0`, `AUTO1`, `SUNNY`, `FLASH` and
     `SHADE`, my own files add `CLOUDY`, `INCANDESCENT`, `PRESET` and
     `COOL WHT FL`, and frames shot on a Z 9 and a D600 add `AUTO2`,
-    `NATURAL AUTO`, `PRESET1` to `PRESET4` and a chosen colour
+    `NATURAL AUTO`, `PRESET1` to `PRESET4` and a chosen color
     temperature as its number, such as `3230K`
     ([section 8.7](#87-camera-settings)). **[F]** Still on no checked
     file: the other fluorescent lamps, the Z 9's preset slots 5 and 6,
     and whatever the bodies not checked write.
-22. **The colour temperature under a manual setting.** Answered for the
+22. **The color temperature under a manual setting.** Answered for the
     Z 9: it holds a temperature under every setting, 3230 under a chosen
     3230 K and 5200 under a preset; the D850 and the Z fc write 0 under
     `SUNNY` ([section 8.7](#87-camera-settings)). **[F]**
@@ -2002,7 +2002,7 @@ Retrieved October 2026.
   https://forum.dxo.com/t/nikon-d850-raw-m-size-resolution-is-not-recognized-correctly/24178
 - [21] ExifTool forum, truncated MakerNote report (search extract) —
   https://exiftool.org/forum/index.php?msg=28917
-- [22] raw.pixls.us, the catalogue's exiv2 metadata listing of each file
+- [22] raw.pixls.us, the catalog's exiv2 metadata listing of each file
   (read October 2026) — https://raw.pixls.us/
 - [23] CIPA DC-008-Translation-2026, "Exchangeable image file format for
   digital still cameras: Exif Version 3.1" (January 2026), read

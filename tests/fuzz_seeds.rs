@@ -17,7 +17,7 @@
 //! Z 9 in DX and 1:1 crop modes, in their own little-endian byte order,
 //! and three frames of the session on which my own D600's autofocus
 //! points were measured, in their own big-endian byte order: frame 4, a
-//! single point far from the centre, frame 42, auto-area, whose
+//! single point far from the center, frame 42, auto-area, whose
 //! AFInfo2 marks 12 points used, and frame 49, a single point in the DX
 //! crop.
 //!

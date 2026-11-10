@@ -30,9 +30,9 @@ mode and one in 1:1, with a single autofocus point placed in the top-left
 corner of the picture. They were taken to tell apart the two ways a crop
 mode records its focus point: as a fraction of the cropped picture, which
 the reader scales, or as a position in the full frame, which the reader
-shifts into the cropped window. A point near the centre lands in the same
+shifts into the cropped window. A point near the center lands in the same
 place either way, and every public sample of a crop mode has its point near
-the centre, so no public sample can tell the two apart.
+the center, so no public sample can tell the two apart.
 
 I took the three JPEG pictures with the same camera on 2026-10-22, to
 check what a camera JPEG records in each crop mode and image size
@@ -65,7 +65,7 @@ camera wrote them.
   MakerNote's preview) by a stub JPEG of 122 bytes with no image in it,
   whose frame header keeps the original's size, the same stub the
   fixtures built in code use; the raw data, the pixels, by 64 bytes
-  starting `FF 10 FF 50`; and the small grey image of SubIFD3 by 64 zero
+  starting `FF 10 FF 50`; and the small gray image of SubIFD3 by 64 zero
   bytes.
 - **Removed:** the serial numbers of the camera and of the lens
   (BodySerialNumber, LensSerialNumber and the MakerNote's SerialNumber);
@@ -137,30 +137,30 @@ previews and the metadata of real Z 9 files. In the full 8256 by 5504
 frame, for the NEF files:
 
 - `nikon-z9-dx.nef`, the DX crop, which cuts both sides: AFInfo2 records
-  the centre (636, 572) and an area of 420 by 468, and the reader scales
-  them onto CropArea's 5392 by 3592, giving the centre (415, 373) and an
+  the center (636, 572) and an area of 420 by 468, and the reader scales
+  them onto CropArea's 5392 by 3592, giving the center (415, 373) and an
   area of 274 by 305.
 - `nikon-z9-1x1.nef`, the 1:1 crop, which keeps the height: AFInfo2
-  records the centre (1797, 424) and an area of 291 by 323, and the
-  reader moves the centre into CropArea's 5504 by 5504 window, 1376
-  pixels from the frame's left edge, giving the centre (421, 424) and the
+  records the center (1797, 424) and an area of 291 by 323, and the
+  reader moves the center into CropArea's 5504 by 5504 window, 1376
+  pixels from the frame's left edge, giving the center (421, 424) and the
   same area.
 
 For the JPEG files, which hold no CropArea, the reader places the point
 on the JPEG's own picture
 ([ADR015](../../docs/architecture-decisions/adr015-the-focus-point-of-a-crop-mode-jpeg.md)):
 
-- `nikon-z9-fx.jpg`, no crop: AFInfo2 records the centre (4225, 2614)
+- `nikon-z9-fx.jpg`, no crop: AFInfo2 records the center (4225, 2614)
   and an area of 406 by 406 in a frame of the JPEG's own size, and the
   reader gives them as recorded.
-- `nikon-z9-dx.jpg`, the DX crop: AFInfo2 records the centre (1024, 718)
+- `nikon-z9-dx.jpg`, the DX crop: AFInfo2 records the center (1024, 718)
   and an area of 226 by 258, and the reader scales them onto the JPEG's
-  5392 by 3592, giving the centre (669, 469) and an area of 148 by 168.
+  5392 by 3592, giving the center (669, 469) and an area of 148 by 168.
 - `nikon-z9-16x9.jpg`, the 16:9 crop at the middle size, which keeps the
-  width: AFInfo2 records the centre (878, 4504) and an area of 162 by
-  178, and the reader moves the centre into the window of the JPEG's
+  width: AFInfo2 records the center (878, 4504) and an area of 162 by
+  178, and the reader moves the center into the window of the JPEG's
   shape, 8256 by 4640, 432 pixels below the frame's top edge, giving the
-  centre (878, 4072) and the same area. Every preview takes the file's
+  center (878, 4072) and the same area. Every preview takes the file's
   Orientation 8.
 
 Each point is the one the reader gives on the raw file of the same shot,
@@ -172,13 +172,13 @@ The tests check every camera setting each file gives. From the Exif
 IFD, the same on all five shots: aperture priority, multi-segment
 (Nikon's matrix) metering, a flash that did not fire, with no mode
 recorded, and auto white balance, which the JPEG files' MakerNote
-confirms with `AUTO0`. From the MakerNote: the colour temperature auto
+confirms with `AUTO0`. From the MakerNote: the color temperature auto
 white balance chose, which differs from shot to shot; the electronic
 shutter; and the image area of each crop mode, from CropHiSpeed. The NEF
 files also give the large raw size, and the JPEG files a recorded zero
 fine-tuning, `0/4, 0/4`; a JPEG gives no raw size, and the NEF files no
 fine-tuning, since the stripping removed it. The JPEG files record the
-colour space sRGB in their Exif IFD, which alone decides; the NEF files,
+color space sRGB in their Exif IFD, which alone decides; the NEF files,
 like every Nikon raw file checked, record no ColorSpace there, so their
 MakerNote's sRGB is the one given.
 
@@ -299,7 +299,7 @@ that did not fire and auto white balance, and from the MakerNote a
 recorded zero fine-tuning (0x000B), whose two values fit in their entry
 and so were kept, and sRGB; and point 38 at (1812, 1705) with its box of 164 by 164,
 placed from the table as its focus point and in the layout. It gives
-no colour
+no color
 temperature, shutter, image area or raw size: the D600 writes no
 ColorTemperatureAuto, ShutterMode or ImageSizeRAW, the stripping
 removed the white balance text, and CropHiSpeed's crop setting, 0,
@@ -310,7 +310,7 @@ files: its four previews, the thumbnail, the MakerNote's preview, the
 MPF image and the file itself, each where the camera's layout puts it;
 the NEF's capture time, exposure and lens's range; the image size of
 its frame header, 6016 by 4016, and no raw size; the NEF's camera
-settings, with the colour space sRGB from the Exif IFD's ColorSpace,
+settings, with the color space sRGB from the Exif IFD's ColorSpace,
 which the NEF lacks, and the white balance text `AUTO1`, which the JPEG
 keeps and which agrees with Exif's auto; and point 38 placed from the
 table where the NEF's is, at (1812, 1705) with its box of 164 by 164 in
@@ -354,16 +354,16 @@ CropHiSpeed among them.
 The tests open each file and check that the NEF gives point 1 placed
 from the table at (3008, 2007) in the table's 6016 by 4016 frame, as
 every NEF does whatever size its JPEG was shot at; that the Medium JPEG
-gives it at (3005, 2002) in the 6010 by 4006 window, its centre moved
+gives it at (3005, 2002) in the 6010 by 4006 window, its center moved
 back by the window's origin, (3, 5); and that the Small JPEG gives it
 at (3008, 2007) in the 6016 by 4016 frame; each with its box of 164 by
 164, from a table, as the primary of a list of that point alone, with
 the area mode `Tracking`, and with the layout of the D600's 39 points.
 
-## Licence and changes
+## License and changes
 
 I, who took the photographs, publish these files under the
-repository's licence, MIT OR Apache-2.0, at your option.
+repository's license, MIT OR Apache-2.0, at your option.
 
 The Z 9's NEF files were made on 2026-10-20, its JPEG files on
 2026-10-22, the D600's NEF files on 2026-10-27, its JPEG on

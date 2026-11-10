@@ -427,10 +427,10 @@ impl Longitude {
     }
 }
 
-/// How high a picture was taken: metres as the file records them, and
+/// How high a picture was taken: meters as the file records them, and
 /// whether they lie above or below the reference.
 ///
-/// Exif records the metres as one fraction and the side in
+/// Exif records the meters as one fraction and the side in
 /// GPSAltitudeRef: 0 and 2 above, 1 and 3 below. Which surface they are
 /// measured from is not given: Exif called 0 and 1 sea level until its
 /// version 2.32, and version 3.0 made them the reference ellipsoid and
@@ -469,7 +469,7 @@ pub struct Altitude {
 
 impl Altitude {
     /// `meters` above the reference, kept as given; `None` when its
-    /// denominator is zero. Zero metres is a real altitude.
+    /// denominator is zero. Zero meters is a real altitude.
     #[must_use]
     pub fn above(meters: Rational) -> Option<Self> {
         (meters.denominator != 0).then_some(Self {
@@ -488,7 +488,7 @@ impl Altitude {
         })
     }
 
-    /// The metres from the reference, as recorded; never negative, since
+    /// The meters from the reference, as recorded; never negative, since
     /// the side is [`is_below`](Self::is_below).
     pub fn meters(&self) -> Rational {
         self.meters
@@ -501,7 +501,7 @@ impl Altitude {
         self.below
     }
 
-    /// The altitude in metres as a decimal, negative below the reference.
+    /// The altitude in meters as a decimal, negative below the reference.
     pub fn to_meters(self) -> f64 {
         signed(self.meters.to_f64(), self.below)
     }
@@ -822,7 +822,7 @@ mod tests {
         assert_ne!(
             Altitude::above(r(10, 1)),
             Altitude::above(r(100, 10)),
-            "metres as recorded"
+            "meters as recorded"
         );
     }
 
@@ -835,7 +835,7 @@ mod tests {
         let below = Altitude::below(r(4305, 100)).unwrap();
         assert!(below.is_below());
         assert_eq!(below.to_meters(), -43.05);
-        // Zero metres is a real altitude, on either side.
+        // Zero meters is a real altitude, on either side.
         assert_eq!(Altitude::above(r(0, 1)).unwrap().to_meters(), 0.0);
         assert!(Altitude::below(r(0, 1)).is_some());
         assert_eq!(Altitude::above(r(35, 0)), None);

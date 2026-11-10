@@ -12,12 +12,12 @@ structure and values kept, 2,452 bytes; the JPEG is the camera's JPEG
 with its images replaced by stubs and its personal fields zeroed, its
 Exif segment otherwise as the camera wrote it, 69,876 bytes;
 [the fixtures' README](../README.md#the-d600-session) says how they were
-stripped and checked, under which licence they are published, and who
+stripped and checked, under which license they are published, and who
 *I* is.
 
 Frames 4, 42 and 49, in bold, are the three that the record chooses to
 check the table of the D600's points with: a single point far from the
-centre, where a wrong table, a wrong bit order or a wrong frame shows,
+center, where a wrong table, a wrong bit order or a wrong frame shows,
 as a NEF and as its JPEG;
 an auto-area frame, whose mask marks 12 points used, the primary among
 them; and a single point in the DX crop, which shifts into the crop.

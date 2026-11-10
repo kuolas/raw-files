@@ -6,7 +6,7 @@ use std::borrow::Cow;
 use std::fmt;
 use std::io;
 
-/// A specialised [`Result`](std::result::Result) whose error defaults to
+/// A specialized [`Result`](std::result::Result) whose error defaults to
 /// raw-files' [`Error`].
 pub type Result<T, E = Error> = std::result::Result<T, E>;
 
@@ -66,9 +66,9 @@ pub enum ErrorKind {
     /// read.
     Io,
     /// The file is not a RAW file or a JPEG file that this version of
-    /// raw-files recognises.
+    /// raw-files recognizes.
     UnknownFormat,
-    /// The file was recognised, but this variant of its format, or this
+    /// The file was recognized, but this variant of its format, or this
     /// feature of it, is not supported.
     Unsupported,
     /// The file contradicts itself or its format.
@@ -114,12 +114,12 @@ impl Error {
         Self::new(ErrorKind::Malformed, message.into(), Some(offset), None)
     }
 
-    /// The file is not a RAW file or a JPEG file this version recognises.
+    /// The file is not a RAW file or a JPEG file this version recognizes.
     pub(crate) fn unknown_format(message: impl Into<Cow<'static, str>>) -> Self {
         Self::new(ErrorKind::UnknownFormat, message.into(), None, None)
     }
 
-    /// The file is recognised, but this variant or feature is not supported.
+    /// The file is recognized, but this variant or feature is not supported.
     #[cfg_attr(
         not(test),
         expect(dead_code, reason = "no format module reports this error yet")

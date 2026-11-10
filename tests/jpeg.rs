@@ -106,7 +106,7 @@ const IMAGE_LENGTH: u16 = 0x0101;
 /// (PhotometricInterpretation).
 const PHOTOMETRIC_INTERPRETATION: u16 = 0x0106;
 
-/// The PhotometricInterpretation of raw data: a colour filter array.
+/// The PhotometricInterpretation of raw data: a color filter array.
 const CFA: u16 = 32803;
 
 /// Where the visible image starts in raw data, column then row
@@ -904,7 +904,7 @@ fn a_nefs_embedded_jpeg_saved_alone_opens_as_a_jpeg() {
     assert_opens(&stub, &previews, &metadata, "embedded JPEG");
 }
 
-/// The focus centred at `center` in `frame`, with an area of `area`, each
+/// The focus centered at `center` in `frame`, with an area of `area`, each
 /// width or x first, and focus confirmed.
 fn confirmed(frame: (u32, u32), center: (u32, u32), area: (u32, u32)) -> Focus {
     let size = |(width, height)| Size { width, height };
@@ -1506,7 +1506,7 @@ fn a_limit_crossed_inside_the_makernote_costs_the_makernote_only() {
 }
 
 /// The focus point a Sony MakerNote's FocusLocation `location` records:
-/// the frame's width and height, then the centre's x and y. Sony records
+/// the frame's width and height, then the center's x and y. Sony records
 /// no confirmation of focus.
 fn sony_focus([width, height, x, y]: [u16; 4]) -> Focus {
     let frame = size_of((width, height));
@@ -1555,7 +1555,7 @@ fn sony_metadata(make: &str, model: &str, main: (u16, u16), focus: Option<Focus>
 #[test]
 fn a_sony_jpeg_gives_the_focus_point_its_makernote_records() {
     // The ILCE-7M3's JPEG at the camera's M size, whose MakerNote, after
-    // the `SONY DSC` header, records its point off centre in a frame of
+    // the `SONY DSC` header, records its point off center in a frame of
     // the JPEG's own size, in AF-C: the point as recorded, with no area
     // and no confirmation. Every value the Exif segment records is kept,
     // and the file's own preview runs through the zeros after its end.
@@ -1582,7 +1582,7 @@ fn a_sony_jpeg_gives_the_focus_point_its_makernote_records() {
 
 #[test]
 fn a_sony_jpeg_gives_the_camera_settings_its_makernote_records() {
-    // The ILCE-7M3's JPEG, whose MakerNote also records a chosen colour
+    // The ILCE-7M3's JPEG, whose MakerNote also records a chosen color
     // temperature of 3200 K, a shift of three steps towards amber, which
     // Sony stores as 3, and the electronic front curtain on: the settings
     // as the Sony MakerNote reader gives them, the shift positive towards
@@ -1682,7 +1682,7 @@ fn a_sony_export_cut_to_another_shape_gives_no_focus_point() {
 #[test]
 fn a_sony_jpeg_in_manual_focus_gives_no_focus_point() {
     // The DSC-RX100M4's JPEG, whose FocusMode is the one BYTE 0, manual
-    // focus, and whose FocusLocation is the frame's centre: no point.
+    // focus, and whose FocusLocation is the frame's center: no point.
     for order in ORDERS {
         let file = rx100m4_jpeg(order);
         assert_opens(
@@ -1779,7 +1779,7 @@ fn a_sony_makernotes_offsets_count_from_the_exif_segments_tiff_header() {
     // segment comes first, so its TIFF header lies 12 bytes into the file,
     // and the offset FocusLocation's entry holds, counted from the file's
     // start, lands 12 bytes early, inside those 32 bytes, where a decoy
-    // lies: a FocusLocation of the same frame with another centre. Counted
+    // lies: a FocusLocation of the same frame with another center. Counted
     // from the Exif segment's TIFF header, the point is the camera's; from
     // the file's start it would be the decoy's, and from the MakerNote's
     // own start, as Nikon's count, past the MakerNote, and none.
@@ -1912,7 +1912,7 @@ fn a_limit_crossed_inside_the_sony_makernote_costs_its_focus_point_only() {
 struct StrippedZ9Jpeg {
     /// The file's name in `tests/fixtures/`.
     file: &'static str,
-    /// The maker the reader recognises from the Make, and the name the Make
+    /// The maker the reader recognizes from the Make, and the name the Make
     /// and the Model give.
     make: Make,
     model: &'static str,
@@ -1941,7 +1941,7 @@ struct StrippedZ9Jpeg {
     /// IFD1's thumbnail, the length IFD1 declares for it, the two images
     /// of the MPF list, and the file itself, of its frame header's size.
     previews: [(Range<u64>, (u16, u16)); 4],
-    /// The frame, the centre and the area of the focus point the reader
+    /// The frame, the center and the area of the focus point the reader
     /// gives, and whether the camera confirmed focus.
     focus_frame: (u32, u32),
     focus_center: (u32, u32),
@@ -1950,7 +1950,7 @@ struct StrippedZ9Jpeg {
     /// The area mode the reader names from AFInfo2's byte 5, under the
     /// detection method at byte 4, `None` for a code it does not name.
     area_mode: Option<FocusAreaMode>,
-    /// The colour temperature of the white balance the camera applied, in
+    /// The color temperature of the white balance the camera applied, in
     /// kelvin: the MakerNote's ColorTemperatureAuto.
     color_temperature: u32,
     /// The image area, from the crop setting of the MakerNote's
@@ -1960,7 +1960,7 @@ struct StrippedZ9Jpeg {
 
 /// The FX shot, the camera's full output, at full size: CropHiSpeed
 /// `[11, 8280, 5520, 8280, 5520, 0, 0]` records no crop, so the point is as
-/// AFInfo2 records it, the centre (4225, 2614) and the area 406 by 406 in
+/// AFInfo2 records it, the center (4225, 2614) and the area 406 by 406 in
 /// the frame of 8256 by 5504, which is the JPEG's own size.
 const STRIPPED_Z9_FX_JPEG: StrippedZ9Jpeg = StrippedZ9Jpeg {
     file: support::fixtures::Z9_FX_JPEG,
@@ -1997,7 +1997,7 @@ const STRIPPED_Z9_FX_JPEG: StrippedZ9Jpeg = StrippedZ9Jpeg {
 };
 
 /// The DX shot, at full size: CropHiSpeed `[2, 8280, 5520, 5408, 3608,
-/// 1436, 956]` records a crop that cuts both sides, so the centre (1024,
+/// 1436, 956]` records a crop that cuts both sides, so the center (1024,
 /// 718) and the area 226 by 258 that AFInfo2 records in the full 8256 by
 /// 5504 frame are fractions of the picture, and the reader scales them
 /// onto the JPEG's 5392 by 3592, each rounded to the nearest pixel.
@@ -2038,7 +2038,7 @@ const STRIPPED_Z9_DX_JPEG: StrippedZ9Jpeg = StrippedZ9Jpeg {
 /// The 16:9 shot, at the middle size, 6192 by 3480, taken in portrait
 /// orientation and stored on its side with Orientation 8, which turns
 /// every preview. CropHiSpeed `[6, 8280, 5520, 8280, 4656, 0, 432]`
-/// records a crop that keeps the width, so the centre (878, 4504) that
+/// records a crop that keeps the width, so the center (878, 4504) that
 /// AFInfo2 records in the full 8256 by 5504 frame is a position in that
 /// frame. The window of the JPEG's shape in it is 8256 wide and 8256 x
 /// 3480 / 6192 = 4640 high, whose origin is (5504 - 4640) / 2 = 432 down:
@@ -2227,12 +2227,12 @@ fn check_stripped_z9_jpeg(stripped: &StrippedZ9Jpeg) {
     assert_eq!(points.area_mode(), stripped.area_mode, "{label}");
     // No layout: raw-files has no table of the Z 9's points.
     assert_eq!(metadata.focus_layout(), None, "{label}");
-    // The settings, the same on the three shots but the colour
+    // The settings, the same on the three shots but the color
     // temperature and the image area. From the Exif IFD: aperture
     // priority, matrix metering, a Flash of 0, no flash fired and no mode
     // recorded, and the ColorSpace 1, sRGB, which keeps the MakerNote's
     // out. From the MakerNote: auto white balance, its text `AUTO0`, which
-    // Exif's auto agrees with; the colour temperature it chose; a recorded
+    // Exif's auto agrees with; the color temperature it chose; a recorded
     // zero fine-tuning, `0/4, 0/4`; the electronic shutter; and the image
     // area of the crop. A JPEG has no raw image size, whatever its
     // MakerNote's ImageSizeRAW says.
@@ -2460,7 +2460,7 @@ fn check_d600_jpeg_point_1(label: &str, pixels: (u16, u16), frame: (u16, u16), c
 }
 
 /// The Medium JPEG of frame 7856, 4512 by 3008, which I shot with my own
-/// D600 on 2026-11-03, shows the 6010 by 4006 window centred in the
+/// D600 on 2026-11-03, shows the 6010 by 4006 window centered in the
 /// table's 6016 by 4016 frame, as the D600's record measures it on its
 /// NEF's full-size preview: point 1, at (3008, 2007) in the table, is
 /// placed in that window, less its origin, (3, 5), at (3005, 2002). The
@@ -2492,7 +2492,7 @@ fn the_d600_small_jpeg_gives_point_1_placed_in_the_tables_frame() {
 
 // Real files, downloaded: eight camera-original JPEGs of Wikimedia
 // Commons, of five Sony bodies, two Nikon bodies and a Canon, under CC0, a
-// public-domain dedication or CC BY. They are listed with their licences,
+// public-domain dedication or CC BY. They are listed with their licenses,
 // their authors and their hashes in `tests/samples.tsv`;
 // `scripts/fetch-samples.sh` downloads them. They are too large to commit,
 // so a test whose file is absent says so and passes: the suite runs
@@ -2756,8 +2756,8 @@ fn every_jpeg_sample_opens_with_its_previews() {
 /// number, lens range and offset from UTC and the D70's ISO and lens
 /// range; no raw size, and the frame header's size as the image size
 /// (ADR014). The focus point is the one Sony's MakerNote records, as
-/// recorded, on the ILCE-7M3, off centre in a frame of its picture's size,
-/// and on the ILCE-7RM2, at the centre; where there is none, a comment
+/// recorded, on the ILCE-7M3, off center in a frame of its picture's size,
+/// and on the ILCE-7RM2, at the center; where there is none, a comment
 /// says why. The camera settings are those the Exif IFD records, with,
 /// on the Nikon and Sony files, those their MakerNote records: every file
 /// gives sRGB, from its Exif ColorSpace; the G7 X records no

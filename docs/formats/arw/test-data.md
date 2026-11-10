@@ -1,6 +1,6 @@
 # ARW: test data
 
-Real ARW files are large and their licences vary, so the raw-files tests
+Real ARW files are large and their licenses vary, so the raw-files tests
 combine small committed fixtures that we build ourselves with larger public
 samples that CI downloads and checks against a hash. This page lists the
 sources, the rules for what may be committed, what the public archive holds
@@ -19,25 +19,25 @@ Status: desk research plus structural checks on 36 CC0 sample files
 made with throwaway scripts that are not in the repository, and no pixel
 output was compared with a reference decoder.
 
-## 1. Sources and their licence status
+## 1. Sources and their license status
 
-| Source | Licence status | Commit to the repository? |
+| Source | License status | Commit to the repository? |
 |---|---|---|
-| raw.pixls.us | The upload form asks contributors to release files under CC0. Unlike the directory listing, the site's JSON catalogue gives a licence for each file: 200 of the 209 Sony-family files are CC0, and nine are CC BY-NC-SA imports from rawsamples.ch (section 3.2). [1] **[P]** | Only a file the catalogue lists as CC0, and only if small. Normally download in CI instead (section 2). |
+| raw.pixls.us | The upload form asks contributors to release files under CC0. Unlike the directory listing, the site's JSON catalog gives a license for each file: 200 of the 209 Sony-family files are CC0, and nine are CC BY-NC-SA imports from rawsamples.ch (section 3.2). [1] **[P]** | Only a file the catalog lists as CC0, and only if small. Normally download in CI instead (section 2). |
 | rawsamples.ch (the earlier archive) | Mostly CC BY-NC-SA 2.5 CH; replaced by raw.pixls.us in 2017. [4][5] **[S]** | No. The non-commercial and share-alike terms do not fit `MIT OR Apache-2.0`. |
-| dnglab RawDB (rawdb.dnglab.org) | Its contribution guide says sample sets must be CC0. The site is a JavaScript application whose per-file licences we could not read; the dnglab repository holds only analysis results. It has bodies that raw.pixls.us lacks: ILCE-7RM6 (four files) and DSC-RX10M5 (two). [6] **[P]** | No. Download only, after confirming the licence of the specific file. |
-| ExifTool sample images | The Sony archive (761 models, 8.5 MB, 2025-12-03) holds JPEG files only, with the main image replaced and previews removed. No licence is stated. [7] **[P]** | No. Treat as unlicensed. |
-| Test files of other projects: exiv2's `.exv` metadata extracts, exif-py's A7 III ARW, metadata-extractor's Sony APP1 segments, the three files rawkit's tests fetch from Graphite's server | The projects are GPL-2.0-or-later, BSD-3-Clause, Apache-2.0 and MIT OR Apache-2.0; the licence of each file is not stated. [8] **[P]** | No. |
+| dnglab RawDB (rawdb.dnglab.org) | Its contribution guide says sample sets must be CC0. The site is a JavaScript application whose per-file licenses we could not read; the dnglab repository holds only analysis results. It has bodies that raw.pixls.us lacks: ILCE-7RM6 (four files) and DSC-RX10M5 (two). [6] **[P]** | No. Download only, after confirming the license of the specific file. |
+| ExifTool sample images | The Sony archive (761 models, 8.5 MB, 2025-12-03) holds JPEG files only, with the main image replaced and previews removed. No license is stated. [7] **[P]** | No. Treat as unlicensed. |
+| Test files of other projects: exiv2's `.exv` metadata extracts, exif-py's A7 III ARW, metadata-extractor's Sony APP1 segments, the three files rawkit's tests fetch from Graphite's server | The projects are GPL-2.0-or-later, BSD-3-Clause, Apache-2.0 and MIT OR Apache-2.0; the license of each file is not stated. [8] **[P]** | No. |
 | Fuzzing corpora | OSS-Fuzz's LibRaw seeds cover CR2, NEF and RAF, **not ARW**; exiv2's corpus is built from exiv2's own test data. [9] **[P]** | No. Generate our own corpus from our own fixtures. |
 | Review galleries (Imaging Resource, DPReview, PetaPixel, photographyblog), vendor samples (DxO), files linked from issue threads | Proprietary or unknown. Imaging Resource allows local, private, non-commercial use only. [10] **[S]** | No, and do not redistribute. Manual experiments only. |
-| Files you made yourself | Yours to licence. | Yes, with provenance recorded (section 5). |
+| Files you made yourself | Yours to license. | Yes, with provenance recorded (section 5). |
 
 ## 2. What is committed and what is downloaded
 
 The rules are those of the [NEF test-data page](../nef/test-data.md); this
 section only adds what is specific to Sony.
 
-**Committed** (small, a few KB each, licence clear):
+**Committed** (small, a few KB each, license clear):
 
 - hand-built fixtures (section 5.1);
 - fixtures stripped from a CC0 sample, with the pixel data removed and the
@@ -50,9 +50,9 @@ ARW, and 325 MiB for the one ARQ [1]):
 
 - real samples from raw.pixls.us, fetched by URL and **pinned by SHA-256**.
   The site publishes `filelist.sha256` and repeats each file's hash in the
-  catalogue; the repository records the hash of each file it uses, and CI
+  catalog; the repository records the hash of each file it uses, and CI
   fails if a download differs. [1][3] **[P]**
-- Before adding a file to the list, check its licence in the catalogue
+- Before adding a file to the list, check its license in the catalog
   (the `set=noncc0` view lists the exceptions) and note it in the list
   entry. [1] **[P]**
 - Tests that need these files are skipped, not failed, when they are
@@ -70,13 +70,13 @@ Practical points for the download step, as observed in October 2026
   file system. Key a local cache on the file id or the hash, not on the
   path.
 
-The repository never holds a file whose licence is unclear, however small.
+The repository never holds a file whose license is unclear, however small.
 
 ### 2.1 The CI set
 
 The files CI downloads are listed in
 [`tests/samples.tsv`](../../../tests/samples.tsv), the source of truth for
-their names, hashes, licences and URLs; `scripts/fetch-samples.sh`
+their names, hashes, licenses and URLs; `scripts/fetch-samples.sh`
 downloads them and checks each hash, and the tests in `tests/arw.rs` read
 them. The set is every file of [Files checked](#files-checked): 35 in the
 normal tier, and the ARQ (file 3255) in the large tier, which the script
@@ -120,37 +120,37 @@ compared only where that tag exists):
 | 1311 | ILCE-7RM2 | FocusLocation `[7952, 5304, 3976, 2652]`; FocusMode 0 | none: manual focus |
 | 1351 | DSC-F828 | no focus tag read | none: no focus tag at all |
 | 1457 | NEX-5 | no focus tag read | none: no FocusLocation; a point number in CameraInfo only |
-| 1541 | ILCE-9 | FocusLocation `[6000, 4000, 2662, 2000]`; FocusMode 3 | frame 6000 × 4000, centre (2662, 2000), area none |
-| 1542 | ILCE-9 | FocusLocation `[6000, 4000, 2493, 1808]`; FocusMode 3 | frame 6000 × 4000, centre (2493, 1808), area none |
+| 1541 | ILCE-9 | FocusLocation `[6000, 4000, 2662, 2000]`; FocusMode 3 | frame 6000 × 4000, center (2662, 2000), area none |
+| 1542 | ILCE-9 | FocusLocation `[6000, 4000, 2493, 1808]`; FocusMode 3 | frame 6000 × 4000, center (2493, 1808), area none |
 | 1582 | ILCE-7S | FocusMode 0 | none: manual focus, and no FocusLocation either |
 | 2271 | DSLR-A200 | no focus tag read | none: no FocusLocation; a point number in CameraInfo only |
 | 2346 | DSLR-A100 | no focus tag read | none: no FocusLocation; only the Minolta block, which is not read |
 | 2521 | DSLR-A700 | no focus tag read | none: no FocusLocation; a point number in CameraInfo only |
-| 3012 | DSC-RX100M6 | FocusLocation `[3648, 3648, 1824, 1824]`; FocusMode 4 | frame 3648 × 3648, centre (1824, 1824), area none |
-| 3015 | DSC-RX100M6 | FocusLocation `[5472, 3080, 2736, 936]`; FocusMode 4 | frame 5472 × 3080, centre (2736, 936), area none |
+| 3012 | DSC-RX100M6 | FocusLocation `[3648, 3648, 1824, 1824]`; FocusMode 4 | frame 3648 × 3648, center (1824, 1824), area none |
+| 3015 | DSC-RX100M6 | FocusLocation `[5472, 3080, 2736, 936]`; FocusMode 4 | frame 5472 × 3080, center (2736, 936), area none |
 | 3221 | DSC-R1 | no focus tag read | none: no focus tag at all |
-| 3251 | ILCE-7RM3 | FocusLocation `[7952, 5304, 3976, 1911]`; FocusMode 2 | frame 7952 × 5304, centre (3976, 1911), area none |
-| 3255 | ILCE-7RM3 | FocusLocation `[7952, 5304, 3976, 1911]`; FocusMode 2 | frame 7952 × 5304, centre (3976, 1911), area none |
+| 3251 | ILCE-7RM3 | FocusLocation `[7952, 5304, 3976, 1911]`; FocusMode 2 | frame 7952 × 5304, center (3976, 1911), area none |
+| 3255 | ILCE-7RM3 | FocusLocation `[7952, 5304, 3976, 1911]`; FocusMode 2 | frame 7952 × 5304, center (3976, 1911), area none |
 | 3751 | SLT-A99V | FocusMode 3 | none: no FocusLocation; a mask of A-mount points, no position |
 | 4051 | Hasselblad Lunar | no focus tag read | none: no FocusLocation; focus data only in an enciphered block |
-| 4466 | ILCE-1 | FocusLocation `[8640, 5760, 4320, 2880]`; FocusFrameSize `[1026, 912, 0]`; FocusMode 2 | frame 8640 × 5760, centre (4320, 2880), area 1026 × 912 |
-| 5418 | ILCE-7SM3 | FocusLocation `[4240, 2832, 2120, 1180]`; FocusFrameSize `[92, 94, 257]`; FocusMode 3 | frame 4240 × 2832, centre (2120, 1180), area 92 × 94 |
+| 4466 | ILCE-1 | FocusLocation `[8640, 5760, 4320, 2880]`; FocusFrameSize `[1026, 912, 0]`; FocusMode 2 | frame 8640 × 5760, center (4320, 2880), area 1026 × 912 |
+| 5418 | ILCE-7SM3 | FocusLocation `[4240, 2832, 2120, 1180]`; FocusFrameSize `[92, 94, 257]`; FocusMode 3 | frame 4240 × 2832, center (2120, 1180), area 92 × 94 |
 | 5811 | DSC-RX100 | no focus tag read | none: no focus tag at all |
 | 5858 | DSLR-A900 | no focus tag read | none: no FocusLocation; a point number in CameraInfo only |
-| 6736 | ILCE-6700 | FocusLocation `[6192, 4128, 3096, 2064]`; FocusFrameSize `[135, 138, 257]`; FocusMode 2 | frame 6192 × 4128, centre (3096, 2064), area 135 × 138 |
-| 6929 | ILCE-7M4 | FocusLocation `[7008, 4672, 3832, 2102]`; FocusFrameSize `[350, 351, 257]`; FocusMode 3 | frame 7008 × 4672, centre (3832, 2102), area 350 × 351 |
-| 6930 | ILCE-7M4 | FocusLocation `[7008, 4672, 3482, 2306]`; FocusFrameSize `[350, 351, 257]`; FocusMode 3 | frame 7008 × 4672, centre (3482, 2306), area 350 × 351 |
-| 6931 | ILCE-7M4 | FocusLocation `[7008, 4672, 3591, 2306]`; FocusFrameSize `[350, 351, 257]`; FocusMode 3 | frame 7008 × 4672, centre (3591, 2306), area 350 × 351 |
-| 6933 | ILCE-7M4 | FocusLocation `[4608, 3072, 2304, 1529]`; FocusFrameSize `[230, 231, 257]`; FocusMode 3 | frame 4608 × 3072, centre (2304, 1529), area 230 × 231 |
-| 6936 | ILCE-7M4 | FocusLocation `[4608, 3072, 2275, 1516]`; FocusFrameSize `[230, 231, 257]`; FocusMode 3 | frame 4608 × 3072, centre (2275, 1516), area 230 × 231 |
+| 6736 | ILCE-6700 | FocusLocation `[6192, 4128, 3096, 2064]`; FocusFrameSize `[135, 138, 257]`; FocusMode 2 | frame 6192 × 4128, center (3096, 2064), area 135 × 138 |
+| 6929 | ILCE-7M4 | FocusLocation `[7008, 4672, 3832, 2102]`; FocusFrameSize `[350, 351, 257]`; FocusMode 3 | frame 7008 × 4672, center (3832, 2102), area 350 × 351 |
+| 6930 | ILCE-7M4 | FocusLocation `[7008, 4672, 3482, 2306]`; FocusFrameSize `[350, 351, 257]`; FocusMode 3 | frame 7008 × 4672, center (3482, 2306), area 350 × 351 |
+| 6931 | ILCE-7M4 | FocusLocation `[7008, 4672, 3591, 2306]`; FocusFrameSize `[350, 351, 257]`; FocusMode 3 | frame 7008 × 4672, center (3591, 2306), area 350 × 351 |
+| 6933 | ILCE-7M4 | FocusLocation `[4608, 3072, 2304, 1529]`; FocusFrameSize `[230, 231, 257]`; FocusMode 3 | frame 4608 × 3072, center (2304, 1529), area 230 × 231 |
+| 6936 | ILCE-7M4 | FocusLocation `[4608, 3072, 2275, 1516]`; FocusFrameSize `[230, 231, 257]`; FocusMode 3 | frame 4608 × 3072, center (2275, 1516), area 230 × 231 |
 | 7361 | ILCE-9M3 | FocusLocation `[6000, 4000, 3000, 2000]`; FocusFrameSize `[0, 0, 0]`; FocusMode 0 | none: manual focus |
 | 7364 | ILCE-9M3 | FocusLocation `[3008, 2000, 1504, 1000]`; FocusFrameSize `[0, 0, 0]`; FocusMode 0 | none: manual focus |
-| 7835 | ILCE-1M2 | FocusLocation `[5616, 3744, 2808, 1872]`; FocusFrameSize `[1386, 998, 0]`; FocusMode 3 | frame 5616 × 3744, centre (2808, 1872), area 1386 × 998 |
-| 8846 | ILCE-7M5 | FocusLocation `[7008, 4672, 3504, 2336]`; FocusFrameSize `[745, 594, 257]`; FocusMode 2 | frame 7008 × 4672, centre (3504, 2336), area 745 × 594 |
-| 8847 | ILCE-7M5 | FocusLocation `[7008, 4672, 3504, 2336]`; FocusFrameSize `[745, 594, 257]`; FocusMode 2 | frame 7008 × 4672, centre (3504, 2336), area 745 × 594 |
-| 8848 | ILCE-7M5 | FocusLocation `[4608, 3072, 2304, 1536]`; FocusFrameSize `[490, 390, 257]`; FocusMode 2 | frame 4608 × 3072, centre (2304, 1536), area 490 × 390 |
-| 8849 | ILCE-7M5 | FocusLocation `[4608, 3072, 2304, 1536]`; FocusFrameSize `[490, 390, 257]`; FocusMode 2 | frame 4608 × 3072, centre (2304, 1536), area 490 × 390 |
-| 8850 | ILCE-7M5 | FocusLocation `[4608, 3072, 2304, 1536]`; FocusFrameSize `[490, 390, 257]`; FocusMode 2 | frame 4608 × 3072, centre (2304, 1536), area 490 × 390 |
+| 7835 | ILCE-1M2 | FocusLocation `[5616, 3744, 2808, 1872]`; FocusFrameSize `[1386, 998, 0]`; FocusMode 3 | frame 5616 × 3744, center (2808, 1872), area 1386 × 998 |
+| 8846 | ILCE-7M5 | FocusLocation `[7008, 4672, 3504, 2336]`; FocusFrameSize `[745, 594, 257]`; FocusMode 2 | frame 7008 × 4672, center (3504, 2336), area 745 × 594 |
+| 8847 | ILCE-7M5 | FocusLocation `[7008, 4672, 3504, 2336]`; FocusFrameSize `[745, 594, 257]`; FocusMode 2 | frame 7008 × 4672, center (3504, 2336), area 745 × 594 |
+| 8848 | ILCE-7M5 | FocusLocation `[4608, 3072, 2304, 1536]`; FocusFrameSize `[490, 390, 257]`; FocusMode 2 | frame 4608 × 3072, center (2304, 1536), area 490 × 390 |
+| 8849 | ILCE-7M5 | FocusLocation `[4608, 3072, 2304, 1536]`; FocusFrameSize `[490, 390, 257]`; FocusMode 2 | frame 4608 × 3072, center (2304, 1536), area 490 × 390 |
+| 8850 | ILCE-7M5 | FocusLocation `[4608, 3072, 2304, 1536]`; FocusFrameSize `[490, 390, 257]`; FocusMode 2 | frame 4608 × 3072, center (2304, 1536), area 490 × 390 |
 
 "No focus tag read" means that the file has none of these four tags; the
 last column says what such a file records instead, as
@@ -182,15 +182,15 @@ Which files record each setting; the values are in
 | Flash | Exif 0x9209 | all 36 and the five JPEGs; 16 (not fired) on every one | none |
 | White balance | Exif 0xA403 and 0x9208 | all 36 and the five JPEGs | none |
 | White balance | MakerNote 0x0115 | 33 and four JPEGs | 1351, 2346, 3221 and the A100 JPEG |
-| Colour temperature | MakerNote 0xB021 | 34 and the five JPEGs; 5500 on 7361 and 7364, 0 on the others | 1351, 3221 |
+| Color temperature | MakerNote 0xB021 | 34 and the five JPEGs; 5500 on 7361 and 7364, 0 on the others | 1351, 3221 |
 | Fine-tuning | MakerNote 0x2014 | 28 and four JPEGs; `0, 0` on every one | 964, 1351, 1457, 2271, 2346, 2521, 3221, 5858 and the A100 JPEG |
 | Fluorescent lamp | MakerNote 0x0112 | 33 and four JPEGs; 0 on every one | 1351, 2346, 3221 and the A100 JPEG |
 | Electronic front curtain setting | MakerNote 0x201A | 1310, 1311, 1541, 1542, 1582, 3012, 3015, 3251, 3255, 3751, 4466, 5418, 6736, 6929 to 6931, 6933, 6936, 7361, 7364, 7835, 8846 to 8850 and four JPEGs | 964, 1351, 1457, 2271, 2346, 2521, 3221, 4051, 5811, 5858 and the A100 JPEG |
 | Shutter used | none plain | none | all |
 | APS-C mode | none plain | none | all; the APS-C files are 1582, 6933, 6936, 7835 and 8848 to 8850 |
 | Raw image size | MakerNote 0x202E | 3012, 3015, 3251, 3255, 4466, 5418, 6736, 6929 to 6931, 6933, 6936, 7361, 7364, 7835, 8846 to 8850 and the ILCE-7M3 JPEG | the 16 others and four JPEGs |
-| Colour space | Exif 0xA001 | all 36 and the five JPEGs; 65535 on 2346, 3221, 5858 | none |
-| Colour space | InteropIndex | 35 and the five JPEGs; `R03` on 3221 and 5858, empty on 2346 | 1351 |
+| Color space | Exif 0xA001 | all 36 and the five JPEGs; 65535 on 2346, 3221, 5858 | none |
+| Color space | InteropIndex | 35 and the five JPEGs; `R03` on 3221 and 5858, empty on 2346 | 1351 |
 | Focal length in 35 mm terms | Exif 0xA405 | 34 and the five JPEGs; 0 on 1582 | 1351, 3221 |
 | Software | IFD0 0x0131 | 34 and the five JPEGs | 1351, 3221 |
 
@@ -202,7 +202,7 @@ program; two more could not be read over the network. What they show is in
 
 On 2026-10-25 I shot 32 frames of one scene with the same ILCE-7M2 for
 these values, one or more per white balance setting, fine-tuning,
-electronic front curtain setting and colour space, 30 of them as an
+electronic front curtain setting and color space, 30 of them as an
 ARW file and a JPEG, and six more later that day, each an ARW file and
 a JPEG, under auto and two custom white balances, one of them measured
 anew. They stay private; what the notes give of them is each setting
@@ -213,7 +213,7 @@ the files above, read again with it on the same day. As for the
 no note of the setting was kept while shooting, so each frame was
 matched to its setting by the order of the shots and by its tags, and
 the direction of each fine-tuning value was read from the average
-colour of the frame's JPEG against the frame shot without a shift.
+color of the frame's JPEG against the frame shot without a shift.
 Sony's Imaging Edge Desktop, run afterwards on the fine-tuning frames
 as a reader to compare with, names the setting each holds, and agrees.
 ExifTool 13.55, run on these frames as a reader to compare with,
@@ -231,8 +231,8 @@ WBShiftAB_GM.
   **[P]**
 - `https://raw.pixls.us/data/filelist.sha256` lists `<sha256> *<path>` for
   every file on the site (2016 lines). [3] **[P]**
-- The JSON catalogue, `https://raw.pixls.us/json/getrepository.php?set=all`,
-  gives per file the make, model, mode label, remark, licence, date, the
+- The JSON catalog, `https://raw.pixls.us/json/getrepository.php?set=all`,
+  gives per file the make, model, mode label, remark, license, date, the
   download link with its SHA-256 and size, and a link to a metadata dump;
   `set=noncc0` lists the non-CC0 files, and
   `https://raw.pixls.us/json/getrepository-missing.php?set=missing` the
@@ -240,7 +240,7 @@ WBShiftAB_GM.
 - The whole archive can be cloned with Git LFS
   (`https://raw.pixls.us/data.lfs.git`). [1] **[P]**
 
-Three traps in the catalogue:
+Three traps in the catalog:
 
 - **The column that looks like a size in MB is megapixels.** It equals the
   raw IFD's width times height (42.56 for the 8000×5320 of file 1310). The
@@ -252,7 +252,7 @@ Three traps in the catalogue:
   such as BitsPerSample: "8bit" is the A700's BitsPerSample (file 2521),
   and "(4:3)" marks lossless files whose tile-padded raw IFD is close to
   4:3 although the image is 3:2 (files 4466, 6929, 6736, 8848). **[F]**
-  Some aspect-ratio labels are wrong, and the ILCE-7 file is labelled
+  Some aspect-ratio labels are wrong, and the ILCE-7 file is labeled
   "14bit compressed" under a file name that says "uncompressed". [1]
   **[P]**
 - **The per-file metadata dumps are exiv2 output, not ExifTool's**, at
@@ -267,7 +267,7 @@ Three traps in the catalogue:
 
 ### 3.2 Contents
 
-From the catalogue and directory listings in October 2026 [1][2] **[P]**:
+From the catalog and directory listings in October 2026 [1][2] **[P]**:
 
 - **209 Sony-family files from 109 bodies**, about 7.8 GiB, of which
   7.6 GiB is CC0: 100 body folders under `data/Sony/`, 8 under
@@ -276,7 +276,7 @@ From the catalogue and directory listings in October 2026 [1][2] **[P]**:
 - **Formats:** 1 SRF (DSC-F828), 1 SR2 (DSC-R1), 1 ARQ (ILCE-7RM3) and
   206 ARW, the Hasselblad Lunar included. The extension is `.ARW` on most
   files and `.arw` on nine.
-- The catalogue's Sony listing also carries 24 Hasselblad 3FR, FFF and DNG
+- The catalog's Sony listing also carries 24 Hasselblad 3FR, FFF and DNG
   files. They are not Sony formats, but their metadata dumps were read to
   check the reader's rule for a Hasselblad Make: none of the 11 3FR and 11
   FFF files carries DNGVersion or DNGPrivateData, and the two DNG files,
@@ -315,13 +315,13 @@ From the catalogue and directory listings in October 2026 [1][2] **[P]**:
   NEX-VG30, NEX-VG900, ILCE-6100A, ILX-LR1, ZV-1A and ILME-FX3A. The
   Sony-based Hasselblad **Stellar** and **HV** have no sample either.
 - The missing list also names SLT-A55V and SLT-A99V, but the files
-  catalogued as SLT-A55 and SLT-A99 carry the Model strings `SLT-A55V` and
-  `SLT-A99V` (files 964 and 3751), so those two are naming artefacts.
+  cataloged as SLT-A55 and SLT-A99 carry the Model strings `SLT-A55V` and
+  `SLT-A99V` (files 964 and 3751), so those two are naming artifacts.
   **[F]**
 
 ## 4. Recommended minimal body set
 
-Every file below is CC0 in the catalogue and was checked (see
+Every file below is CC0 in the catalog and was checked (see
 [Files checked](#files-checked)).
 "FileFormat" is the MakerNote tag 0xB000 as read from the file; ExifTool
 names `3 3 1 0` ARW 2.3.1, and so on. "Why" says what the file exercises.
@@ -354,7 +354,7 @@ JPEG (4466), a YCbCr raw IFD that a preview finder must skip (7364) and an
 ARW 6.0 file. **[F]**
 
 Not on raw.pixls.us: an ILCE-7RM6 file (in dnglab's RawDB; check the
-file's licence first) for the tiled ARW 6.0 layout, and a DSC-V3 SRF.
+file's license first) for the tiled ARW 6.0 layout, and a DSC-V3 SRF.
 
 ## 5. Building fixtures
 
@@ -363,7 +363,7 @@ file's licence first) for the tiled ARW 6.0 layout, and a DSC-V3 SRF.
 Write the fixture generator as a test helper or small script in the
 repository, not a binary blob nobody can regenerate. Where a binary fixture
 is committed, a text file next to it records how it was made, the source
-sample's id, URL, SHA-256 and licence as checked (for a derived fixture),
+sample's id, URL, SHA-256 and license as checked (for a derived fixture),
 the date, and what it exercises, as on the
 [NEF page](../nef/test-data.md). The ARW-specific pieces:
 
@@ -490,14 +490,14 @@ bytes. **[I]** unless marked.
 | Question | Sample files | State |
 |---|---|---|
 | Where the largest preview lives, per generation | All 36 | Settled: IFD0 (about 1616×1080) before ARW 4.0, a full-size JPEG in IFD2 from ARW 4.0 on (16 files) **[F]** |
-| Whether the A7 V's Compressed and Compressed (HQ) differ in codec, and whether the catalogue swapped their labels | 8846 to 8850 | Settled: both Compression 32766; Quality 4 or 5 tells them apart; RAWFileType is 3 on both; labels not swapped, HQ files are smaller **[F]** |
+| Whether the A7 V's Compressed and Compressed (HQ) differ in codec, and whether the catalog swapped their labels | 8846 to 8850 | Settled: both Compression 32766; Quality 4 or 5 tells them apart; RAWFileType is 3 on both; labels not swapped, HQ files are smaller **[F]** |
 | Whether ARW 1.0 is compressed, and the A100's byte order | 2346 | Settled: an ARW1 stream in a little-endian file **[F]** |
 | How 12-bit uncompressed data is scaled | 1311 | Settled: stored at 14-bit scale **[F]** |
 | The ARQ layout | 3255 | Settled: four samples per pixel, Photometric 32892, R-G-G2-B **[F]** |
 | Whether any ARW declares TIFF/EP or DNG conformance | All 36 | Settled: none does **[F]** |
 | Where the SRF2 to SRF6 IFDs are and which key decrypts them | 1351 | Open: the IFD at SRF1's next pointer did not decrypt with any key tried |
-| The DSC-F828's colour filter (RGBE) | 1351 | Open: decode the decrypted image and compare the four channel means |
-| The ARW 6.0 header fields beyond width and half-height; the four-tile layout | 8846 to 8850; ILCE-7RM6 files from dnglab's RawDB after a licence check | Open: the A7 V full-frame files have one tile, so the four-tile layout is probably the A7R VI's |
+| The DSC-F828's color filter (RGBE) | 1351 | Open: decode the decrypted image and compare the four channel means |
+| The ARW 6.0 header fields beyond width and half-height; the four-tile layout | 8846 to 8850; ILCE-7RM6 files from dnglab's RawDB after a license check | Open: the A7 V full-frame files have one tile, so the four-tile layout is probably the A7R VI's |
 | CameraOrientation in deciphered 0x9400 | 3751 | Settled for the 9400a layout: byte 0x28 says 8, as IFD0 does **[F]**; the 9400b and 9400c offsets are unchecked on a rotated file |
 | The 0x9050 layout on ILCE-9M3, ILCE-6700 and ILCE-1M2 | 7361, 7364, 6736, 7835 and the other files of those bodies | Open: the deciphered values at the known offsets are not shutter counts |
 | Which other A-mount DSLRs write ARW1 streams under Compression 32767 | DSLR-A230, A290, A350, A380, A390 (CC0); A300 and A330 are not CC0 | Open: the A200 does (2271) **[F]** |
@@ -516,13 +516,13 @@ the file id, its hash and what was measured.
 
 ## 7. Open questions about test data
 
-- **Whether the catalogue's licence field can be relied on.** It is the
-  only per-file licence statement; check whether it can change after
+- **Whether the catalog's license field can be relied on.** It is the
+  only per-file license statement; check whether it can change after
   upload by comparing `set=noncc0` at intervals.
 - **Whether raw.pixls.us ids and download URLs are stable.** CI pins by
   hash, but a moved file would turn into a skipped test; compare the
-  catalogue's URLs with `filelist.sha256` paths at intervals.
-- **The licence of dnglab's ILCE-7RM6 and DSC-RX10M5 files**, which only
+  catalog's URLs with `filelist.sha256` paths at intervals.
+- **The license of dnglab's ILCE-7RM6 and DSC-RX10M5 files**, which only
   the RawDB application shows; they are the only public source for the
   tiled ARW 6.0 layout.
 - **Whether file 8845** (A7 V, full frame, lossless) has the same
@@ -533,8 +533,8 @@ the file id, its hash and what was measured.
 
 These 36 files were downloaded from raw.pixls.us in October 2026 and used
 for the sample checks behind the [F] tags in the ARW pages. All are CC0 in
-the catalogue. Each file's SHA-256 matched the catalogue before any
-parsing, and its size matched the catalogue's MiB figure. All are
+the catalog. Each file's SHA-256 matched the catalog before any
+parsing, and its size matched the catalog's MiB figure. All are
 little-endian TIFF with IFD0 at offset 8. **[F]**
 
 The checks used throwaway scripts written from the prose of these pages: a
@@ -550,13 +550,13 @@ and the camera settings
 ([section 2.3](#23-the-camera-settings-of-each-file)). The ARQ (3255)
 was deleted after measurement and downloaded again for those checks.
 
-"Mode" is the catalogue's label, with its remark where that adds the crop
+"Mode" is the catalog's label, with its remark where that adds the crop
 or size; "Bytes" is the file size.
 
 | Id | Body | Mode | Bytes | Used to check |
 |---|---|---|---|---|
 | 964 | SLT-A55 | 12-bit compressed | 16,973,824 | Model string `SLT-A55V`; MakerNote values four bytes after the IFD; 51 bytes after the preview's EOI |
-| 1310 | ILCE-7RM2 | 12-bit compressed | 43,286,528 | 12-bit cRAW; RAWFileType 0; cipher shutter count; catalogue megapixel column (42.56) |
+| 1310 | ILCE-7RM2 | 12-bit compressed | 43,286,528 | 12-bit cRAW; RAWFileType 0; cipher shutter count; catalog megapixel column (42.56) |
 | 1311 | ILCE-7RM2 | 12-bit uncompressed | 85,852,160 | 12-bit data at 14-bit scale; SonyRawFileType contradicts ExifTool's meaning; no plain 0x7310 |
 | 1351 | DSC-F828 | SRF, 4:3 | 17,393,344 | SRF layout; key chain and DataKey; decrypted image is 14-bit; IFD1 640×480 JPEG |
 | 1457 | NEX-5 | 12-bit compressed | 14,811,136 | ARW 2.2; unusual 0x7010 knots; padding after the preview's EOI |
@@ -669,7 +669,7 @@ The full hashes and download URLs:
 
 ## Sources
 
-[1] raw.pixls.us home page, upload terms and JSON catalogue —
+[1] raw.pixls.us home page, upload terms and JSON catalog —
     https://raw.pixls.us/ ,
     https://raw.pixls.us/json/getrepository.php?set=all ,
     https://raw.pixls.us/json/getrepository.php?set=noncc0 ,

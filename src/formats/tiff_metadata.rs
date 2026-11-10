@@ -7,7 +7,7 @@
 //! the camera's make and model, the software that wrote the file and the
 //! orientation in IFD0, the capture time, the body's serial number, the
 //! exposure, the lens and some of the camera's settings in the Exif IFD,
-//! with the Interoperability IFD for the colour space, where the picture
+//! with the Interoperability IFD for the color space, where the picture
 //! was taken in the GPS IFD, and the sizes in the IFD of the raw data. So
 //! [`read`] reads them once, over the tree, for every format, and a format
 //! adds only what its own structures record and the standard tags lack
@@ -66,7 +66,7 @@
 //!   denominator, minutes and seconds below 60, and no more than 90° of
 //!   latitude or 180° of longitude. Without one there is no location, and
 //!   no other GPS value is read. A zero is a real value of every GPS
-//!   fraction: 0 seconds, 0 metres and 0° are kept. The other parts each
+//!   fraction: 0 seconds, 0 meters and 0° are kept. The other parts each
 //!   need both their tags, of the type and count Exif gives, and a part
 //!   whose tags are missing or damaged is `None` alone: the altitude,
 //!   GPSAltitude, one RATIONAL, above its reference for a GPSAltitudeRef,
@@ -137,24 +137,24 @@
 //!     shade, and `None` for a light no mode stands for, such as the
 //!     standard light D65, for "unknown" and for "other"
 //!     ([`white_balance_mode`]);
-//!   - the colour space is sRGB for a ColorSpace of 1, and Adobe RGB for
+//!   - the color space is sRGB for a ColorSpace of 1, and Adobe RGB for
 //!     65535, "uncalibrated", when the Interoperability IFD's
 //!     InteropIndex, read by the text rule, is `R03`, a DCF option file;
 //!     any other ColorSpace, an "uncalibrated" one beside another index or
 //!     none, and no ColorSpace give `None` ([`color_space`]).
 //!
 //!   The other settings are recorded only in a maker's MakerNote, so they
-//!   are `None` here: the white balance's colour temperature and
+//!   are `None` here: the white balance's color temperature and
 //!   fine-tuning, the shutter, the electronic front curtain setting, the
 //!   image area and the raw image size. A format's MakerNote reader fills
 //!   them where its MakerNote records them, and puts the MakerNote's white
 //!   balance setting, finer than Exif's, in place of the mode read here
 //!   when the MakerNote names one, as Nikon's and Sony's readers both do.
-//!   So that a MakerNote's colour space never overrules Exif's, [`read`]
+//!   So that a MakerNote's color space never overrules Exif's, [`read`]
 //!   also says whether the Exif IFD keeps a ColorSpace entry, of any known
-//!   type and any count, whether or not it gives a colour space
+//!   type and any count, whether or not it gives a color space
 //!   ([`Standard`]): only when it keeps none may a MakerNote give the
-//!   colour space, as Nikon's raw files, which record none in Exif, need.
+//!   color space, as Nikon's raw files, which record none in Exif, need.
 //!   An entry the IFD's reader skips as damaged, of an unknown type, of a
 //!   length past 32 bits or with its value outside its block, the file or
 //!   a JPEG's Exif segment, counts as none, so the MakerNote may stand in,
@@ -250,17 +250,17 @@ const ISO_65535_OR_MORE: u32 = 65535;
 /// What [`read`] reads from the standard tags: the metadata, and, for a
 /// format whose own structures record the same values, whether the
 /// standard tags recorded two of them: the image size as a crop of the
-/// raw IFD's, and the colour space.
+/// raw IFD's, and the color space.
 ///
 /// The standard tags come first (ADR011). A format's own crop, such as
 /// Nikon's crop area, may replace the raw size the image size otherwise
 /// falls back on, but never a default crop; comparing the image size with
 /// the raw size cannot tell the two apart, since a default crop may cover
-/// the whole raw. A format's own colour space, such as the one in Nikon's
+/// the whole raw. A format's own color space, such as the one in Nikon's
 /// MakerNote, may stand in only where the Exif IFD holds no ColorSpace: a
 /// ColorSpace that gives none, such as a program's "uncalibrated", is
 /// still Exif's word, and a MakerNote the program left behind may describe
-/// a picture that is no longer there. The colour space `None` cannot tell
+/// a picture that is no longer there. The color space `None` cannot tell
 /// the two apart.
 #[derive(Debug, Default)]
 pub(crate) struct Standard {
@@ -270,7 +270,7 @@ pub(crate) struct Standard {
     /// it is the raw size, or there is no image size.
     pub(crate) from_default_crop: bool,
     /// Whether the Exif IFD keeps a ColorSpace entry, of any known type and
-    /// any count, whether or not it gives a colour space; `false` when
+    /// any count, whether or not it gives a color space; `false` when
     /// there is no Exif IFD, and when the IFD's reader skipped the entry
     /// as damaged, of an unknown type, of a length past 32 bits or with its
     /// value outside its block, the file or a JPEG's Exif segment
@@ -663,7 +663,7 @@ fn exposure<R: Read + Seek>(src: &mut Source<R>, exif: &Ifd) -> Result<Exposure>
     })
 }
 
-/// The focal length in 35 mm terms, in whole millimetres, from the Exif
+/// The focal length in 35 mm terms, in whole millimeters, from the Exif
 /// IFD `exif`: its FocalLengthIn35mmFilm, which must be exactly one SHORT,
 /// the type and count the standard gives it, as [`one_short`] reads it.
 /// `None` when the value is zero, which Exif writes for a focal length the
@@ -886,7 +886,7 @@ fn lens_specification<R: Read + Seek>(
 /// The ColorSpace Exif writes for sRGB.
 const SRGB: u16 = 1;
 
-/// The ColorSpace Exif writes for "uncalibrated": any colour space but
+/// The ColorSpace Exif writes for "uncalibrated": any color space but
 /// sRGB, which the Interoperability IFD's InteropIndex may then name.
 const UNCALIBRATED: u16 = 0xFFFF;
 
@@ -901,8 +901,8 @@ const DCF_OPTION_FILE: &str = "R03";
 
 /// How the camera was set for the picture, as the Exif IFD `exif` records
 /// it, with the Interoperability IFD `interop`, when the tree has one, for
-/// the colour space: the exposure program, the metering mode, the flash,
-/// the white balance mode and the colour space, as the
+/// the color space: the exposure program, the metering mode, the flash,
+/// the white balance mode and the color space, as the
 /// [module documentation](self) gives their rules.
 ///
 /// The other settings, which only a maker's MakerNote records, are `None`,
@@ -920,7 +920,7 @@ fn camera_settings<R: Read + Seek>(
     Ok(CameraSettings {
         white_balance: WhiteBalance {
             mode: white_balance_mode(src, exif)?,
-            // Only a maker's MakerNote records the colour temperature and
+            // Only a maker's MakerNote records the color temperature and
             // the fine-tuning: Nikon's and Sony's readers fill them.
             color_temperature: None,
             fine_tune: None,
@@ -960,7 +960,7 @@ fn exposure_program(code: u16) -> Option<ExposureProgram> {
 }
 
 /// The metering mode an Exif MeteringMode `code` names: 1 average, 2
-/// centre-weighted average, 3 spot, 4 multi-spot, 5 multi-segment (Exif's
+/// center-weighted average, 3 spot, 4 multi-spot, 5 multi-segment (Exif's
 /// "pattern"), 6 partial and 255 other. `None` for 0, "unknown", and for
 /// every code Exif does not define.
 fn metering_mode(code: u16) -> Option<MeteringMode> {
@@ -1044,7 +1044,7 @@ fn white_balance_mode<R: Read + Seek>(
 /// [`Flash`](WhiteBalanceMode::Flash).
 ///
 /// `None` for every other code: 0, "unknown"; 17 to 23, the standard
-/// lights A to D50, and 25 to 34, light sources and LEDs by colour
+/// lights A to D50, and 25 to 34, light sources and LEDs by color
 /// temperature, which name a light no mode stands for; 255, "other"; and
 /// every code Exif does not define.
 fn white_balance_of_light(code: u16) -> Option<WhiteBalanceMode> {
@@ -1059,7 +1059,7 @@ fn white_balance_of_light(code: u16) -> Option<WhiteBalanceMode> {
     })
 }
 
-/// The colour space the Exif IFD `exif` records in its ColorSpace, exactly
+/// The color space the Exif IFD `exif` records in its ColorSpace, exactly
 /// one SHORT ([`one_short`]): [`SRGB`] is sRGB, and [`UNCALIBRATED`] is
 /// Adobe RGB when the Interoperability IFD `interop` holds the
 /// InteropIndex [`DCF_OPTION_FILE`], read as every text is ([`text`]).
@@ -1233,7 +1233,7 @@ mod tests {
     };
     use std::io::Cursor;
 
-    /// When the picture was stored or digitised (DateTimeDigitized), an
+    /// When the picture was stored or digitized (DateTimeDigitized), an
     /// Exif tag the reader must never take the capture time from.
     const DATE_TIME_DIGITIZED: u16 = 0x9004;
 
@@ -1314,7 +1314,7 @@ mod tests {
 
     /// The camera settings of the Z 9 file's Exif IFD, each with its tag,
     /// each one SHORT: those of the public Z 9 sample 5147, the program 2,
-    /// centre-weighted metering, a flash that did not fire and recorded no
+    /// center-weighted metering, a flash that did not fire and recorded no
     /// mode, and auto white balance, with the LightSource 0, "unknown",
     /// beside it. Like every Nikon raw file checked, the sample records no
     /// ColorSpace.
@@ -2379,7 +2379,7 @@ mod tests {
             (8, Orientation::Rotate270),
             (6, Orientation::Rotate90),
             (1, Orientation::NoTransforms),
-            // No EXIF orientation: none.
+            // No Exif orientation: none.
             (9, Orientation::NoTransforms),
         ] {
             let (mut src, tree) = testing::file(|builder, ifd| {
@@ -3605,7 +3605,7 @@ mod tests {
         Undefined(&'static [u8]),
     }
 
-    /// The colour space read from [`settings`]'s file with the ColorSpace
+    /// The color space read from [`settings`]'s file with the ColorSpace
     /// `code`, one SHORT, when `Some`, and the Interoperability IFD
     /// `index` says, which holds the InteroperabilityVersion too.
     fn color_space(code: Option<u16>, index: Index) -> Option<ColorSpace> {
@@ -3746,9 +3746,9 @@ mod tests {
             });
             read(&mut src, &tree).unwrap().exif_records_color_space
         };
-        // sRGB, "uncalibrated" with no index, which gives no colour space,
+        // sRGB, "uncalibrated" with no index, which gives no color space,
         // a code Exif does not define, a LONG and two SHORTs, which are
-        // not read: each is the Exif IFD's word on the colour space.
+        // not read: each is the Exif IFD's word on the color space.
         assert!(records(|builder, exif| {
             builder.short(exif, COLOR_SPACE, &[1]);
         }));
@@ -3806,7 +3806,7 @@ mod tests {
 
     /// The settings of [`full_settings_except`]'s file, each one SHORT:
     /// aperture priority, multi-segment metering, a flash that fired in
-    /// fill mode, a manual white balance for shade, and a colour space
+    /// fill mode, a manual white balance for shade, and a color space
     /// that is "uncalibrated", which the InteropIndex `R03` beside it makes
     /// Adobe RGB.
     const FULL_SETTINGS: [(u16, u16); 6] = [
@@ -3994,11 +3994,11 @@ mod tests {
         height: 4000,
     };
 
-    /// The PhotometricInterpretation of a colour filter array: raw data,
+    /// The PhotometricInterpretation of a color filter array: raw data,
     /// as the preview finder takes it.
     const CFA: u16 = 32803;
 
-    /// Gives `ifd` the tags of raw data: samples of a colour filter array,
+    /// Gives `ifd` the tags of raw data: samples of a color filter array,
     /// and the ImageWidth `width` and ImageLength `height`, as LONGs.
     fn raw_tags(builder: &mut TiffBuilder, ifd: IfdId, width: u32, height: u32) {
         builder
@@ -4801,7 +4801,7 @@ mod tests {
         assert_eq!(altitude(Some(Gps::Byte(&[1])), meters), below);
         assert_eq!(altitude(Some(Gps::Byte(&[2])), meters), above);
         assert_eq!(altitude(Some(Gps::Byte(&[3])), meters), below);
-        // Zero metres is a real altitude.
+        // Zero meters is a real altitude.
         assert_eq!(
             altitude(Some(Gps::Byte(&[0])), Some(Gps::Rationals(&[(0, 1)]))),
             Altitude::above(fraction(0, 1))

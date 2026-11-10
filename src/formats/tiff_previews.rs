@@ -25,7 +25,7 @@
 //!   names the rule the file follows, since neither ever holds an image;
 //!   then the format's own candidates, in the order it gives them.
 //! - An IFD that describes raw data is skipped, whatever it points at: one
-//!   whose samples are a colour filter array (CFA) or Sony's linear raw
+//!   whose samples are a color filter array (CFA) or Sony's linear raw
 //!   (ARQ), one whose samples are wider than 8 bits, one stored in tiles,
 //!   and one that says it is the full-resolution image. No camera writes a
 //!   preview so. The metadata reader takes the raw size by the same test
@@ -92,11 +92,11 @@ const OLD_STYLE_JPEG: u32 = 6;
 /// The Compression value of JPEG as TIFF Technical Note 2 defines it.
 const JPEG: u32 = 7;
 
-/// The PhotometricInterpretation value of a colour filter array: raw
-/// sensor data, one colour per pixel (CFA, from TIFF/EP).
+/// The PhotometricInterpretation value of a color filter array: raw
+/// sensor data, one color per pixel (CFA, from TIFF/EP).
 const CFA: u32 = 32803;
 
-/// The PhotometricInterpretation value of linear raw data, every colour at
+/// The PhotometricInterpretation value of linear raw data, every color at
 /// every pixel (LinearRaw, from the DNG specification), which Sony's
 /// pixel-shift ARQ files hold.
 const LINEAR_RAW: u32 = 32892;
@@ -246,7 +246,7 @@ pub(crate) fn check<R: Read + Seek>(
 }
 
 /// The orientation of every preview: IFD0's Orientation, or none when it
-/// is missing, cannot be read or is not one of the eight EXIF values.
+/// is missing, cannot be read or is not one of the eight Exif values.
 ///
 /// The metadata reader (`tiff_metadata`) gives the file's metadata this
 /// orientation too, so that the metadata and the previews never disagree.
@@ -874,7 +874,7 @@ mod tests {
 
     #[test]
     fn an_invalid_orientation_means_none() {
-        // 0 and 9 are no EXIF orientation; 0x1_0006 is none either, though
+        // 0 and 9 are no Exif orientation; 0x1_0006 is none either, though
         // its low 16 bits are 6.
         for value in [0, 9, 0x1_0006] {
             let previews = one_ifd(|builder, ifd| {

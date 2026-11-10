@@ -131,9 +131,9 @@ the first tag that contains the commit. [8][9][10][11] **[P]**
 | 2018-01-29 | 8d44074 | SR2 block inside DNG | Over-read: a value offset not checked against SR2SubIFDLength | 0.19.0 |
 | 2018-10-02 | 02e24bf | `parseSonySRF` | Over-read: a key field at a fixed offset read without a length check | 0.20-RC2 |
 | 2019-08-05 to 2019-11-12 | 1375b07, af705b8, 5d0707d, 3e2cc80, 74c2689, b1c2fcd, f9ff88f, 2099f64 | `parseSonySRF`, `sony_decrypt` | Over-reads; negative offsets from absolute positions minus the current position; a decrypt length smaller than the offset; entry counts of 0 or above 1000; a `sony_decrypt` over-read on 32-bit builds (OSS-Fuzz 13897; issues #231, #244, #246, #251) | 0.20-RC2 |
-| 2020-05-14 | 72e05585 | `sony_decrypt` | Signed integer overflow (undefined behaviour) in the keystream seeding, moved to unsigned 64-bit (OSS-Fuzz 7432 and 9465; the maintainer called it "Not a bug" and "GIGO" but changed it) | 0.20-RC2 |
+| 2020-05-14 | 72e05585 | `sony_decrypt` | Signed integer overflow (undefined behavior) in the keystream seeding, moved to unsigned 64-bit (OSS-Fuzz 7432 and 9465; the maintainer called it "Not a bug" and "GIGO" but changed it) | 0.20-RC2 |
 | 2020-06-29 | 35d7083 | SRF and SR2 white-balance lists | Static index tables replaced by bounds-checked ones | 0.20-RC2 |
-| 2023-07-31 | 17294b5 | `sony_arq_load_raw` | ARQ decoded without checking the metadata: the fix rejects a file that has a CFA pattern or fewer than three colours | 0.21.2 and 0.22.0 |
+| 2023-07-31 | 17294b5 | `sony_arq_load_raw` | ARQ decoded without checking the metadata: the fix rejects a file that has a CFA pattern or fewer than three colors | 0.21.2 and 0.22.0 |
 | 2023-12-14 | 62f0423, a6f212a | `libraw_tagtype_dataunit_bytes`, via `parseSonySR2` | Off-by-one indexing a 19-entry TIFF type-size table with a type from the file (OSS-Fuzz 65027, OSV-2023-1295) | 0.21.2 |
 | 2024-05-04 | c2e8a90 | `process_Sony_0x2010` | Over-read: fixed offsets (aspect ratio, metering and others) read past the block length (OSS-Fuzz 68535, issue #646) | 0.22.0 |
 | 2024-05-25 | 54c6af9 | `parseSonySR2` | Overrun of a 64-row white-balance table from tags 0x7480 to 0x7486 and 0x7820 to 0x782D | 0.22.0 |
@@ -352,7 +352,7 @@ A6. **SR2Private as a bounded sub-slice (when relevant).** Black level,
 A7. **Keystream length and arithmetic (when relevant).** Round the length
     down to a multiple of four and refuse a result of zero. Seed with
     `wrapping_mul` and `wrapping_add` on `u32` (in Rust an overflow panics
-    in debug builds; LibRaw's signed version was undefined behaviour until
+    in debug builds; LibRaw's signed version was undefined behavior until
     0.20.0); keep the generator state in a fixed 128-word ring indexed
     modulo 128, and generate one word per data word as it goes, never a
     keystream buffer sized from the file. The key is the constant bytes
@@ -432,7 +432,7 @@ A13. **M/S-size YCbCr precision, and ARQ sample counts (when relevant).**
      16, and check the subsampling in the frame against YCbCrSubSampling.
      These IFDs have no WhiteLevel tag and a CFAPattern of `255 255 255 255`
      **[F]**: handle the absence, and never use those pattern bytes as an
-     index into a colour table. Cap the tile count and the compressed and
+     index into a color table. Cap the tile count and the compressed and
      decoded size of each tile (LibRaw 4e265f1 caps them at 1 GB and 2 GB).
      ARQ is Photometric 32892 with four samples per pixel and B = 8·W·H:
      340,480,000 bytes for 8000×5320 in file 3255, with every value at most
@@ -450,10 +450,10 @@ A14. **ARW 6.0: detect and refuse before any decoding (when relevant).**
      files 8846 and 8847 use 32766. **[F]** Previews and metadata from ARW
      6.0 files are unaffected. This is the same posture as NEF HE (NEF item
      11); why ARW 6.0 is out of scope is in
-     [licences-and-references.md](licences-and-references.md). If the
+     [licenses-and-references.md](licenses-and-references.md). If the
      refusal is ever lifted, LibRaw's new decoder (section 2.1) is the only
      public implementation, so expect new bugs: bound the tile count and
-     rectangles, the per-region sizes and the quantiser shifts.
+     rectangles, the per-region sizes and the quantizer shifts.
 
 A15. **SRF key chain: never hard-code 200896 without bounds (when
      relevant).** In the DSC-F828 sample (file 1351) the MakerNote starts at
@@ -530,7 +530,7 @@ Report a security problem in raw-files privately, as described in
 6. **ARW1 and non-multiple-of-32 widths.** Raw width 4600 (A290, A350,
    A380, A390) is not a multiple of 32. Do those bodies write ARW1, cRAW or
    something else? If cRAW, item A9's width rule needs a defined partial-block
-   behaviour.
+   behavior.
 7. **12-bit fallback modes.** Silent shutter, bulb and long-exposure noise
    reduction drop some bodies to 12 bits. Do they change the strip size,
    the 0x7010 curve or the levels in a way the dispatch rule (A8) misses?

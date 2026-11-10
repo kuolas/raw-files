@@ -20,7 +20,7 @@ records only as an identifier are others. Such facts can only come from
 outside the file: from a table someone has built.
 
 Other projects publish tables of autofocus-point layouts, some under
-permissive licences that would allow copying with attribution.
+permissive licenses that would allow copying with attribution.
 [ADR013](adr013-clean-room-and-third-party-code.md) lets permissively
 licensed code enter by a recorded decision, forbids copying or
 translating anything from a copyleft source, and left where a per-body
@@ -34,7 +34,7 @@ evidence of its own to show stands on borrowed work, and the
 community would be right to ask what it checked and what it gave
 back. Cooperation between projects on such tables is possible, and
 worth having, once each has something to offer the other; it is not
-the same thing as copying under a licence.
+the same thing as copying under a license.
 
 The camera itself can supply the facts. One session with a body
 measures its layout: a frame per point in single-point mode, read in
@@ -84,14 +84,14 @@ project.
 - **A table stores the readings, rounded, not a grid fitted to them.**
   The readings are the evidence; a grid is a guess at what the maker's
   software draws.
-- **No table is taken from another project on its licence alone.** A
+- **No table is taken from another project on its license alone.** A
   table from another project enters only by a decision of its own,
   made in cooperation with that project: with its agreement, its
-  licence terms and attribution kept as
+  license terms and attribution kept as
   [ADR013](adr013-clean-room-and-third-party-code.md) asks, and a way
   for raw-files to check the values it did not measure. Until such a
   decision exists, no table is transcribed from another project,
-  whatever its licence, and none is derived from reading another
+  whatever its license, and none is derived from reading another
   program's code. A name, a numbering or an order that published
   documentation gives may be read as documentation and confirmed on
   the frames, as any fact under ADR013; the values come from the
@@ -106,7 +106,7 @@ project.
   checked it against the frames. In both cases the record names who
   shot the frames and who measured them; the frames stay private,
   except those committed as fixtures, which are the photographer's own
-  and are published under the repository's licence with their
+  and are published under the repository's license with their
   agreement.
 - **A body without a table gives none**, and the format notes say so
   per body, with the reason counted where the project's test over a
@@ -114,7 +114,7 @@ project.
 
 Rejected:
 
-- **Transcribing permissively licensed tables on the licence alone,
+- **Transcribing permissively licensed tables on the license alone,
   with attribution.** The project's own evidence is the only check it
   can offer on a table, and a borrowed number cannot be re-measured by
   the project; a reader could not tell which values the project had
@@ -135,7 +135,7 @@ Rejected:
 ## What this decision does not cover
 
 - Per-body facts that the files themselves hold, such as a sensor's
-  colour filter phase, a crop's trim or a white level, which are read
+  color filter phase, a crop's trim or a white level, which are read
   from the files and recorded in the format notes as any other fact,
   not measured outside them.
 - A decoder's fixed tables, such as the symbol lists of a compression
@@ -147,7 +147,7 @@ Rejected:
   metadata still to read and leaves to their own decision.
 - The terms of a table taken from another project in cooperation with
   it: the decision that allows one records that project's agreement,
-  the licence, the attribution and how raw-files checks the values it
+  the license, the attribution and how raw-files checks the values it
   did not measure. This record names the condition and does not make
   that decision.
 - How a table is used once it exists: which conditions a file must

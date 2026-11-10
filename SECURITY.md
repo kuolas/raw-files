@@ -13,7 +13,7 @@ Include what you can: the affected component, steps to reproduce or a proof of
 concept (a sample file that triggers the problem is ideal), and the impact as
 you understand it.
 
-You will get an acknowledgement within **7 days**. Please allow a reasonable
+You will get an acknowledgment within **7 days**. Please allow a reasonable
 window for a fix before any public disclosure; you will be credited in the
 release notes unless you prefer otherwise.
 

@@ -50,10 +50,10 @@ const LIST: &str = include_str!("../samples.tsv");
 /// from, `raw.pixls.us` or `commons`; its id there, a number on
 /// raw.pixls.us and the file's name on Wikimedia Commons; its format, the
 /// name of the file in `raw-samples/`, its tier, `normal` or `large`; its
-/// SHA-256; its licence, with the author for a licence that asks for
+/// SHA-256; its license, with the author for a license that asks for
 /// credit; and its URL.
 const COLUMNS: [&str; 8] = [
-    "source", "id", "format", "file", "tier", "sha256", "licence", "url",
+    "source", "id", "format", "file", "tier", "sha256", "license", "url",
 ];
 
 /// The files `tests/samples.tsv` lists of `format`, as its format column
@@ -179,14 +179,14 @@ pub fn check(sample: &Sample, format: Format) {
 
 /// What a sample file of `tests/samples.tsv` must give as its metadata:
 /// every value of [`Metadata`](raw_files::Metadata), `None` where the file
-/// must give none. The camera's maker is the [`Make`] the reader recognises
+/// must give none. The camera's maker is the [`Make`] the reader recognizes
 /// from the recorded Make, and its model the name raw-files' table gives
 /// for the maker and the recorded Model, `None` for every body the table
 /// does not hold, as [`Camera::model`](raw_files::Camera::model) gives
 /// them. Fractions are the numerator and denominator as stored,
 /// so `(10, 3200)` is not `(1, 320)`. The software is its text, as the
 /// reader cleans it, and the focal length in 35 mm terms its whole
-/// millimetres. The capture time is its ISO 8601 form, as
+/// millimeters. The capture time is its ISO 8601 form, as
 /// [`DateTime`](raw_files::DateTime) displays it. The focus point is the
 /// one the reader gives ([`SampleFocus`]), and so are the camera settings
 /// ([`SampleSettings`]). The lens is `None` where the file describes none,
@@ -235,12 +235,12 @@ pub struct SampleMetadata {
 /// ([`CameraSettings`](raw_files::CameraSettings)): every value, `None`
 /// where the file must give none, each a variant of the library's own
 /// enums, so that a row reads as what a caller gets. The white balance is
-/// its three parts: its mode, its colour temperature in kelvin, and its
+/// its three parts: its mode, its color temperature in kelvin, and its
 /// fine-tuning ([`SampleFineTune`]). Then the exposure program, the metering
 /// mode, the flash, whether it fired and then its mode, `None` when the
 /// file records no mode, the shutter used, whether Sony's electronic front
 /// curtain setting was on, the image area, the raw image size and the
-/// colour space.
+/// color space.
 ///
 /// Every row writes every field, `None` included, one to a line, so that
 /// a value read later changes one line of a row.
@@ -271,13 +271,13 @@ pub struct SampleFineTune {
 
 /// Where the camera of a sample file focused, as the reader must give it
 /// ([`Focus`](raw_files::Focus)): the frame the point is measured in, its
-/// width and height in pixels; the centre of the focus area in that frame,
+/// width and height in pixels; the center of the focus area in that frame,
 /// x from its left and y from its top; the area's width and height, `None`
 /// when the file records no area; and whether the camera confirmed focus,
 /// `None` when the file does not say. The frame is the one the reader
 /// gives, not always the one the file records: on a Nikon crop mode it is
 /// the cropped picture, the size of the MakerNote's CropArea, and the
-/// centre and the area are placed in it.
+/// center and the area are placed in it.
 ///
 /// Then what the reader gives of the autofocus points
 /// ([`FocusPoints`](raw_files::FocusPoints)), whose primary the point above
@@ -605,7 +605,7 @@ pub fn check_metadata(expected: &SampleMetadata, format: Format) {
     assert_eq!(
         white_balance.color_temperature(),
         expected.color_temperature,
-        "{label}: white balance colour temperature"
+        "{label}: white balance color temperature"
     );
     assert_eq!(
         white_balance.fine_tune().map(|fine_tune| SampleFineTune {
@@ -649,7 +649,7 @@ pub fn check_metadata(expected: &SampleMetadata, format: Format) {
     assert_eq!(
         settings.color_space(),
         expected.color_space,
-        "{label}: colour space"
+        "{label}: color space"
     );
 }
 

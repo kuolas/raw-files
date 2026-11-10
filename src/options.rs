@@ -85,7 +85,7 @@ impl Options {
     /// # Errors
     ///
     /// `UnknownFormat` if the file is not a RAW file or a JPEG file this
-    /// version recognises; `Malformed` if its structure is damaged;
+    /// version recognizes; `Malformed` if its structure is damaged;
     /// `LimitExceeded` if reading its structure would cross one of the
     /// limits, though a limit crossed inside a JPEG file's Exif or MPF
     /// segment is not an error: it costs what that segment holds, the Exif

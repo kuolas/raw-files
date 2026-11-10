@@ -113,7 +113,7 @@
 //!
 //! - **FocusLocation** ([`FOCUS_LOCATION`]) says where the camera focused:
 //!   the width and height of a frame, then the x and y of the focus area's
-//!   centre in it. Every sample from the ILCE-7RM2 on has it; the ILCE-7S,
+//!   center in it. Every sample from the ILCE-7RM2 on has it; the ILCE-7S,
 //!   the NEX-5, the RX100, the A-mount bodies, the Hasselblad Lunar and the
 //!   older formats do not. The ILCE-9M3, the ILCE-1M2 and the ILCE-7M5
 //!   repeat it in **FocusLocation2** ([`FOCUS_LOCATION2`]), equal to it on
@@ -129,7 +129,7 @@
 //! - **FocusMode** ([`FOCUS_MODE`]) says how the camera focused: manual
 //!   focus, or one of the autofocus modes.
 //!
-//! The position is the centre of the area. Several autofocus shots with an
+//! The position is the center of the area. Several autofocus shots with an
 //! area sit at exactly half their frame, such as the ILCE-1's (4320, 2880)
 //! in 8640 by 5760 pixels with an area of 1026 by 912 (file 4466) and the
 //! ILCE-6700's (file 6736); and the ILCE-7RM3's agrees with the spot that
@@ -145,14 +145,14 @@
 //! it is the full-size 7008 by 4672, larger than the stored image (files
 //! 6930 and 6931), and on the ILCE-9M3's small raw 3008 by 2000 (file
 //! 7364). The point is given as recorded, built through [`Focus::new`] and
-//! [`Focus::with_size`]: a frame with a zero side or a centre off the
+//! [`Focus::with_size`]: a frame with a zero side or a center off the
 //! frame gives none, and so does an area that does not fit inside the
-//! frame around its centre, since such a record cannot be used, as on a
+//! frame around its center, since such a record cannot be used, as on a
 //! Nikon file (ADR012). A side of zero in FocusFrameSize says only that no
 //! size is recorded, and the point is kept without one.
 //!
 //! A shot in manual focus still records a location, the frame's exact
-//! centre, with FocusMode 0: the ILCE-7RM2's files 1310 and 1311, and the
+//! center, with FocusMode 0: the ILCE-7RM2's files 1310 and 1311, and the
 //! ILCE-9M3's 7361 and 7364, whose FocusFrameSize is all zeros. The camera
 //! did not focus on that point, so FocusMode 0 gives none, whatever
 //! FocusLocation holds (ADR012). Nothing else in the plain tags says that
@@ -169,8 +169,8 @@
 //!
 //! The MakerNote also records how the camera was set for the picture,
 //! beyond what the Exif tags record (ADR011): the white balance setting
-//! itself, where Exif says only auto or the kind of light; the colour
-//! temperature of a chosen colour temperature or of a custom white
+//! itself, where Exif says only auto or the kind of light; the color
+//! temperature of a chosen color temperature or of a custom white
 //! balance; the photographer's fine-tuning of the white balance; and the
 //! electronic front curtain setting. Each comes
 //! from one plain tag of the MakerNote IFD, of the exact type and count its
@@ -190,17 +190,17 @@
 //! whether the body shot in APS-C mode are recorded only in enciphered
 //! blocks, which are not read, so they are `None`; so is the raw size,
 //! since the plain Quality tag (0x202E) gives an APS-C raw the code of a
-//! medium one. The colour space is Exif's alone, which every checked Sony
+//! medium one. The color space is Exif's alone, which every checked Sony
 //! file records.
 //!
 //! **WhiteBalance** ([`WHITE_BALANCE`]) is one LONG, a code for the
 //! setting. On the ILCE-7M2's frames it is 0 under auto, 16 under
 //! daylight, 32 under cloudy, 48 under shade, 64 under tungsten, 80 under
 //! flash, 96 under each of the four fluorescent lamps, 112 under custom,
-//! 128 under underwater, and 1 under a chosen colour temperature; the
+//! 128 under underwater, and 1 under a chosen color temperature; the
 //! public samples hold 0, 48 and 112 ([`white_balance_mode`]). ExifTool's
-//! documentation names 1 a colour temperature or a colour filter; no
-//! frame was shot with a colour filter, so whether one gives 1 too is
+//! documentation names 1 a color temperature or a color filter; no
+//! frame was shot with a color filter, so whether one gives 1 too is
 //! unchecked. The setting takes the place of Exif's mode, which agrees
 //! with it on every file checked but under underwater, where Exif's
 //! WhiteBalance says auto. Any other code, or a tag of another shape,
@@ -211,7 +211,7 @@
 //! Two more tags would seem to record the white balance, and neither is
 //! read. 0xB054, which ExifTool's documentation also calls WhiteBalance,
 //! says auto on the ILCE-7S's file and the RX100M4's JPEG, both set to
-//! shade, and on the frames shot under shade and under a chosen colour
+//! shade, and on the frames shot under shade and under a chosen color
 //! temperature. 0x0112, which that documentation calls
 //! WhiteBalanceFineTune, holds the kind of fluorescent lamp: -1 to 2 under
 //! the four lamps, and 0 under every other setting and on every frame with
@@ -219,18 +219,18 @@
 //! setting, such as "Fluorescent (+1)".
 //!
 //! **ColorTemperature** ([`COLOR_TEMPERATURE`]) is one LONG, in kelvin.
-//! Under a chosen colour temperature it holds the one chosen: 5500 on the
+//! Under a chosen color temperature it holds the one chosen: 5500 on the
 //! first frame shot under that setting and 3200 on the later ones. Under
 //! custom it holds the custom white balance's own temperature: 5500 on a
 //! frame shot with the camera's old custom white balance while the
-//! colour-temperature setting stood at 3200, and 6300 on one shot after a
+//! color-temperature setting stood at 3200, and 6300 on one shot after a
 //! new custom white balance was measured, the value the camera showed for
 //! it; the ILCE-9M3's two public samples, shot under custom, hold 5500
 //! too. Under every other setting it holds 0 on every file checked, the
 //! public samples, my own files and the frames, and 0 gives none. So
 //! it is read under whichever setting, as Nikon's is, and the white
-//! balance mode beside it says which colour temperature it is. It
-//! gives one only from 1 to 99,999 K, the bound Nikon's colour
+//! balance mode beside it says which color temperature it is. It
+//! gives one only from 1 to 99,999 K, the bound Nikon's color
 //! temperatures are held to too: a larger number is no temperature a
 //! camera is set to.
 //!
@@ -281,7 +281,7 @@ pub(in crate::formats) const SONY: &[u8; 4] = b"SONY";
 
 /// The Sony MakerNote tag that records the white balance setting
 /// (WhiteBalance): one LONG, a code for the setting, such as 0 for auto,
-/// 48 for shade or 1 for a chosen colour temperature.
+/// 48 for shade or 1 for a chosen color temperature.
 pub(in crate::formats) const WHITE_BALANCE: u16 = 0x0115;
 
 /// The Sony MakerNote tag that records the white balance fine-tuning
@@ -302,7 +302,7 @@ pub(in crate::formats) const FOCUS_MODE: u16 = 0x201B;
 
 /// The Sony MakerNote tag that records where the camera focused
 /// (FocusLocation): four SHORTs, the width and height of the frame, then
-/// the x and y of the focus area's centre in it.
+/// the x and y of the focus area's center in it.
 pub(in crate::formats) const FOCUS_LOCATION: u16 = 0x2027;
 
 /// The Sony MakerNote tag that records the size of the focus area
@@ -315,8 +315,8 @@ const FOCUS_FRAME_SIZE: u16 = 0x2037;
 /// (FocusLocation2): the same four SHORTs, with the same values.
 const FOCUS_LOCATION2: u16 = 0x204A;
 
-/// The Sony MakerNote tag that records a colour temperature, in kelvin
-/// (ColorTemperature): one LONG, the one chosen under a chosen colour
+/// The Sony MakerNote tag that records a color temperature, in kelvin
+/// (ColorTemperature): one LONG, the one chosen under a chosen color
 /// temperature and the custom white balance's own under custom, and 0 when
 /// none was recorded.
 const COLOR_TEMPERATURE: u16 = 0xB021;
@@ -465,7 +465,7 @@ pub(in crate::formats) fn metadata<R: Read + Seek>(
     Ok(metadata)
 }
 
-/// Where the camera focused, as `makernote` records it: the centre of the
+/// Where the camera focused, as `makernote` records it: the center of the
 /// focus area and the frame it is measured in, from FocusLocation, and the
 /// area's size from FocusFrameSize when it records one. Whether focus was
 /// confirmed is never set: no plain tag records it.
@@ -473,9 +473,9 @@ pub(in crate::formats) fn metadata<R: Read + Seek>(
 /// `None` when FocusMode records manual focus ([`manual_focus`]); when
 /// neither FocusLocation nor FocusLocation2 gives a location
 /// ([`location`]); when [`Focus::new`] refuses the location, for a frame
-/// with a zero side or a centre off the frame; or when FocusFrameSize
+/// with a zero side or a center off the frame; or when FocusFrameSize
 /// records an area, both of its sides above zero, that [`Focus::with_size`]
-/// refuses because it does not fit inside the frame around the centre.
+/// refuses because it does not fit inside the frame around the center.
 ///
 /// FocusLocation2 is read only when FocusLocation gives no location: when
 /// it is missing, and also when it is there but is not four SHORTs, a shape
@@ -530,9 +530,9 @@ fn manual_focus<R: Read + Seek>(src: &mut Source<R>, makernote: &MakerNote) -> R
     Ok(mode.as_deref() == Some(&[0]))
 }
 
-/// The frame and the centre that `makernote`'s tag `tag`, FocusLocation or
+/// The frame and the center that `makernote`'s tag `tag`, FocusLocation or
 /// FocusLocation2, records: its four SHORTs, the frame's width and height,
-/// then the centre's x and y, widened to 32 bits. `None` when the tag is
+/// then the center's x and y, widened to 32 bits. `None` when the tag is
 /// missing, is not of type SHORT, or does not hold exactly four values.
 ///
 /// The values are not checked here: [`Focus::new`] checks them.
@@ -604,9 +604,9 @@ fn area<R: Read + Seek>(src: &mut Source<R>, makernote: &MakerNote) -> Result<Op
 ///   Exif tags gave, which records only auto or the kind of light, and
 ///   calls the underwater setting auto. When the MakerNote names none, the
 ///   Exif tags' mode stays.
-/// - **The colour temperature** is ColorTemperature, exactly one LONG,
+/// - **The color temperature** is ColorTemperature, exactly one LONG,
 ///   from 1 to 99,999 K ([`checked_color_temperature`]), under whichever white
-///   balance setting: the chosen colour temperature under that setting
+///   balance setting: the chosen color temperature under that setting
 ///   and the custom white balance's own under custom, as the files show.
 ///   0, which every other setting holds on every file checked, records
 ///   none, and a larger number is no temperature a camera is set to.
@@ -620,7 +620,7 @@ fn area<R: Read + Seek>(src: &mut Source<R>, makernote: &MakerNote) -> Result<Op
 /// `settings` has them, `None`: Sony records the first two only in
 /// enciphered blocks, and gives an APS-C raw the raw size code of a
 /// medium one. The exposure program, the metering mode, the flash and the
-/// colour space are the Exif tags' alone.
+/// color space are the Exif tags' alone.
 ///
 /// # Errors
 ///
@@ -644,7 +644,7 @@ fn camera_settings<R: Read + Seek>(
 }
 
 /// The white balance mode a WhiteBalance `code` names: 0
-/// [`Auto`](WhiteBalanceMode::Auto); 1, a chosen colour temperature,
+/// [`Auto`](WhiteBalanceMode::Auto); 1, a chosen color temperature,
 /// [`ColorTemperature`](WhiteBalanceMode::ColorTemperature); 16
 /// [`Daylight`](WhiteBalanceMode::Daylight); 32
 /// [`Cloudy`](WhiteBalanceMode::Cloudy); 48
@@ -655,8 +655,8 @@ fn camera_settings<R: Read + Seek>(
 /// [`Custom`](WhiteBalanceMode::Custom); and 128
 /// [`Underwater`](WhiteBalanceMode::Underwater).
 ///
-/// ExifTool's documentation names 1 a colour temperature or a colour
-/// filter; no checked file was shot with a colour filter, so that it
+/// ExifTool's documentation names 1 a color temperature or a color
+/// filter; no checked file was shot with a color filter, so that it
 /// writes 1 too is unchecked. `None` for every other code: a code grows
 /// into the table only once a file shows it, and until then the Exif tags'
 /// mode stands in its place.
@@ -1340,7 +1340,7 @@ mod tests {
     /// height (public sample 6929).
     const FRAME_7M4: [u16; 2] = [7008, 4672];
 
-    /// The centre that the ILCE-7M4's FocusLocation records in
+    /// The center that the ILCE-7M4's FocusLocation records in
     /// [`FRAME_7M4`], its x and y (sample 6929).
     const CENTER_7M4: [u16; 2] = [3832, 2102];
 
@@ -1354,7 +1354,7 @@ mod tests {
         [order.u16(width), order.u16(height), order.u16(third)].concat()
     }
 
-    /// FocusLocation's four SHORTs for a frame `frame` and a centre
+    /// FocusLocation's four SHORTs for a frame `frame` and a center
     /// `center`.
     fn location_of([width, height]: [u16; 2], [x, y]: [u16; 2]) -> [u16; 4] {
         [width, height, x, y]
@@ -1418,7 +1418,7 @@ mod tests {
         focus(&mut src, &makernote).unwrap()
     }
 
-    /// The focus centred at `center` in `frame`, with an area of `area`
+    /// The focus centered at `center` in `frame`, with an area of `area`
     /// when there is one, and nothing said about whether focus was
     /// confirmed.
     fn expected(frame: [u16; 2], center: [u16; 2], area: Option<[u16; 2]>) -> Focus {
@@ -1429,7 +1429,7 @@ mod tests {
             Point { x, y },
             FocusOrigin::Recorded,
         )
-        .expect("a usable centre");
+        .expect("a usable center");
         match area.map(|area| area.map(u32::from)) {
             Some([width, height]) => focus
                 .with_size(Size { width, height })
@@ -1512,7 +1512,7 @@ mod tests {
     #[test]
     fn focus_mode_0_gives_none() {
         // As the ILCE-9M3 writes a manual-focus shot: the frame's exact
-        // centre and an area of zeros (public sample 7361).
+        // center and an area of zeros (public sample 7361).
         for order in ORDERS {
             let manual = focus_of(order, |builder, ifd| {
                 builder
@@ -2037,7 +2037,7 @@ mod tests {
 
     #[test]
     fn the_color_temperature_is_read_under_any_white_balance_setting() {
-        // 3200 under a chosen colour temperature, as on the ILCE-7M2's
+        // 3200 under a chosen color temperature, as on the ILCE-7M2's
         // later frames; 5500 and 6300 under custom, as on its custom
         // frames; and a value above 0 under auto, shade, a code no file
         // shows, or with no white balance tag at all, which no file
@@ -2070,7 +2070,7 @@ mod tests {
 
     #[test]
     fn a_color_temperature_of_zero_or_of_another_shape_gives_none() {
-        // Under a chosen colour temperature: 0, which records none, as
+        // Under a chosen color temperature: 0, which records none, as
         // every other setting holds on every file checked; a SHORT; an
         // SLONG; and two LONGs.
         for order in ORDERS {
@@ -2264,7 +2264,7 @@ mod tests {
     }
 
     /// Adds to `ifd` every settings tag the reader reads, as a frame shot
-    /// on the ILCE-7M2 under a chosen colour temperature of 3200 K might
+    /// on the ILCE-7M2 under a chosen color temperature of 3200 K might
     /// record them, shifted three steps towards amber, with the electronic
     /// front curtain on.
     fn settings_tags(builder: &mut TiffBuilder, ifd: IfdId) {
@@ -2289,7 +2289,7 @@ mod tests {
     #[test]
     fn the_settings_the_makernote_does_not_record_are_the_standard_tags() {
         // The exposure program, the metering mode, the flash and the
-        // colour space stay as Exif gave them; and the shutter, the image
+        // color space stay as Exif gave them; and the shutter, the image
         // area and the raw image size stay `None`, whatever Quality says.
         for order in ORDERS {
             let settings = settings_from(order, exif_settings(), |builder, ifd| {

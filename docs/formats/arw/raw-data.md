@@ -41,20 +41,20 @@ SR2SubIFD keystream and the SRF key chain. They are not implemented in
 raw-files, and the check scripts are not in the repository. **No pixel
 output was compared with a reference decoder**, so a check means "the data
 decode consistently with the description" (all bytes consumed, values in
-range, neighbouring same-colour pixels close), not "bit-exact".
+range, neighboring same-color pixels close), not "bit-exact".
 
 **Offsets, formulas and constants taken from implementation source code must
 be checked against that source and against sample files before they are
 hard-coded.**
 
-**Licence hygiene.** The decoders read for this page are under dcraw's own
-licence, LGPL-2.1 or CDDL-1.0 (LibRaw), LGPL-2.1-or-later (rawspeed) and
+**License hygiene.** The decoders read for this page are under dcraw's own
+license, LGPL-2.1 or CDDL-1.0 (LibRaw), LGPL-2.1-or-later (rawspeed) and
 LGPL-2.1 (rawler, rawloader); ExifTool is under the Perl terms and Laurent
 Clévy's notes under GPL-3.0. See
-[licences-and-references.md](licences-and-references.md). None of their
+[licenses-and-references.md](licenses-and-references.md). None of their
 code may be copied or transliterated into raw-files. This page restates
 algorithms in prose and original pseudocode only. It gives the ARW1 prefix
-code as a rule, not a table, and reproduces no tone curve or delinearisation
+code as a rule, not a table, and reproduces no tone curve or delinearization
 table.
 
 ## Where the raw data lives
@@ -131,7 +131,7 @@ samples, it keeps the TIFF tile geometry, and otherwise it takes the
 dimensions from the JPEG frame. 6 is not a value Sony writes for raw data.
 [3] **[P]** Every lossless sample lists 0x0111 before 0x0102, so the
 rename happens on them. Files 4466, 6929, 6930, 6736, 7364, 8848 **[F]**
-The A100 carries no raw IFD at all and is recognised by model
+The A100 carries no raw IFD at all and is recognized by model
 and IFD width (3872). [1][3] **[P]**
 
 ### BitsPerSample is not reliable
@@ -192,7 +192,7 @@ Two tags name the mode, and neither should select the decoder.
 ### Choosing the decode path
 
 Let W and H be the raw IFD's width and height and B the strip byte count
-(for tiles, the sum of the tile byte counts). The layouts are recognised by
+(for tiles, the sum of the tile byte counts). The layouts are recognized by
 Compression, Photometric, SamplesPerPixel and size:
 
 | Test | Layout | Samples |
@@ -286,7 +286,7 @@ ARW 6.0, SR2, SRF or ARQ path, and it uses `unwrap`, `assert!` and
 unexpected input. [20] **[P]** Its ARW1 code
 table, cRAW block loop and 0x7010 curve builder match dcraw element for
 element **[P]**; that they were translated from dcraw is **[I]**. See
-[licences-and-references.md](licences-and-references.md).
+[licenses-and-references.md](licenses-and-references.md).
 
 ### Disagreements
 
@@ -316,7 +316,7 @@ when the data and FileFormat are consistent with it (see
   [1][13][18] **[P]**
 - **Predictor.** One running sum for the whole image, never reset: each
   decoded difference is added to the sum and the sum is the sample. So a
-  sample is predicted from the same-colour sample two rows above it, or, at
+  sample is predicted from the same-color sample two rows above it, or, at
   the start of a column or of the odd-row pass, from the last sample
   visited. [1][13] **[P]**, interpretation **[I]**
 - **Range.** The sum must stay within 0 to 4095. dcraw and LibRaw flag a
@@ -381,7 +381,7 @@ difference of 0 with no extra bits. [1][13] **[P]**
   **[P]**
 - **3881 is right.** Decoding file 2346 from offset 98304 as 3881 columns
   by 2608 rows consumes 10,039,263 of 10,039,268 bytes with no range
-  violation, and the mean same-colour differences between neighbours are
+  violation, and the mean same-color differences between neighbors are
   small (about 18 vertically, 21 horizontally). With 3880 columns, 2485
   bytes are left unread. File 2346
   **[F]** Why the encoder writes one extra column is unexplained. **[I]**
@@ -420,7 +420,7 @@ the DSLR-A200 (FileFormat 3.0.0.0) writes exactly this:
 
 ## cRAW (Compression 32767, one byte per pixel)
 
-Sony's lossy "compressed RAW", called ARW2 by decoders: 16 same-colour
+Sony's lossy "compressed RAW", called ARW2 by decoders: 16 same-color
 pixels in 16 bytes, followed by a tone curve. It has been written since the
 A700 (FileFormat 3.0.0.0, BitsPerSample 8, file 2521 **[F]**), although
 Clévy's prose dates it to ARW 2.1 [23] **[S]**, and it is still the
@@ -436,7 +436,7 @@ A7 V, "Compressed" is the ARW 6.0 codec instead. [28] **[S]**, files
   each row decodes independently.
 - **Spans.** Each 32-pixel span of a row is two 16-byte blocks. The first
   codes the 16 even columns of the span (s, s+2, …, s+30), the second the
-  16 odd ones. In a Bayer row each block therefore holds a single colour.
+  16 odd ones. In a Bayer row each block therefore holds a single color.
 - **Block fields.** Read the 16 bytes as one 128-bit little-endian integer
   and take fields from the least significant end:
 
@@ -527,7 +527,7 @@ for row in 0 .. H:
   65520, which still fits in 16 bits. **[I]**
 - **Non-monotonic knots.** No decoder checks that the knots increase; a
   decreasing knot empties a segment and leaves whatever the table held
-  before (dcraw initialises it as the identity). [1][12] **[P]**,
+  before (dcraw initializes it as the identity). [1][12] **[P]**,
   consequence **[I]**
 - **Tag absent.** dcraw and LibRaw keep their identity curve; rawspeed and
   rawler fail, because the tag is required. There is no documented Sony
@@ -553,7 +553,7 @@ All 15 cRAW files were checked, over 500,000 blocks in total (a sample of
 about 100 rows from each file). **[F]**
 
 - No block has `max < min`, and no block has `imax == imin`.
-- Same-colour jumps across block boundaries average 8 to 57 code units,
+- Same-color jumps across block boundaries average 8 to 57 code units,
   which is what a correct field layout gives (measured on 13 of the 15
   files).
 - 0.02 to 0.13 % of the reconstructed pixels exceed their block's `max`
@@ -581,19 +581,19 @@ about 100 rows from each file). **[F]**
 
 The cRAW block is the first embodiment of Sony patent US 8,023,748 B2
 (application US 2007/0223824 A1, priority JP 2006-050170, 2006): 16
-same-colour pixels, the maximum and minimum with their positions, and 14
-differences quantised to 7 bits, 256 bits down to 128. Google Patents lists
+same-color pixels, the maximum and minimum with their positions, and 14
+differences quantized to 7 bits, 256 bits down to 128. Google Patents lists
 it as "Expired – Fee Related"; a related patent, US 8,013,910 B2, is listed
 the same way. [32] **[S]** A patent on an encoder may not read on a decoder,
 and an expired patent cannot be enforced, so a cRAW decoder looks
 unencumbered. **[I]** This identifies a question; it is not legal advice.
 
-### Known artefacts
+### Known artifacts
 
 These are facts about the data, not decoder bugs: errors concentrate where
 a high-contrast edge shares a 16-pixel block with a flat area, because the
 large span forces a coarse step on all 14 deltas; RawDigger and Lloyd
-Chambers showed posterization and 32-pixel line artefacts around star
+Chambers showed posterization and 32-pixel line artifacts around star
 trails in 2014. [24][25] **[S]** Dietz's KARWY tool models each pixel's
 error range to repair them. [25] **[S]** A library that returns sensor
 data should return the plain lookup.
@@ -609,8 +609,8 @@ data should return the plain lookup.
   A900 sample is exactly 1.5000 bytes per pixel (6080×4048, file 5858).
   **[F]** The A850 sample on raw.pixls.us is not CC0 and was not
   downloaded; its published exiv2 dump also gives exactly 1.5. [39] **[P]**
-- **Nibble order checked.** With the little-endian formula, same-colour
-  neighbours in file 5858 differ by 16.7 on average and the values range
+- **Nibble order checked.** With the little-endian formula, same-color
+  neighbors in file 5858 differ by 16.7 on average and the values range
   from 134 to 1592; the big-endian alternative gives 167 and 0 to 4095.
   **[F]**
 - **Levels.** The data are at 12-bit scale, so the 14-bit-scale black and
@@ -652,7 +652,7 @@ data should return the plain lookup.
   component 0 goes to (2y, 2x), 1 to (2y, 2x+1), 2 to (2y+1, 2x) and 3 to
   (2y+1, 2x+1). LibRaw, rawspeed and rawler agree. [8][12][18] **[P]** With
   predictor 1 each component predicts from the same component one quad to
-  the left, so from the same-colour pixel two columns left; T.81's usual
+  the left, so from the same-color pixel two columns left; T.81's usual
   rules for the first line and the first column presumably apply. **[I]**
 - **The Huffman tables are in each tile** (DHT), so nothing has to be
   brought from outside. [8][12] **[P]**
@@ -682,7 +682,7 @@ DefaultCropOrigin/Size. [21] **[P]**
 LibRaw's per-body table gives 8660×5784 for the A1 and 7028×4688 for the
 A7 IV, a few columns narrower than 0x7038. [4] **[P]** rawspeed crops to
 0x7038 after decoding, rawler uses it as the active area, and LibRaw
-ignores it in favour of its table. [4][12][18] **[P]**
+ignores it in favor of its table. [4][12][18] **[P]**
 
 ### M and S sizes: YCbCr tiles
 
@@ -762,14 +762,14 @@ unaffected.
   understood. **[I]**
 - **Transform and coding**, as described by LibRaw's decoder and an
   independent write-up [10][30] **[P]**/**[S]**: each CFA quad is split
-  into a green low-pass and a green high-pass band and two colour residuals
+  into a green low-pass and a green high-pass band and two color residuals
   against the greens; green low-pass and the residuals go through a
   three-level reversible 5/3 lifting wavelet; coefficients are entropy
   coded in groups with an adaptive Golomb–Rice-like width; each 16-row
-  chunk carries 4-bit quantiser shifts, and quantisation is the only lossy
+  chunk carries 4-bit quantizer shifts, and quantization is the only lossy
   step.
 - **Output.** Signed 12-bit codes, offset by 2048 and clipped to 0 to 4095,
-  go through a fixed **4096-entry delinearisation curve that is not in the
+  go through a fixed **4096-entry delinearization curve that is not in the
   file**. [10] **[P]** LibRaw embeds it as a table; the write-up ships one
   extracted by running files through an official decoder. [10][30]
   **[P]**/**[S]** The curve is the identity up to code 1427, then
@@ -789,7 +789,7 @@ unaffected.
 | LibRaw | decoder on master since PR #824 (merged 2026-07-18), not in release 0.22.2; the file header says the code was generated with AI assistance [10][11] | **[P]** |
 | rawspeed | PR #972 closed unmerged 2026-09-13; it claimed a byte-exact match with Adobe's output; Compression 32766 throws [12][17] | **[P]** |
 | rawler (dnglab) | refused as unsupported (no camera file defines mode "arw6"); the decompressor behind it is an unreachable `unimplemented!()` stub; an AI-assisted port in PR #825 is open [18] | **[P]** |
-| arw6_decode | independent Python decoder and format write-up, AI-assisted, **no licence file** [30] | **[P]** |
+| arw6_decode | independent Python decoder and format write-up, AI-assisted, **no license file** [30] | **[P]** |
 | Adobe | Camera Raw and Lightroom reportedly decode A7 V files from about April 2026 [35] | **[S]** |
 
 ### Patents: a legal question
@@ -860,8 +860,8 @@ image data are encrypted**, with the same keystream as the SR2SubIFD.
   not read from SRF2. File 1351 **[F]** dcraw, LibRaw, rawspeed and rawler
   all hard-code the offsets (the V3 data at 787,392 in dcraw); ExifTool
   walks the structure instead. [1][4][12][18][22] **[P]**
-- **CFA.** dcraw and LibRaw describe the F828 as four-colour "RGBE"
-  (E for emerald), R E / G B; rawspeed lists the fourth colour as yellow
+- **CFA.** dcraw and LibRaw describe the F828 as four-color "RGBE"
+  (E for emerald), R E / G B; rawspeed lists the fourth color as yellow
   in the pattern Y R / B G, which is dcraw's shifted one column and fits
   rawspeed's crop at x = 5. [1][4][16] **[P]**, reconciliation **[I]** The
   file has no CFA tags, and the samples were not decoded far enough to
@@ -902,7 +902,7 @@ image data are encrypted**, with the same keystream as the SR2SubIFD.
 
 ## The SR2SubIFD: where the levels are
 
-Black level, white level, white balance and the colour matrix of every SR2
+Black level, white level, white balance and the color matrix of every SR2
 and ARW 2.0-and-later file live in an encrypted IFD, the SR2SubIFD. A
 decoder needs it even when the image data are plain. The structure is also
 described in
@@ -936,7 +936,7 @@ what a raw decoder needs.
   ```
 
   The cipher is its own inverse. LibRaw computed the multiply in signed
-  `int` until 0.20.0, which is undefined behaviour; in Rust it is
+  `int` until 0.20.0, which is undefined behavior; in Rust it is
   `wrapping_mul` and `wrapping_add` on `u32`. [6] **[P]**
 - **Checked.** The keystream decrypts the SR2SubIFD of all 34 SR2, ARW and
   ARQ samples that have one (every sample except the A100 and the SRF): the
@@ -959,7 +959,7 @@ what a raw decoder needs.
 - **0x787F WhiteLevel exists only in the SR2SubIFD**, so a decoder that
   wants Sony's own white level still has to decrypt it.
 
-## Levels, CFA, crop, white balance and colour
+## Levels, CFA, crop, white balance and color
 
 ### Black level
 
@@ -980,7 +980,7 @@ what a raw decoder needs.
 - **ARW 6.0.** 512 in the file; LibRaw uses 1024. See
   [ARW 6.0](#arw-60-compression-32766).
 - **Channel order: the decoders disagree.** LibRaw reads 0x7310 as fixed
-  colours R, G1, G2, B and reads 0x7300 without reordering; rawspeed and
+  colors R, G1, G2, B and reads 0x7300 without reordering; rawspeed and
   rawler store the four values by CFA position. [3][6][12][18] **[P]** The
   readings agree on RGGB bodies, which is every sampled CFA body except
   the R1 **[F]** (the A100 is GRBG per dcraw, LibRaw and rawspeed, but
@@ -1029,7 +1029,7 @@ what a raw decoder needs.
 - **No CFA tags**: the A100 (no raw IFD), the SRF and the ARQ (four
   samples per pixel). The M/S YCbCr IFDs carry 255, 255, 255, 255. **[F]**
 - rawspeed ignores the tag and uses its camera list: RGGB for every Sony
-  except the A100 and R1 (GRBG) and the F828 (four colours). [12][16]
+  except the A100 and R1 (GRBG) and the F828 (four colors). [12][16]
   **[P]** dcraw and LibRaw also give the A100 GRBG, while rawler's camera
   file says RGGB. [1][4][18] **[P]** The A100's pattern is therefore a
   disagreement between decoders, not measured.
@@ -1044,7 +1044,7 @@ what a raw decoder needs.
     Sony writes;
   - 0x7038 SonyRawImageSize on lossless files.
 - **0x74C7 is (left, top)**, as LibRaw reads it, not (top, left) as
-  libopenraw does. The RX100M6 1:1 file gives (924, 12) for a centred
+  libopenraw does. The RX100M6 1:1 file gives (924, 12) for a centered
   3648×3648 crop of a 5504-wide raw: 924 = 12 + (5472 − 3648)/2. The 16:9
   file gives (12, 296). Files 3012, 3015 **[F]**
 - **The two crop pairs can disagree.** They are equal on the A9, 7S III,
@@ -1071,23 +1071,23 @@ what a raw decoder needs.
 
 ### White balance
 
-As-shot white balance is SR2SubIFD 0x7313 (R, G, G, B, greens normalised
+As-shot white balance is SR2SubIFD 0x7313 (R, G, G, B, greens normalized
 to 1024, for example 2516, 1024, 1024, 1600 in file 1542) on ARW, 0x7303
-(G, R, B, G, normalised to 256) on the R1, and the MRW `WBG` record on the
+(G, R, B, G, normalized to 256) on the R1, and the MRW `WBG` record on the
 A100 (401, 256, 256, 574 in file 2346, little-endian). **[F]** rawspeed and
 rawler prefer 0x7303 when both exist; dcraw guesses the 0x7313 order from
 the greens. [1][12][18] **[P]** The details are in
 [makernote-and-metadata.md](makernote-and-metadata.md). In M/S files the
 data are already white-balanced. [5][9] **[P]**
 
-### Colour matrix
+### Color matrix
 
 The SR2SubIFD holds a 3×3 ColorMatrix (0x7800), which ExifTool names and
 annotates "divide by 1024" [22] **[P]**; the samples store it as nine
 signed 16-bit values (SSHORT, count 9; files 1542, 2271, 5811, 8846)
 **[F]**. Its rows sum to about 1024: in file 1542, 1243 −205
-−15 / −31 1209 −154 / 47 −47 1024. **[F]** LibRaw stores it, row-normalised,
-and does not use it; every decoder converts colour with its own per-body,
+−15 / −31 1209 −154 / 47 −47 1024. **[F]** LibRaw stores it, row-normalized,
+and does not use it; every decoder converts color with its own per-body,
 Adobe-derived matrix instead. [1][6][16][18] **[P]** What space the Sony
 matrix maps to is not documented. **[I]** raw-files returns sensor data, so
 it can expose 0x7800 as metadata without interpreting it.
@@ -1157,7 +1157,7 @@ support article, read through search extracts only)
 ## Data a decoder must bring itself
 
 What is not in the file, and where raw-files would have to get it. This is
-an input to the licence decision in
+an input to the license decision in
 [open-questions.md](open-questions.md), as the Nikon Huffman tables are for
 NEF.
 
@@ -1169,14 +1169,14 @@ NEF.
 | MakerNote substitution cipher | no | metadata only (0x2010, 0x9050, 0x94xx), not raw data | The inverse is computable from the formula b³ mod 249; see [makernote-and-metadata.md](makernote-and-metadata.md). |
 | cRAW tone curve | yes (0x7010) | cRAW | Five slopes from four knots; no default when the tag is absent. |
 | Lossless JPEG Huffman tables | yes (DHT in each tile) | Compression 7 | Standard T.81. |
-| ARW 6.0 delinearisation curve | **no** | Compression 32766 | 4096 entries, construction unknown; published only as tables extracted from Sony or Adobe output (LibRaw's embedded table, the unlicensed write-up's). **The hard case**; one reason ARW 6.0 is refused. [10][30] |
+| ARW 6.0 delinearization curve | **no** | Compression 32766 | 4096 entries, construction unknown; published only as tables extracted from Sony or Adobe output (LibRaw's embedded table, the unlicensed write-up's). **The hard case**; one reason ARW 6.0 is refused. [10][30] |
 | ARW 6.0 levels | partly (0x7310, 0xC61D, apparently halved) | Compression 32766 | LibRaw hard-codes 1024 and 39002. [5] |
 | Per-body crops | often (SonyCrop, DefaultCrop, 0x7038) | older bodies | Derive per-width trims from samples. |
 | Per-body black and white levels | usually (SR2SubIFD, raw IFD) | all | Fallbacks and practical white points: derive from samples. |
-| Colour matrices | Sony's 0x7800 exists, meaning unknown | rendering only | Every decoder uses Adobe-derived per-body matrices. |
+| Color matrices | Sony's 0x7800 exists, meaning unknown | rendering only | Every decoder uses Adobe-derived per-body matrices. |
 | YCbCr→RGB coefficients, chroma midpoint | no | M/S, only if converting | LibRaw uses BT.601 and a midpoint of 16383. [9] |
 
-Graphite's rawkit (MIT OR Apache-2.0) is the only permissively labelled
+Graphite's rawkit (MIT OR Apache-2.0) is the only permissively labeled
 Rust code with an ARW1 table, a cRAW loop and a 0x7010 curve builder; they
 match dcraw element for element **[P]**, and that they were translated
 from it is **[I]**. It does not change the list above: the ARW1 code needs
@@ -1243,10 +1243,10 @@ checklist ([../nef/raw-data.md](../nef/raw-data.md)) applies as well.
     current one; entry counts 1 to 1000. CVE-2020-35535 (LibRaw
     `parseSonySRF`) and an open rawler fuzzing report (a panic indexing
     offset 200,896 of a 44 KB file) show the class. [37] **[P]**
-13. **ARQ.** Require 4 samples, Photometric 32892 or equivalent 4-colour
+13. **ARQ.** Require 4 samples, Photometric 32892 or equivalent 4-color
     metadata, and B = 8·W·H by checked arithmetic; 16-shot files exceed
     240 megapixels. LibRaw once decoded ARQ without checking it was
-    four-colour. [37] **[P]**
+    four-color. [37] **[P]**
 14. **IFD roles.** Read NewSubfileType as `u32` and never narrow it
     (CVE-2026-88387); never let a SubIFD count or a special case advance an
     index into a fixed table (CVE-2017-6887); check Photometric and
@@ -1274,7 +1274,7 @@ For raw sensor data: **[I]**
     white balance of every ARW live there (the plain copies exist only from
     ARW 2.3.3, and 0x787F never has one).
 - **Second:** lossless M/S as a three-channel YCbCr image, flagged as
-  non-CFA, white-balanced and non-linear, with any RGB conversion labelled
+  non-CFA, white-balanced and non-linear, with any RGB conversion labeled
   approximate; 12-bit packed (A700, A850, A900); ARW1 (A100, A200), now
   that its decoding and the A200's "+8" are checked on samples.
 - **Later:** SRF (two bodies from 2003–2004, encrypted, RGBE, offsets not
@@ -1329,7 +1329,7 @@ These are also tracked in [open-questions.md](open-questions.md).
 - **ARW 6.0.** The A7R VI tile layout (2×2?) and its stream tag (`0000`?);
   the meaning of the tile-stream header bytes 4–7 (`00 00 00 02`) and 12–15
   (`3D 00 6E 00`) on the A7 V; whether Compressed and Compressed (HQ)
-  differ only in quantiser choice.
+  differ only in quantizer choice.
 - **ColorMatrix 0x7800.** What it maps; compare with Adobe's matrix for
   the ILCE-9.
 - **ARQ variants.** A 16-shot ARQ and ARQs from the A7R V, A7CR and A1 II:
@@ -1348,7 +1348,7 @@ These are also tracked in [open-questions.md](open-questions.md).
 ## Sources
 
 All retrieved October 2026. Implementation sources are read only; see
-[licences-and-references.md](licences-and-references.md). Entries marked
+[licenses-and-references.md](licenses-and-references.md). Entries marked
 "search extract" were read only through search-result snippets.
 
 [1] dcraw 9.28 (rev 1.478), dcraw.c — https://www.dechifro.org/dcraw/dcraw.c ; the text was read from a mirror, https://raw.githubusercontent.com/ncruces/dcraw/master/dcraw.c, not verified against the original (`sony_decrypt`, `sony_load_raw`, `sony_arw_load_raw`, `sony_arw2_load_raw`, `parse_tiff_ifd` Sony cases, `apply_tiff` case 32767, `packed_load_raw`, `unpacked_load_raw`, `identify` Sony branches)
@@ -1374,13 +1374,13 @@ All retrieved October 2026. Implementation sources are read only; see
 [21] ExifTool, Exif.pm (Compression values; tags 0x7000–0x74C8) — https://raw.githubusercontent.com/exiftool/exiftool/master/lib/Image/ExifTool/Exif.pm
 [22] ExifTool, Sony.pm (FileFormat, RAWFileType, SR2Private, SR2SubIFD, SRF, `Decrypt`, `ProcessSRF`) — https://raw.githubusercontent.com/exiftool/exiftool/master/lib/Image/ExifTool/Sony.pm ; tag pages — https://exiftool.org/TagNames/Sony.html
 [23] Laurent Clévy, "Description of Sony RAW file formats" v0.55 (GPL-3.0) — https://github.com/lclevy/sony_raw
-[24] RawDigger, "Detecting posterization in Sony cRAW/ARW2 files" (2014) — https://www.rawdigger.com/howtouse/sony-craw-arw2-posterization-detection ; Lloyd Chambers, star-trail artefacts (2014, search extract) — https://www.diglloyd.com/blog/2014/20140214_1-SonyA7-artifacts-star-trails.html
+[24] RawDigger, "Detecting posterization in Sony cRAW/ARW2 files" (2014) — https://www.rawdigger.com/howtouse/sony-craw-arw2-posterization-detection ; Lloyd Chambers, star-trail artifacts (2014, search extract) — https://www.diglloyd.com/blog/2014/20140214_1-SonyA7-artifacts-star-trails.html
 [25] Henry Dietz, "Sony ARW2 Compression: Artifacts and Credible Repair", IS&T Electronic Imaging 2016 — https://aggregate.org/DIT/EI2016/ei2016ARW.pdf ; https://doi.org/10.2352/ISSN.2470-1173.2016.2.VIPC-227
 [26] Sony support article 00229990, "What shooting settings affect RAW image bit sizes (14 bits to 12bits)?" — https://www.sony.co.uk/electronics/support/articles/00229990 (search extracts only)
 [27] Sony Help Guides, "RAW File Type": ILX-LR1 — https://helpguide.sony.net/ilc/2390/v1/en/contents/0404I_raw_file_type.html ; ILCE-1M2 — https://helpguide.sony.net/ilc/2440/v1/en/contents/201h_raw_file_type.html ; ILCE-7M5 — https://helpguide.sony.net/ilc/2540/v1/en/contents/251h_raw_file_type.html ; Sony ANZ, Alpha 1 and Alpha 7S III firmware — https://scene.sonyanz.com/articles-and-resources/sony-announces-new-firmware-for-alpha-1-and-alpha-7s-iii-cameras
 [28] darktable issue #19917, "Sony ILCE 7m5" — https://github.com/darktable-org/darktable/issues/19917
 [29] discuss.pixls.us, "raw black/white point" — https://discuss.pixls.us/t/raw-black-white-point/39426
-[30] abbradar, arw6_decode README (no licence file) — https://github.com/abbradar/arw6_decode
+[30] abbradar, arw6_decode README (no license file) — https://github.com/abbradar/arw6_decode
 [31] SMPTE RDD 34:2015, "LLVC – Low Latency Video Codec for Network Transfer" — https://pub.smpte.org/latest/rdd34/rdd34-2015.pdf
 [32] Google Patents, US 2007/0223824 A1 (US 8,023,748 B2) — https://patents.google.com/patent/US20070223824A1/en ; US 8,013,910 B2 — https://patents.google.com/patent/US8013910B2/en
 [33] JPEG XS patent pool — https://www.intopix.com/blogs/post/intoPIX-and-Fraunhofer-IIS-team-with-Vectis-to-offer-JPEG-XS-patent-pool-license ; https://jpegxspool.com/
@@ -1390,11 +1390,11 @@ All retrieved October 2026. Implementation sources are read only; see
 [37] Sony-path security history: NVD, CVE-2017-6887 — https://nvd.nist.gov/vuln/detail/CVE-2017-6887 ; CVE-2020-35535 — https://nvd.nist.gov/vuln/detail/CVE-2020-35535 ; CVE-2026-88387 — https://nvd.nist.gov/vuln/detail/CVE-2026-88387 ; LibRaw commits cc54bb6, 17294b5, 62f0423, 9c9c04b, 17f1683, 4e265f1 — https://github.com/LibRaw/LibRaw/commit/<sha> ; LibRaw issue #792 — https://github.com/LibRaw/LibRaw/issues/792 ; rawspeed commits a3a8b581, fa488def, b9f5b8b1, bbd6d363, 0953acf8 — https://github.com/darktable-org/rawspeed/commit/<sha> ; dnglab issues #569–#575 — https://github.com/dnglab/dnglab/issues/574 ; OSV-2023-1295 — https://github.com/google/oss-fuzz-vulns . Details in [security.md](security.md).
 [38] Web searches for Sony legal action, DMCA notices or cease-and-desist
     letters against dcraw, LibRaw or other ARW decoders (October 2026): no hits
-[39] raw.pixls.us, Sony catalogue and the exiv2 metadata dumps it publishes per file — https://raw.pixls.us/
+[39] raw.pixls.us, Sony catalog and the exiv2 metadata dumps it publishes per file — https://raw.pixls.us/
 [40] raw.pixls.us sample files (all CC0), checked October 2026. The same list
     is in [test-data.md](test-data.md#files-checked).
 
-| File | Body | Mode (catalogue) | SHA-256 | URL |
+| File | Body | Mode (catalog) | SHA-256 | URL |
 |---|---|---|---|---|
 | 964 | Sony SLT-A55 | 12bit 12bit compressed (3:2) | `f861454a49abe0345ff69887874d00617cdf0b96af96d605051e68deda424a08` | https://raw.pixls.us/getfile.php/964/nice/Sony%20-%20SLT-A55%20-%2012bit%2012bit%20compressed%20(3:2).ARW |
 | 1310 | Sony ILCE-7RM2 | 12bit 12bit compressed (3:2) | `a606ebf1dcc6704f03f2966326c60a87dd6bdb3704464b3897c10349a10d3a19` | https://raw.pixls.us/getfile.php/1310/nice/Sony%20-%20ILCE-7RM2%20-%2012bit%2012bit%20compressed%20(3:2).ARW |

@@ -26,7 +26,7 @@
 //! - SubIFD0 is a reduced-resolution image that declares the full-size
 //!   JPEG, 8256 by 5504 pixels, the same way.
 //! - SubIFD1 is the raw data: the full-resolution image (NewSubfileType 0),
-//!   8280 by 5520 pixels, of 14-bit samples of a colour filter array
+//!   8280 by 5520 pixels, of 14-bit samples of a color filter array
 //!   (PhotometricInterpretation 32803), with Nikon's Compression 34713, in
 //!   one strip. Its ImageWidth and ImageLength are LONGs, and it holds no
 //!   default crop, as on the public Z 9 sample 5147. The strip is 64 bytes
@@ -35,7 +35,7 @@
 //!   the bytes stand for the raw data.
 //! - SubIFD2 is a reduced-resolution image that declares the medium JPEG,
 //!   1620 by 1080 pixels, as IFD0 does.
-//! - SubIFD3 is an uncompressed reduced-resolution grey image, 384 by 256
+//! - SubIFD3 is an uncompressed reduced-resolution gray image, 384 by 256
 //!   pixels of 8-bit samples, in one strip of 64 zero bytes that stand for
 //!   it.
 //! - SubIFD4 and SubIFD5 are reduced-resolution images with no pixels:
@@ -66,7 +66,7 @@
 //!   columns and 8 rows into the raw, the CropArea `[12, 8, 8256, 5504]` of
 //!   the public Z 9 samples 5146 to 5148, as four SHORTs. AFInfo2 is the 80
 //!   UNDEFINED bytes of version `0400` that those samples record, which
-//!   [`z9_af_info2`] writes: a focus area of 291 by 323 pixels centred at
+//!   [`z9_af_info2`] writes: a focus area of 291 by 323 pixels centered at
 //!   (4905, 2461) in a frame of 8256 by 5504, with focus confirmed. The
 //!   PreviewIFD declares a small JPEG of 640 by 424 pixels. The MakerNote,
 //!   AFInfo2's numbers included, is in the file's byte order unless the
@@ -94,7 +94,7 @@
 //!   JPEG, 4288 by 2848 pixels, through its JPEGInterchangeFormat and
 //!   JPEGInterchangeFormatLength tags, with Compression 6.
 //! - SubIFD1 is the raw data: the full-resolution image (NewSubfileType 0),
-//!   4352 by 2868 pixels, of 12-bit samples of a colour filter array
+//!   4352 by 2868 pixels, of 12-bit samples of a color filter array
 //!   (PhotometricInterpretation 32803), with Nikon's Compression 34713, in
 //!   one strip, of 64 zero bytes that stand for the raw data. Its
 //!   ImageWidth and ImageLength are LONGs, and it holds no default crop.
@@ -134,7 +134,7 @@
 //! - SubIFD1 is the raw data, 4048 by 4040 pixels, the stored pixels of the
 //!   1:1 crop, of 14-bit samples with Compression 34713, in one strip of 64
 //!   bytes that start with `FF 10 FF 50`, as the Z 9's.
-//! - SubIFD3 is an uncompressed grey image of 320 by 256 pixels, in one
+//! - SubIFD3 is an uncompressed gray image of 320 by 256 pixels, in one
 //!   strip of 64 zero bytes; SubIFD4 and SubIFD5 are the Z 9's empty ones.
 //! - The Exif IFD holds the sample's values, each of the type it has there:
 //!   ExifVersion `0232`; DateTimeOriginal `2024:06:29 15:38:53`,
@@ -151,7 +151,7 @@
 //!   1:1 crop of a 6064 by 4040 picture; the CropArea `[8, 4, 4032, 4032]`;
 //!   the sample's AFInfo2 of version `0401`, the 80 bytes the Z 9's layout
 //!   has, with the area mode 192 (pinpoint), a frame of 6048 by 4032, the
-//!   camera's full output, a focus area of 163 by 174 pixels centred at
+//!   camera's full output, a focus area of 163 by 174 pixels centered at
 //!   (3023, 2016) in it, and the in-focus byte 0, a missed focus; and a
 //!   PreviewIFD that declares a small JPEG of 480 by 480 pixels.
 //!
@@ -167,7 +167,7 @@
 //!   the sample's 57,600, which is not a JPEG and so not a preview. IFD0
 //!   points at one SubIFD and at the Exif IFD.
 //! - SubIFD0 is the raw data: the full-resolution image (NewSubfileType
-//!   0), 2012 by 1324 pixels, of 12-bit samples of a colour filter array,
+//!   0), 2012 by 1324 pixels, of 12-bit samples of a color filter array,
 //!   uncompressed (Compression 1), in one strip of 64 zero bytes that stand
 //!   for the sample's 67 strips. Its ImageWidth and ImageLength are LONGs,
 //!   and it holds no default crop.
@@ -275,9 +275,9 @@ const DATE_TIME_ORIGINAL: u16 = 0x9003;
 const OFFSET_TIME_ORIGINAL: u16 = 0x9011;
 /// The exposure compensation in EV, as an SRATIONAL (ExposureBiasValue).
 const EXPOSURE_BIAS_VALUE: u16 = 0x9204;
-/// The focal length in millimetres, as a RATIONAL (FocalLength).
+/// The focal length in millimeters, as a RATIONAL (FocalLength).
 const FOCAL_LENGTH: u16 = 0x920A;
-/// The focal length in 35 mm terms, in whole millimetres, as a SHORT
+/// The focal length in 35 mm terms, in whole millimeters, as a SHORT
 /// (FocalLengthIn35mmFilm).
 const FOCAL_LENGTH_IN_35MM_FILM: u16 = 0xA405;
 /// The capture time's fraction of a second, as ASCII digits
@@ -339,7 +339,7 @@ pub const LENS: u16 = 0x0084;
 const AF_INFO: u16 = 0x0088;
 /// Where the camera's autofocus aimed, as an UNDEFINED value that starts
 /// with its version, four ASCII digits, and holds at the version's offsets
-/// the size of a frame, the centre of the focus area and the area's size,
+/// the size of a frame, the center of the focus area and the area's size,
 /// as SHORTs in the MakerNote's byte order, and on most versions whether
 /// focus was confirmed (AFInfo2, a tag of the MakerNote IFD).
 pub const AF_INFO2: u16 = 0x00B7;
@@ -354,11 +354,11 @@ const UNCOMPRESSED: u16 = 1;
 const OLD_STYLE_JPEG: u16 = 6;
 /// Compression of Nikon's own raw data.
 const NIKON_RAW: u16 = 34713;
-/// PhotometricInterpretation of black is zero, a grey image.
+/// PhotometricInterpretation of black is zero, a gray image.
 const BLACK_IS_ZERO: u16 = 1;
 /// PhotometricInterpretation of an RGB image.
 const RGB: u16 = 2;
-/// PhotometricInterpretation of a colour filter array, raw sensor data.
+/// PhotometricInterpretation of a color filter array, raw sensor data.
 const CFA: u16 = 32803;
 /// ResolutionUnit of inches.
 const INCH: u16 = 2;
@@ -447,7 +447,7 @@ const D1H_TEXT_TAGS: [(u16, &str); 9] = [
 /// width, then height, the camera's full-size output, as on the public Z 9
 /// samples 5146 to 5148.
 pub const Z9_FOCUS_FRAME: (u32, u32) = (8256, 5504);
-/// The centre of the Z 9 file's focus area in [`Z9_FOCUS_FRAME`]: x, then
+/// The center of the Z 9 file's focus area in [`Z9_FOCUS_FRAME`]: x, then
 /// y, as on the public Z 9 samples 5146 to 5148.
 pub const Z9_FOCUS_CENTER: (u32, u32) = (4905, 2461);
 /// The size of the Z 9 file's focus area: width, then height, a single
@@ -458,7 +458,7 @@ pub const Z9_FOCUS_AREA: (u32, u32) = (291, 323);
 /// bodies write it, with its SHORTs in byte order `order`: 80 bytes, the
 /// version `version`, the detection method 2 (hybrid), the area mode
 /// `area_mode`, a zero byte and the coordinates flag 1; zeros up to byte
-/// 62; then the frame, the centre and the area of `record`, each width or
+/// 62; then the frame, the center and the area of `record`, each width or
 /// x before its height or y; the in-focus byte `in_focus`; and five zero
 /// bytes.
 pub fn af_info2_04xx(
@@ -520,13 +520,13 @@ const CROP_AREA_Z6III_1X1: [u16; 4] = [8, 4, 4032, 4032];
 
 /// The focus point that the Z6III file's AFInfo2 records, as on the public
 /// sample 7808: the frame, the camera's full 6048 by 4032 output, the
-/// centre and the area in it, a pinpoint area, each width or x first.
+/// center and the area in it, a pinpoint area, each width or x first.
 const Z6III_RECORDED_FOCUS: [(u32, u32); 3] = [(6048, 4032), (3023, 2016), (163, 174)];
 
 /// The frame of the Z6III file's focus point, as the reader gives it: the
 /// cropped picture, CropArea's size, not the frame AFInfo2 records.
 pub const Z6III_FOCUS_FRAME: (u32, u32) = (4032, 4032);
-/// The centre of the Z6III file's focus area in [`Z6III_FOCUS_FRAME`]: the
+/// The center of the Z6III file's focus area in [`Z6III_FOCUS_FRAME`]: the
 /// recorded (3023, 2016) moved back across by the 1:1 window's origin,
 /// half of 6048 less 4032.
 pub const Z6III_FOCUS_CENTER: (u32, u32) = (2015, 2016);
@@ -583,7 +583,7 @@ pub struct Z9Blobs {
     pub raw: BlobId,
     /// SubIFD2's medium JPEG.
     pub medium_jpeg: BlobId,
-    /// SubIFD3's grey strip.
+    /// SubIFD3's gray strip.
     pub gray: BlobId,
     /// The Exif IFD's MakerNote block.
     pub makernote: BlobId,
@@ -656,7 +656,7 @@ pub fn nikon_makernote_with(
 }
 
 /// The Z 9 layout, in byte order `order`, with IFD0's Orientation
-/// `orientation` (an EXIF value, 1 to 8).
+/// `orientation` (an Exif value, 1 to 8).
 pub fn z9_file(order: Order, orientation: u16) -> Built {
     z9_file_with_blobs(order, orientation).0
 }
@@ -777,7 +777,7 @@ pub fn z9_file_with(order: Order, orientation: u16, makernote_order: Order) -> (
 }
 
 /// The Z6III layout, in byte order `order`, with IFD0's Orientation
-/// `orientation` (an EXIF value, 1 to 8).
+/// `orientation` (an Exif value, 1 to 8).
 pub fn z6iii_file(order: Order, orientation: u16) -> Built {
     z6iii_file_with_blobs(order, orientation).0
 }
@@ -916,7 +916,7 @@ pub struct D300Blobs {
 }
 
 /// The D300 layout, in byte order `order`, with IFD0's Orientation
-/// `orientation` (an EXIF value, 1 to 8).
+/// `orientation` (an Exif value, 1 to 8).
 pub fn d300_file(order: Order, orientation: u16) -> Built {
     d300_file_with_blobs(order, orientation).0
 }

@@ -89,7 +89,7 @@ affects; [test-data.md](test-data.md) describes the files.
   through the viewfinder (a zero frame) and the D70 writes no AFInfo2,
   so no public Nikon JPEG in the set shows a position. A camera-original
   JPEG from a Z body, or from a DSLR in live view, under a usable
-  licence, would. [F]
+  license, would. [F]
 - **A Nikon JPEG shot in a crop mode, on a public file.** What such a
   JPEG records is known from my own Z 9 shots only (part 4); a public
   one, from a Z body or a DSLR in live view, would check it. [I]
@@ -103,7 +103,7 @@ affects; [test-data.md](test-data.md) describes the files.
   Sony's camera tags is unchecked on any file; phones are outside what
   the JPEG reader is for. [I]
 - **Other makers.** No camera-original Fujifilm, Panasonic or phone JPEG
-  with a usable licence was found; Canon's MakerNote is not read. [S]
+  with a usable license was found; Canon's MakerNote is not read. [S]
 - **ImageSizeRAW in a camera JPEG.** On the three stripped Z 9 JPEGs it
   is 1 on the full-size files and 2 on the middle-size one, so it follows
   either the JPEG's size or the raw size set beside it. A JPEG-only shot
@@ -119,12 +119,12 @@ affects; [test-data.md](test-data.md) describes the files.
 
 - Adobe's XMP specification, for the XMP segment's identifier and
   packet; the identifier on these pages is as found in the files.
-- The ICC profile specification, for the APP2 segments that carry colour
+- The ICC profile specification, for the APP2 segments that carry color
   profiles.
 - The earlier editions of Exif (2.32, 3.0) and of the Multi-Picture
   Format (2009, 2021), and any amendment to T.81 after 1992. The pages
   cite the editions listed in
-  [licences-and-references.md](licences-and-references.md).
+  [licenses-and-references.md](licenses-and-references.md).
 - ISO/IEC 10918-1 itself, which is technically the same text as T.81 and
   was not bought.
 
@@ -145,7 +145,7 @@ affects; [test-data.md](test-data.md) describes the files.
 - **What a Nikon JPEG records in a crop mode.** Shots made with my
   Z 9, as a JPEG and a raw file of each picture, in the DX, 1:1 and
   16:9 modes and at the camera's three image sizes, record AFInfo2's
-  full 8256×5504 frame in every JPEG, with the raw file's centre and
+  full 8256×5504 frame in every JPEG, with the raw file's center and
   area, no CropArea, and the raw file's CropHiSpeed. The full-size
   JPEG is the raw file's CropArea; at the smaller sizes the DX JPEGs
   are exactly 3:2, which the 5392×3592 full-size picture is not. So

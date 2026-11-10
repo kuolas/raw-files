@@ -1341,7 +1341,7 @@ mod tests {
 
     #[test]
     fn the_first_mpf_segment_is_found_among_app2_segments() {
-        // A colour profile first, an APP2 segment of another kind, and a
+        // A color profile first, an APP2 segment of another kind, and a
         // second MPF segment after the first.
         let mut builder = JpegBuilder::new();
         builder.app2(b"ICC_PROFILE\0\x01\x01").app2(&MPF).app2(&MPF);

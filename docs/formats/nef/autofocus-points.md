@@ -15,7 +15,7 @@ from section 2.
 Every table is measured by the project, or by a contributor, on frames
 shot with the body itself and read in the maker's own software, run as
 a reader to compare with; no table is transcribed from another
-project on its licence alone, and one from another project would
+project on its license alone, and one from another project would
 enter only by a decision made together with that project: that is the
 decision of
 [ADR017](../../architecture-decisions/adr017-per-body-tables-measured-by-the-project.md),
@@ -89,12 +89,12 @@ how to get in touch
 5. **Check the controls**: the live-view frames against the area their
    file records, the repeats against their originals, the portrait
    frames against the landscape readings turned, the crop frames against
-   the origin of their window centred in the frame, which the crop tag
+   the origin of their window centered in the frame, which the crop tag
    must record too, the auto-area frames against their masks. Fit each
    JPEG of a smaller size onto the full-size preview of its own raw
    file, with a scale and an offset on each axis, as section 2.9 does:
    the part of the frame it covers is the size's window, which must lie
-   centred and have the JPEG's shape.
+   centered and have the JPEG's shape.
 6. **Read the files' bytes**: the point number, the layout code, the
    mask and the focus mode of every frame, with a script written from
    the notes. The mask's bit order is read off the single-point frames,
@@ -111,7 +111,7 @@ how to get in touch
    and an auto-area frame; and run the tests. In the pull request say
    which software and version was run, and cite the frames as your own.
    A record names who shot the frames and who measured them; the frames
-   are committed stripped, under the repository's licence, with the
+   are committed stripped, under the repository's license, with the
    photographer's agreement, and their pixels and personal fields
    never are.
 
@@ -199,17 +199,17 @@ point 13 sets bit 4 of byte 9 and point 38 sets bit 5 of byte 12.
 
 The frame is 6016x4016, the body's full-size output and the frame its
 live-view shots record. Every point's box reads 164x164 (readings 162.8
-to 165.7). The centres are read from NX Studio's box and rounded to the
+to 165.7). The centers are read from NX Studio's box and rounded to the
 pixel; the tolerance is ±3 pixels (section 2.5). The name is the
 viewfinder's row letter, A at the top to E at the bottom, and column
 number, 1 at the left to 11 at the right; rows A and E have points over
 the three inner columns only and number them 1 to 3. That is the order
 in which ExifTool's published table names the numbers, read as
-documentation [P][1], and the frames confirm it: 1 is the centre, 13
+documentation [P][1], and the frames confirm it: 1 is the center, 13
 the top of the inner columns' left one, 38 the top of the outer columns'
 left one. **[F]** The mask bit is number − 1 (section 2.3).
 
-| Number | Name | Bit | Centre | Centre as read | Box as read |
+| Number | Name | Bit | Center | Center as read | Box as read |
 |---|---|---|---|---|---|
 | 1 | C6 | 0 | (3008, 2007) | (3008.0, 2006.6) | 162.9 x 162.8 |
 | 2 | B6 | 1 | (3008, 1755) | (3008.0, 1755.4) | 162.9 x 165.6 |
@@ -255,8 +255,8 @@ left one. **[F]** The mask bit is number − 1 (section 2.3).
 3247, 3486, 3724, 3963 and 4203, about 239 pixels apart. The three
 inner columns (5, 6 and 7) have five rows, at 1503, 1755, 2007, 2258
 and 2510, about 252 apart; the eight outer columns have three, at 1705,
-2007 and 2308, about 302 apart. The centre point, 1, lies at the frame's
-centre (3008, 2008) within 2 pixels. The table stores the readings
+2007 and 2308, about 302 apart. The center point, 1, lies at the frame's
+center (3008, 2008) within 2 pixels. The table stores the readings
 rounded to the pixel, not a grid fitted to them: the readings are the
 evidence, and a grid would be a guess at what the maker's software
 draws.
@@ -276,7 +276,7 @@ the table's tolerance is set at ±3.
 
 **The live-view frames calibrate the reading.** Frames 53 to 56 record
 their focus area in the file, in the 6016x4016 frame: an area of
-540x540 centred at (343, 3673), (343, 343), (5671, 343) and
+540x540 centered at (343, 3673), (343, 343), (5671, 343) and
 (5671, 3673), the four limits of the area's travel. The screenshots
 read (342.6, 3670.8), (342.6, 342.4), (5671.9, 342.4) and
 (5670.5, 3670.8), with a box of 539x539: NX Studio draws the box with
@@ -301,7 +301,7 @@ again, read identically to their originals. **[F]**
   within 2 pixels of CropHiSpeed's origin (1040, 696), which, though
   CropHiSpeed counts the sensor's pixels, is also
   ((6016 − 3936) / 2, (4016 − 2624) / 2): the origin of the window
-  centred in the output frame, in output pixels, with no correction for
+  centered in the output frame, in output pixels, with no correction for
   the border:
   CropHiSpeed's cropped size, 3968x2636, counts 32 and 12 pixels that
   the 3936x2624 picture does not have, as the raw image's 6080x4028
@@ -313,19 +313,19 @@ again, read identically to their originals. **[F]**
   NEF as in the JPEG
   ([ADR018](../../architecture-decisions/adr018-focus-points-placed-from-a-table-and-the-points-used.md)).
   **[F]** In sensor pixels the DX crop lies 16 pixels left of the
-  centre, 1040 + 3968 / 2 = 3024 against 6080 / 2 = 3040, while the
-  picture lies centred in the output: the left and top borders trimmed
+  center, 1040 + 3968 / 2 = 3024 against 6080 / 2 = 3040, while the
+  picture lies centered in the output: the left and top borders trimmed
   from the full frame and from the crop are the same, and the full
   frame loses 64 pixels across where the crop loses 32. So the frames
   cannot tell a shift by CropHiSpeed's origin from one to the window
-  centred in the output, and the table keeps the window's size,
+  centered in the output, and the table keeps the window's size,
   3936x2624, measured on the frames; a file is placed on the crop only
-  when CropHiSpeed's origin is that window's centred origin
+  when CropHiSpeed's origin is that window's centered origin
   ([ADR018](../../architecture-decisions/adr018-focus-points-placed-from-a-table-and-the-points-used.md)).
-  **[I]** Whether the window lies centred, and CropHiSpeed records its
+  **[I]** Whether the window lies centered, and CropHiSpeed records its
   origin, on other bodies is a fact per body, which the two crop
   frames of the procedure check; the D7200's 1.3x files record an
-  origin that is not centred
+  origin that is not centered
   ([makernote-and-metadata.md](makernote-and-metadata.md#86-focus-point)).
 - **Auto-area (frames 42 to 44).** Area mode 8; primary points 22, 22
   and 4; masks of 12, 13 and 9 bits. NX Studio draws one box per bit,
@@ -367,7 +367,7 @@ Three of the frames serve the table's tests, frame 4 also as its
 JPEG:
 
 - frame 4, point 38 (B1, the top-left of the outer columns), as a NEF
-  and as its JPEG: a single point far from the centre, where a wrong
+  and as its JPEG: a single point far from the center, where a wrong
   table, a wrong bit order or a wrong frame shows, on both paths; the
   tests of its NEF and of its JPEG check every value of their metadata,
   point 38 at (1812, 1705) with its box of 164 by 164, as the focus
@@ -453,7 +453,7 @@ I shot six RAW+JPEG pairs with my own D600 on 2026-11-03, outside the
 session, frames 7854 to 7859 by the camera's numbering: two each at the
 Large, Medium and Small sizes, of one static scene, with an AF-S Nikkor
 50mm f/1.4G at f/1.4, through the viewfinder in 3D-tracking with the
-centre point, point 1 (the frames of section 2.2). Each JPEG was fitted
+center point, point 1 (the frames of section 2.2). Each JPEG was fitted
 onto the full-size preview of its own NEF, 6016x4016 with the framing
 of the Large JPEG, which exiv2, run as a reader, extracted: a script
 written for this measurement matched small patches of the two pictures
@@ -471,12 +471,12 @@ The Medium bounds are the mean of the two frames, which agree to 0.05
 pixels. **[F]** So the Medium JPEG is not the whole frame scaled more
 in height than in width, nor a picture scaled by 0.75 with 4 rows cut
 from it: it is a window of the frame, 6010.2x4006.9 frame pixels, 3:2,
-centred to within 0.06 pixels (2.90 left and 2.94 right, 4.54 above
+centered to within 0.06 pixels (2.90 left and 2.94 right, 4.54 above
 and 4.60 below), scaled evenly. **[F]** No tag records the window:
 the Medium JPEG carries the same AFInfo2 and CropHiSpeed as its NEF
 (section 2.2), CropHiSpeed recording no crop.
 
-The table keeps that window as a whole number of frame pixels, centred
+The table keeps that window as a whole number of frame pixels, centered
 to the pixel: 6010x4006, at the origin (3, 5), the nearest such window
 to the measured one
 ([ADR018](../../architecture-decisions/adr018-focus-points-placed-from-a-table-and-the-points-used.md)).

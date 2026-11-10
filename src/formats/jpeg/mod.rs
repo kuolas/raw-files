@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! The JPEG reader: how the crate recognises a JPEG file, and how it finds
+//! The JPEG reader: how the crate recognizes a JPEG file, and how it finds
 //! the file's previews and reads its metadata.
 //!
 //! A JPEG file is a picture as a camera writes it beside its raw file or
@@ -83,7 +83,7 @@
 //! raw file, the standard tags first (ADR011): the camera's make and model
 //! and the orientation from IFD0, and the serial number, the capture time,
 //! the exposure, the camera's settings and the lens from the Exif IFD, with
-//! the Interoperability IFD for the colour space.
+//! the Interoperability IFD for the color space.
 //!
 //! Then the MakerNote is read, by IFD0's Make, as in a raw file (ADR014),
 //! once, by the reader of the maker the Make names ([`Maker`]); the Make
@@ -104,7 +104,7 @@
 //!   gave none, so that an Exif value always wins; the camera settings
 //!   that only it records, but the raw image size, since a JPEG holds no
 //!   raw data, and its white balance setting, finer than Exif's, in place
-//!   of Exif's, and its colour space only when the Exif IFD holds no
+//!   of Exif's, and its color space only when the Exif IFD holds no
 //!   ColorSpace; and the focus point, below.
 //! - **When the Make starts with `SONY`**, as the ARW claim first tests it,
 //!   the Sony MakerNote reader (`makernote/sony.rs`) reads it as it reads
@@ -140,7 +140,7 @@
 //! ([`Picture::Jpeg`]). A JPEG shot in a crop mode, as the Z 9 writes it,
 //! records its point in the camera's full output and holds no CropArea,
 //! and its point is placed on the JPEG's pixels (ADR015): a DX crop's
-//! scaled onto them, a 1:1 or 16:9 crop's moved into the centred window of
+//! scaled onto them, a 1:1 or 16:9 crop's moved into the centered window of
 //! the recorded frame that has the JPEG's shape. A JPEG whose MakerNote
 //! holds a CropArea gives no point on a crop, since it has no raw size to
 //! check CropArea against. A JPEG shot through a DSLR's viewfinder, of a
@@ -154,7 +154,7 @@
 //! shape where the whole frame has not (ADR018).
 //!
 //! The Sony MakerNote reader gives the point as it gives an ARW's (ADR012):
-//! the frame and the centre from FocusLocation, or FocusLocation2 without
+//! the frame and the center from FocusLocation, or FocusLocation2 without
 //! it, the area from FocusFrameSize where it records one, and none in
 //! manual focus. Sony's frame is the picture as framed in the camera, so
 //! the point is not placed: the ILCE-7M3's JPEG at the camera's M size
@@ -293,7 +293,7 @@ fn parse<R: Read + Seek>(
     // are read, so that its reader takes them for the JPEG's: with no raw
     // size, CropArea gives no image size, and a crop is placed on the
     // picture's pixels. Whether the Exif IFD holds a ColorSpace is kept as
-    // read, so that the MakerNote's colour space never overrules it.
+    // read, so that the MakerNote's color space never overrules it.
     let standard = Standard {
         metadata: Metadata {
             raw_size: None,
@@ -661,7 +661,7 @@ mod tests {
         // A Nikon MakerNote whose IFD holds one entry, its ColorSpace, one
         // SHORT 2, Adobe RGB. Beside an Exif ColorSpace that is
         // "uncalibrated" with no index, as a program that rewrote the JPEG
-        // may leave it, the colour space is Exif's: none. Without an Exif
+        // may leave it, the color space is Exif's: none. Without an Exif
         // ColorSpace, it is the MakerNote's.
         let mut nikon = b"Nikon\0\x02\x11\0\0II\x2A\0\x08\0\0\0".to_vec();
         nikon.extend_from_slice(&[0x01, 0, 0x1E, 0, 0x03, 0, 0x01, 0, 0, 0, 0x02, 0, 0, 0]);

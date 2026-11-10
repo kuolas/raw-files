@@ -65,7 +65,7 @@ describes how the research was done and what it could not reach.
 | [autofocus-points.md](autofocus-points.md) | The procedure by which a body's autofocus points are measured, and the record of each body measured, the D600 first (focus points) |
 | [raw-data.md](raw-data.md) | How the sensor data is stored: Huffman compression, packed layouts, small raws, HE/HE\* (raw sensor data) |
 | [security.md](security.md) | Past vulnerabilities in NEF parsers and the checklist that follows from them |
-| [licences-and-references.md](licences-and-references.md) | Standards, existing implementations and their licences, and what raw-files may reuse |
+| [licenses-and-references.md](licenses-and-references.md) | Standards, existing implementations and their licenses, and what raw-files may reuse |
 | [test-data.md](test-data.md) | Where sample files come from, which may be committed, and which bodies to cover |
 | [open-questions.md](open-questions.md) | Decisions to take, facts still to establish, and what the samples, a decision or the code settled |
 | [research-record.md](research-record.md) | How this documentation was researched, and its limits |
@@ -115,9 +115,9 @@ the disagreement.
   balance.
 - **Compressed raw data uses six fixed Huffman tables.**
   - The tables are built into decoders; the file does not store them.
-  - Each pixel is predicted from the pixel of the same colour two columns to
+  - Each pixel is predicted from the pixel of the same color two columns to
     the left.
-  - A linearisation curve in MakerNote 0x0096 maps the decoded values. Nikon's
+  - A linearization curve in MakerNote 0x0096 maps the decoded values. Nikon's
     "lossy" modes are that curve [S].
 - **HE and HE\*** (Z 9 and later) are a JPEG XS-based codec. JPEG XS is
   covered by a patent pool; whether it applies to HE is a legal question. No
@@ -126,7 +126,7 @@ the disagreement.
 - **No mature NEF implementation can be copied into raw-files.** They are GPL,
   LGPL, CDDL or under dcraw's own terms. Small permissively licensed crates
   exist but are immature. The mature ones can be read for understanding only
-  (see [licences-and-references.md](licences-and-references.md)).
+  (see [licenses-and-references.md](licenses-and-references.md)).
 
 ## Where to start, by capability
 
@@ -154,7 +154,7 @@ the disagreement.
   - [open-questions.md](open-questions.md), for the data-table decisions that
     must be taken first.
 
-## Licence hygiene
+## License hygiene
 
 raw-files is MIT OR Apache-2.0 ([ADR002](../../architecture-decisions/adr002-license-mit-or-apache-2.md)).
 These pages restate algorithms in prose or in original pseudocode. They copy

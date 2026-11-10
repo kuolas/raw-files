@@ -8,7 +8,7 @@
 //! file's, and a format module, such as the one for NEF files, decides what
 //! that structure means.
 //!
-//! A file's container is recognised by its first bytes, and [`Structure`]
+//! A file's container is recognized by its first bytes, and [`Structure`]
 //! is the structure read from it: a JPEG file starts with SOI and a marker,
 //! `FF D8 FF`, and a TIFF file with a byte-order mark, `II` or `MM`.
 //! [`Structure::read`] asks the JPEG container first, then reads a TIFF

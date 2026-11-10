@@ -24,7 +24,7 @@ samples, the fixtures and my own files, as it reads every other value.
 The name has to come from outside the files. It can be had from the
 maker's own documents, its manuals and its product pages; from the
 tables other readers keep, such as ExifTool's list of Sony's model
-numbers; or from retailers, reviews and encyclopaedias.
+numbers; or from retailers, reviews and encyclopedias.
 
 The makers' own documents do not always agree with each other. Sony's
 photo gallery writes α7 IV and α9 III, and the Help Guide of the same
@@ -67,7 +67,7 @@ recorded in the format notes before the code, on a page of their own
   uniform across a maker's line. The brand is not part of the name: a
   program joins the two
   ([ADR021](adr021-what-the-file-records-and-what-raw-files-reads-into-it.md)).
-- **The maker by its whole text.** A maker is recognised from a Make
+- **The maker by its whole text.** A maker is recognized from a Make
   text a file has shown, matched whole and with its case, as the white
   balance texts are
   ([ADR011](adr011-metadata-from-standard-tags.md)); its name, such as
@@ -77,8 +77,8 @@ recorded in the format notes before the code, on a page of their own
   maker and the recorded Model text together, exactly, so that a Model
   text two makers might both write cannot give the other's name.
 - **No other project's table.** No name is taken from another reader's
-  table, whatever its licence, nor from a retailer, a review or an
-  encyclopaedia. Other readers may be run on a file to see its Model
+  table, whatever its license, nor from a retailer, a review or an
+  encyclopedia. Other readers may be run on a file to see its Model
   text, as [ADR013](adr013-clean-room-and-third-party-code.md) allows,
   never to take a name.
 - **A body not listed has no name**, and a body whose maker's document
@@ -90,7 +90,7 @@ Rejected:
   Sony's model numbers. Their selection and arrangement are another
   project's work, and a name taken from them could not be checked
   against the maker by a reader of the notes.
-- **Names from retailers, reviews or encyclopaedias.** They are not the
+- **Names from retailers, reviews or encyclopedias.** They are not the
   maker's, and differ from one another.
 - **One spelling for a maker's whole line**, such as every Nikon Z name
   without a space. The line would read evenly, but some of its names
