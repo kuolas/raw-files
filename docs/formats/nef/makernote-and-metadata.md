@@ -3,8 +3,9 @@
 This page describes the Nikon MakerNote found in NEF files: its three
 layouts, the tags that matter, the encrypted blocks and how they are
 decrypted, and where a viewer finds orientation, capture date, make, model
-and image size, where the camera recorded the point it focused on, and
-how the camera was set for the shot.
+and image size, where the camera recorded the point it focused on,
+how the camera was set for the shot, and who made the picture and where
+it was taken.
 It serves three of the [roadmap](../../ROADMAP.md)'s capabilities:
 metadata, both what raw-files reads from the plain tags and full
 metadata; focus points; and, for the decoding-related tags, raw sensor
@@ -538,7 +539,8 @@ The lesson is that the block can be that large, so cap allocations.
 ## 8. Viewer metadata
 
 Everything a viewer needs next to the preview comes from standard IFD0, its
-SubIFDs and the Exif IFD, except the crop rectangle, which comes from the
+SubIFDs, the Exif IFD and, for the location, the GPS IFD
+([section 8.9](#89-location)), except the crop rectangle, which comes from the
 MakerNote, and the serial number, ISO, lens range and offset from UTC
 that older bodies record only there (sections
 [8.2](#82-capture-date-and-time-zone) and
@@ -1372,6 +1374,126 @@ the D600, 14 of them with a JPEG of the same shot **[F]**.
 
 Every value of these frames lies inside the MakerNote **[F]**.
 
+### 8.8 Authorship
+
+Who made the picture and what was written about it. Exif records the
+artist in IFD0's 0x013B Artist, the copyright notice in 0x8298
+Copyright and a description in 0x010E ImageDescription; a comment in
+the Exif IFD's 0x9286 UserComment; and, since Exif 3.0, the
+photographer, the editor and the title in 0xA437 Photographer, 0xA438
+ImageEditor and 0xA436 ImageTitle, beside the camera's owner in 0xA430
+CameraOwnerName. Each is of type ASCII or UTF-8, the UTF-8 type being
+the one Exif 3.0 added, except UserComment, which is UNDEFINED and
+starts with 8 bytes naming its characters: `ASCII` and three NULs,
+`JIS`, `UNICODE` (UTF-8), or eight NULs for undefined text, which Exif
+leaves to the reader's locale. Exif says CameraOwnerName and
+Photographer shall in principle not be rewritten. [P][23] (4.6.4 and
+Tables 4 and 5, pp. 29 to 30; 4.6.5.4.1, 4.6.5.4.6 and 4.6.5.4.7, pp.
+41 to 43; 4.6.6.4.2, p. 49; 4.6.6.9.2 and 4.6.6.9.8 to 4.6.6.9.10, pp.
+79 to 81)
+
+The numbers below and in [section 8.9](#89-location) were taken on 9
+November 2026 with a counting program of my own over raw-files' own
+view of every entry ([section 12](#12-the-directories-a-file-holds)),
+written from Exif 3.1; no other reader was run. They cover the 289 NEF
+and NRW files of raw.pixls.us and, as counts only, 29,447 of my own:
+14,335 NEFs of my Z 9, 14,338 of five Nikon DSLRs and 774 of a folder
+of files a program exported. **[F]** In sections 8.8 and 8.9, **[F]**
+marks a count over these files rather than a fact of one named file.
+
+- **Every text is plain ASCII**: of type ASCII, NUL-terminated, with
+  no byte above 0x7F and nothing after the NUL. No NEF uses the UTF-8
+  type. **[F]**
+- **Artist and Copyright are fixed fields.** Artist is 37 bytes on
+  every file that has it; Copyright is 55 bytes on all but 8 public
+  files, which write 33 or 34 bytes of text (4) or 8 of spaces (4).
+  Unset, a field starts with a NUL or is all spaces; set, its text is
+  padded with spaces on some bodies. On the public files Artist is on
+  223 (text on 102, a NUL first on 102, spaces on 19) and Copyright on
+  231 (text on 90, a NUL first on 114, spaces on 27), the text up to 36
+  bytes of Artist and 34 of Copyright once trimmed; on mine both are on
+  25,879 files, with text on 23,091. **[F]**
+- **Nikon cameras write no description.** ImageDescription is on 13
+  public files, all spaces (11, 32 or 33 bytes), and on none of mine.
+  **[F]**
+- **UserComment is 44 bytes, the code `ASCII` and 36 bytes of NULs,
+  spaces or text**, on all but a few files: on 257 of the 268 public
+  files that have it, the rest 48, 126 or 128 bytes, and on every one
+  of mine. Its text is on 21 public files and 8,083 of mine, ending at
+  a NUL or padded with spaces. 11 public files, 7 of them with the Make
+  `NIKON`, have the undefined code followed by NULs or spaces. No NEF
+  has the `JIS` or `UNICODE` code, or text under the undefined code.
+  **[F]**
+- **No NEF has CameraOwnerName, Photographer, ImageEditor or
+  ImageTitle.** **[F]**
+
+raw-files will read these texts into a value of their own, and the
+owner with the camera, as
+[ADR011](../../architecture-decisions/adr011-metadata-from-standard-tags.md)
+decides: IFD0's texts from IFD0 alone, each text cleaned as every text
+is, from either type where Exif allows both; the description and the
+comment without the 255-byte limit; the comment only under the `ASCII`
+code. A comment under another code stays `None`, and the view of every
+entry gives its bytes. The photographer, the editor, the title and the
+owner can be checked on built files only, since no file here records
+one. **[I]**
+
+### 8.9 Location
+
+Exif records where the picture was taken in the GPS IFD, which IFD0's
+0x8825 points to: GPSVersionID (0x0000, four BYTEs, 2.4.0.0 in Exif
+3.1); the latitude and longitude, each a reference letter (`N` or `S`,
+`E` or `W`, ASCII, count 2) and three RATIONALs, degrees, minutes and
+seconds (0x0001 to 0x0004); the altitude, GPSAltitudeRef (0x0005,
+BYTE) and GPSAltitude (0x0006, a RATIONAL in metres); the time,
+GPSTimeStamp (0x0007, three RATIONALs, in UTC) with GPSDateStamp
+(0x001D, `YYYY:MM:DD`, ASCII, count 11); the image direction,
+GPSImgDirectionRef (0x0010, `T` true or `M` magnetic north) and
+GPSImgDirection (0x0011, 0.00 to 359.99 degrees); the map datum,
+GPSMapDatum (0x0012, ASCII); and 20 more tags, from the satellites
+used to the horizontal positioning error. Exif names both the form
+`dd/1, mm/1, ss/1` and degrees with minutes to a fraction,
+`dd/1, mmmm/100, 0/1`. GPSAltitudeRef 0 and 1 mean at or above and
+below the ellipsoid, and 2 and 3 above and below sea level; until
+Exif 2.32, 0 and 1 meant sea level. The tags also hold positions from
+other satellite systems and from mobile networks. [P][23] (Table 14,
+pp. 82 to 83; 4.6.7 and 4.6.7.1.1 to 4.6.7.1.19, pp. 82 to 88;
+4.6.7.1.30, p. 91)
+
+- **A GPS IFD is no location.** It is on every NEF of mine and on 263
+  of the 289 public files, and on 254 of those and on all of mine but
+  262 it holds a single entry, its version: 2.3.0.0, or 2.2.0.0 on
+  older bodies (43 of the public files and my D300S's 647), or 2.0.0.0
+  on the D1H and D1X (3 public files). **[F]**
+- **A position is on 6 public files and 262 of mine.** The public ones
+  are 3 Z 9 files, 2 D5600 files and a Nikon 1 AW1 file; mine are all
+  Z 9 files. Every one writes the latitude and longitude as degrees
+  and minutes with four decimals (`d/1, m/10000, 0/1`), the GPS time
+  with seconds over 100, the date, the satellites as two digits and
+  the datum in 17 bytes: blank on the Z 9's, `WGS-84` on the D5600's
+  and the AW1's. All but one write the altitude, with
+  the reference 0; one public file writes the image direction, from
+  magnetic north. **[F]**
+- **Three Coolpix NRWs write the tags with nothing in them.** The
+  P6000 (version 2.2.0.0), P7700 and P7800 (2.3.0.0) write every
+  position tag, the altitude, the time and the image direction with
+  blank references and zero denominators, and a blank datum of 10
+  bytes. They record no position. **[F]**
+- **Every GPS entry is of the type and count Exif gives**, every GPS
+  IFD sorted by tag with no tag twice, and no entry left out. **[F]**
+
+raw-files will give a location only where both references and both
+coordinates are sound, as
+[ADR011](../../architecture-decisions/adr011-metadata-from-standard-tags.md)
+decides, with the altitude, the time, the image direction and the
+datum beside it; a GPS IFD of only a version, and the Coolpix files'
+blanks, give none. The satellites, which every NEF with a position
+records, stay in the view of every entry, as do the tags no NEF here
+writes. **[I]**
+
+Every text and GPS value counted lies inside the blocks raw-files'
+`open` already reads. **[F]**
+
 ## 9. Robustness pitfalls
 
 The raw-files rule is that a malformed file returns an error and never panics.
@@ -1878,3 +2000,7 @@ Retrieved October 2026.
   https://exiftool.org/forum/index.php?msg=28917
 - [22] raw.pixls.us, the catalogue's exiv2 metadata listing of each file
   (read October 2026) — https://raw.pixls.us/
+- [23] CIPA DC-008-Translation-2026, "Exchangeable image file format for
+  digital still cameras: Exif Version 3.1" (January 2026), read
+  November 2026 —
+  https://www.cipa.jp/std/documents/download_e.html?CIPA_DC-008-2026-E
