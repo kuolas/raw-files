@@ -2,8 +2,9 @@
 
 - Status: Accepted
 - Date: 2026-10-15
-- Revision: 2, 2026-10-25
-- Issue: #13; the camera settings #26, revised in #51
+- Revision: 3, 2026-11-09
+- Issue: #13; the camera settings #26, revised in #51; authorship and
+  location #97
 
 ## Context
 
@@ -143,6 +144,69 @@ They showed:
   the program's name on every file a program rewrote. Exif 3.0 added
   CameraFirmware for the camera's alone; no checked file writes it.
 
+A viewer also shows who made a picture and where it was taken: the
+artist, the copyright notice, a title, a description or a comment, and
+the place on a map. Exif records them in tags of IFD0, the Exif IFD and
+the GPS IFD (Exif 3.1, CIPA DC-008-2026: 4.6.5.4, 4.6.6.4.2, 4.6.6.9
+and 4.6.7). We counted what files record in them on 9 November 2026,
+with a counting program of my own over raw-files' own view of every
+entry ([ADR023](adr023-every-entry-a-file-records.md)), written from
+Exif 3.1; no other reader was run. It opened 57,786 files: 515 public
+ones (the 507 NEF, ARW and JPEG files of raw.pixls.us and the eight
+camera JPEGs from Wikimedia Commons) and, as counts only, 57,271 of my
+own (a Z 9, six Nikon DSLRs, an ILCE-7M2, Canon and Fujifilm cameras,
+and files a program rewrote). The format notes for
+[NEF](../formats/nef/makernote-and-metadata.md),
+[ARW](../formats/arw/makernote-and-metadata.md) and
+[JPEG](../formats/jpeg/container-and-metadata.md) hold the details.
+They showed:
+
+- **Every text is plain ASCII.** Artist, Copyright and
+  ImageDescription are of type ASCII on every file, with no byte above
+  0x7F. No file uses the UTF-8 type that Exif 3.0 added and that Exif
+  3.1 allows beside ASCII for sixteen texts, among them Make, Model,
+  Software and the lens's make and model, but not the serial numbers.
+  Cleaned, the longest texts are an Artist of 36 bytes, a Copyright of
+  34 and a description of 176, and the longest comment holds 176 bytes
+  after its code; a program wrote both, the description with control
+  characters.
+- **Cameras write fields of a fixed length, and blanks.** Nikon writes
+  Artist in 37 bytes and Copyright in 55, a NUL first or all spaces
+  when they are not set; Sony an ImageDescription of 32 spaces on all
+  but its older bodies' files, with copies in IFD1 and IFD2; a Canon DSLR an Artist, a
+  Copyright and a CameraOwnerName of one NUL; Fujifilm compacts a
+  Copyright of four spaces.
+- **Older Sony bodies describe every picture as `SONY DSC`**, on 24
+  files (23 public ARWs and a camera JPEG); newer ones write the
+  spaces.
+- **A comment is ASCII or blank.** UserComment starts with 8 bytes
+  naming its characters: ASCII, JIS, Unicode (UTF-8) or undefined
+  (4.6.4 and Table 4). There is text under the ASCII code only, on
+  11,319 files, 11,277 of them Nikon's; Nikon cameras write the code
+  and 36 bytes of NULs, spaces or text. The undefined code is followed by
+  NULs and spaces alone, and no file uses JIS or Unicode.
+- **No file holds text in CameraOwnerName, Photographer, ImageEditor
+  or ImageTitle.** CameraOwnerName is blank on the 138 files that have
+  it, all Canon's; the other three, added in Exif 3.0, are in no file.
+- **A GPS IFD is seldom a position.** 46,250 files hold a GPS IFD and
+  548 a position. Nearly every Nikon file, and the Canon DSLR's, holds
+  one of a single entry, its version; a Sony body without a fix writes
+  four (the version, the status `V`, the datum and the differential
+  correction); three Coolpix files write every position tag with blank
+  references and zero denominators.
+- **Each maker writes a position its own way.** Nikon writes degrees
+  and minutes with four decimals (`d/1, m/10000, 0/1`), Sony degrees,
+  minutes and seconds with three (`d/1, m/1, s/1000`), a phone whole
+  seconds; the GPS time has hundredths of a second on Nikon and
+  thousandths on Sony. Every one of the 531 files with an altitude
+  records the reference 0, under GPS version 2.3, though
+  Exif 3.0 changed what 0 means, from sea level to the ellipsoid, and
+  added 2 and 3 for sea level (4.6.7.1.6). The datum is `WGS-84` on
+  Sony's files with a position and blank on all but 3 of Nikon's; one public file records the image
+  direction, from magnetic north.
+- **Nothing here costs a read.** Every text and GPS value measured lies
+  inside the blocks that opening the file already reads.
+
 ## Decision
 
 We will read the metadata, the camera's settings among it, from the
@@ -154,7 +218,9 @@ nothing standard records a value; nothing is deciphered or decrypted.
   reading again. The values it reads lie near the start of the file:
   the Exif and MakerNote values below 105 KB on every Nikon Z sample,
   the Exif values below 44 KB on every Sony one; the raw IFD, which gives the raw size, is one that
-  `open` already reads to find the previews.
+  `open` already reads to find the previews. The authorship texts and
+  the GPS IFD's values lie inside the blocks `open` reads on every file
+  counted.
 - **A damaged field costs only that field.** A field whose tag is
   missing, of an unexpected type, out of range or unreadable is `None`,
   and the file still opens; only an I/O error is passed up. So does a
@@ -207,6 +273,21 @@ nothing standard records a value; nothing is deciphered or decrypted.
   ends; an empty result, a value longer than 255 bytes, or a lens named
   only with `-` characters is `None`. Bytes that are not UTF-8 become
   U+FFFD.
+- **A text of either type where Exif allows both.** The twelve texts
+  raw-files reads that Exif 3.1 gives as "ASCII or UTF-8" are read from
+  a value of either type: Make, Model, Software, LensMake, LensModel, ImageDescription,
+  Artist, Copyright, CameraOwnerName, ImageTitle, Photographer and
+  ImageEditor. Every other text, such as the serial numbers and the
+  capture time, which Exif gives as ASCII alone, and every MakerNote
+  text, is read only from type ASCII.
+- **A description and a comment are free text.** They have no 255-byte
+  limit, only the cap on the size of any value read (`Limits`), and
+  keep their line breaks; every other text keeps the limit.
+- **A camera's placeholder is no description.** A text that a measured
+  file shows a camera writes in ImageDescription by itself is `None`,
+  as a lens named only with dashes is. The list holds `SONY DSC`; a
+  text is matched as the whole cleaned text, whatever the Make, and the
+  list grows only from measured files.
 - **The exposure program, the metering mode and the flash come from Exif
   alone**, with Exif's codes: the programs 1 to 8, the metering modes 1
   to 6 and 255, "other"; 0, "not defined" or "unknown", gives none. The
@@ -270,6 +351,53 @@ nothing standard records a value; nothing is deciphered or decrypted.
 - **The software** is IFD0's Software as written, cleaned like every
   text: the camera's firmware, or the program that last wrote the file.
   Exif's CameraFirmware is not read, since no checked file writes it.
+- **Authorship is a value of its own**, of seven texts: the artist
+  (IFD0's Artist), the copyright notice (IFD0's Copyright), the
+  photographer (the Exif IFD's Photographer), the editor (ImageEditor),
+  the title (ImageTitle), the description (IFD0's ImageDescription)
+  and the comment (the Exif IFD's UserComment). IFD0's texts are read
+  from IFD0 alone, not from the copies Sony writes in IFD1 and IFD2,
+  and nothing is read from a MakerNote.
+- **A comment is read under the ASCII code alone.** The text after
+  UserComment's 8-byte code `ASCII` is read and cleaned as every text.
+  Under the JIS, Unicode or undefined code, or a code Exif does not
+  list, and when the value is no longer than its code, the comment is
+  `None`.
+- **The camera's owner is the camera's.** CameraOwnerName, which names
+  whoever owns the body, whoever takes the picture, and which Exif says
+  shall in principle not be rewritten (4.6.6.9.2), is read with the
+  camera, beside its serial number.
+- **A location needs a sound position.** A file has a location when
+  its GPS IFD records GPSLatitudeRef `N` or `S`, GPSLongitudeRef `E` or
+  `W`, and GPSLatitude and GPSLongitude as three RATIONAL values each,
+  with no zero denominator, minutes and seconds below 60, and no more
+  than 90° of latitude or 180° of longitude. Without one, none of the
+  location's parts is given, whatever else the GPS IFD records.
+- **Coordinates as recorded.** A coordinate keeps the three fractions
+  the file records, its degrees, minutes and seconds, and its
+  hemisphere; decimal degrees, negative to the south and west, are
+  computed when asked for.
+- **The location's other parts** are each read from both their tags,
+  and a part whose tags are missing or damaged is `None` alone. The
+  altitude is GPSAltitude in metres as recorded and whether it lies
+  above (GPSAltitudeRef 0 or 2) or below (1 or 3) its reference,
+  without naming the surface it is measured from. The time is
+  GPSDateStamp and GPSTimeStamp together, one time in UTC; it needs
+  whole hours and minutes, seconds whose denominator is a power of ten,
+  so that the fraction of a second the file records is kept, and a date
+  and time that exist, as the capture time does. The image direction
+  is GPSImgDirection, below 360°, counted from the north that
+  GPSImgDirectionRef names, `T` true or `M` magnetic, with no default
+  when the reference is missing. The map datum is GPSMapDatum, cleaned
+  as every text. GPSVersionID, GPSStatus and the other GPS tags are not
+  read.
+- **As recorded, nothing redacted.** The artist, the copyright notice,
+  the owner, the description, the comment and the location name people
+  and places. raw-files gives them as the file records them, with no
+  option to hide them, as the view of every entry does
+  ([ADR023](adr023-every-entry-a-file-records.md)). Tests on public
+  sample files check them by presence and shape only, and tests on my
+  own files print counts only.
 
 Rejected:
 
@@ -297,7 +425,8 @@ Rejected:
   into `1/320`.
 - **Trimming only trailing spaces, with no length limit**, as other
   readers do. A leading space is padding too, and the longest measured
-  value has 65 bytes, so text past 255 bytes is taken for damage.
+  value has 65 bytes, so text past 255 bytes is taken for damage,
+  except in a description and a comment, which are free text.
 - **Deciphering Sony's enciphered block** for older serial numbers. Its
   tables have no settled provenance.
 - **Deciphering the Sony blocks that record the shutter used and APS-C
@@ -327,6 +456,56 @@ Rejected:
   stays 0 when the photographer shifts the white balance.
 - **Letting the MakerNote's colour space overrule Exif's.** A rewritten
   JPEG can keep a stale one.
+- **The authorship texts flat on the metadata, or split**, the artist
+  and the copyright in a value and the description and the comment
+  flat. Seven more getters would crowd a type whose other values are
+  grouped, and a split would put the answers to one question, who made
+  the picture and what they wrote about it, in two places.
+- **The names `Gps` and `Position`.** Exif says its GPS tags also hold
+  positions from other satellite systems and from mobile networks
+  (4.6.7), and the value holds more than a position: an altitude, a
+  time, a direction and a datum.
+- **Decimal degrees only, or no decimal degrees.** Degrees alone lose
+  what the file records, and a floating-point value would keep the
+  metadata from being compared and hashed; fractions alone make every
+  program that shows a map compute the same degrees.
+- **A typed value for every GPS tag, or also for those cameras
+  write**: the satellites, the status, the measure mode. Most of the
+  tags are written by no measured camera file, the rest describe the
+  receiver rather than the picture, and the view of every entry gives
+  them all.
+- **Reading the Unicode code as UTF-8, and text under the undefined
+  code.** Exif defines the Unicode code as UTF-8 (Table 4), but no
+  measured file shows what writers put there, and it leaves the
+  undefined code to the reader's locale (Table 5), so either reading
+  would be a guess. The view of every entry gives the bytes.
+- **A placeholder given as recorded.** A viewer would show `SONY DSC`
+  as the description of every picture those bodies took.
+- **The 255-byte limit for every text, or a fixed 64 KiB for the free
+  texts.** A program's description is ordinary text at any length, not
+  damage, and a second number beside the cap on any value would make a
+  value readable one way and not the other.
+- **The UTF-8 type for the new texts only, or for none.** Make and
+  Model would be read by a different rule from Artist in the same IFD,
+  and a file that follows Exif 3.0 with no UTF-8 at all would lose its
+  texts as damaged.
+- **A redaction option.** raw-files gives what the file records; a
+  program that hides a name or a place decides what to hide, as with
+  the view of every entry.
+- **The surface of the altitude named, or signed metres as a
+  floating-point value.** Exif 3.0 changed the meaning of 0 and 1, and
+  every measured file records 0 under an older GPS version, so a
+  surface would be guessed from a version number; a floating-point
+  value loses what the file records.
+- **The photographer, the editor, the title and the owner left until a
+  file records one.** The standard defines each as plainly as the
+  artist, so a file could add nothing their reading needs; their
+  readers are checked on built files, since no measured file records
+  one.
+- **The owner with the authorship.** The owner is a fact about the
+  body, set once in the camera and the same on every picture it takes,
+  whoever takes it, as the serial number is; the photographer, the
+  editor and the title are facts about the picture.
 
 ## Consequences
 
@@ -379,3 +558,25 @@ Rejected:
 - The software names the camera's firmware or the program that last
   wrote the file, and a caller cannot tell which without reading the
   text.
+- A comment under the JIS, Unicode or undefined code is `None`; no
+  measured file has text under one. The view of every entry gives its
+  bytes.
+- The GPS tags not read stay in the view of every entry: the
+  satellites, on every Nikon file with a position; the status and the
+  measure mode, on Sony files; the speed, the track and the precision,
+  on 2 public ARWs; the differential correction; and the destination,
+  processing-method, area and positioning-error tags, on no measured
+  camera file.
+- Which surface an altitude is measured from is not given.
+- A GPS IFD without a sound position gives no time, altitude,
+  direction or datum, even where it records them, as a Sony file
+  without a fix records its datum.
+- A text that only IFD1, IFD2 or a MakerNote holds gives none; no
+  measured file holds one there and not in IFD0.
+- The photographer, the editor, the title and the owner are read by
+  the standard's text alone, and checked on built files only, until a
+  file records one.
+- A placeholder that another body writes is given as a description
+  until a measured file shows it and the list gains it.
+- A program that shows these values shows people's names and the
+  places they were; raw-files leaves what to show to it.
