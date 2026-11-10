@@ -8,7 +8,7 @@ mod support;
 use std::fs::File;
 use std::io::{self, Cursor};
 
-use raw_files::{ErrorKind, Focus, Format, Limits, Metadata, Options, Point, RawFile};
+use raw_files::{Authorship, ErrorKind, Focus, Format, Limits, Metadata, Options, Point, RawFile};
 use support::jpeg_builder::JpegBuilder;
 use support::tiff_builder::{Order, TiffBuilder};
 
@@ -20,6 +20,40 @@ const DNG_VERSION: u16 = 0xC612;
 
 /// The DNGPrivateData tag: a block of the camera maker's own data.
 const DNG_PRIVATE_DATA: u16 = 0xC634;
+
+/// The authorship tags of IFD0, each with a text of a painter's.
+const IFD0_AUTHORSHIP: [(u16, &str); 3] = [
+    (0x013B, "Claude Monet"),                  // Artist
+    (0x8298, "Copyright Claude Monet"),        // Copyright
+    (0x010E, "The port of Le Havre\nat dawn"), // ImageDescription
+];
+
+/// The authorship texts of the Exif IFD, but the comment.
+const EXIF_AUTHORSHIP: [(u16, &str); 3] = [
+    (0xA437, "Camille Pissarro"),          // Photographer
+    (0xA438, "Édouard Manet"),             // ImageEditor
+    (0xA436, "Impression, soleil levant"), // ImageTitle
+];
+
+/// The UserComment tag of the Exif IFD.
+const USER_COMMENT: u16 = 0x9286;
+
+/// A TIFF file whose IFD0 holds the Make `make` and [`IFD0_AUTHORSHIP`],
+/// and whose Exif IFD holds [`EXIF_AUTHORSHIP`], in UTF-8, and a comment
+/// under the ASCII code.
+fn with_authorship(make: &str) -> Vec<u8> {
+    let mut builder = TiffBuilder::new(Order::Little);
+    let (ifd0, exif) = (builder.ifd(), builder.ifd());
+    builder.ascii(ifd0, MAKE, make).exif(ifd0, exif);
+    for (tag, text) in IFD0_AUTHORSHIP {
+        builder.ascii(ifd0, tag, text);
+    }
+    for (tag, text) in EXIF_AUTHORSHIP {
+        builder.utf8(exif, tag, text);
+    }
+    builder.undefined(exif, USER_COMMENT, b"ASCII\0\0\0Painted at dawn   ");
+    builder.build().bytes
+}
 
 /// A TIFF file of one IFD, with Make `make` when there is one.
 fn one_ifd(make: Option<&str>) -> Vec<u8> {
@@ -163,6 +197,29 @@ fn handles_are_send_and_sync_when_their_reader_is() {
     assert_sync::<RawFile<Cursor<&[u8]>>>();
     assert_send::<Options>();
     assert_sync::<Options>();
+}
+
+#[test]
+fn an_authorship_built_by_hand_equals_what_open_reads() {
+    let expected = Authorship::default()
+        .with_artist("Claude Monet")
+        .with_copyright("Copyright Claude Monet")
+        .with_description("The port of Le Havre\nat dawn")
+        .with_photographer("Camille Pissarro")
+        .with_editor("Édouard Manet")
+        .with_title("Impression, soleil levant")
+        .with_comment("Painted at dawn");
+    let mut jpeg = JpegBuilder::new();
+    jpeg.jfif().exif(&with_authorship("NIKON CORPORATION"));
+    for (bytes, format) in [
+        (with_authorship("NIKON CORPORATION"), Format::Nef),
+        (with_authorship("SONY"), Format::Arw),
+        (jpeg.build().bytes, Format::Jpeg),
+    ] {
+        let file = RawFile::from_bytes(&bytes).unwrap();
+        assert_eq!(file.format(), format);
+        assert_eq!(file.metadata().authorship(), &expected, "{format:?}");
+    }
 }
 
 #[test]

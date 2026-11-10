@@ -25,6 +25,10 @@
 //!   with the maker raw-files recognises in them and, for the bodies it
 //!   names, the name the body is sold under, in a [`Camera`]; and the
 //!   software that wrote the file;
+//! - who made the picture and what they wrote about it, in an
+//!   [`Authorship`]: the artist, the copyright notice, the photographer,
+//!   the editor, the title, the description and the comment, as the file
+//!   records them;
 //! - the capture time and the orientation;
 //! - the exposure, with the focal length in 35 mm terms, and the lens;
 //! - the camera's settings, in [`CameraSettings`]: the white balance, the
@@ -423,6 +427,7 @@
 // builds keep both lints, and CI checks those.
 #![cfg_attr(fuzzing, allow(dead_code, unfulfilled_lint_expectations))]
 
+mod authorship;
 mod camera;
 mod camera_settings;
 mod container;
@@ -476,6 +481,7 @@ mod tiff_builder;
 #[cfg(test)]
 mod testing;
 
+pub use authorship::Authorship;
 pub use camera::{Camera, Make};
 pub use camera_settings::{
     CameraSettings, ColorSpace, ExposureProgram, FineTune, Flash, FlashMode, ImageArea,

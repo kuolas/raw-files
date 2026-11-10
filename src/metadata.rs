@@ -3,27 +3,31 @@
 //! What the camera recorded about a picture.
 //!
 //! Besides the image, a camera records how the picture was taken: by which
-//! camera and when, the software that wrote the file, the exposure it
-//! chose, how the camera was set, the lens it was taken with, how large the
-//! image is, and where the camera focused. [`Metadata`] holds all of it,
-//! read when the file is opened; [`Camera`] holds the camera as the file
-//! names it, [`Exposure`] and [`Lens`] the exposure and the lens as the
-//! file records them, fractions with the numerator and denominator it
-//! stored, [`CameraSettings`] the camera's settings, [`Focus`] where the
-//! camera's autofocus aimed, as the camera recorded it, [`FocusPoints`]
-//! the autofocus points it used, and [`FocusLayout`] every autofocus point
-//! of the body, where raw-files has its table of them.
+//! camera and when, the software that wrote the file, who made the picture
+//! and what they wrote about it, the exposure it chose, how the camera was
+//! set, the lens it was taken with, how large the image is, and where the
+//! camera focused. [`Metadata`] holds all of it, read when the file is
+//! opened; [`Camera`] holds the camera as the file names it, [`Authorship`]
+//! the texts on who made the picture, [`Exposure`] and [`Lens`] the
+//! exposure and the lens as the file records them, fractions with the
+//! numerator and denominator it stored, [`CameraSettings`] the camera's
+//! settings, [`Focus`] where the camera's autofocus aimed, as the camera
+//! recorded it, [`FocusPoints`] the autofocus points it used, and
+//! [`FocusLayout`] every autofocus point of the body, where raw-files has
+//! its table of them.
 //!
 //! Every value is optional. A file may not record it, or may record it in a
 //! way that cannot be read, such as a tag of the wrong type; either way the
 //! value is `None`, and the others are unaffected.
 //!
 //! A program that uses raw-files can build these values for its own tests,
-//! without a camera file: [`Metadata`], [`Camera`], [`Exposure`], [`Lens`],
-//! [`CameraSettings`] and [`FocusPoints`] through their `with_…` methods,
-//! and a [`Focus`], a [`FocusLayout`], a [`DateTime`] and a [`Rational`]
-//! through their checked constructors. [`Metadata`]'s docs show how.
+//! without a camera file: [`Metadata`], [`Camera`], [`Authorship`],
+//! [`Exposure`], [`Lens`], [`CameraSettings`] and [`FocusPoints`] through
+//! their `with_…` methods, and a [`Focus`], a [`FocusLayout`], a
+//! [`DateTime`] and a [`Rational`] through their checked constructors.
+//! [`Metadata`]'s docs show how.
 
+use crate::authorship::Authorship;
 use crate::camera::Camera;
 use crate::camera_settings::CameraSettings;
 use crate::datetime::DateTime;
@@ -33,7 +37,8 @@ use crate::orientation::Orientation;
 use crate::rational::{Rational, SignedRational};
 
 /// What the camera recorded about a picture: the camera and the software
-/// that wrote the file, when the picture was taken, how to turn it upright,
+/// that wrote the file, who made the picture and what they wrote about it,
+/// when the picture was taken, how to turn it upright,
 /// its exposure, how the camera was set, its lens, the sizes of its raw
 /// data and of its visible image, and where the camera focused, with the
 /// layout of the body's autofocus points where raw-files has its table.
@@ -150,6 +155,7 @@ use crate::rational::{Rational, SignedRational};
 pub struct Metadata {
     pub(crate) camera: Camera,
     pub(crate) software: Option<String>,
+    pub(crate) authorship: Authorship,
     pub(crate) capture_time: Option<DateTime>,
     pub(crate) orientation: Orientation,
     pub(crate) exposure: Exposure,
@@ -182,6 +188,49 @@ impl Metadata {
     /// those of the Sony DSC-F828 and DSC-R1.
     pub fn software(&self) -> Option<&str> {
         self.software.as_deref()
+    }
+
+    /// Who made the picture and what they wrote about it (see
+    /// [`Authorship`]): the artist, the copyright notice, the photographer,
+    /// the editor, the title, the description and the comment, each as the
+    /// file records it. Always present, though each of its values is
+    /// optional: a camera writes most of them only when its owner has set
+    /// them.
+    ///
+    /// NEF, ARW and JPEG files give them alike, from the standard TIFF and
+    /// Exif tags; nothing is read from a maker's MakerNote. A program's
+    /// tests build the authorship with the `with_…` methods of
+    /// [`Authorship`] and set it with
+    /// [`with_authorship`](Self::with_authorship).
+    ///
+    /// # Examples
+    ///
+    /// A caption from the title and the artist, each when the file records
+    /// it:
+    ///
+    /// ```
+    /// use raw_files::{Authorship, Metadata};
+    ///
+    /// fn caption(metadata: &Metadata) -> String {
+    ///     let authorship = metadata.authorship();
+    ///     match (authorship.title(), authorship.artist()) {
+    ///         (Some(title), Some(artist)) => format!("{title}, by {artist}"),
+    ///         (Some(title), None) => title.to_owned(),
+    ///         (None, Some(artist)) => format!("by {artist}"),
+    ///         (None, None) => String::from("untitled"),
+    ///     }
+    /// }
+    ///
+    /// let metadata = Metadata::default().with_authorship(
+    ///     Authorship::default()
+    ///         .with_artist("Claude Monet")
+    ///         .with_title("Impression, soleil levant"),
+    /// );
+    /// assert_eq!(caption(&metadata), "Impression, soleil levant, by Claude Monet");
+    /// assert_eq!(caption(&Metadata::default()), "untitled");
+    /// ```
+    pub fn authorship(&self) -> &Authorship {
+        &self.authorship
     }
 
     /// When the picture was taken, as the camera's clock showed it: the
@@ -521,6 +570,14 @@ impl Metadata {
     #[must_use]
     pub fn with_software(mut self, software: impl Into<String>) -> Self {
         self.software = Some(software.into());
+        self
+    }
+
+    /// Sets who made the picture and what they wrote about it, in place of
+    /// the authorship it had; [`authorship`](Self::authorship) reads it.
+    #[must_use]
+    pub fn with_authorship(mut self, authorship: Authorship) -> Self {
+        self.authorship = authorship;
         self
     }
 
@@ -1359,6 +1416,20 @@ mod tests {
             .with_shutter(Shutter::ElectronicFrontCurtain)
     }
 
+    /// The authorship of a picture, every text set, each one different
+    /// from the others.
+    fn z9_authorship() -> Authorship {
+        Authorship {
+            artist: Some("Claude Monet".to_owned()),
+            copyright: Some("Copyright Claude Monet".to_owned()),
+            photographer: Some("Camille Pissarro".to_owned()),
+            editor: Some("Alfred Sisley".to_owned()),
+            title: Some("Impression, soleil levant".to_owned()),
+            description: Some("The port of Le Havre\nat sunrise".to_owned()),
+            comment: Some("Painted from a window".to_owned()),
+        }
+    }
+
     /// The camera of a Z 9 picture, every value set.
     fn z9_camera() -> Camera {
         Camera {
@@ -1376,6 +1447,7 @@ mod tests {
         Metadata {
             camera: z9_camera(),
             software: Some("Ver.01.00".to_owned()),
+            authorship: z9_authorship(),
             capture_time: DateTime::from_exif(b"2024:05:01 10:20:30", Some(b"85"), Some(b"+02:00")),
             orientation: Orientation::Rotate90,
             exposure: z9_exposure(),
@@ -1447,6 +1519,7 @@ mod tests {
         let metadata = Metadata::default();
         assert_eq!(metadata.camera(), &Camera::default());
         assert_eq!(metadata.software(), None);
+        assert_eq!(metadata.authorship(), &Authorship::default());
         assert_eq!(metadata.capture_time(), None);
         assert_eq!(metadata.orientation(), Orientation::NoTransforms);
         assert_eq!(metadata.exposure(), &Exposure::default());
@@ -1464,6 +1537,7 @@ mod tests {
         let metadata = z9_metadata();
         assert_eq!(metadata.camera(), &z9_camera());
         assert_eq!(metadata.software(), Some("Ver.01.00"));
+        assert_eq!(metadata.authorship(), &z9_authorship());
         let time = metadata.capture_time().unwrap();
         assert_eq!(time.to_string(), "2024-05-01T10:20:30.85+02:00");
         assert_eq!(metadata.orientation(), Orientation::Rotate90);
@@ -1712,6 +1786,7 @@ mod tests {
             ..Camera::default()
         };
         let settings = CameraSettings::default().with_color_space(ColorSpace::Srgb);
+        let authorship = Authorship::default().with_artist("Berthe Morisot");
         // From the empty metadata, and from a full one whose every value
         // differs from the one set, so that a builder writing another
         // value, or clearing one, is caught: the Z 9's, which has no
@@ -1735,6 +1810,13 @@ mod tests {
                     start.clone().with_software("Ver.01.10"),
                     Metadata {
                         software: Some("Ver.01.10".to_owned()),
+                        ..start.clone()
+                    },
+                ),
+                (
+                    start.clone().with_authorship(authorship.clone()),
+                    Metadata {
+                        authorship: authorship.clone(),
                         ..start.clone()
                     },
                 ),
@@ -1815,7 +1897,7 @@ mod tests {
         }
     }
 
-    /// [`z9_metadata`] built through ten of its twelve builders, all but
+    /// [`z9_metadata`] built through eleven of its thirteen builders, all but
     /// [`Metadata::with_focus_points`], whose list `with_focus` makes, and
     /// [`Metadata::with_focus_layout`], since a Z 9 has no layout.
     fn z9_metadata_built() -> Metadata {
@@ -1823,6 +1905,7 @@ mod tests {
         Metadata::default()
             .with_camera(z9_camera())
             .with_software("Ver.01.00")
+            .with_authorship(z9_authorship_built())
             .with_capture_time(
                 DateTime::from_exif(b"2024:05:01 10:20:30", Some(b"85"), Some(b"+02:00")).unwrap(),
             )
@@ -1833,6 +1916,18 @@ mod tests {
             .with_raw_size(size(8_280, 5_520))
             .with_image_size(size(8_256, 5_504))
             .with_focus(z9_focus())
+    }
+
+    /// [`z9_authorship`] built through the seven builders.
+    fn z9_authorship_built() -> Authorship {
+        Authorship::default()
+            .with_artist("Claude Monet")
+            .with_copyright("Copyright Claude Monet")
+            .with_photographer("Camille Pissarro")
+            .with_editor("Alfred Sisley")
+            .with_title("Impression, soleil levant")
+            .with_description("The port of Le Havre\nat sunrise")
+            .with_comment("Painted from a window")
     }
 
     /// [`z9_exposure`] built through the six builders.
@@ -1852,8 +1947,9 @@ mod tests {
     #[test]
     fn every_builder_in_a_chain_equals_the_value_built_field_by_field() {
         assert_eq!(z9_exposure_built(), z9_exposure());
+        assert_eq!(z9_authorship_built(), z9_authorship());
         assert_eq!(z9_metadata_built(), z9_metadata());
-        // The twelfth builder at the end of the chain.
+        // The thirteenth builder at the end of the chain.
         assert_eq!(
             z9_metadata_built().with_focus_layout(d600_layout()),
             Metadata {
@@ -1896,6 +1992,7 @@ mod tests {
                 serial_number: Some("A".to_owned()),
             })
             .with_software("A")
+            .with_authorship(Authorship::default().with_title("A"))
             .with_capture_time(DateTime::new(2000, 1, 1, 0, 0, 0).unwrap())
             .with_orientation(Orientation::Rotate180)
             .with_exposure(Exposure::default().with_iso(1))
@@ -1917,6 +2014,7 @@ mod tests {
         let metadata = earlier
             .with_camera(z9.camera.clone())
             .with_software("Ver.01.00")
+            .with_authorship(z9.authorship.clone())
             .with_capture_time(z9.capture_time.unwrap())
             .with_orientation(z9.orientation)
             .with_exposure(z9.exposure.clone())

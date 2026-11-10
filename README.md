@@ -18,9 +18,11 @@ fuller RAW decoding is planned.
   with the maker raw-files recognises in them, such as Nikon, and, for
   the bodies the [notes on camera names](docs/formats/camera-names.md)
   list, the name the body is sold under, such as Z6III; the software
-  that wrote the file; the lens; the exposure, with the focal length in
-  35 mm terms; the orientation; and the sizes of the raw data and of the
-  visible image.
+  that wrote the file; who made the picture and what they wrote about
+  it, from the artist and the copyright notice to the title, the
+  description and the comment, as the file records them; the lens; the
+  exposure, with the focal length in 35 mm terms; the orientation; and
+  the sizes of the raw data and of the visible image.
 - **Camera settings.** The white balance with its colour temperature and
   fine-tuning, the exposure program, the metering mode, the flash, the
   shutter, Sony's electronic front curtain setting, the image area, the
@@ -313,19 +315,20 @@ orientation to show it in. `preview_at_least` picks the smallest preview
 that fills a box. `Metadata` holds what the camera recorded about the
 picture, read when the file is opened; every value is optional, since not
 every camera records every one, and a damaged value is `None` on its own.
-`Metadata::camera_settings` says how the camera was set, as a
-`CameraSettings`. `Focus` is where the camera focused, and its `scaled_to`
-places it on a preview; `Focus::origin` says, as a `FocusOrigin`, whether
-the camera recorded the position or raw-files placed it from a table of
-the body's points. `Metadata::focus_points` gives the autofocus points the
+`Metadata::authorship` gives who made the picture and what they wrote
+about it, as an `Authorship`, and `Metadata::camera_settings` says how
+the camera was set, as a `CameraSettings`. `Focus` is where the camera
+focused, and its `scaled_to` places it on a preview; `Focus::origin`
+says, as a `FocusOrigin`, whether the camera recorded the position or
+raw-files placed it from a table of the body's points. `Metadata::focus_points` gives the autofocus points the
 camera used, a `FocusPoints` of `FocusPoint`s with the primary among them
 and the `FocusAreaMode`, and `Metadata::focus_layout` the body's
 `FocusLayout` of `FocusLayoutPoint`s, where raw-files has its table.
 `RawFile::entries` gives every entry of the TIFF directories raw-files
 walks, an `Entries` of `Entry`s, each with its `Directory`, tag,
 `FieldType` and count, and `RawFile::read_value` reads one's `Value`. The
-`with_…` methods of `Metadata`, `Camera`, `Exposure`, `Lens`,
-`CameraSettings`, `WhiteBalance`, `Flash`, `DateTime`, `Focus`,
+`with_…` methods of `Metadata`, `Camera`, `Authorship`, `Exposure`,
+`Lens`, `CameraSettings`, `WhiteBalance`, `Flash`, `DateTime`, `Focus`,
 `FocusPoints` and `FocusPoint` and the constructors, such as
 `Focus::new` and `FocusLayout::new`, build every metadata value without
 a file, for a program's tests; an `Entry` comes only from a file.
@@ -373,7 +376,9 @@ ARW files of the Sony-built Hasselblad bodies.
   Sony's format, the full-size JPEG in IFD2.
 - **Metadata**: from the standard tags. Most Sony bodies keep their serial
   number in a form the library does not read, and of the public samples
-  only the ILCE-1 and the ILCE-7M5 give one.
+  only the ILCE-1 and the ILCE-7M5 give one. Older bodies describe every
+  picture as `SONY DSC`, a text the camera writes by itself, which gives
+  no description.
 - **Camera settings**: from the MakerNote: the white balance setting,
   finer than Exif's, the colour temperature under a chosen colour
   temperature or a custom white balance, the fine-tuning and the
