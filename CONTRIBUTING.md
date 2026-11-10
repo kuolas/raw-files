@@ -229,6 +229,12 @@ comments, the CHANGELOG, commit messages, pull requests and issues.
   every entry". A term of the project's own is defined where it is
   first used.
 
+**Spelling.** Everything is American, prose and every name in code
+alike: color, center, meter, recognize. "License" is the noun and the
+verb. The standard is written "Exif". A name keeps the
+spelling its owner gives it, such as ExifTool's `EXIF` group or a term
+a standard defines. A quoted text keeps its own.
+
 ## Commit messages
 
 We follow the
