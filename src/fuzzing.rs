@@ -52,7 +52,7 @@ fn read_values<R: Read + Seek>(src: &mut Source<R>, tree: &Tree) {
     for (_, ifd) in tree.iter() {
         for tag in ifd.tags() {
             let _ = ifd.u32s(src, tag);
-            let _ = ifd.ascii(src, tag);
+            let _ = ifd.text_bytes(src, tag);
             let _ = ifd.bytes(src, tag);
         }
     }

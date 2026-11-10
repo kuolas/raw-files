@@ -10,6 +10,19 @@ does.
 
 ## [Unreleased]
 
+### Changed
+
+- The camera's Make and Model, the Software, and the lens's LensMake
+  and LensModel are read from a value of type UTF-8 as from one of type
+  ASCII, since Exif 3.1 gives each as "ASCII or UTF-8": the same
+  cleaning, and the same 255 bytes at most, counted as stored. So a NEF
+  or ARW whose Make is of type UTF-8 is now claimed by its reader, where
+  it was refused as of no known format, and a camera JPEG's MakerNote is
+  read. The serial numbers and the
+  capture time, which Exif gives as ASCII alone, are read only from
+  type ASCII, as is every text of a maker's MakerNote. No file checked
+  writes the UTF-8 type, so no value read from one changes.
+
 ## [0.8.0] - 2026-11-09
 
 The eighth release, the first step towards full metadata: every entry

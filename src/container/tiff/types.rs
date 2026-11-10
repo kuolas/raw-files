@@ -33,3 +33,5 @@ pub(crate) const SLONG: u16 = 9;
 pub(crate) const SRATIONAL: u16 = 10;
 /// Field type IFD: the offsets of IFDs, as LONGs (TIFF Technical Note 1).
 pub(crate) const IFD: u16 = 13;
+/// Field type UTF-8: text in UTF-8, ending in a NUL (Exif 3.0).
+pub(crate) const UTF8: u16 = 129;

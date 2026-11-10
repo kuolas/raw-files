@@ -27,7 +27,11 @@
 //!   lens, and the software are text, read by the one rule [`text`] gives:
 //!   cut at the first NUL, `None` when longer than 255 bytes, trimmed of
 //!   spaces at both ends, `None` when nothing is left, and with bytes that
-//!   are not UTF-8 replaced by U+FFFD.
+//!   are not UTF-8 replaced by U+FFFD. The texts Exif 3.1 gives as "ASCII
+//!   or UTF-8", the make, the model, the software and the lens's make and
+//!   model, are read from a value of either type by that rule
+//!   ([`ascii_or_utf8_text`]); the serial numbers, which Exif gives as
+//!   ASCII alone, as every MakerNote text, only from type ASCII.
 //! - The software is IFD0's Software, as written and cleaned by that rule:
 //!   the camera's firmware version, such as `Ver.1.10` from the D300's
 //!   `Ver.1.10 `, or the name of the program that last wrote the file.
@@ -240,11 +244,11 @@ pub(crate) fn read<R: Read + Seek>(src: &mut Source<R>, tree: &Tree) -> Result<S
     let (raw_size, default_crop) = sizes(src, tree)?;
     let metadata = Metadata {
         camera: Camera {
-            recorded_make: text(src, ifd0, MAKE)?,
-            recorded_model: text(src, ifd0, MODEL)?,
+            recorded_make: ascii_or_utf8_text(src, ifd0, MAKE)?,
+            recorded_model: ascii_or_utf8_text(src, ifd0, MODEL)?,
             serial_number,
         },
-        software: text(src, ifd0, SOFTWARE)?,
+        software: ascii_or_utf8_text(src, ifd0, SOFTWARE)?,
         capture_time,
         orientation: tiff_previews::orientation(src, tree)?,
         exposure,
@@ -291,13 +295,37 @@ pub(crate) fn text<R: Read + Seek>(
     ifd: &Ifd,
     tag: u16,
 ) -> Result<Option<String>> {
-    let Some(bytes) = skip_damage(ifd.ascii_bytes(src, tag))?.flatten() else {
-        return Ok(None);
-    };
-    if bytes.len() > MAX_TEXT_LEN {
-        return Ok(None);
-    }
-    Ok(clean_text(&bytes))
+    Ok(short_text(
+        skip_damage(ifd.ascii_bytes(src, tag))?.flatten(),
+    ))
+}
+
+/// The text of tag `tag` of `ifd`, of type ASCII or UTF-8, cleaned as
+/// [`text`] cleans a text of type ASCII: for the texts that Exif 3.1 gives
+/// as "ASCII or UTF-8", such as the Make, the Model and the LensModel.
+///
+/// A value of type UTF-8 is cut at its first NUL, held to
+/// [`MAX_TEXT_LEN`] bytes and trimmed as one of type ASCII is, and bytes
+/// that are not UTF-8 become U+FFFD in either.
+///
+/// # Errors
+///
+/// As for [`text`].
+pub(crate) fn ascii_or_utf8_text<R: Read + Seek>(
+    src: &mut Source<R>,
+    ifd: &Ifd,
+    tag: u16,
+) -> Result<Option<String>> {
+    Ok(short_text(skip_damage(ifd.text_bytes(src, tag))?.flatten()))
+}
+
+/// The text `bytes` hold, up to their first NUL, cleaned by
+/// [`clean_text`]; `None` when there are none, or when they are longer
+/// than [`MAX_TEXT_LEN`].
+fn short_text(bytes: Option<Vec<u8>>) -> Option<String> {
+    bytes
+        .filter(|bytes| bytes.len() <= MAX_TEXT_LEN)
+        .and_then(|bytes| clean_text(&bytes))
 }
 
 /// When the picture was taken, from the Exif IFD `exif`: its
@@ -521,9 +549,9 @@ fn signed_rational<R: Read + Seek>(
 /// `Io` when the reader fails. A value that cannot be read for any other
 /// reason is `None`, and costs no other value.
 fn lens<R: Read + Seek>(src: &mut Source<R>, exif: &Ifd) -> Result<Lens> {
-    let recorded_make = text(src, exif, LENS_MAKE)?;
+    let recorded_make = ascii_or_utf8_text(src, exif, LENS_MAKE)?;
     let recorded_model =
-        text(src, exif, LENS_MODEL)?.filter(|model| !model.chars().all(|c| c == '-'));
+        ascii_or_utf8_text(src, exif, LENS_MODEL)?.filter(|model| !model.chars().all(|c| c == '-'));
     let serial_number = text(src, exif, LENS_SERIAL_NUMBER)?;
     let mut lens = Lens {
         recorded_make,
@@ -908,7 +936,7 @@ mod tests {
     use crate::orientation::Orientation;
     use crate::testing::{FAR, FailsFar, size};
     use crate::tiff_builder::{
-        ASCII, IfdId, LONG, Order, RATIONAL, RawValue, SHORT, SRATIONAL, TiffBuilder,
+        ASCII, IfdId, LONG, Order, RATIONAL, RawValue, SHORT, SRATIONAL, TiffBuilder, UTF8,
     };
     use std::io::Cursor;
 
@@ -1429,6 +1457,125 @@ mod tests {
             builder.raw(ifd, MAKE, ASCII, count, RawValue::Offset(4096));
         });
         read(&mut src, &tree).unwrap().metadata.camera.recorded_make
+    }
+
+    /// Where a text is read from: IFD0 or the Exif IFD.
+    #[derive(Clone, Copy, Debug)]
+    enum In {
+        Ifd0,
+        Exif,
+    }
+
+    /// Reads a text of the metadata, for the tests that check each text by
+    /// the same rule.
+    type GetText = fn(&Metadata) -> Option<&str>;
+
+    /// The five texts read before the authorship that Exif 3.1 gives as
+    /// "ASCII or UTF-8", each with its tag, where it is read from and what
+    /// reads it back.
+    const ASCII_OR_UTF8_TEXTS: [(u16, In, GetText); 5] = [
+        (MAKE, In::Ifd0, |m| m.camera().recorded_make()),
+        (MODEL, In::Ifd0, |m| m.camera().recorded_model()),
+        (SOFTWARE, In::Ifd0, |m| m.software()),
+        (LENS_MAKE, In::Exif, |m| m.lens().recorded_make()),
+        (LENS_MODEL, In::Exif, |m| m.lens().recorded_model()),
+    ];
+
+    /// The texts Exif 3.1 gives as ASCII alone that the reader reads from
+    /// the standard tags, each with its tag and what reads it back: the
+    /// serial numbers. The capture time, ASCII alone too, is checked on its
+    /// own.
+    const ASCII_ONLY_TEXTS: [(u16, GetText); 2] = [
+        (BODY_SERIAL_NUMBER, |m| m.camera().serial_number()),
+        (LENS_SERIAL_NUMBER, |m| m.lens().serial_number()),
+    ];
+
+    /// The metadata of a file whose IFD or Exif IFD, as `at` says, holds
+    /// what `add` adds, given the builder and that IFD's ID.
+    fn with_text(at: In, add: impl FnOnce(&mut TiffBuilder, IfdId)) -> Metadata {
+        let (mut src, tree) = testing::file(|builder, ifd0| {
+            let exif = builder.ifd();
+            builder.exif(ifd0, exif);
+            add(builder, if matches!(at, In::Ifd0) { ifd0 } else { exif });
+        });
+        read(&mut src, &tree).unwrap().metadata
+    }
+
+    #[test]
+    fn a_text_exif_gives_as_ascii_or_utf8_is_read_from_either_type() {
+        // A name with letters past ASCII, which only UTF-8 can hold, padded
+        // as the cameras pad their ASCII texts.
+        for (tag, at, get) in ASCII_OR_UTF8_TEXTS {
+            let ascii = with_text(at, |builder, ifd| {
+                builder.ascii(ifd, tag, "  Zeiss Ikon ");
+            });
+            assert_eq!(get(&ascii), Some("Zeiss Ikon"), "{tag:#06X}");
+            let utf8 = with_text(at, |builder, ifd| {
+                builder.utf8(ifd, tag, "  Zeiß Ikon \0\0");
+            });
+            assert_eq!(get(&utf8), Some("Zeiß Ikon"), "{tag:#06X}");
+        }
+    }
+
+    #[test]
+    fn a_text_of_another_type_is_none() {
+        for (tag, at, get) in ASCII_OR_UTF8_TEXTS {
+            for metadata in [
+                with_text(at, |builder, ifd| {
+                    builder.undefined(ifd, tag, b"Zeiss Ikon\0");
+                }),
+                with_text(at, |builder, ifd| {
+                    builder.byte(ifd, tag, b"Zeiss Ikon\0");
+                }),
+            ] {
+                assert_eq!(get(&metadata), None, "{tag:#06X}");
+            }
+        }
+    }
+
+    #[test]
+    fn a_utf8_text_keeps_the_255_byte_limit_counted_as_stored() {
+        for (tag, at, get) in ASCII_OR_UTF8_TEXTS {
+            // "é" is two bytes: 127 of them and one more byte are 255.
+            let kept = format!("{}e", "é".repeat(127));
+            let metadata = with_text(at, |builder, ifd| {
+                builder.utf8(ifd, tag, &kept);
+            });
+            assert_eq!(get(&metadata), Some(kept.as_str()), "{tag:#06X}");
+            let refused = "é".repeat(128);
+            let metadata = with_text(at, |builder, ifd| {
+                builder.utf8(ifd, tag, &refused);
+            });
+            assert_eq!(get(&metadata), None, "{tag:#06X}");
+        }
+    }
+
+    #[test]
+    fn bytes_of_a_utf8_text_that_are_not_utf8_become_the_replacement_character() {
+        let (mut src, tree) = testing::file(|builder, ifd| {
+            builder.blob_at(4096, b"SO\xFFNY\0");
+            builder.raw(ifd, MAKE, UTF8, 6, RawValue::Offset(4096));
+        });
+        let metadata = read(&mut src, &tree).unwrap().metadata;
+        assert_eq!(metadata.camera().recorded_make(), Some("SO\u{FFFD}NY"));
+    }
+
+    #[test]
+    fn a_text_exif_gives_as_ascii_alone_is_none_in_utf8() {
+        for (tag, get) in ASCII_ONLY_TEXTS {
+            let ascii = with_text(In::Exif, |builder, exif| {
+                builder.ascii(exif, tag, "1234567");
+            });
+            assert_eq!(get(&ascii), Some("1234567"), "{tag:#06X}");
+            let utf8 = with_text(In::Exif, |builder, exif| {
+                builder.utf8(exif, tag, "1234567");
+            });
+            assert_eq!(get(&utf8), None, "{tag:#06X}");
+        }
+        let utf8_time = with_text(In::Exif, |builder, exif| {
+            builder.utf8(exif, DATE_TIME_ORIGINAL, "2022:02:05 13:46:41");
+        });
+        assert_eq!(utf8_time.capture_time(), None);
     }
 
     #[test]

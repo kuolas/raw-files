@@ -284,6 +284,14 @@ mod tests {
     }
 
     #[test]
+    fn a_make_of_type_utf8_is_claimed() {
+        // Exif 3.1 gives the Make as "ASCII or UTF-8".
+        assert!(claimed(|builder, ifd| {
+            builder.utf8(ifd, MAKE, "SONY");
+        }));
+    }
+
+    #[test]
     fn a_hasselblad_make_with_sonys_private_pointer_is_claimed() {
         assert!(claimed_make_with_pointer("HASSELBLAD"));
     }

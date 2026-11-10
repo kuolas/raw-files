@@ -97,6 +97,8 @@ pub const SLONG: u16 = 9;
 /// The TIFF field type SRATIONAL: pairs of signed 32-bit integers,
 /// numerator first.
 pub const SRATIONAL: u16 = 10;
+/// The Exif field type UTF-8: text in UTF-8 ending in a NUL.
+pub const UTF8: u16 = 129;
 
 /// The SubIFDs tag: the offsets of child IFDs.
 pub const SUB_IFDS: u16 = 0x014A;
@@ -328,6 +330,13 @@ impl TiffBuilder {
         let mut bytes = text.as_bytes().to_vec();
         bytes.push(0);
         self.entry(ifd, tag, ASCII, bytes.len(), Value::Bytes(bytes))
+    }
+
+    /// Adds a UTF-8 entry: `text` and a NUL, which the count includes.
+    pub fn utf8(&mut self, ifd: IfdId, tag: u16, text: &str) -> &mut Self {
+        let mut bytes = text.as_bytes().to_vec();
+        bytes.push(0);
+        self.entry(ifd, tag, UTF8, bytes.len(), Value::Bytes(bytes))
     }
 
     /// Adds a SHORT entry.
