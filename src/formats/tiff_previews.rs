@@ -179,8 +179,8 @@ pub(crate) fn tree_candidates<R: Read + Seek>(
     tree: &Tree,
 ) -> Result<Vec<Candidate>> {
     let mut candidates = Vec::new();
-    for (location, ifd) in tree.iter() {
-        if location.holds_no_image() {
+    for (link, ifd) in tree.iter() {
+        if link.holds_no_image() {
             continue;
         }
         // An IFD whose tags cannot be read is skipped as raw data is,

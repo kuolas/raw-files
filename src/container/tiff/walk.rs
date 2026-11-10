@@ -14,7 +14,7 @@
 //! taken; and the Exif IFD's Interoperability IFD tag (0xA005), the offset
 //! of the IFD that names the rule the file follows, and so whether it is in
 //! Adobe RGB. [`walk`] follows these links from IFD0 and returns every IFD
-//! it finds as a [`Tree`], each with the [`Location`] it was found at.
+//! it finds as a [`Tree`], each with the [`Link`] that led the walk to it.
 //!
 //! The Interoperability IFD and the GPS IFD are tried last, after IFD0's
 //! whole chain, the Interoperability IFD first, so that its place does not
@@ -50,7 +50,7 @@
 //! - a **visited set** of the positions in the file already tried, so no
 //!   position is parsed twice: an IFD that points to itself, a cycle of
 //!   SubIFDs, or two links to one IFD cost one parse and give one entry in
-//!   the tree, at the location where the walk first found it; a chain that
+//!   the tree, under the link that first led the walk to it; a chain that
 //!   reaches it goes on from its next pointer, which the set keeps, and
 //!   passes each IFD once, so a chain that loops ends. The set keeps a next
 //!   pointer only for an IFD in the tree: a SubIFD left out (see below)
@@ -100,15 +100,15 @@ use crate::error::{Error, ErrorKind, Result};
 use crate::io::{ByteOrder, Source};
 use crate::limits::Limits;
 
-/// Where in a TIFF file the walk found an IFD: which link led to it.
+/// The link that led the walk to an IFD: where in a TIFF file it found it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) enum Location {
+pub(crate) enum Link {
     /// The first IFD, the one the header points to.
     Ifd0,
     /// The IFD this many steps along IFD0's chain of next-IFD pointers:
     /// `Chain(1)` is IFD1, the IFD that IFD0's next-IFD pointer leads to,
     /// and `Chain(2)` is IFD2. A step that reaches an IFD the walk found
-    /// first through another link leaves that IFD at its first location,
+    /// first through another link leaves that IFD under its first link,
     /// but still counts: the IFD after it is one step further.
     Chain(u32),
     /// A SubIFD: a child of another IFD of the tree, through its SubIFDs tag
@@ -123,25 +123,25 @@ pub(crate) enum Location {
     /// IFD0's Exif IFD, through its Exif IFD tag (0x8769).
     Exif,
     /// IFD0's GPS IFD, through its GPS IFD tag (0x8825). An IFD the walk
-    /// found first through another link keeps that location, where
+    /// found first through another link keeps that link, where
     /// [`Tree::gps`] finds it.
     Gps,
     /// The Exif IFD's Interoperability IFD, through its Interoperability
-    /// IFD tag (0xA005), when the Exif IFD is in the tree at
+    /// IFD tag (0xA005), when the Exif IFD is in the tree under
     /// [`Exif`](Self::Exif). An IFD the walk found first through another
-    /// link keeps that location, where [`Tree::interop`] finds it.
+    /// link keeps that link, where [`Tree::interop`] finds it.
     Interop,
 }
 
-impl Location {
-    /// Whether the IFD at this location never holds an image: the Exif IFD
+impl Link {
+    /// Whether the IFD this link leads to never holds an image: the Exif IFD
     /// holds the capture metadata, the GPS IFD where the picture was taken,
     /// and the Interoperability IFD names the rule the file follows. The
     /// preview finder and the search for the raw size skip all three.
     ///
-    /// An IFD found first at another location stays there, and is asked: the
-    /// Nikon D70's IFD1, which is also its Interoperability IFD, lies at
-    /// `Chain(1)` and holds the thumbnail.
+    /// An IFD found first through another link keeps that link, and is
+    /// asked: the Nikon D70's IFD1, which is also its Interoperability IFD,
+    /// lies under `Chain(1)` and holds the thumbnail.
     pub(crate) fn holds_no_image(self) -> bool {
         match self {
             Self::Exif | Self::Gps | Self::Interop => true,
@@ -151,19 +151,19 @@ impl Location {
 }
 
 /// The IFDs of a TIFF file that [`walk`] found, each with its
-/// [`Location`].
+/// [`Link`].
 ///
 /// The IFDs are in the order the walk found them, which is deterministic:
 /// IFD0; then IFD0's SubIFDs, depth first, each followed by its own
 /// SubIFDs, in the order of the SubIFDs arrays; then IFD0's Exif IFD; then
 /// IFD1 and its SubIFDs in the same way, IFD2 and its SubIFDs, and so on
 /// along the chain; and last the Exif IFD's Interoperability IFD, then
-/// IFD0's GPS IFD. IFD0 is always first, and an IFD appears once, at the
-/// first location it was found at.
+/// IFD0's GPS IFD. IFD0 is always first, and an IFD appears once, under the
+/// first link that led the walk to it.
 #[derive(Clone, Debug)]
 pub(crate) struct Tree {
     /// Never empty: IFD0 is always the first.
-    ifds: Vec<(Location, Ifd)>,
+    ifds: Vec<(Link, Ifd)>,
     /// The position in `ifds` of the IFD that IFD0's GPS IFD tag leads to,
     /// wherever the walk placed it; `None` when the tag leads to no IFD of
     /// the tree.
@@ -187,30 +187,30 @@ impl Tree {
         &self.ifds[0].1
     }
 
-    /// Every IFD with its location, in the order of the tree.
-    pub(crate) fn iter(&self) -> impl Iterator<Item = (Location, &Ifd)> {
-        self.ifds.iter().map(|(location, ifd)| (*location, ifd))
+    /// Every IFD with its link, in the order of the tree.
+    pub(crate) fn iter(&self) -> impl Iterator<Item = (Link, &Ifd)> {
+        self.ifds.iter().map(|(link, ifd)| (*link, ifd))
     }
 
     /// IFD0's Exif IFD, if the walk found it there.
     ///
     /// `None` also when the Exif IFD tag points to an IFD the walk had
-    /// already found at another location: unlike [`interop`](Self::interop),
-    /// this gives only the IFD at [`Location::Exif`].
+    /// already found through another link: unlike [`interop`](Self::interop),
+    /// this gives only the IFD under [`Link::Exif`].
     pub(crate) fn exif(&self) -> Option<&Ifd> {
         self.iter()
-            .find(|&(location, _)| location == Location::Exif)
+            .find(|&(link, _)| link == Link::Exif)
             .map(|(_, ifd)| ifd)
     }
 
     /// The IFD that the Exif IFD's Interoperability IFD tag leads to,
-    /// wherever the walk placed it: at [`Location::Interop`] when the walk
-    /// found it first through that tag, and otherwise at the location where
-    /// it found it before, as on the Nikon D70, whose Interoperability IFD
-    /// is its IFD1, at `Chain(1)`. A tag that leads back to the Exif IFD
-    /// itself, or to IFD0, gives that IFD too, as the file says.
+    /// wherever the walk placed it: under [`Link::Interop`] when the walk
+    /// found it first through that tag, and otherwise under the link through
+    /// which it found it before, as on the Nikon D70, whose Interoperability
+    /// IFD is its IFD1, under `Chain(1)`. A tag that leads back to the Exif
+    /// IFD itself, or to IFD0, gives that IFD too, as the file says.
     ///
-    /// `None` when there is no Exif IFD at [`Location::Exif`], when it has
+    /// `None` when there is no Exif IFD under [`Link::Exif`], when it has
     /// no Interoperability IFD tag or one that cannot be read or followed,
     /// and when the IFD the tag leads to is not in the tree: one that
     /// cannot be parsed, or a SubIFD the walk left out.
@@ -221,9 +221,9 @@ impl Tree {
     }
 
     /// The IFD that IFD0's GPS IFD tag leads to, wherever the walk placed
-    /// it: at [`Location::Gps`] when the walk found it first through that
-    /// tag, and otherwise at the location where it found it before, as
-    /// [`interop`](Self::interop) gives the Interoperability IFD.
+    /// it: under [`Link::Gps`] when the walk found it first through that
+    /// tag, and otherwise under the link through which it found it before,
+    /// as [`interop`](Self::interop) gives the Interoperability IFD.
     ///
     /// `None` when IFD0 has no GPS IFD tag or one that cannot be read or
     /// followed, and when the IFD the tag leads to is not in the tree.
@@ -238,11 +238,11 @@ impl Tree {
         self.ifds.len()
     }
 
-    /// The IFD at position `i` of the tree, with its location; `None` past
+    /// The IFD at position `i` of the tree, with its link; `None` past
     /// the end. Position 0 is IFD0.
     #[cfg_attr(not(test), expect(dead_code, reason = "nothing reads this method yet"))]
-    pub(crate) fn get(&self, i: usize) -> Option<(Location, &Ifd)> {
-        self.ifds.get(i).map(|(location, ifd)| (*location, ifd))
+    pub(crate) fn get(&self, i: usize) -> Option<(Link, &Ifd)> {
+        self.ifds.get(i).map(|(link, ifd)| (*link, ifd))
     }
 }
 
@@ -294,14 +294,14 @@ pub(crate) fn walk<R: Read + Seek>(
     // IFD0 is the one IFD whose failure is the walk's.
     walker.claim(at)?;
     let (ifd0, mut next) = parse_ifd(walker.src, block, at, header.order, limits)?;
-    walker.place(Location::Ifd0, ifd0)?;
+    walker.place(Link::Ifd0, ifd0)?;
 
     let exif = skip_damage(walker.ifds[0].1.u32(walker.src, EXIF_IFD))?.flatten();
     if let Some(at) = exif.and_then(|link| walker.target(link))
         && let Some((ifd, next)) = walker.candidate(at)?
     {
         walker.visited.insert(at, next);
-        walker.ifds.push((Location::Exif, ifd));
+        walker.ifds.push((Link::Exif, ifd));
     }
 
     let mut step: u32 = 1;
@@ -317,11 +317,11 @@ pub(crate) fn walk<R: Read + Seek>(
                 break;
             };
             walker.visited.insert(at, after);
-            walker.place(Location::Chain(step), ifd)?;
+            walker.place(Link::Chain(step), ifd)?;
         }
         // New or found before, the IFD takes this step; one found before,
         // through another link or by this chain on a loop, keeps its first
-        // location. The chain goes on from the pointer recorded for it and
+        // link. The chain goes on from the pointer recorded for it and
         // takes it, leaving 0, so the chain goes on from each IFD at most
         // once and a loop ends.
         next = walker.visited.get_mut(&at).map_or(0, mem::take);
@@ -337,17 +337,13 @@ pub(crate) fn walk<R: Read + Seek>(
     // chain; the Interoperability IFD first, so that its place does not
     // depend on whether the file has a GPS IFD, and an IFD both tags lead
     // to is the Interoperability IFD.
-    let link = match walker
-        .ifds
-        .iter()
-        .find(|(location, _)| *location == Location::Exif)
-    {
+    let offset = match walker.ifds.iter().find(|(link, _)| *link == Link::Exif) {
         Some((_, exif)) => skip_damage(exif.u32(walker.src, INTEROP_IFD))?.flatten(),
         None => None,
     };
-    let interop = walker.last(link, Location::Interop)?;
-    let link = skip_damage(walker.ifds[0].1.u32(walker.src, GPS_IFD))?.flatten();
-    let gps = walker.last(link, Location::Gps)?;
+    let interop = walker.last(offset, Link::Interop)?;
+    let offset = skip_damage(walker.ifds[0].1.u32(walker.src, GPS_IFD))?.flatten();
+    let gps = walker.last(offset, Link::Gps)?;
 
     Ok(Tree {
         ifds: walker.ifds,
@@ -376,7 +372,7 @@ struct Walker<'a, R> {
     /// most [`Limits::max_ifds`].
     attempts: u32,
     /// The tree so far.
-    ifds: Vec<(Location, Ifd)>,
+    ifds: Vec<(Link, Ifd)>,
 }
 
 /// The SubIFDs of one IFD of the tree that the walk has yet to try.
@@ -443,25 +439,25 @@ impl<R: Read + Seek> Walker<'_, R> {
         skip_damage(parse_ifd(self.src, self.block, at, self.order, self.limits))
     }
 
-    /// Follows `link`, an offset as written, to an IFD tried once the chain
-    /// has ended, and adds it to the tree at `location`, alone: its
-    /// next-IFD pointer and its SubIFDs are not followed. Returns the IFD's
-    /// position in the tree: the new one, or where the walk placed it
-    /// before through another link; `None` when there is no link, when it
-    /// cannot be followed, or when the IFD it leads to is not in the tree.
+    /// Follows `offset`, as written, to an IFD tried once the chain has
+    /// ended, and adds it to the tree under `link`, alone: its next-IFD
+    /// pointer and its SubIFDs are not followed. Returns the IFD's position
+    /// in the tree: the new one, or where the walk placed it before through
+    /// another link; `None` when there is no offset, when it cannot be
+    /// followed, or when the IFD it leads to is not in the tree.
     ///
     /// # Errors
     ///
     /// As for [`candidate`](Self::candidate).
-    fn last(&mut self, link: Option<u32>, location: Location) -> Result<Option<usize>> {
-        let Some(at) = link.and_then(|link| self.target(link)) else {
+    fn last(&mut self, offset: Option<u32>, link: Link) -> Result<Option<usize>> {
+        let Some(at) = offset.and_then(|offset| self.target(offset)) else {
             return Ok(None);
         };
         Ok(match self.candidate(at)? {
             Some((ifd, _)) => {
                 // Nothing is walked after it, so its next-IFD pointer is
                 // not needed: `visited` keeps the 0 that `claim` recorded.
-                self.ifds.push((location, ifd));
+                self.ifds.push((link, ifd));
                 Some(self.ifds.len() - 1)
             }
             // Tried before, or not an IFD. One tried before and kept in the
@@ -471,14 +467,14 @@ impl<R: Read + Seek> Walker<'_, R> {
         })
     }
 
-    /// Adds `ifd`, at depth 0, to the tree at `location`, then its SubIFDs,
+    /// Adds `ifd`, at depth 0, to the tree under `link`, then its SubIFDs,
     /// depth first, each followed by its own SubIFDs.
     ///
     /// # Errors
     ///
     /// As for [`candidate`](Self::candidate).
-    fn place(&mut self, location: Location, ifd: Ifd) -> Result<()> {
-        self.ifds.push((location, ifd));
+    fn place(&mut self, link: Link, ifd: Ifd) -> Result<()> {
+        self.ifds.push((link, ifd));
         let mut stack: Vec<Children> = Vec::new();
         stack.extend(self.children(self.ifds.len() - 1, 0)?);
         // One element per IFD on the path from `ifd` down to the IFD being
@@ -496,7 +492,7 @@ impl<R: Read + Seek> Walker<'_, R> {
                 && child.invalid_entries() == 0
             {
                 self.visited.insert(at, next);
-                self.ifds.push((Location::Sub { parent, index }, child));
+                self.ifds.push((Link::Sub { parent, index }, child));
                 stack.extend(self.children(self.ifds.len() - 1, depth)?);
             }
         }
@@ -600,8 +596,8 @@ mod tests {
             .collect()
     }
 
-    fn locations(tree: &Tree) -> Vec<Location> {
-        tree.iter().map(|(location, _)| location).collect()
+    fn links(tree: &Tree) -> Vec<Link> {
+        tree.iter().map(|(link, _)| link).collect()
     }
 
     fn assert_error<T>(result: Result<T>, kind: ErrorKind, offset: u64) {
@@ -631,26 +627,26 @@ mod tests {
             assert_eq!(tree.ifd0().block(), &Block::file(len));
             assert_eq!(ids(&mut src, &tree), [0, 1, 2, 3]);
             assert_eq!(
-                locations(&tree),
+                links(&tree),
                 [
-                    Location::Ifd0,
-                    Location::Sub {
+                    Link::Ifd0,
+                    Link::Sub {
                         parent: 0,
                         index: 0
                     },
-                    Location::Sub {
+                    Link::Sub {
                         parent: 0,
                         index: 1
                     },
-                    Location::Exif,
+                    Link::Exif,
                 ]
             );
             assert_eq!(tree.ifd0().offset(), built.ifd_offset(ifd0));
             assert_eq!(tree.exif().unwrap().offset(), built.ifd_offset(exif));
-            let (location, second) = tree.get(2).unwrap();
+            let (link, second) = tree.get(2).unwrap();
             assert_eq!(
-                location,
-                Location::Sub {
+                link,
+                Link::Sub {
                     parent: 0,
                     index: 1
                 }
@@ -682,7 +678,7 @@ mod tests {
         let exif = ifd(&mut builder, 1);
         builder.exif(ifd0, exif);
         let (_, tree) = walked(&builder.build());
-        assert_eq!(locations(&tree), [Location::Ifd0, Location::Exif]);
+        assert_eq!(links(&tree), [Link::Ifd0, Link::Exif]);
         assert!(tree.exif().is_some());
         assert!(tree.interop().is_none());
     }
@@ -720,15 +716,15 @@ mod tests {
 
             assert_eq!(ids(&mut src, &tree), [0, 1, 3, 2]);
             assert_eq!(
-                locations(&tree),
+                links(&tree),
                 [
-                    Location::Ifd0,
-                    Location::Chain(1),
-                    Location::Sub {
+                    Link::Ifd0,
+                    Link::Chain(1),
+                    Link::Sub {
                         parent: 1,
                         index: 0
                     },
-                    Location::Chain(2),
+                    Link::Chain(2),
                 ]
             );
         }
@@ -748,16 +744,16 @@ mod tests {
 
         // IFD0, a, a's c, b, the Exif IFD, IFD1, IFD1's d.
         assert_eq!(ids(&mut src, &tree), [0, 1, 3, 2, 4, 5, 6]);
-        let sub = |parent, index| Location::Sub { parent, index };
+        let sub = |parent, index| Link::Sub { parent, index };
         assert_eq!(
-            locations(&tree),
+            links(&tree),
             [
-                Location::Ifd0,
+                Link::Ifd0,
                 sub(0, 0),
                 sub(1, 0),
                 sub(0, 1),
-                Location::Exif,
-                Location::Chain(1),
+                Link::Exif,
+                Link::Chain(1),
                 sub(5, 0),
             ]
         );
@@ -770,7 +766,7 @@ mod tests {
             let ifd0 = ifd(&mut builder, 0);
             builder.next(ifd0, Some(ifd0));
             let (_, tree) = walked(&builder.build());
-            assert_eq!(locations(&tree), [Location::Ifd0]);
+            assert_eq!(links(&tree), [Link::Ifd0]);
 
             // IFD0 → IFD1 → IFD0.
             let mut builder = TiffBuilder::new(order);
@@ -798,7 +794,7 @@ mod tests {
     }
 
     #[test]
-    fn an_ifd_found_twice_is_kept_at_its_first_location() {
+    fn an_ifd_found_twice_keeps_its_first_link() {
         for order in ORDERS {
             let mut builder = TiffBuilder::new(order);
             let ifd0 = ifd(&mut builder, 0);
@@ -811,7 +807,7 @@ mod tests {
             assert_eq!(ids(&mut src, &tree), [0, 1]);
             assert_eq!(
                 tree.get(1).unwrap().0,
-                Location::Sub {
+                Link::Sub {
                     parent: 0,
                     index: 0
                 }
@@ -823,7 +819,7 @@ mod tests {
     #[test]
     fn the_chain_goes_on_through_an_ifd_found_through_another_link() {
         for order in ORDERS {
-            for link in [Link::Exif, Link::SubIfds] {
+            for link in [Pointer::Exif, Pointer::SubIfds] {
                 // IFD0 → X → Y along the chain, where IFD0 also links to X
                 // as its Exif IFD or as a SubIFD, which the walk follows
                 // first.
@@ -831,25 +827,25 @@ mod tests {
                 let ifd0 = ifd(&mut builder, 0);
                 let (x, y) = (ifd(&mut builder, 1), ifd(&mut builder, 2));
                 match link {
-                    Link::Exif => builder.exif(ifd0, x),
+                    Pointer::Exif => builder.exif(ifd0, x),
                     _ => builder.subifds(ifd0, &[x]),
                 };
                 builder.next(ifd0, Some(x)).next(x, Some(y));
                 let (mut src, tree) = walked(&builder.build());
 
-                // X keeps its first location, and still takes step 1 of the
+                // X keeps its first link, and still takes step 1 of the
                 // chain: Y is IFD2.
                 let first = match link {
-                    Link::Exif => Location::Exif,
-                    _ => Location::Sub {
+                    Pointer::Exif => Link::Exif,
+                    _ => Link::Sub {
                         parent: 0,
                         index: 0,
                     },
                 };
                 assert_eq!(ids(&mut src, &tree), [0, 1, 2], "{link:?}");
                 assert_eq!(
-                    locations(&tree),
-                    [Location::Ifd0, first, Location::Chain(2)],
+                    links(&tree),
+                    [Link::Ifd0, first, Link::Chain(2)],
                     "{link:?}"
                 );
             }
@@ -895,18 +891,18 @@ mod tests {
             let ifd0 = ifd(&mut builder, 0);
             builder.subifds_raw(ifd0, &[0]).long(ifd0, EXIF_IFD, &[4]);
             let mut files = vec![("SubIFD 0 and Exif 4".to_owned(), builder.build())];
-            for link in [Link::SubIfds, Link::Exif, Link::Next] {
+            for link in [Pointer::SubIfds, Pointer::Exif, Pointer::Next] {
                 for at in [0, 1, 4, 7] {
-                    if matches!(link, Link::Next) && at == 0 {
+                    if matches!(link, Pointer::Next) && at == 0 {
                         // 0 is no next IFD, not a link.
                         continue;
                     }
                     let mut builder = TiffBuilder::new(order);
                     let ifd0 = ifd(&mut builder, 0);
                     match link {
-                        Link::SubIfds => builder.subifds_raw(ifd0, &[at]),
-                        Link::Exif => builder.long(ifd0, EXIF_IFD, &[at]),
-                        Link::Next => builder.next_raw(ifd0, at),
+                        Pointer::SubIfds => builder.subifds_raw(ifd0, &[at]),
+                        Pointer::Exif => builder.long(ifd0, EXIF_IFD, &[at]),
+                        Pointer::Next => builder.next_raw(ifd0, at),
                     };
                     files.push((format!("{link:?} at {at}"), builder.build()));
                 }
@@ -915,7 +911,7 @@ mod tests {
                 // The cap allows IFD0 alone: trying any link would cross it.
                 let (_, tree) = try_walk(&built.bytes, &Limits::default().with_max_ifds(1))
                     .unwrap_or_else(|err| panic!("{what} ({order:?}): {err:?}"));
-                assert_eq!(locations(&tree), [Location::Ifd0], "{what} ({order:?})");
+                assert_eq!(links(&tree), [Link::Ifd0], "{what} ({order:?})");
             }
         }
     }
@@ -1007,7 +1003,7 @@ mod tests {
             let built = builder.build();
 
             let (_, tree) = try_walk(&built.bytes, &Limits::default().with_max_ifds(4)).unwrap();
-            assert_eq!(locations(&tree), [Location::Ifd0]);
+            assert_eq!(links(&tree), [Link::Ifd0]);
             assert_error(
                 try_walk(&built.bytes, &Limits::default().with_max_ifds(3)),
                 ErrorKind::LimitExceeded,
@@ -1041,7 +1037,7 @@ mod tests {
             builder.subifds_raw(ifd0, &[1024, 2048]);
             let built = builder.build();
             let (_, tree) = walked(&built);
-            assert_eq!(locations(&tree), [Location::Ifd0]);
+            assert_eq!(links(&tree), [Link::Ifd0]);
         }
     }
 
@@ -1066,7 +1062,7 @@ mod tests {
             assert_eq!(ids(&mut src, &tree), [0, 3]);
             assert_eq!(
                 tree.get(1).unwrap().0,
-                Location::Sub {
+                Link::Sub {
                     parent: 0,
                     index: 2
                 }
@@ -1105,14 +1101,14 @@ mod tests {
 
             let (mut src, tree) = walked(&build(true));
             assert_eq!(ids(&mut src, &tree), [0], "{order:?}");
-            assert_eq!(locations(&tree), [Location::Ifd0], "{order:?}");
+            assert_eq!(links(&tree), [Link::Ifd0], "{order:?}");
 
             // The control: chain IFDs may carry invalid entries.
             let (mut src, tree) = walked(&build(false));
             assert_eq!(ids(&mut src, &tree), [0, 1, 2], "{order:?}");
             assert_eq!(
-                locations(&tree),
-                [Location::Ifd0, Location::Chain(1), Location::Chain(2)],
+                links(&tree),
+                [Link::Ifd0, Link::Chain(1), Link::Chain(2)],
                 "{order:?}"
             );
         }
@@ -1265,16 +1261,16 @@ mod tests {
             // I was written first after IFD0, and is still found last.
             assert!(built.ifd_offset(interop) < built.ifd_offset(a));
             assert_eq!(ids(&mut src, &tree), [0, 1, 2, 3, 4, 5], "{order:?}");
-            let sub = |parent, index| Location::Sub { parent, index };
+            let sub = |parent, index| Link::Sub { parent, index };
             assert_eq!(
-                locations(&tree),
+                links(&tree),
                 [
-                    Location::Ifd0,
+                    Link::Ifd0,
                     sub(0, 0),
-                    Location::Exif,
-                    Location::Chain(1),
+                    Link::Exif,
+                    Link::Chain(1),
                     sub(3, 0),
-                    Location::Interop,
+                    Link::Interop,
                 ],
                 "{order:?}"
             );
@@ -1302,17 +1298,17 @@ mod tests {
             assert!(built.ifd_offset(gps) < built.ifd_offset(a));
             assert_eq!(ids(&mut src, &tree), [0, 1, 2, 3, 4, 5], "{order:?}");
             assert_eq!(
-                locations(&tree),
+                links(&tree),
                 [
-                    Location::Ifd0,
-                    Location::Sub {
+                    Link::Ifd0,
+                    Link::Sub {
                         parent: 0,
                         index: 0
                     },
-                    Location::Exif,
-                    Location::Chain(1),
-                    Location::Interop,
-                    Location::Gps,
+                    Link::Exif,
+                    Link::Chain(1),
+                    Link::Interop,
+                    Link::Gps,
                 ],
                 "{order:?}"
             );
@@ -1338,8 +1334,8 @@ mod tests {
             let built = builder.build();
             let (_, tree) = walked(&built);
             assert_eq!(
-                locations(&tree),
-                [Location::Ifd0, Location::Exif, Location::Interop],
+                links(&tree),
+                [Link::Ifd0, Link::Exif, Link::Interop],
                 "{order:?}"
             );
             let at = built.ifd_offset(shared);
@@ -1364,8 +1360,8 @@ mod tests {
             let (mut src, tree) = walked(&built);
             assert_eq!(ids(&mut src, &tree), [0, 1, 2], "{order:?}");
             assert_eq!(
-                locations(&tree),
-                [Location::Ifd0, Location::Chain(1), Location::Chain(2)],
+                links(&tree),
+                [Link::Ifd0, Link::Chain(1), Link::Chain(2)],
                 "{order:?}"
             );
             let found = tree.gps().expect("IFD1");
@@ -1424,11 +1420,7 @@ mod tests {
                 let (_, tree) =
                     try_walk(&builder.build().bytes, &Limits::default().with_max_ifds(2))
                         .unwrap_or_else(|err| panic!("{link} ({order:?}): {err:?}"));
-                assert_eq!(
-                    locations(&tree),
-                    [Location::Ifd0, Location::Exif],
-                    "{link} ({order:?})"
-                );
+                assert_eq!(links(&tree), [Link::Ifd0, Link::Exif], "{link} ({order:?})");
             }
         }
     }
@@ -1481,8 +1473,8 @@ mod tests {
                 let (mut src, tree) = walked(&built);
                 assert_eq!(ids(&mut src, &tree), [0, 1], "{to_exif} ({order:?})");
                 assert_eq!(
-                    locations(&tree),
-                    [Location::Ifd0, Location::Exif],
+                    links(&tree),
+                    [Link::Ifd0, Link::Exif],
                     "{to_exif} ({order:?})"
                 );
                 let found = tree.interop().expect("the IFD the tag leads to");
@@ -1511,13 +1503,8 @@ mod tests {
             let (mut src, tree) = walked(&built);
             assert_eq!(ids(&mut src, &tree), [0, 1, 2, 3], "{order:?}");
             assert_eq!(
-                locations(&tree),
-                [
-                    Location::Ifd0,
-                    Location::Exif,
-                    Location::Chain(1),
-                    Location::Chain(2)
-                ],
+                links(&tree),
+                [Link::Ifd0, Link::Exif, Link::Chain(1), Link::Chain(2)],
                 "{order:?}"
             );
             assert_eq!(tree.get(2).unwrap().1.offset(), built.ifd_offset(ifd1));
@@ -1533,7 +1520,7 @@ mod tests {
             // IFD0 with a SubIFD a and its Exif IFD; IFD1 with a SubIFD d;
             // IFD2. The Exif IFD's Interoperability IFD tag leads to a, IFD1,
             // d and IFD2 in turn, each found before the tag is followed.
-            let sub = |parent, index| Location::Sub { parent, index };
+            let sub = |parent, index| Link::Sub { parent, index };
             for (target, id) in [(0, 1), (1, 3), (2, 4), (3, 5)] {
                 let mut builder = TiffBuilder::new(order);
                 let ifd0 = ifd(&mut builder, 0);
@@ -1546,18 +1533,18 @@ mod tests {
                 let built = builder.build();
                 let (mut src, tree) = walked(&built);
 
-                // Each IFD once, at the location where it was found first.
+                // Each IFD once, under the link it was found through first.
                 let what = format!("to {id} ({order:?})");
                 assert_eq!(ids(&mut src, &tree), [0, 1, 2, 3, 4, 5], "{what}");
                 assert_eq!(
-                    locations(&tree),
+                    links(&tree),
                     [
-                        Location::Ifd0,
+                        Link::Ifd0,
                         sub(0, 0),
-                        Location::Exif,
-                        Location::Chain(1),
+                        Link::Exif,
+                        Link::Chain(1),
                         sub(3, 0),
-                        Location::Chain(2),
+                        Link::Chain(2),
                     ],
                     "{what}"
                 );
@@ -1602,11 +1589,7 @@ mod tests {
                 let limits = Limits::default().with_max_ifds(3);
                 let (_, tree) = try_walk(&builder.build().bytes, &limits)
                     .unwrap_or_else(|err| panic!("{case} ({order:?}): {err:?}"));
-                assert_eq!(
-                    locations(&tree),
-                    [Location::Ifd0, Location::Exif],
-                    "{case} ({order:?})"
-                );
+                assert_eq!(links(&tree), [Link::Ifd0, Link::Exif], "{case} ({order:?})");
                 assert!(tree.interop().is_none(), "{case} ({order:?})");
             }
         }
@@ -1614,15 +1597,15 @@ mod tests {
 
     #[test]
     fn only_the_exif_gps_and_interoperability_ifds_hold_no_image() {
-        assert!(Location::Exif.holds_no_image());
-        assert!(Location::Gps.holds_no_image());
-        assert!(Location::Interop.holds_no_image());
-        let sub = Location::Sub {
+        assert!(Link::Exif.holds_no_image());
+        assert!(Link::Gps.holds_no_image());
+        assert!(Link::Interop.holds_no_image());
+        let sub = Link::Sub {
             parent: 0,
             index: 0,
         };
-        for location in [Location::Ifd0, Location::Chain(1), sub] {
-            assert!(!location.holds_no_image(), "{location:?}");
+        for link in [Link::Ifd0, Link::Chain(1), sub] {
+            assert!(!link.holds_no_image(), "{link:?}");
         }
     }
 
@@ -1710,9 +1693,10 @@ mod tests {
         }
     }
 
-    /// A link from IFD0 to another IFD.
+    /// The pointer in IFD0 that leads to another IFD: its SubIFDs tag, its
+    /// Exif IFD tag or its next-IFD pointer.
     #[derive(Clone, Copy, Debug)]
-    enum Link {
+    enum Pointer {
         SubIfds,
         Exif,
         Next,
@@ -1720,7 +1704,7 @@ mod tests {
 
     /// The bytes of a little-endian file whose IFD0 links to an IFD that
     /// lies past the first 64 KiB, at [`FAR_IFD`], through `link`.
-    fn far_link(link: Link) -> Vec<u8> {
+    fn far_link(link: Pointer) -> Vec<u8> {
         let order = Order::Little;
         let mut inner = TiffBuilder::new(order);
         let far = ifd(&mut inner, 1);
@@ -1731,9 +1715,9 @@ mod tests {
         let ifd0 = ifd(&mut builder, 0);
         let far = u32::try_from(FAR_IFD).unwrap();
         match link {
-            Link::SubIfds => builder.subifds_raw(ifd0, &[far]),
-            Link::Exif => builder.long(ifd0, EXIF_IFD, &[far]),
-            Link::Next => builder.next_raw(ifd0, far),
+            Pointer::SubIfds => builder.subifds_raw(ifd0, &[far]),
+            Pointer::Exif => builder.long(ifd0, EXIF_IFD, &[far]),
+            Pointer::Next => builder.next_raw(ifd0, far),
         };
         builder.blob_at(FAR_BLOB, &inner.bytes);
         builder.build().bytes
@@ -1747,7 +1731,7 @@ mod tests {
 
     #[test]
     fn a_reader_failure_past_ifd0_fails_the_walk() {
-        for link in [Link::SubIfds, Link::Exif, Link::Next] {
+        for link in [Pointer::SubIfds, Pointer::Exif, Pointer::Next] {
             let bytes = far_link(link);
             // The far IFD is there, for a reader that does not fail.
             let (mut src, tree) = try_walk(&bytes, &Limits::default()).unwrap();
@@ -1846,7 +1830,7 @@ mod tests {
             let built = builder.build();
 
             let (mut src, at_zero) = walked(&built);
-            let at_zero = (ids(&mut src, &at_zero), locations(&at_zero));
+            let at_zero = (ids(&mut src, &at_zero), links(&at_zero));
             let (mut src, tree) = walked_at(&built);
             assert_eq!(
                 tree.ifd0().block(),
@@ -1855,7 +1839,7 @@ mod tests {
             );
             assert_eq!(ids(&mut src, &tree), at_zero.0, "{order:?}");
             assert_eq!(ids(&mut src, &tree), [0, 1, 3, 2, 4, 5, 6], "{order:?}");
-            assert_eq!(locations(&tree), at_zero.1, "{order:?}");
+            assert_eq!(links(&tree), at_zero.1, "{order:?}");
             for (i, id) in [ifd0, a, c, b, exif, ifd1, d].into_iter().enumerate() {
                 let (_, found) = tree.get(i).unwrap();
                 assert_eq!(found.offset(), POS + built.ifd_offset(id), "{i}");
@@ -1872,16 +1856,16 @@ mod tests {
     #[test]
     fn a_link_inside_a_file_counts_from_its_header_not_from_the_start() {
         for order in ORDERS {
-            for link in [Link::SubIfds, Link::Exif, Link::Next] {
+            for link in [Pointer::SubIfds, Pointer::Exif, Pointer::Next] {
                 // IFD0 links to X; counted from the start of the file, the
                 // link lands on a decoy.
                 let mut builder = TiffBuilder::new(order);
                 let ifd0 = ifd(&mut builder, 0);
                 let x = ifd(&mut builder, 1);
                 match link {
-                    Link::SubIfds => builder.subifds(ifd0, &[x]),
-                    Link::Exif => builder.exif(ifd0, x),
-                    Link::Next => builder.next(ifd0, Some(x)),
+                    Pointer::SubIfds => builder.subifds(ifd0, &[x]),
+                    Pointer::Exif => builder.exif(ifd0, x),
+                    Pointer::Next => builder.next(ifd0, Some(x)),
                 };
                 let built = builder.build();
                 let mut bytes = placed(&built);
@@ -1895,9 +1879,9 @@ mod tests {
                 let mut builder = TiffBuilder::new(order);
                 let ifd0 = ifd(&mut builder, 0);
                 match link {
-                    Link::SubIfds => builder.subifds_raw(ifd0, &[far]),
-                    Link::Exif => builder.long(ifd0, EXIF_IFD, &[far]),
-                    Link::Next => builder.next_raw(ifd0, far),
+                    Pointer::SubIfds => builder.subifds_raw(ifd0, &[far]),
+                    Pointer::Exif => builder.long(ifd0, EXIF_IFD, &[far]),
+                    Pointer::Next => builder.next_raw(ifd0, far),
                 };
                 let mut bytes = placed(&builder.build());
                 assert!(POS + u64::from(far) > u64::try_from(bytes.len()).unwrap());
@@ -1916,7 +1900,7 @@ mod tests {
             let ifd0 = ifd(&mut builder, 0);
             builder.next(ifd0, Some(ifd0));
             let (_, tree) = walked_at(&builder.build());
-            assert_eq!(locations(&tree), [Location::Ifd0], "{order:?}");
+            assert_eq!(links(&tree), [Link::Ifd0], "{order:?}");
 
             // IFD0 → IFD1 → IFD0.
             let mut builder = TiffBuilder::new(order);
@@ -1946,8 +1930,8 @@ mod tests {
             let (mut src, tree) = walked_at(&builder.build());
             assert_eq!(ids(&mut src, &tree), [0, 1, 2], "{order:?}");
             assert_eq!(
-                locations(&tree),
-                [Location::Ifd0, Location::Exif, Location::Chain(2)],
+                links(&tree),
+                [Link::Ifd0, Link::Exif, Link::Chain(2)],
                 "{order:?}"
             );
         }
@@ -1956,29 +1940,25 @@ mod tests {
     #[test]
     fn links_into_a_header_inside_a_file_are_not_tried() {
         for order in ORDERS {
-            for link in [Link::SubIfds, Link::Exif, Link::Next] {
+            for link in [Pointer::SubIfds, Pointer::Exif, Pointer::Next] {
                 for at in 0..8 {
-                    if matches!(link, Link::Next) && at == 0 {
+                    if matches!(link, Pointer::Next) && at == 0 {
                         // 0 is no next IFD, not a link.
                         continue;
                     }
                     let mut builder = TiffBuilder::new(order);
                     let ifd0 = ifd(&mut builder, 0);
                     match link {
-                        Link::SubIfds => builder.subifds_raw(ifd0, &[at]),
-                        Link::Exif => builder.long(ifd0, EXIF_IFD, &[at]),
-                        Link::Next => builder.next_raw(ifd0, at),
+                        Pointer::SubIfds => builder.subifds_raw(ifd0, &[at]),
+                        Pointer::Exif => builder.long(ifd0, EXIF_IFD, &[at]),
+                        Pointer::Next => builder.next_raw(ifd0, at),
                     };
                     // The cap allows IFD0 alone: trying any link would
                     // cross it.
                     let bytes = placed(&builder.build());
                     let (_, tree) = try_walk_at(&bytes, POS, &Limits::default().with_max_ifds(1))
                         .unwrap_or_else(|err| panic!("{link:?} at {at} ({order:?}): {err:?}"));
-                    assert_eq!(
-                        locations(&tree),
-                        [Location::Ifd0],
-                        "{link:?} at {at} ({order:?})"
-                    );
+                    assert_eq!(links(&tree), [Link::Ifd0], "{link:?} at {at} ({order:?})");
                 }
             }
         }
@@ -2073,14 +2053,14 @@ mod tests {
     #[test]
     fn links_whose_position_would_pass_the_largest_offset_are_not_tried() {
         for order in ORDERS {
-            for link in [Link::SubIfds, Link::Exif, Link::Next] {
+            for link in [Pointer::SubIfds, Pointer::Exif, Pointer::Next] {
                 for at in [1 << 31, u32::MAX] {
                     let mut builder = TiffBuilder::new(order);
                     let ifd0 = ifd(&mut builder, 0);
                     match link {
-                        Link::SubIfds => builder.subifds_raw(ifd0, &[at]),
-                        Link::Exif => builder.long(ifd0, EXIF_IFD, &[at]),
-                        Link::Next => builder.next_raw(ifd0, at),
+                        Pointer::SubIfds => builder.subifds_raw(ifd0, &[at]),
+                        Pointer::Exif => builder.long(ifd0, EXIF_IFD, &[at]),
+                        Pointer::Next => builder.next_raw(ifd0, at),
                     };
                     // The cap allows IFD0 alone: trying any link would
                     // cross it.
@@ -2122,7 +2102,7 @@ mod tests {
     #[test]
     fn an_ifd_outside_the_bounds_is_left_out() {
         for order in ORDERS {
-            for link in [Link::SubIfds, Link::Exif, Link::Next] {
+            for link in [Pointer::SubIfds, Pointer::Exif, Pointer::Next] {
                 // IFD0 links to X, the last IFD of the structure, which holds
                 // one entry; the file goes on past the bounds, so that the
                 // bounds, not the file, are what leave X out.
@@ -2130,9 +2110,9 @@ mod tests {
                 let ifd0 = ifd(&mut builder, 0);
                 let x = ifd(&mut builder, 1);
                 match link {
-                    Link::SubIfds => builder.subifds(ifd0, &[x]),
-                    Link::Exif => builder.exif(ifd0, x),
-                    Link::Next => builder.next(ifd0, Some(x)),
+                    Pointer::SubIfds => builder.subifds(ifd0, &[x]),
+                    Pointer::Exif => builder.exif(ifd0, x),
+                    Pointer::Next => builder.next(ifd0, Some(x)),
                 };
                 let built = builder.build();
                 let x_at = built.ifd_offset(x);
@@ -2167,7 +2147,7 @@ mod tests {
             let built = builder.build();
             let table_end = 8 + 2 + 12;
             let (_, tree) = try_walk_to(&built, table_end).unwrap();
-            assert_eq!(locations(&tree), [Location::Ifd0], "{order:?}");
+            assert_eq!(links(&tree), [Link::Ifd0], "{order:?}");
             // Its entries one byte past the bounds' end, its count past
             // them, and IFD0 wholly past them.
             for end in [table_end - 1, 9, 8] {
@@ -2184,7 +2164,7 @@ mod tests {
     #[test]
     fn a_value_outside_the_bounds_leaves_out_a_subifd_but_not_a_chain_or_exif_ifd() {
         for order in ORDERS {
-            for link in [Link::SubIfds, Link::Exif, Link::Next] {
+            for link in [Pointer::SubIfds, Pointer::Exif, Pointer::Next] {
                 // IFD0 links to X, the last IFD of the structure, which holds
                 // a value stored out of line, the last bytes of the
                 // structure.
@@ -2193,9 +2173,9 @@ mod tests {
                 let x = ifd(&mut builder, 1);
                 builder.long(x, 0x0101, &[1, 2]);
                 match link {
-                    Link::SubIfds => builder.subifds(ifd0, &[x]),
-                    Link::Exif => builder.exif(ifd0, x),
-                    Link::Next => builder.next(ifd0, Some(x)),
+                    Pointer::SubIfds => builder.subifds(ifd0, &[x]),
+                    Pointer::Exif => builder.exif(ifd0, x),
+                    Pointer::Next => builder.next(ifd0, Some(x)),
                 };
                 let built = builder.build();
                 let len = u64::try_from(built.bytes.len()).unwrap();
@@ -2209,7 +2189,7 @@ mod tests {
                 // One byte past it: X's entry is invalid, which leaves out
                 // a SubIFD only.
                 let (mut src, tree) = try_walk_to(&built, len - 1).unwrap();
-                if matches!(link, Link::SubIfds) {
+                if matches!(link, Pointer::SubIfds) {
                     assert_eq!(ids(&mut src, &tree), [0], "{order:?}");
                 } else {
                     assert_eq!(ids(&mut src, &tree), [0, 1], "{link:?} ({order:?})");
