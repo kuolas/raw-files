@@ -499,7 +499,7 @@ fn reading_the_largest_preview_returns_exactly_the_stubs_bytes() {
 }
 
 #[test]
-fn the_raw_strip_the_grey_image_and_the_empty_subifds_are_not_previews() {
+fn the_raw_strip_the_gray_image_and_the_empty_subifds_are_not_previews() {
     for order in ORDERS {
         let (built, blobs) = z9_file_with_blobs(order, 1);
         // The raw strip is where the fixture says, so that the check below
@@ -518,7 +518,7 @@ fn the_raw_strip_the_grey_image_and_the_empty_subifds_are_not_previews() {
             "{order:?}: {starts:?}"
         );
         assert!(
-            !starts.contains(&built.blob_offset(blobs.grey)),
+            !starts.contains(&built.blob_offset(blobs.gray)),
             "{order:?}: {starts:?}"
         );
         // The empty SubIFDs declare a strip at offset 0.

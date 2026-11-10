@@ -193,10 +193,10 @@ pub const ISO: u16 = 400;
 /// The exposure compensation, as a fraction, in the Exif IFD.
 pub const EXPOSURE_BIAS: (i32, i32) = (-4, 6);
 /// The focal length, as a fraction, in the Exif IFD.
-pub const FOCAL_MILLIMETRES: (u32, u32) = (500, 10);
+pub const FOCAL_MILLIMETERS: (u32, u32) = (500, 10);
 /// The focal length in 35 mm terms, in the Exif IFD: the same 50 mm, as on
 /// the Z 9's full frame, FX.
-pub const FOCAL_MILLIMETRES_IN_35MM_FILM: u16 = 50;
+pub const FOCAL_MILLIMETERS_IN_35MM_FILM: u16 = 50;
 /// The lens's make, model and serial number, in the Exif IFD.
 pub const LENS: [&str; 3] = ["NIKON", "NIKKOR Z 24-70mm f/2.8 S", "20012345"];
 /// The lens's range, in the Exif IFD: the shortest and the longest focal
@@ -403,8 +403,8 @@ fn camera_value(tiff: &mut TiffBuilder, ifd: IfdId, tag: u16) {
         F_NUMBER => tiff.rational(ifd, tag, &[APERTURE]),
         PHOTOGRAPHIC_SENSITIVITY => tiff.short(ifd, tag, &[ISO]),
         EXPOSURE_BIAS_VALUE => tiff.srational(ifd, tag, &[EXPOSURE_BIAS]),
-        FOCAL_LENGTH => tiff.rational(ifd, tag, &[FOCAL_MILLIMETRES]),
-        FOCAL_LENGTH_IN_35MM_FILM => tiff.short(ifd, tag, &[FOCAL_MILLIMETRES_IN_35MM_FILM]),
+        FOCAL_LENGTH => tiff.rational(ifd, tag, &[FOCAL_MILLIMETERS]),
+        FOCAL_LENGTH_IN_35MM_FILM => tiff.short(ifd, tag, &[FOCAL_MILLIMETERS_IN_35MM_FILM]),
         LENS_MAKE => tiff.ascii(ifd, tag, lens_recorded_make),
         LENS_MODEL => tiff.ascii(ifd, tag, lens_recorded_model),
         LENS_SERIAL_NUMBER => tiff.ascii(ifd, tag, lens_serial_number),

@@ -679,7 +679,7 @@ fn focal_length_in_35mm_film<R: Read + Seek>(
     exif: &Ifd,
 ) -> Result<Option<u32>> {
     Ok(one_short(src, exif, FOCAL_LENGTH_IN_35MM_FILM)?
-        .filter(|&millimetres| millimetres > 0)
+        .filter(|&millimeters| millimeters > 0)
         .map(u32::from))
 }
 
@@ -3634,7 +3634,7 @@ mod tests {
     }
 
     #[test]
-    fn a_colour_space_of_srgb_is_srgb_whatever_the_index() {
+    fn a_color_space_of_srgb_is_srgb_whatever_the_index() {
         // `R98` beside it, as on 39 of the public samples; no index, as
         // on two; and `R03`, which does not overrule it.
         for index in [
@@ -3652,7 +3652,7 @@ mod tests {
     }
 
     #[test]
-    fn an_uncalibrated_colour_space_with_the_dcf_option_files_index_is_adobe_rgb() {
+    fn an_uncalibrated_color_space_with_the_dcf_option_files_index_is_adobe_rgb() {
         // As on the public A900 and DSC-R1 samples. The index is text,
         // cleaned as every text is, so the spaces that pad it are dropped.
         for text in ["R03", "R03 ", " R03  "] {
@@ -3665,7 +3665,7 @@ mod tests {
     }
 
     #[test]
-    fn an_uncalibrated_colour_space_without_the_dcf_option_files_index_is_none() {
+    fn an_uncalibrated_color_space_without_the_dcf_option_files_index_is_none() {
         let cases = [
             // Another index, an empty one, as on the public DSLR-A100
             // sample, or one that is not exactly `R03`.
@@ -3686,7 +3686,7 @@ mod tests {
     }
 
     #[test]
-    fn the_index_alone_or_beside_an_undefined_colour_space_is_none() {
+    fn the_index_alone_or_beside_an_undefined_color_space_is_none() {
         // No ColorSpace, as in every Nikon raw file checked, and codes Exif
         // does not define: `R03` does not make them Adobe RGB.
         for code in [None, Some(0), Some(2), Some(65534)] {
@@ -3928,7 +3928,7 @@ mod tests {
     }
 
     #[test]
-    fn a_damaged_index_costs_only_the_colour_space() {
+    fn a_damaged_index_costs_only_the_color_space() {
         type Damage = fn(&mut TiffBuilder, IfdId);
         let damages: [(&str, Damage); 5] = [
             ("missing", |_, _| {}),
@@ -4794,25 +4794,25 @@ mod tests {
                 .expect("the position is sound")
                 .altitude()
         };
-        let metres = Some(Gps::Rationals(&[(35_050, 1000)]));
+        let meters = Some(Gps::Rationals(&[(35_050, 1000)]));
         let above = Altitude::above(fraction(35_050, 1000));
         let below = Altitude::below(fraction(35_050, 1000));
-        assert_eq!(altitude(Some(Gps::Byte(&[0])), metres), above);
-        assert_eq!(altitude(Some(Gps::Byte(&[1])), metres), below);
-        assert_eq!(altitude(Some(Gps::Byte(&[2])), metres), above);
-        assert_eq!(altitude(Some(Gps::Byte(&[3])), metres), below);
+        assert_eq!(altitude(Some(Gps::Byte(&[0])), meters), above);
+        assert_eq!(altitude(Some(Gps::Byte(&[1])), meters), below);
+        assert_eq!(altitude(Some(Gps::Byte(&[2])), meters), above);
+        assert_eq!(altitude(Some(Gps::Byte(&[3])), meters), below);
         // Zero metres is a real altitude.
         assert_eq!(
             altitude(Some(Gps::Byte(&[0])), Some(Gps::Rationals(&[(0, 1)]))),
             Altitude::above(fraction(0, 1))
         );
-        for (label, reference, metres) in [
-            ("a reference of 4", Some(Gps::Byte(&[4])), metres),
-            ("a reference of 255", Some(Gps::Byte(&[255])), metres),
-            ("no reference", None, metres),
+        for (label, reference, meters) in [
+            ("a reference of 4", Some(Gps::Byte(&[4])), meters),
+            ("a reference of 255", Some(Gps::Byte(&[255])), meters),
+            ("no reference", None, meters),
             ("no altitude", Some(Gps::Byte(&[1])), None),
-            ("a reference of two BYTEs", Some(Gps::Byte(&[0, 0])), metres),
-            ("a reference of type SHORT", Some(Gps::Short(&[0])), metres),
+            ("a reference of two BYTEs", Some(Gps::Byte(&[0, 0])), meters),
+            ("a reference of type SHORT", Some(Gps::Short(&[0])), meters),
             (
                 "a zero denominator",
                 Some(Gps::Byte(&[0])),
@@ -4824,7 +4824,7 @@ mod tests {
                 Some(Gps::Rationals(&[(35, 1), (1, 1)])),
             ),
         ] {
-            assert_eq!(altitude(reference, metres), None, "{label}");
+            assert_eq!(altitude(reference, meters), None, "{label}");
         }
     }
 

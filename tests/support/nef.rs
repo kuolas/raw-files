@@ -584,7 +584,7 @@ pub struct Z9Blobs {
     /// SubIFD2's medium JPEG.
     pub medium_jpeg: BlobId,
     /// SubIFD3's grey strip.
-    pub grey: BlobId,
+    pub gray: BlobId,
     /// The Exif IFD's MakerNote block.
     pub makernote: BlobId,
     /// Where the MakerNote's small JPEG starts, counted from the start of
@@ -716,7 +716,7 @@ pub fn z9_file_with(order: Order, orientation: u16, makernote_order: Order) -> (
         .short(subs[3], COMPRESSION, &[UNCOMPRESSED])
         .short(subs[3], PHOTOMETRIC_INTERPRETATION, &[BLACK_IS_ZERO])
         .short(subs[3], SAMPLES_PER_PIXEL, &[1]);
-    let grey = strip(&mut builder, subs[3], &[0; 64]);
+    let gray = strip(&mut builder, subs[3], &[0; 64]);
 
     for (sub, compression) in [(subs[4], NIKON_RAW), (subs[5], UNCOMPRESSED)] {
         builder
@@ -769,7 +769,7 @@ pub fn z9_file_with(order: Order, orientation: u16, makernote_order: Order) -> (
         full_size_jpeg,
         raw,
         medium_jpeg,
-        grey,
+        gray,
         makernote,
         preview_in_makernote,
     };
@@ -832,7 +832,7 @@ pub fn z6iii_file_with_blobs(order: Order, orientation: u16) -> (Built, Z9Blobs)
         .short(subs[3], COMPRESSION, &[UNCOMPRESSED])
         .short(subs[3], PHOTOMETRIC_INTERPRETATION, &[BLACK_IS_ZERO])
         .short(subs[3], SAMPLES_PER_PIXEL, &[1]);
-    let grey = strip(&mut builder, subs[3], &[0; 64]);
+    let gray = strip(&mut builder, subs[3], &[0; 64]);
 
     for (sub, compression) in [(subs[4], NIKON_RAW), (subs[5], UNCOMPRESSED)] {
         builder
@@ -890,7 +890,7 @@ pub fn z6iii_file_with_blobs(order: Order, orientation: u16) -> (Built, Z9Blobs)
         full_size_jpeg,
         raw,
         medium_jpeg,
-        grey,
+        gray,
         makernote,
         preview_in_makernote,
     };

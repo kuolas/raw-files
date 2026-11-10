@@ -86,7 +86,7 @@ trap cleanup EXIT
 matched=0
 skipped=0
 from_commons=0
-while IFS=$'\t' read -r source id format file tier sha256 licence url || [ -n "$source" ]; do
+while IFS=$'\t' read -r source id format file tier sha256 license url || [ -n "$source" ]; do
 	[ -n "$source" ] || continue
 	if [ -n "$only" ] && [ "$format" != "$only" ]; then
 		continue
@@ -135,7 +135,7 @@ while IFS=$'\t' read -r source id format file tier sha256 licence url || [ -n "$
 
 	target="$dest/$file"
 	if [ -f "$target" ] && [ "$(sha256 "$target")" = "$sha256" ]; then
-		printf 'kept     %s (%s %s, %s)\n' "$file" "$source" "$id" "$licence"
+		printf 'kept     %s (%s %s, %s)\n' "$file" "$source" "$id" "$license"
 		continue
 	fi
 
@@ -158,7 +158,7 @@ while IFS=$'\t' read -r source id format file tier sha256 licence url || [ -n "$
 	chmod 644 "$part"
 	mv -f "$part" "$target"
 	part=""
-	printf 'fetched  %s (%s %s, %s)\n' "$file" "$source" "$id" "$licence"
+	printf 'fetched  %s (%s %s, %s)\n' "$file" "$source" "$id" "$license"
 done < <(tail -n +2 "$list")
 
 if [ "$matched" -eq 0 ]; then

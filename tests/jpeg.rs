@@ -69,8 +69,8 @@ use support::jpeg_files::{
 use support::jpeg_files::{
     APERTURE, BODY_SERIAL_NUMBER, CAMERA_MAKE, CAMERA_MODEL, CAMERA_SERIAL_NUMBER, CAMERA_SOFTWARE,
     DATE_TIME_ORIGINAL, EXIF_IFD_TAGS, EXPOSURE_BIAS, EXPOSURE_BIAS_VALUE, EXPOSURE_SECONDS,
-    EXPOSURE_TIME, F_NUMBER, FOCAL_LENGTH, FOCAL_LENGTH_IN_35MM_FILM, FOCAL_MILLIMETRES,
-    FOCAL_MILLIMETRES_IN_35MM_FILM, ISO, LENS, LENS_MAKE, LENS_MODEL, LENS_RANGE,
+    EXPOSURE_TIME, F_NUMBER, FOCAL_LENGTH, FOCAL_LENGTH_IN_35MM_FILM, FOCAL_MILLIMETERS,
+    FOCAL_MILLIMETERS_IN_35MM_FILM, ISO, LENS, LENS_MAKE, LENS_MODEL, LENS_RANGE,
     LENS_SERIAL_NUMBER, LENS_SPECIFICATION, MAIN, MAKE, MODEL, MPF_IMAGES,
     PHOTOGRAPHIC_SENSITIVITY, ROTATE_90, SOFTWARE, THUMBNAIL, camera_exif, camera_file,
     camera_jpeg, camera_jpeg_with_metadata, exif, exif_jpeg, padded_jpeg, plain_jpeg,
@@ -282,11 +282,11 @@ fn camera_metadata_without(lost: &[u16]) -> Metadata {
             exposure.with_exposure_bias(SignedRational::new(numerator, denominator).unwrap());
     }
     if kept(FOCAL_LENGTH) {
-        exposure = exposure.with_focal_length(fraction(FOCAL_MILLIMETRES));
+        exposure = exposure.with_focal_length(fraction(FOCAL_MILLIMETERS));
     }
     if kept(FOCAL_LENGTH_IN_35MM_FILM) {
         exposure =
-            exposure.with_focal_length_in_35mm_film(u32::from(FOCAL_MILLIMETRES_IN_35MM_FILM));
+            exposure.with_focal_length_in_35mm_film(u32::from(FOCAL_MILLIMETERS_IN_35MM_FILM));
     }
     let [lens_recorded_make, lens_recorded_model, lens_serial_number] = LENS;
     let mut lens = Lens::default();
@@ -513,7 +513,7 @@ fn a_camera_jpeg_gives_every_value_its_exif_segment_records() {
             .map(|bias| (bias.numerator, bias.denominator)),
         Some(EXPOSURE_BIAS)
     );
-    assert_eq!(stored(exposure.focal_length()), Some(FOCAL_MILLIMETRES));
+    assert_eq!(stored(exposure.focal_length()), Some(FOCAL_MILLIMETERS));
     let lens = read.lens();
     assert_eq!(
         [
