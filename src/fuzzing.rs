@@ -228,7 +228,7 @@ fn read_location(location: &Location) {
         longitude.to_degrees(),
     );
     if let Some(altitude) = location.altitude() {
-        let _ = (altitude.metres(), altitude.is_below(), altitude.to_metres());
+        let _ = (altitude.meters(), altitude.is_below(), altitude.to_meters());
     }
     if let Some(time) = location.time() {
         read_time(&time);
