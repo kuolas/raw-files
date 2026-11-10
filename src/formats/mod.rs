@@ -170,8 +170,10 @@ pub(super) fn is_dng(tree: &Tree) -> bool {
 /// of spaces at either end, compared without regard to case.
 ///
 /// The readers' claims decide by it, and the JPEG reader too, which reads
-/// a maker's MakerNote by it. A missing Make, a Make that is not text (type
-/// ASCII), and a Make that starts with anything else are all "no".
+/// a maker's MakerNote by it. The Make is read as the metadata reads it,
+/// of type ASCII or UTF-8, the two types Exif 3.1 allows for it. A missing
+/// Make, a Make of another type, and a Make that starts with anything else
+/// are all "no".
 ///
 /// # Errors
 ///
@@ -186,13 +188,13 @@ pub(super) fn make_starts_with<R: Read + Seek>(
     tree: &Tree,
     name: &[u8],
 ) -> Result<bool> {
-    let Some(make) = tree.ifd0().ascii(src, MAKE)? else {
+    let Some(make) = tree.ifd0().text_bytes(src, MAKE)? else {
         return Ok(false);
     };
+    let start = make.iter().position(|&b| b != b' ').unwrap_or(make.len());
     Ok(make
-        .trim_matches(' ')
-        .as_bytes()
-        .get(..name.len())
+        .get(start..)
+        .and_then(|make| make.get(..name.len()))
         .is_some_and(|start| start.eq_ignore_ascii_case(name)))
 }
 
@@ -530,18 +532,19 @@ mod tests {
     }
 
     #[test]
-    fn a_utf8_entry_counts_where_any_type_does_and_is_no_text() {
-        // Exif 3.0 lets a camera write its Make in UTF-8. Whether the typed
-        // values read such text is not decided: the Make is read as ASCII
-        // only, so a UTF-8 Make names no maker. A DNGVersion counts by its
-        // presence, of any type the IFD reader keeps, UTF-8 now among them.
+    fn a_utf8_make_is_text_and_a_utf8_entry_counts_where_any_type_does() {
+        // Exif 3.0 lets a camera write its Make in UTF-8, and Exif 3.1 gives
+        // the Make as "ASCII or UTF-8": such a Make is read as one of type
+        // ASCII is, padding and all. A DNGVersion counts by its presence,
+        // of any type the IFD reader keeps, UTF-8 among them.
         let (mut src, tree) = testing::file(|builder, ifd| {
             builder
-                .raw(ifd, MAKE, 129, 6, RawValue::Offset(512))
+                .raw(ifd, MAKE, 129, 8, RawValue::Offset(512))
                 .raw(ifd, DNG_VERSION, 129, 1, RawValue::Inline([0; 4]))
-                .blob_at(512, b"NIKON\0");
+                .blob_at(512, b" NIKON \0");
         });
-        assert!(!make_starts_with(&mut src, &tree, b"NIKON").unwrap());
+        assert!(make_starts_with(&mut src, &tree, b"NIKON").unwrap());
+        assert!(!make_starts_with(&mut src, &tree, b"SONY").unwrap());
         assert!(is_dng(&tree));
     }
 

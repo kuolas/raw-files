@@ -38,7 +38,9 @@
 use std::io::{Read, Seek};
 use std::ops::Range;
 
-use super::types::{ASCII, BYTE, IFD, LONG, RATIONAL, SHORT, SLONG, SRATIONAL, SSHORT, UNDEFINED};
+use super::types::{
+    ASCII, BYTE, IFD, LONG, RATIONAL, SHORT, SLONG, SRATIONAL, SSHORT, UNDEFINED, UTF8,
+};
 use super::{Block, skip_damage};
 use crate::entries::FieldType;
 use crate::error::{Error, Result};
@@ -543,9 +545,14 @@ impl Ifd {
     /// Bytes that are not UTF-8 become U+FFFD; spaces are kept, for the
     /// caller to trim.
     ///
+    /// Only the tests read text this way, to check what
+    /// [`ascii_bytes`](Self::ascii_bytes) gives as a `String`: the readers
+    /// take the bytes and clean them themselves.
+    ///
     /// # Errors
     ///
     /// As for [`u32s`](Self::u32s).
+    #[cfg(test)]
     pub(crate) fn ascii<R: Read + Seek>(
         &self,
         src: &mut Source<R>,
@@ -556,10 +563,11 @@ impl Ifd {
             .map(|bytes| String::from_utf8_lossy(&bytes).into_owned()))
     }
 
-    /// The text of tag `tag` as the file stores it, when its type is ASCII:
-    /// the bytes [`ascii`](Self::ascii) reads, before they are turned into
-    /// a `String`, for a caller that measures or parses the bytes
-    /// themselves. `None` when the tag is missing or has another type.
+    /// The text of tag `tag` as the file stores it, when its type is ASCII,
+    /// for a caller that cleans, measures or parses the bytes itself; a
+    /// text Exif allows in UTF-8 too is read by
+    /// [`text_bytes`](Self::text_bytes). `None` when the tag is missing or
+    /// has another type.
     ///
     /// The bytes end at the first NUL, or with the value when there is
     /// none. Bytes that are not UTF-8 are kept as they are.
@@ -572,7 +580,40 @@ impl Ifd {
         src: &mut Source<R>,
         tag: u16,
     ) -> Result<Option<Vec<u8>>> {
-        let Some((_, mut bytes)) = self.value(src, tag, &[ASCII])? else {
+        self.text_of_type(src, tag, &[ASCII])
+    }
+
+    /// The text of tag `tag` as the file stores it, when its type is ASCII
+    /// or UTF-8, the two types Exif 3.1 allows for many of its texts, such
+    /// as the Make: the bytes [`ascii_bytes`](Self::ascii_bytes) reads, of
+    /// either type. `None` when the tag is missing or has another type.
+    ///
+    /// The bytes end at the first NUL, or with the value when there is
+    /// none. Bytes that are not UTF-8 are kept as they are, whatever the
+    /// type says.
+    ///
+    /// # Errors
+    ///
+    /// As for [`u32s`](Self::u32s).
+    pub(crate) fn text_bytes<R: Read + Seek>(
+        &self,
+        src: &mut Source<R>,
+        tag: u16,
+    ) -> Result<Option<Vec<u8>>> {
+        self.text_of_type(src, tag, &[ASCII, UTF8])
+    }
+
+    /// The bytes of tag `tag` up to the first NUL, when its type is one of
+    /// `types`: what [`ascii_bytes`](Self::ascii_bytes) and
+    /// [`text_bytes`](Self::text_bytes) read. `None` when the tag is
+    /// missing or has another type.
+    fn text_of_type<R: Read + Seek>(
+        &self,
+        src: &mut Source<R>,
+        tag: u16,
+        types: &[u16],
+    ) -> Result<Option<Vec<u8>>> {
+        let Some((_, mut bytes)) = self.value(src, tag, types)? else {
             return Ok(None);
         };
         if let Some(nul) = bytes.iter().position(|&b| b == 0) {
@@ -582,8 +623,9 @@ impl Ifd {
     }
 
     /// The bytes of tag `tag`, when its type is BYTE or UNDEFINED; `None`
-    /// when the tag is missing or has another type. ASCII is not included:
-    /// [`ascii`](Self::ascii) reads text.
+    /// when the tag is missing or has another type. ASCII and UTF-8 are not
+    /// included: [`ascii_bytes`](Self::ascii_bytes) and
+    /// [`text_bytes`](Self::text_bytes) read text.
     ///
     /// # Errors
     ///
@@ -742,8 +784,6 @@ mod tests {
     use crate::ErrorKind;
     /// The code of field type DOUBLE, which no reader takes.
     const DOUBLE: u16 = 12;
-    /// The code of field type UTF-8, which no reader takes.
-    const UTF8: u16 = 129;
     use crate::testing::{FAR, FailsFar};
     use crate::tiff_builder::{Built, IfdId, Order, RawValue, TiffBuilder};
     use std::io::Cursor;
@@ -1864,7 +1904,7 @@ mod tests {
     }
 
     #[test]
-    fn a_utf8_entry_is_kept_and_no_typed_reader_takes_it() {
+    fn a_utf8_entry_is_kept_and_only_the_reader_of_either_text_takes_it() {
         for order in ORDERS {
             // Exif 3.0's UTF-8 type, inline and out of line: "é" is two
             // bytes, and the NUL is counted.
@@ -1883,8 +1923,11 @@ mod tests {
                 let entry = ifd.entry(tag).expect("kept");
                 assert_eq!(entry.typ(), UTF8);
                 assert_eq!(entry.read(src, 16).unwrap(), expected, "{order:?}");
-                // Every typed reader checks the type, and UTF-8 is none of
-                // theirs: the text readers take ASCII only.
+                // Every typed reader checks the type: the reader of a text
+                // of either type takes UTF-8, cut at its NUL; the ASCII
+                // readers and the readers of numbers and bytes do not.
+                let text = expected.strip_suffix(b"\0").expect("a NUL ends it");
+                assert_eq!(ifd.text_bytes(src, tag).unwrap().as_deref(), Some(text));
                 assert_eq!(ifd.ascii(src, tag).unwrap(), None);
                 assert_eq!(ifd.ascii_bytes(src, tag).unwrap(), None);
                 assert_eq!(ifd.bytes(src, tag).unwrap(), None);

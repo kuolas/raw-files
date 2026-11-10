@@ -289,6 +289,7 @@ fn read(bytes: &[u8], limits: &Limits) -> Result<(Tree, Vec<Error>)> {
         for tag in ifd.tags() {
             errors.extend(ifd.u32s(&mut src, tag).err());
             errors.extend(ifd.ascii(&mut src, tag).err());
+            errors.extend(ifd.text_bytes(&mut src, tag).err());
             errors.extend(ifd.bytes(&mut src, tag).err());
         }
     }

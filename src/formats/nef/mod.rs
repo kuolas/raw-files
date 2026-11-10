@@ -153,6 +153,14 @@ mod tests {
     }
 
     #[test]
+    fn a_make_of_type_utf8_is_claimed() {
+        // Exif 3.1 gives the Make as "ASCII or UTF-8".
+        assert!(claimed(|builder, ifd| {
+            builder.utf8(ifd, MAKE, "NIKON CORPORATION");
+        }));
+    }
+
+    #[test]
     fn the_make_of_another_manufacturer_is_not_claimed() {
         assert!(!claimed_make("Canon"));
     }
