@@ -14,10 +14,11 @@ fuller RAW decoding is planned.
   and it never reads the raw data.
 - **Metadata.** What a viewer or a file renamer needs next to a preview:
   the capture time, with sub-seconds and offset from UTC when recorded;
-  the camera's make, model and serial number as the file records them,
-  with the maker raw-files recognises in them, such as Nikon, and, for
-  the bodies the [notes on camera names](docs/formats/camera-names.md)
-  list, the name the body is sold under, such as Z6III; the software
+  the camera's make, model, serial number and owner's name as the file
+  records them, with the maker raw-files recognises in them, such as
+  Nikon, and, for the bodies the
+  [notes on camera names](docs/formats/camera-names.md) list, the name
+  the body is sold under, such as Z6III; the software
   that wrote the file; who made the picture and what they wrote about
   it, from the artist and the copyright notice to the title, the
   description and the comment, as the file records them; where the
