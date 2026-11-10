@@ -340,13 +340,14 @@ changes the list.
 One test is ignored by default: it runs the reader over a folder of your
 own camera files, RAW and JPEG, and prints counts only, never a path, the
 text of a make, model or software as the file records it, the value of a
-serial number, time, exposure or lens, or where the camera focused, so its
-output can go into an issue. It counts each file under the format its
-extension names, in one section per format, and skips the AppleDouble
-files, whose name starts with `._`, which macOS writes beside each file on
-a disk such as an exFAT one, saying how many it skipped. It checks that
-every file opens, that every one has a preview, that the largest preview is
-a whole JPEG, that the metadata gives the preview's orientation, and that
+serial number, time, exposure or lens, where the camera focused, who made
+the picture or where it was taken, so its output can go into an issue.
+It counts each file under the format its extension names, in one section
+per format, and skips the AppleDouble files, whose name starts with `._`,
+which macOS writes beside each file on a disk such as an exFAT one, saying
+how many it skipped. It checks that every file opens, that every one has
+a preview, that the largest preview is a whole JPEG, that the metadata
+gives the preview's orientation, and that
 every focus point, and every point of a list of the points the camera used,
 lies inside its frame, area included, both as read and once placed on the
 largest preview; and that the focus point, the list and the layout of the

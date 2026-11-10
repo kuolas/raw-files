@@ -1517,13 +1517,17 @@ without differential correction). [P][30] (Table 14, pp. 82 to 83;
 - **Every GPS entry is of the type and count Exif gives**, every GPS
   IFD sorted by tag with no tag twice, and no entry left out. **[F]**
 
-raw-files will give a location only where both references and both
-coordinates are sound, as
+raw-files gives a location, `Metadata::location`, only where both
+references and both coordinates are sound, as
 [ADR011](../../architecture-decisions/adr011-metadata-from-standard-tags.md)
 decides, with the altitude, the time and the datum beside it; a body
 without a fix gives none, though it records a datum. The status, the
 measure mode, the differential correction, the precision, the speed
-and the track stay in the view of every entry. **[I]**
+and the track stay in the view of every entry. The tests of the public
+samples check which parts of a location each file gives, never where
+it lies: the ILCE-1M2 sample gives one with a time and the datum, the
+SLT-A55V sample one with an altitude too, and no other sample gives
+one.
 
 Every text and GPS value counted lies inside the blocks raw-files'
 `open` already reads. **[F]**
