@@ -42,12 +42,15 @@ ever complete for every body. What each gives so far:
   Multi-Picture Format (MPF) list and, from the Nikon bodies that
   write one, its MakerNote's small JPEG.
 - **Metadata.** What a viewer or a file renamer needs next to the
-  preview: capture time, camera make, model and serial number (with the
-  maker raw-files recognises in them and, for the bodies the
-  [notes on camera names](formats/camera-names.md) list, the name the
-  body is sold under), lens, exposure, orientation, image sizes, and
-  how the camera was set (white balance, exposure program, metering,
-  flash, shutter, image area).
+  preview: capture time, camera make, model, serial number and owner's
+  name (with the maker raw-files recognises in them and, for the bodies
+  the [notes on camera names](formats/camera-names.md) list, the name
+  the body is sold under), who made the picture (artist, copyright
+  notice, photographer, editor, title, description and comment), where
+  it was taken (position, altitude, GPS time, image direction and map
+  datum), lens, exposure, orientation, image sizes, and how the camera
+  was set (white balance, exposure program, metering, flash, shutter,
+  image area).
   Read from the standard TIFF and Exif tags and from the MakerNote, for
   the camera settings that only it records and, on Nikon files, for the
   fields that older bodies record only there. A JPEG file's metadata
@@ -61,11 +64,10 @@ ever complete for every body. What each gives so far:
   Open, and next: **full metadata**, every metadata value a file
   records, so that a program needs no second reader beside raw-files:
   more capture settings, how the camera processed its JPEG, the lens by
-  name, the author and copyright, the location, the XMP and IPTC
-  fields, what editing software, such as Nikon's, writes into the
-  file, and what a maker records only in enciphered or encrypted
-  blocks, which needs a decision of its own first. It comes before raw
-  sensor data
+  name, the XMP and IPTC fields, what editing software, such as
+  Nikon's, writes into the file, and what a maker records only in
+  enciphered or encrypted blocks, which needs a decision of its own
+  first. It comes before raw sensor data
   ([ADR016](architecture-decisions/adr016-full-metadata-before-raw-data.md)).
 
   Full metadata begins with **every entry a file records**, which
@@ -76,20 +78,21 @@ ever complete for every body. What each gives so far:
   value as the file records it, and the name a published standard
   gives the tag
   ([ADR023](architecture-decisions/adr023-every-entry-a-file-records.md),
-  [the tag names](formats/tag-names.md)). The groups of values come
-  next, each read from the same directories; enciphered and encrypted
+  [the tag names](formats/tag-names.md)). The groups of values follow,
+  each read from the same directories; enciphered and encrypted
   records are given only as their bytes until the decision on reading
-  them. The first two will be **who made a picture**, its artist,
-  copyright notice, photographer, editor, title, description and
-  comment, with the name of the camera's owner beside its serial
-  number, and **where it was taken**, its
-  position, altitude, GPS time, image direction and map datum, read
-  from the standard tags alone
+  them. raw-files gives the first two: **who made a picture**, its
+  artist, copyright notice, photographer, editor, title, description
+  and comment, with the name of the camera's owner beside its serial
+  number, and **where it was taken**, its position, altitude, GPS
+  time, image direction and map datum. Both are read from the standard
+  tags alone
   ([ADR011](architecture-decisions/adr011-metadata-from-standard-tags.md),
-  [#97](https://github.com/kuolas/raw-files/issues/97)); they wait only
-  for their readers, written from the format notes and checked on the
-  files those notes count, or on built files for the texts no measured
-  file records.
+  [#97](https://github.com/kuolas/raw-files/issues/97)) and checked on
+  the files the format notes count, or on built files for the texts no
+  measured file records: the photographer, the editor, the title and
+  the camera's owner. **More capture settings** come next, such as the
+  focus mode, stabilisation and the image quality.
 - **Focus points.** Where the camera focused, in coordinates that place
   it on a preview, to judge sharpness where the photographer focused.
   Read from the MakerNote, on Nikon mirrorless bodies, Nikon DSLRs in
@@ -115,8 +118,10 @@ ever complete for every body. What each gives so far:
 
 The public API is the file handle (`RawFile` and `Options`) with the
 preview types (`Preview`, `PreviewFormat`, `Orientation`, `Size`), the
-metadata types (`Metadata`, `Camera`, `Make`, `Exposure`, `Lens`,
-`Point`, `DateTime`, `Rational` and `SignedRational`), the focus types
+metadata types (`Metadata`, `Camera`, `Make`, `Authorship`,
+`Exposure`, `Lens`, `Point`, `DateTime`, `Rational` and
+`SignedRational`), the location types (`Location`, `Latitude`,
+`Longitude`, `Altitude`, `Direction` and `North`), the focus types
 (`Focus`, `FocusOrigin`, `FocusPoints`, `FocusPoint`, `FocusAreaMode`,
 `FocusLayout` and `FocusLayoutPoint`), the camera settings types
 (`CameraSettings`, `WhiteBalance`, `FineTune`, `Flash`, and the enums
@@ -200,12 +205,17 @@ the architecture decisions.
   when asked for
   ([#50](https://github.com/kuolas/raw-files/issues/50),
   [ADR023](architecture-decisions/adr023-every-entry-a-file-records.md)).
+- **0.9.0**: metadata, who made a picture and where it was taken, the
+  second step of full metadata: the artist, the copyright notice, the
+  photographer, the editor, the title, the description, the comment and
+  the name of the camera's owner, and the position with its altitude,
+  GPS time, image direction and map datum, each as the file records it
+  ([#97](https://github.com/kuolas/raw-files/issues/97),
+  [ADR011](architecture-decisions/adr011-metadata-from-standard-tags.md)).
 - **Next**: more of full metadata, the values a file records read
-  group by group, the ones that only enciphered or encrypted blocks
-  hold among them
-  ([#50](https://github.com/kuolas/raw-files/issues/50)), beginning
-  with who made a picture and where it was taken
-  ([#97](https://github.com/kuolas/raw-files/issues/97)).
+  group by group, beginning with more capture settings; the values
+  that only enciphered or encrypted blocks hold come last
+  ([#50](https://github.com/kuolas/raw-files/issues/50)).
 
 ## Open questions
 
