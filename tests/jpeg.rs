@@ -88,7 +88,8 @@ use support::nef::{
 };
 use support::samples::{
     Jpeg, Sample, SampleEntries, SampleFineTune, SampleFocus, SampleLens, SampleMetadata,
-    SampleSettings, SerialShape, check, check_entries, check_metadata, listed,
+    SampleSettings, SerialShape, Text, check, check_entries, check_metadata,
+    check_placeholder_description, listed,
 };
 use support::tiff_builder::{EXIF_IFD, IfdId, Order, TiffBuilder};
 
@@ -2781,6 +2782,7 @@ const METADATA: &[SampleMetadata] = &[
         recorded_model: Some("ILCE-7M3"),
         software: Some("ILCE-7M3 v4.01"),
         serial_number: None,
+        texts: &[],
         capture_time: Some("2025-06-05T10:47:33+01:00"),
         orientation: Orientation::NoTransforms,
         iso: Some(320),
@@ -2837,6 +2839,7 @@ const METADATA: &[SampleMetadata] = &[
         recorded_model: Some("ILCE-7RM2"),
         software: Some("ILCE-7RM2 v4.00"),
         serial_number: None,
+        texts: &[],
         capture_time: Some("2026-06-08T20:03:02"),
         orientation: Orientation::NoTransforms,
         iso: Some(5000),
@@ -2893,6 +2896,7 @@ const METADATA: &[SampleMetadata] = &[
         recorded_model: Some("DSC-RX100M4"),
         software: Some("DSC-RX100M4 v2.00"),
         serial_number: None,
+        texts: &[Text::Artist, Text::Copyright],
         capture_time: Some("2019-11-19T10:51:00"),
         orientation: Orientation::NoTransforms,
         iso: Some(80),
@@ -2940,6 +2944,7 @@ const METADATA: &[SampleMetadata] = &[
         recorded_model: Some("ILCE-6000"),
         software: Some("ILCE-6000 v1.00"),
         serial_number: None,
+        texts: &[],
         capture_time: Some("2014-03-19T07:55:02"),
         orientation: Orientation::NoTransforms,
         iso: Some(100),
@@ -2987,6 +2992,7 @@ const METADATA: &[SampleMetadata] = &[
         recorded_model: Some("DSLR-A100"),
         software: Some("DSLR-A100 v1.04"),
         serial_number: None,
+        texts: &[],
         capture_time: Some("2008-06-09T15:44:33"),
         orientation: Orientation::NoTransforms,
         iso: Some(200),
@@ -3026,6 +3032,7 @@ const METADATA: &[SampleMetadata] = &[
             len: 7,
             digits: true,
         }),
+        texts: &[],
         capture_time: Some("2018-12-02T12:42:13.30+09:00"),
         orientation: Orientation::NoTransforms,
         iso: Some(400),
@@ -3073,6 +3080,7 @@ const METADATA: &[SampleMetadata] = &[
         recorded_model: Some("NIKON D70"),
         software: Some("Ver.1.02"),
         serial_number: None,
+        texts: &[],
         capture_time: Some("2009-06-07T11:52:30"),
         orientation: Orientation::NoTransforms,
         iso: Some(200),
@@ -3117,6 +3125,7 @@ const METADATA: &[SampleMetadata] = &[
         recorded_model: Some("Canon PowerShot G7 X"),
         software: None,
         serial_number: None,
+        texts: &[],
         capture_time: Some("2016-07-17T17:30:26"),
         orientation: Orientation::NoTransforms,
         iso: Some(125),
@@ -3145,6 +3154,12 @@ const METADATA: &[SampleMetadata] = &[
         },
     },
 ];
+
+#[test]
+fn the_dslr_a100s_placeholder_is_recorded_and_gives_no_description() {
+    // The one sample JPEG the JPEG notes (section 4) list as writing it.
+    check_placeholder_description("sony-dslr-a100.jpg", Format::Jpeg);
+}
 
 #[test]
 fn every_jpeg_sample_gives_its_metadata() {

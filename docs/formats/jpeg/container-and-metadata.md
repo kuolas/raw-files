@@ -306,12 +306,12 @@ Nikon's and Sony's raw files hold in these tags.
   - No JPEG has text in CameraOwnerName, Photographer, ImageEditor or
     ImageTitle, or a UserComment under the `JIS` or `UNICODE` code, or
     text under the undefined one.
-- raw-files will read these texts as in a raw file, as
+- raw-files reads these texts as in a raw file, as
   [ADR011](../../architecture-decisions/adr011-metadata-from-standard-tags.md)
   decides: IFD0's from IFD0 alone, not from IFD1; the comment only
-  under the `ASCII` code; `SONY DSC` as no description. A comment
-  segment (COM, section 1) and XMP (section 5) are not read for them.
-  [I]
+  under the `ASCII` code; `SONY DSC` as no description, as the tests
+  check on the A100 file. A comment segment (COM, section 1) and XMP
+  (section 5) are not read for them.
 
 **Where it was taken.** The GPS IFD, which IFD0's 0x8825 points to,
 records the position, the altitude, the GPS time in UTC, the image
