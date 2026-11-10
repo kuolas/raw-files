@@ -18,11 +18,13 @@ use std::io::{Cursor, Read, Seek};
 
 use crate::container::jpeg::{mpf, probe, segments};
 use crate::container::tiff::{Block, Tree, walk};
+use crate::datetime::DateTime;
 use crate::entries::{Entries, Entry, Value};
 use crate::focus::{Focus, FocusLayout, FocusPoints};
 use crate::geometry::Size;
 use crate::io::Source;
 use crate::limits::Limits;
+use crate::location::Location;
 use crate::metadata::Metadata;
 use crate::options::Options;
 
@@ -205,6 +207,56 @@ fn read_value(value: &Value) {
     let _ = format!("{value:?}");
 }
 
+/// Asks `location` for every part, and converts each coordinate and the
+/// altitude to a decimal as a map would, so that the conversions are
+/// fuzzed on values the reader built from arbitrary bytes.
+fn read_location(location: &Location) {
+    let latitude = location.latitude();
+    let _ = (
+        latitude.degrees(),
+        latitude.minutes(),
+        latitude.seconds(),
+        latitude.is_south(),
+        latitude.to_degrees(),
+    );
+    let longitude = location.longitude();
+    let _ = (
+        longitude.degrees(),
+        longitude.minutes(),
+        longitude.seconds(),
+        longitude.is_west(),
+        longitude.to_degrees(),
+    );
+    if let Some(altitude) = location.altitude() {
+        let _ = (altitude.metres(), altitude.is_below(), altitude.to_metres());
+    }
+    if let Some(time) = location.time() {
+        read_time(&time);
+    }
+    if let Some(direction) = location.image_direction() {
+        let north = direction.north();
+        let _ = (direction.degrees(), north.name(), north.to_string());
+    }
+    let _ = location.map_datum();
+}
+
+/// Asks `time` for every value, and formats it as a caller showing it
+/// would.
+fn read_time(time: &DateTime) {
+    let _ = time.to_string();
+    let _ = (
+        time.year(),
+        time.month(),
+        time.day(),
+        time.hour(),
+        time.minute(),
+        time.second(),
+        time.nanosecond(),
+        time.subsecond_digits(),
+        time.offset_minutes(),
+    );
+}
+
 /// Asks `metadata` for every value, and formats, reduces and converts
 /// each time and fraction as a caller showing it would, so that what those
 /// types do with values the reader built from arbitrary bytes is fuzzed
@@ -231,19 +283,11 @@ fn read_metadata(metadata: &Metadata) {
         authorship.description(),
         authorship.comment(),
     );
+    if let Some(location) = metadata.location() {
+        read_location(location);
+    }
     if let Some(time) = metadata.capture_time() {
-        let _ = time.to_string();
-        let _ = (
-            time.year(),
-            time.month(),
-            time.day(),
-            time.hour(),
-            time.minute(),
-            time.second(),
-            time.nanosecond(),
-            time.subsecond_digits(),
-            time.offset_minutes(),
-        );
+        read_time(&time);
     }
     let _ = metadata.orientation();
     let exposure = metadata.exposure();

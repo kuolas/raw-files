@@ -317,6 +317,53 @@ impl DateTime {
         Some(time)
     }
 
+    /// The GPS time read from Exif's GPSDateStamp `date`, the text
+    /// `YYYY:MM:DD`, and GPSTimeStamp `time`, the hours, minutes and
+    /// seconds as fractions, numerator first, as stored: one time in UTC,
+    /// with an offset of zero.
+    ///
+    /// The date is cut at its first NUL and trimmed of the spaces at
+    /// either end, as [`from_exif`](Self::from_exif) does, and must then be
+    /// exactly `YYYY:MM:DD`. The hours and the minutes must be whole, of
+    /// denominator 1. The seconds' denominator must be a power of ten from
+    /// 1 to 10⁹, and its zeros are the digits of the fraction of a second
+    /// kept: none for 1, two for 100, as Nikon writes them, three for 1000,
+    /// as Sony does, so that `3045/100` is 30.45 seconds. Returns `None`
+    /// otherwise, or when the date and time are not real, by the rules of
+    /// [`new`](Self::new): an hour of 24 or a second of 60 is refused, as
+    /// is any value too large for its field.
+    pub(crate) fn from_gps(date: &[u8], time: [(u32, u32); 3]) -> Option<Self> {
+        let &[y0, y1, y2, y3, b':', mo0, mo1, b':', d0, d1] = cleaned(date) else {
+            return None;
+        };
+        let [hours, minutes, (numerator, denominator)] = time;
+        let whole = |(numerator, denominator): (u32, u32)| {
+            (denominator == 1)
+                .then(|| u8::try_from(numerator).ok())
+                .flatten()
+        };
+        // 10⁹ is the largest power of ten a u32 holds.
+        let digits = (0..=9_u8).find(|&digits| 10_u32.pow(u32::from(digits)) == denominator)?;
+        let second = u8::try_from(numerator / denominator).ok()?;
+        let time = Self::new(
+            u16::from(two_digits(y0, y1)?) * 100 + u16::from(two_digits(y2, y3)?),
+            two_digits(mo0, mo1)?,
+            two_digits(d0, d1)?,
+            whole(hours)?,
+            whole(minutes)?,
+            second,
+        )?;
+        let time = if digits == 0 {
+            time
+        } else {
+            // The remainder is below 10^digits, so the nanoseconds are below
+            // 10⁹, and `with_subseconds` always accepts them.
+            let nanosecond = (numerator % denominator) * 10_u32.pow(9 - u32::from(digits));
+            time.with_subseconds(nanosecond, digits)?
+        };
+        time.with_offset_minutes(0)
+    }
+
     /// The year, from 0 to 9999.
     pub fn year(&self) -> u16 {
         self.year

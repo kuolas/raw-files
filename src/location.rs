@@ -15,6 +15,7 @@
 //! a file whose GPS IFD records no sound position has no location at all,
 //! whatever else that IFD holds, and a damaged altitude, time, direction
 //! or datum costs only itself.
+//! [`Metadata::location`](crate::Metadata::location) gives a file's.
 //!
 //! A program that uses raw-files can build a [`Location`] for its own
 //! tests through the checked constructors of its parts, which refuse a
@@ -88,12 +89,12 @@ use crate::rational::Rational;
 /// ```
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Location {
-    latitude: Latitude,
-    longitude: Longitude,
-    altitude: Option<Altitude>,
-    time: Option<DateTime>,
-    image_direction: Option<Direction>,
-    map_datum: Option<String>,
+    pub(crate) latitude: Latitude,
+    pub(crate) longitude: Longitude,
+    pub(crate) altitude: Option<Altitude>,
+    pub(crate) time: Option<DateTime>,
+    pub(crate) image_direction: Option<Direction>,
+    pub(crate) map_datum: Option<String>,
 }
 
 impl Location {

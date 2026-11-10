@@ -5,10 +5,11 @@
 //! Besides the image, a camera records how the picture was taken: by which
 //! camera and when, the software that wrote the file, who made the picture
 //! and what they wrote about it, the exposure it chose, how the camera was
-//! set, the lens it was taken with, how large the image is, and where the
-//! camera focused. [`Metadata`] holds all of it, read when the file is
-//! opened; [`Camera`] holds the camera as the file names it, [`Authorship`]
-//! the texts on who made the picture, [`Exposure`] and [`Lens`] the
+//! set, the lens it was taken with, how large the image is, where the
+//! camera focused, and where the picture was taken. [`Metadata`] holds all
+//! of it, read when the file is opened; [`Camera`] holds the camera as the
+//! file names it, [`Authorship`] the texts on who made the picture,
+//! [`Location`] where it was taken, [`Exposure`] and [`Lens`] the
 //! exposure and the lens as the file records them, fractions with the
 //! numerator and denominator it stored, [`CameraSettings`] the camera's
 //! settings, [`Focus`] where the camera's autofocus aimed, as the camera
@@ -22,9 +23,10 @@
 //!
 //! A program that uses raw-files can build these values for its own tests,
 //! without a camera file: [`Metadata`], [`Camera`], [`Authorship`],
-//! [`Exposure`], [`Lens`], [`CameraSettings`] and [`FocusPoints`] through
-//! their `with_…` methods, and a [`Focus`], a [`FocusLayout`], a
-//! [`DateTime`] and a [`Rational`] through their checked constructors.
+//! [`Exposure`], [`Lens`], [`CameraSettings`], [`FocusPoints`] and
+//! [`Location`] through their `with_…` methods, and a [`Focus`], a
+//! [`FocusLayout`], a [`DateTime`], a [`Rational`] and a location's
+//! coordinates through their checked constructors.
 //! [`Metadata`]'s docs show how.
 
 use crate::authorship::Authorship;
@@ -33,12 +35,13 @@ use crate::camera_settings::CameraSettings;
 use crate::datetime::DateTime;
 use crate::focus::{Focus, FocusLayout, FocusPoints};
 use crate::geometry::Size;
+use crate::location::Location;
 use crate::orientation::Orientation;
 use crate::rational::{Rational, SignedRational};
 
 /// What the camera recorded about a picture: the camera and the software
 /// that wrote the file, who made the picture and what they wrote about it,
-/// when the picture was taken, how to turn it upright,
+/// where and when the picture was taken, how to turn it upright,
 /// its exposure, how the camera was set, its lens, the sizes of its raw
 /// data and of its visible image, and where the camera focused, with the
 /// layout of the body's autofocus points where raw-files has its table.
@@ -156,6 +159,7 @@ pub struct Metadata {
     pub(crate) camera: Camera,
     pub(crate) software: Option<String>,
     pub(crate) authorship: Authorship,
+    pub(crate) location: Option<Location>,
     pub(crate) capture_time: Option<DateTime>,
     pub(crate) orientation: Orientation,
     pub(crate) exposure: Exposure,
@@ -231,6 +235,51 @@ impl Metadata {
     /// ```
     pub fn authorship(&self) -> &Authorship {
         &self.authorship
+    }
+
+    /// Where the picture was taken (see [`Location`]): the position the
+    /// GPS IFD records, with the altitude, the GPS time, the direction the
+    /// camera faced and the map datum when it records them.
+    ///
+    /// A file has a location only when its GPS IFD records a sound
+    /// position: GPSLatitudeRef `N` or `S` and GPSLongitudeRef `E` or `W`,
+    /// with GPSLatitude and GPSLongitude as exactly three fractions each
+    /// that name a place, with no zero denominator, minutes and seconds
+    /// below 60, and no more than 90° of latitude or 180° of longitude.
+    /// Without one it is `None`, whatever else the GPS IFD holds: many
+    /// cameras write a GPS IFD of only its version when no position was
+    /// recorded, and some write every tag with nothing in it. The other
+    /// parts are each read from both their tags, and a part whose tags are
+    /// missing or damaged is `None` alone; [`Location`]'s getters say
+    /// what each needs.
+    ///
+    /// Or the location given to [`with_location`](Self::with_location).
+    ///
+    /// # Examples
+    ///
+    /// Where a picture was taken, in decimal degrees for a map, and how
+    /// high:
+    ///
+    /// ```no_run
+    /// use raw_files::RawFile;
+    ///
+    /// # fn main() -> raw_files::Result<()> {
+    /// let file = RawFile::open("photo.nef")?;
+    /// if let Some(location) = file.metadata().location() {
+    ///     println!(
+    ///         "at {:.5}, {:.5}",
+    ///         location.latitude().to_degrees(),
+    ///         location.longitude().to_degrees()
+    ///     );
+    ///     if let Some(altitude) = location.altitude() {
+    ///         println!("{:.0} m", altitude.to_metres());
+    ///     }
+    /// }
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn location(&self) -> Option<&Location> {
+        self.location.as_ref()
     }
 
     /// When the picture was taken, as the camera's clock showed it: the
@@ -578,6 +627,14 @@ impl Metadata {
     #[must_use]
     pub fn with_authorship(mut self, authorship: Authorship) -> Self {
         self.authorship = authorship;
+        self
+    }
+
+    /// Sets where the picture was taken, in place of any location set
+    /// before; [`location`](Self::location) reads it.
+    #[must_use]
+    pub fn with_location(mut self, location: Location) -> Self {
+        self.location = Some(location);
         self
     }
 
@@ -1091,6 +1148,7 @@ mod tests {
     };
     use crate::focus::{FocusAreaMode, FocusLayoutPoint, FocusOrigin, FocusPoint};
     use crate::geometry::Point;
+    use crate::location::{Altitude, Direction, Latitude, Longitude, North};
     use crate::testing::{point, size, z9_focus, z9_focus_from};
 
     fn fraction(numerator: u32, denominator: u32) -> Rational {
@@ -1430,6 +1488,25 @@ mod tests {
         }
     }
 
+    /// A made-up location, every part set and each unlike any other
+    /// value of these tests: the Eiffel Tower's position in degrees and
+    /// minutes, as Nikon writes one, with an altitude, a GPS time, a
+    /// direction and a datum, built field by field.
+    fn z9_location() -> Location {
+        Location {
+            latitude: Latitude::north(fraction(48, 1), fraction(514_933, 10_000), fraction(0, 1))
+                .unwrap(),
+            longitude: Longitude::east(fraction(2, 1), fraction(176_700, 10_000), fraction(0, 1))
+                .unwrap(),
+            altitude: Altitude::above(fraction(3_505, 100)),
+            time: DateTime::new(2024, 5, 1, 8, 20, 30)
+                .and_then(|time| time.with_subseconds(850_000_000, 2))
+                .and_then(|time| time.with_offset_minutes(0)),
+            image_direction: Direction::new(fraction(27_550, 100), North::Magnetic),
+            map_datum: Some("WGS-84".to_owned()),
+        }
+    }
+
     /// The camera of a Z 9 picture, every value set.
     fn z9_camera() -> Camera {
         Camera {
@@ -1449,6 +1526,7 @@ mod tests {
             camera: z9_camera(),
             software: Some("Ver.01.00".to_owned()),
             authorship: z9_authorship(),
+            location: Some(z9_location()),
             capture_time: DateTime::from_exif(b"2024:05:01 10:20:30", Some(b"85"), Some(b"+02:00")),
             orientation: Orientation::Rotate90,
             exposure: z9_exposure(),
@@ -1521,6 +1599,7 @@ mod tests {
         assert_eq!(metadata.camera(), &Camera::default());
         assert_eq!(metadata.software(), None);
         assert_eq!(metadata.authorship(), &Authorship::default());
+        assert_eq!(metadata.location(), None);
         assert_eq!(metadata.capture_time(), None);
         assert_eq!(metadata.orientation(), Orientation::NoTransforms);
         assert_eq!(metadata.exposure(), &Exposure::default());
@@ -1539,6 +1618,7 @@ mod tests {
         assert_eq!(metadata.camera(), &z9_camera());
         assert_eq!(metadata.software(), Some("Ver.01.00"));
         assert_eq!(metadata.authorship(), &z9_authorship());
+        assert_eq!(metadata.location(), Some(&z9_location()));
         let time = metadata.capture_time().unwrap();
         assert_eq!(time.to_string(), "2024-05-01T10:20:30.85+02:00");
         assert_eq!(metadata.orientation(), Orientation::Rotate90);
@@ -1788,6 +1868,10 @@ mod tests {
         };
         let settings = CameraSettings::default().with_color_space(ColorSpace::Srgb);
         let authorship = Authorship::default().with_artist("Berthe Morisot");
+        let location = Location::new(
+            Latitude::south(fraction(33, 1), fraction(51, 1), fraction(31_000, 1000)).unwrap(),
+            Longitude::east(fraction(151, 1), fraction(12, 1), fraction(55_000, 1000)).unwrap(),
+        );
         // From the empty metadata, and from a full one whose every value
         // differs from the one set, so that a builder writing another
         // value, or clearing one, is caught: the Z 9's, which has no
@@ -1818,6 +1902,13 @@ mod tests {
                     start.clone().with_authorship(authorship.clone()),
                     Metadata {
                         authorship: authorship.clone(),
+                        ..start.clone()
+                    },
+                ),
+                (
+                    start.clone().with_location(location.clone()),
+                    Metadata {
+                        location: Some(location.clone()),
                         ..start.clone()
                     },
                 ),
@@ -1898,7 +1989,7 @@ mod tests {
         }
     }
 
-    /// [`z9_metadata`] built through eleven of its thirteen builders, all but
+    /// [`z9_metadata`] built through twelve of its fourteen builders, all but
     /// [`Metadata::with_focus_points`], whose list `with_focus` makes, and
     /// [`Metadata::with_focus_layout`], since a Z 9 has no layout.
     fn z9_metadata_built() -> Metadata {
@@ -1907,6 +1998,7 @@ mod tests {
             .with_camera(z9_camera())
             .with_software("Ver.01.00")
             .with_authorship(z9_authorship_built())
+            .with_location(z9_location())
             .with_capture_time(
                 DateTime::from_exif(b"2024:05:01 10:20:30", Some(b"85"), Some(b"+02:00")).unwrap(),
             )
@@ -1950,7 +2042,7 @@ mod tests {
         assert_eq!(z9_exposure_built(), z9_exposure());
         assert_eq!(z9_authorship_built(), z9_authorship());
         assert_eq!(z9_metadata_built(), z9_metadata());
-        // The thirteenth builder at the end of the chain.
+        // The fourteenth builder at the end of the chain.
         assert_eq!(
             z9_metadata_built().with_focus_layout(d600_layout()),
             Metadata {
@@ -1995,6 +2087,10 @@ mod tests {
             })
             .with_software("A")
             .with_authorship(Authorship::default().with_title("A"))
+            .with_location(Location::new(
+                Latitude::north(fraction(1, 1), fraction(1, 1), fraction(1, 1)).unwrap(),
+                Longitude::west(fraction(1, 1), fraction(1, 1), fraction(1, 1)).unwrap(),
+            ))
             .with_capture_time(DateTime::new(2000, 1, 1, 0, 0, 0).unwrap())
             .with_orientation(Orientation::Rotate180)
             .with_exposure(Exposure::default().with_iso(1))
@@ -2017,6 +2113,7 @@ mod tests {
             .with_camera(z9.camera.clone())
             .with_software("Ver.01.00")
             .with_authorship(z9.authorship.clone())
+            .with_location(z9.location.clone().unwrap())
             .with_capture_time(z9.capture_time.unwrap())
             .with_orientation(z9.orientation)
             .with_exposure(z9.exposure.clone())

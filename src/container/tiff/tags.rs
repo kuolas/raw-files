@@ -15,6 +15,54 @@
 /// "uncalibrated".
 pub(crate) const INTEROP_INDEX: u16 = 0x0001;
 
+/// Whether the latitude lies north or south of the equator
+/// (GPSLatitudeRef), as the text `N` or `S`, read from the GPS IFD, whose
+/// tags number from 0x0000, so that their numbers repeat other
+/// directories': each GPS tag has its meaning in the GPS IFD alone.
+pub(crate) const GPS_LATITUDE_REF: u16 = 0x0001;
+
+/// The latitude (GPSLatitude), as three fractions of type RATIONAL,
+/// degrees, minutes and seconds, read from the GPS IFD.
+pub(crate) const GPS_LATITUDE: u16 = 0x0002;
+
+/// Whether the longitude lies east or west of the prime meridian
+/// (GPSLongitudeRef), as the text `E` or `W`, read from the GPS IFD.
+pub(crate) const GPS_LONGITUDE_REF: u16 = 0x0003;
+
+/// The longitude (GPSLongitude), as three fractions of type RATIONAL,
+/// degrees, minutes and seconds, read from the GPS IFD.
+pub(crate) const GPS_LONGITUDE: u16 = 0x0004;
+
+/// Whether the altitude lies above or below its reference
+/// (GPSAltitudeRef), as one BYTE, read from the GPS IFD: 0 and 2 above, 1
+/// and 3 below.
+pub(crate) const GPS_ALTITUDE_REF: u16 = 0x0005;
+
+/// The altitude in metres (GPSAltitude), as one fraction of type
+/// RATIONAL, read from the GPS IFD.
+pub(crate) const GPS_ALTITUDE: u16 = 0x0006;
+
+/// The time of day in UTC (GPSTimeStamp), as three fractions of type
+/// RATIONAL, hours, minutes and seconds, read from the GPS IFD.
+pub(crate) const GPS_TIME_STAMP: u16 = 0x0007;
+
+/// The north the image direction counts from (GPSImgDirectionRef), as the
+/// text `T` for true north or `M` for magnetic north, read from the GPS
+/// IFD.
+pub(crate) const GPS_IMG_DIRECTION_REF: u16 = 0x0010;
+
+/// The direction the camera faced (GPSImgDirection), as one fraction of
+/// type RATIONAL, in degrees from 0 to 359.99, read from the GPS IFD.
+pub(crate) const GPS_IMG_DIRECTION: u16 = 0x0011;
+
+/// The geodetic datum the position is given in (GPSMapDatum), as text,
+/// such as `WGS-84`, read from the GPS IFD.
+pub(crate) const GPS_MAP_DATUM: u16 = 0x0012;
+
+/// The date in UTC (GPSDateStamp), as the text `YYYY:MM:DD`, read from the
+/// GPS IFD.
+pub(crate) const GPS_DATE_STAMP: u16 = 0x001D;
+
 /// Whether the image an IFD describes is the full-resolution image, a
 /// reduced-resolution copy of it, or a page of several (NewSubfileType): a
 /// bit field, 0 for the full-resolution image.
