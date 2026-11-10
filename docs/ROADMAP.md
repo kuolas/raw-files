@@ -79,7 +79,17 @@ ever complete for every body. What each gives so far:
   [the tag names](formats/tag-names.md)). The groups of values come
   next, each read from the same directories; enciphered and encrypted
   records are given only as their bytes until the decision on reading
-  them.
+  them. The first two will be **who made a picture**, its artist,
+  copyright notice, photographer, editor, title, description and
+  comment, with the name of the camera's owner beside its serial
+  number, and **where it was taken**, its
+  position, altitude, GPS time, image direction and map datum, read
+  from the standard tags alone
+  ([ADR011](architecture-decisions/adr011-metadata-from-standard-tags.md),
+  [#97](https://github.com/kuolas/raw-files/issues/97)); they wait only
+  for their readers, written from the format notes and checked on the
+  files those notes count, or on built files for the texts no measured
+  file records.
 - **Focus points.** Where the camera focused, in coordinates that place
   it on a preview, to judge sharpness where the photographer focused.
   Read from the MakerNote, on Nikon mirrorless bodies, Nikon DSLRs in
@@ -193,7 +203,9 @@ the architecture decisions.
 - **Next**: more of full metadata, the values a file records read
   group by group, the ones that only enciphered or encrypted blocks
   hold among them
-  ([#50](https://github.com/kuolas/raw-files/issues/50)).
+  ([#50](https://github.com/kuolas/raw-files/issues/50)), beginning
+  with who made a picture and where it was taken
+  ([#97](https://github.com/kuolas/raw-files/issues/97)).
 
 ## Open questions
 
