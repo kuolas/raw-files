@@ -456,6 +456,7 @@ mod jpeg_builder;
 #[path = "../tests/support/jpeg_stub.rs"]
 mod jpeg_stub;
 mod limits;
+mod location;
 mod metadata;
 mod options;
 mod orientation;
@@ -497,6 +498,7 @@ pub use focus::{
 pub use format::Format;
 pub use geometry::{Point, Size};
 pub use limits::Limits;
+pub use location::{Altitude, Direction, Latitude, Location, Longitude, North};
 pub use metadata::{Exposure, Lens, Metadata};
 pub use options::Options;
 pub use orientation::Orientation;
