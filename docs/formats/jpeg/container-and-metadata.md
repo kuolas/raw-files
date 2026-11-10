@@ -334,11 +334,12 @@ them, with Exif 3.1's sections. [P][3] (Table 14, pp. 82 to 83;
   JPEGs (16,060), the Canon DSLR's (137) and 35 rewritten Nikon files
   have a GPS IFD of only its version; my ILCE-7M2's JPEGs have no GPS
   IFD. Every GPS entry is of the type and count Exif gives.
-- raw-files will give a location only where both references and both
-  coordinates are sound, as
+- raw-files gives a location, `Metadata::location`, only where both
+  references and both coordinates are sound, as
   [ADR011](../../architecture-decisions/adr011-metadata-from-standard-tags.md)
   decides; a GPS IFD of only a version, or without a fix, gives none,
-  and a reference without its altitude gives no altitude. [I]
+  and a reference without its altitude gives no altitude. The tests
+  check that none of the eight camera files gives a location.
 
 Every text and GPS value counted lies inside the blocks raw-files'
 `open` already reads. [F]

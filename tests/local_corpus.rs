@@ -33,7 +33,11 @@
 //! made the pictures, it counts how many files have each of the eight
 //! texts, the artist, the copyright notice, the photographer, the editor,
 //! the title, the description, the comment and the camera's owner, and
-//! never prints one: they name people.
+//! never prints one: they name people. For where they were taken, it
+//! counts how many files have a location and how many each of its parts,
+//! the altitude, the GPS time, the image direction and the map datum, and
+//! never prints a coordinate, an altitude, a time or a datum: they name
+//! places. The files with a GPS IFD are counted with the directories.
 //!
 //! For each camera setting, from the exposure program to the colour space,
 //! it counts, over the files of a section, how many have the setting and
@@ -123,8 +127,8 @@ use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
 use raw_files::{
-    Authorship, Camera, DateTime, FocusLayout, FocusOrigin, FocusPoints, Format, Lens, Metadata,
-    Point, RawFile, Size,
+    Altitude, Authorship, Camera, DateTime, Direction, FocusLayout, FocusOrigin, FocusPoints,
+    Format, Latitude, Lens, Location, Longitude, Metadata, North, Point, Rational, RawFile, Size,
 };
 
 /// A file that counts the bytes its reads return, into a counter the caller
@@ -171,6 +175,9 @@ struct MetadataTally {
     /// Files with each text of who made the picture, in the order of
     /// [`AUTHORSHIP_TEXTS`], the camera's owner last.
     authorship: [usize; 8],
+    /// Files with a location, then with each of its parts, in the order of
+    /// [`LOCATION_PARTS`].
+    location: [usize; 5],
     capture_time: usize,
     with_subseconds: usize,
     with_offset: usize,
@@ -201,6 +208,15 @@ const AUTHORSHIP_TEXTS: [&str; 8] = [
     "a description",
     "a comment",
     "an owner",
+];
+
+/// What the counts of [`MetadataTally::location`] are of, as printed.
+const LOCATION_PARTS: [&str; 5] = [
+    "a location",
+    "an altitude",
+    "a GPS time",
+    "an image direction",
+    "a map datum",
 ];
 
 impl MetadataTally {
@@ -234,6 +250,18 @@ impl MetadataTally {
         ];
         for (count, text) in self.authorship.iter_mut().zip(texts) {
             *count += usize::from(text.is_some());
+        }
+        if let Some(location) = metadata.location() {
+            let parts = [
+                true,
+                location.altitude().is_some(),
+                location.time().is_some(),
+                location.image_direction().is_some(),
+                location.map_datum().is_some(),
+            ];
+            for (count, part) in self.location.iter_mut().zip(parts) {
+                *count += usize::from(part);
+            }
         }
         if let Some(time) = metadata.capture_time() {
             self.capture_time += 1;
@@ -843,6 +871,12 @@ impl Tally {
             .map(|(text, count)| format!("{text}: {count}"))
             .collect();
         println!("files with {}", authorship.join(", "));
+        let location: Vec<String> = LOCATION_PARTS
+            .iter()
+            .zip(m.location)
+            .map(|(part, count)| format!("{part}: {count}"))
+            .collect();
+        println!("files with {}", location.join(", "));
         println!(
             "files by maker: {:?}, with a recorded make that names no maker: {}",
             m.makers, m.make_without_maker
@@ -1565,6 +1599,44 @@ fn the_metadata_tally_counts_each_authorship_text() {
     tally.record(&Metadata::default().with_authorship(all).with_camera(owner));
     tally.record(&Metadata::default());
     assert_eq!(tally.authorship, [2; 8]);
+}
+
+#[test]
+fn the_metadata_tally_counts_a_location_and_each_of_its_parts() {
+    // A made-up position: the Eiffel Tower's.
+    let fraction = |numerator, denominator| Rational::new(numerator, denominator).unwrap();
+    let position = Location::new(
+        Latitude::north(fraction(48, 1), fraction(514_933, 10_000), fraction(0, 1)).unwrap(),
+        Longitude::east(fraction(2, 1), fraction(176_700, 10_000), fraction(0, 1)).unwrap(),
+    );
+    let altitude = Altitude::above(fraction(35, 1)).unwrap();
+    let time = DateTime::new(2024, 5, 1, 8, 20, 30)
+        .and_then(|time| time.with_offset_minutes(0))
+        .unwrap();
+    let direction = Direction::new(fraction(275, 1), North::Magnetic).unwrap();
+    // A different number of files for each part, so that a part counted
+    // in another's place shows: the datum on four files, the direction on
+    // three, the time on two, the altitude on one; then the position alone
+    // and a file without a location.
+    let with_datum = position.with_map_datum("WGS-84");
+    let with_direction = with_datum.clone().with_image_direction(direction);
+    let with_time = with_direction.clone().with_time(time);
+    let with_altitude = with_time.clone().with_altitude(altitude);
+    let mut tally = MetadataTally::default();
+    for location in [
+        with_altitude,
+        with_time,
+        with_direction,
+        with_datum,
+        Location::new(
+            Latitude::south(fraction(33, 1), fraction(51, 1), fraction(25, 1)).unwrap(),
+            Longitude::east(fraction(151, 1), fraction(12, 1), fraction(55, 1)).unwrap(),
+        ),
+    ] {
+        tally.record(&Metadata::default().with_location(location));
+    }
+    tally.record(&Metadata::default());
+    assert_eq!(tally.location, [5, 1, 2, 3, 4]);
 }
 
 /// Three points of a 39-point layout in a 6016 × 4016 frame, from the

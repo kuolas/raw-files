@@ -1484,14 +1484,16 @@ pp. 82 to 83; 4.6.7 and 4.6.7.1.1 to 4.6.7.1.19, pp. 82 to 88;
 - **Every GPS entry is of the type and count Exif gives**, every GPS
   IFD sorted by tag with no tag twice, and no entry left out. **[F]**
 
-raw-files will give a location only where both references and both
-coordinates are sound, as
+raw-files gives a location, `Metadata::location`, only where both
+references and both coordinates are sound, as
 [ADR011](../../architecture-decisions/adr011-metadata-from-standard-tags.md)
 decides, with the altitude, the time, the image direction and the
 datum beside it; a GPS IFD of only a version, and the Coolpix files'
 blanks, give none. The satellites, which every NEF with a position
 records, stay in the view of every entry, as do the tags no NEF here
-writes. **[I]**
+writes. The tests of the public samples check which parts of a
+location each file gives, never where it lies: the three Z 9 samples
+give one with an altitude and a time, and no other sample gives one.
 
 Every text and GPS value counted lies inside the blocks raw-files'
 `open` already reads. **[F]**

@@ -202,7 +202,9 @@ pub fn check(sample: &Sample, format: Format) {
 /// lens's by whether there is one. Nor does it hold the name or the words
 /// of whoever took a public file: the texts of who made a picture and the
 /// camera's owner are recorded by which of them the file gives
-/// ([`Text`]), never by what they say.
+/// ([`Text`]), never by what they say, and the location by whether the
+/// file gives one and which of its optional parts ([`LocationPart`]),
+/// never by where it lies.
 pub struct SampleMetadata {
     pub file: &'static str,
     pub make: Option<Make>,
@@ -212,6 +214,7 @@ pub struct SampleMetadata {
     pub software: Option<&'static str>,
     pub serial_number: Option<SerialShape>,
     pub texts: &'static [Text],
+    pub location: Option<&'static [LocationPart]>,
     pub capture_time: Option<&'static str>,
     pub orientation: Orientation,
     pub iso: Option<u32>,
@@ -350,6 +353,34 @@ impl Text {
     }
 }
 
+/// An optional part of the location a sample file gives: the repository
+/// records whether a public file has a location and which of these parts
+/// it gives, never a coordinate, an altitude, a time or a datum. A row
+/// lists them in the order of the variants, the order of the getters of
+/// [`Location`](raw_files::Location); an empty list is a position alone.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum LocationPart {
+    Altitude,
+    Time,
+    ImageDirection,
+    MapDatum,
+}
+
+impl LocationPart {
+    /// Which parts `location` gives, in the order of the variants.
+    pub fn given(location: &raw_files::Location) -> Vec<Self> {
+        [
+            (Self::Altitude, location.altitude().is_some()),
+            (Self::Time, location.time().is_some()),
+            (Self::ImageDirection, location.image_direction().is_some()),
+            (Self::MapDatum, location.map_datum().is_some()),
+        ]
+        .into_iter()
+        .filter_map(|(part, given)| given.then_some(part))
+        .collect()
+    }
+}
+
 /// Checks that the sample file `name` opens as `format`, records in IFD0's
 /// ImageDescription the text `SONY DSC`, as older Sony bodies write it by
 /// themselves whatever the picture, in 9 bytes or padded with spaces, and
@@ -424,6 +455,11 @@ pub fn check_metadata(expected: &SampleMetadata, format: Format) {
         "{label}: serial number"
     );
     assert_eq!(Text::given(metadata), expected.texts, "{label}: texts");
+    assert_eq!(
+        metadata.location().map(LocationPart::given),
+        expected.location.map(<[LocationPart]>::to_vec),
+        "{label}: location"
+    );
     assert_eq!(
         metadata
             .capture_time()
