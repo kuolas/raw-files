@@ -21,10 +21,10 @@
 //! Nikon and Sony cameras, from what the maker's MakerNote records that
 //! they lack:
 //!
-//! - the camera's make, model and serial number as the file records them,
-//!   with the maker raw-files recognises in them and, for the bodies it
-//!   names, the name the body is sold under, in a [`Camera`]; and the
-//!   software that wrote the file;
+//! - the camera's make, model, serial number and owner's name as the
+//!   file records them, with the maker raw-files recognises in them and,
+//!   for the bodies it names, the name the body is sold under, in a
+//!   [`Camera`]; and the software that wrote the file;
 //! - who made the picture and what they wrote about it, in an
 //!   [`Authorship`]: the artist, the copyright notice, the photographer,
 //!   the editor, the title, the description and the comment, as the file
