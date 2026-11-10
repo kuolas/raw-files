@@ -10,6 +10,16 @@ does.
 
 ## [Unreleased]
 
+### Added
+
+- `Camera::display_name` gives a camera's name to show a person, for
+  every file that records a Model. It is the maker's name and the
+  body's, such as `Nikon Z6III`, where raw-files has both. For any
+  other body it is the Model as the file records it, such as
+  `NIKON D7200`. `Camera::model` is unchanged: `None` for a body the
+  table of names does not hold
+  ([#104](https://github.com/kuolas/raw-files/issues/104)).
+
 ### Changed
 
 - The `UnknownFormat` error for a TIFF file of an unknown format has a

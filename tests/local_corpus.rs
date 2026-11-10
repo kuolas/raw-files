@@ -168,6 +168,11 @@ struct MetadataTally {
     /// recorded Model but no name.
     model: usize,
     recorded_model_without_model: usize,
+    /// Files whose text to show breaks one of its rules: it is there
+    /// exactly when a Model is recorded; it is the maker's name and the
+    /// body's, joined by a space, where the library has both; and it is
+    /// the recorded Model wherever the library has no name for the body.
+    display_name_not_by_rule: usize,
     recorded_make: usize,
     recorded_model: usize,
     software: usize,
@@ -233,6 +238,13 @@ impl MetadataTally {
             (None, Some(_)) => self.recorded_model_without_model += 1,
             (None, None) => {}
         }
+        let shown = camera.display_name();
+        let by_rule = match (camera.make(), camera.model()) {
+            (Some(make), Some(model)) => shown == Some(format!("{make} {model}")),
+            _ => shown.as_deref() == camera.recorded_model(),
+        };
+        self.display_name_not_by_rule +=
+            usize::from(!by_rule || shown.is_some() != camera.recorded_model().is_some());
         self.recorded_make += usize::from(camera.recorded_make().is_some());
         self.recorded_model += usize::from(camera.recorded_model().is_some());
         self.software += usize::from(metadata.software().is_some());
@@ -886,6 +898,10 @@ impl Tally {
             m.model, m.recorded_model_without_model
         );
         println!(
+            "files whose camera's text to show breaks its rules: {}",
+            m.display_name_not_by_rule
+        );
+        println!(
             "files with a capture time: {}, of which with sub-seconds: {}, with an offset from UTC: {}",
             m.capture_time, m.with_subseconds, m.with_offset
         );
@@ -1412,6 +1428,10 @@ fn every_file_of_the_local_corpus_opens_and_gives_a_whole_jpeg() {
             "some values of {format} files' entries could not be read"
         );
         assert_eq!(
+            tally.metadata.display_name_not_by_rule, 0,
+            "some {format} files' camera's text to show breaks its rules"
+        );
+        assert_eq!(
             tally.orientation_disagreements, 0,
             "some {format} files' metadata orientation differs from their preview's"
         );
@@ -1567,6 +1587,7 @@ fn the_metadata_tally_counts_the_makers_and_the_names() {
     assert_eq!(tally.model, 2);
     assert_eq!(tally.recorded_model_without_model, 3);
     assert_eq!((tally.recorded_make, tally.recorded_model), (4, 5));
+    assert_eq!(tally.display_name_not_by_rule, 0);
 }
 
 #[test]

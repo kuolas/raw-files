@@ -79,7 +79,8 @@ use crate::rational::{Rational, SignedRational};
 /// let file = RawFile::open("photo.nef")?;
 /// let metadata = file.metadata();
 /// let camera = metadata.camera();
-/// println!("camera: {}", camera.recorded_model().unwrap_or("unknown"));
+/// let name = camera.display_name();
+/// println!("camera: {}", name.as_deref().unwrap_or("unknown"));
 /// println!(
 ///     "serial number: {}",
 ///     camera.serial_number().unwrap_or("not recorded")

@@ -269,6 +269,7 @@ fn read_metadata(metadata: &Metadata) {
     let camera = metadata.camera();
     let _ = camera.make().map(|make| (make.name(), make.to_string()));
     let _ = camera.model();
+    let _ = camera.display_name();
     let _ = camera.recorded_make();
     let _ = camera.recorded_model();
     let _ = camera.serial_number();

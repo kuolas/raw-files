@@ -232,9 +232,8 @@ impl<R: Read + Seek> RawFile<R> {
     ///     if let Some(time) = metadata.capture_time() {
     ///         println!("taken at {time}");
     ///     }
-    ///     let camera = metadata.camera();
-    ///     if let (Some(make), Some(model)) = (camera.recorded_make(), camera.recorded_model()) {
-    ///         println!("with a {make} {model}");
+    ///     if let Some(name) = metadata.camera().display_name() {
+    ///         println!("with a {name}");
     ///     }
     ///     Ok(())
     /// }

@@ -14,9 +14,10 @@ use std::env;
 use std::path::{Path, PathBuf};
 
 use raw_files::{
-    ColorSpace, Directory, ExposureProgram, FieldType, FlashMode, FocusAreaMode, FocusOrigin,
-    FocusPoint, Format, ImageArea, Make, MeteringMode, Orientation, Preview, PreviewFormat,
-    Rational, RawFile, RawImageSize, Shutter, SignedRational, Size, WhiteBalanceMode,
+    Camera, ColorSpace, Directory, ExposureProgram, FieldType, FlashMode, FocusAreaMode,
+    FocusOrigin, FocusPoint, Format, ImageArea, Make, MeteringMode, Orientation, Preview,
+    PreviewFormat, Rational, RawFile, RawImageSize, Shutter, SignedRational, Size,
+    WhiteBalanceMode,
 };
 
 /// The path of the sample file `name`, or `None`, with a note on stderr,
@@ -423,6 +424,31 @@ fn stored_signed(fraction: SignedRational) -> (i32, i32) {
     (fraction.numerator, fraction.denominator)
 }
 
+/// Checks the rules of `camera`'s text to show: it is there exactly when
+/// a Model is recorded; it is the maker's name and the body's, joined by
+/// a space, where raw-files has both; and it is the recorded Model
+/// wherever raw-files has no name for the body.
+pub fn check_display_name(camera: &Camera, label: &str) {
+    let shown = camera.display_name();
+    assert_eq!(
+        shown.is_some(),
+        camera.recorded_model().is_some(),
+        "{label}: a text to show without a recorded model, or the reverse"
+    );
+    match (camera.make(), camera.model()) {
+        (Some(make), Some(model)) => assert_eq!(
+            shown,
+            Some(format!("{make} {model}")),
+            "{label}: the text to show of a body with a name"
+        ),
+        _ => assert_eq!(
+            shown.as_deref(),
+            camera.recorded_model(),
+            "{label}: the text to show of a body with no name"
+        ),
+    }
+}
+
 /// Checks that the sample file `expected` names opens as `format` and
 /// gives exactly the metadata `expected` records: every value compared, the
 /// focus point's and the camera settings' among them, so that a value the
@@ -448,6 +474,7 @@ pub fn check_metadata(expected: &SampleMetadata, format: Format) {
         expected.recorded_model,
         "{label}: recorded model"
     );
+    check_display_name(metadata.camera(), label);
     assert_eq!(metadata.software(), expected.software, "{label}: software");
     assert_eq!(
         metadata.camera().serial_number().map(SerialShape::of),
