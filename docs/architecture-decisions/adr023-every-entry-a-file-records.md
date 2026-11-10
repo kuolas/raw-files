@@ -259,8 +259,9 @@ Rejected:
   bodies, which raw-files does not read.
 - Sony's SR2SubIFD, which is encrypted as a whole, and the MakerNote
   chain of SRF files, which needs a key read from an enciphered record.
-- Whether the typed values accept a UTF-8 entry where they expect
-  ASCII.
+- Which typed values accept a UTF-8 entry beside an ASCII one:
+  [ADR011](adr011-metadata-from-standard-tags.md) decides it, text by
+  text, as Exif 3.1 gives each.
 
 ## Consequences
 
