@@ -1427,16 +1427,18 @@ marks a count over these files rather than a fact of one named file.
 - **No NEF has CameraOwnerName, Photographer, ImageEditor or
   ImageTitle.** **[F]**
 
-raw-files will read these texts into a value of their own, and the
-owner with the camera, as
+raw-files reads these texts into a value of their own,
+`Metadata::authorship`, and the owner with the camera,
+`Camera::owner_name`, as
 [ADR011](../../architecture-decisions/adr011-metadata-from-standard-tags.md)
 decides: IFD0's texts from IFD0 alone, each text cleaned as every text
 is, from either type where Exif allows both; the description and the
 comment without the 255-byte limit; the comment only under the `ASCII`
-code. A comment under another code stays `None`, and the view of every
+code. A comment under another code is `None`, and the view of every
 entry gives its bytes. The photographer, the editor, the title and the
-owner can be checked on built files only, since no file here records
-one. **[I]**
+owner are checked on built files only, since no file here records
+one; the tests of the public samples check which texts each file
+gives, never what they say.
 
 ### 8.9 Location
 

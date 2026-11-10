@@ -1474,16 +1474,19 @@ than a fact of one named file.
 - **No ARW has CameraOwnerName, Photographer, ImageEditor or
   ImageTitle.** **[F]**
 
-raw-files will read these texts into a value of their own, and the
-owner with the camera, as
+raw-files reads these texts into a value of their own,
+`Metadata::authorship`, and the owner with the camera,
+`Camera::owner_name`, as
 [ADR011](../../architecture-decisions/adr011-metadata-from-standard-tags.md)
 decides: IFD0's texts from IFD0 alone, not from the copies in IFD1 and
 IFD2; each text cleaned as every text is, from either type where Exif
 allows both; the description and the comment without the 255-byte
 limit; the comment only under the `ASCII` code. `SONY DSC` is a text
-the camera writes by itself, so it gives no description. The
-photographer, the editor, the title and the owner can be checked on
-built files only, since no file here records one. **[I]**
+the camera writes by itself, so it gives no description, as the tests
+check on the six public samples of those bodies. The photographer, the
+editor, the title and the owner are checked on built files only, since
+no file here records one; the tests of the public samples check which
+texts each file gives, never what they say.
 
 ### 9.9 Location
 

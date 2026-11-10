@@ -29,7 +29,11 @@
 //! distributed; it never prints a path, a file name, the text of a make,
 //! model or software as the file records it, or the value of a serial
 //! number, capture time, exposure or lens, so its output can be pasted
-//! into an issue without disclosing anything about the photos.
+//! into an issue without disclosing anything about the photos. For who
+//! made the pictures, it counts how many files have each of the eight
+//! texts, the artist, the copyright notice, the photographer, the editor,
+//! the title, the description, the comment and the camera's owner, and
+//! never prints one: they name people.
 //!
 //! For each camera setting, from the exposure program to the colour space,
 //! it counts, over the files of a section, how many have the setting and
@@ -119,8 +123,8 @@ use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
 use raw_files::{
-    Camera, DateTime, FocusLayout, FocusOrigin, FocusPoints, Format, Lens, Metadata, Point,
-    RawFile, Size,
+    Authorship, Camera, DateTime, FocusLayout, FocusOrigin, FocusPoints, Format, Lens, Metadata,
+    Point, RawFile, Size,
 };
 
 /// A file that counts the bytes its reads return, into a counter the caller
@@ -164,6 +168,9 @@ struct MetadataTally {
     recorded_model: usize,
     software: usize,
     serial_number: usize,
+    /// Files with each text of who made the picture, in the order of
+    /// [`AUTHORSHIP_TEXTS`], the camera's owner last.
+    authorship: [usize; 8],
     capture_time: usize,
     with_subseconds: usize,
     with_offset: usize,
@@ -184,6 +191,18 @@ struct MetadataTally {
     capture_times: HashMap<DateTime, usize>,
 }
 
+/// What the counts of [`MetadataTally::authorship`] are of, as printed.
+const AUTHORSHIP_TEXTS: [&str; 8] = [
+    "an artist",
+    "a copyright notice",
+    "a photographer",
+    "an editor",
+    "a title",
+    "a description",
+    "a comment",
+    "an owner",
+];
+
 impl MetadataTally {
     /// Counts what `metadata` has.
     fn record(&mut self, metadata: &Metadata) {
@@ -202,6 +221,20 @@ impl MetadataTally {
         self.recorded_model += usize::from(camera.recorded_model().is_some());
         self.software += usize::from(metadata.software().is_some());
         self.serial_number += usize::from(camera.serial_number().is_some());
+        let authorship = metadata.authorship();
+        let texts = [
+            authorship.artist(),
+            authorship.copyright(),
+            authorship.photographer(),
+            authorship.editor(),
+            authorship.title(),
+            authorship.description(),
+            authorship.comment(),
+            camera.owner_name(),
+        ];
+        for (count, text) in self.authorship.iter_mut().zip(texts) {
+            *count += usize::from(text.is_some());
+        }
         if let Some(time) = metadata.capture_time() {
             self.capture_time += 1;
             self.with_subseconds += usize::from(time.subsecond_digits() > 0);
@@ -804,6 +837,12 @@ impl Tally {
             "files with a recorded make: {}, a recorded model: {}, software: {}, a serial number: {}",
             m.recorded_make, m.recorded_model, m.software, m.serial_number
         );
+        let authorship: Vec<String> = AUTHORSHIP_TEXTS
+            .iter()
+            .zip(m.authorship)
+            .map(|(text, count)| format!("{text}: {count}"))
+            .collect();
+        println!("files with {}", authorship.join(", "));
         println!(
             "files by maker: {:?}, with a recorded make that names no maker: {}",
             m.makers, m.make_without_maker
@@ -1494,6 +1533,38 @@ fn the_metadata_tally_counts_the_makers_and_the_names() {
     assert_eq!(tally.model, 2);
     assert_eq!(tally.recorded_model_without_model, 3);
     assert_eq!((tally.recorded_make, tally.recorded_model), (4, 5));
+}
+
+#[test]
+fn the_metadata_tally_counts_each_authorship_text() {
+    // Each text alone, the owner among them; a file with all eight; and a
+    // file with none.
+    let alone = [
+        Authorship::default().with_artist("Claude Monet"),
+        Authorship::default().with_copyright("Copyright Claude Monet"),
+        Authorship::default().with_photographer("Camille Pissarro"),
+        Authorship::default().with_editor("Alfred Sisley"),
+        Authorship::default().with_title("Impression, soleil levant"),
+        Authorship::default().with_description("The port of Le Havre"),
+        Authorship::default().with_comment("Painted at dawn"),
+    ];
+    let all = Authorship::default()
+        .with_artist("Claude Monet")
+        .with_copyright("Copyright Claude Monet")
+        .with_photographer("Camille Pissarro")
+        .with_editor("Alfred Sisley")
+        .with_title("Impression, soleil levant")
+        .with_description("The port of Le Havre")
+        .with_comment("Painted at dawn");
+    let owner = Camera::default().with_owner_name("Paul Cézanne");
+    let mut tally = MetadataTally::default();
+    for authorship in alone {
+        tally.record(&Metadata::default().with_authorship(authorship));
+    }
+    tally.record(&Metadata::default().with_camera(owner.clone()));
+    tally.record(&Metadata::default().with_authorship(all).with_camera(owner));
+    tally.record(&Metadata::default());
+    assert_eq!(tally.authorship, [2; 8]);
 }
 
 /// Three points of a 39-point layout in a 6016 × 4016 frame, from the

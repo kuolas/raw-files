@@ -199,7 +199,10 @@ pub fn check(sample: &Sample, format: Format) {
 ///
 /// The files are public, but the repository holds no camera's or lens's
 /// serial number, so a serial number is recorded by its shape alone and a
-/// lens's by whether there is one.
+/// lens's by whether there is one. Nor does it hold the name or the words
+/// of whoever took a public file: the texts of who made a picture and the
+/// camera's owner are recorded by which of them the file gives
+/// ([`Text`]), never by what they say.
 pub struct SampleMetadata {
     pub file: &'static str,
     pub make: Option<Make>,
@@ -208,6 +211,7 @@ pub struct SampleMetadata {
     pub recorded_model: Option<&'static str>,
     pub software: Option<&'static str>,
     pub serial_number: Option<SerialShape>,
+    pub texts: &'static [Text],
     pub capture_time: Option<&'static str>,
     pub orientation: Orientation,
     pub iso: Option<u32>,
@@ -308,6 +312,64 @@ impl SerialShape {
     }
 }
 
+/// A text of who made the picture, or the camera's owner, that a sample
+/// file gives: the repository records which texts the reader gives for a
+/// public file, never what they say. A row lists them in the order of
+/// the variants, the order of the getters of
+/// [`Authorship`](raw_files::Authorship), then
+/// [`Camera::owner_name`](raw_files::Camera::owner_name).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Text {
+    Artist,
+    Copyright,
+    Photographer,
+    Editor,
+    Title,
+    Description,
+    Comment,
+    OwnerName,
+}
+
+impl Text {
+    /// Which texts `metadata` gives, in the order of the variants.
+    pub fn given(metadata: &raw_files::Metadata) -> Vec<Self> {
+        let authorship = metadata.authorship();
+        [
+            (Self::Artist, authorship.artist()),
+            (Self::Copyright, authorship.copyright()),
+            (Self::Photographer, authorship.photographer()),
+            (Self::Editor, authorship.editor()),
+            (Self::Title, authorship.title()),
+            (Self::Description, authorship.description()),
+            (Self::Comment, authorship.comment()),
+            (Self::OwnerName, metadata.camera().owner_name()),
+        ]
+        .into_iter()
+        .filter_map(|(text, value)| value.map(|_| text))
+        .collect()
+    }
+}
+
+/// Checks that the sample file `name` opens as `format`, records in IFD0's
+/// ImageDescription the text `SONY DSC`, as older Sony bodies write it by
+/// themselves whatever the picture, in 9 bytes or padded with spaces, and
+/// gives no description for it. Does nothing when the file has not been
+/// downloaded.
+pub fn check_placeholder_description(name: &str, format: Format) {
+    let Some(path) = path(name) else {
+        return;
+    };
+    let mut file = RawFile::open(&path).unwrap();
+    assert_eq!(file.format(), format, "{name}");
+    let entry = file
+        .entries()
+        .entry(Directory::Ifd(0), 0x010E)
+        .expect("an ImageDescription");
+    let recorded = file.read_value(&entry).unwrap();
+    assert_eq!(recorded.text().as_deref(), Some("SONY DSC"), "{name}");
+    assert_eq!(file.metadata().authorship().description(), None, "{name}");
+}
+
 /// What the lens of a sample file must be: its recorded make and model,
 /// whether it has a serial number, and its range, each fraction as stored.
 pub struct SampleLens {
@@ -361,6 +423,7 @@ pub fn check_metadata(expected: &SampleMetadata, format: Format) {
         expected.serial_number,
         "{label}: serial number"
     );
+    assert_eq!(Text::given(metadata), expected.texts, "{label}: texts");
     assert_eq!(
         metadata
             .capture_time()
