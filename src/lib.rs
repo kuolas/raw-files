@@ -2,68 +2,61 @@
 
 //! raw-files: a camera RAW library in pure Rust.
 //!
-//! raw-files reads camera RAW files and the JPEG files cameras write: the
-//! previews they hold, which in a raw file are the JPEG images it embeds
-//! and in a JPEG file the file itself and the smaller copies it carries,
-//! and the metadata a viewer or a file renamer needs next to them. The RAW
-//! files it reads are Nikon NEF and Sony ARW, whose raw sensor data it will
-//! later decode. A malformed file gives an error, never a panic.
+//! raw-files reads Nikon NEF and Sony ARW raw files, and the JPEG files
+//! cameras write. It gives their previews, their metadata and where the
+//! camera focused. It does not decode the raw sensor data yet. The
+//! [README](https://github.com/kuolas/raw-files#readme) says what each
+//! format is checked on, and the
+//! [roadmap](https://github.com/kuolas/raw-files/blob/master/docs/ROADMAP.md)
+//! says what comes next.
 //!
-//! [`RawFile`] opens a file by path, from bytes in memory or from any reader
-//! that can seek, detects its format from its content, lists its previews
-//! and reads one; [`Options`] opens it with other [`Limits`].
-//! [`RawFile::format`] says which [`Format`] the file is, and
-//! [`Format::is_raw`] whether it holds raw data; a file of no format
-//! raw-files reads is refused with the `UnknownFormat` error.
-//! [`RawFile::metadata`] gives what the camera recorded about the picture,
-//! read when the file is opened, from the standard TIFF and Exif tags, in a
-//! JPEG those of its Exif segment, and, in the raw files and the JPEGs of
-//! Nikon and Sony cameras, from what the maker's MakerNote records that
-//! they lack:
+//! # Opening a file
 //!
-//! - the camera's make, model, serial number and owner's name as the
-//!   file records them, with the maker raw-files recognizes in them and,
-//!   for the bodies it names, the name the body is sold under, in a
-//!   [`Camera`]; and the software that wrote the file;
-//! - who made the picture and what they wrote about it, in an
-//!   [`Authorship`]: the artist, the copyright notice, the photographer,
-//!   the editor, the title, the description and the comment, as the file
-//!   records them;
-//! - where the picture was taken, in a [`Location`]: its latitude and
-//!   longitude as the file records them, with decimal degrees for a map,
-//!   and the altitude, the GPS time, the direction the camera faced and
-//!   the map datum ([`Metadata::location`]);
-//! - the capture time and the orientation;
-//! - the exposure, with the focal length in 35 mm terms, and the lens;
-//! - the camera's settings, in [`CameraSettings`]: the white balance, the
-//!   exposure program, the metering mode, the flash, the shutter, the
-//!   electronic front curtain setting, the image area, the raw image size
-//!   and the color space: from the Exif tags and, for those only a
-//!   MakerNote records, from the plain tags of Nikon's and Sony's
-//!   MakerNotes;
-//! - the sizes of the raw data, which a JPEG lacks, and of the visible
-//!   image;
-//! - where the camera focused ([`Metadata::focus`]), the autofocus points
-//!   it used, with the area mode ([`Metadata::focus_points`]), and the
-//!   layout of the body's autofocus points where raw-files has its table
-//!   ([`Metadata::focus_layout`]).
+//! [`RawFile`] is an open camera file. [`RawFile::open`] opens one by path,
+//! [`RawFile::from_bytes`] from memory, and [`RawFile::from_reader`] from
+//! any reader that can seek. The format is found from the file's content,
+//! and [`RawFile::format`] says which [`Format`] it is. [`Options`] opens a
+//! file under other [`Limits`].
 //!
-//! Beneath those values, [`RawFile::entries`] gives every entry of the TIFF
-//! directories the file holds that raw-files walks, a Nikon or Sony
-//! MakerNote's among them, as the file records it: each [`Entry`] with its
-//! [`Directory`], tag, [`FieldType`] and count, in the file's order;
-//! [`RawFile::read_value`] reads one's [`Value`] when asked for, under
-//! [`Limits::max_value_bytes`].
+//! # What a file gives
 //!
-//! See the [roadmap](https://github.com/kuolas/raw-files/blob/master/docs/ROADMAP.md)
-//! for the plan and the
-//! [architecture](https://github.com/kuolas/raw-files/blob/master/docs/ARCHITECTURE.md)
-//! for how the code is laid out.
+//! | What | Method | Type |
+//! |---|---|---|
+//! | The previews | [`RawFile::previews`], [`RawFile::largest_preview`], [`RawFile::preview_at_least`] | [`Preview`] |
+//! | A preview's bytes | [`RawFile::read_preview`], [`RawFile::read_preview_into`] | bytes |
+//! | What the camera recorded about the picture | [`RawFile::metadata`] | [`Metadata`] |
+//! | Every entry of the file's TIFF directories | [`RawFile::entries`] | [`Entries`] of [`Entry`] |
+//! | One entry's value | [`RawFile::read_value`] | [`Value`] |
+//!
+//! The metadata is read when the file is opened. Each of its values comes
+//! from one method of [`Metadata`]:
+//!
+//! | What | Method | Type |
+//! |---|---|---|
+//! | The camera, its serial number and its owner | [`Metadata::camera`] | [`Camera`], with its [`Make`] |
+//! | The software that wrote the file | [`Metadata::software`] | text |
+//! | Who made the picture, and what they wrote about it | [`Metadata::authorship`] | [`Authorship`] |
+//! | Where the picture was taken | [`Metadata::location`] | [`Location`] |
+//! | When it was taken | [`Metadata::capture_time`] | [`DateTime`] |
+//! | How to turn it upright | [`Metadata::orientation`] | [`Orientation`] |
+//! | The exposure | [`Metadata::exposure`] | [`Exposure`] |
+//! | How the camera was set | [`Metadata::camera_settings`] | [`CameraSettings`] |
+//! | The lens | [`Metadata::lens`] | [`Lens`] |
+//! | The size of the raw data | [`Metadata::raw_size`] | [`Size`] |
+//! | The size of the visible image | [`Metadata::image_size`] | [`Size`] |
+//! | Where the camera focused | [`Metadata::focus`] | [`Focus`] |
+//! | The autofocus points it used | [`Metadata::focus_points`] | [`FocusPoints`] |
+//! | The layout of the body's autofocus points | [`Metadata::focus_layout`] | [`FocusLayout`] |
+//!
+//! The `with_…` methods and the checked constructors, such as
+//! [`Focus::new`], build every metadata value without a file, for a
+//! program's tests. [`Metadata`] shows how. An [`Entry`] comes only from a
+//! file.
 //!
 //! # Examples
 //!
 //! Read the largest preview of a NEF file, with its size and the
-//! orientation it must be shown in:
+//! orientation to show it in:
 //!
 //! ```no_run
 //! use raw_files::RawFile;
@@ -84,9 +77,7 @@
 //! ```
 //!
 //! Print when a picture was taken, with which camera and lens, and at what
-//! exposure. Every value is optional: a file that does not record one, or
-//! records it in a way that cannot be read, gives `None` for that value
-//! alone.
+//! exposure. Each value is optional, so each is handled on its own:
 //!
 //! ```no_run
 //! use raw_files::RawFile;
@@ -120,10 +111,10 @@
 //! # }
 //! ```
 //!
-//! Find where the camera focused on the largest preview: the window in
-//! which to measure how sharp the picture is. A file that records no focus
-//! point gives `None`, and one that records the point without its area
-//! gives the point alone.
+//! Find where the camera focused on the largest preview. That is the
+//! window in which to measure how sharp the picture is. A file that records
+//! no focus point gives `None`, and a point recorded without its area has
+//! no [`Focus::size`]:
 //!
 //! ```no_run
 //! use raw_files::RawFile;
@@ -149,10 +140,10 @@
 //! # }
 //! ```
 //!
-//! Say where a focus point came from ([`FocusPoints::origin`]), as a
-//! viewer's caption does: recorded by the camera, or named by number and
-//! placed from a table of the body's points; with the area mode the camera
-//! was set to ([`Metadata::focus_points`]):
+//! Say where a focus point came from, as a viewer's caption does.
+//! [`FocusPoints::origin`] tells a point the camera recorded from one named
+//! by number and placed from a table of the body's points.
+//! [`FocusPoints::area_mode`] gives the area mode the camera was set to:
 //!
 //! ```
 //! use raw_files::{
@@ -198,16 +189,9 @@
 //! );
 //! ```
 //!
-//! A program's tests can build every metadata value without a file,
-//! through the `with_…` methods of [`Metadata`], [`Camera`], [`Exposure`],
-//! [`Lens`], [`CameraSettings`], [`WhiteBalance`], [`Flash`], [`DateTime`],
-//! [`Focus`], [`FocusPoints`] and [`FocusPoint`], the constructors of
-//! [`FineTune`] and [`Flash`], and the checked constructors, such as
-//! [`DateTime::new`] and [`FocusLayout::new`]; [`Metadata`] shows how.
-//!
-//! Show how the camera was set ([`Metadata::camera_settings`]), as a
-//! viewer's information panel does; every setting is optional, and one the
-//! file does not record is left out:
+//! Show how the camera was set, as a viewer's information panel does.
+//! Every setting is optional, and one the file does not record is left
+//! out:
 //!
 //! ```
 //! use raw_files::{
@@ -256,10 +240,9 @@
 //! );
 //! ```
 //!
-//! List every entry of the maker's own directory, the MakerNote, as the
-//! file records it ([`RawFile::entries`]), though no standard names its
-//! tags; say how many entries could not be read; and read one standard
-//! entry's value ([`RawFile::read_value`]):
+//! List every entry of the MakerNote, the maker's own directory, though no
+//! standard names its tags. Then say how many of its entries could not be
+//! read, and read one standard entry's value:
 //!
 //! ```no_run
 //! use raw_files::{Directory, RawFile};
@@ -285,9 +268,9 @@
 //! ```
 //!
 //! Tell a raw file from the JPEG of the same shot by their names, before
-//! opening either, as a photo browser that shows the two as one picture
-//! does: [`Format::from_extension`] gives the format a name suggests, and
-//! [`Format::is_raw`] whether files of that format hold raw data.
+//! opening either. A photo browser that shows the two as one picture does
+//! this. [`Format::from_extension`] gives the format a name suggests, and
+//! [`Format::is_raw`] whether that format holds raw data:
 //!
 //! ```
 //! use std::path::Path;
@@ -315,115 +298,55 @@
 //!
 //! # Guarantees
 //!
-//! - A malformed or truncated file returns an error, never a panic,
-//!   whatever its bytes. Every offset and length read from a file is checked
-//!   before it is used; the tests feed the readers truncated and corrupted
-//!   files, and fuzz targets exercise them.
-//! - Damaged metadata costs only what it damages. Each value of
-//!   [`Metadata`] is read on its own when the file is opened: a tag that is
-//!   missing, of an unexpected type or out of range leaves that value
-//!   `None`, and the other values and the previews as they are. A damaged
-//!   directory, such as an Exif IFD whose pointer is wrong, loses the
-//!   values in it and no others. A JPEG whose Exif segment is missing or
-//!   cannot be read still opens: its image size is the only value read
-//!   from it, its orientation is the default, no transform, and its
-//!   previews are the file itself and the images after the main one.
-//! - An untrusted file cannot make the library allocate or walk without
-//!   bound. [`Limits`] caps the directories visited, their entries, their
-//!   nesting, the size of a preview and that of an entry's value, with
-//!   defaults that suit untrusted input. A cap the walk cannot go on
-//!   without (the first directory's size, the total number of directories)
-//!   fails with [`LimitExceeded`](ErrorKind::LimitExceeded), and so does
-//!   reading a preview or an entry's value larger than allowed, which fails
-//!   that read alone. A directory past the first that crosses a cap, or one
-//!   nested deeper than allowed, is left out as a damaged one is, so the
-//!   file still opens with what was reachable. In a JPEG file, a cap
-//!   crossed inside its Exif or MPF segment, the first directory's size
-//!   included, costs what that segment holds, not the file.
-//! - The format comes from the file's content, never from its name. A
-//!   renamed file opens as what it is, and a DNG is refused the same way
-//!   even when its Make names Nikon or Sony. [`Format::from_extension`]
-//!   exists for file pickers and folder scans, which decide what to offer
-//!   before opening anything.
-//! - Opening reads the structure and the frame header of each preview
-//!   through a block cache, a few blocks rather than the whole file, and a
-//!   preview's bytes only when asked for. Listing the entries reads
-//!   nothing more; [`RawFile::read_value`] reads an entry's value each time
+//! - **A malformed file returns an error, never a panic.** Every offset
+//!   and length read from a file is checked before it is used. The tests
+//!   feed the readers truncated and corrupted files, and fuzz targets
+//!   exercise them.
+//! - **Damaged metadata costs only what it damages.** A tag that is
+//!   missing, of an unexpected type or out of range leaves its value
+//!   `None`. The other values and the previews stay as they are. A damaged
+//!   directory, such as an Exif IFD with a wrong pointer, loses only the
+//!   values in it.
+//! - **A JPEG whose Exif segment is missing or cannot be read still
+//!   opens.** Its previews are the file itself and the images its MPF
+//!   list holds after the main one. Its image size is the only value read from it, and its
+//!   orientation is the default, no transform.
+//! - **An untrusted file cannot make the library allocate or walk without
+//!   bound.** [`Limits`] caps the number of directories, their entries and
+//!   their nesting. It also caps the size of a preview and of an entry's
+//!   value. Its defaults suit untrusted input.
+//! - **A cap fails only what it must.** A cap the walk cannot go on without
+//!   fails the open with [`LimitExceeded`](ErrorKind::LimitExceeded): the
+//!   first directory's size, or the total number of directories. A preview
+//!   or a value larger than allowed fails that read alone. A directory past
+//!   the first that crosses a cap, or one nested too deep, is left out like
+//!   a damaged one. In a JPEG file, a cap crossed inside its Exif or MPF
+//!   segment costs that segment, not the file.
+//! - **The format comes from the file's content, never from its name.** A
+//!   renamed file opens as what it is. A DNG is refused even when its Make
+//!   names Nikon or Sony. [`Format::from_extension`] serves file pickers and
+//!   folder scans, which choose before opening anything.
+//! - **Opening reads little.** It reads the structure and each preview's
+//!   frame header, a few blocks through a cache rather than the whole file.
+//!   A preview's bytes are read only when asked for. Listing the entries
+//!   reads nothing more, and [`RawFile::read_value`] reads a value each time
 //!   it is asked for.
-//! - The crate is pure Rust with no dependencies outside the standard
-//!   library, and it contains no `unsafe` code: it forbids it. So there is
-//!   no serde feature either: a caller that stores metadata serializes what
-//!   the getters return, which is text, integers, booleans, enums whose
-//!   `name` gives their text, and small structs of these; an
-//!   [`Orientation`] gives its Exif number, a [`PreviewFormat`] its MIME
-//!   type, a [`Directory`] its text through `Display`, and a [`Value`]
-//!   holds its numbers or bytes in a vector.
+//! - **Pure Rust, with no dependencies outside the standard library.** The
+//!   crate forbids `unsafe` code.
+//! - **No serde feature,** since it would be a dependency. A caller that
+//!   stores metadata serializes what the getters return: text, integers,
+//!   booleans, small structs of these, and enums whose `name` gives their
+//!   text. An [`Orientation`] gives its Exif number, a [`PreviewFormat`]
+//!   its MIME type, and a [`Directory`] its text through `Display`. A
+//!   [`Value`] holds its numbers or bytes in a vector.
 //!
 //! # Formats
 //!
-//! Two RAW formats, Nikon NEF, including the NRW files of Coolpix cameras,
-//! and Sony ARW, including the SRF, SR2 and ARQ files of the same family
-//! and the ARW files of the Sony-built Hasselblad bodies; and JPEG, the
-//! files cameras write beside their raw files or instead of them. Of a raw
-//! file, raw-files reads the embedded previews, the metadata and the focus
-//! point, not the raw data, each checked on the public-domain (CC0) sample
-//! files of [raw.pixls.us](https://raw.pixls.us/): 35 Nikon files, from
-//! the D1H to the Z5II, and 36 Sony-family files, from the DSC-F828 to the
-//! ILCE-7M5. A focus point placed from a table, which no public sample
-//! gives, is checked on the 56 frames of the Nikon D600 session that the
-//! NEF format notes record, stripped of their pixels and committed with
-//! the tests.
-//!
-//! A JPEG file's previews are the file itself, the thumbnail of its Exif
-//! segment, the images its Multi-Picture Format (MPF) list holds after the
-//! main one and, from the Nikon bodies that write one, such as the D70,
-//! the small JPEG its MakerNote points at. Its metadata is what its Exif
-//! segment records, read as in a raw file, with the picture's size as the
-//! image size and no raw size; from a Nikon or a Sony camera, also what
-//! its MakerNote records, as in a NEF or an ARW: what the Exif segment
-//! lacks, the camera settings and the focus point among it, and the white
-//! balance setting, finer than the Exif segment's. No other maker's
-//! MakerNote is read. These are checked on eight camera JPEGs from
-//! [Wikimedia Commons](https://commons.wikimedia.org/), of five Sony
-//! bodies, two Nikon bodies and a Canon; on three stripped JPEG files from
-//! a Nikon Z 9, one in FX and two in the DX and 16:9 crop modes, which
-//! check where a crop mode's focus point is placed; on a stripped JPEG
-//! file from that Nikon D600 session, which checks a point placed from a
-//! table; on two stripped JPEG files of the same D600 at its Medium and
-//! Small sizes, which check a point placed in the window of the frame a
-//! JPEG size shows; and on JPEG files built in the tests.
-//!
-//! Nikon mirrorless bodies, Nikon DSLRs in live view and Sony bodies from
-//! the ILCE-7RM2 on record where they focused as a position, which
-//! [`Metadata::focus`] gives, from a raw file or a JPEG alike. A Nikon
-//! DSLR's shot through the viewfinder records only the number of an
-//! autofocus point, which raw-files places from its table of the body's
-//! points where it has one, the Nikon D600's, with the points the camera
-//! used ([`Metadata::focus_points`]) and the origin
-//! [`FocusOrigin::Table`]. Any other shot that records at most the number
-//! of an autofocus point or the points used, one bit per point, such as one
-//! through the viewfinder of a body without a table or a Sony body's before
-//! the ILCE-7RM2, gives `None`, and so does a shot in manual focus. A Nikon
-//! JPEG shot in a crop mode (DX, 1:1, 16:9) records its point in the
-//! camera's full output, and the point is placed on the JPEG's picture. A
-//! JPEG gives its point only when the point's frame has the picture's
-//! shape, so an export cut to another shape or turned upright gives
-//! `None`. The exceptions are an export cut from a Nikon crop-mode JPEG,
-//! and one of a D600 JPEG cut or scaled to exactly the Medium size,
-//! 4512x3008, which is read as a Medium JPEG: their points may be
-//! misplaced, by far on a cut.
-//!
-//! # What comes next
-//!
-//! The [roadmap](https://github.com/kuolas/raw-files/blob/master/docs/ROADMAP.md)
-//! plans next every metadata value a file records, the ones that only
-//! enciphered or encrypted blocks hold among them; then the raw sensor
-//! data; and last a developed linear image. No other body's table of
-//! autofocus points is planned: one is added when frames shot with that
-//! body have been measured, by the
-//! [procedure](https://github.com/kuolas/raw-files/blob/master/docs/formats/nef/autofocus-points.md#1-the-procedure)
-//! the NEF format notes describe, so that the shots through its
-//! viewfinder give their points too.
+//! raw-files reads Nikon NEF, Sony ARW and JPEG, and [`Format`] says which
+//! files each includes. Any other file, a DNG among them, is refused with
+//! [`UnknownFormat`](ErrorKind::UnknownFormat). The
+//! [README](https://github.com/kuolas/raw-files#formats) says what each
+//! format is checked on.
 
 // A fuzzing build compiles the reader for one caller, the fuzz entry points,
 // which use only part of it. What is unused there, and so which `expect`s
