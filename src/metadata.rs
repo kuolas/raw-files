@@ -272,7 +272,7 @@ impl Metadata {
     ///         location.longitude().to_degrees()
     ///     );
     ///     if let Some(altitude) = location.altitude() {
-    ///         println!("{:.0} m", altitude.to_metres());
+    ///         println!("{:.0} m", altitude.to_meters());
     ///     }
     /// }
     /// # Ok(())

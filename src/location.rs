@@ -82,7 +82,7 @@ use crate::rational::Rational;
 /// assert_eq!(location.latitude().minutes(), Rational::new(514_933, 10_000)?);
 /// assert!((location.latitude().to_degrees() - 48.858_22).abs() < 1e-5);
 /// assert!((location.longitude().to_degrees() - 2.294_5).abs() < 1e-5);
-/// assert_eq!(location.altitude().map(|altitude| altitude.to_metres()), Some(35.0));
+/// assert_eq!(location.altitude().map(|altitude| altitude.to_meters()), Some(35.0));
 /// assert_eq!(location.map_datum(), None);
 /// # Some(())
 /// # }
@@ -441,7 +441,7 @@ impl Longitude {
 ///
 /// Two altitudes are equal when their side and their fraction are the
 /// same as recorded, as for [`Rational`]. There is no `Ord`; sort by
-/// [`to_metres`](Self::to_metres) to order by height.
+/// [`to_meters`](Self::to_meters) to order by height.
 ///
 /// # Examples
 ///
@@ -456,42 +456,42 @@ impl Longitude {
 /// # fn example() -> Option<()> {
 /// let shore = Altitude::below(Rational::new(43_050, 100)?)?;
 /// assert!(shore.is_below());
-/// assert_eq!(shore.metres(), Rational::new(43_050, 100)?);
-/// assert_eq!(shore.to_metres(), -430.5);
+/// assert_eq!(shore.meters(), Rational::new(43_050, 100)?);
+/// assert_eq!(shore.to_meters(), -430.5);
 /// # Some(())
 /// # }
 /// ```
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct Altitude {
-    metres: Rational,
+    meters: Rational,
     below: bool,
 }
 
 impl Altitude {
-    /// `metres` above the reference, kept as given; `None` when its
+    /// `meters` above the reference, kept as given; `None` when its
     /// denominator is zero. Zero metres is a real altitude.
     #[must_use]
-    pub fn above(metres: Rational) -> Option<Self> {
-        (metres.denominator != 0).then_some(Self {
-            metres,
+    pub fn above(meters: Rational) -> Option<Self> {
+        (meters.denominator != 0).then_some(Self {
+            meters,
             below: false,
         })
     }
 
-    /// `metres` below the reference, kept as given; `None` when its
+    /// `meters` below the reference, kept as given; `None` when its
     /// denominator is zero.
     #[must_use]
-    pub fn below(metres: Rational) -> Option<Self> {
-        (metres.denominator != 0).then_some(Self {
-            metres,
+    pub fn below(meters: Rational) -> Option<Self> {
+        (meters.denominator != 0).then_some(Self {
+            meters,
             below: true,
         })
     }
 
     /// The metres from the reference, as recorded; never negative, since
     /// the side is [`is_below`](Self::is_below).
-    pub fn metres(&self) -> Rational {
-        self.metres
+    pub fn meters(&self) -> Rational {
+        self.meters
     }
 
     /// Whether the altitude lies below the reference: the file's
@@ -502,8 +502,8 @@ impl Altitude {
     }
 
     /// The altitude in metres as a decimal, negative below the reference.
-    pub fn to_metres(&self) -> f64 {
-        signed(self.metres.to_f64(), self.below)
+    pub fn to_meters(&self) -> f64 {
+        signed(self.meters.to_f64(), self.below)
     }
 }
 
@@ -788,7 +788,7 @@ mod tests {
         for zero in [
             south.to_degrees(),
             meridian.to_degrees(),
-            Altitude::below(r(0, 1)).unwrap().to_metres(),
+            Altitude::below(r(0, 1)).unwrap().to_meters(),
         ] {
             assert!(zero.is_sign_positive(), "{zero}");
             assert_eq!(format!("{zero:.5}"), "0.00000");
@@ -829,14 +829,14 @@ mod tests {
     #[test]
     fn an_altitude_keeps_its_side() {
         let above = Altitude::above(r(3505, 100)).unwrap();
-        assert_eq!(above.metres(), r(3505, 100));
+        assert_eq!(above.meters(), r(3505, 100));
         assert!(!above.is_below());
-        assert_eq!(above.to_metres(), 35.05);
+        assert_eq!(above.to_meters(), 35.05);
         let below = Altitude::below(r(4305, 100)).unwrap();
         assert!(below.is_below());
-        assert_eq!(below.to_metres(), -43.05);
+        assert_eq!(below.to_meters(), -43.05);
         // Zero metres is a real altitude, on either side.
-        assert_eq!(Altitude::above(r(0, 1)).unwrap().to_metres(), 0.0);
+        assert_eq!(Altitude::above(r(0, 1)).unwrap().to_meters(), 0.0);
         assert!(Altitude::below(r(0, 1)).is_some());
         assert_eq!(Altitude::above(r(35, 0)), None);
         assert_eq!(Altitude::below(r(0, 0)), None);
