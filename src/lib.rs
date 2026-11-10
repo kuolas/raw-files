@@ -88,13 +88,8 @@
 //! if let Some(time) = metadata.capture_time() {
 //!     println!("taken {time}");
 //! }
-//! let camera = metadata.camera();
-//! // The maker and the name the body is sold under, where raw-files
-//! // has its name, or else the Model as the file records it.
-//! if let (Some(make), Some(model)) = (camera.make(), camera.model()) {
-//!     println!("camera: {make} {model}");
-//! } else if let Some(model) = camera.recorded_model() {
-//!     println!("camera: {model}");
+//! if let Some(name) = metadata.camera().display_name() {
+//!     println!("camera: {name}");
 //! }
 //! if let Some(name) = metadata.lens().recorded_model() {
 //!     println!("lens: {name}");
