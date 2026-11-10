@@ -8,7 +8,9 @@ mod support;
 use std::fs::File;
 use std::io::{self, Cursor};
 
-use raw_files::{Authorship, ErrorKind, Focus, Format, Limits, Metadata, Options, Point, RawFile};
+use raw_files::{
+    Authorship, Camera, ErrorKind, Focus, Format, Limits, Metadata, Options, Point, RawFile,
+};
 use support::jpeg_builder::JpegBuilder;
 use support::tiff_builder::{Order, TiffBuilder};
 
@@ -38,9 +40,12 @@ const EXIF_AUTHORSHIP: [(u16, &str); 3] = [
 /// The UserComment tag of the Exif IFD.
 const USER_COMMENT: u16 = 0x9286;
 
+/// The CameraOwnerName tag of the Exif IFD.
+const CAMERA_OWNER_NAME: u16 = 0xA430;
+
 /// A TIFF file whose IFD0 holds the Make `make` and [`IFD0_AUTHORSHIP`],
-/// and whose Exif IFD holds [`EXIF_AUTHORSHIP`], in UTF-8, and a comment
-/// under the ASCII code.
+/// and whose Exif IFD holds [`EXIF_AUTHORSHIP`], in UTF-8, a comment under
+/// the ASCII code and the camera's owner, in UTF-8.
 fn with_authorship(make: &str) -> Vec<u8> {
     let mut builder = TiffBuilder::new(Order::Little);
     let (ifd0, exif) = (builder.ifd(), builder.ifd());
@@ -52,6 +57,7 @@ fn with_authorship(make: &str) -> Vec<u8> {
         builder.utf8(exif, tag, text);
     }
     builder.undefined(exif, USER_COMMENT, b"ASCII\0\0\0Painted at dawn   ");
+    builder.utf8(exif, CAMERA_OWNER_NAME, "Paul Cézanne");
     builder.build().bytes
 }
 
@@ -200,7 +206,7 @@ fn handles_are_send_and_sync_when_their_reader_is() {
 }
 
 #[test]
-fn an_authorship_built_by_hand_equals_what_open_reads() {
+fn an_authorship_and_a_camera_built_by_hand_equal_what_open_reads() {
     let expected = Authorship::default()
         .with_artist("Claude Monet")
         .with_copyright("Copyright Claude Monet")
@@ -211,14 +217,24 @@ fn an_authorship_built_by_hand_equals_what_open_reads() {
         .with_comment("Painted at dawn");
     let mut jpeg = JpegBuilder::new();
     jpeg.jfif().exif(&with_authorship("NIKON CORPORATION"));
-    for (bytes, format) in [
-        (with_authorship("NIKON CORPORATION"), Format::Nef),
-        (with_authorship("SONY"), Format::Arw),
-        (jpeg.build().bytes, Format::Jpeg),
+    let camera = |make| {
+        Camera::default()
+            .with_recorded_make(make)
+            .with_owner_name("Paul Cézanne")
+    };
+    for (bytes, format, make) in [
+        (
+            with_authorship("NIKON CORPORATION"),
+            Format::Nef,
+            "NIKON CORPORATION",
+        ),
+        (with_authorship("SONY"), Format::Arw, "SONY"),
+        (jpeg.build().bytes, Format::Jpeg, "NIKON CORPORATION"),
     ] {
         let file = RawFile::from_bytes(&bytes).unwrap();
         assert_eq!(file.format(), format);
         assert_eq!(file.metadata().authorship(), &expected, "{format:?}");
+        assert_eq!(file.metadata().camera(), &camera(make), "{format:?}");
     }
 }
 

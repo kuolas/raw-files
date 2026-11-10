@@ -27,6 +27,11 @@ does.
   texts in IFD1 and IFD2 are not read, nor anything in a MakerNote.
   `Metadata::with_authorship` and the `with_…` methods of `Authorship`
   build one for a program's tests.
+- `Camera::owner_name` gives the name of the camera's owner, the Exif
+  IFD's CameraOwnerName, of type ASCII or UTF-8, cleaned as every text
+  is and held to 255 bytes, `None` when blank; `Camera::with_owner_name`
+  sets it. It names whoever owns the body, not whoever took the
+  picture.
 
 ### Changed
 

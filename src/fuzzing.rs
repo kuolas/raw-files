@@ -220,6 +220,7 @@ fn read_metadata(metadata: &Metadata) {
     let _ = camera.recorded_make();
     let _ = camera.recorded_model();
     let _ = camera.serial_number();
+    let _ = camera.owner_name();
     let authorship = metadata.authorship();
     let _ = (
         authorship.artist(),
