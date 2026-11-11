@@ -10,11 +10,13 @@
 //! The sample files are too large to commit, so `scripts/fetch-samples.sh`
 //! downloads them, the RAW files from raw.pixls.us and the JPEG files from
 //! Wikimedia Commons, and a test whose file is absent skips with a note
-//! rather than failing: the suite runs offline.
+//! rather than failing: the suite runs offline. `RAW_FILES_REQUIRE_SAMPLES=1`
+//! makes it fail instead ([`path`]).
 
 use std::any::Any;
 use std::collections::BTreeSet;
 use std::env;
+use std::ffi::OsStr;
 use std::panic::{self, AssertUnwindSafe};
 use std::path::{Path, PathBuf};
 
@@ -30,6 +32,10 @@ use raw_files::{
 /// crate's root), or in `raw-samples` at the crate's root when it is unset,
 /// where `scripts/fetch-samples.sh` puts them: a folder that git ignores and
 /// that `cargo clean` leaves alone.
+///
+/// With `RAW_FILES_REQUIRE_SAMPLES=1`, a missing file panics with the note
+/// instead, as [`missing_fails`] decides from the file's [`tier`], so that a
+/// run meant to read the samples cannot pass without them.
 pub fn path(name: &str) -> Option<PathBuf> {
     let dir = match env::var_os("RAW_FILES_SAMPLES") {
         Some(dir) if !dir.is_empty() => PathBuf::from(dir),
@@ -37,14 +43,79 @@ pub fn path(name: &str) -> Option<PathBuf> {
     };
     let path = dir.join(name);
     if path.is_file() {
-        Some(path)
-    } else {
-        eprintln!(
-            "skipped: sample file {} is missing; scripts/fetch-samples.sh downloads it",
-            path.display()
-        );
-        None
+        return Some(path);
     }
+    let note = format!(
+        "sample file {} is missing; scripts/fetch-samples.sh downloads it",
+        path.display()
+    );
+    let require = require_switch(env::var_os("RAW_FILES_REQUIRE_SAMPLES").as_deref());
+    // Set to 1, as `scripts/fetch-samples.sh` reads it.
+    let large = env::var_os("RAW_FILES_LARGE").is_some_and(|value| value == "1");
+    if missing_fails(tier(name), require, large) {
+        panic!("{note}, and RAW_FILES_REQUIRE_SAMPLES=1 requires it");
+    }
+    eprintln!("skipped: {note}");
+    None
+}
+
+/// Whether `RAW_FILES_REQUIRE_SAMPLES`, of the value `value`, asks for the
+/// samples: `1` does, and unset or empty does not, as CI leaves it on macOS
+/// and Windows. Any other value panics: read as off, a `true` or a `yes`
+/// would leave the samples optional without a word.
+pub fn require_switch(value: Option<&OsStr>) -> bool {
+    match value.map(OsStr::to_str) {
+        None | Some(Some("")) => false,
+        Some(Some("1")) => true,
+        Some(Some(other)) => {
+            panic!("RAW_FILES_REQUIRE_SAMPLES is {other:?}; set it to 1, or leave it unset")
+        }
+        Some(None) => {
+            panic!("RAW_FILES_REQUIRE_SAMPLES is not UTF-8; set it to 1, or leave it unset")
+        }
+    }
+}
+
+/// The tier of a sample file, as the tier column of `tests/samples.tsv`
+/// gives it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Tier {
+    /// A file `scripts/fetch-samples.sh` always fetches.
+    Normal,
+    /// A file it fetches only with `RAW_FILES_LARGE=1`, such as the ARQ.
+    Large,
+}
+
+/// The tier `tests/samples.tsv` lists for the file `name`. A name the list
+/// does not hold counts as normal.
+pub fn tier(name: &str) -> Tier {
+    // The columns are checked as `listed` checks them, so that a column
+    // moved in the list fails here rather than giving every file the
+    // normal tier.
+    let mut lines = LIST.lines();
+    let header: Vec<&str> = lines.next().unwrap().split('\t').collect();
+    assert_eq!(header, COLUMNS);
+    for line in lines.filter(|line| !line.is_empty()) {
+        let fields: Vec<&str> = line.split('\t').collect();
+        assert_eq!(fields.len(), COLUMNS.len(), "{line}");
+        if fields[3] == name {
+            return match fields[4] {
+                "normal" => Tier::Normal,
+                "large" => Tier::Large,
+                other => panic!("{name}: an unknown tier {other} in tests/samples.tsv"),
+            };
+        }
+    }
+    Tier::Normal
+}
+
+/// Whether a missing sample file of `tier` fails its test rather than
+/// skipping. It fails only when `RAW_FILES_REQUIRE_SAMPLES=1` asks for the
+/// samples (`require`). A large file fails only when `RAW_FILES_LARGE=1`
+/// is set too (`large`), since without it `scripts/fetch-samples.sh` does
+/// not fetch one.
+pub fn missing_fails(tier: Tier, require: bool, large: bool) -> bool {
+    require && (tier == Tier::Normal || large)
 }
 
 /// The list of sample files, `tests/samples.tsv`, compiled in, so that a

@@ -127,9 +127,15 @@ jobs:
         run: scripts/fetch-samples.sh
         env:
           RAW_FILES_SAMPLES: ${{ runner.temp }}/raw-samples
+      # On Linux, RAW_FILES_REQUIRE_SAMPLES=1 makes a missing file of the
+      # normal tier fail its test rather than skip. A wrong path or a cache
+      # restored to another folder would otherwise pass the sample tests
+      # without reading a file. macOS and Windows have no samples on
+      # purpose, so it is empty there, which is off, and they skip.
       - run: cargo test --workspace
         env:
           RAW_FILES_SAMPLES: ${{ runner.temp }}/raw-samples
+          RAW_FILES_REQUIRE_SAMPLES: ${{ matrix.os == 'ubuntu-latest' && '1' || '' }}
       - run: cargo doc --workspace --no-deps
         env:
           RUSTDOCFLAGS: -D warnings
