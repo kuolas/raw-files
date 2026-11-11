@@ -147,6 +147,20 @@ does.
 
   The point given is the same
   ([#150](https://github.com/kuolas/raw-files/issues/150)).
+- `FieldType::code()` is now `FieldType::to_code()`, which breaks its
+  callers. It pairs with `FieldType::from_code`, as
+  `Orientation::to_exif` pairs with `from_exif`:
+
+  ```rust
+  // 0.9.0
+  let code = entry.field_type().code();
+
+  // 0.10.0
+  let code = entry.field_type().to_code();
+  ```
+
+  The codes are the same
+  ([#150](https://github.com/kuolas/raw-files/issues/150)).
 
 ## [0.9.0] - 2026-11-10
 

@@ -194,6 +194,7 @@ pub enum FieldType {
 impl FieldType {
     /// The type that an entry's type code `code` names: 1 to 13, or 129.
     /// `None` for any other code, which raw-files cannot read.
+    /// [`to_code`](Self::to_code) gives a type's code back.
     ///
     /// # Examples
     ///
@@ -224,8 +225,18 @@ impl FieldType {
         })
     }
 
-    /// The type's code, as an entry records it.
-    pub fn code(self) -> u16 {
+    /// The type's code, as an entry records it: the code that
+    /// [`from_code`](Self::from_code) takes.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use raw_files::FieldType;
+    ///
+    /// assert_eq!(FieldType::Short.to_code(), 3);
+    /// assert_eq!(FieldType::from_code(129).map(FieldType::to_code), Some(129));
+    /// ```
+    pub fn to_code(self) -> u16 {
         match self {
             Self::Byte => 1,
             Self::Ascii => 2,
@@ -936,7 +947,7 @@ mod tests {
             "UTF-8",
         ];
         for (i, field_type) in TYPES.into_iter().enumerate() {
-            assert_eq!(field_type.code(), codes[i], "{field_type:?}");
+            assert_eq!(field_type.to_code(), codes[i], "{field_type:?}");
             assert_eq!(field_type.size(), sizes[i], "{field_type:?}");
             assert_eq!(field_type.name(), names[i], "{field_type:?}");
             assert_eq!(field_type.to_string(), names[i], "{field_type:?}");
@@ -949,7 +960,7 @@ mod tests {
     fn only_the_known_codes_name_a_type() {
         let known = (0..=u16::MAX)
             .filter_map(FieldType::from_code)
-            .map(FieldType::code);
+            .map(FieldType::to_code);
         assert!(known.eq([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 129]));
     }
 
@@ -1087,7 +1098,7 @@ mod tests {
         for (i, value) in (1..).zip(values) {
             let bytes = encode(value, order);
             let count = u32::try_from(value.len()).unwrap();
-            let code = value.field_type().code();
+            let code = value.field_type().to_code();
             if bytes.len() <= 4 {
                 // Left-justified, as TIFF holds a value in its entry.
                 let mut field = [0; 4];
