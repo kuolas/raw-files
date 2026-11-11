@@ -59,6 +59,18 @@ does.
   `FocusLayout::point`, still return `Option`. What the readers give
   for a file is unchanged
   ([#105](https://github.com/kuolas/raw-files/issues/105)).
+- `Limits::max_value_bytes` now bounds the values raw-files reads for
+  itself, for the metadata and the previews, as well as those
+  `RawFile::read_value` reads. Before, those values had a fixed cap of
+  their own, 1 MiB, the default of `max_value_bytes`. Only a caller who
+  changes the cap sees a difference:
+  - `Limits::unlimited()` now lifts the cap on every value.
+  - Under a lowered cap, a longer value of the metadata is `None`, and
+    a preview or a directory located by one is left out. A RAW file, or
+    any TIFF file but a DNG, whose Make is longer than the cap fails to
+    open with `LimitExceeded`; a JPEG file still opens, without what its
+    MakerNote gives
+    ([#113](https://github.com/kuolas/raw-files/issues/113)).
 - The `UnknownFormat` error for a TIFF file of an unknown format has a
   message that ends in "recognizes". It ended in "recognises". The docs
   and the messages are now spelled the American way, as the API's

@@ -178,11 +178,13 @@ pub(super) fn is_dng(tree: &Tree) -> bool {
 /// # Errors
 ///
 /// Whatever reading the Make returns: `LimitExceeded` for a value longer
-/// than one tag may take, `Io` when the reader fails. A claim that cannot
-/// read its tag stops detection rather than passing the file on. The JPEG
-/// reader takes a Make it cannot read, a value too long for its limits,
-/// for another maker's, but a failing reader stays an `Io` error there
-/// too.
+/// than the cap IFD0 was read under, `Limits::max_value_bytes`, at the
+/// value's offset; `Io` when the reader fails. A claim that cannot read
+/// its tag stops detection rather than passing the file on, so a TIFF file
+/// other than a DNG whose Make is longer than the cap fails to open. The
+/// JPEG reader takes a Make it cannot read for another maker's, which
+/// costs only the MakerNote, but a failing reader stays an `Io` error
+/// there too.
 pub(super) fn make_starts_with<R: Read + Seek>(
     src: &mut Source<R>,
     tree: &Tree,
@@ -643,8 +645,8 @@ mod tests {
 
     #[test]
     fn a_make_too_long_to_read_is_an_error() {
-        // A Make of more bytes than the 1 MiB one tag value may take, inside
-        // the file.
+        // A Make of more bytes than the 1 MiB one value may take under the
+        // default limits, inside the file.
         let count: u32 = 1024 * 1024 + 1;
         let err = make_of(
             |builder, ifd| {

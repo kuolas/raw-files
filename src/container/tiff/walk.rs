@@ -517,8 +517,9 @@ impl<R: Read + Seek> Walker<'_, R> {
             parent,
             // Below the cap, which is a `u32`: this cannot overflow.
             depth: depth + 1,
-            // The array is at most 1 MiB, far fewer than 2^32 offsets, so
-            // the positions cannot run out.
+            // A value's length is a `u32`, so the array holds fewer than
+            // 2^31 offsets, even as SHORTs of two bytes each, whatever the
+            // cap on one value: the positions cannot run out.
             offsets: offsets.into_iter().zip(0..),
         }))
     }
@@ -1644,7 +1645,8 @@ mod tests {
 
     #[test]
     fn an_interoperability_link_whose_value_is_too_long_to_read_is_not_followed() {
-        // Over the 1 MiB that one tag value may take, and inside the file.
+        // Over the 1 MiB that one value may take under the default
+        // limits, and inside the file.
         let count = 256 * 1024 + 1;
         let mut builder = TiffBuilder::new(Order::Little);
         let ifd0 = ifd(&mut builder, 0);
@@ -1745,7 +1747,8 @@ mod tests {
 
     #[test]
     fn a_link_whose_value_is_too_long_to_read_is_not_followed() {
-        // Over the 1 MiB that one tag value may take, and inside the file.
+        // Over the 1 MiB that one value may take under the default
+        // limits, and inside the file.
         let count = 256 * 1024 + 1;
         for tag in [SUB_IFDS, EXIF_IFD] {
             let mut builder = TiffBuilder::new(Order::Little);

@@ -27,8 +27,13 @@
 //! file is counted and skipped, not an error for the IFD: real files carry
 //! such entries and still hold good previews. Every entry that is kept can
 //! be read. Values are read only when asked for, through the same
-//! [`Source`], and no accessor reads more than [`MAX_VALUE_LEN`] bytes for
-//! one value.
+//! [`Source`]. An IFD keeps the cap on one value of the limits it was read
+//! with, [`Limits::max_value_bytes`], and no accessor reads a longer value
+//! stored out of line: it fails with `LimitExceeded`. The readers take
+//! that for damage, but for the Make of a TIFF file, which decides its
+//! format.
+//! One number bounds every value, those raw-files reads for the metadata
+//! and the previews as much as those a caller reads.
 //!
 //! [`ifd_in`] reads the IFD at an offset written inside a block, as a
 //! MakerNote's IFDs are found, and gives none when it is damaged.
@@ -47,18 +52,6 @@ use crate::error::{Error, Result};
 use crate::io::{ByteOrder, Source, within};
 use crate::limits::Limits;
 
-/// The longest value, in bytes, that one accessor of [`Ifd`] reads.
-///
-/// A cap on what one tag can make raw-files allocate, independent of
-/// [`Limits`]: the tags read through these accessors are numbers and short
-/// texts, far below it. A longer value is a payload, such as a preview,
-/// which has its own path and its own limit.
-///
-/// [`Limits::max_value_bytes`] bounds the values a caller reads through the
-/// raw view, and its default is this same number, so that a value is
-/// readable through one path whenever it is through the other.
-const MAX_VALUE_LEN: u32 = 1024 * 1024;
-
 /// An IFD read by [`parse_ifd`]: the entries that can be read, and how many
 /// could not.
 ///
@@ -68,7 +61,9 @@ const MAX_VALUE_LEN: u32 = 1024 * 1024;
 /// occurrence.
 ///
 /// The accessors that read a value take the [`Source`] the IFD was read
-/// from. Inline values are served from the entry without touching it.
+/// from. Inline values are served from the entry without touching it. A
+/// value stored out of line is read only when it is no longer than the cap
+/// the IFD was read under.
 #[derive(Clone, Debug)]
 pub(crate) struct Ifd {
     offset: u64,
@@ -77,6 +72,9 @@ pub(crate) struct Ifd {
     order: ByteOrder,
     entries: Vec<Entry>,
     invalid_entries: u32,
+    /// The most bytes one accessor reads for one value: the
+    /// [`Limits::max_value_bytes`] of the limits given to [`parse_ifd`].
+    value_cap: u64,
 }
 
 /// An entry of an [`Ifd`]: a field type that is known, and a value that lies
@@ -124,6 +122,10 @@ enum Value {
 /// [`Ifd::invalid_entries`]: one whose field type is unknown, whose length
 /// (count times type size) overflows 32 bits, or whose value is out of line
 /// and overflows or does not lie inside the block and the file.
+///
+/// The IFD keeps `limits`' [`max_value_bytes`](Limits::max_value_bytes),
+/// the cap its accessors read each value under. An entry whose value is
+/// longer is kept: only reading that value fails.
 ///
 /// # Errors
 ///
@@ -220,6 +222,7 @@ pub(crate) fn parse_ifd<R: Read + Seek>(
         order,
         entries,
         invalid_entries,
+        value_cap: limits.max_value_bytes(),
     };
     Ok((ifd, next))
 }
@@ -414,8 +417,9 @@ impl Ifd {
     ///
     /// # Errors
     ///
-    /// `LimitExceeded` if the value is longer than [`MAX_VALUE_LEN`], at the
-    /// value's offset; `Io` if the reader fails.
+    /// `LimitExceeded` if the value is stored out of line and is longer than
+    /// the cap the IFD was read under ([`parse_ifd`]), at the value's
+    /// offset; `Io` if the reader fails.
     pub(crate) fn u32s<R: Read + Seek>(
         &self,
         src: &mut Source<R>,
@@ -666,7 +670,7 @@ impl Ifd {
     }
 
     /// The first entry with tag `tag` and its value's bytes, when its type is
-    /// one of `types`, read under [`MAX_VALUE_LEN`].
+    /// one of `types`, read under the cap the IFD was read under.
     fn value<R: Read + Seek>(
         &self,
         src: &mut Source<R>,
@@ -676,7 +680,7 @@ impl Ifd {
         let Some(entry) = self.entry_of_type(tag, types) else {
             return Ok(None);
         };
-        let bytes = entry.read(src, u64::from(MAX_VALUE_LEN))?;
+        let bytes = entry.read(src, self.value_cap)?;
         Ok(Some((entry, bytes)))
     }
 }
@@ -826,9 +830,20 @@ mod tests {
         )
     }
 
-    /// Reads `ifd` of `built`, which must succeed, and returns the source to
-    /// read its values through.
+    /// Reads `ifd` of `built` with the default limits, which must succeed,
+    /// and returns the source to read its values through.
     fn read(order: Order, built: &Built, ifd: IfdId) -> (Source<Cursor<Vec<u8>>>, Ifd, u32) {
+        read_with(order, built, ifd, &Limits::default())
+    }
+
+    /// Reads `ifd` of `built` with `limits`, as [`read`] does with the
+    /// default ones.
+    fn read_with(
+        order: Order,
+        built: &Built,
+        ifd: IfdId,
+        limits: &Limits,
+    ) -> (Source<Cursor<Vec<u8>>>, Ifd, u32) {
         let mut src = open(&built.bytes);
         let block = Block::file(src.len());
         let (parsed, next) = parse_ifd(
@@ -836,7 +851,7 @@ mod tests {
             &block,
             built.ifd_offset(ifd),
             byte_order(order),
-            &Limits::default(),
+            limits,
         )
         .unwrap();
         (src, parsed, next)
@@ -869,11 +884,34 @@ mod tests {
     }
 
     #[test]
-    fn the_default_value_cap_is_the_accessors_cap() {
-        assert_eq!(
-            Limits::default().max_value_bytes(),
-            u64::from(MAX_VALUE_LEN)
-        );
+    fn the_accessors_read_under_the_value_cap_of_the_limits_the_ifd_was_read_with() {
+        for order in ORDERS {
+            let at = 512;
+            let mut builder = TiffBuilder::new(order);
+            let id = builder.ifd();
+            builder
+                .raw(id, 0x0001, UNDEFINED, 100, RawValue::Offset(at))
+                .short(id, 0x0002, &[7, 8]);
+            builder.pad_to(u64::from(at) + 100);
+            let built = builder.build();
+            let limits = |n| Limits::default().with_max_value_bytes(n);
+
+            // At the cap, and with no cap, the value is read whole.
+            for limits in [limits(100), Limits::unlimited()] {
+                let (mut src, ifd, _) = read_with(order, &built, id, &limits);
+                assert_eq!(ifd.bytes(&mut src, 0x0001).unwrap().unwrap().len(), 100);
+            }
+            // A byte under it, refused at the value; the entry is still kept.
+            let (mut src, ifd, _) = read_with(order, &built, id, &limits(99));
+            assert_eq!(ifd.invalid_entries(), 0, "{order:?}");
+            let err = ifd.bytes(&mut src, 0x0001).unwrap_err();
+            assert_eq!(err.kind(), ErrorKind::LimitExceeded, "{err:?}");
+            assert_eq!(err.offset(), Some(u64::from(at)), "{err:?}");
+            // A value held in its entry is read under any cap, zero included.
+            let (mut src, ifd, _) = read_with(order, &built, id, &limits(0));
+            assert_eq!(ifd.u32s(&mut src, 0x0002).unwrap(), Some(vec![7, 8]));
+            assert!(ifd.bytes(&mut src, 0x0001).is_err());
+        }
     }
 
     #[test]
@@ -1263,7 +1301,7 @@ mod tests {
     fn a_rational_longer_than_the_cap_exceeds_a_limit_as_u32s_does() {
         let order = Order::Little;
         let at = 512;
-        let max = MAX_VALUE_LEN;
+        let max = u32::try_from(Limits::default().max_value_bytes()).unwrap();
         let mut builder = TiffBuilder::new(order);
         let ifd = builder.ifd();
         builder
@@ -1873,7 +1911,7 @@ mod tests {
     fn a_value_longer_than_the_cap_exceeds_a_limit() {
         let order = Order::Little;
         let at = 512;
-        let max = MAX_VALUE_LEN;
+        let max = u32::try_from(Limits::default().max_value_bytes()).unwrap();
         let mut builder = TiffBuilder::new(order);
         let ifd = builder.ifd();
         builder

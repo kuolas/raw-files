@@ -145,10 +145,11 @@ impl<R: Read + Seek> RawFile<R> {
     /// `UnknownFormat` if the file is not a RAW file or a JPEG file this
     /// version recognizes; `Malformed` if its structure is damaged;
     /// `LimitExceeded` if reading its structure would cross one of the
-    /// [`Limits`], though a limit crossed inside a JPEG file's Exif or MPF
-    /// segment is not an error: it costs what that segment holds, the Exif
-    /// values and thumbnail or the MPF images, as damage there does; `Io` if
-    /// the reader fails.
+    /// [`Limits`], as a RAW file's Make longer than
+    /// [`Limits::max_value_bytes`] does, though a limit crossed inside a
+    /// JPEG file's Exif or MPF segment is not an error: it costs at most
+    /// what that segment holds, the Exif values and thumbnail or the MPF
+    /// images, as damage there does; `Io` if the reader fails.
     pub fn from_reader(reader: R) -> Result<Self> {
         Options::new().from_reader(reader)
     }
@@ -704,11 +705,93 @@ mod tests {
         let err = file.read_value(&undefined).unwrap_err();
         assert_eq!(err.kind(), ErrorKind::LimitExceeded, "{err:?}");
         assert_eq!(err.offset(), Some(undefined.byte_range().unwrap().start));
-        // The cap bounds one value, not the file: the others still read,
-        // and a value held in its entry is never refused.
-        let mut file = Options::new().limits(limits(0)).from_bytes(&bytes).unwrap();
+        // The cap bounds one value, not the file: the others still read.
+        let time = file.entries().entry(Directory::Exif, 0x9003).unwrap();
+        assert_eq!(file.read_value(&time).unwrap().len(), 20);
+        // A value held in its entry is never refused. The lowest cap the
+        // file opens under is its Make's length, 18 bytes, which the
+        // capture time's 20 pass.
+        let mut file = Options::new()
+            .limits(limits(18))
+            .from_bytes(&bytes)
+            .unwrap();
         let metering = file.entries().entry(Directory::Exif, 0x9207).unwrap();
         assert_eq!(file.read_value(&metering).unwrap(), Value::Short(vec![5]));
+        let err = file.read_value(&time).unwrap_err();
+        assert_eq!(err.kind(), ErrorKind::LimitExceeded, "{err:?}");
+    }
+
+    /// A NEF whose IFD0 holds its Make, a short Artist and an
+    /// ImageDescription of `description` bytes, which the metadata reads
+    /// with no limit of its own on its length.
+    fn nef_with_description(description: usize) -> Vec<u8> {
+        let mut builder = TiffBuilder::new(Order::Little);
+        let ifd0 = builder.ifd();
+        builder
+            .ascii(ifd0, 0x010F, "NIKON CORPORATION")
+            .ascii(ifd0, 0x013B, "Claude Monet")
+            .ascii(ifd0, 0x010E, &"a".repeat(description));
+        builder.build().bytes
+    }
+
+    #[test]
+    fn the_metadata_is_read_under_the_value_cap_of_the_limits() {
+        let bytes = nef_with_description(300);
+        let read = |limits: Limits| Options::new().limits(limits).from_bytes(&bytes).unwrap();
+
+        // The default cap and a cap of 301 bytes, the value with its NUL,
+        // read the description; a cap of 200 does not, and still reads the
+        // artist, whose value is shorter.
+        for (cap, read_whole) in [(None, true), (Some(301), true), (Some(200), false)] {
+            let limits = cap.map_or_else(Limits::default, |n| {
+                Limits::default().with_max_value_bytes(n)
+            });
+            let mut file = read(limits);
+            let authorship = file.metadata().authorship();
+            assert_eq!(authorship.artist(), Some("Claude Monet"), "{cap:?}");
+            let description = authorship.description().map(str::len);
+            assert_eq!(description, read_whole.then_some(300), "{cap:?}");
+            // The caller's read of the same value goes the same way.
+            let entry = file.entries().entry(Directory::Ifd(0), 0x010E).unwrap();
+            assert_eq!(file.read_value(&entry).is_ok(), read_whole, "{cap:?}");
+        }
+    }
+
+    #[test]
+    fn unlimited_limits_lift_the_cap_on_the_metadatas_values() {
+        // One byte more than the default cap, with the NUL two.
+        let bytes = nef_with_description(1024 * 1024 + 1);
+        let default = RawFile::from_bytes(&bytes).unwrap();
+        assert_eq!(default.metadata().authorship().description(), None);
+        let unlimited = Options::new()
+            .limits(Limits::unlimited())
+            .from_bytes(&bytes)
+            .unwrap();
+        let description = unlimited.metadata().authorship().description();
+        assert_eq!(description.map(str::len), Some(1024 * 1024 + 1));
+    }
+
+    #[test]
+    fn a_make_longer_than_the_value_cap_fails_the_open() {
+        // "NIKON CORPORATION" and its NUL: 18 bytes.
+        let bytes = nef(Order::Little, 8);
+        let make = RawFile::from_bytes(&bytes)
+            .unwrap()
+            .entries()
+            .entry(Directory::Ifd(0), 0x010F)
+            .unwrap();
+        let at = make.byte_range().unwrap().start;
+        for cap in [0, 17] {
+            let limits = Limits::default().with_max_value_bytes(cap);
+            let err = Options::new()
+                .limits(limits)
+                .from_bytes(&bytes)
+                .unwrap_err();
+            assert_eq!(err.kind(), ErrorKind::LimitExceeded, "{cap}: {err:?}");
+            assert_eq!(err.offset(), Some(at), "{cap}");
+        }
+        let limits = Limits::default().with_max_value_bytes(18);
+        assert!(Options::new().limits(limits).from_bytes(&bytes).is_ok());
     }
 
     #[test]

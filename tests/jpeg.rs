@@ -44,10 +44,10 @@ use std::io::Cursor;
 use std::ops::Range;
 
 use raw_files::{
-    Camera, CameraSettings, ColorSpace, DateTime, ErrorKind, Exposure, ExposureProgram, FineTune,
-    Flash, FlashMode, Focus, FocusAreaMode, FocusOrigin, FocusPoint, FocusPoints, Format,
+    Camera, CameraSettings, ColorSpace, DateTime, Directory, ErrorKind, Exposure, ExposureProgram,
+    FineTune, Flash, FlashMode, Focus, FocusAreaMode, FocusOrigin, FocusPoint, FocusPoints, Format,
     ImageArea, Lens, Limits, Make, Metadata, MeteringMode, Options, Orientation, Point, Preview,
-    PreviewFormat, Rational, RawFile, Shutter, SignedRational, Size, WhiteBalance,
+    PreviewFormat, Rational, RawFile, Shutter, SignedRational, Size, Value, WhiteBalance,
     WhiteBalanceMode,
 };
 use support::arw::{
@@ -1844,6 +1844,67 @@ fn a_sony_makernote_under_another_makers_make_is_not_read() {
                 &format!("{make}, {order:?}"),
             );
         }
+    }
+}
+
+#[test]
+fn a_make_longer_than_the_value_cap_costs_a_jpeg_its_make_and_makernote_only() {
+    // The ILCE-7M3's JPEG under a Make of `SONY` padded with spaces, as the
+    // DSLR-A100 pads its own, to 64 bytes with its NUL, longer than every
+    // other value the readers read whole; the MakerNote is read in place.
+    // Under a cap of 64 the file reads whole, the point included. Under 63
+    // the Make cannot be read, so no maker's reader takes the MakerNote:
+    // the file still opens with every preview and every other value.
+    let make = format!("{:<63}", "SONY");
+    let mut lost = SONY_LOST.to_vec();
+    lost.push(MAKE);
+    let without_make = with_camera_changed(camera_metadata_without(&lost), |camera| {
+        camera.with_recorded_model(ILCE7M3_MODEL)
+    })
+    .with_image_size(size_of(ILCE7M3_MAIN));
+    let whole = sony_metadata(
+        SONY_MAKE,
+        ILCE7M3_MODEL,
+        ILCE7M3_MAIN,
+        Some(sony_focus(ILCE7M3_FOCUS_LOCATION)),
+    );
+    for order in ORDERS {
+        let file = ilce7m3_jpeg_with(order, &make, ILCE7M3_MAIN, |_, _| {});
+        let previews = sony_previews(&file, ILCE7M3_MAIN);
+        for (cap, metadata) in [(64, &whole), (63, &without_make)] {
+            assert_opens_with(
+                &Options::new().limits(Limits::default().with_max_value_bytes(cap)),
+                &file.built.bytes,
+                &previews,
+                metadata,
+                &format!("{cap}, {order:?}"),
+            );
+        }
+    }
+}
+
+#[test]
+fn a_jpeg_opens_under_a_value_cap_of_zero_and_its_entries_hold_their_values() {
+    // A JPEG's format is told by its markers, not its Make, so it opens
+    // under any cap. Under a cap of 0 a value its entry holds, such as
+    // IFD0's Orientation, one SHORT, is still read, and every other value
+    // is refused, such as the Make.
+    for order in ORDERS {
+        let file = ilce7m3_jpeg(order, ILCE7M3_MAIN);
+        let options = Options::new().limits(Limits::default().with_max_value_bytes(0));
+        let mut opened = options.from_bytes(&file.built.bytes).unwrap();
+        assert_eq!(opened.format(), Format::Jpeg, "{order:?}");
+        assert_eq!(opened.metadata().focus(), None, "{order:?}");
+        let entries = opened.entries();
+        let orientation = entries.entry(Directory::Ifd(0), 0x0112).unwrap();
+        let make = entries.entry(Directory::Ifd(0), 0x010F).unwrap();
+        assert_eq!(
+            opened.read_value(&orientation).unwrap(),
+            Value::Short(vec![6]),
+            "{order:?}"
+        );
+        let err = opened.read_value(&make).unwrap_err();
+        assert_eq!(err.kind(), ErrorKind::LimitExceeded, "{order:?}");
     }
 }
 
