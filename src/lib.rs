@@ -50,8 +50,9 @@
 //!
 //! The `with_…` methods and the checked constructors, such as
 //! [`Focus::new`], build every metadata value without a file, for a
-//! program's tests. [`Metadata`] shows how. An [`Entry`] comes only from a
-//! file.
+//! program's tests. [`Metadata`] shows how. A constructor that refuses its
+//! arguments returns a [`ValueError`] that names the rule they broke. An
+//! [`Entry`] comes only from a file.
 //!
 //! # Examples
 //!
@@ -120,7 +121,7 @@
 //! let on_preview = file
 //!     .largest_preview()
 //!     .zip(file.metadata().focus())
-//!     .and_then(|(preview, focus)| focus.scaled_to(preview.size()));
+//!     .and_then(|(preview, focus)| focus.scaled_to(preview.size()).ok());
 //! match on_preview {
 //!     Some(focus) => {
 //!         let (center, frame) = (focus.center(), focus.frame());

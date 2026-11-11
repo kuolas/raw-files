@@ -156,12 +156,12 @@ pub fn open(data: &[u8]) {
     read_metadata(file.metadata());
     let largest = file.largest_preview();
     if let (Some(focus), Some(preview)) = (file.metadata().focus(), largest)
-        && let Some(on_preview) = focus.scaled_to(preview.size())
+        && let Ok(on_preview) = focus.scaled_to(preview.size())
     {
         read_focus(&on_preview);
     }
     if let (Some(points), Some(preview)) = (file.metadata().focus_points(), largest)
-        && let Some(on_preview) = points.scaled_to(preview.size())
+        && let Ok(on_preview) = points.scaled_to(preview.size())
     {
         read_focus_points(&on_preview);
     }
@@ -326,13 +326,13 @@ fn read_metadata(metadata: &Metadata) {
     };
     if let Some(focus) = metadata.focus() {
         read_focus(&focus);
-        if let Some(on_tiny) = focus.scaled_to(tiny) {
+        if let Ok(on_tiny) = focus.scaled_to(tiny) {
             read_focus(&on_tiny);
         }
     }
     if let Some(points) = metadata.focus_points() {
         read_focus_points(points);
-        if let Some(on_tiny) = points.scaled_to(tiny) {
+        if let Ok(on_tiny) = points.scaled_to(tiny) {
             read_focus_points(&on_tiny);
         }
     }

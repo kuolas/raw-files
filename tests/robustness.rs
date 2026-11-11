@@ -633,7 +633,7 @@ fn show_metadata(metadata: &Metadata, out: &mut String) {
         // Placed on a small preview's frame, and on its own, which scales
         // by one.
         for frame in [SMALL_FRAME, focus.frame()] {
-            if let Some(scaled) = focus.scaled_to(frame) {
+            if let Ok(scaled) = focus.scaled_to(frame) {
                 show_focus(scaled, out);
             }
         }
@@ -643,7 +643,7 @@ fn show_metadata(metadata: &Metadata, out: &mut String) {
         // Placed on a small preview's frame, and on its own, as the focus
         // is.
         for frame in [SMALL_FRAME, points.frame()] {
-            if let Some(scaled) = points.scaled_to(frame) {
+            if let Ok(scaled) = points.scaled_to(frame) {
                 show_focus_points(&scaled, out);
             }
         }

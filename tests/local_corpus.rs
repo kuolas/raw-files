@@ -684,15 +684,15 @@ impl FocusTally {
     fn record_scaled(&mut self, metadata: &Metadata, preview: Size) {
         if let Some(focus) = metadata.focus() {
             match focus.scaled_to(preview) {
-                Some(scaled) => {
+                Ok(scaled) => {
                     self.scaled_outside_frame +=
                         usize::from(!lies_inside(scaled.center(), scaled.size(), preview));
                 }
-                None => self.not_scaled += 1,
+                Err(_) => self.not_scaled += 1,
             }
         }
         if let Some(list) = metadata.focus_points() {
-            let inside = list.scaled_to(preview).is_some_and(|scaled| {
+            let inside = list.scaled_to(preview).is_ok_and(|scaled| {
                 scaled
                     .points()
                     .iter()

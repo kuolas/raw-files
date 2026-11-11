@@ -30,11 +30,23 @@ use std::fmt;
 ///
 /// # Examples
 ///
-/// ```
-/// use raw_files::ValueError;
+/// A focus area that does not fit around its center, as a test might
+/// build by mistake, and the rule it broke:
 ///
-/// let err = ValueError::CenterOffFrame;
-/// assert_eq!(err.to_string(), "the center lies outside the frame");
+/// ```
+/// use raw_files::{Focus, FocusOrigin, Point, Size, ValueError};
+///
+/// # fn main() -> Result<(), ValueError> {
+/// let frame = Size { width: 100, height: 100 };
+/// let focus = Focus::new(frame, Point { x: 10, y: 50 }, FocusOrigin::Recorded)?;
+/// let err = focus.with_size(Size { width: 30, height: 30 }).unwrap_err();
+/// assert_eq!(err, ValueError::AreaOffFrame);
+/// assert_eq!(
+///     err.to_string(),
+///     "the area does not fit inside the frame around its center"
+/// );
+/// # Ok(())
+/// # }
 /// ```
 #[non_exhaustive]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]

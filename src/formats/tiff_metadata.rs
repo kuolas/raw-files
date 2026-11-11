@@ -514,7 +514,7 @@ fn location<R: Read + Seek>(src: &mut Source<R>, gps: &Ifd) -> Result<Option<Loc
         _ => return Ok(None),
     };
     let Some(latitude) = exact_rationals::<_, 3>(src, gps, GPS_LATITUDE)?
-        .and_then(|[degrees, minutes, seconds]| latitude(degrees, minutes, seconds))
+        .and_then(|[degrees, minutes, seconds]| latitude(degrees, minutes, seconds).ok())
     else {
         return Ok(None);
     };
@@ -524,20 +524,19 @@ fn location<R: Read + Seek>(src: &mut Source<R>, gps: &Ifd) -> Result<Option<Loc
         _ => return Ok(None),
     };
     let Some(longitude) = exact_rationals::<_, 3>(src, gps, GPS_LONGITUDE)?
-        .and_then(|[degrees, minutes, seconds]| longitude(degrees, minutes, seconds))
+        .and_then(|[degrees, minutes, seconds]| longitude(degrees, minutes, seconds).ok())
     else {
         return Ok(None);
     };
 
-    let altitude = match one_byte(src, gps, GPS_ALTITUDE_REF)? {
-        Some(0 | 2) => {
-            exact_rationals::<_, 1>(src, gps, GPS_ALTITUDE)?.and_then(|[m]| Altitude::above(m))
-        }
-        Some(1 | 3) => {
-            exact_rationals::<_, 1>(src, gps, GPS_ALTITUDE)?.and_then(|[m]| Altitude::below(m))
-        }
-        _ => None,
-    };
+    let altitude =
+        match one_byte(src, gps, GPS_ALTITUDE_REF)? {
+            Some(0 | 2) => exact_rationals::<_, 1>(src, gps, GPS_ALTITUDE)?
+                .and_then(|[m]| Altitude::above(m).ok()),
+            Some(1 | 3) => exact_rationals::<_, 1>(src, gps, GPS_ALTITUDE)?
+                .and_then(|[m]| Altitude::below(m).ok()),
+            _ => None,
+        };
     let time = match skip_damage(gps.ascii_bytes(src, GPS_DATE_STAMP))?.flatten() {
         Some(date) => exact_rationals::<_, 3>(src, gps, GPS_TIME_STAMP)?.and_then(|time| {
             DateTime::from_gps(
@@ -554,7 +553,7 @@ fn location<R: Read + Seek>(src: &mut Source<R>, gps: &Ifd) -> Result<Option<Loc
     };
     let image_direction = match north {
         Some(north) => exact_rationals::<_, 1>(src, gps, GPS_IMG_DIRECTION)?
-            .and_then(|[degrees]| Direction::new(degrees, north)),
+            .and_then(|[degrees]| Direction::new(degrees, north).ok()),
         None => None,
     };
     Ok(Some(Location {
@@ -825,7 +824,7 @@ fn signed_rational<R: Read + Seek>(
     let first = skip_damage(ifd.srationals(src, tag))?
         .flatten()
         .and_then(|values| values.first().copied());
-    Ok(first.and_then(|(numerator, denominator)| SignedRational::new(numerator, denominator)))
+    Ok(first.and_then(|(numerator, denominator)| SignedRational::new(numerator, denominator).ok()))
 }
 
 /// The lens the picture was taken with, from the Exif IFD `exif`: its
@@ -4653,10 +4652,11 @@ mod tests {
     /// The location [`NIKON_GPS`] records.
     fn nikon_location() -> Location {
         Location {
-            altitude: Altitude::above(fraction(35_050, 1000)),
+            altitude: Altitude::above(fraction(35_050, 1000)).ok(),
             time: DateTime::new(2024, 5, 1, 8, 20, 30)
                 .and_then(|time| time.with_subseconds(450_000_000, 2))
-                .and_then(|time| time.with_offset_minutes(0)),
+                .and_then(|time| time.with_offset_minutes(0))
+                .ok(),
             ..Location::new(
                 Latitude::north(fraction(48, 1), fraction(514_933, 10_000), fraction(0, 1))
                     .unwrap(),
@@ -4671,7 +4671,8 @@ mod tests {
         let sony = Location {
             time: DateTime::new(2024, 5, 1, 13, 5, 21)
                 .and_then(|time| time.with_subseconds(450_000_000, 3))
-                .and_then(|time| time.with_offset_minutes(0)),
+                .and_then(|time| time.with_offset_minutes(0))
+                .ok(),
             map_datum: Some("WGS-84".to_owned()),
             ..Location::new(
                 Latitude::north(fraction(40, 1), fraction(41, 1), fraction(21_400, 1000)).unwrap(),
@@ -4795,8 +4796,8 @@ mod tests {
                 .altitude()
         };
         let meters = Some(Gps::Rationals(&[(35_050, 1000)]));
-        let above = Altitude::above(fraction(35_050, 1000));
-        let below = Altitude::below(fraction(35_050, 1000));
+        let above = Altitude::above(fraction(35_050, 1000)).ok();
+        let below = Altitude::below(fraction(35_050, 1000)).ok();
         assert_eq!(altitude(Some(Gps::Byte(&[0])), meters), above);
         assert_eq!(altitude(Some(Gps::Byte(&[1])), meters), below);
         assert_eq!(altitude(Some(Gps::Byte(&[2])), meters), above);
@@ -4804,7 +4805,7 @@ mod tests {
         // Zero meters is a real altitude.
         assert_eq!(
             altitude(Some(Gps::Byte(&[0])), Some(Gps::Rationals(&[(0, 1)]))),
-            Altitude::above(fraction(0, 1))
+            Altitude::above(fraction(0, 1)).ok()
         );
         for (label, reference, meters) in [
             ("a reference of 4", Some(Gps::Byte(&[4])), meters),
@@ -4930,18 +4931,18 @@ mod tests {
         let degrees = Some(Gps::Rationals(&[(27_550, 100)]));
         assert_eq!(
             direction(Some(Gps::Ascii("M")), degrees),
-            Direction::new(fraction(27_550, 100), North::Magnetic)
+            Direction::new(fraction(27_550, 100), North::Magnetic).ok()
         );
         assert_eq!(
             direction(
                 Some(Gps::Ascii("T")),
                 Some(Gps::Rationals(&[(35_999, 100)]))
             ),
-            Direction::new(fraction(35_999, 100), North::True)
+            Direction::new(fraction(35_999, 100), North::True).ok()
         );
         assert_eq!(
             direction(Some(Gps::Ascii("T")), Some(Gps::Rationals(&[(0, 1)]))),
-            Direction::new(fraction(0, 1), North::True)
+            Direction::new(fraction(0, 1), North::True).ok()
         );
         for (label, reference, degrees) in [
             ("no reference", None, degrees),
@@ -5062,7 +5063,7 @@ mod tests {
         let tags = with_gps(&tags, GPS_IMG_DIRECTION_REF, Some(Gps::Ascii("T")));
         let tags = with_gps(&tags, GPS_IMG_DIRECTION, Some(Gps::Rationals(&[(275, 1)])));
         let whole = Location {
-            image_direction: Direction::new(fraction(275, 1), North::True),
+            image_direction: Direction::new(fraction(275, 1), North::True).ok(),
             map_datum: Some("WGS-84".to_owned()),
             ..nikon_location()
         };

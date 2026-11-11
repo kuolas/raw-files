@@ -497,7 +497,7 @@ fn focus<R: Read + Seek>(src: &mut Source<R>, makernote: &MakerNote) -> Result<O
         found = location(src, makernote, FOCUS_LOCATION2)?;
     }
     let Some(focus) =
-        found.and_then(|(frame, center)| Focus::new(frame, center, FocusOrigin::Recorded))
+        found.and_then(|(frame, center)| Focus::new(frame, center, FocusOrigin::Recorded).ok())
     else {
         return Ok(None);
     };
@@ -505,7 +505,7 @@ fn focus<R: Read + Seek>(src: &mut Source<R>, makernote: &MakerNote) -> Result<O
     // none with a zero side, so this one is a record that cannot be used,
     // which gives no focus on every format, as ADR012 decides.
     Ok(match area(src, makernote)? {
-        Some(size) => focus.with_size(size),
+        Some(size) => focus.with_size(size).ok(),
         None => Some(focus),
     })
 }
@@ -721,8 +721,8 @@ fn fine_tune<R: Read + Seek>(
 /// fit. No file checked holds it; the reader refuses it rather than make
 /// up a shift.
 fn fine_tune_of(blue_amber: i32, green_magenta: i32) -> Option<FineTune> {
-    let amber_blue = SignedRational::new(blue_amber.checked_neg()?, 1)?;
-    let green_magenta = SignedRational::new(green_magenta, 1)?;
+    let amber_blue = SignedRational::new(blue_amber.checked_neg()?, 1).ok()?;
+    let green_magenta = SignedRational::new(green_magenta, 1).ok()?;
     Some(FineTune::new(amber_blue, green_magenta))
 }
 
