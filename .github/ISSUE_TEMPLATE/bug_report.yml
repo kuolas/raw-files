@@ -43,10 +43,10 @@ body:
       label: Sample file
       description: Most RAW bugs need the file to reproduce. Attach it (zipped) or link to it. **Anything you attach is public** — only share a photo you are happy for anyone to see and use.
   - type: input
-    id: commit
+    id: version
     attributes:
-      label: Commit
-      description: Nothing has been released yet, so the commit you built is the version — `git rev-parse --short HEAD`.
+      label: Version
+      description: The raw-files version you use, as `cargo tree -i raw-files` or your `Cargo.lock` shows it. If you built raw-files from git, give the commit instead — `git rev-parse --short HEAD`.
     validations:
       required: true
   - type: input
