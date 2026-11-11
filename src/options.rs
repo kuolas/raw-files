@@ -17,7 +17,8 @@ use crate::limits::Limits;
 /// [`RawFile::open`], [`RawFile::from_bytes`] and [`RawFile::from_reader`]
 /// do: `RawFile::open(path)` is `Options::new().open(path)`. Build an
 /// `Options` to open files with other limits; more options will join them
-/// as the library grows.
+/// as the library grows. `Options` is not `Copy`, so that a later option
+/// that cannot be copied does not break callers.
 ///
 /// # Examples
 ///
