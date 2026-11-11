@@ -161,6 +161,25 @@ does.
 
   The codes are the same
   ([#150](https://github.com/kuolas/raw-files/issues/150)).
+- `Latitude::to_degrees()` and `Longitude::to_degrees()` are now
+  `to_decimal_degrees()`, which breaks their callers. `degrees()`
+  beside them gives only the degrees part as recorded, and the `f64`
+  returned has std's own `to_degrees`, which converts radians:
+
+  ```rust
+  // 0.9.0
+  let (lat, lon) = (location.latitude().to_degrees(), location.longitude().to_degrees());
+
+  // 0.10.0
+  let (lat, lon) = (
+      location.latitude().to_decimal_degrees(),
+      location.longitude().to_decimal_degrees(),
+  );
+  ```
+
+  The numbers are the same. `Altitude::to_meters` keeps its name, since
+  `meters()` beside it is the whole value
+  ([#150](https://github.com/kuolas/raw-files/issues/150)).
 
 ## [0.9.0] - 2026-11-10
 

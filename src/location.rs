@@ -34,10 +34,10 @@ use crate::value_error::ValueError;
 ///
 /// The position is as the file records it: each coordinate keeps the
 /// degrees, minutes and seconds the file wrote, as fractions, and its
-/// hemisphere; [`Latitude::to_degrees`] and [`Longitude::to_degrees`] give
-/// decimal degrees for a map. Exif's GPS tags may also hold a position
-/// from another satellite system or from a mobile network: the file does
-/// not say which gave it.
+/// hemisphere; [`Latitude::to_decimal_degrees`] and
+/// [`Longitude::to_decimal_degrees`] give decimal degrees for a map.
+/// Exif's GPS tags may also hold a position from another satellite system
+/// or from a mobile network: the file does not say which gave it.
 ///
 /// A location names a place, and raw-files gives it as the file records
 /// it: nothing is rounded or hidden, and there is no option to hide it. A
@@ -78,8 +78,8 @@ use crate::value_error::ValueError;
 ///     .with_time(DateTime::new(2026, 6, 21, 10, 15, 30)?.with_offset_minutes(0)?);
 ///
 /// assert_eq!(location.latitude().minutes(), Rational::new(514_933, 10_000)?);
-/// assert!((location.latitude().to_degrees() - 48.858_22).abs() < 1e-5);
-/// assert!((location.longitude().to_degrees() - 2.294_5).abs() < 1e-5);
+/// assert!((location.latitude().to_decimal_degrees() - 48.858_22).abs() < 1e-5);
+/// assert!((location.longitude().to_decimal_degrees() - 2.294_5).abs() < 1e-5);
 /// assert_eq!(location.altitude().map(Altitude::to_meters), Some(35.0));
 /// assert_eq!(location.map_datum(), None);
 /// # Ok(())
@@ -230,8 +230,9 @@ impl Location {
 /// differently: degrees and minutes with four decimals and no seconds
 /// (`48/1, 514933/10000, 0/1`), as Nikon does, or degrees, minutes and
 /// seconds with three decimals (`48/1, 51/1, 29600/1000`), as Sony does.
-/// The fractions are kept as written; [`to_degrees`](Self::to_degrees)
-/// gives the decimal degrees a map takes.
+/// The fractions are kept as written;
+/// [`to_decimal_degrees`](Self::to_decimal_degrees) gives the decimal
+/// degrees a map takes.
 ///
 /// [`north`](Self::north) and [`south`](Self::south) build one and refuse
 /// three fractions that name no latitude.
@@ -242,8 +243,9 @@ impl Location {
 /// are the same as recorded, as for [`Rational`]: minutes of 30/1 are not
 /// equal to 300000/10000, and 0° north is not equal to 0° south. There is
 /// no `Ord`, since an order by angle would disagree with that equality;
-/// sort by [`to_degrees`](Self::to_degrees) to order by angle. There is no
-/// `Display` either: a program formats degrees as it shows them.
+/// sort by [`to_decimal_degrees`](Self::to_decimal_degrees) to order by
+/// angle. There is no `Display` either: a program formats degrees as it
+/// shows them.
 ///
 /// # Examples
 ///
@@ -260,7 +262,7 @@ impl Location {
 /// )?;
 /// assert!(!latitude.is_south());
 /// assert_eq!(latitude.seconds(), Rational::new(29_600, 1000)?);
-/// assert!((latitude.to_degrees() - 48.858_22).abs() < 1e-5);
+/// assert!((latitude.to_decimal_degrees() - 48.858_22).abs() < 1e-5);
 /// // Minutes of 60 name no latitude.
 /// assert_eq!(
 ///     Latitude::north(Rational::new(48, 1)?, Rational::new(60, 1)?, Rational::new(0, 1)?),
@@ -347,8 +349,8 @@ impl Latitude {
     /// The latitude in decimal degrees, negative to the south, as a map
     /// takes it: the degrees, plus the minutes over 60 and the seconds
     /// over 3600. 48° 51.4933′ north gives about 48.85822.
-    pub fn to_degrees(self) -> f64 {
-        signed(self.angle.to_degrees(), self.south)
+    pub fn to_decimal_degrees(self) -> f64 {
+        signed(self.angle.to_decimal_degrees(), self.south)
     }
 }
 
@@ -357,9 +359,9 @@ impl Latitude {
 /// hemisphere.
 ///
 /// It is kept as [`Latitude`] is, as written, and
-/// [`to_degrees`](Self::to_degrees) gives decimal degrees. [`east`](Self::east)
-/// and [`west`](Self::west) build one and refuse three fractions that name
-/// no longitude.
+/// [`to_decimal_degrees`](Self::to_decimal_degrees) gives decimal degrees.
+/// [`east`](Self::east) and [`west`](Self::west) build one and refuse
+/// three fractions that name no longitude.
 ///
 /// # Equality
 ///
@@ -381,7 +383,7 @@ impl Latitude {
 ///     Rational::new(0, 1)?,
 /// )?;
 /// assert!(longitude.is_west());
-/// assert!((longitude.to_degrees() + 74.044_45).abs() < 1e-5);
+/// assert!((longitude.to_decimal_degrees() + 74.044_45).abs() < 1e-5);
 /// # Ok(())
 /// # }
 /// ```
@@ -459,8 +461,8 @@ impl Longitude {
     /// The longitude in decimal degrees, negative to the west, as a map
     /// takes it: the degrees, plus the minutes over 60 and the seconds
     /// over 3600.
-    pub fn to_degrees(self) -> f64 {
-        signed(self.angle.to_degrees(), self.west)
+    pub fn to_decimal_degrees(self) -> f64 {
+        signed(self.angle.to_decimal_degrees(), self.west)
     }
 }
 
@@ -748,7 +750,7 @@ impl Angle {
     }
 
     /// The angle in decimal degrees.
-    fn to_degrees(self) -> f64 {
+    fn to_decimal_degrees(self) -> f64 {
         self.degrees.to_f64() + self.minutes.to_f64() / 60.0 + self.seconds.to_f64() / 3600.0
     }
 }
@@ -923,15 +925,15 @@ mod tests {
     #[test]
     fn zero_is_a_real_coordinate() {
         let equator = Latitude::north(r(0, 1), r(0, 1), r(0, 1)).unwrap();
-        assert_eq!(equator.to_degrees(), 0.0);
+        assert_eq!(equator.to_decimal_degrees(), 0.0);
         let meridian = Longitude::west(r(0, 1), r(0, 1), r(0, 1)).unwrap();
-        assert_eq!(meridian.to_degrees(), 0.0);
+        assert_eq!(meridian.to_decimal_degrees(), 0.0);
         // Zero to the south or west, or below, is no negative zero: it
         // prints without a minus sign.
         let south = Latitude::south(r(0, 1), r(0, 1), r(0, 1)).unwrap();
         for zero in [
-            south.to_degrees(),
-            meridian.to_degrees(),
+            south.to_decimal_degrees(),
+            meridian.to_decimal_degrees(),
             Altitude::below(r(0, 1)).unwrap().to_meters(),
         ] {
             assert!(zero.is_sign_positive(), "{zero}");
@@ -943,21 +945,21 @@ mod tests {
 
     #[test]
     fn decimal_degrees_are_negative_to_the_south_and_west() {
-        let north = tower_latitude().to_degrees();
+        let north = tower_latitude().to_decimal_degrees();
         assert!((north - 48.858_221_666).abs() < 1e-9, "{north}");
         let south = Latitude::south(r(33, 1), r(51, 1), r(31_000, 1000)).unwrap();
-        assert!((south.to_degrees() + 33.858_611_111).abs() < 1e-9);
-        let east = tower_longitude().to_degrees();
+        assert!((south.to_decimal_degrees() + 33.858_611_111).abs() < 1e-9);
+        let east = tower_longitude().to_decimal_degrees();
         assert!((east - 2.294_5).abs() < 1e-9, "{east}");
         let west = Longitude::west(r(74, 1), r(2, 1), r(40_002, 1000)).unwrap();
-        assert!((west.to_degrees() + 74.044_445).abs() < 1e-9);
+        assert!((west.to_decimal_degrees() + 74.044_445).abs() < 1e-9);
     }
 
     #[test]
     fn equality_is_of_what_is_recorded() {
         let thirty = Latitude::north(r(10, 1), r(30, 1), r(0, 1)).unwrap();
         let decimals = Latitude::north(r(10, 1), r(300_000, 10_000), r(0, 1)).unwrap();
-        assert_eq!(thirty.to_degrees(), decimals.to_degrees());
+        assert_eq!(thirty.to_decimal_degrees(), decimals.to_decimal_degrees());
         assert_ne!(thirty, decimals);
         assert_ne!(
             Latitude::north(r(10, 1), r(30, 1), r(0, 1)),

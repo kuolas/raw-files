@@ -266,8 +266,8 @@ impl Metadata {
     /// if let Some(location) = file.metadata().location() {
     ///     println!(
     ///         "at {:.5}, {:.5}",
-    ///         location.latitude().to_degrees(),
-    ///         location.longitude().to_degrees()
+    ///         location.latitude().to_decimal_degrees(),
+    ///         location.longitude().to_decimal_degrees()
     ///     );
     ///     if let Some(altitude) = location.altitude() {
     ///         println!("{:.0} m", altitude.to_meters());
