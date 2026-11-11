@@ -37,6 +37,10 @@ does.
     `malformed file`, so that it reads in front of an error's own
     text: `malformed file: bad tag at byte 12`. An error's own text
     still does not name its category.
+- `Size::area` gives how many pixels a size has, as a `u64` that
+  cannot overflow. `Size`'s docs already told a caller to compare areas
+  to tell which of two pictures is larger, since sizes order by width
+  first ([#150](https://github.com/kuolas/raw-files/issues/150)).
 
 ### Changed
 

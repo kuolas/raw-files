@@ -11,7 +11,8 @@ use std::fmt;
 /// this size with its width and height exchanged.
 ///
 /// Sizes order by width, then by height, so that they can key a map or be
-/// sorted; to compare how large two pictures are, compare their areas.
+/// sorted; to compare how large two pictures are, compare their
+/// [`area`](Self::area)s.
 ///
 /// As text ([`Display`](fmt::Display)), a size is its width and its height
 /// around a plain `x`, `8256x5504`, as command-line tools write sizes: the
@@ -50,7 +51,24 @@ pub struct Size {
 impl Size {
     /// How many pixels an image of this size has. It is a `u64`, so it
     /// cannot overflow: two `u32`s multiplied always fit.
-    pub(crate) fn area(self) -> u64 {
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use raw_files::Size;
+    ///
+    /// let z9 = Size { width: 8256, height: 5504 };
+    /// assert_eq!(z9.area(), 45_441_024);
+    /// // Wider is not larger: 8256 × 5504 orders after 6000 × 9000, yet
+    /// // has fewer pixels.
+    /// let tall = Size { width: 6000, height: 9000 };
+    /// assert!(z9 > tall && z9.area() < tall.area());
+    /// // The largest sides there are do not overflow.
+    /// let largest = Size { width: u32::MAX, height: u32::MAX };
+    /// assert_eq!(largest.area(), 18_446_744_065_119_617_025);
+    /// ```
+    #[must_use]
+    pub fn area(self) -> u64 {
         u64::from(self.width) * u64::from(self.height)
     }
 
