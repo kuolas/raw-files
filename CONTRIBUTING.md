@@ -122,7 +122,8 @@ Please **don't** report security problems in a public issue. See
 Pull requests come from contributors. While the project is young, a pull
 request from someone who is not one yet is closed with a link to this section,
 however good the change. Sample files and test shots are welcome from anyone,
-through an issue.
+through an issue. The [sample files page](docs/formats/sample-files.md) says
+how to propose a sample file.
 
 You become a contributor by taking part first:
 
