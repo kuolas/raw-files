@@ -28,7 +28,7 @@
 /// assert_eq!(limits.max_preview_bytes(), 32 * 1024 * 1024);
 /// assert_eq!(limits.max_ifds(), Limits::default().max_ifds());
 /// ```
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct Limits {
     max_ifds: u32,
     max_ifd_entries: u32,
@@ -109,23 +109,23 @@ impl Limits {
 
     /// How many IFDs, the directories of a TIFF-based file, are visited
     /// per file at most.
-    pub fn max_ifds(&self) -> u32 {
+    pub fn max_ifds(self) -> u32 {
         self.max_ifds
     }
 
     /// How many entries one IFD may hold at most.
-    pub fn max_ifd_entries(&self) -> u32 {
+    pub fn max_ifd_entries(self) -> u32 {
         self.max_ifd_entries
     }
 
     /// How deeply SubIFDs may nest at most.
-    pub fn max_ifd_depth(&self) -> u32 {
+    pub fn max_ifd_depth(self) -> u32 {
         self.max_ifd_depth
     }
 
     /// How many bytes one preview may take at most, which is the most that
     /// `read_preview` will allocate.
-    pub fn max_preview_bytes(&self) -> u64 {
+    pub fn max_preview_bytes(self) -> u64 {
         self.max_preview_bytes
     }
 
@@ -155,7 +155,7 @@ impl Limits {
     ///
     /// The default holds every value measured on camera files, the largest
     /// a whole MakerNote of under 1,000,000 bytes.
-    pub fn max_value_bytes(&self) -> u64 {
+    pub fn max_value_bytes(self) -> u64 {
         self.max_value_bytes
     }
 }
@@ -285,7 +285,15 @@ mod tests {
             ),
             (1, 2, 3, 4, 5)
         );
-        assert_eq!(limits.clone(), limits);
+    }
+
+    #[test]
+    fn limits_is_copy() {
+        fn copied<T: Copy>(value: &T) -> T {
+            *value
+        }
+        let limits = Limits::default().with_max_ifds(7);
+        assert_eq!(copied(&limits), limits);
     }
 
     #[test]

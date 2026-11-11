@@ -205,6 +205,25 @@ does.
   The directories and their entries are the same, in the same order.
   `in_directory` of a directory the file lacks is an empty slice
   ([#150](https://github.com/kuolas/raw-files/issues/150)).
+- `Limits` is `Copy`, and its five getters, such as `Limits::max_ifds`,
+  take `self` where they took `&self`. A getter called by path with a
+  reference breaks:
+
+  ```rust
+  // 0.9.0
+  let caps: Vec<u32> = all_limits.iter().map(Limits::max_ifds).collect();
+
+  // 0.10.0
+  let caps: Vec<u32> = all_limits.iter().copied().map(Limits::max_ifds).collect();
+  ```
+
+  So, rarely, does a closure without `move` that uses a `Limits` by
+  value: it now borrows the value where it moved it, so it cannot
+  outlive it. `Limits` holds only numbers, so a caller no longer clones
+  it to open files with the same caps through several `Options`.
+  `Options::limits()`, new in this release, gives it by value.
+  `Options` stays only `Clone`, so that an option that cannot be copied
+  can join it ([#150](https://github.com/kuolas/raw-files/issues/150)).
 
 ## [0.9.0] - 2026-11-10
 
