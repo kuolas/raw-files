@@ -700,7 +700,7 @@ impl Entry {
     /// which the readers compare with the constants of
     /// [`types`](super::types).
     pub(crate) fn typ(&self) -> u16 {
-        self.field_type.code()
+        self.field_type.to_code()
     }
 
     /// The number of values, as written.
