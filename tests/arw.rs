@@ -309,7 +309,7 @@ fn assert_the_arw4_focus(metadata: &Metadata, label: &str) {
     let primary = points
         .primary()
         .unwrap_or_else(|| panic!("{label}: no primary"));
-    assert_eq!(Some(primary), points.points().first(), "{label}");
+    assert_eq!(Some(&primary), points.points().first(), "{label}");
     assert_eq!(primary.number(), None, "{label}");
     assert_eq!(points.origin(), FocusOrigin::Recorded, "{label}");
     assert_eq!(points.area_mode(), None, "{label}");

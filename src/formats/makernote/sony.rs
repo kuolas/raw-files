@@ -2377,7 +2377,11 @@ mod tests {
             // area mode.
             let points = found.focus_points().expect("a list");
             assert_eq!(points.points().len(), 1, "{order:?}");
-            assert_eq!(points.primary(), points.points().first(), "{order:?}");
+            assert_eq!(
+                points.primary(),
+                points.points().first().copied(),
+                "{order:?}"
+            );
             assert_eq!(points.primary().unwrap().number(), None, "{order:?}");
             assert_eq!(points.origin(), FocusOrigin::Recorded, "{order:?}");
             assert_eq!(points.area_mode(), None, "{order:?}");

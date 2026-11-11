@@ -4803,12 +4803,8 @@ mod tests {
                     panic!("{label}: {points:?}");
                 };
                 assert_eq!(only.number(), None, "{label}");
-                assert!(
-                    points
-                        .primary()
-                        .is_some_and(|primary| std::ptr::eq(primary, only)),
-                    "{label}"
-                );
+                assert_eq!(points.primary_index(), Some(0), "{label}");
+                assert_eq!(points.primary(), Some(*only), "{label}");
                 let [width, height] = recorded.frame.map(u32::from);
                 assert_eq!(points.frame(), Size { width, height }, "{label}");
                 assert_eq!(points.origin(), FocusOrigin::Recorded, "{label}");
@@ -5297,7 +5293,7 @@ mod tests {
             let numbers: Vec<Option<u16>> =
                 points.points().iter().map(FocusPoint::number).collect();
             assert_eq!(numbers, (1..=39).map(Some).collect::<Vec<_>>(), "{order:?}");
-            assert_eq!(points.primary().and_then(FocusPoint::number), Some(38));
+            assert_eq!(points.primary().and_then(|point| point.number()), Some(38));
             // An empty mask, or one whose bits the table lacks: the primary
             // alone.
             let alone = placed_list([6016, 4016], &[B1], 38, FocusAreaMode::Single);

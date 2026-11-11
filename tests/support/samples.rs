@@ -15,9 +15,8 @@ use std::path::{Path, PathBuf};
 
 use raw_files::{
     Camera, ColorSpace, Directory, ExposureProgram, FieldType, FlashMode, FocusAreaMode,
-    FocusOrigin, FocusPoint, Format, ImageArea, Make, MeteringMode, Orientation, Preview,
-    PreviewFormat, Rational, RawFile, RawImageSize, Shutter, SignedRational, Size,
-    WhiteBalanceMode,
+    FocusOrigin, Format, ImageArea, Make, MeteringMode, Orientation, Preview, PreviewFormat,
+    Rational, RawFile, RawImageSize, Shutter, SignedRational, Size, WhiteBalanceMode,
 };
 
 /// The path of the sample file `name`, or `None`, with a note on stderr,
@@ -600,7 +599,7 @@ pub fn check_metadata(expected: &SampleMetadata, format: Format) {
         (
             points.origin(),
             points.points().len(),
-            points.primary().and_then(FocusPoint::number),
+            points.primary().and_then(|point| point.number()),
             points.area_mode(),
         )
     });
