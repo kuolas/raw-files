@@ -897,7 +897,7 @@ const UNCALIBRATED: u16 = 0xFFFF;
 /// Exif gives the index only the meaning "DCF option file"; that such a
 /// file is in Adobe RGB is from ExifTool's published documentation of the
 /// tag, read as documentation, and the camera files the JPEG format notes
-/// checked agree (section 4 of those notes, and ADR011).
+/// checked agree (section 4 of those notes). ADR011 reads it so.
 const DCF_OPTION_FILE: &str = "R03";
 
 /// How the camera was set for the picture, as the Exif IFD `exif` records
