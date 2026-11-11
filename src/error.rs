@@ -8,6 +8,27 @@ use std::io;
 
 /// A specialized [`Result`](std::result::Result) whose error defaults to
 /// raw-files' [`Error`].
+///
+/// # Examples
+///
+/// A function that opens a file returns `Result<T>`, and `?` passes the
+/// error on. The error type can also be named, as for a constructor that
+/// refuses its arguments:
+///
+/// ```
+/// use raw_files::{ErrorKind, Rational, RawFile, Result, ValueError};
+///
+/// /// How many previews a file holds.
+/// fn preview_count(bytes: &[u8]) -> Result<usize> {
+///     Ok(RawFile::from_bytes(bytes)?.previews().len())
+/// }
+///
+/// let err = preview_count(b"not a camera file").unwrap_err();
+/// assert_eq!(err.kind(), ErrorKind::UnknownFormat);
+///
+/// let refused: Result<Rational, ValueError> = Rational::new(1, 0);
+/// assert_eq!(refused, Err(ValueError::ZeroDenominator));
+/// ```
 pub type Result<T, E = Error> = std::result::Result<T, E>;
 
 /// An error from reading a camera file, a RAW file or a JPEG.
@@ -16,6 +37,9 @@ pub type Result<T, E = Error> = std::result::Result<T, E>;
 /// [`offset()`](Error::offset) says where in the file, when that is known.
 /// An error that came from the reader keeps the [`io::Error`] as its
 /// [`source()`](std::error::Error::source).
+///
+/// `Error` is neither `Clone` nor `PartialEq`, since the [`io::Error`] it
+/// may keep is neither. Compare errors by their [`kind()`](Error::kind).
 ///
 /// # Examples
 ///

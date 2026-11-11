@@ -431,6 +431,9 @@ impl Entry {
 ///
 /// New variants may be added with new field types.
 ///
+/// `Value` has no `Eq` or `Hash`, because FLOAT and DOUBLE values are
+/// floating-point numbers, and a NaN is not equal to itself.
+///
 /// # Examples
 ///
 /// A short form of a value, for a list of entries:
