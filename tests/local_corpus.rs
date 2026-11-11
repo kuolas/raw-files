@@ -477,10 +477,10 @@ impl EntriesTally {
     /// Counts the entries of `raw` and reads every value.
     fn record<R: Read + Seek>(&mut self, raw: &mut RawFile<R>) {
         let entries = raw.entries().clone();
-        for directory in entries.directories() {
+        for &directory in entries.directories() {
             let counts = self.directories.entry(directory.to_string()).or_default();
             counts.0 += 1;
-            counts.1 += entries.in_directory(directory).count();
+            counts.1 += entries.in_directory(directory).len();
             counts.2 += u64::from(entries.skipped(directory));
         }
         for entry in &entries {

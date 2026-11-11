@@ -2876,6 +2876,7 @@ mod tests {
     fn tags_in(entries: &Entries, directory: Directory) -> Vec<u16> {
         entries
             .in_directory(directory)
+            .iter()
             .map(crate::Entry::tag)
             .collect()
     }
@@ -2912,7 +2913,7 @@ mod tests {
                 let (mut src, makernote) = makernote_at(&with_block(order, &block), pos);
                 let view = view_of(&makernote);
                 let what = format!("{order:?}, {pos}");
-                let directories: Vec<Directory> = view.directories().collect();
+                let directories: Vec<Directory> = view.directories().to_vec();
                 assert_eq!(directories, [Directory::MakerNote, PREVIEW], "{what}");
                 assert_eq!(
                     tags_in(&view, Directory::MakerNote),
@@ -3049,7 +3050,7 @@ mod tests {
             let block = block(order, Change::PointerOutOfLine);
             let (_, makernote) = makernote_at(&with_block(order, &block), 0);
             let view = view_of(&makernote);
-            let directories: Vec<Directory> = view.directories().collect();
+            let directories: Vec<Directory> = view.directories().to_vec();
             assert_eq!(directories, [Directory::MakerNote], "{order:?}");
             assert_eq!(
                 tags_in(&view, Directory::MakerNote),
@@ -3072,7 +3073,7 @@ mod tests {
             let mut entries = Entries::new();
             entries.push(Directory::Ifd(1), &makernote.ifd);
             makernote.add_entries(&mut entries);
-            let directories: Vec<Directory> = entries.directories().collect();
+            let directories: Vec<Directory> = entries.directories().to_vec();
             assert_eq!(directories, [Directory::Ifd(1)], "{order:?}");
         }
     }
@@ -3088,7 +3089,7 @@ mod tests {
             let (_, makernote) = makernote_at(&with_block(order, &block), 0);
             assert!(makernote.preview.is_some(), "{order:?}");
             let view = view_of(&makernote);
-            let directories: Vec<Directory> = view.directories().collect();
+            let directories: Vec<Directory> = view.directories().to_vec();
             assert_eq!(directories, [Directory::MakerNote], "{order:?}");
         }
     }

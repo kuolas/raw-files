@@ -180,6 +180,27 @@ does.
   The numbers are the same. `Altitude::to_meters` keeps its name, since
   `meters()` beside it is the whole value
   ([#150](https://github.com/kuolas/raw-files/issues/150)).
+- `Entries::directories` returns `&[Directory]` and
+  `Entries::in_directory` returns `&[Entry]`, where they returned
+  iterators, which breaks code that calls an iterator's methods on
+  them or iterates the directories by value. Every list of the API is
+  now a slice, as `RawFile::previews` is, with a length and indexing:
+
+  ```rust
+  // 0.9.0
+  for directory in entries.directories() {
+      let count = entries.in_directory(directory).count();
+  }
+
+  // 0.10.0
+  for &directory in entries.directories() {
+      let count = entries.in_directory(directory).len();
+  }
+  ```
+
+  The directories and their entries are the same, in the same order.
+  `in_directory` of a directory the file lacks is an empty slice
+  ([#150](https://github.com/kuolas/raw-files/issues/150)).
 
 ## [0.9.0] - 2026-11-10
 

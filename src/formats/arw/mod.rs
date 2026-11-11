@@ -460,7 +460,7 @@ mod tests {
         let parsed = parse(&mut src, &tree, &Limits::default()).unwrap();
         let entries = &parsed.entries;
         assert_eq!(
-            entries.directories().collect::<Vec<_>>(),
+            entries.directories(),
             [Directory::Ifd(0), Directory::Exif, Directory::Gps]
         );
         assert!(entries.entry(Directory::Ifd(0), MAKE).is_some());
@@ -541,7 +541,7 @@ mod tests {
             let parsed = parse(&mut src, &tree, &Limits::default()).unwrap();
             let entries = &parsed.entries;
             assert_eq!(
-                entries.directories().collect::<Vec<_>>(),
+                entries.directories(),
                 [
                     Directory::Ifd(0),
                     Directory::Exif,
@@ -552,6 +552,7 @@ mod tests {
             );
             let tags: Vec<u16> = entries
                 .in_directory(Directory::Private)
+                .iter()
                 .map(crate::Entry::tag)
                 .collect();
             assert_eq!(
@@ -586,7 +587,7 @@ mod tests {
                 let (mut src, tree) = with_private(order, target);
                 let parsed = parse(&mut src, &tree, &limits).unwrap();
                 assert_eq!(
-                    parsed.entries.directories().collect::<Vec<_>>(),
+                    parsed.entries.directories(),
                     [Directory::Ifd(0), Directory::Exif, Directory::MakerNote],
                     "{order:?}, {target:?}, {limits:?}"
                 );
@@ -603,7 +604,7 @@ mod tests {
         for order in ORDERS {
             let (mut src, tree) = with_private_typed(order, Target::Private, UNDEFINED);
             let parsed = parse(&mut src, &tree, &Limits::default()).unwrap();
-            let found = parsed.entries.directories().collect::<Vec<_>>();
+            let found = parsed.entries.directories();
             assert!(!found.contains(&Directory::Private), "{order:?}");
             assert!(found.contains(&Directory::MakerNote), "{order:?}");
         }

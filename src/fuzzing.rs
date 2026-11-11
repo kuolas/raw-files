@@ -174,9 +174,9 @@ pub fn open(data: &[u8]) {
         let _ = file.read_preview_into(&preview, &mut buf);
     }
     let entries = file.entries().clone();
-    for directory in entries.directories() {
+    for &directory in entries.directories() {
         let _ = (directory.to_string(), entries.skipped(directory));
-        let _ = entries.in_directory(directory).count();
+        let _ = entries.in_directory(directory).len();
     }
     for entry in &entries {
         read_entry(entry);
