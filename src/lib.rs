@@ -403,6 +403,7 @@ mod tiff_builder;
 // size, point and focus fixtures the focus, metadata and reader tests share.
 #[cfg(test)]
 mod testing;
+mod value_error;
 
 pub use authorship::Authorship;
 pub use camera::{Camera, Make};
@@ -426,3 +427,4 @@ pub use options::Options;
 pub use orientation::Orientation;
 pub use preview::{Preview, PreviewFormat};
 pub use rational::{Rational, SignedRational};
+pub use value_error::ValueError;
