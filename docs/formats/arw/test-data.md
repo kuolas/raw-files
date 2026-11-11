@@ -92,14 +92,16 @@ are now checked by the test suite as well as by the throwaway scripts.
 The tests also check every metadata value the reader gives for each file
 against a table generated from a walk of the file's IFDs and Exif IFD, by
 the reader's rules, with serial numbers recorded by their shape alone; that
-table is the record of the values, so this page does not repeat it.
+table is the record of the values, so this page does not repeat it. How
+a sample comes in, how its rows are made and how to check one is on the
+[sample files page](../sample-files.md).
 
 ### 2.2 The focus point of each file
 
 The focus-point facts tagged [F] in
 [makernote-and-metadata.md](makernote-and-metadata.md#96-focus-point)
-were measured on 2026-10-19 on all 36 files, with the same kind of
-throwaway script as the other checks, reading the MakerNote's
+were measured on 2026-10-19 on all 36 files, with a script of my own,
+kept outside the repository, reading the MakerNote's
 FocusLocation (0x2027), FocusLocation2 (0x204A), FocusFrameSize (0x2037)
 and FocusMode (0x201B). What each file records, and the focus point that
 the rules of

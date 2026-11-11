@@ -114,9 +114,10 @@ its size, place, format and orientation, read whole, the file's own
 preview through the zeros after its last image; every value of its
 metadata, serial numbers by their shape alone; and its focus point, or
 that it has none. The expected values are tables generated from a walk
-of each file's bytes, by the reader's rules, not typed in. A test whose
-file has not been downloaded says so and passes, so the suite runs
-offline. [F]
+of each file's bytes, by the reader's rules, not typed in. The
+[sample files page](../sample-files.md) says how they are made and how
+to check one. A test whose file has not been downloaded says so and
+passes, so the suite runs offline. [F]
 
 ## 3. How the files were chosen
 

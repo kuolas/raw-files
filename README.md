@@ -193,6 +193,9 @@ Everyone taking part is expected to follow the
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — how the code is structured.
 - [docs/architecture-decisions/](docs/architecture-decisions/README.md) — why
   things are the way they are.
+- [docs/formats/sample-files.md](docs/formats/sample-files.md) — how a
+  sample file comes in, where its expected values come from, and how to
+  check one.
 - [CHANGELOG.md](CHANGELOG.md) — user-visible changes.
 
 ## Acknowledgments

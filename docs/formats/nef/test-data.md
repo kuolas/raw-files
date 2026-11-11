@@ -153,16 +153,19 @@ The MakerNote and metadata facts tagged **[F]** in
 there on 2026-10-20.
 
 The checks walked each file's IFDs, Exif IFD and MakerNote IFD with a
-throwaway, bounds-checked script written from these pages, and read the
-tags' values; no other program's output was used for them. The camera
-settings were checked later, with ExifTool's output for comparison
+bounds-checked script of my own, written from these pages and kept
+outside the repository, and read the tags' values; no other program's
+output was used for them. The camera settings were checked later, with
+ExifTool's output for comparison
 ([section 2.4](#24-files-checked-for-the-camera-settings)).
 
 The tests in `tests/nef.rs` check every metadata value the reader gives,
 the focus point among them, for each of the 35 NEF files of section 2.1
 against a table generated from such a walk, by the reader's rules, with
 serial numbers recorded by their shape alone; that table is the record of
-the values, so this page does not repeat it.
+the values, so this page does not repeat it. How a sample comes in, how
+its rows are made and how to check one is on the
+[sample files page](../sample-files.md).
 
 ### 2.3 Files checked for the focus point
 
@@ -191,10 +194,10 @@ Z body in manual focus and a rotated shot:
 | 8559 | Z fc | 12bit compressed (Lossless) (3:2) | `a213f29e52f02c0155030d204bf885c7b85ae65a78057a751ccb3ade2d141798` | CC0 |
 
 The check read each file's MakerNote AFInfo2 (or AFInfo), FocusMode,
-CropHiSpeed and CropArea with the same kind of throwaway script as
-section 2.2, and so did a check of the two D1X files, added on
-2026-10-23. FocusMode is `MANUAL` on files 928, 1835 and 8559 and an
-AF mode on every other file. What each of the 35 files
+CropHiSpeed and CropArea with a script of my own, kept outside the
+repository like that of section 2.2, and so did a check of the two D1X
+files, added on 2026-10-23. FocusMode is `MANUAL` on files 928, 1835
+and 8559 and an AF mode on every other file. What each of the 35 files
 records, and the focus point that the rules of
 [ADR012](../../architecture-decisions/adr012-focus-points-as-the-camera-records-them.md)
 give from it:
