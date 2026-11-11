@@ -212,6 +212,17 @@ the architecture decisions.
   GPS time, image direction and map datum, each as the file records it
   ([#97](https://github.com/kuolas/raw-files/issues/97),
   [ADR011](architecture-decisions/adr011-metadata-from-standard-tags.md)).
+- **0.10.0**: the API made consistent before full metadata is built on
+  it: a refusal that names the rule broken, `with_…` setters
+  throughout, the raw view's lists as slices and its fractions as
+  `Rational` values, and
+  a name to show for the camera, the orientation, the preview's
+  encoding and an error's category
+  ([#102](https://github.com/kuolas/raw-files/issues/102),
+  [#104](https://github.com/kuolas/raw-files/issues/104),
+  [#105](https://github.com/kuolas/raw-files/issues/105),
+  [#107](https://github.com/kuolas/raw-files/issues/107),
+  [#150](https://github.com/kuolas/raw-files/issues/150)).
 - **Next**: more of full metadata, the values a file records read
   group by group, beginning with more capture settings; the values
   that only enciphered or encrypted blocks hold come last

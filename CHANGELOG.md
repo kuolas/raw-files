@@ -10,6 +10,35 @@ does.
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-11-11
+
+The tenth release makes the API consistent before full metadata is
+built on it. A function that refuses its arguments now says which rule
+they broke, in a `ValueError`. Every setter is a `with_…` method.
+`Entries` gives its lists as slices, as `RawFile::previews` does, and a
+fraction of the raw view is a `Rational`, as a fraction of the metadata
+is. `Camera::display_name` gives a camera's
+name to show, and `Orientation`, `PreviewFormat` and `ErrorKind` each
+gain a name. This changes some of 0.9.0's signatures, each with what a
+caller does (see Changed):
+
+- The functions that refuse their arguments return
+  `Result<_, ValueError>`, not `Option`; `.ok()` gives the `Option`
+  back.
+- `Value::Rational` and `Value::SRational` hold `Rational` and
+  `SignedRational`, not pairs; code that matches them names the fields.
+- `Options::limits(limits)` is `Options::with_limits(limits)`.
+- `FocusPoints::primary` gives `Option<FocusPoint>`, not a reference.
+- `FieldType::code` is `FieldType::to_code`.
+- `Latitude::to_degrees` and `Longitude::to_degrees` are
+  `to_decimal_degrees`.
+- `Entries::directories` and `Entries::in_directory` return slices, not
+  iterators.
+- `Limits` is `Copy`, and its getters take `self`.
+
+`Limits::max_value_bytes` now bounds every value raw-files reads, which
+only a caller who changes the cap sees.
+
 ### Added
 
 - `Camera::display_name` gives a camera's name to show a person, for
@@ -187,8 +216,8 @@ does.
 - `Entries::directories` returns `&[Directory]` and
   `Entries::in_directory` returns `&[Entry]`, where they returned
   iterators, which breaks code that calls an iterator's methods on
-  them or iterates the directories by value. Every list of the API is
-  now a slice, as `RawFile::previews` is, with a length and indexing:
+  them or iterates the directories by value. Both lists are now slices,
+  as `RawFile::previews` is, with a length and indexing:
 
   ```rust
   // 0.9.0
@@ -846,7 +875,8 @@ files.
 - A DNG is of no known format, whatever camera maker its Make names:
   converters and the phones that write DNG keep the maker's name.
 
-[Unreleased]: https://github.com/kuolas/raw-files/compare/v0.9.0...HEAD
+[Unreleased]: https://github.com/kuolas/raw-files/compare/v0.10.0...HEAD
+[0.10.0]: https://github.com/kuolas/raw-files/compare/v0.9.0...v0.10.0
 [0.9.0]: https://github.com/kuolas/raw-files/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/kuolas/raw-files/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/kuolas/raw-files/compare/v0.6.0...v0.7.0
