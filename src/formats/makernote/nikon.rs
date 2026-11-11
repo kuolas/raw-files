@@ -382,31 +382,32 @@
 //! Nothing in the block is trusted. Every offset found inside it is checked
 //! against the block, not only against the file: the MakerNote IFD and the
 //! PreviewIFD must lie inside the block, with their whole entry tables; the
-//! three numbers that lead to the JPEG must be held in their entries, not
-//! stored elsewhere; and the whole JPEG, as declared, must lie inside the
-//! block, whichever header the offsets count from. The block's IFDs are
-//! read inside the block ([`ifd_in`]): every entry whose value lies
-//! outside the block is dropped, as an entry whose value lies outside the
-//! file is, so every value read from them lies inside the block: the ISO's
-//! two numbers, WorldTime's four bytes, the settings of one SHORT and
-//! 0x000B's two SSHORTs, which the entry holds, and CropArea's four
-//! numbers, CropHiSpeed's seven, the serial number, the lens's range,
-//! FocusMode's and WhiteBalance's texts, 0x003F's two fractions and
-//! AFInfo2's bytes, which take more than the four bytes an entry holds and
-//! so are stored elsewhere. A value of another type than its tag's rule
-//! allows is not read. The readers of text, of fractions and of signed
-//! SHORTs each read their one type, ASCII, RATIONAL or SRATIONAL, and
-//! SSHORT ([`Ifd::i16s`]), but those of unsigned numbers and of bytes
-//! accept more types than a tag's rule allows, such as [`Ifd::u32s`],
-//! which reads type IFD too, so a reader of numbers or bytes first finds
-//! the tag's entry among the types its rule allows
-//! ([`Ifd::entry_of_type`]). A block that does not hold together, whether
-//! it is too short for its layout, its inner header is not one, or an IFD
-//! in it is cut short or has more entries than the limits allow, costs
-//! what the MakerNote would have given, the small preview, the crop area,
-//! the camera settings and the values above, never the file: the NEF
-//! security notes ask that bad entries be skipped rather than fail the
-//! file (`docs/formats/nef/security.md`, item 4 of the checklist).
+//! three numbers that lead to the JPEG, the PreviewIFD's offset and the
+//! JPEG's offset and length, must each be one LONG, as Nikon writes them,
+//! which the entry holds itself ([`Ifd::one_u32`]); and the whole JPEG, as
+//! declared, must lie inside the block, whichever header the offsets count
+//! from. The block's IFDs are read inside the block ([`ifd_in`]): every
+//! entry whose value lies outside the block is dropped, as an entry whose
+//! value lies outside the file is, so every value read from them lies
+//! inside the block: the ISO's two numbers, WorldTime's four bytes, the
+//! settings of one SHORT and 0x000B's two SSHORTs, which the entry holds,
+//! and CropArea's four numbers, CropHiSpeed's seven, the serial number, the
+//! lens's range, FocusMode's and WhiteBalance's texts, 0x003F's two
+//! fractions and AFInfo2's bytes, which take more than the four bytes an
+//! entry holds and so are stored elsewhere. A value of another type than
+//! its tag's rule allows is not read. The readers of text, of fractions and
+//! of signed SHORTs each read their one type, ASCII, RATIONAL or SRATIONAL,
+//! and SSHORT ([`Ifd::i16s`]), but those of unsigned numbers and of bytes
+//! accept more types than a tag's rule allows, such as [`Ifd::u32s`], which
+//! reads type IFD too, so a reader of numbers or bytes first finds the
+//! tag's entry among the types its rule allows ([`Ifd::entry_of_type`]). A
+//! block that does not hold together, whether it is too short for its
+//! layout, its inner header is not one, or an IFD in it is cut short or has
+//! more entries than the limits allow, costs what the MakerNote would have
+//! given, the small preview, the crop area, the camera settings and the
+//! values above, never the file: the NEF security notes ask that bad
+//! entries be skipped rather than fail the file
+//! (`docs/formats/nef/security.md`, item 4 of the checklist).
 //! Only a failure of the reader itself is an error: that is not the file's
 //! fault, and says nothing about the MakerNote.
 //!
@@ -658,8 +659,8 @@ pub(in crate::formats) fn read<R: Read + Seek>(
 /// The PreviewIFD of the MakerNote whose IFD is `ifd`, read within
 /// `limits`: the IFD at the offset its entry 0x0011 holds, counted from the
 /// MakerNote's base, in its byte order, inside its block; `None` when the
-/// entry is missing, of a type no number is read from, or stored out of
-/// line, or the IFD does not hold together inside the block.
+/// entry is missing or is not one LONG, as Nikon writes it, or the IFD does
+/// not hold together inside the block.
 ///
 /// # Errors
 ///
@@ -669,7 +670,7 @@ fn preview_ifd<R: Read + Seek>(
     ifd: &Ifd,
     limits: &Limits,
 ) -> Result<Option<Ifd>> {
-    let Some(pointer) = inline_u32(src, ifd, PREVIEW_IFD)? else {
+    let Some(pointer) = ifd.one_u32(PREVIEW_IFD, &[LONG]) else {
         return Ok(None);
     };
     ifd_in(src, ifd.block(), pointer, ifd.order(), limits)
@@ -710,28 +711,17 @@ fn embedded_ifd<R: Read + Seek>(
 /// Where the preview JPEG of `makernote` is, as a candidate for the shared
 /// finder, with its absolute offset: the JPEG its PreviewIFD declares, read
 /// with the MakerNote; `None` when the MakerNote has no PreviewIFD, or one
-/// that does not declare a JPEG inside the block.
+/// that does not declare a JPEG inside the block, its JPEGInterchangeFormat
+/// and JPEGInterchangeFormatLength each one LONG, as Nikon writes them.
 ///
-/// See the [module documentation](self) for the checks.
-///
-/// # Errors
-///
-/// `Io` when the reader fails. Nothing the block holds is an error.
-pub(in crate::formats) fn preview_candidate<R: Read + Seek>(
-    src: &mut Source<R>,
-    makernote: &MakerNote,
-) -> Result<Option<Candidate>> {
-    let Some(preview) = &makernote.preview else {
-        return Ok(None);
-    };
-    let offset = inline_u32(src, preview, JPEG_INTERCHANGE_FORMAT)?;
-    let length = inline_u32(src, preview, JPEG_INTERCHANGE_FORMAT_LENGTH)?;
-    let (Some(offset), Some(length)) = (offset, length) else {
-        return Ok(None);
-    };
-
+/// See the [module documentation](self) for the checks. The two numbers
+/// are held in their entries, so this reads nothing from the file.
+pub(in crate::formats) fn preview_candidate(makernote: &MakerNote) -> Option<Candidate> {
+    let preview = makernote.preview.as_ref()?;
+    let offset = preview.one_u32(JPEG_INTERCHANGE_FORMAT, &[LONG])?;
+    let length = preview.one_u32(JPEG_INTERCHANGE_FORMAT_LENGTH, &[LONG])?;
     // An empty JPEG is passed on: the finder drops it with the others.
-    Ok(tiff_previews::candidate(preview.block(), offset, length))
+    tiff_previews::candidate(preview.block(), offset, length)
 }
 
 /// The metadata of the file whose MakerNote is `makernote` and whose
@@ -912,16 +902,16 @@ fn camera_settings<R: Read + Seek>(
     if let Some(mode) = white_balance.and_then(white_balance_of_text) {
         settings.white_balance.mode = Some(mode);
     }
-    settings.white_balance.color_temperature = color_temperature(src, makernote, white_balance)?;
+    settings.white_balance.color_temperature = color_temperature(makernote, white_balance);
     settings.white_balance.fine_tune = fine_tune(src, makernote)?;
-    settings.shutter = one_short(src, ifd, SHUTTER_MODE)?.and_then(shutter);
+    settings.shutter = one_short(ifd, SHUTTER_MODE).and_then(shutter);
     settings.image_area = crop_hi_speed.and_then(|crop| image_area(crop.mode));
     settings.raw_image_size = match picture {
-        Picture::Raw => one_short(src, ifd, IMAGE_SIZE_RAW)?.and_then(raw_image_size),
+        Picture::Raw => one_short(ifd, IMAGE_SIZE_RAW).and_then(raw_image_size),
         Picture::Jpeg => None,
     };
     if !exif_records_color_space {
-        settings.color_space = one_short(src, ifd, COLOR_SPACE)?.and_then(color_space);
+        settings.color_space = one_short(ifd, COLOR_SPACE).and_then(color_space);
     }
     Ok(settings)
 }
@@ -940,22 +930,14 @@ fn camera_settings<R: Read + Seek>(
 /// before the D5 and the D850 write no ColorTemperatureAuto, and the text
 /// is all they record of a temperature, the D600 `3230K` too; under any
 /// other setting they record none.
-///
-/// # Errors
-///
-/// `Io` when the reader fails. Nothing the block holds is an error.
-fn color_temperature<R: Read + Seek>(
-    src: &mut Source<R>,
-    makernote: &MakerNote,
-    white_balance: Option<&str>,
-) -> Result<Option<u32>> {
-    let recorded = one_short(src, &makernote.ifd, COLOR_TEMPERATURE)?
+fn color_temperature(makernote: &MakerNote, white_balance: Option<&str>) -> Option<u32> {
+    let recorded = one_short(&makernote.ifd, COLOR_TEMPERATURE)
         .and_then(|kelvin| checked_color_temperature(u32::from(kelvin)));
-    Ok(recorded.or_else(|| {
+    recorded.or_else(|| {
         white_balance
             .and_then(kelvin_of_text)
             .and_then(checked_color_temperature)
-    }))
+    })
 }
 
 /// The white balance mode that the WhiteBalance text `text`, as read,
@@ -2092,27 +2074,6 @@ fn shorts_at(value: &[u8], at: usize, order: ByteOrder) -> Option<(u32, u32)> {
     ))
 }
 
-/// The value of tag `tag` of `ifd`, as [`Ifd::u32`] reads it, when the
-/// entry holds it in its own value field; `None` when the tag is missing,
-/// of another type, or stored out of line.
-///
-/// A PreviewIFD pointer, a JPEG offset and a JPEG length are each one
-/// number, which an entry always holds itself. One stored out of line
-/// could be read from anywhere in the file, outside the block.
-///
-/// # Errors
-///
-/// `Io` when the reader fails.
-fn inline_u32<R: Read + Seek>(src: &mut Source<R>, ifd: &Ifd, tag: u16) -> Result<Option<u32>> {
-    if ifd
-        .entry(tag)
-        .is_none_or(|entry| entry.value_offset().is_some())
-    {
-        return Ok(None);
-    }
-    Ok(skip_damage(ifd.u32(src, tag))?.flatten())
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -2217,6 +2178,22 @@ mod tests {
             self.preview + 2 + 12 + 8
         }
 
+        /// Where the value field of the PreviewIFD's JPEGInterchangeFormat
+        /// entry is: the first entry, 8 bytes in.
+        fn offset_at(&self) -> u64 {
+            self.preview + 2 + 8
+        }
+
+        /// Rewrites the entry whose value field is at `value_at` with type
+        /// `typ`, count `count` and value field `value`, in the block's
+        /// byte order; its tag is kept.
+        fn put_entry(&mut self, value_at: u64, typ: u16, count: u32, value: [u8; 4]) {
+            let at = usize::try_from(value_at).unwrap();
+            self.bytes[at - 6..at - 4].copy_from_slice(&self.order.u16(typ));
+            self.bytes[at - 4..at].copy_from_slice(&self.order.u32(count));
+            self.bytes[at..at + 4].copy_from_slice(&value);
+        }
+
         /// The candidate the block gives when it sits at `at` in the file.
         fn candidate(&self, at: u64) -> Candidate {
             Candidate {
@@ -2286,7 +2263,7 @@ mod tests {
             // The block's end, counted from the inner header, written in
             // the value field of the PreviewIFD's first entry, 8 bytes in.
             let end = u32::try_from(block.len() - HEADER_AT).unwrap();
-            block.put_u32(block.preview + 2 + 8, end);
+            block.put_u32(block.offset_at(), end);
         }
         block
     }
@@ -2360,7 +2337,7 @@ mod tests {
         let Some(makernote) = read(src, tree, limits)? else {
             return Ok(None);
         };
-        preview_candidate(src, &makernote)
+        Ok(preview_candidate(&makernote))
     }
 
     /// The MakerNote's preview candidate in the file `bytes`, whose IFDs
@@ -2579,7 +2556,7 @@ mod tests {
                 "{order:?}"
             );
             assert_eq!(makernote.ifd.order(), byte_order(order), "{order:?}");
-            let found = preview_candidate(&mut src, &makernote).unwrap();
+            let found = preview_candidate(&makernote);
             assert_eq!(found, Some(expected), "{order:?}");
             let start = usize::try_from(expected.offset).unwrap();
             assert_eq!(bytes[start..start + 3], [0xFF, 0xD8, 0xFF], "{order:?}");
@@ -2603,7 +2580,7 @@ mod tests {
                 .expect("a MakerNote");
             let block = tiff::Block::new(POS, POS + range.start..POS + range.end);
             assert_eq!(makernote.ifd.block(), &block, "{order:?}");
-            let found = preview_candidate(&mut src, &makernote).unwrap();
+            let found = preview_candidate(&makernote);
             assert_eq!(
                 found,
                 Some(Candidate {
@@ -2654,7 +2631,7 @@ mod tests {
             // no preview.
             let (bytes, _, _) = headerless_file(order, b"", Some(2 + 24));
             let (mut src, makernote, standard) = read_file(bytes);
-            let found = preview_candidate(&mut src, &makernote).unwrap();
+            let found = preview_candidate(&makernote);
             assert_eq!(found, None, "{order:?}");
             let metadata = metadata(&mut src, &makernote, standard, Picture::Raw).unwrap();
             assert_eq!(metadata.exposure.iso, Some(200), "{order:?}");
@@ -2809,6 +2786,48 @@ mod tests {
             let mut long = block(order, Change::Nothing);
             long.put_u32(long.length_at(), u32::MAX);
             assert_eq!(candidate(with_block(order, &long)), None, "{order:?}");
+        }
+    }
+
+    #[test]
+    fn a_preview_number_that_is_not_one_long_gives_no_preview() {
+        for order in ORDERS {
+            let sound = block(order, Change::Nothing);
+            let pointer = u32::try_from(sound.preview - HEADER_AT).unwrap();
+            let offset = u32::try_from(sound.jpeg - HEADER_AT).unwrap();
+            let length = u32::try_from(sound.jpeg_len).unwrap();
+            let long = |value: u32| order.u32(value);
+            // The value first, as two SHORTs or one SHORT write it, then 0.
+            let shorts = |value: u32| {
+                let value = u16::try_from(value).unwrap();
+                let mut field = [0; 4];
+                field[..2].copy_from_slice(&order.u16(value));
+                field
+            };
+            let cases = [
+                (sound.pointer_at(), pointer, "the PreviewIFD pointer"),
+                (sound.offset_at(), offset, "the JPEG's offset"),
+                (sound.length_at(), length, "the JPEG's length"),
+            ];
+            for (at, value, what) in cases {
+                // Rewritten as the one LONG it is, the preview stands.
+                let mut same = block(order, Change::Nothing);
+                same.put_entry(at, LONG, 1, long(value));
+                let found = candidate(with_block(order, &same));
+                assert_eq!(found, Some(sound.candidate(AT)), "{order:?} {what}");
+
+                for (typ, count, field, shape) in [
+                    (SHORT, 2, shorts(value), "two SHORTs, the first right"),
+                    (SHORT, 1, shorts(value), "one SHORT"),
+                    (IFD, 1, long(value), "one IFD"),
+                    (LONG, 0, long(value), "no LONG"),
+                ] {
+                    let mut changed = block(order, Change::Nothing);
+                    changed.put_entry(at, typ, count, field);
+                    let found = candidate(with_block(order, &changed));
+                    assert_eq!(found, None, "{order:?} {what} as {shape}");
+                }
+            }
         }
     }
 

@@ -38,10 +38,7 @@ pub(super) fn previews<R: Read + Seek>(
     tree: &Tree,
     makernote: Option<&MakerNote>,
 ) -> Result<Vec<Preview>> {
-    let extra = match makernote {
-        Some(makernote) => nikon::preview_candidate(src, makernote)?,
-        None => None,
-    };
+    let extra = makernote.and_then(nikon::preview_candidate);
     tiff_previews::find(src, tree, extra.as_slice())
 }
 

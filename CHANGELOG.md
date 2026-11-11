@@ -19,6 +19,12 @@ does.
   longer than the cap on one value (`Limits::max_value_bytes`) was
   refused, taking with it its value or the directory or preview it
   locates; a shorter one was copied whole to use its first four bytes.
+- A Nikon MakerNote's small preview is found only when its pointer and
+  the preview's offset and length are each one LONG, as Nikon writes
+  them ([#110](https://github.com/kuolas/raw-files/issues/110)). Each
+  was read as the first value of any SHORT, LONG or IFD entry, so a
+  pointer written as two SHORTs was read as its first SHORT. Every
+  other value of a MakerNote already had its type and count checked.
 
 ## [0.10.0] - 2026-11-11
 
