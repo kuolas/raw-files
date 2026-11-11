@@ -55,10 +55,30 @@ struct Inner {
 /// arm. The categories order as they are listed, and a new category is
 /// added after the existing ones, so an order once observed holds.
 ///
-/// It has no [`Display`](fmt::Display): its text form is its variant's
-/// name, such as `Malformed`, which `Debug` gives. An [`Error`]'s own text
-/// is its message, followed by the byte offset when it is known; it does
-/// not name the category.
+/// As text, [`name`](Self::name) and [`Display`](fmt::Display), a
+/// category is a few lowercase words with no final period, such as
+/// "malformed file", so that it reads in front of an error's own text.
+/// An [`Error`]'s own text is its message, followed by the byte offset
+/// when it is known; it does not name the category. An I/O error's own
+/// message is "I/O error", the name of its category: what the reader
+/// reported is the error's [`source()`](std::error::Error::source).
+///
+/// # Examples
+///
+/// Name the category before the error's own text, as a log line would:
+///
+/// ```
+/// use raw_files::{ErrorKind, RawFile};
+///
+/// // A TIFF header whose first directory starts at byte 8, where the
+/// // file ends.
+/// let err = RawFile::from_bytes(b"II*\0\x08\0\0\0").unwrap_err();
+/// assert_eq!(err.kind(), ErrorKind::Malformed);
+/// assert_eq!(
+///     format!("{}: {err}", err.kind()),
+///     "malformed file: data runs past the end of the file at byte 8",
+/// );
+/// ```
 #[non_exhaustive]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum ErrorKind {
@@ -76,6 +96,29 @@ pub enum ErrorKind {
     /// Reading the file would cross a limit set by `Limits`, or needs more
     /// memory than this platform can give.
     LimitExceeded,
+}
+
+impl ErrorKind {
+    /// The category's name, in lowercase and with no final period, for a
+    /// log line or a table of counts: "I/O error", "unknown format",
+    /// "unsupported file", "malformed file" or "limit exceeded".
+    /// [`Display`](fmt::Display) writes the same.
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Io => "I/O error",
+            Self::UnknownFormat => "unknown format",
+            Self::Unsupported => "unsupported file",
+            Self::Malformed => "malformed file",
+            Self::LimitExceeded => "limit exceeded",
+        }
+    }
+}
+
+impl fmt::Display for ErrorKind {
+    /// Writes [`name`](ErrorKind::name).
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.name())
+    }
 }
 
 impl Error {
@@ -245,6 +288,87 @@ mod tests {
     #[test]
     fn result_is_small() {
         assert!(size_of::<Result<u64>>() <= 16);
+    }
+
+    // Every category, in the order of its declaration. The `match` has no
+    // wildcard arm, so a category added later does not compile until it is
+    // listed here too, and the test of the names then fails until its name
+    // is listed there.
+    fn all_kinds() -> [ErrorKind; 5] {
+        let all = [
+            ErrorKind::Io,
+            ErrorKind::UnknownFormat,
+            ErrorKind::Unsupported,
+            ErrorKind::Malformed,
+            ErrorKind::LimitExceeded,
+        ];
+        for kind in all {
+            match kind {
+                ErrorKind::Io
+                | ErrorKind::UnknownFormat
+                | ErrorKind::Unsupported
+                | ErrorKind::Malformed
+                | ErrorKind::LimitExceeded => {}
+            }
+        }
+        all
+    }
+
+    #[test]
+    fn every_kind_name_is_the_one_documented_and_display_writes_it() {
+        // The names are stable once released: a program may show, store or
+        // count by them, so a changed one fails here. `assert_names` wants
+        // sentence case; these are lowercase, to read before an error's
+        // text, so they are checked here.
+        let names: Vec<&str> = all_kinds().map(ErrorKind::name).to_vec();
+        assert_eq!(
+            names,
+            [
+                "I/O error",
+                "unknown format",
+                "unsupported file",
+                "malformed file",
+                "limit exceeded",
+            ]
+        );
+        for kind in all_kinds() {
+            let name = kind.name();
+            assert_eq!(kind.to_string(), name, "{kind:?}");
+            assert!(name.is_ascii(), "{kind:?}");
+            assert!(!name.ends_with('.'), "{kind:?}");
+            // No capital letter, but those of the abbreviation "I/O".
+            let rest = name.strip_prefix("I/O").unwrap_or(name);
+            assert!(!rest.contains(|c: char| c.is_ascii_uppercase()), "{kind:?}");
+        }
+        let distinct: std::collections::HashSet<&str> = names.iter().copied().collect();
+        assert_eq!(distinct.len(), names.len(), "{names:?}");
+    }
+
+    #[test]
+    fn kinds_order_as_they_are_listed() {
+        crate::testing::assert_ordered(&all_kinds());
+    }
+
+    #[test]
+    fn an_errors_text_does_not_name_its_category() {
+        // An error's own text is its message and offset, with no category
+        // put before it, so that a caller can write "category: text".
+        let errors = [
+            Error::unknown_format("not a TIFF file"),
+            Error::unsupported("lossy compression"),
+            Error::malformed("bad tag", 12),
+            Error::limit("preview too large", 1 << 40),
+        ];
+        for err in errors {
+            let text = err.to_string();
+            assert!(!text.starts_with(err.kind().name()), "{text}");
+        }
+        // An I/O error's message is "I/O error", its category's name: its
+        // text is that message alone, never "I/O error: I/O error".
+        let err = Error::from(io::Error::other("disk on fire"));
+        assert_eq!(err.to_string(), "I/O error");
+        let err = Error::io_at(io::Error::from(io::ErrorKind::UnexpectedEof), 7);
+        assert_eq!(err.to_string(), "I/O error at byte 7");
     }
 
     #[test]

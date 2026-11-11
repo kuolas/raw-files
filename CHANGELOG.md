@@ -26,6 +26,17 @@ does.
 - `Options::limits()` reads back the limits that files are opened
   under: `Limits::default()` until `Options::with_limits` sets others
   ([#107](https://github.com/kuolas/raw-files/issues/107)).
+- `Orientation`, `PreviewFormat` and `ErrorKind` each have a `name`,
+  which `Display` writes, as fourteen other enums of the crate, such as
+  `Format` and `Make`, do. Their docs sent a caller to `Debug` before
+  ([#107](https://github.com/kuolas/raw-files/issues/107)):
+  - An orientation says what a viewer does to the stored pixels, such
+    as `Rotate 90 degrees clockwise`, for an information panel.
+  - A preview's encoding is `JPEG`, as `Format::Jpeg`'s name is.
+  - An error's category is lowercase with no final period, such as
+    `malformed file`, so that it reads in front of an error's own
+    text: `malformed file: bad tag at byte 12`. An error's own text
+    still does not name its category.
 
 ### Changed
 

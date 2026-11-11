@@ -67,10 +67,10 @@
 //! if let Some(preview) = file.largest_preview() {
 //!     let jpeg = file.read_preview(&preview)?;
 //!     println!(
-//!         "{} pixels, shown upright by {:?}, {} bytes",
+//!         "{} pixels, {} bytes. To show it upright: {}",
 //!         preview.size(),
-//!         preview.orientation(),
 //!         jpeg.len(),
+//!         preview.orientation(),
 //!     );
 //! }
 //! # Ok(())
@@ -336,9 +336,8 @@
 //! - **No serde feature,** since it would be a dependency. A caller that
 //!   stores metadata serializes what the getters return: text, integers,
 //!   booleans, small structs of these, and enums whose `name` gives their
-//!   text. An [`Orientation`] gives its Exif number, a [`PreviewFormat`]
-//!   its MIME type, and a [`Directory`] its text through `Display`. A
-//!   [`Value`] holds its numbers, fractions or bytes in a vector.
+//!   text. A [`Directory`] gives its text through `Display`. A [`Value`]
+//!   holds its numbers, fractions or bytes in a vector.
 //!
 //! # Formats
 //!
