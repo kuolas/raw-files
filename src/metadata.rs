@@ -1708,7 +1708,7 @@ mod tests {
                 None => only,
             };
             assert_eq!(points.points(), [only], "{focus:?}");
-            assert_eq!(points.primary(), Some(&only), "{focus:?}");
+            assert_eq!(points.primary(), Some(only), "{focus:?}");
             assert_eq!(points.primary().unwrap().number(), None, "{focus:?}");
             assert_eq!(metadata.focus(), Some(focus), "{focus:?}");
         }

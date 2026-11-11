@@ -639,9 +639,9 @@ impl FocusPoint {
 /// let on_preview = points.scaled_to(Size { width: 1504, height: 1004 })?;
 /// let centers: Vec<Point> = on_preview.points().iter().map(FocusPoint::center).collect();
 /// assert_eq!(centers, [Point { x: 752, y: 502 }, Point { x: 692, y: 376 }]);
-/// assert_eq!(on_preview.primary().and_then(FocusPoint::number), Some(13));
+/// assert_eq!(on_preview.primary().and_then(|point| point.number()), Some(13));
 /// assert_eq!(
-///     on_preview.primary().and_then(FocusPoint::size),
+///     on_preview.primary().and_then(|point| point.size()),
 ///     Some(Size { width: 41, height: 41 })
 /// );
 /// assert_eq!(on_preview.area_mode(), Some(FocusAreaMode::Auto));
@@ -756,8 +756,8 @@ impl FocusPoints {
 
     /// The primary point, the one [`Metadata::focus`](crate::Metadata::focus)
     /// reports, or `None` when no point is marked as the primary.
-    pub fn primary(&self) -> Option<&FocusPoint> {
-        self.points.get(self.primary?)
+    pub fn primary(&self) -> Option<FocusPoint> {
+        self.points.get(self.primary?).copied()
     }
 
     /// Where the primary point is in [`points`](Self::points), counted
@@ -2004,18 +2004,18 @@ mod tests {
         assert_eq!(list.clone().with_primary_index(usize::MAX), refused);
         assert_eq!(
             list.clone().with_primary_index(0).unwrap().primary(),
-            Some(&first)
+            Some(first)
         );
         let marked = list.with_primary_index(1).unwrap();
-        assert_eq!(marked.primary(), Some(&second));
+        assert_eq!(marked.primary(), Some(second));
         // A later primary replaces the earlier one, and a point added
         // after it leaves it as it was.
         assert_eq!(
             marked.clone().with_primary_index(0).unwrap().primary(),
-            Some(&first)
+            Some(first)
         );
         let longer = marked.with_point(FocusPoint::new(point(30, 30))).unwrap();
-        assert_eq!(longer.primary(), Some(&second));
+        assert_eq!(longer.primary(), Some(second));
         assert_eq!(longer.points().len(), 3);
     }
 
@@ -2029,7 +2029,7 @@ mod tests {
             assert_eq!(marked.primary_index(), Some(index), "{index}");
             // Every point equals the primary, so only the index says which
             // of them it is.
-            assert_eq!(marked.primary(), Some(&twin), "{index}");
+            assert_eq!(marked.primary(), Some(twin), "{index}");
             let scaled = marked.scaled_to(size(50, 50)).unwrap();
             assert_eq!(scaled.primary_index(), Some(index), "{index}");
         }
@@ -2102,7 +2102,7 @@ mod tests {
                 assert_eq!(list.frame(), focus.frame(), "{focus:?}");
                 assert_eq!(list.origin(), origin, "{focus:?}");
                 assert_eq!(list.points(), [only], "{focus:?}");
-                assert_eq!(list.primary(), Some(&only), "{focus:?}");
+                assert_eq!(list.primary(), Some(only), "{focus:?}");
                 assert_eq!(list.area_mode(), None, "{focus:?}");
                 // The same list as the builders make, and its primary is
                 // the focus given.
@@ -2164,7 +2164,7 @@ mod tests {
                     .with_in_focus(true),
             ]
         );
-        assert_eq!(preview.primary(), preview.points().get(1));
+        assert_eq!(preview.primary(), preview.points().get(1).copied());
         assert_eq!(preview.area_mode(), Some(FocusAreaMode::Single));
         assert_eq!(preview.origin(), FocusOrigin::Recorded);
     }
@@ -2227,7 +2227,11 @@ mod tests {
                             "{context}"
                         );
                         assert_eq!(scaled.points().len(), 2, "{context}");
-                        assert_eq!(scaled.primary(), scaled.points().get(1), "{context}");
+                        assert_eq!(
+                            scaled.primary(),
+                            scaled.points().get(1).copied(),
+                            "{context}"
+                        );
                         for (got, was) in scaled.points().iter().zip(&points) {
                             let as_focus = built(frame, was.center(), was.size(), was.in_focus())
                                 .and_then(|focus| focus.scaled_to(target))

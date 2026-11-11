@@ -130,6 +130,23 @@ does.
 
   A file opened with the same limits is read as before
   ([#107](https://github.com/kuolas/raw-files/issues/107)).
+- `FocusPoints::primary` returns `Option<FocusPoint>` where it
+  returned `Option<&FocusPoint>`, which breaks code that compares it
+  with a reference or passes it to a function taking one. Every lookup
+  of a `Copy` value now gives it by value, as `Metadata::focus` does:
+
+  ```rust
+  // 0.9.0
+  assert_eq!(points.primary(), points.points().first());
+  let number = points.primary().and_then(FocusPoint::number);
+
+  // 0.10.0
+  assert_eq!(points.primary(), points.points().first().copied());
+  let number = points.primary().and_then(|point| point.number());
+  ```
+
+  The point given is the same
+  ([#150](https://github.com/kuolas/raw-files/issues/150)).
 
 ## [0.9.0] - 2026-11-10
 

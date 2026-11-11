@@ -381,7 +381,7 @@ fn assert_the_z9_points(metadata: &Metadata, label: &str) {
     let primary = points
         .primary()
         .unwrap_or_else(|| panic!("{label}: no primary"));
-    assert_eq!(Some(primary), points.points().first(), "{label}");
+    assert_eq!(Some(&primary), points.points().first(), "{label}");
     assert_eq!(primary.number(), None, "{label}");
     assert_eq!(points.origin(), FocusOrigin::Recorded, "{label}");
     assert_eq!(points.area_mode(), Some(FocusAreaMode::Single), "{label}");
@@ -1937,7 +1937,7 @@ fn check_d600_focus(label: &str, metadata: &Metadata, focus: D600Focus) {
             let primary = points
                 .primary()
                 .unwrap_or_else(|| panic!("{label}: no primary"));
-            assert_eq!(Some(primary), points.points().first(), "{label}");
+            assert_eq!(Some(&primary), points.points().first(), "{label}");
             assert_eq!(primary.number(), None, "{label}");
             assert_eq!(primary.center(), focus.center(), "{label}");
             assert_eq!(primary.size(), focus.size(), "{label}");
