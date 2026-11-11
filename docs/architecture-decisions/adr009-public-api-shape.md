@@ -2,6 +2,8 @@
 
 - Status: Accepted
 - Date: 2026-10-11
+- Revision: 2, 2026-11-10
+- Issue: #105
 
 ## Context
 
@@ -25,6 +27,13 @@ by category; callers mostly need to tell "not supported" from "corrupt".
 For input, the options were a byte slice (simple, but the whole file must be
 in memory), a `Read + Seek` source, or both through separate types.
 
+A program also builds values without a file, for its tests: a time, a
+fraction, a location, a focus point. Their constructors check their
+arguments. They first returned `None` for a refused value, which does
+not say which rule refused it. `Focus::with_size` and
+`FocusPoints::with_point` each have three rules, so a test that got
+`None` had to work out which one it broke.
+
 ## Decision
 
 We will expose **one handle, `RawFile<R>`, generic over any
@@ -46,10 +55,16 @@ We will expose **one handle, `RawFile<R>`, generic over any
   decoder trait; dispatch stays inside the crate.
 - No third-party types in the public API. Conversions to other crates' types
   can come later behind optional features.
-- Errors are one opaque `Error` with a `#[non_exhaustive]` `ErrorKind` (I/O,
-  unknown format, unsupported, malformed, limit exceeded) and, when known,
-  the byte offset in the file. Something a file does not contain is `None`,
-  not an error.
+- An error from reading a file is one opaque `Error` with a
+  `#[non_exhaustive]` `ErrorKind` (I/O, unknown format, unsupported,
+  malformed, limit exceeded) and, when known, the byte offset in the file.
+  Something a file does not contain is `None`, not an error.
+- A function that refuses its arguments returns `Result<_, ValueError>`.
+  `ValueError` is a small `Copy` enum with one variant per rule, so a
+  caller learns which rule refused the value. When several rules are
+  broken, the first in the function's documented order is returned.
+- A lookup, such as `Format::from_extension`, and a getter return
+  `Option`: no value there is an answer, not a refusal.
 - Enums that may gain variants and records that may gain fields are
   `#[non_exhaustive]`, and structs expose getters; only small fixed value
   types such as `Size` have public fields.
@@ -80,6 +95,20 @@ Rejected:
 - **Several crates**, such as one for containers and one for decoding.
   They would turn internal boundaries into public ones before those
   boundaries have settled.
+- **`Option` from every constructor**, as before. It cannot say which
+  rule refused a value, and after 1.0 a reason could not be added.
+- **`Result` for the focus types alone.** `?` cannot mix `Option` and
+  `Result` in one chain, and the fractions feed every other type.
+- **An error type per family of values.** `?` could not mix them in one
+  chain either.
+- **`Error` with a new `ErrorKind`.** Each refusal would allocate, and
+  its rules could be told apart only by their text.
+- **A conversion from `ValueError` into `Error`.** `Error` would then
+  mean something that no reading of a file returns. A function that
+  opens a file and builds values returns `Box<dyn std::error::Error>`.
+- **List methods that borrow the list**, so that a refused point keeps
+  the list built so far. They would leave the `with_…` convention, and
+  the error now tells a test's author what to fix.
 
 ## Consequences
 
