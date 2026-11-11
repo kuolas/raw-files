@@ -201,6 +201,9 @@ in IFD0's Software [P][3]:
 | Color space | 0xA001 ColorSpace, SHORT | 1 sRGB, 0xFFFF uncalibrated: any color space but sRGB | 4.6.6.2.1, p. 47 |
 | Software | IFD0 0x0131 Software, ASCII or UTF-8 | the name and version of the software or firmware that generated the image | 4.6.5.4.4, p. 42 |
 
+- **ExifTool's documentation lists an exposure program 9**, "bulb",
+  which Exif does not define [S][6]. No file checked for the camera
+  settings holds it. [F]
 - **A color space other than sRGB is named elsewhere.** ColorSpace says
   only sRGB or "uncalibrated". The Interoperability IFD, which the Exif
   IFD points to with tag 0xA005 (4.6.3.3.1, p. 29), holds
