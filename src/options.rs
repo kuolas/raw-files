@@ -25,7 +25,8 @@ use crate::limits::Limits;
 /// use raw_files::{ErrorKind, Limits, Options};
 ///
 /// let limits = Limits::default().with_max_preview_bytes(16 * 1024 * 1024);
-/// let options = Options::new().limits(limits);
+/// let options = Options::new().with_limits(limits);
+/// assert_eq!(options.limits().max_preview_bytes(), 16 * 1024 * 1024);
 /// let err = options.from_bytes(b"not a RAW file").unwrap_err();
 /// assert_eq!(err.kind(), ErrorKind::UnknownFormat);
 /// ```
@@ -42,11 +43,19 @@ impl Options {
     }
 
     /// Sets the limits that files opened with these options are read
-    /// under.
+    /// under, in place of those set before; [`limits`](Self::limits) reads
+    /// them.
     #[must_use]
-    pub fn limits(mut self, limits: Limits) -> Self {
+    pub fn with_limits(mut self, limits: Limits) -> Self {
         self.limits = limits;
         self
+    }
+
+    /// The limits that files opened with these options are read under:
+    /// [`Limits::default()`] until [`with_limits`](Self::with_limits) sets
+    /// others.
+    pub fn limits(&self) -> &Limits {
+        &self.limits
     }
 
     /// Opens the file at `path` with these options.
@@ -95,5 +104,26 @@ impl Options {
     /// if the reader fails.
     pub fn from_reader<R: Read + Seek>(&self, reader: R) -> Result<RawFile<R>> {
         RawFile::new(reader, self.limits.clone())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn new_options_have_the_default_limits() {
+        assert_eq!(Options::new().limits(), &Limits::default());
+        assert_eq!(Options::default().limits(), &Limits::default());
+    }
+
+    #[test]
+    fn limits_reads_back_what_with_limits_set() {
+        let limits = Limits::default().with_max_ifds(3).with_max_value_bytes(64);
+        let options = Options::new().with_limits(limits.clone());
+        assert_eq!(options.limits(), &limits);
+        // A second call replaces the limits, as every `with_…` does.
+        let options = options.with_limits(Limits::unlimited());
+        assert_eq!(options.limits(), &Limits::unlimited());
     }
 }

@@ -23,6 +23,9 @@ does.
   has one variant per rule, such as `ValueError::CenterOffFrame`, and
   its `Display` text says the rule
   ([#105](https://github.com/kuolas/raw-files/issues/105)).
+- `Options::limits()` reads back the limits that files are opened
+  under: `Limits::default()` until `Options::with_limits` sets others
+  ([#107](https://github.com/kuolas/raw-files/issues/107)).
 
 ### Changed
 
@@ -102,6 +105,20 @@ does.
   message that ends in "recognizes". It ended in "recognises". The docs
   and the messages are now spelled the American way, as the API's
   names are.
+- `Options::limits(limits)` is now `Options::with_limits(limits)`,
+  which breaks its callers. Every setter of the crate is now a `with_…`
+  method, and `Options::limits()` reads the limits back:
+
+  ```rust
+  // 0.9.0
+  let options = Options::new().limits(Limits::unlimited());
+
+  // 0.10.0
+  let options = Options::new().with_limits(Limits::unlimited());
+  ```
+
+  A file opened with the same limits is read as before
+  ([#107](https://github.com/kuolas/raw-files/issues/107)).
 
 ## [0.9.0] - 2026-11-10
 
