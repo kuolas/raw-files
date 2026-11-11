@@ -44,11 +44,7 @@
 use std::io::{Read, Seek};
 use std::ops::Range;
 
-use super::types::{
-    ASCII, BYTE, IFD, LONG, RATIONAL, SHORT, SLONG, SRATIONAL, SSHORT, UNDEFINED, UTF8,
-};
-use super::{Block, skip_damage};
-use crate::entries::FieldType;
+use super::{Block, FieldType, skip_damage};
 use crate::error::{Error, Result};
 use crate::io::{ByteOrder, Source, within};
 use crate::limits::Limits;
@@ -410,8 +406,9 @@ impl Ifd {
     /// later occurrence of an allowed type does not count: the lookups by
     /// tag always mean the first occurrence, and a value reader would read
     /// that one.
-    pub(crate) fn entry_of_type(&self, tag: u16, types: &[u16]) -> Option<&Entry> {
-        self.entry(tag).filter(|entry| types.contains(&entry.typ()))
+    pub(crate) fn entry_of_type(&self, tag: u16, types: &[FieldType]) -> Option<&Entry> {
+        self.entry(tag)
+            .filter(|entry| types.contains(&entry.field_type()))
     }
 
     /// The values of tag `tag`, widened to 32 bits, when its type is SHORT,
@@ -427,11 +424,16 @@ impl Ifd {
         src: &mut Source<R>,
         tag: u16,
     ) -> Result<Option<Vec<u32>>> {
-        let Some((entry, bytes)) = self.value(src, tag, &[SHORT, LONG, IFD])? else {
+        let Some((entry, bytes)) = self.value(
+            src,
+            tag,
+            &[FieldType::Short, FieldType::Long, FieldType::Ifd],
+        )?
+        else {
             return Ok(None);
         };
         let order = self.order;
-        let values = if entry.typ() == SHORT {
+        let values = if entry.field_type() == FieldType::Short {
             let (shorts, _) = bytes.as_chunks::<2>();
             shorts.iter().map(|&v| u32::from(order.u16(v))).collect()
         } else {
@@ -454,7 +456,7 @@ impl Ifd {
         src: &mut Source<R>,
         tag: u16,
     ) -> Result<Option<Vec<i16>>> {
-        let Some((_, bytes)) = self.value(src, tag, &[SSHORT])? else {
+        let Some((_, bytes)) = self.value(src, tag, &[FieldType::SShort])? else {
             return Ok(None);
         };
         let order = self.order;
@@ -477,7 +479,7 @@ impl Ifd {
         src: &mut Source<R>,
         tag: u16,
     ) -> Result<Option<Vec<i32>>> {
-        let Some((_, bytes)) = self.value(src, tag, &[SLONG])? else {
+        let Some((_, bytes)) = self.value(src, tag, &[FieldType::SLong])? else {
             return Ok(None);
         };
         let order = self.order;
@@ -506,14 +508,16 @@ impl Ifd {
     /// `Io` if the reader fails. The value lies inside the file, as every
     /// kept entry's does, so nothing else can go wrong.
     pub(crate) fn u32<R: Read + Seek>(&self, src: &mut Source<R>, tag: u16) -> Result<Option<u32>> {
-        let Some(entry) = self.entry_of_type(tag, &[SHORT, LONG, IFD]) else {
+        let Some(entry) =
+            self.entry_of_type(tag, &[FieldType::Short, FieldType::Long, FieldType::Ifd])
+        else {
             return Ok(None);
         };
         if entry.count == 0 {
             return Ok(None);
         }
         let order = self.order;
-        let short = entry.typ() == SHORT;
+        let short = entry.field_type() == FieldType::Short;
         let value = match entry.value {
             Value::Inline([b0, b1, ..]) if short => u32::from(order.u16([b0, b1])),
             Value::Inline(field) => order.u32(field),
@@ -536,7 +540,7 @@ impl Ifd {
     /// One SHORT, LONG or IFD takes at most four bytes, so the entry holds
     /// it in its own value field: this reads nothing from the file, takes
     /// no source and cannot fail.
-    pub(crate) fn one_u32(&self, tag: u16, types: &[u16]) -> Option<u32> {
+    pub(crate) fn one_u32(&self, tag: u16, types: &[FieldType]) -> Option<u32> {
         let entry = self.entry_of_type(tag, types)?;
         if entry.count != 1 {
             return None;
@@ -545,9 +549,9 @@ impl Ifd {
             return None;
         };
         let [b0, b1, ..] = field;
-        match entry.typ() {
-            SHORT => Some(u32::from(self.order.u16([b0, b1]))),
-            LONG | IFD => Some(self.order.u32(field)),
+        match entry.field_type() {
+            FieldType::Short => Some(u32::from(self.order.u16([b0, b1]))),
+            FieldType::Long | FieldType::Ifd => Some(self.order.u32(field)),
             _ => None,
         }
     }
@@ -569,7 +573,7 @@ impl Ifd {
         src: &mut Source<R>,
         tag: u16,
     ) -> Result<Option<Vec<(u32, u32)>>> {
-        self.pairs(src, tag, RATIONAL)
+        self.pairs(src, tag, FieldType::Rational)
     }
 
     /// The signed fractions of tag `tag`, such as an exposure compensation
@@ -589,7 +593,7 @@ impl Ifd {
         src: &mut Source<R>,
         tag: u16,
     ) -> Result<Option<Vec<(i32, i32)>>> {
-        Ok(self.pairs(src, tag, SRATIONAL)?.map(|pairs| {
+        Ok(self.pairs(src, tag, FieldType::SRational)?.map(|pairs| {
             pairs
                 .into_iter()
                 .map(|(n, d)| (n.cast_signed(), d.cast_signed()))
@@ -639,7 +643,7 @@ impl Ifd {
         src: &mut Source<R>,
         tag: u16,
     ) -> Result<Option<Vec<u8>>> {
-        self.text_of_type(src, tag, &[ASCII])
+        self.text_of_type(src, tag, &[FieldType::Ascii])
     }
 
     /// The text of tag `tag` as the file stores it, when its type is ASCII
@@ -659,7 +663,7 @@ impl Ifd {
         src: &mut Source<R>,
         tag: u16,
     ) -> Result<Option<Vec<u8>>> {
-        self.text_of_type(src, tag, &[ASCII, UTF8])
+        self.text_of_type(src, tag, &[FieldType::Ascii, FieldType::Utf8])
     }
 
     /// The bytes of tag `tag` up to the first NUL, when its type is one of
@@ -670,7 +674,7 @@ impl Ifd {
         &self,
         src: &mut Source<R>,
         tag: u16,
-        types: &[u16],
+        types: &[FieldType],
     ) -> Result<Option<Vec<u8>>> {
         let Some((_, mut bytes)) = self.value(src, tag, types)? else {
             return Ok(None);
@@ -695,12 +699,12 @@ impl Ifd {
         tag: u16,
     ) -> Result<Option<Vec<u8>>> {
         Ok(self
-            .value(src, tag, &[BYTE, UNDEFINED])?
+            .value(src, tag, &[FieldType::Byte, FieldType::Undefined])?
             .map(|(_, bytes)| bytes))
     }
 
     /// The pairs of 32-bit numbers of tag `tag`, numerator first, both in
-    /// the IFD's byte order, when its type is `typ`: what
+    /// the IFD's byte order, when its type is `field_type`: what
     /// [`rationals`](Self::rationals) and [`srationals`](Self::srationals)
     /// read, before the signed ones are cast. `None` when the tag is
     /// missing or has another type.
@@ -708,9 +712,9 @@ impl Ifd {
         &self,
         src: &mut Source<R>,
         tag: u16,
-        typ: u16,
+        field_type: FieldType,
     ) -> Result<Option<Vec<(u32, u32)>>> {
-        let Some((_, bytes)) = self.value(src, tag, &[typ])? else {
+        let Some((_, bytes)) = self.value(src, tag, &[field_type])? else {
             return Ok(None);
         };
         let order = self.order;
@@ -730,7 +734,7 @@ impl Ifd {
         &self,
         src: &mut Source<R>,
         tag: u16,
-        types: &[u16],
+        types: &[FieldType],
     ) -> Result<Option<(&Entry, Vec<u8>)>> {
         let Some(entry) = self.entry_of_type(tag, types) else {
             return Ok(None);
@@ -749,13 +753,6 @@ impl Entry {
     /// The entry's field type.
     pub(crate) fn field_type(&self) -> FieldType {
         self.field_type
-    }
-
-    /// The code of the entry's field type, one of the types 1 to 13 or 129,
-    /// which the readers compare with the constants of
-    /// [`types`](super::types).
-    pub(crate) fn typ(&self) -> u16 {
-        self.field_type.to_code()
     }
 
     /// The number of values, as written.
@@ -791,7 +788,7 @@ impl Entry {
     /// The value of a kept entry lies inside its IFD's block and the file,
     /// so the range does too.
     pub(crate) fn byte_range(&self) -> Option<Range<u64>> {
-        if !matches!(self.typ(), UNDEFINED | BYTE) {
+        if !matches!(self.field_type, FieldType::Undefined | FieldType::Byte) {
             return None;
         }
         let start = self.value_offset()?;
@@ -844,7 +841,10 @@ mod tests {
     /// The code of field type DOUBLE, which no reader takes.
     const DOUBLE: u16 = 12;
     use crate::testing::{FAR, FailsFar};
-    use crate::tiff_builder::{Built, IfdId, Order, RawValue, TiffBuilder};
+    use crate::tiff_builder::{
+        ASCII, BYTE, Built, IFD, IfdId, LONG, Order, RATIONAL, RawValue, SHORT, SLONG, SRATIONAL,
+        SSHORT, TiffBuilder, UNDEFINED, UTF8,
+    };
     use std::io::Cursor;
 
     const ORDERS: [Order; 2] = [Order::Little, Order::Big];
@@ -1049,8 +1049,8 @@ mod tests {
             // A RATIONAL's entry says where its pairs are, numerator first.
             let rational = ifd.entry(0x000C).unwrap();
             assert_eq!(
-                (rational.tag(), rational.typ(), rational.count()),
-                (0x000C, RATIONAL, 1)
+                (rational.tag(), rational.field_type(), rational.count()),
+                (0x000C, FieldType::Rational, 1)
             );
             let at = rational.value_offset().unwrap();
             assert_eq!(file_bytes(&built, at, 4), order.u32(300));
@@ -1680,8 +1680,12 @@ mod tests {
     fn entry_of_type_finds_an_entry_of_the_allowed_type() {
         for order in ORDERS {
             let ifd = typed_ifd(order);
-            for (tag, typ) in [(0x0001, SHORT), (0x0002, LONG), (0x0003, ASCII)] {
-                let entry = ifd.entry_of_type(tag, &[typ]);
+            for (tag, field_type) in [
+                (0x0001, FieldType::Short),
+                (0x0002, FieldType::Long),
+                (0x0003, FieldType::Ascii),
+            ] {
+                let entry = ifd.entry_of_type(tag, &[field_type]);
                 assert!(entry.is_some(), "{order:?}, tag {tag:#06X}");
                 assert_eq!(entry, ifd.entry(tag), "{order:?}, tag {tag:#06X}");
             }
@@ -1693,10 +1697,18 @@ mod tests {
         for order in ORDERS {
             let ifd = typed_ifd(order);
             // A LONG where only SHORT is allowed, which `u32s` would read.
-            assert_eq!(ifd.entry_of_type(0x0002, &[SHORT]), None, "{order:?}");
-            assert_eq!(ifd.entry_of_type(0x0001, &[LONG]), None, "{order:?}");
             assert_eq!(
-                ifd.entry_of_type(0x0003, &[BYTE, UNDEFINED]),
+                ifd.entry_of_type(0x0002, &[FieldType::Short]),
+                None,
+                "{order:?}"
+            );
+            assert_eq!(
+                ifd.entry_of_type(0x0001, &[FieldType::Long]),
+                None,
+                "{order:?}"
+            );
+            assert_eq!(
+                ifd.entry_of_type(0x0003, &[FieldType::Byte, FieldType::Undefined]),
                 None,
                 "{order:?}"
             );
@@ -1709,11 +1721,14 @@ mod tests {
         for order in ORDERS {
             let ifd = typed_ifd(order);
             for tag in [0x0001, 0x0002] {
-                let entry = ifd.entry_of_type(tag, &[SHORT, LONG]);
+                let entry = ifd.entry_of_type(tag, &[FieldType::Short, FieldType::Long]);
                 assert!(entry.is_some(), "{order:?}, tag {tag:#06X}");
                 assert_eq!(entry, ifd.entry(tag), "{order:?}, tag {tag:#06X}");
             }
-            assert_eq!(ifd.entry_of_type(0x0003, &[SHORT, LONG]), None);
+            assert_eq!(
+                ifd.entry_of_type(0x0003, &[FieldType::Short, FieldType::Long]),
+                None
+            );
         }
     }
 
@@ -1722,7 +1737,10 @@ mod tests {
         for order in ORDERS {
             let ifd = typed_ifd(order);
             assert_eq!(
-                ifd.entry_of_type(0x0099, &[SHORT, LONG, ASCII]),
+                ifd.entry_of_type(
+                    0x0099,
+                    &[FieldType::Short, FieldType::Long, FieldType::Ascii]
+                ),
                 None,
                 "{order:?}"
             );
@@ -1742,9 +1760,13 @@ mod tests {
             let (_, ifd, _) = read(order, &built, ifd);
             assert_eq!(ifd.len(), 2, "both are kept");
             // The first is a SHORT: the LONG after it is not found.
-            assert_eq!(ifd.entry_of_type(0x0112, &[LONG]), None, "{order:?}");
             assert_eq!(
-                ifd.entry_of_type(0x0112, &[SHORT]),
+                ifd.entry_of_type(0x0112, &[FieldType::Long]),
+                None,
+                "{order:?}"
+            );
+            assert_eq!(
+                ifd.entry_of_type(0x0112, &[FieldType::Short]),
                 Some(&ifd.entries()[0]),
                 "{order:?}"
             );
@@ -2072,24 +2094,24 @@ mod tests {
                 .raw(ifd, 0x0008, SLONG, 1, RawValue::Inline(order.u32(5)));
             let built = builder.build();
             let (_, ifd, _) = read(order, &built, ifd);
-            let any = &[SHORT, LONG, IFD];
+            let any = &[FieldType::Short, FieldType::Long, FieldType::Ifd];
 
-            assert_eq!(ifd.one_u32(0x0001, &[LONG]), Some(0x0102_0304));
+            assert_eq!(ifd.one_u32(0x0001, &[FieldType::Long]), Some(0x0102_0304));
             assert_eq!(ifd.one_u32(0x0001, any), Some(0x0102_0304));
-            assert_eq!(ifd.one_u32(0x0002, &[SHORT]), Some(0x0506));
+            assert_eq!(ifd.one_u32(0x0002, &[FieldType::Short]), Some(0x0506));
             assert_eq!(ifd.one_u32(0x0002, any), Some(0x0506));
-            assert_eq!(ifd.one_u32(0x0003, &[IFD]), Some(0x0708_090A));
+            assert_eq!(ifd.one_u32(0x0003, &[FieldType::Ifd]), Some(0x0708_090A));
             // A type the reader does not allow.
-            assert_eq!(ifd.one_u32(0x0002, &[LONG]), None, "{order:?}");
-            assert_eq!(ifd.one_u32(0x0001, &[SHORT]), None, "{order:?}");
-            assert_eq!(ifd.one_u32(0x0003, &[LONG]), None, "{order:?}");
+            assert_eq!(ifd.one_u32(0x0002, &[FieldType::Long]), None, "{order:?}");
+            assert_eq!(ifd.one_u32(0x0001, &[FieldType::Short]), None, "{order:?}");
+            assert_eq!(ifd.one_u32(0x0003, &[FieldType::Long]), None, "{order:?}");
             // Two values, or none: not even the first is taken.
             for tag in [0x0004, 0x0005, 0x0006] {
                 assert_eq!(ifd.one_u32(tag, any), None, "{order:?} {tag:#06X}");
             }
             // A type of another size, even when named.
-            assert_eq!(ifd.one_u32(0x0007, &[BYTE]), None, "{order:?}");
-            assert_eq!(ifd.one_u32(0x0008, &[SLONG]), None, "{order:?}");
+            assert_eq!(ifd.one_u32(0x0007, &[FieldType::Byte]), None, "{order:?}");
+            assert_eq!(ifd.one_u32(0x0008, &[FieldType::SLong]), None, "{order:?}");
             // A missing tag.
             assert_eq!(ifd.one_u32(0x0009, any), None, "{order:?}");
         }
@@ -2149,7 +2171,7 @@ mod tests {
             assert_eq!(ifd.invalid_entries(), 0, "{order:?}");
             for (tag, expected) in [(0x010F, &b"\xC3\xA9\0"[..]), (0x0110, b"Z \xC3\xA9t\0")] {
                 let entry = ifd.entry(tag).expect("kept");
-                assert_eq!(entry.typ(), UTF8);
+                assert_eq!(entry.field_type(), FieldType::Utf8);
                 assert_eq!(entry.read(src, 16).unwrap(), expected, "{order:?}");
                 // Every typed reader checks the type: the reader of a text
                 // of either type takes UTF-8, cut at its NUL; the ASCII

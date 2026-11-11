@@ -94,11 +94,16 @@ pub const LONG: u16 = 4;
 pub const RATIONAL: u16 = 5;
 /// The TIFF field type UNDEFINED: bytes the tag gives a meaning to.
 pub const UNDEFINED: u16 = 7;
+/// The TIFF field type SSHORT: 16-bit signed integers.
+pub const SSHORT: u16 = 8;
 /// The TIFF field type SLONG: 32-bit signed integers.
 pub const SLONG: u16 = 9;
 /// The TIFF field type SRATIONAL: pairs of signed 32-bit integers,
 /// numerator first.
 pub const SRATIONAL: u16 = 10;
+/// The TIFF field type IFD: the offsets of IFDs, as LONGs (TIFF Technical
+/// Note 1).
+pub const IFD: u16 = 13;
 /// The Exif field type UTF-8: text in UTF-8 ending in a NUL.
 pub const UTF8: u16 = 129;
 

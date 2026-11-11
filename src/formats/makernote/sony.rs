@@ -261,7 +261,7 @@ use std::io::{Read, Seek};
 
 use super::{MakerNoteBlock, checked_color_temperature};
 use crate::camera_settings::{CameraSettings, FineTune, WhiteBalanceMode};
-use crate::container::tiff::types::{BYTE, SHORT, SLONG, UNDEFINED};
+use crate::container::tiff::FieldType;
 use crate::container::tiff::{Ifd, Tree, skip_damage};
 use crate::entries::{Directory, Entries};
 use crate::error::Result;
@@ -521,7 +521,7 @@ fn focus<R: Read + Seek>(src: &mut Source<R>, makernote: &MakerNote) -> Result<O
 fn manual_focus<R: Read + Seek>(src: &mut Source<R>, makernote: &MakerNote) -> Result<bool> {
     let one_byte = makernote
         .ifd
-        .entry_of_type(FOCUS_MODE, &[BYTE])
+        .entry_of_type(FOCUS_MODE, &[FieldType::Byte])
         .is_some_and(|entry| entry.count() == 1);
     if !one_byte {
         return Ok(false);
@@ -547,7 +547,7 @@ fn location<R: Read + Seek>(
 ) -> Result<Option<(Size, Point)>> {
     let four_shorts = makernote
         .ifd
-        .entry_of_type(tag, &[SHORT])
+        .entry_of_type(tag, &[FieldType::Short])
         .is_some_and(|entry| entry.count() == 4);
     if !four_shorts {
         return Ok(None);
@@ -574,7 +574,7 @@ fn location<R: Read + Seek>(
 fn area<R: Read + Seek>(src: &mut Source<R>, makernote: &MakerNote) -> Result<Option<Size>> {
     let six_bytes = makernote
         .ifd
-        .entry_of_type(FOCUS_FRAME_SIZE, &[UNDEFINED])
+        .entry_of_type(FOCUS_FRAME_SIZE, &[FieldType::Undefined])
         .is_some_and(|entry| entry.count() == 6);
     if !six_bytes {
         return Ok(None);
@@ -697,7 +697,7 @@ fn fine_tune<R: Read + Seek>(
 ) -> Result<Option<FineTune>> {
     let two_slongs = makernote
         .ifd
-        .entry_of_type(FINE_TUNE, &[SLONG])
+        .entry_of_type(FINE_TUNE, &[FieldType::SLong])
         .is_some_and(|entry| entry.count() == 2);
     if !two_slongs {
         return Ok(None);
@@ -745,13 +745,14 @@ mod tests {
         ColorSpace, ExposureProgram, Flash, FlashMode, MeteringMode, WhiteBalance,
     };
     use crate::container::tiff::tags::{MAKE, MAKER_NOTE};
-    use crate::container::tiff::types::{ASCII, SHORT, SSHORT, UNDEFINED};
     use crate::container::tiff::{Block, ifd_in, walk};
     use crate::error::ErrorKind;
     use crate::focus::FocusOrigin;
     use crate::formats::testing::{Src, byte_order};
     use crate::testing::{FAR, FailsFar};
-    use crate::tiff_builder::{Built, IfdId, Order, RawValue, TiffBuilder};
+    use crate::tiff_builder::{
+        ASCII, Built, IfdId, Order, RawValue, SHORT, SSHORT, TiffBuilder, UNDEFINED,
+    };
     use std::io::Cursor;
 
     const ORDERS: [Order; 2] = [Order::Little, Order::Big];

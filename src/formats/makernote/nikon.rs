@@ -427,8 +427,8 @@ use super::{MakerNoteBlock, checked_color_temperature};
 use crate::camera_settings::{
     CameraSettings, ColorSpace, FineTune, ImageArea, RawImageSize, Shutter, WhiteBalanceMode,
 };
+use crate::container::tiff::FieldType;
 use crate::container::tiff::tags::{JPEG_INTERCHANGE_FORMAT, JPEG_INTERCHANGE_FORMAT_LENGTH};
-use crate::container::tiff::types::{LONG, SHORT, SRATIONAL, SSHORT, UNDEFINED};
 use crate::container::tiff::{Block, Ifd, Tree, ifd_in, parse_header, skip_damage};
 use crate::entries::{Directory, Entries};
 use crate::error::Result;
@@ -670,7 +670,7 @@ fn preview_ifd<R: Read + Seek>(
     ifd: &Ifd,
     limits: &Limits,
 ) -> Result<Option<Ifd>> {
-    let Some(pointer) = ifd.one_u32(PREVIEW_IFD, &[LONG]) else {
+    let Some(pointer) = ifd.one_u32(PREVIEW_IFD, &[FieldType::Long]) else {
         return Ok(None);
     };
     ifd_in(src, ifd.block(), pointer, ifd.order(), limits)
@@ -718,8 +718,8 @@ fn embedded_ifd<R: Read + Seek>(
 /// are held in their entries, so this reads nothing from the file.
 pub(in crate::formats) fn preview_candidate(makernote: &MakerNote) -> Option<Candidate> {
     let preview = makernote.preview.as_ref()?;
-    let offset = preview.one_u32(JPEG_INTERCHANGE_FORMAT, &[LONG])?;
-    let length = preview.one_u32(JPEG_INTERCHANGE_FORMAT_LENGTH, &[LONG])?;
+    let offset = preview.one_u32(JPEG_INTERCHANGE_FORMAT, &[FieldType::Long])?;
+    let length = preview.one_u32(JPEG_INTERCHANGE_FORMAT_LENGTH, &[FieldType::Long])?;
     // An empty JPEG is passed on: the finder drops it with the others.
     tiff_previews::candidate(preview.block(), offset, length)
 }
@@ -1029,11 +1029,11 @@ fn fine_tune<R: Read + Seek>(
     makernote: &MakerNote,
 ) -> Result<Option<FineTune>> {
     let ifd = &makernote.ifd;
-    let two = |tag, typ| {
-        ifd.entry_of_type(tag, &[typ])
+    let two = |tag, field_type| {
+        ifd.entry_of_type(tag, &[field_type])
             .is_some_and(|entry| entry.count() == 2)
     };
-    if two(FINE_TUNE, SRATIONAL) {
+    if two(FINE_TUNE, FieldType::SRational) {
         let fractions = skip_damage(ifd.srationals(src, FINE_TUNE))?.flatten();
         if let Some(&[amber_blue, magenta_green]) = fractions.as_deref()
             && let Some(fine_tune) = fine_tune_of(amber_blue, magenta_green)
@@ -1041,7 +1041,7 @@ fn fine_tune<R: Read + Seek>(
             return Ok(Some(fine_tune));
         }
     }
-    if !two(FINE_TUNE_STEPS, SSHORT) {
+    if !two(FINE_TUNE_STEPS, FieldType::SShort) {
         return Ok(None);
     }
     let steps = skip_damage(ifd.i16s(src, FINE_TUNE_STEPS))?.flatten();
@@ -1190,7 +1190,10 @@ fn crop_area<R: Read + Seek>(
     let Some(raw) = raw else {
         return Ok(CropArea::Unusable);
     };
-    if ifd.entry_of_type(CROP_AREA, &[SHORT, LONG]).is_none() {
+    if ifd
+        .entry_of_type(CROP_AREA, &[FieldType::Short, FieldType::Long])
+        .is_none()
+    {
         return Ok(CropArea::Unusable);
     }
     let values = skip_damage(ifd.u32s(src, CROP_AREA))?.flatten();
@@ -1234,7 +1237,7 @@ fn serial_number<R: Read + Seek>(
 /// `Io` when the reader fails. Nothing the block holds is an error.
 fn iso<R: Read + Seek>(src: &mut Source<R>, makernote: &MakerNote) -> Result<Option<u32>> {
     let ifd = &makernote.ifd;
-    if ifd.entry_of_type(ISO, &[SHORT]).is_none() {
+    if ifd.entry_of_type(ISO, &[FieldType::Short]).is_none() {
         return Ok(None);
     }
     let values = skip_damage(ifd.u32s(src, ISO))?.flatten();
@@ -1288,7 +1291,10 @@ fn lens_range<R: Read + Seek>(
 /// `Io` when the reader fails. Nothing the block holds is an error.
 fn world_time<R: Read + Seek>(src: &mut Source<R>, makernote: &MakerNote) -> Result<Option<i16>> {
     let ifd = &makernote.ifd;
-    if ifd.entry_of_type(WORLD_TIME, &[UNDEFINED]).is_none() {
+    if ifd
+        .entry_of_type(WORLD_TIME, &[FieldType::Undefined])
+        .is_none()
+    {
         return Ok(None);
     }
     let bytes = skip_damage(ifd.bytes(src, WORLD_TIME))?.flatten();
@@ -1352,7 +1358,10 @@ fn focus<R: Read + Seek>(
 ) -> Result<Option<FocusPoints>> {
     let ifd = &makernote.ifd;
     // Without AFInfo2 there is nothing to place, so FocusMode is not read.
-    if ifd.entry_of_type(AF_INFO2, &[UNDEFINED]).is_none() {
+    if ifd
+        .entry_of_type(AF_INFO2, &[FieldType::Undefined])
+        .is_none()
+    {
         return Ok(None);
     }
     if manual_focus(src, makernote)? {
@@ -1461,7 +1470,10 @@ fn crop_hi_speed<R: Read + Seek>(
     makernote: &MakerNote,
 ) -> Result<Option<CropHiSpeed>> {
     let ifd = &makernote.ifd;
-    if ifd.entry_of_type(CROP_HI_SPEED, &[SHORT]).is_none() {
+    if ifd
+        .entry_of_type(CROP_HI_SPEED, &[FieldType::Short])
+        .is_none()
+    {
         return Ok(None);
     }
     let values = skip_damage(ifd.u32s(src, CROP_HI_SPEED))?.flatten();
@@ -2085,7 +2097,6 @@ mod tests {
         MAKE, MAKER_NOTE, MODEL, OFFSET_TIME_ORIGINAL, PHOTOGRAPHIC_SENSITIVITY,
         PHOTOMETRIC_INTERPRETATION, SUB_SEC_TIME_ORIGINAL, WHITE_BALANCE as EXIF_WHITE_BALANCE,
     };
-    use crate::container::tiff::types::{BYTE, IFD, RATIONAL, SRATIONAL, SSHORT};
     use crate::container::tiff::{self, parse_ifd, walk};
     use crate::datetime::DateTime;
     use crate::entries::Value;
@@ -2094,7 +2105,10 @@ mod tests {
     use crate::jpeg_stub::jpeg_stub;
     use crate::metadata::Lens;
     use crate::testing::{FAR, FailsFar};
-    use crate::tiff_builder::{ASCII, IfdId, Order, RawValue, TiffBuilder};
+    use crate::tiff_builder::{
+        ASCII, BYTE, IFD, IfdId, LONG, Order, RATIONAL, RawValue, SHORT, SRATIONAL, SSHORT,
+        TiffBuilder, UNDEFINED,
+    };
     use std::io::Cursor;
     use std::ops::Range;
 

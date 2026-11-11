@@ -118,7 +118,7 @@
 use std::io::{Read, Seek};
 use std::ops::Range;
 
-use crate::container::tiff::types::UNDEFINED;
+use crate::container::tiff::FieldType;
 use crate::container::tiff::{Block, Ifd, ifd_in, parse_header, skip_damage};
 use crate::error::Result;
 use crate::io::{ByteOrder, Source};
@@ -186,7 +186,10 @@ fn listed_images<R: Read + Seek>(
 ) -> Result<Vec<Range<u64>>> {
     // The value readers take BYTE as well as UNDEFINED; MPEntry's rule
     // allows UNDEFINED only.
-    if ifd.entry_of_type(MP_ENTRY, &[UNDEFINED]).is_none() {
+    if ifd
+        .entry_of_type(MP_ENTRY, &[FieldType::Undefined])
+        .is_none()
+    {
         return Ok(Vec::new());
     }
     let Some(value) = skip_damage(ifd.bytes(src, MP_ENTRY))?.flatten() else {
