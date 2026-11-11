@@ -153,6 +153,11 @@ impl Limits {
     ///   fails to open with `LimitExceeded`: its format is told by its
     ///   Make. A JPEG file still opens, without what its MakerNote gives.
     ///
+    /// A tag that names one number, such as the offset of a directory, the
+    /// orientation or the ISO, is never refused for its length: raw-files
+    /// reads its first value alone, or, where the tag's rule allows exactly
+    /// one value, gives none when the file gives it more.
+    ///
     /// The default holds every value measured on camera files, the largest
     /// a whole MakerNote of under 1,000,000 bytes.
     pub fn max_value_bytes(self) -> u64 {
