@@ -43,8 +43,8 @@ mod previews;
 use std::io::{Read, Seek};
 
 use super::{FormatSpec, Parsed, is_dng, make_starts_with, tiff_metadata};
+use crate::container::tiff::FieldType;
 use crate::container::tiff::tags::DNG_PRIVATE_DATA;
-use crate::container::tiff::types::BYTE;
 use crate::container::tiff::{Entry, Ifd, Tree, ifd_in};
 use crate::entries::{Directory, Entries};
 use crate::error::Result;
@@ -136,7 +136,7 @@ fn claims<R: Read + Seek>(src: &mut Source<R>, tree: &Tree) -> Result<bool> {
 /// block of a maker's own data of any length, is not one.
 fn private_pointer(tree: &Tree) -> Option<&Entry> {
     tree.ifd0()
-        .entry_of_type(DNG_PRIVATE_DATA, &[BYTE])
+        .entry_of_type(DNG_PRIVATE_DATA, &[FieldType::Byte])
         .filter(|entry| entry.count() == 4)
 }
 
@@ -229,7 +229,6 @@ mod tests {
     use crate::container::tiff::tags::{
         DNG_VERSION, MAKE, MAKER_NOTE, WHITE_BALANCE as EXIF_WHITE_BALANCE,
     };
-    use crate::container::tiff::types::UNDEFINED;
     use crate::container::tiff::{Block, walk};
     use crate::entries::Value;
     use crate::focus::Focus;
@@ -239,7 +238,7 @@ mod tests {
     use crate::formats::testing::{Src, file};
     use crate::geometry::{Point, Size};
     use crate::rational::SignedRational;
-    use crate::tiff_builder::{IfdId, Order, RawValue, TiffBuilder};
+    use crate::tiff_builder::{BYTE, IfdId, Order, RawValue, TiffBuilder, UNDEFINED};
     use std::io::Cursor;
 
     const ORDERS: [Order; 2] = [Order::Little, Order::Big];

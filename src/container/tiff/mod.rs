@@ -11,30 +11,31 @@
 //! are read by the [`ifd`] module, and found by the [`mod@walk`] module:
 //! IFD0's chain of next IFDs, their SubIFDs, IFD0's Exif and GPS IFDs and
 //! the Exif IFD's Interoperability IFD. The [`tags`] module names the tags
-//! the crate reads, and the [`types`] module the field types of their
+//! the crate reads, and the [`field_type`] module the field types of their
 //! values.
 //!
 //! This module is the container's face to the rest of the crate: it
 //! re-exports what the format modules use, and the split into files below
-//! stays private to this folder, but for `tags` and `types`, whose
-//! constants the format modules name as `tiff::tags::ORIENTATION` and
-//! `tiff::types::UNDEFINED`. Besides the readers, it
-//! re-exports the walk's rule for damage, [`skip_damage`], so that what
-//! reads the tree after the walk loses to damage only what the damage
+//! stays private to this folder, but for `tags`, whose constants the
+//! format modules name as `tiff::tags::ORIENTATION`. Besides the readers,
+//! it re-exports [`FieldType`], which the crate's root re-exports in turn.
+//! It also re-exports the walk's rule for damage, [`skip_damage`], so that
+//! what reads the tree after the walk loses to damage only what the damage
 //! touches, as the walk does. One file holds only tests:
 //! `robustness`, which reads truncated and corrupted files through the
 //! whole reader.
 
 mod block;
+mod field_type;
 mod header;
 mod ifd;
 #[cfg(test)]
 mod robustness;
 pub(crate) mod tags;
-pub(crate) mod types;
 mod walk;
 
 pub(crate) use block::Block;
+pub use field_type::FieldType;
 pub(crate) use header::parse_header;
 pub(crate) use ifd::{Entry, Ifd, ifd_in, parse_ifd};
 pub(crate) use walk::{Link, Tree, skip_damage, walk};

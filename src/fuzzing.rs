@@ -17,7 +17,7 @@
 use std::io::{Cursor, Read, Seek};
 
 use crate::container::jpeg::{mpf, probe, segments};
-use crate::container::tiff::types::{IFD, LONG, SHORT};
+use crate::container::tiff::FieldType;
 use crate::container::tiff::{Block, Tree, walk};
 use crate::datetime::DateTime;
 use crate::entries::{Entries, Entry, Value};
@@ -60,7 +60,7 @@ fn read_values<R: Read + Seek>(src: &mut Source<R>, tree: &Tree) {
         for tag in ifd.tags() {
             let _ = ifd.u32s(src, tag);
             let _ = ifd.u32(src, tag);
-            let _ = ifd.one_u32(tag, &[SHORT, LONG, IFD]);
+            let _ = ifd.one_u32(tag, &[FieldType::Short, FieldType::Long, FieldType::Ifd]);
             let _ = ifd.i16s(src, tag);
             let _ = ifd.i32s(src, tag);
             let _ = ifd.rationals(src, tag);

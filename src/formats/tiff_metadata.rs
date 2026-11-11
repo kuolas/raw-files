@@ -197,6 +197,7 @@ use crate::camera_settings::{
     CameraSettings, ColorSpace, ExposureProgram, Flash, FlashMode, MeteringMode, WhiteBalance,
     WhiteBalanceMode,
 };
+use crate::container::tiff::FieldType;
 use crate::container::tiff::tags::{
     ARTIST, BODY_SERIAL_NUMBER, CAMERA_OWNER_NAME, COLOR_SPACE, COPYRIGHT, DATE_TIME_ORIGINAL,
     DEFAULT_CROP_ORIGIN, DEFAULT_CROP_SIZE, EXPOSURE_BIAS_VALUE, EXPOSURE_PROGRAM, EXPOSURE_TIME,
@@ -208,7 +209,6 @@ use crate::container::tiff::tags::{
     OFFSET_TIME_ORIGINAL, PHOTOGRAPHER, PHOTOGRAPHIC_SENSITIVITY, RECOMMENDED_EXPOSURE_INDEX,
     SOFTWARE, SUB_SEC_TIME_ORIGINAL, USER_COMMENT, WHITE_BALANCE,
 };
-use crate::container::tiff::types::{BYTE, LONG, RATIONAL, SHORT, UNDEFINED};
 use crate::container::tiff::{Ifd, Tree, skip_damage};
 use crate::datetime::DateTime;
 use crate::entries::clean_text;
@@ -474,7 +474,10 @@ fn description<R: Read + Seek>(src: &mut Source<R>, ifd0: &Ifd) -> Result<Option
 /// reason, such as one longer than the cap, is `None`.
 fn comment<R: Read + Seek>(src: &mut Source<R>, exif: &Ifd) -> Result<Option<String>> {
     // `bytes` reads BYTE as well as UNDEFINED; Exif gives UNDEFINED alone.
-    if exif.entry_of_type(USER_COMMENT, &[UNDEFINED]).is_none() {
+    if exif
+        .entry_of_type(USER_COMMENT, &[FieldType::Undefined])
+        .is_none()
+    {
         return Ok(None);
     }
     let Some(bytes) = skip_damage(exif.bytes(src, USER_COMMENT))?.flatten() else {
@@ -584,7 +587,7 @@ fn exact_rationals<R: Read + Seek, const N: usize>(
     ifd: &Ifd,
     tag: u16,
 ) -> Result<Option<[Rational; N]>> {
-    if !holds(ifd, tag, RATIONAL, N) {
+    if !holds(ifd, tag, FieldType::Rational, N) {
         return Ok(None);
     }
     let pairs = skip_damage(ifd.rationals(src, tag))?.flatten();
@@ -609,7 +612,7 @@ fn exact_rationals<R: Read + Seek, const N: usize>(
 /// reason is `None`.
 fn one_byte<R: Read + Seek>(src: &mut Source<R>, ifd: &Ifd, tag: u16) -> Result<Option<u8>> {
     // `bytes` reads UNDEFINED as well as BYTE; Exif gives BYTE alone.
-    if !holds(ifd, tag, BYTE, 1) {
+    if !holds(ifd, tag, FieldType::Byte, 1) {
         return Ok(None);
     }
     Ok(skip_damage(ifd.bytes(src, tag))?
@@ -686,7 +689,7 @@ fn focal_length_in_35mm_film(exif: &Ifd) -> Option<u32> {
 /// from the file.
 pub(crate) fn one_short(ifd: &Ifd, tag: u16) -> Option<u16> {
     // A SHORT, widened to 32 bits, always fits back.
-    ifd.one_u32(tag, &[SHORT])
+    ifd.one_u32(tag, &[FieldType::Short])
         .and_then(|value| u16::try_from(value).ok())
 }
 
@@ -697,16 +700,17 @@ pub(crate) fn one_short(ifd: &Ifd, tag: u16) -> Option<u16> {
 /// number. `None` when the tag is missing, of another type or of another
 /// count. The entry holds the value, so this reads nothing from the file.
 pub(crate) fn one_long(ifd: &Ifd, tag: u16) -> Option<u32> {
-    ifd.one_u32(tag, &[LONG])
+    ifd.one_u32(tag, &[FieldType::Long])
 }
 
-/// Whether tag `tag` of `ifd` is of type `typ` and holds exactly `count`
-/// values: what the readers of fractions and of a byte check before they
-/// read, so that a tag of another type or count gives nothing and costs
-/// no read (ADR011). The type is checked through [`Ifd::entry_of_type`],
-/// since the value readers take more types than a tag's rule allows.
-fn holds(ifd: &Ifd, tag: u16, typ: u16, count: usize) -> bool {
-    ifd.entry_of_type(tag, &[typ])
+/// Whether tag `tag` of `ifd` is of type `field_type` and holds exactly
+/// `count` values: what the readers of fractions and of a byte check
+/// before they read, so that a tag of another type or count gives nothing
+/// and costs no read (ADR011). The type is checked through
+/// [`Ifd::entry_of_type`], since the value readers take more types than a
+/// tag's rule allows.
+fn holds(ifd: &Ifd, tag: u16, field_type: FieldType, count: usize) -> bool {
+    ifd.entry_of_type(tag, &[field_type])
         .is_some_and(|entry| usize::try_from(entry.count()).ok() == Some(count))
 }
 
@@ -1172,7 +1176,8 @@ mod tests {
     use crate::orientation::Orientation;
     use crate::testing::{FAR, FailsFar, size};
     use crate::tiff_builder::{
-        ASCII, IfdId, LONG, Order, RATIONAL, RawValue, SHORT, SRATIONAL, TiffBuilder, UTF8,
+        ASCII, IfdId, LONG, Order, RATIONAL, RawValue, SHORT, SRATIONAL, TiffBuilder, UNDEFINED,
+        UTF8,
     };
     use std::io::Cursor;
 

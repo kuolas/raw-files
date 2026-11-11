@@ -175,10 +175,9 @@ fn checked_color_temperature(kelvin: u32) -> Option<u32> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::container::tiff::types::{ASCII, UNDEFINED};
     use crate::container::tiff::walk;
     use crate::formats::testing::{Src, byte_order};
-    use crate::tiff_builder::{Built, IfdId, Order, RawValue, TiffBuilder};
+    use crate::tiff_builder::{ASCII, Built, IfdId, Order, RawValue, TiffBuilder, UNDEFINED};
     use std::io::Cursor;
 
     const ORDERS: [Order; 2] = [Order::Little, Order::Big];
