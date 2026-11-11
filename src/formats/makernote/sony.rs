@@ -631,15 +631,15 @@ fn camera_settings<R: Read + Seek>(
     mut settings: CameraSettings,
 ) -> Result<CameraSettings> {
     let ifd = &makernote.ifd;
-    let mode = one_long(src, ifd, WHITE_BALANCE)?.and_then(white_balance_mode);
+    let mode = one_long(ifd, WHITE_BALANCE).and_then(white_balance_mode);
     if let Some(mode) = mode {
         settings.white_balance.mode = Some(mode);
     }
     settings.white_balance.color_temperature =
-        one_long(src, ifd, COLOR_TEMPERATURE)?.and_then(checked_color_temperature);
+        one_long(ifd, COLOR_TEMPERATURE).and_then(checked_color_temperature);
     settings.white_balance.fine_tune = fine_tune(src, makernote)?;
     settings.electronic_front_curtain_setting =
-        one_long(src, ifd, ELECTRONIC_FRONT_CURTAIN)?.and_then(electronic_front_curtain_setting);
+        one_long(ifd, ELECTRONIC_FRONT_CURTAIN).and_then(electronic_front_curtain_setting);
     Ok(settings)
 }
 

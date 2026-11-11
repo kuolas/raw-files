@@ -270,7 +270,7 @@ sensor data. [P][1]
 | 0x0005 | WhiteBalance | string | the white balance setting, as upper-case text padded with spaces; on every checked body; values in [section 8.7](#87-camera-settings) **[F]** | metadata, full metadata |
 | 0x000B | WhiteBalanceFineTune | s16[1 or 2] | the white balance fine-tuning: one value from the D1H to the D200, two from the D300 on; not written by the Z 9, Z f, Z5II, Z50II and Z6III, which write 0x003F alone **[F]** | metadata |
 | 0x000C | WB_RBLevels | rational[4] | as-shot white-balance multipliers; LibRaw reads them as R, B, then two greens (ExifTool leaves the last two unidentified) | full metadata, raw data |
-| 0x0011 | PreviewIFD | IFD | sub-IFD with a small JPEG preview; offsets relative to MakerNote + 10 | previews |
+| 0x0011 | PreviewIFD | u32 | the offset of a sub-IFD with a small JPEG preview; offsets relative to MakerNote + 10. One LONG in every checked file that has it, as are the sub-IFD's 0x0201 and 0x0202; raw-files reads them in no other shape **[F]** | previews |
 | 0x001B | CropHiSpeed | u16[7] | crop mode and geometry; field order in [section 8.4](#84-image-dimensions) | metadata, focus points, raw data |
 | 0x001D | SerialNumber | string | the body's serial number; decryption key input. Seven digits on every checked DSLR and mirrorless body from the D300 on (eight on the Nikon 1 J1) and on the Coolpix A; seven spaces on the D200 (file 8079); absent before it and on the Coolpix E5700 and P7800 **[F]** | metadata, full metadata, raw data |
 | 0x001E | ColorSpace | u16 | the color space setting: 1 sRGB, 2 Adobe RGB, 4 BT.2100; from the D200 on, but not on the Coolpix P7800, while no checked NEF has the Exif ColorSpace **[F]** | metadata |

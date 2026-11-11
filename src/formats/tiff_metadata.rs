@@ -659,7 +659,7 @@ fn exposure<R: Read + Seek>(src: &mut Source<R>, exif: &Ifd) -> Result<Exposure>
         exposure_time: rational(src, exif, EXPOSURE_TIME)?,
         f_number: rational(src, exif, F_NUMBER)?,
         focal_length: rational(src, exif, FOCAL_LENGTH)?,
-        focal_length_in_35mm_film: focal_length_in_35mm_film(src, exif)?,
+        focal_length_in_35mm_film: focal_length_in_35mm_film(exif),
         exposure_bias: signed_rational(src, exif, EXPOSURE_BIAS_VALUE)?,
     })
 }
@@ -670,91 +670,39 @@ fn exposure<R: Read + Seek>(src: &mut Source<R>, exif: &Ifd) -> Result<Exposure>
 /// `None` when the value is zero, which Exif writes for a focal length the
 /// camera did not know, as the ILCE-7S does with a manual lens (public
 /// sample 1582).
-///
-/// # Errors
-///
-/// `Io` when the reader fails. A value that cannot be read for any other
-/// reason is `None`.
-fn focal_length_in_35mm_film<R: Read + Seek>(
-    src: &mut Source<R>,
-    exif: &Ifd,
-) -> Result<Option<u32>> {
-    Ok(one_short(src, exif, FOCAL_LENGTH_IN_35MM_FILM)?
+fn focal_length_in_35mm_film(exif: &Ifd) -> Option<u32> {
+    one_short(exif, FOCAL_LENGTH_IN_35MM_FILM)
         .filter(|&millimeters| millimeters > 0)
-        .map(u32::from))
+        .map(u32::from)
 }
 
 /// The value of tag `tag` of `ifd`, when the tag is of type SHORT and
-/// holds exactly one value, as [`one_of_type`] reads it: the type and
+/// holds exactly one value, as [`Ifd::one_u32`] reads it: the type and
 /// count the standard gives each Exif tag read this way, a single number
 /// or code such as the focal length in 35 mm terms or the metering mode,
 /// and that a MakerNote's reader holds its own such tags to, such as
-/// Nikon's shutter mode.
-///
-/// # Errors
-///
-/// `Io` when the reader fails. A value that cannot be read for any other
-/// reason is `None`.
-pub(crate) fn one_short<R: Read + Seek>(
-    src: &mut Source<R>,
-    ifd: &Ifd,
-    tag: u16,
-) -> Result<Option<u16>> {
-    let value = one_of_type(src, ifd, tag, SHORT)?;
+/// Nikon's shutter mode. `None` when the tag is missing, of another type
+/// or of another count. The entry holds the value, so this reads nothing
+/// from the file.
+pub(crate) fn one_short(ifd: &Ifd, tag: u16) -> Option<u16> {
     // A SHORT, widened to 32 bits, always fits back.
-    Ok(value.and_then(|value| u16::try_from(value).ok()))
+    ifd.one_u32(tag, &[SHORT])
+        .and_then(|value| u16::try_from(value).ok())
 }
 
 /// The value of tag `tag` of `ifd`, when the tag is of type LONG and holds
-/// exactly one value, as [`one_of_type`] reads it: the type and count a
+/// exactly one value, as [`Ifd::one_u32`] reads it: the type and count a
 /// MakerNote's reader holds its tags of one number to where the maker
 /// writes them as LONGs, such as each of Sony's settings tags of one
-/// number.
-///
-/// # Errors
-///
-/// `Io` when the reader fails. A value that cannot be read for any other
-/// reason is `None`.
-pub(crate) fn one_long<R: Read + Seek>(
-    src: &mut Source<R>,
-    ifd: &Ifd,
-    tag: u16,
-) -> Result<Option<u32>> {
-    one_of_type(src, ifd, tag, LONG)
-}
-
-/// The value of tag `tag` of `ifd`, widened to 32 bits, when the tag is of
-/// type `typ`, SHORT or LONG, and holds exactly one value: the one rule
-/// behind [`one_short`] and [`one_long`].
-///
-/// `None` when the tag is missing, of another type or of another count.
-/// The type is checked first ([`Ifd::entry_of_type`]), since [`Ifd::u32`]
-/// would take a SHORT, a LONG and an IFD alike; a tag of one value that
-/// holds several, or none, records nothing the reader can trust, so even
-/// its first value is not taken (ADR011).
-///
-/// One SHORT or one LONG is held in its entry, so reading it reads
-/// nothing more from the file.
-///
-/// # Errors
-///
-/// `Io` when the reader fails. A value that cannot be read for any other
-/// reason is `None`.
-fn one_of_type<R: Read + Seek>(
-    src: &mut Source<R>,
-    ifd: &Ifd,
-    tag: u16,
-    typ: u16,
-) -> Result<Option<u32>> {
-    if !holds(ifd, tag, typ, 1) {
-        return Ok(None);
-    }
-    Ok(skip_damage(ifd.u32(src, tag))?.flatten())
+/// number. `None` when the tag is missing, of another type or of another
+/// count. The entry holds the value, so this reads nothing from the file.
+pub(crate) fn one_long(ifd: &Ifd, tag: u16) -> Option<u32> {
+    ifd.one_u32(tag, &[LONG])
 }
 
 /// Whether tag `tag` of `ifd` is of type `typ` and holds exactly `count`
-/// values: what every reader of a tag of fixed shape checks before it
-/// reads, so that a tag of another type or count gives nothing and costs
+/// values: what the readers of fractions and of a byte check before they
+/// read, so that a tag of another type or count gives nothing and costs
 /// no read (ADR011). The type is checked through [`Ifd::entry_of_type`],
 /// since the value readers take more types than a tag's rule allows.
 fn holds(ifd: &Ifd, tag: u16, typ: u16, count: usize) -> bool {
@@ -920,15 +868,15 @@ fn camera_settings<R: Read + Seek>(
 ) -> Result<CameraSettings> {
     Ok(CameraSettings {
         white_balance: WhiteBalance {
-            mode: white_balance_mode(src, exif)?,
+            mode: white_balance_mode(exif),
             // Only a maker's MakerNote records the color temperature and
             // the fine-tuning: Nikon's and Sony's readers fill them.
             color_temperature: None,
             fine_tune: None,
         },
-        exposure_program: one_short(src, exif, EXPOSURE_PROGRAM)?.and_then(exposure_program),
-        metering_mode: one_short(src, exif, METERING_MODE)?.and_then(metering_mode),
-        flash: one_short(src, exif, FLASH)?.and_then(flash),
+        exposure_program: one_short(exif, EXPOSURE_PROGRAM).and_then(exposure_program),
+        metering_mode: one_short(exif, METERING_MODE).and_then(metering_mode),
+        flash: one_short(exif, FLASH).and_then(flash),
         // Only a maker's MakerNote records these: Nikon's reader fills
         // all but the electronic front curtain setting, which Nikon does
         // not record, and Sony's reader that setting alone, since Sony
@@ -1018,19 +966,11 @@ fn flash(bits: u16) -> Option<Flash> {
 /// `None` when the WhiteBalance is missing, cannot be read or holds
 /// another code, and for a manual white balance whose LightSource is
 /// missing, cannot be read or names no mode.
-///
-/// # Errors
-///
-/// `Io` when the reader fails. A value that cannot be read for any other
-/// reason is `None`.
-fn white_balance_mode<R: Read + Seek>(
-    src: &mut Source<R>,
-    exif: &Ifd,
-) -> Result<Option<WhiteBalanceMode>> {
-    match one_short(src, exif, WHITE_BALANCE)? {
-        Some(0) => Ok(Some(WhiteBalanceMode::Auto)),
-        Some(1) => Ok(one_short(src, exif, LIGHT_SOURCE)?.and_then(white_balance_of_light)),
-        _ => Ok(None),
+fn white_balance_mode(exif: &Ifd) -> Option<WhiteBalanceMode> {
+    match one_short(exif, WHITE_BALANCE) {
+        Some(0) => Some(WhiteBalanceMode::Auto),
+        Some(1) => one_short(exif, LIGHT_SOURCE).and_then(white_balance_of_light),
+        _ => None,
     }
 }
 
@@ -1081,7 +1021,7 @@ fn color_space<R: Read + Seek>(
     exif: &Ifd,
     interop: Option<&Ifd>,
 ) -> Result<Option<ColorSpace>> {
-    match one_short(src, exif, COLOR_SPACE)? {
+    match one_short(exif, COLOR_SPACE) {
         Some(SRGB) => Ok(Some(ColorSpace::Srgb)),
         Some(UNCALIBRATED) => {
             let Some(interop) = interop else {

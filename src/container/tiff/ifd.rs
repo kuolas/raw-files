@@ -498,7 +498,8 @@ impl Ifd {
     /// costs no more than one, and is never refused for its length as
     /// [`u32s`](Self::u32s) refuses it. A reader whose tag's rule gives a
     /// count first checks the count of the entry that
-    /// [`entry_of_type`](Self::entry_of_type) finds.
+    /// [`entry_of_type`](Self::entry_of_type) finds, or takes
+    /// [`one_u32`](Self::one_u32) for a tag of exactly one value.
     ///
     /// # Errors
     ///
@@ -520,6 +521,35 @@ impl Ifd {
             Value::At(at) => src.u32_at(at, order)?,
         };
         Ok(Some(value))
+    }
+
+    /// The value of tag `tag`, widened to 32 bits, when its type is one of
+    /// `types` and it holds exactly one value; `None` when the tag is
+    /// missing, has another type, or holds none or several.
+    ///
+    /// Each of `types` is SHORT, LONG or IFD: a reader names the types its
+    /// tag's rule allows, as [`entry_of_type`](Self::entry_of_type) takes
+    /// them. A type of any other size gives `None`. A tag of one number
+    /// that holds several, or none, records nothing a reader can trust, so
+    /// even its first value is not taken (ADR011).
+    ///
+    /// One SHORT, LONG or IFD takes at most four bytes, so the entry holds
+    /// it in its own value field: this reads nothing from the file, takes
+    /// no source and cannot fail.
+    pub(crate) fn one_u32(&self, tag: u16, types: &[u16]) -> Option<u32> {
+        let entry = self.entry_of_type(tag, types)?;
+        if entry.count != 1 {
+            return None;
+        }
+        let Value::Inline(field) = entry.value else {
+            return None;
+        };
+        let [b0, b1, ..] = field;
+        match entry.typ() {
+            SHORT => Some(u32::from(self.order.u16([b0, b1]))),
+            LONG | IFD => Some(self.order.u32(field)),
+            _ => None,
+        }
     }
 
     /// The fractions of tag `tag`, such as an exposure time of 10/3200 s,
@@ -2017,6 +2047,51 @@ mod tests {
             for tag in [0x0007, 0x0008, 0x0009] {
                 assert_eq!(ifd.u32(src, tag).unwrap(), None, "{order:?} {tag:#06X}");
             }
+        }
+    }
+
+    #[test]
+    fn one_value_of_an_allowed_type_is_read_and_any_other_shape_is_not() {
+        for order in ORDERS {
+            let mut builder = TiffBuilder::new(order);
+            let ifd = builder.ifd();
+            builder
+                .long(ifd, 0x0001, &[0x0102_0304])
+                .short(ifd, 0x0002, &[0x0506])
+                .raw(
+                    ifd,
+                    0x0003,
+                    IFD,
+                    1,
+                    RawValue::Inline(order.u32(0x0708_090A)),
+                )
+                .short(ifd, 0x0004, &[1, 2])
+                .long(ifd, 0x0005, &[1, 2])
+                .raw(ifd, 0x0006, LONG, 0, RawValue::Inline([1, 2, 3, 4]))
+                .byte(ifd, 0x0007, &[9])
+                .raw(ifd, 0x0008, SLONG, 1, RawValue::Inline(order.u32(5)));
+            let built = builder.build();
+            let (_, ifd, _) = read(order, &built, ifd);
+            let any = &[SHORT, LONG, IFD];
+
+            assert_eq!(ifd.one_u32(0x0001, &[LONG]), Some(0x0102_0304));
+            assert_eq!(ifd.one_u32(0x0001, any), Some(0x0102_0304));
+            assert_eq!(ifd.one_u32(0x0002, &[SHORT]), Some(0x0506));
+            assert_eq!(ifd.one_u32(0x0002, any), Some(0x0506));
+            assert_eq!(ifd.one_u32(0x0003, &[IFD]), Some(0x0708_090A));
+            // A type the reader does not allow.
+            assert_eq!(ifd.one_u32(0x0002, &[LONG]), None, "{order:?}");
+            assert_eq!(ifd.one_u32(0x0001, &[SHORT]), None, "{order:?}");
+            assert_eq!(ifd.one_u32(0x0003, &[LONG]), None, "{order:?}");
+            // Two values, or none: not even the first is taken.
+            for tag in [0x0004, 0x0005, 0x0006] {
+                assert_eq!(ifd.one_u32(tag, any), None, "{order:?} {tag:#06X}");
+            }
+            // A type of another size, even when named.
+            assert_eq!(ifd.one_u32(0x0007, &[BYTE]), None, "{order:?}");
+            assert_eq!(ifd.one_u32(0x0008, &[SLONG]), None, "{order:?}");
+            // A missing tag.
+            assert_eq!(ifd.one_u32(0x0009, any), None, "{order:?}");
         }
     }
 
