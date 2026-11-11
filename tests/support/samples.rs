@@ -3,14 +3,19 @@
 //! Where the integration tests find the real sample files of
 //! `tests/samples.tsv`, which files of each format the list names, and the
 //! checks that one opens with exactly the previews expected of it and
-//! gives exactly the metadata expected of it, its focus point among it.
-//! They are too large to commit, so `scripts/fetch-samples.sh` downloads
-//! them, the RAW files from raw.pixls.us and the JPEG files from Wikimedia
-//! Commons, and a test whose file is absent skips with a note rather than
-//! failing: the suite runs offline.
+//! gives exactly the metadata expected of it, its focus point among it;
+//! and [`check_every`], which runs such a check on every file of a table
+//! and names every file that fails.
+//!
+//! The sample files are too large to commit, so `scripts/fetch-samples.sh`
+//! downloads them, the RAW files from raw.pixls.us and the JPEG files from
+//! Wikimedia Commons, and a test whose file is absent skips with a note
+//! rather than failing: the suite runs offline.
 
+use std::any::Any;
 use std::collections::BTreeSet;
 use std::env;
+use std::panic::{self, AssertUnwindSafe};
 use std::path::{Path, PathBuf};
 
 use raw_files::{
@@ -114,6 +119,47 @@ pub struct Sample {
 /// The stored size of each preview, in order.
 pub fn sizes(previews: &[Preview]) -> Vec<Size> {
     previews.iter().map(Preview::size).collect()
+}
+
+/// Runs `check` on every item of a table of samples, and fails once at the
+/// end if any check failed, naming each failing item's file, as `file`
+/// gives it, with its panic message, in the table's order.
+///
+/// A test that stopped at the first failing file would show only that
+/// file, and the next would appear only once it was fixed. Checking every
+/// file first lets one run show the whole effect of a change. The checks
+/// keep their asserts: each runs under `catch_unwind`, which turns an
+/// assert's panic back into a value.
+pub fn check_every<T>(items: &[T], file: impl Fn(&T) -> &str, check: impl Fn(&T)) {
+    let mut failures = Vec::new();
+    for item in items {
+        // The item and the check are only read, and nothing they hold is
+        // used again once a check has panicked, so no broken state can be
+        // seen after an unwind.
+        if let Err(payload) = panic::catch_unwind(AssertUnwindSafe(|| check(item))) {
+            let message = panic_message(payload.as_ref()).replace('\n', "\n    ");
+            failures.push(format!("{}: {message}", file(item)));
+        }
+    }
+    assert!(
+        failures.is_empty(),
+        "{} of {} sample files failed:\n{}",
+        failures.len(),
+        items.len(),
+        failures.join("\n")
+    );
+}
+
+/// The text a panic was raised with: `panic!` and `assert!` give a `&str`
+/// or a `String`.
+pub fn panic_message(payload: &(dyn Any + Send)) -> &str {
+    if let Some(text) = payload.downcast_ref::<&str>() {
+        text
+    } else if let Some(text) = payload.downcast_ref::<String>() {
+        text
+    } else {
+        "a panic without a message"
+    }
 }
 
 /// Checks that `sample` opens as `format` with exactly its expected

@@ -88,7 +88,7 @@ use support::nef::{
 };
 use support::samples::{
     Jpeg, Sample, SampleEntries, SampleFineTune, SampleFocus, SampleLens, SampleMetadata,
-    SampleSettings, SerialShape, Text, check, check_entries, check_metadata,
+    SampleSettings, SerialShape, Text, check, check_entries, check_every, check_metadata,
     check_placeholder_description, listed,
 };
 use support::tiff_builder::{EXIF_IFD, IfdId, Order, TiffBuilder};
@@ -2809,9 +2809,11 @@ const SAMPLES: &[Sample] = &[
 
 #[test]
 fn every_jpeg_sample_opens_with_its_previews() {
-    for sample in SAMPLES {
-        check(sample, Format::Jpeg);
-    }
+    check_every(
+        SAMPLES,
+        |sample| sample.file,
+        |sample| check(sample, Format::Jpeg),
+    );
 }
 
 /// The metadata each JPEG sample must give, in the order of
@@ -3236,9 +3238,11 @@ fn the_dslr_a100s_placeholder_is_recorded_and_gives_no_description() {
 
 #[test]
 fn every_jpeg_sample_gives_its_metadata() {
-    for expected in METADATA {
-        check_metadata(expected, Format::Jpeg);
-    }
+    check_every(
+        METADATA,
+        |expected| expected.file,
+        |expected| check_metadata(expected, Format::Jpeg),
+    );
 }
 
 #[test]
@@ -3369,7 +3373,5 @@ const ENTRIES: &[SampleEntries] = &[
 
 #[test]
 fn every_samples_entries_are_its_directories_with_their_counts() {
-    for expected in ENTRIES {
-        check_entries(expected);
-    }
+    check_every(ENTRIES, |expected| expected.file, check_entries);
 }

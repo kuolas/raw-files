@@ -63,7 +63,7 @@ use support::nef::{
 use support::samples::{
     Jpeg, LocationPart, Sample, SampleEntries, SampleFineTune, SampleFocus, SampleLens,
     SampleMetadata, SampleSettings, SerialShape, Text, check, check_enciphered, check_entries,
-    check_metadata, listed, sizes,
+    check_every, check_metadata, listed, sizes,
 };
 use support::tiff_builder::{Built, Order};
 
@@ -2337,9 +2337,11 @@ const SAMPLES: &[Sample] = &[
 
 #[test]
 fn every_z9_sample_opens_with_its_four_previews() {
-    for sample in SAMPLES {
-        check(sample, Format::Nef);
-    }
+    check_every(
+        SAMPLES,
+        |sample| sample.file,
+        |sample| check(sample, Format::Nef),
+    );
 }
 
 /// The samples of 25 other bodies, from the D1H of 2001 to the Z5II of
@@ -3192,9 +3194,11 @@ const OTHER_SAMPLES: &[Sample] = &[
 
 #[test]
 fn every_sample_of_the_other_nikon_bodies_opens_with_its_previews() {
-    for sample in OTHER_SAMPLES {
-        check(sample, Format::Nef);
-    }
+    check_every(
+        OTHER_SAMPLES,
+        |sample| sample.file,
+        |sample| check(sample, Format::Nef),
+    );
 }
 
 /// The metadata each NEF sample must give, in the order of
@@ -5135,9 +5139,11 @@ const METADATA: &[SampleMetadata] = &[
 
 #[test]
 fn every_nikon_sample_gives_its_metadata() {
-    for expected in METADATA {
-        check_metadata(expected, Format::Nef);
-    }
+    check_every(
+        METADATA,
+        |expected| expected.file,
+        |expected| check_metadata(expected, Format::Nef),
+    );
 }
 
 #[test]
@@ -5660,9 +5666,7 @@ const ENTRIES: &[SampleEntries] = &[
 
 #[test]
 fn every_samples_entries_are_its_directories_with_their_counts() {
-    for expected in ENTRIES {
-        check_entries(expected);
-    }
+    check_every(ENTRIES, |expected| expected.file, check_entries);
 }
 
 #[test]
