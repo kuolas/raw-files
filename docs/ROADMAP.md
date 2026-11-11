@@ -128,7 +128,7 @@ metadata types (`Metadata`, `Camera`, `Make`, `Authorship`,
 `WhiteBalanceMode`, `ExposureProgram`, `MeteringMode`, `FlashMode`,
 `Shutter`, `ImageArea`, `RawImageSize` and `ColorSpace`), the raw view's
 types (`Entries`, `Entry`, `Directory`, `FieldType` and `Value`),
-`Format`, `Error`, `ErrorKind`, `Result` and `Limits`.
+`Format`, `Error`, `ErrorKind`, `Result`, `ValueError` and `Limits`.
 
 ## Formats
 
