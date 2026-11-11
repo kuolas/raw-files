@@ -21,8 +21,10 @@
 //! The rules, in order:
 //!
 //! - Every IFD of the tree is asked, in the tree's order, except the Exif
-//!   IFD, which holds capture metadata, and the Interoperability IFD, which
-//!   names the rule the file follows, since neither ever holds an image;
+//!   IFD, which holds capture metadata, the GPS IFD, which holds where the
+//!   picture was taken, and the Interoperability IFD, which names the rule
+//!   the file follows, since none of them ever holds an image
+//!   ([`Link::holds_no_image`](crate::container::tiff::Link::holds_no_image));
 //!   then the format's own candidates, in the order it gives them.
 //! - An IFD that describes raw data is skipped, whatever it points at: one
 //!   whose samples are a color filter array (CFA) or Sony's linear raw
@@ -164,7 +166,7 @@ pub(crate) fn find<R: Read + Seek>(
 /// The candidates that the IFDs of `tree` declare, in the tree's order:
 /// the first step of [`find`].
 ///
-/// The Exif IFD and the Interoperability IFD are not asked, an IFD that
+/// The Exif, GPS and Interoperability IFDs are not asked, an IFD that
 /// describes raw data is skipped, and so is an IFD whose tags these rules
 /// read cannot be read; see the [module documentation](self). Each
 /// candidate counts from the base of the block its IFD was read in, and
