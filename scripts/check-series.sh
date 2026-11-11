@@ -89,9 +89,16 @@ trap cleanup EXIT
 git worktree add --detach --quiet "$wt" "$base"
 
 # True when every path commit $1 changes is one no build, test or doctest
-# reads. If a test ever reads a file under docs/ or a README, remove that path
-# from the list. --no-renames: otherwise a source file moved into docs/ would
-# show only its destination and pass for docs-only.
+# reads. Two files that the patterns below would skip are read by tests, so
+# they are build inputs and come first:
+#
+#   README.md                     its code samples are doc-tests (src/lib.rs)
+#   docs/formats/camera-names.md  a unit test checks the table of names
+#                                 against it (src/camera.rs)
+#
+# A file that a test starts to read must be added there, never skipped.
+# --no-renames: otherwise a source file moved into docs/ would show only its
+# destination and pass for docs-only.
 no_build_inputs() {
 	local paths path
 	# A commit with no parent (an orphan merged in) has no "$1^": the diff
@@ -99,6 +106,7 @@ no_build_inputs() {
 	paths=$(git diff --no-renames --name-only "$1^" "$1" 2>/dev/null) || return 1
 	while IFS= read -r path; do
 		case "$path" in
+			README.md | docs/formats/camera-names.md) return 1 ;;
 			'' | *.md | docs/* | .claude/* | .github/*) ;;
 			LICENSE*) case "$path" in */*) return 1 ;; esac ;;
 			*) return 1 ;;
