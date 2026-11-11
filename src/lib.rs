@@ -338,7 +338,7 @@
 //!   booleans, small structs of these, and enums whose `name` gives their
 //!   text. An [`Orientation`] gives its Exif number, a [`PreviewFormat`]
 //!   its MIME type, and a [`Directory`] its text through `Display`. A
-//!   [`Value`] holds its numbers or bytes in a vector.
+//!   [`Value`] holds its numbers, fractions or bytes in a vector.
 //!
 //! # Formats
 //!

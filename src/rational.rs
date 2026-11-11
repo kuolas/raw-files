@@ -11,13 +11,15 @@
 //! with `reduced` to compare or show them in lowest terms, or turns them
 //! into a decimal with `to_f64`. Each type's `new` refuses a fraction with
 //! a zero denominator, which is no number, so that a caller can build its
-//! own for its tests. The readers build every signed fraction through
-//! `new` too, and every unsigned one of the exposure and the lens through
-//! a stricter check of their own, which also refuses a zero numerator:
-//! Exif writes a zero for such a value the camera did not know. The
-//! fractions of a location, its degrees, minutes, seconds and meters, are
-//! the exception: a zero is a real value there, and the location's own
-//! types check them.
+//! own for its tests. The readers build every signed fraction of the
+//! metadata through `new` too, and every unsigned one of the exposure and
+//! the lens through a stricter check of their own, which also refuses a
+//! zero numerator: Exif writes a zero for such a value the camera did not
+//! know. The fractions of a location, its degrees, minutes, seconds and
+//! meters, are the exception: a zero is a real value there, and the
+//! location's own types check them. A fraction in a
+//! [`Value`](crate::Value) is checked by nothing: it is as the file
+//! records it, a zero denominator included.
 
 use std::fmt;
 
@@ -29,9 +31,11 @@ use crate::value_error::ValueError;
 /// Its fields are public because it is a small fixed value: a numerator and
 /// a denominator, nothing more.
 ///
-/// The values the library returns never have a zero denominator, nor do
-/// the ones [`new`](Self::new) builds, but a struct literal can hold one;
-/// every method then still gives a result rather than a panic.
+/// The values of [`Metadata`](crate::Metadata) never have a zero
+/// denominator, nor do the ones [`new`](Self::new) builds. A fraction in
+/// a [`Value`](crate::Value) is as the file records it and may have one,
+/// as may a struct literal. Every method then still gives a result rather
+/// than a panic.
 ///
 /// # Equality
 ///
@@ -76,9 +80,10 @@ impl Rational {
     /// they read it as `None`; in a [`Location`](crate::Location), whose
     /// degrees, minutes, seconds and meters may be zero, they keep it.
     ///
-    /// The fields are public, so a struct literal can still hold any two
-    /// numbers, unchecked: that is why every method still gives a result,
-    /// never a panic, for a zero denominator.
+    /// A struct literal can still hold any two numbers, unchecked, and a
+    /// [`Value`](crate::Value) keeps a zero denominator the file records.
+    /// That is why every method still gives a result for a zero
+    /// denominator, never a panic.
     ///
     /// # Errors
     ///
@@ -117,8 +122,9 @@ impl Rational {
     /// not know: an f-number
     /// of 0/10 from a lens that does not report its aperture, as on the
     /// public ILCE-7S sample 1582, or a lens range of 0/0. That suits every
-    /// unsigned fraction the library reads, such as an exposure time, an
-    /// f-number or a focal length: none of them can be zero when known.
+    /// unsigned fraction of the exposure and the lens, such as an exposure
+    /// time, an f-number or a focal length: none of them can be zero when
+    /// known.
     pub(crate) fn known(numerator: u32, denominator: u32) -> Option<Self> {
         if numerator == 0 {
             return None;
@@ -129,8 +135,9 @@ impl Rational {
     /// The fraction as a decimal: the numerator divided by the denominator,
     /// so 10/3200 gives 0.003125.
     ///
-    /// A zero denominator, which the library never returns, gives what
-    /// floating-point division gives: infinity, or NaN for 0/0.
+    /// A zero denominator, which only a [`Value`](crate::Value) or a struct
+    /// literal holds, gives what floating-point division gives: infinity,
+    /// or NaN for 0/0.
     pub fn to_f64(self) -> f64 {
         f64::from(self.numerator) / f64::from(self.denominator)
     }
@@ -169,9 +176,11 @@ impl fmt::Display for Rational {
 /// a denominator, nothing more. The sign may be on either number, or on
 /// both, as the file stored it.
 ///
-/// The values the library returns never have a zero denominator, nor do
-/// the ones [`new`](Self::new) builds, but a struct literal can hold one;
-/// every method then still gives a result rather than a panic.
+/// The values of [`Metadata`](crate::Metadata) never have a zero
+/// denominator, nor do the ones [`new`](Self::new) builds. A fraction in
+/// a [`Value`](crate::Value) is as the file records it and may have one,
+/// as may a struct literal. Every method then still gives a result rather
+/// than a panic.
 ///
 /// # Equality
 ///
@@ -207,16 +216,16 @@ impl SignedRational {
     /// The fraction `numerator`/`denominator`, kept as given, not reduced,
     /// with each sign where it is given.
     ///
-    /// This is how the readers build every signed fraction they return,
-    /// and how a caller builds one for its tests. A zero denominator is
-    /// refused because the fraction would be no number. A zero numerator is
-    /// kept: the signed fraction the library reads, the exposure bias, is
-    /// zero when no compensation was chosen, which cameras write as 0/6 or
-    /// 0/10.
+    /// This is how the readers build every signed fraction of the
+    /// metadata, and how a caller builds one for its tests. A zero
+    /// denominator is refused because the fraction would be no number. A
+    /// zero numerator is kept: an exposure bias is zero when no
+    /// compensation was chosen, which cameras write as 0/6 or 0/10.
     ///
-    /// The fields are public, so a struct literal can still hold any two
-    /// numbers, unchecked: that is why every method still gives a result,
-    /// never a panic, for a zero denominator.
+    /// A struct literal can still hold any two numbers, unchecked, and a
+    /// [`Value`](crate::Value) keeps a zero denominator the file records.
+    /// That is why every method still gives a result for a zero
+    /// denominator, never a panic.
     ///
     /// # Errors
     ///
@@ -249,8 +258,9 @@ impl SignedRational {
     /// The fraction as a decimal: the numerator divided by the denominator,
     /// so -2/3 gives about -0.667.
     ///
-    /// A zero denominator, which the library never returns, gives what
-    /// floating-point division gives: an infinity, or NaN for 0/0.
+    /// A zero denominator, which only a [`Value`](crate::Value) or a struct
+    /// literal holds, gives what floating-point division gives: an
+    /// infinity, or NaN for 0/0.
     pub fn to_f64(self) -> f64 {
         f64::from(self.numerator) / f64::from(self.denominator)
     }
