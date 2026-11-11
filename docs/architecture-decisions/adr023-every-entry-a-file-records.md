@@ -141,8 +141,9 @@ handle, with each value read only when it is asked for.
   shrunk since it was opened.
 - **Values as recorded, text cleaned on request.** A value has one
   variant per type, as the file records it: an array of the type's
-  numbers; a RATIONAL or SRATIONAL as numerator and denominator pairs,
-  zero denominators kept; FLOAT and DOUBLE as floating-point numbers;
+  numbers; a RATIONAL or SRATIONAL as a `Rational` or a
+  `SignedRational`, numerator and denominator as recorded, zero
+  denominators kept; FLOAT and DOUBLE as floating-point numbers;
   ASCII and UTF-8 as their bytes. A caller can ask for the bytes of a
   BYTE, UNDEFINED, ASCII or UTF-8 value, and for its text cleaned as
   [ADR011](adr011-metadata-from-standard-tags.md) cleans every text

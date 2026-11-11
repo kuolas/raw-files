@@ -26,6 +26,7 @@ use std::ops::Range;
 use crate::container::tiff::{self, Ifd, Link, Tree};
 use crate::error::Result;
 use crate::io::{ByteOrder, Source};
+use crate::rational::{Rational, SignedRational};
 
 /// Which directory of a file an entry lies in, named by what led the reader
 /// to it.
@@ -412,10 +413,10 @@ impl Entry {
 /// An entry's values, as the file records them, each variant holding the
 /// values of one [`FieldType`] in the byte order of the entry's directory.
 ///
-/// Nothing is interpreted: a RATIONAL or SRATIONAL is a pair, numerator
-/// first, with a zero denominator kept; text is its bytes, with its NUL and
-/// any padding, as [`bytes`](Self::bytes) gives them and
-/// [`text`](Self::text) cleans them.
+/// Nothing is interpreted. A RATIONAL is a [`Rational`] and an SRATIONAL a
+/// [`SignedRational`], as recorded, with a zero denominator kept. Text is
+/// its bytes, with its NUL and any padding, as [`bytes`](Self::bytes)
+/// gives them and [`text`](Self::text) cleans them.
 ///
 /// New variants may be added with new field types.
 ///
@@ -424,7 +425,7 @@ impl Entry {
 /// A short form of a value, for a list of entries:
 ///
 /// ```
-/// use raw_files::Value;
+/// use raw_files::{Rational, Value};
 ///
 /// fn summary(value: &Value) -> String {
 ///     if let Some(text) = value.text() {
@@ -432,8 +433,8 @@ impl Entry {
 ///     }
 ///     match value {
 ///         Value::Short(numbers) => format!("{numbers:?}"),
-///         Value::Rational(pairs) => {
-///             let fractions: Vec<String> = pairs.iter().map(|(n, d)| format!("{n}/{d}")).collect();
+///         Value::Rational(fractions) => {
+///             let fractions: Vec<String> = fractions.iter().map(Rational::to_string).collect();
 ///             fractions.join(" ")
 ///         }
 ///         _ => match value.bytes() {
@@ -447,7 +448,11 @@ impl Entry {
 /// assert_eq!(summary(&model), "NIKON Z 9");
 /// assert_eq!(summary(&Value::Short(vec![1])), "[1]");
 /// // A zero denominator is kept, as the file records it.
-/// assert_eq!(summary(&Value::Rational(vec![(28, 10), (0, 0)])), "28/10 0/0");
+/// let fractions = vec![
+///     Rational { numerator: 28, denominator: 10 },
+///     Rational { numerator: 0, denominator: 0 },
+/// ];
+/// assert_eq!(summary(&Value::Rational(fractions)), "28/10 0/0");
 /// assert_eq!(summary(&Value::Undefined(vec![0; 6])), "6 bytes");
 /// assert_eq!(summary(&Value::Double(vec![0.5, 1.5])), "2 values");
 /// ```
@@ -462,8 +467,9 @@ pub enum Value {
     Short(Vec<u16>),
     /// LONG values.
     Long(Vec<u32>),
-    /// RATIONAL values, as `(numerator, denominator)` pairs.
-    Rational(Vec<(u32, u32)>),
+    /// RATIONAL values, each as the file records it, a zero denominator
+    /// included.
+    Rational(Vec<Rational>),
     /// SBYTE values.
     SByte(Vec<i8>),
     /// UNDEFINED bytes.
@@ -472,8 +478,9 @@ pub enum Value {
     SShort(Vec<i16>),
     /// SLONG values.
     SLong(Vec<i32>),
-    /// SRATIONAL values, as `(numerator, denominator)` pairs.
-    SRational(Vec<(i32, i32)>),
+    /// SRATIONAL values, each as the file records it, a zero denominator
+    /// included and each sign on the number that carries it.
+    SRational(Vec<SignedRational>),
     /// FLOAT values.
     Float(Vec<f32>),
     /// DOUBLE values.
@@ -501,15 +508,19 @@ impl Value {
             let (chunks, _) = bytes.as_chunks::<4>();
             chunks.iter().map(|&v| order.u32(v)).collect()
         };
-        let pairs = |bytes: &[u8]| -> Vec<(u32, u32)> {
-            let (chunks, _) = bytes.as_chunks::<8>();
-            chunks
-                .iter()
-                .map(|&[n0, n1, n2, n3, d0, d1, d2, d3]| {
-                    (order.u32([n0, n1, n2, n3]), order.u32([d0, d1, d2, d3]))
-                })
-                .collect()
+        // A fraction's two numbers, numerator first, as the file stores
+        // them. The fractions are built by struct literal: `new` refuses a
+        // zero denominator and `known` a zero numerator, and the raw view
+        // keeps both, as recorded.
+        let fraction = |[n0, n1, n2, n3, d0, d1, d2, d3]: [u8; 8]| Rational {
+            numerator: order.u32([n0, n1, n2, n3]),
+            denominator: order.u32([d0, d1, d2, d3]),
         };
+        // A fraction takes the 8 bytes it is read from, so a vector of them
+        // is as long as its bytes, as said above.
+        const {
+            assert!(size_of::<Rational>() == 8 && size_of::<SignedRational>() == 8);
+        }
         match field_type {
             FieldType::Byte => Self::Byte(bytes),
             FieldType::Ascii => Self::Ascii(bytes),
@@ -536,20 +547,29 @@ impl Value {
                         .collect(),
                 )
             }
-            FieldType::Rational => Self::Rational(pairs(&bytes)),
-            FieldType::SRational => Self::SRational(
-                bytes
-                    .as_chunks::<8>()
-                    .0
-                    .iter()
-                    .map(|&[n0, n1, n2, n3, d0, d1, d2, d3]| {
-                        (
-                            order.u32([n0, n1, n2, n3]).cast_signed(),
-                            order.u32([d0, d1, d2, d3]).cast_signed(),
-                        )
-                    })
-                    .collect(),
-            ),
+            FieldType::Rational => {
+                let (chunks, _) = bytes.as_chunks::<8>();
+                Self::Rational(chunks.iter().map(|&v| fraction(v)).collect())
+            }
+            FieldType::SRational => {
+                let (chunks, _) = bytes.as_chunks::<8>();
+                Self::SRational(
+                    chunks
+                        .iter()
+                        .map(|&v| {
+                            let Rational {
+                                numerator,
+                                denominator,
+                            } = fraction(v);
+                            // Each sign stays on the number that carries it.
+                            SignedRational {
+                                numerator: numerator.cast_signed(),
+                                denominator: denominator.cast_signed(),
+                            }
+                        })
+                        .collect(),
+                )
+            }
             FieldType::Double => {
                 let (chunks, _) = bytes.as_chunks::<8>();
                 Self::Double(
@@ -863,6 +883,20 @@ mod tests {
 
     const ORDERS: [Order; 2] = [Order::Little, Order::Big];
 
+    fn unsigned(numerator: u32, denominator: u32) -> Rational {
+        Rational {
+            numerator,
+            denominator,
+        }
+    }
+
+    fn signed(numerator: i32, denominator: i32) -> SignedRational {
+        SignedRational {
+            numerator,
+            denominator,
+        }
+    }
+
     /// Every field type, in declaration order.
     const TYPES: [FieldType; 14] = [
         FieldType::Byte,
@@ -993,12 +1027,17 @@ mod tests {
             Value::SLong(v) => v.iter().flat_map(|&n| u32s(n.cast_unsigned())).collect(),
             Value::Rational(v) => v
                 .iter()
-                .flat_map(|&(n, d)| [u32s(n), u32s(d)])
+                .flat_map(|r| [u32s(r.numerator), u32s(r.denominator)])
                 .flatten()
                 .collect(),
             Value::SRational(v) => v
                 .iter()
-                .flat_map(|&(n, d)| [u32s(n.cast_unsigned()), u32s(d.cast_unsigned())])
+                .flat_map(|r| {
+                    [
+                        u32s(r.numerator.cast_unsigned()),
+                        u32s(r.denominator.cast_unsigned()),
+                    ]
+                })
                 .flatten()
                 .collect(),
             Value::Float(v) => v.iter().flat_map(|&n| u32s(n.to_bits())).collect(),
@@ -1018,7 +1057,7 @@ mod tests {
             Value::Short(vec![1, 2, 0x0304]),
             Value::Long(vec![0x0102_0304]),
             Value::Long(vec![1, u32::MAX]),
-            Value::Rational(vec![(1, 3), (5, 0)]),
+            Value::Rational(vec![unsigned(1, 3), unsigned(5, 0)]),
             Value::SByte(vec![-1, 2, i8::MIN]),
             Value::SByte(vec![-128, -1, 0, 1, 127]),
             Value::Undefined(vec![0, 1, 2]),
@@ -1027,7 +1066,7 @@ mod tests {
             Value::SShort(vec![-1, -2, i16::MIN]),
             Value::SLong(vec![-5]),
             Value::SLong(vec![-1, i32::MIN]),
-            Value::SRational(vec![(-1, 3), (2, -5)]),
+            Value::SRational(vec![signed(-1, 3), signed(2, -5)]),
             Value::Float(vec![1.5]),
             Value::Float(vec![-0.25, f32::MAX]),
             Value::Double(vec![3.25]),
@@ -1099,6 +1138,40 @@ mod tests {
                 assert_eq!(entry.byte_range().is_none(), len <= 4, "{what}");
                 assert_eq!(&entry.read(&mut src, 1024).unwrap(), value, "{what}");
             }
+        }
+    }
+
+    #[test]
+    fn a_rational_keeps_a_zero_numerator_and_denominator_as_recorded() {
+        // 0/0, 5/0 and 0/7, written by hand in each byte order.
+        let little = [
+            0, 0, 0, 0, 0, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 7, 0, 0, 0,
+        ];
+        let big = [
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 7,
+        ];
+        let expected = Value::Rational(vec![unsigned(0, 0), unsigned(5, 0), unsigned(0, 7)]);
+        for (order, bytes) in [(ByteOrder::Little, little), (ByteOrder::Big, big)] {
+            let value = Value::decode(FieldType::Rational, order, bytes.to_vec());
+            assert_eq!(value, expected, "{order:?}");
+        }
+    }
+
+    #[test]
+    fn a_signed_rational_keeps_each_sign_where_it_is_recorded() {
+        // -1/3 and 2/-5, written by hand in each byte order.
+        let little = [
+            0xFF, 0xFF, 0xFF, 0xFF, 3, 0, 0, 0, 2, 0, 0, 0, 0xFB, 0xFF, 0xFF, 0xFF,
+        ];
+        let big = [
+            0xFF, 0xFF, 0xFF, 0xFF, 0, 0, 0, 3, 0, 0, 0, 2, 0xFF, 0xFF, 0xFF, 0xFB,
+        ];
+        // Not normalized: 2/-5 keeps its sign below the line, where
+        // `reduced` would give -2/5.
+        let expected = Value::SRational(vec![signed(-1, 3), signed(2, -5)]);
+        for (order, bytes) in [(ByteOrder::Little, little), (ByteOrder::Big, big)] {
+            let value = Value::decode(FieldType::SRational, order, bytes.to_vec());
+            assert_eq!(value, expected, "{order:?}");
         }
     }
 
@@ -1178,7 +1251,10 @@ mod tests {
         }
         assert_eq!(Value::Ascii(b"ab\0".to_vec()).bytes(), Some(&b"ab\0"[..]));
         assert!(Value::Short(Vec::new()).is_empty());
-        assert_eq!(Value::Rational(vec![(1, 2), (3, 4)]).len(), 2);
+        assert_eq!(
+            Value::Rational(vec![unsigned(1, 2), unsigned(3, 4)]).len(),
+            2
+        );
     }
 
     #[test]

@@ -59,6 +59,33 @@ does.
   `FocusLayout::point`, still return `Option`. What the readers give
   for a file is unchanged
   ([#105](https://github.com/kuolas/raw-files/issues/105)).
+- `Value::Rational` holds a `Vec<Rational>` and `Value::SRational` a
+  `Vec<SignedRational>`, where they held pairs of numbers, which breaks
+  code that matches on them. A fraction of the raw view now has the
+  type a fraction of the metadata has, with `Display`, `reduced` and
+  `to_f64`. Code that read a pair names the fields, or lets the
+  fraction print itself:
+
+  ```rust
+  // 0.9.0
+  let shown: Vec<String> = match &value {
+      Value::Rational(pairs) => pairs.iter().map(|(n, d)| format!("{n}/{d}")).collect(),
+      _ => Vec::new(),
+  };
+
+  // 0.10.0
+  let shown: Vec<String> = match &value {
+      Value::Rational(fractions) => fractions.iter().map(Rational::to_string).collect(),
+      _ => Vec::new(),
+  };
+  ```
+
+  Each fraction is still as the file records it: a zero denominator is
+  kept, and each sign stays on the number that carries it. The bytes
+  read are unchanged, and so are the values of `Metadata`, which never
+  hold a zero denominator. Only `{:?}` of a value changes, writing each
+  fraction's fields
+  ([#102](https://github.com/kuolas/raw-files/issues/102)).
 - `Limits::max_value_bytes` now bounds the values raw-files reads for
   itself, for the metadata and the previews, as well as those
   `RawFile::read_value` reads. Before, those values had a fixed cap of
