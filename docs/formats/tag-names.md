@@ -109,7 +109,12 @@ Exif uses eight of them (1 to 5, 7, 9 and 10) and adds one of its own
   MetadataEditingSoftware in the Exif IFD (Table 8, p. 45); and one as
   UTF-8 alone, DevelopmentTypeDescription (Table 9, p. 46). Every other
   text tag stays ASCII, the dates, ImageUniqueID, BodySerialNumber and
-  LensSerialNumber among them.
+  LensSerialNumber among them. raw-files reads twelve of the sixteen,
+  from a value of either type: all but CameraFirmware,
+  RAWDevelopingSoftware, ImageEditingSoftware and
+  MetadataEditingSoftware, which it does not read. It reads every other
+  text, and every MakerNote text, from type ASCII alone
+  ([ADR011](../architecture-decisions/adr011-metadata-from-standard-tags.md)).
 - **The count of a UTF-8 value is its bytes**, NUL included, not its
   characters, since a character takes one to four bytes (section 4.6.2,
   p. 28).

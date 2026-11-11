@@ -829,7 +829,8 @@ file. [F] The focus point is a plain MakerNote tag too
 settings; the shutter used and APS-C mode are only in enciphered blocks
 ([section 9.7](#97-camera-settings)). IFD0 has no ImageWidth or ImageLength except on the A100 (where
 they do not describe IFD0's JPEG) and in SRF files (where IFD0 describes the
-raw). [S][24][F]
+raw). [S][24][F] On every Sony sample, the Exif values raw-files reads
+lie in the first 44 KB of the file. [F]
 
 ### 9.1 Orientation
 

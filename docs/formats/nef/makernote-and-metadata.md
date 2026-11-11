@@ -551,7 +551,9 @@ settings that Exif does not record ([section 8.7](#87-camera-settings)).
 ImageLength describe the thumbnail
 (160x120 on DSLRs), not the sensor; the stored sensor size is in the raw
 SubIFD reached through tag 0x014A.
-Decryption is never needed for these fields. [P][1][2]
+Decryption is never needed for these fields. [P][1][2] On every Nikon Z
+sample, the Exif and MakerNote values raw-files reads lie in the first
+105 KB of the file. **[F]**
 
 ### 8.1 Orientation
 
