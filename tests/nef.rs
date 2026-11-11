@@ -1084,7 +1084,7 @@ fn a_limit_crossed_inside_the_d1h_makernote_costs_the_makernote_only() {
         let (built, blobs) = d1h_file_with_blobs(order);
         for (entries, read) in [(15, true), (14, false)] {
             assert_the_d1h_file(
-                &Options::new().limits(Limits::default().with_max_ifd_entries(entries)),
+                &Options::new().with_limits(Limits::default().with_max_ifd_entries(entries)),
                 &built,
                 &blobs,
                 read,

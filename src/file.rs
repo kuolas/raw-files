@@ -692,14 +692,14 @@ mod tests {
         let bytes = nef(Order::Little, 1000);
         let limits = |n| Limits::default().with_max_value_bytes(n);
         let mut file = Options::new()
-            .limits(limits(1000))
+            .with_limits(limits(1000))
             .from_bytes(&bytes)
             .unwrap();
         let undefined = file.entries().entry(Directory::Exif, 0x927C).unwrap();
         assert_eq!(file.read_value(&undefined).unwrap().len(), 1000);
 
         let mut file = Options::new()
-            .limits(limits(999))
+            .with_limits(limits(999))
             .from_bytes(&bytes)
             .unwrap();
         let err = file.read_value(&undefined).unwrap_err();
@@ -712,7 +712,7 @@ mod tests {
         // file opens under is its Make's length, 18 bytes, which the
         // capture time's 20 pass.
         let mut file = Options::new()
-            .limits(limits(18))
+            .with_limits(limits(18))
             .from_bytes(&bytes)
             .unwrap();
         let metering = file.entries().entry(Directory::Exif, 0x9207).unwrap();
@@ -737,7 +737,12 @@ mod tests {
     #[test]
     fn the_metadata_is_read_under_the_value_cap_of_the_limits() {
         let bytes = nef_with_description(300);
-        let read = |limits: Limits| Options::new().limits(limits).from_bytes(&bytes).unwrap();
+        let read = |limits: Limits| {
+            Options::new()
+                .with_limits(limits)
+                .from_bytes(&bytes)
+                .unwrap()
+        };
 
         // The default cap and a cap of 301 bytes, the value with its NUL,
         // read the description; a cap of 200 does not, and still reads the
@@ -764,7 +769,7 @@ mod tests {
         let default = RawFile::from_bytes(&bytes).unwrap();
         assert_eq!(default.metadata().authorship().description(), None);
         let unlimited = Options::new()
-            .limits(Limits::unlimited())
+            .with_limits(Limits::unlimited())
             .from_bytes(&bytes)
             .unwrap();
         let description = unlimited.metadata().authorship().description();
@@ -784,14 +789,19 @@ mod tests {
         for cap in [0, 17] {
             let limits = Limits::default().with_max_value_bytes(cap);
             let err = Options::new()
-                .limits(limits)
+                .with_limits(limits)
                 .from_bytes(&bytes)
                 .unwrap_err();
             assert_eq!(err.kind(), ErrorKind::LimitExceeded, "{cap}: {err:?}");
             assert_eq!(err.offset(), Some(at), "{cap}");
         }
         let limits = Limits::default().with_max_value_bytes(18);
-        assert!(Options::new().limits(limits).from_bytes(&bytes).is_ok());
+        assert!(
+            Options::new()
+                .with_limits(limits)
+                .from_bytes(&bytes)
+                .is_ok()
+        );
     }
 
     #[test]

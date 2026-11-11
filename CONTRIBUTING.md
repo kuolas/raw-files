@@ -456,7 +456,7 @@ A few conventions:
   crate has no dependencies, and the crate docs say so. The items about
   macros, collections, iterators, smart pointers and destructors have
   nothing to apply to yet.
-- **Values are changed with `with_…` methods.** A value a caller reads,
+- **Every setter is a `with_…` method.** A value a caller reads,
   such as `Metadata`, `Exposure` or `Lens`, starts from `default()`, and
   each of its values is set by a `with_…` method named after the getter
   that reads it back: `with_iso` sets what `iso()` returns. A value that
@@ -468,9 +468,9 @@ A few conventions:
   has no `default()`: its constructor takes those parts, its `with_…`
   methods set the rest, and where a file may not record it, the getter
   that gives it returns an `Option`, as `Metadata::focus_points` and
-  `CameraSettings::flash` do. A builder whose last call does the work,
-  such as `Options`, which ends in `open`, `from_bytes` or `from_reader`,
-  names its setters without the prefix, as `std::fs::OpenOptions` does.
+  `CameraSettings::flash` do. `Options`, which opens files, starts from
+  `new()`. Its setters follow the same rule: `with_limits` sets what
+  `limits()` returns.
 - **A function that can refuse its arguments returns
   `Result<_, ValueError>`.** Its `# Errors` section lists the variants in
   the order it checks them, and the first rule broken is the one

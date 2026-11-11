@@ -728,7 +728,7 @@ fn a_limit_crossed_inside_the_exif_segment_costs_its_metadata_only() {
     for (options, label) in [
         (Options::new(), "default limits"),
         (
-            Options::new().limits(Limits::default().with_max_ifds(EXIF_IFDS)),
+            Options::new().with_limits(Limits::default().with_max_ifds(EXIF_IFDS)),
             "max_ifds at the segment's IFDs",
         ),
     ] {
@@ -743,7 +743,7 @@ fn a_limit_crossed_inside_the_exif_segment_costs_its_metadata_only() {
 
     // Walking the segment needs `EXIF_IFDS` IFDs, so one fewer crosses the
     // limit: the segment's values and thumbnail are lost, not the file.
-    let options = Options::new().limits(Limits::default().with_max_ifds(EXIF_IFDS - 1));
+    let options = Options::new().with_limits(Limits::default().with_max_ifds(EXIF_IFDS - 1));
     let previews = expected(
         &[
             (built.mpf_image(0), MPF_IMAGES[0]),
@@ -1495,7 +1495,7 @@ fn a_limit_crossed_inside_the_makernote_costs_the_makernote_only() {
             [(20, read, with), (19, nikon_previews(&file, MAIN), without)]
         {
             assert_opens_with(
-                &Options::new().limits(Limits::default().with_max_ifd_entries(entries)),
+                &Options::new().with_limits(Limits::default().with_max_ifd_entries(entries)),
                 &file.built.bytes,
                 &previews,
                 &metadata,
@@ -1873,7 +1873,7 @@ fn a_make_longer_than_the_value_cap_costs_a_jpeg_its_make_and_makernote_only() {
         let previews = sony_previews(&file, ILCE7M3_MAIN);
         for (cap, metadata) in [(64, &whole), (63, &without_make)] {
             assert_opens_with(
-                &Options::new().limits(Limits::default().with_max_value_bytes(cap)),
+                &Options::new().with_limits(Limits::default().with_max_value_bytes(cap)),
                 &file.built.bytes,
                 &previews,
                 metadata,
@@ -1891,7 +1891,7 @@ fn a_jpeg_opens_under_a_value_cap_of_zero_and_its_entries_hold_their_values() {
     // is refused, such as the Make.
     for order in ORDERS {
         let file = ilce7m3_jpeg(order, ILCE7M3_MAIN);
-        let options = Options::new().limits(Limits::default().with_max_value_bytes(0));
+        let options = Options::new().with_limits(Limits::default().with_max_value_bytes(0));
         let mut opened = options.from_bytes(&file.built.bytes).unwrap();
         assert_eq!(opened.format(), Format::Jpeg, "{order:?}");
         assert_eq!(opened.metadata().focus(), None, "{order:?}");
@@ -1943,7 +1943,7 @@ fn a_limit_crossed_inside_the_sony_makernote_costs_its_focus_point_only() {
         assert_eq!(u16_in(&file.built.bytes, file.makernote_ifd, order), 12);
         for (entries, focus) in [(12, Some(sony_focus(ILCE7M3_FOCUS_LOCATION))), (11, None)] {
             assert_opens_with(
-                &Options::new().limits(Limits::default().with_max_ifd_entries(entries)),
+                &Options::new().with_limits(Limits::default().with_max_ifd_entries(entries)),
                 &file.built.bytes,
                 &sony_previews(&file, ILCE7M3_MAIN),
                 &sony_metadata(SONY_MAKE, ILCE7M3_MODEL, ILCE7M3_MAIN, focus),
