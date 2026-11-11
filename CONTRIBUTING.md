@@ -359,6 +359,12 @@ one format only, and one file, the 325 MiB ARQ, is fetched only with
 on `master` keeps filled, so a pull request downloads nothing unless it
 changes the list.
 
+With `RAW_FILES_REQUIRE_SAMPLES=1`, a missing sample file fails its test
+instead of skipping. A file of the large tier fails only when
+`RAW_FILES_LARGE=1` is set too. CI sets the switch on Linux, so a wrong
+path or a misplaced cache cannot pass the sample tests without reading
+a file.
+
 One test is ignored by default: it runs the reader over a folder of your
 own camera files, RAW and JPEG, and prints counts only, never a path, the
 text of a make, model or software as the file records it, the value of a
