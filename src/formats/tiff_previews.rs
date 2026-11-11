@@ -276,9 +276,11 @@ pub(crate) fn orientation<R: Read + Seek>(src: &mut Source<R>, tree: &Tree) -> R
 ///
 /// # Errors
 ///
-/// As for [`Ifd::u32s`]: `LimitExceeded` for a value longer than the cap
-/// the IFD was read under, which [`find`] and the metadata reader take
-/// for damage and skip the IFD; `Io` when the reader fails.
+/// `LimitExceeded` when the BitsPerSample, which [`Ifd::u32s`] reads
+/// whole, is longer than the cap the IFD was read under, which [`find`]
+/// and the metadata reader take for damage and skip the IFD; `Io` when
+/// the reader fails. The other tags are read for their first value alone
+/// ([`Ifd::u32`]), which no cap refuses.
 pub(crate) fn is_raw<R: Read + Seek>(src: &mut Source<R>, ifd: &Ifd) -> Result<bool> {
     if matches!(
         ifd.u32(src, PHOTOMETRIC_INTERPRETATION)?,
@@ -317,8 +319,11 @@ pub(crate) fn is_raw<R: Read + Seek>(src: &mut Source<R>, ifd: &Ifd) -> Result<b
 ///
 /// # Errors
 ///
-/// As for [`is_raw`]: `LimitExceeded`, which [`find`] takes for damage and
-/// skips the IFD, and `Io`.
+/// `LimitExceeded` when the StripOffsets or the StripByteCounts, which
+/// [`Ifd::u32s`] reads whole, is longer than the cap the IFD was read
+/// under, which [`find`] takes for damage and skips the IFD; `Io` when the
+/// reader fails. The other tags are read for their first value alone
+/// ([`Ifd::u32`]), which no cap refuses.
 fn declared<R: Read + Seek>(src: &mut Source<R>, ifd: &Ifd) -> Result<Option<Candidate>> {
     let block = ifd.block().within_file(src.len());
     let offset = ifd.u32(src, JPEG_INTERCHANGE_FORMAT)?;

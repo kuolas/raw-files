@@ -10,6 +10,16 @@ does.
 
 ## [Unreleased]
 
+### Fixed
+
+- The tags raw-files reads by their first value, such as the offsets of
+  the Exif and GPS directories, the orientation or the ISO, are read
+  from that value alone when the file gives them many values
+  ([#114](https://github.com/kuolas/raw-files/issues/114)). Such a tag
+  longer than the cap on one value (`Limits::max_value_bytes`) was
+  refused, taking with it its value or the directory or preview it
+  locates; a shorter one was copied whole to use its first four bytes.
+
 ## [0.10.0] - 2026-11-11
 
 The tenth release makes the API consistent before full metadata is

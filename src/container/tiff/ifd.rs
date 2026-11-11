@@ -31,7 +31,8 @@
 //! with, [`Limits::max_value_bytes`], and no accessor reads a longer value
 //! stored out of line: it fails with `LimitExceeded`. The readers take
 //! that for damage, but for the Make of a TIFF file, which decides its
-//! format.
+//! format. The one exception is [`Ifd::u32`], which reads a tag's first
+//! value alone, whatever the count, and so never more than four bytes.
 //! One number bounds every value, those raw-files reads for the metadata
 //! and the previews as much as those a caller reads.
 //!
@@ -63,7 +64,8 @@ use crate::limits::Limits;
 /// The accessors that read a value take the [`Source`] the IFD was read
 /// from. Inline values are served from the entry without touching it. A
 /// value stored out of line is read only when it is no longer than the cap
-/// the IFD was read under.
+/// the IFD was read under, but by [`u32`](Self::u32), which reads only its
+/// first number.
 #[derive(Clone, Debug)]
 pub(crate) struct Ifd {
     offset: u64,
@@ -485,16 +487,39 @@ impl Ifd {
         ))
     }
 
-    /// The first value of tag `tag`, as [`u32s`](Self::u32s) reads it;
-    /// `None` also when the tag has no values.
+    /// The first value of tag `tag`, widened to 32 bits, when its type is
+    /// SHORT, LONG or IFD; `None` when the tag is missing, has another type
+    /// or has no values.
+    ///
+    /// The first value is read alone: from the entry when the entry holds
+    /// the values itself, and otherwise as the 2 bytes of a SHORT or the 4
+    /// of a LONG at the values' offset. The other values are neither read
+    /// nor checked, so a tag of one number that the file gives many values
+    /// costs no more than one, and is never refused for its length as
+    /// [`u32s`](Self::u32s) refuses it. A reader whose tag's rule gives a
+    /// count first checks the count of the entry that
+    /// [`entry_of_type`](Self::entry_of_type) finds.
     ///
     /// # Errors
     ///
-    /// As for [`u32s`](Self::u32s), which reads every value of the tag.
+    /// `Io` if the reader fails. The value lies inside the file, as every
+    /// kept entry's does, so nothing else can go wrong.
     pub(crate) fn u32<R: Read + Seek>(&self, src: &mut Source<R>, tag: u16) -> Result<Option<u32>> {
-        Ok(self
-            .u32s(src, tag)?
-            .and_then(|values| values.first().copied()))
+        let Some(entry) = self.entry_of_type(tag, &[SHORT, LONG, IFD]) else {
+            return Ok(None);
+        };
+        if entry.count == 0 {
+            return Ok(None);
+        }
+        let order = self.order;
+        let short = entry.typ() == SHORT;
+        let value = match entry.value {
+            Value::Inline([b0, b1, ..]) if short => u32::from(order.u16([b0, b1])),
+            Value::Inline(field) => order.u32(field),
+            Value::At(at) if short => u32::from(src.u16_at(at, order)?),
+            Value::At(at) => src.u32_at(at, order)?,
+        };
+        Ok(Some(value))
     }
 
     /// The fractions of tag `tag`, such as an exposure time of 10/3200 s,
@@ -1932,12 +1957,102 @@ mod tests {
         for result in [
             ifd.bytes(src, 0x0002).map(|_| ()),
             ifd.u32s(src, 0x0004).map(|_| ()),
-            ifd.u32(src, 0x0004).map(|_| ()),
             ifd.ascii(src, 0x0005).map(|_| ()),
         ] {
             let err = result.expect_err("the value is over the cap");
             assert_eq!(err.kind(), ErrorKind::LimitExceeded, "{err:?}");
             assert_eq!(err.offset(), Some(u64::from(at)), "{err:?}");
+        }
+        // The first value alone is never over the cap.
+        assert_eq!(ifd.u32(src, 0x0004).unwrap(), Some(0));
+    }
+
+    #[test]
+    fn the_first_value_is_read_alone_whatever_the_count() {
+        for order in ORDERS {
+            // A cap of 16 bytes, which the out-of-line LONGs of 0x0001 and
+            // the SHORTs of 0x0002 pass, each far longer.
+            let longs: Vec<u8> = (1..=1000_u32).flat_map(|v| order.u32(v)).collect();
+            let shorts: Vec<u8> = (11..=1010_u16).flat_map(|v| order.u16(v)).collect();
+            let mut builder = TiffBuilder::new(order);
+            let ifd = builder.ifd();
+            builder
+                .raw(ifd, 0x0001, LONG, 1000, RawValue::Offset(1024))
+                .raw(ifd, 0x0002, SHORT, 1000, RawValue::Offset(8192))
+                .raw(ifd, 0x0003, IFD, 1000, RawValue::Offset(1024))
+                .short(ifd, 0x0004, &[0x0102, 0x0304, 0x0506])
+                .long(ifd, 0x0005, &[0x0102_0304, 0x0506_0708, 0x090A_0B0C])
+                .short(ifd, 0x0006, &[0x0708, 0x090A])
+                .raw(ifd, 0x0007, SHORT, 0, RawValue::Inline([1, 2, 3, 4]))
+                .raw(ifd, 0x0008, LONG, 0, RawValue::Inline([1, 2, 3, 4]))
+                .raw(ifd, 0x0009, IFD, 0, RawValue::Inline([1, 2, 3, 4]));
+            builder.blob_at(1024, &longs);
+            builder.blob_at(8192, &shorts);
+            let built = builder.build();
+            let limits = Limits::default().with_max_value_bytes(16);
+            let (mut src, ifd, _) = read_with(order, &built, ifd, &limits);
+            let src = &mut src;
+            assert_eq!(ifd.invalid_entries(), 0, "{order:?}");
+
+            for (tag, first) in [
+                (0x0001, 1),
+                (0x0002, 11),
+                (0x0003, 1),
+                (0x0004, 0x0102),
+                (0x0005, 0x0102_0304),
+                (0x0006, 0x0708),
+            ] {
+                assert_eq!(
+                    ifd.u32(src, tag).unwrap(),
+                    Some(first),
+                    "{order:?} tag {tag:#06X}"
+                );
+            }
+            // Read whole, the long values are over the cap.
+            for tag in [0x0001, 0x0002, 0x0003] {
+                let err = ifd.u32s(src, tag).expect_err("over the cap");
+                assert_eq!(err.kind(), ErrorKind::LimitExceeded, "{order:?} {err:?}");
+            }
+            // No values, whatever the entry's value field holds.
+            for tag in [0x0007, 0x0008, 0x0009] {
+                assert_eq!(ifd.u32(src, tag).unwrap(), None, "{order:?} {tag:#06X}");
+            }
+        }
+    }
+
+    #[test]
+    fn the_first_value_is_read_without_the_bytes_after_it() {
+        for order in ORDERS {
+            // Two LONGs, and three SHORTs, whose first lies in the first block
+            // the source caches and whose second runs past it, where the
+            // reader fails: reading every value fails, reading the first
+            // does not. The LONGs start 6 bytes before the block's end, the
+            // SHORTs 2 bytes before it, just after the first LONG.
+            let offset = |back: u64| RawValue::Offset(u32::try_from(FAR - back).unwrap());
+            let mut builder = TiffBuilder::new(order);
+            let ifd = builder.ifd();
+            builder
+                .raw(ifd, 0x0001, LONG, 2, offset(6))
+                .raw(ifd, 0x0002, SHORT, 3, offset(2));
+            builder.blob_at(
+                FAR - 6,
+                &[order.u32(0x0102_0304).as_slice(), &order.u16(7)].concat(),
+            );
+            builder.pad_to(FAR + 16);
+            let built = builder.build();
+            let mut src = Source::new(FailsFar(Cursor::new(built.bytes.clone()))).unwrap();
+            let block = Block::file(src.len());
+            let at = built.ifd_offset(ifd);
+            let (ifd, _) =
+                parse_ifd(&mut src, &block, at, byte_order(order), &Limits::default()).unwrap();
+            assert_eq!(ifd.invalid_entries(), 0, "{order:?}");
+
+            assert_eq!(ifd.u32(&mut src, 0x0001).unwrap(), Some(0x0102_0304));
+            assert_eq!(ifd.u32(&mut src, 0x0002).unwrap(), Some(7));
+            for tag in [0x0001, 0x0002] {
+                let err = ifd.u32s(&mut src, tag).expect_err("the reader fails");
+                assert_eq!(err.kind(), ErrorKind::Io, "{order:?} {err:?}");
+            }
         }
     }
 
