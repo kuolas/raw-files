@@ -431,7 +431,9 @@ use crate::container::tiff::types::{LONG, SHORT, SRATIONAL, SSHORT, UNDEFINED};
 use crate::container::tiff::{Block, Ifd, Tree, ifd_in, parse_header, skip_damage};
 use crate::entries::{Directory, Entries};
 use crate::error::Result;
-use crate::focus::{Focus, FocusAreaMode, FocusOrigin, FocusPoint, FocusPoints, lies_on, scale};
+use crate::focus::{
+    Focus, FocusAreaMode, FocusOrigin, FocusPoint, FocusPoints, check_point, scale,
+};
 use crate::formats::tiff_metadata::{self, Standard, one_short};
 use crate::formats::tiff_previews::{self, Candidate};
 use crate::geometry::{Point, Size};
@@ -812,7 +814,7 @@ pub(in crate::formats) fn metadata<R: Read + Seek>(
     if let Some(time) = metadata.capture_time
         && time.offset_minutes().is_none()
         && let Some(offset) = world_time(src, makernote)?
-        && let Some(time) = time.with_offset_minutes(offset)
+        && let Ok(time) = time.with_offset_minutes(offset)
     {
         metadata.capture_time = Some(time);
     }
@@ -1087,9 +1089,9 @@ fn fine_tune_of(
     (amber_blue, amber_blue_denominator): (i32, i32),
     (magenta_green, magenta_green_denominator): (i32, i32),
 ) -> Option<FineTune> {
-    let amber_blue = SignedRational::new(amber_blue, amber_blue_denominator)?;
+    let amber_blue = SignedRational::new(amber_blue, amber_blue_denominator).ok()?;
     let green_magenta =
-        SignedRational::new(magenta_green.checked_neg()?, magenta_green_denominator)?;
+        SignedRational::new(magenta_green.checked_neg()?, magenta_green_denominator).ok()?;
     Some(FineTune::new(amber_blue, green_magenta))
 }
 
@@ -1593,7 +1595,7 @@ fn in_crop(
     let FocusRecord { frame, center, .. } = record;
     let window = match (cut, onto) {
         (Cut::Both, Onto::CropArea(size) | Onto::Pixels(size)) => {
-            return focus.scaled_to(size);
+            return focus.scaled_to(size).ok();
         }
         (_, Onto::CropArea(window)) => window,
         (_, Onto::Pixels(pixels)) => window_of_shape(frame, cut, pixels)?,
@@ -1685,7 +1687,7 @@ fn centered_origin(frame: u32, window: u32) -> Option<u32> {
 /// uncropped JPEG of a size the table lists the window that size shows,
 /// into which every center moves back by the window's origin, the box kept
 /// ([`placed_frame`]). A point that no longer lies on the window by the
-/// rule every focus point is checked by ([`lies_on`]), its center outside
+/// rule every focus point is checked by ([`check_point`]), its center outside
 /// it or its box across an edge, is dropped; the primary dropped costs the
 /// whole list.
 fn placed(
@@ -1698,7 +1700,7 @@ fn placed(
         return None;
     }
     let (frame, origin) = placed_frame(table, crop, pixels)?;
-    let mut points = FocusPoints::new(frame, FocusOrigin::Table)?;
+    let mut points = FocusPoints::new(frame, FocusOrigin::Table).ok()?;
     let mut primary = None;
     for point in table.points() {
         let number = point.number();
@@ -1716,17 +1718,19 @@ fn placed(
             continue;
         };
         let center = Point { x, y };
-        if !lies_on(frame, center, Some(size)) {
+        if check_point(frame, center, Some(size)).is_err() {
             continue;
         }
         if is_primary {
             primary = Some(points.points().len());
         }
-        // `lies_on` is the rule `with_point` checks, so it refuses none
+        // `check_point` is the rule `with_point` checks, so it refuses none
         // here: the `?` never returns.
-        points = points.with_point(FocusPoint::new(center).with_number(number).with_size(size))?;
+        points = points
+            .with_point(FocusPoint::new(center).with_number(number).with_size(size))
+            .ok()?;
     }
-    points.with_primary_index(primary?)
+    points.with_primary_index(primary?).ok()
 }
 
 /// The frame of the points placed from `table`, and the origin their
@@ -1931,8 +1935,9 @@ impl FocusRecord {
         // position; and an area of no zero side that does not fit around
         // the center is a record that cannot be used, which gives no focus
         // on every format, as ADR012 decides.
-        let focus =
-            Focus::new(self.frame, self.center, FocusOrigin::Recorded)?.with_size(self.area)?;
+        let focus = Focus::new(self.frame, self.center, FocusOrigin::Recorded)
+            .and_then(|focus| focus.with_size(self.area))
+            .ok()?;
         Some(match self.in_focus {
             Some(in_focus) => focus.with_in_focus(in_focus),
             None => focus,
@@ -3918,10 +3923,10 @@ mod tests {
                 assert_eq!(
                     range_of(&lens),
                     [
-                        Rational::new(180, 10),
-                        Rational::new(700, 10),
+                        Rational::new(180, 10).ok(),
+                        Rational::new(700, 10).ok(),
                         None,
-                        Rational::new(45, 10)
+                        Rational::new(45, 10).ok()
                     ],
                     "{zero:?} {order:?}"
                 );

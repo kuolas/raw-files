@@ -2369,15 +2369,17 @@ fn the_d600_frame_4_jpeg_gives_its_previews_metadata_and_point_38_placed_from_th
     let frame = size_of((6016, 4016));
     let point_38 = Point { x: 1812, y: 1705 };
     let box_164 = size_of((164, 164));
-    let placed =
-        Focus::new(frame, point_38, FocusOrigin::Table).and_then(|focus| focus.with_size(box_164));
+    let placed = Focus::new(frame, point_38, FocusOrigin::Table)
+        .and_then(|focus| focus.with_size(box_164))
+        .ok();
     assert_eq!(metadata.focus(), placed, "{label}");
     let points = FocusPoints::new(frame, FocusOrigin::Table)
         .and_then(|points| {
             points.with_point(FocusPoint::new(point_38).with_number(38).with_size(box_164))
         })
         .and_then(|points| points.with_primary_index(0))
-        .map(|points| points.with_area_mode(FocusAreaMode::Single));
+        .map(|points| points.with_area_mode(FocusAreaMode::Single))
+        .ok();
     assert_eq!(metadata.focus_points(), points.as_ref(), "{label}");
     // The D600's layout of 39 points, from its table, by the Model, its
     // point 38 at the same place.
@@ -2442,15 +2444,17 @@ fn check_d600_jpeg_point_1(label: &str, pixels: (u16, u16), frame: (u16, u16), c
     assert_eq!(metadata.image_size(), Some(size_of(pixels)), "{label}");
     let frame = size_of(frame);
     let box_164 = size_of((164, 164));
-    let placed =
-        Focus::new(frame, center, FocusOrigin::Table).and_then(|focus| focus.with_size(box_164));
+    let placed = Focus::new(frame, center, FocusOrigin::Table)
+        .and_then(|focus| focus.with_size(box_164))
+        .ok();
     assert_eq!(metadata.focus(), placed, "{label}");
     let points = FocusPoints::new(frame, FocusOrigin::Table)
         .and_then(|points| {
             points.with_point(FocusPoint::new(center).with_number(1).with_size(box_164))
         })
         .and_then(|points| points.with_primary_index(0))
-        .map(|points| points.with_area_mode(FocusAreaMode::Tracking));
+        .map(|points| points.with_area_mode(FocusAreaMode::Tracking))
+        .ok();
     assert_eq!(metadata.focus_points(), points.as_ref(), "{label}");
     let layout = metadata
         .focus_layout()

@@ -102,10 +102,7 @@ use crate::rational::{Rational, SignedRational};
 ///     Point, Rational, Size,
 /// };
 ///
-/// # fn main() {
-/// #     example().expect("every step gives a value");
-/// # }
-/// # fn example() -> Option<()> {
+/// # fn main() -> Result<(), raw_files::ValueError> {
 /// let time = DateTime::new(2022, 2, 5, 13, 46, 41)?
 ///     .with_subseconds(850_000_000, 2)?
 ///     .with_offset_minutes(-300)?;
@@ -132,7 +129,7 @@ use crate::rational::{Rational, SignedRational};
 ///     Some("2022-02-05T13:46:41.85-05:00")
 /// );
 /// assert_eq!(metadata.exposure().iso(), Some(64));
-/// assert_eq!(metadata.exposure().exposure_time(), Rational::new(10, 3200));
+/// assert_eq!(metadata.exposure().exposure_time(), Some(Rational::new(10, 3200)?));
 /// assert_eq!(
 ///     metadata.camera_settings().metering_mode(),
 ///     Some(MeteringMode::MultiSegment)
@@ -144,7 +141,7 @@ use crate::rational::{Rational, SignedRational};
 ///     Some(Point { x: 4905, y: 2461 })
 /// );
 /// // The focus is a list of that one point, its primary.
-/// let points = metadata.focus_points()?;
+/// let points = metadata.focus_points().expect("a focus is a list of one point");
 /// assert_eq!(points.points().len(), 1);
 /// assert_eq!(
 ///     points.primary().map(|point| point.center()),
@@ -152,7 +149,7 @@ use crate::rational::{Rational, SignedRational};
 /// );
 /// assert_eq!(metadata.camera().serial_number(), None);
 /// assert_eq!(metadata.exposure().f_number(), None);
-/// # Some(())
+/// # Ok(())
 /// # }
 /// ```
 #[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
@@ -954,25 +951,22 @@ impl Exposure {
 /// ```
 /// use raw_files::{Lens, Rational};
 ///
-/// # fn main() {
-/// #     example().expect("every step gives a value");
-/// # }
-/// # fn example() -> Option<()> {
+/// # fn main() -> Result<(), raw_files::ValueError> {
 /// let fixed = Lens::default()
 ///     .with_min_focal_length(Rational::new(90, 10)?)
 ///     .with_max_focal_length(Rational::new(720, 10)?)
 ///     .with_f_number_at_min_focal_length(Rational::new(28, 10)?)
 ///     .with_f_number_at_max_focal_length(Rational::new(45, 10)?);
 /// assert_eq!(fixed.recorded_model(), None);
-/// assert_eq!(fixed.min_focal_length(), Rational::new(90, 10));
-/// assert_eq!(fixed.max_focal_length(), Rational::new(720, 10));
-/// assert_eq!(fixed.f_number_at_min_focal_length(), Rational::new(28, 10));
-/// assert_eq!(fixed.f_number_at_max_focal_length(), Rational::new(45, 10));
+/// assert_eq!(fixed.min_focal_length(), Some(Rational::new(90, 10)?));
+/// assert_eq!(fixed.max_focal_length(), Some(Rational::new(720, 10)?));
+/// assert_eq!(fixed.f_number_at_min_focal_length(), Some(Rational::new(28, 10)?));
+/// assert_eq!(fixed.f_number_at_max_focal_length(), Some(Rational::new(45, 10)?));
 ///
 /// let named = Lens::default().with_recorded_model("NIKKOR Z 14-30mm f/4 S");
 /// assert_eq!(named.recorded_model(), Some("NIKKOR Z 14-30mm f/4 S"));
 /// assert_eq!(named.min_focal_length(), None);
-/// # Some(())
+/// # Ok(())
 /// # }
 /// ```
 #[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
@@ -1499,11 +1493,12 @@ mod tests {
                 .unwrap(),
             longitude: Longitude::east(fraction(2, 1), fraction(176_700, 10_000), fraction(0, 1))
                 .unwrap(),
-            altitude: Altitude::above(fraction(3_505, 100)),
+            altitude: Altitude::above(fraction(3_505, 100)).ok(),
             time: DateTime::new(2024, 5, 1, 8, 20, 30)
                 .and_then(|time| time.with_subseconds(850_000_000, 2))
-                .and_then(|time| time.with_offset_minutes(0)),
-            image_direction: Direction::new(fraction(27_550, 100), North::Magnetic),
+                .and_then(|time| time.with_offset_minutes(0))
+                .ok(),
+            image_direction: Direction::new(fraction(27_550, 100), North::Magnetic).ok(),
             map_datum: Some("WGS-84".to_owned()),
         }
     }

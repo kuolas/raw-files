@@ -470,6 +470,12 @@ A few conventions:
   `CameraSettings::flash` do. A builder whose last call does the work,
   such as `Options`, which ends in `open`, `from_bytes` or `from_reader`,
   names its setters without the prefix, as `std::fs::OpenOptions` does.
+- **A function that can refuse its arguments returns
+  `Result<_, ValueError>`.** Its `# Errors` section lists the variants in
+  the order it checks them, and the first rule broken is the one
+  returned. A lookup, such as `Format::from_extension` or
+  `Orientation::from_exif`, and a getter return `Option`
+  ([ADR009](docs/architecture-decisions/adr009-public-api-shape.md)).
 
 ## Fuzzing
 

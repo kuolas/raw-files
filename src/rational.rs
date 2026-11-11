@@ -21,6 +21,8 @@
 
 use std::fmt;
 
+use crate::value_error::ValueError;
+
 /// A fraction of two unsigned numbers, exactly as the file stored it, such
 /// as an exposure time of 10/3200 s.
 ///
@@ -63,8 +65,7 @@ pub struct Rational {
 }
 
 impl Rational {
-    /// The fraction `numerator`/`denominator`, kept as given, not reduced;
-    /// `None` when the denominator is zero.
+    /// The fraction `numerator`/`denominator`, kept as given, not reduced.
     ///
     /// This is how a caller builds a fraction for its tests. A zero
     /// denominator is refused because the fraction would be no number. A
@@ -79,33 +80,37 @@ impl Rational {
     /// numbers, unchecked: that is why every method still gives a result,
     /// never a panic, for a zero denominator.
     ///
+    /// # Errors
+    ///
+    /// [`ZeroDenominator`](ValueError::ZeroDenominator) when `denominator`
+    /// is zero.
+    ///
     /// # Examples
     ///
     /// ```
-    /// use raw_files::Rational;
+    /// use raw_files::{Rational, ValueError};
     ///
-    /// # fn main() {
-    /// #     example().expect("10/3200 is accepted");
-    /// # }
-    /// # fn example() -> Option<()> {
+    /// # fn main() -> Result<(), ValueError> {
     /// let time = Rational::new(10, 3200)?;
     /// assert_eq!((time.numerator, time.denominator), (10, 3200));
     /// // A fraction that is no number.
-    /// assert_eq!(Rational::new(1, 0), None);
-    /// # Some(())
+    /// assert_eq!(Rational::new(1, 0), Err(ValueError::ZeroDenominator));
+    /// # Ok(())
     /// # }
     /// ```
-    #[must_use]
-    pub fn new(numerator: u32, denominator: u32) -> Option<Self> {
-        (denominator != 0).then_some(Self {
+    pub fn new(numerator: u32, denominator: u32) -> Result<Self, ValueError> {
+        if denominator == 0 {
+            return Err(ValueError::ZeroDenominator);
+        }
+        Ok(Self {
             numerator,
             denominator,
         })
     }
 
     /// The fraction a file stored as `numerator`/`denominator`, when it
-    /// gives a value: as [`new`](Self::new) builds it, and also `None` when
-    /// the numerator is zero.
+    /// gives a value: as [`new`](Self::new) builds it, and `None` when
+    /// `new` refuses it or the numerator is zero.
     ///
     /// This is how the readers build every unsigned fraction of the
     /// exposure and the lens. Exif writes a zero for a value the camera did
@@ -118,7 +123,7 @@ impl Rational {
         if numerator == 0 {
             return None;
         }
-        Self::new(numerator, denominator)
+        Self::new(numerator, denominator).ok()
     }
 
     /// The fraction as a decimal: the numerator divided by the denominator,
@@ -200,8 +205,7 @@ pub struct SignedRational {
 
 impl SignedRational {
     /// The fraction `numerator`/`denominator`, kept as given, not reduced,
-    /// with each sign where it is given; `None` when the denominator is
-    /// zero.
+    /// with each sign where it is given.
     ///
     /// This is how the readers build every signed fraction they return,
     /// and how a caller builds one for its tests. A zero denominator is
@@ -214,25 +218,29 @@ impl SignedRational {
     /// numbers, unchecked: that is why every method still gives a result,
     /// never a panic, for a zero denominator.
     ///
+    /// # Errors
+    ///
+    /// [`ZeroDenominator`](ValueError::ZeroDenominator) when `denominator`
+    /// is zero.
+    ///
     /// # Examples
     ///
     /// ```
-    /// use raw_files::SignedRational;
+    /// use raw_files::{SignedRational, ValueError};
     ///
-    /// # fn main() {
-    /// #     example().expect("0/6 is accepted");
-    /// # }
-    /// # fn example() -> Option<()> {
+    /// # fn main() -> Result<(), ValueError> {
     /// // No exposure compensation, as a camera writes it in sixths.
     /// let bias = SignedRational::new(0, 6)?;
     /// assert_eq!((bias.numerator, bias.denominator), (0, 6));
-    /// assert_eq!(SignedRational::new(-2, 0), None);
-    /// # Some(())
+    /// assert_eq!(SignedRational::new(-2, 0), Err(ValueError::ZeroDenominator));
+    /// # Ok(())
     /// # }
     /// ```
-    #[must_use]
-    pub fn new(numerator: i32, denominator: i32) -> Option<Self> {
-        (denominator != 0).then_some(Self {
+    pub fn new(numerator: i32, denominator: i32) -> Result<Self, ValueError> {
+        if denominator == 0 {
+            return Err(ValueError::ZeroDenominator);
+        }
+        Ok(Self {
             numerator,
             denominator,
         })
@@ -321,15 +329,15 @@ mod tests {
     #[test]
     fn unsigned_new_refuses_only_a_zero_denominator() {
         // Kept as given, not reduced.
-        assert_eq!(Rational::new(10, 3200), Some(unsigned(10, 3200)));
-        assert_eq!(Rational::new(u32::MAX, 1), Some(unsigned(u32::MAX, 1)));
+        assert_eq!(Rational::new(10, 3200), Ok(unsigned(10, 3200)));
+        assert_eq!(Rational::new(u32::MAX, 1), Ok(unsigned(u32::MAX, 1)));
         // A real zero, such as an angle of 0°, kept as given.
-        assert_eq!(Rational::new(0, 1), Some(unsigned(0, 1)));
-        assert_eq!(Rational::new(0, 10), Some(unsigned(0, 10)));
+        assert_eq!(Rational::new(0, 1), Ok(unsigned(0, 1)));
+        assert_eq!(Rational::new(0, 10), Ok(unsigned(0, 10)));
         // Fractions that are no number.
-        assert_eq!(Rational::new(1, 0), None);
-        assert_eq!(Rational::new(7, 0), None);
-        assert_eq!(Rational::new(0, 0), None);
+        assert_eq!(Rational::new(1, 0), Err(ValueError::ZeroDenominator));
+        assert_eq!(Rational::new(7, 0), Err(ValueError::ZeroDenominator));
+        assert_eq!(Rational::new(0, 0), Err(ValueError::ZeroDenominator));
     }
 
     #[test]
@@ -349,18 +357,16 @@ mod tests {
     #[test]
     fn signed_new_refuses_only_a_zero_denominator() {
         // Kept as given, not reduced, each sign where it is given.
-        assert_eq!(SignedRational::new(-4, 6), Some(signed(-4, 6)));
-        assert_eq!(SignedRational::new(-3, 10), Some(signed(-3, 10)));
-        assert_eq!(SignedRational::new(2, -3), Some(signed(2, -3)));
+        assert_eq!(SignedRational::new(-4, 6), Ok(signed(-4, 6)));
+        assert_eq!(SignedRational::new(-3, 10), Ok(signed(-3, 10)));
+        assert_eq!(SignedRational::new(2, -3), Ok(signed(2, -3)));
         // No compensation: a real zero, kept as stored.
-        assert_eq!(SignedRational::new(0, 6), Some(signed(0, 6)));
-        assert_eq!(
-            SignedRational::new(i32::MIN, -1),
-            Some(signed(i32::MIN, -1))
-        );
-        assert_eq!(SignedRational::new(0, 0), None);
-        assert_eq!(SignedRational::new(-4, 0), None);
-        assert_eq!(SignedRational::new(-7, 0), None);
+        assert_eq!(SignedRational::new(0, 6), Ok(signed(0, 6)));
+        assert_eq!(SignedRational::new(i32::MIN, -1), Ok(signed(i32::MIN, -1)));
+        let refused = Err(ValueError::ZeroDenominator);
+        assert_eq!(SignedRational::new(0, 0), refused);
+        assert_eq!(SignedRational::new(-4, 0), refused);
+        assert_eq!(SignedRational::new(-7, 0), refused);
     }
 
     #[test]

@@ -274,7 +274,7 @@ impl PointTable {
     /// run from 1 to the count. So a table that fails them gives a file no
     /// layout ([`layout`]), never a panic.
     fn layout(&'static self) -> Option<FocusLayout> {
-        FocusLayout::new(self.recorded_model, self.frame, self.points)
+        FocusLayout::new(self.recorded_model, self.frame, self.points).ok()
     }
 
     /// The frame every point is measured in: the body's full-size output.

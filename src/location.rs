@@ -26,6 +26,7 @@ use std::fmt;
 
 use crate::datetime::DateTime;
 use crate::rational::Rational;
+use crate::value_error::ValueError;
 
 /// Where a picture was taken: its latitude and longitude, with the
 /// altitude, the GPS time, the direction the camera faced and the
@@ -61,10 +62,7 @@ use crate::rational::Rational;
 /// ```
 /// use raw_files::{Altitude, DateTime, Latitude, Location, Longitude, Rational};
 ///
-/// # fn main() {
-/// #     example().expect("every step accepts these values");
-/// # }
-/// # fn example() -> Option<()> {
+/// # fn main() -> Result<(), raw_files::ValueError> {
 /// let latitude = Latitude::north(
 ///     Rational::new(48, 1)?,
 ///     Rational::new(514_933, 10_000)?,
@@ -84,7 +82,7 @@ use crate::rational::Rational;
 /// assert!((location.longitude().to_degrees() - 2.294_5).abs() < 1e-5);
 /// assert_eq!(location.altitude().map(Altitude::to_meters), Some(35.0));
 /// assert_eq!(location.map_datum(), None);
-/// # Some(())
+/// # Ok(())
 /// # }
 /// ```
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -252,12 +250,9 @@ impl Location {
 /// The latitude of the Eiffel Tower, as a Sony camera would write it:
 ///
 /// ```
-/// use raw_files::{Latitude, Rational};
+/// use raw_files::{Latitude, Rational, ValueError};
 ///
-/// # fn main() {
-/// #     example().expect("every step accepts these values");
-/// # }
-/// # fn example() -> Option<()> {
+/// # fn main() -> Result<(), ValueError> {
 /// let latitude = Latitude::north(
 ///     Rational::new(48, 1)?,
 ///     Rational::new(51, 1)?,
@@ -269,9 +264,9 @@ impl Location {
 /// // Minutes of 60 name no latitude.
 /// assert_eq!(
 ///     Latitude::north(Rational::new(48, 1)?, Rational::new(60, 1)?, Rational::new(0, 1)?),
-///     None
+///     Err(ValueError::ArcMinutesOutOfRange)
 /// );
-/// # Some(())
+/// # Ok(())
 /// # }
 /// ```
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -282,26 +277,49 @@ pub struct Latitude {
 
 impl Latitude {
     /// The latitude `degrees`, `minutes` and `seconds` north of the
-    /// equator, kept as given; `None` when they name no latitude, which is
-    /// when a fraction has a zero denominator, the minutes or the seconds
-    /// are 60 or more, or the three together come to more than 90°.
+    /// equator, kept as given.
     ///
     /// Zero is a real value of each: 0° is the equator, and 0 seconds is
     /// what Nikon writes beside minutes with decimals. 90° 0′ 0″ is the
     /// pole, the most there is.
-    #[must_use]
-    pub fn north(degrees: Rational, minutes: Rational, seconds: Rational) -> Option<Self> {
-        Angle::new(degrees, minutes, seconds, 90).map(|angle| Self {
+    ///
+    /// # Errors
+    ///
+    /// In the order they are checked:
+    ///
+    /// - [`ZeroDenominator`](ValueError::ZeroDenominator) when one of the
+    ///   three fractions has a zero denominator;
+    /// - [`ArcMinutesOutOfRange`](ValueError::ArcMinutesOutOfRange) when
+    ///   `minutes` is 60 or more;
+    /// - [`ArcSecondsOutOfRange`](ValueError::ArcSecondsOutOfRange) when
+    ///   `seconds` is 60 or more;
+    /// - [`LatitudeOutOfRange`](ValueError::LatitudeOutOfRange) when the
+    ///   three together come to more than 90°.
+    pub fn north(
+        degrees: Rational,
+        minutes: Rational,
+        seconds: Rational,
+    ) -> Result<Self, ValueError> {
+        let angle = Angle::latitude(degrees, minutes, seconds)?;
+        Ok(Self {
             angle,
             south: false,
         })
     }
 
     /// The latitude `degrees`, `minutes` and `seconds` south of the
-    /// equator, kept as given; `None` as for [`north`](Self::north).
-    #[must_use]
-    pub fn south(degrees: Rational, minutes: Rational, seconds: Rational) -> Option<Self> {
-        Angle::new(degrees, minutes, seconds, 90).map(|angle| Self { angle, south: true })
+    /// equator, kept as given.
+    ///
+    /// # Errors
+    ///
+    /// As for [`north`](Self::north).
+    pub fn south(
+        degrees: Rational,
+        minutes: Rational,
+        seconds: Rational,
+    ) -> Result<Self, ValueError> {
+        let angle = Angle::latitude(degrees, minutes, seconds)?;
+        Ok(Self { angle, south: true })
     }
 
     /// The degrees, as recorded; never negative, since the hemisphere is
@@ -356,10 +374,7 @@ impl Latitude {
 /// ```
 /// use raw_files::{Longitude, Rational};
 ///
-/// # fn main() {
-/// #     example().expect("every step accepts these values");
-/// # }
-/// # fn example() -> Option<()> {
+/// # fn main() -> Result<(), raw_files::ValueError> {
 /// let longitude = Longitude::west(
 ///     Rational::new(74, 1)?,
 ///     Rational::new(26_670, 10_000)?,
@@ -367,7 +382,7 @@ impl Latitude {
 /// )?;
 /// assert!(longitude.is_west());
 /// assert!((longitude.to_degrees() + 74.044_45).abs() < 1e-5);
-/// # Some(())
+/// # Ok(())
 /// # }
 /// ```
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -378,23 +393,45 @@ pub struct Longitude {
 
 impl Longitude {
     /// The longitude `degrees`, `minutes` and `seconds` east of the prime
-    /// meridian, kept as given; `None` when they name no longitude, which
-    /// is when a fraction has a zero denominator, the minutes or the
-    /// seconds are 60 or more, or the three together come to more than
-    /// 180°.
+    /// meridian, kept as given.
     ///
     /// Zero is a real value of each, as for [`Latitude::north`]; 180° 0′
     /// 0″ is the antimeridian, the most there is.
-    #[must_use]
-    pub fn east(degrees: Rational, minutes: Rational, seconds: Rational) -> Option<Self> {
-        Angle::new(degrees, minutes, seconds, 180).map(|angle| Self { angle, west: false })
+    ///
+    /// # Errors
+    ///
+    /// In the order they are checked:
+    ///
+    /// - [`ZeroDenominator`](ValueError::ZeroDenominator) when one of the
+    ///   three fractions has a zero denominator;
+    /// - [`ArcMinutesOutOfRange`](ValueError::ArcMinutesOutOfRange) when
+    ///   `minutes` is 60 or more;
+    /// - [`ArcSecondsOutOfRange`](ValueError::ArcSecondsOutOfRange) when
+    ///   `seconds` is 60 or more;
+    /// - [`LongitudeOutOfRange`](ValueError::LongitudeOutOfRange) when the
+    ///   three together come to more than 180°.
+    pub fn east(
+        degrees: Rational,
+        minutes: Rational,
+        seconds: Rational,
+    ) -> Result<Self, ValueError> {
+        let angle = Angle::longitude(degrees, minutes, seconds)?;
+        Ok(Self { angle, west: false })
     }
 
     /// The longitude `degrees`, `minutes` and `seconds` west of the prime
-    /// meridian, kept as given; `None` as for [`east`](Self::east).
-    #[must_use]
-    pub fn west(degrees: Rational, minutes: Rational, seconds: Rational) -> Option<Self> {
-        Angle::new(degrees, minutes, seconds, 180).map(|angle| Self { angle, west: true })
+    /// meridian, kept as given.
+    ///
+    /// # Errors
+    ///
+    /// As for [`east`](Self::east).
+    pub fn west(
+        degrees: Rational,
+        minutes: Rational,
+        seconds: Rational,
+    ) -> Result<Self, ValueError> {
+        let angle = Angle::longitude(degrees, minutes, seconds)?;
+        Ok(Self { angle, west: true })
     }
 
     /// The degrees, as recorded; never negative, since the hemisphere is
@@ -450,15 +487,12 @@ impl Longitude {
 /// ```
 /// use raw_files::{Altitude, Rational};
 ///
-/// # fn main() {
-/// #     example().expect("every step accepts these values");
-/// # }
-/// # fn example() -> Option<()> {
+/// # fn main() -> Result<(), raw_files::ValueError> {
 /// let shore = Altitude::below(Rational::new(43_050, 100)?)?;
 /// assert!(shore.is_below());
 /// assert_eq!(shore.meters(), Rational::new(43_050, 100)?);
 /// assert_eq!(shore.to_meters(), -430.5);
-/// # Some(())
+/// # Ok(())
 /// # }
 /// ```
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -468,22 +502,29 @@ pub struct Altitude {
 }
 
 impl Altitude {
-    /// `meters` above the reference, kept as given; `None` when its
-    /// denominator is zero. Zero meters is a real altitude.
-    #[must_use]
-    pub fn above(meters: Rational) -> Option<Self> {
-        (meters.denominator != 0).then_some(Self {
-            meters,
+    /// `meters` above the reference, kept as given. Zero meters is a real
+    /// altitude.
+    ///
+    /// # Errors
+    ///
+    /// [`ZeroDenominator`](ValueError::ZeroDenominator) when the
+    /// denominator of `meters` is zero.
+    pub fn above(meters: Rational) -> Result<Self, ValueError> {
+        Ok(Self {
+            meters: checked(meters)?,
             below: false,
         })
     }
 
-    /// `meters` below the reference, kept as given; `None` when its
-    /// denominator is zero.
-    #[must_use]
-    pub fn below(meters: Rational) -> Option<Self> {
-        (meters.denominator != 0).then_some(Self {
-            meters,
+    /// `meters` below the reference, kept as given.
+    ///
+    /// # Errors
+    ///
+    /// [`ZeroDenominator`](ValueError::ZeroDenominator) when the
+    /// denominator of `meters` is zero.
+    pub fn below(meters: Rational) -> Result<Self, ValueError> {
+        Ok(Self {
+            meters: checked(meters)?,
             below: true,
         })
     }
@@ -523,18 +564,18 @@ impl Altitude {
 /// # Examples
 ///
 /// ```
-/// use raw_files::{Direction, North, Rational};
+/// use raw_files::{Direction, North, Rational, ValueError};
 ///
-/// # fn main() {
-/// #     example().expect("every step accepts these values");
-/// # }
-/// # fn example() -> Option<()> {
+/// # fn main() -> Result<(), ValueError> {
 /// let facing = Direction::new(Rational::new(27_550, 100)?, North::Magnetic)?;
 /// assert_eq!(facing.degrees().to_f64(), 275.5);
 /// assert_eq!(facing.north(), North::Magnetic);
 /// // A full turn is no bearing: 360° is 0°.
-/// assert_eq!(Direction::new(Rational::new(360, 1)?, North::True), None);
-/// # Some(())
+/// assert_eq!(
+///     Direction::new(Rational::new(360, 1)?, North::True),
+///     Err(ValueError::DirectionOutOfRange)
+/// );
+/// # Ok(())
 /// # }
 /// ```
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -544,13 +585,23 @@ pub struct Direction {
 }
 
 impl Direction {
-    /// `degrees` clockwise from `north`, kept as given; `None` when the
-    /// denominator is zero or the angle is 360° or more. Zero is due
-    /// north, a real bearing.
-    #[must_use]
-    pub fn new(degrees: Rational, north: North) -> Option<Self> {
-        let below_360 = u64::from(degrees.numerator) < 360 * u64::from(degrees.denominator);
-        (degrees.denominator != 0 && below_360).then_some(Self { degrees, north })
+    /// `degrees` clockwise from `north`, kept as given. Zero is due north,
+    /// a real bearing.
+    ///
+    /// # Errors
+    ///
+    /// In the order they are checked:
+    ///
+    /// - [`ZeroDenominator`](ValueError::ZeroDenominator) when the
+    ///   denominator of `degrees` is zero;
+    /// - [`DirectionOutOfRange`](ValueError::DirectionOutOfRange) when the
+    ///   angle is 360° or more.
+    pub fn new(degrees: Rational, north: North) -> Result<Self, ValueError> {
+        let degrees = checked(degrees)?;
+        if u64::from(degrees.numerator) >= 360 * u64::from(degrees.denominator) {
+            return Err(ValueError::DirectionOutOfRange);
+        }
+        Ok(Self { degrees, north })
     }
 
     /// The degrees clockwise from [`north`](Self::north), as recorded,
@@ -619,15 +670,55 @@ struct Angle {
 }
 
 impl Angle {
-    /// The angle `degrees`, `minutes` and `seconds`; `None` when a fraction
-    /// has a zero denominator, the minutes or the seconds are 60 or more,
-    /// or the three together come to more than `max` degrees.
-    fn new(degrees: Rational, minutes: Rational, seconds: Rational, max: u32) -> Option<Self> {
-        let below_60 = |part: Rational| {
-            part.denominator != 0 && u64::from(part.numerator) < 60 * u64::from(part.denominator)
-        };
-        if degrees.denominator == 0 || !below_60(minutes) || !below_60(seconds) {
-            return None;
+    /// A latitude's angle: at most 90°, by the rules of [`new`](Self::new).
+    fn latitude(
+        degrees: Rational,
+        minutes: Rational,
+        seconds: Rational,
+    ) -> Result<Self, ValueError> {
+        Self::new(
+            degrees,
+            minutes,
+            seconds,
+            90,
+            ValueError::LatitudeOutOfRange,
+        )
+    }
+
+    /// A longitude's angle: at most 180°, by the rules of [`new`](Self::new).
+    fn longitude(
+        degrees: Rational,
+        minutes: Rational,
+        seconds: Rational,
+    ) -> Result<Self, ValueError> {
+        Self::new(
+            degrees,
+            minutes,
+            seconds,
+            180,
+            ValueError::LongitudeOutOfRange,
+        )
+    }
+
+    /// The angle `degrees`, `minutes` and `seconds`, checked in the order
+    /// [`Latitude::north`] documents: the three denominators, then the
+    /// minutes, the seconds, and `beyond` when the three together come to
+    /// more than `max` degrees.
+    fn new(
+        degrees: Rational,
+        minutes: Rational,
+        seconds: Rational,
+        max: u32,
+        beyond: ValueError,
+    ) -> Result<Self, ValueError> {
+        let (degrees, minutes, seconds) = (checked(degrees)?, checked(minutes)?, checked(seconds)?);
+        let below_60 =
+            |part: Rational| u64::from(part.numerator) < 60 * u64::from(part.denominator);
+        if !below_60(minutes) {
+            return Err(ValueError::ArcMinutesOutOfRange);
+        }
+        if !below_60(seconds) {
+            return Err(ValueError::ArcSecondsOutOfRange);
         }
         // degrees + minutes / 60 + seconds / 3600 <= max, multiplied out by
         // 3600 and the three denominators so that the test is exact: each
@@ -646,7 +737,10 @@ impl Angle {
         );
         let angle = 3600 * dn * md * sd + 60 * mn * dd * sd + sn * dd * md;
         let largest = 3600 * u128::from(max) * dd * md * sd;
-        (angle <= largest).then_some(Self {
+        if angle > largest {
+            return Err(beyond);
+        }
+        Ok(Self {
             degrees,
             minutes,
             seconds,
@@ -657,6 +751,13 @@ impl Angle {
     fn to_degrees(self) -> f64 {
         self.degrees.to_f64() + self.minutes.to_f64() / 60.0 + self.seconds.to_f64() / 3600.0
     }
+}
+
+/// `fraction` when [`Rational::new`] takes it, the one function that
+/// decides whether a fraction is a number, so that a struct literal with a
+/// zero denominator is refused as `new` refuses one.
+fn checked(fraction: Rational) -> Result<Rational, ValueError> {
+    Rational::new(fraction.numerator, fraction.denominator)
 }
 
 /// `value`, negated when `negative`. Only a value above zero is negated,
@@ -715,56 +816,99 @@ mod tests {
             (r(48, 1), r(0, 1), r(0, 0)),
             (r(0, 0), r(0, 0), r(0, 0)),
         ] {
-            assert_eq!(Latitude::north(d, m, s), None, "{d} {m} {s}");
-            assert_eq!(Latitude::south(d, m, s), None, "{d} {m} {s}");
-            assert_eq!(Longitude::east(d, m, s), None, "{d} {m} {s}");
-            assert_eq!(Longitude::west(d, m, s), None, "{d} {m} {s}");
+            let refused = ValueError::ZeroDenominator;
+            assert_eq!(Latitude::north(d, m, s), Err(refused), "{d} {m} {s}");
+            assert_eq!(Latitude::south(d, m, s), Err(refused), "{d} {m} {s}");
+            assert_eq!(Longitude::east(d, m, s), Err(refused), "{d} {m} {s}");
+            assert_eq!(Longitude::west(d, m, s), Err(refused), "{d} {m} {s}");
         }
     }
 
     #[test]
     fn minutes_and_seconds_must_be_below_60() {
         // 59.9999 minutes and 59.999 seconds are the most there are.
-        assert!(Latitude::north(r(10, 1), r(599_999, 10_000), r(0, 1)).is_some());
-        assert!(Latitude::north(r(10, 1), r(0, 1), r(59_999, 1000)).is_some());
-        assert!(Longitude::east(r(10, 1), r(59, 1), r(59_999, 1000)).is_some());
-        for (m, s) in [
-            (r(60, 1), r(0, 1)),
-            (r(600_000, 10_000), r(0, 1)),
-            (r(0, 1), r(60, 1)),
-            (r(0, 1), r(60_000, 1000)),
-            (r(u32::MAX, 1), r(0, 1)),
+        assert!(Latitude::north(r(10, 1), r(599_999, 10_000), r(0, 1)).is_ok());
+        assert!(Latitude::north(r(10, 1), r(0, 1), r(59_999, 1000)).is_ok());
+        assert!(Longitude::east(r(10, 1), r(59, 1), r(59_999, 1000)).is_ok());
+        let minutes = ValueError::ArcMinutesOutOfRange;
+        let seconds = ValueError::ArcSecondsOutOfRange;
+        for (m, s, err) in [
+            (r(60, 1), r(0, 1), minutes),
+            (r(600_000, 10_000), r(0, 1), minutes),
+            (r(0, 1), r(60, 1), seconds),
+            (r(0, 1), r(60_000, 1000), seconds),
+            (r(u32::MAX, 1), r(0, 1), minutes),
         ] {
-            assert_eq!(Latitude::north(r(10, 1), m, s), None, "{m} {s}");
-            assert_eq!(Longitude::west(r(10, 1), m, s), None, "{m} {s}");
+            assert_eq!(Latitude::north(r(10, 1), m, s), Err(err), "{m} {s}");
+            assert_eq!(Longitude::west(r(10, 1), m, s), Err(err), "{m} {s}");
         }
     }
 
     #[test]
+    fn a_coordinate_reports_the_first_rule_broken_in_its_documented_order() {
+        // Every rule broken, then one rule fewer each time: the
+        // denominators, the minutes, the seconds, the whole angle.
+        let cases = [
+            (r(500, 1), r(60, 1), r(60, 0), ValueError::ZeroDenominator),
+            (
+                r(500, 1),
+                r(60, 1),
+                r(60, 1),
+                ValueError::ArcMinutesOutOfRange,
+            ),
+            (
+                r(500, 1),
+                r(0, 1),
+                r(60, 1),
+                ValueError::ArcSecondsOutOfRange,
+            ),
+        ];
+        for (d, m, s, err) in cases {
+            assert_eq!(Latitude::north(d, m, s), Err(err), "{d} {m} {s}");
+            assert_eq!(Latitude::south(d, m, s), Err(err), "{d} {m} {s}");
+            assert_eq!(Longitude::east(d, m, s), Err(err), "{d} {m} {s}");
+            assert_eq!(Longitude::west(d, m, s), Err(err), "{d} {m} {s}");
+        }
+        assert_eq!(
+            Latitude::south(r(500, 1), r(0, 1), r(0, 1)),
+            Err(ValueError::LatitudeOutOfRange)
+        );
+        assert_eq!(
+            Longitude::west(r(500, 1), r(0, 1), r(0, 1)),
+            Err(ValueError::LongitudeOutOfRange)
+        );
+    }
+
+    #[test]
     fn a_latitude_goes_up_to_90_degrees() {
-        assert!(Latitude::north(r(90, 1), r(0, 1), r(0, 1)).is_some());
-        assert!(Latitude::south(r(900_000, 10_000), r(0, 1), r(0, 1)).is_some());
-        assert!(Latitude::north(r(89, 1), r(59, 1), r(60_000, 1001)).is_some());
-        assert_eq!(Latitude::north(r(90, 1), r(0, 1), r(1, 1)), None);
-        assert_eq!(Latitude::south(r(90, 1), r(1, 10_000), r(0, 1)), None);
-        assert_eq!(Latitude::north(r(900_001, 10_000), r(0, 1), r(0, 1)), None);
-        assert_eq!(Latitude::north(r(91, 1), r(0, 1), r(0, 1)), None);
-        assert_eq!(Latitude::north(r(u32::MAX, 1), r(0, 1), r(0, 1)), None);
+        assert!(Latitude::north(r(90, 1), r(0, 1), r(0, 1)).is_ok());
+        assert!(Latitude::south(r(900_000, 10_000), r(0, 1), r(0, 1)).is_ok());
+        assert!(Latitude::north(r(89, 1), r(59, 1), r(60_000, 1001)).is_ok());
+        let refused = Err(ValueError::LatitudeOutOfRange);
+        assert_eq!(Latitude::north(r(90, 1), r(0, 1), r(1, 1)), refused);
+        assert_eq!(Latitude::south(r(90, 1), r(1, 10_000), r(0, 1)), refused);
+        assert_eq!(
+            Latitude::north(r(900_001, 10_000), r(0, 1), r(0, 1)),
+            refused
+        );
+        assert_eq!(Latitude::north(r(91, 1), r(0, 1), r(0, 1)), refused);
+        assert_eq!(Latitude::north(r(u32::MAX, 1), r(0, 1), r(0, 1)), refused);
         // 180 degrees is a longitude, not a latitude.
-        assert_eq!(Latitude::north(r(180, 1), r(0, 1), r(0, 1)), None);
+        assert_eq!(Latitude::north(r(180, 1), r(0, 1), r(0, 1)), refused);
     }
 
     #[test]
     fn a_longitude_goes_up_to_180_degrees() {
-        assert!(Longitude::east(r(180, 1), r(0, 1), r(0, 1)).is_some());
-        assert!(Longitude::west(r(179, 1), r(599_999, 10_000), r(0, 1)).is_some());
-        assert_eq!(Longitude::east(r(180, 1), r(0, 1), r(1, 1000)), None);
-        assert_eq!(Longitude::west(r(180, 1), r(1, 1), r(0, 1)), None);
-        assert_eq!(Longitude::east(r(181, 1), r(0, 1), r(0, 1)), None);
+        assert!(Longitude::east(r(180, 1), r(0, 1), r(0, 1)).is_ok());
+        assert!(Longitude::west(r(179, 1), r(599_999, 10_000), r(0, 1)).is_ok());
+        let refused = Err(ValueError::LongitudeOutOfRange);
+        assert_eq!(Longitude::east(r(180, 1), r(0, 1), r(1, 1000)), refused);
+        assert_eq!(Longitude::west(r(180, 1), r(1, 1), r(0, 1)), refused);
+        assert_eq!(Longitude::east(r(181, 1), r(0, 1), r(0, 1)), refused);
         // The largest fractions: the products stay exact.
         assert_eq!(
             Longitude::east(r(u32::MAX, u32::MAX), r(59, 1), r(59, 1)),
-            Some(Longitude {
+            Ok(Longitude {
                 angle: Angle {
                     degrees: r(u32::MAX, u32::MAX),
                     minutes: r(59, 1),
@@ -773,7 +917,7 @@ mod tests {
                 west: false,
             })
         );
-        assert_eq!(Longitude::east(r(u32::MAX, 1), r(0, 1), r(0, 1)), None);
+        assert_eq!(Longitude::east(r(u32::MAX, 1), r(0, 1), r(0, 1)), refused);
     }
 
     #[test]
@@ -794,7 +938,7 @@ mod tests {
             assert_eq!(format!("{zero:.5}"), "0.00000");
         }
         // Recorded with another hemisphere, it is another value.
-        assert_ne!(Latitude::south(r(0, 1), r(0, 1), r(0, 1)), Some(equator));
+        assert_ne!(Latitude::south(r(0, 1), r(0, 1), r(0, 1)), Ok(equator));
     }
 
     #[test]
@@ -837,9 +981,9 @@ mod tests {
         assert_eq!(below.to_meters(), -43.05);
         // Zero meters is a real altitude, on either side.
         assert_eq!(Altitude::above(r(0, 1)).unwrap().to_meters(), 0.0);
-        assert!(Altitude::below(r(0, 1)).is_some());
-        assert_eq!(Altitude::above(r(35, 0)), None);
-        assert_eq!(Altitude::below(r(0, 0)), None);
+        assert!(Altitude::below(r(0, 1)).is_ok());
+        assert_eq!(Altitude::above(r(35, 0)), Err(ValueError::ZeroDenominator));
+        assert_eq!(Altitude::below(r(0, 0)), Err(ValueError::ZeroDenominator));
     }
 
     #[test]
@@ -847,11 +991,20 @@ mod tests {
         let facing = Direction::new(r(35_999, 100), North::True).unwrap();
         assert_eq!(facing.degrees(), r(35_999, 100));
         assert_eq!(facing.north(), North::True);
-        assert!(Direction::new(r(0, 1), North::Magnetic).is_some());
-        assert_eq!(Direction::new(r(360, 1), North::True), None);
-        assert_eq!(Direction::new(r(36_000, 100), North::Magnetic), None);
-        assert_eq!(Direction::new(r(u32::MAX, 1), North::True), None);
-        assert_eq!(Direction::new(r(90, 0), North::True), None);
+        assert!(Direction::new(r(0, 1), North::Magnetic).is_ok());
+        let refused = Err(ValueError::DirectionOutOfRange);
+        assert_eq!(Direction::new(r(360, 1), North::True), refused);
+        assert_eq!(Direction::new(r(36_000, 100), North::Magnetic), refused);
+        assert_eq!(Direction::new(r(u32::MAX, 1), North::True), refused);
+        assert_eq!(
+            Direction::new(r(90, 0), North::True),
+            Err(ValueError::ZeroDenominator)
+        );
+        // 360/0 breaks both rules: the denominator is checked first.
+        assert_eq!(
+            Direction::new(r(360, 0), North::True),
+            Err(ValueError::ZeroDenominator)
+        );
     }
 
     #[test]

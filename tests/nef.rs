@@ -45,7 +45,8 @@ use raw_files::{
     Camera, CameraSettings, ColorSpace, DateTime, Exposure, ExposureProgram, FineTune, Flash,
     FlashMode, Focus, FocusAreaMode, FocusOrigin, FocusPoint, FocusPoints, Format, ImageArea, Lens,
     Limits, Make, Metadata, MeteringMode, Options, Orientation, Point, Preview, PreviewFormat,
-    Rational, RawFile, RawImageSize, Shutter, SignedRational, Size, WhiteBalance, WhiteBalanceMode,
+    Rational, RawFile, RawImageSize, Shutter, SignedRational, Size, ValueError, WhiteBalance,
+    WhiteBalanceMode,
 };
 use support::nef::{
     D1H_ISO, D1H_LENS, D1H_PREVIEW_JPEG, D1H_RAW, D1hBlobs, d1h_file, d1h_file_with,
@@ -402,9 +403,9 @@ fn the_z9_file_gives_every_value_its_fixture_records() {
 
 /// The metadata [`assert_the_z9_metadata`] checks, built as a caller's
 /// test would, through the public constructors and the `with_…` methods
-/// alone, with the orientation `orientation`; `None` when a constructor
-/// refuses a value.
-fn the_z9_metadata_by_hand(orientation: Orientation) -> Option<Metadata> {
+/// alone, with the orientation `orientation`; the error of the first
+/// constructor that refuses a value.
+fn the_z9_metadata_by_hand(orientation: Orientation) -> Result<Metadata, ValueError> {
     let time = DateTime::new(2022, 2, 5, 13, 46, 41)?
         .with_subseconds(850_000_000, 2)?
         .with_offset_minutes(-300)?;
@@ -452,7 +453,7 @@ fn the_z9_metadata_by_hand(orientation: Orientation) -> Option<Metadata> {
         })
         // The fixture's AFInfo2 records the area mode 193, single point.
         .with_focus_points(FocusPoints::from(focus).with_area_mode(FocusAreaMode::Single));
-    Some(metadata)
+    Ok(metadata)
 }
 
 #[test]
@@ -576,8 +577,9 @@ fn the_z6iii_file_gives_its_focus_point_on_the_cropped_picture() {
 
 /// The metadata of the Z6III file, with the orientation `orientation`,
 /// built as a caller's test would, through the public constructors and
-/// the `with_…` methods alone; `None` when a constructor refuses a value.
-fn the_z6iii_metadata_by_hand(orientation: Orientation) -> Option<Metadata> {
+/// the `with_…` methods alone; the error of the first constructor that
+/// refuses a value.
+fn the_z6iii_metadata_by_hand(orientation: Orientation) -> Result<Metadata, ValueError> {
     let time = DateTime::new(2024, 6, 29, 15, 38, 53)?
         .with_subseconds(420_000_000, 2)?
         .with_offset_minutes(-240)?;
@@ -621,7 +623,7 @@ fn the_z6iii_metadata_by_hand(orientation: Orientation) -> Option<Metadata> {
         .with_image_size(as_size(Z6III_IMAGE))
         .with_focus(focus)
         .with_camera_settings(CameraSettings::default().with_image_area(ImageArea::Square));
-    Some(metadata)
+    Ok(metadata)
 }
 
 #[test]
@@ -773,11 +775,11 @@ fn the_d300_file_gives_what_its_exif_tags_lack_from_the_makernote() {
 /// the public constructors and the `with_…` methods alone: what its
 /// standard tags give, with the ISO, the lens's range and the white
 /// balance setting, `SUNNY`, daylight, that its MakerNote alone records
-/// when `with_makernote`; `None` when a constructor refuses a value. It
-/// records no serial number, no offset from UTC, no orientation, no focal
-/// length in 35 mm terms, no focus point and no other camera setting
-/// either way.
-fn the_d1h_metadata_by_hand(with_makernote: bool) -> Option<Metadata> {
+/// when `with_makernote`; the error of the first constructor that refuses
+/// a value. It records no serial number, no offset from UTC, no
+/// orientation, no focal length in 35 mm terms, no focus point and no
+/// other camera setting either way.
+fn the_d1h_metadata_by_hand(with_makernote: bool) -> Result<Metadata, ValueError> {
     let time = DateTime::new(2022, 3, 24, 10, 9, 27)?.with_subseconds(10_000_000, 2)?;
     let mut exposure = Exposure::default()
         .with_exposure_time(Rational::new(10, 8000)?)
@@ -811,7 +813,7 @@ fn the_d1h_metadata_by_hand(with_makernote: bool) -> Option<Metadata> {
                 .with_white_balance(WhiteBalance::default().with_mode(WhiteBalanceMode::Daylight)),
         );
     }
-    Some(metadata.with_exposure(exposure))
+    Ok(metadata.with_exposure(exposure))
 }
 
 /// Checks that the D1H file `built`, whose parts are where `blobs` says,
@@ -2099,7 +2101,8 @@ fn the_d600_frame_4_gives_its_previews_metadata_and_point_38_placed_from_the_tab
     let frame = as_size((6016, 4016));
     let point_38 = Point { x: 1812, y: 1705 };
     let placed = Focus::new(frame, point_38, FocusOrigin::Table)
-        .and_then(|focus| focus.with_size(as_size((164, 164))));
+        .and_then(|focus| focus.with_size(as_size((164, 164))))
+        .ok();
     assert_eq!(metadata.focus(), placed, "{label}");
     let points = FocusPoints::new(frame, FocusOrigin::Table)
         .and_then(|points| {
@@ -2110,7 +2113,8 @@ fn the_d600_frame_4_gives_its_previews_metadata_and_point_38_placed_from_the_tab
             )
         })
         .and_then(|points| points.with_primary_index(0))
-        .map(|points| points.with_area_mode(FocusAreaMode::Single));
+        .map(|points| points.with_area_mode(FocusAreaMode::Single))
+        .ok();
     assert_eq!(metadata.focus_points(), points.as_ref(), "{label}");
     // Point 38 of the D600's layout, from its table, at the same place.
     let layout = metadata

@@ -19,9 +19,46 @@ does.
   `NIKON D7200`. `Camera::model` is unchanged: `None` for a body the
   table of names does not hold
   ([#104](https://github.com/kuolas/raw-files/issues/104)).
+- `ValueError`, the error of a function that refuses its arguments. It
+  has one variant per rule, such as `ValueError::CenterOffFrame`, and
+  its `Display` text says the rule
+  ([#105](https://github.com/kuolas/raw-files/issues/105)).
 
 ### Changed
 
+- Every function that refuses its arguments returns
+  `Result<_, ValueError>` where it returned `Option`, which breaks its
+  callers. A refusal now says which rule it broke. The functions are
+  `Rational::new`, `SignedRational::new`, `DateTime::new`,
+  `DateTime::with_subseconds`,
+  `DateTime::with_offset_minutes`, `Latitude::north` and `south`,
+  `Longitude::east` and `west`, `Altitude::above` and `below`,
+  `Direction::new`, `Focus::new`, `Focus::with_size`,
+  `Focus::scaled_to`, `FocusPoints::new`, `FocusPoints::with_point`,
+  `FocusPoints::with_primary_index`, `FocusPoints::scaled_to` and
+  `FocusLayout::new`. A test that builds values with `?` returns a
+  `Result` in place of an `Option`:
+
+  ```rust
+  // 0.9.0
+  fn focus(frame: Size, center: Point, area: Size) -> Option<Focus> {
+      Focus::new(frame, center, FocusOrigin::Recorded)?.with_size(area)
+  }
+  assert_eq!(Rational::new(1, 0), None);
+
+  // 0.10.0
+  fn focus(frame: Size, center: Point, area: Size) -> Result<Focus, ValueError> {
+      Focus::new(frame, center, FocusOrigin::Recorded)?.with_size(area)
+  }
+  assert_eq!(Rational::new(1, 0), Err(ValueError::ZeroDenominator));
+  ```
+
+  Code that wants the old `Option` calls `.ok()`. When several rules
+  are broken, the first in the order the function's docs list is
+  returned. Lookups and getters, such as `Format::from_extension` and
+  `FocusLayout::point`, still return `Option`. What the readers give
+  for a file is unchanged
+  ([#105](https://github.com/kuolas/raw-files/issues/105)).
 - The `UnknownFormat` error for a TIFF file of an unknown format has a
   message that ends in "recognizes". It ended in "recognises". The docs
   and the messages are now spelled the American way, as the API's

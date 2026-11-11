@@ -21,6 +21,8 @@
 
 use std::fmt;
 
+use crate::value_error::ValueError;
+
 /// The latest year a `DateTime` may have: the last that the four digits of
 /// its ISO 8601 form can show, and the last that the four digits of an Exif
 /// date can hold.
@@ -103,23 +105,20 @@ const MAX_OFFSET_MINUTES: i16 = 14 * 60;
 ///
 /// A time built for a test, as a camera would record 85 hundredths of a
 /// second past 10:20:30 on 1 May 2024, two hours ahead of UTC; a date that
-/// does not exist gives none:
+/// does not exist is refused:
 ///
 /// ```
-/// use raw_files::DateTime;
+/// use raw_files::{DateTime, ValueError};
 ///
-/// # fn main() {
-/// #     example().expect("every step accepts a real date and time");
-/// # }
-/// # fn example() -> Option<()> {
+/// # fn main() -> Result<(), ValueError> {
 /// let time = DateTime::new(2024, 5, 1, 10, 20, 30)?
 ///     .with_subseconds(850_000_000, 2)?
 ///     .with_offset_minutes(120)?;
 /// assert_eq!(time.to_string(), "2024-05-01T10:20:30.85+02:00");
 ///
 /// // 2023 was not a leap year.
-/// assert_eq!(DateTime::new(2023, 2, 29, 0, 0, 0), None);
-/// # Some(())
+/// assert_eq!(DateTime::new(2023, 2, 29, 0, 0, 0), Err(ValueError::DayOutOfRange));
+/// # Ok(())
 /// # }
 /// ```
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -140,38 +139,61 @@ pub struct DateTime {
 
 impl DateTime {
     /// The date and time `year`-`month`-`day` `hour`:`minute`:`second`,
-    /// with no fraction of a second and no offset from UTC; `None` when
-    /// they are not a real date and time.
+    /// with no fraction of a second and no offset from UTC.
     ///
     /// This is how the reader builds every time it returns, and how a
-    /// caller builds one for its tests. It gives `None` when:
-    ///
-    /// - `year` is above 9999, which the four digits of the
-    ///   [`Display`](fmt::Display) form cannot show;
-    /// - `month` is not 1 to 12;
-    /// - `day` is 0, or past the last day of its month. 29 February exists
-    ///   only in a leap year, by the Gregorian rule: every fourth year,
-    ///   except the centuries that 400 does not divide, so 2000 was a leap
-    ///   year and 1900 was not;
-    /// - `hour` is above 23, or `minute` or `second` above 59. A leap
-    ///   second is not accepted.
-    ///
-    /// Add a fraction of a second with
+    /// caller builds one for its tests. Add a fraction of a second with
     /// [`with_subseconds`](Self::with_subseconds) and an offset with
     /// [`with_offset_minutes`](Self::with_offset_minutes).
-    #[must_use]
-    pub fn new(year: u16, month: u8, day: u8, hour: u8, minute: u8, second: u8) -> Option<Self> {
-        if year > MAX_YEAR
-            || !(1..=12).contains(&month)
-            || day == 0
-            || day > days_in_month(year, month)
-            || hour > 23
-            || minute > 59
-            || second > 59
-        {
-            return None;
+    ///
+    /// # Errors
+    ///
+    /// In the order they are checked:
+    ///
+    /// - [`YearOutOfRange`](ValueError::YearOutOfRange) when `year` is
+    ///   above 9999, which the four digits of the
+    ///   [`Display`](fmt::Display) form cannot show;
+    /// - [`MonthOutOfRange`](ValueError::MonthOutOfRange) when `month` is
+    ///   not 1 to 12;
+    /// - [`DayOutOfRange`](ValueError::DayOutOfRange) when `day` is 0, or
+    ///   past the last day of its month. 29 February exists only in a leap
+    ///   year, by the Gregorian rule: every fourth year, except the
+    ///   centuries that 400 does not divide, so 2000 was a leap year and
+    ///   1900 was not;
+    /// - [`HourOutOfRange`](ValueError::HourOutOfRange) when `hour` is
+    ///   above 23;
+    /// - [`MinuteOutOfRange`](ValueError::MinuteOutOfRange) when `minute`
+    ///   is above 59;
+    /// - [`SecondOutOfRange`](ValueError::SecondOutOfRange) when `second`
+    ///   is above 59. A leap second is not accepted.
+    pub fn new(
+        year: u16,
+        month: u8,
+        day: u8,
+        hour: u8,
+        minute: u8,
+        second: u8,
+    ) -> Result<Self, ValueError> {
+        if year > MAX_YEAR {
+            return Err(ValueError::YearOutOfRange);
         }
-        Some(Self {
+        if !(1..=12).contains(&month) {
+            return Err(ValueError::MonthOutOfRange);
+        }
+        // The month is a real one, so it has a last day.
+        if day == 0 || day > days_in_month(year, month) {
+            return Err(ValueError::DayOutOfRange);
+        }
+        if hour > 23 {
+            return Err(ValueError::HourOutOfRange);
+        }
+        if minute > 59 {
+            return Err(ValueError::MinuteOutOfRange);
+        }
+        if second > 59 {
+            return Err(ValueError::SecondOutOfRange);
+        }
+        Ok(Self {
             year,
             month,
             day,
@@ -192,25 +214,35 @@ impl DateTime {
     /// differ in equality and in the [`Display`](fmt::Display) form, as
     /// they would from a file.
     ///
-    /// It gives `None` when:
+    /// # Errors
     ///
-    /// - `digits` is 0 or above 9: a fraction of a second is recorded with
-    ///   1 to 9 digits, the ninth being the nanosecond, and a time without
-    ///   one is simply built without this;
-    /// - `nanosecond` is 1 000 000 000 or more, a whole second;
-    /// - `nanosecond` does not fit in `digits` digits: it must be a
+    /// In the order they are checked:
+    ///
+    /// - [`SubsecondDigitsOutOfRange`](ValueError::SubsecondDigitsOutOfRange)
+    ///   when `digits` is 0 or above 9: a fraction of a second is recorded
+    ///   with 1 to 9 digits, the ninth being the nanosecond, and a time
+    ///   without one is simply built without this;
+    /// - [`NanosecondOutOfRange`](ValueError::NanosecondOutOfRange) when
+    ///   `nanosecond` is 1 000 000 000 or more, a whole second;
+    /// - [`NanosecondFinerThanDigits`](ValueError::NanosecondFinerThanDigits)
+    ///   when `nanosecond` does not fit in `digits` digits: it must be a
     ///   multiple of 10 to the power of 9 minus `digits`, so that the
     ///   digits recorded hold all of it. 855 000 000 with 2 digits is
     ///   refused, since `.85` would lose its last 5.
-    #[must_use]
-    pub fn with_subseconds(self, nanosecond: u32, digits: u8) -> Option<Self> {
-        if !(1..=9).contains(&digits) || nanosecond >= 1_000_000_000 {
-            return None;
+    pub fn with_subseconds(self, nanosecond: u32, digits: u8) -> Result<Self, ValueError> {
+        if !(1..=9).contains(&digits) {
+            return Err(ValueError::SubsecondDigitsOutOfRange);
+        }
+        if nanosecond >= 1_000_000_000 {
+            return Err(ValueError::NanosecondOutOfRange);
         }
         // The value of one unit of the last digit recorded: 1 for nine
         // digits, 100 000 000 for one.
         let unit = 10_u32.pow(9 - u32::from(digits));
-        nanosecond.is_multiple_of(unit).then_some(Self {
+        if !nanosecond.is_multiple_of(unit) {
+            return Err(ValueError::NanosecondFinerThanDigits);
+        }
+        Ok(Self {
             nanosecond,
             subsec_digits: digits,
             ..self
@@ -226,17 +258,19 @@ impl DateTime {
     /// the time-zone setting of a Nikon camera's clock; and how a caller
     /// gives one to a time for its tests.
     ///
-    /// It gives `None` when `minutes` lies more than 14 hours from UTC,
-    /// beyond `-14:00` to `+14:00`, since no offset from UTC in use lies
-    /// outside that.
-    #[must_use]
-    pub fn with_offset_minutes(self, minutes: i16) -> Option<Self> {
-        (-MAX_OFFSET_MINUTES..=MAX_OFFSET_MINUTES)
-            .contains(&minutes)
-            .then_some(Self {
-                offset: Some(minutes),
-                ..self
-            })
+    /// # Errors
+    ///
+    /// [`OffsetOutOfRange`](ValueError::OffsetOutOfRange) when `minutes`
+    /// lies more than 14 hours from UTC, beyond `-14:00` to `+14:00`,
+    /// since no offset from UTC in use lies outside that.
+    pub fn with_offset_minutes(self, minutes: i16) -> Result<Self, ValueError> {
+        if !(-MAX_OFFSET_MINUTES..=MAX_OFFSET_MINUTES).contains(&minutes) {
+            return Err(ValueError::OffsetOutOfRange);
+        }
+        Ok(Self {
+            offset: Some(minutes),
+            ..self
+        })
     }
 
     /// The time read from the three Exif texts that record it: the date
@@ -302,17 +336,18 @@ impl DateTime {
             two_digits(h0, h1)?,
             two_digits(mi0, mi1)?,
             two_digits(s0, s1)?,
-        )?;
+        )
+        .ok()?;
         // A fraction or offset that its parser or its constructor refuses
         // is left out, and the time stands without it. The parser never
         // gives a fraction the constructor refuses.
         let time = subsec
             .and_then(parse_subsec)
-            .and_then(|(nanosecond, digits)| time.with_subseconds(nanosecond, digits))
+            .and_then(|(nanosecond, digits)| time.with_subseconds(nanosecond, digits).ok())
             .unwrap_or(time);
         let time = offset
             .and_then(parse_offset)
-            .and_then(|minutes| time.with_offset_minutes(minutes))
+            .and_then(|minutes| time.with_offset_minutes(minutes).ok())
             .unwrap_or(time);
         Some(time)
     }
@@ -352,16 +387,17 @@ impl DateTime {
             whole(hours)?,
             whole(minutes)?,
             second,
-        )?;
+        )
+        .ok()?;
         let time = if digits == 0 {
             time
         } else {
             // The remainder is below 10^digits, so the nanoseconds are below
             // 10⁹, and `with_subseconds` always accepts them.
             let nanosecond = (numerator % denominator) * 10_u32.pow(9 - u32::from(digits));
-            time.with_subseconds(nanosecond, digits)?
+            time.with_subseconds(nanosecond, digits).ok()?
         };
-        time.with_offset_minutes(0)
+        time.with_offset_minutes(0).ok()
     }
 
     /// The year, from 0 to 9999.
@@ -784,7 +820,11 @@ mod tests {
     fn an_offset_given_apart_beyond_fourteen_hours_is_refused() {
         for minutes in [841, -841, 15360, i16::MAX, i16::MIN] {
             let time = read(DATE, Some(b"85"), None);
-            assert_eq!(time.with_offset_minutes(minutes), None, "{minutes}");
+            assert_eq!(
+                time.with_offset_minutes(minutes),
+                Err(ValueError::OffsetOutOfRange),
+                "{minutes}"
+            );
         }
     }
 
@@ -923,33 +963,61 @@ mod tests {
     /// The time `new` builds from these fields, which the test expects to
     /// be accepted.
     fn built(year: u16, month: u8, day: u8, hour: u8, minute: u8, second: u8) -> DateTime {
-        DateTime::new(year, month, day, hour, minute, second).unwrap_or_else(|| {
-            panic!("{year:04}-{month:02}-{day:02} {hour:02}:{minute:02}:{second:02} refused")
+        DateTime::new(year, month, day, hour, minute, second).unwrap_or_else(|err| {
+            panic!("{year:04}-{month:02}-{day:02} {hour:02}:{minute:02}:{second:02} refused: {err}")
         })
     }
 
     #[test]
     fn new_takes_29_february_only_in_a_gregorian_leap_year() {
         assert_eq!(built(2024, 2, 29, 0, 0, 0).day(), 29);
-        assert_eq!(DateTime::new(2023, 2, 29, 0, 0, 0), None);
+        let refused = Err(ValueError::DayOutOfRange);
+        assert_eq!(DateTime::new(2023, 2, 29, 0, 0, 0), refused);
         // The century rule: 400 divides 2000, not 1900.
         assert_eq!(built(2000, 2, 29, 0, 0, 0).day(), 29);
-        assert_eq!(DateTime::new(1900, 2, 29, 0, 0, 0), None);
-        assert_eq!(DateTime::new(2024, 2, 30, 0, 0, 0), None);
+        assert_eq!(DateTime::new(1900, 2, 29, 0, 0, 0), refused);
+        assert_eq!(DateTime::new(2024, 2, 30, 0, 0, 0), refused);
     }
 
     #[test]
     fn new_checks_each_field_against_its_range() {
         assert_eq!(built(2022, 4, 30, 0, 0, 0).day(), 30);
-        assert_eq!(DateTime::new(2022, 4, 31, 0, 0, 0), None);
-        assert_eq!(DateTime::new(2022, 0, 1, 0, 0, 0), None);
-        assert_eq!(DateTime::new(2022, 13, 1, 0, 0, 0), None);
-        assert_eq!(DateTime::new(2022, 1, 0, 0, 0, 0), None);
+        let new = DateTime::new;
+        assert_eq!(new(2022, 4, 31, 0, 0, 0), Err(ValueError::DayOutOfRange));
+        assert_eq!(new(2022, 0, 1, 0, 0, 0), Err(ValueError::MonthOutOfRange));
+        assert_eq!(new(2022, 13, 1, 0, 0, 0), Err(ValueError::MonthOutOfRange));
+        assert_eq!(new(2022, 1, 0, 0, 0, 0), Err(ValueError::DayOutOfRange));
         let last = built(2022, 12, 31, 23, 59, 59);
         assert_eq!(last.to_string(), "2022-12-31T23:59:59");
-        assert_eq!(DateTime::new(2022, 1, 31, 24, 0, 0), None);
-        assert_eq!(DateTime::new(2022, 1, 31, 10, 60, 0), None);
-        assert_eq!(DateTime::new(2022, 1, 31, 10, 20, 60), None);
+        assert_eq!(new(2022, 1, 31, 24, 0, 0), Err(ValueError::HourOutOfRange));
+        assert_eq!(
+            new(2022, 1, 31, 10, 60, 0),
+            Err(ValueError::MinuteOutOfRange)
+        );
+        assert_eq!(
+            new(2022, 1, 31, 10, 20, 60),
+            Err(ValueError::SecondOutOfRange)
+        );
+    }
+
+    #[test]
+    fn new_reports_the_first_rule_broken_in_its_documented_order() {
+        let new = DateTime::new;
+        // Every field out of range: the year is checked first.
+        assert_eq!(
+            new(10000, 13, 0, 24, 60, 60),
+            Err(ValueError::YearOutOfRange)
+        );
+        assert_eq!(
+            new(2022, 13, 0, 24, 60, 60),
+            Err(ValueError::MonthOutOfRange)
+        );
+        assert_eq!(new(2022, 1, 0, 24, 60, 60), Err(ValueError::DayOutOfRange));
+        assert_eq!(new(2022, 1, 1, 24, 60, 60), Err(ValueError::HourOutOfRange));
+        assert_eq!(
+            new(2022, 1, 1, 23, 60, 60),
+            Err(ValueError::MinuteOutOfRange)
+        );
     }
 
     #[test]
@@ -959,8 +1027,9 @@ mod tests {
             built(9999, 12, 31, 0, 0, 0).to_string(),
             "9999-12-31T00:00:00"
         );
-        assert_eq!(DateTime::new(10000, 1, 1, 0, 0, 0), None);
-        assert_eq!(DateTime::new(u16::MAX, 1, 1, 0, 0, 0), None);
+        let refused = Err(ValueError::YearOutOfRange);
+        assert_eq!(DateTime::new(10000, 1, 1, 0, 0, 0), refused);
+        assert_eq!(DateTime::new(u16::MAX, 1, 1, 0, 0, 0), refused);
     }
 
     #[test]
@@ -974,10 +1043,11 @@ mod tests {
     #[test]
     fn with_subseconds_takes_one_to_nine_digits() {
         let time = built(2022, 1, 31, 10, 20, 30);
-        assert_eq!(time.with_subseconds(0, 0), None);
-        assert_eq!(time.with_subseconds(500_000_000, 0), None);
-        assert_eq!(time.with_subseconds(0, 10), None);
-        assert_eq!(time.with_subseconds(500_000_000, 10), None);
+        let refused = Err(ValueError::SubsecondDigitsOutOfRange);
+        assert_eq!(time.with_subseconds(0, 0), refused);
+        assert_eq!(time.with_subseconds(500_000_000, 0), refused);
+        assert_eq!(time.with_subseconds(0, 10), refused);
+        assert_eq!(time.with_subseconds(500_000_000, 10), refused);
         let nine = time.with_subseconds(999_999_999, 9).unwrap();
         assert_eq!(nine.to_string(), "2022-01-31T10:20:30.999999999");
         assert_eq!(nine.subsecond_digits(), 9);
@@ -986,9 +1056,25 @@ mod tests {
     #[test]
     fn with_subseconds_refuses_a_whole_second() {
         let time = built(2022, 1, 31, 10, 20, 30);
-        assert_eq!(time.with_subseconds(1_000_000_000, 9), None);
-        assert_eq!(time.with_subseconds(1_000_000_000, 1), None);
-        assert_eq!(time.with_subseconds(u32::MAX, 9), None);
+        let refused = Err(ValueError::NanosecondOutOfRange);
+        assert_eq!(time.with_subseconds(1_000_000_000, 9), refused);
+        assert_eq!(time.with_subseconds(1_000_000_000, 1), refused);
+        assert_eq!(time.with_subseconds(u32::MAX, 9), refused);
+    }
+
+    #[test]
+    fn with_subseconds_reports_the_first_rule_broken_in_its_documented_order() {
+        let time = built(2022, 1, 31, 10, 20, 30);
+        // A whole second that two digits cannot hold either, with no digits:
+        // the digits are checked first, then the whole second.
+        assert_eq!(
+            time.with_subseconds(1_000_000_001, 0),
+            Err(ValueError::SubsecondDigitsOutOfRange)
+        );
+        assert_eq!(
+            time.with_subseconds(1_000_000_001, 2),
+            Err(ValueError::NanosecondOutOfRange)
+        );
     }
 
     #[test]
@@ -1002,8 +1088,9 @@ mod tests {
             None,
             "2022-01-31T10:20:30.85",
         );
-        assert_eq!(time.with_subseconds(855_000_000, 2), None);
-        assert_eq!(time.with_subseconds(1, 8), None);
+        let refused = Err(ValueError::NanosecondFinerThanDigits);
+        assert_eq!(time.with_subseconds(855_000_000, 2), refused);
+        assert_eq!(time.with_subseconds(1, 8), refused);
         assert_eq!(
             time.with_subseconds(1, 9).unwrap().to_string(),
             "2022-01-31T10:20:30.000000001"
@@ -1036,8 +1123,9 @@ mod tests {
         assert_eq!(east.to_string(), "2022-01-31T10:20:30+14:00");
         let west = time.with_offset_minutes(-840).unwrap();
         assert_eq!(west.to_string(), "2022-01-31T10:20:30-14:00");
-        assert_eq!(time.with_offset_minutes(841), None);
-        assert_eq!(time.with_offset_minutes(-841), None);
+        let refused = Err(ValueError::OffsetOutOfRange);
+        assert_eq!(time.with_offset_minutes(841), refused);
+        assert_eq!(time.with_offset_minutes(-841), refused);
     }
 
     #[test]
