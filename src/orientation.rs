@@ -2,6 +2,8 @@
 
 //! Image orientation: how a viewer turns the stored pixels upright.
 
+use std::fmt;
+
 /// What a viewer must do to the stored pixels to show the image upright, as
 /// the camera recorded it from its orientation sensor.
 ///
@@ -14,8 +16,10 @@
 /// values. It orders as its variants are listed, by their Exif number, so
 /// that orientations can key a map or be sorted.
 ///
-/// It has no [`Display`](std::fmt::Display): its text form is its
-/// variant's name, such as `Rotate90`, which `Debug` gives.
+/// As text, [`name`](Self::name) and [`Display`](fmt::Display), an
+/// orientation says what a viewer does to the stored pixels, for an
+/// information panel: "Rotate 90 degrees clockwise". `Debug` gives the
+/// variant's name, `Rotate90`.
 ///
 /// # Examples
 ///
@@ -29,6 +33,7 @@
 /// let orientation = Orientation::from_exif(6)?;
 /// assert_eq!(orientation, Orientation::Rotate90);
 /// assert!(orientation.swaps_dimensions());
+/// assert_eq!(orientation.to_string(), "Rotate 90 degrees clockwise");
 /// // Exif defines no orientation 9.
 /// assert_eq!(Orientation::from_exif(9), None);
 /// # Some(())
@@ -92,6 +97,24 @@ impl Orientation {
         }
     }
 
+    /// What a viewer does to the stored pixels to show the image upright,
+    /// in a person's words, for an information panel: "No change",
+    /// "Mirror left to right", "Rotate 90 degrees clockwise" or "Rotate 90
+    /// degrees counterclockwise, then mirror left to right".
+    /// [`Display`](fmt::Display) writes the same.
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::NoTransforms => "No change",
+            Self::FlipHorizontal => "Mirror left to right",
+            Self::Rotate180 => "Rotate 180 degrees",
+            Self::FlipVertical => "Mirror top to bottom",
+            Self::Rotate90FlipH => "Rotate 90 degrees clockwise, then mirror left to right",
+            Self::Rotate90 => "Rotate 90 degrees clockwise",
+            Self::Rotate270FlipH => "Rotate 90 degrees counterclockwise, then mirror left to right",
+            Self::Rotate270 => "Rotate 90 degrees counterclockwise",
+        }
+    }
+
     /// Whether applying this orientation exchanges the width and height.
     ///
     /// When true (Exif 5 to 8), the displayed width is the stored height and
@@ -105,9 +128,17 @@ impl Orientation {
     }
 }
 
+impl fmt::Display for Orientation {
+    /// Writes [`name`](Orientation::name).
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.name())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::testing::{assert_names, assert_ordered};
 
     const TABLE: [(u16, Orientation); 8] = [
         (1, Orientation::NoTransforms),
@@ -148,6 +179,29 @@ mod tests {
             let orientation = Orientation::from_exif(n).unwrap();
             assert_eq!(orientation.swaps_dimensions(), n >= 5, "Exif {n}");
         }
+    }
+
+    #[test]
+    fn every_orientation_name_is_the_one_documented_and_display_writes_it() {
+        // The names are stable once released: a program may show or store
+        // them, so a changed one fails here. `TABLE` lists every variant,
+        // in Exif order, which is their declaration order.
+        let all = TABLE.map(|(_, orientation)| orientation);
+        assert_ordered(&all);
+        assert_names(
+            &all,
+            Orientation::name,
+            &[
+                "No change",
+                "Mirror left to right",
+                "Rotate 180 degrees",
+                "Mirror top to bottom",
+                "Rotate 90 degrees clockwise, then mirror left to right",
+                "Rotate 90 degrees clockwise",
+                "Rotate 90 degrees counterclockwise, then mirror left to right",
+                "Rotate 90 degrees counterclockwise",
+            ],
+        );
     }
 
     #[test]

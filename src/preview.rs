@@ -5,6 +5,7 @@
 //! JPEG file carries, the JPEG file itself among them, and how to choose
 //! among them.
 
+use std::fmt;
 use std::ops::Range;
 
 use crate::{Orientation, Size};
@@ -116,8 +117,9 @@ impl Preview {
 /// It orders as its variants are listed, and a new variant is added after
 /// the existing ones, so an order once observed holds.
 ///
-/// It has no [`Display`](std::fmt::Display): its text form is its
-/// variant's name, such as `Jpeg`, which `Debug` gives.
+/// As text, [`name`](Self::name) and [`Display`](fmt::Display), an
+/// encoding is its name as a person would say it: "JPEG", as
+/// [`Format::Jpeg`](crate::Format::Jpeg)'s name is.
 ///
 /// # Examples
 ///
@@ -126,6 +128,7 @@ impl Preview {
 ///
 /// assert_eq!(PreviewFormat::Jpeg.mime_type(), "image/jpeg");
 /// assert_eq!(PreviewFormat::Jpeg.extension(), "jpg");
+/// assert_eq!(PreviewFormat::Jpeg.to_string(), "JPEG");
 /// ```
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[non_exhaustive]
@@ -135,6 +138,14 @@ pub enum PreviewFormat {
 }
 
 impl PreviewFormat {
+    /// The encoding's name as a person would say it, for an information
+    /// panel: "JPEG". [`Display`](fmt::Display) writes the same.
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Jpeg => "JPEG",
+        }
+    }
+
     /// The media type of the encoding, for an HTTP header or a clipboard.
     pub fn mime_type(self) -> &'static str {
         match self {
@@ -148,6 +159,13 @@ impl PreviewFormat {
         match self {
             Self::Jpeg => "jpg",
         }
+    }
+}
+
+impl fmt::Display for PreviewFormat {
+    /// Writes [`name`](PreviewFormat::name).
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.name())
     }
 }
 
@@ -178,7 +196,7 @@ pub(crate) fn at_least(previews: &[Preview], size: Size) -> Option<Preview> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::testing::size;
+    use crate::testing::{assert_names, size};
 
     /// A JPEG preview of `width` by `height` pixels, `length` bytes at
     /// `offset`, upright.
@@ -212,6 +230,22 @@ mod tests {
         assert_eq!(preview.orientation(), Orientation::Rotate90);
         assert_eq!(preview.byte_range(), 100..2_100);
         assert_eq!(preview.byte_len(), 2_000);
+    }
+
+    #[test]
+    fn every_preview_format_name_is_the_one_documented_and_display_writes_it() {
+        // The match has no wildcard arm, so a variant added later does not
+        // compile until it is listed in `all` too, and the names then fail
+        // until its name is listed.
+        let all = [PreviewFormat::Jpeg];
+        for format in all {
+            match format {
+                PreviewFormat::Jpeg => {}
+            }
+        }
+        // The names are stable once released: a program may show or store
+        // them, so a changed one fails here.
+        assert_names(&all, PreviewFormat::name, &["JPEG"]);
     }
 
     #[test]
