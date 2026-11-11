@@ -796,7 +796,11 @@ ExifTool lists for the layout or the body:
 The layout codes seen, with ExifTool's names for them [P][1]: 0, no
 layout, on every live-view and manual-focus file; 1, the 51-point
 layout; 2, the 11-point; 3, the 39-point; 4, the Nikon 1's; 7, the
-153-point. **[F]** The mask's bit order is bit number − 1, counting
+153-point. **[F]** ExifTool's published tables, read as documentation,
+list two layouts for the D780, 51 points through the viewfinder and 81
+points in live view, each with its own layout code [P][1]. So a file's
+layout code tells which grid its number belongs to. [I] The mask's bit
+order is bit number − 1, counting
 from the least significant bit of the first byte, on the D600's
 39-point layout, measured on 45 frames that each set exactly one bit
 ([autofocus-points.md](autofocus-points.md#23-the-masks-bit-order))

@@ -327,6 +327,13 @@ again, read identically to their originals. **[F]**
   frames of the procedure check; the D7200's 1.3x files record an
   origin that is not centered
   ([makernote-and-metadata.md](makernote-and-metadata.md#86-focus-point)).
+  Two other readings miss the picture. With CropHiSpeed's cropped size,
+  3968x2636, as the frame, a point scaled onto the NEF's own 3936x2624
+  preview, by 3936/3968 across and 2624/2636 down, lands up to about 25
+  pixels off at the far edge: point 27, at 3163 in the window, lands at
+  3137. Half the output frame less that cropped size,
+  ((6016 − 3968) / 2, (4016 − 2636) / 2), gives the origin (1024, 690),
+  16 and 6 pixels off the frames' (1040, 696). **[I]**
 - **Auto-area (frames 42 to 44).** Area mode 8; primary points 22, 22
   and 4; masks of 12, 13 and 9 bits. NX Studio draws one box per bit,
   and the union of the boxes measured spans the columns and rows the
@@ -341,6 +348,9 @@ again, read identically to their originals. **[F]**
   method 1, area mode 4, layout code 0, point number 0, and a recorded
   position, which the existing rules for a recorded position give
   ([ADR012](../../architecture-decisions/adr012-focus-points-as-the-camera-records-them.md)).
+  **[F]** Version 0100's in-focus byte is the contrast-detect result:
+  the in-focus byte reads 1 on these four frames, where contrast
+  detection ran, and 0 on every viewfinder frame, in focus or not.
   **[F]**
 
 ### 2.7 The fixtures
@@ -503,6 +513,24 @@ pairs. So that method is indirect, and the window is the pairs'
 direct fit alone; the difference is within the table's tolerance of
 ±3 frame pixels (section 2.5). **[F]**
 
+A rule that mapped every JPEG of exactly 3:2 to the centered 3:2 window
+of the frame, as a crop-mode JPEG's window is found from its shape,
+would take the frame's whole width, 6016, where the picture shows
+6010.2. It would land a point up to about 2 Medium pixels off. **[I]**
+The size alone also cannot tell an export from a camera JPEG:
+
+- An export scaled from a Large JPEG to exactly 4512x3008 is read as a
+  Medium JPEG. Its points land up to about 2.3 pixels across and 3.8
+  down off on the export. **[I]**
+- An export cut from a larger JPEG to that size is read so too. Its
+  points are off by as much as the cut moved the picture, hundreds of
+  pixels. **[I]**
+- An export scaled from a Medium JPEG to another size takes the whole
+  frame. One taller than about 750 pixels has not the whole frame's
+  shape and gives no point. At that height or less, the one pixel of
+  rounding takes the two shapes for one, and its point lands under a
+  pixel off. **[I]**
+
 ## 3. Bodies without a table
 
 Every other body gives no point for a shot that names one, since
@@ -523,7 +551,8 @@ file 2 to 51; so the bit order
 of the 51-point and 11-point layouts can be read the same way once
 frames with known points exist. The D600's own files, 1,374 of them,
 have a point number on 1,339 and none on 35 (34 through the viewfinder,
-1 in live view); 94 of them have an empty mask, the 35 and 59 with a
+1 in live view), and the reader gives a focus point on the 1,339 and
+none on the 35; 94 of them have an empty mask, the 35 and 59 with a
 number (23 single-point, 36 dynamic-area), so the mask is not always
 written beside the number; its 13 auto-area files, and the session's
 three, set between 2 and 16 bits. **[F]**
