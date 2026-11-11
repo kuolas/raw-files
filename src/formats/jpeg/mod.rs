@@ -722,7 +722,7 @@ mod tests {
             let (bytes, found) = read(&builder);
             let mut src = Source::new(Cursor::new(bytes)).unwrap();
             let parsed = parse(&mut src, &found, &Limits::default()).unwrap();
-            let directories: Vec<Directory> = parsed.entries.directories().collect();
+            let directories: Vec<Directory> = parsed.entries.directories().to_vec();
             assert_eq!(directories, expected, "{segment:?}");
             assert_eq!(parsed.entries.is_empty(), expected.is_empty());
         }
@@ -750,10 +750,10 @@ mod tests {
             let (bytes, found) = read(&builder);
             let mut src = Source::new(Cursor::new(bytes)).unwrap();
             let parsed = parse(&mut src, &found, &Limits::default()).unwrap();
-            let directories: Vec<Directory> = parsed.entries.directories().collect();
+            let directories: Vec<Directory> = parsed.entries.directories().to_vec();
             assert_eq!(directories, expected, "Exif {with_exif}");
             // MPFVersion, NumberOfImages and MPEntry.
-            assert_eq!(parsed.entries.in_directory(Directory::MpIndex).count(), 3);
+            assert_eq!(parsed.entries.in_directory(Directory::MpIndex).len(), 3);
             assert!(parsed.entries.entry(Directory::MpIndex, 0xB002).is_some());
             // The large thumbnail is still a preview.
             assert_eq!(parsed.previews.len(), 2, "Exif {with_exif}");
@@ -852,16 +852,13 @@ mod tests {
                 expected.extend_from_slice(makers);
                 expected.push(Directory::MpIndex);
                 let what = format!("{order:?}, {make}, {layout:?}");
-                assert_eq!(
-                    entries.directories().collect::<Vec<_>>(),
-                    expected,
-                    "{what}"
-                );
+                assert_eq!(entries.directories(), expected, "{what}");
                 if makers.is_empty() {
                     continue;
                 }
                 let tags: Vec<u16> = entries
                     .in_directory(Directory::MakerNote)
+                    .iter()
                     .map(crate::Entry::tag)
                     .collect();
                 let expected_tags: &[u16] = match layout {

@@ -523,7 +523,7 @@ fn open_and_read_everything(bytes: &[u8]) -> bool {
         let _ = black_box(file.read_preview(&preview));
     }
     let entries = file.entries().clone();
-    for directory in entries.directories() {
+    for &directory in entries.directories() {
         let _ = write!(seen, "{directory} {}", entries.skipped(directory));
     }
     for entry in &entries {

@@ -201,7 +201,7 @@ mod tests {
         let parsed = parse(&mut src, &tree, &Limits::default()).unwrap();
         let entries = &parsed.entries;
         assert_eq!(
-            entries.directories().collect::<Vec<_>>(),
+            entries.directories(),
             [Directory::Ifd(0), Directory::Exif, Directory::Gps]
         );
         assert!(entries.entry(Directory::Ifd(0), MAKE).is_some());
@@ -233,7 +233,7 @@ mod tests {
         let parsed = parse(&mut src, &tree, &Limits::default()).unwrap();
         let entries = &parsed.entries;
         assert_eq!(
-            entries.directories().collect::<Vec<_>>(),
+            entries.directories(),
             [
                 Directory::Ifd(0),
                 Directory::Exif,

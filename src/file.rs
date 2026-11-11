@@ -668,7 +668,7 @@ mod tests {
         for order in [Order::Little, Order::Big] {
             let bytes = nef(order, 64);
             let mut file = RawFile::from_bytes(&bytes).unwrap();
-            let directories: Vec<Directory> = file.entries().directories().collect();
+            let directories: Vec<Directory> = file.entries().directories().to_vec();
             assert_eq!(directories, [Directory::Ifd(0), Directory::Exif]);
             assert_eq!(file.entries().len(), 6, "{order:?}");
             let time = file.entries().entry(Directory::Exif, 0x9003).unwrap();

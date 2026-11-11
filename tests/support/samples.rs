@@ -705,10 +705,11 @@ pub fn check_entries(expected: &SampleEntries) {
     let entries = file.entries().clone();
     let found: Vec<(String, usize, u32)> = entries
         .directories()
-        .map(|d| {
+        .iter()
+        .map(|&d| {
             (
                 d.to_string(),
-                entries.in_directory(d).count(),
+                entries.in_directory(d).len(),
                 entries.skipped(d),
             )
         })

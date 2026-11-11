@@ -703,6 +703,11 @@ pub(crate) fn clean_text(bytes: &[u8]) -> Option<String> {
 /// An entry that could not be checked when the file was opened is left
 /// out, and [`skipped`](Self::skipped) counts it.
 ///
+/// [`directories`](Self::directories) and
+/// [`in_directory`](Self::in_directory) are slices, as every list of the
+/// API is: they have a length, they can be indexed, and they iterate in
+/// both directions.
+///
 /// # Examples
 ///
 /// Say how many entries each directory lists, and how many it left out:
@@ -715,7 +720,7 @@ pub(crate) fn clean_text(bytes: &[u8]) -> Option<String> {
 ///     let entries = file.entries();
 ///     // From a Z 9: "IFD0: 22 entries, 0 left out", then the SubIFDs, Exif
 ///     // and the rest.
-///     for directory in entries.directories() {
+///     for &directory in entries.directories() {
 ///         println!(
 ///             "{directory}: {} entries, {} left out",
 ///             entries.in_directory(directory).len(),
@@ -728,15 +733,19 @@ pub(crate) fn clean_text(bytes: &[u8]) -> Option<String> {
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Entries {
     entries: Vec<Entry>,
-    /// Each directory found, in the order it was found, with the range of
-    /// its entries in `entries`.
-    directories: Vec<Found>,
+    /// Each directory found, in the order it was found, for
+    /// [`directories`](Self::directories) to give as a slice.
+    directories: Vec<Directory>,
+    /// What is known of each directory of `directories`, at the same
+    /// position. Only [`push`](Self::push) adds to the two, one item to
+    /// each, so that they cannot fall out of step.
+    found: Vec<Found>,
 }
 
-/// One directory of [`Entries`].
+/// One directory of [`Entries`], whose name is at the same position in
+/// [`Entries::directories`].
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 struct Found {
-    directory: Directory,
     /// Where the directory lies in the file: the position of its entry
     /// count.
     offset: u64,
@@ -752,6 +761,7 @@ impl Entries {
         Self {
             entries: Vec::new(),
             directories: Vec::new(),
+            found: Vec::new(),
         }
     }
 
@@ -792,11 +802,7 @@ impl Entries {
     /// listed once, under the first. Whether it was added: a reader lists
     /// the directories a skipped one leads to only when it was.
     pub(crate) fn push(&mut self, directory: Directory, ifd: &Ifd) -> bool {
-        if self
-            .directories
-            .iter()
-            .any(|found| found.offset == ifd.offset())
-        {
+        if self.found.iter().any(|found| found.offset == ifd.offset()) {
             return false;
         }
         let start = self.entries.len();
@@ -807,8 +813,8 @@ impl Entries {
                 order,
                 entry,
             }));
-        self.directories.push(Found {
-            directory,
+        self.directories.push(directory);
+        self.found.push(Found {
             offset: ifd.offset(),
             entries: start..self.entries.len(),
             skipped: ifd.invalid_entries(),
@@ -834,17 +840,16 @@ impl Entries {
 
     /// Every directory found, in the order it was found, each once, and
     /// whether or not any of its entries could be listed.
-    pub fn directories(&self) -> impl Iterator<Item = Directory> + '_ {
-        self.directories.iter().map(|found| found.directory)
+    pub fn directories(&self) -> &[Directory] {
+        &self.directories
     }
 
-    /// The entries of `directory`, in the order it lists them; none when
+    /// The entries of `directory`, in the order it lists them; empty when
     /// the file has no such directory.
-    pub fn in_directory(&self, directory: Directory) -> std::slice::Iter<'_, Entry> {
-        self.found(directory)
+    pub fn in_directory(&self, directory: Directory) -> &[Entry] {
+        self.lookup(directory)
             .and_then(|found| self.entries.get(found.entries.clone()))
             .unwrap_or_default()
-            .iter()
     }
 
     /// The entry of `tag` in `directory`; when the directory lists the tag
@@ -853,6 +858,7 @@ impl Entries {
     /// be listed.
     pub fn entry(&self, directory: Directory, tag: u16) -> Option<Entry> {
         self.in_directory(directory)
+            .iter()
             .find(|entry| entry.tag() == tag)
             .copied()
     }
@@ -862,14 +868,13 @@ impl Entries {
     /// outside the file or the part of it the directory was read in. 0 for
     /// a directory the file does not have.
     pub fn skipped(&self, directory: Directory) -> u32 {
-        self.found(directory).map_or(0, |found| found.skipped)
+        self.lookup(directory).map_or(0, |found| found.skipped)
     }
 
-    /// The directory `directory`, if it was found.
-    fn found(&self, directory: Directory) -> Option<&Found> {
-        self.directories
-            .iter()
-            .find(|found| found.directory == directory)
+    /// What is known of `directory`, if it was found.
+    fn lookup(&self, directory: Directory) -> Option<&Found> {
+        let position = self.directories.iter().position(|&d| d == directory)?;
+        self.found.get(position)
     }
 }
 
@@ -1316,7 +1321,7 @@ mod tests {
             }
 
             let what = format!("{order:?}");
-            let found: Vec<Directory> = entries.directories().collect();
+            let found: Vec<Directory> = entries.directories().to_vec();
             assert_eq!(
                 found,
                 [Directory::Exif, Directory::Gps, Directory::SubIfd(0)],
@@ -1327,7 +1332,11 @@ mod tests {
             assert_eq!(entries.skipped(Directory::SubIfd(0)), 0, "{what}");
             assert_eq!(entries.skipped(Directory::Interop), 0, "{what}");
             let tags = |directory| -> Vec<u16> {
-                entries.in_directory(directory).map(Entry::tag).collect()
+                entries
+                    .in_directory(directory)
+                    .iter()
+                    .map(Entry::tag)
+                    .collect()
             };
             assert_eq!(tags(Directory::Exif), [1, 5], "{what}");
             assert!(tags(Directory::Gps).is_empty(), "{what}");
@@ -1367,7 +1376,8 @@ mod tests {
         let mut src = source(&built.bytes);
         entries
             .directories()
-            .map(|directory| {
+            .iter()
+            .map(|&directory| {
                 let id = match entries
                     .entry(directory, 0x0100)
                     .map(|e| e.read(&mut src, 64))
@@ -1401,6 +1411,7 @@ mod tests {
             builder.next(ifd0, Some(ifd1)).subifds(ifd1, &[d]);
             let built = builder.build();
             let entries = walked(&built);
+            assert_lists_agree(&entries);
             assert_eq!(
                 directories_and_ids(&entries, &built),
                 [
@@ -1436,7 +1447,7 @@ mod tests {
                 [(Directory::Ifd(0), 0), (Directory::Ifd(1), 1)],
                 "{order:?}"
             );
-            assert_eq!(entries.in_directory(Directory::Gps).count(), 0);
+            assert_eq!(entries.in_directory(Directory::Gps).len(), 0);
         }
     }
 
@@ -1453,6 +1464,7 @@ mod tests {
         assert_eq!(entries.skipped(Directory::Exif), 2);
         let tags: Vec<u16> = entries
             .in_directory(Directory::Exif)
+            .iter()
             .map(Entry::tag)
             .collect();
         assert_eq!(tags, [0x9207]);
@@ -1470,7 +1482,7 @@ mod tests {
         let (same, _) =
             parse_ifd(&mut src, &block, at, ByteOrder::Little, &Limits::default()).unwrap();
         assert!(!entries.push(Directory::MakerNote, &same));
-        assert_eq!(entries.directories().collect::<Vec<_>>(), [Directory::Exif]);
+        assert_eq!(entries.directories(), [Directory::Exif]);
         assert_eq!(entries.len(), 1);
         assert_eq!(entries.in_directory(Directory::MakerNote).len(), 0);
 
@@ -1486,9 +1498,99 @@ mod tests {
             parse_ifd(&mut src, &block, at, ByteOrder::Little, &Limits::default()).unwrap();
         assert!(entries.push(Directory::MakerNote, &other));
         assert_eq!(
-            entries.directories().collect::<Vec<_>>(),
+            entries.directories(),
             [Directory::Exif, Directory::MakerNote]
         );
+    }
+
+    /// Checks that the two lists `entries` keeps of its directories agree:
+    /// as many items in each, and each directory's entries, by the range
+    /// kept for it, are entries of the directory named at its position.
+    fn assert_lists_agree(entries: &Entries) {
+        assert_eq!(entries.directories.len(), entries.found.len());
+        for (&directory, found) in entries.directories.iter().zip(&entries.found) {
+            let listed = entries.entries.get(found.entries.clone()).unwrap();
+            assert!(
+                listed.iter().all(|entry| entry.directory() == directory),
+                "{directory}: {listed:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn the_directories_and_their_entries_are_slices_in_the_files_order() {
+        for order in ORDERS {
+            // An Exif IFD of two entries, a GPS IFD whose one entry is
+            // left out, a SubIFD of three; then the Exif IFD again, as a
+            // MakerNote, which is refused.
+            let mut builder = TiffBuilder::new(order);
+            let first = builder.ifd();
+            builder
+                .short(first, 0x0001, &[1])
+                .short(first, 0x0002, &[2]);
+            let second = builder.ifd();
+            builder.raw(second, 0x0001, 99, 1, RawValue::Inline([0; 4]));
+            let third = builder.ifd();
+            builder
+                .short(third, 0x0003, &[3])
+                .short(third, 0x0004, &[4])
+                .short(third, 0x0005, &[5]);
+            let built = builder.build();
+            let mut entries = entries_of(&built, first, Directory::Exif, order);
+            let mut src = source(&built.bytes);
+            let block = Block::file(src.len());
+            let byte_order = match order {
+                Order::Little => ByteOrder::Little,
+                Order::Big => ByteOrder::Big,
+            };
+            let parsed = |src: &mut Source<Cursor<Vec<u8>>>, ifd| {
+                let at = built.ifd_offset(ifd);
+                parse_ifd(src, &block, at, byte_order, &Limits::default())
+                    .unwrap()
+                    .0
+            };
+            assert!(entries.push(Directory::Gps, &parsed(&mut src, second)));
+            assert!(entries.push(Directory::SubIfd(0), &parsed(&mut src, third)));
+            assert!(!entries.push(Directory::MakerNote, &parsed(&mut src, first)));
+
+            let what = format!("{order:?}");
+            assert_lists_agree(&entries);
+            // Every directory found, in the order found, the GPS IFD among
+            // them though none of its entries could be listed.
+            assert_eq!(
+                entries.directories(),
+                [Directory::Exif, Directory::Gps, Directory::SubIfd(0)],
+                "{what}"
+            );
+            let tags = |directory| -> Vec<u16> {
+                entries
+                    .in_directory(directory)
+                    .iter()
+                    .map(Entry::tag)
+                    .collect()
+            };
+            assert_eq!(tags(Directory::Exif), [1, 2], "{what}");
+            assert!(entries.in_directory(Directory::Gps).is_empty(), "{what}");
+            assert_eq!(tags(Directory::SubIfd(0)), [3, 4, 5], "{what}");
+            // A directory the file lacks, or that was refused, is empty.
+            assert!(
+                entries.in_directory(Directory::MakerNote).is_empty(),
+                "{what}"
+            );
+            assert!(
+                entries.in_directory(Directory::Interop).is_empty(),
+                "{what}"
+            );
+            // The directories' entries, joined in the directories' order,
+            // are every entry, in the file's order.
+            let joined: Vec<&Entry> = entries
+                .directories()
+                .iter()
+                .flat_map(|&directory| entries.in_directory(directory))
+                .collect();
+            assert_eq!(joined, entries.iter().collect::<Vec<_>>(), "{what}");
+            assert_eq!(entries.len(), 5, "{what}");
+        }
     }
 
     #[test]
@@ -1496,7 +1598,7 @@ mod tests {
         let entries = Entries::new();
         assert!(entries.is_empty());
         assert_eq!(entries.len(), 0);
-        assert_eq!(entries.directories().count(), 0);
+        assert_eq!(entries.directories().len(), 0);
         assert_eq!(entries.in_directory(Directory::Ifd(0)).len(), 0);
         assert_eq!(entries.iter().len(), 0);
         assert_eq!(entries.skipped(Directory::Ifd(0)), 0);

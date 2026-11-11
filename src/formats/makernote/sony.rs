@@ -908,6 +908,7 @@ mod tests {
     fn makernote_tags(entries: &Entries) -> Vec<u16> {
         entries
             .in_directory(Directory::MakerNote)
+            .iter()
             .map(crate::Entry::tag)
             .collect()
     }
@@ -930,7 +931,7 @@ mod tests {
                 let (mut src, found) = read_file(built.bytes);
                 let view = view_of(&found.expect("a MakerNote"));
                 let what = format!("{prefix:?}, {order:?}");
-                let directories: Vec<Directory> = view.directories().collect();
+                let directories: Vec<Directory> = view.directories().to_vec();
                 assert_eq!(directories, [Directory::MakerNote], "{what}");
                 assert_eq!(makernote_tags(&view), [FIRST, SECOND], "{what}");
                 assert_eq!(view.skipped(Directory::MakerNote), 0, "{what}");
@@ -985,7 +986,7 @@ mod tests {
                 .undefined_ifd(exif, MAKER_NOTE, makernote);
             let (_, found) = read_file(builder.build().bytes);
             let view = view_of(&found.expect("a MakerNote"));
-            assert_eq!(view.directories().count(), 1, "{order:?}");
+            assert_eq!(view.directories().len(), 1, "{order:?}");
             assert_eq!(makernote_tags(&view), [FIRST, SECOND], "{order:?}");
         }
     }
