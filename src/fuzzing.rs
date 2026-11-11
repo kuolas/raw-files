@@ -217,7 +217,7 @@ fn read_location(location: &Location) {
         latitude.minutes(),
         latitude.seconds(),
         latitude.is_south(),
-        latitude.to_degrees(),
+        latitude.to_decimal_degrees(),
     );
     let longitude = location.longitude();
     let _ = (
@@ -225,7 +225,7 @@ fn read_location(location: &Location) {
         longitude.minutes(),
         longitude.seconds(),
         longitude.is_west(),
-        longitude.to_degrees(),
+        longitude.to_decimal_degrees(),
     );
     if let Some(altitude) = location.altitude() {
         let _ = (altitude.meters(), altitude.is_below(), altitude.to_meters());
