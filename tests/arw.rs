@@ -28,7 +28,7 @@ use support::arw::{
 use support::samples::{
     Jpeg, LocationPart, Sample, SampleEntries, SampleFineTune, SampleFocus, SampleLens,
     SampleMetadata, SampleSettings, SerialShape, Text, check, check_enciphered, check_entries,
-    check_metadata, check_placeholder_description, listed, sizes,
+    check_every, check_metadata, check_placeholder_description, listed, sizes,
 };
 use support::tiff_builder::{BlobId, Built, Order};
 
@@ -3450,46 +3450,57 @@ const LARGE_METADATA: &[SampleMetadata] = &[
 
 #[test]
 fn every_sony_sample_opens_with_the_previews_the_notes_predict() {
-    for sample in SAMPLES {
-        check(sample, Format::Arw);
-    }
+    check_every(
+        SAMPLES,
+        |sample| sample.file,
+        |sample| check(sample, Format::Arw),
+    );
 }
 
 #[test]
 fn the_arq_sample_opens_with_the_two_previews_of_its_pixel_shift_frame() {
-    for sample in LARGE_SAMPLES {
-        check(sample, Format::Arw);
-    }
+    check_every(
+        LARGE_SAMPLES,
+        |sample| sample.file,
+        |sample| check(sample, Format::Arw),
+    );
 }
 
 #[test]
 fn the_older_bodies_placeholder_is_recorded_and_gives_no_description() {
     // The public samples among the 23 public ARW files the ARW notes
     // (section 9.8) list as writing it.
-    for name in [
+    let names = [
         "sony-dslr-a100.arw",
         "sony-dslr-a200.arw",
         "sony-dslr-a700.arw",
         "sony-dslr-a900.arw",
         "sony-nex-5.arw",
         "sony-slt-a55.arw",
-    ] {
-        check_placeholder_description(name, Format::Arw);
-    }
+    ];
+    check_every(
+        &names,
+        |name| name,
+        |name| check_placeholder_description(name, Format::Arw),
+    );
 }
 
 #[test]
 fn every_sony_sample_gives_its_metadata() {
-    for expected in METADATA {
-        check_metadata(expected, Format::Arw);
-    }
+    check_every(
+        METADATA,
+        |expected| expected.file,
+        |expected| check_metadata(expected, Format::Arw),
+    );
 }
 
 #[test]
 fn the_arq_sample_gives_the_metadata_of_its_pixel_shift_frame() {
-    for expected in LARGE_METADATA {
-        check_metadata(expected, Format::Arw);
-    }
+    check_every(
+        LARGE_METADATA,
+        |expected| expected.file,
+        |expected| check_metadata(expected, Format::Arw),
+    );
 }
 
 #[test]
@@ -4019,9 +4030,7 @@ const ENTRIES: &[SampleEntries] = &[
 
 #[test]
 fn every_samples_entries_are_its_directories_with_their_counts() {
-    for expected in ENTRIES {
-        check_entries(expected);
-    }
+    check_every(ENTRIES, |expected| expected.file, check_entries);
 }
 
 #[test]
