@@ -17,6 +17,7 @@
 use std::io::{Cursor, Read, Seek};
 
 use crate::container::jpeg::{mpf, probe, segments};
+use crate::container::tiff::types::{IFD, LONG, SHORT};
 use crate::container::tiff::{Block, Tree, walk};
 use crate::datetime::DateTime;
 use crate::entries::{Entries, Entry, Value};
@@ -46,14 +47,25 @@ pub fn tiff_walk(data: &[u8]) {
     read_values(&mut src, &tree);
 }
 
-/// Reads every value of every IFD of `tree` through each accessor, as a
-/// number, as text and as bytes, whatever the tag and its type; then
-/// lists the tree's entries, as opening a file does, and reads and
-/// formats each one's value under the default cap.
+/// Reads every value of every IFD of `tree` through each typed accessor,
+/// whatever the tag and its type: as unsigned numbers, all of them, the
+/// first alone and one alone; as signed numbers of 16 and 32 bits; as
+/// fractions, unsigned and signed; as text, ASCII alone and ASCII or
+/// UTF-8; and as bytes. Each accessor refuses the types it does not read,
+/// so every one is asked of every tag. Then this lists the tree's
+/// entries, as opening a file does, and reads and formats each one's
+/// value under the default cap.
 fn read_values<R: Read + Seek>(src: &mut Source<R>, tree: &Tree) {
     for (_, ifd) in tree.iter() {
         for tag in ifd.tags() {
             let _ = ifd.u32s(src, tag);
+            let _ = ifd.u32(src, tag);
+            let _ = ifd.one_u32(tag, &[SHORT, LONG, IFD]);
+            let _ = ifd.i16s(src, tag);
+            let _ = ifd.i32s(src, tag);
+            let _ = ifd.rationals(src, tag);
+            let _ = ifd.srationals(src, tag);
+            let _ = ifd.ascii_bytes(src, tag);
             let _ = ifd.text_bytes(src, tag);
             let _ = ifd.bytes(src, tag);
         }

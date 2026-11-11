@@ -88,8 +88,8 @@
 //!   checks them. Without a DateTimeOriginal there is no capture time,
 //!   whatever fraction or offset the file records. It is never taken from
 //!   DateTimeDigitized or from IFD0's DateTime, which editors change.
-//! - The ISO is the Exif PhotographicSensitivity, of type SHORT or LONG,
-//!   its first value. When that is missing, unreadable, zero, which Exif
+//! - The ISO is the Exif PhotographicSensitivity, of type SHORT, LONG or
+//!   IFD, its first value. When that is missing, unreadable, zero, which Exif
 //!   writes for an unknown sensitivity, or 65535, which Exif writes for one
 //!   of 65535 or more, the ISO is the RecommendedExposureIndex, or else the
 //!   ISOSpeed, each its first value and only when above zero. A 65535 that
@@ -166,9 +166,9 @@
 //! - The orientation is IFD0's Orientation, read as the preview finder reads
 //!   it ([`tiff_previews::orientation`]), so that the metadata and the
 //!   previews never disagree.
-//! - The raw size is the ImageWidth and ImageLength, of type SHORT or LONG,
-//!   of the IFD of the tree, the Exif and Interoperability IFDs left out,
-//!   that the preview finder takes for raw data
+//! - The raw size is the ImageWidth and ImageLength, of type SHORT, LONG
+//!   or IFD, of the IFD of the tree, the Exif, GPS and Interoperability
+//!   IFDs left out, that the preview finder takes for raw data
 //!   ([`tiff_previews::is_raw`]), whose width and height are both above
 //!   zero, and that has the most pixels of all such IFDs, the first in the
 //!   tree's order on a tie: a file can hold a small full-resolution raw
@@ -1039,8 +1039,9 @@ fn color_space<R: Read + Seek>(
 /// or both `None` when no IFD does.
 ///
 /// The IFDs are asked in the tree's order, except the Exif IFD, which holds
-/// capture metadata, and the Interoperability IFD, which names the rule the
-/// file follows: neither ever holds an image. An IFD counts as raw data
+/// capture metadata, the GPS IFD, which holds where the picture was taken,
+/// and the Interoperability IFD, which names the rule the file follows:
+/// none of them ever holds an image. An IFD counts as raw data
 /// when the preview finder says so ([`tiff_previews::is_raw`]); one whose
 /// tags that test reads cannot be read is passed over, as the finder passes
 /// over it. A raw IFD counts only when [`raw_size`] reads a size from it.
@@ -1077,7 +1078,8 @@ fn sizes<R: Read + Seek>(src: &mut Source<R>, tree: &Tree) -> Result<(Option<Siz
 }
 
 /// The size of the raw data `ifd` describes: its ImageWidth and
-/// ImageLength, each of type SHORT or LONG, as [`Ifd::u32`] reads them.
+/// ImageLength, each of type SHORT, LONG or IFD, as [`Ifd::u32`] reads
+/// them.
 /// `None` when either is missing, cannot be read or is zero.
 ///
 /// # Errors
@@ -1131,8 +1133,8 @@ pub(crate) fn crop([x, y]: [u32; 2], [width, height]: [u32; 2], raw: Size) -> Op
 }
 
 /// The two whole numbers tag `tag` of `ifd` holds, in the forms the DNG
-/// specification allows its crop tags: integers of type SHORT or LONG, as
-/// [`Ifd::u32s`] reads them, or fractions of type RATIONAL whose every
+/// specification allows its crop tags: integers of type SHORT or LONG, or
+/// IFD, which [`Ifd::u32s`] reads too, or fractions of type RATIONAL whose every
 /// denominator is 1. `None` when the tag is missing, cannot be read, holds
 /// a fraction with another denominator, or holds other than two values.
 ///
