@@ -11,7 +11,7 @@
 /// [`ErrorKind::LimitExceeded`](crate::ErrorKind::LimitExceeded); past the
 /// first directory, a directory that crosses a cap is left out as a damaged
 /// one is. In a JPEG file, a cap crossed inside its Exif or MPF segment
-/// costs what that segment holds, not the file, which still opens.
+/// costs at most what that segment holds, not the file, which still opens.
 ///
 /// Build it from [`Limits::default()`], or [`Limits::unlimited()`], and
 /// change a cap with its `with_…` method, such as
@@ -98,10 +98,9 @@ impl Limits {
         self
     }
 
-    /// Sets how many bytes the value of one entry may take, which is the
-    /// most that [`RawFile::read_value`](crate::RawFile::read_value) reads
-    /// into memory, in place of the cap set before;
-    /// [`max_value_bytes`](Self::max_value_bytes) reads it.
+    /// Sets how many bytes the value of one entry may take, in place of the
+    /// cap set before; [`max_value_bytes`](Self::max_value_bytes) reads it
+    /// and says what a lowered cap costs.
     #[must_use]
     pub fn with_max_value_bytes(mut self, n: u64) -> Self {
         self.max_value_bytes = n;
@@ -130,10 +129,29 @@ impl Limits {
         self.max_preview_bytes
     }
 
-    /// How many bytes the value of one entry may take at most, which is
-    /// the most that [`RawFile::read_value`](crate::RawFile::read_value)
-    /// reads into memory; decoding a value of numbers holds as much again
-    /// while it runs. A longer value fails only its own read.
+    /// How many bytes the value of one entry may take at most.
+    ///
+    /// The cap holds for every value read whole from the file: those
+    /// raw-files reads for the metadata and the previews when it opens a
+    /// file, and those a caller reads with
+    /// [`RawFile::read_value`](crate::RawFile::read_value). It is the most
+    /// one read takes into memory; decoding a value of numbers holds up to
+    /// twice as much again while it runs. A value of four bytes or fewer,
+    /// which its entry holds itself, is read under any cap. A MakerNote is
+    /// not read whole: raw-files reads its directory in place, and each of
+    /// that directory's values under the cap.
+    ///
+    /// A longer value costs what raw-files would have read from it:
+    ///
+    /// - [`RawFile::read_value`](crate::RawFile::read_value) fails with
+    ///   [`ErrorKind::LimitExceeded`](crate::ErrorKind::LimitExceeded).
+    /// - A value of the metadata is `None`, as a damaged one is.
+    /// - A preview or a directory that the file locates by such a value is
+    ///   left out, with all it holds, such as the SubIFDs of a list longer
+    ///   than the cap.
+    /// - A RAW file, or any TIFF file but a DNG, whose Make is longer
+    ///   fails to open with `LimitExceeded`: its format is told by its
+    ///   Make. A JPEG file still opens, without what its MakerNote gives.
     ///
     /// The default holds every value measured on camera files, the largest
     /// a whole MakerNote of under 1,000,000 bytes.

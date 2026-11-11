@@ -150,8 +150,10 @@ handle, with each value read only when it is asked for.
   UTF-8 replaced), without that record's 255-byte limit.
 - **One cap bounds one value.** A new `Limits` cap, a number of bytes
   as the preview cap is, bounds the value one read may allocate, at
-  1 MiB by default, the cap the typed values already use; a value over
-  it fails only its own read, with `LimitExceeded`.
+  1 MiB by default. It is the one the typed values are read under, so a
+  value the metadata reads whole is readable through the view too.
+  A value over it fails its own `read_value` with `LimitExceeded`, and
+  costs the readers what they would have read from it.
 - **The reach is every TIFF directory raw-files reads or can read
   cheaply.** IFD0 and the IFDs chained after it, the SubIFDs, the Exif,
   GPS and Interoperability IFDs; the Nikon and Sony MakerNotes in the
@@ -220,8 +222,9 @@ Rejected:
 - **A smaller cap, 256 KiB or 128 KiB.** Both are above every value
   measured but the MakerNote entry, which reaches 993,826 bytes on a
   Nikon 1 NEF and 697,564 on an ARW and whose bytes a caller could then
-  not read; and a second number beside the typed values' 1 MiB would
-  make a value readable one way and not the other.
+  not read; and a number for the view apart from the one the typed
+  values are read under would make a value readable one way and not the
+  other.
 - **The reach without SR2Private**, or with a JPEG's XMP and IPTC
   segments as bytes. SR2Private holds the plain entries that lead to
   the SR2SubIFD; the XMP and IPTC segments are not TIFF entries, and

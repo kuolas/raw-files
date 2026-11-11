@@ -31,9 +31,9 @@
 //!   preview so. The metadata reader takes the raw size by the same test
 //!   ([`is_raw`]), so that the two agree on which IFD holds the raw data.
 //! - An IFD is skipped too, with whatever it points at, when a tag these
-//!   rules read in it cannot be read, such as a value longer than one tag
-//!   may take: damage costs only the IFD it touches, never the other
-//!   previews, as in the walk past IFD0.
+//!   rules read in it cannot be read, such as a value longer than the
+//!   limits' cap on one value: damage costs only the IFD it touches, never
+//!   the other previews, as in the walk past IFD0.
 //! - An IFD's preview is the JPEG stream its JPEGInterchangeFormat and
 //!   JPEGInterchangeFormatLength tags declare, when it has both; otherwise
 //!   its one strip, when it is JPEG-compressed and stored as exactly one
@@ -276,9 +276,9 @@ pub(crate) fn orientation<R: Read + Seek>(src: &mut Source<R>, tree: &Tree) -> R
 ///
 /// # Errors
 ///
-/// As for [`Ifd::u32s`]: `LimitExceeded` for a value longer than one tag
-/// may take, which [`find`] and the metadata reader take for damage and
-/// skip the IFD; `Io` when the reader fails.
+/// As for [`Ifd::u32s`]: `LimitExceeded` for a value longer than the cap
+/// the IFD was read under, which [`find`] and the metadata reader take
+/// for damage and skip the IFD; `Io` when the reader fails.
 pub(crate) fn is_raw<R: Read + Seek>(src: &mut Source<R>, ifd: &Ifd) -> Result<bool> {
     if matches!(
         ifd.u32(src, PHOTOMETRIC_INTERPRETATION)?,
@@ -903,8 +903,8 @@ mod tests {
         assert_eq!(sizes(&previews), [size(1620, 1080), size(160, 120)]);
     }
 
-    /// More SHORTs than the 1 MiB one tag value may take: a value that lies
-    /// inside the file and cannot be read.
+    /// More SHORTs than the 1 MiB one value may take under the default
+    /// limits: a value that lies inside the file and cannot be read.
     const TOO_MANY_SHORTS: u32 = 512 * 1024 + 1;
 
     /// Gives `ifd` tag `tag` with [`TOO_MANY_SHORTS`] SHORTs at offset
@@ -939,8 +939,8 @@ mod tests {
     fn an_ifd_whose_jpeg_tags_cannot_be_read_is_skipped() {
         for order in ORDERS {
             // The SubIFD's StripOffsets holds 262,145 values, one megabyte
-            // and four bytes: over the cap on a tag's size. Where the JPEG
-            // is stored is unknown, so the SubIFD costs only its own
+            // and four bytes: over the default cap on one value. Where the
+            // JPEG is stored is unknown, so the SubIFD costs only its own
             // preview, and IFD0's is still found.
             let mut builder = TiffBuilder::new(order);
             let ifd0 = builder.ifd();

@@ -233,12 +233,14 @@ fn seeds_dir() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("fuzz/seeds/tiff_walk")
 }
 
-/// Limits far below the defaults, which the fixtures still fit.
+/// Limits far below the defaults, which the fixtures still fit: a value
+/// lies inside its file, so none is longer than the longest fixture.
 fn small_limits() -> Limits {
     Limits::default()
         .with_max_ifds(8)
         .with_max_ifd_entries(16)
         .with_max_ifd_depth(2)
+        .with_max_value_bytes(u64::try_from(MAX_FIXTURE_LEN).unwrap())
 }
 
 /// Limits that `fixture` does not fit, one at a time: one IFD fewer than
@@ -305,8 +307,8 @@ fn check(bytes: &[u8], limits: &Limits, what: impl Fn() -> String) -> Option<usi
         panic!("reading {} panicked", what());
     };
     let (tree, errors) = result.ok()?;
-    // Every entry the walk keeps lies inside the file, and the fixtures are
-    // far shorter than the 1 MiB an accessor reads at most.
+    // Every entry the walk keeps lies inside the file, and no fixture is
+    // longer than the cap on one value of any limits used here.
     assert!(
         errors.is_empty(),
         "{}: values cannot be read: {errors:?}",

@@ -313,11 +313,15 @@
 //!   value. Its defaults suit untrusted input.
 //! - **A cap fails only what it must.** A cap the walk cannot go on without
 //!   fails the open with [`LimitExceeded`](ErrorKind::LimitExceeded): the
-//!   first directory's size, or the total number of directories. A preview
-//!   or a value larger than allowed fails that read alone. A directory past
+//!   first directory's size, or the total number of directories. So does a
+//!   Make longer than the cap on one value in a TIFF file other than a DNG,
+//!   every RAW file among them, since the Make tells its format. A preview
+//!   larger than allowed fails that read alone. A value larger than allowed
+//!   fails its own [`RawFile::read_value`], is `None` to the metadata, and
+//!   costs the previews and directories located by it. A directory past
 //!   the first that crosses a cap, or one nested too deep, is left out like
 //!   a damaged one. In a JPEG file, a cap crossed inside its Exif or MPF
-//!   segment costs that segment, not the file.
+//!   segment costs at most that segment, not the file.
 //! - **The format comes from the file's content, never from its name.** A
 //!   renamed file opens as what it is. A DNG is refused even when its Make
 //!   names Nikon or Sony. [`Format::from_extension`] serves file pickers and

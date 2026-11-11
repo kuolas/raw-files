@@ -21,9 +21,10 @@
 //! - A damaged value costs only itself. A tag that is missing, of a type
 //!   other than the standard's, of a count other than one where the rules
 //!   below ask for one SHORT, or whose value cannot be read, such as one
-//!   longer than one tag may take, gives `None` for its own value; every
-//!   other value is still read, and the file still opens. Only a failure of
-//!   the reader is an error: it says nothing about the file.
+//!   longer than the limits' cap on one value, gives `None` for its own
+//!   value; every other value is still read, and the file still opens.
+//!   Only a failure of the reader is an error: it says nothing about the
+//!   file.
 //! - The make, the model and the serial number, of the camera and of the
 //!   lens, and the software are text, read by the one rule [`text`] gives:
 //!   cut at the first NUL, `None` when longer than 255 bytes, trimmed of
@@ -364,7 +365,8 @@ pub(crate) fn read<R: Read + Seek>(src: &mut Source<R>, tree: &Tree) -> Result<S
 /// # Errors
 ///
 /// `Io` when the reader fails. A value that cannot be read for any other
-/// reason, such as one longer than one tag may take, is `None`.
+/// reason, such as one longer than the limits' cap on one value
+/// ([`Limits::max_value_bytes`](crate::Limits::max_value_bytes)), is `None`.
 pub(crate) fn text<R: Read + Seek>(
     src: &mut Source<R>,
     ifd: &Ifd,
@@ -1340,7 +1342,8 @@ mod tests {
         }
     }
 
-    /// More bytes than the 1 MiB one tag value may take.
+    /// More bytes than the 1 MiB one value may take under the default
+    /// limits.
     const TOO_LONG: u32 = 1024 * 1024 + 1;
 
     /// A little-endian file whose IFD0 holds the Orientation 8 and
@@ -2600,7 +2603,7 @@ mod tests {
                 z9_expected_with_lens(z9_lens_with(|lens| lens.serial_number = None)),
             ),
             (
-                "a LensSpecification of more values than one tag may take",
+                "a LensSpecification of more values than the default cap allows",
                 LENS_SPECIFICATION,
                 |builder, _, exif| too_long_of(builder, exif, LENS_SPECIFICATION, RATIONAL, 8),
                 z9_expected_with_lens(z9_lens_with(|lens| lens.range = [None; 4])),
