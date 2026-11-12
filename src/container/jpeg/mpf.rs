@@ -118,8 +118,8 @@
 use std::io::{Read, Seek};
 use std::ops::Range;
 
-use crate::container::tiff::{Block, Ifd, ifd_in, parse_header, skip_damage};
-use crate::error::Result;
+use crate::container::tiff::{Block, Ifd, ifd_in, parse_header};
+use crate::error::{Result, skip_damage};
 use crate::io::{ByteOrder, Source};
 use crate::limits::Limits;
 

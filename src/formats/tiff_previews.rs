@@ -80,8 +80,8 @@ use crate::container::tiff::tags::{
     NEW_SUBFILE_TYPE, ORIENTATION, PHOTOMETRIC_INTERPRETATION, STRIP_BYTE_COUNTS, STRIP_OFFSETS,
     TILE_BYTE_COUNTS, TILE_LENGTH, TILE_OFFSETS, TILE_WIDTH,
 };
-use crate::container::tiff::{Block, Ifd, Tree, skip_damage};
-use crate::error::Result;
+use crate::container::tiff::{Block, Ifd, Tree};
+use crate::error::{Result, skip_damage};
 use crate::geometry::Size;
 use crate::io::{Source, within};
 use crate::orientation::Orientation;

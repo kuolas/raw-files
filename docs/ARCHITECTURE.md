@@ -14,7 +14,7 @@ shots: they stay private, and are cited by counts or by frame numbers.
 | File | Holds | May depend on |
 |---|---|---|
 | `src/lib.rs` | the library root: the crate documentation and the re-exports; in a doc-test build only, the README as a module, so that its code samples are compiled | `authorship`, `camera`, `camera_settings`, `datetime`, `entries`, `error`, `file`, `focus`, `format`, `geometry`, `limits`, `location`, `metadata`, `options`, `orientation`, `preview`, `rational`, `value_error` |
-| `src/error.rs` | `Error`, `ErrorKind`, `Result`: what can go wrong, by category, with the byte offset when known | — |
+| `src/error.rs` | `Error`, `ErrorKind`, `Result`: what can go wrong, by category, with the byte offset when known; and `skip_damage`, the crate's rule for damage: damage in the file becomes `None`, and only a failure of the reader stays an error | — |
 | `src/value_error.rs` | `ValueError`: why a function refused its arguments, one variant per rule, each with a lowercase text that `Display` writes, ordered as the variants are listed; no conversion into `Error`, which comes from reading a file | — |
 | `src/limits.rs` | `Limits`: the caps on what a file can make the library walk or allocate | — |
 | `src/orientation.rs` | `Orientation`: what a viewer must do to the stored pixels to show the image upright, from the Exif tag's eight values | — |

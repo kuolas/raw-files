@@ -56,8 +56,8 @@ use std::io::{Read, Seek};
 use std::ops::Range;
 
 use super::rule::{Element, Held, Rule, Shape};
-use super::{Block, FieldType, skip_damage};
-use crate::error::{Error, Result};
+use super::{Block, FieldType};
+use crate::error::{Error, Result, skip_damage};
 use crate::io::{ByteOrder, Source, within};
 use crate::limits::Limits;
 

@@ -88,9 +88,9 @@
 use std::io::{Read, Seek};
 
 use super::{PREVIEW_IFD, rules};
-use crate::container::tiff::{Block, Ifd, Tree, ifd_in, parse_header, skip_damage};
+use crate::container::tiff::{Block, Ifd, Tree, ifd_in, parse_header};
 use crate::entries::{Directory, Entries};
-use crate::error::Result;
+use crate::error::{Result, skip_damage};
 use crate::formats::makernote::MakerNoteBlock;
 use crate::formats::tiff_previews::{self, Candidate};
 use crate::io::Source;
