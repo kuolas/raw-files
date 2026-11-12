@@ -5,8 +5,9 @@ Rust. It is at a very early stage, so ideas, bug reports and sample files are
 the help it needs most. Changes to the code and docs come from contributors;
 see [Becoming a contributor](#becoming-a-contributor).
 
-This page is the one place the project's rules live. It is short on purpose;
-if something here is unclear, that is a bug in this page, and an issue about it
+This page is the one place the project's rules live. How to run the tests
+beyond the six commands is in [docs/TESTING.md](docs/TESTING.md). If
+something here is unclear, that is a bug in this page, and an issue about it
 is a fine first contribution.
 
 Everyone taking part is expected to follow the
@@ -107,6 +108,8 @@ After an issue is opened:
   opened the issue. Despite its name, it does not mark an issue that asks
   a question.
 - `help wanted` — the maintainer would welcome a contributor taking it on.
+- `good first issue` — a small task that needs little knowledge of the
+  code, a good first one for a new contributor.
 - `duplicate` — another issue already covers it; it is closed with a link
   to that one.
 - `invalid` — not a problem in raw-files; it is closed with the reason.
@@ -348,89 +351,29 @@ The last one documents the private items too, with the test configuration
 on, so that the modules compiled only for tests get their doc comments and
 links checked as well; the normal doc build never sees them.
 
-Some tests read real sample files, which are too large to commit. When the
-files are absent, those tests print a note and pass, so the suite runs
-offline. `scripts/fetch-samples.sh` downloads the pinned set listed in
-[`tests/samples.tsv`](tests/samples.tsv), about 1.6 GB: RAW files from
-raw.pixls.us and camera JPEGs from Wikimedia Commons, as the list's
-source column says. It saves them into `raw-samples/` at the
-repository's root, a folder that git ignores and that `cargo clean`
-leaves alone, or into the directory named by `RAW_FILES_SAMPLES`, and
-checks each file's SHA-256; `cargo test` then runs those tests too.
-`scripts/fetch-samples.sh nef` (or `arw`, or `jpeg`) fetches the files of
-one format only, and one file, the 325 MiB ARQ, is fetched only with
-`RAW_FILES_LARGE=1`. CI does this on Linux, from a cache that a workflow
-on `master` keeps filled, so a pull request downloads nothing unless it
-changes the list.
+Some tests read real sample files, which are too large to commit. When
+the files are absent, those tests print a note and pass, so the suite
+runs offline. `scripts/fetch-samples.sh` downloads them.
 
-With `RAW_FILES_REQUIRE_SAMPLES=1`, a missing sample file fails its test
-instead of skipping. A file of the large tier fails only when
-`RAW_FILES_LARGE=1` is set too. CI sets the switch on Linux, so a wrong
-path or a misplaced cache cannot pass the sample tests without reading
-a file.
+Four tests are ignored by default. One runs the reader over a folder of
+your own camera files. The other three write the fuzz seeds again
+after a fixture changes.
 
-One test is ignored by default: it runs the reader over a folder of your
-own camera files, RAW and JPEG, and prints counts only, never a path, the
-text of a make, model or software as the file records it, the value of a
-serial number, time, exposure or lens, where the camera focused, who made
-the picture or where it was taken, so its output can go into an issue.
-It counts each file under the format its extension names, in one section
-per format, and skips the AppleDouble files, whose name starts with `._`,
-which macOS writes beside each file on a disk such as an exFAT one, saying
-how many it skipped. It checks that every file opens, that every one has
-a preview, that the largest preview is a whole JPEG, that the metadata
-gives the preview's orientation, and that
-every focus point, and every point of a list of the points the camera used,
-lies inside its frame, area included, both as read and once placed on the
-largest preview; and that the focus point, the list and the layout of the
-body's points agree: the focus point is the list's primary, a recorded
-position is a list of one point, and points placed from a table are points
-of the layout for the file's Model. It counts how many files have each
-metadata field and a focus point, the files by maker, and those with a
-model's name or a recorded Model without one, how many previews of each
-size they hold, the focus points by origin, recorded or placed from a
-table, the lists by number of points and by area mode, and the files with a
-layout, with and without a focus point; and, for each camera setting, how
-many files have each kind of it, such as aperture priority, auto white
-balance or a white balance fine-tuning of `(-24/4, 0/4)`, for the color
-temperature its range, and how many flashes fired: totals over the files of
-a format, never tied to one file. A preview may end in padding after the
-image's end marker, as some Sony cameras write it: `FF` bytes in any file,
-and zeros in a JPEG file, whose largest preview is the whole file and must
-hold its own image's end marker, not only its thumbnail's. Other data there
-fails a RAW file's preview, and is only counted in a JPEG file; except that
-a NEF file's preview may end before its declared length in the shape the
-D600 and the D3200 write about once in 500 files, a length 2 more than a
-multiple of 512 with up to 513 bytes of other data after the image's own
-end marker, which is counted as a preview that ends early. It fails on a
-folder it cannot read, that holds no file of a format raw-files reads, or
-that holds an entry it cannot read. Run it with `--release`, because it
-reads every file:
+[docs/TESTING.md](docs/TESTING.md) says how to fetch the sample files
+and how to run the ignored tests. It also says how to fuzz the readers,
+and what CI runs.
 
-```sh
-RAW_FILES_LOCAL_CORPUS=/path/to/photos cargo test --release --test local_corpus -- --ignored --nocapture
-```
+CI is the real gate: a pull request is merged only when all of its
+checks pass.
 
-CI ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) runs them on every
-pull request on macOS, Linux and Windows, builds and tests the crate with
-Rust 1.95, the oldest version it supports, and checks the commit messages and
-that there are no merge commits in the PR. CI is the real gate: a pull request
-is merged only when all of its checks pass.
-
-CI also compares the crate's public API with the newest version on crates.io,
-with `cargo-semver-checks`, so that a change that would break callers of the
-last release is caught before it is merged. It catches many breaking changes,
-such as a removed or renamed item, but not all: a changed type or behavior
-is still for review to find. A breaking change is allowed only once the
-version in `Cargo.toml` has been raised to one that permits it: before 1.0,
-the minor number, as the versioning promise in `CHANGELOG.md` says. So the
-pull request that makes the first breaking change of a release raises the
-version, not the commit that releases it. Adding to the API needs no bump to
-pass, and that a patch release adds nothing to the API is for review to
-check. To run it yourself, use `cargo install cargo-semver-checks --locked`,
-then `cargo semver-checks` in the repository root (it downloads the published
-version from crates.io the first time). It is not one of the six commands
-above because it needs that install and the network.
+A breaking change is allowed only once the version in `Cargo.toml`
+permits it. Before 1.0, that is a raised minor number, as the
+versioning promise in `CHANGELOG.md` says. So the pull request that
+makes the first breaking change of a release raises the version, not
+the commit that releases it. CI's
+[check for breaking changes](docs/TESTING.md#the-check-for-breaking-changes)
+catches many breaking changes, but not all. That a patch release adds
+nothing to the API is for review to check.
 
 The oldest supported Rust (`rust-version` in `Cargo.toml`) is a stable
 release at least six months old. It is raised only when the code needs
@@ -486,86 +429,15 @@ A few conventions:
   `new()`. Its setters follow the same rule: `with_limits` sets what
   `limits()` returns.
 - **A function that can refuse its arguments returns
-  `Result<_, ValueError>`.** Its `# Errors` section lists the variants in
-  the order it checks them, and the first rule broken is the one
-  returned. A lookup, such as `Format::from_extension` or
-  `Orientation::from_exif`, and a getter return `Option`
+  `Result<_, ValueError>`**, and its `# Errors` section lists the
+  variants in the order it checks them
   ([ADR009](docs/architecture-decisions/adr009-public-api-shape.md)).
-
-## Fuzzing
-
-The parsers read files from anyone, so they must answer any input with a
-result: never a panic, and never unbounded memory. Fuzzing tests that on
-inputs nobody would write by hand. The fuzz targets live in
-[`fuzz/`](fuzz/), a separate crate that is not part of the published
-package, and need nightly Rust and
-[cargo-fuzz](https://github.com/rust-fuzz/cargo-fuzz):
-
-```sh
-rustup toolchain install nightly
-cargo install cargo-fuzz
-```
-
-To fuzz the TIFF reader for a minute, from the repository root:
-
-```sh
-mkdir -p fuzz/corpus/tiff_walk
-cargo +nightly fuzz run tiff_walk fuzz/corpus/tiff_walk fuzz/seeds/tiff_walk -- -max_total_time=60 -timeout=25 -malloc_limit_mb=256
-```
-
-The first directory is where the fuzzer saves what it finds (it is not
-committed, and libFuzzer refuses to start when it does not exist, hence the
-`mkdir`); the second holds the seeds it starts from, a few valid files
-committed in [`fuzz/seeds/`](fuzz/seeds/README.md). Without them the fuzzer
-never builds a big-endian header, and half of the reader goes unfuzzed.
-The target `jpeg_probe`, which fuzzes the search for a JPEG preview's
-frame header, runs the same way, with `jpeg_probe` in place of `tiff_walk`
-throughout. So does the target `jpeg_segments`, which reads the input as
-a JPEG file: the walk over its segments, the TIFF structure of its Exif
-segment with every value in it, and the index of its MPF segment, which
-lists the images after the first. Its seeds are JPEG files built as the
-JPEG reader's tests build them, and the stripped camera JPEGs committed
-in `tests/fixtures/`:
-
-```sh
-mkdir -p fuzz/corpus/jpeg_segments
-cargo +nightly fuzz run jpeg_segments fuzz/corpus/jpeg_segments fuzz/seeds/jpeg_segments -- -max_total_time=60 -timeout=25 -malloc_limit_mb=256
-```
-
-The target `open`, which opens the input as a caller would and reads its
-metadata, its focus point placed on a preview, every preview it finds,
-and every entry of its directories with its value, has seeds of its own,
-fixtures of the Nikon and Sony layouts, and takes the TIFF ones and the
-JPEG ones too, since a plain TIFF file and a JPEG file are also
-something it must open; libFuzzer takes several corpus directories:
-
-```sh
-mkdir -p fuzz/corpus/open
-cargo +nightly fuzz run open fuzz/corpus/open fuzz/seeds/open fuzz/seeds/tiff_walk fuzz/seeds/jpeg_segments -- -max_total_time=60 -timeout=25 -malloc_limit_mb=256
-```
-
-The allocation limit makes a runaway allocation a finding: the run stops
-on any one allocation over 256 MiB. (libFuzzer also stops once the whole
-process passes 2 GiB; a lower limit trips on the sanitizer's own
-bookkeeping, not on the reader.) The timeout makes a hang a finding too:
-libFuzzer waits 1200 seconds for one input by default, longer than the CI
-job lasts, and a parse takes milliseconds, so 25 seconds is a hang. It is
-reported as a `timeout-*` file in `fuzz/artifacts/`.
-An input that fails is saved in `fuzz/artifacts/`; a fix for it comes with
-a regression test that reads that input, as for any other bug.
-
-No other build compiles the fuzz code, so CI checks that both parts of it
-compile, on stable Rust: the library's entry points, with
-`RUSTFLAGS="--cfg fuzzing" cargo clippy --workspace --all-targets -- -D warnings`,
-and the fuzz crate, with
-`RUSTFLAGS="--cfg fuzzing" cargo check --manifest-path fuzz/Cargo.toml`.
-CI runs the four targets for ten minutes each twice a week and on request
-(`.github/workflows/fuzz.yml`, started by hand from the Actions tab), with
-the same commands as above but `-max_total_time=600`, ten minutes per
-target, and keeps the corpus each run found in the Actions cache for the
-next run. It uploads any failing input as a run artifact for thirty days.
-It is not a required check, so a finding there is a bug to fix, not a
-blocked pull request.
+- **A malformed file gets a result, never a panic**, and never
+  unbounded memory
+  ([ADR008](docs/architecture-decisions/adr008-lints-and-panics.md),
+  [ADR009](docs/architecture-decisions/adr009-public-api-shape.md)).
+  Fuzzing tests that, as [docs/TESTING.md](docs/TESTING.md#fuzzing)
+  says.
 
 ## Local git hooks (optional)
 
@@ -649,25 +521,15 @@ you in both. With your agreement, the frames are committed stripped of
 their pixels and personal fields, under the repository's license.
 
 A contributor ([Becoming a contributor](#becoming-a-contributor)) can
-also measure a body themselves, following the whole procedure
-([autofocus-points.md](docs/formats/nef/autofocus-points.md#1-the-procedure)):
-shoot one frame per point in single-point mode and the control frames
-the page lists, read every frame in the maker's software with its
-focus-point display on, measure the screenshots by pixel, and check
-the controls. The controls include RAW + JPEG frames at each smaller
-JPEG size the body offers: fit each such JPEG onto the full-size
-preview of its own raw file, with a scale and an offset on each axis,
-to find which part of the frame it shows, since a size whose picture
-is a window of the frame, as the D600's Medium JPEG is, needs that
-window in the table. Then write the body's record on that page, as the
-D600's is written, with the readings and their tolerance; the table in
-the code, with its provenance; and the frames, stripped of their
-pixels and personal fields, with their expected values in the tests. In the
-pull request say which software and version you ran, and that the
-frames are your own: they are licensed as the repository's fixtures
-are ([tests/fixtures/README.md](tests/fixtures/README.md)).
-The maintainer checks the table against your frames before it enters,
-so keep them, and expect to be asked for them.
+also measure a body themselves, by the whole procedure
+([autofocus-points.md](docs/formats/nef/autofocus-points.md#1-the-procedure)).
+It says how to shoot, read and measure the frames, and what the
+record, the table and the fixtures hold. In the pull request, say
+which software and version you ran, and that the frames are your own.
+They are licensed as the repository's fixtures are
+([tests/fixtures/README.md](tests/fixtures/README.md)). The maintainer
+checks the table against your frames before it enters, so keep them,
+and expect to be asked for them.
 
 ## License of contributions
 
