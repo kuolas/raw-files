@@ -199,6 +199,7 @@ use crate::geometry::Size;
 use crate::io::Source;
 use crate::limits::Limits;
 use crate::metadata::Metadata;
+use crate::orientation::Orientation;
 use crate::preview::{Preview, PreviewFormat};
 
 /// The JPEG format's entry in the JPEG container's list of formats.
@@ -288,32 +289,8 @@ fn parse<R: Read + Seek>(
         ),
         None => (Standard::default(), Vec::new(), None),
     };
-    // The picture's own size, whatever sizes the tree gives, and no raw
-    // size: a JPEG holds no raw data. Set before the MakerNote's values
-    // are read, so that its reader takes them for the JPEG's: with no raw
-    // size, CropArea gives no image size, and a crop is placed on the
-    // picture's pixels. Whether the Exif IFD holds a ColorSpace is kept as
-    // read, so that the MakerNote's color space never overrules it.
-    let standard = Standard {
-        metadata: Metadata {
-            raw_size: None,
-            image_size: Some(size),
-            ..standard.metadata
-        },
-        from_default_crop: false,
-        ..standard
-    };
-    let mut metadata = match &makernote {
-        Some(MakerNote::Nikon(makernote)) => {
-            candidates.extend(nikon::preview_candidate(makernote));
-            nikon::metadata(src, makernote, standard, Picture::Jpeg)?
-        }
-        Some(MakerNote::Sony(makernote)) => sony::metadata(src, makernote, standard.metadata)?,
-        None => standard.metadata,
-    };
-    metadata.focus_points = metadata
-        .focus_points
-        .filter(|points| points.frame().same_shape(size));
+    let metadata = metadata(src, standard, makernote.as_ref(), size)?;
+    candidates.extend(makernote.as_ref().and_then(MakerNote::preview_candidate));
     // The entries of the Exif segment's tree, walked once, none when it
     // does not walk, as it then gives no metadata; then the MakerNote's;
     // then the MP Index IFD's, which the MPF segment holds apart from it.
@@ -334,20 +311,78 @@ fn parse<R: Read + Seek>(
             })
         }));
     }
-    // Every preview takes the metadata's orientation, IFD0's.
-    let mut previews = tiff_previews::check(src, &candidates, metadata.orientation)?;
-    previews.push(Preview::new(
-        0,
-        src.len(),
-        size,
-        PreviewFormat::Jpeg,
-        metadata.orientation,
-    ));
+    let previews = previews(src, &candidates, size, metadata.orientation)?;
     Ok(Parsed {
         previews,
         metadata,
         entries,
     })
+}
+
+/// The metadata of a JPEG file whose picture is `size`: `standard`, what
+/// the shared reader read from the Exif segment's tree or the default
+/// when there is none, with the values `makernote` adds, read from `src`.
+///
+/// The image size is `size`, whatever sizes the tree gives, and there is
+/// no raw size: a JPEG holds no raw data. Both are set before the
+/// MakerNote's values are read, so that its reader takes them for the
+/// JPEG's: with no raw size, CropArea gives no image size, and a crop is
+/// placed on the picture's pixels. Whether the Exif IFD holds a ColorSpace
+/// is kept as read, so that the MakerNote's color space never overrules
+/// it. The focus points are kept only when their frame has the picture's
+/// shape ([`Size::same_shape`]).
+///
+/// # Errors
+///
+/// `Io` when the reader fails. Nothing the file holds is an error here.
+fn metadata<R: Read + Seek>(
+    src: &mut Source<R>,
+    standard: Standard,
+    makernote: Option<&MakerNote>,
+    size: Size,
+) -> Result<Metadata> {
+    let standard = Standard {
+        metadata: Metadata {
+            raw_size: None,
+            image_size: Some(size),
+            ..standard.metadata
+        },
+        from_default_crop: false,
+        ..standard
+    };
+    let mut metadata = match makernote {
+        Some(makernote) => makernote.metadata(src, standard)?,
+        None => standard.metadata,
+    };
+    metadata.focus_points = metadata
+        .focus_points
+        .filter(|points| points.frame().same_shape(size));
+    Ok(metadata)
+}
+
+/// The previews of a JPEG file whose picture is `size`: those of
+/// `candidates` that the shared finder accepts, then the file itself, its
+/// whole byte range, with `size`. Every preview takes `orientation`, the
+/// metadata's, IFD0's.
+///
+/// # Errors
+///
+/// `Io` when the reader fails. Nothing the file holds is an error here.
+fn previews<R: Read + Seek>(
+    src: &mut Source<R>,
+    candidates: &[Candidate],
+    size: Size,
+    orientation: Orientation,
+) -> Result<Vec<Preview>> {
+    let mut previews = tiff_previews::check(src, candidates, orientation)?;
+    previews.push(Preview::new(
+        0,
+        src.len(),
+        size,
+        PreviewFormat::Jpeg,
+        orientation,
+    ));
+    Ok(previews)
 }
 
 /// A maker whose MakerNote the JPEG reader reads, as IFD0's Make names it.
@@ -428,6 +463,34 @@ impl MakerNote {
             Some(Maker::Sony) => sony::read(src, tree, limits)?.map(MakerNote::Sony),
             None => None,
         })
+    }
+
+    /// `standard`, with the values the MakerNote adds, read from `src` by
+    /// its maker's reader: [`nikon::metadata`], for a JPEG's picture, or
+    /// [`sony::metadata`].
+    ///
+    /// # Errors
+    ///
+    /// `Io` when the reader fails. Nothing the file holds is an error here.
+    fn metadata<R: Read + Seek>(
+        &self,
+        src: &mut Source<R>,
+        standard: Standard,
+    ) -> Result<Metadata> {
+        match self {
+            MakerNote::Nikon(makernote) => nikon::metadata(src, makernote, standard, Picture::Jpeg),
+            MakerNote::Sony(makernote) => sony::metadata(src, makernote, standard.metadata),
+        }
+    }
+
+    /// Where the MakerNote's preview is, as a candidate for the shared
+    /// finder: Nikon's PreviewIFD's JPEG ([`nikon::preview_candidate`]);
+    /// `None` for Sony's, whose reader gives no preview.
+    fn preview_candidate(&self) -> Option<Candidate> {
+        match self {
+            MakerNote::Nikon(makernote) => nikon::preview_candidate(makernote),
+            MakerNote::Sony(_) => None,
+        }
     }
 
     /// Adds the MakerNote's directories to `entries`, as its maker's reader
