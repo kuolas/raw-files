@@ -219,6 +219,54 @@ without testing; commits that touch only docs are skipped unless you pass
 `--all`. For a fork, pass the base explicitly: `scripts/check-series.sh
 upstream/master`. If `master` moves before the merge, rebase and run it again.
 
+### Preparing a release (maintainers)
+
+Before a release, go through three things.
+
+1. **The Rust API Guidelines.** Go through their
+   [checklist](https://rust-lang.github.io/api-guidelines/checklist.html)
+   for every public item added since the last release:
+   - the common traits;
+   - a rustdoc example on each type;
+   - an `# Errors` section on each fallible function;
+   - the Cargo metadata.
+
+   Where the project departs from a guideline on purpose, it says so
+   where a reader would look:
+   - `DateTime`, `Rational` and `SignedRational` have no `Ord`, and their
+     docs say why;
+   - there is no serde feature, because the crate has no dependencies,
+     and the crate docs say so;
+   - `Entries` has no `FromIterator` or `Extend`: an `Entry` comes only
+     from a file, as the crate docs say.
+
+   The items about macros, smart pointers and destructors have nothing to
+   apply to yet.
+2. **Statements that have gone out of date.** Search the pages for words
+   and dates that tie a statement to a moment:
+
+   ```sh
+   git grep -n -i -E '\b(today|now|currently|at present|so far|yet|as of)\b|\bsince ([0-9]{1,2} [a-z]+ )?20[0-9]{2}' -- '*.md' ':!CHANGELOG.md'
+   git grep -n -E '\b(January|February|March|April|May|June|July|August|September|October|November|December) 20[0-9]{2}\b|\b[0-9]{1,2} (January|February|March|April|May|June|July|August|September|October|November|December)\b' -- '*.md' ':!CHANGELOG.md'
+   ```
+
+   A hit that still holds stays, and so does a date that says when a
+   file was read or a measurement made. Then read these pages against
+   the code:
+   - [What it reads](README.md#what-it-reads) in the README, the list of
+     what raw-files reads, which the others follow;
+   - the capabilities in [docs/ROADMAP.md](docs/ROADMAP.md);
+   - the crate docs' table in `src/lib.rs`;
+   - the Status sections of the [NEF](docs/formats/nef/README.md#status),
+     [ARW](docs/formats/arw/README.md#status) and
+     [JPEG](docs/formats/jpeg/README.md#status) notes, which say what
+     has been checked against sample files.
+3. **The changelog.** Write the release's opening in
+   [CHANGELOG.md](CHANGELOG.md), as the conventions under
+   [Code style and checks](#code-style-and-checks) say. It says what the
+   release changes and how many entries are marked `**Breaking:**`, and
+   links to the API docs of that version.
+
 ## Writing
 
 These rules hold for everything the project writes: the docs, the
@@ -411,16 +459,9 @@ A few conventions:
   Architecture Decision Record in
   [docs/architecture-decisions/](docs/architecture-decisions/README.md).
 - **The public API follows the
-  [Rust API Guidelines](https://rust-lang.github.io/api-guidelines/checklist.html).**
-  Before a release, go through its checklist for every public item added
-  since the last one: the common traits, a rustdoc example on each type,
-  an `# Errors` section on each fallible function, the Cargo metadata.
-  Where the project departs from a guideline on purpose, say so where a
-  reader would look: `DateTime`, `Rational` and `SignedRational` have no
-  `Ord`, and their docs say why; there is no serde feature, because the
-  crate has no dependencies, and the crate docs say so. The items about
-  macros, collections, iterators, smart pointers and destructors have
-  nothing to apply to yet.
+  [Rust API Guidelines](https://rust-lang.github.io/api-guidelines/checklist.html)**,
+  checked before each release as
+  [Preparing a release](#preparing-a-release-maintainers) says.
 - **Every setter is a `with_…` method.** A value a caller reads,
   such as `Metadata`, `Exposure` or `Lens`, starts from `default()`, and
   each of its values is set by a `with_…` method named after the getter
