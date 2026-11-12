@@ -1,8 +1,54 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! The Nikon MakerNote's AFInfo2: where the camera's autofocus
-//! aimed, read at each version's offsets, and the points a shot
-//! through a DSLR's viewfinder names by number.
+//! The Nikon MakerNote's AFInfo2, read at each version's offsets, and
+//! the points a shot through a DSLR's viewfinder names by number.
+//!
+//! AFInfo2 records where the camera's autofocus aimed, which no standard
+//! tag records. Mirrorless bodies, and DSLRs in live view, fill in a
+//! position in pixels: the size of a frame, the center of the focus area
+//! in that frame, and the area's width and height. A DSLR shot through the
+//! viewfinder records a zero frame and area instead, and names its points
+//! by number, which only a table of the body's points, carried by no file,
+//! places in pixels (public samples 928 and 1835): a body with a table
+//! gives them placed from it, as [`crop`](super::crop) says, and any other
+//! body no focus point. The layout of the body's points, which every file
+//! of a body whose table is in raw-files ([`points`]), the D600, has
+//! whatever the shot
+//! ([`Metadata::focus_layout`](crate::Metadata::focus_layout)), is not
+//! this reader's to give: detection gives it from the Model alone,
+//! whatever the MakerNote holds, even when it cannot be read.
+//! The position is the center of the area, not its corner: the Coolpix A,
+//! focusing at the middle of its 4928 by 3264 frame, records (2464, 1632)
+//! (sample 2238). The frame is the camera's full-size output, not the
+//! stored raw: 8256 by 5504 on the Z 9, inside an 8280 by 5520 raw
+//! (samples 5146 to 5148), and the full 6048 by 4024 on the Z 6's small
+//! raw, whose stored image is 4548 by 3030 (sample 3587); the point is
+//! reported in that frame, as recorded. AFInfo2 is a value of type
+//! UNDEFINED that starts with a version, four ASCII digits, and each
+//! version keeps its fields at offsets of its own, as ExifTool's tables
+//! publish them. It is read at the exact versions 0100, 0101, 0300, 0301,
+//! 0400, 0401 and 0402; any other, such as the Nikon 1's 0200, gives no
+//! focus point, since its fields may lie elsewhere (ADR012). The frame,
+//! the center and the area are SHORTs in the MakerNote's byte order. On
+//! every version read but 0300 and 0301, a byte says whether the camera
+//! confirmed focus: 1 for yes, 0 for a miss, and any other value says
+//! nothing. On every version read, byte 5 records the area mode, how the
+//! camera chose its points, by a code read with the detection method at
+//! byte 4: the codes that frames shot in a known mode confirmed, under the
+//! method recorded, name a [`FocusAreaMode`] ([`area_mode`]), and any other
+//! names none. A recorded position is given only when the value is at
+//! least as long as its version's layout, the frame and the area have no
+//! zero side, the center lies on the frame, and the area fits inside the
+//! frame around it ([`Focus::new`], [`Focus::with_size`]); it is given as
+//! a list of one point, the primary, with the area mode ([`FocusPoints`]).
+//! FocusMode, ASCII text, records how the camera focused: `MANUAL`, or an
+//! autofocus mode padded with spaces, such as `AF-S  `. When it reads
+//! exactly `MANUAL`, by the text rule, the file gives no focus point
+//! ([`manual_focus`]), whatever AFInfo2 holds: the point of a
+//! manual-focus shot is not one the camera focused on (ADR012).
+//!
+//! [`FocusPoints`]: crate::focus::FocusPoints
+//! [`manual_focus`]: super::manual_focus
 
 use crate::focus::{Focus, FocusAreaMode, FocusOrigin};
 use crate::formats::makernote::points;
