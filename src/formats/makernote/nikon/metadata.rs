@@ -3,6 +3,63 @@
 //! What the Nikon MakerNote records of the picture beside the
 //! standard tags: CropArea, the serial number, the ISO, the lens's
 //! range and WorldTime.
+//!
+//! It also records the visible image of a raw file, which no standard tag
+//! of a NEF records: the part of the stored raw data that a viewer shows,
+//! without the border pixels around it. Its CropArea, which the D850, the
+//! D780 and the Z bodies write in their raw files, is that rectangle: on the
+//! Z 9, the 8256 by 5504 pixels that start 12 columns and 8 rows into the
+//! 8280 by 5520 raw, as large as the camera's full-size preview (public
+//! samples 5146 to 5148). It is four numbers, the left column, the top
+//! row, the width and the height, in stored raw pixels. It gives the image
+//! size only when it holds exactly four SHORTs or LONGs, its width and
+//! height are above zero, and it lies inside the raw size the standard tags
+//! give; and never when the raw IFD records a default crop, a standard tag,
+//! which comes first (ADR011). So it never gives a JPEG's image size: a
+//! JPEG holds no raw data, so there is no raw size for CropArea to lie
+//! inside, and its picture is its own pixels, of the size its frame header
+//! gives (ADR014). The Z 9's own JPEGs hold no CropArea; a MakerNote
+//! copied from a raw file into an exported JPEG does.
+//!
+//! Older bodies record three more values only here, in plain form: Nikon
+//! has written them in the standard Exif tags only since the D780 and the
+//! Z 6 (public samples 3827 and 3587). SerialNumber is the body's serial
+//! number, ASCII text, seven digits on every checked body from the D300 on
+//! (sample 928) but the Nikon 1 J1, which writes eight (sample 2956); the
+//! D200 writes seven spaces, which are none (sample 8079). ISO holds two
+//! SHORTs, of which the second is the ISO, and gives the ISO of the D100
+//! and the D70, which write none in the Exif tags (samples 2996 and 2060);
+//! the D700 writes four zero bytes there instead, which are none (sample
+//! 2255). Lens is the lens's range, four RATIONALs in the order of the
+//! Exif LensSpecification, on every checked body with interchangeable
+//! lenses. Each is used only when the standard tags give no value for it:
+//! an Exif value always wins, even where the MakerNote records another. A
+//! lens the Exif tags name but give no range for, such as the Nikon 1 J1's
+//! (sample 2956), takes the MakerNote's range and keeps its name; an Exif
+//! range with any value known is kept whole.
+//!
+//! WorldTime is the time zone and daylight-saving setting of the camera's
+//! clock, and so gives the capture time's offset from UTC on bodies whose
+//! Exif tags record none. It is four bytes: the zone in minutes east of
+//! UTC, a signed 16-bit number in the MakerNote's byte order; a byte that
+//! is 1 when daylight saving time is on and 0 when it is off; and one for
+//! how the camera shows dates, which is not read. The offset is the zone,
+//! plus 60 minutes when daylight saving time is on. On every public sample
+//! that also records the Exif OffsetTimeOriginal, the two agree, with
+//! daylight saving time off (samples 1835, 3827, 3587 and 5146 to 5148)
+//! and on (samples 6887 and 7808 to 7810). The bodies before the D850
+//! write no Exif offset, and most of them from the D300 on write
+//! WorldTime: the D300, D700, D7000, D750, D810, Nikon 1 J1 and Coolpix A
+//! (samples 928, 2255, 961, 895, 2036, 2956 and 2238); the D1H, D100, D70,
+//! D200, Coolpix E5700 and P7800 do not. WorldTime gives an offset only
+//! when it is of type UNDEFINED and exactly four bytes long, its
+//! daylight-saving byte is 0 or 1, and the offset lies within 14 hours of
+//! UTC, the bound an Exif offset is held to: a zone that editing software
+//! has rewritten in the wrong byte order reads as hundreds of hours, 15360
+//! minutes for 60. It is used only for a capture time the standard tags
+//! give, when they give no offset for it: OffsetTimeOriginal is missing,
+//! or cannot be read. An Exif offset always wins, even where WorldTime
+//! records another.
 
 use std::io::{Read, Seek};
 
@@ -42,7 +99,7 @@ pub(super) enum CropArea {
 /// [`tiff_metadata::crop`] does not accept: one of zero width or height,
 /// or not inside the raw data.
 ///
-/// See the [module documentation](super) for what CropArea is.
+/// See the [module documentation](self) for what CropArea is.
 ///
 /// # Errors
 ///
@@ -137,7 +194,7 @@ pub(super) fn lens_range<R: Read + Seek>(
 ///
 /// Four bytes are held in the entry, so this reads nothing from the file,
 /// and a tag of another count is not read. See the
-/// [module documentation](super) for what WorldTime is.
+/// [module documentation](self) for what WorldTime is.
 pub(super) fn world_time(makernote: &MakerNote) -> Option<i16> {
     let ifd = &makernote.ifd;
     let [zone0, zone1, daylight_saving, _date_format] = ifd.held(rules::WORLD_TIME)?;

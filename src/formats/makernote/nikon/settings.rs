@@ -1,7 +1,110 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! How the camera was set for the picture, as the Nikon MakerNote
-//! records it beyond the Exif tags.
+//! The camera settings in the Nikon MakerNote: the white balance, the
+//! shutter used, the image area, the raw size and the color space.
+//!
+//! The MakerNote also records how the camera was set for the picture,
+//! beyond what the Exif tags record (ADR011): the white balance setting
+//! itself, where Exif says only auto or the kind of light; the color
+//! temperature of the white balance the camera applied; the
+//! photographer's fine-tuning of it; the shutter used; the part of the
+//! sensor the picture uses; the raw size the camera was set to; and the
+//! color space of its JPEG output. Each comes from one tag, of the exact
+//! type and count its rule names, and a code or a text gives a value only
+//! where a checked file, or a standard, shows what it means; anything else
+//! costs that value alone. The meaning of each code is ExifTool's, read
+//! in its published tag documentation and confirmed on the public samples
+//! and on frames I shot for these values with a Z 9 and a D600, as
+//! the NEF notes record them (`docs/formats/nef/`, section 8.7 of the
+//! notes on the MakerNote).
+//!
+//! WhiteBalance is ASCII text, an upper-case word padded with spaces, read
+//! by the text rule. Its words cannot be guessed from one another, `COOL
+//! WHT FL` for a cool white fluorescent lamp, so each is looked up whole
+//! in a table of the texts checked files hold. The public samples show
+//! `AUTO`, `AUTO0`, `AUTO1`, `SUNNY`, `FLASH` and `SHADE`; my
+//! own files add `CLOUDY`, `INCANDESCENT`, `PRESET` and `COOL WHT
+//! FL`; and the frames shot on the Z 9 and the D600 add `AUTO2`,
+//! `NATURAL AUTO` and `PRESET1` to `PRESET4`, with Exif's white balance
+//! agreeing with each. A color temperature the photographer chose is
+//! written as its number, `3230K` on both bodies, which no table could
+//! list, so it is read by its form: one to five digits and an upper-case
+//! `K`. A text the table lacks, such as one of the Z 9's preset slots 5
+//! and 6, which no checked file shows, gives way to the white balance the
+//! Exif tags record, never to a guess from its letters.
+//!
+//! ColorTemperatureAuto is one SHORT, in kelvin: the color temperature of
+//! the white balance the camera applied. The D5, the D850, the D780 and
+//! the Z bodies write it, 3050 to 7000 under auto on 17 public samples;
+//! my Z 9 writes it under every setting, 5210 under daylight, 5200
+//! under a preset and 3230 under a chosen 3230 K; the D850 and the Z
+//! fc write 0 under daylight (samples 1835 and 8559), which records
+//! none. The bodies before them write none, and the WhiteBalance text is
+//! all they record of a temperature: the number of a chosen one, `3230K`
+//! on my D600. So when ColorTemperatureAuto gives none, the color
+//! temperature is that number, when the text records one; on the Z 9,
+//! which writes both, they agree. A color temperature is given only
+//! from 1 to 99,999 K, the largest number the text's five digits hold.
+//!
+//! The fine-tuning is a shift of the white balance along two axes, amber
+//! to blue and green to magenta, which Nikon writes in two tags. 0x003F,
+//! two SRATIONALs, from the D810 on, is `0/4, 0/4` on every public sample;
+//! 0x000B, SSHORTs, holds two values on the bodies from the D300 to the
+//! Z fc and one on the D1 family, the D70, the D100 and the D200. On the
+//! Z 9, 0x003F holds `-12/4, 8/4` on a frame whose picture is warmer and
+//! greener than the one shot without a shift, and `8/4, -8/4` on a cooler
+//! and more magenta one; on the D600, 0x000B holds `3, 0` on a frame
+//! cooler than the one at `-3, 0`, and `0, 3` on one greener than the one
+//! at `0, -3`. So the first value runs from amber, negative, to blue,
+//! positive, and the second from magenta, negative, to green, positive.
+//! [`FineTune`] signs its green to magenta shift positive towards magenta,
+//! so the second value is turned around, its numerator negated. 0x003F
+//! gives the fine-tuning, as stored, and 0x000B, read as whole steps, only
+//! when 0x003F gives none. A 0x000B of one value gives none, since no file
+//! shows its axis or its sign; and a fraction over zero, which no file
+//! holds, gives none, since it records no shift, a choice of this reader's.
+//!
+//! ShutterMode is one SHORT, a code for the shutter used: 0 mechanical, on
+//! the D850, the D780 and the Z f; 16 electronic, on the Nikon 1 J1 and
+//! the Z 9; and the auto setting's 80, which chose the mechanical shutter,
+//! on the Z5II, and 81, which chose the electronic front curtain, on the
+//! Z 6, the Z 30, the Z50II, the Z6III and the Z fc. 64, a movie's
+//! electronic shutter, gives none, and so do 48 and 96, which ExifTool's
+//! documentation lists but no checked file holds.
+//!
+//! The image area is the crop setting, CropHiSpeed's first value, read
+//! only when CropHiSpeed holds exactly seven SHORTs: 11, FX uncropped, on
+//! the D750, the D810, the D5, the D850, the D780, the Z 6, the Z 9 and
+//! the Z f; 12, DX uncropped, on the D5600, the Z 30 and the Z fc; 2, a DX
+//! crop, on the Z6III's DX file and the D600's DX frame; 17 and 18, the
+//! 1:1 crops of FX and DX; 6, the 16:9 crop; 9, which ExifTool's
+//! documentation names a DX movie's 16:9 crop, on the Z50II's 16:9 still
+//! and a D7100's; and 1 and 10, the 1.3x crop and the 1.3x movie crop, on
+//! my D7200 files, stills all of them. 0, "off", gives none: the D700,
+//! FX, and the D300, DX, both write it, so it does not say which
+//! sensor the body has.
+//!
+//! ImageSizeRAW is one SHORT, the raw size the camera was set to: 1 large,
+//! on 19 of the 22 public samples that write it, and 3 small, on the other
+//! three, small raws (samples 1835, 2036 and 3587). No checked raw file is
+//! a medium one, so 2 gives none. In a JPEG, ImageSizeRAW follows the
+//! JPEG's own size, as my Z 9 shots taken as a NEF and a JPEG
+//! together show, so a JPEG's picture ([`Picture::Jpeg`]) gives none:
+//! a JPEG holds no raw data (ADR014).
+//!
+//! ColorSpace is one SHORT, the color space of the camera's JPEG output:
+//! 1 sRGB and 2 Adobe RGB, which the D200 and every later body but the
+//! Coolpix P7800 write; 4, BT.2100, gives none. It is read only when the
+//! Exif IFD holds no ColorSpace, as no checked NEF file does: a program
+//! that rewrites a JPEG may set Exif's to "uncalibrated" and leave the
+//! camera's MakerNote behind, as on 10 of my rewritten JPEGs, so
+//! where Exif records one, it alone decides. An Exif entry the TIFF
+//! reader skips as damaged, of an unknown type, of a length past 32
+//! bits or with its value outside its block, the file or a JPEG's Exif
+//! segment, counts as none, as any damaged value does (ADR011).
+//!
+//! Nikon records no electronic front curtain setting apart from the
+//! shutter used, so that value stays `None`.
 
 use std::io::{Read, Seek};
 
@@ -24,7 +127,7 @@ use crate::rational::SignedRational;
 /// value lies inside the block, as every value read from the MakerNote
 /// IFD does; a missing tag, another type or count, or a code no rule
 /// names gives `None` for that value alone. See the
-/// [module documentation](super) for what each tag records, and on which
+/// [module documentation](self) for what each tag records, and on which
 /// files.
 ///
 /// - **The white balance mode** is the one WhiteBalance's text names
