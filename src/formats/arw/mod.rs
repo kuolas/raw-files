@@ -43,9 +43,7 @@ mod previews;
 use std::io::{Read, Seek};
 
 use super::{FormatSpec, Parsed, is_dng, make_starts_with, tiff_metadata};
-use crate::container::tiff::FieldType;
-use crate::container::tiff::tags::DNG_PRIVATE_DATA;
-use crate::container::tiff::{Entry, Ifd, Tree, ifd_in};
+use crate::container::tiff::{Ifd, Tree, ifd_in};
 use crate::entries::{Directory, Entries};
 use crate::error::Result;
 use crate::format::Format;
@@ -130,14 +128,24 @@ fn claims<R: Read + Seek>(src: &mut Source<R>, tree: &Tree) -> Result<bool> {
     Ok(sony_pointer && make_starts_with(src, tree, HASSELBLAD)?)
 }
 
+/// The rule of the one tag this reader reads itself: IFD0's
+/// DNGPrivateData, in the shape Sony writes it, four bytes of type BYTE
+/// that hold the offset of its private directory (ADR011).
+mod rules {
+    use crate::container::tiff::tags;
+    use crate::container::tiff::{FieldType, Held};
+
+    pub(super) const DNG_PRIVATE_DATA: Held<[u8; 4]> =
+        Held::new(tags::DNG_PRIVATE_DATA, &[FieldType::Byte]);
+}
+
 /// IFD0's pointer to Sony's private directory, SR2Private, when it has the
-/// shape Sony writes it in: the DNGPrivateData entry (0xC634), four bytes
-/// of type BYTE, which the entry holds itself. A DNG's DNGPrivateData, a
-/// block of a maker's own data of any length, is not one.
-fn private_pointer(tree: &Tree) -> Option<&Entry> {
-    tree.ifd0()
-        .entry_of_type(DNG_PRIVATE_DATA, &[FieldType::Byte])
-        .filter(|entry| entry.count() == 4)
+/// shape Sony writes it in: the four bytes of the DNGPrivateData entry
+/// (0xC634), of type BYTE, which the entry holds itself, so that this
+/// reads nothing from the file. A DNG's DNGPrivateData, a block of a
+/// maker's own data of any length, is not one.
+fn private_pointer(tree: &Tree) -> Option<[u8; 4]> {
+    tree.ifd0().held(rules::DNG_PRIVATE_DATA)
 }
 
 /// Sony's private directory, SR2Private, of the file in `src` whose IFDs
@@ -167,13 +175,9 @@ fn private_ifd<R: Read + Seek>(
     let Some(pointer) = private_pointer(tree) else {
         return Ok(None);
     };
-    // Four bytes, which the entry holds: no read of the file.
-    let Ok(field) = <[u8; 4]>::try_from(pointer.read(src, 4)?) else {
-        return Ok(None);
-    };
     let ifd0 = tree.ifd0();
     let order = ifd0.order();
-    let private = ifd_in(src, ifd0.block(), order.u32(field), order, limits)?;
+    let private = ifd_in(src, ifd0.block(), order.u32(pointer), order, limits)?;
     Ok(private.filter(|ifd| ifd.invalid_entries() == 0))
 }
 
@@ -227,7 +231,7 @@ mod tests {
     use super::*;
     use crate::camera_settings::{CameraSettings, FineTune, WhiteBalance, WhiteBalanceMode};
     use crate::container::tiff::tags::{
-        DNG_VERSION, MAKE, MAKER_NOTE, WHITE_BALANCE as EXIF_WHITE_BALANCE,
+        DNG_PRIVATE_DATA, DNG_VERSION, MAKE, MAKER_NOTE, WHITE_BALANCE as EXIF_WHITE_BALANCE,
     };
     use crate::container::tiff::{Block, walk};
     use crate::entries::Value;

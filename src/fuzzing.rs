@@ -17,8 +17,7 @@
 use std::io::{Cursor, Read, Seek};
 
 use crate::container::jpeg::{mpf, probe, segments};
-use crate::container::tiff::FieldType;
-use crate::container::tiff::{Block, Tree, walk};
+use crate::container::tiff::{Block, FieldType, First, Held, Rule, Text, Tree, walk};
 use crate::datetime::DateTime;
 use crate::entries::{Entries, Entry, Value};
 use crate::focus::{Focus, FocusLayout, FocusPoints};
@@ -28,6 +27,7 @@ use crate::limits::Limits;
 use crate::location::Location;
 use crate::metadata::Metadata;
 use crate::options::Options;
+use crate::rational::{Rational, SignedRational};
 
 /// Reads `data` as a TIFF file: the walk with the default limits, header
 /// first, then every value of every IFD the walk found, through each
@@ -48,24 +48,52 @@ pub fn tiff_walk(data: &[u8]) {
 }
 
 /// Reads every value of every IFD of `tree` through each typed accessor,
-/// whatever the tag and its type: as unsigned numbers, all of them, the
-/// first alone and one alone; as signed numbers of 16 and 32 bits; as
-/// fractions, unsigned and signed; as text, ASCII alone and ASCII or
-/// UTF-8; and as bytes. Each accessor refuses the types it does not read,
-/// so every one is asked of every tag. Then this lists the tree's
+/// whatever the tag and its type. First by rules, every shape of every
+/// element: any count, the first value alone, an exact count, and held in
+/// the entry; then text. Then through the accessors that read by tag
+/// number: unsigned numbers, all of them and the first alone; fractions;
+/// text, ASCII or UTF-8; and bytes. Each refuses the types it does not
+/// read, so every one is asked of every tag. Then this lists the tree's
 /// entries, as opening a file does, and reads and formats each one's
 /// value under the default cap.
 fn read_values<R: Read + Seek>(src: &mut Source<R>, tree: &Tree) {
+    const NUMBERS: &[FieldType] = &[FieldType::Short, FieldType::Long, FieldType::Ifd];
+    const SSHORT: &[FieldType] = &[FieldType::SShort];
+    const SLONG: &[FieldType] = &[FieldType::SLong];
+    const RATIONAL: &[FieldType] = &[FieldType::Rational];
+    const SRATIONAL: &[FieldType] = &[FieldType::SRational];
+    const BYTES: &[FieldType] = &[FieldType::Byte, FieldType::Undefined];
+    const TEXT: &[FieldType] = &[FieldType::Ascii, FieldType::Utf8];
     for (_, ifd) in tree.iter() {
         for tag in ifd.tags() {
+            // The rules are built here for each tag, so that every tag is
+            // read by each; their checks pass, since each names its own
+            // element's types.
+            let _ = ifd.get(src, Rule::<Vec<u32>>::new(tag, NUMBERS));
+            let _ = ifd.get(src, Rule::<First<u32>>::new(tag, NUMBERS));
+            let _ = ifd.get(src, Rule::<[u32; 4]>::new(tag, NUMBERS));
+            let _ = ifd.held(Held::<[u32; 1]>::new(tag, NUMBERS));
+            let _ = ifd.get(src, Rule::<Vec<i16>>::new(tag, SSHORT));
+            let _ = ifd.get(src, Rule::<First<i16>>::new(tag, SSHORT));
+            let _ = ifd.held(Held::<[i16; 2]>::new(tag, SSHORT));
+            let _ = ifd.get(src, Rule::<Vec<i32>>::new(tag, SLONG));
+            let _ = ifd.get(src, Rule::<[i32; 2]>::new(tag, SLONG));
+            let _ = ifd.held(Held::<[i32; 1]>::new(tag, SLONG));
+            let _ = ifd.get(src, Rule::<Vec<Rational>>::new(tag, RATIONAL));
+            let _ = ifd.get(src, Rule::<First<Rational>>::new(tag, RATIONAL));
+            let _ = ifd.get(src, Rule::<[Rational; 3]>::new(tag, RATIONAL));
+            let _ = ifd.get(src, Rule::<Vec<SignedRational>>::new(tag, SRATIONAL));
+            let _ = ifd.get(src, Rule::<First<SignedRational>>::new(tag, SRATIONAL));
+            let _ = ifd.get(src, Rule::<[SignedRational; 2]>::new(tag, SRATIONAL));
+            let _ = ifd.get(src, Rule::<Vec<u8>>::new(tag, BYTES));
+            let _ = ifd.get(src, Rule::<First<u8>>::new(tag, BYTES));
+            let _ = ifd.get(src, Rule::<[u8; 6]>::new(tag, BYTES));
+            let _ = ifd.held(Held::<[u8; 4]>::new(tag, BYTES));
+            let _ = ifd.get(src, Rule::<Text>::new(tag, TEXT));
+
             let _ = ifd.u32s(src, tag);
             let _ = ifd.u32(src, tag);
-            let _ = ifd.one_u32(tag, &[FieldType::Short, FieldType::Long, FieldType::Ifd]);
-            let _ = ifd.i16s(src, tag);
-            let _ = ifd.i32s(src, tag);
             let _ = ifd.rationals(src, tag);
-            let _ = ifd.srationals(src, tag);
-            let _ = ifd.ascii_bytes(src, tag);
             let _ = ifd.text_bytes(src, tag);
             let _ = ifd.bytes(src, tag);
         }

@@ -118,7 +118,6 @@
 use std::io::{Read, Seek};
 use std::ops::Range;
 
-use crate::container::tiff::FieldType;
 use crate::container::tiff::{Block, Ifd, ifd_in, parse_header, skip_damage};
 use crate::error::Result;
 use crate::io::{ByteOrder, Source};
@@ -128,6 +127,15 @@ use crate::limits::Limits;
 /// UNDEFINED value of one MP Entry per image, 16 bytes each, the first
 /// image's first (DC-007 Table 3, p. 12; Figure 7, p. 13).
 const MP_ENTRY: u16 = 0xB002;
+
+/// The rule of the one tag this reader reads: MPEntry, of type UNDEFINED
+/// alone, as DC-007 gives it, of any count, which the reader checks is a
+/// whole number of entries (ADR011).
+mod rules {
+    use crate::container::tiff::{FieldType, Rule};
+
+    pub(super) const MP_ENTRY: Rule<Vec<u8>> = Rule::new(super::MP_ENTRY, &[FieldType::Undefined]);
+}
 
 /// The length of one MP Entry: the attribute, the size and the offset, 4
 /// bytes each, then two entry numbers of 2 bytes (DC-007 Figure 7, p. 13).
@@ -184,15 +192,7 @@ fn listed_images<R: Read + Seek>(
     mpf: &Block,
     ifd: &Ifd,
 ) -> Result<Vec<Range<u64>>> {
-    // The value readers take BYTE as well as UNDEFINED; MPEntry's rule
-    // allows UNDEFINED only.
-    if ifd
-        .entry_of_type(MP_ENTRY, &[FieldType::Undefined])
-        .is_none()
-    {
-        return Ok(Vec::new());
-    }
-    let Some(value) = skip_damage(ifd.bytes(src, MP_ENTRY))?.flatten() else {
+    let Some(value) = ifd.get(src, rules::MP_ENTRY)? else {
         return Ok(Vec::new());
     };
     Ok(ranges(mpf, ifd.order(), &value))

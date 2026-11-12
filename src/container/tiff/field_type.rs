@@ -125,7 +125,7 @@ impl FieldType {
     /// assert_eq!(FieldType::Short.to_code(), 3);
     /// assert_eq!(FieldType::from_code(129).map(FieldType::to_code), Some(129));
     /// ```
-    pub fn to_code(self) -> u16 {
+    pub const fn to_code(self) -> u16 {
         match self {
             Self::Byte => 1,
             Self::Ascii => 2,
@@ -145,7 +145,7 @@ impl FieldType {
     }
 
     /// The number of bytes one value of the type takes: 1, 2, 4 or 8.
-    pub fn size(self) -> u32 {
+    pub const fn size(self) -> u32 {
         match self {
             Self::Byte | Self::Ascii | Self::SByte | Self::Undefined | Self::Utf8 => 1,
             Self::Short | Self::SShort => 2,

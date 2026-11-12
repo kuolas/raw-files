@@ -78,12 +78,10 @@
 //! counted; among them the records Sony enciphers, such as 0x2010 and
 //! 0x9050, which are plain UNDEFINED entries whose bytes the view gives as
 //! recorded, neither marked nor deciphered (ADR023).
-//! A value is read only in the shape its tag's rule allows, its type and
-//! its number of values: the value readers accept more types than a tag's
-//! rule allows, [`Ifd::u32s`] reading LONG and IFD as well as SHORT and
-//! [`Ifd::bytes`] BYTE as well as UNDEFINED, so each reader first finds the
-//! tag's entry among the types its rule allows ([`Ifd::entry_of_type`]) and
-//! checks its count. Signed numbers are read by [`Ifd::i32s`], which reads
+//! A value is read only in the shape its tag's rule names, its type and its
+//! number of values, which the reader declares once, beside the tag's
+//! number ([`Rule`]); a value of another type
+//! or count is never read ([`Ifd::get`]). The fine-tuning's rule names
 //! SLONG alone, so that a negative value is never read as a large one.
 //! The signatures are looked for in at most the block's first 12 bytes,
 //! never past its end. A block too short for its header or for the IFD's
@@ -261,12 +259,10 @@ use std::io::{Read, Seek};
 
 use super::{MakerNoteBlock, checked_color_temperature};
 use crate::camera_settings::{CameraSettings, FineTune, WhiteBalanceMode};
-use crate::container::tiff::FieldType;
-use crate::container::tiff::{Ifd, Tree, skip_damage};
+use crate::container::tiff::{Ifd, Rule, Tree};
 use crate::entries::{Directory, Entries};
 use crate::error::Result;
 use crate::focus::{Focus, FocusOrigin, FocusPoints};
-use crate::formats::tiff_metadata::one_long;
 use crate::geometry::{Point, Size};
 use crate::io::Source;
 use crate::limits::Limits;
@@ -320,6 +316,28 @@ const FOCUS_LOCATION2: u16 = 0x204A;
 /// temperature and the custom white balance's own under custom, and 0 when
 /// none was recorded.
 const COLOR_TEMPERATURE: u16 = 0xB021;
+
+/// The rules of the tags this reader reads: each tag's number, from the
+/// constants above, and the type and count Sony writes its value in on
+/// every file checked, which a value must have to be read (ADR011).
+/// [`Ifd::get`] and [`Ifd::held`] read them.
+mod rules {
+    use crate::container::tiff::{FieldType, Held, Rule};
+
+    const LONG: &[FieldType] = &[FieldType::Long];
+    const SHORT: &[FieldType] = &[FieldType::Short];
+
+    pub(super) const WHITE_BALANCE: Held<[u32; 1]> = Held::new(super::WHITE_BALANCE, LONG);
+    pub(super) const FINE_TUNE: Rule<[i32; 2]> = Rule::new(super::FINE_TUNE, &[FieldType::SLong]);
+    pub(super) const ELECTRONIC_FRONT_CURTAIN: Held<[u32; 1]> =
+        Held::new(super::ELECTRONIC_FRONT_CURTAIN, LONG);
+    pub(super) const FOCUS_MODE: Held<[u8; 1]> = Held::new(super::FOCUS_MODE, &[FieldType::Byte]);
+    pub(super) const FOCUS_LOCATION: Rule<[u32; 4]> = Rule::new(super::FOCUS_LOCATION, SHORT);
+    pub(super) const FOCUS_FRAME_SIZE: Rule<[u8; 6]> =
+        Rule::new(super::FOCUS_FRAME_SIZE, &[FieldType::Undefined]);
+    pub(super) const FOCUS_LOCATION2: Rule<[u32; 4]> = Rule::new(super::FOCUS_LOCATION2, SHORT);
+    pub(super) const COLOR_TEMPERATURE: Held<[u32; 1]> = Held::new(super::COLOR_TEMPERATURE, LONG);
+}
 
 /// The header of the DSLR-A100's MakerNote (`SONY DSC `, then three NULs),
 /// which ExifTool's documentation also lists for the DSC compacts' JPEG
@@ -489,12 +507,12 @@ pub(in crate::formats) fn metadata<R: Read + Seek>(
 ///
 /// `Io` when the reader fails. Nothing the block holds is an error.
 fn focus<R: Read + Seek>(src: &mut Source<R>, makernote: &MakerNote) -> Result<Option<Focus>> {
-    if manual_focus(src, makernote)? {
+    if manual_focus(makernote) {
         return Ok(None);
     }
-    let mut found = location(src, makernote, FOCUS_LOCATION)?;
+    let mut found = location(src, makernote, rules::FOCUS_LOCATION)?;
     if found.is_none() {
-        found = location(src, makernote, FOCUS_LOCATION2)?;
+        found = location(src, makernote, rules::FOCUS_LOCATION2)?;
     }
     let Some(focus) =
         found.and_then(|(frame, center)| Focus::new(frame, center, FocusOrigin::Recorded).ok())
@@ -513,21 +531,10 @@ fn focus<R: Read + Seek>(src: &mut Source<R>, makernote: &MakerNote) -> Result<O
 /// Whether `makernote`'s FocusMode records manual focus: whether it is one
 /// BYTE, and that byte is 0. A FocusMode that is missing, of another type
 /// or another count, or that holds any other value, such as 3 for AF-C,
-/// records no manual focus.
-///
-/// # Errors
-///
-/// `Io` when the reader fails. Nothing the block holds is an error.
-fn manual_focus<R: Read + Seek>(src: &mut Source<R>, makernote: &MakerNote) -> Result<bool> {
-    let one_byte = makernote
-        .ifd
-        .entry_of_type(FOCUS_MODE, &[FieldType::Byte])
-        .is_some_and(|entry| entry.count() == 1);
-    if !one_byte {
-        return Ok(false);
-    }
-    let mode = skip_damage(makernote.ifd.bytes(src, FOCUS_MODE))?.flatten();
-    Ok(mode.as_deref() == Some(&[0]))
+/// records no manual focus. The entry holds its one byte, so this reads
+/// nothing from the file.
+fn manual_focus(makernote: &MakerNote) -> bool {
+    makernote.ifd.held(rules::FOCUS_MODE) == Some([0])
 }
 
 /// The frame and the center that `makernote`'s tag `tag`, FocusLocation or
@@ -543,17 +550,9 @@ fn manual_focus<R: Read + Seek>(src: &mut Source<R>, makernote: &MakerNote) -> R
 fn location<R: Read + Seek>(
     src: &mut Source<R>,
     makernote: &MakerNote,
-    tag: u16,
+    rule: Rule<[u32; 4]>,
 ) -> Result<Option<(Size, Point)>> {
-    let four_shorts = makernote
-        .ifd
-        .entry_of_type(tag, &[FieldType::Short])
-        .is_some_and(|entry| entry.count() == 4);
-    if !four_shorts {
-        return Ok(None);
-    }
-    let values = skip_damage(makernote.ifd.u32s(src, tag))?.flatten();
-    let Some(&[width, height, x, y]) = values.as_deref() else {
+    let Some([width, height, x, y]) = makernote.ifd.get(src, rule)? else {
         return Ok(None);
     };
     Ok(Some((Size { width, height }, Point { x, y })))
@@ -572,15 +571,9 @@ fn location<R: Read + Seek>(
 ///
 /// `Io` when the reader fails. Nothing the block holds is an error.
 fn area<R: Read + Seek>(src: &mut Source<R>, makernote: &MakerNote) -> Result<Option<Size>> {
-    let six_bytes = makernote
-        .ifd
-        .entry_of_type(FOCUS_FRAME_SIZE, &[FieldType::Undefined])
-        .is_some_and(|entry| entry.count() == 6);
-    if !six_bytes {
-        return Ok(None);
-    }
-    let value = skip_damage(makernote.ifd.bytes(src, FOCUS_FRAME_SIZE))?.flatten();
-    let Some(&[width0, width1, height0, height1, ..]) = value.as_deref() else {
+    let Some([width0, width1, height0, height1, ..]) =
+        makernote.ifd.get(src, rules::FOCUS_FRAME_SIZE)?
+    else {
         return Ok(None);
     };
     let order = makernote.ifd.order();
@@ -631,15 +624,19 @@ fn camera_settings<R: Read + Seek>(
     mut settings: CameraSettings,
 ) -> Result<CameraSettings> {
     let ifd = &makernote.ifd;
-    let mode = one_long(ifd, WHITE_BALANCE).and_then(white_balance_mode);
+    let mode = ifd
+        .held(rules::WHITE_BALANCE)
+        .and_then(|[code]| white_balance_mode(code));
     if let Some(mode) = mode {
         settings.white_balance.mode = Some(mode);
     }
-    settings.white_balance.color_temperature =
-        one_long(ifd, COLOR_TEMPERATURE).and_then(checked_color_temperature);
+    settings.white_balance.color_temperature = ifd
+        .held(rules::COLOR_TEMPERATURE)
+        .and_then(|[kelvin]| checked_color_temperature(kelvin));
     settings.white_balance.fine_tune = fine_tune(src, makernote)?;
-    settings.electronic_front_curtain_setting =
-        one_long(ifd, ELECTRONIC_FRONT_CURTAIN).and_then(electronic_front_curtain_setting);
+    settings.electronic_front_curtain_setting = ifd
+        .held(rules::ELECTRONIC_FRONT_CURTAIN)
+        .and_then(|[code]| electronic_front_curtain_setting(code));
     Ok(settings)
 }
 
@@ -695,15 +692,7 @@ fn fine_tune<R: Read + Seek>(
     src: &mut Source<R>,
     makernote: &MakerNote,
 ) -> Result<Option<FineTune>> {
-    let two_slongs = makernote
-        .ifd
-        .entry_of_type(FINE_TUNE, &[FieldType::SLong])
-        .is_some_and(|entry| entry.count() == 2);
-    if !two_slongs {
-        return Ok(None);
-    }
-    let values = skip_damage(makernote.ifd.i32s(src, FINE_TUNE))?.flatten();
-    let Some(&[blue_amber, green_magenta]) = values.as_deref() else {
+    let Some([blue_amber, green_magenta]) = makernote.ifd.get(src, rules::FINE_TUNE)? else {
         return Ok(None);
     };
     Ok(fine_tune_of(blue_amber, green_magenta))
