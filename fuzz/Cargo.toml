@@ -1,6 +1,6 @@
 # The fuzz targets: they feed the library's parsers arbitrary bytes and
 # report any input that makes one panic, hang or allocate without bound.
-# They run with nightly Rust and cargo-fuzz (see CONTRIBUTING.md §Fuzzing).
+# They run with nightly Rust and cargo-fuzz (see docs/TESTING.md §Fuzzing).
 # A separate crate, never published, and not part of the raw-files package.
 # Its one dependency besides the library, `libfuzzer-sys`, compiles
 # libFuzzer's C++ runtime: the only native code in the repository, kept out

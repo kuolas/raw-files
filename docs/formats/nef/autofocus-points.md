@@ -400,7 +400,7 @@ The tests check that the NEF and the Small JPEG give point 1 at
 
 The local corpus test, which runs the reader over a folder of camera
 files and prints counts only
-([CONTRIBUTING.md](../../../CONTRIBUTING.md#code-style-and-checks)),
+([docs/TESTING.md](../../TESTING.md#the-local-corpus-test)),
 gives the same counts on the session's 56 NEF files as on its 56
 JPEGs **[F]**:
 

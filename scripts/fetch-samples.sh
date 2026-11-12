@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # fetch-samples.sh — download the real sample files that the tests read when
-# they are present (CONTRIBUTING.md §Code style and checks). The list is
+# they are present (docs/TESTING.md §The sample files). The list is
 # tests/samples.tsv: one file per line, pinned by its SHA-256, each with the
 # site it comes from, its id there, its tier, its license and its URL.
 # Without the files, those tests skip.

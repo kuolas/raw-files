@@ -9,7 +9,7 @@
 # required check: a finding here is a bug to fix, not a blocked pull
 # request. The failing input is uploaded as a run artifact.
 #
-# The commands are the ones of CONTRIBUTING.md §Fuzzing.
+# The commands are the ones of docs/TESTING.md §Fuzzing.
 #
 # Actions must be node24-generation majors; see ci.yml. Before adding or
 # bumping one, check that the tag's action.yml says `using: node24`:
@@ -78,7 +78,7 @@ jobs:
           path: fuzz/corpus/${{ matrix.target }}
           key: fuzz-corpus-${{ matrix.target }}-${{ github.run_id }}
           restore-keys: fuzz-corpus-${{ matrix.target }}-
-      # From the repository root, as in CONTRIBUTING.md §Fuzzing. libFuzzer
+      # From the repository root, as in docs/TESTING.md §Fuzzing. libFuzzer
       # refuses to start when the corpus directory does not exist, as on the
       # first run, when there is nothing to restore.
       - run: mkdir -p fuzz/corpus/${{ matrix.target }}

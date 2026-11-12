@@ -157,18 +157,15 @@ downloads (about 1.6 GB). Without the files, those tests skip.
 The 325 MiB ARQ file comes only with `RAW_FILES_LARGE=1`.
 
 Another test runs the reader over a folder of your own camera files, RAW
-and JPEG. It prints totals over the folder, per format, and never:
-
-- a path or a file name;
-- a make, a model, a software or any other text as a file records it;
-- a serial number, a time, an exposure, a lens or a place;
-- where the camera focused.
-
-So its output can go into an issue:
+and JPEG. It prints totals only, tied to no file, so its output can go
+into an issue:
 
 ```sh
 RAW_FILES_LOCAL_CORPUS=/path/to/photos cargo test --release --test local_corpus -- --ignored --nocapture
 ```
+
+[docs/TESTING.md](docs/TESTING.md#the-local-corpus-test) lists what the
+output never holds.
 
 [CONTRIBUTING.md](CONTRIBUTING.md) lists the full checks.
 
@@ -190,6 +187,8 @@ Everyone taking part is expected to follow the
 - **To change it:**
   - [CONTRIBUTING.md](CONTRIBUTING.md): how to build, test and send a
     change;
+  - [docs/TESTING.md](docs/TESTING.md): the sample files, the ignored
+    tests, fuzzing and what CI runs;
   - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md): which file holds what;
   - the [decision records](docs/architecture-decisions/README.md): why
     the code has its shape.
