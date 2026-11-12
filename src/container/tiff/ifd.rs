@@ -332,10 +332,6 @@ fn parse_entry(raw: &[u8; 12], inside: &Block, order: ByteOrder) -> Option<Entry
     })
 }
 
-// The walk and the format readers read IFDs through some of these
-// accessors; the others wait for a reader that needs them.
-// Each `expect` fails the build once its accessor has a caller, so it is
-// then removed rather than left behind.
 impl Ifd {
     /// The absolute offset of the IFD: where its entry count is.
     pub(crate) fn offset(&self) -> u64 {
@@ -356,19 +352,13 @@ impl Ifd {
 
     /// The number of entries that can be read; skipped entries are not
     /// counted.
-    #[cfg_attr(
-        not(test),
-        expect(dead_code, reason = "nothing reads this accessor yet")
-    )]
+    #[cfg(test)]
     pub(crate) fn len(&self) -> usize {
         self.entries.len()
     }
 
     /// Whether no entry can be read: every entry of the IFD was skipped.
-    #[cfg_attr(
-        not(test),
-        expect(dead_code, reason = "nothing reads this accessor yet")
-    )]
+    #[cfg(test)]
     pub(crate) fn is_empty(&self) -> bool {
         self.entries.is_empty()
     }
@@ -390,10 +380,7 @@ impl Ifd {
 
     /// The tags of the entries that can be read, in the order of the file,
     /// a repeated tag each time it appears.
-    #[cfg_attr(
-        not(test),
-        expect(dead_code, reason = "nothing reads this accessor yet")
-    )]
+    #[cfg(any(test, fuzzing))]
     pub(crate) fn tags(&self) -> impl Iterator<Item = u16> {
         self.entries.iter().map(|entry| entry.tag)
     }
@@ -529,9 +516,8 @@ impl Ifd {
     }
 
     /// The bytes of tag `tag` up to the first NUL, when its type is one of
-    /// `types`: what [`ascii`](Self::ascii) and
-    /// [`text_bytes`](Self::text_bytes) read. `None` when the tag is
-    /// missing or has another type.
+    /// `types`: what [`text_bytes`](Self::text_bytes) reads, and `ascii` in
+    /// the tests. `None` when the tag is missing or has another type.
     fn text_of_type<R: Read + Seek>(
         &self,
         src: &mut Source<R>,

@@ -64,7 +64,7 @@ impl Block {
     }
 
     /// The range of the file the block may use.
-    #[cfg_attr(not(test), expect(dead_code, reason = "nothing reads this method yet"))]
+    #[cfg(test)]
     pub(crate) fn bounds(&self) -> &Range<u64> {
         &self.bounds
     }
