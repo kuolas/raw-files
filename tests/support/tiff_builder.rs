@@ -29,6 +29,9 @@
 //! bytes or fewer sits in the entry's value field, left-justified, and the
 //! rest of the field is zero.
 //!
+//! The field type codes it writes are its own constants, the standards'
+//! numbers, so that a fixture never depends on the `FieldType` it tests.
+//!
 //! An IFD with its prefix and its values is also a block that an entry can
 //! hold as its value, as a Sony MakerNote is held: an IFD that no other IFD
 //! points at, whose offsets count from the start of the file, like every
