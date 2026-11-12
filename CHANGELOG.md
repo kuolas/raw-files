@@ -12,44 +12,47 @@ does. An entry that can break a caller opens with **Breaking:**.
 
 ### Changed
 
-- A tag that raw-files reads only at an exact count is now skipped
-  before its value is read when it holds another count, as a tag of
-  another type already was
-  ([#109](https://github.com/kuolas/raw-files/issues/109)). These were
-  read whole and then counted: Nikon's CropArea, ISO, Lens, WorldTime
-  and CropHiSpeed, and a DNG default crop. A hostile file now costs less
-  reading, and a source that fails at such a value no longer makes
-  opening the file fail.
+- A tag that raw-files reads only at an exact count is now skipped,
+  unread, when it holds another count
+  ([#109](https://github.com/kuolas/raw-files/issues/109)). A tag of
+  another type was already skipped before its value was read. These
+  tags were read whole and then counted: Nikon's CropArea, ISO, Lens,
+  WorldTime and CropHiSpeed, and a DNG default crop. A hostile file now
+  costs less reading. A source that fails at such a value no longer
+  makes opening the file fail.
 
 ### Fixed
 
-- The tags raw-files reads by their first value, such as the offsets of
-  the Exif and GPS directories, the orientation, the ISO, and the
-  exposure time, f-number, focal length and exposure bias, are read
-  from that value alone when the file gives them many values
+- A tag that raw-files reads by its first value is now read from that
+  value alone when the file gives it many
   ([#114](https://github.com/kuolas/raw-files/issues/114),
-  [#109](https://github.com/kuolas/raw-files/issues/109)). Such a tag
-  longer than the cap on one value (`Limits::max_value_bytes`) was
+  [#109](https://github.com/kuolas/raw-files/issues/109)). Such tags
+  include the offsets of the Exif and GPS directories, the orientation,
+  the ISO, and the exposure time, f-number, focal length and exposure
+  bias.
+  One longer than the cap on one value (`Limits::max_value_bytes`) was
   refused, taking with it its value or the directory or preview it
-  locates; a shorter one was copied whole to use its first value.
-- A Nikon MakerNote's small preview is found only when its pointer and
-  the preview's offset and length are each one LONG, as Nikon writes
-  them ([#110](https://github.com/kuolas/raw-files/issues/110)). Each
-  was read as the first value of any SHORT, LONG or IFD entry, so a
-  pointer written as two SHORTs was read as its first SHORT. Every
-  other value of a MakerNote already had its type and count checked.
+  locates. A shorter one was copied whole to use its first value.
+- A Nikon MakerNote's small preview is found only when the pointer to
+  it, its offset and its length are each one LONG
+  ([#110](https://github.com/kuolas/raw-files/issues/110)). That is how
+  Nikon writes them. Each was read as the first value of any SHORT,
+  LONG or IFD entry. So a pointer written as two SHORTs was read as its
+  first SHORT. Every other value of a MakerNote already had its type
+  and count checked.
 
 ## [0.10.0] - 2026-11-11
 
 The tenth release makes the API consistent before full metadata is
 built on it. A function that refuses its arguments now says which rule
 they broke, in a `ValueError`. Every setter is a `with_…` method.
-`Entries` gives its lists as slices, as `RawFile::previews` does, and a
+`Entries` gives its lists as slices, as `RawFile::previews` does. A
 fraction of the raw view is a `Rational`, as a fraction of the metadata
-is. `Camera::display_name` gives a camera's
-name to show, and `Orientation`, `PreviewFormat` and `ErrorKind` each
-gain a name. This changes some of 0.9.0's signatures, each with what a
-caller does (see Changed):
+is. `Camera::display_name` gives a camera's name to show, and
+`Orientation`, `PreviewFormat` and `ErrorKind` each gain a name.
+
+Nine entries under Changed are marked **Breaking**. Eight change
+0.9.0's signatures, and each says what a caller does:
 
 - The functions that refuse their arguments return
   `Result<_, ValueError>`, not `Option`; `.ok()` gives the `Option`
@@ -65,8 +68,10 @@ caller does (see Changed):
   iterators.
 - `Limits` is `Copy`, and its getters take `self`.
 
-`Limits::max_value_bytes` now bounds every value raw-files reads, which
-only a caller who changes the cap sees.
+The ninth marked entry says that `Limits::max_value_bytes` now bounds
+every value raw-files reads. Only a caller who changes the cap sees it.
+The [API docs of 0.10.0](https://docs.rs/raw-files/0.10.0/raw_files/) hold
+the rules of each item named below.
 
 ### Added
 
@@ -77,17 +82,17 @@ only a caller who changes the cap sees.
   `NIKON D7200`. `Camera::model` is unchanged: `None` for a body the
   table of names does not hold
   ([#104](https://github.com/kuolas/raw-files/issues/104)).
-- `ValueError`, the error of a function that refuses its arguments. It
-  has one variant per rule, such as `ValueError::CenterOffFrame`, and
-  its `Display` text says the rule
+- `ValueError` is the error of a function that refuses its arguments.
+  It has one variant per rule, such as `ValueError::CenterOffFrame`,
+  and its `Display` text says the rule
   ([#105](https://github.com/kuolas/raw-files/issues/105)).
 - `Options::limits()` reads back the limits that files are opened
   under: `Limits::default()` until `Options::with_limits` sets others
   ([#107](https://github.com/kuolas/raw-files/issues/107)).
 - `Orientation`, `PreviewFormat` and `ErrorKind` each have a `name`,
-  which `Display` writes, as fourteen other enums of the crate, such as
-  `Format` and `Make`, do. Their docs sent a caller to `Debug` before
-  ([#107](https://github.com/kuolas/raw-files/issues/107)):
+  which `Display` writes. Fourteen other enums of the crate, such as
+  `Format` and `Make`, already do. Their docs sent a caller to `Debug`
+  before ([#107](https://github.com/kuolas/raw-files/issues/107)):
   - An orientation says what a viewer does to the stored pixels, such
     as `Rotate 90 degrees clockwise`, for an information panel.
   - A preview's encoding is `JPEG`, as `Format::Jpeg`'s name is.
@@ -102,11 +107,10 @@ only a caller who changes the cap sees.
 
 ### Changed
 
-- Every function that refuses its arguments returns
-  `Result<_, ValueError>` where it returned `Option`, which breaks its
-  callers. A refusal now says which rule it broke. The functions are
-  `Rational::new`, `SignedRational::new`, `DateTime::new`,
-  `DateTime::with_subseconds`,
+- **Breaking:** every function that refuses its arguments returns
+  `Result<_, ValueError>` where it returned `Option`. A refusal now
+  says which rule it broke. The functions are `Rational::new`,
+  `SignedRational::new`, `DateTime::new`, `DateTime::with_subseconds`,
   `DateTime::with_offset_minutes`, `Latitude::north` and `south`,
   `Longitude::east` and `west`, `Altitude::above` and `below`,
   `Direction::new`, `Focus::new`, `Focus::with_size`,
@@ -135,12 +139,11 @@ only a caller who changes the cap sees.
   `FocusLayout::point`, still return `Option`. What the readers give
   for a file is unchanged
   ([#105](https://github.com/kuolas/raw-files/issues/105)).
-- `Value::Rational` holds a `Vec<Rational>` and `Value::SRational` a
-  `Vec<SignedRational>`, where they held pairs of numbers, which breaks
-  code that matches on them. A fraction of the raw view now has the
-  type a fraction of the metadata has, with `Display`, `reduced` and
-  `to_f64`. Code that read a pair names the fields, or lets the
-  fraction print itself:
+- **Breaking:** `Value::Rational` holds a `Vec<Rational>` and
+  `Value::SRational` a `Vec<SignedRational>`, where they held pairs of
+  numbers. A fraction of the raw view now has the type a fraction of
+  the metadata has, with `Display`, `reduced` and `to_f64`. Code that
+  read a pair names the fields, or lets the fraction print itself:
 
   ```rust
   // 0.9.0
@@ -158,29 +161,25 @@ only a caller who changes the cap sees.
 
   Each fraction is still as the file records it: a zero denominator is
   kept, and each sign stays on the number that carries it. The bytes
-  read are unchanged, and so are the values of `Metadata`, which never
-  hold a zero denominator. Only `{:?}` of a value changes, writing each
+  read are unchanged. So are the values of `Metadata`, which never hold
+  a zero denominator. Only `{:?}` of a value changes, writing each
   fraction's fields
   ([#102](https://github.com/kuolas/raw-files/issues/102)).
-- `Limits::max_value_bytes` now bounds the values raw-files reads for
-  itself, for the metadata and the previews, as well as those
-  `RawFile::read_value` reads. Before, those values had a fixed cap of
-  their own, 1 MiB, the default of `max_value_bytes`. Only a caller who
-  changes the cap sees a difference:
+- **Breaking:** `Limits::max_value_bytes` now bounds the values
+  raw-files reads for itself, for the metadata and the previews, as
+  well as those `RawFile::read_value` reads. Before, those values had a
+  fixed cap of their own, 1 MiB, the default of `max_value_bytes`. Only
+  a caller who changes the cap sees a difference:
   - `Limits::unlimited()` now lifts the cap on every value.
   - Under a lowered cap, a longer value of the metadata is `None`, and
     a preview or a directory located by one is left out. A RAW file, or
     any TIFF file but a DNG, whose Make is longer than the cap fails to
-    open with `LimitExceeded`; a JPEG file still opens, without what its
+    open with `LimitExceeded`. A JPEG file still opens, without what its
     MakerNote gives
     ([#113](https://github.com/kuolas/raw-files/issues/113)).
-- The `UnknownFormat` error for a TIFF file of an unknown format has a
-  message that ends in "recognizes". It ended in "recognises". The docs
-  and the messages are now spelled the American way, as the API's
-  names are.
-- `Options::limits(limits)` is now `Options::with_limits(limits)`,
-  which breaks its callers. Every setter of the crate is now a `with_…`
-  method, and `Options::limits()` reads the limits back:
+- **Breaking:** `Options::limits(limits)` is now
+  `Options::with_limits(limits)`. Every setter of the crate is now a
+  `with_…` method, and `Options::limits()` reads the limits back:
 
   ```rust
   // 0.9.0
@@ -192,10 +191,11 @@ only a caller who changes the cap sees.
 
   A file opened with the same limits is read as before
   ([#107](https://github.com/kuolas/raw-files/issues/107)).
-- `FocusPoints::primary` returns `Option<FocusPoint>` where it
-  returned `Option<&FocusPoint>`, which breaks code that compares it
-  with a reference or passes it to a function taking one. Every lookup
-  of a `Copy` value now gives it by value, as `Metadata::focus` does:
+- **Breaking:** `FocusPoints::primary` returns `Option<FocusPoint>`
+  where it returned `Option<&FocusPoint>`. This breaks code that
+  compares it with a reference or passes it to a function taking one.
+  Every lookup of a `Copy` value now gives it by value, as
+  `Metadata::focus` does:
 
   ```rust
   // 0.9.0
@@ -209,9 +209,9 @@ only a caller who changes the cap sees.
 
   The point given is the same
   ([#150](https://github.com/kuolas/raw-files/issues/150)).
-- `FieldType::code()` is now `FieldType::to_code()`, which breaks its
-  callers. It pairs with `FieldType::from_code`, as
-  `Orientation::to_exif` pairs with `from_exif`:
+- **Breaking:** `FieldType::code()` is now `FieldType::to_code()`. It
+  pairs with `FieldType::from_code`, as `Orientation::to_exif` pairs
+  with `from_exif`:
 
   ```rust
   // 0.9.0
@@ -223,10 +223,10 @@ only a caller who changes the cap sees.
 
   The codes are the same
   ([#150](https://github.com/kuolas/raw-files/issues/150)).
-- `Latitude::to_degrees()` and `Longitude::to_degrees()` are now
-  `to_decimal_degrees()`, which breaks their callers. `degrees()`
-  beside them gives only the degrees part as recorded, and the `f64`
-  returned has std's own `to_degrees`, which converts radians:
+- **Breaking:** `Latitude::to_degrees()` and `Longitude::to_degrees()`
+  are now `to_decimal_degrees()`. `degrees()` beside them gives only
+  the degrees part as recorded. The `f64` returned has std's own
+  `to_degrees`, which converts radians:
 
   ```rust
   // 0.9.0
@@ -242,11 +242,11 @@ only a caller who changes the cap sees.
   The numbers are the same. `Altitude::to_meters` keeps its name, since
   `meters()` beside it is the whole value
   ([#150](https://github.com/kuolas/raw-files/issues/150)).
-- `Entries::directories` returns `&[Directory]` and
+- **Breaking:** `Entries::directories` returns `&[Directory]` and
   `Entries::in_directory` returns `&[Entry]`, where they returned
-  iterators, which breaks code that calls an iterator's methods on
-  them or iterates the directories by value. Both lists are now slices,
-  as `RawFile::previews` is, with a length and indexing:
+  iterators. This breaks code that calls an iterator's methods on them
+  or iterates the directories by value. Both lists are now slices, as
+  `RawFile::previews` is, with a length and indexing:
 
   ```rust
   // 0.9.0
@@ -263,9 +263,9 @@ only a caller who changes the cap sees.
   The directories and their entries are the same, in the same order.
   `in_directory` of a directory the file lacks is an empty slice
   ([#150](https://github.com/kuolas/raw-files/issues/150)).
-- `Limits` is `Copy`, and its five getters, such as `Limits::max_ifds`,
-  take `self` where they took `&self`. A getter called by path with a
-  reference breaks:
+- **Breaking:** `Limits` is `Copy`, and its five getters, such as
+  `Limits::max_ifds`, take `self` where they took `&self`. A getter
+  called by path with a reference breaks:
 
   ```rust
   // 0.9.0
@@ -276,384 +276,391 @@ only a caller who changes the cap sees.
   ```
 
   So, rarely, does a closure without `move` that uses a `Limits` by
-  value: it now borrows the value where it moved it, so it cannot
+  value. It now borrows the value where it moved it, so it cannot
   outlive it. `Limits` holds only numbers, so a caller no longer clones
   it to open files with the same caps through several `Options`.
   `Options::limits()`, new in this release, gives it by value.
   `Options` stays only `Clone`, so that an option that cannot be copied
   can join it ([#150](https://github.com/kuolas/raw-files/issues/150)).
+- The `UnknownFormat` error for a TIFF file of an unknown format has a
+  message that ends in "recognizes". It ended in "recognises". The docs
+  and the messages are now spelled the American way, as the API's
+  names are.
 
 ## [0.9.0] - 2026-11-10
 
-The ninth release, the second step towards full metadata: who made a
+The ninth release is the second step towards full metadata: who made a
 picture and where it was taken. `Metadata::authorship` gives the
 artist, the copyright notice, the photographer, the editor, the title,
-the description and the comment, `Camera::owner_name` the name of the
-camera's owner, and `Metadata::location` the position, with the
-altitude, the GPS time, the image direction and the map datum. Each is
-given as the file records it, a person's name and the place a picture
-was taken among them, with nothing hidden and no option to hide it: a
-program that shows or shares them decides what to keep. A GPS IFD is
-no location: many cameras write one that holds only its version, and a
-file has a location only when it records a sound position. No file
-checked records a photographer, an editor, a title or the name of a
-camera's owner, so those readers are checked on built files only.
-Nothing in 0.8.0's API was removed or changed in signature; a NEF or
-ARW whose Make is of type UTF-8 is now read where it was refused, and
-a camera JPEG's MakerNote with it, and, on the NEFs checked, opening
-one that records a position reads one more block (see Changed).
+the description and the comment. `Camera::owner_name` gives the name of
+the camera's owner. `Metadata::location` gives the position, with the
+altitude, the GPS time, the image direction and the map datum.
+
+Each is given as the file records it, a person's name and the place a
+picture was taken among them. Nothing is hidden, and there is no option
+to hide it: a program that shows or shares them decides what to keep.
+A GPS IFD is no location: many cameras write one that holds only its
+version. A file has a location only when it records a sound position.
+No file checked records a photographer, an editor, a title or the name
+of a camera's owner, so those readers are checked on built files only.
+
+Nothing in 0.8.0's API was removed or changed in signature, and no
+entry is marked **Breaking**. A NEF or ARW whose Make is of type UTF-8
+is now read where it was refused. So is the MakerNote of a camera JPEG
+with such a Make. On the NEFs checked, opening one that records a
+position reads one more block (see Changed). The
+[API docs of 0.9.0](https://docs.rs/raw-files/0.9.0/raw_files/) hold
+the rules of each item named below.
 
 ### Added
 
 - `Metadata::authorship` gives who made the picture and what they wrote
-  about it, in an `Authorship`: the artist, the copyright notice and the
-  description from IFD0's Artist, Copyright and ImageDescription, and
-  the photographer, the editor, the title and the comment from the Exif
-  IFD's Photographer, ImageEditor, ImageTitle and UserComment, in NEF,
-  ARW and JPEG files alike. Each text is given as the file records it,
-  cleaned as every text is and nothing hidden; a blank field, as a
-  camera writes one its owner has not set, is `None`. The description
-  and the comment are free text, with no 255-byte limit and their line
-  breaks kept. `SONY DSC`, which older Sony bodies write as the
-  description of every picture, gives none. The comment is read only
-  under UserComment's `ASCII` character code. Sony's copies of IFD0's
-  texts in IFD1 and IFD2 are not read, nor anything in a MakerNote.
-  `Metadata::with_authorship` and the `with_…` methods of `Authorship`
-  build one for a program's tests.
-- `Camera::owner_name` gives the name of the camera's owner, the Exif
-  IFD's CameraOwnerName, of type ASCII or UTF-8, cleaned as every text
-  is and held to 255 bytes, `None` when blank; `Camera::with_owner_name`
-  sets it. It names whoever owns the body, not whoever took the
-  picture.
+  about it, in an `Authorship`, from NEF, ARW and JPEG files alike. The
+  artist, the copyright notice and the description come from IFD0. The
+  photographer, the editor, the title and the comment come from the
+  Exif IFD. Each text is given as the file records it, cleaned as every
+  text is, with nothing hidden. A blank field, as a camera writes one
+  its owner has not set, is `None`. The description and the comment are
+  free text, with no 255-byte limit and their line breaks kept. Sony's
+  copies of IFD0's texts in IFD1 and IFD2 are not read, nor anything in
+  a MakerNote. The docs of each getter name its tag and say what else
+  gives `None`. `Metadata::with_authorship` and the `with_…` methods of
+  `Authorship` build one for a program's tests.
+- `Camera::owner_name` gives the name of the camera's owner, from the
+  Exif IFD's CameraOwnerName, of type ASCII or UTF-8. It names whoever
+  owns the body, not whoever took the picture. Its text is cleaned as
+  every text is and held to 255 bytes, and it is `None` when blank.
+  `Camera::with_owner_name` sets it.
 - `Metadata::location` gives where the picture was taken, in a
-  `Location`, read from the GPS IFD of NEF, ARW and JPEG files alike: a
-  position, a `Latitude` and a `Longitude`, each the degrees, minutes
-  and seconds the file records as fractions with its hemisphere, and
-  `to_degrees` for signed decimal degrees; and, when the file records
-  them, the `Altitude`, above or below its reference without naming the
-  surface, the GPS time in UTC with the fraction of a second the file
-  records, the image direction, a `Direction` from true or magnetic
-  `North`, and the map datum. A GPS IFD without a sound position gives
-  no location: both reference letters and both coordinates must name a
-  place, so a GPS IFD of only its version, a Sony file without a fix and
-  a Coolpix file's blank tags give none. Each other part needs both its
-  tags, and a damaged one costs only itself; a GPS time needs a date and
-  time that exist. Everything is given as recorded, nothing rounded or
-  hidden. GPSVersionID, GPSStatus and the other GPS tags are not read;
-  the view of every entry gives them. `Metadata::with_location`,
+  `Location`, from the GPS IFD of NEF, ARW and JPEG files alike. Its
+  position is a `Latitude` and a `Longitude`. Each holds the degrees,
+  minutes and seconds the file records as fractions, with its
+  hemisphere, and `to_degrees` gives signed decimal degrees. When the
+  file records them, a location also has the `Altitude`, the GPS time
+  in UTC, the image direction, a `Direction` from true or magnetic
+  `North`, and the map datum. Everything is given as recorded, nothing
+  rounded or hidden.
+  A GPS IFD without a sound position gives no location. So a GPS IFD of
+  only its version, a Sony file without a fix and a Coolpix file's
+  blank tags give none. Each other part needs both its tags, and a
+  damaged one costs only itself. The docs of `Metadata::location` say
+  what a sound position is, and the getters of `Location` what each
+  part needs. GPSVersionID, GPSStatus and the other GPS tags are not
+  read; `RawFile::entries` gives them. `Metadata::with_location`,
   `Location::new` and its `with_…` methods, and the checked
   constructors of the coordinates, the altitude and the direction build
   one for a program's tests.
 
 ### Changed
 
-- The camera's Make and Model, the Software, and the lens's LensMake
-  and LensModel are read from a value of type UTF-8 as from one of type
-  ASCII, since Exif 3.1 gives each as "ASCII or UTF-8": the same
-  cleaning, and the same 255 bytes at most, counted as stored. So a NEF
-  or ARW whose Make is of type UTF-8 is now claimed by its reader, where
-  it was refused as of no known format, and a camera JPEG's MakerNote is
-  read. The serial numbers and the
-  capture time, which Exif gives as ASCII alone, are read only from
-  type ASCII, as is every text of a maker's MakerNote. No file checked
-  writes the UTF-8 type, so no value read from one changes.
+- The camera's Make and Model, the Software, LensMake and LensModel are
+  now read from type UTF-8 as from type ASCII. Exif 3.1 gives each as
+  "ASCII or UTF-8". The cleaning is the same, and so is the limit of
+  255 bytes, counted as stored. So a NEF or ARW whose Make is of type
+  UTF-8 is now claimed by its reader, where it was refused as of no
+  known format. A camera JPEG's MakerNote with such a Make is read too.
+  The serial numbers and the capture time, which Exif gives as ASCII
+  alone, are read only from type ASCII, as is every text of a maker's
+  MakerNote. No file checked writes the UTF-8 type, so no value read
+  from one changes.
 - Opening a file whose GPS IFD records a position now reads the
   location's values. On the NEFs checked they lie past the blocks
-  opening read before, so opening reads one more 64 KiB block: 448 KiB
-  in all on a Nikon Z 9's NEF, where 0.8.0 read 384 KiB, and one more
-  block on each of the 6 NEFs of raw.pixls.us that record a position.
-  On the ARW and JPEG files checked, and on the files without a
-  position, it reads nothing more, and neither do the authorship's
-  texts. No `Limits` cap counts these reads; each value is read under
+  opening read before, so opening reads one more 64 KiB block. That is
+  448 KiB in all on a Nikon Z 9's NEF, where 0.8.0 read 384 KiB. It is
+  one more block on each of the 6 NEFs of raw.pixls.us that record a
+  position. On the ARW and JPEG files checked, and on the files without
+  a position, it reads nothing more, and neither do the authorship's
+  texts. No `Limits` cap counts these reads. Each value is read under
   the bound on any one value, as every value of the metadata is.
 
 ## [0.8.0] - 2026-11-09
 
-The eighth release, the first step towards full metadata: every entry
-of the TIFF directories raw-files walks in a NEF, ARW or camera JPEG,
-a Nikon or Sony MakerNote's among them, as the file records it, with
-the name a published standard gives each standard tag, and any
-entry's value read when asked for. Nothing in 0.7.0's API was removed
-or changed in signature, though opening a file now also reads its GPS
-IFD, which counts towards the cap on directories, and, in an ARW, the
-table of Sony's private directory (see Changed).
+The eighth release is the first step towards full metadata. It gives
+every entry of the TIFF directories that raw-files walks in a NEF, an
+ARW or a camera JPEG, as the file records it. A Nikon or Sony
+MakerNote's entries are among them. A standard tag comes with the name
+a published standard gives it, and an entry's value is read when asked
+for.
+
+Nothing in 0.7.0's API was removed or changed in signature. Opening a
+file reads more than it did. One entry under Changed is marked
+**Breaking**: the GPS IFD now counts towards the cap on directories.
+The [API docs of 0.8.0](https://docs.rs/raw-files/0.8.0/raw_files/)
+hold the rules of each item named below.
 
 ### Added
 
-- `RawFile::entries` gives every entry of every TIFF directory of the
-  file that raw-files walks, as the file records it, in an `Entries`:
-  IFD0 and the directories chained after it, the SubIFDs, the Exif, GPS
-  and Interoperability IFDs, a Nikon or Sony MakerNote's IFD in the
-  layouts raw-files reads, in a raw file or a JPEG, with Nikon's preview
-  IFD, an ARW's private directory, SR2Private, and a JPEG's
-  Multi-Picture Format index. A record the maker enciphers is an entry
-  like any other, whose bytes are given as stored, neither marked nor
-  deciphered; no standard names a maker's tags, so those entries have
-  no name.
-  Each `Entry` gives its `Directory`, its tag, its `FieldType`, its count
-  and where its value lies; `Entries` lists them directory by directory
-  in the order they were found, looks one up by directory and tag, the
-  first when a tag is repeated, and counts per directory the entries
-  left out because they could not be checked when the file was opened:
-  an unknown type, a length that overflows, or a value outside the file
-  or the part of it the directory was read in. Reading the entries reads
-  nothing from the file.
-  `Directory` writes the name a viewer shows through `Display`, such as
-  `IFD0` or `MakerNote 0x0011`, and `FieldType` has a `name` that
-  `Display` writes, such as `SHORT`, spelled as the standards write it.
-- `RawFile::read_value` reads an entry's value, as a `Value` with one
-  variant per field type, its numbers in the byte order of the entry's
-  directory, fractions as numerator and denominator pairs with a zero
-  denominator kept, and text as its bytes, which `Value::text` cleans as
-  the metadata's text is cleaned, without its 255-byte limit. A value is
-  read from the file each time it is asked for.
+- `RawFile::entries` gives every entry of every TIFF directory that
+  raw-files walks, as the file records it. Four types come with it:
+  `Entries`, `Entry`, `Directory` and `FieldType`. Listing the entries
+  reads nothing from the file. The method's docs name the directories,
+  and those of `Entries` say which entries are left out.
+- `RawFile::read_value` reads an entry's value from the file, as a
+  `Value` with one variant per field type. A value is read each time it
+  is asked for. `Value::text` gives a text value cleaned as the
+  metadata's text is, without its 255-byte limit. The docs of `Value`
+  say how numbers and fractions are given.
 - `Entry::name` gives the name a published standard gives the entry's
-  tag in its kind of directory, such as `DateTimeOriginal` for tag
-  0x9003 of the Exif IFD: TIFF 6.0's, Exif 3.1's, DCF 2.0's for the
-  Interoperability IFD, CIPA DC-007's for the Multi-Picture index and
-  the DNG specification's for the four DNG tags raw-files reads, 218 in
-  all, spelled as each document spells them, each recorded with its
-  document and page in `docs/formats/tag-names.md`. A tag no such
-  document names in that kind of directory has none, as an Exif tag
-  written in IFD0 has none there.
-- `Limits::max_value_bytes`, set with `with_max_value_bytes`, bounds the
-  bytes one entry's value may take, 1 MiB by default, the bound the
-  metadata's values already have; a longer value fails only its own
-  read, with `LimitExceeded`.
+  tag in its kind of directory. Tag 0x9003 of the Exif IFD is
+  `DateTimeOriginal`. The 218 names come from five documents, which the
+  method's docs list, and
+  [`docs/formats/tag-names.md`](https://github.com/kuolas/raw-files/blob/v0.8.0/docs/formats/tag-names.md)
+  records each with its document and page. A tag has no name where no
+  document names it. An Exif tag written in IFD0 has none there, and a
+  maker's tags have none anywhere.
+- `Limits::max_value_bytes` bounds the bytes one entry's value may
+  take. The default is 1 MiB, the bound the metadata's values already
+  have, and `Limits::with_max_value_bytes` sets another. A longer value
+  fails only its own read, with `LimitExceeded`.
 
 ### Changed
 
-- Opening a file now also reads IFD0's GPS IFD, after the chain of
-  directories, so that its entries can be listed; an IFD it shares with
-  the chain stays there. On most older NEFs this reads one more 64 KiB
-  block. The GPS IFD counts towards `Limits::max_ifds`, so with a cap
-  set at a file's count of directories under 0.7.0, a raw file may now
-  be refused, and a JPEG lose what its Exif segment holds.
+- **Breaking:** the GPS IFD now counts towards `Limits::max_ifds`,
+  since opening a file now also reads it. This matters with a cap set
+  at a file's count of directories under 0.7.0. A raw file may then be
+  refused, and a JPEG may lose what its Exif segment holds. The GPS IFD
+  is read after the chain of directories, so that its entries can be
+  listed. An IFD it shares with the chain stays there. On most older
+  NEFs this reads one more 64 KiB block.
 - Opening an ARW now also reads the table of Sony's private directory,
-  SR2Private, at the offset IFD0's DNGPrivateData holds, so that its
-  entries can be listed; its values are read only when asked for. On
-  89 of the 245 public ARW-family files measured this reads one more
-  64 KiB block.
-- An entry of Exif 3.0's UTF-8 type (129) is kept, where it was left out
-  as one of an unknown type. The metadata still reads text only from
-  ASCII entries.
+  SR2Private, so that its entries can be listed. The table lies at the
+  offset that IFD0's DNGPrivateData holds. Its values are read only
+  when asked for. On 89 of the 245 public ARW-family files measured,
+  this reads one more 64 KiB block.
+- An entry of Exif 3.0's UTF-8 type (129) is kept, where it was left
+  out as one of an unknown type. The metadata still reads text only
+  from ASCII entries.
 
 ## [0.7.0] - 2026-11-03
 
-The seventh release: the camera's maker and the name the body is sold
-under, beside the Make and Model texts the file records, from
-raw-files' own table of names; the camera's and the lens's values as
-plain values, as the exposure's are; and a D600 Medium JPEG's
-autofocus points, placed in the window of the frame its picture shows,
-and a D600's 3D-tracking area mode named. This changes some of 0.6.0's
-signatures: the camera's values move from `Metadata` to a `Camera`,
-`Metadata::lens` gives a `&Lens`, the recorded texts are named
-`recorded_make` and `recorded_model`, and `LensBuilder` is gone (see
-Changed and Removed).
+The seventh release names the camera's maker and the name the body is
+sold under, from raw-files' own table of names. Both stand beside the
+Make and Model texts the file records. The camera's and the lens's
+values are plain values, as the exposure's are. A D600 Medium JPEG's
+autofocus points are placed in the window of the frame its picture
+shows, and a D600's 3D-tracking area mode is named.
+
+Five entries are marked **Breaking**, four under Changed and one under
+Removed. They change some of 0.6.0's signatures. The camera's values
+move from `Metadata` to a `Camera`, and `Metadata::lens` gives a
+`&Lens`. The recorded texts are named `recorded_make` and
+`recorded_model`, and `LensBuilder` is gone. The
+[API docs of 0.7.0](https://docs.rs/raw-files/0.7.0/raw_files/) hold
+the rules of each item named below.
 
 ### Added
 
-- `Camera::make` gives the camera's maker as a `Make`, `Nikon`, `Sony`,
-  `Hasselblad` or `Canon`, recognized from the whole Make text the file
-  records, case included: `NIKON CORPORATION` and `NIKON` are Nikon,
-  `SONY` Sony, `HASSELBLAD` Hasselblad and `Canon` Canon, and any other
-  text gives `None`. `Make` has a `name` that `Display` writes, spelled
-  as each maker writes its own name, and orders as its variants are
-  listed. `make()` is read from the recorded Make each time it is asked
-  for, with no setter of its own, so a program's tests set the recorded
-  text with `with_recorded_make`.
+- `Camera::make` gives the camera's maker as a `Make`: `Nikon`, `Sony`,
+  `Hasselblad` or `Canon`. It is recognized from the whole Make text the
+  file records, case included. `NIKON CORPORATION` and `NIKON` are
+  Nikon, `SONY` Sony, `HASSELBLAD` Hasselblad and `Canon` Canon, and any
+  other text gives `None`. `Make` has a `name` that `Display` writes,
+  spelled as each maker writes its own name, and orders as its variants
+  are listed. `make()` is read from the recorded Make each time it is
+  asked for, with no setter of its own. So a program's tests set the
+  recorded text with `with_recorded_make`.
 - `Camera::model` gives the name the maker sells the body under, without
-  the brand, spelled as the maker writes it, such as `Z6III` for a file
-  whose Model is `NIKON Z6_3` and `α7 II` for `ILCE-7M2`. It comes from
-  raw-files' table of the bodies the notes on camera names list with
-  their evidence: the Nikon D600, Z 9, Z 6, Z 30, Z f, Z fc, Z50II, Z5II
-  and Z6III, and the Sony α1, α1 II, α6000, α6700, α7 II, α7 III, α7 IV,
-  α7 V, α7R II, α7R III, α7S, α7S III, α9 and α9 III. Any other body
-  gives `None`, never the recorded text, which `recorded_model` still
-  gives. `model()` is read from the recorded make and Model each time it
-  is asked for, with no setter of its own.
+  the brand, spelled as the maker writes it. A file whose Model is
+  `NIKON Z6_3` gives `Z6III`, and one whose Model is `ILCE-7M2` gives
+  `α7 II`. It comes from raw-files' table of the bodies the notes on
+  camera names list with their evidence. They are the Nikon D600, Z 9,
+  Z 6, Z 30, Z f, Z fc, Z50II, Z5II and Z6III, and the Sony α1, α1 II,
+  α6000, α6700, α7 II, α7 III, α7 IV, α7 V, α7R II, α7R III, α7S,
+  α7S III, α9 and α9 III. Any other body gives `None`, never the
+  recorded text, which `recorded_model` still gives. `model()` is read
+  from the recorded make and Model each time it is asked for, with no
+  setter of its own.
 
 ### Changed
 
-- `Metadata::lens` gives a `&Lens`, as `Metadata::exposure` gives a
-  `&Exposure`, instead of an `Option<&Lens>`. A file that describes no
-  lens gives a lens whose every value is `None`, as `Lens::default()`
-  is, so 0.6.0's `metadata.lens().and_then(|lens| lens.model())` is
-  `metadata.lens().recorded_model()` now, and an `if let Some(lens)` on
-  it fails to compile rather than change meaning. A program that asked
+- **Breaking:** `Metadata::lens` gives a `&Lens`, as
+  `Metadata::exposure` gives a `&Exposure`, instead of an
+  `Option<&Lens>`. A file that describes no lens gives a lens whose
+  every value is `None`, as `Lens::default()` is. So 0.6.0's
+  `metadata.lens().and_then(|lens| lens.model())` is
+  `metadata.lens().recorded_model()` now. An `if let Some(lens)` on it
+  fails to compile rather than change meaning. A program that asked
   whether the file describes a lens at all, with 0.6.0's
   `metadata.lens().is_some()`, compares with the empty lens:
   `*metadata.lens() != Lens::default()`.
-- `Lens` is built as `Exposure` is, from the empty `Lens::default()`
-  through `with_recorded_make`, `with_recorded_model`,
-  `with_serial_number`, `with_min_focal_length`, `with_max_focal_length`,
-  `with_f_number_at_min_focal_length` and
-  `with_f_number_at_max_focal_length`, each storing its value as given.
-- `Metadata::make`, `Metadata::model` and `Metadata::serial_number` move
-  to a `Camera`, which `Metadata::camera` gives as `Metadata::lens` gives
-  a `Lens`: they are `Camera::recorded_make`, `Camera::recorded_model`
-  and `Camera::serial_number` there. The first two give the text as the
-  file records it, cleaned as before, so 0.6.0's `metadata.model()` is
+- **Breaking:** `Metadata::make`, `Metadata::model` and
+  `Metadata::serial_number` move to a `Camera`, which
+  `Metadata::camera` gives as `Metadata::lens` gives a `Lens`. They are
+  `Camera::recorded_make`, `Camera::recorded_model` and
+  `Camera::serial_number` there. The first two give the text as the
+  file records it, cleaned as before. So 0.6.0's `metadata.model()` is
   `metadata.camera().recorded_model()` now. A program's tests build a
   camera from `Camera::default()` through `with_recorded_make`,
-  `with_recorded_model` and `with_serial_number` and set it with
+  `with_recorded_model` and `with_serial_number`. They set it with
   `Metadata::with_camera`, in place of 0.6.0's `Metadata::with_make`,
   `Metadata::with_model` and `Metadata::with_serial_number`.
-- `FocusLayout::model` is `FocusLayout::recorded_model`: its text is the
-  Model as the file records it, such as `NIKON D600`, as
-  `Camera::recorded_model` gives it.
-- `Lens::make` and `Lens::model` are `Lens::recorded_make` and
-  `Lens::recorded_model`, with their setters `with_recorded_make` and
-  `with_recorded_model`: they give the text as the file records it, as
-  `Camera`'s do, and leave the plain words for the lens's name that a
-  table of lenses is to give. 0.6.0's `lens.model()` is
-  `lens.recorded_model()`.
-- Nikon files name the DSLR area-mode code 9 under phase detection,
-  through the viewfinder, as `FocusAreaMode::Tracking`: D600 frames shot
-  in 3D-tracking write it. `FocusPoints::area_mode` gave `None` for such
-  a file before.
+- **Breaking:** `FocusLayout::model` is `FocusLayout::recorded_model`.
+  Its text is the Model as the file records it, such as `NIKON D600`,
+  as `Camera::recorded_model` gives it.
+- **Breaking:** `Lens::make` and `Lens::model` are
+  `Lens::recorded_make` and `Lens::recorded_model`, with their setters
+  `with_recorded_make` and `with_recorded_model`. They give the text as
+  the file records it, as `Camera`'s do. They leave the plain words for
+  the lens's name that a table of lenses is to give. 0.6.0's
+  `lens.model()` is `lens.recorded_model()`.
+- `Lens` is built as `Exposure` is, from the empty `Lens::default()`
+  through `with_…` methods, each storing its value as given. They are
+  `with_recorded_make`, `with_recorded_model`, `with_serial_number`,
+  `with_min_focal_length`, `with_max_focal_length`,
+  `with_f_number_at_min_focal_length` and
+  `with_f_number_at_max_focal_length`.
+- Nikon files name the DSLR area-mode code 9, under phase detection,
+  through the viewfinder, as `FocusAreaMode::Tracking`. D600 frames
+  shot in 3D-tracking write it. `FocusPoints::area_mode` gave `None`
+  for such a file before.
 
 ### Removed
 
-- `LensBuilder` and `Lens::builder`: a program's tests start from
-  `Lens::default()` and write `.with_recorded_model(…)` for `.model(…)`,
-  and so on for every value, with no `build()` call and no `?` after it.
+- **Breaking:** `LensBuilder` and `Lens::builder` are gone. A program's
+  tests start from `Lens::default()` and write
+  `.with_recorded_model(…)` for `.model(…)`, and so on for every value,
+  with no `build()` call and no `?` after it.
 
 ### Fixed
 
 - A Nikon D600 JPEG at the Medium size, 4512x3008, shot through the
   viewfinder ([#62](https://github.com/kuolas/raw-files/issues/62)),
-  gives the autofocus points it names, placed from the
-  D600's table, where it gave none: its picture is not the whole
-  6016x4016 frame scaled, but the 6010x4006 window centered in it, which
-  the table now holds for that size, as measured on RAW+JPEG pairs. The
-  frame of `Metadata::focus` and `Metadata::focus_points` is that
-  window, 6010x4006, every center moved back by its origin, (3, 5), so
-  that a point scaled from that frame onto the JPEG lands where the
-  camera's picture shows it; the NEF of the same shot
-  still gives the 6016x4016 frame, and `Metadata::focus_layout` stays
-  in it, as on a crop. A DX JPEG at a smaller size still gives none.
+  gives the autofocus points it names, where it gave none. They are
+  placed from the D600's table. Its picture is not the whole 6016x4016
+  frame scaled, but the 6010x4006 window centered in it. The table now
+  holds that window for that size, as measured on RAW+JPEG pairs.
+  The frame of `Metadata::focus` and `Metadata::focus_points` is that
+  window, 6010x4006, every center moved back by its origin, (3, 5). So
+  a point scaled from that frame onto the JPEG lands where the camera's
+  picture shows it. The NEF of the same shot still gives the 6016x4016
+  frame, and `Metadata::focus_layout` stays in it, as on a crop. A DX
+  JPEG at a smaller size still gives none.
   An export of a D600 JPEG cut or scaled to exactly 4512x3008 is read
-  as a Medium JPEG, its points placed in the window, by far misplaced
-  on a cut; an export scaled from a Medium JPEG to another size gives
-  none, unless it is small enough, about 750 pixels tall or less, for
-  the whole frame to pass the shape rule, when its point is placed in
-  the whole frame, off by under a pixel.
+  as a Medium JPEG, its points placed in the window. On a cut, they are
+  by far misplaced. An export scaled from a Medium JPEG to another size
+  gives none. The exception is one about 750 pixels tall or less, small
+  enough for the whole frame to pass the shape rule. Its point is
+  placed in the whole frame, off by under a pixel.
 
 ## [0.6.0] - 2026-10-29
 
-The sixth release: a DSLR's autofocus point, which a shot through the
-viewfinder names only by number, placed on the picture from raw-files'
-own table of the body's points, the Nikon D600's first; and the focus
-API at its full shape, with where a point came from, the points the
-camera used with the area mode, and the layout of the body's points.
-The API is also made more consistent before more is built on it, which
-changes some of 0.5.0's signatures: `Focus::new` takes the origin,
-`RawFile::preview_at_least` a `Size`, `Limits` names its setters
-`with_…` and reads its caps back, and `Preview::width` and
-`Preview::height` are gone (see Changed and Removed).
+The sixth release places on the picture a DSLR's autofocus point, which
+a shot through the viewfinder names only by number. It does so from
+raw-files' own table of the body's points, the Nikon D600's first. The
+focus API reaches its full shape: where a point came from, the points
+the camera used with the area mode, and the layout of the body's
+points.
+
+The API is also made more consistent before more is built on it. Four
+entries are marked **Breaking**, three under Changed and one under
+Removed. They change some of 0.5.0's signatures: `Focus::new` takes the
+origin, and `RawFile::preview_at_least` a `Size`. `Limits` names its
+setters `with_…` and reads its caps back, and `Preview::width` and
+`Preview::height` are gone. The
+[API docs of 0.6.0](https://docs.rs/raw-files/0.6.0/raw_files/) hold
+the rules of each item named below.
 
 ### Added
 
-- `Focus::origin` says where a focus point came from, as a `FocusOrigin`:
-  `Recorded`, a position the camera measured and wrote, or `Table`, a
-  point the camera named by number that raw-files placed from its table
-  of the body's autofocus points.
-  `Focus::new` takes it (see Changed) and `Focus::scaled_to` keeps it;
-  `FocusOrigin` has a `name` that `Display` writes, "Recorded" and
-  "Placed from a table", and orders as its variants are listed.
+- `Focus::origin` says where a focus point came from, as a
+  `FocusOrigin`. `Recorded` is a position the camera measured and
+  wrote. `Table` is a point the camera named by number that raw-files
+  placed from its table of the body's autofocus points. `Focus::new`
+  takes it (see Changed) and `Focus::scaled_to` keeps it. `FocusOrigin`
+  has a `name` that `Display` writes, "Recorded" and "Placed from a
+  table", and orders as its variants are listed.
 - `Metadata::focus_points` gives the autofocus points the camera used,
-  as a `FocusPoints`: every point in one frame, each a `FocusPoint` with
-  its number when the file gives one, its center, its area when recorded
-  and whether focus was confirmed when the file says; which of them is
-  the primary, which `Metadata::focus` gives as a `Focus` and
-  `FocusPoints::primary_index` by its place in the list; the area mode,
-  a `FocusAreaMode`, "Single point", "Dynamic area", "Auto area" or
-  "Tracking", with a `name` that `Display` writes, ordered as its
-  variants are listed; and where the points came from.
-  `FocusPoints::scaled_to` places every point on a preview as
-  `Focus::scaled_to` places one. A program's tests build a list with
-  `FocusPoints::new`, `with_point`, `with_primary_index` and
-  `with_area_mode`, each point with `FocusPoint::new` and its
-  `with_number`, `with_size` and `with_in_focus`, or a list of one point
-  from a `Focus` with `From`, and set it with
-  `Metadata::with_focus_points`; `Metadata::with_focus` sets a list of
-  that one point.
+  as a `FocusPoints`. It holds every point in one frame, each a
+  `FocusPoint` with its number when the file gives one, its center, its
+  area when recorded and whether focus was confirmed when the file says.
+  It says which of them is the primary, which `Metadata::focus` gives as
+  a `Focus` and `FocusPoints::primary_index` by its place in the list.
+  It gives the area mode, a `FocusAreaMode`: "Single point", "Dynamic
+  area", "Auto area" or "Tracking", with a `name` that `Display` writes,
+  ordered as its variants are listed. And it says where the points came
+  from. `FocusPoints::scaled_to` places every point on a preview as
+  `Focus::scaled_to` places one.
+  A program's tests build a list with `FocusPoints::new`, `with_point`,
+  `with_primary_index` and `with_area_mode`, each point with
+  `FocusPoint::new` and its `with_number`, `with_size` and
+  `with_in_focus`. A list of one point comes from a `Focus` with
+  `From`. `Metadata::with_focus_points` sets a list, and
+  `Metadata::with_focus` sets a list of that one point.
 - NEF, ARW and JPEG files give the position the camera recorded as a
   list of one point, the primary, with no number. Nikon files give the
-  area mode from AFInfo2's area-mode byte, on every version read, for
-  the codes that frames shot in a known mode confirmed, under the
-  detection method the file records: the DSLR codes 0 single point, 5
-  dynamic area and 8 auto area under phase detection, through the
-  viewfinder; the mirrorless codes 193 single point and 197 auto area
-  under any detection method, and 207 tracking under contrast or hybrid
-  detection. Any other code, or a DSLR code in live view, gives `None`.
-  Sony files give no area mode.
+  area mode from AFInfo2's area-mode byte, on every version read. They
+  give it for the codes that frames shot in a known mode confirmed,
+  under the detection method the file records. The DSLR codes are 0
+  single point, 5 dynamic area and 8 auto area, under phase detection,
+  through the viewfinder. The mirrorless codes are 193 single point and
+  197 auto area, under any detection method, and 207 tracking, under
+  contrast or hybrid detection. Any other code, or a DSLR code in live
+  view, gives `None`. Sony files give no area mode.
 - `Metadata::focus_layout` gives the layout of the body's autofocus
-  points, as a `FocusLayout`: the Model it is for, the frame its points
-  are measured in, the body's full-size output, and every point, each a
-  `FocusLayoutPoint` with the camera's number for it, the center of its
-  box and the box's size; `FocusLayout::point` finds a point by its
-  number, so that a viewer can draw the grid and mark on it the points
-  the camera used. `FocusLayout::new` builds one from a `static` array
-  of points, which `FocusLayoutPoint::new` can fill since it is `const`,
-  and refuses a frame with a zero side, no points, a number of 0, one
-  given twice or points out of rising number order, and a point whose
-  center or box does not lie on the frame by the rules of `Focus::new`
-  and `Focus::with_size`; a program's tests set it with
-  `Metadata::with_focus_layout`. The readers give a
-  layout only from a table of the body's points, and `None` for a body
-  whose table is not in raw-files.
+  points, as a `FocusLayout`. A viewer can draw the grid from it, and
+  mark on it the points the camera used. It holds the Model it is for,
+  the frame its points are measured in, the body's full-size output, and
+  every point. Each point is a `FocusLayoutPoint` with the camera's
+  number for it, the center of its box and the box's size.
+  `FocusLayout::point` finds a point by its number. `FocusLayout::new`
+  builds one from a `static` array of points, which
+  `FocusLayoutPoint::new` can fill since it is `const`. The docs of
+  `FocusLayout::new` list what it refuses. A program's tests set it with
+  `Metadata::with_focus_layout`. The readers give a layout only from a
+  table of the body's points, and `None` for a body whose table is not
+  in raw-files.
 - NEF and JPEG files of the Nikon D600 give its layout of 39 autofocus
-  points (`Metadata::focus_layout`), whatever the shot: through the
-  viewfinder, in live view, in manual focus or on a crop. The layout
-  depends on the Model alone, so a file whose MakerNote is missing or
-  cannot be read, such as an editor's re-save, gives it too. The table was
-  measured by the project on frames shot with a D600 and read in Nikon's
-  NX Studio, as the NEF notes record it.
+  points (`Metadata::focus_layout`), whatever the shot. That holds
+  through the viewfinder, in live view, in manual focus or on a crop.
+  The layout depends on the Model alone. So a file whose MakerNote is
+  missing or cannot be read, such as an editor's re-save, gives it too.
+  The table was measured by the project on frames shot with a D600 and
+  read in Nikon's NX Studio, as the NEF notes record it.
 - NEF and JPEG files of the Nikon D600 shot through the viewfinder give
   the autofocus point the camera names by number, placed from that
   table. `Metadata::focus` gives the point's center and its box of
-  164x164 in the 6016x4016 frame, with the origin `Table` and nothing
-  said of whether focus was confirmed; `Metadata::focus_points` gives
-  every point the file's record of the points used, one bit per point,
-  names, and the primary, each with its number, in number order, with
-  the area mode: single point, dynamic area or auto area. On the DX crop
-  the points are placed in the crop's window, 3936x2624, the size of the
-  NEF's full-size preview and of its JPEG; a crop-mode JPEG at a smaller
-  size gives none.
-  A Medium JPEG, 4512x3008, gives none either: its shape, exactly 3:2,
+  164x164 in the 6016x4016 frame. Its origin is `Table`, and nothing is
+  said of whether focus was confirmed. `Metadata::focus_points` gives
+  every point that the file's record of the points used names, one bit
+  per point, and the primary. Each comes with its number, in number
+  order, with the area mode: single point, dynamic area or auto area.
+  On the DX crop the points are placed in the crop's window, 3936x2624,
+  the size of the NEF's full-size preview and of its JPEG. A crop-mode
+  JPEG at a smaller size gives none.
+  A Medium JPEG, 4512x3008, gives none either. Its shape, exactly 3:2,
   is further from the 6016x4016 frame than the one pixel of rounding by
-  which a JPEG's point must fit its picture; a Small JPEG, 3008x2008,
+  which a JPEG's point must fit its picture. A Small JPEG, 3008x2008,
   half the frame, keeps its point. A shot through the viewfinder of any
   other body gives no focus point, since raw-files has no table of its
   points.
 
 ### Changed
 
-- `Focus::new` takes where the point came from, a `FocusOrigin`, as its
-  third argument, so that every focus value says where it came from
-  when it is built. A program that built a focus with 0.5.0's
-  `Focus::new(frame, center)` writes
+- **Breaking:** `Focus::new` takes where the point came from, a
+  `FocusOrigin`, as its third argument. So every focus value says where
+  it came from when it is built. A program that built a focus with
+  0.5.0's `Focus::new(frame, center)` writes
   `Focus::new(frame, center, FocusOrigin::Recorded)` for the same
   value.
-- `RawFile::preview_at_least` takes the box as a `Size`, as
-  `Focus::scaled_to` takes a frame, so that a size has one form across
-  the API: `preview_at_least(Size { width: 1024, height: 768 })` for
-  0.5.0's `preview_at_least(1024, 768)`.
-- The setters of `Limits` are named after the cap they set, as every
-  `with_…` method is: `with_max_ifds`, `with_max_ifd_entries`,
-  `with_max_ifd_depth` and `with_max_preview_bytes`. The names they had,
-  `max_ifds`, `max_ifd_entries`, `max_ifd_depth` and
-  `max_preview_bytes`, now read each cap back and take no argument, so
-  0.5.0's `Limits::default().max_ifds(64)`, which is
+- **Breaking:** `RawFile::preview_at_least` takes the box as a `Size`,
+  as `Focus::scaled_to` takes a frame, so that a size has one form
+  across the API. 0.5.0's `preview_at_least(1024, 768)` is
+  `preview_at_least(Size { width: 1024, height: 768 })`.
+- **Breaking:** the setters of `Limits` are named after the cap they
+  set, as every `with_…` method is: `with_max_ifds`,
+  `with_max_ifd_entries`, `with_max_ifd_depth` and
+  `with_max_preview_bytes`. The names they had, `max_ifds`,
+  `max_ifd_entries`, `max_ifd_depth` and `max_preview_bytes`, now read
+  each cap back and take no argument. So 0.5.0's
+  `Limits::default().max_ifds(64)`, which is
   `Limits::default().with_max_ifds(64)` now, fails to compile rather
   than set nothing.
 
 ### Removed
 
-- `Preview::width` and `Preview::height`: `Preview::size` gives both,
-  as `preview.size().width` and `preview.size().height`.
+- **Breaking:** `Preview::width` and `Preview::height` are gone.
+  `Preview::size` gives both, as `preview.size().width` and
+  `preview.size().height`.
 
 ## [0.5.0] - 2026-10-26
 
