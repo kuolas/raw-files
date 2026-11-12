@@ -117,6 +117,10 @@
 //! counts are printed for the reader of the output to judge, since what a
 //! folder's cameras record varies: a body that writes no serial number, or
 //! no sub-seconds, is not a failure of the library.
+//!
+//! Its unit tests, of the whole-JPEG check and of the metadata, settings
+//! and focus tallies, run with every `cargo test`, since they need no folder
+//! of files.
 
 use std::cell::Cell;
 use std::collections::{BTreeMap, BTreeSet, HashMap};

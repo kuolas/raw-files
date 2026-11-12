@@ -9,7 +9,8 @@
 //! readers here read the layouts raw-files knows, and are shared by every
 //! format whose files carry them: NEF and ARW files, and JPEG files, whose
 //! Exif segment holds the same MakerNote. The JPEG reader reads both,
-//! Nikon's and Sony's, each by IFD0's Make.
+//! Nikon's and Sony's, each by IFD0's Make. A reader here never depends
+//! on a format's folder.
 //!
 //! - [`nikon`] reads Nikon's MakerNote: its small preview JPEG, the visible
 //!   image size, the focus point, the camera settings that only it
