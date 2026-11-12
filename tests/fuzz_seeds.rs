@@ -1,57 +1,35 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! The seeds of the `open` and `jpeg_segments` fuzz targets: the
-//! integration tests' fixtures of the RAW formats, committed as files in
-//! `fuzz/seeds/open/`, and their JPEG files, committed as files in
-//! `fuzz/seeds/jpeg_segments/`.
+//! The seeds of the `open` and `jpeg_segments` fuzz targets, written from
+//! the integration tests' fixtures: the RAW files into `fuzz/seeds/open/`,
+//! the JPEG files into `fuzz/seeds/jpeg_segments/`.
 //!
 //! A fuzzer reaches the Nikon or Sony reader only by building a layout that
-//! the format detection accepts, which it does by luck. So the `open`
-//! target starts from files laid out like the NEF of a Nikon Z 9, of a
-//! Z6III on a 1:1 crop, whose MakerNote records the crop, of a D300,
-//! whose MakerNote records what the Z 9's standard tags hold, and of a
-//! D1H, whose MakerNote, of the headerless layout, holds its only JPEG,
-//! and one like each generation of Sony's family, in both byte orders;
-//! and from real files committed in `tests/fixtures/` with their pixels
-//! and personal fields removed, copied as they are: two shots of my own
-//! Z 9 in DX and 1:1 crop modes, in their own little-endian byte order,
-//! and three frames of the session on which my own D600's autofocus
-//! points were measured, in their own big-endian byte order: frame 4, a
-//! single point far from the center, frame 42, auto-area, whose
-//! AFInfo2 marks 12 points used, and frame 49, a single point in the DX
-//! crop.
+//! the format detection accepts, which it does by luck. Likewise, it builds
+//! an Exif segment that holds a TIFF structure, an MPF segment that holds
+//! an index, or a maker's MakerNote only by luck. So each target starts
+//! from files that hold them:
 //!
-//! Likewise, a fuzzer builds an Exif segment that holds a TIFF structure,
-//! or an MPF segment that holds an index, only by luck. So the
-//! `jpeg_segments` target starts from JPEG files: one with no Exif segment,
-//! one whose Exif segment holds IFD0 and IFD1's thumbnail, a camera's with
-//! every value the metadata reads in its Exif segment and an MPF index of
-//! the images after its main one, the same camera layout with a JFIF
-//! segment first, one with zeros after its end, five Nikon cameras' JPEGs,
-//! whose Exif segment holds a Nikon MakerNote, which a fuzzer would build
-//! by luck alone too: a Z 9's in FX and on a 1:1 crop, a D5300's, a D70's
-//! and one laid out as a D1H's would be, whose MakerNote is of the
-//! headerless layout, its offsets counted from the segment's TIFF header;
-//! and three Sony cameras' JPEGs, whose Exif segment holds a Sony
-//! MakerNote after its `SONY DSC` header: an ILCE-7M3's and an ILCE-7M4's,
-//! whose MakerNote records a focus point, and a DSLR-A100's, with no MPF
-//! index; the Exif segment's TIFF structure and the MPF index in both
-//! byte orders. And from the four real JPEGs committed in
-//! `tests/fixtures/`, with their images replaced by stubs and their
-//! personal fields zeroed, copied as they are: shots of my own Z 9 in
-//! FX and in DX and 16:9 crop modes, the camera's own Exif segment in
-//! its little-endian byte order, and frame 4 of the D600 session, the
-//! camera's own Exif segment in its big-endian byte order, with a
-//! MakerNote that names its point by number and holds a preview. The
-//! `open` target takes these seeds too, as JPEG files are something it
+//! - files built in code: for `open`, the NEF layouts of
+//!   `tests/support/nef.rs` and the files of each generation of Sony's
+//!   family of `tests/support/arw.rs`; for `jpeg_segments`, the JPEG files
+//!   of `tests/support/jpeg_files.rs`, all but the RX100 IV's and the
+//!   ILCE-6000's. Each is in both byte orders, but the two JPEG files with
+//!   neither a TIFF structure nor an MPF index;
+//! - real files committed in `tests/fixtures/`, which its README lists,
+//!   copied as they are, in their own byte order: for `open`, the Z 9's
+//!   two NEF files and frames 4, 42 and 49 of the D600 session; for
+//!   `jpeg_segments`, the Z 9's three JPEG files and frame 4's JPEG.
+//!
+//! [`open_seeds`] and [`jpeg_segments_seeds`] list them. The `open` target
+//! takes the `jpeg_segments` seeds too, as JPEG files are something it
 //! must open, and reaches the Nikon and Sony MakerNote readers through
 //! them.
 //!
 //! The fixtures live in `tests/`, outside the library, so this test writes
 //! and checks the seed files, as the unit tests of the TIFF reader do for
-//! theirs. [`open_seeds`] and [`jpeg_segments_seeds`] list them; the
-//! ignored test `write_fuzz_seeds` regenerates the files after a fixture
-//! changes, and `the_open_fuzz_seeds_match_the_fixtures` and
+//! theirs. The ignored test `write_fuzz_seeds` regenerates the files after
+//! a fixture changes, and `the_open_fuzz_seeds_match_the_fixtures` and
 //! `the_jpeg_segments_fuzz_seeds_match_the_fixtures` fail when a file is
 //! missing or has gone stale.
 

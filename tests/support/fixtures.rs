@@ -1,17 +1,8 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 //! Where the integration tests find the files committed in
-//! `tests/fixtures/`: two NEF files from my own Z 9, in DX and 1:1
-//! crop modes, with their pixels and personal fields removed and
-//! their structure and values kept; three JPEG files from the
-//! same camera, in FX and in DX and 16:9 crop modes, with their
-//! images replaced by stubs and their personal fields zeroed and
-//! their Exif segment kept as the camera wrote it; and the 56 NEF
-//! files of the session on which the autofocus points of my own D600
-//! were measured, stripped as the Z 9's are, with the JPEG of frame 4,
-//! stripped as the Z 9's JPEGs are, in `nikon-d600/`; and a NEF file and
-//! two JPEG files of my D600 at its smaller JPEG sizes, stripped the same
-//! ways, in `nikon-d600-jpeg-sizes/`; as `tests/fixtures/README.md` says.
+//! `tests/fixtures/`: real files of my own Z 9 and D600, stripped of their
+//! pixels and personal fields, which `tests/fixtures/README.md` lists.
 //! Unlike the downloaded samples, they are in the repository, so a test
 //! never skips one: a missing fixture is a failure.
 

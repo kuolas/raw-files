@@ -51,7 +51,8 @@ Each file is the camera's file with its pixels and personal fields
 removed, and its structure and the values the reader reads kept as the
 camera wrote them.
 
-- **Kept:** the TIFF header and IFD0 (Make, Model, Orientation, Software,
+- **Kept:** the TIFF header, in the camera's little-endian byte order,
+  and IFD0 (Make, Model, Orientation, Software,
   DateTime, the pointers to the SubIFDs and the Exif IFD, and the small
   tags); the six SubIFDs with their tags; from the Exif IFD, the
   exposure, the capture times with their fractions of a second and
@@ -89,7 +90,8 @@ every IFD, value and offset where the camera put them, so that the reader
 walks the camera's own layout; its images are replaced and its personal
 fields zeroed in place. Each is 69,998 bytes.
 
-- **Kept:** the start of the image (SOI); the Exif segment: IFD0 (Make,
+- **Kept:** the start of the image (SOI); the Exif segment, in the
+  camera's little-endian byte order: IFD0 (Make,
   Model, Orientation, Software, DateTime, the resolution tags and the
   pointers to the Exif and GPS IFDs), the Exif IFD (the exposure, the
   capture times with their fractions of a second and offsets from UTC,

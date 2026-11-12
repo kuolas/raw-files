@@ -8,57 +8,28 @@
 //! the TIFF reader hold the walk to that; the tests here hold everything
 //! that opening a file runs after it to the same rule: the detection of
 //! the format, the preview finder, and the metadata reader, whose values
-//! come from tags all over the file. They damage the fixtures that carry
-//! every metadata tag the readers read: a Nikon Z 9's NEF (with its
-//! MakerNote, which records the focus point, in the file's byte order and
-//! in the other), a Nikon Z6III's NEF on a 1:1 crop, whose MakerNote's
-//! CropHiSpeed and CropArea place the focus point on the cropped picture, a
-//! Nikon D300's NEF, whose MakerNote records the serial number, the lens's
-//! range and the clock's time zone that its standard tags lack, a Nikon
-//! D1H's NEF, whose MakerNote, of the headerless layout, its offsets
-//! counted from the start of the file, records the ISO and the lens's
-//! range and holds the file's only JPEG, and an ILCE-7M4's ARW 4, with its
-//! MakerNote, which records the focus point, each in both byte orders.
-//! They damage ten real files too, committed with their pixels and
-//! personal fields removed or zeroed: two NEF shots of my own Z 9 in DX
-//! and 1:1 crop modes, and three JPEG shots of the same camera in FX and
-//! in DX and 16:9 crop modes, the last in portrait orientation, whose
-//! Exif segment is the camera's own; they hold the camera's own layout of
-//! tags, in little-endian byte order, where the fixtures only imitate
-//! it; and frame 4 of the session on which my own D600's autofocus
-//! points were measured, a NEF shot through the viewfinder whose
-//! MakerNote names its point by number, and the camera's JPEG of the
-//! same shot, whose MakerNote holds a preview, both in the camera's own
-//! big-endian layout; and frame 7856 of my own D600, its NEF and its
-//! Medium JPEG, whose points the reader places in the window of the frame
-//! that the D600's table keeps for that size, and frame 7858's Small
-//! JPEG. The other 55 frames of that session share the NEF's layout, so
-//! one stands for them all and keeps the sweeps short.
-//! And they damage the JPEG files the JPEG reader's tests open, whose
-//! segments the walk reads before the Exif segment's TIFF structure and
-//! the MPF index: one with no Exif segment, one with zeros after its end,
-//! one whose Exif segment holds IFD0 and IFD1's thumbnail, a camera's, whose Exif segment holds every value the
-//! metadata reads and whose MPF index lists two images after its main
-//! one, a camera's with a JFIF segment first, whose Exif segment holds
-//! only IFD0's orientation and IFD1's thumbnail, and five Nikon cameras'
-//! JPEGs, whose Exif segment holds a Nikon MakerNote: a Z 9's, whose
-//! MakerNote records its focus point, one of a Z 9's on a 1:1 crop, whose
-//! point is placed on the JPEG's pixels, a D5300's, whose MakerNote
-//! records the serial number, the lens's range and the clock's time zone
-//! that its Exif segment lacks, a D70's, whose MakerNote, in the other
-//! byte order from its Exif segment's, records the ISO and holds a
-//! preview, and one laid out as a D1H's would be, whose MakerNote, of the
-//! headerless layout, its offsets counted from the segment's TIFF header,
-//! records the ISO and the lens's range and holds a preview;
-//! and three Sony cameras' JPEGs, whose Exif segment holds a Sony
-//! MakerNote after its `SONY DSC` header, its offsets counted from the
-//! segment's TIFF header: an ILCE-7M3's, whose MakerNote records its focus
-//! point, an ILCE-7M4's, whose MakerNote records the focus area's size too,
-//! and a DSLR-A100's, with no MPF index, whose MakerNote holds tags of an
-//! older layout and no focus point; those with a TIFF structure or an MPF
-//! index in both byte orders. They
-//! cut each file at every length, and overwrite each byte in turn with
-//! 0x00, 0xFF and its complement.
+//! come from tags all over the file.
+//!
+//! They damage three kinds of file:
+//!
+//! - files built in code that carry every metadata tag the readers read,
+//!   each in both byte orders: the NEF layouts of a Nikon Z 9, a Z6III on
+//!   a 1:1 crop, a D300 and a D1H, from `tests/support/nef.rs`, the Z 9's
+//!   also with its MakerNote in the other byte order from the file's; and
+//!   an ILCE-7M4's ARW 4, from `tests/support/arw.rs`;
+//! - thirteen of the JPEG layouts of `tests/support/jpeg_files.rs`, the
+//!   eleven with a TIFF structure or an MPF index in both byte orders.
+//!   Every Nikon and Sony camera's JPEG of that file is among them, but
+//!   the RX100 IV's and the ILCE-6000's;
+//! - ten of the real files committed in `tests/fixtures/`, which its
+//!   README lists: the Z 9's two NEF files and three JPEG files, frame 4
+//!   of the D600 session and its JPEG, and the three files of the
+//!   D600's JPEG sizes. They hold a camera's own layout of tags, where
+//!   the built files only imitate it. Frame 4 stands for the session's
+//!   other frames, which share its layout, and keeps the sweeps short.
+//!
+//! They cut each file at every length, and overwrite each byte in turn
+//! with 0x00, 0xFF and its complement.
 //!
 //! Each damaged file is opened as a caller would open it, with
 //! [`RawFile::from_bytes`], which reads through the same source and block
