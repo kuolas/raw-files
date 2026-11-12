@@ -185,18 +185,21 @@ Everyone taking part is expected to follow the
 
 ## Documentation
 
-- [API documentation](https://docs.rs/raw-files) — how to use the
-  library, with examples and the guarantees.
-- [CONTRIBUTING.md](CONTRIBUTING.md) — how to build, test and send a change.
-- [docs/ROADMAP.md](docs/ROADMAP.md) — what raw-files aims for,
-  what it reads so far, and what comes next.
-- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — how the code is structured.
-- [docs/architecture-decisions/](docs/architecture-decisions/README.md) — why
-  things are the way they are.
-- [docs/formats/sample-files.md](docs/formats/sample-files.md) — how a
-  sample file comes in, where its expected values come from, and how to
-  check one.
-- [CHANGELOG.md](CHANGELOG.md) — user-visible changes.
+- **To use the library:** the [API documentation](https://docs.rs/raw-files),
+  with examples and the guarantees.
+- **To change it:**
+  - [CONTRIBUTING.md](CONTRIBUTING.md): how to build, test and send a
+    change;
+  - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md): which file holds what;
+  - the [decision records](docs/architecture-decisions/README.md): why
+    the code has its shape.
+- **To know what a file holds:** the
+  [format notes](docs/formats/README.md) record what NEF, ARW and camera
+  JPEG files hold, and where each fact comes from.
+
+[docs/ROADMAP.md](docs/ROADMAP.md) says what raw-files aims for, what it
+reads so far, and what comes next. [CHANGELOG.md](CHANGELOG.md) lists the
+user-visible changes.
 
 ## Acknowledgments
 
