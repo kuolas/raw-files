@@ -200,7 +200,7 @@ use crate::camera_settings::{
     CameraSettings, ColorSpace, ExposureProgram, Flash, FlashMode, MeteringMode, WhiteBalance,
     WhiteBalanceMode,
 };
-use crate::container::tiff::tags::{COLOR_SPACE, DEFAULT_CROP_ORIGIN, DEFAULT_CROP_SIZE};
+use crate::container::tiff::tags::COLOR_SPACE;
 use crate::container::tiff::{Ifd, Rule, Text, Tree, skip_damage};
 use crate::datetime::DateTime;
 use crate::entries::clean_text;
@@ -220,7 +220,8 @@ use crate::rational::{Rational, SignedRational};
 /// The ISO's three tags and the raw size's two are read by their first
 /// value alone, whatever the count, a
 /// [`First`](crate::container::tiff::First) rule, of type SHORT, LONG or
-/// IFD, a LONG under another name.
+/// IFD, a LONG under another name. The default crop's two tags each have
+/// two rules, for the two forms the DNG specification allows them.
 mod rules {
     use crate::container::tiff::tags;
     use crate::container::tiff::{FieldType, First, Held, Rule, Text};
@@ -305,6 +306,13 @@ mod rules {
     // The IFD of the raw data.
     pub(super) const IMAGE_WIDTH: Rule<First<u32>> = Rule::new(tags::IMAGE_WIDTH, NUMBER);
     pub(super) const IMAGE_LENGTH: Rule<First<u32>> = Rule::new(tags::IMAGE_LENGTH, NUMBER);
+    pub(super) const DEFAULT_CROP_ORIGIN: Rule<[u32; 2]> =
+        Rule::new(tags::DEFAULT_CROP_ORIGIN, NUMBER);
+    pub(super) const DEFAULT_CROP_ORIGIN_FRACTIONS: Rule<[Rational; 2]> =
+        Rule::new(tags::DEFAULT_CROP_ORIGIN, RATIONAL);
+    pub(super) const DEFAULT_CROP_SIZE: Rule<[u32; 2]> = Rule::new(tags::DEFAULT_CROP_SIZE, NUMBER);
+    pub(super) const DEFAULT_CROP_SIZE_FRACTIONS: Rule<[Rational; 2]> =
+        Rule::new(tags::DEFAULT_CROP_SIZE, RATIONAL);
 }
 
 /// The longest text, in bytes as stored, that is taken for a value rather
@@ -1099,10 +1107,15 @@ fn raw_size<R: Read + Seek>(src: &mut Source<R>, ifd: &Ifd) -> Result<Option<Siz
 /// `Io` when the reader fails. A value that cannot be read for any other
 /// reason is missing.
 fn default_crop<R: Read + Seek>(src: &mut Source<R>, ifd: &Ifd, raw: Size) -> Result<Option<Size>> {
-    let Some([x, y]) = whole_pair(src, ifd, DEFAULT_CROP_ORIGIN)? else {
+    let origin = (
+        rules::DEFAULT_CROP_ORIGIN,
+        rules::DEFAULT_CROP_ORIGIN_FRACTIONS,
+    );
+    let Some([x, y]) = whole_pair(src, ifd, origin)? else {
         return Ok(None);
     };
-    let Some(size) = whole_pair(src, ifd, DEFAULT_CROP_SIZE)? else {
+    let size = (rules::DEFAULT_CROP_SIZE, rules::DEFAULT_CROP_SIZE_FRACTIONS);
+    let Some(size) = whole_pair(src, ifd, size)? else {
         return Ok(None);
     };
     Ok(crop([x, y], size, raw))
@@ -1123,11 +1136,13 @@ pub(crate) fn crop([x, y]: [u32; 2], [width, height]: [u32; 2], raw: Size) -> Op
     (inside(x, width, raw.width) && inside(y, height, raw.height)).then_some(Size { width, height })
 }
 
-/// The two whole numbers tag `tag` of `ifd` holds, in the forms the DNG
-/// specification allows its crop tags: integers of type SHORT or LONG, or
-/// IFD, which [`Ifd::u32s`] reads too, or fractions of type RATIONAL whose every
-/// denominator is 1. `None` when the tag is missing, cannot be read, holds
-/// a fraction with another denominator, or holds other than two values.
+/// The two whole numbers a tag of `ifd` holds, in the forms the DNG
+/// specification allows its crop tags, each with its rule: two integers
+/// of type SHORT or LONG, or IFD, a LONG under another name, by the first
+/// rule of `rules`; or two fractions of type RATIONAL whose every
+/// denominator is 1, by the second. `None` when the tag is missing, cannot
+/// be read, holds a fraction with another denominator, or holds other
+/// than two values, which is not read.
 ///
 /// # Errors
 ///
@@ -1136,20 +1151,18 @@ pub(crate) fn crop([x, y]: [u32; 2], [width, height]: [u32; 2], raw: Size) -> Op
 fn whole_pair<R: Read + Seek>(
     src: &mut Source<R>,
     ifd: &Ifd,
-    tag: u16,
+    (integers, fractions): (Rule<[u32; 2]>, Rule<[Rational; 2]>),
 ) -> Result<Option<[u32; 2]>> {
-    let values = match skip_damage(ifd.u32s(src, tag))?.flatten() {
-        Some(integers) => Some(integers),
-        None => skip_damage(ifd.rationals(src, tag))?
-            .flatten()
-            .and_then(|fractions| {
-                fractions
-                    .into_iter()
-                    .map(|(numerator, denominator)| (denominator == 1).then_some(numerator))
-                    .collect()
-            }),
+    if let Some(integers) = ifd.get(src, integers)? {
+        return Ok(Some(integers));
+    }
+    let Some([first, second]) = ifd.get(src, fractions)? else {
+        return Ok(None);
     };
-    Ok(values.and_then(|values: Vec<u32>| <[u32; 2]>::try_from(values).ok()))
+    let whole = |fraction: Rational| (fraction.denominator == 1).then_some(fraction.numerator);
+    Ok(whole(first)
+        .zip(whole(second))
+        .map(|(first, second)| [first, second]))
 }
 
 #[cfg(test)]
@@ -4431,6 +4444,58 @@ mod tests {
             let tree = walk(&mut src, &file_block, &Limits::default()).unwrap();
             let err = read(&mut src, &tree).expect_err("the read fails");
             assert_eq!(err.kind(), ErrorKind::Io, "{label}: {err:?}");
+        }
+    }
+
+    #[test]
+    fn a_default_crop_of_another_count_than_two_is_not_read() {
+        /// `values` as little-endian LONGs.
+        fn longs(values: &[u32]) -> Vec<u8> {
+            values.iter().flat_map(|v| v.to_le_bytes()).collect()
+        }
+        // Each of the default crop's tags of three values, as integers or
+        // as fractions, stored far away, where every read fails. Its count
+        // is checked before its values are read, so it gives no crop, and
+        // reading the metadata succeeds, with the raw size as the image
+        // size.
+        let cases = [
+            (DEFAULT_CROP_ORIGIN, LONG, longs(&[12, 8, 0])),
+            (DEFAULT_CROP_SIZE, LONG, longs(&[5976, 3984, 0])),
+            (DEFAULT_CROP_ORIGIN, RATIONAL, longs(&[12, 1, 8, 1, 0, 1])),
+            (
+                DEFAULT_CROP_SIZE,
+                RATIONAL,
+                longs(&[5976, 1, 3984, 1, 0, 1]),
+            ),
+        ];
+        let far = u32::try_from(2 * FAR).unwrap();
+        for (tag, typ, value) in cases {
+            let label = format!("{tag:#06X}, type {typ}");
+            let mut builder = TiffBuilder::new(Order::Little);
+            let ifd = builder.ifd();
+            builder
+                .short(ifd, PHOTOMETRIC_INTERPRETATION, &[CFA])
+                .long(ifd, IMAGE_WIDTH, &[RAW.width])
+                .long(ifd, IMAGE_LENGTH, &[RAW.height])
+                .blob_at(2 * FAR, &value);
+            builder.raw(ifd, tag, typ, 3, RawValue::Offset(far));
+            let other = if tag == DEFAULT_CROP_ORIGIN {
+                (DEFAULT_CROP_SIZE, [5976, 3984])
+            } else {
+                (DEFAULT_CROP_ORIGIN, [12, 8])
+            };
+            builder.short(ifd, other.0, &other.1);
+            let bytes = builder.build().bytes;
+            // A reader that does not fail gives the same.
+            let metadata = read_bytes(bytes.clone());
+            assert_eq!(metadata.image_size, Some(RAW), "{label}");
+
+            let mut src = Source::new(FailsFar(Cursor::new(bytes))).unwrap();
+            let file_block = Block::file(src.len());
+            let tree = walk(&mut src, &file_block, &Limits::default()).unwrap();
+            let read = read(&mut src, &tree).unwrap_or_else(|err| panic!("{label}: {err:?}"));
+            assert_eq!(read.metadata.raw_size, Some(RAW), "{label}");
+            assert_eq!(read.metadata.image_size, Some(RAW), "{label}");
         }
     }
 

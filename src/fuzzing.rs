@@ -51,9 +51,9 @@ pub fn tiff_walk(data: &[u8]) {
 /// whatever the tag and its type. First by rules, every shape of every
 /// element: any count, the first value alone, an exact count, and held in
 /// the entry; then text. Then through the accessors that read by tag
-/// number: unsigned numbers, all of them and the first alone; fractions;
-/// text, ASCII or UTF-8; and bytes. Each refuses the types it does not
-/// read, so every one is asked of every tag. Then this lists the tree's
+/// number: unsigned numbers, all of them and the first alone, and text,
+/// ASCII or UTF-8. Each refuses the types it does not read, so every one
+/// is asked of every tag. Then this lists the tree's
 /// entries, as opening a file does, and reads and formats each one's
 /// value under the default cap.
 fn read_values<R: Read + Seek>(src: &mut Source<R>, tree: &Tree) {
@@ -93,9 +93,7 @@ fn read_values<R: Read + Seek>(src: &mut Source<R>, tree: &Tree) {
 
             let _ = ifd.u32s(src, tag);
             let _ = ifd.u32(src, tag);
-            let _ = ifd.rationals(src, tag);
             let _ = ifd.text_bytes(src, tag);
-            let _ = ifd.bytes(src, tag);
         }
     }
     let cap = Limits::default().max_value_bytes();

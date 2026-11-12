@@ -406,20 +406,18 @@ impl Ifd {
     /// The entry of tag `tag` when it has a type its tag's rule allows, one
     /// of `types`; `None` when the tag is missing or has another type.
     ///
-    /// [`get`](Self::get) and [`held`](Self::held) find a rule's entry with
-    /// it, and a reader may check that a tag is there before it reads
-    /// another. The value accessors accept more types than a tag's rule may
-    /// allow: [`u32s`](Self::u32s) reads LONG and IFD as well as SHORT. The
-    /// entry's value, as every kept entry's, lies inside the IFD's block
-    /// and the file: for an IFD read by [`ifd_in`], such as a MakerNote's,
-    /// inside the block.
+    /// Every reader of a value finds its entry with it: [`get`](Self::get)
+    /// and [`held`](Self::held) by a rule's types, the accessors by their
+    /// own. The entry's value, as every kept entry's, lies inside the IFD's
+    /// block and the file: for an IFD read by [`ifd_in`], such as a
+    /// MakerNote's, inside the block.
     ///
     /// The entry is the tag's first occurrence, the one
     /// [`entry`](Self::entry) finds. When that one has another type, a
     /// later occurrence of an allowed type does not count: the lookups by
     /// tag always mean the first occurrence, and a value reader would read
     /// that one.
-    pub(crate) fn entry_of_type(&self, tag: u16, types: &[FieldType]) -> Option<&Entry> {
+    fn entry_of_type(&self, tag: u16, types: &[FieldType]) -> Option<&Entry> {
         self.entry(tag)
             .filter(|entry| types.contains(&entry.field_type()))
     }
@@ -482,26 +480,6 @@ impl Ifd {
         }
         let bytes = entry.read_first(src)?;
         Ok(u32::decode(entry.field_type, &bytes, self.order))
-    }
-
-    /// The fractions of tag `tag`, such as an exposure time of 10/3200 s,
-    /// when its type is RATIONAL; `None` when the tag is missing or has
-    /// another type.
-    ///
-    /// Each value is a `(numerator, denominator)` pair of unsigned 32-bit
-    /// numbers, numerator first, both in the IFD's byte order. The pairs
-    /// are returned as written: a denominator of 0 is kept, for the caller
-    /// to judge.
-    ///
-    /// # Errors
-    ///
-    /// As for [`u32s`](Self::u32s).
-    pub(crate) fn rationals<R: Read + Seek>(
-        &self,
-        src: &mut Source<R>,
-        tag: u16,
-    ) -> Result<Option<Vec<(u32, u32)>>> {
-        self.pairs(src, tag, FieldType::Rational)
     }
 
     /// The text of tag `tag`, when its type is ASCII; `None` when the tag is
@@ -567,47 +545,6 @@ impl Ifd {
             bytes.truncate(nul);
         }
         Ok(Some(bytes))
-    }
-
-    /// The bytes of tag `tag`, when its type is BYTE or UNDEFINED; `None`
-    /// when the tag is missing or has another type. ASCII and UTF-8 are not
-    /// included: [`text_bytes`](Self::text_bytes) reads text.
-    ///
-    /// # Errors
-    ///
-    /// As for [`u32s`](Self::u32s).
-    pub(crate) fn bytes<R: Read + Seek>(
-        &self,
-        src: &mut Source<R>,
-        tag: u16,
-    ) -> Result<Option<Vec<u8>>> {
-        Ok(self
-            .value(src, tag, &[FieldType::Byte, FieldType::Undefined])?
-            .map(|(_, bytes)| bytes))
-    }
-
-    /// The pairs of 32-bit numbers of tag `tag`, numerator first, both in
-    /// the IFD's byte order, when its type is `field_type`: what
-    /// [`rationals`](Self::rationals) reads. `None` when the tag is missing
-    /// or has another type.
-    fn pairs<R: Read + Seek>(
-        &self,
-        src: &mut Source<R>,
-        tag: u16,
-        field_type: FieldType,
-    ) -> Result<Option<Vec<(u32, u32)>>> {
-        let Some((_, bytes)) = self.value(src, tag, &[field_type])? else {
-            return Ok(None);
-        };
-        let order = self.order;
-        let (pairs, _) = bytes.as_chunks::<8>();
-        let values = pairs
-            .iter()
-            .map(|&[n0, n1, n2, n3, d0, d1, d2, d3]| {
-                (order.u32([n0, n1, n2, n3]), order.u32([d0, d1, d2, d3]))
-            })
-            .collect();
-        Ok(Some(values))
     }
 
     /// The value of the tag `rule` names, in the rule's shape, when its
@@ -915,27 +852,31 @@ mod tests {
             let mut builder = TiffBuilder::new(order);
             let id = builder.ifd();
             builder
-                .raw(id, 0x0001, UNDEFINED, 100, RawValue::Offset(at))
+                .raw(id, 0x0001, LONG, 25, RawValue::Offset(at))
                 .short(id, 0x0002, &[7, 8]);
             builder.pad_to(u64::from(at) + 100);
             let built = builder.build();
             let limits = |n| Limits::default().with_max_value_bytes(n);
+            let longs = rule::<Vec<u32>>(0x0001, &[FieldType::Long]);
 
             // At the cap, and with no cap, the value is read whole.
             for limits in [limits(100), Limits::unlimited()] {
                 let (mut src, ifd, _) = read_with(order, &built, id, &limits);
-                assert_eq!(ifd.bytes(&mut src, 0x0001).unwrap().unwrap().len(), 100);
+                assert_eq!(ifd.u32s(&mut src, 0x0001).unwrap().unwrap().len(), 25);
+                assert_eq!(ifd.get(&mut src, longs).unwrap().unwrap().len(), 25);
             }
-            // A byte under it, refused at the value; the entry is still kept.
+            // A byte under it, refused at the value, and no value by a rule;
+            // the entry is still kept.
             let (mut src, ifd, _) = read_with(order, &built, id, &limits(99));
             assert_eq!(ifd.invalid_entries(), 0, "{order:?}");
-            let err = ifd.bytes(&mut src, 0x0001).unwrap_err();
+            let err = ifd.u32s(&mut src, 0x0001).unwrap_err();
             assert_eq!(err.kind(), ErrorKind::LimitExceeded, "{err:?}");
             assert_eq!(err.offset(), Some(u64::from(at)), "{err:?}");
+            assert_eq!(ifd.get(&mut src, longs).unwrap(), None, "{order:?}");
             // A value held in its entry is read under any cap, zero included.
             let (mut src, ifd, _) = read_with(order, &built, id, &limits(0));
             assert_eq!(ifd.u32s(&mut src, 0x0002).unwrap(), Some(vec![7, 8]));
-            assert!(ifd.bytes(&mut src, 0x0001).is_err());
+            assert!(ifd.u32s(&mut src, 0x0001).is_err());
         }
     }
 
@@ -981,12 +922,12 @@ mod tests {
                 ifd.ascii(src, 0x0008).unwrap().as_deref(),
                 Some("a longer text")
             );
-            assert_eq!(ifd.bytes(src, 0x0009).unwrap(), Some(vec![1, 2, 3]));
+            assert_eq!(bytes(&ifd, src, 0x0009), Some(vec![1, 2, 3]));
             assert_eq!(
-                ifd.bytes(src, 0x000A).unwrap(),
+                bytes(&ifd, src, 0x000A),
                 Some(vec![1, 2, 3, 4, 5, 6, 7, 8, 9])
             );
-            assert_eq!(ifd.bytes(src, 0x000B).unwrap(), Some(vec![0xFE]));
+            assert_eq!(bytes(&ifd, src, 0x000B), Some(vec![0xFE]));
 
             // Four bytes or fewer are inline; five or more are out of line,
             // where the file holds them.
@@ -1069,7 +1010,7 @@ mod tests {
             let built = builder.build();
             let (mut src, ifd, _) = read(order, &built, ifd);
             let src = &mut src;
-            assert_eq!(ifd.bytes(src, 0x0001).unwrap(), Some(vec![1, 2]));
+            assert_eq!(bytes(&ifd, src, 0x0001), Some(vec![1, 2]));
             assert_eq!(ifd.ascii(src, 0x0002).unwrap().as_deref(), Some("xyz"));
             // Count 0: an empty value, not a missing tag.
             assert_eq!(ifd.u32s(src, 0x0003).unwrap(), Some(vec![]));
@@ -1111,10 +1052,10 @@ mod tests {
             // Each accessor reads its own types only.
             assert_eq!(ifd.ascii(src, 0x0006).unwrap(), None);
             assert_eq!(ifd.ascii(src, 0x0005).unwrap(), None);
-            assert_eq!(ifd.bytes(src, 0x0003).unwrap(), None, "not ASCII");
-            assert_eq!(ifd.bytes(src, 0x0006).unwrap(), None);
+            assert_eq!(bytes(&ifd, src, 0x0003), None, "not ASCII");
+            assert_eq!(bytes(&ifd, src, 0x0006), None);
             assert_eq!(ifd.ascii(src, 0x0099).unwrap(), None);
-            assert_eq!(ifd.bytes(src, 0x0099).unwrap(), None);
+            assert_eq!(bytes(&ifd, src, 0x0099), None);
         }
     }
 
@@ -1693,11 +1634,9 @@ mod tests {
         let src = &mut src;
         assert_eq!(ifd.invalid_entries(), 0, "every value is inside the file");
 
-        let bytes = ifd.bytes(src, 0x0001).unwrap().unwrap();
-        assert_eq!(bytes.len(), 1024 * 1024);
+        assert_eq!(bytes(&ifd, src, 0x0001).unwrap().len(), 1024 * 1024);
         assert_eq!(ifd.u32s(src, 0x0003).unwrap().unwrap().len(), 256 * 1024);
         for result in [
-            ifd.bytes(src, 0x0002).map(|_| ()),
             ifd.u32s(src, 0x0004).map(|_| ()),
             ifd.ascii(src, 0x0005).map(|_| ()),
         ] {
@@ -1705,6 +1644,8 @@ mod tests {
             assert_eq!(err.kind(), ErrorKind::LimitExceeded, "{err:?}");
             assert_eq!(err.offset(), Some(u64::from(at)), "{err:?}");
         }
+        // By a rule, a value over the cap is damage: no value.
+        assert_eq!(bytes(&ifd, src, 0x0002), None);
         // The first value alone is never over the cap.
         assert_eq!(ifd.u32(src, 0x0004).unwrap(), Some(0));
     }
@@ -1829,7 +1770,7 @@ mod tests {
                         .unwrap(),
                     None
                 );
-                assert_eq!(ifd.bytes(src, tag).unwrap(), None);
+                assert_eq!(bytes(&ifd, src, tag), None);
                 assert_eq!(ifd.u32s(src, tag).unwrap(), None);
                 assert_eq!(entry.byte_range(), None);
             }
@@ -2309,6 +2250,13 @@ mod tests {
     /// A rule of shape `S` for tag `tag`, of `types`.
     fn rule<S: Shape>(tag: u16, types: &'static [FieldType]) -> Rule<S> {
         Rule::new(tag, types)
+    }
+
+    /// The bytes of tag `tag` of `ifd`, of type BYTE or UNDEFINED and any
+    /// count, by a rule; `None` when there are none.
+    fn bytes<R: Read + Seek>(ifd: &Ifd, src: &mut Source<R>, tag: u16) -> Option<Vec<u8>> {
+        let rule = rule::<Vec<u8>>(tag, &[FieldType::Byte, FieldType::Undefined]);
+        ifd.get(src, rule).expect("the reader does not fail")
     }
 
     /// A held rule of shape `S` for tag `tag`, of `types`.

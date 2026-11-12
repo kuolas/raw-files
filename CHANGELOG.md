@@ -10,6 +10,17 @@ does.
 
 ## [Unreleased]
 
+### Changed
+
+- A tag that raw-files reads only at an exact count is now skipped
+  before its value is read when it holds another count, as a tag of
+  another type already was
+  ([#109](https://github.com/kuolas/raw-files/issues/109)). These were
+  read whole and then counted: Nikon's CropArea, ISO, Lens, WorldTime
+  and CropHiSpeed, and a DNG default crop. A hostile file now costs less
+  reading, and a source that fails at such a value no longer makes
+  opening the file fail.
+
 ### Fixed
 
 - The tags raw-files reads by their first value, such as the offsets of
