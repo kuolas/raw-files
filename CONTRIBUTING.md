@@ -385,11 +385,19 @@ A few conventions:
 - **Bug fixes come with a regression test** — one you have seen fail without
   the fix and pass with it. For a file that failed to parse, the test feeds
   the parser the smallest input that shows the problem.
-- **A user-visible change adds a line to [CHANGELOG.md](CHANGELOG.md)** under
-  `[Unreleased]`, in the same pull request. For a library, user-visible means
-  anything a caller can see: the public API, its behavior, a newly supported
-  camera, the minimum Rust version. Internal refactors and docs changes don't
-  need one.
+- **A user-visible change adds an entry to [CHANGELOG.md](CHANGELOG.md)**
+  under `[Unreleased]`, in the same pull request. For a library,
+  user-visible means anything a caller can see: the public API, its
+  behavior, a newly supported camera, the minimum Rust version. Internal
+  refactors and docs changes don't need one.
+- **An entry opens with one sentence that says what changed**, of 25
+  words at most, and names the item. The detail follows in short
+  sentences or a list. A rule that the item's docs hold is left to
+  them: a release's opening links to the API docs of that version.
+- **An entry that can break a caller opens with `**Breaking:**`**, and
+  comes first in its section. A change is breaking when a caller must
+  change their code, or their limits, to keep what the last release
+  gave them. The release's opening says how many entries are marked.
 - **Comments describe the code as it is**, not its history ("added in v0.2"
   belongs in git). A comment marking a known shortcut cites its issue —
   `// See #123` — rather than a bare `TODO`.

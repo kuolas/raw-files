@@ -6,7 +6,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the version numbers follow [Semantic Versioning](https://semver.org/).
 Before 1.0, a minor release (0.2.0, 0.3.0, ...) may change the public API,
 and the changelog says what changed; a patch release (0.1.1, ...) never
-does.
+does. An entry that can break a caller opens with **Breaking:**.
 
 ## [Unreleased]
 
