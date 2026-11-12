@@ -114,7 +114,7 @@ pub(crate) enum Link {
     /// A SubIFD: a child of another IFD of the tree, through its SubIFDs tag
     /// (0x014A).
     Sub {
-        /// The parent's position in the [`Tree`], for [`Tree::get`].
+        /// The parent's position in the [`Tree`].
         parent: usize,
         /// The position of this IFD's offset in the parent's SubIFDs array,
         /// from 0.
@@ -177,9 +177,7 @@ pub(crate) struct Tree {
 // The NEF reader's claim reads IFD0, the preview finder goes through every
 // IFD of the tree, the metadata and MakerNote readers read the Exif IFD,
 // and the metadata reader reads the Interoperability IFD and the GPS IFD;
-// nothing reads the number of IFDs or an IFD by its position yet. Each
-// `expect` fails the build once its method has a caller, so it is then
-// removed rather than left behind.
+// only the tests read the number of IFDs or an IFD by its position.
 impl Tree {
     /// IFD0, the IFD the header points to.
     pub(crate) fn ifd0(&self) -> &Ifd {
@@ -232,14 +230,14 @@ impl Tree {
     }
 
     /// The number of IFDs in the tree, at least 1.
-    #[cfg_attr(not(test), expect(dead_code, reason = "nothing reads this method yet"))]
+    #[cfg(test)]
     pub(crate) fn len(&self) -> usize {
         self.ifds.len()
     }
 
     /// The IFD at position `i` of the tree, with its link; `None` past
     /// the end. Position 0 is IFD0.
-    #[cfg_attr(not(test), expect(dead_code, reason = "nothing reads this method yet"))]
+    #[cfg(test)]
     pub(crate) fn get(&self, i: usize) -> Option<(Link, &Ifd)> {
         self.ifds.get(i).map(|(link, ifd)| (*link, ifd))
     }

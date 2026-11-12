@@ -347,12 +347,6 @@
 //! [README](https://github.com/kuolas/raw-files#formats) says what each
 //! format is checked on.
 
-// A fuzzing build compiles the reader for one caller, the fuzz entry points,
-// which use only part of it. What is unused there, and so which `expect`s
-// go unfulfilled, says nothing about the library: the normal and test
-// builds keep both lints, and CI checks those.
-#![cfg_attr(fuzzing, allow(dead_code, unfulfilled_lint_expectations))]
-
 mod authorship;
 mod camera;
 mod camera_settings;

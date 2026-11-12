@@ -175,8 +175,7 @@ impl Error {
 }
 
 // The constructors the rest of the crate builds errors with. No format
-// module reports `Unsupported` yet; the `expect` fails the build once that
-// constructor has a caller, so it is then removed rather than left behind.
+// module reports `Unsupported`, so only the tests build that error.
 impl Error {
     /// The file contradicts itself or its format at byte `offset`.
     pub(crate) fn malformed(message: impl Into<Cow<'static, str>>, offset: u64) -> Self {
@@ -189,10 +188,7 @@ impl Error {
     }
 
     /// The file is recognized, but this variant or feature is not supported.
-    #[cfg_attr(
-        not(test),
-        expect(dead_code, reason = "no format module reports this error yet")
-    )]
+    #[cfg(test)]
     pub(crate) fn unsupported(message: impl Into<Cow<'static, str>>) -> Self {
         Self::new(ErrorKind::Unsupported, message.into(), None, None)
     }

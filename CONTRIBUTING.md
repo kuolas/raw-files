@@ -446,6 +446,10 @@ A few conventions:
 - **Comments describe the code as it is**, not its history ("added in v0.2"
   belongs in git). A comment marking a known shortcut cites its issue —
   `// See #123` — rather than a bare `TODO`.
+- **An item only the tests use is marked `#[cfg(test)]`**, or
+  `#[cfg(any(test, fuzzing))]` when the fuzz entry points call it too.
+  The library's normal build then leaves it out, so any other caller
+  fails that build until the mark is removed.
 - **New source files start with the license header:**
   `// SPDX-License-Identifier: MIT OR Apache-2.0`.
 - **Decisions that would surprise someone reading only the code** get a short
