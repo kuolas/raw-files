@@ -24,7 +24,7 @@ for how to stay on the safe side; anything with legal weight needs a lawyer.
   non-disclosure agreement. [2][3][4] **[S]** One report says that SDK
   returned converted JPEG or TIFF output rather than access to the raw data;
   that is unconfirmed.
-- Today's Nikon developer portal offers a camera-control SDK. We could not
+- Nikon's developer portal offers a camera-control SDK. We could not
   load a page describing a RAW SDK, so its current availability and terms
   are **unverified**. Either way, an NDA-bound SDK cannot feed an open-source
   clean-room effort, and raw-files does not use one. [I]

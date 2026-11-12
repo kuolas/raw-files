@@ -215,7 +215,7 @@ others came from RW2, DNG, generic TIFF and, for #797, a CR2 seed.
 | #797 | CR2 seed | An IFD `count` drove a 6.6 GB allocation from an input of at most 2 MB (2026-07) | Closed |
 
 rawler's ARW 6.0 decompressor is an `unimplemented!()` stub, but it is
-unreachable today: rawler refuses Compression 32766 as unsupported before
+unreachable: rawler refuses Compression 32766 as unsupported before
 decoding (no camera file defines its "arw6" mode), and `RawLoader::decode`
 catches panics in any case. An earlier report (#514) showed ILCE-7CR M/S-size
 lossless files panicking it. rawloader issue #54 (2026-04) reports three more

@@ -147,7 +147,7 @@ affects, and test-data.md describes the sample set that would answer Part 2.
   does (file 2218) and the D810 (2014) does not, and no body in between
   was checked.
   And how the raw IFD size maps to the visible size on the bodies without
-  it, which today report the raw size with its border pixels
+  it, for which raw-files gives the raw size, border pixels included
   ([makernote-and-metadata.md](makernote-and-metadata.md)).
 - **Focus point.** What no sample shows yet
   ([makernote-and-metadata.md](makernote-and-metadata.md#86-focus-point),

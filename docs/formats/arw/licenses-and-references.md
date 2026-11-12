@@ -246,7 +246,7 @@ separates the two modes, and Lossless Compressed stays Compression 7
 - **dnglab** PR #825 is open. It ports arw6_decode, which has no license,
   with AI assistance; rawler's main branch refuses Compression 32766 as
   unsupported (no camera file defines its "arw6" mode), and its ARW 6.0
-  decompressor is an `unimplemented!()` stub that is unreachable today.
+  decompressor is an `unimplemented!()` stub that is unreachable.
   [17][31] **[P]**
 - Adobe Lightroom and Camera Raw reportedly read A7 V Compressed and
   Compressed (HQ) from about April 2026. [39] **[S]**

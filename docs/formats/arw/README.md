@@ -107,11 +107,11 @@ the disagreement.
   - Embedded JPEGs carry no APP segment and are stored unrotated; IFD0's
     Orientation applies [F].
 - **Viewer metadata is plain.** Orientation, capture date, make, model and
-  the crop tags come from IFD0, the Exif IFD and the raw SubIFD, plus the
-  plain MakerNote tags 0xB000 and 0xB001 (and 0xB027 and 0xB02A for the
-  lens). The previews and the metadata raw-files reads need **no
-  decryption and no deciphering** on any checked file [F]
-  ([makernote-and-metadata.md](makernote-and-metadata.md)).
+  the crop tags come from IFD0, the Exif IFD and the raw SubIFD. The tags
+  raw-files reads from the MakerNote are in
+  [makernote-and-metadata.md, section 9](makernote-and-metadata.md#9-viewer-metadata).
+  The previews and the metadata raw-files reads need **no decryption and
+  no deciphering** on any checked file [F].
 - **The focus point is plain too.** FocusLocation (0x2027) gives the
   frame and the center of the focus area on every checked body from the
   ILCE-7RM2 (2015) on, and FocusFrameSize (0x2037) the area's size from
