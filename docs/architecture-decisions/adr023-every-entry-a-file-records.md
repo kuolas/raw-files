@@ -73,10 +73,11 @@ bodies. They showed:
   tag 0x0014), then Nikon's ShotInfo at 65,472 bytes and an XMP packet
   at 34,816. No value in any file passes 1 MiB, the cap raw-files
   already applies to the values it reads.
-- **Reading them costs little more than opening does.** `open` reads
-  320 KB of a Z 9 NEF today (the median), 192 KB of an older NEF, 128 to
-  256 KB of an ARW and 128 to 384 KB of a JPEG. Every value of a JPEG
-  and of all but two Z 9 NEFs lies inside what `open` already reads.
+- **Reading them costs little more than opening does.** Before this
+  decision, `open` read 320 KB of a Z 9 NEF (the median), 192 KB of an
+  older NEF, 128 to 256 KB of an ARW and 128 to 384 KB of a JPEG. Every
+  value of a JPEG and of all but two Z 9 NEFs lay inside what `open`
+  already read.
   Most older NEFs need one more 64 KiB block, for their GPS IFD's
   table; an ARW needs SR2Private's table, inside what `open` reads on
   my files and one more block on 89 of the 245 public ones, and, to
