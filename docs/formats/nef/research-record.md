@@ -134,7 +134,8 @@ their IFDs and embedded JPEGs. What they show is tagged **[F]** in
 [container-and-previews.md](container-and-previews.md) and
 [raw-data.md](raw-data.md), and the questions they answer are marked in
 [open-questions.md](open-questions.md). Metadata and raw decoding were not
-checked.
+checked then; the [Status](README.md#status) says what has been checked
+since.
 
 ## Extending this documentation
 

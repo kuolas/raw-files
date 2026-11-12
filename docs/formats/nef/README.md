@@ -16,45 +16,31 @@ sensor data.
 
 ## Status
 
-This is desk research, done in October 2026. On 13 October 2026 the container
-and preview notes were checked against the three CC0 Nikon Z 9 files that CI
-downloads (files 5146 to 5148, listed in
-[test-data.md](test-data.md#21-the-ci-set)); what they show is tagged
-**[F]**. On 15 October 2026 the MakerNote's layout and the viewer
-metadata were checked against those three files and 20 more CC0 files,
-from the D1H to the Z6III, which CI downloads too (listed in
-[test-data.md](test-data.md#21-the-ci-set)). On 19 October 2026 the
-autofocus data was checked against those 23 files and seven more CC0
-files, and on 20 October 2026 against three more, which CI downloads too
-(listed in
-[test-data.md](test-data.md#23-files-checked-for-the-focus-point)). On
-21 October 2026 the MakerNote of two Nikon camera JPEGs from Wikimedia
-Commons, a D5300's and a D70's, was checked as well
-([makernote-and-metadata.md](makernote-and-metadata.md#in-a-jpeg-file),
-listed in the [JPEG test data](../jpeg/test-data.md#2-the-sample-files)).
-On 23 October 2026 two D1X files were added, which CI downloads too, to
-check the headerless MakerNote on a second body (listed in
-[test-data.md](test-data.md#21-the-ci-set)). The same day the headerless
-and short-header MakerNotes were checked by hand on camera JPEGs of
-early Coolpix bodies from Wikimedia Commons, which are not downloaded
-([makernote-and-metadata.md](makernote-and-metadata.md#in-a-jpeg-file),
-listed in the
-[JPEG test data](../jpeg/test-data.md#6-early-coolpix-files-checked-by-hand)).
-The tests check the previews of all 35, and test-data.md records them, but
-the containers of the 32 files of 25 other bodies are not yet written up
-in these pages. On 26 October 2026 the autofocus points of a D600 were
-measured on 56 frames shot with my own D600, read in Nikon's NX Studio as a
-reader to compare with ([autofocus-points.md](autofocus-points.md)); the
-frames are committed stripped of their pixels and personal fields
-([test-data.md](test-data.md#23-files-checked-for-the-focus-point)) and
-are cited by counts and frame numbers. The raw data
-was not checked, beyond the raw IFD's tags and the first bytes of the Z 9's
-strip. **Everything else has yet to be checked against sample files.** Byte
-offsets and formulas taken from other projects' source code should be
-checked against that source and against real files before they are
-hard-coded. [open-questions.md](open-questions.md)
-lists what is still unknown. [research-record.md](research-record.md)
-describes how the research was done and what it could not reach.
+These pages began as desk research, as the
+[research record](research-record.md) says. The table shows what has
+since been checked against sample files, and where. What a file shows
+is tagged **[F]**.
+
+| Topic | Checked against sample files | Where |
+|---|---|---|
+| The container and the previews | The Z 9's three files, and a few more the page names; the tests also check the previews of the CI set's other files, whose containers the page does not describe | [container-and-previews.md](container-and-previews.md); the files: [test-data.md, section 2.1](test-data.md#21-the-ci-set) |
+| The MakerNote's layouts | The CI set, with two bodies of the headerless layout; by hand, camera JPEGs of early Coolpix bodies, which are not downloaded | [makernote-and-metadata.md, section 1](makernote-and-metadata.md#1-finding-the-makernote); the Coolpix files: [JPEG test data, section 6](../jpeg/test-data.md#6-early-coolpix-files-checked-by-hand) |
+| The MakerNote in a camera JPEG | A D5300's and a D70's JPEG | [makernote-and-metadata.md, "In a JPEG file"](makernote-and-metadata.md#in-a-jpeg-file); the files: [JPEG test data, section 2](../jpeg/test-data.md#2-the-sample-files) |
+| The orientation, capture time, camera, sizes, serial number, ISO and lens | The CI set | [makernote-and-metadata.md, sections 8.1 to 8.5](makernote-and-metadata.md#8-viewer-metadata); the files: [test-data.md, section 2.2](test-data.md#22-files-checked-for-metadata) |
+| The focus point | The CI set, and shots of my own Z 9 and D600 | [makernote-and-metadata.md, section 8.6](makernote-and-metadata.md#86-focus-point); the files: [test-data.md, section 2.3](test-data.md#23-files-checked-for-the-focus-point) |
+| A body's autofocus points | The D600's, on frames I shot with my own D600 | [autofocus-points.md, section 2](autofocus-points.md#2-nikon-d600) |
+| The camera settings | The CI set, two Nikon camera JPEGs and files of my own | [makernote-and-metadata.md, section 8.7](makernote-and-metadata.md#87-camera-settings); the files: [test-data.md, section 2.4](test-data.md#24-files-checked-for-the-camera-settings) |
+| Authorship and location | Counted on the NEF files of raw.pixls.us and on my own | [makernote-and-metadata.md, sections 8.8 and 8.9](makernote-and-metadata.md#88-authorship), which give the counts |
+| The directories a file holds | Counted on the same kinds of file | [makernote-and-metadata.md, section 12](makernote-and-metadata.md#12-the-directories-a-file-holds) |
+| The raw data | Only the raw IFD's tags, the compression tags and the first bytes of the Z 9's strip; no strip was decoded | [raw-data.md](raw-data.md#how-to-read-this-page) |
+| The encrypted blocks and their decryption, the white balance multipliers, LensData and ShotInfo | Not checked: from the sources alone | [makernote-and-metadata.md, sections 4 to 7](makernote-and-metadata.md#4-encrypted-blocks) |
+
+A topic the table does not list rests on the sources alone. Byte offsets
+and formulas taken from other projects' source code should be checked
+against that source and against real files before they are hard-coded.
+[open-questions.md](open-questions.md) lists what is still unknown.
+[research-record.md](research-record.md) describes how the research was
+done and what it could not reach.
 
 ## Pages
 
@@ -110,9 +96,9 @@ the disagreement.
   - SubIFD order is not fixed, so choose by measured JPEG size.
 - **Viewer metadata is in standard tags.** Orientation, capture date, make and
   model come from IFD0 and the Exif IFD; the stored sensor size comes from the
-  raw SubIFD, since IFD0's own size is the thumbnail's [P]. The MakerNote is
-  needed only for the crop area, black level, compression type and white
-  balance.
+  raw SubIFD, since IFD0's own size is the thumbnail's [P]. What the key
+  tags of the MakerNote are used for is in
+  [makernote-and-metadata.md, section 2](makernote-and-metadata.md#2-key-tags).
 - **Compressed raw data uses six fixed Huffman tables.**
   - The tables are built into decoders; the file does not store them.
   - Each pixel is predicted from the pixel of the same color two columns to
