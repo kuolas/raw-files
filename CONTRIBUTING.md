@@ -227,7 +227,7 @@ comments, the CHANGELOG, commit messages, pull requests and issues.
 - **One home for each rule.** State it once, and link to it from the
   other places that need it. Three kinds of fact have a set home:
   - what a camera body or a file records: the format notes, in
-    [docs/formats/](docs/formats/);
+    [docs/formats/](docs/formats/README.md);
   - the committed test files: [tests/fixtures/README.md](tests/fixtures/README.md);
   - the public types: the [API documentation](https://docs.rs/raw-files).
 - **The API's own names.** Write `RawFile::entries`, not "the view of
