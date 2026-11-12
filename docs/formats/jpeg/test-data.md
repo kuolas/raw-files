@@ -33,10 +33,11 @@ Eight camera-original JPEGs, one per body, chosen to cover the Sony and
 Nikon MakerNotes, a Multi-Picture Format segment with one image and with
 two, a file with none, Sony's padding after the last image, and a maker
 whose MakerNote raw-files does not read. Each was downloaded from its
-original upload and walked byte by byte (section 3). Licenses and
-authors are as shown on each file's page, read when the files were
-chosen, on 21 October 2026, and checked again on each file page on 22
-October 2026, when they joined the downloaded set. [P]
+original upload and walked byte by byte on 21 October 2026
+(section 3). Licenses and authors are as shown on each file's page,
+read when the files were chosen, on 21 October 2026, and checked again
+on each file page on 22 October 2026, when they joined the downloaded
+set. [P]
 
 | Body (firmware) | File on Wikimedia Commons | License, author | Bytes | SHA-256 |
 |---|---|---|---|---|

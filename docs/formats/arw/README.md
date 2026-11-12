@@ -24,8 +24,9 @@ MakerNote structure, parsed every embedded JPEG up to its start-of-frame
 marker, and ran the algorithms that the pages describe as *checked* (the SR2
 keystream, the MakerNote cipher, the cRAW block layout, ARW1 decoding, the
 lossless tile headers and the SRF key chain). They used throwaway scripts
-written from the pages' prose, which are not in the repository; none of this
-is implemented in raw-files yet. On 19 October 2026 the autofocus data of
+written from the pages' prose, which are not in the repository. None of
+those algorithms is in raw-files: the previews, the metadata and the focus
+point it reads need none of them. On 19 October 2026 the autofocus data of
 the same 36 files was checked too; raw-files reads the focus point from
 it, and `tests/arw.rs` checks every file's. On 21 October 2026 the
 MakerNote of five Sony camera JPEGs from Wikimedia Commons was checked
@@ -209,8 +210,8 @@ not repeat what the two formats share:
 Two things differ: ARW needs no built-in Huffman tables (lossless tiles
 carry their own) and no MakerNote cipher for anything but full metadata, and
 the ARW pages were checked against sample files from the start, while the
-NEF pages were desk research first and have so far been checked on the Z 9
-only.
+NEF pages were desk research first, and their
+[Status](../nef/README.md#status) says what has been checked since.
 
 ## License hygiene
 
