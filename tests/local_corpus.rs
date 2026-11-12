@@ -1,126 +1,161 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! The reader run over a folder of your own camera files, RAW and JPEG, to
-//! see whether it copes with cameras and settings the committed samples do
-//! not cover.
+//! The reader run over a folder of your own camera files, RAW and JPEG.
+//! It shows whether raw-files copes with cameras and settings that the
+//! tests' own files do not cover.
 //!
-//! The test is ignored by default. Run it, in release mode because it reads
-//! every file, with
+//! This file holds two kinds of test:
 //!
-//! ```sh
-//! RAW_FILES_LOCAL_CORPUS=/path/to/photos cargo test --release --test local_corpus -- --ignored --nocapture
-//! ```
+//! - one test that reads the folder `RAW_FILES_LOCAL_CORPUS` names. It
+//!   is ignored by default. `docs/TESTING.md` says how to run it and
+//!   what its output never holds;
+//! - unit tests of its checks and its tallies, on files and metadata
+//!   built in the test. They run with every `cargo test`.
 //!
-//! It walks the folder and its subfolders, opens every file whose extension
-//! names a format raw-files reads, and reads the metadata, the previews and
-//! the largest preview's bytes of each. It skips, and counts, the
-//! AppleDouble files among them: a file whose name starts with `._`, which
-//! macOS writes beside a file to hold its extended attributes on a disk
-//! that cannot, such as one formatted exFAT, and which is no photo though
-//! it keeps the photo's extension. It counts each file under the
-//! format its extension names, failures included, and prints one section
-//! of counts for each format the folder holds; a section also counts the
-//! formats its files opened as, so that a renamed file shows. It prints
-//! counts only: how many files opened, how many have each metadata field,
-//! how many have each maker, by the name the library gives it, such as
-//! "Nikon", and how many a recorded Make that names none, how many have a
-//! model's name from the library's table and how many a recorded Model but
-//! no name, how many previews the files have, and how the sizes are
-//! distributed; it never prints a path, a file name, the text of a make,
-//! model or software as the file records it, or the value of a serial
-//! number, capture time, exposure or lens, so its output can be pasted
-//! into an issue without disclosing anything about the photos. For who
-//! made the pictures, it counts how many files have each of the eight
-//! texts, the artist, the copyright notice, the photographer, the editor,
-//! the title, the description, the comment and the camera's owner, and
-//! never prints one: they name people. For where they were taken, it
-//! counts how many files have a location and how many each of its parts,
-//! the altitude, the GPS time, the image direction and the map datum, and
-//! never prints a coordinate, an altitude, a time or a datum: they name
-//! places. The files with a GPS IFD are counted with the directories.
+//! # What the folder test reads
 //!
-//! For each camera setting, from the exposure program to the color space,
-//! it counts, over the files of a section, how many have the setting and
-//! how many have each kind of it, by the name the library gives the kind,
-//! such as "Aperture priority"; how many flashes fired; how many files had
-//! the electronic front curtain setting on and how many off; how many have
-//! each white balance fine-tuning, by its pair of shifts, such as
-//! `(-24/4, 0/4)`; and the lowest and the highest color temperature
-//! recorded. As for the sizes, these are totals over the section, tied to
-//! no file.
+//! It walks the folder and its subfolders, and opens every file whose
+//! extension names a format raw-files reads. Of each file it reads the
+//! metadata, the previews, the bytes of the largest preview and the
+//! value of every entry.
 //!
-//! For the focus point, where the camera focused, it counts the files that
-//! have one, how many of those record that the camera confirmed focus, that
-//! it missed, or neither, the sizes of the frames the points are measured
-//! in, how many different sizes the focus areas have, and how many frames
-//! are not the file's image size. It counts the focus points by their
-//! origin too, by the name the library gives it: "Recorded" for a position
-//! the camera measured, "Placed from a table" for a point placed from the
-//! table of the body's autofocus points.
+//! It skips the AppleDouble files and counts them. Such a file's name
+//! starts with `._`. Apple's macOS writes one beside a file to hold its
+//! extended attributes on a disk that cannot hold them, such as one
+//! formatted exFAT. It keeps the photo's extension, and it is no photo.
 //!
-//! For the autofocus points the camera used, it counts the files with a
-//! list of them and how many of those mark a primary, how many files have
-//! each number of points in their list, how many points the lists hold and
-//! how many of those have a number, the lists by area mode, by the name
-//! the library gives the mode, such as "Auto area", and the lists of one
-//! point placed from a table. For the layout of the body's autofocus
-//! points, it counts the files with one, by its number of points, and the
-//! files with one but no focus point. Two of these counts each gather cases
-//! the library gives alike, which the output cannot tell apart: a list of
-//! one point placed from a table is a single-point shot or a shot whose
-//! mask of the points used names no point beside the primary, and a file
-//! with a layout and no focus point is a manual-focus shot, a shot that
-//! names point 0, a crop the body's table does not confirm, a crop-mode
-//! JPEG smaller than the crop's window, a JPEG cut to another shape than
-//! the frame's, which the JPEG shape rule refuses, or a file whose
-//! MakerNote is missing or cannot be read, since the layout comes from the
-//! Model alone. It never prints where a point lies, how large one area is,
-//! or a point's number.
+//! It counts each file under the format its extension names, failures
+//! included, and prints one section for each format. A section also
+//! counts the formats its files opened as, so a renamed file shows.
 //!
-//! For the entries of the files' directories, it counts, for each
-//! directory, by the name the library gives it, such as "Exif",
-//! "SubIFD1" or "MakerNote 0x0011", how many files have it and how many
-//! entries it lists and leaves out over them, and how many entries have
-//! each field type, by its name, such as "SHORT"; and it reads every
-//! entry's value. It never prints a tag or a value.
+//! # What it checks
 //!
-//! It fails when the folder cannot be read or holds no file of a format
-//! raw-files reads, and otherwise unless every entry of the folder could be
-//! read and, in every format's section, every file opened, every file has
-//! a preview, every entry's value could be read,
-//! every largest preview is a whole JPEG, every file's metadata gives the
-//! orientation its largest preview carries, and every focus point lies
-//! inside its frame, its area included, both as read and once placed on the
-//! largest preview, as does every point of a list of the points used. Nor
-//! may the focus point, the list and the layout disagree: every list must
-//! mark a primary, and the focus point must be that primary, in the list's
-//! frame and with its origin; every recorded position must be a list of
-//! one point without a number; and every list placed from a table must
-//! come with a layout, for the Model the file names, and hold points of
-//! that layout, numbered in rising order, each with the layout's box and
-//! the layout's center, moved on a crop, or on a JPEG whose size shows a
-//! window of the frame, such as the D600's Medium JPEG, into the centered
-//! window that is the list's frame. These hold by how the library builds
-//! a list, and the test checks them by hand rather than taking the
-//! library's word for it.
-//! A whole JPEG starts with its start marker and ends with
-//! its end marker, followed by nothing but the padding some Sony cameras
-//! write: `FF` bytes, in any format, and zeros, only in the largest preview
-//! of a file that opens as JPEG, which is the whole file. Such a file must
-//! also hold its own image's end marker, after its first scan, not only
-//! its thumbnail's. Other data after the last end marker fails a RAW
-//! file's preview, and is only counted in a JPEG file's; except that a
-//! NEF file's preview may end before its declared length in the shape
-//! the D600 and the D3200 sometimes write, a length 2 more than a
-//! multiple of 512 with up to 513 bytes of other data after the image's
-//! own end marker, which is counted as a preview that ends early. The metadata
-//! counts are printed for the reader of the output to judge, since what a
-//! folder's cameras record varies: a body that writes no serial number, or
-//! no sub-seconds, is not a failure of the library.
+//! The test fails on a folder it cannot read, and on one that holds no
+//! file of a format raw-files reads. It fails when an entry of the
+//! folder cannot be read. It also fails unless, in every section:
 //!
-//! Its unit tests, of the whole-JPEG check and of the metadata, settings
-//! and focus tallies, run with every `cargo test`, since they need no folder
-//! of files.
+//! - every file opens and has a preview;
+//! - every entry's value can be read;
+//! - the camera's text to show follows its rules (below);
+//! - every largest preview is a whole JPEG (below);
+//! - the metadata gives the orientation the largest preview carries;
+//! - every focus point lies inside its frame, its area included, both
+//!   as read and once placed on the largest preview;
+//! - so does every point of a list of the points used;
+//! - the focus point, the list and the layout agree (below).
+//!
+//! The counts of the metadata fail nothing. What a folder's cameras
+//! record varies: a body that writes no serial number, or no
+//! sub-seconds, is not a failure of the library. The counts are printed
+//! for the reader of the output to judge.
+//!
+//! ## The camera's text to show
+//!
+//! `Camera::display_name` is there exactly when the file records a
+//! Model. It is the maker's name and the body's, joined by a space,
+//! where the library has both. It is the recorded Model where the
+//! library has no name for the body.
+//!
+//! ## A whole JPEG
+//!
+//! A whole JPEG starts with its start marker and ends with its end
+//! marker. Only padding may follow, as some Sony cameras write it:
+//!
+//! - `FF` bytes, in any format;
+//! - zeros, only in the largest preview of a file that opens as JPEG,
+//!   which is the whole file.
+//!
+//! Such a file must also hold its own image's end marker, after its
+//! first scan, not only its thumbnail's. Other data after the last end
+//! marker fails a RAW file's preview. In a JPEG file it is only counted.
+//!
+//! One shape is counted and not failed: a NEF preview that ends early.
+//! Its declared length is 2 more than a multiple of 512, and up to 513
+//! bytes of other data follow the image's own end marker. The D600 and
+//! the D3200 sometimes write it
+//! (`docs/formats/nef/container-and-previews.md`, section 5).
+//!
+//! ## The focus point, the list and the layout
+//!
+//! - Every list marks a primary.
+//! - The focus point is that primary, in the list's frame and with its
+//!   origin.
+//! - A recorded position is a list of one point without a number.
+//! - A list placed from a table comes with a layout, for the Model the
+//!   file names.
+//! - Its points are points of that layout, numbered in rising order,
+//!   each with the layout's box and the layout's center.
+//! - On a crop, the center is moved into the centered window that is the
+//!   list's frame. So it is on a JPEG whose size shows a window of the
+//!   frame, such as the D600's Medium JPEG.
+//!
+//! These hold by how the library builds a list. The test checks them by
+//! hand and does not take the library's word for it.
+//!
+//! # What it counts
+//!
+//! It prints counts only: totals over a section, tied to no file. A kind
+//! is counted by the name the library gives it, such as "Nikon",
+//! "Aperture priority" or "Auto area".
+//!
+//! - **The files**: how many opened, the formats they opened as, how
+//!   many previews they have and how the sizes are distributed.
+//! - **The entries**: how many files have each directory, and how many
+//!   entries it lists and leaves out. A directory goes by the library's
+//!   name for it, such as "Exif", "SubIFD1" or "MakerNote 0x0011". Then
+//!   how many entries have each field type, such as "SHORT". The files
+//!   with a GPS IFD are counted here.
+//! - **The metadata**: how many files have each field.
+//! - **The camera**: how many files have each maker, and how many a
+//!   recorded Make that names none. How many have a model's name from
+//!   the library's table, and how many a recorded Model but no name.
+//! - **Who made the pictures**: how many files have each of the eight
+//!   texts. They are the artist, the copyright notice, the photographer,
+//!   the editor, the title, the description, the comment and the
+//!   camera's owner.
+//! - **Where they were taken**: how many files have a location, and how
+//!   many each of its parts. They are the altitude, the GPS time, the
+//!   image direction and the map datum.
+//! - **The camera settings**, from the exposure program to the color
+//!   space: how many files have the setting, and how many each kind of
+//!   it. Also how many flashes fired, and how many files had the
+//!   electronic front curtain setting on and how many off. Each white
+//!   balance fine-tuning is counted by its pair of shifts, such as
+//!   `(-24/4, 0/4)`. Of the color temperatures, the lowest and the
+//!   highest are printed.
+//! - **The focus point**: the files that have one, and how many of those
+//!   record that the camera confirmed focus, that it missed, or
+//!   neither. The points by origin: "Recorded" is a position the camera
+//!   measured. "Placed from a table" is a point placed from the table of
+//!   the body's autofocus points. The sizes of the frames the points are
+//!   measured in. How many different sizes the focus areas have. How
+//!   many frames are not the file's image size.
+//! - **The points used**: the files with a list, and how many of those
+//!   mark a primary. How many files have each number of points. How many
+//!   points the lists hold, and how many of those have a number. The
+//!   lists by area mode, and the lists of one point placed from a table.
+//! - **The layout**: the files with one, by its number of points, and
+//!   the files with one but no focus point.
+//!
+//! Two of these counts gather cases the library gives alike, so the
+//! output cannot tell them apart.
+//!
+//! A list of one point placed from a table is one of:
+//!
+//! - a single-point shot;
+//! - a shot whose mask of the points used names no point beside the
+//!   primary.
+//!
+//! A file with a layout and no focus point is one of these, since the
+//! layout comes from the Model alone:
+//!
+//! - a manual-focus shot;
+//! - a shot that names point 0;
+//! - a crop the body's table does not confirm;
+//! - a crop-mode JPEG smaller than the crop's window;
+//! - a JPEG cut to another shape than the frame's, which the JPEG shape
+//!   rule refuses;
+//! - a file whose MakerNote is missing or cannot be read.
 
 use std::cell::Cell;
 use std::collections::{BTreeMap, BTreeSet, HashMap};
