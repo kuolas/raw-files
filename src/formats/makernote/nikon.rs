@@ -384,7 +384,7 @@
 //! PreviewIFD must lie inside the block, with their whole entry tables; the
 //! three numbers that lead to the JPEG, the PreviewIFD's offset and the
 //! JPEG's offset and length, must each be one LONG, as Nikon writes them,
-//! which the entry holds itself ([`Ifd::one_u32`]); and the whole JPEG, as
+//! which the entry holds itself ([`Ifd::held`]); and the whole JPEG, as
 //! declared, must lie inside the block, whichever header the offsets count
 //! from. The block's IFDs are read inside the block ([`ifd_in`]): every
 //! entry whose value lies outside the block is dropped, as an entry whose
@@ -394,13 +394,10 @@
 //! and CropArea's four numbers, CropHiSpeed's seven, the serial number, the
 //! lens's range, FocusMode's and WhiteBalance's texts, 0x003F's two
 //! fractions and AFInfo2's bytes, which take more than the four bytes an
-//! entry holds and so are stored elsewhere. A value of another type than
-//! its tag's rule allows is not read. The readers of text, of fractions and
-//! of signed SHORTs each read their one type, ASCII, RATIONAL or SRATIONAL,
-//! and SSHORT ([`Ifd::i16s`]), but those of unsigned numbers and of bytes
-//! accept more types than a tag's rule allows, such as [`Ifd::u32s`], which
-//! reads type IFD too, so a reader of numbers or bytes first finds the
-//! tag's entry among the types its rule allows ([`Ifd::entry_of_type`]). A
+//! entry holds and so are stored elsewhere. A value is read only in the
+//! type and count its tag's rule names, which the reader declares once,
+//! beside the tag's number ([`Rule`](crate::container::tiff::Rule)); a
+//! value of another type or count is never read ([`Ifd::get`]). A
 //! block that does not hold together, whether it is too short for its
 //! layout, its inner header is not one, or an IFD in it is cut short or has
 //! more entries than the limits allow, costs what the MakerNote would have
@@ -427,15 +424,13 @@ use super::{MakerNoteBlock, checked_color_temperature};
 use crate::camera_settings::{
     CameraSettings, ColorSpace, FineTune, ImageArea, RawImageSize, Shutter, WhiteBalanceMode,
 };
-use crate::container::tiff::FieldType;
-use crate::container::tiff::tags::{JPEG_INTERCHANGE_FORMAT, JPEG_INTERCHANGE_FORMAT_LENGTH};
-use crate::container::tiff::{Block, Ifd, Tree, ifd_in, parse_header, skip_damage};
+use crate::container::tiff::{Block, FieldType, Ifd, Tree, ifd_in, parse_header, skip_damage};
 use crate::entries::{Directory, Entries};
 use crate::error::Result;
 use crate::focus::{
     Focus, FocusAreaMode, FocusOrigin, FocusPoint, FocusPoints, check_point, scale,
 };
-use crate::formats::tiff_metadata::{self, Standard, one_short};
+use crate::formats::tiff_metadata::{self, Standard};
 use crate::formats::tiff_previews::{self, Candidate};
 use crate::geometry::{Point, Size};
 use crate::io::{ByteOrder, Source};
@@ -530,6 +525,41 @@ const LENS: u16 = 0x0084;
 /// as SHORTs in the MakerNote's byte order, and on most versions a byte
 /// saying whether focus was confirmed.
 const AF_INFO2: u16 = 0x00B7;
+
+/// The rules of the tags this reader reads: each tag's number, from the
+/// constants above, and the type and count Nikon writes its value in on
+/// every file checked, which a value must have to be read (ADR011).
+/// [`Ifd::get`] and [`Ifd::held`] read them. Two are tags of the
+/// PreviewIFD, which Nikon writes as one LONG each.
+mod rules {
+    use crate::container::tiff::tags;
+    use crate::container::tiff::{FieldType, Held, Rule, Text};
+    use crate::rational::SignedRational;
+
+    const SHORT: &[FieldType] = &[FieldType::Short];
+    const LONG: &[FieldType] = &[FieldType::Long];
+    const ASCII: &[FieldType] = &[FieldType::Ascii];
+
+    pub(super) const WHITE_BALANCE: Rule<Text> = Rule::new(super::WHITE_BALANCE, ASCII);
+    pub(super) const FOCUS_MODE: Rule<Text> = Rule::new(super::FOCUS_MODE, ASCII);
+    pub(super) const FINE_TUNE_STEPS: Held<[i16; 2]> =
+        Held::new(super::FINE_TUNE_STEPS, &[FieldType::SShort]);
+    pub(super) const PREVIEW_IFD: Held<[u32; 1]> = Held::new(super::PREVIEW_IFD, LONG);
+    pub(super) const SERIAL_NUMBER: Rule<Text> = Rule::new(super::SERIAL_NUMBER, ASCII);
+    pub(super) const COLOR_SPACE: Held<[u32; 1]> = Held::new(super::COLOR_SPACE, SHORT);
+    pub(super) const SHUTTER_MODE: Held<[u32; 1]> = Held::new(super::SHUTTER_MODE, SHORT);
+    pub(super) const IMAGE_SIZE_RAW: Held<[u32; 1]> = Held::new(super::IMAGE_SIZE_RAW, SHORT);
+    pub(super) const FINE_TUNE: Rule<[SignedRational; 2]> =
+        Rule::new(super::FINE_TUNE, &[FieldType::SRational]);
+    pub(super) const COLOR_TEMPERATURE: Held<[u32; 1]> = Held::new(super::COLOR_TEMPERATURE, SHORT);
+    pub(super) const AF_INFO2: Rule<Vec<u8>> = Rule::new(super::AF_INFO2, &[FieldType::Undefined]);
+
+    // The PreviewIFD.
+    pub(super) const JPEG_INTERCHANGE_FORMAT: Held<[u32; 1]> =
+        Held::new(tags::JPEG_INTERCHANGE_FORMAT, LONG);
+    pub(super) const JPEG_INTERCHANGE_FORMAT_LENGTH: Held<[u32; 1]> =
+        Held::new(tags::JPEG_INTERCHANGE_FORMAT_LENGTH, LONG);
+}
 
 /// The signature a Nikon MakerNote of the embedded layout starts with, and
 /// the short-header layout too: what tells both from the headerless one.
@@ -670,7 +700,7 @@ fn preview_ifd<R: Read + Seek>(
     ifd: &Ifd,
     limits: &Limits,
 ) -> Result<Option<Ifd>> {
-    let Some(pointer) = ifd.one_u32(PREVIEW_IFD, &[FieldType::Long]) else {
+    let Some([pointer]) = ifd.held(rules::PREVIEW_IFD) else {
         return Ok(None);
     };
     ifd_in(src, ifd.block(), pointer, ifd.order(), limits)
@@ -718,8 +748,8 @@ fn embedded_ifd<R: Read + Seek>(
 /// are held in their entries, so this reads nothing from the file.
 pub(in crate::formats) fn preview_candidate(makernote: &MakerNote) -> Option<Candidate> {
     let preview = makernote.preview.as_ref()?;
-    let offset = preview.one_u32(JPEG_INTERCHANGE_FORMAT, &[FieldType::Long])?;
-    let length = preview.one_u32(JPEG_INTERCHANGE_FORMAT_LENGTH, &[FieldType::Long])?;
+    let [offset] = preview.held(rules::JPEG_INTERCHANGE_FORMAT)?;
+    let [length] = preview.held(rules::JPEG_INTERCHANGE_FORMAT_LENGTH)?;
     // An empty JPEG is passed on: the finder drops it with the others.
     tiff_previews::candidate(preview.block(), offset, length)
 }
@@ -897,21 +927,27 @@ fn camera_settings<R: Read + Seek>(
 ) -> Result<CameraSettings> {
     let ifd = &makernote.ifd;
     // Read once, for the white balance mode and the color temperature.
-    let white_balance = tiff_metadata::text(src, ifd, WHITE_BALANCE)?;
+    let white_balance = tiff_metadata::text(src, ifd, rules::WHITE_BALANCE)?;
     let white_balance = white_balance.as_deref();
     if let Some(mode) = white_balance.and_then(white_balance_of_text) {
         settings.white_balance.mode = Some(mode);
     }
     settings.white_balance.color_temperature = color_temperature(makernote, white_balance);
     settings.white_balance.fine_tune = fine_tune(src, makernote)?;
-    settings.shutter = one_short(ifd, SHUTTER_MODE).and_then(shutter);
+    settings.shutter = ifd
+        .held(rules::SHUTTER_MODE)
+        .and_then(|[code]| shutter(code));
     settings.image_area = crop_hi_speed.and_then(|crop| image_area(crop.mode));
     settings.raw_image_size = match picture {
-        Picture::Raw => one_short(ifd, IMAGE_SIZE_RAW).and_then(raw_image_size),
+        Picture::Raw => ifd
+            .held(rules::IMAGE_SIZE_RAW)
+            .and_then(|[code]| raw_image_size(code)),
         Picture::Jpeg => None,
     };
     if !exif_records_color_space {
-        settings.color_space = one_short(ifd, COLOR_SPACE).and_then(color_space);
+        settings.color_space = ifd
+            .held(rules::COLOR_SPACE)
+            .and_then(|[code]| color_space(code));
     }
     Ok(settings)
 }
@@ -931,8 +967,10 @@ fn camera_settings<R: Read + Seek>(
 /// is all they record of a temperature, the D600 `3230K` too; under any
 /// other setting they record none.
 fn color_temperature(makernote: &MakerNote, white_balance: Option<&str>) -> Option<u32> {
-    let recorded = one_short(&makernote.ifd, COLOR_TEMPERATURE)
-        .and_then(|kelvin| checked_color_temperature(u32::from(kelvin)));
+    let recorded = makernote
+        .ifd
+        .held(rules::COLOR_TEMPERATURE)
+        .and_then(|[kelvin]| checked_color_temperature(kelvin));
     recorded.or_else(|| {
         white_balance
             .and_then(kelvin_of_text)
@@ -1018,8 +1056,8 @@ fn kelvin_of_text(text: &str) -> Option<u32> {
 /// a 0x000B of one value, as the D1 family, the D70, the D100 and the
 /// D200 write it, gives none, since no file shows its axis or its sign.
 /// The type and count of each are checked before its values are read
-/// ([`Ifd::entry_of_type`]), so that an entry of another count, however
-/// long, is never read.
+/// ([`Ifd::get`]), so that an entry of another count, however long, is
+/// never read.
 ///
 /// # Errors
 ///
@@ -1029,23 +1067,13 @@ fn fine_tune<R: Read + Seek>(
     makernote: &MakerNote,
 ) -> Result<Option<FineTune>> {
     let ifd = &makernote.ifd;
-    let two = |tag, field_type| {
-        ifd.entry_of_type(tag, &[field_type])
-            .is_some_and(|entry| entry.count() == 2)
-    };
-    if two(FINE_TUNE, FieldType::SRational) {
-        let fractions = skip_damage(ifd.srationals(src, FINE_TUNE))?.flatten();
-        if let Some(&[amber_blue, magenta_green]) = fractions.as_deref()
-            && let Some(fine_tune) = fine_tune_of(amber_blue, magenta_green)
-        {
-            return Ok(Some(fine_tune));
-        }
+    let fraction = |value: SignedRational| (value.numerator, value.denominator);
+    if let Some([amber_blue, magenta_green]) = ifd.get(src, rules::FINE_TUNE)?
+        && let Some(fine_tune) = fine_tune_of(fraction(amber_blue), fraction(magenta_green))
+    {
+        return Ok(Some(fine_tune));
     }
-    if !two(FINE_TUNE_STEPS, FieldType::SShort) {
-        return Ok(None);
-    }
-    let steps = skip_damage(ifd.i16s(src, FINE_TUNE_STEPS))?.flatten();
-    let Some(&[amber_blue, magenta_green]) = steps.as_deref() else {
+    let Some([amber_blue, magenta_green]) = ifd.held(rules::FINE_TUNE_STEPS) else {
         return Ok(None);
     };
     Ok(fine_tune_of(
@@ -1085,7 +1113,7 @@ fn fine_tune_of(
 /// documentation names the electronic front curtain and a high-speed
 /// electronic shutter but no checked file holds; and every code nothing
 /// names.
-fn shutter(code: u16) -> Option<Shutter> {
+fn shutter(code: u32) -> Option<Shutter> {
     Some(match code {
         0 | 80 => Shutter::Mechanical,
         16 => Shutter::Electronic,
@@ -1126,7 +1154,7 @@ fn image_area(mode: u32) -> Option<ImageArea> {
 /// [`Large`](RawImageSize::Large) and 3 [`Small`](RawImageSize::Small).
 /// `None` for 2, the medium size, which no checked raw file holds, for 0,
 /// which no table names, and for every other code.
-fn raw_image_size(code: u16) -> Option<RawImageSize> {
+fn raw_image_size(code: u32) -> Option<RawImageSize> {
     Some(match code {
         1 => RawImageSize::Large,
         3 => RawImageSize::Small,
@@ -1138,7 +1166,7 @@ fn raw_image_size(code: u16) -> Option<RawImageSize> {
 /// [`Srgb`](ColorSpace::Srgb) and 2 [`AdobeRgb`](ColorSpace::AdobeRgb).
 /// `None` for 4, BT.2100, which no variant names and no checked file
 /// holds, and for every other code.
-fn color_space(code: u16) -> Option<ColorSpace> {
+fn color_space(code: u32) -> Option<ColorSpace> {
     Some(match code {
         1 => ColorSpace::Srgb,
         2 => ColorSpace::AdobeRgb,
@@ -1220,7 +1248,7 @@ fn serial_number<R: Read + Seek>(
     src: &mut Source<R>,
     makernote: &MakerNote,
 ) -> Result<Option<String>> {
-    tiff_metadata::text(src, &makernote.ifd, SERIAL_NUMBER)
+    tiff_metadata::text(src, &makernote.ifd, rules::SERIAL_NUMBER)
 }
 
 /// The ISO that `makernote`'s ISO tag records: the second of its values,
@@ -1357,19 +1385,16 @@ fn focus<R: Read + Seek>(
     table: Option<&PointTable>,
 ) -> Result<Option<FocusPoints>> {
     let ifd = &makernote.ifd;
-    // Without AFInfo2 there is nothing to place, so FocusMode is not read.
-    if ifd
-        .entry_of_type(AF_INFO2, &[FieldType::Undefined])
-        .is_none()
-    {
+    // Without AFInfo2 there is nothing to place, so FocusMode is not read;
+    // with manual focus there is nothing to place either, so AFInfo2 is not
+    // read.
+    if ifd.entry(AF_INFO2).is_none() || manual_focus(src, makernote)? {
         return Ok(None);
     }
-    if manual_focus(src, makernote)? {
+    let Some(value) = ifd.get(src, rules::AF_INFO2)? else {
         return Ok(None);
-    }
-    let value = skip_damage(ifd.bytes(src, AF_INFO2))?.flatten();
-    let order = ifd.order();
-    let Some(record) = value.and_then(|value| af_info2_record(&value, order)) else {
+    };
+    let Some(record) = af_info2_record(&value, ifd.order()) else {
         return Ok(None);
     };
     let points = if record.records_position() {
@@ -1793,7 +1818,7 @@ fn placed_frame(
 ///
 /// `Io` when the reader fails. Nothing the block holds is an error.
 fn manual_focus<R: Read + Seek>(src: &mut Source<R>, makernote: &MakerNote) -> Result<bool> {
-    let mode = tiff_metadata::text(src, &makernote.ifd, FOCUS_MODE)?;
+    let mode = tiff_metadata::text(src, &makernote.ifd, rules::FOCUS_MODE)?;
     Ok(mode.as_deref() == Some("MANUAL"))
 }
 
@@ -2093,9 +2118,10 @@ mod tests {
     use crate::container::tiff::tags::{
         BODY_SERIAL_NUMBER, COLOR_SPACE as EXIF_COLOR_SPACE, DATE_TIME_ORIGINAL,
         DEFAULT_CROP_ORIGIN, DEFAULT_CROP_SIZE, EXPOSURE_PROGRAM, IMAGE_LENGTH, IMAGE_WIDTH,
-        INTEROP_INDEX, LENS_MAKE, LENS_MODEL, LENS_SERIAL_NUMBER, LENS_SPECIFICATION, LIGHT_SOURCE,
-        MAKE, MAKER_NOTE, MODEL, OFFSET_TIME_ORIGINAL, PHOTOGRAPHIC_SENSITIVITY,
-        PHOTOMETRIC_INTERPRETATION, SUB_SEC_TIME_ORIGINAL, WHITE_BALANCE as EXIF_WHITE_BALANCE,
+        INTEROP_INDEX, JPEG_INTERCHANGE_FORMAT, JPEG_INTERCHANGE_FORMAT_LENGTH, LENS_MAKE,
+        LENS_MODEL, LENS_SERIAL_NUMBER, LENS_SPECIFICATION, LIGHT_SOURCE, MAKE, MAKER_NOTE, MODEL,
+        OFFSET_TIME_ORIGINAL, PHOTOGRAPHIC_SENSITIVITY, PHOTOMETRIC_INTERPRETATION,
+        SUB_SEC_TIME_ORIGINAL, WHITE_BALANCE as EXIF_WHITE_BALANCE,
     };
     use crate::container::tiff::{self, parse_ifd, walk};
     use crate::datetime::DateTime;

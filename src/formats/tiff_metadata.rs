@@ -18,11 +18,14 @@
 //!
 //! The rules:
 //!
+//! - A value is read only from a tag of the type and count its rule names
+//!   (ADR011). Each tag's rule is declared once, in the `rules` module
+//!   below, and the IFD reads it ([`Ifd::get`], [`Ifd::held`]), checking
+//!   the type and count before anything is read.
 //! - A damaged value costs only itself. A tag that is missing, of a type
-//!   other than the standard's, of a count other than one where the rules
-//!   below ask for one SHORT, or whose value cannot be read, such as one
-//!   longer than the limits' cap on one value, gives `None` for its own
-//!   value; every other value is still read, and the file still opens.
+//!   or count other than its rule's, or whose value cannot be read, such
+//!   as one longer than the limits' cap on one value, gives `None` for its
+//!   own value; every other value is still read, and the file still opens.
 //!   Only a failure of the reader is an error: it says nothing about the
 //!   file.
 //! - The make, the model and the serial number, of the camera and of the
@@ -33,7 +36,7 @@
 //!   or UTF-8", the make, the model, the software, the lens's make and
 //!   model, the camera's owner, the artist, the copyright notice, the
 //!   photographer, the editor and the title, are read from a value of
-//!   either type by that rule ([`ascii_or_utf8_text`]), and so is the
+//!   either type by that rule, and so is the
 //!   description, as free text without the 255-byte limit (below); the
 //!   serial numbers, which Exif gives as ASCII alone, as every MakerNote
 //!   text, only from type ASCII.
@@ -104,8 +107,8 @@
 //!   `None` only when its denominator is zero, since a zero bias, such as
 //!   0/6, is no compensation ([`SignedRational::new`]).
 //! - The focal length in 35 mm terms is the Exif FocalLengthIn35mmFilm,
-//!   exactly one SHORT, the type and count the standard gives it
-//!   ([`one_short`]); it is `None` when zero, which Exif writes for one the
+//!   exactly one SHORT, the type and count the standard gives it; it is
+//!   `None` when zero, which Exif writes for one the
 //!   camera did not know ([`focal_length_in_35mm_film`]).
 //! - The lens is described by the Exif LensMake, LensModel and
 //!   LensSerialNumber, and by the LensSpecification, of type RATIONAL and
@@ -118,7 +121,7 @@
 //!   whose lens tags give no value gives a lens with every value `None`
 //!   ([`lens`]).
 //! - The camera settings that Exif records come from tags of the Exif IFD,
-//!   each exactly one SHORT, as the standard gives them ([`one_short`]),
+//!   each exactly one SHORT, as the standard gives them,
 //!   and each code Exif defines and a variant names gives that variant;
 //!   every other code, the ones Exif writes for "not defined" or "unknown"
 //!   among them, gives `None` ([`camera_settings`]):
@@ -186,7 +189,7 @@
 //!   checked by the same test of a crop ([`crop`]).
 //!
 //! Nothing here panics on any input: every value is read through the IFD's
-//! checked accessors, which check its offset and length against the file
+//! checked readers, which check its offset and length against the file
 //! and cap its size (ADR008).
 
 use std::io::{Read, Seek};
@@ -197,19 +200,8 @@ use crate::camera_settings::{
     CameraSettings, ColorSpace, ExposureProgram, Flash, FlashMode, MeteringMode, WhiteBalance,
     WhiteBalanceMode,
 };
-use crate::container::tiff::FieldType;
-use crate::container::tiff::tags::{
-    ARTIST, BODY_SERIAL_NUMBER, CAMERA_OWNER_NAME, COLOR_SPACE, COPYRIGHT, DATE_TIME_ORIGINAL,
-    DEFAULT_CROP_ORIGIN, DEFAULT_CROP_SIZE, EXPOSURE_BIAS_VALUE, EXPOSURE_PROGRAM, EXPOSURE_TIME,
-    F_NUMBER, FLASH, FOCAL_LENGTH, FOCAL_LENGTH_IN_35MM_FILM, GPS_ALTITUDE, GPS_ALTITUDE_REF,
-    GPS_DATE_STAMP, GPS_IMG_DIRECTION, GPS_IMG_DIRECTION_REF, GPS_LATITUDE, GPS_LATITUDE_REF,
-    GPS_LONGITUDE, GPS_LONGITUDE_REF, GPS_MAP_DATUM, GPS_TIME_STAMP, IMAGE_DESCRIPTION,
-    IMAGE_EDITOR, IMAGE_LENGTH, IMAGE_TITLE, IMAGE_WIDTH, INTEROP_INDEX, ISO_SPEED, LENS_MAKE,
-    LENS_MODEL, LENS_SERIAL_NUMBER, LENS_SPECIFICATION, LIGHT_SOURCE, MAKE, METERING_MODE, MODEL,
-    OFFSET_TIME_ORIGINAL, PHOTOGRAPHER, PHOTOGRAPHIC_SENSITIVITY, RECOMMENDED_EXPOSURE_INDEX,
-    SOFTWARE, SUB_SEC_TIME_ORIGINAL, USER_COMMENT, WHITE_BALANCE,
-};
-use crate::container::tiff::{Ifd, Tree, skip_damage};
+use crate::container::tiff::tags::{COLOR_SPACE, DEFAULT_CROP_ORIGIN, DEFAULT_CROP_SIZE};
+use crate::container::tiff::{Ifd, Rule, Text, Tree, skip_damage};
 use crate::datetime::DateTime;
 use crate::entries::clean_text;
 use crate::error::Result;
@@ -219,6 +211,101 @@ use crate::io::Source;
 use crate::location::{Altitude, Direction, Latitude, Location, Longitude, North};
 use crate::metadata::{Exposure, Lens, Metadata};
 use crate::rational::{Rational, SignedRational};
+
+/// The rules of the standard tags this reader reads: each tag's number,
+/// from [`tags`](crate::container::tiff::tags), and the types and count its
+/// value must have to be read (ADR011), as the module documentation gives
+/// them. [`Ifd::get`] and [`Ifd::held`] read them.
+///
+/// The ISO's three tags and the raw size's two are read by their first
+/// value alone, whatever the count, a
+/// [`First`](crate::container::tiff::First) rule, of type SHORT, LONG or
+/// IFD, a LONG under another name.
+mod rules {
+    use crate::container::tiff::tags;
+    use crate::container::tiff::{FieldType, First, Held, Rule, Text};
+    use crate::rational::{Rational, SignedRational};
+
+    /// Text Exif 3.1 gives as "ASCII or UTF-8".
+    const ASCII_OR_UTF8: &[FieldType] = &[FieldType::Ascii, FieldType::Utf8];
+    /// Text Exif gives as ASCII alone.
+    const ASCII: &[FieldType] = &[FieldType::Ascii];
+    /// One number of a tag Exif gives as SHORT or LONG, IFD taken as a LONG.
+    const NUMBER: &[FieldType] = &[FieldType::Short, FieldType::Long, FieldType::Ifd];
+    const SHORT: &[FieldType] = &[FieldType::Short];
+    const RATIONAL: &[FieldType] = &[FieldType::Rational];
+
+    // IFD0.
+    pub(super) const MAKE: Rule<Text> = Rule::new(tags::MAKE, ASCII_OR_UTF8);
+    pub(super) const MODEL: Rule<Text> = Rule::new(tags::MODEL, ASCII_OR_UTF8);
+    pub(super) const SOFTWARE: Rule<Text> = Rule::new(tags::SOFTWARE, ASCII_OR_UTF8);
+    pub(super) const ARTIST: Rule<Text> = Rule::new(tags::ARTIST, ASCII_OR_UTF8);
+    pub(super) const COPYRIGHT: Rule<Text> = Rule::new(tags::COPYRIGHT, ASCII_OR_UTF8);
+    pub(super) const IMAGE_DESCRIPTION: Rule<Text> =
+        Rule::new(tags::IMAGE_DESCRIPTION, ASCII_OR_UTF8);
+
+    // The Exif IFD.
+    pub(super) const BODY_SERIAL_NUMBER: Rule<Text> = Rule::new(tags::BODY_SERIAL_NUMBER, ASCII);
+    pub(super) const CAMERA_OWNER_NAME: Rule<Text> =
+        Rule::new(tags::CAMERA_OWNER_NAME, ASCII_OR_UTF8);
+    pub(super) const PHOTOGRAPHER: Rule<Text> = Rule::new(tags::PHOTOGRAPHER, ASCII_OR_UTF8);
+    pub(super) const IMAGE_EDITOR: Rule<Text> = Rule::new(tags::IMAGE_EDITOR, ASCII_OR_UTF8);
+    pub(super) const IMAGE_TITLE: Rule<Text> = Rule::new(tags::IMAGE_TITLE, ASCII_OR_UTF8);
+    pub(super) const USER_COMMENT: Rule<Vec<u8>> =
+        Rule::new(tags::USER_COMMENT, &[FieldType::Undefined]);
+    pub(super) const DATE_TIME_ORIGINAL: Rule<Text> = Rule::new(tags::DATE_TIME_ORIGINAL, ASCII);
+    pub(super) const SUB_SEC_TIME_ORIGINAL: Rule<Text> =
+        Rule::new(tags::SUB_SEC_TIME_ORIGINAL, ASCII);
+    pub(super) const OFFSET_TIME_ORIGINAL: Rule<Text> =
+        Rule::new(tags::OFFSET_TIME_ORIGINAL, ASCII);
+    pub(super) const PHOTOGRAPHIC_SENSITIVITY: Rule<First<u32>> =
+        Rule::new(tags::PHOTOGRAPHIC_SENSITIVITY, NUMBER);
+    pub(super) const RECOMMENDED_EXPOSURE_INDEX: Rule<First<u32>> =
+        Rule::new(tags::RECOMMENDED_EXPOSURE_INDEX, NUMBER);
+    pub(super) const ISO_SPEED: Rule<First<u32>> = Rule::new(tags::ISO_SPEED, NUMBER);
+    pub(super) const EXPOSURE_TIME: Rule<Vec<Rational>> = Rule::new(tags::EXPOSURE_TIME, RATIONAL);
+    pub(super) const F_NUMBER: Rule<Vec<Rational>> = Rule::new(tags::F_NUMBER, RATIONAL);
+    pub(super) const FOCAL_LENGTH: Rule<Vec<Rational>> = Rule::new(tags::FOCAL_LENGTH, RATIONAL);
+    pub(super) const EXPOSURE_BIAS_VALUE: Rule<Vec<SignedRational>> =
+        Rule::new(tags::EXPOSURE_BIAS_VALUE, &[FieldType::SRational]);
+    pub(super) const FOCAL_LENGTH_IN_35MM_FILM: Held<[u32; 1]> =
+        Held::new(tags::FOCAL_LENGTH_IN_35MM_FILM, SHORT);
+    pub(super) const LENS_MAKE: Rule<Text> = Rule::new(tags::LENS_MAKE, ASCII_OR_UTF8);
+    pub(super) const LENS_MODEL: Rule<Text> = Rule::new(tags::LENS_MODEL, ASCII_OR_UTF8);
+    pub(super) const LENS_SERIAL_NUMBER: Rule<Text> = Rule::new(tags::LENS_SERIAL_NUMBER, ASCII);
+    pub(super) const LENS_SPECIFICATION: Rule<[Rational; 4]> =
+        Rule::new(tags::LENS_SPECIFICATION, RATIONAL);
+    pub(super) const EXPOSURE_PROGRAM: Held<[u32; 1]> = Held::new(tags::EXPOSURE_PROGRAM, SHORT);
+    pub(super) const METERING_MODE: Held<[u32; 1]> = Held::new(tags::METERING_MODE, SHORT);
+    pub(super) const FLASH: Held<[u32; 1]> = Held::new(tags::FLASH, SHORT);
+    pub(super) const WHITE_BALANCE: Held<[u32; 1]> = Held::new(tags::WHITE_BALANCE, SHORT);
+    pub(super) const LIGHT_SOURCE: Held<[u32; 1]> = Held::new(tags::LIGHT_SOURCE, SHORT);
+    pub(super) const COLOR_SPACE: Held<[u32; 1]> = Held::new(tags::COLOR_SPACE, SHORT);
+
+    // The Interoperability IFD.
+    pub(super) const INTEROP_INDEX: Rule<Text> = Rule::new(tags::INTEROP_INDEX, ASCII);
+
+    // The GPS IFD.
+    pub(super) const GPS_LATITUDE_REF: Rule<Text> = Rule::new(tags::GPS_LATITUDE_REF, ASCII);
+    pub(super) const GPS_LATITUDE: Rule<[Rational; 3]> = Rule::new(tags::GPS_LATITUDE, RATIONAL);
+    pub(super) const GPS_LONGITUDE_REF: Rule<Text> = Rule::new(tags::GPS_LONGITUDE_REF, ASCII);
+    pub(super) const GPS_LONGITUDE: Rule<[Rational; 3]> = Rule::new(tags::GPS_LONGITUDE, RATIONAL);
+    pub(super) const GPS_ALTITUDE_REF: Held<[u8; 1]> =
+        Held::new(tags::GPS_ALTITUDE_REF, &[FieldType::Byte]);
+    pub(super) const GPS_ALTITUDE: Rule<[Rational; 1]> = Rule::new(tags::GPS_ALTITUDE, RATIONAL);
+    pub(super) const GPS_DATE_STAMP: Rule<Text> = Rule::new(tags::GPS_DATE_STAMP, ASCII);
+    pub(super) const GPS_TIME_STAMP: Rule<[Rational; 3]> =
+        Rule::new(tags::GPS_TIME_STAMP, RATIONAL);
+    pub(super) const GPS_IMG_DIRECTION_REF: Rule<Text> =
+        Rule::new(tags::GPS_IMG_DIRECTION_REF, ASCII);
+    pub(super) const GPS_IMG_DIRECTION: Rule<[Rational; 1]> =
+        Rule::new(tags::GPS_IMG_DIRECTION, RATIONAL);
+    pub(super) const GPS_MAP_DATUM: Rule<Text> = Rule::new(tags::GPS_MAP_DATUM, ASCII);
+
+    // The IFD of the raw data.
+    pub(super) const IMAGE_WIDTH: Rule<First<u32>> = Rule::new(tags::IMAGE_WIDTH, NUMBER);
+    pub(super) const IMAGE_LENGTH: Rule<First<u32>> = Rule::new(tags::IMAGE_LENGTH, NUMBER);
+}
 
 /// The longest text, in bytes as stored, that is taken for a value rather
 /// than for damage.
@@ -295,8 +382,8 @@ pub(crate) fn read<R: Read + Seek>(src: &mut Source<R>, tree: &Tree) -> Result<S
     let (serial_number, owner_name, capture_time, exposure, camera_settings, lens) =
         match tree.exif() {
             Some(exif) => (
-                text(src, exif, BODY_SERIAL_NUMBER)?,
-                ascii_or_utf8_text(src, exif, CAMERA_OWNER_NAME)?,
+                text(src, exif, rules::BODY_SERIAL_NUMBER)?,
+                text(src, exif, rules::CAMERA_OWNER_NAME)?,
                 capture_time(src, exif)?,
                 exposure(src, exif)?,
                 camera_settings(src, exif, tree.interop())?,
@@ -314,12 +401,12 @@ pub(crate) fn read<R: Read + Seek>(src: &mut Source<R>, tree: &Tree) -> Result<S
     let (raw_size, default_crop) = sizes(src, tree)?;
     let metadata = Metadata {
         camera: Camera {
-            recorded_make: ascii_or_utf8_text(src, ifd0, MAKE)?,
-            recorded_model: ascii_or_utf8_text(src, ifd0, MODEL)?,
+            recorded_make: text(src, ifd0, rules::MAKE)?,
+            recorded_model: text(src, ifd0, rules::MODEL)?,
             serial_number,
             owner_name,
         },
-        software: ascii_or_utf8_text(src, ifd0, SOFTWARE)?,
+        software: text(src, ifd0, rules::SOFTWARE)?,
         authorship: authorship(src, tree)?,
         location: match tree.gps() {
             Some(gps) => location(src, gps)?,
@@ -347,20 +434,22 @@ pub(crate) fn read<R: Read + Seek>(src: &mut Source<R>, tree: &Tree) -> Result<S
     })
 }
 
-/// The text of tag `tag` of `ifd`, cleaned as every text value of the
-/// metadata is, such as the camera's make and serial number, whether a
-/// standard tag or a format's own, such as the serial number in Nikon's
+/// The text of the tag `rule` names in `ifd`, cleaned as every text value
+/// of the metadata is, such as the camera's make and serial number, whether
+/// a standard tag or a format's own, such as the serial number in Nikon's
 /// MakerNote, records it.
 ///
-/// The value must be of type ASCII. It ends at its first NUL, or with the
-/// value when there is none. When what is before the NUL is longer than
+/// The value must be of a type the rule names: ASCII, or ASCII or UTF-8
+/// for the texts Exif 3.1 gives as "ASCII or UTF-8", such as the Make, the
+/// Model and the LensModel. It ends at its first NUL, or with the value
+/// when there is none. When what is before the NUL is longer than
 /// [`MAX_TEXT_LEN`] bytes, counted as stored, before any trimming or
 /// replacement, it is damage and `None`. Spaces at either end are padding
 /// and are dropped, as in the DSLR-A100's Make, `SONY` and eleven spaces;
 /// spaces inside the text, and any other blank such as a tab, are kept, as
 /// the capture time's reading and the formats' Make test keep them. Text
 /// that is empty once trimmed, as a value of NULs or of spaces only, is
-/// `None`. Bytes that are not UTF-8 become U+FFFD.
+/// `None`. Bytes that are not UTF-8 become U+FFFD, whatever the type says.
 ///
 /// # Errors
 ///
@@ -370,30 +459,9 @@ pub(crate) fn read<R: Read + Seek>(src: &mut Source<R>, tree: &Tree) -> Result<S
 pub(crate) fn text<R: Read + Seek>(
     src: &mut Source<R>,
     ifd: &Ifd,
-    tag: u16,
+    rule: Rule<Text>,
 ) -> Result<Option<String>> {
-    Ok(short_text(
-        skip_damage(ifd.ascii_bytes(src, tag))?.flatten(),
-    ))
-}
-
-/// The text of tag `tag` of `ifd`, of type ASCII or UTF-8, cleaned as
-/// [`text`] cleans a text of type ASCII: for the texts that Exif 3.1 gives
-/// as "ASCII or UTF-8", such as the Make, the Model and the LensModel.
-///
-/// A value of type UTF-8 is cut at its first NUL, held to
-/// [`MAX_TEXT_LEN`] bytes and trimmed as one of type ASCII is, and bytes
-/// that are not UTF-8 become U+FFFD in either.
-///
-/// # Errors
-///
-/// As for [`text`].
-pub(crate) fn ascii_or_utf8_text<R: Read + Seek>(
-    src: &mut Source<R>,
-    ifd: &Ifd,
-    tag: u16,
-) -> Result<Option<String>> {
-    Ok(short_text(skip_damage(ifd.text_bytes(src, tag))?.flatten()))
+    Ok(short_text(ifd.get(src, rule)?))
 }
 
 /// The text `bytes` hold, up to their first NUL, cleaned by
@@ -411,8 +479,8 @@ fn short_text(bytes: Option<Vec<u8>>) -> Option<String> {
 ///
 /// IFD0's texts are read from IFD0 alone: the copies Sony writes in IFD1
 /// and IFD2 are not read. The artist, the copyright notice, the
-/// photographer, the editor and the title are read by
-/// [`ascii_or_utf8_text`]; the description by [`description`] and the
+/// photographer, the editor and the title are read by [`text`]; the
+/// description by [`description`] and the
 /// comment by [`comment`], as free text. A file without an Exif IFD gives
 /// no photographer, editor, title or comment.
 ///
@@ -423,15 +491,15 @@ fn short_text(bytes: Option<Vec<u8>>) -> Option<String> {
 fn authorship<R: Read + Seek>(src: &mut Source<R>, tree: &Tree) -> Result<Authorship> {
     let ifd0 = tree.ifd0();
     let mut authorship = Authorship {
-        artist: ascii_or_utf8_text(src, ifd0, ARTIST)?,
-        copyright: ascii_or_utf8_text(src, ifd0, COPYRIGHT)?,
+        artist: text(src, ifd0, rules::ARTIST)?,
+        copyright: text(src, ifd0, rules::COPYRIGHT)?,
         description: description(src, ifd0)?,
         ..Authorship::default()
     };
     if let Some(exif) = tree.exif() {
-        authorship.photographer = ascii_or_utf8_text(src, exif, PHOTOGRAPHER)?;
-        authorship.editor = ascii_or_utf8_text(src, exif, IMAGE_EDITOR)?;
-        authorship.title = ascii_or_utf8_text(src, exif, IMAGE_TITLE)?;
+        authorship.photographer = text(src, exif, rules::PHOTOGRAPHER)?;
+        authorship.editor = text(src, exif, rules::IMAGE_EDITOR)?;
+        authorship.title = text(src, exif, rules::IMAGE_TITLE)?;
         authorship.comment = comment(src, exif)?;
     }
     Ok(authorship)
@@ -452,7 +520,7 @@ fn authorship<R: Read + Seek>(src: &mut Source<R>, tree: &Tree) -> Result<Author
 /// `Io` when the reader fails. A value that cannot be read for any other
 /// reason, such as one longer than the cap, is `None`.
 fn description<R: Read + Seek>(src: &mut Source<R>, ifd0: &Ifd) -> Result<Option<String>> {
-    let Some(bytes) = skip_damage(ifd0.text_bytes(src, IMAGE_DESCRIPTION))?.flatten() else {
+    let Some(bytes) = ifd0.get(src, rules::IMAGE_DESCRIPTION)? else {
         return Ok(None);
     };
     Ok(clean_text(&bytes).filter(|text| !PLACEHOLDER_DESCRIPTIONS.contains(&text.as_str())))
@@ -473,14 +541,7 @@ fn description<R: Read + Seek>(src: &mut Source<R>, ifd0: &Ifd) -> Result<Option
 /// `Io` when the reader fails. A value that cannot be read for any other
 /// reason, such as one longer than the cap, is `None`.
 fn comment<R: Read + Seek>(src: &mut Source<R>, exif: &Ifd) -> Result<Option<String>> {
-    // `bytes` reads BYTE as well as UNDEFINED; Exif gives UNDEFINED alone.
-    if exif
-        .entry_of_type(USER_COMMENT, &[FieldType::Undefined])
-        .is_none()
-    {
-        return Ok(None);
-    }
-    let Some(bytes) = skip_damage(exif.bytes(src, USER_COMMENT))?.flatten() else {
+    let Some(bytes) = exif.get(src, rules::USER_COMMENT)? else {
         return Ok(None);
     };
     Ok(bytes.strip_prefix(ASCII_CODE).and_then(clean_text))
@@ -491,14 +552,14 @@ fn comment<R: Read + Seek>(src: &mut Source<R>, exif: &Ifd) -> Result<Option<Str
 ///
 /// The position needs GPSLatitudeRef `N` or `S` and GPSLongitudeRef `E` or
 /// `W`, each read by [`text`], and GPSLatitude and GPSLongitude, each
-/// exactly three RATIONALs ([`exact_rationals`]) that [`Latitude`] or
+/// exactly three RATIONALs that [`Latitude`] or
 /// [`Longitude`] accepts; without one there is no location, and no other
 /// GPS value is read. The other parts each need both their tags, and a
 /// part whose tags are missing or damaged is `None` alone:
 ///
 /// - the altitude, GPSAltitude, exactly one RATIONAL with a denominator
 ///   above zero, above its reference for a GPSAltitudeRef of 0 or 2 and
-///   below it for 1 or 3, exactly one BYTE ([`one_byte`]);
+///   below it for 1 or 3, exactly one BYTE;
 /// - the time, GPSDateStamp, of type ASCII, and GPSTimeStamp, exactly
 ///   three RATIONALs, as [`DateTime::from_gps`] reads them;
 /// - the image direction, GPSImgDirection, exactly one RATIONAL that
@@ -513,37 +574,40 @@ fn comment<R: Read + Seek>(src: &mut Source<R>, exif: &Ifd) -> Result<Option<Str
 /// `Io` when the reader fails. A value that cannot be read for any other
 /// reason is `None`, and costs no other value.
 fn location<R: Read + Seek>(src: &mut Source<R>, gps: &Ifd) -> Result<Option<Location>> {
-    let latitude = match text(src, gps, GPS_LATITUDE_REF)?.as_deref() {
+    let latitude = match text(src, gps, rules::GPS_LATITUDE_REF)?.as_deref() {
         Some("N") => Latitude::north,
         Some("S") => Latitude::south,
         _ => return Ok(None),
     };
-    let Some(latitude) = exact_rationals::<_, 3>(src, gps, GPS_LATITUDE)?
+    let Some(latitude) = gps
+        .get(src, rules::GPS_LATITUDE)?
         .and_then(|[degrees, minutes, seconds]| latitude(degrees, minutes, seconds).ok())
     else {
         return Ok(None);
     };
-    let longitude = match text(src, gps, GPS_LONGITUDE_REF)?.as_deref() {
+    let longitude = match text(src, gps, rules::GPS_LONGITUDE_REF)?.as_deref() {
         Some("E") => Longitude::east,
         Some("W") => Longitude::west,
         _ => return Ok(None),
     };
-    let Some(longitude) = exact_rationals::<_, 3>(src, gps, GPS_LONGITUDE)?
+    let Some(longitude) = gps
+        .get(src, rules::GPS_LONGITUDE)?
         .and_then(|[degrees, minutes, seconds]| longitude(degrees, minutes, seconds).ok())
     else {
         return Ok(None);
     };
 
-    let altitude =
-        match one_byte(src, gps, GPS_ALTITUDE_REF)? {
-            Some(0 | 2) => exact_rationals::<_, 1>(src, gps, GPS_ALTITUDE)?
-                .and_then(|[m]| Altitude::above(m).ok()),
-            Some(1 | 3) => exact_rationals::<_, 1>(src, gps, GPS_ALTITUDE)?
-                .and_then(|[m]| Altitude::below(m).ok()),
-            _ => None,
-        };
-    let time = match skip_damage(gps.ascii_bytes(src, GPS_DATE_STAMP))?.flatten() {
-        Some(date) => exact_rationals::<_, 3>(src, gps, GPS_TIME_STAMP)?.and_then(|time| {
+    let altitude = match gps.held(rules::GPS_ALTITUDE_REF) {
+        Some([0 | 2]) => gps
+            .get(src, rules::GPS_ALTITUDE)?
+            .and_then(|[m]| Altitude::above(m).ok()),
+        Some([1 | 3]) => gps
+            .get(src, rules::GPS_ALTITUDE)?
+            .and_then(|[m]| Altitude::below(m).ok()),
+        _ => None,
+    };
+    let time = match gps.get(src, rules::GPS_DATE_STAMP)? {
+        Some(date) => gps.get(src, rules::GPS_TIME_STAMP)?.and_then(|time| {
             DateTime::from_gps(
                 &date,
                 time.map(|fraction| (fraction.numerator, fraction.denominator)),
@@ -551,13 +615,14 @@ fn location<R: Read + Seek>(src: &mut Source<R>, gps: &Ifd) -> Result<Option<Loc
         }),
         None => None,
     };
-    let north = match text(src, gps, GPS_IMG_DIRECTION_REF)?.as_deref() {
+    let north = match text(src, gps, rules::GPS_IMG_DIRECTION_REF)?.as_deref() {
         Some("T") => Some(North::True),
         Some("M") => Some(North::Magnetic),
         _ => None,
     };
     let image_direction = match north {
-        Some(north) => exact_rationals::<_, 1>(src, gps, GPS_IMG_DIRECTION)?
+        Some(north) => gps
+            .get(src, rules::GPS_IMG_DIRECTION)?
             .and_then(|[degrees]| Direction::new(degrees, north).ok()),
         None => None,
     };
@@ -565,59 +630,9 @@ fn location<R: Read + Seek>(src: &mut Source<R>, gps: &Ifd) -> Result<Option<Loc
         altitude,
         time,
         image_direction,
-        map_datum: text(src, gps, GPS_MAP_DATUM)?,
+        map_datum: text(src, gps, rules::GPS_MAP_DATUM)?,
         ..Location::new(latitude, longitude)
     }))
-}
-
-/// The `N` fractions of tag `tag` of `ifd`, as stored, a zero denominator
-/// included, when the tag is of type RATIONAL and holds exactly `N`
-/// values; `None` when it is missing, of another type or of another
-/// count.
-///
-/// The type and count are checked before the value is read, so a tag of
-/// another count costs no read.
-///
-/// # Errors
-///
-/// `Io` when the reader fails. A value that cannot be read for any other
-/// reason is `None`.
-fn exact_rationals<R: Read + Seek, const N: usize>(
-    src: &mut Source<R>,
-    ifd: &Ifd,
-    tag: u16,
-) -> Result<Option<[Rational; N]>> {
-    if !holds(ifd, tag, FieldType::Rational, N) {
-        return Ok(None);
-    }
-    let pairs = skip_damage(ifd.rationals(src, tag))?.flatten();
-    Ok(pairs
-        .and_then(|pairs| <[(u32, u32); N]>::try_from(pairs).ok())
-        .map(|pairs| {
-            pairs.map(|(numerator, denominator)| Rational {
-                numerator,
-                denominator,
-            })
-        }))
-}
-
-/// The value of tag `tag` of `ifd`, when the tag is of type BYTE and holds
-/// exactly one value; `None` when it is missing, of another type or of
-/// another count. One BYTE is held in its entry, so reading it reads
-/// nothing more from the file.
-///
-/// # Errors
-///
-/// `Io` when the reader fails. A value that cannot be read for any other
-/// reason is `None`.
-fn one_byte<R: Read + Seek>(src: &mut Source<R>, ifd: &Ifd, tag: u16) -> Result<Option<u8>> {
-    // `bytes` reads UNDEFINED as well as BYTE; Exif gives BYTE alone.
-    if !holds(ifd, tag, FieldType::Byte, 1) {
-        return Ok(None);
-    }
-    Ok(skip_damage(ifd.bytes(src, tag))?
-        .flatten()
-        .and_then(|bytes| bytes.first().copied()))
 }
 
 /// When the picture was taken, from the Exif IFD `exif`: its
@@ -635,11 +650,11 @@ fn one_byte<R: Read + Seek>(src: &mut Source<R>, ifd: &Ifd, tag: u16) -> Result<
 /// `Io` when the reader fails. A value that cannot be read for any other
 /// reason is missing.
 fn capture_time<R: Read + Seek>(src: &mut Source<R>, exif: &Ifd) -> Result<Option<DateTime>> {
-    let Some(date) = skip_damage(exif.ascii_bytes(src, DATE_TIME_ORIGINAL))?.flatten() else {
+    let Some(date) = exif.get(src, rules::DATE_TIME_ORIGINAL)? else {
         return Ok(None);
     };
-    let subsec = skip_damage(exif.ascii_bytes(src, SUB_SEC_TIME_ORIGINAL))?.flatten();
-    let offset = skip_damage(exif.ascii_bytes(src, OFFSET_TIME_ORIGINAL))?.flatten();
+    let subsec = exif.get(src, rules::SUB_SEC_TIME_ORIGINAL)?;
+    let offset = exif.get(src, rules::OFFSET_TIME_ORIGINAL)?;
     Ok(DateTime::from_exif(
         &date,
         subsec.as_deref(),
@@ -659,67 +674,31 @@ fn capture_time<R: Read + Seek>(src: &mut Source<R>, exif: &Ifd) -> Result<Optio
 fn exposure<R: Read + Seek>(src: &mut Source<R>, exif: &Ifd) -> Result<Exposure> {
     Ok(Exposure {
         iso: iso(src, exif)?,
-        exposure_time: rational(src, exif, EXPOSURE_TIME)?,
-        f_number: rational(src, exif, F_NUMBER)?,
-        focal_length: rational(src, exif, FOCAL_LENGTH)?,
+        exposure_time: rational(src, exif, rules::EXPOSURE_TIME)?,
+        f_number: rational(src, exif, rules::F_NUMBER)?,
+        focal_length: rational(src, exif, rules::FOCAL_LENGTH)?,
         focal_length_in_35mm_film: focal_length_in_35mm_film(exif),
-        exposure_bias: signed_rational(src, exif, EXPOSURE_BIAS_VALUE)?,
+        exposure_bias: signed_rational(src, exif, rules::EXPOSURE_BIAS_VALUE)?,
     })
 }
 
 /// The focal length in 35 mm terms, in whole millimeters, from the Exif
 /// IFD `exif`: its FocalLengthIn35mmFilm, which must be exactly one SHORT,
-/// the type and count the standard gives it, as [`one_short`] reads it.
-/// `None` when the value is zero, which Exif writes for a focal length the
-/// camera did not know, as the ILCE-7S does with a manual lens (public
-/// sample 1582).
+/// the type and count the standard gives it. `None` when the value is
+/// zero, which Exif writes for a focal length the camera did not know, as
+/// the ILCE-7S does with a manual lens (public sample 1582).
 fn focal_length_in_35mm_film(exif: &Ifd) -> Option<u32> {
-    one_short(exif, FOCAL_LENGTH_IN_35MM_FILM)
-        .filter(|&millimeters| millimeters > 0)
-        .map(u32::from)
-}
-
-/// The value of tag `tag` of `ifd`, when the tag is of type SHORT and
-/// holds exactly one value, as [`Ifd::one_u32`] reads it: the type and
-/// count the standard gives each Exif tag read this way, a single number
-/// or code such as the focal length in 35 mm terms or the metering mode,
-/// and that a MakerNote's reader holds its own such tags to, such as
-/// Nikon's shutter mode. `None` when the tag is missing, of another type
-/// or of another count. The entry holds the value, so this reads nothing
-/// from the file.
-pub(crate) fn one_short(ifd: &Ifd, tag: u16) -> Option<u16> {
-    // A SHORT, widened to 32 bits, always fits back.
-    ifd.one_u32(tag, &[FieldType::Short])
-        .and_then(|value| u16::try_from(value).ok())
-}
-
-/// The value of tag `tag` of `ifd`, when the tag is of type LONG and holds
-/// exactly one value, as [`Ifd::one_u32`] reads it: the type and count a
-/// MakerNote's reader holds its tags of one number to where the maker
-/// writes them as LONGs, such as each of Sony's settings tags of one
-/// number. `None` when the tag is missing, of another type or of another
-/// count. The entry holds the value, so this reads nothing from the file.
-pub(crate) fn one_long(ifd: &Ifd, tag: u16) -> Option<u32> {
-    ifd.one_u32(tag, &[FieldType::Long])
-}
-
-/// Whether tag `tag` of `ifd` is of type `field_type` and holds exactly
-/// `count` values: what the readers of fractions and of a byte check
-/// before they read, so that a tag of another type or count gives nothing
-/// and costs no read (ADR011). The type is checked through
-/// [`Ifd::entry_of_type`], since the value readers take more types than a
-/// tag's rule allows.
-fn holds(ifd: &Ifd, tag: u16, field_type: FieldType, count: usize) -> bool {
-    ifd.entry_of_type(tag, &[field_type])
-        .is_some_and(|entry| usize::try_from(entry.count()).ok() == Some(count))
+    let [millimeters] = exif.held(rules::FOCAL_LENGTH_IN_35MM_FILM)?;
+    (millimeters > 0).then_some(millimeters)
 }
 
 /// The ISO the picture was taken at, from the Exif IFD `exif`.
 ///
 /// It is the first value of the PhotographicSensitivity, of type SHORT or
-/// LONG, as [`Ifd::u32`] reads it (which takes the type IFD too, a LONG
-/// under another name). Exif gives two of its values a meaning of their
-/// own: zero, a sensitivity the camera did not know, and 65535
+/// LONG, or IFD, a LONG under another name, read alone whatever the count
+/// ([`First`](crate::container::tiff::First)). Exif gives two of its
+/// values a meaning of their own: zero, a sensitivity the camera did not
+/// know, and 65535
 /// ([`ISO_65535_OR_MORE`]), one of 65535 or more. For those, and when the
 /// tag is missing or cannot be read, the ISO is the first value of the
 /// RecommendedExposureIndex, or else that of the ISOSpeed, each read the
@@ -732,38 +711,39 @@ fn holds(ifd: &Ifd, tag: u16, field_type: FieldType, count: usize) -> bool {
 /// `Io` when the reader fails. A value that cannot be read for any other
 /// reason is missing.
 fn iso<R: Read + Seek>(src: &mut Source<R>, exif: &Ifd) -> Result<Option<u32>> {
-    let sensitivity = skip_damage(exif.u32(src, PHOTOGRAPHIC_SENSITIVITY))?.flatten();
+    let sensitivity = exif.get(src, rules::PHOTOGRAPHIC_SENSITIVITY)?;
     if let Some(iso) = sensitivity.filter(|&iso| iso != 0 && iso != ISO_65535_OR_MORE) {
         return Ok(Some(iso));
     }
-    for tag in [RECOMMENDED_EXPOSURE_INDEX, ISO_SPEED] {
-        if let Some(iso) = skip_damage(exif.u32(src, tag))?
-            .flatten()
-            .filter(|&iso| iso > 0)
-        {
+    for rule in [rules::RECOMMENDED_EXPOSURE_INDEX, rules::ISO_SPEED] {
+        if let Some(iso) = exif.get(src, rule)?.filter(|&iso| iso > 0) {
             return Ok(Some(iso));
         }
     }
     Ok(sensitivity.filter(|&iso| iso == ISO_65535_OR_MORE))
 }
 
-/// The first fraction of tag `tag` of `ifd`, which must be of type
-/// RATIONAL, as stored; `None` when its numerator or its denominator is
-/// zero ([`Rational::known`]).
+/// The first fraction of the tag `rule` names in `ifd`, which must be of
+/// type RATIONAL, as stored; `None` when its numerator or its denominator
+/// is zero ([`Rational::known`]).
 ///
 /// # Errors
 ///
 /// `Io` when the reader fails. A value that cannot be read for any other
 /// reason is `None`.
-fn rational<R: Read + Seek>(src: &mut Source<R>, ifd: &Ifd, tag: u16) -> Result<Option<Rational>> {
-    let first = skip_damage(ifd.rationals(src, tag))?
-        .flatten()
+fn rational<R: Read + Seek>(
+    src: &mut Source<R>,
+    ifd: &Ifd,
+    rule: Rule<Vec<Rational>>,
+) -> Result<Option<Rational>> {
+    let first = ifd
+        .get(src, rule)?
         .and_then(|values| values.first().copied());
-    Ok(first.and_then(|(numerator, denominator)| Rational::known(numerator, denominator)))
+    Ok(first.and_then(|first| Rational::known(first.numerator, first.denominator)))
 }
 
-/// The first fraction of tag `tag` of `ifd`, which must be of type
-/// SRATIONAL, as stored; `None` when its denominator is zero
+/// The first fraction of the tag `rule` names in `ifd`, which must be of
+/// type SRATIONAL, as stored; `None` when its denominator is zero
 /// ([`SignedRational::new`]).
 ///
 /// # Errors
@@ -773,12 +753,12 @@ fn rational<R: Read + Seek>(src: &mut Source<R>, ifd: &Ifd, tag: u16) -> Result<
 fn signed_rational<R: Read + Seek>(
     src: &mut Source<R>,
     ifd: &Ifd,
-    tag: u16,
+    rule: Rule<Vec<SignedRational>>,
 ) -> Result<Option<SignedRational>> {
-    let first = skip_damage(ifd.srationals(src, tag))?
-        .flatten()
+    let first = ifd
+        .get(src, rule)?
         .and_then(|values| values.first().copied());
-    Ok(first.and_then(|(numerator, denominator)| SignedRational::new(numerator, denominator).ok()))
+    Ok(first.and_then(|first| SignedRational::new(first.numerator, first.denominator).ok()))
 }
 
 /// The lens the picture was taken with, from the Exif IFD `exif`: its
@@ -797,10 +777,10 @@ fn signed_rational<R: Read + Seek>(
 /// `Io` when the reader fails. A value that cannot be read for any other
 /// reason is `None`, and costs no other value.
 fn lens<R: Read + Seek>(src: &mut Source<R>, exif: &Ifd) -> Result<Lens> {
-    let recorded_make = ascii_or_utf8_text(src, exif, LENS_MAKE)?;
+    let recorded_make = text(src, exif, rules::LENS_MAKE)?;
     let recorded_model =
-        ascii_or_utf8_text(src, exif, LENS_MODEL)?.filter(|model| !model.chars().all(|c| c == '-'));
-    let serial_number = text(src, exif, LENS_SERIAL_NUMBER)?;
+        text(src, exif, rules::LENS_MODEL)?.filter(|model| !model.chars().all(|c| c == '-'));
+    let serial_number = text(src, exif, rules::LENS_SERIAL_NUMBER)?;
     let mut lens = Lens {
         recorded_make,
         recorded_model,
@@ -815,9 +795,9 @@ fn lens<R: Read + Seek>(src: &mut Source<R>, exif: &Ifd) -> Result<Lens> {
 /// shortest and longest focal length, then the f-number at each, in the
 /// order the tag stores them.
 ///
-/// The tag must be of type RATIONAL and hold exactly four values, as
-/// [`exact_rationals`] reads them; with any other count it describes no
-/// range the reader can trust, and all four are `None`, without a read.
+/// The tag must be of type RATIONAL and hold exactly four values; with any
+/// other count it describes no range the reader can trust, and all four
+/// are `None`, without a read.
 /// Each value is `None` when its numerator or its denominator is zero
 /// ([`Rational::known`]): Exif writes 0/0 for a value the camera did not
 /// know, such as the apertures of a lens that does not report them.
@@ -830,18 +810,18 @@ fn lens_specification<R: Read + Seek>(
     src: &mut Source<R>,
     exif: &Ifd,
 ) -> Result<[Option<Rational>; 4]> {
-    let values = exact_rationals::<_, 4>(src, exif, LENS_SPECIFICATION)?;
+    let values = exif.get(src, rules::LENS_SPECIFICATION)?;
     Ok(values.map_or([None; 4], |values| {
         values.map(|value| Rational::known(value.numerator, value.denominator))
     }))
 }
 
 /// The ColorSpace Exif writes for sRGB.
-const SRGB: u16 = 1;
+const SRGB: u32 = 1;
 
 /// The ColorSpace Exif writes for "uncalibrated": any color space but
 /// sRGB, which the Interoperability IFD's InteropIndex may then name.
-const UNCALIBRATED: u16 = 0xFFFF;
+const UNCALIBRATED: u32 = 0xFFFF;
 
 /// The InteropIndex of a DCF option file, which names Adobe RGB beside a
 /// ColorSpace of [`UNCALIBRATED`].
@@ -878,9 +858,13 @@ fn camera_settings<R: Read + Seek>(
             color_temperature: None,
             fine_tune: None,
         },
-        exposure_program: one_short(exif, EXPOSURE_PROGRAM).and_then(exposure_program),
-        metering_mode: one_short(exif, METERING_MODE).and_then(metering_mode),
-        flash: one_short(exif, FLASH).and_then(flash),
+        exposure_program: exif
+            .held(rules::EXPOSURE_PROGRAM)
+            .and_then(|[code]| exposure_program(code)),
+        metering_mode: exif
+            .held(rules::METERING_MODE)
+            .and_then(|[code]| metering_mode(code)),
+        flash: exif.held(rules::FLASH).and_then(|[bits]| flash(bits)),
         // Only a maker's MakerNote records these: Nikon's reader fills
         // all but the electronic front curtain setting, which Nikon does
         // not record, and Sony's reader that setting alone, since Sony
@@ -898,7 +882,7 @@ fn camera_settings<R: Read + Seek>(
 /// 2 program ("normal program"), 3 aperture priority, 4 shutter priority,
 /// 5 creative, 6 action, 7 portrait and 8 landscape. `None` for 0, "not
 /// defined", and for every code Exif does not define, such as 9.
-fn exposure_program(code: u16) -> Option<ExposureProgram> {
+fn exposure_program(code: u32) -> Option<ExposureProgram> {
     Some(match code {
         1 => ExposureProgram::Manual,
         2 => ExposureProgram::Program,
@@ -916,7 +900,7 @@ fn exposure_program(code: u16) -> Option<ExposureProgram> {
 /// center-weighted average, 3 spot, 4 multi-spot, 5 multi-segment (Exif's
 /// "pattern"), 6 partial and 255 other. `None` for 0, "unknown", and for
 /// every code Exif does not define.
-fn metering_mode(code: u16) -> Option<MeteringMode> {
+fn metering_mode(code: u32) -> Option<MeteringMode> {
     Some(match code {
         1 => MeteringMode::Average,
         2 => MeteringMode::CenterWeighted,
@@ -941,11 +925,12 @@ fn metering_mode(code: u16) -> Option<MeteringMode> {
 ///
 /// `None` when any of the reserved bits 7 to 15 is set, which no camera
 /// writes, and when bits 0 and 5 are both set, a flash that fired on a
-/// camera without one: the value contradicts itself.
-fn flash(bits: u16) -> Option<Flash> {
-    const FIRED: u16 = 1;
-    const NO_FLASH_FUNCTION: u16 = 1 << 5;
-    const RESERVED: u16 = 0xFF80;
+/// camera without one: the value contradicts itself. `bits` is a SHORT
+/// widened, so no bit above 15 is set.
+fn flash(bits: u32) -> Option<Flash> {
+    const FIRED: u32 = 1;
+    const NO_FLASH_FUNCTION: u32 = 1 << 5;
+    const RESERVED: u32 = 0xFF80;
     if bits & RESERVED != 0 {
         return None;
     }
@@ -965,15 +950,17 @@ fn flash(bits: u16) -> Option<Flash> {
 /// The white balance mode the Exif IFD `exif` records: its WhiteBalance,
 /// 0 for auto, and, when it is 1, "manual", the kind of light its
 /// LightSource names ([`white_balance_of_light`]). Each must be exactly
-/// one SHORT ([`one_short`]).
+/// one SHORT.
 ///
 /// `None` when the WhiteBalance is missing, cannot be read or holds
 /// another code, and for a manual white balance whose LightSource is
 /// missing, cannot be read or names no mode.
 fn white_balance_mode(exif: &Ifd) -> Option<WhiteBalanceMode> {
-    match one_short(exif, WHITE_BALANCE) {
-        Some(0) => Some(WhiteBalanceMode::Auto),
-        Some(1) => one_short(exif, LIGHT_SOURCE).and_then(white_balance_of_light),
+    match exif.held(rules::WHITE_BALANCE) {
+        Some([0]) => Some(WhiteBalanceMode::Auto),
+        Some([1]) => exif
+            .held(rules::LIGHT_SOURCE)
+            .and_then(|[code]| white_balance_of_light(code)),
         _ => None,
     }
 }
@@ -992,7 +979,7 @@ fn white_balance_mode(exif: &Ifd) -> Option<WhiteBalanceMode> {
 /// lights A to D50, and 25 to 34, light sources and LEDs by color
 /// temperature, which name a light no mode stands for; 255, "other"; and
 /// every code Exif does not define.
-fn white_balance_of_light(code: u16) -> Option<WhiteBalanceMode> {
+fn white_balance_of_light(code: u32) -> Option<WhiteBalanceMode> {
     Some(match code {
         1 | 9 => WhiteBalanceMode::Daylight,
         10 => WhiteBalanceMode::Cloudy,
@@ -1005,7 +992,7 @@ fn white_balance_of_light(code: u16) -> Option<WhiteBalanceMode> {
 }
 
 /// The color space the Exif IFD `exif` records in its ColorSpace, exactly
-/// one SHORT ([`one_short`]): [`SRGB`] is sRGB, and [`UNCALIBRATED`] is
+/// one SHORT: [`SRGB`] is sRGB, and [`UNCALIBRATED`] is
 /// Adobe RGB when the Interoperability IFD `interop` holds the
 /// InteropIndex [`DCF_OPTION_FILE`], read as every text is ([`text`]).
 ///
@@ -1025,13 +1012,13 @@ fn color_space<R: Read + Seek>(
     exif: &Ifd,
     interop: Option<&Ifd>,
 ) -> Result<Option<ColorSpace>> {
-    match one_short(exif, COLOR_SPACE) {
-        Some(SRGB) => Ok(Some(ColorSpace::Srgb)),
-        Some(UNCALIBRATED) => {
+    match exif.held(rules::COLOR_SPACE) {
+        Some([SRGB]) => Ok(Some(ColorSpace::Srgb)),
+        Some([UNCALIBRATED]) => {
             let Some(interop) = interop else {
                 return Ok(None);
             };
-            let index = text(src, interop, INTEROP_INDEX)?;
+            let index = text(src, interop, rules::INTEROP_INDEX)?;
             Ok((index.as_deref() == Some(DCF_OPTION_FILE)).then_some(ColorSpace::AdobeRgb))
         }
         _ => Ok(None),
@@ -1082,8 +1069,8 @@ fn sizes<R: Read + Seek>(src: &mut Source<R>, tree: &Tree) -> Result<(Option<Siz
 }
 
 /// The size of the raw data `ifd` describes: its ImageWidth and
-/// ImageLength, each of type SHORT, LONG or IFD, as [`Ifd::u32`] reads
-/// them.
+/// ImageLength, each of type SHORT, LONG or IFD, each its first value,
+/// read alone whatever the count.
 /// `None` when either is missing, cannot be read or is zero.
 ///
 /// # Errors
@@ -1091,8 +1078,8 @@ fn sizes<R: Read + Seek>(src: &mut Source<R>, tree: &Tree) -> Result<(Option<Siz
 /// `Io` when the reader fails. A value that cannot be read for any other
 /// reason is missing.
 fn raw_size<R: Read + Seek>(src: &mut Source<R>, ifd: &Ifd) -> Result<Option<Size>> {
-    let width = skip_damage(ifd.u32(src, IMAGE_WIDTH))?.flatten();
-    let height = skip_damage(ifd.u32(src, IMAGE_LENGTH))?.flatten();
+    let width = ifd.get(src, rules::IMAGE_WIDTH)?;
+    let height = ifd.get(src, rules::IMAGE_LENGTH)?;
     Ok(width
         .zip(height)
         .filter(|&(width, height)| width > 0 && height > 0)
@@ -1168,7 +1155,9 @@ fn whole_pair<R: Read + Seek>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::container::tiff::tags::{NEW_SUBFILE_TYPE, ORIENTATION, PHOTOMETRIC_INTERPRETATION};
+    // The fixtures name each tag by its number, as a file stores it; the
+    // reader above names it by its rule.
+    use crate::container::tiff::tags::*;
     use crate::container::tiff::{Block, walk};
     use crate::error::ErrorKind;
     use crate::formats::testing;

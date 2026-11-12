@@ -29,12 +29,23 @@
 //! be read. Values are read only when asked for, through the same
 //! [`Source`]. An IFD keeps the cap on one value of the limits it was read
 //! with, [`Limits::max_value_bytes`], and no accessor reads a longer value
-//! stored out of line: it fails with `LimitExceeded`. The readers take
-//! that for damage, but for the Make of a TIFF file, which decides its
-//! format. The one exception is [`Ifd::u32`], which reads a tag's first
-//! value alone, whatever the count, and so never more than four bytes.
-//! One number bounds every value, those raw-files reads for the metadata
-//! and the previews as much as those a caller reads.
+//! stored out of line. The exceptions read a tag's first value alone,
+//! whatever the count, and so never more than eight bytes: [`Ifd::u32`],
+//! and [`Ifd::get`] with a [`First`](super::rule::First) rule. One number
+//! bounds every other value, those raw-files reads for the metadata and
+//! the previews as much as those a caller reads.
+//!
+//! There are two ways to read a value:
+//!
+//! - The metadata and MakerNote readers read by [`Rule`]: [`Ifd::get`] and
+//!   [`Ifd::held`]. A rule names a tag's exact type and count, which are
+//!   checked before anything is read (ADR011). Damage, such as a value
+//!   longer than the cap, gives `None`, and a failure of the reader is the
+//!   only error.
+//! - The walk, the preview finder and format detection read by tag number,
+//!   through the accessors such as [`Ifd::u32s`]. These pass damage up as
+//!   an error, `LimitExceeded` for a value over the cap, since they skip a
+//!   whole IFD on it, or decide a file's format by it.
 //!
 //! [`ifd_in`] reads the IFD at an offset written inside a block, as a
 //! MakerNote's IFDs are found, and gives none when it is damaged.
@@ -44,6 +55,7 @@
 use std::io::{Read, Seek};
 use std::ops::Range;
 
+use super::rule::{Element, Held, Rule, Shape};
 use super::{Block, FieldType, skip_damage};
 use crate::error::{Error, Result};
 use crate::io::{ByteOrder, Source, within};
@@ -60,8 +72,9 @@ use crate::limits::Limits;
 /// The accessors that read a value take the [`Source`] the IFD was read
 /// from. Inline values are served from the entry without touching it. A
 /// value stored out of line is read only when it is no longer than the cap
-/// the IFD was read under, but by [`u32`](Self::u32), which reads only its
-/// first number.
+/// the IFD was read under, but by [`u32`](Self::u32) and by
+/// [`get`](Self::get) with a [`First`](super::rule::First) rule, which read
+/// only its first value.
 #[derive(Clone, Debug)]
 pub(crate) struct Ifd {
     offset: u64,
@@ -393,13 +406,13 @@ impl Ifd {
     /// The entry of tag `tag` when it has a type its tag's rule allows, one
     /// of `types`; `None` when the tag is missing or has another type.
     ///
-    /// A reader checks the type with it before it reads a value, because
-    /// the value readers accept more types than a tag's rule allows:
-    /// [`u32s`](Self::u32s) reads LONG and IFD as well as SHORT, and
-    /// [`bytes`](Self::bytes) reads BYTE as well as UNDEFINED. The entry's
-    /// value, as every kept entry's, lies inside the IFD's block and the
-    /// file: for an IFD read by [`ifd_in`], such as a MakerNote's, inside
-    /// the block.
+    /// [`get`](Self::get) and [`held`](Self::held) find a rule's entry with
+    /// it, and a reader may check that a tag is there before it reads
+    /// another. The value accessors accept more types than a tag's rule may
+    /// allow: [`u32s`](Self::u32s) reads LONG and IFD as well as SHORT. The
+    /// entry's value, as every kept entry's, lies inside the IFD's block
+    /// and the file: for an IFD read by [`ifd_in`], such as a MakerNote's,
+    /// inside the block.
     ///
     /// The entry is the tag's first occurrence, the one
     /// [`entry`](Self::entry) finds. When that one has another type, a
@@ -443,52 +456,6 @@ impl Ifd {
         Ok(Some(values))
     }
 
-    /// The values of tag `tag`, each a signed 16-bit number in the IFD's
-    /// byte order, when its type is SSHORT; `None` when the tag is missing
-    /// or has another type. [`u32s`](Self::u32s) does not read SSHORT, so
-    /// that a negative number is never read as a large one.
-    ///
-    /// # Errors
-    ///
-    /// As for [`u32s`](Self::u32s).
-    pub(crate) fn i16s<R: Read + Seek>(
-        &self,
-        src: &mut Source<R>,
-        tag: u16,
-    ) -> Result<Option<Vec<i16>>> {
-        let Some((_, bytes)) = self.value(src, tag, &[FieldType::SShort])? else {
-            return Ok(None);
-        };
-        let order = self.order;
-        let (shorts, _) = bytes.as_chunks::<2>();
-        Ok(Some(
-            shorts.iter().map(|&v| order.u16(v).cast_signed()).collect(),
-        ))
-    }
-
-    /// The values of tag `tag`, each a signed 32-bit number in the IFD's
-    /// byte order, when its type is SLONG; `None` when the tag is missing
-    /// or has another type. [`u32s`](Self::u32s) does not read SLONG, so
-    /// that a negative number is never read as a large one.
-    ///
-    /// # Errors
-    ///
-    /// As for [`u32s`](Self::u32s).
-    pub(crate) fn i32s<R: Read + Seek>(
-        &self,
-        src: &mut Source<R>,
-        tag: u16,
-    ) -> Result<Option<Vec<i32>>> {
-        let Some((_, bytes)) = self.value(src, tag, &[FieldType::SLong])? else {
-            return Ok(None);
-        };
-        let order = self.order;
-        let (longs, _) = bytes.as_chunks::<4>();
-        Ok(Some(
-            longs.iter().map(|&v| order.u32(v).cast_signed()).collect(),
-        ))
-    }
-
     /// The first value of tag `tag`, widened to 32 bits, when its type is
     /// SHORT, LONG or IFD; `None` when the tag is missing, has another type
     /// or has no values.
@@ -498,62 +465,23 @@ impl Ifd {
     /// of a LONG at the values' offset. The other values are neither read
     /// nor checked, so a tag of one number that the file gives many values
     /// costs no more than one, and is never refused for its length as
-    /// [`u32s`](Self::u32s) refuses it. A reader whose tag's rule gives a
-    /// count first checks the count of the entry that
-    /// [`entry_of_type`](Self::entry_of_type) finds, or takes
-    /// [`one_u32`](Self::one_u32) for a tag of exactly one value.
+    /// [`u32s`](Self::u32s) refuses it. A reader of a tag's rule reads its
+    /// first value with [`get`](Self::get) and a
+    /// [`First`](super::rule::First) rule, the same way.
     ///
     /// # Errors
     ///
     /// `Io` if the reader fails. The value lies inside the file, as every
     /// kept entry's does, so nothing else can go wrong.
     pub(crate) fn u32<R: Read + Seek>(&self, src: &mut Source<R>, tag: u16) -> Result<Option<u32>> {
-        let Some(entry) =
-            self.entry_of_type(tag, &[FieldType::Short, FieldType::Long, FieldType::Ifd])
-        else {
+        let Some(entry) = self.entry_of_type(tag, u32::TYPES) else {
             return Ok(None);
         };
         if entry.count == 0 {
             return Ok(None);
         }
-        let order = self.order;
-        let short = entry.field_type() == FieldType::Short;
-        let value = match entry.value {
-            Value::Inline([b0, b1, ..]) if short => u32::from(order.u16([b0, b1])),
-            Value::Inline(field) => order.u32(field),
-            Value::At(at) if short => u32::from(src.u16_at(at, order)?),
-            Value::At(at) => src.u32_at(at, order)?,
-        };
-        Ok(Some(value))
-    }
-
-    /// The value of tag `tag`, widened to 32 bits, when its type is one of
-    /// `types` and it holds exactly one value; `None` when the tag is
-    /// missing, has another type, or holds none or several.
-    ///
-    /// Each of `types` is SHORT, LONG or IFD: a reader names the types its
-    /// tag's rule allows, as [`entry_of_type`](Self::entry_of_type) takes
-    /// them. A type of any other size gives `None`. A tag of one number
-    /// that holds several, or none, records nothing a reader can trust, so
-    /// even its first value is not taken (ADR011).
-    ///
-    /// One SHORT, LONG or IFD takes at most four bytes, so the entry holds
-    /// it in its own value field: this reads nothing from the file, takes
-    /// no source and cannot fail.
-    pub(crate) fn one_u32(&self, tag: u16, types: &[FieldType]) -> Option<u32> {
-        let entry = self.entry_of_type(tag, types)?;
-        if entry.count != 1 {
-            return None;
-        }
-        let Value::Inline(field) = entry.value else {
-            return None;
-        };
-        let [b0, b1, ..] = field;
-        match entry.field_type() {
-            FieldType::Short => Some(u32::from(self.order.u16([b0, b1]))),
-            FieldType::Long | FieldType::Ifd => Some(self.order.u32(field)),
-            _ => None,
-        }
+        let bytes = entry.read_first(src)?;
+        Ok(u32::decode(entry.field_type, &bytes, self.order))
     }
 
     /// The fractions of tag `tag`, such as an exposure time of 10/3200 s,
@@ -576,31 +504,6 @@ impl Ifd {
         self.pairs(src, tag, FieldType::Rational)
     }
 
-    /// The signed fractions of tag `tag`, such as an exposure compensation
-    /// of -2/3 EV, when its type is SRATIONAL; `None` when the tag is
-    /// missing or has another type.
-    ///
-    /// Each value is a `(numerator, denominator)` pair of signed 32-bit
-    /// numbers, numerator first, both in the IFD's byte order. The pairs
-    /// are returned as written: a denominator of 0 is kept, for the caller
-    /// to judge.
-    ///
-    /// # Errors
-    ///
-    /// As for [`u32s`](Self::u32s).
-    pub(crate) fn srationals<R: Read + Seek>(
-        &self,
-        src: &mut Source<R>,
-        tag: u16,
-    ) -> Result<Option<Vec<(i32, i32)>>> {
-        Ok(self.pairs(src, tag, FieldType::SRational)?.map(|pairs| {
-            pairs
-                .into_iter()
-                .map(|(n, d)| (n.cast_signed(), d.cast_signed()))
-                .collect()
-        }))
-    }
-
     /// The text of tag `tag`, when its type is ASCII; `None` when the tag is
     /// missing or has another type.
     ///
@@ -608,9 +511,9 @@ impl Ifd {
     /// Bytes that are not UTF-8 become U+FFFD; spaces are kept, for the
     /// caller to trim.
     ///
-    /// Only the tests read text this way, to check what
-    /// [`ascii_bytes`](Self::ascii_bytes) gives as a `String`: the readers
-    /// take the bytes and clean them themselves.
+    /// Only the tests read text this way, as a `String`: the readers read
+    /// text by a [`Text`](super::rule::Text) rule, and clean the bytes
+    /// themselves.
     ///
     /// # Errors
     ///
@@ -622,34 +525,15 @@ impl Ifd {
         tag: u16,
     ) -> Result<Option<String>> {
         Ok(self
-            .ascii_bytes(src, tag)?
+            .text_of_type(src, tag, &[FieldType::Ascii])?
             .map(|bytes| String::from_utf8_lossy(&bytes).into_owned()))
-    }
-
-    /// The text of tag `tag` as the file stores it, when its type is ASCII,
-    /// for a caller that cleans, measures or parses the bytes itself; a
-    /// text Exif allows in UTF-8 too is read by
-    /// [`text_bytes`](Self::text_bytes). `None` when the tag is missing or
-    /// has another type.
-    ///
-    /// The bytes end at the first NUL, or with the value when there is
-    /// none. Bytes that are not UTF-8 are kept as they are.
-    ///
-    /// # Errors
-    ///
-    /// As for [`u32s`](Self::u32s).
-    pub(crate) fn ascii_bytes<R: Read + Seek>(
-        &self,
-        src: &mut Source<R>,
-        tag: u16,
-    ) -> Result<Option<Vec<u8>>> {
-        self.text_of_type(src, tag, &[FieldType::Ascii])
     }
 
     /// The text of tag `tag` as the file stores it, when its type is ASCII
     /// or UTF-8, the two types Exif 3.1 allows for many of its texts, such
-    /// as the Make: the bytes [`ascii_bytes`](Self::ascii_bytes) reads, of
-    /// either type. `None` when the tag is missing or has another type.
+    /// as the Make. `None` when the tag is missing or has another type.
+    /// Format detection reads the Make this way; the readers read text by a
+    /// [`Text`](super::rule::Text) rule.
     ///
     /// The bytes end at the first NUL, or with the value when there is
     /// none. Bytes that are not UTF-8 are kept as they are, whatever the
@@ -667,7 +551,7 @@ impl Ifd {
     }
 
     /// The bytes of tag `tag` up to the first NUL, when its type is one of
-    /// `types`: what [`ascii_bytes`](Self::ascii_bytes) and
+    /// `types`: what [`ascii`](Self::ascii) and
     /// [`text_bytes`](Self::text_bytes) read. `None` when the tag is
     /// missing or has another type.
     fn text_of_type<R: Read + Seek>(
@@ -687,8 +571,7 @@ impl Ifd {
 
     /// The bytes of tag `tag`, when its type is BYTE or UNDEFINED; `None`
     /// when the tag is missing or has another type. ASCII and UTF-8 are not
-    /// included: [`ascii_bytes`](Self::ascii_bytes) and
-    /// [`text_bytes`](Self::text_bytes) read text.
+    /// included: [`text_bytes`](Self::text_bytes) reads text.
     ///
     /// # Errors
     ///
@@ -705,9 +588,8 @@ impl Ifd {
 
     /// The pairs of 32-bit numbers of tag `tag`, numerator first, both in
     /// the IFD's byte order, when its type is `field_type`: what
-    /// [`rationals`](Self::rationals) and [`srationals`](Self::srationals)
-    /// read, before the signed ones are cast. `None` when the tag is
-    /// missing or has another type.
+    /// [`rationals`](Self::rationals) reads. `None` when the tag is missing
+    /// or has another type.
     fn pairs<R: Read + Seek>(
         &self,
         src: &mut Source<R>,
@@ -726,6 +608,72 @@ impl Ifd {
             })
             .collect();
         Ok(Some(values))
+    }
+
+    /// The value of the tag `rule` names, in the rule's shape, when its
+    /// entry has one of the rule's types and a count the shape takes;
+    /// `None` when the tag is missing, has another type or another count,
+    /// or its value cannot be read.
+    ///
+    /// The type and the count are checked before anything is read, so a tag
+    /// of another type or count costs no read, however long its value. That
+    /// is the metadata decision's rule (ADR011), written once here for every
+    /// reader of metadata. The entry is the tag's first occurrence, as for
+    /// [`entry_of_type`](Self::entry_of_type).
+    ///
+    /// The value is read under the cap the IFD was read under, and a longer
+    /// one is damage, `None`. A [`First`](super::rule::First) rule reads only
+    /// the first value, at most eight bytes, whatever the count and the cap.
+    /// A value held in the entry is served from it without a read: a rule
+    /// whose value always fits there is a [`Held`], read by
+    /// [`held`](Self::held) with no source.
+    ///
+    /// # Errors
+    ///
+    /// `Io` if the reader fails, the only error: anything else wrong with
+    /// the value is damage in the file, and costs only that value.
+    pub(crate) fn get<R: Read + Seek, S: Shape>(
+        &self,
+        src: &mut Source<R>,
+        rule: Rule<S>,
+    ) -> Result<Option<S::Output>> {
+        let Some(entry) = self.entry_of_type(rule.tag(), rule.types()) else {
+            return Ok(None);
+        };
+        if !S::takes(entry.count) {
+            return Ok(None);
+        }
+        let bytes = if S::FIRST_ONLY {
+            entry.read_first(src)
+        } else {
+            entry.read(src, self.value_cap)
+        };
+        let Some(bytes) = skip_damage(bytes)? else {
+            return Ok(None);
+        };
+        Ok(S::decode(entry.field_type, bytes, self.order))
+    }
+
+    /// The value of the tag `rule` names, in the rule's shape, when its
+    /// entry has one of the rule's types and a count the shape takes;
+    /// `None` when the tag is missing or has another type or count.
+    ///
+    /// A [`Held`] rule's value is never longer than four bytes, which
+    /// [`Held::new`] checks when the rule is declared. The entry holds such
+    /// a value in its own field. So this reads nothing from the file, takes
+    /// no source and cannot fail. A tag whose count the shape does not take,
+    /// such as one SHORT given two, records nothing a reader can trust, and
+    /// even its first value is not taken (ADR011).
+    pub(crate) fn held<S: Shape>(&self, rule: Held<S>) -> Option<S::Output> {
+        let entry = self.entry_of_type(rule.tag(), rule.types())?;
+        if !S::takes(entry.count) {
+            return None;
+        }
+        let Value::Inline(field) = entry.value else {
+            return None;
+        };
+        let len = usize::try_from(entry.len).ok()?;
+        S::decode(entry.field_type, field.get(..len)?.to_vec(), self.order)
     }
 
     /// The first entry with tag `tag` and its value's bytes, when its type is
@@ -832,12 +780,34 @@ impl Entry {
             }
         }
     }
+
+    /// The bytes of the entry's first value alone, from `src`, the source
+    /// its IFD was read from: one value's size, at most eight bytes, never
+    /// refused for a cap; none when the entry has no values.
+    ///
+    /// # Errors
+    ///
+    /// As for [`read`](Self::read), but never `LimitExceeded`.
+    fn read_first<R: Read + Seek>(&self, src: &mut Source<R>) -> Result<Vec<u8>> {
+        let len = self.field_type.size().min(self.len);
+        match self.value {
+            Value::Inline(field) => {
+                // At most 4 for an inline value, so this only shortens.
+                let mut bytes = field.to_vec();
+                bytes.truncate(usize::try_from(len).unwrap_or(usize::MAX));
+                Ok(bytes)
+            }
+            Value::At(at) => src.bytes(at, u64::from(len)),
+        }
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::ErrorKind;
+    use crate::container::tiff::{First, Text};
+    use crate::rational::{Rational, SignedRational};
     /// The code of field type DOUBLE, which no reader takes.
     const DOUBLE: u16 = 12;
     use crate::testing::{FAR, FailsFar};
@@ -1149,252 +1119,6 @@ mod tests {
     }
 
     #[test]
-    fn i16s_reads_sshort_only_in_both_byte_orders() {
-        for order in ORDERS {
-            let mut builder = TiffBuilder::new(order);
-            let ifd = builder.ifd();
-            let shorts: Vec<u8> = [-6_i16, 3, i16::MIN, i16::MAX]
-                .into_iter()
-                .flat_map(|v| order.u16(v.cast_unsigned()))
-                .collect();
-            builder.blob_at(512, &shorts);
-            let mut inline = [0; 4];
-            inline[..2].copy_from_slice(&order.u16((-1_i16).cast_unsigned()));
-            inline[2..].copy_from_slice(&order.u16(2));
-            builder
-                .raw(ifd, 0x0001, SSHORT, 2, RawValue::Inline(inline))
-                .raw(ifd, 0x0002, SSHORT, 4, RawValue::Offset(512))
-                .raw(ifd, 0x0003, SSHORT, 0, RawValue::Inline([1, 2, 3, 4]))
-                .short(ifd, 0x0004, &[0xFFFF, 2])
-                .long(ifd, 0x0005, &[1]);
-            let built = builder.build();
-            let (mut src, ifd, _) = read(order, &built, ifd);
-            let src = &mut src;
-            assert_eq!(ifd.invalid_entries(), 0);
-
-            assert_eq!(ifd.i16s(src, 0x0001).unwrap(), Some(vec![-1, 2]));
-            assert_eq!(
-                ifd.i16s(src, 0x0002).unwrap(),
-                Some(vec![-6, 3, i16::MIN, i16::MAX])
-            );
-            // Count 0: an empty value, not a missing tag.
-            assert_eq!(ifd.i16s(src, 0x0003).unwrap(), Some(vec![]));
-            // A SHORT or a LONG is not signed, and is not read as one.
-            for tag in [0x0004, 0x0005, 0x0099] {
-                assert_eq!(ifd.i16s(src, tag).unwrap(), None, "tag {tag:#06X}");
-            }
-            // And the unsigned reader does not read an SSHORT.
-            assert_eq!(ifd.u32s(src, 0x0001).unwrap(), None);
-        }
-    }
-
-    #[test]
-    fn i32s_reads_slong_only_in_both_byte_orders() {
-        for order in ORDERS {
-            let mut builder = TiffBuilder::new(order);
-            let ifd = builder.ifd();
-            builder
-                .raw(
-                    ifd,
-                    0x0001,
-                    SLONG,
-                    1,
-                    RawValue::Inline(order.u32((-3_i32).cast_unsigned())),
-                )
-                .slong(ifd, 0x0002, &[-3, 0, i32::MIN, i32::MAX])
-                .raw(ifd, 0x0003, SLONG, 0, RawValue::Inline([1, 2, 3, 4]))
-                .short(ifd, 0x0004, &[0xFFFF, 2])
-                .long(ifd, 0x0005, &[0xFFFF_FFFD])
-                .raw(ifd, 0x0006, SSHORT, 2, RawValue::Inline([0xFF; 4]));
-            let built = builder.build();
-            let (mut src, ifd, _) = read(order, &built, ifd);
-            let src = &mut src;
-            assert_eq!(ifd.invalid_entries(), 0);
-
-            assert_eq!(ifd.i32s(src, 0x0001).unwrap(), Some(vec![-3]));
-            assert_eq!(
-                ifd.i32s(src, 0x0002).unwrap(),
-                Some(vec![-3, 0, i32::MIN, i32::MAX])
-            );
-            // Count 0: an empty value, not a missing tag.
-            assert_eq!(ifd.i32s(src, 0x0003).unwrap(), Some(vec![]));
-            // A SHORT, a LONG or an SSHORT is not an SLONG, and is not
-            // read as one.
-            for tag in [0x0004, 0x0005, 0x0006, 0x0099] {
-                assert_eq!(ifd.i32s(src, tag).unwrap(), None, "tag {tag:#06X}");
-            }
-            // And the unsigned reader does not read an SLONG.
-            assert_eq!(ifd.u32s(src, 0x0001).unwrap(), None);
-        }
-    }
-
-    #[test]
-    fn rationals_and_srationals_in_both_byte_orders() {
-        let signed = [
-            (-2, 3),
-            (0x0102_0304, -0x0506_0708),
-            (i32::MIN, i32::MAX),
-            (7, 0),
-        ];
-        for order in ORDERS {
-            let mut builder = TiffBuilder::new(order);
-            let ifd = builder.ifd();
-            builder.blob_at(512, &srational_bytes(order, &signed));
-            builder
-                .rational(
-                    ifd,
-                    0x0001,
-                    &[
-                        (10, 3200),
-                        (0x0102_0304, 0x0506_0708),
-                        (u32::MAX, 1),
-                        (5, 0),
-                    ],
-                )
-                .raw(ifd, 0x0002, SRATIONAL, 4, RawValue::Offset(512))
-                .raw(ifd, 0x0003, RATIONAL, 0, RawValue::Inline([1, 2, 3, 4]))
-                .raw(ifd, 0x0004, SRATIONAL, 0, RawValue::Inline([1, 2, 3, 4]));
-            let built = builder.build();
-            let (mut src, ifd, _) = read(order, &built, ifd);
-            let src = &mut src;
-            assert_eq!(ifd.invalid_entries(), 0);
-
-            assert_eq!(
-                ifd.rationals(src, 0x0001).unwrap(),
-                Some(vec![
-                    (10, 3200),
-                    (0x0102_0304, 0x0506_0708),
-                    (u32::MAX, 1),
-                    (5, 0)
-                ])
-            );
-            assert_eq!(ifd.srationals(src, 0x0002).unwrap(), Some(signed.to_vec()));
-            // Count 0: an empty value, not a missing tag.
-            assert_eq!(ifd.rationals(src, 0x0003).unwrap(), Some(vec![]));
-            assert_eq!(ifd.srationals(src, 0x0004).unwrap(), Some(vec![]));
-        }
-    }
-
-    #[test]
-    fn rationals_and_srationals_read_their_own_type_only() {
-        for order in ORDERS {
-            let mut builder = TiffBuilder::new(order);
-            let ifd = builder.ifd();
-            builder.blob_at(512, &srational_bytes(order, &[(-1, 3)]));
-            builder.blob_at(520, &[0x3F, 0xF0, 0, 0, 0, 0, 0, 0]);
-            builder
-                .rational(ifd, 0x0001, &[(1, 3)])
-                .raw(ifd, 0x0002, SRATIONAL, 1, RawValue::Offset(512))
-                .short(ifd, 0x0003, &[1, 3])
-                .long(ifd, 0x0004, &[1, 3])
-                .raw(ifd, 0x0005, DOUBLE, 1, RawValue::Offset(520));
-            let built = builder.build();
-            let (mut src, ifd, _) = read(order, &built, ifd);
-            let src = &mut src;
-            assert_eq!(ifd.invalid_entries(), 0);
-
-            assert_eq!(ifd.rationals(src, 0x0001).unwrap(), Some(vec![(1, 3)]));
-            assert_eq!(ifd.srationals(src, 0x0002).unwrap(), Some(vec![(-1, 3)]));
-            assert_eq!(ifd.srationals(src, 0x0001).unwrap(), None, "RATIONAL");
-            assert_eq!(ifd.rationals(src, 0x0002).unwrap(), None, "SRATIONAL");
-            for tag in [0x0003, 0x0004, 0x0005, 0x0099] {
-                assert_eq!(ifd.rationals(src, tag).unwrap(), None, "tag {tag:#06X}");
-                assert_eq!(ifd.srationals(src, tag).unwrap(), None, "tag {tag:#06X}");
-            }
-            // And the other accessors do not read them.
-            assert_eq!(ifd.u32s(src, 0x0002).unwrap(), None);
-            assert_eq!(ifd.bytes(src, 0x0002).unwrap(), None);
-        }
-    }
-
-    #[test]
-    fn a_rational_past_the_end_of_the_file_is_read_as_u32s_reads_a_long() {
-        for order in ORDERS {
-            let mut builder = TiffBuilder::new(order);
-            let ifd = builder.ifd();
-            builder.blob_at(512, &srational_bytes(order, &[(-1, 3)]));
-            builder
-                .long(ifd, 0x0001, &[1, 3])
-                .rational(ifd, 0x0002, &[(1, 3)])
-                .raw(ifd, 0x0003, SRATIONAL, 1, RawValue::Offset(512));
-            let built = builder.build();
-            let (_, parsed, _) = read(order, &built, ifd);
-            let value_at = |tag| parsed.entry(tag).unwrap().value_offset().unwrap();
-            let first = [0x0001, 0x0002, 0x0003].map(value_at).into_iter().min();
-            let cut = usize::try_from(first.unwrap()).unwrap();
-            let at = built.ifd_offset(ifd);
-            assert!(
-                cut >= usize::try_from(at).unwrap() + 2 + 36 + 4,
-                "after the IFD"
-            );
-
-            // In a file cut before the values, the entries are skipped: each
-            // accessor finds no tag.
-            let short = built.truncated(cut);
-            let (cut_ifd, _) = try_read(order, &short, 0, at, &Limits::default()).unwrap();
-            assert_eq!(cut_ifd.invalid_entries(), 3);
-            let mut src = open(&short);
-            assert_eq!(cut_ifd.u32s(&mut src, 0x0001).unwrap(), None);
-            assert_eq!(cut_ifd.rationals(&mut src, 0x0002).unwrap(), None);
-            assert_eq!(cut_ifd.srationals(&mut src, 0x0003).unwrap(), None);
-
-            // Read through a shorter file than the IFD was read from, each
-            // value fails as `u32s` fails, at the value's offset.
-            let longs = parsed.u32s(&mut src, 0x0001).expect_err("past the end");
-            let rationals = parsed.rationals(&mut src, 0x0002).map(|_| ());
-            let srationals = parsed.srationals(&mut src, 0x0003).map(|_| ());
-            assert_eq!(longs.offset(), Some(value_at(0x0001)), "{longs:?}");
-            for (tag, result) in [(0x0002, rationals), (0x0003, srationals)] {
-                let err = result.expect_err("past the end");
-                assert_eq!(err.kind(), longs.kind(), "{err:?}");
-                assert_eq!(err.offset(), Some(value_at(tag)), "{err:?}");
-            }
-        }
-    }
-
-    #[test]
-    fn a_rational_longer_than_the_cap_exceeds_a_limit_as_u32s_does() {
-        let order = Order::Little;
-        let at = 512;
-        let max = u32::try_from(Limits::default().max_value_bytes()).unwrap();
-        let mut builder = TiffBuilder::new(order);
-        let ifd = builder.ifd();
-        builder
-            .raw(ifd, 0x0001, RATIONAL, max / 8, RawValue::Offset(at))
-            .raw(ifd, 0x0002, RATIONAL, max / 8 + 1, RawValue::Offset(at))
-            .raw(ifd, 0x0003, SRATIONAL, max / 8, RawValue::Offset(at))
-            .raw(ifd, 0x0004, SRATIONAL, max / 8 + 1, RawValue::Offset(at))
-            .raw(ifd, 0x0005, LONG, max / 4 + 1, RawValue::Offset(at));
-        builder.pad_to(u64::from(at) + u64::from(max) + 8);
-        let built = builder.build();
-        let (mut src, ifd, _) = read(order, &built, ifd);
-        let src = &mut src;
-        assert_eq!(ifd.invalid_entries(), 0, "every value is inside the file");
-
-        assert_eq!(
-            ifd.rationals(src, 0x0001).unwrap().unwrap().len(),
-            128 * 1024
-        );
-        assert_eq!(
-            ifd.srationals(src, 0x0003).unwrap().unwrap().len(),
-            128 * 1024
-        );
-        let longs = ifd
-            .u32s(src, 0x0005)
-            .expect_err("the value is over the cap");
-        assert_eq!(longs.kind(), ErrorKind::LimitExceeded, "{longs:?}");
-        assert_eq!(longs.offset(), Some(u64::from(at)), "{longs:?}");
-        for result in [
-            ifd.rationals(src, 0x0002).map(|_| ()),
-            ifd.srationals(src, 0x0004).map(|_| ()),
-        ] {
-            let err = result.expect_err("the value is over the cap");
-            assert_eq!(err.kind(), longs.kind(), "{err:?}");
-            assert_eq!(err.offset(), longs.offset(), "{err:?}");
-        }
-    }
-
-    #[test]
     fn ascii_ends_at_the_first_nul() {
         let order = Order::Little;
         let mut builder = TiffBuilder::new(order);
@@ -1426,40 +1150,6 @@ mod tests {
         );
         assert_eq!(ifd.ascii(src, 0x0005).unwrap().as_deref(), Some("wxyz"));
         assert_eq!(ifd.ascii(src, 0x0006).unwrap().as_deref(), Some("a"));
-    }
-
-    #[test]
-    fn ascii_bytes_end_at_the_first_nul_and_keep_bytes_that_are_not_utf8() {
-        for order in ORDERS {
-            let mut builder = TiffBuilder::new(order);
-            let ifd = builder.ifd();
-            builder.blob_at(512, &[b'a', 0xFF, 0xFE, b'b', 0, b'c']);
-            builder.blob_at(520, b"  spaced  \0\0");
-            builder
-                .raw(ifd, 0x0001, ASCII, 6, RawValue::Offset(512))
-                .raw(ifd, 0x0002, ASCII, 12, RawValue::Offset(520))
-                .raw(ifd, 0x0003, ASCII, 4, RawValue::Inline([b'x', 0, b'y', 0]))
-                .raw(ifd, 0x0004, UNDEFINED, 4, RawValue::Inline(*b"wxyz"));
-            let built = builder.build();
-            let (mut src, ifd, _) = read(order, &built, ifd);
-            let src = &mut src;
-
-            let bytes = |src: &mut Source<_>, tag| ifd.ascii_bytes(src, tag).unwrap();
-            assert_eq!(
-                bytes(src, 0x0001).as_deref(),
-                Some(&[b'a', 0xFF, 0xFE, b'b'][..]),
-                "{order:?}"
-            );
-            assert_eq!(
-                bytes(src, 0x0002).as_deref(),
-                Some(&b"  spaced  "[..]),
-                "{order:?}"
-            );
-            assert_eq!(bytes(src, 0x0003).as_deref(), Some(&b"x"[..]), "{order:?}");
-            // Of type UNDEFINED, which is not text, and missing.
-            assert_eq!(bytes(src, 0x0004), None, "{order:?}");
-            assert_eq!(bytes(src, 0x0005), None, "{order:?}");
-        }
     }
 
     #[test]
@@ -2073,51 +1763,6 @@ mod tests {
     }
 
     #[test]
-    fn one_value_of_an_allowed_type_is_read_and_any_other_shape_is_not() {
-        for order in ORDERS {
-            let mut builder = TiffBuilder::new(order);
-            let ifd = builder.ifd();
-            builder
-                .long(ifd, 0x0001, &[0x0102_0304])
-                .short(ifd, 0x0002, &[0x0506])
-                .raw(
-                    ifd,
-                    0x0003,
-                    IFD,
-                    1,
-                    RawValue::Inline(order.u32(0x0708_090A)),
-                )
-                .short(ifd, 0x0004, &[1, 2])
-                .long(ifd, 0x0005, &[1, 2])
-                .raw(ifd, 0x0006, LONG, 0, RawValue::Inline([1, 2, 3, 4]))
-                .byte(ifd, 0x0007, &[9])
-                .raw(ifd, 0x0008, SLONG, 1, RawValue::Inline(order.u32(5)));
-            let built = builder.build();
-            let (_, ifd, _) = read(order, &built, ifd);
-            let any = &[FieldType::Short, FieldType::Long, FieldType::Ifd];
-
-            assert_eq!(ifd.one_u32(0x0001, &[FieldType::Long]), Some(0x0102_0304));
-            assert_eq!(ifd.one_u32(0x0001, any), Some(0x0102_0304));
-            assert_eq!(ifd.one_u32(0x0002, &[FieldType::Short]), Some(0x0506));
-            assert_eq!(ifd.one_u32(0x0002, any), Some(0x0506));
-            assert_eq!(ifd.one_u32(0x0003, &[FieldType::Ifd]), Some(0x0708_090A));
-            // A type the reader does not allow.
-            assert_eq!(ifd.one_u32(0x0002, &[FieldType::Long]), None, "{order:?}");
-            assert_eq!(ifd.one_u32(0x0001, &[FieldType::Short]), None, "{order:?}");
-            assert_eq!(ifd.one_u32(0x0003, &[FieldType::Long]), None, "{order:?}");
-            // Two values, or none: not even the first is taken.
-            for tag in [0x0004, 0x0005, 0x0006] {
-                assert_eq!(ifd.one_u32(tag, any), None, "{order:?} {tag:#06X}");
-            }
-            // A type of another size, even when named.
-            assert_eq!(ifd.one_u32(0x0007, &[FieldType::Byte]), None, "{order:?}");
-            assert_eq!(ifd.one_u32(0x0008, &[FieldType::SLong]), None, "{order:?}");
-            // A missing tag.
-            assert_eq!(ifd.one_u32(0x0009, any), None, "{order:?}");
-        }
-    }
-
-    #[test]
     fn the_first_value_is_read_without_the_bytes_after_it() {
         for order in ORDERS {
             // Two LONGs, and three SHORTs, whose first lies in the first block
@@ -2179,7 +1824,11 @@ mod tests {
                 let text = expected.strip_suffix(b"\0").expect("a NUL ends it");
                 assert_eq!(ifd.text_bytes(src, tag).unwrap().as_deref(), Some(text));
                 assert_eq!(ifd.ascii(src, tag).unwrap(), None);
-                assert_eq!(ifd.ascii_bytes(src, tag).unwrap(), None);
+                assert_eq!(
+                    ifd.get(src, rule::<Text>(tag, &[FieldType::Ascii]))
+                        .unwrap(),
+                    None
+                );
                 assert_eq!(ifd.bytes(src, tag).unwrap(), None);
                 assert_eq!(ifd.u32s(src, tag).unwrap(), None);
                 assert_eq!(entry.byte_range(), None);
@@ -2651,6 +2300,521 @@ mod tests {
             let wrapping = offset + 1;
             let ifd = read_ifd_in(bytes, &block, u64::MAX, wrapping, order).1;
             assert!(ifd.is_none(), "{order:?}");
+        }
+    }
+
+    // The rule readers. The tests build each rule at run time, for tags
+    // that vary; the readers declare theirs as `const` items.
+
+    /// A rule of shape `S` for tag `tag`, of `types`.
+    fn rule<S: Shape>(tag: u16, types: &'static [FieldType]) -> Rule<S> {
+        Rule::new(tag, types)
+    }
+
+    /// A held rule of shape `S` for tag `tag`, of `types`.
+    fn held_rule<S: Shape>(tag: u16, types: &'static [FieldType]) -> Held<S> {
+        Held::new(tag, types)
+    }
+
+    /// The field types a rule can name, each alone, for the rules the tests
+    /// build: a rule's types live as long as the program.
+    static NAMED: [FieldType; 11] = [
+        FieldType::Byte,
+        FieldType::Undefined,
+        FieldType::Short,
+        FieldType::Long,
+        FieldType::Ifd,
+        FieldType::SShort,
+        FieldType::SLong,
+        FieldType::Rational,
+        FieldType::SRational,
+        FieldType::Ascii,
+        FieldType::Utf8,
+    ];
+
+    /// `field_type` alone, as a rule's types.
+    fn only(field_type: FieldType) -> &'static [FieldType] {
+        let i = NAMED
+            .iter()
+            .position(|&t| t == field_type)
+            .expect("a type a rule can name");
+        std::slice::from_ref(&NAMED[i])
+    }
+
+    /// Gives `ifd` tag `tag` of type `code` with `count` values whose bytes
+    /// are `bytes`: in the entry when they fit, and otherwise at `at`.
+    fn put(
+        builder: &mut TiffBuilder,
+        ifd: IfdId,
+        tag: u16,
+        code: u16,
+        count: u32,
+        bytes: &[u8],
+        at: u32,
+    ) {
+        if bytes.len() <= 4 {
+            let mut field = [0; 4];
+            field[..bytes.len()].copy_from_slice(bytes);
+            builder.raw(ifd, tag, code, count, RawValue::Inline(field));
+        } else {
+            builder.blob_at(u64::from(at), bytes);
+            builder.raw(ifd, tag, code, count, RawValue::Offset(at));
+        }
+    }
+
+    /// Checks every shape of element `T` over tags of `code`, which is
+    /// `field_type`, holding the first 0, 1, 2 and 3 of `values`, each
+    /// encoded by `encode`, in both byte orders: an array reads exactly its
+    /// count and nothing else, `Vec` any count, zero included, and `First`
+    /// the first value of any count but zero.
+    fn check_shapes<T>(
+        code: u16,
+        field_type: FieldType,
+        values: [T; 3],
+        encode: fn(Order, T) -> Vec<u8>,
+    ) where
+        T: Element + Copy + PartialEq + std::fmt::Debug,
+    {
+        let types = only(field_type);
+        for order in ORDERS {
+            let mut builder = TiffBuilder::new(order);
+            let ifd = builder.ifd();
+            for k in 0..=3_u16 {
+                let bytes: Vec<u8> = values[..usize::from(k)]
+                    .iter()
+                    .flat_map(|&v| encode(order, v))
+                    .collect();
+                put(
+                    &mut builder,
+                    ifd,
+                    k,
+                    code,
+                    u32::from(k),
+                    &bytes,
+                    1024 + 64 * u32::from(k),
+                );
+            }
+            let built = builder.build();
+            let (mut src, ifd, _) = read(order, &built, ifd);
+            let src = &mut src;
+            assert_eq!(ifd.invalid_entries(), 0, "{field_type} {order:?}");
+            let what = |k: u16| format!("{field_type} {order:?}: {k} values");
+            let [a, b, c] = values;
+
+            // An array: its exact count gives the values; one fewer and one
+            // more give none.
+            for k in 0..=3 {
+                let one = ifd.get(src, rule::<[T; 1]>(k, types)).unwrap();
+                let two = ifd.get(src, rule::<[T; 2]>(k, types)).unwrap();
+                let three = ifd.get(src, rule::<[T; 3]>(k, types)).unwrap();
+                assert_eq!(one, (k == 1).then_some([a]), "{}", what(k));
+                assert_eq!(two, (k == 2).then_some([a, b]), "{}", what(k));
+                assert_eq!(three, (k == 3).then_some([a, b, c]), "{}", what(k));
+            }
+            // `Vec`: any count, zero included.
+            for k in 0..=3 {
+                let all = ifd.get(src, rule::<Vec<T>>(k, types)).unwrap();
+                assert_eq!(
+                    all.as_deref(),
+                    Some(&values[..usize::from(k)]),
+                    "{}",
+                    what(k)
+                );
+            }
+            // `First`: the first value of any count but zero.
+            for k in 0..=3 {
+                let first = ifd.get(src, rule::<First<T>>(k, types)).unwrap();
+                assert_eq!(first, (k > 0).then_some(a), "{}", what(k));
+            }
+            // A missing tag.
+            assert_eq!(ifd.get(src, rule::<Vec<T>>(0x0099, types)).unwrap(), None);
+        }
+    }
+
+    #[test]
+    fn a_rule_reads_exactly_its_count_of_every_element_in_both_byte_orders() {
+        check_shapes(BYTE, FieldType::Byte, [1_u8, 0xFE, 0x7F], |_, v| vec![v]);
+        check_shapes(UNDEFINED, FieldType::Undefined, [0_u8, 0xFF, 9], |_, v| {
+            vec![v]
+        });
+        let short = |order: Order, v: u32| order.u16(u16::try_from(v).unwrap()).to_vec();
+        check_shapes(SHORT, FieldType::Short, [0x0102_u32, 0xFFFF, 0], short);
+        let long = |order: Order, v: u32| order.u32(v).to_vec();
+        check_shapes(LONG, FieldType::Long, [0x0102_0304_u32, u32::MAX, 0], long);
+        check_shapes(IFD, FieldType::Ifd, [8_u32, 0x0A0B_0C0D, 0], long);
+        let sshort = |order: Order, v: i16| order.u16(v.cast_unsigned()).to_vec();
+        check_shapes(
+            SSHORT,
+            FieldType::SShort,
+            [-6_i16, i16::MIN, i16::MAX],
+            sshort,
+        );
+        let slong = |order: Order, v: i32| order.u32(v.cast_unsigned()).to_vec();
+        check_shapes(SLONG, FieldType::SLong, [-3_i32, i32::MIN, i32::MAX], slong);
+        let fraction = |numerator, denominator| Rational {
+            numerator,
+            denominator,
+        };
+        check_shapes(
+            RATIONAL,
+            FieldType::Rational,
+            [fraction(10, 3200), fraction(u32::MAX, 1), fraction(5, 0)],
+            |order, v| [order.u32(v.numerator), order.u32(v.denominator)].concat(),
+        );
+        let signed = |numerator, denominator| SignedRational {
+            numerator,
+            denominator,
+        };
+        check_shapes(
+            SRATIONAL,
+            FieldType::SRational,
+            [signed(-2, 3), signed(i32::MIN, i32::MAX), signed(7, 0)],
+            |order, v| srational_bytes(order, &[(v.numerator, v.denominator)]),
+        );
+    }
+
+    #[test]
+    fn a_rule_reads_only_a_type_it_names() {
+        // One tag of each type a rule can name, each one value long, and
+        // DOUBLE, which none can; a rule of each type, of any count, finds
+        // the tag of its own type and no other.
+        let types = [
+            (BYTE, FieldType::Byte),
+            (UNDEFINED, FieldType::Undefined),
+            (SHORT, FieldType::Short),
+            (LONG, FieldType::Long),
+            (IFD, FieldType::Ifd),
+            (SSHORT, FieldType::SShort),
+            (SLONG, FieldType::SLong),
+            (RATIONAL, FieldType::Rational),
+            (SRATIONAL, FieldType::SRational),
+            (ASCII, FieldType::Ascii),
+            (UTF8, FieldType::Utf8),
+            (DOUBLE, FieldType::Double),
+        ];
+        for order in ORDERS {
+            let mut builder = TiffBuilder::new(order);
+            let ifd = builder.ifd();
+            for (tag, (code, field_type)) in (1..).zip(types) {
+                let len = field_type.size();
+                let at = 1024 + 16 * u32::from(tag);
+                let bytes = vec![1; usize::try_from(len).unwrap()];
+                put(&mut builder, ifd, tag, code, 1, &bytes, at);
+            }
+            let built = builder.build();
+            let (mut src, ifd, _) = read(order, &built, ifd);
+            let src = &mut src;
+            assert_eq!(ifd.invalid_entries(), 0, "{order:?}");
+
+            for (tag, (_, stored)) in (1..).zip(types) {
+                let mut found = |named: FieldType| -> bool {
+                    let types = only(named);
+                    match named {
+                        FieldType::Byte | FieldType::Undefined => {
+                            ifd.get(src, rule::<Vec<u8>>(tag, types)).unwrap().is_some()
+                        }
+                        FieldType::Short | FieldType::Long | FieldType::Ifd => ifd
+                            .get(src, rule::<Vec<u32>>(tag, types))
+                            .unwrap()
+                            .is_some(),
+                        FieldType::SShort => ifd
+                            .get(src, rule::<Vec<i16>>(tag, types))
+                            .unwrap()
+                            .is_some(),
+                        FieldType::SLong => ifd
+                            .get(src, rule::<Vec<i32>>(tag, types))
+                            .unwrap()
+                            .is_some(),
+                        FieldType::Rational => ifd
+                            .get(src, rule::<Vec<Rational>>(tag, types))
+                            .unwrap()
+                            .is_some(),
+                        FieldType::SRational => ifd
+                            .get(src, rule::<Vec<SignedRational>>(tag, types))
+                            .unwrap()
+                            .is_some(),
+                        FieldType::Ascii | FieldType::Utf8 => {
+                            ifd.get(src, rule::<Text>(tag, types)).unwrap().is_some()
+                        }
+                        _ => unreachable!("no rule names {named}"),
+                    }
+                };
+                for (_, named) in types.iter().filter(|(_, t)| *t != FieldType::Double) {
+                    assert_eq!(
+                        found(*named),
+                        *named == stored,
+                        "{order:?}: {named} rule, {stored} tag"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn text_is_the_bytes_before_the_first_nul_as_stored() {
+        for order in ORDERS {
+            let mut builder = TiffBuilder::new(order);
+            let ifd = builder.ifd();
+            builder.blob_at(512, &[b'a', 0xFF, 0xFE, b'b', 0, b'c']);
+            builder.blob_at(520, b"  spaced  \0\0");
+            builder.blob_at(540, b"Z \xC3\xA9t\0");
+            builder
+                .raw(ifd, 0x0001, ASCII, 6, RawValue::Offset(512))
+                .raw(ifd, 0x0002, ASCII, 12, RawValue::Offset(520))
+                .raw(ifd, 0x0003, ASCII, 4, RawValue::Inline([b'x', 0, b'y', 0]))
+                .raw(ifd, 0x0004, ASCII, 4, RawValue::Inline(*b"wxyz"))
+                .raw(ifd, 0x0005, ASCII, 0, RawValue::Inline(*b"wxyz"))
+                .raw(ifd, 0x0006, UTF8, 6, RawValue::Offset(540))
+                .raw(ifd, 0x0007, UNDEFINED, 4, RawValue::Inline(*b"wxyz"));
+            let built = builder.build();
+            let (mut src, ifd, _) = read(order, &built, ifd);
+            let src = &mut src;
+            let ascii: &[FieldType] = &[FieldType::Ascii];
+            let either: &[FieldType] = &[FieldType::Ascii, FieldType::Utf8];
+            let text =
+                |src: &mut Source<_>, tag, types| ifd.get(src, rule::<Text>(tag, types)).unwrap();
+
+            assert_eq!(
+                text(src, 0x0001, ascii).as_deref(),
+                Some(&[b'a', 0xFF, 0xFE, b'b'][..])
+            );
+            assert_eq!(
+                text(src, 0x0002, ascii).as_deref(),
+                Some(&b"  spaced  "[..])
+            );
+            assert_eq!(text(src, 0x0003, ascii).as_deref(), Some(&b"x"[..]));
+            // No NUL: the whole value.
+            assert_eq!(text(src, 0x0004, ascii).as_deref(), Some(&b"wxyz"[..]));
+            // No values: an empty text, whatever the entry's field holds.
+            assert_eq!(text(src, 0x0005, ascii).as_deref(), Some(&b""[..]));
+            // UTF-8 only where the rule names it; UNDEFINED never.
+            assert_eq!(text(src, 0x0006, ascii), None, "{order:?}");
+            assert_eq!(
+                text(src, 0x0006, either).as_deref(),
+                Some(&b"Z \xC3\xA9t"[..])
+            );
+            assert_eq!(text(src, 0x0007, either), None, "{order:?}");
+        }
+    }
+
+    #[test]
+    fn first_reads_the_first_value_alone_whatever_the_count_and_the_cap() {
+        for order in ORDERS {
+            // The fixture of the test of `u32` above, with fractions: under a
+            // cap of 16 bytes, each value is far over it read whole.
+            let longs: Vec<u8> = (1..=1000_u32).flat_map(|v| order.u32(v)).collect();
+            let shorts: Vec<u8> = (11..=1010_u16).flat_map(|v| order.u16(v)).collect();
+            let mut builder = TiffBuilder::new(order);
+            let ifd = builder.ifd();
+            builder
+                .raw(ifd, 0x0001, LONG, 1000, RawValue::Offset(1024))
+                .raw(ifd, 0x0002, SHORT, 1000, RawValue::Offset(8192))
+                .raw(ifd, 0x0003, RATIONAL, 500, RawValue::Offset(1024))
+                .raw(ifd, 0x0004, SRATIONAL, 500, RawValue::Offset(1024));
+            builder.blob_at(1024, &longs);
+            builder.blob_at(8192, &shorts);
+            let built = builder.build();
+            let limits = Limits::default().with_max_value_bytes(16);
+            let (mut src, ifd, _) = read_with(order, &built, ifd, &limits);
+            let src = &mut src;
+            assert_eq!(ifd.invalid_entries(), 0, "{order:?}");
+            let numbers: &[FieldType] = &[FieldType::Short, FieldType::Long];
+
+            assert_eq!(
+                ifd.get(src, rule::<First<u32>>(0x0001, numbers)).unwrap(),
+                Some(1)
+            );
+            assert_eq!(
+                ifd.get(src, rule::<First<u32>>(0x0002, numbers)).unwrap(),
+                Some(11)
+            );
+            assert_eq!(
+                ifd.get(src, rule::<First<Rational>>(0x0003, &[FieldType::Rational]))
+                    .unwrap(),
+                Some(Rational {
+                    numerator: 1,
+                    denominator: 2
+                })
+            );
+            assert_eq!(
+                ifd.get(
+                    src,
+                    rule::<First<SignedRational>>(0x0004, &[FieldType::SRational])
+                )
+                .unwrap(),
+                Some(SignedRational {
+                    numerator: 1,
+                    denominator: 2
+                })
+            );
+            // Read whole, each is over the cap: damage, no value.
+            assert_eq!(
+                ifd.get(src, rule::<Vec<u32>>(0x0001, numbers)).unwrap(),
+                None
+            );
+            assert_eq!(
+                ifd.get(src, rule::<Vec<Rational>>(0x0003, &[FieldType::Rational]))
+                    .unwrap(),
+                None
+            );
+        }
+    }
+
+    /// The file of the tests that the reader's failure is the only error of
+    /// [`Ifd::get`], read through a [`FailsFar`]: tag 0x0001, three SHORTs
+    /// from [`FAR`] on, where every read fails; tag 0x0002, the same with
+    /// four SHORTs; tag 0x0003, two SHORTs at the start of the file, read
+    /// well; and tag 0x0004, a cap's worth of BYTEs and one more.
+    fn failing_far(order: Order) -> (Source<FailsFar>, Ifd) {
+        let far = RawValue::Offset(u32::try_from(FAR).unwrap());
+        let cap = u32::try_from(Limits::default().max_value_bytes()).unwrap();
+        let mut builder = TiffBuilder::new(order);
+        let ifd = builder.ifd();
+        builder
+            .raw(ifd, 0x0001, SHORT, 3, far)
+            .raw(ifd, 0x0002, SHORT, 4, far)
+            .short(ifd, 0x0003, &[7, 8])
+            .raw(ifd, 0x0004, BYTE, cap + 1, RawValue::Offset(16));
+        builder.pad_to(FAR + u64::from(cap) + 16);
+        let built = builder.build();
+        let mut src = Source::new(FailsFar(Cursor::new(built.bytes.clone()))).unwrap();
+        let block = Block::file(src.len());
+        let at = built.ifd_offset(ifd);
+        let (ifd, _) =
+            parse_ifd(&mut src, &block, at, byte_order(order), &Limits::default()).unwrap();
+        assert_eq!(ifd.invalid_entries(), 0, "{order:?}");
+        (src, ifd)
+    }
+
+    #[test]
+    fn get_fails_only_when_the_reader_fails_reading_a_value_of_the_rules_shape() {
+        let short: &[FieldType] = &[FieldType::Short];
+        for order in ORDERS {
+            let (mut src, ifd) = failing_far(order);
+            let src = &mut src;
+            // The rule's count, from FAR on: the reader fails.
+            let err = ifd
+                .get(src, rule::<[u32; 3]>(0x0001, short))
+                .expect_err("the reader fails");
+            assert_eq!(err.kind(), ErrorKind::Io, "{order:?} {err:?}");
+            // Another count, from FAR on: nothing is read, so nothing fails.
+            assert_eq!(
+                ifd.get(src, rule::<[u32; 3]>(0x0002, short)).unwrap(),
+                None,
+                "{order:?}"
+            );
+            // Another type, from FAR on: the same.
+            assert_eq!(
+                ifd.get(src, rule::<Vec<u32>>(0x0001, &[FieldType::Long]))
+                    .unwrap(),
+                None,
+                "{order:?}"
+            );
+            // Over the cap: damage, never read.
+            assert_eq!(
+                ifd.get(src, rule::<Vec<u8>>(0x0004, &[FieldType::Byte]))
+                    .unwrap(),
+                None,
+                "{order:?}"
+            );
+            assert_eq!(
+                ifd.get(src, rule::<[u32; 2]>(0x0003, short)).unwrap(),
+                Some([7, 8])
+            );
+        }
+    }
+
+    #[test]
+    fn a_rules_value_past_the_end_of_the_file_is_damage() {
+        for order in ORDERS {
+            let mut builder = TiffBuilder::new(order);
+            let ifd = builder.ifd();
+            builder
+                .long(ifd, 0x0001, &[1, 3])
+                .rational(ifd, 0x0002, &[(1, 3)])
+                .srational(ifd, 0x0003, &[(-1, 3)]);
+            let built = builder.build();
+            let (_, parsed, _) = read(order, &built, ifd);
+            let value_at = |tag| parsed.entry(tag).unwrap().value_offset().unwrap();
+            let first = [0x0001, 0x0002, 0x0003].map(value_at).into_iter().min();
+            let cut = usize::try_from(first.unwrap()).unwrap();
+
+            // Read through a shorter file than the IFD was read from: the raw
+            // accessor fails, and a rule gives no value.
+            let mut src = open(&built.truncated(cut));
+            let err = parsed.u32s(&mut src, 0x0001).expect_err("past the end");
+            assert_eq!(err.kind(), ErrorKind::Malformed, "{err:?}");
+            let longs = parsed.get(&mut src, rule::<[u32; 2]>(0x0001, &[FieldType::Long]));
+            assert_eq!(longs.unwrap(), None, "{order:?}");
+            let fractions = parsed.get(
+                &mut src,
+                rule::<[Rational; 1]>(0x0002, &[FieldType::Rational]),
+            );
+            assert_eq!(fractions.unwrap(), None, "{order:?}");
+            let signed = parsed.get(
+                &mut src,
+                rule::<First<SignedRational>>(0x0003, &[FieldType::SRational]),
+            );
+            assert_eq!(signed.unwrap(), None, "{order:?}");
+        }
+    }
+
+    #[test]
+    fn held_reads_what_the_entry_holds_of_the_rules_shape_and_nothing_else() {
+        for order in ORDERS {
+            let mut builder = TiffBuilder::new(order);
+            let ifd = builder.ifd();
+            builder
+                .long(ifd, 0x0001, &[0x0102_0304])
+                .short(ifd, 0x0002, &[0x0506])
+                .raw(
+                    ifd,
+                    0x0003,
+                    IFD,
+                    1,
+                    RawValue::Inline(order.u32(0x0708_090A)),
+                )
+                .short(ifd, 0x0004, &[1, 2])
+                .long(ifd, 0x0005, &[1, 2])
+                .raw(ifd, 0x0006, LONG, 0, RawValue::Inline([1, 2, 3, 4]))
+                .byte(ifd, 0x0007, &[9, 8, 7, 6])
+                .undefined(ifd, 0x0008, &[9, 8, 7, 6])
+                .byte(ifd, 0x0009, &[9, 8, 7])
+                .raw(ifd, 0x000A, SSHORT, 2, RawValue::Inline([0xFF; 4]));
+            let built = builder.build();
+            // Read from the file, then held with no source at all.
+            let (_, ifd, _) = read(order, &built, ifd);
+            let any: &[FieldType] = &[FieldType::Short, FieldType::Long, FieldType::Ifd];
+            let one = |tag, types| ifd.held(held_rule::<[u32; 1]>(tag, types));
+
+            assert_eq!(one(0x0001, &[FieldType::Long]), Some([0x0102_0304]));
+            assert_eq!(one(0x0001, any), Some([0x0102_0304]));
+            assert_eq!(one(0x0002, &[FieldType::Short]), Some([0x0506]));
+            assert_eq!(one(0x0003, &[FieldType::Ifd]), Some([0x0708_090A]));
+            // A type the rule does not name.
+            assert_eq!(one(0x0002, &[FieldType::Long]), None, "{order:?}");
+            assert_eq!(one(0x0001, &[FieldType::Short]), None, "{order:?}");
+            assert_eq!(one(0x0003, &[FieldType::Long]), None, "{order:?}");
+            // Two values, or none, where the rule takes one: not even the
+            // first is taken.
+            for tag in [0x0004, 0x0005, 0x0006] {
+                assert_eq!(one(tag, any), None, "{order:?} {tag:#06X}");
+            }
+            // Two SHORTs, where the rule takes two.
+            let two = ifd.held(held_rule::<[u32; 2]>(0x0004, &[FieldType::Short]));
+            assert_eq!(two, Some([1, 2]), "{order:?}");
+            // Four bytes of BYTE, of UNDEFINED, and three where four are
+            // wanted.
+            let bytes = |tag, types| ifd.held(held_rule::<[u8; 4]>(tag, types));
+            assert_eq!(bytes(0x0007, &[FieldType::Byte]), Some([9, 8, 7, 6]));
+            assert_eq!(bytes(0x0008, &[FieldType::Undefined]), Some([9, 8, 7, 6]));
+            assert_eq!(bytes(0x0008, &[FieldType::Byte]), None, "{order:?}");
+            assert_eq!(bytes(0x0009, &[FieldType::Byte]), None, "{order:?}");
+            // Two SSHORTs, read signed.
+            let signed = ifd.held(held_rule::<[i16; 2]>(0x000A, &[FieldType::SShort]));
+            assert_eq!(signed, Some([-1, -1]), "{order:?}");
+            // A missing tag.
+            assert_eq!(one(0x0099, any), None, "{order:?}");
         }
     }
 }
