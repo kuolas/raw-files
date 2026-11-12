@@ -100,12 +100,13 @@
 //!   that neither replaces is `None` ([`iso`]).
 //! - The exposure time, the f-number and the focal length are the Exif
 //!   ExposureTime, FNumber and FocalLength, of type RATIONAL, their first
-//!   value as stored; each is `None` when its numerator or its denominator
-//!   is zero, since Exif writes a zero for a value the camera did not know
+//!   value as stored, read alone whatever the count, as the ISO's is.
+//!   Each is `None` when its numerator or its denominator is zero, since
+//!   Exif writes a zero for a value the camera did not know
 //!   ([`Rational::known`]). The exposure bias is the Exif
-//!   ExposureBiasValue, of type SRATIONAL, its first value as stored; it is
-//!   `None` only when its denominator is zero, since a zero bias, such as
-//!   0/6, is no compensation ([`SignedRational::new`]).
+//!   ExposureBiasValue, of type SRATIONAL, its first value as stored, read
+//!   the same way; it is `None` only when its denominator is zero, since a
+//!   zero bias, such as 0/6, is no compensation ([`SignedRational::new`]).
 //! - The focal length in 35 mm terms is the Exif FocalLengthIn35mmFilm,
 //!   exactly one SHORT, the type and count the standard gives it; it is
 //!   `None` when zero, which Exif writes for one the
@@ -201,7 +202,7 @@ use crate::camera_settings::{
     WhiteBalanceMode,
 };
 use crate::container::tiff::tags::COLOR_SPACE;
-use crate::container::tiff::{Ifd, Rule, Text, Tree, skip_damage};
+use crate::container::tiff::{First, Ifd, Rule, Text, Tree, skip_damage};
 use crate::datetime::DateTime;
 use crate::entries::clean_text;
 use crate::error::Result;
@@ -218,10 +219,10 @@ use crate::rational::{Rational, SignedRational};
 /// them. [`Ifd::get`] and [`Ifd::held`] read them.
 ///
 /// The ISO's three tags and the raw size's two are read by their first
-/// value alone, whatever the count, a
-/// [`First`](crate::container::tiff::First) rule, of type SHORT, LONG or
-/// IFD, a LONG under another name. The default crop's two tags each have
-/// two rules, for the two forms the DNG specification allows them.
+/// value alone, whatever the count, a [`First`] rule, of type SHORT, LONG
+/// or IFD, a LONG under another name; so are the exposure's four
+/// fractions. The default crop's two tags each have two rules, for the two
+/// forms the DNG specification allows them.
 mod rules {
     use crate::container::tiff::tags;
     use crate::container::tiff::{FieldType, First, Held, Rule, Text};
@@ -264,10 +265,11 @@ mod rules {
     pub(super) const RECOMMENDED_EXPOSURE_INDEX: Rule<First<u32>> =
         Rule::new(tags::RECOMMENDED_EXPOSURE_INDEX, NUMBER);
     pub(super) const ISO_SPEED: Rule<First<u32>> = Rule::new(tags::ISO_SPEED, NUMBER);
-    pub(super) const EXPOSURE_TIME: Rule<Vec<Rational>> = Rule::new(tags::EXPOSURE_TIME, RATIONAL);
-    pub(super) const F_NUMBER: Rule<Vec<Rational>> = Rule::new(tags::F_NUMBER, RATIONAL);
-    pub(super) const FOCAL_LENGTH: Rule<Vec<Rational>> = Rule::new(tags::FOCAL_LENGTH, RATIONAL);
-    pub(super) const EXPOSURE_BIAS_VALUE: Rule<Vec<SignedRational>> =
+    pub(super) const EXPOSURE_TIME: Rule<First<Rational>> =
+        Rule::new(tags::EXPOSURE_TIME, RATIONAL);
+    pub(super) const F_NUMBER: Rule<First<Rational>> = Rule::new(tags::F_NUMBER, RATIONAL);
+    pub(super) const FOCAL_LENGTH: Rule<First<Rational>> = Rule::new(tags::FOCAL_LENGTH, RATIONAL);
+    pub(super) const EXPOSURE_BIAS_VALUE: Rule<First<SignedRational>> =
         Rule::new(tags::EXPOSURE_BIAS_VALUE, &[FieldType::SRational]);
     pub(super) const FOCAL_LENGTH_IN_35MM_FILM: Held<[u32; 1]> =
         Held::new(tags::FOCAL_LENGTH_IN_35MM_FILM, SHORT);
@@ -704,9 +706,8 @@ fn focal_length_in_35mm_film(exif: &Ifd) -> Option<u32> {
 ///
 /// It is the first value of the PhotographicSensitivity, of type SHORT or
 /// LONG, or IFD, a LONG under another name, read alone whatever the count
-/// ([`First`](crate::container::tiff::First)). Exif gives two of its
-/// values a meaning of their own: zero, a sensitivity the camera did not
-/// know, and 65535
+/// ([`First`]). Exif gives two of its values a meaning of their own:
+/// zero, a sensitivity the camera did not know, and 65535
 /// ([`ISO_65535_OR_MORE`]), one of 65535 or more. For those, and when the
 /// tag is missing or cannot be read, the ISO is the first value of the
 /// RecommendedExposureIndex, or else that of the ISOSpeed, each read the
@@ -732,8 +733,8 @@ fn iso<R: Read + Seek>(src: &mut Source<R>, exif: &Ifd) -> Result<Option<u32>> {
 }
 
 /// The first fraction of the tag `rule` names in `ifd`, which must be of
-/// type RATIONAL, as stored; `None` when its numerator or its denominator
-/// is zero ([`Rational::known`]).
+/// type RATIONAL, as stored, read alone whatever the count; `None` when its
+/// numerator or its denominator is zero ([`Rational::known`]).
 ///
 /// # Errors
 ///
@@ -742,17 +743,15 @@ fn iso<R: Read + Seek>(src: &mut Source<R>, exif: &Ifd) -> Result<Option<u32>> {
 fn rational<R: Read + Seek>(
     src: &mut Source<R>,
     ifd: &Ifd,
-    rule: Rule<Vec<Rational>>,
+    rule: Rule<First<Rational>>,
 ) -> Result<Option<Rational>> {
-    let first = ifd
-        .get(src, rule)?
-        .and_then(|values| values.first().copied());
+    let first = ifd.get(src, rule)?;
     Ok(first.and_then(|first| Rational::known(first.numerator, first.denominator)))
 }
 
 /// The first fraction of the tag `rule` names in `ifd`, which must be of
-/// type SRATIONAL, as stored; `None` when its denominator is zero
-/// ([`SignedRational::new`]).
+/// type SRATIONAL, as stored, read alone whatever the count; `None` when
+/// its denominator is zero ([`SignedRational::new`]).
 ///
 /// # Errors
 ///
@@ -761,11 +760,9 @@ fn rational<R: Read + Seek>(
 fn signed_rational<R: Read + Seek>(
     src: &mut Source<R>,
     ifd: &Ifd,
-    rule: Rule<Vec<SignedRational>>,
+    rule: Rule<First<SignedRational>>,
 ) -> Result<Option<SignedRational>> {
-    let first = ifd
-        .get(src, rule)?
-        .and_then(|values| values.first().copied());
+    let first = ifd.get(src, rule)?;
     Ok(first.and_then(|first| SignedRational::new(first.numerator, first.denominator).ok()))
 }
 
@@ -2370,7 +2367,7 @@ mod tests {
             change(&mut expected.camera_settings);
             expected
         }
-        let cases: [(&str, u16, Change, Metadata); 25] = [
+        let cases: [(&str, u16, Change, Metadata); 21] = [
             (
                 "a Model that is not text",
                 MODEL,
@@ -2478,47 +2475,11 @@ mod tests {
                 },
             ),
             (
-                "an ExposureTime too long to read",
-                EXPOSURE_TIME,
-                |builder, _, exif| too_long_of(builder, exif, EXPOSURE_TIME, RATIONAL, 8),
-                z9_expected_with(Exposure {
-                    exposure_time: None,
-                    ..z9_exposure()
-                }),
-            ),
-            (
-                "an FNumber too long to read",
-                F_NUMBER,
-                |builder, _, exif| too_long_of(builder, exif, F_NUMBER, RATIONAL, 8),
-                z9_expected_with(Exposure {
-                    f_number: None,
-                    ..z9_exposure()
-                }),
-            ),
-            (
-                "a FocalLength too long to read",
-                FOCAL_LENGTH,
-                |builder, _, exif| too_long_of(builder, exif, FOCAL_LENGTH, RATIONAL, 8),
-                z9_expected_with(Exposure {
-                    focal_length: None,
-                    ..z9_exposure()
-                }),
-            ),
-            (
                 "a FocalLengthIn35mmFilm too long to read",
                 FOCAL_LENGTH_IN_35MM_FILM,
                 |builder, _, exif| too_long_of(builder, exif, FOCAL_LENGTH_IN_35MM_FILM, SHORT, 2),
                 z9_expected_with(Exposure {
                     focal_length_in_35mm_film: None,
-                    ..z9_exposure()
-                }),
-            ),
-            (
-                "an ExposureBiasValue too long to read",
-                EXPOSURE_BIAS_VALUE,
-                |builder, _, exif| too_long_of(builder, exif, EXPOSURE_BIAS_VALUE, SRATIONAL, 8),
-                z9_expected_with(Exposure {
-                    exposure_bias: None,
                     ..z9_exposure()
                 }),
             ),
@@ -3019,6 +2980,41 @@ mod tests {
                 exposure_bias: Some(signed(-3, 10)),
             }
         );
+    }
+
+    #[test]
+    fn a_fraction_too_long_to_read_whole_gives_its_first() {
+        // Each of the exposure's fractions with more values than the cap on
+        // one value lets through, the first of them a real one: the first
+        // is read alone, as the ISO's is, and the others are not read.
+        let count = TOO_LONG.div_ceil(8);
+        let too_long = |builder: &mut TiffBuilder, exif, tag, typ, first: [u32; 2]| {
+            builder.blob_at(
+                4096,
+                &[first[0].to_le_bytes(), first[1].to_le_bytes()].concat(),
+            );
+            builder.raw(exif, tag, typ, count, RawValue::Offset(4096));
+            builder.pad_to(4096 + u64::from(count) * 8);
+        };
+        let read =
+            exposure(|builder, exif| too_long(builder, exif, EXPOSURE_TIME, RATIONAL, [1, 250]));
+        assert_eq!(read.exposure_time, Some(fraction(1, 250)));
+        let read = exposure(|builder, exif| too_long(builder, exif, F_NUMBER, RATIONAL, [28, 10]));
+        assert_eq!(read.f_number, Some(fraction(28, 10)));
+        let read =
+            exposure(|builder, exif| too_long(builder, exif, FOCAL_LENGTH, RATIONAL, [500, 10]));
+        assert_eq!(read.focal_length, Some(fraction(500, 10)));
+        let minus_one_third = [(-1_i32).cast_unsigned(), 3];
+        let read = exposure(|builder, exif| {
+            too_long(
+                builder,
+                exif,
+                EXPOSURE_BIAS_VALUE,
+                SRATIONAL,
+                minus_one_third,
+            );
+        });
+        assert_eq!(read.exposure_bias, Some(signed(-1, 3)));
     }
 
     #[test]

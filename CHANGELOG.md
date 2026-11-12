@@ -24,12 +24,14 @@ does.
 ### Fixed
 
 - The tags raw-files reads by their first value, such as the offsets of
-  the Exif and GPS directories, the orientation or the ISO, are read
+  the Exif and GPS directories, the orientation, the ISO, and the
+  exposure time, f-number, focal length and exposure bias, are read
   from that value alone when the file gives them many values
-  ([#114](https://github.com/kuolas/raw-files/issues/114)). Such a tag
+  ([#114](https://github.com/kuolas/raw-files/issues/114),
+  [#109](https://github.com/kuolas/raw-files/issues/109)). Such a tag
   longer than the cap on one value (`Limits::max_value_bytes`) was
   refused, taking with it its value or the directory or preview it
-  locates; a shorter one was copied whole to use its first four bytes.
+  locates; a shorter one was copied whole to use its first value.
 - A Nikon MakerNote's small preview is found only when its pointer and
   the preview's offset and length are each one LONG, as Nikon writes
   them ([#110](https://github.com/kuolas/raw-files/issues/110)). Each
