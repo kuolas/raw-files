@@ -21,12 +21,8 @@
 //! format modules name as `tiff::tags::ORIENTATION`. Besides the readers,
 //! it re-exports the rules, [`Rule`], [`Held`] and their shapes [`First`]
 //! and [`Text`], and [`FieldType`], which the crate's root re-exports in
-//! turn.
-//! It also re-exports the walk's rule for damage, [`skip_damage`], so that
-//! what reads the tree after the walk loses to damage only what the damage
-//! touches, as the walk does. One file holds only tests:
-//! `robustness`, which reads truncated and corrupted files through the
-//! whole reader.
+//! turn. One file holds only tests: `robustness`, which reads truncated
+//! and corrupted files through the whole reader.
 
 mod block;
 mod field_type;
@@ -43,4 +39,4 @@ pub use field_type::FieldType;
 pub(crate) use header::parse_header;
 pub(crate) use ifd::{Entry, Ifd, ifd_in, parse_ifd};
 pub(crate) use rule::{First, Held, Rule, Text};
-pub(crate) use walk::{Link, Tree, skip_damage, walk};
+pub(crate) use walk::{Link, Tree, walk};

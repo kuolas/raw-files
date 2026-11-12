@@ -96,7 +96,7 @@ use std::vec;
 use super::header::HEADER_LEN;
 use super::tags::{EXIF_IFD, GPS_IFD, INTEROP_IFD, SUB_IFDS};
 use super::{Block, Ifd, parse_header, parse_ifd};
-use crate::error::{Error, ErrorKind, Result};
+use crate::error::{Error, Result, skip_damage};
 use crate::io::{ByteOrder, Source};
 use crate::limits::Limits;
 
@@ -525,27 +525,10 @@ impl<R: Read + Seek> Walker<'_, R> {
     }
 }
 
-/// Turns damage in the file into `None`, keeping only a failure of the
-/// reader as an error.
-///
-/// The rule wherever damage should cost only the part of the file it
-/// touches: past IFD0, an IFD that cannot be parsed or a tag value that
-/// cannot be read costs the walk only what it would have led to, the
-/// preview finder skips an IFD whose tags it cannot read, and a NEF
-/// MakerNote that does not hold together costs only its own preview. An
-/// `Io` error is not damage: it says nothing about the file, and the
-/// reader may fail again on the next read.
-pub(crate) fn skip_damage<T>(result: Result<T>) -> Result<Option<T>> {
-    match result {
-        Ok(value) => Ok(Some(value)),
-        Err(err) if err.kind() == ErrorKind::Io => Err(err),
-        Err(_) => Ok(None),
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::error::ErrorKind;
     use crate::testing::FailsFar;
     use crate::tiff_builder::{Built, IfdId, LONG, Order, RawValue, TiffBuilder};
     use std::io::{self, Cursor, SeekFrom};

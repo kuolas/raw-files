@@ -202,10 +202,10 @@ use crate::camera_settings::{
     WhiteBalanceMode,
 };
 use crate::container::tiff::tags::COLOR_SPACE;
-use crate::container::tiff::{First, Ifd, Rule, Text, Tree, skip_damage};
+use crate::container::tiff::{First, Ifd, Rule, Text, Tree};
 use crate::datetime::DateTime;
 use crate::entries::clean_text;
-use crate::error::Result;
+use crate::error::{Result, skip_damage};
 use crate::formats::tiff_previews;
 use crate::geometry::Size;
 use crate::io::Source;

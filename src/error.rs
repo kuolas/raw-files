@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! The error type: what went wrong, by category, and where in the file.
+//! The error type: what went wrong, by category, and where in the file;
+//! and the crate's rule for damage, [`skip_damage`], which turns damage in
+//! the file into `None` and keeps a failure of the reader as an error.
 
 use std::borrow::Cow;
 use std::fmt;
@@ -213,6 +215,24 @@ impl Error {
             Some(offset),
             Some(source),
         )
+    }
+}
+
+/// Turns damage in the file into `None`, keeping only a failure of the
+/// reader as an error.
+///
+/// The rule wherever damage should cost only the part of the file it
+/// touches. For example, past IFD0, an IFD that cannot be parsed or a tag
+/// value that cannot be read costs the walk only what it would have led
+/// to, the preview finder skips an IFD whose tags it cannot read, and a
+/// NEF MakerNote that does not hold together costs only its own preview. An
+/// `Io` error is not damage: it says nothing about the file, and the
+/// reader may fail again on the next read.
+pub(crate) fn skip_damage<T>(result: Result<T>) -> Result<Option<T>> {
+    match result {
+        Ok(value) => Ok(Some(value)),
+        Err(err) if err.kind() == ErrorKind::Io => Err(err),
+        Err(_) => Ok(None),
     }
 }
 
@@ -552,5 +572,25 @@ mod tests {
             .and_then(|source| source.downcast_ref::<io::Error>())
             .expect("the source is still the reader's io::Error");
         assert_eq!(source.kind(), io::ErrorKind::UnexpectedEof);
+    }
+
+    #[test]
+    fn skip_damage_keeps_a_value_and_a_failing_reader() {
+        assert_eq!(skip_damage(Ok(7)).ok(), Some(Some(7)));
+        let err = skip_damage::<u8>(Err(Error::io_at(io::Error::other("gone"), 3)))
+            .expect_err("a failing reader stays an error");
+        assert_eq!(err.kind(), ErrorKind::Io);
+        assert_eq!(err.offset(), Some(3));
+    }
+
+    #[test]
+    fn skip_damage_turns_every_other_kind_into_none() {
+        for kind in all_kinds() {
+            if kind == ErrorKind::Io {
+                continue;
+            }
+            let err = Error::new(kind, Cow::Borrowed("damage"), Some(5), None);
+            assert_eq!(skip_damage::<u8>(Err(err)).ok(), Some(None), "{kind}");
+        }
     }
 }
