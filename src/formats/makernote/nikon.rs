@@ -424,7 +424,7 @@ use super::{MakerNoteBlock, checked_color_temperature};
 use crate::camera_settings::{
     CameraSettings, ColorSpace, FineTune, ImageArea, RawImageSize, Shutter, WhiteBalanceMode,
 };
-use crate::container::tiff::{Block, FieldType, Ifd, Tree, ifd_in, parse_header, skip_damage};
+use crate::container::tiff::{Block, Ifd, Tree, ifd_in, parse_header, skip_damage};
 use crate::entries::{Directory, Entries};
 use crate::error::Result;
 use crate::focus::{
@@ -534,24 +534,31 @@ const AF_INFO2: u16 = 0x00B7;
 mod rules {
     use crate::container::tiff::tags;
     use crate::container::tiff::{FieldType, Held, Rule, Text};
-    use crate::rational::SignedRational;
+    use crate::rational::{Rational, SignedRational};
 
     const SHORT: &[FieldType] = &[FieldType::Short];
     const LONG: &[FieldType] = &[FieldType::Long];
     const ASCII: &[FieldType] = &[FieldType::Ascii];
 
+    pub(super) const ISO: Held<[u32; 2]> = Held::new(super::ISO, SHORT);
     pub(super) const WHITE_BALANCE: Rule<Text> = Rule::new(super::WHITE_BALANCE, ASCII);
     pub(super) const FOCUS_MODE: Rule<Text> = Rule::new(super::FOCUS_MODE, ASCII);
     pub(super) const FINE_TUNE_STEPS: Held<[i16; 2]> =
         Held::new(super::FINE_TUNE_STEPS, &[FieldType::SShort]);
     pub(super) const PREVIEW_IFD: Held<[u32; 1]> = Held::new(super::PREVIEW_IFD, LONG);
+    pub(super) const CROP_HI_SPEED: Rule<[u32; 7]> = Rule::new(super::CROP_HI_SPEED, SHORT);
     pub(super) const SERIAL_NUMBER: Rule<Text> = Rule::new(super::SERIAL_NUMBER, ASCII);
     pub(super) const COLOR_SPACE: Held<[u32; 1]> = Held::new(super::COLOR_SPACE, SHORT);
+    pub(super) const WORLD_TIME: Held<[u8; 4]> =
+        Held::new(super::WORLD_TIME, &[FieldType::Undefined]);
     pub(super) const SHUTTER_MODE: Held<[u32; 1]> = Held::new(super::SHUTTER_MODE, SHORT);
     pub(super) const IMAGE_SIZE_RAW: Held<[u32; 1]> = Held::new(super::IMAGE_SIZE_RAW, SHORT);
     pub(super) const FINE_TUNE: Rule<[SignedRational; 2]> =
         Rule::new(super::FINE_TUNE, &[FieldType::SRational]);
+    pub(super) const CROP_AREA: Rule<[u32; 4]> =
+        Rule::new(super::CROP_AREA, &[FieldType::Short, FieldType::Long]);
     pub(super) const COLOR_TEMPERATURE: Held<[u32; 1]> = Held::new(super::COLOR_TEMPERATURE, SHORT);
+    pub(super) const LENS: Rule<[Rational; 4]> = Rule::new(super::LENS, &[FieldType::Rational]);
     pub(super) const AF_INFO2: Rule<Vec<u8>> = Rule::new(super::AF_INFO2, &[FieldType::Undefined]);
 
     // The PreviewIFD.
@@ -824,7 +831,7 @@ pub(in crate::formats) fn metadata<R: Read + Seek>(
         metadata.camera.serial_number = serial_number(src, makernote)?;
     }
     if metadata.exposure.iso.is_none() {
-        metadata.exposure.iso = iso(src, makernote)?;
+        metadata.exposure.iso = iso(makernote);
     }
     if !metadata.lens.has_range() {
         metadata.lens.set_range(lens_range(src, makernote)?);
@@ -833,7 +840,7 @@ pub(in crate::formats) fn metadata<R: Read + Seek>(
     // nothing.
     if let Some(time) = metadata.capture_time
         && time.offset_minutes().is_none()
-        && let Some(offset) = world_time(src, makernote)?
+        && let Some(offset) = world_time(makernote)
         && let Ok(time) = time.with_offset_minutes(offset)
     {
         metadata.capture_time = Some(time);
@@ -1218,14 +1225,7 @@ fn crop_area<R: Read + Seek>(
     let Some(raw) = raw else {
         return Ok(CropArea::Unusable);
     };
-    if ifd
-        .entry_of_type(CROP_AREA, &[FieldType::Short, FieldType::Long])
-        .is_none()
-    {
-        return Ok(CropArea::Unusable);
-    }
-    let values = skip_damage(ifd.u32s(src, CROP_AREA))?.flatten();
-    let Some(&[left, top, width, height]) = values.as_deref() else {
+    let Some([left, top, width, height]) = ifd.get(src, rules::CROP_AREA)? else {
         return Ok(CropArea::Unusable);
     };
     Ok(tiff_metadata::crop([left, top], [width, height], raw)
@@ -1258,21 +1258,11 @@ fn serial_number<R: Read + Seek>(
 /// Most bodies that write the tag write `[0, ISO]`, such as `[0, 200]` on
 /// the D300 (public sample 928). Any other shape records no ISO: the D700
 /// writes four zero bytes of type UNDEFINED (sample 2255), the Coolpix
-/// E5700 `[0, 0]` (sample 4456).
-///
-/// # Errors
-///
-/// `Io` when the reader fails. Nothing the block holds is an error.
-fn iso<R: Read + Seek>(src: &mut Source<R>, makernote: &MakerNote) -> Result<Option<u32>> {
-    let ifd = &makernote.ifd;
-    if ifd.entry_of_type(ISO, &[FieldType::Short]).is_none() {
-        return Ok(None);
-    }
-    let values = skip_damage(ifd.u32s(src, ISO))?.flatten();
-    let Some(&[_, iso]) = values.as_deref() else {
-        return Ok(None);
-    };
-    Ok((iso > 0).then_some(iso))
+/// E5700 `[0, 0]` (sample 4456). Two SHORTs are held in the entry, so this
+/// reads nothing from the file, and a tag of another count is not read.
+fn iso(makernote: &MakerNote) -> Option<u32> {
+    let [_, iso] = makernote.ifd.held(rules::ISO)?;
+    (iso > 0).then_some(iso)
 }
 
 /// The lens's range that `makernote`'s Lens tag records: its shortest and
@@ -1292,12 +1282,10 @@ fn lens_range<R: Read + Seek>(
     src: &mut Source<R>,
     makernote: &MakerNote,
 ) -> Result<[Option<Rational>; 4]> {
-    let values = skip_damage(makernote.ifd.rationals(src, LENS))?.flatten();
-    let Some(&[first, second, third, fourth]) = values.as_deref() else {
+    let Some(values) = makernote.ifd.get(src, rules::LENS)? else {
         return Ok([None; 4]);
     };
-    Ok([first, second, third, fourth]
-        .map(|(numerator, denominator)| Rational::known(numerator, denominator)))
+    Ok(values.map(|value| Rational::known(value.numerator, value.denominator)))
 }
 
 /// The offset of the camera's clock from UTC, in minutes east of UTC, that
@@ -1312,32 +1300,21 @@ fn lens_range<R: Read + Seek>(
 /// which takes it, refuses one beyond 14 hours, as a zone rewritten in the
 /// wrong byte order is.
 ///
-/// See the [module documentation](self) for what WorldTime is.
-///
-/// # Errors
-///
-/// `Io` when the reader fails. Nothing the block holds is an error.
-fn world_time<R: Read + Seek>(src: &mut Source<R>, makernote: &MakerNote) -> Result<Option<i16>> {
+/// Four bytes are held in the entry, so this reads nothing from the file,
+/// and a tag of another count is not read. See the
+/// [module documentation](self) for what WorldTime is.
+fn world_time(makernote: &MakerNote) -> Option<i16> {
     let ifd = &makernote.ifd;
-    if ifd
-        .entry_of_type(WORLD_TIME, &[FieldType::Undefined])
-        .is_none()
-    {
-        return Ok(None);
-    }
-    let bytes = skip_damage(ifd.bytes(src, WORLD_TIME))?.flatten();
-    let Some(&[zone0, zone1, daylight_saving, _date_format]) = bytes.as_deref() else {
-        return Ok(None);
-    };
+    let [zone0, zone1, daylight_saving, _date_format] = ifd.held(rules::WORLD_TIME)?;
     let zone = i32::from(ifd.order().u16([zone0, zone1]).cast_signed());
     let offset = match daylight_saving {
         0 => zone,
         1 => zone + 60,
-        _ => return Ok(None),
+        _ => return None,
     };
     // A zone near the end of the 16-bit range, plus the daylight hour, may
     // not fit; it is far beyond any offset in use anyway.
-    Ok(i16::try_from(offset).ok())
+    i16::try_from(offset).ok()
 }
 
 /// Where the camera's autofocus aimed, as `makernote`'s AFInfo2 records
@@ -1494,16 +1471,8 @@ fn crop_hi_speed<R: Read + Seek>(
     src: &mut Source<R>,
     makernote: &MakerNote,
 ) -> Result<Option<CropHiSpeed>> {
-    let ifd = &makernote.ifd;
-    if ifd
-        .entry_of_type(CROP_HI_SPEED, &[FieldType::Short])
-        .is_none()
-    {
-        return Ok(None);
-    }
-    let values = skip_damage(ifd.u32s(src, CROP_HI_SPEED))?.flatten();
     let Some(
-        &[
+        [
             mode,
             original_width,
             original_height,
@@ -1512,7 +1481,7 @@ fn crop_hi_speed<R: Read + Seek>(
             left,
             top,
         ],
-    ) = values.as_deref()
+    ) = makernote.ifd.get(src, rules::CROP_HI_SPEED)?
     else {
         return Ok(None);
     };
@@ -7970,6 +7939,90 @@ mod tests {
             let err =
                 metadata(&mut src, &makernote, standard, Picture::Raw).expect_err("the read fails");
             assert_eq!(err.kind(), ErrorKind::Io, "{len}: {err:?}");
+        }
+    }
+
+    #[test]
+    fn a_tag_of_another_count_than_its_rule_is_not_read() {
+        // Each tag that is read only at an exact count, given one value
+        // more, alone in the block, whose last bytes it is, placed from FAR
+        // on, where every read fails, with the inner header and the
+        // MakerNote IFD before FAR. Its count is checked before its values
+        // are read, so it gives nothing, and reading the metadata succeeds.
+        let order = Order::Little;
+        type Check = fn(&Metadata) -> bool;
+        let cases: [(&str, u64, Tags, Check); 5] = [
+            (
+                "CropArea",
+                10,
+                |inner, ifd| {
+                    inner.short(ifd, CROP_AREA, &[4, 4, 5976, 3984, 0]);
+                },
+                |metadata| metadata.image_size == Some(RAW),
+            ),
+            (
+                "ISO",
+                6,
+                |inner, ifd| {
+                    inner.short(ifd, ISO, &[0, 200, 0]);
+                },
+                |metadata| metadata.exposure.iso.is_none(),
+            ),
+            (
+                "Lens",
+                40,
+                |inner, ifd| {
+                    let range = [(240, 10), (700, 10), (28, 10), (28, 10), (1, 1)];
+                    inner.rational(ifd, LENS, &range);
+                },
+                |metadata| !metadata.lens.has_range(),
+            ),
+            (
+                "WorldTime",
+                5,
+                |inner, ifd| {
+                    inner.undefined(ifd, WORLD_TIME, &[0x3C, 0, 0, 0, 0]);
+                },
+                |metadata| {
+                    let time = metadata.capture_time.expect("a capture time");
+                    time.offset_minutes().is_none()
+                },
+            ),
+            (
+                "CropHiSpeed",
+                16,
+                |inner, ifd| {
+                    let crop = [11, 8280, 5520, 8280, 5520, 0, 0, 0];
+                    inner.short(ifd, CROP_HI_SPEED, &crop);
+                },
+                |metadata| metadata.camera_settings.image_area.is_none(),
+            ),
+        ];
+        for (name, len, tags, check) in cases {
+            let block = tags_block(order, tags).0;
+            let at = FAR - (whole(&block) - len);
+            let bytes = nikon_file_with(order, at, &block, 0, |builder, ifd0, exif| {
+                builder
+                    .short(ifd0, PHOTOMETRIC_INTERPRETATION, &[CFA])
+                    .long(ifd0, IMAGE_WIDTH, &[RAW.width])
+                    .long(ifd0, IMAGE_LENGTH, &[RAW.height])
+                    .ascii(exif, DATE_TIME_ORIGINAL, "2024:05:01 12:00:00");
+                entry_at(builder, exif, MAKER_NOTE, UNDEFINED, at, whole(&block));
+            });
+            // A reader that does not fail gives the same.
+            assert!(check(&metadata_of(bytes.clone())), "{name}");
+
+            let limits = Limits::default();
+            let mut src = Source::new(FailsFar(Cursor::new(bytes))).unwrap();
+            let file_block = tiff::Block::file(src.len());
+            let tree = walk(&mut src, &file_block, &limits).unwrap();
+            let makernote = read(&mut src, &tree, &limits)
+                .unwrap()
+                .expect("a MakerNote");
+            let standard = tiff_metadata::read(&mut src, &tree).unwrap();
+            let read = metadata(&mut src, &makernote, standard, Picture::Raw)
+                .unwrap_or_else(|err| panic!("{name}: {err:?}"));
+            assert!(check(&read), "{name}");
         }
     }
 

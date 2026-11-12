@@ -1792,8 +1792,11 @@ mod tests {
             let (mut src, makernote) = focus_file(order, b"", |builder, ifd| {
                 tags_7m4(builder, ifd, order);
             });
-            let bytes = makernote.ifd.bytes(&mut src, FOCUS_FRAME_SIZE).unwrap();
-            stored.push(bytes.expect("FocusFrameSize"));
+            let bytes = makernote
+                .ifd
+                .get(&mut src, rules::FOCUS_FRAME_SIZE)
+                .unwrap();
+            stored.push(bytes.expect("FocusFrameSize").to_vec());
             let found = focus(&mut src, &makernote).unwrap();
             assert_eq!(found, Some(focus_7m4()), "{order:?}");
         }

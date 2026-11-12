@@ -42,8 +42,8 @@ use std::io::Cursor;
 use std::panic;
 use std::path::{Path, PathBuf};
 
-use super::Block;
 use super::walk::{Link, Tree, walk};
+use super::{Block, FieldType, First, Held, Rule, Text};
 use crate::error::{Error, Result};
 use crate::io::Source;
 use crate::limits::Limits;
@@ -279,10 +279,15 @@ fn limit_sets(fixture: &Fixture) -> Vec<(&'static str, Limits)> {
 }
 
 /// Reads `bytes` as a caller would: the walk with `limits`, header first,
-/// then every value of every IFD the walk found, through each accessor.
+/// then every value of every IFD the walk found, through each accessor
+/// that passes damage up, as bytes under the cap of `limits`, and by
+/// rules of each shape.
 /// Returns the tree with the errors of the value reads, or the error that
 /// stopped the walk.
 fn read(bytes: &[u8], limits: &Limits) -> Result<(Tree, Vec<Error>)> {
+    const NUMBERS: &[FieldType] = &[FieldType::Short, FieldType::Long, FieldType::Ifd];
+    const BYTES: &[FieldType] = &[FieldType::Byte, FieldType::Undefined];
+    const TEXT: &[FieldType] = &[FieldType::Ascii, FieldType::Utf8];
     let mut src = Source::new(Cursor::new(bytes))?;
     let block = Block::file(src.len());
     let tree = walk(&mut src, &block, limits)?;
@@ -292,7 +297,24 @@ fn read(bytes: &[u8], limits: &Limits) -> Result<(Tree, Vec<Error>)> {
             errors.extend(ifd.u32s(&mut src, tag).err());
             errors.extend(ifd.ascii(&mut src, tag).err());
             errors.extend(ifd.text_bytes(&mut src, tag).err());
-            errors.extend(ifd.bytes(&mut src, tag).err());
+        }
+        for entry in ifd.entries() {
+            errors.extend(entry.read(&mut src, limits.max_value_bytes()).err());
+        }
+        // And by rules of each shape, which give damage as `None`: their
+        // only error is a failing reader's, which a reader over bytes in
+        // memory never is.
+        for tag in ifd.tags() {
+            errors.extend(ifd.get(&mut src, Rule::<Vec<u32>>::new(tag, NUMBERS)).err());
+            errors.extend(
+                ifd.get(&mut src, Rule::<First<u32>>::new(tag, NUMBERS))
+                    .err(),
+            );
+            errors.extend(ifd.get(&mut src, Rule::<[u32; 2]>::new(tag, NUMBERS)).err());
+            errors.extend(ifd.get(&mut src, Rule::<Vec<u8>>::new(tag, BYTES)).err());
+            errors.extend(ifd.get(&mut src, Rule::<Text>::new(tag, TEXT)).err());
+            let _ = ifd.held(Held::<[u32; 1]>::new(tag, NUMBERS));
+            let _ = ifd.held(Held::<[u8; 4]>::new(tag, BYTES));
         }
     }
     Ok((tree, errors))
