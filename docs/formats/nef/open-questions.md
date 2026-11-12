@@ -283,7 +283,7 @@ record or the code of raw-files has answered it; each names what did.
   file's for previews and metadata, as recommended. The reader takes
   every number inside the MakerNote in the byte order of the MakerNote's
   own header
-  ([src/formats/makernote/nikon.rs](../../../src/formats/makernote/nikon.rs)),
+  ([src/formats/makernote/nikon/block.rs](../../../src/formats/makernote/nikon/block.rs)),
   so such a file gives the same previews and the same metadata as one
   whose orders agree, which the tests check on a MakerNote written in the
   other byte order ([tests/nef.rs](../../../tests/nef.rs)). Whether raw
