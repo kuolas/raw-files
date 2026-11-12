@@ -116,19 +116,8 @@ ever complete for every body. What each gives so far:
   plus the color model that converts it to a standard color space.
   Not started.
 
-The public API is the file handle (`RawFile` and `Options`) with the
-preview types (`Preview`, `PreviewFormat`, `Orientation`, `Size`), the
-metadata types (`Metadata`, `Camera`, `Make`, `Authorship`,
-`Exposure`, `Lens`, `Point`, `DateTime`, `Rational` and
-`SignedRational`), the location types (`Location`, `Latitude`,
-`Longitude`, `Altitude`, `Direction` and `North`), the focus types
-(`Focus`, `FocusOrigin`, `FocusPoints`, `FocusPoint`, `FocusAreaMode`,
-`FocusLayout` and `FocusLayoutPoint`), the camera settings types
-(`CameraSettings`, `WhiteBalance`, `FineTune`, `Flash`, and the enums
-`WhiteBalanceMode`, `ExposureProgram`, `MeteringMode`, `FlashMode`,
-`Shutter`, `ImageArea`, `RawImageSize` and `ColorSpace`), the raw view's
-types (`Entries`, `Entry`, `Directory`, `FieldType` and `Value`),
-`Format`, `Error`, `ErrorKind`, `Result`, `ValueError` and `Limits`.
+The [API documentation](https://docs.rs/raw-files) lists every public
+type.
 
 ## Formats
 
