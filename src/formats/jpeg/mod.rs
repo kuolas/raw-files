@@ -91,7 +91,7 @@
 //! claims of the raw formats compare it.
 //!
 //! - **When the Make starts with `NIKON`**, as the NEF claim tests it, the
-//!   Nikon MakerNote reader (`makernote/nikon.rs`) reads it as it reads a
+//!   Nikon MakerNote reader (`makernote/nikon/`) reads it as it reads a
 //!   NEF's. In the layout every body since the D70 writes, the offsets
 //!   count from the MakerNote's own inner header, so it reads the same
 //!   inside the Exif segment. In the headerless layout of the D1 family,
