@@ -79,4 +79,4 @@ cargo test write_fuzz_seeds -- --ignored
 ```
 
 The fuzzer saves what it finds to `fuzz/corpus/`, which git ignores; see
-[CONTRIBUTING.md](../../CONTRIBUTING.md#fuzzing) for how to run it.
+[docs/TESTING.md](../../docs/TESTING.md#fuzzing) for how to run it.

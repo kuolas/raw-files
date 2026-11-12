@@ -23,8 +23,8 @@ raw-files.
 The tests open each sample file and compare what raw-files reads with
 tables of expected values. The files are too large to commit.
 `scripts/fetch-samples.sh` downloads them and checks each one's SHA-256;
-[CONTRIBUTING.md](../../CONTRIBUTING.md#code-style-and-checks) says how
-to run it. A test whose file has not been downloaded says so and passes.
+[docs/TESTING.md](../TESTING.md#the-sample-files) says how to run
+it. A test whose file has not been downloaded says so and passes.
 
 The list of the files is [`tests/samples.tsv`](../../tests/samples.tsv):
 a header line, then one line per file, its columns separated by tabs.
