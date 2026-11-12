@@ -377,7 +377,7 @@ nothing to the API is for review to check.
 
 The oldest supported Rust (`rust-version` in `Cargo.toml`) is a stable
 release at least six months old. It is raised only when the code needs
-something newer, in a minor release, with a line in the changelog; raising
+something newer, in a minor release, with an entry in the changelog; raising
 it is not a breaking change.
 
 A few conventions:

@@ -270,7 +270,7 @@ except the DSC-R1 (14-bit big-endian); Compression 7 decodes Bayer tiles and
 converts YCbCr tiles to RGB. For Compression 32766 it looks the camera up in
 mode "arw6", which no Sony camera file defines, so such files fail as
 unsupported before decoding starts; its ARW 6.0 decompressor is an
-`unimplemented!()` stub that is unreachable today, and `RawLoader::decode` also
+`unimplemented!()` stub that is unreachable, and `RawLoader::decode` also
 catches panics. [18] **[P]** rawloader is the older rawler design: Compression
 1 and 32767 only, no lossless, no ARW 6.0, no ARQ. [19] **[P]**
 

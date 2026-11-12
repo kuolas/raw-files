@@ -36,10 +36,10 @@ Numbers in square brackets such as [3] refer to [Sources](#sources).
 **Status.** This page combines desk research with structural checks on 36
 CC0 sample files (October 2026): every TIFF and MakerNote structure was
 walked, and every embedded JPEG was parsed up to its start-of-frame marker.
-The check scripts were throwaway and are not in the repository; nothing here
-is implemented in raw-files yet, and no pixel output was compared with a
-reference decoder. Where an algorithm below is said to be *checked*, it was
-run by those scripts on the sample files, not by raw-files.
+The check scripts were throwaway and are not in the repository, and no
+pixel output was compared with a reference decoder. Where an algorithm
+below is said to be *checked*, it was run by those scripts on the sample
+files, not by raw-files.
 
 This page restates algorithms in prose. No code from other projects is
 reproduced, and none should be copied into raw-files from GPL, LGPL or

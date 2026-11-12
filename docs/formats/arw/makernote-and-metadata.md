@@ -821,8 +821,9 @@ multipliers, and raw decoding uses them.
 
 Everything a viewer needs next to the preview comes from IFD0, the Exif IFD,
 the raw SubIFD and, for the location, the GPS IFD
-([section 9.9](#99-location)), plus two plain MakerNote tags for
-identification and lens. **No decryption or deciphering is needed** on any sample: Make, Model,
+([section 9.9](#99-location)), and from the MakerNote for the focus point
+and the camera settings ([sections 9.6](#96-focus-point) and
+[9.7](#97-camera-settings)). **No decryption or deciphering is needed** on any sample: Make, Model,
 Orientation, dates, 0xB000, 0xB001 and the crop tags are plain in every
 file. [F] The focus point is a plain MakerNote tag too
 ([section 9.6](#96-focus-point)), and so are most of the camera
