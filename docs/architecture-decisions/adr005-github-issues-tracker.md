@@ -11,9 +11,9 @@ of known shortcuts, a status page, a work log).
 
 ## Decision
 
-We will track all of it as GitHub issues, labeled from GitHub's default set
-(`bug`, `enhancement`, `documentation`, `good first issue`, `help wanted`).
-There is no in-repo register, status page or work log.
+We will track all of it as GitHub issues, labeled from the tracker's own
+set, which [CONTRIBUTING.md](../../CONTRIBUTING.md#labels) lists. There is
+no in-repo register, status page or work log.
 
 ## Consequences
 

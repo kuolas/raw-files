@@ -46,9 +46,11 @@ We will expose **one handle, `RawFile<R>`, generic over any
 - Bytes already in memory, including a memory-mapped file, are opened with
   `RawFile::from_bytes`, a `RawFile<Cursor<&[u8]>>`: the same handle and the
   same code path.
-- Opening reads only the file's structure. Each capability (previews now;
-  metadata, raw data and development later) then succeeds or fails on its
-  own, so a file whose raw data is not supported still gives its previews.
+- Opening reads the file's structure, and its metadata as
+  [ADR011](adr011-metadata-from-standard-tags.md) decides. Each other
+  capability, such as the previews or the raw data, then succeeds or fails
+  on its own, so a file whose raw data is not supported still gives its
+  previews.
 - The format is detected from the file's content, never from its name.
   Format modules produce format-neutral public types: supporting a new
   format adds a `Format` variant and nothing else. There is no public
@@ -116,13 +118,15 @@ Rejected:
   ([ADR008](adr008-lints-and-panics.md)); on allocations bounded by
   `Limits`; and on detection by content, so a renamed file opens as what it
   is.
-- Showing a preview reads a few kilobytes of structure plus the preview's
-  own bytes, whether the file is on disk, on a network share or in memory.
+- Showing a preview reads the file's structure, a few blocks of 64 KiB,
+  plus the preview's own bytes, whether the file is on disk, on a network
+  share or in memory.
 - `RawFile<R>` is `Send` when `R` is, so files can be opened on a thread
   pool. Reading takes `&mut self`; a `Preview` is `Copy`, so a caller copies
   it out before reading its bytes.
-- Metadata, raw data and development arrive as new methods and types, and
-  new formats as new `Format` variants, without changing what exists.
+- Raw data and development arrive as new methods and types, as metadata
+  did, and new formats as new `Format` variants, without changing what
+  exists.
 - Before 1.0, a minor release may still break the API; `#[non_exhaustive]`
   and getters keep most additions from needing to.
 - The `unstable` APIs carry no compatibility promise; a program using them
