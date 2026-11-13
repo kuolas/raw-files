@@ -1,69 +1,35 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 //! The formats of the camera files the crate reads, RAW files and the JPEG
-//! files cameras write: the table of the formats the crate can detect, and
-//! detection over it.
+//! files cameras write, and the detection of a file's format.
 //!
-//! Each format lives in its own folder here (`nef/`, `arw/`, `jpeg/`) and
-//! registers itself as a [`FormatSpec`] in the list of the container its
-//! files are built on, [`tiff_specs`] or [`jpeg_specs`]: one function that
-//! says whether a file is of that format, and one that reads its previews
-//! and its metadata, both over the structure that container read from the
-//! file.
+//! The parts, in the order a file is read:
+//!
+//! - [`detect`] takes the [`Structure`] the file's container read, and asks
+//!   only the formats of that container's list, in order. The first that
+//!   claims the file reads it.
+//! - Each format lives in its own folder (`nef/`, `arw/`, `jpeg/`) and joins
+//!   its container's list with a [`FormatSpec`]. [`tiff_specs`] holds NEF
+//!   and ARW, and [`jpeg_specs`] holds JPEG.
+//! - `tiff_previews` finds the previews and `tiff_metadata` reads the
+//!   standard tags, for the formats on TIFF and for the TIFF structure in a
+//!   JPEG file's Exif segment.
+//! - `makernote` reads the Nikon and Sony MakerNotes, apart from the
+//!   formats, so that every format whose files carry one reads it with the
+//!   same reader. Its readers read their IFDs inside the MakerNote with the
+//!   TIFF container's [`ifd_in`](crate::container::tiff::ifd_in).
+//! - Last, [`detect`] gives the file the layout of its body's autofocus
+//!   points.
+//!
 //! Detection goes by content, never by the file's name, so a renamed file
-//! opens as what it is; [`Format::from_extension`] is for file pickers,
-//! which must choose what to offer before opening anything. The preview
-//! finder that the TIFF-based formats share lives in `tiff_previews`, and
-//! the metadata reader they share in `tiff_metadata`; the JPEG format uses
-//! both over its Exif segment's TIFF structure. The Nikon and Sony
-//! MakerNote readers live in `makernote`, apart from the formats, so that
-//! every format whose files carry a maker's MakerNote reads it with the
-//! same reader; they read their IFDs inside the MakerNote's block with the
-//! TIFF container's [`ifd_in`](crate::container::tiff::ifd_in).
+//! opens as what it is. [`Format::from_extension`] is for file pickers,
+//! which must choose what to offer before opening anything. A file that no
+//! format of its container claims is of no format the crate recognizes,
+//! and the error names the container. A DNG is such a file, whatever its
+//! Make says ([`is_dng`]).
 //!
-//! Detection, [`detect`], starts from the container: the file's first
-//! bytes name it, and its structure, a [`Structure`], is read before any
-//! format is asked. Only the formats that container can hold are then
-//! asked, in the order of its list, and the first that claims the file
-//! reads it. A file that no format of its container claims is of no
-//! format the crate recognizes, and the error says which container the
-//! file is.
-//!
-//! Detection then gives the file the layout of its body's autofocus
-//! points, from the table that `makernote::points` holds for the body the
-//! Model names. A body with one layout gives it from the Model alone,
-//! whatever the format and whatever the file's MakerNote holds, so it is
-//! looked up here, once, after any format's reader: a file whose
-//! MakerNote is missing or cannot be read, such as an editor's re-save
-//! that keeps the Model, has it too. A body whose files name one of
-//! several layouts, each by its own layout code, will give the layout
-//! that the file's layout code names, as
-//! [`Metadata::focus_layout`](crate::Metadata::focus_layout) states.
-//!
-//! The TIFF list holds NEF and ARW, in that order. A Nikon file is
-//! recognized by its IFD0's Make, and opens with its previews, which the
-//! NEF reader finds with the shared finder, and its metadata, which it
-//! reads with the shared reader. A Sony file is recognized by its IFD0's
-//! Make too, helped for a Hasselblad Make by the pointer to Sony's private
-//! directory, and opens with its previews and its metadata, which the ARW
-//! reader finds and reads the same way. A TIFF file no format claims is of
-//! no format the crate recognizes.
-//!
-//! The JPEG list holds JPEG. A JPEG file is claimed when its first frame
-//! header gives the picture's size and is not lossless, and opens with its
-//! previews, the file itself, the thumbnail of its Exif segment, the
-//! images of its MPF list and, on a Nikon file, the preview of its
-//! MakerNote, which the JPEG reader checks with the shared finder, and
-//! with its metadata, which it reads from its Exif segment with the shared
-//! reader, its image size the picture's, and then, when IFD0's Make names
-//! Nikon or Sony, from its MakerNote with that maker's reader, as a NEF's
-//! or an ARW's ([`make_starts_with`] reads that Make too). A JPEG file no
-//! format claims is of no format the crate recognizes.
-//!
-//! A DNG is of no format the crate recognizes either, whatever its Make
-//! says: converters and the phones that write DNG keep the maker's name in
-//! the Make, so each reader refuses a DNG before it looks at the Make
-//! ([`is_dng`]), and [`make_starts_with`] reads the Make for them.
+//! How each format's files are recognized is in its notes, which
+//! `docs/formats/README.md` lists.
 
 mod arw;
 mod jpeg;
@@ -102,23 +68,23 @@ pub(crate) struct Parsed {
     pub entries: Entries,
 }
 
-/// One format the crate can detect, as two functions over `S`, the
-/// structure that the container its files are built on read from a file:
-/// a [`Tree`] for a format on TIFF, the [`Segments`] for one on JPEG.
+/// One format the crate can detect, as two functions over `S`. `S` is the
+/// structure its container read from a file: a [`Tree`] on TIFF, the
+/// [`Segments`] on JPEG.
 ///
 /// A spec is a pair of plain functions rather than a trait object, so that
-/// each container's list is data: detection walks it in order, and a
-/// format joins it by giving it its spec. The structure is a type of the
-/// spec, so a format can sit only in the list of the container whose
-/// structure it reads.
+/// each container's list is data. Detection walks it in order, and a format
+/// joins it by giving it its spec. The structure is a type of the spec, so
+/// a format can sit only in the list of the container whose structure it
+/// reads.
 pub(crate) struct FormatSpec<R, S> {
     /// The format this spec detects and reads.
     pub format: Format,
     /// Whether this format owns the file. It looks at the structure, and
     /// may read values through the source, but never at the file's name.
     pub claims: fn(&mut Source<R>, &S) -> Result<bool>,
-    /// Reads the previews and the metadata of a file that this format
-    /// claimed.
+    /// Reads the previews, the metadata and the entries of a file that this
+    /// format claimed.
     pub parse: fn(&mut Source<R>, &S, &Limits) -> Result<Parsed>,
 }
 
@@ -148,43 +114,37 @@ const JPEG_UNCLAIMED: &str = "the file is a JPEG file, but holds no frame header
 /// IFD0 holds DNGVersion, which every DNG carries there.
 ///
 /// A maker's reader refuses a DNG whatever its Make says. DNG is Adobe's
-/// format, which no reader of this release reads, yet a DNG keeps the
-/// camera maker's name: Adobe's converter leaves `SONY` or
-/// `NIKON CORPORATION` in IFD0's Make and adds DNGVersion, and Sony's Xperia
-/// phones write DNG with `Sony` as the Make. Without this test such a file
-/// would open as its maker's own format. A reader of DNG would claim a file
-/// by DNGVersion itself.
+/// format, which no reader of the crate reads, yet a DNG keeps the camera
+/// maker's name. Adobe's converter leaves `SONY` or `NIKON CORPORATION` in
+/// IFD0's Make and adds DNGVersion. Sony's Xperia phones write DNG with
+/// `Sony` as the Make. Without this test, such a file would open as its
+/// maker's own format. A reader of DNG would claim a file by DNGVersion
+/// itself.
 ///
-/// An entry that the IFD parser skipped because it could not be read (an
-/// unknown field type, a length that overflows, a value outside the file)
-/// is absent from the tree, so a DNG whose version entry is damaged is
-/// taken for a file without one. That is the crate's rule for damage, which
-/// costs only what it touches: the preview finder takes an Orientation it
-/// cannot read for none in the same way.
+/// A DNGVersion entry that the IFD parser skipped as damaged is absent from
+/// the tree ([`Ifd::entry`](crate::container::tiff::Ifd::entry)). The file
+/// is then taken for one without it: damage costs only what it touches
+/// ([`skip_damage`](crate::error::skip_damage)).
 pub(super) fn is_dng(tree: &Tree) -> bool {
     tree.ifd0().entry(DNG_VERSION).is_some()
 }
 
-/// Whether the Make of the IFD0 of the file whose TIFF structure is `tree`,
-/// which names the camera's manufacturer, starts with `name` once trimmed
-/// of spaces at either end, compared without regard to case.
+/// Whether the Make of the IFD0 of the file whose TIFF structure is `tree`
+/// starts with `name`. The Make, which names the camera's manufacturer, is
+/// trimmed of spaces at either end, and compared without regard to case.
 ///
-/// The readers' claims decide by it, and the JPEG reader too, which reads
-/// a maker's MakerNote by it. The Make is read as the metadata reads it,
-/// of type ASCII or UTF-8, the two types Exif 3.1 allows for it. A missing
+/// The readers' claims decide by it, and the JPEG reader chooses a
+/// MakerNote's reader by it. The Make is read as the metadata reads it, of
+/// type ASCII or UTF-8, the two types Exif 3.1 allows for it. A missing
 /// Make, a Make of another type, and a Make that starts with anything else
 /// are all "no".
 ///
 /// # Errors
 ///
-/// Whatever reading the Make returns: `LimitExceeded` for a value longer
-/// than the cap IFD0 was read under, `Limits::max_value_bytes`, at the
-/// value's offset; `Io` when the reader fails. A claim that cannot read
-/// its tag stops detection rather than passing the file on, so a TIFF file
-/// other than a DNG whose Make is longer than the cap fails to open. The
-/// JPEG reader takes a Make it cannot read for another maker's, which
-/// costs only the MakerNote, but a failing reader stays an `Io` error
-/// there too.
+/// `LimitExceeded` for a Make longer than the cap on one value that IFD0
+/// was read under, at the value's offset; `Io` when the reader fails. A
+/// claim passes the error on and stops detection, so a TIFF file whose Make
+/// is over the cap fails to open, unless it is a DNG.
 pub(super) fn make_starts_with<R: Read + Seek>(
     src: &mut Source<R>,
     tree: &Tree,
@@ -205,7 +165,13 @@ pub(super) fn make_starts_with<R: Read + Seek>(
 /// container's list that claims it.
 ///
 /// Returns the format and what its reader found, with the layout of the
-/// autofocus points of the body the Model names ([`points::layout`]).
+/// autofocus points of the body the Model names ([`points::layout`]). Every
+/// body with a table has one layout, so the layout depends on the Model
+/// alone, whatever the format and whatever the file's MakerNote holds. A
+/// body of several layouts would give the one its files name
+/// ([`Metadata::focus_layout`](crate::Metadata::focus_layout)). So it is set here, once, after the format's
+/// reader. A file whose MakerNote is missing or cannot be read, such as an
+/// editor's re-save that keeps the Model, has its layout too.
 ///
 /// # Errors
 ///
@@ -230,7 +196,6 @@ pub(crate) fn detect<R: Read + Seek>(
         ),
     };
     let (format, mut parsed) = found.ok_or_else(|| Error::unknown_format(unclaimed))?;
-    // The layout depends on the Model alone, so no format's reader sets it.
     parsed.metadata.focus_layout = parsed
         .metadata
         .camera
