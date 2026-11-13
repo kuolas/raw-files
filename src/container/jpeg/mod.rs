@@ -3,118 +3,33 @@
 //! The JPEG container: the marker segments of a JPEG stream, as far as
 //! raw-files reads them. Nothing here decodes an image.
 //!
-//! A JPEG stream is a picture compressed as the JPEG standard, ITU-T T.81,
-//! describes, and raw-files meets it in two places. RAW files carry their
+//! raw-files meets JPEG streams in two places. RAW files carry their
 //! previews as JPEG streams, often several, from a thumbnail to a full-size
 //! image. And a JPEG file, the picture a camera writes beside its raw file
-//! or instead of it, is one such stream, with the camera's metadata inside
-//! it, which raw-files opens as a format of its own, its previews found as
-//! a raw file's are (ADR014). Both are read by walking the
-//! stream's segments up to its compressed image:
+//! or instead of it, is one such stream with the camera's metadata inside.
+//! raw-files opens it as a format of its own (ADR014). Both are read by
+//! walking the stream's segments up to its compressed image:
 //!
 //! - [`probe`] sizes a preview. The tags that describe a preview are often
-//!   missing, zero or wrong about its size, so the preview finder asks each
-//!   candidate itself: `probe` finds the frame header in the bytes the tags
-//!   give and reads the image's width and height from it.
+//!   missing, zero or wrong about its size. So the preview finder asks each
+//!   candidate itself: `probe` reads the width and height from the frame
+//!   header in the bytes the tags give.
 //! - [`segments`] reads a JPEG file: it keeps the file's frame header, its
-//!   Exif segment and its MPF segment, the parts a reader of the file needs.
+//!   Exif segment and its MPF segment, the parts a reader of the file
+//!   needs.
 //! - [`mpf::index`] reads the MPF segment's index: where the images the
 //!   file holds after its first one lie, such as its large thumbnails.
 //!
-//! # Marker segments
+//! [`probe`] and [`segments`] walk the segments in the same way, with
+//! `Walk`. It reads only inside the bytes it is given, and every step
+//! moves it forward, with checked arithmetic. It ends at SOS, where the
+//! compressed image starts, and wherever the bytes stop looking like
+//! segments; [`MAX_STEPS`] makes it end on any input.
 //!
-//! A JPEG stream is a sequence of markers, each the byte `FF` followed by a
-//! code that says what comes next (T.81 B.1.1.2, p. 31).
-//!
-//! - Any number of `FF` fill bytes may come before a marker's code (T.81
-//!   B.1.1.2, p. 31).
-//! - A few markers stand alone, with nothing after them: SOI (`D8`), the
-//!   start of the image, EOI (`D9`), its end, the restart markers RST0 to
-//!   RST7 (`D0` to `D7`) and TEM (`01`) (T.81 B.1.1.3 and Table B.1,
-//!   pp. 31 to 32).
-//! - Every other marker starts a segment: a 2-byte big-endian length,
-//!   which counts itself and the payload after it but not the marker, so
-//!   that it is at least 2 (T.81 B.1.1.4, p. 33), and a payload of at most
-//!   65,533 bytes (T.81 Table B.9, p. 44).
-//!
-//! A stream opens with SOI, then holds tables, application data such as
-//! Exif, and comments, then the frame header (SOF), which gives the
-//! image's size and how it is coded, then the scan, an SOS segment followed
-//! by the compressed image data, and ends with EOI (T.81 B.2.1 and Figure
-//! B.2, pp. 34 to 35).
-//!
-//! # The walk
-//!
-//! Both readers walk the segments from the marker after SOI, with one
-//! walk, `Walk`, which yields each segment that has a length, with its
-//! marker and where its payload lies. It takes one step per marker or fill
-//! byte and gives up after [`MAX_STEPS`] of them, so it ends on any input.
-//! It ends as well, keeping what came before for whoever reads it, at:
-//!
-//! - SOS. What follows it is the compressed image, not a sequence of
-//!   segments: the coder stuffs a `00` after every `FF` byte it produces
-//!   (T.81 B.1.1.5, note 2, p. 33), and restart markers may come between
-//!   its parts, so an `FF` byte there can look like a marker without being
-//!   one. A frame header that has not come by then cannot be found by
-//!   walking;
-//! - EOI, the end of the stream;
-//! - a byte that is not a marker where a marker should be, a stuffed
-//!   `FF 00` included, since the walk has then left the sequence of
-//!   segments, and a length read after it could send it anywhere;
-//! - a length below 2, which cannot count itself and would send the walk
-//!   back or keep it in place;
-//! - a segment that runs past the end of the bytes walked.
-//!
-//! The walk reads only inside the bytes it is given, never past their end,
-//! and every step moves it forward, with checked arithmetic.
-//!
-//! # The frame header
-//!
-//! After its marker and its length, the frame header holds the sample
-//! precision, 1 byte, then the image's height and width, 2 bytes each
-//! (T.81 B.2.2 and Figure B.3, p. 35; Table B.2, p. 36). A height of 0 is
-//! legal, meaning that a DNL segment after the first scan gives it (T.81
-//! p. 36; B.2.5, p. 45), but it gives no size to a reader that stops at
-//! SOS; a width of 0 is never legal. Either gives no [`Frame`].
-//!
-//! The frame header's marker says how the image is coded, and a lossless
-//! frame (`C3`, `C7`, `CB`, `CF`; T.81 Table B.1, p. 32) is never a
-//! preview: Sony stores the raw sensor data of its lossless ARW files as
-//! tiles that are lossless JPEG streams, each starting `FF D8 FF C3`, and a
-//! strip that points at the first tile looks to the tags much like a
-//! preview. The walk reports every frame header as it finds it; the frame
-//! says whether it is lossless, so that the reader can drop it.
-//!
-//! # A JPEG file
-//!
-//! A JPEG file starts with SOI and a marker, `FF D8 FF`, and a file that
-//! does not is no JPEG file, for which [`segments`] gives nothing. It walks
-//! a JPEG file from there to the end of the file, keeping three things:
-//!
-//! - **The first frame header**, the main image's, read as [`probe`]
-//!   reads it. When it gives no size, none is kept, and a later frame
-//!   header is not looked at.
-//! - **The first Exif segment**: the first APP1 segment (`E1`) whose
-//!   payload starts with `Exif` and two zero bytes (CIPA DC-008 4.5.4 and
-//!   Figure 7, pp. 20 to 21; 4.7.2.3 and Figure 36, p. 105). A whole TIFF
-//!   structure follows them, the camera's metadata, whose offsets count
-//!   from its own header, the first byte after the identifier (DC-008
-//!   4.6.2, p. 28; 4.7.2.5, p. 106), and all of which lies inside the
-//!   segment (ADR014). It is kept as a [`Block`]: its base is that TIFF
-//!   header, and its bounds run from there to the end of the segment. A
-//!   later Exif segment is skipped, as XMP and every other application
-//!   segment are.
-//! - **The first MPF segment**: the first APP2 segment (`E2`) whose payload
-//!   starts with `MPF` and a zero byte (CIPA DC-007 5.2.1 and Figure 4,
-//!   pp. 10 to 11). An MP header in the shape of a TIFF header follows
-//!   them, and the index of the file's images after it, whose offsets count
-//!   from the MP header's first byte (DC-007 5.2, p. 10). It is kept as a
-//!   [`Block`] too: its base is the MP header, and its bounds run from
-//!   there to the end of the segment. The [`mpf`] module reads the index.
-//!
-//! A payload too short to hold its identifier is not that segment. One that
-//! holds the identifier and too little after it is: its block may be too
-//! small to read, which the reader of the block finds out, as damage.
+//! The JPEG notes describe the marker segments, the frame header, and the
+//! Exif and MPF segments, with the standards' clauses
+//! (`docs/formats/jpeg/container-and-metadata.md`, sections 1, 2, 4
+//! and 7).
 
 pub(crate) mod mpf;
 
@@ -129,10 +44,9 @@ use crate::io::{ByteOrder, Source, within};
 ///
 /// A step reads one marker, or skips one fill byte before a marker. Real
 /// previews reach their frame header in a few dozen steps, and camera JPEG
-/// files their scan in fewer; the cap keeps a stream made of nothing but
+/// files their scan in fewer. The cap keeps a stream made of nothing but
 /// tiny segments or fill bytes from making a walk read its whole range,
-/// which can be most of a large file, one marker at a time. Both [`probe`]
-/// and [`segments`] walk under it.
+/// which can be most of a large file, one marker at a time.
 ///
 /// The JPEG standard allows any number of fill bytes before a marker, so a
 /// stream with more of them than the cap allows loses what lies after them.
@@ -144,7 +58,7 @@ const START: [u8; 3] = [0xFF, 0xD8, 0xFF];
 
 /// The shortest frame header that holds the image's size: the length
 /// itself, the sample precision, the height and the width, 2 + 1 + 2 + 2
-/// bytes.
+/// bytes (T.81 B.2.2 and Figure B.3, p. 35).
 const MIN_FRAME_HEADER_LEN: u16 = 7;
 
 /// The marker of an APP1 segment, which holds Exif, XMP or other
@@ -174,7 +88,7 @@ pub(crate) struct Frame {
     pub height: u16,
     /// The code of the frame header's marker, from `C0` to `CF`, which says
     /// how the image is coded: `C0` for a baseline JPEG, `C2` for a
-    /// progressive one, `C3` for a lossless one, and so on; see
+    /// progressive one, `C3` for a lossless one, and so on. See
     /// [`is_lossless`](Frame::is_lossless).
     pub marker: u8,
 }
@@ -184,38 +98,39 @@ impl Frame {
     /// and not a preview.
     ///
     /// A lossless JPEG keeps every sample exactly as it was, which is how a
-    /// camera stores sensor data without loss, and such a stream can look much
-    /// like a preview to the tags that point at it: Sony stores the raw tiles
-    /// of its lossless ARW files as lossless JPEG streams. The preview finder
-    /// drops these frames.
+    /// camera stores sensor data without loss. Such a stream can look much
+    /// like a preview to the tags that point at it: Sony stores the raw data
+    /// of its lossless ARW files as tiles of lossless JPEG
+    /// (`docs/formats/jpeg/container-and-metadata.md`, section 2). The
+    /// preview finder drops these frames.
     ///
-    /// The lossless frame markers are `C3`, the lossless process with Huffman
-    /// coding, `C7`, its differential variant, and `CB` and `CF`, the same two
-    /// with arithmetic coding.
+    /// The lossless frame markers are `C3`, the lossless process with
+    /// Huffman coding, `C7`, its differential variant, and `CB` and `CF`,
+    /// the same two with arithmetic coding (T.81 Table B.1, p. 32).
     pub(crate) fn is_lossless(self) -> bool {
         matches!(self.marker, 0xC3 | 0xC7 | 0xCB | 0xCF)
     }
 }
 
-/// What the walk over a JPEG file's segments found; see the
-/// [module documentation](self#a-jpeg-file).
-///
-/// Every field is `None` when the walk found no such segment before it
-/// ended.
+/// What [`segments`] found in the segments of a JPEG file. Every field is
+/// `None` when the walk found no such segment before it ended.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub(crate) struct Segments {
-    /// The first frame header, if it gives a size: `None` when there is no
+    /// The first frame header, if it gives a size. `None` when there is no
     /// frame header before the walk ends, and when the first gives none,
-    /// being too short to hold the size or giving a width or height of 0.
-    /// A later frame header is not looked at.
+    /// being too short to hold the size or giving a width or height of 0. A
+    /// later frame header is not looked at.
     pub frame: Option<Frame>,
     /// The TIFF structure of the first Exif segment: its base is the TIFF
     /// header, 6 bytes into the segment's payload, and its bounds run from
-    /// there to the end of the segment.
+    /// there to the end of the segment. The structure's offsets count from
+    /// that header (CIPA DC-008 4.6.2, p. 28), and all of it lies inside
+    /// the segment (ADR014).
     pub exif: Option<Block>,
     /// The MPF index of the first MPF segment: its base is the MP header, 4
     /// bytes into the segment's payload, and its bounds run from there to
-    /// the end of the segment.
+    /// the end of the segment. The index's offsets count from the MP header
+    /// (CIPA DC-007 5.2, p. 10).
     pub mpf: Option<Block>,
 }
 
@@ -252,19 +167,28 @@ struct Segment {
 }
 
 /// The walk over the marker segments of a JPEG stream, which both
-/// [`probe`] and [`segments`] use; see the
-/// [module documentation](self#the-walk).
+/// [`probe`] and [`segments`] use.
 ///
-/// It yields each segment that has a length, in the order of the stream.
-/// It skips fill bytes and stand-alone markers, which have nothing to
-/// yield, and ends, yielding nothing more, at SOS, EOI, a byte that is not
-/// a marker where a marker should be, a length below 2, a segment that
-/// runs past the end of its range, or after [`MAX_STEPS`] steps, counted
-/// over the whole walk. When reading the source fails it yields that error
-/// and then ends too, since it cannot know where the next marker is.
+/// It yields each segment that has a length, in the order of the stream. A
+/// marker is the byte `FF` and a code (T.81 B.1.1.2, p. 31). The walk skips
+/// the fill bytes, any `FF`s before a marker's code, and the markers that
+/// stand alone but EOI, which have nothing to yield. It ends, yielding
+/// nothing more:
 ///
-/// It reads only inside its range and holds the source while it walks;
-/// [`source`](Walk::source) lends it out between steps, to read a payload.
+/// - at SOS: what follows is the compressed image, where an `FF` byte can
+///   look like a marker without being one (T.81 B.1.1.5, note 2, p. 33);
+/// - at EOI, the end of the stream;
+/// - at a byte that is not a marker where a marker should be, a stuffed
+///   `FF 00` included: a length read after it could send the walk anywhere;
+/// - at a length below 2, which cannot count itself (T.81 B.1.1.4, p. 33)
+///   and would send the walk back or keep it in place;
+/// - at a segment that runs past the end of its range;
+/// - after [`MAX_STEPS`] steps, counted over the whole walk.
+///
+/// When reading the source fails it yields that error and then ends too,
+/// since it cannot know where the next marker is. It reads only inside its
+/// range and holds the source while it walks; [`source`](Walk::source)
+/// lends it out between steps, to read a payload.
 struct Walk<'a, R> {
     src: &'a mut Source<R>,
     /// Where the next marker, or a fill byte before it, should be.
@@ -338,7 +262,7 @@ impl<'a, R: Read + Seek> Walk<'a, R> {
                 // `FF 00` is a stuffed byte: the way entropy-coded data
                 // writes a data byte of `FF`, so that it is not read as a
                 // marker. It names no segment and appears only inside the
-                // scan, so bytes that hold one where a marker should be are
+                // scan. So bytes that hold one where a marker should be are
                 // not a sequence of segments, and reading a length after it
                 // could jump the walk anywhere.
                 return Ok(None);
@@ -409,8 +333,8 @@ fn frame_size<R: Read + Seek>(src: &mut Source<R>, segment: &Segment) -> Result<
     let height = src.u16_at(height_at, ByteOrder::Big)?;
     let width = src.u16_at(width_at, ByteOrder::Big)?;
     // A height of 0 is legal JPEG, meaning that a DNL segment after the
-    // first scan gives it, but it gives no size here; a width of 0 is never
-    // legal.
+    // first scan gives it (T.81 p. 36; B.2.5, p. 45), but it gives no size
+    // here. A width of 0 is never legal.
     if width == 0 || height == 0 {
         return Ok(None);
     }
@@ -424,7 +348,9 @@ fn frame_size<R: Read + Seek>(src: &mut Source<R>, segment: &Segment) -> Result<
 /// The block that `segment` holds after `id`, its identifier: its base is
 /// the first byte after the identifier, and its bounds run from there to
 /// the end of the segment. `None` when the payload does not start with
-/// `id`, being too short to hold it included.
+/// `id`, being too short to hold it included. A payload that holds `id`
+/// and too little after it still gives a block, which may be too small to
+/// read: the reader of the block finds that out, as damage.
 ///
 /// # Errors
 ///
@@ -450,21 +376,18 @@ fn block_after<R: Read + Seek>(
 /// Finds the frame header of the JPEG stream in the `len` bytes at
 /// `offset` and returns the image's size from it.
 ///
-/// Returns `Ok(None)` when those bytes hold no frame header that can be
-/// found: they do not start with SOI and a marker (`FF D8 FF`), or the walk
-/// over the marker segments meets SOS or EOI first, a byte that is not a
-/// marker where a marker should be (a stuffed `FF 00` included), a segment
-/// length shorter than its own 2 bytes, a segment that runs past
-/// `offset + len`, more than [`MAX_STEPS`] steps, or a frame header too
-/// short to hold the size or giving a width or height of 0. A range whose
-/// end does not fit in a `u64` holds no stream either.
+/// `Ok(None)` when those bytes hold no frame header that can be found:
 ///
-/// The walk reads only inside the range, never past `offset + len`, so a
-/// caller can pass the range that a preview's tags declare and trust that
-/// nothing after it is taken for part of the stream. Fill bytes, any run of
-/// `FF` before a marker's code, are skipped, as the JPEG standard allows.
-/// Every frame header is reported, lossless ones included: telling a
-/// preview from raw data is the caller's decision, for which there is
+/// - when they do not start with SOI and a marker (`FF D8 FF`);
+/// - when the walk ends before a frame header ([`Walk`]);
+/// - when the frame header gives no size ([`frame_size`]);
+/// - when the range's end does not fit in a `u64`.
+///
+/// The walk reads only inside the range, never past `offset + len`. So a
+/// caller can pass the range that a preview's tags declare, and trust that
+/// nothing after it is taken for part of the stream. Every frame header is
+/// reported, lossless ones included: telling a preview from raw data is the
+/// caller's decision, for which there is
 /// [`is_lossless`](Frame::is_lossless).
 ///
 /// # Errors
@@ -490,12 +413,10 @@ pub(crate) fn probe<R: Read + Seek>(
 }
 
 /// Walks the segments of the JPEG file in `src`, from SOI, and keeps its
-/// first frame header, its first Exif segment and its first MPF segment;
-/// see the [module documentation](self#a-jpeg-file).
-///
-/// What the walk found before it ended is kept, whatever ended it: SOS,
-/// EOI, a length below 2, a segment that runs past the end of the file, a
-/// byte that is not a marker, or the cap of [`MAX_STEPS`] steps.
+/// first frame header, its first Exif segment and its first MPF segment. A
+/// later Exif or MPF segment is skipped, as XMP and every other application
+/// segment are. What the walk found before it ended is kept, whatever ended
+/// it ([`Walk`]).
 ///
 /// Returns `None` when the file does not start with SOI and a marker
 /// (`FF D8 FF`), a file shorter than those 3 bytes included: it is not a

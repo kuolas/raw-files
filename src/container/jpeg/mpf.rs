@@ -4,114 +4,26 @@
 //! first one lie.
 //!
 //! The Multi-Picture Format (MPF), CIPA DC-007, lets one JPEG file hold
-//! several images, each a whole JPEG stream from SOI to EOI: the main
-//! image first, then others, such as large thumbnails, smaller copies of
-//! the picture for screens (DC-007 5.1 and Figure 1, pp. 7 to 8; 6.1.2.2
-//! and Table 9, pp. 30 to 31). A decoder reads the first image and stops
-//! at its EOI, so the others are found only through the index that the
-//! first image carries. They are previews of the file (ADR014), checked as
-//! every preview is; [`index`] says where they lie, and gives the MP
-//! Index IFD itself, whose entries the raw view lists.
+//! several images, each a whole JPEG stream: the main image first, then
+//! others, such as large thumbnails. A decoder stops at the first image's
+//! EOI, so the others are found only through the index in the first
+//! image's MPF segment. They are previews of the file (ADR014), checked as
+//! every preview is.
 //!
-//! # Where the index lies
-//!
-//! The index lies in the first image's MPF segment, the APP2 segment whose
-//! payload starts with `MPF` and a zero byte, which [`segments`] finds
-//! (DC-007 5.2.1 and Figure 4, pp. 10 to 11). After the identifier comes
-//! an MP header in the shape of a TIFF header: a byte-order mark, 42, and
-//! the offset of the first IFD (DC-007 5.2.2.1 and Figure 5, 5.2.2.2,
-//! p. 11). That IFD is the MP Index IFD (DC-007 5.2.3 and Table 3, pp. 12
-//! to 18).
-//!
-//! Every offset in the segment, an image's among them, counts from the MP
-//! header's first byte (DC-007 5.2, p. 10), not from the start of the
-//! file. So the segment is read as the [`Block`] that [`segments`] gives:
-//! its base is the MP header, and its bounds run from there to the end of
-//! the segment. The index is an IFD inside its own segment, read by the
-//! TIFF container as a MakerNote's IFD is: the MP header at the block's
-//! base, the MP Index IFD inside the block and under
-//! [`Limits::max_ifd_entries`], and every value it holds inside the block.
-//! A segment's payload holds at most 65,533 bytes, so nothing read from
-//! it is longer.
-//!
-//! Of the index's tags, only MPEntry ([`MP_ENTRY`]) is read. The MP tags
-//! are the Multi-Picture Format's own, not TIFF or Exif tags, so they are
-//! named here, beside their one reader, and not with the TIFF container's
-//! tags. NumberOfImages (0xB001), which says how many images the file
-//! holds, is not trusted and not read: the entries are those MPEntry's
-//! value holds, so a count that disagrees with the value can neither send
-//! the reader past it nor hide an entry. MPFVersion (0xB000) is not read
-//! either.
-//!
-//! # An MP Entry
-//!
-//! An MP Entry describes one image the file holds. MPEntry's value is one
-//! entry per image, 16 bytes each, every number in the MP header's byte
-//! order (DC-007 Figure 7, p. 13):
-//!
-//! - the image's attribute, 4 bytes: flags, and the MP type, which says
-//!   what the image is for, such as a large thumbnail (DC-007 Figure 8,
-//!   p. 14; Table 4, p. 15). It is not read;
-//! - the image's size, 4 bytes: the specification counts the bytes
-//!   "between the SOI and EOI markers" without saying whether the markers
-//!   count (DC-007 5.2.3.3.2, p. 16); on the camera files the notes
-//!   describe, they do, and the size runs to the end of EOI;
-//! - the image's offset, 4 bytes: where its SOI lies, counted from the MP
-//!   header, and 0 for the first image (DC-007 5.2.3.3.3, p. 16);
-//! - the entry numbers of two images that depend on this one, 2 bytes
-//!   each. They are not read.
-//!
-//! # What is kept
-//!
-//! [`index`] gives, for each entry in the order of the value, the range
-//! from the MP header's position plus the entry's offset, over the
-//! entry's size. It leaves out:
-//!
-//! - an entry whose offset is 0: the file's first image, which is the file
-//!   itself, a preview of its own (ADR014). The specification gives 0 to
-//!   the first image only, and an offset of 0 points at the MP header,
-//!   inside the first image, where no other image can start. So an entry
-//!   is taken for the first image by its offset, wherever it stands in the
-//!   value; a first entry with another offset is kept as any other;
-//! - an entry whose start or end would pass the largest offset. On any
-//!   file a reader can hold, this cannot happen, since the MP header lies
-//!   inside the file and the offset and the size are 32-bit numbers, but
-//!   the sums are checked all the same.
-//!
-//! It keeps an entry whatever its MP type: a gain map or a frame of a
-//! panorama as well as a large thumbnail. Whether images other than large
-//! thumbnails should be previews is an open question of the JPEG notes;
-//! every camera file they describe that has an MPF index lists large
-//! thumbnails only after its first image.
-//!
-//! It keeps as well, for the preview finder to judge with every other
-//! candidate, so that each rule is applied in one place:
-//!
-//! - an entry whose range runs past the end of the file, or lies wholly
-//!   past it: the finder drops every candidate that does not lie inside
-//!   the file;
-//! - an entry of size 0: the finder drops an empty candidate;
-//! - an entry whose range holds no image: the finder checks that each
-//!   candidate starts with SOI and holds a frame header within its own
-//!   bytes.
-//!
-//! The ranges are not checked against the block, which bounds the index
-//! and not the images: the images lie after the first image's EOI,
-//! outside the segment. Nor is an image searched for: on the camera files
-//! the notes describe, an image starts after zeros up to a multiple of 512
-//! bytes (the Sony files and the Nikon D5300's) or after 12 bytes that are
-//! not zeros (the Canon G7 X's), and only its offset says where.
-//!
-//! # Damage
+//! [`index`] reads the index inside the [`Block`] that [`segments`] gives:
+//! the MP header at the block's base, then the MP Index IFD, which the TIFF
+//! container reads as it reads a MakerNote's IFD ([`ifd_in`]). Of the
+//! index's tags, only MPEntry ([`MP_ENTRY`]) is read, and [`range`] turns
+//! each of its entries into the byte range of an image. The raw view lists
+//! the MP Index IFD's entries.
 //!
 //! Only a failure of the reader is an error. Whatever else the segment
-//! holds costs only the images it touches, as damage costs the MakerNote
-//! readers only their own block ([`skip_damage`]): an MP header that
-//! cannot be read, or an MP Index IFD that cannot be read or has more
-//! entries than the limit allows, gives no index; an MPEntry that is
-//! missing, of a type other than UNDEFINED or of a length that is not a
-//! multiple of 16, so not laid out as entries, gives the index with no
-//! images; an entry that cannot give a range gives none.
+//! holds costs only the images it touches, as damage costs a MakerNote
+//! reader only its own block ([`skip_damage`]).
+//!
+//! The JPEG notes describe the segment, its MP Entries and the images of
+//! the camera files (`docs/formats/jpeg/container-and-metadata.md`,
+//! section 7).
 //!
 //! [`segments`]: super::segments
 
@@ -126,6 +38,10 @@ use crate::limits::Limits;
 /// The MP tag that lists the images the file holds (MPEntry): an
 /// UNDEFINED value of one MP Entry per image, 16 bytes each, the first
 /// image's first (DC-007 Table 3, p. 12; Figure 7, p. 13).
+///
+/// The MP tags are the Multi-Picture Format's own, not TIFF or Exif tags,
+/// so this one is named here, beside its one reader, and not with the TIFF
+/// container's tags.
 const MP_ENTRY: u16 = 0xB002;
 
 /// The rule of the one tag this reader reads: MPEntry, of type UNDEFINED
@@ -153,14 +69,23 @@ pub(crate) struct Index {
 
 /// The MPF index in `mpf`: its MP Index IFD, and the byte ranges in the
 /// file of the images it lists after the file's first image, in the order
-/// of their entries; see the [module documentation](self).
+/// of their entries.
 ///
 /// `mpf` is the block [`segments`](super::segments) gives: its base is the
-/// MP header, and its bounds run from there to the end of the MPF segment.
-/// A range may run past the end of the file, be empty, or hold no image:
-/// the preview finder checks each one, as every candidate. An MP header or
-/// an MP Index IFD that cannot be read gives no index, and an MPEntry that
-/// does not hold together gives the index with no ranges.
+/// MP header, which has the shape of a TIFF header (DC-007 5.2.2.1, p. 11),
+/// and its bounds run from there to the end of the MPF segment. An MP
+/// header or an MP Index IFD that cannot be read gives no index, and an
+/// MPEntry that does not hold together gives the index with no ranges.
+///
+/// An entry is kept whatever its MP type, a gain map or a frame of a
+/// panorama as well as a large thumbnail. Whether those should be previews
+/// is open (`docs/formats/jpeg/open-questions.md`, section 1).
+///
+/// A range is checked here only for overflow ([`range`]). The block bounds
+/// the index and not the images, which lie after the first image's EOI,
+/// outside the segment. A range may run past the end of the file, be
+/// empty, or hold no image. The preview finder checks each one, as every
+/// candidate, so that each rule is applied in one place.
 ///
 /// # Errors
 ///
@@ -181,7 +106,7 @@ pub(crate) fn index<R: Read + Seek>(
 }
 
 /// The ranges of the images that `ifd`, the MP Index IFD of `mpf`, lists
-/// after the file's first image; none when its MPEntry is missing, of a
+/// after the file's first image. None when its MPEntry is missing, of a
 /// type its rule does not allow, or cannot be read.
 ///
 /// # Errors
@@ -201,6 +126,11 @@ fn listed_images<R: Read + Seek>(
 /// The ranges of the images that `value`, MPEntry's value in byte order
 /// `order`, lists in `mpf`, the first image's left out; none when the
 /// value is not a whole number of entries.
+///
+/// The entries are those the value holds. NumberOfImages (0xB001), which
+/// says how many images the file holds, is not read, so a count that
+/// disagrees with the value can neither send the reader past it nor hide an
+/// entry.
 fn ranges(mpf: &Block, order: ByteOrder, value: &[u8]) -> Vec<Range<u64>> {
     let (entries, rest) = value.as_chunks::<ENTRY_LEN>();
     if !rest.is_empty() {
@@ -212,10 +142,21 @@ fn ranges(mpf: &Block, order: ByteOrder, value: &[u8]) -> Vec<Range<u64>> {
         .collect()
 }
 
-/// The range of the image that `entry` describes, in byte order `order`,
-/// from the MP header of `mpf`: `None` for the file's first image, whose
-/// offset is 0, and when the range's start or end would pass the largest
-/// offset.
+/// The range of the image that `entry` describes, in byte order `order`:
+/// from the MP header of `mpf` plus the entry's offset, where the image's
+/// SOI lies (DC-007 5.2.3.3.3, p. 16), over the entry's size. The image is
+/// not searched for: only its offset says where it starts.
+///
+/// `None` for the file's first image, whose offset is 0. The specification
+/// gives 0 to the first image only, and an offset of 0 points at the MP
+/// header, inside the first image, where no other image can start. So an
+/// entry is taken for the first image by its offset, wherever it stands in
+/// the value, and a first entry with another offset is kept as any other.
+///
+/// `None` also when the range's start or end would pass the largest
+/// offset. That cannot happen on a file a reader can hold: the MP header
+/// lies inside the file, and the offset and the size are 32-bit numbers.
+/// The sums are checked all the same.
 fn range(mpf: &Block, order: ByteOrder, entry: &[u8; ENTRY_LEN]) -> Option<Range<u64>> {
     // The attribute and the two dependent images' entry numbers are not
     // read.
