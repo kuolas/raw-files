@@ -105,6 +105,24 @@ struct Inner {
 ///     "malformed file: data runs past the end of the file at byte 8",
 /// );
 /// ```
+///
+/// Tell a damaged file from one that crosses a limit. The same bytes give
+/// either, by the limits they are opened under:
+///
+/// ```
+/// use raw_files::{ErrorKind, Limits, Options, RawFile};
+///
+/// // A TIFF header whose first directory starts at byte 8, where the
+/// // file ends.
+/// let header = b"II*\0\x08\0\0\0";
+/// let damaged = RawFile::from_bytes(header).unwrap_err();
+/// assert_eq!(damaged.kind(), ErrorKind::Malformed);
+///
+/// // The same bytes, opened under a limit of no directories at all.
+/// let limits = Limits::default().with_max_ifds(0);
+/// let capped = Options::new().with_limits(limits).from_bytes(header).unwrap_err();
+/// assert_eq!(capped.kind(), ErrorKind::LimitExceeded);
+/// ```
 #[non_exhaustive]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum ErrorKind {
@@ -115,7 +133,8 @@ pub enum ErrorKind {
     /// raw-files recognizes.
     UnknownFormat,
     /// The file was recognized, but this variant of its format, or this
-    /// feature of it, is not supported.
+    /// feature of it, is not supported. This version of raw-files returns
+    /// it for no file.
     Unsupported,
     /// The file contradicts itself or its format.
     Malformed,
