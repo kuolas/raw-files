@@ -1,56 +1,51 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! TIFF directories (IFDs): their entries, and typed access to their values.
+//! TIFF directories (IFDs): their entries, and typed access to their
+//! values.
 //!
-//! An IFD (image file directory) is a table of tags that describes one image
-//! in the file: its size, its compression, where its pixels or its embedded
-//! JPEG are, and so on. In the file it is laid out as: a 2-byte number
-//! saying how many entries follow; that many entries, 12 bytes each; and a
-//! 4-byte offset pointing to the next IFD in the chain, 0 when there is
-//! none. Each entry holds one tag: the tag's number, the type of its values
-//! (byte, short, long, text, ...), how many values there are, and a 4-byte
-//! field that holds the values themselves when they fit in four bytes,
-//! left-justified, and otherwise the offset where they are stored.
+//! An IFD is a table of tags that describes one image of the file. In the
+//! file it is a 2-byte count of entries, that many entries of 12 bytes
+//! each, and the 4-byte offset of the next IFD in the chain, 0 when there
+//! is none. An entry holds a tag's number, the field type of its values,
+//! how many values there are, and a 4-byte field. The field holds the
+//! values themselves, left-justified, when they fit in four bytes, and
+//! otherwise the offset where they are stored.
 //!
-//! An IFD is read inside a [`Block`]: the offsets written inside it count
-//! from the block's base, the start of the file for a TIFF file's own IFDs
-//! and an embedded TIFF header for the IFDs of a JPEG file's Exif segment or
-//! of some MakerNotes; and the IFD, with its values, must lie inside the
-//! block's bounds, the whole file for a TIFF file's own IFDs and the
-//! segment or the MakerNote for the others. Every offset this module
-//! returns is absolute, a position in the file, except the next-IFD
-//! pointer, which is returned as written.
+//! The parts, in the order a file is read:
 //!
-//! [`parse_ifd`] reads an IFD and checks each entry against the block and
-//! the file once, while reading it. An entry whose type is unknown, whose
-//! length overflows, or whose value does not lie inside the block and the
-//! file is counted and skipped, not an error for the IFD: real files carry
-//! such entries and still hold good previews. Every entry that is kept can
-//! be read. Values are read only when asked for, through the same
-//! [`Source`]. An IFD keeps the cap on one value of the limits it was read
-//! with, [`Limits::max_value_bytes`], and no accessor reads a longer value
-//! stored out of line. The exceptions read a tag's first value alone,
-//! whatever the count, and so never more than eight bytes: [`Ifd::u32`],
-//! and [`Ifd::get`] with a [`First`](super::rule::First) rule. One number
-//! bounds every other value, those raw-files reads for the metadata and
-//! the previews as much as those a caller reads.
+//! - [`parse_ifd`] reads an IFD inside a [`Block`], and checks each entry
+//!   against the block and the file once. A damaged entry is counted and
+//!   skipped: real files carry such entries and still hold good previews.
+//!   So the value of every entry that is kept lies inside the block and
+//!   the file. It returns the next-IFD pointer as written; every other
+//!   offset this module returns is a position in the file.
+//! - [`ifd_in`] reads an IFD that a reader finds by an offset of its own,
+//!   such as a MakerNote's, and gives none when it is damaged.
+//! - An [`Ifd`] reads a value only when asked for, through the same
+//!   [`Source`].
+//! - [`Entry::byte_range`] says where a value made of bytes, such as a
+//!   MakerNote, lies in the file.
 //!
 //! There are two ways to read a value:
 //!
-//! - The metadata and MakerNote readers read by [`Rule`]: [`Ifd::get`] and
-//!   [`Ifd::held`]. A rule names a tag's exact type and count, which are
-//!   checked before anything is read (ADR011). Damage, such as a value
-//!   longer than the cap, gives `None`, and a failure of the reader is the
-//!   only error.
-//! - The walk, the preview finder and format detection read by tag number,
-//!   through the accessors such as [`Ifd::u32s`]. These pass damage up as
-//!   an error, `LimitExceeded` for a value over the cap, since they skip a
-//!   whole IFD on it, or decide a file's format by it.
+//! - **By rule**, as the metadata and MakerNote readers do: [`Ifd::get`]
+//!   and [`Ifd::held`]. The tag's type and count are checked against the
+//!   rule before anything is read. A tag of another type or count, such as
+//!   one SHORT given two, records nothing a reader can trust: it gives
+//!   nothing, and even its first value is not taken (ADR011). Damage gives
+//!   `None`, and a failure of the reader is the only error.
+//! - **By tag number**, as the walk, the preview finder and format
+//!   detection do: the accessors such as [`Ifd::u32s`]. These pass damage
+//!   up as an error, `LimitExceeded` for a value over the cap, since their
+//!   callers skip a whole IFD on it, or decide a file's format by it.
 //!
-//! [`ifd_in`] reads the IFD at an offset written inside a block, as a
-//! MakerNote's IFDs are found, and gives none when it is damaged.
-//! [`Entry::byte_range`] says where a value made of bytes, such as a
-//! MakerNote, lies in the file.
+//! An IFD keeps the cap on one value of the limits it was read with,
+//! [`Limits::max_value_bytes`]. No accessor reads a longer value stored
+//! out of line, but those that read a tag's first value alone, never more
+//! than eight bytes: [`Ifd::u32`], and [`Ifd::get`] with a
+//! [`First`](super::rule::First) rule. So one number bounds every other
+//! value, those raw-files reads for the metadata and the previews as much
+//! as those a caller reads.
 
 use std::io::{Read, Seek};
 use std::ops::Range;
@@ -70,11 +65,7 @@ use crate::limits::Limits;
 /// occurrence.
 ///
 /// The accessors that read a value take the [`Source`] the IFD was read
-/// from. Inline values are served from the entry without touching it. A
-/// value stored out of line is read only when it is no longer than the cap
-/// the IFD was read under, but by [`u32`](Self::u32) and by
-/// [`get`](Self::get) with a [`First`](super::rule::First) rule, which read
-/// only its first value.
+/// from.
 #[derive(Clone, Debug)]
 pub(crate) struct Ifd {
     offset: u64,
@@ -113,13 +104,7 @@ enum Value {
 }
 
 /// Reads the IFD at byte `offset` of `src`, inside `block`, in byte order
-/// `order`.
-///
-/// `offset` is a position in the file. The block's base is added to every
-/// offset written inside the IFD, which here means the offsets of values
-/// longer than four bytes, and the IFD may use only the block's bounds:
-/// the whole file for a TIFF file's own IFDs, and the MakerNote or the
-/// Exif segment for the IFDs inside one.
+/// `order`. `offset` is a position in the file.
 ///
 /// Returns the IFD and its next-IFD pointer **as written**: relative to
 /// the base, and not checked against anything. 0 means there is no next
@@ -130,23 +115,25 @@ enum Value {
 /// block and the file. A next-IFD pointer cut off by the end of either
 /// counts as 0, as other readers treat one cut off by the end of the file.
 /// An entry that cannot be read is skipped and counted in
-/// [`Ifd::invalid_entries`]: one whose field type is unknown, whose length
-/// (count times type size) overflows 32 bits, or whose value is out of line
-/// and overflows or does not lie inside the block and the file.
+/// [`Ifd::invalid_entries`]:
 ///
-/// The IFD keeps `limits`' [`max_value_bytes`](Limits::max_value_bytes),
-/// the cap its accessors read each value under. An entry whose value is
-/// longer is kept: only reading that value fails.
+/// - one whose field type is unknown;
+/// - one whose length, count times type size, overflows 32 bits;
+/// - one whose value is stored out of line and overflows, or does not lie
+///   inside the block and the file.
+///
+/// An entry whose value is longer than `limits`'
+/// [`max_value_bytes`](Limits::max_value_bytes) is kept: only reading that
+/// value fails.
 ///
 /// # Errors
 ///
-/// `Malformed` if the IFD has no entries, or its count or entries do not
-/// lie inside the block and the file; `LimitExceeded` if it has more
-/// entries than [`Limits::max_ifd_entries`] allows; `Io` if the reader
-/// fails. The `Malformed` and `LimitExceeded` errors are at `offset`.
-/// Nothing is read before its bounds are checked, so a count or entries
-/// outside the block or the file are `Malformed`, never `Io`, whatever
-/// the reader would do there.
+/// At `offset`: `Malformed` if the IFD has no entries, or its count or
+/// entries do not lie inside the block and the file; `LimitExceeded` if it
+/// has more entries than [`Limits::max_ifd_entries`] allows. `Io` if the
+/// reader fails. Nothing is read before its bounds are checked, so a count
+/// or entries outside the block or the file are `Malformed`, never `Io`,
+/// whatever the reader would do there.
 pub(crate) fn parse_ifd<R: Read + Seek>(
     src: &mut Source<R>,
     block: &Block,
@@ -154,13 +141,13 @@ pub(crate) fn parse_ifd<R: Read + Seek>(
     order: ByteOrder,
     limits: &Limits,
 ) -> Result<(Ifd, u32)> {
-    // Nothing is read before its bounds are checked, once, against the block
-    // cut at the end of the file: what passes can be read, whatever bounds
-    // the caller gave, and what does not is never read. A range that runs
-    // past the end of the file is refused as one past the file, not the
-    // block, so that a TIFF file's own IFDs, whose block is the file, fail
-    // as they would without one; the count with the message of a read past
-    // the end of the file.
+    // Nothing is read before its bounds are checked, once, against the
+    // block cut at the end of the file. What passes can be read, whatever
+    // bounds the caller gave, and what does not is never read. A range that
+    // runs past the end of the file is refused as one past the file, not
+    // the block. So a TIFF file's own IFDs, whose block is the file, fail as
+    // they would without one. The count's message is the one a read past
+    // the end of the file gives.
     let file_len = src.len();
     let inside = block.within_file(file_len);
     check_inside(
@@ -244,10 +231,10 @@ pub(crate) fn parse_ifd<R: Read + Seek>(
 ///
 /// # Errors
 ///
-/// `Malformed` at `offset` if they do not: `past_the_file` if they run past
-/// the end of the file, or their end would pass the largest offset, and
-/// `outside_the_block` if they lie inside the file but not inside the
-/// block.
+/// `Malformed` at `offset` if they do not. The message is `past_the_file`
+/// when they run past the end of the file, or their end would pass the
+/// largest offset. It is `outside_the_block` when they lie inside the file
+/// but not inside the block.
 fn check_inside(
     inside: &Block,
     file_len: u64,
@@ -269,21 +256,19 @@ fn check_inside(
 }
 
 /// The IFD at `offset`, an offset written inside `block` and so counted
-/// from its base ([`Block::at`]), read in byte order `order`; `None` when
+/// from its base ([`Block::at`]), read in byte order `order`. `None` when
 /// that position would pass the largest offset, or when [`parse_ifd`]
 /// refuses the IFD as damaged ([`skip_damage`]).
 ///
 /// For the IFDs a reader finds by offsets of its own rather than by the
-/// walk, such as a MakerNote's: where the offsets inside the block count
-/// from and the byte order of its numbers differ from maker to maker, and
-/// the caller gives both. Nothing the block holds is trusted. [`parse_ifd`]
-/// reads the IFD inside the block: it refuses an IFD that does not lie
-/// inside the block with its count and its whole entry table, and leaves
-/// out an entry whose value does not, as one whose value lies outside the
-/// file. So every value read from the IFD lies inside the block.
+/// walk, such as a MakerNote's. Where its offsets count from and the byte
+/// order of its numbers differ from maker to maker, so the caller gives
+/// both. [`parse_ifd`] reads the IFD inside the block, so every value read
+/// from it lies inside the block.
 ///
 /// The IFD's next-IFD pointer is not used, and not required: the D200
-/// writes none in its MakerNote.
+/// writes none in its MakerNote
+/// (`docs/formats/nef/makernote-and-metadata.md`, section 1).
 ///
 /// # Errors
 ///
@@ -302,10 +287,10 @@ pub(crate) fn ifd_in<R: Read + Seek>(
     Ok(parsed.map(|(ifd, _)| ifd))
 }
 
-/// Reads one 12-byte entry: `None` if its field type is unknown, its length
-/// overflows 32 bits, or its value is out of line and does not fit `inside`,
-/// the block cut at the end of the file, once the base is added to its
-/// offset.
+/// Reads one 12-byte entry. `None` if its field type is unknown, if its
+/// length overflows 32 bits, or if its value is out of line and does not
+/// fit `inside` once the base is added to its offset. `inside` is the
+/// block cut at the end of the file.
 fn parse_entry(raw: &[u8; 12], inside: &Block, order: ByteOrder) -> Option<Entry> {
     let [t0, t1, y0, y1, c0, c1, c2, c3, f0, f1, f2, f3] = *raw;
     let tag = order.u16([t0, t1]);
@@ -363,12 +348,8 @@ impl Ifd {
         self.entries.is_empty()
     }
 
-    /// The number of entries skipped because their type is unknown, their
-    /// length overflows or their value lies outside the IFD's block or the
-    /// file.
-    ///
-    /// 0 means every entry of the IFD has a known type and lies inside the
-    /// block and the file.
+    /// The number of entries that [`parse_ifd`] skipped: 0 when it kept
+    /// them all.
     pub(crate) fn invalid_entries(&self) -> u32 {
         self.invalid_entries
     }
@@ -390,14 +371,10 @@ impl Ifd {
         self.entries.iter().find(|entry| entry.tag == tag)
     }
 
-    /// The entry of tag `tag` when it has a type its tag's rule allows, one
-    /// of `types`; `None` when the tag is missing or has another type.
-    ///
-    /// Every reader of a value finds its entry with it: [`get`](Self::get)
-    /// and [`held`](Self::held) by a rule's types, the accessors by their
-    /// own. The entry's value, as every kept entry's, lies inside the IFD's
-    /// block and the file: for an IFD read by [`ifd_in`], such as a
-    /// MakerNote's, inside the block.
+    /// The entry of tag `tag` when it has one of `types`; `None` when the
+    /// tag is missing or has another type. Every reader of a value finds
+    /// its entry with it: [`get`](Self::get) and [`held`](Self::held) by a
+    /// rule's types, the accessors by their own.
     ///
     /// The entry is the tag's first occurrence, the one
     /// [`entry`](Self::entry) finds. When that one has another type, a
@@ -445,18 +422,14 @@ impl Ifd {
     /// SHORT, LONG or IFD; `None` when the tag is missing, has another type
     /// or has no values.
     ///
-    /// The first value is read alone: from the entry when the entry holds
-    /// the values itself, and otherwise as the 2 bytes of a SHORT or the 4
-    /// of a LONG at the values' offset. The other values are neither read
-    /// nor checked, so a tag of one number that the file gives many values
-    /// costs no more than one, and is never refused for its length as
-    /// [`u32s`](Self::u32s) refuses it. A reader of a tag's rule reads its
-    /// first value with [`get`](Self::get) and a
-    /// [`First`](super::rule::First) rule, the same way.
+    /// The first value is read alone, as a [`First`](super::rule::First)
+    /// rule reads it: the other values are neither read nor checked, and
+    /// the value is never refused for its length as [`u32s`](Self::u32s)
+    /// refuses it.
     ///
     /// # Errors
     ///
-    /// `Io` if the reader fails. The value lies inside the file, as every
+    /// `Io` if the reader fails: the value lies inside the file, as every
     /// kept entry's does, so nothing else can go wrong.
     pub(crate) fn u32<R: Read + Seek>(&self, src: &mut Source<R>, tag: u16) -> Result<Option<u32>> {
         let Some(entry) = self.entry_of_type(tag, u32::TYPES) else {
@@ -534,27 +507,22 @@ impl Ifd {
     }
 
     /// The value of the tag `rule` names, in the rule's shape, when its
-    /// entry has one of the rule's types and a count the shape takes;
+    /// entry has one of the rule's types and a count the shape takes.
     /// `None` when the tag is missing, has another type or another count,
-    /// or its value cannot be read.
-    ///
-    /// The type and the count are checked before anything is read, so a tag
-    /// of another type or count costs no read, however long its value. That
-    /// is the metadata decision's rule (ADR011), written once here for every
-    /// reader of metadata. The entry is the tag's first occurrence, as for
-    /// [`entry_of_type`](Self::entry_of_type).
+    /// or its value cannot be read. The type and the count are checked
+    /// before anything is read, so a tag that breaks its rule costs no
+    /// read, however long its value.
     ///
     /// The value is read under the cap the IFD was read under, and a longer
-    /// one is damage, `None`. A [`First`](super::rule::First) rule reads only
-    /// the first value, at most eight bytes, whatever the count and the cap.
-    /// A value held in the entry is served from it without a read: a rule
-    /// whose value always fits there is a [`Held`], read by
+    /// one is damage, `None`. A [`First`](super::rule::First) rule reads
+    /// only the first value, whatever the count and the cap. A rule whose
+    /// value always fits in the entry is a [`Held`], read by
     /// [`held`](Self::held) with no source.
     ///
     /// # Errors
     ///
-    /// `Io` if the reader fails, the only error: anything else wrong with
-    /// the value is damage in the file, and costs only that value.
+    /// `Io` if the reader fails: anything else wrong with the value is
+    /// damage in the file, and costs only that value.
     pub(crate) fn get<R: Read + Seek, S: Shape>(
         &self,
         src: &mut Source<R>,
@@ -578,15 +546,13 @@ impl Ifd {
     }
 
     /// The value of the tag `rule` names, in the rule's shape, when its
-    /// entry has one of the rule's types and a count the shape takes;
+    /// entry has one of the rule's types and a count the shape takes.
     /// `None` when the tag is missing or has another type or count.
     ///
     /// A [`Held`] rule's value is never longer than four bytes, which
     /// [`Held::new`] checks when the rule is declared. The entry holds such
     /// a value in its own field. So this reads nothing from the file, takes
-    /// no source and cannot fail. A tag whose count the shape does not take,
-    /// such as one SHORT given two, records nothing a reader can trust, and
-    /// even its first value is not taken (ADR011).
+    /// no source and cannot fail.
     pub(crate) fn held<S: Shape>(&self, rule: Held<S>) -> Option<S::Output> {
         let entry = self.entry_of_type(rule.tag(), rule.types())?;
         if !S::takes(entry.count) {
@@ -649,12 +615,11 @@ impl Entry {
         self.len
     }
 
-    /// Where the bytes of the entry's value lie in the file, when the value
-    /// is made of bytes, such as a MakerNote, a maker's own metadata stored
-    /// as the value of one tag: from the value's offset to its end. `None`
-    /// unless the entry's type is UNDEFINED or BYTE and its value is stored
-    /// out of line, as a value longer than the four bytes an entry holds
-    /// itself always is.
+    /// Where the bytes of the entry's value lie in the file, from the
+    /// value's offset to its end, when the value is made of bytes, such as
+    /// a MakerNote. `None` unless the entry's type is UNDEFINED or BYTE and
+    /// its value is stored out of line, as one longer than four bytes
+    /// always is.
     ///
     /// The value of a kept entry lies inside its IFD's block and the file,
     /// so the range does too.
@@ -678,12 +643,12 @@ impl Entry {
     ///
     /// # Errors
     ///
-    /// `LimitExceeded` if the value is stored out of line and is longer than
-    /// `cap`, at the value's offset, before anything is read; `Malformed` if
-    /// the value does not lie inside the file `src` reads, which cannot
-    /// happen for the source the entry was read from; `Io` if the reader
-    /// fails, as it does when the file has shrunk since its length was
-    /// taken.
+    /// - `LimitExceeded` at the value's offset, before anything is read, if
+    ///   the value is stored out of line and is longer than `cap`;
+    /// - `Malformed` if the value does not lie inside the file `src` reads,
+    ///   which cannot happen for the source the entry was read from;
+    /// - `Io` if the reader fails, as it does when the file has shrunk
+    ///   since its length was taken.
     pub(crate) fn read<R: Read + Seek>(&self, src: &mut Source<R>, cap: u64) -> Result<Vec<u8>> {
         match self.value {
             Value::Inline(field) => {
@@ -706,7 +671,7 @@ impl Entry {
 
     /// The bytes of the entry's first value alone, from `src`, the source
     /// its IFD was read from: one value's size, at most eight bytes, never
-    /// refused for a cap; none when the entry has no values.
+    /// refused for a cap. None when the entry has no values.
     ///
     /// # Errors
     ///

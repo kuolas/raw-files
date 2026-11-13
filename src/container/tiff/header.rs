@@ -1,13 +1,8 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 //! The TIFF header: the byte order of a TIFF structure and the offset of
-//! its first directory, IFD0.
-//!
-//! The header lies at the base of the [`Block`] the structure is read in:
-//! at byte 0 for a TIFF file's own structure, and at its own position for a
-//! TIFF structure inside a file, such as the one inside a Nikon MakerNote or
-//! the one a JPEG file holds in its Exif segment. The offsets inside the
-//! structure count from the header.
+//! its first directory, IFD0. It lies at the base of the [`Block`] the
+//! structure is read in.
 
 use std::io::{Read, Seek};
 
@@ -32,10 +27,8 @@ pub(crate) struct Header {
     /// The order of the bytes in every multi-byte value of the file, or of
     /// the embedded structure.
     pub order: ByteOrder,
-    /// The offset of IFD0 from the start of the header, the block's base, as
-    /// the header gives it: not yet checked against anything. For a file's
-    /// own header, which is at byte 0, that is the offset from the start of
-    /// the file.
+    /// The offset of IFD0 from the header, the block's base, as the header
+    /// gives it: not yet checked against anything.
     pub ifd0: u32,
 }
 
@@ -50,10 +43,10 @@ pub(crate) struct Header {
 ///
 /// # Errors
 ///
-/// `UnknownFormat` if the 8 bytes at the base do not lie inside the block
-/// and the file, the header starts with neither byte-order mark, or has a
-/// number other than 42 after it, which includes BigTIFF's 43; `Io` if the
-/// reader fails.
+/// `UnknownFormat` when the 8 bytes at the base do not lie inside the
+/// block and the file, or when the header starts with neither byte-order
+/// mark. `UnknownFormat` too when a number other than 42 follows the mark,
+/// such as BigTIFF's 43. `Io` if the reader fails.
 pub(crate) fn parse_header<R: Read + Seek>(src: &mut Source<R>, block: &Block) -> Result<Header> {
     // Checked here, before reading, so that a short file or block is "not a
     // TIFF file" rather than the `Malformed` of a read past the end. Once

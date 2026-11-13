@@ -1,25 +1,20 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! The bounds-checked reader: the one place raw-files reads bytes from a file.
+//! The bounds-checked reader: the one place raw-files reads bytes from a
+//! file.
 //!
-//! Every byte the crate reads passes through [`Source`], and every read takes
-//! the same checked path: `offset + len` is computed with `checked_add` and
-//! compared with the file's length, taken once when the source is created. A
-//! read that overflows or runs past the end is a `Malformed` error at its
-//! offset, found before the reader is touched, never a panic or a short read
-//! (ADR008). A file that turns out shorter than that length, because it
-//! shrank after it was opened, is an `Io` error at the offset of the read.
+//! Every byte the crate reads passes through [`Source`], which checks each
+//! read against the file's length before it touches the reader (ADR008).
 //! [`within`] is the same check against the end of a range other than the
 //! file, for the readers that hold a range of their own.
 //!
 //! Small reads go through a block cache. Walking a file's TIFF directories
-//! reads a few bytes here and a few there, often close together; the cache
-//! keeps the last few 64 KiB blocks, so these reads cost one underlying read
-//! per block instead of one per value. Wrapping the reader in a `BufReader`
-//! would not do this: it discards its buffer on every seek (ADR009). Payload
-//! reads, such as a preview's bytes, bypass the cache: they go straight from
-//! the reader into the caller's buffer, and leave the cached blocks as they
-//! were.
+//! reads a few bytes here and a few there, often close together. The cache
+//! keeps the last few 64 KiB blocks, so these reads cost one underlying
+//! read per block instead of one per value. Wrapping the reader in a
+//! `BufReader` would not do this: it discards its buffer on every seek
+//! (ADR009). Payload reads, such as a preview's bytes, bypass the cache
+//! ([`Source::read_into`]).
 
 use std::io::{self, Read, Seek, SeekFrom};
 
@@ -76,11 +71,16 @@ impl ByteOrder {
 
 /// A `Read + Seek` source whose every read is checked against its length.
 ///
-/// The length is taken once, when the source is created. A read whose range
-/// does not lie inside the file fails before the reader is touched. An empty
-/// read is allowed at any offset up to and including the length, and returns
-/// no bytes: a zero-length value that ends at the end of the file is not
-/// damage.
+/// The length is taken once, when the source is created. Every read
+/// computes `offset + len` with `checked_add` and compares it with the
+/// length. A read that overflows or runs past the end is a `Malformed`
+/// error at its offset, found before the reader is touched: never a panic
+/// or a short read (ADR008). A file that has shrunk since it was opened is
+/// an `Io` error at the offset of the read.
+///
+/// An empty read is allowed at any offset up to and including the length,
+/// and returns no bytes. A zero-length value that ends at the end of the
+/// file is not damage.
 ///
 /// Every call seeks before it reads, so the reader's position after any call
 /// is unspecified.
@@ -120,15 +120,16 @@ impl<R: Read + Seek> Source<R> {
     /// This is the read for payloads. It bypasses the block cache and leaves
     /// it as it was. `buf` is cleared, then grows to exactly `len` bytes, so
     /// the most this allocates is `len` bytes, and only once `len` has been
-    /// checked against the file's length; capping `len` by `Limits` is the
+    /// checked against the file's length. Capping `len` by `Limits` is the
     /// caller's job. On error `buf` is left empty.
     ///
     /// # Errors
     ///
-    /// `Malformed` if the range runs past the end of the file;
-    /// `LimitExceeded` if `len` bytes cannot be held in memory on this
-    /// platform; `Io` if the reader fails, with `offset` when the file is
-    /// shorter than its length.
+    /// - `Malformed` if the range runs past the end of the file;
+    /// - `LimitExceeded` if `len` bytes cannot be held in memory on this
+    ///   platform;
+    /// - `Io` if the reader fails, with `offset` when the file is shorter
+    ///   than its length.
     pub(crate) fn read_into(&mut self, offset: u64, len: u64, buf: &mut Vec<u8>) -> Result<()> {
         buf.clear();
         self.check(offset, len)?;
@@ -218,7 +219,7 @@ impl<R: Read + Seek> Source<R> {
     /// cache.
     ///
     /// A block that cannot be read whole makes the read fail, even when the
-    /// bytes asked for were there: the file has changed since it was opened.
+    /// bytes asked for were there. The file has changed since it was opened.
     fn read_cached(&mut self, offset: u64, out: &mut [u8]) -> Result<()> {
         let len = u64::try_from(out.len()).map_err(|_| too_large(offset))?;
         self.check(offset, len)?;
@@ -253,12 +254,13 @@ impl<R: Read + Seek> Source<R> {
     }
 }
 
-/// `pos + n` if the sum does not overflow and is at most `end`: the end of
-/// the `n` bytes at `pos` when they lie inside a range ending at `end`.
+/// `pos + n` if the sum does not overflow and is at most `end`. That is
+/// the end of the `n` bytes at `pos` when they lie inside a range ending at
+/// `end`.
 ///
-/// The check the readers make on a range of their own before they read in
-/// it, such as a JPEG stream's or a preview candidate's: a sum that would
-/// overflow lies inside no range, so it never wraps round to a small
+/// The readers make this check on a range of their own, such as a JPEG
+/// stream's or a preview candidate's, before they read in it. A sum that
+/// would overflow lies inside no range, so it never wraps round to a small
 /// offset.
 pub(crate) fn within(pos: u64, n: u64, end: u64) -> Option<u64> {
     pos.checked_add(n).filter(|&next| next <= end)
@@ -348,7 +350,7 @@ fn load_block<R: Read + Seek>(
 /// Seeks to `start` and fills `buf`.
 ///
 /// A reader that ends early means the file shrank after its length was
-/// taken: that is an `Io` error at `at`, the offset of the caller's read,
+/// taken. That is an `Io` error at `at`, the offset of the caller's read,
 /// with the reader's error as its source. Other reader errors become `Io`
 /// errors as they are.
 fn read_exact_at<R: Read + Seek>(inner: &mut R, start: u64, buf: &mut [u8], at: u64) -> Result<()> {

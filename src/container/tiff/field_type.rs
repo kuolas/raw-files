@@ -1,16 +1,12 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! The TIFF field types: what kind of value an entry of an IFD holds.
+//! The TIFF field types: what kind of value an entry of an IFD holds, and
+//! how many bytes one value takes.
 //!
-//! Every entry names the type of its values, and the type says how to
-//! read them: how many bytes one value takes, and what those bytes mean,
-//! a number, a fraction, text, or bytes that only the tag gives a meaning
-//! to. A reader checks an entry's type before it reads a value, so that it
-//! never takes a fraction for a number or a number for text. It names the
-//! types it takes as [`FieldType`]s, not as codes, so that a type cannot
-//! stand where a tag is wanted. TIFF 6.0 defines types 1 to 12, TIFF
-//! Technical Note 1 adds type 13, and Exif 3.0 adds type 129, text in
-//! UTF-8; an entry of any other type cannot be read.
+//! A reader names the types it takes as [`FieldType`]s, not as codes, so
+//! that a type cannot stand where a tag is wanted. The types are those of
+//! TIFF 6.0 (codes 1 to 12), TIFF Technical Note 1 (13) and Exif 3.0 (129,
+//! text in UTF-8).
 //!
 //! `FieldType` is public: the raw view gives every entry's type as one,
 //! and `entries` and the crate's root re-export it from here.
