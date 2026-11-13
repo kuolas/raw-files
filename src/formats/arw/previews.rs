@@ -3,29 +3,29 @@
 //! Where a Sony RAW file keeps its previews, and how the reader finds them.
 //!
 //! A Sony camera writes its JPEG previews into the IFDs of IFD0's chain,
-//! never into a SubIFD. IFD0 holds a medium one: 1616 by 1080 pixels on
-//! most bodies since 2008, 640 by 480 or 640 by 424 on the earliest, and
-//! cut to the picture's shape when the camera was set to another aspect
-//! ratio. IFD1, the next IFD of the chain, holds a thumbnail of 160 by 120
-//! pixels. Bodies that write version 4.0 or later of Sony's file format
-//! (the FileFormat tag of the MakerNote) add IFD2, after IFD1, with a JPEG
-//! of the picture's full size, whose Compression is 7, the newer TIFF code
-//! for JPEG. The SRF files of the earliest bodies are the exception: their
-//! IFD0 describes the raw data, and their only JPEG is in IFD1.
+//! never into a SubIFD:
 //!
-//! The raw data is in IFD0's one SubIFD, and on the newest bodies it can
-//! look like a preview. A lossless raw is stored as tiles that are each a
-//! JPEG stream, starting with the start-of-image marker and a lossless
-//! frame header; a medium or small raw is a YCbCr image, as IFD2's JPEG
-//! is. The shared TIFF preview finder keeps them out twice over: its rule
-//! that an IFD describing raw data (by its color filter array, its samples
-//! wider than 8 bits, its tiles or its full-resolution role) points at no
-//! preview, and its rejection of lossless JPEG streams behind that rule.
+//! - IFD0 holds a medium one;
+//! - IFD1 holds a thumbnail;
+//! - IFD2 holds a full-size one, on bodies that write version 4.0 or later
+//!   of Sony's file format.
 //!
-//! So the finder does all the work, over the whole tree, and this module
-//! adds no candidate of its own: Sony's MakerNote points at no preview that
-//! the IFDs do not already list. A file with no preview the finder can
-//! take, such as a damaged one, opens with an empty list.
+//! The SRF files of the earliest bodies are the exception: their IFD0
+//! describes the raw data, and their only JPEG is in IFD1. On every other
+//! body but the DSLR-A100, the raw data is in IFD0's one SubIFD. The shared
+//! TIFF preview finder does all the work, over the whole tree. Sony's
+//! MakerNote points at no preview that the IFDs do not list, so this
+//! module adds no candidate of its own.
+//!
+//! On the newest bodies the raw data can look like a preview. A lossless
+//! raw is stored as tiles of lossless JPEG, and a medium or small raw is a
+//! YCbCr image, as IFD2's JPEG is. The finder keeps them out by its test
+//! for raw data ([`tiff_previews::is_raw`]), and drops a lossless frame
+//! behind it.
+//!
+//! The sizes of each body's previews, and where the SRF files and the
+//! DSLR-A100 keep their raw data, are in the ARW notes
+//! (`docs/formats/arw/container-and-previews.md`, sections 1.3 and 4).
 
 use std::io::{Read, Seek};
 
@@ -36,12 +36,12 @@ use crate::io::Source;
 use crate::preview::Preview;
 
 /// The previews of the Sony file in `src`, whose IFDs are `tree`, in the
-/// order the shared finder found them.
+/// order the shared finder found them. A file with no preview the finder
+/// can take, such as a damaged one, opens with an empty list.
 ///
 /// # Errors
 ///
-/// `Io` when the reader fails. Nothing the file holds is an error here: an
-/// IFD whose tags cannot be read costs only its own preview.
+/// `Io` when the reader fails.
 pub(super) fn previews<R: Read + Seek>(src: &mut Source<R>, tree: &Tree) -> Result<Vec<Preview>> {
     tiff_previews::find(src, tree, &[])
 }
