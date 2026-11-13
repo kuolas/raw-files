@@ -41,9 +41,8 @@
 /// `with_…` methods, such as [`with_artist`](Self::with_artist), each named
 /// after the method that reads the value back and each replacing any value
 /// set before, and set the authorship on a [`Metadata`] with
-/// [`Metadata::with_authorship`]. As for [`Lens`](crate::Lens), every value
-/// is optional, so the empty `Authorship` is the start of every chain and
-/// there is no separate builder type.
+/// [`Metadata::with_authorship`]. The empty `Authorship` is the start of
+/// every chain.
 ///
 /// The `with_…` methods store each text as given: it is not trimmed or
 /// otherwise changed, though the readers clean a file's text before they

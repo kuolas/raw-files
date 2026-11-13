@@ -78,19 +78,10 @@ use crate::value_error::ValueError;
 /// records only the points it used, one bit per point, give no `Focus`; nor
 /// does a shot in manual focus, which records none that means anything.
 ///
-/// On Nikon files, [`Metadata::focus`](crate::Metadata::focus) is read from
-/// the MakerNote's AFInfo2 block, as the camera recorded it but placed
-/// inside the cropped picture on a crop, or placed from the body's table,
-/// and is `None` for a manual-focus shot.
-/// On Sony files it is read from the MakerNote's FocusLocation, on the
-/// bodies from the ILCE-7RM2 on, in the frame the camera framed the
-/// picture in: the picture at an aspect-ratio setting, and, on a medium or
-/// small raw, the full size or the stored size, as the body chooses. It
-/// is `None` for a manual-focus shot and for the bodies that record only
-/// a point's number, and its [`in_focus`](Self::in_focus) is always
-/// `None`. The area's size is read from the MakerNote's FocusFrameSize,
-/// which the bodies record only from the ILCE-7SM3 on, so on the bodies
-/// before it [`size`](Self::size) is `None`.
+/// What each maker's files record, and which of its values a body leaves
+/// out, is in
+/// [the notes on Nikon's focus point](https://github.com/kuolas/raw-files/blob/master/docs/formats/nef/makernote-and-metadata.md#86-focus-point)
+/// and [the notes on Sony's focus point](https://github.com/kuolas/raw-files/blob/master/docs/formats/arw/makernote-and-metadata.md#96-focus-point).
 ///
 /// The JPEG files ([`Format::Jpeg`](crate::Format::Jpeg)) of those cameras
 /// record one too, given under the shape rule that
@@ -406,9 +397,9 @@ impl fmt::Display for FocusOrigin {
 /// only once a file shot in a known mode shows what it means, as the codes
 /// of the camera settings are under the
 /// [decision to read the metadata from the standard tags](https://github.com/kuolas/raw-files/blob/master/docs/architecture-decisions/adr011-metadata-from-standard-tags.md),
-/// and any other code gives `None`;
-/// [`Metadata::focus_points`](crate::Metadata::focus_points) says which
-/// codes each reader names.
+/// and any other code gives `None`.
+/// [The notes on Nikon's focus point](https://github.com/kuolas/raw-files/blob/master/docs/formats/nef/makernote-and-metadata.md#86-focus-point)
+/// list the codes named.
 ///
 /// `FocusAreaMode` is `#[non_exhaustive]`, so match on it with a wildcard
 /// arm. It orders as its variants are listed, and a new variant is added
@@ -996,31 +987,20 @@ impl FocusLayoutPoint {
 /// the window does not hold whole is not on the picture: on the Nikon
 /// D600's DX crop, the window is 3936 × 2624, and point 38, at
 /// (1812, 1705) in the table's 6016 × 4016 frame, lies at (772, 1009) in
-/// it. On the D600's Medium JPEG, 4512 × 3008, the window is 6010 × 4006,
-/// and point 38 lies at (1809, 1700) in it. A preview smaller than the
-/// window then takes the point scaled from the window, as a focus is
-/// scaled. A crop shot whose file gives no
+/// it. A preview smaller than the window then takes the point scaled from
+/// the window, as a focus is scaled. A crop shot whose file gives no
 /// points placed from the table, such as one in manual focus, a crop-mode
 /// JPEG smaller than the window or a shot in live view, which records its
-/// position in a frame of its own, gives no way to find the window, and
-/// nor does a D600 Medium JPEG shot so: its layout stays in the
-/// 6016 × 4016 frame while its picture shows the 6010 × 4006 window;
-/// [issue #65](https://github.com/kuolas/raw-files/issues/65) proposes a
+/// position in a frame of its own, gives no way to find the window. Nor
+/// does a D600 Medium JPEG shot so, whose picture shows a window of the
+/// frame
+/// ([the notes on the D600's JPEG sizes](https://github.com/kuolas/raw-files/blob/master/docs/formats/nef/autofocus-points.md#29-the-jpeg-sizes)).
+/// [Issue #65](https://github.com/kuolas/raw-files/issues/65) proposes a
 /// method that places the layout on the picture.
 ///
-/// The readers give a layout only for a body whose table is in
-/// raw-files, and `None` for every other body. The
-/// [NEF format notes](https://github.com/kuolas/raw-files/blob/master/docs/formats/nef/autofocus-points.md)
-/// record each body measured, and the tables in raw-files are written
-/// from those records, so a body the notes record has a layout only when
-/// its table is in raw-files.
-///
-/// A body with one layout, such as the Nikon D600, gives it from the
-/// file's Model alone, whatever the file. A body whose files name one of
-/// several layouts, each by its own layout code, as the Nikon D780's files
-/// name its 51 points through the viewfinder or its 81 points in live
-/// view, will give the layout that the file's layout code names, and
-/// `None` when the file names none.
+/// The readers give a layout only for a body whose table is in raw-files;
+/// [`Metadata::focus_layout`](crate::Metadata::focus_layout) says which
+/// files have one.
 ///
 /// # Equality
 ///

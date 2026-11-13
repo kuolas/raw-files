@@ -19,9 +19,8 @@ use std::fmt;
 /// text is ASCII, so it fits a file name or a log line as it is. The docs
 /// write sizes with a multiplication sign in prose.
 ///
-/// Its fields are public because it is a small fixed value: a width and a
-/// height, nothing more. There is no `Default`, since a size of 0 × 0 is
-/// no image, and [`Focus::new`](crate::Focus::new) refuses it as a frame.
+/// Its fields are public. There is no `Default`: a size of 0 × 0 is no
+/// image, and [`Focus::new`](crate::Focus::new) refuses it as a frame.
 ///
 /// # Examples
 ///
@@ -123,10 +122,8 @@ impl fmt::Display for Size {
 /// As text ([`Display`](fmt::Display)), a point is its `x` and its `y` in
 /// parentheses, `x` first: `(4128, 2752)`.
 ///
-/// Its fields are public because it is a small fixed value: a distance
-/// across and a distance down, nothing more. There is no `Default`, since
-/// (0, 0) is a real place, the top-left corner, which a default would
-/// silently choose.
+/// Its fields are public. There is no `Default`: (0, 0) is a real place,
+/// the top-left corner.
 ///
 /// # Examples
 ///

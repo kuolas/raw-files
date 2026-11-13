@@ -59,15 +59,13 @@ use std::fmt;
 /// methods, such as [`with_recorded_model`](Self::with_recorded_model),
 /// each named after the method that reads the value back and each replacing
 /// any value set before, and set the camera on a [`Metadata`] with
-/// [`Metadata::with_camera`]. As for [`Lens`](crate::Lens), every value is
-/// optional, so the empty `Camera` is the start of every chain and there is
-/// no separate builder type.
+/// [`Metadata::with_camera`]. The empty `Camera` is the start of every
+/// chain.
 ///
 /// The `with_…` methods store each value as given. A text is not trimmed or
 /// otherwise changed, though the readers clean a file's text before they
 /// store it: a test gets back what it wrote. A text may be a `&str`, which
-/// is copied, or a `String`, which is moved. `Camera` is not `Copy`, since
-/// each of its values is a text of its own.
+/// is copied, or a `String`, which is moved.
 ///
 /// # Examples
 ///
