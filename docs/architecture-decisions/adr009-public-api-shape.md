@@ -2,8 +2,8 @@
 
 - Status: Accepted
 - Date: 2026-10-11
-- Revision: 2, 2026-11-10
-- Issue: #105
+- Revision: 3, 2026-11-13
+- Issue: #119
 
 ## Context
 
@@ -70,6 +70,27 @@ We will expose **one handle, `RawFile<R>`, generic over any
 - Enums that may gain variants and records that may gain fields are
   `#[non_exhaustive]`, and structs expose getters; only small fixed value
   types such as `Size` have public fields.
+- A record whose every value is optional, such as `Metadata`,
+  `Exposure` or `Lens`, starts from its empty `default()`, and a
+  `with_…` method sets each value. It has no separate builder type.
+- A record that may gain a value that cannot be copied is `Clone` and
+  not `Copy`, even when every value it holds can be copied. Such a value
+  would otherwise break callers. `Exposure`, `CameraSettings` and
+  `Options` are such records. A record of plain numbers, such as
+  `Limits`, `Preview` or `Focus`, is `Copy`.
+- A value that keeps what the file stored is equal to another only
+  when both were stored the same way. `Rational` and `Latitude` are
+  such values. Such a value has no `Ord`, since an order by value would
+  disagree with that equality. A caller sorts by a method that gives the
+  value, such as `Rational::to_f64`.
+- `DateTime` has no order, because local times do not order by their
+  fields. 10:00 at an offset of `+02:00` came before 09:00 at `+00:00`.
+  A time without an offset cannot be placed against either. `Direction`
+  has none because a bearing turns round to its start.
+- `Value` has no `Eq` or `Hash`. Its FLOAT and DOUBLE values are
+  floating-point numbers, and a NaN is not equal to itself.
+- A value with no empty state that means anything, such as a `Size`, a
+  `Point`, a `Flash` or a `FineTune`, has no `Default`.
 - Every allocation whose size comes from the file is capped by `Limits`,
   whose defaults are safe for untrusted input.
 - raw-files stays **one crate**. The raw-data and development APIs arrive
@@ -111,6 +132,10 @@ Rejected:
 - **List methods that borrow the list**, so that a refused point keeps
   the list built so far. They would leave the `with_…` convention, and
   the error now tells a test's author what to fix.
+- **A separate builder type**, as the builder pattern of the Rust API
+  Guidelines has it (C-BUILDER). Every value of such a record is
+  optional, so the empty record is already a valid start for every
+  chain. A builder would be a second type with the same methods.
 
 ## Consequences
 
