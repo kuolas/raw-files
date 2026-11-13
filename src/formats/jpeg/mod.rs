@@ -3,185 +3,38 @@
 //! The JPEG reader: how the crate recognizes a JPEG file, and how it finds
 //! the file's previews and reads its metadata.
 //!
-//! A JPEG file is a picture as a camera writes it beside its raw file or
-//! instead of it, or as an editor exports it: one JPEG stream, with the
-//! camera's metadata in an Exif segment before the picture's frame header,
-//! and often smaller copies of the picture stored after its end and listed
-//! in an MPF segment. raw-files opens it as a format of its own, through
-//! the same handle and into the same types as a raw file (ADR014). It holds
-//! no raw data.
+//! A JPEG file is a picture as a camera writes it, beside its raw file or
+//! instead of it, or as an editor exports it. It is one JPEG stream, with
+//! the camera's metadata in an Exif segment before the picture's frame
+//! header. Smaller copies of the picture often follow its end, listed in an
+//! MPF segment. raw-files opens it as a format of its own, through the
+//! same handle and into the same types as a raw file (ADR014). It holds no
+//! raw data.
 //!
-//! The JPEG container has walked the file's segments up to its scan and
-//! kept its first frame header, its first Exif segment and its first MPF
-//! segment ([`Segments`]). For this reader a file is a JPEG when that frame
-//! header gives a size, neither side zero, and is not lossless
-//! ([`claims`]): a lossless frame keeps every sample value exactly, which is
-//! how some raw files store their raw data, not a picture to show (T.81
-//! Table B.1, p. 32). Nothing else decides: a file without an Exif segment,
-//! or whose Exif segment is damaged, is a JPEG all the same, and the file's
-//! name is never looked at.
+//! The parts, in the order a file is read:
 //!
-//! # The previews
+//! - [`claims`] says whether a file is a JPEG, by the frame header the JPEG
+//!   container kept ([`picture`]).
+//! - [`parse`] walks the Exif segment's TIFF structure, and reads its
+//!   standard metadata with the shared reader. Then it reads the MakerNote
+//!   of the maker that IFD0's Make names ([`MakerNote::read`]).
+//! - [`metadata`] sets the picture's own size, and keeps the focus points
+//!   only when their frame has the picture's shape.
+//! - `parse` then reads the MPF list, and [`previews`] checks the
+//!   candidates with the shared finder and adds the file itself.
 //!
-//! - **The file itself**: its whole byte range, exactly as stored, with the
-//!   size its frame header gives. A viewer opens the whole file, and a
-//!   decoder stops at the main image's end marker, so the MPF images and
-//!   any padding after it, such as the zeros some Sony bodies write, do no
-//!   harm (CIPA DC-008 4.7, p. 99). It is built from the frame header the
-//!   claim checked, not probed again. No other preview starts at the
-//!   file's first byte: the thumbnail lies inside the Exif segment, and an
-//!   MPF image after the main image.
-//! - **The thumbnail in IFD1** of the Exif segment's TIFF structure, which
-//!   the shared TIFF preview finder (`tiff_previews`) finds as it finds a
-//!   raw file's: counted from that structure's header, and inside the
-//!   segment (DC-008 4.5.8, pp. 25 to 26).
-//! - **Each image the MPF list holds after the first**, at the MP header's
-//!   position plus the offset its entry gives, over the size its entry
-//!   gives (CIPA DC-007 5.2.3.3.3, p. 16), whatever the type of image the
-//!   entry names. These images lie after the main image, outside the
-//!   segment that lists them, so they are bounded by the file alone
-//!   ([`mpf::index`]).
-//! - **The JPEG of the Nikon MakerNote's PreviewIFD**, in a file whose
-//!   MakerNote the reader reads ([below](#the-metadata)), as the D70's
-//!   JPEGs hold one of 564 by 372 pixels. The MakerNote reader finds it as
-//!   in a NEF ([`nikon::preview_candidate`]): counted from the MakerNote's
-//!   own inner header, or, in the headerless layout of the D1 family,
-//!   from the Exif segment's TIFF header, and wholly inside the length the
-//!   MakerNote declares, which lies inside the Exif segment. A JPEG that
-//!   the PreviewIFD places outside that length is not a preview.
+//! Damage costs only what it touches, as in a raw file. A TIFF header or an
+//! IFD0 that cannot be read, or a limit of the caller's [`Limits`] crossed
+//! while walking the Exif segment, gives no tree. That costs the segment's
+//! values and its thumbnail, never the file, which opens with its own
+//! preview, its image size and its MPF images. A MakerNote that does not
+//! hold together costs what it would have given, and an MPF list that does
+//! not hold together costs only its images. Only a failure of the reader is
+//! an error.
 //!
-//! The thumbnail, the MPF images and the MakerNote's preview are checked
-//! as every preview is, by the shared finder's
-//! [`check`](tiff_previews::check): each must lie inside the file, start
-//! with SOI and hold, within its own bytes, a frame header that gives a
-//! size and is not lossless, and is measured from that frame header. Every
-//! preview, the file included, takes the orientation of IFD0 of the Exif
-//! segment, or none without one.
-//!
-//! # Damage
-//!
-//! The Exif segment is read as a bounded block, whose TIFF header is the
-//! base of every offset. A TIFF header or an IFD0 that cannot be read, or
-//! a limit of the caller's [`Limits`] crossed while walking the segment's
-//! structure, gives no tree: it costs the segment's values and its
-//! thumbnail, never the file, which opens with its own preview and its MPF
-//! images, listed in a segment of their own. The image size remains, since
-//! it comes from the frame header, not from the segment. Past IFD0,
-//! damage costs only what it touches, as in a raw file: an IFD or a value
-//! that lies outside the segment is damage, and costs what it holds. A
-//! MakerNote that does not hold together, or in which a limit is crossed,
-//! costs what it would have given, as in a raw file: a Nikon MakerNote its
-//! values, its focus point and its preview, as in a NEF, and a Sony
-//! MakerNote its camera settings and its focus point, as in an ARW. An MPF
-//! list that does not hold together costs only its images. Only a failure
-//! of the reader is an error.
-//!
-//! # The metadata
-//!
-//! The metadata is read from the Exif segment's tree by the reader the
-//! TIFF-based formats share (`tiff_metadata`), by the same rules as in a
-//! raw file, the standard tags first (ADR011): the camera's make and model
-//! and the orientation from IFD0, and the serial number, the capture time,
-//! the exposure, the camera's settings and the lens from the Exif IFD, with
-//! the Interoperability IFD for the color space.
-//!
-//! Then the MakerNote is read, by IFD0's Make, as in a raw file (ADR014),
-//! once, by the reader of the maker the Make names ([`Maker`]); the Make
-//! is compared trimmed of spaces at either end and in any case, as the
-//! claims of the raw formats compare it.
-//!
-//! - **When the Make starts with `NIKON`**, as the NEF claim tests it, the
-//!   Nikon MakerNote reader (`makernote/nikon/`) reads it as it reads a
-//!   NEF's. In the layout every body since the D70 writes, the offsets
-//!   count from the MakerNote's own inner header, so it reads the same
-//!   inside the Exif segment. In the headerless layout of the D1 family,
-//!   they count from the TIFF header of the structure that holds the
-//!   MakerNote, as Sony's do, which in a JPEG is the one inside the Exif
-//!   segment, as the JPEGs of early Coolpix bodies that write it show,
-//!   and the numbers are in that structure's byte order. It gives what it
-//!   gives a NEF: the serial number, the ISO, the lens's range and the
-//!   capture time's offset from UTC, each only when the standard tags
-//!   gave none, so that an Exif value always wins; the camera settings
-//!   that only it records, but the raw image size, since a JPEG holds no
-//!   raw data, and its white balance setting, finer than Exif's, in place
-//!   of Exif's, and its color space only when the Exif IFD holds no
-//!   ColorSpace; and the focus point, below.
-//! - **When the Make starts with `SONY`**, as the ARW claim first tests it,
-//!   the Sony MakerNote reader (`makernote/sony.rs`) reads it as it reads
-//!   an ARW's. It gives what it gives an ARW: the camera settings that only
-//!   it records, its white balance setting, finer than Exif's, in place of
-//!   Exif's, and the focus point, below. Its offsets count from
-//!   the TIFF header of the structure that holds it, which in a JPEG is
-//!   the one inside the Exif segment, the base of the Exif IFD's offsets,
-//!   as the Sony camera JPEGs that ADR014 describes count them; its IFD
-//!   follows Sony's 12-byte `SONY DSC` header, which every one of them
-//!   writes. The ARW claim's second test, a Hasselblad Make with the
-//!   pointer to Sony's private directory, looks for a raw file's
-//!   structure, and a JPEG under Hasselblad's Make is not read as Sony's.
-//!
-//! A MakerNote of one maker's layout under another maker's Make is not
-//! read: Nikon's software writes Nikon-style MakerNotes into other makers'
-//! files. No other maker's MakerNote is read.
-//!
-//! The image size is the size in the frame header, the picture's own (T.81
-//! B.2.2 and Figure B.3, p. 35), never a size the tree gives: the Exif
-//! pixel dimensions are not read, since an editor may leave them
-//! unchanged, and an IFD that the shared reader would take for raw data
-//! gives no size either. A JPEG holds no raw data, so it has no raw size.
-//! Without a tree, the image size is the only value. Both are set before
-//! the MakerNote's values are read, so that its reader takes them for a
-//! JPEG's: with no raw size, CropArea, which a MakerNote copied from a raw
-//! file holds, gives no image size (ADR014).
-//!
-//! # The focus point
-//!
-//! The Nikon MakerNote reader places the focus point by the rules it
-//! follows in a NEF (ADR012), with the JPEG's own pixels as the picture
-//! ([`Picture::Jpeg`]). A JPEG shot in a crop mode, as the Z 9 writes it,
-//! records its point in the camera's full output and holds no CropArea,
-//! and its point is placed on the JPEG's pixels (ADR015): a DX crop's
-//! scaled onto them, a 1:1 or 16:9 crop's moved into the centered window of
-//! the recorded frame that has the JPEG's shape. A JPEG whose MakerNote
-//! holds a CropArea gives no point on a crop, since it has no raw size to
-//! check CropArea against. A JPEG shot through a DSLR's viewfinder, of a
-//! body whose table of points raw-files has, the D600, gives the points its
-//! AFInfo2 names placed from the table, as its raw file does (ADR018): in
-//! the table's frame, or on a crop in the crop's window, and then only
-//! when the JPEG's own size is that window's, so that a crop-mode JPEG at
-//! a smaller size gives none. An uncropped JPEG of a size that the table
-//! lists as showing a window of the frame, the D600's Medium JPEG, 4512
-//! by 3008, gives them in that window, 6010 by 4006, which has the JPEG's
-//! shape where the whole frame has not (ADR018).
-//!
-//! The Sony MakerNote reader gives the point as it gives an ARW's (ADR012):
-//! the frame and the center from FocusLocation, or FocusLocation2 without
-//! it, the area from FocusFrameSize where it records one, and none in
-//! manual focus. Sony's frame is the picture as framed in the camera, so
-//! the point is not placed: the ILCE-7M3's JPEG at the camera's M size
-//! records its point at (1783, 1804) in a frame of its own 3936 by 2624
-//! pixels. The DSLR-A100's MakerNote, of an older layout, holds no
-//! FocusLocation, and gives none.
-//!
-//! Each reader gives its point as a list of one, the primary, or, placed
-//! from a table, the points the file names, which the metadata holds as
-//! its focus points, with the area mode on a Nikon file. Then the list is
-//! kept only when its frame has the picture's aspect ratio, to within one
-//! pixel of rounding in either size ([`Size::same_shape`]), in the stored
-//! orientation (ADR014). A camera's own JPEG passes, and so does an
-//! export scaled from it, except from a JPEG whose points the table
-//! places in the window of its size, such as the D600's Medium JPEG: the
-//! window is kept for that size alone, so a scaled export takes the whole
-//! frame, of another shape, and gives no point, unless it is about 750
-//! pixels tall or less, where the rule's rounding passes the whole frame
-//! and the point lands under a pixel off. An export cut to another
-//! shape, or turned upright in its pixels, which may keep the camera's
-//! MakerNote, gives no point. The rule applies to whatever point the
-//! MakerNote reader gave, so it cannot refuse a Nikon crop-mode JPEG cut
-//! again: its point is placed on the export's own pixels, a window of
-//! their shape, and is misplaced if the cut changed the shape (ADR015).
-//! Nor can it refuse an export of a D600 JPEG cut or scaled to exactly
-//! the Medium size: it is read as a Medium JPEG, its points placed in the
-//! Medium window, by far misplaced on a cut (ADR018).
+//! What cameras write in a JPEG, segment by segment, is in the JPEG notes
+//! (`docs/formats/jpeg/container-and-metadata.md`, sections 4, 6, 7 and
+//! 10).
 
 use std::io::{Read, Seek};
 
@@ -213,6 +66,9 @@ pub(crate) fn spec<R: Read + Seek>() -> FormatSpec<R, Segments> {
 
 /// The frame header of the picture the file holds: the first frame header
 /// of the file, when it gives a size and is not lossless; `None` otherwise.
+/// A lossless frame keeps every sample value exactly, which is how some raw
+/// files store their raw data, not a picture to show
+/// ([`Frame::is_lossless`]).
 ///
 /// [`segments`](crate::container::jpeg::segments) keeps a frame header
 /// only when neither side is zero, so a frame header that gives no size
@@ -224,7 +80,10 @@ fn picture(segments: &Segments) -> Option<Frame> {
 /// Whether the file whose segments are `segments` is a JPEG file: whether
 /// its first frame header gives a size and is not lossless ([`picture`]).
 ///
-/// It reads nothing: the container read the frame header already.
+/// Nothing else decides. A file without an Exif segment, or whose Exif
+/// segment is damaged, is a JPEG all the same, and the file's name is never
+/// looked at. It reads nothing: the container read the frame header
+/// already.
 ///
 /// # Errors
 ///
@@ -233,36 +92,36 @@ fn claims<R: Read + Seek>(_: &mut Source<R>, segments: &Segments) -> Result<bool
     Ok(picture(segments).is_some())
 }
 
-/// Reads the previews and the metadata of a JPEG file that [`claims`]
-/// accepted.
+/// Reads the previews, the metadata and the entries of a JPEG file that
+/// [`claims`] accepted.
 ///
 /// The Exif segment's TIFF structure, when there is one, is walked within
-/// `limits`, and gives the standard metadata, the orientation among it,
-/// and the thumbnail's candidate. When IFD0's Make names Nikon, the Nikon
-/// MakerNote is read, within `limits`, and gives the values the standard
-/// tags lack, the camera settings and the focus points among them, a
-/// recorded position, placed on the picture, or the points a shot through
-/// the viewfinder names, placed from the table of the body's points, and
-/// the candidate of its preview; when it names Sony, the Sony MakerNote
-/// is read, within `limits`, and gives the camera settings that only it
-/// records and the focus point, as recorded ([`MakerNote::read`]). The
-/// MPF list, read within `limits` as well, gives a candidate for each
-/// image after the first. The shared finder checks them all, and the
-/// file itself joins them as a preview of its own, with its frame
-/// header's size, which is the metadata's image size.
-/// The focus points, the primary among them, are kept only when their
-/// frame has the picture's shape ([`Size::same_shape`]); see the
-/// [module documentation](self). The entries are those of the Exif
-/// segment's tree, then those of the MakerNote's directories, Nikon's
-/// MakerNote IFD and PreviewIFD or Sony's MakerNote IFD
-/// ([`MakerNote::add_entries`]), then the MP Index IFD's.
+/// `limits`, and the shared reader reads its standard metadata. Then:
+///
+/// - **The MakerNote** is read once, within `limits`, by the reader of the
+///   maker that IFD0's Make names ([`MakerNote::read`]). It gives the values
+///   the standard tags lack, as in a raw file.
+/// - **The previews' candidates** are three kinds:
+///   - the thumbnail in IFD1 of the Exif segment's structure, which the
+///     shared finder gathers as in a raw file (CIPA DC-008 4.5.8, pp. 25
+///     to 26);
+///   - the JPEG of the Nikon MakerNote's PreviewIFD, as a Nikon D70's JPEG
+///     holds one ([`MakerNote::preview_candidate`]);
+///   - each image the MPF list holds after the first, read within `limits`
+///     ([`mpf::index`]).
+/// - **The entries** are those of the Exif segment's tree, then those of
+///   the MakerNote's directories ([`MakerNote::add_entries`]), then the MP
+///   Index IFD's.
+///
+/// [`metadata`] sets the picture's size and keeps the focus points that
+/// fit it, after the MakerNote is read and before the MPF list.
+/// [`previews`] checks the candidates.
 ///
 /// # Errors
 ///
-/// `Io` when the reader fails. Nothing the file holds is an error here.
-/// `UnknownFormat`, with the message detection gives a JPEG file no format
-/// claims, for segments that [`claims`] refuses, which detection never
-/// passes here.
+/// `Io` when the reader fails. `UnknownFormat`, with the message detection
+/// gives a JPEG file no format claims, for segments that [`claims`]
+/// refuses, which detection never passes here.
 fn parse<R: Read + Seek>(
     src: &mut Source<R>,
     segments: &Segments,
@@ -291,8 +150,8 @@ fn parse<R: Read + Seek>(
     };
     let metadata = metadata(src, standard, makernote.as_ref(), size)?;
     candidates.extend(makernote.as_ref().and_then(MakerNote::preview_candidate));
-    // The entries of the Exif segment's tree, walked once, none when it
-    // does not walk, as it then gives no metadata; then the MakerNote's;
+    // The entries of the Exif segment's tree, walked once, or none when it
+    // does not walk, as it then gives no metadata. Then the MakerNote's,
     // then the MP Index IFD's, which the MPF segment holds apart from it.
     let mut entries = tree.as_ref().map_or_else(Entries::new, Entries::of_tree);
     if let Some(makernote) = &makernote {
@@ -319,22 +178,46 @@ fn parse<R: Read + Seek>(
     })
 }
 
-/// The metadata of a JPEG file whose picture is `size`: `standard`, what
-/// the shared reader read from the Exif segment's tree or the default
-/// when there is none, with the values `makernote` adds, read from `src`.
+/// The metadata of a JPEG file whose picture is `size`: `standard`, with
+/// the values `makernote` adds, read from `src`. `standard` is what the
+/// shared reader read from the Exif segment's tree, or the default when
+/// there is none.
 ///
-/// The image size is `size`, whatever sizes the tree gives, and there is
-/// no raw size: a JPEG holds no raw data. Both are set before the
+/// The image size is `size`, the frame header's, the picture's own (T.81
+/// B.2.2 and Figure B.3, p. 35), whatever sizes the tree gives. The Exif
+/// pixel dimensions are not read, since an editor may leave them unchanged.
+/// There is no raw size: a JPEG holds no raw data. Both are set before the
 /// MakerNote's values are read, so that its reader takes them for the
-/// JPEG's: with no raw size, CropArea gives no image size, and a crop is
-/// placed on the picture's pixels. Whether the Exif IFD holds a ColorSpace
-/// is kept as read, so that the MakerNote's color space never overrules
-/// it. The focus points are kept only when their frame has the picture's
-/// shape ([`Size::same_shape`]).
+/// JPEG's. With no raw size, CropArea gives no image size, and a crop is
+/// placed on the picture's pixels (ADR014). Whether the Exif IFD holds a
+/// ColorSpace is kept as read, so that the MakerNote's color space never
+/// overrules it.
+///
+/// The focus points are kept only when their frame has the picture's
+/// shape, to within one pixel of rounding in either size, in the stored
+/// orientation ([`Size::same_shape`], ADR014). A camera's own JPEG passes,
+/// and so does an export scaled from it. An export cut to another shape, or
+/// turned upright in its pixels, gives no point, even when it keeps the
+/// camera's MakerNote. The test sees only the points the MakerNote reader
+/// gave, so three cases come out otherwise:
+///
+/// - a Nikon crop-mode JPEG cut again passes. Its points are placed on the
+///   export's own pixels, and are misplaced if the cut changed the shape
+///   (ADR015).
+/// - a D600 JPEG cut or scaled to exactly the Medium size passes, read as
+///   a Medium JPEG. Its points are placed in the Medium window, by far
+///   misplaced on a cut (ADR018).
+/// - an export scaled from such a Medium JPEG takes the whole frame, since
+///   the window is kept for the Medium size alone, and gives no point. At
+///   about 750 pixels tall or less, the one pixel of rounding passes the
+///   whole frame, and the point lands under a pixel off.
+///
+/// The notes measure the Medium window and these exports
+/// (`docs/formats/nef/autofocus-points.md`, section 2.9).
 ///
 /// # Errors
 ///
-/// `Io` when the reader fails. Nothing the file holds is an error here.
+/// `Io` when the reader fails.
 fn metadata<R: Read + Seek>(
     src: &mut Source<R>,
     standard: Standard,
@@ -361,13 +244,21 @@ fn metadata<R: Read + Seek>(
 }
 
 /// The previews of a JPEG file whose picture is `size`: those of
-/// `candidates` that the shared finder accepts, then the file itself, its
-/// whole byte range, with `size`. Every preview takes `orientation`, the
-/// metadata's, IFD0's.
+/// `candidates` that the shared finder accepts ([`tiff_previews::check`]),
+/// then the file itself. Every preview takes `orientation`, the metadata's,
+/// from IFD0 of the Exif segment, or none without one.
+///
+/// The file itself is its whole byte range, exactly as stored, with `size`,
+/// built from the frame header the claim checked, not probed again. A
+/// viewer opens the whole file, and a decoder stops at the main image's end
+/// marker. So the MPF images and any padding after it do no harm (CIPA
+/// DC-008 4.7, p. 99). No other preview starts at the file's first byte:
+/// the thumbnail lies inside the Exif segment, and an MPF image after the
+/// main image.
 ///
 /// # Errors
 ///
-/// `Io` when the reader fails. Nothing the file holds is an error here.
+/// `Io` when the reader fails.
 fn previews<R: Read + Seek>(
     src: &mut Source<R>,
     candidates: &[Candidate],
@@ -409,10 +300,9 @@ impl Maker {
         }
     }
 
-    /// The maker that the IFD0 of `tree` names in its Make, trimmed of
-    /// spaces at either end and in any case, as the claims of the raw
-    /// formats test it ([`make_starts_with`]); `None` for any other Make, or
-    /// none.
+    /// The maker that the IFD0 of `tree` names in its Make, as the claims of
+    /// the raw formats test it ([`make_starts_with`]). `None` for any other
+    /// Make, or none.
     ///
     /// # Errors
     ///
@@ -439,20 +329,20 @@ enum MakerNote {
 
 impl MakerNote {
     /// The MakerNote of the JPEG file in `src`, whose Exif segment's TIFF
-    /// structure is `tree`, read within `limits` by the reader of the maker
-    /// that IFD0's Make names ([`Maker::of`]), as [`nikon::read`] or
-    /// [`sony::read`] gives it; `None` under any other Make.
+    /// structure is `tree`, read within `limits`. The maker that IFD0's Make
+    /// names ([`Maker::of`]) reads it, with [`nikon::read`] or
+    /// [`sony::read`]; `None` under any other Make.
     ///
-    /// Make decides, not what the MakerNote looks like, as in a raw file:
+    /// Make decides, not what the MakerNote looks like, as in a raw file.
     /// Nikon's editing software writes Nikon-style MakerNotes into the files
-    /// of other makes, whose Make it leaves as it was, and a Sony MakerNote
-    /// without a header, as an ARW's is, holds nothing that names Sony. A
-    /// Make that cannot be read is taken for another maker's, so that it
-    /// costs only the MakerNote.
+    /// of other makes, and leaves their Make as it was. A Sony MakerNote
+    /// without a header, as an ARW's is, holds nothing that names Sony. No
+    /// other maker's MakerNote is read. A Make that cannot be read is taken
+    /// for another maker's, so that it costs only the MakerNote.
     ///
     /// # Errors
     ///
-    /// `Io` when the reader fails. Nothing the file holds is an error here.
+    /// `Io` when the reader fails.
     fn read<R: Read + Seek>(
         src: &mut Source<R>,
         tree: &Tree,
@@ -471,7 +361,7 @@ impl MakerNote {
     ///
     /// # Errors
     ///
-    /// `Io` when the reader fails. Nothing the file holds is an error here.
+    /// `Io` when the reader fails.
     fn metadata<R: Read + Seek>(
         &self,
         src: &mut Source<R>,
