@@ -282,9 +282,9 @@ that CI checks both rules, the scaling and the window, on real camera
 bytes.
 
 The point fields of a DSLR shot through the viewfinder, and the table
-of the D600's points, were measured on 2026-10-26 on 56 frames shot
-with my own D600, recorded in
-[autofocus-points.md](autofocus-points.md#2-nikon-d600). The 56 NEF
+of the D600's points, were measured on 2026-10-26 on frames shot with
+my own D600, recorded in
+[autofocus-points.md](autofocus-points.md#2-nikon-d600). Their NEF
 files are committed in `tests/fixtures/nikon-d600/`, stripped of their
 pixels and personal fields as
 [the fixtures' README](../../../tests/fixtures/README.md#the-d600-session)

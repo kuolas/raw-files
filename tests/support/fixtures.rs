@@ -29,7 +29,7 @@ pub const Z9_DX_JPEG: &str = "nikon-z9-dx.jpg";
 /// of the recorded frame that has the JPEG's shape.
 pub const Z9_16X9_JPEG: &str = "nikon-z9-16x9.jpg";
 
-/// The name of frame `frame` of the D600 session, numbered 1 to 56 in
+/// The name of frame `frame` of the D600 session, numbered from 1 in
 /// the order the frames were shot, as the NEF notes' record of the
 /// session numbers them: `nikon-d600/frame-04.nef` for frame 4, for
 /// [`fixture`] and [`read_fixture`].

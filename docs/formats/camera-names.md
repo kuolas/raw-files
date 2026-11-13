@@ -79,7 +79,7 @@ names follow Nikon body by body. The one other spelling found is
 
 | Model text | Files | Name | Maker's documents |
 |---|---|---|---|
-| `NIKON D600` | the 56 frames of my own D600 in `tests/fixtures/nikon-d600/` | D600 | *D600 User's Manual*, 6MB15311-01, page 326 (specifications): "Nikon D600 Digital Camera" |
+| `NIKON D600` | the frames of my own D600 in `tests/fixtures/nikon-d600/` | D600 | *D600 User's Manual*, 6MB15311-01, page 326 (specifications): "Nikon D600 Digital Camera" |
 | `NIKON Z 9` | files 5146 to 5148; the fixtures of my own Z 9 | Z 9 | *Z 9 Reference Guide*, for firmware 5.20, page 951 (specifications): "Nikon Z 9 Digital Camera"; [online manual](https://onlinemanual.nikonimglib.com/z9/en/), title "Z 9 Reference Guide"; [product page](https://imaging.nikon.com/imaging/lineup/mirrorless/z_9/), title "Z 9 \| Mirrorless Cameras \| Nikon Consumer"; [Nikon USA](https://www.nikonusa.com/p/z-9/1669/overview), title "Nikon Z 9 Mirrorless Camera …" |
 | `NIKON Z 6` | file 3587 | Z 6 | [online manual](https://onlinemanual.nikonimglib.com/z7_z6/en/), title "Z 7/Z 6 Online Manual"; [product page](https://imaging.nikon.com/imaging/lineup/mirrorless/z_6/), title "Z 6 \| Mirrorless Cameras …" |
 | `NIKON Z 30` | file 5812 | Z 30 | [online manual](https://onlinemanual.nikonimglib.com/z30/en/), title "Z 30 Reference Guide"; [product page](https://imaging.nikon.com/imaging/lineup/mirrorless/z_30/), title "Z 30 \| Mirrorless Cameras …" |
