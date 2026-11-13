@@ -1,75 +1,38 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! The preview finder shared by the TIFF-based formats, and by the JPEG
-//! format, whose Exif segment holds a TIFF structure: it finds the JPEG
+//! The preview finder that the TIFF-based formats share, and the JPEG
+//! format, whose Exif segment holds a TIFF structure. It finds the JPEG
 //! previews a camera embedded in a file, and measures each from its own
 //! frame header.
 //!
 //! A TIFF-based RAW file describes each of its images with an IFD: the raw
 //! sensor data, a full-size JPEG preview, a thumbnail. The formats differ
-//! in where they put which, but the way to tell a preview from the rest is
-//! the same for all of them, so [`find`] does it once, over the whole tree,
-//! and a format adds only the candidates it knows of outside the tree, such
-//! as a preview its MakerNote points at.
+//! in where they put which, but a preview is told from the rest the same
+//! way in all of them. So [`find`] does it once, over the whole tree, and a
+//! format adds only the candidates it knows of outside the tree, such as a
+//! preview its MakerNote points at. [`find`] takes two steps, which a
+//! format may also take apart:
 //!
-//! [`find`] takes two steps, which a format may also take apart:
-//! [`tree_candidates`] gathers the candidates the tree's IFDs declare, and
-//! [`check`] checks a list of candidates and measures the ones that pass.
-//! A format may check candidates without a tree: a JPEG file with no usable
-//! Exif segment still has the images of its MPF list.
+//! - [`tree_candidates`] gathers the candidates the tree's IFDs declare. It
+//!   skips every IFD that holds no image, describes raw data ([`is_raw`])
+//!   or cannot be read.
+//! - [`check`] keeps the candidates that hold a JPEG stream a viewer can
+//!   show, and measures each. A format may check candidates without a
+//!   tree: a JPEG file with no usable Exif segment still has the images of
+//!   its MPF list.
 //!
-//! The rules, in order:
+//! Every preview is shown upright by IFD0's Orientation ([`orientation`]).
+//! Nothing here trusts a size from a tag: a preview's size is its frame
+//! header's. Nothing the file holds is an error of the finder's. Damage
+//! costs only the IFD or the candidate it touches ([`skip_damage`]), and
+//! only a failure of the reader is an error. Every offset and length is
+//! checked before it is used, so no input makes the finder panic
+//! ([`Source`], ADR008).
 //!
-//! - Every IFD of the tree is asked, in the tree's order, except the Exif
-//!   IFD, which holds capture metadata, the GPS IFD, which holds where the
-//!   picture was taken, and the Interoperability IFD, which names the rule
-//!   the file follows, since none of them ever holds an image
-//!   ([`Link::holds_no_image`](crate::container::tiff::Link::holds_no_image));
-//!   then the format's own candidates, in the order it gives them.
-//! - An IFD that describes raw data is skipped, whatever it points at: one
-//!   whose samples are a color filter array (CFA) or Sony's linear raw
-//!   (ARQ), one whose samples are wider than 8 bits, one stored in tiles,
-//!   and one that says it is the full-resolution image. No camera writes a
-//!   preview so. The metadata reader takes the raw size by the same test
-//!   ([`is_raw`]), so that the two agree on which IFD holds the raw data.
-//! - An IFD is skipped too, with whatever it points at, when a tag these
-//!   rules read in it cannot be read, such as a value longer than the
-//!   limits' cap on one value: damage costs only the IFD it touches, never
-//!   the other previews, as in the walk past IFD0.
-//! - An IFD's preview is the JPEG stream its JPEGInterchangeFormat and
-//!   JPEGInterchangeFormatLength tags declare, when it has both; otherwise
-//!   its one strip, when it is JPEG-compressed and stored as exactly one
-//!   strip. Two candidates, from IFDs or from the format, at one position
-//!   in the file are the same preview: the first that passes the checks
-//!   below is kept, and the other is dropped. A candidate that fails them
-//!   claims nothing, so a wrong declaration never hides a right one of the
-//!   same bytes.
-//! - Inside a TIFF structure embedded in a file, such as a JPEG file's
-//!   Exif segment, an IFD's offsets count from that structure's header,
-//!   and its JPEG must lie inside the structure. So an IFD's candidate
-//!   counts from the base of the block the IFD was read in, and is dropped
-//!   unless it lies inside that block's bounds as well as the file. A NEF's
-//!   or an ARW's own IFDs have the start of the file as their base and the
-//!   whole file as their bounds. A format's own candidates are positions in
-//!   the file already: the format bounds each by the block it read it in,
-//!   as a MakerNote's preview must lie inside the MakerNote, while an MPF
-//!   image of a JPEG file, stored after the main image, is bounded by the
-//!   file alone, which the next rule checks for every candidate.
-//! - A candidate must lie inside the file, as declared: one that is empty,
-//!   or runs past the end of the file, is dropped, never cut to fit, since
-//!   a preview cut short would not decode.
-//! - The bytes must hold a JPEG stream with a frame header, which gives the
-//!   preview's size, and the frame must not be lossless: a lossless JPEG is
-//!   raw data, as in Sony's lossless ARW files.
-//! - Every preview is shown upright by IFD0's Orientation, which describes
-//!   the capture; the Orientation of any other IFD is ignored, and a
-//!   missing, unknown or unreadable value means none.
-//!
-//! The previews come back in the order they were found; the file handle
-//! sorts them. Nothing here trusts a size from a tag, and the finder never
-//! panics on any input: every offset and length read from the file is
-//! checked before it is used (ADR008). Nothing the file holds is an error
-//! of the finder's; only a failure of the reader is.
+//! Where each format keeps its previews is in its notes: section 3 of
+//! `docs/formats/nef/container-and-previews.md` and of
+//! `docs/formats/arw/container-and-previews.md`, and sections 6, 7 and 10
+//! of `docs/formats/jpeg/container-and-metadata.md`.
 
 use std::collections::BTreeSet;
 use std::io::{Read, Seek};
@@ -114,17 +77,16 @@ const FULL_RESOLUTION: u32 = 0;
 /// The tags of an image stored in tiles, which only raw data is.
 const TILE_TAGS: [u16; 4] = [TILE_WIDTH, TILE_LENGTH, TILE_OFFSETS, TILE_BYTE_COUNTS];
 
-/// Where a preview may be, as declared, to be checked like every other: an
-/// IFD's, or one a format found outside the tree, such as the preview a
-/// MakerNote points at or an image of a JPEG file's MPF list.
+/// Where a preview may be, as declared, to be checked like every other. It
+/// is an IFD's, or one a format found outside the tree, such as a
+/// MakerNote's preview or an image of a JPEG file's MPF list.
 ///
-/// A format's own candidates are positions in the file, not offsets as a
-/// tag writes them: the format has turned each offset it read into a
-/// position. It bounds each candidate by the block it read it in, as a
-/// MakerNote's preview must lie inside the MakerNote; an MPF image, stored
-/// after the main image, outside the segment that lists it, is bounded by
-/// the file alone. [`check`] then drops every candidate, an IFD's or a
-/// format's, that does not lie inside the file.
+/// A format's own candidates are positions in the file already: the format
+/// turned each offset it read into a position. It bounds each by the block
+/// it read it in ([`Block`]), as a MakerNote's preview must lie inside the
+/// MakerNote. An MPF image, stored after the main image, is bounded by the
+/// file alone. [`check`] then drops every candidate that does not lie
+/// inside the file.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) struct Candidate {
     /// Where the preview starts: a position in the file, not an offset as
@@ -136,13 +98,10 @@ pub(crate) struct Candidate {
 
 /// Finds the previews of the TIFF-based file in `src`, whose IFDs are
 /// `tree`, and of the candidates `extra` that its format found outside the
-/// tree.
+/// tree. Each is shown upright by IFD0's orientation ([`orientation`]).
 ///
-/// See the [module documentation](self) for the rules. The previews are in
-/// the order they were found: the tree's, in its order, then `extra`'s.
-/// It takes two steps: [`tree_candidates`] gathers the tree's candidates,
-/// and [`check`] checks them and `extra`, with IFD0's orientation
-/// ([`orientation`]).
+/// The previews are in the order they were found: the tree's, in its
+/// order, then `extra`'s. The file handle sorts them.
 ///
 /// # Errors
 ///
@@ -166,16 +125,17 @@ pub(crate) fn find<R: Read + Seek>(
 /// The candidates that the IFDs of `tree` declare, in the tree's order:
 /// the first step of [`find`].
 ///
-/// The Exif, GPS and Interoperability IFDs are not asked, an IFD that
-/// describes raw data is skipped, and so is an IFD whose tags these rules
-/// read cannot be read; see the [module documentation](self). Each
-/// candidate counts from the base of the block its IFD was read in, and
-/// lies inside that block's bounds and the file.
+/// Every IFD is asked but the Exif, GPS and Interoperability IFDs, which
+/// never hold an image
+/// ([`Link::holds_no_image`](crate::container::tiff::Link::holds_no_image)).
+/// An IFD that describes raw data ([`is_raw`]) is skipped with whatever it
+/// points at. So is an IFD whose tags these rules read cannot be read,
+/// such as a value over the cap on one value. Each other IFD gives the
+/// stream it declares ([`declared`]).
 ///
 /// # Errors
 ///
-/// `Io` when the reader fails. A tag value that cannot be read for any
-/// other reason costs its IFD's candidate.
+/// `Io` when the reader fails.
 pub(crate) fn tree_candidates<R: Read + Seek>(
     src: &mut Source<R>,
     tree: &Tree,
@@ -198,15 +158,21 @@ pub(crate) fn tree_candidates<R: Read + Seek>(
 
 /// The previews among `candidates`, in their order, each shown upright by
 /// `orientation`: the second step of [`find`], which a format may also
-/// take without a tree, as a JPEG file with no usable Exif segment does
-/// for the images of its MPF list.
+/// take without a tree.
 ///
-/// A candidate is dropped when it is empty or does not lie wholly inside
-/// the file, when its bytes hold no JPEG stream with a frame header that
-/// gives a size, when that frame is lossless, and when a candidate before
-/// it at the same position became a preview; see the
-/// [module documentation](self). Each preview's size is its frame
-/// header's.
+/// A candidate is dropped when:
+///
+/// - it is empty, or does not lie wholly inside the file as declared,
+///   since a preview cut to fit would not decode;
+/// - its bytes hold no JPEG stream with a frame header that gives a size
+///   ([`jpeg::probe`]);
+/// - that frame is lossless, which is raw data
+///   ([`Frame::is_lossless`](jpeg::Frame::is_lossless));
+/// - a candidate before it at the same position became a preview. Two
+///   candidates at one position, from IFDs or from the format, are the
+///   same preview.
+///
+/// Each preview's size is its frame header's.
 ///
 /// # Errors
 ///
@@ -247,16 +213,16 @@ pub(crate) fn check<R: Read + Seek>(
     Ok(previews)
 }
 
-/// The orientation of every preview: IFD0's Orientation, or none when it
-/// is missing, cannot be read or is not one of the eight Exif values.
+/// The orientation of every preview: IFD0's Orientation, which describes
+/// the capture, or none when it is missing, cannot be read or is not one of
+/// the eight Exif values. The Orientation of any other IFD is ignored.
 ///
 /// The metadata reader (`tiff_metadata`) gives the file's metadata this
 /// orientation too, so that the metadata and the previews never disagree.
 ///
 /// # Errors
 ///
-/// `Io` when the reader fails; a value that cannot be read for any other
-/// reason means none.
+/// `Io` when the reader fails.
 pub(crate) fn orientation<R: Read + Seek>(src: &mut Source<R>, tree: &Tree) -> Result<Orientation> {
     Ok(skip_damage(tree.ifd0().u32(src, ORIENTATION))?
         .flatten()
@@ -266,22 +232,27 @@ pub(crate) fn orientation<R: Read + Seek>(src: &mut Source<R>, tree: &Tree) -> R
 }
 
 /// Whether `ifd` describes raw data, by the role its tags give it, so that
-/// nothing it points at is a preview.
+/// nothing it points at is a preview. It does when:
 ///
-/// The metadata reader (`tiff_metadata`) takes the raw size from the
-/// largest IFD this says is raw data, so that the finder and the metadata
-/// agree on which IFDs hold it.
+/// - its samples are a color filter array (CFA), or linear raw, as in
+///   Sony's pixel-shift ARQ files;
+/// - its samples are wider than 8 bits;
+/// - it is stored in tiles;
+/// - it says it is the full-resolution image.
+///
+/// No camera writes a preview so. The metadata reader (`tiff_metadata`)
+/// takes the raw size from the largest IFD this says is raw data, so that
+/// the finder and the metadata agree on which IFDs hold it.
 ///
 /// A tag whose value the test reads says nothing either way when it is
-/// missing or not of an integer type that [`Ifd::u32s`] reads; a tile tag
+/// missing or not of an integer type that [`Ifd::u32s`] reads. A tile tag
 /// counts by its presence alone, whatever its type.
 ///
 /// # Errors
 ///
 /// `LimitExceeded` when the BitsPerSample, which [`Ifd::u32s`] reads
-/// whole, is longer than the cap the IFD was read under, which [`find`]
-/// and the metadata reader take for damage and skip the IFD; `Io` when
-/// the reader fails. The other tags are read for their first value alone
+/// whole, is longer than the cap the IFD was read under; `Io` when the
+/// reader fails. The other tags are read for their first value alone
 /// ([`Ifd::u32`]), which no cap refuses.
 pub(crate) fn is_raw<R: Read + Seek>(src: &mut Source<R>, ifd: &Ifd) -> Result<bool> {
     if matches!(
@@ -291,9 +262,8 @@ pub(crate) fn is_raw<R: Read + Seek>(src: &mut Source<R>, ifd: &Ifd) -> Result<b
         return Ok(true);
     }
     // Samples wider than a JPEG preview's are raw data, whatever the
-    // PhotometricInterpretation says: this also covers raw data that calls
-    // itself YCbCr (6) with samples above 8 bits, while an 8-bit YCbCr image
-    // is a preview.
+    // PhotometricInterpretation says. So raw data that calls itself YCbCr
+    // (6) is caught, while an 8-bit YCbCr image is a preview.
     if ifd
         .u32s(src, BITS_PER_SAMPLE)?
         .is_some_and(|bits| bits.iter().any(|&b| b > PREVIEW_BITS))
@@ -307,25 +277,27 @@ pub(crate) fn is_raw<R: Read + Seek>(src: &mut Source<R>, ifd: &Ifd) -> Result<b
     Ok(ifd.u32(src, NEW_SUBFILE_TYPE)? == Some(FULL_RESOLUTION))
 }
 
-/// Where `ifd` says its JPEG stream is, if it says so: the stream that
-/// JPEGInterchangeFormat and JPEGInterchangeFormatLength declare, or else a
-/// JPEG-compressed image's one strip; `None` when the stream it declares
-/// does not lie inside the IFD's block and the file.
+/// Where `ifd` says its JPEG stream is, if it says so:
 ///
-/// The offset is written as every offset inside the IFD's TIFF structure
-/// is, counted from the structure's header, the base of the block the IFD
-/// was read in ([`Ifd::block`]). That is the start of the file for a NEF's
-/// or an ARW's own IFDs, and the TIFF header inside the Exif segment for a
-/// JPEG file's, whose thumbnail must then lie inside the segment as well
-/// as the file.
+/// - the stream that JPEGInterchangeFormat and JPEGInterchangeFormatLength
+///   declare, when it has both;
+/// - or else a JPEG-compressed image's one strip, when it is stored as
+///   exactly one.
+///
+/// `None` when the stream it declares does not lie inside the IFD's block
+/// and the file.
+///
+/// The offset counts from the base of the block the IFD was read in
+/// ([`Ifd::block`]), as every offset inside its TIFF structure does
+/// ([`Block`]). In a JPEG file, the thumbnail must then lie inside the
+/// Exif segment as well as the file.
 ///
 /// # Errors
 ///
 /// `LimitExceeded` when the StripOffsets or the StripByteCounts, which
 /// [`Ifd::u32s`] reads whole, is longer than the cap the IFD was read
-/// under, which [`find`] takes for damage and skips the IFD; `Io` when the
-/// reader fails. The other tags are read for their first value alone
-/// ([`Ifd::u32`]), which no cap refuses.
+/// under; `Io` when the reader fails. The other tags are read for their
+/// first value alone ([`Ifd::u32`]), which no cap refuses.
 fn declared<R: Read + Seek>(src: &mut Source<R>, ifd: &Ifd) -> Result<Option<Candidate>> {
     let block = ifd.block().within_file(src.len());
     let offset = ifd.u32(src, JPEG_INTERCHANGE_FORMAT)?;
@@ -345,14 +317,14 @@ fn declared<R: Read + Seek>(src: &mut Source<R>, ifd: &Ifd) -> Result<Option<Can
 }
 
 /// The candidate of `length` bytes at `offset`, as a tag of an IFD read in
-/// `block` writes them: at the position `offset` gives inside the block
-/// ([`Block::at`]), when the whole of it lies inside the block's bounds,
-/// an empty candidate included; `None` when it does not, or when that
-/// position would pass the largest offset.
+/// `block` writes them. Its position is the one `offset` gives inside the
+/// block ([`Block::at`]). `None` when that position would pass the largest
+/// offset, or when the candidate does not lie wholly inside the block's
+/// bounds. An empty candidate inside them is kept.
 ///
 /// The bounds are used as given. A caller whose bounds may run past the
 /// end of the file cuts them at it first ([`Block::within_file`]), as
-/// [`declared`] does; one whose bounds lie inside the file, such as a
+/// [`declared`] does. One whose bounds lie inside the file, such as a
 /// MakerNote's, passes its block as it is.
 pub(crate) fn candidate(block: &Block, offset: u32, length: u32) -> Option<Candidate> {
     let offset = block.at(offset)?;

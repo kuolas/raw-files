@@ -1,197 +1,44 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! The metadata reader shared by the TIFF-based formats: it reads what the
+//! The metadata reader that the TIFF-based formats share: it reads what the
 //! camera recorded about a picture from the standard TIFF and Exif tags.
 //!
-//! Cameras of every maker record the same facts in the same standard tags:
-//! the camera's make and model, the software that wrote the file and the
-//! orientation in IFD0, the capture time, the body's serial number, the
-//! exposure, the lens and some of the camera's settings in the Exif IFD,
-//! with the Interoperability IFD for the color space, where the picture
-//! was taken in the GPS IFD, and the sizes in the IFD of the raw data. So
-//! [`read`] reads them once, over the tree, for every format, and a format
-//! adds only what its own structures record and the standard tags lack
-//! (ADR011, which chose the standard tags first). The JPEG reader shares
-//! it too, over the tree of a JPEG file's Exif segment, and then decides
-//! the sizes itself: the picture's own size in place of the ones read
-//! here, and no raw size (ADR014).
+//! Cameras of every maker record the same facts in the same standard tags.
+//! So [`read`] reads them once, over the tree, for every format, and a
+//! format adds only what its own structures record and the standard tags
+//! lack (ADR011). The JPEG reader shares it too, over the tree of a JPEG
+//! file's Exif segment, and then decides the sizes itself (ADR014).
 //!
-//! The rules:
+//! [`read`] reads, by IFD:
 //!
-//! - A value is read only from a tag of the type and count its rule names
-//!   (ADR011). Each tag's rule is declared once, in the `rules` module
-//!   below, and the IFD reads it ([`Ifd::get`], [`Ifd::held`]), checking
-//!   the type and count before anything is read.
-//! - A damaged value costs only itself. A tag that is missing, of a type
-//!   or count other than its rule's, or whose value cannot be read, such
-//!   as one longer than the limits' cap on one value, gives `None` for its
-//!   own value; every other value is still read, and the file still opens.
-//!   Only a failure of the reader is an error: it says nothing about the
-//!   file.
-//! - The make, the model and the serial number, of the camera and of the
-//!   lens, and the software are text, read by the one rule [`text`] gives:
-//!   cut at the first NUL, `None` when longer than 255 bytes, trimmed of
-//!   spaces at both ends, `None` when nothing is left, and with bytes that
-//!   are not UTF-8 replaced by U+FFFD. The texts Exif 3.1 gives as "ASCII
-//!   or UTF-8", the make, the model, the software, the lens's make and
-//!   model, the camera's owner, the artist, the copyright notice, the
-//!   photographer, the editor and the title, are read from a value of
-//!   either type by that rule, and so is the
-//!   description, as free text without the 255-byte limit (below); the
-//!   serial numbers, which Exif gives as ASCII alone, as every MakerNote
-//!   text, only from type ASCII.
-//! - The camera's owner is the Exif CameraOwnerName, read by that rule, as
-//!   a fact of the camera beside its serial number.
-//! - The software is IFD0's Software, as written and cleaned by that rule:
-//!   the camera's firmware version, such as `Ver.1.10` from the D300's
-//!   `Ver.1.10 `, or the name of the program that last wrote the file.
-//!   Exif 3.0's CameraFirmware, which no checked file writes, is not read.
-//! - The authorship is seven texts ([`authorship`]): the artist, the
-//!   copyright notice and the description from IFD0's Artist, Copyright
-//!   and ImageDescription, never from the copies Sony writes in IFD1 and
-//!   IFD2; the photographer, the editor and the title from the Exif IFD's
-//!   Photographer, ImageEditor and ImageTitle; and the comment from its
-//!   UserComment. Each but the comment is of type ASCII or UTF-8, as Exif
-//!   3.1 gives them. The artist, the copyright notice, the photographer,
-//!   the editor and the title are read by the text rule above. The
-//!   description and the comment are free text, cleaned by that rule but
-//!   with no limit of 255 bytes, only the cap on any one value, so their
-//!   line breaks are kept. A description that is a text a camera writes
-//!   by itself, `SONY DSC`, matched whole once cleaned, is `None`
-//!   ([`description`]). The comment is the text after UserComment's
-//!   8-byte code, of type UNDEFINED, when that code is `ASCII`; under any
-//!   other code, and when the value holds no more than its code, it is
-//!   `None` ([`comment`]). Nothing is read from a MakerNote.
-//! - The location is read from the GPS IFD the walk found, wherever it
-//!   placed it ([`location`]). It needs a sound position: GPSLatitudeRef
-//!   `N` or `S` and GPSLongitudeRef `E` or `W`, each read by the text rule
-//!   and nothing else, and GPSLatitude and GPSLongitude, each exactly three
-//!   RATIONALs, degrees, minutes and seconds as stored, with no zero
-//!   denominator, minutes and seconds below 60, and no more than 90° of
-//!   latitude or 180° of longitude. Without one there is no location, and
-//!   no other GPS value is read. A zero is a real value of every GPS
-//!   fraction: 0 seconds, 0 meters and 0° are kept. The other parts each
-//!   need both their tags, of the type and count Exif gives, and a part
-//!   whose tags are missing or damaged is `None` alone: the altitude,
-//!   GPSAltitude, one RATIONAL, above its reference for a GPSAltitudeRef,
-//!   one BYTE, of 0 or 2 and below it for 1 or 3, without naming the
-//!   surface it is measured from; the GPS time, GPSDateStamp, `YYYY:MM:DD`
-//!   of type ASCII, and GPSTimeStamp, three RATIONALs with whole hours and
-//!   minutes and the seconds over a power of ten up to 10⁹, whose zeros
-//!   are the digits of the fraction kept, a date and time that exist, in
-//!   UTC ([`DateTime::from_gps`]); the image direction, GPSImgDirection,
-//!   one RATIONAL below 360°, from the north GPSImgDirectionRef names, `T`
-//!   true or `M` magnetic, with no default; and the map datum,
-//!   GPSMapDatum, of type ASCII as Exif gives it, read by the text rule,
-//!   `None` when blank, as the Z 9 writes it. GPSVersionID, GPSStatus and the
-//!   other GPS tags are not read.
-//! - The capture time is the Exif DateTimeOriginal, with its own fraction
-//!   of a second (SubSecTimeOriginal) and offset from UTC
-//!   (OffsetTimeOriginal), each of type ASCII; [`DateTime::from_exif`]
-//!   checks them. Without a DateTimeOriginal there is no capture time,
-//!   whatever fraction or offset the file records. It is never taken from
-//!   DateTimeDigitized or from IFD0's DateTime, which editors change.
-//! - The ISO is the Exif PhotographicSensitivity, of type SHORT, LONG or
-//!   IFD, its first value. When that is missing, unreadable, zero, which Exif
-//!   writes for an unknown sensitivity, or 65535, which Exif writes for one
-//!   of 65535 or more, the ISO is the RecommendedExposureIndex, or else the
-//!   ISOSpeed, each its first value and only when above zero. A 65535 that
-//!   neither replaces stands, as the least the sensitivity was; a zero
-//!   that neither replaces is `None` ([`iso`]).
-//! - The exposure time, the f-number and the focal length are the Exif
-//!   ExposureTime, FNumber and FocalLength, of type RATIONAL, their first
-//!   value as stored, read alone whatever the count, as the ISO's is.
-//!   Each is `None` when its numerator or its denominator is zero, since
-//!   Exif writes a zero for a value the camera did not know
-//!   ([`Rational::known`]). The exposure bias is the Exif
-//!   ExposureBiasValue, of type SRATIONAL, its first value as stored, read
-//!   the same way; it is `None` only when its denominator is zero, since a
-//!   zero bias, such as 0/6, is no compensation ([`SignedRational::new`]).
-//! - The focal length in 35 mm terms is the Exif FocalLengthIn35mmFilm,
-//!   exactly one SHORT, the type and count the standard gives it; it is
-//!   `None` when zero, which Exif writes for one the
-//!   camera did not know ([`focal_length_in_35mm_film`]).
-//! - The lens is described by the Exif LensMake, LensModel and
-//!   LensSerialNumber, and by the LensSpecification, of type RATIONAL and
-//!   of exactly four values: the shortest and longest focal length and the
-//!   f-number at each. A LensSpecification of any other count is ignored
-//!   whole; each of its four values is `None` when its numerator or its
-//!   denominator is zero, as a 0/0 for a value the camera did not know
-//!   ([`Rational::known`]). A LensModel made only of `-` characters, which
-//!   Sony writes for a manual lens, names no lens and is `None`. A file
-//!   whose lens tags give no value gives a lens with every value `None`
-//!   ([`lens`]).
-//! - The camera settings that Exif records come from tags of the Exif IFD,
-//!   each exactly one SHORT, as the standard gives them,
-//!   and each code Exif defines and a variant names gives that variant;
-//!   every other code, the ones Exif writes for "not defined" or "unknown"
-//!   among them, gives `None` ([`camera_settings`]):
-//!   - the exposure program is the ExposureProgram, 1 to 8; 0, "not
-//!     defined", and 9, which Exif does not define, give `None`
-//!     ([`exposure_program`]);
-//!   - the metering mode is the MeteringMode, 1 to 6 and 255, "other"; 0,
-//!     "unknown", gives `None` ([`metering_mode`]);
-//!   - the flash is the Flash, read by its bits: whether it fired, and its
-//!     mode, compulsory firing, compulsory suppression or auto, none when
-//!     the camera has no flash function; return light and red-eye
-//!     reduction are not read. A value with a reserved bit set, or that
-//!     says a flash fired on a camera without one, gives `None`
-//!     ([`flash`]);
-//!   - the white balance mode is auto for a WhiteBalance of 0; for 1,
-//!     "manual", it is the kind of light the LightSource names, such as
-//!     shade, and `None` for a light no mode stands for, such as the
-//!     standard light D65, for "unknown" and for "other"
-//!     ([`white_balance_mode`]);
-//!   - the color space is sRGB for a ColorSpace of 1, and Adobe RGB for
-//!     65535, "uncalibrated", when the Interoperability IFD's
-//!     InteropIndex, read by the text rule, is `R03`, a DCF option file;
-//!     any other ColorSpace, an "uncalibrated" one beside another index or
-//!     none, and no ColorSpace give `None` ([`color_space`]).
+//! - from IFD0, the camera's make and model, the software and the
+//!   orientation;
+//! - from the Exif IFD, the body's serial number and its owner, the capture
+//!   time ([`capture_time`]), the exposure ([`exposure`]) and the lens
+//!   ([`lens`]);
+//! - from the Exif IFD, with the Interoperability IFD, the camera settings
+//!   Exif records ([`camera_settings`]);
+//! - from IFD0 and the Exif IFD, who made the picture ([`authorship`]);
+//! - from the GPS IFD, where the picture was taken ([`location`]);
+//! - from the IFD of the raw data, the raw size and the image size
+//!   ([`sizes`]).
 //!
-//!   The other settings are recorded only in a maker's MakerNote, so they
-//!   are `None` here: the white balance's color temperature and
-//!   fine-tuning, the shutter, the electronic front curtain setting, the
-//!   image area and the raw image size. A format's MakerNote reader fills
-//!   them where its MakerNote records them, and puts the MakerNote's white
-//!   balance setting, finer than Exif's, in place of the mode read here
-//!   when the MakerNote names one, as Nikon's and Sony's readers both do.
-//!   So that a MakerNote's color space never overrules Exif's, [`read`]
-//!   also says whether the Exif IFD keeps a ColorSpace entry, of any known
-//!   type and any count, whether or not it gives a color space
-//!   ([`Standard`]): only when it keeps none may a MakerNote give the
-//!   color space, as Nikon's raw files, which record none in Exif, need.
-//!   An entry the IFD's reader skips as damaged, of an unknown type, of a
-//!   length past 32 bits or with its value outside its block, the file or
-//!   a JPEG's Exif segment, counts as none, so the MakerNote may stand in,
-//!   as for any damaged value (ADR011).
-//! - A file without an Exif IFD has no capture time, no serial number, no
-//!   exposure, no lens, none of the camera settings, and no photographer,
-//!   editor, title or comment. A file without a GPS IFD has no location.
-//! - The orientation is IFD0's Orientation, read as the preview finder reads
-//!   it ([`tiff_previews::orientation`]), so that the metadata and the
-//!   previews never disagree.
-//! - The raw size is the ImageWidth and ImageLength, of type SHORT, LONG
-//!   or IFD, of the IFD of the tree, the Exif, GPS and Interoperability
-//!   IFDs left out, that the preview finder takes for raw data
-//!   ([`tiff_previews::is_raw`]), whose width and height are both above
-//!   zero, and that has the most pixels of all such IFDs, the first in the
-//!   tree's order on a tie: a file can hold a small full-resolution raw
-//!   image beside the real one, as the public Coolpix E5700 sample 4456
-//!   does. An IFD whose tags say nothing readable either way is passed
-//!   over, as the finder passes over it. Without such an IFD there is no
-//!   raw size, and no image size.
-//! - The image size is the default crop of that same IFD, its
-//!   DefaultCropSize, when it and its DefaultCropOrigin each hold exactly
-//!   two whole numbers, the size is above zero, and the crop lies inside
-//!   the raw size; otherwise it is the raw size ([`default_crop`]). A
-//!   format whose own structures record a crop may then put it in place of
-//!   the raw size, never of a default crop, which [`read`] says it has
-//!   found ([`Standard`]): NEF puts the CropArea of Nikon's MakerNote there,
-//!   checked by the same test of a crop ([`crop`]).
+//! Each tag's type and count are its rule, in [`rules`], checked before
+//! anything is read ([`Ifd::get`]). Every name and serial number is read by
+//! one rule ([`text`]); the description and the comment are free text,
+//! without its 255-byte limit. A damaged value costs only itself. A tag that is missing,
+//! breaks its rule or cannot be read, such as one over the cap on one
+//! value, gives `None` for its own value. Every other value is still read,
+//! and the file still opens. Only a failure of the reader is an error.
+//! Every offset and length is checked before it is used, so no input makes
+//! the reader panic ([`Source`], ADR008).
 //!
-//! Nothing here panics on any input: every value is read through the IFD's
-//! checked readers, which check its offset and length against the file
-//! and cap its size (ADR008).
+//! What each tag is, and where its standard defines it, is in
+//! `docs/formats/tag-names.md`, sections 3 to 6. What the cameras write in
+//! it is in the format notes: `docs/formats/nef/makernote-and-metadata.md`,
+//! section 8, `docs/formats/arw/makernote-and-metadata.md`, section 9, and
+//! `docs/formats/jpeg/container-and-metadata.md`, section 4. A sample cited
+//! here by number is the file of that number on raw.pixls.us.
 
 use std::io::{Read, Seek};
 
@@ -215,14 +62,14 @@ use crate::rational::{Rational, SignedRational};
 
 /// The rules of the standard tags this reader reads: each tag's number,
 /// from [`tags`](crate::container::tiff::tags), and the types and count its
-/// value must have to be read (ADR011), as the module documentation gives
-/// them. [`Ifd::get`] and [`Ifd::held`] read them.
+/// value must have to be read (ADR011). [`Ifd::get`] and [`Ifd::held`] read
+/// them.
 ///
-/// The ISO's three tags and the raw size's two are read by their first
-/// value alone, whatever the count, a [`First`] rule, of type SHORT, LONG
-/// or IFD, a LONG under another name; so are the exposure's four
-/// fractions. The default crop's two tags each have two rules, for the two
-/// forms the DNG specification allows them.
+/// A [`First`] rule reads a tag's first value alone, whatever the count:
+/// the ISO's three tags, the raw size's two and the exposure's four
+/// fractions. IFD is a LONG under another name. The default crop's two
+/// tags each have two rules, for the two forms the DNG specification allows
+/// them.
 mod rules {
     use crate::container::tiff::tags;
     use crate::container::tiff::{FieldType, First, Held, Rule, Text};
@@ -321,8 +168,8 @@ mod rules {
 /// than for damage.
 ///
 /// The longest text value measured on the public sample files is 65 bytes,
-/// a lens model, so a longer one than this is not a name or a serial
-/// number a camera wrote.
+/// a lens model. A text longer than this is not a name or a serial number
+/// a camera wrote.
 const MAX_TEXT_LEN: usize = 255;
 
 /// The texts that cameras write in ImageDescription by themselves, whatever
@@ -330,10 +177,9 @@ const MAX_TEXT_LEN: usize = 255;
 /// description.
 ///
 /// Only a text measured files show a camera writes joins the list. Older
-/// Sony bodies write `SONY DSC`: in 9 bytes, or padded with spaces to 32,
-/// on 23 public ARW files and in a public sample JPEG of the DSLR-A100, as
-/// the ARW notes (section 9.8) and the JPEG notes (section 4) list. Newer
-/// Sony bodies write 32 spaces, which are no text.
+/// Sony bodies write `SONY DSC`, in ARW files and in JPEGs
+/// (`docs/formats/arw/makernote-and-metadata.md`, section 9.8, and
+/// `docs/formats/jpeg/container-and-metadata.md`, section 4).
 const PLACEHOLDER_DESCRIPTIONS: [&str; 1] = ["SONY DSC"];
 
 /// The 8 bytes that start a UserComment whose text is ASCII: the code
@@ -341,25 +187,24 @@ const PLACEHOLDER_DESCRIPTIONS: [&str; 1] = ["SONY DSC"];
 const ASCII_CODE: &[u8; 8] = b"ASCII\0\0\0";
 
 /// The PhotographicSensitivity that Exif writes for a sensitivity of 65535
-/// or more: a least value, which a RecommendedExposureIndex or an ISOSpeed
-/// replaces with the real one when the file records it.
+/// or more. It is a least value, which a RecommendedExposureIndex or an
+/// ISOSpeed replaces when the file records one.
 const ISO_65535_OR_MORE: u32 = 65535;
 
-/// What [`read`] reads from the standard tags: the metadata, and, for a
-/// format whose own structures record the same values, whether the
-/// standard tags recorded two of them: the image size as a crop of the
-/// raw IFD's, and the color space.
+/// What [`read`] reads from the standard tags: the metadata, and two facts
+/// that a format's own structures need. They say whether the standard tags
+/// recorded the image size as a crop, and the color space.
 ///
 /// The standard tags come first (ADR011). A format's own crop, such as
 /// Nikon's crop area, may replace the raw size the image size otherwise
-/// falls back on, but never a default crop; comparing the image size with
+/// falls back on, but never a default crop. Comparing the image size with
 /// the raw size cannot tell the two apart, since a default crop may cover
 /// the whole raw. A format's own color space, such as the one in Nikon's
-/// MakerNote, may stand in only where the Exif IFD holds no ColorSpace: a
-/// ColorSpace that gives none, such as a program's "uncalibrated", is
-/// still Exif's word, and a MakerNote the program left behind may describe
-/// a picture that is no longer there. The color space `None` cannot tell
-/// the two apart.
+/// MakerNote, may stand in only where the Exif IFD holds no ColorSpace. A
+/// ColorSpace that gives none, such as a program's "uncalibrated", is still
+/// Exif's word, and a MakerNote the program left behind may describe a
+/// picture that is no longer there. The color space `None` cannot tell the
+/// two apart.
 #[derive(Debug, Default)]
 pub(crate) struct Standard {
     /// The metadata, every value of it from the standard tags.
@@ -368,25 +213,27 @@ pub(crate) struct Standard {
     /// it is the raw size, or there is no image size.
     pub(crate) from_default_crop: bool,
     /// Whether the Exif IFD keeps a ColorSpace entry, of any known type and
-    /// any count, whether or not it gives a color space; `false` when
-    /// there is no Exif IFD, and when the IFD's reader skipped the entry
-    /// as damaged, of an unknown type, of a length past 32 bits or with its
-    /// value outside its block, the file or a JPEG's Exif segment
-    /// ([`Ifd::entry`]).
+    /// any count, whether or not it gives a color space. `false` when there
+    /// is no Exif IFD, and when the IFD's reader skipped the entry as
+    /// damaged ([`Ifd::entry`]), so that the MakerNote may stand in.
     pub(crate) exif_records_color_space: bool,
 }
 
 /// Reads the metadata that `tree` records, the IFDs of a TIFF-based file
-/// in `src` or of the Exif segment of a JPEG file in `src`, with whether
-/// its image size is a default crop and whether its Exif IFD holds a
-/// ColorSpace.
+/// in `src` or of a JPEG file's Exif segment ([`Standard`]).
 ///
-/// See the [module documentation](self) for the rules.
+/// The software is IFD0's Software, as written and cleaned by [`text`]: a
+/// camera's firmware version, or the name of the program that last wrote
+/// the file. The
+/// owner is the Exif CameraOwnerName, a fact of the camera beside its
+/// serial number. The orientation is the preview finder's
+/// ([`tiff_previews::orientation`]). A file without an Exif IFD has no
+/// capture time, serial number, owner, exposure, lens or camera settings,
+/// and a file without a GPS IFD has no location.
 ///
 /// # Errors
 ///
-/// `Io` when the reader fails. A value that cannot be read for any other
-/// reason is `None`, and costs no other value.
+/// `Io` when the reader fails.
 pub(crate) fn read<R: Read + Seek>(src: &mut Source<R>, tree: &Tree) -> Result<Standard> {
     let ifd0 = tree.ifd0();
     let (serial_number, owner_name, capture_time, exposure, camera_settings, lens) =
@@ -444,28 +291,25 @@ pub(crate) fn read<R: Read + Seek>(src: &mut Source<R>, tree: &Tree) -> Result<S
     })
 }
 
-/// The text of the tag `rule` names in `ifd`, cleaned as every text value
-/// of the metadata is, such as the camera's make and serial number, whether
-/// a standard tag or a format's own, such as the serial number in Nikon's
-/// MakerNote, records it.
+/// The text of the tag `rule` names in `ifd`, by the one rule every text
+/// value of the metadata is read by. A format's own tags use it too, such
+/// as the serial number in Nikon's MakerNote.
 ///
-/// The value must be of a type the rule names: ASCII, or ASCII or UTF-8
-/// for the texts Exif 3.1 gives as "ASCII or UTF-8", such as the Make, the
-/// Model and the LensModel. It ends at its first NUL, or with the value
-/// when there is none. When what is before the NUL is longer than
-/// [`MAX_TEXT_LEN`] bytes, counted as stored, before any trimming or
+/// The value must be of a type the rule names: ASCII or UTF-8 where Exif
+/// 3.1 allows both, and ASCII alone otherwise and in every MakerNote
+/// (ADR011). It ends at its first NUL, or
+/// with the value when there is none. When what is before the NUL is longer
+/// than [`MAX_TEXT_LEN`] bytes, counted as stored, before any trimming or
 /// replacement, it is damage and `None`. Spaces at either end are padding
-/// and are dropped, as in the DSLR-A100's Make, `SONY` and eleven spaces;
-/// spaces inside the text, and any other blank such as a tab, are kept, as
+/// and are dropped, as in the DSLR-A100's Make, `SONY` and eleven spaces.
+/// Spaces inside the text, and any other blank such as a tab, are kept, as
 /// the capture time's reading and the formats' Make test keep them. Text
 /// that is empty once trimmed, as a value of NULs or of spaces only, is
 /// `None`. Bytes that are not UTF-8 become U+FFFD, whatever the type says.
 ///
 /// # Errors
 ///
-/// `Io` when the reader fails. A value that cannot be read for any other
-/// reason, such as one longer than the limits' cap on one value
-/// ([`Limits::max_value_bytes`](crate::Limits::max_value_bytes)), is `None`.
+/// `Io` when the reader fails.
 pub(crate) fn text<R: Read + Seek>(
     src: &mut Source<R>,
     ifd: &Ifd,
@@ -483,21 +327,19 @@ fn short_text(bytes: Option<Vec<u8>>) -> Option<String> {
         .and_then(|bytes| clean_text(&bytes))
 }
 
-/// Who made the picture and what they wrote about it, from `tree`: the
-/// artist, the copyright notice and the description from IFD0, and the
-/// photographer, the editor, the title and the comment from the Exif IFD.
+/// Who made the picture and what they wrote about it, from `tree`. The
+/// artist, the copyright notice and the description are IFD0's, and the
+/// photographer, the editor, the title and the comment the Exif IFD's.
 ///
 /// IFD0's texts are read from IFD0 alone: the copies Sony writes in IFD1
-/// and IFD2 are not read. The artist, the copyright notice, the
-/// photographer, the editor and the title are read by [`text`]; the
-/// description by [`description`] and the
-/// comment by [`comment`], as free text. A file without an Exif IFD gives
-/// no photographer, editor, title or comment.
+/// and IFD2 are not read. The description ([`description`]) and the comment
+/// ([`comment`]) are free text, and the others are read by [`text`]. A file
+/// without an Exif IFD gives no photographer, editor, title or comment.
+/// Nothing is read from a MakerNote.
 ///
 /// # Errors
 ///
-/// `Io` when the reader fails. A value that cannot be read for any other
-/// reason is `None`, and costs no other value.
+/// `Io` when the reader fails.
 fn authorship<R: Read + Seek>(src: &mut Source<R>, tree: &Tree) -> Result<Authorship> {
     let ifd0 = tree.ifd0();
     let mut authorship = Authorship {
@@ -516,9 +358,9 @@ fn authorship<R: Read + Seek>(src: &mut Source<R>, tree: &Tree) -> Result<Author
 }
 
 /// What the picture shows, from IFD0 `ifd0`'s ImageDescription, of type
-/// ASCII or UTF-8: free text, cut at its first NUL and cleaned as every
-/// text is, with no limit of 255 bytes, only the cap on any one value, and
-/// with its line breaks kept.
+/// ASCII or UTF-8. It is free text, cut at its first NUL and cleaned as
+/// every text is, with its line breaks kept. It has no limit of 255 bytes,
+/// only the cap on any one value.
 ///
 /// `None` when the cleaned text is one of [`PLACEHOLDER_DESCRIPTIONS`],
 /// whole, whatever the camera's Make: a text a camera writes by itself is
@@ -527,8 +369,7 @@ fn authorship<R: Read + Seek>(src: &mut Source<R>, tree: &Tree) -> Result<Author
 ///
 /// # Errors
 ///
-/// `Io` when the reader fails. A value that cannot be read for any other
-/// reason, such as one longer than the cap, is `None`.
+/// `Io` when the reader fails.
 fn description<R: Read + Seek>(src: &mut Source<R>, ifd0: &Ifd) -> Result<Option<String>> {
     let Some(bytes) = ifd0.get(src, rules::IMAGE_DESCRIPTION)? else {
         return Ok(None);
@@ -537,19 +378,19 @@ fn description<R: Read + Seek>(src: &mut Source<R>, ifd0: &Ifd) -> Result<Option
 }
 
 /// A comment on the picture, from the Exif IFD `exif`'s UserComment, of
-/// type UNDEFINED: the text after its 8-byte code when the code is
-/// [`ASCII_CODE`], cut at its first NUL and cleaned as every text is, with
-/// no limit of 255 bytes, only the cap on any one value, and with its line
-/// breaks kept.
+/// type UNDEFINED: the text after its 8-byte code, when the code is
+/// [`ASCII_CODE`]. It is cut at its first NUL and cleaned as every text is,
+/// with its line breaks kept. It has no limit of 255 bytes, only the cap on
+/// any one value.
 ///
 /// `None` under any other code: the undefined code of eight NULs, `JIS`,
-/// `UNICODE`, which Exif defines as UTF-8, and a code Exif does not list;
-/// and when the value is no longer than its code, or of another type.
+/// `UNICODE`, which Exif defines as UTF-8, or a code Exif does not list.
+/// `None` too when the value is no longer than its code, or of another
+/// type.
 ///
 /// # Errors
 ///
-/// `Io` when the reader fails. A value that cannot be read for any other
-/// reason, such as one longer than the cap, is `None`.
+/// `Io` when the reader fails.
 fn comment<R: Read + Seek>(src: &mut Source<R>, exif: &Ifd) -> Result<Option<String>> {
     let Some(bytes) = exif.get(src, rules::USER_COMMENT)? else {
         return Ok(None);
@@ -562,14 +403,14 @@ fn comment<R: Read + Seek>(src: &mut Source<R>, exif: &Ifd) -> Result<Option<Str
 ///
 /// The position needs GPSLatitudeRef `N` or `S` and GPSLongitudeRef `E` or
 /// `W`, each read by [`text`], and GPSLatitude and GPSLongitude, each
-/// exactly three RATIONALs that [`Latitude`] or
-/// [`Longitude`] accepts; without one there is no location, and no other
-/// GPS value is read. The other parts each need both their tags, and a
-/// part whose tags are missing or damaged is `None` alone:
+/// exactly three RATIONALs that [`Latitude`] or [`Longitude`] accepts.
+/// Without one there is no location, and no other GPS value is read. The
+/// other parts each need both their tags, and a part whose tags are missing
+/// or damaged is `None` alone:
 ///
 /// - the altitude, GPSAltitude, exactly one RATIONAL with a denominator
-///   above zero, above its reference for a GPSAltitudeRef of 0 or 2 and
-///   below it for 1 or 3, exactly one BYTE;
+///   above zero. It is above its reference for a GPSAltitudeRef, exactly
+///   one BYTE, of 0 or 2, and below it for 1 or 3 ([`Altitude`]);
 /// - the time, GPSDateStamp, of type ASCII, and GPSTimeStamp, exactly
 ///   three RATIONALs, as [`DateTime::from_gps`] reads them;
 /// - the image direction, GPSImgDirection, exactly one RATIONAL that
@@ -581,8 +422,7 @@ fn comment<R: Read + Seek>(src: &mut Source<R>, exif: &Ifd) -> Result<Option<Str
 ///
 /// # Errors
 ///
-/// `Io` when the reader fails. A value that cannot be read for any other
-/// reason is `None`, and costs no other value.
+/// `Io` when the reader fails.
 fn location<R: Read + Seek>(src: &mut Source<R>, gps: &Ifd) -> Result<Option<Location>> {
     let latitude = match text(src, gps, rules::GPS_LATITUDE_REF)?.as_deref() {
         Some("N") => Latitude::north,
@@ -647,18 +487,18 @@ fn location<R: Read + Seek>(src: &mut Source<R>, gps: &Ifd) -> Result<Option<Loc
 
 /// When the picture was taken, from the Exif IFD `exif`: its
 /// DateTimeOriginal, with its SubSecTimeOriginal and OffsetTimeOriginal
-/// when the file records them, all three of type ASCII, as
+/// when the file records them. All three are of type ASCII, as
 /// [`DateTime::from_exif`] reads them.
 ///
 /// `None` when there is no DateTimeOriginal that can be read, or when it
 /// names no real date and time, such as an unset clock. A fraction of a
 /// second or an offset that cannot be read is left out, and the time
-/// stands without it.
+/// stands without it. The time is never taken from DateTimeDigitized or
+/// from IFD0's DateTime, which editors change.
 ///
 /// # Errors
 ///
-/// `Io` when the reader fails. A value that cannot be read for any other
-/// reason is missing.
+/// `Io` when the reader fails.
 fn capture_time<R: Read + Seek>(src: &mut Source<R>, exif: &Ifd) -> Result<Option<DateTime>> {
     let Some(date) = exif.get(src, rules::DATE_TIME_ORIGINAL)? else {
         return Ok(None);
@@ -672,15 +512,17 @@ fn capture_time<R: Read + Seek>(src: &mut Source<R>, exif: &Ifd) -> Result<Optio
     ))
 }
 
-/// The exposure the picture was taken with, from the Exif IFD `exif`: the
-/// ISO, as [`iso`] reads it, the four fractions, as [`rational`] and
-/// [`signed_rational`] read them, and the focal length in 35 mm terms, as
-/// [`focal_length_in_35mm_film`] reads it.
+/// The exposure the picture was taken with, from the Exif IFD `exif`:
+///
+/// - the ISO, as [`iso`] reads it;
+/// - the exposure time, the f-number and the focal length, as [`rational`]
+///   reads them, and the exposure bias, as [`signed_rational`] reads it;
+/// - the focal length in 35 mm terms, as [`focal_length_in_35mm_film`]
+///   reads it.
 ///
 /// # Errors
 ///
-/// `Io` when the reader fails. A value that cannot be read for any other
-/// reason is `None`, and costs no other value.
+/// `Io` when the reader fails.
 fn exposure<R: Read + Seek>(src: &mut Source<R>, exif: &Ifd) -> Result<Exposure> {
     Ok(Exposure {
         iso: iso(src, exif)?,
@@ -693,10 +535,10 @@ fn exposure<R: Read + Seek>(src: &mut Source<R>, exif: &Ifd) -> Result<Exposure>
 }
 
 /// The focal length in 35 mm terms, in whole millimeters, from the Exif
-/// IFD `exif`: its FocalLengthIn35mmFilm, which must be exactly one SHORT,
+/// IFD `exif`'s FocalLengthIn35mmFilm. The tag must be exactly one SHORT,
 /// the type and count the standard gives it. `None` when the value is
 /// zero, which Exif writes for a focal length the camera did not know, as
-/// the ILCE-7S does with a manual lens (public sample 1582).
+/// the ILCE-7S does with a manual lens (sample 1582).
 fn focal_length_in_35mm_film(exif: &Ifd) -> Option<u32> {
     let [millimeters] = exif.held(rules::FOCAL_LENGTH_IN_35MM_FILM)?;
     (millimeters > 0).then_some(millimeters)
@@ -704,21 +546,19 @@ fn focal_length_in_35mm_film(exif: &Ifd) -> Option<u32> {
 
 /// The ISO the picture was taken at, from the Exif IFD `exif`.
 ///
-/// It is the first value of the PhotographicSensitivity, of type SHORT or
-/// LONG, or IFD, a LONG under another name, read alone whatever the count
-/// ([`First`]). Exif gives two of its values a meaning of their own:
-/// zero, a sensitivity the camera did not know, and 65535
-/// ([`ISO_65535_OR_MORE`]), one of 65535 or more. For those, and when the
-/// tag is missing or cannot be read, the ISO is the first value of the
-/// RecommendedExposureIndex, or else that of the ISOSpeed, each read the
-/// same way and taken only when above zero; the two are read only then.
-/// When neither gives one, a 65535 stands, since the sensitivity was at
-/// least that, and anything else is `None`.
+/// It is the first value of the PhotographicSensitivity, of type SHORT,
+/// LONG or IFD, read alone whatever the count ([`First`]). Exif gives two
+/// of its values a meaning of their own: zero, a sensitivity the camera did
+/// not know, and 65535 ([`ISO_65535_OR_MORE`]), one of 65535 or more. For
+/// those, and when the tag is missing or cannot be read, the ISO is the
+/// first value of the RecommendedExposureIndex, or else of the ISOSpeed.
+/// Each is read the same way, and taken only when above zero. The two are
+/// read only then. When neither gives one, a 65535 stands, since the
+/// sensitivity was at least that, and anything else is `None`.
 ///
 /// # Errors
 ///
-/// `Io` when the reader fails. A value that cannot be read for any other
-/// reason is missing.
+/// `Io` when the reader fails.
 fn iso<R: Read + Seek>(src: &mut Source<R>, exif: &Ifd) -> Result<Option<u32>> {
     let sensitivity = exif.get(src, rules::PHOTOGRAPHIC_SENSITIVITY)?;
     if let Some(iso) = sensitivity.filter(|&iso| iso != 0 && iso != ISO_65535_OR_MORE) {
@@ -733,13 +573,13 @@ fn iso<R: Read + Seek>(src: &mut Source<R>, exif: &Ifd) -> Result<Option<u32>> {
 }
 
 /// The first fraction of the tag `rule` names in `ifd`, which must be of
-/// type RATIONAL, as stored, read alone whatever the count; `None` when its
-/// numerator or its denominator is zero ([`Rational::known`]).
+/// type RATIONAL, as stored, read alone whatever the count. `None` when its
+/// numerator or its denominator is zero ([`Rational::known`]): Exif writes
+/// a zero for a value the camera did not know.
 ///
 /// # Errors
 ///
-/// `Io` when the reader fails. A value that cannot be read for any other
-/// reason is `None`.
+/// `Io` when the reader fails.
 fn rational<R: Read + Seek>(
     src: &mut Source<R>,
     ifd: &Ifd,
@@ -750,13 +590,13 @@ fn rational<R: Read + Seek>(
 }
 
 /// The first fraction of the tag `rule` names in `ifd`, which must be of
-/// type SRATIONAL, as stored, read alone whatever the count; `None` when
-/// its denominator is zero ([`SignedRational::new`]).
+/// type SRATIONAL, as stored, read alone whatever the count. `None` only
+/// when its denominator is zero ([`SignedRational::new`]): a zero bias,
+/// such as 0/6, is a real value, no compensation.
 ///
 /// # Errors
 ///
-/// `Io` when the reader fails. A value that cannot be read for any other
-/// reason is `None`.
+/// `Io` when the reader fails.
 fn signed_rational<R: Read + Seek>(
     src: &mut Source<R>,
     ifd: &Ifd,
@@ -767,20 +607,18 @@ fn signed_rational<R: Read + Seek>(
 }
 
 /// The lens the picture was taken with, from the Exif IFD `exif`: its
-/// LensMake, LensModel and LensSerialNumber, read by the rule [`text`]
-/// gives, and its range from the LensSpecification, as
-/// [`lens_specification`] reads it. A file with none of these tags, or
-/// none that can be read, gives a lens with every value `None`.
+/// LensMake, LensModel and LensSerialNumber, each read by [`text`], and its
+/// range ([`lens_specification`]). A file with none of these tags, or none
+/// that can be read, gives a lens with every value `None`.
 ///
 /// A LensModel made only of `-` characters is `None`: Sony writes `----`
-/// for a manual lens, as on the public ILCE-7S sample 1582, and that names
-/// no lens. Only the model is read this way; a model with dashes among
-/// other characters, such as `FE 24-70mm F2.8 GM`, is kept.
+/// for a manual lens, as the ILCE-7S does (sample 1582), and that names no
+/// lens. Only the model is read this way; a model with dashes among other
+/// characters, such as `FE 24-70mm F2.8 GM`, is kept.
 ///
 /// # Errors
 ///
-/// `Io` when the reader fails. A value that cannot be read for any other
-/// reason is `None`, and costs no other value.
+/// `Io` when the reader fails.
 fn lens<R: Read + Seek>(src: &mut Source<R>, exif: &Ifd) -> Result<Lens> {
     let recorded_make = text(src, exif, rules::LENS_MAKE)?;
     let recorded_model =
@@ -800,17 +638,16 @@ fn lens<R: Read + Seek>(src: &mut Source<R>, exif: &Ifd) -> Result<Lens> {
 /// shortest and longest focal length, then the f-number at each, in the
 /// order the tag stores them.
 ///
-/// The tag must be of type RATIONAL and hold exactly four values; with any
+/// The tag must be of type RATIONAL and hold exactly four values. With any
 /// other count it describes no range the reader can trust, and all four
-/// are `None`, without a read.
-/// Each value is `None` when its numerator or its denominator is zero
-/// ([`Rational::known`]): Exif writes 0/0 for a value the camera did not
-/// know, such as the apertures of a lens that does not report them.
+/// are `None`, without a read. Each value is `None` when its numerator or
+/// its denominator is zero ([`Rational::known`]). Exif writes 0/0 for a
+/// value the camera did not know, such as the apertures of a lens that does
+/// not report them.
 ///
 /// # Errors
 ///
-/// `Io` when the reader fails. A value that cannot be read for any other
-/// reason gives four `None`s.
+/// `Io` when the reader fails.
 fn lens_specification<R: Read + Seek>(
     src: &mut Source<R>,
     exif: &Ifd,
@@ -831,25 +668,31 @@ const UNCALIBRATED: u32 = 0xFFFF;
 /// The InteropIndex of a DCF option file, which names Adobe RGB beside a
 /// ColorSpace of [`UNCALIBRATED`].
 ///
-/// Exif gives the index only the meaning "DCF option file"; that such a
+/// Exif gives the index only the meaning "DCF option file". That such a
 /// file is in Adobe RGB is from ExifTool's published documentation of the
-/// tag, read as documentation, and the camera files the JPEG format notes
-/// checked agree (section 4 of those notes). ADR011 reads it so.
+/// tag, read as documentation. The camera files the JPEG notes checked
+/// agree (`docs/formats/jpeg/container-and-metadata.md`, section 4), and
+/// ADR011 reads it so.
 const DCF_OPTION_FILE: &str = "R03";
 
 /// How the camera was set for the picture, as the Exif IFD `exif` records
-/// it, with the Interoperability IFD `interop`, when the tree has one, for
-/// the color space: the exposure program, the metering mode, the flash,
-/// the white balance mode and the color space, as the
-/// [module documentation](self) gives their rules.
+/// it: the exposure program, the metering mode, the flash, the white
+/// balance mode and the color space. The color space also reads the
+/// Interoperability IFD `interop`, when the tree has one.
 ///
-/// The other settings, which only a maker's MakerNote records, are `None`,
-/// for a format's MakerNote reader to fill.
+/// Each tag must be exactly one SHORT, as the standard gives it. Each code
+/// Exif defines and a variant names gives that variant. Every other code,
+/// the ones Exif writes for "not defined" or "unknown" among them, gives
+/// `None`.
+///
+/// The other settings, which only a maker's MakerNote records, are `None`.
+/// A format's MakerNote reader fills them where its MakerNote records them.
+/// It also puts the MakerNote's white balance setting, finer than Exif's,
+/// in place of the mode read here, when the MakerNote names one.
 ///
 /// # Errors
 ///
-/// `Io` when the reader fails. A value that cannot be read for any other
-/// reason is `None`, and costs no other value.
+/// `Io` when the reader fails.
 fn camera_settings<R: Read + Seek>(
     src: &mut Source<R>,
     exif: &Ifd,
@@ -870,11 +713,11 @@ fn camera_settings<R: Read + Seek>(
             .held(rules::METERING_MODE)
             .and_then(|[code]| metering_mode(code)),
         flash: exif.held(rules::FLASH).and_then(|[bits]| flash(bits)),
-        // Only a maker's MakerNote records these: Nikon's reader fills
-        // all but the electronic front curtain setting, which Nikon does
-        // not record, and Sony's reader that setting alone, since Sony
-        // records the others only in enciphered blocks or, for the raw
-        // size, in a code that does not tell APS-C from medium.
+        // Only a maker's MakerNote records these. Nikon's reader fills all
+        // but the electronic front curtain setting, which Nikon does not
+        // record. Sony's reader fills that setting alone: Sony records the
+        // others only in enciphered blocks or, for the raw size, in a code
+        // that does not tell APS-C from medium.
         shutter: None,
         electronic_front_curtain_setting: None,
         image_area: None,
@@ -918,19 +761,23 @@ fn metering_mode(code: u32) -> Option<MeteringMode> {
     })
 }
 
-/// The flash an Exif Flash value `bits` records, by its bits: bit 0
-/// whether it fired, bits 3 and 4 its mode, and bit 5 that the camera has
-/// no flash function. Bits 1 and 2, whether the flash's return light was
-/// detected, and bit 6, red-eye reduction, are not read.
+/// The flash an Exif Flash value `bits` records, by its bits:
+///
+/// - bit 0, whether it fired;
+/// - bits 3 and 4, its mode;
+/// - bit 5, that the camera has no flash function.
+///
+/// Bits 1 and 2, whether the flash's return light was detected, and bit 6,
+/// red-eye reduction, are not read.
 ///
 /// The mode is 1 [`Fill`](FlashMode::Fill) ("compulsory flash firing"), 2
 /// [`Off`](FlashMode::Off) ("compulsory flash suppression") and 3
-/// [`Auto`](FlashMode::Auto); 0, "unknown", gives no mode, and so does
+/// [`Auto`](FlashMode::Auto). 0, "unknown", gives no mode, and so does
 /// bit 5, since a camera without a flash function has no flash mode.
 ///
 /// `None` when any of the reserved bits 7 to 15 is set, which no camera
-/// writes, and when bits 0 and 5 are both set, a flash that fired on a
-/// camera without one: the value contradicts itself. `bits` is a SHORT
+/// writes. `None` too when bits 0 and 5 are both set, a flash that fired on
+/// a camera without one: the value contradicts itself. `bits` is a SHORT
 /// widened, so no bit above 15 is set.
 fn flash(bits: u32) -> Option<Flash> {
     const FIRED: u32 = 1;
@@ -971,19 +818,24 @@ fn white_balance_mode(exif: &Ifd) -> Option<WhiteBalanceMode> {
 }
 
 /// The white balance mode a manual white balance set for the light an
-/// Exif LightSource `code` names: 1 daylight and 9 fine weather give
-/// [`Daylight`](WhiteBalanceMode::Daylight), 10 cloudy weather
-/// [`Cloudy`](WhiteBalanceMode::Cloudy), 11 shade
-/// [`Shade`](WhiteBalanceMode::Shade), 3 tungsten and 24 ISO studio
-/// tungsten [`Tungsten`](WhiteBalanceMode::Tungsten), 2 fluorescent and 12
-/// to 16, its five kinds of lamp,
-/// [`Fluorescent`](WhiteBalanceMode::Fluorescent), and 4 flash
-/// [`Flash`](WhiteBalanceMode::Flash).
+/// Exif LightSource `code` names:
 ///
-/// `None` for every other code: 0, "unknown"; 17 to 23, the standard
-/// lights A to D50, and 25 to 34, light sources and LEDs by color
-/// temperature, which name a light no mode stands for; 255, "other"; and
-/// every code Exif does not define.
+/// - 1 daylight and 9 fine weather give
+///   [`Daylight`](WhiteBalanceMode::Daylight);
+/// - 10 cloudy weather gives [`Cloudy`](WhiteBalanceMode::Cloudy);
+/// - 11 shade gives [`Shade`](WhiteBalanceMode::Shade);
+/// - 3 tungsten and 24 ISO studio tungsten give
+///   [`Tungsten`](WhiteBalanceMode::Tungsten);
+/// - 2 fluorescent and 12 to 16, its five kinds of lamp, give
+///   [`Fluorescent`](WhiteBalanceMode::Fluorescent);
+/// - 4 flash gives [`Flash`](WhiteBalanceMode::Flash).
+///
+/// `None` for every other code, since no mode stands for its light:
+///
+/// - 0, "unknown", and 255, "other";
+/// - 17 to 23, the standard lights A to D50;
+/// - 25 to 34, light sources and LEDs by color temperature;
+/// - every code Exif does not define.
 fn white_balance_of_light(code: u32) -> Option<WhiteBalanceMode> {
     Some(match code {
         1 | 9 => WhiteBalanceMode::Daylight,
@@ -997,21 +849,24 @@ fn white_balance_of_light(code: u32) -> Option<WhiteBalanceMode> {
 }
 
 /// The color space the Exif IFD `exif` records in its ColorSpace, exactly
-/// one SHORT: [`SRGB`] is sRGB, and [`UNCALIBRATED`] is
-/// Adobe RGB when the Interoperability IFD `interop` holds the
-/// InteropIndex [`DCF_OPTION_FILE`], read as every text is ([`text`]).
+/// one SHORT. [`SRGB`] is sRGB, and [`UNCALIBRATED`] is Adobe RGB when the
+/// Interoperability IFD `interop` holds the InteropIndex
+/// [`DCF_OPTION_FILE`], read by [`text`].
 ///
-/// `None` when the ColorSpace is missing, cannot be read or holds another
-/// code, such as 2, which Exif does not define; and for an "uncalibrated"
-/// one without an Interoperability IFD, or whose InteropIndex is missing,
-/// cannot be read or is another, such as `R98`, a DCF basic file. The
-/// InteropIndex is read only for an "uncalibrated" ColorSpace: with sRGB,
-/// it changes nothing.
+/// `None` when:
+///
+/// - the ColorSpace is missing, cannot be read or holds another code, such
+///   as 2, which Exif does not define;
+/// - it is "uncalibrated", and there is no Interoperability IFD, or its
+///   InteropIndex is missing, cannot be read or is another, such as `R98`,
+///   a DCF basic file.
+///
+/// The InteropIndex is read only for an "uncalibrated" ColorSpace: with
+/// sRGB, it changes nothing.
 ///
 /// # Errors
 ///
-/// `Io` when the reader fails. A value that cannot be read for any other
-/// reason is `None`.
+/// `Io` when the reader fails.
 fn color_space<R: Read + Seek>(
     src: &mut Source<R>,
     exif: &Ifd,
@@ -1030,26 +885,25 @@ fn color_space<R: Read + Seek>(
     }
 }
 
-/// The raw size and the default crop of the file whose IFDs are `tree`:
-/// both from the largest IFD that holds raw data and says how large it is,
-/// or both `None` when no IFD does.
+/// The raw size and the default crop of the file whose IFDs are `tree`.
+/// Both come from the largest IFD that holds raw data and says how large it
+/// is, and both are `None` when no IFD does.
 ///
-/// The IFDs are asked in the tree's order, except the Exif IFD, which holds
-/// capture metadata, the GPS IFD, which holds where the picture was taken,
-/// and the Interoperability IFD, which names the rule the file follows:
-/// none of them ever holds an image. An IFD counts as raw data
-/// when the preview finder says so ([`tiff_previews::is_raw`]); one whose
-/// tags that test reads cannot be read is passed over, as the finder passes
-/// over it. A raw IFD counts only when [`raw_size`] reads a size from it.
-/// Of those, the one with the most pixels gives the raw size, the first on
-/// a tie: the Coolpix E5700 (public sample 4456) writes a 656 by 484 raw
-/// image before its 2576 by 1924 one, both full-resolution. The crop is
-/// then that IFD's [`default_crop`], `None` when it has none.
+/// The IFDs are asked in the tree's order, but the Exif, GPS and
+/// Interoperability IFDs, which never hold an image
+/// ([`Link::holds_no_image`](crate::container::tiff::Link::holds_no_image)).
+/// An IFD counts as raw data when the preview finder says so
+/// ([`tiff_previews::is_raw`]). One whose tags that test reads cannot be
+/// read is passed over, as the finder passes over it. A raw IFD counts only
+/// when [`raw_size`] reads a size from it. Of those, the one with the most
+/// pixels gives the raw size, the first on a tie. The Coolpix E5700 writes
+/// a 656 by 484 raw image before its 2576 by 1924 one, both full-resolution
+/// (sample 4456). The crop is then that IFD's [`default_crop`], `None` when
+/// it has none.
 ///
 /// # Errors
 ///
-/// `Io` when the reader fails. A value that cannot be read for any other
-/// reason costs only what it would have given.
+/// `Io` when the reader fails.
 fn sizes<R: Read + Seek>(src: &mut Source<R>, tree: &Tree) -> Result<(Option<Size>, Option<Size>)> {
     let mut largest: Option<(&Ifd, Size)> = None;
     for (link, ifd) in tree.iter() {
@@ -1074,14 +928,13 @@ fn sizes<R: Read + Seek>(src: &mut Source<R>, tree: &Tree) -> Result<(Option<Siz
 }
 
 /// The size of the raw data `ifd` describes: its ImageWidth and
-/// ImageLength, each of type SHORT, LONG or IFD, each its first value,
-/// read alone whatever the count.
-/// `None` when either is missing, cannot be read or is zero.
+/// ImageLength, each of type SHORT, LONG or IFD, each its first value, read
+/// alone whatever the count. `None` when either is missing, cannot be read
+/// or is zero.
 ///
 /// # Errors
 ///
-/// `Io` when the reader fails. A value that cannot be read for any other
-/// reason is missing.
+/// `Io` when the reader fails.
 fn raw_size<R: Read + Seek>(src: &mut Source<R>, ifd: &Ifd) -> Result<Option<Size>> {
     let width = ifd.get(src, rules::IMAGE_WIDTH)?;
     let height = ifd.get(src, rules::IMAGE_LENGTH)?;
@@ -1095,14 +948,14 @@ fn raw_size<R: Read + Seek>(src: &mut Source<R>, ifd: &Ifd) -> Result<Option<Siz
 /// the size its DefaultCropSize gives, when the crop can be trusted.
 ///
 /// The crop needs both its DefaultCropOrigin, the column and the row where
-/// it starts, and its DefaultCropSize, its width and height, each exactly
-/// two whole numbers as [`whole_pair`] reads them, and it must be one that
-/// [`crop`] accepts. `None` otherwise, for the caller to take the raw size.
+/// it starts, and its DefaultCropSize, its width and height. Each must be
+/// exactly two whole numbers, as [`whole_pair`] reads them, and the crop
+/// one that [`crop`] accepts. `None` otherwise, for the caller to take the
+/// raw size.
 ///
 /// # Errors
 ///
-/// `Io` when the reader fails. A value that cannot be read for any other
-/// reason is missing.
+/// `Io` when the reader fails.
 fn default_crop<R: Read + Seek>(src: &mut Source<R>, ifd: &Ifd, raw: Size) -> Result<Option<Size>> {
     let origin = (
         rules::DEFAULT_CROP_ORIGIN,
@@ -1118,11 +971,11 @@ fn default_crop<R: Read + Seek>(src: &mut Source<R>, ifd: &Ifd, raw: Size) -> Re
     Ok(crop([x, y], size, raw))
 }
 
-/// The size of the crop whose first column and row are `x` and `y` and
-/// whose size is `width` by `height`, in raw data of size `raw`, when the
-/// crop can be trusted: its size is above zero, and it lies inside the raw
-/// data, the start plus the size, in each direction, at most the raw size,
-/// a sum that overflows being outside. `None` otherwise.
+/// The size of the crop at column `x` and row `y`, of `width` by `height`,
+/// in raw data of size `raw`, when the crop can be trusted. It can when its
+/// size is above zero and it lies inside the raw data. In each direction,
+/// the start plus the size is then at most the raw size, and a sum that
+/// overflows is outside. `None` otherwise.
 ///
 /// The one test for every crop a file records, the DNG default crop here
 /// and a format's own, such as Nikon's crop area.
@@ -1133,18 +986,19 @@ pub(crate) fn crop([x, y]: [u32; 2], [width, height]: [u32; 2], raw: Size) -> Op
     (inside(x, width, raw.width) && inside(y, height, raw.height)).then_some(Size { width, height })
 }
 
-/// The two whole numbers a tag of `ifd` holds, in the forms the DNG
-/// specification allows its crop tags, each with its rule: two integers
-/// of type SHORT or LONG, or IFD, a LONG under another name, by the first
-/// rule of `rules`; or two fractions of type RATIONAL whose every
-/// denominator is 1, by the second. `None` when the tag is missing, cannot
-/// be read, holds a fraction with another denominator, or holds other
-/// than two values, which is not read.
+/// The two whole numbers a tag of `ifd` holds, in either form the DNG
+/// specification allows its crop tags, each with its rule:
+///
+/// - two integers of type SHORT, LONG or IFD, by the first rule of `rules`;
+/// - two fractions of type RATIONAL whose every denominator is 1, by the
+///   second.
+///
+/// `None` when the tag is missing, cannot be read, holds a fraction with
+/// another denominator, or holds other than two values, which is not read.
 ///
 /// # Errors
 ///
-/// `Io` when the reader fails. A value that cannot be read for any other
-/// reason is missing.
+/// `Io` when the reader fails.
 fn whole_pair<R: Read + Seek>(
     src: &mut Source<R>,
     ifd: &Ifd,
