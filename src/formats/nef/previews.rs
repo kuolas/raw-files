@@ -2,18 +2,15 @@
 
 //! Where a NEF file keeps its previews, and how the reader finds them.
 //!
-//! A Nikon camera writes several JPEG previews next to the raw data. Some
-//! recent bodies, the Z 9 among them, put a small one in IFD0; the
-//! full-size one, and on bodies from about 2012 on a medium one of about
-//! 1620 by 1080 pixels, sit in SubIFDs, in an order that varies between
-//! bodies. The MakerNote's PreviewIFD holds a small one too, which on the
-//! oldest bodies is the only JPEG: the MakerNote reader finds it in the
-//! MakerNote that the NEF reader has read once for the whole file, and it
-//! joins the search as the one candidate the reader adds outside the tree.
+//! A Nikon camera writes several JPEG previews beside the raw data: in the
+//! SubIFDs, in IFD0 on some recent bodies, and in the MakerNote's
+//! PreviewIFD. The shared TIFF preview finder finds them over the whole
+//! tree. The PreviewIFD's JPEG is the one candidate this reader adds from
+//! outside the tree ([`nikon::preview_candidate`]), out of the MakerNote
+//! the NEF reader read once for the whole file.
 //!
-//! The shared TIFF preview finder does the finding, over the whole tree and
-//! that candidate: it tells the previews from the raw data and measures
-//! each one.
+//! Which body puts which preview where, and at what size, is in the NEF
+//! notes (`docs/formats/nef/container-and-previews.md`, sections 3 and 4).
 
 use std::io::{Read, Seek};
 
@@ -28,11 +25,12 @@ use crate::preview::Preview;
 /// MakerNote, already read, is `makernote`, in the order they were found:
 /// the tree's, then the MakerNote's.
 ///
+/// An IFD whose tags cannot be read costs only its own preview, and a
+/// MakerNote that does not hold together gives no candidate.
+///
 /// # Errors
 ///
-/// `Io` when the reader fails. Nothing the file holds is an error here: an
-/// IFD whose tags cannot be read, or a MakerNote that does not hold
-/// together, costs only its own preview.
+/// `Io` when the reader fails.
 pub(super) fn previews<R: Read + Seek>(
     src: &mut Source<R>,
     tree: &Tree,

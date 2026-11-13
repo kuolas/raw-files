@@ -4,26 +4,24 @@
 //! finds the file's previews and reads its metadata.
 //!
 //! A NEF file is a TIFF file written by a Nikon camera, with Nikon's own
-//! additions inside: a MakerNote, compressed raw data. For this reader a
-//! file is a NEF when the Make tag of its IFD0, which names the camera's
-//! manufacturer, names Nikon, and the file is not a DNG: a DNG converted
-//! from a NEF keeps Nikon's name in its Make, but it is Adobe's format. The
-//! NRW files of Coolpix cameras are the same TIFF family and are recognized
-//! the same way. The file's name is never looked at, and neither is the
-//! image IFD0 describes, which differs between bodies and does not tell a
-//! Nikon file from another.
+//! additions inside: a MakerNote, compressed raw data. The NRW files of
+//! Coolpix cameras are of the same TIFF family, and are read the same way.
 //!
-//! The reader of Nikon's MakerNote, shared with any other format whose
-//! files carry that MakerNote, is [`nikon`]: it reads the MakerNote once
-//! per file, finds the small preview the MakerNote points at, and reads
-//! what the MakerNote records that the standard tags lack:
-//! the visible image size, the focus point, the camera settings that only
-//! it records, and, on the older bodies whose standard tags lack them, the
-//! serial number, the ISO, the lens's range and the capture time's offset
-//! from UTC, from the time-zone setting of the camera's clock. The search
-//! for the previews is in `previews.rs`, and takes the MakerNote already
-//! read. The metadata comes from the standard tags, through the reader the
-//! TIFF-based formats share, and then from that MakerNote.
+//! The parts, in the order a file is read:
+//!
+//! - [`claims`] says whether a file is a NEF, by IFD0's Make.
+//! - [`parse`] reads Nikon's MakerNote once, with [`nikon`], the reader
+//!   every format whose files carry that MakerNote shares. Then it reads
+//!   the previews, the metadata and the entries.
+//! - `previews` finds the previews, with the MakerNote already read.
+//!
+//! Nothing the file holds is an error of this reader's. Damage costs only
+//! what it touches ([`skip_damage`](crate::error::skip_damage)), and only
+//! a failure of the reader is an error.
+//!
+//! The NEF notes say where a NEF keeps each of these
+//! (`docs/formats/nef/container-and-previews.md` and
+//! `docs/formats/nef/makernote-and-metadata.md`).
 
 mod previews;
 
@@ -48,19 +46,17 @@ pub(crate) fn spec<R: Read + Seek>() -> FormatSpec<R, Tree> {
 }
 
 /// Whether the file whose TIFF structure is `tree` is a NEF: whether it is
-/// not a DNG ([`is_dng`]), and the Make of its IFD0, trimmed of spaces at
-/// either end, starts with `NIKON`, in any case ([`make_starts_with`]).
+/// not a DNG ([`is_dng`]), and its IFD0's Make starts with `NIKON`
+/// ([`make_starts_with`]).
 ///
-/// For a file that is not a DNG, Make alone decides. The NEF notes
-/// (`docs/formats/nef/`) record `NIKON CORPORATION` as the Make of the
-/// DSLRs and `NIKON` as that of the Coolpix compacts, and the public sample
-/// collection they cite files the Z bodies, and a recent Coolpix, under
-/// `NIKON CORPORATION`: the manufacturer's name comes first in each, so the
-/// prefix covers them all.
-/// The notes' own test for a Nikon MakerNote compares Make the same way.
-/// The MakerNote's `Nikon` signature does not decide, because Nikon's
-/// editing software writes Nikon-style MakerNotes into the files of other
-/// makes, whose Make it leaves as it was.
+/// For a file that is not a DNG, Make alone decides. Nikon writes `NIKON`
+/// on the Coolpix E5700 and P7800, and `NIKON CORPORATION` on every other
+/// body checked: the prefix covers both
+/// (`docs/formats/nef/makernote-and-metadata.md`, section 8.3). The
+/// MakerNote's `Nikon` signature does not decide: Nikon's editing software
+/// writes Nikon-style MakerNotes into the files of other makes, and leaves
+/// their Make as it was. Neither does the file's name, nor the image IFD0
+/// describes, which differs between bodies.
 ///
 /// # Errors
 ///
@@ -69,39 +65,27 @@ fn claims<R: Read + Seek>(src: &mut Source<R>, tree: &Tree) -> Result<bool> {
     Ok(!is_dng(tree) && make_starts_with(src, tree, NIKON)?)
 }
 
-/// Reads the previews and the metadata of a NEF file that [`claims`]
-/// accepted.
+/// Reads the previews, the metadata and the entries of a NEF file that
+/// [`claims`] accepted.
 ///
 /// The MakerNote is read first, once for the whole file, with its
-/// PreviewIFD, within `limits`. The previews are the JPEGs that IFD0 and
-/// the SubIFDs declare, found by the shared TIFF preview finder over the
-/// whole tree, and the one the MakerNote's PreviewIFD declares. The
-/// metadata is what the shared TIFF metadata reader reads from the
-/// standard tags: the camera, the capture time, the orientation, the
-/// exposure, the camera's settings, the lens and the sizes. When there is
-/// a MakerNote, its CropArea then gives the visible image size, unless the
-/// raw IFD records a default crop, and it gives the serial number, the ISO
-/// and the lens's range when the standard tags gave none, as on bodies
-/// before the D780 and the Z 6, and the capture time's offset from UTC,
-/// from its WorldTime, when the standard tags gave a capture time without
-/// one, as on bodies before the D850; it gives the camera settings that
-/// only it records, the raw image size among them, its white balance
-/// setting, when it names one, in place of Exif's, and its color space
-/// when the Exif tags record none, as no Nikon raw file checked does; and
-/// it gives the focus points, from its AFInfo2, which no standard tag
-/// records: a recorded position, placed on CropArea on a crop, as on a
-/// raw file's picture, or the points a shot through the viewfinder names
-/// by number, placed from the table of the body's points, in the crop's
-/// window on a crop the table confirms ([`Picture::Raw`],
-/// [`nikon::metadata`]). The entries are those of every directory of the
-/// tree, then the MakerNote IFD's and its PreviewIFD's
-/// ([`MakerNote::add_entries`](nikon::MakerNote::add_entries)).
+/// PreviewIFD, within `limits`. Then:
+///
+/// - **The previews** are the JPEGs that IFD0 and the SubIFDs declare,
+///   and the one the MakerNote's PreviewIFD declares. The shared TIFF
+///   preview finder finds those of IFD0 and the SubIFDs over the whole
+///   tree.
+/// - **The metadata** is what the shared TIFF metadata reader reads from
+///   the standard tags. When there is a MakerNote, [`nikon::metadata`]
+///   adds what it records and the standard tags lack, for a raw file's
+///   picture ([`Picture::Raw`]).
+/// - **The entries** are those of every directory of the tree, then the
+///   MakerNote IFD's and its PreviewIFD's
+///   ([`MakerNote::add_entries`](nikon::MakerNote::add_entries)).
 ///
 /// # Errors
 ///
-/// As for [`nikon::read`], [`previews::previews`],
-/// [`tiff_metadata::read`] and [`nikon::metadata`]: `Io` when the
-/// reader fails. Nothing the file holds is an error here.
+/// `Io` when the reader fails.
 fn parse<R: Read + Seek>(src: &mut Source<R>, tree: &Tree, limits: &Limits) -> Result<Parsed> {
     let makernote = nikon::read(src, tree, limits)?;
     let previews = previews::previews(src, tree, makernote.as_ref())?;
