@@ -5,88 +5,78 @@
 //!
 //! A TIFF-based RAW file holds several images, such as a thumbnail, one or
 //! more JPEG previews and the raw sensor data, and each is described by its
-//! own IFD. The IFDs reach each other through five kinds of link: the
-//! next-IFD pointer at the end of an IFD, which chains IFD0 to IFD1, IFD1 to
-//! IFD2, and so on; the SubIFDs tag (0x014A), an array of offsets of child
-//! IFDs, which may have SubIFDs of their own; IFD0's Exif IFD tag (0x8769),
-//! the offset of the IFD that holds the capture metadata; IFD0's GPS IFD
-//! tag (0x8825), the offset of the IFD that holds where the picture was
-//! taken; and the Exif IFD's Interoperability IFD tag (0xA005), the offset
-//! of the IFD that names the rule the file follows, and so whether it is in
-//! Adobe RGB. [`walk`] follows these links from IFD0 and returns every IFD
-//! it finds as a [`Tree`], each with the [`Link`] that led the walk to it.
+//! own IFD. [`walk`] follows the links between them from IFD0, and returns
+//! every IFD it finds as a [`Tree`], each with the [`Link`] that led the
+//! walk to it. It follows five kinds of link, and nothing else:
+//!
+//! - the next-IFD pointer of IFD0, then of each IFD that pointer leads to,
+//!   in turn: IFD0's chain;
+//! - the SubIFDs tag of IFD0, of an IFD the chain finds first, and of a
+//!   SubIFD: the offsets of child IFDs. The Exif IFD's are never followed,
+//!   even when the chain reaches it;
+//! - IFD0's Exif IFD tag;
+//! - IFD0's GPS IFD tag;
+//! - the Exif IFD's Interoperability IFD tag.
 //!
 //! The Interoperability IFD and the GPS IFD are tried last, after IFD0's
-//! whole chain, the Interoperability IFD first, so that its place does not
-//! depend on whether the file has a GPS IFD, and an IFD both tags lead to
-//! is the Interoperability IFD. The Nikon D70 writes one IFD that is both
-//! its IFD1, which holds the thumbnail, and its Interoperability IFD. Tried
-//! last, the Interoperability IFD tag finds that IFD already in the tree as
-//! IFD1, where it stays, so the preview finder, which never asks the
-//! Interoperability IFD, still finds the thumbnail there. The tree also keeps where the tag led, and
-//! [`Tree::interop`] gives that IFD wherever it lies, so an InteropIndex in
-//! an IFD shared with the chain is not lost. The GPS IFD tag is treated the
-//! same way, and [`Tree::gps`] gives its IFD wherever it lies: a GPS IFD
-//! tried after the chain can neither take an IFD's place in it nor move a
-//! preview.
+//! whole chain. The Interoperability IFD comes first of the two, so that
+//! its place does not depend on whether the file has a GPS IFD. An IFD
+//! that both tags lead to is the Interoperability IFD.
 //!
-//! The walk reads a TIFF structure inside a [`Block`]: its base, where the
-//! TIFF header lies and every link counts from, and its bounds, the range
-//! of the file that the structure's IFDs and values must lie inside. For a
-//! TIFF file's own structure the base is the start of the file and the
-//! bounds are the whole file; for a TIFF structure inside a file, such as
-//! the one in a JPEG file's Exif segment, the base is that header's
-//! position and the bounds are the segment. IFD0 lies at the base plus the
-//! offset the header gives, and every other IFD at the base plus the offset
-//! its link gives. The walk keeps the links as written and works out each
-//! IFD's position in the file from them; an IFD whose position would pass
-//! the largest offset cannot be read, and one outside the bounds is
-//! treated as one outside the file.
+//! Tried last, a tag cannot take an IFD out of the chain. A Nikon D70's
+//! JPEG holds one IFD that is both IFD1, with the thumbnail, and the
+//! Interoperability IFD (`docs/formats/jpeg/container-and-metadata.md`,
+//! section 6). The Interoperability IFD tag finds it already in the tree
+//! as IFD1, and it stays there. So the preview finder, which never asks
+//! for the Interoperability IFD, still finds the thumbnail.
+//!
+//! The tree also keeps where each tag led. [`Tree::interop`] gives that
+//! IFD wherever it lies, so an InteropIndex in an IFD shared with the
+//! chain is not lost. [`Tree::gps`] does the same for the GPS IFD. A GPS
+//! IFD tried after the chain can neither take an IFD's place in it nor
+//! move a preview.
+//!
+//! The walk reads inside a [`Block`]: every link counts from its base, and
+//! an IFD outside its bounds is treated as one outside the file.
 //!
 //! The links are offsets read from the file, so a damaged or hostile file
 //! can make them loop, nest without end or multiply. Three things keep the
 //! walk bounded on any input:
 //!
-//! - a **visited set** of the positions in the file already tried, so no
-//!   position is parsed twice: an IFD that points to itself, a cycle of
-//!   SubIFDs, or two links to one IFD cost one parse and give one entry in
-//!   the tree, under the link that first led the walk to it; a chain that
-//!   reaches it goes on from its next pointer, which the set keeps, and
-//!   passes each IFD once, so a chain that loops ends. The set keeps a next
-//!   pointer only for an IFD in the tree: a SubIFD left out (see below)
-//!   leaves 0, like an IFD that cannot be parsed, so a chain that reaches it
-//!   ends there;
-//! - a **depth cap**, [`Limits::max_ifd_depth`]: IFD0 and the chain IFDs are
-//!   at depth 0, their SubIFDs at depth 1, and so on, and the SubIFDs of an
+//! - a **visited set** of the positions already tried, so no position is
+//!   parsed twice. An IFD that points to itself, a cycle of SubIFDs or two
+//!   links to one IFD cost one parse, and give one entry in the tree, under
+//!   the first link. A chain passes each IFD once, so a chain that loops
+//!   ends.
+//! - a **depth cap**, [`Limits::max_ifd_depth`]: IFD0 and the chain IFDs
+//!   are at depth 0, their SubIFDs at depth 1, and so on. The SubIFDs of an
 //!   IFD at the cap are not followed. A real file never nests that deep, so
-//!   this is not an error: what lies deeper is ignored;
+//!   this is not an error.
 //! - a **total cap**, [`Limits::max_ifds`], on the IFDs the walk tries to
-//!   parse, whether or not they turn out to be IFDs: a file full of bogus
-//!   links costs as much as a file full of IFDs. The attempt that would
-//!   cross it is a `LimitExceeded` error.
+//!   parse, IFDs or not: a file full of bogus links costs as much as a file
+//!   full of IFDs. The attempt that would cross it is a `LimitExceeded`
+//!   error.
+//!
+//! The walk runs in a loop over an explicit stack, not by recursion, so a
+//! file cannot make it use more call stack however it nests its IFDs.
 //!
 //! IFD0 must be readable: a file whose IFD0 cannot be parsed has nothing to
 //! offer, and the walk fails. Past IFD0, damage costs only the part of the
-//! tree it touches. An IFD that cannot be parsed, one outside the bounds
-//! among them, ends the chain if it is a chain IFD, and is left out if it is
-//! a SubIFD, the Exif IFD, the GPS IFD or the Interoperability IFD; a link
-//! whose tag value cannot be read is not followed. No IFD can start inside
-//! the 8-byte header, so a link into it, one whose offset is below 8, is
-//! not tried: it is neither parsed nor counted against the total cap, and a
-//! chain that reaches it ends; nor is a link whose position would pass the
-//! largest offset. A SubIFD must also be wholly sound, with every entry of
-//! a known type and inside the bounds and the file, or it is left out: the
-//! Sony DSLR-A100 writes the offset of its raw data in the SubIFDs tag, and
-//! the bytes there are not an IFD. Only a failure of the reader itself
-//! stops the walk, as does the total cap.
+//! tree it touches:
 //!
-//! The walk follows nothing else: not the next-IFD pointers of SubIFDs or of
-//! the Exif IFD, unless IFD0's chain itself reaches that IFD, nor those of
-//! the GPS and Interoperability IFDs; not the SubIFDs of the Exif, GPS or
-//! Interoperability IFD; not the Exif IFD tag or the GPS IFD tag of any IFD
-//! but IFD0; and not the Interoperability IFD tag of any IFD but the Exif
-//! IFD. The walk runs in a loop over an explicit stack, not by recursion,
-//! so a file cannot make it use more call stack however it nests its IFDs.
+//! - an IFD that cannot be parsed, one outside the bounds among them, ends
+//!   the chain if it is a chain IFD, and is left out otherwise;
+//! - a link whose tag value cannot be read is not followed;
+//! - a link into the 8-byte header, where no IFD can start, or one whose
+//!   position would pass the largest offset, is not tried, and a chain
+//!   that reaches it ends;
+//! - a SubIFD must also be wholly sound, with every entry of a known type
+//!   and inside the bounds and the file, or it is left out. The Sony
+//!   DSLR-A100 writes the offset of its raw data in the SubIFDs tag, and
+//!   the bytes there are not an IFD
+//!   (`docs/formats/arw/container-and-previews.md`, sections 1.3 and 1.4).
+//!
+//! Only a failure of the reader stops the walk, as does the total cap.
 
 use std::collections::BTreeMap;
 use std::io::{Read, Seek};
@@ -134,14 +124,13 @@ pub(crate) enum Link {
 }
 
 impl Link {
-    /// Whether the IFD this link leads to never holds an image: the Exif IFD
-    /// holds the capture metadata, the GPS IFD where the picture was taken,
-    /// and the Interoperability IFD names the rule the file follows. The
-    /// preview finder and the search for the raw size skip all three.
+    /// Whether the IFD this link leads to never holds an image: the Exif,
+    /// GPS and Interoperability IFDs. The preview finder and the search for
+    /// the raw size skip all three.
     ///
     /// An IFD found first through another link keeps that link, and is
-    /// asked: the Nikon D70's IFD1, which is also its Interoperability IFD,
-    /// lies under `Chain(1)` and holds the thumbnail.
+    /// asked: an IFD1 that is also the Interoperability IFD lies under
+    /// `Chain(1)` and holds the thumbnail.
     pub(crate) fn holds_no_image(self) -> bool {
         match self {
             Self::Exif | Self::Gps | Self::Interop => true,
@@ -153,13 +142,16 @@ impl Link {
 /// The IFDs of a TIFF file that [`walk`] found, each with its
 /// [`Link`].
 ///
-/// The IFDs are in the order the walk found them, which is deterministic:
-/// IFD0; then IFD0's SubIFDs, depth first, each followed by its own
-/// SubIFDs, in the order of the SubIFDs arrays; then IFD0's Exif IFD; then
-/// IFD1 and its SubIFDs in the same way, IFD2 and its SubIFDs, and so on
-/// along the chain; and last the Exif IFD's Interoperability IFD, then
-/// IFD0's GPS IFD. IFD0 is always first, and an IFD appears once, under the
-/// first link that led the walk to it.
+/// An IFD appears once, under the first link that led the walk to it. The
+/// order is deterministic:
+///
+/// 1. IFD0, always first;
+/// 2. IFD0's SubIFDs, depth first, each followed by its own SubIFDs, in the
+///    order of the SubIFDs arrays;
+/// 3. IFD0's Exif IFD;
+/// 4. IFD1 and its SubIFDs in the same way, then IFD2 and its SubIFDs, and
+///    so on along the chain;
+/// 5. the Exif IFD's Interoperability IFD, then IFD0's GPS IFD.
 #[derive(Clone, Debug)]
 pub(crate) struct Tree {
     /// Never empty: IFD0 is always the first.
@@ -174,10 +166,9 @@ pub(crate) struct Tree {
     interop: Option<usize>,
 }
 
-// The NEF reader's claim reads IFD0, the preview finder goes through every
-// IFD of the tree, the metadata and MakerNote readers read the Exif IFD,
-// and the metadata reader reads the Interoperability IFD and the GPS IFD;
-// only the tests read the number of IFDs or an IFD by its position.
+// The readers go through the tree, or ask for IFD0 or for the IFD a tag
+// leads to; only the tests read the number of IFDs or an IFD by its
+// position.
 impl Tree {
     /// IFD0, the IFD the header points to.
     pub(crate) fn ifd0(&self) -> &Ifd {
@@ -202,16 +193,16 @@ impl Tree {
     }
 
     /// The IFD that the Exif IFD's Interoperability IFD tag leads to,
-    /// wherever the walk placed it: under [`Link::Interop`] when the walk
-    /// found it first through that tag, and otherwise under the link through
-    /// which it found it before, as on the Nikon D70, whose Interoperability
-    /// IFD is its IFD1, under `Chain(1)`. A tag that leads back to the Exif
-    /// IFD itself, or to IFD0, gives that IFD too, as the file says.
+    /// wherever the walk placed it. That is under [`Link::Interop`] when the
+    /// walk found it first through that tag, and otherwise under the link
+    /// that found it first, such as `Chain(1)` for an IFD1 that is also the
+    /// Interoperability IFD. A tag that leads back to the Exif IFD itself,
+    /// or to IFD0, gives that IFD too, as the file says.
     ///
-    /// `None` when there is no Exif IFD under [`Link::Exif`], when it has
-    /// no Interoperability IFD tag or one that cannot be read or followed,
-    /// and when the IFD the tag leads to is not in the tree: one that
-    /// cannot be parsed, or a SubIFD the walk left out.
+    /// `None` when there is no Exif IFD under [`Link::Exif`], or it has no
+    /// Interoperability IFD tag that can be read and followed. `None` also
+    /// when the IFD the tag leads to is not in the tree: one that cannot be
+    /// parsed, or a SubIFD the walk left out.
     pub(crate) fn interop(&self) -> Option<&Ifd> {
         self.interop
             .and_then(|i| self.ifds.get(i))
@@ -219,9 +210,8 @@ impl Tree {
     }
 
     /// The IFD that IFD0's GPS IFD tag leads to, wherever the walk placed
-    /// it: under [`Link::Gps`] when the walk found it first through that
-    /// tag, and otherwise under the link through which it found it before,
-    /// as [`interop`](Self::interop) gives the Interoperability IFD.
+    /// it, as [`interop`](Self::interop) gives the Interoperability IFD:
+    /// under [`Link::Gps`] when the walk found it first through that tag.
     ///
     /// `None` when IFD0 has no GPS IFD tag or one that cannot be read or
     /// followed, and when the IFD the tag leads to is not in the tree.
@@ -243,26 +233,26 @@ impl Tree {
     }
 }
 
-/// Walks the IFDs of the TIFF structure in `src` that `block` holds: reads
-/// its header at the block's base, then IFD0, its chain of next IFDs, the
-/// SubIFDs of each of those, recursively, IFD0's Exif IFD, the Exif IFD's
-/// Interoperability IFD and IFD0's GPS IFD, counting every link from the base
-/// and reading every IFD inside the bounds.
-///
-/// See the [module documentation](self) for what is followed, what is left
-/// out and the order of the tree.
+/// Walks the IFDs of the TIFF structure in `src` that `block` holds, from
+/// its header at the block's base. The [module documentation](self) says
+/// which links it follows and what it leaves out, and [`Tree`] gives the
+/// order of the IFDs.
 ///
 /// # Errors
 ///
-/// Whatever [`parse_header`] returns if the header cannot be read, which
-/// includes `UnknownFormat` when the block holds no TIFF header. Every other
-/// error offset is a position in the file. `Malformed` if IFD0 lies inside
-/// the header, at IFD0's position (the base plus IFD0's offset), or if that
-/// position would pass the largest offset, at the base; whatever
-/// [`parse_ifd`] returns for IFD0 if it cannot be read, which includes an
-/// IFD0 outside the bounds; `LimitExceeded` if the walk would try to parse
-/// more IFDs than [`Limits::max_ifds`] allows, at the position of the IFD
-/// that would cross it; `Io` if the reader fails.
+/// Every error offset is a position in the file.
+///
+/// - Whatever [`parse_header`] returns if the header cannot be read,
+///   `UnknownFormat` when the block holds no TIFF header included.
+/// - `Malformed` if IFD0 lies inside the header, at IFD0's position (the
+///   base plus IFD0's offset), or if that position would pass the largest
+///   offset, at the base.
+/// - Whatever [`parse_ifd`] returns for IFD0 if it cannot be read, an IFD0
+///   outside the bounds included.
+/// - `LimitExceeded` if the walk would try to parse more IFDs than
+///   [`Limits::max_ifds`] allows, at the position of the IFD that would
+///   cross it.
+/// - `Io` if the reader fails.
 pub(crate) fn walk<R: Read + Seek>(
     src: &mut Source<R>,
     block: &Block,
@@ -316,24 +306,21 @@ pub(crate) fn walk<R: Read + Seek>(
             walker.visited.insert(at, after);
             walker.place(Link::Chain(step), ifd)?;
         }
-        // New or found before, the IFD takes this step; one found before,
+        // New or found before, the IFD takes this step. One found before,
         // through another link or by this chain on a loop, keeps its first
-        // link. The chain goes on from the pointer recorded for it and
-        // takes it, leaving 0, so the chain goes on from each IFD at most
-        // once and a loop ends.
+        // link. The chain goes on from the pointer recorded for the IFD and
+        // takes it, leaving 0, so it goes on from each IFD at most once and
+        // a loop ends.
         next = walker.visited.get_mut(&at).map_or(0, mem::take);
         // Each step either claims a new position or takes a pointer recorded
         // when an earlier claim was parsed, so the total cap bounds the
-        // steps to twice its value; saturating keeps the largest caps from
+        // steps to twice its value. Saturating keeps the largest caps from
         // overflowing.
         step = step.saturating_add(1);
     }
 
-    // The Interoperability and GPS IFDs come last, so that an IFD they
-    // share with the chain, as the D70's IFD1, keeps its place in the
-    // chain; the Interoperability IFD first, so that its place does not
-    // depend on whether the file has a GPS IFD, and an IFD both tags lead
-    // to is the Interoperability IFD.
+    // Last, the Interoperability IFD, then the GPS IFD, as the module doc
+    // says.
     let offset = match walker.ifds.iter().find(|(link, _)| *link == Link::Exif) {
         Some((_, exif)) => skip_damage(exif.u32(walker.src, INTEROP_IFD))?.flatten(),
         None => None,
@@ -357,13 +344,18 @@ struct Walker<'a, R> {
     order: ByteOrder,
     limits: &'a Limits,
     /// The position in the file of every IFD the walk has tried to parse,
-    /// whether or not it could, with the next-IFD pointer read there that
-    /// the chain has yet to follow, as written: an offset from the base. The
-    /// pointer is kept only for an IFD in the tree: 0 when the IFD could not
-    /// be parsed, when it is a SubIFD the walk left out, when it is IFD0,
-    /// whose pointer the chain starts from, when it is the GPS or the
-    /// Interoperability IFD, tried once the chain has ended, and once the
-    /// chain has gone on from it.
+    /// whether or not it could. With it, the next-IFD pointer read there
+    /// that the chain has yet to follow, as written: an offset from the
+    /// base.
+    ///
+    /// The pointer is kept only for an IFD in the tree. It is 0:
+    ///
+    /// - for an IFD that could not be parsed, or a SubIFD the walk left
+    ///   out, so that a chain that reaches it ends there;
+    /// - for IFD0, whose pointer the chain starts from;
+    /// - for the GPS and Interoperability IFDs, tried once the chain has
+    ///   ended;
+    /// - once the chain has gone on from the IFD.
     visited: BTreeMap<u64, u32>,
     /// How many IFDs the walk has tried to parse: the size of `visited`, at
     /// most [`Limits::max_ifds`].
@@ -385,9 +377,9 @@ struct Children {
 
 impl<R: Read + Seek> Walker<'_, R> {
     /// The position in the file of the IFD a link past IFD0 leads to, given
-    /// the link as written, an offset from the base: `None` if the link
-    /// cannot be followed, because it lies inside the header or its position
-    /// would pass the largest offset.
+    /// the link as written, an offset from the base. `None` if the link
+    /// cannot be followed, because it lies inside the header or its
+    /// position would pass the largest offset.
     ///
     /// No IFD can start inside the header, so a link there is not tried: it
     /// is neither parsed nor counted. (An IFD0 there is an error, which
@@ -440,7 +432,7 @@ impl<R: Read + Seek> Walker<'_, R> {
     /// ended, and adds it to the tree under `link`, alone: its next-IFD
     /// pointer and its SubIFDs are not followed. Returns the IFD's position
     /// in the tree: the new one, or where the walk placed it before through
-    /// another link; `None` when there is no offset, when it cannot be
+    /// another link. `None` when there is no offset, when it cannot be
     /// followed, or when the IFD it leads to is not in the tree.
     ///
     /// # Errors
@@ -458,7 +450,7 @@ impl<R: Read + Seek> Walker<'_, R> {
                 Some(self.ifds.len() - 1)
             }
             // Tried before, or not an IFD. One tried before and kept in the
-            // tree is found by its position, where it lies once; one left
+            // tree is found by its position, where it lies once. One left
             // out, or that cannot be parsed, is not in the tree.
             None => self.ifds.iter().position(|(_, ifd)| ifd.offset() == at),
         })
@@ -517,7 +509,7 @@ impl<R: Read + Seek> Walker<'_, R> {
             depth: depth + 1,
             // A value's length is a `u32`, so the array holds fewer than
             // 2^31 offsets, even as SHORTs of two bytes each, whatever the
-            // cap on one value: the positions cannot run out.
+            // cap on one value. The positions cannot run out.
             offsets: offsets.into_iter().zip(0..),
         }))
     }

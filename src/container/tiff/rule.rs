@@ -2,12 +2,10 @@
 
 //! Tag rules: what type and count a tag's value must have to be read.
 //!
-//! The metadata decision (ADR011) reads a value only from a tag of the
-//! exact type and count its rule names. A tag of another type or count
-//! records nothing a reader can trust, so it gives nothing, and its value
-//! is never read. A [`Rule`] declares that rule once, beside the tag's
-//! number, and [`Ifd::get`](super::Ifd::get) reads every rule the same way.
-//! A [`Held`] is a rule whose value always fits in the entry's four bytes,
+//! A [`Rule`] names a tag and the field types its value may have. It is
+//! declared once, beside the tag's number, and
+//! [`Ifd::get`](super::Ifd::get) reads every rule the same way (ADR011). A
+//! [`Held`] is a rule whose value always fits in the entry's four bytes,
 //! which [`Ifd::held`](super::Ifd::held) reads with no source and no error.
 //!
 //! A rule's type parameter is its shape: how many values it takes, and what
@@ -20,8 +18,7 @@
 //! | [`First<T>`] | one or more | the first value, read alone |
 //! | [`Text`] | any | the bytes before the first NUL |
 //!
-//! `T` is an [`Element`], and each element names the field types it is read
-//! from:
+//! `T` is an [`Element`], read from these field types:
 //!
 //! | Element | Field types |
 //! |---|---|
@@ -35,15 +32,13 @@
 //! [`Text`] is read from ASCII and UTF-8. These are the forms the raw
 //! view's values take too ([`crate::entries::Value`]).
 //!
-//! A rule names the types its tag may have, and each must be one its shape
-//! is read from: a rule of `u32`s cannot name RATIONAL. [`Rule::new`]
-//! checks this, and [`Held::new`] checks too that the value fits in four
-//! bytes. Both are `const fn`, and every reader declares its rules as
-//! `const` items, so a reader's rule that fails either check stops the
-//! build; a rule built at run time, as the tests and the fuzz entry build
-//! them, panics instead. The checks are
-//! [`decodes_to`] and [`fits_in_entry`], kept apart from the constructors
-//! so that the tests can evaluate them at compile time.
+//! A rule may name only types its shape is read from: a rule of `u32`s
+//! cannot name RATIONAL. [`Rule::new`] checks this, and [`Held::new`] also
+//! checks that the value fits in four bytes. Both are `const fn`, and every
+//! reader declares its rules as `const` items, so a reader's rule that
+//! fails a check stops the build. The checks, [`decodes_to`] and
+//! [`fits_in_entry`], are functions of their own so that the tests can
+//! evaluate them at compile time.
 
 use std::marker::PhantomData;
 
@@ -251,8 +246,7 @@ pub(crate) trait Element: sealed::Sealed + Sized {
 /// first is read: the 2 bytes of a SHORT, say, wherever the others lie.
 ///
 /// A tag of one number that the file gives many values thus costs no more
-/// than one, and is never refused for its length. This is the rule of the
-/// tags read by their first value since the ISO was (#114).
+/// than one, and is never refused for its length.
 pub(crate) struct First<T>(PhantomData<fn() -> T>);
 
 /// The shape of a text rule: the bytes of an ASCII or UTF-8 value before

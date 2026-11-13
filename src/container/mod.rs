@@ -2,21 +2,17 @@
 
 //! The containers: file structures that several formats share.
 //!
-//! A container module knows the structure and nothing about camera vendors:
-//! the TIFF module reads a TIFF file's structure, the JPEG module the
-//! marker segments of a JPEG stream, an embedded preview's or a JPEG
-//! file's, and a format module, such as the one for NEF files, decides what
-//! that structure means.
+//! A container reads a structure and knows nothing of camera makers. The
+//! TIFF container reads a TIFF file's directories, and the JPEG container
+//! the marker segments of a JPEG stream, a JPEG file's or a preview's. A
+//! format module, such as the NEF reader, decides what the structure
+//! means.
 //!
-//! A file's container is recognized by its first bytes, and [`Structure`]
-//! is the structure read from it: a JPEG file starts with SOI and a marker,
-//! `FF D8 FF`, and a TIFF file with a byte-order mark, `II` or `MM`.
-//! [`Structure::read`] asks the JPEG container first, then reads a TIFF
-//! structure from byte 0, and refuses a file that starts neither way. The
-//! formats that the container can hold are then asked whether the
-//! structure is theirs.
+//! [`Structure::read`] tells a file's container by its first bytes. The
+//! formats that container can hold are then asked whether the structure is
+//! theirs.
 //!
-//! Each container is a folder, even when it starts as one file, so a
+//! Each container is a folder, even when it starts as one file, so that a
 //! container that grows never moves.
 
 pub(crate) mod jpeg;
@@ -44,23 +40,19 @@ impl Structure {
     /// Reads the structure of the file in `src`, by the container its first
     /// bytes name, under `limits`.
     ///
-    /// A file that starts with SOI and a marker, `FF D8 FF`, is a JPEG
-    /// file, and its segments are read; the JPEG container decides that,
-    /// as [`jpeg::segments`] does not walk a file that starts otherwise. A
-    /// file that starts with a byte-order mark, `II` or `MM`, is taken for
-    /// a TIFF file, and walked from its header at byte 0: whatever follows
-    /// the mark is the TIFF header's to judge, so that a file that only
-    /// looks like TIFF is refused with the header's own reason.
+    /// - A file that starts with SOI and a marker, `FF D8 FF`, is a JPEG
+    ///   file, and its segments are read. The JPEG container decides this:
+    ///   [`jpeg::segments`] walks no file that starts otherwise.
+    /// - A file that starts with a byte-order mark, `II` or `MM`, is walked
+    ///   as a TIFF file from byte 0. What follows the mark is the TIFF
+    ///   header's to judge, so a file that only looks like TIFF is refused
+    ///   with the header's own reason.
     ///
     /// # Errors
     ///
     /// `UnknownFormat`, with no offset, when the file starts neither way, a
-    /// file shorter than 2 bytes included; for a file that starts with a
-    /// byte-order mark, whatever [`walk`] returns: `UnknownFormat` when the
-    /// file is too short to hold a TIFF header, or the mark is not followed
-    /// by the number 42, as in a BigTIFF file, and `Malformed` or
-    /// `LimitExceeded` when the TIFF structure is damaged or crosses one of
-    /// the `limits`; `Io` if the reader fails.
+    /// file shorter than 2 bytes included. For a file that starts with a
+    /// byte-order mark, whatever [`walk`] returns. `Io` if the reader fails.
     pub(crate) fn read<R: Read + Seek>(src: &mut Source<R>, limits: &Limits) -> Result<Self> {
         if let Some(segments) = jpeg::segments(src)? {
             return Ok(Self::Jpeg(segments));

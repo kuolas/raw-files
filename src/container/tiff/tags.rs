@@ -9,16 +9,16 @@
 //! with its first reader.
 
 /// The rule the file follows, as text (InteroperabilityIndex), read from
-/// the Interoperability IFD, the one IFD where tag 0x0001 has this meaning:
-/// `R98` for a DCF basic file and `R03` for a DCF option file, which is how
-/// a file in Adobe RGB names its color space when its ColorSpace says only
-/// "uncalibrated".
+/// the Interoperability IFD, the one IFD where tag 0x0001 has this
+/// meaning. `R98` is a DCF basic file and `R03` a DCF option file, which is
+/// how a file in Adobe RGB names its color space when its ColorSpace says
+/// only "uncalibrated".
 pub(crate) const INTEROP_INDEX: u16 = 0x0001;
 
 /// Whether the latitude lies north or south of the equator
-/// (GPSLatitudeRef), as the text `N` or `S`, read from the GPS IFD, whose
-/// tags number from 0x0000, so that their numbers repeat other
-/// directories': each GPS tag has its meaning in the GPS IFD alone.
+/// (GPSLatitudeRef), as the text `N` or `S`, read from the GPS IFD. The
+/// GPS IFD's tags number from 0x0000, so their numbers repeat other
+/// directories': each has its meaning in the GPS IFD alone.
 pub(crate) const GPS_LATITUDE_REF: u16 = 0x0001;
 
 /// The latitude (GPSLatitude), as three fractions of type RATIONAL,
@@ -90,7 +90,7 @@ pub(crate) const PHOTOMETRIC_INTERPRETATION: u16 = 0x0106;
 
 /// What the picture shows, as free text (ImageDescription), read from
 /// IFD0: a description its author wrote, or a text some cameras write by
-/// themselves whatever the picture, such as `SONY DSC`.
+/// themselves whatever the picture.
 pub(crate) const IMAGE_DESCRIPTION: u16 = 0x010E;
 
 /// The manufacturer of the camera that wrote the file, as text (Make), read
@@ -114,7 +114,7 @@ pub(crate) const ORIENTATION: u16 = 0x0112;
 pub(crate) const STRIP_BYTE_COUNTS: u16 = 0x0117;
 
 /// The name and version of the firmware or program that wrote the file, as
-/// text (Software), read from IFD0: a camera writes its firmware version
+/// text (Software), read from IFD0. A camera writes its firmware version
 /// there, such as `Ver.01.00`, and a program that rewrites the file its own
 /// name.
 pub(crate) const SOFTWARE: u16 = 0x0131;
@@ -169,9 +169,9 @@ pub(crate) const F_NUMBER: u16 = 0x829D;
 pub(crate) const EXIF_IFD: u16 = 0x8769;
 
 /// How the camera chose the exposure, as a SHORT (ExposureProgram), read
-/// from the Exif IFD: 1 manual, 2 program, 3 aperture priority, 4 shutter
-/// priority, and 5 to 8 programs biased toward a kind of subject; 0 is
-/// "not defined".
+/// from the Exif IFD. 1 is manual, 2 program, 3 aperture priority and 4
+/// shutter priority; 5 to 8 are programs biased toward a kind of subject,
+/// and 0 is "not defined".
 pub(crate) const EXPOSURE_PROGRAM: u16 = 0x8822;
 
 /// The offset of IFD0's GPS IFD (GPS Info IFD Pointer), the directory
@@ -210,9 +210,9 @@ pub(crate) const OFFSET_TIME_ORIGINAL: u16 = 0x9011;
 pub(crate) const EXPOSURE_BIAS_VALUE: u16 = 0x9204;
 
 /// How the camera metered the light, as a SHORT (MeteringMode), read from
-/// the Exif IFD: 1 to 6 for average, center-weighted average, spot,
-/// multi-spot, pattern and partial metering, and 255 for another mode; 0
-/// is "unknown".
+/// the Exif IFD. 1 to 6 are average, center-weighted average, spot,
+/// multi-spot, pattern and partial metering, 255 is another mode, and 0 is
+/// "unknown".
 pub(crate) const METERING_MODE: u16 = 0x9207;
 
 /// The kind of light the white balance was set for, as a SHORT
@@ -221,16 +221,17 @@ pub(crate) const METERING_MODE: u16 = 0x9207;
 /// chosen when [`WHITE_BALANCE`] says manual.
 pub(crate) const LIGHT_SOURCE: u16 = 0x9208;
 
-/// The flash, as a SHORT of bits (Flash), read from the Exif IFD: bit 0
-/// whether it fired, bits 3 and 4 its mode, bit 5 that the camera has no
-/// flash function; bits 1, 2 and 6 say whether its return light was
-/// detected and whether red-eye reduction was on, and bits 7 to 15 are
-/// reserved.
+/// The flash, as a SHORT of bits (Flash), read from the Exif IFD. Bit 0
+/// says whether it fired, bits 3 and 4 give its mode, and bit 5 says that
+/// the camera has no flash function. Bits 1, 2 and 6 say whether its
+/// return light was detected and whether red-eye reduction was on, and
+/// bits 7 to 15 are reserved.
 pub(crate) const FLASH: u16 = 0x9209;
 
 /// The focal length the picture was taken at, in millimeters, as a
-/// fraction of type RATIONAL (FocalLength), read from the Exif IFD: the
-/// lens's actual focal length, such as 180/10, not its 35 mm equivalent.
+/// fraction of type RATIONAL (FocalLength), read from the Exif IFD. It is
+/// the lens's actual focal length, such as 180/10, not its 35 mm
+/// equivalent.
 pub(crate) const FOCAL_LENGTH: u16 = 0x920A;
 
 /// A comment on the picture (UserComment), read from the Exif IFD: of
@@ -253,10 +254,8 @@ pub(crate) const MAKER_NOTE: u16 = 0x927C;
 pub(crate) const COLOR_SPACE: u16 = 0xA001;
 
 /// The offset of the Interoperability IFD (Interoperability IFD Pointer),
-/// read from the Exif IFD: the IFD whose InteroperabilityIndex names the
-/// rule the file follows, such as `R03` for a DCF option file, which is how
-/// a file says it is in Adobe RGB when its ColorSpace says only
-/// "uncalibrated".
+/// read from the Exif IFD: the IFD whose InteroperabilityIndex
+/// ([`INTEROP_INDEX`]) names the rule the file follows.
 pub(crate) const INTEROP_IFD: u16 = 0xA005;
 
 /// Whether the white balance was set automatically or by hand, as a SHORT
@@ -265,9 +264,10 @@ pub(crate) const INTEROP_IFD: u16 = 0xA005;
 pub(crate) const WHITE_BALANCE: u16 = 0xA403;
 
 /// The focal length in 35 mm terms, in whole millimeters, as a SHORT
-/// (FocalLengthIn35mmFilm), read from the Exif IFD: the focal length that
-/// would give the same field of view on a 35 mm film camera, such as 75
-/// for 50 mm on a DX body. Exif writes 0 for one the camera did not know.
+/// (FocalLengthIn35mmFilm), read from the Exif IFD. It is the focal length
+/// that would give the same field of view on a 35 mm film camera, such as
+/// 75 for 50 mm on a DX body. Exif writes 0 for one the camera did not
+/// know.
 pub(crate) const FOCAL_LENGTH_IN_35MM_FILM: u16 = 0xA405;
 
 /// The owner of the camera, as text (CameraOwnerName), read from the Exif
@@ -281,8 +281,8 @@ pub(crate) const BODY_SERIAL_NUMBER: u16 = 0xA431;
 /// The lens's range, as four fractions of type RATIONAL
 /// (LensSpecification), read from the Exif IFD: its shortest and longest
 /// focal length in millimeters, then the f-number of its widest aperture at
-/// each, such as 140/10, 300/10, 400/100 and 400/100 for a 14-30 mm f/4. A
-/// value of 0/0 is one the camera did not know.
+/// each. A 14-30 mm f/4 gives 140/10, 300/10, 400/100 and 400/100. A value
+/// of 0/0 is one the camera did not know.
 pub(crate) const LENS_SPECIFICATION: u16 = 0xA432;
 
 /// The manufacturer of the lens, as text (LensMake), read from the Exif
@@ -309,22 +309,20 @@ pub(crate) const PHOTOGRAPHER: u16 = 0xA437;
 pub(crate) const IMAGE_EDITOR: u16 = 0xA438;
 
 /// The version of the DNG specification a DNG file follows (DNGVersion),
-/// read from IFD0: present in every DNG and in the DNG-based files of some
-/// makers, absent from a Sony RAW file.
+/// read from IFD0: present in every DNG, and in the DNG-based files of
+/// some makers.
 pub(crate) const DNG_VERSION: u16 = 0xC612;
 
 /// Where the visible image starts in the raw data, as two numbers, the
 /// column then the row (DefaultCropOrigin, from the DNG specification),
-/// read from the IFD of the raw data: of type SHORT, LONG or RATIONAL.
-/// Sony writes it in its ARW files from version 2.3.3 on.
+/// read from the IFD of the raw data. Its type is SHORT, LONG or RATIONAL.
 pub(crate) const DEFAULT_CROP_ORIGIN: u16 = 0xC61F;
 
 /// The size of the visible image in the raw data, as two numbers, the
 /// width then the height (DefaultCropSize, from the DNG specification),
-/// read from the IFD of the raw data: of type SHORT, LONG or RATIONAL.
+/// read from the IFD of the raw data. Its type is SHORT, LONG or RATIONAL.
 pub(crate) const DEFAULT_CROP_SIZE: u16 = 0xC620;
 
-/// A maker's private data block (DNGPrivateData), read from IFD0: Sony
-/// writes it in every ARW, SR2 and ARQ file as the offset of its
-/// SR2Private directory, or, on the A100, of a Minolta block.
+/// A maker's private data block (DNGPrivateData), read from IFD0, where
+/// Sony writes the offset of its SR2Private directory.
 pub(crate) const DNG_PRIVATE_DATA: u16 = 0xC634;

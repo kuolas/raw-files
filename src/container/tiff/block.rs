@@ -3,30 +3,9 @@
 //! The block a TIFF structure is read in: where its offsets count from,
 //! and which bytes of the file it may use.
 //!
-//! Every offset written inside a TIFF structure counts from a position in
-//! the file, the structure's base, and everything the structure points at,
-//! its IFDs and their values, must lie inside a range of the file, its
-//! bounds. A [`Block`] is that pair. Some examples:
-//!
-//! - a TIFF file's own structure, as a NEF or an ARW file holds it: base 0,
-//!   and the whole file as bounds;
-//! - the TIFF structure of a JPEG file's Exif segment: base at its TIFF
-//!   header, 6 bytes into the payload of the APP1 segment, and the segment
-//!   as bounds;
-//! - the MPF index of a JPEG file: base at its MP header, and the APP2
-//!   segment that holds it as bounds;
-//! - the Nikon MakerNote: base at the TIFF header it holds, 10 bytes in,
-//!   and the MakerNote as bounds; or, in the headerless layout of the D1
-//!   family, base at the header of the TIFF structure that holds it, as
-//!   for Sony's below;
-//! - the Sony MakerNote: base at the header of the TIFF structure that
-//!   holds it, since its offsets count from there (0 in an ARW file), and
-//!   the MakerNote as bounds. The base lies outside the bounds, which a
-//!   block allows.
-//!
-//! [`Block::at`] is the one place where an offset written in the file
-//! becomes a position in the file, and [`Block::fits`] says whether a range
-//! of the file lies inside the bounds.
+//! [`Block`] is the pair. [`Block::at`] is the one place where an offset
+//! written in the file becomes a position in the file, and [`Block::fits`]
+//! says whether a range of the file lies inside the bounds.
 
 use std::ops::Range;
 
@@ -35,9 +14,19 @@ use crate::io::within;
 /// Where the offsets of a TIFF structure count from, its base, and the
 /// range of the file it may use, its bounds.
 ///
-/// The base may lie outside the bounds. An empty or inverted range is a
-/// block that no byte fits in. The bounds may also run past the end of
-/// the file: whoever reads inside them checks the file as well.
+/// Every offset written inside the structure counts from the base, and
+/// everything it points at, its IFDs and their values, must lie inside the
+/// bounds. A TIFF file's own structure has base 0 and the whole file as
+/// bounds ([`file`](Self::file)). A structure inside a file, such as a
+/// JPEG file's Exif segment or a MakerNote, has a base of its own, most
+/// often its TIFF header, and the segment or the MakerNote as bounds.
+///
+/// The base may lie outside the bounds: the offsets of a Sony MakerNote
+/// count from the header of the TIFF structure that holds it
+/// (`docs/formats/arw/container-and-previews.md`, section 1.5). An empty
+/// or inverted range is a block that no byte fits in. The bounds may also
+/// run past the end of the file: whoever reads inside them checks the file
+/// as well.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct Block {
     base: u64,
