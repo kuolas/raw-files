@@ -4,41 +4,24 @@
 //! full-size output, 6016 by 4016 pixels.
 //!
 //! I shot the frames with my own D600 and measured them on 2026-10-26,
-//! reading them in Nikon NX Studio 1.10.0, run as a reader to compare
-//! with: frames 1 to 39 of the session, one per point in single-point
-//! autofocus, with frames 40 and 41 repeating points 1 and 13,
-//! which read the same. I calibrated the reading on the four live-view
-//! frames, 53 to 56, which record their focus area in the file: NX Studio
-//! draws a point's box with its outer edge at the area's bounds. Each
-//! center is the reading of NX Studio's box rounded to the pixel, good to
-//! ±3 pixels, and every box reads 164 by 164. The record, with every
-//! reading, is the D600's section of the NEF notes on autofocus points
-//! ([`docs/formats/nef/autofocus-points.md`, section 2](https://github.com/kuolas/raw-files/blob/master/docs/formats/nef/autofocus-points.md#2-nikon-d600)),
-//! and the 56 frames of the session are committed in
-//! `tests/fixtures/nikon-d600/`, stripped of their pixels and personal
-//! fields, so that the table can be checked on them: every frame gives the
-//! table's layout, and every frame shot through the viewfinder in autofocus
-//! the points it names, placed from the table, frame 4, a shot with point
-//! 38, among them.
+//! reading them in Nikon NX Studio 1.10.0, run as a reader to compare with.
+//! The table is read from frames 1 to 39, one per point in single-point
+//! autofocus, and calibrated on the live-view frames 53 to 56, which record
+//! their focus area. Each center is good to ±3 pixels, and every box reads
+//! 164 by 164. The same frames' bytes give the layout code and the mask's
+//! bit order. Frames 49 to 51, shot on the DX crop, give the crop's window,
+//! and RAW+JPEG pairs I shot later give the Medium JPEG's.
 //!
-//! Beside the points, the table carries what the same frames' bytes show
-//! of the way a file names them: layout code 3, a mask whose bit number − 1
-//! stands for each point, and the DX crop, whose 3936 by 2624 window lies
-//! centered in the frame: frames 49 and 50 put their points where the
-//! table's place, less the window's origin, says. It also carries the
-//! Medium JPEG's size, 4512 by 3008, whose picture shows the 6010 by 4006
-//! window centered in the frame, as I measured it on RAW+JPEG pairs shot
-//! on 2026-11-03, outside the session (section 2.9 of the record); the
-//! frame and the Medium JPEG of one such pair, and the Small JPEG of
-//! another, are committed in `tests/fixtures/nikon-d600-jpeg-sizes/`.
+//! The record, with every reading and the frames committed as fixtures,
+//! is the D600's section of the NEF notes on autofocus points
+//! ([`docs/formats/nef/autofocus-points.md`, section 2](https://github.com/kuolas/raw-files/blob/master/docs/formats/nef/autofocus-points.md#2-nikon-d600)).
 //!
 //! Each point's name, in the comment beside it, is its row in the
 //! viewfinder, A at the top to E at the bottom, and its column, 1 at the
-//! left to 11 at the right; rows A and E have points over the three inner
-//! columns only, and number them 1 to 3. The numbers follow the order in
-//! which ExifTool's published tag documentation names them, read as
-//! documentation and confirmed on the frames: 1 is the center, 13 the top
-//! of the inner columns' left one and 38 the top of the leftmost column.
+//! left to 11 at the right. Rows A and E have points over the three inner
+//! columns only, and number them 1 to 3. The point numbers follow
+//! ExifTool's published tag documentation, read as documentation and
+//! confirmed on the frames.
 
 use super::{BitOrder, ConfirmedCrop, ConfirmedJpegSize, PointTable, Provenance};
 use crate::focus::FocusLayoutPoint;
@@ -109,11 +92,9 @@ pub(super) static TABLE: PointTable = PointTable {
     // On all 45 single-point frames with a point number, exactly one bit
     // is set, bit number − 1 (section 2.3).
     bit_order: BitOrder::NumberLessOne,
-    // The DX crop, CropHiSpeed's setting 2: frames 49 to 51's full-size
-    // previews and JPEGs are 3936 by 2624, and frames 49 and 50 put points
-    // 38 and 27 within 2 pixels of the table's place less (1040, 696),
-    // the origin of that window centered in the frame, which CropHiSpeed
-    // records too (section 2.6).
+    // The DX crop, CropHiSpeed's setting 2: frames 49 to 51 show its
+    // window, centered in the frame, and frames 49 and 50 put their points
+    // where the table places them in it (section 2.6).
     crops: &[ConfirmedCrop {
         code: 2,
         window: Size {
@@ -121,13 +102,9 @@ pub(super) static TABLE: PointTable = PointTable {
             height: 2624,
         },
     }],
-    // The Medium JPEG, 4512 by 3008: fitted onto its own NEF's full-size
-    // preview, the two Medium pairs of my 2026-11-03 frames show the
-    // window from 2.90 to 6013.06 across and from 4.54 to 4011.40 down,
-    // scaled by 0.75072 on both axes, where the Large and Small JPEGs show
-    // the whole frame. 6010 by 4006, centered at (3, 5), is the nearest
-    // whole-pixel window centered in the frame, and puts every point within
-    // 0.35 of a Medium pixel of the measured place (section 2.9).
+    // The Medium JPEG, 4512 by 3008: the nearest whole-pixel window
+    // centered in the frame to what my RAW+JPEG pairs measure, where the
+    // Large and Small JPEGs show the whole frame (section 2.9).
     jpeg_sizes: &[ConfirmedJpegSize {
         size: Size {
             width: 4512,

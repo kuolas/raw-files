@@ -3,73 +3,49 @@
 //! The tables of a body's autofocus points: where each autofocus point of
 //! a body lies on its picture, which no file the body writes records.
 //!
-//! A Nikon DSLR shot through the viewfinder names the autofocus point the
-//! camera used by its number, and records no position for it. A table
-//! gives, for one body, every point's number, the center of the box the
-//! maker's software draws for it and the box's size, all in the body's
-//! full-size output frame. Every file whose Model names a body with a
-//! table is given the table as the layout of the body's points, a
-//! [`FocusLayout`] ([`layout`]), whatever the shot and whatever the
-//! file's format. A body with one layout gives it from the Model alone,
-//! so detection looks it up once, after the format's reader, and a file
-//! whose MakerNote is missing or cannot be read has it too.
+//! A Nikon DSLR shot through the viewfinder names the point the camera
+//! used by its number, and records no position for it. A table gives, for
+//! one body, each point's number, the center of its box and the box's
+//! size, in the body's full-size output frame. The parts:
+//!
+//! - [`find`] finds a body's table by the file's Model alone;
+//! - [`layout`] gives the table as the layout of the body's points
+//!   ([`FocusLayout`]), which detection gives every file of that Model,
+//!   whatever the shot and the file's format;
+//! - [`PointTable`] holds one body's points, with what its record confirms
+//!   of the way a file names them: the layout code, the mask's bit order
+//!   ([`BitOrder`]), the crops ([`ConfirmedCrop`]) and the JPEG sizes
+//!   ([`ConfirmedJpegSize`]). The Nikon reader places a named point with
+//!   them.
 //!
 //! Every table is measured by the project, or by a contributor, on frames
-//! shot with the body itself and read in the maker's own software, run as
-//! a reader to compare with, as the
+//! shot with the body itself, as the
 //! [decision to measure per-body tables in the project](https://github.com/kuolas/raw-files/blob/master/docs/architecture-decisions/adr017-per-body-tables-measured-by-the-project.md)
-//! (ADR017) sets out. The body's record in the NEF notes
-//! (`docs/formats/nef/autofocus-points.md`) holds the readings, with their
-//! method and their tolerance, and a table's values are written from that
-//! record alone: the readings rounded to the pixel, not a grid fitted to
-//! them, and nothing from another project's table. Each table carries its
-//! [`Provenance`]: who shot the frames and who measured them, when, in
-//! which software, on which frames, and the folder of fixtures that holds
-//! the frames, committed so that the table can be checked on them.
+//! (ADR017) sets out. Its values are written from the body's record in the
+//! NEF notes alone: the readings rounded to the pixel, not a grid fitted
+//! to them, and nothing from another project's table. Each table carries
+//! its [`Provenance`].
 //!
 //! Each body's table is a file of its own in this folder, named after the
 //! body's Model in lower case with its spaces as underscores, such as
-//! `nikon_d600.rs` for `NIKON D600`, and registered by hand in
-//! [`TABLES`]. A test fails on a file here that is not registered, and on
-//! one whose name is not its table's Model; others check each table
-//! against itself and against the frame it is measured in.
+//! `nikon_d600.rs` for `NIKON D600`. It is registered by hand in
+//! [`TABLES`], and a test fails on a file here that is not.
 //!
-//! A table is found by the file's Model alone ([`find`]), and its layout is
-//! given for every file of that Model. One Model can carry two layouts,
-//! though: ExifTool's published tag documentation, read as documentation,
-//! lists two for the D780, 51 points through the viewfinder and 81 in live
-//! view, each under a layout code of its own, which AFInfo2 records. So the
-//! Model alone does not say which of a body's layouts a point that a file
-//! names belongs to: placing that point takes the file's layout code too,
-//! as the
+//! One Model can carry two layouts, each under a layout code of its own:
+//! ExifTool's published tag documentation, read as documentation, lists
+//! two for the D780. So placing a named point takes the file's layout code
+//! too, as the
 //! [decision to place focus points from a table](https://github.com/kuolas/raw-files/blob/master/docs/architecture-decisions/adr018-focus-points-placed-from-a-table-and-the-points-used.md)
-//! (ADR018) says. Nor does it say which layout such a body's file has:
-//! a body whose files name one of several layouts will give the layout
-//! that the file's layout code names, and none when the file names none,
-//! as [`Metadata::focus_layout`](crate::Metadata::focus_layout) states;
-//! only a body with one layout gives it from the Model alone.
+//! (ADR018) says.
 //!
-//! So a table carries, beside its points, what its record confirms of the
-//! way a file names them, which the Nikon MakerNote's reader needs to place
-//! a point that a shot through the viewfinder names: the layout code the
-//! body writes for the table's layout; the order in which the mask of the
-//! points used names each point by a bit ([`BitOrder`]); and the crops
-//! the record's crop frames confirm, each with the size of its window
-//! ([`ConfirmedCrop`]). A point on such a crop moves into the crop's
-//! window, whose size the record measured, centered in the table's frame,
-//! as the decision to place focus points from a table (ADR018) sets out.
-//! A crop the record does not confirm gives no placed point. The table
-//! also carries the sizes of the body's JPEGs whose picture is not the
-//! whole frame scaled, each with the window of the frame it shows
-//! ([`ConfirmedJpegSize`]): a point in an uncropped JPEG of such a size
-//! moves into that window, centered in the table's frame, as the same
-//! decision sets out.
-//! A JPEG of a size the table does not list takes the whole frame. A body
-//! whose uncropped files record a CropHiSpeed cropped size other than the
-//! original, as the D810's do, four pixels short in width
-//! ([`super::nikon`]), would have those files read as a crop when a named
-//! point is placed, so check the body's uncropped CropHiSpeed before
-//! adding its table.
+//! A body whose uncropped files record a CropHiSpeed cropped size other
+//! than the original, as the D810's do, would have those files read as a
+//! crop when a named point is placed. Check the body's uncropped
+//! CropHiSpeed before adding its table.
+//!
+//! The NEF notes hold each body's record, with the procedure, the readings
+//! and their tolerance (`docs/formats/nef/autofocus-points.md`, sections 1
+//! and 2).
 
 use crate::focus::{FocusLayout, FocusLayoutPoint};
 use crate::geometry::Size;
@@ -92,23 +68,21 @@ pub(in crate::formats) const MASK_LEN: usize = 7;
 /// significant bit of the mask's first byte, so that bit k is bit k % 8 of
 /// byte k / 8.
 ///
-/// It is a fact of the body's layout, read off the frames of the body's
-/// record where exactly one bit is set, the single-point frames, as the
-/// procedure in the NEF notes says: no file names its order.
+/// It is a fact of the body's layout, read off the single-point frames of
+/// the body's record, as the procedure in the NEF notes says. No file
+/// names its order.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(in crate::formats) enum BitOrder {
     /// Point n is bit n − 1: point 1 is the least significant bit of the
     /// first byte, point 9 the least significant of the second. The D600's
-    /// order, on all 45 of its record's single-point frames with a point
-    /// number (section 2.3 of the record).
+    /// order (`docs/formats/nef/autofocus-points.md`, section 2.3).
     NumberLessOne,
 }
 
 impl BitOrder {
     /// The bit that stands for point `number`, counted as the type's
-    /// documentation says; `None` for a number no bit stands for, such as
-    /// 0, which no point has. Whether the bit lies in the mask's
-    /// [`MASK_LEN`] bytes is the reader's to check, as it reads them.
+    /// documentation says. `None` for a number no bit stands for, such as 0.
+    /// Whether the bit lies in the mask is the reader's to check.
     fn bit(self, number: u16) -> Option<usize> {
         match self {
             BitOrder::NumberLessOne => usize::from(number).checked_sub(1),
@@ -133,24 +107,17 @@ pub(in crate::formats) struct PointTable {
     /// writes it, the center of its box and the box's size, in `frame`.
     points: &'static [FocusLayoutPoint],
     /// The layout code the body writes beside a point number of this
-    /// layout, AFInfo2's FocusPointSchema: 3 on every D600 frame through
-    /// the viewfinder with a point number (section 2.2 of its record). A
-    /// file names a point of this table only under this code, since one
-    /// Model can carry two layouts.
+    /// layout, AFInfo2's FocusPointSchema. A file names a point of this
+    /// table only under this code, since one Model can carry two layouts.
     layout_code: u8,
     /// How the mask of the points used names each point by a bit.
     bit_order: BitOrder,
-    /// The crops the record's crop frames confirm, each with its window:
-    /// on the D600, the DX crop, setting 2, in a 3936 by 2624 window,
-    /// where frames 49 and 50 put their points within 2 pixels of the
-    /// table's place (section 2.6 of its record). A file on any other crop
-    /// gives no placed point.
+    /// The crops the record's crop frames confirm, each with its window. A
+    /// file on any other crop gives no placed point.
     crops: &'static [ConfirmedCrop],
-    /// The sizes of the body's JPEGs that show a window of the frame
-    /// rather than the whole of it, each with its window: on the D600,
-    /// the Medium JPEG, 4512 by 3008, in a 6010 by 4006 window, as its
-    /// record's RAW+JPEG pairs measure it (section 2.9 of its record). A
-    /// JPEG of any other size shows the whole frame.
+    /// The sizes of the body's JPEGs that show a window of the frame rather
+    /// than the whole of it, each with its window. A JPEG of any other size
+    /// shows the whole frame.
     jpeg_sizes: &'static [ConfirmedJpegSize],
     /// Where the table's values come from.
     #[cfg_attr(
@@ -164,26 +131,20 @@ pub(in crate::formats) struct PointTable {
     provenance: Provenance,
 }
 
-/// A crop that a body's record confirms a named point can be placed on:
-/// the crop's setting, as CropHiSpeed's first value records it, and the
-/// size of the crop's picture in the body's output, the window that a
-/// point placed on the crop is measured in.
+/// A crop that a body's record confirms a named point can be placed on.
+/// It holds the crop's setting, as CropHiSpeed's first value records it,
+/// and the window a point placed on the crop is measured in: the size of
+/// the crop's picture.
 ///
 /// The window is measured on the record's crop frames, as the size of
 /// their full-size previews and JPEGs, and lies centered in the table's
-/// frame, which the frames confirm. No tag gives it: CropHiSpeed's cropped
-/// size counts the sensor's pixels, the border of the stored raw data
-/// among them, 3968 by 2636 on a D600 DX frame against a 3936 by 2624
-/// picture. A file whose CropHiSpeed origin is not the window's, half of
-/// the frame less the window on each axis, gives no placed point
-/// (ADR018).
+/// frame. No tag gives it: CropHiSpeed's cropped size counts the sensor's
+/// pixels, the border of the stored raw data among them.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(in crate::formats) struct ConfirmedCrop {
-    /// The crop setting, CropHiSpeed's first value: 2, the DX crop, on the
-    /// D600.
+    /// The crop setting, CropHiSpeed's first value.
     code: u32,
-    /// The size of the crop's picture, in the pixels of the table's frame:
-    /// 3936 by 2624 for the D600's DX crop.
+    /// The size of the crop's picture, in the pixels of the table's frame.
     window: Size,
 }
 
@@ -197,27 +158,21 @@ impl ConfirmedCrop {
 }
 
 /// A size of the body's uncropped JPEGs whose picture is not the whole
-/// frame scaled, as the body's record measures it: the JPEG's size, as
-/// its frame header gives it, and the window of the table's frame that
-/// its picture shows, scaled down, in which a point placed on such a JPEG
-/// is measured.
+/// frame scaled: the JPEG's size, as its frame header gives it, and the
+/// window of the table's frame that its picture shows.
 ///
 /// The window is measured on the record's RAW+JPEG pairs at that size, by
 /// fitting each JPEG onto the full-size preview of its own raw file, and
-/// lies centered in the table's frame, which the pairs confirm. No tag
-/// gives it, and the JPEG's shape alone does not: the D600's Medium JPEG,
-/// 4512 by 3008, shows a 6010 by 4006 window of its 6016 by 4016 frame,
-/// not the whole frame, which would be 4512 by 3012 at that scale.
-/// A JPEG of a size the table does not list takes the whole frame, as the
-/// Large and Small JPEGs of the D600, 6016 by 4016 and 3008 by 2008, do
-/// (ADR018).
+/// lies centered in the table's frame. No tag gives it, and the JPEG's
+/// shape alone does not: the D600's Medium JPEG shows a window a few pixels
+/// smaller than its frame (`docs/formats/nef/autofocus-points.md`, section
+/// 2.9).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(in crate::formats) struct ConfirmedJpegSize {
-    /// The JPEG's size, as its frame header gives it: 4512 by 3008 for
-    /// the D600's Medium JPEG.
+    /// The JPEG's size, as its frame header gives it.
     size: Size,
     /// The window of the frame its picture shows, in the pixels of the
-    /// table's frame: 6010 by 4006 for the D600's Medium JPEG.
+    /// table's frame.
     window: Size,
 }
 
@@ -231,8 +186,8 @@ impl ConfirmedJpegSize {
 }
 
 /// Where a table's values come from, as the body's record in the NEF notes
-/// gives it: a record for readers of the table, which the table tests
-/// check is filled in and whose frames they check are committed.
+/// gives it: a record for readers of the table. The table tests check that
+/// it is filled in and that its frames are committed.
 #[derive(Debug)]
 #[cfg_attr(test, derive(Clone, Copy))]
 #[cfg_attr(
@@ -256,23 +211,18 @@ struct Provenance {
     /// calibrate the reading, by their numbers in the record.
     frames: &'static str,
     /// The folder in `tests/fixtures/` that holds the session's frames,
-    /// stripped of their pixels and personal fields, on which the tests
-    /// check the table, such as `nikon-d600/`.
+    /// such as `nikon-d600/`.
     fixtures: &'static str,
 }
 
 impl PointTable {
     /// The layout of the table's points, as
-    /// [`Metadata::focus_layout`](crate::Metadata::focus_layout) gives it:
-    /// the table's Model, frame and points, through the checked
-    /// [`FocusLayout::new`].
+    /// [`Metadata::focus_layout`](crate::Metadata::focus_layout) gives it,
+    /// through the checked [`FocusLayout::new`].
     ///
-    /// It is `Some` for every registered table, which the table tests
-    /// check: a frame with no zero side, every number above 0 and above
-    /// the one before it, every center and box on the frame, among checks
-    /// that go further than [`FocusLayout::new`]'s, such as numbers that
-    /// run from 1 to the count. So a table that fails them gives a file no
-    /// layout ([`layout`]), never a panic.
+    /// It is `Some` for every registered table: the table tests check more
+    /// than [`FocusLayout::new`] does. A table that failed them would give a
+    /// file no layout ([`layout`]), never a panic.
     fn layout(&'static self) -> Option<FocusLayout> {
         FocusLayout::new(self.recorded_model, self.frame, self.points).ok()
     }
@@ -293,19 +243,17 @@ impl PointTable {
     }
 
     /// The bit of the mask of the points used that stands for point
-    /// `number`, by the table's [`BitOrder`]; `None` for a number no bit
-    /// stands for. Every point of the table has a bit of its own inside the
-    /// mask's [`MASK_LEN`] bytes, which the table tests check.
+    /// `number`, by the table's [`BitOrder`]. `None` for a number no bit
+    /// stands for. The table tests check that every point's bit lies inside
+    /// the mask's [`MASK_LEN`] bytes.
     pub(in crate::formats) fn bit(&self, number: u16) -> Option<usize> {
         self.bit_order.bit(number)
     }
 
     /// The window of the crop whose setting, CropHiSpeed's first value, is
-    /// `code`, in the pixels of the table's frame, as the table's record
-    /// measured it; `None` for a crop the record does not confirm. Every
-    /// window fits the frame, and the frame less the window is even on
-    /// each axis, so that it can be centered to the pixel, which the table
-    /// tests check.
+    /// `code`, in the pixels of the table's frame. `None` for a crop the
+    /// record does not confirm. The table tests check that every window
+    /// fits the frame and can be centered in it to the pixel.
     pub(in crate::formats) fn crop_window(&self, code: u32) -> Option<Size> {
         self.crops
             .iter()
@@ -313,12 +261,11 @@ impl PointTable {
             .map(|crop| crop.window)
     }
 
-    /// The window of the frame that an uncropped JPEG of `size`, as its
-    /// frame header gives it, shows, in the pixels of the table's frame, as
-    /// the table's record measured it; `None` for a size whose picture is
-    /// the whole frame, or that the record did not measure. Every window
-    /// fits the frame, can be centered to the pixel and has the shape of
-    /// its JPEG size, which the table tests check.
+    /// The window of the frame that an uncropped JPEG of `size` shows, in
+    /// the pixels of the table's frame. `None` for a size whose picture is
+    /// the whole frame, or that the record did not measure. The table tests
+    /// check that every window fits the frame, can be centered in it to the
+    /// pixel, and has the shape of its JPEG size.
     pub(in crate::formats) fn jpeg_window(&self, size: Size) -> Option<Size> {
         self.jpeg_sizes
             .iter()
@@ -348,10 +295,9 @@ impl PointTable {
 }
 
 /// The table of the body whose Model is `recorded_model`, matched exactly
-/// against the table's Model, such as `NIKON D600`; `None` for a body
+/// against the table's Model, such as `NIKON D600`. `None` for a body
 /// without a table. `recorded_model` is the file's Model as
-/// [`Camera::recorded_model`](crate::Camera::recorded_model) gives it,
-/// trimmed of padding.
+/// [`Camera::recorded_model`](crate::Camera::recorded_model) gives it.
 pub(in crate::formats) fn find(recorded_model: &str) -> Option<&'static PointTable> {
     TABLES
         .iter()
@@ -362,8 +308,7 @@ pub(in crate::formats) fn find(recorded_model: &str) -> Option<&'static PointTab
 /// The layout of the autofocus points of the body whose Model is
 /// `recorded_model`, as
 /// [`Metadata::focus_layout`](crate::Metadata::focus_layout) gives it: its
-/// table's ([`find`]); `None` for a body without a table. Detection gives
-/// it to every file, whatever its format, from the Model alone.
+/// table's ([`find`]). `None` for a body without a table.
 pub(in crate::formats) fn layout(recorded_model: &str) -> Option<FocusLayout> {
     find(recorded_model).and_then(PointTable::layout)
 }
