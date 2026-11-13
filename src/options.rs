@@ -17,8 +17,7 @@ use crate::limits::Limits;
 /// [`RawFile::open`], [`RawFile::from_bytes`] and [`RawFile::from_reader`]
 /// do: `RawFile::open(path)` is `Options::new().open(path)`. Build an
 /// `Options` to open files with other limits; more options will join them
-/// as the library grows. `Options` is not `Copy`, so that a later option
-/// that cannot be copied does not break callers.
+/// as the library grows. `Options` is `Clone` and not `Copy`.
 ///
 /// # Examples
 ///
@@ -65,8 +64,8 @@ impl Options {
     ///
     /// # Errors
     ///
-    /// `Io` if the file cannot be opened, and otherwise as for
-    /// [`from_reader`](Self::from_reader).
+    /// [`Io`](crate::ErrorKind::Io) if the file cannot be opened, and
+    /// otherwise as for [`from_reader`](Self::from_reader).
     pub fn open(&self, path: impl AsRef<Path>) -> Result<RawFile<File>> {
         self.from_reader(File::open(path)?)
     }
@@ -86,23 +85,9 @@ impl Options {
     ///
     /// See [`RawFile::from_reader`], which this is with the default options.
     ///
-    /// Reads go through the library's own block cache, which seeks before
-    /// every read, so wrapping the reader in a [`std::io::BufReader`]
-    /// gains nothing: the library seeks before every read and reads whole
-    /// blocks, so the wrapper's buffer is never used. Pass the `File` or
-    /// reader as it is.
-    ///
     /// # Errors
     ///
-    /// `UnknownFormat` if the file is not a RAW file or a JPEG file this
-    /// version recognizes; `Malformed` if its structure is damaged;
-    /// `LimitExceeded` if reading its structure would cross one of the
-    /// limits, as a RAW file's Make longer than
-    /// [`Limits::max_value_bytes`](crate::Limits::max_value_bytes) does,
-    /// though a limit crossed inside a JPEG file's Exif or MPF segment is
-    /// not an error: it costs at most what that segment holds, the Exif
-    /// values and thumbnail or the MPF images, as damage there does; `Io`
-    /// if the reader fails.
+    /// As for [`RawFile::from_reader`].
     pub fn from_reader<R: Read + Seek>(&self, reader: R) -> Result<RawFile<R>> {
         RawFile::new(reader, self.limits)
     }

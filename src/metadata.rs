@@ -39,33 +39,28 @@ use crate::location::Location;
 use crate::orientation::Orientation;
 use crate::rational::{Rational, SignedRational};
 
-/// What the camera recorded about a picture: the camera and the software
-/// that wrote the file, who made the picture and what they wrote about it,
-/// where and when the picture was taken, how to turn it upright,
-/// its exposure, how the camera was set, its lens, the sizes of its raw
-/// data and of its visible image, and where the camera focused, with the
-/// layout of the body's autofocus points where raw-files has its table.
+/// What the camera recorded about a picture.
+/// [`RawFile::metadata`](crate::RawFile::metadata) gives it, read when the
+/// file is opened. The [crate docs](crate#what-a-file-gives) list its
+/// values, each with the method that reads it.
 ///
-/// Every value is `None` when the file does not record it or records it in
-/// a way that cannot be read. A damaged value costs only itself, and a
-/// damaged directory only the values in it: the rest is still read, and
+/// Every value is `None` when the file does not record it, or records it
+/// in a way that cannot be read. A damaged value costs only itself, and a
+/// damaged directory only the values in it. The rest is still read, and
 /// the file still opens with its previews.
 ///
-/// `Metadata::default()` is an empty one, with every value `None` and the
-/// orientation [`NoTransforms`](Orientation::NoTransforms). A caller's
-/// tests start from it and set the values they need with the `with_…`
-/// methods, such as [`with_camera`](Self::with_camera), each named after
-/// the method that reads the value back and each replacing any value set
-/// before. The builder pattern of the Rust API Guidelines (C-BUILDER)
-/// uses a separate builder type, but `Metadata` needs none: every value is
-/// optional, so the empty `Metadata` is already a valid start for every
-/// chain.
+/// A program builds a `Metadata` for its tests without a file.
+/// `Metadata::default()` is an empty one: every value is `None`, and the
+/// orientation is [`NoTransforms`](Orientation::NoTransforms). A `with_…`
+/// method, such as [`with_camera`](Self::with_camera), sets one value and
+/// replaces any set before. It is named after the method that reads the
+/// value back.
 ///
-/// The `with_…` methods store each value as given: none refuses or changes
-/// one. The docs of the methods that read a value say what the readers give
-/// for a file, such as a text cleaned of padding; a test gets back what it
-/// wrote. `Metadata` is not `Copy`, so that a later value that cannot be
-/// copied does not break callers.
+/// A `with_…` method stores the value as given: none refuses or changes
+/// one, so a test gets back what it wrote. What the readers give for a
+/// file, such as a text cleaned of padding, is in the docs of the method
+/// that reads the value. There is no separate builder type
+/// ([the decision on the shape of the API](https://github.com/kuolas/raw-files/blob/master/docs/architecture-decisions/adr009-public-api-shape.md)).
 ///
 /// # Examples
 ///
@@ -379,74 +374,35 @@ impl Metadata {
         self.image_size
     }
 
-    /// Where the camera focused, as the file records it (see [`Focus`]):
-    /// the camera's own record only, never an estimate from the picture. It
-    /// is the primary point of [`focus_points`](Self::focus_points) as a
-    /// [`Focus`], with the list's frame and origin, and `None` when there is
-    /// no list or the list names no primary.
+    /// Where the camera focused, as the file records it: the camera's own
+    /// record only, never an estimate from the picture.
     ///
-    /// It is read on Nikon files, from the MakerNote's AFInfo2 block, as the
-    /// camera recorded it. The exception, on a raw file, is a Nikon crop,
-    /// any that CropHiSpeed records with a CropArea: there the point is
-    /// placed inside the cropped picture, by the sides the crop cuts, as the
-    /// [NEF format notes](https://github.com/kuolas/raw-files/blob/master/docs/formats/nef/makernote-and-metadata.md)
-    /// describe. DX, 1:1 and 16:9 are the checked cases.
+    /// It is the primary point of [`focus_points`](Self::focus_points) as
+    /// a [`Focus`], with the list's frame and origin. The docs of
+    /// [`Focus`] say which cameras record one.
     ///
-    /// A Nikon DSLR shot through the viewfinder records no position, only
-    /// the number of an autofocus point. For a body whose table of points
-    /// raw-files has, the Nikon D600, that point is placed from the table,
-    /// in the body's full-size output frame, with the origin
-    /// [`Table`](crate::FocusOrigin::Table) and [`in_focus`](Focus::in_focus)
-    /// `None`, since the file does not say whether focus was confirmed
-    /// there. On a crop that the body's table was checked on, with frames
-    /// shot in that crop, the D600's DX crop, it is placed in the crop's
-    /// window, the middle of the table's frame that the crop keeps: the
-    /// frame less the crop's left and top margins, which the file records,
-    /// cut from both sides. It is `None` when the window leaves it out, and
-    /// any other crop gives `None`.
+    /// It is `None` when there is no list, or the list names no primary:
     ///
-    /// It is `None` on a Nikon file that records no position and names no
-    /// point that raw-files can place, such as a shot through the
-    /// viewfinder of a body without a table, and on a manual-focus shot.
-    /// It is `None` too when the AFInfo2 version is one raw-files does not
-    /// know, and on a crop whose point cannot be placed on the cropped
-    /// picture: a 1:1 or 16:9 crop on a small raw, or a crop whose CropArea
-    /// cannot be used.
+    /// - in a file of a maker other than Nikon or Sony;
+    /// - on a manual-focus shot;
+    /// - when the file records no position, and names no point that
+    ///   raw-files can place. A shot through the viewfinder of a Nikon
+    ///   DSLR is one, on a body without a table of points;
+    /// - in a record of a layout raw-files does not read, such as an
+    ///   AFInfo2 version it does not know;
+    /// - on a crop whose point cannot be placed on the cropped picture;
+    /// - in a JPEG whose picture has another shape than the frame the
+    ///   point is measured in, as an export cut or turned upright has.
     ///
-    /// On Sony files it is read from the MakerNote's FocusLocation, on the
-    /// bodies from the ILCE-7RM2 on, as the camera recorded it and as the
-    /// [ARW format notes](https://github.com/kuolas/raw-files/blob/master/docs/formats/arw/makernote-and-metadata.md)
-    /// describe. Its frame is the picture as the camera framed it, which
-    /// differs from the image size on a picture taken at another aspect
-    /// ratio than the sensor's, and can on a medium or small raw: the
-    /// ILCE-7M4 records the full size there, the ILCE-9M3 the stored size.
-    /// It is `None` on a manual-focus shot and on the older bodies, which
-    /// record only an autofocus point's number or nothing at all, and its
-    /// [`in_focus`](Focus::in_focus) is always `None`: Sony records it in
-    /// no plain tag. The area's size is read from the MakerNote's
-    /// FocusFrameSize, which the bodies record only from the ILCE-7SM3 on,
-    /// so on the bodies before it [`size`](Focus::size) is `None`.
+    /// A JPEG that an editor cut to the camera's shape, or cut from a
+    /// Nikon crop-mode JPEG, keeps a point that may be misplaced
+    /// ([the open questions on JPEG files](https://github.com/kuolas/raw-files/blob/master/docs/formats/jpeg/open-questions.md#1-decisions-for-the-maintainers)).
     ///
-    /// A [`Format::Jpeg`](crate::Format::Jpeg) file of a Nikon or a Sony
-    /// camera gives the point as its raw file would. A Nikon crop-mode JPEG
-    /// (DX, 1:1 or 16:9), which has no CropArea, has its point placed on the
-    /// JPEG's own picture; a point placed from a table on a crop is given
-    /// only when the JPEG's size is the crop's window, which on the D600 is
-    /// the full image size. A JPEG's point is given only when its frame has
-    /// the picture's shape, so an export cut to another shape, or turned
-    /// upright, gives `None`. The exceptions are an export cut from a Nikon
-    /// crop-mode JPEG, and an export of a D600 JPEG cut or scaled to
-    /// exactly the Medium size, which is read as a Medium JPEG: their
-    /// points may be misplaced, by far on a cut. A D600 Medium JPEG,
-    /// 4512x3008, whose picture shows the 6010x4006 window centered in the
-    /// 6016x4016 frame rather than the whole frame, gives the point placed
-    /// from the table in that window, its frame 6010x4006, which has the
-    /// JPEG's shape; a Small JPEG, 3008x2008, half the frame, gives it in
-    /// the 6016x4016 frame. An export scaled from a Medium JPEG to another
-    /// size takes the whole frame, since the window is kept for the Medium
-    /// size alone: it gives `None` unless it is about 750 pixels tall or
-    /// less, where the shape rule's rounding passes the whole frame and the
-    /// point lands under a pixel off.
+    /// The format notes hold each maker's rules:
+    ///
+    /// - Nikon: [the notes on Nikon's focus point](https://github.com/kuolas/raw-files/blob/master/docs/formats/nef/makernote-and-metadata.md#86-focus-point);
+    /// - Sony: [the notes on Sony's focus point](https://github.com/kuolas/raw-files/blob/master/docs/formats/arw/makernote-and-metadata.md#96-focus-point);
+    /// - a camera's JPEG: [the notes on a JPEG's focus point](https://github.com/kuolas/raw-files/blob/master/docs/formats/jpeg/container-and-metadata.md#12-recommendation-for-raw-files), item 7.
     ///
     /// # Examples
     ///
@@ -478,45 +434,25 @@ impl Metadata {
     /// the center of its area, the area's size when recorded, and whether
     /// the camera confirmed focus there when the file says; which of them
     /// is the primary, the one [`focus`](Self::focus) reports; the area
-    /// mode, when a checked file names its code; and where the points came
-    /// from.
+    /// mode; and where the points came from.
     ///
-    /// The Nikon and Sony readers give the position the camera recorded,
-    /// the one [`focus`](Self::focus) gives, as a list of one point, its
-    /// primary: with no number, with the position's area and whether focus
-    /// was confirmed, and with the origin
-    /// [`Recorded`](crate::FocusOrigin::Recorded).
+    /// A position the camera recorded is a list of one point, its primary,
+    /// with no number and the origin
+    /// [`Recorded`](crate::FocusOrigin::Recorded). A point placed from a
+    /// table of the body's points comes with the other points of the table
+    /// that the file names as used, in number order. Each has its number
+    /// and the table's box, and the list has the origin
+    /// [`Table`](crate::FocusOrigin::Table). On a crop, a point the crop's
+    /// window leaves out is not in the list.
     ///
-    /// For a point that the Nikon reader places from a table of the body's
-    /// points, on a shot through a DSLR's viewfinder, the list is every
-    /// point of the table that the file's record of the points used, one
-    /// bit per point, names, and the primary, whether that record names it
-    /// or not, in number order: each with its number, the table's center
-    /// and box, and `None` for [`in_focus`](crate::FocusPoint::in_focus),
-    /// with the origin [`Table`](crate::FocusOrigin::Table). When the file
-    /// writes no such record, or one that names no point of the table, the
-    /// list is the primary alone. On a crop, the points are in the crop's
-    /// window, the frame of [`focus`](Self::focus), and a point the window
-    /// leaves out is not in the list.
+    /// It is `None` for the reasons [`focus`](Self::focus) gives. Every list
+    /// the readers give has a primary.
     ///
-    /// On a Nikon file the area mode is read from AFInfo2's area-mode byte,
-    /// on every version raw-files reads, and named for the codes that
-    /// frames shot in a known mode confirmed, under the detection method
-    /// the file records: through the viewfinder, by phase detection, 0
-    /// [`Single`](crate::FocusAreaMode::Single), 5
-    /// [`Dynamic`](crate::FocusAreaMode::Dynamic), 8
-    /// [`Auto`](crate::FocusAreaMode::Auto) and 9
-    /// [`Tracking`](crate::FocusAreaMode::Tracking); under any detection
-    /// method, 193 [`Single`](crate::FocusAreaMode::Single) and 197
-    /// [`Auto`](crate::FocusAreaMode::Auto); and under contrast or hybrid
-    /// detection, 207 [`Tracking`](crate::FocusAreaMode::Tracking). Any other
-    /// code, or a DSLR code in live view, gives `None`.
-    /// On a Sony file the area mode is always `None`, since the codes of its
-    /// AFAreaModeSetting are not checked.
-    ///
-    /// The list is `None` when the file records no focus point that
-    /// raw-files reads, for the reasons [`focus`](Self::focus) gives; every
-    /// list the readers give has a primary.
+    /// The area mode is named only for the codes that frames shot in a
+    /// known mode confirmed, and is `None` for any other code. On a Sony
+    /// file it is always `None`, since the codes of its AFAreaModeSetting
+    /// are not checked. The codes named on a Nikon file are in
+    /// [the notes on Nikon's focus point](https://github.com/kuolas/raw-files/blob/master/docs/formats/nef/makernote-and-metadata.md#86-focus-point).
     ///
     /// # Examples
     ///
@@ -741,16 +677,13 @@ impl Metadata {
 /// caller's tests start from it and set the values they need with the
 /// `with_…` methods, such as [`with_iso`](Self::with_iso), each named after
 /// the method that reads the value back and each replacing any value set
-/// before. As for [`Metadata`], every value is optional, so the empty
-/// `Exposure` is the start of every chain and there is no separate builder
-/// type.
+/// before. The empty `Exposure` is the start of every chain.
 ///
 /// The `with_…` methods store each value as given: none refuses or changes
 /// one, so a test reads back even a zero it wrote, such as an ISO of 0 or
 /// an f-number of 0/10, though the readers never return a zero ISO,
 /// exposure time, f-number, focal length or focal length in 35 mm terms.
-/// `Exposure` is not `Copy`, so that a later value that cannot be copied
-/// does not break callers.
+/// `Exposure` is `Clone` and not `Copy`.
 ///
 /// # Examples
 ///
@@ -913,9 +846,7 @@ impl Exposure {
 /// tests start from it and set the values they need with the `with_…`
 /// methods, such as [`with_recorded_model`](Self::with_recorded_model),
 /// each named after the method that reads the value back and each replacing
-/// any value set before. As for [`Exposure`], every value is optional, so
-/// the empty `Lens` is the start of every chain and there is no separate
-/// builder type.
+/// any value set before. The empty `Lens` is the start of every chain.
 ///
 /// The `with_…` methods store each value as given. A text is not trimmed or
 /// otherwise changed, and a model made only of `-` characters is kept,

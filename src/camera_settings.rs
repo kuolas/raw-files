@@ -64,13 +64,10 @@ use crate::rational::SignedRational;
 /// set the values they need with the `with_…` methods, such as
 /// [`with_metering_mode`](Self::with_metering_mode), each named after the
 /// method that reads the value back and each replacing any value set
-/// before. As for [`Metadata`](crate::Metadata), every value is optional,
-/// so the empty record is the start of every chain and there is no
-/// separate builder type.
+/// before. The empty record is the start of every chain.
 ///
 /// The `with_…` methods store each value as given: none refuses or changes
-/// one. `CameraSettings` is not `Copy`, so that a later value that cannot
-/// be copied does not break callers.
+/// one. `CameraSettings` is `Clone` and not `Copy`.
 ///
 /// # Examples
 ///
@@ -329,8 +326,7 @@ impl CameraSettings {
 /// store each value as given, so a test reads back even a color
 /// temperature of 0; the readers' rules that a recorded 0 or a number
 /// above 99,999 K gives `None` are not the builders'. `WhiteBalance` is
-/// not `Copy`, so that a later part that cannot be copied does not break
-/// callers.
+/// `Clone` and not `Copy`.
 ///
 /// # Examples
 ///
@@ -476,9 +472,8 @@ impl WhiteBalance {
 ///
 /// A fine-tuning always has both shifts: a file that records a shift
 /// along one axis only gives no fine-tuning, since no file shows which
-/// axis it is on. There is no `Default`, since there is no empty
-/// fine-tuning: a file that records none gives `None` for
-/// [`WhiteBalance::fine_tune`].
+/// axis it is on. There is no `Default`: a file that records none gives
+/// `None` for [`WhiteBalance::fine_tune`].
 ///
 /// # Equality
 ///
@@ -538,8 +533,8 @@ impl FineTune {
 /// Red-eye reduction and whether the flash's return light was detected,
 /// which Exif records beside them, are not given.
 ///
-/// There is no `Default`, since a flash always says whether it fired: a
-/// file that records no flash gives `None` for [`CameraSettings::flash`].
+/// There is no `Default`: a file that records no flash gives `None` for
+/// [`CameraSettings::flash`].
 ///
 /// # Examples
 ///

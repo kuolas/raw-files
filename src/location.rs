@@ -242,10 +242,9 @@ impl Location {
 /// Two latitudes are equal when their hemisphere and their three fractions
 /// are the same as recorded, as for [`Rational`]: minutes of 30/1 are not
 /// equal to 300000/10000, and 0° north is not equal to 0° south. There is
-/// no `Ord`, since an order by angle would disagree with that equality;
-/// sort by [`to_decimal_degrees`](Self::to_decimal_degrees) to order by
-/// angle. There is no `Display` either: a program formats degrees as it
-/// shows them.
+/// no `Ord`. Sort by [`to_decimal_degrees`](Self::to_decimal_degrees) to
+/// order by angle. There is no `Display` either: a program formats degrees
+/// as it shows them.
 ///
 /// # Examples
 ///
@@ -560,8 +559,7 @@ impl Altitude {
 /// # Equality
 ///
 /// Two directions are equal when their north and their fraction are the
-/// same as recorded, as for [`Rational`]. There is no `Ord`, since a
-/// bearing turns round to its start.
+/// same as recorded, as for [`Rational`]. There is no `Ord`.
 ///
 /// # Examples
 ///

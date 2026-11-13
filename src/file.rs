@@ -48,7 +48,7 @@ use crate::preview::{self, Preview};
 /// handle holds nothing else that would prevent it, and the library keeps no
 /// global state, so files can be opened and read on a thread pool, one
 /// handle per thread. Reading takes `&mut self`; a [`Preview`] is `Copy`, so
-/// copy the one you want out of the handle before reading it.
+/// copy the one to read out of the handle before reading it.
 ///
 /// # Examples
 ///
@@ -100,8 +100,8 @@ impl RawFile<File> {
     ///
     /// # Errors
     ///
-    /// `Io` if the file cannot be opened, and otherwise as for
-    /// [`from_reader`](Self::from_reader).
+    /// [`Io`](crate::ErrorKind::Io) if the file cannot be opened, and
+    /// otherwise as for [`from_reader`](Self::from_reader).
     pub fn open(path: impl AsRef<Path>) -> Result<Self> {
         Options::new().open(path)
     }
@@ -132,24 +132,27 @@ impl<R: Read + Seek> RawFile<R> {
     /// The file starts at the reader's start, whatever its position, and
     /// the format is detected from its content.
     ///
-    /// Reads go through the library's own block cache, which seeks before
-    /// every read, so wrapping the reader in a [`std::io::BufReader`]
-    /// gains nothing: the library seeks before every read and reads whole
-    /// blocks, so the wrapper's buffer is never used. Pass the `File` or
-    /// reader as it is.
+    /// Pass the `File` or reader as it is. Wrapping it in a
+    /// [`std::io::BufReader`] gains nothing. The library reads whole
+    /// blocks through a cache of its own, and seeks before every read, so
+    /// the wrapper's buffer is never used.
     ///
     /// This is [`Options::new().from_reader(reader)`](Options::from_reader).
     ///
     /// # Errors
     ///
-    /// `UnknownFormat` if the file is not a RAW file or a JPEG file this
-    /// version recognizes; `Malformed` if its structure is damaged;
-    /// `LimitExceeded` if reading its structure would cross one of the
-    /// [`Limits`], as a RAW file's Make longer than
-    /// [`Limits::max_value_bytes`] does, though a limit crossed inside a
-    /// JPEG file's Exif or MPF segment is not an error: it costs at most
-    /// what that segment holds, the Exif values and thumbnail or the MPF
-    /// images, as damage there does; `Io` if the reader fails.
+    /// - [`UnknownFormat`](crate::ErrorKind::UnknownFormat) if the file is
+    ///   not a RAW file or a JPEG file this version recognizes.
+    /// - [`Malformed`](crate::ErrorKind::Malformed) if its structure is
+    ///   damaged.
+    /// - [`LimitExceeded`](crate::ErrorKind::LimitExceeded) if reading its
+    ///   structure would cross one of the [`Limits`]. A RAW file's Make
+    ///   longer than [`Limits::max_value_bytes`] does.
+    /// - [`Io`](crate::ErrorKind::Io) if the reader fails.
+    ///
+    /// A limit crossed inside a JPEG file's Exif or MPF segment is not an
+    /// error. It costs at most what that segment holds, as damage there
+    /// does: the Exif values and the thumbnail, or the MPF images.
     pub fn from_reader(reader: R) -> Result<Self> {
         Options::new().from_reader(reader)
     }
@@ -305,14 +308,16 @@ impl<R: Read + Seek> RawFile<R> {
     ///
     /// # Errors
     ///
-    /// `LimitExceeded` if the value is longer than
-    /// [`Limits::max_value_bytes`] allows, at the value's offset, before
-    /// anything is allocated or read; `Malformed` if the value does not lie
-    /// inside this file, which happens when `entry` came from another file,
-    /// since an `Entry` is `Copy` and carries no tie to its file, while the
-    /// value of an entry of another file that does lie inside this one is
-    /// read from this file; `Io` if the reader fails, as it does when the
-    /// file has shrunk since it was opened.
+    /// - [`LimitExceeded`](crate::ErrorKind::LimitExceeded) if the value is
+    ///   longer than [`Limits::max_value_bytes`] allows, at the value's
+    ///   offset, before anything is allocated or read.
+    /// - [`Malformed`](crate::ErrorKind::Malformed) if the value does not
+    ///   lie inside this file. That happens when `entry` came from another
+    ///   file, since an `Entry` is `Copy` and carries no tie to its file.
+    ///   The value of an entry of another file that does lie inside this
+    ///   one is read from this file.
+    /// - [`Io`](crate::ErrorKind::Io) if the reader fails, as it does when
+    ///   the file has shrunk since it was opened.
     ///
     /// # Examples
     ///
@@ -383,15 +388,17 @@ impl<R: Read + Seek> RawFile<R> {
     ///
     /// # Errors
     ///
-    /// `LimitExceeded` if the preview is longer than
-    /// [`Limits::max_preview_bytes`] allows, at the preview's offset, before
-    /// anything is allocated or read; `Malformed` if the preview does not
-    /// lie inside this file, which happens when `preview` came from another
-    /// file, since a `Preview` is `Copy` and carries no tie to its file;
-    /// `Io` if the reader fails. `LimitExceeded` is also returned when the
-    /// preview's bytes cannot be held in memory on this platform (a length
-    /// past what a `Vec` can hold, or an allocation that fails), whatever the
-    /// limits are: `max_preview_bytes` cannot make such a preview fit.
+    /// - [`LimitExceeded`](crate::ErrorKind::LimitExceeded) if the preview
+    ///   is longer than [`Limits::max_preview_bytes`] allows, at the
+    ///   preview's offset, before anything is allocated or read. It is
+    ///   also returned, whatever the limits, when the preview's bytes
+    ///   cannot be held in memory on this platform: a length past what a
+    ///   `Vec` can hold, or an allocation that fails.
+    /// - [`Malformed`](crate::ErrorKind::Malformed) if the preview does not
+    ///   lie inside this file. That happens when `preview` came from
+    ///   another file, since a `Preview` is `Copy` and carries no tie to
+    ///   its file.
+    /// - [`Io`](crate::ErrorKind::Io) if the reader fails.
     pub fn read_preview_into(&mut self, preview: &Preview, buf: &mut Vec<u8>) -> Result<()> {
         let offset = preview.byte_range().start;
         if preview.byte_len() > self.limits.max_preview_bytes() {

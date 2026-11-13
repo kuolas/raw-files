@@ -59,11 +59,10 @@ const MAX_OFFSET_MINUTES: i16 = 14 * 60;
 /// number of sub-second digits. So `10:20:30.5` and `10:20:30.50` are not
 /// equal, although they name the same moment.
 ///
-/// `DateTime` has no ordering, because local times do not order by their
-/// fields: 10:00 at an offset of `+02:00` came before 09:00 at `+00:00`,
-/// and a time without an offset cannot be placed against either. Sort by
-/// the getters in the order you need, such as `(year, month, day, hour,
-/// minute, second, nanosecond)` for the order of one camera's clock.
+/// `DateTime` has no ordering. Sort by the getters in the order needed,
+/// such as `(year, month, day, hour, minute, second, nanosecond)` for the
+/// order of one camera's clock
+/// ([the decision on the shape of the API](https://github.com/kuolas/raw-files/blob/master/docs/architecture-decisions/adr009-public-api-shape.md)).
 ///
 /// # Display
 ///

@@ -28,8 +28,7 @@ use crate::value_error::ValueError;
 /// A fraction of two unsigned numbers, exactly as the file stored it, such
 /// as an exposure time of 10/3200 s.
 ///
-/// Its fields are public because it is a small fixed value: a numerator and
-/// a denominator, nothing more.
+/// Its fields are public.
 ///
 /// The values of [`Metadata`](crate::Metadata) never have a zero
 /// denominator, nor do the ones [`new`](Self::new) builds. A fraction in
@@ -43,8 +42,8 @@ use crate::value_error::ValueError;
 /// not equal to 1/320, although they are the same number. Compare their
 /// [`reduced`](Self::reduced) forms to compare the numbers.
 ///
-/// There is no `Ord` for the same reason: an order by value would disagree
-/// with this equality. Sort by [`to_f64`](Self::to_f64) to order by value.
+/// There is no `Ord`. Sort by [`to_f64`](Self::to_f64) to order by value
+/// ([the decision on the shape of the API](https://github.com/kuolas/raw-files/blob/master/docs/architecture-decisions/adr009-public-api-shape.md)).
 ///
 /// # Examples
 ///
@@ -172,9 +171,8 @@ impl fmt::Display for Rational {
 /// A fraction of two signed numbers, exactly as the file stored it, such
 /// as an exposure bias of -2/3 EV.
 ///
-/// Its fields are public because it is a small fixed value: a numerator and
-/// a denominator, nothing more. The sign may be on either number, or on
-/// both, as the file stored it.
+/// Its fields are public. The sign may be on either number, or on both, as
+/// the file stored it.
 ///
 /// The values of [`Metadata`](crate::Metadata) never have a zero
 /// denominator, nor do the ones [`new`](Self::new) builds. A fraction in
@@ -188,8 +186,7 @@ impl fmt::Display for Rational {
 /// equal to -1/3, nor 2/-3 to -2/3, although they are the same number.
 /// Compare their [`reduced`](Self::reduced) forms to compare the numbers.
 ///
-/// There is no `Ord` for the same reason: an order by value would disagree
-/// with this equality. Sort by [`to_f64`](Self::to_f64) to order by value.
+/// There is no `Ord`. Sort by [`to_f64`](Self::to_f64) to order by value.
 ///
 /// # Examples
 ///
