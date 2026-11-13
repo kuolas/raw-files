@@ -1,259 +1,49 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! The Sony MakerNote: where it lies in the file, how its directory is
-//! found, what is checked before anything in it is read, and the focus
-//! point and the camera settings read from it.
+//! The Sony MakerNote reader: how its directory is found and checked, and
+//! the focus point and the camera settings read from it.
 //!
-//! The MakerNote is a block of Sony's own metadata, the value of the
-//! MakerNote tag of the Exif IFD: a directory of Sony's tags, an IFD like
-//! the file's own, with the values it points at. raw-files reads it for
-//! what no standard tag records and Sony keeps in plain tags of this
-//! directory: the point where the camera focused, as the decision on
-//! focus points decided (ADR012); and the camera settings that only the
-//! MakerNote records, by the decision to read the standard tags first and
-//! a maker's MakerNote only where they record nothing (ADR011).
+//! The MakerNote is a directory of Sony's tags, an IFD like the file's
+//! own. raw-files reads it for what no standard tag records and Sony keeps
+//! in plain tags: the point where the camera focused (ADR012), and the
+//! camera settings that only the MakerNote records (ADR011). Nothing is
+//! deciphered: Sony enciphers several tags' values, and none of them is
+//! read. FileFormat (0xB000), SonyModelID (0xB001) and the lens tags are
+//! not read either, since the standard tags give the camera and the lens.
 //!
-//! Sony has written the block in several layouts, told apart by its first
-//! bytes:
+//! The parts, in the order a file is read:
 //!
-//! - **A header, then the IFD 12 bytes in.** The DSLR-A100's ARW 1.0 starts
-//!   its MakerNote with `SONY DSC `, a space and three NULs included
-//!   (public sample 2346 of raw.pixls.us). ExifTool's documentation lists
-//!   four more headers for Sony files, seen in no sample: `SONY CAM ` and
-//!   three NULs; `SONY MOBILE`; two NULs, `SONY PIC` and a NUL; and `VHAB`,
-//!   five spaces and a NUL. The last three are shorter than 12 bytes, and
-//!   the bytes after them, up to the IFD, are not looked at.
-//! - **No header: the IFD at the block's start.** Every other ARW, SR2 and
-//!   ARQ sample writes this one, the Hasselblad Lunar's among them (sample
-//!   4051). The SRF files of the earliest bodies keep a chain of IFDs
-//!   there; the first is read as a plain IFD, with its single entry, and
-//!   the chain is not followed.
-//! - **No Sony directory at all.** A block that starts with `SONY PI` and a
-//!   NUL, or `PREMI` and a NUL, is in Olympus's format, with Olympus's
-//!   tags, and one that starts with `SONY PIC` and a NUL is text.
-//!   ExifTool's documentation lists them for the JPEG files of Sony's
-//!   compacts, and none of the RAW samples holds one. Such a block gives no
-//!   MakerNote, even with an IFD after it, since what it holds is not
-//!   Sony's directory.
+//! - [`read`] tells the block's layout by its first bytes ([`ifd_start`]),
+//!   and reads its IFD once, into a [`MakerNote`];
+//! - [`metadata`] reads the camera settings ([`camera_settings`]) and the
+//!   focus point ([`focus`]);
+//! - [`MakerNote::add_entries`] lists the IFD's entries in the raw view.
 //!
-//! The headers are looked for first, then the blocks that hold no Sony
-//! directory; any other block is taken to start with its IFD. The file's
-//! Make is not looked at here: the format's reader has already decided by
-//! it that the file is Sony's, the ARW reader in its claim and the JPEG
-//! reader by IFD0's Make, both by the name [`SONY`].
-//!
-//! Every offset inside the block counts from the TIFF header of the
-//! structure that holds the MakerNote, as the offsets of that structure's
-//! own IFDs do, and as in Nikon's headerless layout: not from the block,
-//! nor from a header of its own, as in Nikon's other layout. In an ARW
-//! file that header is the start of the file: on the A100, tag 0xB028
-//! records the offset of a Minolta-format IFD, and the IFD lies at that
-//! offset from the file's start (sample 2346). In a JPEG file it is the
-//! TIFF header inside the Exif segment: the Sony JPEG files that ADR014
-//! describes count from there. So the IFD is read in a block
-//! whose base is the Exif IFD's, the header of the structure the Exif IFD
-//! was read in. The block's numbers are in the file's byte order, the one
-//! the Exif IFD was read in. Every ARW sample is little-endian. The one
-//! big-endian Sony file known is the DSLR-A100's JPEG from Wikimedia
-//! Commons, whose MakerNote's entries read only in the file's order, as
-//! the ARW notes record (`docs/formats/arw/makernote-and-metadata.md`,
-//! section 1); it holds no focus tag.
+//! The Make is not looked at here: the format's reader has taken the file
+//! for a Sony one by [`SONY`]. Every offset inside the block counts from
+//! the TIFF header of the structure that holds the MakerNote, as in Nikon's
+//! headerless layout. Every number is in that structure's byte order. So
+//! the IFD is read through the block ([`MakerNoteBlock::ifd_at`]).
 //!
 //! The four bytes after the IFD's entries are not a next-IFD pointer to
-//! rely on: they are zero on the older bodies, such as the A100, the NEX-5
-//! and the DSC-R1, and the first bytes of the values on the RX100 and every
-//! ILCE and RX body since 2012. They are neither used nor required, as the
-//! ARW security notes ask (`docs/formats/arw/security.md`, item A5). Nor
-//! need the tags be sorted: Sony writes other IFDs with tags out of order
-//! (the raw SubIFD of the ILCE-9, samples 1541 and 1542), and the IFD keeps
-//! the order of the file, each tag found wherever it is.
+//! rely on. They are zero on the older bodies, such as the A100, the NEX-5
+//! and the DSC-R1, and the first bytes of the values on the newer ones.
+//! They are neither used nor required, as the ARW security notes ask
+//! (`docs/formats/arw/security.md`, item A5). Nor need the tags be sorted:
+//! the IFD keeps the file's order, and each tag is found wherever it is.
 //!
-//! Nothing in the block is trusted. Its IFD is read inside the block
-//! ([`MakerNoteBlock::ifd_at`]), as the Nikon reader's are: the IFD must
-//! lie inside the block with its count and its whole entry table, and
-//! every entry whose value lies outside the block is dropped, as an entry
-//! whose value lies outside the file is, so every value read from it lies
-//! inside the block. The raw view lists the IFD's entries as the directory
-//! `MakerNote` ([`Directory`]), with the entries dropped
-//! counted; among them the records Sony enciphers, such as 0x2010 and
-//! 0x9050, which are plain UNDEFINED entries whose bytes the view gives as
-//! recorded, neither marked nor deciphered (ADR023).
-//! A value is read only in the shape its tag's rule names, its type and its
-//! number of values, which the reader declares once, beside the tag's
-//! number ([`Rule`]); a value of another type
-//! or count is never read ([`Ifd::get`]). The fine-tuning's rule names
-//! SLONG alone, so that a negative value is never read as a large one.
-//! The signatures are looked for in at most the block's first 12 bytes,
-//! never past its end. A block too short for its header or for the IFD's
-//! count, an IFD cut short by the block's end, one with no entries, and one
-//! with more entries than the limits allow cost the MakerNote, never the
-//! file. Only a failure of the reader itself is an error: that is not the
-//! file's fault, and says nothing about the MakerNote.
+//! Nothing the block holds is an error. A block too short for its header
+//! or for the IFD's count, or an IFD cut short, with no entries or with
+//! more than the limits allow, costs the MakerNote, never the file.
 //!
-//! Nothing in the block is deciphered: Sony enciphers several of its tags'
-//! values, and none of them is read. FileFormat (0xB000), SonyModelID
-//! (0xB001) and the lens tags are not read either: the standard tags give
-//! the camera and the lens (ADR011).
-//!
-//! The MakerNote is read once per file, into a [`MakerNote`]: its block
-//! found and checked, its IFD parsed. Every use of the MakerNote is to read
-//! from that same structure, as the Nikon reader's do, so that none of them
-//! finds, checks or parses the block again.
-//!
-//! # The focus point
-//!
-//! The bodies from the ILCE-7RM2 (2015) on record where the camera focused
-//! as a position in pixels, in plain tags of the MakerNote IFD, outside
-//! the values Sony enciphers. The tags' meanings are those of ExifTool's
-//! documentation, confirmed on the 36 public samples that the ARW notes
-//! list (`docs/formats/arw/makernote-and-metadata.md`, section 9.6), and
-//! every one of their values lies inside the block on every sample:
-//!
-//! - **FocusLocation** ([`FOCUS_LOCATION`]) says where the camera focused:
-//!   the width and height of a frame, then the x and y of the focus area's
-//!   center in it. Every sample from the ILCE-7RM2 on has it; the ILCE-7S,
-//!   the NEX-5, the RX100, the A-mount bodies, the Hasselblad Lunar and the
-//!   older formats do not. The ILCE-9M3, the ILCE-1M2 and the ILCE-7M5
-//!   repeat it in **FocusLocation2** ([`FOCUS_LOCATION2`]), equal to it on
-//!   every sample. FocusLocation2 is read only when FocusLocation gives
-//!   nothing; no sample has FocusLocation2 alone, so such a file is
-//!   unchecked.
-//! - **FocusFrameSize** ([`FOCUS_FRAME_SIZE`]) says how large the focus
-//!   area is, on the bodies from the ILCE-7SM3 (2020) on: from 92 by 94
-//!   pixels on the ILCE-7SM3 (public sample 5418) to 1386 by 998 on the
-//!   ILCE-1M2 (file 7835). Its numbers are in the file's byte order, like
-//!   every number in the block; every sample is little-endian, so that a
-//!   big-endian file's are too is unchecked.
-//! - **FocusMode** ([`FOCUS_MODE`]) says how the camera focused: manual
-//!   focus, or one of the autofocus modes.
-//!
-//! The position is the center of the area. Several autofocus shots with an
-//! area sit at exactly half their frame, such as the ILCE-1's (4320, 2880)
-//! in 8640 by 5760 pixels with an area of 1026 by 912 (file 4466) and the
-//! ILCE-6700's (file 6736); and the ILCE-7RM3's agrees with the spot that
-//! another tag, FlexibleSpotPosition, records on a grid of 640 by 480
-//! (file 3251).
-//!
-//! The frame is the picture as the camera framed it, in the orientation of
-//! the stored image and at the file's scale, which is not always the image
-//! size raw-files reports. It is 6000 by 4000 on the ILCE-9 (files 1541
-//! and 1542). On the RX100M6's 1:1 file it is 3648 by 3648, while the
-//! image size is the 5472 by 3648 default crop (file 3012), and on its 16:9
-//! file 5472 by 3080 (file 3015). On the ILCE-7M4's medium and small raws
-//! it is the full-size 7008 by 4672, larger than the stored image (files
-//! 6930 and 6931), and on the ILCE-9M3's small raw 3008 by 2000 (file
-//! 7364). The point is given as recorded, built through [`Focus::new`] and
-//! [`Focus::with_size`]: a frame with a zero side or a center off the
-//! frame gives none, and so does an area that does not fit inside the
-//! frame around its center, since such a record cannot be used, as on a
-//! Nikon file (ADR012). A side of zero in FocusFrameSize says only that no
-//! size is recorded, and the point is kept without one.
-//!
-//! A shot in manual focus still records a location, the frame's exact
-//! center, with FocusMode 0: the ILCE-7RM2's files 1310 and 1311, and the
-//! ILCE-9M3's 7361 and 7364, whose FocusFrameSize is all zeros. The camera
-//! did not focus on that point, so FocusMode 0 gives none, whatever
-//! FocusLocation holds (ADR012). Nothing else in the plain tags says that
-//! no autofocus took place, so any other FocusMode, or none, keeps the
-//! point. The ILCE-7S's file is a manual-focus shot without FocusLocation
-//! (file 1582). No plain tag says whether focus was confirmed either, so
-//! [`Focus::in_focus`] is never set.
-//!
-//! The point is given as a list of one, its primary ([`FocusPoints`]),
-//! with no area mode: AFAreaModeSetting is not read, since no file shot in
-//! a known mode has checked what its codes mean.
-//!
-//! # The camera settings
-//!
-//! The MakerNote also records how the camera was set for the picture,
-//! beyond what the Exif tags record (ADR011): the white balance setting
-//! itself, where Exif says only auto or the kind of light; the color
-//! temperature of a chosen color temperature or of a custom white
-//! balance; the photographer's fine-tuning of the white balance; and the
-//! electronic front curtain setting. Each comes
-//! from one plain tag of the MakerNote IFD, of the exact type and count its
-//! rule names, and a code gives a value only where a checked file shows
-//! what it means; anything else costs that value alone ([`camera_settings`]).
 //! The meaning of each code is ExifTool's, read in its published tag
-//! documentation, and confirmed on the public samples and on 32 frames
-//! I shot with an ILCE-7M2 under each setting, and two more under custom,
-//! as the ARW notes record them
-//! (`docs/formats/arw/makernote-and-metadata.md`, section 9.7). Sony's
-//! Imaging Edge Desktop was run on those frames as a reader to compare
-//! with. Every settings tag of every checked file lies inside the
-//! block, the A200's, the A700's and the A900's too, whose values of other
-//! tags run past it.
-//!
-//! The other settings stay as the Exif tags give them. The shutter used and
-//! whether the body shot in APS-C mode are recorded only in enciphered
-//! blocks, which are not read, so they are `None`; so is the raw size,
-//! since the plain Quality tag (0x202E) gives an APS-C raw the code of a
-//! medium one. The color space is Exif's alone, which every checked Sony
-//! file records.
-//!
-//! **WhiteBalance** ([`WHITE_BALANCE`]) is one LONG, a code for the
-//! setting. On the ILCE-7M2's frames it is 0 under auto, 16 under
-//! daylight, 32 under cloudy, 48 under shade, 64 under tungsten, 80 under
-//! flash, 96 under each of the four fluorescent lamps, 112 under custom,
-//! 128 under underwater, and 1 under a chosen color temperature; the
-//! public samples hold 0, 48 and 112 ([`white_balance_mode`]). ExifTool's
-//! documentation names 1 a color temperature or a color filter; no
-//! frame was shot with a color filter, so whether one gives 1 too is
-//! unchecked. The setting takes the place of Exif's mode, which agrees
-//! with it on every file checked but under underwater, where Exif's
-//! WhiteBalance says auto. Any other code, or a tag of another shape,
-//! gives way to Exif's mode. The DSC-F828 and the DSC-R1 write no such tag,
-//! and the DSLR-A100 keeps it in a Minolta-format IFD of its own, which is
-//! not read, so their mode is Exif's.
-//!
-//! Two more tags would seem to record the white balance, and neither is
-//! read. 0xB054, which ExifTool's documentation also calls WhiteBalance,
-//! says auto on the ILCE-7S's file and the RX100M4's JPEG, both set to
-//! shade, and on the frames shot under shade and under a chosen color
-//! temperature. 0x0112, which that documentation calls
-//! WhiteBalanceFineTune, holds the kind of fluorescent lamp: -1 to 2 under
-//! the four lamps, and 0 under every other setting and on every frame with
-//! a fine-tuning; Imaging Edge Desktop shows it in brackets after the
-//! setting, such as "Fluorescent (+1)".
-//!
-//! **ColorTemperature** ([`COLOR_TEMPERATURE`]) is one LONG, in kelvin.
-//! Under a chosen color temperature it holds the one chosen: 5500 on the
-//! first frame shot under that setting and 3200 on the later ones. Under
-//! custom it holds the custom white balance's own temperature: 5500 on a
-//! frame shot with the camera's old custom white balance while the
-//! color-temperature setting stood at 3200, and 6300 on one shot after a
-//! new custom white balance was measured, the value the camera showed for
-//! it; the ILCE-9M3's two public samples, shot under custom, hold 5500
-//! too. Under every other setting it holds 0 on every file checked, the
-//! public samples, my own files and the frames, and 0 gives none. So
-//! it is read under whichever setting, as Nikon's is, and the white
-//! balance mode beside it says which color temperature it is. It
-//! gives one only from 1 to 99,999 K, the bound Nikon's color
-//! temperatures are held to too: a larger number is no temperature a
-//! camera is set to.
-//!
-//! The fine-tuning is a shift of the white balance along two axes, amber to
-//! blue and green to magenta. **WBShiftAB_GM** ([`FINE_TUNE`]) holds it as
-//! two SLONGs, whole steps, on every body checked but the DSLR-A100, A200,
-//! A700 and A900, the SLT-A55V, the NEX-5, the DSC-F828 and the DSC-R1,
-//! which write none; every public sample that writes it holds `0, 0`. On
-//! the ILCE-7M2's frames it holds `3, 0` on a frame whose picture is warmer
-//! than the one shot without a shift, `-3, 0` on a cooler one, `0, -3` on a
-//! greener one and `0, 3` on a more magenta one; Imaging Edge Desktop names
-//! three of those shifts A3, G3 and M3. So the first value runs from blue,
-//! negative, to amber, positive, and the second from green, negative, to
-//! magenta, positive. [`FineTune`] signs its amber to blue shift positive
-//! towards blue, so the first value is turned around and the second kept,
-//! each as a fraction over 1 ([`fine_tune_of`]). A recorded `0, 0` is a
-//! fine-tuning like any other.
-//!
-//! **ElectronicFrontCurtainShutter** ([`ELECTRONIC_FRONT_CURTAIN`]) is one
-//! LONG, the electronic front curtain setting: 0 off and 1 on, as the two
-//! frames shot with it off and the others show. The SLT-A99V, the ILCE-7S
-//! and every later body checked write it. It is the menu setting, not the
-//! shutter used: on four public samples it contradicts what an enciphered
-//! block says of the release, as ExifTool, run on the files as a reader to
-//! compare with, decodes it, so it never gives the shutter.
+//! documentation. Each was confirmed on the public samples and on frames I
+//! shot with an ILCE-7M2 under each setting, also read in Sony's Imaging
+//! Edge Desktop, run as a reader to compare with. The ARW notes record
+//! them, and give the layouts (`docs/formats/arw/makernote-and-metadata.md`,
+//! section 1), what each focus tag records (section 9.6) and each settings
+//! tag (section 9.7). A sample cited here by number is the file of that
+//! number on raw.pixls.us.
 
 use std::io::{Read, Seek};
 
@@ -270,9 +60,8 @@ use crate::metadata::Metadata;
 use crate::rational::SignedRational;
 
 /// The manufacturer's name that a Sony camera's Make starts with, compared
-/// without regard to case: what a format's reader looks for in IFD0's Make
-/// before it takes a file for a Sony one, the ARW claim and the JPEG reader
-/// alike.
+/// without regard to case. The ARW claim and the JPEG reader look for it in
+/// IFD0's Make before they take a file for a Sony one.
 pub(in crate::formats) const SONY: &[u8; 4] = b"SONY";
 
 /// The Sony MakerNote tag that records the white balance setting
@@ -288,7 +77,9 @@ pub(in crate::formats) const FINE_TUNE: u16 = 0x2014;
 
 /// The Sony MakerNote tag that records the electronic front curtain
 /// setting (ElectronicFrontCurtainShutter): one LONG, 0 off and 1 on. It is
-/// the menu setting, not the shutter used.
+/// the menu setting, not the shutter used: on four samples it contradicts
+/// the release an enciphered block records, as ExifTool, run on the files
+/// as a reader to compare with, decodes it.
 pub(in crate::formats) const ELECTRONIC_FRONT_CURTAIN: u16 = 0x201A;
 
 /// The Sony MakerNote tag that records how the camera focused
@@ -319,8 +110,9 @@ const COLOR_TEMPERATURE: u16 = 0xB021;
 
 /// The rules of the tags this reader reads: each tag's number, from the
 /// constants above, and the type and count Sony writes its value in on
-/// every file checked, which a value must have to be read (ADR011).
-/// [`Ifd::get`] and [`Ifd::held`] read them.
+/// every file checked (ADR011). [`Ifd::get`] and [`Ifd::held`] read them.
+/// The fine-tuning's rule names SLONG alone, so that a negative value is
+/// never read as a large one.
 mod rules {
     use crate::container::tiff::{FieldType, Held, Rule};
 
@@ -385,23 +177,15 @@ const SONY_PIC: &[u8; 9] = b"SONY PIC\0";
 const NOT_SONY: [&[u8]; 3] = [SONY_PI, PREMI, SONY_PIC];
 
 /// A Sony MakerNote, its block found and its IFD read: what every use of
-/// the MakerNote starts from, so that the block is found, checked and
-/// parsed once per file.
-///
-/// See the [module documentation](self) for the layouts.
+/// the MakerNote starts from.
 #[derive(Debug)]
 pub(in crate::formats) struct MakerNote {
     /// The MakerNote IFD, which holds Sony's tags: at the block's start, or
-    /// 12 bytes in after a header, inside the block with its whole entry
-    /// table, its offsets counted from the TIFF header of the structure
-    /// that holds the MakerNote. Its entries whose values lie outside the
-    /// block were dropped when it was read, so every value read from it
-    /// lies inside the block.
+    /// 12 bytes in after a header. It was read inside the block, so every
+    /// value read from it lies inside the block.
     ///
-    /// It was read in the block, [`Ifd::block`]: with that header as its
-    /// base, the Exif IFD's, and with bounds where the block's bytes are in
-    /// the file, which every offset found inside the block is checked
-    /// against.
+    /// Its block, [`Ifd::block`], has the MakerNote's bytes as bounds, and
+    /// the Exif IFD's base.
     ifd: Ifd,
 }
 
@@ -409,21 +193,25 @@ impl MakerNote {
     /// Adds the MakerNote IFD to `entries`, as the directory `MakerNote`.
     /// Its next-IFD pointer is never followed: on most files the slot holds
     /// the first value instead, and an SRF file's chain is enciphered.
+    ///
+    /// The records Sony enciphers, such as 0x2010 and 0x9050, are plain
+    /// UNDEFINED entries, listed as recorded, neither marked nor deciphered
+    /// (ADR023).
     pub(in crate::formats) fn add_entries(&self, entries: &mut Entries) {
         entries.push(Directory::MakerNote, &self.ifd);
     }
 }
 
 /// The Sony MakerNote of the file in `src`, whose IFDs are `tree`, read
-/// within `limits`; `None` when the file has no Exif IFD, no MakerNote, a
-/// MakerNote that is not bytes stored out of line, one that holds no Sony
-/// directory, or one whose IFD does not hold together inside the block.
+/// within `limits`.
 ///
-/// See the [module documentation](self) for the layouts and the checks.
+/// `None` when the file has no Exif IFD or no MakerNote, when the
+/// MakerNote is not bytes stored out of line or holds no Sony directory,
+/// or when its IFD does not hold together inside the block.
 ///
 /// # Errors
 ///
-/// `Io` when the reader fails. Nothing the block holds is an error.
+/// `Io` when the reader fails.
 pub(in crate::formats) fn read<R: Read + Seek>(
     src: &mut Source<R>,
     tree: &Tree,
@@ -436,17 +224,15 @@ pub(in crate::formats) fn read<R: Read + Seek>(
     let Some(skip) = ifd_start(&head) else {
         return Ok(None);
     };
-    // The block's offsets count from the header of the TIFF structure that
-    // holds it, and its numbers are in that structure's byte order, the
-    // file's: the Exif IFD's base and order.
+    // The Exif IFD's base and byte order.
     let ifd = block.ifd_at(src, skip, limits)?;
     Ok(ifd.map(|ifd| MakerNote { ifd }))
 }
 
 /// How far into the block the MakerNote IFD starts, from `head`, the
-/// block's first bytes, at most [`HEADER_LEN`] of them: after one of
-/// [`HEADERS`], [`HEADER_LEN`]; at the start, without one; `None` when the
-/// block starts as one of [`NOT_SONY`], and holds no Sony directory.
+/// block's first [`HEADER_LEN`] bytes at most. It is [`HEADER_LEN`] after
+/// one of [`HEADERS`], and 0 without one. `None` when the block starts as
+/// one of [`NOT_SONY`], and holds no Sony directory.
 fn ifd_start(head: &[u8]) -> Option<u64> {
     if HEADERS.iter().any(|header| head.starts_with(header)) {
         Some(HEADER_LEN)
@@ -459,20 +245,21 @@ fn ifd_start(head: &[u8]) -> Option<u64> {
 
 /// The metadata of a file whose Sony MakerNote is `makernote`: `metadata`,
 /// what the standard tags gave, with what the MakerNote records that they
-/// lack, the same in every format whose files carry it, raw or JPEG.
+/// lack. It is the same in every format whose files carry it, raw or JPEG:
 ///
-/// First the camera settings that only the MakerNote records, and the white
-/// balance setting, in place of the mode the Exif tags gave when the
-/// MakerNote names one, each by its own rule ([`camera_settings`]). Then
-/// the focus point, as recorded ([`focus`]), always read: the standard
-/// tags never give one, so it is not a value they may already hold. It is
-/// given as a list of one point, the primary, with no area mode, since
-/// AFAreaModeSetting is not read. The other values are the standard tags'
-/// alone.
+/// - **the camera settings** that only the MakerNote records, and the white
+///   balance setting, in place of the Exif tags' mode
+///   ([`camera_settings`]);
+/// - **the focus point**, as recorded ([`focus`]), always read, since the
+///   standard tags never give one. It is a list of one point, the primary,
+///   with no area mode: AFAreaModeSetting is not read, since no file shot
+///   in a known mode has checked what its codes mean.
+///
+/// The other values are the standard tags' alone.
 ///
 /// # Errors
 ///
-/// `Io` when the reader fails. Nothing the block holds is an error.
+/// `Io` when the reader fails.
 pub(in crate::formats) fn metadata<R: Read + Seek>(
     src: &mut Source<R>,
     makernote: &MakerNote,
@@ -483,29 +270,27 @@ pub(in crate::formats) fn metadata<R: Read + Seek>(
     Ok(metadata)
 }
 
-/// Where the camera focused, as `makernote` records it: the center of the
-/// focus area and the frame it is measured in, from FocusLocation, and the
-/// area's size from FocusFrameSize when it records one. Whether focus was
-/// confirmed is never set: no plain tag records it.
+/// Where the camera focused, as `makernote` records it: the frame and the
+/// center of the focus area from FocusLocation ([`location`]), and the
+/// area's size from FocusFrameSize when it records one ([`area`]).
 ///
-/// `None` when FocusMode records manual focus ([`manual_focus`]); when
-/// neither FocusLocation nor FocusLocation2 gives a location
-/// ([`location`]); when [`Focus::new`] refuses the location, for a frame
-/// with a zero side or a center off the frame; or when FocusFrameSize
-/// records an area, both of its sides above zero, that [`Focus::with_size`]
-/// refuses because it does not fit inside the frame around the center.
+/// The point is given as recorded, in the frame as the camera framed it,
+/// which is not always the image size raw-files reports. Whether focus
+/// was confirmed is never set: no plain tag records it.
 ///
-/// FocusLocation2 is read only when FocusLocation gives no location: when
-/// it is missing, and also when it is there but is not four SHORTs, a shape
-/// no sample shows, which reads as missing. A location of the right shape
-/// is FocusLocation's, whatever FocusLocation2 holds. A FocusFrameSize that
-/// gives no area ([`area`]) keeps the point without a size.
+/// FocusLocation2 is read only when FocusLocation gives no location,
+/// missing or of another shape. No sample has FocusLocation2 alone, so
+/// such a file is unchecked.
 ///
-/// See the [module documentation](self) for what the tags record.
+/// `None` when FocusMode records manual focus ([`manual_focus`]), or when
+/// neither tag gives a location. `None` too when [`Focus::new`] refuses the
+/// location, for a frame with a zero side or a center off the frame, or
+/// when [`Focus::with_size`] refuses an area that does not fit inside the
+/// frame around the center.
 ///
 /// # Errors
 ///
-/// `Io` when the reader fails. Nothing the block holds is an error.
+/// `Io` when the reader fails.
 fn focus<R: Read + Seek>(src: &mut Source<R>, makernote: &MakerNote) -> Result<Option<Focus>> {
     if manual_focus(makernote) {
         return Ok(None);
@@ -519,9 +304,8 @@ fn focus<R: Read + Seek>(src: &mut Source<R>, makernote: &MakerNote) -> Result<O
     else {
         return Ok(None);
     };
-    // An area that `with_size` refuses costs the whole point: `area` gives
-    // none with a zero side, so this one is a record that cannot be used,
-    // which gives no focus on every format, as ADR012 decides.
+    // An area that `with_size` refuses costs the whole point. Such a
+    // record cannot be used, and gives no focus on every format (ADR012).
     Ok(match area(src, makernote)? {
         Some(size) => focus.with_size(size).ok(),
         None => Some(focus),
@@ -529,24 +313,26 @@ fn focus<R: Read + Seek>(src: &mut Source<R>, makernote: &MakerNote) -> Result<O
 }
 
 /// Whether `makernote`'s FocusMode records manual focus: whether it is one
-/// BYTE, and that byte is 0. A FocusMode that is missing, of another type
-/// or another count, or that holds any other value, such as 3 for AF-C,
-/// records no manual focus. The entry holds its one byte, so this reads
-/// nothing from the file.
+/// BYTE, 0. A FocusMode that is missing, breaks its rule or holds any other
+/// value, such as 3 for AF-C, records none.
+///
+/// A shot in manual focus still records a location, the frame's exact
+/// center, with FocusMode 0 (samples 1310 and 1311). The camera did not
+/// focus on that point, so FocusMode 0 gives none, whatever FocusLocation
+/// holds (ADR012). Nothing else in the plain tags says that no autofocus
+/// took place, so any other FocusMode, or none, keeps the point.
 fn manual_focus(makernote: &MakerNote) -> bool {
     makernote.ifd.held(rules::FOCUS_MODE) == Some([0])
 }
 
 /// The frame and the center that `makernote`'s tag `tag`, FocusLocation or
 /// FocusLocation2, records: its four SHORTs, the frame's width and height,
-/// then the center's x and y, widened to 32 bits. `None` when the tag is
-/// missing, is not of type SHORT, or does not hold exactly four values.
-///
-/// The values are not checked here: [`Focus::new`] checks them.
+/// then the center's x and y. `None` when the tag is missing or breaks its
+/// rule. The values are checked by [`Focus::new`].
 ///
 /// # Errors
 ///
-/// `Io` when the reader fails. Nothing the block holds is an error.
+/// `Io` when the reader fails.
 fn location<R: Read + Seek>(
     src: &mut Source<R>,
     makernote: &MakerNote,
@@ -560,16 +346,15 @@ fn location<R: Read + Seek>(
 
 /// The size of the focus area that `makernote`'s FocusFrameSize records:
 /// the first two of its three 16-bit numbers, the area's width and height,
-/// in the MakerNote's byte order, widened to 32 bits. The third is not
-/// read.
+/// in the MakerNote's byte order. The third is not read.
 ///
-/// `None` when the tag is missing, is not of type UNDEFINED, does not hold
-/// exactly six bytes, or records a width or a height of zero, which on
-/// Sony says only that no size is recorded (ADR012).
+/// `None` when the tag is missing or breaks its rule, and when it records a
+/// width or a height of zero, which on Sony says only that no size is
+/// recorded (ADR012). The point is then kept without a size.
 ///
 /// # Errors
 ///
-/// `Io` when the reader fails. Nothing the block holds is an error.
+/// `Io` when the reader fails.
 fn area<R: Read + Seek>(src: &mut Source<R>, makernote: &MakerNote) -> Result<Option<Size>> {
     let Some([width0, width1, height0, height1, ..]) =
         makernote.ifd.get(src, rules::FOCUS_FRAME_SIZE)?
@@ -583,41 +368,33 @@ fn area<R: Read + Seek>(src: &mut Source<R>, makernote: &MakerNote) -> Result<Op
 }
 
 /// How the camera was set for the picture: `settings`, what the standard
-/// tags gave, with what `makernote` records of the settings, each value
-/// read by its own rule, so that a damaged one costs only itself. A value
-/// is read only from a tag of the type and count its rule names, whose
-/// value lies inside the block, as every value read from the MakerNote
-/// IFD does; a missing tag, another type or count, or a code no rule
-/// names gives `None` for that value alone. See the
-/// [module documentation](self#the-camera-settings) for what each tag
-/// records, and on which files.
+/// tags gave, with what `makernote` records. Each value is read by its own
+/// rule, so that a damaged one costs only itself:
 ///
-/// - **The white balance mode** is the one WhiteBalance's code names,
-///   exactly one LONG ([`white_balance_mode`]), in place of the one the
-///   Exif tags gave, which records only auto or the kind of light, and
-///   calls the underwater setting auto. When the MakerNote names none, the
-///   Exif tags' mode stays.
-/// - **The color temperature** is ColorTemperature, exactly one LONG,
-///   from 1 to 99,999 K ([`checked_color_temperature`]), under whichever white
-///   balance setting: the chosen color temperature under that setting
-///   and the custom white balance's own under custom, as the files show.
-///   0, which every other setting holds on every file checked, records
-///   none, and a larger number is no temperature a camera is set to.
-/// - **The fine-tuning** is WBShiftAB_GM, exactly two SLONGs
-///   ([`fine_tune`]).
+/// - **The white balance mode** is the one WhiteBalance's code names
+///   ([`white_balance_mode`]), in place of the Exif tags' mode, which
+///   records only auto or the kind of light, and calls the underwater
+///   setting auto. When the code names none, the Exif tags' mode stays.
+/// - **The color temperature** is ColorTemperature, from 1 to 99,999 K
+///   ([`checked_color_temperature`]), under whichever white balance
+///   setting: the chosen color temperature under that setting, and the
+///   custom white balance's own under custom. 0, which every other setting
+///   holds on every file checked, records none.
+/// - **The fine-tuning** is WBShiftAB_GM's ([`fine_tune`]).
 /// - **The electronic front curtain setting** is
-///   ElectronicFrontCurtainShutter, exactly one LONG
-///   ([`electronic_front_curtain_setting`]).
+///   ElectronicFrontCurtainShutter's ([`electronic_front_curtain_setting`]).
 ///
 /// The shutter used, the image area and the raw image size stay as
-/// `settings` has them, `None`: Sony records the first two only in
-/// enciphered blocks, and gives an APS-C raw the raw size code of a
-/// medium one. The exposure program, the metering mode, the flash and the
-/// color space are the Exif tags' alone.
+/// `settings` has them, `None`. Sony records the first two only in
+/// enciphered blocks, and gives an APS-C raw the raw size code of a medium
+/// one. The exposure program, the metering mode, the flash and the color
+/// space are the Exif tags' alone. Neither 0xB054 nor 0x0112, which
+/// ExifTool's documentation names for the white balance, is read: on the
+/// files checked, neither records the setting.
 ///
 /// # Errors
 ///
-/// `Io` when the reader fails. Nothing the block holds is an error.
+/// `Io` when the reader fails.
 fn camera_settings<R: Read + Seek>(
     src: &mut Source<R>,
     makernote: &MakerNote,
@@ -640,23 +417,25 @@ fn camera_settings<R: Read + Seek>(
     Ok(settings)
 }
 
-/// The white balance mode a WhiteBalance `code` names: 0
-/// [`Auto`](WhiteBalanceMode::Auto); 1, a chosen color temperature,
-/// [`ColorTemperature`](WhiteBalanceMode::ColorTemperature); 16
-/// [`Daylight`](WhiteBalanceMode::Daylight); 32
-/// [`Cloudy`](WhiteBalanceMode::Cloudy); 48
-/// [`Shade`](WhiteBalanceMode::Shade); 64
-/// [`Tungsten`](WhiteBalanceMode::Tungsten); 80
-/// [`Flash`](WhiteBalanceMode::Flash); 96, each of the four fluorescent
-/// lamps, [`Fluorescent`](WhiteBalanceMode::Fluorescent); 112
-/// [`Custom`](WhiteBalanceMode::Custom); and 128
-/// [`Underwater`](WhiteBalanceMode::Underwater).
+/// The white balance mode a WhiteBalance `code` names:
 ///
-/// ExifTool's documentation names 1 a color temperature or a color
-/// filter; no checked file was shot with a color filter, so that it
-/// writes 1 too is unchecked. `None` for every other code: a code grows
-/// into the table only once a file shows it, and until then the Exif tags'
-/// mode stands in its place.
+/// - 0 [`Auto`](WhiteBalanceMode::Auto);
+/// - 1, a chosen color temperature,
+///   [`ColorTemperature`](WhiteBalanceMode::ColorTemperature);
+/// - 16 [`Daylight`](WhiteBalanceMode::Daylight), 32
+///   [`Cloudy`](WhiteBalanceMode::Cloudy) and 48
+///   [`Shade`](WhiteBalanceMode::Shade);
+/// - 64 [`Tungsten`](WhiteBalanceMode::Tungsten) and 80
+///   [`Flash`](WhiteBalanceMode::Flash);
+/// - 96, each of the four fluorescent lamps,
+///   [`Fluorescent`](WhiteBalanceMode::Fluorescent);
+/// - 112 [`Custom`](WhiteBalanceMode::Custom) and 128
+///   [`Underwater`](WhiteBalanceMode::Underwater).
+///
+/// ExifTool's documentation names 1 a color temperature or a color filter.
+/// No checked file was shot with a color filter, so whether one writes 1
+/// too is unchecked. `None` for every other code: a code joins the table
+/// only once a file shows it, and until then the Exif tags' mode stands.
 fn white_balance_mode(code: u32) -> Option<WhiteBalanceMode> {
     Some(match code {
         0 => WhiteBalanceMode::Auto,
@@ -674,20 +453,18 @@ fn white_balance_mode(code: u32) -> Option<WhiteBalanceMode> {
 }
 
 /// The white balance fine-tuning that `makernote`'s WBShiftAB_GM records,
-/// signed as [`FineTune`] signs it: its two SLONGs, whole steps, the shift
-/// from amber to blue and then the one from green to magenta
-/// ([`fine_tune_of`]). A recorded zero shift, `0, 0`, is a fine-tuning
-/// like any other.
+/// signed as [`FineTune`] signs it ([`fine_tune_of`]): its two SLONGs,
+/// whole steps, the shift from amber to blue and then the one from green
+/// to magenta. A recorded zero shift, `0, 0`, is a fine-tuning like any
+/// other.
 ///
-/// `None` when the tag is missing, as on the bodies that write none, the
-/// DSLR-A100, A200, A700 and A900, the SLT-A55V, the NEX-5, the DSC-F828
-/// and the DSC-R1; when it is not of type SLONG, does not hold exactly two
-/// values, or stores them outside the block; and when [`fine_tune_of`]
-/// gives none for its values.
+/// `None` when the tag is missing, as on the oldest bodies, breaks its rule
+/// or stores its values outside the block, and when [`fine_tune_of`] gives
+/// none.
 ///
 /// # Errors
 ///
-/// `Io` when the reader fails. Nothing the block holds is an error.
+/// `Io` when the reader fails.
 fn fine_tune<R: Read + Seek>(
     src: &mut Source<R>,
     makernote: &MakerNote,
@@ -699,16 +476,17 @@ fn fine_tune<R: Read + Seek>(
 }
 
 /// The fine-tuning of Sony's two values, `blue_amber` and `green_magenta`,
-/// whole steps, each as a fraction over 1: the first with its sign
-/// turned around, and the second as it is. Sony stores a shift towards
-/// amber and one towards magenta as positive, as frames shot on an
-/// ILCE-7M2 with a known shift show; [`FineTune`] signs each value as its
-/// axis is named, so its amber to blue shift is positive towards blue, and
-/// Sony's first value is turned around (ADR011).
+/// whole steps, each as a fraction over 1. The first has its sign turned
+/// around, and the second is kept.
 ///
-/// `None` when the first value is `i32::MIN`, whose negation does not
-/// fit. No file checked holds it; the reader refuses it rather than make
-/// up a shift.
+/// Sony stores a shift towards amber and one towards magenta as positive,
+/// as frames shot on an ILCE-7M2 with a known shift show. [`FineTune`]
+/// signs each value as its axis is named, so its amber to blue shift is
+/// positive towards blue, and Sony's first value is turned around
+/// (ADR011).
+///
+/// `None` when the first value is `i32::MIN`, whose negation does not fit.
+/// No file checked holds it.
 fn fine_tune_of(blue_amber: i32, green_magenta: i32) -> Option<FineTune> {
     let amber_blue = SignedRational::new(blue_amber.checked_neg()?, 1).ok()?;
     let green_magenta = SignedRational::new(green_magenta, 1).ok()?;
