@@ -1,37 +1,36 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! The Nikon MakerNote: where it lies in the file, where it keeps its small
-//! preview JPEG, and what it records of the picture that the standard tags
-//! lack.
-//!
-//! The MakerNote is a block of Nikon's own metadata, the value of the
-//! MakerNote tag of the Exif IFD. Among much else, it points at a
-//! PreviewIFD, a small IFD whose JPEGInterchangeFormat and
-//! JPEGInterchangeFormatLength declare a small JPEG, 640 by 424 pixels or
-//! smaller. Every Nikon body since the D70 writes one, and on the oldest
-//! bodies it is the file's only JPEG.
+//! The Nikon MakerNote reader: the small preview JPEG the MakerNote keeps,
+//! and what it records of the picture that the standard tags lack.
 //!
 //! The MakerNote is read once per file, into a [`MakerNote`]: its block
 //! found and checked, its MakerNote IFD and its PreviewIFD parsed. Every
-//! use of the MakerNote then reads from that same structure, so that none
-//! of them finds, checks or parses the block again: the preview, the
-//! metadata, and the raw view, which lists both IFDs' entries as the
-//! directories `MakerNote` and `MakerNoteSub(0x0011)`
-//! ([`Directory`]).
+//! use of the MakerNote then reads from that structure, and none finds,
+//! checks or parses the block again. The parts, in the order a file is
+//! read:
 //!
-//! Each part of the reader is a file, with its own notes:
-//!
-//! - [`block`]: the block's layouts, the checks on it, and the
-//!   PreviewIFD and its JPEG;
-//! - [`metadata`](mod@metadata): CropArea, the serial number, the ISO,
+//! - [`block`] reads the block in its layouts, the MakerNote IFD and the
+//!   PreviewIFD, and gives the PreviewIFD's JPEG as a candidate preview;
+//! - [`metadata`](fn@metadata) reads what the MakerNote adds to the
+//!   standard tags, with the four files below;
+//! - [`metadata`](mod@metadata) reads CropArea, the serial number, the ISO,
 //!   the lens's range and WorldTime;
-//! - [`settings`]: the camera settings;
-//! - [`af_info2`]: AFInfo2, the focus point it records and the points
+//! - [`settings`] reads the camera settings;
+//! - [`af_info2`] reads AFInfo2, the focus point it records and the points
 //!   it names;
-//! - [`crop`]: CropHiSpeed, and placing the focus point on a crop or
-//!   from the body's table.
+//! - [`crop`] reads CropHiSpeed, and places a focus point on a crop or
+//!   from the body's table;
+//! - [`MakerNote::add_entries`] lists both IFDs' entries in the raw view,
+//!   as the directories `MakerNote` and `MakerNoteSub(0x0011)`.
 //!
-//! [`Directory`]: crate::entries::Directory
+//! A tag's number and what it records are on its constant, such as
+//! [`CROP_AREA`]. The type and count Nikon writes it in are its rule
+//! ([`rules`]), and a value of another type or count is never read.
+//! Nothing the block holds is an error: a tag that is missing or breaks
+//! its rule gives no value.
+//!
+//! The NEF notes say what each tag records, and on which bodies
+//! (`docs/formats/nef/makernote-and-metadata.md`, sections 1 and 8).
 
 mod af_info2;
 mod block;
@@ -58,14 +57,13 @@ use metadata::{CropArea, crop_area, iso, lens_range, serial_number, world_time};
 use settings::camera_settings;
 
 /// The Nikon MakerNote tag that records the ISO the picture was taken at
-/// (ISO): two SHORTs, the second of them the ISO, on the bodies whose Exif
-/// tags may lack one.
+/// (ISO): two SHORTs, the second of them the ISO.
 const ISO: u16 = 0x0002;
 
 /// The Nikon MakerNote tag that records the white balance setting
-/// (WhiteBalance), as ASCII text: an upper-case word, such as `AUTO1` or
-/// `SUNNY`, padded with spaces, or a chosen color temperature as its
-/// number, such as `3230K`.
+/// (WhiteBalance), as ASCII text. It is an upper-case word padded with
+/// spaces, such as `AUTO1` or `SUNNY`, or a chosen color temperature as
+/// its number, such as `3230K`.
 const WHITE_BALANCE: u16 = 0x0005;
 
 /// The Nikon MakerNote tag that records how the camera focused
@@ -74,10 +72,9 @@ const WHITE_BALANCE: u16 = 0x0005;
 const FOCUS_MODE: u16 = 0x0007;
 
 /// The Nikon MakerNote tag that records the white balance fine-tuning in
-/// whole steps (WhiteBalanceFineTune): SSHORTs, two of them, amber to blue
-/// then magenta to green, on the bodies from the D300 to the Z fc, beside
-/// 0x003F ([`FINE_TUNE`]) from the D810 on; one, whose axis and sign no
-/// file shows, on the D1 family, the D70, the D100 and the D200.
+/// whole steps (WhiteBalanceFineTune): two SSHORTs, amber to blue then
+/// magenta to green. The oldest bodies write one, whose axis and sign no
+/// file shows.
 const FINE_TUNE_STEPS: u16 = 0x000B;
 
 /// The Nikon MakerNote tag that points at the PreviewIFD, the sub-IFD
@@ -86,9 +83,9 @@ const PREVIEW_IFD: u16 = 0x0011;
 
 /// The Nikon MakerNote tag that records the crop mode the picture was
 /// taken in, and how large the picture was before and after the crop
-/// (CropHiSpeed): seven SHORTs, the mode, the original width and height,
-/// the cropped width and height, and the left column and top row where
-/// the crop starts.
+/// (CropHiSpeed). It holds seven SHORTs: the mode, the original width and
+/// height, the cropped width and height, and the left column and top row
+/// where the crop starts.
 const CROP_HI_SPEED: u16 = 0x001B;
 
 /// The Nikon MakerNote tag that records the camera body's serial number
@@ -100,10 +97,10 @@ const SERIAL_NUMBER: u16 = 0x001D;
 const COLOR_SPACE: u16 = 0x001E;
 
 /// The Nikon MakerNote tag that records the time zone and daylight-saving
-/// setting of the camera's clock (WorldTime): four UNDEFINED bytes, the
-/// zone in minutes east of UTC as a signed 16-bit number in the
-/// MakerNote's byte order, then 1 when daylight saving time is on and 0
-/// when it is off, then the date display format.
+/// setting of the camera's clock (WorldTime): four UNDEFINED bytes. The
+/// first two are the zone in minutes east of UTC as a signed 16-bit number
+/// in the MakerNote's byte order. Then comes 1 when daylight saving time is
+/// on and 0 when it is off, then the date display format.
 const WORLD_TIME: u16 = 0x0024;
 
 /// The Nikon MakerNote tag that records which shutter took the picture
@@ -117,9 +114,8 @@ const SHUTTER_MODE: u16 = 0x0034;
 const IMAGE_SIZE_RAW: u16 = 0x003E;
 
 /// The Nikon MakerNote tag that records the white balance fine-tuning in
-/// the camera's own steps, from the D810 on (WhiteBalanceFineTune): two
-/// SRATIONALs, amber to blue then magenta to green, fractions of 4 on
-/// every file checked.
+/// the camera's own steps (WhiteBalanceFineTune): two SRATIONALs, amber to
+/// blue then magenta to green.
 const FINE_TUNE: u16 = 0x003F;
 
 /// The Nikon MakerNote tag that records the visible image, the rectangle
@@ -139,17 +135,16 @@ const LENS: u16 = 0x0084;
 
 /// The Nikon MakerNote tag that records where the camera's autofocus
 /// aimed (AFInfo2): an UNDEFINED value that starts with its version, four
-/// ASCII digits, and holds, at offsets each version sets, the size of a
+/// ASCII digits. At offsets each version sets, it holds the size of a
 /// frame, the center of the focus area and the area's width and height,
-/// as SHORTs in the MakerNote's byte order, and on most versions a byte
-/// saying whether focus was confirmed.
+/// as SHORTs in the MakerNote's byte order. Most versions add a byte that
+/// says whether focus was confirmed.
 const AF_INFO2: u16 = 0x00B7;
 
 /// The rules of the tags this reader reads: each tag's number, from the
 /// constants above, and the type and count Nikon writes its value in on
-/// every file checked, which a value must have to be read (ADR011).
-/// [`Ifd::get`] and [`Ifd::held`] read them. Two are tags of the
-/// PreviewIFD, which Nikon writes as one LONG each.
+/// every file checked (ADR011). [`Ifd::get`] and [`Ifd::held`] read them.
+/// Two are tags of the PreviewIFD, which Nikon writes as one LONG each.
 ///
 /// [`Ifd::get`]: crate::container::tiff::Ifd::get
 /// [`Ifd::held`]: crate::container::tiff::Ifd::held
@@ -191,25 +186,21 @@ mod rules {
 }
 
 /// The manufacturer's name that a Nikon camera's Make starts with,
-/// compared without regard to case: what a format's reader looks for in
-/// IFD0's Make before it takes a file for a Nikon one, the NEF claim and
-/// the JPEG reader alike.
+/// compared without regard to case. The NEF claim and the JPEG reader look
+/// for it in IFD0's Make before they take a file for a Nikon one.
 pub(in crate::formats) const NIKON: &[u8; 5] = b"NIKON";
 
 /// What a file's picture is, as the format that read the MakerNote knows
-/// it: what the focus point of a crop mode is placed on when the
-/// MakerNote holds no CropArea. [`metadata`] turns it, once, into the
-/// pixels it gives [`focus`]: none for a raw file, the image size for a
-/// JPEG.
+/// it: what the focus point of a crop is placed on when the MakerNote
+/// holds no CropArea. [`metadata`] turns it into the pixels it gives
+/// [`focus`]: none for a raw file, the image size for a JPEG.
 ///
 /// [`metadata`]: fn@metadata
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(in crate::formats) enum Picture {
     /// A raw file's, such as a NEF's: the picture is the part of the stored
-    /// raw data that CropArea locates inside it, and a crop's point is
-    /// placed on CropArea alone. A raw file has no pixels of its own to
-    /// place it on, so a crop without a CropArea is read as recorded
-    /// (ADR012).
+    /// raw data that CropArea locates. A raw file has no pixels of its own,
+    /// so a crop without a CropArea is read as recorded (ADR012).
     Raw,
     /// A JPEG's: the picture is the file's own pixels, of the size its
     /// frame header gives, which the metadata's image size already holds.
@@ -217,54 +208,46 @@ pub(in crate::formats) enum Picture {
     Jpeg,
 }
 
-/// The metadata of the file whose MakerNote is `makernote` and whose
-/// picture is of the kind `picture` names: what the standard tags gave,
-/// `standard`, with what the MakerNote records that the standard tags
-/// lack, the focus point among it.
+/// The metadata of the file whose MakerNote is `makernote`: what the
+/// standard tags gave, `standard`, with what the MakerNote records that
+/// they lack. `picture` says what kind of picture the file holds.
 ///
-/// That is, first, the image size, from CropArea, which replaces the raw
-/// size the image size otherwise falls back on: when the raw IFD records no
-/// default crop, which comes first, and when there is a raw size for the
-/// crop area to lie inside ([`crop_area`]). A JPEG's reader passes no raw
-/// size, so a JPEG keeps the image size `standard` gives, its picture's.
-/// CropArea is read once, whether or not it gives the image size, and the
-/// focus point below takes what it gives too: on a crop, a CropArea that
-/// cannot be used, or that there is no raw size to check against, gives no
-/// focus point. Then, each only when the standard tags gave none, the
-/// serial number ([`serial_number`]), the ISO ([`iso`]), the lens's range
-/// ([`lens_range`]) and the capture time's offset from UTC
-/// ([`world_time`]): a range fills a lens whose standard tags gave no
-/// value of its range, keeping their recorded make and model and their
-/// serial number; an offset is given only to a capture time the standard
-/// tags gave, one whose OffsetTimeOriginal is missing or could not be
-/// read, and only within the bound every offset is held to
-/// ([`DateTime::with_offset_minutes`](crate::datetime::DateTime::with_offset_minutes)).
-/// Then the camera settings that only the MakerNote records, and the white
-/// balance setting, finer than Exif's, in place of the mode the Exif tags
-/// gave when the MakerNote names one, each by its own rule
-/// ([`camera_settings`]): the color space only when the Exif IFD holds no
-/// ColorSpace, and the raw image size only for a raw file's picture.
-/// CropHiSpeed is read once, for the image area and the focus point.
-/// The table of the body's autofocus points is found from the Model the
-/// standard tags give, matched exactly as [`points::find`] matches it:
-/// none for a body without a table, or a file without a Model. Then the
-/// focus points, from AFInfo2 and FocusMode, with AFInfo2's
-/// area mode ([`focus`]), always read: the standard tags never give one,
-/// so it is not a fallback. A recorded position is placed on the cropped
-/// picture by CropHiSpeed and CropArea on a crop, as a list of one point;
-/// the points a record with no position names are placed from the table,
-/// in the crop's window on a crop that CropHiSpeed records. `picture` says,
-/// once, what a crop without a CropArea is placed on: nothing for a raw
-/// file's, whose point is then read as recorded, and for a JPEG's, its own
-/// pixels, of the image size `standard` gives, which a point placed on a
-/// crop must have as its window, and which picks the window of a JPEG size
-/// that the table lists. Every other value is the standard tags', and the
-/// layout of the body's autofocus points is not given here: detection
-/// gives it from the Model alone, whatever the MakerNote holds.
+/// In this order:
+///
+/// - **The image size**, from CropArea, which replaces the raw size the
+///   image size otherwise falls back on ([`crop_area`]). Only when the raw
+///   IFD records no default crop, which comes first, and when there is a
+///   raw size for the crop area to lie inside. A JPEG's reader passes no
+///   raw size, so a JPEG keeps the image size `standard` gives, its
+///   picture's.
+/// - **The serial number, the ISO, the lens's range and the offset from
+///   UTC**, each only when the standard tags gave none ([`serial_number`],
+///   [`iso`], [`lens_range`], [`world_time`]). A range fills a lens whose
+///   standard tags gave no value of its range, keeping their recorded make
+///   and model and their serial number. An offset is given only to a
+///   capture time the standard tags gave without one: its
+///   OffsetTimeOriginal is missing or could not be read. It is held to the
+///   bound of every offset
+///   ([`DateTime::with_offset_minutes`](crate::datetime::DateTime::with_offset_minutes)).
+/// - **The camera settings** that only the MakerNote records, and its
+///   white balance setting, finer than Exif's, in place of the mode the
+///   Exif tags gave when it names one ([`camera_settings`]). The color space is read only
+///   when the Exif IFD holds no ColorSpace, and the raw image size only for
+///   a raw file's picture.
+/// - **The focus points**, from AFInfo2 and FocusMode, always read, since
+///   the standard tags never give one ([`focus`]). A recorded position is
+///   placed on a crop's picture. The points a record with no position names
+///   are placed from the table of the body the Model names, matched as
+///   [`points::find`] matches it. A file without a Model has no table.
+///
+/// CropArea and CropHiSpeed are each read once, for the image size or the
+/// image area and for the focus point. Every other value is the standard
+/// tags'. The layout of the body's autofocus points is not given here:
+/// detection gives it from the Model alone.
 ///
 /// # Errors
 ///
-/// `Io` when the reader fails. Nothing the block holds is an error.
+/// `Io` when the reader fails.
 pub(in crate::formats) fn metadata<R: Read + Seek>(
     src: &mut Source<R>,
     makernote: &MakerNote,
@@ -277,8 +260,7 @@ pub(in crate::formats) fn metadata<R: Read + Seek>(
         exif_records_color_space,
     } = standard;
     // Read once, for the image size and the focus point. Without a raw
-    // size, as in a JPEG, CropArea is never a size, so it never replaces
-    // the image size a JPEG's reader gave, the picture's own (ADR014).
+    // size, as in a JPEG, CropArea is never a size (ADR014).
     let crop = crop_area(src, makernote, metadata.raw_size)?;
     if !from_default_crop && let CropArea::Size(image) = crop {
         metadata.image_size = Some(image);
@@ -328,45 +310,28 @@ pub(in crate::formats) fn metadata<R: Read + Seek>(
 }
 
 /// Where the camera's autofocus aimed, as `makernote`'s AFInfo2 records
-/// it, with the area mode the record names, when it names one
-/// ([`area_mode`]).
+/// it, with the area mode the record names ([`area_mode`]):
 ///
-/// A record of a position, whose frame and area have no zero side
-/// ([`FocusRecord::records_position`]), gives the center of the focus area,
-/// the area's size and the frame the two are measured in, with whether
-/// focus was confirmed on the versions that say, placed on the cropped
-/// picture when `crop`, what CropHiSpeed records, already read
-/// ([`crop_hi_speed`]), says the file is a crop, by `crop_area`, what
-/// CropArea gives, already read ([`crop_area`]), or, when the MakerNote
-/// holds no CropArea, on `pixels`, a JPEG's own pixels, when the file has
-/// them ([`in_crop`]). The point is given as a list of one, the primary.
+/// - a record of a position ([`FocusRecord::records_position`]) gives one
+///   point, the primary. On a crop, which `crop` records, it is placed on
+///   the crop's picture: CropArea, from `crop_area`, or a JPEG's `pixels`
+///   ([`in_crop`]). A raw file's crop without a CropArea is read as
+///   recorded.
+/// - a record with no position, as a shot through a DSLR's viewfinder
+///   writes, gives the points it names ([`NamedPoints`]), placed from
+///   `table` ([`placed`]). CropArea plays no part there.
 ///
-/// A record with a zero side, as a shot through a DSLR's viewfinder
-/// writes, gives the points it names ([`NamedPoints`]), placed from
-/// `table`, the table of the body the file's Model names, when there is
-/// one ([`placed`]), with their frame on a crop set by `crop` and checked
-/// against `pixels`, and on an uncropped JPEG set by `pixels` when the
-/// table lists that size; CropArea plays no part there.
-///
-/// `None` when FocusMode records manual focus ([`manual_focus`]); when
-/// AFInfo2 is missing, is not of type UNDEFINED, stores its value outside
-/// the block, or holds a value [`af_info2_record`] gives none for; for a
-/// position, when [`in_crop`] gives none, because [`FocusRecord::focus`]
-/// refuses the record as recorded or the record cannot be placed on the
-/// cropped picture; and with no position, when the record names no points,
-/// as every version but 0100 does here, there is no table, or [`placed`]
-/// gives none.
-///
-/// See [`af_info2`] and [`crop`] for what AFInfo2 and CropHiSpeed are.
+/// `None` when FocusMode records manual focus ([`manual_focus`]), when
+/// AFInfo2 is missing or breaks its rule, or when its record cannot be
+/// read ([`af_info2_record`]), checked or placed.
 ///
 /// # Errors
 ///
-/// `Io` when the reader fails. Nothing the block holds is an error.
+/// `Io` when the reader fails.
 ///
 /// [`area_mode`]: af_info2::area_mode
 /// [`FocusRecord::records_position`]: af_info2::FocusRecord::records_position
 /// [`NamedPoints`]: af_info2::NamedPoints
-/// [`FocusRecord::focus`]: af_info2::FocusRecord::focus
 fn focus<R: Read + Seek>(
     src: &mut Source<R>,
     makernote: &MakerNote,
@@ -402,16 +367,16 @@ fn focus<R: Read + Seek>(
     }))
 }
 
-/// Whether `makernote`'s FocusMode records manual focus: whether it is of
-/// type ASCII and reads `MANUAL`, exactly, by the rule every text value of
-/// the metadata is read by ([`tiff_metadata::text`]), which cuts it at its
-/// first NUL and trims the spaces that pad it. A FocusMode that is
-/// missing, of another type, or that reads anything else, such as `AF-S`,
-/// records no manual focus.
+/// Whether `makernote`'s FocusMode reads `MANUAL`, exactly, by the text
+/// rule ([`tiff_metadata::text`]). A FocusMode that is missing, breaks its
+/// rule or reads anything else, such as `AF-S`, records no manual focus.
+///
+/// The point of a manual-focus shot is not one the camera focused on, so
+/// such a shot gives none, whatever AFInfo2 holds (ADR012).
 ///
 /// # Errors
 ///
-/// `Io` when the reader fails. Nothing the block holds is an error.
+/// `Io` when the reader fails.
 fn manual_focus<R: Read + Seek>(src: &mut Source<R>, makernote: &MakerNote) -> Result<bool> {
     let mode = tiff_metadata::text(src, &makernote.ifd, rules::FOCUS_MODE)?;
     Ok(mode.as_deref() == Some("MANUAL"))

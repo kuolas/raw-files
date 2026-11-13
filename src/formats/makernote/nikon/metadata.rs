@@ -1,65 +1,28 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! What the Nikon MakerNote records of the picture beside the
-//! standard tags: CropArea, the serial number, the ISO, the lens's
-//! range and WorldTime.
+//! What the Nikon MakerNote records of the picture beside the standard
+//! tags. Each function reads one tag of the MakerNote IFD:
 //!
-//! It also records the visible image of a raw file, which no standard tag
-//! of a NEF records: the part of the stored raw data that a viewer shows,
-//! without the border pixels around it. Its CropArea, which the D850, the
-//! D780 and the Z bodies write in their raw files, is that rectangle: on the
-//! Z 9, the 8256 by 5504 pixels that start 12 columns and 8 rows into the
-//! 8280 by 5520 raw, as large as the camera's full-size preview (public
-//! samples 5146 to 5148). It is four numbers, the left column, the top
-//! row, the width and the height, in stored raw pixels. It gives the image
-//! size only when it holds exactly four SHORTs or LONGs, its width and
-//! height are above zero, and it lies inside the raw size the standard tags
-//! give; and never when the raw IFD records a default crop, a standard tag,
-//! which comes first (ADR011). So it never gives a JPEG's image size: a
-//! JPEG holds no raw data, so there is no raw size for CropArea to lie
-//! inside, and its picture is its own pixels, of the size its frame header
-//! gives (ADR014). The Z 9's own JPEGs hold no CropArea; a MakerNote
-//! copied from a raw file into an exported JPEG does.
+//! - [`crop_area`] reads CropArea, the visible image of a raw file;
+//! - [`serial_number`] reads SerialNumber, the body's serial number;
+//! - [`iso`] reads ISO;
+//! - [`lens_range`] reads Lens, the lens's range;
+//! - [`world_time`] reads WorldTime, the offset of the camera's clock
+//!   from UTC.
 //!
-//! Older bodies record three more values only here, in plain form: Nikon
-//! has written them in the standard Exif tags only since the D780 and the
-//! Z 6 (public samples 3827 and 3587). SerialNumber is the body's serial
-//! number, ASCII text, seven digits on every checked body from the D300 on
-//! (sample 928) but the Nikon 1 J1, which writes eight (sample 2956); the
-//! D200 writes seven spaces, which are none (sample 8079). ISO holds two
-//! SHORTs, of which the second is the ISO, and gives the ISO of the D100
-//! and the D70, which write none in the Exif tags (samples 2996 and 2060);
-//! the D700 writes four zero bytes there instead, which are none (sample
-//! 2255). Lens is the lens's range, four RATIONALs in the order of the
-//! Exif LensSpecification, on every checked body with interchangeable
-//! lenses. Each is used only when the standard tags give no value for it:
-//! an Exif value always wins, even where the MakerNote records another. A
-//! lens the Exif tags name but give no range for, such as the Nikon 1 J1's
-//! (sample 2956), takes the MakerNote's range and keeps its name; an Exif
-//! range with any value known is kept whole.
+//! A function says what its tag gives and when it gives nothing. It does
+//! not decide when the value is used: [`metadata`](fn@super::metadata)
+//! does, and the standard tags come first (ADR011).
 //!
-//! WorldTime is the time zone and daylight-saving setting of the camera's
-//! clock, and so gives the capture time's offset from UTC on bodies whose
-//! Exif tags record none. It is four bytes: the zone in minutes east of
-//! UTC, a signed 16-bit number in the MakerNote's byte order; a byte that
-//! is 1 when daylight saving time is on and 0 when it is off; and one for
-//! how the camera shows dates, which is not read. The offset is the zone,
-//! plus 60 minutes when daylight saving time is on. On every public sample
-//! that also records the Exif OffsetTimeOriginal, the two agree, with
-//! daylight saving time off (samples 1835, 3827, 3587 and 5146 to 5148)
-//! and on (samples 6887 and 7808 to 7810). The bodies before the D850
-//! write no Exif offset, and most of them from the D300 on write
-//! WorldTime: the D300, D700, D7000, D750, D810, Nikon 1 J1 and Coolpix A
-//! (samples 928, 2255, 961, 895, 2036, 2956 and 2238); the D1H, D100, D70,
-//! D200, Coolpix E5700 and P7800 do not. WorldTime gives an offset only
-//! when it is of type UNDEFINED and exactly four bytes long, its
-//! daylight-saving byte is 0 or 1, and the offset lies within 14 hours of
-//! UTC, the bound an Exif offset is held to: a zone that editing software
-//! has rewritten in the wrong byte order reads as hundreds of hours, 15360
-//! minutes for 60. It is used only for a capture time the standard tags
-//! give, when they give no offset for it: OffsetTimeOriginal is missing,
-//! or cannot be read. An Exif offset always wins, even where WorldTime
-//! records another.
+//! What each tag records is on its constant in the parent module, such
+//! as [`CROP_AREA`]. Its type and count are its rule ([`rules`]). Nothing
+//! the block holds is an error: a tag that is missing or breaks its rule
+//! gives no value.
+//!
+//! The NEF notes say which bodies write each tag, and what they write
+//! (`docs/formats/nef/makernote-and-metadata.md`, sections 8.2, 8.4 and
+//! 8.5). A sample cited here by number is the file of that number on
+//! raw.pixls.us.
 
 use std::io::{Read, Seek};
 
@@ -73,13 +36,13 @@ use crate::rational::Rational;
 
 /// What `makernote`'s CropArea gives, as [`crop_area`] reads it: the size
 /// of the visible image, or why there is none. The image size takes only
-/// a size; on a crop, the focus point tells the other two apart
+/// a size. On a crop, the focus point tells the other two apart
 /// ([`in_crop`]).
 ///
 /// [`in_crop`]: super::crop::in_crop
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum CropArea {
-    /// There is no CropArea tag, as on the D810 (public sample 2036).
+    /// There is no CropArea tag, as on the D810 (sample 2036).
     Absent,
     /// There is a CropArea tag, but its value cannot be used, or there is
     /// no raw size to check it against.
@@ -88,22 +51,25 @@ pub(super) enum CropArea {
     Size(Size),
 }
 
-/// The size of the visible image that `makernote`'s CropArea records, in
-/// raw data of size `raw`, as [`CropArea::Size`].
+/// The size of the visible image that `makernote`'s CropArea
+/// ([`CROP_AREA`]) records, in raw data of size `raw`:
 ///
-/// [`CropArea::Absent`] when the tag is missing, or stores its value
-/// outside the block, where the reading of the block drops it. Otherwise
-/// [`CropArea::Unusable`] when there is no raw size, whatever the tag's
-/// type, or when the tag is not of type SHORT or LONG, does not hold
-/// exactly four values, or describes a rectangle that
-/// [`tiff_metadata::crop`] does not accept: one of zero width or height,
-/// or not inside the raw data.
+/// - [`CropArea::Absent`] when the tag is missing, or stores its value
+///   outside the block, where the reading of the block drops it;
+/// - [`CropArea::Unusable`] when there is no raw size, whatever the tag
+///   holds;
+/// - [`CropArea::Unusable`] when the tag breaks its rule
+///   ([`rules::CROP_AREA`]);
+/// - [`CropArea::Unusable`] when its rectangle has a side of zero, or
+///   does not lie inside the raw data ([`tiff_metadata::crop`]);
+/// - [`CropArea::Size`] otherwise.
 ///
-/// See the [module documentation](self) for what CropArea is.
+/// A JPEG has no raw size, so CropArea never gives a JPEG's image size
+/// (ADR014).
 ///
 /// # Errors
 ///
-/// `Io` when the reader fails. Nothing the block holds is an error.
+/// `Io` when the reader fails.
 pub(super) fn crop_area<R: Read + Seek>(
     src: &mut Source<R>,
     makernote: &MakerNote,
@@ -125,17 +91,17 @@ pub(super) fn crop_area<R: Read + Seek>(
 }
 
 /// The camera body's serial number that `makernote`'s SerialNumber
-/// records, read by the rule every text value of the metadata is read by
-/// ([`tiff_metadata::text`]); `None` when the tag is missing, is not of
-/// type ASCII, stores its value outside the block, or holds text that rule
-/// gives none for, such as the seven spaces the D200 writes (public sample
-/// 8079).
+/// ([`SERIAL_NUMBER`](super::SERIAL_NUMBER)) records, read by the rule
+/// every text value of the metadata is read by ([`tiff_metadata::text`]).
 ///
-/// A serial number that is not all digits is returned as written.
+/// `None` when the tag is missing, breaks its rule, stores its value
+/// outside the block, or holds text that the text rule gives none for.
+/// The D200 writes seven spaces, which are none (sample 8079). A serial
+/// number that is not all digits is returned as written.
 ///
 /// # Errors
 ///
-/// `Io` when the reader fails. Nothing the block holds is an error.
+/// `Io` when the reader fails.
 pub(super) fn serial_number<R: Read + Seek>(
     src: &mut Source<R>,
     makernote: &MakerNote,
@@ -143,33 +109,29 @@ pub(super) fn serial_number<R: Read + Seek>(
     tiff_metadata::text(src, &makernote.ifd, rules::SERIAL_NUMBER)
 }
 
-/// The ISO that `makernote`'s ISO tag records: the second of its values,
-/// when it holds exactly two of type SHORT and that second one is above
-/// zero; `None` otherwise.
+/// The ISO that `makernote`'s ISO tag ([`ISO`](super::ISO)) records: the
+/// second of its two values, when it is above zero. `None` when the tag
+/// is missing or breaks its rule.
 ///
-/// Most bodies that write the tag write `[0, ISO]`, such as `[0, 200]` on
-/// the D300 (public sample 928). Any other shape records no ISO: the D700
-/// writes four zero bytes of type UNDEFINED (sample 2255), the Coolpix
-/// E5700 `[0, 0]` (sample 4456). Two SHORTs are held in the entry, so this
-/// reads nothing from the file, and a tag of another count is not read.
+/// A zero is no ISO: the Coolpix E5700 writes `[0, 0]` (sample 4456).
 pub(super) fn iso(makernote: &MakerNote) -> Option<u32> {
     let [_, iso] = makernote.ifd.held(rules::ISO)?;
     (iso > 0).then_some(iso)
 }
 
-/// The lens's range that `makernote`'s Lens tag records: its shortest and
-/// longest focal length, then the f-number at each, in the order of the
-/// Exif LensSpecification, as
-/// [`Lens::set_range`](crate::metadata::Lens::set_range) takes them.
+/// The lens's range that `makernote`'s Lens tag ([`LENS`](super::LENS))
+/// records: its shortest and longest focal length, then the f-number at
+/// each, as [`Lens::set_range`](crate::metadata::Lens::set_range) takes
+/// them.
 ///
-/// The tag must be of type RATIONAL, hold exactly four values and store
-/// them inside the block; otherwise all four are `None`. Each value is
-/// `None` when its numerator or its denominator is zero, as in the Exif
-/// tag ([`Rational::known`]).
+/// All four are `None` when the tag is missing, breaks its rule, or
+/// stores its values outside the block. Each value is `None` when its
+/// numerator or its denominator is zero, as in the Exif tag
+/// ([`Rational::known`]).
 ///
 /// # Errors
 ///
-/// `Io` when the reader fails. Nothing the block holds is an error.
+/// `Io` when the reader fails.
 pub(super) fn lens_range<R: Read + Seek>(
     src: &mut Source<R>,
     makernote: &MakerNote,
@@ -180,21 +142,20 @@ pub(super) fn lens_range<R: Read + Seek>(
     Ok(values.map(|value| Rational::known(value.numerator, value.denominator)))
 }
 
-/// The offset of the camera's clock from UTC, in minutes east of UTC, that
-/// `makernote`'s WorldTime records: its time zone, plus 60 minutes when
-/// its daylight-saving byte is 1; `None` when the tag is missing, is not of
-/// type UNDEFINED, does not hold exactly four bytes, or has a
-/// daylight-saving byte other than 0 or 1.
+/// The offset of the camera's clock that `makernote`'s WorldTime
+/// ([`WORLD_TIME`](super::WORLD_TIME)) records, in minutes east of UTC.
+/// It is the time zone, plus 60 minutes when the daylight-saving byte is
+/// 1.
 ///
-/// The zone is read in the MakerNote's byte order. The offset is not
-/// bounded here:
+/// `None` when the tag is missing or breaks its rule, or when the
+/// daylight-saving byte is neither 0 nor 1. The zone is read in the
+/// MakerNote's byte order.
+///
+/// The offset is not bounded here.
 /// [`DateTime::with_offset_minutes`](crate::datetime::DateTime::with_offset_minutes),
-/// which takes it, refuses one beyond 14 hours, as a zone rewritten in the
-/// wrong byte order is.
-///
-/// Four bytes are held in the entry, so this reads nothing from the file,
-/// and a tag of another count is not read. See the
-/// [module documentation](self) for what WorldTime is.
+/// which takes it, refuses one beyond 14 hours. Editing software can
+/// rewrite the zone in the wrong byte order, and 60 minutes then read as
+/// 15360 (`docs/formats/nef/makernote-and-metadata.md`, section 8.2).
 pub(super) fn world_time(makernote: &MakerNote) -> Option<i16> {
     let ifd = &makernote.ifd;
     let [zone0, zone1, daylight_saving, _date_format] = ifd.held(rules::WORLD_TIME)?;
@@ -205,7 +166,7 @@ pub(super) fn world_time(makernote: &MakerNote) -> Option<i16> {
         _ => return None,
     };
     // A zone near the end of the 16-bit range, plus the daylight hour, may
-    // not fit; it is far beyond any offset in use anyway.
+    // not fit. It is far beyond any offset in use anyway.
     i16::try_from(offset).ok()
 }
 

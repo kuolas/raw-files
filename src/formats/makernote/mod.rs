@@ -1,40 +1,38 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! The MakerNote readers: one per camera maker whose MakerNote raw-files
-//! reads.
+//! The MakerNote readers: one for each camera maker whose MakerNote
+//! raw-files reads.
 //!
-//! A MakerNote is a camera maker's own metadata, stored as the value of
-//! one Exif tag, MakerNote, in a layout each maker sets. It records what
-//! the standard tags lack, such as the point where the camera focused. The
-//! readers here read the layouts raw-files knows, and are shared by every
-//! format whose files carry them: NEF and ARW files, and JPEG files, whose
-//! Exif segment holds the same MakerNote. The JPEG reader reads both,
-//! Nikon's and Sony's, each by IFD0's Make. A reader here never depends
-//! on a format's folder.
+//! A MakerNote is a camera maker's own metadata, the value of the Exif tag
+//! MakerNote, in a layout each maker sets. It records what the standard
+//! tags lack, such as the point where the camera focused. A reader here
+//! serves every format whose files carry its MakerNote: NEF or ARW files,
+//! and JPEG files, whose Exif segment holds the same MakerNote. It never
+//! depends on a format's folder.
 //!
-//! - [`nikon`] reads Nikon's MakerNote: its small preview JPEG, the visible
-//!   image size, the focus point, the camera settings that only it
-//!   records, such as the white balance setting and the shutter used, and
-//!   the values older bodies record only there.
-//! - [`points`] holds the tables of a body's autofocus points, measured by
-//!   the project, which no file records: detection gives every file whose
-//!   Model names a body with a table that body's layout of points, after
-//!   the format's reader, whatever the file's MakerNote holds.
-//! - [`sony`] reads Sony's MakerNote: the focus point, and the camera
-//!   settings that only it records, such as the white balance setting and
-//!   the electronic front curtain setting.
+//! - [`nikon`] reads Nikon's MakerNote: its small preview, the visible
+//!   image size, the focus point, the camera settings and the values older
+//!   bodies record only there.
+//! - [`sony`] reads Sony's MakerNote: the focus point and the camera
+//!   settings.
+//! - [`points`] holds the tables of a body's autofocus points, which no
+//!   file records.
 //!
-//! What the readers share lives here, in a [`MakerNoteBlock`]: the
-//! MakerNote's block as the Exif IFD records it, where its bytes lie and
-//! the Exif IFD whose MakerNote it is. A reader finds the block through it
-//! and tells its maker's layout by the block's first bytes. A layout whose
-//! offsets count from the header of the TIFF structure that holds the
-//! MakerNote, as Sony's and the headerless layout of Nikon's D1 family do,
-//! has its IFD read through it too, with that structure's base and byte
-//! order. A layout with a TIFF header of its own, as Nikon's other one,
-//! takes only where the block's bytes lie, and reads its IFD from that
-//! header. One bound holds every color temperature a MakerNote gives,
-//! whatever its maker: 1 to 99,999 K ([`checked_color_temperature`]).
+//! A reader starts from the block as the Exif IFD records it, a
+//! [`MakerNoteBlock`]. It tells its maker's layout by the block's first
+//! bytes. Then it reads the IFD that holds the maker's tags, inside the
+//! block, so that every value read from it lies inside the MakerNote.
+//!
+//! Nothing the block holds is an error. Damage costs the MakerNote, or
+//! the one value it touches, never the file
+//! ([`skip_damage`](crate::error::skip_damage)).
+//!
+//! Every color temperature a MakerNote gives is held to one bound,
+//! whatever its maker ([`checked_color_temperature`]).
+//!
+//! The notes say how each maker lays out its block
+//! (`docs/formats/nef/makernote-and-metadata.md`, section 1, and
+//! `docs/formats/arw/makernote-and-metadata.md`, section 1).
 
 use std::io::{Read, Seek};
 use std::ops::Range;
@@ -49,42 +47,38 @@ pub(in crate::formats) mod nikon;
 pub(in crate::formats) mod points;
 pub(in crate::formats) mod sony;
 
-/// A MakerNote's block as the TIFF structure that holds it records it:
-/// what every reader starts from, to tell its maker's layout by the
-/// block's first bytes and to read the IFD that holds the maker's tags.
+/// A MakerNote's block as the Exif IFD records it: where the block's bytes
+/// lie, and the Exif IFD whose MakerNote it is.
 ///
-/// It keeps where the block's bytes lie and the Exif IFD whose MakerNote
-/// it is. The Exif IFD gives what the offsets inside the block count from
-/// in a layout without a TIFF header of its own, the header of the
-/// structure that holds the MakerNote, and the byte order of that
-/// structure's numbers.
+/// A layout with a TIFF header of its own, such as Nikon's embedded
+/// layout, takes only where the bytes lie ([`range`](Self::range)), and
+/// reads its IFD from that header. A layout whose offsets count from the
+/// header of the TIFF structure that holds the MakerNote, as Sony's and
+/// Nikon's headerless layout do, reads its IFD through the block
+/// ([`ifd_at`](Self::ifd_at)).
 #[derive(Debug)]
 struct MakerNoteBlock<'a> {
-    /// The Exif IFD whose MakerNote entry holds the block. The base of its
-    /// block is the header of the TIFF structure that holds the MakerNote,
-    /// the start of the file in a RAW file and the TIFF header inside the
-    /// Exif segment in a JPEG file, and its byte order is that structure's.
+    /// The Exif IFD whose MakerNote entry holds the block. Its base is the
+    /// header of the TIFF structure that holds the MakerNote: the start of
+    /// a RAW file, or the TIFF header inside a JPEG file's Exif segment.
+    /// Its byte order is that structure's.
     exif: &'a Ifd,
-    /// Where the block's bytes lie in the file: the MakerNote entry's value,
-    /// which lies inside the Exif IFD's block and the file, as every kept
-    /// entry's value does, and whose end is not before its start.
+    /// Where the block's bytes lie in the file: the MakerNote entry's
+    /// value. It lies inside the file, and its end is not before its start.
     range: Range<u64>,
 }
 
 impl<'a> MakerNoteBlock<'a> {
-    /// The MakerNote's block of the file whose IFDs are `tree`: the value of
-    /// the Exif IFD's MakerNote tag; `None` when the file has no Exif IFD,
-    /// no MakerNote, or a MakerNote that is not bytes stored out of line
-    /// ([`Entry::byte_range`]).
+    /// The MakerNote's block of the file whose IFDs are `tree`. `None` when
+    /// the file has no Exif IFD or no MakerNote, or when the MakerNote is
+    /// not bytes stored out of line ([`Entry::byte_range`]).
     fn find(tree: &'a Tree) -> Option<Self> {
         let exif = tree.exif()?;
         let range = exif.entry(MAKER_NOTE).and_then(Entry::byte_range)?;
         Some(Self { exif, range })
     }
 
-    /// Where the block's bytes lie in the file: what a layout with a TIFF
-    /// header of its own reads its IFD in, with that header as the base.
-    /// The range lies inside the file, and its end is not before its start.
+    /// Where the block's bytes lie in the file.
     fn range(&self) -> &Range<u64> {
         &self.range
     }
@@ -95,32 +89,25 @@ impl<'a> MakerNoteBlock<'a> {
     ///
     /// # Errors
     ///
-    /// `Io` when the reader fails. The block's bytes lie inside the file,
-    /// so a read that stays inside the block can fail only with the reader.
+    /// `Io` when the reader fails.
     fn first_bytes<R: Read + Seek>(&self, src: &mut Source<R>, max: u64) -> Result<Vec<u8>> {
         let len = self.range.end.saturating_sub(self.range.start);
         src.bytes(self.range.start, len.min(max))
     }
 
     /// The IFD `skip` bytes into the block, read within `limits` as the
-    /// TIFF structure that holds the MakerNote reads its own: its offsets
-    /// counted from that structure's header, the base of the Exif IFD's
-    /// block, and its numbers in that structure's byte order, the Exif
-    /// IFD's. `None` when no offset counted from that header reaches the
-    /// IFD ([`ifd_offset`]), or when the IFD does not hold together inside
-    /// the block.
+    /// structure that holds the MakerNote reads its own IFDs. Its offsets
+    /// count from that structure's header, and its numbers are in that
+    /// structure's byte order, both the Exif IFD's.
     ///
-    /// It serves the layouts whose offsets count from that header, Sony's
-    /// and the headerless layout of Nikon's D1 family; a layout with a TIFF
-    /// header of its own, as Nikon's other one, counts from that header
-    /// instead, in the block's bytes ([`range`](Self::range)). The IFD is
-    /// read inside the block ([`ifd_in`]): the bounds of the block it is
-    /// read in are the MakerNote's bytes, so every value read from it lies
-    /// inside them.
+    /// The IFD is read inside the block ([`ifd_in`]), so every value read
+    /// from it lies inside the MakerNote. `None` when no offset counted from
+    /// that header reaches the IFD ([`ifd_offset`]), or when the IFD does
+    /// not hold together inside the block.
     ///
     /// # Errors
     ///
-    /// `Io` when the reader fails. Nothing the block holds is an error.
+    /// `Io` when the reader fails.
     fn ifd_at<R: Read + Seek>(
         &self,
         src: &mut Source<R>,
@@ -136,19 +123,15 @@ impl<'a> MakerNoteBlock<'a> {
     }
 }
 
-/// The offset of the MakerNote IFD as a TIFF offset is written, counted
-/// from `base`, the header of the TIFF structure that holds the MakerNote,
-/// for an IFD `skip` bytes into a MakerNote that starts at position
-/// `start`; `None` when the IFD lies before the base or more than the
-/// 32-bit range past it.
+/// The offset of an IFD `skip` bytes into a MakerNote that starts at
+/// `start`, as a TIFF offset is written: counted from `base`, the header of
+/// the structure that holds the MakerNote. `None` when the IFD lies before
+/// the base, or more than the 32-bit range past it.
 ///
-/// No offset written in the structure counts back from its header, so an
-/// IFD that lies before the header is one the offsets could not reach,
-/// and gives no MakerNote. A MakerNote the Exif IFD points at starts at the
-/// base or past it, since the entry's offset counts from the same base, so
-/// that check only keeps the subtraction from wrapping. A MakerNote that
-/// starts near the top of the 32-bit range past the base may put its IFD
-/// out of reach too.
+/// No offset in the structure counts back from its header, so an IFD
+/// before the header is one no offset could reach. The Exif IFD's entry
+/// counts from the same base, so a MakerNote never starts before it: that
+/// check only keeps the subtraction from wrapping.
 fn ifd_offset(base: u64, start: u64, skip: u64) -> Option<u32> {
     start
         .checked_add(skip)
@@ -157,16 +140,15 @@ fn ifd_offset(base: u64, start: u64, skip: u64) -> Option<u32> {
 }
 
 /// The highest color temperature, in kelvin, that a MakerNote's value
-/// gives: 99,999 K, the largest number of five digits, the most that
-/// Nikon's white balance text may hold for a chosen color temperature
+/// gives: 99,999 K, the largest number of five digits. It is the most a
+/// Nikon white balance text may hold for a chosen color temperature
 /// ([`nikon`]'s `MAX_KELVIN_DIGITS`).
 const MAX_COLOR_TEMPERATURE: u32 = 99_999;
 
-/// `kelvin`, a color temperature a MakerNote records, when it records
-/// one: from 1 to [`MAX_COLOR_TEMPERATURE`]. 0, which a maker writes where it
-/// records no temperature, gives `None`, and so does a number past the bound,
-/// which is no temperature a camera is set to: the reader refuses it rather
-/// than report it.
+/// `kelvin`, a color temperature a MakerNote records, when it is from 1 to
+/// [`MAX_COLOR_TEMPERATURE`]. 0, which a maker writes where it records no
+/// temperature, gives `None`. So does a number past the bound, which is no
+/// temperature a camera is set to.
 fn checked_color_temperature(kelvin: u32) -> Option<u32> {
     (1..=MAX_COLOR_TEMPERATURE)
         .contains(&kelvin)

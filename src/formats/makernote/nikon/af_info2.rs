@@ -1,54 +1,35 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! The Nikon MakerNote's AFInfo2, read at each version's offsets, and
-//! the points a shot through a DSLR's viewfinder names by number.
+//! The Nikon MakerNote's AFInfo2, read at each version's offsets, and the
+//! points a shot through a DSLR's viewfinder names by number.
 //!
 //! AFInfo2 records where the camera's autofocus aimed, which no standard
-//! tag records. Mirrorless bodies, and DSLRs in live view, fill in a
-//! position in pixels: the size of a frame, the center of the focus area
-//! in that frame, and the area's width and height. A DSLR shot through the
-//! viewfinder records a zero frame and area instead, and names its points
-//! by number, which only a table of the body's points, carried by no file,
-//! places in pixels (public samples 928 and 1835): a body with a table
-//! gives them placed from it, as [`crop`](super::crop) says, and any other
-//! body no focus point. The layout of the body's points, which every file
-//! of a body whose table is in raw-files ([`points`]), the D600, has
-//! whatever the shot
-//! ([`Metadata::focus_layout`](crate::Metadata::focus_layout)), is not
-//! this reader's to give: detection gives it from the Model alone,
-//! whatever the MakerNote holds, even when it cannot be read.
-//! The position is the center of the area, not its corner: the Coolpix A,
-//! focusing at the middle of its 4928 by 3264 frame, records (2464, 1632)
-//! (sample 2238). The frame is the camera's full-size output, not the
-//! stored raw: 8256 by 5504 on the Z 9, inside an 8280 by 5520 raw
-//! (samples 5146 to 5148), and the full 6048 by 4024 on the Z 6's small
-//! raw, whose stored image is 4548 by 3030 (sample 3587); the point is
-//! reported in that frame, as recorded. AFInfo2 is a value of type
-//! UNDEFINED that starts with a version, four ASCII digits, and each
-//! version keeps its fields at offsets of its own, as ExifTool's tables
-//! publish them. It is read at the exact versions 0100, 0101, 0300, 0301,
-//! 0400, 0401 and 0402; any other, such as the Nikon 1's 0200, gives no
-//! focus point, since its fields may lie elsewhere (ADR012). The frame,
-//! the center and the area are SHORTs in the MakerNote's byte order. On
-//! every version read but 0300 and 0301, a byte says whether the camera
-//! confirmed focus: 1 for yes, 0 for a miss, and any other value says
-//! nothing. On every version read, byte 5 records the area mode, how the
-//! camera chose its points, by a code read with the detection method at
-//! byte 4: the codes that frames shot in a known mode confirmed, under the
-//! method recorded, name a [`FocusAreaMode`] ([`area_mode`]), and any other
-//! names none. A recorded position is given only when the value is at
-//! least as long as its version's layout, the frame and the area have no
-//! zero side, the center lies on the frame, and the area fits inside the
-//! frame around it ([`Focus::new`], [`Focus::with_size`]); it is given as
-//! a list of one point, the primary, with the area mode ([`FocusPoints`]).
-//! FocusMode, ASCII text, records how the camera focused: `MANUAL`, or an
-//! autofocus mode padded with spaces, such as `AF-S  `. When it reads
-//! exactly `MANUAL`, by the text rule, the file gives no focus point
-//! ([`manual_focus`]), whatever AFInfo2 holds: the point of a
-//! manual-focus shot is not one the camera focused on (ADR012).
+//! tag records ([`AF_INFO2`](super::AF_INFO2)). It records it in one of
+//! two ways:
 //!
-//! [`FocusPoints`]: crate::focus::FocusPoints
-//! [`manual_focus`]: super::manual_focus
+//! - **A position in pixels**, on mirrorless bodies and on DSLRs in live
+//!   view. It is the size of a frame, the center of the focus area in that
+//!   frame, and the area's width and height. The frame is the camera's
+//!   full-size output, not the stored raw, and the point is reported in it
+//!   as recorded.
+//! - **Points named by number**, on a DSLR shot through the viewfinder,
+//!   with a zero frame and area ([`NamedPoints`]). Only a table of the
+//!   body's points places them, which [`crop`](super::crop) does.
+//!
+//! [`af_info2_record`] reads a value at its version's offsets ([`layout`])
+//! into a [`FocusRecord`], with the area mode ([`area_mode`]). It checks
+//! nothing more: [`crop`](super::crop) checks a record before it places
+//! it.
+//!
+//! This reader does not give the layout of the body's points
+//! ([`Metadata::focus_layout`](crate::Metadata::focus_layout)). Detection
+//! gives it, from the Model alone, to every file of a body whose table is
+//! in raw-files ([`points`]). So a file has its layout whatever the shot,
+//! and even when its MakerNote cannot be read.
+//!
+//! The NEF notes give each version's offsets, the bodies that write it and
+//! the samples that confirm it (`docs/formats/nef/makernote-and-metadata.md`,
+//! section 8.6).
 
 use crate::focus::{Focus, FocusAreaMode, FocusOrigin};
 use crate::formats::makernote::points;
@@ -60,21 +41,13 @@ use crate::io::ByteOrder;
 /// version writes.
 ///
 /// Each of the frame, the center and the area is two SHORTs in the
-/// MakerNote's byte order, the width or x at its offset and the height or y
-/// two bytes after it. The offsets are those of ExifTool's published
-/// tables, confirmed on the public samples whose fields hold values. The
-/// area mode is not here: it is byte 5, read with the detection method at
-/// byte 4, on every version, which [`af_info2_record`] reads.
-///
-/// The points a record with no position names, the layout code, the
-/// primary point's number and the mask of the points used, are read on
-/// version 0100 alone, where a table's frames checked them: the other
-/// versions keep them at offsets of their own, which the NEF notes record
-/// and no table yet checks.
+/// MakerNote's byte order, the width or x first. The offsets are those of
+/// ExifTool's published tag documentation, read as documentation and
+/// confirmed on the samples whose fields hold values. The area mode is at
+/// the same offset on every version, so it is not here.
 #[derive(Clone, Copy, Debug)]
 pub(super) struct Layout {
-    /// How long a value of this version is, at least: the length of the
-    /// version's layout, whose last fields may not be read.
+    /// How long a value of this version is, at least.
     min_len: usize,
     /// The frame's width, then its height.
     frame: usize,
@@ -86,16 +59,15 @@ pub(super) struct Layout {
     /// that have one.
     in_focus: Option<usize>,
     /// The layout code, followed by the primary point's number and the
-    /// mask of the points used ([`NamedPoints`]), on the version read for
-    /// them, 0100.
+    /// mask of the points used ([`NamedPoints`]), on version 0100 alone.
     named: Option<usize>,
 }
 
-/// The layout of AFInfo2 version `version`, its first four bytes: `None`
+/// The layout of AFInfo2 version `version`, its first four bytes. `None`
 /// for any version but the exact ones read, 0100, 0101, 0300, 0301, 0400,
 /// 0401 and 0402. A version that shares its first two digits with these,
 /// such as 0200 or a future 0403, may have moved its fields, and is not
-/// read at the offsets of its neighbors (ADR012).
+/// read at its neighbors' offsets (ADR012).
 pub(super) fn layout(version: &[u8]) -> Option<Layout> {
     match version {
         b"0100" => Some(Layout {
@@ -135,10 +107,7 @@ pub(super) fn layout(version: &[u8]) -> Option<Layout> {
 }
 
 /// What an AFInfo2 value records of the focus point, read but not yet
-/// checked: the frame, the center of the focus area in it, the area's
-/// size, whether focus was confirmed, on the versions that say, the area
-/// mode, when its code names one, and, on the version read for them, the
-/// points the record names.
+/// checked.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) struct FocusRecord {
     /// The frame the center and the area are measured in.
@@ -150,45 +119,30 @@ pub(super) struct FocusRecord {
     /// Whether focus was confirmed: `None` when the version has no byte
     /// for it, or the byte is neither 1 nor 0.
     pub(super) in_focus: Option<bool>,
-    /// How the camera chose its points: `None` when the area-mode byte,
-    /// under the detection method recorded, holds a code [`area_mode`]
-    /// does not name.
+    /// How the camera chose its points: `None` when [`area_mode`] names no
+    /// mode for the record's codes.
     pub(super) area_mode: Option<FocusAreaMode>,
-    /// The points the record names, read on version 0100 alone: what a
-    /// record with no position gives, placed from a table.
+    /// The points the record names, read on version 0100 alone.
     pub(super) named: Option<NamedPoints>,
 }
 
 impl FocusRecord {
     /// Whether the record records a position: whether its frame and its
-    /// area have no zero side. A shot through a DSLR's viewfinder writes a
-    /// zero frame and area, and names its points instead
-    /// ([`NamedPoints`]). A record of a position is checked further, as
-    /// recorded, by [`focus`](Self::focus), and one that fails gives no
-    /// point, whatever it names.
+    /// area have no zero side. A record with no position names its points
+    /// instead ([`NamedPoints`]).
     pub(super) fn records_position(self) -> bool {
         let Self { frame, area, .. } = self;
         frame.width != 0 && frame.height != 0 && area.width != 0 && area.height != 0
     }
 
-    /// The focus point this record describes: `None` when [`Focus::new`]
-    /// or [`Focus::with_size`] refuses it, for a frame or an area with a
-    /// zero side, which is how a shot through a DSLR's viewfinder says it
-    /// records no position, a center outside the frame, or an area that
-    /// does not fit inside the frame around its center.
-    ///
-    /// [`in_crop`] calls it on the record as recorded, on every record of
-    /// a position ([`records_position`](Self::records_position)), and on a
-    /// crop that keeps one side again, on the record moved into the cropped
-    /// picture.
-    ///
-    /// [`in_crop`]: super::crop::in_crop
+    /// The focus point this record describes, with whether focus was
+    /// confirmed. `None` when [`Focus::new`] or [`Focus::with_size`] refuses
+    /// it: a frame or an area with a zero side, a center outside the frame,
+    /// or an area that does not fit inside the frame around its center.
     pub(super) fn focus(self) -> Option<Focus> {
         // An area that `with_size` refuses costs the whole focus, not only
-        // the area. A zero side is how a Nikon file says it records no
-        // position; and an area of no zero side that does not fit around
-        // the center is a record that cannot be used, which gives no focus
-        // on every format, as ADR012 decides.
+        // the area. Such a record cannot be used, and gives no focus on
+        // every format (ADR012).
         let focus = Focus::new(self.frame, self.center, FocusOrigin::Recorded)
             .and_then(|focus| focus.with_size(self.area))
             .ok()?;
@@ -200,20 +154,13 @@ impl FocusRecord {
 }
 
 /// What the AFInfo2 value `value` records, its SHORTs in byte order
-/// `order`: the frame, the center and the area at its version's
-/// [`layout`]; the in-focus byte, when the layout has one, as `true` for 1,
-/// `false` for 0, and nothing said for any other value; the area mode
-/// that byte 5 names under the detection method of byte 4, both the same
-/// on every version ([`area_mode`]); and, when the layout keeps them, on
-/// version 0100, the points the record names ([`named_points`]).
+/// `order`, at its version's [`layout`]. The in-focus byte, when the layout
+/// has one, is `true` for 1 and `false` for 0, and says nothing otherwise.
+/// The area mode is read at bytes 4 and 5 ([`area_mode`]), and the points
+/// the record names where the layout keeps them ([`named_points`]).
 ///
 /// `None` when the version is not one read, or the value is shorter than
-/// its layout. The values are not checked here: [`in_crop`] checks a
-/// position, as recorded, with [`FocusRecord::focus`], before it places
-/// it, and [`placed`] the points named against the body's table.
-///
-/// [`in_crop`]: super::crop::in_crop
-/// [`placed`]: super::crop::placed
+/// its layout. The values are not checked here.
 pub(super) fn af_info2_record(value: &[u8], order: ByteOrder) -> Option<FocusRecord> {
     let layout = layout(value.get(..4)?)?;
     if value.len() < layout.min_len {
@@ -249,25 +196,23 @@ pub(super) fn af_info2_record(value: &[u8], order: ByteOrder) -> Option<FocusRec
     })
 }
 
-/// What a record with no position names of the points the camera used: a
-/// shot through a DSLR's viewfinder writes the layout of points the
-/// numbers belong to, the primary point's number and a mask of the points
-/// used, which only a table of the body's points places ([`placed`]).
-/// Read on version 0100 alone ([`Layout::named`]), where the D600's frames
-/// checked them.
+/// What a record with no position names of the points the camera used:
+/// the layout of points the numbers belong to, the primary point's number
+/// and a mask of the points used. Only a table of the body's points places
+/// them ([`placed`]). Read on version 0100 alone ([`Layout::named`]), where
+/// the D600's frames checked them.
 ///
 /// [`placed`]: super::crop::placed
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) struct NamedPoints {
-    /// The layout code, AFInfo2's FocusPointSchema, byte 6: 3 for the
-    /// D600's 39 points, and 0, no layout, on a live-view or manual-focus
-    /// shot.
+    /// The layout code, AFInfo2's FocusPointSchema, byte 6. It is 0, no
+    /// layout, on a live-view or manual-focus shot.
     pub(super) layout_code: u8,
     /// The primary point's number, byte 7: the point the camera focused
     /// on, and 0 for none.
     pub(super) primary: u8,
-    /// The mask of the points used, bytes 8 to 14, whose bits the table's
-    /// bit order ties to its points ([`PointTable::bit`]).
+    /// The mask of the points used, bytes 8 to 14. The table's bit order
+    /// ties its bits to the table's points ([`PointTable::bit`]).
     ///
     /// [`PointTable::bit`]: points::PointTable::bit
     pub(super) mask: [u8; points::MASK_LEN],
@@ -285,9 +230,9 @@ impl NamedPoints {
 }
 
 /// The points that the AFInfo2 value `value` names at `at`, where its
-/// layout keeps them ([`Layout::named`]): the layout code at `at`, the
-/// primary point's number after it, and the mask of the points used after
-/// that; `None` when they do not all lie inside the value.
+/// layout keeps them ([`Layout::named`]): the layout code, then the primary
+/// point's number, then the mask of the points used. `None` when they do
+/// not all lie inside the value.
 fn named_points(value: &[u8], at: usize) -> Option<NamedPoints> {
     let (&[layout_code, primary], rest) = value.get(at..)?.split_first_chunk::<2>()?;
     Some(NamedPoints {
@@ -297,42 +242,32 @@ fn named_points(value: &[u8], at: usize) -> Option<NamedPoints> {
     })
 }
 
-/// The area mode, how the camera chose its points, that AFInfo2's
-/// area-mode byte, byte 5, names with the code `code`, read under the
-/// detection method that byte 4 records as `detection`; `None` for any
-/// other pair, whose meaning no file shot in a known mode has shown, as
-/// the decision to name only confirmed area modes requires (ADR018).
+/// The area mode, how the camera chose its points, that AFInfo2's byte 5
+/// names with `code`, under the detection method that byte 4 records as
+/// `detection`. `None` for any other pair: an area mode is named only once
+/// frames shot in that mode confirm its code (ADR018).
 ///
 /// The detection method is how the camera found focus: 0 by phase
 /// detection, through a DSLR's viewfinder; 1 by contrast detection, in a
-/// DSLR's live view; and 2 by both, hybrid, on the mirrorless bodies.
-/// ExifTool's published documentation, read as documentation, gives byte 5
-/// two lists, told apart by that method. The codes a DSLR writes through
-/// the viewfinder mean one thing under phase detection and another under
-/// contrast detection, where 0 is plain contrast-detect, not a single
-/// point. The codes 193 and 197 are on both lists with one meaning, which
-/// is why they are named under any detection method. The code 207 is on
-/// the contrast-detect list and in the one list of version 04xx only, so
-/// it is named under contrast or hybrid detection, the detection the Z 9
-/// files record.
+/// DSLR's live view; 2 by both, on the mirrorless bodies. ExifTool's
+/// published documentation, read as documentation, gives byte 5 two lists,
+/// told apart by that method. So a DSLR's codes are named under phase
+/// detection alone; 193 and 197, on both lists with one meaning, under any
+/// method; and 207 under contrast or hybrid detection.
 ///
-/// Named, each on frames shot in its mode, as the NEF format notes record:
+/// Named, each on frames shot in its mode:
 ///
 /// - under phase detection, 0 [`Single`](FocusAreaMode::Single), 5
 ///   [`Dynamic`](FocusAreaMode::Dynamic), 8 [`Auto`](FocusAreaMode::Auto)
-///   and 9 [`Tracking`](FocusAreaMode::Tracking), on my D600 frames
-///   through the viewfinder, in single-point, dynamic-area, auto-area and
-///   3D-tracking AF;
-/// - under any detection method, 193 [`Single`](FocusAreaMode::Single), on
-///   the two Z 9 frames shot with a single point and committed as
-///   fixtures, both under hybrid detection, and 197
-///   [`Auto`](FocusAreaMode::Auto), on my Z 9 files shot in auto-area AF;
+///   and 9 [`Tracking`](FocusAreaMode::Tracking), on my D600 frames;
+/// - under any method, 193 [`Single`](FocusAreaMode::Single), on two of my
+///   Z 9 frames committed as fixtures, and 197
+///   [`Auto`](FocusAreaMode::Auto), on my Z 9 files;
 /// - under contrast or hybrid detection, 207
-///   [`Tracking`](FocusAreaMode::Tracking), on my Z 9 files shot in
-///   3D-tracking, under hybrid detection.
+///   [`Tracking`](FocusAreaMode::Tracking), on my Z 9 files.
 ///
-/// A DSLR code under contrast or hybrid detection, 207 under phase
-/// detection, or any other code gives `None`.
+/// The NEF notes list the frames (`docs/formats/nef/makernote-and-metadata.md`,
+/// section 8.6).
 pub(super) fn area_mode(detection: u8, code: u8) -> Option<FocusAreaMode> {
     match (detection, code) {
         (0, 0) | (_, 193) => Some(FocusAreaMode::Single),
@@ -343,7 +278,7 @@ pub(super) fn area_mode(detection: u8, code: u8) -> Option<FocusAreaMode> {
     }
 }
 
-/// The two SHORTs at `at` in `value`, in byte order `order`; `None` when
+/// The two SHORTs at `at` in `value`, in byte order `order`. `None` when
 /// they do not lie inside it.
 fn shorts_at(value: &[u8], at: usize, order: ByteOrder) -> Option<(u32, u32)> {
     let &[first0, first1, second0, second1] = value.get(at..)?.first_chunk::<4>()?;

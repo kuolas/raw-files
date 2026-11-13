@@ -1,87 +1,49 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! The Nikon MakerNote's block: its layouts, the MakerNote IFD and
-//! the PreviewIFD read from it, and the PreviewIFD's JPEG as a
-//! candidate preview.
+//! The Nikon MakerNote's block: its layouts, the MakerNote IFD and the
+//! PreviewIFD read from it, and the PreviewIFD's JPEG as a candidate
+//! preview.
 //!
 //! Nikon has used three layouts for the block, told apart by their first
-//! bytes, and two of them are read. The one every body since the D70 and
-//! the D100 writes, the embedded layout, starts with the signature `Nikon`
-//! and a NUL, two version bytes and two more; then, 10 bytes in, comes a
-//! TIFF header of its own: a byte-order mark, 42 and the offset of the
-//! MakerNote IFD. That inner header is the base of every offset inside the
-//! block, the MakerNote IFD's, the PreviewIFD's and the JPEG's, never the
-//! start of the file, and its byte order, which may differ from the
-//! file's, is the order of every number inside the block. So the offsets
-//! are the same wherever the block lies, in a NEF file or in a JPEG file's
-//! Exif segment: the header of the TIFF structure that holds the MakerNote
-//! is not their base, as it is for Sony's.
+//! bytes. Two are read:
 //!
-//! The D1 family's block, the headerless layout, has no header at all: it
-//! is a bare IFD, the MakerNote IFD, at its first byte. Its offsets, the
-//! PreviewIFD's and the JPEG's among them, count from the header of the
-//! TIFF structure that holds the MakerNote, as Sony's do: the start of the
-//! file in a NEF file, the TIFF header inside the Exif segment in a JPEG
-//! file. Its numbers are in that structure's byte order. So, unlike the
-//! embedded layout's, its offsets depend on where the block lies, and the
-//! block is read with the base and the byte order of the Exif IFD, which
-//! the walk read in that structure ([`MakerNoteBlock::ifd_at`]). The D1H
-//! writes it, big-endian, file and block alike: its MakerNote IFD starts
-//! at the block's first byte, and its PreviewIFD and that IFD's JPEG, the
-//! file's only one, 570 by 375 pixels, lie inside the block where offsets
-//! counted from the start of the file put them (public sample 5364). Early
-//! Coolpix bodies, the E990 and others, write it into their JPEGs,
-//! little-endian like the Exif segment, with offsets counted from the
-//! segment's TIFF header, as camera JPEGs from Wikimedia Commons, checked
-//! by hand, show; where they hold a PreviewIFD, its JPEG lies past the end
-//! of the block, so it is not a preview.
+//! - **The embedded layout**, which every body since the D70 and the D100
+//!   writes. It starts with the signature `Nikon` and a NUL, and holds a
+//!   TIFF header of its own 10 bytes in. That inner header is the base of
+//!   every offset inside the block, and its byte order is the order of
+//!   every number there. So the offsets are the same wherever the block
+//!   lies, in a NEF file or in a JPEG file's Exif segment.
+//! - **The headerless layout**, which the D1 family writes. The block is a
+//!   bare IFD at its first byte. Its offsets count from the header of the
+//!   TIFF structure that holds the MakerNote, as Sony's do, and its numbers
+//!   are in that structure's byte order ([`MakerNoteBlock::ifd_at`]).
 //!
-//! The third layout, an IFD after the 8 bytes `Nikon\0\1\0`, which the
-//! Coolpix E700 to E950 wrote into their JPEGs, is not read: the sources
-//! disagree on the byte order of its numbers, and the public files that
-//! have it, little-endian inside the block and out, cannot settle it. A
-//! file that has one gets nothing from its MakerNote.
+//! The third, an IFD after the 8 bytes `Nikon\0\1\0`, is not read: the
+//! sources disagree on the byte order of its numbers, and the files that
+//! have it cannot settle it. A file that has one gets nothing from its
+//! MakerNote.
 //!
 //! A block that starts with the signature is of the embedded layout or of
-//! none: it is never read as a bare IFD. Any other block is taken for the
-//! headerless layout. The file's Make is not looked at here: the format's
-//! reader has already decided by it that the file is Nikon's, the NEF
-//! reader in its claim and the JPEG reader by IFD0's Make, both by the
-//! name [`NIKON`]. So a block of another maker's under a Nikon Make, or
-//! one that is no IFD at all, is read as a bare IFD, under the same
-//! checks: its first two bytes, taken for the number of entries, are in
-//! the thousands for a block that starts with text, more than the limits
-//! or the block allow, and whatever passes is held to the block and to
-//! each tag's rule, as below.
+//! none. Any other block is read as a bare IFD. The Make is not looked at
+//! here: the format's reader has taken the file for a Nikon one by
+//! [`NIKON`]. So a block of another maker's under a Nikon Make is read as a
+//! bare IFD too, under the same checks. If it starts with text, its first
+//! two bytes, taken for the number of entries, are more than the limits or
+//! the block allow.
 //!
-//! Nothing in the block is trusted. Every offset found inside it is checked
-//! against the block, not only against the file: the MakerNote IFD and the
-//! PreviewIFD must lie inside the block, with their whole entry tables; the
-//! three numbers that lead to the JPEG, the PreviewIFD's offset and the
-//! JPEG's offset and length, must each be one LONG, as Nikon writes them,
-//! which the entry holds itself ([`Ifd::held`]); and the whole JPEG, as
-//! declared, must lie inside the block, whichever header the offsets count
-//! from. The block's IFDs are read inside the block ([`ifd_in`]): every
-//! entry whose value lies outside the block is dropped, as an entry whose
-//! value lies outside the file is, so every value read from them lies
-//! inside the block: the ISO's two numbers, WorldTime's four bytes, the
-//! settings of one SHORT and 0x000B's two SSHORTs, which the entry holds,
-//! and CropArea's four numbers, CropHiSpeed's seven, the serial number, the
-//! lens's range, FocusMode's and WhiteBalance's texts, 0x003F's two
-//! fractions and AFInfo2's bytes, which take more than the four bytes an
-//! entry holds and so are stored elsewhere. A value is read only in the
-//! type and count its tag's rule names, which the reader declares once,
-//! beside the tag's number ([`Rule`](crate::container::tiff::Rule)); a
-//! value of another type or count is never read ([`Ifd::get`]). A
-//! block that does not hold together, whether it is too short for its
-//! layout, its inner header is not one, or an IFD in it is cut short or has
-//! more entries than the limits allow, costs what the MakerNote would have
-//! given, the small preview, the crop area, the camera settings and the
-//! values above, never the file: the NEF security notes ask that bad
-//! entries be skipped rather than fail the file
-//! (`docs/formats/nef/security.md`, item 4 of the checklist).
-//! Only a failure of the reader itself is an error: that is not the file's
-//! fault, and says nothing about the MakerNote.
+//! Every offset found inside the block is checked against the block, not
+//! only against the file. The MakerNote IFD and the PreviewIFD are read
+//! inside the block ([`ifd_in`]), each with its whole entry table, and an
+//! entry whose value lies outside the block is dropped. The PreviewIFD's
+//! JPEG must lie inside the block too ([`preview_candidate`]).
+//!
+//! Nothing the block holds is an error. A block that does not hold
+//! together costs what the MakerNote would have given, never the file, as
+//! the NEF security notes ask (`docs/formats/nef/security.md`, item 4 of
+//! the checklist).
+//!
+//! The NEF notes give each layout's bytes and the bodies that write it
+//! (`docs/formats/nef/makernote-and-metadata.md`, section 1).
 //!
 //! [`NIKON`]: super::NIKON
 
@@ -96,8 +58,9 @@ use crate::formats::tiff_previews::{self, Candidate};
 use crate::io::Source;
 use crate::limits::Limits;
 
-/// The signature a Nikon MakerNote of the embedded layout starts with, and
-/// the short-header layout too: what tells both from the headerless one.
+/// The signature a Nikon MakerNote of the embedded layout starts with, as
+/// does one of the short-header layout: what tells both from the
+/// headerless layout.
 const SIGNATURE: &[u8; 6] = b"Nikon\0";
 
 /// Where the inner TIFF header sits in a block of the embedded layout:
@@ -109,42 +72,32 @@ pub(super) const HEADER_AT: u64 = 10;
 const MIN_LEN: u64 = HEADER_AT + 8;
 
 /// A Nikon MakerNote of one of the layouts read here, its block found and
-/// its MakerNote IFD read: what every use of the MakerNote starts from, so
-/// that the block is found, checked and parsed once per file.
-///
-/// See the [module documentation](self) for the layouts.
+/// its MakerNote IFD read: what every use of the MakerNote starts from.
 #[derive(Debug)]
 pub(in crate::formats) struct MakerNote {
     /// The MakerNote IFD, which holds Nikon's tags: the IFD the inner
     /// header points at, or the one at the block's first byte in the
-    /// headerless layout, inside the block with its whole entry table. Its
-    /// entries whose values lie outside the block were dropped when it was
-    /// read, so every value read from it lies inside the block.
+    /// headerless layout. It was read inside the block, so every value read
+    /// from it lies inside the block.
     ///
-    /// It was read in the block, [`Ifd::block`]: its bounds are where the
-    /// block's bytes are in the file, which every offset found inside the
-    /// block is checked against, and its base, which every such offset
-    /// counts from, is the inner TIFF header, 10 bytes into the block, or,
-    /// in the headerless layout, the header of the TIFF structure that
-    /// holds the MakerNote, the Exif IFD's. Its byte order, [`Ifd::order`],
-    /// is the inner header's, which may differ from the file's, or the
+    /// Its block, [`Ifd::block`], has the MakerNote's bytes as bounds. Its
+    /// base is the inner TIFF header, or, in the headerless layout, the
+    /// Exif IFD's. Its byte order, [`Ifd::order`], is the inner header's,
+    /// which may differ from the file's, or in the headerless layout the
     /// Exif IFD's: the order of every number inside the block.
     pub(super) ifd: Ifd,
     /// The PreviewIFD, which the MakerNote IFD's entry 0x0011 points to,
-    /// read in the same block, with the same base and byte order; `None`
-    /// when that entry is missing, is not one number the entry holds, or
-    /// leads to no IFD that holds together inside the block. Read with the
-    /// MakerNote IFD, so that the preview and the raw view both take it
-    /// from here.
+    /// read in the same block, with the same base and byte order
+    /// ([`preview_ifd`]). Read with the MakerNote IFD, so that the preview
+    /// and the raw view both take it from here.
     preview: Option<Ifd>,
 }
 
 impl MakerNote {
     /// Adds the MakerNote's directories to `entries`: the MakerNote IFD,
-    /// then the PreviewIFD, under the tag of the entry that points to it,
-    /// only when the MakerNote IFD was added, not already listed as a
-    /// directory at the same position, so that no PreviewIFD is listed
-    /// without its MakerNote.
+    /// then the PreviewIFD, under the tag of the entry that points to it.
+    /// The PreviewIFD is added only when the MakerNote IFD was, so that no
+    /// PreviewIFD is listed without its MakerNote.
     pub(in crate::formats) fn add_entries(&self, entries: &mut Entries) {
         if entries.push(Directory::MakerNote, &self.ifd)
             && let Some(preview) = &self.preview
@@ -155,22 +108,15 @@ impl MakerNote {
 }
 
 /// The Nikon MakerNote of the file in `src`, whose IFDs are `tree`, read
-/// within `limits`, for a file that its format's reader has taken for a
-/// Nikon one by its Make, with its PreviewIFD when it has one
-/// ([`preview_ifd`]); `None` when the file has no Exif IFD, no MakerNote,
-/// a MakerNote of the short-header layout, which is not read, or one whose
-/// inner header or MakerNote IFD does not hold together.
+/// within `limits`, with its PreviewIFD when it has one.
 ///
-/// The Make is not looked at here: the caller has. A block that starts
-/// with the signature is of the embedded layout or none; any other block
-/// is read as the headerless layout, another maker's under a Nikon Make
-/// too, under the same checks.
-///
-/// See the [module documentation](self) for the layouts and the checks.
+/// `None` when the file has no Exif IFD or no MakerNote, when the
+/// MakerNote is of the short-header layout, or when its inner header or
+/// its MakerNote IFD does not hold together.
 ///
 /// # Errors
 ///
-/// `Io` when the reader fails. Nothing the block holds is an error.
+/// `Io` when the reader fails.
 pub(in crate::formats) fn read<R: Read + Seek>(
     src: &mut Source<R>,
     tree: &Tree,
@@ -183,10 +129,7 @@ pub(in crate::formats) fn read<R: Read + Seek>(
     let ifd = if head.as_slice() == SIGNATURE {
         embedded_ifd(src, &block, limits)?
     } else {
-        // The headerless layout: a bare IFD at the block's first byte, its
-        // offsets counted from the header of the TIFF structure that holds
-        // the MakerNote, and its numbers in that structure's byte order,
-        // the Exif IFD's base and order.
+        // The headerless layout: a bare IFD at the block's first byte.
         block.ifd_at(src, 0, limits)?
     };
     let Some(ifd) = ifd else {
@@ -197,14 +140,15 @@ pub(in crate::formats) fn read<R: Read + Seek>(
 }
 
 /// The PreviewIFD of the MakerNote whose IFD is `ifd`, read within
-/// `limits`: the IFD at the offset its entry 0x0011 holds, counted from the
-/// MakerNote's base, in its byte order, inside its block; `None` when the
-/// entry is missing or is not one LONG, as Nikon writes it, or the IFD does
-/// not hold together inside the block.
+/// `limits`: the IFD at the offset its entry 0x0011 holds, inside the
+/// MakerNote's block, with its base and byte order.
+///
+/// `None` when the entry is missing or breaks its rule, one LONG as Nikon
+/// writes it, or when the IFD does not hold together inside the block.
 ///
 /// # Errors
 ///
-/// `Io` when the reader fails. Nothing the block holds is an error.
+/// `Io` when the reader fails.
 fn preview_ifd<R: Read + Seek>(
     src: &mut Source<R>,
     ifd: &Ifd,
@@ -216,15 +160,15 @@ fn preview_ifd<R: Read + Seek>(
     ifd_in(src, ifd.block(), pointer, ifd.order(), limits)
 }
 
-/// The MakerNote IFD of `block`, a block of the embedded layout, which
-/// starts with the signature, read within `limits`: the IFD the inner
-/// TIFF header points at, in the block whose base is that header; `None`
-/// when the block is too short for the header, or the header or the IFD
-/// does not hold together. A block of the short-header layout, which
-/// starts with the signature too, is read the same way: its IFD starts 8
-/// bytes in, so the bytes 10 bytes in are the start of the IFD's first
-/// entry, not a TIFF header, and it gives none unless that entry's tag
-/// and type happen to read as a byte-order mark and 42.
+/// The MakerNote IFD of `block`, a block that starts with the signature,
+/// read within `limits`: the IFD the inner TIFF header points at, with that
+/// header as the base. `None` when the block is too short for the header,
+/// or the header or the IFD does not hold together.
+///
+/// A block of the short-header layout starts with the signature too. Its
+/// IFD starts 8 bytes in, so 10 bytes in lies its first entry, not a TIFF
+/// header. It gives none unless that entry's tag and type happen to read
+/// as a byte-order mark and 42.
 ///
 /// # Errors
 ///
@@ -249,13 +193,13 @@ fn embedded_ifd<R: Read + Seek>(
 }
 
 /// Where the preview JPEG of `makernote` is, as a candidate for the shared
-/// finder, with its absolute offset: the JPEG its PreviewIFD declares, read
-/// with the MakerNote; `None` when the MakerNote has no PreviewIFD, or one
-/// that does not declare a JPEG inside the block, its JPEGInterchangeFormat
-/// and JPEGInterchangeFormatLength each one LONG, as Nikon writes them.
+/// finder: the JPEG its PreviewIFD declares, held to the block
+/// ([`tiff_previews::candidate`]).
 ///
-/// See the [module documentation](self) for the checks. The two numbers
-/// are held in their entries, so this reads nothing from the file.
+/// `None` when the MakerNote has no PreviewIFD, when its
+/// JPEGInterchangeFormat or JPEGInterchangeFormatLength breaks its rule,
+/// one LONG each, as Nikon writes them, or when the JPEG they declare does
+/// not lie inside the block.
 pub(in crate::formats) fn preview_candidate(makernote: &MakerNote) -> Option<Candidate> {
     let preview = makernote.preview.as_ref()?;
     let [offset] = preview.held(rules::JPEG_INTERCHANGE_FORMAT)?;

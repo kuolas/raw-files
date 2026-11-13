@@ -1,126 +1,36 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! The Nikon MakerNote's CropHiSpeed, and placing a focus point on a
-//! crop: a recorded position on the cropped picture, and the points
-//! a record names, placed from the body's table.
+//! The Nikon MakerNote's CropHiSpeed, and placing a focus point on a crop:
+//! a recorded position on the cropped picture, and the points a record
+//! names, placed from the body's table.
 //!
-//! On a crop mode, DX, 1:1 or 16:9, the point is not reported as recorded,
-//! for the frame AFInfo2 records stays the camera's full output while the
-//! picture is cut from it: the Z6III's 1:1 file records a 6048 by 4032
-//! frame for a picture of 4032 by 4032 (public sample 7808), and its 16:9
-//! and DX files and the Z50II's 1:1 and 16:9 files do the same (samples
-//! 7809, 7810, 7767 and 7770). What the values mean on the cropped picture
-//! depends on what the crop cut. A DX crop, which cuts both sides, records
-//! fractions of the cropped picture; a crop that keeps one side, 1:1 or
-//! 16:9, records positions in the full frame. Shots made with my Z 9, with
-//! the point in the top-left corner of the picture, showed it, with the
-//! same single point of 291 by 323 at (502, 424) in FX. The DX shot records
-//! (636, 572) and an area of 420 by 468, which, scaled onto its 5392 by
-//! 3592 picture, are (415, 373) and 274 by 305, near the corner and about
-//! the FX area. The 1:1 shot records (1797, 424), which is (421, 424) in
-//! its 5504 by 5504 window of the frame, and the 16:9 shot (502, 715),
-//! which is (502, 283) in its 8256 by 4640 window, both with the FX area.
-//! CropHiSpeed tells a crop apart: its cropped size differs from its
-//! original size on a crop, and equals it on every other file checked but
-//! the D810's, below. The record is checked first as recorded, in the full
-//! frame, as on any file: one that does not hold there gives no focus point
-//! on a crop either. On a crop, the frame becomes CropArea's size. A DX
-//! crop's point is scaled onto it as [`Focus::scaled_to`] scales: the
-//! center and the area are each rounded to the nearest pixel, a half
-//! rounding up. An area that rounding leaves a pixel too wide for its
-//! center is trimmed to fit, and an area side that rounds to nothing is
-//! kept at one pixel. A center that rounds onto an edge of the picture
-//! keeps the point without an area. A 1:1 or 16:9 crop's center moves
-//! back by the window's origin, half the difference between the frame and
-//! CropArea, keeping the area. That window holds only when CropArea's
-//! kept side equals the frame's: a small raw's CropArea counts stored
-//! pixels, smaller than the full output, so a 1:1 or 16:9 crop on one
-//! gives no focus point, while a DX crop on one is scaled onto its
-//! CropArea. A raw file whose CropHiSpeed records a crop but that has no
-//! CropArea is read as recorded: the D810 writes a cropped width four
-//! pixels short of its original on an uncropped file, and no CropArea
-//! (sample 2036); one whose CropArea cannot be used, or cannot be checked
-//! against a raw size, gives no focus point. A CropHiSpeed that fits
-//! neither shape, cutting both sides or keeping exactly one, such as one
-//! with a cropped side larger than its original, gives none too.
-//! CropHiSpeed is read only when it holds exactly seven SHORTs; otherwise
-//! the file is read as no crop (ADR012).
+//! On a crop mode, DX, 1:1 or 16:9, the frame AFInfo2 records stays the
+//! camera's full output, while the picture is cut from it. CropHiSpeed
+//! tells a crop apart: its cropped size differs from its original size.
+//! The parts, in the order a point is placed:
 //!
-//! A JPEG shot in a crop mode records the same AFInfo2 and CropHiSpeed as
-//! the raw file of the same shot, with the frame still the full output at
-//! every image size, and no CropArea: shots made with my Z 9 showed
-//! it, in each crop mode and at each of its three image sizes. Its
-//! picture is the JPEG's own pixels, of the size its frame header gives,
-//! which the metadata's image size holds, and its point is placed on them
-//! as a raw file's is placed on CropArea (ADR015). A DX crop's point is
-//! scaled onto the JPEG's size, which becomes the frame. A 1:1 or 16:9
-//! crop's picture is the centered window of the recorded frame that has the
-//! frame's length on the side the crop keeps and the JPEG's shape: its cut
-//! side is the kept length times the JPEG's cut side over its kept side,
-//! rounded to the nearest pixel, a half rounding up. The center moves back
-//! by that window's origin, the area is kept, and the window becomes the
-//! frame, as with CropArea; a window longer than the frame on the cut side
-//! gives no focus point. A JPEG whose MakerNote holds a CropArea is read by
-//! the raw file's rule: with no raw size to check CropArea against, a crop
-//! gives no focus point, and a file that is no crop gives its point as
-//! recorded. The format's reader says which of the two a file's picture
-//! is, a raw file's or a JPEG's ([`Picture`]): a crop without a CropArea
-//! is placed on the JPEG's pixels, and a raw file, which has none of its
-//! own, gives its point as recorded. Whether the point placed so fits the
-//! JPEG's picture is for the JPEG reader to judge (ADR014).
+//! - [`crop_hi_speed`] reads CropHiSpeed;
+//! - [`in_crop`] places a recorded position on the cropped picture: on
+//!   CropArea in a raw file, on the JPEG's own pixels in a JPEG;
+//! - [`placed`] places the points a record names from the body's table, in
+//!   the frame or the window [`placed_frame`] gives.
 //!
-//! A record whose frame or area has a zero side records no position, and
-//! the points it names are placed from the table of the body the file's
-//! Model names, by the decision to place a point that the camera names by
-//! number from the body's table (ADR018). They are read on version 0100
-//! alone, where the D600's frames checked them: the layout code
-//! (FocusPointSchema) at byte 6, the primary point's number at byte 7 and
-//! the mask of the points used in the seven bytes 8 to 14, its bit k being
-//! bit k % 8 of byte 8 + k / 8; the other versions keep them at offsets of
-//! their own, which are not read. Points are placed only when FocusMode is
-//! not `MANUAL`, the version is 0100, the Model has a table, the layout
-//! code is the table's, 3 on the D600, and the primary's number is a point
-//! of the table, 1 to 39 on the D600; any other such record gives no focus
-//! point. The focus point is then the primary's center and box, as the
-//! table gives them, in the table's frame, from a table
-//! ([`FocusOrigin::Table`]), with nothing said of whether focus was
-//! confirmed: version 0100's in-focus byte is the contrast-detect result,
-//! 0 on every viewfinder frame of the D600's, in focus or not. The list
-//! holds every point of the table whose bit the mask sets, by the table's
-//! bit order, number − 1 on the D600, and the primary, whether the mask
-//! sets its bit or not, in number order, each with its number; a set bit
-//! the table lacks is skipped, and an empty mask gives the primary alone.
-//! The area mode is read as [`af_info2`](super::af_info2) reads it for a
-//! position. On a crop, whose CropHiSpeed records a cropped size that
-//! differs from its original size, points are placed only when the table's
-//! record confirms the crop's setting: the DX crop, 2, on the D600. Then
-//! the frame is the crop's window, of the size the record measured, 3936 by
-//! 2624 on a D600 DX frame, centered in the table's frame, so that its
-//! origin is (1040, 696); every center moves back by that origin and every
-//! box is kept, by the decision to measure a placed point on a crop in the
-//! crop's window (ADR018).
-//! CropHiSpeed's origin, its sixth and seventh values, must be the
-//! window's, as on every D600 DX frame; a file whose origin is not
-//! records the crop elsewhere in the frame and gives no focus point, by
-//! the decision to keep each crop's window in the table (ADR018). A point
-//! whose center or box the window leaves out is dropped, and when the
-//! primary is, the file gives no focus point. In a JPEG the window must be
-//! the JPEG's own size, as it is on the D600 at full image size, so that a
-//! crop-mode JPEG at a smaller size gives none. An uncropped JPEG takes the
-//! table's frame, which the JPEG reader holds to the picture's shape,
-//! unless the table lists its size as one whose picture shows a window of
-//! the frame: the D600's Medium JPEG, 4512 by 3008, shows the 6010 by 4006
-//! window centered in the 6016 by 4016 frame, as I measured it by fitting
-//! the Medium JPEGs of RAW+JPEG pairs onto their NEF's full-size preview.
-//! Its points are then placed as on a crop: the frame is that window, every
-//! center moves back by its origin, (3, 5), and a point the window leaves
-//! out is dropped, by the decision to keep a JPEG size's window in the
-//! table (ADR018). Its Large and Small JPEGs, 6016 by 4016 and 3008 by
-//! 2008, show the whole frame, and take it. CropArea plays no part in it.
-//! A record of a position is read by the rules of
-//! [`af_info2`](super::af_info2) and those above, whatever it names.
+//! What a crop's values mean depends on what it cut ([`Cut`]). A DX crop,
+//! which cuts both sides, records fractions of the cropped picture, and
+//! its point is scaled onto it. A 1:1 or 16:9 crop, which keeps one side,
+//! records positions in the full frame, and its center moves back by the
+//! origin of the picture's window.
 //!
-//! [`Picture`]: super::Picture
+//! A record is checked first as recorded, in the full frame, as on any
+//! file. One that does not hold there gives no focus point on a crop
+//! either. Nothing the block holds is an error: a CropHiSpeed that is
+//! missing or breaks its rule reads as no crop (ADR012).
+//!
+//! The NEF notes give what each crop records, with the shots that showed
+//! it (`docs/formats/nef/makernote-and-metadata.md`, section 8.6). The
+//! D600's windows are in its record (`docs/formats/nef/autofocus-points.md`,
+//! sections 2.6 and 2.9). A sample cited here by number is the file of
+//! that number on raw.pixls.us.
 
 use std::cmp::Ordering;
 use std::io::{Read, Seek};
@@ -135,15 +45,9 @@ use crate::formats::makernote::points::PointTable;
 use crate::geometry::{Point, Size};
 use crate::io::Source;
 
-/// What CropHiSpeed records of a crop: the crop setting, which gives the
-/// image area ([`image_area`]) and says which crop a point placed from a
-/// table may be placed on ([`placed_frame`]); the size of the picture
-/// before the crop and after it, in the sensor's pixels, which [`in_crop`]
-/// and [`placed_frame`] only compare with each other; and where the crop
-/// starts, which a point placed from a table requires to be its window's
-/// centered origin ([`placed_frame`]).
-///
-/// [`image_area`]: super::settings::image_area
+/// What CropHiSpeed records of a crop
+/// ([`CROP_HI_SPEED`](super::CROP_HI_SPEED)). Its two sizes count the
+/// sensor's pixels, so they are only compared with each other.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) struct CropHiSpeed {
     /// The crop setting, its first value, such as 11 for FX uncropped.
@@ -153,18 +57,17 @@ pub(super) struct CropHiSpeed {
     /// The cropped width and height.
     cropped: Size,
     /// The crop's left column and top row, its sixth and seventh values,
-    /// in the sensor's pixels: (1040, 696) on a D600 DX frame, (0, 0)
-    /// uncropped. On the D600 it is also the origin of the DX picture's
-    /// window centered in the 6016 by 4016 output, which a point placed from
-    /// a table requires of it ([`placed_frame`]).
+    /// in the sensor's pixels: (0, 0) uncropped. A point placed from a
+    /// table requires it to be the origin of the crop's window
+    /// ([`placed_frame`]).
     origin: Point,
 }
 
 impl CropHiSpeed {
-    /// What this crop cut, by comparing its cropped size with its original
-    /// size on each side: `None` for no crop, the two sizes equal, and for
-    /// a crop that fits neither shape, such as one with a cropped side
-    /// larger than its original, or one side cut and the other larger.
+    /// What this crop cut, by its cropped size against its original size on
+    /// each side. `None` for no crop, the two sizes equal, and for a crop
+    /// that fits neither shape, such as one with a cropped side larger than
+    /// its original.
     fn cut(self) -> Option<Cut> {
         let (original, cropped) = (self.original, self.cropped);
         match (
@@ -210,14 +113,13 @@ enum Onto {
     Pixels(Size),
 }
 
-/// What `makernote`'s CropHiSpeed records of the crop; `None` when the tag
-/// is missing, is not of type SHORT, does not hold exactly seven values,
-/// or stores them outside the block. A file without it is read as no crop,
-/// and has no image area.
+/// What `makernote`'s CropHiSpeed records of the crop. `None` when the tag
+/// is missing, breaks its rule or stores its values outside the block: the
+/// file is then read as no crop, and has no image area.
 ///
 /// # Errors
 ///
-/// `Io` when the reader fails. Nothing the block holds is an error.
+/// `Io` when the reader fails.
 pub(super) fn crop_hi_speed<R: Read + Seek>(
     src: &mut Source<R>,
     makernote: &MakerNote,
@@ -251,64 +153,38 @@ pub(super) fn crop_hi_speed<R: Read + Seek>(
 }
 
 /// The focus point `record` describes, placed on the cropped picture when
-/// the file is a crop, and as AFInfo2 records it otherwise; `None` when
-/// the record is refused as recorded, or the file is a crop on which it
-/// cannot be placed.
+/// the file is a crop, and as recorded otherwise. `None` when the record
+/// is refused as recorded, or when the file is a crop it cannot be placed
+/// on.
 ///
-/// The record is checked first, as recorded, in its own frame, by
-/// [`FocusRecord::focus`], on a crop as on any other file. A center outside
-/// the recorded frame, or an area that does not fit around it there, gives
-/// none, even where placing it on the cropped picture would move it inside.
+/// The record is checked first, as recorded, in its own frame
+/// ([`FocusRecord::focus`]). A center outside that frame, or an area that
+/// does not fit around it there, gives none, even where placing it on the
+/// cropped picture would make it fit.
 ///
-/// A file is a crop when CropHiSpeed, `crop`, records a cropped size
-/// that differs from its original size. On a crop, AFInfo2's frame is
-/// still the camera's full output, and the point is placed on the cropped
-/// picture ([`Onto`]): CropArea, when the file has one, which `crop_area`
-/// gives; and, when it has none, `pixels`, a JPEG's own pixels, of the
-/// size its frame header gives (ADR015). A crop without a CropArea tag
-/// and without `pixels`, as in a raw file, such as the D810's, whose
-/// cropped width is four pixels short on an uncropped file (public sample
-/// 2036), has no picture to place the record on, and is read as recorded.
-/// A crop whose CropArea cannot be used, or could not be checked against
-/// a raw size, as in any JPEG, has a picture whose size is not known, and
-/// gives none. What happens to the center and the area depends on what the
-/// crop cut ([`CropHiSpeed::cut`]), as the module documentation shows:
+/// A file is a crop when `crop` records a cropped size that differs from
+/// its original size. The picture the point is placed on ([`Onto`]) is
+/// CropArea, when `crop_area` gives one, or else `pixels`, a JPEG's own
+/// pixels (ADR015). A crop with neither, as in a raw file without a
+/// CropArea, is read as recorded. The D810 is why: it writes a cropped
+/// width four pixels short on an uncropped file, and no CropArea (sample
+/// 2036). A CropArea that cannot be used, as in any JPEG, gives none.
+/// Then, by what the crop cut ([`CropHiSpeed::cut`]):
 ///
-/// - **A crop that cuts both sides** (DX) records fractions of the
-///   cropped picture, in the full frame's units. The point is scaled onto
-///   CropArea, or onto the JPEG's pixels, by [`Focus::scaled_to`]: x and
-///   the width multiplied by the picture's width over the frame's, y and
-///   the height by the heights, each rounded to the nearest pixel, a half
-///   rounding up, and the frame becomes the picture's size. An area that
-///   rounding leaves a pixel too wide for its center is trimmed to fit,
-///   and an area side that rounds to nothing keeps one pixel. A center
-///   that rounds onto an edge of the picture leaves no room for an area,
-///   and keeps the point without one.
-/// - **A crop that keeps one side** (1:1, 16:9), whose cropped size
-///   equals the original on exactly one side and is smaller on the other,
-///   records positions in the full frame, of which the cropped picture is
-///   the centered window. The window is CropArea; on a JPEG's pixels, it
-///   is the frame's length on the side the crop keeps, and on the side it
-///   cuts, the kept length times the JPEG's cut side over its kept side
-///   ([`window_of_shape`]), so that the window has the JPEG's shape in the
-///   frame's pixels. The center moves back on each axis by the window's
-///   origin, half the difference between the frame and the window, rounded
-///   down ([`shifted`]), the area is kept, and the frame becomes the
-///   window. That holds only when the window's kept side equals the
-///   frame's, as a JPEG's does by its making: on a small raw, CropArea
-///   counts stored pixels and the frame the full output, the window cannot
-///   be placed, and the file gives none. A window side larger than the
-///   frame's, or a center that would move past the window's left or top
-///   edge, gives none too. The moved record is checked again by
-///   [`FocusRecord::focus`], in the window: a center past its right or
-///   bottom edge, or an area that no longer fits around the moved center,
-///   gives none.
+/// - **A crop that cuts both sides** (DX) records fractions of the cropped
+///   picture. The point is scaled onto the picture by [`Focus::scaled_to`],
+///   and the frame becomes the picture's size.
+/// - **A crop that keeps one side** (1:1, 16:9) records positions in the
+///   full frame, of which the picture is the centered window. On a JPEG's
+///   pixels, the window has the JPEG's shape ([`window_of_shape`]). The
+///   center moves back by the window's origin ([`shifted`]), the area is
+///   kept, and the frame becomes the window. The window's kept side must
+///   equal the frame's: on a small raw, CropArea counts stored pixels and
+///   the frame the full output, so the file gives none. The moved record is
+///   checked again, in the window.
 ///
-/// A CropHiSpeed that fits neither shape, such as one whose cropped size
-/// is larger than its original on a side, records no crop the point can
-/// be placed on, and gives none; except in a file with neither a CropArea
-/// nor `pixels`, which is read as recorded whatever its CropHiSpeed
-/// records.
+/// A CropHiSpeed that fits neither shape gives none, except in a file with
+/// neither a CropArea nor `pixels`, which is read as recorded.
 pub(super) fn in_crop(
     record: FocusRecord,
     crop: Option<CropHiSpeed>,
@@ -358,18 +234,18 @@ pub(super) fn in_crop(
 }
 
 /// The centered window of the recorded frame `frame` that a crop which cut
-/// one side, `cut`, shows on a JPEG of `pixels`: the frame's length on the
-/// side the crop keeps, and on the side it cuts, that length times the
-/// JPEG's cut side over its kept side, rounded to the nearest pixel, a
-/// half rounding up, by the rule [`Focus::scaled_to`] scales by
-/// ([`scale`]) (ADR015). So the window has the JPEG's shape, in the frame's
-/// pixels. It may be longer than the frame on the cut side, which
-/// [`shifted`] then refuses. A cut side too long for a `u32` saturates at
-/// `u32::MAX`, as [`scale`] does, and is refused the same way: the
-/// frame's sides are read from SHORTs, so no frame is that long.
+/// one side, `cut`, shows on a JPEG of `pixels`, in the frame's pixels.
+/// Its kept side is the frame's length, and its cut side that length times
+/// the JPEG's cut side over its kept side, rounded as [`scale`] rounds
+/// (ADR015). So the window has the JPEG's shape.
+///
+/// The window may be longer than the frame on the cut side, which
+/// [`shifted`] then refuses. A side too long for a `u32` saturates, as in
+/// [`scale`], and is refused the same way, though the frame's sides are
+/// read from SHORTs, so no frame is that long.
 ///
 /// `None` for a crop that cut both sides, which has no window, and for a
-/// JPEG side of zero, which [`scale`] cannot divide by.
+/// JPEG side of zero.
 fn window_of_shape(frame: Size, cut: Cut, pixels: Size) -> Option<Size> {
     if pixels.width == 0 || pixels.height == 0 {
         return None;
@@ -403,32 +279,27 @@ fn centered_origin(frame: u32, window: u32) -> Option<u32> {
     Some(frame.checked_sub(window)? / 2)
 }
 
-/// The points that `named`, what a record with no position names, names,
-/// placed from `table`, the table of the body the file's Model names, by
-/// the decision to place a point that the camera names by number from the
-/// body's table (ADR018); `None` when they cannot be placed.
+/// Places the points that `named` names from `table`, by the decision to
+/// place a point the camera names by number from the body's table
+/// (ADR018). `named` is what a record with no position names, and `table`
+/// is the table of the body that the file's Model names. `None` when the
+/// points cannot be placed.
 ///
-/// The record names points of the table only when its layout code is the
-/// table's; any other code, such as 0 on a manual-focus or live-view shot,
-/// names none. The list then holds every point of the table that is the
-/// primary, the one whose number is `named`'s, or whose bit the mask sets
-/// ([`PointTable::bit`]), in the table's order, which is number order;
-/// each with its number, the table's center and box, nothing said of
-/// whether focus was confirmed, since version 0100's in-focus byte is the
-/// contrast-detect result, and the origin [`FocusOrigin::Table`]. So a set
-/// bit the table lacks is skipped; an empty mask, or one that names no
-/// point of the table, gives the primary alone; and a mask that leaves out
-/// the primary's own bit gives its points and the primary. The primary is
-/// marked: `None` when the table has no point of its number, as for 0,
-/// which names none, or a number past the table.
+/// The record names points of the table only under the table's layout
+/// code. Any other, such as 0 on a manual-focus or live-view shot, names
+/// none. The list holds, in number order, the primary, whose number is
+/// `named`'s, and every point whose bit the mask sets ([`PointTable::bit`]).
+/// So a set bit the table lacks is skipped, and an empty mask gives the
+/// primary alone. Each point has its number, the table's center and box,
+/// and the origin [`FocusOrigin::Table`]. Nothing is said of whether focus
+/// was confirmed: version 0100's in-focus byte is the contrast-detect
+/// result. The primary is marked, and a primary number the table lacks,
+/// such as 0, gives `None`.
 ///
-/// The frame is the table's, or on a crop the crop's window, or on an
-/// uncropped JPEG of a size the table lists the window that size shows,
-/// into which every center moves back by the window's origin, the box kept
-/// ([`placed_frame`]). A point that no longer lies on the window by the
-/// rule every focus point is checked by ([`check_point`]), its center outside
-/// it or its box across an edge, is dropped; the primary dropped costs the
-/// whole list.
+/// The frame, and the origin every center moves back by, are
+/// [`placed_frame`]'s. A point that no longer lies on the frame by the rule
+/// of every focus point ([`check_point`]) is dropped. The primary dropped
+/// costs the whole list.
 pub(super) fn placed(
     named: NamedPoints,
     table: &PointTable,
@@ -473,34 +344,25 @@ pub(super) fn placed(
 }
 
 /// The frame of the points placed from `table`, and the origin their
-/// centers move back by: on a file that is no crop, whose CropHiSpeed,
-/// `crop`, records a cropped size equal to its original size or is
-/// missing, the table's frame, the body's full-size output, and no move;
-/// but in a JPEG whose own size, `pixels`, is one the table lists as
-/// showing a window of the frame ([`PointTable::jpeg_window`]), that
-/// window, 6010 by 4006 on a D600 Medium JPEG, and its origin centered in
-/// the table's frame, (3, 5) on the D600, by the decision to keep a JPEG
-/// size's window in the table (ADR018). A JPEG of any other size, which
-/// the JPEG reader then holds to the picture's shape, and a raw file,
-/// which has no `pixels`, keep the table's frame.
+/// centers move back by:
 ///
-/// On a crop, only when the table's record confirms the crop's setting:
-/// the crop's window, the size the record measured
-/// ([`PointTable::crop_window`]), 3936 by 2624 on a D600 DX frame, and its
-/// origin centered in the table's frame, half of the frame less the window
-/// on each axis, (1040, 696) on the D600, by the decisions to measure a
-/// placed point on a crop in the crop's window and to keep each crop's
-/// window in the table (ADR018). CropHiSpeed's origin must be that
-/// origin: one that is not records a crop placed elsewhere in the frame
-/// than the record's frames show, which the window cannot be trusted on.
-/// In a JPEG, whose own size is `pixels`, the window must be that size,
-/// which on the D600 is the full image size: a crop-mode JPEG at a smaller
-/// size gives none (ADR018), whatever JPEG sizes the table lists.
+/// - **on a file that is no crop**, whose `crop` is missing or records a
+///   cropped size equal to its original size, the table's frame, the
+///   body's full-size output, and no move. A JPEG whose size, `pixels`,
+///   the table lists takes the window that size shows
+///   ([`PointTable::jpeg_window`]), centered in the frame, by the decision
+///   to keep a JPEG size's window in the table (ADR018).
+/// - **on a crop**, the window the table's record confirms for the crop's
+///   setting ([`PointTable::crop_window`]), centered in the frame. These
+///   are the decisions to measure a placed point on a crop in the crop's
+///   window and to keep each crop's window in the table (ADR018).
+///   CropHiSpeed's origin must be the window's: one that is not records the
+///   crop elsewhere in the frame. In a JPEG, the window must be the JPEG's
+///   own size, so a crop at a smaller image size gives none.
 ///
-/// `None` on a crop the record does not confirm, for a CropHiSpeed origin
-/// other than the window's, for a window that does not fit the frame,
-/// which the table tests rule out, and on a crop for a JPEG whose size is
-/// not the window's.
+/// `None` on a crop the record does not confirm, or whose origin is not
+/// the window's, and for a window that does not fit the frame. `None` too
+/// on a crop in a JPEG whose size is not the window's.
 fn placed_frame(
     table: &PointTable,
     crop: Option<CropHiSpeed>,
