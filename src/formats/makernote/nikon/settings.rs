@@ -3,108 +3,28 @@
 //! The camera settings in the Nikon MakerNote: the white balance, the
 //! shutter used, the image area, the raw size and the color space.
 //!
-//! The MakerNote also records how the camera was set for the picture,
-//! beyond what the Exif tags record (ADR011): the white balance setting
-//! itself, where Exif says only auto or the kind of light; the color
-//! temperature of the white balance the camera applied; the
-//! photographer's fine-tuning of it; the shutter used; the part of the
-//! sensor the picture uses; the raw size the camera was set to; and the
-//! color space of its JPEG output. Each comes from one tag, of the exact
-//! type and count its rule names, and a code or a text gives a value only
-//! where a checked file, or a standard, shows what it means; anything else
-//! costs that value alone. The meaning of each code is ExifTool's, read
-//! in its published tag documentation and confirmed on the public samples
-//! and on frames I shot for these values with a Z 9 and a D600, as
-//! the NEF notes record them (`docs/formats/nef/`, section 8.7 of the
-//! notes on the MakerNote).
+//! The MakerNote records how the camera was set for the picture beyond
+//! what the Exif tags record (ADR011). [`camera_settings`] reads each
+//! setting from one tag, by its own rule:
 //!
-//! WhiteBalance is ASCII text, an upper-case word padded with spaces, read
-//! by the text rule. Its words cannot be guessed from one another, `COOL
-//! WHT FL` for a cool white fluorescent lamp, so each is looked up whole
-//! in a table of the texts checked files hold. The public samples show
-//! `AUTO`, `AUTO0`, `AUTO1`, `SUNNY`, `FLASH` and `SHADE`; my
-//! own files add `CLOUDY`, `INCANDESCENT`, `PRESET` and `COOL WHT
-//! FL`; and the frames shot on the Z 9 and the D600 add `AUTO2`,
-//! `NATURAL AUTO` and `PRESET1` to `PRESET4`, with Exif's white balance
-//! agreeing with each. A color temperature the photographer chose is
-//! written as its number, `3230K` on both bodies, which no table could
-//! list, so it is read by its form: one to five digits and an upper-case
-//! `K`. A text the table lacks, such as one of the Z 9's preset slots 5
-//! and 6, which no checked file shows, gives way to the white balance the
-//! Exif tags record, never to a guess from its letters.
+//! - the white balance mode from WhiteBalance's text
+//!   ([`white_balance_of_text`]), finer than Exif's;
+//! - the color temperature from ColorTemperatureAuto, else from a
+//!   WhiteBalance text that records a chosen one ([`color_temperature`]);
+//! - the fine-tuning from 0x003F, else from 0x000B ([`fine_tune`]);
+//! - the shutter used from ShutterMode ([`shutter`]);
+//! - the image area from CropHiSpeed's crop setting ([`image_area`]);
+//! - the raw size from ImageSizeRAW ([`raw_image_size`]);
+//! - the color space from ColorSpace ([`color_space`]).
 //!
-//! ColorTemperatureAuto is one SHORT, in kelvin: the color temperature of
-//! the white balance the camera applied. The D5, the D850, the D780 and
-//! the Z bodies write it, 3050 to 7000 under auto on 17 public samples;
-//! my Z 9 writes it under every setting, 5210 under daylight, 5200
-//! under a preset and 3230 under a chosen 3230 K; the D850 and the Z
-//! fc write 0 under daylight (samples 1835 and 8559), which records
-//! none. The bodies before them write none, and the WhiteBalance text is
-//! all they record of a temperature: the number of a chosen one, `3230K`
-//! on my D600. So when ColorTemperatureAuto gives none, the color
-//! temperature is that number, when the text records one; on the Z 9,
-//! which writes both, they agree. A color temperature is given only
-//! from 1 to 99,999 K, the largest number the text's five digits hold.
+//! A code or a text gives a value only where a checked file, or a
+//! standard, shows what it means. Anything else costs that value alone.
+//! Nothing the block holds is an error.
 //!
-//! The fine-tuning is a shift of the white balance along two axes, amber
-//! to blue and green to magenta, which Nikon writes in two tags. 0x003F,
-//! two SRATIONALs, from the D810 on, is `0/4, 0/4` on every public sample;
-//! 0x000B, SSHORTs, holds two values on the bodies from the D300 to the
-//! Z fc and one on the D1 family, the D70, the D100 and the D200. On the
-//! Z 9, 0x003F holds `-12/4, 8/4` on a frame whose picture is warmer and
-//! greener than the one shot without a shift, and `8/4, -8/4` on a cooler
-//! and more magenta one; on the D600, 0x000B holds `3, 0` on a frame
-//! cooler than the one at `-3, 0`, and `0, 3` on one greener than the one
-//! at `0, -3`. So the first value runs from amber, negative, to blue,
-//! positive, and the second from magenta, negative, to green, positive.
-//! [`FineTune`] signs its green to magenta shift positive towards magenta,
-//! so the second value is turned around, its numerator negated. 0x003F
-//! gives the fine-tuning, as stored, and 0x000B, read as whole steps, only
-//! when 0x003F gives none. A 0x000B of one value gives none, since no file
-//! shows its axis or its sign; and a fraction over zero, which no file
-//! holds, gives none, since it records no shift, a choice of this reader's.
-//!
-//! ShutterMode is one SHORT, a code for the shutter used: 0 mechanical, on
-//! the D850, the D780 and the Z f; 16 electronic, on the Nikon 1 J1 and
-//! the Z 9; and the auto setting's 80, which chose the mechanical shutter,
-//! on the Z5II, and 81, which chose the electronic front curtain, on the
-//! Z 6, the Z 30, the Z50II, the Z6III and the Z fc. 64, a movie's
-//! electronic shutter, gives none, and so do 48 and 96, which ExifTool's
-//! documentation lists but no checked file holds.
-//!
-//! The image area is the crop setting, CropHiSpeed's first value, read
-//! only when CropHiSpeed holds exactly seven SHORTs: 11, FX uncropped, on
-//! the D750, the D810, the D5, the D850, the D780, the Z 6, the Z 9 and
-//! the Z f; 12, DX uncropped, on the D5600, the Z 30 and the Z fc; 2, a DX
-//! crop, on the Z6III's DX file and the D600's DX frame; 17 and 18, the
-//! 1:1 crops of FX and DX; 6, the 16:9 crop; 9, which ExifTool's
-//! documentation names a DX movie's 16:9 crop, on the Z50II's 16:9 still
-//! and a D7100's; and 1 and 10, the 1.3x crop and the 1.3x movie crop, on
-//! my D7200 files, stills all of them. 0, "off", gives none: the D700,
-//! FX, and the D300, DX, both write it, so it does not say which
-//! sensor the body has.
-//!
-//! ImageSizeRAW is one SHORT, the raw size the camera was set to: 1 large,
-//! on 19 of the 22 public samples that write it, and 3 small, on the other
-//! three, small raws (samples 1835, 2036 and 3587). No checked raw file is
-//! a medium one, so 2 gives none. In a JPEG, ImageSizeRAW follows the
-//! JPEG's own size, as my Z 9 shots taken as a NEF and a JPEG
-//! together show, so a JPEG's picture ([`Picture::Jpeg`]) gives none:
-//! a JPEG holds no raw data (ADR014).
-//!
-//! ColorSpace is one SHORT, the color space of the camera's JPEG output:
-//! 1 sRGB and 2 Adobe RGB, which the D200 and every later body but the
-//! Coolpix P7800 write; 4, BT.2100, gives none. It is read only when the
-//! Exif IFD holds no ColorSpace, as no checked NEF file does: a program
-//! that rewrites a JPEG may set Exif's to "uncalibrated" and leave the
-//! camera's MakerNote behind, as on 10 of my rewritten JPEGs, so
-//! where Exif records one, it alone decides. An Exif entry the TIFF
-//! reader skips as damaged, of an unknown type, of a length past 32
-//! bits or with its value outside its block, the file or a JPEG's Exif
-//! segment, counts as none, as any damaged value does (ADR011).
-//!
-//! Nikon records no electronic front curtain setting apart from the
-//! shutter used, so that value stays `None`.
+//! The meaning of each code is ExifTool's, read in its published tag
+//! documentation. Each was confirmed on the public samples and on frames I
+//! shot for these values with a Z 9 and a D600, as the NEF notes record
+//! (`docs/formats/nef/makernote-and-metadata.md`, section 8.7).
 
 use std::io::{Read, Seek};
 
@@ -121,58 +41,37 @@ use crate::io::Source;
 use crate::rational::SignedRational;
 
 /// How the camera was set for the picture: `settings`, what the standard
-/// tags gave, with what `makernote` records of the settings, each value
-/// read by its own rule, so that a damaged one costs only itself. A value
-/// is read only from a tag of the type and count its rule names, whose
-/// value lies inside the block, as every value read from the MakerNote
-/// IFD does; a missing tag, another type or count, or a code no rule
-/// names gives `None` for that value alone. See the
-/// [module documentation](self) for what each tag records, and on which
-/// files.
+/// tags gave, with what `makernote` records. Each value is read by its own
+/// rule, so that a damaged one costs only itself:
 ///
 /// - **The white balance mode** is the one WhiteBalance's text names
-///   ([`white_balance_of_text`]), in place of the one the Exif tags gave,
-///   which records only auto or the kind of light. The text is read once,
-///   by the rule every text value of the metadata is read by
-///   ([`tiff_metadata::text`]), which takes only a value of type ASCII,
-///   cuts it at its first NUL and trims the spaces that pad it. When the
-///   tag is missing, is not of type ASCII, stores its value outside the
-///   block or names no mode, the Exif tags' mode stays.
-/// - **The color temperature** is ColorTemperatureAuto, exactly one
-///   SHORT, when above zero, under whichever white balance setting: 0
-///   records none. Otherwise, as on the bodies that write no
-///   ColorTemperatureAuto, it is the number of a WhiteBalance text that records
-///   a chosen color temperature, such as `3230K` ([`color_temperature`]).
+///   ([`white_balance_of_text`]), in place of the Exif tags' mode, which
+///   records only auto or the kind of light. The text is read once, by the
+///   text rule ([`tiff_metadata::text`]). When it names no mode, the Exif
+///   tags' mode stays.
+/// - **The color temperature** is ColorTemperatureAuto's, or a chosen one
+///   that the WhiteBalance text records ([`color_temperature`]).
 /// - **The fine-tuning** is read from 0x003F, else from 0x000B
 ///   ([`fine_tune`]).
-/// - **The shutter used** is ShutterMode's code, exactly one SHORT
-///   ([`shutter`]).
-/// - **The image area** is the crop setting, the first value, of
-///   `crop_hi_speed`, CropHiSpeed as [`crop_hi_speed`] read it, which
-///   holds exactly seven SHORTs ([`image_area`]).
-/// - **The raw image size** is ImageSizeRAW's code, exactly one SHORT
-///   ([`raw_image_size`]), for a raw file's picture alone: in a JPEG,
-///   whose `picture` is [`Picture::Jpeg`], the tag follows the JPEG's own
-///   size, and a JPEG holds no raw data, so it gives none (ADR014).
-/// - **The color space** is ColorSpace's code, exactly one SHORT
-///   ([`color_space`]), only when the Exif IFD keeps no ColorSpace entry,
-///   of any known type and any count, `exif_records_color_space` being
-///   `false`, as in every Nikon raw file checked. Where the Exif IFD keeps
-///   one, it alone decides, even when it gives none: a program that
-///   rewrote a JPEG may have set it to "uncalibrated" and left behind a
-///   MakerNote that no longer describes the picture (ADR011). An entry the
-///   IFD's reader skips as damaged, of an unknown type, of a length past 32
-///   bits or with its value outside its block, the file or a JPEG's Exif
-///   segment, counts as none, so the MakerNote stands in, as for any
-///   damaged value.
+/// - **The shutter used** is ShutterMode's code ([`shutter`]).
+/// - **The image area** is the crop setting of `crop_hi_speed`,
+///   CropHiSpeed as [`crop_hi_speed`] read it ([`image_area`]).
+/// - **The raw image size** is ImageSizeRAW's code ([`raw_image_size`]),
+///   for a raw file's picture alone. In a JPEG, whose `picture` is
+///   [`Picture::Jpeg`], the tag follows the JPEG's own size, and a JPEG
+///   holds no raw data (ADR014).
+/// - **The color space** is ColorSpace's code ([`color_space`]), only when
+///   `exif_records_color_space` is `false`. Where the Exif IFD keeps a
+///   ColorSpace, it alone decides
+///   ([`Standard`](tiff_metadata::Standard)).
 ///
-/// The electronic front curtain setting is Sony's, and Nikon records
-/// none: it stays as `settings` has it, `None`. The exposure program, the
-/// metering mode and the flash are the Exif tags' alone.
+/// Nikon records no electronic front curtain setting, so it stays as
+/// `settings` has it, `None`. The exposure program, the metering mode and
+/// the flash are the Exif tags' alone.
 ///
 /// # Errors
 ///
-/// `Io` when the reader fails. Nothing the block holds is an error.
+/// `Io` when the reader fails.
 ///
 /// [`crop_hi_speed`]: super::crop::crop_hi_speed
 pub(super) fn camera_settings<R: Read + Seek>(
@@ -211,19 +110,17 @@ pub(super) fn camera_settings<R: Read + Seek>(
 }
 
 /// The color temperature, in kelvin, of the white balance `makernote`
-/// records: ColorTemperatureAuto, exactly one SHORT, when it gives one;
-/// otherwise the number of `white_balance`, the WhiteBalance text as
-/// [`camera_settings`] read it, when that text records a chosen color
-/// temperature ([`kelvin_of_text`]). Either gives one only from 1 to 99,999 K
-/// ([`checked_color_temperature`]), so a ColorTemperatureAuto of 0, which
-/// records none, gives way to the text, and a text of `0K` gives none.
+/// records: ColorTemperatureAuto, when it gives one; otherwise the number
+/// of `white_balance`, the WhiteBalance text, when that text records a
+/// chosen color temperature ([`kelvin_of_text`]). Either gives one only
+/// from 1 to 99,999 K ([`checked_color_temperature`]). So a
+/// ColorTemperatureAuto of 0, which records none, gives way to the text.
 ///
-/// ColorTemperatureAuto comes first, under whichever white balance
-/// setting: it records the temperature the camera applied, the chosen one
-/// included, which the Z 9 writes in both, 3230 beside `3230K`. The bodies
-/// before the D5 and the D850 write no ColorTemperatureAuto, and the text
-/// is all they record of a temperature, the D600 `3230K` too; under any
-/// other setting they record none.
+/// ColorTemperatureAuto comes first, under whichever setting: it records
+/// the temperature the camera applied, a chosen one included. The Z 9
+/// writes both, 3230 beside `3230K`. The text is there for the bodies
+/// before the D5 and the D850, which write no ColorTemperatureAuto: it is
+/// all they record of a temperature, `3230K` on the D600 too.
 fn color_temperature(makernote: &MakerNote, white_balance: Option<&str>) -> Option<u32> {
     let recorded = makernote
         .ifd
@@ -237,23 +134,28 @@ fn color_temperature(makernote: &MakerNote, white_balance: Option<&str>) -> Opti
 }
 
 /// The white balance mode that the WhiteBalance text `text`, as read,
-/// names, looked up whole in the table of the texts that checked files
-/// hold, never by its first letters: `AUTO`, `AUTO0`, `AUTO1`, `AUTO2`
-/// and `NATURAL AUTO` give [`Auto`](WhiteBalanceMode::Auto); `SUNNY`
-/// [`Daylight`](WhiteBalanceMode::Daylight); `CLOUDY`
-/// [`Cloudy`](WhiteBalanceMode::Cloudy); `SHADE`
-/// [`Shade`](WhiteBalanceMode::Shade); `INCANDESCENT`
-/// [`Tungsten`](WhiteBalanceMode::Tungsten); `COOL WHT FL`
-/// [`Fluorescent`](WhiteBalanceMode::Fluorescent); `FLASH`
-/// [`Flash`](WhiteBalanceMode::Flash); and `PRESET` and `PRESET1` to
-/// `PRESET4` [`Custom`](WhiteBalanceMode::Custom). A chosen color
-/// temperature, written as its number, is the one text read by its form
-/// ([`kelvin_of_text`]): whatever the number, it gives
+/// names. Its words cannot be guessed from one another, such as `COOL WHT
+/// FL` for a cool white fluorescent lamp. So each is looked up whole in a
+/// table of the texts that checked files hold:
+///
+/// - `AUTO`, `AUTO0`, `AUTO1`, `AUTO2` and `NATURAL AUTO` give
+///   [`Auto`](WhiteBalanceMode::Auto);
+/// - `SUNNY` [`Daylight`](WhiteBalanceMode::Daylight), `CLOUDY`
+///   [`Cloudy`](WhiteBalanceMode::Cloudy) and `SHADE`
+///   [`Shade`](WhiteBalanceMode::Shade);
+/// - `INCANDESCENT` [`Tungsten`](WhiteBalanceMode::Tungsten) and `COOL WHT
+///   FL` [`Fluorescent`](WhiteBalanceMode::Fluorescent);
+/// - `FLASH` [`Flash`](WhiteBalanceMode::Flash);
+/// - `PRESET` and `PRESET1` to `PRESET4`
+///   [`Custom`](WhiteBalanceMode::Custom).
+///
+/// A chosen color temperature, written as its number, is the one text read
+/// by its form ([`kelvin_of_text`]). Whatever the number, it gives
 /// [`ColorTemperature`](WhiteBalanceMode::ColorTemperature).
 ///
 /// `None` for every other text, such as `PRESET5`, which no checked file
-/// holds: a text grows into the table only once a file shows it, and
-/// until then the Exif tags' mode stands in its place.
+/// holds. A text joins the table only once a file shows it, and until then
+/// the Exif tags' mode stands.
 fn white_balance_of_text(text: &str) -> Option<WhiteBalanceMode> {
     Some(match text {
         "AUTO" | "AUTO0" | "AUTO1" | "AUTO2" | "NATURAL AUTO" => WhiteBalanceMode::Auto,
@@ -270,9 +172,9 @@ fn white_balance_of_text(text: &str) -> Option<WhiteBalanceMode> {
 }
 
 /// The most digits a WhiteBalance text that records a chosen color
-/// temperature may have: the rule's own bound, past the four of every
-/// such text checked, such as `3230K`. Its largest number is the bound
-/// every color temperature a MakerNote gives is held to
+/// temperature may have: the rule's own bound, past the four of every such
+/// text checked. Its largest number is the bound of every color
+/// temperature a MakerNote gives
 /// ([`MAX_COLOR_TEMPERATURE`](super::super::MAX_COLOR_TEMPERATURE)).
 const MAX_KELVIN_DIGITS: usize = 5;
 
@@ -282,13 +184,14 @@ const _: () =
     assert!(10_u32.pow(MAX_KELVIN_DIGITS as u32) - 1 == super::super::MAX_COLOR_TEMPERATURE);
 
 /// The color temperature that the WhiteBalance text `text`, as read,
-/// records as its number when the photographer chose one, as the Z 9 and
-/// the D600 write it, `3230K` for 3230 K: one to [`MAX_KELVIN_DIGITS`]
-/// ASCII digits, then an upper-case `K`, and nothing else, so that `K`
-/// alone, `3230 K` and `3230k` give `None`. `0K` has the form and gives
-/// 0, which records no temperature: its caller judges the number
-/// ([`color_temperature`]), while the form alone names the mode
-/// ([`white_balance_of_text`]).
+/// records as its number when the photographer chose one: `3230K` for
+/// 3230 K. That is one to [`MAX_KELVIN_DIGITS`] ASCII digits, then an
+/// upper-case `K`, and nothing else, so `K` alone, `3230 K` and `3230k`
+/// give `None`.
+///
+/// `0K` has the form and gives 0, which records no temperature. Its caller
+/// judges the number ([`color_temperature`]), while the form alone names
+/// the mode ([`white_balance_of_text`]).
 fn kelvin_of_text(text: &str) -> Option<u32> {
     let digits = text.strip_suffix('K')?;
     if !(1..=MAX_KELVIN_DIGITS).contains(&digits.len())
@@ -301,28 +204,21 @@ fn kelvin_of_text(text: &str) -> Option<u32> {
 }
 
 /// The white balance fine-tuning that `makernote` records, signed as
-/// [`FineTune`] signs it: from 0x003F, two SRATIONALs, the camera's own
-/// steps as stored, such as `-12/4`; else, when 0x003F gives none, from
-/// 0x000B, exactly two SSHORTs, whole steps, each read as a fraction whose
-/// denominator is 1. Either holds the shift from amber to blue, then the
-/// one from magenta to green ([`fine_tune_of`]). A recorded zero shift, such as
-/// `0/4, 0/4`, is a fine-tuning like any other.
+/// [`FineTune`] signs it ([`fine_tune_of`]):
 ///
-/// 0x003F gives none when it is missing, is not of type SRATIONAL, holds
-/// another count than two, or stores its values outside the block, and
-/// when [`fine_tune_of`] gives none for its values. 0x000B gives none when
-/// it is missing, is not of type SSHORT, or holds another count than two:
-/// a 0x000B of one value, as the D1 family, the D70, the D100 and the
-/// D200 write it, gives none, since no file shows its axis or its sign.
-/// The type and count of each are checked before its values are read
-/// ([`Ifd::get`]), so that an entry of another count, however long, is
-/// never read.
+/// - from 0x003F, two SRATIONALs in the camera's own steps, as stored,
+///   such as `-12/4`;
+/// - else, when 0x003F is missing, breaks its rule or gives none, from
+///   0x000B, two SSHORTs in whole steps, each read as a fraction over 1.
+///
+/// Either holds the shift from amber to blue, then the one from magenta to
+/// green. A recorded zero shift, such as `0/4, 0/4`, is a fine-tuning like
+/// any other. A 0x000B of one value breaks its rule and gives none: no
+/// file shows its axis or its sign.
 ///
 /// # Errors
 ///
-/// `Io` when the reader fails. Nothing the block holds is an error.
-///
-/// [`Ifd::get`]: crate::container::tiff::Ifd::get
+/// `Io` when the reader fails.
 fn fine_tune<R: Read + Seek>(
     src: &mut Source<R>,
     makernote: &MakerNote,
@@ -344,18 +240,18 @@ fn fine_tune<R: Read + Seek>(
 }
 
 /// The fine-tuning of Nikon's two values, `amber_blue` and
-/// `magenta_green`, each a numerator and a denominator as stored: the
-/// first as it is, and the second with its numerator negated, its
-/// denominator kept. Nikon stores a shift towards blue and one towards
-/// green as positive, as frames shot on a Z 9 and a D600 with a known
-/// shift show; [`FineTune`] signs each value as its axis is named, so its
-/// green to magenta shift is positive towards magenta, and Nikon's
-/// second value is turned around (ADR011).
+/// `magenta_green`, each a numerator and a denominator as stored. The first
+/// is kept, and the second has its numerator negated.
 ///
-/// `None` when either denominator is zero, which records no fraction,
-/// and when the second numerator is `i32::MIN`, whose negation does not
-/// fit. No file checked holds either; the reader refuses them rather than
-/// make up a shift.
+/// Nikon stores a shift towards blue and one towards green as positive, as
+/// frames shot on a Z 9 and a D600 with a known shift show. [`FineTune`]
+/// signs each value as its axis is named, so its green to magenta shift is
+/// positive towards magenta, and Nikon's second value is turned around
+/// (ADR011).
+///
+/// `None` when either denominator is zero, which records no fraction, and
+/// when the second numerator is `i32::MIN`, whose negation does not fit. No
+/// file checked holds either.
 fn fine_tune_of(
     (amber_blue, amber_blue_denominator): (i32, i32),
     (magenta_green, magenta_green_denominator): (i32, i32),
@@ -367,13 +263,13 @@ fn fine_tune_of(
 }
 
 /// The shutter a ShutterMode `code` names: 0 the mechanical shutter, 16 the
-/// electronic one, and the auto setting's two codes for the shutter the
-/// camera chose, 80 the mechanical shutter and 81 the electronic front
-/// curtain. `None` for every other code: 64, a movie's electronic shutter,
-/// which a still does not record; 48 and 96, which ExifTool's
-/// documentation names the electronic front curtain and a high-speed
-/// electronic shutter but no checked file holds; and every code nothing
-/// names.
+/// electronic one, and the auto setting's codes for the shutter the camera
+/// chose, 80 the mechanical shutter and 81 the electronic front curtain.
+///
+/// `None` for every other code. 64 is a movie's electronic shutter, which a
+/// still does not record. ExifTool's documentation names 48 the electronic
+/// front curtain and 96 a high-speed electronic shutter, but no checked
+/// file holds either.
 fn shutter(code: u32) -> Option<Shutter> {
     Some(match code {
         0 | 80 => Shutter::Mechanical,
@@ -383,21 +279,22 @@ fn shutter(code: u32) -> Option<Shutter> {
     })
 }
 
-/// The image area a CropHiSpeed crop setting `mode` names: 11, FX
-/// uncropped, [`FullFrame`](ImageArea::FullFrame); 2, a DX crop, and 12, a
-/// DX body uncropped, [`ApsC`](ImageArea::ApsC); 17, FX 1:1,
-/// [`Square`](ImageArea::Square); 18, DX 1:1,
-/// [`ApsCSquare`](ImageArea::ApsCSquare); 6, 16:9,
-/// [`Wide`](ImageArea::Wide); 9, which ExifTool's documentation names a
-/// DX movie's 16:9 crop and DX bodies write on still pictures,
-/// [`ApsCWide`](ImageArea::ApsCWide); and 1, the 1.3x crop, and 10, the
-/// 1.3x movie crop, which a DX body writes on still pictures too,
-/// [`Crop1_3x`](ImageArea::Crop1_3x).
+/// The image area a CropHiSpeed crop setting `mode` names:
 ///
-/// `None` for 0, "off", which both FX and DX bodies write, so it does not
-/// say which sensor the body has; for 3, a 5:4 crop, 4, a 3:2 crop, and
-/// 8, a 2.7x crop, which no checked file holds; for the other movie
-/// crops; and for every code nothing names.
+/// - 11, FX uncropped, [`FullFrame`](ImageArea::FullFrame);
+/// - 2, a DX crop, and 12, a DX body uncropped, [`ApsC`](ImageArea::ApsC);
+/// - 17, FX 1:1, [`Square`](ImageArea::Square), and 18, DX 1:1,
+///   [`ApsCSquare`](ImageArea::ApsCSquare);
+/// - 6, 16:9, [`Wide`](ImageArea::Wide);
+/// - 9, which ExifTool's documentation names a DX movie's 16:9 crop and DX
+///   bodies write on still pictures, [`ApsCWide`](ImageArea::ApsCWide);
+/// - 1, the 1.3x crop, and 10, the 1.3x movie crop, which a DX body writes
+///   on still pictures too, [`Crop1_3x`](ImageArea::Crop1_3x).
+///
+/// `None` for 0, "off", which FX and DX bodies both write, so it does not
+/// say which sensor the body has. `None` too for 3, a 5:4 crop, 4, a 3:2
+/// crop, and 8, a 2.7x crop, which no checked file holds; for the other
+/// movie crops; and for every code nothing names.
 pub(super) fn image_area(mode: u32) -> Option<ImageArea> {
     Some(match mode {
         11 => ImageArea::FullFrame,
