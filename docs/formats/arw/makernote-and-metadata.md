@@ -1408,7 +1408,10 @@ same way
   it is the custom white balance's own temperature: 5500 under the
   custom white balance stored in the camera, on the five frames shot
   with it and on one shot hours later, and 6300, the value the camera
-  showed, once a new custom white balance was measured. It is 0 under
+  showed, once a new custom white balance was measured. One of the
+  frames with the stored custom white balance was shot while the
+  color-temperature setting stood at 3200, and holds 5500: the value is
+  the custom white balance's own, not that setting's. It is 0 under
   every other setting. The two public custom files hold 5500 too.
 - **Fine-tuning:** under custom, 0x2014 is `3, 0` on the frame Imaging
   Edge Desktop shows as "A-B: A3", `0, -3` on the one it shows as "G-M:
