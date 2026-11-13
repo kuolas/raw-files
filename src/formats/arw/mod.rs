@@ -3,40 +3,37 @@
 //! The Sony ARW reader: how the crate recognizes a Sony RAW file, and how
 //! it finds the file's previews and reads its metadata.
 //!
-//! Sony's RAW files are one family. Every Sony body since 2006 writes ARW;
-//! Sony's earliest bodies wrote SRF and SR2 files; and Sony's software
-//! makes ARQ files, composites of several pixel-shift frames. All of them
-//! are one TIFF container with Sony's additions inside: a MakerNote, a
-//! private directory, compressed or encrypted raw data. The MakerNote's
-//! FileFormat tag gives a version, but the version follows the firmware
-//! rather than the body, and the previews are found the same way whatever
-//! it says, so this reader never needs it.
+//! Sony's RAW files are one family:
 //!
-//! One more maker's name turns up in this family. Hasselblad, which makes
-//! medium-format cameras with RAW formats of its own, also sold a few Sony
-//! cameras under its own name, with a new body shell around Sony's
-//! electronics: the Lunar is a Sony NEX-7 inside. Those cameras write
-//! ordinary Sony ARW files, with Hasselblad's name in the Make tag.
-//! Hasselblad's own cameras write files of other kinds with the same name
-//! in the Make: 3FR and FFF files, which are TIFF-based, and, from the
-//! camera modules it makes for DJI's drones, DNG files.
+//! - ARW, which every Sony body since 2006 writes;
+//! - SRF and SR2, which the earliest bodies wrote;
+//! - ARQ, which Sony's software makes from several pixel-shift frames.
 //!
-//! For this reader a file is a Sony file when it is not a DNG and the Make
-//! tag of its IFD0, which names the camera's manufacturer, names Sony; or
-//! names Hasselblad, and IFD0 shows Sony's structure: the pointer to Sony's
-//! private directory, in the shape Sony writes it. A DNG keeps the maker's
-//! name in its Make, whether Adobe's converter made it from an ARW file or
-//! one of Sony's phones wrote it, but it is Adobe's format, not Sony's.
-//! Hasselblad's 3FR and FFF files carry no such pointer, and its DNG files
-//! carry a DNG version, as far as the published samples show; [`claims`]
-//! says what was measured. The file's name is never looked at.
+//! Each is one TIFF container with Sony's additions inside: a MakerNote, a
+//! private directory, compressed or encrypted raw data. A few cameras that
+//! Hasselblad sold under its own name write ARW files too.
 //!
-//! The search for the previews is in `previews.rs`. The metadata comes
-//! from the standard tags, through the reader the TIFF-based formats share,
-//! and what no standard tag records, the camera settings that only Sony's
-//! MakerNote records and the focus point, from that MakerNote, through
-//! [`sony`], the reader of Sony's MakerNote shared with any other format
-//! whose files carry it.
+//! The parts, in the order a file is read:
+//!
+//! - [`claims`] says whether a file is a Sony RAW file, by IFD0's Make,
+//!   and for a Hasselblad Make by Sony's private pointer.
+//! - [`parse`] reads Sony's MakerNote once, with [`sony`], the reader every
+//!   format whose files carry that MakerNote shares, and Sony's private
+//!   directory ([`private_ifd`]). Then it reads the previews, the metadata
+//!   and the entries.
+//! - `previews` finds the previews.
+//!
+//! The MakerNote's FileFormat tag gives a version, but this reader never
+//! needs it. The version follows the firmware rather than the body, and
+//! the previews are found the same way whatever it says.
+//!
+//! Nothing the file holds is an error of this reader's. Damage costs only
+//! what it touches ([`skip_damage`](crate::error::skip_damage)), and only
+//! a failure of the reader is an error.
+//!
+//! The ARW notes say what each kind of file holds
+//! (`docs/formats/arw/container-and-previews.md`, section 1.3). A sample
+//! cited here by number is the file of that number on raw.pixls.us.
 
 mod previews;
 
@@ -65,50 +62,32 @@ pub(crate) fn spec<R: Read + Seek>() -> FormatSpec<R, Tree> {
 }
 
 /// Whether the file whose TIFF structure is `tree` is a Sony RAW file:
-/// whether it is not a DNG ([`is_dng`]), and the Make of its IFD0, trimmed
-/// of spaces at either end, starts with `SONY`, in any case
-/// ([`make_starts_with`]); or starts with `HASSELBLAD`, in any case, in an
-/// IFD0 that holds Sony's private pointer (DNGPrivateData, as four bytes).
+/// whether it is not a DNG ([`is_dng`]), and its IFD0's Make starts with
+/// `SONY` ([`make_starts_with`]). A Make that starts with `HASSELBLAD`
+/// passes too, in an IFD0 that holds Sony's private pointer
+/// ([`private_pointer`]).
 ///
-/// For a file that is not a DNG, a Sony Make decides alone. The ARW notes
-/// (`docs/formats/arw/`) record `SONY` as the Make of every Sony body,
-/// padded with eleven spaces on the A100 and with one on the A200 to A900,
-/// which the trim covers. The SRF files of the earliest bodies carry no
-/// private pointer, but their Make is Sony's too, so the pointer is not
-/// asked of a Sony Make.
+/// For a file that is not a DNG, a Sony Make decides alone. Every Sony body
+/// writes `SONY`, some padded with spaces, which [`make_starts_with`] trims
+/// (`docs/formats/arw/makernote-and-metadata.md`, section 9.3). The SRF
+/// files of the earliest bodies carry no private pointer, so the pointer is
+/// not asked of a Sony Make.
 ///
-/// A Hasselblad Make appears here because Hasselblad sold a few Sony
-/// cameras under its own name, rebuilt around Sony's electronics (the
-/// Lunar is a NEX-7 inside), and those write ordinary Sony ARW files with
-/// `HASSELBLAD` as the Make: the Lunar's file has Model `Lunar` and every
-/// Sony structure, the pointer to Sony's private directory among them
-/// (file 4051 of raw.pixls.us). The files of Hasselblad's own cameras
-/// carry the same Make and must not be claimed as Sony's: its cameras
-/// write 3FR and FFF files, which are TIFF-based, and the camera modules
-/// it makes for DJI's drones write DNG.
+/// A Hasselblad Make needs the pointer. A few Sony cameras that Hasselblad
+/// sold under its own name, such as the Lunar, a NEX-7 inside, write
+/// ordinary ARW files (sample 4051). Their Make is `HASSELBLAD`, and their
+/// IFD0 holds the pointer among Sony's structures. Hasselblad's own cameras
+/// write 3FR, FFF and DNG files under the same Make. In exiv2's metadata
+/// dumps of the 24 that raw.pixls.us lists, read in place of the files, no
+/// 3FR or FFF file holds the pointer, and both DNG files hold DNGVersion
+/// (`docs/formats/arw/test-data.md`, section 3.2). The first test, for
+/// every Make, has ruled DNGVersion out, so this branch asks only for the
+/// pointer.
 ///
-/// The structure tells them apart, as the metadata dumps of the 24
-/// Hasselblad-made files on raw.pixls.us show. None of the 11 3FR and 11
-/// FFF files carries DNGPrivateData or DNGVersion; both DNG files, from
-/// the L1D-20c and L2D-20c drone modules, carry both; and the Lunar's file
-/// carries DNGPrivateData and no DNGVersion, as Sony's ARW files do. So a
-/// Hasselblad Make is claimed only with the pointer present and the
-/// version absent. The version's absence is the test this claim makes
-/// first, for every Make, so the Hasselblad branch asks only for the
-/// pointer. The dumps are exiv2's output, read in place of the files
-/// themselves; the Lunar's dump lists its DNGPrivateData, so the dumps do
-/// list the tag when a file has it.
-///
-/// The pointer must also have Sony's shape. Sony writes DNGPrivateData as
-/// four bytes (type BYTE, count 4) holding the offset of its private
-/// directory, whereas a DNG's DNGPrivateData is a block of a maker's own
-/// data, of any length. Asking for that shape keeps out a Hasselblad file
-/// that holds such a block but no DNG version, should one exist.
-///
-/// The rule rests on those 24 dumps, the Lunar's dump and the one Lunar
-/// sample. A counterexample, such as a 3FR or FFF file with the pointer, a Hasselblad
-/// DNG without a version, or a Sony-built Hasselblad without the pointer,
-/// would call for checking it again.
+/// The rule rests on those 24 dumps and the one Lunar sample. A 3FR or FFF
+/// file with the pointer, a Hasselblad DNG without DNGVersion, or a
+/// Sony-built Hasselblad without the pointer would call for checking it
+/// again.
 ///
 /// # Errors
 ///
@@ -120,17 +99,14 @@ fn claims<R: Read + Seek>(src: &mut Source<R>, tree: &Tree) -> Result<bool> {
     if make_starts_with(src, tree, SONY)? {
         return Ok(true);
     }
-    // Sony's pointer is four bytes; a DNG's private data block is not. The
-    // DNG version, the other half of the Hasselblad rule, was ruled out
-    // above for every Make. The pointer is tested first because it costs
-    // no read, and the Make was read once already.
+    // The pointer is tested first because it costs no read, and the Make
+    // was read once already.
     let sony_pointer = private_pointer(tree).is_some();
     Ok(sony_pointer && make_starts_with(src, tree, HASSELBLAD)?)
 }
 
 /// The rule of the one tag this reader reads itself: IFD0's
-/// DNGPrivateData, in the shape Sony writes it, four bytes of type BYTE
-/// that hold the offset of its private directory (ADR011).
+/// DNGPrivateData, as Sony writes it (ADR011).
 mod rules {
     use crate::container::tiff::tags;
     use crate::container::tiff::{FieldType, Held};
@@ -139,34 +115,37 @@ mod rules {
         Held::new(tags::DNG_PRIVATE_DATA, &[FieldType::Byte]);
 }
 
-/// IFD0's pointer to Sony's private directory, SR2Private, when it has the
-/// shape Sony writes it in: the four bytes of the DNGPrivateData entry
-/// (0xC634), of type BYTE, which the entry holds itself, so that this
-/// reads nothing from the file. A DNG's DNGPrivateData, a block of a
-/// maker's own data of any length, is not one.
+/// IFD0's pointer to Sony's private directory, SR2Private, in the shape
+/// Sony writes it: the four bytes of the DNGPrivateData entry, of type
+/// BYTE, which hold the directory's offset. A DNG's DNGPrivateData is a
+/// block of a maker's own data, of any length, and is not one. Asking for
+/// this shape keeps such a block out, even in a file without DNGVersion.
 fn private_pointer(tree: &Tree) -> Option<[u8; 4]> {
     tree.ifd0().held(rules::DNG_PRIVATE_DATA)
 }
 
 /// Sony's private directory, SR2Private, of the file in `src` whose IFDs
-/// are `tree`, read within `limits`: the IFD at the offset IFD0's pointer
-/// holds ([`private_pointer`]), its four bytes read as one number in the
-/// file's byte order, an ordinary IFD whose offsets count from the start
-/// of the file, as IFD0's do. `None` when the file has no such pointer, or
-/// it leads to no IFD that holds together inside the file, or to one with
-/// an entry that cannot be read. That last is the walk's rule for a
-/// SubIFD, and for the same file: the DSLR-A100's pointer leads to a
-/// Minolta MRW block, whose first bytes count 19,712 entries, more than
-/// the default limits allow, and which, under limits that allow them,
-/// reads as entries of types TIFF does not define. No SR2Private measured
-/// has an entry that cannot be read.
+/// are `tree`, read within `limits`. It is an ordinary IFD, at the offset
+/// IFD0's pointer holds in the file's byte order ([`private_pointer`]). Its
+/// offsets count from the start of the file, as IFD0's do.
 ///
-/// Only its table is read. Its entries locate the SR2SubIFD, which is
-/// encrypted, and hold the key; that directory is not parsed.
+/// `None` when the file has no such pointer, or when the pointer leads:
+///
+/// - to no IFD that holds together inside the file;
+/// - to an IFD with an entry that cannot be read, as the walk takes a
+///   SubIFD. The DSLR-A100's leads to a Minolta block that is no IFD
+///   (`docs/formats/arw/container-and-previews.md`, section 1.3). Its
+///   first bytes count 19,712 entries, more than the default limits allow.
+///   Under limits that allow them, they read as entries of types TIFF does
+///   not define.
+///
+/// No SR2Private measured has an entry that cannot be read. Only its table
+/// is read. Its entries locate the SR2SubIFD, which is encrypted, and hold
+/// the key; that directory is not parsed.
 ///
 /// # Errors
 ///
-/// `Io` when the reader fails. Nothing the file holds is an error.
+/// `Io` when the reader fails.
 fn private_ifd<R: Read + Seek>(
     src: &mut Source<R>,
     tree: &Tree,
@@ -181,28 +160,25 @@ fn private_ifd<R: Read + Seek>(
     Ok(private.filter(|ifd| ifd.invalid_entries() == 0))
 }
 
-/// Reads the previews and the metadata of a file that [`claims`]
-/// accepted.
+/// Reads the previews, the metadata and the entries of a file that
+/// [`claims`] accepted.
 ///
-/// The MakerNote is read first, once for the whole file, within `limits`.
-/// The previews are the JPEGs that the IFDs of IFD0's chain declare, found
-/// by the shared TIFF preview finder over the whole tree. The metadata is
-/// what the shared TIFF metadata reader reads from the standard tags: the
-/// camera, the capture time, the orientation, the exposure, the camera's
-/// settings, the lens and the sizes. When there is a MakerNote, it then
-/// gives what no standard tag records ([`sony::metadata`]): the camera
-/// settings that only it records, its white balance setting in place of
-/// Exif's, and the focus point. The entries are those of every directory
-/// of the tree, then the MakerNote IFD's
-/// ([`MakerNote::add_entries`](sony::MakerNote::add_entries)), then those
-/// of Sony's private directory, SR2Private, read within `limits` too
-/// ([`private_ifd`]).
+/// The MakerNote is read first, once for the whole file, and Sony's private
+/// directory, both within `limits`. Then:
+///
+/// - **The previews** are the JPEGs that the IFDs of IFD0's chain declare.
+///   The shared TIFF preview finder finds them over the whole tree.
+/// - **The metadata** is what the shared TIFF metadata reader reads from
+///   the standard tags. When there is a MakerNote, [`sony::metadata`] adds
+///   what no standard tag records.
+/// - **The entries** are those of every directory of the tree, then the
+///   MakerNote IFD's
+///   ([`MakerNote::add_entries`](sony::MakerNote::add_entries)), then those
+///   of SR2Private.
 ///
 /// # Errors
 ///
-/// As for [`sony::read`], [`private_ifd`], [`previews::previews`],
-/// [`tiff_metadata::read`] and [`sony::metadata`]: `Io` when the reader
-/// fails. Nothing the file holds is an error here.
+/// `Io` when the reader fails.
 fn parse<R: Read + Seek>(src: &mut Source<R>, tree: &Tree, limits: &Limits) -> Result<Parsed> {
     let makernote = sony::read(src, tree, limits)?;
     let private = private_ifd(src, tree, limits)?;
