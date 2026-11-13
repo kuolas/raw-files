@@ -2525,12 +2525,13 @@ fn check_d600_jpeg_point_1(label: &str, pixels: (u16, u16), frame: (u16, u16), c
 }
 
 /// The Medium JPEG of frame 7856, 4512 by 3008, which I shot with my own
-/// D600 on 2026-11-03, shows the 6010 by 4006 window centered in the
-/// table's 6016 by 4016 frame, as the D600's record measures it on its
-/// NEF's full-size preview: point 1, at (3008, 2007) in the table, is
-/// placed in that window, less its origin, (3, 5), at (3005, 2002). The
-/// JPEG reader keeps the point, since the window has the JPEG's shape
-/// within its rounding, where the whole frame has not.
+/// D600 on 2026-11-03, shows a window centered in the table's frame, as
+/// the D600's record measures it on its NEF's full-size preview
+/// (`docs/formats/nef/autofocus-points.md`, section 2.9): point 1, at
+/// (3008, 2007) in the table, is placed in that window, less its origin,
+/// (3, 5), at (3005, 2002). The JPEG reader keeps the point, since the
+/// window has the JPEG's shape within its rounding, where the whole frame
+/// has not.
 #[test]
 fn the_d600_medium_jpeg_gives_point_1_placed_in_its_window() {
     check_d600_jpeg_point_1(

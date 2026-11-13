@@ -120,8 +120,9 @@ maintains raw-files. They come from my own cameras and stay private.
   - among them, three of the Z 9: lossless, HE and HE\*;
   - test files laid out like a Z 9's, a Z6III's, a D300's and a D1H's;
   - two stripped files of my own Z 9;
-  - the 56 frames on which I measured my own D600's autofocus points,
-    stripped of their pixels;
+  - the frames on which I measured my own D600's autofocus points,
+    stripped of their pixels
+    ([the fixtures](tests/fixtures/README.md#the-d600-session));
   - the NEF of one more D600 frame, shot as a pair with a Medium JPEG.
 - **Sony ARW**, with the SRF, SR2 and ARQ files of the same family and
   the ARW files of the Sony-built Hasselblad bodies

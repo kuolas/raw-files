@@ -42,8 +42,8 @@ the maker's own software with its focus-point display on, gives every
 point's position; control frames that the file can check, repeats, a
 portrait frame, frames in a crop mode, auto-area frames and, where the
 body has live view, frames whose area the file records, calibrate the
-reading and show how the point behaves. A session of 56 frames with a
-Nikon D600, measured this way, gave its 39 points to about 2 pixels,
+reading and show how the point behaves. A session with a Nikon D600,
+measured this way, gave its 39 points to about 2 pixels,
 the bit order of its mask, how a point shifts into a DX crop and what
 its manual-focus and live-view shots write
 ([the record](../formats/nef/autofocus-points.md#2-nikon-d600)). The

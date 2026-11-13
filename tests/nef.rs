@@ -18,7 +18,7 @@
 //! removed (see [`support::fixtures`]): their previews, every value of
 //! their metadata, the camera settings among them, and their focus points,
 //! which the reader scales onto the DX crop and moves into the 1:1 window.
-//! Then the 56 real files of the session on which my own D600's
+//! Then the real files of the session on which my own D600's
 //! autofocus points were measured, committed stripped the same way: what
 //! the reader gives each frame, the layout of the D600's points from its
 //! table, its orientation, its image area and its focus points among it:
@@ -1354,8 +1354,8 @@ fn the_stripped_z9_1x1_file_gives_its_previews_metadata_and_shifted_focus_point(
     check_stripped_z9(&STRIPPED_Z9_1X1);
 }
 
-// Real files, committed: the 56 frames of the session on which the
-// autofocus points of my own D600 were measured, numbered 1 to 56 in the
+// Real files, committed: the frames of the session on which the
+// autofocus points of my own D600 were measured, numbered from 1 in the
 // order they were shot, stripped of their pixels and personal fields with
 // their structure and values kept (`tests/fixtures/nikon-d600/README.md`),
 // so that what the NEF notes' record of the session reads from the files'
@@ -1410,7 +1410,7 @@ const D600_FULL: (u32, u32) = (6016, 4016);
 /// frame at CropHiSpeed's origin, (1040, 696).
 const D600_WINDOW: (u32, u32) = (3936, 2624);
 
-/// The 56 frames of the D600 session, in order. The point numbers, the
+/// The frames of the D600 session, in order. The point numbers, the
 /// layout code, the area mode, the mask's bits, FocusMode and CropHiSpeed
 /// were read from each file's bytes with a script written from the notes,
 /// and each point's center is the record's, from the table of the NEF

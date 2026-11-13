@@ -20,8 +20,8 @@ only the number of an autofocus point, such as a Nikon DSLR's through
 the viewfinder, gets none until a table of the body's points exists.
 [ADR017](adr017-per-body-tables-measured-by-the-project.md) decides
 that the project measures such tables on frames shot with the body. The
-first table is the Nikon D600's, measured on 56 frames I shot with my
-own D600 ([the record](../formats/nef/autofocus-points.md#2-nikon-d600)).
+first table is the Nikon D600's, measured on frames I shot with my own
+D600 ([the record](../formats/nef/autofocus-points.md#2-nikon-d600)).
 
 A viewer that draws where the camera focused wants more than one point.
 On a dynamic-area or auto-area shot, it wants every point the camera
@@ -50,8 +50,8 @@ The D600's frames show, as the record details:
   the window follows from the origin or is centered in the output: on
   the D600 both hold
   ([§2.6](../formats/nef/autofocus-points.md#26-the-control-frames)).
-- The Medium JPEG, 4512x3008, shows a centered window of the frame,
-  6010.2x4006.9 frame pixels, scaled evenly. No tag records it either.
+- The Medium JPEG, 4512x3008, shows a centered window of the frame, a
+  few pixels smaller, scaled evenly. No tag records it either.
   In the whole frame, the JPEG reader's shape rule
   ([ADR014](adr014-jpeg-files-as-a-format-of-their-own.md)) refuses it,
   so a Medium JPEG gave no point
@@ -123,9 +123,8 @@ measured in that window, which the body's table keeps.
   so a crop-mode JPEG at a smaller size gives none, counted. ADR014's
   aspect-ratio rule then applies to the placed frame, or the window,
   unchanged.
-- **The D600's table** keeps the DX crop's window, 3936x2624 at
-  (1040, 696), and the Medium JPEG's, 6010x4006 at (3, 5), each
-  centered to the pixel nearest the measured one
+- **The D600's table** keeps the DX crop's window and the Medium
+  JPEG's, each centered to the pixel nearest the measured one
   ([§2.6](../formats/nef/autofocus-points.md#26-the-control-frames),
   [§2.9](../formats/nef/autofocus-points.md#29-the-jpeg-sizes)).
 - **The points the camera used are reported**, through
