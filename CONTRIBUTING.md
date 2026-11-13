@@ -233,8 +233,9 @@ Before a release, go through three things.
 
    Where the project departs from a guideline on purpose, it says so
    where a reader would look:
-   - `DateTime`, `Rational` and `SignedRational` have no `Ord`, and their
-     docs say why;
+   - `DateTime`, `Rational` and `SignedRational` have no `Ord`: their
+     docs say what to sort by, and the decision record on the shape of
+     the public API says why (ADR009);
    - there is no serde feature, because the crate has no dependencies,
      and the crate docs say so;
    - `Entries` has no `FromIterator` or `Extend`: an `Entry` comes only
