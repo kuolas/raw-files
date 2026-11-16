@@ -2,9 +2,9 @@
 
 - Status: Accepted
 - Date: 2026-10-11
-- Revision: 6, 2026-11-16
+- Revision: 7, 2026-11-16
 - Issue: #119; the handle's name #107; reads through `&self` #89; the
-  numbers to sort times by #103
+  numbers to sort times by #103; a value's text form #148
 
 ## Context
 
@@ -104,6 +104,9 @@ file or a JPEG ([ADR014](adr014-jpeg-files-as-a-format-of-their-own.md)).
   round to its start.
 - `Value` has no `Eq` or `Hash`. Its FLOAT and DOUBLE values are
   floating-point numbers, and a NaN is not equal to itself.
+  Nor has it `Display`: std's docs advise a display adapter, such as
+  `Path::display`, for a type with no one obvious text form, and
+  `Value::display` is one.
 - A value with no empty state that means anything, such as a `Size`, a
   `Point`, a `Flash` or a `FineTune`, has no `Default`.
 - Every allocation whose size comes from the file is capped by `Limits`,

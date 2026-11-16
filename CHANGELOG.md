@@ -41,6 +41,25 @@ does. An entry that can break a caller opens with **Breaking:**.
 
   Each constant comes from the same row as the name `Entry::name`
   gives, so the two cannot disagree.
+- `Value::display` gives a short form of a value to print, so a list of
+  entries is one `println!` per entry
+  ([#148](https://github.com/kuolas/raw-files/issues/148)):
+
+  ```rust
+  for entry in file.entries() {
+      println!("{} {}", entry.name().unwrap_or("?"), file.read_value(entry)?.display());
+  }
+  ```
+
+  What each type prints:
+  - text: as `Value::text` cleans it, each control character escaped;
+  - numbers: in decimal;
+  - fractions: as they print;
+  - UNDEFINED bytes: in hexadecimal.
+
+  A long value stops after 16 values, or 80 characters of text, and
+  gives its length; a precision such as `{:.4}` sets the number. The
+  form is for people and may change. `Value` itself has no `Display`.
 
 ### Changed
 

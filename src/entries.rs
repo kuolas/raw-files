@@ -17,9 +17,11 @@
 //! length overflows, or whose value lies outside the file or the part of it
 //! the directory was read in. So every entry listed can be read.
 
+mod display;
 mod names;
 
 pub use crate::container::tiff::FieldType;
+pub use display::ValueDisplay;
 
 use std::fmt;
 use std::io::{Read, Seek};
@@ -271,43 +273,30 @@ impl Entry {
 ///
 /// New variants may be added with new field types.
 ///
-/// `Value` has no `Eq` or `Hash`.
+/// `Value` has no `Eq` or `Hash`. Nor has it `Display`:
+/// [`display`](Self::display) gives a short form to print.
 ///
 /// # Examples
 ///
-/// A short form of a value, for a list of entries:
+/// Print a value, or take its numbers:
 ///
 /// ```
 /// use raw_files::{Rational, Value};
 ///
-/// fn summary(value: &Value) -> String {
-///     if let Some(text) = value.text() {
-///         return text;
-///     }
-///     match value {
-///         Value::Short(numbers) => format!("{numbers:?}"),
-///         Value::Rational(fractions) => {
-///             let fractions: Vec<String> = fractions.iter().map(Rational::to_string).collect();
-///             fractions.join(" ")
-///         }
-///         _ => match value.bytes() {
-///             Some(bytes) => format!("{} bytes", bytes.len()),
-///             None => format!("{} values", value.len()),
-///         },
-///     }
-/// }
-///
 /// let model = Value::Ascii(b"NIKON Z 9\0".to_vec());
-/// assert_eq!(summary(&model), "NIKON Z 9");
-/// assert_eq!(summary(&Value::Short(vec![1])), "[1]");
+/// assert_eq!(model.display().to_string(), "NIKON Z 9");
 /// // A zero denominator is kept, as the file records it.
 /// let fractions = vec![
 ///     Rational { numerator: 28, denominator: 10 },
 ///     Rational { numerator: 0, denominator: 0 },
 /// ];
-/// assert_eq!(summary(&Value::Rational(fractions)), "28/10 0/0");
-/// assert_eq!(summary(&Value::Undefined(vec![0; 6])), "6 bytes");
-/// assert_eq!(summary(&Value::Double(vec![0.5, 1.5])), "2 values");
+/// assert_eq!(Value::Rational(fractions).display().to_string(), "28/10 0/0");
+///
+/// let version = Value::Undefined(b"0230".to_vec());
+/// assert_eq!(version.display().to_string(), "30 32 33 30");
+/// if let Value::Undefined(bytes) = &version {
+///     assert_eq!(bytes, b"0230");
+/// }
 /// ```
 #[non_exhaustive]
 #[derive(Clone, Debug, PartialEq)]
@@ -511,6 +500,27 @@ impl Value {
             _ => None,
         }
     }
+
+    /// A short form of the value for people to read, which `{}` prints:
+    /// text as [`text`](Self::text) cleans it, numbers in decimal and
+    /// UNDEFINED bytes in hexadecimal. A long value is cut short, its
+    /// length given. [`ValueDisplay`] says what each type prints.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use raw_files::Value;
+    ///
+    /// let size = Value::Short(vec![8256, 5504]);
+    /// assert_eq!(format!("{}", size.display()), "8256 5504");
+    ///
+    /// let table = Value::Undefined(vec![0xFF; 1000]);
+    /// assert_eq!(format!("{:.4}", table.display()), "ff ff ff ff … (1000 bytes)");
+    /// ```
+    #[must_use = "this does not print the value, it returns an object that `{}` prints"]
+    pub fn display(&self) -> ValueDisplay<'_> {
+        ValueDisplay::new(self)
+    }
 }
 
 /// The text that `bytes` holds, cleaned: cut at the first NUL, spaces at
@@ -520,6 +530,14 @@ impl Value {
 /// Only spaces are padding: any other blank, such as a tab, is kept, and
 /// so are spaces inside the text.
 pub(crate) fn clean_text(bytes: &[u8]) -> Option<String> {
+    let text = trim_text(bytes);
+    (!text.is_empty()).then(|| String::from_utf8_lossy(text).into_owned())
+}
+
+/// The bytes of the text that `bytes` holds, before they are read as
+/// UTF-8: cut at the first NUL, with the spaces at either end dropped, as
+/// [`clean_text`] cleans them.
+fn trim_text(bytes: &[u8]) -> &[u8] {
     let bytes = bytes
         .iter()
         .position(|&b| b == 0)
@@ -529,8 +547,7 @@ pub(crate) fn clean_text(bytes: &[u8]) -> Option<String> {
         .iter()
         .rposition(|&b| b != b' ')
         .map_or(start, |i| i + 1);
-    let text = bytes.get(start..end).unwrap_or_default();
-    (!text.is_empty()).then(|| String::from_utf8_lossy(text).into_owned())
+    bytes.get(start..end).unwrap_or_default()
 }
 
 /// Every entry of every directory a file holds, in the file's order:
