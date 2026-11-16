@@ -16,15 +16,15 @@ use std::fmt;
 /// How an entry's values are stored: what one value is and how many bytes
 /// it takes.
 ///
-/// TIFF 6.0 defines the first twelve; [`Ifd`](Self::Ifd) is the type some
-/// files give the offsets of other directories, and [`Utf8`](Self::Utf8)
-/// is Exif's type for text in UTF-8.
+/// TIFF 6.0 defines the first twelve; [`Ifd`](Self::Ifd) is the type
+/// Adobe's PageMaker 6.0 TIFF Technical Notes define for the offsets of
+/// other directories, and [`Utf8`](Self::Utf8) is Exif's type for text in
+/// UTF-8.
 ///
 /// New variants may be added if a standard defines more types.
 ///
-/// `Display` writes the type's [`name`](Self::name) as the standards write
-/// it, such as "SHORT" or "UTF-8"; [`Ifd`](Self::Ifd), which none of the
-/// standards raw-files follows names, is "IFD".
+/// `Display` writes the type's [`name`](Self::name) as the specification
+/// that defines it writes it, such as "SHORT", "IFD" or "UTF-8".
 ///
 /// # Examples
 ///
@@ -69,7 +69,9 @@ pub enum FieldType {
     /// DOUBLE, code 12: 64-bit IEEE floating-point numbers.
     Double,
     /// IFD, code 13: the offsets of directories, as 32-bit unsigned
-    /// integers.
+    /// integers. Adobe's PageMaker 6.0 TIFF Technical Notes define it for
+    /// the SubIFDs tag: "otherwise identical to LONG, but is only used to
+    /// point to other valid IFDs".
     Ifd,
     /// UTF-8, code 129: text in UTF-8, ending in a NUL, with no byte order
     /// mark; its count is in bytes, not characters.
@@ -150,9 +152,8 @@ impl FieldType {
         }
     }
 
-    /// The type's name as the standards write it, for a viewer that lists
-    /// entries: "SHORT", "RATIONAL" or "UTF-8"; [`Ifd`](Self::Ifd), which
-    /// none of the standards raw-files follows names, is "IFD".
+    /// The type's name as the specification that defines it writes it, for
+    /// a viewer that lists entries: "SHORT", "RATIONAL", "IFD" or "UTF-8".
     /// [`Display`](fmt::Display) writes the same.
     ///
     /// # Examples

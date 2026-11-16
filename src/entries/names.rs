@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! The names published standards give the tags of each kind of directory.
+//! The names published specifications give the tags of each kind of
+//! directory.
 //!
 //! A tag's name depends on the kind of directory it lies in: the GPS IFD's
 //! tags number from 0x0000 and the Interoperability IFD's from 0x0001, so
@@ -12,7 +13,8 @@
 //! The tables are written from `docs/formats/tag-names.md` alone, which
 //! records each name with the document and the page that give it: TIFF
 //! 6.0 and Exif 3.1 for IFD0, the IFDs chained after it and the SubIFDs,
-//! with the DNG specification for the four DNG tags raw-files reads; Exif
+//! with the DNG specification for the four DNG tags raw-files reads and
+//! Adobe's PageMaker 6.0 TIFF Technical Notes for the SubIFDs tag; Exif
 //! 3.1 for the Exif and GPS IFDs; Exif 3.1 and DCF 2.0 for the
 //! Interoperability IFD; and CIPA DC-007 for the Multi-Picture index. A
 //! name is spelled as the document spells it, spaces included. No other
@@ -37,8 +39,9 @@ pub(super) fn name(directory: Directory, tag: u16) -> Option<&'static str> {
 }
 
 /// The names of the tags of IFD0, the IFDs chained after it and the
-/// SubIFDs, by tag: TIFF 6.0's, Exif's for IFD0 and IFD1, and the DNG
-/// specification's for the DNG tags raw-files reads.
+/// SubIFDs, by tag: TIFF 6.0's, Exif's for IFD0 and IFD1, the DNG
+/// specification's for the DNG tags raw-files reads, and Adobe's TIFF
+/// notes' for the SubIFDs tag.
 const CHAIN: &[(u16, &str)] = &[
     (0x00FE, "NewSubfileType"),
     (0x00FF, "SubfileType"),
@@ -90,6 +93,7 @@ const CHAIN: &[(u16, &str)] = &[
     (0x0143, "TileLength"),
     (0x0144, "TileOffsets"),
     (0x0145, "TileByteCounts"),
+    (0x014A, "SubIFDs"),
     (0x014C, "InkSet"),
     (0x014D, "InkNames"),
     (0x014E, "NumberOfInks"),
@@ -281,7 +285,7 @@ mod tests {
     use super::*;
 
     const TABLES: [(&[(u16, &str)], usize); 5] = [
-        (CHAIN, 80),
+        (CHAIN, 81),
         (EXIF, 96),
         (GPS, 32),
         (INTEROP, 5),
@@ -298,7 +302,7 @@ mod tests {
                 assert_eq!(name, name.trim(), "{tag:#06X}");
             }
         }
-        assert_eq!(TABLES.iter().map(|(_, count)| count).sum::<usize>(), 218);
+        assert_eq!(TABLES.iter().map(|(_, count)| count).sum::<usize>(), 219);
     }
 
     #[test]
@@ -311,6 +315,8 @@ mod tests {
             (Directory::Ifd(0), 0x8769, "Exif IFD Pointer"),
             (Directory::Ifd(0), 0x8825, "GPS Info IFD Pointer"),
             (Directory::Ifd(0), 0xC634, "DNGPrivateData"),
+            (Directory::Ifd(0), 0x014A, "SubIFDs"),
+            (Directory::SubIfd(0), 0x014A, "SubIFDs"),
             (Directory::Exif, 0x9003, "DateTimeOriginal"),
             (Directory::Exif, 0x927C, "MakerNote"),
             (Directory::Exif, 0xA005, "Interoperability IFD Pointer"),
@@ -341,9 +347,8 @@ mod tests {
             (Directory::Exif, 0x0001),
             (Directory::Ifd(0), 0x0000),
             (Directory::Gps, 0x1001),
-            // Tags no document read names: SubIFDs, XMP, Sony's and
-            // Nikon's own, and the DNG tags raw-files does not read.
-            (Directory::Ifd(0), 0x014A),
+            // Tags no document read names: XMP, Sony's and Nikon's own,
+            // and the DNG tags raw-files does not read.
             (Directory::Ifd(0), 0x02BC),
             (Directory::SubIfd(0), 0x7000),
             (Directory::SubIfd(0), 0xC7D5),
