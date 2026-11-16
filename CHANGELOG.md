@@ -30,6 +30,25 @@ does. An entry that can break a caller opens with **Breaking:**.
 
   A file opens and reads as before
   ([#107](https://github.com/kuolas/raw-files/issues/107)).
+- **Breaking:** `CameraFile::read_value`, `read_preview` and
+  `read_preview_into` take `&self`, no longer `&mut self`, so a program
+  reads a value or a preview while it goes through `entries()` or
+  `previews()`, with no copy of the list:
+
+  ```rust
+  let file = CameraFile::open("photo.nef")?;
+  for entry in file.entries() {
+      let value = file.read_value(entry)?;
+  }
+  ```
+
+  Remove the `mut` on the handle that the compiler now reports as
+  unused, and any copy such as `file.previews().to_vec()` made only to
+  read. The reader sits behind a lock inside the handle, so threads
+  that share a handle read in turn, and the handle is `Sync` when its
+  reader is `Send`: a handle over a reader that is `Sync` and not
+  `Send` is no longer `Sync`
+  ([#89](https://github.com/kuolas/raw-files/issues/89)).
 - A tag that raw-files reads only at an exact count is now skipped,
   unread, when it holds another count
   ([#109](https://github.com/kuolas/raw-files/issues/109)). A tag of

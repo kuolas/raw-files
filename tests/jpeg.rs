@@ -444,8 +444,8 @@ fn a_camera_jpeg_lists_the_file_the_thumbnail_and_the_mpf_images() {
     );
 
     let file = CameraFile::from_bytes(&built.bytes).unwrap();
-    for preview in file.previews().to_vec() {
-        let bytes = file.read_preview(&preview).unwrap();
+    for preview in file.previews() {
+        let bytes = file.read_preview(preview).unwrap();
         let range = preview.byte_range();
         let (start, end) = (
             usize::try_from(range.start).unwrap(),
@@ -2171,11 +2171,11 @@ fn open_stripped_jpeg(
     // that, and the thumbnail or the MakerNote's preview the stub, then
     // zeros to the length IFD1 or the PreviewIFD declares, which the
     // stripping kept so that no offset moved.
-    let previews = file.previews().to_vec();
+    let previews = file.previews();
     let largest = file.largest_preview().unwrap();
     assert_eq!(Some(largest), previews.last().copied(), "{label}");
     assert_eq!(largest.byte_range(), 0..to_u64(bytes.len()), "{label}");
-    for preview in &previews {
+    for preview in previews {
         let size = preview.size();
         let read = file.read_preview(preview).unwrap();
         if *preview == largest {

@@ -208,15 +208,15 @@ pub fn open(data: &[u8]) {
         height: 1,
     });
     let mut buf = Vec::new();
-    for preview in file.previews().to_vec() {
-        let _ = file.read_preview_into(&preview, &mut buf);
+    for preview in file.previews() {
+        let _ = file.read_preview_into(preview, &mut buf);
     }
-    let entries = file.entries().clone();
+    let entries = file.entries();
     for &directory in entries.directories() {
         let _ = (directory.to_string(), entries.skipped(directory));
         let _ = entries.in_directory(directory).len();
     }
-    for entry in &entries {
+    for entry in entries {
         read_entry(entry);
         let _ = entries.entry(entry.directory(), entry.tag());
         if let Ok(value) = file.read_value(entry) {

@@ -2,8 +2,8 @@
 
 - Status: Accepted
 - Date: 2026-10-11
-- Revision: 4, 2026-11-16
-- Issue: #119; the handle's name #107
+- Revision: 5, 2026-11-16
+- Issue: #119; the handle's name #107; reads through `&self` #89
 
 ## Context
 
@@ -47,6 +47,14 @@ file or a JPEG ([ADR014](adr014-jpeg-files-as-a-format-of-their-own.md)).
 - Bytes already in memory, including a memory-mapped file, are opened with
   `CameraFile::from_bytes`, a `CameraFile<Cursor<&[u8]>>`: the same handle
   and the same code path.
+- Reading takes `&self`. A read names its own offset and length, those
+  of an `Entry` or a `Preview`, and seeks before it reads, so it
+  changes nothing a caller can see, and a program reads a value or a
+  preview while it goes through the list it came from. The reader sits
+  behind a `Mutex` inside the handle: threads that share a handle read
+  in turn, and a value an entry holds itself is read without the lock.
+  A lock that a panicking read left poisoned is taken all the same,
+  since a read that fails leaves the block cache as it was.
 - Opening reads the file's structure, and its metadata as
   [ADR011](adr011-metadata-from-standard-tags.md) decides. Each other
   capability, such as the previews or the raw data, then succeeds or fails
@@ -120,6 +128,22 @@ Rejected:
 - **`RawFile` kept as a deprecated alias.** One type would have two
   names until it was removed, and the changelog already says what a
   caller changes.
+- **Reads through `&mut self`**, as the handle had them before. The
+  lists of entries and previews borrow the handle, so a program could
+  not read from one while it went through it, and every caller copied
+  the list first.
+- **A public trait of reads at an offset as the bound**, whose reads
+  take `&self`, as std's `FileExt::read_at`, parquet's `ChunkReader`
+  and positioned-io's `ReadAt` do. Two threads could read one handle at
+  once, which no program asks for, at the cost of a public trait and
+  code for each platform, and the block cache would still need a lock.
+  Those three APIs' docs were read for their signatures; none of their
+  code was.
+- **An iterator that yields each entry with its value.** It serves only
+  a program that reads every value, and leaves the previews as they
+  were.
+- **`entries()` returning an owned list**, shared and cheap to clone.
+  The getter would give an owned value for a reason no caller sees.
 - **Separate types for slices and readers.** Two code paths to keep in step.
   `Cursor<&[u8]>` covers slices through the one handle, and
   `Preview::byte_range` lets a slice caller borrow a preview's bytes instead
@@ -155,9 +179,10 @@ Rejected:
 - Showing a preview reads the file's structure, a few blocks of 64 KiB,
   plus the preview's own bytes, whether the file is on disk, on a network
   share or in memory.
-- `CameraFile<R>` is `Send` when `R` is, so files can be opened on a thread
-  pool. Reading takes `&mut self`; a `Preview` is `Copy`, so a caller copies
-  it out before reading its bytes.
+- `CameraFile<R>` is `Send` when `R` is, and `Sync` when `R` is `Send`,
+  so files can be opened and read on a thread pool. Threads that share
+  one handle read from the file one at a time; a program that wants two
+  reads at once opens the file twice.
 - Raw data and development arrive as new methods and types, as metadata
   did, and new formats as new `Format` variants, without changing what
   exists.
