@@ -360,9 +360,12 @@ impl Value {
         // them. The fractions are built by struct literal: `new` refuses a
         // zero denominator and `known` a zero numerator, and the raw view
         // keeps both, as recorded.
-        let fraction = |[n0, n1, n2, n3, d0, d1, d2, d3]: [u8; 8]| Rational {
-            numerator: order.u32([n0, n1, n2, n3]),
-            denominator: order.u32([d0, d1, d2, d3]),
+        let fraction = |bytes: [u8; 8]| {
+            let (numerator, denominator) = tiff::fraction(bytes, order);
+            Rational {
+                numerator,
+                denominator,
+            }
         };
         // A fraction takes the 8 bytes it is read from, so a vector of them
         // is as long as its bytes, as said above.

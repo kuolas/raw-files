@@ -34,5 +34,5 @@ pub(crate) use block::Block;
 pub use field_type::FieldType;
 pub(crate) use header::parse_header;
 pub(crate) use ifd::{Entry, Ifd, ifd_in, parse_ifd};
-pub(crate) use rule::{First, Held, Rule, Text};
+pub(crate) use rule::{First, Held, Rule, Text, fraction};
 pub(crate) use walk::{Link, Tree, walk};
