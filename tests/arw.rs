@@ -569,7 +569,7 @@ fn a_preview_at_least_2000_by_1500_on_the_arw4_file_is_ifd2s() {
 fn reading_the_largest_preview_returns_exactly_the_stubs_bytes() {
     for order in ORDERS {
         let (built, _) = arw4_file(order, 1);
-        let mut file = CameraFile::from_reader(Cursor::new(built.bytes)).unwrap();
+        let file = CameraFile::from_reader(Cursor::new(built.bytes)).unwrap();
         let largest = file.largest_preview().unwrap();
         let bytes = file.read_preview(&largest).unwrap();
         assert_eq!(bytes, stub(ARW4_FULL_SIZE_JPEG), "{order:?}");

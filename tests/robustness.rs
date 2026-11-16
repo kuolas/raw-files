@@ -485,7 +485,7 @@ impl<'a> Tiff<'a> {
 ///
 /// Reading a preview or an entry's value may fail; it must not panic.
 fn open_and_read_everything(bytes: &[u8]) -> bool {
-    let Ok(mut file) = CameraFile::from_bytes(bytes) else {
+    let Ok(file) = CameraFile::from_bytes(bytes) else {
         return false;
     };
     let mut seen = String::new();

@@ -759,6 +759,34 @@ mod tests {
         assert_eq!(counters.reads(), 6, "the evicted block is loaded again");
     }
 
+    /// What the handle's recovery of a poisoned lock rests on: a load that
+    /// fails or panics adds no block and evicts none.
+    #[test]
+    fn a_load_that_fails_or_panics_leaves_the_cache_as_it_was() {
+        let mut cache = BlockCache::new();
+        for n in 0..4 {
+            let fill = u8::try_from(n).unwrap();
+            cache
+                .get_or_load(n * BLOCK_SIZE, || Ok(vec![fill; 8]))
+                .unwrap();
+        }
+        let failed = cache.get_or_load(4 * BLOCK_SIZE, || Err(Error::malformed("failed", 0)));
+        assert!(failed.is_err());
+        let panicked = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let _ = cache.get_or_load(5 * BLOCK_SIZE, || panic!("the reader panicked"));
+        }));
+        assert!(panicked.is_err());
+
+        let starts: Vec<u64> = cache.blocks.iter().map(|block| block.start).collect();
+        assert_eq!(starts, [0, BLOCK_SIZE, 2 * BLOCK_SIZE, 3 * BLOCK_SIZE]);
+        for n in 0..4 {
+            let block = cache
+                .get_or_load(n * BLOCK_SIZE, || panic!("block {n} is cached"))
+                .unwrap();
+            assert_eq!(block, [u8::try_from(n).unwrap(); 8]);
+        }
+    }
+
     #[test]
     fn payload_reads_bypass_the_cache() {
         let (mut source, counters) = counting();

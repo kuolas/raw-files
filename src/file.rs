@@ -8,6 +8,7 @@ use std::fmt;
 use std::fs::File;
 use std::io::{Cursor, Read, Seek};
 use std::path::Path;
+use std::sync::{Mutex, MutexGuard, PoisonError};
 
 use crate::container::Structure;
 use crate::entries::{Entries, Entry, Value};
@@ -44,11 +45,14 @@ use crate::preview::{self, Preview};
 /// else through [`from_reader`](Self::from_reader). To open with other
 /// [`Limits`], use [`Options`].
 ///
-/// A `CameraFile<R>` is [`Send`] when `R` is, and [`Sync`] when `R` is: the
-/// handle holds nothing else that would prevent it, and the library keeps no
-/// global state, so files can be opened and read on a thread pool, one
-/// handle per thread. Reading takes `&mut self`; a [`Preview`] is `Copy`, so
-/// copy the one to read out of the handle before reading it.
+/// Reading takes `&self`, so a program reads an entry's value or a
+/// preview's bytes while it goes through the list it came from.
+///
+/// A `CameraFile<R>` is [`Send`] when `R` is, and [`Sync`] when `R` is
+/// [`Send`]: the reader sits behind a lock, and the library keeps no global
+/// state, so files can be opened and read on a thread pool. Threads that
+/// share one handle read from the file one at a time; a program that wants
+/// two reads at once opens the file twice.
 ///
 /// # Examples
 ///
@@ -61,7 +65,7 @@ use crate::preview::{self, Preview};
 /// use raw_files::{CameraFile, Size};
 ///
 /// fn main() -> raw_files::Result<()> {
-///     let mut file = CameraFile::open("DSC_0001.NEF")?;
+///     let file = CameraFile::open("DSC_0001.NEF")?;
 ///     println!("a {} file", file.format());
 ///     let Some(preview) = file.preview_at_least(Size { width: 1024, height: 768 }) else {
 ///         println!("no previews");
@@ -79,7 +83,9 @@ use crate::preview::{self, Preview};
 /// }
 /// ```
 pub struct CameraFile<R> {
-    src: Source<R>,
+    /// Behind a lock so that a read takes `&self`; see
+    /// [`source`](Self::source).
+    src: Mutex<Source<R>>,
     format: Format,
     /// Smallest first, as [`preview::sort`] orders them.
     previews: Vec<Preview>,
@@ -185,7 +191,7 @@ impl<R: Read + Seek> CameraFile<R> {
         } = parsed;
         preview::sort(&mut previews);
         Self {
-            src,
+            src: Mutex::new(src),
             format,
             previews,
             metadata,
@@ -210,6 +216,33 @@ impl<R: Read + Seek> CameraFile<R> {
     /// Empty when the file holds no preview the library can show. The sizes
     /// are measured from each preview's own data, not taken from the tags
     /// that describe it.
+    ///
+    /// # Examples
+    ///
+    /// Read the bytes of every preview:
+    ///
+    /// ```
+    /// use std::path::Path;
+    ///
+    /// use raw_files::CameraFile;
+    ///
+    /// fn print_previews(path: &Path) -> raw_files::Result<()> {
+    ///     let file = CameraFile::open(path)?;
+    ///     for preview in file.previews() {
+    ///         let bytes = file.read_preview(preview)?;
+    ///         println!("{} pixels, {} bytes", preview.size(), bytes.len());
+    ///     }
+    ///     Ok(())
+    /// }
+    /// # fn main() -> raw_files::Result<()> {
+    /// #     // A JPEG file of the repository, which a packaged crate leaves out.
+    /// #     let path = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/nikon-z9-fx.jpg");
+    /// #     if Path::new(path).exists() {
+    /// #         print_previews(Path::new(path))?;
+    /// #     }
+    /// #     Ok(())
+    /// # }
+    /// ```
     pub fn previews(&self) -> &[Preview] {
         &self.previews
     }
@@ -266,31 +299,40 @@ impl<R: Read + Seek> CameraFile<R> {
     ///
     /// # Examples
     ///
-    /// List every entry, then print when the picture was taken, as the
-    /// Exif IFD's DateTimeOriginal (tag 0x9003) records it:
+    /// List every entry with its value's text, or why the value could not
+    /// be read:
     ///
-    /// ```no_run
-    /// use raw_files::{CameraFile, Directory};
+    /// ```
+    /// use std::path::Path;
     ///
-    /// fn main() -> raw_files::Result<()> {
-    ///     let mut file = CameraFile::open("DSC_0001.NEF")?;
+    /// use raw_files::CameraFile;
+    ///
+    /// fn print_entries(path: &Path) -> raw_files::Result<()> {
+    ///     let file = CameraFile::open(path)?;
     ///     for entry in file.entries() {
-    ///         let name = entry.name().unwrap_or("");
+    ///         let text = match file.read_value(entry) {
+    ///             Ok(value) => value.text().unwrap_or_default(),
+    ///             Err(err) => format!("({err})"),
+    ///         };
     ///         println!(
-    ///             "{} 0x{:04X} {name} {} x {}",
+    ///             "{} 0x{:04X} {} {} x {} {text}",
     ///             entry.directory(),
     ///             entry.tag(),
+    ///             entry.name().unwrap_or(""),
     ///             entry.field_type(),
     ///             entry.count(),
     ///         );
     ///     }
-    ///     if let Some(entry) = file.entries().entry(Directory::Exif, 0x9003) {
-    ///         if let Some(text) = file.read_value(&entry)?.text() {
-    ///             println!("taken at {text}");
-    ///         }
-    ///     }
     ///     Ok(())
     /// }
+    /// # fn main() -> raw_files::Result<()> {
+    /// #     // A NEF file of the repository, which a packaged crate leaves out.
+    /// #     let path = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/nikon-z9-dx.nef");
+    /// #     if Path::new(path).exists() {
+    /// #         print_entries(Path::new(path))?;
+    /// #     }
+    /// #     Ok(())
+    /// # }
     /// ```
     pub fn entries(&self) -> &Entries {
         &self.entries
@@ -300,7 +342,8 @@ impl<R: Read + Seek> CameraFile<R> {
     /// of its directory.
     ///
     /// A value the entry holds itself, of four bytes or fewer, is read from
-    /// the entry, without touching the reader. Any other is read from the
+    /// the entry, without touching the reader, so without waiting for
+    /// another thread's read. Any other is read from the
     /// file each time it is asked for: at most [`Limits::max_value_bytes`]
     /// bytes are read into memory, and a value of numbers, such as SHORTs or
     /// RATIONALs, is decoded into a vector of as many bytes again, so the
@@ -327,7 +370,7 @@ impl<R: Read + Seek> CameraFile<R> {
     /// use raw_files::{CameraFile, Directory, Value};
     ///
     /// fn main() -> raw_files::Result<()> {
-    ///     let mut file = CameraFile::open("DSC_0001.NEF")?;
+    ///     let file = CameraFile::open("DSC_0001.NEF")?;
     ///     if let Some(make) = file.entries().entry(Directory::Ifd(0), 0x010F) {
     ///         println!("{:?}", file.read_value(&make)?.text());
     ///     }
@@ -339,8 +382,12 @@ impl<R: Read + Seek> CameraFile<R> {
     ///     Ok(())
     /// }
     /// ```
-    pub fn read_value(&mut self, entry: &Entry) -> Result<Value> {
-        entry.read(&mut self.src, self.limits.max_value_bytes())
+    pub fn read_value(&self, entry: &Entry) -> Result<Value> {
+        // A value held in the entry needs no reader, so it takes no lock.
+        if let Some(value) = entry.held_value() {
+            return Ok(value);
+        }
+        entry.read(&mut self.source(), self.limits.max_value_bytes())
     }
 
     /// The largest preview, the last of [`previews`](Self::previews), or
@@ -372,7 +419,7 @@ impl<R: Read + Seek> CameraFile<R> {
     /// # Errors
     ///
     /// As for [`read_preview_into`](Self::read_preview_into).
-    pub fn read_preview(&mut self, preview: &Preview) -> Result<Vec<u8>> {
+    pub fn read_preview(&self, preview: &Preview) -> Result<Vec<u8>> {
         let mut buf = Vec::new();
         self.read_preview_into(preview, &mut buf)?;
         Ok(buf)
@@ -399,7 +446,7 @@ impl<R: Read + Seek> CameraFile<R> {
     ///   another file, since a `Preview` is `Copy` and carries no tie to
     ///   its file.
     /// - [`Io`](crate::ErrorKind::Io) if the reader fails.
-    pub fn read_preview_into(&mut self, preview: &Preview, buf: &mut Vec<u8>) -> Result<()> {
+    pub fn read_preview_into(&self, preview: &Preview, buf: &mut Vec<u8>) -> Result<()> {
         let offset = preview.byte_range().start;
         if preview.byte_len() > self.limits.max_preview_bytes() {
             buf.clear();
@@ -408,14 +455,36 @@ impl<R: Read + Seek> CameraFile<R> {
                 offset,
             ));
         }
-        self.src.read_into(offset, preview.byte_len(), buf)
+        self.source().read_into(offset, preview.byte_len(), buf)
     }
 
     /// Returns the reader, giving up the handle.
     ///
     /// The reader's position is unspecified: seek before reading from it.
     pub fn into_inner(self) -> R {
-        self.src.into_inner()
+        // Recovered from a panicked read as `source` recovers it.
+        let src = self
+            .src
+            .into_inner()
+            .unwrap_or_else(PoisonError::into_inner);
+        src.into_inner()
+    }
+
+    /// The source, locked for one read; the lock is released when the
+    /// guard is dropped, at the end of the read's statement.
+    ///
+    /// A lock left poisoned by a read that panicked, in the reader or in
+    /// raw-files, is taken all the same. Such a read leaves raw-files'
+    /// own state whole: every read seeks before it reads, so the reader's
+    /// position means nothing, and the block cache adds a block only once
+    /// its load has returned it whole. What a reader that panicked keeps
+    /// of its own state is the reader's, as it is after a read that
+    /// returned an error.
+    ///
+    /// Nothing called while the guard is held reaches the handle, so a
+    /// thread never waits for a lock it holds.
+    fn source(&self) -> MutexGuard<'_, Source<R>> {
+        self.src.lock().unwrap_or_else(PoisonError::into_inner)
     }
 }
 
@@ -435,6 +504,11 @@ impl<R> fmt::Debug for CameraFile<R> {
 
 #[cfg(test)]
 mod tests {
+    use std::panic::AssertUnwindSafe;
+    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::sync::{Arc, mpsc};
+    use std::time::Duration;
+
     use super::*;
     use crate::camera::Camera;
     use crate::entries::{Directory, Entries};
@@ -570,7 +644,7 @@ mod tests {
         let (bytes, at) = file_with_blob();
         let len = u64::try_from(BLOB.len()).unwrap();
         let blob = preview(at, len, 1, 1);
-        let mut file = handle(Cursor::new(bytes), vec![blob], Limits::default());
+        let file = handle(Cursor::new(bytes), vec![blob], Limits::default());
         assert_eq!(file.read_preview(&blob).unwrap(), BLOB);
         // A preview inside the blob: its own bytes and no more.
         let inner = preview(at + 2, len - 4, 1, 1);
@@ -582,7 +656,7 @@ mod tests {
         let (bytes, at) = file_with_blob();
         let len = u64::try_from(BLOB.len()).unwrap();
         let blob = preview(at, len, 1, 1);
-        let mut file = handle(Cursor::new(bytes), vec![blob], Limits::default());
+        let file = handle(Cursor::new(bytes), vec![blob], Limits::default());
         let mut buf = b"left over from the last preview, and longer than this one".to_vec();
         file.read_preview_into(&blob, &mut buf).unwrap();
         assert_eq!(buf, BLOB);
@@ -598,7 +672,7 @@ mod tests {
         // whole without the limit, and a preview longer than the file.
         let blob = preview(at, len, 1, 1);
         let huge = preview(at + 1, 1 << 40, 1, 1);
-        let mut file = handle(Cursor::new(bytes), vec![blob, huge], limits);
+        let file = handle(Cursor::new(bytes), vec![blob, huge], limits);
         for preview in [blob, huge] {
             let mut buf = Vec::with_capacity(4);
             buf.extend_from_slice(b"old");
@@ -617,7 +691,7 @@ mod tests {
         let (bytes, at) = file_with_blob();
         let len = u64::try_from(BLOB.len()).unwrap();
         let blob = preview(at, len, 1, 1);
-        let mut file = handle(
+        let file = handle(
             Cursor::new(bytes),
             vec![blob],
             Limits::default().with_max_preview_bytes(len),
@@ -631,7 +705,7 @@ mod tests {
         let end = u64::try_from(bytes.len()).unwrap();
         // As a preview of another, longer file would be.
         let elsewhere = preview(end - 4, 8, 1, 1);
-        let mut file = handle(Cursor::new(bytes), vec![], Limits::default());
+        let file = handle(Cursor::new(bytes), vec![], Limits::default());
         let mut buf = b"stale".to_vec();
         let err = file.read_preview_into(&elsewhere, &mut buf).unwrap_err();
         assert_eq!(err.kind(), ErrorKind::Malformed);
@@ -642,7 +716,7 @@ mod tests {
     #[test]
     fn into_inner_returns_the_reader() {
         let (bytes, at) = file_with_blob();
-        let mut file = handle(Cursor::new(bytes.clone()), three(at), Limits::default());
+        let file = handle(Cursor::new(bytes.clone()), three(at), Limits::default());
         // Move the reader, so that seeking back is the test's job.
         let first = file.previews()[0];
         file.read_preview(&first).unwrap();
@@ -674,7 +748,7 @@ mod tests {
     fn the_entries_are_the_files_and_their_values_are_read_on_request() {
         for order in [Order::Little, Order::Big] {
             let bytes = nef(order, 64);
-            let mut file = CameraFile::from_bytes(&bytes).unwrap();
+            let file = CameraFile::from_bytes(&bytes).unwrap();
             let directories: Vec<Directory> = file.entries().directories().to_vec();
             assert_eq!(directories, [Directory::Ifd(0), Directory::Exif]);
             assert_eq!(file.entries().len(), 6, "{order:?}");
@@ -698,14 +772,14 @@ mod tests {
     fn a_value_is_read_up_to_the_value_cap_and_refused_past_it() {
         let bytes = nef(Order::Little, 1000);
         let limits = |n| Limits::default().with_max_value_bytes(n);
-        let mut file = Options::new()
+        let file = Options::new()
             .with_limits(limits(1000))
             .from_bytes(&bytes)
             .unwrap();
         let undefined = file.entries().entry(Directory::Exif, 0x927C).unwrap();
         assert_eq!(file.read_value(&undefined).unwrap().len(), 1000);
 
-        let mut file = Options::new()
+        let file = Options::new()
             .with_limits(limits(999))
             .from_bytes(&bytes)
             .unwrap();
@@ -718,7 +792,7 @@ mod tests {
         // A value held in its entry is never refused. The lowest cap the
         // file opens under is its Make's length, 18 bytes, which the
         // capture time's 20 pass.
-        let mut file = Options::new()
+        let file = Options::new()
             .with_limits(limits(18))
             .from_bytes(&bytes)
             .unwrap();
@@ -758,7 +832,7 @@ mod tests {
             let limits = cap.map_or_else(Limits::default, |n| {
                 Limits::default().with_max_value_bytes(n)
             });
-            let mut file = read(limits);
+            let file = read(limits);
             let authorship = file.metadata().authorship();
             assert_eq!(authorship.artist(), Some("Claude Monet"), "{cap:?}");
             let description = authorship.description().map(str::len);
@@ -816,7 +890,7 @@ mod tests {
         // A Nikon 1 NEF's MakerNote entry, the largest value measured on
         // camera files: 993,826 bytes.
         let bytes = nef(Order::Big, 993_826);
-        let mut file = CameraFile::from_bytes(&bytes).unwrap();
+        let file = CameraFile::from_bytes(&bytes).unwrap();
         let makernote = file.entries().entry(Directory::Exif, 0x927C).unwrap();
         assert_eq!(file.read_value(&makernote).unwrap().len(), 993_826);
     }
@@ -832,7 +906,7 @@ mod tests {
             .entries()
             .entry(Directory::Exif, 0x927C)
             .unwrap();
-        let mut file = CameraFile::from_bytes(&short).unwrap();
+        let file = CameraFile::from_bytes(&short).unwrap();
         let err = file.read_value(&undefined).unwrap_err();
         assert_eq!(err.kind(), ErrorKind::Malformed, "{err:?}");
     }
@@ -850,6 +924,104 @@ mod tests {
         fn seek(&mut self, pos: std::io::SeekFrom) -> std::io::Result<u64> {
             self.0.seek(pos)
         }
+    }
+
+    #[test]
+    fn threads_sharing_a_handle_each_read_their_own_preview() {
+        let (bytes, at) = file_with_blob();
+        let len = u64::try_from(BLOB.len()).unwrap();
+        let whole = preview(at, len, 2, 2);
+        let inner = preview(at + 2, len - 4, 1, 1);
+        let file = handle(Cursor::new(bytes), vec![whole, inner], Limits::default());
+        let file = &file;
+        std::thread::scope(|scope| {
+            for (preview, expected) in [(whole, BLOB), (inner, &BLOB[2..BLOB.len() - 2])] {
+                scope.spawn(move || {
+                    let mut buf = Vec::new();
+                    for _ in 0..1_000 {
+                        file.read_preview_into(&preview, &mut buf).unwrap();
+                        assert_eq!(buf, expected);
+                    }
+                });
+            }
+        });
+    }
+
+    /// A reader that panics on its next read once `armed` is set, which
+    /// that read clears.
+    struct PanicsWhenArmed {
+        inner: Cursor<Vec<u8>>,
+        armed: Arc<AtomicBool>,
+    }
+
+    impl Read for PanicsWhenArmed {
+        fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+            assert!(
+                !self.armed.swap(false, Ordering::SeqCst),
+                "the reader panicked"
+            );
+            self.inner.read(buf)
+        }
+    }
+
+    impl Seek for PanicsWhenArmed {
+        fn seek(&mut self, pos: std::io::SeekFrom) -> std::io::Result<u64> {
+            self.inner.seek(pos)
+        }
+    }
+
+    #[test]
+    fn a_read_that_panicked_leaves_the_handle_readable() {
+        let bytes = nef(Order::Little, 64);
+        let armed = Arc::new(AtomicBool::new(false));
+        let reader = PanicsWhenArmed {
+            inner: Cursor::new(bytes.clone()),
+            armed: Arc::clone(&armed),
+        };
+        let file = CameraFile::from_reader(reader).unwrap();
+        let undefined = file.entries().entry(Directory::Exif, 0x927C).unwrap();
+        // The UNDEFINED value's 64 bytes, read as a preview's would be.
+        let range = undefined.byte_range().unwrap();
+        let block = preview(range.start, range.end - range.start, 1, 1);
+
+        armed.store(true, Ordering::SeqCst);
+        let panicked = std::panic::catch_unwind(AssertUnwindSafe(|| file.read_preview(&block)));
+        assert!(panicked.is_err());
+        assert!(file.src.is_poisoned());
+
+        assert_eq!(
+            file.read_value(&undefined).unwrap(),
+            Value::Undefined(vec![0xAB; 64])
+        );
+        assert_eq!(file.read_preview(&block).unwrap(), vec![0xAB; 64]);
+        assert_eq!(file.into_inner().inner.into_inner(), bytes);
+    }
+
+    #[test]
+    fn a_value_held_in_its_entry_is_read_while_another_read_holds_the_lock() {
+        let bytes = nef(Order::Little, 64);
+        let file = CameraFile::from_bytes(&bytes).unwrap();
+        let metering = file.entries().entry(Directory::Exif, 0x9207).unwrap();
+        assert_eq!(metering.byte_range(), None, "held in the entry");
+        let time = file.entries().entry(Directory::Exif, 0x9003).unwrap();
+        assert!(time.byte_range().is_some(), "stored out of line");
+
+        let (held, held_read) = mpsc::channel();
+        let (out_of_line, out_of_line_read) = mpsc::channel();
+        let guard = file.source();
+        std::thread::scope(|scope| {
+            scope.spawn(|| held.send(file.read_value(&metering)));
+            scope.spawn(|| out_of_line.send(file.read_value(&time)));
+            let value = held_read.recv_timeout(Duration::from_secs(10));
+            // A value out of line is read under the lock, so its read
+            // gives nothing until the guard goes.
+            let waited = out_of_line_read.recv_timeout(Duration::from_millis(100));
+            drop(guard);
+            assert_eq!(value.unwrap().unwrap(), Value::Short(vec![5]));
+            assert!(waited.is_err());
+            let taken = out_of_line_read.recv().unwrap().unwrap();
+            assert_eq!(taken.text().as_deref(), Some("2026:11:09 10:11:12"));
+        });
     }
 
     #[test]

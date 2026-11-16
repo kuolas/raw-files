@@ -244,7 +244,7 @@ pub fn check(sample: &Sample, format: Format) {
         return;
     };
     let label = sample.file;
-    let mut file = CameraFile::open(&path).unwrap();
+    let file = CameraFile::open(&path).unwrap();
     assert_eq!(file.format(), format, "{label}");
     let expected_sizes: Vec<Size> = sample
         .previews
@@ -507,7 +507,7 @@ pub fn check_placeholder_description(name: &str, format: Format) {
     let Some(path) = path(name) else {
         return;
     };
-    let mut file = CameraFile::open(&path).unwrap();
+    let file = CameraFile::open(&path).unwrap();
     assert_eq!(file.format(), format, "{name}");
     let entry = file
         .entries()
@@ -892,7 +892,7 @@ pub fn check_entries(expected: &SampleEntries) {
 pub fn check_enciphered(name: &str, tag: u16) -> Option<Vec<u8>> {
     let path = path(name)?;
     let stored = std::fs::read(&path).unwrap();
-    let mut file = CameraFile::open(&path).unwrap();
+    let file = CameraFile::open(&path).unwrap();
     let entry = file
         .entries()
         .entry(Directory::MakerNote, tag)

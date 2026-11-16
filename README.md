@@ -86,7 +86,7 @@ preview:
 use raw_files::CameraFile;
 
 fn main() -> raw_files::Result<()> {
-    let mut file = CameraFile::open("photo.nef")?;
+    let file = CameraFile::open("photo.nef")?;
     if let Some(time) = file.metadata().capture_time() {
         println!("taken {time}");
     }

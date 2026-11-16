@@ -15,9 +15,9 @@ use crate::{Orientation, Size};
 /// bytes are, its measured size, its format and the orientation a viewer
 /// must apply.
 ///
-/// A `Preview` describes the image; it does not hold its bytes. It is a
-/// small `Copy` value, so a caller copies the one it wants out of the file
-/// handle and then reads it, since reading needs the handle mutably.
+/// A `Preview` describes the image; it does not hold its bytes.
+/// [`CameraFile::read_preview`](crate::CameraFile::read_preview) reads
+/// them. It is a small `Copy` value, kept after the handle is gone.
 ///
 /// The size comes from the JPEG's own frame header, never from the tags
 /// that describe the preview: those are often missing, zero or wrong.

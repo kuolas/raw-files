@@ -220,13 +220,22 @@ fn the_options_limits_reach_the_walk() {
     assert_eq!(err.kind(), ErrorKind::LimitExceeded);
 }
 
+/// A reader that is [`Send`] and not [`Sync`], as one holding a `Cell` is.
+#[expect(dead_code, reason = "only its auto traits are tested")]
+struct SendNotSync(Cursor<Vec<u8>>, std::cell::Cell<u8>);
+
 #[test]
-fn handles_are_send_and_sync_when_their_reader_is() {
+fn handles_are_send_and_sync_when_their_reader_is_send() {
     fn assert_send<T: Send>() {}
     fn assert_sync<T: Sync>() {}
     assert_send::<CameraFile<File>>();
+    assert_sync::<CameraFile<File>>();
     assert_send::<CameraFile<Cursor<&[u8]>>>();
     assert_sync::<CameraFile<Cursor<&[u8]>>>();
+    // The lock gives the reader to one thread at a time, so a reader that
+    // can be sent to a thread is enough to share the handle.
+    assert_send::<CameraFile<SendNotSync>>();
+    assert_sync::<CameraFile<SendNotSync>>();
     assert_send::<Options>();
     assert_sync::<Options>();
 }

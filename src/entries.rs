@@ -245,6 +245,15 @@ impl Entry {
         let bytes = self.entry.read(src, cap)?;
         Ok(Value::decode(self.field_type(), self.order, bytes))
     }
+
+    /// The value the entry holds itself, as it holds one of four bytes or
+    /// fewer, decoded with no source to read from; `None` when the value
+    /// lies elsewhere in the file. The same value [`read`](Self::read)
+    /// gives.
+    pub(crate) fn held_value(&self) -> Option<Value> {
+        let bytes = self.entry.held_bytes()?;
+        Some(Value::decode(self.field_type(), self.order, bytes))
+    }
 }
 
 /// An entry's values, as the file records them, each variant holding the
