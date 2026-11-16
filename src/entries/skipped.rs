@@ -29,9 +29,14 @@ use crate::error::ErrorKind;
 /// - **A directory with an entry that cannot be checked**, of an unknown
 ///   type or with its value outside the file: a SubIFD, or Sony's private
 ///   directory, is left out whole. `Malformed`.
-/// - **A link whose value cannot be read**, such as a SubIFDs value longer
-///   than [`Limits::max_value_bytes`](crate::Limits::max_value_bytes): the
-///   offset is `None`.
+/// - **A link whose value cannot be read**: the offset is `None`. A
+///   SubIFDs value longer than
+///   [`Limits::max_value_bytes`](crate::Limits::max_value_bytes) is
+///   `LimitExceeded`. An Exif, GPS or Interoperability IFD tag that is not
+///   one SHORT, LONG or IFD is `Malformed`: raw-files reads each only so.
+///   An entry that cannot be read at all, of a type TIFF does not define
+///   or with its value outside the file, is no link: it is counted by
+///   [`Entries::skipped_entries`](crate::Entries::skipped_entries).
 /// - **The SubIFDs of a directory at the depth cap**,
 ///   [`Limits::max_ifd_depth`](crate::Limits::max_ifd_depth): each one is
 ///   listed, `LimitExceeded`. No camera file nests that deep.
@@ -51,9 +56,11 @@ use crate::error::ErrorKind;
 /// apart from that structure, so one of them is listed even when a link of
 /// the structure leads to the same position: the DSLR-A100's two below
 /// lead to the same bytes. Nor is a pointer to the next directory of 0 one,
-/// which means there is none; or an entry whose type or count is not the
-/// one raw-files reads that link in. The MP Index IFD of a JPEG file is not
-/// listed when it cannot be read: no directory links to it.
+/// which means there is none. Nor, but for the Exif, GPS and
+/// Interoperability IFD tags, is an entry whose type or count is not the
+/// one raw-files reads that link in, such as a Nikon PreviewIFD tag that
+/// is not one LONG. The MP Index IFD of a JPEG file is not listed when it
+/// cannot be read: no directory links to it.
 ///
 /// It has no public constructor: only a file gives one.
 ///

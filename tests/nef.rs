@@ -65,7 +65,7 @@ use support::samples::{
     SampleMetadata, SampleSettings, SerialShape, Text, check, check_enciphered, check_entries,
     check_every, check_metadata, listed, sizes,
 };
-use support::tiff_builder::{Built, Order, RawValue, SUB_IFDS, TiffBuilder};
+use support::tiff_builder::{Built, EXIF_IFD, Order, RawValue, SHORT, SUB_IFDS, TiffBuilder};
 
 const ORDERS: [Order; 2] = [Order::Little, Order::Big];
 
@@ -5676,6 +5676,46 @@ fn an_enciphered_record_is_given_byte_for_byte() {
     if let Some(bytes) = check_enciphered("nikon-z9-lossless.nef", 0x0091) {
         assert_eq!(bytes.get(..4), Some(&b"0805"[..]));
         assert_eq!(bytes.len(), 62_151);
+    }
+}
+
+#[test]
+fn an_exif_pointer_of_two_values_is_listed_as_skipped() {
+    // A Nikon file whose Exif IFD tag holds two SHORTs, the first of them
+    // the Exif IFD's offset. The tag takes one value, so the Exif IFD is
+    // not read, and the link is listed with no position.
+    for order in ORDERS {
+        // Built once with one LONG to learn the offset. An entry is 12
+        // bytes whatever its type, so the IFDs keep their places.
+        let build = |pointer: Option<[u8; 4]>| {
+            let mut builder = TiffBuilder::new(order);
+            let (ifd0, exif) = (builder.ifd(), builder.ifd());
+            builder.ascii(ifd0, 0x010F, "NIKON CORPORATION");
+            builder.short(exif, 0x8827, &[100]);
+            match pointer {
+                Some(value) => builder.raw(ifd0, EXIF_IFD, SHORT, 2, RawValue::Inline(value)),
+                None => builder.exif(ifd0, exif),
+            };
+            let built = builder.build();
+            let at = built.ifd_offset(exif);
+            (built, at)
+        };
+        let (_, at) = build(None);
+        let [a, b] = order.u16(u16::try_from(at).unwrap());
+        let (built, moved) = build(Some([a, b, 0, 0]));
+        assert_eq!(moved, at, "{order:?}");
+        let file = CameraFile::from_bytes(&built.bytes).unwrap();
+        assert_eq!(file.format(), Format::Nef, "{order:?}");
+        assert_eq!(file.metadata().exposure().iso(), None, "{order:?}");
+        let entries = file.entries();
+        assert_eq!(entries.directories(), [Directory::Ifd(0)], "{order:?}");
+        let [skipped] = entries.skipped_directories() else {
+            panic!("{order:?}: {:?}", entries.skipped_directories());
+        };
+        assert_eq!(skipped.parent(), Directory::Ifd(0), "{order:?}");
+        assert_eq!(skipped.tag(), Some(EXIF_IFD), "{order:?}");
+        assert_eq!(skipped.offset(), None, "{order:?}");
+        assert_eq!(skipped.kind(), ErrorKind::Malformed, "{order:?}");
     }
 }
 
