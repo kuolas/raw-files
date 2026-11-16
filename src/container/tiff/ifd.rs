@@ -52,7 +52,7 @@ use std::ops::Range;
 
 use super::rule::{Element, Held, Rule, Shape};
 use super::{Block, FieldType};
-use crate::error::{Error, Result, skip_damage};
+use crate::error::{Error, ErrorKind, Result, damage_kind, skip_damage};
 use crate::io::{ByteOrder, Source, within};
 use crate::limits::Limits;
 
@@ -256,9 +256,10 @@ fn check_inside(
 }
 
 /// The IFD at `offset`, an offset written inside `block` and so counted
-/// from its base ([`Block::at`]), read in byte order `order`. `None` when
-/// that position would pass the largest offset, or when [`parse_ifd`]
-/// refuses the IFD as damaged ([`skip_damage`]).
+/// from its base ([`Block::at`]), read in byte order `order`. In its place,
+/// the kind of what refused it ([`damage_kind`]): `Malformed` when that
+/// position would pass the largest offset or the IFD is damaged,
+/// `LimitExceeded` when a cap of `limits` refuses it.
 ///
 /// For the IFDs a reader finds by offsets of its own rather than by the
 /// walk, such as a MakerNote's. Where its offsets count from and the byte
@@ -279,11 +280,11 @@ pub(crate) fn ifd_in<R: Read + Seek>(
     offset: u32,
     order: ByteOrder,
     limits: &Limits,
-) -> Result<Option<Ifd>> {
+) -> Result<std::result::Result<Ifd, ErrorKind>> {
     let Some(at) = block.at(offset) else {
-        return Ok(None);
+        return Ok(Err(ErrorKind::Malformed));
     };
-    let parsed = skip_damage(parse_ifd(src, block, at, order, limits))?;
+    let parsed = damage_kind(parse_ifd(src, block, at, order, limits))?;
     Ok(parsed.map(|(ifd, _)| ifd))
 }
 
@@ -1939,7 +1940,8 @@ mod tests {
             byte_order(order),
             &Limits::default(),
         )
-        .unwrap();
+        .unwrap()
+        .ok();
         (src, ifd)
     }
 

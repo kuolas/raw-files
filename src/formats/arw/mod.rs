@@ -41,7 +41,8 @@ use std::io::{Read, Seek};
 
 use super::{FormatSpec, Parsed, is_dng, make_starts_with, tiff_metadata};
 use crate::container::tiff::{Ifd, Tree, ifd_in};
-use crate::entries::{Directory, Entries};
+use crate::entries::{Directory, Entries, Lookup, SkippedDirectory};
+use crate::error::ErrorKind;
 use crate::error::Result;
 use crate::format::Format;
 use crate::formats::makernote::sony::{self, SONY};
@@ -129,7 +130,8 @@ fn private_pointer(tree: &Tree) -> Option<[u8; 4]> {
 /// IFD0's pointer holds in the file's byte order ([`private_pointer`]). Its
 /// offsets count from the start of the file, as IFD0's do.
 ///
-/// `None` when the file has no such pointer, or when the pointer leads:
+/// [`Lookup::Absent`] when the file has no such pointer.
+/// [`Lookup::Skipped`], for the raw view to list, when the pointer leads:
 ///
 /// - to no IFD that holds together inside the file;
 /// - to an IFD with an entry that cannot be read, as the walk takes a
@@ -150,14 +152,24 @@ fn private_ifd<R: Read + Seek>(
     src: &mut Source<R>,
     tree: &Tree,
     limits: &Limits,
-) -> Result<Option<Ifd>> {
+) -> Result<Lookup<Ifd>> {
     let Some(pointer) = private_pointer(tree) else {
-        return Ok(None);
+        return Ok(Lookup::Absent);
     };
     let ifd0 = tree.ifd0();
     let order = ifd0.order();
-    let private = ifd_in(src, ifd0.block(), order.u32(pointer), order, limits)?;
-    Ok(private.filter(|ifd| ifd.invalid_entries() == 0))
+    let offset = order.u32(pointer);
+    let kind = match ifd_in(src, ifd0.block(), offset, order, limits)? {
+        Ok(ifd) if ifd.invalid_entries() == 0 => return Ok(Lookup::Found(ifd)),
+        Ok(_) => ErrorKind::Malformed,
+        Err(kind) => kind,
+    };
+    Ok(Lookup::Skipped(SkippedDirectory::new(
+        Directory::Ifd(0),
+        Some(rules::DNG_PRIVATE_DATA.tag()),
+        ifd0.block().at(offset),
+        kind,
+    )))
 }
 
 /// Reads the previews, the metadata and the entries of a file that
@@ -174,26 +186,35 @@ fn private_ifd<R: Read + Seek>(
 /// - **The entries** are those of every directory of the tree, then the
 ///   MakerNote IFD's
 ///   ([`MakerNote::add_entries`](sony::MakerNote::add_entries)), then those
-///   of SR2Private.
+///   of SR2Private. A MakerNote IFD or an SR2Private that cannot be read
+///   is listed as skipped, in the same order.
 ///
 /// # Errors
 ///
 /// `Io` when the reader fails.
 fn parse<R: Read + Seek>(src: &mut Source<R>, tree: &Tree, limits: &Limits) -> Result<Parsed> {
-    let makernote = sony::read(src, tree, limits)?;
+    let makernote = sony::lookup(src, tree, limits)?;
     let private = private_ifd(src, tree, limits)?;
     let previews = previews::previews(src, tree)?;
     let standard = tiff_metadata::read(src, tree)?.metadata;
     let mut entries = Entries::of_tree(tree);
-    let metadata = match &makernote {
-        Some(makernote) => {
+    let metadata = match makernote {
+        Lookup::Found(makernote) => {
             makernote.add_entries(&mut entries);
-            sony::metadata(src, makernote, standard)?
+            sony::metadata(src, &makernote, standard)?
         }
-        None => standard,
+        Lookup::Skipped(skipped) => {
+            entries.skip(skipped);
+            standard
+        }
+        Lookup::Absent => standard,
     };
-    if let Some(private) = &private {
-        entries.push(Directory::Private, private);
+    match &private {
+        Lookup::Found(private) => {
+            entries.push(Directory::Private, private);
+        }
+        Lookup::Skipped(skipped) => entries.skip(*skipped),
+        Lookup::Absent => {}
     }
     Ok(Parsed {
         previews,
@@ -539,7 +560,7 @@ mod tests {
                 [SR2_SUB_IFD_OFFSET, SR2_SUB_IFD_LENGTH, SR2_SUB_IFD_KEY],
                 "{order:?}"
             );
-            assert_eq!(entries.skipped(Directory::Private), 0, "{order:?}");
+            assert_eq!(entries.skipped_entries(Directory::Private), 0, "{order:?}");
             // The key's bytes, as recorded; the SR2SubIFD is not parsed.
             let key = entries.entry(Directory::Private, SR2_SUB_IFD_KEY).unwrap();
             assert_eq!(
@@ -556,23 +577,55 @@ mod tests {
     #[test]
     fn a_pointer_that_leads_to_no_ifd_gives_no_private_directory_alone() {
         // The MRW block, under the default limits and none; an offset past
-        // the end of the file. The MakerNote is listed all the same.
+        // the end of the file. The MakerNote is listed all the same, and
+        // the private directory is listed as skipped, with the cause. Read
+        // little-endian, the block counts 19,712 entries, over the default
+        // cap; big-endian, 77, whose types TIFF does not define.
         for order in ORDERS {
-            for (target, limits) in [
-                (Target::Mrw, Limits::default()),
-                (Target::Mrw, Limits::unlimited()),
-                (Target::At(u32::MAX), Limits::default()),
+            let mrw_kind = match order {
+                Order::Little => ErrorKind::LimitExceeded,
+                Order::Big => ErrorKind::Malformed,
+            };
+            for (target, limits, kind) in [
+                (Target::Mrw, Limits::default(), mrw_kind),
+                (Target::Mrw, Limits::unlimited(), ErrorKind::Malformed),
+                (
+                    Target::At(u32::MAX),
+                    Limits::default(),
+                    ErrorKind::Malformed,
+                ),
             ] {
                 let (mut src, tree) = with_private(order, target);
                 let parsed = parse(&mut src, &tree, &limits).unwrap();
+                let what = format!("{order:?}, {target:?}, {limits:?}");
                 assert_eq!(
                     parsed.entries.directories(),
                     [Directory::Ifd(0), Directory::Exif, Directory::MakerNote],
-                    "{order:?}, {target:?}, {limits:?}"
+                    "{what}"
                 );
                 let focus_mode = parsed.entries.entry(Directory::MakerNote, FOCUS_MODE);
-                assert!(focus_mode.is_some(), "{order:?}, {target:?}");
+                assert!(focus_mode.is_some(), "{what}");
+                let [skipped] = parsed.entries.skipped_directories() else {
+                    panic!("{what}: {:?}", parsed.entries.skipped_directories());
+                };
+                assert_eq!(skipped.parent(), Directory::Ifd(0), "{what}");
+                assert_eq!(skipped.tag(), Some(DNG_PRIVATE_DATA), "{what}");
+                assert_eq!(skipped.kind(), kind, "{what}");
+                let at = match target {
+                    Target::At(at) => u64::from(at),
+                    _ => skipped.offset().expect("the MRW block's position"),
+                };
+                assert_eq!(skipped.offset(), Some(at), "{what}");
             }
+        }
+    }
+
+    #[test]
+    fn a_sound_private_directory_or_none_lists_no_skipped_directory() {
+        for order in ORDERS {
+            let (mut src, tree) = with_private(order, Target::Private);
+            let parsed = parse(&mut src, &tree, &Limits::default()).unwrap();
+            assert_eq!(parsed.entries.skipped_directories(), [], "{order:?}");
         }
     }
 

@@ -41,9 +41,16 @@ pub fn tiff_walk(data: &[u8]) {
         return;
     };
     let block = Block::file(src.len());
-    let Ok(tree) = walk(&mut src, &block, &Limits::default()) else {
+    let limits = Limits::default();
+    let Ok(tree) = walk(&mut src, &block, &limits) else {
         return;
     };
+    // The tree and the links it lists keep to the total cap together.
+    let cap = usize::try_from(limits.max_ifds()).unwrap_or(usize::MAX);
+    assert!(tree.iter().count() + tree.skipped().len() <= cap);
+    for skipped in tree.skipped() {
+        let _ = (skipped.parent, skipped.tag, skipped.offset, skipped.kind);
+    }
     read_values(&mut src, &tree);
 }
 
@@ -213,8 +220,16 @@ pub fn open(data: &[u8]) {
     }
     let entries = file.entries();
     for &directory in entries.directories() {
-        let _ = (directory.to_string(), entries.skipped(directory));
+        let _ = (directory.to_string(), entries.skipped_entries(directory));
         let _ = entries.in_directory(directory).len();
+    }
+    for skipped in entries.skipped_directories() {
+        let _ = (
+            skipped.parent().to_string(),
+            skipped.tag(),
+            skipped.offset(),
+            skipped.kind(),
+        );
     }
     for entry in entries {
         read_entry(entry);

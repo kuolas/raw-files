@@ -9,8 +9,9 @@
   [ADR021](adr021-what-the-file-records-and-what-raw-files-reads-into-it.md),
   what the file records and what raw-files reads into it
 - Date: 2026-11-03
-- Revision: 2, 2026-11-16
-- Issue: #50; the names of the SubIFDs tag and of field type 13 #90
+- Revision: 3, 2026-11-16
+- Issue: #50; the names of the SubIFDs tag and of field type 13 #90;
+  the directories left out #92
 
 ## Context
 
@@ -141,6 +142,18 @@ handle, with each value read only when it is asked for.
   Every listed entry is checked, so reading its value fails only on an
   I/O error, a value larger than the cap below, or a file that has
   shrunk since it was opened.
+- **A directory left out is listed, with its link and its cause.** A
+  directory past IFD0 that cannot be read is not listed, and
+  `Entries::skipped_directories` gives one `SkippedDirectory` for it: the
+  listed directory that holds the link, the link's tag (none for a
+  next-IFD pointer), where it leads when that is known, and the cause, as
+  the `ErrorKind` opening a file gives for it. That is `LimitExceeded`
+  when a cap of `Limits` stopped the reader, the depth cap or the cap on
+  one directory's entries or one value's length, and `Malformed` for any
+  other damage. A link to a position tried before, and a next-IFD
+  pointer of 0, are not listed. Each link the walk lists counts toward
+  `Limits::max_ifds`, as a directory it tries does, so the list is
+  bounded with the tree. Entries left out stay a count per directory.
 - **Values as recorded, text cleaned on request.** A value has one
   variant per type, as the file records it: an array of the type's
   numbers; a RATIONAL or SRATIONAL as a `Rational` or a
@@ -222,6 +235,15 @@ Rejected:
 - **Damaged entries listed and marked.** Every caller would have to
   check each entry before reading it, for entries on 22 files out of
   18,464. A listing of the entries left out can still be added.
+- **A count per directory of the directories left out.** A count loses
+  the link and the cause, which the reader knows, and a caller needs
+  both to tell a cap it could raise from damage it cannot. kamadak-exif
+  0.6.2 gives the errors it ignored as a list
+  (`PartialResult::into_inner`); its API documentation was read for what
+  it returns, and none of its code.
+- **A reason type of its own.** The causes are those `ErrorKind`
+  already names, the kinds opening a file gives for the same damage or
+  cap; a second enum would name them twice.
 - **Text cleaned only, or bytes only.** Cleaned text loses what the
   file records, which a program comparing with another reader needs;
   bytes alone make every caller clean text itself.
@@ -293,6 +315,10 @@ Rejected:
   that reads one often keeps its own copy.
 - A damaged entry is invisible but for its directory's count, so a
   caller cannot tell why an entry is missing.
+- A directory left out is listed, so a caller can tell that it was
+  there, and whether a larger limit may bring it back. A file that links
+  to more directories than `Limits::max_ifds` allows, read or left out
+  together, fails to open; the most links measured in one file is 9.
 - An enciphered record looks like any other binary entry; a caller
   reads which ones are enciphered in the format notes, not in the API.
 - The names are those of the published specifications, which differ

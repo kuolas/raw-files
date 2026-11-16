@@ -15,9 +15,9 @@ use std::collections::BTreeSet;
 use std::io::Cursor;
 
 use raw_files::{
-    CameraFile, CameraSettings, ColorSpace, Exposure, ExposureProgram, FlashMode, FocusOrigin,
-    Format, Lens, Make, Metadata, MeteringMode, Orientation, Point, PreviewFormat, Rational,
-    SignedRational, Size, WhiteBalanceMode,
+    CameraFile, CameraSettings, ColorSpace, Directory, ErrorKind, Exposure, ExposureProgram,
+    FlashMode, FocusOrigin, Format, Lens, Make, Metadata, MeteringMode, Orientation, Point,
+    PreviewFormat, Rational, SignedRational, Size, WhiteBalanceMode,
 };
 use support::arw::{
     A100_JPEG, A100_RAW_AS_COUNT, A100_TAG_SIZE, ARW4_FOCUS_CENTER, ARW4_FOCUS_FRAME,
@@ -627,10 +627,17 @@ fn the_a100s_subifd_pointer_leads_to_bytes_that_are_not_an_ifd() {
             assert!(!is_tiff_type(typ), "{order:?}: entry {i} has type {typ}");
         }
 
-        // And the walk leaves it out: the file opens, with its two JPEGs.
+        // And the walk leaves it out: the file opens, with its two JPEGs,
+        // and the raw view lists the link, refused for its count.
         let file = CameraFile::from_bytes(bytes).unwrap();
         assert_eq!(file.format(), Format::Arw, "{order:?}");
         assert_eq!(file.previews().len(), 2, "{order:?}");
+        let skipped = file.entries().skipped_directories();
+        let first = skipped.first().expect("a directory left out");
+        assert_eq!(first.parent(), Directory::Ifd(0), "{order:?}");
+        assert_eq!(first.tag(), Some(SUB_IFDS), "{order:?}");
+        assert_eq!(first.offset(), Some(u64::from(pointer)), "{order:?}");
+        assert_eq!(first.kind(), ErrorKind::LimitExceeded, "{order:?}");
     }
 }
 

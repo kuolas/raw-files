@@ -39,7 +39,8 @@ use std::ops::Range;
 
 use crate::container::tiff::tags::MAKER_NOTE;
 use crate::container::tiff::{Block, Entry, Ifd, Tree, ifd_in};
-use crate::error::Result;
+use crate::entries::{Directory, Lookup, SkippedDirectory};
+use crate::error::{ErrorKind, Result};
 use crate::io::Source;
 use crate::limits::Limits;
 
@@ -101,9 +102,11 @@ impl<'a> MakerNoteBlock<'a> {
     /// structure's byte order, both the Exif IFD's.
     ///
     /// The IFD is read inside the block ([`ifd_in`]), so every value read
-    /// from it lies inside the MakerNote. `None` when no offset counted from
-    /// that header reaches the IFD ([`ifd_offset`]), or when the IFD does
-    /// not hold together inside the block.
+    /// from it lies inside the MakerNote. In its place, the kind of what
+    /// refused it: `Malformed` when no offset counted from that header
+    /// reaches the IFD ([`ifd_offset`]), or when the IFD does not hold
+    /// together inside the block; `LimitExceeded` when a cap of `limits`
+    /// refuses it.
     ///
     /// # Errors
     ///
@@ -113,13 +116,47 @@ impl<'a> MakerNoteBlock<'a> {
         src: &mut Source<R>,
         skip: u64,
         limits: &Limits,
-    ) -> Result<Option<Ifd>> {
+    ) -> Result<std::result::Result<Ifd, ErrorKind>> {
         let base = self.exif.block().base();
         let Some(offset) = ifd_offset(base, self.range.start, skip) else {
-            return Ok(None);
+            return Ok(Err(ErrorKind::Malformed));
         };
         let block = Block::new(base, self.range.clone());
         ifd_in(src, &block, offset, self.exif.order(), limits)
+    }
+
+    /// The MakerNote IFD `skip` bytes into the block, as [`ifd_at`]
+    /// reads it, or the directory the raw view lists as skipped in its
+    /// place: held by the Exif IFD's MakerNote entry, at the position of
+    /// the IFD in the file.
+    ///
+    /// # Errors
+    ///
+    /// `Io` when the reader fails.
+    ///
+    /// [`ifd_at`]: Self::ifd_at
+    fn makernote_ifd_at<R: Read + Seek>(
+        &self,
+        src: &mut Source<R>,
+        skip: u64,
+        limits: &Limits,
+    ) -> Result<Lookup<Ifd>> {
+        let found = self.ifd_at(src, skip, limits)?;
+        Ok(self.looked(found, self.range.start.checked_add(skip)))
+    }
+
+    /// `found`, the MakerNote IFD read at position `at` in the file, or the
+    /// directory the raw view lists as skipped in its place.
+    fn looked(&self, found: std::result::Result<Ifd, ErrorKind>, at: Option<u64>) -> Lookup<Ifd> {
+        match found {
+            Ok(ifd) => Lookup::Found(ifd),
+            Err(kind) => Lookup::Skipped(SkippedDirectory::new(
+                Directory::Exif,
+                Some(MAKER_NOTE),
+                at,
+                kind,
+            )),
+        }
     }
 }
 
@@ -306,7 +343,7 @@ mod tests {
                     let block = MakerNoteBlock::find(&tree).expect("a block");
                     let skip = u64::try_from(prefix.len()).unwrap();
                     let limits = Limits::default();
-                    let found = block.ifd_at(&mut src, skip, &limits).unwrap();
+                    let found = block.ifd_at(&mut src, skip, &limits).unwrap().ok();
                     let found = found.expect("an IFD");
                     let label = format!("{order:?}, {pos}, {skip}");
                     let range = built.ifd_block(ifd);
@@ -353,18 +390,18 @@ mod tests {
             // The block ends one byte before the table does.
             let (mut src, tree) = declared(table - 1);
             let block = MakerNoteBlock::find(&tree).expect("a block");
-            let found = block.ifd_at(&mut src, 0, &limits).unwrap();
+            let found = block.ifd_at(&mut src, 0, &limits).unwrap().ok();
             assert!(found.is_none(), "{order:?}");
 
             // The control: a block that ends with the table gives the IFD,
             // unless it holds more entries than the limits allow.
             let (mut src, tree) = declared(table);
             let block = MakerNoteBlock::find(&tree).expect("a block");
-            let found = block.ifd_at(&mut src, 0, &limits).unwrap();
+            let found = block.ifd_at(&mut src, 0, &limits).unwrap().ok();
             let found = found.expect("an IFD");
             assert_eq!(found.u32(&mut src, SECOND).unwrap(), Some(8), "{order:?}");
             let limits = Limits::default().with_max_ifd_entries(1);
-            let found = block.ifd_at(&mut src, 0, &limits).unwrap();
+            let found = block.ifd_at(&mut src, 0, &limits).unwrap().ok();
             assert!(found.is_none(), "{order:?}");
         }
     }

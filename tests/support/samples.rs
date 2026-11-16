@@ -21,7 +21,7 @@ use std::panic::{self, AssertUnwindSafe};
 use std::path::{Path, PathBuf};
 
 use raw_files::{
-    Camera, CameraFile, ColorSpace, Directory, ExposureProgram, FieldType, FlashMode,
+    Camera, CameraFile, ColorSpace, Directory, ErrorKind, ExposureProgram, FieldType, FlashMode,
     FocusAreaMode, FocusOrigin, Format, ImageArea, Make, MeteringMode, Orientation, Preview,
     PreviewFormat, Rational, RawImageSize, Shutter, SignedRational, Size, WhiteBalanceMode,
 };
@@ -805,8 +805,30 @@ pub struct SampleEntries {
     pub directories: &'static [(&'static str, usize, u32)],
 }
 
+/// A directory left out, as a sample's expectation gives it: the directory
+/// that holds the link, by the name the library gives it, the link's tag
+/// and the cause.
+type SkippedLink = (&'static str, Option<u16>, ErrorKind);
+
+/// The directories a sample leaves out, by its file: the directory that
+/// holds the link, the link's tag and the cause. Every other sample leaves
+/// none out.
+///
+/// The DSLR-A100 writes the position of its raw data where IFD0's SubIFDs
+/// tag and its pointer to Sony's private directory lead, and the bytes
+/// there count 19,712 entries, over the default cap
+/// (`docs/formats/arw/container-and-previews.md`, sections 1.3 and 1.4).
+const SKIPPED_DIRECTORIES: &[(&str, &[SkippedLink])] = &[(
+    "sony-dslr-a100.arw",
+    &[
+        ("IFD0", Some(0x014A), ErrorKind::LimitExceeded),
+        ("IFD0", Some(0xC634), ErrorKind::LimitExceeded),
+    ],
+)];
+
 /// Checks that `expected`'s file lists exactly its directories, in order,
-/// with their counts; that every entry's value reads under the default
+/// with their counts, and leaves out only those [`SKIPPED_DIRECTORIES`]
+/// names for it; that every entry's value reads under the default
 /// cap, the whole MakerNote's included; and that the entries agree with the
 /// typed values read from them: IFD0's Make and Model are the recorded make
 /// and model, the Exif IFD's DateTimeOriginal names the capture time's
@@ -827,7 +849,7 @@ pub fn check_entries(expected: &SampleEntries) {
             (
                 d.to_string(),
                 entries.in_directory(d).len(),
-                entries.skipped(d),
+                entries.skipped_entries(d),
             )
         })
         .collect();
@@ -837,6 +859,19 @@ pub fn check_entries(expected: &SampleEntries) {
         .map(|&(name, listed, skipped)| (name.to_string(), listed, skipped))
         .collect();
     assert_eq!(found, want, "{label}");
+
+    let skipped: Vec<(String, Option<u16>, ErrorKind)> = entries
+        .skipped_directories()
+        .iter()
+        .map(|skipped| (skipped.parent().to_string(), skipped.tag(), skipped.kind()))
+        .collect();
+    let want: Vec<(String, Option<u16>, ErrorKind)> = SKIPPED_DIRECTORIES
+        .iter()
+        .filter(|(file, _)| *file == label)
+        .flat_map(|(_, skipped)| skipped.iter())
+        .map(|&(parent, tag, kind)| (parent.to_owned(), tag, kind))
+        .collect();
+    assert_eq!(skipped, want, "{label}: the directories left out");
 
     for entry in entries {
         let value = file.read_value(entry);

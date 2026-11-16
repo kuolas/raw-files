@@ -165,6 +165,13 @@ Sources for the table: files 1351, 3221, 2346, 2271 to 3251, 3255, 4051 and
 the 16 files from 5418 on **[F]**; the same shapes appear in the ExifTool
 dumps of an F828, an R1, an A100 and an ILCE-9 [18] **[P]**.
 
+The raw view gives the A100's 0x014A and 0xC634 targets as directories
+left out, with the link and the cause: read little-endian, their first
+two bytes count 19,712 entries, over the default cap. Measured on
+2026-11-16, they are the only directories left out of any Sony file: on
+the A100 sample and file 2346, and on none of the other Sony files of
+the samples and the raw.pixls.us clone, nor of my 3,217 ARWs **[F]**.
+
 The exceptions to "IFD0 and IFD1 hold JPEGs": in the SRF, IFD0 is the raw;
 and among the exiv2 dumps, one FileFormat 4.0 file has no IFD2 (section
 3.1).

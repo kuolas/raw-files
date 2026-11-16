@@ -29,6 +29,7 @@
 //! | One entry, by its directory and a tag of [`tags`] | [`Entries::entry`] | [`Entry`] |
 //! | One entry's value | [`CameraFile::read_value`] | [`Value`] |
 //! | A value's short form, to print | [`Value::display`] | [`ValueDisplay`] |
+//! | The directories left out, which could not be read | [`Entries::skipped_directories`] | [`SkippedDirectory`] |
 //!
 //! The metadata is read when the file is opened. Each of its values comes
 //! from one method of [`Metadata`]:
@@ -251,7 +252,7 @@
 //! for entry in entries.in_directory(Directory::MakerNote) {
 //!     println!("0x{:04X} {} x {}", entry.tag(), entry.field_type(), entry.count());
 //! }
-//! let left_out = entries.skipped(Directory::MakerNote);
+//! let left_out = entries.skipped_entries(Directory::MakerNote);
 //! if left_out > 0 {
 //!     println!("{left_out} entries could not be read");
 //! }
@@ -412,7 +413,7 @@ pub use camera_settings::{
     MeteringMode, RawImageSize, Shutter, WhiteBalance, WhiteBalanceMode,
 };
 pub use datetime::DateTime;
-pub use entries::{Directory, Entries, Entry, FieldType, Value, ValueDisplay};
+pub use entries::{Directory, Entries, Entry, FieldType, SkippedDirectory, Value, ValueDisplay};
 pub use error::{Error, ErrorKind, Result};
 pub use file::CameraFile;
 pub use focus::{

@@ -292,7 +292,8 @@ impl<R: Read + Seek> CameraFile<R> {
     /// index. Records a maker enciphers are entries like any other, whose
     /// bytes are given as stored. Each entry was checked when the
     /// file was opened; one that could not be is left out, and counted by
-    /// [`Entries::skipped`].
+    /// [`Entries::skipped_entries`]. A directory that could not be read is
+    /// left out whole, and listed by [`Entries::skipped_directories`].
     ///
     /// Reading the entries reads nothing from the file, so it never fails;
     /// [`read_value`](Self::read_value) reads an entry's value.

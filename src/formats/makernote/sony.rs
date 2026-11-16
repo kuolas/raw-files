@@ -50,7 +50,7 @@ use std::io::{Read, Seek};
 use super::{MakerNoteBlock, checked_color_temperature};
 use crate::camera_settings::{CameraSettings, FineTune, WhiteBalanceMode};
 use crate::container::tiff::{Ifd, Rule, Tree};
-use crate::entries::{Directory, Entries};
+use crate::entries::{Directory, Entries, Lookup};
 use crate::error::Result;
 use crate::focus::{Focus, FocusOrigin, FocusPoints};
 use crate::geometry::{Point, Size};
@@ -205,28 +205,44 @@ impl MakerNote {
 /// The Sony MakerNote of the file in `src`, whose IFDs are `tree`, read
 /// within `limits`.
 ///
-/// `None` when the file has no Exif IFD or no MakerNote, when the
-/// MakerNote is not bytes stored out of line or holds no Sony directory,
-/// or when its IFD does not hold together inside the block.
+/// [`Lookup::Absent`] when the file has no Exif IFD or no MakerNote, or
+/// when the MakerNote is not bytes stored out of line or holds no Sony
+/// directory. [`Lookup::Skipped`] when its IFD does not hold together
+/// inside the block: the raw view lists it as skipped.
 ///
 /// # Errors
 ///
 /// `Io` when the reader fails.
+pub(in crate::formats) fn lookup<R: Read + Seek>(
+    src: &mut Source<R>,
+    tree: &Tree,
+    limits: &Limits,
+) -> Result<Lookup<MakerNote>> {
+    let Some(block) = MakerNoteBlock::find(tree) else {
+        return Ok(Lookup::Absent);
+    };
+    let head = block.first_bytes(src, HEADER_LEN)?;
+    let Some(skip) = ifd_start(&head) else {
+        return Ok(Lookup::Absent);
+    };
+    // The Exif IFD's base and byte order.
+    let ifd = block.makernote_ifd_at(src, skip, limits)?;
+    Ok(ifd.map(|ifd| MakerNote { ifd }))
+}
+
+/// The Sony MakerNote of the file in `src`, as [`lookup`] finds it;
+/// `None` when it gives none.
+///
+/// # Errors
+///
+/// As for [`lookup`].
+#[cfg(test)]
 pub(in crate::formats) fn read<R: Read + Seek>(
     src: &mut Source<R>,
     tree: &Tree,
     limits: &Limits,
 ) -> Result<Option<MakerNote>> {
-    let Some(block) = MakerNoteBlock::find(tree) else {
-        return Ok(None);
-    };
-    let head = block.first_bytes(src, HEADER_LEN)?;
-    let Some(skip) = ifd_start(&head) else {
-        return Ok(None);
-    };
-    // The Exif IFD's base and byte order.
-    let ifd = block.ifd_at(src, skip, limits)?;
-    Ok(ifd.map(|ifd| MakerNote { ifd }))
+    Ok(lookup(src, tree, limits)?.found())
 }
 
 /// How far into the block the MakerNote IFD starts, from `head`, the
@@ -702,7 +718,7 @@ mod tests {
                 let directories: Vec<Directory> = view.directories().to_vec();
                 assert_eq!(directories, [Directory::MakerNote], "{what}");
                 assert_eq!(makernote_tags(&view), [FIRST, SECOND], "{what}");
-                assert_eq!(view.skipped(Directory::MakerNote), 0, "{what}");
+                assert_eq!(view.skipped_entries(Directory::MakerNote), 0, "{what}");
                 let second = view.entry(Directory::MakerNote, SECOND).unwrap();
                 assert_eq!(
                     second.read(&mut src, 64).unwrap(),
@@ -730,7 +746,11 @@ mod tests {
                 let (_, found) = read_file(builder.build().bytes);
                 let view = view_of(&found.expect("a MakerNote"));
                 let what = format!("{order:?}, declared {count} bytes");
-                assert_eq!(view.skipped(Directory::MakerNote), skipped, "{what}");
+                assert_eq!(
+                    view.skipped_entries(Directory::MakerNote),
+                    skipped,
+                    "{what}"
+                );
                 let listed = if skipped == 0 {
                     vec![FIRST, SECOND]
                 } else {
@@ -791,7 +811,11 @@ mod tests {
                 let block = Block::new(0, at..at + LEN);
                 let limits = Limits::unlimited();
                 let sound = ifd_in(&mut src, &block, offset, byte_order(order), &limits);
-                assert_eq!(sound.unwrap().map(|ifd| ifd.len()), Some(2), "{start:?}");
+                assert_eq!(
+                    sound.unwrap().ok().map(|ifd| ifd.len()),
+                    Some(2),
+                    "{start:?}"
+                );
             }
         }
     }
@@ -1011,6 +1035,27 @@ mod tests {
             assert!(read_with(built.bytes.clone(), &limits).1.is_some());
             let limits = Limits::default().with_max_ifd_entries(1);
             assert!(read_with(built.bytes, &limits).1.is_none(), "{order:?}");
+        }
+    }
+
+    #[test]
+    fn a_makernote_ifd_that_cannot_be_read_is_listed_as_skipped() {
+        // The two entries of the sound IFD, over a cap of one, with no
+        // header and after Sony's first.
+        for order in ORDERS {
+            for prefix in [&b""[..], HEADERS[0]] {
+                let (built, ifd) = sound_file(order, prefix);
+                let (mut src, tree) = opened(built.bytes.clone());
+                let limits = Limits::default().with_max_ifd_entries(1);
+                let Lookup::Skipped(skipped) = lookup(&mut src, &tree, &limits).unwrap() else {
+                    panic!("{order:?}, {prefix:?}: the IFD holds two entries");
+                };
+                let what = format!("{order:?}, {prefix:?}");
+                assert_eq!(skipped.parent(), Directory::Exif, "{what}");
+                assert_eq!(skipped.tag(), Some(MAKER_NOTE), "{what}");
+                assert_eq!(skipped.offset(), Some(built.ifd_offset(ifd)), "{what}");
+                assert_eq!(skipped.kind(), ErrorKind::LimitExceeded, "{what}");
+            }
         }
     }
 

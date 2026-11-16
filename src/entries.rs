@@ -16,12 +16,18 @@
 //! per directory: one whose type is none of those [`FieldType`] names, whose
 //! length overflows, or whose value lies outside the file or the part of it
 //! the directory was read in. So every entry listed can be read.
+//!
+//! A directory the reader could not read is left out whole, and listed with
+//! the link that led to it and the cause, as a [`SkippedDirectory`].
 
 mod display;
 mod names;
+mod skipped;
 
 pub use crate::container::tiff::FieldType;
 pub use display::ValueDisplay;
+pub(crate) use skipped::Lookup;
+pub use skipped::SkippedDirectory;
 
 use std::fmt;
 use std::io::{Read, Seek};
@@ -560,16 +566,20 @@ fn trim_text(bytes: &[u8]) -> &[u8] {
 /// first, as raw-files' own readers do.
 ///
 /// An entry that could not be checked when the file was opened is left
-/// out, and [`skipped`](Self::skipped) counts it.
+/// out, and [`skipped_entries`](Self::skipped_entries) counts it. A
+/// directory that could not be read is left out whole, and
+/// [`skipped_directories`](Self::skipped_directories) lists it.
 ///
-/// [`directories`](Self::directories) and
-/// [`in_directory`](Self::in_directory) are slices, as every list of the
-/// API is: they have a length, they can be indexed, and they iterate in
-/// both directions.
+/// [`directories`](Self::directories),
+/// [`in_directory`](Self::in_directory) and
+/// [`skipped_directories`](Self::skipped_directories) are slices, as every
+/// list of the API is: they have a length, they can be indexed, and they
+/// iterate in both directions.
 ///
 /// # Examples
 ///
-/// Say how many entries each directory lists, and how many it left out:
+/// Say how many entries each directory lists, and how many it left out,
+/// then which directories were left out:
 ///
 /// ```no_run
 /// use raw_files::CameraFile;
@@ -583,7 +593,16 @@ fn trim_text(bytes: &[u8]) -> &[u8] {
 ///         println!(
 ///             "{directory}: {} entries, {} left out",
 ///             entries.in_directory(directory).len(),
-///             entries.skipped(directory),
+///             entries.skipped_entries(directory),
+///         );
+///     }
+///     // A Z 9 file leaves none out; a DSLR-A100's, the two that IFD0
+///     // links to.
+///     for skipped in entries.skipped_directories() {
+///         println!(
+///             "a directory {} links to was left out: {}",
+///             skipped.parent(),
+///             skipped.kind(),
 ///         );
 ///     }
 ///     Ok(())
@@ -599,6 +618,8 @@ pub struct Entries {
     /// position. Only [`push`](Self::push) adds to the two, one item to
     /// each, so that they cannot fall out of step.
     found: Vec<Found>,
+    /// Each directory left out, in the order the readers met them.
+    skipped: Vec<SkippedDirectory>,
 }
 
 /// One directory of [`Entries`], whose name is at the same position in
@@ -621,6 +642,7 @@ impl Entries {
             entries: Vec::new(),
             directories: Vec::new(),
             found: Vec::new(),
+            skipped: Vec::new(),
         }
     }
 
@@ -631,9 +653,14 @@ impl Entries {
     ///
     /// An IFD the walk reached through two links is in the tree once, at
     /// the first, and so is listed once, under that name.
+    ///
+    /// Then the links the walk did not follow, each with the name of the
+    /// directory that holds it.
     pub(crate) fn of_tree(tree: &Tree) -> Self {
         let mut entries = Self::new();
         let mut subifds: u32 = 0;
+        // The name of each IFD of the tree, at its position there.
+        let mut names = Vec::new();
         for (link, ifd) in tree.iter() {
             let directory = match link {
                 Link::Ifd0 => Directory::Ifd(0),
@@ -650,8 +677,25 @@ impl Entries {
                 Link::Interop => Directory::Interop,
             };
             entries.push(directory, ifd);
+            names.push(directory);
+        }
+        for skipped in tree.skipped() {
+            // The walk lists only links held by IFDs of the tree.
+            if let Some(&parent) = names.get(skipped.parent) {
+                entries.skip(SkippedDirectory::new(
+                    parent,
+                    skipped.tag,
+                    skipped.offset,
+                    skipped.kind,
+                ));
+            }
         }
         entries
+    }
+
+    /// Lists `skipped`, a directory left out, after those listed before.
+    pub(crate) fn skip(&mut self, skipped: SkippedDirectory) {
+        self.skipped.push(skipped);
     }
 
     /// Adds the entries of `ifd`, a directory found as `directory`, after
@@ -730,8 +774,23 @@ impl Entries {
     /// not be checked: an unknown type, a length that overflows, or a value
     /// outside the file or the part of it the directory was read in. 0 for
     /// a directory the file does not have.
-    pub fn skipped(&self, directory: Directory) -> u32 {
+    pub fn skipped_entries(&self, directory: Directory) -> u32 {
         self.lookup(directory).map_or(0, |found| found.skipped)
+    }
+
+    /// Each directory left out because it could not be read, with the link
+    /// that led to it and the cause, in the order they were met: those the
+    /// TIFF structure links to, then those of the MakerNote and of Sony's
+    /// private directory. [`SkippedDirectory`] says what each looks like.
+    ///
+    /// Never more than [`Limits::max_ifds`](crate::Limits::max_ifds), so a
+    /// file cannot make the list long. Each one the TIFF structure links to
+    /// counts toward that cap, as a directory read does. The MakerNote's
+    /// and Sony's private directory add at most two, and each needs a
+    /// directory of the structure read before it, IFD0 or the Exif IFD,
+    /// whose place in the count it takes.
+    pub fn skipped_directories(&self) -> &[SkippedDirectory] {
+        &self.skipped
     }
 
     /// What is known of `directory`, if it was found.
@@ -1134,10 +1193,10 @@ mod tests {
                 [Directory::Exif, Directory::Gps, Directory::SubIfd(0)],
                 "{what}"
             );
-            assert_eq!(entries.skipped(Directory::Exif), 3, "{what}");
-            assert_eq!(entries.skipped(Directory::Gps), 1, "{what}");
-            assert_eq!(entries.skipped(Directory::SubIfd(0)), 0, "{what}");
-            assert_eq!(entries.skipped(Directory::Interop), 0, "{what}");
+            assert_eq!(entries.skipped_entries(Directory::Exif), 3, "{what}");
+            assert_eq!(entries.skipped_entries(Directory::Gps), 1, "{what}");
+            assert_eq!(entries.skipped_entries(Directory::SubIfd(0)), 0, "{what}");
+            assert_eq!(entries.skipped_entries(Directory::Interop), 0, "{what}");
             let tags = |directory| -> Vec<u16> {
                 entries
                     .in_directory(directory)
@@ -1267,8 +1326,8 @@ mod tests {
             .raw(exif, 0x0001, 99, 1, RawValue::Inline([0; 4]))
             .raw(exif, 0x0002, 3, 8, RawValue::Offset(0xFFFF_0000));
         let entries = walked(&builder.build());
-        assert_eq!(entries.skipped(Directory::Ifd(0)), 0);
-        assert_eq!(entries.skipped(Directory::Exif), 2);
+        assert_eq!(entries.skipped_entries(Directory::Ifd(0)), 0);
+        assert_eq!(entries.skipped_entries(Directory::Exif), 2);
         let tags: Vec<u16> = entries
             .in_directory(Directory::Exif)
             .iter()
@@ -1408,6 +1467,6 @@ mod tests {
         assert_eq!(entries.directories().len(), 0);
         assert_eq!(entries.in_directory(Directory::Ifd(0)).len(), 0);
         assert_eq!(entries.iter().len(), 0);
-        assert_eq!(entries.skipped(Directory::Ifd(0)), 0);
+        assert_eq!(entries.skipped_entries(Directory::Ifd(0)), 0);
     }
 }
