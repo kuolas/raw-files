@@ -55,10 +55,10 @@
 /// records it:
 ///
 /// ```no_run
-/// use raw_files::RawFile;
+/// use raw_files::CameraFile;
 ///
 /// # fn main() -> raw_files::Result<()> {
-/// let file = RawFile::open("photo.nef")?;
+/// let file = CameraFile::open("photo.nef")?;
 /// let authorship = file.metadata().authorship();
 /// if let Some(artist) = authorship.artist() {
 ///     println!("by {artist}");

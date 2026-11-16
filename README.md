@@ -72,7 +72,7 @@ Linux and Windows alike.
   as the file records it. Each comes with its directory, tag, type and
   count, and the name a published standard gives its tag. Its value is
   read when asked for.
-  [`RawFile::entries`](https://docs.rs/raw-files/latest/raw_files/struct.RawFile.html#method.entries)
+  [`CameraFile::entries`](https://docs.rs/raw-files/latest/raw_files/struct.CameraFile.html#method.entries)
   lists the directories.
 - **Not yet.** Decoding the raw sensor data. The
   [roadmap](docs/ROADMAP.md) says what comes after.
@@ -83,10 +83,10 @@ Open a file, print when the picture was taken, and read its largest
 preview:
 
 ```rust,no_run
-use raw_files::RawFile;
+use raw_files::CameraFile;
 
 fn main() -> raw_files::Result<()> {
-    let mut file = RawFile::open("photo.nef")?;
+    let mut file = CameraFile::open("photo.nef")?;
     if let Some(time) = file.metadata().capture_time() {
         println!("taken {time}");
     }

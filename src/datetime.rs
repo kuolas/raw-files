@@ -80,10 +80,10 @@ const MAX_OFFSET_MINUTES: i16 = 14 * 60;
 /// burst share their second:
 ///
 /// ```no_run
-/// use raw_files::RawFile;
+/// use raw_files::CameraFile;
 ///
 /// # fn main() -> raw_files::Result<()> {
-/// let file = RawFile::open("photo.nef")?;
+/// let file = CameraFile::open("photo.nef")?;
 /// if let Some(time) = file.metadata().capture_time() {
 ///     println!("taken {time}");
 ///     let name = format!(

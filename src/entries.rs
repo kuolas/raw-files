@@ -134,7 +134,7 @@ impl fmt::Display for Directory {
 /// type, how many values it holds and where they lie.
 ///
 /// An `Entry` describes the value; it does not hold it.
-/// [`RawFile::read_value`](crate::RawFile::read_value) reads it. Like a
+/// [`CameraFile::read_value`](crate::CameraFile::read_value) reads it. Like a
 /// [`Preview`](crate::Preview), an entry is a small `Copy` value that only
 /// a file gives.
 ///
@@ -151,11 +151,11 @@ impl fmt::Display for Directory {
 /// ```no_run
 /// use std::fs;
 ///
-/// use raw_files::{Directory, RawFile};
+/// use raw_files::{CameraFile, Directory};
 ///
 /// fn main() -> raw_files::Result<()> {
 ///     let bytes = fs::read("DSC_0001.NEF")?;
-///     let file = RawFile::from_bytes(&bytes)?;
+///     let file = CameraFile::from_bytes(&bytes)?;
 ///     if let Some(entry) = file.entries().entry(Directory::Exif, 0x927C) {
 ///         println!(
 ///             "{} {} x {}",
@@ -524,7 +524,7 @@ pub(crate) fn clean_text(bytes: &[u8]) -> Option<String> {
 /// directory, in the order it lists its entries, which need not be sorted
 /// by tag.
 ///
-/// [`RawFile::entries`](crate::RawFile::entries) gives them. A tag that a
+/// [`CameraFile::entries`](crate::CameraFile::entries) gives them. A tag that a
 /// directory lists twice is listed twice; [`entry`](Self::entry) finds the
 /// first, as raw-files' own readers do.
 ///
@@ -541,10 +541,10 @@ pub(crate) fn clean_text(bytes: &[u8]) -> Option<String> {
 /// Say how many entries each directory lists, and how many it left out:
 ///
 /// ```no_run
-/// use raw_files::RawFile;
+/// use raw_files::CameraFile;
 ///
 /// fn main() -> raw_files::Result<()> {
-///     let file = RawFile::open("DSC_0001.NEF")?;
+///     let file = CameraFile::open("DSC_0001.NEF")?;
 ///     let entries = file.entries();
 ///     // From a Z 9: "IFD0: 22 entries, 0 left out", then the SubIFDs, Exif
 ///     // and the rest.

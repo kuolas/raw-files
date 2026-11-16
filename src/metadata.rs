@@ -40,8 +40,8 @@ use crate::orientation::Orientation;
 use crate::rational::{Rational, SignedRational};
 
 /// What the camera recorded about a picture.
-/// [`RawFile::metadata`](crate::RawFile::metadata) gives it, read when the
-/// file is opened. The [crate docs](crate#what-a-file-gives) list its
+/// [`CameraFile::metadata`](crate::CameraFile::metadata) gives it, read when
+/// the file is opened. The [crate docs](crate#what-a-file-gives) list its
 /// values, each with the method that reads it.
 ///
 /// Every value is `None` when the file does not record it, or records it
@@ -68,10 +68,10 @@ use crate::rational::{Rational, SignedRational};
 /// lacks one still gives the others:
 ///
 /// ```no_run
-/// use raw_files::RawFile;
+/// use raw_files::CameraFile;
 ///
 /// # fn main() -> raw_files::Result<()> {
-/// let file = RawFile::open("photo.nef")?;
+/// let file = CameraFile::open("photo.nef")?;
 /// let metadata = file.metadata();
 /// let camera = metadata.camera();
 /// let name = camera.display_name();
@@ -254,10 +254,10 @@ impl Metadata {
     /// high:
     ///
     /// ```no_run
-    /// use raw_files::RawFile;
+    /// use raw_files::CameraFile;
     ///
     /// # fn main() -> raw_files::Result<()> {
-    /// let file = RawFile::open("photo.nef")?;
+    /// let file = CameraFile::open("photo.nef")?;
     /// if let Some(location) = file.metadata().location() {
     ///     println!(
     ///         "at {:.5}, {:.5}",
@@ -409,10 +409,10 @@ impl Metadata {
     /// Where the camera focused, and whether it confirmed focus there:
     ///
     /// ```no_run
-    /// use raw_files::RawFile;
+    /// use raw_files::CameraFile;
     ///
     /// # fn main() -> raw_files::Result<()> {
-    /// let file = RawFile::open("photo.nef")?;
+    /// let file = CameraFile::open("photo.nef")?;
     /// if let Some(focus) = file.metadata().focus() {
     ///     let (center, frame) = (focus.center(), focus.frame());
     ///     println!("focused at {center} on a frame of {frame} pixels");
@@ -459,10 +459,10 @@ impl Metadata {
     /// Every point the camera used, the primary marked, and the area mode:
     ///
     /// ```no_run
-    /// use raw_files::RawFile;
+    /// use raw_files::CameraFile;
     ///
     /// # fn main() -> raw_files::Result<()> {
-    /// let file = RawFile::open("photo.nef")?;
+    /// let file = CameraFile::open("photo.nef")?;
     /// if let Some(points) = file.metadata().focus_points() {
     ///     for (index, point) in points.points().iter().enumerate() {
     ///         let primary = points.primary_index() == Some(index);
@@ -517,10 +517,10 @@ impl Metadata {
     /// matched by their numbers:
     ///
     /// ```no_run
-    /// use raw_files::{FocusPoint, RawFile};
+    /// use raw_files::{CameraFile, FocusPoint};
     ///
     /// # fn main() -> raw_files::Result<()> {
-    /// let file = RawFile::open("photo.nef")?;
+    /// let file = CameraFile::open("photo.nef")?;
     /// let metadata = file.metadata();
     /// if let Some(layout) = metadata.focus_layout() {
     ///     let used: Vec<u16> = metadata
@@ -691,10 +691,10 @@ impl Metadata {
 /// fractions as stored (`10/3200` and `900/100`):
 ///
 /// ```no_run
-/// use raw_files::RawFile;
+/// use raw_files::CameraFile;
 ///
 /// # fn main() -> raw_files::Result<()> {
-/// let file = RawFile::open("photo.nef")?;
+/// let file = CameraFile::open("photo.nef")?;
 /// let exposure = file.metadata().exposure();
 /// if let (Some(time), Some(f_number), Some(iso)) = (
 ///     exposure.exposure_time(),
@@ -860,10 +860,10 @@ impl Exposure {
 /// `NIKKOR Z 14-30mm f/4 S` and `14-30 mm`, each when the file records it:
 ///
 /// ```no_run
-/// use raw_files::RawFile;
+/// use raw_files::CameraFile;
 ///
 /// # fn main() -> raw_files::Result<()> {
-/// let file = RawFile::open("photo.nef")?;
+/// let file = CameraFile::open("photo.nef")?;
 /// let lens = file.metadata().lens();
 /// if let Some(name) = lens.recorded_model() {
 ///     println!("lens: {name}");

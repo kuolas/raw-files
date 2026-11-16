@@ -12,21 +12,21 @@
 //!
 //! # Opening a file
 //!
-//! [`RawFile`] is an open camera file. [`RawFile::open`] opens one by path,
-//! [`RawFile::from_bytes`] from memory, and [`RawFile::from_reader`] from
-//! any reader that can seek. The format is found from the file's content,
-//! and [`RawFile::format`] says which [`Format`] it is. [`Options`] opens a
-//! file under other [`Limits`].
+//! [`CameraFile`] is an open camera file. [`CameraFile::open`] opens one by
+//! path, [`CameraFile::from_bytes`] from memory, and
+//! [`CameraFile::from_reader`] from any reader that can seek. The format is
+//! found from the file's content, and [`CameraFile::format`] says which
+//! [`Format`] it is. [`Options`] opens a file under other [`Limits`].
 //!
 //! # What a file gives
 //!
 //! | What | Method | Type |
 //! |---|---|---|
-//! | The previews | [`RawFile::previews`], [`RawFile::largest_preview`], [`RawFile::preview_at_least`] | [`Preview`] |
-//! | A preview's bytes | [`RawFile::read_preview`], [`RawFile::read_preview_into`] | bytes |
-//! | What the camera recorded about the picture | [`RawFile::metadata`] | [`Metadata`] |
-//! | Every entry of the file's TIFF directories | [`RawFile::entries`] | [`Entries`] of [`Entry`] |
-//! | One entry's value | [`RawFile::read_value`] | [`Value`] |
+//! | The previews | [`CameraFile::previews`], [`CameraFile::largest_preview`], [`CameraFile::preview_at_least`] | [`Preview`] |
+//! | A preview's bytes | [`CameraFile::read_preview`], [`CameraFile::read_preview_into`] | bytes |
+//! | What the camera recorded about the picture | [`CameraFile::metadata`] | [`Metadata`] |
+//! | Every entry of the file's TIFF directories | [`CameraFile::entries`] | [`Entries`] of [`Entry`] |
+//! | One entry's value | [`CameraFile::read_value`] | [`Value`] |
 //!
 //! The metadata is read when the file is opened. Each of its values comes
 //! from one method of [`Metadata`]:
@@ -60,10 +60,10 @@
 //! orientation to show it in:
 //!
 //! ```no_run
-//! use raw_files::RawFile;
+//! use raw_files::CameraFile;
 //!
 //! # fn main() -> raw_files::Result<()> {
-//! let mut file = RawFile::open("photo.nef")?;
+//! let mut file = CameraFile::open("photo.nef")?;
 //! if let Some(preview) = file.largest_preview() {
 //!     let jpeg = file.read_preview(&preview)?;
 //!     println!(
@@ -81,10 +81,10 @@
 //! exposure. Each value is optional, so each is handled on its own:
 //!
 //! ```no_run
-//! use raw_files::RawFile;
+//! use raw_files::CameraFile;
 //!
 //! # fn main() -> raw_files::Result<()> {
-//! let file = RawFile::open("photo.nef")?;
+//! let file = CameraFile::open("photo.nef")?;
 //! let metadata = file.metadata();
 //! if let Some(time) = metadata.capture_time() {
 //!     println!("taken {time}");
@@ -113,10 +113,10 @@
 //! no [`Focus::size`]:
 //!
 //! ```no_run
-//! use raw_files::RawFile;
+//! use raw_files::CameraFile;
 //!
 //! # fn main() -> raw_files::Result<()> {
-//! let file = RawFile::open("photo.nef")?;
+//! let file = CameraFile::open("photo.nef")?;
 //! // The camera measures the point in its own frame; scale it to the preview.
 //! let on_preview = file
 //!     .largest_preview()
@@ -241,10 +241,10 @@
 //! read, and read one standard entry's value:
 //!
 //! ```no_run
-//! use raw_files::{Directory, RawFile};
+//! use raw_files::{CameraFile, Directory};
 //!
 //! # fn main() -> raw_files::Result<()> {
-//! let mut file = RawFile::open("photo.nef")?;
+//! let mut file = CameraFile::open("photo.nef")?;
 //! let entries = file.entries();
 //! for entry in entries.in_directory(Directory::MakerNote) {
 //!     println!("0x{:04X} {} x {}", entry.tag(), entry.field_type(), entry.count());
@@ -317,7 +317,7 @@
 //!   Make longer than the cap on one value in a TIFF file other than a DNG,
 //!   every RAW file among them, since the Make tells its format. A preview
 //!   larger than allowed fails that read alone. A value larger than allowed
-//!   fails its own [`RawFile::read_value`], is `None` to the metadata, and
+//!   fails its own [`CameraFile::read_value`], is `None` to the metadata, and
 //!   costs the previews and directories located by it. A directory past
 //!   the first that crosses a cap, or one nested too deep, is left out like
 //!   a damaged one. In a JPEG file, a cap crossed inside its Exif or MPF
@@ -329,7 +329,7 @@
 //! - **Opening reads little.** It reads the structure and each preview's
 //!   frame header, a few blocks through a cache rather than the whole file.
 //!   A preview's bytes are read only when asked for. Listing the entries
-//!   reads nothing more, and [`RawFile::read_value`] reads a value each time
+//!   reads nothing more, and [`CameraFile::read_value`] reads a value each time
 //!   it is asked for.
 //! - **Pure Rust, with no dependencies outside the standard library.** The
 //!   crate forbids `unsafe` code.
@@ -412,7 +412,7 @@ pub use camera_settings::{
 pub use datetime::DateTime;
 pub use entries::{Directory, Entries, Entry, FieldType, Value};
 pub use error::{Error, ErrorKind, Result};
-pub use file::RawFile;
+pub use file::CameraFile;
 pub use focus::{
     Focus, FocusAreaMode, FocusLayout, FocusLayoutPoint, FocusOrigin, FocusPoint, FocusPoints,
 };

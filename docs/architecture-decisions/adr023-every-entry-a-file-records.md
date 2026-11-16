@@ -127,10 +127,10 @@ handle, with each value read only when it is asked for.
   not read. The
   typed values do not read through this view: both are built from the
   same parsed directories.
-- **A type of its own on the handle.** `RawFile::entries` gives the
+- **A type of its own on the handle.** `CameraFile::entries` gives the
   entries, in the file's order, directory by directory in the order
   the walk reaches them, with lookup by directory and tag; and
-  `RawFile::read_value` reads one entry's value. `Metadata` stays the
+  `CameraFile::read_value` reads one entry's value. `Metadata` stays the
   value type it is, built with setters. A caller cannot make an entry
   of its own, as it cannot make a `Preview`.
 - **A damaged entry is left out and counted.** An entry of a type the
@@ -212,7 +212,7 @@ Rejected:
 - **The view on `Metadata`.** `Metadata` is a value a caller can build
   and compare ([ADR011](adr011-metadata-from-standard-tags.md)); entries
   read from the file on request belong with the handle, as previews do.
-- **The entries flat on `RawFile`**, a method per lookup. Iteration,
+- **The entries flat on `CameraFile`**, a method per lookup. Iteration,
   lookup and the counts of entries left out are one thing, which a type
   holds better than a handful of methods.
 - **Damaged entries listed and marked.** Every caller would have to

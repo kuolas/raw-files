@@ -166,8 +166,9 @@ use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
 use raw_files::{
-    Altitude, Authorship, Camera, DateTime, Direction, FocusLayout, FocusOrigin, FocusPoints,
-    Format, Latitude, Lens, Location, Longitude, Metadata, North, Point, Rational, RawFile, Size,
+    Altitude, Authorship, Camera, CameraFile, DateTime, Direction, FocusLayout, FocusOrigin,
+    FocusPoints, Format, Latitude, Lens, Location, Longitude, Metadata, North, Point, Rational,
+    Size,
 };
 
 /// A file that counts the bytes its reads return, into a counter the caller
@@ -513,9 +514,9 @@ struct EntriesTally {
 }
 
 impl EntriesTally {
-    /// Counts the entries of `raw` and reads every value.
-    fn record<R: Read + Seek>(&mut self, raw: &mut RawFile<R>) {
-        let entries = raw.entries().clone();
+    /// Counts the entries of `file` and reads every value.
+    fn record<R: Read + Seek>(&mut self, file: &mut CameraFile<R>) {
+        let entries = file.entries().clone();
         for &directory in entries.directories() {
             let counts = self.directories.entry(directory.to_string()).or_default();
             counts.0 += 1;
@@ -527,7 +528,7 @@ impl EntriesTally {
                 .types
                 .entry(entry.field_type().to_string())
                 .or_default() += 1;
-            if raw.read_value(entry).is_err() {
+            if file.read_value(entry).is_err() {
                 self.unreadable_values += 1;
             }
         }
@@ -1336,8 +1337,8 @@ fn check(path: &Path, tally: &mut Tally) {
         file,
         bytes_read: Rc::clone(&bytes_read),
     };
-    let mut raw = match RawFile::from_reader(reader) {
-        Ok(raw) => raw,
+    let mut camera_file = match CameraFile::from_reader(reader) {
+        Ok(camera_file) => camera_file,
         Err(error) => {
             tally.fail(error.kind());
             return;
@@ -1345,30 +1346,32 @@ fn check(path: &Path, tally: &mut Tally) {
     };
     tally.opened += 1;
     tally.open_bytes.push(bytes_read.get());
-    let format = raw.format();
+    let format = camera_file.format();
     *tally.formats.entry(format).or_default() += 1;
     *tally
         .preview_counts
-        .entry(raw.previews().len())
+        .entry(camera_file.previews().len())
         .or_default() += 1;
-    for preview in raw.previews() {
+    for preview in camera_file.previews() {
         *tally
             .preview_sizes
             .entry((preview.size().width, preview.size().height))
             .or_default() += 1;
     }
-    tally.metadata.record(raw.metadata());
-    tally.settings.record(raw.metadata());
-    tally.focus.record(raw.metadata());
-    tally.entries.record(&mut raw);
-    let Some(preview) = raw.largest_preview() else {
+    tally.metadata.record(camera_file.metadata());
+    tally.settings.record(camera_file.metadata());
+    tally.focus.record(camera_file.metadata());
+    tally.entries.record(&mut camera_file);
+    let Some(preview) = camera_file.largest_preview() else {
         tally.no_preview += 1;
         return;
     };
-    if preview.orientation() != raw.metadata().orientation() {
+    if preview.orientation() != camera_file.metadata().orientation() {
         tally.orientation_disagreements += 1;
     }
-    tally.focus.record_scaled(raw.metadata(), preview.size());
+    tally
+        .focus
+        .record_scaled(camera_file.metadata(), preview.size());
     *tally
         .sizes
         .entry((preview.size().width, preview.size().height))
@@ -1377,7 +1380,7 @@ fn check(path: &Path, tally: &mut Tally) {
         .orientations
         .entry(format!("{:?}", preview.orientation()))
         .or_default() += 1;
-    match raw.read_preview(&preview) {
+    match camera_file.read_preview(&preview) {
         Ok(bytes) => match wholeness(&bytes, preview.byte_len(), format) {
             Wholeness::Whole => {}
             Wholeness::EndsEarly => tally.ends_early += 1,

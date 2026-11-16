@@ -42,10 +42,10 @@ use std::collections::BTreeSet;
 use std::io::Cursor;
 
 use raw_files::{
-    Camera, CameraSettings, ColorSpace, DateTime, Exposure, ExposureProgram, FineTune, Flash,
-    FlashMode, Focus, FocusAreaMode, FocusOrigin, FocusPoint, FocusPoints, Format, ImageArea, Lens,
-    Limits, Make, Metadata, MeteringMode, Options, Orientation, Point, Preview, PreviewFormat,
-    Rational, RawFile, RawImageSize, Shutter, SignedRational, Size, ValueError, WhiteBalance,
+    Camera, CameraFile, CameraSettings, ColorSpace, DateTime, Exposure, ExposureProgram, FineTune,
+    Flash, FlashMode, Focus, FocusAreaMode, FocusOrigin, FocusPoint, FocusPoints, Format,
+    ImageArea, Lens, Limits, Make, Metadata, MeteringMode, Options, Orientation, Point, Preview,
+    PreviewFormat, Rational, RawImageSize, Shutter, SignedRational, Size, ValueError, WhiteBalance,
     WhiteBalanceMode,
 };
 use support::nef::{
@@ -104,8 +104,8 @@ const Z6III_JPEGS: FourJpegs = [
 /// failure.
 fn assert_the_four_jpegs(built: &Built, blobs: Z9Blobs, jpegs: FourJpegs, label: &str) {
     let [ifd0_jpeg, preview_jpeg, medium_jpeg, full_size_jpeg] = jpegs;
-    let from_bytes = RawFile::from_bytes(&built.bytes).unwrap();
-    let from_reader = RawFile::from_reader(Cursor::new(built.bytes.clone())).unwrap();
+    let from_bytes = CameraFile::from_bytes(&built.bytes).unwrap();
+    let from_reader = CameraFile::from_reader(Cursor::new(built.bytes.clone())).unwrap();
     for (how, format, previews) in [
         ("bytes", from_bytes.format(), from_bytes.previews()),
         ("reader", from_reader.format(), from_reader.previews()),
@@ -153,7 +153,7 @@ fn a_makernote_in_the_other_byte_order_from_the_files_gives_the_same_four_jpegs(
 #[test]
 fn reading_the_makernote_preview_returns_exactly_the_stubs_bytes() {
     let built = z9_file(Order::Big, 1);
-    let mut file = RawFile::from_reader(Cursor::new(built.bytes)).unwrap();
+    let mut file = CameraFile::from_reader(Cursor::new(built.bytes)).unwrap();
     let preview = file.previews()[1];
     assert_eq!(preview.size(), size_of(PREVIEW_JPEG));
     assert_eq!(file.read_preview(&preview).unwrap(), stub(PREVIEW_JPEG));
@@ -162,7 +162,7 @@ fn reading_the_makernote_preview_returns_exactly_the_stubs_bytes() {
 #[test]
 fn the_largest_preview_is_the_full_size_jpeg_and_at_least_picks_the_smallest_that_fits() {
     let built = z9_file(Order::Little, 1);
-    let file = RawFile::from_bytes(&built.bytes).unwrap();
+    let file = CameraFile::from_bytes(&built.bytes).unwrap();
     let size = |preview: Option<Preview>| preview.map(|p| p.size());
     let at_least = |width, height| size(file.preview_at_least(Size { width, height }));
     assert_eq!(size(file.largest_preview()), Some(size_of(FULL_SIZE_JPEG)));
@@ -177,7 +177,7 @@ fn the_largest_preview_is_the_full_size_jpeg_and_at_least_picks_the_smallest_tha
 fn every_preview_takes_ifd0s_orientation() {
     for (value, orientation) in [(8, Orientation::Rotate270), (1, Orientation::NoTransforms)] {
         let built = z9_file(Order::Big, value);
-        let file = RawFile::from_bytes(&built.bytes).unwrap();
+        let file = CameraFile::from_bytes(&built.bytes).unwrap();
         assert_eq!(file.previews().len(), 4, "Orientation {value}");
         for preview in file.previews() {
             assert_eq!(preview.orientation(), orientation, "Orientation {value}");
@@ -200,8 +200,8 @@ fn fraction(numerator: u32, denominator: u32) -> Rational {
 /// and no camera settings, since it records none; `label` names the file
 /// in a failure.
 fn assert_the_z9_metadata(built: &Built, orientation: Orientation, label: &str) {
-    let from_bytes = RawFile::from_bytes(&built.bytes).unwrap();
-    let from_reader = RawFile::from_reader(Cursor::new(built.bytes.clone())).unwrap();
+    let from_bytes = CameraFile::from_bytes(&built.bytes).unwrap();
+    let from_reader = CameraFile::from_reader(Cursor::new(built.bytes.clone())).unwrap();
     for (how, metadata, previews) in [
         ("bytes", from_bytes.metadata(), from_bytes.previews()),
         ("reader", from_reader.metadata(), from_reader.previews()),
@@ -467,8 +467,8 @@ fn the_z9_metadata_built_by_hand_equals_what_open_reads() {
             let expected = the_z9_metadata_by_hand(orientation)
                 .expect("every value of the Z 9 fixture is one the constructors accept");
             let built = z9_file(order, value);
-            let from_bytes = RawFile::from_bytes(&built.bytes).unwrap();
-            let from_reader = RawFile::from_reader(Cursor::new(built.bytes.clone())).unwrap();
+            let from_bytes = CameraFile::from_bytes(&built.bytes).unwrap();
+            let from_reader = CameraFile::from_reader(Cursor::new(built.bytes.clone())).unwrap();
             assert_eq!(from_bytes.metadata(), &expected, "{label}, from bytes");
             assert_eq!(from_reader.metadata(), &expected, "{label}, from reader");
         }
@@ -490,7 +490,7 @@ fn a_makernote_in_the_other_byte_order_from_the_files_gives_the_same_metadata() 
 #[test]
 fn reading_the_largest_preview_returns_exactly_the_stubs_bytes() {
     let built = z9_file(Order::Little, 1);
-    let mut file = RawFile::from_reader(Cursor::new(built.bytes)).unwrap();
+    let mut file = CameraFile::from_reader(Cursor::new(built.bytes)).unwrap();
     let largest = file.largest_preview().unwrap();
     let bytes = file.read_preview(&largest).unwrap();
     assert_eq!(bytes[..3], [0xFF, 0xD8, 0xFF]);
@@ -508,7 +508,7 @@ fn the_raw_strip_the_gray_image_and_the_empty_subifds_are_not_previews() {
         let raw = usize::try_from(built.blob_offset(blobs.raw)).unwrap();
         assert_eq!(built.bytes[raw..raw + 4], RAW_STRIP_START, "{order:?}");
 
-        let file = RawFile::from_bytes(&built.bytes).unwrap();
+        let file = CameraFile::from_bytes(&built.bytes).unwrap();
         let starts: Vec<u64> = file
             .previews()
             .iter()
@@ -543,7 +543,7 @@ fn the_z6iii_file_gives_its_focus_point_on_the_cropped_picture() {
     // that CropArea is, keeping the area, as on the public sample 7808.
     for order in ORDERS {
         let built = z6iii_file(order, 1);
-        let file = RawFile::from_bytes(&built.bytes).unwrap();
+        let file = CameraFile::from_bytes(&built.bytes).unwrap();
         let metadata = file.metadata();
         assert_eq!(
             metadata.camera().recorded_make(),
@@ -634,8 +634,8 @@ fn the_z6iii_metadata_built_by_hand_equals_what_open_reads() {
             let expected = the_z6iii_metadata_by_hand(orientation)
                 .expect("every value of the Z6III fixture is one the constructors accept");
             let built = z6iii_file(order, value);
-            let from_bytes = RawFile::from_bytes(&built.bytes).unwrap();
-            let from_reader = RawFile::from_reader(Cursor::new(built.bytes.clone())).unwrap();
+            let from_bytes = CameraFile::from_bytes(&built.bytes).unwrap();
+            let from_reader = CameraFile::from_reader(Cursor::new(built.bytes.clone())).unwrap();
             assert_eq!(from_bytes.metadata(), &expected, "{label}, from bytes");
             assert_eq!(from_reader.metadata(), &expected, "{label}, from reader");
         }
@@ -649,7 +649,7 @@ fn the_d300_file_opens_as_nef_with_its_two_jpegs_smallest_first() {
     // preview, as on the public D300 sample 928.
     for order in ORDERS {
         let (built, blobs) = d300_file_with_blobs(order, 1);
-        let file = RawFile::from_bytes(&built.bytes).unwrap();
+        let file = CameraFile::from_bytes(&built.bytes).unwrap();
         assert_eq!(file.format(), Format::Nef, "{order:?}");
         let previews = file.previews();
         assert_eq!(
@@ -685,7 +685,7 @@ fn the_d300_file_gives_what_its_exif_tags_lack_from_the_makernote() {
         for (value, orientation) in [(8, Orientation::Rotate270), (1, Orientation::NoTransforms)] {
             let label = format!("{order:?}, Orientation {value}");
             let built = d300_file(order, value);
-            let file = RawFile::from_bytes(&built.bytes).unwrap();
+            let file = CameraFile::from_bytes(&built.bytes).unwrap();
             let metadata = file.metadata();
             assert_eq!(
                 metadata.camera().recorded_make(),
@@ -899,7 +899,7 @@ fn the_d1h_file_opens_as_nef_with_its_makernotes_jpeg_alone() {
             true,
             &format!("{order:?}"),
         );
-        let file = RawFile::from_bytes(&built.bytes).unwrap();
+        let file = CameraFile::from_bytes(&built.bytes).unwrap();
         let starts: Vec<u64> = file
             .previews()
             .iter()
@@ -918,7 +918,7 @@ fn the_d1h_file_opens_as_nef_with_its_makernotes_jpeg_alone() {
 fn reading_the_d1h_files_preview_returns_exactly_the_stubs_bytes() {
     for order in ORDERS {
         let built = d1h_file(order);
-        let mut file = RawFile::from_reader(Cursor::new(built.bytes)).unwrap();
+        let mut file = CameraFile::from_reader(Cursor::new(built.bytes)).unwrap();
         let preview = file.largest_preview().unwrap();
         assert_eq!(
             file.read_preview(&preview).unwrap(),
@@ -932,7 +932,7 @@ fn reading_the_d1h_files_preview_returns_exactly_the_stubs_bytes() {
 fn the_d1h_file_gives_what_its_exif_tags_lack_from_its_headerless_makernote() {
     for order in ORDERS {
         let built = d1h_file(order);
-        let file = RawFile::from_bytes(&built.bytes).unwrap();
+        let file = CameraFile::from_bytes(&built.bytes).unwrap();
         let metadata = file.metadata();
         // No PhotographicSensitivity in the Exif IFD: the MakerNote's
         // second value.
@@ -1180,7 +1180,7 @@ const STRIPPED_Z9_1X1: StrippedZ9 = StrippedZ9 {
 /// placed on the cropped picture among them.
 fn check_stripped_z9(expected: &StrippedZ9) {
     let label = expected.file;
-    let mut file = RawFile::open(support::fixtures::fixture(expected.file)).unwrap();
+    let mut file = CameraFile::open(support::fixtures::fixture(expected.file)).unwrap();
     assert_eq!(file.format(), Format::Nef, "{label}");
 
     // The stripping replaced each JPEG by a stub of 122 bytes with the
@@ -1834,7 +1834,7 @@ fn every_frame_of_the_d600_session_gives_what_its_bytes_record() {
     for &(frame, orientation, image_area, focus) in &D600_SESSION {
         let name = support::fixtures::d600_frame(frame);
         let label = name.as_str();
-        let file = RawFile::open(support::fixtures::fixture(label))
+        let file = CameraFile::open(support::fixtures::fixture(label))
             .unwrap_or_else(|error| panic!("{label}: {error}"));
         assert_eq!(file.format(), Format::Nef, "{label}");
         let metadata = file.metadata();
@@ -1958,7 +1958,7 @@ fn check_d600_focus(label: &str, metadata: &Metadata, focus: D600Focus) {
 #[test]
 fn the_d600_frame_7856_gives_point_1_placed_in_the_tables_frame_in_3d_tracking() {
     let label = support::fixtures::D600_7856_NEF;
-    let file = RawFile::open(support::fixtures::fixture(label))
+    let file = CameraFile::open(support::fixtures::fixture(label))
         .unwrap_or_else(|error| panic!("{label}: {error}"));
     assert_eq!(file.format(), Format::Nef, "{label}");
     let metadata = file.metadata();
@@ -1993,7 +1993,7 @@ fn the_d600_frame_7856_gives_point_1_placed_in_the_tables_frame_in_3d_tracking()
 fn the_d600_frame_4_gives_its_previews_metadata_and_point_38_placed_from_the_table() {
     let name = support::fixtures::d600_frame(4);
     let label = name.as_str();
-    let mut file = RawFile::open(support::fixtures::fixture(label)).unwrap();
+    let mut file = CameraFile::open(support::fixtures::fixture(label)).unwrap();
 
     // The MakerNote's preview, SubIFD2's and SubIFD0's, each replaced by a
     // stub of 122 bytes with the original's frame header. IFD0's thumbnail
@@ -2190,7 +2190,7 @@ fn the_d600_frame_4_gives_the_layout_without_a_readable_makernote() {
     // Another tag, which no reader reads, still in tag order.
     missing[entry + 1] = 0x7D;
     for (what, bytes) in [("unreadable", unreadable), ("missing", missing)] {
-        let file = RawFile::from_bytes(&bytes).unwrap();
+        let file = CameraFile::from_bytes(&bytes).unwrap();
         let metadata = file.metadata();
         assert_eq!(
             metadata.camera().recorded_model(),
