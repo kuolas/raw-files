@@ -32,8 +32,8 @@
 //! with 0x00, 0xFF and its complement.
 //!
 //! Each damaged file is opened as a caller would open it, with
-//! [`RawFile::from_bytes`], which reads through the same source and block
-//! cache as [`RawFile::from_reader`]. Opening may fail; when it does not,
+//! [`CameraFile::from_bytes`], which reads through the same source and block
+//! cache as [`CameraFile::from_reader`]. Opening may fail; when it does not,
 //! every getter of the metadata is read, every fraction is shown, reduced
 //! and turned into a decimal, the capture time is shown and taken apart,
 //! the focus point is shown and scaled onto a small frame and onto its
@@ -94,7 +94,7 @@ use std::ops::Range;
 use std::panic;
 
 use raw_files::{
-    Entry, Focus, FocusLayout, FocusPoints, Metadata, Rational, RawFile, SignedRational, Size,
+    CameraFile, Entry, Focus, FocusLayout, FocusPoints, Metadata, Rational, SignedRational, Size,
     Value,
 };
 use support::arw::{ARW4_FULL_SIZE_JPEG, arw4_file, stub};
@@ -485,7 +485,7 @@ impl<'a> Tiff<'a> {
 ///
 /// Reading a preview or an entry's value may fail; it must not panic.
 fn open_and_read_everything(bytes: &[u8]) -> bool {
-    let Ok(mut file) = RawFile::from_bytes(bytes) else {
+    let Ok(mut file) = CameraFile::from_bytes(bytes) else {
         return false;
     };
     let mut seen = String::new();
@@ -837,7 +837,7 @@ fn an_impossible_capture_time_costs_only_the_capture_time() {
         ),
     ]);
     for (name, undamaged_bytes, time) in fixtures {
-        let undamaged = RawFile::from_bytes(&undamaged_bytes).unwrap();
+        let undamaged = CameraFile::from_bytes(&undamaged_bytes).unwrap();
         let copies: Vec<usize> = undamaged_bytes
             .windows(time.len())
             .enumerate()
@@ -856,7 +856,7 @@ fn an_impossible_capture_time_costs_only_the_capture_time() {
                 let mut bytes = undamaged_bytes.clone();
                 let start = at + offset;
                 bytes[start..start + 2].copy_from_slice(replacement);
-                let damaged = RawFile::from_bytes(&bytes).unwrap();
+                let damaged = CameraFile::from_bytes(&bytes).unwrap();
                 if damaged.metadata().capture_time().is_none() {
                     costly += 1;
                     assert_all_but_the_capture_time(

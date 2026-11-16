@@ -74,10 +74,10 @@ use std::fmt;
 /// printed on a line of its own, since Nikon's Model repeats the brand:
 ///
 /// ```no_run
-/// use raw_files::RawFile;
+/// use raw_files::CameraFile;
 ///
 /// # fn main() -> raw_files::Result<()> {
-/// let file = RawFile::open("photo.nef")?;
+/// let file = CameraFile::open("photo.nef")?;
 /// let camera = file.metadata().camera();
 /// println!("make: {}", camera.recorded_make().unwrap_or("not recorded"));
 /// println!("model: {}", camera.recorded_model().unwrap_or("not recorded"));
@@ -254,10 +254,10 @@ impl Camera {
     /// A file's camera:
     ///
     /// ```no_run
-    /// use raw_files::RawFile;
+    /// use raw_files::CameraFile;
     ///
     /// # fn main() -> raw_files::Result<()> {
-    /// let file = RawFile::open("photo.arw")?;
+    /// let file = CameraFile::open("photo.arw")?;
     /// if let Some(name) = file.metadata().camera().display_name() {
     ///     println!("camera: {name}");
     /// }

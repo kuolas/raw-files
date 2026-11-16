@@ -44,7 +44,7 @@ use crate::preview::{self, Preview};
 /// else through [`from_reader`](Self::from_reader). To open with other
 /// [`Limits`], use [`Options`].
 ///
-/// A `RawFile<R>` is [`Send`] when `R` is, and [`Sync`] when `R` is: the
+/// A `CameraFile<R>` is [`Send`] when `R` is, and [`Sync`] when `R` is: the
 /// handle holds nothing else that would prevent it, and the library keeps no
 /// global state, so files can be opened and read on a thread pool, one
 /// handle per thread. Reading takes `&mut self`; a [`Preview`] is `Copy`, so
@@ -58,10 +58,10 @@ use crate::preview::{self, Preview};
 /// ```no_run
 /// use std::fs;
 ///
-/// use raw_files::{RawFile, Size};
+/// use raw_files::{CameraFile, Size};
 ///
 /// fn main() -> raw_files::Result<()> {
-///     let mut file = RawFile::open("DSC_0001.NEF")?;
+///     let mut file = CameraFile::open("DSC_0001.NEF")?;
 ///     println!("a {} file", file.format());
 ///     let Some(preview) = file.preview_at_least(Size { width: 1024, height: 768 }) else {
 ///         println!("no previews");
@@ -78,7 +78,7 @@ use crate::preview::{self, Preview};
 ///     Ok(())
 /// }
 /// ```
-pub struct RawFile<R> {
+pub struct CameraFile<R> {
     src: Source<R>,
     format: Format,
     /// Smallest first, as [`preview::sort`] orders them.
@@ -88,7 +88,7 @@ pub struct RawFile<R> {
     limits: Limits,
 }
 
-impl RawFile<File> {
+impl CameraFile<File> {
     /// Opens the camera file at `path`, a RAW file or a JPEG, with the
     /// default [`Limits`].
     ///
@@ -107,7 +107,7 @@ impl RawFile<File> {
     }
 }
 
-impl<'a> RawFile<Cursor<&'a [u8]>> {
+impl<'a> CameraFile<Cursor<&'a [u8]>> {
     /// Opens a camera file that is already in memory, such as a file read
     /// whole or mapped into memory, with the default [`Limits`].
     ///
@@ -119,13 +119,13 @@ impl<'a> RawFile<Cursor<&'a [u8]>> {
     ///
     /// # Errors
     ///
-    /// As for [`from_reader`](RawFile::from_reader).
+    /// As for [`from_reader`](CameraFile::from_reader).
     pub fn from_bytes(bytes: &'a [u8]) -> Result<Self> {
         Options::new().from_bytes(bytes)
     }
 }
 
-impl<R: Read + Seek> RawFile<R> {
+impl<R: Read + Seek> CameraFile<R> {
     /// Opens the camera file that `reader` reads, with the default
     /// [`Limits`].
     ///
@@ -228,10 +228,10 @@ impl<R: Read + Seek> RawFile<R> {
     /// Print when a picture was taken, and with which camera:
     ///
     /// ```no_run
-    /// use raw_files::RawFile;
+    /// use raw_files::CameraFile;
     ///
     /// fn main() -> raw_files::Result<()> {
-    ///     let file = RawFile::open("DSC_0001.NEF")?;
+    ///     let file = CameraFile::open("DSC_0001.NEF")?;
     ///     let metadata = file.metadata();
     ///     if let Some(time) = metadata.capture_time() {
     ///         println!("taken at {time}");
@@ -270,10 +270,10 @@ impl<R: Read + Seek> RawFile<R> {
     /// Exif IFD's DateTimeOriginal (tag 0x9003) records it:
     ///
     /// ```no_run
-    /// use raw_files::{Directory, RawFile};
+    /// use raw_files::{CameraFile, Directory};
     ///
     /// fn main() -> raw_files::Result<()> {
-    ///     let mut file = RawFile::open("DSC_0001.NEF")?;
+    ///     let mut file = CameraFile::open("DSC_0001.NEF")?;
     ///     for entry in file.entries() {
     ///         let name = entry.name().unwrap_or("");
     ///         println!(
@@ -324,10 +324,10 @@ impl<R: Read + Seek> RawFile<R> {
     /// Print the camera's Make as text, and the GPS version as numbers:
     ///
     /// ```no_run
-    /// use raw_files::{Directory, RawFile, Value};
+    /// use raw_files::{CameraFile, Directory, Value};
     ///
     /// fn main() -> raw_files::Result<()> {
-    ///     let mut file = RawFile::open("DSC_0001.NEF")?;
+    ///     let mut file = CameraFile::open("DSC_0001.NEF")?;
     ///     if let Some(make) = file.entries().entry(Directory::Ifd(0), 0x010F) {
     ///         println!("{:?}", file.read_value(&make)?.text());
     ///     }
@@ -422,9 +422,9 @@ impl<R: Read + Seek> RawFile<R> {
 /// Shows the format, the previews, the metadata and the number of
 /// entries; never the reader, which need not be `Debug`, nor each entry,
 /// which would bury the rest.
-impl<R> fmt::Debug for RawFile<R> {
+impl<R> fmt::Debug for CameraFile<R> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("RawFile")
+        f.debug_struct("CameraFile")
             .field("format", &self.format)
             .field("previews", &self.previews)
             .field("metadata", &self.metadata)
@@ -463,13 +463,13 @@ mod tests {
 
     /// A handle over `reader`, of format NEF, with `previews` in the order
     /// given and no metadata, under `limits`.
-    fn handle<R: Read + Seek>(reader: R, previews: Vec<Preview>, limits: Limits) -> RawFile<R> {
+    fn handle<R: Read + Seek>(reader: R, previews: Vec<Preview>, limits: Limits) -> CameraFile<R> {
         let parsed = formats::Parsed {
             previews,
             metadata: Metadata::default(),
             entries: Entries::new(),
         };
-        RawFile::from_parts(Source::new(reader).unwrap(), Format::Nef, parsed, limits)
+        CameraFile::from_parts(Source::new(reader).unwrap(), Format::Nef, parsed, limits)
     }
 
     /// The bytes of a stand-in preview: what reading must return.
@@ -556,7 +556,7 @@ mod tests {
             metadata: metadata.clone(),
             entries: Entries::new(),
         };
-        let file = RawFile::from_parts(
+        let file = CameraFile::from_parts(
             Source::new(Cursor::new(bytes)).unwrap(),
             Format::Nef,
             parsed,
@@ -674,7 +674,7 @@ mod tests {
     fn the_entries_are_the_files_and_their_values_are_read_on_request() {
         for order in [Order::Little, Order::Big] {
             let bytes = nef(order, 64);
-            let mut file = RawFile::from_bytes(&bytes).unwrap();
+            let mut file = CameraFile::from_bytes(&bytes).unwrap();
             let directories: Vec<Directory> = file.entries().directories().to_vec();
             assert_eq!(directories, [Directory::Ifd(0), Directory::Exif]);
             assert_eq!(file.entries().len(), 6, "{order:?}");
@@ -773,7 +773,7 @@ mod tests {
     fn unlimited_limits_lift_the_cap_on_the_metadatas_values() {
         // One byte more than the default cap, with the NUL two.
         let bytes = nef_with_description(1024 * 1024 + 1);
-        let default = RawFile::from_bytes(&bytes).unwrap();
+        let default = CameraFile::from_bytes(&bytes).unwrap();
         assert_eq!(default.metadata().authorship().description(), None);
         let unlimited = Options::new()
             .with_limits(Limits::unlimited())
@@ -787,7 +787,7 @@ mod tests {
     fn a_make_longer_than_the_value_cap_fails_the_open() {
         // "NIKON CORPORATION" and its NUL: 18 bytes.
         let bytes = nef(Order::Little, 8);
-        let make = RawFile::from_bytes(&bytes)
+        let make = CameraFile::from_bytes(&bytes)
             .unwrap()
             .entries()
             .entry(Directory::Ifd(0), 0x010F)
@@ -816,7 +816,7 @@ mod tests {
         // A Nikon 1 NEF's MakerNote entry, the largest value measured on
         // camera files: 993,826 bytes.
         let bytes = nef(Order::Big, 993_826);
-        let mut file = RawFile::from_bytes(&bytes).unwrap();
+        let mut file = CameraFile::from_bytes(&bytes).unwrap();
         let makernote = file.entries().entry(Directory::Exif, 0x927C).unwrap();
         assert_eq!(file.read_value(&makernote).unwrap().len(), 993_826);
     }
@@ -827,12 +827,12 @@ mod tests {
         // one, as a `Copy` entry can be.
         let long = nef(Order::Little, 4000);
         let short = nef(Order::Little, 8);
-        let undefined = RawFile::from_bytes(&long)
+        let undefined = CameraFile::from_bytes(&long)
             .unwrap()
             .entries()
             .entry(Directory::Exif, 0x927C)
             .unwrap();
-        let mut file = RawFile::from_bytes(&short).unwrap();
+        let mut file = CameraFile::from_bytes(&short).unwrap();
         let err = file.read_value(&undefined).unwrap_err();
         assert_eq!(err.kind(), ErrorKind::Malformed, "{err:?}");
     }
@@ -858,7 +858,7 @@ mod tests {
         let file = handle(Opaque(Cursor::new(bytes)), three(at), Limits::default());
         let text = format!("{file:?}");
         assert!(
-            text.starts_with("RawFile { format: Nef, previews: ["),
+            text.starts_with("CameraFile { format: Nef, previews: ["),
             "{text}"
         );
         assert!(text.contains("width: 1620"), "{text}");

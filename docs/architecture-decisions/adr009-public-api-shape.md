@@ -2,8 +2,8 @@
 
 - Status: Accepted
 - Date: 2026-10-11
-- Revision: 3, 2026-11-13
-- Issue: #119
+- Revision: 4, 2026-11-16
+- Issue: #119; the handle's name #107
 
 ## Context
 
@@ -36,16 +36,17 @@ not say which rule refused it. `Focus::with_size` and
 
 ## Decision
 
-We will expose **one handle, `RawFile<R>`, generic over any
-`R: Read + Seek`**.
+We will expose **one handle, `CameraFile<R>`, generic over any
+`R: Read + Seek`**. It is named for what it opens: a camera file, a raw
+file or a JPEG ([ADR014](adr014-jpeg-files-as-a-format-of-their-own.md)).
 
-- `RawFile::open(path)` returns a `RawFile<File>`. Small reads go through a
-  block cache inside raw-files, so walking a file's scattered TIFF
+- `CameraFile::open(path)` returns a `CameraFile<File>`. Small reads go
+  through a block cache inside raw-files, so walking a file's scattered TIFF
   directories costs one read per block. Callers do not wrap the file in a
   `BufReader`, which discards its buffer on every seek.
 - Bytes already in memory, including a memory-mapped file, are opened with
-  `RawFile::from_bytes`, a `RawFile<Cursor<&[u8]>>`: the same handle and the
-  same code path.
+  `CameraFile::from_bytes`, a `CameraFile<Cursor<&[u8]>>`: the same handle
+  and the same code path.
 - Opening reads the file's structure, and its metadata as
   [ADR011](adr011-metadata-from-standard-tags.md) decides. Each other
   capability, such as the previews or the raw data, then succeeds or fails
@@ -99,7 +100,7 @@ We will expose **one handle, `RawFile<R>`, generic over any
 
 The first release has this surface:
 
-- `RawFile`: `open`, `from_bytes`, `from_reader`, `format`, `previews`,
+- `CameraFile`: `open`, `from_bytes`, `from_reader`, `format`, `previews`,
   `largest_preview`, `preview_at_least`, `read_preview`,
   `read_preview_into`, `into_inner`;
 - `Options` and `Limits`, to open with other limits;
@@ -111,6 +112,14 @@ Rejected:
 
 - **Byte slices only.** The whole file would be read to show its preview:
   the cost a culler on a network share cannot pay.
+- **The name `RawFile`**, which the handle had while raw-files read only
+  raw files. It also opens JPEG files, for which `Format::is_raw` is
+  false, so "raw" had two senses in one API. The rename costs a caller
+  an edit wherever the type is written, and gives a name that is true of
+  every file the handle opens.
+- **`RawFile` kept as a deprecated alias.** One type would have two
+  names until it was removed, and the changelog already says what a
+  caller changes.
 - **Separate types for slices and readers.** Two code paths to keep in step.
   `Cursor<&[u8]>` covers slices through the one handle, and
   `Preview::byte_range` lets a slice caller borrow a preview's bytes instead
@@ -146,7 +155,7 @@ Rejected:
 - Showing a preview reads the file's structure, a few blocks of 64 KiB,
   plus the preview's own bytes, whether the file is on disk, on a network
   share or in memory.
-- `RawFile<R>` is `Send` when `R` is, so files can be opened on a thread
+- `CameraFile<R>` is `Send` when `R` is, so files can be opened on a thread
   pool. Reading takes `&mut self`; a `Preview` is `Copy`, so a caller copies
   it out before reading its bytes.
 - Raw data and development arrive as new methods and types, as metadata

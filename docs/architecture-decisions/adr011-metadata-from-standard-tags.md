@@ -58,7 +58,7 @@ standard tags. A maker's plain MakerNote tags are read only where
 nothing standard records a value. Nothing is deciphered or decrypted.
 
 - **Read when the file is opened.** `open` reads the metadata together
-  with the file's structure, and `RawFile::metadata` returns it without
+  with the file's structure, and `CameraFile::metadata` returns it without
   reading again. On the Nikon Z and Sony samples measured, its values
   lie near the start of the file. The raw IFD, which gives the raw
   size, is one `open` already reads to find the previews.
@@ -222,7 +222,7 @@ nothing standard records a value. Nothing is deciphered or decrypted.
   - GPSVersionID, GPSStatus and the other GPS tags are not read.
 - **As recorded, nothing redacted.** The authorship texts, the owner
   and the location name people and places. raw-files gives them as the
-  file records them, with no option to hide them, as `RawFile::entries`
+  file records them, with no option to hide them, as `CameraFile::entries`
   does ([ADR023](adr023-every-entry-a-file-records.md)). Tests on
   public sample files check them by presence and shape only. Tests on
   my own files print counts only.
@@ -299,12 +299,12 @@ Rejected:
 - **A typed value for every GPS tag, or also for those cameras write**:
   the satellites, the status, the measure mode. No measured camera file
   writes most of the tags, and the rest describe the receiver rather
-  than the picture. `RawFile::entries` gives them all.
+  than the picture. `CameraFile::entries` gives them all.
 - **Reading the Unicode code as UTF-8, and text under the undefined
   code.** Exif defines the Unicode code as UTF-8 (Table 4), but no
   measured file shows what writers put there. Exif leaves the undefined
   code to the reader's locale (Table 5). Either reading would be a
-  guess, and `RawFile::entries` gives the bytes.
+  guess, and `CameraFile::entries` gives the bytes.
 - **A placeholder given as recorded.** A viewer would show `SONY DSC`
   as the description of every picture those bodies took.
 - **The 255-byte limit for every text, or a fixed 64 KiB for the free
@@ -317,7 +317,7 @@ Rejected:
   UTF-8 texts as damaged.
 - **A redaction option.** raw-files gives what the file records. A
   program that hides a name or a place decides what to hide, as with
-  `RawFile::entries`.
+  `CameraFile::entries`.
 - **The surface of the altitude named, or signed meters as a
   floating-point value.** Exif 3.0 changed the meaning of 0 and 1, and
   every measured file records 0 under an older GPS version. So a
@@ -378,10 +378,10 @@ Rejected:
 - The software names the camera's firmware or the program that last
   wrote the file. A caller cannot tell which without reading the text.
 - A comment under the JIS, Unicode or undefined code is `None`, and
-  `RawFile::entries` gives its bytes. No measured file has text under
+  `CameraFile::entries` gives its bytes. No measured file has text under
   one.
 - The GPS tags not read, such as the satellites, the status and the
-  measure mode, stay in `RawFile::entries`
+  measure mode, stay in `CameraFile::entries`
   ([NEF notes §8.9](../formats/nef/makernote-and-metadata.md#89-location),
   [ARW notes §9.9](../formats/arw/makernote-and-metadata.md#99-location)).
 - Which surface an altitude is measured from is not given. A GPS IFD

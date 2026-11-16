@@ -7,17 +7,18 @@ use std::io::{Cursor, Read, Seek};
 use std::path::Path;
 
 use crate::error::Result;
-use crate::file::RawFile;
+use crate::file::CameraFile;
 use crate::limits::Limits;
 
 /// How to open a camera file, a RAW file or a JPEG: today, with which
 /// [`Limits`].
 ///
 /// The defaults suit untrusted files, and opening with them is what
-/// [`RawFile::open`], [`RawFile::from_bytes`] and [`RawFile::from_reader`]
-/// do: `RawFile::open(path)` is `Options::new().open(path)`. Build an
-/// `Options` to open files with other limits; more options will join them
-/// as the library grows. `Options` is `Clone` and not `Copy`.
+/// [`CameraFile::open`], [`CameraFile::from_bytes`] and
+/// [`CameraFile::from_reader`] do: `CameraFile::open(path)` is
+/// `Options::new().open(path)`. Build an `Options` to open files with other
+/// limits; more options will join them as the library grows. `Options` is
+/// `Clone` and not `Copy`.
 ///
 /// # Examples
 ///
@@ -60,36 +61,36 @@ impl Options {
 
     /// Opens the file at `path` with these options.
     ///
-    /// See [`RawFile::open`], which this is with the default options.
+    /// See [`CameraFile::open`], which this is with the default options.
     ///
     /// # Errors
     ///
     /// [`Io`](crate::ErrorKind::Io) if the file cannot be opened, and
     /// otherwise as for [`from_reader`](Self::from_reader).
-    pub fn open(&self, path: impl AsRef<Path>) -> Result<RawFile<File>> {
+    pub fn open(&self, path: impl AsRef<Path>) -> Result<CameraFile<File>> {
         self.from_reader(File::open(path)?)
     }
 
     /// Opens a file that is already in memory with these options.
     ///
-    /// See [`RawFile::from_bytes`], which this is with the default options.
+    /// See [`CameraFile::from_bytes`], which this is with the default options.
     ///
     /// # Errors
     ///
     /// As for [`from_reader`](Self::from_reader).
-    pub fn from_bytes<'a>(&self, bytes: &'a [u8]) -> Result<RawFile<Cursor<&'a [u8]>>> {
+    pub fn from_bytes<'a>(&self, bytes: &'a [u8]) -> Result<CameraFile<Cursor<&'a [u8]>>> {
         self.from_reader(Cursor::new(bytes))
     }
 
     /// Opens the file that `reader` reads with these options.
     ///
-    /// See [`RawFile::from_reader`], which this is with the default options.
+    /// See [`CameraFile::from_reader`], which this is with the default options.
     ///
     /// # Errors
     ///
-    /// As for [`RawFile::from_reader`].
-    pub fn from_reader<R: Read + Seek>(&self, reader: R) -> Result<RawFile<R>> {
-        RawFile::new(reader, self.limits)
+    /// As for [`CameraFile::from_reader`].
+    pub fn from_reader<R: Read + Seek>(&self, reader: R) -> Result<CameraFile<R>> {
+        CameraFile::new(reader, self.limits)
     }
 }
 

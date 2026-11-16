@@ -74,10 +74,10 @@ use crate::rational::SignedRational;
 /// The settings a file records, each on its own, since each is optional:
 ///
 /// ```no_run
-/// use raw_files::RawFile;
+/// use raw_files::CameraFile;
 ///
 /// # fn main() -> raw_files::Result<()> {
-/// let file = RawFile::open("photo.nef")?;
+/// let file = CameraFile::open("photo.nef")?;
 /// let settings = file.metadata().camera_settings();
 /// if let Some(program) = settings.exposure_program() {
 ///     println!("program: {program}");

@@ -15,8 +15,8 @@ use std::collections::BTreeSet;
 use std::io::Cursor;
 
 use raw_files::{
-    CameraSettings, ColorSpace, Exposure, ExposureProgram, FlashMode, FocusOrigin, Format, Lens,
-    Make, Metadata, MeteringMode, Orientation, Point, PreviewFormat, Rational, RawFile,
+    CameraFile, CameraSettings, ColorSpace, Exposure, ExposureProgram, FlashMode, FocusOrigin,
+    Format, Lens, Make, Metadata, MeteringMode, Orientation, Point, PreviewFormat, Rational,
     SignedRational, Size, WhiteBalanceMode,
 };
 use support::arw::{
@@ -58,8 +58,8 @@ fn stub_len(size: (u16, u16)) -> u64 {
 /// stub of its size at its blob's offset. `label` names the file in a
 /// failure.
 fn assert_previews(built: &Built, expected: &[(BlobId, (u16, u16))], label: &str) {
-    let from_bytes = RawFile::from_bytes(&built.bytes).unwrap();
-    let from_reader = RawFile::from_reader(Cursor::new(built.bytes.clone())).unwrap();
+    let from_bytes = CameraFile::from_bytes(&built.bytes).unwrap();
+    let from_reader = CameraFile::from_reader(Cursor::new(built.bytes.clone())).unwrap();
     let expected_sizes: Vec<Size> = expected.iter().map(|&(_, size)| size_of(size)).collect();
     for (how, format, previews) in [
         ("bytes", from_bytes.format(), from_bytes.previews()),
@@ -181,7 +181,7 @@ fn the_a100s_ifd0_preview_is_sized_from_its_frame_header_not_its_tags() {
             ],
             &format!("A100, {order:?}"),
         );
-        let file = RawFile::from_bytes(&built.bytes).unwrap();
+        let file = CameraFile::from_bytes(&built.bytes).unwrap();
         assert!(
             !sizes(file.previews()).contains(&size_of(A100_TAG_SIZE)),
             "{order:?}"
@@ -206,7 +206,7 @@ fn every_layout(order: Order) -> Vec<(&'static str, (Built, ArwBlobs))> {
 fn no_preview_starts_at_the_raw_data_of_any_layout() {
     for order in ORDERS {
         for (name, (built, blobs)) in every_layout(order) {
-            let file = RawFile::from_bytes(&built.bytes).unwrap();
+            let file = CameraFile::from_bytes(&built.bytes).unwrap();
             let raw: Vec<u64> = blobs
                 .raw
                 .iter()
@@ -321,7 +321,7 @@ fn the_arw4_file_gives_every_value_its_fixture_records() {
         for (value, orientation) in [(8, Orientation::Rotate270), (1, Orientation::NoTransforms)] {
             let label = format!("{order:?}, Orientation {value}");
             let (built, _) = arw4_file(order, value);
-            let file = RawFile::from_reader(Cursor::new(built.bytes)).unwrap();
+            let file = CameraFile::from_reader(Cursor::new(built.bytes)).unwrap();
             let metadata = file.metadata();
             assert_eq!(metadata.camera().recorded_make(), Some("SONY"), "{label}");
             assert_eq!(
@@ -458,7 +458,7 @@ fn every_layout_gives_the_metadata_its_fixture_records() {
         {
             assert_eq!(name, expected_name);
             let label = format!("{name}, {order:?}");
-            let file = RawFile::from_bytes(&built.bytes).unwrap();
+            let file = CameraFile::from_bytes(&built.bytes).unwrap();
             assert_eq!(file.format(), Format::Arw, "{label}");
             let metadata = file.metadata();
             assert_eq!(metadata.camera().recorded_make(), Some("SONY"), "{label}");
@@ -509,7 +509,7 @@ fn orientation_8_gives_rotate270_on_every_preview_of_the_arw2_and_arw4_files() {
             ("ARW 2", arw2_file(order, 8)),
             ("ARW 4", arw4_file(order, 8)),
         ] {
-            let file = RawFile::from_bytes(&built.bytes).unwrap();
+            let file = CameraFile::from_bytes(&built.bytes).unwrap();
             assert!(!file.previews().is_empty(), "{name}, {order:?}");
             for preview in file.previews() {
                 assert_eq!(
@@ -526,7 +526,7 @@ fn orientation_8_gives_rotate270_on_every_preview_of_the_arw2_and_arw4_files() {
 fn the_largest_preview_is_ifd2s_on_the_arw4_file_and_ifd0s_on_the_arw2_file() {
     for order in ORDERS {
         let (built, blobs) = arw4_file(order, 1);
-        let largest = RawFile::from_bytes(&built.bytes)
+        let largest = CameraFile::from_bytes(&built.bytes)
             .unwrap()
             .largest_preview()
             .unwrap();
@@ -537,7 +537,7 @@ fn the_largest_preview_is_ifd2s_on_the_arw4_file_and_ifd0s_on_the_arw2_file() {
         );
 
         let (built, blobs) = arw2_file(order, 1);
-        let largest = RawFile::from_bytes(&built.bytes)
+        let largest = CameraFile::from_bytes(&built.bytes)
             .unwrap()
             .largest_preview()
             .unwrap();
@@ -552,7 +552,7 @@ fn the_largest_preview_is_ifd2s_on_the_arw4_file_and_ifd0s_on_the_arw2_file() {
 #[test]
 fn a_preview_at_least_2000_by_1500_on_the_arw4_file_is_ifd2s() {
     let (built, blobs) = arw4_file(Order::Little, 1);
-    let file = RawFile::from_bytes(&built.bytes).unwrap();
+    let file = CameraFile::from_bytes(&built.bytes).unwrap();
     let box_2000_by_1500 = Size {
         width: 2000,
         height: 1500,
@@ -569,7 +569,7 @@ fn a_preview_at_least_2000_by_1500_on_the_arw4_file_is_ifd2s() {
 fn reading_the_largest_preview_returns_exactly_the_stubs_bytes() {
     for order in ORDERS {
         let (built, _) = arw4_file(order, 1);
-        let mut file = RawFile::from_reader(Cursor::new(built.bytes)).unwrap();
+        let mut file = CameraFile::from_reader(Cursor::new(built.bytes)).unwrap();
         let largest = file.largest_preview().unwrap();
         let bytes = file.read_preview(&largest).unwrap();
         assert_eq!(bytes, stub(ARW4_FULL_SIZE_JPEG), "{order:?}");
@@ -628,7 +628,7 @@ fn the_a100s_subifd_pointer_leads_to_bytes_that_are_not_an_ifd() {
         }
 
         // And the walk leaves it out: the file opens, with its two JPEGs.
-        let file = RawFile::from_bytes(bytes).unwrap();
+        let file = CameraFile::from_bytes(bytes).unwrap();
         assert_eq!(file.format(), Format::Arw, "{order:?}");
         assert_eq!(file.previews().len(), 2, "{order:?}");
     }

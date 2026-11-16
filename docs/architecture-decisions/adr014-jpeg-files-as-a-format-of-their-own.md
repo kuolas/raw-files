@@ -6,7 +6,8 @@
   from the standard tags; [ADR012](adr012-focus-points-as-the-camera-records-them.md),
   focus points as the camera records them
 - Date: 2026-10-21
-- Issue: #35
+- Revision: 2, 2026-11-16
+- Issue: #35; the handle's name #107
 
 ## Context
 
@@ -153,9 +154,9 @@ what the file records about its own picture.
   camera's raw sensor data, as NEF and ARW do, and false for JPEG, so
   that a program tells raw formats from the others without matching
   every variant of an enum that will gain more. It says nothing of the
-  container or the codecs. The handle keeps its name, `RawFile`; its
-  documentation says that it opens a camera file raw-files reads, a raw
-  file or a JPEG.
+  container or the codecs. The handle's documentation says that it opens
+  a camera file raw-files reads, a raw file or a JPEG; its name is
+  [ADR009](adr009-public-api-shape.md)'s.
 - **The first Exif segment holds the metadata.** It is the first APP1
   segment before the scan whose payload starts with `Exif` and two zero
   bytes, wherever it lies; a later one is skipped, as XMP, color
@@ -246,9 +247,6 @@ Rejected:
   has touched**, judged by marks such as a JFIF segment or a raw file's
   CropArea. Such marks do not tell whether the pixels still have the
   camera's framing, and whether the frame fits the picture does.
-- **Renaming `RawFile`**, for example to `CameraFile` with the old name
-  kept as a deprecated alias. Callers would change code for a name and
-  gain nothing they need.
 - **Leaving `jpg` out of `Format::from_extension`.** It and `Format::all`
   would disagree, and a file picker built from them would not offer
   JPEGs.

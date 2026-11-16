@@ -18,11 +18,11 @@ use std::io;
 /// refuses its arguments:
 ///
 /// ```
-/// use raw_files::{ErrorKind, Rational, RawFile, Result, ValueError};
+/// use raw_files::{CameraFile, ErrorKind, Rational, Result, ValueError};
 ///
 /// /// How many previews a file holds.
 /// fn preview_count(bytes: &[u8]) -> Result<usize> {
-///     Ok(RawFile::from_bytes(bytes)?.previews().len())
+///     Ok(CameraFile::from_bytes(bytes)?.previews().len())
 /// }
 ///
 /// let err = preview_count(b"not a camera file").unwrap_err();
@@ -94,11 +94,11 @@ struct Inner {
 /// Name the category before the error's own text, as a log line would:
 ///
 /// ```
-/// use raw_files::{ErrorKind, RawFile};
+/// use raw_files::{CameraFile, ErrorKind};
 ///
 /// // A TIFF header whose first directory starts at byte 8, where the
 /// // file ends.
-/// let err = RawFile::from_bytes(b"II*\0\x08\0\0\0").unwrap_err();
+/// let err = CameraFile::from_bytes(b"II*\0\x08\0\0\0").unwrap_err();
 /// assert_eq!(err.kind(), ErrorKind::Malformed);
 /// assert_eq!(
 ///     format!("{}: {err}", err.kind()),
@@ -110,12 +110,12 @@ struct Inner {
 /// either, by the limits they are opened under:
 ///
 /// ```
-/// use raw_files::{ErrorKind, Limits, Options, RawFile};
+/// use raw_files::{CameraFile, ErrorKind, Limits, Options};
 ///
 /// // A TIFF header whose first directory starts at byte 8, where the
 /// // file ends.
 /// let header = b"II*\0\x08\0\0\0";
-/// let damaged = RawFile::from_bytes(header).unwrap_err();
+/// let damaged = CameraFile::from_bytes(header).unwrap_err();
 /// assert_eq!(damaged.kind(), ErrorKind::Malformed);
 ///
 /// // The same bytes, opened under a limit of no directories at all.

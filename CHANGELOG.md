@@ -12,6 +12,24 @@ does. An entry that can break a caller opens with **Breaking:**.
 
 ### Changed
 
+- **Breaking:** `RawFile` is now `CameraFile`. The handle opens JPEG
+  files too, for which `Format::is_raw` is false, and the docs already
+  called it an open camera file. Rename the type wherever it is
+  imported or written, such as `RawFile<File>` in a field. No method's
+  name or arguments changed, and `Debug` writes the new name:
+
+  ```rust
+  // 0.10.0
+  use raw_files::RawFile;
+  let file = RawFile::open("photo.nef")?;
+
+  // 0.11.0
+  use raw_files::CameraFile;
+  let file = CameraFile::open("photo.nef")?;
+  ```
+
+  A file opens and reads as before
+  ([#107](https://github.com/kuolas/raw-files/issues/107)).
 - A tag that raw-files reads only at an exact count is now skipped,
   unread, when it holds another count
   ([#109](https://github.com/kuolas/raw-files/issues/109)). A tag of

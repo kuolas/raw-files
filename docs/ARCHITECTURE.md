@@ -20,7 +20,7 @@ by frame numbers.
 The library has four parts. They are listed from what a caller opens
 down to the values every part shares:
 
-1. **The handle**: `RawFile` and `Options`, in `src/file.rs` and
+1. **The handle**: `CameraFile` and `Options`, in `src/file.rs` and
    `src/options.rs`. A caller opens a file through them.
 2. **The format readers**, in `src/formats/`. Each claims the files of
    its format, finds their previews and reads their metadata. NEF, ARW
@@ -53,7 +53,7 @@ adds a row.
 |---|---|---|
 | `src/lib.rs` | The crate root: the crate documentation and the re-exports of the public types. | `authorship`, `camera`, `camera_settings`, `datetime`, `entries`, `error`, `file`, `focus`, `format`, `geometry`, `limits`, `location`, `metadata`, `options`, `orientation`, `preview`, `rational`, `value_error` |
 | `src/options.rs` | `Options`: how a file is opened, and under which `Limits`. | `file`, `limits`, `error` |
-| `src/file.rs` | `RawFile`: the file handle, giving the format, the previews, the metadata and the entries, and reading a preview's bytes or an entry's value. | `container`, `formats`, `io`, `options`, `preview`, `metadata`, `entries`, `format`, `limits`, `error`, `geometry` |
+| `src/file.rs` | `CameraFile`: the file handle, giving the format, the previews, the metadata and the entries, and reading a preview's bytes or an entry's value. | `container`, `formats`, `io`, `options`, `preview`, `metadata`, `entries`, `format`, `limits`, `error`, `geometry` |
 
 ### The format readers
 
@@ -162,7 +162,7 @@ adds a row.
 
 A change that moves data between modules updates this section.
 
-A file is opened through `Options`, or `RawFile`'s
+A file is opened through `Options`, or `CameraFile`'s
 constructors, which use the default options, from any `Read + Seek` source
 ([ADR009](architecture-decisions/adr009-public-api-shape.md)). The reader is
 wrapped in an `io::Source`, which takes the file's length. The file's first

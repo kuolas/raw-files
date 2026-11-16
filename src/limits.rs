@@ -134,8 +134,8 @@ impl Limits {
     /// The cap holds for every value read whole from the file: those
     /// raw-files reads for the metadata and the previews when it opens a
     /// file, and those a caller reads with
-    /// [`RawFile::read_value`](crate::RawFile::read_value). It is the most
-    /// one read takes into memory; decoding a value of numbers holds up to
+    /// [`CameraFile::read_value`](crate::CameraFile::read_value). It is the
+    /// most one read takes into memory; decoding a value of numbers holds up to
     /// twice as much again while it runs. A value of four bytes or fewer,
     /// which its entry holds itself, is read under any cap. A MakerNote is
     /// not read whole: raw-files reads its directory in place, and each of
@@ -143,7 +143,7 @@ impl Limits {
     ///
     /// A longer value costs what raw-files would have read from it:
     ///
-    /// - [`RawFile::read_value`](crate::RawFile::read_value) fails with
+    /// - [`CameraFile::read_value`](crate::CameraFile::read_value) fails with
     ///   [`ErrorKind::LimitExceeded`](crate::ErrorKind::LimitExceeded).
     /// - A value of the metadata is `None`, as a damaged one is.
     /// - A preview or a directory that the file locates by such a value is

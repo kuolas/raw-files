@@ -9,8 +9,8 @@ use std::fs::File;
 use std::io::{self, Cursor};
 
 use raw_files::{
-    Altitude, Authorship, Camera, DateTime, Direction, ErrorKind, Focus, Format, Latitude, Limits,
-    Location, Longitude, Metadata, North, Options, Point, Rational, RawFile,
+    Altitude, Authorship, Camera, CameraFile, DateTime, Direction, ErrorKind, Focus, Format,
+    Latitude, Limits, Location, Longitude, Metadata, North, Options, Point, Rational,
 };
 use support::jpeg_builder::JpegBuilder;
 use support::tiff_builder::{Order, TiffBuilder};
@@ -110,7 +110,7 @@ fn two_ifds() -> Vec<u8> {
 #[test]
 fn a_file_that_is_neither_a_tiff_nor_a_jpeg_file_is_of_unknown_format() {
     for bytes in [&b"not a tiff"[..], b"", b"I", &[0xFF, 0xD8]] {
-        let err = RawFile::from_bytes(bytes).unwrap_err();
+        let err = CameraFile::from_bytes(bytes).unwrap_err();
         assert_eq!(err.kind(), ErrorKind::UnknownFormat, "{bytes:02X?}");
     }
 }
@@ -126,21 +126,21 @@ fn a_jpeg_file_opens_as_jpeg_whatever_its_make() {
     let mut builder = JpegBuilder::new();
     builder.jfif().exif(&tiff.build().bytes);
     let bytes = builder.build().bytes;
-    let file = RawFile::from_bytes(&bytes).unwrap();
+    let file = CameraFile::from_bytes(&bytes).unwrap();
     assert_eq!(file.format(), Format::Jpeg);
     assert!(!file.format().is_raw());
-    let file = RawFile::from_reader(Cursor::new(bytes)).unwrap();
+    let file = CameraFile::from_reader(Cursor::new(bytes)).unwrap();
     assert_eq!(file.format(), Format::Jpeg);
 }
 
 #[test]
 fn a_nikon_file_that_holds_no_jpeg_opens_as_nef_with_no_previews() {
     let bytes = one_ifd(Some("NIKON CORPORATION"));
-    let file = RawFile::from_bytes(&bytes).unwrap();
+    let file = CameraFile::from_bytes(&bytes).unwrap();
     assert_eq!(file.format(), Format::Nef);
     assert!(file.previews().is_empty());
     assert_eq!(file.largest_preview(), None);
-    let file = RawFile::from_reader(Cursor::new(bytes)).unwrap();
+    let file = CameraFile::from_reader(Cursor::new(bytes)).unwrap();
     assert_eq!(file.format(), Format::Nef);
     assert!(file.previews().is_empty());
     assert_eq!(file.largest_preview(), None);
@@ -149,11 +149,11 @@ fn a_nikon_file_that_holds_no_jpeg_opens_as_nef_with_no_previews() {
 #[test]
 fn a_sony_file_that_holds_no_jpeg_opens_as_arw_with_no_previews() {
     let bytes = one_ifd(Some("SONY"));
-    let file = RawFile::from_bytes(&bytes).unwrap();
+    let file = CameraFile::from_bytes(&bytes).unwrap();
     assert_eq!(file.format(), Format::Arw);
     assert!(file.previews().is_empty());
     assert_eq!(file.largest_preview(), None);
-    let file = RawFile::from_reader(Cursor::new(bytes)).unwrap();
+    let file = CameraFile::from_reader(Cursor::new(bytes)).unwrap();
     assert_eq!(file.format(), Format::Arw);
     assert!(file.previews().is_empty());
     assert_eq!(file.largest_preview(), None);
@@ -171,9 +171,9 @@ fn a_dng_whose_make_names_a_known_maker_is_of_unknown_format() {
             .byte(ifd, DNG_VERSION, &[1, 4, 0, 0])
             .byte(ifd, DNG_PRIVATE_DATA, &[0; 32]);
         let bytes = builder.build().bytes;
-        let err = RawFile::from_bytes(&bytes).unwrap_err();
+        let err = CameraFile::from_bytes(&bytes).unwrap_err();
         assert_eq!(err.kind(), ErrorKind::UnknownFormat, "{make}");
-        let err = RawFile::from_reader(Cursor::new(bytes)).unwrap_err();
+        let err = CameraFile::from_reader(Cursor::new(bytes)).unwrap_err();
         assert_eq!(err.kind(), ErrorKind::UnknownFormat, "{make}");
     }
 }
@@ -182,9 +182,9 @@ fn a_dng_whose_make_names_a_known_maker_is_of_unknown_format() {
 fn a_tiff_file_of_no_known_format_is_of_unknown_format() {
     for make in [Some("Canon"), None] {
         let bytes = one_ifd(make);
-        let err = RawFile::from_bytes(&bytes).unwrap_err();
+        let err = CameraFile::from_bytes(&bytes).unwrap_err();
         assert_eq!(err.kind(), ErrorKind::UnknownFormat, "{make:?}");
-        let err = RawFile::from_reader(Cursor::new(bytes)).unwrap_err();
+        let err = CameraFile::from_reader(Cursor::new(bytes)).unwrap_err();
         assert_eq!(err.kind(), ErrorKind::UnknownFormat, "{make:?}");
     }
 }
@@ -192,7 +192,7 @@ fn a_tiff_file_of_no_known_format_is_of_unknown_format() {
 #[test]
 fn a_missing_file_is_an_io_error_that_converts_back() {
     let path = std::env::temp_dir().join("raw-files-open-test-no-such-file.nef");
-    let err = RawFile::open(&path).unwrap_err();
+    let err = CameraFile::open(&path).unwrap_err();
     assert_eq!(err.kind(), ErrorKind::Io);
     assert_eq!(err.offset(), None);
     assert_eq!(io::Error::from(err).kind(), io::ErrorKind::NotFound);
@@ -210,7 +210,7 @@ fn options_with_room_for_the_file_still_find_no_format() {
 fn the_options_limits_reach_the_walk() {
     let bytes = two_ifds();
     // The default limits walk both IFDs, and find no format.
-    let err = RawFile::from_bytes(&bytes).unwrap_err();
+    let err = CameraFile::from_bytes(&bytes).unwrap_err();
     assert_eq!(err.kind(), ErrorKind::UnknownFormat);
     // One IFD allowed: the walk stops at the second.
     let options = Options::new().with_limits(Limits::default().with_max_ifds(1));
@@ -224,9 +224,9 @@ fn the_options_limits_reach_the_walk() {
 fn handles_are_send_and_sync_when_their_reader_is() {
     fn assert_send<T: Send>() {}
     fn assert_sync<T: Sync>() {}
-    assert_send::<RawFile<File>>();
-    assert_send::<RawFile<Cursor<&[u8]>>>();
-    assert_sync::<RawFile<Cursor<&[u8]>>>();
+    assert_send::<CameraFile<File>>();
+    assert_send::<CameraFile<Cursor<&[u8]>>>();
+    assert_sync::<CameraFile<Cursor<&[u8]>>>();
     assert_send::<Options>();
     assert_sync::<Options>();
 }
@@ -257,7 +257,7 @@ fn an_authorship_and_a_camera_built_by_hand_equal_what_open_reads() {
         (with_authorship("SONY"), Format::Arw, "SONY"),
         (jpeg.build().bytes, Format::Jpeg, "NIKON CORPORATION"),
     ] {
-        let file = RawFile::from_bytes(&bytes).unwrap();
+        let file = CameraFile::from_bytes(&bytes).unwrap();
         assert_eq!(file.format(), format);
         assert_eq!(file.metadata().authorship(), &expected, "{format:?}");
         assert_eq!(file.metadata().camera(), &camera(make), "{format:?}");
@@ -287,7 +287,7 @@ fn a_location_built_by_hand_equals_what_open_reads() {
         (with_location("SONY"), Format::Arw),
         (jpeg.build().bytes, Format::Jpeg),
     ] {
-        let file = RawFile::from_bytes(&bytes).unwrap();
+        let file = CameraFile::from_bytes(&bytes).unwrap();
         assert_eq!(file.format(), format);
         assert_eq!(file.metadata().location(), Some(&expected), "{format:?}");
     }

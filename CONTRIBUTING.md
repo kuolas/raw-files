@@ -282,7 +282,7 @@ comments, the CHANGELOG, commit messages, pull requests and issues.
     [docs/formats/](docs/formats/README.md);
   - the committed test files: [tests/fixtures/README.md](tests/fixtures/README.md);
   - the public types: the [API documentation](https://docs.rs/raw-files).
-- **The API's own names.** Write `RawFile::entries`, not "the view of
+- **The API's own names.** Write `CameraFile::entries`, not "the view of
   every entry". A term of the project's own is defined where it is
   first used.
 

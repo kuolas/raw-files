@@ -123,10 +123,10 @@ use crate::value_error::ValueError;
 /// Where the camera focused on a file's largest preview:
 ///
 /// ```no_run
-/// use raw_files::RawFile;
+/// use raw_files::CameraFile;
 ///
 /// # fn main() -> raw_files::Result<()> {
-/// let file = RawFile::open("photo.nef")?;
+/// let file = CameraFile::open("photo.nef")?;
 /// let focus = file.metadata().focus();
 /// if let (Some(focus), Some(preview)) = (focus, file.largest_preview()) {
 ///     if let Ok(focus) = focus.scaled_to(preview.size()) {

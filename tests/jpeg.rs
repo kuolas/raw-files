@@ -44,11 +44,11 @@ use std::io::Cursor;
 use std::ops::Range;
 
 use raw_files::{
-    Camera, CameraSettings, ColorSpace, DateTime, Directory, ErrorKind, Exposure, ExposureProgram,
-    FineTune, Flash, FlashMode, Focus, FocusAreaMode, FocusOrigin, FocusPoint, FocusPoints, Format,
-    ImageArea, Lens, Limits, Make, Metadata, MeteringMode, Options, Orientation, Point, Preview,
-    PreviewFormat, Rational, RawFile, Shutter, SignedRational, Size, Value, WhiteBalance,
-    WhiteBalanceMode,
+    Camera, CameraFile, CameraSettings, ColorSpace, DateTime, Directory, ErrorKind, Exposure,
+    ExposureProgram, FineTune, Flash, FlashMode, Focus, FocusAreaMode, FocusOrigin, FocusPoint,
+    FocusPoints, Format, ImageArea, Lens, Limits, Make, Metadata, MeteringMode, Options,
+    Orientation, Point, Preview, PreviewFormat, Rational, Shutter, SignedRational, Size, Value,
+    WhiteBalance, WhiteBalanceMode,
 };
 use support::arw::{
     ARW4_FOCUS_CENTER, ARW4_FOCUS_FRAME, ARW4_FOCUS_SIZE, ARW4_FULL_SIZE_JPEG,
@@ -401,7 +401,7 @@ fn a_jpeg_without_exif_opens_with_the_file_as_its_one_preview() {
     let metadata = main_metadata(Orientation::NoTransforms);
     assert_opens(&built.bytes, &previews, &metadata, "no Exif");
 
-    let file = RawFile::from_bytes(&built.bytes).unwrap();
+    let file = CameraFile::from_bytes(&built.bytes).unwrap();
     let read = file.metadata();
     assert_eq!(read.image_size(), Some(size_of(MAIN)));
     assert_eq!(read.raw_size(), None);
@@ -443,7 +443,7 @@ fn a_camera_jpeg_lists_the_file_the_thumbnail_and_the_mpf_images() {
         "camera JPEG",
     );
 
-    let mut file = RawFile::from_bytes(&built.bytes).unwrap();
+    let mut file = CameraFile::from_bytes(&built.bytes).unwrap();
     for preview in file.previews().to_vec() {
         let bytes = file.read_preview(&preview).unwrap();
         let range = preview.byte_range();
@@ -492,7 +492,7 @@ fn a_camera_jpeg_gives_every_value_its_exif_segment_records() {
 
     // Each value, as the tags give it; the sizes, as the frame header
     // gives them; and no focus point, which no standard tag records.
-    let file = RawFile::from_bytes(&built.bytes).unwrap();
+    let file = CameraFile::from_bytes(&built.bytes).unwrap();
     let read = file.metadata();
     assert_eq!(read.camera().recorded_make(), Some(CAMERA_MAKE));
     assert_eq!(read.camera().recorded_model(), Some(CAMERA_MODEL));
@@ -570,7 +570,7 @@ fn the_image_size_is_the_pictures_whatever_the_tags_say() {
         "sizes in the tags",
     );
 
-    let file = RawFile::from_bytes(&built.bytes).unwrap();
+    let file = CameraFile::from_bytes(&built.bytes).unwrap();
     assert_eq!(file.metadata().image_size(), Some(size_of(MAIN)));
     assert_eq!(file.metadata().raw_size(), None);
 }
@@ -588,7 +588,7 @@ fn the_files_own_preview_runs_through_the_padding_after_its_end() {
         "padded",
     );
 
-    let mut file = RawFile::from_bytes(&built.bytes).unwrap();
+    let mut file = CameraFile::from_bytes(&built.bytes).unwrap();
     let preview = file.largest_preview().unwrap();
     assert_eq!(file.read_preview(&preview).unwrap(), built.bytes);
 }
@@ -665,7 +665,7 @@ fn a_jpeg_without_a_picture_to_show_is_of_unknown_format() {
         ("zero width", zero_width),
     ] {
         let bytes = builder.build().bytes;
-        let err = RawFile::from_bytes(&bytes).unwrap_err();
+        let err = CameraFile::from_bytes(&bytes).unwrap_err();
         assert_eq!(err.kind(), ErrorKind::UnknownFormat, "{case}: {err:?}");
         assert_eq!(err.offset(), None, "{case}");
         if case == "lossless" {
@@ -675,7 +675,7 @@ fn a_jpeg_without_a_picture_to_show_is_of_unknown_format() {
                  size and is not lossless"
             );
         }
-        let err = RawFile::from_reader(Cursor::new(bytes)).unwrap_err();
+        let err = CameraFile::from_reader(Cursor::new(bytes)).unwrap_err();
         assert_eq!(err.kind(), ErrorKind::UnknownFormat, "{case}: {err:?}");
     }
 }
@@ -2147,11 +2147,11 @@ fn open_stripped_jpeg(
     name: &str,
     previews: &[(Range<u64>, (u16, u16))],
     orientation: Orientation,
-) -> RawFile<File> {
+) -> CameraFile<File> {
     let label = name;
     let bytes = support::fixtures::read_fixture(name);
-    let mut file = RawFile::open(support::fixtures::fixture(name)).unwrap();
-    let from_bytes = RawFile::from_bytes(&bytes).unwrap();
+    let mut file = CameraFile::open(support::fixtures::fixture(name)).unwrap();
+    let from_bytes = CameraFile::from_bytes(&bytes).unwrap();
     for (how, format, found) in [
         ("path", file.format(), file.previews()),
         ("bytes", from_bytes.format(), from_bytes.previews()),
@@ -2492,7 +2492,7 @@ fn the_d600_frame_4_jpeg_gives_its_previews_metadata_and_point_38_placed_from_th
 /// code 3, primary point 1 and bit 0 of the mask, and CropHiSpeed records
 /// no crop, as in the NEF of the same shot.
 fn check_d600_jpeg_point_1(label: &str, pixels: (u16, u16), frame: (u16, u16), center: Point) {
-    let file = RawFile::open(support::fixtures::fixture(label))
+    let file = CameraFile::open(support::fixtures::fixture(label))
         .unwrap_or_else(|error| panic!("{label}: {error}"));
     assert_eq!(file.format(), Format::Jpeg, "{label}");
     let metadata = file.metadata();

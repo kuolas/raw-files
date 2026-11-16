@@ -29,11 +29,11 @@ use crate::{Orientation, Size};
 /// buffer and saves it under the extension its format uses.
 ///
 /// ```no_run
-/// use raw_files::RawFile;
+/// use raw_files::CameraFile;
 ///
 /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
 /// let bytes = std::fs::read("photo.nef")?;
-/// let file = RawFile::from_bytes(&bytes)?;
+/// let file = CameraFile::from_bytes(&bytes)?;
 /// if let Some(preview) = file.largest_preview() {
 ///     let range = preview.byte_range();
 ///     let (start, end) = (usize::try_from(range.start)?, usize::try_from(range.end)?);
