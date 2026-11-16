@@ -30,7 +30,8 @@
 //! | [`SignedRational`] | SRATIONAL |
 //!
 //! [`Text`] is read from ASCII and UTF-8. These are the forms the raw
-//! view's values take too ([`crate::entries::Value`]).
+//! view's values take too ([`crate::entries::Value`]), and [`fraction`]
+//! splits the bytes of a fraction for both.
 //!
 //! A rule may name only types its shape is read from: a rule of `u32`s
 //! cannot name RATIONAL. [`Rule::new`] checks this, and [`Held::new`] also
@@ -385,20 +386,30 @@ impl Element for i32 {
     }
 }
 
+/// The two numbers of a RATIONAL or SRATIONAL value that `bytes` hold in
+/// byte order `order`, numerator first, as stored: two LONGs, or two
+/// SLONGs for an SRATIONAL (TIFF 6.0, Section 2, pp. 15 to 16).
+///
+/// Both come back unsigned. A caller reading an SRATIONAL takes each sign
+/// from its number's own bits, with `cast_signed`. Neither number is
+/// judged: a zero denominator is kept.
+pub(crate) fn fraction(bytes: [u8; 8], order: ByteOrder) -> (u32, u32) {
+    let [n0, n1, n2, n3, d0, d1, d2, d3] = bytes;
+    (order.u32([n0, n1, n2, n3]), order.u32([d0, d1, d2, d3]))
+}
+
 impl sealed::Sealed for Rational {}
 
 impl Element for Rational {
     const TYPES: &'static [FieldType] = &[FieldType::Rational];
 
-    /// The fraction as stored, numerator first: a zero denominator is kept,
+    /// The fraction as stored ([`fraction`]): a zero denominator is kept,
     /// for the reader to judge.
     fn decode(_field_type: FieldType, bytes: &[u8], order: ByteOrder) -> Option<Self> {
-        let &[n0, n1, n2, n3, d0, d1, d2, d3] = bytes else {
-            return None;
-        };
+        let (numerator, denominator) = fraction(bytes.try_into().ok()?, order);
         Some(Rational {
-            numerator: order.u32([n0, n1, n2, n3]),
-            denominator: order.u32([d0, d1, d2, d3]),
+            numerator,
+            denominator,
         })
     }
 }
@@ -408,15 +419,13 @@ impl sealed::Sealed for SignedRational {}
 impl Element for SignedRational {
     const TYPES: &'static [FieldType] = &[FieldType::SRational];
 
-    /// The fraction as stored, numerator first: a zero denominator is kept,
-    /// for the reader to judge.
+    /// The fraction as stored ([`fraction`]), each sign on the number that
+    /// carries it: a zero denominator is kept, for the reader to judge.
     fn decode(_field_type: FieldType, bytes: &[u8], order: ByteOrder) -> Option<Self> {
-        let &[n0, n1, n2, n3, d0, d1, d2, d3] = bytes else {
-            return None;
-        };
+        let (numerator, denominator) = fraction(bytes.try_into().ok()?, order);
         Some(SignedRational {
-            numerator: order.u32([n0, n1, n2, n3]).cast_signed(),
-            denominator: order.u32([d0, d1, d2, d3]).cast_signed(),
+            numerator: numerator.cast_signed(),
+            denominator: denominator.cast_signed(),
         })
     }
 }
