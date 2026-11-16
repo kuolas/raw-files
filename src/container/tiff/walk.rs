@@ -66,7 +66,10 @@
 //!
 //! - an IFD that cannot be parsed, one outside the bounds among them, ends
 //!   the chain if it is a chain IFD, and is left out otherwise;
-//! - a link whose value cannot be read is not followed;
+//! - a link whose value cannot be read is not followed. The Exif, GPS and
+//!   Interoperability IFD tags are read only as one SHORT, LONG or IFD
+//!   ([`rules`]): a tag of another type or count is not read, and is such
+//!   a link;
 //! - a link into the 8-byte header, where no IFD can start, or one whose
 //!   position would pass the largest offset, is not tried, and a chain
 //!   that reaches it ends;
@@ -98,9 +101,9 @@ use std::mem;
 use std::vec;
 
 use super::header::HEADER_LEN;
-use super::tags::{EXIF_IFD, GPS_IFD, INTEROP_IFD, SUB_IFDS};
-use super::{Block, Ifd, parse_header, parse_ifd};
-use crate::error::{Error, ErrorKind, Result, damage_kind, skip_damage};
+use super::tags::SUB_IFDS;
+use super::{Block, Held, Ifd, parse_header, parse_ifd};
+use crate::error::{Error, ErrorKind, Result, damage_kind};
 use crate::io::{ByteOrder, Source};
 use crate::limits::Limits;
 
@@ -331,11 +334,10 @@ pub(crate) fn walk<R: Read + Seek>(
     let (ifd0, mut next) = parse_ifd(walker.src, block, at, header.order, limits)?;
     walker.place(Link::Ifd0, ifd0)?;
 
-    let exif = skip_damage(walker.ifds[0].1.u32(walker.src, EXIF_IFD))?.flatten();
-    if let Some(link) = exif {
+    if let Some(link) = walker.pointer(0, rules::EXIF_IFD)? {
         let origin = Origin {
             parent: 0,
-            tag: Some(EXIF_IFD),
+            tag: Some(rules::EXIF_IFD.tag()),
         };
         if let Some(at) = walker.target(link, origin)?
             && let Some((ifd, next)) = walker.candidate(at, origin)?
@@ -386,22 +388,22 @@ pub(crate) fn walk<R: Read + Seek>(
 
     // Last, the Interoperability IFD, then the GPS IFD, as the module doc
     // says.
-    let exif = (walker.ifds.iter().enumerate()).find(|(_, (link, _))| *link == Link::Exif);
+    let exif = walker.ifds.iter().position(|(link, _)| *link == Link::Exif);
     let interop = match exif {
-        Some((parent, (_, exif))) => {
-            let offset = skip_damage(exif.u32(walker.src, INTEROP_IFD))?.flatten();
+        Some(parent) => {
+            let offset = walker.pointer(parent, rules::INTEROP_IFD)?;
             let origin = Origin {
                 parent,
-                tag: Some(INTEROP_IFD),
+                tag: Some(rules::INTEROP_IFD.tag()),
             };
             walker.last(offset, Link::Interop, origin)?
         }
         None => None,
     };
-    let offset = skip_damage(walker.ifds[0].1.u32(walker.src, GPS_IFD))?.flatten();
+    let offset = walker.pointer(0, rules::GPS_IFD)?;
     let origin = Origin {
         parent: 0,
-        tag: Some(GPS_IFD),
+        tag: Some(rules::GPS_IFD.tag()),
     };
     let gps = walker.last(offset, Link::Gps, origin)?;
 
@@ -416,6 +418,27 @@ pub(crate) fn walk<R: Read + Seek>(
         interop,
         skipped: walker.skipped,
     })
+}
+
+/// The rules of the three pointers the walk reads by their tags: IFD0's
+/// Exif IFD and GPS IFD tags, and the Exif IFD's Interoperability IFD tag.
+/// [`Ifd::held`] reads them. The SubIFDs tag, an array, is read whole.
+///
+/// Exif gives each pointer as one LONG (section 4.6.3). Each is read as
+/// one value of type SHORT, LONG or IFD: TIFF 6.0 asks a reader to accept
+/// a SHORT for any unsigned integer, and IFD is a LONG that points to an
+/// IFD (Adobe's TIFF notes). The notes record the shapes measured
+/// (`docs/formats/tag-names.md`, section 2).
+mod rules {
+    use super::super::tags;
+    use super::super::{FieldType, Held};
+
+    /// One offset: a SHORT, a LONG, or an IFD.
+    const POINTER: &[FieldType] = &[FieldType::Short, FieldType::Long, FieldType::Ifd];
+
+    pub(super) const EXIF_IFD: Held<[u32; 1]> = Held::new(tags::EXIF_IFD, POINTER);
+    pub(super) const GPS_IFD: Held<[u32; 1]> = Held::new(tags::GPS_IFD, POINTER);
+    pub(super) const INTEROP_IFD: Held<[u32; 1]> = Held::new(tags::INTEROP_IFD, POINTER);
 }
 
 /// The state of one walk.
@@ -500,6 +523,34 @@ impl<R: Read + Seek> Walker<'_, R> {
                 Ok(None)
             }
         }
+    }
+
+    /// The offset that the pointer `rule` names holds, as written, in the
+    /// IFD at position `parent` of the tree: `None` when the IFD has no
+    /// such tag. A pointer of another type or count is not followed: it is
+    /// listed with no position, as `Malformed`, and `None` is returned.
+    ///
+    /// One value of the rule's types fits in the entry, so the read takes
+    /// no source and cannot fail.
+    ///
+    /// # Errors
+    ///
+    /// As for [`skip`](Self::skip).
+    fn pointer(&mut self, parent: usize, rule: Held<[u32; 1]>) -> Result<Option<u32>> {
+        let Some((_, ifd)) = self.ifds.get(parent) else {
+            return Ok(None);
+        };
+        if let Some([offset]) = ifd.held(rule) {
+            return Ok(Some(offset));
+        }
+        if ifd.entry(rule.tag()).is_some() {
+            let origin = Origin {
+                parent,
+                tag: Some(rule.tag()),
+            };
+            self.skip(origin, None, ErrorKind::Malformed)?;
+        }
+        Ok(None)
     }
 
     /// The position in the file a link as written leads to, if an IFD can
@@ -752,10 +803,13 @@ impl<R: Read + Seek> Walker<'_, R> {
 
 #[cfg(test)]
 mod tests {
+    use super::super::tags::{EXIF_IFD, GPS_IFD, INTEROP_IFD};
     use super::*;
     use crate::error::ErrorKind;
     use crate::testing::FailsFar;
-    use crate::tiff_builder::{Built, IfdId, LONG, Order, RawValue, TiffBuilder};
+    use crate::tiff_builder::{
+        ASCII, BYTE, Built, IFD, IfdId, LONG, Order, RATIONAL, RawValue, SHORT, SLONG, TiffBuilder,
+    };
     use std::io::{self, Cursor, SeekFrom};
 
     const ORDERS: [Order; 2] = [Order::Little, Order::Big];
@@ -2234,10 +2288,10 @@ mod tests {
         assert_eq!(ids(&mut src, &tree), [0, 1, 2]);
         assert_eq!(tree.exif().unwrap().invalid_entries(), 0);
         assert!(tree.interop().is_none());
-        // Its first value alone is read: 0, which leads into the header.
+        // Refused for its count, unread, so listed with no position.
         assert_eq!(
             tree.skipped(),
-            [skip(1, Some(INTEROP_IFD), Some(0), ErrorKind::Malformed)]
+            [skip(1, Some(INTEROP_IFD), None, ErrorKind::Malformed)]
         );
     }
 
@@ -2342,15 +2396,132 @@ mod tests {
             let (mut src, tree) = walked(&built);
             assert_eq!(ids(&mut src, &tree), [0, 1], "tag {tag:#06X}");
             assert_eq!(tree.ifd0().invalid_entries(), 0);
-            // The SubIFDs value is refused for its length, so it is listed
-            // with no position. Of the Exif IFD tag, only the first value is
-            // read: 0, which leads into the header.
+            // Each is listed with no position: the SubIFDs value is refused
+            // for its length, the Exif IFD tag for its count, unread.
             let expected = if tag == SUB_IFDS {
                 skip(0, Some(tag), None, ErrorKind::LimitExceeded)
             } else {
-                skip(0, Some(tag), Some(0), ErrorKind::Malformed)
+                skip(0, Some(tag), None, ErrorKind::Malformed)
             };
             assert_eq!(tree.skipped(), [expected], "tag {tag:#06X}");
+        }
+    }
+
+    /// The three pointers the walk reads by their tags.
+    const POINTERS: [u16; 3] = [EXIF_IFD, GPS_IFD, INTEROP_IFD];
+
+    /// A file whose pointer `tag` leads to an IFD of id 9, written by
+    /// `write` from that IFD's offset into the IFD that holds the pointer:
+    /// IFD0, or for the Interoperability IFD tag, the Exif IFD, which IFD0
+    /// links to with one LONG. Returns the file, the position in the tree
+    /// of the IFD that holds the pointer, and the offset of the IFD of id 9.
+    fn pointer_file(
+        order: Order,
+        tag: u16,
+        write: impl Fn(&mut TiffBuilder, IfdId, u32),
+    ) -> (Built, usize, u32) {
+        let file = |pointer: &dyn Fn(&mut TiffBuilder, IfdId, IfdId)| {
+            let mut builder = TiffBuilder::new(order);
+            let ifd0 = ifd(&mut builder, 0);
+            let holder = if tag == INTEROP_IFD {
+                let exif = ifd(&mut builder, 1);
+                builder.exif(ifd0, exif);
+                exif
+            } else {
+                ifd0
+            };
+            let target = ifd(&mut builder, 9);
+            pointer(&mut builder, holder, target);
+            let built = builder.build();
+            let at = u32::try_from(built.ifd_offset(target)).unwrap();
+            (built, at)
+        };
+        // Built once with a pointer of one LONG to learn the offset, then
+        // with the entry `write` makes. An entry is 12 bytes whatever its
+        // type, so the IFDs keep their places.
+        let (_, at) = file(&|builder, holder, target| {
+            builder.ifd_pointer(holder, tag, target);
+        });
+        let (built, moved) = file(&|builder, holder, _| write(builder, holder, at));
+        assert_eq!(moved, at, "the IFDs moved");
+        let holder = usize::from(tag == INTEROP_IFD);
+        (built, holder, at)
+    }
+
+    /// The four bytes of an entry that holds one SHORT, `value`.
+    fn one_short(order: Order, value: u32) -> RawValue {
+        let [a, b] = order.u16(u16::try_from(value).unwrap());
+        RawValue::Inline([a, b, 0, 0])
+    }
+
+    /// The IFD the pointer `tag` led the walk to, by the tree's accessor.
+    fn pointed(tree: &Tree, tag: u16) -> Option<&Ifd> {
+        match tag {
+            EXIF_IFD => tree.exif(),
+            GPS_IFD => tree.gps(),
+            _ => tree.interop(),
+        }
+    }
+
+    #[test]
+    fn a_pointer_of_one_short_long_or_ifd_is_followed() {
+        for order in ORDERS {
+            for tag in POINTERS {
+                for typ in [SHORT, LONG, IFD] {
+                    let (built, _, at) = pointer_file(order, tag, |builder, holder, at| {
+                        let value = if typ == SHORT {
+                            one_short(order, at)
+                        } else {
+                            RawValue::Inline(order.u32(at))
+                        };
+                        builder.raw(holder, tag, typ, 1, value);
+                    });
+                    let what = format!("{order:?} {tag:#06X} type {typ}");
+                    let (mut src, tree) = walked(&built);
+                    assert!(ids(&mut src, &tree).contains(&9), "{what}");
+                    let found = pointed(&tree, tag).map(Ifd::offset);
+                    assert_eq!(found, Some(u64::from(at)), "{what}");
+                    assert_eq!(tree.skipped(), [], "{what}");
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn a_pointer_of_another_count_or_type_is_listed_with_no_position() {
+        // Each entry holds the IFD's offset as its first value, or its
+        // first four bytes, or points at the IFD's bytes when its value
+        // does not fit in the entry: inside the file, so the entry is kept.
+        let shapes = |order: Order, at: u32| {
+            [
+                (SHORT, 2, one_short(order, at)),
+                (LONG, 2, RawValue::Offset(at)),
+                (SHORT, 0, one_short(order, at)),
+                (LONG, 0, RawValue::Inline(order.u32(at))),
+                (IFD, 2, RawValue::Offset(at)),
+                (SLONG, 1, RawValue::Inline(order.u32(at))),
+                (BYTE, 4, RawValue::Inline(order.u32(at))),
+                (ASCII, 4, RawValue::Inline(order.u32(at))),
+                (RATIONAL, 1, RawValue::Offset(at)),
+            ]
+        };
+        for order in ORDERS {
+            for tag in POINTERS {
+                for index in 0..shapes(order, 0).len() {
+                    let (built, holder, _) = pointer_file(order, tag, |builder, holder, at| {
+                        let (typ, count, value) = shapes(order, at)[index];
+                        builder.raw(holder, tag, typ, count, value);
+                    });
+                    let (typ, count, _) = shapes(order, 0)[index];
+                    let what = format!("{order:?} {tag:#06X} type {typ} count {count}");
+                    let (mut src, tree) = walked(&built);
+                    let expected: &[u32] = if tag == INTEROP_IFD { &[0, 1] } else { &[0] };
+                    assert_eq!(ids(&mut src, &tree), expected, "{what}");
+                    assert!(pointed(&tree, tag).is_none(), "{what}");
+                    let listed = skip(holder, Some(tag), None, ErrorKind::Malformed);
+                    assert_eq!(tree.skipped(), [listed], "{what}");
+                }
+            }
         }
     }
 
