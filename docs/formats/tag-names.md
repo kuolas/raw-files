@@ -3,8 +3,8 @@
 Every entry of a TIFF directory is a tag number, a type, a count and a
 value. raw-files gives every entry it walks, as the file records it
 ([ADR023](../architecture-decisions/adr023-every-entry-a-file-records.md)),
-and a name for an entry's tag where a published standard gives that tag
-a name in that kind of directory. This page records every such name,
+and a name for an entry's tag where a published specification gives
+that tag a name in that kind of directory. This page records every such name,
 with the document and the place in it that gives the name, and the
 field types the entries can have. The table of names in the code is
 written from this page and from nothing else
@@ -38,16 +38,22 @@ kind of directory it is in, not on the format.
 DC-008-2026) [2]; DCF 2.0, edition 2010 (CIPA DC-009-2010) [3], for the
 Interoperability IFD; the Multi-Picture Format (CIPA DC-007-2026) [4];
 the DNG specification 1.7.1.0 [5], for the DNG tags raw-files reads;
-and XMP Specification Part 3 [6], for the XMP tag. Each name below is
-the field name the document gives, spelled as it spells it, and each
-row says where: a table or section, and the printed page number.
+and XMP Specification Part 3 [6], for the XMP tag. A seventh, read on
+16 November 2026, is Adobe's *PageMaker 6.0 TIFF Technical Notes* [7],
+for the SubIFDs tag and field type 13. NEF and ARW files hold their raw
+data and larger previews in SubIFDs, and the DNG specification uses
+SubIFD trees, but none of the six names the tag or the type. Each name
+below is the field name the document gives, spelled as it spells it,
+and each row says where: a table or section, and the printed page
+number.
 
 **How they were taken out.** The documents' text was extracted from
 their PDFs, and the names read from their tag tables by a script of my
 own: TIFF 6.0's Appendix A, "TIFF Tags Sorted by Number"; Exif's
 tables 6, 8, 9, 14 and 16, with each tag's own section; DCF's section
 4.4.5.3; the Multi-Picture Format's Table 3; and the DNG
-specification's chapter 4, "DNG Tags". Every row matches a tag number
+specification's chapter 4, "DNG Tags". The notes' two names were read
+from their TIFF Tech Note 1, "TIFF Trees". Every row matches a tag number
 given both in decimal and in hexadecimal in the document. No other
 reader's tag list was read or run to make this page.
 
@@ -67,7 +73,7 @@ and 14 camera JPEGs, "public" below), and on a sample of my own files,
 at most 100 per folder (6,315 NEF, 297 ARW and 2,407 JPEG files from
 Nikon, Sony, Canon and Fujifilm bodies, "mine" below). The "Seen in"
 column says in which formats' files a tag was found; 194 different tags
-were found, 140 of them named below, and the 54 others are listed in
+were found, 141 of them named below, and the 53 others are listed in
 [section 9](#9-tags-no-document-names).
 
 ## 2. Field types
@@ -120,21 +126,32 @@ Exif uses eight of them (1 to 5, 7, 9 and 10) and adds one of its own
   p. 28).
 - **No file writes it.** None of the 18,464 files walked for the raw
   view on 3 November 2026 has an entry of type 129.
-- **Type 13, an IFD, is in neither document.** raw-files already
-  accepts it for the SubIFDs tag, and the view reads it as a type of
-  its own
-  ([ADR023](../architecture-decisions/adr023-every-entry-a-file-records.md));
-  but no document read defines it, so this page gives it no name. The
-  view writes it as "IFD", raw-files' own word for it, not a
-  document's. None of those 18,464 files has an entry of type 13.
+
+Adobe's TIFF notes add one more (TIFF Tech Note 1, "TIFF Trees",
+pp. 4 to 5) [7]:
+
+| Code | Name | One value |
+|---|---|---|
+| 13 | IFD | a LONG that is the offset of another IFD |
+
+- **IFD is the type the notes prefer for the SubIFDs tag.** They give
+  the tag's type as `LONG or "IFD" (Type = 13)`, and add that `"IFD" is
+  preferred` (p. 4). Type 13 "is otherwise identical to LONG, but is
+  only used to point to other valid IFDs" (p. 5).
+- **Neither TIFF 6.0 nor Exif defines it.** raw-files accepts it for
+  the SubIFDs tag, and the view reads it as a type of its own
+  ([ADR023](../architecture-decisions/adr023-every-entry-a-file-records.md)).
+- **No file writes it.** None of those 18,464 files has an entry of
+  type 13.
 
 ## 3. The IFD chain and the SubIFDs
 
 IFD0, the IFDs chained after it (IFD1, IFD2) and the SubIFDs that IFD0
 points to share one set of names: TIFF 6.0's, with Exif's for the tags
 it uses in IFD0 and IFD1 (Table 6, pp. 31 to 32) and for the two
-pointers it adds there (section 4.6.3) [1][2], and the DNG
-specification's for the four DNG tags raw-files reads [5]. A JPEG's
+pointers it adds there (section 4.6.3) [1][2], the DNG
+specification's for the four DNG tags raw-files reads [5], and Adobe's
+TIFF notes' for the SubIFDs tag [7]. A JPEG's
 Exif segment holds the same IFD0 and IFD1. Exif's own tags have these
 names only in the Exif IFD: a camera that writes one of them in IFD0,
 as a NEF does DateTimeOriginal, gets no name there
@@ -192,6 +209,7 @@ as a NEF does DateTimeOriginal, gets no name there
 | 0x0143 | TileLength | TIFF 6.0, Appendix A, p. 118 | ARW |
 | 0x0144 | TileOffsets | TIFF 6.0, Appendix A, p. 118 | ARW |
 | 0x0145 | TileByteCounts | TIFF 6.0, Appendix A, p. 118 | ARW |
+| 0x014A | SubIFDs | PageMaker 6.0 TIFF notes, TIFF Tech Note 1, p. 4 | ARW, NEF |
 | 0x014C | InkSet | TIFF 6.0, Appendix A, p. 118 | – |
 | 0x014D | InkNames | TIFF 6.0, Appendix A, p. 118 | – |
 | 0x014E | NumberOfInks | TIFF 6.0, Appendix A, p. 118 | – |
@@ -223,7 +241,7 @@ as a NEF does DateTimeOriginal, gets no name there
 | 0xC620 | DefaultCropSize | DNG 1.7.1.0, Chapter 4, DNG Tags, p. 31 | ARW |
 | 0xC634 | DNGPrivateData | DNG 1.7.1.0, Chapter 4, DNG Tags, p. 41 | ARW |
 
-80 names.
+81 names.
 
 
 ## 4. The Exif IFD
@@ -439,7 +457,6 @@ counts per format.
 | Directory | Tag | Files, public / mine | Why it has no name |
 |---|---|---|---|
 | IFD chain | 0x000B | JPEG 0 / 5 | no document read names it |
-| IFD chain | 0x014A | ARW 243 / 295; NEF 383 / 6314 | the DNG specification uses SubIFD trees "as described in the TIFF-EP specification" and names no tag; TIFF-EP was not read |
 | IFD chain | 0x02BC | ARW 152 / 40; NEF 227 / 6186 | XMP part 3 (p. 10; Table 12, p. 19) and the DNG specification (p. 14) call it "the XMP metadata tag (700)", holding an XMP packet, and give it no field name |
 | IFD chain | 0x0301 | JPEG 0 / 3 | no document read names it |
 | IFD chain | 0x0303 | JPEG 0 / 3 | no document read names it |
@@ -493,12 +510,13 @@ counts per format.
 | Exif | 0xEA1C | JPEG 0 / 13 | no document read names it |
 | Exif | 0xEA1D | JPEG 0 / 11 | no document read names it |
 
-54 tags.
+53 tags.
 
 
 ## Sources
 
-All documents were downloaded and read on 9 November 2026.
+Documents 1 to 6 were downloaded and read on 9 November 2026, and
+document 7 on 16 November 2026.
 
 [1] Adobe Systems, "TIFF, Revision 6.0", Final, June 3, 1992; the
     copy Adobe published. **[P]**
@@ -519,4 +537,11 @@ All documents were downloaded and read on 9 November 2026.
     **[P]**
 [6] Adobe, "XMP Specification Part 3: Storage in Files", January 2020,
     https://github.com/adobe/XMP-Toolkit-SDK/blob/main/docs/XMPSpecificationPart3.pdf.
+    **[P]**
+[7] Adobe Systems, "Adobe PageMaker 6.0 TIFF Technical Notes", draft,
+    September 14, 1995. Adobe published it at
+    http://partners.adobe.com/public/developer/en/tiff/TIFFPM6.pdf,
+    which now gives 404; the copy read is the Internet Archive's
+    capture of that address on 31 December 2005,
+    https://web.archive.org/web/20051231212249/http://partners.adobe.com/public/developer/en/tiff/TIFFPM6.pdf.
     **[P]**

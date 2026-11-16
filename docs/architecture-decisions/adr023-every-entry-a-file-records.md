@@ -9,7 +9,8 @@
   [ADR021](adr021-what-the-file-records-and-what-raw-files-reads-into-it.md),
   what the file records and what raw-files reads into it
 - Date: 2026-11-03
-- Issue: #50
+- Revision: 2, 2026-11-16
+- Issue: #50; the names of the SubIFDs tag and of field type 13 #90
 
 ## Context
 
@@ -172,14 +173,17 @@ handle, with each value read only when it is asked for.
   MakerNote, a MakerNote's own IFD by the tag that points to it,
   SR2Private and the Multi-Picture index each by its kind. The
   MakerNote is the camera maker's, whom the file's camera names.
-- **Names come from the standards only.** An entry has a name where a
-  published standard gives its tag one in that kind of directory: TIFF
-  6.0, Exif, DCF for the Interoperability IFD, CIPA DC-007 for the
-  Multi-Picture index, and the DNG specification for the DNG tags
-  raw-files reads. The names, each with its document and section, are
-  recorded in [the tag names](../formats/tag-names.md) before any code
-  holds them ([ADR013](adr013-clean-room-and-third-party-code.md)). A
-  MakerNote tag, and any tag no such document names, has none.
+- **Names come from published specifications only.** An entry has a
+  name where a published specification gives its tag one in that kind
+  of directory: TIFF 6.0, Exif, DCF for the Interoperability IFD, CIPA
+  DC-007 for the Multi-Picture index, and the DNG specification for the
+  DNG tags raw-files reads. Adobe's *PageMaker 6.0 TIFF Technical Notes*
+  name the SubIFDs tag, which NEF and ARW files use, and field type 13,
+  the type they define for it; the other documents name neither. The
+  names, each with its document and section, are recorded in
+  [the tag names](../formats/tag-names.md) before any code holds them
+  ([ADR013](adr013-clean-room-and-third-party-code.md)). A MakerNote
+  tag, and any tag no such document names, has none.
 - **As recorded, nothing redacted.** The view gives serial numbers, GPS
   entries and the owner's, artist's and copyright texts as the file
   records them, with no option to hide them, as full metadata gives
@@ -195,8 +199,8 @@ handle, with each value read only when it is asked for.
   format notes say which records are enciphered, by maker and record
   version.
 - **Exif's UTF-8 type is read.** The view reads TIFF 6.0's twelve
-  types; the IFD type, 13, which no document read defines but raw-files
-  already accepts for the SubIFDs tag; and Exif's UTF-8, 129. An entry
+  types; Adobe's IFD type, 13, which raw-files already accepts for the
+  SubIFDs tag; and Exif's UTF-8, 129. An entry
   of type 129 is listed as UTF-8, and its bytes and cleaned text are
   given as an ASCII value's are.
 
@@ -237,6 +241,10 @@ Rejected:
 - **No names yet.** A program would keep its own table of the standard
   names beside raw-files, the second reader this view is meant to
   remove.
+- **The standards alone, without Adobe's TIFF notes.** The SubIFDs tag
+  is in IFD0 of nearly every NEF and ARW, and type 13 is what the notes
+  prefer for it. Without the notes, both would stay unnamed, or carry a
+  word of raw-files' own.
 - **A redaction option.** raw-files gives what the file records; a
   program that hides a serial number or a position decides what to
   hide.
@@ -287,9 +295,9 @@ Rejected:
   caller cannot tell why an entry is missing.
 - An enciphered record looks like any other binary entry; a caller
   reads which ones are enciphered in the format notes, not in the API.
-- The names are those of the standards, which differ from other
-  readers' names for the same tags in places, and most MakerNote
-  entries have none.
+- The names are those of the published specifications, which differ
+  from other readers' names for the same tags in places, and most
+  MakerNote entries have none.
 - Every new walk raw-files adds, such as another maker's MakerNote,
   adds its entries to the view, and the directory type grows by a
   variant, which does not break callers.

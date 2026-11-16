@@ -75,8 +75,8 @@ ever complete for every body. What each gives so far:
   IFDs, the SubIFDs, the Exif, GPS and Interoperability IFDs, the Nikon
   and Sony MakerNotes, Nikon's preview IFD, Sony's SR2Private and a
   JPEG's Multi-Picture index), with its directory, tag number, type and
-  value as the file records it, and the name a published standard
-  gives the tag
+  value as the file records it, and the name a published
+  specification gives the tag
   ([ADR023](architecture-decisions/adr023-every-entry-a-file-records.md),
   [the tag names](formats/tag-names.md)). The groups of values follow,
   each read from the same directories; enciphered and encrypted
