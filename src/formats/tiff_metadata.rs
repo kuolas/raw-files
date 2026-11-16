@@ -270,7 +270,7 @@ pub(crate) fn read<R: Read + Seek>(src: &mut Source<R>, tree: &Tree) -> Result<S
             None => None,
         },
         capture_time,
-        orientation: tiff_previews::orientation(src, tree)?,
+        orientation: tiff_previews::orientation(tree),
         exposure,
         camera_settings,
         lens,
@@ -2189,11 +2189,7 @@ mod tests {
             });
             let metadata = read(&mut src, &tree).unwrap().metadata;
             assert_eq!(metadata.orientation(), orientation, "{value}");
-            assert_eq!(
-                tiff_previews::orientation(&mut src, &tree).unwrap(),
-                orientation,
-                "{value}"
-            );
+            assert_eq!(tiff_previews::orientation(&tree), orientation, "{value}");
         }
     }
 
@@ -4189,11 +4185,13 @@ mod tests {
 
     #[test]
     fn an_ifd_whose_role_cannot_be_read_is_passed_over() {
-        // IFD0's PhotometricInterpretation cannot be read, so whether it
-        // holds raw data is unknown, as for the preview finder.
+        // IFD0's BitsPerSample cannot be read, so whether it holds raw data
+        // is unknown, as for the preview finder, though it says it is the
+        // full-resolution image.
         let metadata = metadata_of(|builder, ifd| {
-            too_long_of(builder, ifd, PHOTOMETRIC_INTERPRETATION, SHORT, 2);
+            too_long_of(builder, ifd, BITS_PER_SAMPLE, SHORT, 2);
             builder
+                .long(ifd, NEW_SUBFILE_TYPE, &[0])
                 .long(ifd, IMAGE_WIDTH, &[RAW.width])
                 .long(ifd, IMAGE_LENGTH, &[RAW.height]);
             let sub = builder.ifd();
