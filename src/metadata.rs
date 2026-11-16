@@ -368,8 +368,54 @@ impl Metadata {
     /// the size the camera's menu names. For a RAW file, it is `None` when
     /// there is no raw size.
     ///
+    /// It counts stored pixels, which are not always square. A Nikon D1X
+    /// stores one row for every two rows of the picture: its image size is
+    /// about 3:1, and the picture 3:2, the shape of its preview. Its raw
+    /// directory records this, with an XResolution twice its YResolution,
+    /// which the raw view gives ([`tags::tiff::X_RESOLUTION`] and
+    /// [`tags::tiff::Y_RESOLUTION`]).
+    ///
     /// For a JPEG file, it is the size its frame header gives: the picture's
     /// own size.
+    ///
+    /// [`tags::tiff::X_RESOLUTION`]: crate::tags::tiff::X_RESOLUTION
+    /// [`tags::tiff::Y_RESOLUTION`]: crate::tags::tiff::Y_RESOLUTION
+    ///
+    /// # Examples
+    ///
+    /// The resolutions of a D1X's raw directory, its first SubIFD, give
+    /// the shape of its pixels:
+    ///
+    /// ```
+    /// use std::path::Path;
+    ///
+    /// use raw_files::{CameraFile, Directory, Value, tags};
+    ///
+    /// fn print_pixel_shape(path: &Path) -> raw_files::Result<()> {
+    ///     let file = CameraFile::open(path)?;
+    ///     let read = |tag| match file.entries().entry(Directory::SubIfd(0), tag) {
+    ///         Some(entry) => file.read_value(&entry).map(Some),
+    ///         None => Ok(None),
+    ///     };
+    ///     let x = read(tags::tiff::X_RESOLUTION)?;
+    ///     let y = read(tags::tiff::Y_RESOLUTION)?;
+    ///     if let (Some(size), Some(Value::Rational(x)), Some(Value::Rational(y))) =
+    ///         (file.metadata().image_size(), x, y)
+    ///     {
+    ///         // 4028x1324 stored, at 600/1 by 300/1 per inch
+    ///         println!("{size} stored, at {} by {} per inch", x[0], y[0]);
+    ///     }
+    ///     Ok(())
+    /// }
+    /// # fn main() -> raw_files::Result<()> {
+    /// #     // A sample file, which only a checkout with the samples holds.
+    /// #     let path = concat!(env!("CARGO_MANIFEST_DIR"), "/raw-samples/nikon-d1x-12bit-lossy.nef");
+    /// #     if Path::new(path).exists() {
+    /// #         print_pixel_shape(Path::new(path))?;
+    /// #     }
+    /// #     Ok(())
+    /// # }
+    /// ```
     pub fn image_size(&self) -> Option<Size> {
         self.image_size
     }
