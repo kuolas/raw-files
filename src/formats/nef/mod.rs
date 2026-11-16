@@ -29,7 +29,7 @@ use std::io::{Read, Seek};
 
 use super::{FormatSpec, Parsed, is_dng, make_starts_with, tiff_metadata};
 use crate::container::tiff::Tree;
-use crate::entries::Entries;
+use crate::entries::{Entries, Lookup};
 use crate::error::Result;
 use crate::format::Format;
 use crate::formats::makernote::nikon::{self, NIKON, Picture};
@@ -81,22 +81,27 @@ fn claims<R: Read + Seek>(src: &mut Source<R>, tree: &Tree) -> Result<bool> {
 ///   picture ([`Picture::Raw`]).
 /// - **The entries** are those of every directory of the tree, then the
 ///   MakerNote IFD's and its PreviewIFD's
-///   ([`MakerNote::add_entries`](nikon::MakerNote::add_entries)).
+///   ([`MakerNote::add_entries`](nikon::MakerNote::add_entries)). A
+///   MakerNote IFD that cannot be read is listed as skipped.
 ///
 /// # Errors
 ///
 /// `Io` when the reader fails.
 fn parse<R: Read + Seek>(src: &mut Source<R>, tree: &Tree, limits: &Limits) -> Result<Parsed> {
-    let makernote = nikon::read(src, tree, limits)?;
-    let previews = previews::previews(src, tree, makernote.as_ref())?;
+    let makernote = nikon::lookup(src, tree, limits)?;
+    let previews = previews::previews(src, tree, makernote.as_ref().found())?;
     let standard = tiff_metadata::read(src, tree)?;
     let mut entries = Entries::of_tree(tree);
-    let metadata = match &makernote {
-        Some(makernote) => {
+    let metadata = match makernote {
+        Lookup::Found(makernote) => {
             makernote.add_entries(&mut entries);
-            nikon::metadata(src, makernote, standard, Picture::Raw)?
+            nikon::metadata(src, &makernote, standard, Picture::Raw)?
         }
-        None => standard.metadata,
+        Lookup::Skipped(skipped) => {
+            entries.skip(skipped);
+            standard.metadata
+        }
+        Lookup::Absent => standard.metadata,
     };
     Ok(Parsed {
         previews,

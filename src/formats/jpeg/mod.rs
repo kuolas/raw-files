@@ -17,7 +17,7 @@
 //!   container kept ([`picture`]).
 //! - [`parse`] walks the Exif segment's TIFF structure, and reads its
 //!   standard metadata with the shared reader. Then it reads the MakerNote
-//!   of the maker that IFD0's Make names ([`MakerNote::read`]).
+//!   of the maker that IFD0's Make names ([`MakerNote::lookup`]).
 //! - [`metadata`] sets the picture's own size, and keeps the focus points
 //!   only when their frame has the picture's shape.
 //! - `parse` then reads the MPF list, and [`previews`] checks the
@@ -45,7 +45,7 @@ use super::tiff_previews::{self, Candidate};
 use super::{FormatSpec, JPEG_UNCLAIMED, Parsed, make_starts_with};
 use crate::container::jpeg::{Frame, Segments, mpf};
 use crate::container::tiff::{Tree, walk};
-use crate::entries::{Directory, Entries};
+use crate::entries::{Directory, Entries, Lookup};
 use crate::error::{Error, Result, skip_damage};
 use crate::format::Format;
 use crate::geometry::Size;
@@ -99,7 +99,7 @@ fn claims<R: Read + Seek>(_: &mut Source<R>, segments: &Segments) -> Result<bool
 /// `limits`, and the shared reader reads its standard metadata. Then:
 ///
 /// - **The MakerNote** is read once, within `limits`, by the reader of the
-///   maker that IFD0's Make names ([`MakerNote::read`]). It gives the values
+///   maker that IFD0's Make names ([`MakerNote::lookup`]). It gives the values
 ///   the standard tags lack, as in a raw file.
 /// - **The previews' candidates** are three kinds:
 ///   - the thumbnail in IFD1 of the Exif segment's structure, which the
@@ -144,18 +144,25 @@ fn parse<R: Read + Seek>(
         Some(tree) => (
             tiff_metadata::read(src, tree)?,
             tiff_previews::tree_candidates(src, tree)?,
-            MakerNote::read(src, tree, limits)?,
+            MakerNote::lookup(src, tree, limits)?,
         ),
-        None => (Standard::default(), Vec::new(), None),
+        None => (Standard::default(), Vec::new(), Lookup::Absent),
     };
-    let metadata = metadata(src, standard, makernote.as_ref(), size)?;
-    candidates.extend(makernote.as_ref().and_then(MakerNote::preview_candidate));
+    let metadata = metadata(src, standard, makernote.as_ref().found(), size)?;
+    candidates.extend(
+        makernote
+            .as_ref()
+            .found()
+            .and_then(MakerNote::preview_candidate),
+    );
     // The entries of the Exif segment's tree, walked once, or none when it
     // does not walk, as it then gives no metadata. Then the MakerNote's,
     // then the MP Index IFD's, which the MPF segment holds apart from it.
     let mut entries = tree.as_ref().map_or_else(Entries::new, Entries::of_tree);
-    if let Some(makernote) = &makernote {
-        makernote.add_entries(&mut entries);
+    match &makernote {
+        Lookup::Found(makernote) => makernote.add_entries(&mut entries),
+        Lookup::Skipped(skipped) => entries.skip(*skipped),
+        Lookup::Absent => {}
     }
     let index = match &segments.mpf {
         Some(block) => mpf::index(src, block, limits)?,
@@ -330,8 +337,10 @@ enum MakerNote {
 impl MakerNote {
     /// The MakerNote of the JPEG file in `src`, whose Exif segment's TIFF
     /// structure is `tree`, read within `limits`. The maker that IFD0's Make
-    /// names ([`Maker::of`]) reads it, with [`nikon::read`] or
-    /// [`sony::read`]; `None` under any other Make.
+    /// names ([`Maker::of`]) reads it, with [`nikon::lookup`] or
+    /// [`sony::lookup`]; [`Lookup::Absent`] under any other Make, and
+    /// [`Lookup::Skipped`] when the maker's reader lists its IFD as
+    /// skipped.
     ///
     /// Make decides, not what the MakerNote looks like, as in a raw file.
     /// Nikon's editing software writes Nikon-style MakerNotes into the files
@@ -343,15 +352,15 @@ impl MakerNote {
     /// # Errors
     ///
     /// `Io` when the reader fails.
-    fn read<R: Read + Seek>(
+    fn lookup<R: Read + Seek>(
         src: &mut Source<R>,
         tree: &Tree,
         limits: &Limits,
-    ) -> Result<Option<MakerNote>> {
+    ) -> Result<Lookup<MakerNote>> {
         Ok(match skip_damage(Maker::of(src, tree))?.flatten() {
-            Some(Maker::Nikon) => nikon::read(src, tree, limits)?.map(MakerNote::Nikon),
-            Some(Maker::Sony) => sony::read(src, tree, limits)?.map(MakerNote::Sony),
-            None => None,
+            Some(Maker::Nikon) => nikon::lookup(src, tree, limits)?.map(MakerNote::Nikon),
+            Some(Maker::Sony) => sony::lookup(src, tree, limits)?.map(MakerNote::Sony),
+            None => Lookup::Absent,
         })
     }
 

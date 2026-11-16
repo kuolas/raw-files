@@ -1941,14 +1941,18 @@ The ten largest values, sizes in bytes. Next come IFD0's XMP packet
 ### 14.3 Entries a reader leaves out
 
 The view leaves out a damaged entry and counts it in its directory
-(ADR023). On the ARW-family files: **[F]**
+(ADR023), and gives a directory it cannot read as left out, with the
+link that leads to it and the cause (`Entries::skipped_directories`).
+On the ARW-family files: **[F]**
 
 | Directory | What | Tags | Files, public / mine |
 |---|---|---|---|
 | MakerNote | a value past the MakerNote's declared length | 0x2003, 0xB020, 0xB02A, 0xB02B, 0xB02C | 14 / 0 (DSLR-A200 to A900) |
-| SR2Private, SubIFD | a pointer at bytes that are no IFD (more than 1,000 entries) | whole directory | 2 / 0 (DSLR-A100) |
+| SR2Private, SubIFD | a pointer at bytes that are no IFD (more than 1,000 entries): both given as left out, held by IFD0's 0xC634 and 0x014A, limit exceeded | whole directory | 2 / 0 (DSLR-A100) |
 
-- **None of my 500 files has a damaged entry or directory.** **[F]**
+- **None of my 500 files has a damaged entry or directory.** Measured
+  again on 2026-11-16, none of my 3,217 ARWs gives a directory left out.
+  **[F]**
 - **Irregular but readable, and kept:** tags out of ascending order,
   in the MakerNote and the raw SubIFD of nearly every file, mine
   included, and in the Exif IFD of 2 public files; a value at an odd

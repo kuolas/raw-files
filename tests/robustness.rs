@@ -94,8 +94,8 @@ use std::ops::Range;
 use std::panic;
 
 use raw_files::{
-    CameraFile, Entry, Focus, FocusLayout, FocusPoints, Metadata, Rational, SignedRational, Size,
-    Value,
+    CameraFile, Entry, Focus, FocusLayout, FocusPoints, Limits, Metadata, Rational, SignedRational,
+    Size, Value,
 };
 use support::arw::{ARW4_FULL_SIZE_JPEG, arw4_file, stub};
 use support::fixtures::{
@@ -495,7 +495,24 @@ fn open_and_read_everything(bytes: &[u8]) -> bool {
     }
     let entries = file.entries();
     for &directory in entries.directories() {
-        let _ = write!(seen, "{directory} {}", entries.skipped(directory));
+        let _ = write!(seen, "{directory} {}", entries.skipped_entries(directory));
+    }
+    let skipped = entries.skipped_directories();
+    let cap = usize::try_from(Limits::default().max_ifds()).unwrap();
+    assert!(
+        skipped.len() <= cap,
+        "{} directories left out",
+        skipped.len()
+    );
+    for skipped in skipped {
+        let _ = write!(
+            seen,
+            "{} {:?} {:?} {}",
+            skipped.parent(),
+            skipped.tag(),
+            skipped.offset(),
+            skipped.kind()
+        );
     }
     for entry in entries {
         show_entry(entry, &mut seen);

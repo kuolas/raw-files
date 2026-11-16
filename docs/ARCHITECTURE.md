@@ -115,9 +115,10 @@ adds a row.
 | `src/focus.rs` | `Focus`, `FocusPoints` and `FocusLayout`, with their parts: where the camera's autofocus aimed, the points it used and the body's layout of points. | `geometry`, `value_error` |
 | `src/metadata.rs` | `Metadata`, `Exposure` and `Lens`: what the camera recorded about a picture, every value optional, each built without a file through `with_…` methods. | `authorship`, `camera`, `camera_settings`, `datetime`, `focus`, `geometry`, `location`, `orientation`, `rational` |
 | `src/preview.rs` | `Preview` and `PreviewFormat`: one preview in a file, with its byte range, size, format and orientation, and the choice among previews by size. | `geometry`, `orientation` |
-| `src/entries.rs` | `Directory`, `Entry`, `Value` and `Entries`: the raw view, every entry of every TIFF directory a file holds, as recorded, with its value decoded on request. | `container`, `io`, `error`, `rational` |
+| `src/entries.rs` | `Directory`, `Entry`, `Value` and `Entries`: the raw view, every entry of every TIFF directory a file holds, as recorded, with its value decoded on request, and each directory left out as a `SkippedDirectory`. | `container`, `io`, `error`, `rational` |
 | `src/entries/display.rs` | `ValueDisplay`: the short form of a `Value` that `Value::display` gives, cut after a few values. | `entries` |
 | `src/entries/names.rs` | The name of an entry's tag, from the table of `tags` for its kind of directory. | `entries`, `tags` |
+| `src/entries/skipped.rs` | `SkippedDirectory`: a directory a file links to that could not be read, with the link and the cause; and what a reader found where one of its own links leads. | `entries`, `error` |
 | `src/tags.rs` | `tags`: a constant for each tag `Entry::name` has a name for, one module per kind of directory, each row giving the constant and its name at once. | — |
 | `src/format.rs` | `Format`: the camera file formats the library reads, NEF, ARW and JPEG, with their names, extensions and whether each holds raw data. | — |
 

@@ -98,7 +98,7 @@ pub(crate) fn index<R: Read + Seek>(
     let Some(header) = skip_damage(parse_header(src, mpf))? else {
         return Ok(None);
     };
-    let Some(ifd) = ifd_in(src, mpf, header.ifd0, header.order, limits)? else {
+    let Ok(ifd) = ifd_in(src, mpf, header.ifd0, header.order, limits)? else {
         return Ok(None);
     };
     let images = listed_images(src, mpf, &ifd)?;

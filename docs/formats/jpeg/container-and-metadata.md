@@ -771,9 +771,10 @@ The ten largest values, sizes in bytes. **[F]**
 
 ### 14.3 Entries a reader leaves out
 
-The view leaves out a damaged entry and counts it in its directory,
-and a directory that cannot be read is not listed (ADR023). On the
-JPEG files: **[F]**
+The view leaves out a damaged entry and counts it in its directory
+(ADR023). A directory that cannot be read is not listed; the view gives
+it as left out instead, with the link that leads to it and the cause
+(`Entries::skipped_directories`). On the JPEG files: **[F]**
 
 | Directory | What | Files, public / mine |
 |---|---|---|
@@ -781,6 +782,18 @@ JPEG files: **[F]**
 | Interoperability | the pointer to it leaves the Exif segment | 0 / 1 |
 | Nikon MakerNote preview IFD | more than 1,000 entries | 0 / 1 |
 | SubIFD | 540 entries of tags 0x2000 and 0xA000, of types TIFF does not define | 1 / 0 (a raw.pixls.us file) |
+
+Measured again on 2026-11-16 through `Entries::skipped_directories`, on
+24,634 JPEG files of mine: 69 give a directory left out, and no
+camera's JPEG of a Nikon body is among them. **[F]**
+
+- 64 Nikon PreviewIFDs that do not lie inside the MakerNote, malformed,
+  all in JPEGs an editor rewrote: NX Studio from a Z 9 and a D7200,
+  ViewNX 2 and GIMP from a D3200.
+- 4 MakerNote IFDs of a Sony Ericsson W760i phone, read as Sony's, over
+  the cap on one directory's entries.
+- 1 Interoperability IFD of a Canon EOS 300D, whose pointer leaves the
+  Exif segment, malformed.
 
 - **The D70 file's Interoperability pointer leads to IFD1** (section
   6), which the walk has already listed in IFD0's chain; the view keeps

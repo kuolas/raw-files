@@ -60,6 +60,25 @@ does. An entry that can break a caller opens with **Breaking:**.
   A long value stops after 16 values, or 80 characters of text, and
   gives its length; a precision such as `{:.4}` sets the number. The
   form is for people and may change. `Value` itself has no `Display`.
+- `Entries::skipped_directories` lists each directory a file links to
+  that raw-files could not read, as a `SkippedDirectory`
+  ([#92](https://github.com/kuolas/raw-files/issues/92)). Such a
+  directory left no trace before, so a caller could not tell it was
+  there. Each one gives:
+  - the listed directory that holds the link, and the link's tag;
+  - where the link leads, when that is known;
+  - why, as an `ErrorKind`: `LimitExceeded` when a cap of `Limits`
+    stopped the reader, so that a larger limit may list it, and
+    `Malformed` for damage.
+
+  ```rust
+  for skipped in file.entries().skipped_directories() {
+      println!("{} links to a directory left out: {}", skipped.parent(), skipped.kind());
+  }
+  ```
+
+  Of the public files measured, the Sony DSLR-A100's list two, some
+  Nikon Coolpix NRWs and COOLSCAN NEFs one, and one damaged JPEG one.
 
 ### Changed
 
@@ -100,6 +119,30 @@ does. An entry that can break a caller opens with **Breaking:**.
   reader is `Send`: a handle over a reader that is `Sync` and not
   `Send` is no longer `Sync`
   ([#89](https://github.com/kuolas/raw-files/issues/89)).
+- **Breaking:** `Entries::skipped` is now `Entries::skipped_entries`,
+  beside the new `skipped_directories`
+  ([#92](https://github.com/kuolas/raw-files/issues/92)). It still
+  counts the entries left out of one directory. Rename the call:
+
+  ```rust
+  // 0.10.0
+  let left_out = entries.skipped(Directory::MakerNote);
+  // 0.11.0
+  let left_out = entries.skipped_entries(Directory::MakerNote);
+  ```
+- **Breaking:** each link the walk does not follow now counts toward
+  `Limits::max_ifds`, as a directory it reads does, so the list of
+  directories left out stays as bounded as the directories read
+  ([#92](https://github.com/kuolas/raw-files/issues/92)). These were free
+  before, and each now counts once per position it leads to:
+  - a link into the TIFF header;
+  - a link past the largest offset, or a SubIFDs value that cannot be
+    read, once per directory and tag;
+  - a SubIFD of a directory at the depth cap.
+
+  A file whose directories and dead links together pass the cap now
+  fails with `LimitExceeded`, where it opened before. No camera file
+  comes near: the most measured in one file is 9, under the default 256.
 - A tag that raw-files reads only at an exact count is now skipped,
   unread, when it holds another count
   ([#109](https://github.com/kuolas/raw-files/issues/109)). A tag of

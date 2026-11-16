@@ -257,10 +257,6 @@ impl Tree {
     /// Every link the walk met and did not follow, in the order it met
     /// them, as the [module documentation](self) lists them. With the IFDs
     /// of the tree, at most [`Limits::max_ifds`].
-    #[cfg_attr(
-        not(test),
-        expect(dead_code, reason = "the raw view lists them, in the next commit")
-    )]
     pub(crate) fn skipped(&self) -> &[Skipped] {
         &self.skipped
     }

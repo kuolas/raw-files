@@ -42,11 +42,11 @@ use std::collections::BTreeSet;
 use std::io::Cursor;
 
 use raw_files::{
-    Camera, CameraFile, CameraSettings, ColorSpace, DateTime, Exposure, ExposureProgram, FineTune,
-    Flash, FlashMode, Focus, FocusAreaMode, FocusOrigin, FocusPoint, FocusPoints, Format,
-    ImageArea, Lens, Limits, Make, Metadata, MeteringMode, Options, Orientation, Point, Preview,
-    PreviewFormat, Rational, RawImageSize, Shutter, SignedRational, Size, ValueError, WhiteBalance,
-    WhiteBalanceMode,
+    Camera, CameraFile, CameraSettings, ColorSpace, DateTime, Directory, ErrorKind, Exposure,
+    ExposureProgram, FineTune, Flash, FlashMode, Focus, FocusAreaMode, FocusOrigin, FocusPoint,
+    FocusPoints, Format, ImageArea, Lens, Limits, Make, Metadata, MeteringMode, Options,
+    Orientation, Point, Preview, PreviewFormat, Rational, RawImageSize, Shutter, SignedRational,
+    Size, ValueError, WhiteBalance, WhiteBalanceMode,
 };
 use support::nef::{
     D1H_ISO, D1H_LENS, D1H_PREVIEW_JPEG, D1H_RAW, D1hBlobs, d1h_file, d1h_file_with,
@@ -65,7 +65,7 @@ use support::samples::{
     SampleMetadata, SampleSettings, SerialShape, Text, check, check_enciphered, check_entries,
     check_every, check_metadata, listed, sizes,
 };
-use support::tiff_builder::{Built, Order};
+use support::tiff_builder::{Built, Order, RawValue, SUB_IFDS, TiffBuilder};
 
 const ORDERS: [Order; 2] = [Order::Little, Order::Big];
 
@@ -5676,5 +5676,40 @@ fn an_enciphered_record_is_given_byte_for_byte() {
     if let Some(bytes) = check_enciphered("nikon-z9-lossless.nef", 0x0091) {
         assert_eq!(bytes.get(..4), Some(&b"0805"[..]));
         assert_eq!(bytes.len(), 62_151);
+    }
+}
+
+#[test]
+fn a_subifd_with_an_entry_that_cannot_be_checked_is_listed_as_skipped() {
+    // A Nikon file whose IFD0 links to two SubIFDs: the first holds an
+    // entry of type 99, which TIFF does not define, the second is sound.
+    for order in ORDERS {
+        let mut builder = TiffBuilder::new(order);
+        let (ifd0, damaged, sound) = (builder.ifd(), builder.ifd(), builder.ifd());
+        builder.ascii(ifd0, 0x010F, "NIKON CORPORATION");
+        builder.raw(damaged, 0x0100, 99, 1, RawValue::Inline([0; 4]));
+        builder.short(sound, 0x0100, &[160]);
+        builder.subifds(ifd0, &[damaged, sound]);
+        let built = builder.build();
+        let file = CameraFile::from_bytes(&built.bytes).unwrap();
+        assert_eq!(file.format(), Format::Nef, "{order:?}");
+        let entries = file.entries();
+        // The sound one is the first SubIFD listed.
+        assert_eq!(
+            entries.directories(),
+            [Directory::Ifd(0), Directory::SubIfd(0)],
+            "{order:?}"
+        );
+        let [skipped] = entries.skipped_directories() else {
+            panic!("{order:?}: {:?}", entries.skipped_directories());
+        };
+        assert_eq!(skipped.parent(), Directory::Ifd(0), "{order:?}");
+        assert_eq!(skipped.tag(), Some(SUB_IFDS), "{order:?}");
+        assert_eq!(
+            skipped.offset(),
+            Some(built.ifd_offset(damaged)),
+            "{order:?}"
+        );
+        assert_eq!(skipped.kind(), ErrorKind::Malformed, "{order:?}");
     }
 }

@@ -1919,16 +1919,19 @@ with StripOffsets. **[F]**
 ### 12.3 Entries a reader leaves out
 
 The view leaves out a damaged entry and counts it in its directory
-(ADR023), and a directory that does not lie where its reader allows is
-not listed at all. On the NEF files: **[F]**
+(ADR023). A directory that does not lie where its reader allows is not
+listed; the view gives it as left out instead, with the link that leads
+to it and the cause (`Entries::skipped_directories`). On the NEF files:
+**[F]**
 
 | Directory | What | Tags | Files, public / mine |
 |---|---|---|---|
 | MakerNote | a value past the MakerNote's declared length, left out and counted | 0x0E01 | 2 / 0 (COOLSCAN files) |
-| MakerNote preview IFD | the whole IFD past the MakerNote's declared length: not listed | whole directory, whose 0x011A and 0x011B values lie further out | 6 / 0 (Coolpix NRW and COOLSCAN files) |
+| MakerNote preview IFD | the whole IFD past the MakerNote's declared length: given as left out, held by the MakerNote's 0x0011, malformed | whole directory, whose 0x011A and 0x011B values lie further out | 6 / 0 (Coolpix NRW and COOLSCAN files) |
 
 - **None of my 11,376 files has a damaged entry or directory**, nor any
-  of the fixtures; 11,743 of the 11,759 files have no irregularity of
+  of the fixtures. Measured again on 2026-11-16, none of my 29,483 NEFs
+  gives a directory left out; 11,743 of the 11,759 files have no irregularity of
   any kind. **[F]**
 - **Irregular but readable, and kept:** a value at an odd offset, which
   TIFF asks to be even (in the MakerNotes of 8 public files, IFD0 of 7,

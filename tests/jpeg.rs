@@ -3376,3 +3376,42 @@ const ENTRIES: &[SampleEntries] = &[
 fn every_samples_entries_are_its_directories_with_their_counts() {
     check_every(ENTRIES, |expected| expected.file, check_entries);
 }
+
+#[test]
+fn an_exif_ifd_that_cannot_be_read_is_listed_as_skipped() {
+    // IFD0 links to an Exif IFD past the end of the TIFF structure, or to
+    // bytes whose count of entries, 0xFFFF, is over the default cap.
+    for order in ORDERS {
+        for (link, kind) in [
+            (0x0010_0000, ErrorKind::Malformed),
+            (1024, ErrorKind::LimitExceeded),
+        ] {
+            let mut builder = TiffBuilder::new(order);
+            let ifd0 = builder.ifd();
+            builder.ascii(ifd0, MAKE, CAMERA_MAKE);
+            builder.long(ifd0, EXIF_IFD, &[link]);
+            builder.blob_at(1024, &[0xFF; 32]);
+            let built = camera_file(order, false, &builder.build().bytes, &[]);
+            let file = CameraFile::from_bytes(&built.bytes).unwrap();
+            let what = format!("{order:?}, {link:#X}");
+            assert_eq!(file.format(), Format::Jpeg, "{what}");
+            let entries = file.entries();
+            assert!(entries.in_directory(Directory::Exif).is_empty(), "{what}");
+            let [skipped] = entries.skipped_directories() else {
+                panic!("{what}: {:?}", entries.skipped_directories());
+            };
+            // The link counts from the TIFF header, six bytes after the
+            // segment's "Exif\0\0".
+            let header = built
+                .bytes
+                .windows(6)
+                .position(|window| window == b"Exif\0\0")
+                .map(|at| u64::try_from(at + 6).unwrap())
+                .expect("an Exif segment");
+            assert_eq!(skipped.parent(), Directory::Ifd(0), "{what}");
+            assert_eq!(skipped.tag(), Some(EXIF_IFD), "{what}");
+            assert_eq!(skipped.offset(), Some(header + u64::from(link)), "{what}");
+            assert_eq!(skipped.kind(), kind, "{what}");
+        }
+    }
+}

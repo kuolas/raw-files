@@ -103,8 +103,10 @@
 //! - **The entries**: how many files have each directory, and how many
 //!   entries it lists and leaves out. A directory goes by the library's
 //!   name for it, such as "Exif", "SubIFD1" or "MakerNote 0x0011". Then
-//!   how many entries have each field type, such as "SHORT". The files
-//!   with a GPS IFD are counted here.
+//!   how many entries have each field type, such as "SHORT", and how many
+//!   directories were left out, by the directory and the tag of the link
+//!   and the cause, such as "IFD0 0x014A limit exceeded". The files with a
+//!   GPS IFD are counted here.
 //! - **The metadata**: how many files have each field.
 //! - **The camera**: how many files have each maker, and how many a
 //!   recorded Make that names none. How many have a model's name from
@@ -510,6 +512,9 @@ struct EntriesTally {
     /// entries left out, over those files.
     directories: BTreeMap<String, (usize, usize, u64)>,
     types: BTreeMap<String, usize>,
+    /// The directories left out, by the directory that holds the link,
+    /// its tag ("next" for a next-directory pointer) and the cause.
+    skipped_directories: BTreeMap<String, usize>,
     unreadable_values: usize,
 }
 
@@ -521,7 +526,14 @@ impl EntriesTally {
             let counts = self.directories.entry(directory.to_string()).or_default();
             counts.0 += 1;
             counts.1 += entries.in_directory(directory).len();
-            counts.2 += u64::from(entries.skipped(directory));
+            counts.2 += u64::from(entries.skipped_entries(directory));
+        }
+        for skipped in entries.skipped_directories() {
+            let tag = skipped
+                .tag()
+                .map_or_else(|| "next".to_owned(), |tag| format!("{tag:#06X}"));
+            let key = format!("{} {tag} {}", skipped.parent(), skipped.kind());
+            *self.skipped_directories.entry(key).or_default() += 1;
         }
         for entry in entries {
             *self
@@ -541,6 +553,7 @@ impl EntriesTally {
             );
         }
         println!("entries by field type: {:?}", self.types);
+        println!("directories left out: {:?}", self.skipped_directories);
         println!("values that could not be read: {}", self.unreadable_values);
     }
 }

@@ -40,7 +40,9 @@ mod settings;
 #[cfg(test)]
 mod testing;
 
-pub(in crate::formats) use block::{MakerNote, preview_candidate, read};
+#[cfg(test)]
+pub(in crate::formats) use block::read;
+pub(in crate::formats) use block::{MakerNote, lookup, preview_candidate};
 
 use std::io::{Read, Seek};
 
