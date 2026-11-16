@@ -21,6 +21,52 @@ use std::fmt;
 /// information panel: "Rotate 90 degrees clockwise". `Debug` gives the
 /// variant's name, `Rotate90`.
 ///
+/// # Rotation and mirror
+///
+/// Each orientation is a turn clockwise, then a mirror left to right or
+/// none, in that order. [`rotation_degrees`](Self::rotation_degrees) gives
+/// the turn and [`is_mirrored`](Self::is_mirrored) the mirror:
+///
+/// | Variant | Exif | Rotation | Mirrored |
+/// |---|---|---|---|
+/// | [`NoTransforms`](Self::NoTransforms) | 1 | 0 | no |
+/// | [`FlipHorizontal`](Self::FlipHorizontal) | 2 | 0 | yes |
+/// | [`Rotate180`](Self::Rotate180) | 3 | 180 | no |
+/// | [`FlipVertical`](Self::FlipVertical) | 4 | 180 | yes |
+/// | [`Rotate90FlipH`](Self::Rotate90FlipH) | 5 | 90 | yes |
+/// | [`Rotate90`](Self::Rotate90) | 6 | 90 | no |
+/// | [`Rotate270FlipH`](Self::Rotate270FlipH) | 7 | 270 | yes |
+/// | [`Rotate270`](Self::Rotate270) | 8 | 270 | no |
+///
+/// A mirror top to bottom, `FlipVertical`, is a turn of 180 degrees and a
+/// mirror left to right. With the two parts, a program in another language
+/// says what a viewer does without matching the eight variants, here in
+/// French:
+///
+/// ```
+/// use raw_files::Orientation;
+///
+/// fn en_francais(orientation: Orientation) -> String {
+///     let turn = match orientation.rotation_degrees() {
+///         0 => None,
+///         degrees => Some(format!("pivoter de {degrees} degrés dans le sens horaire")),
+///     };
+///     let mirror = orientation.is_mirrored().then_some("retourner de gauche à droite");
+///     match (turn, mirror) {
+///         (None, None) => "aucun changement".to_owned(),
+///         (Some(turn), None) => turn,
+///         (None, Some(mirror)) => mirror.to_owned(),
+///         (Some(turn), Some(mirror)) => format!("{turn}, puis {mirror}"),
+///     }
+/// }
+///
+/// assert_eq!(
+///     en_francais(Orientation::Rotate90FlipH),
+///     "pivoter de 90 degrés dans le sens horaire, puis retourner de gauche à droite"
+/// );
+/// assert_eq!(en_francais(Orientation::NoTransforms), "aucun changement");
+/// ```
+///
 /// # Examples
 ///
 /// ```
@@ -121,9 +167,31 @@ impl Orientation {
     /// the displayed height is the stored width. This matters when choosing a
     /// preview that fits a box.
     pub fn swaps_dimensions(self) -> bool {
+        matches!(self.rotation_degrees(), 90 | 270)
+    }
+
+    /// How far a viewer turns the stored pixels clockwise, in degrees: 0,
+    /// 90, 180 or 270. The viewer turns them first, then mirrors them when
+    /// [`is_mirrored`](Self::is_mirrored) says so, as the
+    /// [table of the type](Self#rotation-and-mirror) shows.
+    #[must_use]
+    pub fn rotation_degrees(self) -> u16 {
+        match self {
+            Self::NoTransforms | Self::FlipHorizontal => 0,
+            Self::Rotate90FlipH | Self::Rotate90 => 90,
+            Self::Rotate180 | Self::FlipVertical => 180,
+            Self::Rotate270FlipH | Self::Rotate270 => 270,
+        }
+    }
+
+    /// Whether a viewer mirrors the stored pixels left to right, after
+    /// turning them by [`rotation_degrees`](Self::rotation_degrees), as the
+    /// [table of the type](Self#rotation-and-mirror) shows.
+    #[must_use]
+    pub fn is_mirrored(self) -> bool {
         matches!(
             self,
-            Self::Rotate90FlipH | Self::Rotate90 | Self::Rotate270FlipH | Self::Rotate270
+            Self::FlipHorizontal | Self::FlipVertical | Self::Rotate90FlipH | Self::Rotate270FlipH
         )
     }
 }
@@ -207,5 +275,123 @@ mod tests {
     #[test]
     fn default_is_no_transforms() {
         assert_eq!(Orientation::default(), Orientation::NoTransforms);
+    }
+
+    #[test]
+    fn each_orientation_gives_the_rotation_and_mirror_of_the_table() {
+        let table = [
+            (Orientation::NoTransforms, 0, false),
+            (Orientation::FlipHorizontal, 0, true),
+            (Orientation::Rotate180, 180, false),
+            (Orientation::FlipVertical, 180, true),
+            (Orientation::Rotate90FlipH, 90, true),
+            (Orientation::Rotate90, 90, false),
+            (Orientation::Rotate270FlipH, 270, true),
+            (Orientation::Rotate270, 270, false),
+        ];
+        for (orientation, degrees, mirrored) in table {
+            assert_eq!(orientation.rotation_degrees(), degrees, "{orientation:?}");
+            assert_eq!(orientation.is_mirrored(), mirrored, "{orientation:?}");
+            assert_eq!(
+                orientation.swaps_dimensions(),
+                degrees == 90 || degrees == 270,
+                "{orientation:?}"
+            );
+        }
+    }
+
+    /// A side of the picture as a viewer shows it.
+    #[derive(Debug, PartialEq)]
+    enum Side {
+        Top,
+        Bottom,
+        Left,
+        Right,
+    }
+
+    /// The grid a viewer shows from `stored`, a grid of the stored pixels'
+    /// places: turned clockwise by the rotation, then mirrored left to
+    /// right when the orientation says so.
+    fn shown(orientation: Orientation, stored: &[Vec<(usize, usize)>]) -> Vec<Vec<(usize, usize)>> {
+        let mut grid = stored.to_vec();
+        for _ in 0..orientation.rotation_degrees() / 90 {
+            // A quarter turn clockwise: the first column, read from the
+            // bottom up, becomes the first row.
+            let rows = grid.len();
+            let columns = grid[0].len();
+            grid = (0..columns)
+                .map(|column| (0..rows).rev().map(|row| grid[row][column]).collect())
+                .collect();
+        }
+        if orientation.is_mirrored() {
+            for row in &mut grid {
+                row.reverse();
+            }
+        }
+        grid
+    }
+
+    /// The side of `grid` along which every place lies that `stored`
+    /// accepts, and no other place does.
+    fn side_of(grid: &[Vec<(usize, usize)>], stored: impl Fn((usize, usize)) -> bool) -> Side {
+        let last_row = grid.len() - 1;
+        let last_column = grid[0].len() - 1;
+        let on_side = |side: &Side, row: usize, column: usize| match side {
+            Side::Top => row == 0,
+            Side::Bottom => row == last_row,
+            Side::Left => column == 0,
+            Side::Right => column == last_column,
+        };
+        [Side::Top, Side::Bottom, Side::Left, Side::Right]
+            .into_iter()
+            .find(|side| {
+                grid.iter().enumerate().all(|(row, places)| {
+                    places
+                        .iter()
+                        .enumerate()
+                        .all(|(column, &place)| stored(place) == on_side(side, row, column))
+                })
+            })
+            .expect("the places lie along one side")
+    }
+
+    #[test]
+    fn the_rotation_then_the_mirror_put_row_0_and_column_0_where_exif_says() {
+        // CIPA DC-008 (Exif), the Orientation tag, names for each value the
+        // side of the shown picture on which the stored picture's 0th row
+        // and 0th column lie.
+        let exif = [
+            (1, Side::Top, Side::Left),
+            (2, Side::Top, Side::Right),
+            (3, Side::Bottom, Side::Right),
+            (4, Side::Bottom, Side::Left),
+            (5, Side::Left, Side::Top),
+            (6, Side::Right, Side::Top),
+            (7, Side::Right, Side::Bottom),
+            (8, Side::Left, Side::Bottom),
+        ];
+        // Two rows of three, so that a row cannot pass for a column.
+        let stored: Vec<Vec<(usize, usize)>> = (0..2)
+            .map(|row| (0..3).map(|column| (row, column)).collect())
+            .collect();
+        for (number, row_0, column_0) in exif {
+            let orientation = Orientation::from_exif(number).unwrap();
+            let grid = shown(orientation, &stored);
+            assert_eq!(
+                side_of(&grid, |(row, _)| row == 0),
+                row_0,
+                "Exif {number}, row 0"
+            );
+            assert_eq!(
+                side_of(&grid, |(_, column)| column == 0),
+                column_0,
+                "Exif {number}, column 0"
+            );
+            assert_eq!(
+                grid.len() == 3,
+                orientation.swaps_dimensions(),
+                "Exif {number}"
+            );
+        }
     }
 }

@@ -21,6 +21,12 @@ does. An entry that can break a caller opens with **Breaking:**.
     time without an offset from UTC.
 
   `DateTime` itself still has no order.
+- `Orientation::rotation_degrees` and `Orientation::is_mirrored` give
+  an orientation's two parts: a turn clockwise of 0, 90, 180 or 270
+  degrees, then a mirror left to right or none
+  ([#149](https://github.com/kuolas/raw-files/issues/149)). A program
+  applies an orientation, or names it in its own language, without
+  matching the eight variants.
 
 ### Changed
 
