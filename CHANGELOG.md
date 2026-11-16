@@ -27,6 +27,20 @@ does. An entry that can break a caller opens with **Breaking:**.
   ([#149](https://github.com/kuolas/raw-files/issues/149)). A program
   applies an orientation, or names it in its own language, without
   matching the eight variants.
+- The module `tags` gives a constant for each tag `Entry::name` has a
+  name for, 219 in all, one module per kind of directory
+  ([#106](https://github.com/kuolas/raw-files/issues/106)). A lookup
+  reads as what it looks for:
+
+  ```rust
+  // 0.10.0
+  entries.entry(Directory::Exif, 0x9003) // DateTimeOriginal
+  // 0.11.0
+  entries.entry(Directory::Exif, tags::exif::DATE_TIME_ORIGINAL)
+  ```
+
+  Each constant comes from the same row as the name `Entry::name`
+  gives, so the two cannot disagree.
 
 ### Changed
 

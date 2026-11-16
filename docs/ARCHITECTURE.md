@@ -51,7 +51,7 @@ adds a row.
 
 | File | Holds | May depend on |
 |---|---|---|
-| `src/lib.rs` | The crate root: the crate documentation and the re-exports of the public types. | `authorship`, `camera`, `camera_settings`, `datetime`, `entries`, `error`, `file`, `focus`, `format`, `geometry`, `limits`, `location`, `metadata`, `options`, `orientation`, `preview`, `rational`, `value_error` |
+| `src/lib.rs` | The crate root: the crate documentation and the re-exports of the public types. | `authorship`, `camera`, `camera_settings`, `datetime`, `entries`, `error`, `file`, `focus`, `format`, `geometry`, `limits`, `location`, `metadata`, `options`, `orientation`, `preview`, `rational`, `tags`, `value_error` |
 | `src/options.rs` | `Options`: how a file is opened, and under which `Limits`. | `file`, `limits`, `error` |
 | `src/file.rs` | `CameraFile`: the file handle, giving the format, the previews, the metadata and the entries, and reading a preview's bytes or an entry's value. | `container`, `formats`, `io`, `options`, `preview`, `metadata`, `entries`, `format`, `limits`, `error`, `geometry` |
 
@@ -90,7 +90,7 @@ adds a row.
 | `src/container/tiff/header.rs` | The TIFF header: the byte order and the offset of IFD0, read at the base of a block. | `io`, `error` |
 | `src/container/tiff/ifd.rs` | TIFF IFDs: their entries, checked against the block they are read in, and the readers of their values by tag rule and by tag number. | `io`, `error`, `limits` |
 | `src/container/tiff/rule.rs` | Tag rules: `Rule` and `Held`, a tag's number and the field types its value may have, in a shape that sets its count. | `rational`, `io` |
-| `src/container/tiff/tags.rs` | The numbers of the TIFF and Exif tags the crate reads, each named and documented for what it means. | — |
+| `src/container/tiff/tags.rs` | The TIFF and Exif tags the crate reads, each documented for what a reader does with it, its number taken from `tags`. | `tags` |
 | `src/container/tiff/field_type.rs` | `FieldType`: the one table of the TIFF field types, each with its code, size and name. | — |
 | `src/container/tiff/walk.rs` | The IFD walk inside a block: it follows the links from IFD0 and returns every IFD it finds as a `Tree`, bounded on any input. | `io`, `error`, `limits` |
 | `src/container/tiff/robustness.rs` | Tests only: the whole TIFF reader on truncated and corrupted files, which give an error or a tree within the limits, never a panic. | — |
@@ -116,7 +116,8 @@ adds a row.
 | `src/metadata.rs` | `Metadata`, `Exposure` and `Lens`: what the camera recorded about a picture, every value optional, each built without a file through `with_…` methods. | `authorship`, `camera`, `camera_settings`, `datetime`, `focus`, `geometry`, `location`, `orientation`, `rational` |
 | `src/preview.rs` | `Preview` and `PreviewFormat`: one preview in a file, with its byte range, size, format and orientation, and the choice among previews by size. | `geometry`, `orientation` |
 | `src/entries.rs` | `Directory`, `Entry`, `Value` and `Entries`: the raw view, every entry of every TIFF directory a file holds, as recorded, with its value decoded on request. | `container`, `io`, `error`, `rational` |
-| `src/entries/names.rs` | The names published standards give the tags of each kind of directory, one table per kind, sorted by tag. | `entries` |
+| `src/entries/names.rs` | The name of an entry's tag, from the table of `tags` for its kind of directory. | `entries`, `tags` |
+| `src/tags.rs` | `tags`: a constant for each tag `Entry::name` has a name for, one module per kind of directory, each row giving the constant and its name at once. | — |
 | `src/format.rs` | `Format`: the camera file formats the library reads, NEF, ARW and JPEG, with their names, extensions and whether each holds raw data. | — |
 
 ### The tests

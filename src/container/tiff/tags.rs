@@ -7,322 +7,328 @@
 //! that the code reading it can use the name alone. Only the tags something
 //! reads are listed, in the order of their numbers: a tag joins this list
 //! with its first reader.
+//!
+//! A constant takes its number from the public one of [`crate::tags`] that
+//! names the same tag, so that each number is written once; its docs here
+//! say what a reader does with the tag. A tag no specification names would
+//! keep a number of its own.
 
 /// The rule the file follows, as text (InteroperabilityIndex), read from
 /// the Interoperability IFD, the one IFD where tag 0x0001 has this
 /// meaning. `R98` is a DCF basic file and `R03` a DCF option file, which is
 /// how a file in Adobe RGB names its color space when its ColorSpace says
 /// only "uncalibrated".
-pub(crate) const INTEROP_INDEX: u16 = 0x0001;
+pub(crate) const INTEROP_INDEX: u16 = crate::tags::interop::INTEROPERABILITY_INDEX;
 
 /// Whether the latitude lies north or south of the equator
 /// (GPSLatitudeRef), as the text `N` or `S`, read from the GPS IFD. The
 /// GPS IFD's tags number from 0x0000, so their numbers repeat other
 /// directories': each has its meaning in the GPS IFD alone.
-pub(crate) const GPS_LATITUDE_REF: u16 = 0x0001;
+pub(crate) const GPS_LATITUDE_REF: u16 = crate::tags::gps::GPS_LATITUDE_REF;
 
 /// The latitude (GPSLatitude), as three fractions of type RATIONAL,
 /// degrees, minutes and seconds, read from the GPS IFD.
-pub(crate) const GPS_LATITUDE: u16 = 0x0002;
+pub(crate) const GPS_LATITUDE: u16 = crate::tags::gps::GPS_LATITUDE;
 
 /// Whether the longitude lies east or west of the prime meridian
 /// (GPSLongitudeRef), as the text `E` or `W`, read from the GPS IFD.
-pub(crate) const GPS_LONGITUDE_REF: u16 = 0x0003;
+pub(crate) const GPS_LONGITUDE_REF: u16 = crate::tags::gps::GPS_LONGITUDE_REF;
 
 /// The longitude (GPSLongitude), as three fractions of type RATIONAL,
 /// degrees, minutes and seconds, read from the GPS IFD.
-pub(crate) const GPS_LONGITUDE: u16 = 0x0004;
+pub(crate) const GPS_LONGITUDE: u16 = crate::tags::gps::GPS_LONGITUDE;
 
 /// Whether the altitude lies above or below its reference
 /// (GPSAltitudeRef), as one BYTE, read from the GPS IFD: 0 and 2 above, 1
 /// and 3 below.
-pub(crate) const GPS_ALTITUDE_REF: u16 = 0x0005;
+pub(crate) const GPS_ALTITUDE_REF: u16 = crate::tags::gps::GPS_ALTITUDE_REF;
 
 /// The altitude in meters (GPSAltitude), as one fraction of type
 /// RATIONAL, read from the GPS IFD.
-pub(crate) const GPS_ALTITUDE: u16 = 0x0006;
+pub(crate) const GPS_ALTITUDE: u16 = crate::tags::gps::GPS_ALTITUDE;
 
 /// The time of day in UTC (GPSTimeStamp), as three fractions of type
 /// RATIONAL, hours, minutes and seconds, read from the GPS IFD.
-pub(crate) const GPS_TIME_STAMP: u16 = 0x0007;
+pub(crate) const GPS_TIME_STAMP: u16 = crate::tags::gps::GPS_TIME_STAMP;
 
 /// The north the image direction counts from (GPSImgDirectionRef), as the
 /// text `T` for true north or `M` for magnetic north, read from the GPS
 /// IFD.
-pub(crate) const GPS_IMG_DIRECTION_REF: u16 = 0x0010;
+pub(crate) const GPS_IMG_DIRECTION_REF: u16 = crate::tags::gps::GPS_IMG_DIRECTION_REF;
 
 /// The direction the camera faced (GPSImgDirection), as one fraction of
 /// type RATIONAL, in degrees from 0 to 359.99, read from the GPS IFD.
-pub(crate) const GPS_IMG_DIRECTION: u16 = 0x0011;
+pub(crate) const GPS_IMG_DIRECTION: u16 = crate::tags::gps::GPS_IMG_DIRECTION;
 
 /// The geodetic datum the position is given in (GPSMapDatum), as text,
 /// such as `WGS-84`, read from the GPS IFD.
-pub(crate) const GPS_MAP_DATUM: u16 = 0x0012;
+pub(crate) const GPS_MAP_DATUM: u16 = crate::tags::gps::GPS_MAP_DATUM;
 
 /// The date in UTC (GPSDateStamp), as the text `YYYY:MM:DD`, read from the
 /// GPS IFD.
-pub(crate) const GPS_DATE_STAMP: u16 = 0x001D;
+pub(crate) const GPS_DATE_STAMP: u16 = crate::tags::gps::GPS_DATE_STAMP;
 
 /// Whether the image an IFD describes is the full-resolution image, a
 /// reduced-resolution copy of it, or a page of several (NewSubfileType): a
 /// bit field, 0 for the full-resolution image.
-pub(crate) const NEW_SUBFILE_TYPE: u16 = 0x00FE;
+pub(crate) const NEW_SUBFILE_TYPE: u16 = crate::tags::tiff::NEW_SUBFILE_TYPE;
 
 /// The width in pixels of the image an IFD describes (ImageWidth), as a
 /// SHORT or a LONG: read from the IFD of the raw data, its raw size.
-pub(crate) const IMAGE_WIDTH: u16 = 0x0100;
+pub(crate) const IMAGE_WIDTH: u16 = crate::tags::tiff::IMAGE_WIDTH;
 
 /// The height in pixels of the image an IFD describes (ImageLength), as a
 /// SHORT or a LONG: read from the IFD of the raw data, its raw size.
-pub(crate) const IMAGE_LENGTH: u16 = 0x0101;
+pub(crate) const IMAGE_LENGTH: u16 = crate::tags::tiff::IMAGE_LENGTH;
 
 /// How many bits each sample of the image's pixels holds, one value per
 /// sample (BitsPerSample).
-pub(crate) const BITS_PER_SAMPLE: u16 = 0x0102;
+pub(crate) const BITS_PER_SAMPLE: u16 = crate::tags::tiff::BITS_PER_SAMPLE;
 
 /// How the image's data is compressed (Compression): 1 for none, 6 and 7
 /// for JPEG, and values of the vendors' own.
-pub(crate) const COMPRESSION: u16 = 0x0103;
+pub(crate) const COMPRESSION: u16 = crate::tags::tiff::COMPRESSION;
 
 /// What the image's samples mean (PhotometricInterpretation): RGB, YCbCr,
 /// a color filter array of sensor data, and so on.
-pub(crate) const PHOTOMETRIC_INTERPRETATION: u16 = 0x0106;
+pub(crate) const PHOTOMETRIC_INTERPRETATION: u16 = crate::tags::tiff::PHOTOMETRIC_INTERPRETATION;
 
 /// What the picture shows, as free text (ImageDescription), read from
 /// IFD0: a description its author wrote, or a text some cameras write by
 /// themselves whatever the picture.
-pub(crate) const IMAGE_DESCRIPTION: u16 = 0x010E;
+pub(crate) const IMAGE_DESCRIPTION: u16 = crate::tags::tiff::IMAGE_DESCRIPTION;
 
 /// The manufacturer of the camera that wrote the file, as text (Make), read
 /// from IFD0: what tells one vendor's files from another's.
-pub(crate) const MAKE: u16 = 0x010F;
+pub(crate) const MAKE: u16 = crate::tags::tiff::MAKE;
 
 /// The model of the camera that wrote the file, as text (Model), read from
 /// IFD0, such as `NIKON Z 9`.
-pub(crate) const MODEL: u16 = 0x0110;
+pub(crate) const MODEL: u16 = crate::tags::tiff::MODEL;
 
 /// Where each strip of the image's data starts, as absolute offsets
 /// (StripOffsets).
-pub(crate) const STRIP_OFFSETS: u16 = 0x0111;
+pub(crate) const STRIP_OFFSETS: u16 = crate::tags::tiff::STRIP_OFFSETS;
 
 /// What a viewer must do to the stored pixels to show the image upright
 /// (Orientation): one of the eight Exif values.
-pub(crate) const ORIENTATION: u16 = 0x0112;
+pub(crate) const ORIENTATION: u16 = crate::tags::tiff::ORIENTATION;
 
 /// How many bytes each strip of the image's data takes, one value per
 /// strip (StripByteCounts).
-pub(crate) const STRIP_BYTE_COUNTS: u16 = 0x0117;
+pub(crate) const STRIP_BYTE_COUNTS: u16 = crate::tags::tiff::STRIP_BYTE_COUNTS;
 
 /// The name and version of the firmware or program that wrote the file, as
 /// text (Software), read from IFD0. A camera writes its firmware version
 /// there, such as `Ver.01.00`, and a program that rewrites the file its own
 /// name.
-pub(crate) const SOFTWARE: u16 = 0x0131;
+pub(crate) const SOFTWARE: u16 = crate::tags::tiff::SOFTWARE;
 
 /// The name of the main person who made the picture, as text (Artist),
 /// read from IFD0.
-pub(crate) const ARTIST: u16 = 0x013B;
+pub(crate) const ARTIST: u16 = crate::tags::tiff::ARTIST;
 
 /// The width in pixels of each tile of an image stored in tiles
 /// (TileWidth).
-pub(crate) const TILE_WIDTH: u16 = 0x0142;
+pub(crate) const TILE_WIDTH: u16 = crate::tags::tiff::TILE_WIDTH;
 
 /// The height in pixels of each tile of an image stored in tiles
 /// (TileLength).
-pub(crate) const TILE_LENGTH: u16 = 0x0143;
+pub(crate) const TILE_LENGTH: u16 = crate::tags::tiff::TILE_LENGTH;
 
 /// Where each tile of an image stored in tiles starts (TileOffsets).
-pub(crate) const TILE_OFFSETS: u16 = 0x0144;
+pub(crate) const TILE_OFFSETS: u16 = crate::tags::tiff::TILE_OFFSETS;
 
 /// How many bytes each tile of an image stored in tiles takes
 /// (TileByteCounts).
-pub(crate) const TILE_BYTE_COUNTS: u16 = 0x0145;
+pub(crate) const TILE_BYTE_COUNTS: u16 = crate::tags::tiff::TILE_BYTE_COUNTS;
 
 /// The offsets of an IFD's child IFDs (SubIFDs), which describe further
 /// images of the file.
-pub(crate) const SUB_IFDS: u16 = 0x014A;
+pub(crate) const SUB_IFDS: u16 = crate::tags::tiff::SUB_IFDS;
 
 /// Where an embedded JPEG stream starts, as an absolute offset
 /// (JPEGInterchangeFormat): how most RAW files point at a preview.
-pub(crate) const JPEG_INTERCHANGE_FORMAT: u16 = 0x0201;
+pub(crate) const JPEG_INTERCHANGE_FORMAT: u16 = crate::tags::tiff::JPEG_INTERCHANGE_FORMAT;
 
 /// How many bytes the embedded JPEG stream that
 /// [`JPEG_INTERCHANGE_FORMAT`] points at takes
 /// (JPEGInterchangeFormatLength).
-pub(crate) const JPEG_INTERCHANGE_FORMAT_LENGTH: u16 = 0x0202;
+pub(crate) const JPEG_INTERCHANGE_FORMAT_LENGTH: u16 =
+    crate::tags::tiff::JPEG_INTERCHANGE_FORMAT_LENGTH;
 
 /// The copyright notice of whoever holds the rights to the picture, as
 /// text (Copyright), read from IFD0.
-pub(crate) const COPYRIGHT: u16 = 0x8298;
+pub(crate) const COPYRIGHT: u16 = crate::tags::tiff::COPYRIGHT;
 
 /// How long the shutter was open, in seconds, as a fraction of type
 /// RATIONAL (ExposureTime), read from the Exif IFD, such as 10/3200 for
 /// 1/320 s.
-pub(crate) const EXPOSURE_TIME: u16 = 0x829A;
+pub(crate) const EXPOSURE_TIME: u16 = crate::tags::exif::EXPOSURE_TIME;
 
 /// The f-number the picture was taken at, as a fraction of type RATIONAL
 /// (FNumber), read from the Exif IFD, such as 900/100 for f/9.
-pub(crate) const F_NUMBER: u16 = 0x829D;
+pub(crate) const F_NUMBER: u16 = crate::tags::exif::F_NUMBER;
 
-/// The offset of the IFD that holds the Exif capture metadata (Exif IFD),
-/// read from IFD0.
-pub(crate) const EXIF_IFD: u16 = 0x8769;
+/// The offset of the IFD that holds the Exif capture metadata (Exif IFD
+/// Pointer), read from IFD0.
+pub(crate) const EXIF_IFD: u16 = crate::tags::tiff::EXIF_IFD_POINTER;
 
 /// How the camera chose the exposure, as a SHORT (ExposureProgram), read
 /// from the Exif IFD. 1 is manual, 2 program, 3 aperture priority and 4
 /// shutter priority; 5 to 8 are programs biased toward a kind of subject,
 /// and 0 is "not defined".
-pub(crate) const EXPOSURE_PROGRAM: u16 = 0x8822;
+pub(crate) const EXPOSURE_PROGRAM: u16 = crate::tags::exif::EXPOSURE_PROGRAM;
 
 /// The offset of IFD0's GPS IFD (GPS Info IFD Pointer), the directory
 /// that holds where the picture was taken, as Exif's GPS tags record it.
-pub(crate) const GPS_IFD: u16 = 0x8825;
+pub(crate) const GPS_IFD: u16 = crate::tags::tiff::GPS_INFO_IFD_POINTER;
 
 /// The sensitivity the picture was taken at, as a SHORT or a LONG
 /// (PhotographicSensitivity, called ISOSpeedRatings before Exif 2.3), read
 /// from the Exif IFD: the ISO. Exif writes 65535 for a sensitivity of 65535
 /// or more.
-pub(crate) const PHOTOGRAPHIC_SENSITIVITY: u16 = 0x8827;
+pub(crate) const PHOTOGRAPHIC_SENSITIVITY: u16 = crate::tags::exif::PHOTOGRAPHIC_SENSITIVITY;
 
 /// The recommended exposure index of the camera as ISO 12232 defines it,
 /// as a LONG (RecommendedExposureIndex), read from the Exif IFD: what
 /// gives the ISO when PhotographicSensitivity cannot.
-pub(crate) const RECOMMENDED_EXPOSURE_INDEX: u16 = 0x8832;
+pub(crate) const RECOMMENDED_EXPOSURE_INDEX: u16 = crate::tags::exif::RECOMMENDED_EXPOSURE_INDEX;
 
 /// The ISO speed of the camera as ISO 12232 defines it, as a LONG
 /// (ISOSpeed), read from the Exif IFD: what gives the ISO when neither
 /// PhotographicSensitivity nor RecommendedExposureIndex can.
-pub(crate) const ISO_SPEED: u16 = 0x8833;
+pub(crate) const ISO_SPEED: u16 = crate::tags::exif::ISO_SPEED;
 
 /// When the picture was taken, as the camera's clock showed it, as text in
 /// the form `YYYY:MM:DD HH:MM:SS` (DateTimeOriginal), read from the Exif
 /// IFD: the capture time.
-pub(crate) const DATE_TIME_ORIGINAL: u16 = 0x9003;
+pub(crate) const DATE_TIME_ORIGINAL: u16 = crate::tags::exif::DATE_TIME_ORIGINAL;
 
 /// The offset from UTC of the camera's clock when the picture was taken,
 /// as text in the form `+HH:MM` or `-HH:MM` (OffsetTimeOriginal), read from
 /// the Exif IFD.
-pub(crate) const OFFSET_TIME_ORIGINAL: u16 = 0x9011;
+pub(crate) const OFFSET_TIME_ORIGINAL: u16 = crate::tags::exif::OFFSET_TIME_ORIGINAL;
 
 /// The exposure compensation chosen, in EV, as a fraction of type
 /// SRATIONAL (ExposureBiasValue), read from the Exif IFD, such as -3/10;
 /// 0/6 means no compensation.
-pub(crate) const EXPOSURE_BIAS_VALUE: u16 = 0x9204;
+pub(crate) const EXPOSURE_BIAS_VALUE: u16 = crate::tags::exif::EXPOSURE_BIAS_VALUE;
 
 /// How the camera metered the light, as a SHORT (MeteringMode), read from
 /// the Exif IFD. 1 to 6 are average, center-weighted average, spot,
 /// multi-spot, pattern and partial metering, 255 is another mode, and 0 is
 /// "unknown".
-pub(crate) const METERING_MODE: u16 = 0x9207;
+pub(crate) const METERING_MODE: u16 = crate::tags::exif::METERING_MODE;
 
 /// The kind of light the white balance was set for, as a SHORT
 /// (LightSource), read from the Exif IFD: such as 1 daylight, 3 tungsten
 /// or 11 shade; 0 is "unknown". It says which manual white balance was
 /// chosen when [`WHITE_BALANCE`] says manual.
-pub(crate) const LIGHT_SOURCE: u16 = 0x9208;
+pub(crate) const LIGHT_SOURCE: u16 = crate::tags::exif::LIGHT_SOURCE;
 
 /// The flash, as a SHORT of bits (Flash), read from the Exif IFD. Bit 0
 /// says whether it fired, bits 3 and 4 give its mode, and bit 5 says that
 /// the camera has no flash function. Bits 1, 2 and 6 say whether its
 /// return light was detected and whether red-eye reduction was on, and
 /// bits 7 to 15 are reserved.
-pub(crate) const FLASH: u16 = 0x9209;
+pub(crate) const FLASH: u16 = crate::tags::exif::FLASH;
 
 /// The focal length the picture was taken at, in millimeters, as a
 /// fraction of type RATIONAL (FocalLength), read from the Exif IFD. It is
 /// the lens's actual focal length, such as 180/10, not its 35 mm
 /// equivalent.
-pub(crate) const FOCAL_LENGTH: u16 = 0x920A;
+pub(crate) const FOCAL_LENGTH: u16 = crate::tags::exif::FOCAL_LENGTH;
 
 /// A comment on the picture (UserComment), read from the Exif IFD: of
 /// type UNDEFINED, 8 bytes naming the characters that follow, then the
 /// text.
-pub(crate) const USER_COMMENT: u16 = 0x9286;
+pub(crate) const USER_COMMENT: u16 = crate::tags::exif::USER_COMMENT;
 
 /// The fraction of a second of the capture time, as text holding its
 /// digits alone (SubSecTimeOriginal), read from the Exif IFD.
-pub(crate) const SUB_SEC_TIME_ORIGINAL: u16 = 0x9291;
+pub(crate) const SUB_SEC_TIME_ORIGINAL: u16 = crate::tags::exif::SUB_SEC_TIME_ORIGINAL;
 
 /// The camera maker's own metadata block, whose layout each vendor defines
 /// (MakerNote): an Exif tag, read from the Exif IFD, whose value is the
 /// block's bytes.
-pub(crate) const MAKER_NOTE: u16 = 0x927C;
+pub(crate) const MAKER_NOTE: u16 = crate::tags::exif::MAKER_NOTE;
 
 /// The color space of the picture, as a SHORT (ColorSpace), read from the
 /// Exif IFD: 1 for sRGB, and 65535, "uncalibrated", for any other, which
 /// the [`INTEROP_INDEX`] may then name.
-pub(crate) const COLOR_SPACE: u16 = 0xA001;
+pub(crate) const COLOR_SPACE: u16 = crate::tags::exif::COLOR_SPACE;
 
 /// The offset of the Interoperability IFD (Interoperability IFD Pointer),
 /// read from the Exif IFD: the IFD whose InteroperabilityIndex
 /// ([`INTEROP_INDEX`]) names the rule the file follows.
-pub(crate) const INTEROP_IFD: u16 = 0xA005;
+pub(crate) const INTEROP_IFD: u16 = crate::tags::exif::INTEROPERABILITY_IFD_POINTER;
 
 /// Whether the white balance was set automatically or by hand, as a SHORT
 /// (WhiteBalance), read from the Exif IFD: 0 auto, 1 manual, the kind of
 /// light then in [`LIGHT_SOURCE`].
-pub(crate) const WHITE_BALANCE: u16 = 0xA403;
+pub(crate) const WHITE_BALANCE: u16 = crate::tags::exif::WHITE_BALANCE;
 
 /// The focal length in 35 mm terms, in whole millimeters, as a SHORT
 /// (FocalLengthIn35mmFilm), read from the Exif IFD. It is the focal length
 /// that would give the same field of view on a 35 mm film camera, such as
 /// 75 for 50 mm on a DX body. Exif writes 0 for one the camera did not
 /// know.
-pub(crate) const FOCAL_LENGTH_IN_35MM_FILM: u16 = 0xA405;
+pub(crate) const FOCAL_LENGTH_IN_35MM_FILM: u16 = crate::tags::exif::FOCAL_LENGTH_IN_35MM_FILM;
 
 /// The owner of the camera, as text (CameraOwnerName), read from the Exif
 /// IFD: set in the camera, and in principle never rewritten.
-pub(crate) const CAMERA_OWNER_NAME: u16 = 0xA430;
+pub(crate) const CAMERA_OWNER_NAME: u16 = crate::tags::exif::CAMERA_OWNER_NAME;
 
 /// The serial number of the camera body, as text (BodySerialNumber), read
 /// from the Exif IFD.
-pub(crate) const BODY_SERIAL_NUMBER: u16 = 0xA431;
+pub(crate) const BODY_SERIAL_NUMBER: u16 = crate::tags::exif::BODY_SERIAL_NUMBER;
 
 /// The lens's range, as four fractions of type RATIONAL
 /// (LensSpecification), read from the Exif IFD: its shortest and longest
 /// focal length in millimeters, then the f-number of its widest aperture at
 /// each. A 14-30 mm f/4 gives 140/10, 300/10, 400/100 and 400/100. A value
 /// of 0/0 is one the camera did not know.
-pub(crate) const LENS_SPECIFICATION: u16 = 0xA432;
+pub(crate) const LENS_SPECIFICATION: u16 = crate::tags::exif::LENS_SPECIFICATION;
 
 /// The manufacturer of the lens, as text (LensMake), read from the Exif
 /// IFD.
-pub(crate) const LENS_MAKE: u16 = 0xA433;
+pub(crate) const LENS_MAKE: u16 = crate::tags::exif::LENS_MAKE;
 
 /// The lens's model name, as text (LensModel), read from the Exif IFD,
 /// such as `NIKKOR Z 14-30mm f/4 S`.
-pub(crate) const LENS_MODEL: u16 = 0xA434;
+pub(crate) const LENS_MODEL: u16 = crate::tags::exif::LENS_MODEL;
 
 /// The serial number of the lens, as text (LensSerialNumber), read from
 /// the Exif IFD.
-pub(crate) const LENS_SERIAL_NUMBER: u16 = 0xA435;
+pub(crate) const LENS_SERIAL_NUMBER: u16 = crate::tags::exif::LENS_SERIAL_NUMBER;
 
 /// The picture's title, as text (ImageTitle), read from the Exif IFD.
-pub(crate) const IMAGE_TITLE: u16 = 0xA436;
+pub(crate) const IMAGE_TITLE: u16 = crate::tags::exif::IMAGE_TITLE;
 
 /// The name of the photographer, as text (Photographer), read from the
 /// Exif IFD.
-pub(crate) const PHOTOGRAPHER: u16 = 0xA437;
+pub(crate) const PHOTOGRAPHER: u16 = crate::tags::exif::PHOTOGRAPHER;
 
 /// The name of the main person who edited the picture, as text
 /// (ImageEditor), read from the Exif IFD.
-pub(crate) const IMAGE_EDITOR: u16 = 0xA438;
+pub(crate) const IMAGE_EDITOR: u16 = crate::tags::exif::IMAGE_EDITOR;
 
 /// The version of the DNG specification a DNG file follows (DNGVersion),
 /// read from IFD0: present in every DNG, and in the DNG-based files of
 /// some makers.
-pub(crate) const DNG_VERSION: u16 = 0xC612;
+pub(crate) const DNG_VERSION: u16 = crate::tags::tiff::DNG_VERSION;
 
 /// Where the visible image starts in the raw data, as two numbers, the
 /// column then the row (DefaultCropOrigin, from the DNG specification),
 /// read from the IFD of the raw data. Its type is SHORT, LONG or RATIONAL.
-pub(crate) const DEFAULT_CROP_ORIGIN: u16 = 0xC61F;
+pub(crate) const DEFAULT_CROP_ORIGIN: u16 = crate::tags::tiff::DEFAULT_CROP_ORIGIN;
 
 /// The size of the visible image in the raw data, as two numbers, the
 /// width then the height (DefaultCropSize, from the DNG specification),
 /// read from the IFD of the raw data. Its type is SHORT, LONG or RATIONAL.
-pub(crate) const DEFAULT_CROP_SIZE: u16 = 0xC620;
+pub(crate) const DEFAULT_CROP_SIZE: u16 = crate::tags::tiff::DEFAULT_CROP_SIZE;
 
 /// A maker's private data block (DNGPrivateData), read from IFD0, where
 /// Sony writes the offset of its SR2Private directory.
-pub(crate) const DNG_PRIVATE_DATA: u16 = 0xC634;
+pub(crate) const DNG_PRIVATE_DATA: u16 = crate::tags::tiff::DNG_PRIVATE_DATA;
