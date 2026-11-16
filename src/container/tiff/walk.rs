@@ -50,12 +50,12 @@
 //!   ends.
 //! - a **depth cap**, [`Limits::max_ifd_depth`]: IFD0 and the chain IFDs
 //!   are at depth 0, their SubIFDs at depth 1, and so on. The SubIFDs of an
-//!   IFD at the cap are not followed. A real file never nests that deep, so
-//!   this is not an error.
+//!   IFD at the cap are not followed, only listed (below). A real file
+//!   never nests that deep, so this is not an error.
 //! - a **total cap**, [`Limits::max_ifds`], on the IFDs the walk tries to
-//!   parse, IFDs or not: a file full of bogus links costs as much as a file
-//!   full of IFDs. The attempt that would cross it is a `LimitExceeded`
-//!   error.
+//!   parse, IFDs or not, together with the links it lists without trying
+//!   them: a file full of bogus links costs as much as a file full of IFDs.
+//!   The attempt that would cross it is a `LimitExceeded` error.
 //!
 //! The walk runs in a loop over an explicit stack, not by recursion, so a
 //! file cannot make it use more call stack however it nests its IFDs.
@@ -66,7 +66,7 @@
 //!
 //! - an IFD that cannot be parsed, one outside the bounds among them, ends
 //!   the chain if it is a chain IFD, and is left out otherwise;
-//! - a link whose tag value cannot be read is not followed;
+//! - a link whose value cannot be read is not followed;
 //! - a link into the 8-byte header, where no IFD can start, or one whose
 //!   position would pass the largest offset, is not tried, and a chain
 //!   that reaches it ends;
@@ -76,9 +76,23 @@
 //!   the bytes there are not an IFD
 //!   (`docs/formats/arw/container-and-previews.md`, sections 1.3 and 1.4).
 //!
+//! The tree lists each of these links, and each link the depth cap stops,
+//! with the IFD that holds it and the cause ([`Tree::skipped`]): so a
+//! caller can tell that a directory was there. The cause is
+//! `LimitExceeded` when a cap of [`Limits`] stopped the walk, the depth cap
+//! or the cap on one IFD's entries or one value's length, and `Malformed`
+//! for any other damage. Each link listed counts toward the total cap, as
+//! an IFD tried does, so the list is bounded with the tree. A position is
+//! listed once: a link to a position the walk tried or listed before is
+//! not listed again, since the IFD there is in the tree under its first
+//! link, or was listed at it. A link the depth cap stopped is dropped from
+//! the list when another link leads the walk to its IFD. A link with no
+//! position is listed once for the IFD and tag that hold it. A next-IFD
+//! pointer of 0 is no link.
+//!
 //! Only a failure of the reader stops the walk, as does the total cap.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::io::{Read, Seek};
 use std::mem;
 use std::vec;
@@ -86,7 +100,7 @@ use std::vec;
 use super::header::HEADER_LEN;
 use super::tags::{EXIF_IFD, GPS_IFD, INTEROP_IFD, SUB_IFDS};
 use super::{Block, Ifd, parse_header, parse_ifd};
-use crate::error::{Error, Result, skip_damage};
+use crate::error::{Error, ErrorKind, Result, damage_kind, skip_damage};
 use crate::io::{ByteOrder, Source};
 use crate::limits::Limits;
 
@@ -139,8 +153,27 @@ impl Link {
     }
 }
 
+/// A link the walk met that led to no IFD of the [`Tree`], as the
+/// [module documentation](self) lists them: what
+/// [`Entries::skipped_directories`](crate::Entries::skipped_directories)
+/// gives for the walk.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct Skipped {
+    /// The position in the tree of the IFD that holds the link.
+    pub(crate) parent: usize,
+    /// The link's tag: the SubIFDs, Exif IFD, Interoperability IFD or GPS
+    /// IFD tag; `None` for a next-IFD pointer.
+    pub(crate) tag: Option<u16>,
+    /// The position in the file the link leads to; `None` when its value
+    /// could not be read, or the position would pass the largest offset.
+    pub(crate) offset: Option<u64>,
+    /// `LimitExceeded` when a cap of [`Limits`] stopped the walk, the depth
+    /// cap among them; `Malformed` for damage.
+    pub(crate) kind: ErrorKind,
+}
+
 /// The IFDs of a TIFF file that [`walk`] found, each with its
-/// [`Link`].
+/// [`Link`], and the links it did not follow.
 ///
 /// An IFD appears once, under the first link that led the walk to it. The
 /// order is deterministic:
@@ -164,6 +197,8 @@ pub(crate) struct Tree {
     /// Interoperability IFD tag leads to, wherever the walk placed it;
     /// `None` when the tag leads to no IFD of the tree.
     interop: Option<usize>,
+    /// Every link the walk did not follow, in the order it met them.
+    skipped: Vec<Skipped>,
 }
 
 // The readers go through the tree, or ask for IFD0 or for the IFD a tag
@@ -219,6 +254,17 @@ impl Tree {
         self.gps.and_then(|i| self.ifds.get(i)).map(|(_, ifd)| ifd)
     }
 
+    /// Every link the walk met and did not follow, in the order it met
+    /// them, as the [module documentation](self) lists them. With the IFDs
+    /// of the tree, at most [`Limits::max_ifds`].
+    #[cfg_attr(
+        not(test),
+        expect(dead_code, reason = "the raw view lists them, in the next commit")
+    )]
+    pub(crate) fn skipped(&self) -> &[Skipped] {
+        &self.skipped
+    }
+
     /// The number of IFDs in the tree, at least 1.
     #[cfg(test)]
     pub(crate) fn len(&self) -> usize {
@@ -249,9 +295,11 @@ impl Tree {
 ///   offset, at the base.
 /// - Whatever [`parse_ifd`] returns for IFD0 if it cannot be read, an IFD0
 ///   outside the bounds included.
-/// - `LimitExceeded` if the walk would try to parse more IFDs than
-///   [`Limits::max_ifds`] allows, at the position of the IFD that would
-///   cross it.
+/// - `LimitExceeded` if the IFDs the walk would try to parse and the links
+///   it would list without trying them pass [`Limits::max_ifds`] in all,
+///   at the position of the IFD that would cross it or that the link leads
+///   to; for a link with no such position, at the position of the IFD that
+///   holds it.
 /// - `Io` if the reader fails.
 pub(crate) fn walk<R: Read + Seek>(
     src: &mut Source<R>,
@@ -276,6 +324,10 @@ pub(crate) fn walk<R: Read + Seek>(
         visited: BTreeMap::new(),
         attempts: 0,
         ifds: Vec::new(),
+        positions: BTreeMap::new(),
+        skipped: Vec::new(),
+        listed: BTreeSet::new(),
+        unplaced: BTreeSet::new(),
     };
 
     // IFD0 is the one IFD whose failure is the walk's.
@@ -284,23 +336,35 @@ pub(crate) fn walk<R: Read + Seek>(
     walker.place(Link::Ifd0, ifd0)?;
 
     let exif = skip_damage(walker.ifds[0].1.u32(walker.src, EXIF_IFD))?.flatten();
-    if let Some(at) = exif.and_then(|link| walker.target(link))
-        && let Some((ifd, next)) = walker.candidate(at)?
-    {
-        walker.visited.insert(at, next);
-        walker.ifds.push((Link::Exif, ifd));
+    if let Some(link) = exif {
+        let origin = Origin {
+            parent: 0,
+            tag: Some(EXIF_IFD),
+        };
+        if let Some(at) = walker.target(link, origin)?
+            && let Some((ifd, next)) = walker.candidate(at, origin)?
+        {
+            walker.visited.insert(at, next);
+            walker.push(Link::Exif, ifd);
+        }
     }
 
     let mut step: u32 = 1;
+    // The position in the tree of the IFD that holds `next`.
+    let mut holder: usize = 0;
     while next != 0 {
+        let origin = Origin {
+            parent: holder,
+            tag: None,
+        };
         // A link into the header, or one whose position would pass the
         // largest offset, ends the chain.
-        let Some(at) = walker.target(next) else {
+        let Some(at) = walker.target(next, origin)? else {
             break;
         };
         if !walker.visited.contains_key(&at) {
             // A new IFD. One that cannot be parsed ends the chain.
-            let Some((ifd, after)) = walker.candidate(at)? else {
+            let Some((ifd, after)) = walker.candidate(at, origin)? else {
                 break;
             };
             walker.visited.insert(at, after);
@@ -312,6 +376,11 @@ pub(crate) fn walk<R: Read + Seek>(
         // takes it, leaving 0, so it goes on from each IFD at most once and
         // a loop ends.
         next = walker.visited.get_mut(&at).map_or(0, mem::take);
+        // A pointer is kept only for an IFD of the tree, so the next one,
+        // if not 0, has its holder there.
+        if let Some(position) = walker.position(at) {
+            holder = position;
+        }
         // Each step either claims a new position or takes a pointer recorded
         // when an earlier claim was parsed, so the total cap bounds the
         // steps to twice its value. Saturating keeps the largest caps from
@@ -321,18 +390,35 @@ pub(crate) fn walk<R: Read + Seek>(
 
     // Last, the Interoperability IFD, then the GPS IFD, as the module doc
     // says.
-    let offset = match walker.ifds.iter().find(|(link, _)| *link == Link::Exif) {
-        Some((_, exif)) => skip_damage(exif.u32(walker.src, INTEROP_IFD))?.flatten(),
+    let exif = (walker.ifds.iter().enumerate()).find(|(_, (link, _))| *link == Link::Exif);
+    let interop = match exif {
+        Some((parent, (_, exif))) => {
+            let offset = skip_damage(exif.u32(walker.src, INTEROP_IFD))?.flatten();
+            let origin = Origin {
+                parent,
+                tag: Some(INTEROP_IFD),
+            };
+            walker.last(offset, Link::Interop, origin)?
+        }
         None => None,
     };
-    let interop = walker.last(offset, Link::Interop)?;
     let offset = skip_damage(walker.ifds[0].1.u32(walker.src, GPS_IFD))?.flatten();
-    let gps = walker.last(offset, Link::Gps)?;
+    let origin = Origin {
+        parent: 0,
+        tag: Some(GPS_IFD),
+    };
+    let gps = walker.last(offset, Link::Gps, origin)?;
+
+    // A link the depth cap stopped, to a position another link then led
+    // into the tree, is not one the walk left out.
+    let positions = &walker.positions;
+    (walker.skipped).retain(|skipped| skipped.offset.is_none_or(|at| !positions.contains_key(&at)));
 
     Ok(Tree {
         ifds: walker.ifds,
         gps,
         interop,
+        skipped: walker.skipped,
     })
 }
 
@@ -357,11 +443,32 @@ struct Walker<'a, R> {
     ///   ended;
     /// - once the chain has gone on from the IFD.
     visited: BTreeMap<u64, u32>,
-    /// How many IFDs the walk has tried to parse: the size of `visited`, at
-    /// most [`Limits::max_ifds`].
+    /// How many IFDs the walk has tried to parse, the size of `visited`,
+    /// and how many links it has listed without trying them: at least the
+    /// sizes of `ifds` and `skipped` together, and at most
+    /// [`Limits::max_ifds`].
     attempts: u32,
     /// The tree so far.
     ifds: Vec<(Link, Ifd)>,
+    /// The position in `ifds` of each IFD of the tree, by its position in
+    /// the file.
+    positions: BTreeMap<u64, usize>,
+    /// The links not followed so far.
+    skipped: Vec<Skipped>,
+    /// The position in the file of each link listed without a try, so that
+    /// another link there is not listed again.
+    listed: BTreeSet<u64>,
+    /// The IFD, by its position in the tree, and the tag of each link
+    /// listed with no position, so that it is listed once.
+    unplaced: BTreeSet<(usize, Option<u16>)>,
+}
+
+/// Where a link lies: the IFD that holds it, by its position in the tree,
+/// and its tag, `None` for a next-IFD pointer.
+#[derive(Clone, Copy)]
+struct Origin {
+    parent: usize,
+    tag: Option<u16>,
 }
 
 /// The SubIFDs of one IFD of the tree that the walk has yet to try.
@@ -377,82 +484,181 @@ struct Children {
 
 impl<R: Read + Seek> Walker<'_, R> {
     /// The position in the file of the IFD a link past IFD0 leads to, given
-    /// the link as written, an offset from the base. `None` if the link
-    /// cannot be followed, because it lies inside the header or its
-    /// position would pass the largest offset.
+    /// the link as written, an offset from the base, and where it lies.
+    /// `None` if the link cannot be followed, because it lies inside the
+    /// header or its position would pass the largest offset.
     ///
     /// No IFD can start inside the header, so a link there is not tried: it
-    /// is neither parsed nor counted. (An IFD0 there is an error, which
-    /// [`walk`] reports before it claims IFD0.)
-    fn target(&self, link: u32) -> Option<u64> {
-        if u64::from(link) < HEADER_LEN {
-            return None;
-        }
-        self.block.at(link)
-    }
-
-    /// Marks the IFD at position `at` in the file as tried, with no
-    /// next-IFD pointer recorded yet, and counts the attempt; `false`, with
-    /// nothing counted, if it was tried before.
+    /// is not parsed, but it is listed and counted, once per position, as a
+    /// link whose position would pass the largest offset is. (An IFD0 there
+    /// is an error, which [`walk`] reports before it claims IFD0.)
     ///
     /// # Errors
     ///
-    /// `LimitExceeded` at `at` if the walk has already tried as many IFDs as
-    /// the total cap allows.
-    fn claim(&mut self, at: u64) -> Result<bool> {
-        if self.visited.contains_key(&at) {
-            return Ok(false);
+    /// As for [`skip`](Self::skip).
+    fn target(&mut self, link: u32, origin: Origin) -> Result<Option<u64>> {
+        match self.position_of(link) {
+            Ok(at) => Ok(Some(at)),
+            Err(at) => {
+                self.skip(origin, at, ErrorKind::Malformed)?;
+                Ok(None)
+            }
         }
+    }
+
+    /// The position in the file a link as written leads to, if an IFD can
+    /// start there; otherwise, in the error, the position inside the header
+    /// it leads to, or `None` past the largest offset.
+    fn position_of(&self, link: u32) -> std::result::Result<u64, Option<u64>> {
+        match self.block.at(link) {
+            Some(at) if u64::from(link) >= HEADER_LEN => Ok(at),
+            at => Err(at),
+        }
+    }
+
+    /// Counts one more IFD tried, or link listed without a try, toward the
+    /// total cap.
+    ///
+    /// # Errors
+    ///
+    /// `LimitExceeded` at `at` if the walk has already counted as many as
+    /// the total cap allows.
+    fn count(&mut self, at: u64) -> Result<()> {
         if self.attempts >= self.limits.max_ifds() {
             return Err(Error::limit("more IFDs than the limit allows", at));
         }
         self.attempts += 1;
+        Ok(())
+    }
+
+    /// Marks the IFD at position `at` in the file as tried, with no
+    /// next-IFD pointer recorded yet, and counts the attempt; `false`, with
+    /// nothing counted, if it was tried before. A position listed before,
+    /// which the depth cap stopped, was counted then, and is not counted
+    /// again.
+    ///
+    /// # Errors
+    ///
+    /// As for [`count`](Self::count).
+    fn claim(&mut self, at: u64) -> Result<bool> {
+        if self.visited.contains_key(&at) {
+            return Ok(false);
+        }
+        if !self.listed.contains(&at) {
+            self.count(at)?;
+        }
         self.visited.insert(at, 0);
         Ok(true)
     }
 
-    /// Parses the IFD at position `at` in the file, reached by a link past
-    /// IFD0 and found by [`target`](Self::target): `None` if it was tried
-    /// before or cannot be parsed. Returns the IFD and its next-IFD pointer
-    /// as written, an offset from the base. It does not record the pointer:
-    /// the caller does, in `visited`, only once it keeps the IFD in the tree,
-    /// so that an IFD it rejects cannot feed a chain.
+    /// Lists a link from `origin` that the walk does not try, leading to
+    /// `offset` in the file, and counts it toward the total cap: once per
+    /// position, or, with no position, once per IFD and tag.
+    ///
+    /// # Errors
+    ///
+    /// As for [`count`](Self::count), at `offset`, or, when it is `None`, at
+    /// the position of the IFD that holds the link.
+    fn skip(&mut self, origin: Origin, offset: Option<u64>, kind: ErrorKind) -> Result<()> {
+        let new = match offset {
+            Some(at) => !self.listed.contains(&at),
+            None => !self.unplaced.contains(&(origin.parent, origin.tag)),
+        };
+        if !new {
+            return Ok(());
+        }
+        let at = offset
+            .or_else(|| self.ifds.get(origin.parent).map(|(_, ifd)| ifd.offset()))
+            .unwrap_or(self.block.base());
+        self.count(at)?;
+        self.record(origin, offset, kind);
+        Ok(())
+    }
+
+    /// Lists a link from `origin` to `offset` that the walk leaves out, and
+    /// has counted; nothing when a link to the same position was listed
+    /// before.
+    fn record(&mut self, origin: Origin, offset: Option<u64>, kind: ErrorKind) {
+        let new = match offset {
+            Some(at) => self.listed.insert(at),
+            None => self.unplaced.insert((origin.parent, origin.tag)),
+        };
+        if !new {
+            return;
+        }
+        self.skipped.push(Skipped {
+            parent: origin.parent,
+            tag: origin.tag,
+            offset,
+            kind,
+        });
+    }
+
+    /// The position in the tree of the IFD at position `at` in the file;
+    /// `None` when no IFD of the tree lies there.
+    fn position(&self, at: u64) -> Option<usize> {
+        self.positions.get(&at).copied()
+    }
+
+    /// Adds `ifd` to the tree under `link`; its position there.
+    fn push(&mut self, link: Link, ifd: Ifd) -> usize {
+        let position = self.ifds.len();
+        self.positions.insert(ifd.offset(), position);
+        self.ifds.push((link, ifd));
+        position
+    }
+
+    /// Parses the IFD at position `at` in the file, reached by a link from
+    /// `origin` past IFD0 and found by [`target`](Self::target): `None` if
+    /// it was tried before or cannot be parsed. One that cannot be parsed is
+    /// listed. Returns the IFD and its next-IFD pointer as written, an
+    /// offset from the base. It does not record the pointer: the caller
+    /// does, in `visited`, only once it keeps the IFD in the tree, so that
+    /// an IFD it rejects cannot feed a chain.
     ///
     /// # Errors
     ///
     /// As for [`claim`](Self::claim); `Io` if the reader fails.
-    fn candidate(&mut self, at: u64) -> Result<Option<(Ifd, u32)>> {
+    fn candidate(&mut self, at: u64, origin: Origin) -> Result<Option<(Ifd, u32)>> {
         if !self.claim(at)? {
             return Ok(None);
         }
-        skip_damage(parse_ifd(self.src, self.block, at, self.order, self.limits))
+        match damage_kind(parse_ifd(self.src, self.block, at, self.order, self.limits))? {
+            Ok(found) => Ok(Some(found)),
+            Err(kind) => {
+                self.record(origin, Some(at), kind);
+                Ok(None)
+            }
+        }
     }
 
-    /// Follows `offset`, as written, to an IFD tried once the chain has
-    /// ended, and adds it to the tree under `link`, alone: its next-IFD
-    /// pointer and its SubIFDs are not followed. Returns the IFD's position
-    /// in the tree: the new one, or where the walk placed it before through
-    /// another link. `None` when there is no offset, when it cannot be
-    /// followed, or when the IFD it leads to is not in the tree.
+    /// Follows `offset`, as written, from `origin` to an IFD tried once the
+    /// chain has ended, and adds it to the tree under `link`, alone: its
+    /// next-IFD pointer and its SubIFDs are not followed. Returns the IFD's
+    /// position in the tree: the new one, or where the walk placed it
+    /// before through another link. `None` when there is no offset, when it
+    /// cannot be followed, or when the IFD it leads to is not in the tree.
     ///
     /// # Errors
     ///
-    /// As for [`candidate`](Self::candidate).
-    fn last(&mut self, offset: Option<u32>, link: Link) -> Result<Option<usize>> {
-        let Some(at) = offset.and_then(|offset| self.target(offset)) else {
+    /// As for [`candidate`](Self::candidate) and [`target`](Self::target).
+    fn last(&mut self, offset: Option<u32>, link: Link, origin: Origin) -> Result<Option<usize>> {
+        let Some(offset) = offset else {
             return Ok(None);
         };
-        Ok(match self.candidate(at)? {
+        let Some(at) = self.target(offset, origin)? else {
+            return Ok(None);
+        };
+        Ok(match self.candidate(at, origin)? {
             Some((ifd, _)) => {
                 // Nothing is walked after it, so its next-IFD pointer is
                 // not needed: `visited` keeps the 0 that `claim` recorded.
-                self.ifds.push((link, ifd));
-                Some(self.ifds.len() - 1)
+                Some(self.push(link, ifd))
             }
             // Tried before, or not an IFD. One tried before and kept in the
             // tree is found by its position, where it lies once. One left
             // out, or that cannot be parsed, is not in the tree.
-            None => self.ifds.iter().position(|(_, ifd)| ifd.offset() == at),
+            None => self.position(at),
         })
     }
 
@@ -463,9 +669,9 @@ impl<R: Read + Seek> Walker<'_, R> {
     ///
     /// As for [`candidate`](Self::candidate).
     fn place(&mut self, link: Link, ifd: Ifd) -> Result<()> {
-        self.ifds.push((link, ifd));
+        let position = self.push(link, ifd);
         let mut stack: Vec<Children> = Vec::new();
-        stack.extend(self.children(self.ifds.len() - 1, 0)?);
+        stack.extend(self.children(position, 0)?);
         // One element per IFD on the path from `ifd` down to the IFD being
         // tried, so the depth cap bounds the stack.
         while let Some(children) = stack.last_mut() {
@@ -474,16 +680,26 @@ impl<R: Read + Seek> Walker<'_, R> {
                 continue;
             };
             let (parent, depth) = (children.parent, children.depth);
+            let origin = Origin {
+                parent,
+                tag: Some(SUB_IFDS),
+            };
+            let Some(at) = self.target(offset, origin)? else {
+                continue;
+            };
+            let Some((child, next)) = self.candidate(at, origin)? else {
+                continue;
+            };
+            if child.invalid_entries() != 0 {
+                // Tried, so counted already.
+                self.record(origin, Some(at), ErrorKind::Malformed);
+                continue;
+            }
             // A SubIFD's own next-IFD pointer is not followed, but is kept for
             // a chain that reaches the SubIFD, if the SubIFD is kept.
-            if let Some(at) = self.target(offset)
-                && let Some((child, next)) = self.candidate(at)?
-                && child.invalid_entries() == 0
-            {
-                self.visited.insert(at, next);
-                self.ifds.push((Link::Sub { parent, index }, child));
-                stack.extend(self.children(self.ifds.len() - 1, depth)?);
-            }
+            self.visited.insert(at, next);
+            let position = self.push(Link::Sub { parent, index }, child);
+            stack.extend(self.children(position, depth)?);
         }
         Ok(())
     }
@@ -492,17 +708,40 @@ impl<R: Read + Seek> Walker<'_, R> {
     /// at `depth`: `None` if it has no SubIFDs tag that can be read, or lies
     /// at the depth cap.
     ///
+    /// A SubIFDs value that cannot be read is listed as one link with no
+    /// position. At the depth cap, each offset is listed instead, but for
+    /// one that leads to a position the walk tried before: `LimitExceeded`,
+    /// or `Malformed` for one no IFD could be found at, as
+    /// [`target`](Self::target) lists it.
+    ///
     /// # Errors
     ///
-    /// `Io` if the reader fails.
+    /// As for [`skip`](Self::skip).
     fn children(&mut self, parent: usize, depth: u32) -> Result<Option<Children>> {
-        if depth >= self.limits.max_ifd_depth() {
-            return Ok(None);
-        }
         let Some((_, ifd)) = self.ifds.get(parent) else {
             return Ok(None);
         };
-        let offsets = skip_damage(ifd.u32s(self.src, SUB_IFDS))?.flatten();
+        let origin = Origin {
+            parent,
+            tag: Some(SUB_IFDS),
+        };
+        let offsets = match damage_kind(ifd.u32s(self.src, SUB_IFDS))? {
+            Ok(offsets) => offsets,
+            Err(kind) => {
+                self.skip(origin, None, kind)?;
+                return Ok(None);
+            }
+        };
+        if depth >= self.limits.max_ifd_depth() {
+            for offset in offsets.into_iter().flatten() {
+                match self.position_of(offset) {
+                    Ok(at) if self.visited.contains_key(&at) => {}
+                    Ok(at) => self.skip(origin, Some(at), ErrorKind::LimitExceeded)?,
+                    Err(at) => self.skip(origin, at, ErrorKind::Malformed)?,
+                }
+            }
+            return Ok(None);
+        }
         Ok(offsets.map(|offsets| Children {
             parent,
             // Below the cap, which is a `u32`: this cannot overflow.
@@ -554,7 +793,15 @@ mod tests {
     ) -> Result<(Source<Cursor<Vec<u8>>>, Tree)> {
         let mut src = open(bytes);
         let tree = walk(&mut src, block, limits)?;
+        assert_bounded(&tree, limits);
         Ok((src, tree))
+    }
+
+    /// Checks that the IFDs of `tree` and the links it lists together keep
+    /// to the total cap of `limits`.
+    fn assert_bounded(tree: &Tree, limits: &Limits) {
+        let cap = usize::try_from(limits.max_ifds()).unwrap_or(usize::MAX);
+        assert!(tree.len() + tree.skipped().len() <= cap, "{tree:?}");
     }
 
     /// Walks `built` with the default limits, which must succeed.
@@ -571,6 +818,26 @@ mod tests {
 
     fn links(tree: &Tree) -> Vec<Link> {
         tree.iter().map(|(link, _)| link).collect()
+    }
+
+    /// A link the walk did not follow: from the IFD at `parent` in the tree,
+    /// through `tag`, to `offset`, for a `kind` of cause.
+    fn skip(parent: usize, tag: Option<u16>, offset: Option<u64>, kind: ErrorKind) -> Skipped {
+        Skipped {
+            parent,
+            tag,
+            offset,
+            kind,
+        }
+    }
+
+    /// The tag of each kind of link, `None` for a next-IFD pointer.
+    fn tag_of(link: Pointer) -> Option<u16> {
+        match link {
+            Pointer::SubIfds => Some(SUB_IFDS),
+            Pointer::Exif => Some(EXIF_IFD),
+            Pointer::Next => None,
+        }
     }
 
     fn assert_error<T>(result: Result<T>, kind: ErrorKind, offset: u64) {
@@ -763,6 +1030,7 @@ mod tests {
                 .subifds(b, &[a, ifd0]);
             let (mut src, tree) = walked(&builder.build());
             assert_eq!(ids(&mut src, &tree), [0, 1, 2]);
+            assert_eq!(tree.skipped(), []);
         }
     }
 
@@ -786,6 +1054,9 @@ mod tests {
                 }
             );
             assert!(tree.exif().is_none(), "found first as a SubIFD");
+            // The other three links lead to an IFD of the tree: none is
+            // listed.
+            assert_eq!(tree.skipped(), []);
         }
     }
 
@@ -856,14 +1127,26 @@ mod tests {
     }
 
     #[test]
-    fn links_inside_the_header_are_not_tried() {
+    fn links_inside_the_header_are_listed_not_tried() {
         for order in ORDERS {
-            // A SubIFD at 0 and an Exif IFD at 4 in one file, then each kind
-            // of link alone at offsets inside the header.
+            // A SubIFD at 0 and an Exif IFD at 4 in one file.
             let mut builder = TiffBuilder::new(order);
             let ifd0 = ifd(&mut builder, 0);
             builder.subifds_raw(ifd0, &[0]).long(ifd0, EXIF_IFD, &[4]);
-            let mut files = vec![("SubIFD 0 and Exif 4".to_owned(), builder.build())];
+            let built = builder.build();
+            let (_, tree) = try_walk(&built.bytes, &Limits::default().with_max_ifds(3)).unwrap();
+            assert_eq!(links(&tree), [Link::Ifd0], "{order:?}");
+            let malformed = ErrorKind::Malformed;
+            assert_eq!(
+                tree.skipped(),
+                [
+                    skip(0, Some(SUB_IFDS), Some(0), malformed),
+                    skip(0, Some(EXIF_IFD), Some(4), malformed),
+                ],
+                "{order:?}"
+            );
+
+            // Then each kind of link alone at offsets inside the header.
             for link in [Pointer::SubIfds, Pointer::Exif, Pointer::Next] {
                 for at in [0, 1, 4, 7] {
                     if matches!(link, Pointer::Next) && at == 0 {
@@ -877,40 +1160,237 @@ mod tests {
                         Pointer::Exif => builder.long(ifd0, EXIF_IFD, &[at]),
                         Pointer::Next => builder.next_raw(ifd0, at),
                     };
-                    files.push((format!("{link:?} at {at}"), builder.build()));
+                    let built = builder.build();
+                    let what = format!("{link:?} at {at} ({order:?})");
+                    // The link is not tried, but it is listed and counted:
+                    // a cap of IFD0 alone fails at the position it leads
+                    // to.
+                    let (_, tree) = try_walk(&built.bytes, &Limits::default().with_max_ifds(2))
+                        .unwrap_or_else(|err| panic!("{what}: {err:?}"));
+                    assert_eq!(links(&tree), [Link::Ifd0], "{what}");
+                    let expected = skip(0, tag_of(link), Some(u64::from(at)), malformed);
+                    assert_eq!(tree.skipped(), [expected], "{what}");
+                    assert_error(
+                        try_walk(&built.bytes, &Limits::default().with_max_ifds(1)),
+                        ErrorKind::LimitExceeded,
+                        u64::from(at),
+                    );
                 }
             }
-            for (what, built) in files {
-                // The cap allows IFD0 alone: trying any link would cross it.
-                let (_, tree) = try_walk(&built.bytes, &Limits::default().with_max_ifds(1))
-                    .unwrap_or_else(|err| panic!("{what} ({order:?}): {err:?}"));
-                assert_eq!(links(&tree), [Link::Ifd0], "{what} ({order:?})");
-            }
+        }
+    }
+
+    #[test]
+    fn links_to_one_header_position_are_listed_once() {
+        for order in ORDERS {
+            // 300 SubIFD offsets to byte 4 of the header, then one to byte
+            // 6: two positions, two links listed, and the file opens.
+            let mut builder = TiffBuilder::new(order);
+            let ifd0 = ifd(&mut builder, 0);
+            let mut offsets = vec![4; 300];
+            offsets.push(6);
+            builder.subifds_raw(ifd0, &offsets);
+            let built = builder.build();
+            let (_, tree) = try_walk(&built.bytes, &Limits::default().with_max_ifds(3)).unwrap();
+            let malformed = ErrorKind::Malformed;
+            assert_eq!(
+                tree.skipped(),
+                [
+                    skip(0, Some(SUB_IFDS), Some(4), malformed),
+                    skip(0, Some(SUB_IFDS), Some(6), malformed),
+                ],
+                "{order:?}"
+            );
+            // Each position counts once: IFD0 and the two fit 3, not 2.
+            assert_error(
+                try_walk(&built.bytes, &Limits::default().with_max_ifds(2)),
+                ErrorKind::LimitExceeded,
+                6,
+            );
+        }
+    }
+
+    #[test]
+    fn many_links_at_the_depth_cap_cross_the_total_cap() {
+        for order in ORDERS {
+            // IFD0, at the cap of 0, links to 300 positions past its table,
+            // none tried: more links than the default cap of 256 allows.
+            let mut builder = TiffBuilder::new(order);
+            let ifd0 = ifd(&mut builder, 0);
+            let offsets: Vec<u32> = (0..300).map(|i| 4096 + 16 * i).collect();
+            builder.subifds_raw(ifd0, &offsets);
+            let built = builder.build();
+            let depth = Limits::default().with_max_ifd_depth(0);
+            assert_error(
+                try_walk(&built.bytes, &depth),
+                ErrorKind::LimitExceeded,
+                4096 + 16 * 255,
+            );
+            // IFD0 and 300 links fit a cap of 301, which lists them all.
+            let (_, tree) = try_walk(&built.bytes, &depth.with_max_ifds(301)).unwrap();
+            assert_eq!(tree.skipped().len(), 300, "{order:?}");
+        }
+    }
+
+    #[test]
+    fn a_position_the_depth_cap_stopped_and_another_link_reached_is_not_listed() {
+        for order in ORDERS {
+            // IFD0, at the cap of 0, has SubIFDs X, X and the header's byte
+            // 4; its Exif IFD is X too, tried after the SubIFDs.
+            let mut builder = TiffBuilder::new(order);
+            let ifd0 = ifd(&mut builder, 0);
+            let x = ifd(&mut builder, 1);
+            builder.exif(ifd0, x);
+            let mut probe = builder.clone();
+            probe.subifds_raw(ifd0, &[0, 0, 4]);
+            let x_at = probe.build().ifd_offset(x);
+            let x_link = u32::try_from(x_at).unwrap();
+            builder.subifds_raw(ifd0, &[x_link, x_link, 4]);
+            let built = builder.build();
+            assert_eq!(built.ifd_offset(x), x_at);
+            let depth = Limits::default().with_max_ifd_depth(0);
+            let (mut src, tree) = try_walk(&built.bytes, &depth).unwrap();
+            assert_eq!(ids(&mut src, &tree), [0, 1], "{order:?}");
+            assert_eq!(links(&tree), [Link::Ifd0, Link::Exif], "{order:?}");
+            // X is in the tree, as the Exif IFD: only the header's byte is
+            // listed, and as damage, which a larger depth would not lift.
+            assert_eq!(
+                tree.skipped(),
+                [skip(0, Some(SUB_IFDS), Some(4), ErrorKind::Malformed)],
+                "{order:?}"
+            );
+
+            // The Exif IFD tag leads to bytes the cap listed, which are no
+            // IFD: tried, refused, and still listed once, at its first link.
+            let mut builder = TiffBuilder::new(order);
+            let ifd0 = ifd(&mut builder, 0);
+            builder.blob_at(1024, &[0xFF; 32]);
+            builder
+                .subifds_raw(ifd0, &[1024])
+                .long(ifd0, EXIF_IFD, &[1024]);
+            let (_, tree) = try_walk(&builder.build().bytes, &depth).unwrap();
+            assert_eq!(
+                tree.skipped(),
+                [skip(
+                    0,
+                    Some(SUB_IFDS),
+                    Some(1024),
+                    ErrorKind::LimitExceeded
+                )],
+                "{order:?}"
+            );
+
+            // X counts once, listed or in the tree: IFD0 and the Exif IFD
+            // fit a cap of 2.
+            let mut builder = TiffBuilder::new(order);
+            let ifd0 = ifd(&mut builder, 0);
+            let x = ifd(&mut builder, 1);
+            builder.subifds(ifd0, &[x]).exif(ifd0, x);
+            let (_, tree) = try_walk(&builder.build().bytes, &depth.with_max_ifds(2)).unwrap();
+            assert_eq!(links(&tree), [Link::Ifd0, Link::Exif], "{order:?}");
+            assert_eq!(tree.skipped(), [], "{order:?}");
+
+            // With no Exif IFD to reach it, X is listed once, for the cap.
+            let mut builder = TiffBuilder::new(order);
+            let ifd0 = ifd(&mut builder, 0);
+            let x = ifd(&mut builder, 1);
+            builder.subifds(ifd0, &[x, x]);
+            let built = builder.build();
+            let (_, tree) = try_walk(&built.bytes, &depth).unwrap();
+            let x_at = Some(built.ifd_offset(x));
+            assert_eq!(
+                tree.skipped(),
+                [skip(0, Some(SUB_IFDS), x_at, ErrorKind::LimitExceeded)],
+                "{order:?}"
+            );
         }
     }
 
     /// A file whose IFD0 has one SubIFD, which has one, and so on: IFD `n`
     /// lies at depth `n` and has id `n`, down to depth `depth`; IFD0 also
-    /// chains to an IFD1 (id 100) with SubIFDs as deep.
-    fn nested(depth: u16) -> Built {
+    /// chains to an IFD1 (id 100) with SubIFDs as deep. With it, the IFDs
+    /// under IFD0 and under IFD1, by depth.
+    fn nested(depth: u16) -> (Built, [Vec<IfdId>; 2]) {
         let mut builder = TiffBuilder::new(Order::Big);
         let ifd0 = ifd(&mut builder, 0);
         let ifd1 = ifd(&mut builder, 100);
         builder.next(ifd0, Some(ifd1));
-        for (root, first) in [(ifd0, 0), (ifd1, 100)] {
-            let mut parent = root;
+        let mut ids = [vec![ifd0], vec![ifd1]];
+        for (list, first) in ids.iter_mut().zip([0, 100]) {
             for n in 1..=depth {
                 let child = ifd(&mut builder, first + n);
-                builder.subifds(parent, &[child]);
-                parent = child;
+                builder.subifds(*list.last().unwrap(), &[child]);
+                list.push(child);
             }
         }
-        builder.build()
+        (builder.build(), ids)
+    }
+
+    #[test]
+    fn the_subifds_at_the_depth_cap_are_listed() {
+        let (built, [under0, under1]) = nested(7);
+        let at = |id: IfdId| Some(built.ifd_offset(id));
+        let sub = Some(SUB_IFDS);
+        for (cap, expected) in [
+            // IFD0 and IFD1, at depth 0, lie at the cap.
+            (
+                0,
+                vec![
+                    skip(0, sub, at(under0[1]), ErrorKind::LimitExceeded),
+                    skip(1, sub, at(under1[1]), ErrorKind::LimitExceeded),
+                ],
+            ),
+            // IFD0 to its depth-5 SubIFD at positions 0 to 5 of the tree,
+            // then IFD1 and its five.
+            (
+                5,
+                vec![
+                    skip(5, sub, at(under0[6]), ErrorKind::LimitExceeded),
+                    skip(11, sub, at(under1[6]), ErrorKind::LimitExceeded),
+                ],
+            ),
+            (7, vec![]),
+        ] {
+            let limits = Limits::default().with_max_ifd_depth(cap);
+            let (_, tree) = try_walk(&built.bytes, &limits).unwrap();
+            assert_eq!(tree.skipped(), expected, "cap {cap}");
+        }
+    }
+
+    #[test]
+    fn a_subifd_at_the_depth_cap_tried_before_is_not_listed() {
+        for order in ORDERS {
+            // IFD0's SubIFD a lies at the cap of 1, and has SubIFDs IFD0,
+            // tried before, and b, which is listed.
+            let mut builder = TiffBuilder::new(order);
+            let ifd0 = ifd(&mut builder, 0);
+            let (a, b) = (ifd(&mut builder, 1), ifd(&mut builder, 2));
+            builder.subifds(ifd0, &[a]).subifds(a, &[ifd0, b]);
+            let built = builder.build();
+            let limits = Limits::default().with_max_ifd_depth(1);
+            let (mut src, tree) = try_walk(&built.bytes, &limits).unwrap();
+            assert_eq!(ids(&mut src, &tree), [0, 1], "{order:?}");
+            let b_at = Some(built.ifd_offset(b));
+            assert_eq!(
+                tree.skipped(),
+                [skip(1, Some(SUB_IFDS), b_at, ErrorKind::LimitExceeded)],
+                "{order:?}"
+            );
+            // Each one listed counts: a cap of IFD0, a and b's link fits,
+            // one less fails at b.
+            let limits = limits.with_max_ifds(3);
+            try_walk(&built.bytes, &limits).unwrap();
+            assert_error(
+                try_walk(&built.bytes, &limits.with_max_ifds(2)),
+                ErrorKind::LimitExceeded,
+                built.ifd_offset(b),
+            );
+        }
     }
 
     #[test]
     fn subifds_nest_down_to_the_depth_cap() {
-        let built = nested(7);
+        let (built, _) = nested(7);
         for (cap, expected) in [
             (5, vec![0, 1, 2, 3, 4, 5, 100, 101, 102, 103, 104, 105]),
             (1, vec![0, 1, 100, 101]),
@@ -965,6 +1445,44 @@ mod tests {
     }
 
     #[test]
+    fn the_ifds_and_the_links_listed_never_pass_the_total_cap() {
+        for order in ORDERS {
+            // Each kind of link the walk lists: into the header, past the
+            // file, at bytes that are not an IFD, at a SubIFD with an entry
+            // of unknown type, from a chain IFD, and at the depth cap.
+            let mut builder = TiffBuilder::new(order);
+            let ifd0 = ifd(&mut builder, 0);
+            let [a, b, bad, ifd1] = [1, 2, 3, 4].map(|id| ifd(&mut builder, id));
+            builder.raw(bad, 0x0101, 99, 1, RawValue::Inline([0; 4]));
+            builder.blob_at(1024, &[0xFF; 32]);
+            builder
+                .subifds(ifd0, &[a, bad])
+                .subifds(a, &[b])
+                .long(ifd0, EXIF_IFD, &[4])
+                .long(ifd0, GPS_IFD, &[1024])
+                .next(ifd0, Some(ifd1))
+                .next_raw(ifd1, 0xFFFF_0000);
+            let built = builder.build();
+            let depth = Limits::default().with_max_ifd_depth(1);
+            let (_, tree) = try_walk(&built.bytes, &depth).unwrap();
+            // IFD0, a, IFD1; the SubIFDs of a at the cap, bad, the Exif IFD
+            // link, IFD1's next IFD, the GPS IFD link.
+            assert_eq!(tree.len(), 3, "{order:?}");
+            assert_eq!(tree.skipped().len(), 5, "{order:?}");
+            for cap in 0..=8 {
+                // Every walk of the tests checks the bound.
+                match try_walk(&built.bytes, &depth.with_max_ifds(cap)) {
+                    Ok(_) => assert!(cap >= 8, "cap {cap} ({order:?})"),
+                    Err(err) => {
+                        assert_eq!(err.kind(), ErrorKind::LimitExceeded, "cap {cap}");
+                        assert!(cap < 8, "cap {cap} ({order:?})");
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
     fn attempts_count_towards_the_total_cap() {
         for order in ORDERS {
             // Three SubIFD pointers into bytes that are not IFDs: their
@@ -977,6 +1495,10 @@ mod tests {
 
             let (_, tree) = try_walk(&built.bytes, &Limits::default().with_max_ifds(4)).unwrap();
             assert_eq!(links(&tree), [Link::Ifd0]);
+            // Each counts 0xFFFF entries, over the cap on one IFD's.
+            let listed = [1024, 1040, 1056]
+                .map(|at| skip(0, Some(SUB_IFDS), Some(at), ErrorKind::LimitExceeded));
+            assert_eq!(tree.skipped(), listed, "{order:?}");
             assert_error(
                 try_walk(&built.bytes, &Limits::default().with_max_ifds(3)),
                 ErrorKind::LimitExceeded,
@@ -1011,6 +1533,16 @@ mod tests {
             let built = builder.build();
             let (_, tree) = walked(&built);
             assert_eq!(links(&tree), [Link::Ifd0]);
+            // The JPEG's count is over the cap on one IFD's entries; the
+            // noise holds entries of unknown types.
+            assert_eq!(
+                tree.skipped(),
+                [
+                    skip(0, Some(SUB_IFDS), Some(1024), ErrorKind::LimitExceeded),
+                    skip(0, Some(SUB_IFDS), Some(2048), ErrorKind::Malformed),
+                ],
+                "{order:?}"
+            );
         }
     }
 
@@ -1033,6 +1565,15 @@ mod tests {
             let built = builder.build();
             let (mut src, tree) = walked(&built);
             assert_eq!(ids(&mut src, &tree), [0, 3]);
+            let left_out = |id| {
+                skip(
+                    0,
+                    Some(SUB_IFDS),
+                    Some(built.ifd_offset(id)),
+                    ErrorKind::Malformed,
+                )
+            };
+            assert_eq!(tree.skipped(), [left_out(unknown), left_out(outside)]);
             assert_eq!(
                 tree.get(1).unwrap().0,
                 Link::Sub {
@@ -1051,6 +1592,7 @@ mod tests {
             builder.next(ifd0, Some(ifd1)).exif(ifd0, exif);
             let (mut src, tree) = walked(&builder.build());
             assert_eq!(ids(&mut src, &tree), [0, 2, 1]);
+            assert_eq!(tree.skipped(), []);
         }
     }
 
@@ -1069,15 +1611,24 @@ mod tests {
                     builder.subifds(ifd0, &[x]);
                 }
                 builder.next(ifd0, Some(x)).next(x, Some(y));
-                builder.build()
+                (builder.build(), x)
             };
 
-            let (mut src, tree) = walked(&build(true));
+            let (built, x) = build(true);
+            let (mut src, tree) = walked(&built);
             assert_eq!(ids(&mut src, &tree), [0], "{order:?}");
             assert_eq!(links(&tree), [Link::Ifd0], "{order:?}");
+            // Listed once, as a SubIFD: the chain reaches a position tried
+            // before.
+            let x_at = Some(built.ifd_offset(x));
+            assert_eq!(
+                tree.skipped(),
+                [skip(0, Some(SUB_IFDS), x_at, ErrorKind::Malformed)],
+                "{order:?}"
+            );
 
             // The control: chain IFDs may carry invalid entries.
-            let (mut src, tree) = walked(&build(false));
+            let (mut src, tree) = walked(&build(false).0);
             assert_eq!(ids(&mut src, &tree), [0, 1, 2], "{order:?}");
             assert_eq!(
                 links(&tree),
@@ -1100,6 +1651,15 @@ mod tests {
                 builder.blob_at(1024, &[0xFF; 32]);
                 let (mut src, tree) = walked(&builder.build());
                 assert_eq!(ids(&mut src, &tree), [0, 1, 2], "next {broken:#X}");
+                // Past the end of the file, or 0xFFFF entries, over the cap
+                // on one IFD's; held by IFD1, at position 2 of the tree.
+                let kind = if broken == 1024 {
+                    ErrorKind::LimitExceeded
+                } else {
+                    ErrorKind::Malformed
+                };
+                let expected = skip(2, None, Some(u64::from(broken)), kind);
+                assert_eq!(tree.skipped(), [expected], "next {broken:#X} ({order:?})");
             }
         }
     }
@@ -1153,6 +1713,13 @@ mod tests {
                 let (mut src, tree) = walked(&builder.build());
                 assert_eq!(ids(&mut src, &tree), [0, 1], "exif {exif:#X}");
                 assert!(tree.exif().is_none());
+                let kind = if exif == 1024 {
+                    ErrorKind::LimitExceeded
+                } else {
+                    ErrorKind::Malformed
+                };
+                let expected = skip(0, Some(EXIF_IFD), Some(u64::from(exif)), kind);
+                assert_eq!(tree.skipped(), [expected], "exif {exif:#X} ({order:?})");
             }
         }
     }
@@ -1356,6 +1923,13 @@ mod tests {
                 let (mut src, tree) = walked(&builder.build());
                 assert_eq!(ids(&mut src, &tree), [0, 1], "{link:#X} ({order:?})");
                 assert!(tree.gps().is_none(), "{link:#X} ({order:?})");
+                let kind = if link == 1024 {
+                    ErrorKind::LimitExceeded
+                } else {
+                    ErrorKind::Malformed
+                };
+                let expected = skip(0, Some(GPS_IFD), Some(u64::from(link)), kind);
+                assert_eq!(tree.skipped(), [expected], "{link:#X} ({order:?})");
             }
         }
     }
@@ -1376,24 +1950,43 @@ mod tests {
                 let (mut src, tree) = walked(&builder.build());
                 assert_eq!(ids(&mut src, &tree), [0, 1, 2], "{link:#X} ({order:?})");
                 assert!(tree.interop().is_none());
+                let kind = if link == 1024 {
+                    ErrorKind::LimitExceeded
+                } else {
+                    ErrorKind::Malformed
+                };
+                // Held by the Exif IFD, at position 1 of the tree.
+                let expected = skip(1, Some(INTEROP_IFD), Some(u64::from(link)), kind);
+                assert_eq!(tree.skipped(), [expected], "{link:#X} ({order:?})");
             }
         }
     }
 
     #[test]
-    fn an_interoperability_link_into_the_header_is_not_tried() {
+    fn an_interoperability_link_into_the_header_is_listed_not_tried() {
         for order in ORDERS {
             for link in [0, 1, 4, 7] {
                 let mut builder = TiffBuilder::new(order);
                 let ifd0 = ifd(&mut builder, 0);
                 let exif = ifd(&mut builder, 1);
                 builder.exif(ifd0, exif).long(exif, INTEROP_IFD, &[link]);
-                // The cap allows IFD0 and the Exif IFD alone: trying the
-                // link would cross it.
-                let (_, tree) =
-                    try_walk(&builder.build().bytes, &Limits::default().with_max_ifds(2))
-                        .unwrap_or_else(|err| panic!("{link} ({order:?}): {err:?}"));
+                let bytes = builder.build().bytes;
+                let (_, tree) = try_walk(&bytes, &Limits::default().with_max_ifds(3))
+                    .unwrap_or_else(|err| panic!("{link} ({order:?}): {err:?}"));
                 assert_eq!(links(&tree), [Link::Ifd0, Link::Exif], "{link} ({order:?})");
+                let at = Some(u64::from(link));
+                assert_eq!(
+                    tree.skipped(),
+                    [skip(1, Some(INTEROP_IFD), at, ErrorKind::Malformed)],
+                    "{link} ({order:?})"
+                );
+                // Listed, so counted: a cap of IFD0 and the Exif IFD alone
+                // fails at it.
+                assert_error(
+                    try_walk(&bytes, &Limits::default().with_max_ifds(2)),
+                    ErrorKind::LimitExceeded,
+                    u64::from(link),
+                );
             }
         }
     }
@@ -1560,10 +2153,24 @@ mod tests {
                 // The cap allows IFD0, the position and the Exif IFD: the
                 // tag does not try the position again.
                 let limits = Limits::default().with_max_ifds(3);
-                let (_, tree) = try_walk(&builder.build().bytes, &limits)
+                let built = builder.build();
+                let (_, tree) = try_walk(&built.bytes, &limits)
                     .unwrap_or_else(|err| panic!("{case} ({order:?}): {err:?}"));
                 assert_eq!(links(&tree), [Link::Ifd0, Link::Exif], "{case} ({order:?})");
                 assert!(tree.interop().is_none(), "{case} ({order:?})");
+                // Listed once, at the first link that tried it.
+                let [first] = tree.skipped() else {
+                    panic!("{case} ({order:?}): {:?}", tree.skipped());
+                };
+                let expected = match case {
+                    "a SubIFD left out" => (Some(SUB_IFDS), ErrorKind::Malformed),
+                    "not an IFD as a SubIFD" => (Some(SUB_IFDS), ErrorKind::LimitExceeded),
+                    _ => (None, ErrorKind::LimitExceeded),
+                };
+                assert_eq!(
+                    (first.parent, first.tag, first.kind),
+                    (0, expected.0, expected.1)
+                );
             }
         }
     }
@@ -1631,6 +2238,11 @@ mod tests {
         assert_eq!(ids(&mut src, &tree), [0, 1, 2]);
         assert_eq!(tree.exif().unwrap().invalid_entries(), 0);
         assert!(tree.interop().is_none());
+        // Its first value alone is read: 0, which leads into the header.
+        assert_eq!(
+            tree.skipped(),
+            [skip(1, Some(INTEROP_IFD), Some(0), ErrorKind::Malformed)]
+        );
     }
 
     #[test]
@@ -1734,6 +2346,15 @@ mod tests {
             let (mut src, tree) = walked(&built);
             assert_eq!(ids(&mut src, &tree), [0, 1], "tag {tag:#06X}");
             assert_eq!(tree.ifd0().invalid_entries(), 0);
+            // The SubIFDs value is refused for its length, so it is listed
+            // with no position. Of the Exif IFD tag, only the first value is
+            // read: 0, which leads into the header.
+            let expected = if tag == SUB_IFDS {
+                skip(0, Some(tag), None, ErrorKind::LimitExceeded)
+            } else {
+                skip(0, Some(tag), Some(0), ErrorKind::Malformed)
+            };
+            assert_eq!(tree.skipped(), [expected], "tag {tag:#06X}");
         }
     }
 
@@ -1913,7 +2534,7 @@ mod tests {
     }
 
     #[test]
-    fn links_into_a_header_inside_a_file_are_not_tried() {
+    fn links_into_a_header_inside_a_file_are_listed_not_tried() {
         for order in ORDERS {
             for link in [Pointer::SubIfds, Pointer::Exif, Pointer::Next] {
                 for at in 0..8 {
@@ -1928,12 +2549,15 @@ mod tests {
                         Pointer::Exif => builder.long(ifd0, EXIF_IFD, &[at]),
                         Pointer::Next => builder.next_raw(ifd0, at),
                     };
-                    // The cap allows IFD0 alone: trying any link would
-                    // cross it.
+                    // Listed at the position in the file it leads to.
                     let bytes = placed(&builder.build());
-                    let (_, tree) = try_walk_at(&bytes, POS, &Limits::default().with_max_ifds(1))
-                        .unwrap_or_else(|err| panic!("{link:?} at {at} ({order:?}): {err:?}"));
-                    assert_eq!(links(&tree), [Link::Ifd0], "{link:?} at {at} ({order:?})");
+                    let what = format!("{link:?} at {at} ({order:?})");
+                    let (_, tree) = try_walk_at(&bytes, POS, &Limits::default().with_max_ifds(2))
+                        .unwrap_or_else(|err| panic!("{what}: {err:?}"));
+                    assert_eq!(links(&tree), [Link::Ifd0], "{what}");
+                    let position = Some(POS + u64::from(at));
+                    let expected = skip(0, tag_of(link), position, ErrorKind::Malformed);
+                    assert_eq!(tree.skipped(), [expected], "{what}");
                 }
             }
         }
@@ -2026,7 +2650,7 @@ mod tests {
     }
 
     #[test]
-    fn links_whose_position_would_pass_the_largest_offset_are_not_tried() {
+    fn links_whose_position_would_pass_the_largest_offset_are_listed_not_tried() {
         for order in ORDERS {
             for link in [Pointer::SubIfds, Pointer::Exif, Pointer::Next] {
                 for at in [1 << 31, u32::MAX] {
@@ -2037,15 +2661,41 @@ mod tests {
                         Pointer::Exif => builder.long(ifd0, EXIF_IFD, &[at]),
                         Pointer::Next => builder.next_raw(ifd0, at),
                     };
-                    // The cap allows IFD0 alone: trying any link would
-                    // cross it.
-                    let limits = Limits::default().with_max_ifds(1);
-                    let (mut src, tree) = try_walk_at_the_end(builder.build().bytes, &limits)
-                        .unwrap_or_else(|err| panic!("{link:?} at {at} ({order:?}): {err:?}"));
+                    // Listed with no position, which no offset can hold.
+                    let bytes = builder.build().bytes;
+                    let what = format!("{link:?} at {at} ({order:?})");
+                    let limits = Limits::default().with_max_ifds(2);
+                    let (mut src, tree) = try_walk_at_the_end(bytes.clone(), &limits)
+                        .unwrap_or_else(|err| panic!("{what}: {err:?}"));
                     assert_eq!(tree.ifd0().block().base(), NEAR_THE_END);
-                    assert_eq!(ids(&mut src, &tree), [0], "{link:?} at {at} ({order:?})");
+                    assert_eq!(ids(&mut src, &tree), [0], "{what}");
+                    let expected = skip(0, tag_of(link), None, ErrorKind::Malformed);
+                    assert_eq!(tree.skipped(), [expected], "{what}");
+                    // Counted, at the position of IFD0, which holds it.
+                    let ifd0_at = tree.ifd0().offset();
+                    let limits = Limits::default().with_max_ifds(1);
+                    assert_error(
+                        try_walk_at_the_end(bytes, &limits),
+                        ErrorKind::LimitExceeded,
+                        ifd0_at,
+                    );
                 }
             }
+        }
+    }
+
+    #[test]
+    fn links_past_the_largest_offset_are_listed_once_per_ifd_and_tag() {
+        for order in ORDERS {
+            // Two SubIFD offsets past the largest offset: no position, one
+            // link listed, which IFD0 and it fit a cap of 2.
+            let mut builder = TiffBuilder::new(order);
+            let ifd0 = ifd(&mut builder, 0);
+            builder.subifds_raw(ifd0, &[1 << 31, u32::MAX]);
+            let limits = Limits::default().with_max_ifds(2);
+            let (_, tree) = try_walk_at_the_end(builder.build().bytes, &limits).unwrap();
+            let expected = skip(0, Some(SUB_IFDS), None, ErrorKind::Malformed);
+            assert_eq!(tree.skipped(), [expected], "{order:?}");
         }
     }
 

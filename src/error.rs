@@ -244,10 +244,25 @@ impl Error {
 /// `Io` error is not damage: it says nothing about the file, and the
 /// reader may fail again on the next read.
 pub(crate) fn skip_damage<T>(result: Result<T>) -> Result<Option<T>> {
+    Ok(damage_kind(result)?.ok())
+}
+
+/// As [`skip_damage`], keeping what the damage was: the value, or the kind
+/// of what stopped the read in its place, `LimitExceeded` for a cap of
+/// [`Limits`](crate::Limits) and `Malformed` for any other damage. A
+/// failure of the reader stays an error.
+///
+/// For a reader that lists a directory it left out with the cause, as
+/// [`Entries::skipped_directories`](crate::Entries::skipped_directories)
+/// gives it.
+pub(crate) fn damage_kind<T>(result: Result<T>) -> Result<std::result::Result<T, ErrorKind>> {
     match result {
-        Ok(value) => Ok(Some(value)),
-        Err(err) if err.kind() == ErrorKind::Io => Err(err),
-        Err(_) => Ok(None),
+        Ok(value) => Ok(Ok(value)),
+        Err(err) => match err.kind() {
+            ErrorKind::Io => Err(err),
+            ErrorKind::LimitExceeded => Ok(Err(ErrorKind::LimitExceeded)),
+            _ => Ok(Err(ErrorKind::Malformed)),
+        },
     }
 }
 
@@ -596,6 +611,20 @@ mod tests {
             .expect_err("a failing reader stays an error");
         assert_eq!(err.kind(), ErrorKind::Io);
         assert_eq!(err.offset(), Some(3));
+    }
+
+    #[test]
+    fn damage_kind_keeps_a_cap_and_calls_other_damage_malformed() {
+        assert_eq!(damage_kind(Ok(7)).ok(), Some(Ok(7)));
+        for kind in all_kinds() {
+            let err = Error::new(kind, Cow::Borrowed("damage"), Some(5), None);
+            let expected = match kind {
+                ErrorKind::Io => None,
+                ErrorKind::LimitExceeded => Some(Err(ErrorKind::LimitExceeded)),
+                _ => Some(Err(ErrorKind::Malformed)),
+            };
+            assert_eq!(damage_kind::<u8>(Err(err)).ok(), expected, "{kind}");
+        }
     }
 
     #[test]
