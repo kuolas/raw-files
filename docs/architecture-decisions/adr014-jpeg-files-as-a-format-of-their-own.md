@@ -144,10 +144,10 @@ what the file records about its own picture.
   error. A new format adds a `Format` variant and a reader; a format in a
   new container, such as CR3, also adds that container's structure. A
   JPEG begins with `FF D8 FF`; its segments are walked from SOI to the
-  start of the scan, for at most a fixed number of steps, and it opens as
-  `Format::Jpeg` when they hold a frame header that gives a size, neither
-  side zero, and is not lossless. A NEF's embedded JPEG, saved on its own,
-  is a JPEG.
+  start of the scan, for at most as many steps as `Limits` allows, and it
+  opens as `Format::Jpeg` when they hold a frame header that gives a
+  size, neither side zero, and is not lossless. A NEF's embedded JPEG,
+  saved on its own, is a JPEG.
 - **Whether a format holds raw data is said by the format.** `Format::Jpeg`
   is listed by `Format::all` and found by `Format::from_extension` (`jpg`,
   `jpeg`). `Format::is_raw` is true for a format whose files hold a

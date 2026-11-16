@@ -2,9 +2,10 @@
 
 - Status: Accepted
 - Date: 2026-10-11
-- Revision: 7, 2026-11-16
+- Revision: 8, 2026-11-16
 - Issue: #119; the handle's name #107; reads through `&self` #89; the
-  numbers to sort times by #103; a value's text form #148
+  numbers to sort times by #103; a value's text form #148; the JPEG
+  walk's cap #144
 
 ## Context
 
@@ -109,8 +110,13 @@ file or a JPEG ([ADR014](adr014-jpeg-files-as-a-format-of-their-own.md)).
   `Value::display` is one.
 - A value with no empty state that means anything, such as a `Size`, a
   `Point`, a `Flash` or a `FineTune`, has no `Default`.
-- Every allocation whose size comes from the file is capped by `Limits`,
-  whose defaults are safe for untrusted input.
+- `Limits` caps what a file could make large or long:
+  - every allocation whose size comes from the file;
+  - the IFDs a walk visits;
+  - the markers a walk over a JPEG stream reads.
+
+  Its defaults are safe for untrusted input, and `Limits::unlimited()`
+  sets every cap to the largest value its type holds.
 - raw-files stays **one crate**. The raw-data and development APIs arrive
   behind an `unstable` Cargo feature, outside the compatibility promise,
   until an application has used them.
@@ -181,6 +187,10 @@ Rejected:
 - **List methods that borrow the list**, so that a refused point keeps
   the list built so far. They would leave the `with_…` convention, and
   the error now tells a test's author what to fix.
+- **A cap of its own outside `Limits`**, as the JPEG walk's steps had.
+  `Limits::unlimited()` would not lift it, and a caller could not change
+  it. The limits of the `image` and `tiff` crates are each one value
+  whose constructor lifts every cap.
 - **A separate builder type**, as the builder pattern of the Rust API
   Guidelines has it (C-BUILDER). Every value of such a record is
   optional, so the empty record is already a valid start for every
@@ -189,9 +199,9 @@ Rejected:
 ## Consequences
 
 - Callers can rely on getting an `Err`, never a panic, for any file
-  ([ADR008](adr008-lints-and-panics.md)); on allocations bounded by
-  `Limits`; and on detection by content, so a renamed file opens as what it
-  is.
+  ([ADR008](adr008-lints-and-panics.md)); on allocations and walks
+  bounded by `Limits`; and on detection by content, so a renamed file
+  opens as what it is.
 - Showing a preview reads the file's structure, a few blocks of 64 KiB,
   plus the preview's own bytes, whether the file is on disk, on a network
   share or in memory.

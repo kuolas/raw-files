@@ -79,6 +79,16 @@ does. An entry that can break a caller opens with **Breaking:**.
 
   Of the public files measured, the Sony DSLR-A100's list two, some
   Nikon Coolpix NRWs and COOLSCAN NEFs one, and one damaged JPEG one.
+- `Limits::max_jpeg_markers` caps how many markers one walk over a JPEG
+  stream reads, which was a fixed 1,024
+  ([#144](https://github.com/kuolas/raw-files/issues/144)):
+  - its default is still 1,024, so nothing changes under the default;
+  - `Limits::unlimited()` now raises it to `u32::MAX`, and
+    `with_max_jpeg_markers` sets it;
+  - each fill byte before a marker counts as one marker. The JPEG
+    standard allows any number of them. A JPEG file or a preview with
+    more before its frame header than the cap allows is now read under
+    a raised cap.
 
 ### Changed
 

@@ -195,7 +195,7 @@ fn private_ifd<R: Read + Seek>(
 fn parse<R: Read + Seek>(src: &mut Source<R>, tree: &Tree, limits: &Limits) -> Result<Parsed> {
     let makernote = sony::lookup(src, tree, limits)?;
     let private = private_ifd(src, tree, limits)?;
-    let previews = previews::previews(src, tree)?;
+    let previews = previews::previews(src, tree, limits)?;
     let standard = tiff_metadata::read(src, tree)?.metadata;
     let mut entries = Entries::of_tree(tree);
     let metadata = match makernote {

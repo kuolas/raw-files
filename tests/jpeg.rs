@@ -681,6 +681,85 @@ fn a_jpeg_without_a_picture_to_show_is_of_unknown_format() {
 }
 
 #[test]
+fn a_jpeg_with_more_fill_bytes_than_the_marker_cap_opens_under_a_raised_cap() {
+    // 2,000 fill bytes before the frame header: more markers than the
+    // default cap of 1,024 lets the walk read, fewer than a raised cap.
+    let mut builder = JpegBuilder::new();
+    builder.fill(2000).frame(MAIN.0, MAIN.1, 0xC0);
+    let built = builder.build();
+    let err = CameraFile::from_bytes(&built.bytes).unwrap_err();
+    assert_eq!(err.kind(), ErrorKind::UnknownFormat, "{err:?}");
+    let previews = expected(&[(whole(&built), MAIN)], Orientation::NoTransforms);
+    for limits in [
+        Limits::default().with_max_jpeg_markers(4096),
+        Limits::unlimited(),
+    ] {
+        assert_opens_with(
+            &Options::new().with_limits(limits),
+            &built.bytes,
+            &previews,
+            &main_metadata(Orientation::NoTransforms),
+            &format!("{limits:?}"),
+        );
+    }
+}
+
+#[test]
+fn an_mpf_image_past_the_marker_cap_is_left_out_and_the_file_opens() {
+    // The main image's walk takes 4 steps: the MPF segment, then the
+    // stub's DQT, DHT and frame header. The MPF image gets 10 fill bytes
+    // after its SOI, so its walk takes 13. The image is the last thing in
+    // the file, so the bytes put in move nothing its entry points at; its
+    // entry's size now leaves off its last 10 bytes, past its frame
+    // header.
+    let mut builder = JpegBuilder::new();
+    builder.mpf(Order::Little).frame(MAIN.0, MAIN.1, 0xC0);
+    builder.mpf_image(MPF_IMAGES[0].0, MPF_IMAGES[0].1, &[], 1);
+    let built = builder.build();
+    let image = built.mpf_image(0);
+    assert_eq!(image.end, to_u64(built.bytes.len()));
+    let at = usize::try_from(image.start).unwrap() + 2;
+    let mut bytes = built.bytes.clone();
+    bytes.splice(at..at, [0xFF; 10]);
+    let file = 0..to_u64(bytes.len());
+    let main = main_metadata(Orientation::NoTransforms);
+    for (cap, previews) in [
+        (
+            4,
+            expected(&[(file.clone(), MAIN)], Orientation::NoTransforms),
+        ),
+        (
+            12,
+            expected(&[(file.clone(), MAIN)], Orientation::NoTransforms),
+        ),
+        (
+            13,
+            expected(
+                &[(image.clone(), MPF_IMAGES[0]), (file.clone(), MAIN)],
+                Orientation::NoTransforms,
+            ),
+        ),
+    ] {
+        assert_opens_with(
+            &Options::new().with_limits(Limits::default().with_max_jpeg_markers(cap)),
+            &bytes,
+            &previews,
+            &main,
+            &format!("cap {cap}"),
+        );
+    }
+}
+
+#[test]
+fn a_jpeg_under_a_marker_cap_of_zero_is_of_unknown_format() {
+    let built = JpegBuilder::new().build();
+    let options = Options::new().with_limits(Limits::default().with_max_jpeg_markers(0));
+    assert!(CameraFile::from_bytes(&built.bytes).is_ok());
+    let err = options.from_bytes(&built.bytes).unwrap_err();
+    assert_eq!(err.kind(), ErrorKind::UnknownFormat, "{err:?}");
+}
+
+#[test]
 fn a_damaged_exif_segment_costs_the_metadata_and_the_thumbnail_only() {
     let (sound, _) = camera_exif(Order::Little, |_, _, _| {});
 

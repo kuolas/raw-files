@@ -312,7 +312,8 @@
 //! - **An untrusted file cannot make the library allocate or walk without
 //!   bound.** [`Limits`] caps the number of directories, their entries and
 //!   their nesting. It also caps the size of a preview and of an entry's
-//!   value. Its defaults suit untrusted input.
+//!   value, and the markers a walk over a JPEG stream reads. Its defaults
+//!   suit untrusted input.
 //! - **A cap fails only what it must.** A cap the walk cannot go on without
 //!   fails the open with [`LimitExceeded`](ErrorKind::LimitExceeded): the
 //!   first directory's size, or the total number of directories. So does a
@@ -323,7 +324,10 @@
 //!   costs the previews and directories located by it. A directory past
 //!   the first that crosses a cap, or one nested too deep, is left out like
 //!   a damaged one. In a JPEG file, a cap crossed inside its Exif or MPF
-//!   segment costs at most that segment, not the file.
+//!   segment costs at most that segment, not the file. A walk over a JPEG
+//!   stream stops at its cap on markers as at a damaged segment. So a
+//!   preview whose frame header lies past the cap is left out, and a JPEG
+//!   file whose frame header does is of unknown format.
 //! - **The format comes from the file's content, never from its name.** A
 //!   renamed file opens as what it is. A DNG is refused even when its Make
 //!   names Nikon or Sony. [`Format::from_extension`] serves file pickers and

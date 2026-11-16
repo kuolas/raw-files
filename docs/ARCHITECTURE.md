@@ -60,7 +60,7 @@ adds a row.
 | File | Holds | May depend on |
 |---|---|---|
 | `src/formats/mod.rs` | The format table, one list per container, and detection, where the first format that claims a file reads it into a `Parsed`. | `container`, `io`, `format`, `preview`, `metadata`, `entries`, `limits`, `error` |
-| `src/formats/tiff_previews.rs` | The preview finder the TIFF-based formats and the JPEG format share: which IFDs hold JPEG previews, each checked and measured from its own frame header. | `container`, `io`, `preview`, `orientation`, `error`, `geometry` |
+| `src/formats/tiff_previews.rs` | The preview finder the TIFF-based formats and the JPEG format share: which IFDs hold JPEG previews, each checked and measured from its own frame header. | `container`, `io`, `preview`, `orientation`, `error`, `geometry`, `limits` |
 | `src/formats/tiff_metadata.rs` | The metadata reader the TIFF-based formats and the JPEG reader share: it reads what the standard TIFF, Exif and GPS tags record. | `container`, `io`, `metadata`, `authorship`, `location`, `camera`, `camera_settings`, `datetime`, `geometry`, `rational`, `entries` (for `clean_text`), `error`, `tiff_previews` (for `orientation` and `is_raw`) |
 | `src/formats/makernote/mod.rs` | The MakerNote readers, one per maker, shared by every format whose files carry a MakerNote, and the block and color temperature bound they share. | `container`, `io`, `limits`, `error` |
 | `src/formats/makernote/nikon/mod.rs` | The Nikon MakerNote reader's entry points (`read`, `preview_candidate` and `metadata`) and the rules of the tags its parts read. | the files of `makernote/nikon/`, `makernote/points/`, `container` (for the rules), `error`, `focus`, `geometry`, `io`, `metadata`, `rational` (for the rules), `tiff_metadata` (for what it read and its text rule) |
@@ -74,9 +74,9 @@ adds a row.
 | `src/formats/makernote/points/nikon_d600.rs` | The Nikon D600's table of autofocus points, with its layout code, bit order, and crop and JPEG windows. | `makernote/points/mod.rs`, `focus`, `geometry` |
 | `src/formats/makernote/sony.rs` | The Sony MakerNote reader: the block found and checked, read once into one structure, giving the focus point and the camera settings it alone records. | `makernote/mod.rs`, `container`, `entries`, `io`, `limits`, `error`, `geometry`, `focus`, `metadata`, `camera_settings`, `rational` |
 | `src/formats/nef/mod.rs` | The Nikon NEF reader: which files it claims, and the parse that gives a NEF file's previews, metadata and entries. | `makernote/nikon/`, `container`, `io`, `format`, `preview`, `entries`, `limits`, `error`, `tiff_metadata` |
-| `src/formats/nef/previews.rs` | Where a NEF file keeps its previews: the shared finder over the whole tree, with the MakerNote's preview as its one extra candidate. | `makernote/nikon/`, `tiff_previews`, `container`, `io`, `preview`, `error` |
+| `src/formats/nef/previews.rs` | Where a NEF file keeps its previews: the shared finder over the whole tree, with the MakerNote's preview as its one extra candidate. | `makernote/nikon/`, `tiff_previews`, `container`, `io`, `preview`, `error`, `limits` |
 | `src/formats/arw/mod.rs` | The Sony ARW reader, for SRF, SR2 and ARQ files too: its claim by Make, and its parse of previews, metadata and entries, SR2Private included. | `makernote/sony.rs`, `container`, `io`, `format`, `entries`, `limits`, `error`, `tiff_metadata` |
-| `src/formats/arw/previews.rs` | Where a Sony file keeps its previews: the shared finder over the whole tree, with no candidate of its own. | `tiff_previews`, `container`, `io`, `preview`, `error` |
+| `src/formats/arw/previews.rs` | Where a Sony file keeps its previews: the shared finder over the whole tree, with no candidate of its own. | `tiff_previews`, `container`, `io`, `preview`, `error`, `limits` |
 | `src/formats/jpeg/mod.rs` | The JPEG reader: its claim by the first frame header, and its parse of the Exif segment, MakerNote, previews and entries. | `makernote/nikon/`, `makernote/sony.rs`, `tiff_metadata`, `tiff_previews`, `container`, `io`, `format`, `preview`, `metadata`, `entries`, `geometry`, `orientation`, `limits`, `error` |
 
 ### The containers
@@ -94,7 +94,7 @@ adds a row.
 | `src/container/tiff/field_type.rs` | `FieldType`: the one table of the TIFF field types, each with its code, size and name. | — |
 | `src/container/tiff/walk.rs` | The IFD walk inside a block: it follows the links from IFD0 and returns every IFD it finds as a `Tree`, with each link it did not follow, bounded on any input. | `io`, `error`, `limits` |
 | `src/container/tiff/robustness.rs` | Tests only: the whole TIFF reader on truncated and corrupted files, which give an error or a tree within the limits, never a panic. | — |
-| `src/container/jpeg/mod.rs` | The JPEG container: one walk over a stream's marker segments, the probe that sizes a preview and the walk over a JPEG file. | `io`, `error`, `container/tiff` (for `Block`) |
+| `src/container/jpeg/mod.rs` | The JPEG container: one walk over a stream's marker segments, the probe that sizes a preview and the walk over a JPEG file. | `io`, `error`, `limits`, `container/tiff` (for `Block`) |
 | `src/container/jpeg/mpf.rs` | The MPF index of a JPEG file: where the images the file holds after its first one lie, such as its large thumbnails. | `io`, `error`, `limits`, `container/tiff` |
 
 ### The values

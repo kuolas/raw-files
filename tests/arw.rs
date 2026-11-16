@@ -16,8 +16,8 @@ use std::io::Cursor;
 
 use raw_files::{
     CameraFile, CameraSettings, ColorSpace, Directory, ErrorKind, Exposure, ExposureProgram,
-    FlashMode, FocusOrigin, Format, Lens, Make, Metadata, MeteringMode, Orientation, Point,
-    PreviewFormat, Rational, SignedRational, Size, WhiteBalanceMode,
+    FlashMode, FocusOrigin, Format, Lens, Limits, Make, Metadata, MeteringMode, Options,
+    Orientation, Point, PreviewFormat, Rational, SignedRational, Size, WhiteBalanceMode,
 };
 use support::arw::{
     A100_JPEG, A100_RAW_AS_COUNT, A100_TAG_SIZE, ARW4_FOCUS_CENTER, ARW4_FOCUS_FRAME,
@@ -92,6 +92,23 @@ fn the_arw4_file_opens_as_arw_with_its_three_jpegs_smallest_first() {
             ],
             &format!("ARW 4, {order:?}"),
         );
+    }
+}
+
+#[test]
+fn an_arw_opens_under_a_jpeg_marker_cap_of_zero_without_its_previews() {
+    // Each preview's frame header is found by a walk over its markers,
+    // which a cap of 0 stops before the first: every preview is left
+    // out, and the file still opens.
+    for order in ORDERS {
+        let (built, _) = arw4_file(order, 1);
+        let default = CameraFile::from_bytes(&built.bytes).unwrap();
+        assert!(!default.previews().is_empty(), "{order:?}");
+        let options = Options::new().with_limits(Limits::default().with_max_jpeg_markers(0));
+        let capped = options.from_bytes(&built.bytes).unwrap();
+        assert_eq!(capped.format(), Format::Arw, "{order:?}");
+        assert_eq!(capped.previews(), [], "{order:?}");
+        assert_eq!(capped.metadata(), default.metadata(), "{order:?}");
     }
 }
 

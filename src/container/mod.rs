@@ -54,7 +54,7 @@ impl Structure {
     /// file shorter than 2 bytes included. For a file that starts with a
     /// byte-order mark, whatever [`walk`] returns. `Io` if the reader fails.
     pub(crate) fn read<R: Read + Seek>(src: &mut Source<R>, limits: &Limits) -> Result<Self> {
-        if let Some(segments) = jpeg::segments(src)? {
+        if let Some(segments) = jpeg::segments(src, limits)? {
             return Ok(Self::Jpeg(segments));
         }
         // Checked before reading, so that a file of 0 or 1 byte is of no

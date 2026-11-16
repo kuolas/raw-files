@@ -89,7 +89,7 @@ fn claims<R: Read + Seek>(src: &mut Source<R>, tree: &Tree) -> Result<bool> {
 /// `Io` when the reader fails.
 fn parse<R: Read + Seek>(src: &mut Source<R>, tree: &Tree, limits: &Limits) -> Result<Parsed> {
     let makernote = nikon::lookup(src, tree, limits)?;
-    let previews = previews::previews(src, tree, makernote.as_ref().found())?;
+    let previews = previews::previews(src, tree, makernote.as_ref().found(), limits)?;
     let standard = tiff_metadata::read(src, tree)?;
     let mut entries = Entries::of_tree(tree);
     let metadata = match makernote {

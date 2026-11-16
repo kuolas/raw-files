@@ -22,9 +22,10 @@
 //!
 //! [`probe`] and [`segments`] walk the segments in the same way, with
 //! `Walk`. It reads only inside the bytes it is given, and every step
-//! moves it forward, with checked arithmetic. It ends at SOS, where the
-//! compressed image starts, and wherever the bytes stop looking like
-//! segments; [`MAX_STEPS`] makes it end on any input.
+//! moves it forward, with checked arithmetic, so it ends on any input. It
+//! ends at SOS, where the compressed image starts, and wherever the bytes
+//! stop looking like segments. [`Limits::max_jpeg_markers`] bounds how many
+//! steps it takes.
 //!
 //! The JPEG notes describe the marker segments, the frame header, and the
 //! Exif and MPF segments, with the standards' clauses
@@ -39,18 +40,7 @@ use std::ops::Range;
 use crate::container::tiff::Block;
 use crate::error::Result;
 use crate::io::{ByteOrder, Source, within};
-
-/// The most steps a walk over a stream's segments takes before it gives up.
-///
-/// A step reads one marker, or skips one fill byte before a marker. Real
-/// previews reach their frame header in a few dozen steps, and camera JPEG
-/// files their scan in fewer. The cap keeps a stream made of nothing but
-/// tiny segments or fill bytes from making a walk read its whole range,
-/// which can be most of a large file, one marker at a time.
-///
-/// The JPEG standard allows any number of fill bytes before a marker, so a
-/// stream with more of them than the cap allows loses what lies after them.
-const MAX_STEPS: u32 = 1024;
+use crate::limits::Limits;
 
 /// The marker that opens every JPEG stream, SOI, with the `FF` of the
 /// marker that follows it: no stream starts any other way.
@@ -183,7 +173,11 @@ struct Segment {
 /// - at a length below 2, which cannot count itself (T.81 B.1.1.4, p. 33)
 ///   and would send the walk back or keep it in place;
 /// - at a segment that runs past the end of its range;
-/// - after [`MAX_STEPS`] steps, counted over the whole walk.
+/// - after as many steps as [`Limits::max_jpeg_markers`] allows, counted
+///   over the whole walk. A step reads one marker, or skips one fill byte
+///   before a marker. The cap keeps a stream made of nothing but tiny
+///   segments or fill bytes from making a walk read its whole range one
+///   marker at a time. That range can be most of a large file.
 ///
 /// When reading the source fails it yields that error and then ends too,
 /// since it cannot know where the next marker is. It reads only inside its
@@ -197,13 +191,15 @@ struct Walk<'a, R> {
     end: u64,
     /// The steps taken so far.
     steps: u32,
+    /// The most steps the walk takes.
+    max_steps: u32,
     /// Whether the walk has ended.
     ended: bool,
 }
 
 impl<'a, R: Read + Seek> Walk<'a, R> {
     /// The walk over the stream in the `len` bytes at `offset`, from the
-    /// marker after its SOI.
+    /// marker after its SOI, taking at most `max_steps` steps.
     ///
     /// `None` when those bytes do not start with SOI and a marker
     /// (`FF D8 FF`), and when their end does not fit in a `u64`.
@@ -211,7 +207,12 @@ impl<'a, R: Read + Seek> Walk<'a, R> {
     /// # Errors
     ///
     /// Those of reading the first 3 bytes from `src`.
-    fn from_soi(src: &'a mut Source<R>, offset: u64, len: u64) -> Result<Option<Self>> {
+    fn from_soi(
+        src: &'a mut Source<R>,
+        offset: u64,
+        len: u64,
+        max_steps: u32,
+    ) -> Result<Option<Self>> {
         let Some(end) = offset.checked_add(len) else {
             return Ok(None);
         };
@@ -228,6 +229,7 @@ impl<'a, R: Read + Seek> Walk<'a, R> {
             pos,
             end,
             steps: 0,
+            max_steps,
             ended: false,
         }))
     }
@@ -240,7 +242,11 @@ impl<'a, R: Read + Seek> Walk<'a, R> {
     /// Takes steps up to the next segment that has a length, and returns
     /// it; `None` when the walk ends before one.
     fn step(&mut self) -> Result<Option<Segment>> {
-        while self.steps < MAX_STEPS {
+        // Every step either ends the walk or moves `pos` forward inside the
+        // range, by one byte at least. So even under a cap of `u32::MAX`
+        // the walk ends, at the end of its range at the latest. `steps`
+        // stays below the cap before it is raised, so it cannot overflow.
+        while self.steps < self.max_steps {
             self.steps += 1;
             // A marker is `FF` and a code, both inside the range.
             let Some(code_at) = within(self.pos, 1, self.end) else {
@@ -390,6 +396,9 @@ fn block_after<R: Read + Seek>(
 /// caller's decision, for which there is
 /// [`is_lossless`](Frame::is_lossless).
 ///
+/// The walk takes at most as many steps as `limits` allow
+/// ([`Limits::max_jpeg_markers`]).
+///
 /// # Errors
 ///
 /// Only the errors of reading `src`: `Malformed` if the walk reads past the
@@ -399,8 +408,9 @@ pub(crate) fn probe<R: Read + Seek>(
     src: &mut Source<R>,
     offset: u64,
     len: u64,
+    limits: &Limits,
 ) -> Result<Option<Frame>> {
-    let Some(mut walk) = Walk::from_soi(src, offset, len)? else {
+    let Some(mut walk) = Walk::from_soi(src, offset, len, limits.max_jpeg_markers())? else {
         return Ok(None);
     };
     while let Some(segment) = walk.next() {
@@ -416,7 +426,8 @@ pub(crate) fn probe<R: Read + Seek>(
 /// first frame header, its first Exif segment and its first MPF segment. A
 /// later Exif or MPF segment is skipped, as XMP and every other application
 /// segment are. What the walk found before it ended is kept, whatever ended
-/// it ([`Walk`]).
+/// it ([`Walk`]), the cap of `limits` included
+/// ([`Limits::max_jpeg_markers`]).
 ///
 /// Returns `None` when the file does not start with SOI and a marker
 /// (`FF D8 FF`), a file shorter than those 3 bytes included: it is not a
@@ -426,9 +437,12 @@ pub(crate) fn probe<R: Read + Seek>(
 /// # Errors
 ///
 /// Only `Io`, if the reader fails: the walk reads only inside the file.
-pub(crate) fn segments<R: Read + Seek>(src: &mut Source<R>) -> Result<Option<Segments>> {
+pub(crate) fn segments<R: Read + Seek>(
+    src: &mut Source<R>,
+    limits: &Limits,
+) -> Result<Option<Segments>> {
     let len = src.len();
-    let Some(mut walk) = Walk::from_soi(src, 0, len)? else {
+    let Some(mut walk) = Walk::from_soi(src, 0, len, limits.max_jpeg_markers())? else {
         return Ok(None);
     };
     let mut found = Segments::default();
@@ -475,12 +489,32 @@ mod tests {
 
     /// Probes the `len` bytes at `offset` of `bytes`.
     fn probe_in(bytes: &[u8], offset: u64, len: u64) -> Result<Option<Frame>> {
-        probe(&mut Source::new(Cursor::new(bytes)).unwrap(), offset, len)
+        probe(
+            &mut Source::new(Cursor::new(bytes)).unwrap(),
+            offset,
+            len,
+            &Limits::default(),
+        )
     }
 
     /// Probes all of `bytes`.
     fn probe_all(bytes: &[u8]) -> Result<Option<Frame>> {
         probe_in(bytes, 0, u64::try_from(bytes.len()).unwrap())
+    }
+
+    /// Probes all of `bytes` within `limits`.
+    fn probe_all_within(bytes: &[u8], limits: &Limits) -> Result<Option<Frame>> {
+        probe(
+            &mut Source::new(Cursor::new(bytes)).unwrap(),
+            0,
+            u64::try_from(bytes.len()).unwrap(),
+            limits,
+        )
+    }
+
+    /// The default cap on the steps of a walk.
+    fn default_cap() -> usize {
+        usize::try_from(Limits::default().max_jpeg_markers()).unwrap()
     }
 
     /// `bytes` with `extra` inserted at `at`.
@@ -795,15 +829,15 @@ mod tests {
     }
 
     #[test]
-    fn the_walk_gives_up_after_max_steps() {
+    fn the_walk_gives_up_at_the_default_cap() {
         let comment = segment(0xFE, &[]);
         // Each comment and the frame header take one step each.
-        let within_cap = vec![comment.clone(); 1023];
+        let within_cap = vec![comment.clone(); default_cap() - 1];
         assert_eq!(
             probe_all(&soi_then(&within_cap)).unwrap(),
             baseline(640, 480)
         );
-        for count in [1024, 1025] {
+        for count in [default_cap(), default_cap() + 1] {
             let past_cap = vec![comment.clone(); count];
             assert_eq!(probe_all(&soi_then(&past_cap)).unwrap(), None, "{count}");
         }
@@ -811,6 +845,36 @@ mod tests {
         let stub = jpeg_stub(640, 480, 0xC0);
         let fill = vec![0xFF; 2000];
         assert_eq!(probe_all(&insert(&stub, 2, &fill)).unwrap(), None);
+    }
+
+    #[test]
+    fn a_raised_cap_finds_the_frame_header_after_many_fill_bytes() {
+        // 2,000 fill bytes, then the stub's DQT, DHT and frame header: the
+        // frame header is the step 2,003.
+        let stub = jpeg_stub(640, 480, 0xC0);
+        let bytes = insert(&stub, 2, &[0xFF; 2000]);
+        for (limits, found) in [
+            (Limits::default(), None),
+            (Limits::default().with_max_jpeg_markers(2002), None),
+            (
+                Limits::default().with_max_jpeg_markers(2003),
+                baseline(640, 480),
+            ),
+            (Limits::unlimited(), baseline(640, 480)),
+        ] {
+            assert_eq!(
+                probe_all_within(&bytes, &limits).unwrap(),
+                found,
+                "{limits:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_cap_of_zero_probes_nothing_and_does_not_fail() {
+        let stub = jpeg_stub(640, 480, 0xC0);
+        let limits = Limits::default().with_max_jpeg_markers(0);
+        assert_eq!(probe_all_within(&stub, &limits).unwrap(), None);
     }
 
     #[test]
@@ -922,7 +986,8 @@ mod tests {
     fn walked(bytes: &[u8]) -> Option<Vec<Segment>> {
         let mut src = Source::new(Cursor::new(bytes)).unwrap();
         let len = src.len();
-        let walk = Walk::from_soi(&mut src, 0, len).unwrap()?;
+        let walk =
+            Walk::from_soi(&mut src, 0, len, Limits::default().max_jpeg_markers()).unwrap()?;
         Some(walk.map(Result::unwrap).collect())
     }
 
@@ -934,12 +999,23 @@ mod tests {
     /// What [`segments`] gives for the file `bytes`: `None` when it is no
     /// JPEG file.
     fn read_segments(bytes: &[u8]) -> Option<Segments> {
-        segments(&mut Source::new(Cursor::new(bytes)).unwrap()).unwrap()
+        segments(
+            &mut Source::new(Cursor::new(bytes)).unwrap(),
+            &Limits::default(),
+        )
+        .unwrap()
     }
 
     /// The segments of the JPEG file `bytes`.
     fn segments_of(bytes: &[u8]) -> Segments {
         read_segments(bytes).expect("a JPEG file")
+    }
+
+    /// The segments of the JPEG file `bytes`, walked within `limits`.
+    fn segments_within(bytes: &[u8], limits: &Limits) -> Segments {
+        segments(&mut Source::new(Cursor::new(bytes)).unwrap(), limits)
+            .unwrap()
+            .expect("a JPEG file")
     }
 
     /// The block of the `n`th Exif segment of `built`, from where the
@@ -1408,7 +1484,7 @@ mod tests {
         // After SOI: `fill` fill bytes, one step each, then the stub's DQT,
         // DHT and frame header, one step each, so the frame header is the
         // step `fill + 3`.
-        let at_cap = usize::try_from(MAX_STEPS).unwrap() - 3;
+        let at_cap = default_cap() - 3;
         for (fill, found) in [(at_cap, true), (at_cap + 1, false)] {
             let mut builder = JpegBuilder::new();
             builder.fill(fill);
@@ -1419,7 +1495,7 @@ mod tests {
         }
         // Segments count across what the walk yields: an Exif segment and
         // empty comments, a step each, then the stub's three.
-        let comments = usize::try_from(MAX_STEPS).unwrap() - 4;
+        let comments = default_cap() - 4;
         for (count, found) in [(comments, true), (comments + 1, false)] {
             let mut builder = JpegBuilder::new();
             builder.exif(&TIFF);
@@ -1433,6 +1509,57 @@ mod tests {
             assert_eq!(segments.frame, frame, "{count} comments");
             assert_eq!(probe_all(&built.bytes).unwrap(), frame, "{count}");
         }
+    }
+
+    #[test]
+    fn a_raised_cap_reads_the_segments_after_many_fill_bytes() {
+        // An Exif segment, a step, then `fill` fill bytes, then the stub's
+        // DQT, DHT and frame header: the frame header is the step
+        // `fill + 4`.
+        let fill = default_cap();
+        let mut builder = JpegBuilder::new();
+        builder.exif(&TIFF);
+        builder.fill(fill);
+        let built = builder.build();
+        let exif = Some(exif_block(&built, 0));
+        let cap = u32::try_from(fill + 4).unwrap();
+        for (limits, frame) in [
+            (Limits::default(), None),
+            (Limits::default().with_max_jpeg_markers(cap - 1), None),
+            (
+                Limits::default().with_max_jpeg_markers(cap),
+                baseline(640, 480),
+            ),
+            (Limits::unlimited(), baseline(640, 480)),
+        ] {
+            let segments = segments_within(&built.bytes, &limits);
+            assert_eq!(segments.exif, exif, "{limits:?}");
+            assert_eq!(segments.frame, frame, "{limits:?}");
+        }
+    }
+
+    #[test]
+    fn a_cap_of_zero_reads_no_segment_and_does_not_fail() {
+        let built = camera_jpeg();
+        let limits = Limits::default().with_max_jpeg_markers(0);
+        assert_eq!(segments_within(&built.bytes, &limits), Segments::default());
+    }
+
+    #[test]
+    fn the_walk_ends_at_the_end_of_an_endless_run_of_fill_bytes() {
+        // SOI, then nothing but fill bytes, more than the default cap many
+        // times over. Under the largest cap, the walk ends where its range
+        // does: at the last byte, whose code would lie past the end.
+        let fill = 100 * default_cap();
+        let mut bytes = vec![0xFF, 0xD8];
+        bytes.extend(std::iter::repeat_n(0xFF, fill));
+        let mut src = Source::new(Cursor::new(&bytes[..])).unwrap();
+        let len = src.len();
+        let mut walk = Walk::from_soi(&mut src, 0, len, u32::MAX).unwrap().unwrap();
+        assert!(walk.next().is_none());
+        assert_eq!(walk.pos, len - 1);
+        // One step for each fill byte; the last one's ends the walk.
+        assert_eq!(walk.steps, u32::try_from(fill).unwrap());
     }
 
     #[test]
@@ -1463,11 +1590,11 @@ mod tests {
     fn a_failing_reader_is_an_error() {
         let bytes = far_jpeg();
         let mut src = Source::new(FailsFar(Cursor::new(bytes.clone()))).unwrap();
-        let err = segments(&mut src).expect_err("the reader fails");
+        let err = segments(&mut src, &Limits::default()).expect_err("the reader fails");
         assert_eq!(err.kind(), ErrorKind::Io, "{err:?}");
         let mut src = Source::new(FailsFar(Cursor::new(bytes.clone()))).unwrap();
         let len = u64::try_from(bytes.len()).unwrap();
-        let err = probe(&mut src, 0, len).expect_err("the reader fails");
+        let err = probe(&mut src, 0, len, &Limits::default()).expect_err("the reader fails");
         assert_eq!(err.kind(), ErrorKind::Io, "{err:?}");
         // Read without the failure, the same bytes give the Exif segment.
         assert!(segments_of(&bytes).exif.is_some());
@@ -1478,7 +1605,9 @@ mod tests {
         let bytes = far_jpeg();
         let mut src = Source::new(FailsFar(Cursor::new(bytes.clone()))).unwrap();
         let len = u64::try_from(bytes.len()).unwrap();
-        let mut walk = Walk::from_soi(&mut src, 0, len).unwrap().unwrap();
+        let mut walk = Walk::from_soi(&mut src, 0, len, Limits::default().max_jpeg_markers())
+            .unwrap()
+            .unwrap();
         // The two comments, read from the first block.
         for _ in 0..2 {
             assert_eq!(walk.next().unwrap().unwrap().marker, 0xFE);
@@ -1535,7 +1664,8 @@ mod tests {
                 let mut bytes = built.bytes.clone();
                 bytes[at] = value;
                 let mut src = Source::new(Cursor::new(&bytes[..])).unwrap();
-                segments(&mut src).expect("only a reader's failure is an error");
+                segments(&mut src, &Limits::default())
+                    .expect("only a reader's failure is an error");
                 let _ = probe_all(&bytes);
             }
         }
