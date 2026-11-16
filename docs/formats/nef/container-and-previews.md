@@ -288,7 +288,14 @@ any process, not just baseline (section 7).
   Their preview locations beyond Clévy's notes (section 4) are not
   sourced. [14] [8] **[S]/[P]** The files differ from the sources in two
   ways. Files 1785 and 1786 store 4028x1324, not 4024x1324; this page
-  follows the files. And "uncompressed" holds for the D1H file and file
+  follows the files. The files record the pixel shape: in both, the raw
+  directory, SubIFD0, gives XResolution 600/1 and YResolution 300/1, in
+  inches, where the D1H's (file 5364) gives 300/1 and 300/1. Of the
+  2,709 directories that record both tags in the 651 public files that
+  opened on 16 November 2026, only the D1X's raw directories differ;
+  the raw.pixls.us clone holds files 1785 and 1786 again. **[F]**
+  `Metadata::image_size` stays the stored size, and its docs point to
+  these two tags. And "uncompressed" holds for the D1H file and file
   1786 but not for the whole family: file 1785's raw is compressed
   (Compression 34713, NEFCompression 1, lossy type 1). **[F]** The D1X's
   MakerNote is headerless and big-endian, like the file (files 1785 and
