@@ -7,6 +7,8 @@
 //! Many cameras also record the fraction of a second and the offset of
 //! that clock from UTC. [`DateTime`] holds such a time as it was recorded,
 //! checked to be a real date and time, and shows it in ISO 8601 form.
+//! It has no order of its own: [`DateTime::to_local_nanoseconds`] and
+//! [`DateTime::to_unix_nanoseconds`] give the numbers to sort by.
 //!
 //! Exif stores the three parts as separate ASCII texts: the date and time
 //! as `YYYY:MM:DD HH:MM:SS`, the fraction of a second as its digits alone,
@@ -32,6 +34,9 @@ const MAX_YEAR: u16 = 9999;
 /// since no offset from UTC in use lies outside -14:00 to +14:00. An offset
 /// beyond it is refused; from a file, it is taken for damage.
 const MAX_OFFSET_MINUTES: i16 = 14 * 60;
+
+/// The nanoseconds in a second.
+const NANOSECONDS_PER_SECOND: i128 = 1_000_000_000;
 
 /// A date and time as a camera's clock recorded it: local time, with the
 /// fraction of a second and the offset from UTC when the file records them.
@@ -59,10 +64,50 @@ const MAX_OFFSET_MINUTES: i16 = 14 * 60;
 /// number of sub-second digits. So `10:20:30.5` and `10:20:30.50` are not
 /// equal, although they name the same moment.
 ///
-/// `DateTime` has no ordering. Sort by the getters in the order needed,
-/// such as `(year, month, day, hour, minute, second, nanosecond)` for the
-/// order of one camera's clock
+/// `DateTime` has no ordering, because local times do not order by their
+/// fields
 /// ([the decision on the shape of the API](https://github.com/kuolas/raw-files/blob/master/docs/architecture-decisions/adr009-public-api-shape.md)).
+/// Two methods each give a number to sort by:
+///
+/// - [`to_local_nanoseconds`](Self::to_local_nanoseconds) orders the times
+///   of one camera's clock;
+/// - [`to_unix_nanoseconds`](Self::to_unix_nanoseconds) orders times from
+///   any clocks, when each time has an offset from UTC.
+///
+/// Three frames of one camera, sorted as its clock recorded them:
+///
+/// ```
+/// use raw_files::{DateTime, ValueError};
+///
+/// # fn main() -> Result<(), ValueError> {
+/// let evening = DateTime::new(2024, 5, 1, 19, 5, 0)?;
+/// let morning = DateTime::new(2024, 5, 1, 9, 30, 0)?;
+/// let burst = morning.with_subseconds(500_000_000, 1)?;
+/// let mut times = [evening, burst, morning];
+/// times.sort_by_key(|time| time.to_local_nanoseconds());
+/// assert_eq!(times, [morning, burst, evening]);
+/// # Ok(())
+/// # }
+/// ```
+///
+/// Two cameras on one trip, one clock set two hours ahead of UTC and one
+/// set to UTC: 10:00 on the first came before 09:00 on the second. A time
+/// without an offset gives `None`, which `Option`'s order puts first,
+/// whenever it was taken. Leave such times out of this sort, or sort them
+/// apart by the local number.
+///
+/// ```
+/// use raw_files::{DateTime, ValueError};
+///
+/// # fn main() -> Result<(), ValueError> {
+/// let ahead = DateTime::new(2024, 5, 1, 10, 0, 0)?.with_offset_minutes(120)?;
+/// let utc = DateTime::new(2024, 5, 1, 9, 0, 0)?.with_offset_minutes(0)?;
+/// let mut times = [utc, ahead];
+/// times.sort_by_key(|time| time.to_unix_nanoseconds());
+/// assert_eq!(times, [ahead, utc]);
+/// # Ok(())
+/// # }
+/// ```
 ///
 /// # Display
 ///
@@ -458,6 +503,72 @@ impl DateTime {
     pub fn offset_minutes(&self) -> Option<i16> {
         self.offset
     }
+
+    /// The nanoseconds from 1970-01-01T00:00:00 to this time, both read
+    /// on the clock that recorded it; negative before 1970.
+    ///
+    /// The number orders the times of one camera's clock, such as the
+    /// pictures of one card. It reads the date, the time and the fraction
+    /// of a second, never the offset from UTC. So it does not order times
+    /// from clocks set to different zones:
+    /// [`to_unix_nanoseconds`](Self::to_unix_nanoseconds) does.
+    ///
+    /// `.5` and `.50` give the same number, though the two values are not
+    /// equal. Every day counts 86 400 seconds, and the days follow the
+    /// calendar [`new`](Self::new) checks dates by.
+    ///
+    /// The number is an `i128`, since the nanoseconds of the years 0 to
+    /// 9999 do not fit in an `i64`. Euclidean division by 10⁹ gives the
+    /// whole seconds and the nanoseconds left, before 1970 too:
+    ///
+    /// ```
+    /// use raw_files::{DateTime, ValueError};
+    ///
+    /// # fn main() -> Result<(), ValueError> {
+    /// let time = DateTime::new(1969, 12, 31, 23, 59, 59)?.with_subseconds(250_000_000, 2)?;
+    /// let nanoseconds = time.to_local_nanoseconds();
+    /// assert_eq!(nanoseconds, -750_000_000);
+    /// assert_eq!(nanoseconds.div_euclid(1_000_000_000), -1);
+    /// assert_eq!(nanoseconds.rem_euclid(1_000_000_000), 250_000_000);
+    /// # Ok(())
+    /// # }
+    /// ```
+    #[must_use]
+    pub fn to_local_nanoseconds(self) -> i128 {
+        let days = i128::from(days_from_year_zero(self.year, self.month, self.day))
+            - i128::from(days_from_year_zero(1970, 1, 1));
+        // Days of 24 hours, since a `DateTime` never holds a leap second.
+        let hours = days * 24 + i128::from(self.hour);
+        let minutes = hours * 60 + i128::from(self.minute);
+        let seconds = minutes * 60 + i128::from(self.second);
+        seconds * NANOSECONDS_PER_SECOND + i128::from(self.nanosecond)
+    }
+
+    /// The nanoseconds from the Unix epoch, 1970-01-01T00:00:00 UTC, to
+    /// this time; negative before it. `None` when the time has no offset
+    /// from UTC.
+    ///
+    /// The number is the [local one](Self::to_local_nanoseconds) less the
+    /// offset, so it names the moment whatever zone the clock was set to.
+    /// It orders times from any clocks, such as two cameras on one trip.
+    /// A time without an offset cannot be placed against them.
+    ///
+    /// ```
+    /// use raw_files::{DateTime, ValueError};
+    ///
+    /// # fn main() -> Result<(), ValueError> {
+    /// let time = DateTime::new(1970, 1, 1, 2, 0, 0)?;
+    /// assert_eq!(time.to_unix_nanoseconds(), None);
+    /// let two_hours_ahead = time.with_offset_minutes(120)?;
+    /// assert_eq!(two_hours_ahead.to_unix_nanoseconds(), Some(0));
+    /// # Ok(())
+    /// # }
+    /// ```
+    #[must_use]
+    pub fn to_unix_nanoseconds(self) -> Option<i128> {
+        let offset = i128::from(self.offset?);
+        Some(self.to_local_nanoseconds() - offset * 60 * NANOSECONDS_PER_SECOND)
+    }
 }
 
 impl fmt::Display for DateTime {
@@ -526,6 +637,23 @@ fn days_in_month(year: u16, month: u8) -> u8 {
 /// year and 1900 was not.
 fn is_leap_year(year: u16) -> bool {
     year.is_multiple_of(4) && (!year.is_multiple_of(100) || year.is_multiple_of(400))
+}
+
+/// How many days lie from 1 January of the year 0 to `year`-`month`-`day`,
+/// a real date, by the rule of [`is_leap_year`] carried back to the year 0,
+/// as `DateTime` holds dates.
+fn days_from_year_zero(year: u16, month: u8, day: u8) -> u32 {
+    let whole_years = u32::from(year);
+    // The leap years before `year`, by the rule: the years from 0 that 4
+    // divides, less those that 100 divides, plus those that 400 divides.
+    // Of the years 0 to n - 1, `n.div_ceil(k)` are multiples of k, the
+    // year 0 among them.
+    let leap_years =
+        whole_years.div_ceil(4) - whole_years.div_ceil(100) + whole_years.div_ceil(400);
+    let before_month: u32 = (1..month)
+        .map(|earlier| u32::from(days_in_month(year, earlier)))
+        .sum();
+    365 * whole_years + leap_years + before_month + u32::from(day) - 1
 }
 
 /// The fraction of a second from its Exif text, as nanoseconds and the
@@ -1136,5 +1264,135 @@ mod tests {
             .unwrap();
         assert_eq!(time.offset_minutes(), Some(-300));
         assert_eq!(time, read(DATE, Some(b"85"), Some(b"-05:00")));
+    }
+
+    /// The nanoseconds in a second, for the expected values.
+    const SECOND: i128 = 1_000_000_000;
+
+    /// The nanoseconds in a day.
+    const DAY: i128 = 86_400 * SECOND;
+
+    #[test]
+    fn the_local_count_starts_at_1970_and_counts_the_fraction() {
+        assert_eq!(built(1970, 1, 1, 0, 0, 0).to_local_nanoseconds(), 0);
+        let and_a_half = built(1970, 1, 1, 0, 0, 1)
+            .with_subseconds(500_000_000, 1)
+            .unwrap();
+        assert_eq!(and_a_half.to_local_nanoseconds(), 1_500_000_000);
+        assert_eq!(
+            built(1969, 12, 31, 23, 59, 59).to_local_nanoseconds(),
+            -SECOND
+        );
+    }
+
+    #[test]
+    fn the_local_count_matches_the_date_program() {
+        // The seconds that GNU date 9.11 prints for these times in UTC,
+        // with `date -u -d 2000-03-01T00:00:00Z +%s`; run only to compare.
+        let cases = [
+            (built(2000, 3, 1, 0, 0, 0), 951_868_800),
+            (built(2024, 2, 29, 12, 0, 0), 1_709_208_000),
+            (built(0, 1, 1, 0, 0, 0), -62_167_219_200),
+            (built(9999, 12, 31, 23, 59, 59), 253_402_300_799),
+        ];
+        for (time, seconds) in cases {
+            assert_eq!(time.to_local_nanoseconds(), seconds * SECOND, "{time}");
+        }
+    }
+
+    #[test]
+    fn the_first_and_last_moments_a_time_holds_count_without_overflow() {
+        let first = built(0, 1, 1, 0, 0, 0).with_offset_minutes(840).unwrap();
+        let first_local = -62_167_219_200 * SECOND;
+        assert_eq!(first.to_local_nanoseconds(), first_local);
+        assert_eq!(
+            first.to_unix_nanoseconds(),
+            Some(first_local - 14 * 3600 * SECOND)
+        );
+        let last = built(9999, 12, 31, 23, 59, 59)
+            .with_subseconds(999_999_999, 9)
+            .and_then(|time| time.with_offset_minutes(-840))
+            .unwrap();
+        let last_local = 253_402_300_799 * SECOND + 999_999_999;
+        assert_eq!(last.to_local_nanoseconds(), last_local);
+        assert_eq!(
+            last.to_unix_nanoseconds(),
+            Some(last_local + 14 * 3600 * SECOND)
+        );
+    }
+
+    #[test]
+    fn every_day_from_the_year_0_to_9999_adds_one_day() {
+        // Each next day is the one `new` accepts: the next in the month,
+        // else the first of the next month, else of the next year.
+        let mut time = built(0, 1, 1, 0, 0, 0);
+        let first = time.to_local_nanoseconds();
+        let mut steps: i128 = 0;
+        while time != built(9999, 12, 31, 0, 0, 0) {
+            let (year, month, day) = (time.year(), time.month(), time.day());
+            let next = DateTime::new(year, month, day + 1, 0, 0, 0)
+                .or_else(|_| DateTime::new(year, month + 1, 1, 0, 0, 0))
+                .or_else(|_| DateTime::new(year + 1, 1, 1, 0, 0, 0))
+                .unwrap();
+            assert_eq!(
+                next.to_local_nanoseconds() - time.to_local_nanoseconds(),
+                DAY,
+                "{time} to {next}"
+            );
+            time = next;
+            steps += 1;
+        }
+        // The rule repeats every 400 years, of 365 days each and 97 leap
+        // days; 10 000 years are 25 such cycles, so their days less one
+        // are the steps from the first day to the last.
+        let days = 25 * (400 * 365 + 97);
+        assert_eq!(steps, days - 1);
+        assert_eq!(time.to_local_nanoseconds() - first, steps * DAY);
+    }
+
+    #[test]
+    fn the_unix_count_takes_the_offset_away() {
+        let time = built(2024, 5, 1, 10, 20, 30);
+        let local = time.to_local_nanoseconds();
+        assert_eq!(time.to_unix_nanoseconds(), None);
+        let ahead = time.with_offset_minutes(120).unwrap();
+        assert_eq!(ahead.to_unix_nanoseconds(), Some(local - 2 * 3600 * SECOND));
+        let behind = time.with_offset_minutes(-300).unwrap();
+        assert_eq!(
+            behind.to_unix_nanoseconds(),
+            Some(local + 5 * 3600 * SECOND)
+        );
+        // The offset changes the Unix count only.
+        assert_eq!(ahead.to_local_nanoseconds(), local);
+    }
+
+    #[test]
+    fn one_moment_in_two_offsets_has_one_unix_count_and_two_local_ones() {
+        // Paris and New York in May, on summer time.
+        let paris = built(2024, 5, 1, 12, 0, 0)
+            .with_offset_minutes(120)
+            .unwrap();
+        let new_york = built(2024, 5, 1, 6, 0, 0)
+            .with_offset_minutes(-240)
+            .unwrap();
+        assert_eq!(paris.to_unix_nanoseconds(), new_york.to_unix_nanoseconds());
+        assert_ne!(
+            paris.to_local_nanoseconds(),
+            new_york.to_local_nanoseconds()
+        );
+    }
+
+    #[test]
+    fn the_frames_of_a_burst_order_by_their_fraction() {
+        let second = built(2024, 5, 1, 10, 20, 30);
+        let earlier = second.with_subseconds(250_000_000, 2).unwrap();
+        let later = second.with_subseconds(750_000_000, 2).unwrap();
+        assert!(second.to_local_nanoseconds() < earlier.to_local_nanoseconds());
+        assert!(earlier.to_local_nanoseconds() < later.to_local_nanoseconds());
+        // `.5` and `.50` name one moment, though they are not equal.
+        let half = second.with_subseconds(500_000_000, 1).unwrap();
+        let fifty = second.with_subseconds(500_000_000, 2).unwrap();
+        assert_ne!(half, fifty);
+        assert_eq!(half.to_local_nanoseconds(), fifty.to_local_nanoseconds());
     }
 }

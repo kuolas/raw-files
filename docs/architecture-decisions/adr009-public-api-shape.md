@@ -2,8 +2,9 @@
 
 - Status: Accepted
 - Date: 2026-10-11
-- Revision: 5, 2026-11-16
-- Issue: #119; the handle's name #107; reads through `&self` #89
+- Revision: 6, 2026-11-16
+- Issue: #119; the handle's name #107; reads through `&self` #89; the
+  numbers to sort times by #103
 
 ## Context
 
@@ -94,8 +95,13 @@ file or a JPEG ([ADR014](adr014-jpeg-files-as-a-format-of-their-own.md)).
   value, such as `Rational::to_f64`.
 - `DateTime` has no order, because local times do not order by their
   fields. 10:00 at an offset of `+02:00` came before 09:00 at `+00:00`.
-  A time without an offset cannot be placed against either. `Direction`
-  has none because a bearing turns round to its start.
+  A time without an offset cannot be placed against either. A caller
+  sorts by one of two numbers of nanoseconds instead:
+  `DateTime::to_local_nanoseconds`, the order of one camera's clock, or
+  `DateTime::to_unix_nanoseconds`, the moment, when the time has an
+  offset. They are `i128`, since the years 0 to 9999 in nanoseconds do
+  not fit in an `i64`. `Direction` has no order because a bearing turns
+  round to its start.
 - `Value` has no `Eq` or `Hash`. Its FLOAT and DOUBLE values are
   floating-point numbers, and a NaN is not equal to itself.
 - A value with no empty state that means anything, such as a `Size`, a
@@ -144,6 +150,13 @@ Rejected:
   were.
 - **`entries()` returning an owned list**, shared and cheap to clone.
   The getter would give an owned value for a reason no caller sees.
+- **The getters as a time's only sort key**, as before. A caller built
+  a tuple of seven of them for the most common use of a time.
+- **Whole seconds in an `i64`** to sort times by, with
+  `DateTime::nanosecond` as a second part. The frames of a burst share
+  their second, so a caller would build a tuple again.
+- **`SystemTime` for the moment.** Its range and precision differ from
+  one platform to another.
 - **Separate types for slices and readers.** Two code paths to keep in step.
   `Cursor<&[u8]>` covers slices through the one handle, and
   `Preview::byte_range` lets a slice caller borrow a preview's bytes instead
