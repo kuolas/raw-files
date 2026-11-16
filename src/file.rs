@@ -367,14 +367,15 @@ impl<R: Read + Seek> CameraFile<R> {
     /// Print the camera's Make as text, and the GPS version as numbers:
     ///
     /// ```no_run
-    /// use raw_files::{CameraFile, Directory, Value};
+    /// use raw_files::{CameraFile, Directory, Value, tags};
     ///
     /// fn main() -> raw_files::Result<()> {
     ///     let file = CameraFile::open("DSC_0001.NEF")?;
-    ///     if let Some(make) = file.entries().entry(Directory::Ifd(0), 0x010F) {
+    ///     let entries = file.entries();
+    ///     if let Some(make) = entries.entry(Directory::Ifd(0), tags::tiff::MAKE) {
     ///         println!("{:?}", file.read_value(&make)?.text());
     ///     }
-    ///     if let Some(version) = file.entries().entry(Directory::Gps, 0x0000) {
+    ///     if let Some(version) = entries.entry(Directory::Gps, tags::gps::GPS_VERSION_ID) {
     ///         if let Value::Byte(bytes) = file.read_value(&version)? {
     ///             println!("GPS version {bytes:?}");
     ///         }

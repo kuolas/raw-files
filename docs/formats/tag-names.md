@@ -9,6 +9,8 @@ with the document and the place in it that gives the name, and the
 field types the entries can have. The table of names in the code is
 written from this page and from nothing else
 ([ADR013](../architecture-decisions/adr013-clean-room-and-third-party-code.md)).
+Each name has a constant in the crate's `tags` module, such as
+`tags::exif::DATE_TIME_ORIGINAL` for DateTimeOriginal.
 
 Where this page says *my own* files, it is me, Alvaro Kuolas, who
 maintains raw-files, writing about files from my own cameras: they stay

@@ -151,12 +151,13 @@ impl fmt::Display for Directory {
 /// ```no_run
 /// use std::fs;
 ///
-/// use raw_files::{CameraFile, Directory};
+/// use raw_files::{CameraFile, Directory, tags};
 ///
 /// fn main() -> raw_files::Result<()> {
 ///     let bytes = fs::read("DSC_0001.NEF")?;
 ///     let file = CameraFile::from_bytes(&bytes)?;
-///     if let Some(entry) = file.entries().entry(Directory::Exif, 0x927C) {
+///     let makernote = file.entries().entry(Directory::Exif, tags::exif::MAKER_NOTE);
+///     if let Some(entry) = makernote {
 ///         println!(
 ///             "{} {} x {}",
 ///             entry.name().unwrap_or("?"),
@@ -220,8 +221,10 @@ impl Entry {
     /// Interoperability IFD, CIPA DC-007 for the Multi-Picture index, the
     /// DNG specification for the four DNG tags raw-files reads, and Adobe's
     /// PageMaker 6.0 TIFF Technical Notes for the SubIFDs tag. A tag a
-    /// specification names in one kind of directory has no name in another: an
-    /// Exif tag that a camera writes in IFD0 has none there.
+    /// specification names in one kind of directory has no name in another:
+    /// an Exif tag that a camera writes in IFD0 has none there. Each name
+    /// has a constant in [`tags`](crate::tags), in the module of its kind
+    /// of directory.
     pub fn name(&self) -> Option<&'static str> {
         names::name(self.directory, self.tag())
     }
@@ -695,6 +698,10 @@ impl Entries {
     /// more than once, the first, in the order it lists them. `None` when
     /// the file has no such directory, or it has no such entry that could
     /// be listed.
+    ///
+    /// [`tags`](crate::tags) names the numbers of the tags
+    /// [`Entry::name`] has a name for, per kind of directory, such as
+    /// [`tags::exif::DATE_TIME_ORIGINAL`](crate::tags::exif::DATE_TIME_ORIGINAL).
     pub fn entry(&self, directory: Directory, tag: u16) -> Option<Entry> {
         self.in_directory(directory)
             .iter()

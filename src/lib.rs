@@ -26,6 +26,7 @@
 //! | A preview's bytes | [`CameraFile::read_preview`], [`CameraFile::read_preview_into`] | bytes |
 //! | What the camera recorded about the picture | [`CameraFile::metadata`] | [`Metadata`] |
 //! | Every entry of the file's TIFF directories | [`CameraFile::entries`] | [`Entries`] of [`Entry`] |
+//! | One entry, by its directory and a tag of [`tags`] | [`Entries::entry`] | [`Entry`] |
 //! | One entry's value | [`CameraFile::read_value`] | [`Value`] |
 //!
 //! The metadata is read when the file is opened. Each of its values comes
@@ -241,7 +242,7 @@
 //! read, and read one standard entry's value:
 //!
 //! ```no_run
-//! use raw_files::{CameraFile, Directory};
+//! use raw_files::{CameraFile, Directory, tags};
 //!
 //! # fn main() -> raw_files::Result<()> {
 //! let file = CameraFile::open("photo.nef")?;
@@ -253,8 +254,7 @@
 //! if left_out > 0 {
 //!     println!("{left_out} entries could not be read");
 //! }
-//! // IFD0's Model (tag 0x0110), as text.
-//! if let Some(model) = entries.entry(Directory::Ifd(0), 0x0110) {
+//! if let Some(model) = entries.entry(Directory::Ifd(0), tags::tiff::MODEL) {
 //!     if let Some(text) = file.read_value(&model)?.text() {
 //!         println!("Model: {text}");
 //!     }
@@ -388,6 +388,7 @@ mod rational;
 #[cfg(doctest)]
 #[doc = include_str!("../README.md")]
 mod readme {}
+pub mod tags;
 // The TIFF fixture builder lives with the integration tests and is shared
 // with the unit tests: compiled into each test build, never into the
 // library. Each side uses only part of it.
