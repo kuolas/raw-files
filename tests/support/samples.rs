@@ -876,6 +876,9 @@ pub fn check_entries(expected: &SampleEntries) {
             "{label}"
         );
     }
+    if let Some(sub_ifds) = entries.entry(Directory::Ifd(0), 0x014A) {
+        assert_eq!(sub_ifds.name(), Some("SubIFDs"), "{label}");
+    }
     if let Some(serial) = entries.entry(Directory::Exif, 0xA431) {
         assert_eq!(serial.field_type(), FieldType::Ascii, "{label}: serial");
         assert!(serial.count() > 0, "{label}: serial");

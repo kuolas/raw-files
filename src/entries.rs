@@ -211,14 +211,16 @@ impl Entry {
         self.entry.value_len()
     }
 
-    /// The name a published standard gives the entry's tag in its kind of
-    /// directory, such as "DateTimeOriginal" for tag 0x9003 of the Exif
-    /// IFD, spelled as the standard spells it; `None` when none does.
+    /// The name a published specification gives the entry's tag in its
+    /// kind of directory, such as "DateTimeOriginal" for tag 0x9003 of the
+    /// Exif IFD, spelled as the specification spells it; `None` when none
+    /// does.
     ///
     /// The names are those of TIFF 6.0, Exif 3.1, DCF 2.0 for the
-    /// Interoperability IFD, CIPA DC-007 for the Multi-Picture index, and
-    /// the DNG specification for the four DNG tags raw-files reads. A tag a
-    /// standard names in one kind of directory has no name in another: an
+    /// Interoperability IFD, CIPA DC-007 for the Multi-Picture index, the
+    /// DNG specification for the four DNG tags raw-files reads, and Adobe's
+    /// PageMaker 6.0 TIFF Technical Notes for the SubIFDs tag. A tag a
+    /// specification names in one kind of directory has no name in another: an
     /// Exif tag that a camera writes in IFD0 has none there.
     pub fn name(&self) -> Option<&'static str> {
         names::name(self.directory, self.tag())

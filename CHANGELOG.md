@@ -75,6 +75,13 @@ does. An entry that can break a caller opens with **Breaking:**.
   WorldTime and CropHiSpeed, and a DNG default crop. A hostile file now
   costs less reading. A source that fails at such a value no longer
   makes opening the file fail.
+- `Entry::name` now gives "SubIFDs" for tag 0x014A in IFD0, the IFDs
+  chained after it and the SubIFDs
+  ([#90](https://github.com/kuolas/raw-files/issues/90)). The name comes
+  from Adobe's *PageMaker 6.0 TIFF Technical Notes* (1995), read for it
+  as the other documents were: no other reader's tables were used. The
+  same notes define field type 13, which `FieldType::Ifd` still shows
+  as "IFD".
 
 ### Fixed
 
