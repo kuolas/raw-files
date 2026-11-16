@@ -177,7 +177,7 @@ fn parse<R: Read + Seek>(
             })
         }));
     }
-    let previews = previews(src, &candidates, size, metadata.orientation)?;
+    let previews = previews(src, &candidates, size, metadata.orientation, limits)?;
     Ok(Parsed {
         previews,
         metadata,
@@ -253,7 +253,8 @@ fn metadata<R: Read + Seek>(
 /// The previews of a JPEG file whose picture is `size`: those of
 /// `candidates` that the shared finder accepts ([`tiff_previews::check`]),
 /// then the file itself. Every preview takes `orientation`, the metadata's,
-/// from IFD0 of the Exif segment, or none without one.
+/// from IFD0 of the Exif segment, or none without one. The candidates are
+/// probed within `limits`.
 ///
 /// The file itself is its whole byte range, exactly as stored, with `size`,
 /// built from the frame header the claim checked, not probed again. A
@@ -271,8 +272,9 @@ fn previews<R: Read + Seek>(
     candidates: &[Candidate],
     size: Size,
     orientation: Orientation,
+    limits: &Limits,
 ) -> Result<Vec<Preview>> {
-    let mut previews = tiff_previews::check(src, candidates, orientation)?;
+    let mut previews = tiff_previews::check(src, candidates, orientation, limits)?;
     previews.push(Preview::new(
         0,
         src.len(),
@@ -423,7 +425,9 @@ mod tests {
     fn read(builder: &JpegBuilder) -> (Vec<u8>, Segments) {
         let bytes = builder.build().bytes;
         let mut src = Source::new(Cursor::new(bytes.clone())).unwrap();
-        let found = segments(&mut src).unwrap().expect("a JPEG file");
+        let found = segments(&mut src, &Limits::default())
+            .unwrap()
+            .expect("a JPEG file");
         (bytes, found)
     }
 

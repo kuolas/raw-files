@@ -619,7 +619,8 @@ decided, as steps. [I]
    segment whose payload starts `Exif\0\0` and the first APP2 segment
    whose payload starts `MPF\0`. Stop at the first SOS. Stop as well,
    keeping what was found, at a length below 2, a segment that runs past
-   the end of the file, an EOI, or the step cap.
+   the end of the file, an EOI, or the step cap, which the caller's
+   limits set.
 3. **Accept the file** when the walk found a frame header with neither side
    zero that is not lossless (`C3`, `C7`, `CB`, `CF`); otherwise refuse it
    with the `UnknownFormat` error.
@@ -661,7 +662,8 @@ decided, as steps. [I]
   file does. [I]
 - **`FF` bytes before a marker are legal**, in any number, but each is a
   step of the walk: a file with more of them than the step cap allows is
-  refused. None of the eight camera files has one before its scan. [P][1]
+  refused unless the cap is raised. None of the eight camera files has
+  one before its scan. [P][1]
   (B.1.1.2, p. 31) [F] [I]
 - **A frame header after SOS** cannot be found by walking segments; one
   that gives a height of 0 has its height after the first scan. [P][1]

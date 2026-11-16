@@ -128,12 +128,16 @@ the ones a JPEG adds.
    (CVE-2004-0200, OW-002, CVE-2018-6612, CVE-2025-65092, little_exif
    #105.)
 2. **The segment walk ends on any input.** It takes one step per marker
-   or fill byte, always moves forward, stops at the first SOS, and gives
-   up after a fixed number of steps, a crate-private constant, as the
-   search for a preview's frame header does. The cap also bounds what
-   `open` reads. A file with more fill bytes before its scan than the cap
-   allows is therefore refused, although the JPEG standard allows any
-   number of them; none of the eight sample files has a single one.
+   or fill byte, always moves forward and stops at the first SOS. It
+   gives up after `Limits::max_jpeg_markers` steps, 1,024 by default, as
+   the search for a preview's frame header does. The cap bounds the time
+   `open` takes, for each walk on its own. Every step moves forward, so
+   even under the largest cap the walk ends, at the end of its range at
+   the latest.
+   Under the default, a file with more fill bytes before its frame
+   header than the cap allows is refused, although the JPEG standard
+   allows any number of them. `Limits::unlimited()` or a raised cap
+   reads it. None of the eight sample files has a single fill byte.
    (CVE-2021-37622, CVE-2021-37623, CVE-2022-25851.)
 3. **The Exif segment is a bounded block with its own base.** The TIFF
    header 6 bytes into the payload is the base of every offset. Every

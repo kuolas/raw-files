@@ -19,11 +19,12 @@ use crate::error::Result;
 use crate::formats::makernote::nikon::{self, MakerNote};
 use crate::formats::tiff_previews;
 use crate::io::Source;
+use crate::limits::Limits;
 use crate::preview::Preview;
 
 /// The previews of the NEF file in `src`, whose IFDs are `tree` and whose
 /// MakerNote, already read, is `makernote`, in the order they were found:
-/// the tree's, then the MakerNote's.
+/// the tree's, then the MakerNote's. Each is probed within `limits`.
 ///
 /// An IFD whose tags cannot be read costs only its own preview, and a
 /// MakerNote that does not hold together gives no candidate.
@@ -35,9 +36,10 @@ pub(super) fn previews<R: Read + Seek>(
     src: &mut Source<R>,
     tree: &Tree,
     makernote: Option<&MakerNote>,
+    limits: &Limits,
 ) -> Result<Vec<Preview>> {
     let extra = makernote.and_then(nikon::preview_candidate);
-    tiff_previews::find(src, tree, extra.as_slice())
+    tiff_previews::find(src, tree, extra.as_slice(), limits)
 }
 
 #[cfg(test)]
@@ -98,7 +100,8 @@ mod tests {
         let tree = walk(&mut src, &file_block, &Limits::default()).unwrap();
 
         let makernote = super::nikon::read(&mut src, &tree, &Limits::default()).unwrap();
-        let previews = super::previews(&mut src, &tree, makernote.as_ref()).unwrap();
+        let previews =
+            super::previews(&mut src, &tree, makernote.as_ref(), &Limits::default()).unwrap();
         let sizes: Vec<Size> = previews.iter().map(Preview::size).collect();
         assert_eq!(sizes, [size(160, 120)]);
     }

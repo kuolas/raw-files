@@ -112,9 +112,10 @@ fn read_values<R: Read + Seek>(src: &mut Source<R>, tree: &Tree) {
     }
 }
 
-/// Reads `data` as a JPEG stream: the probe for its frame header over the
-/// whole of `data`, then over a range inside it that the first two bytes
-/// choose, and whether each frame found is lossless.
+/// Reads `data` as a JPEG stream: the probe for its frame header, with the
+/// default limits, over the whole of `data`, then over a range inside it
+/// that the first two bytes choose, and whether each frame found is
+/// lossless.
 ///
 /// The second range tests the probe's bounds, which a caller sets from a
 /// preview's tags: the first byte is where it starts, the second how many
@@ -132,7 +133,8 @@ pub fn jpeg_probe(data: &[u8]) {
     let Ok(len) = u64::try_from(data.len()) else {
         return;
     };
-    if let Ok(Some(frame)) = probe(&mut src, 0, len) {
+    let limits = Limits::default();
+    if let Ok(Some(frame)) = probe(&mut src, 0, len, &limits) {
         let _ = frame.is_lossless();
     }
     let [start, cut, ..] = data else {
@@ -146,16 +148,16 @@ pub fn jpeg_probe(data: &[u8]) {
     else {
         return;
     };
-    if let Ok(Some(frame)) = probe(&mut src, offset, sub_len) {
+    if let Ok(Some(frame)) = probe(&mut src, offset, sub_len, &limits) {
         let _ = frame.is_lossless();
     }
 }
 
-/// Reads `data` as a JPEG file: the walk over its segments, then whether
-/// the frame header it kept is lossless; the TIFF structure of its Exif
-/// segment, walked with the default limits and every value of every IFD
+/// Reads `data` as a JPEG file, all of it with the default limits: the walk
+/// over its segments, then whether the frame header it kept is lossless;
+/// the TIFF structure of its Exif segment, with every value of every IFD
 /// read through each accessor, as [`tiff_walk`] reads a TIFF file; and the
-/// index of its MPF segment, with the default limits.
+/// index of its MPF segment.
 ///
 /// Whatever `data` holds, this must return, never panic, and do so in
 /// bounded time and memory. What it reads is thrown away: an error or a
@@ -165,13 +167,13 @@ pub fn jpeg_segments(data: &[u8]) {
     let Ok(mut src) = Source::new(Cursor::new(data)) else {
         return;
     };
-    let Ok(Some(found)) = segments(&mut src) else {
+    let limits = Limits::default();
+    let Ok(Some(found)) = segments(&mut src, &limits) else {
         return;
     };
     if let Some(frame) = found.frame {
         let _ = frame.is_lossless();
     }
-    let limits = Limits::default();
     if let Some(exif) = &found.exif
         && let Ok(tree) = walk(&mut src, exif, &limits)
     {

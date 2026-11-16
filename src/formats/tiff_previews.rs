@@ -46,6 +46,7 @@ use crate::container::tiff::{Block, Held, Ifd, Tree};
 use crate::error::{Error, Result, skip_damage};
 use crate::geometry::Size;
 use crate::io::{Source, within};
+use crate::limits::Limits;
 use crate::orientation::Orientation;
 use crate::preview::{Preview, PreviewFormat};
 
@@ -130,7 +131,8 @@ pub(crate) struct Candidate {
 
 /// Finds the previews of the TIFF-based file in `src`, whose IFDs are
 /// `tree`, and of the candidates `extra` that its format found outside the
-/// tree. Each is shown upright by IFD0's orientation ([`orientation`]).
+/// tree. Each is shown upright by IFD0's orientation ([`orientation`]),
+/// and probed within `limits`.
 ///
 /// The previews are in the order they were found: the tree's, in its
 /// order, then `extra`'s. The file handle sorts them.
@@ -147,11 +149,12 @@ pub(crate) fn find<R: Read + Seek>(
     src: &mut Source<R>,
     tree: &Tree,
     extra: &[Candidate],
+    limits: &Limits,
 ) -> Result<Vec<Preview>> {
     let orientation = orientation(tree);
     let mut candidates = tree_candidates(src, tree)?;
     candidates.extend_from_slice(extra);
-    check(src, &candidates, orientation)
+    check(src, &candidates, orientation, limits)
 }
 
 /// The candidates that the IFDs of `tree` declare, in the tree's order:
@@ -198,7 +201,7 @@ pub(crate) fn tree_candidates<R: Read + Seek>(
 /// - it is empty, or does not lie wholly inside the file as declared,
 ///   since a preview cut to fit would not decode;
 /// - its bytes hold no JPEG stream with a frame header that gives a size
-///   ([`jpeg::probe`]);
+///   ([`jpeg::probe`]), found within `limits`;
 /// - that frame is lossless, which is raw data
 ///   ([`Frame::is_lossless`](jpeg::Frame::is_lossless));
 /// - a candidate before it at the same position became a preview. Two
@@ -216,6 +219,7 @@ pub(crate) fn check<R: Read + Seek>(
     src: &mut Source<R>,
     candidates: &[Candidate],
     orientation: Orientation,
+    limits: &Limits,
 ) -> Result<Vec<Preview>> {
     let mut seen = BTreeSet::new();
     let mut previews = Vec::new();
@@ -223,7 +227,7 @@ pub(crate) fn check<R: Read + Seek>(
         if seen.contains(&candidate.offset) || !inside(candidate, src.len()) {
             continue;
         }
-        let Some(frame) = jpeg::probe(src, candidate.offset, candidate.length)? else {
+        let Some(frame) = jpeg::probe(src, candidate.offset, candidate.length, limits)? else {
             continue;
         };
         if frame.is_lossless() {
@@ -429,7 +433,7 @@ mod tests {
         let mut src = Source::new(Cursor::new(bytes.to_vec()))?;
         let file_block = Block::file(src.len());
         let tree = walk(&mut src, &file_block, &Limits::default())?;
-        find(&mut src, &tree, extra)
+        find(&mut src, &tree, extra, &Limits::default())
     }
 
     /// The previews of `bytes`, with `extra`; the finder must succeed.
@@ -795,7 +799,13 @@ mod tests {
             },
         ];
         let mut src = Source::new(Cursor::new(bytes)).unwrap();
-        let previews = check(&mut src, &candidates, Orientation::Rotate90).unwrap();
+        let previews = check(
+            &mut src,
+            &candidates,
+            Orientation::Rotate90,
+            &Limits::default(),
+        )
+        .unwrap();
         assert_eq!(
             previews,
             [Preview::new(
@@ -1208,7 +1218,7 @@ mod tests {
             let mut src = Source::new(FailsFar(Cursor::new(bytes))).unwrap();
             let file_block = Block::file(src.len());
             let tree = walk(&mut src, &file_block, &Limits::default()).unwrap();
-            let err = find(&mut src, &tree, &[]).expect_err("the read fails");
+            let err = find(&mut src, &tree, &[], &Limits::default()).expect_err("the read fails");
             assert_eq!(err.kind(), ErrorKind::Io, "{case}: {err:?}");
         }
     }
@@ -1238,7 +1248,7 @@ mod tests {
     fn found_in(bytes: &[u8], bounds: Range<u64>) -> Vec<Preview> {
         let mut src = Source::new(Cursor::new(bytes.to_vec())).unwrap();
         let tree = walk(&mut src, &Block::new(POS, bounds), &Limits::default()).unwrap();
-        find(&mut src, &tree, &[]).unwrap()
+        find(&mut src, &tree, &[], &Limits::default()).unwrap()
     }
 
     /// Writes into `bytes`, at `at`, a stub JPEG of 99 by 77: what a finder

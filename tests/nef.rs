@@ -1095,6 +1095,23 @@ fn a_limit_crossed_inside_the_d1h_makernote_costs_the_makernote_only() {
     }
 }
 
+#[test]
+fn a_nef_opens_under_a_jpeg_marker_cap_of_zero_without_its_previews() {
+    // Each preview's frame header is found by a walk over its markers,
+    // which a cap of 0 stops before the first: every preview is left
+    // out, and the file still opens.
+    for order in ORDERS {
+        let (built, _) = d1h_file_with_blobs(order);
+        let default = CameraFile::from_bytes(&built.bytes).unwrap();
+        assert!(!default.previews().is_empty(), "{order:?}");
+        let options = Options::new().with_limits(Limits::default().with_max_jpeg_markers(0));
+        let capped = options.from_bytes(&built.bytes).unwrap();
+        assert_eq!(capped.format(), Format::Nef, "{order:?}");
+        assert_eq!(capped.previews(), [], "{order:?}");
+        assert_eq!(capped.metadata(), default.metadata(), "{order:?}");
+    }
+}
+
 // Two real files, committed. Two shots of my own Z 9, in DX and 1:1
 // crop modes, with a single focus point placed in the top-left corner
 // of the picture, stripped of their pixels and personal fields with

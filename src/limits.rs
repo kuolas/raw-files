@@ -12,6 +12,8 @@
 /// first directory, a directory that crosses a cap is left out as a damaged
 /// one is. In a JPEG file, a cap crossed inside its Exif or MPF segment
 /// costs at most what that segment holds, not the file, which still opens.
+/// A walk over a JPEG stream stops at its cap as at a damaged segment
+/// ([`max_jpeg_markers`](Self::max_jpeg_markers)).
 ///
 /// Build it from [`Limits::default()`], or [`Limits::unlimited()`], and
 /// change a cap with its `with_…` method, such as
@@ -27,6 +29,11 @@
 /// let limits = Limits::default().with_max_preview_bytes(32 * 1024 * 1024);
 /// assert_eq!(limits.max_preview_bytes(), 32 * 1024 * 1024);
 /// assert_eq!(limits.max_ifds(), Limits::default().max_ifds());
+///
+/// // A JPEG stream may hold any number of fill bytes before a marker.
+/// let limits = Limits::default().with_max_jpeg_markers(65_536);
+/// assert_eq!(limits.max_jpeg_markers(), 65_536);
+/// assert_eq!(Limits::unlimited().max_jpeg_markers(), u32::MAX);
 /// ```
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct Limits {
@@ -35,6 +42,7 @@ pub struct Limits {
     max_ifd_depth: u32,
     max_preview_bytes: u64,
     max_value_bytes: u64,
+    max_jpeg_markers: u32,
 }
 
 impl Default for Limits {
@@ -45,6 +53,7 @@ impl Default for Limits {
             max_ifd_depth: 5,
             max_preview_bytes: 128 * 1024 * 1024,
             max_value_bytes: 1024 * 1024,
+            max_jpeg_markers: 1_024,
         }
     }
 }
@@ -61,6 +70,7 @@ impl Limits {
             max_ifd_depth: u32::MAX,
             max_preview_bytes: u64::MAX,
             max_value_bytes: u64::MAX,
+            max_jpeg_markers: u32::MAX,
         }
     }
 
@@ -104,6 +114,15 @@ impl Limits {
     #[must_use]
     pub fn with_max_value_bytes(mut self, n: u64) -> Self {
         self.max_value_bytes = n;
+        self
+    }
+
+    /// Sets how many markers one walk over a JPEG stream reads, in place of
+    /// the cap set before; [`max_jpeg_markers`](Self::max_jpeg_markers)
+    /// reads it and says what counts.
+    #[must_use]
+    pub fn with_max_jpeg_markers(mut self, n: u32) -> Self {
+        self.max_jpeg_markers = n;
         self
     }
 
@@ -164,6 +183,39 @@ impl Limits {
     pub fn max_value_bytes(self) -> u64 {
         self.max_value_bytes
     }
+
+    /// How many markers one walk over a JPEG stream reads at most.
+    ///
+    /// Each marker the walk reads counts as one, and so does each fill
+    /// byte, an `FF` byte before a marker. The cap holds for each walk on
+    /// its own, counted from zero:
+    ///
+    /// - the walk that finds a JPEG file's segments when it opens;
+    /// - the walk that finds the frame header of a preview, in a JPEG file
+    ///   or a RAW file, once for each preview the file declares. A place
+    ///   declared twice is walked twice until it gives a preview.
+    ///
+    /// The cap bounds time, not memory. It keeps a stream of tiny segments
+    /// or fill bytes from making raw-files read it one marker at a time.
+    /// Since each walk counts on its own, opening a file takes at most the
+    /// cap times the number of walks: a raised cap raises the whole
+    /// product.
+    ///
+    /// A walk that reaches the cap stops, and what follows is lost; it is
+    /// not an error:
+    ///
+    /// - A JPEG file whose frame header lies past the cap fails to open
+    ///   with [`ErrorKind::UnknownFormat`](crate::ErrorKind::UnknownFormat).
+    /// - A preview whose frame header lies past the cap is left out.
+    ///
+    /// The JPEG standard allows any number of fill bytes before a marker.
+    /// A stream with more of them than the default allows is read under a
+    /// raised cap, of up to `u32::MAX` markers under
+    /// [`Limits::unlimited()`]. Camera previews reach their frame header in
+    /// a few dozen markers, and camera JPEG files their scan in fewer.
+    pub fn max_jpeg_markers(self) -> u32 {
+        self.max_jpeg_markers
+    }
 }
 
 #[cfg(test)]
@@ -178,6 +230,7 @@ mod tests {
         assert_eq!(limits.max_ifd_depth(), 5);
         assert_eq!(limits.max_preview_bytes(), 128 * 1024 * 1024);
         assert_eq!(limits.max_value_bytes(), 1024 * 1024);
+        assert_eq!(limits.max_jpeg_markers(), 1_024);
     }
 
     #[test]
@@ -197,6 +250,10 @@ mod tests {
             limits.max_value_bytes(),
             Limits::default().max_value_bytes()
         );
+        assert_eq!(
+            limits.max_jpeg_markers(),
+            Limits::default().max_jpeg_markers()
+        );
         assert_ne!(limits, Limits::default());
     }
 
@@ -213,6 +270,10 @@ mod tests {
         assert_eq!(
             limits.max_value_bytes(),
             Limits::default().max_value_bytes()
+        );
+        assert_eq!(
+            limits.max_jpeg_markers(),
+            Limits::default().max_jpeg_markers()
         );
         assert_ne!(limits, Limits::default());
     }
@@ -234,6 +295,10 @@ mod tests {
             limits.max_value_bytes(),
             Limits::default().max_value_bytes()
         );
+        assert_eq!(
+            limits.max_jpeg_markers(),
+            Limits::default().max_jpeg_markers()
+        );
         assert_ne!(limits, Limits::default());
     }
 
@@ -250,6 +315,10 @@ mod tests {
         assert_eq!(
             limits.max_value_bytes(),
             Limits::default().max_value_bytes()
+        );
+        assert_eq!(
+            limits.max_jpeg_markers(),
+            Limits::default().max_jpeg_markers()
         );
         assert_ne!(limits, Limits::default());
     }
@@ -268,6 +337,31 @@ mod tests {
             limits.max_preview_bytes(),
             Limits::default().max_preview_bytes()
         );
+        assert_eq!(
+            limits.max_jpeg_markers(),
+            Limits::default().max_jpeg_markers()
+        );
+        assert_ne!(limits, Limits::default());
+    }
+
+    #[test]
+    fn with_max_jpeg_markers_changes_only_its_cap() {
+        let limits = Limits::default().with_max_jpeg_markers(7);
+        assert_eq!(limits.max_jpeg_markers(), 7);
+        assert_eq!(limits.max_ifds(), Limits::default().max_ifds());
+        assert_eq!(
+            limits.max_ifd_entries(),
+            Limits::default().max_ifd_entries()
+        );
+        assert_eq!(limits.max_ifd_depth(), Limits::default().max_ifd_depth());
+        assert_eq!(
+            limits.max_preview_bytes(),
+            Limits::default().max_preview_bytes()
+        );
+        assert_eq!(
+            limits.max_value_bytes(),
+            Limits::default().max_value_bytes()
+        );
         assert_ne!(limits, Limits::default());
     }
 
@@ -280,16 +374,18 @@ mod tests {
             .with_max_ifd_entries(2)
             .with_max_ifd_depth(3)
             .with_max_preview_bytes(4)
-            .with_max_value_bytes(5);
+            .with_max_value_bytes(5)
+            .with_max_jpeg_markers(6);
         assert_eq!(
             (
                 limits.max_ifds(),
                 limits.max_ifd_entries(),
                 limits.max_ifd_depth(),
                 limits.max_preview_bytes(),
-                limits.max_value_bytes()
+                limits.max_value_bytes(),
+                limits.max_jpeg_markers()
             ),
-            (1, 2, 3, 4, 5)
+            (1, 2, 3, 4, 5, 6)
         );
     }
 
@@ -310,5 +406,6 @@ mod tests {
         assert_eq!(limits.max_ifd_depth(), u32::MAX);
         assert_eq!(limits.max_preview_bytes(), u64::MAX);
         assert_eq!(limits.max_value_bytes(), u64::MAX);
+        assert_eq!(limits.max_jpeg_markers(), u32::MAX);
     }
 }

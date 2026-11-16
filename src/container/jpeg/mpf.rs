@@ -200,7 +200,7 @@ mod tests {
     /// The MPF block that [`segments`] finds in `bytes`.
     fn mpf_block(bytes: &[u8]) -> Block {
         let mut src = Source::new(Cursor::new(bytes)).unwrap();
-        segments(&mut src)
+        segments(&mut src, &Limits::default())
             .unwrap()
             .expect("a JPEG file")
             .mpf
@@ -761,7 +761,10 @@ mod tests {
                 } else {
                     assert_eq!(found, [], "cut at {cut}");
                 }
-                if let Some(block) = segments(&mut src).unwrap().and_then(|found| found.mpf) {
+                if let Some(block) = segments(&mut src, &Limits::default())
+                    .unwrap()
+                    .and_then(|found| found.mpf)
+                {
                     images(&mut src, &block, &Limits::default())
                         .expect("only a reader's failure is an error");
                 }
@@ -782,7 +785,10 @@ mod tests {
                     let mut bytes = built.bytes.clone();
                     bytes[at] = value;
                     let mut src = Source::new(Cursor::new(&bytes[..])).unwrap();
-                    if let Some(block) = segments(&mut src).unwrap().and_then(|found| found.mpf) {
+                    if let Some(block) = segments(&mut src, &Limits::default())
+                        .unwrap()
+                        .and_then(|found| found.mpf)
+                    {
                         images(&mut src, &block, &Limits::default())
                             .expect("only a reader's failure is an error");
                     }

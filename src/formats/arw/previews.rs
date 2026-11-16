@@ -33,17 +33,23 @@ use crate::container::tiff::Tree;
 use crate::error::Result;
 use crate::formats::tiff_previews;
 use crate::io::Source;
+use crate::limits::Limits;
 use crate::preview::Preview;
 
 /// The previews of the Sony file in `src`, whose IFDs are `tree`, in the
-/// order the shared finder found them. A file with no preview the finder
-/// can take, such as a damaged one, opens with an empty list.
+/// order the shared finder found them, each probed within `limits`. A file
+/// with no preview the finder can take, such as a damaged one, opens with
+/// an empty list.
 ///
 /// # Errors
 ///
 /// `Io` when the reader fails.
-pub(super) fn previews<R: Read + Seek>(src: &mut Source<R>, tree: &Tree) -> Result<Vec<Preview>> {
-    tiff_previews::find(src, tree, &[])
+pub(super) fn previews<R: Read + Seek>(
+    src: &mut Source<R>,
+    tree: &Tree,
+    limits: &Limits,
+) -> Result<Vec<Preview>> {
+    tiff_previews::find(src, tree, &[], limits)
 }
 
 #[cfg(test)]
