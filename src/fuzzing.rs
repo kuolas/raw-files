@@ -187,7 +187,7 @@ pub fn jpeg_segments(data: &[u8]) {
 /// bounded time and memory. What it reads is thrown away: an error is an
 /// expected outcome for arbitrary bytes, so every `Result` is ignored.
 pub fn open(data: &[u8]) {
-    let Ok(mut file) = Options::new().from_bytes(data) else {
+    let Ok(file) = Options::new().from_bytes(data) else {
         return;
     };
     let _ = file.format();

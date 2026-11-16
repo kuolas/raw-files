@@ -651,12 +651,7 @@ impl Entry {
     ///   since its length was taken.
     pub(crate) fn read<R: Read + Seek>(&self, src: &mut Source<R>, cap: u64) -> Result<Vec<u8>> {
         match self.value {
-            Value::Inline(field) => {
-                let mut bytes = field.to_vec();
-                // At most 4 for an inline value, so this only shortens.
-                bytes.truncate(usize::try_from(self.len).unwrap_or(usize::MAX));
-                Ok(bytes)
-            }
+            Value::Inline(field) => Ok(held(field, self.len)),
             Value::At(at) => {
                 if u64::from(self.len) > cap {
                     return Err(Error::limit(
@@ -679,15 +674,32 @@ impl Entry {
     fn read_first<R: Read + Seek>(&self, src: &mut Source<R>) -> Result<Vec<u8>> {
         let len = self.field_type.size().min(self.len);
         match self.value {
-            Value::Inline(field) => {
-                // At most 4 for an inline value, so this only shortens.
-                let mut bytes = field.to_vec();
-                bytes.truncate(usize::try_from(len).unwrap_or(usize::MAX));
-                Ok(bytes)
-            }
+            Value::Inline(field) => Ok(held(field, len)),
             Value::At(at) => src.bytes(at, u64::from(len)),
         }
     }
+
+    /// The bytes of the value the entry holds itself, at most four, with
+    /// no source to read from; `None` when the value is stored out of
+    /// line.
+    ///
+    /// This is what [`read`](Self::read) gives for such a value, for a
+    /// caller that has no source at hand, or would rather not wait for one.
+    pub(crate) fn held_bytes(&self) -> Option<Vec<u8>> {
+        match self.value {
+            Value::Inline(field) => Some(held(field, self.len)),
+            Value::At(_) => None,
+        }
+    }
+}
+
+/// The first `len` bytes of `field`, the four bytes of an entry that
+/// holds its value itself.
+fn held(field: [u8; 4], len: u32) -> Vec<u8> {
+    let mut bytes = field.to_vec();
+    // At most 4 for an inline value, so this only shortens.
+    bytes.truncate(usize::try_from(len).unwrap_or(usize::MAX));
+    bytes
 }
 
 #[cfg(test)]

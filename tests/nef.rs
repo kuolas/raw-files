@@ -153,7 +153,7 @@ fn a_makernote_in_the_other_byte_order_from_the_files_gives_the_same_four_jpegs(
 #[test]
 fn reading_the_makernote_preview_returns_exactly_the_stubs_bytes() {
     let built = z9_file(Order::Big, 1);
-    let mut file = CameraFile::from_reader(Cursor::new(built.bytes)).unwrap();
+    let file = CameraFile::from_reader(Cursor::new(built.bytes)).unwrap();
     let preview = file.previews()[1];
     assert_eq!(preview.size(), size_of(PREVIEW_JPEG));
     assert_eq!(file.read_preview(&preview).unwrap(), stub(PREVIEW_JPEG));
@@ -490,7 +490,7 @@ fn a_makernote_in_the_other_byte_order_from_the_files_gives_the_same_metadata() 
 #[test]
 fn reading_the_largest_preview_returns_exactly_the_stubs_bytes() {
     let built = z9_file(Order::Little, 1);
-    let mut file = CameraFile::from_reader(Cursor::new(built.bytes)).unwrap();
+    let file = CameraFile::from_reader(Cursor::new(built.bytes)).unwrap();
     let largest = file.largest_preview().unwrap();
     let bytes = file.read_preview(&largest).unwrap();
     assert_eq!(bytes[..3], [0xFF, 0xD8, 0xFF]);
@@ -918,7 +918,7 @@ fn the_d1h_file_opens_as_nef_with_its_makernotes_jpeg_alone() {
 fn reading_the_d1h_files_preview_returns_exactly_the_stubs_bytes() {
     for order in ORDERS {
         let built = d1h_file(order);
-        let mut file = CameraFile::from_reader(Cursor::new(built.bytes)).unwrap();
+        let file = CameraFile::from_reader(Cursor::new(built.bytes)).unwrap();
         let preview = file.largest_preview().unwrap();
         assert_eq!(
             file.read_preview(&preview).unwrap(),
@@ -1180,7 +1180,7 @@ const STRIPPED_Z9_1X1: StrippedZ9 = StrippedZ9 {
 /// placed on the cropped picture among them.
 fn check_stripped_z9(expected: &StrippedZ9) {
     let label = expected.file;
-    let mut file = CameraFile::open(support::fixtures::fixture(expected.file)).unwrap();
+    let file = CameraFile::open(support::fixtures::fixture(expected.file)).unwrap();
     assert_eq!(file.format(), Format::Nef, "{label}");
 
     // The stripping replaced each JPEG by a stub of 122 bytes with the
@@ -1993,7 +1993,7 @@ fn the_d600_frame_7856_gives_point_1_placed_in_the_tables_frame_in_3d_tracking()
 fn the_d600_frame_4_gives_its_previews_metadata_and_point_38_placed_from_the_table() {
     let name = support::fixtures::d600_frame(4);
     let label = name.as_str();
-    let mut file = CameraFile::open(support::fixtures::fixture(label)).unwrap();
+    let file = CameraFile::open(support::fixtures::fixture(label)).unwrap();
 
     // The MakerNote's preview, SubIFD2's and SubIFD0's, each replaced by a
     // stub of 122 bytes with the original's frame header. IFD0's thumbnail

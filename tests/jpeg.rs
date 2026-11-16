@@ -443,7 +443,7 @@ fn a_camera_jpeg_lists_the_file_the_thumbnail_and_the_mpf_images() {
         "camera JPEG",
     );
 
-    let mut file = CameraFile::from_bytes(&built.bytes).unwrap();
+    let file = CameraFile::from_bytes(&built.bytes).unwrap();
     for preview in file.previews().to_vec() {
         let bytes = file.read_preview(&preview).unwrap();
         let range = preview.byte_range();
@@ -588,7 +588,7 @@ fn the_files_own_preview_runs_through_the_padding_after_its_end() {
         "padded",
     );
 
-    let mut file = CameraFile::from_bytes(&built.bytes).unwrap();
+    let file = CameraFile::from_bytes(&built.bytes).unwrap();
     let preview = file.largest_preview().unwrap();
     assert_eq!(file.read_preview(&preview).unwrap(), built.bytes);
 }
@@ -1892,7 +1892,7 @@ fn a_jpeg_opens_under_a_value_cap_of_zero_and_its_entries_hold_their_values() {
     for order in ORDERS {
         let file = ilce7m3_jpeg(order, ILCE7M3_MAIN);
         let options = Options::new().with_limits(Limits::default().with_max_value_bytes(0));
-        let mut opened = options.from_bytes(&file.built.bytes).unwrap();
+        let opened = options.from_bytes(&file.built.bytes).unwrap();
         assert_eq!(opened.format(), Format::Jpeg, "{order:?}");
         assert_eq!(opened.metadata().focus(), None, "{order:?}");
         let entries = opened.entries();
@@ -2150,7 +2150,7 @@ fn open_stripped_jpeg(
 ) -> CameraFile<File> {
     let label = name;
     let bytes = support::fixtures::read_fixture(name);
-    let mut file = CameraFile::open(support::fixtures::fixture(name)).unwrap();
+    let file = CameraFile::open(support::fixtures::fixture(name)).unwrap();
     let from_bytes = CameraFile::from_bytes(&bytes).unwrap();
     for (how, format, found) in [
         ("path", file.format(), file.previews()),

@@ -63,7 +63,7 @@
 //! use raw_files::CameraFile;
 //!
 //! # fn main() -> raw_files::Result<()> {
-//! let mut file = CameraFile::open("photo.nef")?;
+//! let file = CameraFile::open("photo.nef")?;
 //! if let Some(preview) = file.largest_preview() {
 //!     let jpeg = file.read_preview(&preview)?;
 //!     println!(
@@ -244,7 +244,7 @@
 //! use raw_files::{CameraFile, Directory};
 //!
 //! # fn main() -> raw_files::Result<()> {
-//! let mut file = CameraFile::open("photo.nef")?;
+//! let file = CameraFile::open("photo.nef")?;
 //! let entries = file.entries();
 //! for entry in entries.in_directory(Directory::MakerNote) {
 //!     println!("0x{:04X} {} x {}", entry.tag(), entry.field_type(), entry.count());
