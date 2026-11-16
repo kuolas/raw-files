@@ -299,8 +299,8 @@ impl<R: Read + Seek> CameraFile<R> {
     ///
     /// # Examples
     ///
-    /// List every entry with its value's text, or why the value could not
-    /// be read:
+    /// List every entry with its value's short form, or why the value could
+    /// not be read:
     ///
     /// ```
     /// use std::path::Path;
@@ -310,12 +310,12 @@ impl<R: Read + Seek> CameraFile<R> {
     /// fn print_entries(path: &Path) -> raw_files::Result<()> {
     ///     let file = CameraFile::open(path)?;
     ///     for entry in file.entries() {
-    ///         let text = match file.read_value(entry) {
-    ///             Ok(value) => value.text().unwrap_or_default(),
+    ///         let value = match file.read_value(entry) {
+    ///             Ok(value) => value.display().to_string(),
     ///             Err(err) => format!("({err})"),
     ///         };
     ///         println!(
-    ///             "{} 0x{:04X} {} {} x {} {text}",
+    ///             "{} 0x{:04X} {} {} x {} {value}",
     ///             entry.directory(),
     ///             entry.tag(),
     ///             entry.name().unwrap_or(""),

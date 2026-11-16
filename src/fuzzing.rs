@@ -236,12 +236,14 @@ fn read_entry(entry: &Entry) {
 }
 
 /// Asks `value` for each of its forms, as a caller showing it would: its
-/// type, its length, its bytes, its text and its `Debug` form.
+/// type, its length, its bytes, its text, its short form, cut by default
+/// and at no value, and its `Debug` form.
 fn read_value(value: &Value) {
     let _ = value.field_type();
     let _ = (value.len(), value.is_empty());
     let _ = value.bytes();
     let _ = value.text();
+    let _ = format!("{} {:.0}", value.display(), value.display());
     let _ = format!("{value:?}");
 }
 

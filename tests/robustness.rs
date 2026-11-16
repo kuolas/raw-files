@@ -523,18 +523,21 @@ fn show_entry(entry: &Entry, out: &mut String) {
 }
 
 /// Writes `value` to `out` in the forms the library gives it: its type,
-/// its length, its bytes' length and its text where it has them. The
-/// value itself goes to `black_box` rather than through `Debug`: a
-/// MakerNote's is a hundred kilobytes, written for every damaged copy.
+/// its length, its bytes' length and its text where it has them, and its
+/// short form, cut by default and at no value. The value itself goes to
+/// `black_box` rather than through `Debug`: a MakerNote's is a hundred
+/// kilobytes, written for every damaged copy.
 fn show_value(value: &Value, out: &mut String) {
     let _ = write!(
         out,
-        "{} {} {} {:?} {:?}",
+        "{} {} {} {:?} {:?} {} {:.0}",
         value.field_type(),
         value.len(),
         value.is_empty(),
         value.bytes().map(<[u8]>::len),
         value.text(),
+        value.display(),
+        value.display(),
     );
     black_box(value);
 }

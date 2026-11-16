@@ -28,6 +28,7 @@
 //! | Every entry of the file's TIFF directories | [`CameraFile::entries`] | [`Entries`] of [`Entry`] |
 //! | One entry, by its directory and a tag of [`tags`] | [`Entries::entry`] | [`Entry`] |
 //! | One entry's value | [`CameraFile::read_value`] | [`Value`] |
+//! | A value's short form, to print | [`Value::display`] | [`ValueDisplay`] |
 //!
 //! The metadata is read when the file is opened. Each of its values comes
 //! from one method of [`Metadata`]:
@@ -411,7 +412,7 @@ pub use camera_settings::{
     MeteringMode, RawImageSize, Shutter, WhiteBalance, WhiteBalanceMode,
 };
 pub use datetime::DateTime;
-pub use entries::{Directory, Entries, Entry, FieldType, Value};
+pub use entries::{Directory, Entries, Entry, FieldType, Value, ValueDisplay};
 pub use error::{Error, ErrorKind, Result};
 pub use file::CameraFile;
 pub use focus::{

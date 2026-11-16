@@ -71,7 +71,7 @@ Linux and Windows alike.
 - **Every entry.** Every entry of the TIFF directories raw-files walks,
   as the file records it. Each comes with its directory, tag, type and
   count, and the name a published standard gives its tag. Its value is
-  read when asked for.
+  read when asked for, and has a short form to print.
   [`CameraFile::entries`](https://docs.rs/raw-files/latest/raw_files/struct.CameraFile.html#method.entries)
   lists the directories.
 - **Not yet.** Decoding the raw sensor data. The
