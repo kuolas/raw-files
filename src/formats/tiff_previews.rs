@@ -39,12 +39,11 @@ use std::io::{Read, Seek};
 
 use crate::container::jpeg;
 use crate::container::tiff::tags::{
-    BITS_PER_SAMPLE, COMPRESSION, JPEG_INTERCHANGE_FORMAT, JPEG_INTERCHANGE_FORMAT_LENGTH,
-    NEW_SUBFILE_TYPE, ORIENTATION, PHOTOMETRIC_INTERPRETATION, STRIP_BYTE_COUNTS, STRIP_OFFSETS,
-    TILE_BYTE_COUNTS, TILE_LENGTH, TILE_OFFSETS, TILE_WIDTH,
+    BITS_PER_SAMPLE, STRIP_BYTE_COUNTS, STRIP_OFFSETS, TILE_BYTE_COUNTS, TILE_LENGTH, TILE_OFFSETS,
+    TILE_WIDTH,
 };
-use crate::container::tiff::{Block, Ifd, Tree};
-use crate::error::{Result, skip_damage};
+use crate::container::tiff::{Block, Held, Ifd, Tree};
+use crate::error::{Error, Result, skip_damage};
 use crate::geometry::Size;
 use crate::io::{Source, within};
 use crate::orientation::Orientation;
@@ -77,6 +76,39 @@ const FULL_RESOLUTION: u32 = 0;
 /// The tags of an image stored in tiles, which only raw data is.
 const TILE_TAGS: [u16; 4] = [TILE_WIDTH, TILE_LENGTH, TILE_OFFSETS, TILE_BYTE_COUNTS];
 
+/// The rules of the six tags the finder reads as one number each: their
+/// numbers, from [`tags`](crate::container::tiff::tags), and the shape
+/// their value must have to be read, one SHORT or LONG.
+/// [`Ifd::held`] reads them.
+///
+/// TIFF 6.0 asks a reader to accept BYTE, SHORT or LONG for an unsigned
+/// integer, and says nothing of another count. BYTE is left out: no
+/// measured file writes one of these tags so. A tag of another type or
+/// count is not read. Orientation, Compression and the two JPEG tags then
+/// say nothing, as missing ones do. PhotometricInterpretation or
+/// NewSubfileType then leaves the IFD's role unknown, unless another tag
+/// says it holds raw data ([`is_raw`]). The notes record the shapes
+/// measured (`docs/formats/tag-names.md`, section 2). BitsPerSample,
+/// StripOffsets and StripByteCounts hold one value per sample or strip,
+/// and are read whole ([`Ifd::u32s`]).
+mod rules {
+    use crate::container::tiff::tags;
+    use crate::container::tiff::{FieldType, Held};
+
+    /// One unsigned number, a SHORT or a LONG.
+    const NUMBER: &[FieldType] = &[FieldType::Short, FieldType::Long];
+
+    pub(super) const NEW_SUBFILE_TYPE: Held<[u32; 1]> = Held::new(tags::NEW_SUBFILE_TYPE, NUMBER);
+    pub(super) const COMPRESSION: Held<[u32; 1]> = Held::new(tags::COMPRESSION, NUMBER);
+    pub(super) const PHOTOMETRIC_INTERPRETATION: Held<[u32; 1]> =
+        Held::new(tags::PHOTOMETRIC_INTERPRETATION, NUMBER);
+    pub(super) const ORIENTATION: Held<[u32; 1]> = Held::new(tags::ORIENTATION, NUMBER);
+    pub(super) const JPEG_INTERCHANGE_FORMAT: Held<[u32; 1]> =
+        Held::new(tags::JPEG_INTERCHANGE_FORMAT, NUMBER);
+    pub(super) const JPEG_INTERCHANGE_FORMAT_LENGTH: Held<[u32; 1]> =
+        Held::new(tags::JPEG_INTERCHANGE_FORMAT_LENGTH, NUMBER);
+}
+
 /// Where a preview may be, as declared, to be checked like every other. It
 /// is an IFD's, or one a format found outside the tree, such as a
 /// MakerNote's preview or an image of a JPEG file's MPF list.
@@ -107,7 +139,7 @@ pub(crate) struct Candidate {
 ///
 /// `Io` when the reader fails, whether reading a tag value or probing a
 /// candidate. A tag value that cannot be read for any other reason costs
-/// its IFD's preview, or, for IFD0's Orientation, the orientation. Probing
+/// its IFD's preview. Probing
 /// returns no other error here: it can fail with `Malformed` only on a
 /// range that runs past the end of the file, and no candidate that does is
 /// probed.
@@ -116,7 +148,7 @@ pub(crate) fn find<R: Read + Seek>(
     tree: &Tree,
     extra: &[Candidate],
 ) -> Result<Vec<Preview>> {
-    let orientation = orientation(src, tree)?;
+    let orientation = orientation(tree);
     let mut candidates = tree_candidates(src, tree)?;
     candidates.extend_from_slice(extra);
     check(src, &candidates, orientation)
@@ -130,7 +162,8 @@ pub(crate) fn find<R: Read + Seek>(
 /// ([`Link::holds_no_image`](crate::container::tiff::Link::holds_no_image)).
 /// An IFD that describes raw data ([`is_raw`]) is skipped with whatever it
 /// points at. So is an IFD whose tags these rules read cannot be read,
-/// such as a value over the cap on one value. Each other IFD gives the
+/// such as a value over the cap on one value, or a role tag of another
+/// shape. Each other IFD gives the
 /// stream it declares ([`declared`]).
 ///
 /// # Errors
@@ -214,21 +247,18 @@ pub(crate) fn check<R: Read + Seek>(
 }
 
 /// The orientation of every preview: IFD0's Orientation, which describes
-/// the capture, or none when it is missing, cannot be read or is not one of
-/// the eight Exif values. The Orientation of any other IFD is ignored.
+/// the capture, or none when it is missing, is not one SHORT or LONG
+/// ([`rules`]) or is not one of the eight Exif values. The Orientation of
+/// any other IFD is ignored.
 ///
 /// The metadata reader (`tiff_metadata`) gives the file's metadata this
 /// orientation too, so that the metadata and the previews never disagree.
-///
-/// # Errors
-///
-/// `Io` when the reader fails.
-pub(crate) fn orientation<R: Read + Seek>(src: &mut Source<R>, tree: &Tree) -> Result<Orientation> {
-    Ok(skip_damage(tree.ifd0().u32(src, ORIENTATION))?
-        .flatten()
-        .and_then(|value| u16::try_from(value).ok())
+pub(crate) fn orientation(tree: &Tree) -> Orientation {
+    tree.ifd0()
+        .held(rules::ORIENTATION)
+        .and_then(|[value]| u16::try_from(value).ok())
         .and_then(Orientation::from_exif)
-        .unwrap_or(Orientation::NoTransforms))
+        .unwrap_or(Orientation::NoTransforms)
 }
 
 /// Whether `ifd` describes raw data, by the role its tags give it, so that
@@ -245,20 +275,19 @@ pub(crate) fn orientation<R: Read + Seek>(src: &mut Source<R>, tree: &Tree) -> R
 /// the finder and the metadata agree on which IFDs hold it.
 ///
 /// A tag whose value the test reads says nothing either way when it is
-/// missing or not of an integer type that [`Ifd::u32s`] reads. A tile tag
-/// counts by its presence alone, whatever its type.
+/// missing, or, for BitsPerSample, of a type other than SHORT, LONG or IFD.
+/// A tile tag counts by its presence alone, whatever its type.
 ///
 /// # Errors
 ///
-/// `LimitExceeded` when the BitsPerSample, which [`Ifd::u32s`] reads
-/// whole, is longer than the cap the IFD was read under; `Io` when the
-/// reader fails. The other tags are read for their first value alone
-/// ([`Ifd::u32`]), which no cap refuses.
+/// `Malformed` when the PhotometricInterpretation or the NewSubfileType is
+/// not one SHORT or LONG ([`role`]) and no other tag says the IFD holds
+/// raw data; `LimitExceeded` when the
+/// BitsPerSample, which [`Ifd::u32s`] reads whole, is longer than the cap
+/// the IFD was read under; `Io` when the reader fails.
 pub(crate) fn is_raw<R: Read + Seek>(src: &mut Source<R>, ifd: &Ifd) -> Result<bool> {
-    if matches!(
-        ifd.u32(src, PHOTOMETRIC_INTERPRETATION)?,
-        Some(CFA | LINEAR_RAW)
-    ) {
+    let photometric = role(ifd, rules::PHOTOMETRIC_INTERPRETATION);
+    if matches!(photometric, Ok(Some(CFA | LINEAR_RAW))) {
         return Ok(true);
     }
     // Samples wider than a JPEG preview's are raw data, whatever the
@@ -274,7 +303,33 @@ pub(crate) fn is_raw<R: Read + Seek>(src: &mut Source<R>, ifd: &Ifd) -> Result<b
     if TILE_TAGS.iter().any(|&tag| ifd.entry(tag).is_some()) {
         return Ok(true);
     }
-    Ok(ifd.u32(src, NEW_SUBFILE_TYPE)? == Some(FULL_RESOLUTION))
+    let subfile = role(ifd, rules::NEW_SUBFILE_TYPE);
+    if matches!(subfile, Ok(Some(FULL_RESOLUTION))) {
+        return Ok(true);
+    }
+    // No tag says raw data, so a tag of the IFD's role that cannot be read
+    // leaves what the IFD holds unknown.
+    photometric?;
+    subfile?;
+    Ok(false)
+}
+
+/// The value of the tag of `ifd` that `rule` names, a tag that says what
+/// the IFD's image is for; `None` when the IFD has no such tag.
+///
+/// # Errors
+///
+/// `Malformed`, at the IFD, when the tag is not one SHORT or LONG: what
+/// the IFD says of itself is then unknown, as when a tag cannot be read.
+fn role(ifd: &Ifd, rule: Held<[u32; 1]>) -> Result<Option<u32>> {
+    match ifd.held(rule) {
+        Some([value]) => Ok(Some(value)),
+        None if ifd.entry(rule.tag()).is_some() => Err(Error::malformed(
+            "a tag of an IFD's role is not one SHORT or LONG",
+            ifd.offset(),
+        )),
+        None => Ok(None),
+    }
 }
 
 /// Where `ifd` says its JPEG stream is, if it says so:
@@ -296,16 +351,16 @@ pub(crate) fn is_raw<R: Read + Seek>(src: &mut Source<R>, ifd: &Ifd) -> Result<b
 ///
 /// `LimitExceeded` when the StripOffsets or the StripByteCounts, which
 /// [`Ifd::u32s`] reads whole, is longer than the cap the IFD was read
-/// under; `Io` when the reader fails. The other tags are read for their
-/// first value alone ([`Ifd::u32`]), which no cap refuses.
+/// under; `Io` when the reader fails. The other tags are held in their
+/// entries ([`Ifd::held`]), so reading them cannot fail.
 fn declared<R: Read + Seek>(src: &mut Source<R>, ifd: &Ifd) -> Result<Option<Candidate>> {
     let block = ifd.block().within_file(src.len());
-    let offset = ifd.u32(src, JPEG_INTERCHANGE_FORMAT)?;
-    let length = ifd.u32(src, JPEG_INTERCHANGE_FORMAT_LENGTH)?;
-    if let (Some(offset), Some(length)) = (offset, length) {
+    let offset = ifd.held(rules::JPEG_INTERCHANGE_FORMAT);
+    let length = ifd.held(rules::JPEG_INTERCHANGE_FORMAT_LENGTH);
+    if let (Some([offset]), Some([length])) = (offset, length) {
         return Ok(candidate(&block, offset, length));
     }
-    if !matches!(ifd.u32(src, COMPRESSION)?, Some(OLD_STYLE_JPEG | JPEG)) {
+    if !matches!(ifd.held(rules::COMPRESSION), Some([OLD_STYLE_JPEG | JPEG])) {
         return Ok(None);
     }
     let offsets = ifd.u32s(src, STRIP_OFFSETS)?;
@@ -344,13 +399,19 @@ fn inside(candidate: Candidate, file_len: u64) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::container::tiff::tags::{
+        COMPRESSION, JPEG_INTERCHANGE_FORMAT, JPEG_INTERCHANGE_FORMAT_LENGTH, NEW_SUBFILE_TYPE,
+        ORIENTATION, PHOTOMETRIC_INTERPRETATION,
+    };
     use crate::container::tiff::{parse_ifd, walk};
     use crate::error::ErrorKind;
     use crate::formats::testing::byte_order;
     use crate::jpeg_stub::jpeg_stub;
     use crate::limits::Limits;
     use crate::testing::{FAR, FailsFar, size};
-    use crate::tiff_builder::{BlobId, Built, IfdId, Order, RawValue, SHORT, TiffBuilder};
+    use crate::tiff_builder::{
+        BYTE, BlobId, Built, IFD, IfdId, LONG, Order, RawValue, SHORT, SLONG, TiffBuilder,
+    };
     use std::io::Cursor;
     use std::ops::Range;
 
@@ -516,7 +577,7 @@ mod tests {
     #[test]
     fn a_cfa_ifd_is_raw_data() {
         let previews = one_ifd(|builder, ifd| {
-            builder.short(ifd, PHOTOMETRIC_INTERPRETATION, &[32803]);
+            builder.short(ifd, PHOTOMETRIC_INTERPRETATION, &[CFA as u16]);
         });
         assert_eq!(previews, []);
     }
@@ -937,22 +998,187 @@ mod tests {
         }
     }
 
+    /// Where the tests of a tag's shape place their JPEG.
+    const AT: u32 = 4096;
+
+    /// Each shape the tests write a tag of one number in: its type, its
+    /// count, and whether the finder reads it. Only one SHORT or one LONG
+    /// is read.
+    const SHAPES: [(u16, u32, bool); 9] = [
+        (SHORT, 1, true),
+        (LONG, 1, true),
+        (SHORT, 2, false),
+        (LONG, 2, false),
+        (SHORT, 0, false),
+        (LONG, 0, false),
+        (IFD, 1, false),
+        (SLONG, 1, false),
+        (BYTE, 4, false),
+    ];
+
+    /// Gives `ifd` tag `tag` as `count` values of type `typ`, each `value`
+    /// (the first four bytes of a value of another type). A value of four
+    /// bytes or less is held in the entry; two LONGs are stored apart.
+    fn shaped(
+        builder: &mut TiffBuilder,
+        order: Order,
+        ifd: IfdId,
+        (tag, value): (u16, u32),
+        (typ, count): (u16, u32),
+    ) {
+        let shape = (typ, count);
+        let [a, b] = order.u16(u16::try_from(value).unwrap());
+        match shape {
+            (LONG, 2) => builder.long(ifd, tag, &[value, value]),
+            (SHORT, 2) => builder.raw(ifd, tag, SHORT, 2, RawValue::Inline([a, b, a, b])),
+            (SHORT, _) => builder.raw(ifd, tag, SHORT, count, RawValue::Inline([a, b, 0, 0])),
+            _ => builder.raw(ifd, tag, typ, count, RawValue::Inline(order.u32(value))),
+        };
+    }
+
     #[test]
-    fn an_unreadable_orientation_means_none() {
+    fn each_tag_of_one_number_is_read_only_as_one_short_or_long() {
+        let stub = jpeg_stub(640, 480, 0xC0);
+        let len = u32::try_from(stub.len()).unwrap();
+        // Each tag, with a value that changes what the finder gives; the
+        // other tags its IFD holds to describe the JPEG at `AT`; and whether
+        // the previews show that the tag was read.
+        type Others = fn(&mut TiffBuilder, IfdId, u32);
+        type Read = fn(&[Preview]) -> bool;
+        let pointed: Others = |builder, ifd, len| {
+            builder.long(ifd, JPEG_INTERCHANGE_FORMAT, &[AT]);
+            builder.long(ifd, JPEG_INTERCHANGE_FORMAT_LENGTH, &[len]);
+        };
+        let rotated: Read = |previews| {
+            previews
+                .iter()
+                .map(Preview::orientation)
+                .eq([Orientation::Rotate90])
+        };
+        let found_one: Read = |previews| previews.len() == 1;
+        // The two tags of an IFD's role have a test of their own, below.
+        let cases: [((u16, u32), Others, Read); 4] = [
+            ((ORIENTATION, 6), pointed, rotated),
+            (
+                (JPEG_INTERCHANGE_FORMAT, AT),
+                |builder, ifd, len| {
+                    builder.long(ifd, JPEG_INTERCHANGE_FORMAT_LENGTH, &[len]);
+                },
+                found_one,
+            ),
+            (
+                (JPEG_INTERCHANGE_FORMAT_LENGTH, len),
+                |builder, ifd, _| {
+                    builder.long(ifd, JPEG_INTERCHANGE_FORMAT, &[AT]);
+                },
+                found_one,
+            ),
+            (
+                (COMPRESSION, OLD_STYLE_JPEG),
+                |builder, ifd, len| {
+                    builder.long(ifd, STRIP_OFFSETS, &[AT]);
+                    builder.long(ifd, STRIP_BYTE_COUNTS, &[len]);
+                },
+                found_one,
+            ),
+        ];
         for order in ORDERS {
+            for (tag, others, read) in cases {
+                for (typ, count, expected) in SHAPES {
+                    let mut builder = TiffBuilder::new(order);
+                    let ifd0 = builder.ifd();
+                    builder.blob_at(u64::from(AT), &stub);
+                    others(&mut builder, ifd0, len);
+                    shaped(&mut builder, order, ifd0, tag, (typ, count));
+                    let previews = found(&builder.build().bytes);
+                    let what = format!("{order:?} {:#06X} type {typ} count {count}", tag.0);
+                    assert_eq!(read(&previews), expected, "{what}: {previews:?}");
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn a_role_tag_of_another_shape_leaves_the_role_unknown() {
+        for order in ORDERS {
+            for tag in [
+                (PHOTOMETRIC_INTERPRETATION, CFA),
+                (NEW_SUBFILE_TYPE, FULL_RESOLUTION),
+            ] {
+                for (typ, count, read) in SHAPES {
+                    let mut builder = TiffBuilder::new(order);
+                    let ifd0 = builder.ifd();
+                    jpeg(&mut builder, ifd0, 640, 480);
+                    shaped(&mut builder, order, ifd0, tag, (typ, count));
+                    let bytes = builder.build().bytes;
+                    let what = format!("{order:?} {:#06X} type {typ} count {count}", tag.0);
+                    let mut src = Source::new(Cursor::new(bytes.clone())).unwrap();
+                    let file_block = Block::file(src.len());
+                    let tree = walk(&mut src, &file_block, &Limits::default()).unwrap();
+                    // Read, the tag says the IFD holds raw data; not read, what
+                    // the IFD is for is unknown.
+                    match is_raw(&mut src, tree.ifd0()) {
+                        Ok(raw) => assert!(read && raw, "{what}"),
+                        Err(err) => {
+                            assert!(!read, "{what}: {err:?}");
+                            assert_eq!(err.kind(), ErrorKind::Malformed, "{what}");
+                        }
+                    }
+                    // Either way, the IFD's JPEG is not taken.
+                    assert_eq!(found(&bytes), [], "{what}");
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn another_tag_that_says_raw_data_wins_over_a_role_tag_of_another_shape() {
+        for order in ORDERS {
+            // Each role tag as two values, beside a tag that says the IFD
+            // holds raw data: the other role tag, or a tile tag.
+            type Raw = fn(&mut TiffBuilder, IfdId);
+            let cases: [(u16, Raw); 3] = [
+                (NEW_SUBFILE_TYPE, |builder, ifd| {
+                    builder.short(ifd, PHOTOMETRIC_INTERPRETATION, &[CFA as u16]);
+                }),
+                (PHOTOMETRIC_INTERPRETATION, |builder, ifd| {
+                    builder.long(ifd, NEW_SUBFILE_TYPE, &[0]);
+                }),
+                (PHOTOMETRIC_INTERPRETATION, |builder, ifd| {
+                    builder.long(ifd, TILE_WIDTH, &[256]);
+                }),
+            ];
+            for (tag, raw) in cases {
+                let mut builder = TiffBuilder::new(order);
+                let ifd0 = builder.ifd();
+                builder.long(ifd0, tag, &[0, 0]);
+                raw(&mut builder, ifd0);
+                let bytes = builder.build().bytes;
+                let mut src = Source::new(Cursor::new(bytes)).unwrap();
+                let file_block = Block::file(src.len());
+                let tree = walk(&mut src, &file_block, &Limits::default()).unwrap();
+                let raw = is_raw(&mut src, tree.ifd0());
+                assert!(matches!(raw, Ok(true)), "{order:?} {tag:#06X}: {raw:?}");
+            }
+        }
+    }
+
+    #[test]
+    fn a_thumbnail_offset_of_two_values_gives_no_preview() {
+        for order in ORDERS {
+            // IFD1 points at its thumbnail with two LONGs, the first of
+            // them the JPEG's offset, as a Nikon PreviewIFD that does is
+            // not read either. The tag takes one value.
+            let stub = jpeg_stub(160, 120, 0xC0);
+            let len = u32::try_from(stub.len()).unwrap();
             let mut builder = TiffBuilder::new(order);
-            let ifd0 = builder.ifd();
-            let sub = builder.ifd();
-            unreadable(&mut builder, ifd0, ORIENTATION);
-            jpeg(&mut builder, sub, 640, 480);
-            builder.subifds(ifd0, &[sub]);
-            let previews = found(&builder.build().bytes);
-            assert_eq!(sizes(&previews), [size(640, 480)], "{order:?}");
-            assert_eq!(
-                previews[0].orientation(),
-                Orientation::NoTransforms,
-                "{order:?}"
-            );
+            let (ifd0, ifd1) = (plain_ifd(&mut builder), builder.ifd());
+            builder.next(ifd0, Some(ifd1));
+            builder.blob_at(u64::from(AT), &stub);
+            builder.short(ifd1, COMPRESSION, &[6]);
+            builder.long(ifd1, JPEG_INTERCHANGE_FORMAT, &[AT, AT]);
+            builder.long(ifd1, JPEG_INTERCHANGE_FORMAT_LENGTH, &[len]);
+            assert_eq!(found(&builder.build().bytes), [], "{order:?}");
         }
     }
 

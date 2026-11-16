@@ -28,29 +28,33 @@
 //!
 //! There are two ways to read a value:
 //!
-//! - **By rule**, as the metadata and MakerNote readers do: [`Ifd::get`]
-//!   and [`Ifd::held`]. The tag's type and count are checked against the
+//! - **By rule**, as the metadata and MakerNote readers do, and the walk
+//!   and the preview finder for the tags of one number: [`Ifd::get`] and
+//!   [`Ifd::held`]. The tag's type and count are checked against the
 //!   rule before anything is read. A tag of another type or count, such as
 //!   one SHORT given two, records nothing a reader can trust: it gives
 //!   nothing, and even its first value is not taken (ADR011). Damage gives
 //!   `None`, and a failure of the reader is the only error.
-//! - **By tag number**, as the walk, the preview finder and format
-//!   detection do: the accessors such as [`Ifd::u32s`]. These pass damage
+//! - **By tag number**, as the walk and the preview finder read an array,
+//!   such as the SubIFDs, and format detection reads the Make: the
+//!   accessors such as [`Ifd::u32s`]. These pass damage
 //!   up as an error, `LimitExceeded` for a value over the cap, since their
 //!   callers skip a whole IFD on it, or decide a file's format by it.
 //!
 //! An IFD keeps the cap on one value of the limits it was read with,
 //! [`Limits::max_value_bytes`]. No accessor reads a longer value stored
-//! out of line, but those that read a tag's first value alone, never more
-//! than eight bytes: [`Ifd::u32`], and [`Ifd::get`] with a
-//! [`First`](super::rule::First) rule. So one number bounds every other
+//! out of line, but [`Ifd::get`] with a [`First`](super::rule::First)
+//! rule, which reads a tag's first value alone, never more than eight
+//! bytes. So one number bounds every other
 //! value, those raw-files reads for the metadata and the previews as much
 //! as those a caller reads.
 
 use std::io::{Read, Seek};
 use std::ops::Range;
 
-use super::rule::{Element, Held, Rule, Shape};
+#[cfg(any(test, fuzzing))]
+use super::rule::Element;
+use super::rule::{Held, Rule, Shape};
 use super::{Block, FieldType};
 use crate::error::{Error, ErrorKind, Result, damage_kind, skip_damage};
 use crate::io::{ByteOrder, Source, within};
@@ -428,10 +432,14 @@ impl Ifd {
     /// the value is never refused for its length as [`u32s`](Self::u32s)
     /// refuses it.
     ///
+    /// Only the tests and the fuzz entry read a number this way: the
+    /// readers read each number by a rule, of its type and count.
+    ///
     /// # Errors
     ///
     /// `Io` if the reader fails: the value lies inside the file, as every
     /// kept entry's does, so nothing else can go wrong.
+    #[cfg(any(test, fuzzing))]
     pub(crate) fn u32<R: Read + Seek>(&self, src: &mut Source<R>, tag: u16) -> Result<Option<u32>> {
         let Some(entry) = self.entry_of_type(tag, u32::TYPES) else {
             return Ok(None);

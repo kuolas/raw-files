@@ -151,6 +151,26 @@ does. An entry that can break a caller opens with **Breaking:**.
   WorldTime and CropHiSpeed, and a DNG default crop. A hostile file now
   costs less reading. A source that fails at such a value no longer
   makes opening the file fail.
+- Nine standard tags of one number are now read only as one SHORT or
+  LONG, or one IFD for a pointer
+  ([#158](https://github.com/kuolas/raw-files/issues/158)). Each was
+  read by its first value, whatever its count. A tag of another count
+  or type is no longer read:
+  - an Exif, GPS or Interoperability IFD tag: its directory is not
+    read, and `Entries::skipped_directories` lists the link, with no
+    offset, counted toward `Limits::max_ifds` as every link it lists;
+  - JPEGInterchangeFormat or JPEGInterchangeFormatLength: the directory
+    gives no preview through them;
+  - PhotometricInterpretation or NewSubfileType: unless another tag
+    says the directory holds raw data, what it holds is unknown, so it
+    gives no preview and no raw size, as a directory whose tags cannot
+    be read;
+  - Compression: the directory gives no preview from its strip;
+  - IFD0's Orientation: the previews and the metadata take
+    `Orientation::NoTransforms`, as for a missing tag.
+
+  No file measured writes one of the nine at another count, so none
+  changes.
 - `Entry::name` now gives "SubIFDs" for tag 0x014A in IFD0, the IFDs
   chained after it and the SubIFDs
   ([#90](https://github.com/kuolas/raw-files/issues/90)). The name comes
@@ -165,12 +185,12 @@ does. An entry that can break a caller opens with **Breaking:**.
   value alone when the file gives it many
   ([#114](https://github.com/kuolas/raw-files/issues/114),
   [#109](https://github.com/kuolas/raw-files/issues/109)). Such tags
-  include the offsets of the Exif and GPS directories, the orientation,
-  the ISO, and the exposure time, f-number, focal length and exposure
-  bias.
+  are the three tags of the ISO, the exposure time, the f-number, the
+  focal length, the exposure bias, and the width and height of the raw
+  size.
   One longer than the cap on one value (`Limits::max_value_bytes`) was
-  refused, taking with it its value or the directory or preview it
-  locates. A shorter one was copied whole to use its first value.
+  refused, taking its value with it. A shorter one was copied whole to
+  use its first value.
 - A Nikon MakerNote's small preview is found only when the pointer to
   it, its offset and its length are each one LONG
   ([#110](https://github.com/kuolas/raw-files/issues/110)). That is how

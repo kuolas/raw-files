@@ -98,6 +98,34 @@ An entry's type says how its value is stored. TIFF 6.0 defines twelve
 | 11 | FLOAT | a 4-byte IEEE floating-point number |
 | 12 | DOUBLE | an 8-byte IEEE floating-point number |
 
+TIFF 6.0 lets a writer choose among them for a number: "TIFF readers
+should accept BYTE, SHORT, or LONG values for any unsigned integer
+field" (Section 2, p. 16) [1]. It says nothing of a count other than
+the one a tag's definition gives.
+
+- **raw-files reads nine tags of one number only at a count of 1**, as
+  SHORT or LONG: Compression, Orientation, PhotometricInterpretation,
+  NewSubfileType, JPEGInterchangeFormat and
+  JPEGInterchangeFormatLength, and the pointers to the Exif, GPS and
+  Interoperability IFDs, which it also reads as IFD (below). BYTE is
+  not taken: no file measured writes one of the nine so. A tag of
+  another type or count is not read. A pointer of another type or count
+  is listed among the directories left out
+  (`Entries::skipped_directories`). A PhotometricInterpretation or
+  NewSubfileType of another shape leaves what its IFD holds unknown, so
+  the IFD gives no preview and no raw size, unless another tag says it
+  is raw data.
+- **Every file measured writes each of the nine at a count of 1.**
+  Counted on 16 November 2026 through the raw view, in IFD0, the IFDs
+  chained after it, the SubIFDs and the Exif IFD: the 651 public files
+  that open (144 samples and fixtures, 507 of the raw.pixls.us clone),
+  and 57,334 of my own.
+- **The types are the ones the standards give**, but for one file.
+  Orientation, PhotometricInterpretation and Compression are SHORTs,
+  and NewSubfileType, JPEGInterchangeFormat, JPEGInterchangeFormatLength
+  and the three pointers LONGs. The one exception is a Coolpix A1000
+  NRW of raw.pixls.us, which writes Compression as a LONG.
+
 Exif uses eight of them (1 to 5, 7, 9 and 10) and adds one of its own
 (section 4.6.2, "IFD Structure", pp. 27 to 28) [2]:
 
