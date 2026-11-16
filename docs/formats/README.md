@@ -17,7 +17,7 @@ Each folder's README lists its pages and says where to start.
 ## The pages all formats share
 
 - [tag-names.md](tag-names.md): every name raw-files gives a TIFF tag,
-  with the standard that gives it, and the field types.
+  with the document that gives it, and the field types.
 - [camera-names.md](camera-names.md): how a camera's Make and Model
   texts are read into its maker's and its model's names.
 - [sample-files.md](sample-files.md): how a sample file comes in,
