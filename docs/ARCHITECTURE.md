@@ -92,7 +92,7 @@ adds a row.
 | `src/container/tiff/rule.rs` | Tag rules: `Rule` and `Held`, a tag's number and the field types its value may have, in a shape that sets its count. | `rational`, `io` |
 | `src/container/tiff/tags.rs` | The TIFF and Exif tags the crate reads, each documented for what a reader does with it, its number taken from `tags`. | `tags` |
 | `src/container/tiff/field_type.rs` | `FieldType`: the one table of the TIFF field types, each with its code, size and name. | — |
-| `src/container/tiff/walk.rs` | The IFD walk inside a block: it follows the links from IFD0 and returns every IFD it finds as a `Tree`, bounded on any input. | `io`, `error`, `limits` |
+| `src/container/tiff/walk.rs` | The IFD walk inside a block: it follows the links from IFD0 and returns every IFD it finds as a `Tree`, with each link it did not follow, bounded on any input. | `io`, `error`, `limits` |
 | `src/container/tiff/robustness.rs` | Tests only: the whole TIFF reader on truncated and corrupted files, which give an error or a tree within the limits, never a panic. | — |
 | `src/container/jpeg/mod.rs` | The JPEG container: one walk over a stream's marker segments, the probe that sizes a preview and the walk over a JPEG file. | `io`, `error`, `container/tiff` (for `Block`) |
 | `src/container/jpeg/mpf.rs` | The MPF index of a JPEG file: where the images the file holds after its first one lie, such as its large thumbnails. | `io`, `error`, `limits`, `container/tiff` |
