@@ -10,6 +10,18 @@ does. An entry that can break a caller opens with **Breaking:**.
 
 ## [Unreleased]
 
+### Added
+
+- `DateTime::to_local_nanoseconds` and `DateTime::to_unix_nanoseconds`
+  each give a number to sort times by
+  ([#103](https://github.com/kuolas/raw-files/issues/103)). A caller
+  built one from seven getters before:
+  - the local number orders the pictures of one camera's clock;
+  - the Unix number orders times from any clocks, and is `None` for a
+    time without an offset from UTC.
+
+  `DateTime` itself still has no order.
+
 ### Changed
 
 - **Breaking:** `RawFile` is now `CameraFile`. The handle opens JPEG
