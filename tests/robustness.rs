@@ -490,14 +490,14 @@ fn open_and_read_everything(bytes: &[u8]) -> bool {
     };
     let mut seen = String::new();
     show_metadata(file.metadata(), &mut seen);
-    for preview in file.previews().to_vec() {
-        let _ = black_box(file.read_preview(&preview));
+    for preview in file.previews() {
+        let _ = black_box(file.read_preview(preview));
     }
-    let entries = file.entries().clone();
+    let entries = file.entries();
     for &directory in entries.directories() {
         let _ = write!(seen, "{directory} {}", entries.skipped(directory));
     }
-    for entry in &entries {
+    for entry in entries {
         show_entry(entry, &mut seen);
         if let Ok(value) = file.read_value(entry) {
             show_value(&value, &mut seen);

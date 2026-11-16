@@ -1190,8 +1190,8 @@ fn check_stripped_z9(expected: &StrippedZ9) {
         expected.previews.map(as_size),
         "{label}"
     );
-    let previews = file.previews().to_vec();
-    for preview in &previews {
+    let previews = file.previews();
+    for preview in previews {
         let size = preview.size();
         assert_eq!(preview.format(), PreviewFormat::Jpeg, "{label} {size:?}");
         assert_eq!(
@@ -2004,8 +2004,8 @@ fn the_d600_frame_4_gives_its_previews_metadata_and_point_38_placed_from_the_tab
         [(570, 375), (1632, 1080), (6016, 4016)].map(as_size),
         "{label}"
     );
-    let previews = file.previews().to_vec();
-    for preview in &previews {
+    let previews = file.previews();
+    for preview in previews {
         let size = preview.size();
         assert_eq!(preview.format(), PreviewFormat::Jpeg, "{label} {size:?}");
         assert_eq!(

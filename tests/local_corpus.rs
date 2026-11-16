@@ -515,15 +515,15 @@ struct EntriesTally {
 
 impl EntriesTally {
     /// Counts the entries of `file` and reads every value.
-    fn record<R: Read + Seek>(&mut self, file: &mut CameraFile<R>) {
-        let entries = file.entries().clone();
+    fn record<R: Read + Seek>(&mut self, file: &CameraFile<R>) {
+        let entries = file.entries();
         for &directory in entries.directories() {
             let counts = self.directories.entry(directory.to_string()).or_default();
             counts.0 += 1;
             counts.1 += entries.in_directory(directory).len();
             counts.2 += u64::from(entries.skipped(directory));
         }
-        for entry in &entries {
+        for entry in entries {
             *self
                 .types
                 .entry(entry.field_type().to_string())
@@ -1337,7 +1337,7 @@ fn check(path: &Path, tally: &mut Tally) {
         file,
         bytes_read: Rc::clone(&bytes_read),
     };
-    let mut camera_file = match CameraFile::from_reader(reader) {
+    let camera_file = match CameraFile::from_reader(reader) {
         Ok(camera_file) => camera_file,
         Err(error) => {
             tally.fail(error.kind());
@@ -1361,7 +1361,7 @@ fn check(path: &Path, tally: &mut Tally) {
     tally.metadata.record(camera_file.metadata());
     tally.settings.record(camera_file.metadata());
     tally.focus.record(camera_file.metadata());
-    tally.entries.record(&mut camera_file);
+    tally.entries.record(&camera_file);
     let Some(preview) = camera_file.largest_preview() else {
         tally.no_preview += 1;
         return;

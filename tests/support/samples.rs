@@ -256,7 +256,7 @@ pub fn check(sample: &Sample, format: Format) {
         .collect();
     assert_eq!(sizes(file.previews()), expected_sizes, "{label}");
 
-    let previews = file.previews().to_vec();
+    let previews = file.previews();
     for (preview, jpeg) in previews.iter().zip(sample.previews) {
         let size = preview.size();
         assert_eq!(preview.format(), PreviewFormat::Jpeg, "{label} {size:?}");
@@ -818,8 +818,8 @@ pub fn check_entries(expected: &SampleEntries) {
         return;
     };
     let label = expected.file;
-    let mut file = CameraFile::open(&path).unwrap();
-    let entries = file.entries().clone();
+    let file = CameraFile::open(&path).unwrap();
+    let entries = file.entries();
     let found: Vec<(String, usize, u32)> = entries
         .directories()
         .iter()
@@ -838,28 +838,28 @@ pub fn check_entries(expected: &SampleEntries) {
         .collect();
     assert_eq!(found, want, "{label}");
 
-    for entry in &entries {
+    for entry in entries {
         let value = file.read_value(entry);
         assert!(value.is_ok(), "{label}: {entry:?}: {:?}", value.err());
     }
 
-    let text = |file: &mut CameraFile<std::fs::File>, directory, tag| -> Option<String> {
+    let text = |directory, tag| -> Option<String> {
         let entry = entries.entry(directory, tag)?;
         file.read_value(&entry).unwrap().text()
     };
     let camera = file.metadata().camera().clone();
     assert_eq!(
-        text(&mut file, Directory::Ifd(0), 0x010F).as_deref(),
+        text(Directory::Ifd(0), 0x010F).as_deref(),
         camera.recorded_make(),
         "{label}: Make"
     );
     assert_eq!(
-        text(&mut file, Directory::Ifd(0), 0x0110).as_deref(),
+        text(Directory::Ifd(0), 0x0110).as_deref(),
         camera.recorded_model(),
         "{label}: Model"
     );
     if let Some(time) = file.metadata().capture_time() {
-        let original = text(&mut file, Directory::Exif, 0x9003).expect("DateTimeOriginal");
+        let original = text(Directory::Exif, 0x9003).expect("DateTimeOriginal");
         assert_eq!(
             original.get(..4),
             Some(&*time.year().to_string()),
