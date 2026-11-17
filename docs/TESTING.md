@@ -209,7 +209,8 @@ CI runs three workflows, in
 
 - **commits and hooks**: every commit message against the `commit-msg`
   hook, no merge commits in the pull request, `scripts/test-hooks.sh`,
-  and every hook and script committed executable.
+  `shellcheck` over the scripts and the hooks, and every hook and
+  script committed executable.
 - **cargo**, on macOS, Linux and Windows: the six commands of
   [CONTRIBUTING.md](../CONTRIBUTING.md#code-style-and-checks), in the
   same order. On Linux, it fetches the sample files before the tests,

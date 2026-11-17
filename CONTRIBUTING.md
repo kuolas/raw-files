@@ -527,7 +527,9 @@ To skip them once, set `SKIP_HOOKS=1` (for example `SKIP_HOOKS=1 git push`).
 
 If you change `commit-msg`, run `scripts/test-hooks.sh`; CI runs it too. If
 you change a hook or a script, keep it executable in git:
-`git update-index --chmod=+x <file>`. CI checks this.
+`git update-index --chmod=+x <file>`. CI checks this. Run
+`shellcheck scripts/*.sh .githooks/*` too: CI runs version 0.11.0 and
+fails on any note it prints.
 
 ## Clean room and third-party code
 
