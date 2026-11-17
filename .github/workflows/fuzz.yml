@@ -65,7 +65,10 @@ jobs:
       # never hit a run days apart. The install, a minute or two, is repeated
       # each run, which a job this rare can afford; a pinned nightly would
       # cache, but would need bumping by hand.
-      - run: cargo install cargo-fuzz --locked
+      # cargo-fuzz is pinned, so a new release cannot change a run unseen.
+      # Dependabot does not watch it: raise the version by hand, after
+      # trying the new one locally (docs/TESTING.md §Fuzzing).
+      - run: cargo install cargo-fuzz --version 0.13.2 --locked
       # The corpus is what the fuzzer learned. Without it, ten minutes twice a
       # week never gets past what ten minutes from the seeds finds; with it,
       # every run starts from what the last one found. Each run restores the
