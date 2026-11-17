@@ -213,7 +213,8 @@ below, with the builders listed under [The tests](#the-tests).
 `src/lib.rs` includes the TIFF builder, the stub JPEG and the JPEG file
 builder with `#[path]` under `#[cfg(test)]`. So the unit tests and the
 integration tests share one copy of each, and none becomes part of the
-library.
+library. The published package carries these three files of
+`tests/support/` and no other, so its unit tests run from the package.
 
 The unit tests of any module may use `src/testing.rs`. Its failing
 reader lets a reader's tests tell a failure of the reader from damage in
