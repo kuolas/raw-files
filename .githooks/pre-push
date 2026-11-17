@@ -1,7 +1,9 @@
 #!/bin/sh
 # pre-push — refuse a direct push to master and any merge commit in the pushed
-# range, then run the fast checks (cargo fmt, cargo clippy). Tests are left to
-# CI and to the checks you run before opening a PR, so this stays quick.
+# range, then run the fast checks (cargo fmt, cargo clippy) on each commit the
+# push adds, as it was committed. A fix left in the working tree does not
+# count. Tests are left to CI and to the checks you run before opening a PR,
+# so this stays quick.
 #
 # Bypass once:  SKIP_HOOKS=1 git push
 set -eu
@@ -12,6 +14,9 @@ if [ -n "${SKIP_HOOKS:-}" ]; then
 	echo "pre-push: skipped (SKIP_HOOKS set)"
 	exit 0
 fi
+
+# The commits this push adds, from every ref it updates.
+new_commits=""
 
 # git feeds "<local ref> <local sha> <remote ref> <remote sha>" lines on stdin.
 while read -r _local_ref local_sha remote_ref _remote_sha; do
@@ -60,16 +65,68 @@ while read -r _local_ref local_sha remote_ref _remote_sha; do
 		EOF
 		exit 1
 	fi
+
+	# Oldest first, so the first commit that fails is the one named.
+	new_commits="$new_commits
+$(git rev-list --reverse "$local_sha" --not --remotes 2>/dev/null || true)"
 done
+
+# Each commit once, in order, even when two refs share it.
+commits="$(printf '%s\n' "$new_commits" | awk 'NF && !seen[$0]++')"
+if [ -z "$commits" ]; then
+	echo "pre-push: no new commits to check"
+	exit 0
+fi
 
 # Fast checks only: formatting and lint.
 if ! command -v cargo >/dev/null 2>&1; then
 	echo "pre-push: cargo not on PATH — fast gates skipped (CI still runs them)" >&2
 	exit 0
 fi
-echo "pre-push: cargo fmt --all --check"
-cargo fmt --all --check
-echo "pre-push: cargo clippy --workspace --all-targets"
-cargo clippy --workspace --all-targets --quiet -- -D warnings
+
+# Each commit is checked out in a throwaway worktree, so the checks see its
+# tree and nothing of yours: the checkout, its index and any stash stay as
+# they are. git may export GIT_DIR and friends to a hook; they would point
+# the worktree's commands back at your checkout.
+unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE
+tmp="$(mktemp -d "${TMPDIR:-/tmp}/raw-files-pre-push.XXXXXX")"
+wt="$tmp/tree"
+# A target directory of the hook's own, removed with the worktree. Within a
+# push, each commit rebuilds only what changed since the one before. Never
+# the checkout's: cargo would take what the hook built from a commit for a
+# build of the working tree, and miss an edit not yet committed.
+CARGO_TARGET_DIR="$tmp/target"
+export CARGO_TARGET_DIR
+cleanup() {
+	git worktree remove --force "$wt" >/dev/null 2>&1 || true
+	rm -rf "$tmp"
+}
+trap cleanup EXIT
+trap 'exit 1' HUP INT TERM
+git worktree add --detach --quiet "$wt" "$(printf '%s\n' "$commits" | head -n 1)"
+
+refuse() {
+	cat >&2 <<-EOF
+
+		pre-push: \`$1\` fails on $(git log -1 --format='%h %s' "$2").
+
+		  The hook checks each commit this push adds, as it was committed; a
+		  fix left in the working tree does not count. Fold the fix into that
+		  commit, then push again:
+
+		    git add <files> && git commit --fixup=$(git rev-parse --short "$2")
+		    git rebase -i --autosquash origin/$DEFAULT_BRANCH
+
+	EOF
+	exit 1
+}
+
+for c in $commits; do
+	git -C "$wt" checkout --quiet --force --detach "$c"
+	echo "pre-push: $(git log -1 --format='%h %s' "$c")"
+	(cd "$wt" && cargo fmt --all --check) || refuse "cargo fmt --all --check" "$c"
+	(cd "$wt" && cargo clippy --workspace --all-targets --quiet -- -D warnings) ||
+		refuse "cargo clippy --workspace --all-targets -- -D warnings" "$c"
+done
 
 echo "pre-push: ok"
