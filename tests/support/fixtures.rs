@@ -37,8 +37,13 @@ pub fn d600_frame(frame: u8) -> String {
     format!("nikon-d600/frame-{frame:02}.nef")
 }
 
+/// Frame 4 of the D600 session, `d600_frame(4)`, for a table's row:
+/// shot through the viewfinder with the single point 38, which the reader
+/// places from the D600's table.
+pub const D600_FRAME_4: &str = "nikon-d600/frame-04.nef";
+
 /// The camera's JPEG of frame 4 of the D600 session, the shot whose NEF
-/// is `d600_frame(4)`, made through the viewfinder with the single point
+/// is [`D600_FRAME_4`], made through the viewfinder with the single point
 /// 38, whose point the reader places from the D600's table as on the
 /// NEF.
 pub const D600_FRAME_4_JPEG: &str = "nikon-d600/frame-04.jpg";

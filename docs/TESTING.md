@@ -21,6 +21,8 @@ checks each file's SHA-256. It saves them into `raw-samples/` at the
 repository's root, a folder that git ignores and that `cargo clean`
 leaves alone. `cargo test` then runs those tests too. When the files are
 absent, those tests print a note and pass, so the suite runs offline.
+Seven of the committed fixtures have rows of the same kinds, in tables of
+their own, which are checked either way.
 `scripts/fetch-samples.sh nef` (or `arw`, or `jpeg`) fetches the files
 of one format only.
 

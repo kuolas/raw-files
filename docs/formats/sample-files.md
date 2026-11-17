@@ -78,6 +78,13 @@ without a row fails, even when no file has been downloaded. A `large`
 file's previews and metadata have tables of their own, apart from the
 `normal` files'. The one such file is an ARQ, in `tests/arw.rs`.
 
+The committed files of [`tests/fixtures/`](../../tests/fixtures/README.md)
+that have rows are in tables of the same types, `FIXTURES` and
+`FIXTURE_METADATA`, in `tests/nef.rs` and `tests/jpeg.rs`. A fixture's
+row is checked from `tests/fixtures/`, whether or not the samples are
+downloaded. Section 5 checks it as it checks a sample's row, on the
+committed file.
+
 What each field of a row means is said once, in the docs of the types,
 in [`tests/support/samples.rs`](../../tests/support/samples.rs). Those
 docs also say how a row records what the repository must not hold. A

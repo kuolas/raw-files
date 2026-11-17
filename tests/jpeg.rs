@@ -38,13 +38,12 @@
 
 mod support;
 
-use std::fs::File;
 use std::io::Cursor;
 use std::ops::Range;
 
 use raw_files::{
     Camera, CameraFile, CameraSettings, ColorSpace, DateTime, Directory, ErrorKind, Exposure,
-    ExposureProgram, FineTune, Flash, FlashMode, Focus, FocusAreaMode, FocusOrigin, FocusPoint,
+    ExposureProgram, FineTune, FlashMode, Focus, FocusAreaMode, FocusOrigin, FocusPoint,
     FocusPoints, Format, ImageArea, Lens, Limits, Make, Metadata, MeteringMode, Options,
     Orientation, Point, Preview, PreviewFormat, Rational, Shutter, SignedRational, Size, Value,
     WhiteBalance, WhiteBalanceMode,
@@ -86,9 +85,9 @@ use support::nef::{
     nikon_makernote_with, z9_af_info2,
 };
 use support::samples::{
-    Jpeg, Sample, SampleEntries, SampleFineTune, SampleFocus, SampleLens, SampleMetadata,
-    SampleSettings, SerialShape, Text, check, check_entries, check_every, check_metadata,
-    check_placeholder_description, check_tables,
+    Folder, Jpeg, Sample, SampleEntries, SampleFineTune, SampleFocus, SampleLens, SampleMetadata,
+    SampleSettings, SerialShape, Text, check, check_entries, check_every, check_fixture_tables,
+    check_metadata, check_placeholder_description, check_tables,
 };
 use support::tiff_builder::{EXIF_IFD, IfdId, ORDERS, Order, TiffBuilder};
 use support::{fraction, size_of};
@@ -2025,7 +2024,9 @@ fn a_limit_crossed_inside_the_sony_makernote_costs_its_focus_point_only() {
 // as the camera wrote it (`tests/fixtures/README.md`). They hold what the
 // files built in code only imitate: the camera's own Exif segment, every
 // tag at the camera's offset, with its MakerNote, IFD1's thumbnail, and
-// the MPF list of the images after the main one.
+// the MPF list of the images after the main one. They are checked by
+// rows of the same kinds as the downloaded samples', from
+// `tests/fixtures/`, whether or not the samples are downloaded.
 //
 // The values below were read from each file's bytes by a walk of its
 // structure that shares no code with the reader, with the rules of ADR011,
@@ -2034,519 +2035,538 @@ fn a_limit_crossed_inside_the_sony_makernote_costs_its_focus_point_only() {
 // Each focus point is, to the pixel, the point the reader gives on the raw
 // file of the same shot, scaled onto the same frame.
 
-/// What one of the three stripped Z 9 JPEGs must give.
-struct StrippedZ9Jpeg {
-    /// The file's name in `tests/fixtures/`.
-    file: &'static str,
-    /// The maker the reader recognizes from the Make, and the name the Make
-    /// and the Model give.
-    make: Make,
-    model: &'static str,
-    /// IFD0's Make, Model and Software.
-    recorded_make: &'static str,
-    recorded_model: &'static str,
-    software: &'static str,
-    /// The capture time, as [`DateTime`] displays it: DateTimeOriginal,
-    /// SubSecTimeOriginal and OffsetTimeOriginal.
-    capture_time: &'static str,
-    /// The exposure, each value as stored.
-    exposure_time: (u32, u32),
-    f_number: (u32, u32),
-    iso: u32,
-    focal_length: (u32, u32),
-    focal_length_in_35mm_film: u32,
-    exposure_bias: (i32, i32),
-    /// The lens from the Exif IFD: its make, its model, and its range, the
-    /// shortest and the longest focal length, then the f-number at each.
-    lens_recorded_make: Option<&'static str>,
-    lens_recorded_model: &'static str,
-    lens_range: [(u32, u32); 4],
-    /// IFD0's Orientation, which turns every preview.
-    orientation: Orientation,
-    /// The four previews, smallest first, each its byte range and size:
-    /// IFD1's thumbnail, the length IFD1 declares for it, the two images
-    /// of the MPF list, and the file itself, of its frame header's size.
-    previews: [(Range<u64>, (u16, u16)); 4],
-    /// The frame, the center and the area of the focus point the reader
-    /// gives, and whether the camera confirmed focus.
-    focus_frame: (u32, u32),
-    focus_center: (u32, u32),
-    focus_size: (u32, u32),
-    in_focus: bool,
-    /// The area mode the reader names from AFInfo2's byte 5, under the
-    /// detection method at byte 4, `None` for a code it does not name.
-    area_mode: Option<FocusAreaMode>,
-    /// The color temperature of the white balance the camera applied, in
-    /// kelvin: the MakerNote's ColorTemperatureAuto.
-    color_temperature: u32,
-    /// The image area, from the crop setting of the MakerNote's
-    /// CropHiSpeed.
-    image_area: ImageArea,
-}
-
-/// The FX shot, the camera's full output, at full size: CropHiSpeed
-/// `[11, 8280, 5520, 8280, 5520, 0, 0]` records no crop, so the point is as
-/// AFInfo2 records it, the center (4225, 2614) and the area 406 by 406 in
-/// the frame of 8256 by 5504, which is the JPEG's own size.
-const STRIPPED_Z9_FX_JPEG: StrippedZ9Jpeg = StrippedZ9Jpeg {
-    file: support::fixtures::Z9_FX_JPEG,
-    make: Make::Nikon,
-    model: "Z 9",
-    recorded_make: "NIKON CORPORATION",
-    recorded_model: "NIKON Z 9",
-    software: "Ver.05.30",
-    capture_time: "2026-10-22T09:26:56.75-03:00",
-    exposure_time: (10, 2500),
-    f_number: (800, 100),
-    iso: 64,
-    focal_length: (700, 10),
-    focal_length_in_35mm_film: 70,
-    exposure_bias: (0, 6),
-    lens_recorded_make: None,
-    lens_recorded_model: "VR 70-300mm f/4.5-5.6E",
-    lens_range: [(700, 10), (3000, 10), (450, 100), (560, 100)],
-    orientation: Orientation::NoTransforms,
-    previews: [
-        (39876..52662, (160, 120)),
-        (69754..69876, (640, 424)),
-        (69876..69998, (1620, 1080)),
-        (0..69998, (8256, 5504)),
-    ],
-    focus_frame: (8256, 5504),
-    focus_center: (4225, 2614),
-    focus_size: (406, 406),
-    in_focus: true,
-    // Code 207, 3D-tracking.
-    area_mode: Some(FocusAreaMode::Tracking),
-    color_temperature: 5670,
-    image_area: ImageArea::FullFrame,
-};
-
-/// The DX shot, at full size: CropHiSpeed `[2, 8280, 5520, 5408, 3608,
-/// 1436, 956]` records a crop that cuts both sides, so the center (1024,
-/// 718) and the area 226 by 258 that AFInfo2 records in the full 8256 by
-/// 5504 frame are fractions of the picture, and the reader scales them
-/// onto the JPEG's 5392 by 3592, each rounded to the nearest pixel.
-const STRIPPED_Z9_DX_JPEG: StrippedZ9Jpeg = StrippedZ9Jpeg {
-    file: support::fixtures::Z9_DX_JPEG,
-    make: Make::Nikon,
-    model: "Z 9",
-    recorded_make: "NIKON CORPORATION",
-    recorded_model: "NIKON Z 9",
-    software: "Ver.05.30",
-    capture_time: "2026-10-22T09:40:59.19-03:00",
-    exposure_time: (10, 2000),
-    f_number: (800, 100),
-    iso: 64,
-    focal_length: (780, 10),
-    focal_length_in_35mm_film: 117,
-    exposure_bias: (0, 6),
-    lens_recorded_make: None,
-    lens_recorded_model: "VR 70-300mm f/4.5-5.6E",
-    lens_range: [(700, 10), (3000, 10), (450, 100), (560, 100)],
-    orientation: Orientation::NoTransforms,
-    previews: [
-        (39876..50557, (160, 120)),
-        (69754..69876, (640, 424)),
-        (69876..69998, (1620, 1080)),
-        (0..69998, (5392, 3592)),
-    ],
-    focus_frame: (5392, 3592),
-    focus_center: (669, 469),
-    focus_size: (148, 168),
-    in_focus: true,
-    // Code 192, which no file shot in a known mode names.
-    area_mode: None,
-    color_temperature: 5300,
-    image_area: ImageArea::ApsC,
-};
-
-/// The 16:9 shot, at the middle size, 6192 by 3480, taken in portrait
-/// orientation and stored on its side with Orientation 8, which turns
-/// every preview. CropHiSpeed `[6, 8280, 5520, 8280, 4656, 0, 432]`
-/// records a crop that keeps the width, so the center (878, 4504) that
-/// AFInfo2 records in the full 8256 by 5504 frame is a position in that
-/// frame. The window of the JPEG's shape in it is 8256 wide and 8256 x
-/// 3480 / 6192 = 4640 high, whose origin is (5504 - 4640) / 2 = 432 down:
-/// the reader moves y back to 4072 and keeps the area, 162 by 178.
-const STRIPPED_Z9_16X9_JPEG: StrippedZ9Jpeg = StrippedZ9Jpeg {
-    file: support::fixtures::Z9_16X9_JPEG,
-    make: Make::Nikon,
-    model: "Z 9",
-    recorded_make: "NIKON CORPORATION",
-    recorded_model: "NIKON Z 9",
-    software: "Ver.05.30",
-    capture_time: "2026-10-22T19:17:01.01-03:00",
-    exposure_time: (10, 200),
-    f_number: (450, 100),
-    iso: 1400,
-    focal_length: (700, 10),
-    focal_length_in_35mm_film: 70,
-    exposure_bias: (0, 6),
-    lens_recorded_make: None,
-    lens_recorded_model: "VR 70-300mm f/4.5-5.6E",
-    lens_range: [(700, 10), (3000, 10), (450, 100), (560, 100)],
-    orientation: Orientation::Rotate270,
-    previews: [
-        (39876..51224, (160, 120)),
-        (69754..69876, (640, 360)),
-        (69876..69998, (1920, 1080)),
-        (0..69998, (6192, 3480)),
-    ],
-    focus_frame: (8256, 4640),
-    focus_center: (878, 4072),
-    focus_size: (162, 178),
-    in_focus: true,
-    // Code 192, which no file shot in a known mode names.
-    area_mode: None,
-    color_temperature: 6130,
-    image_area: ImageArea::Wide,
-};
-
-/// Opens the stripped JPEG `name` in `tests/fixtures/`, read whole from
-/// its path and from its bytes, checks that it opens as a JPEG with the
-/// previews `previews`, smallest first, each turned by `orientation` and
-/// read whole, and the same metadata both ways, and returns it opened from
-/// its path.
-fn open_stripped_jpeg(
-    name: &str,
-    previews: &[(Range<u64>, (u16, u16))],
-    orientation: Orientation,
-) -> CameraFile<File> {
-    let label = name;
-    let bytes = support::fixtures::read_fixture(name);
-    let file = CameraFile::open(support::fixtures::fixture(name)).unwrap();
-    let from_bytes = CameraFile::from_bytes(&bytes).unwrap();
-    for (how, format, found) in [
-        ("path", file.format(), file.previews()),
-        ("bytes", from_bytes.format(), from_bytes.previews()),
-    ] {
-        assert_eq!(format, Format::Jpeg, "{label}, from {how}");
-        let found: Vec<Seen> = found.iter().map(seen).collect();
-        assert_eq!(
-            found,
-            expected(previews, orientation),
-            "{label}, from {how}"
-        );
-    }
-    assert_eq!(file.metadata(), from_bytes.metadata(), "{label}");
-
-    // The file itself is the largest preview and reads as the whole file.
-    // Every other preview is a stub JPEG of its size: an MPF image exactly
-    // that, and the thumbnail or the MakerNote's preview the stub, then
-    // zeros to the length IFD1 or the PreviewIFD declares, which the
-    // stripping kept so that no offset moved.
-    let previews = file.previews();
-    let largest = file.largest_preview().unwrap();
-    assert_eq!(Some(largest), previews.last().copied(), "{label}");
-    assert_eq!(largest.byte_range(), 0..to_u64(bytes.len()), "{label}");
-    for preview in previews {
-        let size = preview.size();
-        let read = file.read_preview(preview).unwrap();
-        if *preview == largest {
-            assert_eq!(read, bytes, "{label} {size:?}");
-            continue;
-        }
-        let stub = jpeg_stub(
-            u16::try_from(size.width).unwrap(),
-            u16::try_from(size.height).unwrap(),
-            0xC0,
-        );
-        assert_eq!(read[..stub.len()], stub[..], "{label} {size:?}");
-        assert!(
-            read[stub.len()..].iter().all(|&byte| byte == 0),
-            "{label} {size:?}"
-        );
-    }
-    file
-}
-
-/// Checks that the stripped Z 9 JPEG `stripped` names, read whole from its
-/// path and from its bytes, opens as a JPEG with its four previews,
-/// smallest first, each read whole, and gives every value of its metadata,
-/// the focus point among them.
-fn check_stripped_z9_jpeg(stripped: &StrippedZ9Jpeg) {
-    let label = stripped.file;
-    let file = open_stripped_jpeg(stripped.file, &stripped.previews, stripped.orientation);
-    let metadata = file.metadata();
-    assert_eq!(
-        metadata.camera().recorded_make(),
-        Some(stripped.recorded_make),
-        "{label}"
-    );
-    assert_eq!(
-        metadata.camera().recorded_model(),
-        Some(stripped.recorded_model),
-        "{label}"
-    );
-    assert_eq!(metadata.camera().make(), Some(stripped.make), "{label}");
-    assert_eq!(metadata.camera().model(), Some(stripped.model), "{label}");
-    assert_eq!(metadata.software(), Some(stripped.software), "{label}");
-    // The stripping zeroed BodySerialNumber and the MakerNote's
-    // SerialNumber in place, so neither gives a serial number.
-    assert_eq!(metadata.camera().serial_number(), None, "{label}");
-    assert_eq!(
-        metadata
-            .capture_time()
-            .map(|time| time.to_string())
-            .as_deref(),
-        Some(stripped.capture_time),
-        "{label}"
-    );
-    assert_eq!(metadata.orientation(), stripped.orientation, "{label}");
-    let (numerator, denominator) = stripped.exposure_bias;
-    assert_eq!(
-        metadata.exposure(),
-        &Exposure::default()
-            .with_exposure_time(fraction(stripped.exposure_time.0, stripped.exposure_time.1))
-            .with_f_number(fraction(stripped.f_number.0, stripped.f_number.1))
-            .with_iso(stripped.iso)
-            .with_focal_length(fraction(stripped.focal_length.0, stripped.focal_length.1))
-            .with_focal_length_in_35mm_film(stripped.focal_length_in_35mm_film)
-            .with_exposure_bias(SignedRational::new(numerator, denominator).unwrap()),
-        "{label}"
-    );
-    // The lens from the Exif IFD: a LensMake that is empty gives no make,
-    // and the LensSerialNumber, empty and then zeroed, no serial number.
-    let [shortest, longest, at_shortest, at_longest] = stripped
-        .lens_range
-        .map(|(numerator, denominator)| fraction(numerator, denominator));
-    let mut lens = Lens::default()
-        .with_recorded_model(stripped.lens_recorded_model)
-        .with_min_focal_length(shortest)
-        .with_max_focal_length(longest)
-        .with_f_number_at_min_focal_length(at_shortest)
-        .with_f_number_at_max_focal_length(at_longest);
-    if let Some(make) = stripped.lens_recorded_make {
-        lens = lens.with_recorded_make(make);
-    }
-    assert_eq!(metadata.lens(), &lens, "{label}");
-    // A JPEG holds no raw data, and its image size is its frame header's.
-    assert_eq!(metadata.raw_size(), None, "{label}");
-    assert_eq!(
-        metadata.image_size(),
-        Some(size_of(stripped.previews[3].1)),
-        "{label}"
-    );
-    let focus = confirmed(
-        stripped.focus_frame,
-        stripped.focus_center,
-        stripped.focus_size,
-    )
-    .with_in_focus(stripped.in_focus);
-    assert_eq!(metadata.focus(), Some(focus), "{label}");
-    // The focus points: that point alone, the primary, with no number,
-    // recorded, in the area mode the file's AFInfo2 records.
-    let points = metadata
-        .focus_points()
-        .unwrap_or_else(|| panic!("{label}: no focus points"));
-    let mut expected = FocusPoints::from(focus);
-    if let Some(mode) = stripped.area_mode {
-        expected = expected.with_area_mode(mode);
-    }
-    assert_eq!(points, &expected, "{label}");
-    assert_eq!(points.points().len(), 1, "{label}");
-    assert_eq!(
-        points.primary().and_then(|primary| primary.number()),
-        None,
-        "{label}"
-    );
-    assert_eq!(points.origin(), FocusOrigin::Recorded, "{label}");
-    assert_eq!(points.area_mode(), stripped.area_mode, "{label}");
-    // No layout: raw-files has no table of the Z 9's points.
-    assert_eq!(metadata.focus_layout(), None, "{label}");
-    // The settings, the same on the three shots but the color
-    // temperature and the image area. From the Exif IFD: aperture
-    // priority, matrix metering, a Flash of 0, no flash fired and no mode
-    // recorded, and the ColorSpace 1, sRGB, which keeps the MakerNote's
-    // out. From the MakerNote: auto white balance, its text `AUTO0`, which
-    // Exif's auto agrees with; the color temperature it chose; a recorded
-    // zero fine-tuning, `0/4, 0/4`; the electronic shutter; and the image
-    // area of the crop. A JPEG has no raw image size, whatever its
-    // MakerNote's ImageSizeRAW says.
-    let zero = SignedRational {
-        numerator: 0,
-        denominator: 4,
-    };
-    assert_eq!(
-        metadata.camera_settings(),
-        &CameraSettings::default()
-            .with_white_balance(
-                WhiteBalance::default()
-                    .with_mode(WhiteBalanceMode::Auto)
-                    .with_color_temperature(stripped.color_temperature)
-                    .with_fine_tune(FineTune::new(zero, zero)),
-            )
-            .with_exposure_program(ExposureProgram::AperturePriority)
-            .with_metering_mode(MeteringMode::MultiSegment)
-            .with_flash(Flash::new(false))
-            .with_shutter(Shutter::Electronic)
-            .with_image_area(stripped.image_area)
-            .with_color_space(ColorSpace::Srgb),
-        "{label}"
-    );
-}
-
-#[test]
-fn the_stripped_z9_fx_jpeg_gives_its_previews_metadata_and_recorded_focus_point() {
-    check_stripped_z9_jpeg(&STRIPPED_Z9_FX_JPEG);
-}
-
-#[test]
-fn the_stripped_z9_dx_jpeg_gives_its_previews_metadata_and_scaled_focus_point() {
-    check_stripped_z9_jpeg(&STRIPPED_Z9_DX_JPEG);
-}
-
-#[test]
-fn the_stripped_z9_16x9_jpeg_gives_its_previews_metadata_and_moved_focus_point() {
-    check_stripped_z9_jpeg(&STRIPPED_Z9_16X9_JPEG);
-}
-
-/// Checks that the JPEG of frame 4 of the D600 session, the shot whose NEF
-/// `tests/nef.rs` checks, made through the viewfinder with the single
-/// point 38, the top of the leftmost column, opens with its four previews,
-/// smallest first, each read whole, and gives every value of its metadata:
-/// point 38 placed from the D600's table among them, where the NEF places
-/// it, since the JPEG is the table's whole 6016 by 4016 frame. Its values
-/// were read from the file's bytes and the record in the NEF notes, not
-/// from the reader.
-#[test]
-fn the_d600_frame_4_jpeg_gives_its_previews_metadata_and_point_38_placed_from_the_table() {
-    let label = support::fixtures::D600_FRAME_4_JPEG;
-    // IFD1's thumbnail, the MakerNote's preview, which lies inside the
-    // MakerNote, the one image of the MPF list, and the file itself, of
-    // its frame header's size, all upright: Orientation 1.
-    let file = open_stripped_jpeg(
-        label,
-        &[
-            (39456..48586, (160, 120)),
-            (14352..39295, (570, 375)),
-            (69754..69876, (1632, 1080)),
-            (0..69876, (6016, 4016)),
+/// The previews of each committed JPEG, smallest first: IFD1's thumbnail,
+/// then the D600's MakerNote preview, which lies inside its MakerNote, then
+/// the images of the MPF list, and the file itself, of its frame header's
+/// size, which runs to the end of the file. Every image but the file's
+/// own is a stub JPEG of 122 bytes: an MPF image exactly that, and the
+/// thumbnail or the MakerNote's preview the stub, then zeros to the length
+/// IFD1 or the PreviewIFD declares, which the stripping kept so that no
+/// offset moved.
+const FIXTURES: &[Sample] = &[
+    // The Z 9's FX shot.
+    Sample {
+        file: support::fixtures::Z9_FX_JPEG,
+        orientation: Orientation::NoTransforms,
+        previews: &[
+            Jpeg {
+                width: 160,
+                height: 120,
+                offset: 39_876,
+                len: 12_786,
+                after_eoi: 12_664,
+            },
+            Jpeg {
+                width: 640,
+                height: 424,
+                offset: 69_754,
+                len: 122,
+                after_eoi: 0,
+            },
+            Jpeg {
+                width: 1620,
+                height: 1080,
+                offset: 69_876,
+                len: 122,
+                after_eoi: 0,
+            },
+            Jpeg {
+                width: 8256,
+                height: 5504,
+                offset: 0,
+                len: 69_998,
+                after_eoi: 0,
+            },
         ],
-        Orientation::NoTransforms,
-    );
+    },
+    // The Z 9's DX shot.
+    Sample {
+        file: support::fixtures::Z9_DX_JPEG,
+        orientation: Orientation::NoTransforms,
+        previews: &[
+            Jpeg {
+                width: 160,
+                height: 120,
+                offset: 39_876,
+                len: 10_681,
+                after_eoi: 10_559,
+            },
+            Jpeg {
+                width: 640,
+                height: 424,
+                offset: 69_754,
+                len: 122,
+                after_eoi: 0,
+            },
+            Jpeg {
+                width: 1620,
+                height: 1080,
+                offset: 69_876,
+                len: 122,
+                after_eoi: 0,
+            },
+            Jpeg {
+                width: 5392,
+                height: 3592,
+                offset: 0,
+                len: 69_998,
+                after_eoi: 0,
+            },
+        ],
+    },
+    // The Z 9's 16:9 shot, stored on its side with Orientation 8, which
+    // turns every preview.
+    Sample {
+        file: support::fixtures::Z9_16X9_JPEG,
+        orientation: Orientation::Rotate270,
+        previews: &[
+            Jpeg {
+                width: 160,
+                height: 120,
+                offset: 39_876,
+                len: 11_348,
+                after_eoi: 11_226,
+            },
+            Jpeg {
+                width: 640,
+                height: 360,
+                offset: 69_754,
+                len: 122,
+                after_eoi: 0,
+            },
+            Jpeg {
+                width: 1920,
+                height: 1080,
+                offset: 69_876,
+                len: 122,
+                after_eoi: 0,
+            },
+            Jpeg {
+                width: 6192,
+                height: 3480,
+                offset: 0,
+                len: 69_998,
+                after_eoi: 0,
+            },
+        ],
+    },
+    // The D600's frame 4, upright: Orientation 1. One image in its MPF
+    // list.
+    Sample {
+        file: support::fixtures::D600_FRAME_4_JPEG,
+        orientation: Orientation::NoTransforms,
+        previews: &[
+            Jpeg {
+                width: 160,
+                height: 120,
+                offset: 39_456,
+                len: 9_130,
+                after_eoi: 9_008,
+            },
+            Jpeg {
+                width: 570,
+                height: 375,
+                offset: 14_352,
+                len: 24_943,
+                after_eoi: 24_821,
+            },
+            Jpeg {
+                width: 1632,
+                height: 1080,
+                offset: 69_754,
+                len: 122,
+                after_eoi: 0,
+            },
+            Jpeg {
+                width: 6016,
+                height: 4016,
+                offset: 0,
+                len: 69_876,
+                after_eoi: 0,
+            },
+        ],
+    },
+];
 
-    let metadata = file.metadata();
-    assert_eq!(
-        metadata.camera().recorded_make(),
-        Some("NIKON CORPORATION"),
-        "{label}"
+#[test]
+fn every_jpeg_fixture_gives_its_previews() {
+    check_every(
+        FIXTURES,
+        |sample| sample.file,
+        |sample| check(sample, Format::Jpeg, Folder::Fixtures),
     );
-    assert_eq!(
-        metadata.camera().recorded_model(),
-        Some("NIKON D600"),
-        "{label}"
+}
+
+#[test]
+fn every_jpeg_fixture_opens_alike_from_its_bytes_and_holds_stubs() {
+    // What a table's row cannot say: that the file opened from its bytes
+    // gives what it gives from its path, and that each preview but the
+    // largest reads as the stub of its size, then zeros, and the largest
+    // as the whole file.
+    check_every(
+        FIXTURES,
+        |sample| sample.file,
+        |sample| {
+            let label = sample.file;
+            let bytes = support::fixtures::read_fixture(label);
+            let file = CameraFile::open(support::fixtures::fixture(label)).unwrap();
+            let from_bytes = CameraFile::from_bytes(&bytes).unwrap();
+            assert_eq!(file.previews(), from_bytes.previews(), "{label}");
+            assert_eq!(file.metadata(), from_bytes.metadata(), "{label}");
+            let largest = file.largest_preview().unwrap();
+            for preview in file.previews() {
+                let size = preview.size();
+                let read = file.read_preview(preview).unwrap();
+                if *preview == largest {
+                    assert_eq!(read, bytes, "{label} {size:?}");
+                    continue;
+                }
+                let stub = jpeg_stub(
+                    u16::try_from(size.width).unwrap(),
+                    u16::try_from(size.height).unwrap(),
+                    0xC0,
+                );
+                assert_eq!(read[..stub.len()], stub[..], "{label} {size:?}");
+                assert!(
+                    read[stub.len()..].iter().all(|&byte| byte == 0),
+                    "{label} {size:?}"
+                );
+            }
+        },
     );
-    assert_eq!(metadata.camera().make(), Some(Make::Nikon), "{label}");
-    assert_eq!(metadata.camera().model(), Some("D600"), "{label}");
-    // The firmware the D600 ran, `Ver.1.04 ` with its space trimmed.
-    assert_eq!(metadata.software(), Some("Ver.1.04"), "{label}");
-    // The D600 writes its serial number only in the MakerNote's
-    // SerialNumber, which the stripping zeroed in place.
-    assert_eq!(metadata.camera().serial_number(), None, "{label}");
-    // DateTimeOriginal and SubSecTimeOriginal, with the offset from
-    // WorldTime, -180 minutes with daylight saving time off, since the
-    // D600 writes no OffsetTimeOriginal: the NEF's capture time.
-    assert_eq!(
-        metadata
-            .capture_time()
-            .map(|time| time.to_string())
-            .as_deref(),
-        Some("2026-10-26T13:15:08.10-03:00"),
-        "{label}"
+}
+
+/// The metadata of each committed JPEG. None gives a serial number, a
+/// text of who made the picture or a location: the stripping zeroed
+/// BodySerialNumber, the MakerNote's SerialNumber, Artist, Copyright and
+/// UserComment in place, and the GPS IFD holds only GPSVersionID. A JPEG
+/// holds no raw data, and its image size is its frame header's.
+const FIXTURE_METADATA: &[SampleMetadata] = &[
+    // The Z 9's FX shot, the camera's full output, at full size:
+    // CropHiSpeed `[11, 8280, 5520, 8280, 5520, 0, 0]` records no crop, so
+    // the point is as AFInfo2 records it, the center (4225, 2614) and the
+    // area 406 by 406 in the frame of 8256 by 5504, which is the JPEG's own
+    // size.
+    SampleMetadata {
+        file: support::fixtures::Z9_FX_JPEG,
+        make: Some(Make::Nikon),
+        model: Some("Z 9"),
+        recorded_make: Some("NIKON CORPORATION"),
+        recorded_model: Some("NIKON Z 9"),
+        software: Some("Ver.05.30"),
+        serial_number: None,
+        texts: &[],
+        location: None,
+        // DateTimeOriginal, SubSecTimeOriginal and OffsetTimeOriginal.
+        capture_time: Some("2026-10-22T09:26:56.75-03:00"),
+        orientation: Orientation::NoTransforms,
+        iso: Some(64),
+        exposure_time: Some((10, 2500)),
+        f_number: Some((800, 100)),
+        focal_length: Some((700, 10)),
+        focal_length_in_35mm_film: Some(70),
+        exposure_bias: Some((0, 6)),
+        // The lens from the Exif IFD: a LensMake that is empty gives no
+        // make, and the LensSerialNumber, empty and then zeroed, no serial
+        // number.
+        lens: Some(SampleLens {
+            recorded_make: None,
+            recorded_model: Some("VR 70-300mm f/4.5-5.6E"),
+            serial_number: false,
+            min_focal_length: Some((700, 10)),
+            max_focal_length: Some((3000, 10)),
+            f_number_at_min_focal_length: Some((450, 100)),
+            f_number_at_max_focal_length: Some((560, 100)),
+        }),
+        raw_size: None,
+        image_size: Some((8256, 5504)),
+        focus: Some(SampleFocus {
+            frame: (8256, 5504),
+            center: (4225, 2614),
+            size: Some((406, 406)),
+            in_focus: Some(true),
+            origin: FocusOrigin::Recorded,
+            points: 1,
+            primary_number: None,
+            area_mode: Some(FocusAreaMode::Tracking), // code 207
+        }),
+        // raw-files has no table of the Z 9's points.
+        focus_layout: None,
+        // The same on the three shots but the color temperature and the
+        // image area. From the Exif IFD: aperture priority, matrix
+        // metering, a Flash of 0, no flash fired and no mode recorded, and
+        // the ColorSpace 1, sRGB, which keeps the MakerNote's out. From the
+        // MakerNote: auto white balance, its text `AUTO0`, which Exif's
+        // auto agrees with; the color temperature it chose; a recorded zero
+        // fine-tuning, `0/4, 0/4`; the electronic shutter; and the image
+        // area of the crop. A JPEG has no raw image size, whatever its
+        // MakerNote's ImageSizeRAW says.
+        settings: SampleSettings {
+            white_balance_mode: Some(WhiteBalanceMode::Auto),
+            color_temperature: Some(5670),
+            fine_tune: Some(SampleFineTune {
+                amber_blue: (0, 4),
+                green_magenta: (0, 4),
+            }),
+            exposure_program: Some(ExposureProgram::AperturePriority),
+            metering_mode: Some(MeteringMode::MultiSegment),
+            flash: Some((false, None)),
+            shutter: Some(Shutter::Electronic),
+            electronic_front_curtain_setting: None,
+            image_area: Some(ImageArea::FullFrame),
+            raw_image_size: None,
+            color_space: Some(ColorSpace::Srgb),
+        },
+    },
+    // The Z 9's DX shot, at full size: CropHiSpeed `[2, 8280, 5520, 5408,
+    // 3608, 1436, 956]` records a crop that cuts both sides, so the center
+    // (1024, 718) and the area 226 by 258 that AFInfo2 records in the full
+    // 8256 by 5504 frame are fractions of the picture, and the reader
+    // scales them onto the JPEG's 5392 by 3592, each rounded to the
+    // nearest pixel.
+    SampleMetadata {
+        file: support::fixtures::Z9_DX_JPEG,
+        make: Some(Make::Nikon),
+        model: Some("Z 9"),
+        recorded_make: Some("NIKON CORPORATION"),
+        recorded_model: Some("NIKON Z 9"),
+        software: Some("Ver.05.30"),
+        serial_number: None,
+        texts: &[],
+        location: None,
+        capture_time: Some("2026-10-22T09:40:59.19-03:00"),
+        orientation: Orientation::NoTransforms,
+        iso: Some(64),
+        exposure_time: Some((10, 2000)),
+        f_number: Some((800, 100)),
+        focal_length: Some((780, 10)),
+        focal_length_in_35mm_film: Some(117),
+        exposure_bias: Some((0, 6)),
+        lens: Some(SampleLens {
+            recorded_make: None,
+            recorded_model: Some("VR 70-300mm f/4.5-5.6E"),
+            serial_number: false,
+            min_focal_length: Some((700, 10)),
+            max_focal_length: Some((3000, 10)),
+            f_number_at_min_focal_length: Some((450, 100)),
+            f_number_at_max_focal_length: Some((560, 100)),
+        }),
+        raw_size: None,
+        image_size: Some((5392, 3592)),
+        focus: Some(SampleFocus {
+            frame: (5392, 3592),
+            center: (669, 469),
+            size: Some((148, 168)),
+            in_focus: Some(true),
+            origin: FocusOrigin::Recorded,
+            points: 1,
+            primary_number: None,
+            // Code 192, which no file shot in a known mode names.
+            area_mode: None,
+        }),
+        focus_layout: None,
+        settings: SampleSettings {
+            white_balance_mode: Some(WhiteBalanceMode::Auto),
+            color_temperature: Some(5300),
+            fine_tune: Some(SampleFineTune {
+                amber_blue: (0, 4),
+                green_magenta: (0, 4),
+            }),
+            exposure_program: Some(ExposureProgram::AperturePriority),
+            metering_mode: Some(MeteringMode::MultiSegment),
+            flash: Some((false, None)),
+            shutter: Some(Shutter::Electronic),
+            electronic_front_curtain_setting: None,
+            image_area: Some(ImageArea::ApsC),
+            raw_image_size: None,
+            color_space: Some(ColorSpace::Srgb),
+        },
+    },
+    // The Z 9's 16:9 shot, at the middle size, 6192 by 3480, taken in
+    // portrait orientation and stored on its side with Orientation 8.
+    // CropHiSpeed `[6, 8280, 5520, 8280, 4656, 0, 432]` records a crop that
+    // keeps the width, so the center (878, 4504) that AFInfo2 records in
+    // the full 8256 by 5504 frame is a position in that frame. The window
+    // of the JPEG's shape in it is 8256 wide and 8256 x 3480 / 6192 = 4640
+    // high, whose origin is (5504 - 4640) / 2 = 432 down: the reader moves
+    // y back to 4072 and keeps the area, 162 by 178.
+    SampleMetadata {
+        file: support::fixtures::Z9_16X9_JPEG,
+        make: Some(Make::Nikon),
+        model: Some("Z 9"),
+        recorded_make: Some("NIKON CORPORATION"),
+        recorded_model: Some("NIKON Z 9"),
+        software: Some("Ver.05.30"),
+        serial_number: None,
+        texts: &[],
+        location: None,
+        capture_time: Some("2026-10-22T19:17:01.01-03:00"),
+        orientation: Orientation::Rotate270,
+        iso: Some(1400),
+        exposure_time: Some((10, 200)),
+        f_number: Some((450, 100)),
+        focal_length: Some((700, 10)),
+        focal_length_in_35mm_film: Some(70),
+        exposure_bias: Some((0, 6)),
+        lens: Some(SampleLens {
+            recorded_make: None,
+            recorded_model: Some("VR 70-300mm f/4.5-5.6E"),
+            serial_number: false,
+            min_focal_length: Some((700, 10)),
+            max_focal_length: Some((3000, 10)),
+            f_number_at_min_focal_length: Some((450, 100)),
+            f_number_at_max_focal_length: Some((560, 100)),
+        }),
+        raw_size: None,
+        image_size: Some((6192, 3480)),
+        focus: Some(SampleFocus {
+            frame: (8256, 4640),
+            center: (878, 4072),
+            size: Some((162, 178)),
+            in_focus: Some(true),
+            origin: FocusOrigin::Recorded,
+            points: 1,
+            primary_number: None,
+            // Code 192, which no file shot in a known mode names.
+            area_mode: None,
+        }),
+        focus_layout: None,
+        settings: SampleSettings {
+            white_balance_mode: Some(WhiteBalanceMode::Auto),
+            color_temperature: Some(6130),
+            fine_tune: Some(SampleFineTune {
+                amber_blue: (0, 4),
+                green_magenta: (0, 4),
+            }),
+            exposure_program: Some(ExposureProgram::AperturePriority),
+            metering_mode: Some(MeteringMode::MultiSegment),
+            flash: Some((false, None)),
+            shutter: Some(Shutter::Electronic),
+            electronic_front_curtain_setting: None,
+            image_area: Some(ImageArea::Wide),
+            raw_image_size: None,
+            color_space: Some(ColorSpace::Srgb),
+        },
+    },
+    // The JPEG of frame 4 of the D600 session, the shot whose NEF
+    // `tests/nef.rs` checks, made through the viewfinder with the single
+    // point 38, the top of the leftmost column. Its values were read from
+    // the file's bytes and the record in the NEF notes, not from the
+    // reader.
+    SampleMetadata {
+        file: support::fixtures::D600_FRAME_4_JPEG,
+        make: Some(Make::Nikon),
+        model: Some("D600"),
+        recorded_make: Some("NIKON CORPORATION"),
+        recorded_model: Some("NIKON D600"),
+        // The firmware the D600 ran, `Ver.1.04 ` with its space trimmed.
+        software: Some("Ver.1.04"),
+        // The D600 writes its serial number only in the MakerNote's
+        // SerialNumber, which the stripping zeroed in place.
+        serial_number: None,
+        texts: &[],
+        location: None,
+        // DateTimeOriginal and SubSecTimeOriginal, with the offset from
+        // WorldTime, -180 minutes with daylight saving time off, since the
+        // D600 writes no OffsetTimeOriginal: the NEF's capture time.
+        capture_time: Some("2026-10-26T13:15:08.10-03:00"),
+        orientation: Orientation::NoTransforms,
+        // The NEF's: ISO 2200, 1/40 s at f/4 and 35 mm, 35 mm in 35 mm
+        // terms on the full-frame body, with no compensation.
+        iso: Some(2200),
+        exposure_time: Some((10, 400)),
+        f_number: Some((40, 10)),
+        focal_length: Some((350, 10)),
+        focal_length_in_35mm_film: Some(35),
+        exposure_bias: Some((0, 6)),
+        // The D600's Exif IFD names no lens, so the lens is the
+        // MakerNote's range alone, that of a 35 mm f/1.8 prime.
+        lens: Some(SampleLens {
+            recorded_make: None,
+            recorded_model: None,
+            serial_number: false,
+            min_focal_length: Some((350, 10)),
+            max_focal_length: Some((350, 10)),
+            f_number_at_min_focal_length: Some((18, 10)),
+            f_number_at_max_focal_length: Some((18, 10)),
+        }),
+        raw_size: None,
+        image_size: Some((6016, 4016)),
+        // AFInfo2 names point 38 in layout 3, with bit 37 of its mask set,
+        // area mode 0 under detection method 0, single point, and a zero
+        // frame and area. CropHiSpeed's crop setting, 0, records no crop,
+        // so the point is placed from the table in the table's own frame,
+        // the JPEG's size: at (1812, 1705), with a box of 164 by 164, as
+        // the record in the NEF notes gives it, from a table, and with
+        // nothing said of focus, though the in-focus byte reads 0. The list
+        // is that point alone, numbered 38, the primary.
+        focus: Some(SampleFocus {
+            frame: (6016, 4016),
+            center: (1812, 1705),
+            size: Some((164, 164)),
+            in_focus: None,
+            origin: FocusOrigin::Table,
+            points: 1,
+            primary_number: Some(38),
+            area_mode: Some(FocusAreaMode::Single),
+        }),
+        focus_layout: Some("NIKON D600"),
+        // From the Exif IFD: aperture priority, matrix metering, auto white
+        // balance, a Flash of 16, the flash off by the camera's setting and
+        // not fired, and the ColorSpace 1, sRGB. From the MakerNote: the
+        // white balance text `AUTO1`, which Exif's auto agrees with, and
+        // the fine-tuning 0x000B records, no shift, whole steps. The D600
+        // writes no ColorTemperatureAuto, ShutterMode or ImageSizeRAW, and
+        // CropHiSpeed's crop setting, 0, names no image area.
+        settings: SampleSettings {
+            white_balance_mode: Some(WhiteBalanceMode::Auto),
+            color_temperature: None,
+            fine_tune: Some(SampleFineTune {
+                amber_blue: (0, 1),
+                green_magenta: (0, 1),
+            }),
+            exposure_program: Some(ExposureProgram::AperturePriority),
+            metering_mode: Some(MeteringMode::MultiSegment),
+            flash: Some((false, Some(FlashMode::Off))),
+            shutter: None,
+            electronic_front_curtain_setting: None,
+            image_area: None,
+            raw_image_size: None,
+            color_space: Some(ColorSpace::Srgb),
+        },
+    },
+];
+
+#[test]
+fn every_jpeg_fixture_gives_its_metadata() {
+    check_fixture_tables(FIXTURES, FIXTURE_METADATA);
+    check_every(
+        FIXTURE_METADATA,
+        |expected| expected.file,
+        |expected| check_metadata(expected, Format::Jpeg, Folder::Fixtures),
     );
-    assert_eq!(metadata.orientation(), Orientation::NoTransforms, "{label}");
-    // The exposure as stored, the NEF's: ISO 2200, 1/40 s at f/4 and
-    // 35 mm, 35 mm in 35 mm terms on the full-frame body, with no
-    // compensation.
-    assert_eq!(
-        metadata.exposure(),
-        &Exposure::default()
-            .with_exposure_time(fraction(10, 400))
-            .with_f_number(fraction(40, 10))
-            .with_iso(2200)
-            .with_focal_length(fraction(350, 10))
-            .with_focal_length_in_35mm_film(35)
-            .with_exposure_bias(SignedRational::new(0, 6).unwrap()),
-        "{label}"
-    );
-    // The D600's Exif IFD names no lens, so the lens is the MakerNote's
-    // range alone, that of a 35 mm f/1.8 prime.
-    let lens = Lens::default()
-        .with_min_focal_length(fraction(350, 10))
-        .with_max_focal_length(fraction(350, 10))
-        .with_f_number_at_min_focal_length(fraction(18, 10))
-        .with_f_number_at_max_focal_length(fraction(18, 10));
-    assert_eq!(metadata.lens(), &lens, "{label}");
-    // A JPEG holds no raw data, and its image size is its frame header's.
-    assert_eq!(metadata.raw_size(), None, "{label}");
-    assert_eq!(
-        metadata.image_size(),
-        Some(size_of((6016, 4016))),
-        "{label}"
-    );
-    // AFInfo2 names point 38 in layout 3, with bit 37 of its mask set,
-    // area mode 0 under detection method 0, single point, and a zero frame
-    // and area. CropHiSpeed's crop setting, 0, records no crop, so the
-    // point is placed from the table in the table's own frame, the JPEG's
-    // size: at (1812, 1705), with a box of 164 by 164, as the record in the
-    // NEF notes gives it, from a table, and with nothing said of focus,
-    // though the in-focus byte reads 0. The list is that point alone,
-    // numbered 38, the primary.
-    let frame = size_of((6016, 4016));
-    let point_38 = Point { x: 1812, y: 1705 };
-    let box_164 = size_of((164, 164));
-    let placed = Focus::new(frame, point_38, FocusOrigin::Table)
-        .and_then(|focus| focus.with_size(box_164))
-        .ok();
-    assert_eq!(metadata.focus(), placed, "{label}");
-    let points = FocusPoints::new(frame, FocusOrigin::Table)
-        .and_then(|points| {
-            points.with_point(FocusPoint::new(point_38).with_number(38).with_size(box_164))
-        })
-        .and_then(|points| points.with_primary_index(0))
-        .map(|points| points.with_area_mode(FocusAreaMode::Single))
-        .ok();
-    assert_eq!(metadata.focus_points(), points.as_ref(), "{label}");
-    // The D600's layout of 39 points, from its table, by the Model, its
-    // point 38 at the same place.
-    let layout = metadata
+}
+
+/// Checks that the JPEG of frame 4 of the D600 session gives the layout
+/// of the D600's 39 points, from its table, by the Model, in the table's
+/// frame, the JPEG's size, with point 38 where the frame's focus point
+/// lies and its box of 164 by 164. The frame's row in
+/// [`FIXTURE_METADATA`] checks the focus point and the layout's name.
+#[test]
+fn the_d600_frame_4_jpegs_layout_has_point_38_at_its_focus_point() {
+    let label = support::fixtures::D600_FRAME_4_JPEG;
+    let file = CameraFile::open(support::fixtures::fixture(label)).unwrap();
+    let layout = file
+        .metadata()
         .focus_layout()
         .unwrap_or_else(|| panic!("{label}: no layout"));
-    assert_eq!(layout.recorded_model(), "NIKON D600", "{label}");
-    assert_eq!(layout.frame(), frame, "{label}");
+    assert_eq!(layout.frame(), size_of((6016, 4016)), "{label}");
     assert_eq!(layout.points().len(), 39, "{label}");
     let layout_38 = layout
         .point(38)
         .unwrap_or_else(|| panic!("{label}: no point 38"));
-    assert_eq!(layout_38.center(), point_38, "{label}");
-    assert_eq!(layout_38.size(), box_164, "{label}");
-    // The settings. From the Exif IFD: aperture priority, matrix metering,
-    // auto white balance, a Flash of 16, the flash off by the camera's
-    // setting and not fired, and the ColorSpace 1, sRGB. From the
-    // MakerNote: the white balance text `AUTO1`, which Exif's auto agrees
-    // with, and the fine-tuning 0x000B records, no shift, whole steps. The
-    // D600 writes no ColorTemperatureAuto, ShutterMode or ImageSizeRAW, and
-    // CropHiSpeed's crop setting, 0, names no image area.
-    let zero = SignedRational {
-        numerator: 0,
-        denominator: 1,
-    };
-    assert_eq!(
-        metadata.camera_settings(),
-        &CameraSettings::default()
-            .with_white_balance(
-                WhiteBalance::default()
-                    .with_mode(WhiteBalanceMode::Auto)
-                    .with_fine_tune(FineTune::new(zero, zero)),
-            )
-            .with_exposure_program(ExposureProgram::AperturePriority)
-            .with_metering_mode(MeteringMode::MultiSegment)
-            .with_flash(Flash::new(false).with_mode(FlashMode::Off))
-            .with_color_space(ColorSpace::Srgb),
-        "{label}"
-    );
+    assert_eq!(layout_38.center(), Point { x: 1812, y: 1705 }, "{label}");
+    assert_eq!(layout_38.size(), size_of((164, 164)), "{label}");
 }
 
 /// Checks that the D600 JPEG `label`, of `pixels` as its frame header
@@ -2880,7 +2900,7 @@ fn every_jpeg_sample_opens_with_its_previews() {
     check_every(
         SAMPLES,
         |sample| sample.file,
-        |sample| check(sample, Format::Jpeg),
+        |sample| check(sample, Format::Jpeg, Folder::Samples),
     );
 }
 
@@ -3309,7 +3329,7 @@ fn every_jpeg_sample_gives_its_metadata() {
     check_every(
         METADATA,
         |expected| expected.file,
-        |expected| check_metadata(expected, Format::Jpeg),
+        |expected| check_metadata(expected, Format::Jpeg, Folder::Samples),
     );
 }
 
