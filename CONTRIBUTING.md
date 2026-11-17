@@ -40,22 +40,23 @@ It is the project's one list of what is broken, deferred or wanted.
 
 - **A bug** — use the *Bug report* form: what happened, how to reproduce it,
   and what you expected instead. Most bugs in a RAW library are about one
-  camera's files, so name the camera model, and link a sample file if you can
-  share one.
+  camera's files. So name the camera model, and link a sample file if you
+  can share one.
 - **A feature** — use the *Feature request* form, and start from the problem
   rather than the solution. A request for a camera or format is input to the
   order in [docs/ROADMAP.md](docs/ROADMAP.md) rather than a place in a queue.
 - **Anything else** (a docs fix, a question) — a blank issue is fine.
 
-For anything bigger than a small fix, please open or find an issue **before**
-you start, so we can agree on the approach before you spend time on it.
+For anything bigger than a small fix, please open or find an issue
+**before** you start. Then we can agree on the approach before you spend
+time on it.
 
 ### Labels
 
 The maintainer labels each new issue, so there is nothing for you to pick
 when you open one. They sort the tracker by what an issue is, where it
-belongs, what kind of work it needs and whether it can start; an issue
-often has several.
+belongs, what kind of work it needs and whether it can start. An issue
+often has several labels.
 
 What it is:
 
@@ -123,10 +124,11 @@ Please **don't** report security problems in a public issue. See
 ## Becoming a contributor
 
 Pull requests come from contributors. While the project is young, a pull
-request from someone who is not one yet is closed with a link to this section,
-however good the change. Sample files and test shots are welcome from anyone,
-through an issue. The [sample files page](docs/formats/sample-files.md) says
-how to propose a sample file.
+request from someone not yet a contributor is closed, however good the
+change. It is closed with a link to this section. Sample files and test
+shots are welcome from anyone, through an issue. The
+[sample files page](docs/formats/sample-files.md) says how to propose a
+sample file.
 
 You become a contributor by taking part first:
 
@@ -137,8 +139,8 @@ You become a contributor by taking part first:
    that use, through the issue forms.
 
 A contributor also has a public GitHub profile with a visible record of
-activity, such as projects, issues and reviews, so the maintainer can see how
-they work.
+activity, such as projects, issues and reviews. It lets the maintainer see
+how the contributor works.
 
 After you have taken part this way for a while, the maintainer invites you to
 work on an issue. Agree on the approach in that issue before you start.
@@ -170,9 +172,10 @@ maintainer's own. The flow:
 
    - Keep refactoring and behavior changes in separate commits.
    - Put tests and docs in the same commit as the change that needs them.
-   - Fix a mistake from an earlier commit with `git commit --fixup=<sha>` and
-     fold it in with `git rebase -i --autosquash origin/master`, rather than
-     adding a "fix the previous commit" commit.
+   - Fix a mistake from an earlier commit with `git commit --fixup=<sha>`,
+     rather than adding a "fix the previous commit" commit. Then fold the
+     fixup commit into its target with
+     `git rebase -i --autosquash origin/master`.
 
 3. **Run the checks** (see [Code style and checks](#code-style-and-checks)).
 
@@ -194,10 +197,12 @@ maintainer's own. The flow:
 `master` has a **linear history**: no merge commits and no squashing. Pull
 requests are landed with GitHub's *Rebase and merge*, so every commit you
 wrote becomes a commit on `master`. That is why each one has to build and pass
-on its own, and why we ask you to rebase rather than merge. The payoff is a
-history that reads as a sequence of small, reviewable steps, reverts that touch
-exactly one idea, and `git bisect` runs that stop on the commit that actually
-caused a problem.
+on its own, and why we ask you to rebase rather than merge. The payoff:
+
+- a history that reads as a sequence of small, reviewable steps;
+- reverts that touch exactly one idea;
+- `git bisect` runs that stop on the commit that actually caused a
+  problem.
 
 One consequence worth knowing: GitHub's rebase-merge always writes new commits
 with new hashes. When you refer to a commit, use its hash **on `master`**, not
@@ -234,8 +239,8 @@ Before a release, go through three things.
    Where the project departs from a guideline on purpose, it says so
    where a reader would look:
    - `DateTime`, `Rational` and `SignedRational` have no `Ord`: their
-     docs say what to sort by, and the decision record on the shape of
-     the public API says why (ADR009);
+     docs say what to sort by, and the record on the public API's shape
+     says why (ADR009);
    - there is no serde feature, because the crate has no dependencies,
      and the crate docs say so;
    - `Entries` has no `FromIterator` or `Extend`: an `Entry` comes only
@@ -311,16 +316,19 @@ Closes: #12
   - The component tag is optional and a single word naming the part of the
     project the commit touches (`tiff`, `nef`, `arw`, `docs`, `build`,
     `ci`).
-  - The summary is in the imperative ("Add", not "Added"), **starts with a
-    capital letter** (or with an identifier written as it appears in code,
-    ``tiff: `read_ifd()` rejects offsets past the end``), has **no trailing
-    period**, and stays within about **72 characters**.
+  - The summary:
+    - is in the imperative ("Add", not "Added");
+    - **starts with a capital letter**, or with an identifier written as
+      it appears in code (``tiff: `read_ifd()` rejects offsets past the
+      end``);
+    - has **no trailing period**;
+    - stays within about **72 characters**.
 - **A blank second line**, always.
 - **Body:** plain prose wrapped at 75 columns, explaining *why* the change is
   needed — the diff already shows *how*. It is written as
-  [Writing](#writing) says. If the commit fixes a bug introduced by an
-  earlier commit, name it in the body as `64aee44 ("tiff: Read IFDs
-  lazily")`, using the hash on `master`.
+  [Writing](#writing) says. If the commit fixes a bug an earlier commit
+  introduced, name that commit in the body as `64aee44 ("tiff: Read IFDs
+  lazily")`. Use its hash on `master`.
 - **Issue references** go in the last paragraph, one per line:
   - `Closes: #12` or `Fixes: #12` closes the issue when the commit reaches
     `master` — put it on the commit that actually completes the work;
@@ -341,12 +349,15 @@ build: Pin the Rust toolchain for CI
 Add a README
 ```
 
-Git's own subjects (`Revert "…"`, `Reapply "…"`, `fixup! …`, `squash! …`,
-`amend! …`, and the merge subjects git and GitHub write, such as
-`Merge branch '…'`) are accepted as git writes them; for a revert, add the
-reason to the body. Only a subject that starts the way git writes it is
-exempt: `Revert stuff.` is checked like any other subject. The rule on
-authorship holds for these subjects too.
+Git's own subjects are accepted as git writes them:
+
+- `Revert "…"` and `Reapply "…"`;
+- `fixup! …`, `squash! …` and `amend! …`;
+- the merge subjects git and GitHub write, such as `Merge branch '…'`.
+
+For a revert, add the reason to the body. Only a subject that starts
+the way git writes it is exempt: `Revert stuff.` is checked like any
+other subject. The rule on authorship holds for these subjects too.
 
 ## AI-assisted contributions
 
@@ -356,11 +367,11 @@ the full text as it applies here is in
 [ADR006](docs/architecture-decisions/adr006-ai-assisted-contributions.md). In
 short:
 
-- **You are accountable.** You are always the author, and you vouch for the
+- **You are accountable.** You are always the author. You vouch for the
   quality, license compliance (MIT OR Apache-2.0) and usefulness of
   everything you submit, however it was produced.
 - **Disclose.** You must disclose AI use when a significant part of the
-  contribution is taken from a tool without changes, and should disclose
+  contribution is taken from a tool without changes. You should disclose
   other uses where it might be useful. In commits, use an `Assisted-by:`
   trailer; in issues and comments, a short note:
 
@@ -397,8 +408,8 @@ RUSTDOCFLAGS="--cfg test -D warnings" cargo doc --workspace --no-deps --document
 ```
 
 The last one documents the private items too, with the test configuration
-on, so that the modules compiled only for tests get their doc comments and
-links checked as well; the normal doc build never sees them.
+on. It checks the doc comments and links of the modules compiled only
+for tests, which the normal doc build never sees.
 
 Some tests read real sample files, which are too large to commit. When
 the files are absent, those tests print a note and pass, so the suite
@@ -426,8 +437,8 @@ nothing to the API is for review to check.
 
 The oldest supported Rust (`rust-version` in `Cargo.toml`) is a stable
 release at least six months old. It is raised only when the code needs
-something newer, in a minor release, with an entry in the changelog; raising
-it is not a breaking change.
+something newer, in a minor release, with an entry in the changelog.
+Raising it is not a breaking change.
 
 A few conventions:
 
@@ -463,21 +474,23 @@ A few conventions:
   [Rust API Guidelines](https://rust-lang.github.io/api-guidelines/checklist.html)**,
   checked before each release as
   [Preparing a release](#preparing-a-release-maintainers) says.
-- **Every setter is a `with_…` method.** A value a caller reads,
-  such as `Metadata`, `Exposure` or `Lens`, starts from `default()`, and
-  each of its values is set by a `with_…` method named after the getter
-  that reads it back: `with_iso` sets what `iso()` returns. A value that
-  raw-files computes from others when it is read has no `with_…` method:
-  its docs name the method that sets the value it is read from
-  ([ADR021](docs/architecture-decisions/adr021-what-the-file-records-and-what-raw-files-reads-into-it.md)).
-  A value whose parts mean nothing alone, such as `FocusPoints`, which
-  needs a frame and an origin, or `Flash`, which needs whether it fired,
-  has no `default()`: its constructor takes those parts, its `with_…`
-  methods set the rest, and where a file may not record it, the getter
-  that gives it returns an `Option`, as `Metadata::focus_points` and
-  `CameraSettings::flash` do. `Options`, which opens files, starts from
-  `new()`. Its setters follow the same rule: `with_limits` sets what
-  `limits()` returns.
+- **Every setter is a `with_…` method.**
+  - A value a caller reads, such as `Metadata`, `Exposure` or `Lens`,
+    starts from `default()`. Each of its values is set by a `with_…`
+    method named after the getter that reads it back: `with_iso` sets
+    what `iso()` returns.
+  - A value that raw-files computes from others when it is read has no
+    `with_…` method. Its docs name the method that sets the value it is
+    read from
+    ([ADR021](docs/architecture-decisions/adr021-what-the-file-records-and-what-raw-files-reads-into-it.md)).
+  - A value whose parts mean nothing alone has no `default()`.
+    `FocusPoints` needs a frame and an origin, and `Flash` needs whether
+    it fired. Such a value's constructor takes those parts, and its
+    `with_…` methods set the rest. Where a file may not record such a
+    value, the getter that gives it returns an `Option`, as
+    `Metadata::focus_points` and `CameraSettings::flash` do.
+  - `Options`, which opens files, starts from `new()`. Its setters
+    follow the same rule: `with_limits` sets what `limits()` returns.
 - **A function that can refuse its arguments returns
   `Result<_, ValueError>`**, and its `# Errors` section lists the
   variants in the order it checks them
@@ -525,44 +538,46 @@ project's source code
 In short:
 
 - **Learn facts, write your own code.** A tag number, a field offset or a
-  flag's meaning is a fact: take it from published documentation, from a
-  sample file, or from what another program reports about a file, write
+  flag's meaning is a fact. Take it from published documentation, from a
+  sample file, or from what another program reports about a file. Write
   it into the notes with its source, confirm it on a file where you can,
   and code from the notes.
 - **Never copy or translate code, comments or tables from another
   project's source**, whatever its license (dcraw, LibRaw, rawspeed,
   rawler, ExifTool, exiv2 and the like). Reading their source to settle a
-  fact is fine; what you learned goes through the notes and a sample file
-  like any other fact, and is coded once a file confirms it. Where you
+  fact is fine. What you learned goes through the notes and a sample file
+  like any other fact. It is coded once a file confirms it. Where you
   can, let someone else write the code for a part whose source you have
   read. Never take a program apart: no firmware or software is
-  disassembled or decompiled to learn a format; observing what a program
+  disassembled or decompiled to learn a format. Observing what a program
   does with an input is fine, recorded so that others can repeat it.
 - **Permissively licensed code (MIT, BSD, Apache-2.0) enters only by a
-  recorded decision**, with its license notice and author kept in a
-  notices file and a comment at the code. Nothing is copied without
+  recorded decision.** Its license notice and author are kept in a
+  notices file and in a comment at the code. Nothing is copied without
   attribution.
 - **Run other readers only to compare.** ExifTool or exiv2 may be run on a
-  file, or their published output read, to see what another reader found;
-  record it as a source and confirm it on the file's bytes where you can.
+  file, or their published output read, to see what another reader found.
+  Record it as a source, and confirm it on the file's bytes where you can.
   Nothing of theirs is a dependency, and neither the test suite nor CI
   runs them: the samples stay the evidence.
 - **Say how you used a source.** In a commit, a pull request or a doc,
-  name whether you read a project's documentation or its source, which
-  file confirmed the fact, or that you ran a program to compare with.
+  name each of these that applies:
+  - whether you read a project's documentation or its source;
+  - which file confirmed the fact;
+  - that you ran a program to compare with.
 
 ## Adding a camera's focus points
 
-A DSLR shot through the viewfinder names its autofocus point by number,
-and where that point lies on the picture is in no file: it takes a
-table of the body's points. Such a table enters raw-files only when
-measured by the project or by a contributor on that body, on frames
-shot with it and read in the maker's own software; none is taken from
-another project on its license alone
+A DSLR shot through the viewfinder names its autofocus point by number.
+Where that point lies on the picture is in no file: it takes a table of
+the body's points. Such a table enters raw-files only when measured on
+that body, by the project or by a contributor. It must be measured on
+frames shot with the body and read in the maker's own software. None is
+taken from another project on its license alone
 ([ADR017](docs/architecture-decisions/adr017-per-body-tables-measured-by-the-project.md)).
 A body without a table gives no point for such a shot.
 
-You need no code and no measuring to add a body you own: shoot the
+You need no code and no measuring to add a body you own. Shoot the
 frames the NEF notes' procedure lists, RAW + JPEG
 ([autofocus-points.md](docs/formats/nef/autofocus-points.md#1-the-procedure)),
 and open an issue naming the body. The maintainer will say where to
