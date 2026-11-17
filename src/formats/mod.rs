@@ -11,6 +11,9 @@
 //! - Each format lives in its own folder (`nef/`, `arw/`, `jpeg/`) and joins
 //!   its container's list with a [`FormatSpec`]. [`tiff_specs`] holds NEF
 //!   and ARW, and [`jpeg_specs`] holds JPEG.
+//! - [`parse_tiff`] reads a file of a format on TIFF in the steps every
+//!   such format takes, with the reader of its maker's MakerNote. NEF and
+//!   ARW differ only in that reader and in ARW's private directory.
 //! - `tiff_previews` finds the previews and `tiff_metadata` reads the
 //!   standard tags, for the formats on TIFF and for the TIFF structure in a
 //!   JPEG file's Exif segment.
@@ -40,13 +43,13 @@ mod tiff_previews;
 
 use std::io::{Read, Seek};
 
-use makernote::points;
+use makernote::{Picture, Reader, points};
 
 use crate::container::Structure;
 use crate::container::jpeg::Segments;
-use crate::container::tiff::Tree;
 use crate::container::tiff::tags::{DNG_VERSION, MAKE};
-use crate::entries::Entries;
+use crate::container::tiff::{Ifd, Tree};
+use crate::entries::{Directory, Entries, Lookup};
 use crate::error::{Error, Result};
 use crate::format::Format;
 use crate::io::Source;
@@ -158,6 +161,69 @@ pub(super) fn make_starts_with<R: Read + Seek>(
         .get(start..)
         .and_then(|make| make.get(..name.len()))
         .is_some_and(|start| start.eq_ignore_ascii_case(name)))
+}
+
+/// How a TIFF-based format reads its private directory, if it has one: a
+/// directory that IFD0 points to by a tag the walk does not follow, such
+/// as Sony's SR2Private. [`Lookup::Skipped`] when it cannot be read.
+type PrivateIfd<R> = fn(&mut Source<R>, &Tree, &Limits) -> Result<Lookup<Ifd>>;
+
+/// Reads the previews, the metadata and the entries of a TIFF-based file
+/// that a format claimed, whose IFDs are `tree`: a file of the maker whose
+/// MakerNote reader is `M`, with the format's private directory when
+/// `private` reads one.
+///
+/// The MakerNote is read first, once for the whole file, then the private
+/// directory, both within `limits`. Then:
+///
+/// - **The previews** are the JPEGs that the tree's IFDs declare, which
+///   the shared TIFF preview finder finds over the whole tree, and the
+///   MakerNote's own ([`Reader::preview_candidate`]). Each is probed within
+///   `limits`.
+/// - **The metadata** is what the shared TIFF metadata reader reads from
+///   the standard tags. When there is a MakerNote, its reader adds what it
+///   records and the standard tags lack, for a raw file's picture
+///   ([`Reader::metadata`], [`Picture::Raw`]).
+/// - **The entries** are those of every directory of the tree, then the
+///   MakerNote's ([`makernote::add_entries_of`]), then those of the
+///   private directory. A MakerNote IFD or a private directory that cannot
+///   be read is listed as skipped, in the same order.
+///
+/// # Errors
+///
+/// `Io` when the reader fails.
+fn parse_tiff<M: Reader, R: Read + Seek>(
+    src: &mut Source<R>,
+    tree: &Tree,
+    limits: &Limits,
+    private: Option<PrivateIfd<R>>,
+) -> Result<Parsed> {
+    let makernote = M::lookup(src, tree, limits)?;
+    let private = match private {
+        Some(read) => read(src, tree, limits)?,
+        None => Lookup::Absent,
+    };
+    let candidate = makernote.as_ref().found().and_then(M::preview_candidate);
+    let previews = tiff_previews::find(src, tree, candidate.as_slice(), limits)?;
+    let standard = tiff_metadata::read(src, tree)?;
+    let mut entries = Entries::of_tree(tree);
+    makernote::add_entries_of(&makernote, &mut entries);
+    let metadata = match &makernote {
+        Lookup::Found(makernote) => makernote.metadata(src, standard, Picture::Raw)?,
+        Lookup::Skipped(_) | Lookup::Absent => standard.metadata,
+    };
+    match &private {
+        Lookup::Found(private) => {
+            entries.push(Directory::Private, private);
+        }
+        Lookup::Skipped(skipped) => entries.skip(*skipped),
+        Lookup::Absent => {}
+    }
+    Ok(Parsed {
+        previews,
+        metadata,
+        entries,
+    })
 }
 
 /// Detects the format of the file in `src`, whose container read the
@@ -272,14 +338,21 @@ mod tests {
     use super::testing::{self, Src};
     use super::*;
     use crate::container::tiff::tags::{DNG_PRIVATE_DATA, MAKER_NOTE, MODEL, ORIENTATION};
+    use crate::container::tiff::tags::{JPEG_INTERCHANGE_FORMAT, JPEG_INTERCHANGE_FORMAT_LENGTH};
+    use crate::container::tiff::{Block, walk};
     use crate::error::{Error, ErrorKind};
     use crate::focus::FocusLayout;
+    use crate::formats::makernote::sony;
     use crate::geometry::{Point, Size};
+    use crate::io::BLOCK_SIZE;
     use crate::jpeg_builder::JpegBuilder;
+    use crate::jpeg_stub::jpeg_stub;
     use crate::orientation::Orientation;
     use crate::preview::PreviewFormat;
     use crate::tiff_builder::{ASCII, IfdId, Order, RawValue, TiffBuilder};
-    use std::io::Cursor;
+    use std::cell::RefCell;
+    use std::io::{Cursor, SeekFrom};
+    use std::rc::Rc;
 
     /// A one-IFD TIFF file whose Make is `make`, read into a source and a
     /// tree.
@@ -798,5 +871,96 @@ mod tests {
             assert_eq!(metadata.camera().recorded_make(), Some(make), "{make}");
             assert_eq!(metadata.camera().make(), None, "{make}");
         }
+    }
+
+    /// A reader that writes down where each of its reads starts, so that a
+    /// test sees which of the source's cached blocks are loaded, and in
+    /// what order.
+    struct Recording {
+        inner: Cursor<Vec<u8>>,
+        starts: Rc<RefCell<Vec<u64>>>,
+    }
+
+    impl Read for Recording {
+        fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+            self.starts.borrow_mut().push(self.inner.position());
+            self.inner.read(buf)
+        }
+    }
+
+    impl Seek for Recording {
+        fn seek(&mut self, pos: SeekFrom) -> std::io::Result<u64> {
+            self.inner.seek(pos)
+        }
+    }
+
+    /// A private directory read for the test of the order of the steps: it
+    /// reads the first bytes of the fifth cached block, and finds none.
+    fn private_in_the_fifth_block<R: Read + Seek>(
+        src: &mut Source<R>,
+        _: &Tree,
+        _: &Limits,
+    ) -> Result<Lookup<Ifd>> {
+        src.bytes(4 * BLOCK_SIZE, 4)?;
+        Ok(Lookup::Absent)
+    }
+
+    #[test]
+    fn a_tiff_based_file_is_read_in_the_order_of_its_steps() {
+        // The MakerNote in the second block, the preview's JPEG in the
+        // third, the Model's text in the fourth and what the private
+        // directory reads in the fifth: each step of `parse_tiff` loads
+        // its own block, after the walk has loaded the first.
+        let mut builder = TiffBuilder::new(Order::Little);
+        let (ifd0, exif) = (builder.ifd(), builder.ifd());
+        builder.ascii(ifd0, MAKE, "SONY").exif(ifd0, exif);
+        // A Sony MakerNote IFD of one entry, WhiteBalance, held in its
+        // entry, without a header.
+        let mut makernote = vec![1, 0, 0x15, 0x01, 4, 0, 1, 0, 0, 0];
+        makernote.extend([0; 8]);
+        let makernote = builder.blob_at(BLOCK_SIZE, &makernote);
+        builder.undefined_blob(exif, MAKER_NOTE, makernote);
+        let jpeg = builder.blob_at(2 * BLOCK_SIZE, &jpeg_stub(160, 120, 0xC0));
+        builder
+            .long_blob(ifd0, JPEG_INTERCHANGE_FORMAT, jpeg)
+            .long_blob_len(ifd0, JPEG_INTERCHANGE_FORMAT_LENGTH, jpeg);
+        builder.blob_at(3 * BLOCK_SIZE, b"ILCE-7M2\0");
+        let model_at = u32::try_from(3 * BLOCK_SIZE).unwrap();
+        builder.raw(ifd0, MODEL, ASCII, 9, RawValue::Offset(model_at));
+        builder.pad_to(5 * BLOCK_SIZE);
+        let starts = Rc::new(RefCell::new(Vec::new()));
+        let reader = Recording {
+            inner: Cursor::new(builder.build().bytes),
+            starts: Rc::clone(&starts),
+        };
+        let mut src = Source::new(reader).unwrap();
+        let limits = Limits::default();
+        let file_block = Block::file(src.len());
+        let tree = walk(&mut src, &file_block, &limits).unwrap();
+        assert_eq!(*starts.borrow(), [0], "the walk reads the first block");
+        starts.borrow_mut().clear();
+
+        let parsed = parse_tiff::<sony::MakerNote, _>(
+            &mut src,
+            &tree,
+            &limits,
+            Some(private_in_the_fifth_block),
+        )
+        .unwrap();
+        let blocks: Vec<u64> = starts
+            .borrow()
+            .iter()
+            .map(|start| start / BLOCK_SIZE)
+            .collect();
+        // The MakerNote, the private directory, the previews, the standard
+        // tags.
+        assert_eq!(blocks, [1, 4, 2, 3]);
+        // Each step found what it read.
+        assert_eq!(parsed.previews.len(), 1);
+        assert_eq!(
+            parsed.metadata.camera.recorded_model.as_deref(),
+            Some("ILCE-7M2")
+        );
+        assert!(parsed.entries.directories().contains(&Directory::MakerNote));
     }
 }

@@ -5,43 +5,13 @@
 //! A Nikon camera writes several JPEG previews beside the raw data: in the
 //! SubIFDs, in IFD0 on some recent bodies, and in the MakerNote's
 //! PreviewIFD. The shared TIFF preview finder finds them over the whole
-//! tree. The PreviewIFD's JPEG is the one candidate this reader adds from
-//! outside the tree ([`MakerNote::preview_candidate`]), out of the MakerNote
-//! the NEF reader read once for the whole file.
+//! tree. The PreviewIFD's JPEG is the one candidate from outside the tree,
+//! out of the MakerNote that the NEF reader reads once for the whole file
+//! ([`parse_tiff`](crate::formats::parse_tiff)). This module holds no code
+//! of its own, only the tests of what the reader finds.
 //!
 //! Which body puts which preview where, and at what size, is in the NEF
 //! notes (`docs/formats/nef/container-and-previews.md`, sections 3 and 4).
-
-use std::io::{Read, Seek};
-
-use crate::container::tiff::Tree;
-use crate::error::Result;
-use crate::formats::makernote::Reader;
-use crate::formats::makernote::nikon::MakerNote;
-use crate::formats::tiff_previews;
-use crate::io::Source;
-use crate::limits::Limits;
-use crate::preview::Preview;
-
-/// The previews of the NEF file in `src`, whose IFDs are `tree` and whose
-/// MakerNote, already read, is `makernote`, in the order they were found:
-/// the tree's, then the MakerNote's. Each is probed within `limits`.
-///
-/// An IFD whose tags cannot be read costs only its own preview, and a
-/// MakerNote that does not hold together gives no candidate.
-///
-/// # Errors
-///
-/// `Io` when the reader fails.
-pub(super) fn previews<R: Read + Seek>(
-    src: &mut Source<R>,
-    tree: &Tree,
-    makernote: Option<&MakerNote>,
-    limits: &Limits,
-) -> Result<Vec<Preview>> {
-    let extra = makernote.and_then(MakerNote::preview_candidate);
-    tiff_previews::find(src, tree, extra.as_slice(), limits)
-}
 
 #[cfg(test)]
 mod tests {
@@ -100,11 +70,8 @@ mod tests {
         let file_block = Block::file(src.len());
         let tree = walk(&mut src, &file_block, &Limits::default()).unwrap();
 
-        let makernote =
-            crate::formats::makernote::nikon::read(&mut src, &tree, &Limits::default()).unwrap();
-        let previews =
-            super::previews(&mut src, &tree, makernote.as_ref(), &Limits::default()).unwrap();
-        let sizes: Vec<Size> = previews.iter().map(Preview::size).collect();
+        let parsed = super::super::parse(&mut src, &tree, &Limits::default()).unwrap();
+        let sizes: Vec<Size> = parsed.previews.iter().map(Preview::size).collect();
         assert_eq!(sizes, [size(160, 120)]);
     }
 }

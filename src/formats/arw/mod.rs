@@ -17,11 +17,11 @@
 //!
 //! - [`claims`] says whether a file is a Sony RAW file, by IFD0's Make,
 //!   and for a Hasselblad Make by Sony's private pointer.
-//! - [`parse`] reads Sony's MakerNote once, with [`sony`], the reader every
-//!   format whose files carry that MakerNote shares, and Sony's private
-//!   directory ([`private_ifd`]). Then it reads the previews, the metadata
-//!   and the entries.
-//! - `previews` finds the previews.
+//! - [`parse`] reads the file as every TIFF-based format does
+//!   ([`parse_tiff`]), with [`sony`], the reader every format whose files
+//!   carry Sony's MakerNote shares, and Sony's private directory
+//!   ([`private_ifd`]).
+//! - `previews` says where a Sony RAW file keeps its previews.
 //!
 //! The MakerNote's FileFormat tag gives a version, but this reader never
 //! needs it. The version follows the firmware rather than the body, and
@@ -39,13 +39,13 @@ mod previews;
 
 use std::io::{Read, Seek};
 
-use super::{FormatSpec, Parsed, is_dng, make_starts_with, tiff_metadata};
+use super::{FormatSpec, Parsed, is_dng, make_starts_with, parse_tiff};
 use crate::container::tiff::{Ifd, Tree, ifd_in};
-use crate::entries::{Directory, Entries, Lookup, SkippedDirectory};
+use crate::entries::{Directory, Lookup, SkippedDirectory};
 use crate::error::ErrorKind;
 use crate::error::Result;
 use crate::format::Format;
-use crate::formats::makernote::{Picture, Reader, sony};
+use crate::formats::makernote::{Reader, sony};
 use crate::io::Source;
 use crate::limits::Limits;
 
@@ -174,55 +174,15 @@ fn private_ifd<R: Read + Seek>(
 }
 
 /// Reads the previews, the metadata and the entries of a file that
-/// [`claims`] accepted.
-///
-/// The MakerNote is read first, once for the whole file, and Sony's private
-/// directory, both within `limits`. Then:
-///
-/// - **The previews** are the JPEGs that the IFDs of IFD0's chain declare.
-///   The shared TIFF preview finder finds them over the whole tree.
-/// - **The metadata** is what the shared TIFF metadata reader reads from
-///   the standard tags. When there is a MakerNote, its
-///   [`metadata`](sony::MakerNote::metadata) adds what no standard tag
-///   records.
-/// - **The entries** are those of every directory of the tree, then the
-///   MakerNote IFD's
-///   ([`MakerNote::add_entries`](sony::MakerNote::add_entries)), then those
-///   of SR2Private. A MakerNote IFD or an SR2Private that cannot be read
-///   is listed as skipped, in the same order.
+/// [`claims`] accepted, as every TIFF-based format reads them
+/// ([`parse_tiff`]), with the Sony MakerNote reader and Sony's private
+/// directory ([`private_ifd`]). Sony's MakerNote adds no preview.
 ///
 /// # Errors
 ///
 /// `Io` when the reader fails.
 fn parse<R: Read + Seek>(src: &mut Source<R>, tree: &Tree, limits: &Limits) -> Result<Parsed> {
-    let makernote = sony::MakerNote::lookup(src, tree, limits)?;
-    let private = private_ifd(src, tree, limits)?;
-    let previews = previews::previews(src, tree, limits)?;
-    let standard = tiff_metadata::read(src, tree)?;
-    let mut entries = Entries::of_tree(tree);
-    let metadata = match makernote {
-        Lookup::Found(makernote) => {
-            makernote.add_entries(&mut entries);
-            makernote.metadata(src, standard, Picture::Raw)?
-        }
-        Lookup::Skipped(skipped) => {
-            entries.skip(skipped);
-            standard.metadata
-        }
-        Lookup::Absent => standard.metadata,
-    };
-    match &private {
-        Lookup::Found(private) => {
-            entries.push(Directory::Private, private);
-        }
-        Lookup::Skipped(skipped) => entries.skip(*skipped),
-        Lookup::Absent => {}
-    }
-    Ok(Parsed {
-        previews,
-        metadata,
-        entries,
-    })
+    parse_tiff::<sony::MakerNote, R>(src, tree, limits, Some(private_ifd))
 }
 
 #[cfg(test)]

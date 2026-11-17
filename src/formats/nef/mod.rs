@@ -10,10 +10,10 @@
 //! The parts, in the order a file is read:
 //!
 //! - [`claims`] says whether a file is a NEF, by IFD0's Make.
-//! - [`parse`] reads Nikon's MakerNote once, with [`nikon`], the reader
-//!   every format whose files carry that MakerNote shares. Then it reads
-//!   the previews, the metadata and the entries.
-//! - `previews` finds the previews, with the MakerNote already read.
+//! - [`parse`] reads the file as every TIFF-based format does
+//!   ([`parse_tiff`]), with [`nikon`], the reader every format whose files
+//!   carry Nikon's MakerNote shares.
+//! - `previews` says where a NEF keeps its previews.
 //!
 //! Nothing the file holds is an error of this reader's. Damage costs only
 //! what it touches ([`skip_damage`](crate::error::skip_damage)), and only
@@ -27,12 +27,11 @@ mod previews;
 
 use std::io::{Read, Seek};
 
-use super::{FormatSpec, Parsed, is_dng, make_starts_with, tiff_metadata};
+use super::{FormatSpec, Parsed, is_dng, make_starts_with, parse_tiff};
 use crate::container::tiff::Tree;
-use crate::entries::{Entries, Lookup};
 use crate::error::Result;
 use crate::format::Format;
-use crate::formats::makernote::{Picture, Reader, nikon};
+use crate::formats::makernote::{Reader, nikon};
 use crate::io::Source;
 use crate::limits::Limits;
 
@@ -65,48 +64,16 @@ fn claims<R: Read + Seek>(src: &mut Source<R>, tree: &Tree) -> Result<bool> {
 }
 
 /// Reads the previews, the metadata and the entries of a NEF file that
-/// [`claims`] accepted.
-///
-/// The MakerNote is read first, once for the whole file, with its
-/// PreviewIFD, within `limits`. Then:
-///
-/// - **The previews** are the JPEGs that IFD0 and the SubIFDs declare,
-///   and the one the MakerNote's PreviewIFD declares. The shared TIFF
-///   preview finder finds those of IFD0 and the SubIFDs over the whole
-///   tree.
-/// - **The metadata** is what the shared TIFF metadata reader reads from
-///   the standard tags. When there is a MakerNote, its
-///   [`metadata`](nikon::MakerNote::metadata) adds what it records and the standard tags lack, for a raw file's
-///   picture ([`Picture::Raw`]).
-/// - **The entries** are those of every directory of the tree, then the
-///   MakerNote IFD's and its PreviewIFD's
-///   ([`MakerNote::add_entries`](nikon::MakerNote::add_entries)). A
-///   MakerNote IFD that cannot be read is listed as skipped.
+/// [`claims`] accepted, as every TIFF-based format reads them
+/// ([`parse_tiff`]), with the Nikon MakerNote reader. The MakerNote adds
+/// the JPEG of its PreviewIFD to the previews, and its PreviewIFD to the
+/// entries. A NEF has no private directory.
 ///
 /// # Errors
 ///
 /// `Io` when the reader fails.
 fn parse<R: Read + Seek>(src: &mut Source<R>, tree: &Tree, limits: &Limits) -> Result<Parsed> {
-    let makernote = nikon::MakerNote::lookup(src, tree, limits)?;
-    let previews = previews::previews(src, tree, makernote.as_ref().found(), limits)?;
-    let standard = tiff_metadata::read(src, tree)?;
-    let mut entries = Entries::of_tree(tree);
-    let metadata = match makernote {
-        Lookup::Found(makernote) => {
-            makernote.add_entries(&mut entries);
-            makernote.metadata(src, standard, Picture::Raw)?
-        }
-        Lookup::Skipped(skipped) => {
-            entries.skip(skipped);
-            standard.metadata
-        }
-        Lookup::Absent => standard.metadata,
-    };
-    Ok(Parsed {
-        previews,
-        metadata,
-        entries,
-    })
+    parse_tiff::<nikon::MakerNote, R>(src, tree, limits, None)
 }
 
 #[cfg(test)]
