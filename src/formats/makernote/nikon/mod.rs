@@ -10,7 +10,10 @@
 //! read:
 //!
 //! - [`block`] reads the block in its layouts, the MakerNote IFD and the
-//!   PreviewIFD, and gives the PreviewIFD's JPEG as a candidate preview;
+//!   PreviewIFD, and gives the PreviewIFD's JPEG as a candidate preview.
+//!   It holds the Nikon reader's side of the MakerNote readers' trait
+//!   ([`Reader`](super::Reader)), whose `metadata` calls the function
+//!   below;
 //! - [`metadata`](fn@metadata) reads what the MakerNote adds to the
 //!   standard tags, with the four files below;
 //! - [`metadata`](mod@metadata) reads CropArea, the serial number, the ISO,
@@ -20,8 +23,9 @@
 //!   it names;
 //! - [`crop`] reads CropHiSpeed, and places a focus point on a crop or
 //!   from the body's table;
-//! - [`MakerNote::add_entries`] lists both IFDs' entries in the raw view,
-//!   as the directories `MakerNote` and `MakerNoteSub(0x0011)`.
+//! - [`add_entries`](super::Reader::add_entries) lists both IFDs' entries
+//!   in the raw view, as the directories `MakerNote` and
+//!   `MakerNoteSub(0x0011)`.
 //!
 //! A tag's number and what it records are on its constant, such as
 //! [`CROP_AREA`]. The type and count Nikon writes it in are its rule
@@ -40,14 +44,15 @@ mod settings;
 #[cfg(test)]
 mod testing;
 
+pub(in crate::formats) use block::MakerNote;
 #[cfg(test)]
 pub(in crate::formats) use block::read;
-pub(in crate::formats) use block::{MakerNote, lookup, preview_candidate};
 
 use std::io::{Read, Seek};
 
 use crate::error::Result;
 use crate::focus::FocusPoints;
+use crate::formats::makernote::Picture;
 use crate::formats::makernote::points::{self, PointTable};
 use crate::formats::tiff_metadata::{self, Standard};
 use crate::geometry::Size;
@@ -187,32 +192,12 @@ mod rules {
         Held::new(tags::JPEG_INTERCHANGE_FORMAT_LENGTH, LONG);
 }
 
-/// The manufacturer's name that a Nikon camera's Make starts with,
-/// compared without regard to case. The NEF claim and the JPEG reader look
-/// for it in IFD0's Make before they take a file for a Nikon one.
-pub(in crate::formats) const NIKON: &[u8; 5] = b"NIKON";
-
-/// What a file's picture is, as the format that read the MakerNote knows
-/// it: what the focus point of a crop is placed on when the MakerNote
-/// holds no CropArea. [`metadata`] turns it into the pixels it gives
-/// [`focus`]: none for a raw file, the image size for a JPEG.
-///
-/// [`metadata`]: fn@metadata
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(in crate::formats) enum Picture {
-    /// A raw file's, such as a NEF's: the picture is the part of the stored
-    /// raw data that CropArea locates. A raw file has no pixels of its own,
-    /// so a crop without a CropArea is read as recorded (ADR012).
-    Raw,
-    /// A JPEG's: the picture is the file's own pixels, of the size its
-    /// frame header gives, which the metadata's image size already holds.
-    /// A crop without a CropArea is placed on those pixels (ADR015).
-    Jpeg,
-}
-
 /// The metadata of the file whose MakerNote is `makernote`: what the
 /// standard tags gave, `standard`, with what the MakerNote records that
-/// they lack. `picture` says what kind of picture the file holds.
+/// they lack. `picture` says what kind of picture the file holds, and so
+/// what a crop without a CropArea is placed on: nothing for a raw file,
+/// the image size for a JPEG. The Nikon reader's
+/// [`Reader::metadata`](crate::formats::makernote::Reader::metadata).
 ///
 /// In this order:
 ///
@@ -250,7 +235,7 @@ pub(in crate::formats) enum Picture {
 /// # Errors
 ///
 /// `Io` when the reader fails.
-pub(in crate::formats) fn metadata<R: Read + Seek>(
+fn metadata<R: Read + Seek>(
     src: &mut Source<R>,
     makernote: &MakerNote,
     standard: Standard,

@@ -25,17 +25,18 @@
 //!
 //! A block that starts with the signature is of the embedded layout or of
 //! none. Any other block is read as a bare IFD. The Make is not looked at
-//! here: the format's reader has taken the file for a Nikon one by
-//! [`NIKON`]. So a block of another maker's under a Nikon Make is read as a
-//! bare IFD too, under the same checks. If it starts with text, its first
-//! two bytes, taken for the number of entries, are more than the limits or
-//! the block allow.
+//! here: the format's reader has taken the file for a Nikon one by its
+//! Make ([`MakerNote::MAKE`]). So a block of another maker's under a Nikon
+//! Make is read as a bare IFD too, under the same checks. If it starts
+//! with text, its first two bytes, taken for the number of entries, are
+//! more than the limits or the block allow.
 //!
 //! Every offset found inside the block is checked against the block, not
 //! only against the file. The MakerNote IFD and the PreviewIFD are read
 //! inside the block ([`ifd_in`]), each with its whole entry table, and an
 //! entry whose value lies outside the block is dropped. The PreviewIFD's
-//! JPEG must lie inside the block too ([`preview_candidate`]).
+//! JPEG must lie inside the block too
+//! ([`preview_candidate`](MakerNote::preview_candidate)).
 //!
 //! Nothing the block holds is an error. A block that does not hold
 //! together costs what the MakerNote would have given, never the file, as
@@ -44,8 +45,6 @@
 //!
 //! The NEF notes give each layout's bytes and the bodies that write it
 //! (`docs/formats/nef/makernote-and-metadata.md`, section 1).
-//!
-//! [`NIKON`]: super::NIKON
 
 use std::io::{Read, Seek};
 
@@ -53,10 +52,12 @@ use super::{PREVIEW_IFD, rules};
 use crate::container::tiff::{Block, Ifd, Tree, ifd_in, parse_header};
 use crate::entries::{Directory, Entries, Lookup, SkippedDirectory};
 use crate::error::{Result, skip_damage};
-use crate::formats::makernote::MakerNoteBlock;
+use crate::formats::makernote::{MakerNoteBlock, Picture, Reader};
+use crate::formats::tiff_metadata::Standard;
 use crate::formats::tiff_previews::{self, Candidate};
 use crate::io::Source;
 use crate::limits::Limits;
+use crate::metadata::Metadata;
 
 /// The signature a Nikon MakerNote of the embedded layout starts with, as
 /// does one of the short-header layout: what tells both from the
@@ -95,13 +96,85 @@ pub(in crate::formats) struct MakerNote {
     preview: Lookup<Ifd>,
 }
 
-impl MakerNote {
+impl Reader for MakerNote {
+    /// `NIKON`, the manufacturer's name that a Nikon camera's Make starts
+    /// with. The NEF claim and the JPEG reader look for it in IFD0's Make
+    /// before they take a file for a Nikon one.
+    const MAKE: &'static [u8] = b"NIKON";
+
+    /// The Nikon MakerNote of the file in `src`, whose IFDs are `tree`,
+    /// read within `limits`, with its PreviewIFD when it has one.
+    ///
+    /// [`Lookup::Absent`] when the file has no Exif IFD or no MakerNote, or
+    /// when the MakerNote is of the short-header layout or its inner header
+    /// does not hold together, which the short-header layout's need not
+    /// ([`embedded_ifd`]). [`Lookup::Skipped`] when the MakerNote IFD does
+    /// not hold together: the raw view lists it as skipped.
+    ///
+    /// # Errors
+    ///
+    /// `Io` when the reader fails.
+    fn lookup<R: Read + Seek>(
+        src: &mut Source<R>,
+        tree: &Tree,
+        limits: &Limits,
+    ) -> Result<Lookup<MakerNote>> {
+        let Some(block) = MakerNoteBlock::find(tree) else {
+            return Ok(Lookup::Absent);
+        };
+        let head = block.first_bytes(src, 6)?;
+        let ifd = if head.as_slice() == SIGNATURE {
+            embedded_ifd(src, &block, limits)?
+        } else {
+            // The headerless layout: a bare IFD at the block's first byte.
+            block.makernote_ifd_at(src, 0, limits)?
+        };
+        let ifd = match ifd {
+            Lookup::Found(ifd) => ifd,
+            Lookup::Skipped(skipped) => return Ok(Lookup::Skipped(skipped)),
+            Lookup::Absent => return Ok(Lookup::Absent),
+        };
+        let preview = preview_ifd(src, &ifd, limits)?;
+        Ok(Lookup::Found(MakerNote { ifd, preview }))
+    }
+
+    /// What the MakerNote adds to the standard tags, as
+    /// [`metadata`](fn@super::metadata) reads it.
+    ///
+    /// # Errors
+    ///
+    /// `Io` when the reader fails.
+    fn metadata<R: Read + Seek>(
+        &self,
+        src: &mut Source<R>,
+        standard: Standard,
+        picture: Picture,
+    ) -> Result<Metadata> {
+        super::metadata(src, self, standard, picture)
+    }
+
+    /// Where the MakerNote's preview JPEG is, as a candidate for the shared
+    /// finder: the JPEG its PreviewIFD declares, held to the block
+    /// ([`tiff_previews::candidate`]).
+    ///
+    /// `None` when the MakerNote has no PreviewIFD, when its
+    /// JPEGInterchangeFormat or JPEGInterchangeFormatLength breaks its rule,
+    /// one LONG each, as Nikon writes them, or when the JPEG they declare
+    /// does not lie inside the block.
+    fn preview_candidate(&self) -> Option<Candidate> {
+        let preview = self.preview.as_ref().found()?;
+        let [offset] = preview.held(rules::JPEG_INTERCHANGE_FORMAT)?;
+        let [length] = preview.held(rules::JPEG_INTERCHANGE_FORMAT_LENGTH)?;
+        // An empty JPEG is passed on: the finder drops it with the others.
+        tiff_previews::candidate(preview.block(), offset, length)
+    }
+
     /// Adds the MakerNote's directories to `entries`: the MakerNote IFD,
     /// then the PreviewIFD, under the tag of the entry that points to it,
     /// or the PreviewIFD as skipped when it could not be read. The
     /// PreviewIFD is added only when the MakerNote IFD was, so that no
     /// PreviewIFD is listed without its MakerNote.
-    pub(in crate::formats) fn add_entries(&self, entries: &mut Entries) {
+    fn add_entries(&self, entries: &mut Entries) {
         if entries.push(Directory::MakerNote, &self.ifd) {
             match &self.preview {
                 Lookup::Found(preview) => {
@@ -114,55 +187,19 @@ impl MakerNote {
     }
 }
 
-/// The Nikon MakerNote of the file in `src`, whose IFDs are `tree`, read
-/// within `limits`, with its PreviewIFD when it has one.
-///
-/// [`Lookup::Absent`] when the file has no Exif IFD or no MakerNote, or
-/// when the MakerNote is of the short-header layout or its inner header
-/// does not hold together, which the short-header layout's need not
-/// ([`embedded_ifd`]). [`Lookup::Skipped`] when the MakerNote IFD does not
-/// hold together: the raw view lists it as skipped.
+/// The Nikon MakerNote of the file in `src`, as
+/// [`lookup`](Reader::lookup) finds it; `None` when it gives none.
 ///
 /// # Errors
 ///
-/// `Io` when the reader fails.
-pub(in crate::formats) fn lookup<R: Read + Seek>(
-    src: &mut Source<R>,
-    tree: &Tree,
-    limits: &Limits,
-) -> Result<Lookup<MakerNote>> {
-    let Some(block) = MakerNoteBlock::find(tree) else {
-        return Ok(Lookup::Absent);
-    };
-    let head = block.first_bytes(src, 6)?;
-    let ifd = if head.as_slice() == SIGNATURE {
-        embedded_ifd(src, &block, limits)?
-    } else {
-        // The headerless layout: a bare IFD at the block's first byte.
-        block.makernote_ifd_at(src, 0, limits)?
-    };
-    let ifd = match ifd {
-        Lookup::Found(ifd) => ifd,
-        Lookup::Skipped(skipped) => return Ok(Lookup::Skipped(skipped)),
-        Lookup::Absent => return Ok(Lookup::Absent),
-    };
-    let preview = preview_ifd(src, &ifd, limits)?;
-    Ok(Lookup::Found(MakerNote { ifd, preview }))
-}
-
-/// The Nikon MakerNote of the file in `src`, as [`lookup`] finds it;
-/// `None` when it gives none.
-///
-/// # Errors
-///
-/// As for [`lookup`].
+/// As for [`lookup`](Reader::lookup).
 #[cfg(test)]
 pub(in crate::formats) fn read<R: Read + Seek>(
     src: &mut Source<R>,
     tree: &Tree,
     limits: &Limits,
 ) -> Result<Option<MakerNote>> {
-    Ok(lookup(src, tree, limits)?.found())
+    Ok(MakerNote::lookup(src, tree, limits)?.found())
 }
 
 /// The PreviewIFD of the MakerNote whose IFD is `ifd`, read within
@@ -234,22 +271,6 @@ fn embedded_ifd<R: Read + Seek>(
     Ok(makernote.looked(found, block.at(header.ifd0)))
 }
 
-/// Where the preview JPEG of `makernote` is, as a candidate for the shared
-/// finder: the JPEG its PreviewIFD declares, held to the block
-/// ([`tiff_previews::candidate`]).
-///
-/// `None` when the MakerNote has no PreviewIFD, when its
-/// JPEGInterchangeFormat or JPEGInterchangeFormatLength breaks its rule,
-/// one LONG each, as Nikon writes them, or when the JPEG they declare does
-/// not lie inside the block.
-pub(in crate::formats) fn preview_candidate(makernote: &MakerNote) -> Option<Candidate> {
-    let preview = makernote.preview.as_ref().found()?;
-    let [offset] = preview.held(rules::JPEG_INTERCHANGE_FORMAT)?;
-    let [length] = preview.held(rules::JPEG_INTERCHANGE_FORMAT_LENGTH)?;
-    // An empty JPEG is passed on: the finder drops it with the others.
-    tiff_previews::candidate(preview.block(), offset, length)
-}
-
 #[cfg(test)]
 mod tests {
     use super::super::testing::{
@@ -283,7 +304,7 @@ mod tests {
 
     /// The MakerNote's preview candidate in the file in `src`, whose IFDs
     /// are `tree`: what [`read`], under `limits`, and then
-    /// [`preview_candidate`] return.
+    /// [`preview_candidate`](MakerNote::preview_candidate) return.
     fn read_candidate<R: Read + Seek>(
         src: &mut Source<R>,
         tree: &Tree,
@@ -292,7 +313,7 @@ mod tests {
         let Some(makernote) = read(src, tree, limits)? else {
             return Ok(None);
         };
-        Ok(preview_candidate(&makernote))
+        Ok(makernote.preview_candidate())
     }
 
     /// The MakerNote's preview candidate in the file `bytes`, whose IFDs
@@ -511,7 +532,7 @@ mod tests {
                 "{order:?}"
             );
             assert_eq!(makernote.ifd.order(), byte_order(order), "{order:?}");
-            let found = preview_candidate(&makernote);
+            let found = makernote.preview_candidate();
             assert_eq!(found, Some(expected), "{order:?}");
             let start = usize::try_from(expected.offset).unwrap();
             assert_eq!(bytes[start..start + 3], [0xFF, 0xD8, 0xFF], "{order:?}");
@@ -535,7 +556,7 @@ mod tests {
                 .expect("a MakerNote");
             let block = tiff::Block::new(POS, POS + range.start..POS + range.end);
             assert_eq!(makernote.ifd.block(), &block, "{order:?}");
-            let found = preview_candidate(&makernote);
+            let found = makernote.preview_candidate();
             assert_eq!(
                 found,
                 Some(Candidate {
@@ -586,7 +607,7 @@ mod tests {
             // no preview.
             let (bytes, _, _) = headerless_file(order, b"", Some(2 + 24));
             let (mut src, makernote, standard) = read_file(bytes);
-            let found = preview_candidate(&makernote);
+            let found = makernote.preview_candidate();
             assert_eq!(found, None, "{order:?}");
             let metadata = metadata(&mut src, &makernote, standard, Picture::Raw).unwrap();
             assert_eq!(metadata.exposure.iso, Some(200), "{order:?}");
@@ -675,13 +696,13 @@ mod tests {
         }
     }
 
-    /// What [`lookup`] finds, under `limits`, in the file `bytes`, walked
-    /// with the default limits.
+    /// What [`lookup`](MakerNote::lookup) finds, under `limits`, in the
+    /// file `bytes`, walked with the default limits.
     fn looked_up(bytes: Vec<u8>, limits: &Limits) -> Lookup<MakerNote> {
         let mut src = Source::new(Cursor::new(bytes)).unwrap();
         let file_block = tiff::Block::file(src.len());
         let tree = walk(&mut src, &file_block, &Limits::default()).unwrap();
-        lookup(&mut src, &tree, limits).unwrap()
+        MakerNote::lookup(&mut src, &tree, limits).unwrap()
     }
 
     #[test]

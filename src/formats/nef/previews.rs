@@ -6,7 +6,7 @@
 //! SubIFDs, in IFD0 on some recent bodies, and in the MakerNote's
 //! PreviewIFD. The shared TIFF preview finder finds them over the whole
 //! tree. The PreviewIFD's JPEG is the one candidate this reader adds from
-//! outside the tree ([`nikon::preview_candidate`]), out of the MakerNote
+//! outside the tree ([`MakerNote::preview_candidate`]), out of the MakerNote
 //! the NEF reader read once for the whole file.
 //!
 //! Which body puts which preview where, and at what size, is in the NEF
@@ -16,7 +16,8 @@ use std::io::{Read, Seek};
 
 use crate::container::tiff::Tree;
 use crate::error::Result;
-use crate::formats::makernote::nikon::{self, MakerNote};
+use crate::formats::makernote::Reader;
+use crate::formats::makernote::nikon::MakerNote;
 use crate::formats::tiff_previews;
 use crate::io::Source;
 use crate::limits::Limits;
@@ -38,7 +39,7 @@ pub(super) fn previews<R: Read + Seek>(
     makernote: Option<&MakerNote>,
     limits: &Limits,
 ) -> Result<Vec<Preview>> {
-    let extra = makernote.and_then(nikon::preview_candidate);
+    let extra = makernote.and_then(MakerNote::preview_candidate);
     tiff_previews::find(src, tree, extra.as_slice(), limits)
 }
 
@@ -99,7 +100,8 @@ mod tests {
         let file_block = Block::file(src.len());
         let tree = walk(&mut src, &file_block, &Limits::default()).unwrap();
 
-        let makernote = super::nikon::read(&mut src, &tree, &Limits::default()).unwrap();
+        let makernote =
+            crate::formats::makernote::nikon::read(&mut src, &tree, &Limits::default()).unwrap();
         let previews =
             super::previews(&mut src, &tree, makernote.as_ref(), &Limits::default()).unwrap();
         let sizes: Vec<Size> = previews.iter().map(Preview::size).collect();

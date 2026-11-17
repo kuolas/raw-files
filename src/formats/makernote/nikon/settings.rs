@@ -30,12 +30,12 @@ use std::io::{Read, Seek};
 
 use super::block::MakerNote;
 use super::crop::CropHiSpeed;
-use super::{Picture, rules};
+use super::rules;
 use crate::camera_settings::{
     CameraSettings, ColorSpace, FineTune, ImageArea, RawImageSize, Shutter, WhiteBalanceMode,
 };
 use crate::error::Result;
-use crate::formats::makernote::checked_color_temperature;
+use crate::formats::makernote::{Picture, checked_color_temperature};
 use crate::formats::tiff_metadata;
 use crate::io::Source;
 use crate::rational::SignedRational;

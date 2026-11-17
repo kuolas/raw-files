@@ -18,10 +18,19 @@
 //! - [`points`] holds the tables of a body's autofocus points, which no
 //!   file records.
 //!
-//! A reader starts from the block as the Exif IFD records it, a
-//! [`MakerNoteBlock`]. It tells its maker's layout by the block's first
-//! bytes. Then it reads the IFD that holds the maker's tags, inside the
-//! block, so that every value read from it lies inside the MakerNote.
+//! Every maker's reader has the same shape, the trait [`Reader`], so that
+//! a format reads any maker's MakerNote in the same steps:
+//!
+//! - the file's Make chooses the reader ([`Reader::MAKE`]);
+//! - the reader's [`lookup`](Reader::lookup) starts from the block as the
+//!   Exif IFD records it, a [`MakerNoteBlock`]. It tells its maker's layout
+//!   by the block's first bytes. Then it reads the IFD that holds the
+//!   maker's tags, inside the block, so that every value read from it lies
+//!   inside the MakerNote;
+//! - the format asks the MakerNote for the values it adds, told what kind
+//!   of [`Picture`] the file holds ([`Reader::metadata`]), for its own
+//!   preview ([`Reader::preview_candidate`]) and for its directories in the
+//!   raw view ([`Reader::add_entries`]).
 //!
 //! Nothing the block holds is an error. Damage costs the MakerNote, or
 //! the one value it touches, never the file
@@ -39,14 +48,100 @@ use std::ops::Range;
 
 use crate::container::tiff::tags::MAKER_NOTE;
 use crate::container::tiff::{Block, Entry, Ifd, Tree, ifd_in};
-use crate::entries::{Directory, Lookup, SkippedDirectory};
+use crate::entries::{Directory, Entries, Lookup, SkippedDirectory};
 use crate::error::{ErrorKind, Result};
+use crate::formats::tiff_metadata::Standard;
+use crate::formats::tiff_previews::Candidate;
 use crate::io::Source;
 use crate::limits::Limits;
+use crate::metadata::Metadata;
 
 pub(in crate::formats) mod nikon;
 pub(in crate::formats) mod points;
 pub(in crate::formats) mod sony;
+
+/// A maker's MakerNote, read once per file by that maker's reader: what
+/// every format asks of it, in the same words whatever the maker.
+///
+/// A format reads the MakerNote with [`lookup`](Self::lookup), once for
+/// the whole file. Then it asks the MakerNote for the values it adds to
+/// the standard tags' ([`metadata`](Self::metadata)), for its own preview
+/// ([`preview_candidate`](Self::preview_candidate)) and for its
+/// directories in the raw view ([`add_entries`](Self::add_entries)). A
+/// maker's reader implements it on the structure it reads the MakerNote
+/// into, such as [`nikon::MakerNote`].
+pub(in crate::formats) trait Reader: Sized {
+    /// The name that the maker's cameras write at the start of IFD0's
+    /// Make, compared without regard to case
+    /// ([`make_starts_with`](crate::formats::make_starts_with)).
+    ///
+    /// Make decides which maker's reader reads a file's MakerNote, never
+    /// what the MakerNote looks like. Nikon's editing software writes
+    /// Nikon-style MakerNotes into the files of other makes, and leaves
+    /// their Make as it was. A Sony MakerNote without a header, as an
+    /// ARW's is, holds nothing that names Sony.
+    const MAKE: &'static [u8];
+
+    /// The MakerNote of the file in `src`, whose IFDs are `tree`, read
+    /// within `limits`.
+    ///
+    /// [`Lookup::Absent`] when the file has no MakerNote of a layout this
+    /// reader reads. [`Lookup::Skipped`] when the IFD that holds the
+    /// maker's tags does not hold together: the raw view lists it as
+    /// skipped.
+    ///
+    /// # Errors
+    ///
+    /// `Io` when the reader fails.
+    fn lookup<R: Read + Seek>(
+        src: &mut Source<R>,
+        tree: &Tree,
+        limits: &Limits,
+    ) -> Result<Lookup<Self>>;
+
+    /// The metadata of the file whose MakerNote this is: what the standard
+    /// tags gave, `standard`, with what the MakerNote records that they
+    /// lack, read from `src`. `picture` says what kind of picture the file
+    /// holds.
+    ///
+    /// # Errors
+    ///
+    /// `Io` when the reader fails.
+    fn metadata<R: Read + Seek>(
+        &self,
+        src: &mut Source<R>,
+        standard: Standard,
+        picture: Picture,
+    ) -> Result<Metadata>;
+
+    /// Where the MakerNote's own preview is, as a candidate for the shared
+    /// finder. `None`, the default, for a MakerNote that holds no preview
+    /// of its own.
+    fn preview_candidate(&self) -> Option<Candidate> {
+        None
+    }
+
+    /// Adds the MakerNote's directories to `entries`, the MakerNote IFD
+    /// first.
+    fn add_entries(&self, entries: &mut Entries);
+}
+
+/// What a file's picture is, as the format that read the MakerNote knows
+/// it. A reader that places a focus point on a crop needs to know whether
+/// the file has pixels of its own to place it on.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(in crate::formats) enum Picture {
+    /// A raw file's, such as a NEF's: the picture is a part of the stored
+    /// raw data, which the MakerNote may locate. A raw file has no pixels
+    /// of its own, so a crop that the MakerNote does not locate is read as
+    /// recorded (ADR012).
+    Raw,
+    /// A JPEG's: the picture is the file's own pixels, of the size its
+    /// frame header gives, which the metadata's image size already holds.
+    /// A crop that the MakerNote does not locate is placed on those pixels
+    /// (ADR015).
+    Jpeg,
+}
 
 /// A MakerNote's block as the Exif IFD records it: where the block's bytes
 /// lie, and the Exif IFD whose MakerNote it is.
