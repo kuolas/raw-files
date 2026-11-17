@@ -230,7 +230,12 @@ CI runs three workflows, in
 
 `samples.yml` keeps the sample files in a cache that every pull
 request can restore. So a pull request downloads nothing unless it
-changes the list.
+changes the list. A second job reads the large tier, which no pull
+request fetches. Once a week and on request, it runs the tests with
+`RAW_FILES_LARGE=1` and `RAW_FILES_REQUIRE_SAMPLES=1`, so every sample
+must be present and is read. It keeps the files in a cache of their
+own, which its weekly run keeps from expiring. It is not a required
+check.
 
 `fuzz.yml` runs the four fuzz targets for ten minutes each, twice a
 week and on request, started by hand from the Actions tab. It runs the

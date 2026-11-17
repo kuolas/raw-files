@@ -1,8 +1,7 @@
 # Samples — keeps the real sample files of tests/samples.tsv (the normal
-# tier; the large tier is left out, as in CI) in a cache that every pull
-# request can restore, so that CI downloads them from raw.pixls.us and
-# Wikimedia Commons once per change of the list rather than once per pull
-# request.
+# tier, as in CI) in a cache that every pull request can restore, so that
+# CI downloads them from raw.pixls.us and Wikimedia Commons once per change
+# of the list rather than once per pull request.
 #
 # A workflow run can only restore caches created on its own branch or on the
 # default branch, and the CI workflow runs on pull requests, so a cache it
@@ -10,6 +9,11 @@
 # workflow runs on master, where it saves the cache under the same key the
 # CI workflow restores (the hash of the list), and once a week, because a
 # cache nobody has restored for seven days is evicted.
+#
+# A second job reads the large tier, which no pull request downloads: the
+# 325 MiB ARQ file. It runs the whole test suite with every sample present,
+# that one included, once a week and on request. It is not a required
+# check, so a failure there is a bug to fix, not a blocked pull request.
 #
 # Actions are pinned to commits and must be node24-generation majors; see
 # ci.yml.
@@ -48,3 +52,50 @@ jobs:
       - run: scripts/fetch-samples.sh
         env:
           RAW_FILES_SAMPLES: ${{ runner.temp }}/raw-samples
+
+  large:
+    name: large sample
+    # A change of the list on master seeds the normal cache; this job waits
+    # for the next Monday, or a run started by hand.
+    if: github.event_name != 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: dtolnay/rust-toolchain@df2a88e9fe4098bad09cb42c3dec7187f15861fc # master
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+      # Every sample, the large tier included, under a key of its own, so
+      # that pull requests keep restoring only the normal tier. The path is
+      # the seed job's: a cache restores only to the path it was saved
+      # from. On a cold start the normal tier's entry is restored, and only
+      # the large tier is downloaded. GitHub evicts an entry unused for seven
+      # days, and only this weekly run reads it, so it is kept while each
+      # run starts on time. A run that starts later than the one before may
+      # find it gone and download the ARQ file again.
+      - id: cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/raw-samples
+          key: raw-samples-large-${{ hashFiles('tests/samples.tsv') }}
+          restore-keys: raw-samples-${{ hashFiles('tests/samples.tsv') }}
+      - run: scripts/fetch-samples.sh
+        env:
+          RAW_FILES_SAMPLES: ${{ runner.temp }}/raw-samples
+          RAW_FILES_LARGE: '1'
+      # Saved once the files are fetched and checked, before the tests: the
+      # combined action saves only after a job that passes, and a failing
+      # run would otherwise download the ARQ file again each week.
+      - if: steps.cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/raw-samples
+          key: raw-samples-large-${{ hashFiles('tests/samples.tsv') }}
+      # With both switches on, a sample of either tier that is missing
+      # fails its test rather than skip (docs/TESTING.md §The sample files).
+      - run: cargo test --workspace
+        env:
+          RAW_FILES_SAMPLES: ${{ runner.temp }}/raw-samples
+          RAW_FILES_LARGE: '1'
+          RAW_FILES_REQUIRE_SAMPLES: '1'
