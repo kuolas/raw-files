@@ -170,6 +170,14 @@ placed on the same frame. The tests also check each JPEG's four
 previews, where the camera's layout puts them, and every value of its
 metadata.
 
+Each file's previews and metadata are rows of the same kinds as the
+downloaded samples', and so are those of frame 4 of the D600 session and
+its JPEG. The rows are in tables of their own in `tests/nef.rs` and
+`tests/jpeg.rs`, `FIXTURES` and `FIXTURE_METADATA`. They are checked whether or not the
+samples are downloaded. [The sample files
+page](../../docs/formats/sample-files.md) says what a row holds and how
+to check one by hand.
+
 The tests check every camera setting each file gives. From the Exif
 IFD, the same on all five shots: aperture priority, multi-segment
 (Nikon's matrix) metering, a flash that did not fire, with no mode

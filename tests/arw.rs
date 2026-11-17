@@ -26,7 +26,7 @@ use support::arw::{
 };
 use support::jpeg_stub::{stub, stub_len};
 use support::samples::{
-    Jpeg, LocationPart, Sample, SampleEntries, SampleFineTune, SampleFocus, SampleLens,
+    Folder, Jpeg, LocationPart, Sample, SampleEntries, SampleFineTune, SampleFocus, SampleLens,
     SampleMetadata, SampleSettings, SerialShape, Text, check, check_enciphered, check_entries,
     check_every, check_metadata, check_placeholder_description, check_tables, sizes,
 };
@@ -3451,7 +3451,7 @@ fn every_sony_sample_opens_with_the_previews_the_notes_predict() {
     check_every(
         SAMPLES,
         |sample| sample.file,
-        |sample| check(sample, Format::Arw),
+        |sample| check(sample, Format::Arw, Folder::Samples),
     );
 }
 
@@ -3460,7 +3460,7 @@ fn the_arq_sample_opens_with_the_two_previews_of_its_pixel_shift_frame() {
     check_every(
         LARGE_SAMPLES,
         |sample| sample.file,
-        |sample| check(sample, Format::Arw),
+        |sample| check(sample, Format::Arw, Folder::Samples),
     );
 }
 
@@ -3488,7 +3488,7 @@ fn every_sony_sample_gives_its_metadata() {
     check_every(
         METADATA,
         |expected| expected.file,
-        |expected| check_metadata(expected, Format::Arw),
+        |expected| check_metadata(expected, Format::Arw, Folder::Samples),
     );
 }
 
@@ -3497,7 +3497,7 @@ fn the_arq_sample_gives_the_metadata_of_its_pixel_shift_frame() {
     check_every(
         LARGE_METADATA,
         |expected| expected.file,
-        |expected| check_metadata(expected, Format::Arw),
+        |expected| check_metadata(expected, Format::Arw, Folder::Samples),
     );
 }
 
@@ -3513,7 +3513,7 @@ fn the_hasselblad_lunar_sample_opens_as_a_sony_file() {
         .iter()
         .find(|sample| sample.file == "hasselblad-lunar.arw")
         .unwrap();
-    check(lunar, Format::Arw);
+    check(lunar, Format::Arw, Folder::Samples);
 }
 
 #[test]

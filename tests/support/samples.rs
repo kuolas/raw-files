@@ -5,7 +5,9 @@
 //! checks that one opens with exactly the previews expected of it and
 //! gives exactly the metadata expected of it, its focus point among it;
 //! and [`check_every`], which runs such a check on every file of a table
-//! and names every file that fails.
+//! and names every file that fails. The committed files of
+//! `tests/fixtures/` are checked by the same tables and checks, from their
+//! own [`Folder`].
 //!
 //! The sample files are too large to commit, so `scripts/fetch-samples.sh`
 //! downloads them, the RAW files from raw.pixls.us and the JPEG files from
@@ -57,6 +59,27 @@ pub fn path(name: &str) -> Option<PathBuf> {
     }
     eprintln!("skipped: {note}");
     None
+}
+
+/// The folder that holds the file of a table's row: the downloaded
+/// samples, or the committed fixtures.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Folder {
+    /// The folder of [`path`], from which a file not downloaded skips.
+    Samples,
+    /// `tests/fixtures/`, from which a missing file fails: it is committed.
+    Fixtures,
+}
+
+impl Folder {
+    /// The path of the file `name` in this folder, or `None` when it is a
+    /// sample that has not been downloaded.
+    fn path(self, name: &str) -> Option<PathBuf> {
+        match self {
+            Self::Samples => path(name),
+            Self::Fixtures => Some(super::fixtures::fixture(name)),
+        }
+    }
 }
 
 /// Whether `RAW_FILES_REQUIRE_SAMPLES`, of the value `value`, asks for the
@@ -185,6 +208,18 @@ pub fn check_tables(format: &str, tables: &[(&str, Vec<(&'static str, &'static s
     }
 }
 
+/// Checks that a format's tables of the committed fixtures, of previews
+/// and of metadata, name the same files in the same order, so that no
+/// fixture has a row in one and not the other.
+pub fn check_fixture_tables(previews: &[Sample], metadata: &[SampleMetadata]) {
+    let previews: Vec<&str> = previews.iter().map(|sample| sample.file).collect();
+    let metadata: Vec<&str> = metadata.iter().map(|expected| expected.file).collect();
+    assert_eq!(
+        previews, metadata,
+        "the fixtures' tables of previews and of metadata"
+    );
+}
+
 /// One JPEG a sample file holds, as the notes on its format record it and
 /// the reader must report it: its size in pixels from its own frame header,
 /// where its bytes are, and how many bytes the declared length runs past
@@ -201,7 +236,8 @@ pub struct Jpeg {
     pub after_eoi: u64,
 }
 
-/// A sample file of `tests/samples.tsv` and what opening it must give: its
+/// A sample file of `tests/samples.tsv`, or a committed fixture, and what
+/// opening it must give: its
 /// previews, smallest first, none for a file in which the reader finds
 /// none, and the orientation IFD0 gives them all.
 pub struct Sample {
@@ -215,7 +251,7 @@ pub fn sizes(previews: &[Preview]) -> Vec<Size> {
     previews.iter().map(Preview::size).collect()
 }
 
-/// Runs `check` on every item of a table of samples, and fails once at the
+/// Runs `check` on every item of a table of files, and fails once at the
 /// end if any check failed, naming each failing item's file, as `file`
 /// gives it, with its panic message, in the table's order.
 ///
@@ -237,7 +273,7 @@ pub fn check_every<T>(items: &[T], file: impl Fn(&T) -> &str, check: impl Fn(&T)
     }
     assert!(
         failures.is_empty(),
-        "{} of {} sample files failed:\n{}",
+        "{} of {} files failed:\n{}",
         failures.len(),
         items.len(),
         failures.join("\n")
@@ -260,14 +296,15 @@ pub fn panic_message(payload: &(dyn Any + Send)) -> &str {
 /// previews, smallest first: each a JPEG at its offset and of its length,
 /// with IFD0's orientation, that reads whole as stored, its padding after
 /// the end-of-image marker included; and that the largest is the last, or
-/// that there is none when the file has no preview. Does nothing when the
-/// file has not been downloaded.
-pub fn check(sample: &Sample, format: Format) {
-    let Some(path) = path(sample.file) else {
+/// that there is none when the file has no preview. The file is in
+/// `folder`; a sample not downloaded is skipped.
+pub fn check(sample: &Sample, format: Format, folder: Folder) {
+    let Some(path) = folder.path(sample.file) else {
         return;
     };
     let label = sample.file;
-    let file = CameraFile::open(&path).unwrap();
+    let file =
+        CameraFile::open(&path).unwrap_or_else(|error| panic!("{}: {error}", path.display()));
     assert_eq!(file.format(), format, "{label}");
     let expected_sizes: Vec<Size> = sample
         .previews
@@ -282,14 +319,22 @@ pub fn check(sample: &Sample, format: Format) {
     let previews = file.previews();
     for (preview, jpeg) in previews.iter().zip(sample.previews) {
         let size = preview.size();
-        assert_eq!(preview.format(), PreviewFormat::Jpeg, "{label} {size:?}");
+        assert_eq!(
+            preview.format(),
+            PreviewFormat::Jpeg,
+            "{label} {size:?}: format"
+        );
         assert_eq!(
             preview.orientation(),
             sample.orientation,
-            "{label} {size:?}"
+            "{label} {size:?}: orientation"
         );
-        assert_eq!(preview.byte_range().start, jpeg.offset, "{label} {size:?}");
-        assert_eq!(preview.byte_len(), jpeg.len, "{label} {size:?}");
+        assert_eq!(
+            preview.byte_range().start,
+            jpeg.offset,
+            "{label} {size:?}: offset"
+        );
+        assert_eq!(preview.byte_len(), jpeg.len, "{label} {size:?}: length");
 
         // The declared length is returned as stored, so a preview padded
         // after its end-of-image marker comes back with the padding.
@@ -317,7 +362,8 @@ pub fn check(sample: &Sample, format: Format) {
     );
 }
 
-/// What a sample file of `tests/samples.tsv` must give as its metadata:
+/// What a sample file of `tests/samples.tsv`, or a committed fixture, must
+/// give as its metadata:
 /// every value of [`Metadata`](raw_files::Metadata), `None` where the file
 /// must give none. The camera's maker is the [`Make`] the reader recognizes
 /// from the recorded Make, and its model the name raw-files' table gives
@@ -591,14 +637,15 @@ pub fn check_display_name(camera: &Camera, label: &str) {
 /// Checks that the sample file `expected` names opens as `format` and
 /// gives exactly the metadata `expected` records: every value compared, the
 /// focus point's and the camera settings' among them, so that a value the
-/// file must not give fails as surely as a wrong or a missing one. Does
-/// nothing when the file has not been downloaded.
-pub fn check_metadata(expected: &SampleMetadata, format: Format) {
-    let Some(path) = path(expected.file) else {
+/// file must not give fails as surely as a wrong or a missing one. The
+/// file is in `folder`; a sample not downloaded is skipped.
+pub fn check_metadata(expected: &SampleMetadata, format: Format, folder: Folder) {
+    let Some(path) = folder.path(expected.file) else {
         return;
     };
     let label = expected.file;
-    let file = CameraFile::open(&path).unwrap();
+    let file =
+        CameraFile::open(&path).unwrap_or_else(|error| panic!("{}: {error}", path.display()));
     assert_eq!(file.format(), format, "{label}");
     let metadata = file.metadata();
     assert_eq!(metadata.camera().make(), expected.make, "{label}: make");
@@ -726,15 +773,37 @@ pub fn check_metadata(expected: &SampleMetadata, format: Format) {
         .map(|focus| (focus.frame, focus.center, focus.size, focus.in_focus));
     assert_eq!(focus, expected_focus, "{label}: focus");
 
-    // The points: a list exactly when there is a focus. `focus` is the
-    // list's primary by construction, so the row's `focus` values above
-    // check the primary.
+    // The points: a list exactly when there is a focus, whose primary the
+    // focus is, in the list's frame and from the list's origin, so that
+    // the row's `focus` values above check the primary.
     let points = metadata.focus_points();
     assert_eq!(
         points.is_some(),
         metadata.focus().is_some(),
         "{label}: focus points beside the focus"
     );
+    if let (Some(focus), Some(points)) = (metadata.focus(), points) {
+        let primary = points
+            .primary()
+            .unwrap_or_else(|| panic!("{label}: focus points without a primary"));
+        assert_eq!(
+            (
+                points.frame(),
+                points.origin(),
+                primary.center(),
+                primary.size(),
+                primary.in_focus()
+            ),
+            (
+                focus.frame(),
+                focus.origin(),
+                focus.center(),
+                focus.size(),
+                focus.in_focus()
+            ),
+            "{label}: the focus is the primary point"
+        );
+    }
     let points = points.map(|points| {
         (
             points.origin(),

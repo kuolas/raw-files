@@ -43,7 +43,7 @@ fn check_every_names_every_failing_file_with_its_message_in_order() {
     })
     .expect("a panic naming the failing files");
     let mut lines = failure.lines();
-    assert_eq!(lines.next(), Some("2 of 4 sample files failed:"));
+    assert_eq!(lines.next(), Some("2 of 4 files failed:"));
     assert_eq!(lines.next(), Some("b.nef: the wrong model"));
     // A message of several lines, as an assert's is, keeps its lines, each
     // indented under the file's name.
