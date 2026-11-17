@@ -13,20 +13,13 @@ directories of camera JPEGs hold. Back to
 
 ## How to read this page
 
-Claims carry a confidence tag:
-
-- **[P]**: stated in a specification, cited by its section, table or
-  figure, and page (the printed number).
-- **[S]**: secondary: another program's documentation or output, a
-  write-up, a search.
-- **[I]**: inferred, or a recommendation. Treat it as a hypothesis.
-- **[F]**: measured on a named sample file: one of the eight
-  camera-original JPEGs from Wikimedia Commons, cited by body ("the
-  ILCE-7M3 file"), which [test-data.md](test-data.md#2-the-sample-files)
-  lists with its file name, license and SHA-256; or on the early
-  Coolpix files checked by hand, which
-  [test-data.md](test-data.md#6-early-coolpix-files-checked-by-hand)
-  lists the same way.
+Claims carry the confidence tags of the JPEG notes
+([README](README.md#confidence-tags)). A sample file is one of the eight
+camera-original JPEGs from Wikimedia Commons, cited by body ("the
+ILCE-7M3 file"). [test-data.md](test-data.md#2-the-sample-files) lists
+each with its file name, license and SHA-256. The early Coolpix files
+checked by hand are listed the same way in
+[test-data.md](test-data.md#6-early-coolpix-files-checked-by-hand).
 
 Numbers in brackets point to the [Sources](#sources) at the end. The
 specifications are the editions listed there: T.81 (1992), T.871 (2011),

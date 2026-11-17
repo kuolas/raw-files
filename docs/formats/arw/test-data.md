@@ -7,9 +7,8 @@ sources, the rules for what may be committed, what the public archive holds
 for Sony, a minimal set of files, how to build fixtures, and the files the
 research was checked against. Back to [the ARW overview](README.md).
 
-Confidence tags: **[P]** primary (verified from the primary page or API),
-**[S]** secondary, **[I]** inferred, **[F]** measured on a named sample
-file. A sample is cited as "raw.pixls.us file" plus its id;
+Claims carry the confidence tags of the ARW notes
+([README](README.md#confidence-tags)). A sample is cited as "raw.pixls.us file" plus its id;
 [Files checked](#files-checked) gives the URL and SHA-256 of each.
 Numbers in brackets point to the [Sources](#sources) at the end, retrieved
 in October 2026.
@@ -28,7 +27,7 @@ output was compared with a reference decoder.
 | dnglab RawDB (rawdb.dnglab.org) | Its contribution guide says sample sets must be CC0. The site is a JavaScript application whose per-file licenses we could not read; the dnglab repository holds only analysis results. It has bodies that raw.pixls.us lacks: ILCE-7RM6 (four files) and DSC-RX10M5 (two). [6] **[P]** | No. Download only, after confirming the license of the specific file. |
 | ExifTool sample images | The Sony archive (761 models, 8.5 MB, 2025-12-03) holds JPEG files only, with the main image replaced and previews removed. No license is stated. [7] **[P]** | No. Treat as unlicensed. |
 | Test files of other projects: exiv2's `.exv` metadata extracts, exif-py's A7 III ARW, metadata-extractor's Sony APP1 segments, the three files rawkit's tests fetch from Graphite's server | The projects are GPL-2.0-or-later, BSD-3-Clause, Apache-2.0 and MIT OR Apache-2.0; the license of each file is not stated. [8] **[P]** | No. |
-| Fuzzing corpora | OSS-Fuzz's LibRaw seeds cover CR2, NEF and RAF, **not ARW**; exiv2's corpus is built from exiv2's own test data. [9] **[P]** | No. Generate our own corpus from our own fixtures. |
+| Fuzzing corpora | OSS-Fuzz's LibRaw seeds cover CR2, NEF and RAF, **not ARW**; exiv2's corpus is built from exiv2's own test data. [9] **[S]** | No. Generate our own corpus from our own fixtures. |
 | Review galleries (Imaging Resource, DPReview, PetaPixel, photographyblog), vendor samples (DxO), files linked from issue threads | Proprietary or unknown. Imaging Resource allows local, private, non-commercial use only. [10] **[S]** | No, and do not redistribute. Manual experiments only. |
 | Files you made yourself | Yours to license. | Yes, with provenance recorded (section 5). |
 
@@ -284,7 +283,7 @@ From the catalog and directory listings in October 2026 [1][2] **[P]**:
   FFF files carries DNGVersion or DNGPrivateData, and the two DNG files,
   from the L1D-20c and L2D-20c drone camera modules, carry both. The
   Lunar's dump shows its DNGPrivateData, so the dumps show the tag when a
-  file has it. **[P]**
+  file has it. **[S]**
 - **The nine non-CC0 Sony files**, all CC BY-NC-SA imports from
   rawsamples.ch, with their ids: DSLR-A300 (339), DSC-RX10M2 (340), NEX-3
   (348), DSLR-A580 (350), DSLR-A330 (355), DSLR-A850 (356), NEX-5R (359),

@@ -123,6 +123,13 @@ that would answer Part 2.
 
 ## 2. Facts to establish from sample files
 
+A claim tagged **[S]** alone rests on a secondary source. A fact learned
+only from another program's source code waits for a sample file before
+it is coded. One learned from documentation may be coded first, and the
+notes say so
+([ADR013](../../architecture-decisions/adr013-clean-room-and-third-party-code.md)).
+The [Status](README.md#status) section says what files have checked.
+
 ### Container and previews
 
 - **ZV-1M2 without IFD2.** The only ZV-1M2 dump on raw.pixls.us

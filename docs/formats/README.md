@@ -27,15 +27,29 @@ Each folder's README lists its pages and says where to start.
 
 A claim in the notes carries a tag that says where it comes from:
 
-- **[P]**: a primary source, such as a specification.
-- **[S]**: a secondary source, such as a write-up or a search.
-- **[I]**: an inference, to be tested on sample files.
+- **[P]**: stated in a primary source:
+  - a specification, cited by section, table or figure and printed page;
+  - a camera maker's own documentation;
+  - a project's, publisher's or site's own pages, for what they say of
+    it: its license, terms, releases, contents or security record; and
+    the NVD.
+- **[S]**: secondary:
+  - another program's documentation, source code or output;
+  - a person's write-up, or an archive's format registry;
+  - a forum post, issue or review, or a page read only through a search
+    extract.
+- **[I]**: inferred, derived by arithmetic, recalled without a source,
+  taken from a single unconfirmed report, or a recommendation. Treat it
+  as a hypothesis to test on sample files.
 - **[F]**: measured on a named sample file.
 
-Each folder's README says what counts as a primary source for its
-format, and how its sample files are cited:
+Where a sample contradicts a source, the pages follow the sample and
+record the disagreement.
+
+The READMEs of the three folders give the tags in these same words:
 [NEF](nef/README.md#confidence-tags),
 [ARW](arw/README.md#confidence-tags) and
-[JPEG](jpeg/README.md#confidence-tags). A page beside the folders that
-uses the tags uses them in the meaning above. A page that gives the tags
-a meaning of its own says so at its top.
+[JPEG](jpeg/README.md#confidence-tags). Each also says how its sample
+files are cited. A page beside the folders that uses the tags uses them
+in this meaning. A page that gives the tags a meaning of its own says so
+at its top.

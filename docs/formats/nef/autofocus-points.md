@@ -26,9 +26,8 @@ agreement they are committed stripped of their pixels and personal
 fields, which never enter the repository, and a record cites them by
 their number in the session and gives counts and values, never a
 personal field. Claims carry the confidence tags of the NEF notes
-([README.md](README.md#confidence-tags)): **[F]** measured on the
-frames named, **[P]** stated in published documentation, **[I]**
-inferred.
+([README.md](README.md#confidence-tags)), and **[F]** marks what was
+measured on the frames named.
 
 ## Contents
 
@@ -173,7 +172,7 @@ The area modes seen, with their counts: 0 (single point) on 45 frames
 with the 39-point layout and on the 2 manual-focus frames with layout
 code 0; 5 (dynamic area, 21 points) on 2; 8 (auto-area) on 3; 4 on the
 4 live-view frames, with layout code 0. **[F]** The names are ExifTool's
-for these codes, read in its published tag documentation [P][1], and
+for these codes, read in its published tag documentation [S][1], and
 match the modes the frames were shot in. **[F]**
 
 No frame of the session was shot in 3D-tracking. Eight frames I shot
@@ -182,7 +181,7 @@ viewfinder (frames 7852 to 7859), write area-mode code 9 under
 detection method 0, with the 39-point layout: two JPEGs alone, at the
 Medium and Small sizes, and six RAW+JPEG pairs, whose NEF and JPEG
 carry the same values. **[F]** ExifTool's published documentation
-lists 9 under phase detection as 3D-tracking [P][1], which the frames
+lists 9 under phase detection as 3D-tracking [S][1], which the frames
 confirm. **[F]** The six pairs also measure the JPEG sizes (section
 2.9).
 
@@ -193,7 +192,7 @@ the seven mask bytes is set: bit number − 1, counting from the least
 significant bit of the first byte, so point 1 sets bit 0 of byte 8,
 point 13 sets bit 4 of byte 9 and point 38 sets bit 5 of byte 12.
 **[F]** ExifTool documents a bit order for the 11-point layout only
-[P][1]; the 39-point order is measured here.
+[S][1]; the 39-point order is measured here.
 
 ### 2.4 The table
 
@@ -205,7 +204,7 @@ viewfinder's row letter, A at the top to E at the bottom, and column
 number, 1 at the left to 11 at the right; rows A and E have points over
 the three inner columns only and number them 1 to 3. That is the order
 in which ExifTool's published table names the numbers, read as
-documentation [P][1], and the frames confirm it: 1 is the center, 13
+documentation [S][1], and the frames confirm it: 1 is the center, 13
 the top of the inner columns' left one, 38 the top of the outer columns'
 left one. **[F]** The mask bit is number − 1 (section 2.3).
 

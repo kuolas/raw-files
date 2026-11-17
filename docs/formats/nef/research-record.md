@@ -84,8 +84,8 @@ The pages cite their sources individually. By kind:
 ## Access problems
 
 - **Read only by plain HTTP.** Laurent Clévy's site could be read only over
-  plain HTTP, and was then read directly; the facts taken from it are
-  tagged [P].
+  plain HTTP, and was then read directly, not through search extracts.
+  The facts taken from it are tagged [S], as a write-up's are.
 - **Down.** The ExifTool forum was down throughout. Claims from it come from
   search extracts and are tagged [S].
 - **Refused.** DPReview (HTTP 403) and Photography Life (HTTP 402) refused
@@ -94,8 +94,8 @@ The pages cite their sources individually. By kind:
 - **Not reachable.** Nikon's SDK portal and the oss-fuzz issue tracker could
   not be reached.
 - **Not read line by line.** Some source files were read through automated
-  page extraction. A fact marked [P] was stated in its source, but byte
-  offsets should still be checked against that source before they are
+  page extraction. A fact taken from such a file was stated in it, but
+  byte offsets should still be checked against that source before they are
   hard-coded.
 
 ## Cross-checks made

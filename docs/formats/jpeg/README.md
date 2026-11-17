@@ -57,20 +57,30 @@ with their raw files: the [NEF](../nef/makernote-and-metadata.md) and
 
 Claims carry a tag:
 
-- **[P]**: stated in a primary source: a specification, cited by section,
-  table or figure and printed page, or a publisher's page.
-- **[S]**: secondary: another program's documentation or output, a
-  write-up, a search.
-- **[I]**: inferred, or a recommendation. Treat it as a hypothesis to test
-  on sample files.
-- **[F]**: measured on a named sample file. Files are cited by body ("the
-  ILCE-7M3 file"), and [test-data.md](test-data.md#2-the-sample-files)
-  lists each with its Commons name, license and SHA-256; the early
-  Coolpix files checked by hand are listed the same way in
-  [test-data.md](test-data.md#6-early-coolpix-files-checked-by-hand).
+- **[P]**: stated in a primary source:
+  - a specification, cited by section, table or figure and printed page;
+  - a camera maker's own documentation;
+  - a project's, publisher's or site's own pages, for what they say of
+    it: its license, terms, releases, contents or security record; and
+    the NVD.
+- **[S]**: secondary:
+  - another program's documentation, source code or output;
+  - a person's write-up, or an archive's format registry;
+  - a forum post, issue or review, or a page read only through a search
+    extract.
+- **[I]**: inferred, derived by arithmetic, recalled without a source,
+  taken from a single unconfirmed report, or a recommendation. Treat it
+  as a hypothesis to test on sample files.
+- **[F]**: measured on a named sample file.
 
-Where a sample contradicts a specification, the pages follow the sample
-and record the disagreement.
+Where a sample contradicts a source, the pages follow the sample and
+record the disagreement.
+
+Files are cited by body ("the ILCE-7M3 file"), and
+[test-data.md](test-data.md#2-the-sample-files) lists each with its
+Commons name, license and SHA-256. The early Coolpix files checked by
+hand are listed the same way in
+[test-data.md](test-data.md#6-early-coolpix-files-checked-by-hand).
 
 ## JPEG at a glance
 

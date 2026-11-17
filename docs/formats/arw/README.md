@@ -60,19 +60,28 @@ was done and what it could not reach. The files checked are listed in
 
 Claims carry a tag:
 
-- **[P]** — stated in a primary source: a specification, a tag reference such
-  as ExifTool's, an implementation's source code, or a published tool dump of
-  a file.
-- **[S]** — secondary: a forum post, issue, blog or search extract.
-- **[I]** — inferred, or from a single unconfirmed report. Treat it as a
-  hypothesis to test on sample files.
-- **[F]** — measured on a named sample file. Files are cited by their
-  raw.pixls.us id ("file 4466"); each page's Sources give the URL and
-  SHA-256 of the files it cites, and
-  [test-data.md](test-data.md#files-checked) lists all of them.
+- **[P]**: stated in a primary source:
+  - a specification, cited by section, table or figure and printed page;
+  - a camera maker's own documentation;
+  - a project's, publisher's or site's own pages, for what they say of
+    it: its license, terms, releases, contents or security record; and
+    the NVD.
+- **[S]**: secondary:
+  - another program's documentation, source code or output;
+  - a person's write-up, or an archive's format registry;
+  - a forum post, issue or review, or a page read only through a search
+    extract.
+- **[I]**: inferred, derived by arithmetic, recalled without a source,
+  taken from a single unconfirmed report, or a recommendation. Treat it
+  as a hypothesis to test on sample files.
+- **[F]**: measured on a named sample file.
 
-Where a sample contradicts a source, the pages follow the sample and record
-the disagreement.
+Where a sample contradicts a source, the pages follow the sample and
+record the disagreement.
+
+Files are cited by their raw.pixls.us id ("file 4466"). Each page's
+Sources give the URL and SHA-256 of the files it cites, and
+[test-data.md](test-data.md#files-checked) lists all of them.
 
 ## ARW at a glance
 
@@ -125,7 +134,7 @@ the disagreement.
     samples per pixel in ARQ);
   - Compression 32767, three layouts told apart by byte count: cRAW (one
     byte per pixel, 16-pixel blocks and a tone curve), 12-bit packed (A700,
-    A850, A900) and an ARW1 stream (the A200) [P][F];
+    A850, A900) and an ARW1 stream (the A200) [S][F];
   - ARW1 on the A100, which has no raw IFD: the stream starts at the offset
     in IFD0's 0x014A [F];
   - Compression 7, lossless JPEG in 512×512 tiles: Bayer for the L size,
@@ -149,7 +158,7 @@ the disagreement.
   LibRaw, rawspeed, rawler, libopenraw, ExifTool and exiv2 are read for
   understanding only. Graphite's rawkit is labeled MIT OR Apache-2.0, but
   its ARW1 table, cRAW loop and tone-curve builder match dcraw element for
-  element [P] (that they were translated is [I]), and it panics on
+  element [S] (that they were translated is [I]), and it panics on
   unexpected input ([licenses-and-references.md](licenses-and-references.md)).
 - **Few tables need a decision.** Unlike NEF, the ARW1 prefix code, the
   cipher inverse and the keystream reduce to rules or formulas, and per-body

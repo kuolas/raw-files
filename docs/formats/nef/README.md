@@ -60,24 +60,34 @@ done and what it could not reach.
 
 Claims carry a tag:
 
-- **[P]** — stated in a primary source: a specification, a tag reference such
-  as ExifTool's, or an implementation's source code.
-- **[S]** — secondary: a forum post, issue, blog or search extract.
-- **[I]** — inferred, or from a single unconfirmed report. Treat it as a
-  hypothesis to test on sample files.
-- **[F]** — measured on a named sample file. Files are cited by their
-  raw.pixls.us id ("file 5146"), and
-  [test-data.md](test-data.md#2-what-is-committed-and-what-is-downloaded)
-  lists them with their SHA-256.
+- **[P]**: stated in a primary source:
+  - a specification, cited by section, table or figure and printed page;
+  - a camera maker's own documentation;
+  - a project's, publisher's or site's own pages, for what they say of
+    it: its license, terms, releases, contents or security record; and
+    the NVD.
+- **[S]**: secondary:
+  - another program's documentation, source code or output;
+  - a person's write-up, or an archive's format registry;
+  - a forum post, issue or review, or a page read only through a search
+    extract.
+- **[I]**: inferred, derived by arithmetic, recalled without a source,
+  taken from a single unconfirmed report, or a recommendation. Treat it
+  as a hypothesis to test on sample files.
+- **[F]**: measured on a named sample file.
 
-Where a sample contradicts a source, the pages follow the sample and record
-the disagreement.
+Where a sample contradicts a source, the pages follow the sample and
+record the disagreement.
+
+Files are cited by their raw.pixls.us id ("file 5146"), and
+[test-data.md](test-data.md#2-what-is-committed-and-what-is-downloaded)
+lists them with their SHA-256.
 
 ## NEF at a glance
 
 - **A NEF is a TIFF file.** It has IFD0, SubIFDs (tag 0x014A) and an Exif IFD
   whose MakerNote (0x927C) holds Nikon's own tags. The outer byte order is
-  big-endian (`MM`) on the DSLRs documented up to about 2009 [P], and on
+  big-endian (`MM`) on the DSLRs documented up to about 2009 [S], and on
   the checked DSLRs from the D1H to the D7000 and on the Coolpix A [F].
   The D750 and every later checked body, the Z 9 among them, are
   little-endian (`II`), in the file and in the MakerNote alike, and so are
@@ -90,13 +100,13 @@ the disagreement.
     [F].
   - The MakerNote's PreviewIFD (0x0011) holds a small JPEG. Its offsets count
     from the MakerNote's embedded TIFF header, not from the start of the file
-    [P].
+    [S].
   - IFD0 holds a 160×120 thumbnail: uncompressed on the DSLRs documented
-    [P], a JPEG on the Z 9 [F].
+    [S], a JPEG on the Z 9 [F].
   - SubIFD order is not fixed, so choose by measured JPEG size.
 - **Viewer metadata is in standard tags.** Orientation, capture date, make and
   model come from IFD0 and the Exif IFD; the stored sensor size comes from the
-  raw SubIFD, since IFD0's own size is the thumbnail's [P]. What the key
+  raw SubIFD, since IFD0's own size is the thumbnail's [S]. What the key
   tags of the MakerNote are used for is in
   [makernote-and-metadata.md, section 2](makernote-and-metadata.md#2-key-tags).
 - **Compressed raw data uses six fixed Huffman tables.**

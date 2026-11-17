@@ -6,10 +6,9 @@ page records where each is published and on what terms, how the sample
 files' licenses are honored, and how these notes keep to the clean-room
 rule. Back to [the JPEG overview](README.md).
 
-Confidence tags: **[P]** primary (read on the publisher's page or in the
-document), **[S]** secondary, **[I]** inferred. Numbers in brackets point
-to the [Sources](#sources) at the end. All pages were retrieved in
-October 2026.
+Claims carry the confidence tags of the JPEG notes
+([README](README.md#confidence-tags)). Numbers in brackets point to the
+[Sources](#sources) at the end. All pages were retrieved in October 2026.
 
 **This is not legal advice.** It is a record of what we found.
 

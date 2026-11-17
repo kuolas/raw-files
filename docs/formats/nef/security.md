@@ -6,10 +6,9 @@ vulnerabilities in NEF and Nikon handling, the adjacent ones grouped by bug
 class, and a checklist that maps each class to the raw-files rules. Back to
 [the NEF overview](README.md).
 
-Confidence tags: **[P]** primary (read in the NVD record, the project's
-changelog or source), **[S]** secondary (distribution trackers, summaries),
-**[I]** inferred. Numbers in brackets point to the [Sources](#sources) at the
-end, retrieved in October 2026.
+Claims carry the confidence tags of the NEF notes
+([README](README.md#confidence-tags)). Numbers in brackets point to the
+[Sources](#sources) at the end, retrieved in October 2026.
 
 The raw-files baseline is [ADR008](../../architecture-decisions/adr008-lints-and-panics.md):
 no `unsafe` code, and malformed input returns an error, never a panic. The
@@ -222,7 +221,7 @@ sensor data or an encrypted block (see [the roadmap](../../ROADMAP.md)).
     High Efficiency formats by the first bytes of the raw strip (the two
     JPEG XS markers `FF 10 FF 50`) and by the compression value, and return
     a typed unsupported error. Never fall through to the Huffman path.
-    LibRaw performs this check only on a handful of models [11] **[P]**, and
+    LibRaw performs this check only on a handful of models [11] **[S]**, and
     decodes noise on other bodies [12] **[S]**. raw-files runs the check on every file. See
     [licenses-and-references.md](licenses-and-references.md) for why HE is
     out of scope.
@@ -293,7 +292,7 @@ Report a security problem in raw-files privately, as described in
     Windows, Apple and Android searches **[S]**
 [11] LibRaw source, TIFF tag handling (HE detection) —
     https://raw.githubusercontent.com/LibRaw/LibRaw/master/src/metadata/tiff.cpp
-    **[P]**
+    **[S]**
 [12] rawmakase PR #412 (LibRaw output on an ungated Z5 II) —
     https://github.com/pch/rawmakase/pull/412 **[S]**
 [13] NVD records for CVE-2017-9953, CVE-2017-11336, CVE-2017-11338,

@@ -9,10 +9,9 @@ how they are downloaded, the fixtures, and the early Coolpix files
 that were checked by hand without joining the samples. Back to
 [the JPEG overview](README.md).
 
-Confidence tags: **[P]** primary (read on the file's page or in the
-specification), **[S]** secondary, **[I]** inferred, **[F]** measured on
-the file. Numbers in brackets point to the [Sources](#sources) at the end,
-retrieved in October 2026.
+Claims carry the confidence tags of the JPEG notes
+([README](README.md#confidence-tags)). Numbers in brackets point to the
+[Sources](#sources) at the end, retrieved in October 2026.
 
 ## 1. Sources and their license status
 

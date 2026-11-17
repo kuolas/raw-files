@@ -18,18 +18,12 @@ Sony publishes no ARW specification. Everything below beyond plain TIFF and
 Exif comes from other projects' documentation and source code, from reports
 by people who inspected files, and from structural checks on sample files.
 
-Every claim carries a confidence tag:
-
-- **[P]** stated in a primary source: a specification, tag documentation,
-  the source code of an implementation, or a published tool dump of a file.
-- **[S]** secondary: a forum post, blog, issue report or search-result
-  snippet.
-- **[I]** inferred, or recalled without a source; a hypothesis to test.
-- **[F]** measured on a named sample file. Files are cited as "file 4466",
-  the id of the file in the public raw.pixls.us collection; the files cited
-  here, with their URLs and SHA-256 hashes, are listed under
-  [Sample files](#sample-files), and the full list of checked files is in
-  [test-data.md](test-data.md#files-checked).
+Claims carry the confidence tags of the ARW notes
+([README](README.md#confidence-tags)). Files are cited as "file 4466",
+the id of the file in the public raw.pixls.us collection. The files cited
+here, with their URLs and SHA-256 hashes, are listed under
+[Sample files](#sample-files), and the full list of checked files is in
+[test-data.md](test-data.md#files-checked).
 
 Numbers in square brackets such as [3] refer to [Sources](#sources).
 
@@ -55,34 +49,34 @@ byte-order mark, the number 42, and the offset of IFD0.
 | Evidence | Finding | Conf. |
 |---|---|---|
 | All 36 checked files (SRF, SR2, ARW 1.0 to 6.0, ARQ, Lunar) | start `49 49 2A 00` (`II`, 42) with IFD0 at offset 8 | **[F]** (all files) |
-| exiv2 dumps of the 209 Sony-family files on raw.pixls.us | every Sony-body file that reports a byte order reports `II` | **[P]** [21] |
+| exiv2 dumps of the 209 Sony-family files on raw.pixls.us | every Sony-body file that reports a byte order reports `II` | **[S]** [21] |
 | Clévy's Sony notes | all four formats are TIFF "with Intel (little) endianess" | **[S]** [17] |
-| PRONOM signatures for ARW 1.x, ARW 2.x and SR2 | all begin `49 49 2A 00` | **[P]** [19] |
+| PRONOM signatures for ARW 1.x, ARW 2.x and SR2 | all begin `49 49 2A 00` | **[S]** [19] |
 | A big-endian (`MM`) Sony raw file | none found in any source or sample | **[I]** |
 
 Consequence for raw-files: accept both `II` and `MM`, since it costs
 nothing, but expect `II`. Follow the IFD0 offset wherever it points: one
 published dump of an ILCE-9 file shows IFD0 rewritten at the end of the
-file, after the raw data, by an editing program [18] **[P]**.
+file, after the raw data, by an editing program [18] **[S]**.
 
 The Sony MakerNote has no byte-order mark of its own in any of its forms
 (section 2). ExifTool detects the order from the entry count; LibRaw forces
 little-endian for the `SONY` header form and otherwise uses the file's order
-[3] [11] **[P]**. With every known file little-endian, the difference never
+[3] [11] **[S]**. With every known file little-endian, the difference never
 shows **[I]**.
 
 A few structures are big-endian whatever the header says: the R1's raw
 pixels (file 3221) **[F]**, the SRF's decrypted data and the keystream words
 of the SR2 cipher, and the A100's Minolta CameraSettingsA100 block [6]
-**[P]**. None of them matters for previews; see
+**[S]**. None of them matters for previews; see
 [raw-data.md](raw-data.md) and
 [makernote-and-metadata.md](makernote-and-metadata.md).
 
 ### 1.2 The format family and FileFormat versions
 
 The format version is MakerNote tag 0xB000 **FileFormat**, four bytes,
-which ExifTool maps to a name [1] **[P]**. There is no "ARW 3": the first
-byte jumps from 3 (ARW 2.x) to 4 (ARW 4.0) [1] **[P]**.
+which ExifTool maps to a name [1] **[S]**. There is no "ARW 3": the first
+byte jumps from 3 (ARW 2.x) to 4 (ARW 4.0) [1] **[S]**.
 
 | Format | FileFormat bytes | ExifTool name | Bodies named in ExifTool's comments [1] | Checked samples (firmware) |
 |---|---|---|---|---|
@@ -105,7 +99,7 @@ byte jumps from 3 (ARW 2.x) to 4 (ARW 4.0) [1] **[P]**.
 | ARQ | that of the source frames | – | made on a computer, not in the camera [39] **[S]** | file 3255 (`3 3 5 0`) **[F]** |
 
 ExifTool's own comment on the table asks what happens with compressed raws;
-the mapping is empirical [1] **[P]**.
+the mapping is empirical [1] **[S]**.
 
 **The version follows the firmware, not the body.** Clévy's notes give one
 version per body [17] **[S]**, but three checked bodies write a different
@@ -116,11 +110,11 @@ ties one version to a firmware release:
   lists ARW 2.3 (file 3751) **[F]**;
 - the ILCE-7RM3 on firmware 3.00 writes `3 3 5 0` (ARW 2.3.5), where Clévy
   lists ARW 2.3.3 (file 3251) **[F]**, and other ILCE-7RM3 dumps on
-  raw.pixls.us show `3 3 3 0` [21] **[P]**;
+  raw.pixls.us show `3 3 3 0` [21] **[S]**;
 - the ILCE-7M4 on firmware 2.00 writes `4 0 1 0` (ARW 4.0.1), where Clévy
   lists ARW 4.0 (file 6929) **[F]**;
 - ExifTool attributes `5 0 1 0` to the ILCE-1 with firmware 2.0 [1]
-  **[P]**, while an ILCE-1 on firmware 1.00 writes `4 0 0 0` (file 4466)
+  **[S]**, while an ILCE-1 on firmware 1.00 writes `4 0 0 0` (file 4466)
   **[F]**.
 
 Consequence: never key preview location on FileFormat or on the model. The
@@ -130,7 +124,7 @@ FileFormat only to report it.
 **Identification by signature fails on new files.** PRONOM's signatures
 require `II*\0`, the string "SONY" within the first 512 bytes, and the
 MakerNote entry `00 B0 01 00 04 00 00 00` followed by `01` (SR2), `02`
-(ARW 1.x) or `03` (ARW 2.x) [19] **[P]**. They cannot match ARW 4.0 to 6.0,
+(ARW 1.x) or `03` (ARW 2.x) [19] **[S]**. They cannot match ARW 4.0 to 6.0,
 whose first FileFormat byte is 4, 5 or 6 (files 4466, 7361, 8846) **[F]**,
 nor the Hasselblad Lunar, which contains no "SONY" string at all (file
 4051) **[F]**. The 0xB000 entry itself lies at bytes 884 to 1,356 in files
@@ -138,7 +132,7 @@ with FileFormat up to `3 3 1 0` and at bytes 5,458 to 5,584 in files with
 FileFormat `3 3 3 0` and later (for example 5,484 in file 1541) **[F]**.
 ExifTool recognizes ARW from IFD0 (Make "SONY", NewSubfileType 1,
 Compression 6) in Exif.pm and switches to SR2 when it meets FileFormat
-`1 0 0 0`; it recognizes ARQ by extension only [2] [1] [7] **[P]**.
+`1 0 0 0`; it recognizes ARQ by extension only [2] [1] [7] **[S]**.
 raw-files does not need to tell the formats apart to find a preview: one
 walk serves all of them (section 7).
 
@@ -149,7 +143,7 @@ SubIFDs tag (0x014A), and that SubIFD is the raw image; the IFD0 next-IFD
 chain ends after IFD1 before FileFormat 4.0 and after IFD2 from 4.0 on
 (all files) **[F]**. The exiv2 dumps of the whole raw.pixls.us Sony
 collection agree: one SubIFD in every Sony-body file, and no JPEG in any
-SubIFD [21] **[P]**.
+SubIFD [21] **[S]**.
 
 | Generation | IFD0 | IFD1 (IFD0's next) | IFD2 (IFD1's next) | 0x014A target | MakerNote | 0xC634 target |
 |---|---|---|---|---|---|---|
@@ -163,7 +157,7 @@ SubIFD [21] **[P]**.
 
 Sources for the table: files 1351, 3221, 2346, 2271 to 3251, 3255, 4051 and
 the 16 files from 5418 on **[F]**; the same shapes appear in the ExifTool
-dumps of an F828, an R1, an A100 and an ILCE-9 [18] **[P]**.
+dumps of an F828, an R1, an A100 and an ILCE-9 [18] **[S]**.
 
 The raw view gives the A100's 0x014A and 0xC634 targets as directories
 left out, with the link and the cause: read little-endian, their first
@@ -198,7 +192,7 @@ File 1542 (ILCE-9, ARW 2.3.3) is typical **[F]**:
   encrypted SR2SubIFD (0x7200, 0x7201, 0x7221), and 0x7240 and 0x7241
   (section 5).
 
-The XMP packet in IFD0 appears from FileFormat `3 3 3 0` on [21] **[P]**.
+The XMP packet in IFD0 appears from FileFormat `3 3 3 0` on [21] **[S]**.
 It is in all 21 checked files from `3 3 3 0` onwards (files 1541, 3012,
 3251, 4466, 8846 and others) and in none of the 13 checked files with an
 older FileFormat; no `3 3 2 0` file was checked. **[F]** That is why the
@@ -234,7 +228,7 @@ checked file, so a reader working from a `Read + Seek` source (as raw-files
 does, [ADR009](../../architecture-decisions/adr009-public-api-shape.md))
 can find and return the largest preview
 without touching the raw. That ordering is an observation, not a rule; a
-re-saved file can move IFD0 to the end [18] **[P]**.
+re-saved file can move IFD0 to the end [18] **[S]**.
 
 #### SR2 (DSC-R1)
 
@@ -244,7 +238,7 @@ Compression 6 and a 145,173-byte JPEG of 640x424 at 1,358; IFD1 a
 (3984x2608, 14-bit, uncompressed, CFA). There is no Software tag. The Exif
 IFD's PixelXDimension and PixelYDimension say 640x424, the preview's size,
 not the raw's (file 3221) **[F]**. A published dump of another R1 file
-shows the same shape with a 134,520-byte preview [18] **[P]**.
+shows the same shape with a 134,520-byte preview [18] **[S]**.
 
 #### ARW 1.0 (DSLR-A100)
 
@@ -256,15 +250,15 @@ A hybrid of the Sony and Minolta designs (file 2346) **[F]**:
 - IFD0's 0x014A holds **98,304**, the offset of the raw data; the bytes
   there do not parse as an IFD. ExifTool calls this value A100DataOffset
   and decides by validating the target; after editing in Sony's Image Data
-  Converter it becomes a real SubIFD pointer [1] [2] **[P]**. Another
-  file's dump shows 65,536 [18] **[P]**, so the value is not a constant.
+  Converter it becomes a real SubIFD pointer [1] [2] **[S]**. Another
+  file's dump shows 65,536 [18] **[S]**, so the value is not a constant.
 - 0xC634 points to a Minolta MRW block that begins `\0MRI`, not to an IFD;
   its lengths are little-endian (file 2346) **[F]**.
 - IFD1 holds a 4,071-byte JPEG of 160x120 at 68,535.
 - The MakerNote starts with the 12-byte `SONY DSC \0\0\0` header (section
   2), and its tag 0xB028 points to a Minolta-format IFD whose tags 0x0088
   and 0x0089 give the **same** offset and length as IFD0's JPEG.
-- Make is `SONY` padded with 11 spaces to 16 bytes [21] **[P]** (file 2346)
+- Make is `SONY` padded with 11 spaces to 16 bytes [21] **[S]** (file 2346)
   **[F]**.
 
 #### SRF (DSC-F828, DSC-V3)
@@ -278,11 +272,11 @@ File 1351 (F828) **[F]**:
 - IFD1 at 646 (6 entries: Compression, resolutions, ResolutionUnit,
   0x0201, 0x0202) holds the only JPEG: 640x480, 151,046 bytes, at offset
   740. ExifTool's comment says this "JPEG image in IFD1" is "actually a
-  preview" [2] **[P]**.
+  preview" [2] **[S]**.
 - The MakerNote at 164,580 is the SRF0 to SRF6 chain of small IFDs, SRF1 on
-  encrypted [1] **[P]** [17] **[S]**. A published ExifTool dump of an F828
+  encrypted [1] **[S]** [17] **[S]**. A published ExifTool dump of an F828
   reports that SRF6 holds a 672x492 uncompressed 14-bit "RGB" image at 200,896
-  [18] **[P]**; the sample checks could not locate SRF2 to SRF6 to confirm it.
+  [18] **[S]**; the sample checks could not locate SRF2 to SRF6 to confirm it.
 
 #### ARQ (pixel-shift composite)
 
@@ -296,41 +290,41 @@ SubIFD changed: 8000x5320, 4 samples per pixel, Photometric 32892,
 carries no Image Data Converter IFD **[F]**. MakerNote tag 0x202F
 PixelShiftInfo ends `0 4` in the composite and `1 4` in the frame (files
 3255, 3251) **[F]**, matching ExifTool's description of `0/4` as the
-composed image [1] **[P]**.
+composed image [1] **[S]**.
 
 #### Hasselblad Lunar
 
 The Lunar is a rebadged NEX-7 [40] **[S]** and its file is an ordinary ARW
 2.3 (file 4051) **[F]**: Make is `HASSELBLAD` (upper case, 11 bytes with
 the NUL), Model `Lunar`, FileFormat `3 3 0 0`, SonyModelID 289 (the NEX-7's
-value [1] **[P]**), a headerless MakerNote of 76 entries, IFD0 JPEG
+value [1] **[S]**), a headerless MakerNote of 76 entries, IFD0 JPEG
 1616x1080, IFD1 JPEG 160x120, and a 12-bit compressed raw SubIFD.
 Its IFD0 carries Sony's DNGPrivateData pointer (BYTE, count 4) and no
 DNGVersion, as every Sony ARW does **[F]**, while Hasselblad's own 3FR and
 FFF files carry neither tag ([test data, section
-3.2](test-data.md#32-contents)) **[P]**.
+3.2](test-data.md#32-contents)) **[S]**.
 
 ### 1.4 Tags that identify an IFD's role
 
 | Tag | Name | What Sony files contain | Conf. |
 |---|---|---|---|
 | 0x00FE | NewSubfileType | 1 in IFD0, IFD1 and IFD2; 0 in the raw SubIFD; **absent** in both IFDs of the SRF | **[F]** (all files; 1351) |
-| 0x0103 | Compression | 6 (old-style JPEG) in IFD0 and IFD1; **7 in IFD2, whose JPEG is baseline**; also 7 in lossless and YCbCr raw IFDs; 1, 32767 or 32766 in other raw IFDs; 1 in the SRF IFD0 | **[F]**; names [2] **[P]** |
-| 0x0106 | PhotometricInterpretation | 32803 CFA raw; **32892** "Sequential Color Filter", the ARQ raw; **6 (YCbCr) both in IFD2 (8-bit) and in medium and small raws (BitsPerSample 15,15,15)**; 2 (RGB) in the SRF IFD0, which is raw | **[F]** (4466, 3255, 6930, 1351); 32892 [2] **[P]** |
+| 0x0103 | Compression | 6 (old-style JPEG) in IFD0 and IFD1; **7 in IFD2, whose JPEG is baseline**; also 7 in lossless and YCbCr raw IFDs; 1, 32767 or 32766 in other raw IFDs; 1 in the SRF IFD0 | **[F]**; names [2] **[S]** |
+| 0x0106 | PhotometricInterpretation | 32803 CFA raw; **32892** "Sequential Color Filter", the ARQ raw; **6 (YCbCr) both in IFD2 (8-bit) and in medium and small raws (BitsPerSample 15,15,15)**; 2 (RGB) in the SRF IFD0, which is raw | **[F]** (4466, 3255, 6930, 1351); 32892 [2] **[S]** |
 | 0x0102 | BitsPerSample | absent in IFD0 and IFD1; 8,8,8 in IFD2; 8, 12 or 14 in CFA raws; 15,15,15 in YCbCr raws; 14,14,14 in the SRF IFD0 | **[F]** |
 | 0x0100, 0x0101 | ImageWidth, ImageLength | absent in IFD0 and IFD1 except the A100's IFD0, where they describe the raw; in IFD2 equal to the JPEG's SOF size | **[F]** (2346; all 16 files from 4.0) |
 | 0x0201, 0x0202 | JPEGInterchangeFormat, ...Length | offset and length of the JPEG in IFD0, IFD1 and IFD2 (and the SRF IFD1); never in a SubIFD | **[F]** |
 | 0x0111, 0x0117 | StripOffsets, StripByteCounts | raw IFDs only; a lossless raw IFD has both one strip and the tiles, starting at the same offset; the SRF IFD0 has StripByteCounts without StripOffsets | **[F]** (4466, 1351) |
-| 0x0142 to 0x0145 | TileWidth, TileLength, TileOffsets, TileByteCounts | lossless and YCbCr raw IFDs only, 512x512, from FileFormat 4.0 | **[F]**; [21] **[P]** |
+| 0x0142 to 0x0145 | TileWidth, TileLength, TileOffsets, TileByteCounts | lossless and YCbCr raw IFDs only, 512x512, from FileFormat 4.0 | **[F]**; [21] **[S]** |
 | 0x0211 to 0x0214 | YCbCr tags | in IFD2, and also in YCbCr raw IFDs | **[F]** (4466, 6930) |
 | 0x014A | SubIFDs | one offset in every ARW, SR2 and ARQ; on the A100 the raw data offset | **[F]** |
-| 0xC634 | DNGPrivateData, used as SR2Private | written as BYTE[4] holding a little-endian offset, in every ARW, SR2 and ARQ; ExifTool writes it back the same way because Adobe Camera Raw 5.3 and Apple Preview misbehaved otherwise | **[F]**; [1] [2] **[P]** |
+| 0xC634 | DNGPrivateData, used as SR2Private | written as BYTE[4] holding a little-endian offset, in every ARW, SR2 and ARQ; ExifTool writes it back the same way because Adobe Camera Raw 5.3 and Apple Preview misbehaved otherwise | **[F]**; [1] [2] **[S]** |
 | MakerNote 0xB02C | PreviewImageSize | height then width, equal to the IFD0 JPEG's size (1080 1088 and 1080 1920 in the aspect-ratio files) | **[F]** (3012, 3015) |
 | MakerNote 0xB02B | FullImageSize | height then width of the image; written from the A200 to the A7 V | **[F]** |
 
 LibRaw's raw-IFD selection skips any Sony IFD with BitsPerSample 8,
 Photometric 6, Compression 7, SamplesPerPixel 3 and NewSubfileType 1,
-commented "Sony RGB preview" [10] **[P]**. That is exactly IFD2's profile
+commented "Sony RGB preview" [10] **[S]**. That is exactly IFD2's profile
 (file 4466 and the other 4.0 and later files) **[F]**.
 
 Neither Compression nor NewSubfileType classifies an IFD on its own:
@@ -343,20 +337,20 @@ together.
 | Pointer | Relative to | Conf. |
 |---|---|---|
 | IFD0, the next-IFD chain, 0x014A, the Exif IFD, 0x0201, strips and tiles in every IFD | the start of the file | **[F]** (all files) |
-| Values inside the headerless MakerNote (ARW, SR2, ARQ, Lunar) | the outer TIFF header, which is the file start | **[F]**; [3] [16] **[P]** |
+| Values inside the headerless MakerNote (ARW, SR2, ARQ, Lunar) | the outer TIFF header, which is the file start | **[F]**; [3] [16] **[S]** |
 | Values inside the `SONY DSC` MakerNote (A100), including 0xB028 | the outer TIFF header | **[F]** (2346: 0xB028 = 1,612, and a Minolta IFD parses there) |
 | Minolta sub-MakerNote 0x0088 and 0x0089 (A100) | the outer TIFF header: 0x0088 equals IFD0's 0x0201 | **[F]** (2346) |
-| The SRF MakerNote chain | the file start | [17] **[S]**; [18] **[P]** |
-| SR2Private (0xC634), and 0x7200 inside it | the file start | **[F]**; [1] **[P]** |
-| SR2Private 0x7240 (IDC_IFD) | the file start, by ExifTool's default; but see section 5 for the 6-byte offset seen in every file | [1] **[P]**; **[F]** |
-| SR2Private 0x7241 (IDC2_IFD) and each version IFD 0xD001 inside it, written by Sony's Image Data Converter | **the IFD's own start**: ExifTool switches the base to the start of the directory | [1] [5] **[P]**; no sample |
-| MakerNote 0x2044 HiddenInfo (offset, size) | the TIFF header | [1] **[P]**; **[F]** (6929: (143,360, 53,248), data starting `55 26 11 05`; the offset varies across files from 139,264 (6933, 6936) to 147,456 (8846 to 8850), the size is 53,248 in all) |
+| The SRF MakerNote chain | the file start | [17] **[S]**; [18] **[S]** |
+| SR2Private (0xC634), and 0x7200 inside it | the file start | **[F]**; [1] **[S]** |
+| SR2Private 0x7240 (IDC_IFD) | the file start, by ExifTool's default; but see section 5 for the 6-byte offset seen in every file | [1] **[S]**; **[F]** |
+| SR2Private 0x7241 (IDC2_IFD) and each version IFD 0xD001 inside it, written by Sony's Image Data Converter | **the IFD's own start**: ExifTool switches the base to the start of the directory | [1] [5] **[S]**; no sample |
+| MakerNote 0x2044 HiddenInfo (offset, size) | the TIFF header | [1] **[S]**; **[F]** (6929: (143,360, 53,248), data starting `55 26 11 05`; the offset varies across files from 139,264 (6933, 6936) to 147,456 (8846 to 8850), the size is 53,248 in all) |
 
 ExifTool's base check (FixBase) expects the MakerNote's value data to
 start 4 bytes after the IFD entries for DSLR-*, SLT-A33/A35/A55V and
 NEX-3/5/C3/VG10E, and immediately after them for other Sony bodies; it uses
 the difference to detect and repair a moved MakerNote in edited files [3]
-**[P]**. The samples agree (section 2).
+**[S]**. The samples agree (section 2).
 
 ## 2. MakerNote layouts, as far as previews need them
 
@@ -370,23 +364,23 @@ cross-check PreviewImageSize. The layouts, named by their bytes:
 | Layout | Starts with | IFD starts at | Offsets relative to | Value data after the entries | Seen in | Conf. |
 |---|---|---|---|---|---|---|
 | Headerless | a bare IFD (entry count) | MakerNote start | outer TIFF header | 4 zero bytes, then values, on the A200, A700, A900, NEX-5, SLT-A55V and the R1; values immediately, with **no next-IFD pointer**, on the RX100, A99V, Lunar and every ILCE and RX from 2012 on | every ARW from the A200 on, the R1's SR2, ARQ, the Lunar | **[F]** (2271, 2521, 5858, 1457, 964, 3221; 5811, 3751, 4051, 4466 and later) |
-| `SONY DSC \0\0\0` | 12-byte header | MakerNote start + 12 | outer TIFF header | 4 zero bytes | the A100's ARW; JPEGs from DSC compacts | **[F]** (2346); [3] [9] **[P]** |
-| Other 12-byte headers: `SONY CAM \0\0\0`, `SONY MOBILE`, `\0\0SONY PIC\0`, `VHAB     \0` | 12-byte header | MakerNote start + 12 | outer TIFF header | – | JPEG files from other Sony devices, and Hasselblad rebadges according to ExifTool; no raw sample carries one | [3] **[P]**; **[F]** (none in 36 files) |
-| SRF chain | a bare IFD (SRF0, one entry) | MakerNote start | file start | – | SRF | **[F]** (1351); [1] **[P]** |
+| `SONY DSC \0\0\0` | 12-byte header | MakerNote start + 12 | outer TIFF header | 4 zero bytes | the A100's ARW; JPEGs from DSC compacts | **[F]** (2346); [3] [9] **[S]** |
+| Other 12-byte headers: `SONY CAM \0\0\0`, `SONY MOBILE`, `\0\0SONY PIC\0`, `VHAB     \0` | 12-byte header | MakerNote start + 12 | outer TIFF header | – | JPEG files from other Sony devices, and Hasselblad rebadges according to ExifTool; no raw sample carries one | [3] **[S]**; **[F]** (none in 36 files) |
+| SRF chain | a bare IFD (SRF0, one entry) | MakerNote start | file start | – | SRF | **[F]** (1351); [1] **[S]** |
 
 ExifTool also maps `SONY PI\0` and `PREMI\0` (compacts' JPEGs) to its
 Olympus tables, and a `SONY PIC\0` text block and a Sony Ericsson form to
-other parsers [3] **[P]**; none appears in a raw file.
+other parsers [3] **[S]**; none appears in a raw file.
 
 Detection, combining what the cited projects do: if the data starts with one of
 the 12-byte headers, the IFD is at +12; otherwise it is a bare IFD at +0. Do
 not decide by Make: the Lunar's Make is `HASSELBLAD` and its MakerNote is
 headerless (file 4051) **[F]**. ExifTool falls back to the headerless form when
 Make starts with "SONY", or when Make starts with upper-case "HASSELBLAD" and
-Model starts with HV, Stellar, Lusso or Lunar [3] **[P]**. Exiv2 chooses its
-Sony MakerNote parser by Make "SONY" [9] **[P]**, which is presumably why its
+Model starts with HV, Stellar, Lusso or Lunar [3] **[S]**. Exiv2 chooses its
+Sony MakerNote parser by Make "SONY" [9] **[S]**, which is presumably why its
 dump of the Lunar shows no FileFormat or SonyModelID although the bytes hold
-them [21] **[P]**, file 4051 **[F]**, **[I]** for the cause. Never require a
+them [21] **[S]**, file 4051 **[F]**, **[I]** for the cause. Never require a
 next-IFD pointer after the entries.
 
 ## 3. Where a JPEG can live
@@ -396,14 +390,14 @@ reports to this page.
 
 | ExifTool name | Exiv2 group | Location | Files | Size seen | Conf. |
 |---|---|---|---|---|---|
-| PreviewImage | `Exif.Image` | IFD0 0x0201/0x0202 | ARW, SR2, ARQ (not SRF) | 1616x1080 from the A200 on; A100 640x480; R1 640x424 | names [2] [8] **[P]**; sizes **[F]** |
-| ThumbnailImage | `Exif.Thumbnail` | IFD1 0x0201/0x0202 | all, including SRF | 160x120; in the SRF 640x480, "actually a preview" [2] | names **[P]**; sizes **[F]** |
-| JpgFromRaw | `Exif.Image2` | IFD2 0x0201/0x0202 | ARW with FileFormat 4.0 and later | the image's full size, up to 9504x6336 seen (section 4) | ExifTool names any IFD2 0x0201 JpgFromRaw [2] **[P]**; Exiv2 has a loader for `Exif.Image2` [8] **[P]**; sizes **[F]**, [21] **[P]** |
-| JpgFromRaw | `Exif.SubImage1` | 0x0201 in a SubIFD | none | – | **[F]** (none in 36 files); [21] **[P]** (none in the dumps of 209 Sony-family files) |
-| PreviewImage (Minolta) | `Exif.SonyMinolta` | A100 MakerNote 0xB028, Minolta tags 0x0088/0x0089 | A100 | the same bytes as IFD0's JPEG | [6] [8] **[P]**; **[F]** (2346) |
-| PreviewImage (MakerNote) | not loaded by Exiv2 | MakerNote 0x2001: a 32-byte Sony header, then a JPEG whose first byte is 0x00 instead of 0xFF | Sony **JPEG** files | – | [1] **[P]**; absent from every checked ARW, SR2 and ARQ file **[F]** |
-| IDCPreviewImage, IDCPreviewImage1 and up | – | IFDs that Sony's Image Data Converter writes into SR2Private (0x7240, 0x7241, version IFDs 0xD001) | edited files only | – | [5] **[P]**; none in the samples (0x7241 = 0 in every file) **[F]** |
-| (none) | – | SRF6, a 672x492 uncompressed RGB image | SRF | not a JPEG | [18] **[P]** |
+| PreviewImage | `Exif.Image` | IFD0 0x0201/0x0202 | ARW, SR2, ARQ (not SRF) | 1616x1080 from the A200 on; A100 640x480; R1 640x424 | names [2] [8] **[S]**; sizes **[F]** |
+| ThumbnailImage | `Exif.Thumbnail` | IFD1 0x0201/0x0202 | all, including SRF | 160x120; in the SRF 640x480, "actually a preview" [2] | names **[S]**; sizes **[F]** |
+| JpgFromRaw | `Exif.Image2` | IFD2 0x0201/0x0202 | ARW with FileFormat 4.0 and later | the image's full size, up to 9504x6336 seen (section 4) | ExifTool names any IFD2 0x0201 JpgFromRaw [2] **[S]**; Exiv2 has a loader for `Exif.Image2` [8] **[S]**; sizes **[F]**, [21] **[S]** |
+| JpgFromRaw | `Exif.SubImage1` | 0x0201 in a SubIFD | none | – | **[F]** (none in 36 files); [21] **[S]** (none in the dumps of 209 Sony-family files) |
+| PreviewImage (Minolta) | `Exif.SonyMinolta` | A100 MakerNote 0xB028, Minolta tags 0x0088/0x0089 | A100 | the same bytes as IFD0's JPEG | [6] [8] **[S]**; **[F]** (2346) |
+| PreviewImage (MakerNote) | not loaded by Exiv2 | MakerNote 0x2001: a 32-byte Sony header, then a JPEG whose first byte is 0x00 instead of 0xFF | Sony **JPEG** files | – | [1] **[S]**; absent from every checked ARW, SR2 and ARQ file **[F]** |
+| IDCPreviewImage, IDCPreviewImage1 and up | – | IFDs that Sony's Image Data Converter writes into SR2Private (0x7240, 0x7241, version IFDs 0xD001) | edited files only | – | [5] **[S]**; none in the samples (0x7241 = 0 in every file) **[F]** |
+| (none) | – | SRF6, a 672x492 uncompressed RGB image | SRF | not a JPEG | [18] **[S]** |
 
 Notes:
 
@@ -420,7 +414,7 @@ Notes:
    starts `FF D8 FF DB` (all files) **[F]**. A comment in ExifTool's Sony.pm,
    written about tag 0x2001 in Sony JPEG files, notes that the corresponding
    bytes of ARW previews are `FF D8 FF DB`, a quantization table straight after
-   SOI [1] **[P]**; 0x2001 itself does not occur in ARW files. Sony JPEG files
+   SOI [1] **[S]**; 0x2001 itself does not occur in ARW files. Sony JPEG files
    do use MPF for their preview [27] **[S]**.
 6. **No hidden JPEGs.** A whole-file byte scan for DCT JPEG headers outside
    the referenced ones found none in any checked file **[F]**.
@@ -431,7 +425,7 @@ Every one of the 16 checked files with FileFormat `4 0 0 0` or later
 (ILCE-7SM3, ILCE-1, ILCE-7M4, ILCE-6700, ILCE-9M3, ILCE-1M2, ILCE-7M5) has
 it, and none of the 20 earlier files (SRF, SR2, ARW 1.0 to 2.3.5, ARQ)
 does **[F]**. In the exiv2 dumps, 78 of the 79 ARW files at those versions
-have it [21] **[P]**.
+have it [21] **[S]**.
 
 - **Where.** The third IFD of the IFD0 chain, reached through IFD1's
   next-IFD pointer; its own next pointer is 0. **Not** a SubIFD.
@@ -445,16 +439,16 @@ have it [21] **[P]**.
   ends exactly at the end-of-image marker. Its SOF size equals the IFD's
   ImageWidth and ImageLength and the raw IFD's DefaultCropSize (all 16
   files) **[F]**; in the exiv2 dumps the tag size equals DefaultCropSize in
-  all 78 files [21] **[P]**. Compression 7 notwithstanding, it is an
+  all 78 files [21] **[S]**. Compression 7 notwithstanding, it is an
   ordinary baseline JPEG.
 - **Size.** "Full size" means the size of the recorded image in the mode
   used, not the sensor's: 4608x3072 in the ILCE-7M4's APS-C mode and in its
   medium-size raw, 3504x2336 in its small raw (files 6933, 6936, 6930,
   6931) **[F]**. Lengths run from 1,102,572 bytes (file 7835) to 9,751,756
   bytes (file 4466) in the checked files **[F]**, and from 578,991 to
-  12,313,510 bytes in the dumps [21] **[P]**.
+  12,313,510 bytes in the dumps [21] **[S]**.
 - **The exception.** The only ZV-1M2 dump on raw.pixls.us (FileFormat
-  `4 0 0 0`, firmware 2.01) shows no IFD2 [22] **[P]**. Its bytes were not
+  `4 0 0 0`, firmware 2.01) shows no IFD2 [22] **[S]**. Its bytes were not
   checked. A preview finder that ranks all candidates handles it either way.
 - **A second path to it.** SR2Private tag 0x7240 points exactly 6 bytes
   before IFD2, at six zero bytes, in every 4.0 and later file (section 5)
@@ -465,7 +459,7 @@ This settles a disagreement in earlier reports. One user extracted only a
 another described a full-resolution JPEG extracted as JpgFromRaw [23]
 **[S]**; Adobe acknowledged and fixed a Lightroom Classic bug in which it
 used the smaller of two ILCE-1 previews [24] **[S]**. ExifTool names the
-IFD0 JPEG PreviewImage and the IFD2 JPEG JpgFromRaw [2] **[P]**, so both
+IFD0 JPEG PreviewImage and the IFD2 JPEG JpgFromRaw [2] **[S]**, so both
 users were right about different IFDs; file 4466 holds both (1616x1080 and
 8640x5760) **[F]**. The belief that Sony bodies do not embed a full-size
 JPEG [25] [26] **[S]** holds only before FileFormat 4.0.
@@ -473,7 +467,7 @@ JPEG [25] [26] **[S]** holds only before FileFormat 4.0.
 ## 4. Preview sizes by body and generation
 
 Sizes come from the SOF markers of the checked files **[F]**, and from the
-tag sizes and byte lengths in the exiv2 dumps [21] **[P]**, which do not
+tag sizes and byte lengths in the exiv2 dumps [21] **[S]**, which do not
 show the IFD0 and IFD1 JPEGs' pixel sizes. raw-files should still measure
 at run time (section 7).
 
@@ -485,31 +479,31 @@ at run time (section 7).
 | ARW 2.0 to 2.3.5 (3:2): A200, A700, A900, NEX-5, A55V, RX100, A99V, Lunar, ILCE-7S (APS-C crop), ILCE-7RM2, ILCE-9, ILCE-7RM3, ARQ | 1616x1080 | 160x120 | – | files 2271, 2521, 5858, 1457, 964, 5811, 3751, 4051, 1582, 1310, 1311, 1541, 1542, 3251, 3255 **[F]** |
 | RX100M6 at 1:1 | 1088x1080 | 160x120 | – | file 3012 **[F]** |
 | RX100M6 at 16:9 | 1920x1080 | 160x120 | – | file 3015 **[F]** |
-| 4:3 aspect (bodies not identified) | 1440x1080, from the MakerNote's PreviewImageSize in two dumps | – | – | [21] **[P]** for the tag; **[I]** for the JPEG |
+| 4:3 aspect (bodies not identified) | 1440x1080, from the MakerNote's PreviewImageSize in two dumps | – | – | [21] **[S]** for the tag; **[I]** for the JPEG |
 | ILCE-7SM3 (4.0) | 1616x1080 | 160x120 | 4240x2832 | file 5418 **[F]** |
-| ILCE-1 (4.0) | 1616x1080 | 160x120 | 8640x5760 (9.75 MB lossless; 12.3 MB in a compressed-raw dump) | file 4466 **[F]**; [21] **[P]** |
+| ILCE-1 (4.0) | 1616x1080 | 160x120 | 8640x5760 (9.75 MB lossless; 12.3 MB in a compressed-raw dump) | file 4466 **[F]**; [21] **[S]** |
 | ILCE-7M4 (4.0.1) | 1616x1080 | 160x120 | 7008x4672 (large), 4608x3072 (APS-C, medium), 3504x2336 (small) | files 6929, 6933, 6936, 6930, 6931 **[F]** |
 | ILCE-6700 (4.0.1) | 1616x1080 | 160x120 | 6192x4128 | file 6736 **[F]** |
 | ILCE-9M3 (5.0) | 1616x1080 | 160x120 | 6000x4000; 3008x2000 (small) | files 7361, 7364 **[F]** |
 | ILCE-1M2 (5.0.1) | 1616x1080 | 160x120 | 5616x3744 (APS-C) | file 7835 **[F]** |
 | ILCE-7M5 (6.0) | 1616x1080 | 160x120 | 7008x4672; 4608x3072 (APS-C) | files 8846 to 8850 **[F]** |
-| ILCE-7RM5, ILCE-7CR, DSC-RX1RM3 | – | – | 9504x6336, 6240x4160, 4752x3168 | [21] **[P]** |
-| ILCE-7CM2, ILME-FX2 | – | – | 7008x4672, 4608x3072 (and 3504x2336 on the FX2) | [21] **[P]** |
-| ILME-FX3, ZV-E1 | – | – | 4240x2832 | [21] **[P]** |
-| ILME-FX30, ZV-E10M2 | – | – | 6192x4128 | [21] **[P]** |
-| ILCE-9M3 and ILCE-1M2, other modes | – | – | 3936x2632 (ILCE-9M3); 8640x5760 and 4320x2880 (ILCE-1M2) | [21] **[P]** |
-| ZV-1M2 (4.0) | 1,190,329 bytes | 9,105 bytes | **none** | [22] **[P]** |
+| ILCE-7RM5, ILCE-7CR, DSC-RX1RM3 | – | – | 9504x6336, 6240x4160, 4752x3168 | [21] **[S]** |
+| ILCE-7CM2, ILME-FX2 | – | – | 7008x4672, 4608x3072 (and 3504x2336 on the FX2) | [21] **[S]** |
+| ILME-FX3, ZV-E1 | – | – | 4240x2832 | [21] **[S]** |
+| ILME-FX30, ZV-E10M2 | – | – | 6192x4128 | [21] **[S]** |
+| ILCE-9M3 and ILCE-1M2, other modes | – | – | 3936x2632 (ILCE-9M3); 8640x5760 and 4320x2880 (ILCE-1M2) | [21] **[S]** |
+| ZV-1M2 (4.0) | 1,190,329 bytes | 9,105 bytes | **none** | [22] **[S]** |
 
 Further observations:
 
 - **1616x1080 everywhere at 3:2.** The MakerNote's PreviewImageSize says
   1616x1080 in 191 of the 205 dumps that have it; 11 say 1920x1080, 2 say
-  1440x1080 and 1 says 1088x1080 [21] **[P]**. Earlier reports of
+  1440x1080 and 1 says 1088x1080 [21] **[S]**. Earlier reports of
   1610x1080, 1660x1080 or 1616x1000 [28] [26] **[S]** are probably typos
   **[I]**; no checked file has them.
 - **Byte lengths vary 30-fold for the same pixel size.** IFD0 JPEGs run
   from 85,740 bytes (ZV-E10M2) to 1,334,081 bytes (A350) in the dumps, and
-  IFD1 thumbnails from 2,019 to 13,181 bytes [21] **[P]**. Byte length says
+  IFD1 thumbnails from 2,019 to 13,181 bytes [21] **[S]**. Byte length says
   nothing about pixel size.
 - **Aspect ratio.** The raw and DefaultCropSize stay at 3:2 and the IFD0
   preview carries the in-camera crop (file 3015: raw 5504x3672,
@@ -530,10 +524,10 @@ Further observations:
   ExifTool also repairs a **thumbnail offset 0x10000 too small** in some A100
   files: if the IFD1 data does not start `FF D8 FF`, the offset is below
   0x10000, and a JPEG starts 65,536 bytes later, it uses that and warns; its
-  writer's comment names firmware 1.00 [2] [4] **[P]**. File 2346 is firmware
+  writer's comment names firmware 1.00 [2] [4] **[S]**. File 2346 is firmware
   1.04 and its thumbnail offset is correct **[F]**. ExifTool also notes that
   the A100's IFD0 preview length "may be wrong" and ignores the Minolta
-  duplicate [2] **[P]**; in file 2346 the length is right and ends exactly at
+  duplicate [2] **[S]**; in file 2346 the length is right and ends exactly at
   EOI **[F]**. No firmware-related offset bug is documented for any other body
   **[I]**.
 - **SRF.** IFD0 describes the raw, not an image a reader can use, and has
@@ -546,7 +540,7 @@ Further observations:
   of a lossless raw starts with `FF D8 FF C3`: a JPEG start-of-image
   followed by a lossless (SOF3) frame header (files 4466, 6929, 6930, 6931,
   6736, 7364, 8848) **[F]**, as ExifTool's, LibRaw's and rawspeed's
-  handling suggests [10] [13] **[P]** [20] **[S]**. The raw IFD lists the
+  handling suggests [10] [13] **[S]** [20] **[S]**. The raw IFD lists the
   tiles and also one strip starting at the first tile (file 4466:
   StripOffsets 10,383,360, StripByteCounts 71,191,920 = the sum of the
   tiles) **[F]**.
@@ -567,7 +561,7 @@ Further observations:
   same previews as the frame (file 3255) **[F]**.
 - **Hasselblad Lunar.** A Sony ARW 2.3 under another Make (file 4051)
   **[F]**. ExifTool lists a `VHAB     \0` MakerNote header for Hasselblad
-  models [3] **[P]**, but the Lunar's is headerless. The Stellar, HV and
+  models [3] **[S]**, but the Lunar's is headerless. The Stellar, HV and
   Lusso had no sample.
 - **Bytes after the end-of-image marker.** The declared length usually ends
   exactly at EOI, but the NEX-5 and SLT-A55V IFD0 previews are followed by
@@ -588,13 +582,13 @@ Further observations:
   SR2Private (0x7240, and 0x7241 with a stack of version IFDs, each able to
   carry an IDCPreview JPEG); it can turn the A100's 0x014A into a real SubIFD;
   and a source comment in ExifTool's MinoltaRaw.pm says the IDC utility
-  "corrupts MRWInfo" when writing ARW images [5] [1] [6] **[P]**. ExifTool's
-  author says he has never seen the un-numbered IDCPreviewImage [5] **[P]**. No
+  "corrupts MRWInfo" when writing ARW images [5] [1] [6] **[S]**. ExifTool's
+  author says he has never seen the un-numbered IDCPreviewImage [5] **[S]**. No
   checked file was edited (0x7241 = 0 everywhere) **[F]**. Whether the
   converter also replaces the IFD0 or IFD2 JPEG is unknown.
 - **Third-party re-saves.** A published ILCE-9 dump has IFD0 at about
   byte 49,595,930 of a 49,600,238-byte file, with an XMP packet naming
-  Photo Mechanic [18] **[P]**; which program moved it is **[I]**. All 36
+  Photo Mechanic [18] **[S]**; which program moved it is **[I]**. All 36
   checked files have IFD0 at 8 **[F]**. Exiv2 0.23 wrote NEX-6 ARWs that
   other software rejected, ExifTool then reporting a bad SR2Private entry
   [34] **[S]**. Users report that ARWs edited by ExifTool open everywhere
@@ -603,11 +597,11 @@ Further observations:
 - **Tags out of order.** Raw SubIFDs list 0x011A, 0x7000, 0x0111, 0x7316
   and 0x74C7 out of ascending order, and from 4.0 also 0x0102, 0x0142 and
   0x7038 (files 1541, 1542, 3012, 3251, 4466) **[F]**, as ExifTool's
-  warnings on the published ILCE-9 dump show [18] **[P]**. A parser must not
+  warnings on the published ILCE-9 dump show [18] **[S]**. A parser must not
   require sorted tags.
 - **IFD1 repeats IFD0's Make, Model, Orientation and DateTime** in every
   ARW and SR2 (all files) **[F]**; ExifTool gives IFD1 low priority for ARW
-  [7] **[P]**, and users who edited ModifyDate found the IFD1 copy left
+  [7] **[S]**, and users who edited ModifyDate found the IFD1 copy left
   behind [32] **[S]**.
 - **Make padding.** `SONY` plus 11 spaces on the A100, `SONY ` with one
   space on the A200 to A900, `SONY` after that, `HASSELBLAD` on the Lunar
@@ -618,14 +612,14 @@ Further observations:
 
 | Project | Method for ARW | Conf. |
 |---|---|---|
-| ExifTool | extracts each location under its own name (PreviewImage, ThumbnailImage, JpgFromRaw, IDCPreviewImage, the MakerNote previews); does not choose a largest; validates image data, repairs the A100 thumbnail offset, and drops the A100 duplicate | [2] [4] [5] **[P]** |
-| Exiv2 | collects `Exif.Image` (IFD0), `Exif.Thumbnail` (IFD1), `Exif.Image2` (IFD2), `Exif.SubImage1` to 4, `Exif.SonyMinolta` (A100) and strip-based loaders for groups with NewSubfileType 1; checks offset plus size against the file; makes no SOI check of its own, but reads dimensions by opening each candidate's bytes through `ImageFactory`, which identifies the format by its magic bytes (`FF D8` for JPEG) and so drops a candidate that no Exiv2 image class recognizes; sorts by width times height; does not read MakerNote 0x2001, whose offset lies outside the MakerNote [35] | [8] **[P]**; [35] **[S]** |
-| LibRaw | parses all IFDs in the chain and the SubIFDs; for an IFD with 0x0201 and no BitsPerSample it reads the JPEG header for width, height and bits; picks the IFD maximizing width times height divided by (bits squared plus 1) among IFDs that are not the raw and not CFA or linear-raw photometric; checks offsets against the file size only when an option is set; keeps a deduplicated list of all thumbnails; its raw selection skips the "Sony RGB preview" profile, which is IFD2 | [10] **[P]**; that IFD2 wins its ranking is **[I]** |
-| rawler (dnglab) | `preview_image` reads IFD0's 0x0201/0x0202 only, so on 4.0 and later files it returns the 1616x1080 preview, not IFD2's | [12] **[P]**; the consequence **[I]** |
-| rawspeed | no preview extraction | [13] **[P]** |
-| libopenraw | walks every non-raw IFD and its SubIFDs; treats NewSubfileType absent or 1 as a preview; for Compression 6 or 7 or 0x0201 data **uses ImageWidth and ImageLength when present** and parses the JPEG only when they are absent; disables SubIFD parsing for the A100 | [14] **[P]**; that it would report the A100's 640x480 JPEG as 3872x2592 is **[I]** |
-| rawkit (Graphite) | IFD0's 0x0201/0x0202 only; checks `FF D8`; allocates the declared length before any bounds check | [15] **[P]** |
-| metadata-extractor | no preview extraction; reads both Sony MakerNote forms with the outer TIFF header as base | [16] **[P]** |
+| ExifTool | extracts each location under its own name (PreviewImage, ThumbnailImage, JpgFromRaw, IDCPreviewImage, the MakerNote previews); does not choose a largest; validates image data, repairs the A100 thumbnail offset, and drops the A100 duplicate | [2] [4] [5] **[S]** |
+| Exiv2 | collects `Exif.Image` (IFD0), `Exif.Thumbnail` (IFD1), `Exif.Image2` (IFD2), `Exif.SubImage1` to 4, `Exif.SonyMinolta` (A100) and strip-based loaders for groups with NewSubfileType 1; checks offset plus size against the file; makes no SOI check of its own, but reads dimensions by opening each candidate's bytes through `ImageFactory`, which identifies the format by its magic bytes (`FF D8` for JPEG) and so drops a candidate that no Exiv2 image class recognizes; sorts by width times height; does not read MakerNote 0x2001, whose offset lies outside the MakerNote [35] | [8] **[S]**; [35] **[S]** |
+| LibRaw | parses all IFDs in the chain and the SubIFDs; for an IFD with 0x0201 and no BitsPerSample it reads the JPEG header for width, height and bits; picks the IFD maximizing width times height divided by (bits squared plus 1) among IFDs that are not the raw and not CFA or linear-raw photometric; checks offsets against the file size only when an option is set; keeps a deduplicated list of all thumbnails; its raw selection skips the "Sony RGB preview" profile, which is IFD2 | [10] **[S]**; that IFD2 wins its ranking is **[I]** |
+| rawler (dnglab) | `preview_image` reads IFD0's 0x0201/0x0202 only, so on 4.0 and later files it returns the 1616x1080 preview, not IFD2's | [12] **[S]**; the consequence **[I]** |
+| rawspeed | no preview extraction | [13] **[S]** |
+| libopenraw | walks every non-raw IFD and its SubIFDs; treats NewSubfileType absent or 1 as a preview; for Compression 6 or 7 or 0x0201 data **uses ImageWidth and ImageLength when present** and parses the JPEG only when they are absent; disables SubIFD parsing for the A100 | [14] **[S]**; that it would report the A100's 640x480 JPEG as 3872x2592 is **[I]** |
+| rawkit (Graphite) | IFD0's 0x0201/0x0202 only; checks `FF D8`; allocates the declared length before any bounds check | [15] **[S]** |
+| metadata-extractor | no preview extraction; reads both Sony MakerNote forms with the outer TIFF header as base | [16] **[S]** |
 | Lightroom Classic | used the smaller of two ILCE-1 previews until a fix in 2021 | [24] **[S]** |
 | Viewers in general | macOS, XnView, IMatch and Lightroom's import show the embedded preview, so Sony files look soft at 1:1 | [25] [26] **[S]** |
 
@@ -766,16 +760,16 @@ Return the JPEG bytes as they are and expose the orientation separately.
   and the consumer must apply the Orientation.
 - The MakerNote has its own copies: CameraOrientation in the enciphered tag
   0x9400, Orientation2 in two settings blocks (where 2 means "rotate 180",
-  not a mirror), and bit fields on some older bodies [1] **[P]**. ExifTool
+  not a mirror), and bit fields on some older bodies [1] **[S]**. ExifTool
   saw A55 files where Orientation2 disagreed with the other tags [1]
-  **[P]**. CameraOrientation sits at byte 0x28 of the deciphered 0x9400 in
-  the 9400a layout, 0x24 in 9400b and 0x29 in 9400c [1] **[P]**; in file
+  **[S]**. CameraOrientation sits at byte 0x28 of the deciphered 0x9400 in
+  the 9400a layout, 0x24 in 9400b and 0x29 in 9400c [1] **[S]**; in file
   3751 (9400a) it says 8, agreeing with IFD0 **[F]**. Use IFD0 all the
   same.
 - Exiv2's tracker has a 2008 report of A700 previews shown unrotated in
   digiKam, closed without analysis [33] **[S]**.
 - LibRaw takes the orientation from the lowest-numbered IFD with a
-  non-zero value [10] **[P]**, which on ARW is IFD0.
+  non-zero value [10] **[S]**, which on ARW is IFD0.
 
 So the library should read IFD0's 0x0112 (default 1 when absent or
 invalid) and leave the rotation to the caller, as for NEF.
@@ -798,10 +792,10 @@ invalid) and leave the rotation to the caller, as for NEF.
 - The SRF's IFD0 claims an image with no StripOffsets (file 1351) **[F]**.
   LibRaw's SRF parser had an out-of-bounds read (CVE-2020-35535) [36]
   **[P]**, and rawler panics on a short file at the SRF's fixed key offset
-  [37] **[S]**, an index still unchecked in its source [12] **[P]**.
+  [37] **[S]**, an index still unchecked in its source [12] **[S]**.
 - A thumbnail's declared length is not checked by every reader against the
   file (LibRaw CVE-2020-15503) [36] **[P]**; rawkit allocates the declared
-  length before checking it [15] **[P]**. Bound every length by the file
+  length before checking it [15] **[S]**. Bound every length by the file
   size before allocating.
 - NewSubfileType must be read as an unsigned 32-bit value: LibRaw narrowed
   it to a signed integer (CVE-2026-88387, whose fix was reverted) [36]
@@ -809,7 +803,7 @@ invalid) and leave the rotation to the caller, as for NEF.
 - 0xC634 is BYTE[4], not LONG; a strict type check loses SR2Private
   (all files) **[F]**. Not needed for previews, but a generic TIFF reader
   should not reject the IFD over it.
-- IFD0 need not be at offset 8 after a re-save [18] **[P]**.
+- IFD0 need not be at offset 8 after a re-save [18] **[S]**.
 - Tags are out of ascending order in raw SubIFDs (section 5) **[F]**.
 - The MakerNote's header does not follow Make (the Lunar) (file 4051)
   **[F]**, and newer MakerNotes have no next-IFD pointer **[F]**.
@@ -833,35 +827,35 @@ invalid) and leave the rotation to the caller, as for NEF.
    in the IFD0 chain (file 4466) **[F]**.
 3. **The A100's MakerNote header.** ExifTool's comments and Exiv2's
    example tie the `SONY DSC` header to JPEG files and describe ARW
-   MakerNotes as headerless [3] [9] **[P]**, while LibRaw's comment labels
-   its `SONY` branch "DSLR-A100" [10] **[P]**. Settled by file 2346: the
+   MakerNotes as headerless [3] [9] **[S]**, while LibRaw's comment labels
+   its `SONY` branch "DSLR-A100" [10] **[S]**. Settled by file 2346: the
    A100's ARW MakerNote has the 12-byte header **[F]**.
 4. **The Hasselblad MakerNote header.** ExifTool recognizes a
-   `VHAB     \0` header for Hasselblad models [3] **[P]**; the Lunar's
+   `VHAB     \0` header for Hasselblad models [3] **[S]**; the Lunar's
    MakerNote is headerless (file 4051) **[F]**. Whether any Hasselblad raw
    uses the header is open.
 5. **FileFormat per body.** ExifTool's comments, Clévy's table and the
    samples disagree for the A99V, the ILCE-7RM3, the ILCE-7M4 and the
    ILCE-1; the version follows firmware (section 1.2) **[F]**.
 6. **Clévy's "ARW 4.0" example** describes an ILCE-9 file whose FileFormat
-   is `3 3 3 0`, ARW 2.3.3 [17] [18] **[P]**, and so shows no IFD2.
+   is `3 3 3 0`, ARW 2.3.3 [17] [18] **[S]**, and so shows no IFD2.
 7. **The A100's preview pointer base.** One reading of LibRaw has it
-   relative to a MakerNote base [10] **[P]**; in file 2346 the Minolta
+   relative to a MakerNote base [10] **[S]**; in file 2346 the Minolta
    pointer equals IFD0's file-relative offset **[F]**. These agree if
    LibRaw's base is the outer TIFF header, which sits at file offset 0
    **[I]**.
-8. **The A100's 0x014A value**: 65,536 in a published dump [18] **[P]**,
+8. **The A100's 0x014A value**: 65,536 in a published dump [18] **[S]**,
    98,304 in file 2346 **[F]**. Different files; the value varies.
 9. **Tag dimensions versus the JPEG.** libopenraw trusts tag dimensions
-   when present; Exiv2 and LibRaw measure the JPEG [14] [8] [10] **[P]**.
+   when present; Exiv2 and LibRaw measure the JPEG [14] [8] [10] **[S]**.
    On IFD2 the tags match the SOF; on the A100's IFD0 they do not (files
    4466, 2346) **[F]**.
 10. **The exiv2 dumps and the bytes.** The dump of file 4051 shows no
     FileFormat or SonyModelID, but the bytes hold `3 3 0 0` and 289
-    [21] **[P]**, file 4051 **[F]**; the cause is probably Exiv2's choice of
+    [21] **[S]**, file 4051 **[F]**; the cause is probably Exiv2's choice of
     MakerNote parser by Make **[I]**.
 11. **rawler's comment** names tag 0x2002 as ExifTool's MakerNote preview;
-    ExifTool defines it as 0x2001 (0x2002 is Rating) [12] [1] **[P]**.
+    ExifTool defines it as 0x2001 (0x2002 is Rating) [12] [1] **[S]**.
 
 ## Open questions
 
