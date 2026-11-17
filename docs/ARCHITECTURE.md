@@ -153,7 +153,7 @@ adds a row.
 | `scripts/fetch-samples.sh` | Downloads the files of `tests/samples.tsv` into `raw-samples/` and checks each SHA-256. | `tests/samples.tsv`, `curl`, `sha256sum` or `shasum` |
 | `scripts/check-series.sh` | Builds and tests every commit of a branch in a throwaway worktree, so every commit that lands on `master` is known to pass. | `git`, `cargo` |
 | `scripts/install-hooks.sh` | Turns on the git hooks of `.githooks/` for a checkout, and sets `pull.ff=only`. | `git` |
-| `scripts/test-hooks.sh` | Tests the `commit-msg` hook of `.githooks/` on message files and through a real `git commit`. | `.githooks/commit-msg`, `git` |
+| `scripts/test-hooks.sh` | Tests the `commit-msg` hook of `.githooks/` on message files and through a real `git commit`, and the `pre-push` hook through a real `git push`. | `.githooks/commit-msg`, `.githooks/pre-push`, `git`, `cargo` |
 
 ### The fuzz targets
 

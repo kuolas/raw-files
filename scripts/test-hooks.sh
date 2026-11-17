@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # SPDX-License-Identifier: MIT OR Apache-2.0
 # test-hooks.sh — test .githooks/commit-msg: the grammar of CONTRIBUTING.md
-# §Commit messages, on message files and through a real `git commit`. CI runs
-# it; run it yourself after changing the hook.
+# §Commit messages, on message files and through a real `git commit`; and
+# .githooks/pre-push, through a real `git push` to a throwaway remote. CI runs
+# it; run it yourself after changing a hook.
 #
 #   scripts/test-hooks.sh
 #
@@ -15,12 +16,15 @@ SRC="$(cd "$(dirname "$0")/.." && pwd -P)"
 HOOK="$SRC/.githooks/commit-msg"
 W="$(mktemp -d "${TMPDIR:-/tmp}/raw-files-hooks.XXXXXX")"
 trap 'rm -rf "$W"' EXIT
+# rustup and cargo find their toolchains under $HOME unless told otherwise;
+# they keep yours while $HOME moves below.
+export RUSTUP_HOME="${RUSTUP_HOME:-$HOME/.rustup}" CARGO_HOME="${CARGO_HOME:-$HOME/.cargo}"
 # No git config of yours applies (a signing key, a template): git reads
 # $HOME/.gitconfig and $XDG_CONFIG_HOME/git/config, both moved here.
 export HOME="$W/home" XDG_CONFIG_HOME="$W/home/.config" GIT_CONFIG_NOSYSTEM=1
 export GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@example.invalid
 export GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@example.invalid
-unset SKIP_HOOKS COMMIT_MSG_STORED GIT_EDITOR
+unset SKIP_HOOKS COMMIT_MSG_STORED GIT_EDITOR CARGO_TARGET_DIR
 mkdir -p "$HOME"
 
 FAILS=0
@@ -223,6 +227,101 @@ commit_refused() {
 check "a commit with a glued tag is refused" commit_refused 'ui:fix the thing'
 check "a commit with a good message goes through" \
 	git -C "$C" commit -q --allow-empty -m 'nef: Find the preview'
+
+echo '# pre-push: the commits being pushed, not the working tree'
+if command -v cargo > /dev/null 2>&1 && cargo fmt --version > /dev/null 2>&1 &&
+	cargo clippy --version > /dev/null 2>&1; then
+	P="$W/push"
+	git init -q -b master "$P"
+	git init -q --bare "$W/remote.git"
+	git -C "$P" config core.hooksPath "$SRC/.githooks"
+	git -C "$P" remote add origin "$W/remote.git"
+	printf '[package]\nname = "hooktest"\nversion = "0.1.0"\nedition = "2024"\n' > "$P/Cargo.toml"
+	printf '/target\n' > "$P/.gitignore"
+	mkdir "$P/src"
+	formatted='pub fn one() -> u32 {\n    1\n}\n'
+	unformatted='pub fn one()->u32{1}\n'
+	printf '%b' "$formatted" > "$P/src/lib.rs"
+	git -C "$P" add -A
+	git -C "$P" commit -q --no-verify -m 'Add the crate'
+	git -C "$P" switch -q -c wip/topic
+	# Refused by the hook's check, not by anything else that can fail a push.
+	push_refused() {
+		local out
+		! out="$(git -C "$P" push -q origin "$1" 2>&1)" && grep -q "^pre-push: \`$2\` fails on " <<< "$out"
+	}
+	push_accepted() { git -C "$P" push -q origin "$1" > /dev/null 2>&1; }
+
+	# The case of the pre-push hook's change: the commit is unformatted, and
+	# the fix sits uncommitted in the working tree, where cargo fmt finds
+	# nothing wrong.
+	printf '%b' "$unformatted" > "$P/src/lib.rs"
+	git -C "$P" commit -q --no-verify -am 'Shorten one'
+	printf '%b' "$formatted" > "$P/src/lib.rs"
+	check "an unformatted commit is refused, its fix left uncommitted" \
+		push_refused wip/topic 'cargo fmt --all --check'
+	check "  and the working tree is left as it was" \
+		git -C "$P" diff --quiet HEAD~1 -- src/lib.rs
+	git -C "$P" reset -q --hard HEAD~1
+
+	# The other way round: the commits are clean, and the working tree is
+	# unformatted and holds what clippy warns on (a needless return).
+	printf 'pub fn two() -> u32 {\n    2\n}\n' >> "$P/src/lib.rs"
+	git -C "$P" commit -q --no-verify -am 'Add two'
+	printf 'pub fn one()->u32{return 1;}\n' > "$P/src/lib.rs"
+	check "clean commits go through, the working tree not clean" \
+		push_accepted wip/topic
+	check "  and no worktree is left behind" \
+		test "$(git -C "$P" worktree list | wc -l)" -eq 1
+	# What the hook built from the commits must not stand in for a build of
+	# the working tree, which a shared target directory allowed.
+	checkout_clippy_warns() { ! (cd "$P" && cargo clippy --quiet -- -D warnings > /dev/null 2>&1); }
+	check "  and the checkout's own clippy still sees the working tree" \
+		checkout_clippy_warns
+	git -C "$P" checkout -q -- src/lib.rs
+
+	no_new_commits() {
+		local out
+		out="$(git -C "$P" push origin wip/topic:wip/same 2>&1)" &&
+			grep -q '^pre-push: no new commits to check' <<< "$out"
+	}
+	check "a push that adds no commit checks nothing" no_new_commits
+
+	# Two refs in one push: the commits of each are checked, not only
+	# those of the last ref git names.
+	git -C "$P" switch -q -c wip/bad
+	printf 'pub fn bad()->u32{0}\n' >> "$P/src/lib.rs"
+	git -C "$P" commit -q --no-verify -am 'Add bad'
+	git -C "$P" switch -q wip/topic
+	git -C "$P" switch -q -c wip/good
+	printf 'pub fn good() -> u32 {\n    0\n}\n' >> "$P/src/lib.rs"
+	git -C "$P" commit -q --no-verify -am 'Add good'
+	two_refs_refused() {
+		local out
+		! out="$(git -C "$P" push -q origin wip/bad wip/good 2>&1)" &&
+			grep -q "^pre-push: \`cargo fmt --all --check\` fails on [0-9a-f]* Add bad\\.$" <<< "$out"
+	}
+	check "a push of two refs checks the commits of both" two_refs_refused
+	git -C "$P" switch -q wip/topic
+
+	# A needless return is clippy's own lint, not the compiler's, so these
+	# fail only if the hook runs clippy. Both commits fail, so only a hook
+	# that checks each commit, oldest first, names the first one.
+	printf 'pub fn three() -> u32 {\n    return 3;\n}\n' >> "$P/src/lib.rs"
+	git -C "$P" commit -q --no-verify -am 'Add three'
+	printf 'pub fn four() -> u32 {\n    return 4;\n}\n' >> "$P/src/lib.rs"
+	git -C "$P" commit -q --no-verify -am 'Add four'
+	names_first() {
+		local out
+		! out="$(git -C "$P" push -q origin wip/topic 2>&1)" &&
+			grep -q "^pre-push: \`cargo clippy --workspace --all-targets -- -D warnings\` fails on [0-9a-f]* Add three\\.$" <<< "$out"
+	}
+	check "a commit clippy warns on is refused, the oldest named" names_first
+	check "no worktree is left behind" \
+		test "$(git -C "$P" worktree list | wc -l)" -eq 1
+else
+	echo "SKIP  cargo, rustfmt or clippy not installed"
+fi
 
 echo
 if [ "$FAILS" -eq 0 ]; then

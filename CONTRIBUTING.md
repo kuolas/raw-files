@@ -521,12 +521,13 @@ error instead.
 - `pre-merge-commit` and `pre-commit` refuse merge commits and squash merges
   on any branch — rebase instead.
 - `pre-push` refuses a direct push to `master` or a push containing a merge
-  commit, then runs `cargo fmt --check` and `cargo clippy`.
+  commit. Then it runs `cargo fmt --check` and `cargo clippy` on each commit
+  the push adds, as it was committed: a fix left uncommitted does not count.
 
 To skip them once, set `SKIP_HOOKS=1` (for example `SKIP_HOOKS=1 git push`).
 
-If you change `commit-msg`, run `scripts/test-hooks.sh`; CI runs it too. If
-you change a hook or a script, keep it executable in git:
+If you change `commit-msg` or `pre-push`, run `scripts/test-hooks.sh`; CI
+runs it too. If you change a hook or a script, keep it executable in git:
 `git update-index --chmod=+x <file>`. CI checks this. Run
 `shellcheck scripts/*.sh .githooks/*` too: CI runs version 0.11.0 and
 fails on any note it prints.
