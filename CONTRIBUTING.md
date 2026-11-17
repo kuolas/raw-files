@@ -256,7 +256,7 @@ Before a release, go through three things.
    the code:
    - [What it reads](README.md#what-it-reads) in the README, the list of
      what raw-files reads, which the others follow;
-   - the capabilities in [docs/ROADMAP.md](docs/ROADMAP.md);
+   - the capabilities and the releases in [docs/ROADMAP.md](docs/ROADMAP.md);
    - the crate docs' table in `src/lib.rs`;
    - the Status sections of the [NEF](docs/formats/nef/README.md#status),
      [ARW](docs/formats/arw/README.md#status) and

@@ -4,8 +4,9 @@ The big picture: what raw-files aims for, what it reads so far, and
 what comes next. Bugs and smaller requests live in the
 [issue tracker](https://github.com/kuolas/raw-files/issues).
 
-Where this roadmap says *my own* files, it is me, Alvaro Kuolas, who
-maintains raw-files, writing about my own cameras: they stay private.
+Where this roadmap says *I* or *my own*, it is me, Alvaro Kuolas, who
+maintains raw-files, writing about my own cameras. Their files stay
+private.
 
 ## The goal
 
@@ -13,132 +14,149 @@ raw-files aims for a well-made API: ergonomic, idiomatic Rust that
 follows the
 [Rust API Guidelines](https://rust-lang.github.io/api-guidelines/) and
 that a person can read and understand. It strives for an API that is
-complete, not for support of every camera body: cameras of different
+complete, not for support of every camera body. Cameras of different
 makers record much the same things, so one API can serve them all
 without every body being read first.
 
 The work aims first at mirrorless cameras, such as Nikon Z, Sony
 E-mount Alpha and Canon EOS R bodies. Bodies are added as the
-opportunity comes, when I have one at hand or a contributor sends
-files of it; no camera's support is promised, and none is scheduled.
+opportunity comes: when I have one at hand, or when a contributor sends
+files of it. No camera's support is promised, and none is scheduled.
 
 ## Capabilities
 
 What raw-files gives is grouped in five capabilities: previews,
 metadata, focus points, raw sensor data and the developed image.
-Together they are the whole of what it means to give: decoding ends at
+Together they are the whole of what it means to give. Decoding ends at
 the developed image, and the creative edit stays with the application
 ([ADR010](architecture-decisions/adr010-decoding-ends-at-a-linear-image.md)).
-A capability is a lasting area of work, not a step towards a finish:
-each grows with every body and format it learns to read, so none is
-ever complete for every body. What each gives so far:
 
-- **Previews.** The JPEG previews a file holds, returned without
-  decoding the raw data. A Nikon NEF file gives the JPEG previews in
-  its IFD0, its SubIFDs and its MakerNote. A Sony ARW file, or an SRF,
-  SR2 or ARQ file of the same family, gives the JPEG previews in its
-  IFD0, IFD1 and, on newer bodies, IFD2. A JPEG file gives the file
-  itself, the thumbnail of its Exif segment, the other images of its
-  Multi-Picture Format (MPF) list and, from the Nikon bodies that
-  write one, its MakerNote's small JPEG.
-- **Metadata.** What a viewer or a file renamer needs next to the
-  preview: capture time, camera make, model, serial number and owner's
-  name (with the maker raw-files recognizes in them and, for the bodies
-  the [notes on camera names](formats/camera-names.md) list, the name
-  the body is sold under), who made the picture (artist, copyright
-  notice, photographer, editor, title, description and comment), where
-  it was taken (position, altitude, GPS time, image direction and map
-  datum), lens, exposure, orientation, image sizes, and how the camera
-  was set (white balance, exposure program, metering, flash, shutter,
-  image area).
-  Read from the standard TIFF and Exif tags and from the MakerNote, for
-  the camera settings that only it records and, on Nikon files, for the
-  fields that older bodies record only there. A JPEG file's metadata
-  is read from its Exif segment as in a raw file, with no raw size,
-  and a Nikon or Sony camera's JPEG also gives what its MakerNote adds,
-  as a NEF or an ARW does. Not read: the shutter used and the image
-  area of Sony bodies, which they record only in enciphered blocks, and
-  their raw image size, because a tag gives an APS-C raw the code of a
-  medium one.
+A capability is a lasting area of work, not a step towards a finish.
+Each grows with every body and format it learns to read, so none is
+ever complete for every body.
 
-  Open, and next: **full metadata**, every metadata value a file
-  records, so that a program needs no second reader beside raw-files:
-  more capture settings, how the camera processed its JPEG, the lens by
-  name, the XMP and IPTC fields, what editing software, such as
-  Nikon's, writes into the file, and what a maker records only in
-  enciphered or encrypted blocks, which needs a decision of its own
-  first. It comes before raw sensor data
-  ([ADR016](architecture-decisions/adr016-full-metadata-before-raw-data.md)).
+Each capability raw-files gives starts from `CameraFile`, the handle
+on an open file, and names the methods that give it. The
+[API documentation](https://docs.rs/raw-files) gives each type's rules,
+and the [format notes](formats/README.md) what each body records.
 
-  Full metadata begins with **every entry a file records**, which
-  raw-files gives: each entry of the TIFF directories it walks (the
-  IFDs, the SubIFDs, the Exif, GPS and Interoperability IFDs, the Nikon
-  and Sony MakerNotes, Nikon's preview IFD, Sony's SR2Private and a
-  JPEG's Multi-Picture index), with its directory, tag number, type and
-  value as the file records it, and the name a published
-  specification gives the tag
-  ([ADR023](architecture-decisions/adr023-every-entry-a-file-records.md),
-  [the tag names](formats/tag-names.md)). The groups of values follow,
-  each read from the same directories; enciphered and encrypted
-  records are given only as their bytes until the decision on reading
-  them. raw-files gives the first two: **who made a picture**, its
-  artist, copyright notice, photographer, editor, title, description
-  and comment, with the name of the camera's owner beside its serial
-  number, and **where it was taken**, its position, altitude, GPS
-  time, image direction and map datum. Both are read from the standard
-  tags alone
-  ([ADR011](architecture-decisions/adr011-metadata-from-standard-tags.md),
-  [#97](https://github.com/kuolas/raw-files/issues/97)) and checked on
-  the files the format notes count, or on built files for the texts no
-  measured file records: the photographer, the editor, the title and
-  the camera's owner. **More capture settings** come next, such as the
-  focus mode, stabilization and the image quality.
-- **Focus points.** Where the camera focused, in coordinates that place
-  it on a preview, to judge sharpness where the photographer focused.
-  Read from the MakerNote, on Nikon mirrorless bodies, Nikon DSLRs in
-  live view and Sony bodies from the ILCE-7RM2 on, with the points the
-  camera used and, on Nikon files, the area mode; a Nikon or Sony
-  camera's JPEG gives its focus point only when the point's frame has
-  the picture's shape. A shot that records only the number of an
-  autofocus point, such as a DSLR's through the viewfinder, needs a
-  table of the body's points, measured by the project on that body
-  ([ADR017](architecture-decisions/adr017-per-body-tables-measured-by-the-project.md)).
-  The Nikon D600 is the first body measured: its shots through the
-  viewfinder give their points placed from that table, and its files
-  the layout of its 39 points. Checked on the 56 frames, stripped of
-  their pixels, on which I measured my own D600's points. A shot of
-  another body that records only a number gives no point; a body's
-  table joins when I have the body at hand, or when a contributor
-  sends RAW + JPEG frames of it to measure.
-- **Raw sensor data.** The sensor data of a raw file, decoded. Not
-  started.
-- **Developed image.** The sensor data developed to a linear image,
-  plus the color model that converts it to a standard color space.
-  Not started.
+### Previews
 
-The [API documentation](https://docs.rs/raw-files) lists every public
-type.
+The JPEG previews a file holds, returned without decoding the raw data.
+`CameraFile::previews` lists them, and `CameraFile::read_preview` reads
+one. Each format's notes say where its previews lie:
+[NEF](formats/nef/container-and-previews.md),
+[ARW](formats/arw/container-and-previews.md) and
+[JPEG](formats/jpeg/container-and-metadata.md).
+
+### Metadata
+
+What a viewer or a file renamer needs next to the preview, as
+`CameraFile::metadata` gives it. The README's
+[What it reads](../README.md#what-it-reads) lists every value, and
+`CameraSettings` says which settings a maker's files leave out.
+
+- **Where it comes from.** The standard TIFF and Exif tags, and the
+  MakerNote for what only the MakerNote records. A camera JPEG's comes
+  from its Exif segment, and from its MakerNote on Nikon and Sony
+  cameras.
+- **What it is checked on.** The files each format's notes list, such
+  as the
+  [NEF metadata section](formats/nef/makernote-and-metadata.md#8-viewer-metadata).
+
+Under way, and next: **full metadata**, every metadata value a file
+records. A program then needs no second reader beside raw-files. It
+comes before raw sensor data
+([ADR016](architecture-decisions/adr016-full-metadata-before-raw-data.md)).
+Full metadata covers:
+
+- more capture settings;
+- how the camera processed its JPEG;
+- the lens by name;
+- the XMP and IPTC fields;
+- what editing software, such as Nikon's, writes into the file;
+- what a maker records only in enciphered or encrypted blocks. Reading
+  these needs a decision of its own first.
+
+raw-files gives these steps of it:
+
+1. **Every entry a file records**, from `CameraFile::entries`. That is
+   each entry of the TIFF directories raw-files walks, as the file
+   records it
+   ([ADR023](architecture-decisions/adr023-every-entry-a-file-records.md)).
+   A `Directory` names each directory walked. An entry's tag comes with
+   the name a published specification gives it, where one does
+   ([the tag names](formats/tag-names.md)).
+2. **Who made a picture**, from `Metadata::authorship` and
+   `Camera::owner_name`: the artist, the copyright notice and the other
+   texts `Authorship` lists, and the camera owner's name.
+3. **Where it was taken**, from `Metadata::location`, with the parts
+   `Location` lists.
+
+Steps 2 and 3 read the standard tags alone
+([ADR011](architecture-decisions/adr011-metadata-from-standard-tags.md),
+[#97](https://github.com/kuolas/raw-files/issues/97)). They are
+checked on the files the format notes count. A text no measured file
+records is checked on files built in the tests
+([NEF notes, section 8.8](formats/nef/makernote-and-metadata.md#88-authorship)).
+
+The groups of values follow, each read from the same directories.
+**More capture settings** come next, such as the focus mode,
+stabilization and the image quality. Enciphered and encrypted records
+are given only as their bytes until the decision on reading them.
+
+### Focus points
+
+Where the camera focused, in coordinates that place it on a preview, to
+judge sharpness where the photographer focused. `Metadata::focus` gives
+it, and its docs say which shots give none.
+
+- **Read from the MakerNote** of Nikon mirrorless bodies, Nikon DSLRs
+  in live view and Sony bodies from the ILCE-7RM2 on. With the point
+  come the points the camera used and, on Nikon files, the area mode.
+- **From a camera JPEG**, of a Nikon or Sony body, only when the
+  point's frame has the picture's shape.
+- **From a table of the body's points**, for a shot that records only
+  a point's number, such as a DSLR's through the viewfinder. The project
+  measures each table on the body itself
+  ([ADR017](architecture-decisions/adr017-per-body-tables-measured-by-the-project.md),
+  [ADR018](architecture-decisions/adr018-focus-points-placed-from-a-table-and-the-points-used.md)).
+
+The Nikon D600 is the first body measured. Its shots through the
+viewfinder give their points placed from its table, and its files the
+layout of its 39 points. The table is checked on frames of my own D600,
+stripped of their pixels
+([the session](formats/nef/autofocus-points.md#21-the-session)).
+
+A shot of another body that records only a number gives no point. A
+body's table joins when I have the body at hand, or when a contributor
+sends RAW + JPEG frames of it to measure.
+
+### Raw sensor data
+
+The sensor data of a raw file, decoded. Not started.
+
+### Developed image
+
+The sensor data developed to a linear image, plus the color model that
+converts it to a standard color space. Not started.
 
 ## Formats
 
 raw-files reads three formats, and refuses any other file with the
 `UnknownFormat` error:
 
-- **NEF**, Nikon's raw format. Checked on test files laid out like a
-  Nikon Z 9's, a Z6III's, a D300's and a D1H's, on two stripped files
-  of my own Z 9, and on 35 of the CC0 files of raw.pixls.us: three of
-  the Z 9 (lossless, HE and HE\*) and 32 of 25 other bodies from the
-  D1H to the Z5II.
+- **NEF**, Nikon's raw format, with the NRW files of Coolpix cameras
+  ([format notes](formats/nef/README.md)).
 - **ARW**, Sony's raw format, with the SRF, SR2 and ARQ files of the
-  same family. Checked on test files laid out like each generation of
-  Sony's family, and on 36 of the CC0 files of raw.pixls.us. CI
-  downloads these and the Nikon ones, all but the large ARQ, which is
-  fetched on request.
+  same family and the ARW files of Hasselblad's Sony-built bodies
+  ([format notes](formats/arw/README.md)).
 - **JPEG**, as a camera writes it beside its raw file or instead of it
-  ([ADR014](architecture-decisions/adr014-jpeg-files-as-a-format-of-their-own.md)).
-  Checked on test files built in code, on three stripped JPEG files of
-  my own Z 9 and three of my own D600, and on the eight camera JPEGs of Wikimedia Commons that CI
-  downloads, of five Sony bodies, two Nikon bodies and a Canon.
+  ([ADR014](architecture-decisions/adr014-jpeg-files-as-a-format-of-their-own.md),
+  [format notes](formats/jpeg/README.md)).
+
+The README's [Formats](../README.md#formats) lists the files each format
+is checked on, and which of them CI downloads.
 
 Other formats come in this order:
 
@@ -146,76 +164,49 @@ Other formats come in this order:
 2. **Canon**: CR3, then CR2.
 3. **Fujifilm**: RAF.
 
-Here too the work aims first at mirrorless bodies, so Canon's CR3,
-the format of its EOS R bodies, comes before CR2. DNG comes first: CR3
-is the more complex format to read.
-The order is a plan, not a promise; a change of direction is recorded in
-the architecture decisions.
+Here too the work aims first at mirrorless bodies. So Canon's CR3, the
+format of its EOS R bodies, comes before CR2. DNG comes first: CR3 is
+the more complex format to read. The order is a plan, not a promise. A
+change of direction is recorded in the architecture decisions.
 
 ## Releases
+
+One line per release. The [CHANGELOG](../CHANGELOG.md) has each
+release's changes.
 
 - **0.1.0**: previews of NEF and ARW files.
 - **0.2.0**: their metadata, most of what a viewer or a file renamer
   needs.
 - **0.3.0**: focus points, the position the camera records.
-- **0.4.0**: plain JPEG files, as a third format, with their previews,
-  metadata and focus point
+- **0.4.0**: plain JPEG files, as a third format
   ([#23](https://github.com/kuolas/raw-files/issues/23)).
-- **0.5.0**: metadata, the camera's settings, read from the plain tags
+- **0.5.0**: the camera's settings
   ([#26](https://github.com/kuolas/raw-files/issues/26)).
-- **0.6.0**: focus points, a DSLR's autofocus point, which a shot
-  through the viewfinder names by number, placed on the picture from a
-  table of the body's points, with the points the camera used and the
-  body's layout beside it
-  ([#57](https://github.com/kuolas/raw-files/issues/57)). The tables are
-  the project's own, measured on frames shot with the body and read in
-  the maker's software, the Nikon D600's first, by a procedure that a
-  contributor who owns another body can repeat; a body without a table
-  gives none, and the format notes say so per body
-  ([ADR017](architecture-decisions/adr017-per-body-tables-measured-by-the-project.md),
-  [ADR018](architecture-decisions/adr018-focus-points-placed-from-a-table-and-the-points-used.md)).
-- **0.7.0**: metadata, the camera's maker and the name the body is
-  sold under, spelled as its maker writes it, from the project's own
-  table of names, beside the texts the file records
+- **0.6.0**: a DSLR's autofocus point, placed from a table of the
+  body's points ([#57](https://github.com/kuolas/raw-files/issues/57)).
+- **0.7.0**: the body's maker and sales name, plain camera and lens
+  values, and two D600 focus changes
   ([#49](https://github.com/kuolas/raw-files/issues/49),
-  [ADR021](architecture-decisions/adr021-what-the-file-records-and-what-raw-files-reads-into-it.md),
-  [ADR022](architecture-decisions/adr022-names-as-their-makers-write-them.md));
-  the camera's and the lens's values as plain values, as the
-  exposure's are ([#33](https://github.com/kuolas/raw-files/issues/33));
-  and focus points, a D600 Medium JPEG's points placed in the window
-  of the frame its picture shows
-  ([#62](https://github.com/kuolas/raw-files/issues/62)), and a D600's
-  3D-tracking area mode named
-  ([#63](https://github.com/kuolas/raw-files/issues/63)).
-- **0.8.0**: metadata, every entry a file records, the first step of
-  full metadata: each entry of the TIFF directories raw-files walks,
-  the Nikon and Sony MakerNotes' among them, as the file records it,
-  with the name a published standard gives its tag and its value read
-  when asked for
-  ([#50](https://github.com/kuolas/raw-files/issues/50),
-  [ADR023](architecture-decisions/adr023-every-entry-a-file-records.md)).
-- **0.9.0**: metadata, who made a picture and where it was taken, the
-  second step of full metadata: the artist, the copyright notice, the
-  photographer, the editor, the title, the description, the comment and
-  the name of the camera's owner, and the position with its altitude,
-  GPS time, image direction and map datum, each as the file records it
-  ([#97](https://github.com/kuolas/raw-files/issues/97),
-  [ADR011](architecture-decisions/adr011-metadata-from-standard-tags.md)).
+  [#33](https://github.com/kuolas/raw-files/issues/33),
+  [#62](https://github.com/kuolas/raw-files/issues/62),
+  [#63](https://github.com/kuolas/raw-files/issues/63)).
+- **0.8.0**: every entry a file records, the first step of full
+  metadata ([#50](https://github.com/kuolas/raw-files/issues/50)).
+- **0.9.0**: who made a picture and where it was taken, the second
+  step of full metadata
+  ([#97](https://github.com/kuolas/raw-files/issues/97)).
 - **0.10.0**: the API made consistent before full metadata is built on
-  it: a refusal that names the rule broken, `with_…` setters
-  throughout, the raw view's lists as slices and its fractions as
-  `Rational` values, and
-  a name to show for the camera, the orientation, the preview's
-  encoding and an error's category
-  ([#102](https://github.com/kuolas/raw-files/issues/102),
+  it ([#102](https://github.com/kuolas/raw-files/issues/102),
   [#104](https://github.com/kuolas/raw-files/issues/104),
   [#105](https://github.com/kuolas/raw-files/issues/105),
   [#107](https://github.com/kuolas/raw-files/issues/107),
   [#150](https://github.com/kuolas/raw-files/issues/150)).
-- **Next**: more of full metadata, the values a file records read
-  group by group, beginning with more capture settings; the values
-  that only enciphered or encrypted blocks hold come last
-  ([#50](https://github.com/kuolas/raw-files/issues/50)).
+- **On master, not released**: what the CHANGELOG lists under
+  [Unreleased](../CHANGELOG.md#unreleased), the handle named
+  `CameraFile` among it.
+- **Next**: more of full metadata, group by group, beginning with more
+  capture settings ([#50](https://github.com/kuolas/raw-files/issues/50)).
+  The values only enciphered or encrypted blocks hold come last.
 
 ## Open questions
 
