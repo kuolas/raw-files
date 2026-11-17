@@ -237,3 +237,9 @@ commands above, with `-max_total_time=600`. It keeps the corpus each
 run found in the Actions cache for the next run. It uploads any failing
 input as a run artifact for thirty days. It is not a required
 check, so a finding there is a bug to fix, not a blocked pull request.
+
+Every action the workflows use is pinned to a commit, with its release
+tag in a comment beside it. A tag can be moved to other code, and a
+commit cannot. Once a month, Dependabot opens one pull request that
+updates them all, as
+[`.github/dependabot.yml`](../.github/dependabot.yml) sets up.

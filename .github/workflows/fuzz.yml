@@ -11,10 +11,8 @@
 #
 # The commands are the ones of docs/TESTING.md §Fuzzing.
 #
-# Actions must be node24-generation majors; see ci.yml. Before adding or
-# bumping one, check that the tag's action.yml says `using: node24`:
-#   gh api repos/OWNER/REPO/contents/action.yml?ref=TAG --jq .content | base64 -d | grep using:
-# Composite actions (such as dtolnay/rust-toolchain) have no node runtime.
+# Actions are pinned to commits and must be node24-generation majors; see
+# ci.yml.
 
 name: Fuzz
 
@@ -57,10 +55,12 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
       # Fuzzing needs nightly Rust. dtolnay/rust-toolchain is a composite
       # action: it has no node runtime.
-      - uses: dtolnay/rust-toolchain@nightly
+      - uses: dtolnay/rust-toolchain@df2a88e9fe4098bad09cb42c3dec7187f15861fc # master
+        with:
+          toolchain: nightly
       # Nightly moves daily, so a build cache keyed on the compiler would
       # never hit a run days apart. The install, a minute or two, is repeated
       # each run, which a job this rare can afford; a pinned nightly would
@@ -71,9 +71,9 @@ jobs:
       # every run starts from what the last one found. Each run restores the
       # newest corpus and saves its own under a new key; the old entries
       # expire unused after seven days.
-      # actions/cache/restore@v6 and actions/cache/save@v6 declare
+      # actions/cache/restore v6 and actions/cache/save v6 declare
       # `using: 'node24'` (checked 2026-10-14).
-      - uses: actions/cache/restore@v6
+      - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: fuzz/corpus/${{ matrix.target }}
           key: fuzz-corpus-${{ matrix.target }}-${{ github.run_id }}
@@ -87,14 +87,14 @@ jobs:
       # a successful job, and a run that found a crash is the one whose
       # corpus is worth keeping: it holds the inputs that led there.
       - if: always()
-        uses: actions/cache/save@v6
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: fuzz/corpus/${{ matrix.target }}
           key: fuzz-corpus-${{ matrix.target }}-${{ github.run_id }}
-      # actions/upload-artifact@v6 declares `using: 'node24'` (checked
+      # actions/upload-artifact v6 declares `using: 'node24'` (checked
       # 2026-10-13); v5 and earlier are node20.
       - if: failure()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
           name: fuzz-artifacts-${{ matrix.target }}
           path: fuzz/artifacts/${{ matrix.target }}/

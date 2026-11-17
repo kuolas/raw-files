@@ -11,7 +11,8 @@
 # CI workflow restores (the hash of the list), and once a week, because a
 # cache nobody has restored for seven days is evicted.
 #
-# Actions must be node24-generation majors; see ci.yml.
+# Actions are pinned to commits and must be node24-generation majors; see
+# ci.yml.
 
 name: Samples
 
@@ -34,11 +35,11 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
       # The same path and key as the CI workflow's restore step: both must
       # change together.
-      # actions/cache@v6 declares `using: 'node24'` (checked 2026-10-13).
-      - uses: actions/cache@v6
+      # actions/cache v6 declares `using: 'node24'` (checked 2026-10-13).
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ runner.temp }}/raw-samples
           key: raw-samples-${{ hashFiles('tests/samples.tsv') }}
