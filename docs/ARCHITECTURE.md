@@ -166,58 +166,62 @@ adds a row.
 
 A change that moves data between modules updates this section.
 
-A file is opened through `Options`, or `CameraFile`'s
-constructors, which use the default options, from any `Read + Seek` source
-([ADR009](architecture-decisions/adr009-public-api-shape.md)). The reader is
-wrapped in an `io::Source`, which takes the file's length. The file's first
-bytes say which container it is, `FF D8 FF` a JPEG file and `II` or `MM` a
-TIFF file, and its structure is read: the JPEG file's marker segments, or,
-for a TIFF file, its header, then the walk that finds the file's IFDs under
-the `Limits` and returns them as a tree. Each format of that container's
-list in `formats` is then asked, in order, whether it claims the structure;
-the first that does reads the previews and the metadata from it, and the
-handle keeps both, the previews sorted, smallest first. The JPEG
-container's list holds JPEG, whose reader walks the TIFF structure of the
-file's Exif segment inside that segment, reads the Nikon or the Sony
-MakerNote by IFD0's Make, and reads its MPF list, and lists the file
-itself among its previews. A file of neither container, or one that no
-format claims, is `UnknownFormat`. `metadata()` returns what was
-read at opening and reads nothing more. Reading a preview checks its length
-against `max_preview_bytes`, then reads its bytes with `Source::read_into`
-into the caller's buffer, bypassing the block cache.
+A caller opens a file through `Options`, or through `CameraFile`'s
+constructors, which use the default options
+([ADR009](architecture-decisions/adr009-public-api-shape.md)). The file
+can come from any `Read + Seek` source. Opening wraps it in an
+`io::Source`, which takes the file's length.
+
+The file's first bytes name its container: `FF D8 FF` a JPEG file, and
+`II` or `MM` a TIFF file. The container then reads the file's
+structure:
+
+- of a JPEG file, its marker segments;
+- of a TIFF file, its header, then its IFDs, which the walk finds under
+  the `Limits` and returns as a tree.
+
+Each format in that container's list in `formats` is asked in turn
+whether it claims the structure. The first that does reads the
+previews, the metadata and the entries from it. The handle keeps all
+three, the previews sorted smallest first. A file of neither container,
+or one that no format claims, is `UnknownFormat`.
+
+The JPEG container's list holds one format, JPEG. Its reader walks the
+TIFF structure of the file's Exif segment, inside that segment. It
+reads the Nikon or the Sony MakerNote, chosen by IFD0's Make, and the
+file's MPF list. It lists the file itself among the previews.
+
+`metadata()` and `entries()` return what was read at opening and read
+nothing more. `read_value()` reads an entry's value from the file,
+unless the entry holds it. `read_preview()` and `read_preview_into()`
+check a preview's length against `max_preview_bytes`. They then read its
+bytes into a buffer with `Source::read_into`, bypassing the block cache.
 
 ## Untrusted input
 
-Everything the library will parse comes from a file, so
-every offset and length read from one is checked before it is used, and a bad
-value is an error, never a panic
-([ADR008](architecture-decisions/adr008-lints-and-panics.md)). Every read
-goes through `io::Source`, where its offset and length are checked against
-the file's length.
+Everything the library parses comes from a file. So every offset and
+length read from one is checked before it is used, and a bad value is
+an error, never a panic
+([ADR008](architecture-decisions/adr008-lints-and-panics.md)). Every
+read goes through `io::Source`, which checks its offset and length
+against the file's length.
 
 ## Test fixtures
 
-Tests describe the TIFF files they read in code, with
-`tests/support/tiff_builder.rs`, take their JPEG streams from
-`tests/support/jpeg_stub.rs`, and describe JPEG files with
-`tests/support/jpeg_builder.rs`; `src/lib.rs` includes the three files with
-`#[path]` under `#[cfg(test)]`, so the unit tests and the integration tests
-share one copy of each without it becoming part of the library.
-`src/testing.rs`, compiled only for the unit tests, holds a reader that
-fails past the first block the source caches, with which the tests of every
-reader tell a failure of the reader from damage in the file; the checks of
-an enum's names and order that the tests of the camera settings and of the
-focus share; and the size, the point and the Z 9's focus that the tests of
-the focus, the metadata and the readers build their values from. Whole files
-of one camera's layout, built from the TIFF builder and the stub JPEG, live
-beside them for the integration tests: `tests/support/nef.rs`, the Z 9's,
-the Z6III's, the D300's and the D1H's, and `tests/support/arw.rs`, one for
-each generation of Sony's family; and the whole JPEG files, built with the
-JPEG file builder, in `tests/support/jpeg_files.rs`, which the JPEG reader's
-tests, the robustness tests and the fuzz seeds share. Real files of my own
-cameras are committed in `tests/fixtures/`, stripped of their pixels and
-personal fields. [Their README](../tests/fixtures/README.md) lists them, and
-records how they were made and what was removed; a test never skips them.
-The other real files are not committed: `tests/samples.tsv` pins the ones
-the tests read by their SHA-256, and a test whose file has not been
-downloaded skips.
+The tests build in code every file they read but the real camera files
+below, with the builders listed under [The tests](#the-tests).
+`src/lib.rs` includes the TIFF builder, the stub JPEG and the JPEG file
+builder with `#[path]` under `#[cfg(test)]`. So the unit tests and the
+integration tests share one copy of each, and none becomes part of the
+library.
+
+The unit tests of any module may use `src/testing.rs`. Its failing
+reader lets a reader's tests tell a failure of the reader from damage in
+the file. Its checks test an enum's names and their order.
+
+The real files of my own cameras in
+[`tests/fixtures/`](../tests/fixtures/README.md) are committed, and an
+integration test never skips them. The other real files are not committed:
+`tests/samples.tsv` pins each by its SHA-256. A test whose file has not
+been downloaded skips. The ignored test of `tests/local_corpus.rs` reads
+a folder of your own files instead.
