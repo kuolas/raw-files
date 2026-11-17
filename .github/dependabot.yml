@@ -1,0 +1,28 @@
+# Dependabot — keeps the actions of .github/workflows/ current. Each action
+# is pinned to a commit hash with its release tag in a comment beside it
+# (ci.yml says why). Once a month Dependabot opens one pull request that
+# moves every hash that has a newer release, and its comment with it.
+#
+# Its commit subject, "Bump the actions group with N updates", passes the
+# commit-msg hook. Before the pull request is merged, the subject is reworded
+# in the house grammar, such as "ci: Update the actions" (CONTRIBUTING.md
+# §Commit messages). A new major version still needs the node24 check that
+# ci.yml describes.
+#
+# No commit-message prefix is set: Dependabot would write "ci: bump", whose
+# lower-case summary the hook refuses.
+#
+# Only the actions are watched. The library has no dependencies, and adding
+# one is a decision of its own. The fuzz crate's one, libfuzzer-sys, stays
+# at the version its lock file records.
+
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    groups:
+      actions:
+        patterns:
+          - '*'
