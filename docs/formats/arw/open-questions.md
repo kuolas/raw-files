@@ -128,7 +128,8 @@ only from another program's source code waits for a sample file before
 it is coded. One learned from documentation may be coded first, and the
 notes say so
 ([ADR013](../../architecture-decisions/adr013-clean-room-and-third-party-code.md)).
-The [Status](README.md#status) section says what files have checked.
+The [Status](README.md#status) table lists the topics that files have
+checked.
 
 ### Container and previews
 
