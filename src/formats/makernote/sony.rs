@@ -13,17 +13,21 @@
 //!
 //! The parts, in the order a file is read:
 //!
-//! - [`read`] tells the block's layout by its first bytes ([`ifd_start`]),
-//!   and reads its IFD once, into a [`MakerNote`];
-//! - [`metadata`] reads the camera settings ([`camera_settings`]) and the
-//!   focus point ([`focus`]);
+//! - [`MakerNote::lookup`] tells the block's layout by its first bytes
+//!   ([`ifd_start`]), and reads its IFD once, into a [`MakerNote`];
+//! - [`MakerNote::metadata`] reads the camera settings
+//!   ([`camera_settings`]) and the focus point ([`focus`]);
 //! - [`MakerNote::add_entries`] lists the IFD's entries in the raw view.
 //!
+//! The three are the Sony reader's side of the MakerNote readers' trait
+//! ([`Reader`]).
+//!
 //! The Make is not looked at here: the format's reader has taken the file
-//! for a Sony one by [`SONY`]. Every offset inside the block counts from
-//! the TIFF header of the structure that holds the MakerNote, as in Nikon's
-//! headerless layout. Every number is in that structure's byte order. So
-//! the IFD is read through the block ([`MakerNoteBlock::ifd_at`]).
+//! for a Sony one by its Make ([`MakerNote::MAKE`]). Every offset inside
+//! the block counts from the TIFF header of the structure that holds the
+//! MakerNote, as in Nikon's headerless layout. Every number is in that
+//! structure's byte order. So the IFD is read through the block
+//! ([`MakerNoteBlock::ifd_at`]).
 //!
 //! The four bytes after the IFD's entries are not a next-IFD pointer to
 //! rely on. They are zero on the older bodies, such as the A100, the NEX-5
@@ -47,22 +51,18 @@
 
 use std::io::{Read, Seek};
 
-use super::{MakerNoteBlock, checked_color_temperature};
+use super::{MakerNoteBlock, Picture, Reader, checked_color_temperature};
 use crate::camera_settings::{CameraSettings, FineTune, WhiteBalanceMode};
 use crate::container::tiff::{Ifd, Rule, Tree};
 use crate::entries::{Directory, Entries, Lookup};
 use crate::error::Result;
 use crate::focus::{Focus, FocusOrigin, FocusPoints};
+use crate::formats::tiff_metadata::Standard;
 use crate::geometry::{Point, Size};
 use crate::io::Source;
 use crate::limits::Limits;
 use crate::metadata::Metadata;
 use crate::rational::SignedRational;
-
-/// The manufacturer's name that a Sony camera's Make starts with, compared
-/// without regard to case. The ARW claim and the JPEG reader look for it in
-/// IFD0's Make before they take a file for a Sony one.
-pub(in crate::formats) const SONY: &[u8; 4] = b"SONY";
 
 /// The Sony MakerNote tag that records the white balance setting
 /// (WhiteBalance): one LONG, a code for the setting, such as 0 for auto,
@@ -189,7 +189,73 @@ pub(in crate::formats) struct MakerNote {
     ifd: Ifd,
 }
 
-impl MakerNote {
+/// The Sony reader's MakerNote. It keeps the default
+/// [`preview_candidate`](Reader::preview_candidate), none: Sony's MakerNote
+/// points at no preview that the file's IFDs do not list.
+impl Reader for MakerNote {
+    /// `SONY`, the manufacturer's name that a Sony camera's Make starts
+    /// with. The ARW claim and the JPEG reader look for it in IFD0's Make
+    /// before they take a file for a Sony one.
+    const MAKE: &'static [u8] = b"SONY";
+
+    /// The Sony MakerNote of the file in `src`, whose IFDs are `tree`, read
+    /// within `limits`.
+    ///
+    /// [`Lookup::Absent`] when the file has no Exif IFD or no MakerNote, or
+    /// when the MakerNote is not bytes stored out of line or holds no Sony
+    /// directory. [`Lookup::Skipped`] when its IFD does not hold together
+    /// inside the block: the raw view lists it as skipped.
+    ///
+    /// # Errors
+    ///
+    /// `Io` when the reader fails.
+    fn lookup<R: Read + Seek>(
+        src: &mut Source<R>,
+        tree: &Tree,
+        limits: &Limits,
+    ) -> Result<Lookup<MakerNote>> {
+        let Some(block) = MakerNoteBlock::find(tree) else {
+            return Ok(Lookup::Absent);
+        };
+        let head = block.first_bytes(src, HEADER_LEN)?;
+        let Some(skip) = ifd_start(&head) else {
+            return Ok(Lookup::Absent);
+        };
+        // The Exif IFD's base and byte order.
+        let ifd = block.makernote_ifd_at(src, skip, limits)?;
+        Ok(ifd.map(|ifd| MakerNote { ifd }))
+    }
+
+    /// The metadata of the file whose Sony MakerNote this is: the metadata
+    /// of `standard`, what the standard tags gave, with what the MakerNote
+    /// records that they lack. It is the same whatever the `picture`, raw
+    /// or JPEG, and needs none of the other facts of `standard`:
+    ///
+    /// - **the camera settings** that only the MakerNote records, and the
+    ///   white balance setting, in place of the Exif tags' mode
+    ///   ([`camera_settings`]);
+    /// - **the focus point**, as recorded ([`focus`]), always read, since
+    ///   the standard tags never give one. It is a list of one point, the
+    ///   primary, with no area mode: AFAreaModeSetting is not read, since
+    ///   no file shot in a known mode has checked what its codes mean.
+    ///
+    /// The other values are the standard tags' alone.
+    ///
+    /// # Errors
+    ///
+    /// `Io` when the reader fails.
+    fn metadata<R: Read + Seek>(
+        &self,
+        src: &mut Source<R>,
+        standard: Standard,
+        _picture: Picture,
+    ) -> Result<Metadata> {
+        let mut metadata = standard.metadata;
+        metadata.camera_settings = camera_settings(src, self, metadata.camera_settings)?;
+        metadata.focus_points = focus(src, self)?.map(FocusPoints::from);
+        Ok(metadata)
+    }
+
     /// Adds the MakerNote IFD to `entries`, as the directory `MakerNote`.
     /// Its next-IFD pointer is never followed: on most files the slot holds
     /// the first value instead, and an SRF file's chain is enciphered.
@@ -197,52 +263,24 @@ impl MakerNote {
     /// The records Sony enciphers, such as 0x2010 and 0x9050, are plain
     /// UNDEFINED entries, listed as recorded, neither marked nor deciphered
     /// (ADR023).
-    pub(in crate::formats) fn add_entries(&self, entries: &mut Entries) {
+    fn add_entries(&self, entries: &mut Entries) {
         entries.push(Directory::MakerNote, &self.ifd);
     }
 }
 
-/// The Sony MakerNote of the file in `src`, whose IFDs are `tree`, read
-/// within `limits`.
-///
-/// [`Lookup::Absent`] when the file has no Exif IFD or no MakerNote, or
-/// when the MakerNote is not bytes stored out of line or holds no Sony
-/// directory. [`Lookup::Skipped`] when its IFD does not hold together
-/// inside the block: the raw view lists it as skipped.
+/// The Sony MakerNote of the file in `src`, as
+/// [`lookup`](Reader::lookup) finds it; `None` when it gives none.
 ///
 /// # Errors
 ///
-/// `Io` when the reader fails.
-pub(in crate::formats) fn lookup<R: Read + Seek>(
-    src: &mut Source<R>,
-    tree: &Tree,
-    limits: &Limits,
-) -> Result<Lookup<MakerNote>> {
-    let Some(block) = MakerNoteBlock::find(tree) else {
-        return Ok(Lookup::Absent);
-    };
-    let head = block.first_bytes(src, HEADER_LEN)?;
-    let Some(skip) = ifd_start(&head) else {
-        return Ok(Lookup::Absent);
-    };
-    // The Exif IFD's base and byte order.
-    let ifd = block.makernote_ifd_at(src, skip, limits)?;
-    Ok(ifd.map(|ifd| MakerNote { ifd }))
-}
-
-/// The Sony MakerNote of the file in `src`, as [`lookup`] finds it;
-/// `None` when it gives none.
-///
-/// # Errors
-///
-/// As for [`lookup`].
+/// As for [`lookup`](Reader::lookup).
 #[cfg(test)]
 pub(in crate::formats) fn read<R: Read + Seek>(
     src: &mut Source<R>,
     tree: &Tree,
     limits: &Limits,
 ) -> Result<Option<MakerNote>> {
-    Ok(lookup(src, tree, limits)?.found())
+    Ok(MakerNote::lookup(src, tree, limits)?.found())
 }
 
 /// How far into the block the MakerNote IFD starts, from `head`, the
@@ -257,33 +295,6 @@ fn ifd_start(head: &[u8]) -> Option<u64> {
     } else {
         Some(0)
     }
-}
-
-/// The metadata of a file whose Sony MakerNote is `makernote`: `metadata`,
-/// what the standard tags gave, with what the MakerNote records that they
-/// lack. It is the same in every format whose files carry it, raw or JPEG:
-///
-/// - **the camera settings** that only the MakerNote records, and the white
-///   balance setting, in place of the Exif tags' mode
-///   ([`camera_settings`]);
-/// - **the focus point**, as recorded ([`focus`]), always read, since the
-///   standard tags never give one. It is a list of one point, the primary,
-///   with no area mode: AFAreaModeSetting is not read, since no file shot
-///   in a known mode has checked what its codes mean.
-///
-/// The other values are the standard tags' alone.
-///
-/// # Errors
-///
-/// `Io` when the reader fails.
-pub(in crate::formats) fn metadata<R: Read + Seek>(
-    src: &mut Source<R>,
-    makernote: &MakerNote,
-    mut metadata: Metadata,
-) -> Result<Metadata> {
-    metadata.camera_settings = camera_settings(src, makernote, metadata.camera_settings)?;
-    metadata.focus_points = focus(src, makernote)?.map(FocusPoints::from);
-    Ok(metadata)
 }
 
 /// Where the camera focused, as `makernote` records it: the frame and the
@@ -1047,7 +1058,8 @@ mod tests {
                 let (built, ifd) = sound_file(order, prefix);
                 let (mut src, tree) = opened(built.bytes.clone());
                 let limits = Limits::default().with_max_ifd_entries(1);
-                let Lookup::Skipped(skipped) = lookup(&mut src, &tree, &limits).unwrap() else {
+                let Lookup::Skipped(skipped) = MakerNote::lookup(&mut src, &tree, &limits).unwrap()
+                else {
                     panic!("{order:?}, {prefix:?}: the IFD holds two entries");
                 };
                 let what = format!("{order:?}, {prefix:?}");
@@ -2185,7 +2197,16 @@ mod tests {
             let standard = Metadata::default()
                 .with_camera(Camera::default().with_recorded_make("SONY"))
                 .with_camera_settings(exif_settings());
-            let found = metadata(&mut src, &makernote, standard.clone()).unwrap();
+            let read = |src: &mut Src, picture| {
+                let standard = Standard {
+                    metadata: standard.clone(),
+                    ..Standard::default()
+                };
+                makernote.metadata(src, standard, picture).unwrap()
+            };
+            let found = read(&mut src, Picture::Raw);
+            // The same for a JPEG's picture.
+            assert_eq!(read(&mut src, Picture::Jpeg), found, "{order:?}");
             let expected = standard
                 .with_camera_settings(with_settings_tags(exif_settings()))
                 .with_focus(focus_7m4());

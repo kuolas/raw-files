@@ -45,7 +45,7 @@ use crate::entries::{Directory, Entries, Lookup, SkippedDirectory};
 use crate::error::ErrorKind;
 use crate::error::Result;
 use crate::format::Format;
-use crate::formats::makernote::sony::{self, SONY};
+use crate::formats::makernote::{Picture, Reader, sony};
 use crate::io::Source;
 use crate::limits::Limits;
 
@@ -64,7 +64,8 @@ pub(crate) fn spec<R: Read + Seek>() -> FormatSpec<R, Tree> {
 
 /// Whether the file whose TIFF structure is `tree` is a Sony RAW file:
 /// whether it is not a DNG ([`is_dng`]), and its IFD0's Make starts with
-/// `SONY` ([`make_starts_with`]). A Make that starts with `HASSELBLAD`
+/// `SONY`, the Sony reader's [`MAKE`](Reader::MAKE)
+/// ([`make_starts_with`]). A Make that starts with `HASSELBLAD`
 /// passes too, in an IFD0 that holds Sony's private pointer
 /// ([`private_pointer`]).
 ///
@@ -97,7 +98,7 @@ fn claims<R: Read + Seek>(src: &mut Source<R>, tree: &Tree) -> Result<bool> {
     if is_dng(tree) {
         return Ok(false);
     }
-    if make_starts_with(src, tree, SONY)? {
+    if make_starts_with(src, tree, sony::MakerNote::MAKE)? {
         return Ok(true);
     }
     // The pointer is tested first because it costs no read, and the Make
@@ -181,8 +182,9 @@ fn private_ifd<R: Read + Seek>(
 /// - **The previews** are the JPEGs that the IFDs of IFD0's chain declare.
 ///   The shared TIFF preview finder finds them over the whole tree.
 /// - **The metadata** is what the shared TIFF metadata reader reads from
-///   the standard tags. When there is a MakerNote, [`sony::metadata`] adds
-///   what no standard tag records.
+///   the standard tags. When there is a MakerNote, its
+///   [`metadata`](sony::MakerNote::metadata) adds what no standard tag
+///   records.
 /// - **The entries** are those of every directory of the tree, then the
 ///   MakerNote IFD's
 ///   ([`MakerNote::add_entries`](sony::MakerNote::add_entries)), then those
@@ -193,21 +195,21 @@ fn private_ifd<R: Read + Seek>(
 ///
 /// `Io` when the reader fails.
 fn parse<R: Read + Seek>(src: &mut Source<R>, tree: &Tree, limits: &Limits) -> Result<Parsed> {
-    let makernote = sony::lookup(src, tree, limits)?;
+    let makernote = sony::MakerNote::lookup(src, tree, limits)?;
     let private = private_ifd(src, tree, limits)?;
     let previews = previews::previews(src, tree, limits)?;
-    let standard = tiff_metadata::read(src, tree)?.metadata;
+    let standard = tiff_metadata::read(src, tree)?;
     let mut entries = Entries::of_tree(tree);
     let metadata = match makernote {
         Lookup::Found(makernote) => {
             makernote.add_entries(&mut entries);
-            sony::metadata(src, &makernote, standard)?
+            makernote.metadata(src, standard, Picture::Raw)?
         }
         Lookup::Skipped(skipped) => {
             entries.skip(skipped);
-            standard
+            standard.metadata
         }
-        Lookup::Absent => standard,
+        Lookup::Absent => standard.metadata,
     };
     match &private {
         Lookup::Found(private) => {

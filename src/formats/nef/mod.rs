@@ -32,7 +32,7 @@ use crate::container::tiff::Tree;
 use crate::entries::{Entries, Lookup};
 use crate::error::Result;
 use crate::format::Format;
-use crate::formats::makernote::nikon::{self, NIKON, Picture};
+use crate::formats::makernote::{Picture, Reader, nikon};
 use crate::io::Source;
 use crate::limits::Limits;
 
@@ -46,23 +46,22 @@ pub(crate) fn spec<R: Read + Seek>() -> FormatSpec<R, Tree> {
 }
 
 /// Whether the file whose TIFF structure is `tree` is a NEF: whether it is
-/// not a DNG ([`is_dng`]), and its IFD0's Make starts with `NIKON`
-/// ([`make_starts_with`]).
+/// not a DNG ([`is_dng`]), and its IFD0's Make starts with `NIKON`, the
+/// Nikon reader's [`MAKE`](Reader::MAKE) ([`make_starts_with`]).
 ///
 /// For a file that is not a DNG, Make alone decides. Nikon writes `NIKON`
 /// on the Coolpix E5700 and P7800, and `NIKON CORPORATION` on every other
 /// body checked: the prefix covers both
 /// (`docs/formats/nef/makernote-and-metadata.md`, section 8.3). The
-/// MakerNote's `Nikon` signature does not decide: Nikon's editing software
-/// writes Nikon-style MakerNotes into the files of other makes, and leaves
-/// their Make as it was. Neither does the file's name, nor the image IFD0
-/// describes, which differs between bodies.
+/// MakerNote's `Nikon` signature does not decide, as no MakerNote's look
+/// does ([`Reader::MAKE`]). Neither does the file's name, nor the image
+/// IFD0 describes, which differs between bodies.
 ///
 /// # Errors
 ///
 /// As for [`make_starts_with`].
 fn claims<R: Read + Seek>(src: &mut Source<R>, tree: &Tree) -> Result<bool> {
-    Ok(!is_dng(tree) && make_starts_with(src, tree, NIKON)?)
+    Ok(!is_dng(tree) && make_starts_with(src, tree, nikon::MakerNote::MAKE)?)
 }
 
 /// Reads the previews, the metadata and the entries of a NEF file that
@@ -76,8 +75,8 @@ fn claims<R: Read + Seek>(src: &mut Source<R>, tree: &Tree) -> Result<bool> {
 ///   preview finder finds those of IFD0 and the SubIFDs over the whole
 ///   tree.
 /// - **The metadata** is what the shared TIFF metadata reader reads from
-///   the standard tags. When there is a MakerNote, [`nikon::metadata`]
-///   adds what it records and the standard tags lack, for a raw file's
+///   the standard tags. When there is a MakerNote, its
+///   [`metadata`](nikon::MakerNote::metadata) adds what it records and the standard tags lack, for a raw file's
 ///   picture ([`Picture::Raw`]).
 /// - **The entries** are those of every directory of the tree, then the
 ///   MakerNote IFD's and its PreviewIFD's
@@ -88,14 +87,14 @@ fn claims<R: Read + Seek>(src: &mut Source<R>, tree: &Tree) -> Result<bool> {
 ///
 /// `Io` when the reader fails.
 fn parse<R: Read + Seek>(src: &mut Source<R>, tree: &Tree, limits: &Limits) -> Result<Parsed> {
-    let makernote = nikon::lookup(src, tree, limits)?;
+    let makernote = nikon::MakerNote::lookup(src, tree, limits)?;
     let previews = previews::previews(src, tree, makernote.as_ref().found(), limits)?;
     let standard = tiff_metadata::read(src, tree)?;
     let mut entries = Entries::of_tree(tree);
     let metadata = match makernote {
         Lookup::Found(makernote) => {
             makernote.add_entries(&mut entries);
-            nikon::metadata(src, &makernote, standard, Picture::Raw)?
+            makernote.metadata(src, standard, Picture::Raw)?
         }
         Lookup::Skipped(skipped) => {
             entries.skip(skipped);

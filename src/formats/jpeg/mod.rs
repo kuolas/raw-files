@@ -38,8 +38,9 @@
 
 use std::io::{Read, Seek};
 
-use super::makernote::nikon::{self, NIKON, Picture};
-use super::makernote::sony::{self, SONY};
+use super::makernote::nikon;
+use super::makernote::sony;
+use super::makernote::{Picture, Reader};
 use super::tiff_metadata::{self, Standard};
 use super::tiff_previews::{self, Candidate};
 use super::{FormatSpec, JPEG_UNCLAIMED, Parsed, make_starts_with};
@@ -288,11 +289,13 @@ fn previews<R: Read + Seek>(
 /// A maker whose MakerNote the JPEG reader reads, as IFD0's Make names it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Maker {
-    /// Nikon: a Make that starts with [`NIKON`], as the NEF claim tests it.
+    /// Nikon: a Make that starts with Nikon's
+    /// [`MAKE`](nikon::MakerNote::MAKE), as the NEF claim tests it.
     Nikon,
-    /// Sony: a Make that starts with [`SONY`], as the ARW claim tests it
-    /// first. The claim's second test, a Hasselblad Make with Sony's
-    /// private pointer, is a raw file's structure, which a JPEG lacks.
+    /// Sony: a Make that starts with Sony's
+    /// [`MAKE`](sony::MakerNote::MAKE), as the ARW claim tests it first.
+    /// The claim's second test, a Hasselblad Make with Sony's private
+    /// pointer, is a raw file's structure, which a JPEG lacks.
     Sony,
 }
 
@@ -304,8 +307,8 @@ impl Maker {
     /// The name the maker's Make starts with.
     fn name(self) -> &'static [u8] {
         match self {
-            Maker::Nikon => NIKON,
-            Maker::Sony => SONY,
+            Maker::Nikon => nikon::MakerNote::MAKE,
+            Maker::Sony => sony::MakerNote::MAKE,
         }
     }
 
@@ -339,8 +342,8 @@ enum MakerNote {
 impl MakerNote {
     /// The MakerNote of the JPEG file in `src`, whose Exif segment's TIFF
     /// structure is `tree`, read within `limits`. The maker that IFD0's Make
-    /// names ([`Maker::of`]) reads it, with [`nikon::lookup`] or
-    /// [`sony::lookup`]; [`Lookup::Absent`] under any other Make, and
+    /// names ([`Maker::of`]) reads it, with its
+    /// [`lookup`](nikon::MakerNote::lookup); [`Lookup::Absent`] under any other Make, and
     /// [`Lookup::Skipped`] when the maker's reader lists its IFD as
     /// skipped.
     ///
@@ -360,15 +363,17 @@ impl MakerNote {
         limits: &Limits,
     ) -> Result<Lookup<MakerNote>> {
         Ok(match skip_damage(Maker::of(src, tree))?.flatten() {
-            Some(Maker::Nikon) => nikon::lookup(src, tree, limits)?.map(MakerNote::Nikon),
-            Some(Maker::Sony) => sony::lookup(src, tree, limits)?.map(MakerNote::Sony),
+            Some(Maker::Nikon) => {
+                nikon::MakerNote::lookup(src, tree, limits)?.map(MakerNote::Nikon)
+            }
+            Some(Maker::Sony) => sony::MakerNote::lookup(src, tree, limits)?.map(MakerNote::Sony),
             None => Lookup::Absent,
         })
     }
 
     /// `standard`, with the values the MakerNote adds, read from `src` by
-    /// its maker's reader: [`nikon::metadata`], for a JPEG's picture, or
-    /// [`sony::metadata`].
+    /// its maker's reader, for a JPEG's picture
+    /// ([`metadata`](nikon::MakerNote::metadata)).
     ///
     /// # Errors
     ///
@@ -379,18 +384,19 @@ impl MakerNote {
         standard: Standard,
     ) -> Result<Metadata> {
         match self {
-            MakerNote::Nikon(makernote) => nikon::metadata(src, makernote, standard, Picture::Jpeg),
-            MakerNote::Sony(makernote) => sony::metadata(src, makernote, standard.metadata),
+            MakerNote::Nikon(makernote) => makernote.metadata(src, standard, Picture::Jpeg),
+            MakerNote::Sony(makernote) => makernote.metadata(src, standard, Picture::Jpeg),
         }
     }
 
     /// Where the MakerNote's preview is, as a candidate for the shared
-    /// finder: Nikon's PreviewIFD's JPEG ([`nikon::preview_candidate`]);
+    /// finder: Nikon's PreviewIFD's JPEG
+    /// ([`preview_candidate`](nikon::MakerNote::preview_candidate));
     /// `None` for Sony's, whose reader gives no preview.
     fn preview_candidate(&self) -> Option<Candidate> {
         match self {
-            MakerNote::Nikon(makernote) => nikon::preview_candidate(makernote),
-            MakerNote::Sony(_) => None,
+            MakerNote::Nikon(makernote) => makernote.preview_candidate(),
+            MakerNote::Sony(makernote) => makernote.preview_candidate(),
         }
     }
 
