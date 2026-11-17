@@ -6,8 +6,8 @@ samples that CI downloads and checks against a hash. This page lists the
 sources, the rules for what may be committed, a minimal set of camera bodies,
 and how to build fixtures. Back to [the NEF overview](README.md).
 
-Confidence tags: **[P]** primary (verified from the primary page or API),
-**[S]** secondary, **[I]** inferred. Numbers in brackets point to the
+Claims carry the confidence tags of the NEF notes
+([README](README.md#confidence-tags)). Numbers in brackets point to the
 [Sources](#sources) at the end, retrieved in October 2026.
 
 ## 1. Sources and their license status
@@ -95,7 +95,7 @@ Z50II, a rotated shot (Z 30), a Z body in manual focus (Z fc), and
 three compacts, one of them an NRW file (Coolpix P7800). Each is CC0 in
 the site's catalog, and its SHA-256 matched the catalog's before it
 was read. "Mode" is the catalog's label; on the D1X files the
-"(3.0422960725076)" is the stored aspect ratio, 4028/1324. **[P]** On the
+"(3.0422960725076)" is the stored aspect ratio, 4028/1324. **[I]** On the
 Z5II, Z50II and Z6III files its "8bit" is not the files': they hold
 14-bit raw data, compressed as HE, or as HE\* on files 7812 and 7813, as
 byte 10 of MakerNote tag 0x0051 says: 13 on files 7808 to 7810, 7735,

@@ -6,10 +6,9 @@ page records what we may learn from, what we may reuse, where the format is
 documented, and which legal questions are still open. Back to
 [the ARW overview](README.md).
 
-Confidence tags: **[P]** primary (verified from the primary page, source
-code or API), **[S]** secondary (forum, news report, search summary, or a
-page read only through a summary), **[I]** inferred, **[F]** measured on a
-named sample file. A sample is cited as "raw.pixls.us file" plus its id;
+Claims carry the confidence tags of the ARW notes
+([README](README.md#confidence-tags)). A sample is cited as
+"raw.pixls.us file" plus its id;
 the URL and SHA-256 of each are in
 [test-data.md](test-data.md#files-checked). Numbers in brackets point to
 the [Sources](#sources) at the end. All pages were retrieved in October
@@ -75,7 +74,7 @@ newer files:
   5488 in the ARW 2.3.3 and 2.3.5 files 3012, 1541, 3251). That is
   inside the `{0-6144}` window of the records' byte sequences but outside
   the `{0-2048}` that their own signature note states, so the records are
-  inconsistent with themselves. [4] **[P]**, offsets **[F]**
+  inconsistent with themselves. [4] **[S]**, offsets **[F]**
 - The Hasselblad Lunar ARW contains no "SONY" string at all; its Make is
   `HASSELBLAD` (raw.pixls.us file 4051). No record matches it. **[F]**
 
@@ -178,7 +177,7 @@ Its one crates.io release is 0.1.0, published 2024-11-03, with about 1,250
 downloads. It began as "Raw-rs" in June 2024 (PR #1757) and was renamed in
 PR #2088. [30] **[P]**
 
-We compared it with dcraw 9.28. [14][30] **[P]**
+We compared it with dcraw 9.28. [14][30] **[S]**
 
 - The ARW1 decoder uses dcraw's function names, and its 18-entry constant
   table is the same as dcraw's, value for value. The table expansion, the
@@ -194,9 +193,9 @@ We compared it with dcraw 9.28. [14][30] **[P]**
   category of 0 yields −2, where dcraw returns 0 before any sign step; a
   negative difference subtracts 2^len + 1 rather than dcraw's 2^len − 1;
   and its cRAW path takes dcraw's 12-bit value and shifts it left by 2,
-  declaring a maximum of 16383. [14][30] **[P]**
+  declaring a maximum of 16383. [14][30] **[S]**
 
-So rawkit matches dcraw element for element **[P]**; that it was translated
+So rawkit matches dcraw element for element **[S]**; that it was translated
 from dcraw is **[I]**. LibRaw carries the same inherited dcraw functions,
 so LibRaw as the direct source cannot be excluded for the decoders, but the
 maker list points to dcraw. [I] dcraw's header leaves all code outside the
@@ -214,11 +213,11 @@ For raw-files [I]:
   on the A100, and allocates its preview buffer from a length read from the
   file without a bound, which
   [ADR008](../../architecture-decisions/adr008-lints-and-panics.md)
-  rules out. [30] **[P]**
+  rules out. [30] **[S]**
 - Its per-body color matrices equal the Adobe-derived values in dcraw,
   LibRaw and rawspeed for the four bodies compared (ILCE-7M3, ILCE-6000,
   ZV-E1, ILCE-7RM5); its DSLR-A100 matrix differs from all three by one in
-  three entries, source unknown. [30] **[P]** (values), **[I]** (source)
+  three entries, source unknown. [30] **[S]** (values), **[I]** (source)
 - Its tests download three files (ILCE-7M3, ILCE-7RM4, ILCE-6000) from
   Graphite's server and compare the output with LibRaw's, bit for bit,
   behind an opt-in feature. The license of those files is not stated. [30]
@@ -228,7 +227,7 @@ For raw-files [I]:
 
 ARW 6.0 (TIFF Compression 32766) is written by the ILCE-7M5 (A7 V) for
 both Compressed and Compressed (HQ), and by the ILCE-7RM6 (A7R VI). [15][16]
-[17] **[P]** On the A7 V files checked, the MakerNote Quality tag (4 or 5)
+[17] **[S]** On the A7 V files checked, the MakerNote Quality tag (4 or 5)
 separates the two modes, and Lossless Compressed stays Compression 7
 (raw.pixls.us files 8846, 8847, 8849 and 8850; lossless file 8848).
 **[F]**
@@ -239,7 +238,7 @@ separates the two modes, and Lossless Compressed stays Compression 7
   the code was generated with the help of a language model, and a
   maintainer commented on the maintenance risk of such contributions. The
   PR compared its output with Adobe DNG Converter 18.3.1. [15] **[P]**
-  (merge, file), **[S]** (comparison)
+  (merge), **[S]** (file, comparison)
 - **rawspeed** PR #972, which describes itself as clean-room work from the
   decoder's observed input and output with substantial AI assistance, was
   closed unmerged on 2026-09-13. [16] **[P]**
@@ -247,7 +246,7 @@ separates the two modes, and Lossless Compressed stays Compression 7
   with AI assistance; rawler's main branch refuses Compression 32766 as
   unsupported (no camera file defines its "arw6" mode), and its ARW 6.0
   decompressor is an `unimplemented!()` stub that is unreachable.
-  [17][31] **[P]**
+  [17][31] **[S]**
 - Adobe Lightroom and Camera Raw reportedly read A7 V Compressed and
   Compressed (HQ) from about April 2026. [39] **[S]**
 
@@ -330,9 +329,9 @@ answered before a decoder is written:
 1. **Where the curve comes from.** The codec ends by mapping 12-bit codes
    through a fixed 4096-entry curve that is not stored in the file. It is
    published only as tables extracted from existing decoders, and its
-   construction is unknown. [15][31] **[P]** Read without copying, LibRaw's
+   construction is unknown. [15][31] **[S]** Read without copying, LibRaw's
    table is the identity up to code 1427, then steepens and ends at 39002 [15]
-   **[P]** (shape **[I]**); arw6_decode's README calls it a logarithmic curve
+   **[S]** (shape **[I]**); arw6_decode's README calls it a logarithmic curve
    of the Cineon or S-Log family with a linear toe [31] **[S]**. The files' own
    levels fit LibRaw's hard-coded ones at half scale: tag 0x7310 is 512 where
    LibRaw uses a black level of 1024, and 0xC61D is 16383 where LibRaw's linear
@@ -359,7 +358,7 @@ answered before a decoder is written:
 - **Lossless.** ITU-T T.81 dates from 1992; patents on its lossless
   process have long expired. [I]
 - **ARW 6.0.** No patent was identified. LibRaw names the stream "llvc3"
-  and arw6_decode calls the format "LLVC v3". [15][31] **[P]** LLVC is
+  and arw6_decode calls the format "LLVC v3". [15][31] **[S]** LLVC is
   Sony's name for a line-based wavelet video codec disclosed as SMPTE RDD
   34:2015 (5/3 lifting, 16-line units, 128-bit words, variable-length
   coding), and RDD 34 directs intellectual-property inquiries to Sony. [13]
@@ -369,7 +368,7 @@ answered before a decoder is written:
   Nikon HE. [36] **[I]**
 - **Encryption.** The SR2SubIFD and SRF data are XOR-ed with a keystream
   whose key is stored in the file, and some MakerNote blocks use a keyless
-  byte substitution. [21] **[P]** On every ARW checked the key in tag 0x7221
+  byte substitution. [21] **[S]** On every ARW checked the key in tag 0x7221
   is the same four bytes, `11 22 33 44`. **[F]** Whether decrypting counts
   as circumventing a technological measure under DMCA-like laws is
   untested; the open decoders have done it for about twenty years and we
@@ -401,7 +400,7 @@ was confirmed on samples. These points were not [33]:
   ARW1 rule decodes completely (raw.pixls.us file 2346). **[F]**
 - Their "ARW 4.0" example is a dump of an ILCE-9 file whose FileFormat is
   `3 3 3 0`, which ExifTool names ARW 2.3.3, and whose Software is "ILCE-9
-  v0.01". [33] **[P]** Real ARW 4.0 files differ from the tree shown: they
+  v0.01". [33] **[S]** Real ARW 4.0 files differ from the tree shown: they
   add a third IFD holding a full-size JPEG (files 5418 and 4466). **[F]**
 - They date cRAW to ARW 2.1 (2008), but the DSLR-A700, whose FileFormat is
   `3 0 0 0` (ARW 2.0), already writes cRAW (file 2521). **[F]**
@@ -447,10 +446,10 @@ was confirmed on samples. These points were not [33]:
 [4] PRONOM records fmt/191, fmt/1127, fmt/1126 —
     https://pronom.nationalarchives.gov.uk/fmt/191.xml ,
     https://pronom.nationalarchives.gov.uk/fmt/1127.xml ,
-    https://pronom.nationalarchives.gov.uk/fmt/1126.xml **[P]**
+    https://pronom.nationalarchives.gov.uk/fmt/1126.xml **[S]**
 [5] Library of Congress, Camera Raw Formats (group description) —
     https://www.loc.gov/preservation/digital/formats/fdd/fdd000241.shtml
-    **[P]**
+    **[S]**
 [6] freedesktop shared-mime-info —
     https://gitlab.freedesktop.org/xdg/shared-mime-info/-/raw/master/data/freedesktop.org.xml.in ;
     IANA media types —
@@ -521,8 +520,7 @@ was confirmed on samples. These points were not [33]:
     https://patents.google.com/patent/US8013910B2/en **[S]** (read through a
     summary)
 [33] Laurent Clévy, "Description of Sony RAW file formats (SRF, SR2, ARW
-    and ARQ)", v0.55 — https://github.com/lclevy/sony_raw **[S]** for the
-    prose; **[P]** where the TIFF and ExifTool dumps it publishes are cited
+    and ARQ)", v0.55 — https://github.com/lclevy/sony_raw **[S]**
 [34] RawDigger, "Detecting posterization in Sony cRAW/ARW2 files" —
     https://www.rawdigger.com/howtouse/sony-craw-arw2-posterization-detection
     **[S]**
@@ -530,10 +528,10 @@ was confirmed on samples. These points were not [33]:
     https://doi.org/10.2352/ISSN.2470-1173.2016.2.VIPC-227 , KARWY
     https://aggregate.org/DIT/KARWY/ ; FLIF raw-tools on stuff.mit.edu
     https://stuff.mit.edu/afs/sipb/user/kenta/software/FLIF/raw-tools/sony_arw/README
-    **[P]**; diglloyd
+    **[S]**; diglloyd
     https://diglloyd.com/blog/2019/20191026_2104-SonyA7R_IV-lossy-compression-artifacts.html ;
     Jim Kasson https://blog.kasson.com/?p=4876 ; fileformat.com
-    https://docs.fileformat.com/image/arw/ **[S]** (except where marked)
+    https://docs.fileformat.com/image/arw/ **[S]**
 [36] JPEG XS patent pool (Fraunhofer IIS, intoPIX, Vectis) —
     https://www.intopix.com/blogs/post/intoPIX-and-Fraunhofer-IIS-team-with-Vectis-to-offer-JPEG-XS-patent-pool-license
     **[S]**

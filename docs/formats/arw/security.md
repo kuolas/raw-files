@@ -12,10 +12,8 @@ and LibRaw bug classes, grouped by class, are in
 14 apply to ARW unchanged. Section 4 below lists only what has appeared in
 the generic layer since that page was written.
 
-Confidence tags: **[P]** primary (read in the NVD record, the project's
-changelog, commit or source), **[S]** secondary (distribution trackers,
-summaries), **[I]** inferred, **[F]** measured on a named sample file.
-Samples are cited as "raw.pixls.us file &lt;id&gt;"; the files cited here
+Claims carry the confidence tags of the ARW notes
+([README](README.md#confidence-tags)). Samples are cited as "raw.pixls.us file &lt;id&gt;"; the files cited here
 are listed with their URLs and SHA-256 in [Sources](#sources), and every
 file checked is in [test-data.md](test-data.md#files-checked). Numbers in
 brackets point to the Sources, retrieved in October 2026. The sample checks
@@ -105,11 +103,11 @@ SR2 metadata parsers". Both cannot be right. Conservative reading: fixed in
 with the generic additions in section 4, but it matters for ARW because a
 parser picks the raw and preview IFDs by NewSubfileType. NVD (2026-09-24,
 status Deferred) names LibRaw 0.22.0 and references commit b41cbbd, issue
-#844 and PR #853. PR #853 was closed unmerged. Commit b41cbbd only skipped
+#844 and PR #853. [7] **[P]** PR #853 was closed unmerged. Commit b41cbbd only skipped
 FLOAT and DOUBLE types, and was reverted on 2026-09-09 (dde798d, "No need
 for it"). LibRaw master at 7bfffe2 (2026-10-09) still converts the value
 with `int(getreal(type))`, and for type LONG, which the proof of concept
-uses, `getreal` returns the unsigned 32-bit value. [7][8][9] **[P]** We infer
+uses, `getreal` returns the unsigned 32-bit value. [8][9] **[S]** We infer
 that the LONG case is unfixed in 0.22.1, 0.22.2 and master. **[I]**
 
 ## 2. Sony hardening without a CVE
@@ -145,7 +143,7 @@ A missing NULL check after an allocation in the Sony AFInfo copy was
 reported in April 2026 (#810) and rejected, because LibRaw's allocator
 throws on failure. LibRaw still loops over cRAW blocks with a signed
 `raw_width - 30` and does not check that a block's maximum and minimum
-indices differ. [8][9] **[P]**
+indices differ. [8][9] **[S]**
 
 **New attack surface.** An ARW 6.0 decoder of about 1,600 lines was merged
 into LibRaw master on 2026-07-18 (PR #824) and is in no release yet. [9]
@@ -154,7 +152,7 @@ into LibRaw master on 2026-07-18 (PR #824) and is in no release yet. [9]
 ### 2.2 rawspeed
 
 rawspeed read at develop c10cc500 (2026-10-10). We did not map these
-commits to releases. [12] **[P]**
+commits to releases. [12] **[S]**
 
 | Date | Commit | Function | Class |
 |---|---|---|---|
@@ -173,7 +171,7 @@ height, non-zero tile width and height, an even tile height, as many tile
 offsets as byte counts, and a tile count equal to the tile grid, checked by
 division so the product cannot overflow. Its A100 white-balance reader walks
 the Minolta-style blocks with a bounded sub-stream and rejects zero-length
-entries, which would otherwise loop without advancing. [12] **[P]**
+entries, which would otherwise loop without advancing. [12] **[S]**
 
 ### 2.3 Exiv2 and dcraw
 
@@ -183,13 +181,13 @@ entries, which would otherwise loop without advancing. [12] **[P]**
   Commit 1119a68a (2023-06-25) added NULL checks to 17 Sony print functions
   that dereferenced their metadata argument; present in v0.28.0, fixed in
   v0.28.1, no CVE. Issue #2380, "Crash when loading Sony ARW", was a generic
-  I/O bug. [13] **[P]**
+  I/O bug. [13] **[S]**
 - **dcraw 9.28** (read from a mirror; the original site did not respond):
   the SR2Private length is not capped and the read is not checked before
   decrypting; the decrypted block is written to a temporary file and parsed
   again with a negative base; nested parsing is bounded only by a global IFD
   limit; the 0x7010 curve points are masked to 12 bits; the cRAW row buffer
-  is one byte longer than the row. [15] **[P]** A block with equal maximum
+  is one byte longer than the row. [15] **[S]** A block with equal maximum
   and minimum indices makes dcraw read a fifteenth delta past the block, one
   byte beyond its buffer on a row's last block. **[I]**
 
@@ -200,7 +198,7 @@ raw crate (advisory-db at 7eebec6, 2026-10-09). [18] **[P]** But rawler
 (the decoder in dnglab, LGPL-2.1) has open, unadvised fuzzing reports from
 July 2025 on TIFF-family input, three of them ARW (#572, #574, #575); the
 others came from RW2, DNG, generic TIFF and, for #797, a CR2 seed.
-[16] **[P]**
+[16] **[S]**
 
 | Issue | Input | Report | State |
 |---|---|---|---|
@@ -220,7 +218,7 @@ decoding (no camera file defines its "arw6" mode), and `RawLoader::decode`
 catches panics in any case. An earlier report (#514) showed ILCE-7CR M/S-size
 lossless files panicking it. rawloader issue #54 (2026-04) reports three more
 fuzzing panics from unchecked indexing, in RAF, X3F and TIFF code. [16][17]
-**[P]**
+**[S]**
 
 Every one of these is a panic, an abort or runaway work, not memory
 corruption: exactly the class Rust's safety does not cover and ADR008's
@@ -298,7 +296,7 @@ A2. **The preview finder must reject raw data that looks like a JPEG.**
 A3. **The A100's 0x014A is not a SubIFD, and its SR2Private is not an
     IFD.** In camera-original A100 files, IFD0 tag 0x014A holds the raw
     data offset (98304 in file 2346, where the bytes do not parse as an
-    IFD) **[F]**; only Sony's converter turns it into a real SubIFD. **[P]**
+    IFD) **[F]**; only Sony's converter turns it into a real SubIFD. **[S]**
     Follow 0x014A only after checking that the target looks like an IFD
     (sane entry count, all entries inside the file), never by model name,
     and never let a SubIFD special case advance an index into a fixed-size
@@ -337,7 +335,7 @@ A6. **SR2Private as a bounded sub-slice (when relevant).** Black level,
     check that demands type LONG loses it). Read 0x7200 offset, 0x7201
     length and 0x7221 key (count must be 4). Require `offset + length <=
     file length` with `checked_add`, and a configurable cap: LibRaw uses
-    10,240,000 bytes **[P]**; the measured lengths are 11,932 to 62,112
+    10,240,000 bytes **[S]**; the measured lengths are 11,932 to 62,112
     bytes (all files in [test-data.md](test-data.md#files-checked)) **[F]**,
     so a cap of 1 MiB leaves a wide margin **[I]**. Allocate only after
     these checks and decrypt only bytes actually present. The decrypted IFD
@@ -461,7 +459,7 @@ A15. **SRF key chain: never hard-code 200896 without bounds (when
      encrypted IFD at 164,600, the data key at its decrypted byte 22, and
      the encrypted image at 862,144 for 16,531,200 bytes, running exactly
      to the end of the file. **[F]** dcraw, LibRaw, rawspeed and rawler use
-     these as absolute constants **[P]**; rawler panics on a 44,210-byte
+     these as absolute constants **[S]**; rawler panics on a 44,210-byte
      file (section 3). Derive every position from the MakerNote and check
      each one against the file: the key byte b, the key word 4·b bytes
      after it, each IFD and its entries, and the data range
@@ -595,26 +593,26 @@ All retrieved in October 2026.
     376e0d1b, 46eae2f7, 35fe49b5, 5ff5484d, 582bf5d0, 7e51ed90, a74c1a57,
     fa488def, dbe7591e, b9f5b8b1, bbd6d363, 0953acf8, 8d37641f; source
     `src/librawspeed/decoders/ArwDecoder.cpp` and the Sony decompressors
-    **[P]**
+    **[S]**
 [13] Exiv2 issues #2380 and #2385, pull requests #1753 and #1786, commits
     3897f17b, 1119a68a, 11a26fb0, dc2c77ce —
     https://github.com/Exiv2/exiv2/issues/2385 ,
-    https://github.com/Exiv2/exiv2/commit/1119a68a **[P]**
+    https://github.com/Exiv2/exiv2/commit/1119a68a **[S]**
 [14] Exiv2 security advisories (37) —
     https://github.com/Exiv2/exiv2/security/advisories ; NVD keyword listing
     https://services.nvd.nist.gov/rest/json/cves/2.0?keywordSearch=exiv2
     **[P]**
 [15] dcraw 9.28, read from a mirror because the original site did not
     respond — https://raw.githubusercontent.com/ncruces/dcraw/master/dcraw.c
-    (original https://www.dechifro.org/dcraw/dcraw.c) **[P]** (mirror not
+    (original https://www.dechifro.org/dcraw/dcraw.c) **[S]** (mirror not
     verified against the original)
 [16] dnglab (rawler) issues #514, #569 to #575, #582, #797 —
     https://github.com/dnglab/dnglab/issues/<n> ; `rawler/src/decoders/arw.rs`
     at main ae01bcb2 (2026-08-30) —
     https://raw.githubusercontent.com/dnglab/dnglab/main/rawler/src/decoders/arw.rs
-    **[P]**
+    **[S]**
 [17] rawloader issue #54 — https://github.com/pedrocr/rawloader/issues/54
-    **[P]**
+    **[S]**
 [18] RustSec advisory database at 7eebec6 (2026-10-09) —
     https://github.com/rustsec/advisory-db **[P]**
 [19] NVD records for the section 4 entries —
@@ -624,7 +622,7 @@ All retrieved in October 2026.
     `ExifInterface`, `piex`, `Adobe Camera Raw` **[P]** (Apple and Android
     searches keyword-only)
 [21] ExifTool Sony tag names — https://exiftool.org/TagNames/Sony.html
-    **[P]**
+    **[S]**
 [22] raw.pixls.us sample files cited on this page, all CC0; the full list is
     in [test-data.md](test-data.md#files-checked). **[F]**
     - file 1351, Sony DSC-F828 (SRF) —

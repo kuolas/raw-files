@@ -7,9 +7,8 @@ parsers of exactly the structures raw-files reads, grouped by bug class,
 and a checklist that maps each class to the raw-files rules. Back to
 [the JPEG overview](README.md).
 
-Confidence tags: **[P]** primary (read in the NVD record or the project's
-own advisory or changelog), **[S]** secondary (a bug report, a search
-result), **[I]** inferred. Numbers in brackets point to the
+Claims carry the confidence tags of the JPEG notes
+([README](README.md#confidence-tags)). Numbers in brackets point to the
 [Sources](#sources) at the end, retrieved in October 2026. Only
 vulnerability records, advisories, changelogs and bug reports were read;
 no project's source code.

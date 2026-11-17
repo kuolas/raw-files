@@ -5,10 +5,9 @@ implementation is under a copyleft license. This page records what we may
 learn from, what we may reuse, and where the format is documented. Back to
 [the NEF overview](README.md).
 
-Confidence tags: **[P]** primary (verified from the primary page or API),
-**[S]** secondary (forum, news report, search summary), **[I]** inferred.
-Numbers in brackets point to the [Sources](#sources) at the end. All pages
-were retrieved in October 2026.
+Claims carry the confidence tags of the NEF notes
+([README](README.md#confidence-tags)). Numbers in brackets point to the
+[Sources](#sources) at the end. All pages were retrieved in October 2026.
 
 **This is not legal advice.** It is a record of what we found and a proposal
 for how to stay on the safe side; anything with legal weight needs a lawyer.
@@ -280,9 +279,9 @@ cite them; do not copy their tables or prose.
     `nom-exif`, `little_exif`, `rawkit` —
     https://crates.io/api/v1/crates/tiff ,
     https://api.github.com/repos/mindeng/nom-exif/license **[P]**
-[22] ExifTool, Nikon tags — https://exiftool.org/TagNames/Nikon.html **[P]**
-[23] Exiv2, MakerNote notes — https://exiv2.org/makernote.html **[P]**
-[24] Laurent Clévy, NEF notes — http://lclevy.free.fr/nef/ **[P]**
+[22] ExifTool, Nikon tags — https://exiftool.org/TagNames/Nikon.html **[S]**
+[23] Exiv2, MakerNote notes — https://exiv2.org/makernote.html **[S]**
+[24] Laurent Clévy, NEF notes — http://lclevy.free.fr/nef/ **[S]**
 [25] Leon Plickat, "Decoding Nikon NEF Files" —
     https://leon_plickat.srht.site/nikon-nef.html **[S]**
 [26] Bill Claff, NEF compression —
