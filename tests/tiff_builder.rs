@@ -10,7 +10,9 @@
 
 mod support;
 
-use support::tiff_builder::{EXIF_IFD, LONG, Order, RawValue, SUB_IFDS, TiffBuilder, UNDEFINED};
+use support::tiff_builder::{
+    EXIF_IFD, LONG, ORDERS, Order, RawValue, SUB_IFDS, TiffBuilder, UNDEFINED,
+};
 
 /// One IFD, holding Make (ASCII, out of line) and Orientation (SHORT,
 /// inline).
@@ -298,7 +300,7 @@ fn an_undefined_ifd_without_a_prefix_or_values_is_the_ifd() {
 
 #[test]
 fn an_undefined_ifd_declaring_a_count_keeps_the_layout() {
-    for order in [Order::Little, Order::Big] {
+    for order in ORDERS {
         // The same file twice: the entry that holds the block declares
         // its whole length in one and 5 bytes in the other. The block's
         // prefix puts its start before its IFD, and a blob follows it.

@@ -50,7 +50,7 @@ use support::jpeg_files::{
     z9_jpeg,
 };
 use support::nef::{d1h_file, d300_file, z6iii_file, z9_file};
-use support::tiff_builder::Order;
+use support::tiff_builder::{ORDERS, Order};
 
 /// A layout built in code, once: the stem and extension of its file names,
 /// and a builder for the fixture in a given byte order.
@@ -60,7 +60,7 @@ type Layout = (&'static str, &'static str, fn(Order) -> Vec<u8>);
 /// or `be` and the extension, with the bytes of the fixture it holds.
 fn in_both_orders(layouts: &[Layout]) -> Vec<(String, Vec<u8>)> {
     let mut seeds = Vec::new();
-    for order in [Order::Little, Order::Big] {
+    for order in ORDERS {
         let suffix = match order {
             Order::Little => "le",
             Order::Big => "be",

@@ -59,6 +59,9 @@ pub enum Order {
     Big,
 }
 
+/// Both byte orders, for a test that builds its file in each.
+pub const ORDERS: [Order; 2] = [Order::Little, Order::Big];
+
 impl Order {
     /// The byte-order mark of a file in this order.
     pub fn mark(self) -> [u8; 2] {

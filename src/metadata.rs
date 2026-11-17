@@ -1121,14 +1121,8 @@ mod tests {
     use crate::focus::{FocusAreaMode, FocusLayoutPoint, FocusOrigin, FocusPoint};
     use crate::geometry::Point;
     use crate::location::{Altitude, Direction, Latitude, Longitude, North};
+    use crate::testing::fraction;
     use crate::testing::{point, size, z9_focus, z9_focus_from};
-
-    fn fraction(numerator: u32, denominator: u32) -> Rational {
-        Rational {
-            numerator,
-            denominator,
-        }
-    }
 
     /// An exposure of 1/320 s at f/9, 14 mm, 14 mm in 35 mm terms too on a
     /// full-frame body, and ISO 64, with -2/3 EV of compensation, as a

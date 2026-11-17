@@ -15,7 +15,7 @@ use support::jpeg_builder::{
     MPF_VERSION, NUMBER_OF_IMAGES, UNDEFINED, XMP_ID,
 };
 use support::jpeg_stub::{FRAME_HEADER_AT, jpeg_stub, segment};
-use support::tiff_builder::Order;
+use support::tiff_builder::{ORDERS, Order};
 
 /// The bytes of `bytes` in `range`.
 fn at(bytes: &[u8], range: std::ops::Range<u64>) -> &[u8] {
@@ -199,7 +199,7 @@ fn with_mpf(order: Order) -> JpegBuilder {
 
 #[test]
 fn the_mpf_index_lists_the_main_image_and_the_images_after_it() {
-    for order in [Order::Little, Order::Big] {
+    for order in ORDERS {
         let built = with_mpf(order).build();
         let bytes = &built.bytes;
         let header = built.mpf_header();
@@ -281,7 +281,7 @@ fn the_mpf_index_lists_the_main_image_and_the_images_after_it() {
 
 #[test]
 fn the_mpf_index_can_be_damaged() {
-    for order in [Order::Little, Order::Big] {
+    for order in ORDERS {
         let whole = with_mpf(order).build();
 
         // The MP header, NumberOfImages, and an entry's offset and size.

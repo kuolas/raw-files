@@ -352,7 +352,7 @@ mod tests {
     use crate::container::tiff::{self, walk};
     use crate::error::ErrorKind;
     use crate::limits::Limits;
-    use crate::testing::{FAR, FailsFar};
+    use crate::testing::{FAR, FailsFar, signed_fraction};
     use crate::tiff_builder::{BYTE, IfdId, Order, RawValue, SSHORT, TiffBuilder, UNDEFINED};
     use std::io::Cursor;
 
@@ -793,11 +793,11 @@ mod tests {
     /// A shift of `amber_blue` and `green_magenta`, each a numerator and a
     /// denominator, as [`FineTune`] holds it.
     fn shift(amber_blue: (i32, i32), green_magenta: (i32, i32)) -> FineTune {
-        let fraction = |(numerator, denominator)| SignedRational {
-            numerator,
-            denominator,
-        };
-        FineTune::new(fraction(amber_blue), fraction(green_magenta))
+        let (amber_blue, green_magenta) = (
+            signed_fraction(amber_blue.0, amber_blue.1),
+            signed_fraction(green_magenta.0, green_magenta.1),
+        );
+        FineTune::new(amber_blue, green_magenta)
     }
 
     /// Gives `ifd` the tag `tag` as one or two SSHORTs, `values`, which its

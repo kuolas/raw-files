@@ -162,6 +162,29 @@ pub fn listed(format: &str) -> BTreeSet<(&'static str, &'static str)> {
     listed
 }
 
+/// Checks that each of a format's tables of expected values, named in a
+/// failure by the first item of its pair, holds the files
+/// `tests/samples.tsv` lists of `format`, each with its tier, each once,
+/// and no other file.
+pub fn check_tables(format: &str, tables: &[(&str, Vec<(&'static str, &'static str)>)]) {
+    let listed = listed(format);
+    for (what, files) in tables {
+        let expected: BTreeSet<(&str, &str)> = files.iter().copied().collect();
+        assert_eq!(
+            expected.len(),
+            files.len(),
+            "a file is in the tables of {what} twice"
+        );
+        let unexpected: Vec<_> = listed.difference(&expected).collect();
+        let unlisted: Vec<_> = expected.difference(&listed).collect();
+        assert!(
+            unexpected.is_empty() && unlisted.is_empty(),
+            "listed without expected {what}: {unexpected:?}; \
+             expected {what} but not listed: {unlisted:?}"
+        );
+    }
+}
+
 /// One JPEG a sample file holds, as the notes on its format record it and
 /// the reader must report it: its size in pixels from its own frame header,
 /// where its bytes are, and how many bytes the declared length runs past

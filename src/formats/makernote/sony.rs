@@ -545,11 +545,9 @@ mod tests {
     use crate::formats::testing::{Src, byte_order};
     use crate::testing::{FAR, FailsFar};
     use crate::tiff_builder::{
-        ASCII, Built, IfdId, Order, RawValue, SHORT, SSHORT, TiffBuilder, UNDEFINED,
+        ASCII, Built, IfdId, ORDERS, Order, RawValue, SHORT, SSHORT, TiffBuilder, UNDEFINED,
     };
     use std::io::Cursor;
-
-    const ORDERS: [Order; 2] = [Order::Little, Order::Big];
 
     // Tags that mean nothing here, for entries the tests read back by tag,
     // in the order an IFD sorts them in.

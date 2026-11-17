@@ -304,10 +304,10 @@ mod tests {
     use super::*;
     use crate::container::tiff::walk;
     use crate::formats::testing::{Src, byte_order};
-    use crate::tiff_builder::{ASCII, Built, IfdId, Order, RawValue, TiffBuilder, UNDEFINED};
+    use crate::tiff_builder::{
+        ASCII, Built, IfdId, ORDERS, Order, RawValue, TiffBuilder, UNDEFINED,
+    };
     use std::io::Cursor;
-
-    const ORDERS: [Order; 2] = [Order::Little, Order::Big];
 
     // Tags that mean nothing here, for entries the tests read back by tag.
     const FIRST: u16 = 0x0101;

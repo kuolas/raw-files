@@ -78,7 +78,7 @@ use super::arw::{
     self, ARW4_FOCUS_CENTER, ARW4_FOCUS_FRAME, ARW4_FULL_SIZE_JPEG, arw4_focus_frame_size,
 };
 use super::jpeg_builder::{Built, JpegBuilder};
-use super::jpeg_stub::jpeg_stub;
+use super::jpeg_stub::{jpeg_stub, stub_len};
 use super::nef::{
     self, AF_INFO2, CROP_AREA, CROP_HI_SPEED, D1H_ISO, D1H_LENS, D1H_PREVIEW_JPEG, D300_LENS,
     FOCUS_MODE, PREVIEW_IFD, SERIAL_NUMBER, WORLD_TIME, Z9_FOCUS_AREA, Z9_FOCUS_CENTER,
@@ -217,11 +217,6 @@ pub const THUMBNAIL: (u16, u16) = (160, 120);
 /// thumbnails of classes 1 and 2.
 pub const MPF_IMAGES: [(u16, u16); 2] = [(640, 424), (1620, 1080)];
 
-/// The length of the stub JPEG of `size`.
-fn stub_len(size: (u16, u16)) -> u64 {
-    u64::try_from(jpeg_stub(size.0, size.1, 0xC0).len()).unwrap()
-}
-
 /// A JPEG with no Exif segment: SOI, then the main image of [`MAIN`].
 pub fn plain_jpeg() -> Built {
     let mut builder = JpegBuilder::new();
@@ -267,7 +262,7 @@ fn exif_built<T>(
     let blob = tiff.blob(&jpeg_stub(THUMBNAIL.0, THUMBNAIL.1, 0xC0));
     match thumbnail_at {
         Some(at) => {
-            let len = u32::try_from(stub_len(THUMBNAIL)).unwrap();
+            let len = u32::try_from(stub_len()).unwrap();
             tiff.long(ifd1, JPEG_INTERCHANGE_FORMAT, &[at]);
             tiff.long(ifd1, JPEG_INTERCHANGE_FORMAT_LENGTH, &[len]);
         }
@@ -278,7 +273,7 @@ fn exif_built<T>(
     }
     let built = tiff.build();
     let at = built.blob_offset(blob);
-    (built, at..at + stub_len(THUMBNAIL), added)
+    (built, at..at + stub_len(), added)
 }
 
 /// A JPEG whose Exif segment holds [`exif`]'s TIFF structure in byte order

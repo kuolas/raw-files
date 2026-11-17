@@ -410,16 +410,14 @@ mod tests {
     use crate::container::tiff::{parse_ifd, walk};
     use crate::error::ErrorKind;
     use crate::formats::testing::byte_order;
-    use crate::jpeg_stub::jpeg_stub;
+    use crate::jpeg_stub::{jpeg_stub, stub_len};
     use crate::limits::Limits;
     use crate::testing::{FAR, FailsFar, size};
     use crate::tiff_builder::{
-        BYTE, BlobId, Built, IFD, IfdId, LONG, Order, RawValue, SHORT, SLONG, TiffBuilder,
+        BYTE, BlobId, Built, IFD, IfdId, LONG, ORDERS, Order, RawValue, SHORT, SLONG, TiffBuilder,
     };
     use std::io::Cursor;
     use std::ops::Range;
-
-    const ORDERS: [Order; 2] = [Order::Little, Order::Big];
 
     /// A tag no rule reads, for an IFD that needs an entry and nothing else:
     /// ImageWidth.
@@ -478,11 +476,6 @@ mod tests {
     /// As [`jpeg_with_marker`], with a baseline frame header.
     fn jpeg(builder: &mut TiffBuilder, ifd: IfdId, width: u16, height: u16) -> BlobId {
         jpeg_with_marker(builder, ifd, width, height, 0xC0)
-    }
-
-    /// The length of a stub JPEG.
-    fn stub_len() -> u64 {
-        u64::try_from(jpeg_stub(1, 1, 0xC0).len()).unwrap()
     }
 
     /// The previews of a little-endian file whose one IFD points at a

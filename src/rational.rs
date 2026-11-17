@@ -318,29 +318,16 @@ fn gcd(mut a: u32, mut b: u32) -> u32 {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    fn unsigned(numerator: u32, denominator: u32) -> Rational {
-        Rational {
-            numerator,
-            denominator,
-        }
-    }
-
-    fn signed(numerator: i32, denominator: i32) -> SignedRational {
-        SignedRational {
-            numerator,
-            denominator,
-        }
-    }
+    use crate::testing::{fraction, signed_fraction};
 
     #[test]
     fn unsigned_new_refuses_only_a_zero_denominator() {
         // Kept as given, not reduced.
-        assert_eq!(Rational::new(10, 3200), Ok(unsigned(10, 3200)));
-        assert_eq!(Rational::new(u32::MAX, 1), Ok(unsigned(u32::MAX, 1)));
+        assert_eq!(Rational::new(10, 3200), Ok(fraction(10, 3200)));
+        assert_eq!(Rational::new(u32::MAX, 1), Ok(fraction(u32::MAX, 1)));
         // A real zero, such as an angle of 0°, kept as given.
-        assert_eq!(Rational::new(0, 1), Ok(unsigned(0, 1)));
-        assert_eq!(Rational::new(0, 10), Ok(unsigned(0, 10)));
+        assert_eq!(Rational::new(0, 1), Ok(fraction(0, 1)));
+        assert_eq!(Rational::new(0, 10), Ok(fraction(0, 10)));
         // Fractions that are no number.
         assert_eq!(Rational::new(1, 0), Err(ValueError::ZeroDenominator));
         assert_eq!(Rational::new(7, 0), Err(ValueError::ZeroDenominator));
@@ -350,8 +337,8 @@ mod tests {
     #[test]
     fn known_refuses_a_zero_numerator_or_denominator() {
         // Kept as given, not reduced.
-        assert_eq!(Rational::known(10, 3200), Some(unsigned(10, 3200)));
-        assert_eq!(Rational::known(u32::MAX, 1), Some(unsigned(u32::MAX, 1)));
+        assert_eq!(Rational::known(10, 3200), Some(fraction(10, 3200)));
+        assert_eq!(Rational::known(u32::MAX, 1), Some(fraction(u32::MAX, 1)));
         // An unknown f-number, as Sony writes it, then an unknown lens
         // range and fractions that are no number.
         assert_eq!(Rational::known(0, 10), None);
@@ -364,12 +351,15 @@ mod tests {
     #[test]
     fn signed_new_refuses_only_a_zero_denominator() {
         // Kept as given, not reduced, each sign where it is given.
-        assert_eq!(SignedRational::new(-4, 6), Ok(signed(-4, 6)));
-        assert_eq!(SignedRational::new(-3, 10), Ok(signed(-3, 10)));
-        assert_eq!(SignedRational::new(2, -3), Ok(signed(2, -3)));
+        assert_eq!(SignedRational::new(-4, 6), Ok(signed_fraction(-4, 6)));
+        assert_eq!(SignedRational::new(-3, 10), Ok(signed_fraction(-3, 10)));
+        assert_eq!(SignedRational::new(2, -3), Ok(signed_fraction(2, -3)));
         // No compensation: a real zero, kept as stored.
-        assert_eq!(SignedRational::new(0, 6), Ok(signed(0, 6)));
-        assert_eq!(SignedRational::new(i32::MIN, -1), Ok(signed(i32::MIN, -1)));
+        assert_eq!(SignedRational::new(0, 6), Ok(signed_fraction(0, 6)));
+        assert_eq!(
+            SignedRational::new(i32::MIN, -1),
+            Ok(signed_fraction(i32::MIN, -1))
+        );
         let refused = Err(ValueError::ZeroDenominator);
         assert_eq!(SignedRational::new(0, 0), refused);
         assert_eq!(SignedRational::new(-4, 0), refused);
@@ -386,14 +376,14 @@ mod tests {
             ((u32::MAX, u32::MAX), (1, 1)),
         ];
         for ((n, d), (rn, rd)) in cases {
-            assert_eq!(unsigned(n, d).reduced(), unsigned(rn, rd), "{n}/{d}");
+            assert_eq!(fraction(n, d).reduced(), fraction(rn, rd), "{n}/{d}");
         }
     }
 
     #[test]
     fn unsigned_with_a_zero_denominator_stays_unchanged() {
         for n in [0, 7, u32::MAX] {
-            assert_eq!(unsigned(n, 0).reduced(), unsigned(n, 0), "{n}/0");
+            assert_eq!(fraction(n, 0).reduced(), fraction(n, 0), "{n}/0");
         }
     }
 
@@ -412,7 +402,11 @@ mod tests {
             ((i32::MIN, i32::MIN), (1, 1)),
         ];
         for ((n, d), (rn, rd)) in cases {
-            assert_eq!(signed(n, d).reduced(), signed(rn, rd), "{n}/{d}");
+            assert_eq!(
+                signed_fraction(n, d).reduced(),
+                signed_fraction(rn, rd),
+                "{n}/{d}"
+            );
         }
     }
 
@@ -426,48 +420,59 @@ mod tests {
             (-1, i32::MIN),
             (i32::MAX, i32::MIN),
         ] {
-            assert_eq!(signed(n, d).reduced(), signed(n, d), "{n}/{d}");
+            assert_eq!(
+                signed_fraction(n, d).reduced(),
+                signed_fraction(n, d),
+                "{n}/{d}"
+            );
         }
     }
 
     #[test]
     fn signed_with_a_zero_denominator_stays_unchanged() {
         for n in [0, 7, -7, i32::MIN, i32::MAX] {
-            assert_eq!(signed(n, 0).reduced(), signed(n, 0), "{n}/0");
+            assert_eq!(
+                signed_fraction(n, 0).reduced(),
+                signed_fraction(n, 0),
+                "{n}/0"
+            );
         }
     }
 
     #[test]
     fn to_f64_divides() {
-        assert_eq!(unsigned(10, 3200).to_f64(), 0.003125);
-        assert_eq!(unsigned(0, 6).to_f64(), 0.0);
-        assert!((signed(-2, 3).to_f64() + 2.0 / 3.0).abs() < 1e-12);
-        assert_eq!(signed(0, 6).to_f64(), 0.0);
-        assert_eq!(signed(3, -10).to_f64(), -0.3);
+        assert_eq!(fraction(10, 3200).to_f64(), 0.003125);
+        assert_eq!(fraction(0, 6).to_f64(), 0.0);
+        assert!((signed_fraction(-2, 3).to_f64() + 2.0 / 3.0).abs() < 1e-12);
+        assert_eq!(signed_fraction(0, 6).to_f64(), 0.0);
+        assert_eq!(signed_fraction(3, -10).to_f64(), -0.3);
     }
 
     #[test]
     fn to_f64_with_a_zero_denominator_follows_floating_point() {
-        assert_eq!(unsigned(7, 0).to_f64(), f64::INFINITY);
-        assert!(unsigned(0, 0).to_f64().is_nan());
-        assert_eq!(signed(-7, 0).to_f64(), f64::NEG_INFINITY);
-        assert!(signed(0, 0).to_f64().is_nan());
+        assert_eq!(fraction(7, 0).to_f64(), f64::INFINITY);
+        assert!(fraction(0, 0).to_f64().is_nan());
+        assert_eq!(signed_fraction(-7, 0).to_f64(), f64::NEG_INFINITY);
+        assert!(signed_fraction(0, 0).to_f64().is_nan());
     }
 
     #[test]
     fn display_as_stored() {
-        assert_eq!(unsigned(10, 3200).to_string(), "10/3200");
-        assert_eq!(unsigned(0, 6).to_string(), "0/6");
-        assert_eq!(signed(-2, 3).to_string(), "-2/3");
-        assert_eq!(signed(0, 6).to_string(), "0/6");
-        assert_eq!(signed(2, -3).to_string(), "2/-3");
+        assert_eq!(fraction(10, 3200).to_string(), "10/3200");
+        assert_eq!(fraction(0, 6).to_string(), "0/6");
+        assert_eq!(signed_fraction(-2, 3).to_string(), "-2/3");
+        assert_eq!(signed_fraction(0, 6).to_string(), "0/6");
+        assert_eq!(signed_fraction(2, -3).to_string(), "2/-3");
     }
 
     #[test]
     fn equality_as_stored() {
-        assert_ne!(unsigned(10, 3200), unsigned(1, 320));
-        assert_eq!(unsigned(10, 3200).reduced(), unsigned(1, 320).reduced());
-        assert_ne!(signed(2, -3), signed(-2, 3));
-        assert_eq!(signed(2, -3).reduced(), signed(-2, 3).reduced());
+        assert_ne!(fraction(10, 3200), fraction(1, 320));
+        assert_eq!(fraction(10, 3200).reduced(), fraction(1, 320).reduced());
+        assert_ne!(signed_fraction(2, -3), signed_fraction(-2, 3));
+        assert_eq!(
+            signed_fraction(2, -3).reduced(),
+            signed_fraction(-2, 3).reduced()
+        );
     }
 }

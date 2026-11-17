@@ -86,7 +86,7 @@ pub(crate) fn parse_header<R: Read + Seek>(src: &mut Source<R>, block: &Block) -
 mod tests {
     use super::*;
     use crate::ErrorKind;
-    use crate::tiff_builder::{IfdId, Order, TiffBuilder};
+    use crate::tiff_builder::{IfdId, ORDERS, Order, TiffBuilder};
     use std::io::{self, Cursor, SeekFrom};
 
     /// Reads the header of the file `bytes`, at byte 0.
@@ -205,7 +205,7 @@ mod tests {
 
     #[test]
     fn ifd0_is_where_the_header_says() {
-        for order in [Order::Little, Order::Big] {
+        for order in ORDERS {
             let (mut builder, ifd) = one_ifd(order);
             let built = builder.build();
             let ifd0 = u32::try_from(built.ifd_offset(ifd)).unwrap();
@@ -230,7 +230,7 @@ mod tests {
 
     #[test]
     fn a_magic_other_than_42_is_not_a_tiff_file() {
-        for order in [Order::Little, Order::Big] {
+        for order in ORDERS {
             for magic in [0, 41, 0x2A00, u16::MAX] {
                 let (mut builder, _) = one_ifd(order);
                 builder.magic(magic);
@@ -241,7 +241,7 @@ mod tests {
 
     #[test]
     fn bigtiff_is_not_a_tiff_file() {
-        for order in [Order::Little, Order::Big] {
+        for order in ORDERS {
             let (mut builder, _) = one_ifd(order);
             builder.magic(43);
             let err = assert_unknown_format(&builder.build().bytes);
@@ -251,7 +251,7 @@ mod tests {
 
     #[test]
     fn a_file_shorter_than_the_header_is_not_a_tiff_file() {
-        for order in [Order::Little, Order::Big] {
+        for order in ORDERS {
             let built = one_ifd(order).0.build();
             for len in 0..8 {
                 assert_unknown_format(&built.truncated(len));

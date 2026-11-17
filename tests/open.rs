@@ -10,8 +10,9 @@ use std::io::{self, Cursor};
 
 use raw_files::{
     Altitude, Authorship, Camera, CameraFile, DateTime, Direction, ErrorKind, Focus, Format,
-    Latitude, Limits, Location, Longitude, Metadata, North, Options, Point, Rational,
+    Latitude, Limits, Location, Longitude, Metadata, North, Options, Point,
 };
+use support::fraction;
 use support::jpeg_builder::JpegBuilder;
 use support::tiff_builder::{Order, TiffBuilder};
 
@@ -275,7 +276,6 @@ fn an_authorship_and_a_camera_built_by_hand_equal_what_open_reads() {
 
 #[test]
 fn a_location_built_by_hand_equals_what_open_reads() {
-    let fraction = |numerator, denominator| Rational::new(numerator, denominator).unwrap();
     let expected = Location::new(
         Latitude::north(fraction(40, 1), fraction(41, 1), fraction(21_400, 1000)).unwrap(),
         Longitude::west(fraction(74, 1), fraction(2, 1), fraction(40_200, 1000)).unwrap(),

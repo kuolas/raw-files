@@ -819,24 +819,9 @@ mod tests {
     use crate::container::tiff::{Block, parse_ifd, walk};
     use crate::limits::Limits;
     use crate::testing::assert_ordered;
-    use crate::tiff_builder::{Built, IfdId, Order, RawValue, TiffBuilder};
+    use crate::testing::{fraction, signed_fraction};
+    use crate::tiff_builder::{Built, IfdId, ORDERS, Order, RawValue, TiffBuilder};
     use std::io::Cursor;
-
-    const ORDERS: [Order; 2] = [Order::Little, Order::Big];
-
-    fn unsigned(numerator: u32, denominator: u32) -> Rational {
-        Rational {
-            numerator,
-            denominator,
-        }
-    }
-
-    fn signed(numerator: i32, denominator: i32) -> SignedRational {
-        SignedRational {
-            numerator,
-            denominator,
-        }
-    }
 
     #[test]
     fn directories_are_named_and_ordered() {
@@ -942,7 +927,7 @@ mod tests {
             Value::Short(vec![1, 2, 0x0304]),
             Value::Long(vec![0x0102_0304]),
             Value::Long(vec![1, u32::MAX]),
-            Value::Rational(vec![unsigned(1, 3), unsigned(5, 0)]),
+            Value::Rational(vec![fraction(1, 3), fraction(5, 0)]),
             Value::SByte(vec![-1, 2, i8::MIN]),
             Value::SByte(vec![-128, -1, 0, 1, 127]),
             Value::Undefined(vec![0, 1, 2]),
@@ -951,7 +936,7 @@ mod tests {
             Value::SShort(vec![-1, -2, i16::MIN]),
             Value::SLong(vec![-5]),
             Value::SLong(vec![-1, i32::MIN]),
-            Value::SRational(vec![signed(-1, 3), signed(2, -5)]),
+            Value::SRational(vec![signed_fraction(-1, 3), signed_fraction(2, -5)]),
             Value::Float(vec![1.5]),
             Value::Float(vec![-0.25, f32::MAX]),
             Value::Double(vec![3.25]),
@@ -1035,7 +1020,7 @@ mod tests {
         let big = [
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 7,
         ];
-        let expected = Value::Rational(vec![unsigned(0, 0), unsigned(5, 0), unsigned(0, 7)]);
+        let expected = Value::Rational(vec![fraction(0, 0), fraction(5, 0), fraction(0, 7)]);
         for (order, bytes) in [(ByteOrder::Little, little), (ByteOrder::Big, big)] {
             let value = Value::decode(FieldType::Rational, order, bytes.to_vec());
             assert_eq!(value, expected, "{order:?}");
@@ -1053,7 +1038,7 @@ mod tests {
         ];
         // Not normalized: 2/-5 keeps its sign below the line, where
         // `reduced` would give -2/5.
-        let expected = Value::SRational(vec![signed(-1, 3), signed(2, -5)]);
+        let expected = Value::SRational(vec![signed_fraction(-1, 3), signed_fraction(2, -5)]);
         for (order, bytes) in [(ByteOrder::Little, little), (ByteOrder::Big, big)] {
             let value = Value::decode(FieldType::SRational, order, bytes.to_vec());
             assert_eq!(value, expected, "{order:?}");
@@ -1137,7 +1122,7 @@ mod tests {
         assert_eq!(Value::Ascii(b"ab\0".to_vec()).bytes(), Some(&b"ab\0"[..]));
         assert!(Value::Short(Vec::new()).is_empty());
         assert_eq!(
-            Value::Rational(vec![unsigned(1, 2), unsigned(3, 4)]).len(),
+            Value::Rational(vec![fraction(1, 2), fraction(3, 4)]).len(),
             2
         );
     }

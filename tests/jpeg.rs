@@ -38,7 +38,6 @@
 
 mod support;
 
-use std::collections::BTreeSet;
 use std::fs::File;
 use std::io::Cursor;
 use std::ops::Range;
@@ -89,12 +88,10 @@ use support::nef::{
 use support::samples::{
     Jpeg, Sample, SampleEntries, SampleFineTune, SampleFocus, SampleLens, SampleMetadata,
     SampleSettings, SerialShape, Text, check, check_entries, check_every, check_metadata,
-    check_placeholder_description, listed,
+    check_placeholder_description, check_tables,
 };
-use support::tiff_builder::{EXIF_IFD, IfdId, Order, TiffBuilder};
-
-/// Both byte orders.
-const ORDERS: [Order; 2] = [Order::Little, Order::Big];
+use support::tiff_builder::{EXIF_IFD, IfdId, ORDERS, Order, TiffBuilder};
+use support::{fraction, size_of};
 
 /// The width of the image an IFD describes (ImageWidth).
 const IMAGE_WIDTH: u16 = 0x0100;
@@ -123,14 +120,6 @@ const PIXEL_X_DIMENSION: u16 = 0xA002;
 /// The height of the picture, as the Exif IFD records it
 /// (PixelYDimension).
 const PIXEL_Y_DIMENSION: u16 = 0xA003;
-
-/// A `(width, height)` pair of `u16`s as a [`Size`].
-fn size_of((width, height): (u16, u16)) -> Size {
-    Size {
-        width: u32::from(width),
-        height: u32::from(height),
-    }
-}
 
 /// `n` as a `u64`.
 fn to_u64(n: usize) -> u64 {
@@ -236,11 +225,6 @@ fn capture_time() -> DateTime {
         .unwrap()
 }
 
-/// `(numerator, denominator)` as a fraction of the metadata.
-fn fraction((numerator, denominator): (u32, u32)) -> Rational {
-    Rational::new(numerator, denominator).unwrap()
-}
-
 /// The metadata of a JPEG whose main image is of size [`MAIN`] and whose
 /// Exif segment holds [`camera_exif`]'s values, but the values of the
 /// tags in `lost`: the image size, no raw size and no focus point, and
@@ -268,10 +252,10 @@ fn camera_metadata_without(lost: &[u16]) -> Metadata {
     }
     let mut exposure = Exposure::default();
     if kept(EXPOSURE_TIME) {
-        exposure = exposure.with_exposure_time(fraction(EXPOSURE_SECONDS));
+        exposure = exposure.with_exposure_time(fraction(EXPOSURE_SECONDS.0, EXPOSURE_SECONDS.1));
     }
     if kept(F_NUMBER) {
-        exposure = exposure.with_f_number(fraction(APERTURE));
+        exposure = exposure.with_f_number(fraction(APERTURE.0, APERTURE.1));
     }
     if kept(PHOTOGRAPHIC_SENSITIVITY) {
         exposure = exposure.with_iso(u32::from(ISO));
@@ -282,7 +266,7 @@ fn camera_metadata_without(lost: &[u16]) -> Metadata {
             exposure.with_exposure_bias(SignedRational::new(numerator, denominator).unwrap());
     }
     if kept(FOCAL_LENGTH) {
-        exposure = exposure.with_focal_length(fraction(FOCAL_MILLIMETERS));
+        exposure = exposure.with_focal_length(fraction(FOCAL_MILLIMETERS.0, FOCAL_MILLIMETERS.1));
     }
     if kept(FOCAL_LENGTH_IN_35MM_FILM) {
         exposure =
@@ -300,7 +284,8 @@ fn camera_metadata_without(lost: &[u16]) -> Metadata {
         lens = lens.with_serial_number(lens_serial_number);
     }
     if kept(LENS_SPECIFICATION) {
-        let [shortest, longest, at_shortest, at_longest] = LENS_RANGE.map(fraction);
+        let [shortest, longest, at_shortest, at_longest] =
+            LENS_RANGE.map(|(numerator, denominator)| fraction(numerator, denominator));
         lens = lens
             .with_min_focal_length(shortest)
             .with_max_focal_length(longest)
@@ -1076,7 +1061,8 @@ fn capture_time_at(offset: Option<i16>) -> DateTime {
 /// A lens that only its range describes: `range`, the shortest and the
 /// longest focal length, then the f-number at each.
 fn lens_of_range(range: [(u32, u32); 4]) -> Lens {
-    let [shortest, longest, at_shortest, at_longest] = range.map(fraction);
+    let [shortest, longest, at_shortest, at_longest] =
+        range.map(|(numerator, denominator)| fraction(numerator, denominator));
     Lens::default()
         .with_min_focal_length(shortest)
         .with_max_focal_length(longest)
@@ -2312,17 +2298,19 @@ fn check_stripped_z9_jpeg(stripped: &StrippedZ9Jpeg) {
     assert_eq!(
         metadata.exposure(),
         &Exposure::default()
-            .with_exposure_time(fraction(stripped.exposure_time))
-            .with_f_number(fraction(stripped.f_number))
+            .with_exposure_time(fraction(stripped.exposure_time.0, stripped.exposure_time.1))
+            .with_f_number(fraction(stripped.f_number.0, stripped.f_number.1))
             .with_iso(stripped.iso)
-            .with_focal_length(fraction(stripped.focal_length))
+            .with_focal_length(fraction(stripped.focal_length.0, stripped.focal_length.1))
             .with_focal_length_in_35mm_film(stripped.focal_length_in_35mm_film)
             .with_exposure_bias(SignedRational::new(numerator, denominator).unwrap()),
         "{label}"
     );
     // The lens from the Exif IFD: a LensMake that is empty gives no make,
     // and the LensSerialNumber, empty and then zeroed, no serial number.
-    let [shortest, longest, at_shortest, at_longest] = stripped.lens_range.map(fraction);
+    let [shortest, longest, at_shortest, at_longest] = stripped
+        .lens_range
+        .map(|(numerator, denominator)| fraction(numerator, denominator));
     let mut lens = Lens::default()
         .with_recorded_model(stripped.lens_recorded_model)
         .with_min_focal_length(shortest)
@@ -2475,10 +2463,10 @@ fn the_d600_frame_4_jpeg_gives_its_previews_metadata_and_point_38_placed_from_th
     assert_eq!(
         metadata.exposure(),
         &Exposure::default()
-            .with_exposure_time(fraction((10, 400)))
-            .with_f_number(fraction((40, 10)))
+            .with_exposure_time(fraction(10, 400))
+            .with_f_number(fraction(40, 10))
             .with_iso(2200)
-            .with_focal_length(fraction((350, 10)))
+            .with_focal_length(fraction(350, 10))
             .with_focal_length_in_35mm_film(35)
             .with_exposure_bias(SignedRational::new(0, 6).unwrap()),
         "{label}"
@@ -2486,10 +2474,10 @@ fn the_d600_frame_4_jpeg_gives_its_previews_metadata_and_point_38_placed_from_th
     // The D600's Exif IFD names no lens, so the lens is the MakerNote's
     // range alone, that of a 35 mm f/1.8 prime.
     let lens = Lens::default()
-        .with_min_focal_length(fraction((350, 10)))
-        .with_max_focal_length(fraction((350, 10)))
-        .with_f_number_at_min_focal_length(fraction((18, 10)))
-        .with_f_number_at_max_focal_length(fraction((18, 10)));
+        .with_min_focal_length(fraction(350, 10))
+        .with_max_focal_length(fraction(350, 10))
+        .with_f_number_at_min_focal_length(fraction(18, 10))
+        .with_f_number_at_max_focal_length(fraction(18, 10));
     assert_eq!(metadata.lens(), &lens, "{label}");
     // A JPEG holds no raw data, and its image size is its frame header's.
     assert_eq!(metadata.raw_size(), None, "{label}");
@@ -3328,29 +3316,30 @@ fn every_jpeg_sample_gives_its_metadata() {
 #[test]
 fn the_sample_list_and_the_tables_of_previews_metadata_and_entries_name_the_same_jpeg_files() {
     // The list is compiled in, so this runs without any download.
-    let listed = listed("jpeg");
-    let previews: Vec<&str> = SAMPLES.iter().map(|sample| sample.file).collect();
-    let metadata: Vec<&str> = METADATA.iter().map(|expected| expected.file).collect();
-    let entries: Vec<&str> = ENTRIES.iter().map(|expected| expected.file).collect();
-    for (what, files) in [
-        ("previews", previews),
-        ("metadata", metadata),
-        ("entries", entries),
-    ] {
-        let expected: BTreeSet<(&str, &str)> = files.iter().map(|&file| (file, "normal")).collect();
-        assert_eq!(
-            expected.len(),
-            files.len(),
-            "a file is in the tables of {what} twice"
-        );
-        let unexpected: Vec<_> = listed.difference(&expected).collect();
-        let unlisted: Vec<_> = expected.difference(&listed).collect();
-        assert!(
-            unexpected.is_empty() && unlisted.is_empty(),
-            "listed without expected {what}: {unexpected:?}; \
-             expected {what} but not listed: {unlisted:?}"
-        );
-    }
+    let normal = |file| (file, "normal");
+    check_tables(
+        "jpeg",
+        &[
+            (
+                "previews",
+                SAMPLES.iter().map(|sample| normal(sample.file)).collect(),
+            ),
+            (
+                "metadata",
+                METADATA
+                    .iter()
+                    .map(|expected| normal(expected.file))
+                    .collect(),
+            ),
+            (
+                "entries",
+                ENTRIES
+                    .iter()
+                    .map(|expected| normal(expected.file))
+                    .collect(),
+            ),
+        ],
+    );
 }
 
 /// The entries of every camera JPEG sample, each directory in the order the
