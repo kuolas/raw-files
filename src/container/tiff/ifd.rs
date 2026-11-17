@@ -719,14 +719,12 @@ mod tests {
     use crate::rational::{Rational, SignedRational};
     /// The code of field type DOUBLE, which no reader takes.
     const DOUBLE: u16 = 12;
-    use crate::testing::{FAR, FailsFar};
+    use crate::testing::{FAR, FailsFar, fraction, signed_fraction};
     use crate::tiff_builder::{
-        ASCII, BYTE, Built, IFD, IfdId, LONG, Order, RATIONAL, RawValue, SHORT, SLONG, SRATIONAL,
-        SSHORT, TiffBuilder, UNDEFINED, UTF8,
+        ASCII, BYTE, Built, IFD, IfdId, LONG, ORDERS, Order, RATIONAL, RawValue, SHORT, SLONG,
+        SRATIONAL, SSHORT, TiffBuilder, UNDEFINED, UTF8,
     };
     use std::io::Cursor;
-
-    const ORDERS: [Order; 2] = [Order::Little, Order::Big];
 
     fn byte_order(order: Order) -> ByteOrder {
         match order {
@@ -2372,24 +2370,20 @@ mod tests {
         );
         let slong = |order: Order, v: i32| order.u32(v.cast_unsigned()).to_vec();
         check_shapes(SLONG, FieldType::SLong, [-3_i32, i32::MIN, i32::MAX], slong);
-        let fraction = |numerator, denominator| Rational {
-            numerator,
-            denominator,
-        };
         check_shapes(
             RATIONAL,
             FieldType::Rational,
             [fraction(10, 3200), fraction(u32::MAX, 1), fraction(5, 0)],
             |order, v| [order.u32(v.numerator), order.u32(v.denominator)].concat(),
         );
-        let signed = |numerator, denominator| SignedRational {
-            numerator,
-            denominator,
-        };
         check_shapes(
             SRATIONAL,
             FieldType::SRational,
-            [signed(-2, 3), signed(i32::MIN, i32::MAX), signed(7, 0)],
+            [
+                signed_fraction(-2, 3),
+                signed_fraction(i32::MIN, i32::MAX),
+                signed_fraction(7, 0),
+            ],
             |order, v| srational_bytes(order, &[(v.numerator, v.denominator)]),
         );
     }

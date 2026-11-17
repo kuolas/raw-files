@@ -7,7 +7,8 @@
 //! the one documented, that `Display` writes it, that they are distinct,
 //! ASCII and in sentence case, and that the variants order as they are
 //! listed; and the fixtures the tests of the focus, the metadata and the
-//! readers share: a size, a point and a Z 9's focus.
+//! readers share: a size, a point, a fraction of each sign and a Z 9's
+//! focus.
 //!
 //! It stands at the crate's top, outside `container` and `formats`, so
 //! that tests of either may use it without a container module's tests
@@ -19,6 +20,7 @@ use std::io::{self, Cursor, Read, Seek, SeekFrom};
 use crate::focus::{Focus, FocusOrigin};
 use crate::geometry::{Point, Size};
 use crate::io::BLOCK_SIZE;
+use crate::rational::{Rational, SignedRational};
 
 /// The first byte of the second block the source caches: a [`FailsFar`]
 /// still serves everything the first block holds, such as a file's header
@@ -82,6 +84,22 @@ pub(crate) fn size(width: u32, height: u32) -> Size {
 /// The point `x` pixels from the left and `y` from the top.
 pub(crate) fn point(x: u32, y: u32) -> Point {
     Point { x, y }
+}
+
+/// The fraction `numerator`/`denominator`, as stored.
+pub(crate) fn fraction(numerator: u32, denominator: u32) -> Rational {
+    Rational {
+        numerator,
+        denominator,
+    }
+}
+
+/// The signed fraction `numerator`/`denominator`, as stored.
+pub(crate) fn signed_fraction(numerator: i32, denominator: i32) -> SignedRational {
+    SignedRational {
+        numerator,
+        denominator,
+    }
 }
 
 /// Where a Nikon Z 9 focused: a 291 × 323 area right of and above the

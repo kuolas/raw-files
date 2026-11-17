@@ -75,7 +75,7 @@ mod tests {
     use crate::ErrorKind;
     use crate::jpeg_builder::JpegBuilder;
     use crate::testing::{FAR, FailsFar};
-    use crate::tiff_builder::{Order, TiffBuilder};
+    use crate::tiff_builder::{ORDERS, Order, TiffBuilder};
     use std::io::Cursor;
 
     /// The structure read from the file `bytes`, under the default limits.
@@ -122,7 +122,7 @@ mod tests {
 
     #[test]
     fn a_tiff_file_in_either_byte_order_is_read_as_its_tree() {
-        for order in [Order::Little, Order::Big] {
+        for order in ORDERS {
             match read(&tiff_file(order).build().bytes).unwrap() {
                 Structure::Tiff(tree) => assert_eq!(tree.len(), 1, "{order:?}"),
                 Structure::Jpeg(_) => panic!("a TIFF file read as JPEG"),

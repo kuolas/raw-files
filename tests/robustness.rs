@@ -97,7 +97,7 @@ use raw_files::{
     CameraFile, Entry, Focus, FocusLayout, FocusPoints, Limits, Metadata, Rational, SignedRational,
     Size, Value,
 };
-use support::arw::{ARW4_FULL_SIZE_JPEG, arw4_file, stub};
+use support::arw::{ARW4_FULL_SIZE_JPEG, arw4_file};
 use support::fixtures::{
     D600_7856_MEDIUM_JPEG, D600_7856_NEF, D600_7858_SMALL_JPEG, D600_FRAME_4_JPEG, Z9_1X1,
     Z9_16X9_JPEG, Z9_DX, Z9_DX_JPEG, Z9_FX_JPEG, d600_frame, read_fixture,
@@ -107,10 +107,9 @@ use support::jpeg_files::{
     d1h_jpeg, d70_jpeg, d5300_jpeg, exif_jpeg, ilce7m3_jpeg, ilce7m4_jpeg, padded_jpeg, plain_jpeg,
     z9_jpeg,
 };
+use support::jpeg_stub::stub;
 use support::nef::{d1h_file, d300_file, z6iii_file, z9_file, z9_file_with};
-use support::tiff_builder::Order;
-
-const ORDERS: [Order; 2] = [Order::Little, Order::Big];
+use support::tiff_builder::{ORDERS, Order};
 
 /// A fixture to damage: its name for failure messages, its bytes, and how
 /// far into it the byte-by-byte damage goes.

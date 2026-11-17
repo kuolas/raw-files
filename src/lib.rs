@@ -405,7 +405,8 @@ mod tiff_builder;
 // What the unit tests of any module may use: the reader that fails past
 // the first cached block, with which a reader's tests tell its failure
 // from damage in the file; the checks of an enum's names and order; and the
-// size, point and focus fixtures the focus, metadata and reader tests share.
+// size, point, fraction and focus fixtures the focus, metadata and reader
+// tests share.
 #[cfg(test)]
 mod testing;
 mod value_error;

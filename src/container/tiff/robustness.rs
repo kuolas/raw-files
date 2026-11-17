@@ -47,9 +47,7 @@ use super::{Block, FieldType, First, Held, Rule, Text};
 use crate::error::{Error, Result};
 use crate::io::Source;
 use crate::limits::Limits;
-use crate::tiff_builder::{Built, EXIF_IFD, IfdId, Order, SUB_IFDS, TiffBuilder};
-
-const ORDERS: [Order; 2] = [Order::Little, Order::Big];
+use crate::tiff_builder::{Built, EXIF_IFD, IfdId, ORDERS, Order, SUB_IFDS, TiffBuilder};
 
 // Tags that camera files carry, for fixtures that look like theirs. The
 // reader gives none of them a meaning.

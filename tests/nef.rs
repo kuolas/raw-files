@@ -38,7 +38,6 @@
 
 mod support;
 
-use std::collections::BTreeSet;
 use std::io::Cursor;
 
 use raw_files::{
@@ -48,6 +47,7 @@ use raw_files::{
     Orientation, Point, Preview, PreviewFormat, Rational, RawImageSize, Shutter, SignedRational,
     Size, ValueError, WhiteBalance, WhiteBalanceMode,
 };
+use support::jpeg_stub::{stub, stub_len};
 use support::nef::{
     D1H_ISO, D1H_LENS, D1H_PREVIEW_JPEG, D1H_RAW, D1hBlobs, d1h_file, d1h_file_with,
     d1h_file_with_blobs,
@@ -57,30 +57,18 @@ use support::nef::{
     FULL_SIZE_JPEG, IFD0_JPEG, LENS_MODEL_Z14_30, LENS_MODEL_Z24_200, MEDIUM_JPEG, PREVIEW_JPEG,
     RAW_STRIP_START, Z6III_FOCUS_AREA, Z6III_FOCUS_CENTER, Z6III_FOCUS_FRAME, Z6III_FULL_SIZE_JPEG,
     Z6III_IMAGE, Z6III_IN_FOCUS, Z6III_MEDIUM_JPEG, Z6III_PREVIEW_JPEG, Z6III_RAW, Z9_FOCUS_AREA,
-    Z9_FOCUS_CENTER, Z9_FOCUS_FRAME, Z9Blobs, d300_file, d300_file_with_blobs, stub, z6iii_file,
+    Z9_FOCUS_CENTER, Z9_FOCUS_FRAME, Z9Blobs, d300_file, d300_file_with_blobs, z6iii_file,
     z6iii_file_with_blobs, z9_file, z9_file_with, z9_file_with_blobs,
 };
 use support::samples::{
     Jpeg, LocationPart, Sample, SampleEntries, SampleFineTune, SampleFocus, SampleLens,
     SampleMetadata, SampleSettings, SerialShape, Text, check, check_enciphered, check_entries,
-    check_every, check_metadata, listed, sizes,
+    check_every, check_metadata, check_tables, sizes,
 };
-use support::tiff_builder::{Built, EXIF_IFD, Order, RawValue, SHORT, SUB_IFDS, TiffBuilder};
-
-const ORDERS: [Order; 2] = [Order::Little, Order::Big];
-
-/// A `(width, height)` pair of `u16`s as a [`Size`].
-fn size_of((width, height): (u16, u16)) -> Size {
-    Size {
-        width: u32::from(width),
-        height: u32::from(height),
-    }
-}
-
-/// The length of the stub JPEG of `size`.
-fn stub_len(size: (u16, u16)) -> u64 {
-    u64::try_from(stub(size).len()).unwrap()
-}
+use support::tiff_builder::{
+    Built, EXIF_IFD, ORDERS, Order, RawValue, SHORT, SUB_IFDS, TiffBuilder,
+};
+use support::{fraction, size_of};
 
 /// The sizes of the four JPEGs of a file laid out like the Z 9's: IFD0's,
 /// the MakerNote's, SubIFD2's medium one and SubIFD0's full-size one,
@@ -103,7 +91,6 @@ const Z6III_JPEGS: FourJpegs = [
 /// first, each where the fixture put it; `label` names the file in a
 /// failure.
 fn assert_the_four_jpegs(built: &Built, blobs: Z9Blobs, jpegs: FourJpegs, label: &str) {
-    let [ifd0_jpeg, preview_jpeg, medium_jpeg, full_size_jpeg] = jpegs;
     let from_bytes = CameraFile::from_bytes(&built.bytes).unwrap();
     let from_reader = CameraFile::from_reader(Cursor::new(built.bytes.clone())).unwrap();
     for (how, format, previews) in [
@@ -112,19 +99,16 @@ fn assert_the_four_jpegs(built: &Built, blobs: Z9Blobs, jpegs: FourJpegs, label:
     ] {
         assert_eq!(format, Format::Nef, "{label}, from {how}");
         assert_eq!(sizes(previews), jpegs.map(size_of), "{label}, from {how}");
-        let expected = [
-            (built.blob_offset(blobs.ifd0_jpeg), ifd0_jpeg),
-            (
-                built.blob_offset(blobs.makernote) + blobs.preview_in_makernote,
-                preview_jpeg,
-            ),
-            (built.blob_offset(blobs.medium_jpeg), medium_jpeg),
-            (built.blob_offset(blobs.full_size_jpeg), full_size_jpeg),
+        let offsets = [
+            built.blob_offset(blobs.ifd0_jpeg),
+            built.blob_offset(blobs.makernote) + blobs.preview_in_makernote,
+            built.blob_offset(blobs.medium_jpeg),
+            built.blob_offset(blobs.full_size_jpeg),
         ];
-        for (preview, (offset, size)) in previews.iter().zip(expected) {
+        for (preview, offset) in previews.iter().zip(offsets) {
             assert_eq!(preview.format(), PreviewFormat::Jpeg, "{label}, from {how}");
             assert_eq!(preview.byte_range().start, offset, "{label}, from {how}");
-            assert_eq!(preview.byte_len(), stub_len(size), "{label}, from {how}");
+            assert_eq!(preview.byte_len(), stub_len(), "{label}, from {how}");
         }
     }
 }
@@ -182,14 +166,6 @@ fn every_preview_takes_ifd0s_orientation() {
         for preview in file.previews() {
             assert_eq!(preview.orientation(), orientation, "Orientation {value}");
         }
-    }
-}
-
-/// The fraction `numerator`/`denominator`, as stored.
-fn fraction(numerator: u32, denominator: u32) -> Rational {
-    Rational {
-        numerator,
-        denominator,
     }
 }
 
@@ -657,17 +633,14 @@ fn the_d300_file_opens_as_nef_with_its_two_jpegs_smallest_first() {
             [size_of(D300_PREVIEW_JPEG), size_of(D300_FULL_SIZE_JPEG)],
             "{order:?}"
         );
-        let expected = [
-            (
-                built.blob_offset(blobs.makernote) + blobs.preview_in_makernote,
-                D300_PREVIEW_JPEG,
-            ),
-            (built.blob_offset(blobs.full_size_jpeg), D300_FULL_SIZE_JPEG),
+        let offsets = [
+            built.blob_offset(blobs.makernote) + blobs.preview_in_makernote,
+            built.blob_offset(blobs.full_size_jpeg),
         ];
-        for (preview, (offset, size)) in previews.iter().zip(expected) {
+        for (preview, offset) in previews.iter().zip(offsets) {
             assert_eq!(preview.format(), PreviewFormat::Jpeg, "{order:?}");
             assert_eq!(preview.byte_range().start, offset, "{order:?}");
-            assert_eq!(preview.byte_len(), stub_len(size), "{order:?}");
+            assert_eq!(preview.byte_len(), stub_len(), "{order:?}");
         }
         let starts: Vec<u64> = previews.iter().map(|p| p.byte_range().start).collect();
         for strip in [blobs.thumbnail, blobs.raw] {
@@ -833,7 +806,7 @@ fn assert_the_d1h_file(
     let expected_metadata = the_d1h_metadata_by_hand(with_makernote)
         .expect("every value of the D1H fixture is one the constructors accept");
     let start = built.blob_offset(blobs.preview_jpeg);
-    let len = stub_len(D1H_PREVIEW_JPEG);
+    let len = stub_len();
     let expected_previews: Vec<_> = [(start..start + len, size_of(D1H_PREVIEW_JPEG))]
         .into_iter()
         .filter(|_| preview)
@@ -886,11 +859,7 @@ fn the_d1h_file_opens_as_nef_with_its_makernotes_jpeg_alone() {
         // the sample's does.
         let jpeg = built.blob_offset(blobs.preview_jpeg);
         assert!(blobs.makernote.contains(&blobs.preview_ifd), "{order:?}");
-        assert_eq!(
-            blobs.makernote.end,
-            jpeg + stub_len(D1H_PREVIEW_JPEG),
-            "{order:?}"
-        );
+        assert_eq!(blobs.makernote.end, jpeg + stub_len(), "{order:?}");
         assert_the_d1h_file(
             &Options::new(),
             &built,
@@ -1020,7 +989,7 @@ fn a_d1h_preview_running_past_the_declared_block_is_not_a_preview() {
         let (_, sound) = d1h_file_with_blobs(order);
         let declared = sound.makernote.end - sound.makernote.start - 1;
         let (built, blobs) = d1h_file_with(order, &[], Some(declared));
-        let jpeg_end = built.blob_offset(blobs.preview_jpeg) + stub_len(D1H_PREVIEW_JPEG);
+        let jpeg_end = built.blob_offset(blobs.preview_jpeg) + stub_len();
         assert!(
             jpeg_end <= u64::try_from(built.bytes.len()).unwrap(),
             "{order:?}"
@@ -5166,34 +5135,34 @@ fn every_nikon_sample_gives_its_metadata() {
 #[test]
 fn the_sample_list_and_the_tables_of_previews_metadata_and_entries_name_the_same_nikon_files() {
     // The list is compiled in, so this runs without any download.
-    let listed = listed("nef");
-
-    let previews: Vec<&str> = SAMPLES
-        .iter()
-        .chain(OTHER_SAMPLES)
-        .map(|sample| sample.file)
-        .collect();
-    let metadata: Vec<&str> = METADATA.iter().map(|expected| expected.file).collect();
-    let entries: Vec<&str> = ENTRIES.iter().map(|expected| expected.file).collect();
-    for (what, files) in [
-        ("previews", previews),
-        ("metadata", metadata),
-        ("entries", entries),
-    ] {
-        let expected: BTreeSet<(&str, &str)> = files.iter().map(|&file| (file, "normal")).collect();
-        assert_eq!(
-            expected.len(),
-            files.len(),
-            "a file is in the tables of {what} twice"
-        );
-        let unexpected: Vec<_> = listed.difference(&expected).collect();
-        let unlisted: Vec<_> = expected.difference(&listed).collect();
-        assert!(
-            unexpected.is_empty() && unlisted.is_empty(),
-            "listed without expected {what}: {unexpected:?}; \
-             expected {what} but not listed: {unlisted:?}"
-        );
-    }
+    let normal = |file| (file, "normal");
+    check_tables(
+        "nef",
+        &[
+            (
+                "previews",
+                SAMPLES
+                    .iter()
+                    .chain(OTHER_SAMPLES)
+                    .map(|sample| normal(sample.file))
+                    .collect(),
+            ),
+            (
+                "metadata",
+                METADATA
+                    .iter()
+                    .map(|expected| normal(expected.file))
+                    .collect(),
+            ),
+            (
+                "entries",
+                ENTRIES
+                    .iter()
+                    .map(|expected| normal(expected.file))
+                    .collect(),
+            ),
+        ],
+    );
 }
 
 /// The entries of every Nikon sample, each directory in the order the

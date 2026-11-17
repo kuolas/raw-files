@@ -10,7 +10,7 @@
 
 mod support;
 
-use support::jpeg_stub::{FRAME_HEADER_AT, jpeg_stub, segment};
+use support::jpeg_stub::{FRAME_HEADER_AT, jpeg_stub, segment, stub, stub_len};
 
 #[test]
 fn a_stub_starts_ends_and_has_its_frame_header_where_documented() {
@@ -29,6 +29,15 @@ fn a_stub_starts_ends_and_has_its_frame_header_where_documented() {
     // SOS follows the frame header.
     assert_eq!(bytes[FRAME_HEADER_AT + frame.len()..][..2], [0xFF, 0xDA]);
     assert_eq!(bytes[bytes.len() - 2..], [0xFF, 0xD9]);
+    // Every stub is as long, whatever its size and marker.
+    for other in [
+        jpeg_stub(1, 1, 0xC3),
+        jpeg_stub(u16::MAX, u16::MAX, 0xC0),
+        stub((640, 480)),
+    ] {
+        assert_eq!(u64::try_from(other.len()).unwrap(), stub_len());
+    }
+    assert_eq!(u64::try_from(bytes.len()).unwrap(), stub_len());
 }
 
 #[test]

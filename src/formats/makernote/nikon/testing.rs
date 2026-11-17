@@ -23,7 +23,7 @@ use crate::limits::Limits;
 use crate::metadata::Metadata;
 use crate::tiff_builder::{IfdId, LONG, Order, RawValue, TiffBuilder, UNDEFINED};
 
-pub(super) const ORDERS: [Order; 2] = [Order::Little, Order::Big];
+pub(super) use crate::tiff_builder::ORDERS;
 
 /// Where the tests put the MakerNote block in the file.
 pub(super) const AT: u64 = 1024;

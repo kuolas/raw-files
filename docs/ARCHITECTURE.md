@@ -127,15 +127,15 @@ adds a row.
 
 | File | Holds | May depend on |
 |---|---|---|
-| `src/testing.rs` | Tests only: a reader that fails past the first cached block, the checks of an enum's names and order, and values the tests build from. | `focus`, `geometry`, `io` |
-| `tests/support/mod.rs` | For the integration tests: the module that gathers the helpers of `tests/support/`. | the files of `tests/support/` |
-| `tests/support/tiff_builder.rs` | The fixture builder: small TIFF files described in code, with any rule broken on purpose, for unit and integration tests. | — (`std` only) |
-| `tests/support/jpeg_stub.rs` | The stub JPEG: a small well-formed stream with a chosen frame header and no image, for unit and integration tests. | — (`std` only) |
+| `src/testing.rs` | Tests only: a reader that fails past the first cached block, the checks of an enum's names and order, and values the tests build from, a fraction of each sign among them. | `focus`, `geometry`, `io`, `rational` |
+| `tests/support/mod.rs` | For the integration tests: the module that gathers the helpers of `tests/support/`, with the size and fraction conversions that the tests of every format use. | the files of `tests/support/`, the library |
+| `tests/support/tiff_builder.rs` | The fixture builder: small TIFF files described in code, with any rule broken on purpose, in either byte order or both, for unit and integration tests. | — (`std` only) |
+| `tests/support/jpeg_stub.rs` | The stub JPEG: a small well-formed stream with a chosen frame header and no image, and the baseline stub that built files hold as previews, for unit and integration tests. | — (`std` only) |
 | `tests/support/jpeg_builder.rs` | The JPEG file builder: segments, the stub as main image, an MPF index and the images after it, with where each part landed. | `tests/support/jpeg_stub.rs`, `tests/support/tiff_builder.rs` (for `Order`) (`std` only) |
 | `tests/support/jpeg_files.rs` | Whole JPEG files: plain, Exif, padded, and Nikon and Sony camera layouts with their MakerNotes, for the JPEG reader's, robustness and fuzz-seed tests. | `tests/support/jpeg_builder.rs`, `tests/support/jpeg_stub.rs`, `tests/support/tiff_builder.rs`, `tests/support/nef.rs`, `tests/support/arw.rs` |
 | `tests/support/nef.rs` | For the integration tests: files laid out like the NEF files of a Z 9, D300, Z6III and D1H, and the Nikon MakerNote builder. | `tests/support/tiff_builder.rs`, `tests/support/jpeg_stub.rs` |
 | `tests/support/arw.rs` | For the integration tests: files laid out like each generation of Sony's RAW family, ARW 4 to the A100's ARW 1.0, with stub JPEGs. | `tests/support/tiff_builder.rs`, `tests/support/jpeg_stub.rs` |
-| `tests/support/samples.rs` | For the integration tests: where the downloaded samples of `tests/samples.tsv` are found, the types of the tables of expected values, and the checks against them. | the library |
+| `tests/support/samples.rs` | For the integration tests: where the downloaded samples of `tests/samples.tsv` are found, the types of the tables of expected values, the checks against them, and the check that a format's tables name the files the list names. | the library |
 | `tests/support/fixtures.rs` | For the integration tests: where the committed files of `tests/fixtures/` are found and read, a missing one being a failure. | — (`std` only) |
 | `tests/fixtures/` | Real camera files of my own, stripped of their pixels and personal fields, which `tests/fixtures/README.md` lists. | — |
 | `tests/tiff_builder.rs` | Tests only: the TIFF fixture builder, checked from outside the crate; its only tests. | `tests/support` |

@@ -65,6 +65,18 @@ pub fn jpeg_stub(width: u16, height: u16, marker: u8) -> Vec<u8> {
     bytes
 }
 
+/// The baseline stub JPEG of `(width, height)`, its frame header's marker
+/// SOF0, as the files built for the tests hold their previews.
+pub fn stub((width, height): (u16, u16)) -> Vec<u8> {
+    jpeg_stub(width, height, 0xC0)
+}
+
+/// The length of every stub JPEG, whatever its size and marker: each
+/// field of its segments has a fixed width.
+pub fn stub_len() -> u64 {
+    u64::try_from(jpeg_stub(1, 1, 0xC0).len()).unwrap()
+}
+
 /// A marker segment: `FF`, `marker`, the big-endian length, which counts
 /// its own 2 bytes and the payload's, then `payload`.
 ///

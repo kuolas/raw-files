@@ -201,10 +201,8 @@ mod tests {
     use crate::formats::testing::{Src, file};
     use crate::geometry::{Point, Size};
     use crate::rational::SignedRational;
-    use crate::tiff_builder::{BYTE, IfdId, Order, RawValue, TiffBuilder, UNDEFINED};
+    use crate::tiff_builder::{BYTE, IfdId, ORDERS, Order, RawValue, TiffBuilder, UNDEFINED};
     use std::io::Cursor;
-
-    const ORDERS: [Order; 2] = [Order::Little, Order::Big];
 
     /// Whether the ARW reader claims the file that `build` describes.
     fn claimed(build: impl FnOnce(&mut TiffBuilder, IfdId)) -> bool {

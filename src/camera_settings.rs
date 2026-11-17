@@ -1073,14 +1073,8 @@ impl fmt::Display for ColorSpace {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::testing::signed_fraction;
     use crate::testing::{assert_names, assert_ordered};
-
-    fn fraction(numerator: i32, denominator: i32) -> SignedRational {
-        SignedRational {
-            numerator,
-            denominator,
-        }
-    }
 
     /// A white balance with every part set: Nikon's auto, the temperature
     /// it chose, and a shift in quarter steps along both axes, each value
@@ -1090,8 +1084,8 @@ mod tests {
             mode: Some(WhiteBalanceMode::Auto),
             color_temperature: Some(5_200),
             fine_tune: Some(FineTune {
-                amber_blue: fraction(-24, 4),
-                green_magenta: fraction(4, 4),
+                amber_blue: signed_fraction(-24, 4),
+                green_magenta: signed_fraction(4, 4),
             }),
         }
     }
@@ -1161,8 +1155,8 @@ mod tests {
         assert_eq!(white_balance.mode(), Some(WhiteBalanceMode::Auto));
         assert_eq!(white_balance.color_temperature(), Some(5_200));
         let fine_tune = white_balance.fine_tune().unwrap();
-        assert_eq!(fine_tune.amber_blue(), fraction(-24, 4));
-        assert_eq!(fine_tune.green_magenta(), fraction(4, 4));
+        assert_eq!(fine_tune.amber_blue(), signed_fraction(-24, 4));
+        assert_eq!(fine_tune.green_magenta(), signed_fraction(4, 4));
     }
 
     #[test]
@@ -1255,8 +1249,8 @@ mod tests {
     #[test]
     fn each_white_balance_builder_sets_its_own_value_and_no_other() {
         let fine_tune = FineTune {
-            amber_blue: fraction(1, 2),
-            green_magenta: fraction(-1, 2),
+            amber_blue: signed_fraction(1, 2),
+            green_magenta: signed_fraction(-1, 2),
         };
         for start in [WhiteBalance::default(), nikon_white_balance()] {
             let cases = [
@@ -1295,7 +1289,10 @@ mod tests {
                 WhiteBalance::default()
                     .with_mode(WhiteBalanceMode::Auto)
                     .with_color_temperature(5_200)
-                    .with_fine_tune(FineTune::new(fraction(-24, 4), fraction(4, 4))),
+                    .with_fine_tune(FineTune::new(
+                        signed_fraction(-24, 4),
+                        signed_fraction(4, 4),
+                    )),
             )
             .with_exposure_program(ExposureProgram::AperturePriority)
             .with_metering_mode(MeteringMode::MultiSegment)
@@ -1338,24 +1335,30 @@ mod tests {
         let white_balance = WhiteBalance::default()
             .with_mode(WhiteBalanceMode::Daylight)
             .with_color_temperature(1)
-            .with_fine_tune(FineTune::new(fraction(1, 1), fraction(1, 1)))
+            .with_fine_tune(FineTune::new(signed_fraction(1, 1), signed_fraction(1, 1)))
             .with_mode(WhiteBalanceMode::Auto)
             .with_color_temperature(5_200)
-            .with_fine_tune(FineTune::new(fraction(-24, 4), fraction(4, 4)));
+            .with_fine_tune(FineTune::new(
+                signed_fraction(-24, 4),
+                signed_fraction(4, 4),
+            ));
         assert_eq!(white_balance, nikon_white_balance());
     }
 
     #[test]
     fn a_fine_tune_keeps_both_shifts_as_given() {
         // Two different shifts, so that one given for the other is caught.
-        let fine_tune = FineTune::new(fraction(-6, 1), fraction(2, 4));
-        assert_eq!(fine_tune.amber_blue(), fraction(-6, 1));
-        assert_eq!(fine_tune.green_magenta(), fraction(2, 4));
+        let fine_tune = FineTune::new(signed_fraction(-6, 1), signed_fraction(2, 4));
+        assert_eq!(fine_tune.amber_blue(), signed_fraction(-6, 1));
+        assert_eq!(fine_tune.green_magenta(), signed_fraction(2, 4));
         // As stored: -24/4 is not -6/1, and a zero shift is a value.
-        assert_ne!(FineTune::new(fraction(-24, 4), fraction(2, 4)), fine_tune);
-        let zero = FineTune::new(fraction(0, 4), fraction(0, 4));
-        assert_eq!(zero.amber_blue(), fraction(0, 4));
-        assert_eq!(zero.green_magenta(), fraction(0, 4));
+        assert_ne!(
+            FineTune::new(signed_fraction(-24, 4), signed_fraction(2, 4)),
+            fine_tune
+        );
+        let zero = FineTune::new(signed_fraction(0, 4), signed_fraction(0, 4));
+        assert_eq!(zero.amber_blue(), signed_fraction(0, 4));
+        assert_eq!(zero.green_magenta(), signed_fraction(0, 4));
     }
 
     #[test]

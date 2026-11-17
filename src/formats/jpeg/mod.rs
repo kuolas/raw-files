@@ -423,7 +423,7 @@ mod tests {
     use crate::error::ErrorKind;
     use crate::jpeg_builder::JpegBuilder;
     use crate::testing::{FAR, FailsFar};
-    use crate::tiff_builder::{Order, TiffBuilder};
+    use crate::tiff_builder::{ORDERS, Order, TiffBuilder};
     use std::io::Cursor;
 
     /// The bytes of the file `builder` describes, with its segments as the
@@ -799,7 +799,7 @@ mod tests {
     #[test]
     fn a_makernotes_directories_come_after_the_exif_tree_and_before_the_mp_index() {
         let nikon = [Directory::MakerNote, Directory::MakerNoteSub(0x0011)];
-        for order in [Order::Little, Order::Big] {
+        for order in ORDERS {
             for (make, layout, makers) in [
                 ("NIKON CORPORATION", Layout::NikonEmbedded, &nikon[..]),
                 ("NIKON", Layout::NikonHeaderless, &nikon[..]),

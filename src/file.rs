@@ -518,7 +518,7 @@ mod tests {
     use crate::orientation::Orientation;
     use crate::preview::PreviewFormat;
     use crate::testing::size;
-    use crate::tiff_builder::{Order, TiffBuilder};
+    use crate::tiff_builder::{ORDERS, Order, TiffBuilder};
 
     /// A JPEG preview of `width` by `height` pixels, `length` bytes at
     /// `offset`, upright.
@@ -748,7 +748,7 @@ mod tests {
 
     #[test]
     fn the_entries_are_the_files_and_their_values_are_read_on_request() {
-        for order in [Order::Little, Order::Big] {
+        for order in ORDERS {
             let bytes = nef(order, 64);
             let file = CameraFile::from_bytes(&bytes).unwrap();
             let directories: Vec<Directory> = file.entries().directories().to_vec();

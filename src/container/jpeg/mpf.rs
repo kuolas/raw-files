@@ -178,10 +178,8 @@ mod tests {
     use crate::container::jpeg::segments;
     use crate::jpeg_builder::{Built, JpegBuilder};
     use crate::testing::{FAR, FailsFar};
-    use crate::tiff_builder::Order;
+    use crate::tiff_builder::{ORDERS, Order};
     use std::io::Cursor;
-
-    const ORDERS: [Order; 2] = [Order::Little, Order::Big];
 
     /// The TIFF structure of the Exif segments the tests build: a
     /// little-endian header with IFD0 at 8, and an empty IFD0. Nothing here

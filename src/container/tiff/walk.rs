@@ -808,11 +808,10 @@ mod tests {
     use crate::error::ErrorKind;
     use crate::testing::FailsFar;
     use crate::tiff_builder::{
-        ASCII, BYTE, Built, IFD, IfdId, LONG, Order, RATIONAL, RawValue, SHORT, SLONG, TiffBuilder,
+        ASCII, BYTE, Built, IFD, IfdId, LONG, ORDERS, Order, RATIONAL, RawValue, SHORT, SLONG,
+        TiffBuilder,
     };
     use std::io::{self, Cursor, SeekFrom};
-
-    const ORDERS: [Order; 2] = [Order::Little, Order::Big];
 
     /// The tag each test IFD carries, as a SHORT, to tell it apart: its id.
     const ID: u16 = 0x0100;

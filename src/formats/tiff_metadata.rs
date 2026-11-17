@@ -1019,6 +1019,7 @@ fn whole_pair<R: Read + Seek>(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::testing::{fraction, signed_fraction};
     // The fixtures name each tag by its number, as a file stores it; the
     // reader above names it by its rule.
     use crate::container::tiff::tags::*;
@@ -1029,8 +1030,8 @@ mod tests {
     use crate::orientation::Orientation;
     use crate::testing::{FAR, FailsFar, size};
     use crate::tiff_builder::{
-        ASCII, IfdId, LONG, Order, RATIONAL, RawValue, SHORT, SRATIONAL, TiffBuilder, UNDEFINED,
-        UTF8,
+        ASCII, IfdId, LONG, ORDERS, Order, RATIONAL, RawValue, SHORT, SRATIONAL, TiffBuilder,
+        UNDEFINED, UTF8,
     };
     use std::io::Cursor;
 
@@ -1207,22 +1208,6 @@ mod tests {
         DateTime::from_exif(b"2022:02:05 13:46:41", subsec, offset)
     }
 
-    /// The fraction `numerator`/`denominator`, as stored.
-    fn fraction(numerator: u32, denominator: u32) -> Rational {
-        Rational {
-            numerator,
-            denominator,
-        }
-    }
-
-    /// The signed fraction `numerator`/`denominator`, as stored.
-    fn signed(numerator: i32, denominator: i32) -> SignedRational {
-        SignedRational {
-            numerator,
-            denominator,
-        }
-    }
-
     /// The exposure of the Z 9 file, as [`EXIF_EXPOSURE`] records it:
     /// 1/320 s at f/9, 18 mm, 18 mm in 35 mm terms too, and ISO 64, with no
     /// compensation.
@@ -1233,7 +1218,7 @@ mod tests {
             f_number: Some(fraction(900, 100)),
             focal_length: Some(fraction(180, 10)),
             focal_length_in_35mm_film: Some(18),
-            exposure_bias: Some(signed(0, 6)),
+            exposure_bias: Some(signed_fraction(0, 6)),
         }
     }
 
@@ -1389,7 +1374,7 @@ mod tests {
         assert_eq!(exposure.f_number(), Some(fraction(900, 100)));
         assert_eq!(exposure.focal_length(), Some(fraction(180, 10)));
         assert_eq!(exposure.focal_length_in_35mm_film(), Some(18));
-        assert_eq!(exposure.exposure_bias(), Some(signed(0, 6)));
+        assert_eq!(exposure.exposure_bias(), Some(signed_fraction(0, 6)));
         let settings = metadata.camera_settings();
         assert_eq!(settings.exposure_program(), Some(ExposureProgram::Program));
         assert_eq!(settings.metering_mode(), Some(MeteringMode::CenterWeighted));
@@ -2481,7 +2466,7 @@ mod tests {
                 1,
                 longs(&[(-3_i32).cast_unsigned(), 10]),
                 None,
-                only(|e| e.exposure_bias = Some(signed(-3, 10))),
+                only(|e| e.exposure_bias = Some(signed_fraction(-3, 10))),
             ),
             (
                 PHOTOGRAPHIC_SENSITIVITY,
@@ -2779,12 +2764,15 @@ mod tests {
 
     #[test]
     fn no_compensation_is_a_real_zero_kept_as_stored() {
-        assert_eq!(z9_file().exposure.exposure_bias, Some(signed(0, 6)));
+        assert_eq!(
+            z9_file().exposure.exposure_bias,
+            Some(signed_fraction(0, 6))
+        );
         let bias = exposure(|builder, exif| {
             builder.srational(exif, EXPOSURE_BIAS_VALUE, &[(0, 10)]);
         })
         .exposure_bias;
-        assert_eq!(bias, Some(signed(0, 10)));
+        assert_eq!(bias, Some(signed_fraction(0, 10)));
     }
 
     #[test]
@@ -2794,7 +2782,7 @@ mod tests {
                 builder.srational(exif, EXPOSURE_BIAS_VALUE, &[value]);
             })
             .exposure_bias;
-            assert_eq!(bias, Some(signed(value.0, value.1)), "{value:?}");
+            assert_eq!(bias, Some(signed_fraction(value.0, value.1)), "{value:?}");
         }
     }
 
@@ -2827,7 +2815,7 @@ mod tests {
                 f_number: Some(fraction(56, 10)),
                 focal_length: Some(fraction(180, 10)),
                 focal_length_in_35mm_film: None,
-                exposure_bias: Some(signed(-3, 10)),
+                exposure_bias: Some(signed_fraction(-3, 10)),
             }
         );
     }
@@ -2864,7 +2852,7 @@ mod tests {
                 minus_one_third,
             );
         });
-        assert_eq!(read.exposure_bias, Some(signed(-1, 3)));
+        assert_eq!(read.exposure_bias, Some(signed_fraction(-1, 3)));
     }
 
     #[test]
@@ -4458,9 +4446,6 @@ mod tests {
         (GPS_MAP_DATUM, Gps::Ascii("         ")),
         (GPS_DATE_STAMP, Gps::Ascii("          ")),
     ];
-
-    /// Both byte orders.
-    const ORDERS: [Order; 2] = [Order::Little, Order::Big];
 
     /// Writes `tags` into the GPS IFD `gps`.
     fn write_gps(builder: &mut TiffBuilder, gps: IfdId, tags: &[(u16, Gps)]) {

@@ -210,7 +210,7 @@
 
 use std::ops::Range;
 
-use super::jpeg_stub::jpeg_stub;
+use super::jpeg_stub::stub;
 use super::tiff_builder::{BlobId, Built, IfdId, Order, TiffBuilder};
 
 /// Whether an IFD's image is the full-resolution one, 0, or a
@@ -365,8 +365,6 @@ const INCH: u16 = 2;
 /// YCbCrPositioning of chroma samples that lie on the first luma sample
 /// of each pair, co-sited.
 const CO_SITED: u16 = 2;
-/// The baseline frame header's marker, SOF0.
-const BASELINE: u8 = 0xC0;
 
 /// The signature a Nikon MakerNote starts with: `Nikon` and a NUL.
 const MAKER_NOTE_SIGNATURE: &[u8; 6] = b"Nikon\0";
@@ -565,11 +563,6 @@ const Z9_SOFTWARE: &str = "Ver.01.00\0\0\0";
 
 /// The start of the raw strip: the start-of-codestream marker of JPEG XS.
 pub const RAW_STRIP_START: [u8; 4] = [0xFF, 0x10, 0xFF, 0x50];
-
-/// The stub JPEG of `size`, as the file holds it.
-pub fn stub((width, height): (u16, u16)) -> Vec<u8> {
-    jpeg_stub(width, height, BASELINE)
-}
 
 /// Where the blobs of a Z 9 file are, as [`z9_file_with`] laid them
 /// out, or of a Z6III file, laid out alike by [`z6iii_file_with_blobs`].

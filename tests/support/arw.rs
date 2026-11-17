@@ -111,7 +111,7 @@
 //! that no preview starts at the raw data. The tags that the shared builder
 //! has no constant for are named here.
 
-use super::jpeg_stub::jpeg_stub;
+use super::jpeg_stub::{jpeg_stub, stub};
 use super::tiff_builder::{BlobId, Built, IfdId, Order, TiffBuilder};
 
 /// Whether an IFD's image is the full-resolution one, 0, or a
@@ -247,8 +247,6 @@ const CFA: u16 = 32803;
 /// PhotometricInterpretation of linear raw data, every color at every
 /// pixel.
 const LINEAR_RAW: u16 = 32892;
-/// The baseline frame header's marker, SOF0.
-const BASELINE: u8 = 0xC0;
 /// The lossless frame header's marker, SOF3.
 const LOSSLESS: u8 = 0xC3;
 
@@ -324,11 +322,6 @@ pub const A100_RAW_NOISE: [u8; 4] = [0x20, 0x1D, 0xE2, 0xE5];
 /// Where the lossless raw tiles of the ARW 4 files start: after everything
 /// else the builder places.
 const TILES_AT: u64 = 0x1_0000;
-
-/// The baseline stub JPEG of `size`, as the files hold their previews.
-pub fn stub((width, height): (u16, u16)) -> Vec<u8> {
-    jpeg_stub(width, height, BASELINE)
-}
 
 /// The lossless stub JPEG of [`RAW_TILE`], as the ARW 4 files hold each
 /// raw tile.

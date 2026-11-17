@@ -11,47 +11,33 @@
 
 mod support;
 
-use std::collections::BTreeSet;
 use std::io::Cursor;
 
 use raw_files::{
     CameraFile, CameraSettings, ColorSpace, Directory, ErrorKind, Exposure, ExposureProgram,
     FlashMode, FocusOrigin, Format, Lens, Limits, Make, Metadata, MeteringMode, Options,
-    Orientation, Point, PreviewFormat, Rational, SignedRational, Size, WhiteBalanceMode,
+    Orientation, Point, PreviewFormat, SignedRational, Size, WhiteBalanceMode,
 };
 use support::arw::{
     A100_JPEG, A100_RAW_AS_COUNT, A100_TAG_SIZE, ARW4_FOCUS_CENTER, ARW4_FOCUS_FRAME,
     ARW4_FOCUS_SIZE, ARW4_FULL_SIZE_JPEG, ArwBlobs, IFD0_JPEG, MEDIUM_FULL_SIZE_JPEG, SR2_JPEG,
     SRF_JPEG, THUMBNAIL, a100_file, arq_file, arw2_file, arw4_file, arw4_medium_file, sr2_file,
-    srf_file, stub,
+    srf_file,
 };
+use support::jpeg_stub::{stub, stub_len};
 use support::samples::{
     Jpeg, LocationPart, Sample, SampleEntries, SampleFineTune, SampleFocus, SampleLens,
     SampleMetadata, SampleSettings, SerialShape, Text, check, check_enciphered, check_entries,
-    check_every, check_metadata, check_placeholder_description, listed, sizes,
+    check_every, check_metadata, check_placeholder_description, check_tables, sizes,
 };
-use support::tiff_builder::{BlobId, Built, Order};
-
-const ORDERS: [Order; 2] = [Order::Little, Order::Big];
+use support::tiff_builder::{BlobId, Built, ORDERS, Order};
+use support::{fraction, size_of};
 
 /// The SubIFDs tag, whose value on the A100 is the offset of its raw data.
 const SUB_IFDS: u16 = 0x014A;
 
 /// The entries an IFD may have under the default limits.
 const DEFAULT_MAX_IFD_ENTRIES: u16 = 1000;
-
-/// A `(width, height)` pair of `u16`s as a [`Size`].
-fn size_of((width, height): (u16, u16)) -> Size {
-    Size {
-        width: u32::from(width),
-        height: u32::from(height),
-    }
-}
-
-/// The length of the stub JPEG of `size`.
-fn stub_len(size: (u16, u16)) -> u64 {
-    u64::try_from(stub(size).len()).unwrap()
-}
 
 /// Checks that the Sony file `built` opens as ARW, from bytes and from a
 /// reader, with exactly the JPEGs `expected`, smallest first: each the
@@ -67,14 +53,14 @@ fn assert_previews(built: &Built, expected: &[(BlobId, (u16, u16))], label: &str
     ] {
         assert_eq!(format, Format::Arw, "{label}, from {how}");
         assert_eq!(sizes(previews), expected_sizes, "{label}, from {how}");
-        for (preview, &(blob, size)) in previews.iter().zip(expected) {
+        for (preview, &(blob, _)) in previews.iter().zip(expected) {
             assert_eq!(preview.format(), PreviewFormat::Jpeg, "{label}, from {how}");
             assert_eq!(
                 preview.byte_range().start,
                 built.blob_offset(blob),
                 "{label}, from {how}"
             );
-            assert_eq!(preview.byte_len(), stub_len(size), "{label}, from {how}");
+            assert_eq!(preview.byte_len(), stub_len(), "{label}, from {how}");
         }
     }
 }
@@ -244,16 +230,10 @@ fn no_preview_starts_at_the_raw_data_of_any_layout() {
 /// 1/50 s at f/5.6, 50 mm, 50 mm in 35 mm terms too, and ISO 250, with no
 /// compensation; `label` names the file in a failure.
 fn assert_the_arw4_exposure(exposure: &Exposure, label: &str) {
-    let fraction = |numerator, denominator| {
-        Some(Rational {
-            numerator,
-            denominator,
-        })
-    };
     assert_eq!(exposure.iso(), Some(250), "{label}");
-    assert_eq!(exposure.exposure_time(), fraction(1, 50), "{label}");
-    assert_eq!(exposure.f_number(), fraction(56, 10), "{label}");
-    assert_eq!(exposure.focal_length(), fraction(500, 10), "{label}");
+    assert_eq!(exposure.exposure_time(), Some(fraction(1, 50)), "{label}");
+    assert_eq!(exposure.f_number(), Some(fraction(56, 10)), "{label}");
+    assert_eq!(exposure.focal_length(), Some(fraction(500, 10)), "{label}");
     assert_eq!(exposure.focal_length_in_35mm_film(), Some(50), "{label}");
     assert_eq!(
         exposure.exposure_bias(),
@@ -274,25 +254,19 @@ fn size(width: u32, height: u32) -> Size {
 /// `FE 50mm F2.5 G`, a 50 mm prime at f/2.5, with no make and no serial
 /// number; `label` names the file in a failure.
 fn assert_the_arw4_lens(lens: &Lens, label: &str) {
-    let fraction = |numerator, denominator| {
-        Some(Rational {
-            numerator,
-            denominator,
-        })
-    };
     assert_eq!(lens.recorded_make(), None, "{label}");
     assert_eq!(lens.recorded_model(), Some("FE 50mm F2.5 G"), "{label}");
     assert_eq!(lens.serial_number(), None, "{label}");
-    assert_eq!(lens.min_focal_length(), fraction(500, 10), "{label}");
-    assert_eq!(lens.max_focal_length(), fraction(500, 10), "{label}");
+    assert_eq!(lens.min_focal_length(), Some(fraction(500, 10)), "{label}");
+    assert_eq!(lens.max_focal_length(), Some(fraction(500, 10)), "{label}");
     assert_eq!(
         lens.f_number_at_min_focal_length(),
-        fraction(25, 10),
+        Some(fraction(25, 10)),
         "{label}"
     );
     assert_eq!(
         lens.f_number_at_max_focal_length(),
-        fraction(25, 10),
+        Some(fraction(25, 10)),
         "{label}"
     );
 }
@@ -3545,8 +3519,6 @@ fn the_hasselblad_lunar_sample_opens_as_a_sony_file() {
 #[test]
 fn the_sample_list_and_the_tables_of_previews_metadata_and_entries_name_the_same_sony_files() {
     // The list is compiled in, so this runs without any download.
-    let listed = listed("arw");
-
     let previews: Vec<(&str, &str)> = SAMPLES
         .iter()
         .map(|sample| (sample.file, "normal"))
@@ -3574,25 +3546,14 @@ fn the_sample_list_and_the_tables_of_previews_metadata_and_entries_name_the_same
             (expected.file, tier)
         })
         .collect();
-    for (what, tables) in [
-        ("previews", previews),
-        ("metadata", metadata),
-        ("entries", entries),
-    ] {
-        let expected: BTreeSet<(&str, &str)> = tables.iter().copied().collect();
-        assert_eq!(
-            expected.len(),
-            tables.len(),
-            "a file is in the tables of {what} twice"
-        );
-        let unexpected: Vec<_> = listed.difference(&expected).collect();
-        let unlisted: Vec<_> = expected.difference(&listed).collect();
-        assert!(
-            unexpected.is_empty() && unlisted.is_empty(),
-            "listed without expected {what}: {unexpected:?}; \
-             expected {what} but not listed: {unlisted:?}"
-        );
-    }
+    check_tables(
+        "arw",
+        &[
+            ("previews", previews),
+            ("metadata", metadata),
+            ("entries", entries),
+        ],
+    );
 }
 
 /// The entries of every Sony-family sample, each directory in the order the
