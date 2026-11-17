@@ -60,7 +60,7 @@ fi
 merges=$(git rev-list --merges "$base..HEAD")
 if [ -n "$merges" ]; then
 	printf 'check-series: %s..HEAD holds merge commit(s) — history here is linear:\n' "$base" >&2
-	git --no-pager log --no-walk --format='  %h %s' $merges >&2
+	git --no-pager log --no-walk --format='  %h %s' --stdin <<<"$merges" >&2
 	printf '\n  Replay the branch without them:  git rebase %s\n' "$base" >&2
 	exit 1
 fi
@@ -80,6 +80,7 @@ if [ "$n" -eq 1 ]; then
 fi
 
 wt=$(mktemp -d "${TMPDIR:-/tmp}/check-series.XXXXXX")
+# shellcheck disable=SC2329 # the trap below runs it
 cleanup() {
 	git worktree remove --force "$wt" >/dev/null 2>&1 || true
 	rm -rf "$wt"
