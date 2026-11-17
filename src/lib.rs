@@ -402,9 +402,9 @@ pub mod tags;
 #[allow(dead_code)]
 #[path = "../tests/support/tiff_builder.rs"]
 mod tiff_builder;
-// The reader that fails past the first cached block, shared by the unit
-// tests of every module that reads a file, the checks of an enum's names
-// and order, shared by the tests of every module with a named enum, and the
+// What the unit tests of any module may use: the reader that fails past
+// the first cached block, with which a reader's tests tell its failure
+// from damage in the file; the checks of an enum's names and order; and the
 // size, point and focus fixtures the focus, metadata and reader tests share.
 #[cfg(test)]
 mod testing;
