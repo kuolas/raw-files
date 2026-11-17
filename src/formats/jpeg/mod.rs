@@ -17,7 +17,8 @@
 //!   container kept ([`picture`]).
 //! - [`parse`] walks the Exif segment's TIFF structure, and reads its
 //!   standard metadata with the shared reader. Then it reads the MakerNote
-//!   of the maker that IFD0's Make names ([`MakerNote::lookup`]).
+//!   with the reader of the maker that IFD0's Make names ([`lookup`]), one
+//!   of the list of [`makers`].
 //! - [`metadata`] sets the picture's own size, and keeps the focus points
 //!   only when their frame has the picture's shape.
 //! - `parse` then reads the MPF list, and [`previews`] checks the
@@ -100,7 +101,7 @@ fn claims<R: Read + Seek>(_: &mut Source<R>, segments: &Segments) -> Result<bool
 /// `limits`, and the shared reader reads its standard metadata. Then:
 ///
 /// - **The MakerNote** is read once, within `limits`, by the reader of the
-///   maker that IFD0's Make names ([`MakerNote::lookup`]). It gives the values
+///   maker that IFD0's Make names ([`lookup`]). It gives the values
 ///   the standard tags lack, as in a raw file.
 /// - **The previews' candidates** are three kinds:
 ///   - the thumbnail in IFD1 of the Exif segment's structure, which the
@@ -145,16 +146,21 @@ fn parse<R: Read + Seek>(
         Some(tree) => (
             tiff_metadata::read(src, tree)?,
             tiff_previews::tree_candidates(src, tree)?,
-            MakerNote::lookup(src, tree, limits)?,
+            lookup(src, tree, limits)?,
         ),
         None => (Standard::default(), Vec::new(), Lookup::Absent),
     };
-    let metadata = metadata(src, standard, makernote.as_ref().found(), size)?;
+    let metadata = metadata(
+        src,
+        standard,
+        makernote.as_ref().found().map(Box::as_ref),
+        size,
+    )?;
     candidates.extend(
         makernote
             .as_ref()
             .found()
-            .and_then(MakerNote::preview_candidate),
+            .and_then(|makernote| makernote.preview_candidate()),
     );
     // The entries of the Exif segment's tree, walked once, or none when it
     // does not walk, as it then gives no metadata. Then the MakerNote's,
@@ -229,7 +235,7 @@ fn parse<R: Read + Seek>(
 fn metadata<R: Read + Seek>(
     src: &mut Source<R>,
     standard: Standard,
-    makernote: Option<&MakerNote>,
+    makernote: Option<&dyn MakerNote<R>>,
     size: Size,
 ) -> Result<Metadata> {
     let standard = Standard {
@@ -286,129 +292,123 @@ fn previews<R: Read + Seek>(
     Ok(previews)
 }
 
-/// A maker whose MakerNote the JPEG reader reads, as IFD0's Make names it.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum Maker {
-    /// Nikon: a Make that starts with Nikon's
-    /// [`MAKE`](nikon::MakerNote::MAKE), as the NEF claim tests it.
-    Nikon,
-    /// Sony: a Make that starts with Sony's
-    /// [`MAKE`](sony::MakerNote::MAKE), as the ARW claim tests it first.
-    /// The claim's second test, a Hasselblad Make with Sony's private
-    /// pointer, is a raw file's structure, which a JPEG lacks.
-    Sony,
-}
-
-impl Maker {
-    /// Every maker whose MakerNote the JPEG reader reads. No Make starts
-    /// with two of their names, so the order does not matter.
-    const ALL: [Maker; 2] = [Maker::Nikon, Maker::Sony];
-
-    /// The name the maker's Make starts with.
-    fn name(self) -> &'static [u8] {
-        match self {
-            Maker::Nikon => nikon::MakerNote::MAKE,
-            Maker::Sony => sony::MakerNote::MAKE,
-        }
-    }
-
-    /// The maker that the IFD0 of `tree` names in its Make, as the claims of
-    /// the raw formats test it ([`make_starts_with`]). `None` for any other
-    /// Make, or none.
-    ///
-    /// # Errors
-    ///
-    /// As for [`make_starts_with`].
-    fn of<R: Read + Seek>(src: &mut Source<R>, tree: &Tree) -> Result<Option<Maker>> {
-        for maker in Maker::ALL {
-            if make_starts_with(src, tree, maker.name())? {
-                return Ok(Some(maker));
-            }
-        }
-        Ok(None)
-    }
-}
-
 /// The MakerNote of a JPEG file, read once by its maker's reader, which
-/// every use of it starts from.
-#[derive(Debug)]
-enum MakerNote {
-    /// Nikon's: its values, its focus point and its preview.
-    Nikon(nikon::MakerNote),
-    /// Sony's: its camera settings and its focus point.
-    Sony(sony::MakerNote),
-}
-
-impl MakerNote {
-    /// The MakerNote of the JPEG file in `src`, whose Exif segment's TIFF
-    /// structure is `tree`, read within `limits`. The maker that IFD0's Make
-    /// names ([`Maker::of`]) reads it, with its
-    /// [`lookup`](nikon::MakerNote::lookup); [`Lookup::Absent`] under any other Make, and
-    /// [`Lookup::Skipped`] when the maker's reader lists its IFD as
-    /// skipped.
-    ///
-    /// Make decides, not what the MakerNote looks like, as in a raw file.
-    /// Nikon's editing software writes Nikon-style MakerNotes into the files
-    /// of other makes, and leaves their Make as it was. A Sony MakerNote
-    /// without a header, as an ARW's is, holds nothing that names Sony. No
-    /// other maker's MakerNote is read. A Make that cannot be read is taken
-    /// for another maker's, so that it costs only the MakerNote.
-    ///
-    /// # Errors
-    ///
-    /// `Io` when the reader fails.
-    fn lookup<R: Read + Seek>(
-        src: &mut Source<R>,
-        tree: &Tree,
-        limits: &Limits,
-    ) -> Result<Lookup<MakerNote>> {
-        Ok(match skip_damage(Maker::of(src, tree))?.flatten() {
-            Some(Maker::Nikon) => {
-                nikon::MakerNote::lookup(src, tree, limits)?.map(MakerNote::Nikon)
-            }
-            Some(Maker::Sony) => sony::MakerNote::lookup(src, tree, limits)?.map(MakerNote::Sony),
-            None => Lookup::Absent,
-        })
-    }
-
+/// every use of it starts from: the MakerNote readers' trait
+/// ([`Reader`]), for a JPEG's picture and the one source type `R`. It
+/// lets the JPEG reader hold any maker's MakerNote as one value, since
+/// which maker's it is shows only in the file's Make. `Reader` itself
+/// cannot be held so, since its methods are generic over the source.
+trait MakerNote<R> {
     /// `standard`, with the values the MakerNote adds, read from `src` by
-    /// its maker's reader, for a JPEG's picture
-    /// ([`metadata`](nikon::MakerNote::metadata)).
+    /// its maker's reader for a JPEG's picture
+    /// ([`Reader::metadata`], [`Picture::Jpeg`]).
     ///
     /// # Errors
     ///
     /// `Io` when the reader fails.
-    fn metadata<R: Read + Seek>(
-        &self,
-        src: &mut Source<R>,
-        standard: Standard,
-    ) -> Result<Metadata> {
-        match self {
-            MakerNote::Nikon(makernote) => makernote.metadata(src, standard, Picture::Jpeg),
-            MakerNote::Sony(makernote) => makernote.metadata(src, standard, Picture::Jpeg),
-        }
-    }
+    fn metadata(&self, src: &mut Source<R>, standard: Standard) -> Result<Metadata>;
 
     /// Where the MakerNote's preview is, as a candidate for the shared
-    /// finder: Nikon's PreviewIFD's JPEG
-    /// ([`preview_candidate`](nikon::MakerNote::preview_candidate));
-    /// `None` for Sony's, whose reader gives no preview.
-    fn preview_candidate(&self) -> Option<Candidate> {
-        match self {
-            MakerNote::Nikon(makernote) => makernote.preview_candidate(),
-            MakerNote::Sony(makernote) => makernote.preview_candidate(),
-        }
+    /// finder ([`Reader::preview_candidate`]).
+    fn preview_candidate(&self) -> Option<Candidate>;
+
+    /// Adds the MakerNote's directories to `entries`
+    /// ([`Reader::add_entries`]).
+    fn add_entries(&self, entries: &mut Entries);
+}
+
+impl<M: Reader, R: Read + Seek> MakerNote<R> for M {
+    fn metadata(&self, src: &mut Source<R>, standard: Standard) -> Result<Metadata> {
+        Reader::metadata(self, src, standard, Picture::Jpeg)
     }
 
-    /// Adds the MakerNote's directories to `entries`, as its maker's reader
-    /// lists them: Nikon's MakerNote IFD and PreviewIFD, Sony's MakerNote
-    /// IFD.
+    fn preview_candidate(&self) -> Option<Candidate> {
+        Reader::preview_candidate(self)
+    }
+
     fn add_entries(&self, entries: &mut Entries) {
-        match self {
-            MakerNote::Nikon(makernote) => makernote.add_entries(entries),
-            MakerNote::Sony(makernote) => makernote.add_entries(entries),
+        Reader::add_entries(self, entries);
+    }
+}
+
+/// A maker whose MakerNote the JPEG reader reads: the name its Make starts
+/// with, and how its reader looks the MakerNote up.
+struct Maker<R> {
+    /// The name the maker's Make starts with ([`Reader::MAKE`]).
+    make: &'static [u8],
+    /// The maker's reader's [`Reader::lookup`], giving a [`MakerNote`].
+    lookup: ReadMakerNote<R>,
+}
+
+/// How a maker's reader looks up the MakerNote of a JPEG file, as
+/// [`Reader::lookup`] does.
+type ReadMakerNote<R> = fn(&mut Source<R>, &Tree, &Limits) -> Result<Lookup<Box<dyn MakerNote<R>>>>;
+
+impl<R: Read + Seek> Maker<R> {
+    /// The maker whose MakerNote `M` reads.
+    fn read_by<M: Reader + 'static>() -> Self {
+        Self {
+            make: M::MAKE,
+            lookup: |src, tree, limits| {
+                Ok(M::lookup(src, tree, limits)?
+                    .map(|makernote| Box::new(makernote) as Box<dyn MakerNote<R>>))
+            },
         }
     }
+}
+
+/// Every maker whose MakerNote the JPEG reader reads, one line each. IFD0's
+/// Make is compared with each maker's name in this order, as the raw
+/// formats' claims compare it ([`make_starts_with`]). No Make starts with
+/// two of their names, so the order does not matter.
+///
+/// The test of Sony's Make is the ARW claim's first. The claim's second
+/// test, a Hasselblad Make with Sony's private pointer, is a raw file's
+/// structure, which a JPEG lacks.
+fn makers<R: Read + Seek>() -> [Maker<R>; 2] {
+    [
+        Maker::read_by::<nikon::MakerNote>(),
+        Maker::read_by::<sony::MakerNote>(),
+    ]
+}
+
+/// The maker that the IFD0 of `tree` names in its Make ([`makers`]).
+/// `None` for any other Make, or none.
+///
+/// # Errors
+///
+/// As for [`make_starts_with`].
+fn maker<R: Read + Seek>(src: &mut Source<R>, tree: &Tree) -> Result<Option<Maker<R>>> {
+    for maker in makers() {
+        if make_starts_with(src, tree, maker.make)? {
+            return Ok(Some(maker));
+        }
+    }
+    Ok(None)
+}
+
+/// The MakerNote of the JPEG file in `src`, whose Exif segment's TIFF
+/// structure is `tree`, read within `limits` by the reader of the maker
+/// that IFD0's Make names ([`maker`]). Make decides, as in a raw file
+/// ([`Reader::MAKE`]).
+///
+/// [`Lookup::Absent`] under any other Make: no other maker's MakerNote is
+/// read. A Make that cannot be read is taken for another maker's, so that
+/// it costs only the MakerNote. [`Lookup::Skipped`] when the maker's
+/// reader lists its IFD as skipped.
+///
+/// # Errors
+///
+/// `Io` when the reader fails.
+fn lookup<R: Read + Seek>(
+    src: &mut Source<R>,
+    tree: &Tree,
+    limits: &Limits,
+) -> Result<Lookup<Box<dyn MakerNote<R>>>> {
+    Ok(match skip_damage(maker(src, tree))?.flatten() {
+        Some(maker) => (maker.lookup)(src, tree, limits)?,
+        None => Lookup::Absent,
+    })
 }
 
 #[cfg(test)]

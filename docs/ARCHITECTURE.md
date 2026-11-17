@@ -78,7 +78,7 @@ adds a row.
 | `src/formats/nef/previews.rs` | Where a NEF file keeps its previews, the shared finder over the whole tree with the MakerNote's preview as its one extra candidate, and the tests of what the reader finds there. | nothing outside its tests |
 | `src/formats/arw/mod.rs` | The Sony ARW reader, for SRF, SR2 and ARQ files too: its claim by Make, and its parse, the shared `parse_tiff` with the Sony MakerNote reader and SR2Private. | `formats/mod.rs` (for `parse_tiff`), `makernote/mod.rs` (for `Reader`), `makernote/sony.rs`, `container`, `io`, `format`, `entries`, `limits`, `error` |
 | `src/formats/arw/previews.rs` | Where a Sony file keeps its previews, the shared finder over the whole tree with no candidate of its own, and the tests of what the reader finds there. | nothing outside its tests |
-| `src/formats/jpeg/mod.rs` | The JPEG reader: its claim by the first frame header, and its parse of the Exif segment, MakerNote, previews and entries. | `makernote/nikon/`, `makernote/sony.rs`, `tiff_metadata`, `tiff_previews`, `container`, `io`, `format`, `preview`, `metadata`, `entries`, `geometry`, `orientation`, `limits`, `error` |
+| `src/formats/jpeg/mod.rs` | The JPEG reader: its claim by the first frame header, its parse of the Exif segment, MakerNote, previews and entries, and the list of makers whose MakerNote it reads, one line each. | `makernote/mod.rs` (for `Reader` and `Picture`), `makernote/nikon/`, `makernote/sony.rs`, `tiff_metadata`, `tiff_previews`, `container`, `io`, `format`, `preview`, `metadata`, `entries`, `geometry`, `orientation`, `limits`, `error` |
 
 ### The containers
 
