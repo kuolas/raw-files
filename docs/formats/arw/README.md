@@ -18,23 +18,32 @@ records, is the open part of metadata.
 
 ## Status
 
-This is desk research plus structural checks on 36 CC0 sample files from
-raw.pixls.us, done in October 2026. The checks walked every TIFF and
-MakerNote structure, parsed every embedded JPEG up to its start-of-frame
-marker, and ran the algorithms that the pages describe as *checked* (the SR2
-keystream, the MakerNote cipher, the cRAW block layout, ARW1 decoding, the
-lossless tile headers and the SRF key chain). They used throwaway scripts
-written from the pages' prose, which are not in the repository. None of
-those algorithms is in raw-files: the previews, the metadata and the focus
-point it reads need none of them. On 19 October 2026 the autofocus data of
-the same 36 files was checked too; raw-files reads the focus point from
-it, and `tests/arw.rs` checks every file's. On 21 October 2026 the
-MakerNote of five Sony camera JPEGs from Wikimedia Commons was checked
-as well ([makernote-and-metadata.md](makernote-and-metadata.md#in-a-jpeg-file),
-listed in the [JPEG test data](../jpeg/test-data.md#2-the-sample-files)).
-**No pixel output was compared with a reference decoder**, so "checked"
-means that the data decode consistently with the description, not that
-they are bit-exact.
+These pages are desk research, checked against 36 CC0 sample files from
+raw.pixls.us from the start, as the [research record](research-record.md)
+says. The table shows what has been checked against sample files, and
+where. What a file shows is tagged **[F]**.
+
+| Topic | Checked against sample files | Where |
+|---|---|---|
+| The container and the previews | The 36 files of the CI set; the tests check every file's previews | [container-and-previews.md](container-and-previews.md); the files: [test-data.md, section 2.1](test-data.md#21-the-ci-set) |
+| The MakerNote's layouts | The CI set, and five Sony camera JPEGs | [makernote-and-metadata.md, section 1](makernote-and-metadata.md#1-finding-the-makernote); the JPEGs: [JPEG test data, section 2](../jpeg/test-data.md#2-the-sample-files) |
+| The MakerNote in a camera JPEG | The five Sony camera JPEGs | [makernote-and-metadata.md, "In a JPEG file"](makernote-and-metadata.md#in-a-jpeg-file); the files: [JPEG test data, section 2](../jpeg/test-data.md#2-the-sample-files) |
+| The orientation, capture time, camera, sizes and lens | The CI set | [makernote-and-metadata.md, sections 9.1 to 9.5](makernote-and-metadata.md#9-viewer-metadata); the files: [test-data.md, section 2.1](test-data.md#21-the-ci-set) |
+| The focus point | The CI set; the tests check every file's | [makernote-and-metadata.md, section 9.6](makernote-and-metadata.md#96-focus-point); the files: [test-data.md, section 2.2](test-data.md#22-the-focus-point-of-each-file) |
+| The camera settings | The CI set and the five Sony camera JPEGs | [makernote-and-metadata.md, section 9.7](makernote-and-metadata.md#97-camera-settings); the files: [test-data.md, section 2.3](test-data.md#23-the-camera-settings-of-each-file) |
+| Authorship and location | Counted on the ARW files of raw.pixls.us and on my own | [makernote-and-metadata.md, sections 9.8 and 9.9](makernote-and-metadata.md#98-authorship), which give the counts |
+| The directories a file holds | Counted on the same kinds of file | [makernote-and-metadata.md, section 14](makernote-and-metadata.md#14-the-directories-a-file-holds) |
+| The two ciphers and the SR2 keystream | Files of the CI set, with scripts kept outside the repository: the keystream on the 34 files that have an SR2SubIFD, the MakerNote cipher on four bodies | [makernote-and-metadata.md, sections 3 to 6](makernote-and-metadata.md#3-two-ciphers); the checks: [research-record.md, "Cross-checks made"](research-record.md#cross-checks-made) |
+| The raw data | Files of the CI set, with scripts kept outside the repository: the cRAW blocks of 15 files, ARW1 on two, the other layouts on one each, the tile headers of four lossless Bayer files and of the M and S files, and the SRF key chain of one | [raw-data.md](raw-data.md); the checks: [research-record.md, "Cross-checks made"](research-record.md#cross-checks-made) |
+
+A topic the table does not list is checked only where its page tags a
+fact **[F]**. The deciphering and the decoding of the last two rows are
+not in raw-files. The previews, the metadata and the focus point it reads
+need none of them, and it walks SR2Private as a plain directory. On
+those rows,
+**no pixel output was compared with a reference decoder**. "Checked"
+there means that the data decode consistently with the description,
+not that they are bit-exact.
 
 Byte offsets and formulas taken from other projects' source code should
 still be checked against that source and against real files before they are
