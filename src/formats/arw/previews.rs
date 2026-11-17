@@ -13,44 +13,21 @@
 //! The SRF files of the earliest bodies are the exception: their IFD0
 //! describes the raw data, and their only JPEG is in IFD1. On every other
 //! body but the DSLR-A100, the raw data is in IFD0's one SubIFD. The shared
-//! TIFF preview finder does all the work, over the whole tree. Sony's
-//! MakerNote points at no preview that the IFDs do not list, so this
-//! module adds no candidate of its own.
+//! TIFF preview finder does all the work, over the whole tree
+//! ([`parse_tiff`](crate::formats::parse_tiff)). Sony's MakerNote points at
+//! no preview that the IFDs do not list, so no candidate is added. This
+//! module holds no code of its own, only the tests of what the reader
+//! finds.
 //!
 //! On the newest bodies the raw data can look like a preview. A lossless
 //! raw is stored as tiles of lossless JPEG, and a medium or small raw is a
 //! YCbCr image, as IFD2's JPEG is. The finder keeps them out by its test
-//! for raw data ([`tiff_previews::is_raw`]), and drops a lossless frame
-//! behind it.
+//! for raw data ([`is_raw`](crate::formats::tiff_previews::is_raw)), and
+//! drops a lossless frame behind it.
 //!
 //! The sizes of each body's previews, and where the SRF files and the
 //! DSLR-A100 keep their raw data, are in the ARW notes
 //! (`docs/formats/arw/container-and-previews.md`, sections 1.3 and 4).
-
-use std::io::{Read, Seek};
-
-use crate::container::tiff::Tree;
-use crate::error::Result;
-use crate::formats::tiff_previews;
-use crate::io::Source;
-use crate::limits::Limits;
-use crate::preview::Preview;
-
-/// The previews of the Sony file in `src`, whose IFDs are `tree`, in the
-/// order the shared finder found them, each probed within `limits`. A file
-/// with no preview the finder can take, such as a damaged one, opens with
-/// an empty list.
-///
-/// # Errors
-///
-/// `Io` when the reader fails.
-pub(super) fn previews<R: Read + Seek>(
-    src: &mut Source<R>,
-    tree: &Tree,
-    limits: &Limits,
-) -> Result<Vec<Preview>> {
-    tiff_previews::find(src, tree, &[], limits)
-}
 
 #[cfg(test)]
 mod tests {

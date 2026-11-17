@@ -126,6 +126,18 @@ pub(in crate::formats) trait Reader: Sized {
     fn add_entries(&self, entries: &mut Entries);
 }
 
+/// Adds to `entries` what the MakerNote that `M` looked up gives the raw
+/// view: its directories ([`Reader::add_entries`]), or the MakerNote IFD
+/// listed as skipped in their place. A file without a MakerNote adds
+/// nothing.
+pub(in crate::formats) fn add_entries_of<M: Reader>(makernote: &Lookup<M>, entries: &mut Entries) {
+    match makernote {
+        Lookup::Found(makernote) => makernote.add_entries(entries),
+        Lookup::Skipped(skipped) => entries.skip(*skipped),
+        Lookup::Absent => {}
+    }
+}
+
 /// What a file's picture is, as the format that read the MakerNote knows
 /// it. A reader that places a focus point on a crop needs to know whether
 /// the file has pixels of its own to place it on.

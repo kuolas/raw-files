@@ -25,8 +25,9 @@ down to the values every part shares:
 2. **The format readers**, in `src/formats/`. Each claims the files of
    its format, finds their previews and reads their metadata. NEF, ARW
    and JPEG share the preview finder and the reader of the standard
-   tags. The readers of the MakerNote, where each maker records data of
-   its own, are in `makernote/`.
+   tags, and NEF and ARW share `parse_tiff`. The readers of the
+   MakerNote, where each maker records data of its own, are in
+   `makernote/`, one per maker, each with the same entry points.
 3. **The containers**, in `src/container/`. They read a file's
    structure: the header and the directories (IFDs) of a TIFF file, the
    marker segments of a JPEG file. They know no camera maker and no
@@ -59,7 +60,7 @@ adds a row.
 
 | File | Holds | May depend on |
 |---|---|---|
-| `src/formats/mod.rs` | The format table, one list per container, and detection, where the first format that claims a file reads it into a `Parsed`. | `container`, `io`, `format`, `preview`, `metadata`, `entries`, `limits`, `error` |
+| `src/formats/mod.rs` | The format table, one list per container; detection, where the first format that claims a file reads it into a `Parsed`; and `parse_tiff`, the steps every TIFF-based format takes. | `container`, `io`, `format`, `preview`, `metadata`, `entries`, `limits`, `error`, `makernote/mod.rs` (for `Reader`, `Picture` and `add_entries_of`), `makernote/points/`, `tiff_metadata`, `tiff_previews` |
 | `src/formats/tiff_previews.rs` | The preview finder the TIFF-based formats and the JPEG format share: which IFDs hold JPEG previews, each checked and measured from its own frame header. | `container`, `io`, `preview`, `orientation`, `error`, `geometry`, `limits` |
 | `src/formats/tiff_metadata.rs` | The metadata reader the TIFF-based formats and the JPEG reader share: it reads what the standard TIFF, Exif and GPS tags record. | `container`, `io`, `metadata`, `authorship`, `location`, `camera`, `camera_settings`, `datetime`, `geometry`, `rational`, `entries` (for `clean_text`), `error`, `tiff_previews` (for `orientation` and `is_raw`) |
 | `src/formats/makernote/mod.rs` | The MakerNote readers, one per maker, shared by every format whose files carry a MakerNote: the trait each implements (`Reader`), `Picture`, and the block and color temperature bound they share. | `container`, `io`, `limits`, `error`, `entries`, `metadata`, `tiff_metadata` (for `Standard`), `tiff_previews` (for `Candidate`) |
@@ -73,10 +74,10 @@ adds a row.
 | `src/formats/makernote/points/mod.rs` | `PointTable` and its registry: the tables of a body's autofocus points, which no file records, found by Model through `find` and `layout`. | `focus`, `geometry` |
 | `src/formats/makernote/points/nikon_d600.rs` | The Nikon D600's table of autofocus points, with its layout code, bit order, and crop and JPEG windows. | `makernote/points/mod.rs`, `focus`, `geometry` |
 | `src/formats/makernote/sony.rs` | The Sony MakerNote reader: the block found and checked, read once into one structure, which implements the `Reader` trait, giving the focus point and the camera settings it alone records. | `makernote/mod.rs`, `container`, `entries`, `io`, `limits`, `error`, `geometry`, `focus`, `metadata`, `camera_settings`, `rational`, `tiff_metadata` (for `Standard`) |
-| `src/formats/nef/mod.rs` | The Nikon NEF reader: which files it claims, and the parse that gives a NEF file's previews, metadata and entries. | `makernote/mod.rs` (for `Reader` and `Picture`), `makernote/nikon/`, `container`, `io`, `format`, `preview`, `entries`, `limits`, `error`, `tiff_metadata` |
-| `src/formats/nef/previews.rs` | Where a NEF file keeps its previews: the shared finder over the whole tree, with the MakerNote's preview as its one extra candidate. | `makernote/nikon/`, `tiff_previews`, `container`, `io`, `preview`, `error`, `limits` |
-| `src/formats/arw/mod.rs` | The Sony ARW reader, for SRF, SR2 and ARQ files too: its claim by Make, and its parse of previews, metadata and entries, SR2Private included. | `makernote/mod.rs` (for `Reader` and `Picture`), `makernote/sony.rs`, `container`, `io`, `format`, `entries`, `limits`, `error`, `tiff_metadata` |
-| `src/formats/arw/previews.rs` | Where a Sony file keeps its previews: the shared finder over the whole tree, with no candidate of its own. | `tiff_previews`, `container`, `io`, `preview`, `error`, `limits` |
+| `src/formats/nef/mod.rs` | The Nikon NEF reader: which files it claims, and its parse, the shared `parse_tiff` with the Nikon MakerNote reader. | `formats/mod.rs` (for `parse_tiff`), `makernote/mod.rs` (for `Reader`), `makernote/nikon/`, `container`, `io`, `format`, `limits`, `error` |
+| `src/formats/nef/previews.rs` | Where a NEF file keeps its previews, the shared finder over the whole tree with the MakerNote's preview as its one extra candidate, and the tests of what the reader finds there. | nothing outside its tests |
+| `src/formats/arw/mod.rs` | The Sony ARW reader, for SRF, SR2 and ARQ files too: its claim by Make, and its parse, the shared `parse_tiff` with the Sony MakerNote reader and SR2Private. | `formats/mod.rs` (for `parse_tiff`), `makernote/mod.rs` (for `Reader`), `makernote/sony.rs`, `container`, `io`, `format`, `entries`, `limits`, `error` |
+| `src/formats/arw/previews.rs` | Where a Sony file keeps its previews, the shared finder over the whole tree with no candidate of its own, and the tests of what the reader finds there. | nothing outside its tests |
 | `src/formats/jpeg/mod.rs` | The JPEG reader: its claim by the first frame header, and its parse of the Exif segment, MakerNote, previews and entries. | `makernote/nikon/`, `makernote/sony.rs`, `tiff_metadata`, `tiff_previews`, `container`, `io`, `format`, `preview`, `metadata`, `entries`, `geometry`, `orientation`, `limits`, `error` |
 
 ### The containers
