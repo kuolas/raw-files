@@ -211,7 +211,9 @@
 use std::ops::Range;
 
 use super::jpeg_stub::stub;
-use super::tiff_builder::{BlobId, Built, IfdId, Order, TiffBuilder};
+use super::tiff_builder::{
+    BYTE, BlobId, Built, IFD, IfdId, LONG, Order, RawValue, SHORT, TiffBuilder,
+};
 
 /// Whether an IFD's image is the full-resolution one, 0, or a
 /// reduced-resolution copy, 1 (NewSubfileType).
@@ -284,7 +286,7 @@ const FOCAL_LENGTH_IN_35MM_FILM: u16 = 0xA405;
 /// (SubSecTimeOriginal).
 const SUB_SEC_TIME_ORIGINAL: u16 = 0x9291;
 /// The camera maker's own metadata block (MakerNote).
-const MAKER_NOTE: u16 = 0x927C;
+pub const MAKER_NOTE: u16 = 0x927C;
 /// The camera body's serial number, as ASCII text (BodySerialNumber).
 const BODY_SERIAL_NUMBER: u16 = 0xA431;
 /// The lens's focal and aperture range, as four RATIONALs
@@ -647,6 +649,22 @@ pub fn nikon_makernote_with(
     block.extend_from_slice(&inner.bytes);
     (block, jpeg.map(|jpeg| header_at + inner.blob_offset(jpeg)))
 }
+
+/// Shapes of a MakerNote's PreviewIFD tag other than the one LONG Nikon
+/// writes, as [`TiffBuilder::raw`] takes them: a type, a count and a value
+/// field, then the shape's name. The two LONGs lie out of line at offset
+/// 0 of the MakerNote's inner structure, its header, so that the entry is
+/// sound and only its shape is wrong. The other values point nowhere in
+/// particular, and differently in each byte order: the tests that use
+/// them build no PreviewIFD, and a PreviewIFD tag of one of these shapes
+/// is not followed, wherever it points.
+pub const PREVIEW_IFD_SHAPES: [(u16, u32, RawValue, &str); 5] = [
+    (SHORT, 1, RawValue::Inline([8, 0, 0, 0]), "one SHORT"),
+    (LONG, 2, RawValue::Offset(0), "two LONGs"),
+    (LONG, 0, RawValue::Inline([0; 4]), "no value"),
+    (BYTE, 1, RawValue::Inline([8, 0, 0, 0]), "one BYTE"),
+    (IFD, 1, RawValue::Inline([8, 0, 0, 0]), "one IFD"),
+];
 
 /// The Z 9 layout, in byte order `order`, with IFD0's Orientation
 /// `orientation` (an Exif value, 1 to 8).

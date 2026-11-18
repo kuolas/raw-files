@@ -81,8 +81,8 @@ use support::jpeg_files::{
 use support::jpeg_stub::{jpeg_stub, segment};
 use support::nef::{
     AF_INFO2, CROP_HI_SPEED, D1H_ISO, D1H_LENS, D1H_PREVIEW_JPEG, D300_LENS, FOCUS_MODE,
-    ISO as MAKER_NOTE_ISO, LENS as MAKER_NOTE_LENS, PREVIEW_JPEG, SERIAL_NUMBER, WORLD_TIME,
-    nikon_makernote_with, z9_af_info2,
+    ISO as MAKER_NOTE_ISO, LENS as MAKER_NOTE_LENS, PREVIEW_IFD, PREVIEW_IFD_SHAPES, PREVIEW_JPEG,
+    SERIAL_NUMBER, WORLD_TIME, nikon_makernote_with, z9_af_info2,
 };
 use support::samples::{
     Folder, Jpeg, Sample, SampleEntries, SampleFineTune, SampleFocus, SampleLens, SampleMetadata,
@@ -3463,6 +3463,45 @@ const ENTRIES: &[SampleEntries] = &[
 #[test]
 fn every_samples_entries_are_its_directories_with_their_counts() {
     check_every(ENTRIES, |expected| expected.file, check_entries);
+}
+
+#[test]
+fn a_makernote_preview_ifd_tag_of_another_shape_is_listed_as_skipped() {
+    // A Nikon JPEG whose MakerNote's PreviewIFD tag is not the one LONG
+    // Nikon writes: the PreviewIFD is not read, and the link is listed
+    // with no position. Without the tag, nothing is left out.
+    let shapes =
+        PREVIEW_IFD_SHAPES.map(|(typ, count, value, shape)| (Some((typ, count, value)), shape));
+    for order in ORDERS {
+        for (tag, shape) in shapes.into_iter().chain([(None, "no tag")]) {
+            let (block, _) = nikon_makernote_with(order, [0x02, 0x11], None, |inner, ifd| {
+                if let Some((typ, count, value)) = tag {
+                    inner.raw(ifd, PREVIEW_IFD, typ, count, value);
+                }
+            });
+            let built = nikon_jpeg(order, MAIN, false, &[], |_, _, _| {}, &block, block.len());
+            let file = CameraFile::from_bytes(&built.built.bytes).unwrap();
+            let what = format!("{order:?}, {shape}");
+            assert_eq!(file.format(), Format::Jpeg, "{what}");
+            let entries = file.entries();
+            assert!(
+                entries.directories().contains(&Directory::MakerNote),
+                "{what}"
+            );
+            let skipped = entries.skipped_directories();
+            if tag.is_none() {
+                assert_eq!(skipped, [], "{what}");
+                continue;
+            }
+            let [skipped] = skipped else {
+                panic!("{what}: {skipped:?}");
+            };
+            assert_eq!(skipped.parent(), Directory::MakerNote, "{what}");
+            assert_eq!(skipped.tag(), Some(PREVIEW_IFD), "{what}");
+            assert_eq!(skipped.offset(), None, "{what}");
+            assert_eq!(skipped.kind(), ErrorKind::Malformed, "{what}");
+        }
+    }
 }
 
 #[test]

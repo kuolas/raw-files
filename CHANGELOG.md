@@ -78,7 +78,10 @@ does. An entry that can break a caller opens with **Breaking:**.
   ```
 
   Of the public files measured, the Sony DSLR-A100's list two, some
-  Nikon Coolpix NRWs and COOLSCAN NEFs one, and one damaged JPEG one.
+  Nikon Coolpix NRWs and COOLSCAN NEFs one, and one damaged JPEG one. A
+  Nikon MakerNote's PreviewIFD tag that is not one LONG is listed too,
+  with no offset; no file measured writes one
+  ([#185](https://github.com/kuolas/raw-files/issues/185)).
 - `Limits::max_jpeg_markers` caps how many markers one walk over a JPEG
   stream reads, which was a fixed 1,024
   ([#144](https://github.com/kuolas/raw-files/issues/144)):
