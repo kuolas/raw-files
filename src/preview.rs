@@ -196,7 +196,7 @@ pub(crate) fn at_least(previews: &[Preview], size: Size) -> Option<Preview> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::testing::{assert_names, size};
+    use crate::testing::{assert_names, assert_ordered, size};
 
     /// A JPEG preview of `width` by `height` pixels, `length` bytes at
     /// `offset`, upright.
@@ -235,8 +235,8 @@ mod tests {
     #[test]
     fn every_preview_format_name_is_the_one_documented_and_display_writes_it() {
         // The match has no wildcard arm, so a variant added later does not
-        // compile until it is listed in `all` too, and the names then fail
-        // until its name is listed.
+        // compile until it is named here, beside the list it belongs in.
+        // Once it is in the list, the names fail until its name is listed.
         let all = [PreviewFormat::Jpeg];
         for format in all {
             match format {
@@ -246,6 +246,7 @@ mod tests {
         // The names are stable once released: a program may show or store
         // them, so a changed one fails here.
         assert_names(&all, PreviewFormat::name, &["JPEG"]);
+        assert_ordered(&all);
     }
 
     #[test]

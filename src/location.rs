@@ -774,7 +774,7 @@ fn signed(value: f64, negative: bool) -> f64 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::testing::fraction;
+    use crate::testing::{assert_names, assert_ordered, fraction};
 
     /// The Eiffel Tower's latitude as Nikon writes a position: degrees,
     /// minutes with four decimals, no seconds.
@@ -1058,11 +1058,18 @@ mod tests {
     }
 
     #[test]
-    fn north_has_a_name() {
-        assert_eq!(North::True.name(), "True north");
-        assert_eq!(North::Magnetic.name(), "Magnetic north");
-        assert_eq!(North::Magnetic.to_string(), "Magnetic north");
-        assert!(North::True < North::Magnetic);
+    fn every_north_name_is_the_one_documented_and_display_writes_it() {
+        // The match has no wildcard arm, so a variant added later does not
+        // compile until it is named here, beside the list it belongs in.
+        // Once it is in the list, the names fail until its name is listed.
+        let all = [North::True, North::Magnetic];
+        for north in all {
+            match north {
+                North::True | North::Magnetic => {}
+            }
+        }
+        assert_names(&all, North::name, &["True north", "Magnetic north"]);
+        assert_ordered(&all);
     }
 
     #[test]

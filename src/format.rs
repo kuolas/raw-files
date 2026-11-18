@@ -155,12 +155,31 @@ impl fmt::Display for Format {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::testing::{assert_names, assert_ordered};
 
     #[test]
-    fn all_lists_every_format_once_with_well_formed_names() {
+    fn every_format_name_is_the_one_documented_and_display_writes_it() {
+        // The match has no wildcard arm, so a format added later does not
+        // compile until it is named here, beside the list `all` must give.
+        for &format in Format::all() {
+            match format {
+                Format::Nef | Format::Arw | Format::Jpeg => {}
+            }
+        }
+        // `all` gives every format, in detection order, and that order is
+        // the one the variants are declared in, which `Ord` follows.
         assert_eq!(Format::all(), &[Format::Nef, Format::Arw, Format::Jpeg]);
+        assert_names(
+            Format::all(),
+            Format::name,
+            &["Nikon NEF", "Sony ARW", "JPEG"],
+        );
+        assert_ordered(Format::all());
+    }
+
+    #[test]
+    fn every_format_has_well_formed_extensions() {
         for format in Format::all() {
-            assert!(!format.name().is_empty());
             assert!(!format.extensions().is_empty());
             for ext in format.extensions() {
                 assert!(!ext.is_empty());
@@ -202,15 +221,5 @@ mod tests {
         ] {
             assert_eq!(Format::from_extension(ext), None, "{ext:?}");
         }
-    }
-
-    #[test]
-    fn display_is_the_name() {
-        assert_eq!(Format::Nef.to_string(), "Nikon NEF");
-        assert_eq!(Format::Nef.to_string(), Format::Nef.name());
-        assert_eq!(Format::Arw.to_string(), "Sony ARW");
-        assert_eq!(Format::Arw.to_string(), Format::Arw.name());
-        assert_eq!(Format::Jpeg.to_string(), "JPEG");
-        assert_eq!(Format::Jpeg.to_string(), Format::Jpeg.name());
     }
 }
