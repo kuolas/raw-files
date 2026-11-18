@@ -4,7 +4,7 @@ This page says how to run the tests that need more than `cargo test`.
 They are the sample files, the ignored tests, the local corpus test,
 the check for breaking changes and fuzzing. The page also says what CI
 runs.
-[CONTRIBUTING.md](../CONTRIBUTING.md#code-style-and-checks) has the six
+[CONTRIBUTING.md](../CONTRIBUTING.md#code-style-and-checks) has the seven
 commands to run before a pull request, and the rules a change follows.
 
 ## The sample files
@@ -132,7 +132,7 @@ cargo semver-checks
 ```
 
 The first run downloads the published version from crates.io. The
-check is not one of the six commands, because it needs that install
+check is not one of the seven commands, because it needs that install
 and the network.
 
 ## Fuzzing
@@ -211,7 +211,7 @@ CI runs three workflows, in
   hook, no merge commits in the pull request, `scripts/test-hooks.sh`,
   `shellcheck` over the scripts and the hooks, and every hook and
   script committed executable.
-- **cargo**, on macOS, Linux and Windows: the six commands of
+- **cargo**, on macOS, Linux and Windows: the seven commands of
   [CONTRIBUTING.md](../CONTRIBUTING.md#code-style-and-checks), in the
   same order. On Linux, it fetches the sample files before the tests,
   but not the large tier. There it runs the tests with

@@ -184,6 +184,12 @@ jobs:
       - run: cargo doc --workspace --no-deps --document-private-items
         env:
           RUSTDOCFLAGS: --cfg test -D warnings
+      # The private items again, without the test configuration: a link from
+      # the normal docs to an item that only the tests build resolves above,
+      # and fails here.
+      - run: cargo doc --workspace --no-deps --document-private-items
+        env:
+          RUSTDOCFLAGS: -D warnings
       # The fuzz entry points compile only with `--cfg fuzzing`, and the fuzz
       # crate is its own workspace, so none of the steps above compiles
       # them. Building them needs no nightly, only running them does; once

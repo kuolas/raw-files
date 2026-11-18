@@ -6,7 +6,7 @@ the help it needs most. Changes to the code and docs come from contributors;
 see [Becoming a contributor](#becoming-a-contributor).
 
 This page is the one place the project's rules live. How to run the tests
-beyond the six commands is in [docs/TESTING.md](docs/TESTING.md). If
+beyond the seven commands is in [docs/TESTING.md](docs/TESTING.md). If
 something here is unclear, that is a bug in this page, and an issue about it
 is a fine first contribution.
 
@@ -395,8 +395,8 @@ in [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)), not to a public issue.
 
 ## Code style and checks
 
-Before you open a pull request, run these six commands — the ones CI's build
-job runs on every platform, in the same order:
+Before you open a pull request, run these seven commands — the ones CI's
+build job runs on every platform, in the same order:
 
 ```sh
 cargo fmt --all --check
@@ -405,11 +405,16 @@ cargo build --workspace
 cargo test --workspace
 RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps
 RUSTDOCFLAGS="--cfg test -D warnings" cargo doc --workspace --no-deps --document-private-items
+RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps --document-private-items
 ```
 
-The last one documents the private items too, with the test configuration
-on. It checks the doc comments and links of the modules compiled only
-for tests, which the normal doc build never sees.
+The last two document the private items too:
+
+- The sixth turns the test configuration on. It checks the doc comments
+  and links of the modules compiled only for tests, which the normal doc
+  build never sees.
+- The seventh leaves it off. It fails on a link from the normal docs to
+  an item that only the tests build, which the sixth resolves.
 
 Some tests read real sample files, which are too large to commit. When
 the files are absent, those tests print a note and pass, so the suite
