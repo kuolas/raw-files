@@ -51,7 +51,7 @@ use std::io::{Read, Seek};
 use super::{PREVIEW_IFD, rules};
 use crate::container::tiff::{Block, Ifd, Tree, ifd_in, parse_header};
 use crate::entries::{Directory, Entries, Lookup, SkippedDirectory};
-use crate::error::{Result, skip_damage};
+use crate::error::{ErrorKind, Result, skip_damage};
 use crate::formats::makernote::{MakerNoteBlock, Picture, Reader};
 use crate::formats::tiff_metadata::Standard;
 use crate::formats::tiff_previews::{self, Candidate};
@@ -90,9 +90,9 @@ pub(in crate::formats) struct MakerNote {
     /// The PreviewIFD, which the MakerNote IFD's entry 0x0011 points to,
     /// read in the same block, with the same base and byte order
     /// ([`preview_ifd`]); or the directory the raw view lists as skipped
-    /// when the entry leads to none that can be read. Read with the
-    /// MakerNote IFD, so that the preview and the raw view both take it
-    /// from here.
+    /// when the entry is not one LONG or leads to none that can be read.
+    /// Read with the MakerNote IFD, so that the preview and the raw view
+    /// both take it from here.
     preview: Lookup<Ifd>,
 }
 
@@ -206,10 +206,12 @@ pub(in crate::formats) fn read<R: Read + Seek>(
 /// `limits`: the IFD at the offset its entry 0x0011 holds, inside the
 /// MakerNote's block, with its base and byte order.
 ///
-/// [`Lookup::Absent`] when the entry is missing or breaks its rule, one
-/// LONG as Nikon writes it. [`Lookup::Skipped`] when the IFD does not hold
+/// [`Lookup::Absent`] when the entry is missing. [`Lookup::Skipped`] when
+/// the entry breaks its rule, one LONG as Nikon writes it, with no offset,
+/// since its value is not read as one; or when the IFD does not hold
 /// together inside the block, as when it lies past the MakerNote's
-/// declared length.
+/// declared length. Neither counts toward [`Limits::max_ifds`]: the
+/// MakerNote's IFDs are read apart from the walk, which counts its own.
 ///
 /// # Errors
 ///
@@ -220,7 +222,15 @@ fn preview_ifd<R: Read + Seek>(
     limits: &Limits,
 ) -> Result<Lookup<Ifd>> {
     let Some([pointer]) = ifd.held(rules::PREVIEW_IFD) else {
-        return Ok(Lookup::Absent);
+        if ifd.entry(PREVIEW_IFD).is_none() {
+            return Ok(Lookup::Absent);
+        }
+        return Ok(Lookup::Skipped(SkippedDirectory::new(
+            Directory::MakerNote,
+            Some(PREVIEW_IFD),
+            None,
+            ErrorKind::Malformed,
+        )));
     };
     Ok(
         match ifd_in(src, ifd.block(), pointer, ifd.order(), limits)? {
@@ -284,7 +294,6 @@ mod tests {
     };
     use crate::container::tiff::{self, parse_ifd, walk};
     use crate::entries::Value;
-    use crate::error::ErrorKind;
     use crate::formats::testing::byte_order;
     use crate::formats::tiff_metadata;
     use crate::jpeg_stub::jpeg_stub;
@@ -1120,10 +1129,22 @@ mod tests {
         }
     }
 
+    /// What the raw view lists for a PreviewIFD tag that breaks its rule:
+    /// the link, with no offset, as damage.
+    fn misshaped_link() -> SkippedDirectory {
+        SkippedDirectory::new(
+            Directory::MakerNote,
+            Some(PREVIEW_IFD),
+            None,
+            ErrorKind::Malformed,
+        )
+    }
+
     #[test]
     fn a_makernote_without_a_preview_ifd_is_listed_alone() {
-        // The pointer stored out of line leads to no PreviewIFD, but is an
-        // entry of the MakerNote IFD like any other.
+        // The pointer stored out of line, as two LONGs, leads to no
+        // PreviewIFD: the link is listed as skipped, and the entry is one
+        // of the MakerNote IFD's like any other.
         for order in ORDERS {
             let block = block(order, Change::PointerOutOfLine);
             let (_, makernote) = makernote_at(&with_block(order, &block), 0);
@@ -1136,6 +1157,95 @@ mod tests {
                 "{order:?}"
             );
             assert_eq!(view.in_directory(PREVIEW).len(), 0, "{order:?}");
+            assert_eq!(view.skipped_directories(), [misshaped_link()], "{order:?}");
+        }
+    }
+
+    /// The layouts read here, for the tests that run on both.
+    #[derive(Clone, Copy, Debug)]
+    enum Layout {
+        Embedded,
+        Headerless,
+    }
+
+    /// A sound file of `layout` in byte order `order`, and where in it the
+    /// value field of the MakerNote IFD's PreviewIFD entry lies: the
+    /// second entry in both, after MakerNoteVersion or the ISO.
+    fn with_preview_entry(order: Order, layout: Layout) -> (Vec<u8>, usize) {
+        let (bytes, at) = match layout {
+            Layout::Embedded => {
+                let block = block(order, Change::Nothing);
+                (with_block(order, &block), AT + block.pointer_at())
+            }
+            Layout::Headerless => {
+                let (bytes, range, _) = headerless_file(order, b"", None);
+                (bytes, range.start + 2 + 12 + 8)
+            }
+        };
+        (bytes, usize::try_from(at).unwrap())
+    }
+
+    #[test]
+    fn a_preview_ifd_tag_of_another_type_or_count_is_listed_as_skipped() {
+        // Both layouts, in a NEF file, at 0, and in a JPEG file's Exif
+        // segment, at POS.
+        for order in ORDERS {
+            for layout in [Layout::Embedded, Layout::Headerless] {
+                for pos in [0, POS] {
+                    let (sound, at) = with_preview_entry(order, layout);
+                    let field: [u8; 4] = sound[at..at + 4].try_into().unwrap();
+                    // The MakerNote of the file with the PreviewIFD entry
+                    // rewritten with `tag`, `typ`, `count` and `field`.
+                    let rewritten = |tag: u16, typ: u16, count: u32, field: [u8; 4]| {
+                        let mut bytes = sound.clone();
+                        bytes[at - 8..at - 6].copy_from_slice(&order.u16(tag));
+                        bytes[at - 6..at - 4].copy_from_slice(&order.u16(typ));
+                        bytes[at - 4..at].copy_from_slice(&order.u32(count));
+                        bytes[at..at + 4].copy_from_slice(&field);
+                        makernote_at(&bytes, pos).1
+                    };
+                    let what = format!("{order:?}, {layout:?}, {pos}");
+
+                    // One LONG, as Nikon writes it, is followed.
+                    let makernote = rewritten(PREVIEW_IFD, LONG, 1, field);
+                    let view = view_of(&makernote);
+                    assert_eq!(
+                        view.directories(),
+                        [Directory::MakerNote, PREVIEW],
+                        "{what}"
+                    );
+                    assert_eq!(view.skipped_directories(), [], "{what}");
+                    assert!(makernote.preview_candidate().is_some(), "{what}");
+
+                    // The offset as one SHORT holds it, then two zeros.
+                    let offset = u16::try_from(byte_order(order).u32(field)).unwrap();
+                    let mut short = [0; 4];
+                    short[..2].copy_from_slice(&order.u16(offset));
+                    for (typ, count, field, shape) in [
+                        (SHORT, 1, short, "one SHORT"),
+                        (LONG, 2, field, "two LONGs"),
+                        (LONG, 0, field, "no value"),
+                        (BYTE, 1, field, "one BYTE"),
+                        (IFD, 1, field, "one IFD"),
+                    ] {
+                        let makernote = rewritten(PREVIEW_IFD, typ, count, field);
+                        let view = view_of(&makernote);
+                        let what = format!("{what}, {shape}");
+                        assert_eq!(view.directories(), [Directory::MakerNote], "{what}");
+                        let tags = tags_in(&view, Directory::MakerNote);
+                        assert!(tags.contains(&PREVIEW_IFD), "{what}");
+                        assert_eq!(view.skipped_directories(), [misshaped_link()], "{what}");
+                        assert_eq!(makernote.preview_candidate(), None, "{what}");
+                    }
+
+                    // The entry under the next tag: the MakerNote has no
+                    // PreviewIFD tag, and nothing is left out.
+                    let makernote = rewritten(PREVIEW_IFD + 1, LONG, 1, field);
+                    let view = view_of(&makernote);
+                    assert_eq!(view.directories(), [Directory::MakerNote], "{what}");
+                    assert_eq!(view.skipped_directories(), [], "{what}");
+                }
+            }
         }
     }
 
@@ -1144,15 +1254,19 @@ mod tests {
         // A MakerNote IFD at the position of a directory listed before it,
         // as a damaged file may point its MakerNote at IFD1: neither it nor
         // the PreviewIFD it leads to is listed, so that no PreviewIFD is
-        // listed without its MakerNote.
+        // listed without its MakerNote. Nor is a PreviewIFD tag that is not
+        // one LONG listed as skipped.
         for order in ORDERS {
-            let block = block(order, Change::Nothing);
-            let (_, makernote) = makernote_at(&with_block(order, &block), 0);
-            let mut entries = Entries::new();
-            entries.push(Directory::Ifd(1), &makernote.ifd);
-            makernote.add_entries(&mut entries);
-            let directories: Vec<Directory> = entries.directories().to_vec();
-            assert_eq!(directories, [Directory::Ifd(1)], "{order:?}");
+            for change in [Change::Nothing, Change::PointerOutOfLine] {
+                let block = block(order, change);
+                let (_, makernote) = makernote_at(&with_block(order, &block), 0);
+                let mut entries = Entries::new();
+                entries.push(Directory::Ifd(1), &makernote.ifd);
+                makernote.add_entries(&mut entries);
+                let directories: Vec<Directory> = entries.directories().to_vec();
+                assert_eq!(directories, [Directory::Ifd(1)], "{order:?}, {change:?}");
+                assert_eq!(entries.skipped_directories(), [], "{order:?}, {change:?}");
+            }
         }
     }
 

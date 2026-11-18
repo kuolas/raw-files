@@ -34,8 +34,10 @@ use crate::error::ErrorKind;
 ///   [`Limits::max_value_bytes`](crate::Limits::max_value_bytes) is
 ///   `LimitExceeded`. An Exif, GPS or Interoperability IFD tag that is not
 ///   one SHORT, LONG or IFD is `Malformed`: raw-files reads each only so.
-///   An entry that cannot be read at all, of a type TIFF does not define
-///   or with its value outside the file, is no link: it is counted by
+///   So is a Nikon MakerNote's PreviewIFD tag (0x0011) that is not one
+///   LONG, the one shape Nikon writes it in. An entry that cannot be read
+///   at all, of a type TIFF does not define or with its value outside the
+///   file, is no link: it is counted by
 ///   [`Entries::skipped_entries`](crate::Entries::skipped_entries).
 /// - **The SubIFDs of a directory at the depth cap**,
 ///   [`Limits::max_ifd_depth`](crate::Limits::max_ifd_depth): each one is
@@ -57,10 +59,13 @@ use crate::error::ErrorKind;
 /// the structure leads to the same position: the DSLR-A100's two below
 /// lead to the same bytes. Nor is a pointer to the next directory of 0 one,
 /// which means there is none. Nor, but for the Exif, GPS and
-/// Interoperability IFD tags, is an entry whose type or count is not the
-/// one raw-files reads that link in, such as a Nikon PreviewIFD tag that
-/// is not one LONG. The MP Index IFD of a JPEG file is not listed when it
-/// cannot be read: no directory links to it.
+/// Interoperability IFD tags and Nikon's PreviewIFD tag, is an entry whose
+/// type or count is not the one raw-files reads that link in, such as an
+/// IFD0 DNGPrivateData tag (0xC634) that is not the four BYTEs of Sony's
+/// pointer to its private directory: a DNG writes a block of its maker's
+/// own data, of any length, under that tag, which is no damage. The MP
+/// Index IFD of a JPEG file is not listed when it cannot be read: no
+/// directory links to it.
 ///
 /// It has no public constructor: only a file gives one.
 ///

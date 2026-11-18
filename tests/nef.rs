@@ -54,10 +54,11 @@ use support::nef::{
 };
 use support::nef::{
     D300_FULL_SIZE_JPEG, D300_LENS, D300_PREVIEW_JPEG, D300_RAW, D300_SERIAL_NUMBER,
-    FULL_SIZE_JPEG, IFD0_JPEG, LENS_MODEL_Z14_30, LENS_MODEL_Z24_200, MEDIUM_JPEG, PREVIEW_JPEG,
-    RAW_STRIP_START, Z6III_FOCUS_AREA, Z6III_FOCUS_CENTER, Z6III_FOCUS_FRAME, Z6III_FULL_SIZE_JPEG,
-    Z6III_IMAGE, Z6III_IN_FOCUS, Z6III_MEDIUM_JPEG, Z6III_PREVIEW_JPEG, Z6III_RAW, Z9_FOCUS_AREA,
-    Z9_FOCUS_CENTER, Z9_FOCUS_FRAME, Z9Blobs, d300_file, d300_file_with_blobs, z6iii_file,
+    FULL_SIZE_JPEG, IFD0_JPEG, LENS_MODEL_Z14_30, LENS_MODEL_Z24_200, MAKER_NOTE, MEDIUM_JPEG,
+    PREVIEW_IFD, PREVIEW_IFD_SHAPES, PREVIEW_JPEG, RAW_STRIP_START, Z6III_FOCUS_AREA,
+    Z6III_FOCUS_CENTER, Z6III_FOCUS_FRAME, Z6III_FULL_SIZE_JPEG, Z6III_IMAGE, Z6III_IN_FOCUS,
+    Z6III_MEDIUM_JPEG, Z6III_PREVIEW_JPEG, Z6III_RAW, Z9_FOCUS_AREA, Z9_FOCUS_CENTER,
+    Z9_FOCUS_FRAME, Z9Blobs, d300_file, d300_file_with_blobs, nikon_makernote_with, z6iii_file,
     z6iii_file_with_blobs, z9_file, z9_file_with, z9_file_with_blobs,
 };
 use support::samples::{
@@ -5478,6 +5479,52 @@ fn an_exif_pointer_of_two_values_is_listed_as_skipped() {
         assert_eq!(skipped.tag(), Some(EXIF_IFD), "{order:?}");
         assert_eq!(skipped.offset(), None, "{order:?}");
         assert_eq!(skipped.kind(), ErrorKind::Malformed, "{order:?}");
+    }
+}
+
+#[test]
+fn a_makernote_preview_ifd_tag_of_another_shape_is_listed_as_skipped() {
+    // A Nikon file whose MakerNote's PreviewIFD tag is not the one LONG
+    // Nikon writes: the PreviewIFD is not read, and the link is listed
+    // with no position. Without the tag, nothing is left out.
+    let shapes =
+        PREVIEW_IFD_SHAPES.map(|(typ, count, value, shape)| (Some((typ, count, value)), shape));
+    for order in ORDERS {
+        for (tag, shape) in shapes.into_iter().chain([(None, "no tag")]) {
+            let (block, _) = nikon_makernote_with(order, [0x02, 0x11], None, |inner, ifd| {
+                if let Some((typ, count, value)) = tag {
+                    inner.raw(ifd, PREVIEW_IFD, typ, count, value);
+                }
+            });
+            let mut builder = TiffBuilder::new(order);
+            let (ifd0, exif) = (builder.ifd(), builder.ifd());
+            builder.ascii(ifd0, 0x010F, "NIKON CORPORATION");
+            builder.exif(ifd0, exif);
+            let makernote = builder.blob(&block);
+            builder.undefined_blob(exif, MAKER_NOTE, makernote);
+            let bytes = builder.build().bytes;
+            let file = CameraFile::from_bytes(&bytes).unwrap();
+            let what = format!("{order:?}, {shape}");
+            assert_eq!(file.format(), Format::Nef, "{what}");
+            let entries = file.entries();
+            assert_eq!(
+                entries.directories(),
+                [Directory::Ifd(0), Directory::Exif, Directory::MakerNote],
+                "{what}"
+            );
+            let skipped = entries.skipped_directories();
+            if tag.is_none() {
+                assert_eq!(skipped, [], "{what}");
+                continue;
+            }
+            let [skipped] = skipped else {
+                panic!("{what}: {skipped:?}");
+            };
+            assert_eq!(skipped.parent(), Directory::MakerNote, "{what}");
+            assert_eq!(skipped.tag(), Some(PREVIEW_IFD), "{what}");
+            assert_eq!(skipped.offset(), None, "{what}");
+            assert_eq!(skipped.kind(), ErrorKind::Malformed, "{what}");
+        }
     }
 }
 

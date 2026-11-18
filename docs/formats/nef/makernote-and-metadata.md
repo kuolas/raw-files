@@ -1926,6 +1926,7 @@ to it and the cause (`Entries::skipped_directories`). On the NEF files:
 |---|---|---|---|
 | MakerNote | a value past the MakerNote's declared length, left out and counted | 0x0E01 | 2 / 0 (COOLSCAN files) |
 | MakerNote preview IFD | the whole IFD past the MakerNote's declared length: given as left out, held by the MakerNote's 0x0011, malformed | whole directory, whose 0x011A and 0x011B values lie further out | 6 / 0 (Coolpix NRW and COOLSCAN files) |
+| MakerNote preview IFD | a PreviewIFD tag that is not one LONG: given as left out, with no position, malformed | 0x0011 | 0 / 0 |
 
 - **None of my 11,376 files has a damaged entry or directory**, nor any
   of the fixtures. Measured again on 2026-11-16, none of my 29,483 NEFs
