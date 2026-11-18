@@ -1819,8 +1819,8 @@ mod tests {
 
     // Every origin, in the order of its declaration. The `match` has no
     // wildcard arm, so a variant added later does not compile until it is
-    // listed here too, and the test below then fails until its name is
-    // listed there.
+    // named here, beside the list it belongs in. Once it is in the list, the
+    // test below fails until its name is listed there.
     fn all_origins() -> [FocusOrigin; 2] {
         let all = [FocusOrigin::Recorded, FocusOrigin::Table];
         for origin in all {
@@ -2310,8 +2310,8 @@ mod tests {
 
     // Every area mode, in the order of its declaration. The `match` has no
     // wildcard arm, so a variant added later does not compile until it is
-    // listed here too, and the tests below then fail until its name is
-    // listed there.
+    // named here, beside the list it belongs in. Once it is in the list, the
+    // tests below fail until its name is listed there.
     fn all_area_modes() -> [FocusAreaMode; 4] {
         let all = [
             FocusAreaMode::Single,

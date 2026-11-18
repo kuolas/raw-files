@@ -366,8 +366,8 @@ mod tests {
 
     // Every category, in the order of its declaration. The `match` has no
     // wildcard arm, so a category added later does not compile until it is
-    // listed here too, and the test of the names then fails until its name
-    // is listed there.
+    // named here, beside the list it belongs in. Once it is in the list, the
+    // test of the names fails until its name is listed there.
     fn all_kinds() -> [ErrorKind; 5] {
         let all = [
             ErrorKind::Io,

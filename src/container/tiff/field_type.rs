@@ -193,7 +193,7 @@ impl fmt::Display for FieldType {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::testing::assert_ordered;
+    use crate::testing::{assert_names, assert_ordered};
 
     /// Every field type, in declaration order.
     const TYPES: [FieldType; 14] = [
@@ -236,10 +236,9 @@ mod tests {
         for (i, field_type) in TYPES.into_iter().enumerate() {
             assert_eq!(field_type.to_code(), codes[i], "{field_type:?}");
             assert_eq!(field_type.size(), sizes[i], "{field_type:?}");
-            assert_eq!(field_type.name(), names[i], "{field_type:?}");
-            assert_eq!(field_type.to_string(), names[i], "{field_type:?}");
             assert_eq!(FieldType::from_code(codes[i]), Some(field_type));
         }
+        assert_names(&TYPES, FieldType::name, &names);
         assert_ordered(&TYPES);
     }
 
