@@ -1526,10 +1526,10 @@ The points specific to the MakerNote:
    MakerNote go further: the E885, E995, E2500 and E5000, on their
    earlier firmware, put their PreviewIFD's 320x240 JPEG 12,527 bytes
    past the MakerNote's end, inside the Exif segment, so the reader does
-   not read it either ([section 1](#in-a-jpeg-file)). **[F]** Whether the
-   rule should let such a JPEG through is still to be decided: the issue
-   that asks for reading a MakerNote preview just past the MakerNote, the
-   P7800's, is open (#18).
+   not read it either ([section 1](#in-a-jpeg-file)). **[F]** The rule
+   was weighed against the ten public NEF and NRW files whose preview
+   lies outside the MakerNote, and kept
+   ([container-and-previews.md](container-and-previews.md#21-where-the-makernotes-preview-lies)).
 2. **Truncated MakerNotes.** DNG-converted NEFs can cut the MakerNote short
    (reported as "bad offset" errors on later tags). [S][21]
 3. **Capture NX.** Foreign brands, changed byte order and fixed-order

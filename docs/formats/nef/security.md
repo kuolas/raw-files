@@ -165,7 +165,11 @@ sensor data or an encrypted block (see [the roadmap](../../ROADMAP.md)).
    indexing, on data derived from the file. A MakerNote is a bounded
    sub-slice with the base its layout sets: its inner TIFF header in the
    embedded layout, never the outer base, and the outer TIFF header in
-   the headerless layout, whose offsets count from there.
+   the headerless layout, whose offsets count from there. A MakerNote's
+   preview is held to it too: its PreviewIFD and JPEG are read only
+   inside the MakerNote's declared length, a rule weighed against the ten
+   public files that break it
+   ([container-and-previews.md](container-and-previews.md#21-where-the-makernotes-preview-lies)).
    Applies to IFD offsets, entry value offsets, strip offsets and byte
    counts, SubIFD pointers, and JPEG preview offsets and lengths.
    (CVE-2020-15503, CVE-2024-8025, CVE-2017-7544, CVE-2018-20337,

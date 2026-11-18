@@ -3,8 +3,9 @@
 What the [JPEG documentation](README.md) does not yet settle. Part 1 lists
 decisions for the maintainers. Part 2 lists facts that sample files can
 establish. Part 3 lists sources that were not read. Part 4 lists questions
-that the sample files have already settled. Each item names the page it
-affects; [test-data.md](test-data.md) describes the files.
+that the sample files, or a decision taken on them, have already settled.
+Each item names the page it affects; [test-data.md](test-data.md)
+describes the files.
 
 ## 1. Decisions for the maintainers
 
@@ -29,21 +30,7 @@ affects; [test-data.md](test-data.md) describes the files.
    and a camera's rating. raw-files does not read it; reading it would
    need a decision of its own. Affects
    [container-and-metadata.md](container-and-metadata.md#5-other-application-segments).
-3. **A MakerNote preview outside the declared MakerNote.** The NEF
-   reader refuses a PreviewIFD JPEG that does not lie wholly inside the
-   MakerNote's declared length, which costs one Coolpix NRW file its
-   preview (#18). The JPEG reader applies the same rule, which refuses
-   the copy an exporting editor leaves outside the declared MakerNote.
-   Cameras write such a JPEG too: the early Coolpix E885, E995, E2500
-   and E5000, on their earlier firmware, put their PreviewIFD's 320×240
-   JPEG inside the Exif segment but 12,527 bytes past the MakerNote's
-   end, so those files give no MakerNote preview
-   ([test-data.md](test-data.md#6-early-coolpix-files-checked-by-hand)).
-   [F] If the rule is relaxed for the NRW file (#18), the question is
-   whether a JPEG should follow, since an editor that rewrites the Exif
-   segment can leave such a pointer behind. Affects
-   [container-and-metadata.md](container-and-metadata.md#10-makernotes-in-a-jpeg).
-4. **MPF images other than large thumbnails.** The Multi-Picture Format
+3. **MPF images other than large thumbnails.** The Multi-Picture Format
    lists more than large thumbnails: its MP types include a gain map
    (0x050000), the panorama, disparity and multi-angle images of a
    multi-frame file (0x020001 to 0x020003), and an original kept for
@@ -128,7 +115,7 @@ affects; [test-data.md](test-data.md) describes the files.
 - ISO/IEC 10918-1 itself, which is technically the same text as T.81 and
   was not bought.
 
-## 4. Questions settled by the sample files
+## 4. Questions settled by the sample files or a decision
 
 - **Sony's MakerNote in a JPEG.** It has the `SONY DSC` header, unlike
   the ARW files of the same bodies, and its offsets count from the TIFF
@@ -142,6 +129,19 @@ affects; [test-data.md](test-data.md) describes the files.
   [F]
 - **A camera JPEG can hold a MakerNote preview**: the D70's PreviewIFD
   holds a 564×372 JPEG inside the declared MakerNote. [F]
+- **A MakerNote preview outside the declared MakerNote is not read.**
+  The JPEG reader reads a Nikon MakerNote's PreviewIFD and its JPEG only
+  inside the MakerNote's declared length, as the NEF reader does. Ten
+  public NEF and NRW files keep that preview outside, and the rule was
+  weighed against them and kept
+  ([NEF container notes](../nef/container-and-previews.md#21-where-the-makernotes-preview-lies)).
+  The early Coolpix E885, E995, E2500 and E5000, on their earlier
+  firmware, put their PreviewIFD's 320×240 JPEG inside the Exif segment
+  but 12,527 bytes past the MakerNote's end, so those files give no
+  MakerNote preview
+  ([test-data.md](test-data.md#6-early-coolpix-files-checked-by-hand));
+  an editor that rewrites the Exif segment can leave such a pointer
+  behind too. [F]
 - **What a Nikon JPEG records in a crop mode.** Shots made with my
   Z 9, as a JPEG and a raw file of each picture, in the DX, 1:1 and
   16:9 modes and at the camera's three image sizes, record AFInfo2's
