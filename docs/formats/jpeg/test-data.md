@@ -385,8 +385,8 @@ segment where it records one other than 0. The headerless MakerNote is
 read and adds nothing: its ISO tag records none, and its PreviewIFD's
 JPEG lies outside the MakerNote, so the rule that a MakerNote's preview
 lie inside the MakerNote refuses it
-([open-questions.md](open-questions.md#1-decisions-for-the-maintainers),
-item 3). The short-header MakerNote is not read.
+([open-questions.md](open-questions.md#4-questions-settled-by-the-sample-files-or-a-decision)).
+The short-header MakerNote is not read.
 
 ExifTool 13.55 was run on files of each layout as an independent reader,
 to compare: it read the same layouts, numbers of entries and byte order.

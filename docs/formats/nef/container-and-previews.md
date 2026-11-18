@@ -181,6 +181,43 @@ software can write Nikon-style MakerNotes into files from other cameras. [4]
 [13] **[S]** The D200's MakerNote IFD reportedly lacks a next-IFD pointer, so
 do not require one after the entries. [12] **[S]**
 
+### 2.1 Where the MakerNote's preview lies
+
+The Exif IFD's MakerNote entry declares how long the MakerNote is. The
+PreviewIFD, and the JPEG it declares, lie inside that length in most
+files, and outside it in ten. I measured the 289 NEF and NRW files of
+the raw.pixls.us collection on 2026-11-18, with a script of my own that
+reads the files' bytes; no other reader was run. **[F]**
+
+| Where the MakerNote's preview lies | Files | Bodies (files) |
+|---|---|---|
+| Inside the declared MakerNote | 275 | |
+| The JPEG starts exactly at the MakerNote's end | 2 | Coolpix P7800 (1425), P7700 (5495) |
+| The JPEG starts 12 or 14 bytes past the end | 2 | Coolpix P330 (912), P340 (619) |
+| The PreviewIFD starts at the end, its JPEG further on | 4 | Coolpix P6000 (651), P7000 (598), P7100 (585), B700 (1621) |
+| The PreviewIFD starts 4 bytes past the end, its JPEG about 205 KB further on | 2 | COOLSCAN IV ED (4282), COOLSCAN V ED (4269) |
+| No PreviewIFD | 4 | D1 (201), Coolpix P950 (3806), P1000 (3381), P1100 (7689) |
+
+Eight of the nine NRW files with a PreviewIFD keep it, or its JPEG,
+outside the MakerNote. Every such JPEG lies inside the file and has a
+baseline frame header. Every PreviewIFD tag is one LONG, in all 285
+files that have one, and so are the PreviewIFD's JPEGInterchangeFormat
+and JPEGInterchangeFormatLength. **[F]** The same holds for the 32,352
+NEF and 3 NRW files of 31 bodies on my own disk, measured the same way
+on the same day: every PreviewIFD tag is one LONG, and only three
+copies of file 1425 keep the preview outside the MakerNote. **[F]**
+
+raw-files reads a MakerNote's PreviewIFD and its JPEG only inside the
+MakerNote's declared length, in a NEF, an NRW and a JPEG file alike. The
+rule was weighed against these ten files and kept: nothing inside a
+MakerNote is trusted to point outside it. An editor that moves or
+rewrites a MakerNote can leave such a pointer behind, and the
+MakerNote's declared length is the one bound its offsets can be checked
+against. The eight Coolpix files still give two previews each: IFD0's
+160x120 JPEG and the full-size one. The two COOLSCAN files, from Nikon's
+film scanners, give none: their MakerNote's JPEG is their only one.
+**[F]**
+
 ## 3. Where a JPEG can live
 
 ExifTool gives each location a name, which is useful for matching reports to
