@@ -950,8 +950,9 @@ What the fields hold:
   2036, 1835, 3827). ExifTool's 0100 and 0101 tables call the position
   fields valid for contrast-detect AF only [S][1]; the live-view files
   above, with a detection method of 1 (contrast) on the D7000, D5600, D5
-  and Coolpix A and 2 (hybrid) on the Z bodies, are the ones that fill them.
-  **[F]** Mapping a point number to pixels needs a table of the body's
+  and Coolpix A and 2 (hybrid) on the Z bodies, are the ones that fill
+  them; my Z 9 writes 1 in pinpoint AF. **[F]**
+  Mapping a point number to pixels needs a table of the body's
   points, which no file carries (ADR012). raw-files measures such
   tables itself, one body at a time, on frames shot with the body and
   read in the maker's software. The D600's is measured: the record,
@@ -1013,18 +1014,26 @@ What the fields hold:
   **[F]**. raw-files names the mode, on every version, only for the
   codes that frames shot in a known mode confirmed, under the detection
   method the file records, and gives none for any other code, such as
-  192, 196, 199, 1 or 2
+  196, 199, 1 or 2
   ([ADR018](../../architecture-decisions/adr018-focus-points-placed-from-a-table-and-the-points-used.md)):
   under phase detection, 0 single point, 5 dynamic area and 8 auto-area
   on my D600 session, and 9 3D-tracking on eight D600 frames I shot in
-  that mode outside it **[F]**; 193 single point and 197 auto-area under
-  any detection method, on which the two lists agree (193 on the two
-  Z 9 frames shot with a single point and committed as fixtures
+  that mode outside it **[F]**; 192 pinpoint, 193 single point and 197
+  auto-area under any detection method, on which the two lists agree
+  (192 on seven Z 9 frames I shot in pinpoint AF on 2026-11-19, four in
+  FX and three in DX, each NEF and the JPEG of four of them writing it
+  under detection 1, contrast detection, one of them committed as
+  fixtures; 193 on the two Z 9 frames shot with a single point and
+  committed as fixtures
   ([`tests/fixtures/`](../../../tests/fixtures/README.md)), 197 on my
   Z 9 files, 99 of which carry it and were shot in auto-area) **[F]**;
   and 207 3D-tracking under contrast or hybrid detection, the lists
   that carry it (on my Z 9 files, 8,877 of which carry it and were
   shot in 3D-tracking, under hybrid detection), counts only **[F]**.
+  ExifTool's published documentation, read as documentation, lists 192
+  as pinpoint in both lists [S][1], and my frames confirm it. The
+  Z6III's five files write it under detection 2, in a mode not
+  recorded, and take the name as every file that writes the code does.
 - **Every AFInfo2 and CropHiSpeed value lies inside the MakerNote's
   declared length** on every checked file. **[F]**
 - **In a camera JPEG**, the D5300's AFInfo2 is version 0100 with a zero
@@ -1079,7 +1088,7 @@ and what raw-files gives; a row without a file is an open question
 
 | Shot | What the file records | CC0 files | raw-files gives |
 |---|---|---|---|
-| Mirrorless, single point, pinpoint, wide area or 3D-tracking | a position | Z 6 3587, Z 9 5146 to 5148, Z f 6887, Z6III 7808 to 7810, 7812, 7813, Z50II 7767, 7770 | the point |
+| Mirrorless, single point, pinpoint, wide area or 3D-tracking | a position | Z 6 3587, Z 9 5146 to 5148, Z f 6887, Z6III 7808 to 7810, 7812, 7813, Z50II 7767, 7770; my Z 9 shots, one pinpoint frame committed stripped | the point |
 | Mirrorless on a DX crop | a position, scaled into the full frame | Z6III 7810; my Z 9 shots, off-center, one DX frame committed stripped | the point, scaled onto the crop |
 | Mirrorless on an aspect crop (1:1, 16:9) | a position in the full frame | Z6III 7808, 7809, 7812, 7813, Z50II 7767, 7770; my Z 9 shots, off-center, one 1:1 frame committed stripped | the point, moved into the window |
 | A DX crop at 1:1 or 16:9 on an FX body | unknown | none | the point, scaled; unchecked |

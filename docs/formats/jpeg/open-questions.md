@@ -80,7 +80,7 @@ describes the files.
   the JPEG reader is for. [I]
 - **Other makers.** No camera-original Fujifilm, Panasonic or phone JPEG
   with a usable license was found; Canon's MakerNote is not read. [S]
-- **ImageSizeRAW in a camera JPEG.** On the three stripped Z 9 JPEGs it
+- **ImageSizeRAW in a camera JPEG.** On the four stripped Z 9 JPEGs it
   is 1 on the full-size files and 2 on the middle-size one, so it follows
   either the JPEG's size or the raw size set beside it. A JPEG-only shot
   at a smaller size, and a RAW+JPEG pair at different sizes, would tell

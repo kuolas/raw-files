@@ -249,20 +249,23 @@ fn named_points(value: &[u8], at: usize) -> Option<NamedPoints> {
 ///
 /// The detection method is how the camera found focus: 0 by phase
 /// detection, through a DSLR's viewfinder; 1 by contrast detection, in a
-/// DSLR's live view; 2 by both, on the mirrorless bodies. ExifTool's
-/// published documentation, read as documentation, gives byte 5 two lists,
-/// told apart by that method. So a DSLR's codes are named under phase
-/// detection alone; 193 and 197, on both lists with one meaning, under any
-/// method; and 207 under contrast or hybrid detection.
+/// DSLR's live view and in my Z 9's pinpoint AF; 2 by both, on the
+/// mirrorless bodies, the Z6III's files that write 192 among them.
+/// ExifTool's published documentation, read as documentation, gives byte 5
+/// two lists, told apart by that method. So a DSLR's codes are named under
+/// phase detection alone; 192, 193 and 197, on both lists with one meaning,
+/// under any method; and 207 under contrast or hybrid detection.
 ///
 /// Named, each on frames shot in its mode:
 ///
 /// - under phase detection, 0 [`Single`](FocusAreaMode::Single), 5
 ///   [`Dynamic`](FocusAreaMode::Dynamic), 8 [`Auto`](FocusAreaMode::Auto)
 ///   and 9 [`Tracking`](FocusAreaMode::Tracking), on my D600 frames;
-/// - under any method, 193 [`Single`](FocusAreaMode::Single), on two of my
-///   Z 9 frames committed as fixtures, and 197
-///   [`Auto`](FocusAreaMode::Auto), on my Z 9 files;
+/// - under any method, 192 [`Pinpoint`](FocusAreaMode::Pinpoint), on my
+///   Z 9 frames shot in pinpoint AF, one of them committed as fixtures,
+///   193 [`Single`](FocusAreaMode::Single), on two of my Z 9 frames
+///   committed as fixtures, and 197 [`Auto`](FocusAreaMode::Auto), on my
+///   Z 9 files;
 /// - under contrast or hybrid detection, 207
 ///   [`Tracking`](FocusAreaMode::Tracking), on my Z 9 files.
 ///
@@ -271,6 +274,7 @@ fn named_points(value: &[u8], at: usize) -> Option<NamedPoints> {
 pub(super) fn area_mode(detection: u8, code: u8) -> Option<FocusAreaMode> {
     match (detection, code) {
         (0, 0) | (_, 193) => Some(FocusAreaMode::Single),
+        (_, 192) => Some(FocusAreaMode::Pinpoint),
         (0, 5) => Some(FocusAreaMode::Dynamic),
         (0, 8) | (_, 197) => Some(FocusAreaMode::Auto),
         (0, 9) | (1 | 2, 207) => Some(FocusAreaMode::Tracking),
@@ -716,25 +720,29 @@ mod tests {
         // Byte 5 on every version read, under the detection method byte 4
         // records: 0 phase detection, 1 contrast detection, 2 hybrid. The
         // codes that frames shot in a known mode confirmed name it: the
-        // DSLR codes, 9 among them, only under phase detection, 193 and
-        // 197 under any, and 207 under contrast or hybrid detection, the
-        // lists that carry it. Any other names none: a DSLR code under
-        // contrast or hybrid detection; 207 under phase detection, whose
-        // list lacks it; the codes the public samples show in modes not
-        // named, 1 and 2 under detection 1 in the live view of the D7000,
-        // the Coolpix A, the D5600 and the D5, and 192, 196 and 199 under
-        // detection 2; and codes no file shows. The point is kept either
-        // way.
-        use FocusAreaMode::{Auto, Dynamic, Single, Tracking};
+        // DSLR codes, 9 among them, only under phase detection; 192, 193
+        // and 197 under any, on which the two lists agree; and 207 under
+        // contrast or hybrid detection, the lists that carry it. Any other
+        // names none: a DSLR code under contrast or hybrid detection; 207
+        // under phase detection, whose list lacks it; the codes the public
+        // samples show in modes not named, 1 and 2 under detection 1 in
+        // the live view of the D7000, the Coolpix A, the D5600 and the D5,
+        // and 196 and 199 under detection 2; and codes no file shows. The
+        // point is kept either way.
+        use FocusAreaMode::{Auto, Dynamic, Pinpoint, Single, Tracking};
         let mut named = vec![(0, 0, Single), (0, 5, Dynamic), (0, 8, Auto)];
         for detection in [0, 1, 2] {
-            named.extend([(detection, 193, Single), (detection, 197, Auto)]);
+            named.extend([
+                (detection, 192, Pinpoint),
+                (detection, 193, Single),
+                (detection, 197, Auto),
+            ]);
         }
         named.extend([(0, 9, Tracking), (1, 207, Tracking), (2, 207, Tracking)]);
         let mut unnamed = vec![(1, 0), (2, 0), (1, 5), (2, 8), (1, 4), (0, 207)];
         unnamed.extend([(1, 9), (2, 9)]);
-        unnamed.extend([1, 2, 3, 4, 192, 196, 199, 255].map(|code| (0, code)));
-        unnamed.extend([1, 2, 192, 199].map(|code| (1, code)));
+        unnamed.extend([1, 2, 3, 4, 196, 199, 255].map(|code| (0, code)));
+        unnamed.extend([1, 2, 199].map(|code| (1, code)));
         let codes = named
             .into_iter()
             .map(|(detection, code, mode)| (detection, code, Some(mode)))

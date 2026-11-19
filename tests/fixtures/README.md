@@ -1,7 +1,7 @@
 # Test fixtures
 
 Real files that a camera wrote, small enough to commit, that the tests
-read as they are: five from a Nikon Z 9, two NEF files and three JPEG
+read as they are: seven from a Nikon Z 9, three NEF files and four JPEG
 files, listed below; the 56 NEF files of a session shot with a
 Nikon D600 with the JPEG of one of its frames, in
 [`nikon-d600/`](nikon-d600/README.md), which lists them; and a NEF
@@ -13,12 +13,14 @@ lists them. Every other fixture is built in code.
 |---|---|---|---|
 | `nikon-z9-dx.nef` | DX | 9908 | `2f8db98a8e19788f9b3427ec1530591833173962ceceaa7e693ab30579185157` |
 | `nikon-z9-1x1.nef` | 1:1 | 9909 | `2ddfe140ca6f8cfbdd3aec355342a2a72fd9da13f847c5f532123c5e397bb263` |
+| `nikon-z9-pinpoint.nef` | FX (no crop) | 2484 | `8005638e709625da97779840481d912d5fd129be5864c6177672641ea429862c` |
 
 | File | Crop mode | Image size | Orientation | Frame | SHA-256 |
 |---|---|---|---|---|---|
 | `nikon-z9-fx.jpg` | FX (no crop) | 8256×5504, full | 1 | 9915 | `87cfa8ee041fbc823f074b94dd0026b06dfd3cf1bed66492b1812afdd5c2c10b` |
 | `nikon-z9-dx.jpg` | DX | 5392×3592, full | 1 | 9936 | `2d4e0736c7cd58963b250f1de47caf1161de42f7b4b2ae34ef6411ab178a4ac1` |
 | `nikon-z9-16x9.jpg` | 16:9 | 6192×3480, middle | 8, portrait | 9954 | `74106bc62d37eac2b89e3b5f2c2d07639f54d21c25feee4dc577471c81a7c017` |
+| `nikon-z9-pinpoint.jpg` | FX (no crop) | 8256×5504, full | 1 | 2484 | `96a6de50530c66a21404e75899efd52ed5fb844c7dc6908660b0cdbd9dbd6970` |
 
 ## Where they come from
 
@@ -42,6 +44,11 @@ full size; and one in 16:9 crop mode at the middle size, taken in
 portrait orientation, so that the picture is stored on its side with
 Orientation 8. None of the public JPEG samples the tests use is shot in
 a crop mode or in portrait orientation.
+
+I took the pinpoint picture, a NEF and its JPEG, with the same camera
+on 2026-11-19, in FX at full size, in pinpoint AF with the point placed
+off-center, to confirm the area-mode code the Z 9 writes in that mode
+([the NEF notes' record](../../docs/formats/nef/test-data.md#23-files-checked-for-the-focus-point)).
 
 ## What was kept, replaced and removed
 
@@ -79,8 +86,8 @@ camera wrote them.
   fine-tuning (0x003F) among them.
 
 Once they were stripped, I checked that no byte sequence of the
-removed serial numbers or shutter count remains in either file, that
-neither holds a run of six or more digits, and that the focus fields,
+removed serial numbers or shutter count remains in any of the three
+files, that none holds a run of six or more digits, and that the focus fields,
 CropHiSpeed, CropArea and the raw size are those of the camera's file.
 
 ### The Z 9's JPEG files
@@ -122,7 +129,7 @@ fields zeroed in place. Each is 69,998 bytes.
   each MPF image.
 
 Once they were stripped, I checked that no byte sequence of the zeroed
-serial numbers or shutter count remains in any of the three files, as
+serial numbers or shutter count remains in any of the four files, as
 text or as a binary number in either byte order, nor the bytes of the
 time the camera was switched on; that every GPS value is zero and no XMP
 is left; that the Exif segment differs from the camera's only inside the
@@ -170,6 +177,14 @@ placed on the same frame. The tests also check each JPEG's four
 previews, where the camera's layout puts them, and every value of its
 metadata.
 
+The pinpoint shot checks the area mode on real camera bytes: its NEF
+and its JPEG record area mode 192 under detection method 1, contrast
+detection, with no crop, and the reader gives the area mode `Pinpoint`
+on both, with the point as recorded, the center (5522, 1847) and an
+area of 162 by 178 in the full frame. The DX and 16:9 JPEGs write the
+same code and take the same name; the two crop NEF files write 193,
+single point, and the FX JPEG 207, 3D-tracking.
+
 Each file's previews and metadata are rows of the same kinds as the
 downloaded samples', and so are those of frame 4 of the D600 session and
 its JPEG. The rows are in tables of their own in `tests/nef.rs` and
@@ -179,9 +194,10 @@ page](../../docs/formats/sample-files.md) says what a row holds and how
 to check one by hand.
 
 The tests check every camera setting each file gives. From the Exif
-IFD, the same on all five shots: aperture priority, multi-segment
-(Nikon's matrix) metering, a flash that did not fire, with no mode
-recorded, and auto white balance, which the JPEG files' MakerNote
+IFD, the same on all six shots but the metering: aperture priority,
+multi-segment (Nikon's matrix) metering, or spot metering on the
+pinpoint shot, a flash that did not fire, with no mode recorded, and
+auto white balance, which the JPEG files' MakerNote
 confirms with `AUTO0`. From the MakerNote: the color temperature auto
 white balance chose, which differs from shot to shot; the electronic
 shutter; and the image area of each crop mode, from CropHiSpeed. The NEF
@@ -192,7 +208,7 @@ color space sRGB in their Exif IFD, which alone decides; the NEF files,
 like every Nikon raw file checked, record no ColorSpace there, so their
 MakerNote's sRGB is the one given.
 
-The tests also cut all five files at every length and overwrite each of
+The tests also cut all seven files at every length and overwrite each of
 their bytes, but, in the JPEG files, those of three spans of zeros that
 no reader parses, the zeroed ShotInfo, the padding after the thumbnail's
 stub and the camera's zeros after the thumbnail's declared length, up to

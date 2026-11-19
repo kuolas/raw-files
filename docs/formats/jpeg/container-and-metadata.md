@@ -599,10 +599,10 @@ settings tags from its IFD, in the layouts above. On the D5300, D70 and
 five Sony files they are the tags the
 [NEF notes](../nef/makernote-and-metadata.md#87-camera-settings) and the
 [ARW notes](../arw/makernote-and-metadata.md#97-camera-settings) record,
-with the values listed there. [F] The three stripped Z 9 JPEGs of the
+with the values listed there. [F] The four stripped Z 9 JPEGs of the
 [fixtures](../../../tests/fixtures/README.md), shot with my own Z 9 on
 firmware `Ver.05.30` and made public as fixtures, keep the camera's
-MakerNote whole, all 75 entries, beside the two stripped NEF files of
+MakerNote whole, all 75 entries, beside the three stripped NEF files of
 the same body and firmware and the Z 9 NEF samples of raw.pixls.us
 (firmware `Ver.01.00`, 73 entries on the lossless file, 72 on the HE
 and HE\* ones). [F]

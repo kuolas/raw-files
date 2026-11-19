@@ -405,7 +405,7 @@ impl fmt::Display for FocusOrigin {
 /// arm. It orders as its variants are listed, and a new variant is added
 /// after the existing ones, so an order once observed holds. Its
 /// [`name`](Self::name)s, which `Display` writes too, are "Single point",
-/// "Dynamic area", "Auto area" and "Tracking".
+/// "Dynamic area", "Auto area", "Tracking" and "Pinpoint".
 ///
 /// # Examples
 ///
@@ -429,6 +429,9 @@ pub enum FocusAreaMode {
     /// A subject the camera followed from the point where focus started:
     /// Nikon's 3D-tracking.
     Tracking,
+    /// One point, which the photographer placed, smaller than a single
+    /// point, for a precise spot: Nikon's pinpoint AF.
+    Pinpoint,
 }
 
 impl FocusAreaMode {
@@ -440,6 +443,7 @@ impl FocusAreaMode {
             FocusAreaMode::Dynamic => "Dynamic area",
             FocusAreaMode::Auto => "Auto area",
             FocusAreaMode::Tracking => "Tracking",
+            FocusAreaMode::Pinpoint => "Pinpoint",
         }
     }
 }
@@ -2488,19 +2492,21 @@ mod tests {
     // wildcard arm, so a variant added later does not compile until it is
     // named here, beside the list it belongs in. Once it is in the list, the
     // tests below fail until its name is listed there.
-    fn all_area_modes() -> [FocusAreaMode; 4] {
+    fn all_area_modes() -> [FocusAreaMode; 5] {
         let all = [
             FocusAreaMode::Single,
             FocusAreaMode::Dynamic,
             FocusAreaMode::Auto,
             FocusAreaMode::Tracking,
+            FocusAreaMode::Pinpoint,
         ];
         for mode in all {
             match mode {
                 FocusAreaMode::Single
                 | FocusAreaMode::Dynamic
                 | FocusAreaMode::Auto
-                | FocusAreaMode::Tracking => {}
+                | FocusAreaMode::Tracking
+                | FocusAreaMode::Pinpoint => {}
             }
         }
         all
@@ -2513,7 +2519,13 @@ mod tests {
         assert_names(
             &all_area_modes(),
             FocusAreaMode::name,
-            &["Single point", "Dynamic area", "Auto area", "Tracking"],
+            &[
+                "Single point",
+                "Dynamic area",
+                "Auto area",
+                "Tracking",
+                "Pinpoint",
+            ],
         );
     }
 

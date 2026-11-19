@@ -18,8 +18,8 @@
 //!   neither a TIFF structure nor an MPF index;
 //! - real files committed in `tests/fixtures/`, which its README lists,
 //!   copied as they are, in their own byte order: for `open`, the Z 9's
-//!   two NEF files and frames 4, 42 and 49 of the D600 session; for
-//!   `jpeg_segments`, the Z 9's three JPEG files and frame 4's JPEG.
+//!   three NEF files and frames 4, 42 and 49 of the D600 session; for
+//!   `jpeg_segments`, the Z 9's four JPEG files and frame 4's JPEG.
 //!
 //! [`open_seeds`] and [`jpeg_segments_seeds`] list them. The `open` target
 //! takes the `jpeg_segments` seeds too, as JPEG files are something it
@@ -41,8 +41,8 @@ use support::arw::{
     a100_file, arq_file, arw2_file, arw4_file, arw4_medium_file, sr2_file, srf_file,
 };
 use support::fixtures::{
-    D600_FRAME_4_JPEG, Z9_1X1, Z9_16X9_JPEG, Z9_DX, Z9_DX_JPEG, Z9_FX_JPEG, d600_frame,
-    read_fixture,
+    D600_FRAME_4_JPEG, Z9_1X1, Z9_16X9_JPEG, Z9_DX, Z9_DX_JPEG, Z9_FX_JPEG, Z9_PINPOINT,
+    Z9_PINPOINT_JPEG, d600_frame, read_fixture,
 };
 use support::jpeg_files::{
     CAMERA_MAKE, ILCE7M3_MAIN, MAIN, Z9Mode, a100_jpeg, camera_jpeg, camera_jpeg_with_metadata,
@@ -74,7 +74,7 @@ fn in_both_orders(layouts: &[Layout]) -> Vec<(String, Vec<u8>)> {
 
 /// The RAW fixtures as starting inputs for the `open` target: each file
 /// name with the bytes of the fixture it holds, in both byte orders for
-/// those built in code, and once for the two stripped Z 9 files and the
+/// those built in code, and once for the three stripped Z 9 files and the
 /// three stripped D600 frames.
 fn open_seeds() -> Vec<(String, Vec<u8>)> {
     let mut seeds = in_both_orders(&[
@@ -99,7 +99,7 @@ fn open_seeds() -> Vec<(String, Vec<u8>)> {
     ]);
     // Real files, so in one byte order only, and under the names they are
     // committed by.
-    for name in [Z9_DX, Z9_1X1] {
+    for name in [Z9_DX, Z9_1X1, Z9_PINPOINT] {
         seeds.push((name.to_owned(), read_fixture(name)));
     }
     // The D600 frames lie in a folder of their own, so the folder's name
@@ -115,7 +115,7 @@ fn open_seeds() -> Vec<(String, Vec<u8>)> {
 /// for the `open` target too: each file name with the bytes of the file it
 /// holds, in both byte orders for those built in code with a TIFF
 /// structure and an MPF index, once for those with neither, and once for
-/// the three stripped Z 9 JPEGs and the stripped JPEG of frame 4 of the
+/// the four stripped Z 9 JPEGs and the stripped JPEG of frame 4 of the
 /// D600 session.
 fn jpeg_segments_seeds() -> Vec<(String, Vec<u8>)> {
     let mut seeds = in_both_orders(&[
@@ -153,7 +153,7 @@ fn jpeg_segments_seeds() -> Vec<(String, Vec<u8>)> {
     seeds.push(("padded.jpg".to_owned(), padded_jpeg().bytes));
     // Real files, so in one byte order only, and under the names they are
     // committed by.
-    for name in [Z9_FX_JPEG, Z9_DX_JPEG, Z9_16X9_JPEG] {
+    for name in [Z9_FX_JPEG, Z9_DX_JPEG, Z9_16X9_JPEG, Z9_PINPOINT_JPEG] {
         seeds.push((name.to_owned(), read_fixture(name)));
     }
     // The D600's lies in the session's folder, so the folder's name goes
