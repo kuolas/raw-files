@@ -954,49 +954,22 @@ impl FocusLayoutPoint {
 /// [decision to measure per-body tables in the project](https://github.com/kuolas/raw-files/blob/master/docs/architecture-decisions/adr017-per-body-tables-measured-by-the-project.md)
 /// sets out.
 ///
-/// A viewer draws from it the grid of points the photographer saw in the
-/// viewfinder, and marks on that grid the points of
-/// [`Metadata::focus_points`](crate::Metadata::focus_points), each found by
-/// its number with [`point`](Self::point). The points are in rising order
-/// of their numbers, each number above 0 and given once. The centers and
-/// the boxes follow the rules of [`Focus`]'s coordinates: every center
-/// lies on the frame, its edges included, and every box fits inside the
-/// frame around its center.
+/// A viewer reads from it the grid of points the photographer saw in the
+/// viewfinder, and finds in it each point of
+/// [`Metadata::focus_points`](crate::Metadata::focus_points) by its number
+/// with [`point`](Self::point). The points are in rising order of their
+/// numbers, each number above 0 and given once. The centers and the boxes
+/// follow the rules of [`Focus`]'s coordinates: every center lies on the
+/// frame, its edges included, and every box fits inside the frame around
+/// its center.
 ///
 /// The frame is the table's, whatever the shot. On a shot in a crop mode,
-/// a point of [`Metadata::focus_points`](crate::Metadata::focus_points)
-/// is in the crop's frame, while the layout stays in the body's full
-/// frame, and the same holds on a JPEG of a size whose picture shows a
-/// window of the frame rather than the whole of it, such as the Nikon
-/// D600's Medium JPEG, as the
+/// and in a JPEG of a size whose picture shows a window of the frame
+/// rather than the whole of it, such as the Nikon D600's Medium JPEG, the
+/// picture and its previews have the framing of that window, as the
 /// [decision to report the points the camera used, and to keep each crop's and JPEG size's window in the table](https://github.com/kuolas/raw-files/blob/master/docs/architecture-decisions/adr018-focus-points-placed-from-a-table-and-the-points-used.md)
-/// says.
-///
-/// So the layout has the previews' framing only on a shot that is not a
-/// crop, in a file whose picture shows the whole frame, where a viewer
-/// places each point on a preview by scaling it, as [`Focus::scaled_to`]
-/// scales a focus. On a crop, the picture, and so every preview, has the
-/// framing of the centered window of the table's frame that the crop
-/// keeps, as a JPEG of such a size has the framing of the window that its
-/// size shows, and the window's size is the frame of
-/// [`Metadata::focus_points`](crate::Metadata::focus_points) when the
-/// file gives points placed from the table, whose
-/// [`origin`](FocusPoints::origin) is [`Table`](FocusOrigin::Table). A
-/// point of the layout lies in that window at its center less half the
-/// difference between the two frames, across and down, and one whose box
-/// the window does not hold whole is not on the picture: on the Nikon
-/// D600's DX crop, the window is 3936 × 2624, and point 38, at
-/// (1812, 1705) in the table's 6016 × 4016 frame, lies at (772, 1009) in
-/// it. A preview smaller than the window then takes the point scaled from
-/// the window, as a focus is scaled. A crop shot whose file gives no
-/// points placed from the table, such as one in manual focus, a crop-mode
-/// JPEG smaller than the window or a shot in live view, which records its
-/// position in a frame of its own, gives no way to find the window. Nor
-/// does a D600 Medium JPEG shot so, whose picture shows a window of the
-/// frame
-/// ([the notes on the D600's JPEG sizes](https://github.com/kuolas/raw-files/blob/master/docs/formats/nef/autofocus-points.md#29-the-jpeg-sizes)).
-/// [Issue #65](https://github.com/kuolas/raw-files/issues/65) proposes a
-/// method that places the layout on the picture.
+/// says. A [`PlacedFocusLayout`] holds the layout placed on the picture,
+/// in the picture's frame, and is the one to scale onto a preview.
 ///
 /// The readers give a layout only for a body whose table is in raw-files;
 /// [`Metadata::focus_layout`](crate::Metadata::focus_layout) says which
@@ -1088,17 +1061,7 @@ impl FocusLayout {
         if points.is_empty() {
             return Err(ValueError::NoPoints);
         }
-        // Each number must be greater than the one before it, the first
-        // greater than 0, which Nikon writes for no point: so no number is
-        // 0 or given twice, and `point` can search the points by number.
-        let mut before = 0;
-        for point in points {
-            if point.number <= before {
-                return Err(ValueError::PointNumbersNotRising);
-            }
-            check_point(frame, point.center, Some(point.size))?;
-            before = point.number;
-        }
+        check_layout_points(frame, points)?;
         Ok(Self {
             recorded_model,
             frame,
@@ -1135,19 +1098,228 @@ impl FocusLayout {
     /// by its [`number`](FocusPoint::number).
     pub fn point(&self, number: u16) -> Option<FocusLayoutPoint> {
         // `new` takes the points only in rising order of their numbers.
-        self.points
-            .binary_search_by_key(&number, |point| point.number)
-            .ok()
-            .and_then(|index| self.points.get(index))
-            .copied()
+        point_numbered(self.points, number)
     }
+}
+
+/// The layout of a body's autofocus points placed on a file's picture:
+/// every point of the body's table that the picture shows, each a
+/// [`FocusLayoutPoint`] with its number, the center of its box and the
+/// box's size, in the picture's frame: the part of the table's frame
+/// that the picture shows, in the table's pixels.
+///
+/// A viewer draws from it the grid of points the photographer saw in the
+/// viewfinder over a preview of the picture, a crop's included.
+/// [`scaled_to`](Self::scaled_to) places the grid on the preview's size,
+/// and [`point`](Self::point) finds in it, by number, each point of
+/// [`Metadata::focus_points`](crate::Metadata::focus_points) placed from
+/// the table.
+///
+/// It differs from [`FocusLayout`] in its frame. A [`FocusLayout`] is the
+/// body's table, in the table's frame, the body's full-size output,
+/// whatever the shot. A placed layout is in the frame of the picture,
+/// which on a crop is a window of the table's frame. So only a placed
+/// layout has the previews' framing on every file, and only it can be
+/// scaled onto a preview; [`FocusLayout`] has no
+/// [`scaled_to`](Self::scaled_to).
+///
+/// The points are in rising order of their numbers, each number above 0
+/// and given once. The centers and the boxes follow the rules of
+/// [`Focus`]'s coordinates: every center lies on the frame, its edges
+/// included, and every box fits inside the frame around its center. A
+/// point of the table whose box the picture does not hold whole is left
+/// out, so a placed layout may hold fewer points than the table, or none.
+///
+/// # Equality
+///
+/// Two placed layouts are equal when the frame and the points, in order,
+/// are the same. There is no order, as there is none for [`Focus`]. There
+/// is no `Default` either, since a placed layout has a frame: a file whose
+/// picture's place in the table is not known gives `None`.
+///
+/// # Examples
+///
+/// Three points of the Nikon D600's layout placed on its DX crop, whose
+/// picture is the centered 3936 × 2624 window of the body's 6016 × 4016
+/// frame: the center point, 1, the top point of the left one of the three
+/// middle columns, 13, and the top point of the leftmost column, 38, each
+/// with its 164 × 164 box, moved by the window's origin, (1040, 696). Then
+/// placed on a 984 × 656 preview, a quarter of the window:
+///
+/// ```
+/// use raw_files::{FocusLayoutPoint, PlacedFocusLayout, Point, Size};
+///
+/// # fn main() -> Result<(), raw_files::ValueError> {
+/// let window = Size { width: 3936, height: 2624 };
+/// let size = Size { width: 164, height: 164 };
+/// let layout = PlacedFocusLayout::new(
+///     window,
+///     vec![
+///         FocusLayoutPoint::new(1, Point { x: 1968, y: 1311 }, size),
+///         FocusLayoutPoint::new(13, Point { x: 1728, y: 807 }, size),
+///         FocusLayoutPoint::new(38, Point { x: 772, y: 1009 }, size),
+///     ],
+/// )?;
+/// assert_eq!(layout.frame(), window);
+/// assert_eq!(layout.points().len(), 3);
+///
+/// let on_preview = layout.scaled_to(Size { width: 984, height: 656 })?;
+/// let point = on_preview.point(38).expect("point 38 is on the preview");
+/// assert_eq!(point.center(), Point { x: 193, y: 252 });
+/// assert_eq!(point.size(), Size { width: 41, height: 41 });
+/// # Ok(())
+/// # }
+/// ```
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct PlacedFocusLayout {
+    frame: Size,
+    points: Vec<FocusLayoutPoint>,
+}
+
+impl PlacedFocusLayout {
+    /// The layout placed on a picture of size `frame`, its points
+    /// `points`, in the order given. It may hold no points: a picture can
+    /// leave every point of the table out.
+    ///
+    /// The points are taken by value, and kept. This is how a caller
+    /// builds a placed layout for its tests.
+    ///
+    /// # Errors
+    ///
+    /// In the order they are checked, the points one at a time, in the
+    /// order given, each by the last four rules:
+    ///
+    /// - [`ZeroFrameSide`](ValueError::ZeroFrameSide) when either side of
+    ///   `frame` is zero;
+    /// - [`PointNumbersNotRising`](ValueError::PointNumbersNotRising) when
+    ///   a point's number is 0 or is not greater than the number of the
+    ///   point before it, as for [`FocusLayout::new`];
+    /// - [`CenterOffFrame`](ValueError::CenterOffFrame) when a point's
+    ///   center lies outside the frame, by the rule of [`Focus::new`];
+    /// - [`ZeroAreaSide`](ValueError::ZeroAreaSide) when a point's box has
+    ///   a zero side;
+    /// - [`AreaOffFrame`](ValueError::AreaOffFrame) when a point's box does
+    ///   not fit inside the frame around its center, by the rule of
+    ///   [`Focus::with_size`].
+    pub fn new(frame: Size, points: Vec<FocusLayoutPoint>) -> Result<Self, ValueError> {
+        check_frame(frame)?;
+        check_layout_points(frame, &points)?;
+        Ok(Self { frame, points })
+    }
+
+    /// The size of the frame every point is measured in: the part of the
+    /// table's frame that the picture shows, in the table's pixels. It
+    /// has the framing of the picture and its previews, but not always the
+    /// picture's size: on a JPEG smaller than the table's frame it is
+    /// still the table's. So scale the layout onto any picture or preview,
+    /// the picture itself included ([`scaled_to`](Self::scaled_to)). It
+    /// never has a zero side.
+    pub fn frame(&self) -> Size {
+        self.frame
+    }
+
+    /// Every point the picture shows, in rising order of their numbers.
+    /// Each number is above 0 and above the number before it, so no two
+    /// points share one; each center lies on the frame, and each box fits
+    /// inside it around its center. It may be empty.
+    pub fn points(&self) -> &[FocusLayoutPoint] {
+        &self.points
+    }
+
+    /// The point numbered `number`, or `None` when the layout has no point
+    /// of that number: the body has none, as for 0, or the picture leaves
+    /// it out. A point of
+    /// [`Metadata::focus_points`](crate::Metadata::focus_points) placed
+    /// from the table is found here by its
+    /// [`number`](FocusPoint::number).
+    pub fn point(&self, number: u16) -> Option<FocusLayoutPoint> {
+        // `new` takes the points only in rising order of their numbers.
+        point_numbered(&self.points, number)
+    }
+
+    /// The same layout measured in `frame`, such as a preview's size:
+    /// always a layout when `frame` has no zero side, whose frame is
+    /// `frame`, with the same points in the same order but for those left
+    /// out below.
+    ///
+    /// Each point is scaled as [`FocusPoints::scaled_to`] scales one, by
+    /// the same rounding and the same trimming: the center lands where it
+    /// rounds to, on the new frame, a box that rounds to nothing keeps a
+    /// side of one pixel, and a box too large to fit around the center is
+    /// trimmed to fit. A point whose box cannot fit at all, around a
+    /// center on an edge of the new frame, is left out, since every point
+    /// of a layout has a box. Rounding puts a center on an edge only on a
+    /// frame a few pixels across: on the Nikon D600's layout, one or two.
+    ///
+    /// Each call rounds to whole pixels. To place the layout on several
+    /// frames, scale it from the layout as read each time, not from one
+    /// already scaled, so that it is not rounded twice.
+    ///
+    /// # Errors
+    ///
+    /// [`ZeroFrameSide`](ValueError::ZeroFrameSide) when either side of
+    /// `frame` is zero.
+    pub fn scaled_to(&self, frame: Size) -> Result<Self, ValueError> {
+        check_frame(frame)?;
+        let points = self
+            .points
+            .iter()
+            .filter_map(|point| {
+                let (center, size) =
+                    scaled_point(point.center, Some(point.size), self.frame, frame);
+                Some(FocusLayoutPoint {
+                    center,
+                    size: size?,
+                    ..*point
+                })
+            })
+            .collect();
+        // Every scaled center lies on the frame, every box kept fits
+        // around it, and the numbers keep their order, so `new` refuses
+        // none: it returns the layout, never an error.
+        Self::new(frame, points)
+    }
+}
+
+/// Whether `points`, the points of a layout in the frame `frame`, are
+/// in rising order of their numbers, the first above 0, and each lies on
+/// the frame by [`check_point`], checked a point at a time, in the order
+/// given: the rules [`FocusLayout::new`] and [`PlacedFocusLayout::new`]
+/// check their points by. `frame` has no zero side, checked first by the
+/// callers.
+fn check_layout_points(frame: Size, points: &[FocusLayoutPoint]) -> Result<(), ValueError> {
+    // Each number must be greater than the one before it, the first
+    // greater than 0, which Nikon writes for no point: so no number is
+    // 0 or given twice, and `point_numbered` can search the points by
+    // number.
+    let mut before = 0;
+    for point in points {
+        if point.number <= before {
+            return Err(ValueError::PointNumbersNotRising);
+        }
+        check_point(frame, point.center, Some(point.size))?;
+        before = point.number;
+    }
+    Ok(())
+}
+
+/// The point of `points` numbered `number`, or `None` when none is.
+/// `points` is in rising order of their numbers, as
+/// [`check_layout_points`] checks it, so it is searched by halves.
+fn point_numbered(points: &[FocusLayoutPoint], number: u16) -> Option<FocusLayoutPoint> {
+    points
+        .binary_search_by_key(&number, |point| point.number)
+        .ok()
+        .and_then(|index| points.get(index))
+        .copied()
 }
 
 /// Whether a point centered at `center`, with an area of `size` when it has
 /// one, lies on the frame `frame`: [`Focus::new`]'s check of the center
 /// ([`check_center`]), then [`Focus::with_size`]'s of the area
 /// ([`check_area`]). The one rule a focus is checked by is so the one a
-/// [`FocusPoints`] and a [`FocusLayout`] check each of their points by,
+/// [`FocusPoints`], a [`FocusLayout`] and a [`PlacedFocusLayout`] check
+/// each of their points by,
 /// and its `is_ok()` the one by which the Nikon MakerNote's reader drops a
 /// point placed from a table that the crop's window leaves out.
 pub(crate) fn check_point(
@@ -2724,6 +2896,249 @@ mod tests {
         all.extend([base, again]);
         all.extend(others.iter().copied());
         let set: std::collections::HashSet<FocusLayout> = all.into_iter().collect();
+        assert_eq!(set.len(), others.len() + 1);
+    }
+
+    /// The D600's DX window: the centered 3936 by 2624 window of its
+    /// frame, at the origin (1040, 696).
+    const D600_DX: Size = Size {
+        width: 3_936,
+        height: 2_624,
+    };
+
+    /// [`D600_THREE`] placed on the DX window: each center less the
+    /// window's origin.
+    fn d600_three_on_dx() -> PlacedFocusLayout {
+        PlacedFocusLayout::new(
+            D600_DX,
+            vec![
+                d600(1, 1_968, 1_311),
+                d600(13, 1_728, 807),
+                d600(38, 772, 1_009),
+            ],
+        )
+        .unwrap()
+    }
+
+    #[test]
+    fn a_placed_layout_checks_its_points_by_the_rules_of_a_layout() {
+        // Arrays the layout tests refuse, and two they take, give the
+        // placed layout the same answer: the two check their points by one
+        // function.
+        static ZERO: [FocusLayoutPoint; 1] = [d600(0, 3_008, 2_007)];
+        static FALLING: [FocusLayoutPoint; 2] = [d600(2, 3_008, 2_007), d600(1, 2_768, 1_503)];
+        static TWICE: [FocusLayoutPoint; 2] = [d600(38, 1_812, 1_705), d600(38, 1_812, 1_705)];
+        static OFF_ACROSS: [FocusLayoutPoint; 1] = [first(6_017, 25, 2, 2)];
+        static NO_HEIGHT: [FocusLayoutPoint; 1] = [first(50, 25, 10, 0)];
+        static TOO_TALL: [FocusLayoutPoint; 1] = [first(50, 25, 2, 51)];
+        static FITS: [FocusLayoutPoint; 1] = [first(50, 25, 100, 50)];
+        let cases: [(&'static [FocusLayoutPoint], Result<(), ValueError>); 8] = [
+            (&ZERO, Err(ValueError::PointNumbersNotRising)),
+            (&FALLING, Err(ValueError::PointNumbersNotRising)),
+            (&TWICE, Err(ValueError::PointNumbersNotRising)),
+            (&OFF_ACROSS, Err(ValueError::CenterOffFrame)),
+            (&NO_HEIGHT, Err(ValueError::ZeroAreaSide)),
+            (&TOO_TALL, Err(ValueError::AreaOffFrame)),
+            (&FITS, Ok(())),
+            (&D600_THREE, Ok(())),
+        ];
+        for (points, expected) in cases {
+            let layout = FocusLayout::new("NIKON D600", D600_FRAME, points).map(|_| ());
+            let placed = PlacedFocusLayout::new(D600_FRAME, points.to_vec()).map(|_| ());
+            assert_eq!(layout, expected, "layout {points:?}");
+            assert_eq!(placed, expected, "placed {points:?}");
+        }
+    }
+
+    #[test]
+    fn a_placed_layout_reports_the_first_rule_broken_in_its_documented_order() {
+        let frame = size(100, 50);
+        let new = |points: &[FocusLayoutPoint]| PlacedFocusLayout::new(frame, points.to_vec());
+        // A zero side before any point: this point breaks every rule.
+        let broken = FocusLayoutPoint::new(0, point(101, 25), size(0, 2));
+        for side in [size(0, 50), size(100, 0), size(0, 0)] {
+            for points in [vec![broken], Vec::new()] {
+                assert_eq!(
+                    PlacedFocusLayout::new(side, points),
+                    Err(ValueError::ZeroFrameSide),
+                    "{side:?}"
+                );
+            }
+        }
+        // In one point: a number of 0 off the frame, a center off the frame
+        // with a box of zero width, a box of zero width too tall to fit,
+        // and a box too tall to fit.
+        assert_eq!(new(&[broken]), Err(ValueError::PointNumbersNotRising));
+        let checks = [
+            (first(101, 25, 0, 2), ValueError::CenterOffFrame),
+            (first(50, 25, 0, 51), ValueError::ZeroAreaSide),
+            (first(50, 25, 2, 51), ValueError::AreaOffFrame),
+        ];
+        for (point, err) in checks {
+            assert_eq!(new(&[point]), Err(err), "{point:?}");
+        }
+        // Across points, the first point that breaks a rule: the first,
+        // whose box does not fit, before the second, numbered 1 again;
+        // then a good point before one numbered 1 again.
+        let good = first(50, 25, 2, 2);
+        assert_eq!(
+            new(&[first(50, 25, 2, 51), good]),
+            Err(ValueError::AreaOffFrame)
+        );
+        assert_eq!(new(&[good, good]), Err(ValueError::PointNumbersNotRising));
+    }
+
+    #[test]
+    fn a_placed_layout_may_hold_no_points() {
+        let empty = PlacedFocusLayout::new(D600_DX, Vec::new()).unwrap();
+        assert_eq!(empty.frame(), D600_DX);
+        assert!(empty.points().is_empty());
+        assert_eq!(empty.point(1), None);
+        let scaled = empty.scaled_to(size(984, 656)).unwrap();
+        assert_eq!(scaled.frame(), size(984, 656));
+        assert!(scaled.points().is_empty());
+    }
+
+    #[test]
+    fn placed_layout_getters_return_what_was_built() {
+        let layout = d600_three_on_dx();
+        assert_eq!(layout.frame(), D600_DX);
+        assert_eq!(
+            layout.points(),
+            [
+                d600(1, 1_968, 1_311),
+                d600(13, 1_728, 807),
+                d600(38, 772, 1_009)
+            ]
+        );
+        for point in layout.points() {
+            assert_eq!(layout.point(point.number()), Some(*point));
+        }
+        // The body has points 2, 12, 37 and 39, and no point 0 or 40: none
+        // of them is among these three.
+        for number in [0, 2, 12, 14, 37, 39, 40, u16::MAX] {
+            assert_eq!(layout.point(number), None, "{number}");
+        }
+    }
+
+    #[test]
+    fn a_placed_layout_scaled_to_its_own_frame_is_unchanged_and_to_a_zero_side_is_refused() {
+        let layout = d600_three_on_dx();
+        assert_eq!(layout.scaled_to(D600_DX), Ok(layout.clone()));
+        let refused = Err(ValueError::ZeroFrameSide);
+        assert_eq!(layout.scaled_to(size(0, 656)), refused);
+        assert_eq!(layout.scaled_to(size(984, 0)), refused);
+        assert_eq!(layout.scaled_to(size(0, 0)), refused);
+    }
+
+    #[test]
+    fn a_placed_layout_scales_each_point_as_a_list_scales_it() {
+        // The three D600 points on the DX window, and on every frame of 1
+        // to 6 by 1 to 4 every point that fits it with a box 2 high, each
+        // scaled to frames of 1 to 9 by 1 to 9 and to three larger sizes:
+        // each point is the point a list of the same points gives, scaled,
+        // and the points left out are exactly the list's that keep no
+        // area.
+        let mut layouts = vec![d600_three_on_dx()];
+        for width in 1..=6_u32 {
+            for height in 1..=4_u32 {
+                let frame = size(width, height);
+                let mut points = Vec::new();
+                for x in 0..=width {
+                    for y in 0..=height {
+                        for side in 1..=width {
+                            if check_point(frame, point(x, y), Some(size(side, 2))).is_ok() {
+                                let number = u16::try_from(points.len() + 1).unwrap();
+                                let center = point(x, y);
+                                points.push(FocusLayoutPoint::new(number, center, size(side, 2)));
+                            }
+                        }
+                    }
+                }
+                layouts.push(PlacedFocusLayout::new(frame, points).unwrap());
+            }
+        }
+        let targets: Vec<Size> = (1..=9_u32)
+            .flat_map(|width| (1..=9_u32).map(move |height| size(width, height)))
+            .chain([size(984, 656), size(1_968, 1_312), size(6_016, 4_016)])
+            .collect();
+        let (mut kept, mut left_out) = (0, 0);
+        for layout in &layouts {
+            let mut list = FocusPoints::new(layout.frame(), FocusOrigin::Table).unwrap();
+            for point in layout.points() {
+                let point = FocusPoint::new(point.center())
+                    .with_number(point.number())
+                    .with_size(point.size());
+                list = list.with_point(point).unwrap();
+            }
+            for &target in &targets {
+                let context = format!("{layout:?} to {target:?}");
+                let scaled = layout.scaled_to(target).expect(&context);
+                assert_eq!(scaled.frame(), target, "{context}");
+                let expected: Vec<FocusLayoutPoint> = list
+                    .scaled_to(target)
+                    .expect(&context)
+                    .points()
+                    .iter()
+                    .filter_map(|point| {
+                        let (number, size) = (point.number()?, point.size()?);
+                        Some(FocusLayoutPoint::new(number, point.center(), size))
+                    })
+                    .collect();
+                assert_eq!(scaled.points(), expected, "{context}");
+                kept += scaled.points().len();
+                left_out += layout.points().len() - scaled.points().len();
+            }
+        }
+        // Points were kept and left out, so both cases are exercised.
+        assert!(kept > 0 && left_out > 0, "{kept} kept, {left_out} left out");
+    }
+
+    #[test]
+    fn a_placed_layout_on_a_frame_of_two_pixels_leaves_out_a_point_on_its_edge() {
+        // On a frame 2 pixels wide, point 38's center, 772 of the DX
+        // window's 3936, rounds to 0, the left edge, where no box fits:
+        // it is left out. Points 1 and 13 round to 1, with a box of 1 by
+        // 1, kept from rounding to nothing.
+        let layout = d600_three_on_dx();
+        let scaled = layout.scaled_to(size(2, 2)).unwrap();
+        assert_eq!(
+            scaled.points(),
+            [
+                FocusLayoutPoint::new(1, point(1, 1), size(1, 1)),
+                FocusLayoutPoint::new(13, point(1, 1), size(1, 1)),
+            ]
+        );
+        // One pixel wide: every center rounds to 0 or 1, both edges.
+        assert!(layout.scaled_to(size(1, 1)).unwrap().points().is_empty());
+        // Three pixels wide keeps all three.
+        assert_eq!(layout.scaled_to(size(3, 3)).unwrap().points().len(), 3);
+    }
+
+    #[test]
+    fn placed_layout_equality_is_by_every_value() {
+        let base = d600_three_on_dx();
+        let moved = vec![
+            d600(1, 1_968, 1_311),
+            d600(13, 1_728, 807),
+            d600(38, 773, 1_009),
+        ];
+        let others = [
+            PlacedFocusLayout::new(size(3_937, 2_624), base.points().to_vec()),
+            PlacedFocusLayout::new(D600_FRAME, base.points().to_vec()),
+            PlacedFocusLayout::new(D600_DX, base.points()[..2].to_vec()),
+            PlacedFocusLayout::new(D600_DX, moved),
+            PlacedFocusLayout::new(D600_DX, Vec::new()),
+        ];
+        let others: Vec<PlacedFocusLayout> = others.into_iter().map(Result::unwrap).collect();
+        for (place, other) in others.iter().enumerate() {
+            assert_ne!(&base, other, "value {place}");
+        }
+        assert_eq!(base, d600_three_on_dx());
+        let mut all = others.clone();
+        all.extend([base, d600_three_on_dx()]);
+        all.extend(others.iter().cloned());
+        let set: std::collections::HashSet<PlacedFocusLayout> = all.into_iter().collect();
         assert_eq!(set.len(), others.len() + 1);
     }
 }
