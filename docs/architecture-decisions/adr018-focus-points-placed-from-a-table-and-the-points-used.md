@@ -9,8 +9,9 @@
   [ADR015](adr015-the-focus-point-of-a-crop-mode-jpeg.md), the focus
   point of a JPEG
 - Date: 2026-10-26
-- Revision: 2, 2026-11-03
-- Issue: #57; each crop's and JPEG size's window #62
+- Revision: 3, 2026-11-18
+- Issue: #57; each crop's and JPEG size's window #62; the layout placed
+  on the picture #65
 
 ## Context
 
@@ -60,14 +61,24 @@ The D600's frames show, as the record details:
 So on a crop, and in some JPEG sizes, a placed point needs a window
 that only the body's record measures.
 
+A viewer that draws the grid of the body's points on a crop's preview
+meets the same window. The layout is in the table's frame, while a
+crop's previews have the window's framing. Scaled onto a DX preview,
+the grid puts point 38 about 414 pixels right of where it lies and 105
+below. A viewer could find the window only from the points the camera
+used, so a crop shot in manual focus gave none. And every viewer would
+repeat the reader's rules for the window and its edge.
+
 ## Decision
 
 We will place a focus point that the camera names by number from the
 table of the body's points, and say where every point came from. We
 will report the points the camera used, with the primary, the area mode
-and, for a body with a table, the body's layout. On a crop, and in a JPEG of
-a size whose picture is a window of the frame, a placed point is
-measured in that window, which the body's table keeps.
+and, for a body with a table, the body's layout, both in the table's
+frame and placed on the picture. On a crop, and in a JPEG of a size
+whose picture is a window of the frame, a placed point is measured in
+that window, which the body's table keeps, and so is the placed
+layout.
 
 - **A named point is placed from the table.** When a file's record has
   a zero frame or area and names a point, the point's center and box
@@ -147,8 +158,48 @@ measured in that window, which the body's table keeps.
   gives no mode.
 - **A body with a table gives its layout**, through
   `Metadata::focus_layout`: every point's number, center and box in the
-  table's frame, whatever the shot, so that a viewer can draw the grid.
-  A body without a table gives none.
+  table's frame, whatever the shot, the grid as the table holds it. A
+  body without a table gives none.
+- **The layout is also given placed on the picture**, through
+  `Metadata::placed_focus_layout`, as a type of its own,
+  `PlacedFocusLayout`. It holds every point of the table in the frame a
+  point placed from the table takes on that file, moved by the same
+  origin, by the reader's own rule.
+  - Its frame is the table's on a shot that is no crop, in a raw file
+    and in a JPEG whose picture is the whole frame. It is the window on
+    a confirmed crop and in a JPEG of a size the table lists.
+  - A point whose box the frame does not hold whole is left out, as a
+    placed point is dropped, so the layout may hold no points.
+  - It depends on the picture alone, not on the shot: a crop shot in
+    manual focus or in live view has it. Where the file gives points
+    placed from the table, the two share one frame.
+  - It is none where a placed point would be refused for its picture:
+    a crop the table does not confirm, or another origin; a crop-mode
+    JPEG not of the window's size; a JPEG of another shape, by ADR014's
+    rule. A file whose MakerNote is missing or cannot be read gives
+    none either, since nothing says whether it is a crop.
+  - Its `scaled_to` scales each point as a list of points is scaled. A
+    point whose box no longer fits at all, around a center on the new
+    frame's edge, is left out, since a point of a layout always has a
+    box. On the D600 that takes a frame one or two pixels across.
+  - `FocusLayout` stays the table, in the table's frame, `Copy`, with
+    no `scaled_to`. No public method places a layout in a window the
+    caller gives: only the reader knows which window holds.
+- **Two frames, two types**, so that only the layout on the picture can
+  be scaled onto a preview. The Rust API Guidelines say newtypes "can
+  statically distinguish between different interpretations of an
+  underlying type" (C-NEWTYPE). Other crates draw the same line, as
+  their published documentation shows:
+  - euclid 0.22.14 tags a value with its space "to prevent mixing
+    values from different spaces";
+  - rusttype 0.9.3 turns a `ScaledGlyph` into a `PositionedGlyph` by
+    `positioned`, a type for each stage, the form of the name;
+  - image 0.25.10's `crop_imm` gives a `SubImage`, "a view into another
+    image", not an image of the same type.
+
+  `PlacedFocusLayout::new` takes its points by value, as the guidelines
+  ask of a function that keeps what it is given (C-CALLER-CONTROL). The
+  guidelines and the three crates were read as documentation only.
 - **`Metadata::focus` keeps its shape and meaning** for every file that
   had a point. A recorded position is reported as before, with origin
   `Recorded`, and `Focus` stays `Copy`. A placed point is still the
@@ -220,6 +271,19 @@ Rejected:
   from a camera's JPEG, which ADR014 refuses.
 - **Leaving the Medium JPEG without a point**, while the NEF of the
   same shot gives one.
+- **One type for both layouts, holding borrowed or owned points, with
+  two getters.** Nothing would stop a caller from scaling the table's
+  layout onto a crop's preview, and `FocusLayout` would lose `Copy`.
+- **`Metadata::focus_layout` itself placed on the picture.** An
+  unconfirmed crop would give none where it gives the table, and the
+  whole grid, with the crop inside it, would be lost.
+- **The window from `Metadata`, with a `FocusLayout::cropped_to`.**
+  Every viewer would repeat the composition and the rule of the
+  window's edge.
+- **A point of the placed layout without a box** where scaling leaves
+  it no room, as a list's point keeps its center alone. A point of a
+  layout always has a box, and only a frame one or two pixels across
+  loses one.
 
 ## What this decision does not cover
 
@@ -237,8 +301,8 @@ Rejected:
 - A crop-mode JPEG smaller than the crop's window, such as a DX JPEG at
   the Medium size. Its picture is a part of the crop's window, and the
   D600's crop frames were shot at full size only. Such a JPEG gives no
-  placed point until frames in that crop at that size are measured, by
-  this record's rule or another.
+  placed point and no placed layout until frames in that crop at that
+  size are measured, by this record's rule or another.
 - A crop or a JPEG size whose picture is not centered in the output, or
   a JPEG size not scaled evenly: none is known. Its record would
   measure where the window lies, and a decision would say how the table
@@ -251,8 +315,6 @@ Rejected:
   table. Its frame is the one the file records, under
   [ADR012](adr012-focus-points-as-the-camera-records-them.md), ADR014
   and ADR015.
-- The layout of the body's points, which stays in the table's frame, on
-  a crop and on a JPEG size's window alike.
 - Which bodies have tables, which crops and sizes a body's record must
   shoot, and how a table and a window are measured: the procedure of
   the NEF notes, under
@@ -272,6 +334,15 @@ Rejected:
 - A caller that wants only the one point reads `Metadata::focus` as
   before. One that wants the origin, the list, the mode or the layout
   reads the new getters. Nothing a caller had changes shape.
+- A viewer draws the grid of the body's points on any preview of a file
+  with a placed layout, a crop's included, by scaling it, and finds the
+  points used in it by number. It repeats none of the reader's rules.
+- A crop shot in manual focus or in live view has its grid in the
+  window, though it names no point.
+- The D600's confirmed windows each hold every point of its table, so no
+  D600 file's placed layout leaves one out
+  ([§2.10](../formats/nef/autofocus-points.md#210-the-layout-on-the-picture)).
+  The rule matters for a body whose crop cuts through its grid.
 - The list of a recorded position has one point, so a caller can treat
   every file alike.
 - A set bit the table lacks, or a number beyond it, is counted in the
