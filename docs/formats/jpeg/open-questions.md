@@ -30,19 +30,6 @@ describes the files.
    and a camera's rating. raw-files does not read it; reading it would
    need a decision of its own. Affects
    [container-and-metadata.md](container-and-metadata.md#5-other-application-segments).
-3. **MPF images other than large thumbnails.** The Multi-Picture Format
-   lists more than large thumbnails: its MP types include a gain map
-   (0x050000), the panorama, disparity and multi-angle images of a
-   multi-frame file (0x020001 to 0x020003), and an original kept for
-   preservation (0x040000) (CIPA DC-007 Table 4, p. 15). Such an image is
-   a whole JPEG stream and would pass the checks every preview passes, so
-   a caller asking for the smallest preview that fits a size could be
-   given a gain map, or one frame of a panorama, in place of the picture.
-   Every camera file in the set lists only its first image and large
-   thumbnails of classes 1 and 2. The reader of the MPF index keeps no MP
-   type, so every image the index lists is a preview; a rule by type, such
-   as keeping large thumbnails only, would have it read the type. Affects
-   [container-and-metadata.md](container-and-metadata.md#7-the-multi-picture-format).
 
 ## 2. Facts to establish from sample files
 
@@ -64,8 +51,10 @@ describes the files.
   thumbnail; whether other Sony bodies and image sizes do the same is
   unchecked. [F] [P]
 - **The MP Entry flags.** The G7 X does not mark its first image as the
-  representative image; whether any file marks another image so, and
-  whether a reader should care, is open. [F] [I]
+  representative image; whether any file marks another image so is
+  open. raw-files reads no flag, only the MP type
+  ([section 7.3](container-and-metadata.md#73-which-images-are-previews)).
+  [F] [I]
 - **Two Exif segments.** No file in the set has a second Exif segment;
   the reader takes the first. A real file with two would show which one
   holds the camera's data. [F] [I]
@@ -161,6 +150,16 @@ describes the files.
   raw-files' walk, which follows the Interoperability pointer only after
   IFD0's chain and so reads that IFD as IFD1, and the reader gives the
   file's 128×85 thumbnail. [F]
+- **Which MPF images are previews.** The Multi-Picture Format lists
+  more than large thumbnails: a gain map, the frames of a multi-frame
+  file, an original kept for preservation. Each is a whole JPEG stream
+  that passes every check a preview's bytes pass. So only the large
+  thumbnails are previews, the first of each class
+  ([ADR014](../../architecture-decisions/adr014-jpeg-files-as-a-format-of-their-own.md)).
+  Every camera file in the set lists only large thumbnails after its
+  first image, and keeps them all
+  ([section 7.3](container-and-metadata.md#73-which-images-are-previews)).
+  [F] [I]
 - **The MP Entry's size** counts the SOI and EOI markers, on every file
   with MPF. [F]
 - **The MPF images' frame headers** lie 648 to 1,160 bytes into each

@@ -6,8 +6,8 @@
   from the standard tags; [ADR012](adr012-focus-points-as-the-camera-records-them.md),
   focus points as the camera records them
 - Date: 2026-10-21
-- Revision: 2, 2026-11-16
-- Issue: #35; the handle's name #107
+- Revision: 3, 2026-11-18
+- Issue: #35; the handle's name #107; the MPF previews #53
 
 ## Context
 
@@ -59,9 +59,23 @@ What a JPEG file holds is set out in public standards:
 - **The Multi-Picture Format** (CIPA DC-007, MPF) lets a file hold more
   images after the end of the first: an APP2 segment lists them, each with
   its type, size and offset, counted from the list's own header. The
-  types include large thumbnails for screens, with the main image's
-  aspect ratio and at most 640×480 or 1920×1080 pixels, among other
-  sizes.
+  types are:
+  - the main image, which is the file itself;
+  - large thumbnails for screens, copies of the picture with its aspect
+    ratio, in five classes of at most 640×480, 1920×1080, 3840×2160,
+    7680×4320 and 15360×8640 pixels, at most one of each class;
+  - a frame of a multi-frame file: one view of a panorama, of a stereo
+    pair or of a set of views;
+  - an original kept for preservation, the picture as it was before an
+    edit;
+  - a gain map, from which a viewer rebuilds a high dynamic range
+    picture: data, not a picture to show;
+  - an undefined type, which says nothing of what the image is;
+  - a family of type addition images, each type defined apart from the
+    standard.
+
+  Each of these images is a whole JPEG stream, so each passes the checks
+  that a preview's bytes pass.
 
 We read eight camera-original JPEGs published on Wikimedia Commons under
 open licenses, one from each of eight bodies, checked byte by byte to be
@@ -89,8 +103,9 @@ They showed:
   PixelYDimension) on every file. No file has a second Exif segment.
 - **Most hold larger previews in MPF.** The four newer Sony files and the
   G7 X list one image of 1616×1080 or 1620×1080 pixels, the D5300 two, of
-  640×424 and 1620×1080, all stored after the end of the main image. The
-  D70 and the A100 hold no MPF segment.
+  640×424 and 1620×1080, all stored after the end of the main image. Each
+  is a large thumbnail, of class 2, or of classes 1 and 2 on the D5300.
+  The D70 and the A100 hold no MPF segment.
 - **The MakerNotes are those of the raw files, with offsets counted from
   the segment's TIFF header.** The D5300 and D70 files hold the Nikon
   layout that NEF files use, which carries a TIFF header of its own as the
@@ -171,19 +186,41 @@ what the file records about its own picture.
   with every metadata value absent and its previews shown as stored.
   Such a segment costs the metadata and the previews that it holds, the
   thumbnail and the MakerNote's preview, never the file: the file itself
-  and the images of its MPF list, a segment of its own, remain previews.
+  and the large thumbnails of its MPF list, a segment of its own, remain
+  previews.
 - **The previews are the file and the smaller images it holds.** The
   file itself is a preview: its whole byte range, exactly as stored, the
   MPF images and any padding after the main image included, with the size
   of its frame header. A decoder stops at the end of the first image. The
-  others are IFD1's JPEG thumbnail; each image the MPF list holds after
-  the first, at its offset from the list's header; and, on a Nikon file,
-  the JPEG of the MakerNote's PreviewIFD, under the rule that holds in a
-  NEF: it must lie wholly inside the length the MakerNote declares. Each
-  must lie inside the file, the thumbnail inside the Exif segment, and
-  must start with SOI and hold, within its own bytes, a frame header that
+  others are IFD1's JPEG thumbnail; the large thumbnails of the MPF list,
+  at their offsets from the list's header, as the next point says; and,
+  on a Nikon file, the JPEG of the MakerNote's PreviewIFD, under the rule
+  that holds in a NEF: it must lie wholly inside the length the
+  MakerNote declares. Each must lie inside the file, the thumbnail
+  inside the Exif segment, and must start with SOI and hold, within its own bytes, a frame header that
   gives a size and is not lossless, as every preview raw-files reports.
   Each takes IFD0's orientation.
+- **Of the MPF list, only the large thumbnails, the first of each
+  class.** A preview is an entry whose MP type is 0x010001 to 0x010005,
+  and of each class only the first in the list's order. Every other
+  entry is not a preview, whatever it holds: the main image's, since the
+  file itself already is one; a frame of a multi-frame file; an original
+  kept for preservation; a gain map; an image of undefined type; and one
+  of a type the standard adds later.
+  - A large thumbnail is, by its type, a smaller copy of the picture with
+    the picture's aspect ratio, which is what a caller takes a preview to
+    be. The other types are other images or data, and an undefined type
+    gives no ground to take an image for a copy of the picture.
+  - One of each class is what the standard allows. Taking the first of
+    each bounds what a list costs at five images to check, however many
+    entries it has. A later entry of a class already taken is left out,
+    even when the first is found to hold no image and the later one
+    would. An entry at offset 0, the main image's place, takes no class.
+  - The type is read from the entry alone, from the low 24 bits of its
+    attribute. The flags and the image data format above them are not
+    read. Each large thumbnail kept is still checked as every preview
+    is, and its size is measured from its own frame header, not taken
+    from its class.
 - **The image size is the picture's.** A JPEG has no raw size. The image
   size is the size in the file's frame header. The Exif pixel dimensions
   are not read, as [ADR011](adr011-metadata-from-standard-tags.md)
@@ -208,9 +245,9 @@ what the file records about its own picture.
 - **No new limits.** The segment walk stops after a fixed number of
   steps, a marker or a fill byte each, as the search for a preview's
   frame header does; the Exif segment is bounded by its two-byte
-  length; the MPF list is an IFD under the existing limit on entries;
-  and reading a preview, the file included, stays under the existing
-  limit on preview bytes.
+  length; the MPF list is an IFD under the existing limit on entries,
+  and gives at most five candidates; and reading a preview, the file
+  included, stays under the existing limit on preview bytes.
 
 Rejected:
 
@@ -223,6 +260,24 @@ Rejected:
   hold an image of 1616×1080 or 1620×1080 for that.
 - **Leaving the MakerNote's preview out.** A D70 JPEG would give fewer
   previews than the raw file of the same body.
+- **Every image the MPF list holds after its first**, as this record
+  first had it. A gain map, a frame of a panorama or one view of a
+  stereo pair would be offered as the picture, at the size of a preview
+  of it. A caller that asks for the smallest preview of a given size
+  could be handed a phone's gain map in place of the picture. And a
+  hostile list of 4,092 entries cost 4,091 images to check, about 0.14
+  seconds a file in a release build.
+- **Every MPF image but the types known not to be pictures**, the
+  multi-frame images and the gain map. An image of undefined type, or an
+  original kept for preservation, would still be offered as a copy of
+  the picture. So would an image of a type the standard adds later,
+  until it was named here.
+- **Every large thumbnail, with no limit per class.** A list of 4,092
+  entries, as many as a segment holds, would cost 4,091 images to check,
+  to take images the standard does not allow.
+- **A budget of walking steps shared by all of a file's MPF images.** A
+  list's wrong entries could spend the budget before a right one is
+  checked, and a preview the file holds would be lost.
 - **The size the MPF list gives the first image, as the extent of the
   file's own preview.** The whole file is what a viewer opens, decoders
   stop at the end of the first image anyway, and a file without MPF has
@@ -264,8 +319,12 @@ Rejected:
 ## What this decision does not cover
 
 Other containers that cameras and phones write, such as HEIF; the XMP
-segment, which can record an editor's crop, rating or labels; the
-MakerNotes of other makers; telling an exported JPEG from a camera's by
+segment, which can record an editor's crop, rating or labels; the other
+images of an MPF list read for what they are, such as a gain map to
+rebuild a high dynamic range picture, or the frames of a panorama; the
+MP Attribute IFD that an image other than the first may carry; images
+that a file holds after its first without an MPF list; the MakerNotes
+of other makers; telling an exported JPEG from a camera's by
 anything but the shape of its picture; decoding a JPEG's pixels; writing
 or editing files; and pairing a JPEG with the raw file of the same shot.
 Each is a decision of its own, which builds on this one.
@@ -279,10 +338,15 @@ Each is a decision of its own, which builds on this one.
   must switch to `Format::is_raw`; the changelog says so, since a check of
   the API's signatures cannot see a change of behavior.
 - Opening a JPEG reads its segments up to the scan, the Exif and MPF
-  segments, and the start of each MPF image up to its frame header, which
-  can lie after the image's own application segments: one to three
-  blocks of 64 KiB on the Commons files. Nothing more is read for the
-  metadata.
+  segments, and the start of each large thumbnail kept up to its frame
+  header, which can lie after the image's own application segments: one
+  to three blocks of 64 KiB on the Commons files. Nothing more is read
+  for the metadata.
+- Opening a JPEG checks at most five MPF images, whatever its list
+  holds. Every Commons file keeps every MPF image it lists.
+- A file whose smaller copies of the picture are of another MP type, or
+  of the undefined one, loses them as previews. The file itself and its
+  Exif thumbnail remain. No camera file read writes them so.
 - A JPEG with more fill bytes before its scan than the walk's steps
   allow is refused, although the JPEG standard allows any number of
   them. None of the Commons files has a single one; the cap also bounds
@@ -295,7 +359,7 @@ Each is a decision of its own, which builds on this one.
   opens, but its own preview cannot be read without raising the limit.
 - An Exif segment whose TIFF header or IFD0 cannot be read costs the
   metadata, the thumbnail and the MakerNote's preview; the file and its
-  MPF images remain. A single damaged value costs only itself.
+  large thumbnails remain. A single damaged value costs only itself.
 - An export that keeps the shape of the camera's picture keeps its focus
   point, which scales with the picture. An export cropped to the same
   shape, or a square picture turned upright, cannot be told from the

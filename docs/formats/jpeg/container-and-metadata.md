@@ -425,12 +425,26 @@ them. [P][4] (5.1 and Figure 1, pp. 7 to 8)
   its EOI: the markers count. [F]
 - **The offset** is that of the image's SOI, from the MP header, and is
   0 for the first image. [P][4] (5.2.3.3.3, p. 16)
-- **The MP types** include 0x030000, the baseline primary image;
-  0x010001 to 0x010005, large thumbnails of classes 1 to 5; 0x020001 to
-  0x020003, the panorama, disparity and multi-angle images of a
-  multi-frame file; 0x040000, an original kept for preservation;
-  0x050000, a gain map; and 0x000000, undefined. [P][4] (Table 4, p. 15;
-  Figure 9, p. 16)
+- **The MP type** is the attribute's low 24 bits: a byte of type
+  information, 8 reserved bits, then a byte that gives the sub-type, such
+  as a large thumbnail's class. A code the table below does not list is
+  restricted. [P][4] (Figure 9, p. 16; text, p. 16)
+
+| MP type | Image | In a baseline MP file (`.JPG`) |
+|---|---|---|
+| 0x030000 | The baseline primary image, the first | required |
+| 0x010001 to 0x010005 | A large thumbnail of class 1 to 5 | allowed |
+| 0x040000 | An original kept for preservation, as Exif describes it | allowed |
+| 0x050000 | A gain map, as ISO 21496-1 describes it | allowed |
+| `xy000z`, x from 8 to F, y and z from 1 to F | A type addition image, each type defined in a registry CIPA keeps apart | allowed |
+| 0x020001 to 0x020003 | A panorama, disparity or multi-angle frame of a multi-frame image | not allowed: an extended MP file's (`.MPO`) |
+| 0x000000 | Undefined | not allowed: an extended MP file's |
+
+[P][4] (Table 4, p. 15; text, pp. 15 to 16)
+
+- **A baseline MP file** holds the primary image and may hold large
+  thumbnails, at most one of each class. It may also hold an original
+  kept for preservation and a gain map. [P][4] (6.1, pp. 29 to 30)
 
 ### 7.2 Large thumbnails
 
@@ -460,6 +474,10 @@ On the camera files [F]:
   dependent images, and the representative image) on the Sony and D5300
   files, and 0x80 (a parent, but not marked representative) on the G7 X;
   the thumbnails' is 0x40 (a dependent child). [F]
+- The first entry's MP type is 0x030000, the baseline primary image, on
+  every file. Each other entry's is 0x010001 or 0x010002, the class its
+  image's size falls in. No entry sets a reserved bit or an image data
+  format other than 0, JPEG. [F]
 - On the Sony files the MPF segment ends where the next segment starts at
   a multiple of 512 bytes from the start of the file. [F]
 - The specification does not say that the images follow the first one's
@@ -467,6 +485,37 @@ On the camera files [F]:
   extended MP file's order free. [P][4] (Figure 1, p. 8; 6.2, p. 32) On
   every camera file they follow the first image, in the order of their
   entries. [F]
+
+### 7.3 Which images are previews
+
+raw-files takes as previews only the large thumbnails of an MPF list,
+and of each class only the first in the list's order, as
+[ADR014](../../architecture-decisions/adr014-jpeg-files-as-a-format-of-their-own.md)
+decided. [I]
+
+- The other types are other images or data, such as a gain map or one
+  view of a stereo pair, which pass every check a preview's bytes pass.
+  [I]
+- The MP type is read from the entry's attribute alone. The flags and
+  the image data format are not read. [I]
+- At most five entries are kept, so a list of 4,092 entries, as many as
+  a segment holds, costs at most five images to check. [I]
+- On every camera file above, that is every image after the first. [F]
+- **On my own JPEGs** **[F]**, counted on 19 November 2026 with a
+  program of my own written from DC-007, as counts only: 25,297 whose
+  Make names a camera maker, 16,815 of them with an MPF index.
+  - 16,749 list after the main image only large thumbnails: one of
+    class 2 (11,236), or one of class 1 and one of class 2 (5,513). Each
+    keeps them all.
+  - The other 66 hold an index that does not hold together, and none of
+    their entries of another type points at an image.
+- **Six phone JPEGs of mine**, from a Samsung Galaxy S26 Ultra, counted
+  apart from the camera JPEGs, list a gain map under the undefined type,
+  0x000000, not 0x050000. It is one gray channel, a quarter of the
+  picture's width and height, and carries an ISO 21496-1 segment. The
+  rule leaves each out. Two of the six gave their gain map as a preview
+  before it; on the other four the entry's range runs past the end of
+  the file, so the finder already left it out. [F]
 
 ## 8. After the last image
 
@@ -596,8 +645,8 @@ Each segment as marker and length, in file order up to SOS. [F]
 | Canon G7 X | APP1 Exif 27,646; APP1 XMP 3,996; APP2 MPF 96; DQT; SOF0; DHT | 31,880 | 8,667,055 |
 
 On these files, reading the segments up to SOS, the Exif and MPF segments,
-and each MPF image up to its frame header takes one to three blocks of
-64 KiB. [F]
+and each large thumbnail up to its frame header takes one to three blocks
+of 64 KiB. [F]
 
 ## 12. Recommendation for raw-files
 
@@ -623,14 +672,16 @@ decided, as steps. [I]
    one outside is dropped as damage. A segment whose TIFF header or IFD0
    cannot be read gives none of the values the segment records, no
    thumbnail and no MakerNote preview; the file still opens, with its own
-   preview, its MPF images and its image size, which the frame header
-   gives, not the segment.
+   preview, its MPF list's large thumbnails and its image size, which the
+   frame header gives, not the segment.
 5. **The previews** are the file itself (its whole byte range, with the
-   main frame header's size); IFD1's JPEG thumbnail; each MPF entry after
-   the first, at the MP header's position plus its offset, inside the file;
-   and on a Nikon file the MakerNote PreviewIFD's JPEG inside the
-   MakerNote's declared length. Each must start with SOI and hold,
-   within its own bytes, a frame header that has no zero side and is not
+   main frame header's size); IFD1's JPEG thumbnail; each MPF entry of a
+   large thumbnail (MP type 0x010001 to 0x010005), the first of each
+   class in the list's order, at the MP header's position plus its
+   offset, inside the file; and on a Nikon file the MakerNote
+   PreviewIFD's JPEG inside the MakerNote's declared length. Each must
+   start with SOI and hold, within its own bytes, a frame header that
+   has no zero side and is not
    lossless; each takes IFD0's orientation.
 6. **The metadata** comes from the standard tags, then the MakerNote by
    IFD0's Make, as for a NEF or an ARW; the image size is the main frame
