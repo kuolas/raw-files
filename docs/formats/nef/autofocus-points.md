@@ -530,6 +530,35 @@ The size alone also cannot tell an export from a camera JPEG:
   rounding takes the two shapes for one, and its point lands under a
   pixel off. **[I]**
 
+### 2.10 The layout on the picture
+
+The table's frame is the body's full-size output, so the layout of the
+39 points has the previews' framing only on a picture of the whole
+frame. On a DX frame and on a Medium JPEG the picture is a window of the
+frame (sections 2.6 and 2.9). There the layout placed on the picture is
+the table's moved into the window, by the window's origin, as a point
+placed from the table is
+([ADR018](../../architecture-decisions/adr018-focus-points-placed-from-a-table-and-the-points-used.md)).
+A point whose box the window does not hold whole is left out.
+
+Computed from the table of section 2.4 **[I]**:
+
+| Picture | Part of the 6016x4016 frame | Origin | Points held | Nearest box to an edge |
+|---|---|---|---|---|
+| FX, and a Large or Small JPEG | the whole frame | (0, 0) | 39 | 1,421 pixels |
+| DX crop | 3936x2624 | (1040, 696) | 39 | 690 pixels |
+| Medium JPEG | 6010x4006 | (3, 5) | 39 | 1,416 pixels |
+
+So every window the table keeps holds every point, and no D600 file's
+placed layout leaves one out. The nearest box on the DX crop is that of
+the left column's points, 37 to 39.
+
+The worked case: on a DX frame, point 38, at (1812, 1705) in the table's
+frame, lies at (1812 − 1040, 1705 − 696) = (772, 1009) in the window.
+NX Studio drew it on frame 49 at (770, 1009) (section 2.6). The layout
+scaled onto the window without being placed would put it at
+(1186, 1114), about 414 pixels right and 105 below. **[I]**
+
 ## 3. Bodies without a table
 
 Every other body gives no point for a shot that names one, since
