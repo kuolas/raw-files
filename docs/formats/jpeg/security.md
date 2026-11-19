@@ -157,8 +157,8 @@ the ones a JPEG adds.
 5. **Damage costs the data it touches, never the file.** A bad entry
    costs its value; a TIFF header or IFD0 that cannot be read costs the
    metadata, the thumbnail and the MakerNote's preview; the file still
-   opens, with its own preview and its MPF images. A component count of 0
-   is a value of no use, not a reason to read.
+   opens, with its own preview and its MPF list's large thumbnails. A
+   component count of 0 is a value of no use, not a reason to read.
    (CVE-2012-0259, CVE-2012-1610, CVE-2020-12767.)
 6. **The thumbnail is checked like any preview.** JPEGInterchangeFormat
    and JPEGInterchangeFormatLength must describe a range inside the Exif
@@ -174,7 +174,11 @@ the ones a JPEG adds.
    to the MP header's position with `checked_add`; the image must lie
    inside the file and start with SOI, and its frame header is searched
    for within it only. The declared size is a bound, never an allocation.
-   The first entry, at offset 0, is the file itself. (zenjpeg #223,
+   The first entry, at offset 0, is the file itself. Only the first
+   large thumbnail of each class is a candidate
+   ([ADR014](../../architecture-decisions/adr014-jpeg-files-as-a-format-of-their-own.md)),
+   so a list of 4,092 entries, as many as a segment holds, costs at most
+   five searches for a frame header, not one per entry. (zenjpeg #223,
    CVE-2021-27921.)
 8. **No allocation is sized from a tag or a frame header.** The frame
    header's width and height are reported, never multiplied into a
