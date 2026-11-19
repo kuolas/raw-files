@@ -33,7 +33,7 @@ use crate::authorship::Authorship;
 use crate::camera::Camera;
 use crate::camera_settings::CameraSettings;
 use crate::datetime::DateTime;
-use crate::focus::{Focus, FocusLayout, FocusPoints};
+use crate::focus::{Focus, FocusLayout, FocusPoints, PlacedFocusLayout};
 use crate::geometry::Size;
 use crate::location::Location;
 use crate::orientation::Orientation;
@@ -162,6 +162,7 @@ pub struct Metadata {
     pub(crate) image_size: Option<Size>,
     pub(crate) focus_points: Option<FocusPoints>,
     pub(crate) focus_layout: Option<FocusLayout>,
+    pub(crate) placed_focus_layout: Option<PlacedFocusLayout>,
 }
 
 impl Metadata {
@@ -489,7 +490,9 @@ impl Metadata {
     /// that the file names as used, in number order. Each has its number
     /// and the table's box, and the list has the origin
     /// [`Table`](crate::FocusOrigin::Table). On a crop, a point the crop's
-    /// window leaves out is not in the list.
+    /// window leaves out is not in the list, and
+    /// [`placed_focus_layout`](Self::placed_focus_layout) gives the body's
+    /// whole grid of points in the list's frame.
     ///
     /// It is `None` for the reasons [`focus`](Self::focus) gives. Every list
     /// the readers give has a primary.
@@ -554,8 +557,8 @@ impl Metadata {
     /// the points of [`focus_points`](Self::focus_points) are in the
     /// crop's frame, not in the layout's, as they are in the window of the
     /// frame that a JPEG of some sizes shows, such as the Nikon D600's
-    /// Medium JPEG, and [`FocusLayout`] says how to place the layout on
-    /// such a shot's picture.
+    /// Medium JPEG. [`placed_focus_layout`](Self::placed_focus_layout)
+    /// gives the layout placed on such a shot's picture.
     ///
     /// # Examples
     ///
@@ -584,6 +587,90 @@ impl Metadata {
     /// ```
     pub fn focus_layout(&self) -> Option<FocusLayout> {
         self.focus_layout
+    }
+
+    /// The layout of the body's autofocus points placed on the file's
+    /// picture (see [`PlacedFocusLayout`]): every point of raw-files' table
+    /// of the body that the picture shows, each with its number, the
+    /// center of its box and the box's size, in the part of the table's
+    /// frame that the picture shows. That frame has the framing of the
+    /// picture and its previews, though not always the picture's size, so
+    /// the layout is scaled onto any of them, the picture itself included.
+    ///
+    /// A viewer draws it on a preview with
+    /// [`PlacedFocusLayout::scaled_to`], a crop's included, and marks on it
+    /// the points of [`focus_points`](Self::focus_points), found by their
+    /// numbers. [`focus_layout`](Self::focus_layout) gives the same points
+    /// in the table's own frame.
+    ///
+    /// A file has one when its body has a table in raw-files, as for
+    /// [`focus_layout`](Self::focus_layout), and the place of its picture
+    /// in the table's frame is known. The frame is then:
+    ///
+    /// - the table's, on a shot that is not a crop, in a raw file and in
+    ///   a JPEG whose picture is the whole frame, at any size;
+    /// - the crop's window, on a crop the table's record confirms;
+    /// - the window of the frame that a JPEG of some sizes shows, such as
+    ///   the Nikon D600's Medium JPEG.
+    ///
+    /// It does not depend on the shot's focus: a manual-focus or live-view
+    /// shot has it, as does a shot whose point raw-files cannot place.
+    /// Where [`focus_points`](Self::focus_points) are placed from the table,
+    /// their frame is this layout's. A point of the table whose box the
+    /// picture does not hold whole is left out.
+    ///
+    /// It is `None` where the picture's place in the table's frame is not
+    /// known, even when [`focus_layout`](Self::focus_layout) gives the
+    /// table:
+    ///
+    /// - on a crop the table's record does not confirm, or whose origin is
+    ///   not the window's;
+    /// - on a crop-mode JPEG whose size is not the crop's window, such as
+    ///   one at a smaller size;
+    /// - in a JPEG whose picture has another shape than the frame, as an
+    ///   export cut or turned upright has;
+    /// - in a file whose MakerNote is missing or cannot be read, which
+    ///   does not say whether the shot is a crop.
+    ///
+    /// A JPEG that an editor cut to the camera's shape, or cut or scaled
+    /// to exactly a size whose window the table keeps, such as the D600's
+    /// Medium size, keeps a placed layout that may be misplaced, as its
+    /// points are
+    /// ([the open questions on JPEG files](https://github.com/kuolas/raw-files/blob/master/docs/formats/jpeg/open-questions.md#1-decisions-for-the-maintainers)).
+    ///
+    /// The D600's windows, and how many of its points each holds, are in
+    /// [the notes on the D600's layout](https://github.com/kuolas/raw-files/blob/master/docs/formats/nef/autofocus-points.md#210-the-layout-on-the-picture).
+    ///
+    /// # Examples
+    ///
+    /// The grid of the body's points on a file's largest preview, with the
+    /// points the camera used marked, matched by their numbers:
+    ///
+    /// ```no_run
+    /// use raw_files::{CameraFile, FocusPoint};
+    ///
+    /// # fn main() -> raw_files::Result<()> {
+    /// let file = CameraFile::open("photo.nef")?;
+    /// let metadata = file.metadata();
+    /// let layout = metadata.placed_focus_layout();
+    /// if let (Some(layout), Some(preview)) = (layout, file.largest_preview()) {
+    ///     let used: Vec<u16> = metadata
+    ///         .focus_points()
+    ///         .map(|points| points.points().iter().filter_map(FocusPoint::number).collect())
+    ///         .unwrap_or_default();
+    ///     if let Ok(grid) = layout.scaled_to(preview.size()) {
+    ///         for point in grid.points() {
+    ///             let (number, center, size) = (point.number(), point.center(), point.size());
+    ///             let mark = if used.contains(&number) { ", used" } else { "" };
+    ///             println!("point {number}: a box of {size} at {center}{mark}");
+    ///         }
+    ///     }
+    /// }
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn placed_focus_layout(&self) -> Option<&PlacedFocusLayout> {
+        self.placed_focus_layout.as_ref()
     }
 
     /// Sets the camera, in place of the one it had; [`camera`](Self::camera)
@@ -698,12 +785,26 @@ impl Metadata {
     }
 
     /// Sets the layout of the body's autofocus points, in place of any set
-    /// before; [`focus_layout`](Self::focus_layout) reads it. The focus and
-    /// the points are left as they were, as [`with_focus`](Self::with_focus)
-    /// and [`with_focus_points`](Self::with_focus_points) leave the layout.
+    /// before; [`focus_layout`](Self::focus_layout) reads it. The focus,
+    /// the points and the placed layout are left as they were, as
+    /// [`with_focus`](Self::with_focus),
+    /// [`with_focus_points`](Self::with_focus_points) and
+    /// [`with_placed_focus_layout`](Self::with_placed_focus_layout) leave
+    /// this one.
     #[must_use]
     pub fn with_focus_layout(mut self, layout: FocusLayout) -> Self {
         self.focus_layout = Some(layout);
+        self
+    }
+
+    /// Sets the layout of the body's autofocus points placed on the
+    /// picture, in place of any set before;
+    /// [`placed_focus_layout`](Self::placed_focus_layout) reads it. The
+    /// focus, the points and the layout in the table's frame are left as
+    /// they were, as their setters leave this one.
+    #[must_use]
+    pub fn with_placed_focus_layout(mut self, layout: PlacedFocusLayout) -> Self {
+        self.placed_focus_layout = Some(layout);
         self
     }
 }
@@ -1509,6 +1610,7 @@ mod tests {
             }),
             focus_points: Some(FocusPoints::from(z9_focus())),
             focus_layout: None,
+            placed_focus_layout: None,
         }
     }
 
@@ -1577,6 +1679,7 @@ mod tests {
         assert_eq!(metadata.focus(), None);
         assert_eq!(metadata.focus_points(), None);
         assert_eq!(metadata.focus_layout(), None);
+        assert_eq!(metadata.placed_focus_layout(), None);
     }
 
     #[test]
@@ -1709,6 +1812,36 @@ mod tests {
         assert_eq!(listed_after, listed);
         let focused_after = Metadata::default().with_focus_layout(layout).with_focus(z9);
         assert_eq!(focused_after, focused);
+    }
+
+    #[test]
+    fn the_placed_layout_is_set_apart_from_the_layout_and_the_points() {
+        let (layout, list) = (d600_layout(), two_points());
+        let placed = PlacedFocusLayout::new(size(3_936, 2_624), D600_POINTS.to_vec()).unwrap();
+        // Alone, it gives nothing else.
+        let alone = Metadata::default().with_placed_focus_layout(placed.clone());
+        assert_eq!(alone.placed_focus_layout(), Some(&placed));
+        assert_eq!(alone.focus_layout(), None);
+        assert_eq!(alone.focus_points(), None);
+        assert_eq!(alone.focus(), None);
+        // Set before or after the layout and the points, each setter
+        // leaves the others.
+        let after = Metadata::default()
+            .with_focus_layout(layout)
+            .with_focus_points(list.clone())
+            .with_placed_focus_layout(placed.clone());
+        let before = Metadata::default()
+            .with_placed_focus_layout(placed.clone())
+            .with_focus_layout(layout)
+            .with_focus_points(list.clone());
+        assert_eq!(after, before);
+        assert_eq!(after.placed_focus_layout(), Some(&placed));
+        assert_eq!(after.focus_layout(), Some(layout));
+        assert_eq!(after.focus_points(), Some(&list));
+        // A later placed layout replaces the earlier one.
+        let empty = PlacedFocusLayout::new(size(1, 1), Vec::new()).unwrap();
+        let replaced = after.with_placed_focus_layout(empty.clone());
+        assert_eq!(replaced.placed_focus_layout(), Some(&empty));
     }
 
     #[test]

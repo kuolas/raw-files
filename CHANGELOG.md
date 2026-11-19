@@ -101,6 +101,16 @@ does. An entry that can break a caller opens with **Breaking:**.
   in a scheme of their own, and no file confirms what they record, so
   `Metadata` gains no value from them. The layout is read only in a
   little-endian Exif segment, the case of every file known.
+- `Metadata::placed_focus_layout` gives the layout of the body's
+  autofocus points placed on the file's picture, as a
+  `PlacedFocusLayout`
+  ([#65](https://github.com/kuolas/raw-files/issues/65)):
+  - a viewer draws the grid on any preview with its `scaled_to`, a
+    crop's included, where `Metadata::focus_layout` stays in the
+    table's frame;
+  - a crop shot in manual focus or in live view has it too, where the
+    crop's window was known before only from the points the camera
+    used.
 
 ### Changed
 

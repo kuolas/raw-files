@@ -557,7 +557,10 @@ The worked case: on a DX frame, point 38, at (1812, 1705) in the table's
 frame, lies at (1812 − 1040, 1705 − 696) = (772, 1009) in the window.
 NX Studio drew it on frame 49 at (770, 1009) (section 2.6). The layout
 scaled onto the window without being placed would put it at
-(1186, 1114), about 414 pixels right and 105 below. **[I]**
+(1186, 1114), about 414 pixels right and 105 below. **[I]** The reader
+gives frame 49 that placed layout, its 39 points in the 3936x2624
+window, with point 38 at (772, 1009), where its focus point lies.
+**[F]**
 
 ## 3. Bodies without a table
 

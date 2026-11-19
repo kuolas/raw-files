@@ -207,9 +207,10 @@ fn parse<R: Read + Seek>(
 /// ColorSpace is kept as read, so that the MakerNote's color space never
 /// overrules it.
 ///
-/// The focus points are kept only when their frame has the picture's
-/// shape, to within one pixel of rounding in either size, in the stored
-/// orientation ([`Size::same_shape`], ADR014). A camera's own JPEG passes,
+/// The focus points, and the layout placed on the picture, are each kept
+/// only when their frame has the picture's shape, to within one pixel of
+/// rounding in either size, in the stored orientation
+/// ([`Size::same_shape`], ADR014). A camera's own JPEG passes,
 /// and so does an export scaled from it. An export cut to another shape, or
 /// turned upright in its pixels, gives no point, even when it keeps the
 /// camera's MakerNote. The test sees only the points the MakerNote reader
@@ -254,6 +255,9 @@ fn metadata<R: Read + Seek>(
     metadata.focus_points = metadata
         .focus_points
         .filter(|points| points.frame().same_shape(size));
+    metadata.placed_focus_layout = metadata
+        .placed_focus_layout
+        .filter(|layout| layout.frame().same_shape(size));
     Ok(metadata)
 }
 

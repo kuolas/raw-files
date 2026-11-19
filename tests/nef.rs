@@ -63,8 +63,9 @@ use support::nef::{
 };
 use support::samples::{
     Folder, Jpeg, LocationPart, Sample, SampleEntries, SampleFineTune, SampleFocus, SampleLens,
-    SampleMetadata, SampleSettings, SerialShape, Text, check, check_enciphered, check_entries,
-    check_every, check_fixture_tables, check_metadata, check_tables, sizes,
+    SampleMetadata, SamplePlacedLayout, SampleSettings, SerialShape, Text, check, check_enciphered,
+    check_entries, check_every, check_fixture_tables, check_metadata, check_placed_layout,
+    check_tables, sizes,
 };
 use support::tiff_builder::{
     Built, EXIF_IFD, ORDERS, Order, RawValue, SHORT, SUB_IFDS, TiffBuilder,
@@ -1102,6 +1103,7 @@ const FIXTURE_METADATA: &[SampleMetadata] = &[
         }),
         // raw-files has no table of the Z 9's points.
         focus_layout: None,
+        placed_focus_layout: None,
         // From the Exif IFD: aperture priority, matrix metering, a Flash of
         // 0, no flash fired and no mode recorded, and auto white balance.
         // From the MakerNote: the color temperature auto white balance
@@ -1174,6 +1176,7 @@ const FIXTURE_METADATA: &[SampleMetadata] = &[
             area_mode: Some(FocusAreaMode::Single), // code 193
         }),
         focus_layout: None,
+        placed_focus_layout: None,
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
             color_temperature: Some(2860),
@@ -1248,6 +1251,10 @@ const FIXTURE_METADATA: &[SampleMetadata] = &[
             area_mode: Some(FocusAreaMode::Single),
         }),
         focus_layout: Some("NIKON D600"),
+        placed_focus_layout: Some(SamplePlacedLayout {
+            frame: (6016, 4016),
+            points: 39,
+        }),
         // From the Exif IFD: aperture priority, matrix metering, auto white
         // balance, and a Flash of 16, the flash off by the camera's setting
         // and not fired. From the MakerNote: the fine-tuning 0x000B
@@ -1791,6 +1798,24 @@ fn every_frame_of_the_d600_session_gives_what_its_bytes_record() {
         assert_eq!(layout.recorded_model(), "NIKON D600", "{label}");
         assert_eq!(layout.frame(), as_size((6016, 4016)), "{label}");
         assert_eq!(layout.points().len(), 39, "{label}");
+        // The layout placed on the picture, whatever the shot: on an FX
+        // frame in the table's frame, where it is the layout itself, and on
+        // a DX frame in the crop's window, at CropHiSpeed's origin. Both
+        // hold every point of the D600.
+        let (window, origin) = if image_area == D600_DX {
+            (D600_WINDOW, Point { x: 1040, y: 696 })
+        } else {
+            (D600_FULL, Point { x: 0, y: 0 })
+        };
+        let held = check_placed_layout(label, metadata, as_size(window), origin);
+        assert_eq!(held, 39, "{label}");
+        if image_area == D600_FX {
+            assert_eq!(
+                metadata.placed_focus_layout().map(|placed| placed.points()),
+                Some(layout.points()),
+                "{label}"
+            );
+        }
         check_d600_focus(label, metadata, focus);
     }
 }
@@ -1905,11 +1930,42 @@ fn the_d600_frame_7856_gives_point_1_placed_in_the_tables_frame_in_3d_tracking()
         .unwrap_or_else(|| panic!("{label}: no layout"));
     assert_eq!(layout.frame(), as_size(D600_FULL), "{label}");
     assert_eq!(layout.points().len(), 39, "{label}");
+    let held = check_placed_layout(label, metadata, as_size(D600_FULL), Point { x: 0, y: 0 });
+    assert_eq!(held, 39, "{label}");
     check_d600_focus(
         label,
         metadata,
         Placed(D600_FULL, 1, FocusAreaMode::Tracking, &[(1, (3008, 2007))]),
     );
+}
+
+/// Checks that frame 49 of the D600 session, shot in the DX crop with
+/// point 38, gives the layout of the D600's points placed on its picture,
+/// the crop's 3936 by 2624 window: point 38, at (1812, 1705) in the
+/// table's frame, lies at (772, 1009), less the window's origin,
+/// (1040, 696), where the frame's focus point lies. The window holds the
+/// box of every point, so the layout leaves none out.
+#[test]
+fn the_d600_dx_frame_49_gives_the_layout_placed_in_the_crop_window() {
+    let name = support::fixtures::d600_frame(49);
+    let label = name.as_str();
+    let file = CameraFile::open(support::fixtures::fixture(label)).unwrap();
+    let metadata = file.metadata();
+    assert_eq!(metadata.camera_settings().image_area(), D600_DX, "{label}");
+    let window = as_size(D600_WINDOW);
+    let held = check_placed_layout(label, metadata, window, Point { x: 1040, y: 696 });
+    assert_eq!(held, 39, "{label}");
+    let placed = metadata.placed_focus_layout().unwrap();
+    let point_38 = placed
+        .point(38)
+        .unwrap_or_else(|| panic!("{label}: no point 38"));
+    assert_eq!(point_38.center(), Point { x: 772, y: 1009 }, "{label}");
+    assert_eq!(point_38.size(), as_size((164, 164)), "{label}");
+    let focus = metadata
+        .focus()
+        .unwrap_or_else(|| panic!("{label}: no focus point"));
+    assert_eq!(focus.frame(), window, "{label}");
+    assert_eq!(focus.center(), point_38.center(), "{label}");
 }
 
 /// Checks that point 38 of the D600's layout, which frame 4 of the D600
@@ -1937,7 +1993,8 @@ fn the_d600_frame_4s_point_38_in_the_layout_lies_at_its_focus_point() {
 /// points when its MakerNote is missing, as after an editor drops it on a
 /// re-save, and when it cannot be read, its inner TIFF header zeroed: the
 /// layout depends on the Model alone. Neither file gives a focus point,
-/// which only the MakerNote records.
+/// which only the MakerNote records, nor the layout placed on the picture,
+/// since only the MakerNote says whether the shot is a crop.
 #[test]
 fn the_d600_frame_4_gives_the_layout_without_a_readable_makernote() {
     let name = support::fixtures::d600_frame(4);
@@ -1979,6 +2036,7 @@ fn the_d600_frame_4_gives_the_layout_without_a_readable_makernote() {
         );
         assert_eq!(metadata.focus(), None, "{label}, {what}");
         assert_eq!(metadata.focus_points(), None, "{label}, {what}");
+        assert_eq!(metadata.placed_focus_layout(), None, "{label}, {what}");
         let layout = metadata
             .focus_layout()
             .unwrap_or_else(|| panic!("{label}, {what}: no layout"));
@@ -3055,6 +3113,7 @@ const METADATA: &[SampleMetadata] = &[
             area_mode: Some(FocusAreaMode::Single), // code 193
         }),
         focus_layout: None,
+        placed_focus_layout: None,
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
             color_temperature: Some(4650),
@@ -3116,6 +3175,7 @@ const METADATA: &[SampleMetadata] = &[
             area_mode: Some(FocusAreaMode::Single), // code 193
         }),
         focus_layout: None,
+        placed_focus_layout: None,
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
             color_temperature: Some(4630),
@@ -3177,6 +3237,7 @@ const METADATA: &[SampleMetadata] = &[
             area_mode: Some(FocusAreaMode::Single), // code 193
         }),
         focus_layout: None,
+        placed_focus_layout: None,
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
             color_temperature: Some(4630),
@@ -3226,6 +3287,7 @@ const METADATA: &[SampleMetadata] = &[
         image_size: Some((2012, 1324)),
         focus: None, // no AFInfo2: AFInfo holds a point number only
         focus_layout: None,
+        placed_focus_layout: None,
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Daylight),
             color_temperature: None,
@@ -3272,6 +3334,7 @@ const METADATA: &[SampleMetadata] = &[
         image_size: Some((4028, 1324)),
         focus: None, // no AFInfo2: AFInfo holds a point number only
         focus_layout: None,
+        placed_focus_layout: None,
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
             color_temperature: None,
@@ -3318,6 +3381,7 @@ const METADATA: &[SampleMetadata] = &[
         image_size: Some((4028, 1324)),
         focus: None, // no AFInfo2: AFInfo holds a point number only
         focus_layout: None,
+        placed_focus_layout: None,
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Flash),
             color_temperature: None,
@@ -3364,6 +3428,7 @@ const METADATA: &[SampleMetadata] = &[
         image_size: Some((3034, 2024)),
         focus: None, // no AFInfo2: AFInfo holds a point number only
         focus_layout: None,
+        placed_focus_layout: None,
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Shade),
             color_temperature: None,
@@ -3410,6 +3475,7 @@ const METADATA: &[SampleMetadata] = &[
         image_size: Some((3040, 2014)),
         focus: None, // no AFInfo2: AFInfo holds a point number only
         focus_layout: None,
+        placed_focus_layout: None,
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
             color_temperature: None,
@@ -3456,6 +3522,7 @@ const METADATA: &[SampleMetadata] = &[
         image_size: Some((3904, 2616)),
         focus: None, // no AFInfo2: AFInfo holds a point number only
         focus_layout: None,
+        placed_focus_layout: None,
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
             color_temperature: None,
@@ -3505,6 +3572,7 @@ const METADATA: &[SampleMetadata] = &[
         image_size: Some((4352, 2868)),
         focus: None, // FocusMode MANUAL, and a zero frame
         focus_layout: None,
+        placed_focus_layout: None,
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
             color_temperature: None,
@@ -3557,6 +3625,7 @@ const METADATA: &[SampleMetadata] = &[
         image_size: Some((4288, 2844)),
         focus: None, // a viewfinder shot that names a point: no table for this body
         focus_layout: None,
+        placed_focus_layout: None,
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
             color_temperature: None,
@@ -3618,6 +3687,7 @@ const METADATA: &[SampleMetadata] = &[
             area_mode: None, // code 1: no file shot in a known mode names it
         }),
         focus_layout: None,
+        placed_focus_layout: None,
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
             color_temperature: None,
@@ -3670,6 +3740,7 @@ const METADATA: &[SampleMetadata] = &[
         image_size: Some((6032, 4032)),
         focus: None, // a viewfinder shot that names a point: no table for this body
         focus_layout: None,
+        placed_focus_layout: None,
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
             color_temperature: None,
@@ -3722,6 +3793,7 @@ const METADATA: &[SampleMetadata] = &[
         image_size: Some((3680, 2456)),
         focus: None, // a viewfinder shot that names a point: no table for this body
         focus_layout: None,
+        placed_focus_layout: None,
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
             color_temperature: None,
@@ -3774,6 +3846,7 @@ const METADATA: &[SampleMetadata] = &[
         image_size: Some((6192, 4128)),
         focus: None, // FocusMode MANUAL, and a zero frame
         focus_layout: None,
+        placed_focus_layout: None,
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Daylight),
             color_temperature: None,
@@ -3826,6 +3899,7 @@ const METADATA: &[SampleMetadata] = &[
         image_size: Some((6048, 4024)),
         focus: None, // a viewfinder shot that names a point: no table for this body
         focus_layout: None,
+        placed_focus_layout: None,
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
             color_temperature: Some(4420),
@@ -3887,6 +3961,7 @@ const METADATA: &[SampleMetadata] = &[
             area_mode: Some(FocusAreaMode::Single), // code 193
         }),
         focus_layout: None,
+        placed_focus_layout: None,
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
             color_temperature: Some(3050),
@@ -3948,6 +4023,7 @@ const METADATA: &[SampleMetadata] = &[
             area_mode: None, // code 196: no file shot in a known mode names it
         }),
         focus_layout: None,
+        placed_focus_layout: None,
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
             color_temperature: Some(5750),
@@ -4009,6 +4085,7 @@ const METADATA: &[SampleMetadata] = &[
             area_mode: None, // code 192: no file shot in a known mode names it
         }),
         focus_layout: None,
+        placed_focus_layout: None,
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
             color_temperature: Some(4910),
@@ -4070,6 +4147,7 @@ const METADATA: &[SampleMetadata] = &[
             area_mode: None, // code 192: no file shot in a known mode names it
         }),
         focus_layout: None,
+        placed_focus_layout: None,
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
             color_temperature: Some(4830),
@@ -4131,6 +4209,7 @@ const METADATA: &[SampleMetadata] = &[
             area_mode: None, // code 192: no file shot in a known mode names it
         }),
         focus_layout: None,
+        placed_focus_layout: None,
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
             color_temperature: Some(4870),
@@ -4184,6 +4263,7 @@ const METADATA: &[SampleMetadata] = &[
             area_mode: None, // code 1: no file shot in a known mode names it
         }),
         focus_layout: None,
+        placed_focus_layout: None,
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
             color_temperature: None,
@@ -4225,6 +4305,7 @@ const METADATA: &[SampleMetadata] = &[
         image_size: Some((4032, 3024)),
         focus: None, // no AFInfo2: AFInfo holds a point number only
         focus_layout: None,
+        placed_focus_layout: None,
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
             color_temperature: None,
@@ -4266,6 +4347,7 @@ const METADATA: &[SampleMetadata] = &[
         image_size: Some((2576, 1924)),
         focus: None, // no AFInfo2: AFInfo holds a point number only
         focus_layout: None,
+        placed_focus_layout: None,
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
             color_temperature: None,
@@ -4315,6 +4397,7 @@ const METADATA: &[SampleMetadata] = &[
         image_size: Some((3904, 2606)),
         focus: None, // version 0200: a point number only
         focus_layout: None,
+        placed_focus_layout: None,
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
             color_temperature: None,
@@ -4376,6 +4459,7 @@ const METADATA: &[SampleMetadata] = &[
             area_mode: None, // code 2: no file shot in a known mode names it
         }),
         focus_layout: None,
+        placed_focus_layout: None,
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
             color_temperature: None,
@@ -4428,6 +4512,7 @@ const METADATA: &[SampleMetadata] = &[
         image_size: Some((4032, 4032)),
         focus: None, // auto-area mode: a mask of points only, zero frame
         focus_layout: None,
+        placed_focus_layout: None,
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
             color_temperature: Some(4820),
@@ -4480,6 +4565,7 @@ const METADATA: &[SampleMetadata] = &[
         image_size: Some((6048, 3400)),
         focus: None, // auto-area mode: a mask of points only, zero frame
         focus_layout: None,
+        placed_focus_layout: None,
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
             color_temperature: Some(4720),
@@ -4541,6 +4627,7 @@ const METADATA: &[SampleMetadata] = &[
             area_mode: Some(FocusAreaMode::Tracking), // code 207
         }),
         focus_layout: None,
+        placed_focus_layout: None,
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
             color_temperature: Some(6590),
@@ -4602,6 +4689,7 @@ const METADATA: &[SampleMetadata] = &[
             area_mode: Some(FocusAreaMode::Tracking), // code 207
         }),
         focus_layout: None,
+        placed_focus_layout: None,
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
             color_temperature: Some(7000),
@@ -4663,6 +4751,7 @@ const METADATA: &[SampleMetadata] = &[
             area_mode: None, // code 192: no file shot in a known mode names it
         }),
         focus_layout: None,
+        placed_focus_layout: None,
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
             color_temperature: Some(4820),
@@ -4724,6 +4813,7 @@ const METADATA: &[SampleMetadata] = &[
             area_mode: None, // code 192: no file shot in a known mode names it
         }),
         focus_layout: None,
+        placed_focus_layout: None,
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
             color_temperature: Some(4740),
@@ -4785,6 +4875,7 @@ const METADATA: &[SampleMetadata] = &[
             area_mode: None, // code 2: no file shot in a known mode names it
         }),
         focus_layout: None,
+        placed_focus_layout: None,
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
             color_temperature: Some(6020),
@@ -4846,6 +4937,7 @@ const METADATA: &[SampleMetadata] = &[
             area_mode: None, // code 199: no file shot in a known mode names it
         }),
         focus_layout: None,
+        placed_focus_layout: None,
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
             color_temperature: Some(5240),
@@ -4898,6 +4990,7 @@ const METADATA: &[SampleMetadata] = &[
         image_size: Some((5568, 3712)),
         focus: None, // FocusMode MANUAL; AFInfo2 records a position, (2520, 1856) and 288 by 319, which the rule discards
         focus_layout: None,
+        placed_focus_layout: None,
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Daylight),
             color_temperature: None,

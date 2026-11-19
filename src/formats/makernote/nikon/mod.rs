@@ -59,7 +59,7 @@ use crate::geometry::Size;
 use crate::io::Source;
 use crate::metadata::Metadata;
 use af_info2::af_info2_record;
-use crop::{CropHiSpeed, crop_hi_speed, in_crop, placed};
+use crop::{CropHiSpeed, crop_hi_speed, in_crop, placed, placed_layout};
 use metadata::{CropArea, crop_area, iso, lens_range, serial_number, world_time};
 use settings::camera_settings;
 
@@ -231,11 +231,14 @@ mod rules {
 ///   placed on a crop's picture. The points a record with no position names
 ///   are placed from the table of the body the Model names, matched as
 ///   [`points::find`] matches it. A file without a Model has no table.
+/// - **The layout placed on the picture**: every point of that table, in
+///   the frame the named points take, whatever the shot
+///   ([`placed_layout`]).
 ///
 /// CropArea and CropHiSpeed are each read once, for the image size or the
 /// image area and for the focus point. Every other value is the standard
-/// tags'. The layout of the body's autofocus points is not given here:
-/// detection gives it from the Model alone.
+/// tags'. The layout of the body's autofocus points in the table's frame
+/// is not given here: detection gives it from the Model alone.
 ///
 /// A MakerNote of the short-header layout adds nothing: its tags are
 /// numbered in a scheme of their own, which none of the rules above
@@ -306,6 +309,9 @@ fn metadata<R: Read + Seek>(
         .as_deref()
         .and_then(points::find);
     metadata.focus_points = focus(src, makernote, crop_hi_speed, crop, pixels, table)?;
+    // The table's layout on the picture, whatever the shot.
+    metadata.placed_focus_layout =
+        table.and_then(|table| placed_layout(table, crop_hi_speed, pixels));
     Ok(metadata)
 }
 

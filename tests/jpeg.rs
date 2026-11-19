@@ -86,8 +86,9 @@ use support::nef::{
 };
 use support::samples::{
     Folder, Jpeg, Sample, SampleEntries, SampleFineTune, SampleFocus, SampleLens, SampleMetadata,
-    SampleSettings, SerialShape, Text, check, check_entries, check_every, check_fixture_tables,
-    check_metadata, check_placeholder_description, check_tables,
+    SamplePlacedLayout, SampleSettings, SerialShape, Text, check, check_entries, check_every,
+    check_fixture_tables, check_metadata, check_placed_layout, check_placeholder_description,
+    check_tables,
 };
 use support::tiff_builder::{EXIF_IFD, IfdId, ORDERS, Order, TiffBuilder};
 use support::{fraction, size_of};
@@ -2404,6 +2405,7 @@ const FIXTURE_METADATA: &[SampleMetadata] = &[
         }),
         // raw-files has no table of the Z 9's points.
         focus_layout: None,
+        placed_focus_layout: None,
         // The same on the three shots but the color temperature and the
         // image area. From the Exif IFD: aperture priority, matrix
         // metering, a Flash of 0, no flash fired and no mode recorded, and
@@ -2477,6 +2479,7 @@ const FIXTURE_METADATA: &[SampleMetadata] = &[
             area_mode: None,
         }),
         focus_layout: None,
+        placed_focus_layout: None,
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
             color_temperature: Some(5300),
@@ -2543,6 +2546,7 @@ const FIXTURE_METADATA: &[SampleMetadata] = &[
             area_mode: None,
         }),
         focus_layout: None,
+        placed_focus_layout: None,
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
             color_temperature: Some(6130),
@@ -2623,6 +2627,10 @@ const FIXTURE_METADATA: &[SampleMetadata] = &[
             area_mode: Some(FocusAreaMode::Single),
         }),
         focus_layout: Some("NIKON D600"),
+        placed_focus_layout: Some(SamplePlacedLayout {
+            frame: (6016, 4016),
+            points: 39,
+        }),
         // From the Exif IFD: aperture priority, matrix metering, auto white
         // balance, a Flash of 16, the flash off by the camera's setting and
         // not fired, and the ColorSpace 1, sRGB. From the MakerNote: the
@@ -2679,6 +2687,51 @@ fn the_d600_frame_4_jpegs_layout_has_point_38_at_its_focus_point() {
         .unwrap_or_else(|| panic!("{label}: no point 38"));
     assert_eq!(layout_38.center(), Point { x: 1812, y: 1705 }, "{label}");
     assert_eq!(layout_38.size(), size_of((164, 164)), "{label}");
+    // The JPEG shows the whole frame, so the layout placed on it is the
+    // layout itself.
+    let metadata = file.metadata();
+    let held = check_placed_layout(label, metadata, size_of((6016, 4016)), Point { x: 0, y: 0 });
+    assert_eq!(held, 39, "{label}");
+}
+
+/// Checks that the JPEG of frame 4 of the D600 session, its frame header
+/// changed to say 4016 by 4016, a square, as an export cut to another
+/// shape would, gives no focus point and no layout placed on the picture,
+/// since the frame of both has not the picture's shape, while it still
+/// gives the layout of the D600's points in the table's frame, by the
+/// Model.
+#[test]
+fn a_d600_jpeg_cut_to_another_shape_gives_no_placed_layout() {
+    let label = support::fixtures::D600_FRAME_4_JPEG;
+    let mut bytes = support::fixtures::read_fixture(label);
+    // The main image's frame header: the first SOF0 to SOF2 marker among
+    // the segments that follow the start of image, each skipped by its
+    // length.
+    let mut at = 2;
+    let header = loop {
+        let marker = bytes[at + 1];
+        if (0xC0..=0xC2).contains(&marker) {
+            break at;
+        }
+        at += 2 + usize::from(u16::from_be_bytes([bytes[at + 2], bytes[at + 3]]));
+    };
+    // Its height and width, two bytes each, after the marker, the length
+    // and the precision.
+    assert_eq!(&bytes[header + 5..header + 9], &[0x0F, 0xB0, 0x17, 0x80]);
+    bytes[header + 7..header + 9].copy_from_slice(&4016_u16.to_be_bytes());
+    let file = CameraFile::from_bytes(&bytes).unwrap();
+    let metadata = file.metadata();
+    assert_eq!(
+        metadata.image_size(),
+        Some(size_of((4016, 4016))),
+        "{label}"
+    );
+    assert_eq!(metadata.focus_points(), None, "{label}");
+    assert_eq!(metadata.placed_focus_layout(), None, "{label}");
+    let layout = metadata
+        .focus_layout()
+        .unwrap_or_else(|| panic!("{label}: no layout"));
+    assert_eq!(layout.frame(), size_of((6016, 4016)), "{label}");
 }
 
 /// Checks that the D600 JPEG `label`, of `pixels` as its frame header
@@ -2689,8 +2742,15 @@ fn the_d600_frame_4_jpegs_layout_has_point_38_at_its_focus_point() {
 /// mode `Tracking`; and the layout of the D600's 39 points in the table's
 /// frame. AFInfo2 records area mode 9 under detection method 0, layout
 /// code 3, primary point 1 and bit 0 of the mask, and CropHiSpeed records
-/// no crop, as in the NEF of the same shot.
-fn check_d600_jpeg_point_1(label: &str, pixels: (u16, u16), frame: (u16, u16), center: Point) {
+/// no crop, as in the NEF of the same shot. The layout placed on the
+/// picture is the table's moved back by `origin`, in `frame`, holding
+/// every point of the D600.
+fn check_d600_jpeg_point_1(
+    label: &str,
+    pixels: (u16, u16),
+    (frame, origin): ((u16, u16), Point),
+    center: Point,
+) {
     let file = CameraFile::open(support::fixtures::fixture(label))
         .unwrap_or_else(|error| panic!("{label}: {error}"));
     assert_eq!(file.format(), Format::Jpeg, "{label}");
@@ -2721,6 +2781,11 @@ fn check_d600_jpeg_point_1(label: &str, pixels: (u16, u16), frame: (u16, u16), c
         .unwrap_or_else(|| panic!("{label}: no layout"));
     assert_eq!(layout.frame(), size_of((6016, 4016)), "{label}");
     assert_eq!(layout.points().len(), 39, "{label}");
+    assert_eq!(
+        check_placed_layout(label, metadata, frame, origin),
+        39,
+        "{label}"
+    );
 }
 
 /// The Medium JPEG of frame 7856, 4512 by 3008, which I shot with my own
@@ -2736,7 +2801,7 @@ fn the_d600_medium_jpeg_gives_point_1_placed_in_its_window() {
     check_d600_jpeg_point_1(
         support::fixtures::D600_7856_MEDIUM_JPEG,
         (4512, 3008),
-        (6010, 4006),
+        ((6010, 4006), Point { x: 3, y: 5 }),
         Point { x: 3005, y: 2002 },
     );
 }
@@ -2750,7 +2815,7 @@ fn the_d600_small_jpeg_gives_point_1_placed_in_the_tables_frame() {
     check_d600_jpeg_point_1(
         support::fixtures::D600_7858_SMALL_JPEG,
         (3008, 2008),
-        (6016, 4016),
+        ((6016, 4016), Point { x: 0, y: 0 }),
         Point { x: 3008, y: 2007 },
     );
 }
@@ -3145,6 +3210,7 @@ const METADATA: &[SampleMetadata] = &[
             area_mode: None,
         }),
         focus_layout: None,
+        placed_focus_layout: None,
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
             color_temperature: None,
@@ -3203,6 +3269,7 @@ const METADATA: &[SampleMetadata] = &[
             area_mode: None,
         }),
         focus_layout: None,
+        placed_focus_layout: None,
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
             color_temperature: None,
@@ -3252,6 +3319,7 @@ const METADATA: &[SampleMetadata] = &[
         image_size: Some((5472, 3648)),
         focus: None, // manual focus
         focus_layout: None,
+        placed_focus_layout: None,
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Shade),
             color_temperature: None,
@@ -3301,6 +3369,7 @@ const METADATA: &[SampleMetadata] = &[
         image_size: Some((6000, 4000)),
         focus: None, // no FocusLocation: a point number only (AFPointSelected)
         focus_layout: None,
+        placed_focus_layout: None,
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
             color_temperature: None,
@@ -3342,6 +3411,7 @@ const METADATA: &[SampleMetadata] = &[
         image_size: Some((3872, 2592)),
         focus: None, // no FocusLocation: only the A100's Minolta block, which is not read
         focus_layout: None,
+        placed_focus_layout: None,
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
             color_temperature: None,
@@ -3391,6 +3461,7 @@ const METADATA: &[SampleMetadata] = &[
         image_size: Some((6000, 4000)),
         focus: None, // a viewfinder shot that names a point: no table for this body
         focus_layout: None,
+        placed_focus_layout: None,
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
             color_temperature: None,
@@ -3440,6 +3511,7 @@ const METADATA: &[SampleMetadata] = &[
         image_size: Some((3008, 2000)),
         focus: None, // no AFInfo2: AFInfo holds a point number only
         focus_layout: None,
+        placed_focus_layout: None,
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
             color_temperature: None,
@@ -3478,6 +3550,7 @@ const METADATA: &[SampleMetadata] = &[
         image_size: Some((1600, 1200)),
         focus: None, // the short-header MakerNote records no point
         focus_layout: None,
+        placed_focus_layout: None,
         settings: SampleSettings {
             white_balance_mode: None,
             color_temperature: None,
@@ -3516,6 +3589,7 @@ const METADATA: &[SampleMetadata] = &[
         image_size: Some((1280, 960)),
         focus: None, // the short-header MakerNote records no point
         focus_layout: None,
+        placed_focus_layout: None,
         settings: SampleSettings {
             white_balance_mode: None,
             color_temperature: None,
@@ -3554,6 +3628,7 @@ const METADATA: &[SampleMetadata] = &[
         image_size: Some((1600, 1200)),
         focus: None, // the short-header MakerNote records no point
         focus_layout: None,
+        placed_focus_layout: None,
         settings: SampleSettings {
             white_balance_mode: None,
             color_temperature: None,
@@ -3592,6 +3667,7 @@ const METADATA: &[SampleMetadata] = &[
         image_size: Some((5472, 3648)),
         focus: None, // the MakerNote of a maker no reader reads
         focus_layout: None,
+        placed_focus_layout: None,
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
             color_temperature: None,

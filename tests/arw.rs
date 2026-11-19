@@ -1589,6 +1589,7 @@ const METADATA: &[SampleMetadata] = &[
         image_size: Some((4928, 3280)),
         focus: None, // no FocusLocation: a point number in CameraInfo only
         focus_layout: None,
+        placed_focus_layout: None,
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
             color_temperature: None,
@@ -1635,6 +1636,7 @@ const METADATA: &[SampleMetadata] = &[
         image_size: Some((8000, 5320)),
         focus: None, // manual focus
         focus_layout: None,
+        placed_focus_layout: None,
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
             color_temperature: None,
@@ -1684,6 +1686,7 @@ const METADATA: &[SampleMetadata] = &[
         image_size: Some((8000, 5320)),
         focus: None, // manual focus
         focus_layout: None,
+        placed_focus_layout: None,
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
             color_temperature: None,
@@ -1725,6 +1728,7 @@ const METADATA: &[SampleMetadata] = &[
         image_size: Some((3360, 2460)),
         focus: None, // no FocusLocation: no focus tag at all
         focus_layout: None,
+        placed_focus_layout: None,
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
             color_temperature: None,
@@ -1771,6 +1775,7 @@ const METADATA: &[SampleMetadata] = &[
         image_size: Some((4608, 3072)),
         focus: None, // no FocusLocation: a point number in CameraInfo only
         focus_layout: None,
+        placed_focus_layout: None,
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
             color_temperature: None,
@@ -1826,6 +1831,7 @@ const METADATA: &[SampleMetadata] = &[
             area_mode: None,
         }),
         focus_layout: None,
+        placed_focus_layout: None,
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
             color_temperature: None,
@@ -1884,6 +1890,7 @@ const METADATA: &[SampleMetadata] = &[
             area_mode: None,
         }),
         focus_layout: None,
+        placed_focus_layout: None,
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
             color_temperature: None,
@@ -1925,6 +1932,7 @@ const METADATA: &[SampleMetadata] = &[
         image_size: Some((2816, 1872)),
         focus: None, // manual focus; no FocusLocation either
         focus_layout: None,
+        placed_focus_layout: None,
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Shade),
             color_temperature: None,
@@ -1966,6 +1974,7 @@ const METADATA: &[SampleMetadata] = &[
         image_size: Some((3880, 2600)),
         focus: None, // no FocusLocation: a point number in CameraInfo only
         focus_layout: None,
+        placed_focus_layout: None,
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
             color_temperature: None,
@@ -2004,6 +2013,7 @@ const METADATA: &[SampleMetadata] = &[
         image_size: None,
         focus: None, // no FocusLocation: only the A100's Minolta block, which is not read
         focus_layout: None,
+        placed_focus_layout: None,
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
             color_temperature: None,
@@ -2042,6 +2052,7 @@ const METADATA: &[SampleMetadata] = &[
         image_size: Some((4288, 2856)),
         focus: None, // no FocusLocation: a point number in CameraInfo only
         focus_layout: None,
+        placed_focus_layout: None,
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
             color_temperature: None,
@@ -2097,6 +2108,7 @@ const METADATA: &[SampleMetadata] = &[
             area_mode: None,
         }),
         focus_layout: None,
+        placed_focus_layout: None,
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
             color_temperature: None,
@@ -2155,6 +2167,7 @@ const METADATA: &[SampleMetadata] = &[
             area_mode: None,
         }),
         focus_layout: None,
+        placed_focus_layout: None,
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
             color_temperature: None,
@@ -2196,6 +2209,7 @@ const METADATA: &[SampleMetadata] = &[
         image_size: Some((3984, 2608)),
         focus: None, // no FocusLocation: no focus tag at all
         focus_layout: None,
+        placed_focus_layout: None,
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
             color_temperature: None,
@@ -2251,6 +2265,7 @@ const METADATA: &[SampleMetadata] = &[
             area_mode: None,
         }),
         focus_layout: None,
+        placed_focus_layout: None,
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
             color_temperature: None,
@@ -2300,6 +2315,7 @@ const METADATA: &[SampleMetadata] = &[
         image_size: Some((6048, 4024)),
         focus: None, // no FocusLocation: a mask of A-mount points (AFPointsUsed), no position
         focus_layout: None,
+        placed_focus_layout: None,
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
             color_temperature: None,
@@ -2349,6 +2365,7 @@ const METADATA: &[SampleMetadata] = &[
         image_size: Some((6048, 4024)),
         focus: None, // no FocusLocation: focus data only in an enciphered block
         focus_layout: None,
+        placed_focus_layout: None,
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
             color_temperature: None,
@@ -2410,6 +2427,7 @@ const METADATA: &[SampleMetadata] = &[
             area_mode: None,
         }),
         focus_layout: None,
+        placed_focus_layout: None,
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
             color_temperature: None,
@@ -2468,6 +2486,7 @@ const METADATA: &[SampleMetadata] = &[
             area_mode: None,
         }),
         focus_layout: None,
+        placed_focus_layout: None,
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
             color_temperature: None,
@@ -2517,6 +2536,7 @@ const METADATA: &[SampleMetadata] = &[
         image_size: Some((5504, 3672)),
         focus: None, // no FocusLocation: no focus tag at all
         focus_layout: None,
+        placed_focus_layout: None,
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
             color_temperature: None,
@@ -2558,6 +2578,7 @@ const METADATA: &[SampleMetadata] = &[
         image_size: Some((6080, 4048)),
         focus: None, // no FocusLocation: a point number in CameraInfo only
         focus_layout: None,
+        placed_focus_layout: None,
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
             color_temperature: None,
@@ -2613,6 +2634,7 @@ const METADATA: &[SampleMetadata] = &[
             area_mode: None,
         }),
         focus_layout: None,
+        placed_focus_layout: None,
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
             color_temperature: None,
@@ -2671,6 +2693,7 @@ const METADATA: &[SampleMetadata] = &[
             area_mode: None,
         }),
         focus_layout: None,
+        placed_focus_layout: None,
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
             color_temperature: None,
@@ -2729,6 +2752,7 @@ const METADATA: &[SampleMetadata] = &[
             area_mode: None,
         }),
         focus_layout: None,
+        placed_focus_layout: None,
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
             color_temperature: None,
@@ -2787,6 +2811,7 @@ const METADATA: &[SampleMetadata] = &[
             area_mode: None,
         }),
         focus_layout: None,
+        placed_focus_layout: None,
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
             color_temperature: None,
@@ -2845,6 +2870,7 @@ const METADATA: &[SampleMetadata] = &[
             area_mode: None,
         }),
         focus_layout: None,
+        placed_focus_layout: None,
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
             color_temperature: None,
@@ -2903,6 +2929,7 @@ const METADATA: &[SampleMetadata] = &[
             area_mode: None,
         }),
         focus_layout: None,
+        placed_focus_layout: None,
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
             color_temperature: None,
@@ -2952,6 +2979,7 @@ const METADATA: &[SampleMetadata] = &[
         image_size: Some((6000, 4000)),
         focus: None, // manual focus
         focus_layout: None,
+        placed_focus_layout: None,
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Custom),
             color_temperature: Some(5500),
@@ -3001,6 +3029,7 @@ const METADATA: &[SampleMetadata] = &[
         image_size: Some((3008, 2000)),
         focus: None, // manual focus
         focus_layout: None,
+        placed_focus_layout: None,
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Custom),
             color_temperature: Some(5500),
@@ -3059,6 +3088,7 @@ const METADATA: &[SampleMetadata] = &[
             area_mode: None,
         }),
         focus_layout: None,
+        placed_focus_layout: None,
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
             color_temperature: None,
@@ -3120,6 +3150,7 @@ const METADATA: &[SampleMetadata] = &[
             area_mode: None,
         }),
         focus_layout: None,
+        placed_focus_layout: None,
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
             color_temperature: None,
@@ -3181,6 +3212,7 @@ const METADATA: &[SampleMetadata] = &[
             area_mode: None,
         }),
         focus_layout: None,
+        placed_focus_layout: None,
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
             color_temperature: None,
@@ -3242,6 +3274,7 @@ const METADATA: &[SampleMetadata] = &[
             area_mode: None,
         }),
         focus_layout: None,
+        placed_focus_layout: None,
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
             color_temperature: None,
@@ -3303,6 +3336,7 @@ const METADATA: &[SampleMetadata] = &[
             area_mode: None,
         }),
         focus_layout: None,
+        placed_focus_layout: None,
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
             color_temperature: None,
@@ -3364,6 +3398,7 @@ const METADATA: &[SampleMetadata] = &[
             area_mode: None,
         }),
         focus_layout: None,
+        placed_focus_layout: None,
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
             color_temperature: None,
@@ -3427,6 +3462,7 @@ const LARGE_METADATA: &[SampleMetadata] = &[
             area_mode: None,
         }),
         focus_layout: None,
+        placed_focus_layout: None,
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
             color_temperature: None,

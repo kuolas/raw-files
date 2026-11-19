@@ -969,7 +969,9 @@ impl FocusLayoutPoint {
 /// picture and its previews have the framing of that window, as the
 /// [decision to report the points the camera used, and to keep each crop's and JPEG size's window in the table](https://github.com/kuolas/raw-files/blob/master/docs/architecture-decisions/adr018-focus-points-placed-from-a-table-and-the-points-used.md)
 /// says. A [`PlacedFocusLayout`] holds the layout placed on the picture,
-/// in the picture's frame, and is the one to scale onto a preview.
+/// in the picture's frame, and is the one to scale onto a preview:
+/// [`Metadata::placed_focus_layout`](crate::Metadata::placed_focus_layout)
+/// gives it.
 ///
 /// The readers give a layout only for a body whose table is in raw-files;
 /// [`Metadata::focus_layout`](crate::Metadata::focus_layout) says which
@@ -1107,6 +1109,8 @@ impl FocusLayout {
 /// [`FocusLayoutPoint`] with its number, the center of its box and the
 /// box's size, in the picture's frame: the part of the table's frame
 /// that the picture shows, in the table's pixels.
+/// [`Metadata::placed_focus_layout`](crate::Metadata::placed_focus_layout)
+/// gives it, and says which files have one.
 ///
 /// A viewer draws from it the grid of points the photographer saw in the
 /// viewfinder over a preview of the picture, a crop's included.

@@ -50,6 +50,7 @@
 //! | Where the camera focused | [`Metadata::focus`] | [`Focus`] |
 //! | The autofocus points it used | [`Metadata::focus_points`] | [`FocusPoints`] |
 //! | The layout of the body's autofocus points | [`Metadata::focus_layout`] | [`FocusLayout`] |
+//! | That layout placed on the picture | [`Metadata::placed_focus_layout`] | [`PlacedFocusLayout`] |
 //!
 //! The `with_…` methods and the checked constructors, such as
 //! [`Focus::new`], build every metadata value without a file, for a
