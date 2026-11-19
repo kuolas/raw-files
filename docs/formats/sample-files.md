@@ -28,7 +28,7 @@ it. A test whose file has not been downloaded says so and passes.
 
 The list of the files is [`tests/samples.tsv`](../../tests/samples.tsv):
 a header line, then one line per file, its columns separated by tabs.
-It names 79 files: 71 RAW files from raw.pixls.us and 8 camera JPEGs
+It names 82 files: 71 RAW files from raw.pixls.us and 11 camera JPEGs
 from Wikimedia Commons. Its columns:
 
 | Column | What it holds |

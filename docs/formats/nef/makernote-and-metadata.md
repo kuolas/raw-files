@@ -306,8 +306,9 @@ lacks. **[F]**
   is 4, 5 and 6 at 1, 2 and 4. `Metadata` holds no JPEG quality.
 
 The other tags hold one value on every file, or values neither reader
-names. The files are listed in the
-[JPEG test data](../jpeg/test-data.md#6-early-coolpix-files-checked-by-hand).
+names. The files are listed in the JPEG test data, three as samples in
+[section 2](../jpeg/test-data.md#2-the-sample-files) and the others in
+[section 6](../jpeg/test-data.md#6-early-coolpix-files-checked-by-hand).
 
 ## 2. Key tags
 

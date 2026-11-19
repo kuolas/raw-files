@@ -53,9 +53,9 @@ exiv2's code or printed text is copied into the repository. [I]
 
 ## 3. The sample files' licenses
 
-The eight Commons files ([test-data.md](test-data.md#2-the-sample-files))
-are under CC0, a public-domain dedication, CC BY 2.0, CC BY 2.5 or CC BY
-4.0. [P][6]
+The eleven Commons files ([test-data.md](test-data.md#2-the-sample-files))
+are under CC0, a public-domain dedication, the public domain of a work of
+the US government, CC BY 2.0, CC BY 2.5, CC BY 3.0 or CC BY 4.0. [P][6]
 
 - **CC0** asks nothing of a user. [S][7] The D70 file's page declares it
   in the public domain by its author, a dedication that Commons records
@@ -72,7 +72,8 @@ are under CC0, a public-domain dedication, CC BY 2.0, CC BY 2.5 or CC BY
   any adaptation of the data. [I]
 - **The early Coolpix files checked by hand**
   ([test-data.md](test-data.md#6-early-coolpix-files-checked-by-hand))
-  are not samples: nothing downloads them, and the repository holds
+  are not samples, but for the three of section 2: nothing downloads
+  the others, and the repository holds
   nothing of theirs but their names, licenses and hashes and facts about
   their structure, such as where a MakerNote lies and what its offsets
   count from. Facts are not the work a license covers, so some of them

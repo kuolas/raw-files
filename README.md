@@ -134,8 +134,9 @@ maintains raw-files. They come from my own cameras and stay private.
 - **JPEG**, as a camera writes it beside its raw file or instead of it,
   or as an editor exports it
   ([format notes](docs/formats/jpeg/README.md)). Checked on:
-  - eight camera JPEGs from Wikimedia Commons, which CI downloads: five
-    of Sony bodies, two of Nikon bodies and one of a Canon;
+  - eleven camera JPEGs from Wikimedia Commons, which CI downloads: five
+    of Sony bodies, five of Nikon bodies, three of them early Coolpix
+    bodies, and one of a Canon;
   - three stripped JPEG files of my own Z 9 and three of my own D600;
   - JPEG files built in the tests.
 

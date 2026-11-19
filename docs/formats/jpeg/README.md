@@ -28,12 +28,13 @@ the editions listed in [licenses-and-references.md](licenses-and-references.md),
 and checked against eight camera-original JPEGs from Wikimedia Commons, of
 Sony, Nikon and Canon bodies, listed in
 [test-data.md](test-data.md#2-the-sample-files); what they show is tagged
-**[F]**. The tests download them and check every preview, metadata value
-and focus point of each. On 23 October 2026 the MakerNotes of 47 more
-camera-original JPEGs from Wikimedia Commons, of early Coolpix bodies,
-were checked by hand for the two older layouts of the Nikon MakerNote;
-they are not downloaded
+**[F]**. On 23 October 2026 the MakerNotes of 47 more camera-original
+JPEGs from Wikimedia Commons, of early Coolpix bodies, were checked by
+hand for the two older layouts of the Nikon MakerNote
 ([test-data.md](test-data.md#6-early-coolpix-files-checked-by-hand)).
+Three of them joined the samples in November 2026; the other 44 are not
+downloaded. The tests download the eleven samples and check every
+preview, metadata value and focus point of each.
 [open-questions.md](open-questions.md) lists what is still unknown,
 among it the orientation of the small images on a portrait picture on a
 public file. What a Nikon JPEG records in a crop mode is known from

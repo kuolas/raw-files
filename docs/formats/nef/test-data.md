@@ -440,7 +440,8 @@ raw-files reads it only in a little-endian structure, the case of every
 file checked and the one where the sources agree on its byte order
 ([MakerNote notes](makernote-and-metadata.md#in-a-jpeg-file)). It has
 no NEF fixture: the tests build blocks of the layout in both byte
-orders.
+orders, and three of those JPEGs are downloaded samples
+([JPEG test data](../jpeg/test-data.md#2-the-sample-files)).
 
 Plus corrupted variants (section 5) of the smallest of these.
 
