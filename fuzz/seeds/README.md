@@ -30,8 +30,9 @@ me, Alvaro Kuolas, who maintains raw-files, as
   the RAW formats, built in code by
   [`tests/support/nef.rs`](../../tests/support/nef.rs) and
   [`tests/support/arw.rs`](../../tests/support/arw.rs): the NEF layouts
-  of four Nikon bodies, and files of each generation of Sony's family,
-  in both byte orders. Beside them are five real files committed in
+  of four Nikon bodies, the D1H's again with the short-header MakerNote
+  of the earliest Coolpix bodies, and files of each generation of Sony's
+  family, in both byte orders. Beside them are five real files committed in
   [`tests/fixtures/`](../../tests/fixtures/README.md), copied as they
   are: my own Z 9's two NEF files, and frames 4, 42 and 49 of the D600
   session, named `nikon-d600-frame-04.nef` and so on. The target also

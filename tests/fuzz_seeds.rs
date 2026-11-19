@@ -49,7 +49,7 @@ use support::jpeg_files::{
     d1h_jpeg, d70_jpeg, d5300_jpeg, exif_jpeg, ilce7m3_jpeg, ilce7m4_jpeg, padded_jpeg, plain_jpeg,
     z9_jpeg,
 };
-use support::nef::{d1h_file, d300_file, z6iii_file, z9_file};
+use support::nef::{d1h_file, d1h_file_with, d300_file, z6iii_file, z9_file};
 use support::tiff_builder::{ORDERS, Order};
 
 /// A layout built in code, once: the stem and extension of its file names,
@@ -82,6 +82,11 @@ fn open_seeds() -> Vec<(String, Vec<u8>)> {
         ("nikon-z6iii-1x1", "nef", |order| z6iii_file(order, 1).bytes),
         ("nikon-d300", "nef", |order| d300_file(order, 1).bytes),
         ("nikon-d1h", "nef", |order| d1h_file(order).bytes),
+        // The D1H's MakerNote IFD after the short header of the earliest
+        // Coolpix bodies, which is read only in a little-endian file.
+        ("nikon-d1h-short-header", "nef", |order| {
+            d1h_file_with(order, b"Nikon\0\x01\0", None).0.bytes
+        }),
         ("sony-arw4", "arw", |order| arw4_file(order, 1).0.bytes),
         ("sony-arw4-medium", "arw", |order| {
             arw4_medium_file(order).0.bytes

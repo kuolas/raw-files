@@ -5,7 +5,7 @@
 //! preview.
 //!
 //! Nikon has used three layouts for the block, told apart by their first
-//! bytes. Two are read:
+//! bytes:
 //!
 //! - **The embedded layout**, which every body since the D70 and the D100
 //!   writes. It starts with the signature `Nikon` and a NUL, and holds a
@@ -17,13 +17,21 @@
 //!   bare IFD at its first byte. Its offsets count from the header of the
 //!   TIFF structure that holds the MakerNote, as Sony's do, and its numbers
 //!   are in that structure's byte order ([`MakerNoteBlock::ifd_at`]).
+//! - **The short-header layout**, which the Coolpix E700, E800, E900 and
+//!   E950 write in their JPEGs. The block starts with the 8 bytes
+//!   `Nikon\0\1\0`, and an IFD follows them, read as the headerless
+//!   layout's is. It is read only when the structure that holds the
+//!   MakerNote is little-endian ([`short_header_ifd`]).
 //!
-//! The third, an IFD after the 8 bytes `Nikon\0\1\0`, is not read: the
-//! sources disagree on the byte order of its numbers, and the files that
-//! have it cannot settle it. A file that has one gets nothing from its
-//! MakerNote.
+//! The short-header layout numbers its tags in a scheme of its own: its
+//! tag 0x0002 holds a text, where the later layouts record the ISO. So the
+//! MakerNote keeps the layout it was read in ([`Layout`]), and gives its
+//! IFD to the readers of the tags' rules only for the later layouts
+//! ([`MakerNote::tagged`]). A short-header MakerNote gives no PreviewIFD
+//! and no metadata, only its entries in the raw view.
 //!
-//! A block that starts with the signature is of the embedded layout or of
+//! A block that starts with the short header is of that layout. Any other
+//! block that starts with the signature is of the embedded layout or of
 //! none. Any other block is read as a bare IFD. The Make is not looked at
 //! here: the format's reader has taken the file for a Nikon one by its
 //! Make ([`MakerNote::MAKE`]). So a block of another maker's under a Nikon
@@ -55,7 +63,7 @@ use crate::error::{ErrorKind, Result, skip_damage};
 use crate::formats::makernote::{MakerNoteBlock, Picture, Reader};
 use crate::formats::tiff_metadata::Standard;
 use crate::formats::tiff_previews::{self, Candidate};
-use crate::io::Source;
+use crate::io::{ByteOrder, Source};
 use crate::limits::Limits;
 use crate::metadata::Metadata;
 
@@ -63,6 +71,15 @@ use crate::metadata::Metadata;
 /// does one of the short-header layout: what tells both from the
 /// headerless layout.
 const SIGNATURE: &[u8; 6] = b"Nikon\0";
+
+/// The 8 bytes a Nikon MakerNote of the short-header layout starts with:
+/// the signature, then 1 and 0, where the embedded layout's version starts
+/// with 2.
+const SHORT_HEADER: &[u8; 8] = b"Nikon\0\x01\0";
+
+/// Where the MakerNote IFD starts in a block of the short-header layout:
+/// right after its header.
+const SHORT_HEADER_LEN: u64 = SHORT_HEADER.len() as u64;
 
 /// Where the inner TIFF header sits in a block of the embedded layout:
 /// after the signature, two version bytes and two more.
@@ -77,23 +94,60 @@ const MIN_LEN: u64 = HEADER_AT + 8;
 #[derive(Debug)]
 pub(in crate::formats) struct MakerNote {
     /// The MakerNote IFD, which holds Nikon's tags: the IFD the inner
-    /// header points at, or the one at the block's first byte in the
-    /// headerless layout. It was read inside the block, so every value read
-    /// from it lies inside the block.
+    /// header points at, the one at the block's first byte in the
+    /// headerless layout, or the one 8 bytes in, in the short-header
+    /// layout. It was read inside the block, so every value read from it
+    /// lies inside the block.
     ///
     /// Its block, [`Ifd::block`], has the MakerNote's bytes as bounds. Its
-    /// base is the inner TIFF header, or, in the headerless layout, the
+    /// base is the inner TIFF header, or, in the other two layouts, the
     /// Exif IFD's. Its byte order, [`Ifd::order`], is the inner header's,
-    /// which may differ from the file's, or in the headerless layout the
+    /// which may differ from the file's, or in the other two layouts the
     /// Exif IFD's: the order of every number inside the block.
-    pub(super) ifd: Ifd,
+    ///
+    /// Private, so that the readers of the tags' rules reach it only
+    /// through [`tagged`](Self::tagged).
+    ifd: Ifd,
+    /// The layout the block was read in, which says whose rules read the
+    /// MakerNote IFD's tags: none of the later layouts' read a
+    /// short-header MakerNote's.
+    layout: Layout,
     /// The PreviewIFD, which the MakerNote IFD's entry 0x0011 points to,
     /// read in the same block, with the same base and byte order
     /// ([`preview_ifd`]); or the directory the raw view lists as skipped
     /// when the entry is not one LONG or leads to none that can be read.
     /// Read with the MakerNote IFD, so that the preview and the raw view
-    /// both take it from here.
+    /// both take it from here. Always absent in the short-header layout,
+    /// whose tag 0x0011, if it had one, would not be the PreviewIFD's.
     preview: Lookup<Ifd>,
+}
+
+impl MakerNote {
+    /// The MakerNote IFD, for the readers of the tags' rules
+    /// (`super::rules`): `None` for a MakerNote of the short-header
+    /// layout, whose tags are numbered in a scheme of their own. So no
+    /// rule of the later layouts reads a short-header MakerNote's tags,
+    /// whichever reader asks.
+    pub(super) fn tagged(&self) -> Option<&Ifd> {
+        match self.layout {
+            Layout::Embedded | Layout::Headerless => Some(&self.ifd),
+            Layout::ShortHeader => None,
+        }
+    }
+}
+
+/// The layouts of a Nikon MakerNote's block that are read here, as its
+/// first bytes tell them apart.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Layout {
+    /// The embedded layout: the signature, a version and a TIFF header of
+    /// the block's own, 10 bytes in.
+    Embedded,
+    /// The headerless layout: a bare IFD at the block's first byte.
+    Headerless,
+    /// The short-header layout: an IFD after the 8 bytes `Nikon\0\1\0`,
+    /// whose tags are numbered in a scheme of their own.
+    ShortHeader,
 }
 
 impl Reader for MakerNote {
@@ -105,11 +159,12 @@ impl Reader for MakerNote {
     /// The Nikon MakerNote of the file in `src`, whose IFDs are `tree`,
     /// read within `limits`, with its PreviewIFD when it has one.
     ///
-    /// [`Lookup::Absent`] when the file has no Exif IFD or no MakerNote, or
-    /// when the MakerNote is of the short-header layout or its inner header
-    /// does not hold together, which the short-header layout's need not
-    /// ([`embedded_ifd`]). [`Lookup::Skipped`] when the MakerNote IFD does
-    /// not hold together: the raw view lists it as skipped.
+    /// [`Lookup::Absent`] when the file has no Exif IFD or no MakerNote,
+    /// when the MakerNote's inner header does not hold together
+    /// ([`embedded_ifd`]), or when it is of the short-header layout in a
+    /// big-endian structure ([`short_header_ifd`]). [`Lookup::Skipped`]
+    /// when the MakerNote IFD does not hold together: the raw view lists it
+    /// as skipped.
     ///
     /// # Errors
     ///
@@ -122,20 +177,30 @@ impl Reader for MakerNote {
         let Some(block) = MakerNoteBlock::find(tree) else {
             return Ok(Lookup::Absent);
         };
-        let head = block.first_bytes(src, 6)?;
-        let ifd = if head.as_slice() == SIGNATURE {
-            embedded_ifd(src, &block, limits)?
+        let head = block.first_bytes(src, SHORT_HEADER_LEN)?;
+        let (layout, ifd) = if head.as_slice() == SHORT_HEADER {
+            (Layout::ShortHeader, short_header_ifd(src, &block, limits)?)
+        } else if head.starts_with(SIGNATURE) {
+            (Layout::Embedded, embedded_ifd(src, &block, limits)?)
         } else {
-            // The headerless layout: a bare IFD at the block's first byte.
-            block.makernote_ifd_at(src, 0, limits)?
+            // A bare IFD at the block's first byte.
+            (Layout::Headerless, block.makernote_ifd_at(src, 0, limits)?)
         };
         let ifd = match ifd {
             Lookup::Found(ifd) => ifd,
             Lookup::Skipped(skipped) => return Ok(Lookup::Skipped(skipped)),
             Lookup::Absent => return Ok(Lookup::Absent),
         };
-        let preview = preview_ifd(src, &ifd, limits)?;
-        Ok(Lookup::Found(MakerNote { ifd, preview }))
+        let preview = match layout {
+            Layout::Embedded | Layout::Headerless => preview_ifd(src, &ifd, limits)?,
+            // Its tags are not the later layouts': no tag 0x0011 is followed.
+            Layout::ShortHeader => Lookup::Absent,
+        };
+        Ok(Lookup::Found(MakerNote {
+            ifd,
+            layout,
+            preview,
+        }))
     }
 
     /// What the MakerNote adds to the standard tags, as
@@ -250,10 +315,7 @@ fn preview_ifd<R: Read + Seek>(
 /// header as the base.
 ///
 /// [`Lookup::Absent`] when the block is too short for the header, or the
-/// header does not hold together. A block of the short-header layout
-/// starts with the signature too. Its IFD starts 8 bytes in, so 10 bytes
-/// in lies its first entry, not a TIFF header. It gives none unless that
-/// entry's tag and type happen to read as a byte-order mark and 42.
+/// header does not hold together.
 ///
 /// [`Lookup::Skipped`] when the header holds together and the IFD it
 /// points at does not.
@@ -279,6 +341,35 @@ fn embedded_ifd<R: Read + Seek>(
     };
     let found = ifd_in(src, &block, header.ifd0, header.order, limits)?;
     Ok(makernote.looked(found, block.at(header.ifd0)))
+}
+
+/// The MakerNote IFD of `makernote`, a block of the short-header layout,
+/// read within `limits`: the IFD right after its 8 bytes, read as the
+/// structure that holds the MakerNote reads its own IFDs, with that
+/// structure's header as the base ([`MakerNoteBlock::makernote_ifd_at`]).
+///
+/// [`Lookup::Absent`] when that structure is big-endian. Every file known
+/// to have the layout is little-endian, outside the MakerNote and inside.
+/// The sources disagree on a big-endian one: one says its numbers are
+/// always little-endian, another reads them in the structure's byte
+/// order. So such a block is left unread rather than read by a guess
+/// (`docs/formats/nef/makernote-and-metadata.md`, section 1).
+///
+/// [`Lookup::Skipped`] when the IFD does not hold together inside the
+/// block.
+///
+/// # Errors
+///
+/// `Io` when the reader fails.
+fn short_header_ifd<R: Read + Seek>(
+    src: &mut Source<R>,
+    makernote: &MakerNoteBlock<'_>,
+    limits: &Limits,
+) -> Result<Lookup<Ifd>> {
+    if makernote.order() != ByteOrder::Little {
+        return Ok(Lookup::Absent);
+    }
+    makernote.makernote_ifd_at(src, SHORT_HEADER_LEN, limits)
 }
 
 #[cfg(test)]
@@ -580,22 +671,208 @@ mod tests {
         }
     }
 
-    #[test]
-    fn the_short_header_layout_has_none() {
-        // `Nikon\0\1\0`, then the IFD, its offsets counted from the start
-        // of the file, as the sources describe the layout: read 8 bytes in,
-        // it would give the preview.
-        for order in ORDERS {
-            let (bytes, _, _) = headerless_file(order, b"Nikon\0\x01\0", None);
-            let mut src = Source::new(Cursor::new(bytes)).unwrap();
+    /// The file `bytes`, walked with the default limits at position `pos`
+    /// of a larger file as [`placed`] places it, or as the whole file at 0:
+    /// a source of the file and its tree.
+    fn walked_at(bytes: &[u8], pos: u64) -> (Source<Cursor<Vec<u8>>>, Tree) {
+        if pos == 0 {
+            let mut src = Source::new(Cursor::new(bytes.to_vec())).unwrap();
             let file_block = tiff::Block::file(src.len());
             let tree = walk(&mut src, &file_block, &Limits::default()).unwrap();
-            let makernote = read(&mut src, &tree, &Limits::default()).unwrap();
-            assert!(makernote.is_none(), "{order:?}");
+            (src, tree)
+        } else {
+            assert_eq!(pos, POS);
+            placed(bytes)
+        }
+    }
 
-            // The control: the same IFD, with no header, is read.
-            let (bytes, _, expected) = headerless_file(order, b"", None);
-            assert_eq!(candidate(bytes), Some(expected), "{order:?}");
+    /// What [`lookup`](MakerNote::lookup) finds, with the default limits,
+    /// in the file `bytes`, walked as [`walked_at`] walks it.
+    fn looked_up_at(bytes: &[u8], pos: u64) -> Lookup<MakerNote> {
+        let (mut src, tree) = walked_at(bytes, pos);
+        MakerNote::lookup(&mut src, &tree, &Limits::default()).unwrap()
+    }
+
+    #[test]
+    fn a_short_header_makernote_is_read_in_a_little_endian_structure() {
+        // `Nikon\0\1\0`, then the IFD, its offsets counted from the header
+        // of the structure that holds the MakerNote: in a NEF file, at 0,
+        // and in a JPEG file's Exif segment, at POS.
+        for pos in [0, POS] {
+            let (bytes, range, _) = headerless_file(Order::Little, SHORT_HEADER, None);
+            let Lookup::Found(makernote) = looked_up_at(&bytes, pos) else {
+                panic!("{pos}: a MakerNote");
+            };
+            assert_eq!(makernote.layout, Layout::ShortHeader, "{pos}");
+            let block = tiff::Block::new(pos, pos + range.start..pos + range.end);
+            assert_eq!(makernote.ifd.block(), &block, "{pos}");
+            assert_eq!(makernote.ifd.order(), ByteOrder::Little, "{pos}");
+            let view = view_of(&makernote);
+            assert_eq!(tags_in(&view, Directory::MakerNote), [ISO, PREVIEW_IFD]);
+
+            // The same layout in a big-endian structure is not read, and
+            // nothing is listed as skipped.
+            let (bytes, _, _) = headerless_file(Order::Big, SHORT_HEADER, None);
+            let found = looked_up_at(&bytes, pos);
+            assert!(matches!(found, Lookup::Absent), "{pos}: {found:?}");
+        }
+    }
+
+    /// Tags of the short-header layout as the Coolpix files write them:
+    /// a text of 6 bytes, so stored out of line, and a SHORT.
+    const SHORT_HEADER_TEXT: u16 = 0x0002;
+    const SHORT_HEADER_SHORT: u16 = 0x0003;
+
+    /// A little-endian file whose MakerNote is of the short-header layout,
+    /// and where its block lies. The file's own builder writes the block,
+    /// so its offsets count from the start of the file. Its IFD holds:
+    ///
+    /// - the text `08.00` under [`SHORT_HEADER_TEXT`], the only value
+    ///   stored out of line, so the block's last bytes;
+    /// - 11 under [`SHORT_HEADER_SHORT`];
+    /// - one SHORT under 0x0011, which the later layouts would take for a
+    ///   PreviewIFD tag of the wrong type.
+    ///
+    /// The MakerNote's entry declares the first `declared` bytes of the
+    /// block when given, and the whole block otherwise.
+    fn short_header_file(declared: Option<u64>) -> (Vec<u8>, Range<u64>) {
+        let mut builder = TiffBuilder::new(Order::Little);
+        let ifd0 = builder.ifd();
+        let exif = builder.ifd();
+        let makernote = builder.ifd();
+        builder.ascii(ifd0, MAKE, "NIKON").exif(ifd0, exif);
+        builder.undefined(exif, 0x9000, b"0210");
+        builder
+            .prefix(makernote, SHORT_HEADER)
+            .ascii(makernote, SHORT_HEADER_TEXT, "08.00")
+            .short(makernote, SHORT_HEADER_SHORT, &[11])
+            .short(makernote, PREVIEW_IFD, &[1]);
+        match declared {
+            None => builder.undefined_ifd(exif, MAKER_NOTE, makernote),
+            Some(count) => {
+                let count = u32::try_from(count).unwrap();
+                builder.undefined_ifd_declaring(exif, MAKER_NOTE, makernote, count)
+            }
+        };
+        let built = builder.build();
+        let range = built.ifd_block(makernote);
+        builder.pad_to(range.end + TAIL);
+        (builder.build().bytes, range)
+    }
+
+    #[test]
+    fn a_short_header_value_stored_out_of_line_counts_from_the_outer_header() {
+        // Counted from the MakerNote's start, or from the end of its 8
+        // bytes, the text's offset would lead past the block.
+        let (bytes, range) = short_header_file(None);
+        for pos in [0, POS] {
+            let (mut src, makernote) = makernote_at(&bytes, pos);
+            let view = view_of(&makernote);
+            assert_eq!(
+                tags_in(&view, Directory::MakerNote),
+                [SHORT_HEADER_TEXT, SHORT_HEADER_SHORT, PREVIEW_IFD],
+                "{pos}"
+            );
+            let entry = view.entry(Directory::MakerNote, SHORT_HEADER_TEXT).unwrap();
+            assert_eq!(
+                entry.byte_range(),
+                Some(pos + range.end - 6..pos + range.end),
+                "{pos}"
+            );
+            let text = Value::Ascii(b"08.00\0".to_vec());
+            assert_eq!(entry.read(&mut src, 64).unwrap(), text, "{pos}");
+            let short = view
+                .entry(Directory::MakerNote, SHORT_HEADER_SHORT)
+                .unwrap();
+            assert_eq!(short.read(&mut src, 64).unwrap(), Value::Short(vec![11]));
+        }
+    }
+
+    #[test]
+    fn a_short_header_value_past_the_declared_length_is_dropped_alone() {
+        let (_, range) = short_header_file(None);
+        let whole = range.end - range.start;
+        for (count, skipped) in [(whole - 1, 1), (whole, 0)] {
+            let (bytes, _) = short_header_file(Some(count));
+            let (_, makernote) = makernote_at(&bytes, 0);
+            let view = view_of(&makernote);
+            let listed = if skipped == 0 {
+                vec![SHORT_HEADER_TEXT, SHORT_HEADER_SHORT, PREVIEW_IFD]
+            } else {
+                vec![SHORT_HEADER_SHORT, PREVIEW_IFD]
+            };
+            assert_eq!(tags_in(&view, Directory::MakerNote), listed, "{count}");
+            assert_eq!(
+                view.skipped_entries(Directory::MakerNote),
+                skipped,
+                "{count}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_short_header_ifd_running_past_the_block_is_listed_as_skipped() {
+        // The header, the count and three entries take 46 bytes.
+        let table = SHORT_HEADER_LEN + 2 + 3 * 12;
+        for (count, found) in [(table - 1, false), (table, true)] {
+            let (bytes, range) = short_header_file(Some(count));
+            match looked_up_at(&bytes, 0) {
+                Lookup::Skipped(skipped) if !found => {
+                    let expected = SkippedDirectory::new(
+                        Directory::Exif,
+                        Some(MAKER_NOTE),
+                        Some(range.start + SHORT_HEADER_LEN),
+                        ErrorKind::Malformed,
+                    );
+                    assert_eq!(skipped, expected, "{count}");
+                }
+                Lookup::Found(makernote) if found => {
+                    // Its next-IFD pointer is not needed, nor its text.
+                    let view = view_of(&makernote);
+                    let listed = [SHORT_HEADER_SHORT, PREVIEW_IFD];
+                    assert_eq!(tags_in(&view, Directory::MakerNote), listed);
+                }
+                other => panic!("{count}: {other:?}"),
+            }
+        }
+    }
+
+    #[test]
+    fn a_short_header_tag_0x0011_leads_to_no_preview_ifd() {
+        // One LONG pointing at a PreviewIFD, which the headerless layout
+        // follows to its JPEG; and one SHORT, which the later layouts list
+        // as a skipped link. Neither is a link here.
+        let (sound, _, expected) = headerless_file(Order::Little, b"", None);
+        assert_eq!(candidate(sound), Some(expected), "the control");
+        let (pointer, _, _) = headerless_file(Order::Little, SHORT_HEADER, None);
+        let (misshaped, _) = short_header_file(None);
+        for (what, bytes) in [("one LONG", pointer), ("one SHORT", misshaped)] {
+            for pos in [0, POS] {
+                let (_, makernote) = makernote_at(&bytes, pos);
+                assert_eq!(makernote.preview_candidate(), None, "{what}, {pos}");
+                let view = view_of(&makernote);
+                assert_eq!(view.directories(), [Directory::MakerNote], "{what}");
+                assert_eq!(view.skipped_directories(), [], "{what}, {pos}");
+            }
+        }
+    }
+
+    #[test]
+    fn a_short_header_tag_0x0002_gives_no_iso() {
+        // The headerless layout's ISO tag, two SHORTs, gives 200 there; in
+        // the short-header layout its tag 0x0002 is a text, and no later
+        // layout's rule reads it. Nothing else changes.
+        for (header, iso) in [(&b""[..], Some(200)), (&SHORT_HEADER[..], None)] {
+            let (bytes, _, _) = headerless_file(Order::Little, header, None);
+            let (mut src, makernote, standard) = read_file(bytes);
+            let expected = standard.metadata.clone();
+            let metadata = makernote
+                .metadata(&mut src, standard, Picture::Jpeg)
+                .unwrap();
+            assert_eq!(metadata.exposure.iso, iso, "{header:?}");
+            if iso.is_none() {
+                assert_eq!(metadata, expected);
+            }
         }
     }
 
@@ -769,18 +1046,19 @@ mod tests {
 
     #[test]
     fn a_layout_not_read_is_not_listed_as_skipped() {
-        // The short-header layout, and an inner header without 42: no IFD
-        // of a layout read here was found to be damaged.
-        for order in ORDERS {
-            let (short_header, _, _) = headerless_file(order, b"Nikon\0\x01\0", None);
-            let no_42 = with_block(order, &block(order, Change::Magic41));
-            for (what, file) in [("short header", short_header), ("no 42", no_42)] {
-                let found = looked_up(file, &Limits::default());
-                assert!(
-                    matches!(found, Lookup::Absent),
-                    "{order:?}, {what}: {found:?}"
-                );
-            }
+        // An inner header without 42, in both byte orders, and the
+        // short-header layout in a big-endian structure, the one order it
+        // is not read in: no IFD of a layout read here was found to be
+        // damaged.
+        let (short_header, _, _) = headerless_file(Order::Big, SHORT_HEADER, None);
+        let files = ORDERS
+            .map(|order| (order, with_block(order, &block(order, Change::Magic41))))
+            .into_iter()
+            .map(|(order, file)| (format!("{order:?}, no 42"), file))
+            .chain([("Big, short header".to_owned(), short_header)]);
+        for (what, file) in files {
+            let found = looked_up(file, &Limits::default());
+            assert!(matches!(found, Lookup::Absent), "{what}: {found:?}");
         }
     }
 
@@ -964,19 +1242,10 @@ mod tests {
             .collect()
     }
 
-    /// The MakerNote of the file `bytes`, walked at position `pos` of a
-    /// larger file as [`placed`] places it, or as the whole file at 0: a
-    /// source of the file and the MakerNote, which must be read.
+    /// The MakerNote of the file `bytes`, walked as [`walked_at`] walks
+    /// it: a source of the file and the MakerNote, which must be read.
     fn makernote_at(bytes: &[u8], pos: u64) -> (Source<Cursor<Vec<u8>>>, MakerNote) {
-        let (mut src, tree) = if pos == 0 {
-            let mut src = Source::new(Cursor::new(bytes.to_vec())).unwrap();
-            let file_block = tiff::Block::file(src.len());
-            let tree = walk(&mut src, &file_block, &Limits::default()).unwrap();
-            (src, tree)
-        } else {
-            assert_eq!(pos, POS);
-            placed(bytes)
-        };
+        let (mut src, tree) = walked_at(bytes, pos);
         let makernote = read(&mut src, &tree, &Limits::default())
             .unwrap()
             .expect("a MakerNote");
@@ -1161,9 +1430,9 @@ mod tests {
         }
     }
 
-    /// The layouts read here, for the tests that run on both.
+    /// The layouts that read a PreviewIFD, for the tests that run on both.
     #[derive(Clone, Copy, Debug)]
-    enum Layout {
+    enum PreviewLayout {
         Embedded,
         Headerless,
     }
@@ -1171,13 +1440,13 @@ mod tests {
     /// A sound file of `layout` in byte order `order`, and where in it the
     /// value field of the MakerNote IFD's PreviewIFD entry lies: the
     /// second entry in both, after MakerNoteVersion or the ISO.
-    fn with_preview_entry(order: Order, layout: Layout) -> (Vec<u8>, usize) {
+    fn with_preview_entry(order: Order, layout: PreviewLayout) -> (Vec<u8>, usize) {
         let (bytes, at) = match layout {
-            Layout::Embedded => {
+            PreviewLayout::Embedded => {
                 let block = block(order, Change::Nothing);
                 (with_block(order, &block), AT + block.pointer_at())
             }
-            Layout::Headerless => {
+            PreviewLayout::Headerless => {
                 let (bytes, range, _) = headerless_file(order, b"", None);
                 (bytes, range.start + 2 + 12 + 8)
             }
@@ -1190,7 +1459,7 @@ mod tests {
         // Both layouts, in a NEF file, at 0, and in a JPEG file's Exif
         // segment, at POS.
         for order in ORDERS {
-            for layout in [Layout::Embedded, Layout::Headerless] {
+            for layout in [PreviewLayout::Embedded, PreviewLayout::Headerless] {
                 for pos in [0, POS] {
                     let (sound, at) = with_preview_entry(order, layout);
                     let field: [u8; 4] = sound[at..at + 4].try_into().unwrap();

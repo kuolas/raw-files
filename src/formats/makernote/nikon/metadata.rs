@@ -75,7 +75,9 @@ pub(super) fn crop_area<R: Read + Seek>(
     makernote: &MakerNote,
     raw: Option<Size>,
 ) -> Result<CropArea> {
-    let ifd = &makernote.ifd;
+    let Some(ifd) = makernote.tagged() else {
+        return Ok(CropArea::Absent);
+    };
     if ifd.entry(CROP_AREA).is_none() {
         return Ok(CropArea::Absent);
     }
@@ -106,7 +108,10 @@ pub(super) fn serial_number<R: Read + Seek>(
     src: &mut Source<R>,
     makernote: &MakerNote,
 ) -> Result<Option<String>> {
-    tiff_metadata::text(src, &makernote.ifd, rules::SERIAL_NUMBER)
+    let Some(ifd) = makernote.tagged() else {
+        return Ok(None);
+    };
+    tiff_metadata::text(src, ifd, rules::SERIAL_NUMBER)
 }
 
 /// The ISO that `makernote`'s ISO tag ([`ISO`](super::ISO)) records: the
@@ -115,7 +120,7 @@ pub(super) fn serial_number<R: Read + Seek>(
 ///
 /// A zero is no ISO: the Coolpix E5700 writes `[0, 0]` (sample 4456).
 pub(super) fn iso(makernote: &MakerNote) -> Option<u32> {
-    let [_, iso] = makernote.ifd.held(rules::ISO)?;
+    let [_, iso] = makernote.tagged()?.held(rules::ISO)?;
     (iso > 0).then_some(iso)
 }
 
@@ -136,7 +141,10 @@ pub(super) fn lens_range<R: Read + Seek>(
     src: &mut Source<R>,
     makernote: &MakerNote,
 ) -> Result<[Option<Rational>; 4]> {
-    let Some(values) = makernote.ifd.get(src, rules::LENS)? else {
+    let Some(ifd) = makernote.tagged() else {
+        return Ok([None; 4]);
+    };
+    let Some(values) = ifd.get(src, rules::LENS)? else {
         return Ok([None; 4]);
     };
     Ok(values.map(|value| Rational::known(value.numerator, value.denominator)))
@@ -157,7 +165,7 @@ pub(super) fn lens_range<R: Read + Seek>(
 /// rewrite the zone in the wrong byte order, and 60 minutes then read as
 /// 15360 (`docs/formats/nef/makernote-and-metadata.md`, section 8.2).
 pub(super) fn world_time(makernote: &MakerNote) -> Option<i16> {
-    let ifd = &makernote.ifd;
+    let ifd = makernote.tagged()?;
     let [zone0, zone1, daylight_saving, _date_format] = ifd.held(rules::WORLD_TIME)?;
     let zone = i32::from(ifd.order().u16([zone0, zone1]).cast_signed());
     let offset = match daylight_saving {
@@ -522,10 +530,25 @@ mod tests {
                     .unwrap()
                     .expect("a MakerNote");
                 let what = format!("{order:?}, declared {count} bytes");
-                assert_eq!(makernote.ifd.entry(SERIAL_NUMBER).is_some(), kept, "{what}");
-                assert_eq!(makernote.ifd.invalid_entries(), u32::from(!kept), "{what}");
+                assert_eq!(
+                    makernote.tagged().unwrap().entry(SERIAL_NUMBER).is_some(),
+                    kept,
+                    "{what}"
+                );
+                assert_eq!(
+                    makernote.tagged().unwrap().invalid_entries(),
+                    u32::from(!kept),
+                    "{what}"
+                );
                 // MakerNoteVersion, whose four bytes the entry holds, stays.
-                assert!(makernote.ifd.entry(MAKER_NOTE_VERSION).is_some(), "{what}");
+                assert!(
+                    makernote
+                        .tagged()
+                        .unwrap()
+                        .entry(MAKER_NOTE_VERSION)
+                        .is_some(),
+                    "{what}"
+                );
             }
         }
     }

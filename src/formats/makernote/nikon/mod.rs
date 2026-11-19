@@ -153,6 +153,11 @@ const AF_INFO2: u16 = 0x00B7;
 /// every file checked (ADR011). [`Ifd::get`] and [`Ifd::held`] read them.
 /// Two are tags of the PreviewIFD, which Nikon writes as one LONG each.
 ///
+/// They are the rules of the embedded and headerless layouts' tags. The
+/// short-header layout's tags have none: they are numbered in a scheme of
+/// their own, and the files confirm none of their values (the NEF notes,
+/// section 1).
+///
 /// [`Ifd::get`]: crate::container::tiff::Ifd::get
 /// [`Ifd::held`]: crate::container::tiff::Ifd::held
 mod rules {
@@ -232,6 +237,10 @@ mod rules {
 /// tags'. The layout of the body's autofocus points is not given here:
 /// detection gives it from the Model alone.
 ///
+/// A MakerNote of the short-header layout adds nothing: its tags are
+/// numbered in a scheme of their own, which none of the rules above
+/// reads, and none of them records a value the files confirm.
+///
 /// # Errors
 ///
 /// `Io` when the reader fails.
@@ -246,6 +255,10 @@ fn metadata<R: Read + Seek>(
         from_default_crop,
         exif_records_color_space,
     } = standard;
+    // None of the rules below is the short-header layout's.
+    if makernote.tagged().is_none() {
+        return Ok(metadata);
+    }
     // Read once, for the image size and the focus point. Without a raw
     // size, as in a JPEG, CropArea is never a size (ADR014).
     let crop = crop_area(src, makernote, metadata.raw_size)?;
@@ -327,7 +340,9 @@ fn focus<R: Read + Seek>(
     pixels: Option<Size>,
     table: Option<&PointTable>,
 ) -> Result<Option<FocusPoints>> {
-    let ifd = &makernote.ifd;
+    let Some(ifd) = makernote.tagged() else {
+        return Ok(None);
+    };
     // Without AFInfo2 there is nothing to place, so FocusMode is not read;
     // with manual focus there is nothing to place either, so AFInfo2 is not
     // read.
@@ -365,7 +380,10 @@ fn focus<R: Read + Seek>(
 ///
 /// `Io` when the reader fails.
 fn manual_focus<R: Read + Seek>(src: &mut Source<R>, makernote: &MakerNote) -> Result<bool> {
-    let mode = tiff_metadata::text(src, &makernote.ifd, rules::FOCUS_MODE)?;
+    let Some(ifd) = makernote.tagged() else {
+        return Ok(false);
+    };
+    let mode = tiff_metadata::text(src, ifd, rules::FOCUS_MODE)?;
     Ok(mode.as_deref() == Some("MANUAL"))
 }
 

@@ -124,6 +124,9 @@ pub(super) fn crop_hi_speed<R: Read + Seek>(
     src: &mut Source<R>,
     makernote: &MakerNote,
 ) -> Result<Option<CropHiSpeed>> {
+    let Some(ifd) = makernote.tagged() else {
+        return Ok(None);
+    };
     let Some(
         [
             mode,
@@ -134,7 +137,7 @@ pub(super) fn crop_hi_speed<R: Read + Seek>(
             left,
             top,
         ],
-    ) = makernote.ifd.get(src, rules::CROP_HI_SPEED)?
+    ) = ifd.get(src, rules::CROP_HI_SPEED)?
     else {
         return Ok(None);
     };

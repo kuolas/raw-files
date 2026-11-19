@@ -52,7 +52,7 @@ use crate::entries::{Directory, Entries, Lookup, SkippedDirectory};
 use crate::error::{ErrorKind, Result};
 use crate::formats::tiff_metadata::Standard;
 use crate::formats::tiff_previews::Candidate;
-use crate::io::Source;
+use crate::io::{ByteOrder, Source};
 use crate::limits::Limits;
 use crate::metadata::Metadata;
 
@@ -191,6 +191,13 @@ impl<'a> MakerNoteBlock<'a> {
         &self.range
     }
 
+    /// The byte order of the TIFF structure that holds the MakerNote, the
+    /// Exif IFD's: the order [`ifd_at`](Self::ifd_at) reads a layout's
+    /// numbers in.
+    fn order(&self) -> ByteOrder {
+        self.exif.order()
+    }
+
     /// The block's first `max` bytes, or all of them when the block is
     /// shorter: where a reader looks for its maker's header, never past the
     /// block's end.
@@ -229,7 +236,7 @@ impl<'a> MakerNoteBlock<'a> {
             return Ok(Err(ErrorKind::Malformed));
         };
         let block = Block::new(base, self.range.clone());
-        ifd_in(src, &block, offset, self.exif.order(), limits)
+        ifd_in(src, &block, offset, self.order(), limits)
     }
 
     /// The MakerNote IFD `skip` bytes into the block, as [`ifd_at`]
