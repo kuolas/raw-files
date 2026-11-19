@@ -423,6 +423,7 @@ pub use error::{Error, ErrorKind, Result};
 pub use file::CameraFile;
 pub use focus::{
     Focus, FocusAreaMode, FocusLayout, FocusLayoutPoint, FocusOrigin, FocusPoint, FocusPoints,
+    PlacedFocusLayout,
 };
 pub use format::Format;
 pub use geometry::{Point, Size};
