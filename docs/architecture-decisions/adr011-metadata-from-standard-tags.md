@@ -74,11 +74,13 @@ nothing standard records a value. Nothing is deciphered or decrypted.
   standard tags have no value, it gives the serial number, the ISO, the
   lens range and the offset from UTC
   ([NEF notes §10](../formats/nef/makernote-and-metadata.md#10-recommendation-for-raw-files)).
-  The short-header MakerNote of the earliest Coolpix bodies is not
-  read, so their files get the Exif fields only. Sony's MakerNote gives
-  none of these fields. On both, the MakerNote is read for the focus
-  point ([ADR012](adr012-focus-points-as-the-camera-records-them.md))
-  and for the camera settings that no standard tag records.
+  Sony's MakerNote gives none of these fields. On both, the MakerNote
+  is read for the focus point
+  ([ADR012](adr012-focus-points-as-the-camera-records-them.md)) and for
+  the camera settings that no standard tag records. The short-header
+  MakerNote of the earliest Coolpix bodies gives no field: its tags are
+  numbered in a scheme of their own, and no file confirms what they
+  record, so their files get the Exif fields only.
 - **The capture time is DateTimeOriginal**, with SubSecTimeOriginal and
   OffsetTimeOriginal. When OffsetTimeOriginal gives no offset, a NEF's
   offset is its WorldTime zone, plus an hour under daylight saving

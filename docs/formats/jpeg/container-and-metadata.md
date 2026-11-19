@@ -576,8 +576,9 @@ segment wherever the raw file counts from the start of the file:
   past the MakerNote's end; raw-files does not give it, since a
   MakerNote's preview must lie inside the MakerNote. [F] The E700, E800,
   E900 and E950 write the short header `Nikon\0\1\0`, then an IFD whose
-  offsets count from the same TIFF header; raw-files does not read that
-  layout. [F] See the
+  offsets count from the same TIFF header. [F] raw-files reads that
+  layout only in a little-endian Exif segment, and lists its entries
+  with no value read from them. See the
   [NEF MakerNote notes](../nef/makernote-and-metadata.md#in-a-jpeg-file).
 - **Sony** (all five Sony files): the 12-byte header `SONY DSC ` and three
   zero bytes, then an IFD whose offsets count from the TIFF header inside
@@ -885,9 +886,9 @@ them
 - **Other makers' MakerNotes**, on 2,837 files: the view gives their
   bytes through the Exif IFD's 0x927C entry, and walks none of them
   until notes describe them.
-- **Nikon's short-header layout** of the earliest Coolpix JPEGs
+- **Nikon's short-header layout in a big-endian Exif segment**
   ([NEF notes](../nef/makernote-and-metadata.md#in-a-jpeg-file)),
-  which raw-files does not read; none is among the files counted here.
+  which raw-files leaves unread; no such file is known.
 - **The content of the encrypted and enciphered records**: their bytes
   only, until a decision allows reading them (ADR016).
 
