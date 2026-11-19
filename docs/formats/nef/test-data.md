@@ -436,10 +436,11 @@ The short-header MakerNote (`Nikon\0\1\0`) only occurs on Coolpix E700 to
 E950, which have no NEF raw; their camera JPEGs on Wikimedia Commons have
 it, and were checked by hand
 ([JPEG test data](../jpeg/test-data.md#6-early-coolpix-files-checked-by-hand)).
-raw-files does not read it, since the sources disagree on its byte order
-and those files, all little-endian, cannot settle it, so it has no
-fixture of its own: the tests only check that a block of that layout
-gives nothing.
+raw-files reads it only in a little-endian structure, the case of every
+file checked and the one where the sources agree on its byte order
+([MakerNote notes](makernote-and-metadata.md#in-a-jpeg-file)). It has
+no NEF fixture: the tests build blocks of the layout in both byte
+orders.
 
 Plus corrupted variants (section 5) of the smallest of these.
 

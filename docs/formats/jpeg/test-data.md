@@ -294,16 +294,29 @@ did to it.
 
 The files the notes cite are listed here. Licenses and authors are as
 Commons' file information gave them, read through its API on 23 October
-2026. [P]
+2026. [P] The 18 files of the short header were downloaded again on 19
+November 2026, each into a folder of its own, and every SHA-256 matched.
+Their licenses and authors, read again that day, had not changed. [P]
 
 | Body (firmware) | File on Wikimedia Commons | License, author | MakerNote | SHA-256 |
 |---|---|---|---|---|
+| E700 (v982-71) | [`3_Chome_Hayashisakichō,_Akashi-shi,_Hyōgo-ken_673-0033,_Japan_-_panoramio.jpg`](https://commons.wikimedia.org/wiki/File:3_Chome_Hayashisakich%C5%8D,_Akashi-shi,_Hy%C5%8Dgo-ken_673-0033,_Japan_-_panoramio.jpg) | CC BY-SA 3.0, kcomiida | short header | `4dee9e3633f2fb592ab58942bfc10c8b2a1464f6a453c0043faa996579e1d372` |
 | E700 (v982p-71) | [`Pokfulam_Service_Reservoir_1.jpg`](https://commons.wikimedia.org/wiki/File:Pokfulam_Service_Reservoir_1.jpg) | CC BY-SA 3.0, Minghong | short header | `924ff0608031c2e7176fc095eaa2eda3f647a54177a30512d8e3d8e7cc26f737` |
+| E700 (v982p-72) | [`Tung_Ping_Chau_5.jpg`](https://commons.wikimedia.org/wiki/File:Tung_Ping_Chau_5.jpg) | CC BY-SA 3.0, Minghong | short header | `7e0046fd6f45617e9e1e5494785014fe96fe8a23eb83d516087ac39e339c5673` |
+| E700 (v982-71) | [`Hagu-kitadaitoujima.jpg`](https://commons.wikimedia.org/wiki/File:Hagu-kitadaitoujima.jpg) | CC BY-SA 3.0, no author named | short header | `7fb38127227808cb02c789cb3d774a6b6be78c7cb3a4216e2f920aaab1b61d29` |
+| E700 (v982p-71) | [`Lung_Fu_Shan_Pinewood_Battery_1.jpg`](https://commons.wikimedia.org/wiki/File:Lung_Fu_Shan_Pinewood_Battery_1.jpg) | CC BY-SA 3.0, Minghong | short header | `9f02c37574fcb512f2b7d7449736aebc595f361dafefef2d913c658c6b6bc279` |
+| E800 (v984-74) | [`Shuttle_FlightSim_NASA_JSC_DSCN0194.JPG`](https://commons.wikimedia.org/wiki/File:Shuttle_FlightSim_NASA_JSC_DSCN0194.JPG) | CC BY-SA 4.0, Lar | short header | `284347d7a38f35eb392fbf0dda2d248195a38151eaf113c61ee75f4c28ab5557` |
 | E800 (v984-75) | [`MIKI-eki.jpg`](https://commons.wikimedia.org/wiki/File:MIKI-eki.jpg) | public domain, released by its author, Deer in alcove | short header | `3a9c59bc9b0a8bed98302661a751d4001e6631fbde3055b93077862c78878882` |
 | E800 (v984p-76) | [`Arlbergbahn_Kronburgabschnitt.jpg`](https://commons.wikimedia.org/wiki/File:Arlbergbahn_Kronburgabschnitt.jpg) | CC BY 3.0 AT, Siegele Roland | short header | `1f993b4969d02668d3a07f4787be7b98f9a355961eab289593565f4082f4cf04` |
+| E800 (v984-74) | [`UP_BigBoy_4023_DSCN0262.JPG`](https://commons.wikimedia.org/wiki/File:UP_BigBoy_4023_DSCN0262.JPG) | CC BY-SA 4.0, Lar | short header | `3dc64a44597ccb7d5e628aedab5c0091fdc6beef0d7a9aee66b05ff768e53dae` |
 | E900 (v88-74) | [`Yamaha_FJ1100.jpg`](https://commons.wikimedia.org/wiki/File:Yamaha_FJ1100.jpg) | public domain, released by its author | short header | `fa11fb20793ccd8eb16c8abc5b1543172afd00048fa7c2883a5061c13e195b47` |
+| E900 (v882-71) | [`South_of_Market,_San_Francisco,_CA,_USA_-_panoramio.jpg`](https://commons.wikimedia.org/wiki/File:South_of_Market,_San_Francisco,_CA,_USA_-_panoramio.jpg) | CC BY-SA 3.0, Andrew Latham | short header | `f399305d3cc5006c1710fb46f8cb38001044387a176f2fce780d3198592536f8` |
+| E900 (v882p-70) | [`Puriton-Manor-Archway.jpg`](https://commons.wikimedia.org/wiki/File:Puriton-Manor-Archway.jpg) | CC BY-SA 3.0, P.R. Clarke | short header | `6a0953621dfc612e84db55cda496ada26ee690e9f360132b57183bccb970dc54` |
 | E900 (v88-74) | [`Petro_Star_refinery.jpg`](https://commons.wikimedia.org/wiki/File:Petro_Star_refinery.jpg) | public domain, a work of the US Department of Energy | short header | `d9a248163d093cb34d04745ad76e3d81d3198fe57a24a35e108fa5a9cadb8189` |
 | E950 (v981-79) | [`Starr_020628-0045_Prosopis_pallida.jpg`](https://commons.wikimedia.org/wiki/File:Starr_020628-0045_Prosopis_pallida.jpg) | CC BY 3.0, Forest & Kim Starr | short header | `326864e25fc315b930e0ab17008420e6421f4520d094f26ae215d74376f6f604` |
+| E950 (v981p-77) | [`USA-ITA_american_football_test_match,_line_of_scrimmage_prior_to_a_play.JPG`](https://commons.wikimedia.org/wiki/File:USA-ITA_american_football_test_match,_line_of_scrimmage_prior_to_a_play.JPG) | CC BY-SA 3.0, Trixt | short header | `7a406b0b0fe31bf24b682e4b5046a52c7b7c3080f845c6289cba2664df820fcc` |
+| E950 (v981-76) | [`2_Nike_Hercules_Missile..jpg`](https://commons.wikimedia.org/wiki/File:2_Nike_Hercules_Missile..jpg) | CC BY-SA 2.0, no author named | short header | `829d76d26eac1d9bf539f0c306a1fb27c6af1dae398be32578f25f3118c8dab9` |
+| E950 (v981-78) | [`Aincourt_country_side004.JPG`](https://commons.wikimedia.org/wiki/File:Aincourt_country_side004.JPG) | CC BY-SA 4.0, Parischicago | short header | `6ff5b5c9e84431f030f8be9863ca51b277526694b5d996a42c64e221cab1dcf4` |
 | E950 (v981-79) | [`Bat_Week_2019_in_Utah_(48918908978).jpg`](https://commons.wikimedia.org/wiki/File:Bat_Week_2019_in_Utah_(48918908978).jpg) | public domain, a work of the US Bureau of Land Management | short header | `b13811c5b1711b4d1ad78ee1f759c12621db95dd05c896be638612f20913e7c1` |
 | E990 (E990v1.1) | [`2006T629_finger_ring.jpg`](https://commons.wikimedia.org/wiki/File:2006T629_finger_ring.jpg) | CC BY 2.0, Portable Antiquities Scheme | headerless | `400441b2539e1cc1d48389148521caee4d862d5cd6d9d18d31abd5158fc80de1` |
 | E990 (E990v1.1) | [`A_Fekete_Tisza_forrásvidéke_-_panoramio.jpg`](https://commons.wikimedia.org/wiki/File:A_Fekete_Tisza_forr%C3%A1svid%C3%A9ke_-_panoramio.jpg) | CC BY 3.0, Gyula Péter | headerless | `3d9b32b7e2a0b9491240389716f01f1595c949e3055978098b35d7d9d8a7d2b0` |
@@ -323,10 +336,15 @@ Commons' file information gave them, read through its API on 23 October
 | E4500 (E4500v1.1) | [`Achnagavin_Bridge,_River_Aline_-_geograph.org.uk_-_1771428.jpg`](https://commons.wikimedia.org/wiki/File:Achnagavin_Bridge,_River_Aline_-_geograph.org.uk_-_1771428.jpg) | CC BY-SA 2.0, Peter Bond | embedded TIFF header | `e02424a26674d02dd28c96e88b1b3fd77b3f8a99b5bfc72485ab3626dc489ca5` |
 | E885 (E885v1.1), turned by an editor | [`Priere-mosquee-saint-denis.JPG`](https://commons.wikimedia.org/wiki/File:Priere-mosquee-saint-denis.JPG) | public domain, released by its author, Thierry Caro | headerless, moved | `76d7f4d9f90d26a73c2a192aaf9c064eae269abfa612846091148db49825ee20` |
 
-Where every camera-original file read of a body or a firmware version
-is under CC BY-SA, as for the E700, E885, E995 and E4500 and the
-E5000's v1.6, a file under CC BY-SA is cited; why such a file may be
-cited is in
+A file under CC BY-SA is cited in two cases:
+
+- every camera-original file read of a body or a firmware version is
+  under CC BY-SA, as for the E700, E885, E995 and E4500 and the E5000's
+  v1.6;
+- it is one of the 18 files of the short header, whose entries the NEF
+  notes count over all of them.
+
+Why such a file may be cited is in
 [licenses-and-references.md](licenses-and-references.md#3-the-sample-files-licenses).
 The E950 file `Bat_Week_2019_in_Utah_(48918908978).jpg` records
 orientation 6 where the other E950 files record 1, which a viewer can
@@ -386,12 +404,17 @@ read and adds nothing: its ISO tag records none, and its PreviewIFD's
 JPEG lies outside the MakerNote, so the rule that a MakerNote's preview
 lie inside the MakerNote refuses it
 ([open-questions.md](open-questions.md#4-questions-settled-by-the-sample-files-or-a-decision)).
-The short-header MakerNote is not read.
+The short-header MakerNote is read and adds nothing but its entries in
+the raw view
+([NEF MakerNote notes](../nef/makernote-and-metadata.md#in-a-jpeg-file)).
 
 ExifTool 13.55 was run on files of each layout as an independent reader,
 to compare: it read the same layouts, numbers of entries and byte order.
-[S] The facts above come from the files' bytes; none of ExifTool's code
-or printed text is copied into the repository.
+[S] On 19 November 2026, ExifTool 13.50 and exiv2 0.28.9, the versions
+Fedora packages, were run the same way on the 18 files of the short
+header, and listed the same entries. [S] The facts above come from the
+files' bytes; none of ExifTool's code or printed text is copied into the
+repository.
 
 ## Sources
 

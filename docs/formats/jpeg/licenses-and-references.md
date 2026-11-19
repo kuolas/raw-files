@@ -45,9 +45,11 @@ explained, are recorded tagged **[S]**. It was also run as a reader on
 some of the early Coolpix files checked by hand
 ([test-data.md](test-data.md#6-early-coolpix-files-checked-by-hand)),
 to compare its reading of their MakerNotes with what their bytes show.
-Every fact tagged **[F]** comes from the files' bytes, read with a
-script written for the purpose. None of ExifTool's code or printed text
-is copied into the repository. [I]
+exiv2 was run the same way on the 18 files of the short header, and the
+two projects' published tag tables for that layout were read as
+documentation. Every fact tagged **[F]** comes from the files' bytes,
+read with a script written for the purpose. None of ExifTool's or
+exiv2's code or printed text is copied into the repository. [I]
 
 ## 3. The sample files' licenses
 
@@ -74,8 +76,9 @@ are under CC0, a public-domain dedication, CC BY 2.0, CC BY 2.5 or CC BY
   nothing of theirs but their names, licenses and hashes and facts about
   their structure, such as where a MakerNote lies and what its offsets
   count from. Facts are not the work a license covers, so some of them
-  are cited although they are under CC BY-SA, where no file of that body
-  under another license was found; each is credited all the same. [I]
+  are cited although they are under CC BY-SA: where no file of that body
+  under another license was found, and where a fact counts over every
+  file of the short header. Each is credited all the same. [I]
 - Commons keeps each upload byte for byte, and a later upload can replace
   the file behind the same name; the SHA-256 pin makes the download
   script notice, deleting the file it downloaded and failing, in CI as

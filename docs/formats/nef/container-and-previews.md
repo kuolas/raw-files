@@ -181,6 +181,11 @@ software can write Nikon-style MakerNotes into files from other cameras. [4]
 [13] **[S]** The D200's MakerNote IFD reportedly lacks a next-IFD pointer, so
 do not require one after the entries. [12] **[S]**
 
+raw-files tells the short header by its 8 bytes. It reads the layout
+only in a little-endian structure, and follows no PreviewIFD from it,
+since its tags are numbered in a scheme of their own
+([makernote-and-metadata.md](makernote-and-metadata.md#in-a-jpeg-file)).
+
 ### 2.1 Where the MakerNote's preview lies
 
 The Exif IFD's MakerNote entry declares how long the MakerNote is. The
@@ -585,8 +590,8 @@ what they show.
    segment's TIFF header, though their JPEGs lie past the MakerNote's
    end (section 1.4). The short-header MakerNotes of early Coolpix JPEGs
    count their other offsets from that header but hold no PreviewIFD,
-   so where theirs would count from cannot be seen; raw-files does not
-   read that layout.
+   so where theirs would count from cannot be seen; raw-files follows
+   no PreviewIFD from that layout (section 2).
 7. Whether any SubIFD JPEG uses several strips. None does on the Z 9: every
    JPEG is in one piece, through 0x0201/0x0202.
 8. How common truncated JPEGs or padding after EOI are in real files. The

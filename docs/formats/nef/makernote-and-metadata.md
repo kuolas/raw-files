@@ -88,7 +88,7 @@ detect them by bytes, never by a "type" number. [S][5][6][12]
 | Layout | Header | IFD starts at | Offsets relative to | Byte order | Bodies |
 |---|---|---|---|---|---|
 | Headerless | none | MakerNote + 0 | the outer TIFF header | the outer file's (the D1 is big-endian) | confirmed on the D1H and the D1X (files 5364, 1785 and 1786) and on the D1 (file 201, not in the CI set), big-endian, file and MakerNote alike **[F]**; in camera JPEGs of the Coolpix E990, E995 and E880, and of the E885, E2500 and E5000 on their earlier firmware, little-endian, Exif segment and MakerNote alike ([In a JPEG file](#in-a-jpeg-file)) **[F]**; the E-series Coolpix files of raw.pixls.us, the E5400, E5700, E8400 and E8800 (files 212, 4456, 2082 and 2769), write the embedded-TIFF layout instead **[F]** |
-| Short header | `Nikon\0` `01 00` (8 bytes) | MakerNote + 8 | the outer TIFF header | exiv2 uses the outer order; ExifTool says little-endian; the files are little-endian, and so is their outer order, so they do not tell which is right **[F]** | in camera JPEGs of the Coolpix E700, E800, E900 and E950 ([In a JPEG file](#in-a-jpeg-file)) **[F]** |
+| Short header | `Nikon\0` `01 00` (8 bytes) | MakerNote + 8 | the outer TIFF header | ExifTool's documentation says little-endian, and exiv2 uses the outer order; every file checked is little-endian, outside the MakerNote and inside, the one case where both agree **[F]** | in camera JPEGs of the Coolpix E700, E800, E900 and E950 ([In a JPEG file](#in-a-jpeg-file)) **[F]** |
 | Embedded TIFF header | `Nikon\0`, version `02 00`, `02 10` or `02 11`, `00 00`, then a TIFF header (`II*\0` or `MM\0*` and a 4-byte offset) (18 bytes) | MakerNote + 10 + the inner IFD offset (normally 8, so + 18) | MakerNote + 10, the inner TIFF header | the inner header's, independent of the file's | D70, D100, D200 and later DSLRs, every Z body; every checked file but the D1H's and the D1X's: `02 00` on the D100 and the Coolpix E5700 and P7800, `02 10` from the D70 to the D7000 and on the Nikon 1 J1, `02 11` on the Coolpix A (2013) and on every body from the D810 (2014) on **[F]** |
 
 Sources: [5][6][4][7]. The D1 byte-order remark is from ExifTool. [S]
@@ -125,11 +125,15 @@ embedded layout. [S][4]
 raw-files reaches the MakerNote reader only under a Make that starts with
 `NIKON`: the NEF claim and the JPEG reader test IFD0's Make first, so the
 Make gates every layout, the embedded one included
-([section 10](#10-recommendation-for-raw-files)). Under that Make, a
-MakerNote that starts with `Nikon\0` is read as the embedded-TIFF layout
-or not at all, never retried as headerless, and the short-header layout
-is not read; any other MakerNote is read as headerless, an IFD at + 0,
-whose first two bytes are its count of entries.
+([section 10](#10-recommendation-for-raw-files)). Under that Make:
+
+- a MakerNote that starts with the 8 bytes `Nikon\0\1\0` is read as the
+  short-header layout, and only when the TIFF structure that holds it
+  is little-endian ([In a JPEG file](#in-a-jpeg-file));
+- any other MakerNote that starts with `Nikon\0` is read as the
+  embedded-TIFF layout or not at all, never retried as headerless;
+- any other MakerNote is read as headerless, an IFD at + 0, whose first
+  two bytes are its count of entries.
 
 ### Layout details
 
@@ -242,13 +246,68 @@ and MakerNote alike. **[F]**
   (`MIKI-eki.jpg`, an E800's; `Yamaha_FJ1100.jpg` and
   `Petro_Star_refinery.jpg`, both an E900's;
   `Starr_020628-0045_Prosopis_pallida.jpg`, an E950's). **[F]**
-  raw-files does not read it
-  ([section 10](#10-recommendation-for-raw-files)).
-- **The short header's byte order stays open.** ExifTool's
-  documentation says its numbers are little-endian, and exiv2 reads
-  them in the outer order (table above); since every one of these files
-  is little-endian outside the MakerNote too, they agree with both.
-  [S] **[F]**
+  raw-files reads the IFD 8 bytes in as it reads the headerless
+  layout's. It lists the entries in the raw view and gives no value
+  from them (below).
+- **The short header is read only in a little-endian structure.**
+  ExifTool's documentation says the layout's numbers are always
+  little-endian, and exiv2 reads them in the byte order of the TIFF
+  structure that holds the MakerNote (table above). [S] All 18 files
+  are little-endian outside the MakerNote and inside, the one case
+  where both agree. **[F]** So raw-files reads the layout only in a
+  little-endian structure, and leaves it unread in a big-endian one
+  rather than guess. A big-endian file would settle that case
+  ([open questions](open-questions.md#container-and-previews)).
+
+**The short header's entries.** The E700, E800 and E950 write 11, and
+the E900 5. The table gives each tag's type and count, what the 18
+files hold, and its name in ExifTool's published tag table for the
+layout, which lists names and no values. [F] [S][1]
+
+| Tag | Type, count | Bodies | What the 18 files hold **[F]** | ExifTool's name [S][1] |
+|---|---|---|---|---|
+| 0x0002 | ASCII, 6 | all four | `08.00`, or `09.41` on the E900 | none |
+| 0x0003 | SHORT, 1 | all four | 11 or 12, and 4 to 6 on the E900 (below) | Quality |
+| 0x0004 | SHORT, 1 | all four | 1 | ColorMode |
+| 0x0005 | SHORT, 1 | all four | 0 | ImageAdjustment |
+| 0x0006 | SHORT, 1 | not the E900 | 0, or 5 on one E700 file | CCDSensitivity |
+| 0x0007 | SHORT, 1 | not the E900 | 0, or 5 on two E700 files | WhiteBalance |
+| 0x0008 | RATIONAL, 1 | not the E900 | 0/0, or 1/0 on one E950 file | Focus |
+| 0x0009 | ASCII, 20 | not the E900 | empty | none |
+| 0x000A | RATIONAL, 1 | not the E900 | 0/100 | DigitalZoom |
+| 0x000B | SHORT, 1 | not the E900 | 0 | Converter |
+| 0x0F00 | LONG, 30; UNDEFINED, 122 on the E800; LONG, 25 on the E900 | all four | values neither reader names | none |
+
+exiv2's documentation lists the same tags with the same types, under
+names of its own, and calls 0x0002, 0x0009 and 0x0F00 unknown. [S][24]
+ExifTool 13.50 and exiv2 0.28.9, run on all 18 files as readers to
+compare, list the same entries; ExifTool reports a little-endian
+directory of 11 entries, or of 5. [S]
+
+**raw-files reads no value from them.** On these files, no tag's
+meaning is confirmed where it would add a value the Exif segment
+lacks. **[F]**
+
+- 0x0002 holds a text. The later layouts' ISO rule, two SHORTs under
+  that tag, never applies to it.
+- 0x0006 is the ISO setting by its name. It holds 0 beside an Exif ISO
+  of 100 on all four E800 files, beside 80 on three E950 files, and
+  beside no Exif ISO on four E700 files. So 0 stands for no one ISO.
+- exiv2, run as a reader, prints that 0 as ISO 80, which the E800 files
+  contradict. [S] The 5 of 0x0006 sits beside an Exif ISO of 100 on its
+  one file (`Pokfulam_Service_Reservoir_1.jpg`), where Exif already
+  gives it.
+- 0x0007 holds 5 on two E700 files, each beside the Exif LightSource
+  20, the standard light D55, and 0 elsewhere. exiv2 prints 5 as cloudy
+  and 0 as auto. [S] A standard light names no setting, so the files
+  confirm neither name.
+- 0x0003 follows the JPEG's compression. At 1600×1200 it is 11 at 2
+  compressed bits per pixel and 12 at 4; on the E900, at 1280×960, it
+  is 4, 5 and 6 at 1, 2 and 4. `Metadata` holds no JPEG quality.
+
+The other tags hold one value on every file, or values neither reader
+names. The files are listed in the
+[JPEG test data](../jpeg/test-data.md#6-early-coolpix-files-checked-by-hand).
 
 ## 2. Key tags
 
@@ -1574,18 +1633,18 @@ offset from UTC as a plain offset, not a labeled home zone
 ([section 8.2](#82-capture-date-and-time-zone)). And by choice: text is
 trimmed of spaces at both ends, not only trailing ones as in
 [section 8.3](#83-make-and-model), and a value over 255 bytes is taken
-for damage; CropArea is used without the 0x001B cross-check of item 2;
-and of the layouts items 2 and 6 cover, the embedded-TIFF and the
-headerless ones are read, not the short-header one, whose byte order
-the sources disagree on and the public files that have it, all
-little-endian, cannot settle ([section 1](#in-a-jpeg-file)): the D1
-family gets its MakerNote preview, its ISO and its lens range from the
-headerless MakerNote (file 5364), and the earliest Coolpix the Exif
-fields only. Every Nikon MakerNote is read only under a Make that starts
-with `NIKON`, whatever its first bytes: the format's reader decides by
-IFD0's Make before the MakerNote is looked at, unlike the "Check the
-signature before Make" of section 1, so a Nikon-format MakerNote that
-Capture NX wrote into another brand's file is not read.
+for damage; and CropArea is used without the 0x001B cross-check of
+item 2. raw-files reads each of the three layouts that items 2 and 6
+cover. The D1 family gets its MakerNote preview, its ISO and its lens
+range from the headerless MakerNote (file 5364). The earliest Coolpix
+bodies get their short-header MakerNote's entries in the raw view, and
+the Exif fields only. The short header is read only in a little-endian
+structure ([section 1](#in-a-jpeg-file)). Every Nikon MakerNote is read only
+under a Make that starts with `NIKON`, whatever its first bytes: the
+format's reader decides by IFD0's Make before the MakerNote is looked
+at, unlike the "Check the signature before Make" of section 1, so a
+Nikon-format MakerNote that Capture NX wrote into another brand's file
+is not read.
 
 The focus point is decided in
 [ADR012](../../architecture-decisions/adr012-focus-points-as-the-camera-records-them.md):
@@ -2016,3 +2075,5 @@ Retrieved October 2026.
   digital still cameras: Exif Version 3.1" (January 2026), read
   November 2026 —
   https://www.cipa.jp/std/documents/download_e.html?CIPA_DC-008-2026-E
+- [24] exiv2, Nikon MakerNote tag reference, read November 2026 —
+  https://exiv2.org/tags-nikon.html

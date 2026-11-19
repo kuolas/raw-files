@@ -3,8 +3,8 @@
 What the [NEF documentation](README.md) does not yet settle. Part 1 lists
 decisions for the maintainers. Part 2 lists facts that sample files can
 establish. Part 3 lists sources that were never read. Part 4 lists questions
-that sample files have already settled, and Part 5 the decisions of Part 1
-that a decision record or the code has settled. Each item names the page it
+that sample files have already settled, and Part 5 the questions that a
+decision record or the code has settled. Each item names the page it
 affects, and test-data.md describes the sample set that would answer Part 2.
 
 ## 1. Decisions for the maintainers
@@ -108,20 +108,10 @@ checked.
   TIFF header put them (file 5364), and the early Coolpix JPEGs'
   PreviewIFDs are where offsets counted from the Exif segment's TIFF
   header put them **[F]**.
-- **The short-header layout.** raw-files does not read the MakerNote that
-  starts `Nikon\0\1\0` yet. raw.pixls.us has no file of the Coolpix E700
-  to E950 that wrote it, as those bodies wrote no raw files, but their
-  camera JPEGs on Wikimedia Commons have it: an IFD 8 bytes in, whose
-  offsets count from the outer TIFF header, the Exif segment's
-  ([makernote-and-metadata.md](makernote-and-metadata.md#in-a-jpeg-file),
-  files listed in the
-  [JPEG test data](../jpeg/test-data.md#6-early-coolpix-files-checked-by-hand))
-  **[F]**. What stays open is the byte order of its numbers, on which
-  the sources disagree, ExifTool's documentation saying little-endian
-  and exiv2 reading the outer order: every one of those files is
-  little-endian inside the MakerNote and out, so they agree with both.
-  Only a file whose outer order is big-endian could settle it, and no
-  camera-original one is known.
+- **The short header in a big-endian file.** A camera-original file
+  whose short-header MakerNote lies in a big-endian structure would
+  show which byte order its numbers take; no such file is known
+  ([makernote-and-metadata.md](makernote-and-metadata.md#in-a-jpeg-file)).
 - **Multi-strip previews.** Whether any SubIFD JPEG is stored in several
   strips. On the Z 9 every JPEG is in one piece, through 0x0201/0x0202 (files
   5146 to 5148), and so is every JPEG of the other 32 files of the CI set;
@@ -273,8 +263,9 @@ details are in
 
 ## 5. Questions settled by a decision or by the code
 
-Each of these was a decision for the maintainers in Part 1. A decision
-record or the code of raw-files has answered it; each names what did.
+Each of these was a decision for the maintainers in Part 1, or, where
+it says so, a question of Part 2. A decision record or the code of
+raw-files has answered it; each names what did.
 
 - **Tables of autofocus points**, which turn the point number of a DSLR
   shot through the viewfinder, a Nikon 1 shot or a Z body's auto-area
@@ -296,6 +287,15 @@ record or the code of raw-files has answered it; each names what did.
   whose orders agree, which the tests check on a MakerNote written in the
   other byte order ([tests/nef.rs](../../../tests/nef.rs)). Whether raw
   decoding rejects it stays open in Part 1.
+- **The short-header layout**, a question of Part 2: whether to read the
+  MakerNote that starts `Nikon\0\1\0`, written by the Coolpix E700 to
+  E950, whose byte order the sources disagree on. raw-files reads it
+  only in a little-endian structure, the case of every file checked and
+  the one where the sources agree. It lists the entries and reads no
+  value from them
+  ([makernote-and-metadata.md](makernote-and-metadata.md#in-a-jpeg-file),
+  [src/formats/makernote/nikon/block.rs](../../../src/formats/makernote/nikon/block.rs)).
+  The big-endian case stays open in Part 2.
 - **Test data strategy.** The proposal was to download large samples in
   CI, pinned by SHA-256, and commit only tiny fixtures
   ([test-data.md](test-data.md)). The sample list

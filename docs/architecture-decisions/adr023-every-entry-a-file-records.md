@@ -9,9 +9,9 @@
   [ADR021](adr021-what-the-file-records-and-what-raw-files-reads-into-it.md),
   what the file records and what raw-files reads into it
 - Date: 2026-11-03
-- Revision: 3, 2026-11-16
+- Revision: 4, 2026-11-19
 - Issue: #50; the names of the SubIFDs tag and of field type 13 #90;
-  the directories left out #92
+  the directories left out #92; the short-header Nikon MakerNote #42
 
 ## Context
 
@@ -291,7 +291,8 @@ Rejected:
 - Names for MakerNote tags. A maker publishes none, and a name only
   another reader's tables give is not taken.
 - Nikon's short-header MakerNote layout, of the earliest Coolpix
-  bodies, which raw-files does not read.
+  bodies, in a big-endian structure, which raw-files leaves unread
+  ([NEF notes](../formats/nef/makernote-and-metadata.md#in-a-jpeg-file)).
 - Sony's SR2SubIFD, which is encrypted as a whole, and the MakerNote
   chain of SRF files, which needs a key read from an enciphered record.
 - Which typed values accept a UTF-8 entry beside an ASCII one:
