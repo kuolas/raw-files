@@ -187,7 +187,7 @@ was not exhaustive. [S]
 ## 4. Fixtures
 
 The JPEG reader's tests use three kinds of fixture: files built in code,
-six files stripped from my own camera JPEGs, and damaged copies of
+seven files stripped from my own camera JPEGs, and damaged copies of
 both. This section says what each kind is for; the tests' own
 documentation says what each file holds.
 
@@ -213,7 +213,9 @@ Three JPEGs from my own Nikon Z 9, taken on 2026-10-22, are committed
 in `tests/fixtures/`: one in FX, the camera's full output, at full
 size, 8256×5504; one in DX crop mode at full size, 5392×3592; and one
 in 16:9 crop mode at the middle size, 6192×3480, taken in portrait
-orientation and stored with Orientation 8. A script stripped them. The
+orientation and stored with Orientation 8. A fourth, shot on 2026-11-19
+in FX at full size in pinpoint AF, is committed with its NEF, to check
+the area mode. A script stripped them. The
 Exif segment is kept as the camera wrote it, with the serial numbers,
 the shutter counts, the time the camera was switched on, the MakerNote's
 encrypted blocks, Artist, Copyright, UserComment and the GPS values

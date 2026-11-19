@@ -281,6 +281,20 @@ stripped as [their README](../../../tests/fixtures/README.md) says, so
 that CI checks both rules, the scaling and the window, on real camera
 bytes.
 
+The area-mode code of pinpoint AF was measured on 2026-11-19 on frames
+I shot with my Z 9 in each of its eleven photo AF-area modes, in two
+sessions, the second in RAW + JPEG. The seven frames shot in pinpoint
+AF, four in FX and three in DX, record area mode 192 under detection
+method 1, contrast detection, in each NEF and in the JPEG of each of
+the four shot in RAW + JPEG; the frames shot with a single point, in
+3D-tracking and in auto-area record 193, 207 and 197, the codes already
+named, as checks. Frame 2484, in FX, is committed as
+`tests/fixtures/nikon-z9-pinpoint.nef` and
+`tests/fixtures/nikon-z9-pinpoint.jpg`, stripped as
+[their README](../../../tests/fixtures/README.md) says, so that CI
+checks the name `Pinpoint` on real camera bytes. The frames of the
+other modes name nothing yet.
+
 The point fields of a DSLR shot through the viewfinder, and the table
 of the D600's points, were measured on 2026-10-26 on frames shot with
 my own D600, recorded in

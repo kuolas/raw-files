@@ -120,7 +120,7 @@ maintains raw-files. They come from my own cameras and stay private.
     Z5II, which CI downloads;
   - among them, three of the Z 9: lossless, HE and HE\*;
   - test files laid out like a Z 9's, a Z6III's, a D300's and a D1H's;
-  - two stripped files of my own Z 9;
+  - three stripped files of my own Z 9;
   - the frames on which I measured my own D600's autofocus points,
     stripped of their pixels
     ([the fixtures](tests/fixtures/README.md#the-d600-session));
@@ -137,7 +137,7 @@ maintains raw-files. They come from my own cameras and stay private.
   - eleven camera JPEGs from Wikimedia Commons, which CI downloads: five
     of Sony bodies, five of Nikon bodies, three of them early Coolpix
     bodies, and one of a Canon;
-  - three stripped JPEG files of my own Z 9 and three of my own D600;
+  - four stripped JPEG files of my own Z 9 and three of my own D600;
   - JPEG files built in the tests.
 
 Any other file, a DNG among them whatever its Make says, is refused with

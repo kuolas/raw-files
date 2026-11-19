@@ -29,6 +29,13 @@ pub const Z9_DX_JPEG: &str = "nikon-z9-dx.jpg";
 /// of the recorded frame that has the JPEG's shape.
 pub const Z9_16X9_JPEG: &str = "nikon-z9-16x9.jpg";
 
+/// The Z 9 file shot in pinpoint AF, in FX, whose AFInfo2 records the area
+/// mode 192.
+pub const Z9_PINPOINT: &str = "nikon-z9-pinpoint.nef";
+
+/// The JPEG of the same Z 9 frame as [`Z9_PINPOINT`], at full size.
+pub const Z9_PINPOINT_JPEG: &str = "nikon-z9-pinpoint.jpg";
+
 /// The name of frame `frame` of the D600 session, numbered from 1 in
 /// the order the frames were shot, as the NEF notes' record of the
 /// session numbers them: `nikon-d600/frame-04.nef` for frame 4, for

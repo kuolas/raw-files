@@ -111,6 +111,11 @@ does. An entry that can break a caller opens with **Breaking:**.
   - a crop shot in manual focus or in live view has it too, where the
     crop's window was known before only from the points the camera
     used.
+- `FocusAreaMode::Pinpoint`, named "Pinpoint": Nikon files that record
+  AFInfo2 area-mode code 192 give it, where `FocusPoints::area_mode`
+  gave `None` before ([#63](https://github.com/kuolas/raw-files/issues/63)).
+  Z 9 frames shot in pinpoint AF write the code, NEF and JPEG alike;
+  the public Z6III samples write it too.
 
 ### Changed
 

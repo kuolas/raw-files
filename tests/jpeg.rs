@@ -1,40 +1,40 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! The JPEG reader from outside the crate, on JPEG files built in code: what
-//! they open as, which previews they list (the file itself, the thumbnail
-//! of the Exif segment and the images of the MPF list), what reading one
-//! returns, and the metadata it gives: every value the Exif segment
-//! records, read as in a raw file, and the image size of the picture,
-//! whatever size the tags give. Then the files it refuses, and the damage
-//! that costs a file some of its previews or of its metadata but never the
-//! file itself. Last, the Nikon MakerNote of a Nikon camera's JPEG, read by
-//! IFD0's Make: the values it adds where the Exif segment has none, its
-//! preview, and its focus point, placed on the JPEG's pixels on a crop mode
-//! and kept only when its frame has the picture's shape; the MakerNote of
-//! the headerless layout of the D1 family, with its offsets counted from
-//! the Exif segment's TIFF header, its preview and its values; and the
-//! damage and the limits that cost the MakerNote but not the file. Then
-//! the Sony MakerNote of a Sony camera's JPEG, read by IFD0's Make too,
-//! with its offsets counted from the Exif segment's TIFF header: the
+//! The JPEG reader from outside the crate, on JPEG files built in code:
+//! what they open as, which previews they list (the file itself, the
+//! thumbnail of the Exif segment and the images of the MPF list), what
+//! reading one returns, and the metadata it gives: every value the Exif
+//! segment records, read as in a raw file, and the image size of the
+//! picture, whatever size the tags give. Then the files it refuses, and the
+//! damage that costs a file some of its previews or of its metadata but
+//! never the file itself. Last, the Nikon MakerNote of a Nikon camera's
+//! JPEG, read by IFD0's Make: the values it adds where the Exif segment has
+//! none, its preview, and its focus point, placed on the JPEG's pixels on a
+//! crop mode and kept only when its frame has the picture's shape; the
+//! MakerNote of the headerless layout of the D1 family, with its offsets
+//! counted from the Exif segment's TIFF header, its preview and its values;
+//! and the damage and the limits that cost the MakerNote but not the file.
+//! Then the Sony MakerNote of a Sony camera's JPEG, read by IFD0's Make
+//! too, with its offsets counted from the Exif segment's TIFF header: the
 //! camera settings it records, its focus point, as recorded and kept only
 //! when its frame has the picture's shape, none where it records none, and
 //! the damage and the limits that cost the point but not the file. Then
-//! three real JPEGs of my own Z 9, in FX and in DX and 16:9 crop modes,
-//! committed with their images replaced by stubs and their personal
-//! fields zeroed (see [`support::fixtures`]), read whole from a path and
-//! from bytes: their previews, every value of their metadata, the camera
-//! settings among them, and their focus points, as recorded in FX, scaled
-//! onto the DX picture and moved into the 16:9 window; and the JPEG of
-//! frame 4 of the session on which my own D600's autofocus points were
-//! measured, committed stripped the same way: its previews, every value
-//! of its metadata, and the point it names by number, placed from the
-//! D600's table where its NEF places it; and a Medium and a Small JPEG
-//! of my D600, whose point is placed in the window of the frame the
-//! Medium JPEG shows, and in the whole frame on the Small one. Then eight
-//! camera JPEGs of Wikimedia Commons, too large to commit, when they have
-//! been downloaded (see [`support::samples::path`]): the previews each
-//! gives, and its metadata, every value of it, the focus point and the
-//! camera settings among them.
+//! four real JPEGs of my own Z 9, in FX, in DX and 16:9 crop modes and in
+//! pinpoint AF, committed with their images replaced by stubs and their
+//! personal fields zeroed (see [`support::fixtures`]), read whole from a
+//! path and from bytes: their previews, every value of their metadata, the
+//! camera settings among them, and their focus points, as recorded in FX,
+//! scaled onto the DX picture and moved into the 16:9 window; and the JPEG
+//! of frame 4 of the session on which my own D600's autofocus points were
+//! measured, committed stripped the same way: its previews, every value of
+//! its metadata, and the point it names by number, placed from the D600's
+//! table where its NEF places it; and a Medium and a Small JPEG of my D600,
+//! whose point is placed in the window of the frame the Medium JPEG shows,
+//! and in the whole frame on the Small one. Then eight camera JPEGs of
+//! Wikimedia Commons, too large to commit, when they have been downloaded
+//! (see [`support::samples::path`]): the previews each gives, and its
+//! metadata, every value of it, the focus point and the camera settings
+//! among them.
 
 mod support;
 
@@ -2130,14 +2130,14 @@ fn a_limit_crossed_inside_the_sony_makernote_costs_its_focus_point_only() {
     }
 }
 
-// Four real files, committed. Three JPEGs of my own Z 9, shot in FX,
-// in DX crop mode and in 16:9 crop mode, and the JPEG of frame 4 of my
-// own D600 session, with every image replaced by a stub JPEG of its size
-// and their personal fields zeroed in place, their Exif segment otherwise
-// as the camera wrote it (`tests/fixtures/README.md`). They hold what the
-// files built in code only imitate: the camera's own Exif segment, every
-// tag at the camera's offset, with its MakerNote, IFD1's thumbnail, and
-// the MPF list of the images after the main one. They are checked by
+// Five real files, committed. Four JPEGs of my own Z 9, shot in FX, in DX
+// crop mode, in 16:9 crop mode and in pinpoint AF, and the JPEG of frame 4
+// of my own D600 session, with every image replaced by a stub JPEG of its
+// size and their personal fields zeroed in place, their Exif segment
+// otherwise as the camera wrote it (`tests/fixtures/README.md`). They hold
+// what the files built in code only imitate: the camera's own Exif segment,
+// every tag at the camera's offset, with its MakerNote, IFD1's thumbnail,
+// and the MPF list of the images after the main one. They are checked by
 // rows of the same kinds as the downloaded samples', from
 // `tests/fixtures/`, whether or not the samples are downloaded.
 //
@@ -2257,6 +2257,42 @@ const FIXTURES: &[Sample] = &[
             Jpeg {
                 width: 6192,
                 height: 3480,
+                offset: 0,
+                len: 69_998,
+                after_eoi: 0,
+            },
+        ],
+    },
+    // The Z 9's pinpoint shot, in FX, its previews where the FX shot's
+    // are; its thumbnail is shorter.
+    Sample {
+        file: support::fixtures::Z9_PINPOINT_JPEG,
+        orientation: Orientation::NoTransforms,
+        previews: &[
+            Jpeg {
+                width: 160,
+                height: 120,
+                offset: 39_876,
+                len: 7_745,
+                after_eoi: 7_623,
+            },
+            Jpeg {
+                width: 640,
+                height: 424,
+                offset: 69_754,
+                len: 122,
+                after_eoi: 0,
+            },
+            Jpeg {
+                width: 1620,
+                height: 1080,
+                offset: 69_876,
+                len: 122,
+                after_eoi: 0,
+            },
+            Jpeg {
+                width: 8256,
+                height: 5504,
                 offset: 0,
                 len: 69_998,
                 after_eoi: 0,
@@ -2475,8 +2511,7 @@ const FIXTURE_METADATA: &[SampleMetadata] = &[
             origin: FocusOrigin::Recorded,
             points: 1,
             primary_number: None,
-            // Code 192, which no file shot in a known mode names.
-            area_mode: None,
+            area_mode: Some(FocusAreaMode::Pinpoint), // code 192
         }),
         focus_layout: None,
         placed_focus_layout: None,
@@ -2542,8 +2577,7 @@ const FIXTURE_METADATA: &[SampleMetadata] = &[
             origin: FocusOrigin::Recorded,
             points: 1,
             primary_number: None,
-            // Code 192, which no file shot in a known mode names.
-            area_mode: None,
+            area_mode: Some(FocusAreaMode::Pinpoint), // code 192
         }),
         focus_layout: None,
         placed_focus_layout: None,
@@ -2560,6 +2594,71 @@ const FIXTURE_METADATA: &[SampleMetadata] = &[
             shutter: Some(Shutter::Electronic),
             electronic_front_curtain_setting: None,
             image_area: Some(ImageArea::Wide),
+            raw_image_size: None,
+            color_space: Some(ColorSpace::Srgb),
+        },
+    },
+    // The JPEG of the Z 9's pinpoint shot, whose NEF `tests/nef.rs`
+    // checks, in FX at full size: no crop, so the point is as AFInfo2
+    // records it, the center (5522, 1847) and the area 162 by 178 in the
+    // frame of 8256 by 5504, the JPEG's own size; the area mode is 192
+    // under detection method 1, contrast detection, as in the NEF.
+    SampleMetadata {
+        file: support::fixtures::Z9_PINPOINT_JPEG,
+        make: Some(Make::Nikon),
+        model: Some("Z 9"),
+        recorded_make: Some("NIKON CORPORATION"),
+        recorded_model: Some("NIKON Z 9"),
+        software: Some("Ver.05.30"),
+        serial_number: None,
+        texts: &[],
+        location: None,
+        capture_time: Some("2026-11-19T19:45:25.75-03:00"),
+        orientation: Orientation::NoTransforms,
+        iso: Some(1600),
+        exposure_time: Some((10, 800)),
+        f_number: Some((450, 100)),
+        focal_length: Some((700, 10)),
+        focal_length_in_35mm_film: Some(70),
+        exposure_bias: Some((0, 6)),
+        lens: Some(SampleLens {
+            recorded_make: None,
+            recorded_model: Some("VR 70-300mm f/4.5-5.6E"),
+            serial_number: false,
+            min_focal_length: Some((700, 10)),
+            max_focal_length: Some((3000, 10)),
+            f_number_at_min_focal_length: Some((450, 100)),
+            f_number_at_max_focal_length: Some((560, 100)),
+        }),
+        raw_size: None,
+        image_size: Some((8256, 5504)),
+        focus: Some(SampleFocus {
+            frame: (8256, 5504),
+            center: (5522, 1847),
+            size: Some((162, 178)),
+            in_focus: Some(true),
+            origin: FocusOrigin::Recorded,
+            points: 1,
+            primary_number: None,
+            area_mode: Some(FocusAreaMode::Pinpoint), // code 192
+        }),
+        focus_layout: None,
+        placed_focus_layout: None,
+        // As the three shots above, but spot metering, Exif's
+        // MeteringMode 3, and the color temperature.
+        settings: SampleSettings {
+            white_balance_mode: Some(WhiteBalanceMode::Auto),
+            color_temperature: Some(5080),
+            fine_tune: Some(SampleFineTune {
+                amber_blue: (0, 4),
+                green_magenta: (0, 4),
+            }),
+            exposure_program: Some(ExposureProgram::AperturePriority),
+            metering_mode: Some(MeteringMode::Spot),
+            flash: Some((false, None)),
+            shutter: Some(Shutter::Electronic),
+            electronic_front_curtain_setting: None,
+            image_area: Some(ImageArea::FullFrame),
             raw_image_size: None,
             color_space: Some(ColorSpace::Srgb),
         },

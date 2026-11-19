@@ -21,8 +21,8 @@
 //!   eleven with a TIFF structure or an MPF index in both byte orders.
 //!   Every Nikon and Sony camera's JPEG of that file is among them, but
 //!   the RX100 IV's and the ILCE-6000's;
-//! - ten of the real files committed in `tests/fixtures/`, which its
-//!   README lists: the Z 9's two NEF files and three JPEG files, frame 4
+//! - twelve of the real files committed in `tests/fixtures/`, which its
+//!   README lists: the Z 9's three NEF files and four JPEG files, frame 4
 //!   of the D600 session and its JPEG, and the three files of the
 //!   D600's JPEG sizes. They hold a camera's own layout of tags, where
 //!   the built files only imitate it. Frame 4 stands for the session's
@@ -51,8 +51,8 @@
 //! that: in the zeros, at each tile's start and around it, and just short
 //! of the end. That keeps the whole file to a few seconds in a debug build.
 //!
-//! The six stripped JPEG files are 69,998 bytes each for the Z 9 and 69,876
-//! bytes each for the D600, most of them the camera's Exif segment of
+//! The seven stripped JPEG files are 69,998 bytes each for the Z 9 and
+//! 69,876 bytes each for the D600, most of them the camera's Exif segment of
 //! 65,536 bytes, kept whole so that no offset in it moves. Three spans of
 //! it are zeros, which nothing parses when the file is opened, and a fourth
 //! in the D600's: the value of the MakerNote's ShotInfo entry, 35,785 bytes
@@ -67,16 +67,16 @@
 //! them; and the zeros the camera wrote after IFD1's length, up to the end
 //! of the segment, 12,876 to 14,981 bytes on the Z 9 and 16,865 to 16,952
 //! on the D600, at which no offset points and which the walk over the
-//! segments steps over by the segment's length. So each of the six is cut
-//! at every length, and overwritten byte by byte everywhere but in those
+//! segments steps over by the segment's length. So each of the seven is
+//! cut at every length, and overwritten byte by byte everywhere but in those
 //! spans, which the test finds from the file's own structure
 //! ([`stripped_jpeg_unread`]) and checks are zeros: every segment header,
 //! every IFD, every value a reader reads, the MPF segment and every stub
-//! are still overwritten. That keeps the six files to about 40 seconds in a
-//! debug build, most of the run; overwriting every byte of the three Z 9
-//! files alone took more than two minutes.
+//! are still overwritten. That keeps the seven files to about two minutes
+//! in a debug build, most of the run; overwriting every byte of three of
+//! the Z 9 files alone took more than two minutes.
 //!
-//! Every other file is swept whole: the two stripped Z 9 NEF files are
+//! Every other file is swept whole: the three stripped Z 9 NEF files are
 //! 4,270 bytes each and the two D600 frames' NEF files 2,452 bytes each,
 //! their raw data replaced by 64 bytes, and the largest JPEG file built in
 //! code, the one with zeros after its end, is 4,218 bytes.
@@ -100,7 +100,8 @@ use raw_files::{
 use support::arw::{ARW4_FULL_SIZE_JPEG, arw4_file};
 use support::fixtures::{
     D600_7856_MEDIUM_JPEG, D600_7856_NEF, D600_7858_SMALL_JPEG, D600_FRAME_4_JPEG, Z9_1X1,
-    Z9_16X9_JPEG, Z9_DX, Z9_DX_JPEG, Z9_FX_JPEG, d600_frame, read_fixture,
+    Z9_16X9_JPEG, Z9_DX, Z9_DX_JPEG, Z9_FX_JPEG, Z9_PINPOINT, Z9_PINPOINT_JPEG, d600_frame,
+    read_fixture,
 };
 use support::jpeg_files::{
     CAMERA_MAKE, ILCE7M3_MAIN, MAIN, Z9Mode, a100_jpeg, camera_jpeg, camera_jpeg_with_metadata,
@@ -132,12 +133,13 @@ struct Fixture {
 /// with its MakerNote in the other byte order from the file's; the Z6III
 /// and the D300 fixtures, with Orientation 8, in both byte orders; the D1H
 /// fixture, which records no orientation, in both byte orders; the
-/// ARW 4 fixture, with Orientation 8, in both byte orders; the five files
-/// stripped from my own Z 9 shots, as they are committed: two NEF
-/// files in DX and 1:1 crop modes, and three JPEG files in FX and in
-/// DX and 16:9 crop modes; frame 4 of my own D600 session, its NEF and
-/// its JPEG, and frame 7856's NEF and Medium JPEG and frame 7858's Small
-/// JPEG of my own D600, as they are committed; and the JPEG files: without Exif,
+/// ARW 4 fixture, with Orientation 8, in both byte orders; the seven files
+/// stripped from my own Z 9 shots, as they are committed: three NEF
+/// files, in DX and 1:1 crop modes and in pinpoint AF, and four JPEG
+/// files, in FX, in DX and 16:9 crop modes and in pinpoint AF; frame 4 of
+/// my own D600 session, its NEF and its JPEG, and frame 7856's NEF and
+/// Medium JPEG and frame 7858's Small JPEG of my own D600, as they are
+/// committed; and the JPEG files: without Exif,
 /// with zeros after its end, and, in both byte orders, with an Exif
 /// segment, a camera's with every value the metadata reads, a camera's
 /// with a JFIF segment first, whose Exif segment holds only the
@@ -225,6 +227,7 @@ fn fixtures() -> Vec<Fixture> {
     for (name, file) in [
         ("Z 9 DX, stripped", Z9_DX.to_owned()),
         ("Z 9 1:1, stripped", Z9_1X1.to_owned()),
+        ("Z 9 pinpoint, stripped", Z9_PINPOINT.to_owned()),
         ("D600 frame 4, stripped", d600_frame(4)),
         ("D600 frame 7856, stripped", D600_7856_NEF.to_owned()),
     ] {
@@ -241,6 +244,7 @@ fn fixtures() -> Vec<Fixture> {
         ("Z 9 FX JPEG, stripped", Z9_FX_JPEG),
         ("Z 9 DX JPEG, stripped", Z9_DX_JPEG),
         ("Z 9 16:9 JPEG, stripped", Z9_16X9_JPEG),
+        ("Z 9 pinpoint JPEG, stripped", Z9_PINPOINT_JPEG),
         ("D600 frame 4 JPEG, stripped", D600_FRAME_4_JPEG),
         (
             "D600 frame 7856 Medium JPEG, stripped",
@@ -801,7 +805,7 @@ fn assert_all_but_the_capture_time(damaged: &Metadata, undamaged: &Metadata, wha
 /// the undamaged file gives, and so are the previews.
 ///
 /// The damage goes into each copy of the time's text in turn. A file can
-/// hold the same text in other tags: the two stripped Z 9 files hold it in
+/// hold the same text in other tags: the Z 9's DX and 1:1 files hold it in
 /// IFD0's DateTime and DateTimeOriginal and in the Exif IFD's
 /// DateTimeOriginal and DateTimeDigitized. The capture time is read from
 /// the Exif IFD's DateTimeOriginal alone, so damage to exactly one copy
