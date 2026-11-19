@@ -82,7 +82,9 @@ pub(super) fn camera_settings<R: Read + Seek>(
     exif_records_color_space: bool,
     picture: Picture,
 ) -> Result<CameraSettings> {
-    let ifd = &makernote.ifd;
+    let Some(ifd) = makernote.tagged() else {
+        return Ok(settings);
+    };
     // Read once, for the white balance mode and the color temperature.
     let white_balance = tiff_metadata::text(src, ifd, rules::WHITE_BALANCE)?;
     let white_balance = white_balance.as_deref();
@@ -123,8 +125,8 @@ pub(super) fn camera_settings<R: Read + Seek>(
 /// all they record of a temperature, `3230K` on the D600 too.
 fn color_temperature(makernote: &MakerNote, white_balance: Option<&str>) -> Option<u32> {
     let recorded = makernote
-        .ifd
-        .held(rules::COLOR_TEMPERATURE)
+        .tagged()
+        .and_then(|ifd| ifd.held(rules::COLOR_TEMPERATURE))
         .and_then(|[kelvin]| checked_color_temperature(kelvin));
     recorded.or_else(|| {
         white_balance
@@ -223,7 +225,9 @@ fn fine_tune<R: Read + Seek>(
     src: &mut Source<R>,
     makernote: &MakerNote,
 ) -> Result<Option<FineTune>> {
-    let ifd = &makernote.ifd;
+    let Some(ifd) = makernote.tagged() else {
+        return Ok(None);
+    };
     let fraction = |value: SignedRational| (value.numerator, value.denominator);
     if let Some([amber_blue, magenta_green]) = ifd.get(src, rules::FINE_TUNE)?
         && let Some(fine_tune) = fine_tune_of(fraction(amber_blue), fraction(magenta_green))

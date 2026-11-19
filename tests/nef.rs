@@ -816,22 +816,39 @@ fn a_d1h_preview_running_past_the_declared_block_is_not_a_preview() {
 }
 
 #[test]
-fn a_short_header_makernote_under_a_nikon_make_is_not_read() {
+fn a_short_header_makernote_is_listed_alone_in_a_little_endian_file() {
     // The D1H file's MakerNote IFD after the 8 bytes `Nikon\0\1\0`, with
-    // its offsets counted from the start of the file, as the sources
-    // describe the short-header layout of the Coolpix E700 to E950: the
-    // layout is not read, so the file gives nothing from it, though its
-    // IFD is sound 8 bytes in.
+    // its offsets counted from the start of the file, as the Coolpix E700
+    // to E950 write the short-header layout. Its tags are numbered in a
+    // scheme of their own, so none of the headerless layout's rules reads
+    // them: no preview from tag 0x0011, no ISO from 0x0002, no lens range
+    // and no PreviewIFD listed. In a little-endian file its entries are
+    // listed, the same as the headerless MakerNote's; in a big-endian one
+    // the layout is not read at all.
     for order in ORDERS {
         let (built, blobs) = d1h_file_with(order, b"Nikon\0\x01\0", None);
-        assert_the_d1h_file(
-            &Options::new(),
-            &built,
-            &blobs,
-            false,
-            false,
-            &format!("{order:?}"),
-        );
+        let label = format!("{order:?}");
+        assert_the_d1h_file(&Options::new(), &built, &blobs, false, false, &label);
+
+        let headerless = d1h_file(order).bytes;
+        let headerless = CameraFile::from_bytes(&headerless).unwrap();
+        let tags = |file: &CameraFile<_>| -> Vec<u16> {
+            let entries = file.entries();
+            let listed = entries.in_directory(Directory::MakerNote);
+            listed.iter().map(raw_files::Entry::tag).collect()
+        };
+        let file = CameraFile::from_bytes(&built.bytes).unwrap();
+        let entries = file.entries();
+        let headerless = tags(&headerless);
+        assert_eq!(headerless.len(), 15, "{label}: the headerless control");
+        let expected = match order {
+            Order::Little => headerless,
+            Order::Big => vec![],
+        };
+        assert_eq!(tags(&file), expected, "{label}");
+        let preview_ifd = Directory::MakerNoteSub(PREVIEW_IFD);
+        assert!(!entries.directories().contains(&preview_ifd), "{label}");
+        assert_eq!(entries.skipped_directories(), [], "{label}");
     }
 }
 

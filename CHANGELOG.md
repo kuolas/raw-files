@@ -92,6 +92,15 @@ does. An entry that can break a caller opens with **Breaking:**.
     standard allows any number of them. A JPEG file or a preview with
     more before its frame header than the cap allows is now read under
     a raised cap.
+- A JPEG from a Nikon Coolpix E700, E800, E900 or E950 now lists its
+  MakerNote's entries in `CameraFile::entries`, under
+  `Directory::MakerNote`
+  ([#42](https://github.com/kuolas/raw-files/issues/42)). Those bodies
+  write a MakerNote of their own layout, after the 8 bytes
+  `Nikon\0\1\0`, which raw-files did not read. Its tags are numbered
+  in a scheme of their own, and no file confirms what they record, so
+  `Metadata` gains no value from them. The layout is read only in a
+  little-endian Exif segment, the case of every file known.
 
 ### Changed
 

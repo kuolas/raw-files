@@ -743,6 +743,10 @@ mod tests {
         /// offsets count from the segment's TIFF header, its block running
         /// through its PreviewIFD.
         NikonHeaderless,
+        /// Nikon's of the Coolpix E700 to E950: the same IFD after the 8
+        /// bytes `Nikon\0\1\0`, read only in a little-endian segment, and
+        /// with no PreviewIFD whatever its tag 0x0011 holds.
+        NikonShortHeader,
         /// Sony's, its IFD after the `SONY DSC` header, its offsets counted
         /// from the segment's TIFF header.
         Sony,
@@ -775,8 +779,11 @@ mod tests {
                 let blob = tiff.blob(&block);
                 tiff.undefined_blob(exif, MAKER_NOTE, blob);
             }
-            Layout::NikonHeaderless => {
+            Layout::NikonHeaderless | Layout::NikonShortHeader => {
                 let (makernote, preview) = (tiff.ifd(), tiff.ifd());
+                if let Layout::NikonShortHeader = layout {
+                    tiff.prefix(makernote, b"Nikon\0\x01\0");
+                }
                 tiff.short(makernote, 0x0101, &[7])
                     .short(makernote, 0x0102, &SHORTS)
                     .ifd_pointer(makernote, 0x0011, preview)
@@ -800,9 +807,14 @@ mod tests {
     fn a_makernotes_directories_come_after_the_exif_tree_and_before_the_mp_index() {
         let nikon = [Directory::MakerNote, Directory::MakerNoteSub(0x0011)];
         for order in ORDERS {
+            let short_header: &[Directory] = match order {
+                Order::Little => &[Directory::MakerNote],
+                Order::Big => &[],
+            };
             for (make, layout, makers) in [
                 ("NIKON CORPORATION", Layout::NikonEmbedded, &nikon[..]),
                 ("NIKON", Layout::NikonHeaderless, &nikon[..]),
+                ("NIKON", Layout::NikonShortHeader, short_header),
                 ("SONY", Layout::Sony, &[Directory::MakerNote][..]),
                 // Another maker's Make: the MakerNote is the Exif entry's
                 // bytes alone.
