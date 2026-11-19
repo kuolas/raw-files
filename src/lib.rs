@@ -306,9 +306,9 @@
 //!   directory, such as an Exif IFD with a wrong pointer, loses only the
 //!   values in it.
 //! - **A JPEG whose Exif segment is missing or cannot be read still
-//!   opens.** Its previews are the file itself and the images its MPF
-//!   list holds after the main one. Its image size is the only value read from it, and its
-//!   orientation is the default, no transform.
+//!   opens.** Its previews are the file itself and the large thumbnails
+//!   its MPF list holds. Its image size is the only value read from it,
+//!   and its orientation is the default, no transform.
 //! - **An untrusted file cannot make the library allocate or walk without
 //!   bound.** [`Limits`] caps the number of directories, their entries and
 //!   their nesting. It also caps the size of a preview and of an entry's

@@ -1,21 +1,25 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! The MPF index of a JPEG file: where the images the file holds after its
-//! first one lie.
+//! The MPF index of a JPEG file: where the large thumbnails the file holds
+//! after its first image lie.
 //!
 //! The Multi-Picture Format (MPF), CIPA DC-007, lets one JPEG file hold
 //! several images, each a whole JPEG stream: the main image first, then
-//! others, such as large thumbnails. A decoder stops at the first image's
-//! EOI, so the others are found only through the index in the first
-//! image's MPF segment. They are previews of the file (ADR014), checked as
-//! every preview is.
+//! others. A decoder stops at the first image's EOI, so the others are
+//! found only through the index in the first image's MPF segment. Each
+//! entry of the index gives its image a type. The large thumbnails are
+//! smaller copies of the picture, and they are the file's previews,
+//! checked as every preview is. A gain map, a frame of a panorama, an
+//! original kept from before an edit, or an image of undefined type is not
+//! a copy of the picture, so it is not a preview (ADR014).
 //!
 //! [`index`] reads the index inside the [`Block`] that [`segments`] gives:
 //! the MP header at the block's base, then the MP Index IFD, which the TIFF
 //! container reads as it reads a MakerNote's IFD ([`ifd_in`]). Of the
-//! index's tags, only MPEntry ([`MP_ENTRY`]) is read, and [`range`] turns
-//! each of its entries into the byte range of an image. The raw view lists
-//! the MP Index IFD's entries.
+//! index's tags, only MPEntry ([`MP_ENTRY`]) is read. [`ranges`] keeps the
+//! first large thumbnail of each class, by the type [`class`] reads, and
+//! [`range`] turns each into the byte range of an image. The raw view
+//! lists the MP Index IFD's entries.
 //!
 //! Only a failure of the reader is an error. Whatever else the segment
 //! holds costs only the images it touches, as damage costs a MakerNote
@@ -57,19 +61,32 @@ mod rules {
 /// bytes each, then two entry numbers of 2 bytes (DC-007 Figure 7, p. 13).
 const ENTRY_LEN: usize = 16;
 
+/// The MP type of a large thumbnail of class 1. Classes 1 to 5 are the
+/// types 0x010001 to 0x010005 (DC-007 Table 4, p. 15; Figure 9, p. 16).
+const LARGE_THUMBNAIL: u32 = 0x01_0001;
+
+/// How many classes of large thumbnails there are. A file holds at most
+/// one large thumbnail of each class (DC-007 6.1, p. 29).
+const CLASSES: usize = 5;
+
+/// The bits of an MP Entry's attribute that hold the MP type, its low 24.
+/// The top 8 hold three flags, two reserved bits and the image data
+/// format (DC-007 Figure 8, p. 14).
+const MP_TYPE: u32 = 0x00FF_FFFF;
+
 /// The MPF index of a JPEG file, as [`index`] reads it.
 #[derive(Clone, Debug)]
 pub(crate) struct Index {
     /// The MP Index IFD, read inside the MPF segment.
     pub(crate) ifd: Ifd,
-    /// The byte ranges in the file of the images the index lists after the
-    /// file's first image, in the order of their entries.
+    /// The byte ranges in the file of the large thumbnails the index lists,
+    /// the first of each class, in the order of their entries.
     pub(crate) images: Vec<Range<u64>>,
 }
 
 /// The MPF index in `mpf`: its MP Index IFD, and the byte ranges in the
-/// file of the images it lists after the file's first image, in the order
-/// of their entries.
+/// file of the large thumbnails it lists, the first of each class, in the
+/// order of their entries.
 ///
 /// `mpf` is the block [`segments`](super::segments) gives: its base is the
 /// MP header, which has the shape of a TIFF header (DC-007 5.2.2.1, p. 11),
@@ -77,9 +94,9 @@ pub(crate) struct Index {
 /// header or an MP Index IFD that cannot be read gives no index, and an
 /// MPEntry that does not hold together gives the index with no ranges.
 ///
-/// An entry is kept whatever its MP type, a gain map or a frame of a
-/// panorama as well as a large thumbnail. Whether those should be previews
-/// is open (`docs/formats/jpeg/open-questions.md`, section 1).
+/// Only large thumbnails are kept, at most five, so a list of thousands of
+/// entries costs the preview finder at most five images to check
+/// ([`ranges`]).
 ///
 /// A range is checked here only for overflow ([`range`]). The block bounds
 /// the index and not the images, which lie after the first image's EOI,
@@ -105,9 +122,9 @@ pub(crate) fn index<R: Read + Seek>(
     Ok(Some(Index { ifd, images }))
 }
 
-/// The ranges of the images that `ifd`, the MP Index IFD of `mpf`, lists
-/// after the file's first image. None when its MPEntry is missing, of a
-/// type its rule does not allow, or cannot be read.
+/// The ranges of the large thumbnails that `ifd`, the MP Index IFD of
+/// `mpf`, lists. None when its MPEntry is missing, of a type its rule does
+/// not allow, or cannot be read.
 ///
 /// # Errors
 ///
@@ -123,9 +140,20 @@ fn listed_images<R: Read + Seek>(
     Ok(ranges(mpf, ifd.order(), &value))
 }
 
-/// The ranges of the images that `value`, MPEntry's value in byte order
-/// `order`, lists in `mpf`, the first image's left out; none when the
-/// value is not a whole number of entries.
+/// The ranges of the large thumbnails that `value`, MPEntry's value in
+/// byte order `order`, lists in `mpf`; none when the value is not a whole
+/// number of entries.
+///
+/// Of each class, only the first entry in the value's order that gives a
+/// range is kept, as the specification allows one large thumbnail per
+/// class. An entry that gives none ([`range`]), such as one at offset 0,
+/// the main image's, takes no class. A later entry of a class already
+/// kept is left out, even when the finder then finds no image at the
+/// first, so a list gives at most five ranges whatever it holds. Every
+/// entry of another type is left out: the main image's, a frame of a
+/// multi-frame file, an original kept from before an edit, a gain map, an
+/// image of undefined type, and one of a type the specification does not
+/// list.
 ///
 /// The entries are those the value holds. NumberOfImages (0xB001), which
 /// says how many images the file holds, is not read, so a count that
@@ -136,10 +164,37 @@ fn ranges(mpf: &Block, order: ByteOrder, value: &[u8]) -> Vec<Range<u64>> {
     if !rest.is_empty() {
         return Vec::new();
     }
-    entries
-        .iter()
-        .filter_map(|entry| range(mpf, order, entry))
-        .collect()
+    let mut kept = [false; CLASSES];
+    let mut images = Vec::new();
+    for entry in entries {
+        let Some(class_kept) = class(order, entry).and_then(|class| kept.get_mut(class)) else {
+            continue;
+        };
+        if *class_kept {
+            continue;
+        }
+        if let Some(image) = range(mpf, order, entry) {
+            *class_kept = true;
+            images.push(image);
+        }
+    }
+    images
+}
+
+/// The class of the large thumbnail that `entry` describes, in byte order
+/// `order`, from 0 for class 1 to 4 for class 5; `None` when its MP type is
+/// another.
+///
+/// The MP type is read from the attribute alone, its low 24 bits
+/// ([`MP_TYPE`]). The flags and the image data format above them are not
+/// read: an entry with any of them set is still of its type. A JPEG image
+/// is the only format the specification defines, and the finder checks that
+/// each image is one.
+fn class(order: ByteOrder, entry: &[u8; ENTRY_LEN]) -> Option<usize> {
+    let [a0, a1, a2, a3, ..] = *entry;
+    let mp_type = order.u32([a0, a1, a2, a3]) & MP_TYPE;
+    let class = usize::try_from(mp_type.checked_sub(LARGE_THUMBNAIL)?).ok()?;
+    (class < CLASSES).then_some(class)
 }
 
 /// The range of the image that `entry` describes, in byte order `order`:
@@ -151,15 +206,16 @@ fn ranges(mpf: &Block, order: ByteOrder, value: &[u8]) -> Vec<Range<u64>> {
 /// gives 0 to the first image only, and an offset of 0 points at the MP
 /// header, inside the first image, where no other image can start. So an
 /// entry is taken for the first image by its offset, wherever it stands in
-/// the value, and a first entry with another offset is kept as any other.
+/// the value, and a first entry with another offset gives a range as any
+/// other; [`ranges`] keeps it only if its type is a large thumbnail's.
 ///
 /// `None` also when the range's start or end would pass the largest
 /// offset. That cannot happen on a file a reader can hold: the MP header
 /// lies inside the file, and the offset and the size are 32-bit numbers.
 /// The sums are checked all the same.
 fn range(mpf: &Block, order: ByteOrder, entry: &[u8; ENTRY_LEN]) -> Option<Range<u64>> {
-    // The attribute and the two dependent images' entry numbers are not
-    // read.
+    // The attribute, which `class` has read, and the two dependent images'
+    // entry numbers are not read here.
     let [_, _, _, _, s0, s1, s2, s3, o0, o1, o2, o3, _, _, _, _] = *entry;
     let size = order.u32([s0, s1, s2, s3]);
     let offset = order.u32([o0, o1, o2, o3]);
@@ -571,15 +627,22 @@ mod tests {
             let mut builder = back_to_back(order);
             builder.mpf_entry_offset(2, 0);
             assert_eq!(images_of(&builder.build().bytes), [built.mpf_image(0)]);
-            // The first entry given another offset is kept as any other:
-            // here the second thumbnail's, with the main image's size.
+            // The first entry given another offset and the type of a large
+            // thumbnail of class 3 is kept as any other: here the second
+            // thumbnail's, with the main image's size.
             let mut builder = back_to_back(order);
-            builder.mpf_entry_offset(0, offset_of(&built, 1));
+            builder
+                .mpf_entry_offset(0, offset_of(&built, 1))
+                .mpf_entry_attribute(0, 0x8001_0003);
             let start = built.mpf_image(1).start;
             let first = start..start + built.image_end();
             let mut expected = vec![first];
             expected.extend(built.mpf_images());
             assert_eq!(images_of(&builder.build().bytes), expected);
+            // With the main image's type, it is left out by its type.
+            let mut builder = back_to_back(order);
+            builder.mpf_entry_offset(0, offset_of(&built, 1));
+            assert_eq!(images_of(&builder.build().bytes), built.mpf_images());
         }
     }
 
@@ -641,17 +704,23 @@ mod tests {
         }
     }
 
-    /// An MP Entry with `size` and `offset` in byte order `order`, and an
-    /// attribute and entry numbers that are not zeros, as no reader of the
+    /// The attribute of the entries that do not test it: a large thumbnail
+    /// of class 1, with every bit above the MP type set, so that no reader
+    /// of the size and the offset may take it for either.
+    const THUMBNAIL: u32 = 0xFF01_0001;
+
+    /// An MP Entry with `attribute`, `size` and `offset` in byte order
+    /// `order`, and entry numbers that are not zeros, as no reader of the
     /// size and the offset may take them for either.
-    fn entry(order: ByteOrder, size: u32, offset: u32) -> [u8; ENTRY_LEN] {
+    fn entry(order: ByteOrder, attribute: u32, size: u32, offset: u32) -> [u8; ENTRY_LEN] {
         let mut entry = [0xEE; ENTRY_LEN];
-        let (size, offset) = match order {
-            ByteOrder::Little => (size.to_le_bytes(), offset.to_le_bytes()),
-            ByteOrder::Big => (size.to_be_bytes(), offset.to_be_bytes()),
+        let u32_bytes = |n: u32| match order {
+            ByteOrder::Little => n.to_le_bytes(),
+            ByteOrder::Big => n.to_be_bytes(),
         };
-        entry[4..8].copy_from_slice(&size);
-        entry[8..12].copy_from_slice(&offset);
+        entry[0..4].copy_from_slice(&u32_bytes(attribute));
+        entry[4..8].copy_from_slice(&u32_bytes(size));
+        entry[8..12].copy_from_slice(&u32_bytes(offset));
         entry
     }
 
@@ -661,25 +730,28 @@ mod tests {
         // overflow, so a block whose base is there stands for it.
         let base = u64::MAX - 100;
         let block = Block::new(base, base..u64::MAX);
+        // Each entry alone, since a list keeps one large thumbnail per
+        // class.
         for order in [ByteOrder::Little, ByteOrder::Big] {
-            let value = [
+            for (size, offset, kept) in [
                 // The end at the largest offset: kept.
-                entry(order, 50, 50),
+                (50, 50, Some(base + 50..u64::MAX)),
                 // The start past it.
-                entry(order, 1, 101),
-                entry(order, 0, u32::MAX),
+                (1, 101, None),
+                (0, u32::MAX, None),
                 // The end past it.
-                entry(order, 51, 50),
-                entry(order, u32::MAX, 1),
+                (51, 50, None),
+                (u32::MAX, 1, None),
                 // At the largest offset, empty: kept.
-                entry(order, 0, 100),
-            ]
-            .concat();
-            assert_eq!(
-                ranges(&block, order, &value),
-                [base + 50..u64::MAX, u64::MAX..u64::MAX],
-                "{order:?}"
-            );
+                (0, 100, Some(u64::MAX..u64::MAX)),
+            ] {
+                let value = entry(order, THUMBNAIL, size, offset);
+                assert_eq!(
+                    ranges(&block, order, &value),
+                    Vec::from_iter(kept),
+                    "{order:?} {size} {offset}"
+                );
+            }
         }
     }
 
@@ -689,10 +761,122 @@ mod tests {
         // and the offset 0x0A0B_0C0D.
         let block = Block::new(1000, 1000..2000);
         for order in [ByteOrder::Little, ByteOrder::Big] {
-            let value = entry(order, 0x0102_0304, 0x0A0B_0C0D);
+            let value = entry(order, THUMBNAIL, 0x0102_0304, 0x0A0B_0C0D);
             let start = 1000 + 0x0A0B_0C0D;
             let image = start..start + 0x0102_0304;
             assert_eq!(ranges(&block, order, &value), [image], "{order:?}");
+        }
+    }
+
+    /// The range of an entry of size 10 at offset 20 in a block based at
+    /// 1000, as the tests below write it.
+    const AT_20: Range<u64> = 1020..1030;
+
+    /// The MP types of the large thumbnails of classes 1 to 5 (DC-007
+    /// Table 4, p. 15).
+    const LARGE_THUMBNAILS: [u32; 5] = [0x01_0001, 0x01_0002, 0x01_0003, 0x01_0004, 0x01_0005];
+
+    /// MP types that are not a large thumbnail's, in order (DC-007 Table 4,
+    /// p. 15; Figure 9, p. 16):
+    ///
+    /// - 0x000000, undefined;
+    /// - 0x010000 and 0x010006, the codes before class 1 and after class
+    ///   5, and 0x010101, class 1 with a reserved bit set, none of which
+    ///   the specification lists;
+    /// - 0x020001 to 0x020003, the panorama, disparity and multi-angle
+    ///   images;
+    /// - 0x030000, the baseline primary image;
+    /// - 0x040000, an original kept for preservation;
+    /// - 0x050000, a gain map;
+    /// - 0x810001, a type addition image;
+    /// - 0xFFFFFF, every bit of the MP type set.
+    const OTHER_TYPES: [u32; 12] = [
+        0x00_0000, 0x01_0000, 0x01_0006, 0x01_0101, 0x02_0001, 0x02_0002, 0x02_0003, 0x03_0000,
+        0x04_0000, 0x05_0000, 0x81_0001, 0xFF_FFFF,
+    ];
+
+    #[test]
+    fn only_a_large_thumbnail_is_kept() {
+        let block = Block::new(1000, 1000..2000);
+        for order in [ByteOrder::Little, ByteOrder::Big] {
+            for mp_type in LARGE_THUMBNAILS {
+                let value = entry(order, 0x4000_0000 | mp_type, 10, 20);
+                let found = ranges(&block, order, &value);
+                assert_eq!(found, [AT_20], "{order:?} {mp_type:06X}");
+            }
+            for mp_type in OTHER_TYPES {
+                let value = entry(order, 0x4000_0000 | mp_type, 10, 20);
+                let found = ranges(&block, order, &value);
+                assert_eq!(found, [], "{order:?} {mp_type:06X}");
+            }
+        }
+    }
+
+    #[test]
+    fn the_flags_and_the_image_data_format_leave_the_type_as_it_is() {
+        // Each bit of the attribute's top byte alone, then all eight: the
+        // three flags, the two reserved bits and the image data format's
+        // three bits.
+        let block = Block::new(1000, 1000..2000);
+        for order in [ByteOrder::Little, ByteOrder::Big] {
+            for top in (0..8).map(|bit| 1_u32 << bit).chain([0xFF]) {
+                let bits = top << 24;
+                let value = entry(order, bits | 0x01_0002, 10, 20);
+                let found = ranges(&block, order, &value);
+                assert_eq!(found, [AT_20], "{order:?} {bits:08X}");
+                let value = entry(order, bits | 0x05_0000, 10, 20);
+                let found = ranges(&block, order, &value);
+                assert_eq!(found, [], "{order:?} {bits:08X}");
+            }
+        }
+    }
+
+    #[test]
+    fn the_first_large_thumbnail_of_each_class_is_kept() {
+        let block = Block::new(1000, 1000..2000);
+        for order in [ByteOrder::Little, ByteOrder::Big] {
+            let at = |mp_type: u32, offset| entry(order, 0x4000_0000 | mp_type, 10, offset);
+            // After the main image's entry and a gain map, classes 2, 1,
+            // 2, 5, 1, 3, 4, 5 and 4: the first of each class is kept, in
+            // the list's order.
+            let value = [
+                entry(order, 0xA003_0000, 900, 0),
+                at(0x05_0000, 10),
+                at(0x01_0002, 20),
+                at(0x01_0001, 30),
+                at(0x01_0002, 40),
+                at(0x01_0005, 50),
+                at(0x01_0001, 60),
+                at(0x01_0003, 70),
+                at(0x01_0004, 80),
+                at(0x01_0005, 90),
+                at(0x01_0004, 100),
+            ]
+            .concat();
+            let kept = [1020..1030, 1030..1040, 1050..1060, 1070..1080, 1080..1090];
+            assert_eq!(ranges(&block, order, &value), kept, "{order:?}");
+            // A first entry that gives no range, at offset 0, takes no
+            // class: the next of its class is kept.
+            let value = [at(0x01_0002, 0), at(0x01_0002, 40)].concat();
+            let next = 1040..1050;
+            assert_eq!(ranges(&block, order, &value), [next], "{order:?}");
+        }
+    }
+
+    #[test]
+    fn a_full_segment_of_one_class_gives_one_image() {
+        // As many entries as a segment holds beside its identifier, the MP
+        // header and an MP Index IFD of the three tags the specification
+        // requires, every one a large thumbnail of class 1 at an offset of
+        // its own: only the first is kept, so the finder checks one image.
+        let entries = (usize::from(u16::MAX) - 2 - 4 - 8 - (2 + 3 * 12 + 4)) / ENTRY_LEN;
+        assert_eq!(entries, 4_092);
+        let block = Block::new(1000, 1000..u64::MAX);
+        for order in [ByteOrder::Little, ByteOrder::Big] {
+            let value: Vec<u8> = (0..entries)
+                .flat_map(|n| entry(order, 0x4001_0001, 10, 20 + 10 * u32::try_from(n).unwrap()))
+                .collect();
+            assert_eq!(ranges(&block, order, &value), [AT_20], "{order:?}");
         }
     }
 
