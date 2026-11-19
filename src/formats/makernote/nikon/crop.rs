@@ -2,7 +2,7 @@
 
 //! The Nikon MakerNote's CropHiSpeed, and placing a focus point on a crop:
 //! a recorded position on the cropped picture, and the points a record
-//! names, placed from the body's table.
+//! names, placed from the body's table, as the table's whole layout is.
 //!
 //! On a crop mode, DX, 1:1 or 16:9, the frame AFInfo2 records stays the
 //! camera's full output, while the picture is cut from it. CropHiSpeed
@@ -13,7 +13,9 @@
 //! - [`in_crop`] places a recorded position on the cropped picture: on
 //!   CropArea in a raw file, on the JPEG's own pixels in a JPEG;
 //! - [`placed`] places the points a record names from the body's table, in
-//!   the frame or the window [`placed_frame`] gives.
+//!   the frame or the window [`placed_frame`] gives;
+//! - [`placed_layout`] places every point of the table there, whatever
+//!   the record names.
 //!
 //! What a crop's values mean depends on what it cut ([`Cut`]). A DX crop,
 //! which cuts both sides, records fractions of the cropped picture, and
@@ -40,7 +42,10 @@ use super::block::MakerNote;
 use super::metadata::CropArea;
 use super::rules;
 use crate::error::Result;
-use crate::focus::{Focus, FocusOrigin, FocusPoint, FocusPoints, check_point, scale};
+use crate::focus::{
+    Focus, FocusLayoutPoint, FocusOrigin, FocusPoint, FocusPoints, PlacedFocusLayout, check_point,
+    scale,
+};
 use crate::formats::makernote::points::PointTable;
 use crate::geometry::{Point, Size};
 use crate::io::Source;
@@ -301,7 +306,7 @@ fn centered_origin(frame: u32, window: u32) -> Option<u32> {
 ///
 /// The frame, and the origin every center moves back by, are
 /// [`placed_frame`]'s. A point that no longer lies on the frame by the rule
-/// of every focus point ([`check_point`]) is dropped. The primary dropped
+/// of every focus point is dropped ([`in_window`]). The primary dropped
 /// costs the whole list.
 pub(super) fn placed(
     named: NamedPoints,
@@ -321,19 +326,10 @@ pub(super) fn placed(
         if !is_primary && !table.bit(number).is_some_and(|bit| named.marks(bit)) {
             continue;
         }
-        let (center, size) = (point.center(), point.size());
-        // A center left or above the window lies outside it, as one past
-        // its right or bottom edge does.
-        let (Some(x), Some(y)) = (
-            center.x.checked_sub(origin.x),
-            center.y.checked_sub(origin.y),
-        ) else {
+        let size = point.size();
+        let Some(center) = in_window(point, frame, origin) else {
             continue;
         };
-        let center = Point { x, y };
-        if check_point(frame, center, Some(size)).is_err() {
-            continue;
-        }
         if is_primary {
             primary = Some(points.points().len());
         }
@@ -344,6 +340,58 @@ pub(super) fn placed(
             .ok()?;
     }
     points.with_primary_index(primary?).ok()
+}
+
+/// The layout of `table`'s points placed on the file's picture, as
+/// [`Metadata::placed_focus_layout`](crate::Metadata::placed_focus_layout)
+/// gives it: every point of the table, in number order, with its number
+/// and box, its center moved by [`placed_frame`]'s origin into its frame,
+/// as [`placed`] places a named point. A point whose box the frame does
+/// not hold whole is left out ([`in_window`]), so the layout may hold
+/// none.
+///
+/// It depends on the picture alone, never on the shot: not on the layout
+/// code, the point numbers or the focus mode, so a manual-focus or
+/// live-view shot has it too. So its frame is the one [`placed`] gives the
+/// same file.
+///
+/// `None` where [`placed_frame`] gives no frame: on a crop the record does
+/// not confirm, or whose origin is not the window's, and on a crop in a
+/// JPEG whose size is not the window's.
+pub(super) fn placed_layout(
+    table: &PointTable,
+    crop: Option<CropHiSpeed>,
+    pixels: Option<Size>,
+) -> Option<PlacedFocusLayout> {
+    let (frame, origin) = placed_frame(table, crop, pixels)?;
+    let points = table
+        .points()
+        .iter()
+        .filter_map(|point| {
+            let center = in_window(point, frame, origin)?;
+            Some(FocusLayoutPoint::new(point.number(), center, point.size()))
+        })
+        .collect();
+    // The table's numbers rise from 1, and `in_window` keeps a point only
+    // when it lies on the frame by `check_point`, so `new` refuses none.
+    PlacedFocusLayout::new(frame, points).ok()
+}
+
+/// The center of the table's `point`, moved back by `origin` into the
+/// window `frame`, or `None` when the point is not on the window: its
+/// center lies left of or above the window, or past its right or bottom
+/// edge, or its box crosses an edge. That is the rule of every focus point
+/// ([`check_point`]), by which [`placed`] drops a point the window leaves
+/// out and [`placed_layout`] leaves one out of the layout.
+fn in_window(point: &FocusLayoutPoint, frame: Size, origin: Point) -> Option<Point> {
+    let center = point.center();
+    let center = Point {
+        x: center.x.checked_sub(origin.x)?,
+        y: center.y.checked_sub(origin.y)?,
+    };
+    check_point(frame, center, Some(point.size()))
+        .is_ok()
+        .then_some(center)
 }
 
 /// The frame of the points placed from `table`, and the origin their
@@ -986,6 +1034,230 @@ mod tests {
         assert_eq!(placed_on_jpeg([1268, 1312], [2536, 2624], 38, &[37]), None);
         // A window wider than the frame has no origin: no point.
         assert_eq!(placed_on_jpeg([3009, 2008], [6018, 4016], 1, &[0]), None);
+    }
+
+    /// The D600's table placed with its centers moved back by `origin`,
+    /// in a frame of `frame`, as the record's values in the NEF notes give
+    /// each point, apart from [`placed_layout`]; every point is kept,
+    /// which the D600's own windows all do.
+    fn d600_layout_in(frame: [u32; 2], origin: [u32; 2]) -> PlacedFocusLayout {
+        let ([width, height], [left, top]) = (frame, origin);
+        let table = points::find("NIKON D600").expect("the D600's table");
+        let points = table
+            .points()
+            .iter()
+            .map(|point| {
+                let center = point.center();
+                let center = Point {
+                    x: center.x - left,
+                    y: center.y - top,
+                };
+                FocusLayoutPoint::new(point.number(), center, point.size())
+            })
+            .collect();
+        PlacedFocusLayout::new(Size { width, height }, points).unwrap()
+    }
+
+    #[test]
+    fn the_layout_is_placed_in_the_frame_the_named_points_take() {
+        // The whole table, in the table's frame on a shot that is no crop,
+        // and moved into the window on the DX crop and on the Medium JPEG,
+        // whose windows hold every point of the D600: point 38 lands at
+        // (772, 1009) in the DX window, and point 1 at (3005, 2002) in the
+        // Medium one. Where the shot also gives points placed from the
+        // table, they are in the same frame, each at the layout's point of
+        // its number.
+        let full = d600_layout_in([6016, 4016], [0, 0]);
+        let dx = d600_layout_in([3936, 2624], [1040, 696]);
+        let medium = d600_layout_in([6010, 4006], [3, 5]);
+        assert_eq!(
+            dx.point(38).map(|point| point.center()),
+            Some(Point { x: 772, y: 1009 })
+        );
+        assert_eq!(
+            medium.point(1).map(|point| point.center()),
+            Some(Point { x: 3005, y: 2002 })
+        );
+        let table = points::find("NIKON D600").expect("the D600's table");
+        assert_eq!(full.points(), table.points());
+        for order in ORDERS {
+            let viewfinder = d600_viewfinder(order);
+            let cases = [
+                (
+                    "FX",
+                    shot(order, "NIKON D600", &viewfinder, Some(D600_FX)),
+                    &full,
+                ),
+                (
+                    "no CropHiSpeed",
+                    shot(order, "NIKON D600", &viewfinder, None),
+                    &full,
+                ),
+                (
+                    "DX",
+                    shot(order, "NIKON D600", &viewfinder, Some(D600_DX)),
+                    &dx,
+                ),
+                (
+                    "Large JPEG",
+                    d600_jpeg(order, &viewfinder, Some(D600_FX), [6016, 4016]),
+                    &full,
+                ),
+                (
+                    "Medium JPEG",
+                    d600_jpeg(order, &viewfinder, Some(D600_FX), [4512, 3008]),
+                    &medium,
+                ),
+                (
+                    "Small JPEG",
+                    d600_jpeg(order, &viewfinder, Some(D600_FX), [3008, 2008]),
+                    &full,
+                ),
+                (
+                    "DX JPEG",
+                    d600_jpeg(order, &viewfinder, Some(D600_DX), [3936, 2624]),
+                    &dx,
+                ),
+            ];
+            for (what, metadata, expected) in cases {
+                let what = format!("{order:?}, {what}");
+                let layout = metadata.placed_focus_layout();
+                assert_eq!(layout, Some(expected), "{what}");
+                let points = metadata.focus_points().expect(&what);
+                assert_eq!(points.frame(), expected.frame(), "{what}");
+                for point in points.points() {
+                    let number = point.number().expect(&what);
+                    let at = expected.point(number).expect(&what);
+                    assert_eq!(point.center(), at.center(), "{what}, point {number}");
+                    assert_eq!(point.size(), Some(at.size()), "{what}, point {number}");
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn the_layout_is_placed_whatever_the_shot() {
+        // A manual-focus DX frame, and DX frames that name no point the
+        // table places, by layout code 0 as in live view, or by point 0:
+        // no focus points, and the layout in the DX window all the same.
+        let dx = d600_layout_in([3936, 2624], [1040, 696]);
+        for order in ORDERS {
+            let manual = metadata_of(shot_file(
+                order,
+                "NIKON D600",
+                "MANUAL",
+                &d600_viewfinder(order),
+                Some(D600_DX),
+            ));
+            let code_0 = viewfinder(order, "0100", 0, 0, &[]);
+            let point_0 = viewfinder(order, "0100", 3, 0, &[]);
+            for (what, metadata) in [
+                ("manual focus", manual),
+                (
+                    "layout code 0",
+                    shot(order, "NIKON D600", &code_0, Some(D600_DX)),
+                ),
+                (
+                    "point 0",
+                    shot(order, "NIKON D600", &point_0, Some(D600_DX)),
+                ),
+            ] {
+                assert_eq!(metadata.focus_points(), None, "{order:?}, {what}");
+                assert_eq!(
+                    metadata.placed_focus_layout(),
+                    Some(&dx),
+                    "{order:?}, {what}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn a_picture_whose_place_in_the_table_is_not_known_gives_no_layout() {
+        // A crop the D600's record does not confirm; the DX crop with an
+        // origin a pixel off, in a raw file and in a JPEG of the window's
+        // size; a DX crop-mode JPEG smaller than the window; and a body
+        // without a table, the D610.
+        for order in ORDERS {
+            let viewfinder = d600_viewfinder(order);
+            let mut unconfirmed = D600_DX;
+            unconfirmed[0] = 1;
+            let mut off = D600_DX;
+            off[5] = 1041;
+            let cases = [
+                (
+                    "unconfirmed crop",
+                    shot(order, "NIKON D600", &viewfinder, Some(unconfirmed)),
+                ),
+                (
+                    "origin off",
+                    shot(order, "NIKON D600", &viewfinder, Some(off)),
+                ),
+                (
+                    "origin off, JPEG",
+                    d600_jpeg(order, &viewfinder, Some(off), [3936, 2624]),
+                ),
+                (
+                    "DX JPEG, Medium size",
+                    d600_jpeg(order, &viewfinder, Some(D600_DX), [2944, 1968]),
+                ),
+                (
+                    "no table",
+                    shot(order, "NIKON D610", &viewfinder, Some(D600_FX)),
+                ),
+            ];
+            for (what, metadata) in cases {
+                assert_eq!(metadata.placed_focus_layout(), None, "{order:?}, {what}");
+            }
+        }
+    }
+
+    #[test]
+    fn the_layout_leaves_out_the_points_a_window_does_not_hold() {
+        // No D600 window leaves a point out, so these windows are narrower
+        // than any the D600 has, each centered in the frame with
+        // CropHiSpeed's origin at its own. The outer columns, at 1812 and
+        // 4203 in the table's frame, hold points 37 to 39 and 25 to 27.
+        let table = points::find("NIKON D600").expect("the D600's table");
+        let numbers = |window: [u32; 2], crop: CropHiSpeed| {
+            let [width, height] = window;
+            let crops = Box::leak(Box::new([points::ConfirmedCrop::new(
+                2,
+                Size { width, height },
+            )]));
+            let layout = super::placed_layout(&table.with_crops(crops), Some(crop), None)
+                .expect("a window that fits the frame");
+            assert_eq!(layout.frame(), Size { width, height });
+            layout
+                .points()
+                .iter()
+                .map(FocusLayoutPoint::number)
+                .collect::<Vec<u16>>()
+        };
+        let all: Vec<u16> = (1..=39).collect();
+        let without_outer: Vec<u16> = all
+            .iter()
+            .copied()
+            .filter(|number| !matches!(number, 25..=27 | 37..=39))
+            .collect();
+        // 2536 by 2624, at (1740, 696): the left column's boxes, centered
+        // at 72, cross the left edge, and the right column's, at 2463,
+        // reach 2545, past the right edge at 2536.
+        assert_eq!(numbers([2536, 2624], d600_dx_at(1740, 696)), without_outer);
+        // 2556 by 2624, at (1730, 696): the left column's boxes, at 82,
+        // reach the left edge exactly, and the right column's, at 2473,
+        // reach 2555: all kept.
+        assert_eq!(numbers([2556, 2624], d600_dx_at(1730, 696)), all);
+        // 2216 by 2624, at (1900, 696): both outer columns' centers lie
+        // outside the window, at 1812 - 1900 and 4203 - 1900 = 2303.
+        assert_eq!(numbers([2216, 2624], d600_dx_at(1900, 696)), without_outer);
+        // A window as narrow as one column's box, 164 by 2624, at the
+        // origin (2926, 696): only the middle column, at 3008, whose
+        // boxes, at 82, fill it exactly.
+        assert_eq!(numbers([164, 2624], d600_dx_at(2926, 696)), [1, 2, 3, 4, 5]);
+        // 2 by 2624, at (3007, 696): no box fits, so no point, and still a
+        // layout.
+        assert_eq!(numbers([2, 2624], d600_dx_at(3007, 696)), Vec::<u16>::new());
     }
 
     /// What a crop test's file holds besides AFInfo2: the size of its raw

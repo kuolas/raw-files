@@ -24,8 +24,9 @@ use std::path::{Path, PathBuf};
 
 use raw_files::{
     Camera, CameraFile, ColorSpace, Directory, ErrorKind, ExposureProgram, FieldType, FlashMode,
-    FocusAreaMode, FocusOrigin, Format, ImageArea, Make, MeteringMode, Orientation, Preview,
-    PreviewFormat, Rational, RawImageSize, Shutter, SignedRational, Size, WhiteBalanceMode,
+    FocusAreaMode, FocusLayoutPoint, FocusOrigin, Format, ImageArea, Make, Metadata, MeteringMode,
+    Orientation, Point, Preview, PreviewFormat, Rational, RawImageSize, Shutter, SignedRational,
+    Size, WhiteBalanceMode,
 };
 
 /// The path of the sample file `name`, or `None`, with a note on stderr,
@@ -381,7 +382,9 @@ pub fn check(sample: &Sample, format: Format, folder: Folder) {
 /// must give
 /// ([`FocusLayout::recorded_model`](raw_files::FocusLayout::recorded_model)),
 /// `None` when it must give none, as for every body that raw-files has no
-/// table of.
+/// table of. The layout placed on the picture is its frame and how many
+/// points it holds ([`SamplePlacedLayout`]), `None` when the reader must
+/// give none.
 ///
 /// The files are public, but the repository holds no camera's or lens's
 /// serial number, so a serial number is recorded by its shape alone and a
@@ -414,7 +417,19 @@ pub struct SampleMetadata {
     pub image_size: Option<(u32, u32)>,
     pub focus: Option<SampleFocus>,
     pub focus_layout: Option<&'static str>,
+    pub placed_focus_layout: Option<SamplePlacedLayout>,
     pub settings: SampleSettings,
+}
+
+/// The layout of the body's autofocus points placed on a sample file's
+/// picture, as the reader must give it
+/// ([`PlacedFocusLayout`](raw_files::PlacedFocusLayout)): the frame of the
+/// picture, its width and height in pixels, and how many points of the
+/// body's table it holds.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct SamplePlacedLayout {
+    pub frame: (u32, u32),
+    pub points: usize,
 }
 
 /// How the camera of a sample file was set, as the reader must give it
@@ -634,6 +649,68 @@ pub fn check_display_name(camera: &Camera, label: &str) {
     }
 }
 
+/// Checks that `metadata`, the file `label`'s, gives the layout of its
+/// body's points placed in a window of `window` pixels of the table's
+/// frame, which starts at `origin`, and returns how many points it holds.
+///
+/// Each point of the layout in the table's frame
+/// ([`Metadata::focus_layout`]) is moved back by `origin`, with its number
+/// and box, and kept exactly when its center and its box lie inside the
+/// window, edges included. That rule is written out here, as the corpus
+/// test writes it, rather than asked of the library. Where the file gives
+/// points placed from the table, their frame is the window, and each lies
+/// at the placed layout's point of its number, with its box.
+///
+/// [`Metadata::focus_layout`]: raw_files::Metadata::focus_layout
+pub fn check_placed_layout(label: &str, metadata: &Metadata, window: Size, origin: Point) -> usize {
+    let layout = metadata
+        .focus_layout()
+        .unwrap_or_else(|| panic!("{label}: no layout"));
+    let placed = metadata
+        .placed_focus_layout()
+        .unwrap_or_else(|| panic!("{label}: no placed layout"));
+    assert_eq!(placed.frame(), window, "{label}: placed layout's frame");
+    let fits = |center: u32, side: u32, frame: u32| {
+        let half = side.div_ceil(2);
+        half <= center && u64::from(center) + u64::from(half) <= u64::from(frame)
+    };
+    let expected: Vec<FocusLayoutPoint> = layout
+        .points()
+        .iter()
+        .filter_map(|point| {
+            let (center, size) = (point.center(), point.size());
+            let center = Point {
+                x: center.x.checked_sub(origin.x)?,
+                y: center.y.checked_sub(origin.y)?,
+            };
+            let inside = fits(center.x, size.width, window.width)
+                && fits(center.y, size.height, window.height);
+            inside.then(|| FocusLayoutPoint::new(point.number(), center, size))
+        })
+        .collect();
+    assert_eq!(placed.points(), expected, "{label}: placed layout's points");
+    if let Some(list) = metadata
+        .focus_points()
+        .filter(|list| list.origin() == FocusOrigin::Table)
+    {
+        assert_eq!(list.frame(), placed.frame(), "{label}: the two frames");
+        for point in list.points() {
+            let number = point
+                .number()
+                .unwrap_or_else(|| panic!("{label}: a placed point without a number"));
+            let at = placed
+                .point(number)
+                .unwrap_or_else(|| panic!("{label}: point {number} not in the placed layout"));
+            assert_eq!(
+                (point.center(), point.size()),
+                (at.center(), Some(at.size())),
+                "{label}: point {number}"
+            );
+        }
+    }
+    placed.points().len()
+}
+
 /// Checks that the sample file `expected` names opens as `format` and
 /// gives exactly the metadata `expected` records: every value compared, the
 /// focus point's and the camera settings' among them, so that a value the
@@ -827,6 +904,16 @@ pub fn check_metadata(expected: &SampleMetadata, format: Format, folder: Folder)
             .map(|layout| layout.recorded_model()),
         expected.focus_layout,
         "{label}: focus layout"
+    );
+    assert_eq!(
+        metadata
+            .placed_focus_layout()
+            .map(|layout| SamplePlacedLayout {
+                frame: size(layout.frame()),
+                points: layout.points().len(),
+            }),
+        expected.placed_focus_layout,
+        "{label}: placed focus layout"
     );
 
     let settings = metadata.camera_settings();

@@ -124,7 +124,8 @@ it, and its docs say which shots give none.
 
 The Nikon D600 is the first body measured. Its shots through the
 viewfinder give their points placed from its table, and its files the
-layout of its 39 points. The table is checked on frames of my own D600,
+layout of its 39 points, also placed on each picture, a crop's
+included. The table is checked on frames of my own D600,
 stripped of their pixels
 ([the session](formats/nef/autofocus-points.md#21-the-session)).
 
@@ -203,7 +204,8 @@ release's changes.
   [#150](https://github.com/kuolas/raw-files/issues/150)).
 - **On master, not released**: what the CHANGELOG lists under
   [Unreleased](../CHANGELOG.md#unreleased), the handle named
-  `CameraFile` among it.
+  `CameraFile` and the layout of a body's points placed on the picture
+  among it.
 - **Next**: more of full metadata, group by group, beginning with more
   capture settings ([#50](https://github.com/kuolas/raw-files/issues/50)).
   The values only enciphered or encrypted blocks hold come last.

@@ -42,7 +42,10 @@
 //! - every focus point lies inside its frame, its area included, both
 //!   as read and once placed on the largest preview;
 //! - so does every point of a list of the points used;
-//! - the focus point, the list and the layout agree (below).
+//! - the focus point, the list, the layout and the layout placed on the
+//!   picture agree (below);
+//! - so does every point of the placed layout, once placed on the
+//!   largest preview.
 //!
 //! The counts of the metadata fail nothing. What a folder's cameras
 //! record varies: a body that writes no serial number, or no
@@ -88,6 +91,12 @@
 //! - On a crop, the center is moved into the centered window that is the
 //!   list's frame. So it is on a JPEG whose size shows a window of the
 //!   frame, such as the D600's Medium JPEG.
+//! - A layout placed on the picture comes with a layout. Its frame is the
+//!   centered window of the layout's frame, and it holds every point of
+//!   the layout moved into that window, exactly those whose box the
+//!   window holds.
+//! - A list placed from a table comes with a placed layout in the same
+//!   frame, each point at the placed layout's point of its number.
 //!
 //! These hold by how the library builds a list. The test checks them by
 //! hand and does not take the library's word for it.
@@ -138,8 +147,11 @@
 //!   lists by area mode, and the lists of one point placed from a table.
 //! - **The layout**: the files with one, by its number of points, and
 //!   the files with one but no focus point.
+//! - **The layout placed on the picture**: the files with one, by its
+//!   number of points and by its frame, and the files with a layout but
+//!   none placed.
 //!
-//! Two of these counts gather cases the library gives alike, so the
+//! Three of these counts gather cases the library gives alike, so the
 //! output cannot tell them apart.
 //!
 //! A list of one point placed from a table is one of:
@@ -158,6 +170,9 @@
 //! - a JPEG cut to another shape than the frame's, which the JPEG shape
 //!   rule refuses;
 //! - a file whose MakerNote is missing or cannot be read.
+//!
+//! A file with a layout and none placed on the picture is one of the last
+//! four.
 
 use std::cell::Cell;
 use std::collections::{BTreeMap, BTreeSet, HashMap};
@@ -169,8 +184,8 @@ use std::rc::Rc;
 
 use raw_files::{
     Altitude, Authorship, Camera, CameraFile, DateTime, Direction, FocusLayout, FocusOrigin,
-    FocusPoints, Format, Latitude, Lens, Location, Longitude, Metadata, North, Point, Rational,
-    Size,
+    FocusPoints, Format, Latitude, Lens, Location, Longitude, Metadata, North, PlacedFocusLayout,
+    Point, Rational, Size,
 };
 
 /// A file that counts the bytes its reads return, into a counter the caller
@@ -618,6 +633,33 @@ struct FocusTally {
     /// Files whose points placed from a table are not the layout's, as
     /// [`placed_from`] checks them: this must stay zero.
     placed_not_from_layout: usize,
+    /// Files with a layout placed on the picture; `placed_layout_sizes`
+    /// counts the files whose placed layout holds each number of points,
+    /// and `placed_layout_frames` those whose placed layout has each
+    /// frame.
+    with_placed_layout: usize,
+    placed_layout_sizes: BTreeMap<usize, usize>,
+    placed_layout_frames: BTreeMap<(u32, u32), usize>,
+    /// Files with a layout and no placed layout: a crop the table does
+    /// not confirm, a crop-mode JPEG smaller than the crop's window, a
+    /// JPEG cut to another shape than the frame's and a file whose
+    /// MakerNote is missing or cannot be read all give it alike, so they
+    /// are counted together.
+    layout_without_placed: usize,
+    /// Files with a placed layout and no layout: both come from the same
+    /// table, so this must stay zero.
+    placed_layout_without_layout: usize,
+    /// Files whose placed layout is not the layout placed in its frame, as
+    /// [`placed_layout_from`] checks it: this must stay zero.
+    placed_layout_not_from_layout: usize,
+    /// Files whose points placed from a table are not on their placed
+    /// layout, as [`list_on_placed_layout`] checks them: this must stay
+    /// zero.
+    list_not_on_placed_layout: usize,
+    /// Files whose placed layout, scaled onto their largest preview, has
+    /// a point outside it, box included: as for `scaled_outside_frame`,
+    /// this must stay zero.
+    placed_layout_scaled_outside_frame: usize,
     /// Files with a point of their list outside the list's frame, area
     /// included, checked by hand as for `outside_frame`: this must stay
     /// zero.
@@ -668,6 +710,7 @@ impl FocusTally {
         if let Some(list) = metadata.focus_points() {
             self.record_list(list, layout);
         }
+        self.record_placed_layout(metadata);
         self.list_not_focus += usize::from(!list_gives_focus(metadata));
         let Some(focus) = metadata.focus() else {
             self.without_point += 1;
@@ -731,9 +774,45 @@ impl FocusTally {
         }
     }
 
-    /// Places the focus point and the list of `metadata` on a largest
-    /// preview of size `preview`, and counts whether that worked and kept
-    /// every point inside the preview.
+    /// Counts the layout `metadata` gives placed on the picture, and checks
+    /// it against the layout in the table's frame and against the list of
+    /// the points used, when those are placed from a table.
+    fn record_placed_layout(&mut self, metadata: &Metadata) {
+        let (layout, placed) = (metadata.focus_layout(), metadata.placed_focus_layout());
+        match (placed, layout) {
+            (Some(placed), layout) => {
+                let frame = placed.frame();
+                self.with_placed_layout += 1;
+                *self
+                    .placed_layout_sizes
+                    .entry(placed.points().len())
+                    .or_default() += 1;
+                *self
+                    .placed_layout_frames
+                    .entry((frame.width, frame.height))
+                    .or_default() += 1;
+                match layout {
+                    Some(layout) => {
+                        self.placed_layout_not_from_layout +=
+                            usize::from(!placed_layout_from(placed, &layout));
+                    }
+                    None => self.placed_layout_without_layout += 1,
+                }
+            }
+            (None, Some(_)) => self.layout_without_placed += 1,
+            (None, None) => {}
+        }
+        if let Some(list) = metadata.focus_points()
+            && list.origin() == FocusOrigin::Table
+        {
+            let on = placed.is_some_and(|placed| list_on_placed_layout(list, placed));
+            self.list_not_on_placed_layout += usize::from(!on);
+        }
+    }
+
+    /// Places the focus point, the list and the placed layout of
+    /// `metadata` on a largest preview of size `preview`, and counts
+    /// whether that worked and kept every point inside the preview.
     fn record_scaled(&mut self, metadata: &Metadata, preview: Size) {
         if let Some(focus) = metadata.focus() {
             match focus.scaled_to(preview) {
@@ -752,6 +831,15 @@ impl FocusTally {
                     .all(|point| lies_inside(point.center(), point.size(), preview))
             });
             self.list_scaled_outside_frame += usize::from(!inside);
+        }
+        if let Some(placed) = metadata.placed_focus_layout() {
+            let inside = placed.scaled_to(preview).is_ok_and(|scaled| {
+                scaled
+                    .points()
+                    .iter()
+                    .all(|point| lies_inside(point.center(), Some(point.size()), preview))
+            });
+            self.placed_layout_scaled_outside_frame += usize::from(!inside);
         }
     }
 }
@@ -785,23 +873,11 @@ fn list_gives_focus(metadata: &Metadata) -> bool {
 /// size shows a window of the frame, such as the D600's Medium JPEG, the
 /// window is the layout's frame less twice the origin on each side, so
 /// the difference of the two frames is even on both axes and the origin
-/// is half of it.
-/// Written out here, as `lies_inside` is, so that the test does not take
-/// the library's word for it.
+/// is half of it ([`centered_origin`]). Written out here, as `lies_inside`
+/// is, so that the test does not take the library's word for it.
 fn placed_from(list: &FocusPoints, layout: &FocusLayout) -> bool {
-    let (window, frame) = (list.frame(), layout.frame());
-    let (Some(across), Some(down)) = (
-        frame.width.checked_sub(window.width),
-        frame.height.checked_sub(window.height),
-    ) else {
+    let Some(origin) = centered_origin(layout.frame(), list.frame()) else {
         return false;
-    };
-    if across % 2 != 0 || down % 2 != 0 {
-        return false;
-    }
-    let origin = Point {
-        x: across / 2,
-        y: down / 2,
     };
     // No point is numbered 0, so every first number rises above it.
     let mut previous = 0;
@@ -819,6 +895,61 @@ fn placed_from(list: &FocusPoints, layout: &FocusLayout) -> bool {
                     && center.y.checked_sub(origin.y) == Some(point.center().y)
             })
     })
+}
+
+/// The origin of the centered window `window` in `frame`: half the
+/// difference of the two on each axis, when the window is no larger than
+/// the frame and the difference is even on both axes; `None` otherwise.
+fn centered_origin(frame: Size, window: Size) -> Option<Point> {
+    let across = frame.width.checked_sub(window.width)?;
+    let down = frame.height.checked_sub(window.height)?;
+    (across % 2 == 0 && down % 2 == 0).then_some(Point {
+        x: across / 2,
+        y: down / 2,
+    })
+}
+
+/// Whether `placed`, a file's layout placed on its picture, is `layout`,
+/// the body's layout in the table's frame, placed in `placed`'s frame, as
+/// `Metadata::placed_focus_layout` documents: that frame is the centered
+/// window of the layout's frame, as [`centered_origin`] finds it, and the
+/// points are every point of the layout, in order, with its number and
+/// box, its center moved back by the window's origin, exactly those whose
+/// center and box then lie inside the window ([`lies_inside`]). Written
+/// out here, as [`placed_from`] is, so that the test does not take the
+/// library's word for it.
+fn placed_layout_from(placed: &PlacedFocusLayout, layout: &FocusLayout) -> bool {
+    let window = placed.frame();
+    let Some(origin) = centered_origin(layout.frame(), window) else {
+        return false;
+    };
+    let expected = layout.points().iter().filter_map(|point| {
+        let (center, size) = (point.center(), point.size());
+        let center = Point {
+            x: center.x.checked_sub(origin.x)?,
+            y: center.y.checked_sub(origin.y)?,
+        };
+        lies_inside(center, Some(size), window).then_some((point.number(), center, size))
+    });
+    let given = placed
+        .points()
+        .iter()
+        .map(|point| (point.number(), point.center(), point.size()));
+    expected.eq(given)
+}
+
+/// Whether `list`, a file's points placed from a table, lies on `placed`,
+/// its layout placed on the picture, as `Metadata::placed_focus_layout`
+/// documents: in the same frame, each point at the placed layout's point
+/// of its number, with its box.
+fn list_on_placed_layout(list: &FocusPoints, placed: &PlacedFocusLayout) -> bool {
+    list.frame() == placed.frame()
+        && list.points().iter().all(|point| {
+            point
+                .number()
+                .and_then(|number| placed.point(number))
+                .is_some_and(|at| point.center() == at.center() && point.size() == Some(at.size()))
+        })
 }
 
 /// Whether `center` lies inside `frame`, edges included, and so does the
@@ -1083,6 +1214,14 @@ impl Tally {
             f.layout_without_point
         );
         println!(
+            "files with a layout placed on the picture: {}, by number of points: {:?}, by frame: {:?}",
+            f.with_placed_layout, f.placed_layout_sizes, f.placed_layout_frames
+        );
+        println!(
+            "files with a layout and none placed on the picture, from a crop the table does not confirm, a crop-mode JPEG smaller than the crop, a JPEG cut to another shape or a MakerNote missing or unreadable, which the library does not tell apart: {}",
+            f.layout_without_placed
+        );
+        println!(
             "files whose focus point lies outside its frame, area included: {}",
             f.outside_frame
         );
@@ -1125,6 +1264,22 @@ impl Tally {
         println!(
             "files whose list could not be scaled onto their largest preview, or lies outside it once scaled, area included: {}",
             f.list_scaled_outside_frame
+        );
+        println!(
+            "files with a placed layout and no layout: {}",
+            f.placed_layout_without_layout
+        );
+        println!(
+            "files whose placed layout is not their layout placed in its frame: {}",
+            f.placed_layout_not_from_layout
+        );
+        println!(
+            "files whose points placed from a table are not on their placed layout: {}",
+            f.list_not_on_placed_layout
+        );
+        println!(
+            "files whose placed layout, scaled onto their largest preview, lies outside it, box included: {}",
+            f.placed_layout_scaled_outside_frame
         );
         println!(
             "files whose metadata orientation differs from their largest preview's: {}",
@@ -1535,6 +1690,22 @@ fn every_file_of_the_local_corpus_opens_and_gives_a_whole_jpeg() {
             f.placed_not_from_layout, 0,
             "some {format} files' points placed from a table are not their layout's"
         );
+        assert_eq!(
+            f.placed_layout_without_layout, 0,
+            "some {format} files have a placed layout and no layout"
+        );
+        assert_eq!(
+            f.placed_layout_not_from_layout, 0,
+            "some {format} files' placed layout is not their layout placed in its frame"
+        );
+        assert_eq!(
+            f.list_not_on_placed_layout, 0,
+            "some {format} files' points placed from a table are not on their placed layout"
+        );
+        assert_eq!(
+            f.placed_layout_scaled_outside_frame, 0,
+            "some {format} files' placed layout, scaled onto their largest preview, lies outside it"
+        );
     }
 }
 
@@ -1910,6 +2081,155 @@ fn the_focus_tally_counts_the_lists_and_layouts_and_checks_them_against_each_oth
         tally.record(metadata);
         tally.record_scaled(metadata, full);
         let mut expected = [0; 7];
+        expected[*rule] = 1;
+        assert_eq!(failures(&tally), expected, "broken file {index}");
+    }
+}
+
+#[test]
+fn the_focus_tally_checks_the_placed_layout_against_the_layout_and_the_list() {
+    use raw_files::{FocusAreaMode, FocusLayoutPoint};
+
+    let full = Size {
+        width: 6016,
+        height: 4016,
+    };
+    let window = Size {
+        width: 3936,
+        height: 2624,
+    };
+    let layout = FocusLayout::new("NIKON D600", full, &THREE_POINTS).unwrap();
+    let d600 = || {
+        Metadata::default()
+            .with_camera(Camera::default().with_recorded_model("NIKON D600"))
+            .with_focus_layout(layout)
+    };
+    let box_164 = Size {
+        width: 164,
+        height: 164,
+    };
+    // The three points placed in `frame` at these centers, in that order.
+    let placed = |frame: Size, centers: &[(u16, u32, u32)]| {
+        let points = centers
+            .iter()
+            .map(|&(number, x, y)| FocusLayoutPoint::new(number, Point { x, y }, box_164))
+            .collect();
+        PlacedFocusLayout::new(frame, points).unwrap()
+    };
+    let on_full = placed(full, &[(1, 3008, 2007), (13, 2768, 1503), (38, 1812, 1705)]);
+    let on_dx = placed(window, &[(1, 1968, 1311), (13, 1728, 807), (38, 772, 1009)]);
+    // A window of 2536 by 2624, at the origin (1740, 696): point 38, at
+    // 72 across, has its box cross the left edge, and is left out.
+    let narrow = Size {
+        width: 2536,
+        height: 2624,
+    };
+    let on_narrow = placed(narrow, &[(1, 1268, 1311), (13, 1028, 807)]);
+    let auto_area = placed_list(
+        full,
+        &[
+            (13, Point { x: 2768, y: 1503 }),
+            (38, Point { x: 1812, y: 1705 }),
+        ],
+        1,
+    )
+    .with_area_mode(FocusAreaMode::Auto);
+    let dx = placed_list(window, &[(38, Point { x: 772, y: 1009 })], 0);
+    // An FX shot and a DX shot with their placed layouts, a shot in the
+    // narrow window with no list, and a shot with a layout and no placed
+    // layout.
+    let files = [
+        d600()
+            .with_focus_points(auto_area.clone())
+            .with_placed_focus_layout(on_full.clone()),
+        d600()
+            .with_focus_points(dx.clone())
+            .with_placed_focus_layout(on_dx.clone()),
+        d600().with_placed_focus_layout(on_narrow),
+        d600(),
+    ];
+    let mut tally = FocusTally::default();
+    for metadata in &files {
+        tally.record(metadata);
+        tally.record_scaled(metadata, full);
+    }
+    assert_eq!(tally.with_placed_layout, 3);
+    assert_eq!(tally.placed_layout_sizes, BTreeMap::from([(2, 1), (3, 2)]));
+    assert_eq!(
+        tally.placed_layout_frames,
+        BTreeMap::from([((2536, 2624), 1), ((3936, 2624), 1), ((6016, 4016), 1)])
+    );
+    assert_eq!(tally.layout_without_placed, 1);
+    let failures = |tally: &FocusTally| {
+        [
+            tally.placed_layout_without_layout,
+            tally.placed_layout_not_from_layout,
+            tally.list_not_on_placed_layout,
+            tally.placed_layout_scaled_outside_frame,
+        ]
+    };
+    assert_eq!(failures(&tally), [0; 4]);
+
+    // Each of these breaks one rule, and is counted under it alone. The
+    // rule of the points inside the preview cannot be broken here:
+    // `PlacedFocusLayout::scaled_to` keeps no point outside it.
+    let broken: [(Metadata, usize); 7] = [
+        (
+            Metadata::default().with_placed_focus_layout(on_full.clone()),
+            0,
+        ),
+        // A point of the layout missing, with its box inside the frame.
+        (
+            d600().with_placed_focus_layout(placed(full, &[(1, 3008, 2007), (38, 1812, 1705)])),
+            1,
+        ),
+        // A center a pixel off.
+        (
+            d600().with_placed_focus_layout(placed(
+                full,
+                &[(1, 3008, 2007), (13, 2768, 1503), (38, 1813, 1705)],
+            )),
+            1,
+        ),
+        // A window whose difference from the frame is odd across.
+        (
+            d600().with_placed_focus_layout(placed(
+                Size {
+                    width: 3937,
+                    height: 2624,
+                },
+                &[(1, 1968, 1311), (13, 1728, 807), (38, 772, 1009)],
+            )),
+            1,
+        ),
+        // The narrow window with a point 38, which it leaves out: at its
+        // own center, 72 across, its box crosses the left edge, so here
+        // it lies at 82, where no point of the layout lands.
+        (
+            d600().with_placed_focus_layout(placed(
+                Size {
+                    width: 2536,
+                    height: 2624,
+                },
+                &[(1, 1268, 1311), (13, 1028, 807), (38, 82, 1009)],
+            )),
+            1,
+        ),
+        // A list placed from a table with no placed layout, and one in
+        // another frame than the placed layout's.
+        (d600().with_focus_points(auto_area), 2),
+        (
+            d600()
+                .with_focus_points(dx)
+                .with_placed_focus_layout(on_full),
+            2,
+        ),
+    ];
+    for (index, (metadata, rule)) in broken.iter().enumerate() {
+        let mut tally = FocusTally::default();
+        tally.record(metadata);
+        tally.record_scaled(metadata, full);
+        let mut expected = [0; 4];
         expected[*rule] = 1;
         assert_eq!(failures(&tally), expected, "broken file {index}");
     }

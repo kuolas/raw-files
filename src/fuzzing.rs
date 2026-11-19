@@ -20,7 +20,7 @@ use crate::container::jpeg::{mpf, probe, segments};
 use crate::container::tiff::{Block, FieldType, First, Held, Rule, Text, Tree, walk};
 use crate::datetime::DateTime;
 use crate::entries::{Entries, Entry, Value};
-use crate::focus::{Focus, FocusLayout, FocusPoints};
+use crate::focus::{Focus, FocusLayout, FocusPoints, PlacedFocusLayout};
 use crate::geometry::Size;
 use crate::io::Source;
 use crate::limits::Limits;
@@ -187,8 +187,9 @@ pub fn jpeg_segments(data: &[u8]) {
 /// Opens `data` as a camera file, a RAW file or a JPEG, as a caller would,
 /// with the default options, then asks it everything the handle answers:
 /// its format, every value of its metadata, formatted as a caller would
-/// print it, its largest preview and the focus point and the focus points
-/// placed on it, the smallest preview at least 1 by 1, the bytes of every
+/// print it, its largest preview and the focus point, the focus points
+/// and the layout placed on the picture each placed on it, the smallest
+/// preview at least 1 by 1, the bytes of every
 /// preview, read into one buffer, and every entry, with its value read
 /// and formatted.
 ///
@@ -211,6 +212,11 @@ pub fn open(data: &[u8]) {
         && let Ok(on_preview) = points.scaled_to(preview.size())
     {
         read_focus_points(&on_preview);
+    }
+    if let (Some(layout), Some(preview)) = (file.metadata().placed_focus_layout(), largest)
+        && let Ok(on_preview) = layout.scaled_to(preview.size())
+    {
+        read_placed_focus_layout(&on_preview);
     }
     let _ = file.preview_at_least(Size {
         width: 1,
@@ -396,6 +402,12 @@ fn read_metadata(metadata: &Metadata) {
     if let Some(layout) = metadata.focus_layout() {
         read_focus_layout(layout);
     }
+    if let Some(layout) = metadata.placed_focus_layout() {
+        read_placed_focus_layout(layout);
+        if let Ok(on_tiny) = layout.scaled_to(tiny) {
+            read_placed_focus_layout(&on_tiny);
+        }
+    }
     let _ = format!("{metadata:?}");
 }
 
@@ -429,6 +441,20 @@ fn read_focus_points(points: &FocusPoints) {
 /// point numbered 1, and its `Debug` form, as a caller drawing it would.
 fn read_focus_layout(layout: FocusLayout) {
     let _ = layout.recorded_model();
+    let _ = layout.frame();
+    for point in layout.points() {
+        let _ = point.number();
+        let _ = point.center();
+        let _ = point.size();
+    }
+    let _ = layout.point(1);
+    let _ = format!("{layout:?}");
+}
+
+/// Asks `layout`, placed on a picture, for each of its values, each
+/// point's among them, the point numbered 1, and its `Debug` form, as a
+/// caller drawing it would.
+fn read_placed_focus_layout(layout: &PlacedFocusLayout) {
     let _ = layout.frame();
     for point in layout.points() {
         let _ = point.number();

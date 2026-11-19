@@ -295,10 +295,12 @@ file; and that every other value is the camera's, byte for byte.
 The tests open every frame and check what the reader gives it: the
 model, the orientation, the image area that CropHiSpeed names, the
 layout of the D600's 39 points, which the D600's table in the code
-gives every frame by its Model, whatever the shot; on the frames shot
-through the viewfinder in autofocus, which name their points by number,
-those points placed from the table, in the crop's window on the DX
-frames; no focus point on the manual-focus frames, which name none; and
+gives every frame by its Model, whatever the shot, and that layout
+placed on the picture, all 39 points in the table's frame or, on the DX
+frames, in the crop's window, as on frame 49, whose point 38 lies at
+(772, 1009); on the frames shot through the viewfinder in autofocus,
+which name their points by number, those points placed from the table,
+in the crop's window on the DX frames; no focus point on the manual-focus frames, which name none; and
 on the four live-view frames the point AFInfo2 records. On frame 4, shot
 through the viewfinder with point 38, they check every value too: its three previews, each a stub;
 the capture time, with the offset from UTC that WorldTime gives, since
@@ -368,7 +370,8 @@ gives it at (3005, 2002) in the 6010 by 4006 window, its center moved
 back by the window's origin, (3, 5); and that the Small JPEG gives it
 at (3008, 2007) in the 6016 by 4016 frame; each with its box of 164 by
 164, from a table, as the primary of a list of that point alone, with
-the area mode `Tracking`, and with the layout of the D600's 39 points.
+the area mode `Tracking`, and with the layout of the D600's 39 points,
+placed on each picture in the frame or the window its point takes.
 
 ## License and changes
 

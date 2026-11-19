@@ -157,7 +157,7 @@ There are four targets:
 | `tiff_walk` | The input as a TIFF file: the header, the walk, and every value of every IFD found | `fuzz/seeds/tiff_walk` |
 | `jpeg_probe` | The search for a JPEG preview's frame header | `fuzz/seeds/jpeg_probe` |
 | `jpeg_segments` | The input as a JPEG file: the walk over its segments, the TIFF structure of its Exif segment with every value in it, and the index of its MPF segment | `fuzz/seeds/jpeg_segments` |
-| `open` | The input opened as a caller would: its metadata, its focus point placed on a preview, every preview, and every entry of its directories with its value | `fuzz/seeds/open`, `fuzz/seeds/tiff_walk` and `fuzz/seeds/jpeg_segments` |
+| `open` | The input opened as a caller would: its metadata, its focus points and layout placed on a preview, every preview, and every entry of its directories with its value | `fuzz/seeds/open`, `fuzz/seeds/tiff_walk` and `fuzz/seeds/jpeg_segments` |
 
 The seeds are a few valid files, committed in
 [`fuzz/seeds/`](../fuzz/seeds/README.md), which says what each folder
