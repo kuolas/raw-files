@@ -4,9 +4,9 @@ The JPEG tests combine small fixtures built in code, small fixtures
 stripped from my own camera JPEGs, and camera-original JPEGs published
 on Wikimedia Commons, which `scripts/fetch-samples.sh` downloads and
 checks against a hash, in CI as on a contributor's machine. This page
-lists the sources, the eight Commons files, how they were chosen and
+lists the sources, the eleven Commons files, how they were chosen and
 how they are downloaded, the fixtures, and the early Coolpix files
-that were checked by hand without joining the samples. Back to
+that were checked by hand, three of which joined the samples. Back to
 [the JPEG overview](README.md).
 
 Claims carry the confidence tags of the JPEG notes
@@ -28,15 +28,15 @@ The repository never holds a file whose license is unclear, however small.
 
 ## 2. The sample files
 
-Eight camera-original JPEGs, one per body, chosen to cover the Sony and
-Nikon MakerNotes, a Multi-Picture Format segment with one image and with
-two, a file with none, Sony's padding after the last image, and a maker
-whose MakerNote raw-files does not read. Each was downloaded from its
-original upload and walked byte by byte on 21 October 2026
-(section 3). Licenses and authors are as shown on each file's page,
-read when the files were chosen, on 21 October 2026, and checked again
-on each file page on 22 October 2026, when they joined the downloaded
-set. [P]
+Eleven camera-original JPEGs, one per body. The first eight were chosen
+to cover the Sony and Nikon MakerNotes, a Multi-Picture Format segment
+with one image and with two, a file with none, Sony's padding after the
+last image, and a maker whose MakerNote raw-files does not read. Each
+was downloaded from its original upload and walked byte by byte on 21
+October 2026 (section 3). Licenses and authors are as shown on each
+file's page, read when the files were chosen, on 21 October 2026, and
+checked again on each file page on 22 October 2026, when they joined the
+downloaded set. [P]
 
 | Body (firmware) | File on Wikimedia Commons | License, author | Bytes | SHA-256 |
 |---|---|---|---|---|
@@ -48,6 +48,15 @@ set. [P]
 | Nikon D5300 (Ver.1.02) | [`"Tours"_French_restaurant_in_Omotesando.JPG`](https://commons.wikimedia.org/wiki/File:%22Tours%22_French_restaurant_in_Omotesando.JPG) | CC0, Syced | 7,822,985 | `29e4f45b01092c2067bb09597bc46117b3cf7dbae1e035921878bae206a45223` |
 | Nikon D70 (Ver.1.02) | [`"Stadswandeling".JPG`](https://commons.wikimedia.org/wiki/File:%22Stadswandeling%22.JPG) | public-domain dedication, Charles Henri | 4,178,961 | `5abe888aed3bc110361e38a78c43c8fb91b7e2808d6e53d37468e8e9704d6116` |
 | Canon PowerShot G7 X | [`DC-3_OH-LCH_at_EFJM_20160717.jpg`](https://commons.wikimedia.org/wiki/File:DC-3_OH-LCH_at_EFJM_20160717.jpg) | CC BY 2.0, Timo Kuusela | 8,667,055 | `ce0b9b6b851d38ded8f32cf8d7a64d6424c5bd2a688c89c85fcdecb9e86dcd80` |
+| Nikon E800 (v984-75) | [`MIKI-eki.jpg`](https://commons.wikimedia.org/wiki/File:MIKI-eki.jpg) | public domain, released by its author, Deer in alcove | 415,571 | `3a9c59bc9b0a8bed98302661a751d4001e6631fbde3055b93077862c78878882` |
+| Nikon E900 (v88-74) | [`Petro_Star_refinery.jpg`](https://commons.wikimedia.org/wiki/File:Petro_Star_refinery.jpg) | public domain, a work of the US Department of Energy | 153,026 | `d9a248163d093cb34d04745ad76e3d81d3198fe57a24a35e108fa5a9cadb8189` |
+| Nikon E950 (v981-79) | [`Starr_020628-0045_Prosopis_pallida.jpg`](https://commons.wikimedia.org/wiki/File:Starr_020628-0045_Prosopis_pallida.jpg) | CC BY 3.0, Forest & Kim Starr | 429,450 | `326864e25fc315b930e0ab17008420e6421f4520d094f26ae215d74376f6f604` |
+
+The last three joined on 19 November 2026, from the early Coolpix files
+of section 6, one for each body of the short-header MakerNote where a
+license allows it. No E700 file joined, since every one found is under
+CC BY-SA. Their licenses and authors are as their file pages gave them
+that day. [P]
 
 What each covers [F]:
 
@@ -61,6 +70,9 @@ What each covers [F]:
 | D5300 | Nikon MakerNote with its embedded TIFF header; AFInfo2 version 0100 with a zero frame, shot through the viewfinder: no focus point; the Exif segment one byte short of its maximum length; MPF with two images, 640×424 and 1620×1080 |
 | D70 | Nikon MakerNote version 0210 with a PreviewIFD JPEG of 564×372; a 128×85 thumbnail; IFD1 shared with the Interoperability IFD; two DQT and four DHT segments; no MPF |
 | G7 X | A MakerNote no reader reads; MPF 1620×1080 after 12 bytes that are not zeros |
+| E800 | Nikon's short-header MakerNote, an IFD of 11 entries after `Nikon\0\1\0`, its offsets counted from the Exif segment's TIFF header; Exif 2.1; an Interoperability IFD; no MPF |
+| E900 | The short-header MakerNote's IFD of 5 entries; an unset clock; no ExposureProgram and no ISO; ColorSpace "uncalibrated" with no Interoperability IFD, so no color space |
+| E950 | The short-header MakerNote of 11 entries beside an Exif ISO of 80; an unset clock |
 
 What the file pages say of the licenses, as checked on 22 October 2026
 [P]:
@@ -83,11 +95,16 @@ What the file pages say of the licenses, as checked on 22 October 2026
 - **D70**: released into the public domain by its copyright holder,
   Charles Henri, a weaker statement than CC0.
 - **ILCE-7M3** and **D5300**: CC0, by Bernatburriel and by Syced.
+- **E800**: released into the public domain by its author, Deer in
+  alcove.
+- **E900**: in the public domain as a work of the US Department of
+  Energy.
+- **E950**: CC BY 3.0, credited to Forest & Kim Starr.
 
 ### 2.1 How they are downloaded and checked
 
 [`tests/samples.tsv`](../../../tests/samples.tsv), the list of every
-downloaded sample, names each of the eight with the source `commons`,
+downloaded sample, names each of the eleven with the source `commons`,
 its Commons file name as its id, the format `jpeg`, the name it is saved
 under, its SHA-256, its license, with the author for CC BY, and the URL
 of its original upload. `scripts/fetch-samples.sh jpeg` downloads them,
@@ -108,6 +125,9 @@ deleted, and the script fails. [F] The files are saved as:
 | Nikon D5300 | `nikon-d5300.jpg` |
 | Nikon D70 | `nikon-d70.jpg` |
 | Canon PowerShot G7 X | `canon-powershot-g7x.jpg` |
+| Nikon E800 | `nikon-e800.jpg` |
+| Nikon E900 | `nikon-e900.jpg` |
+| Nikon E950 | `nikon-e950.jpg` |
 
 `tests/jpeg.rs` opens each and checks every preview the reader gives,
 its size, place, format and orientation, read whole, the file's own
@@ -257,8 +277,9 @@ fixtures, in `fuzz/seeds/jpeg_segments/` (see
   D70 writes no AFInfo2. [F] My own Z 9 shots show the crop modes
   ([ADR015](../../architecture-decisions/adr015-the-focus-point-of-a-crop-mode-jpeg.md)).
 - **Fujifilm, Panasonic, Canon focus data and phones.** [S]
-- **Some camera settings.** All eight files are sRGB and none had its
-  flash fire; my Z 9 fixtures add a Nikon JPEG at a smaller image size
+- **Some camera settings.** The first eight files are sRGB, and the
+  E900 file records no color space. None of the eleven had its flash
+  fire; my Z 9 fixtures add a Nikon JPEG at a smaller image size
   ([container-and-metadata.md](container-and-metadata.md#10-makernotes-in-a-jpeg)). [F]
 
 See [open-questions.md](open-questions.md) for what these gaps leave
@@ -275,8 +296,10 @@ camera-original JPEGs of eleven early Coolpix bodies on Wikimedia
 Commons, the E700, E800, E900, E950, E990, E995, E880, E885, E2500,
 E4500 and E5000, were read byte by byte on 23 October 2026, with a
 script written for the purpose that uses no other project's code. They
-are evidence checked by hand, not samples: none is listed in
-`tests/samples.tsv`, nothing downloads them, and no test reads them.
+are evidence checked by hand. Three of them, of the E800, E900 and
+E950, are samples since 19 November 2026, listed in section 2. No other
+is listed in `tests/samples.tsv`: nothing downloads them, and no test
+reads them.
 
 58 files were read, found in the Commons category of each body, each
 downloaded from its original upload and compared with the SHA-1 that
@@ -292,7 +315,8 @@ Photoshop or XMP segment, or tables laid out otherwise, and are not
 evidence for these pages, except one, cited below for what an editor
 did to it.
 
-The files the notes cite are listed here. Licenses and authors are as
+The files the notes cite are listed here, but for the three samples of
+section 2. Licenses and authors are as
 Commons' file information gave them, read through its API on 23 October
 2026. [P] The 18 files of the short header were downloaded again on 19
 November 2026, each into a folder of its own, and every SHA-256 matched.
@@ -306,14 +330,11 @@ Their licenses and authors, read again that day, had not changed. [P]
 | E700 (v982-71) | [`Hagu-kitadaitoujima.jpg`](https://commons.wikimedia.org/wiki/File:Hagu-kitadaitoujima.jpg) | CC BY-SA 3.0, no author named | short header | `7fb38127227808cb02c789cb3d774a6b6be78c7cb3a4216e2f920aaab1b61d29` |
 | E700 (v982p-71) | [`Lung_Fu_Shan_Pinewood_Battery_1.jpg`](https://commons.wikimedia.org/wiki/File:Lung_Fu_Shan_Pinewood_Battery_1.jpg) | CC BY-SA 3.0, Minghong | short header | `9f02c37574fcb512f2b7d7449736aebc595f361dafefef2d913c658c6b6bc279` |
 | E800 (v984-74) | [`Shuttle_FlightSim_NASA_JSC_DSCN0194.JPG`](https://commons.wikimedia.org/wiki/File:Shuttle_FlightSim_NASA_JSC_DSCN0194.JPG) | CC BY-SA 4.0, Lar | short header | `284347d7a38f35eb392fbf0dda2d248195a38151eaf113c61ee75f4c28ab5557` |
-| E800 (v984-75) | [`MIKI-eki.jpg`](https://commons.wikimedia.org/wiki/File:MIKI-eki.jpg) | public domain, released by its author, Deer in alcove | short header | `3a9c59bc9b0a8bed98302661a751d4001e6631fbde3055b93077862c78878882` |
 | E800 (v984p-76) | [`Arlbergbahn_Kronburgabschnitt.jpg`](https://commons.wikimedia.org/wiki/File:Arlbergbahn_Kronburgabschnitt.jpg) | CC BY 3.0 AT, Siegele Roland | short header | `1f993b4969d02668d3a07f4787be7b98f9a355961eab289593565f4082f4cf04` |
 | E800 (v984-74) | [`UP_BigBoy_4023_DSCN0262.JPG`](https://commons.wikimedia.org/wiki/File:UP_BigBoy_4023_DSCN0262.JPG) | CC BY-SA 4.0, Lar | short header | `3dc64a44597ccb7d5e628aedab5c0091fdc6beef0d7a9aee66b05ff768e53dae` |
 | E900 (v88-74) | [`Yamaha_FJ1100.jpg`](https://commons.wikimedia.org/wiki/File:Yamaha_FJ1100.jpg) | public domain, released by its author | short header | `fa11fb20793ccd8eb16c8abc5b1543172afd00048fa7c2883a5061c13e195b47` |
 | E900 (v882-71) | [`South_of_Market,_San_Francisco,_CA,_USA_-_panoramio.jpg`](https://commons.wikimedia.org/wiki/File:South_of_Market,_San_Francisco,_CA,_USA_-_panoramio.jpg) | CC BY-SA 3.0, Andrew Latham | short header | `f399305d3cc5006c1710fb46f8cb38001044387a176f2fce780d3198592536f8` |
 | E900 (v882p-70) | [`Puriton-Manor-Archway.jpg`](https://commons.wikimedia.org/wiki/File:Puriton-Manor-Archway.jpg) | CC BY-SA 3.0, P.R. Clarke | short header | `6a0953621dfc612e84db55cda496ada26ee690e9f360132b57183bccb970dc54` |
-| E900 (v88-74) | [`Petro_Star_refinery.jpg`](https://commons.wikimedia.org/wiki/File:Petro_Star_refinery.jpg) | public domain, a work of the US Department of Energy | short header | `d9a248163d093cb34d04745ad76e3d81d3198fe57a24a35e108fa5a9cadb8189` |
-| E950 (v981-79) | [`Starr_020628-0045_Prosopis_pallida.jpg`](https://commons.wikimedia.org/wiki/File:Starr_020628-0045_Prosopis_pallida.jpg) | CC BY 3.0, Forest & Kim Starr | short header | `326864e25fc315b930e0ab17008420e6421f4520d094f26ae215d74376f6f604` |
 | E950 (v981p-77) | [`USA-ITA_american_football_test_match,_line_of_scrimmage_prior_to_a_play.JPG`](https://commons.wikimedia.org/wiki/File:USA-ITA_american_football_test_match,_line_of_scrimmage_prior_to_a_play.JPG) | CC BY-SA 3.0, Trixt | short header | `7a406b0b0fe31bf24b682e4b5046a52c7b7c3080f845c6289cba2664df820fcc` |
 | E950 (v981-76) | [`2_Nike_Hercules_Missile..jpg`](https://commons.wikimedia.org/wiki/File:2_Nike_Hercules_Missile..jpg) | CC BY-SA 2.0, no author named | short header | `829d76d26eac1d9bf539f0c306a1fb27c6af1dae398be32578f25f3118c8dab9` |
 | E950 (v981-78) | [`Aincourt_country_side004.JPG`](https://commons.wikimedia.org/wiki/File:Aincourt_country_side004.JPG) | CC BY-SA 4.0, Parischicago | short header | `6ff5b5c9e84431f030f8be9863ca51b277526694b5d996a42c64e221cab1dcf4` |

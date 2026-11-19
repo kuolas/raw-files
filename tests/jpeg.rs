@@ -2755,9 +2755,10 @@ fn the_d600_small_jpeg_gives_point_1_placed_in_the_tables_frame() {
     );
 }
 
-// Real files, downloaded: eight camera-original JPEGs of Wikimedia
-// Commons, of five Sony bodies, two Nikon bodies and a Canon, under CC0, a
-// public-domain dedication or CC BY. They are listed with their licenses,
+// Real files, downloaded: eleven camera-original JPEGs of Wikimedia
+// Commons, of five Sony bodies, five Nikon bodies, three of them early
+// Coolpix, and a Canon, under CC0, a public-domain dedication, the public
+// domain of a US government work or CC BY. They are listed with their licenses,
 // their authors and their hashes in `tests/samples.tsv`;
 // `scripts/fetch-samples.sh` downloads them. They are too large to commit,
 // so a test whose file is absent says so and passes: the suite runs
@@ -2973,6 +2974,69 @@ const SAMPLES: &[Sample] = &[
                 height: 2000,
                 offset: 0,
                 len: 4_178_961,
+                after_eoi: 0,
+            },
+        ],
+    },
+    // NIKON E800 (Wikimedia Commons MIKI-eki.jpg)
+    Sample {
+        file: "nikon-e800.jpg",
+        orientation: Orientation::NoTransforms,
+        previews: &[
+            Jpeg {
+                width: 160,
+                height: 120,
+                offset: 2_048,
+                len: 5_086,
+                after_eoi: 0,
+            },
+            Jpeg {
+                width: 1600,
+                height: 1200,
+                offset: 0,
+                len: 415_571,
+                after_eoi: 0,
+            },
+        ],
+    },
+    // NIKON E900 (Wikimedia Commons Petro_Star_refinery.jpg)
+    Sample {
+        file: "nikon-e900.jpg",
+        orientation: Orientation::NoTransforms,
+        previews: &[
+            Jpeg {
+                width: 160,
+                height: 120,
+                offset: 1_012,
+                len: 3_715,
+                after_eoi: 0,
+            },
+            Jpeg {
+                width: 1280,
+                height: 960,
+                offset: 0,
+                len: 153_026,
+                after_eoi: 0,
+            },
+        ],
+    },
+    // NIKON E950 (Wikimedia Commons Starr_020628-0045_Prosopis_pallida.jpg)
+    Sample {
+        file: "nikon-e950.jpg",
+        orientation: Orientation::NoTransforms,
+        previews: &[
+            Jpeg {
+                width: 160,
+                height: 120,
+                offset: 2_048,
+                len: 4_813,
+                after_eoi: 0,
+            },
+            Jpeg {
+                width: 1600,
+                height: 1200,
+                offset: 0,
+                len: 429_450,
                 after_eoi: 0,
             },
         ],
@@ -3390,6 +3454,120 @@ const METADATA: &[SampleMetadata] = &[
             color_space: Some(ColorSpace::Srgb),
         },
     },
+    // NIKON E800 (Wikimedia Commons MIKI-eki.jpg)
+    SampleMetadata {
+        file: "nikon-e800.jpg",
+        make: Some(Make::Nikon),
+        model: None,
+        recorded_make: Some("NIKON"),
+        recorded_model: Some("E800"),
+        software: Some("v984-75"),
+        serial_number: None,
+        texts: &[],
+        location: None,
+        capture_time: Some("2007-01-24T16:06:55"),
+        orientation: Orientation::NoTransforms,
+        iso: Some(100),
+        exposure_time: Some((10, 669)),
+        f_number: Some((36, 10)),
+        focal_length: Some((78, 10)),
+        focal_length_in_35mm_film: None,
+        exposure_bias: Some((0, 10)),
+        lens: None,
+        raw_size: None,
+        image_size: Some((1600, 1200)),
+        focus: None, // the short-header MakerNote records no point
+        focus_layout: None,
+        settings: SampleSettings {
+            white_balance_mode: None,
+            color_temperature: None,
+            fine_tune: None,
+            exposure_program: Some(ExposureProgram::Program),
+            metering_mode: Some(MeteringMode::MultiSegment),
+            flash: Some((false, None)),
+            shutter: None,
+            electronic_front_curtain_setting: None,
+            image_area: None,
+            raw_image_size: None,
+            color_space: Some(ColorSpace::Srgb),
+        },
+    },
+    // NIKON E900 (Wikimedia Commons Petro_Star_refinery.jpg)
+    SampleMetadata {
+        file: "nikon-e900.jpg",
+        make: Some(Make::Nikon),
+        model: None,
+        recorded_make: Some("NIKON"),
+        recorded_model: Some("E900"),
+        software: Some("v88-74"),
+        serial_number: None,
+        texts: &[],
+        location: None,
+        capture_time: None,
+        orientation: Orientation::NoTransforms,
+        iso: None,
+        exposure_time: Some((1, 118)),
+        f_number: Some((71, 10)),
+        focal_length: Some((80, 10)),
+        focal_length_in_35mm_film: None,
+        exposure_bias: Some((0, 10)),
+        lens: None,
+        raw_size: None,
+        image_size: Some((1280, 960)),
+        focus: None, // the short-header MakerNote records no point
+        focus_layout: None,
+        settings: SampleSettings {
+            white_balance_mode: None,
+            color_temperature: None,
+            fine_tune: None,
+            exposure_program: None,
+            metering_mode: Some(MeteringMode::MultiSegment),
+            flash: Some((false, None)),
+            shutter: None,
+            electronic_front_curtain_setting: None,
+            image_area: None,
+            raw_image_size: None,
+            color_space: None,
+        },
+    },
+    // NIKON E950 (Wikimedia Commons Starr_020628-0045_Prosopis_pallida.jpg)
+    SampleMetadata {
+        file: "nikon-e950.jpg",
+        make: Some(Make::Nikon),
+        model: None,
+        recorded_make: Some("NIKON"),
+        recorded_model: Some("E950"),
+        software: Some("v981-79"),
+        serial_number: None,
+        texts: &[],
+        location: None,
+        capture_time: None,
+        orientation: Orientation::NoTransforms,
+        iso: Some(80),
+        exposure_time: Some((10, 5320)),
+        f_number: Some((74, 10)),
+        focal_length: Some((72, 10)),
+        focal_length_in_35mm_film: None,
+        exposure_bias: Some((0, 10)),
+        lens: None,
+        raw_size: None,
+        image_size: Some((1600, 1200)),
+        focus: None, // the short-header MakerNote records no point
+        focus_layout: None,
+        settings: SampleSettings {
+            white_balance_mode: None,
+            color_temperature: None,
+            fine_tune: None,
+            exposure_program: Some(ExposureProgram::Program),
+            metering_mode: Some(MeteringMode::MultiSegment),
+            flash: Some((false, None)),
+            shutter: None,
+            electronic_front_curtain_setting: None,
+            image_area: None,
+            raw_image_size: None,
+            color_space: Some(ColorSpace::Srgb),
+        },
+    },
     // Canon PowerShot G7 X (Wikimedia Commons DC-3_OH-LCH_at_EFJM_20160717.jpg)
     SampleMetadata {
         file: "canon-powershot-g7x.jpg",
@@ -3557,6 +3735,35 @@ const ENTRIES: &[SampleEntries] = &[
             ("IFD1", 7, 0),
             ("MakerNote", 42, 0),
             ("MakerNote 0x0011", 7, 0),
+        ],
+    },
+    SampleEntries {
+        file: "nikon-e800.jpg",
+        directories: &[
+            ("IFD0", 11, 0),
+            ("Exif", 24, 0),
+            ("IFD1", 6, 0),
+            ("Interop", 2, 0),
+            ("MakerNote", 11, 0),
+        ],
+    },
+    SampleEntries {
+        file: "nikon-e900.jpg",
+        directories: &[
+            ("IFD0", 11, 0),
+            ("Exif", 18, 0),
+            ("IFD1", 6, 0),
+            ("MakerNote", 5, 0),
+        ],
+    },
+    SampleEntries {
+        file: "nikon-e950.jpg",
+        directories: &[
+            ("IFD0", 11, 0),
+            ("Exif", 24, 0),
+            ("IFD1", 6, 0),
+            ("Interop", 2, 0),
+            ("MakerNote", 11, 0),
         ],
     },
     SampleEntries {

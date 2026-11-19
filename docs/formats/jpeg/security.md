@@ -136,7 +136,7 @@ the ones a JPEG adds.
    Under the default, a file with more fill bytes before its frame
    header than the cap allows is refused, although the JPEG standard
    allows any number of them. `Limits::unlimited()` or a raised cap
-   reads it. None of the eight sample files has a single fill byte.
+   reads it. None of the eleven sample files has a single fill byte.
    (CVE-2021-37622, CVE-2021-37623, CVE-2022-25851.)
 3. **The Exif segment is a bounded block with its own base.** The TIFF
    header 6 bytes into the payload is the base of every offset. Every

@@ -14,11 +14,13 @@ directories of camera JPEGs hold. Back to
 ## How to read this page
 
 Claims carry the confidence tags of the JPEG notes
-([README](README.md#confidence-tags)). A sample file is one of the eight
-camera-original JPEGs from Wikimedia Commons, cited by body ("the
+([README](README.md#confidence-tags)). A sample file is one of the
+eleven camera-original JPEGs from Wikimedia Commons, cited by body ("the
 ILCE-7M3 file"). [test-data.md](test-data.md#2-the-sample-files) lists
-each with its file name, license and SHA-256. The early Coolpix files
-checked by hand are listed the same way in
+each with its file name, license and SHA-256. "The eight camera files"
+are the first eight, measured in October 2026. The early Coolpix files
+checked by hand, the last three samples among them, are listed the same
+way in
 [test-data.md](test-data.md#6-early-coolpix-files-checked-by-hand).
 
 Numbers in brackets point to the [Sources](#sources) at the end. The

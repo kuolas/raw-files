@@ -86,10 +86,11 @@ describes the files.
   at a smaller size, and a RAW+JPEG pair at different sizes, would tell
   which; my own D7200 JPEGs, with 0 on 506 of them, point to the raw size
   ([section 10](container-and-metadata.md#10-makernotes-in-a-jpeg)). [F]
-- **An Adobe RGB camera JPEG and a fired flash.** All eight files are
-  sRGB (`R98`, or no InteropIndex on the D70's), and the flash
-  fired on none, so neither InteropIndex `R03` nor a fired Flash value
-  is checked on a public JPEG; my own D3200 JPEGs show `R03`. [F]
+- **An Adobe RGB camera JPEG and a fired flash.** The first eight
+  files are sRGB (`R98`, or no InteropIndex on the D70's), and the E900
+  file records no color space. The flash fired on none of the eleven,
+  so neither InteropIndex `R03` nor a fired Flash value is checked on a
+  public JPEG; my own D3200 JPEGs show `R03`. [F]
 
 ## 3. Sources not consulted
 
