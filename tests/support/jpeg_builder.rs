@@ -86,6 +86,7 @@
 //! other bytes in place of the MP header, [`JpegBuilder::mpf_number_of_images`]
 //! another NumberOfImages, [`JpegBuilder::mpf_entry_offset`] and
 //! [`JpegBuilder::mpf_entry_size`] another offset or size in one entry,
+//! [`JpegBuilder::mpf_entry_attribute`] another attribute in one entry,
 //! [`JpegBuilder::mpf_entry_len`] an MPEntry value of another length, cut
 //! or extended with zeros, [`JpegBuilder::mpf_entry_type`] another field
 //! type and [`JpegBuilder::mpf_entry_tag`] another tag in MPEntry's place.
@@ -218,6 +219,8 @@ struct Mpf {
     offsets: Vec<(usize, u32)>,
     /// The entries whose size is set, by index.
     sizes: Vec<(usize, u32)>,
+    /// The entries whose attribute is set, by index.
+    attributes: Vec<(usize, u32)>,
 }
 
 /// Builds a JPEG file; see the [module documentation](self) for the
@@ -313,6 +316,7 @@ impl JpegBuilder {
             entry_len: None,
             offsets: Vec::new(),
             sizes: Vec::new(),
+            attributes: Vec::new(),
         });
         self.parts.push(Part::Mpf);
         self
@@ -364,6 +368,13 @@ impl JpegBuilder {
     /// image's.
     pub fn mpf_entry_size(&mut self, n: usize, size: u32) -> &mut Self {
         self.mpf_index().sizes.push((n, size));
+        self
+    }
+
+    /// Writes `attribute` as the attribute of the `n`th entry, from 0 for
+    /// the main image's: its flags, its image data format and its MP type.
+    pub fn mpf_entry_attribute(&mut self, n: usize, attribute: u32) -> &mut Self {
+        self.mpf_index().attributes.push((n, attribute));
         self
     }
 
@@ -572,6 +583,10 @@ impl Mpf {
         for &(n, size) in &self.sizes {
             assert!(n < count, "entry {n} of {count}");
             entries[n * MP_ENTRY_LEN + 4..n * MP_ENTRY_LEN + 8].copy_from_slice(&order.u32(size));
+        }
+        for &(n, attribute) in &self.attributes {
+            assert!(n < count, "entry {n} of {count}");
+            entries[n * MP_ENTRY_LEN..n * MP_ENTRY_LEN + 4].copy_from_slice(&order.u32(attribute));
         }
         if let Some(len) = self.entry_len {
             entries.resize(len, 0);

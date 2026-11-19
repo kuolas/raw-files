@@ -17,8 +17,9 @@
 //! - [`segments`] reads a JPEG file: it keeps the file's frame header, its
 //!   Exif segment and its MPF segment, the parts a reader of the file
 //!   needs.
-//! - [`mpf::index`] reads the MPF segment's index: where the images the
-//!   file holds after its first one lie, such as its large thumbnails.
+//! - [`mpf::index`] reads the MPF segment's index: where the large
+//!   thumbnails the file holds after its first image lie, the first of
+//!   each class.
 //!
 //! [`probe`] and [`segments`] walk the segments in the same way, with
 //! `Walk`. It reads only inside the bytes it is given, and every step

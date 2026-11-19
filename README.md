@@ -62,8 +62,9 @@ Linux and Windows alike.
     says which.
 - **JPEG files.** The JPEG files cameras write beside their raw files or
   instead of them. A JPEG's previews are the file itself and the smaller
-  images it holds. A Nikon or Sony camera's JPEG also gives what its
-  MakerNote records, the focus point among it. Any other camera's JPEG
+  copies of the picture it holds. An image its Multi-Picture Format list
+  gives another type, such as a gain map, is not one. A Nikon or Sony
+  camera's JPEG also gives what its MakerNote records, the focus point among it. Any other camera's JPEG
   gives what its Exif segment records. A JPEG gives no point when its
   picture's shape differs from the frame the point is measured in, and
   [`Metadata::focus`](https://docs.rs/raw-files/latest/raw_files/struct.Metadata.html#method.focus)

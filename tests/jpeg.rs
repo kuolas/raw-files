@@ -633,6 +633,105 @@ fn an_mpf_image_that_runs_past_the_end_of_the_file_is_dropped() {
 }
 
 #[test]
+fn a_gain_map_or_another_image_that_is_not_a_large_thumbnail_is_not_a_preview() {
+    // A file laid out as an HDR picture saved as a JPEG: the main image, a
+    // large thumbnail of class 2, then a gain map a quarter of the
+    // picture's area. Asked for the smallest preview that covers the gain
+    // map's size, the reader gives the picture, not the gain map.
+    let other = (MAIN.0 / 2, MAIN.1 / 2);
+    let build = |attribute: u32| {
+        let mut builder = JpegBuilder::new();
+        builder
+            .mpf(Order::Little)
+            .frame(MAIN.0, MAIN.1, 0xC0)
+            .mpf_image(MPF_IMAGES[1].0, MPF_IMAGES[1].1, &[], 512)
+            .mpf_image(other.0, other.1, &[], 512)
+            .mpf_entry_attribute(2, attribute);
+        builder.build()
+    };
+    let gain_map = build(0x4005_0000);
+    let file = CameraFile::from_bytes(&gain_map.bytes).unwrap();
+    let at_least = file.preview_at_least(size_of(other)).unwrap();
+    assert_eq!(at_least.byte_range(), whole(&gain_map));
+    assert_eq!(at_least.size(), size_of(MAIN));
+    // The same of every image that is not a large thumbnail: undefined, a
+    // frame of a panorama, of a stereo pair or of a set of views, a second
+    // main image, an original kept for preservation and the gain map.
+    for mp_type in [
+        0x00_0000, 0x02_0001, 0x02_0002, 0x02_0003, 0x03_0000, 0x04_0000, 0x05_0000,
+    ] {
+        let built = build(0x4000_0000 | mp_type);
+        let previews = expected(
+            &[(built.mpf_image(0), MPF_IMAGES[1]), (whole(&built), MAIN)],
+            Orientation::NoTransforms,
+        );
+        assert_opens(
+            &built.bytes,
+            &previews,
+            &main_metadata(Orientation::NoTransforms),
+            &format!("MP type {mp_type:06X}"),
+        );
+    }
+    // Written as a large thumbnail of class 3, the same image is one.
+    let built = build(0x4001_0003);
+    let previews = expected(
+        &[
+            (built.mpf_image(0), MPF_IMAGES[1]),
+            (built.mpf_image(1), other),
+            (whole(&built), MAIN),
+        ],
+        Orientation::NoTransforms,
+    );
+    assert_opens(
+        &built.bytes,
+        &previews,
+        &main_metadata(Orientation::NoTransforms),
+        "class 3",
+    );
+}
+
+#[test]
+fn of_two_large_thumbnails_of_one_class_the_first_is_kept() {
+    // Two images of 1620 by 1080, each written as a large thumbnail of
+    // class 2. `skip` moves the first one's offset that many bytes into
+    // its image.
+    let build = |skip: u32| {
+        let mut builder = JpegBuilder::new();
+        builder
+            .mpf(Order::Little)
+            .frame(MAIN.0, MAIN.1, 0xC0)
+            .mpf_image(MPF_IMAGES[1].0, MPF_IMAGES[1].1, &[], 512)
+            .mpf_image(MPF_IMAGES[1].0, MPF_IMAGES[1].1, &[], 512);
+        let built = builder.build();
+        let offset = u32::try_from(built.mpf_image(0).start - built.mpf_header()).unwrap();
+        builder.mpf_entry_offset(1, offset + skip);
+        builder.build()
+    };
+    let built = build(0);
+    let previews = expected(
+        &[(built.mpf_image(0), MPF_IMAGES[1]), (whole(&built), MAIN)],
+        Orientation::NoTransforms,
+    );
+    assert_opens(
+        &built.bytes,
+        &previews,
+        &main_metadata(Orientation::NoTransforms),
+        "two of class 2",
+    );
+    // The first entry pointing past its image's SOI, where no JPEG
+    // starts: it is no preview, and the second, which is one, is still
+    // left out.
+    let built = build(2);
+    let previews = expected(&[(whole(&built), MAIN)], Orientation::NoTransforms);
+    assert_opens(
+        &built.bytes,
+        &previews,
+        &main_metadata(Orientation::NoTransforms),
+        "the first of class 2 no JPEG",
+    );
+}
+
+#[test]
 fn a_jpeg_without_a_picture_to_show_is_of_unknown_format() {
     // A lossless frame header: raw data, not a picture.
     let mut lossless = JpegBuilder::new();
@@ -876,10 +975,12 @@ fn a_full_mpf_list_of_images_that_never_reach_a_frame_header_costs_only_time() {
     // standard requires (an index with MPEntry alone has room for one
     // more), every one after the first pointing at the same bytes, which
     // hold a frame header further in than the walk's 1,024 steps reach.
-    // Each entry is probed in full, since only one that becomes a preview
-    // claims its position, and none is a preview. The test checks that
-    // such a file still opens, as the JPEG it is, with the file as its one
-    // preview.
+    // The entries after the first are large thumbnails of the five classes
+    // in turn and images of two other types. Only the first large
+    // thumbnail of each class is a candidate, so the finder walks five of
+    // them. Each of the five is probed in full, since only one that
+    // becomes a preview claims its position, and none is a preview. The test checks that such a file still opens, as the
+    // JPEG it is, with the file as its one preview.
     let mut hostile = vec![0xFF, 0xD8];
     for _ in 0..1100 {
         // An empty comment: one step each.
@@ -922,8 +1023,19 @@ fn a_full_mpf_list_of_images_that_never_reach_a_frame_header_costs_only_time() {
             payload.extend_from_slice(&[0; 4]);
         };
         entry(0xA003_0000, image_end, 0);
-        for _ in 1..entries {
-            entry(0x4001_0002, to_u64(hostile.len()), hostile_at - header);
+        // Classes 1 to 5, then a gain map and a frame of a panorama.
+        let attributes = [
+            0x4001_0001,
+            0x4001_0002,
+            0x4001_0003,
+            0x4001_0004,
+            0x4001_0005,
+            0x4005_0000,
+            0x4002_0001,
+        ];
+        for n in 1..entries {
+            let attribute = attributes[n % attributes.len()];
+            entry(attribute, to_u64(hostile.len()), hostile_at - header);
         }
         payload
     };

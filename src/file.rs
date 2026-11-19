@@ -158,7 +158,8 @@ impl<R: Read + Seek> CameraFile<R> {
     ///
     /// A limit crossed inside a JPEG file's Exif or MPF segment is not an
     /// error. It costs at most what that segment holds, as damage there
-    /// does: the Exif values and the thumbnail, or the MPF images.
+    /// does: the Exif values and the thumbnail, or the MPF list's large
+    /// thumbnails.
     pub fn from_reader(reader: R) -> Result<Self> {
         Options::new().from_reader(reader)
     }
@@ -209,9 +210,22 @@ impl<R: Read + Seek> CameraFile<R> {
     /// length.
     ///
     /// A RAW file's are the JPEG images the camera embedded in it. A JPEG
-    /// file's are the smaller images it carries and the file itself, its
-    /// whole byte range, which on the camera files checked is the largest:
-    /// reading it reads the whole file, under [`Limits::max_preview_bytes`].
+    /// file's are the smaller copies of the picture it carries, and the
+    /// file itself:
+    ///
+    /// - the thumbnail of its Exif segment;
+    /// - the large thumbnails its Multi-Picture Format (MPF) list holds, at
+    ///   most one of each of the five classes;
+    /// - on some Nikon bodies, the preview in its MakerNote;
+    /// - the file itself, its whole byte range, which on the camera files
+    ///   checked is the largest: reading it reads the whole file, under
+    ///   [`Limits::max_preview_bytes`].
+    ///
+    /// The other images an MPF list may hold are not previews: a gain map,
+    /// a frame of a panorama or of a stereo pair, an original kept from
+    /// before an edit, an image of undefined type, and a second large
+    /// thumbnail of a class. Which is which is read from the type the list
+    /// gives each image.
     ///
     /// Empty when the file holds no preview the library can show. The sizes
     /// are measured from each preview's own data, not taken from the tags

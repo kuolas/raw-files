@@ -28,10 +28,10 @@
 //! IFD0 that cannot be read, or a limit of the caller's [`Limits`] crossed
 //! while walking the Exif segment, gives no tree. That costs the segment's
 //! values and its thumbnail, never the file, which opens with its own
-//! preview, its image size and its MPF images. A MakerNote that does not
-//! hold together costs what it would have given, and an MPF list that does
-//! not hold together costs only its images. Only a failure of the reader is
-//! an error.
+//! preview, its image size and its MPF list's large thumbnails. A
+//! MakerNote that does not hold together costs what it would have given,
+//! and an MPF list that does not hold together costs only its large
+//! thumbnails. Only a failure of the reader is an error.
 //!
 //! What cameras write in a JPEG, segment by segment, is in the JPEG notes
 //! (`docs/formats/jpeg/container-and-metadata.md`, sections 4, 6, 7 and
@@ -109,8 +109,8 @@ fn claims<R: Read + Seek>(_: &mut Source<R>, segments: &Segments) -> Result<bool
 ///     to 26);
 ///   - the JPEG of the Nikon MakerNote's PreviewIFD, as a Nikon D70's JPEG
 ///     holds one ([`MakerNote::preview_candidate`]);
-///   - each image the MPF list holds after the first, read within `limits`
-///     ([`mpf::index`]).
+///   - the large thumbnails of the MPF list, the first of each class, read
+///     within `limits` ([`mpf::index`]).
 /// - **The entries** are those of the Exif segment's tree, then those of
 ///   the MakerNote's directories ([`MakerNote::add_entries`]), then the MP
 ///   Index IFD's.

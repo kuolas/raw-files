@@ -96,7 +96,7 @@ adds a row.
 | `src/container/tiff/walk.rs` | The IFD walk inside a block: it follows the links from IFD0 and returns every IFD it finds as a `Tree`, with each link it did not follow, bounded on any input. | `io`, `error`, `limits` |
 | `src/container/tiff/robustness.rs` | Tests only: the whole TIFF reader on truncated and corrupted files, which give an error or a tree within the limits, never a panic. | — |
 | `src/container/jpeg/mod.rs` | The JPEG container: one walk over a stream's marker segments, the probe that sizes a preview and the walk over a JPEG file. | `io`, `error`, `limits`, `container/tiff` (for `Block`) |
-| `src/container/jpeg/mpf.rs` | The MPF index of a JPEG file: where the images the file holds after its first one lie, such as its large thumbnails. | `io`, `error`, `limits`, `container/tiff` |
+| `src/container/jpeg/mpf.rs` | The MPF index of a JPEG file: where the large thumbnails the file holds after its first image lie, the first of each class. | `io`, `error`, `limits`, `container/tiff` |
 
 ### The values
 

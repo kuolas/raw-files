@@ -191,6 +191,20 @@ does. An entry that can break a caller opens with **Breaking:**.
   as the other documents were: no other reader's tables were used. The
   same notes define field type 13, which `FieldType::Ifd` still shows
   as "IFD".
+- A JPEG's previews now take only the large thumbnails of its
+  Multi-Picture Format (MPF) list, the first of each class
+  ([#53](https://github.com/kuolas/raw-files/issues/53)). Every other
+  image the list holds was a preview before:
+  - a gain map, so that `CameraFile::preview_at_least` could give a
+    phone's gain map in place of the picture;
+  - a frame of a panorama, of a stereo pair or of a set of views;
+  - an original kept from before an edit, which could be the largest
+    preview;
+  - an image of undefined type, and a second large thumbnail of a
+    class.
+
+  A list costs at most five images to check, where a hostile one cost
+  4,091. No camera JPEG measured lists another image, so none changes.
 
 ### Fixed
 
