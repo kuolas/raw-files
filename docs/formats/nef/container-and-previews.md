@@ -3,8 +3,8 @@
 A Nikon NEF is a TIFF file with Nikon's own additions, and it carries several
 JPEG images next to the raw sensor data: a full-size or near-full-size
 preview, sometimes a second one of about 1620x1080 pixels, and a small
-thumbnail. This page describes where those JPEGs are, how implementations
-tell them apart, and the algorithm raw-files should use to return the largest.
+thumbnail. This page describes where those JPEGs are, what tells them
+apart, and the algorithm raw-files should use to return the largest.
 
 Back to [the NEF overview](README.md).
 
@@ -123,7 +123,7 @@ components, and is stored in one piece through 0x0201/0x0202 (section 4).
 | Tag | Name | Values worth knowing | Conf. |
 |---|---|---|---|
 | 0x00FE | NewSubfileType | 0 full resolution; the bit flags 1 reduced resolution, 2 a page of a multi-page image and 4 a transparency mask; 8 depth map; 16 enhanced; 0xFFFFFFFF invalid. The Nikon PreviewIFD table also lists 0x10001 ("alternate reduced") [1], which DNG defines as an alternative preview [37] | the tag, 1, 2 and 4 **[P]** [35] (Section 8, p. 36); 0, 8, 16 and 0x10001 **[P]** [37] ("NewSubFileType", p. 20); 0xFFFFFFFF **[S]** [2] |
-| 0x0103 | Compression | 1 uncompressed; 6 JPEG in TIFF 6.0's design, which ExifTool calls old-style; 7 JPEG in the design that replaced it; 34713 Nikon NEF compressed. Value 32769 is handled by dcraw as a packed layout with pad bytes [34] | the tag, 1 and 6 **[P]** [35] (Section 8, p. 30; Section 22, p. 104) [36] (4.6.5.1.4, p. 33); 7 and the replacement **[P]** [38] ("Overview of the solution"); "old-style" and 34713 **[S]** [2]; 32769 handling **[S]** [34]; which bodies write it **[I]** |
+| 0x0103 | Compression | 1 uncompressed; 6 JPEG in TIFF 6.0's design, which ExifTool calls old-style; 7 JPEG in the design that replaced it; 34713 Nikon NEF compressed. Value 32769 marks raw data packed with pad bytes [34] | the tag, 1 and 6 **[P]** [35] (Section 8, p. 30; Section 22, p. 104) [36] (4.6.5.1.4, p. 33); 7 and the replacement **[P]** [38] ("Overview of the solution"); "old-style" and 34713 **[S]** [2]; 32769 **[S]** [34]; which bodies write it **[I]** |
 | 0x0106 | PhotometricInterpretation | 32803 color filter array (raw); 2 RGB; 6 YCbCr | the tag, 2 and 6 **[P]** [35] (Section 8, p. 37; Section 21, p. 90) [36] (4.6.5.1.5, p. 33); 32803 **[P]** [37] ("PhotometricInterpretation", p. 22) |
 | 0x0111, 0x0117 | StripOffsets, StripByteCounts | A JPEG may be stored as a strip | the tags **[P]** [35] (Section 8, p. 40); the JPEG **[S]** [3] |
 | 0x0201, 0x0202 | JPEGInterchangeFormat, ...Length | Offset and length of a JPEG | **[P]** [35] (Section 22, p. 105) [36] (4.6.5.2.4 and 4.6.5.2.5, p. 40) |
@@ -144,8 +144,7 @@ Compression 1 or 34713, Photometric 32803 and the CFA tags. [15] **[S]**
 
 The metadata-extractor issue shows a user first assuming SubIFD offsets were
 relative to the Exif block and then finding they were relative to the file.
-[17] **[S]** Exiv2's loader for the Nikon preview "sometimes" adds a
-MakerNote base offset, consistent with the table. [11] **[S]**
+[17] **[S]**
 
 For the headerless layout, the PreviewIFD's offsets have been seen to
 count from the outer header: the D1H's PreviewIFD and its JPEG are where
@@ -172,14 +171,18 @@ bytes. [12] [31] **[S]**
 | Short header | `Nikon\0\1\0` (8 bytes) | MakerNote start + 8 | outer TIFF header | in JPEGs, the Coolpix E700, E800, E900 and E950, little-endian **[F]** | **[S]** [12]; **[F]** |
 | Embedded TIFF header | `Nikon\0\2` + 3 more header bytes, then `II` or `MM`, 42, and an IFD offset (normally 8) | embedded header + its IFD offset, normally MakerNote start + 18 | embedded header = MakerNote start + 10 | E5400, D2H, D70, D100 and everything later; the Z 9 writes `Nikon\0`, `02 11` (version 0211), `00 00`, then an `II` header (files 5146 to 5148) **[F]** | **[S]** [12] [4] |
 
-Detection, combining what the cited projects do: if the data starts with
-`Nikon\0` and a valid byte-order mark plus magic 42 sit at offset 10, use the
-embedded-header layout; if it starts with `Nikon\0` otherwise, use the short
-header; if it has no signature, treat it as headerless. Test the
-`Nikon\0\2` signature before looking at Make, because Nikon's editing
-software can write Nikon-style MakerNotes into files from other cameras. [4]
-[13] **[S]** The D200's MakerNote IFD reportedly lacks a next-IFD pointer, so
-do not require one after the entries. [12] **[S]**
+The first bytes tell the three layouts apart:
+
+- the embedded-header layout starts with `Nikon\0`, and has a valid
+  byte-order mark and the number 42 at offset 10;
+- the short header starts with `Nikon\0` without them;
+- the headerless layout has no signature.
+
+Test the `Nikon\0\2` signature before looking at Make, because Nikon's
+editing software can write a Nikon-style MakerNote into a file from
+another camera. [4] [13] **[S]** The D200's MakerNote IFD reportedly
+lacks a next-IFD pointer, so do not require one after the entries. [12]
+**[S]**
 
 raw-files tells the short header by its 8 bytes. It reads the layout
 only in a little-endian structure, and follows no PreviewIFD from it,
@@ -243,12 +246,11 @@ Notes on each location:
 
 1. **IFD0.** On DSLR NEFs a thumbnail strip that is uncompressed RGB, never
    a JPEG; one issue's IFD0 strip pointed at zeroed data. [16] **[S]** On
-   Coolpix NRW files IFD0 holds a JPEG. [14] **[S]** ExifTool switches its
-   NEF/NRW file type on IFD0 compression 6, and that misfired on Z 9 files,
-   which shows at least some Z 9 NEFs have a JPEG in IFD0 (section 5). [3]
-   [21] **[S]** Files 5146 to 5148 confirm it: their IFD0 has
-   Compression 6 and holds a 160x120 baseline JPEG through 0x0201/0x0202.
-   **[F]**
+   Coolpix NRW files IFD0 holds a JPEG. [14] **[S]** Some Z 9 NEFs have
+   one too, as ExifTool's author acknowledged when it reported them as
+   NRW files (section 5). [3] [21] **[S]** Files 5146 to 5148 confirm
+   it: their IFD0 has Compression 6 and holds a 160x120 baseline JPEG
+   through 0x0201/0x0202. **[F]**
 2. **SubIFDs.** The large JPEGs. A JPEG here may use either the
    0x0201/0x0202 pair or a strip pair; ExifTool's naming covers both. [3]
    **[S]**
@@ -259,15 +261,15 @@ Notes on each location:
    "non-essential and often corrupted". [23] **[S]** Offsets are
    MakerNote-relative (section 1.4). On the Z 9 it has Compression 6 and
    holds a 640x424 JPEG (files 5146 to 5148). **[F]**
-4. **Exiv2's list.** Exiv2 checks the PreviewIFD (as `Exif.NikonPreview`) and
-   about 40 generic loaders, and accepts TIFF-IFD previews only from sub-image
-   groups with NewSubfileType 1. [11] **[S]**
+4. **Exiv2's list.** Exiv2 reports the PreviewIFD's JPEG, as
+   `Exif.NikonPreview`. Of the previews stored as strips, it reports
+   only those in a directory with NewSubfileType 1. [11] **[S]**
 5. **Multi-Picture Format (MPF).** No evidence that NEFs use it was found.
    **[I]**
 6. **Re-saved files.** A D200 NEF rewritten by Nikon's editing software had
-   a small new JPEG in the slot ExifTool expects to hold the large one,
-   moving the large one to OtherImage. [23] **[S]** Slot position is never
-   reliable.
+   a small new JPEG where the large one had been. ExifTool reported the
+   small one as JpgFromRaw and the large one as OtherImage. [23] **[S]**
+   Slot position is never reliable.
 
 ### 3.1 The second ~1620x1080 JPEG
 
@@ -340,26 +342,25 @@ any process, not just baseline (section 7).
 - **D100.** Its raw data may be uncompressed even though the TIFF
   Compression says compressed. [1] **[S]** Do not use Compression to classify
   the raw IFD; use the JPEG signature to recognize previews.
-- **E2 and E3.** LibRaw adjusts its loading for models starting with "E"
-  [8] **[S]**; no preview facts were found.
+- **E2 and E3.** No source gives facts about their previews.
 - **Coolpix NRW** (P6000, P7000 and others). The same TIFF family, with a
   JPEG-compressed thumbnail in IFD0 and uncompressed 12-bit raw data. [14]
   **[S]** MakerNote tag 0x0014 holds an "NRW " data block. [5] **[S]**
-- **Z 9 IFD0 JPEG misclassification.** ExifTool decides NEF versus NRW by
-  IFD0 compression 6; that classified Z 9 NEFs as NRW, and its author
-  acknowledged that some Z files carry an IFD0 JPEG. [3] [21] **[S]**
+- **Z 9 IFD0 JPEG misclassification.** ExifTool once reported Z 9 NEF
+  files as NRW files, and its author acknowledged that some Z files carry
+  an IFD0 JPEG. [3] [21] **[S]**
   Files 5146 to 5148 confirm it: IFD0 has Compression 6 and holds a 160x120
   JPEG. **[F]** Do not decide the format from IFD0; walk the container
   uniformly.
 - **sNEF ("Small").** The raw IFD holds 3 bytes per pixel of 12-bit YCbCr
   4:2:2 (Y0 Y1 Cb Cr in each 6 bytes) instead of a CFA. [9] [10] **[S]**
-  ExifTool names NEFCompression value 8 "Small" [1] **[S]**; that sNEF files
-  carry it is **[I]**, since rawspeed and rawler detect sNEF by byte count
-  (3 bytes per pixel). See [raw-data.md](raw-data.md). The container is
-  otherwise the same; previews are unaffected as far as is known.
+  ExifTool names NEFCompression value 8 "Small". [1] **[S]** That sNEF
+  files carry it is **[I]**: the sources describe an sNEF by its 3 bytes
+  per pixel, not by this value. See [raw-data.md](raw-data.md). The
+  container is otherwise the same; previews are unaffected as far as is known.
 - **HE and HE\* (Z 9 and later).** NEFCompression values 13 and 14 (Nikon
-  MakerNote tag 0x0093) [1] **[S]**; on Z bodies a decoder reads the
-  compression from MakerNote tag 0x51 [10] **[S]**, and tag 0x0093 is
+  MakerNote tag 0x0093) [1] **[S]**; on most Z bodies MakerNote tag 0x51
+  records the compression [10] **[S]**, and tag 0x0093 is
   absent from files 5146 to 5148, the lossless one included **[F]**; the raw
   IFD still reports TIFF Compression 34713 on Z 9 samples [21] **[S]**, and
   does so on all three files, HE and HE\* included **[F]**, so the tag does
@@ -371,7 +372,9 @@ any process, not just baseline (section 7).
   tree and of the PreviewIFD, and the four preview sizes are the same in
   the lossless, HE\* and HE files; the raw strip's content and length
   differ; and the MakerNote IFD differs by one tag, 0x0096, present in the
-  lossless file only (files 5146 to 5148). **[F]**
+  lossless file only (files 5146 to 5148). **[F]** The Z fc and Z 30 write
+  0x0093 instead of 0x51 (files 8559 and 5812).
+  **[F]**
 - **Z 9 SubIFDs that hold no preview.** After the two JPEG SubIFDs and the
   raw one, the Z 9 has three more (section 1.2). **[F]** SubIFD3 is an
   uncompressed 8-bit gray image of 384x256 (Photometric 1, one strip of
@@ -409,9 +412,9 @@ any process, not just baseline (section 7).
   (a sub-IFD, flagged "non-essential and often corrupted") with tags such as
   FilmType (0x02), MultiSample (0x40), BitDepth (0x41), MasterGain (0x50),
   DigitalICE (0x100) and ROCInfo (0x110). [5] [1] **[S]** Which IFD hosts
-  it in a scan file is unconfirmed. **[I]** There is no CFA, so a CFA-based
-  decoder can reject such a file on Photometric != 32803 **[I]**. For
-  previews, expect no JPEG and return an error.
+  it in a scan file is unconfirmed. **[I]** There is no CFA, so its
+  Photometric is not 32803. **[I]** For previews, expect no JPEG and
+  return an error.
 - **NikonNEFInfo, tag 0xC7D5.** ExifTool's EXIF table lists 0xC7D5
   NikonNEFInfo and links it to its "Nikon NEFInfo" table, which decodes
   DistortionInfo (0x0005) and VignetteInfo (0x0006). [2] [33] **[S]** It is
@@ -419,15 +422,15 @@ any process, not just baseline (section 7).
   is not relevant to previews; which IFD hosts it across bodies remains open
   (see [Open questions](#open-questions)).
 
-## 6. How other implementations choose the largest preview
+## 6. Which preview other readers return
 
-| Project | Method | Conf. |
+| Project | What it returns | Conf. |
 |---|---|---|
-| Exiv2 | collects every candidate; for TIFF-IFD candidates reads width and height from tags (rejecting zero); for JPEG blobs, opens them and reads the dimensions from the JPEG; checks offset + size against the file and a non-zero size; **does not check the SOI marker**; sorts by pixel area ascending, last is largest | **[S]** [11] |
-| rawler | among IFDs with NewSubfileType 1 and a JPEG length tag, picks the largest byte length; does not consult the PreviewIFD | **[S]** [10] |
-| LibRaw | records thumbnails whose width and height may be zero; "largest" is judged by an area-based heuristic; checks offsets against the file size when a check is enabled; skips oversized entries; its documentation warns the largest thumbnail may have zero recorded size | **[S]** [7]; **[S]** docs |
-| fiv (viewer) | picks the smallest by pixel count, skipping zero dimensions (the opposite goal) | **[S]** [18] |
-| rawspeed / rawler (raw IFD) | the IFD with CFAPattern; rawler falls back to the first with NewSubfileType 0; LibRaw takes the largest by a size-times-depth measure | **[S]** [9] [10] [7] |
+| Exiv2 | every preview whose bytes are not empty and lie inside the file, smallest pixel area first, so the last is the largest. A JPEG's size comes from its frame header, and a TIFF directory's from its tags, which must not be zero. **A strip candidate whose bytes do not start with an SOI marker is listed too** | **[S]** [11] |
+| rawler | the JPEG with the most bytes among the directories with NewSubfileType 1 and a JPEG length; never the PreviewIFD's | **[S]** [10] |
+| LibRaw | as the largest, the thumbnail of the largest estimated area. Its documentation warns that this thumbnail may have no recorded width or height | **[S]** [7]; **[S]** docs |
+| fiv (viewer) | the smallest JPEG by pixel count among those with recorded dimensions (the opposite goal) | **[S]** [18] |
+| rawspeed, rawler, LibRaw (raw data) | rawspeed and rawler decode the directory with CFAPattern. In a file without one, rawler decodes the first directory with NewSubfileType 0. LibRaw decodes the largest by size times bit depth | **[S]** [9] [10] [7] |
 
 ## 7. Recommendation for raw-files
 
@@ -446,16 +449,14 @@ They also run it on the 32 files of 25 other bodies listed in
 [test-data.md](test-data.md#21-the-ci-set), which give the previews listed
 there. **[F]**
 
-The steps below restate the common approach in original pseudocode terms.
-
 ### 7.1 Algorithm
 
 1. **Collect candidate IFDs.** Start at IFD0. Add every IFD in its
    next-IFD chain, every offset in each 0x014A array, and from the Exif IFD
    the MakerNote (0x927C), then the PreviewIFD (0x0011) inside it. Keep a
    set of visited offsets so loops end, limit nesting to about 5 levels, and
-   cap the total IFD count and each IFD's entry count (LibRaw caps SubIFDs
-   at 1000 and MakerNote entries near 1000 [7] [6] **[S]**).
+   cap the total IFD count and each IFD's entry count (LibRaw reads at most
+   1000 SubIFDs and about 1000 MakerNote entries [7] [6] **[S]**).
 2. **Locate the bytes.** For each IFD take offset and length from
    0x0201 and 0x0202 if both exist. Otherwise, if 0x0111 and 0x0117 describe
    a single strip (or contiguous strips) and Compression is 6 or 7 and the
@@ -469,9 +470,9 @@ The steps below restate the common approach in original pseudocode terms.
    decide a truncation policy once (reject, or clamp and flag); do not mix
    policies. **[I]**
 4. **Check SOI.** The first two bytes must be `FF D8`. Optionally require
-   `FF` at the third byte. Exiv2 skips this check [11]; raw-files should not,
-   because an IFD0 strip pointing at zeros or non-JPEG data has been
-   reported [16].
+   `FF` at the third byte. Exiv2 can return a preview that does not start
+   with `FF D8`. [11] raw-files should not: an IFD0 strip pointing at zeros
+   or non-JPEG data has been reported. [16]
 5. **Parse to the first SOF.** Walk marker segments with length checks and
    a bounded loop; stop at the first start-of-frame marker and read height
    and width from it. Do not decode. The SOF codes are `C0` to `C3`, `C5` to

@@ -176,8 +176,8 @@ sensor data or an encrypted block (see [the roadmap](../../ROADMAP.md)).
    CVE-2020-13112.)
 2. **Track visited offsets and cap depth.** Keep a set of visited IFD
    offsets, a depth cap (about five) and caps on the total IFDs and entries
-   (LibRaw caps MakerNote entries at 1000). This covers SubIFDs, the Exif
-   IFD, the MakerNote IFD, the Interoperability IFD and next-IFD chains.
+   (LibRaw reads at most 1000 MakerNote entries). This covers SubIFDs, the
+   Exif IFD, the MakerNote IFD, the Interoperability IFD and next-IFD chains.
    Parsing must terminate on any input. (CVE-2017-11338, CVE-2018-20030,
    CVE-2007-6351.)
 3. **Check entry size arithmetic.** Compute `count * type_size` with
@@ -208,11 +208,11 @@ sensor data or an encrypted block (see [the roadmap](../../ROADMAP.md)).
    `rows * stride <= strip bytes` per strip, and honor each strip's own
    offset. Derive the layout from several agreeing facts rather than one
    tag. (CVE-2026-5342, in the padded 12-bit loader, was this bug.)
-8. **Bounds-check the 0x0096 block field by field (when relevant).** Header
-   bytes, the 2110-byte skip, the predictor seeds, the curve size, the curve
-   points, and the split row at offset 562 each need their own check. Reject
-   a curve whose anchors do not tile the range, and ignore a split row at or
-   past the image height.
+8. **Bounds-check the 0x0096 block field by field (when relevant).** Check
+   each field on its own: header, the 2110 bytes before the seeds, seeds,
+   curve size, curve points and the split row at offset 562. Reject a curve
+   whose anchors do not tile the range, and ignore a split row at or past
+   the image height.
 9. **Reject zero divisors.** Rational denominators, strip heights, tile
    sizes, crop sizes and the curve step are all checked before dividing.
    (CVE-2008-2696, CVE-2018-19567.)
@@ -226,10 +226,10 @@ sensor data or an encrypted block (see [the roadmap](../../ROADMAP.md)).
     High Efficiency formats by the first bytes of the raw strip (the two
     JPEG XS markers `FF 10 FF 50`) and by the compression value, and return
     a typed unsupported error. Never fall through to the Huffman path.
-    LibRaw performs this check only on a handful of models [11] **[S]**, and
-    decodes noise on other bodies [12] **[S]**. raw-files runs the check on every file. See
-    [licenses-and-references.md](licenses-and-references.md) for why HE is
-    out of scope.
+    LibRaw refuses the HE files of a handful of bodies [11] **[S]**, and
+    gives noise for those of others [12] **[S]**. raw-files checks every
+    file. See [licenses-and-references.md](licenses-and-references.md) for
+    why HE is out of scope.
 12. **Treat the embedded JPEG as opaque.** For previews, check that the
     declared range holds a start-of-image marker and walk markers with length
     checks to the first frame header, inside the range only. Do not trust

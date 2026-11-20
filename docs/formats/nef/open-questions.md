@@ -40,20 +40,21 @@ affects, and test-data.md describes the sample set that would answer Part 2.
    whose MakerNote byte order differs from the file's. Previews and
    metadata tolerate it (Part 5); the question is whether to reject it for
    raw decoding, as rawler does.
-4. **Serial-number parsing for decryption.** Implementations differ when the
-   serial contains non-digits:
-   - dcraw folds each non-digit in as `c % 10`.
-   - LibRaw stops at the first non-digit and uses 34 for D50-family bodies, 96
-     otherwise.
-   - ExifTool and exiv2 also use 0x22 and 0x60.
+4. **Serial-number parsing for decryption.** Implementations give
+   different keys when the serial contains non-digits:
+   - dcraw counts each non-digit as the digit its character code gives
+     modulo 10, and its key byte is the low byte of that number.
+   - LibRaw's key byte is 34 on D50-family bodies and 96 on the others,
+     as ExifTool's and exiv2's is (0x22 and 0x60).
 
    One behavior should be picked and tested
    ([makernote-and-metadata.md](makernote-and-metadata.md)).
 5. **Strictness on corrupt data.** Implementations differ in three places
    ([raw-data.md](raw-data.md)):
-   - how they clamp the curve index;
-   - whether they reject a curve whose anchor points do not tile the range;
-   - whether a truncated bitstream is an error or zero-filled.
+   - what a value past the curve's end decodes to;
+   - whether a curve whose anchor points do not tile the range decodes at
+     all;
+   - whether a truncated bitstream gives an error or zero-filled rows.
 
 ## 2. Facts to establish from sample files
 
@@ -137,8 +138,8 @@ checked.
 ### MakerNote and metadata
 
 - **Z-series white balance.** Whether 0x000C WB_RBLevels is present and
-  correct on every Z body. Every decoder relies on it there, and no failure
-  has been reported.
+  correct on every Z body. Every decoder gives 0x000C's white balance on
+  a Z body, and no failure has been reported.
 - **Crop area.** Which body first wrote 0x0045 CropArea: the D5 (2016)
   does (file 2218) and the D810 (2014) does not, and no body in between
   was checked.
@@ -169,10 +170,10 @@ checked.
 
 - **0x0096 version bytes.** The version bytes written by lossy type 1 bodies:
   D1H, D1X, D70 and D2H are unconfirmed. Separately, which bodies write 0x49 or
-  0x58, and what the 2110 bytes skipped for them contain.
-- **Predictor seed order.** dcraw and LibRaw read the four seeds of 0x0096
-  row-major, rawspeed and rawler column-major. Read the four seeds from
-  samples; if they are always equal the question is moot
+  0x58, and what the 2110 bytes before the seeds hold in those files.
+- **Predictor seed order.** dcraw and LibRaw give the four seeds of 0x0096
+  to the even row first, rawspeed and rawler to column 0 first. Read the
+  four seeds from samples; if they are always equal the question is moot
   ([raw-data.md](raw-data.md)).
 - **NEFCompression 5 and 6.** Which bodies write them.
 - **NEFCompression 9.** Whether Z bodies write 9 for 12-bit uncompressed

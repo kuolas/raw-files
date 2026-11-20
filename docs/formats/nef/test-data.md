@@ -475,7 +475,7 @@ body exercises.
 | Pro CMOS | D300, D3 | 14-bit lossless; newer MakerNote versions |
 | 2012 to 2016 | D800 or D810, D850 | Several SubIFDs and previews; D810 has the YCbCr small-raw variant; D850 has M and S sizes |
 | Flagship | D5, D6 | Newer MakerNote revisions; D6 has the 14-bit uncompressed packed layout |
-| Mirrorless | Z 6, Z 7 | Z-mount MakerNote; "second version" lossy curve; 12-bit uncompressed |
+| Mirrorless | Z 6, Z 7 | Z-mount MakerNote; the lossy curve of version bytes 0x44 0x40; 12-bit uncompressed |
 | High efficiency | Z 9 (all three files), optionally Z 8 | The only way to test that HE and HE* are detected and refused |
 | Recent | Z f | Newest body in the set |
 | Compact | Coolpix A or P7000 (NRW), E5700 or E8800 (NEF) | The NRW variant, and 2003-era E-series layouts (even rows first, CMYG on some) |
@@ -571,7 +571,7 @@ The set above answers many of them, mostly with `exiftool -v3`, `exiftool
 | Whether HE and HE* change IFD or preview layout | The three Z 9 files side by side. Answered: they do not (section 2.1, files 5146 to 5148) |
 | Whether tag 0x000C white balance is present and correct on Z bodies | Z 6, Z 7, Z 8, Z 9, Z f |
 | Whether CropArea (0x0045) is always present, and raw-to-output size mapping | One file per body, compared with the Exif image size. Partly answered by section 2.2: the D5, D850, D780 and Z bodies write it, older ones and the D5600 do not, and the visible size of the bodies without it is still unknown |
-| Version bytes written by lossy type 1 bodies; what the 2110-byte skip is | `exiftool -b -NEFLinearizationTable` on D1H, D1X, D100, D70, D200, D2X; read the first two bytes |
+| Version bytes written by lossy type 1 bodies; what the 2110 bytes before the seeds hold | `exiftool -b -NEFLinearizationTable` on D1H, D1X, D100, D70, D200, D2X; read the first two bytes |
 | Order of the four 0x0096 predictor seeds (row-major or column-major) | Read the four seeds from 0x0096 on several bodies; if always equal the question is moot |
 | Which bodies write NEFCompression 5 and 6 | `exiftool -NEFCompression` across the whole Nikon set |
 | Black-level channel order on non-RGGB bodies | A non-RGGB body that carries tag 0x003D, such as D3100 or D90 if it does |
