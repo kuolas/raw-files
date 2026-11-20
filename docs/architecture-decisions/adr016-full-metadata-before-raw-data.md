@@ -79,7 +79,9 @@ its first files.
   ([ADR011](adr011-metadata-from-standard-tags.md)): the standard tags
   first, then the maker's MakerNote; each value from a tag of an exact
   type and count; a damaged value costs only itself; a code is named only
-  once a standard or a measured file shows what it means; every fact is
+  once its meaning is known, from a standard, a frame shot in a known
+  setting, or a reader's published documentation that the measured
+  files agree with; every fact is
   recorded in the format notes, from the bytes of a file, before any code
   ([ADR013](adr013-clean-room-and-third-party-code.md)).
 - **The enciphered and encrypted blocks are part of the goal.** What

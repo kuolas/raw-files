@@ -4,8 +4,9 @@
 - Builds on: [ADR011](adr011-metadata-from-standard-tags.md), metadata
   from the standard tags
 - Date: 2026-10-19
-- Revision: 2, 2026-10-26
-- Issue: #25; the points named by number and the points used #57
+- Revision: 3, 2026-11-20
+- Issue: #25; the points named by number and the points used #57;
+  every documented AFInfo2 version and the area mode as a setting #214
 
 ## Context
 
@@ -164,10 +165,15 @@ none.
   (small raws), or where the file records no visible size, so that the
   image size includes the border pixels (the Nikon bodies without a
   CropArea, such as the D7000 and the D5600: files 961 and 1415).
-- **Nikon: AFInfo2, read only at a version we know.** The layout is
-  chosen by the exact version, among 0100, 0101, 0300, 0301, 0400, 0401
-  and 0402. Any other version gives no focus point until its layout is
-  checked on a file and added. The frame is AFInfo2's as recorded,
+- **Nikon: AFInfo2, read at every documented version the files agree
+  with.** The layout is chosen by the exact version. ExifTool's
+  published tag documentation lays out each version read, and the
+  measured files agree with it, as
+  [ADR011](adr011-metadata-from-standard-tags.md) defines agreeing.
+  They are 0100, 0101, 0200, 0201, 0300, 0301, 0400, 0401 and 0402. The Nikon 1
+  versions, 0200 and 0201, give the AF-area mode and no position. Any
+  other version gives no focus point and no area mode until its layout
+  is documented or checked on a file, and added. The frame is AFInfo2's as recorded,
   except on a crop: when CropHiSpeed's cropped size differs from its
   original size and the file has a CropArea, the frame becomes
   CropArea's width and height. If both sides of the crop are smaller
@@ -201,9 +207,12 @@ none.
   record the number of an autofocus point, or a mask of the points used,
   and no position. Until raw-files has a table for a body, its files give
   none; with one, the point is placed from it, and the points used are
-  reported with the area mode, as
+  reported, as
   [ADR018](adr018-focus-points-placed-from-a-table-and-the-points-used.md)
   decides.
+- **The AF-area mode is a camera setting**, not a part of the focus
+  points: it is given whether or not a point is
+  ([ADR011](adr011-metadata-from-standard-tags.md)).
 - **No focus point** when the file records none: the Sony files with
   neither a FocusLocation nor a point number in a plain tag (among the
   samples, the RX100, the Hasselblad Lunar, whose focus data lies only in
@@ -255,6 +264,10 @@ Rejected:
   0403, at offsets that may have moved. The versions read are those
   found in files, each at ExifTool's published layout, even where no
   sample fills it in.
+- **AFInfo2 only at the versions that frames shot in a known setting
+  confirm.** The Nikon 1 versions, and the layouts of 0101 and 0301,
+  would give nothing, though the documentation lays them out and the
+  files agree.
 - **Reporting the point of a manual-focus shot**, with a focus mode
   beside it: a point the camera did not focus on, which a caller would
   measure for nothing, and a maker's value in a type shared by every
@@ -263,9 +276,9 @@ Rejected:
   first did, since no caller needed them and they could be added without
   breaking the API. A viewer that draws where the camera focused wants
   every point the camera used, with the primary marked, and the area
-  mode to label them, so they are reported, as
+  mode to label them. The points are reported as
   [ADR018](adr018-focus-points-placed-from-a-table-and-the-points-used.md)
-  decides.
+  decides, and the mode as a camera setting.
 
 ## What this decision does not cover
 
@@ -293,8 +306,10 @@ and do not change it.
   the preview for display rotates the point with it.
 - A body that brings a new AFInfo2 version gives no focus point until
   the version is added.
-- The 0101 layout and the 0301 version rest on ExifTool's tables: no CC0
-  sample fills in the 0101 position, and none has version 0301.
+- The layouts of 0101, 0200, 0201 and 0301 rest on ExifTool's published
+  documentation, which the public files of those versions agree with.
+  No frame shot in a known setting confirms them, and no CC0 sample
+  fills in the 0101 position.
 - The crop rule relies on CropHiSpeed's two sizes differing only on a
   crop. The D810's four-pixel difference on an uncropped file is
   harmless, since the D810 writes no CropArea. A body that wrote both

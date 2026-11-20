@@ -9,9 +9,9 @@
   [ADR015](adr015-the-focus-point-of-a-crop-mode-jpeg.md), the focus
   point of a JPEG
 - Date: 2026-10-26
-- Revision: 3, 2026-11-18
+- Revision: 4, 2026-11-20
 - Issue: #57; each crop's and JPEG size's window #62; the layout placed
-  on the picture #65
+  on the picture #65; the area mode a camera setting #214
 
 ## Context
 
@@ -73,9 +73,9 @@ repeat the reader's rules for the window and its edge.
 
 We will place a focus point that the camera names by number from the
 table of the body's points, and say where every point came from. We
-will report the points the camera used, with the primary, the area mode
-and, for a body with a table, the body's layout, both in the table's
-frame and placed on the picture. On a crop, and in a JPEG of a size
+will report the points the camera used, with the primary. For a body
+with a table, we will also report its layout, in the table's frame and
+placed on the picture. On a crop, and in a JPEG of a size
 whose picture is a window of the frame, a placed point is measured in
 that window, which the body's table keeps, and so is the placed
 layout.
@@ -142,7 +142,7 @@ layout.
   `Metadata::focus_points`: each with its number when the file gives
   one, its center, its box, and whether focus was confirmed when the
   file says. The list marks the primary, the one `Metadata::focus`
-  reports, and gives the area mode.
+  reports.
   - For a placed point, the list holds one point per set bit of the
     mask whose number the table has, in number order, or the primary
     alone when the mask is empty. A set bit the table lacks is skipped
@@ -150,12 +150,13 @@ layout.
   - For a recorded position, the list is that one point.
   - On a crop, and in a JPEG size's window, every point of the list
     shifts as the primary does.
-- **The area mode is reported in neutral words**, as `FocusAreaMode`:
-  single point, dynamic area, group area, auto area, tracking, wide
-  area, pinpoint. A code is named only once a checked file shows it, as
-  the camera settings' codes are
-  ([ADR011](adr011-metadata-from-standard-tags.md)). Any other code
-  gives no mode.
+- **The area mode labels the points, as a camera setting.** It is
+  given beside the list, whether or not the file gives one, as
+  [ADR011](adr011-metadata-from-standard-tags.md) decides. It is
+  reported in neutral words, as `FocusAreaMode`: single point, dynamic
+  area, auto area, tracking, pinpoint and zone, with each maker's finer
+  kinds folded in. A code is named by the rule of the camera settings'
+  codes, and any other code gives no mode.
 - **A body with a table gives its layout**, through
   `Metadata::focus_layout`: every point's number, center and box in the
   table's frame, whatever the shot, the grid as the table holds it. A
@@ -214,6 +215,9 @@ Rejected:
   and the two differ in error and in meaning.
 - **The area mode as the maker's code.** A number that means one thing
   on Nikon and another on Sony, in a type every format shares.
+- **The area mode as a part of the list of points**, as this record
+  first had it. Most files that name a mode give no list, and so would
+  lose the mode ([ADR011](adr011-metadata-from-standard-tags.md)).
 - **The list of points inside `Focus`.** `Focus` would lose `Copy`, and
   every caller that wants only the primary would carry the list.
 - **Mapping on the Model alone, without the layout code.** One Model

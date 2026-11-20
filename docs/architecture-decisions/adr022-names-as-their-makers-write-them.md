@@ -1,4 +1,4 @@
-# ADR022: Names as their makers write them
+# ADR022: Names and published facts as their makers write them
 
 - Status: Accepted
 - Builds on: [ADR013](adr013-clean-room-and-third-party-code.md), the
@@ -7,7 +7,8 @@
   [ADR021](adr021-what-the-file-records-and-what-raw-files-reads-into-it.md),
   what the file records and what raw-files reads into it
 - Date: 2026-11-02
-- Issue: #49
+- Revision: 2, 2026-11-20
+- Issue: #49; a body's published facts #214
 
 ## Context
 
@@ -35,6 +36,15 @@ its newer ones without, Z6III, Z50II; a regulatory notice in the Z 9's
 manual has Z9. A rule that wrote every Nikon name alike would give
 names Nikon does not use for some of its bodies.
 
+Some files record neither a body's image area nor its raw size. Two
+more facts give them: the format of its sensor, and whether it offers
+raw sizes at all
+([ADR011](adr011-metadata-from-standard-tags.md)). Of the 289 public
+Nikon files, 138 give no image area, with a crop code of "off" or
+none, and 141 record no raw size. Like a name, each fact is published by
+the maker, in a specification or a manual. Only the text that
+identifies the body is in its files.
+
 [ADR017](adr017-per-body-tables-measured-by-the-project.md) builds every
 per-body table from the project's own measurements, and takes none from
 another project. A table of names is a per-body table, but nothing in it
@@ -47,16 +57,20 @@ measured.
 ## Decision
 
 We will take each **name as its maker writes it in its own published
-documents**, and enter a body in the table only with **a file that
-shows its text and a document of its maker that gives its name**, both
-recorded in the format notes before the code, on a page of their own
-([camera-names.md](../formats/camera-names.md)).
+documents**. Each **published fact about a body**, its sensor's format
+and whether it offers raw sizes, comes from the same documents. A body
+enters the table only with **a file that shows its text and a document
+of its maker that gives its name**. A fact enters only with a document
+of its maker that states it. Both are recorded in the format notes
+before the code, on a page of their own
+([camera-names.md](../formats/camera-names.md)). That page gives each
+listed body's name, sensor format and offer of raw sizes.
 
 - **The file.** The Make and Model texts an entry is looked up by come
   from a file the project has read: a public sample, a fixture, or my
   own files, cited by count. The notes name the file.
-- **The document.** The name comes from the maker's own published
-  documents: a product page, a manual or a guide. The notes give its
+- **The document.** The name and the facts come from the maker's own
+  published documents: a product page, a manual or a guide. The notes give its
   title, its edition or address, the page or place where the name
   stands, and the date it was read. Where the maker's documents differ,
   the name its marketing gives, on its product pages, is taken, and the
@@ -82,7 +96,9 @@ recorded in the format notes before the code, on a page of their own
   text, as [ADR013](adr013-clean-room-and-third-party-code.md) allows,
   never to take a name.
 - **A body not listed has no name**, and a body whose maker's document
-  cannot be found stays out of the table; the notes name it and why.
+  cannot be found stays out of the table; the notes name it and why. A
+  fact no document of the maker states is left out, and the setting it
+  would fill stays as the file records it.
 
 Rejected:
 
@@ -98,6 +114,11 @@ Rejected:
 - **The maker's manual over its product pages** where they differ. A
   manual's cover may give the name only as a logo, and Sony's product
   pages write the names as its marketing does.
+- **The facts' evidence rule in the record of the settings alone.** A
+  table's evidence would then be decided in two records, away from the
+  record that decides the table of names it extends.
+- **A record of its own for the table of facts.** Its rule would repeat
+  this one: a file that identifies the body, and the maker's document.
 
 ## What this decision does not cover
 
@@ -121,7 +142,8 @@ Rejected:
   document; the notes are the audit trail, and a reader can open the
   document an entry cites.
 - A body with no file among the samples, the fixtures and my own files
-  has no name, however well known it is.
+  has no name, however well known it is. The table gives it no sensor
+  format or raw size either.
 - Some names are not ASCII, such as Sony's α; a program that needs
   ASCII uses the recorded text.
 - A maker that renames a body, or writes its name differently later,
