@@ -190,7 +190,8 @@ in IFD0's Software [P][3]:
 | Exposure program | 0x8822 ExposureProgram, SHORT | 0 not defined, 1 manual, 2 normal program, 3 aperture priority, 4 shutter priority, 5 creative, 6 action, 7 portrait, 8 landscape; others reserved | 4.6.6.7.3, p. 55 |
 | Metering mode | 0x9207 MeteringMode, SHORT | 0 unknown, 1 average, 2 center-weighted average, 3 spot, 4 multi-spot, 5 pattern, 6 partial, 255 other | 4.6.6.7.19, p. 60 |
 | Kind of light | 0x9208 LightSource, SHORT | 0 unknown, 1 daylight, 2 fluorescent, 3 tungsten, 4 flash, 9 fine weather, 10 cloudy weather, 11 shade, 12 to 16 five kinds of fluorescent lamp, 17 to 23 standard lights A, B, C, D55, D65, D75, D50, 24 ISO studio tungsten, 25 to 29 five kinds of light source and 30 to 34 five kinds of LED by color temperature, 255 other | 4.6.6.7.20, pp. 60 to 61 |
-| Flash | 0x9209 Flash, SHORT, bits | bit 0 fired; bits 1 and 2 whether return light was detected; bits 3 and 4 the mode: unknown, compulsory firing, compulsory suppression, auto; bit 5 no flash function; bit 6 red-eye reduction | 4.6.6.7.21 and Figure 19, pp. 61 to 62 |
+| Flash | 0x9209 Flash, SHORT, bits | bit 0 fired; bits 1 and 2 the return light: 0 no detection function, 1 reserved, 2 not detected, 3 detected; bits 3 and 4 the mode: unknown, compulsory firing, compulsory suppression, auto; bit 5 no flash function; bit 6 red-eye reduction | 4.6.6.7.21 and Figure 19, pp. 61 to 62 |
+| Exposure mode | 0xA402 ExposureMode, SHORT | 0 auto exposure, 1 manual exposure, 2 auto bracket; others reserved | 4.6.6.7.36, p. 69 |
 | White balance | 0xA403 WhiteBalance, SHORT | 0 auto, 1 manual | 4.6.6.7.37, p. 69 |
 | Focal length in 35 mm terms | 0xA405 FocalLengthIn35mmFilm, SHORT, in millimeters | 0 unknown | 4.6.6.7.39, p. 70 |
 | Color space | 0xA001 ColorSpace, SHORT | 1 sRGB, 0xFFFF uncalibrated: any color space but sRGB | 4.6.6.2.1, p. 47 |
@@ -238,6 +239,132 @@ in IFD0's Software [P][3]:
   camera's sRGB in the MakerNote, which no longer describes the picture
   ([NEF notes](../nef/makernote-and-metadata.md#87-camera-settings)).
   [F]
+
+**More of how the camera was set.** raw-files will read more settings
+from these Exif tags, as
+[ADR011](../../architecture-decisions/adr011-metadata-from-standard-tags.md)
+decides. Their codes rest on Exif 3.1 [P][3]. Two more marks say what
+else a code rests on, with the count of files:
+
+- **confirmed by a frame**: a frame shot in a known setting shows the
+  code;
+- **documented and agreed with**: a reader's published documentation
+  gives the code, and the measured files agree with it.
+
+The files agree when the code occurs where the documentation places it
+(the record's version, the detection method, the body family). No other
+value of the same file may contradict it. ADR011 gives the rule.
+
+The counts below were taken on 20 November 2026 with a counting program
+of my own over raw-files' own `open`, with no other reader run. The
+public JPEGs are the 18 of the test fixtures and `raw-samples/`, and the
+9 files of raw.pixls.us that raw-files opens as JPEG. Mine are 22,660
+JPEGs, given as counts only. **[F]** marks a count over these files.
+
+- **The flash.** raw-files reads bits 0, 3 and 4 today: whether the
+  flash fired, and its mode. It will also read bits 1, 2 and 6 as parts
+  of `Flash`:
+  - `Flash::return_light()`, an `Option<bool>`: `Some(true)` for 3,
+    "Strobe return light detected"; `Some(false)` for 2, "not detected".
+    0, "No strobe return detection function", and the reserved 1 give
+    `None`.
+  - `Flash::red_eye_reduction()`, a `bool`, from bit 6. Exif names its
+    1 "Red-eye reduction supported" and its 0 "No red-eye reduction mode
+    or unknown".
+  - A file without Exif's Flash will still give no `Flash`.
+
+  [P][3] (4.6.6.7.21 and Figure 19, pp. 61 to 62)
+
+  | Flash | Fired | Mode | Return light | Red-eye | My JPEGs |
+  |---|---|---|---|---|---|
+  | 16 | no | compulsory suppression | 0 | no | 14,134 |
+  | 0 | no | unknown | 0 | no | 3,307 |
+  | 24 | no | auto | 0 | no | 1,764 |
+  | 15 | yes | compulsory firing | 3, detected | no | 1,291 |
+  | 31 | yes | auto | 3, detected | no | 641 |
+  | 25 | yes | auto | 0 | no | 273 |
+  | 13 | yes | compulsory firing | 2, not detected | no | 249 |
+  | 89 | yes | auto | 0 | yes | 128 |
+  | 9 | yes | compulsory firing | 0 | no | 127 |
+  | 73 | yes | compulsory firing | 0 | yes | 16 |
+  | 32 | no | unknown | 0 | no, and no flash function | 4 |
+
+  The values on my 21,934 JPEGs that record Flash. **[F]**
+
+  - The return light is recorded only on my Nikon DSLRs' JPEGs. It is 3
+    on 1,932, from the D7200, D3200, D300S, D7100, D600 and D3300. It is
+    2 on 249, all from the D3200. **[F]**
+  - No JPEG holds the reserved 1. My Z 9's 318 JPEGs hold 0, so they will
+    give no return light. **[F]**
+  - The red-eye bit is set on 144, all from Fujifilm and Canon cameras,
+    each with the flash fired. **[F]**
+  - The 32 is on 4 JPEGs of a phone. 726 JPEGs with no Make record no
+    Flash. **[F]**
+  - The public JPEGs hold 16 (10 files) and 0 (15 files). None sets bit
+    1, 2 or 6. **[F]**
+- **Exposure bracketing.** ExposureMode's 2, auto bracket, will give
+  exposure bracketing, `Bracketing::Exposure`, where no MakerNote says.
+  [P][3] (4.6.6.7.36, p. 69) None of these JPEGs holds it. **[F]**
+  - My JPEGs hold 0 on 19,921 and 1 on 1,931. **[F]**
+  - The public JPEGs hold 0 on 21, and 1 on the ILCE-7M3 file. **[F]**
+  - Of the public raw files, 9 Sony ones hold 2. **[F]**
+- **The kind of fluorescent lamp.** LightSource's 12 to 16 will give
+  `WhiteBalance::fluorescent_lamp()`, a `FluorescentLamp`. [P][3]
+  (4.6.6.7.20, pp. 60 to 61)
+
+  | LightSource | Exif's name | `FluorescentLamp` |
+  |---|---|---|
+  | 12 | Daylight fluorescent (D 5700 - 7100K) | `Daylight` |
+  | 13 | Day white fluorescent (N 4600 - 5500K) | `DayWhite` |
+  | 14 | Cool white fluorescent (W 3800 - 4500K) | `CoolWhite` |
+  | 15 | White fluorescent (WW 3250 - 3800K) | `White` |
+  | 16 | Warm white fluorescent (L 2600 - 3250K) | `WarmWhite` |
+
+  - 12 to 15 are confirmed by a frame: they occur on the JPEGs of my
+    ILCE-7M2's white balance frames, shot in known settings
+    ([ARW notes](../arw/makernote-and-metadata.md#97-camera-settings)).
+    **[F]**
+  - 16 is on no JPEG measured. Exif names it, so it will be named.
+    **[F]**
+  - Sony's 0x0112 also gives the lamp. It will not be read, since it
+    repeats Exif on every frame measured (ADR011).
+  - The count of each value is not known: LightSource is not among the
+    tags counted on my 22,660 JPEGs.
+
+**When it was digitized.** The Exif IFD records a second time beside
+the capture time: DateTimeDigitized (0x9004), with SubSecTimeDigitized
+(0x9292) and OffsetTimeDigitized (0x9012). [P][3] (4.6.6.6.2, p. 53;
+4.6.6.6.5, pp. 53 to 54; 4.6.6.6.8, p. 54)
+
+- **Exif says a camera writes the same time in both.** "For DSC, the
+  DateTimeDigitized will have the same content as the
+  DateTimeOriginal." [P][3] (4.6.6.6.2, p. 53)
+- **The capture time does not use it**: it comes from DateTimeOriginal
+  ([NEF notes](../nef/makernote-and-metadata.md#82-capture-date-and-time-zone)).
+- **raw-files will give it as a value of its own**,
+  `Metadata::digitized_time`, read from the three tags by the capture
+  time's rules (ADR011).
+
+| DateTimeDigitized against DateTimeOriginal | My JPEGs | Public JPEGs |
+|---|---|---|
+| equal | 21,412 | 25 |
+| different | 519 | 0 |
+| DateTimeOriginal alone | 3 | 1 |
+| neither | 726 | 1 |
+
+The 22,660 JPEGs of mine and the 27 public ones. **[F]**
+
+- **The 519 that differ** are 506 from my D7200, 9 from my D3200,
+  D7100 and D3300, and 4 from a phone. **[F]**
+- **The 506 D7200 JPEGs** are the same 506 that record 0 in
+  ImageSizeRAW (0x003E, [section 10](#10-makernotes-in-a-jpeg)). What
+  made them, the camera's own retouching or a program, these files do
+  not say. **[F]** [I]
+- **The subseconds differ on 509**, 501 of them D7200 JPEGs. Only my
+  Z 9's 318 JPEGs record OffsetTimeDigitized, and it equals
+  OffsetTimeOriginal on each. **[F]**
+- **The equal ones include two zero-filled clocks**, on the E900 and
+  E950 files, which give no time. **[F]**
 
 **Who made the picture.** IFD0 records the artist in 0x013B Artist,
 the copyright notice in 0x8298 Copyright and a description in 0x010E
@@ -631,6 +758,50 @@ and HE\* ones). [F]
   0 on 506, presumably those taken without a raw. [F][I] On neither
   body does a JPEG's 0x003E give a raw size. Quality (0x0004) is `FINE` or
   `BASIC`, the JPEG's compression, where the NEF's says `RAW`. [F]
+  The 506 D7200 JPEGs with 0 are those whose digitized time differs
+  from the capture time ([section 4](#4-exif-the-app1-segment)). [F]
+
+**The JPEG quality** is recorded in the maker's MakerNote: raw-files will
+read it as `JpegQuality`, keeping each maker's step names (ADR011). The
+counts are over the JPEGs of section 4's "More of how the camera was
+set". **[F]**
+
+- **Nikon's Quality (0x0004)** is text. In a JPEG it says `FINE`,
+  `NORMAL` or `BASIC`, and will give `Fine`, `Normal` or `Basic`.
+  - These are the camera's words for its JPEG fine, normal and basic
+    steps, as the Z 9's manual names them. [P][7] (pp. 103 to 104)
+  - My 16,404 Nikon JPEGs with the tag hold `FINE` on 14,894, `NORMAL`
+    on 764, `BASIC` on 41 and `RAW` on 705. **[F]**
+  - The public ones hold `BASIC` on 6, `FINE` on 2 and `NORMAL` on 1.
+    The E800, E900 and E950 files write a SHORT, not text, and will
+    give none. **[F]**
+- **Nikon's 0x0044** is the choice the Z 9's manual calls optimal
+  quality or size priority. [P][7] (pp. 103 to 104, 952) It will give
+  `JpegCompression`.
+  - ExifTool's documentation names 1 size priority and 3 optimal
+    quality [S][8]. Both are documented and agreed with.
+  - 3 is on 274 of my Z 9's JPEGs, all `FINE`, and on one public
+    fixture. 1 is on 27, all `BASIC`, and on three fixtures. **[F]**
+  - So on every measured file, 3 goes with `FINE` and 1 with `BASIC`.
+    No frame shot in a known setting yet tells the star from the
+    quality step. [I]
+  - 0 is on the 17 Z 9 JPEGs whose Quality says `RAW`. The
+    documentation does not name it, so it will give none. **[F]**
+- **A JPEG whose Nikon Quality says `RAW`** will give no JPEG quality.
+  - 705 of my JPEGs say so: 662 from my D3200, 19 from my D7200, 17
+    from my Z 9 and 7 from my D600. **[F]**
+  - 670 of them also hold NEFCompression (0x0093), a raw file's tag. The
+    17 Z 9 ones hold 0x0044 0, which no camera JPEG counted holds. **[F]**
+  - So a program made them from a NEF and kept its MakerNote. [I]
+- **Sony's JPEGs** record the quality in 0x0102, 0x202E or 0xB047.
+  - 0x0102 is on 4 of the 5 public Sony JPEGs and on 50 of my ILCE-7M2's.
+    **[F]**
+  - 0x202E is on the ILCE-7M3 file alone. 0xB047 is on the A100 and
+    ILCE-6000 files and on the same 50 of mine. **[F]**
+
+The [NEF notes §8.10](../nef/makernote-and-metadata.md#810-more-capture-settings) and the
+[ARW notes §9.10](../arw/makernote-and-metadata.md#910-more-capture-settings) give each maker's
+quality tags and what their codes rest on.
 
 ## 11. The camera files, segment by segment
 
@@ -690,7 +861,14 @@ decided, as steps. [I]
    IFD0's Make, as for a NEF or an ARW; the image size is the main frame
    header's, and there is no raw size. The camera settings come the same
    way, but a JPEG gives no raw image size, whatever its MakerNote's
-   ImageSizeRAW says (section 10).
+   ImageSizeRAW says (section 10). More capture settings will come the
+   same way:
+   - from Exif (section 4): the flash's return light and red-eye
+     reduction, exposure bracketing from ExposureMode 2, the kind of
+     fluorescent lamp, and the digitized time;
+   - from the MakerNote (section 10): the JPEG quality, and Nikon's
+     choice of optimal quality or size priority. A JPEG whose Nikon
+     Quality says `RAW` will give no JPEG quality.
 7. **The focus point** is kept only when its frame has the JPEG's aspect
    ratio, to within one pixel of rounding in either size:
    `|fw × jh − fh × jw|` at most the longest of `fw`, `fh`, `jw` and
@@ -918,5 +1096,11 @@ them
     with a script of my own in October 2026. **[F]**
 [6] ExifTool, EXIF tags, https://exiftool.org/TagNames/EXIF.html, read
     as documentation. **[S]**
+[7] Nikon, *Z 9 Reference Guide*, for firmware 5.20,
+    https://onlinemanual.nikonimglib.com/z9/en/. **[P]**
+[8] ExifTool, Nikon tags, https://exiftool.org/TagNames/Nikon.html, read
+    as documentation of single codes' meanings. **[S]**
 
-All pages were retrieved in October 2026.
+Pages [1] to [6] were retrieved in October 2026, [7] and [8] in
+November 2026. For the capture settings of sections 4 and 10, no
+reader's source code was read, and ExifTool and exiv2 were not run.
