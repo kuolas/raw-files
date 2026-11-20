@@ -404,6 +404,41 @@ shifted frames. Nikon's NX Studio, run afterwards on the fine-tuning
 frames as a reader to compare with, names the setting each holds, and
 agrees with every direction read from the colors.
 
+The further capture settings and the AF-area codes of
+[makernote-and-metadata.md](makernote-and-metadata.md#810-more-capture-settings)
+were counted on 2026-11-20. A counting program over raw-files' own view
+of the entries read every NEF and NRW file of raw.pixls.us. As counts
+only, it read 48,395 of my own files with a Nikon MakerNote, of seven
+bodies. ExifTool and exiv2 were not run. A code is marked confirmed only
+where a frame shot in a known setting shows it. These are the frames,
+all my own:
+
+| Frames | Body | Shot in | What they confirm |
+|---|---|---|---|
+| 1 to 41 and 47 to 50 (`tests/fixtures/nikon-d600/`) | D600 | single-point AF, through the viewfinder | AFInfo2 0100, detection 0, area code 0 |
+| 42 to 44 (the same) | D600 | auto-area AF | area code 8 |
+| 45 and 46 (the same) | D600 | manual focus | FocusMode `MANUAL`, with area code 0 |
+| 51 and 52 (the same) | D600 | dynamic-area AF, 21 points | area code 5 |
+| 53 to 56 (the same) | D600 | live view, in an AF-area mode not recorded | detection 1, area code 4, without its mode |
+| 7852 to 7859, fixtures of 7856 and 7858 (`tests/fixtures/nikon-d600-jpeg-sizes/`) | D600 | 3D-tracking, AF-C | area code 9 under detection 0; FocusMode `AF-C` |
+| 2484, 2485, 2509 and 2510 | Z 9 | pinpoint AF, the last two in DX | area code 192, under detection 1 |
+| 2486 | Z 9 | single-point AF | area code 193 |
+| 2487 to 2492 | Z 9 | dynamic-area AF S, M and L, two frames each | area codes 204, 205 and 206 |
+| 2493 to 2496 | Z 9 | wide-area AF S and L, AF-C | area codes 195 and 196; FocusMode `AF-C` |
+| 2497 to 2500 | Z 9 | wide-area AF S and L, AF-S | area codes 195 and 196; FocusMode `AF-S` |
+| 2501 to 2504 and 2508 | Z 9 | wide-area AF C1 and C2 | area code 208, for both |
+| 2505 | Z 9 | 3D-tracking, AF-C | area code 207 |
+| 2506 | Z 9 | auto-area AF | area code 197 |
+| 2507 | Z 9 | wide-area AF L, subject detection off | area code 196 |
+| 9967 to 9978, of 2026-10-25 | Z 9 | the white balance series above | `PRESET1`, `PRESET2`, and `COOL WHT FL` with Exif LightSource 14 |
+| the frames of 2026-10-25 above | D600 | the four preset slots | `PRESET1` to `PRESET4` |
+
+The Z 9's frames 2484 to 2510 were shot on 2026-11-19, as RAW + JPEG,
+and each JPEG holds its NEF's codes. Frames 2484 to 2486, 2497 to 2504
+and 2506 to 2510 were shot under AF-S, the others under AF-C. The
+D600's live-view frames confirm the method and the code, not the mode:
+the mode was not written down while shooting.
+
 ## 3. What raw.pixls.us holds for Nikon
 
 Directory listings, 2026-10-10. **[P]** The data lives under

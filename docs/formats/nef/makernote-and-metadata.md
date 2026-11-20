@@ -325,13 +325,22 @@ sensor data. [S][1]
 |---|---|---|---|---|
 | 0x0001 | MakerNoteVersion | undef[4] | ASCII digits on some bodies, binary on others; do not rely on it | full metadata |
 | 0x0002 | ISO | u16[2] | `[0, ISO]` on most bodies before the D810; absent from the D810 on; four zero bytes of type UNDEFINED on the D700 (file 2255), `[0, 0]` on the E5700 (file 4456) **[F]** | metadata |
+| 0x0004 | Quality | string | the image quality as text: `RAW` or `NRW` in a raw file, `FINE`, `NORMAL` or `BASIC` in a camera JPEG; on every Nikon file measured; values in [section 8.10](#810-more-capture-settings) **[F]** | full metadata |
 | 0x0005 | WhiteBalance | string | the white balance setting, as upper-case text padded with spaces; on every checked body; values in [section 8.7](#87-camera-settings) **[F]** | metadata, full metadata |
+| 0x0007 | FocusMode | string | the focus mode as text, padded with spaces: `AF-S`, `AF-C`, `AF-A`, `AF-F` or `MANUAL`; on every Nikon file measured; [section 8.10](#810-more-capture-settings) **[F]** | focus points, full metadata |
+| 0x0008 | FlashSetting | string | the flash's sync as text, such as `NORMAL` or `REAR SLOW`, or blank; [section 8.10](#810-more-capture-settings) **[F]** | full metadata |
+| 0x0009 | FlashType | string | the flash's source and control as text, such as `Built-in,TTL` or `Optional,M`, or blank; [section 8.10](#810-more-capture-settings) **[F]** | full metadata |
 | 0x000B | WhiteBalanceFineTune | s16[1 or 2] | the white balance fine-tuning: one value from the D1H to the D200, two from the D300 on; not written by the Z 9, Z f, Z5II, Z50II and Z6III, which write 0x003F alone **[F]** | metadata |
 | 0x000C | WB_RBLevels | rational[4] | as-shot white-balance multipliers; LibRaw reads them as R, B, then two greens (ExifTool leaves the last two unidentified) | full metadata, raw data |
+| 0x000F | ISOSelection | string | `AUTO` or `MANUAL`, on the Coolpix bodies that write no ShootingMode, all but the Coolpix A **[F]** | full metadata |
 | 0x0011 | PreviewIFD | u32 | the offset of a sub-IFD with a small JPEG preview; offsets relative to MakerNote + 10. One LONG in every checked file that has it, as are the sub-IFD's 0x0201 and 0x0202; raw-files reads them in no other shape **[F]** | previews |
+| 0x0012 | FlashExposureComp | undef[4] | the built-in flash's compensation: a signed count, then 1, 6 and 0; absent on bodies without a built-in flash, the Z 9 among them **[F]** | full metadata |
+| 0x0017 | ExternalFlashExposureComp | undef[4] | an external flash unit's compensation, in the same four bytes **[F]** | full metadata |
 | 0x001B | CropHiSpeed | u16[7] | crop mode and geometry; field order in [section 8.4](#84-image-dimensions) | metadata, focus points, raw data |
+| 0x001C | ExposureTuning | undef[3] | the exposure fine-tuning: a signed count, then 1 and 6 **[F]** | full metadata |
 | 0x001D | SerialNumber | string | the body's serial number; decryption key input. Seven digits on every checked DSLR and mirrorless body from the D300 on (eight on the Nikon 1 J1) and on the Coolpix A; seven spaces on the D200 (file 8079); absent before it and on the Coolpix E5700 and P7800 **[F]** | metadata, full metadata, raw data |
 | 0x001E | ColorSpace | u16 | the color space setting: 1 sRGB, 2 Adobe RGB, 4 BT.2100; from the D200 on, but not on the Coolpix P7800, while no checked NEF has the Exif ColorSpace **[F]** | metadata |
+| 0x001F | VRInfo | undef[8 or 9] | vibration reduction: a four-digit version, 0100, 0101 or 0200, then whether it was on and its mode **[F]** | full metadata |
 | 0x0021 | FaceDetect | u16 | the size of a frame and up to twelve face rectangles in it; on none of the 30 checked files **[F]** | full metadata |
 | 0x0024 | WorldTime | undef | the time zone and daylight saving setting of the camera's clock; layout in [section 8.2](#82-capture-date-and-time-zone) | metadata, full metadata |
 | 0x0034 | ShutterMode | u16 | the shutter used: mechanical, electronic front curtain or electronic, and whether the camera chose it in its auto mode; on the Nikon 1 J1, D850, D780 and every Z body; codes in [section 8.7](#87-camera-settings) **[F]** | metadata |
@@ -339,11 +348,14 @@ sensor data. [S][1]
 | 0x003D | BlackLevel | u16[4] | per-channel black level, recorded at 14-bit scale | raw data |
 | 0x003E | ImageSizeRAW | u16 | the raw size setting: 1 large, 2 medium, 3 small; from the D750, D810 and D5600 on **[F]** | metadata, raw data |
 | 0x003F | WhiteBalanceFineTune | srational[2] | the white balance fine-tuning as two fractions; from the D810 on **[F]** | metadata |
+| 0x0044 | JPGCompression | u16 | the JPEG compression: 1 size priority, 3 optimal quality, in my Z 9's JPEGs; 0 in every NEF that has it; [section 8.10](#810-more-capture-settings) **[F]** | full metadata |
 | 0x0045 | CropArea | u16[4] | left, top, width, height of the output rectangle | metadata, focus points, raw data |
 | 0x004F | ColorTemperatureAuto | u16 | the color temperature, in kelvin, of the white balance the camera applied: the Z 9 records it under every setting, the D850 and the Z fc write 0 under daylight; on the D5, D850, D780 and every Z body **[F]** | metadata |
 | 0x0051 | (unnamed, Z bodies) | undef | NEFCompression as a u16 at byte 10; byte order disputed (see the note below). Present on the Z 6 (2018) too, and on the Z f, Z6III, Z 9, Z5II and Z50II (files 3587, 6887, 7808 to 7810, 7812, 7813, 5146 to 5148, 7735, 7736, 7767, 7770); absent on the Z fc (2021) and Z 30 (2022), which write 0x0093 instead (files 8559, 5812). Byte 10, read as a u16 in the MakerNote's byte order, little-endian on the three Z 9 files, is 3 (lossless) on the Z 9's lossless file, 14 (HE\*) on its HE\* file and 13 (HE) on its HE file (files 5146 to 5148) **[F]** | full metadata, raw data |
 | 0x0084 | Lens | rational[4] | the lens's shortest and longest focal length and the widest aperture at each; on every checked body with interchangeable lenses, from the D1H on; equal to Exif LensSpecification wherever both exist **[F]** | metadata |
-| 0x0088 | AFInfo | undef[4] | area mode, the number of the focus point and a mask of the points in focus; no position. The only focus data of the checked bodies without AFInfo2: the D1H, D70, D100, D200 and Coolpix E5700 and P7800, and written by no checked body that has AFInfo2 **[F]**; [section 8.6](#86-focus-point) | focus points |
+| 0x0087 | FlashMode | u8 | whether and how the flash fired; not read, since it contradicts Exif's "fired" on hundreds of files ([ADR011](../../architecture-decisions/adr011-metadata-from-standard-tags.md)); [section 8.7](#87-camera-settings) **[F]** | full metadata |
+| 0x0088 | AFInfo | undef[4] | area mode, the number of the focus point and a mask of the points in focus; no position. The only focus data of the checked bodies without AFInfo2: the D1H, D70, D100, D200 and Coolpix E5700 and P7800, and written by no checked body that has AFInfo2 **[F]**; its first byte, the area mode, will be read; [section 8.6](#86-focus-point) | focus points, full metadata |
+| 0x0089 | ShootingMode | u16 (u8 on the D1 family and the D100) | bits for the release mode, bracketing and auto ISO; [section 8.10](#810-more-capture-settings) **[F]** | full metadata |
 | 0x0091 | ShotInfo | undef | model-specific; encrypted for versions 02xx and 08xx | full metadata |
 | 0x0093 | NEFCompression | u16 | compression hint; absent on the Z bodies checked but the Z fc and Z 30, which write 0x0051 instead, and on the D1H and E5700; present on the Z fc and Z 30, with the value 3 (lossless), where 0x0051 is absent (files 8559, 5812) **[F]** | full metadata, raw data |
 | 0x0096 | NEFLinearizationTable | undef | curve and predictor seeds; unencrypted | raw data |
@@ -351,7 +363,8 @@ sensor data. [S][1]
 | 0x0097 | ColorBalance | undef | white balance on older bodies; encrypted from version 0200 | full metadata, raw data |
 | 0x0098 | LensData | undef | lens description; encrypted from version 0201 | full metadata |
 | 0x00A7 | ShutterCount | u32 | decryption key input | full metadata, raw data |
-| 0x00B7 | AFInfo2 | undef | where the camera focused: a block that starts with a four-character version, plain on every version; layouts in [section 8.6](#86-focus-point) | focus points |
+| 0x00B7 | AFInfo2 | undef | where the camera focused and the AF-area mode: a block that starts with a four-character version, plain on every version; layouts in [section 8.6](#86-focus-point) | focus points, full metadata |
+| 0x00B9 | AFTune | undef[4] | AF fine-tune: on or off, the saved lens's index, the value and the value at a zoom's long end; [section 8.10](#810-more-capture-settings) **[F]** | full metadata |
 | 0x0E01 | NikonCaptureData | undef | Capture NX edit data (optional) | full metadata |
 | 0x0E22 | NEFBitDepth | u16[4] | secondary bit-depth source | full metadata, raw data |
 
@@ -813,10 +826,11 @@ raw-files reads it or not:
 | 0x00B7 AFInfo2, in-focus byte | whether focus was confirmed: FocusResult on 04xx, ContrastDetectAFInFocus on 0100 and 0101 | Z 9, Z f, Z6III, Z50II, Z5II, D7000, D5600, D5, Coolpix A **[F]** | read; on 0100 the flag is byte 28, where ExifTool also lists a 20-byte AFPointsSelected that cannot fit in the 30-byte value |
 | 0x00B7 AFInfo2, point fields | the primary point's number, a mask of the points used, and the layout of points (FocusPointSchema) | DSLRs through the viewfinder, the Nikon 1 J1, the Z5II in auto-area mode **[F]** | read on `0100` alone, in a record with no position: the number is placed from a table of the body's points, measured by the project on frames shot with that body ([autofocus-points.md](autofocus-points.md), [ADR017](../../architecture-decisions/adr017-per-body-tables-measured-by-the-project.md)), with the points the mask names ([ADR018](../../architecture-decisions/adr018-focus-points-placed-from-a-table-and-the-points-used.md)); the D600's is the only table, and every other body gives none; the other versions' point fields are not read |
 | 0x00B7 AFInfo2, AFPointsInFocus | a mask of the points in focus, version 0101 only (byte 48) [S] | the D850, one point **[F]** | not read: a mask of version 0101, which needs a table of a body that writes that version |
-| 0x0088 AFInfo | 4 bytes: area mode, point number, mask of the points in focus [S] | the bodies without AFInfo2: D1H, D1X, D70, D100, D200, E5700, P7800 **[F]** | not read: a number only |
+| 0x0088 AFInfo | 4 bytes: area mode, point number, mask of the points in focus [S] | the bodies without AFInfo2: D1H, D1X, D70, D100, D200, E5700, P7800 **[F]** | the point not read: a number only; the area mode, its first byte, will be read (below) |
 | 0x0021 FaceDetect | a frame size and up to twelve face rectangles in it [S] | none of the 35 files **[F]** | not read: no sample |
-| 0x0007 FocusMode | an ASCII string [S][1]: `MANUAL`, or an AF mode padded with spaces to six characters (`AF-S  `, `AF-C  `, `AF-A  `) **[F]** | `MANUAL` on the D300 and D850, both viewfinder shots with a zero frame (files 928, 1835), and on the Z fc, which records a position under it (file 8559); an AF mode on every other file with the embedded MakerNote, my Z 9 shots included **[F]** | read: `MANUAL`, after trimming, gives no focus point |
-| 0x0085 ManualFocusDistance, 0x00B9 AFTune, the area modes in the MenuSettings blocks | settings, not a position [S] | not looked for | not read |
+| 0x0007 FocusMode | an ASCII string [S][1]: `MANUAL`, or an AF mode padded with spaces to six characters (`AF-S  `, `AF-C  `, `AF-A  `) **[F]** | `MANUAL` on the D300 and D850, both viewfinder shots with a zero frame (files 928, 1835), and on the Z fc, which records a position under it (file 8559); an AF mode on every other file with the embedded MakerNote, my Z 9 shots included **[F]** | read: `MANUAL`, after trimming, gives no focus point; the focus mode itself will be a camera setting ([section 8.10](#810-more-capture-settings)) |
+| 0x00B9 AFTune | AF fine-tune, a setting, not a position [S] | 225 public files of 49 bodies and 37,339 of mine ([section 8.10](#810-more-capture-settings)) **[F]** | will be read as a camera setting |
+| 0x0085 ManualFocusDistance, the area modes in the MenuSettings blocks | settings, not a position [S] | not looked for | not read |
 
 **AFInfo2 layouts.** The value is UNDEFINED and starts with a version in
 four ASCII digits; it is not encrypted on any version
@@ -830,7 +844,7 @@ offsets from the start of the value:
 |---|---|---|---|---|---|---|---|---|---|---|
 | `0100` | 30 | 4 | 5 | 6 | none | 16, 18 | 20, 22 | 24, 26 | 28 | DSLRs from the D3 and D300 (2007) and the D90 (2008) up to the D4S, D750, D810, D7200, D5500, D5600 and Df, and the Coolpix A [S]; samples: D300, D700, D750, D810, D7000, D5600, Coolpix A **[F]** |
 | `0101` | 84 | 4 | 5 | 6 | none | 70, 72 | 74, 76 | 78, 80 | 82 | D5, D500, D850, D3400, D3500, D7500 [S]; samples: D850, a viewfinder shot, and D5, in live view **[F]** |
-| `0200`, `0201` | 42 [F] | none | 5 | 6 | none | none | none | none | none | Nikon 1 bodies [S]; sample: J1, `0200` **[F]** |
+| `0200`, `0201` | 42 (`0200`), 52 (`0201`) [F] | none | 5 | 6 | none | none | none | none | none | Nikon 1 bodies [S]; samples: `0200` on the J1, J2, J3, S1, V1, V2 and AW1, `0201` on the J4, J5, S2 and V3 **[F]** |
 | `0300`, `0301` | 60 | 4 | 5 | 6 | 7 | 42, 44 | 46, 48 | 50, 52 | none | `0300`: D780, Z 6, Z 7, Z 50; `0301`: D6, Z 5, Z 6II, Z 7II, Z 30, Z fc [S]; samples: D780, Z 6, both `0300`, and Z 30, Z fc, both `0301` **[F]** |
 | `0400`, `0401`, `0402` | 80 | 4 | 5 | none | 7 | 62, 64 | 66, 68 | 70, 72 | 74 | `0400`: Z 8, Z 9; `0401`: Z f, Z6III; `0402`: Z50II, Z5II [S]; samples: Z 9, Z f, Z6III, Z50II, Z5II **[F]** |
 
@@ -842,7 +856,11 @@ and no other; the bodies before the D3 and every Coolpix but the A have
 no AFInfo2 there. [S][22] Those listings decode only the 0100 offsets,
 and in one byte order whatever the file's, so they settle which version a
 body writes and nothing else. raw-files reads the position at the exact
-versions 0100, 0101, 0300, 0301, 0400, 0401 and 0402 (ADR012). The 0101
+versions 0100, 0101, 0300, 0301, 0400, 0401 and 0402 (ADR012). It will
+also read the area mode at 0200 and 0201, the Nikon 1 versions, which
+record no position
+([ADR012](../../architecture-decisions/adr012-focus-points-as-the-camera-records-them.md)).
+The 0101
 offsets are checked on the D5's live-view file, the only one that fills
 them (file 2218), and version 0301, at the 03xx offsets, on the Z 30's
 and the Z fc's (files 5812, 8559).
@@ -976,7 +994,7 @@ What the fields hold:
   under which conditions, its frame on a crop, the crop's window,
   3936x2624 on a D600 DX frame, whose size the table keeps and checks
   against CropHiSpeed's origin, and how the points used are reported
-  with the area mode are decided in
+  are decided in
   [ADR018](../../architecture-decisions/adr018-focus-points-placed-from-a-table-and-the-points-used.md).
   raw-files places the D600's point so, from version `0100`'s layout
   code, primary point and mask: in the 6016x4016 frame, or in that
@@ -1022,8 +1040,7 @@ What the fields hold:
   agree: 0, 5, 8 and 9 came with detection 0 through the viewfinder, and
   the live-view frames wrote 4 with detection 1
   ([autofocus-points.md](autofocus-points.md#22-what-the-body-writes))
-  **[F]**. raw-files names the mode, on every version, only for the
-  codes that frames shot in a known mode confirmed, under the detection
+  **[F]**. raw-files names the mode, on every version, only for the codes that frames shot in a known mode confirmed, under the detection
   method the file records, and gives none for any other code, such as
   196, 199, 1 or 2
   ([ADR018](../../architecture-decisions/adr018-focus-points-placed-from-a-table-and-the-points-used.md)):
@@ -1045,6 +1062,9 @@ What the fields hold:
   as pinpoint in both lists [S][1], and my frames confirm it. The
   Z6III's five files write it under detection 2, in a mode not
   recorded, and take the name as every file that writes the code does.
+  Today the mode is reported with the focus points, so a file that
+  gives no point gives no mode either. Under the revised records it will
+  be a camera setting, named by the table that ends this section.
 - **Every AFInfo2 and CropHiSpeed value lies inside the MakerNote's
   declared length** on every checked file. **[F]**
 - **In a camera JPEG**, the D5300's AFInfo2 is version 0100 with a zero
@@ -1109,7 +1129,7 @@ and what raw-files gives; a row without a file is an open question
 | DSLR in live view on a crop | the cropped frame | none public; one of my D7200 files, in the 1.3x movie crop | the point as recorded, in the cropped frame; unchecked on a body with a CropArea |
 | A `0101` body in live view | a position, at ExifTool's offsets | D5 2218 | the point; checked |
 | A `0301` body | a position, at the 03xx offsets | Z 30 5812, Z fc 8559 | the point, none on 8559, a manual-focus shot; checked |
-| DSLR through the viewfinder, a body with a table | a point number and a mask | none among the public samples; my D600 frames, all committed stripped, and my D600 files ([autofocus-points.md](autofocus-points.md#2-nikon-d600)) | the point placed from the table, with the points the mask names and the area mode, as decided in [ADR018](../../architecture-decisions/adr018-focus-points-placed-from-a-table-and-the-points-used.md), in the crop's window on a DX frame ([ADR018](../../architecture-decisions/adr018-focus-points-placed-from-a-table-and-the-points-used.md)); checked on those frames |
+| DSLR through the viewfinder, a body with a table | a point number and a mask | none among the public samples; my D600 frames, all committed stripped, and my D600 files ([autofocus-points.md](autofocus-points.md#2-nikon-d600)) | the point placed from the table, with the points the mask names, as decided in [ADR018](../../architecture-decisions/adr018-focus-points-placed-from-a-table-and-the-points-used.md), in the crop's window on a DX frame ([ADR018](../../architecture-decisions/adr018-focus-points-placed-from-a-table-and-the-points-used.md)); checked on those frames |
 | DSLR through the viewfinder, any other body | a point number and a mask | D300 928, D700 2255, D750 895, D810 2036, D850 1835, D780 3827 | none: no table for the body; 928 and 1835 are manual-focus shots, which get none in any case |
 | Nikon 1 | a point number and a mask | J1 2956 | none: needs a table of points |
 | Bodies without AFInfo2 | AFInfo: a point number | D1H 5364, D70 2060, D100 2996, D200 8079, E5700 4456, P7800 1425 | none: needs a table of points |
@@ -1124,6 +1144,90 @@ and what raw-files gives; a row without a file is an open question
 | Camera JPEG in a crop mode (DX, 1:1, 16:9), at any image size | a position in the full frame, no CropArea | none public; my Z 9 shots | the point, placed on the JPEG's picture; unchecked on a public file |
 | Exported JPEG that keeps the camera's MakerNote | the camera's frame and position | none public | the point only when the frame has the export's aspect ratio |
 
+**The AF-area mode, a camera setting.** raw-files will give the AF-area
+mode as a camera setting, whether or not the file gives a focus point,
+and under manual focus too
+([ADR011](../../architecture-decisions/adr011-metadata-from-standard-tags.md)).
+It will come from AFInfo2's bytes 4 and 5, at every version of the
+layouts table above. On the bodies without AFInfo2, it will come from
+the first byte of AFInfo (0x0088). The codes were counted on 2026-11-20
+with a counting program over raw-files' own view of the entries. The
+files are the 289 public NEF and NRW files and 48,395 of my own, as
+counts only. Mine are 31,991 NEF files and 16,404 JPEGs with a Nikon
+MakerNote, of seven bodies. **[F]**
+
+Each code carries one of two marks, with its count of files:
+
+- **confirmed**: a frame shot in a known setting shows it;
+- **documented**: ExifTool's published tag documentation names it
+  [S][1], or the maker's manual for a camera's own text, and the
+  measured files agree with it.
+
+The files agree when two things hold:
+
+- the code occurs where the documentation places it, by the record's
+  version, the detection method and the body family;
+- no other value of the same file contradicts it.
+
+A code the documentation does not name stays unnamed. So does a code
+it names two ways the files cannot tell apart, unless both fold into
+one variant, as code 199 does below. So does a documented code no measured
+file holds, such as 194 or 200 to 203. An unnamed code will give `None`
+([ADR011](../../architecture-decisions/adr011-metadata-from-standard-tags.md)).
+
+The documentation gives versions 0100, 0101 and 03xx two lists for
+byte 5. Detection 0, phase detection, takes the first; detection 1,
+contrast detection, the second. It does not say which list detection 2,
+hybrid, takes. My Z 9's frames confirm hybrid's codes 204 to 208,
+which only the second list holds. Versions 02xx and 04xx have one list
+each. [S][1]
+
+Each variant folds in Nikon's finer kinds: the dynamic-area sizes are
+`Dynamic`, and the wide-area and group-area modes are the new `Zone`.
+The detection column gives the methods the files record the code
+under; "none" means the version records no method:
+
+| Versions | Detection | Code | The documentation's name [S][1] | `FocusAreaMode` | Mark | Files, public / mine |
+|---|---|---|---|---|---|---|
+| `0100`, `0101`, `0301` | 0 | 0 | Single Area | `Single` | confirmed: my D600's frames 1 to 41 and 47 to 50 | 90 / 13,980 |
+| `0100`, `0101` | 0 | 1 | Dynamic Area | `Dynamic` | documented | 2 / 62 |
+| `0100`, `0101` | 0 | 4 | Dynamic Area (9 points) | `Dynamic` | documented | 6 / 413 |
+| `0100` | 0 | 5 | Dynamic Area (21 points) | `Dynamic` | confirmed: my D600's frames 51 and 52 | 4 / 3,999 |
+| `0100` | 0 | 6 | Dynamic Area (51 points) | `Dynamic` | documented | 5 / 0 |
+| `0100` | 0 | 7 | Dynamic Area (51 points, 3D-tracking) | `Tracking` | documented | 6 / 0 |
+| `0100`, `0101`, `0300` | 0 | 8 | Auto-area | `Auto` | confirmed: my D600's frames 42 to 44 | 24 / 11,579 |
+| `0100` | 0 | 9 | Dynamic Area (3D-tracking) | `Tracking` | confirmed: my D600's frames 7852 to 7859 | 4 / 720 |
+| `0100` | 1 | 0 | Contrast-detect | none: it names no area | none | 1 / 1 |
+| `0100` | 1 | 1 | Contrast-detect (normal area) | `Single` | documented | 5 / 11 |
+| `0100`, `0101` | 1 | 2 | Contrast-detect (wide area) | `Zone` | documented | 3 / 402 |
+| `0100` | 1 | 3 | Contrast-detect (face priority) | none: no neutral word fits | none | 0 / 19 |
+| `0100` | 1 | 4 | Contrast-detect (subject tracking) | `Tracking` | documented; my D600's live-view frames 53 to 56 hold it, their mode not recorded | 0 / 12 |
+| `0200`, `0201` | none | 128 | Single | `Single` | documented | 7 / 0 |
+| `0200` | none | 129 | Auto (41 points) | `Auto` | documented | 5 / 0 |
+| `0201` | none | 130 | Subject Tracking (41 points) | `Tracking` | documented | 1 / 0 |
+| `0201` | none | 0 | none: not in the 02xx list | none | none | 2 / 0 |
+| `0400`, `0401` | 1, 2 | 192 | Pinpoint | `Pinpoint` | confirmed: my Z 9's frames 2484, 2485, 2509 and 2510 | 12 / 103 |
+| `0300`, `0301`, `0400` | 2 | 193 | Single | `Single` | confirmed: my Z 9's frame 2486 | 37 / 34 |
+| `0301`, `0400` | 1, 2 | 195 | Wide (S) | `Zone` | confirmed: my Z 9's frames 2493, 2494, 2497 and 2498 | 4 / 14 |
+| `0400`, `0401` | 2 | 196 | Wide (L) | `Zone` | confirmed: my Z 9's frames 2495, 2496, 2499, 2500 and 2507 | 3 / 12 |
+| `0301`, `0400`, `0402` | 1, 2 | 197 | Auto | `Auto` | confirmed: my Z 9's frame 2506 | 18 / 605 |
+| `0301` | 2 | 199 | Auto in the first list, Auto (Animal) in the second | `Auto` | documented: both meanings fold into `Auto` | 2 / 0 |
+| `0400` | 2 | 204, 205, 206 | Dynamic Area (S), (M), (L) | `Dynamic` | confirmed: my Z 9's frames 2487 to 2492 | 0 / 15 |
+| `0400`, `0402` | 1, 2 | 207 | 3D-tracking | `Tracking` | confirmed: my Z 9's frame 2505 | 9 / 16,328 |
+| `0400` | 1, 2 | 208 | Wide (C1/C2) | `Zone` | confirmed: my Z 9's frames 2501 to 2504 and 2508 | 0 / 86 |
+| AFInfo | none | 0 | Single Area | `Single` | documented | 22 / 0 |
+| AFInfo | none | 1 | Dynamic Area | `Dynamic` | documented | 15 / 0 |
+
+**[F]** The frames are listed in
+[test-data.md](test-data.md#24-files-checked-for-the-camera-settings).
+Every frame agrees with the documentation's name for its code. Under
+manual focus the mode is still recorded: 0 on my D600's frames 45 and
+46, and 193 on the Z fc (file 8559). Four Coolpix files write AFInfo's
+1, and no measured value of theirs contradicts it. **[F]** The codes
+mapped to `Single`, `Dynamic` and `Tracking` follow ADR011's neutral
+words. Face priority picks faces for the photographer, a mode none of
+them fits [I].
+
 ### 8.7 Camera settings
 
 How the photographer set the camera for the shot, which a viewer shows
@@ -1133,7 +1237,9 @@ area, the raw image size and the color space, and with them the focal
 length in 35 mm terms and the software that wrote the file. The Exif
 tags record some of these on almost every body. Nikon records the rest
 only in its MakerNote, a few of them only in blocks that are encrypted
-or that have a record format of their own.
+or that have a record format of their own. The further settings that
+raw-files will read, from the focus mode to the JPEG quality, are in
+[section 8.10](#810-more-capture-settings).
 
 Every value below was read on the 35 NEF and NRW files of
 [test-data.md](test-data.md#21-the-ci-set) and on the D70 and D5300
@@ -1595,6 +1701,308 @@ give one with an altitude and a time, and no other sample gives one.
 Every text and GPS value counted lies inside the blocks raw-files'
 `open` already reads. **[F]**
 
+### 8.10 More capture settings
+
+More of how the camera was set, which raw-files will read as camera
+settings
+([ADR011](../../architecture-decisions/adr011-metadata-from-standard-tags.md)):
+
+- the focus mode, AF fine-tune, stabilization and auto ISO;
+- the exposure fine-tuning, the release mode and bracketing, and
+  daylight saving time;
+- the flash's source, control, sync and compensation;
+- the raw compression and bit depth, and the JPEG quality;
+- the white balance's preset slot and fluorescent lamp.
+
+The AF-area mode is in [section 8.6](#86-focus-point).
+
+The values were counted on the files and on the day of section 8.6's
+AF-area table, by the same program **[F]**. Counts read "public / mine":
+the 289 public NEF and NRW files, then my 48,395. The marks
+**confirmed** and **documented** are those of [section
+8.6](#86-focus-point). The meaning of each MakerNote code comes from
+ExifTool's published tag documentation [S][1], read as documentation,
+and no reader's source was read. ExifTool and exiv2 were not run for
+this section. Where a camera writes its own text, its meaning is the
+maker's. The D600's manual [25] and the Z 9's Reference Guide [26] name
+the settings [P]. Every value read lies inside what `open` already
+reads. **[F]**
+
+**Focus mode.** 0x0007 FocusMode is ASCII, seven bytes with the NUL,
+padded with spaces. raw-files will trim it and read it as a camera
+setting:
+
+| Text | Setting [P][25][26] | `FocusMode` | Mark | Files, public / mine |
+|---|---|---|---|---|
+| `AF-S` | single-servo AF | `Single` | confirmed: my Z 9's frames 2484 to 2486, 2497 to 2504 and 2506 to 2510 | 104 / 4,554 |
+| `AF-C` | continuous-servo AF | `Continuous` | confirmed: my Z 9's frames 2487 to 2496 and 2505, my D600's frames 7856 and 7858 | 65 / 27,526 |
+| `AF-A` | auto-servo AF, the camera choosing between the two | `Automatic` | documented | 54 / 15,228 |
+| `AF-F` | full-time AF, which the D600 offers in live view | `FullTime` | documented: 3 Coolpix files | 3 / 0 |
+| `MANUAL` | manual focus | `Manual` | confirmed: my D600's frames 45 and 46 | 61 / 1,087 |
+
+**[F]** ExifTool documents the tag as a string and lists no values
+[S][1]. Nikon writes no direct manual focus mode, so `DirectManual` will
+serve other makers.
+
+**AF fine-tune.** 0x00B9 AFTune is four UNDEFINED bytes [S][1]:
+
+- whether fine-tuning is on;
+- the index of the saved lens, 255 for none;
+- the value, signed;
+- the value at a zoom's long end, signed.
+
+The D600's menu tunes up to 12 lenses, from -20 to +20 [P][25] (p. 259).
+raw-files will read whether it is on, with its value:
+
+| Byte 0 | The documentation's name [S][1] | Read as | Mark | Files, public / mine |
+|---|---|---|---|---|
+| 0 | Off | off | documented | 189 / 37,260 |
+| 1 | On (1) | on | documented | 15 / 3 |
+| 2 | On (2) | on | documented | 21 / 76 |
+
+**[F]** The values seen run from -20 to +20 on my D600, and -20 and
+-2 on public D7000 and D300 files. Byte 3 is 0 on every file. The
+documentation calls it valid only under code 3, "On (Zoom)", which no
+file holds, so the value at the long end will stay `None`. What tells 1
+from 2 is not documented: both read as on, and the difference stays
+open. **[F]**
+
+**Stabilization.** 0x001F VRInfo starts with a four-digit version. Byte
+4 says whether vibration reduction was on, and byte 6 its mode [S][1].
+The versions agree with the bodies the documentation places them on:
+
+| Version | Length | Bodies | Files, public / mine |
+|---|---|---|---|
+| `0100` | 8 | the DSLRs from the D2Hs and D2X on, but the D6 and D780; the Coolpix A | 147 / 31,198 |
+| `0101` | 8 | the Nikon 1 bodies | 15 / 0 |
+| `0200` | 9 | the Z bodies, the D6 and the D780 | 97 / 17,197 |
+
+**[F]** Mine are my six DSLRs' files at 0100 and my Z 9's at 0200. No
+frame was shot in a known stabilization setting, so every code here is
+documented, none confirmed.
+
+| Byte | Code | The documentation's name [S][1] | Read as | Files, public / mine |
+|---|---|---|---|---|
+| 4 | 0 | n/a | `None` | 4 / 0 |
+| 4 | 1 | On | on | 113 / 41,910 |
+| 4 | 2 | Off | off | 142 / 6,485 |
+| 6, `0100` | 0 | Normal | `Normal` | 36 / 24,899 |
+| 6, `0101` | 2 | Active | `Active` | 6 / 0 |
+| 6, `0200` | 1 | Normal (Z bodies) | `Normal` | 71 / 2,345 |
+| 6, `0200` | 3 | Sport (Z bodies) | `Sport` | 0 / 14,666 |
+
+**[F]** The counts of byte 6 count the files where byte 4 says on. Byte
+6 has two lists in the documentation. In the Z bodies' list 0 is off,
+and in the others' list 0 is normal. raw-files will read the mode only
+where byte 4 says on, so the two lists never meet on a file. On version
+0100 byte 6 is 0 on every file, on and off alike. Byte 5, which the
+documentation does not name, repeats byte 4 on 139 public 0100 files and
+on all of mine. Whether 0100's byte 6 ever holds another mode is open:
+the files cannot show it. Byte 8 of 0200, the kind of stabilization,
+will not be read ([section 12.5](#125-what-the-view-leaves-out)).
+
+**Auto ISO.** Bit 5 of 0x0089 ShootingMode is auto ISO [S][1]. It is set
+on 71 of the 271 public files that have the tag and on 30,403 of my
+48,395. **[F]** The documentation gives the D70's bit 5 another meaning,
+and the one public D70 file sets it (value 33). So the D70 will give no
+auto ISO. The Coolpix bodies but the Coolpix A write no ShootingMode.
+Their 0x000F ISOSelection says `AUTO` or `MANUAL` instead, on 16 public
+files (9 and 7). **[F]** raw-files will read the bit, else that text.
+Both are documented; no frame was shot with auto ISO set either way.
+
+**Exposure fine-tuning.** The photographer's fine-tuning of the camera's
+metering, from -1 to +1 EV in sixths on the D600 [P][25] (p. 226).
+0x001C ExposureTuning is three UNDEFINED bytes: a signed count, then 1
+and 6. raw-files will read the count over six, in EV. Of 242 public
+files, 238 hold `00 01 06` and four D750 files `fd 01 06`, -3/6 EV. All
+of mine hold `00 01 06`. **[F]** That the count is in sixths of a stop
+agrees with the menu, but no frame shows it, and the meaning stays open.
+36 of my JPEGs store the tag with four bytes, 35 of them made by a
+program from a raw file. They will give none, by the rule on a value's
+count. **[F]**
+
+**Release mode and bracketing.** The bits of 0x0089 ShootingMode [S][1],
+with the files that set each:
+
+| Bit | The documentation's name [S][1] | Read as | Files, public / mine |
+|---|---|---|---|
+| 0 | Continuous | `ReleaseMode::Continuous` | 71 / 29,902 |
+| 1 | Delay | not read: the exposure delay mode [P][25] (p. 231) | 30 / 8 |
+| 2 | PC Control | not read: no neutral word fits | 12 / 0 |
+| 3 | Self-timer | `ReleaseMode::SelfTimer` | 10 / 0 |
+| 4 | Exposure Bracketing | `Bracketing::Exposure` | 3 / 18 |
+| 6 | White-Balance Bracketing | not read: on no file | 0 / 0 |
+| 7 | IR Control | `ReleaseMode::Remote` | 2 / 1,109 |
+| 8 | D-Lighting Bracketing | not read: on no file | 0 / 0 |
+| 9 | none | not read | 2 / 277 |
+
+**[F]** Each read bit is documented, none confirmed. Bits 6 and 8 are on
+no file, so they will stay unnamed until a file holds them. With none of
+bits 4, 6 and 8 set, bracketing is `Off`. No bit names a single frame,
+which the quiet release and mirror up share. So a release mode with none
+of bits 0, 3 and 7 set will stay `None`. Bit 9 is undocumented. One D600
+frame of mine, outside the counted sets, sets it too, its setting not
+recorded. Exif's ExposureMode 2, auto bracket [P][23] (4.6.6.7.36,
+p. 69), will give `Bracketing::Exposure` where no MakerNote says. No Nikon
+file holds 2: 177 and 102 public files hold 0 and 1, and mine 0 and 1
+too. **[F]**
+
+**Daylight saving time.** WorldTime's third byte
+([section 8.2](#82-capture-date-and-time-zone)): 0 no, 1 yes [S][1]. It is 1 on
+142 of the 251 public files with WorldTime, and on 8,913 of my 48,395,
+all D3200 and Z 9 files. **[F]** Section 8.2 found the offset equal to
+the zone plus 60 minutes where it is 1, so the files agree. raw-files
+will read it as a camera setting, documented.
+
+**The flash's new parts.** Exif's Flash bits stay the flash's first
+source ([section 8.7](#87-camera-settings)). Plain MakerNote texts and
+counts add the rest; FlashInfo (0x00A8) will not be read
+([section 12.5](#125-what-the-view-leaves-out)). No frame was shot with a known
+flash setting, so each text is documented by the maker's manual, none
+confirmed.
+
+0x0009 FlashType gives the source before the comma and the control after
+it. raw-files will read both:
+
+| Text | Setting [P][25] (pp. 143 to 146) | Source, control | Files, public / mine |
+|---|---|---|---|
+| blank | no flash | none | 254 / 44,426 |
+| `Built-in,TTL` | built-in flash, i-TTL | `BuiltIn`, `Ttl` | 0 / 621 |
+| `Built-in,TTL-BL` | built-in flash, i-TTL balanced fill-flash | `BuiltIn`, `Ttl` | 0 / 1,770 |
+| `Optional,TTL` | a flash unit, i-TTL | `External`, `Ttl` | 4 / 1,249 |
+| `Optional,TTL-BL` | a flash unit, balanced fill-flash | `External`, `Ttl` | 5 / 0 |
+| `Optional,AA` | a flash unit, auto aperture | `External`, `AutoAperture` | 7 / 0 |
+| `Optional,M` | a flash unit, manual | `External`, `Manual` | 0 / 211 |
+| `Optional,RPT&Comdr.` | a flash unit, repeating flash, commander mode | `External`, `Repeating` | 0 / 80 |
+| `Optional,TTL&Comdr.` | a flash unit, i-TTL, commander mode | `External`, `Ttl` | 0 / 2 |
+| `NEW_TTL` | none known | none | 1 / 0 |
+
+**[F]** The D100's `NEW_TTL` names neither a source nor a control, so it
+will stay unnamed. The commander part will not be read
+([section 12.5](#125-what-the-view-leaves-out)).
+
+0x0008 FlashSetting gives the sync:
+
+| Text | Setting [P][25] (p. 144) | `FlashSync` | Files, public / mine |
+|---|---|---|---|
+| blank | none recorded | none | 96 / 27,120 |
+| `NORMAL` | front-curtain sync | `FrontCurtain` | 166 / 21,171 |
+| `SLOW` | slow sync | `Slow` | 2 / 57 |
+| `REAR` | rear-curtain sync | `RearCurtain` | 7 / 1 |
+| `REAR SLOW` | rear curtain with slow sync | `SlowRearCurtain` | 15 / 10 |
+| `RED-EYE` | red-eye reduction | none | 1 / 0 |
+
+**[F]** My Z 9 writes `NORMAL` on every NEF file, though it has no
+built-in flash. The one `RED-EYE` file, a Nikon 1 AW1, has an Exif Flash
+of 0. Red-eye reduction will come from Exif's bit 6, which no Nikon file
+sets. **[F]**
+
+0x0012 FlashExposureComp (the built-in flash) and 0x0017
+ExternalFlashExposureComp (a flash unit) are four UNDEFINED bytes: a
+signed count, then 1, 6 and 0. raw-files will read the count over six,
+in EV:
+
+| Tag | Files, public / mine | Not zero, public / mine | Counts seen |
+|---|---|---|---|
+| 0x0012 | 125 / 31,179 | 13 / 3,036 | -18 to +6 |
+| 0x0017 | 266 / 48,359 | 5 / 8 | -4 to +18 |
+
+**[F]** Every count of 0x0012 is a multiple of two, so a third of a
+stop, from -3 EV to +1 EV. That is the range and step the D600's manual
+gives [P][25] (p. 148). Whether the unit is a sixth of a stop is open,
+as for the exposure fine-tuning. The Z 50 and Z50II write 0x0012 as
+`00 01 00 00` (11 public files), with 0 for the 6. raw-files will read the
+count only where bytes 1 and 2 are 1 and 6 [I]. 0x0012 is absent on my
+Z 9, which has no built-in flash. Whether a unit's compensation on it lies
+in 0x0017 or only in FlashInfo is open. **[F]**
+
+**Raw compression and bit depth.** The raw IFD's Compression says
+whether the data is compressed: 1 uncompressed [P], 34713 Nikon's
+compressed form ([raw-data.md](raw-data.md)). On 34713, Nikon's
+NEFCompression refines it
+([section 3](#3-nefcompression-and-bit-depth)): 0x0093, or byte 10 of 0x0051 on
+the Z bodies that write no 0x0093. raw-files will read them so:
+
+| Source | Code | The documentation's name [S][1] | `RawCompression` | Mark | Files, public / mine |
+|---|---|---|---|---|---|
+| Compression | 1 | uncompressed [P] | `Uncompressed` | documented | 43 / 0 |
+| 0x0093 | 1 | Lossy (type 1) | `Lossy` | documented | 13 / 0 |
+| 0x0093 | 2 | Uncompressed | `Uncompressed` | documented | 1 / 0 |
+| 0x0093 | 3 | Lossless | `Lossless` | documented | 65 / 11,544 |
+| 0x0093 | 4 | Lossy (type 2) | `Lossy` | documented | 87 / 3,568 |
+| 0x0093 | 6 | Uncompressed (reduced to 12 bit) | `Uncompressed` | documented | 8 / 0 |
+| 0x0093 | 7 | Unpacked 12 bits | `Uncompressed` | documented | 3 / 0 |
+| 0x0093 | 8 | Small | none: a size, not a compression | none | 2 / 0 |
+| 0x0093 | 9 | Packed 12 bits | `Uncompressed` | documented | 1 / 0 |
+| 0x0093 | 10 | Packed 14 bits | `Uncompressed` | documented | 4 / 0 |
+| 0x0051 | 3 | Lossless | `Lossless` | documented | 23 / 1,080 |
+| 0x0051 | 4 | Lossy (type 2) | `Lossy` | documented | 4 / 0 |
+| 0x0051 | 6 | Uncompressed (reduced to 12 bit) | `Uncompressed` | documented | 2 / 0 |
+| 0x0051 | 10 | Packed 14 bits | `Uncompressed` | documented | 2 / 0 |
+| 0x0051 | 13 | High Efficiency | `HighEfficiency` | documented | 14 / 27 |
+| 0x0051 | 14 | High Efficiency\* | `HighEfficiencyStar` | documented | 14 / 15,772 |
+
+**[F]** The Z 9 samples 5146 to 5148, which the
+[test data](test-data.md) lists as lossless, HE\* and HE, hold codes 3,
+14 and 13. Their catalog entries state no compression, so they confirm
+no code. Codes 7, 9 and 10 are packings of uncompressed data
+([raw-data.md](raw-data.md)), so they will fold into `Uncompressed`. The
+one public file whose Compression is a LONG, a Coolpix A1000's, will
+give none, by the rule on a value's type. **[F]** The raw bit depth will
+be the raw IFD's BitsPerSample where it holds one value. It is 12 on 153
+public files and 3,568 of mine, and 14 on 134 and 28,423. **[F]** It is
+the depth as recorded, which section 3 says a lossy curve can exceed by
+two bits.
+
+**JPEG quality.** 0x0004 Quality in a camera JPEG names the JPEG's
+quality step. raw-files will read it in a JPEG only:
+
+| Text | Setting [P][25] (p. 93) [26] (p. 103) | `JpegQuality` | Files, mine |
+|---|---|---|---|
+| `FINE` | JPEG fine | `Fine` | 14,894 |
+| `NORMAL` | JPEG normal | `Normal` | 764 |
+| `BASIC` | JPEG basic | `Basic` | 41 |
+| `RAW` | a JPEG a program made from a raw file | none | 705 |
+
+**[F]** No public Nikon JPEG is in the set. No frame was shot in a known
+quality, so each text is documented by the manual. The 705 JPEGs that
+say `RAW` came from a program, not the camera: 670 of them carry the raw
+file's NEFCompression too. A raw file's Quality, `RAW`, `NRW` or
+`RAW2.7M`, will give no JPEG quality. **[F]**
+
+0x0044 JPGCompression is one SHORT: 1 size priority, 3 optimal quality
+[S][1]. The D600's menu names the two [P][25] (p. 94), and the Z 9 marks
+optimal quality with a star [P][26] (p. 103). raw-files will read 1 and
+3 as `JpegCompression::SizePriority` and `OptimalQuality`, documented:
+
+| Code | Files, public / mine |
+|---|---|
+| 0, in every NEF that has the tag and in 17 Z 9 JPEGs a program made | 122 / 16,896 |
+| 1, on my Z 9's JPEGs with `BASIC` | 0 / 27 |
+| 3, on my Z 9's JPEGs with `FINE` | 0 / 274 |
+
+**[F]** 0 is undocumented and will give none. Whether the Z 9's 3 and 1
+mark the star or follow the step is open: no frame set both apart.
+
+**The white balance preset slot and fluorescent lamp.** Two parts of the
+white balance ([section 8.7](#87-camera-settings)). The preset slot will
+be the number after 0x0005's `PRESET`:
+
+| Text | Slot | Mark | Files, public / mine |
+|---|---|---|---|
+| `PRESET1` to `PRESET4` | 1 to 4 | confirmed: my D600's frames of 2026-10-25, each slot; my Z 9's frames 9967 to 9978, `PRESET1` and `PRESET2` | 0 / 4 |
+| `PRESET0` | 0 | the D3X's text, its number read by its form, as a chosen color temperature's is; no frame | 1 / 0 |
+| `PRESET` | none: no number | none | 2 / 32 |
+
+**[F]** The count of mine is the Z 9's two frames, each counted twice;
+the D600's frames lie outside the counted sets. The fluorescent lamp
+will come from Exif's LightSource 12 to 16, as the standard names them
+[P][23] (4.6.6.7.20, pp. 60 to 61): daylight, day white, cool white,
+white and warm white. Only 14, cool white, is on Nikon files. It comes
+with `COOL WHT FL` on 15 of my D300S JPEGs and on my Z 9's frame of that
+setting in the series above. **[F]** Nikon's text agrees with the
+standard's code wherever both exist.
+
 ## 9. Robustness pitfalls
 
 The raw-files rule is that a malformed file returns an error and never panics.
@@ -1686,18 +2094,27 @@ the MakerNote's AFInfo2 gives it where it records a position, at the
 versions of [section 8.6](#86-focus-point), scaled onto CropArea on a
 DX crop and moved into the window on an aspect crop; a FocusMode of
 `MANUAL` gives none, and a point number gives none until raw-files has
-a table of the body's points.
+a table of the body's points. The AF-area mode will be a camera
+setting, given with or without a point. It will come from AFInfo2 at
+every version of section 8.6 and from AFInfo's first byte, by the
+table that ends that section.
 
 For the camera settings of [section 8.7](#87-camera-settings),
 [ADR011](../../architecture-decisions/adr011-metadata-from-standard-tags.md)
 decides what this list recommends: read the Exif tags first and the
 plain MakerNote tags where Exif has no value, and decrypt nothing [I]:
 
-- the exposure program, the metering mode, the flash and the focal
-  length in 35 mm terms from Exif alone. Every body that lacks them in
-  Exif lacks them in plain MakerNote tags too, except the D1 family's
-  flash, whose 0x0087 says "did not fire" even on a shot whose white
-  balance is set to flash;
+- the exposure program, the metering mode and the focal length in
+  35 mm terms from Exif alone. Every body that lacks them in Exif lacks
+  them in plain MakerNote tags too;
+- the flash from Exif's Flash bits, with red-eye reduction and the
+  return light. Three plain MakerNote tags add the rest: the source and
+  control from 0x0009's text, the sync from 0x0008's, the compensation
+  from 0x0012 and 0x0017. A file without Exif's Flash gives no flash.
+  So the D1 family gives none, whose 0x0087 says "did not fire" even on
+  a shot whose white balance is set to flash. Neither 0x0087 nor
+  FlashInfo is read
+  ([section 8.10](#810-more-capture-settings));
 - the white balance from 0x0005, which every body writes and which is
   finer than Exif's auto or manual, by a table of the texts files are
   known to hold, since a text like `COOL WHT FL` cannot be guessed,
@@ -1709,16 +2126,34 @@ plain MakerNote tags where Exif has no value, and decrypt nothing [I]:
   text;
 - the fine-tuning from 0x003F, else from 0x000B;
 - the shutter from 0x0034;
-- the image area from CropHiSpeed's first value, with 0 giving none,
-  since it does not say which sensor the body has, and 4 (3:2) and the
-  movie codes too, except 9 and 10, which DX bodies write on stills: 9
-  for the APS-C 16:9 crop, 10 for the 1.3x crop;
-- the raw image size from 0x003E;
+- the image area from CropHiSpeed's first value. 0 does not say which
+  sensor the body has. Where the code is 0 or missing, the body's
+  sensor format will come from raw-files' table of bodies
+  ([camera-names.md](../camera-names.md)). A body the table lacks will give none. 4 (3:2) and the movie codes give none, but 9 and 10, which DX
+  bodies write on stills. 9 is the APS-C 16:9 crop, and 10 the 1.3x
+  crop;
+- the raw image size from 0x003E, else large where the table says the
+  body offers no raw sizes;
 - the color space from Exif whenever it records ColorSpace, 65535
   without `R03` included, and from 0x001E only when it records none,
   since a program that rewrites a JPEG can leave the camera's 0x001E
   behind;
-- the software from IFD0.
+- the software from IFD0;
+- the further settings of [section 8.10](#810-more-capture-settings):
+  - the focus mode from 0x0007, and AF fine-tune from 0x00B9;
+  - stabilization from 0x001F, at its three versions;
+  - auto ISO from 0x0089, else from 0x000F;
+  - the exposure fine-tuning from 0x001C;
+  - the release mode and bracketing from 0x0089, and Exif's
+    ExposureMode;
+  - daylight saving time from WorldTime;
+- the raw compression from the raw IFD's Compression, refined by
+  0x0093 or byte 10 of 0x0051, and the raw bit depth from its
+  BitsPerSample;
+- the JPEG quality from 0x0004 in a JPEG, a `RAW` there giving none,
+  and the size priority or optimal quality from 0x0044;
+- the white balance's preset slot from the number after `PRESET`, and
+  its fluorescent lamp from Exif's LightSource 12 to 16.
 
 ShotInfo's firmware version and image area, NikonSettings, and the
 digits that 0x0051 and 0x0056 start with stay unread: the first two are
@@ -2060,6 +2495,25 @@ By the rule of section 4, on these files: **[F]**
 - **Scanner NEFs** of the COOLSCAN, which open as NEF; their directories
   are walked as any NEF's, and their entry and preview IFD past the
   MakerNote's end are left out as above.
+- **Capture settings the typed values will not read.** Their entries
+  stay in the view with their bytes. Each is a named gap
+  ([ADR011](../../architecture-decisions/adr011-metadata-from-standard-tags.md)),
+  counted on the files of [section 8.10](#810-more-capture-settings),
+  public / mine **[F]**:
+
+| Value | Where | Files, public / mine | Why it waits |
+|---|---|---|---|
+| The flash record's fields, the unit's model among them | 0x00A8 FlashInfo, in 12 versions: 0100 to 0108, 0200, 0300, 0301 | 278 / 48,359 | its layout changes with each version, each needing frames of its own; the model is named only by another reader's table of firmware numbers |
+| Commander mode | `&Comdr.` in 0x0009's text; 0x0087's code 8 | 0 / 82; 0 / 538 | the commander settings lie in FlashInfo, and 0x0087 is not read |
+| Which saved lens AF fine-tune belongs to | byte 1 of 0x00B9, when not 255 | 8 / 56 | an index into the camera's list of saved lenses, which no file records [I] |
+| The kind of stabilization, in the body or the lens too | byte 8 of 0x001F at 0200 | 97 / 2,571, my Z 9 card folders, the only files of mine on which byte 8 was counted | 0 and 1, on 33 public files, are undocumented; 1 is on the D780 and the Z bodies without in-body stabilization |
+| Program shift | 0x000D | 271 / 48,395, not zero on 0 / 2 | reading every plain setting found would double the work |
+| Exposure difference | 0x000E | 271 / 48,395, not zero on 81 / 5,435 | the same |
+| ISO expansion | in 0x0025 ISOInfo | 260 / 48,395 | the same |
+| ShootingMode's other bits | 0x0089 bits 1 (delay), 2 (PC control), 9 and 11 (pre-capture) | bit 1 on 30 / 8, bit 2 on 12 / 0, bit 9 on 2 / 277, bit 11 on none | bit 9 is undocumented, seen also on one D600 frame of mine; the others are no release mode or bracketing |
+| Gain control | Exif 0xA407 GainControl | 279 / 48,514, every Nikon file of mine, with a MakerNote or not | the same as program shift |
+| Sensitivity type | Exif 0x8830 SensitivityType | 218 / 46,808 | the same |
+| Custom rendering | Exif 0xA401 CustomRendered | 279 / 48,514, as GainControl | the same |
 
 ## Sources
 
@@ -2111,3 +2565,8 @@ Retrieved October 2026.
   https://www.cipa.jp/std/documents/download_e.html?CIPA_DC-008-2026-E
 - [24] exiv2, Nikon MakerNote tag reference, read November 2026 —
   https://exiv2.org/tags-nikon.html
+- [25] Nikon, *D600 User's Manual*, 6MB15211-06, the edition Nikon's
+  download center gives, read as documentation November 2026; pages
+  as printed
+- [26] Nikon, *Z 9 Reference Guide*, for firmware 5.20, read as
+  documentation November 2026 — https://onlinemanual.nikonimglib.com/z9/en/
