@@ -458,22 +458,21 @@ Inputs, all from the same file's MakerNote:
 - the shutter count (tag 0x00A7) as four bytes;
 - two fixed 256-byte substitution tables, T0 and T1, listed below.
 
-Procedure:
+The keystream:
 
-1. Reduce the serial number to a single byte, `s` (the low eight bits of
-   the integer). Handling of non-numeric serials is in
+1. The serial number gives one byte, s: the low eight bits of the
+   integer. Non-numeric serials are in
    [section 5.1](#51-non-numeric-serial-numbers).
-2. Reduce the shutter count to a byte, `k`, by XOR-ing its four bytes
-   together.
-3. Initial state: `ci = T0[s]`, `cj = T1[k]`, `ck = 0x60`. `ci` stays
-   constant; `cj` and `ck` evolve.
-4. For every byte from the decryption start offset: `cj = (cj + ci * ck)
-   mod 256`, then `ck = (ck + 1) mod 256`, then the output byte is the input
-   byte XOR `cj`. [S][3][10]
-5. To start `n` bytes into the stream without replaying the first `n`, set
-   `cj = (cj0 + ci * (n * ck0 + n * (n - 1) / 2)) mod 256` and `ck = (ck0 +
-   n) mod 256`, where `cj0` and `ck0` are the initial values from step 3.
-   This is useful for blocks where only a later range is needed. [S][3]
+2. The shutter count gives one byte, k: its four bytes XOR-ed together.
+3. Three bytes make the state: a = T0[s], which stays constant; x,
+   starting at T1[k]; and a counter c, starting at 0x60.
+4. For the i-th byte from the start of the encrypted range (i = 1, 2, …),
+   x_i = (x_(i−1) + a · c_(i−1)) mod 256 and c_i = (c_(i−1) + 1) mod 256.
+   The plain byte is the encrypted byte XOR x_i. [S][3][10]
+5. After n bytes, the state is x_n = (x_0 + a · (n · c_0 + n · (n − 1) / 2))
+   mod 256 and c_n = (c_0 + n) mod 256, with x_0 = T1[k] and c_0 = 0x60.
+   The byte at offset n of the range is then decrypted with x_(n+1), so a
+   block of which only a later part is needed can start there. [S][3]
 
 Where the tables live (cite only; do not copy them): ExifTool's
 `Nikon.pm` (the array named `@xlat`) [3], exiv2's `nikonmn_int.cpp` and
@@ -484,20 +483,18 @@ ambiguous in dcraw's case; see [Open questions](#11-open-questions).
 Consequences for the parser:
 
 - The shutter count (0x00A7) sits after the encrypted blocks in IFD order.
-  Parse the whole MakerNote IFD first, then decrypt. LibRaw works around
-  this by deferring decryption until it reaches 0x00A7. [S][7]
+  Parse the whole MakerNote IFD first, then decrypt. [S][7]
 - A wrong key produces garbage silently, never an error. Check decrypted
   values for plausibility (for example white balance multipliers in a sane
   range) and treat failure as "value absent". [I]
 - If the serial or shutter count is missing, skip decryption and carry on.
   [I]
-- Minimum lengths used by rawspeed as bounds checks for 0x0097 white balance
-  reads: version 0100 needs 80 bytes, 0103 needs 26, 0204 needs 564, 0205
-  needs 284. [S][8]
-- dcraw decrypts only a 324-byte ColorBalance buffer for versions 0200 to
-  0216 (it checks the version number against that range); LibRaw applies the
-  same keystream to ColorBalance, LensData (versions above 0200) and ShotInfo
-  (from byte 4, version 0208 and later). [S][10][7]
+- rawspeed requires a 0x0097 block of at least 80 bytes for version 0100,
+  26 for 0103, 564 for 0204 and 284 for 0205 before it reads the white
+  balance. [S][8]
+- dcraw decrypts a 324-byte part of ColorBalance, for versions 0200 to
+  0216 only; LibRaw also decrypts LensData (versions above 0200) and
+  ShotInfo (from byte 4, version 0208 and later). [S][10][7]
 
 ### 5.1 Non-numeric serial numbers
 
@@ -509,7 +506,7 @@ disagree on what to do. [S]
 |---|---|
 | ExifTool and exiv2 | key byte 0x22 (34) if the model is a D50-family body, otherwise 0x60 (96) [3][6] |
 | LibRaw | stops at the first non-digit; uses 34 if the model is "D50" (or ends in D50 after a non-alphanumeric character), otherwise 96; this value replaces the low byte of the serial number as the index into T0 [7] |
-| dcraw | never stops: each non-digit contributes `c mod 10` to the decimal value, so the key is the low byte of that folded number [10] |
+| dcraw | never stops: each non-digit counts as the digit its character code gives modulo 10, so the key is the low byte of that number [10] |
 
 ExifTool and exiv2 use the same constants as LibRaw, but dcraw can derive a
 different key for a serial that contains letters. All four agree for

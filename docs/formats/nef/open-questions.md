@@ -192,7 +192,8 @@ checked.
 - **Lossless debut.** Whether lossless compression first appeared on the
   D3/D300.
 - **Curve sizes.** How Claff's encoding-table sizes relate to the stored
-  `csize` on bodies after 2009 ([raw-data.md](raw-data.md)).
+  number of curve values N on bodies after 2009
+  ([raw-data.md](raw-data.md#the-curve)).
 - **D850 RAW M/S.** Confirmation at the byte level that these are a smaller
   Bayer CFA with 12-bit lossless compression, and which Huffman table they use.
   Also whether the Z 9 and the original Z 6/Z 7 write M/S NEF.
