@@ -44,10 +44,13 @@ and XMP Specification Part 3 [6], for the XMP tag. A seventh, read on
 16 November 2026, is Adobe's *PageMaker 6.0 TIFF Technical Notes* [7],
 for the SubIFDs tag and field type 13. NEF and ARW files hold their raw
 data and larger previews in SubIFDs, and the DNG specification uses
-SubIFD trees, but none of the six names the tag or the type. Each name
-below is the field name the document gives, spelled as it spells it,
-and each row says where: a table or section, and the printed page
-number.
+SubIFD trees, but none of the six names the tag or the type. An eighth,
+read on 19 November 2026, is the draft *TIFF Technical Note #2* [8],
+which the format notes cite for TIFF Compression 7. The one tag it
+adds, JPEGTables (0x015B), is on no file walked, so this page does not
+list it. Each name below is the field name the document gives, spelled
+as it spells it, and each row says where: a table or section, and the
+printed page number.
 
 **How they were taken out.** The documents' text was extracted from
 their PDFs, and the names read from their tag tables by a script of my
@@ -545,8 +548,8 @@ counts per format.
 
 ## Sources
 
-Documents 1 to 6 were downloaded and read on 9 November 2026, and
-document 7 on 16 November 2026.
+Documents 1 to 6 were downloaded and read on 9 November 2026,
+document 7 on 16 November 2026, and document 8 on 19 November 2026.
 
 [1] Adobe Systems, "TIFF, Revision 6.0", Final, June 3, 1992; the
     copy Adobe published. **[P]**
@@ -574,4 +577,10 @@ document 7 on 16 November 2026.
     which now gives 404; the copy read is the Internet Archive's
     capture of that address on 31 December 2005,
     https://web.archive.org/web/20051231212249/http://partners.adobe.com/public/developer/en/tiff/TIFFPM6.pdf.
+    **[P]**
+[8] "DRAFT TIFF Technical Note #2", 17 March 1995, which replaces TIFF
+    6.0's JPEG design with Compression 7. The copy read is the one
+    libtiff.org published, as the Internet Archive captured it on 23
+    October 2004,
+    https://web.archive.org/web/20041023142121/http://www.libtiff.org:80/TIFFTechNote2.html.
     **[P]**

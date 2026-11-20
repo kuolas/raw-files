@@ -615,10 +615,12 @@ sample, the Exif and MakerNote values raw-files reads lie in the first
 
 ### 8.1 Orientation
 
-IFD0 tag 0x0112, a u16 with values 1 to 8 (1 normal, 2 mirror horizontal, 3
-rotate 180, 4 mirror vertical, 5 transpose, 6 rotate 90 clockwise, 7
-transverse, 8 rotate 270 clockwise). There is no plain orientation tag in the
-MakerNote. Treat 0 and values above 8 as 1. [S][2]
+IFD0 tag 0x0112, Orientation, a u16 with values 1 to 8, each defined by
+where the image's first row and first column lie. [P][23] (4.6.5.1.6,
+p. 33) As turns: 1 normal, 2 mirror horizontal, 3 rotate 180, 4 mirror
+vertical, 5 transpose, 6 rotate 90 clockwise, 7 transverse, 8 rotate 270
+clockwise. There is no plain orientation tag in the MakerNote. Treat 0
+and values above 8 as 1. [S][2]
 
 The preview JPEGs carry no Exif of their own. [S] Preview SubIFDs may carry
 an Orientation tag that disagrees with IFD0 (seen: IFD0 = 6, SubIFD = 1);
@@ -635,8 +637,13 @@ IFD0 0x0112 wins. [S] See
 | Offset from UTC | Exif IFD 0x9011 OffsetTimeOriginal, form `+HH:MM` | optional |
 | Fallback zone | MakerNote 0x0024 WorldTime | the time zone and daylight saving setting of the camera's clock; agrees with OffsetTimeOriginal wherever both exist **[F]** |
 
-Also present: 0x9004 DateTimeDigitized and IFD0 0x0132 DateTime (the last
-modification time). [S][2]
+The three Exif tags and their forms: [P][23] (4.6.6.6.1, p. 52;
+4.6.6.6.4, p. 53; 4.6.6.6.7, p. 54)
+
+Also present: 0x9004 DateTimeDigitized and IFD0 0x0132 DateTime, the
+last modification time [P][23] (4.6.6.6.2, p. 53; 4.6.5.4.5, p. 43).
+The census of [tag-names.md](../tag-names.md#3-the-ifd-chain-and-the-subifds)
+finds both in NEF files. **[F]**
 
 An unset camera clock yields a blank or space-filled string (spaces where the digits would be); return "none" for the date rather than an error. [I]
 
@@ -679,18 +686,20 @@ offset, not as a separate home zone
 
 ### 8.3 Make and model
 
-IFD0 0x010F and 0x0110. Typical values: Make "NIKON CORPORATION" and Model
+IFD0 0x010F Make and 0x0110 Model. [P][23] (4.6.5.4.2 and 4.6.5.4.3,
+p. 42) Typical values: Make "NIKON CORPORATION" and Model
 "NIKON D90" on DSLRs, Make "NIKON" and a Model such as "COOLPIX P7000" on
 compacts. [S][14]
 
-In the one NEF dump inspected the strings were NUL-terminated with the count
-including the NUL and no space padding (Make 18 bytes, Model 10 bytes for a
-D40). [S][14] The D100 does space-pad Model: rawspeed compares it against
-"NIKON D100 " with a trailing space. [S][8] The Exif standard allows
-space-filled "unknown" values, and ExifTool and LibRaw both strip trailing
-whitespace. So: cut at the first NUL, then trim trailing ASCII whitespace.
-[S][2][7] Compare model strings after trimming, because model checks
-elsewhere ("D50" suffix, a "Z" at index 6) assume trimmed text. [I]
+In the one NEF dump inspected the strings were NUL-terminated with the
+count including the NUL and no space padding (Make 18 bytes, Model 10
+bytes for a D40). [S][14] The D100 does space-pad Model: rawspeed
+compares it against "NIKON D100 " with a trailing space. [S][8] Exif
+treats a Make or Model left blank as unknown. [P][23] (4.6.5.4.2 and
+4.6.5.4.3, p. 42) ExifTool and LibRaw both strip trailing whitespace.
+So: cut at the first NUL, then trim trailing ASCII whitespace. [S][2][7]
+Compare model strings after trimming, because model checks elsewhere
+("D50" suffix, a "Z" at index 6) assume trimmed text. [I]
 
 The samples agree: every checked file has NUL-terminated Make and Model
 with no padding, the Z 9's 18 and 10 bytes long like the D40's, except the
@@ -700,7 +709,8 @@ on every other body, the Coolpix A included. **[F]**
 
 ### 8.4 Image dimensions
 
-The raw IFD's ImageWidth and ImageLength (0x0100, 0x0101) give the stored
+ImageWidth and ImageLength are tags 0x0100 and 0x0101. [P][23]
+(4.6.5.1.1 and 4.6.5.1.2, p. 32) In the raw IFD they give the stored
 sensor array, which includes masked and border pixels, so it is usually
 larger than the image a viewer shows. NEF has no DNG-style DefaultCropOrigin,
 DefaultCropSize or ActiveArea; those tags appear in DNG files only. [S][2][9]
@@ -726,9 +736,10 @@ Sources for the output size, in order: [S][7][9]
 2. A per-body table (as rawspeed's `cameras.xml` or rawler's camera data).
    Not suitable for a small library; raw-files should not carry one for
    its metadata. [I]
-3. Exif PixelXDimension and PixelYDimension (0xA002, 0xA003): these exist,
-   but Nikon's values describe the in-camera JPEG size and may differ from
-   the raw crop. [I] No checked NEF has them. **[F]**
+3. Exif PixelXDimension and PixelYDimension (0xA002, 0xA003) [P][23]
+   (4.6.6.3.1 and 4.6.6.3.2, p. 48): these exist, but Nikon's values
+   describe the in-camera JPEG size and may differ from the raw crop.
+   [I] No checked NEF has them. **[F]**
 
 **CropHiSpeed (0x001B)** is seven u16 values. ExifTool's print conversion
 fixes the order as: [S][3]
@@ -768,10 +779,13 @@ them only in the MakerNote, in plain form. **[F]**
 | Item | Exif tag | MakerNote tag | Measured |
 |---|---|---|---|
 | Body serial number | 0xA431 BodySerialNumber | 0x001D SerialNumber | Exif from the D780 and Z 6 on (files 3827, 3587); MakerNote from the D300 on, blank on the D200 |
-| ISO | 0x8827 ISOSpeedRatings | 0x0002 ISO, `[0, ISO]` | Exif on every checked body except the D1H, D1X, D100, D70, D700 and E5700; the first four have it in the MakerNote |
+| ISO | 0x8827 PhotographicSensitivity, called ISOSpeedRatings up to Exif 2.21 | 0x0002 ISO, `[0, ISO]` | Exif on every checked body except the D1H, D1X, D100, D70, D700 and E5700; the first four have it in the MakerNote |
 | Lens model | 0xA434 LensModel | none in plain text | the D780, Z 6 and later, and the Nikon 1 J1 (file 2956) |
 | Lens range | 0xA432 LensSpecification | 0x0084 Lens | Exif from the D780 and Z 6 on; MakerNote on every body with interchangeable lenses, equal to Exif where both exist |
 | Lens make, serial | 0xA433 LensMake, 0xA435 LensSerialNumber | none | the D780 and Z bodies; LensMake is empty for the D780's F-mount lens and the Z f's third-party lens (files 3827, 6887) |
+
+The Exif tags: [P][23] (4.6.6.7.5, p. 56; 4.6.6.9.3 to 4.6.6.9.7,
+pp. 79 to 80)
 
 ISO is two SHORT values in 0x0002, of which the second is the ISO; the
 D700 writes four zero bytes of type UNDEFINED and the E5700 `[0, 0]`,
@@ -1129,8 +1143,9 @@ Every value below was read on the 35 NEF and NRW files of
 JPEGs of the [JPEG test data](../jpeg/test-data.md#2-the-sample-files)
 on 2026-10-23, with a bounds-checked script written from these pages
 **[F]**; [test-data.md](test-data.md#24-files-checked-for-the-camera-settings)
-lists which file records which value. The meaning of each code is
-ExifTool's, read in its published tag documentation [S][1][2]. ExifTool
+lists which file records which value. The meaning of each MakerNote
+code is ExifTool's, read in its published tag documentation [S][1];
+the meaning of each Exif code is the standard's [P][23]. ExifTool
 was also run on the same files as an independent reader to compare
 with: it reads the same value as the script for every tag both read,
 and prints the four bytes of MakerNoteVersion (0x0001) on the E5700
@@ -1156,22 +1171,29 @@ ExifTool decodes from a block the script does not read, it is tagged
 | Focal length in 35 mm terms | Exif 0xA405 FocalLengthIn35mmFilm | none | Exif on every file but the D1H's, the D1X's and the E5700's |
 | Software | IFD0 0x0131 Software | ShotInfo's FirmwareVersion, encrypted | IFD0 on every file |
 
+The standard tags: [P][23] (4.6.5.4.4, p. 42; 4.6.6.2.1, p. 47;
+4.6.6.7.3, p. 55; 4.6.6.7.19 to 4.6.6.7.21, pp. 60 to 61; 4.6.6.7.37,
+p. 69; 4.6.6.7.39, p. 70)
+
 **Exposure program and metering mode.** Both are Exif tags on every
-checked file, the D1H's included **[F]**, with Exif's codes [S][2].
-ExposureProgram is 1 (manual) on 11 files, 2 (normal program) on five
-and the D70 JPEG, 3 (aperture priority) on 11, 4 (shutter priority) on
-the D700 (file 2255), and 0, "not defined", on the seven Z5II and Z6III
-files (7735, 7736, 7808 to 7810, 7812, 7813) and the D5300 JPEG: a
-recent body writes 0 too. MeteringMode is 5 (multi-segment) on 24 NEF
-files and both JPEGs, 2 (center-weighted average) on nine files (928,
-1786, 2238, 5146 to 5148, 7767, 7770, 8079), 3 (spot) on the D100
-(file 2996) and 255 ("other") on the D850 (file 1835) **[F]**, perhaps
-for its highlight-weighted metering, which Exif has no code for [I].
+checked file, the D1H's included **[F]**, with Exif's codes. [P][23]
+(4.6.6.7.3, p. 55; 4.6.6.7.19, p. 60) ExposureProgram is 1 (manual) on
+11 files, 2 (normal program) on five and the D70 JPEG, 3 (aperture
+priority) on 11, 4 (shutter priority) on the D700 (file 2255), and 0,
+"Not defined", on the seven Z5II and Z6III files (7735, 7736, 7808 to
+7810, 7812, 7813) and the D5300 JPEG: a recent body writes 0 too.
+MeteringMode is 5 ("Pattern", raw-files' `MeteringMode::MultiSegment`)
+on 24 NEF files and both JPEGs, 2 (center-weighted average) on nine
+files (928, 1786, 2238, 5146 to 5148, 7767, 7770, 8079), 3 (spot) on the
+D100 (file 2996) and 255 ("other") on the D850 (file 1835) **[F]**,
+perhaps for its highlight-weighted metering, which Exif has no code for
+[I].
 
 **Flash.** Exif's Flash is a set of bits: bit 0 says whether the flash
 fired, bits 1 and 2 whether its return light was detected, bits 3 and 4
 its mode (1 compulsory firing, 2 compulsory suppression, 3 auto), bit 5
-that the camera has no flash function, bit 6 red-eye reduction [S][2].
+that the camera has no flash function, bit 6 red-eye reduction. [P][23]
+(4.6.6.7.21 and Figure 19, pp. 61 to 62)
 The checked files hold 0 (no flash, no mode; 23 NEF files and the D70
 JPEG), 16 (not fired, mode 2; files 961, 1415, 1425, 4456, 7767, 7770
 and the D5300 JPEG), 15 (fired in mode 1, return light detected; the
@@ -1188,7 +1210,8 @@ of light (daylight, shade, incandescent and so on), a color
 temperature, or a preset measured from a gray card, and may shift the
 result (the fine-tuning below). Exif records only whether it was auto
 (0xA403: 0 auto, 1 manual) and, in a tag of its own, the kind of light
-(0x9208 LightSource) [S][2]. Nikon's 0x0005 records the setting itself,
+(0x9208 LightSource). [P][23] (4.6.6.7.37, p. 69; 4.6.6.7.20, p. 60)
+Nikon's 0x0005 records the setting itself,
 as 13 bytes of ASCII: an upper-case word padded with spaces to 12
 characters, then a NUL **[F]**. ExifTool documents it as a string and
 lists no values [S][1]. The checked files hold:
@@ -1204,8 +1227,9 @@ lists no values [S][1]. The checked files hold:
 
 The Exif tags agree with it on every file that has both: 0xA403 is 0
 and LightSource 0 ("unknown") under every `AUTO` setting, and 0xA403 is
-1 under `SUNNY` (LightSource 9, "fine weather") and `SHADE`
-(LightSource 11, "shade") **[F]**. The D1H, D1X and E5700 write no Exif
+1 under `SUNNY` (LightSource 9, "Fine weather") and `SHADE`
+(LightSource 11, "Shade") **[F]**; the quoted names are Exif's.
+[P][23] (4.6.6.7.20, pp. 60 to 61) The D1H, D1X and E5700 write no Exif
 white balance, so 0x0005 is their only record of it. The texts of the
 other settings are on my own files and on frames shot for these values
 (below): a chosen color temperature is written as its number, such as
@@ -1308,17 +1332,19 @@ shoots a raw file and a JPEG together. The size in pixels is CropArea's
 
 **Color space.** The color space the camera was set to for its JPEG
 output, sRGB or Adobe RGB. No checked NEF file has the Exif ColorSpace
-(0xA001) or an InteropIndex; both JPEGs have ColorSpace 1, sRGB
-**[F]**. 0x001E ColorSpace is one SHORT with ExifTool's codes 1 sRGB,
-2 Adobe RGB, 4 BT.2100 [S][1]: 2 on the Coolpix A, D700, Nikon 1 J1,
-Z 30 and D200 (files 2238, 2255, 2956, 5812, 8079), 1 on the other 23
-NEF files that have it and on the D5300 JPEG **[F]**. The NEF files
-of the bodies before the D200 and of the Coolpix E5700 and P7800
-record a color space nowhere in plain form (seven files).
+(0xA001) or an InteropIndex; both JPEGs have ColorSpace 1 **[F]**, which
+Exif defines as sRGB. [P][23] (4.6.6.2.1, p. 47) 0x001E ColorSpace is
+one SHORT with ExifTool's codes 1 sRGB, 2 Adobe RGB, 4 BT.2100 [S][1]: 2
+on the Coolpix A, D700, Nikon 1 J1, Z 30 and D200 (files 2238, 2255,
+2956, 5812, 8079), 1 on the other 23 NEF files that have it and on the
+D5300 JPEG **[F]**. The NEF files of the bodies before the D200 and of
+the Coolpix E5700 and P7800 record a color space nowhere in plain form
+(seven files).
 
-**Focal length in 35 mm terms.** Exif 0xA405 FocalLengthIn35mmFilm
-[S][2], one SHORT in millimeters, is on every file but the D1H's, the
-D1X's and the E5700's, and is never 0 on a Nikon file **[F]**.
+**Focal length in 35 mm terms.** Exif 0xA405 FocalLengthIn35mmFilm is
+one SHORT in millimeters. [P][23] (4.6.6.7.39, p. 70) It is on every
+file but the D1H's, the D1X's and the E5700's, and is never 0 on a
+Nikon file **[F]**.
 
 **Software and firmware.** IFD0's Software (0x0131) is on every
 checked file, and on all of them it is the body's firmware version
@@ -1360,7 +1386,8 @@ They add what the public samples lack **[F]**:
   beside `AUTO`, `AUTO1`, `SUNNY` and `SHADE`. Each text comes with one
   pair of Exif values: `SUNNY` with WhiteBalance 1 and LightSource 9,
   `CLOUDY` 1 and 10, `SHADE` 1 and 11, `INCANDESCENT` 1 and 3,
-  `COOL WHT FL` 1 and 14 (cool white fluorescent), `PRESET` 1 and 0,
+  `COOL WHT FL` 1 and 14 ("Cool white fluorescent", in Exif's words
+  [P][23] (4.6.6.7.20, p. 61)), `PRESET` 1 and 0,
   and `AUTO` and `AUTO1` with 0 and 0 (13 D3200 files with `AUTO` have
   no Exif white balance). A text like `COOL WHT FL` could not have been
   guessed from the others.

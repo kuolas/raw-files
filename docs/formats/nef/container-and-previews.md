@@ -122,12 +122,12 @@ components, and is stored in one piece through 0x0201/0x0202 (section 4).
 
 | Tag | Name | Values worth knowing | Conf. |
 |---|---|---|---|
-| 0x00FE | NewSubfileType | 0 full resolution; 1 reduced resolution; 2 single page; 4 mask; 8 depth map; 16 enhanced; 0xFFFFFFFF invalid. The Nikon PreviewIFD table also lists 0x10001 ("alternate reduced") [1] | **[S]** [2] |
-| 0x0103 | Compression | 1 uncompressed; 6 old-style JPEG; 7 JPEG; 34713 Nikon NEF compressed. Value 32769 is handled by dcraw as a packed layout with pad bytes [34] | **[S]** [2]; 32769 handling **[S]** [34]; which bodies write it **[I]** |
-| 0x0106 | PhotometricInterpretation | 32803 color filter array (raw); 2 RGB; 6 YCbCr | 32803 **[S]** [2]; 2 and 6 are standard TIFF **[I]** |
-| 0x0111, 0x0117 | StripOffsets, StripByteCounts | A JPEG may be stored as a strip | **[S]** [3] |
-| 0x0201, 0x0202 | JPEGInterchangeFormat, ...Length | Offset and length of a JPEG | **[S]** [2] |
-| 0x0112 | Orientation | See section 8 | **[S]** |
+| 0x00FE | NewSubfileType | 0 full resolution; the bit flags 1 reduced resolution, 2 a page of a multi-page image and 4 a transparency mask; 8 depth map; 16 enhanced; 0xFFFFFFFF invalid. The Nikon PreviewIFD table also lists 0x10001 ("alternate reduced") [1], which DNG defines as an alternative preview [37] | the tag, 1, 2 and 4 **[P]** [35] (Section 8, p. 36); 0, 8, 16 and 0x10001 **[P]** [37] ("NewSubFileType", p. 20); 0xFFFFFFFF **[S]** [2] |
+| 0x0103 | Compression | 1 uncompressed; 6 JPEG in TIFF 6.0's design, which ExifTool calls old-style; 7 JPEG in the design that replaced it; 34713 Nikon NEF compressed. Value 32769 is handled by dcraw as a packed layout with pad bytes [34] | the tag, 1 and 6 **[P]** [35] (Section 8, p. 30; Section 22, p. 104) [36] (4.6.5.1.4, p. 33); 7 and the replacement **[P]** [38] ("Overview of the solution"); "old-style" and 34713 **[S]** [2]; 32769 handling **[S]** [34]; which bodies write it **[I]** |
+| 0x0106 | PhotometricInterpretation | 32803 color filter array (raw); 2 RGB; 6 YCbCr | the tag, 2 and 6 **[P]** [35] (Section 8, p. 37; Section 21, p. 90) [36] (4.6.5.1.5, p. 33); 32803 **[P]** [37] ("PhotometricInterpretation", p. 22) |
+| 0x0111, 0x0117 | StripOffsets, StripByteCounts | A JPEG may be stored as a strip | the tags **[P]** [35] (Section 8, p. 40); the JPEG **[S]** [3] |
+| 0x0201, 0x0202 | JPEGInterchangeFormat, ...Length | Offset and length of a JPEG | **[P]** [35] (Section 22, p. 105) [36] (4.6.5.2.4 and 4.6.5.2.5, p. 40) |
+| 0x0112 | Orientation | See section 8 | **[P]** [35] (Section 8, p. 36) [36] (4.6.5.1.6, p. 33) |
 | 0x828E | CFAPattern | Present on the raw IFD | **[S]** [9] |
 
 Clévy's description of the typical SubIFDs: the JPEG one has SubfileType 1,
@@ -648,6 +648,10 @@ snippets only; those are marked.
 [32] intoPIX, TicoRAW on the Z 9 — https://www.intopix.com/blogs/post/nab-22-intopix-show-tico-raw-enabling-8kp60-on-the-z9-and-tico-xs-under-1-gbps
 [33] ExifTool, Nikon tags (NEFInfo table) — https://exiftool.org/TagNames/Nikon.html#NEFInfo
 [34] dcraw 9.28, dcraw.c (`apply_tiff`, TIFF Compression 32769) — https://dechifro.org/dcraw/dcraw.c
+[35] Adobe Systems, "TIFF, Revision 6.0", Final, June 3, 1992; the copy Adobe published, read November 2026 (as [tag-names.md](../tag-names.md#sources) lists it)
+[36] CIPA DC-008-Translation-2026, "Exchangeable image file format for digital still cameras: Exif Version 3.1" (January 2026), read November 2026 — https://www.cipa.jp/std/documents/download_e.html?CIPA_DC-008-2026-E
+[37] Adobe, "Digital Negative (DNG) Specification", version 1.7.1.0, September 2023, read November 2026 — https://helpx.adobe.com/content/dam/help/en/photoshop/pdf/DNG_Spec_1_7_1_0.pdf
+[38] "DRAFT TIFF Technical Note #2", 17 March 1995, read November 2026 in the copy libtiff.org published, as the Internet Archive captured it on 23 October 2004 — https://web.archive.org/web/20041023142121/http://www.libtiff.org:80/TIFFTechNote2.html
 
 ### Sample files
 
