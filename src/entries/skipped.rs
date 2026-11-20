@@ -56,7 +56,7 @@ use crate::error::ErrorKind;
 /// and a link with no position once for the directory and tag that hold
 /// it. A MakerNote's directories and Sony's private directory are read
 /// apart from that structure, so one of them is listed even when a link of
-/// the structure leads to the same position: the DSLR-A100's two below
+/// the structure leads to the same position: the DSLR-A100's two above
 /// lead to the same bytes. Nor is a pointer to the next directory of 0 one,
 /// which means there is none. Nor, but for the Exif, GPS and
 /// Interoperability IFD tags and Nikon's PreviewIFD tag, is an entry whose
