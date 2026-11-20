@@ -2,9 +2,9 @@
 
 - Status: Accepted
 - Date: 2026-10-15
-- Revision: 3, 2026-11-09
+- Revision: 4, 2026-11-20
 - Issue: #13; the camera settings #26, revised in #51; authorship and
-  location #97
+  location #97; more capture settings #214
 
 ## Context
 
@@ -44,6 +44,21 @@ In short:
   temperature and its fine-tuning, the shutter and the image area. Sony
   records the shutter used and APS-C mode only in enciphered blocks, as
   ExifTool, run on the files as a reader to compare with, decodes them.
+- Plain MakerNote tags also record more of how the camera was set:
+  - the focus mode, the AF-area mode and AF fine-tune;
+  - vibration reduction, auto ISO and the exposure fine-tuning;
+  - the release mode and bracketing;
+  - the flash's source, control, sync and compensation;
+  - the image quality.
+
+  Nikon's AFInfo2 names the AF-area mode on most files that give no
+  focus point. Sony records its AF micro adjustment and ISO setting in
+  plain blocks laid out by their byte count. Only its DSLRs and first
+  SLT and NEX bodies write them; later bodies record both in no plain
+  tag.
+- Nothing standard gives these settings' codes. ExifTool's published
+  tag documentation names most of them, and the measured files agree
+  with what it says wherever they hold the code.
 - The authorship texts are plain ASCII on every file counted, and
   cameras fill unset ones with NULs or spaces. A GPS IFD seldom holds a
   position.
@@ -66,8 +81,28 @@ nothing standard records a value. Nothing is deciphered or decrypted.
   type or count, a value out of range or unreadable, a MakerNote value
   outside the MakerNote, or a code no table names gives `None`, and the
   file still opens. Only an I/O error is
-  passed up. A code is named only where a standard or a measured file
-  gives its meaning.
+  passed up.
+- **A code is named only where its meaning is known**, from one of
+  three sources:
+  - a standard;
+  - a frame shot in a known setting;
+  - a reader's published documentation that the measured files agree
+    with.
+
+  The files agree when two things hold:
+  - the code occurs where the documentation places it, by the record's
+    version, the detection method and the body family;
+  - no other value of the same file contradicts it.
+
+  A code the documentation names and no measured file holds stays
+  unnamed. So does a code it names two ways the files cannot tell
+  apart, unless both meanings fold into one variant. The format notes
+  say for each code which source its meaning rests on, with the count
+  of files. The documentation's word reaches the codes of the capture
+  settings below: focus, stabilization, exposure and drive, flash and
+  image quality. The white balance texts and the shutter, image area
+  and raw size codes keep the stricter rule of a standard or a measured
+  file.
 - **The standard tags come first.** IFD0, the Exif IFD and the raw IFD
   give every field, and an Exif value always wins. On NEF, the
   MakerNote gives the visible image size from CropArea. Only where the
@@ -87,9 +122,13 @@ nothing standard records a value. Nothing is deciphered or decrypted.
   time. It is accepted only within ±14:00, since a value rewritten in
   the wrong byte order reads as hundreds of hours. The offset is
   reported the same way whichever tag gave it. DateTimeDigitized and
-  IFD0's DateTime, which editors change, are never used. An unset clock
-  or an impossible date is `None`. raw-files has its own `DateTime`
-  type.
+  IFD0's DateTime, which editors change, are never used for it. An
+  unset clock or an impossible date is `None`. raw-files has its own
+  `DateTime` type.
+- **The digitized time is a value of its own**, `Metadata::digitized_time`:
+  DateTimeDigitized with SubSecTimeDigitized and OffsetTimeDigitized,
+  by the capture time's rules. It equals the capture time on most
+  measured files, and the format notes count those where it does not.
 - **Sizes as stored.** The raw size is that of the largest IFD holding
   raw data, by pixel count, the first on a tie. A file can hold a small
   full-resolution raw image beside the real one, as the Coolpix E5700
@@ -126,12 +165,26 @@ nothing standard records a value. Nothing is deciphered or decrypted.
   as a lens named only with dashes is. The list holds `SONY DSC`. It
   matches the whole cleaned text, whatever the Make, and grows only
   from measured files.
-- **The exposure program, the metering mode and the flash come from
-  Exif alone**, with Exif's codes. 0, "not defined" or "unknown", gives
-  none. The flash is whether it fired and its mode (compulsory firing,
-  compulsory suppression or auto), without red-eye or return light. The
-  MakerNote's versions are not read: they repeat Exif, and Nikon's
-  flash mode contradicts Exif's "fired" on hundreds of files.
+- **The exposure program and the metering mode come from Exif alone**,
+  with Exif's codes. 0, "not defined" or "unknown", gives none.
+- **The flash is Exif's Flash first.** Its bits give whether the flash
+  fired and its mode: compulsory firing, compulsory suppression or
+  auto. They also give red-eye reduction, and whether return light was
+  detected, when the unit can detect it. A file without Exif's Flash
+  gives no flash. Plain
+  MakerNote tags add what Exif does not record:
+  - the source, built-in or external, and how the unit was controlled
+    (TTL, auto aperture, manual or repeating), from Nikon's FlashType
+    text;
+  - the sync, front or rear curtain and slow, from Nikon's FlashSetting
+    text;
+  - the compensation, in EV as recorded: Nikon's for the built-in flash
+    and for an external unit, each in sixths of a stop, and Sony's.
+
+  Nikon's flash record (FlashInfo), whose layout changes over a dozen
+  versions, is not read. So the unit's model and commander mode give
+  none. Nikon's flash mode code is not read either: it contradicts
+  Exif's "fired" on hundreds of files.
 - **The white balance mode comes from the MakerNote first**, since it
   records the setting itself, else from Exif's WhiteBalance and
   LightSource.
@@ -144,6 +197,11 @@ nothing standard records a value. Nothing is deciphered or decrypted.
   - The modes form one short list in neutral words (auto, daylight,
     cloudy, shade, tungsten, fluorescent, flash, underwater, custom,
     color temperature). Each maker's finer kinds fold into it.
+  - Two parts belong to the white balance. The preset slot is the
+    number after Nikon's `PRESET`. The kind of fluorescent lamp comes
+    from Exif's LightSource 12 to 16. Sony's 0x0112, which also gives
+    the lamp, is not read, since it repeats Exif on every frame
+    measured.
 - **The color temperature** is the one the MakerNote records, from 1
   to 99,999 K. Zero means not recorded, and a larger number is no
   temperature a camera is set to. Nikon's is the temperature of the
@@ -164,15 +222,65 @@ nothing standard records a value. Nothing is deciphered or decrypted.
   shutter used.
 - **The image area** is Nikon's crop code, CropHiSpeed's first value,
   in words that fit any maker: full frame, APS-C, 1:1, 16:9, 5:4, 1.3x
-  and 2.7x crops, and the APS-C forms of 1:1 and 16:9. "Off" gives
-  none, since it does not say which sensor the body has. So do the 3:2
-  crop and the movie codes, except two that DX bodies write on stills
+  and 2.7x crops, and the APS-C forms of 1:1 and 16:9. "Off" does not
+  say which sensor the body has. Where the code is "off" or missing,
+  the body's sensor format comes from raw-files' table of bodies. A
+  body the table lacks gives none. The 3:2 crop and the movie codes give
+  none, except two that DX bodies write on stills
   ([NEF notes §10](../formats/nef/makernote-and-metadata.md#10-recommendation-for-raw-files)).
-  Sony's is none.
+  Sony's is none, since its APS-C mode is not recorded in plain form.
 - **The raw image size** (large, medium or small) is Nikon's
-  ImageSizeRAW on a raw file. A JPEG gives none, whatever its MakerNote
-  says, since it holds no raw. A Sony file gives none, since its tag
-  gives an APS-C raw the code of a medium one.
+  ImageSizeRAW on a raw file. Where a raw file records none and the
+  table says the body offers no raw sizes, it is large. A JPEG gives
+  none, whatever its MakerNote says, since it holds no raw. A Sony file
+  gives none, since its tag gives an APS-C raw the code of a medium one.
+- **The table of bodies** gives each listed body's sensor format and
+  whether it offers raw sizes. Each row rests on a file and the maker's
+  published specification, by the evidence rule of the table of names
+  ([ADR022](adr022-names-as-their-makers-write-them.md)).
+- **More of how the camera was set**, each a value of the camera
+  settings, or a part of the value it belongs to:
+  - **The focus mode**, from Nikon's FocusMode text and Sony's
+    0x201B: manual, single, continuous, automatic, full-time and direct
+    manual focus.
+  - **The AF-area mode is a setting**, given whether or not the file
+    records a focus point, and under manual focus too. It comes from
+    three places:
+    - Nikon's AFInfo2, at every documented version the files agree
+      with ([ADR012](adr012-focus-points-as-the-camera-records-them.md));
+    - the first byte of Nikon's older AFInfo, on the bodies without
+      AFInfo2;
+    - Sony's 0x201C.
+  - **AF fine-tune**, on or off with its value and its value at a
+    zoom's long end, from Nikon's AFTune. Which saved lens the value
+    belongs to is not read.
+  - **Stabilization**, on or off with its mode (normal, active or
+    sport), from Nikon's VRInfo at each documented version and Sony's
+    0xB026. Which kind of stabilization, in the lens or the body, is
+    not read.
+  - **Auto ISO**, from a bit of Nikon's ShootingMode or the Coolpix
+    ISOSelection text.
+  - **The exposure fine-tuning**, in EV as recorded, from Nikon's
+    ExposureTuning and Sony's 0x202D.
+  - **The release mode and bracketing**, from Nikon's ShootingMode and
+    Sony's 0xB049. Exif's ExposureMode 2 gives exposure bracketing
+    where no MakerNote says.
+  - **Daylight saving time**, from Nikon's WorldTime.
+  - **The raw compression**, from the raw IFD's Compression, refined
+    by Nikon's NEFCompression or its record 0x0051.
+  - **The raw bit depth**, from the raw IFD's BitsPerSample when it
+    holds one value.
+  - **The JPEG quality**, from Nikon's Quality text in a JPEG and
+    Sony's quality tags, and Nikon's choice between size priority and
+    optimal quality. A JPEG whose Quality says `RAW`, which a program
+    made from a raw file, gives none.
+- **Neutral words, with each maker's finer kinds folded in**, as the
+  white balance modes are. Each variant's documentation lists the maker
+  settings folded into it. Nikon's dynamic-area sizes are one dynamic
+  mode. Nikon's wide-area and group-area and Sony's zone are one zone
+  mode. A ladder the makers cut differently is the exception: the
+  JPEG quality keeps each maker's step names, as variants of one
+  enum.
 - **The color space** is Exif's whenever Exif records ColorSpace. 1 is
   sRGB, 65535 with InteropIndex `R03` is Adobe RGB, and any other 65535
   is none. So a program's "uncalibrated" is never overruled by a
@@ -269,7 +377,7 @@ Rejected:
 - **A variant holding a code no table names** (an `Unknown(u16)`). A
   caller could do nothing with the number but print it, and every match
   would have to handle it. A code can be named later, without breaking
-  callers, once a file shows what it means. The same holds for
+  callers, once its meaning is known by the rule above. The same holds for
   ExifTool's "bulb" program, which Exif does not define.
 - **Sony's electronic front curtain setting as the shutter used.** It
   contradicts the enciphered record of the release, as ExifTool decodes
@@ -334,6 +442,46 @@ Rejected:
   body, set once in the camera and the same on every picture it takes,
   whoever takes it, as the serial number is. The photographer, the
   editor and the title are facts about the picture.
+- **Codes named only from a standard or a frame shot in a known
+  setting.** Most of Sony's codes would stay unnamed, and so would the
+  AF-area and focus modes of bodies the project has no such frames of.
+  Published documentation gives them, and the files agree.
+- **The documentation's word for the versioned records alone**, not
+  for single codes and not for AFInfo2's versions. A code would be
+  named by one rule inside a record and by another beside it.
+- **The capture settings grouped by topic**, inside the camera settings
+  (focus, image quality) or beside them on the metadata. That is a
+  second rule beside the settings' own, and one more level on every
+  call. On the metadata, how the camera was set would be split over
+  three values.
+- **The AF-area mode left with the focus points, or given in both
+  places.** Most files that name a mode give no focus point, and so
+  would lose it. Of 200 public Nikon files whose record names a mode
+  that a frame shot in a known setting confirms, 145 give no focus
+  point.
+  Two places are two values a caller's built metadata can make
+  disagree.
+- **Each maker's own names for the kinds of a setting, or a neutral
+  kind with a second value for the finer one.** A caller would match
+  per maker, and the types would grow with every generation of bodies;
+  a second value is two getters for one setting.
+- **Nikon's flash record at the versions frames confirm.** Its layout
+  changes over a dozen versions, each needing frames of its own.
+- **The flash from Exif's bits alone.** It gives no compensation and
+  no unit, which plain tags record.
+- **Only the image area and raw size a file records.** A body that
+  records neither would give none, though its sensor and its offer of
+  raw sizes are published facts.
+- **The table of bodies for the image area alone**, or left until
+  every per-body table is decided. The raw size has the same gap, and
+  the same evidence closes both.
+- **Only the capture settings the first list of full metadata named**,
+  without the release mode and bracketing. The same frames show them,
+  and a second round would cost another shoot.
+- **Every plain capture setting found**, Exif's GainControl and
+  SensitivityType, Nikon's program shift, exposure difference and ISO
+  expansion, Sony's AF tracking among them. The work would double, and
+  each is a named gap in the notes, with its count and why it waits.
 
 ## Consequences
 
@@ -356,8 +504,9 @@ Rejected:
   ([NEF notes §8.4](../formats/nef/makernote-and-metadata.md#84-image-dimensions)).
 - The image size is the default crop, not the aspect ratio chosen in
   the camera, which Sony records only in tags of its own.
-- Some maker-specific values enter the API, in the camera settings: a
-  crop mode as the image area, the shutter, and the raw size. Others,
+- Some maker-specific values enter the camera settings: a crop mode as
+  the image area, the shutter, the raw size and the JPEG quality's
+  steps. Others,
   such as Sony's model ID and Nikon's shutter count, are not in the
   API, and can be added later without breaking it.
 - DNG files, which use the same standard tags and the same default
@@ -377,6 +526,21 @@ Rejected:
   letters.
 - Codes that a later body or a later Exif adds give `None` until they
   are named, which adds to the types without breaking them.
+- A code named from published documentation, where the files agree, can
+  still be wrong where no file contradicts it. The notes mark which
+  codes rest on the documentation alone. A frame shot in a known
+  setting can later confirm or correct each of them.
+- Some settings stay `None`:
+  - Sony's AF micro adjustment and ISO setting: in no plain tag on
+    later bodies, and in plain blocks not read on the older ones;
+  - a code or record version no measured file holds;
+  - what the documentation leaves unsaid.
+- A caller cannot tell an image area or raw size the table of bodies
+  gave from one the file recorded. A large raw size then also means a
+  body that offers no other.
+- The AF-area mode moves from `FocusPoints` to the camera settings,
+  `FocusPoints::area_mode` is removed, and a caller that read it there
+  changes.
 - The software names the camera's firmware or the program that last
   wrote the file. A caller cannot tell which without reading the text.
 - A comment under the JIS, Unicode or undefined code is `None`, and
