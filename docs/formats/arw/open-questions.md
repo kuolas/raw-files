@@ -103,9 +103,9 @@ that would answer Part 2.
      2 (12-bit scale); LibRaw, rawspeed and rawler write the curve value,
      rawspeed optionally and rawler always dithered. The pages recommend
      the undithered curve value, which can exceed 16383.
-   - **`imax == imin` in a cRAW block.** rawspeed rejects the block; dcraw
-     and LibRaw read a fifteenth delta past it. No sample block has it, so
-     rejecting costs nothing on real files.
+   - **A cRAW block whose two positions are equal.** rawspeed rejects the
+     block; dcraw and LibRaw read a fifteenth delta past it. No sample
+     block has it, so rejecting costs nothing on real files.
    - **cRAW widths not a multiple of 32.** dcraw and LibRaw leave the last
      columns undecoded, rawspeed rejects the file, rawler ignores the
      remainder. Every checked cRAW width is a multiple of 32.

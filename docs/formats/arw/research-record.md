@@ -38,7 +38,9 @@ The research also had to establish three practical points:
   [overview](README.md#confidence-tags)).
 - Where sources disagree, the disagreement is recorded rather than resolved
   by guesswork; where a sample file settles it, the page names the file.
-- Algorithms are restated in prose or original pseudocode.
+- Algorithms are restated in prose or original pseudocode. The raw data
+  page and the MakerNote page's keystream section were later restated as
+  facts about the format, in prose, tables and formulas (#193).
 - Copy no code and no wholesale data tables (such as the ARW1 code table,
   the MakerNote cipher's inverse table, or any tone or delinearization
   curve); individual facts such as tag IDs, offsets, value meanings and

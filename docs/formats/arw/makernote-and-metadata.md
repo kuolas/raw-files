@@ -620,21 +620,17 @@ DNGPrivateData; that is out of scope for raw-files. [S][10]
 ## 6. The SR2 keystream
 
 The same generator encrypts the SR2SubIFD, SRF's MakerNote IFDs and SRF
-pixel data. dcraw and LibRaw call it `sony_decrypt`. ExifTool, LibRaw,
-dcraw, rawspeed and rawler implement the same algorithm. [S][2][9][14][15]
-[16]
+pixel data. ExifTool, LibRaw, dcraw, rawspeed and rawler describe the
+same algorithm. [S][2][9][14][15][16]
 
-Inputs: a 32-bit key K and a buffer. Only whole 4-byte words are processed;
-trailing bytes are left unchanged (rawspeed rounds the length down to a
-multiple of 4; ExifTool processes the integer part of length / 4). [S][2]
-[15]
+Inputs: a 32-bit key K and a buffer. Only whole 4-byte words are
+encrypted; trailing bytes are left unchanged. [S][2][15]
 
 All arithmetic is on unsigned 32-bit values, wrapping on overflow.
 
 1. **Seed** with a linear congruential step, four times:
    K = K × 48828125 + 1 (mod 2³²), recording the results as w0, w1, w2, w3.
-   48828125 is 5¹¹ (0x02E90EDD); ExifTool computes the same product in
-   16-bit halves. [S][2]
+   48828125 is 5¹¹ (0x02E90EDD). [S][2]
 2. **Adjust w3:** w3 = (w3 shifted left by 1) OR (the top bit of
    (w0 XOR w2)).
 3. **Fill** w4 to w126: w_i = ((w_(i−4) XOR w_(i−2)) shifted left by 1) OR
@@ -643,17 +639,13 @@ All arithmetic is on unsigned 32-bit values, wrapping on overflow.
    w_n = w_(n−127) XOR w_(n−63). The k-th keystream word (k = 0, 1, …) is
    w_(127+k).
 5. **Apply:** read the k-th data word as a **big-endian** u32, XOR it with
-   the k-th keystream word, and write it back big-endian. dcraw and LibRaw
-   byte-swap the pad and XOR native words, rawler XORs little-endian words
-   with a byte-swapped pad, and ExifTool unpacks big-endian words; all of
-   these are the same operation.
+   the k-th keystream word, and write it back big-endian.
 6. The cipher is its own inverse.
 
-dcraw, LibRaw and rawspeed keep a 128-word ring buffer instead of the
-growing sequence in step 4; the two forms produce the same keystream
-(checked by computation over random keys). [S][I] dcraw and LibRaw keep the
-state between calls so that SRF pixel data can be decrypted row by row as
-one continuous stream; nothing else needs that. [S][9][14]
+Each new word depends on words 63 and 127 places back, so a ring of 128
+words gives the same keystream as the growing sequence of step 4 (checked
+by computation over random keys). [I] SRF pixel data are one continuous
+keystream from their first byte. [S][9][14]
 
 **Checked on samples.** With key 0x44332211 the SR2SubIFD of every ARW
 from the A200 (2271) to the ILCE-7M5 (8846 to 8850) decrypts to a valid

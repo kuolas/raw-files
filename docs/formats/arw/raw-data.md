@@ -2,7 +2,7 @@
 
 How Sony's ARW files, and their relatives SR2, SRF and ARQ, store the
 sensor data: where the raw image is, the four TIFF Compression values and
-how decoders tell the layouts apart, the ARW1 and cRAW lossy schemes, the
+how the layouts are told apart, the ARW1 and cRAW lossy schemes, the
 packed and uncompressed layouts, the lossless tiles and their YCbCr M/S
 variant, the ARW 6.0 codec that raw-files will refuse, the encrypted SRF
 data and the four-sample ARQ. It ends with the levels, the checks a decoder
@@ -45,10 +45,12 @@ license, LGPL-2.1 or CDDL-1.0 (LibRaw), LGPL-2.1-or-later (rawspeed) and
 LGPL-2.1 (rawler, rawloader); ExifTool is under the Perl terms and Laurent
 Clévy's notes under GPL-3.0. See
 [licenses-and-references.md](licenses-and-references.md). None of their
-code may be copied or transliterated into raw-files. This page restates
-algorithms in prose and original pseudocode only. It gives the ARW1 prefix
-code as a rule, not a table, and reproduces no tone curve or delinearization
-table.
+code may be copied or transliterated into raw-files. This page states what
+the files hold and what each value means, in prose, tables and formulas.
+It gives no pseudocode and does not describe how a program is written; a
+program's behavior appears only where readers are compared. It gives the
+ARW1 prefix code as a rule, not a table, and reproduces no tone curve or
+delinearization table.
 
 ## Where the raw data lives
 
@@ -70,16 +72,16 @@ table.
     File 1351 **[F]**
   - **Previews that look like raw IFDs.** From FileFormat 4.0 on, IFD2 of
     the IFD0 chain holds a full-size JPEG under Compression 7, Photometric 6,
-    8-bit, 3 samples, NewSubfileType 1. **[F]** LibRaw skips exactly that
-    profile when it picks the raw IFD. [3] **[S]** Raw tiles, conversely,
+    8-bit, 3 samples, NewSubfileType 1. **[F]** LibRaw never takes an IFD
+    of that profile for the raw image. [3] **[S]** Raw tiles, conversely,
     begin with an SOI and an SOF3 marker, so a preview finder must reject
     them (see [container-and-previews.md](container-and-previews.md)).
-- **How decoders find it.** dcraw and LibRaw take the IFD with the largest
-  W·H·bps; rawspeed, rawler and rawloader take the first IFD with a
-  StripOffsets tag. When no IFD has one, all three take the A100 path by
-  model; otherwise rawspeed takes the SRF path only for a camera with an
-  SRF hint, while rawler and rawloader try SRF for any other model.
-  [1][3][12][18][19] **[S]**
+- **Readers differ in how they find it.** dcraw and LibRaw take the IFD
+  with the largest W·H·BitsPerSample; rawspeed, rawler and rawloader take
+  the first IFD with a StripOffsets tag. [1][3][12][18][19] **[S]**
+  rawspeed, rawler and rawloader read a file with no StripOffsets in any
+  IFD as an A100 or an SRF file, by its model; rawspeed refuses other
+  models. [12][18][19] **[S]**
 - **Strips.** Uncompressed, cRAW, ARW1, 12-bit packed and ARW 6.0 data are
   one strip; rawspeed rejects more than one strip under Compression 32767.
   [12] **[S]** Every strip and tile in the samples lies inside its file,
@@ -101,9 +103,11 @@ table.
 - **Tag order.** The raw SubIFD has its tags out of ascending order
   (0x011A, 0x7000, 0x0111, then 0x7316 and 0x74C7 on newer files; ARW 4.0
   adds 0x0102, 0x0142 and 0x7038 out of order). Files 1541, 1542, 3012,
-  3251 **[F]** A parser that rejects unsorted IFDs rejects every ARW.
+  3251 **[F]** Every lossless sample lists StripOffsets (0x0111) before
+  BitsPerSample (0x0102). Files 4466, 6929, 6930, 6736, 7364, 8848 **[F]**
+  A parser that rejects unsorted IFDs rejects every ARW.
 
-## Compression and the decode path
+## Compression and the layouts
 
 ### TIFF Compression values
 
@@ -117,15 +121,8 @@ SR2 and ARQ files: [3][12][18][21] **[S]**
 | 32766 | Sony ARW Compressed 2 (the value is shared with a NeXT scheme) | ARW 6.0 wavelet codec | ILCE-7M5 (A7 V), ILCE-7RM6 (A7R VI) | **[S]**, **[F]** for the A7 V |
 | 32767 | Sony ARW Compressed | three different layouts, told apart by size: cRAW, 12-bit packed, ARW1 | DSLR-A700 (2007) and later, up to the ILCE-1M2 | **[S]**, **[F]** |
 
-LibRaw renames Compression 7 to 6 internally when it reaches the data
-offset (StripOffsets or 0x0201) before BitsPerSample and finds a JPEG
-header there; for Make exactly "SONY" with Photometric 32803, or 6 with 3
-samples, it keeps the TIFF tile geometry, and otherwise it takes the
-dimensions from the JPEG frame. 6 is not a value Sony writes for raw data.
-[3] **[S]** Every lossless sample lists 0x0111 before 0x0102, so the
-rename happens on them. Files 4466, 6929, 6930, 6736, 7364, 8848 **[F]**
-The A100 carries no raw IFD at all and is recognized by model
-and IFD width (3872). [1][3] **[S]**
+The A100 carries no raw IFD at all; dcraw and LibRaw recognize it by its
+model and its IFD0 width, 3872. [1][3] **[S]**
 
 ### BitsPerSample is not reliable
 
@@ -146,20 +143,19 @@ whose values are nevertheless at 14-bit scale (see
 files; and 15,15,15 on the YCbCr M/S tiles, whose lossless JPEG frames
 declare 16-bit precision. **[F]**
 
-How decoders cope: [1][3][12][18][20] **[S]**
+How readers differ: [1][3][12][18][20] **[S]**
 
-- dcraw and LibRaw ignore the tag for 32767 and test byte counts.
-- rawspeed forces 8 when more than one IFD has a Make tag and any of them
-  is exactly "SONY", without the trailing space of the A200, A700 and
-  A900 samples; its comment blames a body that marks cRAW as 12.
-- rawler forces 8 in the camera file of almost every Sony, except the A300,
-  A700, A850, A900 and ZV-E1, which keeps its 12-bit packed path reachable.
-- LibRaw repairs a "broken" BitsPerSample above 33 on a one-sample IFD from
-  the bit length of the DNG WhiteLevel (0xC61D), or defaults to 14; its
-  changelog mentions ILCE-1 files damaged by ExifTool. The link between the
-  two is **[I]**.
-- rawkit asserts 12 for cRAW, so an A700 file would fail the assertion.
-  [20] **[S]**, consequence **[I]**
+- dcraw and LibRaw ignore the tag under 32767 and go by the strip's size.
+- rawspeed takes 8 bits for files whose Make is "SONY". The A200, A700
+  and A900 samples write "SONY " with a trailing space, so its correction
+  does not reach them. Files 2271, 2521, 5858 **[F]**
+- rawler takes 8 bits for almost every Sony, except the A300, A700, A850,
+  A900 and ZV-E1, whose 12-bit packed data it can then read.
+- LibRaw repairs an implausible BitsPerSample from the DNG WhiteLevel
+  (0xC61D); its changelog mentions ILCE-1 files damaged by ExifTool. The
+  link between the two is **[I]**.
+- rawkit requires 12 for cRAW, so it would fail on an A700 file. [20]
+  **[S]**, consequence **[I]**
 
 ### SonyRawFileType and RAWFileType
 
@@ -182,13 +178,14 @@ Two tags name the mode, and neither should select the decoder.
 - **No surveyed decoder dispatches on either tag.** LibRaw stores 0x7000
   and ignores it. [3][12][18] **[S]** Record both as cross-checks only.
 
-### Choosing the decode path
+### Telling the layouts apart
 
 Let W and H be the raw IFD's width and height and B the strip byte count
-(for tiles, the sum of the tile byte counts). The layouts are recognized by
-Compression, Photometric, SamplesPerPixel and size:
+(for tiles, the sum of the tile byte counts). Compression, Photometric,
+SamplesPerPixel and the strip's size tell the layouts apart:
+[1][3][12][18] **[S]**
 
-| Test | Layout | Samples |
+| Tags and strip | Layout | Samples |
 |---|---|---|
 | no raw IFD; Model DSLR-A100 | ARW1 from the IFD0 0x014A offset, 3881×2608 | 2346 |
 | no StripOffsets in IFD0; SRF file | SRF, encrypted (see [SRF](#srf-dsc-f828-dsc-v3)) | 1351 |
@@ -200,98 +197,31 @@ Compression, Photometric, SamplesPerPixel and size:
 | Compression 32767, B = W·H | cRAW | 15 files |
 | Compression 32767, 2B = 3·W·H | 12-bit packed | 5858 |
 | Compression 32767, B = 2·W·H | 16-bit words (LibRaw only; no body known) | none |
-| Compression 32767, otherwise | ARW1 with H + 8 rows | 2271 |
+| Compression 32767, any other size | ARW1 with H + 8 rows | 2271 |
 
 Measured bytes per pixel: 2.0000 for Compression 1 (8.0000 for the ARQ),
 1.0000 for cRAW, 1.5000 for the A900, 1.0604 for the A200's ARW1 stream and
 0.56 to 0.62 for ARW 6.0. **[F]**
 
-### dcraw and LibRaw
-
-dcraw 9.28, `apply_tiff`, where case 32767 falls through to the packed
-case: [1] **[S]**
-
-1. The A100 is set up at parse time (model plus width 3872): ARW1 from the
-   0x014A offset.
-2. 32767 and B = W·H: cRAW, with an internal depth of 12 bits and a maximum
-   of 4095.
-3. 32767 and 8B ≠ W·H·bps: ARW1, with H increased by 8.
-4. 32767 otherwise: the packed loader with 24-bit little-endian refills and
-   column pairs swapped, which is 12-bit little-endian packing.
-5. Compression 0 or 1, Make SONY, bps < 14 and B = 2·W·H: bps set to 14,
-   16-bit words.
-6. F828 and V3, by model: the SRF loader at a fixed data offset.
-
-LibRaw (master, October 2026) [3][4][5] **[S]**:
-
-1. 32766 on a non-DNG Sony CFA IFD with 1 sample and bps 12 or 14: ARW 6.0
-   (bps set to 14).
-2. 32767: B = W·H gives cRAW (bps 14, the output is the full curve value);
-   a Sony file with B = 2·W·H gives 16-bit words; 8B ≠ W·H·bps gives ARW1
-   (H + 8); otherwise 12-bit packed, as dcraw.
-3. Compression 1: a Sony file with B = 2·W·H gives 16-bit words; 4 samples
-   and B = 8·W·H give ARQ.
-4. Compression 7, renamed to 6 as described above (Make exactly "SONY"):
-   YCbCr with bps ≥ 12 and 3 samples goes to the Sony YCC loader
-   (three-channel output); otherwise the Sony lossless-JPEG tile loader. A
-   7 that was not renamed reaches the Sony tile loader only through a
-   second gate (ILCE-1, ILCE-7\* or ILCE-9\* with bps 14 and 1 sample);
-   anything else goes to LibRaw's generic `lossless_jpeg_load_raw`.
-5. F828 and V3, by model: the SRF loader.
-
-### rawspeed, rawler and rawloader
-
-rawspeed (develop, October 2026) [12] **[S]**:
-
-1. No IFD with StripOffsets: the A100 (by model; 3881×2608, ARW1) or SRF
-   (by a camera hint); otherwise an error.
-2. Compression 1: 16-bit little-endian words, or big-endian with the R1's
-   camera hint.
-3. Compression 7: lossless tiles, Photometric 32803 only, so the YCbCr M/S
-   files are rejected.
-4. Anything but 32767: an error, so ARW 6.0 is unsupported.
-5. 32767: exactly one strip; bps in {8, 12, 14}; bps forced to 8 when more than
-   one IFD has a Make tag and any of them is exactly "SONY" (the A200, A700 and
-   A900 samples write "SONY " with a trailing space, which does not match:
-   files 2271, 2521, 5858 **[F]**); W, H > 0, H even, W ≤ 9600, H ≤ 6376;
-   8B ≠ W·H·bps gives ARW1 (H + 8); else bps 8 gives cRAW and bps 12 gives
-   12-bit packed (with the levels shifted down by 2); bps 14 is an error.
-
-rawler (dnglab main, August 2026) follows rawspeed for 32767, with a per-camera
-bps override instead of the Make count; Compression 1 is 16-bit little-endian
-except the DSC-R1 (14-bit big-endian); Compression 7 decodes Bayer tiles and
-converts YCbCr tiles to RGB. For Compression 32766 it looks the camera up in
-mode "arw6", which no Sony camera file defines, so such files fail as
-unsupported before decoding starts; its ARW 6.0 decompressor is an
-`unimplemented!()` stub that is unreachable, and `RawLoader::decode` also
-catches panics. [18] **[S]** rawloader is the older rawler design: Compression
-1 and 32767 only, no lossless, no ARW 6.0, no ARQ. [19] **[S]**
-
-### rawkit
-
-Graphite's rawkit (MIT OR Apache-2.0) chooses its path by model,
-Compression and one byte-count test: the A100 by model goes to ARW1;
-otherwise Compression 1 goes to 16-bit uncompressed, a strip of exactly
-W·H bytes to cRAW (with an assertion that bps is 12), and anything else,
-including the A200's ARW1 stream, to a `todo!()`. It has no lossless,
-ARW 6.0, SR2, SRF or ARQ path, and it uses `unwrap`, `assert!` and
-`todo!()` on file data (the A100 CFA is a `todo!()` too), so it panics on
-unexpected input. [20] **[S]** Its ARW1 code
-table, cRAW block loop and 0x7010 curve builder match dcraw element for
-element **[S]**; that they were translated from dcraw is **[I]**. See
-[licenses-and-references.md](licenses-and-references.md).
-
 ### Disagreements
 
-- **Trusting BitsPerSample.** dcraw and LibRaw decide by byte count;
-  rawspeed and rawler patch bps and then decide by bps; rawkit asserts it.
-  The samples show that the size test is the only safe one. **[F]**
+- **Trusting BitsPerSample.** dcraw and LibRaw go by the strip's size;
+  rawspeed and rawler correct BitsPerSample and then go by it; rawkit
+  requires a value. The samples show that the size test is the only safe
+  one. **[F]**
 - **16-bit words under 32767.** Only LibRaw accepts B = 2·W·H with
-  Compression 32767; rawspeed and rawler would send such a strip to ARW1. No
-  sample or source names a body that writes it. [3][12][18] **[S]**
-- **Order.** dcraw and LibRaw test sizes in a fixed order; with checked
-  arithmetic the candidates W·H, 1.5·W·H and 2·W·H cannot coincide for
-  W·H > 0, so order matters only for the "otherwise ARW1" fallback. **[I]**
+  Compression 32767; rawspeed and rawler would read such a strip as ARW1.
+  No sample or source names a body that writes it. [3][12][18] **[S]**
+- **Sizes.** With checked arithmetic, W·H, 1.5·W·H and 2·W·H cannot
+  coincide for W·H > 0, so only ARW1, which has no fixed size, can be
+  taken for another layout. **[I]**
+- **Coverage.** rawspeed refuses the YCbCr M/S tiles and ARW 6.0.
+  [12] **[S]** rawloader reads Compression 1 and 32767 only: no lossless
+  tiles, ARW 6.0 or ARQ. [19] **[S]** Graphite's rawkit reads only the
+  A100's ARW1 (without its color pattern), Compression 1, and cRAW with
+  BitsPerSample 12, and panics on other input, the A200's ARW1 stream
+  among it. [20] **[S]** See also
+  [Data a decoder must bring itself](#data-a-decoder-must-bring-itself).
 
 Recommendation: decide by Compression first, then by exact byte count,
 never by BitsPerSample, and treat "32767 with no size match" as ARW1 only
@@ -313,35 +243,24 @@ when the data and FileFormat are consistent with it (see
   the start of a column or of the odd-row pass, from the last sample
   visited. [1][13] **[S]**, interpretation **[I]**
 - **Range.** The sum must stay within 0 to 4095. dcraw and LibRaw flag a
-  data error and continue; rawspeed throws (and since 2018 also checks for
-  negative sums); rawler does not check and wraps into a `u16`.
-  [1][2][13][18] **[S]**
-
-Original pseudocode:
-
-```
-sum = 0
-for col from W-1 down to 0:
-    for row in (0, 2, 4, … < H) then (1, 3, 5, … < H):
-        len = read_category()
-        sum = sum + read_difference(len)
-        if sum < 0 or sum > 4095: count a range error
-        out[row][col] = sum
-```
+  data error and continue; rawspeed refuses the file (and since 2018 also
+  checks for negative sums); rawler does not check, and the sum wraps
+  modulo 2^16. [1][2][13][18] **[S]**
 
 ### The category code
 
-Each difference starts with a prefix code for its magnitude category `len`
-(0 to 17). The code is not stored in the file, but it has a simple
-structure, which is how rawspeed and rawler decode it without a table:
-[13][18] **[S]**
+Each difference starts with a prefix code for its magnitude category c
+(0 to 17). The code is not stored in the file, but its codewords follow
+a simple rule: [13][18] **[S]**
 
-- Read two bits. `11` means category 1, `10` means category 2.
-- `01` is followed by one more bit: `1` means category 0, `0` means
-  category 3.
-- `00` is followed by a run of zero bits ended by a one bit; with z zeros
-  in the run, the category is 4 + z. After 13 zeros the run stops without
-  a terminating one bit (category 17).
+| Codeword | Category |
+|---|---|
+| `11` | 1 |
+| `10` | 2 |
+| `011` | 0 |
+| `010` | 3 |
+| `00`, then z zeros and a `1` (z = 0 to 12) | 4 + z |
+| `00`, then 13 zeros | 17 |
 
 That gives 18 codes of 2 to 15 bits whose code lengths fill the code space
 exactly. [1] **[S]**, arithmetic **[I]** The rule is a restatement of the
@@ -349,19 +268,18 @@ code's structure; **ARW1 needs no copied table.**
 
 ### Difference decoding
 
-After the category come `len` raw bits, read as an unsigned value v, and
-then the JPEG sign convention: if `len > 0` and the top bit of v is 0, the
-difference is v − (2^len − 1), otherwise it is v. A category of 0 means a
+After the category come c raw bits, read as an unsigned value v, and
+then the JPEG sign convention: if c > 0 and the top bit of v is 0, the
+difference is v − (2^c − 1), otherwise it is v. A category of 0 means a
 difference of 0 with no extra bits. [1][13] **[S]**
 
 - Categories 13 to 17 cannot occur in valid data, since a difference
   between two 12-bit values needs at most 12 bits. **[I]** The A100 sample
   uses categories 0 to 12 only. File 2346 **[F]**
-- dcraw's generic difference routine treats category 16 as −32768 with no
-  extra bits, which then trips the range check. [1] **[S]** rawkit's sign
-  step differs from dcraw's: it subtracts 2^len + 1, and it turns category
-  0 into −2 instead of 0. [20] **[S]** Its effect on real data was not
-  tested. **[I]**
+- dcraw reads category 16 as −32768 with no extra bits, which then fails
+  the range check. [1] **[S]** rawkit gives a negative difference as
+  v − (2^c + 1), and category 0 as −2 instead of 0. [20] **[S]** Its
+  effect on real data was not tested. **[I]**
 - Handle category 0 without computing a shift by −1.
 
 ### Dimensions
@@ -378,22 +296,20 @@ difference of 0 with no extra bits. [1][13] **[S]**
   small (about 18 vertically, 21 horizontally). With 3880 columns, 2485
   bytes are left unread. File 2346
   **[F]** Why the encoder writes one extra column is unexplained. **[I]**
-- **Crops.** rawspeed then crops 1 column and 2 rows. rawler's camera
-  file gives `crop_area` [0, 4, 0, 4], which its code reads as (left, top,
-  right, bottom): 4 rows off the top and 4 off the bottom, no columns.
-  [16][18] **[S]**
-- **IDC-edited files.** dcraw and LibRaw have a second A100 branch (width
-  not 3880): trim 4 rows and 4 columns, big-endian, and the packed loader
-  with `load_flags` 2, which de-interlaces the rows: the data hold all even
-  rows first, then all odd rows. It probably serves files rewritten by
-  Sony's Image Data Converter, which turns 0x014A into a SubIFD. [1][4][22]
-  **[S]**, link **[I]**
+- **Crops.** rawspeed then crops 1 column and 2 rows; rawler crops 4 rows
+  from the top and 4 from the bottom, and no columns. [16][18] **[S]**
+- **IDC-edited files.** dcraw and LibRaw read an A100 file whose width is
+  not 3880 as big-endian 12-bit packed data holding all even rows first,
+  then all odd rows, and trim 4 rows and 4 columns. [1][4] **[S]** Such
+  files are probably the ones Sony's Image Data Converter rewrote, which
+  turns 0x014A into a SubIFD. [22] **[S]**, link **[I]**
 
 ### ARW1 under Compression 32767
 
-Every decoder treats a 32767 strip whose size does not match W·H·bps/8 as
-ARW1 and adds 8 rows to H. [1][3][12][18] **[S]** No source named a body
-that needs it, and Clévy lists ARW 1.0 for the A100 only [23] **[S]**, but
+Every surveyed reader reads a 32767 strip whose size is not
+W·H·BitsPerSample/8 as ARW1 with 8 rows more than H. [1][3][12][18]
+**[S]** No source named a body that needs it, and Clévy lists ARW 1.0 for
+the A100 only [23] **[S]**, but
 the DSLR-A200 (FileFormat 3.0.0.0) writes exactly this:
 
 - Raw IFD 3880×2600, BitsPerSample 12, Compression 32767, strip of
@@ -429,53 +345,29 @@ A7 V, "Compressed" is the ARW 6.0 codec instead. [28] **[S]**, files
   each row decodes independently.
 - **Spans.** Each 32-pixel span of a row is two 16-byte blocks. The first
   codes the 16 even columns of the span (s, s+2, …, s+30), the second the
-  16 odd ones. In a Bayer row each block therefore holds a single color.
+  16 odd ones, so the pixel at position i (0 to 15) of a block is column
+  s + 2i or s + 1 + 2i. In a Bayer row each block therefore holds a single
+  color.
 - **Block fields.** Read the 16 bytes as one 128-bit little-endian integer
   and take fields from the least significant end:
 
   | Bits | Field |
   |---|---|
-  | 0–10 | `max`, 11 bits |
-  | 11–21 | `min`, 11 bits |
-  | 22–25 | `imax`, index (0–15) of the pixel that equals `max` |
-  | 26–29 | `imin`, index (0–15) of the pixel that equals `min` |
-  | 30–127 | 14 deltas of 7 bits, for the other 14 pixels in order |
+  | 0–10 | the block's maximum, 11 bits |
+  | 11–21 | the block's minimum, 11 bits |
+  | 22–25 | the position (0–15) of the pixel that holds the maximum |
+  | 26–29 | the position (0–15) of the pixel that holds the minimum |
+  | 30–127 | 14 deltas of 7 bits, for the other 14 pixels in order of position |
 
-- **Step.** The shift `sh` is the smallest k in 0 to 3 for which
-  `max − min < 128 << k`, and 4 if there is none; the delta step is
+- **Step.** The step is 2^k, where k is the smallest of 0 to 3 for which
+  maximum − minimum < 128 · 2^k, and 4 if there is none; the step is
   therefore 1, 2, 4, 8 or 16. RawDigger describes the step as a power of
-  two rounded from span/128 [24] **[S]**; the decoders all use the test
+  two rounded from span/128 [24] **[S]**; the decoders all use the rule
   above. [1][14] **[S]**
-- **Value.** Each of the 14 pixels is `min + (delta << sh)`, clamped to
-  2047. The result is an 11-bit code that indexes the tone curve.
-
-### Pixel loop
-
-Original pseudocode:
-
-```
-for row in 0 .. H:
-    line = strip[row*W .. row*W + W]
-    for s in 0, 32, 64, … while s + 32 <= W:
-        for half in 0, 1:                       # even columns, then odd
-            b   = u128 little-endian from the next 16 bytes of line
-            mx  = bits 0..10 of b;  mn  = bits 11..21
-            imx = bits 22..25;      imn = bits 26..29
-            if imx == imn: block error           # see the checks below
-            sh  = 0
-            while sh < 4 and (mx - mn) >= (128 << sh): sh += 1
-            next = 30
-            for i in 0 .. 16:
-                if i == imx:   code = mx
-                elif i == imn: code = mn
-                else:
-                    code = min(mn + ((bits next..next+6 of b) << sh), 2047)
-                    next += 7
-                out[row][s + half + 2*i] = curve[2 * code]
-```
-
-`mx − mn` is computed in signed arithmetic, so a crafted block with
-`max < min` gets `sh = 0`, as in dcraw. [1] **[S]**
+- **Value.** Each of the 14 other pixels is minimum + delta · 2^k, limited
+  to 2047. The result is an 11-bit code; the pixel's value is the tone
+  curve's entry 2 · code (see
+  [The 0x7010 tone curve](#the-0x7010-tone-curve)).
 
 ### The 0x7010 tone curve
 
@@ -483,20 +375,12 @@ for row in 0 .. H:
   values. Each is shifted right by 2 and masked to 12 bits to give the
   knots k1 to k4; k0 = 0 and k5 = 4095 are implied. ExifTool notes that
   only the middle four points are stored. [1][21] **[S]**
-- **The curve** has 4096 entries. Between knots k_i and k_(i+1), for i = 0
-  to 4, it rises by 2^i per entry, starting from 0: [1][12][18] **[S]**
-
-  ```
-  k = [0, t1, t2, t3, t4, 4095]      # t_n = (tag value n >> 2) & 0xFFF
-  curve[0] = 0
-  for i in 0 .. 5:                   # slopes 1, 2, 4, 8, 16
-      for j in k[i] + 1 ..= k[i+1]:
-          curve[j] = curve[j-1] + (1 << i)
-  ```
-
-  Dietz describes the same map from the encoder side: a five-segment
-  linear map from 14 bits to 11, whose step doubles in each segment. [25]
-  **[S]**
+- **The curve** has 4096 entries, starting from curve(0) = 0. Between
+  knots k_i and k_(i+1), for i = 0 to 4, it rises by 2^i per entry: for
+  k_i < j ≤ k_(i+1), curve(j) = curve(k_i) + 2^i · (j − k_i). The slopes
+  are therefore 1, 2, 4, 8 and 16. [1][12][18] **[S]** Dietz describes the
+  same map from the encoder side: a five-segment linear map from 14 bits
+  to 11, whose step doubles in each segment. [25] **[S]**
 - **Lookup at index 2·code.** The 11-bit code is doubled before the
   lookup, so only even entries are used and the largest index is 4094.
   [1][14][18] **[S]**
@@ -518,13 +402,12 @@ for row in 0 .. H:
   in the blocks checked. **[F]**
 - **Worst case.** With all four knots 0 the top entry is 16 · 4095 =
   65520, which still fits in 16 bits. **[I]**
-- **Non-monotonic knots.** No decoder checks that the knots increase; a
-  decreasing knot empties a segment and leaves whatever the table held
-  before (dcraw initializes it as the identity). [1][12] **[S]**,
-  consequence **[I]**
-- **Tag absent.** dcraw and LibRaw keep their identity curve; rawspeed and
-  rawler fail, because the tag is required. There is no documented Sony
-  default. [1][2][12][18] **[S]**
+- **Non-monotonic knots.** No surveyed reader checks that the knots
+  increase. A decreasing knot leaves the entries of a segment undefined;
+  dcraw gives them the identity. [1][12] **[S]**, consequence **[I]**
+- **Tag absent.** dcraw and LibRaw use the identity; rawspeed and rawler
+  refuse the file, because they require the tag. There is no documented
+  Sony default. [1][2][12][18] **[S]**
 
 ### Output scale and dithering
 
@@ -533,7 +416,7 @@ for row in 0 .. H:
 | dcraw | `curve[2·code] >> 2`, a 12-bit scale with maximum 4095 |
 | rawkit | `(curve[2·code] >> 2) << 2`: dcraw's value shifted back to 14-bit scale with the low two bits cleared, declared maximum 16383 |
 | LibRaw | `curve[2·code]` |
-| rawspeed | `curve[2·code]`, optionally dithered with a per-row seed from the row's first 24 bits |
+| rawspeed | `curve[2·code]`, optionally dithered |
 | rawler | `curve[2·code]`, always dithered |
 
 [1][2][14][18][20] **[S]** The black and white levels in the file are on
@@ -545,27 +428,31 @@ the scale of the undithered `curve[2·code]` (see
 All 15 cRAW files were checked, over 500,000 blocks in total (a sample of
 about 100 rows from each file). **[F]**
 
-- No block has `max < min`, and no block has `imax == imin`.
+- No block has its maximum below its minimum, and no block gives the
+  same position for both.
 - Same-color jumps across block boundaries average 8 to 57 code units,
   which is what a correct field layout gives (measured on 13 of the 15
   files).
-- 0.02 to 0.13 % of the reconstructed pixels exceed their block's `max`
+- 0.02 to 0.13 % of the reconstructed pixels exceed their block's maximum
   (for example 314 of 381,276 in file 2521; measured on 13 of the 15
-  files). So the decoders' clamp is to 2047 only; clamping to the block's
-  `max` would change real data.
+  files). So the limit is 2047 only; limiting a pixel to the block's
+  maximum would change real data.
 - Every cRAW width is a multiple of 32: 2816, 4288, 4608, 4736, 4928,
   5504, 5664, 6048, 8000.
 
 ### Disagreements
 
-- **`imax == imin`.** rawspeed rejects the block, since 14 deltas cannot
-  cover 15 pixels. dcraw and LibRaw store `max` there and read a 15th delta
-  at bit 128, past the block; on the row's last block that reads past
-  dcraw's row buffer. [1][14] **[S]**, overrun **[I]** No sample block has
-  it **[F]**, so rejecting it costs nothing on real files.
-- **Widths not a multiple of 32.** dcraw and LibRaw loop while
-  `col < W − 30`, leaving the last columns undecoded; rawspeed rejects the
-  file; rawler ignores the remainder. [1][14][18] **[S]**
+- **Both positions equal.** rawspeed rejects the block, since 14 deltas
+  cannot cover 15 pixels. dcraw and LibRaw give that pixel the maximum and
+  read a 15th delta at bit 128, past the block; on the row's last block
+  that reads past the row's data. [1][14] **[S]**, overrun **[I]** No
+  sample block has it **[F]**, so rejecting it costs nothing on real
+  files.
+- **Maximum below minimum.** dcraw reads such a block with a step of 1.
+  [1] **[S]** No sample block has it. **[F]**
+- **Widths not a multiple of 32.** dcraw and LibRaw leave the last
+  columns undecoded; rawspeed rejects the file; rawler ignores the
+  remainder. [1][14][18] **[S]**
 - **Output scale and dithering**, as in the table above.
 - **Step rule.** Decoders use "smallest power with span < 128·2^k";
   RawDigger's description rounds. [1][14][24] **[S]**
@@ -597,7 +484,7 @@ data should return the plain lookup.
   the same Compression 32767 container: B = 1.5·W·H, two pixels in three
   bytes, little-endian:
   `p0 = b0 | (b1 & 15) << 8`, `p1 = b1 >> 4 | b2 << 4`. [1][12][18] **[S]**
-  (formula derived from the decoders' bit readers **[I]**)
+  (formula inferred from how the decoders read the data **[I]**)
 - **Bodies.** A700, A850 and A900 per the decoders [12][18] **[S]**; the
   A900 sample is exactly 1.5000 bytes per pixel (6080×4048, file 5858).
   **[F]** The A850 sample on raw.pixls.us is not CC0 and was not
@@ -623,9 +510,9 @@ data should return the plain lookup.
   uncompressed file (BitsPerSample 12, Compression 1, B = 2·W·H) has every
   value a multiple of 4 (the low two bits are zero over 200 rows), a maximum
   of 16376 and a minimum near 540. So its 0x7310 black of 512 applies
-  unscaled. File 1311 **[F]** The decoders' source leaves this open; the
-  sample agrees with dcraw's rule of setting bps to 14 for any Sony
-  B = 2·W·H file. [1] **[S]** Do not divide the levels by 4 for
+  unscaled. File 1311 **[F]** The decoders leave this open; the sample
+  agrees with dcraw, which reads every Sony file with B = 2·W·H at 14
+  bits. [1] **[S]** Do not divide the levels by 4 for
   Compression 1; divide only for 12-bit packed data and for ARW1.
 - **SR2** is the big-endian variant; see [SR2](#sr2-dsc-r1).
 
@@ -702,10 +589,10 @@ ignores it in favor of its table. [4][12][18] **[S]**
 - **Decoders.**
   - rawspeed rejects them (Photometric must be 32803). [12] **[S]**
   - rawler converts them to linear RGB, doubles the black level for YCbCr
-    data and treats white balance as applied; its maintainer had to adapt
-    the 4:2:0 prediction order, which differs from the generic lossless
-    JPEG decoder's. [18] **[S]**
-  - LibRaw's Sony YCC loader credits dnglab; it marks the result as
+    data and treats white balance as applied. Its issue tracker reports
+    that the 4:2:0 tiles use a prediction order that a generic lossless
+    JPEG decoder does not assume. [18] **[S]**
+  - LibRaw's reading of them credits dnglab; it marks the result as
     white-balanced, sets black 0 and an *estimated* maximum (17536, or
     18091 without RGB conversion), and converts with BT.601-style
     coefficients around a chroma midpoint of 16383. [5][9] **[S]**
@@ -780,15 +667,15 @@ unaffected.
 | Project | ARW 6.0 status | Conf. |
 |---|---|---|
 | LibRaw | decoder on master since PR #824 (merged 2026-07-18), not in release 0.22.2; the file header says the code was generated with AI assistance [10][11] | **[P]**/**[S]** |
-| rawspeed | PR #972 closed unmerged 2026-09-13; it claimed a byte-exact match with Adobe's output; Compression 32766 throws [12][17] | **[P]**/**[S]** |
-| rawler (dnglab) | refused as unsupported (no camera file defines mode "arw6"); the decompressor behind it is an unreachable `unimplemented!()` stub; an AI-assisted port in PR #825 is open [18] | **[S]** |
+| rawspeed | PR #972 closed unmerged 2026-09-13; it claimed a byte-exact match with Adobe's output; refuses Compression 32766 [12][17] | **[P]**/**[S]** |
+| rawler (dnglab) | refuses the files as unsupported; an AI-assisted port in PR #825 is open [18] | **[S]** |
 | arw6_decode | independent Python decoder and format write-up, AI-assisted, **no license file** [30] | **[P]** |
 | Adobe | Camera Raw and Lightroom reportedly decode A7 V files from about April 2026 [35] | **[S]** |
 
 ### Patents: a legal question
 
-LibRaw names the stream "llvc3", and the write-up calls the format "LLVC
-v3". [10][30] **[S]** LLVC is the name of a Sony line-based wavelet video
+LibRaw's decoder and the write-up both call the format LLVC version 3.
+[10][30] **[S]** LLVC is the name of a Sony line-based wavelet video
 codec published as SMPTE RDD 34:2015, which uses a 5/3 lifting filter,
 16-line units and 128-bit words, and which directs intellectual-property
 inquiries to Sony. [31] **[P]** That ARW 6.0 descends from LLVC is a strong
@@ -807,7 +694,7 @@ see [open-questions.md](open-questions.md). This is not legal advice.
   16-bit words inside a little-endian file: read big-endian, every value is
   below 16384 (480 to 16368); read little-endian, only a quarter are.
   File 3221 **[F]** dcraw and LibRaw switch byte order by raw width
-  (3984), rawspeed by a camera hint and rawler by model. [1][4][12][18]
+  (3984), rawspeed by a setting per camera and rawler by model. [1][4][12][18]
   **[S]** Decide it from FileFormat 1.0.0.0, and cross-check with the
   value range. **[I]**
 - **What is encrypted** in SR2, as in every later ARW, is the SR2SubIFD
@@ -830,8 +717,8 @@ image data are encrypted**, with the same keystream as the SR2SubIFD.
 - **The key chain**, checked on the F828 sample: [22] **[S]**, file 1351
   **[F]**
   1. Read the byte b at MakerNote start + 0x8DDC (164,580 + 0x8DDC =
-     200,896 in the sample, where b = 109). ExifTool's comment on the
-     constant asks "why?".
+     200,896 in the sample, where b = 109). No source explains the
+     constant.
   2. The master key is the big-endian u32 at that position + 4b (201,332,
      value 0xABEF9C88).
   3. Decrypt SRF1 (at 164,600) with the master key: it becomes a two-entry
@@ -839,8 +726,7 @@ image data are encrypted**, with the same keystream as the SR2SubIFD.
   4. DataKey is the little-endian u32 at byte 22 of the decrypted SRF1, the
      value field of its second entry (0x6ACE748A).
   5. Decrypt the image with DataKey as one continuous keystream from its
-     first byte (dcraw decrypts row by row but seeds only once). The
-     result is big-endian 16-bit words.
+     first byte. The result is big-endian 16-bit words.
 - **The image.** At 862,144, exactly the end of the MakerNote, 16,531,200
   bytes long (3360 · 2460 · 2), running to the end of the file. Decrypted,
   every value is below 2^14 (up to 16368); undecrypted, only a quarter
@@ -883,15 +769,15 @@ image data are encrypted**, with the same keystream as the SR2SubIFD.
 - **Channel order** R, G, G2, B: the per-channel means above black are
   706, 1552, 1552 and 795; the two greens differ from each other by 26 on
   average, red and blue by 118. File 3255 **[F]** LibRaw's changelog says
-  the same and its loader reorders the last two channels to its own R, G,
+  the same, and LibRaw reorders the last two channels into its own R, G,
   B, G. [7][11] **[S]**
 - **PixelShiftInfo** (MakerNote 0x202F) ends in 0, 4 on the composite and
   1, 4 on the source frame. Files 3255, 3251 **[F]**
 - **16-shot files** double the width and height; LibRaw crops 32 columns
   from 4-shot files and 64 from 16-shot files (raw width above 12000).
   [5][7] **[S]** A 16-shot file is about 2 GB. [34] **[P]**
-- **Decoders.** LibRaw reads ARQ; rawspeed, rawler and rawloader have no
-  ARQ path. [7][12][18][19] **[S]**
+- **Decoders.** LibRaw reads ARQ; rawspeed, rawler and rawloader do
+  not. [7][12][18][19] **[S]**
 
 ## The SR2SubIFD: where the levels are
 
@@ -910,27 +796,11 @@ what a raw decoder needs.
 - **The key is a constant.** 0x7221 is the bytes `11 22 33 44` on every ARW
   sampled, from the A200 to the A7 V; only the R1 has another key. **[F]**
 - **The keystream.** A 32-bit key seeds a lagged-Fibonacci XOR generator
-  through a linear congruential step. Original pseudocode: [1][12][18][22]
-  **[S]**
-
-  ```
-  seed(K):                                   # all arithmetic on u32
-      for i in 0 .. 4:
-          K = K * 48828125 + 1               # wrapping; 48828125 = 5^11
-          x[i] = K
-      x[3] = (x[3] << 1) | ((x[0] ^ x[2]) >> 31)
-      for i in 4 .. 127:
-          x[i] = ((x[i-4] ^ x[i-2]) << 1) | ((x[i-3] ^ x[i-1]) >> 31)
-      for m >= 127:
-          x[m] = x[m-127] ^ x[m-63]
-  keystream word n (n = 0, 1, …) is x[127 + n]
-  decrypt: XOR data word n, read as big-endian u32, with keystream word n;
-           write it back big-endian; leave a tail of 1 to 3 bytes as it is
-  ```
-
-  The cipher is its own inverse. LibRaw computed the multiply in signed
-  `int` until 0.20.0, which is undefined behavior; in Rust it is
-  `wrapping_mul` and `wrapping_add` on `u32`. [6] **[S]**
+  through a linear congruential step, on 32-bit words that wrap. Each data
+  word, read as a big-endian u32, is XOR-ed with the next keystream word;
+  a tail of 1 to 3 bytes is left as it is, and the cipher is its own
+  inverse. [1][12][18][22] **[S]** The recurrence is in
+  [makernote-and-metadata.md](makernote-and-metadata.md#6-the-sr2-keystream).
 - **Checked.** The keystream decrypts the SR2SubIFD of all 34 SR2, ARW and
   ARQ samples that have one (every sample except the A100 and the SRF): the
   result parses as an IFD of 101 to 232 entries with valid types. The
@@ -939,8 +809,7 @@ what a raw decoder needs.
 - **Offsets inside are absolute.** The decrypted IFD's value offsets are
   file offsets, so rebase them by a checked subtraction of the SR2SubIFD's
   offset, and treat any offset outside the decrypted block as absent.
-  rawspeed pads its buffer and forbids pointers into the padding; dcraw
-  re-parses with a negative base. [1][12] **[S]**
+  [1][12] **[S]**
 - **Plain copies.** From ARW 2.3.3 (FileFormat 3.3.3.0, the ILCE-9 of
   2017) the raw IFD also carries 0x7310 BlackLevel and 0x7313
   WB_RGGBLevels in the clear, identical to the SR2SubIFD values; the A7R II
@@ -980,9 +849,10 @@ what a raw decoder needs.
   RGGB in rawler's camera file; not measured), so on
   the samples they diverge only on the R1, where 0x7300's order is
   unknown. **[I]**
-- **Fallbacks.** When the file gives nothing, dcraw uses 128 << (bps − 12)
-  for raw widths above 3888 and 200 << (bps − 12) for 5504-wide DSC bodies;
-  LibRaw uses 512 for cRAW and 128 << (bps − 12) otherwise. [1][4] **[S]**
+- **Fallbacks.** When the file gives nothing, dcraw falls back to a black
+  of 128 at 12 bits (512 at 14) for raw widths above 3888, and 200 (800 at
+  14) on the 5504-wide DSC bodies; LibRaw to 512 on cRAW and to 128 at 12
+  bits (512 at 14) otherwise. [1][4] **[S]**
   rawspeed lists a black of 0 for the 12-bit A200 to A390 and 495 for the
   F828. [16] **[S]** (quoted for cross-checking, not for transcription)
 - **Masked pixels.** rawspeed declares a black area only for the RX1R (14
@@ -994,7 +864,7 @@ what a raw decoder needs.
 - **SR2SubIFD 0x787F** is 15360 in every sample that has it: one value on
   the A200, A700 and A900, three from the NEX-5 on; the R1 has none.
   **[F]** rawspeed and rawler use it as the white point (rawspeed takes
-  the first value); LibRaw treats it only as a "linear maximum". [6][12][18]
+  the first value); LibRaw does not use it as the white point. [6][12][18]
   **[S]**
 - **DNG WhiteLevel 0xC61D** in the raw IFD, from the ILCE-9 on: 16383
   (16380 on the RX100M6), and 16383 on ARW 6.0 too. Absent from the YCbCr
@@ -1054,13 +924,10 @@ what a raw decoder needs.
   older full-frame bodies and trims 32 columns. [5] **[S]**
 - **Older bodies have no crop tags**; dcraw and LibRaw trim by raw width
   (for example 3984 to 3925 for the R1, −32 for 4288, −24 for 6048 with a
-  further −6 on the RX1 and A99, −32 for 8000). dcraw has no case for
-  9600; LibRaw trims 9600 by 36 on the ILCE-7RM5, ILCE-7CR and ILX-LR1
-  and by 32 on other 9600-wide bodies (the ILCE-7RM4). LibRaw also has
-  per-mode tables for newer bodies, whose fallbacks differ: the ILCE-7RM5
-  and ILCE-9M3 groups trim 32 and set a "vendor crop suggested" warning,
-  the ILCE-1 and ILCE-7M4 groups only set the warning, and the ILCE-6700
-  group trims 32 without one. [1][4] **[S]**
+  further −6 on the RX1 and A99, −32 for 8000). [1][4] **[S]** LibRaw
+  trims 9600-wide files by 36 on the ILCE-7RM5, ILCE-7CR and ILX-LR1 and
+  by 32 on the ILCE-7RM4, and keeps a table of crops per mode for newer
+  bodies. [4] **[S]**
 
 ### White balance
 
@@ -1103,10 +970,8 @@ support article, read through search extracts only)
 - **Tags**: BitsPerSample said 12 on file 1311 but SonyRawFileType said 0
   ("14-bit"). **[F]** So neither tag reliably flags a fallback; the low two
   bits of the data do.
-- LibRaw has two heuristics for "14-bit metadata on 12-bit data": it
-  divides black by 4 when it exceeds 256 on packed Sony data, and divides
-  its linear maximum by 4 when that exceeds the maximum by up to four
-  times. [5] **[S]**
+- LibRaw guesses the scale of 12-bit data from the size of the levels.
+  [5] **[S]** The low two bits of the data are a direct test.
 - No 12-bit fallback sample (for example A6300 or A6500 silent shutter)
   was checked.
 
@@ -1157,7 +1022,7 @@ NEF.
 | Item | In the file? | Needed for | Notes |
 |---|---|---|---|
 | ARW1 prefix code | no | A100, A200 (and probably A230–A390) | Reduces to the rule in [The category code](#the-category-code); no table is needed. **[I]** |
-| Keystream constants | no | SR2SubIFD (levels and white balance of every ARW), SRF image | A formula with two constants (5^11 and the lags 127 and 63); fully described above. **[I]** |
+| Keystream constants | no | SR2SubIFD (levels and white balance of every ARW), SRF image | A formula with two constants (5^11 and the lags 127 and 63); fully described in [makernote-and-metadata.md](makernote-and-metadata.md#6-the-sr2-keystream). **[I]** |
 | SRF key position 0x8DDC | no | F828, V3 | One constant; the data offset and length should be in SRF2 but were not located. [22] **[S]**, **[F]** |
 | MakerNote substitution cipher | no | metadata only (0x2010, 0x9050, 0x94xx), not raw data | The inverse is computable from the formula b³ mod 249; see [makernote-and-metadata.md](makernote-and-metadata.md). |
 | cRAW tone curve | yes (0x7010) | cRAW | Five slopes from four knots; no default when the tag is absent. |
@@ -1173,7 +1038,7 @@ Graphite's rawkit (MIT OR Apache-2.0) is the only permissively labeled
 Rust code with an ARW1 table, a cRAW loop and a 0x7010 curve builder; they
 match dcraw element for element **[S]**, and that they were translated
 from it is **[I]**. It does not change the list above: the ARW1 code needs
-no table, and the curve builder is a five-line rule.
+no table, and the curve is a five-segment rule.
 
 ## Decoder robustness checklist
 
@@ -1201,10 +1066,11 @@ checklist ([../nef/raw-data.md](../nef/raw-data.md)) applies as well.
    category 0 without a shift; define what happens when the bits run out.
    [37] **[S]**
 6. **cRAW.** Require W ≥ 32 and W a multiple of 32 (or say what happens to
-   a partial span); require exactly W·H bytes; compute `max − min` signed;
-   reject or flag `imax == imin` and never read past the 16-byte block;
-   clamp to 2047. rawspeed once read out of bounds on widths below 32
-   (an unsigned `w − 30`), and LibRaw once overran its row buffer.
+   a partial span); require exactly W·H bytes; reject or flag a block whose
+   maximum is below its minimum or whose two positions are equal, and never
+   read past the 16-byte block; limit codes to 2047. rawspeed once read
+   out of bounds on widths below 32 (an unsigned `w − 30`), and LibRaw
+   once overran its row buffer.
    [37] **[S]**
 7. **Tone curve.** Mask each knot to 12 bits, build the table in `u32`,
    reject or flag decreasing knots, and index only with values below the
@@ -1330,9 +1196,9 @@ These are also tracked in [open-questions.md](open-questions.md).
 - **A100 levels.** Where the A100's black and white levels are, if
   anywhere in the MRW block.
 - **Implementation conflicts** to settle with samples: the cRAW output scale
-  and the `imax == imin` policy (no sample has it), the A100 crop and CFA
-  pattern (GRBG or RGGB), the black-level channel order, and the M/S RGB
-  conversion.
+  and the policy for a block whose two positions are equal (no sample has
+  it), the A100 crop and CFA pattern (GRBG or RGGB), the black-level
+  channel order, and the M/S RGB conversion.
 - **ARW 6.0 and decryption** as legal questions (the curve's provenance,
   a possible LLVC or JPEG XS patent link, and decryption under
   anti-circumvention law, which every open decoder has done for about 20
