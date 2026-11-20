@@ -38,9 +38,10 @@ The research also had to establish three practical points:
   [overview](README.md#confidence-tags)).
 - Where sources disagree, the disagreement is recorded rather than resolved
   by guesswork; where a sample file settles it, the page names the file.
-- Algorithms are restated in prose or original pseudocode. The raw data
-  page and the MakerNote page's keystream section were later restated as
-  facts about the format, in prose, tables and formulas (#193).
+- Algorithms were restated in prose or original pseudocode at the time. The
+  pages now use prose, numbered steps, tables and formulas. The raw data page
+  and the MakerNote page's keystream section were restated as facts about the
+  format (#193).
 - Copy no code and no wholesale data tables (such as the ARW1 code table,
   the MakerNote cipher's inverse table, or any tone or delinearization
   curve); individual facts such as tag IDs, offsets, value meanings and
@@ -156,15 +157,15 @@ On the sample files, with the throwaway scripts described above:
 - **SR2 keystream.** It decrypts the SR2SubIFD of all 34 files that have
   one (every file except the A100 and the SRF) into a valid IFD of 101 to
   232 entries. The key is `11 22 33 44` on every ARW and different on the
-  R1. The ring-buffer and growing-sequence forms of the generator were
-  shown equal by computation over random keys.
+  R1. Two descriptions of the keystream that differ in form were
+  shown, by computation over random keys, to give the same words.
 - **MakerNote cipher (b³ mod 249).** Deciphered shutter counts increase in
   capture order on four bodies (ILCE-7M4, ILCE-9, ILCE-7RM2, ILCE-7M5). The
   inverse exponent 55 was checked by computation for all 256 byte values.
 - **cRAW block layout.** Over 500,000 blocks in 15 files: no block has its
   maximum below its minimum or its two indices equal, same-color jumps across
   block boundaries are small, and every cRAW width is a multiple of 32. The
-  tone-curve builder gives 17,204 at the top code with the common knots.
+  tone curve built from the common knots reaches 17,204 at the top code.
 - **ARW1.** File 2346 decodes as 3881 columns by 2608 rows, consuming all
   but 5 of 10,039,268 bytes with no range violation; file 2271 decodes with
   eight extra rows, leaving 5 bytes.
@@ -184,8 +185,8 @@ On the sample files, with the throwaway scripts described above:
 
 From the sources:
 
-- **rawkit and dcraw.** rawkit's ARW1 table, cRAW loop and tone-curve
-  builder were compared with dcraw 9.28 and match element for element.
+- **rawkit and dcraw.** rawkit's ARW1 table, cRAW decoding and 0x7010 tone
+  curve were compared with dcraw 9.28 and match element for element.
 - **Security records.** The fix commits for CVE-2017-6887, CVE-2020-35535
   and CVE-2026-88387 were checked against LibRaw's tags and history; the
   disagreements with NVD are recorded in [security.md](security.md).

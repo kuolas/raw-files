@@ -98,18 +98,19 @@ that would answer Part 2.
      0xC61D says 16383 in the same file; rawspeed and rawler use the first,
      libopenraw the second, LibRaw neither. Report both with provenance, or
      pick one?
-   - **cRAW output scale.** dcraw writes the curve value shifted right by
-     2 (12-bit scale); LibRaw, rawspeed and rawler write the curve value,
-     rawspeed optionally and rawler always dithered. The pages recommend
-     the undithered curve value, which can exceed 16383.
+   - **cRAW output scale.** dcraw outputs the curve value divided by 4
+     (12-bit scale). LibRaw, rawspeed and rawler output the curve value
+     itself, rawspeed optionally and rawler always dithered. The pages
+     recommend the undithered curve value, which can exceed 16383.
    - **A cRAW block whose two positions are equal.** rawspeed rejects the
-     block; dcraw and LibRaw read a fifteenth delta past it. No sample
-     block has it, so rejecting costs nothing on real files.
+     block; dcraw and LibRaw take one pixel from the bits after it. No
+     sample block has it, so rejecting costs nothing on real files.
    - **cRAW widths not a multiple of 32.** dcraw and LibRaw leave the last
      columns undecoded, rawspeed rejects the file, rawler ignores the
      remainder. Every checked cRAW width is a multiple of 32.
-   - **ARW1 range violations.** dcraw and LibRaw flag and continue,
-     rawspeed throws, rawler wraps.
+   - **ARW1 range violations.** dcraw and LibRaw report the violation and
+     finish the file, rawspeed fails the file, and rawler outputs the value
+     wrapped around.
    - **M/S output form.** A three-channel YCbCr image flagged as
      white-balanced, or an RGB conversion (LibRaw and rawler convert, with
      different black levels)? The pages suggest YCbCr with any conversion
@@ -176,7 +177,7 @@ checked.
   ([container-and-previews.md](container-and-previews.md),
   [security.md](security.md)).
 - **A100 firmware 1.00.** A file whose IFD1 offset is 0x10000 too small, to
-  confirm ExifTool's repair; file 2346 is firmware 1.04
+  confirm the 65,536-byte offset error; file 2346 is firmware 1.04
   ([container-and-previews.md](container-and-previews.md),
   [security.md](security.md)).
 - **SRF details.** Whether the DSC-V3 has the F828's IFD0 and IFD1 layout,
@@ -265,7 +266,7 @@ checked.
   whether SRF3 to SRF5 are plain; then read RawDataOffset and
   RawDataLength from SRF2 and compare them with 862,144 and 16,531,200. This
   decides where SRF white balance lives and whether the chain can be walked
-  without dcraw's absolute constants ([raw-data.md](raw-data.md),
+  without other decoders' fixed file positions ([raw-data.md](raw-data.md),
   [makernote-and-metadata.md](makernote-and-metadata.md),
   [security.md](security.md)).
 - **F828 CFA.** Decrypt and decode file 1351 and look for four distinct
@@ -296,9 +297,9 @@ checked.
 ### Security
 
 - **Enciphered block lengths.** The actual lengths of 0x2010 and 0x9050 on,
-  for example, the ILCE-9, ILCE-1, ILCE-7M4 and ILCE-7M5, against the
-  largest fixed offset LibRaw and ExifTool read. Only matters if those
-  blocks are ever read ([security.md](security.md)).
+  for example, the ILCE-9, ILCE-1, ILCE-7M4 and ILCE-7M5. Compare them with
+  the largest offset at which LibRaw or ExifTool reports a field. Only matters
+  if those blocks are ever read ([security.md](security.md)).
 
 Other questions that bear on security (edited and re-saved files, SRF,
 cRAW highlights, ARW1 widths, 12-bit fallback, A100 firmware 1.00) are
@@ -394,8 +395,8 @@ SHA-256 are in [test-data.md](test-data.md#files-checked).
   ([makernote-and-metadata.md](makernote-and-metadata.md)).
 - **The A100 raw width**: 3881 columns, not 3880 (file 2346)
   ([raw-data.md](raw-data.md)).
-- **ARW1 under Compression 32767**: written by the DSLR-A200, which
-  explains the decoders' extra eight rows (file 2271)
+- **ARW1 under Compression 32767**: written by the DSLR-A200, whose
+  stream holds eight rows more than the image (file 2271)
   ([raw-data.md](raw-data.md)).
 - **Level scaling**: 12-bit uncompressed data are stored at 14-bit scale
   (file 1311), while 12-bit packed data need the levels divided by 4 (file

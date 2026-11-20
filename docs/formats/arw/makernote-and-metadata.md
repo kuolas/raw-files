@@ -92,7 +92,7 @@ and raw-files should detect them by bytes. [S][2][3][6][7]
 | Layout | Header | IFD starts at | Offsets relative to | Byte order | Seen in |
 |---|---|---|---|---|---|
 | Headerless | none | MakerNote + 0 | the outer TIFF header | the outer file's | every ARW, SR2 and ARQ sample except the A100, including the DSC-R1's SR2 (file 3221) and the Hasselblad Lunar (file 4051) [F] |
-| `SONY DSC` header | `SONY DSC ` then three NUL bytes (12 bytes) | MakerNote + 12 | the outer TIFF header | ExifTool detects it; LibRaw and dcraw force little-endian; exiv2 uses the file's | the DSLR-A100's ARW 1.0 (file 2346) [F]; every Sony camera JPEG checked, from the DSLR-A100's to the ILCE-7M3's ([in a JPEG file](#in-a-jpeg-file)) [F]; JPEGs from DSC compacts [S] |
+| `SONY DSC` header | `SONY DSC ` then three NUL bytes (12 bytes) | MakerNote + 12 | the outer TIFF header | the file's (LibRaw and dcraw read it as little-endian whatever the file) | the DSLR-A100's ARW 1.0 (file 2346) [F]; every Sony camera JPEG checked, from the DSLR-A100's to the ILCE-7M3's ([in a JPEG file](#in-a-jpeg-file)) [F]; JPEGs from DSC compacts [S] |
 | Other 12-byte headers | `SONY CAM `, `SONY MOBILE`, `\0\0SONY PIC\0`, `VHAB` + five spaces + NUL | MakerNote + 12 | the outer TIFF header | as above | listed in ExifTool's MakerNote types page [27]; seen in no raw sample [S][F] |
 | Olympus-format | `SONY PI\0` (IFD at + 12) or `PREMI\0` (+ 8), with Olympus tag tables | as stated | the outer TIFF header | detected | JPEGs of early compacts (DSC-S650 and others) [S][27] |
 | Text block | `SONY PIC\0` | not an IFD | n/a | n/a | JPEGs of some compacts [S][27] |
@@ -108,8 +108,7 @@ Two claims found in the sources did not survive the samples:
 
 - One reading of ExifTool's comments is that every ARW MakerNote is
   headerless. The A100 is the exception: file 2346 starts `SONY DSC ` and
-  three NUL bytes, with a 28-entry IFD at + 12. [F] LibRaw's source labels
-  its `SONY` branch "DSLR-A100", which fits. [S][11]
+  three NUL bytes, with a 28-entry IFD at + 12. [F]
 - The Hasselblad rebadges were said to use the `VHAB` header. The Lunar
   (file 4051, a NEX-7 underneath) is headerless; its MakerNote starts
   `4C 00`, a little-endian count of 76 entries. [F] Whether the Stellar, HV
@@ -131,14 +130,14 @@ Two claims found in the sources did not survive the samples:
    is SRF0, the start of an SRF chain ([section 10](#10-a100-sr2-and-srf)).
    [I]
 
-Test the signatures before Make. The projects disagree here: ExifTool tests
-all the byte patterns above, exiv2 recognizes only `SONY DSC \0\0\0` and
-parses everything else from a `SONY` Make as headerless, and LibRaw and
-dcraw accept any `SONY` prefix, skip 12 bytes and force little-endian. A
-`SONY PI\0` or `SONY PIC\0` MakerNote is misread by the last approach, and a
-`VHAB` one takes LibRaw's + 0 path and fails its entry-count check. [S][3][7]
-[11][14][I] On the samples only the headerless, `SONY DSC` and SRF layouts
-occur, and the projects agree on them. [F]
+Test the signatures before Make. The projects disagree here. ExifTool reads
+every layout above. exiv2 reads only `SONY DSC \0\0\0`, and reads any other
+MakerNote in a file with a `SONY` Make as headerless. LibRaw and dcraw read
+any MakerNote that starts `SONY` as a 12-byte header and a little-endian
+IFD. So they misread a `SONY PI\0` or `SONY PIC\0` MakerNote, and LibRaw
+reads no IFD from a `VHAB` one. [S][3][7][11][14][I] On the samples only
+the headerless, `SONY DSC` and SRF layouts occur, and the projects agree
+on them. [F]
 
 The Make test must accept `HASSELBLAD`: the Lunar contains no `SONY` string
 anywhere, so a Sony check keyed on Make alone rejects a Sony-built file.
@@ -160,9 +159,9 @@ anywhere, so a Sony check keyed on Make alone rejects a Sony-built file.
   pointer on older bodies and the start of the value data on newer ones.
   Measured: four zero bytes on the A100, A200, A700, A900, NEX-5, SLT-A55V
   and the R1's SR2; value data immediately on the RX100, SLT-A99V, Lunar and
-  every ILCE and RX body from 2012 on. [F] This matches ExifTool's
-  relocation heuristic, which expects a 4-byte gap for DSLR-, SLT-A33/A35/
-  A55V and NEX-3/5/C3/VG10E bodies and none for the rest. [S][3] Never
+  every ILCE and RX body from 2012 on. [F] ExifTool expects a 4-byte gap
+  on DSLR-, SLT-A33/A35/A55V and NEX-3/5/C3/VG10E bodies and none on the
+  rest, so the R1's SR2 is an exception to it. [S][3][F] Never
   require or follow a next pointer in a Sony MakerNote.
 - **Where it sits.** The MakerNote starts at byte 870 to 1234 in files with
   FileFormat up to `3 3 1 0` (files 3221, 2346) and at byte 5144 to 5294
@@ -192,9 +191,9 @@ is the base of its offsets
   ILCE-7M3, ILCE-7RM2 and DSC-RX100M4 JPEGs, and every focus tag's value
   lies inside the length the MakerNote declares. [F]
 - **Its byte order is the file's**: little-endian on four files,
-  big-endian on the DSLR-A100's. A reader that forces little-endian, as
-  the table above records of LibRaw and dcraw, would misread the A100
-  JPEG's MakerNote. [F][I]
+  big-endian on the DSLR-A100's. LibRaw and dcraw read this MakerNote as
+  little-endian (table above), so they would misread the A100 JPEG's.
+  [F][I]
 - **One entry points outside the Exif segment.** The ILCE-6000 JPEG's tag
   0x2001, PreviewImage, which ExifTool's tables describe as an HD-size
   preview in JPEG images [S][1], declares 549,518 bytes at an offset that
@@ -292,8 +291,7 @@ Notes:
   ([ADR011](../../architecture-decisions/adr011-metadata-from-standard-tags.md)).
 - **Tag order trap.** 0xB001 comes after 0x2010, 0x9050 and the 0x94xx tags
   in IFD order, so anything that chooses a block layout by ModelID must parse
-  the whole IFD first. LibRaw buffers those blocks until it reaches 0xB001.
-  [S][9]
+  the whole IFD first. [S][9]
 
 ### FileFormat (0xB000)
 
@@ -319,8 +317,7 @@ Four bytes. ExifTool's names, and the versions seen in the samples: [S][1][F]
 | 6 0 0 0 | ARW 6.0 | ILCE-7M5 (8846 to 8850) |
 
 - There is no ARW 3.x. exiv2 labels a few values differently ("SR2 1.0",
-  "ARW 5.0.0"); this is cosmetic. LibRaw folds the bytes into a decimal
-  number (3310 for 3 3 1 0). [S][1][8][9]
+  "ARW 5.0.0"); this is cosmetic. [S][1][8]
 - The version follows the firmware, not only the body: the SLT-A99V with
   firmware 1.02 writes 2.3.1 where Clévy's body table says 2.3, the
   ILCE-7RM3 with firmware 3.00 writes 2.3.5 where Clévy says 2.3.3 and
@@ -331,8 +328,8 @@ Four bytes. ExifTool's names, and the versions seen in the samples: [S][1][F]
 - An exiv2 dump sweep over raw.pixls.us reported no FileFormat or ModelID
   for the Lunar; the bytes of file 4051 have both (3 3 0 0 and 289). [S][24]
   [F]
-- The SRF sample (file 1351) has no FileFormat tag. ExifTool sets the file
-  type to SR2 when FileFormat is 1 0 0 0 and otherwise assumes ARW. [S][1][F]
+- The SRF sample (file 1351) has no FileFormat tag. ExifTool gives the file
+  type SR2 when FileFormat is 1 0 0 0, and ARW otherwise. [S][1][F]
 
 ### SonyModelID (0xB001)
 
@@ -401,8 +398,7 @@ recognizable bytes; do not take that as a sign that it is plain.
 
 - Build a 256-entry table once: for every b from 0 to 248 set
   `inverse[b³ mod 249] = b`, and set `inverse[b] = b` for b from 249 to 255.
-  A `const fn` can do this at compile time; rawler does exactly that and
-  exiv2 builds the table at run time. [S][8][16]
+  A `const fn` can do this at compile time.
 - Or raise to the inverse exponent: for c from 0 to 248, the plain byte is
   c^55 mod 249. 3 × 55 = 165 = 2 × 82 + 1, and 249 is square-free, so
   (b³)^55 ≡ b for every b. [I] (checked by computation for all 256 values)
@@ -416,8 +412,8 @@ plaintext. Multi-byte fields in 0x9050 and the 0x94xx blocks are
 little-endian in ExifTool, exiv2 and LibRaw. [S][2][8][9]
 
 **Which blocks.** ExifTool deciphers 0x2010, 0x900B, 0x9050 and every 0x94xx
-tag; its comment says encryption is certain for 0x2010, 0x9050, 0x9400,
-0x9402 and 0x9403 and assumed for the rest. exiv2 deciphers 0x2010, 0x9400,
+tag. Of these, 0x2010, 0x9050, 0x9400, 0x9402 and 0x9403 are known to be
+enciphered, and the rest are assumed to be. exiv2 deciphers 0x2010, 0x9400,
 0x9402, 0x9403 and 0x9404 (not 0x9050). LibRaw deciphers fields from
 0x2010, 0x9050, 0x9400 to 0x9406, 0x940C, 0x940E and 0x9416. [S][2][8][9]
 
@@ -428,17 +424,27 @@ Tag9050a to Tag9050d, Tag9400a to Tag9400c, and so on). The projects pick
 the layout differently, and a wrong pick yields silently wrong values,
 never an error. [S][1][2][9]
 
-| Block | ExifTool | exiv2 | LibRaw |
-|---|---|---|---|
-| 0x2010 | Model-name patterns | one layout, by Model list | ModelID |
-| 0x9050 | Model-name patterns; for ILCE-1M2, 7M5 and 7RM6 the 9050d layout only if the block starts with five zero bytes | not decoded | ModelID; pre-production Models force 9050a |
-| 0x9400 | the **enciphered** first byte: 0x07, 0x09, 0x0A → 9400a; 0x0C → 9400b; the discrete set 0x23, 0x24, 0x26, 0x28, 0x31, 0x32, 0x33, 0x41, 0x43 → 9400c | 9400c only, for the same set plus 0x34 (DSC-RX10M5); no 9400a or 9400b | 0x23, 0x24, 0x26, 0x28, 0x31, 0x32, 0x33 → 9400c; 0x0C → 9400b; 0x0A only → 9400a; 0x07, 0x09, 0x41 and 0x43 not handled |
-| 0x9404, 0x9405, 0x9406 | enciphered first byte (and the third or fourth byte) | 0x9404 the same way | 0x9404 and 0x9405 the same way |
+The layout of 0x2010 and 0x9050 goes with the body. The layout of 0x9400
+goes with its **enciphered** first byte:
+
+- 0x07, 0x09 and 0x0A mark 9400a, and 0x0C marks 9400b;
+- 0x23, 0x24, 0x26, 0x28, 0x31, 0x32, 0x33, 0x41 and 0x43 mark 9400c, and
+  so does 0x34 (DSC-RX10M5) in exiv2 only.
+
+The layouts of 0x9404, 0x9405 and 0x9406 go with the enciphered first byte
+and the third or fourth byte. The projects decode different parts:
+
+- exiv2 decodes 0x2010 in one layout, on a list of Models, and does not
+  decode 0x9050.
+- exiv2 decodes 0x9400 only as 9400c, and decodes 0x9404 but not 0x9405 or
+  0x9406.
+- LibRaw decodes no 0x9400 block that starts 0x07, 0x09, 0x41 or 0x43. It
+  agrees with ExifTool on the layouts of 0x9404 and 0x9405.
+- LibRaw decodes the 0x9050 of a pre-production Model as 9050a.
 
 Sources: [2][7][8][9]. The 0x9400 "version" is an enciphered value: deciphered,
-its bytes do not increase. ExifTool's comment gives 58 as the plain value
-of enciphered 0xD0; the formula gives 88 (58³ mod 249 is 145), so the
-comment looks like a typo. [S][2][I]
+its bytes do not increase. For example, enciphered 0xD0 deciphers to 88
+(88³ mod 249 is 208, which is 0xD0). [S][2][I]
 
 Measured enciphered first bytes of 0x9400: [F]
 
@@ -451,27 +457,26 @@ Measured enciphered first bytes of 0x9400: [F]
 | 0x33 | ILCE-6700 (6736), ILCE-9M3 (7361), ILCE-1M2 (7835) |
 | 0x41 | ILCE-7M5 (8846) |
 
-0x41 occurs on a real body, so LibRaw's list, which stops at 0x33, misses
-the ILCE-7M5. [F] For the newest bodies the projects also disagree on the
+0x41 occurs on a real body, so LibRaw leaves the ILCE-7M5's 0x9400 block
+undecoded. [F] For the newest bodies the projects also disagree on the
 0x9050 layout: [S][2][9]
 
 - ExifTool has none for the ILCE-9M3, while LibRaw uses 9050d.
-- The ILX-LR1 is 9050a in ExifTool (its Model matches none of the
-  exclusions) but 9050c in LibRaw.
-- ExifTool picks 9050d for the ILCE-1M2, 7M5 and 7RM6 only when the
-  enciphered block starts with five zero bytes (and for the ILCE-6700,
-  7CM2, 7CR, ILME-FX2, ZV-E1 and ZV-E10M2 by Model alone); LibRaw uses
-  9050d for the ILCE-1M2 and 7M5 always. LibRaw has no ModelID for the
-  ILCE-7RM6, so it falls back to 9050a there.
+- The ILX-LR1 is 9050a in ExifTool but 9050c in LibRaw.
+- ExifTool decodes the ILCE-1M2's, 7M5's and 7RM6's block as 9050d only
+  when the enciphered block starts with five zero bytes. It decodes the
+  ILCE-6700's, 7CM2's, 7CR's, ILME-FX2's, ZV-E1's and ZV-E10M2's as 9050d
+  always.
+- LibRaw decodes the ILCE-1M2's and 7M5's block as 9050d always, and the
+  ILCE-7RM6's as 9050a.
 
 ### Shutter count (full metadata)
 
-0x9050 holds the shutter count as a little-endian integer masked to 24 bits
-by ExifTool: at byte 0x32 in 9050a, 0x3A in 9050b and 9050c, and 0x0A in
+0x9050 holds the shutter count in the low 24 bits of a little-endian
+integer. It is at byte 0x32 in 9050a, 0x3A in 9050b and 9050c, and 0x0A in
 9050d, where it counts mechanical actuations only. [S][2] These offsets
-rest on ExifTool alone: LibRaw does not read them, and takes a different
-counter (its ImageCount3) from per-body offsets between 0x19F and 0x1CD.
-[S][9] Checked: [F]
+rest on ExifTool alone: LibRaw reports a different counter, from per-body
+offsets between 0x19F and 0x1CD. [S][9] Checked: [F]
 
 - ILCE-7M4 (6929, 6930, 6931, 6933, 6936), at 0x3A: 16904, 16905, 16906,
   16908, 16911;
@@ -490,14 +495,14 @@ the ILCE-9M3 (7361, 7364) and ILCE-6700 (6736) the deciphered values at
 ### Other traps
 
 - **Double encipherment.** ExifTool 9.04 to 9.10 enciphered these blocks
-  twice when writing. ExifTool recognizes the doubly enciphered 0x9400 first
-  bytes 0x5E, 0xE7 and 0x04 (0x07, 0x09 and 0x0A enciphered again) and
-  deciphers twice. Files edited by those versions exist. [S][2]
-- **Firmware-dependent offsets.** LibRaw moves an offset inside 0x9050 by
-  firmware version (parsed from the Software tag) on the ILCE-7, 7R, 6000,
-  7S and 7M2; ExifTool picks ISO offsets in 0x9401 by version byte and, for
-  the ILCE-7M4 and ILCE-1, by firmware. Treat every offset inside these
-  blocks as fragile. [S][2][9]
+  twice when writing. In such a file the 0x9400 block starts 0x5E, 0xE7 or
+  0x04: 0x07, 0x09 and 0x0A enciphered again. Deciphering it twice gives
+  the plain block. Files edited by those versions exist. [S][2]
+- **Firmware-dependent offsets.** On the ILCE-7, 7R, 6000, 7S and 7M2, an
+  offset inside 0x9050 depends on the firmware version in the Software
+  tag. [S][9] In 0x9401 the ISO offsets depend on the block's version byte
+  and, on the ILCE-7M4 and ILCE-1, on the firmware. [S][2] Treat every
+  offset inside these blocks as fragile.
 - **0x2010 is gone** from the ILCE-7SM3 on (file 5418 and every later
   sample), and 0x9416 replaces 0x9405 from the same body. [S][2][F]
 
@@ -512,20 +517,16 @@ level, a color matrix) live in an encrypted IFD reached from IFD0.
 1. IFD0 tag 0xC634 (DNGPrivateData, which Sony reuses) holds a 4-byte
    absolute file offset. Every ARW, SR2 and ARQ sample writes it as type
    BYTE, count 4. [F] Read the four bytes as a u32 in the file's order.
-   ExifTool reads it as int32u whatever the declared type, and writes it
-   back as int8u because Adobe Camera Raw 5.3 and Apple Preview 10.5.8
-   misbehaved otherwise. [S][4] A parser that insists on type LONG loses
-   SR2Private.
+   Adobe Camera Raw 5.3 and Apple Preview 10.5.8 were reported to
+   misbehave when it has another type. [S][4] A parser that insists on
+   type LONG loses SR2Private.
 2. At that offset is the **SR2Private** IFD, an ordinary TIFF IFD with
    absolute offsets. On the A100 there is no SR2Private IFD: 0xC634 points
    straight at a Minolta MRW block ([section 10](#10-a100-sr2-and-srf)).
    [S][2][F]
 3. SR2Private tags: [S][2]
    - 0x7200 SR2SubIFDOffset: absolute offset of the encrypted block.
-     ExifTool's comment says it takes only the first value if there are
-     several, but its code then parses each further offset as SR2SubIFD2,
-     SR2SubIFD3, … inside the same decrypted buffer. Every sample has one
-     value. [F]
+     Every sample has one value. [F]
    - 0x7201 SR2SubIFDLength: its length in bytes;
    - 0x7202: not named by ExifTool; one SHORT, 0 in every ARW sample, absent
      from the R1 [F];
@@ -537,15 +538,15 @@ level, a color matrix) live in an encrypted IFD reached from IFD0.
      SLT-A55 and A900, files 1457, 964, 5858) [F];
    - 0x7242: not named by ExifTool; ten SHORTs of 0, only on those three
      files [F];
-   - 0x7250 MRWInfo in ExifTool, decoded as a Minolta MRW block only when
-     its first four bytes are not all zero. It is in the SR2Private IFD of
+   - 0x7250 MRWInfo in ExifTool, which decodes it as a Minolta MRW block when
+     its first four bytes are not all zero [S]. It is in the SR2Private IFD of
      every ARW sample from the A200 to the ILCE-7M5 (32 files). On the A200,
      A700 and A900 (2271, 2521, 5858) it is 5120 SHORTs holding an MRW block
-     that starts `00 4D 52 49` (`\0MRI`); on the NEX-5 and SLT-A55 (1457,
-     964) the same 5120 SHORTs are all zero; from the RX100 and A99 (5811,
-     3751) on it is 18,432 SHORTs of data of unknown meaning (in file 1542,
-     at 110,984, starting `5C C6 B4 C1`). [F] The A100 has no SR2Private
-     IFD at all ([section 10](#10-a100-sr2-and-srf));
+     that starts `00 4D 52 49` (`\0MRI`); on the NEX-5 and SLT-A55 (1457, 964)
+     the same 5120 SHORTs are all zero; from the RX100 and A99 (5811, 3751) on
+     it is 18,432 SHORTs of data of unknown meaning (in file 1542, at 110,984,
+     starting `5C C6 B4 C1`). [F] The A100 has no SR2Private IFD at all
+     ([section 10](#10-a100-sr2-and-srf));
    - 0x7251: not named by ExifTool; one SHORT, 0 in every sample except the
      Lunar (file 4051), where it is 65535 [F].
 4. Read SR2SubIFDLength bytes at SR2SubIFDOffset, decrypt them with the key
@@ -553,9 +554,7 @@ level, a color matrix) live in an encrypted IFD reached from IFD0.
    whose first entry count is at the start of the buffer and **whose value
    offsets are still absolute file offsets**. Rebase each by a checked
    subtraction of SR2SubIFDOffset, and skip entries that point outside the
-   block. rawspeed pads its buffer with `offset` bytes in front; dcraw
-   re-parses the plaintext with a negative base; ExifTool sets the data
-   position to the offset. [S][2][14][15]
+   block. [S][2][14][15]
 
 **Measured facts.** [F]
 
@@ -563,8 +562,7 @@ level, a color matrix) live in an encrypted IFD reached from IFD0.
   (0x44332211 read little-endian) on **every ARW** sampled, from the A200
   (2008) to the ILCE-7M5 (2025). Only the R1's SR2 uses another key, bytes
   `63 BE 01 3E` (file 3221).
-- SR2SubIFD lengths are 11,932 to 62,112 bytes, well under LibRaw's cap of
-  10,240,000.
+- SR2SubIFD lengths are 11,932 to 62,112 bytes.
 - The SR2SubIFD has no next-IFD pointer on ARW 2.3.x and later: the four
   bytes after the entries are value data (they read as 33,554,944 or
   52,429,600). On older files they are 0.
@@ -662,10 +660,9 @@ plausible: black 512 on most bodies, 800 on the 1-inch RX100 and RX100M6,
 4 on the A200; white balance normalized to a green of 1024; 0x787F 15360.
 [F]
 
-**Arithmetic hazard.** LibRaw computed the seed step in signed `int`
-(undefined behavior on overflow) until 0.20.0. In Rust, use
-`u32::wrapping_mul` and `wrapping_add`, as rawler does. [S][16] See
-[security.md](security.md).
+**Arithmetic hazard.** The seed step overflows 32 bits for almost every
+key, so it must wrap. [I] In Rust, use `u32::wrapping_mul` and
+`wrapping_add`. [security.md](security.md) has the history.
 
 ## 7. Raw-relevant tags
 
@@ -701,13 +698,13 @@ says 3; the ILCE-7M5 compressed files (8846 to 8850 except the lossless
 [S][4] Never choose a decoder from it; [raw-data.md](raw-data.md) gives the
 rules that work.
 
-**0x7010 SonyToneCurve.** Every decoder builds a 0 to 16383 curve from it;
-see [raw-data.md](raw-data.md). Measured: 8000, 10400, 12900, 14100 in every
-cRAW file except the NEX-5 (0, 9824, 11512, 16362; file 1457) and in every
-other ARW before 4.0, uncompressed ones included; the R1's SR2 has no
-0x7010 (file 3221); 0, 0, 0, 0 on ARW 4.0 and later
-uncompressed (6933), lossless and ARW 6.0 files. [F] The curve is used only
-for cRAW; the values in other files are not decoder input.
+**0x7010 SonyToneCurve.** It defines the curve from cRAW codes to output
+values, which can exceed 16383; see [raw-data.md](raw-data.md). Measured:
+8000, 10400, 12900, 14100 in every cRAW file except the NEX-5 (0, 9824, 11512,
+16362; file 1457) and in every other ARW before 4.0, uncompressed ones
+included; the R1's SR2 has no 0x7010 (file 3221); 0, 0, 0, 0 on ARW 4.0 and
+later uncompressed (6933), lossless and ARW 6.0 files. [F] The curve is used
+only for cRAW; the values in other files are not decoder input.
 
 **0x7038 SonyRawImageSize** appears from ARW 4.0 (absent in the ILCE-9
 files). Lossless raws are padded to whole 512-pixel tiles, and 0x7038 gives
@@ -718,7 +715,7 @@ the usable size, which is still larger than the default crop: [F]
 | 6929 (ILCE-7M4, lossless) | 7168 × 5120 | 7032 × 4688 | (12, 8), 7008 × 4672 |
 | 4466 (ILCE-1, lossless) | 8704 × 6144 | 8664 × 5784 | (12, 12), 8640 × 5760 |
 
-LibRaw's per-body table gives 7028 and 8660 for those two widths. rawspeed
+LibRaw gives widths of 7028 and 8660 for those two bodies. rawspeed
 crops lossless images to 0x7038, while rawler takes it as the active area and
 the crop from DefaultCrop. [S][12][15][16][F]
 
@@ -747,8 +744,8 @@ On the RX100M6, SonyCrop holds the aspect-ratio crop and DefaultCrop the
 A forum post calls 16384 a theoretical maximum, with practical white points
 of about 15360 to 16300. [S][22]
 
-rawspeed and rawler use 0x787F; LibRaw treats it as a "linear max" and keeps
-its own maximum; libopenraw reads 0xC61D. Which is right is a decoding
+rawspeed and rawler give 0x787F as the white level; LibRaw gives its own
+per-body maximum; libopenraw gives 0xC61D. Which is right is a decoding
 question for [raw-data.md](raw-data.md). [S][10][15][16][17]
 
 **Black level.** 0x7310 is 512 on most bodies, 800 on the 1-inch DSC-RX100
@@ -757,7 +754,7 @@ instead (514, 511, 512, 513). [F]
 
 **14-bit scale, and the 12-bit exception.** Black and white levels are
 written at 14-bit scale. ExifTool notes "divide by 4" for 0x7310 and
-0x787F, and rawspeed and rawler shift them right by 2 for 12-bit data.
+0x787F, and rawspeed and rawler divide them by 4 for 12-bit data.
 [S][2][15][16] The samples show that this holds only for some 12-bit
 storage: [F]
 
@@ -778,8 +775,9 @@ scaling; [raw-data.md](raw-data.md) has the full rule.
   1024, 1024, 1600 in file 1542).
 - The CFA pattern is RGGB (CFAPattern 0 1 1 2) on every CFA sample except
   the R1, which is GRBG (1 0 2 1). The ARQ has no CFAPattern.
-- For 0x7300 LibRaw does not reorder; rawspeed and rawler place values by
-  CFA position. The two agree on RGGB and diverge only on the R1. [S][I]
+- For 0x7300, LibRaw gives the black levels in tag order, and rawspeed and
+  rawler in CFA order. The two orders agree on RGGB and differ only on the
+  R1. [S][I]
 
 ## 8. White balance
 
@@ -797,18 +795,21 @@ Sources: [2][9][10][14][15][16][17] and the files cited.
 
 What the decoders do, and where they disagree: [S][9][10][14][15][16][17]
 
-- rawspeed: 0x7303 if present, else 0x7313.
-- rawler: 0x7303 if present, else 0x7313; normalizes by the first green and
-  averages the greens.
+- rawspeed and rawler give 0x7303's white balance on a file that has it,
+  and 0x7313's on the others.
+- rawler's multipliers are normalized to the first green, with the greens
+  averaged.
 - libopenraw: the plain 0x7313 only, so it has no white balance before ARW
   2.3.3.
-- LibRaw: whichever of 0x7303 and 0x7313 it meets last, in any IFD.
-- dcraw: for 0x7313, assumes G R B G order unless both middle values are
-  1024, in which case R G G B. LibRaw dropped this heuristic. Every ARW
-  sample has middle values of 1024, so the projects agree on all of them;
-  the heuristic would matter only for a file whose greens are not 1024.
-- For the A100 `WBG` record, rawspeed takes values 0, 1 and 3 as R, G and B;
-  rawler reads four u16 at + 12 into the record.
+- LibRaw gives 0x7303 or 0x7313 from any IFD; on a file with both, which
+  one depends on the order of the IFDs. Every copy of 0x7313 in an ARW
+  sample is equal, so the IFD matters only on a file that has both tags.
+  [I]
+- dcraw reads 0x7313 as G R B G unless both middle values are 1024, and
+  then as R G G B. LibRaw reads it as R G G B always. Every ARW sample
+  has middle values of 1024, so the projects agree on all of them.
+- For the A100, rawspeed's white balance is the `WBG` record's values 0, 1
+  and 3, as R, G and B. rawler's is the four u16 at + 12 into the record.
 
 The MakerNote also has 0xB021 ColorTemperature and a white balance mode and
 fine-tune; these are settings, not multipliers. [S][2] They are described
@@ -924,11 +925,11 @@ A330, A350, A380, A390 and A850 [S][24]. The A100 also has an
 ImageDescription of `SONY DSC` padded with spaces. [S][24]
 
 So: cut at the first NUL, trim trailing ASCII whitespace, and compare Make
-without regard to case. ExifTool does the same: it reads the string up to
-the first NUL and its Make and Model conversions trim trailing whitespace;
-its rule for the headerless Sony MakerNote matches an upper-case
-`^HASSELBLAD` (the Lunar's Make) together with the HV, Stellar, Lusso and
-Lunar models. LibRaw strips trailing spaces. [S][3][4][12][F]
+without regard to case. ExifTool reports Make and Model the same way: cut
+at the first NUL, with trailing whitespace trimmed. It reads a headerless
+Sony MakerNote when Make is an upper-case `HASSELBLAD`, as on the Lunar,
+and Model is HV, Stellar, Lusso or Lunar. LibRaw reports Make and Model
+with trailing spaces removed. [S][3][4][12][F]
 
 **Model strings.** Product codes such as `DSLR-A700`, `SLT-A99V`, `NEX-5`,
 `ILCE-7M4`, `DSC-RX100M6`, `ILME-FX3`, `ZV-E10`, not marketing names. The
@@ -939,8 +940,8 @@ Pre-production firmware writes placeholder Models (`MODEL-NAME`,
 
 **Hasselblad rebadges.** The Lunar (NEX-7), Stellar and Stellar II (RX100,
 RX100 II), HV (A99) and Lusso (A7R) keep Make Hasselblad and their own Model.
-LibRaw rewrites Make and Model to the Sony names by ModelID; ExifTool and
-exiv2 keep the file's strings. [S][2][13] raw-files should report the
+LibRaw reports the Sony Make and Model that go with the ModelID; ExifTool
+and exiv2 report the file's strings. [S][2][13] raw-files should report the
 strings as stored and expose ModelID separately, so that callers can
 recognize a rebadge or an A850/A900 APS-C file. [I]
 
@@ -967,8 +968,9 @@ includes masked or unused columns and, on lossless files, padding to whole
    can disagree with DefaultCrop by a few pixels (ILCE-7RM3). [F]
 3. **SonyRawImageSize** (0x7038), from ARW 4.0: the usable area of a
    tile-padded raw, still larger than the default crop. [F]
-4. **A per-body trim.** dcraw and LibRaw trim by raw width (for example 24
-   columns off 6048-wide bodies). Do not carry such a table for metadata.
+4. **A per-body trim.** dcraw and LibRaw give a visible width set by the
+   raw width (for example 24 columns fewer on 6048-wide bodies). Do not
+   carry such a table for metadata.
    [S][12][14]
 
 Other size tags, useful as cross-checks: [F]
@@ -1001,8 +1003,7 @@ ModelID unchanged: ILCE-7M4 4736 × 3132 (6933, 6936), ILCE-7S 2816 × 1872
 (1582), ILCE-1M2 5664 × 3768 (7835). [F] The A850 and A900 instead change
 the ModelID ([section 2](#sonymodelid-0xb001)). [S][1] 0x202E Quality is 3
 on these APS-C Bayer files, the same value as a medium-size raw. [F] Nothing
-in the samples marks APS-C mode except the smaller size; LibRaw recognizes
-it by raw width. [S][12][F]
+in the samples marks APS-C mode except the smaller size. [F]
 
 ### 9.5 Lens
 
@@ -1011,12 +1012,12 @@ it by raw width. [S][12][F]
   reads `----` for a manual lens (file 1582). It is absent on the A100
   to A900, the R1, and the fixed-lens RX100 and RX100M6. [F]
 - **MakerNote 0xB027 LensType** is the A-mount lens ID; it is 65535 for
-  E-mount lenses. LibRaw reads 0xEFxx values as Canon EF adapters and
-  0x49xx to 0x59xx as the Sigma MC-11. [S][1][9]
+  E-mount lenses. 0xEFxx values mark a Canon EF lens on an adapter, and
+  0x49xx to 0x59xx the Sigma MC-11. [S][1][9]
 - **MakerNote 0xB02A LensSpec** holds a flags byte, the focal and aperture
   range in BCD, and a second flags byte. [S][1][9]
 - E-mount lens IDs (LensType2) live only in enciphered blocks: 0x9050,
-  0x940C and 0x9416. rawler tries 0x9416, then 0x9050, then 0x940C. [S][16]
+  0x940C and 0x9416. [S][16]
 - ExifTool's composite LensID combines LensType, LensType2 and LensSpec. Its
   lens table is not something to copy. [S][4]
 
@@ -1860,14 +1861,14 @@ of the white balance ([section 9.7](#97-camera-settings)).
 - IFD0 0xC634 does not lead to a TIFF IFD: in file 2346 it points at offset
   72606, where a Minolta MRW block starts `00 4D 52 49` (`\0MRI`). The block
   is 144 bytes and **little-endian**, unlike Minolta's own MRW files
-  (ExifTool's MinoltaRaw.pm takes the byte order from the fourth byte, `I`
-  here, `M` in MRW files); its PRD record gives a sensor of 3880 × 2608 and
+  (the block's fourth byte gives its byte order: `I` here, `M` in MRW
+  files); its PRD record gives a sensor of 3880 × 2608 and
   an image of 3872 × 2592, and its `WBG` record (after 4 bytes) 401, 256,
   256, 574. [S][2][26][F] dcraw and
-  LibRaw try the Minolta parser on that offset first. [S][10][14]
+  LibRaw read that block as a Minolta MRW block. [S][10][14]
 - IFD0 0x014A is the raw data offset, not a SubIFD (98304 in file 2346),
-  except after editing with Sony's Image Data Converter. ExifTool checks
-  whether a valid IFD is there. [S][2][F] See
+  except after editing with Sony's Image Data Converter. A valid IFD at
+  that offset marks an edited file. [S][2][F] See
   [container-and-previews.md](container-and-previews.md).
 - Known bad offsets: some firmware 1.00 thumbnails are 0x10000 too low (file
   2346 is firmware 1.04 and is correct); the IFD0 preview length "may be
@@ -1893,19 +1894,18 @@ priority). At the level metadata needs:
 - The MakerNote is a chain of seven IFDs, SRF0 to SRF6. SRF0 is plain, with
   one entry (tag 0x0003) and a next pointer to SRF1. [S][2][F]
 - **Master key.** Read the byte b at MakerNote start + 0x8DDC; the master
-  key is the big-endian u32 at MakerNote start + 0x8DDC + 4b. ExifTool's
-  comment on the constant is "why?". dcraw, LibRaw and rawspeed use the
-  absolute file offset 200896 instead, which equals MakerNote + 0x8DDC only
-  when the MakerNote is at 164580 as on the F828; ExifTool's form survives a
-  moved MakerNote. [S][2][9][14][15] In file 1351 the MakerNote is at
-  164580, b is 109 and the key at 201332 is 0xABEF9C88. [F]
+  key is the big-endian u32 at MakerNote start + 0x8DDC + 4b. dcraw, LibRaw
+  and rawspeed read that byte at file offset 200896. That is MakerNote +
+  0x8DDC only when the MakerNote is at 164580, as on the F828. So they
+  would misread a file whose MakerNote has moved. [S][2][9][14][15][I]
+  In file 1351 the MakerNote is at 164580, b is 109 and the key at 201332
+  is 0xABEF9C88. [F]
 - **SRF1** decrypts with that key (only up to the key's position is needed)
   to a two-entry IFD: tag 0 SRF2Key and tag 1 DataKey (0x52D6BDBC and
   0x6ACE748A in file 1351), with a next pointer to SRF2. [S][2][F]
 - **DataKey** is the u32 at byte 22 of the decrypted SRF1, read
-  little-endian: the value field of its second entry. dcraw and rawspeed
-  decrypt 40 bytes at absolute offset 164600 and take bytes 22 to 25; LibRaw
-  reads tag 1 but uses the dcraw path. It decrypts the raw data at 862144
+  little-endian: the value field of its second entry. In file 1351, SRF1
+  is at 164600. The DataKey decrypts the raw data at 862144
   (F828) or 787392 (V3). [S][9][14][15][F]
 - **SRF2 to SRF6** hold the raw data offset and length, lens data and
   white balance (SRF2 to SRF5) and standard Exif (SRF6). ExifTool says SRF2
@@ -1914,9 +1914,8 @@ priority). At the level metadata needs:
   file 1351 the bytes at SRF1's next pointer (164640) did not parse as an
   IFD, plain or decrypted with any of the three keys, fresh or continued;
   this is open. [S][2][14][I][F]
-- LibRaw's SRF parser had an out-of-bounds read (CVE-2020-35535), and rawler
-  still indexes the fixed offset 200896 without a check. [S][23][S][16] See
-  [security.md](security.md).
+- LibRaw's SRF parser had an out-of-bounds read (CVE-2020-35535). [S][23]
+  See [security.md](security.md).
 
 ## 11. Robustness pitfalls
 
@@ -1928,18 +1927,16 @@ points specific to Sony metadata:
 1. **Offsets are absolute and unchecked by the camera's own tools.**
    Bounds-check every offset and length in the MakerNote, SR2Private, the
    SR2SubIFD and the SRF chain against the file; skip bad entries rather
-   than abort the IFD. ExifTool repairs moved MakerNotes with a heuristic
-   ([section 1](#1-finding-the-makernote)); do not repair in a first
-   version. [S][3]
+   than abort the IFD. ExifTool reads MakerNotes that have moved
+   ([section 1](#1-finding-the-makernote)) [S][3]; do not repair them in a
+   first version.
 2. **Rebasing the SR2SubIFD.** Its value offsets are absolute; rebase by a
    checked subtraction of SR2SubIFDOffset and skip any entry that points
    before or past the block. Reject a length below 4 after rounding down,
    and cap it (LibRaw: 10,240,000 bytes; the samples use at most 62,112).
-   Decrypt only bytes actually present: LibRaw decrypted a short read until
-   2024. [S][10][F]
+   Decrypt only bytes actually present. [S][10][F]
 3. **Declared types lie.** 0xC634 is BYTE[4] holding a u32; 0x7221 is
-   UNDEFINED[4] holding a u32; LibRaw repairs BitsPerSample values above
-   33 from the white level. Decode by count and bytes. [S][4][10][F]
+   UNDEFINED[4] holding a u32. Decode by count and bytes. [S][4][10][F]
 4. **No next pointers.** The MakerNote and the SR2SubIFD have none on newer
    bodies; the four bytes there are value data. [F]
 5. **Unsorted tags.** Do not require ascending order in any Sony IFD. [F]
@@ -1951,19 +1948,19 @@ points specific to Sony metadata:
    block, and treat a short or mostly-`FF` block (file 7835: 219 of 256 bytes
    `FF`, including the count offsets) as absent. A wrong layout gives silently
    wrong values. Assemble multi-byte values without shifting by the full bit
-   width: LibRaw 0.18.2 fixed shifts by 32 and 40 bits when building a serial
-   number from 0x9050. [S][9][F]
+   width. [S][9][F]
 8. **Garbage from a wrong key.** Decryption never fails; it produces noise.
    Check plausibility (white balance greens near 1024 on ARW, black below
    white, an entry count and types that make sense) and treat failure as
    "value absent". [I][F]
 9. **Edited files.** Sony's Image Data Converter adds IDC IFDs and, on the
    A100, turns 0x014A into a SubIFD; ExifTool 9.04 to 9.10 double-enciphered
-   blocks; and a source comment in ExifTool's MinoltaRaw.pm says Sony's IDC
-   utility "corrupts MRWInfo" when writing ARW images. [S][2][26]
-10. **Caps.** LibRaw caps MakerNote blocks below 256,000 bytes, IFDs below
-    1000 entries and SRF lengths below 0xFFFFF. Apply similar caps and a
-    visited-offset set for chained IFDs (the SRF chain, the IFD0 chain).
+   blocks; and Sony's IDC utility is reported to corrupt MRWInfo when it
+   writes an ARW file. [S][2][26]
+10. **Caps.** LibRaw's limits are 256,000 bytes for a MakerNote block,
+    1000 entries for an IFD and 0xFFFFF for an SRF length. Apply similar
+    caps and a visited-offset set for chained IFDs (the SRF chain, the IFD0
+    chain).
     [S][9][10]
 11. **Pre-production and rebadged bodies.** Placeholder Models and Hasselblad
     Makes must not break detection ([section 9.3](#93-make-model-and-modelid)).

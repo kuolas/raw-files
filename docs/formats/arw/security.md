@@ -140,10 +140,9 @@ the first tag that contains the commit. [8][9][10][11] **[P]**
 | 2026-03-10 | 4e265f1 | `sony_ycbcr_load_raw` (new in 0.22.0) | Tile size unchecked; the bit reader's fast path read 1 to 3 bytes past the buffer (issue #792, CWE-125) | 0.22.1 |
 
 A missing NULL check after an allocation in the Sony AFInfo copy was
-reported in April 2026 (#810) and rejected, because LibRaw's allocator
-throws on failure. LibRaw still loops over cRAW blocks with a signed
-`raw_width - 30` and does not check that a block's maximum and minimum
-indices differ. [8][9] **[S]**
+reported in April 2026 (#810). It was rejected, since LibRaw stops with an
+error when an allocation fails. LibRaw also decodes a cRAW block whose
+maximum and minimum indices are equal. [8][9] **[S]**
 
 **New attack surface.** An ARW 6.0 decoder of about 1,600 lines was merged
 into LibRaw master on 2026-07-18 (PR #824) and is in no release yet. [9]
@@ -166,12 +165,16 @@ commits to releases. [12] **[S]**
 | 2023-02-16 | bbd6d363 | SR2 white-balance decryption | A length that rounds down to 0 is refused; the decrypted IFD may not point into the padding used to make absolute offsets resolve |
 | 2023-12-23 | 0953acf8, 8d37641f | Sony lossless-JPEG tiles | Tile width doubled in 64-bit arithmetic to avoid overflow; tile byte ranges must not overlap |
 
-rawspeed's current lossless path also requires an even image width and
-height, non-zero tile width and height, an even tile height, as many tile
-offsets as byte counts, and a tile count equal to the tile grid, checked by
-division so the product cannot overflow. Its A100 white-balance reader walks
-the Minolta-style blocks with a bounded sub-stream and rejects zero-length
-entries, which would otherwise loop without advancing. [12] **[S]**
+rawspeed also refuses a lossless file with any of these [12] **[S]**:
+
+- an odd image width or height;
+- a zero tile width or height, or an odd tile height;
+- unequal counts of tile offsets and tile byte counts;
+- a tile count other than the tile grid's.
+
+It also gives no A100 white balance from Minolta-style blocks that hold a
+zero-length entry [12] **[S]**. Such an entry would keep a reader that
+steps by entry length in place **[I]**.
 
 ### 2.3 Exiv2 and dcraw
 
@@ -182,14 +185,13 @@ entries, which would otherwise loop without advancing. [12] **[S]**
   that dereferenced their metadata argument; present in v0.28.0, fixed in
   v0.28.1, no CVE. Issue #2380, "Crash when loading Sony ARW", was a generic
   I/O bug. [13] **[S]**
-- **dcraw 9.28** (read from a mirror; the original site did not respond):
-  the SR2Private length is not capped and the read is not checked before
-  decrypting; the decrypted block is written to a temporary file and parsed
-  again with a negative base; nested parsing is bounded only by a global IFD
-  limit; the 0x7010 curve points are masked to 12 bits; the cRAW row buffer
-  is one byte longer than the row. [15] **[S]** A block with equal maximum
-  and minimum indices makes dcraw read a fifteenth delta past the block, one
-  byte beyond its buffer on a row's last block. **[I]**
+- **dcraw 9.28** was read from a mirror, since the original site did not
+  respond. It bounds an SR2Private length neither by a cap nor by the file,
+  and nested IFDs only by a total IFD count. [15] **[S]** It takes each 0x7010
+  point shifted right by 2 and masked to 12 bits, as raw-data.md
+  describes. [15] **[S]** A cRAW block with
+  equal maximum and minimum indices makes dcraw read past it, and on a
+  row's last block past the row. **[I]**
 
 ## 3. Rust is not immune: rawler's fuzzing reports
 
@@ -202,7 +204,7 @@ others came from RW2, DNG, generic TIFF and, for #797, a CR2 seed.
 
 | Issue | Input | Report | State |
 |---|---|---|---|
-| #574 | ARW | Panic indexing byte 200,896 (dcraw's absolute SRF key offset) of a 44,210-byte file in the SRF path | Open; the index is still unchecked on main at ae01bcb2 (2026-08-30), where the same code also multiplies width × height × 2 unchecked |
+| #574 | ARW | Panic at byte 200,896, where the F828 keeps its SRF key, in a 44,210-byte file | Open at ae01bcb2 (2026-08-30) |
 | #575 | ARW | `unwrap` on a sub-view past the end of the file | Closed |
 | #571 | RW2 | Slice-range panic in the bit reader | Open |
 | #569 | TIFF | Index panic in the TIFF IFD code | Open |
@@ -212,13 +214,11 @@ others came from RW2, DNG, generic TIFF and, for #797, a CR2 seed.
 | #582 | DNG | Subtraction overflow | Open |
 | #797 | CR2 seed | An IFD `count` drove a 6.6 GB allocation from an input of at most 2 MB (2026-07) | Closed |
 
-rawler's ARW 6.0 decompressor is an `unimplemented!()` stub, but it is
-unreachable: rawler refuses Compression 32766 as unsupported before
-decoding (no camera file defines its "arw6" mode), and `RawLoader::decode`
-catches panics in any case. An earlier report (#514) showed ILCE-7CR M/S-size
-lossless files panicking it. rawloader issue #54 (2026-04) reports three more
-fuzzing panics from unchecked indexing, in RAF, X3F and TIFF code. [16][17]
-**[S]**
+rawler refuses Compression 32766 as unsupported. A panic during its
+decoding comes back to the caller as an error. An earlier report (#514)
+showed ILCE-7CR M/S-size lossless files panicking it. rawloader issue #54
+(2026-04) reports three more fuzzing panics from unchecked indexing, in
+RAF, X3F and TIFF code. [16][17] **[S]**
 
 Every one of these is a panic, an abort or runaway work, not memory
 corruption: exactly the class Rust's safety does not cover and ADR008's
@@ -334,12 +334,13 @@ A6. **SR2Private as a bounded sub-slice (when relevant).** Black level,
     as four bytes holding a `u32` (it is BYTE[4] in every file **[F]**; a
     check that demands type LONG loses it). Read 0x7200 offset, 0x7201
     length and 0x7221 key (count must be 4). Require `offset + length <=
-    file length` with `checked_add`, and a configurable cap: LibRaw uses
-    10,240,000 bytes **[S]**; the measured lengths are 11,932 to 62,112
-    bytes (all files in [test-data.md](test-data.md#files-checked)) **[F]**,
-    so a cap of 1 MiB leaves a wide margin **[I]**. Allocate only after
-    these checks and decrypt only bytes actually present. The decrypted IFD
-    uses absolute file offsets: rebase each value offset with a
+    file length` with `checked_add`, and a configurable cap. LibRaw reads no
+    SR2SubIFD longer than 10,240,000 bytes **[S]**. The measured lengths are
+    11,932 to 62,112 bytes (all files in
+    [test-data.md](test-data.md#files-checked)) **[F]**, so a cap of 1 MiB
+    leaves a wide margin **[I]**. Allocate only after these checks and
+    decrypt only bytes actually present. The decrypted IFD uses absolute
+    file offsets: rebase each value offset with a
     `checked_sub` of the block offset, and skip any entry whose data falls
     outside the block. Skip entries of unknown TIFF type instead of looking
     the type up in a table. Treat decrypted values as plausible or ignored
@@ -458,12 +459,13 @@ A15. **SRF key chain: never hard-code 200896 without bounds (when
      164,580, the key byte is at 200,896 (MakerNote + 0x8DDC), the first
      encrypted IFD at 164,600, the data key at its decrypted byte 22, and
      the encrypted image at 862,144 for 16,531,200 bytes, running exactly
-     to the end of the file. **[F]** dcraw, LibRaw, rawspeed and rawler use
-     these as absolute constants **[S]**; rawler panics on a 44,210-byte
-     file (section 3). Derive every position from the MakerNote and check
-     each one against the file: the key byte b, the key word 4·b bytes
-     after it, each IFD and its entries, and the data range
-     (`width × height × 2` with checked arithmetic, compared with the
+     to the end of the file. **[F]** dcraw, LibRaw, rawspeed and rawler read
+     the key byte at 200,896 in every SRF file, and the raw data at a
+     fixed offset for each body **[S]**; rawler panics on a
+     44,210-byte file (section 3). Derive every position from the
+     MakerNote and check each one against the file: the key byte b, the
+     key word 4·b bytes after it, each IFD and its entries, and the data
+     range (`width × height × 2` with checked arithmetic, compared with the
      bytes present). Next-block positions are absolute and must not precede
      the current block; entry counts are 1 to 1000. The later SRF IFDs
      could not be located in the sample **[F]**, so a decoder that needs
@@ -515,13 +517,14 @@ Report a security problem in raw-files privately, as described in
    a third-party tool (IFD0 reportedly moved to the end) would test chain
    walking and the visited set on a real layout.
 3. **SRF later IFDs.** Where SRF2 to SRF6 start in file 1351, and with which
-   key; this decides whether the SRF chain can be walked without dcraw's
-   absolute constants. A DSC-V3 file (data offset 787,392 in dcraw) would
-   test the same rule on a second body.
+   key. This decides whether the SRF chain can be walked without other
+   decoders' fixed file positions. A DSC-V3 file (whose raw data
+   dcraw places at offset 787,392) would test the same rule on a second
+   body.
 4. **Enciphered block lengths.** Actual lengths of 0x2010 and 0x9050 on, for
    example, the ILCE-9, ILCE-1, ILCE-7M4 and ILCE-7M5 against the largest
-   fixed offset LibRaw and ExifTool read (for example 0x188C in the last
-   0x2010 layout). Only matters if A16 is ever implemented.
+   offset at which LibRaw or ExifTool reports a field (for example 0x188C
+   in the last 0x2010 layout). Only matters if A16 is ever implemented.
 5. **cRAW highlights.** No sample reaches code 2047. A clipped highlight on
    a cRAW body (an ILCE-9 or ILCE-7RM3 file) would show whether outputs
    above 16383 occur in practice (A10).
