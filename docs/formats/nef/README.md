@@ -23,7 +23,7 @@ is tagged **[F]**.
 
 | Topic | Checked against sample files | Where |
 |---|---|---|
-| The container and the previews | The Z 9's three files, and a few more the page names; the tests also check the previews of the CI set's other files, whose containers the page does not describe | [container-and-previews.md](container-and-previews.md); the files: [test-data.md, section 2.1](test-data.md#21-the-ci-set) |
+| The container and the previews | The Z 9's three files, and a few more the page names; where the MakerNote's preview lies, on the 289 NEF and NRW files of raw.pixls.us; the tests also check the previews of the CI set's other files, whose containers the page does not describe | [container-and-previews.md](container-and-previews.md), and [its section 2.1](container-and-previews.md#21-where-the-makernotes-preview-lies) for the 289 files; the files: [test-data.md, section 2.1](test-data.md#21-the-ci-set) |
 | The MakerNote's layouts | The CI set, with two bodies of the headerless layout; camera JPEGs of early Coolpix bodies, checked by hand, three of them downloaded samples of the short-header layout | [makernote-and-metadata.md, section 1](makernote-and-metadata.md#1-finding-the-makernote); the Coolpix files: [JPEG test data, section 6](../jpeg/test-data.md#6-early-coolpix-files-checked-by-hand) |
 | The MakerNote in a camera JPEG | A D5300's and a D70's JPEG | [makernote-and-metadata.md, "In a JPEG file"](makernote-and-metadata.md#in-a-jpeg-file); the files: [JPEG test data, section 2](../jpeg/test-data.md#2-the-sample-files) |
 | The orientation, capture time, camera, sizes, serial number, ISO and lens | The CI set | [makernote-and-metadata.md, sections 8.1 to 8.5](makernote-and-metadata.md#8-viewer-metadata); the files: [test-data.md, section 2.2](test-data.md#22-files-checked-for-metadata) |
@@ -35,9 +35,10 @@ is tagged **[F]**.
 | The raw data | Only the raw IFD's tags, the compression tags and the first bytes of the Z 9's strip; no strip was decoded | [raw-data.md](raw-data.md#how-to-read-this-page) |
 | The encrypted blocks and their decryption, the white balance multipliers, LensData and ShotInfo | Not checked: from the sources alone | [makernote-and-metadata.md, sections 4 to 7](makernote-and-metadata.md#4-encrypted-blocks) |
 
-A topic the table does not list rests on the sources alone. Byte offsets
-and formulas taken from other projects' source code should be checked
-against that source and against real files before they are hard-coded.
+A topic the table does not list is checked only where its page tags a
+fact **[F]**. Byte offsets and formulas taken from other projects'
+source code should be checked against that source and against real
+files before they are hard-coded.
 [open-questions.md](open-questions.md) lists what is still unknown.
 [research-record.md](research-record.md) describes how the research was
 done and what it could not reach.
