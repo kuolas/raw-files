@@ -35,7 +35,9 @@ The research also had to establish two practical points:
   [overview](README.md#confidence-tags)).
 - Where sources disagree, the disagreement is recorded rather than resolved
   by guesswork.
-- Algorithms are restated in prose or original pseudocode.
+- Algorithms are restated in prose or original pseudocode. The raw data
+  page and the MakerNote page's decryption steps were later restated as
+  facts about the format, in prose, tables and formulas (#193).
 - Copy no code and no wholesale data tables (such as Huffman symbol lists
   or decryption tables); individual facts such as tag IDs, value meanings
   and per-body values are cited to their source.

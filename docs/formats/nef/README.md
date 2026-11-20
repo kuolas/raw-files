@@ -154,8 +154,9 @@ lists them with their SHA-256.
 ## License hygiene
 
 raw-files is MIT OR Apache-2.0 ([ADR002](../../architecture-decisions/adr002-license-mit-or-apache-2.md)).
-These pages restate algorithms in prose or in original pseudocode. They copy
-no code and no wholesale data tables (such as Huffman symbol lists or
-decryption tables); individual facts such as tag IDs, value meanings and
-per-body values are cited to their source. Keep it that way when extending
-them.
+These pages restate algorithms in their own words, as prose, numbered
+steps, tables and formulas, never as another program's code or
+structure. They copy no code and no wholesale data tables (such as
+Huffman symbol lists or decryption tables); individual facts such as tag
+IDs, value meanings and per-body values are cited to their source. Keep
+it that way when extending them.

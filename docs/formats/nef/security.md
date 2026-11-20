@@ -195,8 +195,9 @@ sensor data or an encrypted block (see [the roadmap](../../ROADMAP.md)).
 6. **Make Huffman decoding total (when relevant).** The six Nikon tables are
    fixed in the decoder, not read from the file, so there is no table-parsing
    attack surface of the DHT kind; the risk is in decoding. Guard the length
-   `len` and shift `shl` fields of every decoded symbol (reject `shl > len`,
-   `len > 15`, and handle `len == 0`), bounds-check the predictor value
+   category and shift of every decoded symbol (reject a shift above the
+   category and a category above 15, and handle category 0), bounds-check
+   the predictor value
    before indexing the curve, bounds-check the output row, and treat a
    bitstream that ends early as an error or a flagged zero-fill, never a
    panic. A hard-coded table still needs a test proving it is a complete,
