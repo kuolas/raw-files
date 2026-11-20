@@ -234,10 +234,12 @@ NEF pages were desk research first, and their
 ## License hygiene
 
 raw-files is MIT OR Apache-2.0 ([ADR002](../../architecture-decisions/adr002-license-mit-or-apache-2.md)).
-These pages restate algorithms in prose or in original pseudocode. They copy
-no code and no wholesale data tables: the ARW1 prefix code is given as a
-rule, the MakerNote cipher's inverse and the SR2 keystream as formulas, and
-no tone curve, delinearization curve or per-body table is reproduced.
+These pages restate algorithms in their own words, as prose, numbered
+steps, tables and formulas, never as another program's code or
+structure. They copy no code and no wholesale data tables: the ARW1
+prefix code is given as a rule, the MakerNote cipher's inverse and the
+SR2 keystream as formulas, and no tone curve, delinearization curve or
+per-body table is reproduced.
 Quotations stay under fifteen words; individual facts such as tag IDs,
 offsets, value meanings and per-body values are cited to their source. Keep
 it that way when extending them.
