@@ -308,17 +308,17 @@ FFF files carry neither tag ([test data, section
 
 | Tag | Name | What Sony files contain | Conf. |
 |---|---|---|---|
-| 0x00FE | NewSubfileType | 1 in IFD0, IFD1 and IFD2; 0 in the raw SubIFD; **absent** in both IFDs of the SRF | **[F]** (all files; 1351) |
-| 0x0103 | Compression | 6 (old-style JPEG) in IFD0 and IFD1; **7 in IFD2, whose JPEG is baseline**; also 7 in lossless and YCbCr raw IFDs; 1, 32767 or 32766 in other raw IFDs; 1 in the SRF IFD0 | **[F]**; names [2] **[S]** |
-| 0x0106 | PhotometricInterpretation | 32803 CFA raw; **32892** "Sequential Color Filter", the ARQ raw; **6 (YCbCr) both in IFD2 (8-bit) and in medium and small raws (BitsPerSample 15,15,15)**; 2 (RGB) in the SRF IFD0, which is raw | **[F]** (4466, 3255, 6930, 1351); 32892 [2] **[S]** |
-| 0x0102 | BitsPerSample | absent in IFD0 and IFD1; 8,8,8 in IFD2; 8, 12 or 14 in CFA raws; 15,15,15 in YCbCr raws; 14,14,14 in the SRF IFD0 | **[F]** |
-| 0x0100, 0x0101 | ImageWidth, ImageLength | absent in IFD0 and IFD1 except the A100's IFD0, where they describe the raw; in IFD2 equal to the JPEG's SOF size | **[F]** (2346; all 16 files from 4.0) |
-| 0x0201, 0x0202 | JPEGInterchangeFormat, ...Length | offset and length of the JPEG in IFD0, IFD1 and IFD2 (and the SRF IFD1); never in a SubIFD | **[F]** |
-| 0x0111, 0x0117 | StripOffsets, StripByteCounts | raw IFDs only; a lossless raw IFD has both one strip and the tiles, starting at the same offset; the SRF IFD0 has StripByteCounts without StripOffsets | **[F]** (4466, 1351) |
-| 0x0142 to 0x0145 | TileWidth, TileLength, TileOffsets, TileByteCounts | lossless and YCbCr raw IFDs only, 512x512, from FileFormat 4.0 | **[F]**; [21] **[S]** |
-| 0x0211 to 0x0214 | YCbCr tags | in IFD2, and also in YCbCr raw IFDs | **[F]** (4466, 6930) |
-| 0x014A | SubIFDs | one offset in every ARW, SR2 and ARQ; on the A100 the raw data offset | **[F]** |
-| 0xC634 | DNGPrivateData, used as SR2Private | written as BYTE[4] holding a little-endian offset, in every ARW, SR2 and ARQ; ExifTool writes it back the same way because Adobe Camera Raw 5.3 and Apple Preview misbehaved otherwise | **[F]**; [1] [2] **[S]** |
+| 0x00FE | NewSubfileType | 1 in IFD0, IFD1 and IFD2; 0 in the raw SubIFD; **absent** in both IFDs of the SRF | **[F]** (all files; 1351); the tag [41] (Section 8, p. 36) **[P]** |
+| 0x0103 | Compression | 6 (JPEG in TIFF 6.0's design, which ExifTool calls old-style) in IFD0 and IFD1; **7 in IFD2, whose JPEG is baseline**; also 7 in lossless and YCbCr raw IFDs; 1, 32767 or 32766 in other raw IFDs; 1 in the SRF IFD0 | **[F]**; the tag, 1 and 6 [41] (Section 8, p. 30; Section 22, p. 104) [42] (4.6.5.1.4, p. 33) **[P]**; 7 [44] ("Overview of the solution") **[P]**; "old-style" [2] **[S]** |
+| 0x0106 | PhotometricInterpretation | 32803 CFA raw; **32892** "Sequential Color Filter", the ARQ raw; **6 (YCbCr) both in IFD2 (8-bit) and in medium and small raws (BitsPerSample 15,15,15)**; 2 (RGB) in the SRF IFD0, which is raw | **[F]** (4466, 3255, 6930, 1351); the tag, 2 and 6 [41] (Section 8, p. 37; Section 21, p. 90) [42] (4.6.5.1.5, p. 33) **[P]**; 32803 [43] ("PhotometricInterpretation", p. 22) **[P]**; 32892 [2] **[S]** |
+| 0x0102 | BitsPerSample | absent in IFD0 and IFD1; 8,8,8 in IFD2; 8, 12 or 14 in CFA raws; 15,15,15 in YCbCr raws; 14,14,14 in the SRF IFD0 | **[F]**; the tag [41] (Section 8, p. 29) **[P]** |
+| 0x0100, 0x0101 | ImageWidth, ImageLength | absent in IFD0 and IFD1 except the A100's IFD0, where they describe the raw; in IFD2 equal to the JPEG's SOF size | **[F]** (2346; all 16 files from 4.0); the tags [41] (Section 8, p. 34) **[P]** |
+| 0x0201, 0x0202 | JPEGInterchangeFormat, ...Length | offset and length of the JPEG in IFD0, IFD1 and IFD2 (and the SRF IFD1); never in a SubIFD | **[F]**; the tags [41] (Section 22, p. 105) [42] (4.6.5.2.4 and 4.6.5.2.5, p. 40) **[P]** |
+| 0x0111, 0x0117 | StripOffsets, StripByteCounts | raw IFDs only; a lossless raw IFD has both one strip and the tiles, starting at the same offset; the SRF IFD0 has StripByteCounts without StripOffsets | **[F]** (4466, 1351); the tags [41] (Section 8, p. 40) **[P]** |
+| 0x0142 to 0x0145 | TileWidth, TileLength, TileOffsets, TileByteCounts | lossless and YCbCr raw IFDs only, 512x512, from FileFormat 4.0 | **[F]**; [21] **[S]**; the tags [41] (Section 15, pp. 67 to 68) **[P]** |
+| 0x0211 to 0x0214 | YCbCr tags | in IFD2, and also in YCbCr raw IFDs | **[F]** (4466, 6930); the tags [41] (Section 20, p. 86; Section 21, pp. 90 to 92) **[P]** |
+| 0x014A | SubIFDs | one offset in every ARW, SR2 and ARQ; on the A100 the raw data offset | **[F]**; the tag [45] (TIFF Tech Note 1, p. 4) **[P]** |
+| 0xC634 | DNGPrivateData, used as SR2Private | written as BYTE[4] holding a little-endian offset, in every ARW, SR2 and ARQ; ExifTool writes it back the same way because Adobe Camera Raw 5.3 and Apple Preview misbehaved otherwise | **[F]**; the tag [43] (Chapter 4, p. 41) **[P]**; its use as SR2Private and ExifTool's writing [1] [2] **[S]** |
 | MakerNote 0xB02C | PreviewImageSize | height then width, equal to the IFD0 JPEG's size (1080 1088 and 1080 1920 in the aspect-ratio files) | **[F]** (3012, 3015) |
 | MakerNote 0xB02B | FullImageSize | height then width of the image; written from the A200 to the A7 V | **[F]** |
 
@@ -950,6 +950,11 @@ c10cc500 (10 October 2026), libopenraw f18f7c81 (4 October 2026), Graphite
 [38] Sony Alpha Rumors, ILCE-7M5 firmware 1.01 (12 February 2026) — https://www.sonyalpharumors.com/?p=143029
 [39] Sony, Pixel Shift Multi Shooting support pages (snippets only) — https://support.d-imaging.sony.co.jp/support/ilc/psms/ilce1/en/index.html , https://support.d-imaging.sony.co.jp/support/ilc/psms/ilce7rm4/en
 [40] Popular Photography, Hasselblad Lunar hands-on (snippet only) — https://www.popphoto.com/gear/2012/09/hands-hasselblad-lunar-interchangeable-lens-compact-seriously-beefed-nex-7
+[41] Adobe Systems, "TIFF, Revision 6.0", Final, June 3, 1992; the copy Adobe published, read November 2026 (as [tag-names.md](../tag-names.md#sources) lists it)
+[42] CIPA DC-008-Translation-2026, "Exchangeable image file format for digital still cameras: Exif Version 3.1" (January 2026), read November 2026 — https://www.cipa.jp/std/documents/download_e.html?CIPA_DC-008-2026-E
+[43] Adobe, "Digital Negative (DNG) Specification", version 1.7.1.0, September 2023, read November 2026 — https://helpx.adobe.com/content/dam/help/en/photoshop/pdf/DNG_Spec_1_7_1_0.pdf
+[44] "DRAFT TIFF Technical Note #2", 17 March 1995, read November 2026 in the copy libtiff.org published, as the Internet Archive captured it on 23 October 2004 — https://web.archive.org/web/20041023142121/http://www.libtiff.org:80/TIFFTechNote2.html
+[45] Adobe Systems, "Adobe PageMaker 6.0 TIFF Technical Notes", draft, September 14, 1995, read November 2026 in the Internet Archive's capture of Adobe's copy — https://web.archive.org/web/20051231212249/http://partners.adobe.com/public/developer/en/tiff/TIFFPM6.pdf
 
 ### Sample files
 

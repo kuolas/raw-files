@@ -687,9 +687,10 @@ column is as in [section 2](#2-key-tags).
 | 0xC61D | WhiteLevel (DNG tag) | | ARW 2.3.3 and later | raw data |
 | 0xC61F, 0xC620 | DefaultCropOrigin, DefaultCropSize (DNG tags) | | ARW 2.3.3 and later | metadata, raw data |
 
-Sources: [2][4][10][15][16][17][18]; measurements [F] as cited below. The
-DNG BlackLevel tag (0xC61A) appears in no Sony file of the raw.pixls.us
-sweep. [S][24]
+Sources: the DNG tags' numbers and names [P][31] (Chapter 4, pp. 29 and
+31); the rest [2][4][10][15][16][17][18]; measurements [F] as cited
+below. The DNG BlackLevel tag (0xC61A) appears in no Sony file of the
+raw.pixls.us sweep. [S][24]
 
 **0x7000 does not mean what ExifTool says.** The ILCE-7RM2 12-bit
 uncompressed file (1311) says 0 ("uncompressed 14-bit"); every lossless
@@ -832,8 +833,9 @@ lie in the first 44 KB of the file. [F]
 
 ### 9.1 Orientation
 
-IFD0 tag 0x0112, a u16 with the Exif values 1 to 8. Treat 0 and values
-above 8 as 1. [S][4] IFD1 repeats it, and the R1's raw SubIFD has its own
+IFD0 tag 0x0112, Orientation, a u16 with the Exif values 1 to 8.
+[P][30] (4.6.5.1.6, p. 33) Treat 0 and values above 8 as 1. [S][4]
+IFD1 repeats it, and the R1's raw SubIFD has its own
 copy; IFD0 wins. [F] The embedded JPEGs have no APP segments at all, so
 they carry no orientation of their own (see
 [container-and-previews.md](container-and-previews.md)). [F]
@@ -869,7 +871,9 @@ No Sony tag overrides IFD0. [S][I]
 | Offset from UTC | Exif 0x9011 OffsetTimeOriginal, form `+HH:MM` | from ARW 2.3.3 on in the samples |
 | Last modification | IFD0 0x0132 DateTime | repeated in IFD1 |
 
-Sources: [4][F] and as cited.
+Sources: the four tags and their forms [P][30] (4.6.5.4.5, p. 43;
+4.6.6.6.1, p. 52; 4.6.6.6.4, p. 53; 4.6.6.6.7, p. 54); the rest [4][F]
+and as cited.
 
 **OffsetTime\*.** OffsetTime, OffsetTimeOriginal and OffsetTimeDigitized are
 present, all three together, in the ILCE-9 (1541, 1542; firmware 1.00,
@@ -904,7 +908,8 @@ space-filled string; return "none" for the date rather than an error. [I]
 
 ### 9.3 Make, model and ModelID
 
-IFD0 tags 0x010F and 0x0110. Make bytes as measured [F]; Model padding as
+IFD0 tags 0x010F Make and 0x0110 Model. [P][30] (4.6.5.4.2 and
+4.6.5.4.3, p. 42) Make bytes as measured [F]; Model padding as
 listed in the raw.pixls.us sweep [S][24]:
 
 | Body | Make bytes | Model |
@@ -946,16 +951,17 @@ includes masked or unused columns and, on lossless files, padding to whole
 512-pixel tiles. IFD0's own size, where present, is not the sensor's.
 [S][F] Sources for the visible size, in order of preference:
 
-1. **DefaultCropOrigin and DefaultCropSize** (0xC61F, 0xC620) in the raw
-   SubIFD, written from ARW 2.3.3 on (for example (12, 12) and 6000 × 4000
-   on the ILCE-9, file 1542; (32, 20) and 9504 × 6336 in a 9728 × 6656
-   lossless ILCE-7CR file). [F][S][19][24] On medium and small raws they are
-   smaller than the stored image (6930: 5120 × 3584 stored, 4608 × 3072
-   crop; 6931: 3584 × 2560 stored, 3504 × 2336 crop; the ILCE-9M3's small
-   raw, 7364: 3072 × 2048 stored, 3008 × 2000 crop). [F] APS-C files have
-   the same 4608 × 3072 crop inside differently sized stored images:
-   4736 × 3132 on the ILCE-7M4 (6933, 6936), 4640 × 3088 on the ILCE-7M5
-   (8849, 8850) and 5120 × 3584 on its lossless APS-C file (8848). [F]
+1. **DefaultCropOrigin and DefaultCropSize** (0xC61F, 0xC620, DNG tags
+   [P][31] (Chapter 4, p. 31)) in the raw SubIFD, written from ARW 2.3.3
+   on (for example (12, 12) and 6000 × 4000 on the ILCE-9, file 1542;
+   (32, 20) and 9504 × 6336 in a 9728 × 6656 lossless ILCE-7CR file).
+   [F][S][19][24] On medium and small raws they are smaller than the
+   stored image (6930: 5120 × 3584 stored, 4608 × 3072 crop; 6931: 3584
+   × 2560 stored, 3504 × 2336 crop; the ILCE-9M3's small raw, 7364: 3072
+   × 2048 stored, 3008 × 2000 crop). [F] APS-C files have the same 4608
+   × 3072 crop inside differently sized stored images: 4736 × 3132 on
+   the ILCE-7M4 (6933, 6936), 4640 × 3088 on the ILCE-7M5 (8849, 8850)
+   and 5120 × 3584 on its lossless APS-C file (8848). [F]
 2. **SonyCropTopLeft and SonyCropSize** (0x74C7, 0x74C8), as (left, top) and
    (width, height). They hold the aspect-ratio crop where one is set, and
    can disagree with DefaultCrop by a few pixels (ILCE-7RM3). [F]
@@ -1000,10 +1006,10 @@ it by raw width. [S][12][F]
 
 ### 9.5 Lens
 
-- **Exif LensModel (0xA434)** is present from the NEX-5 and SLT-A55 (2010)
-  on for interchangeable-lens bodies, and reads `----` for a manual lens
-  (file 1582). It is absent on the A100 to A900, the R1, and the fixed-lens
-  RX100 and RX100M6. [F]
+- **Exif LensModel (0xA434)** [P][30] (4.6.6.9.6, p. 80) is present from
+  the NEX-5 and SLT-A55 (2010) on for interchangeable-lens bodies, and
+  reads `----` for a manual lens (file 1582). It is absent on the A100
+  to A900, the R1, and the fixed-lens RX100 and RX100M6. [F]
 - **MakerNote 0xB027 LensType** is the A-mount lens ID; it is 65535 for
   E-mount lenses. LibRaw reads 0xEFxx values as Canon EF adapters and
   0x49xx to 0x59xx as the Sigma MC-11. [S][1][9]
@@ -1015,7 +1021,8 @@ it by raw width. [S][12][F]
   lens table is not something to copy. [S][4]
 
 **The samples overturn LensSpec as a fallback.** [F] Wherever 0xB02A is
-not all zeros, Exif LensSpecification (0xA432) describes the same lens;
+not all zeros, Exif LensSpecification (0xA432 [P][30] (4.6.6.9.4,
+p. 79)) describes the same lens;
 every body from the NEX-5 and SLT-A55 on writes it, the fixed-lens RX100
 and RX100M6 included, except with the ILCE-7S's manual lens (1582).
 LensSpec is all zeros on the A200, A700 and A900 (files 2271, 2521, 5858),
@@ -1165,8 +1172,9 @@ Every value below was read on the 36 files of
 the [JPEG test data](../jpeg/test-data.md#2-the-sample-files) on
 2026-10-23, with a bounds-checked script written from these pages
 **[F]**; [test-data.md](test-data.md#23-the-camera-settings-of-each-file)
-lists which file records which value. The meaning of each code is
-ExifTool's, read in its published tag documentation [S][1][28][29].
+lists which file records which value. The meaning of each MakerNote
+code is ExifTool's, read in its published tag documentation [S][1][29];
+the meaning of each Exif code is the standard's [P][30].
 ExifTool was also run on the same files as an independent reader to
 compare with. It reads the same value as the script for every tag both
 read, with three exceptions: it prints FullImageSize (0xB02B) width
@@ -1196,12 +1204,18 @@ of ExifTool's code is in raw-files.
 | Focal length in 35 mm terms | Exif 0xA405 FocalLengthIn35mmFilm | none | every file but the F828's and the R1's |
 | Software | IFD0 0x0131 Software | none | every file but the F828's and the R1's |
 
+The standard tags: [P][30] (4.6.5.4.4, p. 42; 4.6.6.2.1, p. 47;
+4.6.6.7.3, p. 55; 4.6.6.7.19 to 4.6.6.7.21, pp. 60 to 61; 4.6.6.7.37,
+p. 69; 4.6.6.7.39, p. 70; 4.6.8.1.1, p. 92)
+
 **Exposure program and metering mode.** Both are Exif tags on every
-checked file **[F]**, with Exif's codes [S][28]. ExposureProgram is 1
-(manual) on ten files, 2 (normal program) on five, 3 (aperture
-priority) on 20, 6 (action) on the A200 (file 2271), and 4 (shutter
-priority) on the A100 JPEG; it is never 0. MeteringMode is 5
-(multi-segment) on 29 files and the five JPEGs, 2 (center-weighted average) on the NEX-5,
+checked file **[F]**, with Exif's codes. [P][30] (4.6.6.7.3, p. 55;
+4.6.6.7.19, p. 60) ExposureProgram is 1 (manual) on ten files, 2
+(normal program) on five, 3 (aperture priority) on 20, 6 (action) on
+the A200 (file 2271), and 4 (shutter priority) on the A100 JPEG; it is
+never 0. MeteringMode is 5 ("Pattern", raw-files'
+`MeteringMode::MultiSegment`) on 29 files and the five JPEGs, 2
+(center-weighted average) on the NEX-5,
 A100 and A700 (files 1457, 2346, 2521) and 3 (spot) on the RX100M6,
 A99V and A900 (files 3012, 3015, 3751, 5858) **[F]**. The MakerNote's
 ExposureMode (0xB041) and MeteringMode2 (0x202C) agree with them on
@@ -1221,17 +1235,18 @@ shows a fired flash.
 of light, a color temperature, or a custom value measured from a gray
 card, and may shift the result (the fine-tuning below). Exif records
 only whether it was auto (0xA403) and, in a tag of its own, the kind of
-light (0x9208 LightSource) [S][28]. The MakerNote's 0x0115 WhiteBalance,
-one LONG **[F]**, records the setting, with ExifTool's codes [S][1]: 0
-auto, 1 color temperature or color filter, 16 daylight, 32 cloudy, 48
-shade, 64 tungsten, 80 flash, 96 fluorescent, 112 custom, 128
-underwater. The checked files hold 0 on 30 files and the ILCE-6000,
-ILCE-7M3 and ILCE-7RM2 JPEGs, 48 on the ILCE-7S (file 1582) and the
-RX100M4 JPEG, and 112 on the ILCE-9M3 (files 7361, 7364) **[F]**. Exif
-agrees on every file: 0xA403 is 0 with 0x0115 0, and 1 with 48
-(LightSource 11, "shade") and with 112 (LightSource 255, "other").
-Frames shot for these values on my ILCE-7M2 show every other code
-under its setting (below).
+light (0x9208 LightSource). [P][30] (4.6.6.7.37, p. 69; 4.6.6.7.20, p.
+60) The MakerNote's 0x0115 WhiteBalance, one LONG **[F]**, records the
+setting, with ExifTool's codes [S][1]: 0 auto, 1 color temperature or
+color filter, 16 daylight, 32 cloudy, 48 shade, 64 tungsten, 80 flash,
+96 fluorescent, 112 custom, 128 underwater. The checked files hold 0 on
+30 files and the ILCE-6000, ILCE-7M3 and ILCE-7RM2 JPEGs, 48 on the
+ILCE-7S (file 1582) and the RX100M4 JPEG, and 112 on the ILCE-9M3 (files
+7361, 7364) **[F]**. Exif agrees on every file: 0xA403 is 0 with 0x0115
+0, and 1 with 48 (LightSource 11, "Shade") and with 112 (LightSource
+255, "other light source"), the names Exif gives. [P][30] (4.6.6.7.20,
+pp. 60 to 61) Frames shot for these values on my ILCE-7M2 show every
+other code under its setting (below).
 
 0xB054, also called WhiteBalance by ExifTool, one SHORT with codes for
 auto, custom, daylight, cloudy, the kinds of fluorescent and
@@ -1335,19 +1350,23 @@ gives no size at all.
 
 **Color space.** The color space the camera was set to for its JPEG
 output. Exif ColorSpace (0xA001) is 1 (sRGB) on 33 files and the five
-JPEGs, and 65535 ("uncalibrated") on the A100, R1 and A900 (files 2346,
-3221, 5858) **[F]** [S][28]. The Interoperability IFD's InteropIndex
-(0x0001) then names the color space under the DCF rule, `R98` for
-sRGB and `R03` for Adobe RGB [S][28]: it is `R98` on every file with
+JPEGs, and 65535 ("Uncalibrated") on the A100, R1 and A900 (files 2346,
+3221, 5858) **[F]**; Exif defines 1 as sRGB and 0xFFFF as uncalibrated.
+[P][30] (4.6.6.2.1, p. 47) The Interoperability IFD's InteropIndex
+(0x0001) then names the DCF rule the file follows: `R98` marks a DCF
+basic file and `R03` a DCF option file [P][30] (4.6.8.1.1, p. 92). A
+basic file is in sRGB [P][32] (2.1, p. 6); an option file is in Adobe
+RGB in ExifTool's documentation [S][28]. It is `R98` on every file with
 ColorSpace 1 but the F828's, which has none, `R03` on the R1 and the
 A900, and empty on the A100 **[F]**. So the A100's color space is not
 named in the standard tags, although its Minolta block, as ExifTool
 reads it, says Adobe RGB **[S]**; on the A900 the plain CameraSettings
 block (0x0114) says Adobe RGB too, agreeing with `R03` **[S]**.
 
-**Focal length in 35 mm terms.** Exif 0xA405 FocalLengthIn35mmFilm
-[S][28] is on every file but the F828's and the R1's, and is 0, meaning
-unknown, on the ILCE-7S with its manual lens (file 1582) **[F]**.
+**Focal length in 35 mm terms.** Exif 0xA405 FocalLengthIn35mmFilm is
+in millimeters, and 0 means unknown. [P][30] (4.6.6.7.39, p. 70) It is
+on every file but the F828's and the R1's, and is 0 on the ILCE-7S
+with its manual lens (file 1582) **[F]**.
 
 **Software and firmware.** IFD0's Software is on every file but the
 F828's and the R1's, and holds the body's own name and its firmware
@@ -2083,6 +2102,12 @@ Retrieved October 2026.
   digital still cameras: Exif Version 3.1" (January 2026), read
   November 2026 —
   https://www.cipa.jp/std/documents/download_e.html?CIPA_DC-008-2026-E
+- [31] Adobe, "Digital Negative (DNG) Specification", version 1.7.1.0,
+  September 2023, read November 2026 —
+  https://helpx.adobe.com/content/dam/help/en/photoshop/pdf/DNG_Spec_1_7_1_0.pdf
+- [32] CIPA DC-009-Translation-2010, "Design rule for Camera File
+  system: DCF Version 2.0 (Edition 2010)", read November 2026 —
+  https://www.cipa.jp/std/documents/download_e.html?DC-009-2010_E
 
 ### Sample files
 
