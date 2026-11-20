@@ -300,13 +300,14 @@ formula, so no table needs to be copied.
 
 The three options on the NEF page remain: (a) treat a short table as a
 format fact and transcribe it from at least two sources, (b) derive it from
-sample files, (c) strict clean-room with separate documenter and coder. For
-ARW we suggest [I]:
+sample files, (c) strict clean-room with separate documenter and coder.
+Per-body values take option (b), checked against the files in
+[test-data.md](test-data.md#files-checked)
+([open-questions.md](open-questions.md#5-questions-settled-by-a-decision-or-by-the-code)).
+For the rest of ARW we suggest [I]:
 
 - no table at all for the ARW1 code, the cipher inverse and the keystream,
   since each is a rule or a formula that the code computes;
-- option (b) for per-body values, checked against the files in
-  [test-data.md](test-data.md#files-checked);
 - no color matrices until work on the developed image starts and
   where they may come from is decided;
 - for the ARW 6.0 curve, no decision until section 4.3's questions are
@@ -427,8 +428,10 @@ was confirmed on samples. These points were not [33]:
 - The status of EP 1841233 A1, the European counterpart of the cRAW patent.
 - Whether PRONOM's DROID tool identifies ARW 4.0 and later files at all; a
   run on raw.pixls.us files 4466, 7361 and 8846 would show it.
-- The provenance policy for per-body values and color matrices (section
-  4.2), to be recorded in an ADR before raw-files decodes raw sensor data.
+- The provenance policy for color matrices (section 4.2), to be recorded
+  in an ADR before raw-files decodes raw sensor data. Per-body values are
+  settled
+  ([open-questions.md](open-questions.md#5-questions-settled-by-a-decision-or-by-the-code)).
 
 ## Sources
 

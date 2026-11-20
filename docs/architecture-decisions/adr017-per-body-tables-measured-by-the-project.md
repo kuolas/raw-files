@@ -137,7 +137,10 @@ Rejected:
 - Per-body facts that the files themselves hold, such as a sensor's
   color filter phase, a crop's trim or a white level, which are read
   from the files and recorded in the format notes as any other fact,
-  not measured outside them.
+  not measured outside them. A fact a file shows only in its pixels,
+  such as where the border around the picture ends, is one the files
+  hold: it is derived from sample files of the body, never transcribed
+  from another project's table.
 - A decoder's fixed tables, such as the symbol lists of a compression
   and the substitution tables of a cipher, which no session with a
   camera can measure; they need a decision of their own, which

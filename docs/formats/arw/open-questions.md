@@ -27,9 +27,6 @@ that would answer Part 2.
    - the SR2 keystream is a formula with two constants.
 
    What remains:
-   - per-body crops, black and white level fallbacks and CFA patterns for
-     older bodies without crop tags, which dcraw and LibRaw trim by raw
-     width and rawspeed lists per body;
    - color matrices: every decoder uses Adobe-derived per-body matrices,
      and the meaning of Sony's own 0x7800 is unknown;
    - YCbCr to RGB coefficients for the M and S sizes, if raw-files ever
@@ -39,19 +36,21 @@ that would answer Part 2.
      extracted from existing decoders (LibRaw's embedded table, under its
      own license, and an unlicensed write-up's).
 
-   The tables of autofocus points are settled (Part 5). The options for
-   the rest are, as for NEF:
+   The tables of autofocus points and the per-body facts, the crops of
+   older bodies without crop tags, the level fallbacks and the CFA
+   patterns, are settled (Part 5). The options for the rest are, as for
+   NEF:
    - (a) treat a short table as a format fact, transcribed from two
      independent sources with provenance recorded;
    - (b) derive it from sample files;
    - (c) a clean-room process, in which the person who reads the copyleft
      source is not the person who writes the code.
 
-   Per-body values can always take route (b). Graphite's rawkit does not
-   change the picture: it matches dcraw element for element, so reading it
-   is reading dcraw. A table that turned out to be a published formula
-   would remove the problem for the ARW 6.0 curve. The decision needs to be
-   recorded in an ADR before the first table enters raw-files.
+   Graphite's rawkit does not change the picture: it matches dcraw
+   element for element, so reading it is reading dcraw. A table that
+   turned out to be a published formula would remove the problem for the
+   ARW 6.0 curve. The decision needs to be recorded in an ADR before the
+   first table enters raw-files.
 2. **ARW 6.0.** The recommendation is to detect Compression 32766 and
    return a typed unsupported error before reading the strip, while still
    returning previews and metadata from these files
@@ -430,7 +429,27 @@ record or the code of raw-files has answered it; each names what did.
   [the NEF notes](../nef/autofocus-points.md#1-the-procedure), and takes
   one from another project only by a decision made together with it
   ([ADR017](../../architecture-decisions/adr017-per-body-tables-measured-by-the-project.md)).
-  The other data of Part 1's decision 1 stays open.
+  The next item settles the per-body facts; the rest of Part 1's
+  decision 1 stays open.
+- **Per-body facts a raw decoder needs**: the color filter's phase, the
+  crop that trims the border around the picture, and the black and white
+  levels ([raw-data.md](raw-data.md)). A fact a file records in a tag is
+  read from the tag. A fact a file shows only in its pixels, such as
+  where the border ends, the color filter's phase, a level the file
+  records nowhere or where highlights clip below the white level a tag
+  records, counts as a fact the file holds, a fact of the format. It is
+  derived from sample files of the body and recorded in the format notes
+  with the file and the method, tagged **[F]**. It is never transcribed
+  from another project's per-body table: the values the raw data notes
+  quote from other decoders are there to be checked against the samples.
+  The decision to measure per-body tables in the project leaves such
+  facts to the files; its procedure, frames shot with the body, is for
+  facts that no file holds, such as where an autofocus point lies
+  ([ADR017](../../architecture-decisions/adr017-per-body-tables-measured-by-the-project.md)).
+  This changes nothing in the image size raw-files reports, which comes
+  from the tags and, on a body that records no crop, includes the border
+  pixels
+  ([ADR011](../../architecture-decisions/adr011-metadata-from-standard-tags.md)).
 - **Size and framing for metadata.** Which "image dimensions" to report:
   the stored size, the visible size from DefaultCrop, the in-camera
   framing from SonyCrop, or 0x7038's usable area. The decision to read

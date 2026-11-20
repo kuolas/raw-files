@@ -192,8 +192,9 @@ unsettled. Three options, to be decided by the maintainers:
   non-copyleft or neutral description; a different person writes the code.
   Heaviest, but cleanest.
 
-We suggest (b) for per-body tables, which also keeps them small
-and verifiable, and a decision between (a) and (c) before any Huffman or
+Per-body values take (b), which also keeps them small and verifiable
+([open-questions.md](open-questions.md#5-questions-settled-by-a-decision-or-by-the-code)).
+We suggest a decision between (a) and (c) before any Huffman or
 decryption table is committed. Until that decision is recorded in an ADR,
 we suggest committing neither table. Raw sensor data and the encrypted
 part of full metadata need them; previews and the metadata raw-files

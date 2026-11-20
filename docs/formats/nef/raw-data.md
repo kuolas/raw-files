@@ -788,8 +788,10 @@ raw-files may ever decode HE is a legal question, not an engineering one; see
   example D3 and D700 by 4 with a left margin of 2, D600 and D800 by 46, D4
   and Df by 52) [1][7] **[S]**; rawspeed has similar crops, and none for
   most Z bodies (Z 9: 12 columns) [13] **[S]**.
-- NEF has no equivalent of DNG's DefaultCrop: crop comes from 0x0045 or a
-  per-body table.
+- NEF has no equivalent of DNG's DefaultCrop: crop comes from 0x0045 or,
+  on a body that writes none, from trims derived from sample files of the
+  body, never from another decoder's table
+  ([open-questions.md](open-questions.md#5-questions-settled-by-a-decision-or-by-the-code)).
 
 ### White balance
 
