@@ -109,7 +109,7 @@ source.
 | dcraw 9.28 | C | Custom, no SPDX; the header frees all code outside the Foveon functions "for all uses" (see the NEF page) [14] | SRF, SR2 decryption, ARW1, cRAW, the 0x7010 tone curve; no lossless, no ARW 6.0 | Read only, no copying |
 | LibRaw | C++ | LGPL-2.1-only OR CDDL-1.0 per the README; the GitHub API reports NOASSERTION [15] | SRF, SR2, ARW1, cRAW, lossless, M and S YCbCr, ARQ; ARW 6.0 on master only (section 3.4) | Read only, no copying |
 | rawspeed | C++ | LGPL-2.1 per GitHub; source headers say 2.1 or any later version [16] | Compression 1, 7 (CFA only) and 32767; SRF and SR2 recognized; no 32766 | Read only, no copying |
-| rawler / dnglab | Rust | LGPL-2.1 [17] | SRF, A100, Compression 1, 7 and 32767; 32766 refused as unsupported (the decompressor is an unreachable stub) | Read only, no copying |
+| rawler / dnglab | Rust | LGPL-2.1 [17] | SRF, A100, Compression 1, 7 and 32767; Compression 32766 refused as unsupported | Read only, no copying |
 | rawloader | Rust | LGPL-2.1 [18] | SRF, A100, Compression 1 and 32767; no lossless | Read only, no copying |
 | imagepipe, quickraw | Rust | LGPL-3.0-only, LGPL-2.1 [19] | Pipelines over the above | Read only, no copying |
 | libopenraw (Rust since 0.4) | Rust | LGPL-3.0-or-later per crates.io and the source headers; LGPL-3.0 per the GitHub mirror [20] | ARW detection, thumbnails, raw data | Read only, no copying |
@@ -120,11 +120,11 @@ source.
 | rexiv2, `exiftool-rs` 0.9.0 | Rust | GPL-3.0-or-later [19] | Bindings to exiv2; a reimplementation of ExifTool | Read only, no copying |
 | metadata-extractor | Java | Apache-2.0 [24] | ARW; Sony MakerNote types 1 and 6; a 256-entry decipher table for 0x9050 and 0x94xx blocks (added 2022) | Permissive; read for facts; the table's provenance is not stated |
 | Kim (Ashampoo) | Kotlin | Apache-2.0 [25] | ARW preview from IFD0 tags 0x0201 and 0x0202 only | Permissive, small |
-| jpgfromraw (formerly `arwtojpg`) | Rust | MIT [26] | Walks the whole IFD0 chain, keeps the largest JPEG, bounds-checks offsets | Permissive; worth reading for previews |
+| jpgfromraw (formerly `arwtojpg`) | Rust | MIT [26] | Returns the largest JPEG in the IFD0 chain, with its offsets checked against the file | Permissive; worth reading for previews |
 | imagemeta | Go | MIT [27] | Sony MakerNote decoding; its README aims at ExifTool parity | Permissive label; tables probably follow ExifTool's [I] |
 | exif-py (ExifRead) | Python | BSD-3-Clause [28] | A Sony MakerNote module | Permissive |
 | rawpy | Python | MIT for the wrapper; bundles LibRaw [29] | Whatever LibRaw does | Not pure Rust; the bundle carries LibRaw's license |
-| rawkit (Graphite) | Rust | MIT OR Apache-2.0 [30] | Single-strip uncompressed, 12-bit cRAW, A100 ARW1 (stops at a `todo!()`); IFD0 preview on master only; no lossless, ARW 6.0, SR2, SRF or ARQ | Permissive label; see section 3.3 |
+| rawkit (Graphite) | Rust | MIT OR Apache-2.0 [30] | Single-strip uncompressed, 12-bit cRAW, A100 ARW1 recognized, then a panic; IFD0 preview on master only; no lossless, ARW 6.0, SR2, SRF or ARQ | Permissive label; see section 3.3 |
 | arw6_decode (abbradar) | Python | None: no license file, so all rights reserved [31] | A reference ARW 6.0 decoder with a prose description | Do not read or copy until it is licensed; only its README was read |
 | image-rs `tiff` and `image`, `kamadak-exif`, `zune-jpeg`, `nom-exif`, `little_exif` | Rust | As on the NEF page [19] | Generic TIFF, Exif and JPEG; no Sony MakerNote; `image` does not decode ARW | Dependency candidates, as for NEF |
 
@@ -179,8 +179,8 @@ PR #2088. [30] **[P]**
 
 We compared it with dcraw 9.28. [14][30] **[S]**
 
-- The ARW1 decoder uses dcraw's function names, and its 18-entry constant
-  table is the same as dcraw's, value for value. The table expansion, the
+- The ARW1 decoder uses dcraw's names, and its 18-entry table is the
+  same as dcraw's, value for value. The table expansion, the
   column and row order and the overflow check follow dcraw too.
 - The cRAW decoder follows dcraw's routine step for step: the row buffer
   and loop bound, the bit positions of the block fields, the clamp, the
@@ -209,9 +209,8 @@ For raw-files [I]:
   read only, no copying, like dcraw, until an ADR decides the dcraw
   question.
 - As a dependency it is weak regardless of provenance. It panics on
-  unexpected input (`unwrap`, `assert!`, `todo!()`), stops at a `todo!()`
-  on the A100, and allocates its preview buffer from a length read from the
-  file without a bound, which
+  unexpected input and on A100 files. It sizes its preview buffer from a
+  length read from the file without a bound, which
   [ADR008](../../architecture-decisions/adr008-lints-and-panics.md)
   rules out. [30] **[S]**
 - Its per-body color matrices equal the Adobe-derived values in dcraw,
@@ -243,10 +242,8 @@ separates the two modes, and Lossless Compressed stays Compression 7
   decoder's observed input and output with substantial AI assistance, was
   closed unmerged on 2026-09-13. [16] **[P]**
 - **dnglab** PR #825 is open. It ports arw6_decode, which has no license,
-  with AI assistance; rawler's main branch refuses Compression 32766 as
-  unsupported (no camera file defines its "arw6" mode), and its ARW 6.0
-  decompressor is an `unimplemented!()` stub that is unreachable.
-  [17][31] **[S]**
+  with AI assistance. rawler's main branch refuses Compression 32766 as
+  unsupported. [17][31] **[S]**
 - Adobe Lightroom and Camera Raw reportedly read A7 V Compressed and
   Compressed (HQ) from about April 2026. [39] **[S]**
 
@@ -277,7 +274,7 @@ between implementations, which is the reason to prefer samples:
   2,485 (raw.pixls.us file 2346) **[F]**;
 - the element order of tag 0x74C7, which is (left, top) as LibRaw reads it,
   not (top, left) as libopenraw does (file 3012) **[F]**;
-- the "ARW1 under Compression 32767" path that every decoder carries but no
+- the ARW1 data under Compression 32767, which every decoder reads but no
   source tied to a body: the DSLR-A200 writes it (file 2271) **[F]**.
 
 ### 4.2 Tables that need a decision
@@ -288,10 +285,10 @@ formula, so no table needs to be copied.
 
 | Data | In the file? | Where it is published | Position for raw-files |
 |---|---|---|---|
-| ARW1 prefix code (A100, and the ARW1 streams of the A200 class) | No | As an 18-entry table in dcraw, LibRaw and rawkit; rawspeed and rawler decode it with a rule instead | Reduces to a short rule, described in [raw-data.md](raw-data.md); checked on files 2346 and 2271 **[F]**. No table needed |
-| Inverse of the MakerNote cipher (blocks 0x2010, 0x9050, 0x94xx) | No | Precomputed in LibRaw, ExifTool and metadata-extractor; computed from the formula in exiv2 and rawler | Computable from the formula b³ mod 249 (see [makernote-and-metadata.md](makernote-and-metadata.md)); checked on the shutter counts of 14 files: 6929, 6930, 6931, 6933, 6936, 1541, 1542, 1310, 1311 and 8846 to 8850 **[F]**. No table needed |
+| ARW1 prefix code (A100, and the ARW1 streams of the A200 class) | No | As an 18-entry table in dcraw, LibRaw and rawkit; as a rule in rawspeed and rawler | Reduces to a short rule, described in [raw-data.md](raw-data.md); checked on files 2346 and 2271 **[F]**. No table needed |
+| Inverse of the MakerNote cipher (blocks 0x2010, 0x9050, 0x94xx) | No | As a table in LibRaw, ExifTool and metadata-extractor; as the formula in exiv2 and rawler | Computable from the formula b³ mod 249 (see [makernote-and-metadata.md](makernote-and-metadata.md)); checked on the shutter counts of 14 files: 6929, 6930, 6931, 6933, 6936, 1541, 1542, 1310, 1311 and 8846 to 8850 **[F]**. No table needed |
 | SR2 and SRF keystream | The key is; the algorithm is not | dcraw, LibRaw, rawspeed, ExifTool | A formula with two constants, described in full in [makernote-and-metadata.md](makernote-and-metadata.md); checked on 34 files **[F]** |
-| cRAW tone curve | Yes, four knots in tag 0x7010 | Built by rule in every decoder | No table |
+| cRAW tone curve | Yes, four knots in tag 0x7010 | Nowhere as a table: a rule gives it | No table |
 | Lossless JPEG Huffman tables | Yes, a DHT segment in every tile | ITU-T T.81 | No table |
 | Per-body crops, black and white levels, CFA pattern | Mostly (DefaultCrop, 0x7038, 0x7310, 0x787F, 0xC61D, CFAPattern); older bodies need fallbacks | rawspeed's `cameras.xml`, dcraw and LibRaw | Derive from samples (option (b) below) |
 | Color matrices | Sony's 0x7800 exists, meaning unconfirmed (its rows sum to about 1024 on file 1542 **[F]**) | Adobe-derived per-body matrices in dcraw, LibRaw, rawspeed and rawkit | Needed only for the developed image's color model; defer [I] |
@@ -334,11 +331,11 @@ answered before a decoder is written:
    table is the identity up to code 1427, then steepens and ends at 39002 [15]
    **[S]** (shape **[I]**); arw6_decode's README calls it a logarithmic curve
    of the Cineon or S-Log family with a linear toe [31] **[S]**. The files' own
-   levels fit LibRaw's hard-coded ones at half scale: tag 0x7310 is 512 where
-   LibRaw uses a black level of 1024, and 0xC61D is 16383 where LibRaw's linear
-   maximum is 32800 (files 8846 to 8850). **[F]** (tags), **[I]** (relation) A
-   curve that turned out to be a published formula would remove the table
-   problem. [I]
+   levels are about half of LibRaw's for them **[I]**. Tag 0x7310 is 512
+   against LibRaw's black level of 1024, and 0xC61D 16383 against
+   LibRaw's maximum of 32800 (files 8846 to 8850). **[F]** (tags),
+   [15] **[S]** (LibRaw's values) A curve that turned out to be a published
+   formula would remove the table problem. [I]
 2. **The patent position** (section 5).
 
 ## 5. Patents and encryption
@@ -358,8 +355,8 @@ answered before a decoder is written:
   unencumbered. [I]
 - **Lossless.** ITU-T T.81 dates from 1992; patents on its lossless
   process have long expired. [I]
-- **ARW 6.0.** No patent was identified. LibRaw names the stream "llvc3"
-  and arw6_decode calls the format "LLVC v3". [15][31] **[S]** LLVC is
+- **ARW 6.0.** No patent was identified. LibRaw and arw6_decode both call
+  the format LLVC version 3. [15][31] **[S]** LLVC is
   Sony's name for a line-based wavelet video codec disclosed as SMPTE RDD
   34:2015 (5/3 lifting, 16-line units, 128-bit words, variable-length
   coding), and RDD 34 directs intellectual-property inquiries to Sony. [13]

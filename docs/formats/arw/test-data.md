@@ -110,8 +110,8 @@ present, so it is not repeated). Since 2026-10-21 the reader gives these
 points, and `tests/arw.rs` checks the last column on every file, its
 table giving the reason for each file that gives none; on that day
 ExifTool 13.55, run as a reader to compare with, reported the same
-FocusLocation, FocusFrameSize and FocusLocation2 on every file (its
-FocusMode draws on other tags on the bodies without 0x201B, so it was
+FocusLocation, FocusFrameSize and FocusLocation2 on every file (on
+the bodies without 0x201B its FocusMode comes from other tags, so it was
 compared only where that tag exists):
 
 | Id | Body | What the file records | Focus point by ADR012's rules |

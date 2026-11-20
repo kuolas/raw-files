@@ -166,8 +166,8 @@ Sources give the URL and SHA-256 of the files it cites, and
 - **No mature ARW implementation can be copied into raw-files.** dcraw,
   LibRaw, rawspeed, rawler, libopenraw, ExifTool and exiv2 are read for
   understanding only. Graphite's rawkit is labeled MIT OR Apache-2.0, but
-  its ARW1 table, cRAW loop and tone-curve builder match dcraw element for
-  element [S] (that they were translated is [I]), and it panics on
+  its ARW1 table, cRAW decoding and 0x7010 tone curve match dcraw element
+  for element [S]. That they were translated is [I]. It also panics on
   unexpected input ([licenses-and-references.md](licenses-and-references.md)).
 - **Few tables need a decision.** Unlike NEF, the ARW1 prefix code, the
   cipher inverse and the keystream reduce to rules or formulas, and per-body
