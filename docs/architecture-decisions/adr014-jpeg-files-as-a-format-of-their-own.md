@@ -242,12 +242,17 @@ what the file records about its own picture.
   passes. An export cropped to another shape, or turned upright in its
   pixels, gives no focus point. A point that is kept is scaled onto any
   preview as in a raw file.
-- **No new limits.** The segment walk stops after a fixed number of
-  steps, a marker or a fill byte each, as the search for a preview's
-  frame header does; the Exif segment is bounded by its two-byte
-  length; the MPF list is an IFD under the existing limit on entries,
-  and gives at most five candidates; and reading a preview, the file
-  included, stays under the existing limit on preview bytes.
+- **The walk is capped by a limit.** The segment walk stops after
+  `Limits::max_jpeg_markers` steps, a marker or a fill byte each. So
+  does each search for a preview's frame header, a walk of its own. A
+  caller can raise or lift the limit as any other
+  ([ADR009](adr009-public-api-shape.md)). The other bounds are those
+  that already hold:
+  - the Exif segment is bounded by its two-byte length;
+  - the MPF list is an IFD under the limit on entries, and gives at
+    most five candidates;
+  - reading a preview, the file included, stays under the limit on
+    preview bytes.
 
 Rejected:
 
@@ -307,8 +312,9 @@ Rejected:
   JPEGs.
 - **A note in the changelog in place of `Format::is_raw`.** The next
   format that is not raw, such as HEIF, would set the same trap.
-- **A public limit on the number of JPEG segments.** No caller needs to
-  tune it, and a fixed bound keeps the walk short on any file.
+- **A fixed cap on the walk's steps, outside `Limits`.**
+  `Limits::unlimited()` would not lift it, and a caller could not change
+  it as any other cap (ADR009).
 - **Opening a JPEG outside the table of formats.** There would be two
   ways to open a file, and a third container would add a third.
 - **Accepting only raw formats, or only formats in a TIFF structure.**
