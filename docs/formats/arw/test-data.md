@@ -221,6 +221,24 @@ ExifTool 13.55, run on these frames as a reader to compare with,
 showed which tag changed with the fine-tuning: 0x2014, which it calls
 WBShiftAB_GM.
 
+Eleven of these frames, LGS03150 to LGS03160, confirm codes of the
+white balance and of the kind of fluorescent lamp
+([makernote-and-metadata.md](makernote-and-metadata.md#910-more-capture-settings)).
+Read again on 2026-11-20, each holds:
+
+| Frames | Setting | Exif LightSource | 0x0115 | 0x0112 |
+|---|---|---|---|---|
+| LGS03151 | auto | 0 | 0 | 0 |
+| LGS03150, LGS03152 | daylight | 1 | 16 | 0 |
+| LGS03153 | shade | 11 | 48 | 0 |
+| LGS03154 | cloudy | 10 | 32 | 0 |
+| LGS03155 | tungsten | 3 | 64 | 0 |
+| LGS03156 to LGS03159 | the four fluorescent lamps | 15, 14, 13, 12 | 96 | -1, 0, 1, 2 |
+| LGS03160 | flash | 4 | 80 | 0 |
+
+Each frame's ARW file and JPEG hold the same values; LGS03150's JPEG
+was not among the files read.
+
 ## 3. What raw.pixls.us holds for Sony
 
 ### 3.1 Access

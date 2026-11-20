@@ -222,6 +222,8 @@ offset to data nothing reads or a tag no ARW holds. [S][1][2]
 | ID | Name | Enc. | Meaning | Used for |
 |---|---|---|---|---|
 | 0x0010 | CameraInfo | no | A-mount and NEX AF and lens data, the AF point among them by number; layout chosen by byte count | focus points (point numbers) |
+| 0x0102 | Quality | no | u32; in a raw file 0 RAW, 6 RAW + JPEG, 7 compressed RAW; in a JPEG the JPEG's quality step; [section 9.10](#910-more-capture-settings) [F] | metadata |
+| 0x0104 | FlashExposureComp | no | SRATIONAL; the flash compensation in EV, in tenths on all but one file; [section 9.10](#910-more-capture-settings) [F] | metadata |
 | 0x0112 | WhiteBalanceFineTune | no | u32; despite the name, the kind of fluorescent lamp under a fluorescent white balance (-1 to 2), 0 otherwise; not the fine-tuning, which is 0x2014; [section 9.7](#97-camera-settings) [F] | full metadata |
 | 0x0114 | CameraSettings | no | layout by count; aspect ratio, drive mode, a Sony-coded orientation | full metadata |
 | 0x0115 | WhiteBalance | no | u32; the white balance setting: 0 auto, 16 daylight, 48 shade, 112 custom and others; not on the F828, R1 and A100 [F] | metadata |
@@ -229,14 +231,16 @@ offset to data nothing reads or a tag no ARW holds. [S][1][2]
 | 0x2010 | Tag2010 | yes | settings, a date string, aspect ratio; not written from the ILCE-7SM3 on [F] | full metadata |
 | 0x2014 | WBShiftAB_GM | no | i32[2]; the white balance fine-tuning, amber to blue then green to magenta, positive towards amber and towards magenta; [section 9.7](#97-camera-settings) [F] | metadata |
 | 0x201A | ElectronicFrontCurtainShutter | no | u32; the electronic front curtain setting, 0 off, 1 on; not the shutter used [F] | metadata |
-| 0x201B | FocusMode | no | 0 manual, 2 AF-S, 3 AF-C, 4 AF-A, 6 DMF, 7 AF-D; [section 9.6](#96-focus-point) | focus points |
+| 0x201B | FocusMode | no | 0 manual, 2 AF-S, 3 AF-C, 4 AF-A, 6 DMF, 7 AF-D; sections [9.6](#96-focus-point) and [9.10](#910-more-capture-settings) | focus points, metadata |
+| 0x201C | AFAreaModeSetting | no | u8; the AF-area mode, codes by body family; [section 9.10](#910-more-capture-settings) [F] | metadata |
 | 0x201D | FlexibleSpotPosition | no | the spot chosen in Flexible Spot mode, on a 640 × 480 grid | full metadata |
 | 0x201E | AFPointSelected | no | the selected point or zone, by number | focus points (point numbers) |
 | 0x2020 | AFPointsUsed | no | a mask of the points used | focus points (point numbers) |
 | 0x2022 | FocalPlaneAFPointsUsed | no | a mask of the on-sensor focus points used | focus points (point numbers) |
 | 0x2027 | FocusLocation | no | u16[4]: frame width and height, center x and y of the focus area | focus points |
-| 0x2029 | RAWFileType | no | 0 compressed, 1 uncompressed, 2 lossless, 3 Compressed RAW 2 | full metadata, raw data (hint) |
-| 0x202E | Quality | no | u16[2]; first value 1 RAW, 2 S-size, 3 M-size, 4 compressed, 5 compressed HQ; APS-C files say 3 too, and the ILCE-7M5 gives the compression whatever the size [F] | metadata, raw data (hint) |
+| 0x2029 | RAWFileType | no | 0 compressed, 1 uncompressed, 2 lossless, 3 Compressed RAW 2; repeats the raw IFD's Compression on every file with both [F] | full metadata, raw data (hint) |
+| 0x202D | ExposureStandardAdjustment | no | SRATIONAL; the exposure fine-tuning in EV, in sixths; [section 9.10](#910-more-capture-settings) [F] | metadata |
+| 0x202E | Quality | no | u16[2]; first value 1 RAW, 2 S-size, 3 M-size, 4 compressed, 5 compressed HQ; APS-C files say 3 too, and the ILCE-7M5 gives the compression whatever the size; second value the JPEG's quality step, 0 without a JPEG [F] | metadata, raw data (hint) |
 | 0x202F | PixelShiftInfo | no | group ID and shot number; marks ARQ composites | full metadata |
 | 0x2037 | FocusFrameSize | no | 6 bytes: the focus area's width and height and a third value | focus points |
 | 0x2044 | HiddenInfo | no | offset and size of an unknown block | none |
@@ -249,11 +253,15 @@ offset to data nothing reads or a tag no ARW holds. [S][1][2]
 | 0xB000 | FileFormat | no | u8[4] format version | metadata, full metadata, raw data |
 | 0xB001 | SonyModelID | no | u16 body identifier | metadata, full metadata, raw data |
 | 0xB021 | ColorTemperature | no | u32; kelvin: the chosen temperature under the color-temperature setting (0x0115 code 1) and the custom white balance's own under custom (code 112); 0 under every other setting on every file checked [F] | metadata |
+| 0xB026 | ImageStabilization | no | u32; 0 off, 1 on; [section 9.10](#910-more-capture-settings) [F] | metadata |
 | 0xB027 | LensType | no | A-mount lens ID; 65535 for E-mount lenses | metadata (lens) |
 | 0xB028 | MinoltaMakerNote | no | A100 only: offset of a Minolta-format IFD; 0 means absent | full metadata |
 | 0xB02A | LensSpec | no | 8 bytes: flags, BCD focal and aperture range, flags | metadata (lens) |
 | 0xB02B | FullImageSize | no | u32[2], **height first**; the camera's output size | metadata (cross-check) |
 | 0xB02C | PreviewImageSize | no | u32[2], height first; the IFD0 preview's size | previews (cross-check) |
+| 0xB047 | JPEGQuality | no | u16; 0 standard, 1 fine, 2 extra fine, 65535 not given; 65535 on every interchangeable-lens body that records it; [section 9.10](#910-more-capture-settings) [F] | metadata |
+| 0xB048 | FlashLevel | no | i16; the flash compensation in thirds of a stop, a repeat of 0x0104 [F] | none: 0x0104 gives it |
+| 0xB049 | ReleaseMode | no | u16; 0 normal, 2 continuous, 5 exposure, 6 white balance and 8 DRO bracketing; [section 9.10](#910-more-capture-settings) [F] | metadata |
 | 0xB054 | WhiteBalance | no | u16; a second white balance code, "auto" on two samples set to shade; not the setting [F] | full metadata |
 
 Notes:
@@ -812,8 +820,8 @@ multipliers, and raw decoding uses them.
 Everything a viewer needs next to the preview comes from IFD0, the Exif IFD,
 the raw SubIFD and, for the location, the GPS IFD
 ([section 9.9](#99-location)), and from the MakerNote for the focus point
-and the camera settings ([sections 9.6](#96-focus-point) and
-[9.7](#97-camera-settings)). **No decryption or deciphering is needed** on any sample: Make, Model,
+and the camera settings (sections [9.6](#96-focus-point),
+[9.7](#97-camera-settings) and [9.10](#910-more-capture-settings)). **No decryption or deciphering is needed** on any sample: Make, Model,
 Orientation, dates, 0xB000, 0xB001 and the crop tags are plain in every
 file. [F] The focus point is a plain MakerNote tag too
 ([section 9.6](#96-focus-point)), and so are most of the camera
@@ -1048,7 +1056,8 @@ raw-files reads it or not; all are tags of the MakerNote IFD:
 | 0x2027 FocusLocation | four SHORTs: the frame's width and height, the center's x and y | every sample from the ILCE-7RM2 (2015) on: ILCE-7RM2, ILCE-9, ILCE-7RM3 (ARW and ARQ), DSC-RX100M6, ILCE-1, ILCE-7SM3, ILCE-6700, ILCE-7M4, ILCE-9M3, ILCE-1M2, ILCE-7M5 **[F]** | read |
 | 0x204A FocusLocation2 | the same four values | the ILCE-9M3, ILCE-1M2 and ILCE-7M5, equal to FocusLocation on every one **[F]** | read when FocusLocation gives nothing, absent or of another shape, which no sample is |
 | 0x2037 FocusFrameSize | six bytes: the focus area's width and height as two u16, and a third u16 of 257 or 0 **[F]**; "width and height of FocusFrame, centered on FocusLocation" [S][1] | from the ILCE-7SM3 (2020) on: ILCE-7SM3, ILCE-1, ILCE-6700, ILCE-7M4, ILCE-9M3, ILCE-1M2, ILCE-7M5 **[F]** | read |
-| 0x201B FocusMode | 0 manual, 2 AF-S, 3 AF-C, 4 AF-A, 6 DMF, 7 AF-D [S][1] | the SLT-A99V, the ILCE-7S and every body with FocusLocation **[F]** | read: 0 gives no focus point |
+| 0x201B FocusMode | 0 manual, 2 AF-S, 3 AF-C, 4 AF-A, 6 DMF, 7 AF-D [S][1] | the SLT-A99V, the ILCE-7S and every body with FocusLocation **[F]** | read: 0 gives no focus point; also to be read as the focus mode ([section 9.10](#910-more-capture-settings)) |
+| 0x201C AFAreaModeSetting | the AF-area mode the photographer chose, by codes that depend on the body family [S][1] | the same bodies as FocusMode **[F]** | not read with the focus point: to be read as a camera setting, given whether or not a point is ([section 9.10](#910-more-capture-settings)) |
 | 0x201D FlexibleSpotPosition | the spot chosen in Flexible Spot mode, on a 640 × 480 grid; valid in that mode only [S][1] | the same bodies as FocusMode **[F]** | not read: the spot chosen, not where focus landed, which FocusLocation records on every body that has both |
 | 0x201E AFPointSelected, 0x2020 AFPointsUsed | the selected point or zone by number, a mask of the points used [S][1] | the same bodies; the SLT-A99V's mask has one bit set, every other is zero **[F]** | not read: a number needs a table of the body's points |
 | 0x2022 FocalPlaneAFPointsUsed | a mask of the on-sensor focus points used [S][1] | the SLT-A99V, ILCE-7S and ILCE-7RM2, all zero **[F]** | not read: a mask, needs the same table |
@@ -1157,7 +1166,9 @@ tags record most of these on every Sony body. The MakerNote adds the
 white balance setting itself, its color temperature and fine-tuning,
 and the electronic front curtain setting in plain tags; the shutter the
 camera used and whether it shot in APS-C mode are only in enciphered
-blocks ([section 4](#4-the-makernote-substitution-cipher)).
+blocks ([section 4](#4-the-makernote-substitution-cipher)). The focus
+mode, the AF-area mode and the other settings raw-files will read next
+are in [section 9.10](#910-more-capture-settings).
 
 Every value below was read on the 36 files of
 [test-data.md](test-data.md#files-checked) and on the five Sony JPEGs of
@@ -1545,6 +1556,292 @@ one.
 Every text and GPS value counted lies inside the blocks raw-files'
 `open` already reads. **[F]**
 
+### 9.10 More capture settings
+
+More of how the photographer set the camera:
+
+- the focus mode and the AF-area mode;
+- stabilization and the exposure fine-tuning;
+- the release mode and bracketing, and the flash compensation;
+- the raw compression and bit depth, and the JPEG quality;
+- the kind of fluorescent lamp.
+
+raw-files
+will read each from a plain MakerNote tag or a standard tag, as
+[ADR011](../../architecture-decisions/adr011-metadata-from-standard-tags.md)
+decides, in the order it gives. Nothing needs deciphering.
+
+**How it was measured.** On 2026-11-20 a counting program written from
+these pages read each tag through raw-files' own raw view
+(`CameraFile::entries` and `CameraFile::read_value`) **[F]**. It read:
+
+- the 209 ARW-family files of raw.pixls.us, one of them a Hasselblad
+  Lunar; counts of public files are exact;
+- the five Sony JPEGs of the
+  [JPEG test data](../jpeg/test-data.md#2-the-sample-files);
+- my own ILCE-7M2 files. Which values occur comes from every file of
+  that body I keep. Counts come from a sample of 16 of them: 6 ARW
+  files and 10 JPEGs, one JPEG without a MakerNote.
+
+The meaning of each MakerNote code is ExifTool's, read in its published
+tag documentation, retrieved again on 20 November 2026 [S][1]. Only
+single codes were taken from it, never a table whole. No reader's
+source code was read for this section, and ExifTool and exiv2 were not
+run for it. Every value counted lies inside what `open` already reads.
+**[F]**
+
+**Two marks.** Each code's meaning carries one of two marks, by the
+rule of
+[ADR011](../../architecture-decisions/adr011-metadata-from-standard-tags.md):
+
+- **confirmed by a frame**: a frame I shot in a known setting shows the
+  code;
+- **documented and agreed with**: ExifTool's documentation gives the
+  code, and the measured files agree with it.
+
+The files agree when two things hold:
+
+- the code occurs where the documentation places it: the tag, the
+  body family, the version of the record;
+- no other value of the same file contradicts it.
+
+A code the documentation does not name, or that no measured file holds,
+stays unnamed, and raw-files will give `None`. Of the codes below, only
+the kinds of fluorescent lamp are confirmed by frames: my ILCE-7M2's
+white balance frames of 2026-10-25
+([test-data.md](test-data.md#23-the-camera-settings-of-each-file)).
+
+**Focus mode.** 0x201B FocusMode, one BYTE, is on 175 public files of
+75 bodies [S][1] **[F]**. raw-files will give it as a `FocusMode`:
+
+| 0x201B | ExifTool's word | `FocusMode` | Public files | Mark |
+|---|---|---|---|---|
+| 0 | Manual | `Manual` | 46 | documented and agreed with |
+| 2 | AF-S | `Single` | 46 | documented and agreed with |
+| 3 | AF-C | `Continuous` | 49 | documented and agreed with |
+| 4 | AF-A | `Automatic` | 31 | documented and agreed with |
+| 6 | DMF | `DirectManual` | 3 (1816, 359, 6813) | documented and agreed with |
+| 7 | AF-D | none | 0 | on no file, so unnamed |
+
+- The manual-focus files that record a focus location record the
+  frame's exact center ([section 9.6](#96-focus-point)), as manual
+  focus would.
+- My ILCE-7M2 files hold 0, 2 and 3, never 4 or 6. Of the 15 in the
+  sample with a MakerNote, 11 hold 2, two hold 0 and two hold 3.
+- Seven older files record a focus mode in 0xB042 and 0xB04E, which
+  raw-files will not read. They are the DSC-R1's, the DSLR-A100's and
+  five RX files (3221, 2346, 2647, 4050, 2188, 5811, 4731).
+- 34 public files have no 0x201B, and their focus mode will be `None`:
+  - the SRF, the SR2, the DSLR-A100 and the RX100 (5811);
+  - the 16 other A-mount DSLRs and the Lunar;
+  - six early NEX bodies and seven SLT bodies up to the SLT-A77V.
+
+**AF-area mode.** 0x201C AFAreaModeSetting, one BYTE, is on the same
+175 files [S][1] **[F]**. raw-files will give it as a `FocusAreaMode`,
+whatever the focus mode, as ADR011 decides. Its codes depend on the
+body family, which the Model text gives:
+
+- `SLT-` bodies and `ILCA-` bodies each have a list of their own;
+- every other body (NEX, ILCE, ILME, ZV and DSC) takes ExifTool's list
+  for "NEX, ILCE and some DSC models".
+
+The ILME and ZV bodies are E-mount bodies under other names, and their
+codes all fall in that list [I]. The same code can mean two things
+across families. 9 is Spot on an SLT body, and Center with an A-mount
+adapter on an E-mount body. So the family is chosen before the code is
+named.
+
+| Family | 0x201C | ExifTool's word | `FocusAreaMode` | Public files | Mark |
+|---|---|---|---|---|---|
+| any | 0 | Wide | `Auto` | 89: 86 E-mount and compact, 2 ILCA, 1 SLT | documented and agreed with |
+| E-mount and compact | 1 | Center | `Single` | 26 | documented and agreed with |
+| E-mount and compact | 3 | Flexible Spot | `Single` | 31 | documented and agreed with |
+| E-mount and compact | 11 | Zone | `Zone` | 8 | documented and agreed with |
+| E-mount and compact | 12 | Expanded Flexible Spot | `Dynamic` | 19 | documented and agreed with |
+| ILCA | 4 | Flexible Spot | `Single` | 1 (1068) | documented and agreed with |
+| SLT | 9 | Spot | none | 1 (3751) | documented; its fold is not settled |
+
+- **Flexible Spot agrees with the file.** On the ILCE-7RM3 (file 3251,
+  code 3), FlexibleSpotPosition, which the documentation calls valid
+  only in Flexible Spot mode, matches the focus location
+  ([section 9.6](#96-focus-point)).
+- **Spot on the SLT bodies will stay unnamed.** The documentation does not
+  say whether it is the center point alone, which would be `Single`,
+  or a larger area. A source that settles it can name it later.
+- **The other codes** the documentation gives for each family are on
+  no measured file and will stay unnamed.
+- **My ILCE-7M2 files** hold 0, 1, 3 and 11. Of the 15 in the sample,
+  eight hold 3, three hold 1, two hold 0 and two hold 11.
+- 0xB043 AFAreaMode, on the same seven older files as 0xB042, will
+  not be read.
+
+**Stabilization.** 0xB026 ImageStabilization is one LONG, 0 off and 1
+on [S][1]. It is on 207 public files of 107 bodies, all but the SRF
+and the SR2 (files 1351, 3221) **[F]**. It is 1 on 148 and 0 on 59;
+the documentation's 4294967295, "n/a", is on none.
+
+- The fixed-lens RX1 bodies, which have no stabilization, record 0 on
+  all their files (2647, 4050, 2466, 2467, 8544 to 8548) **[F]**.
+- raw-files will give it as a `Stabilization`, on or off, with no mode:
+  no plain Sony tag records one. Mark: documented and agreed with.
+- It is 1 on every one of my ILCE-7M2 files, and 0 on none.
+
+**Exposure fine-tuning.** 0x202D ExposureStandardAdjustment, one
+SRATIONAL [S][1], is on 132 public files of 43 bodies, and is `0/6` on
+every one **[F]**. raw-files will give it in EV as recorded, so `0/6`
+is zero.
+
+- The documentation gives only the name and the type. The sixths of a
+  stop are the file's own denominator, and no file shows a value other
+  than zero, or its sign.
+- Mark: documented and agreed with, for zero alone.
+- **The ILCE-7M2 records no 0x202D**: none of my files of that body
+  holds it, so its exposure fine-tuning will be `None`.
+
+**Release mode and bracketing.** 0xB049 ReleaseMode, one SHORT [S][1],
+is on 186 public files of 86 bodies **[F]**. Exif's ExposureMode
+(0xA402) gives bracketing too: 2 is "auto bracket". [P][30]
+(4.6.6.7.36, p. 69)
+
+| 0xB049 | ExifTool's word | `ReleaseMode` | `Bracketing` | Files | Mark |
+|---|---|---|---|---|---|
+| 0 | Normal | `Single` | `Off` | 152 public | documented and agreed with |
+| 2 | Continuous | `Continuous` | `Off` | 22 public | documented and agreed with |
+| 5 | Exposure Bracketing | none | none (below) | 10 public | contradicted on 5 of them |
+| 6 | White Balance Bracketing | none | `WhiteBalance` | the ILCE-6000 JPEG; my ILCE-7M2 | documented and agreed with |
+| 8 | DRO Bracketing | none | `DynamicRange` | 1 public (1080) | documented and agreed with |
+| 65535 | n/a | none | none | 1 public (2346) | |
+
+- **A bracket will give no release mode.** The code does not say whether
+  the frames were shot one by one or as a burst.
+- **`Single` reads Normal as a single release.** The documentation
+  names no self-timer or remote code for 0xB049. Whether a self-timer
+  release writes 0 is not known.
+- **Self-timer and remote releases will not come from Sony.** ExifTool
+  decodes them only from blocks raw-files will not read: the plain
+  CameraSettings (0x0114) and the enciphered 0x2010, 0x9050 and 0x9400
+  [S][1].
+- **5 is not always a bracket.** On the RX100M3 and RX100M6 (files
+  2156, 3012 to 3015) Exif's ExposureMode is 2 beside it, and the two
+  agree. The ILCE-7RM3's five pixel-shift files (3251 to 3255) hold 5
+  too. There 0x202F marks a pixel-shift group and Exif's ExposureMode
+  is 1, manual, so 5 is no exposure bracket.
+- So 5 will stay unnamed until a decision says how to tell the two. Exif's
+  ExposureMode 2 still gives `Exposure` on the RX100 files.
+- Exif's ExposureMode 2 is on 9 public files: the five above and four
+  with no 0xB049. These are the DSLR-A330, A350, SLT-A33 and SLT-A35
+  (355, 2053, 2050, 2052).
+- My ILCE-7M2 files hold 0, 2, 5, 6 and 8, and Exif's ExposureMode 2
+  occurs on them. Of the 15 in the sample, 14 hold 0 and one holds 2.
+
+**Flash compensation.** 0x0104 FlashExposureComp, one SRATIONAL
+[S][1], is on 206 public files of 106 bodies, every one but the SRF,
+the SR2 and the DSLR-A100's **[F]**. raw-files will give it in EV as
+recorded, beside Exif's Flash bits ([section 9.7](#97-camera-settings)):
+
+| 0x0104 | EV | Files |
+|---|---|---|
+| `0/10` | 0 | 194 |
+| `0/1` | 0 | the ILME-FX30 (6499) |
+| `-10/10` | -1 | the DSC-RX1RM3 (8544 to 8548) |
+| `-20/10` | -2 | the ILCE-3500, ILCE-9 and SLT-A57 (2047, 1541, 1542, 858) |
+| `-7/10` | -0.7 | the NEX-7 and SLT-A99V (360, 3751) |
+
+- The flash fired on the ILCE-3500's file, whose Exif Flash is 15.
+- 0xB048 FlashLevel, one SSHORT, gives the same in thirds of a stop
+  [S][1]. It is on 186 files, and is -3, -6 and -2 where 0x0104 is -1,
+  -2 and -0.7, and 0 where it is 0 **[F]**.
+- So 0x0104 rounds two thirds of a stop to -0.7. FlashLevel will not
+  be read, since it repeats 0x0104.
+- Mark: documented and agreed with; the two tags agree on every file
+  that has both.
+- The DSLR-A100 and the DSC-R1 record FlashLevel (-1 and 0) but no
+  0x0104, so their compensation will be `None`.
+- It is `0/10` on every one of my ILCE-7M2 files.
+
+**Raw compression and bit depth.** raw-files will read both from the
+raw IFD ([section 7](#7-raw-relevant-tags)): Compression and
+BitsPerSample. 0x2029 RAWFileType repeats Compression on all 139 files
+that have both, and will not be read **[F]**:
+
+| Compression | 0x2029 | `RawCompression` | Public files | Mark |
+|---|---|---|---|---|
+| 1 | 1 | `Uncompressed` | 39 | TIFF 6.0 [P] |
+| 7 | 2 | `Lossless` | 38 | documented and agreed with; lossless JPEG in the data ([raw-data.md](raw-data.md#tiff-compression-values)) |
+| 32767 | 0 | `Lossy`, for cRAW alone (below) | 125 | documented and agreed with |
+| 32766 | 3 | `Lossy` | 4 (8846, 8847, 8849, 8850) | documented and agreed with |
+
+- **32767 holds three layouts**, which the strip's size tells apart
+  ([raw-data.md](raw-data.md#telling-the-layouts-apart)). cRAW, with
+  one byte per pixel, is on 115 files.
+- The 12-bit packed data of the DSLR-A850 and A900 (356, 5858) is not
+  compressed. The ARW1 stream of eight A-mount DSLRs, from the A200
+  to the A390, is not described here.
+- So raw-files will give `Lossy` for 32767 only where the strip holds
+  one byte per pixel, and `None` for the other two layouts.
+- 32766 is the ILCE-7M5's "compressed" and "compressed HQ", which
+  0x202E tells apart (4 and 5). The body writes lossless data under 7,
+  so these two are lossy [I].
+- A camera JPEG of a RAW + JPEG pair also carries 0x2029; it holds no
+  raw, so it will give no raw compression.
+- **Bit depth.** BitsPerSample is 14 on 99 files, 12 on 87 and 8 on the
+  DSLR-A700 (2521). It is `15 15 15`, three values, on the 19 YCbCr
+  medium and small raws, which give `None`.
+- The bit depth is what the file records. It is not always the depth
+  of the stored samples ([raw-data.md](raw-data.md#bitspersample-is-not-reliable)).
+- My ILCE-7M2 raws are all Compression 1, and hold BitsPerSample 14
+  and 12. Of the 6 ARW files in the sample, four hold 14 and two 12.
+
+**JPEG quality.** Three tags give it [S][1] **[F]**:
+
+| Tag | Values the files hold | Public files |
+|---|---|---|
+| 0x202E Quality, second value | 0 without a JPEG (76), 2 fine (35), 3 extra fine (13) | 124, and the ILCE-7M3 JPEG (3) |
+| 0x0102 Quality | in a raw file 0 RAW (116), 6 RAW + JPEG (89), 7 compressed RAW (1); in a JPEG 2 fine, 5 extra fine | 206, and four JPEGs |
+| 0xB047 JPEGQuality | 1 fine (7), 65535 "n/a" (32) | 39 |
+
+- **0x202E and 0x0102 agree** on every file with both: 0x0102's 0 with
+  a second value of 0, and its 6 with 2 or 3. The ILCE-7M3 JPEG has 5,
+  extra fine, beside a second value of 3, extra fine.
+- **0x0102 gives no step in a raw file.** Nor does it in the JPEG of a
+  RAW + JPEG pair, which also says 6, as the RX100M4 and ILCE-6000
+  JPEGs do.
+  The ILCE-7RM2 JPEG has 2, fine.
+- **0xB047 is 65535 on every interchangeable-lens body** that records
+  it. It is 1 on the DSC-R1 and six RX files (3221, 2647, 4050, 2188,
+  5811, 4731, 2156).
+- On the RX1's file (2647) 0x0102 says RAW alone, yet 0xB047 says fine:
+  there it is the menu's step, not a JPEG written.
+
+raw-files will give a `JpegQuality` from the first of these that names
+a step:
+
+1. 0x202E's second value: 2 `Fine`, 3 `ExtraFine`; 0 gives none.
+2. 0x0102 in a JPEG: 2 `Fine`, 5 `ExtraFine`.
+3. 0xB047's 1, `Fine`, where 0x0102 is absent or does not say RAW
+   alone.
+
+A raw file of a RAW + JPEG pair so gives the step of the JPEG written
+beside it. The other documented steps are on no measured file and will
+stay unnamed. Mark: documented and agreed with, for each step named.
+
+**My ILCE-7M2 records no JPEG quality in a plain tag that the
+documentation names.** It writes no 0x202E, 0x0102 is 0 or 6, and
+0xB047 is 65535 on every file. Which plain tag, if any, gives it is
+not settled, so its JPEG quality will be `None`.
+
+**The fluorescent lamp.** raw-files will give the kind of fluorescent
+lamp from Exif's LightSource 12 to 16 [P][30] (4.6.6.7.20, pp. 60 to 61), as a part
+of the white balance ([section 9.7](#97-camera-settings)).
+
+- Sony's 0x0112 gives the same lamp as -1 to 2. It repeats Exif on
+  every frame measured, so it will not be read.
+- My ILCE-7M2's frames under the four lamps (LGS03156 to 03159) hold
+  LightSource 15, 14, 13 and 12, with 0x0112 -1, 0, 1 and 2.
+- These codes are confirmed by a frame. The lamp the body writes as
+  15 will be `White`, Exif's word.
+- LightSource 16, warm white, is on no Sony file. Exif names it.
+
 ## 10. A100, SR2 and SRF
 
 ### DSLR-A100 (ARW 1.0)
@@ -1700,7 +1997,10 @@ declared length are read, and the tags read are FocusLocation,
 FocusLocation2 when FocusLocation gives nothing (absent, or not four
 SHORTs), FocusFrameSize and
 FocusMode ([section 9.6](#96-focus-point)). Nothing is deciphered, and
-0xB000, 0xB001 and the lens tags stay unread.
+0xB000, 0xB001 and the lens tags stay unread. The capture settings of
+[section 9.10](#910-more-capture-settings) will add 0x0102, 0x0104,
+0x201C, 0x202D, 0x202E, 0xB026, 0xB047 and 0xB049, and FocusMode as
+the focus mode.
 
 1. **Standard tags:** IFD0 Make, Model and Orientation; Exif
    DateTimeOriginal, SubSecTimeOriginal and OffsetTimeOriginal (the last two
@@ -1730,13 +2030,20 @@ For the camera settings of [section 9.7](#97-camera-settings),
 decides what this list recommends: read the Exif tags first and the
 plain MakerNote tags where Exif has no value, and decipher nothing [I]:
 
-- the exposure program, the metering mode, the flash and the focal
-  length in 35 mm terms from Exif alone: the MakerNote only repeats the
-  first three, and has no 35 mm focal length for the F828 and R1, which
+- the exposure program, the metering mode and the focal length in
+  35 mm terms from Exif alone. The MakerNote only repeats the first
+  two. It has no 35 mm focal length for the F828 and R1 either, which
   lack it in Exif;
+- the flash from Exif's Flash bits: whether it fired, its mode,
+  red-eye reduction and the return light; 0x2017 only repeats whether
+  it fired;
+- the flash compensation from 0x0104, in EV as recorded, never from
+  0xB048, which repeats it in thirds of a stop;
 - the white balance from 0x0115, which is finer than Exif's auto or
   manual, else from Exif's WhiteBalance and LightSource; never from
   0xB054, which says auto on two files set to shade;
+- the kind of fluorescent lamp from Exif's LightSource 12 to 16, never
+  from 0x0112, which repeats it;
 - the color temperature from 0xB021 when it is above zero, which the
   files checked record only under a chosen color temperature and a
   custom white balance, and no more than 99,999 K, the bound Nikon's
@@ -1751,12 +2058,29 @@ plain MakerNote tags where Exif has no value, and decipher nothing [I]:
   electronic;
 - the color space from Exif's ColorSpace, with an InteropIndex of
   `R03` naming Adobe RGB when ColorSpace is 65535;
-- the software from IFD0.
+- the software from IFD0;
+- the focus mode from 0x201B, and the AF-area mode from 0x201C by the
+  body family's list, whether or not the file gives a focus point;
+- stabilization, on or off, from 0xB026, with no mode;
+- the exposure fine-tuning from 0x202D, in EV as recorded;
+- the release mode and bracketing from 0xB049, and bracketing from
+  Exif's ExposureMode 2 where 0xB049 names none;
+- the raw compression from the raw IFD's Compression, 32767 only for
+  cRAW; never from 0x2029, which repeats it;
+- the raw bit depth from the raw IFD's BitsPerSample when it holds one
+  value;
+- the JPEG quality from 0x202E's second value, else 0x0102 in a JPEG,
+  else 0xB047 where 0x0102 does not say RAW alone.
+
+[Section 9.10](#910-more-capture-settings) gives each list of codes
+and what stays unnamed.
 
 The raw image size stays unread, because 0x202E cannot tell an APS-C
 raw from a medium one; and the shutter used and APS-C mode, because only
 enciphered blocks hold them. The A100's Minolta-format IFD stays unread
-too, so its white balance comes from Exif alone.
+too, so its white balance comes from Exif alone. The AF micro
+adjustment and the ISO setting stay unread, so a Sony file's AF
+fine-tune and auto ISO will be `None` ([section 14.5](#145-what-the-view-leaves-out)).
 
 **Raw sensor data needs the SR2 keystream for older files.**
 
@@ -2021,6 +2345,37 @@ Every one of my 500 files has each of them but 0x9416 and 0x900B.
   **[F]**
 - **The content of the enciphered records**: their bytes only, until a
   decision allows deciphering them (ADR016).
+
+The capture settings of
+[section 9.10](#910-more-capture-settings) leave out these plain values,
+each a named gap that waits
+([ADR011](../../architecture-decisions/adr011-metadata-from-standard-tags.md)).
+Counted on 2026-11-20 over the 209 public files, with ExifTool's
+documentation for the meanings [S][1] **[F]**:
+
+| Value | Where | Public files | Why it waits |
+|---|---|---|---|
+| AF tracking | 0x2021 AFTracking, one BYTE: 0 off (159), 2 Lock-on AF (15), 1 face tracking (1) | 175 | left for later, with the other plain settings ADR011 names; 0 and 1 occur on my ILCE-7M2 |
+| AF illuminator | 0xB044 AFIlluminator, one SHORT: 0 off (5), 1 auto (1), 65535 (1) | 7: the DSC-R1, the DSLR-A100 and five RX bodies | left for later; on no later body |
+| White balance priority | 0x202B PrioritySetInAWB, one BYTE: 0 standard on every file | 132 | left for later; no file shows another value |
+| The fluorescent lamp in Sony's code | 0x0112, one LONG | 206 | repeats Exif's LightSource on every frame measured ([section 9.7](#97-camera-settings)); 3 on the DSLR-A290 (2730), set to daylight, where it may be the fine-tuning its name says |
+
+- **The plain CameraInfo (0x0010) and CameraSettings (0x0114) blocks.**
+  The same 22 public files have both: the DSLR-A200 to A900, the
+  SLT-A33, A35 and A55 and the NEX-3, NEX-5 and NEX-C3. **[F]**
+  - Their layout is chosen by byte count: 0x0114 holds 280, 332, 364,
+    1,536 or 2,048 bytes, and 0x0010 368 to 15,360 bytes. **[F]**
+  - ExifTool documents three layouts of each [S][1]. They hold an ISO
+    setting, the drive mode, the AF-area mode and, in the A700's, A850's
+    and A900's CameraInfo, the AF micro adjustment.
+  - Each layout needs a reading of its own, and no later body writes
+    either block. None of my ILCE-7M2 files has them.
+- **What only enciphered blocks hold.** ExifTool decodes the ISO
+  setting and auto ISO's bounds from the enciphered 0x9401 (its ISOInfo
+  table) [S][1]. It decodes the AF micro adjustment from the enciphered
+  0x940E, for the SLT bodies alone. It documents neither in a plain
+  tag of the later SLT, ILCA and E-mount bodies.
+  - So a Sony file's auto ISO and AF fine-tune will be `None`.
 
 ## Sources
 
