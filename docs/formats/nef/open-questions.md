@@ -20,9 +20,9 @@ affects, and test-data.md describes the sample set that would answer Part 2.
      length, is already documented.
    - the two 256-byte substitution tables used by the MakerNote cipher
      ([makernote-and-metadata.md](makernote-and-metadata.md)).
-   - per-body tables: CFA phase, crop trims and white levels.
 
-   The tables of autofocus points are settled (Part 5). The options for
+   The tables of autofocus points and the per-body facts, the CFA phase,
+   the crop trims and the levels, are settled (Part 5). The options for
    the rest are:
    - (a) treat them as format facts, transcribed from two independent sources
      with provenance recorded;
@@ -30,10 +30,8 @@ affects, and test-data.md describes the sample set that would answer Part 2.
    - (c) a clean-room process, in which the person who reads the copyleft
      source is not the person who writes the code.
 
-   The per-body facts the files themselves hold, the CFA phase, the crop
-   trims and the white levels, take route (b) as facts of the format. The
-   decision on the Huffman and substitution tables needs to be recorded in
-   an ADR before the first of them enters raw-files.
+   The decision on the Huffman and substitution tables needs to be
+   recorded in an ADR before the first of them enters raw-files.
 2. **HE / HE\*.** The recommendation is to detect these files and return an
    "unsupported" error ([raw-data.md](raw-data.md)). Implementing a decoder
    would touch the JPEG XS patent pool. That is a legal question, not an
@@ -277,7 +275,27 @@ raw-files has answered it; each names what did.
   and takes one from another project only by a decision made together
   with it
   ([ADR017](../../architecture-decisions/adr017-per-body-tables-measured-by-the-project.md)).
-  The other data of Part 1's decision 1 stays open.
+  The next item settles the per-body facts; the rest of Part 1's
+  decision 1 stays open.
+- **Per-body facts a raw decoder needs**: the color filter's phase, the
+  crop that trims the border around the picture, and the black and white
+  levels ([raw-data.md](raw-data.md)). A fact a file records in a tag is
+  read from the tag. A fact a file shows only in its pixels, such as
+  where the border ends, the color filter's phase, a level the file
+  records nowhere or where highlights clip below the white level a tag
+  records, counts as a fact the file holds, a fact of the format. It is
+  derived from sample files of the body and recorded in the format notes
+  with the file and the method, tagged **[F]**. It is never transcribed
+  from another project's per-body table: the values the raw data notes
+  quote from other decoders are there to be checked against the samples.
+  The decision to measure per-body tables in the project leaves such
+  facts to the files; its procedure, frames shot with the body, is for
+  facts that no file holds, such as where an autofocus point lies
+  ([ADR017](../../architecture-decisions/adr017-per-body-tables-measured-by-the-project.md)).
+  This changes nothing in the image size raw-files reports, which comes
+  from the tags and, on a body that records no crop, includes the border
+  pixels
+  ([ADR011](../../architecture-decisions/adr011-metadata-from-standard-tags.md)).
 - **Byte-order mismatch, for previews and metadata.** The question was
   whether to tolerate a MakerNote whose byte order differs from the
   file's for previews and metadata, as recommended. The reader takes
