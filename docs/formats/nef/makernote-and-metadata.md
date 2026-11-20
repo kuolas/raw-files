@@ -113,10 +113,9 @@ low-priority. [I]
    layout, IFD at + 0.
 3. Otherwise the MakerNote is not Nikon's; ignore it.
 
-The three implementations differ on how they recognize the embedded layout:
-exiv2 tests for the TIFF magic at offset 10, LibRaw tests the version byte at
-offset 6, ExifTool tests the `Nikon\0\2` prefix. They agree on real files;
-testing all of the conditions above is the robust choice. [S][6][7][4]
+exiv2, LibRaw and ExifTool find the embedded layout in the same real
+files. [S][6][7][4] Testing all of the conditions above is the robust
+choice.
 
 Check the signature before Make. Capture NX can write Nikon-format
 MakerNotes into files from other brands, so the Make test must not gate the
@@ -138,8 +137,8 @@ Make gates every layout, the embedded one included
 ### Layout details
 
 - The inner IFD offset is relative to the inner TIFF header. A gap between
-  the 8-byte inner header and the IFD is legal; exiv2 drops it when
-  rewriting, which shows that such files exist. [S][6]
+  the 8-byte inner header and the IFD is legal. A file with one that
+  exiv2 rewrites comes out without the gap. [S][6]
 - The inner byte order can differ from the outer file's, for example a
   big-endian NEF carrying a little-endian MakerNote. Always use the inner
   header's order for the IFD itself. [S][3]
@@ -148,9 +147,9 @@ Make gates every layout, the embedded one included
   - LensData versions 08xx and ShotInfo on newer bodies (D780, D7500 and
     later, and the Z bodies) are little-endian, while older D-series
     ShotInfo is big-endian;
-  - Capture NX can change the MakerNote's byte order, after which ExifTool
-    byte-swaps ColorBalance 0x0097 and WorldTime to compensate; it also
-    notes ShotInfo staying big-endian regardless.
+  - Capture NX can change the MakerNote's byte order. ColorBalance 0x0097
+    and WorldTime then keep their original order, and ShotInfo stays
+    big-endian.
 - The D200's MakerNote IFD has no next-IFD pointer; do not require one. [S][5]
 - Offsets in the headerless and short-header layouts are relative to the
   outer TIFF header, so anything that moves the MakerNote breaks them. The
@@ -359,7 +358,7 @@ sensor data. [S][1]
 | 0x0091 | ShotInfo | undef | model-specific; encrypted for versions 02xx and 08xx | full metadata |
 | 0x0093 | NEFCompression | u16 | compression hint; absent on the Z bodies checked but the Z fc and Z 30, which write 0x0051 instead, and on the D1H and E5700; present on the Z fc and Z 30, with the value 3 (lossless), where 0x0051 is absent (files 8559, 5812) **[F]** | full metadata, raw data |
 | 0x0096 | NEFLinearizationTable | undef | curve and predictor seeds; unencrypted | raw data |
-| 0x008C | (older curve) | undef | fallback for 0x0096 | raw data |
+| 0x008C | (older curve) | undef | the curve on a file without 0x0096 | raw data |
 | 0x0097 | ColorBalance | undef | white balance on older bodies; encrypted from version 0200 | full metadata, raw data |
 | 0x0098 | LensData | undef | lens description; encrypted from version 0201 | full metadata |
 | 0x00A7 | ShutterCount | u32 | decryption key input | full metadata, raw data |
@@ -372,14 +371,15 @@ Notes:
 
 - 0x00A7 on newer bodies is the combined mechanical and electronic count;
   0x0037 is mechanical-only. The decryption key uses 0x00A7. [S][1]
-- Byte 10 of 0x0051 is read in the MakerNote's byte order by LibRaw, while
-  only rawler forces little-endian; the sources disagree. [S][7][9]
+- LibRaw gives byte 10 of 0x0051 as a u16 in the MakerNote's byte order,
+  rawler as a little-endian u16. [S][7][9] The two agree on a
+  little-endian MakerNote, as on the three Z 9 files. [I]
 - 0x0014 holds Coolpix color data (2560-byte or 1280-byte variants, or an
   "NRW" block on P-series cameras) and is irrelevant to NEF DSLRs. [S][1]
 - Capture NX data (0x0E01) is a sequence of records that can carry a white
-  balance adjustment, a custom white balance and a flip; one implementation
-  walks at most 1024 records. Only full metadata has a use for it. [S][7]
-- The curve in 0x0096 (and its fallback 0x008C) is decoder input; see
+  balance adjustment, a custom white balance and a flip. Only full
+  metadata has a use for it. [S][7]
+- The curves in 0x0096 and 0x008C are decoder input; see
   [raw-data.md](raw-data.md).
 
 ## 3. NEFCompression and bit depth
@@ -411,30 +411,32 @@ metadata code:
 - The value is a hint, not an authority. The TIFF Compression tag of the raw
   IFD (34713 for Nikon's compressed data, 1 for uncompressed) can disagree
   with it, and some firmware labels uncompressed data as compressed.
-  Decoders therefore also compare the strip byte count with the expected
-  uncompressed size. [S][8][9][1]
+  Uncompressed data shows in its size: its strip byte count matches the
+  size that the dimensions and bit depth give, row padding included
+  ([raw-data.md](raw-data.md)). [S][8][9][1]
 - Values 13 and 14 (HE, HE*) are not decodable with the open implementations
   surveyed; report a typed "unsupported compression" error and never attempt
   the lossless decoder on them. [S][9]
-- Fixed-lens (Coolpix) detection in LibRaw uses values 7 and 9 as a
-  heuristic. [S][7]
+- LibRaw counts a file with value 7 or 9 as one from a fixed-lens
+  (Coolpix) body. [S][7]
 
 ### Bit depth sources
 
 In order of authority: [S]
 
-1. BitsPerSample (0x0102) of the raw IFD, used by rawspeed and rawler; the
-   values are 12 or 14, with 16 on some uncompressed paths. The sNEF variant
-   stores 3 bytes per pixel of 12-bit YCbCr 4:2:2 (see
+1. BitsPerSample (0x0102) of the raw IFD, the depth rawspeed and rawler
+   give; the values are 12 or 14, with 16 on some uncompressed files. The
+   sNEF variant stores 3 bytes per pixel of 12-bit YCbCr 4:2:2 (see
    [raw-data.md](raw-data.md)), so this tag does not describe a CFA depth
    there. [8][9]
 2. The curve header in 0x0096: a version header of 0x44 0x40 marks the
    lossy "2nd version" curve (D780, Z 6, Z 7 and others). rawspeed and
-   rawler treat it as a curve over a domain two bits narrower and lower the
-   bits per sample by 2 (14 to 12, or 12 to 10). A 0x46 header is lossless.
-   [8][9]
-3. NEFBitDepth (0x0E22): 12 0 0 0, 14 0 0 0, 8 8 8 0 or 16 16 16 0; LibRaw
-   stores it without acting on it. [7][1]
+   rawler give its curve a domain two bits narrower than BitsPerSample:
+   12 bits in a file labeled 14, 10 in one labeled 12. [8][9] dcraw and
+   LibRaw read it otherwise ([raw-data.md](raw-data.md)). A 0x46 header
+   is lossless. [8][9]
+3. NEFBitDepth (0x0E22): 12 0 0 0, 14 0 0 0, 8 8 8 0 or 16 16 16 0.
+   [7][1]
 4. The NEFCompression value (5, 6, 7 and 9 are 12-bit variants, 10 is packed
    14-bit). [1]
 
@@ -502,12 +504,12 @@ Consequences for the parser:
   range) and treat failure as "value absent". [I]
 - If the serial or shutter count is missing, skip decryption and carry on.
   [I]
-- rawspeed requires a 0x0097 block of at least 80 bytes for version 0100,
-  26 for 0103, 564 for 0204 and 284 for 0205 before it reads the white
-  balance. [S][8]
-- dcraw decrypts a 324-byte part of ColorBalance, for versions 0200 to
-  0216 only; LibRaw also decrypts LensData (versions above 0200) and
-  ShotInfo (from byte 4, version 0208 and later). [S][10][7]
+- rawspeed gives no white balance from a 0x0097 block that is too short.
+  It needs at least 80 bytes at version 0100, 26 at 0103, 564 at 0204
+  and 284 at 0205. [S][8]
+- dcraw decrypts a 324-byte part of ColorBalance, at versions 0200 to
+  0216 only. [S][10] LibRaw also decrypts LensData above version 0200, and
+  ShotInfo from version 0208. [S][7]
 
 ### 5.1 Non-numeric serial numbers
 
@@ -518,27 +520,27 @@ disagree on what to do. [S]
 | Project | Behavior |
 |---|---|
 | ExifTool and exiv2 | key byte 0x22 (34) if the model is a D50-family body, otherwise 0x60 (96) [3][6] |
-| LibRaw | stops at the first non-digit; uses 34 if the model is "D50" (or ends in D50 after a non-alphanumeric character), otherwise 96; this value replaces the low byte of the serial number as the index into T0 [7] |
-| dcraw | never stops: each non-digit counts as the digit its character code gives modulo 10, so the key is the low byte of that number [10] |
+| LibRaw | key byte 34 if the model is "D50" (or ends in D50 after a non-alphanumeric character), otherwise 96 [7] |
+| dcraw | key byte: the low byte of the serial taken as a number, each letter counting as the digit its character code gives modulo 10 [10] |
 
 ExifTool and exiv2 use the same constants as LibRaw, but dcraw can derive a
 different key for a serial that contains letters. All four agree for
 all-digit serials. Which behavior is correct for a real body with a
-lettered serial (the ExifTool comments attribute the 0x60 case to the D200
-and D40X) is not settled. [S][I]
+lettered serial is not settled. [S][I] The D200 and D40X are said to
+need 0x60. [S][3]
 
 ## 6. White balance
 
 Sources, in the order raw-files should try them: [S][7][8][9][16]
 
 1. **MakerNote 0x000C** (WB_RBLevels), unencrypted: four rationals. The
-   reading "R, B, then two greens" for the last two values is LibRaw's;
-   ExifTool calls them unidentified, and rawler uses G = 1.0. rawspeed and
-   rawler use 0x000C first and fall back to 0x0097 only when 0x000C is
-   absent. LibRaw reads both tags and a later tag may override an earlier
-   one, so precedence there is implementation-defined. If a green value is
-   zero or missing, treat green as 1.0 and normalize to it. The tag is
-   present on most NEFs, including the Z bodies. [S][3][7][8][9]
+   reading "R, B, then two greens" for the last two values is LibRaw's.
+   ExifTool calls them unidentified, and rawler gives green a multiplier
+   of 1. On a file with both tags, rawspeed and rawler give 0x000C's white
+   balance; they give 0x0097's only on a file without 0x000C. Which of the
+   two LibRaw gives on a file with both is not established. If a green
+   value is zero or missing, treat green as 1.0 and normalize to it. The
+   tag is present on most NEFs, including the Z bodies. [S][3][7][8][9]
 2. **MakerNote 0x0097** (ColorBalance), used when 0x000C is absent, with a
    per-version layout. Decryption is required from version 0200 on.
 3. A Coolpix-only 0x0014 block as a last resort, not relevant for DSLRs.
@@ -559,10 +561,10 @@ The 0x0097 versions and where the four white-balance values sit:
 | 0220 | | yes, from 284 | not decoded by ExifTool (ColorBalanceUnknown1) | |
 | 08xx | Z bodies | yes | not mapped by any surveyed project | |
 
-Sources: [3][7][8][9]. ExifTool and LibRaw count the offset from different
-bases (ExifTool from the start of the decrypted segment, LibRaw from inside
-a 324-byte block after skipping 284 bytes), so offsets in different rows
-are not directly comparable. [S] ExifTool names the channel orders RBGG
+Sources: [3][7][8][9]. ExifTool's offsets count from the start of the
+decrypted part, and LibRaw's from byte 284 of the block, where its
+324-byte part starts. So offsets in different rows are not directly
+comparable. [S] ExifTool names the channel orders RBGG
 (0100), RGGB (0102, 0205 and others), RGBG (0103), and GRBG for the
 0209/0211/0212/0214 to 0217 group. Normalize to a fixed order and divide by
 the first green. [S][3]
@@ -571,10 +573,11 @@ the first green. [S][3]
 
 Z bodies do not need the encrypted 0800 ColorBalance. A Z 6 forum report
 describes a normal 0x000C with usable values [S][16]. In the decoders,
-rawspeed and rawler contain no Z-specific white balance code (they read
-0x000C), and LibRaw's 0x0097 branch covers only versions 0200 to 0217, so Z
-bodies depend on 0x000C there too [S][7][8][9]. No report of an absent or wrong 0x000C on a Z body was found,
-but this is an absence of evidence rather than a proof. [I]
+rawspeed, rawler and LibRaw all give a Z body's white balance from
+0x000C. None of them decodes the 0800 ColorBalance; LibRaw decodes
+versions 0200 to 0217 only [S][7][8][9]. No report of an absent or wrong
+0x000C on a Z body was found, but this is an absence of evidence rather
+than a proof. [I]
 
 The metadata raw-files reads from the plain tags gives the white balance
 setting ([section 8.7](#87-camera-settings)), not these multipliers;
@@ -596,13 +599,12 @@ stored byte b. Z bodies use little-endian u16 fields instead. [S][1][7]
 
 **ShotInfo (0x0091).** Model-specific tables selected by version (and
 sometimes by block size). It holds roll, pitch and yaw as fixed-point
-numbers, which LibRaw turns into a rotation flag at version-specific
-offsets; this is the only orientation-like data in the MakerNote and it is
-angle data, not the Exif Orientation value. ExifTool drops an oversized
-ShotInfo (above 64 KB, seen on the Z 6III) when copying it into an Exif
-segment; that is a size limit, not a judgment that the block is corrupt.
-The lesson is that the block can be that large, so cap allocations.
-[S][1][3][7]
+numbers, at offsets that depend on the version. This is the only
+orientation-like data in the MakerNote, and it is angle data, not the
+Exif Orientation value. ExifTool leaves a ShotInfo above 64 KB, seen on
+the Z 6III, out of an Exif segment it writes. That is a size limit, not
+a sign of a corrupt block: the block can be that large, so cap
+allocations. [S][1][3][7]
 
 ## 8. Viewer metadata
 
@@ -703,13 +705,14 @@ compacts. [S][14]
 
 In the one NEF dump inspected the strings were NUL-terminated with the
 count including the NUL and no space padding (Make 18 bytes, Model 10
-bytes for a D40). [S][14] The D100 does space-pad Model: rawspeed
-compares it against "NIKON D100 " with a trailing space. [S][8] Exif
+bytes for a D40). [S][14] The D100 does space-pad Model, with one
+trailing space. [S][8] Exif
 treats a Make or Model left blank as unknown. [P][23] (4.6.5.4.2 and
-4.6.5.4.3, p. 42) ExifTool and LibRaw both strip trailing whitespace.
+4.6.5.4.3, p. 42) ExifTool and LibRaw both report Make and Model without
+trailing whitespace.
 So: cut at the first NUL, then trim trailing ASCII whitespace. [S][2][7]
-Compare model strings after trimming, because model checks elsewhere
-("D50" suffix, a "Z" at index 6) assume trimmed text. [I]
+Compare model strings after trimming, because a comparison such as the
+"D50" suffix of section 5.1 assumes trimmed text. [I]
 
 The samples agree: every checked file has NUL-terminated Make and Model
 with no padding, the Z 9's 18 and 10 bytes long like the D40's, except the
@@ -727,8 +730,8 @@ DefaultCropSize or ActiveArea; those tags appear in DNG files only. [S][2][9]
 Sources for the output size, in order: [S][7][9]
 
 1. **CropArea (0x0045)**: four u16 as left, top, width, height in raw
-   pixels. rawler uses it as the crop rectangle; LibRaw stores it as an
-   inset crop. [S] The D5, D850, D780, Z 6, Z f, Z fc, Z 30, Z6III and
+   pixels. rawler and LibRaw both give it as the image's crop
+   rectangle. [S] The D5, D850, D780, Z 6, Z f, Z fc, Z 30, Z6III and
    Z 9 write it; no checked body older than the D5 (2016) does, the D810
    (file 2036) included, and the D5600, of the same year, does not either
    (file 1415). **[F]** It is the visible image: on the Z 9
@@ -751,8 +754,8 @@ Sources for the output size, in order: [S][7][9]
    describe the in-camera JPEG size and may differ from the raw crop.
    [I] No checked NEF has them. **[F]**
 
-**CropHiSpeed (0x001B)** is seven u16 values. ExifTool's print conversion
-fixes the order as: [S][3]
+**CropHiSpeed (0x001B)** is seven u16 values, in this order [S][3]; the
+crop files of [section 8.6](#86-focus-point) bear it out **[F]**:
 
 | Index | Field |
 |---|---|
@@ -766,10 +769,9 @@ fixes the order as: [S][3]
 
 Mode codes: 0 off, 1 1.3x, 2 DX, 3 5:4, 4 3:2, 6 16:9, 8 2.7x, 9 DX movie
 16:9, 10 1.3x movie, 11 FX uncropped, 12 DX uncropped, 13 2.8x movie, 14
-1.4x movie, 15 1.5x movie, 17 FX 1:1, 18 DX 1:1. [S][1] LibRaw maps the
-modes to aspect ratios (0, 1, 2 and 4 as 3:2; 3 as 5:4; 6 as 16:9; 17 as
-1:1). [S][7] On "uncropped" bodies the crop modes change the raw array
-itself. [S][1]
+1.4x movie, 15 1.5x movie, 17 FX 1:1, 18 DX 1:1. [S][1] LibRaw reports
+modes 0, 1, 2 and 4 as 3:2, 3 as 5:4, 6 as 16:9 and 17 as 1:1. [S][7] On
+"uncropped" bodies the crop modes change the raw array itself. [S][1]
 
 ImageSizeRAW (0x003E) says whether a small-raw file is large, medium or
 small. The D850 stores M and S files at sizes that differ from the menu
@@ -778,8 +780,8 @@ sizes (reported as 7104x4728 and 6216x4136 where the menu says 6192x4128 and
 SOF marker of the chosen JPEG; see
 [container-and-previews.md](container-and-previews.md).
 
-The D100 is special: rawler forces a raw width of 3040 on its uncompressed
-path. [S][9]
+The D100 is special: rawler gives its uncompressed files a raw width of
+3040 pixels. [S][9]
 
 ### 8.5 Serial number, ISO and lens
 
@@ -2010,24 +2012,23 @@ The points specific to the MakerNote:
 
 1. **Relocated MakerNotes.** Tools that move the MakerNote without fixing
    offsets leave the headerless and short layouts pointing at the wrong
-   place. ExifTool detects this with a heuristic (value offsets compared
-   with the expected position four bytes after the IFD) and repairs only on
-   request. Bounds-check every offset and length against the MakerNote and
-   the file, skip bad entries rather than abort the IFD, and do not repair
-   in a first version. [S][4][19] An E885 JPEG that an editor turned
-   upright is such a file: its headerless MakerNote moved 342 bytes, and
-   its offsets did not ([section 1](#layout-details)). **[F]** raw-files
-   requires the PreviewIFD's JPEG, as declared, to lie inside the
-   MakerNote too. The Coolpix P7800 declares its MakerNote 2,816 bytes
-   long, ending at byte 4546, and its 640x480 MakerNote JPEG starts at
-   byte 4546, just past it, so the reader does not read it and the file
-   gives its 160x120 and 4000x3000 previews (file 1425); on the E5700 and
-   the D100, the other `02 00` bodies, the declared length includes the
-   JPEG (files 4456, 2996). **[F]** Early Coolpix JPEGs with a headerless
-   MakerNote go further: the E885, E995, E2500 and E5000, on their
-   earlier firmware, put their PreviewIFD's 320x240 JPEG 12,527 bytes
-   past the MakerNote's end, inside the Exif segment, so the reader does
-   not read it either ([section 1](#in-a-jpeg-file)). **[F]** The rule
+   place. ExifTool can recognize such a MakerNote, and repairs its offsets
+   only on request. Bounds-check every offset and length against the
+   MakerNote and the file, skip bad entries rather than abort the IFD,
+   and do not repair in a first version. [S][4][19] An E885 JPEG that an
+   editor turned upright is such a file: its headerless MakerNote moved
+   342 bytes, and its offsets did not ([section 1](#layout-details)).
+   **[F]** raw-files requires the PreviewIFD's JPEG, as declared, to lie
+   inside the MakerNote too. The Coolpix P7800 declares its MakerNote
+   2,816 bytes long, ending at byte 4546, and its 640x480 MakerNote JPEG
+   starts at byte 4546, just past it, so the reader does not read it and
+   the file gives its 160x120 and 4000x3000 previews (file 1425); on the
+   E5700 and the D100, the other `02 00` bodies, the declared length
+   includes the JPEG (files 4456, 2996). **[F]** Early Coolpix JPEGs with
+   a headerless MakerNote go further: the E885, E995, E2500 and E5000, on
+   their earlier firmware, put their PreviewIFD's 320x240 JPEG 12,527
+   bytes past the MakerNote's end, inside the Exif segment, so the reader
+   does not read it either ([section 1](#in-a-jpeg-file)). **[F]** The rule
    was weighed against the ten public NEF and NRW files whose preview
    lies outside the MakerNote, and kept
    ([container-and-previews.md](container-and-previews.md#21-where-the-makernotes-preview-lies)).
@@ -2036,22 +2037,26 @@ The points specific to the MakerNote:
 3. **Capture NX.** Foreign brands, changed byte order and fixed-order
    sub-blocks ([section 1](#1-finding-the-makernote)). [S][3][4]
 4. **Inner versus outer byte order.** Always take the inner header's order.
-   rawler treats a TIFF versus MakerNote mismatch as an error, yet it
-   occurs in real files: tolerate it for metadata, reject it for decoding.
-   [S][I]
+   rawler gives an error for a file whose MakerNote byte order differs
+   from the TIFF's, yet such files exist ([section 1](#layout-details)).
+   Tolerate them for metadata, reject them for decoding. [S][I]
 5. **Type and count mismatches.** Tag 0x0001 is a string on some bodies and
    binary on others, 0x0002 writes four zero bytes for "Lo" ISO, and the
    NEFBitDepth and ImageBoundary types vary by model. Read from the raw
    bytes at the stated count; cap counts. [S][3]
-6. **Loops and sizes.** LibRaw caps the MakerNote at 1000 entries and
-   ignores entries whose declared length is implausible for the file;
-   apply those caps plus a visited-offset set for PreviewIFD and SubIFD
-   recursion. Cap each allocation at the bytes actually remaining. [S][7]
+6. **Loops and sizes.** Cap the MakerNote at 1000 entries; no checked
+   MakerNote has more than 84 ([section 12.1](#121-the-directories)).
+   **[F]** Skip an entry whose declared length is implausible for the
+   file. Keep a visited-offset set for PreviewIFD and SubIFD recursion.
+   Cap each allocation at the bytes actually remaining. LibRaw likewise
+   reads at most 1000 entries of a MakerNote and none of implausible
+   length. [S][7]
 7. **Version-gated decryption.** Decrypt only when the version prefix, the
    minimum length and both key inputs are present; otherwise skip and
    continue. Never unwrap. [I]
-8. **Odd bodies.** D1 (big-endian headerless MakerNote); D100 (own
-   uncompressed path, NEFCompression 2 with a conflicting TIFF tag); D200
+8. **Odd bodies.** D1 (big-endian headerless MakerNote); D100 (an
+   uncompressed layout of its own, NEFCompression 2 with a conflicting
+   TIFF tag); D200
    (no next-IFD pointer); Coolpix NRW files (no 0x0096); D3 and D810
    (14-bit versus 16-bit and mislabeled uncompressed data); D780, Z 6 and
    Z 7 (curve header 0x44 0x40, bit depth two bits lower than labeled);
@@ -2210,10 +2215,11 @@ MakerNote out of the critical path:
    lettered serial. Checking a D50-family and a D200 sample would settle it.
 3. **ColorBalance version 08xx (Z bodies).** Whether any Z body lacks
    0x000C, and whether the encrypted block holds anything useful.
-4. **BlackLevel (0x003D) channel order.** LibRaw reads the four values in
-   fixed color order R, G1, G2, B regardless of the CFA layout. rawspeed and
-   rawler read them by position after assuming an RGGB pattern. The two agree
-   only on RGGB. In rawspeed's camera list every non-RGGB Nikon is a
+4. **BlackLevel (0x003D) channel order.** Whether the four values are in
+   the fixed color order R, G1, G2, B or in CFA position order is not
+   established. LibRaw gives them in the first order, rawspeed and rawler
+   in the second. The two give the same black levels only on an RGGB
+   file. In rawspeed's camera list every non-RGGB Nikon is a
    pre-2010 body, so there may be no practical difference, but which body
    first wrote the tag is unknown. [S][7][8][9][17]
 5. **Bodies that write OffsetTimeOriginal.** Answered: the D850 and every

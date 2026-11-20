@@ -156,20 +156,22 @@ So the working rules are:
    project. Where practical, the person who reads third-party code is not
    the person who writes the raw-files code that implements the same thing.
 3. Prefer to confirm a fact against a sample file over trusting any single
-   implementation. Implementations disagree with each other in places
-   (curve clamping, the "second version" lossy condition, the handling of
-   non-numeric serial numbers), and a sample file settles which is right.
+   implementation. Implementations disagree with each other in places, and
+   a sample file settles which is right:
+   - what a value past the curve's end decodes to;
+   - the curve of the lossy files with version bytes 0x44 0x40;
+   - the key of a serial number that holds letters.
 4. Never paste code, comments or tables from a GPL or LGPL source.
 
 ### 4.2 Tables that need a decision
 
 Three kinds of data are needed by a decoder. The first two are published in
-copyleft projects and in dcraw. dcraw carries both the Huffman data
-(`nikon_tree`) and the cipher tables (`xlat`) outside its single restricted
-(Foveon) block, and its header states that all other code "remains free for
-all uses". [11] **[P]** That sits beside the earlier description of dcraw's
-license as ambiguous for the whole file, and is an input to the decision
-below, not legal advice. The third kind lives in copyleft projects.
+copyleft projects and in dcraw, which carries both outside its single
+restricted (Foveon) block. Its header states that all other code
+"remains free for all uses". [11] **[P]** That sits beside the earlier
+description of dcraw's license as ambiguous for the whole file, and is an
+input to the decision below, not legal advice. The third kind lives in
+copyleft projects.
 
 | Data | Where it is published | Why it is awkward |
 |---|---|---|

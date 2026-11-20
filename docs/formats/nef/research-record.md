@@ -35,7 +35,7 @@ The research also had to establish two practical points:
   [overview](README.md#confidence-tags)).
 - Where sources disagree, the disagreement is recorded rather than resolved
   by guesswork.
-- Algorithms are restated in prose or original pseudocode. The raw data
+- Algorithms were restated in prose or original pseudocode. The raw data
   page and the MakerNote page's decryption steps were later restated as
   facts about the format, in prose, tables and formulas (#193).
 - Copy no code and no wholesale data tables (such as Huffman symbol lists
@@ -106,17 +106,18 @@ The pages cite their sources individually. By kind:
   tables were compared with dcraw 9.28 and match.
 - **MakerNote cipher.** ExifTool, exiv2 and LibRaw describe the same key
   derivation and keystream; dcraw 9.28 agrees.
-- **0x0096 header.** The handling was confirmed in dcraw: the 2110-byte skip
-  triggers on `0x49` *or* `0x58`, and the split row is read at offset 562.
-  rawspeed and rawler were confirmed to add the `0x44 0x40` variant. The
-  order of the four predictor seeds is not a cross-check: dcraw and LibRaw
-  disagree with rawspeed and rawler (see
+- **0x0096 header.** dcraw 9.28 agrees that either version byte, `0x49`
+  *or* `0x58`, brings 2110 bytes before the seeds. It also agrees that
+  the split row lies at offset 562. rawspeed and rawler were confirmed to give
+  the files with version bytes `0x44 0x40` a split row too. The order of
+  the four predictor seeds is not a cross-check: dcraw and LibRaw disagree
+  with rawspeed and rawler (see
   [raw-data.md](raw-data.md#disagreements-1)).
 - **Primary-record checks.** These were confirmed against NVD records,
   CIPA's page and LibRaw's source:
   - CVE-2026-5342 and the other 2026 LibRaw CVEs;
   - the Exif 3.1 publication date;
-  - LibRaw's HE detection and its model list.
+  - the bodies whose HE files LibRaw recognizes.
 
 ## What this research did not do
 
