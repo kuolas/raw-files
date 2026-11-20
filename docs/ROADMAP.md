@@ -100,10 +100,34 @@ checked on the files the format notes count. A text no measured file
 records is checked on files built in the tests
 ([NEF notes, section 8.8](formats/nef/makernote-and-metadata.md#88-authorship)).
 
-The groups of values follow, each read from the same directories.
-**More capture settings** come next, such as the focus mode,
-stabilization and the image quality. Enciphered and encrypted records
-are given only as their bytes until the decision on reading them.
+**More capture settings** come next, as values of `CameraSettings`
+and of the values they belong to
+([ADR011](architecture-decisions/adr011-metadata-from-standard-tags.md),
+[#214](https://github.com/kuolas/raw-files/issues/214)):
+
+- the focus mode, the AF-area mode and AF fine-tune;
+- stabilization, auto ISO and the exposure fine-tuning;
+- the release mode, bracketing and daylight saving time;
+- the flash's red-eye reduction, return light, source, control, sync
+  and compensation;
+- the raw compression and bit depth, and the JPEG quality;
+- the white balance's preset slot and fluorescent lamp.
+
+Beside the capture time, `Metadata` will give the digitized time.
+
+The AF-area mode will move from `FocusPoints` to the camera settings,
+so that a file without a focus point still gives it. A Nikon body that
+records no image area or raw size will get them from a table of
+bodies. Each fact in it comes from the maker's published specification
+([ADR022](architecture-decisions/adr022-names-as-their-makers-write-them.md),
+[the table](formats/camera-names.md)). The format notes say what each
+file records and where each code's meaning comes from
+([NEF](formats/nef/makernote-and-metadata.md#810-more-capture-settings),
+[ARW](formats/arw/makernote-and-metadata.md#910-more-capture-settings)).
+
+The other groups of values follow, each read from the same
+directories. Enciphered and encrypted records are given only as their
+bytes until the decision on reading them.
 
 ### Focus points
 
@@ -113,7 +137,8 @@ it, and its docs say which shots give none.
 
 - **Read from the MakerNote** of Nikon mirrorless bodies, Nikon DSLRs
   in live view and Sony bodies from the ILCE-7RM2 on. With the point
-  come the points the camera used and, on Nikon files, the area mode.
+  come the points the camera used and, on Nikon files, the area mode,
+  which will become a camera setting.
 - **From a camera JPEG**, of a Nikon or Sony body, only when the
   point's frame has the picture's shape.
 - **From a table of the body's points**, for a shot that records only
