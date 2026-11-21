@@ -42,7 +42,8 @@ Linux and Windows alike.
   - the image area;
   - the raw image size;
   - the color space;
-  - the focus mode.
+  - the focus mode;
+  - the AF-area mode, whether or not the file gives a focus point.
   - [`CameraSettings`](https://docs.rs/raw-files/latest/raw_files/struct.CameraSettings.html)
     says which a maker's files leave out: Sony's give no shutter, image
     area or raw image size.
@@ -55,9 +56,9 @@ Linux and Windows alike.
     the body's points, measured on frames shot with that body.
   - The Nikon D600 is the first body with a table. Further bodies join
     as their tables are measured.
-  - With the point come the autofocus points the camera used and the
-    area mode. A body with a table also gives the layout of all its
-    points, for a viewer to draw on any preview, a crop's included.
+  - With the point come the autofocus points the camera used. A body
+    with a table also gives the layout of all its points, for a viewer
+    to draw on any preview, a crop's included.
   - Some shots give no point, such as one in manual focus.
     [`Metadata::focus`](https://docs.rs/raw-files/latest/raw_files/struct.Metadata.html#method.focus)
     says which.

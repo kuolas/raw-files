@@ -383,6 +383,9 @@ fn read_metadata(metadata: &Metadata) {
     }
     let _ = metadata.raw_size();
     let _ = metadata.image_size();
+    let settings = metadata.camera_settings();
+    let _ = settings.focus_mode().map(|mode| mode.to_string());
+    let _ = settings.focus_area_mode().map(|mode| mode.to_string());
     let tiny = Size {
         width: 1,
         height: 1,
@@ -426,7 +429,6 @@ fn read_focus(focus: &Focus) {
 fn read_focus_points(points: &FocusPoints) {
     let _ = points.frame();
     let _ = points.origin();
-    let _ = points.area_mode().map(|mode| mode.to_string());
     for point in points.points() {
         let _ = point.number();
         let _ = point.center();

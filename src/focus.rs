@@ -12,8 +12,9 @@
 //!
 //! The camera may use several autofocus points for one picture, one of
 //! them the primary. [`FocusPoints`] holds them all, each a
-//! [`FocusPoint`], in one frame, with the primary marked, the area mode
-//! the camera was set to, a [`FocusAreaMode`], and where they came from.
+//! [`FocusPoint`], in one frame, with the primary marked and where they
+//! came from. The AF-area mode the camera was set to is a camera setting,
+//! [`CameraSettings::focus_area_mode`](crate::CameraSettings::focus_area_mode).
 //!
 //! [`Metadata::focus`](crate::Metadata::focus) gives the focus point of a
 //! file, if it records one,
@@ -387,74 +388,6 @@ impl fmt::Display for FocusOrigin {
     }
 }
 
-/// How the camera chose its autofocus points for a picture: the area mode
-/// the photographer set, in words that fit any maker.
-///
-/// A viewer labels the points of [`FocusPoints`] with it: one point the
-/// photographer placed, a placed point that its neighbors stood in for
-/// while the subject left it, points the camera chose itself, or a subject
-/// the camera followed across the frame. A maker's code for a mode is named
-/// only once a file shot in a known mode shows what it means, as the codes
-/// of the camera settings are under the
-/// [decision to read the metadata from the standard tags](https://github.com/kuolas/raw-files/blob/master/docs/architecture-decisions/adr011-metadata-from-standard-tags.md),
-/// and any other code gives `None`.
-/// [The notes on Nikon's focus point](https://github.com/kuolas/raw-files/blob/master/docs/formats/nef/makernote-and-metadata.md#86-focus-point)
-/// list the codes named.
-///
-/// `FocusAreaMode` is `#[non_exhaustive]`, so match on it with a wildcard
-/// arm. It orders as its variants are listed, and a new variant is added
-/// after the existing ones, so an order once observed holds. Its
-/// [`name`](Self::name)s, which `Display` writes too, are "Single point",
-/// "Dynamic area", "Auto area", "Tracking" and "Pinpoint".
-///
-/// # Examples
-///
-/// ```
-/// use raw_files::FocusAreaMode;
-///
-/// assert_eq!(FocusAreaMode::Single.name(), "Single point");
-/// assert_eq!(FocusAreaMode::Auto.to_string(), "Auto area");
-/// ```
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
-#[non_exhaustive]
-pub enum FocusAreaMode {
-    /// One point, which the photographer placed: Nikon's single-point AF.
-    Single,
-    /// A point the photographer placed, with the points around it standing
-    /// in for it when the subject briefly leaves it: Nikon's dynamic-area
-    /// AF.
-    Dynamic,
-    /// Points the camera chose itself: Nikon's auto-area AF.
-    Auto,
-    /// A subject the camera followed from the point where focus started:
-    /// Nikon's 3D-tracking.
-    Tracking,
-    /// One point, which the photographer placed, smaller than a single
-    /// point, for a precise spot: Nikon's pinpoint AF.
-    Pinpoint,
-}
-
-impl FocusAreaMode {
-    /// The mode's name, for an information panel, such as "Auto area"; the
-    /// type's docs list them all.
-    pub fn name(self) -> &'static str {
-        match self {
-            FocusAreaMode::Single => "Single point",
-            FocusAreaMode::Dynamic => "Dynamic area",
-            FocusAreaMode::Auto => "Auto area",
-            FocusAreaMode::Tracking => "Tracking",
-            FocusAreaMode::Pinpoint => "Pinpoint",
-        }
-    }
-}
-
-impl fmt::Display for FocusAreaMode {
-    /// Writes [`name`](FocusAreaMode::name).
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(self.name())
-    }
-}
-
 /// One autofocus point of a picture, as a [`FocusPoints`] holds it: its
 /// number, when the file gives one, the center of its area, the area's size
 /// when the file records one, and whether the camera confirmed focus
@@ -582,11 +515,12 @@ impl FocusPoint {
 /// The autofocus points the camera used for a picture: every point, each a
 /// [`FocusPoint`], in the one frame they are all measured in; which of them
 /// is the primary, the point [`Metadata::focus`](crate::Metadata::focus)
-/// reports; the area mode the camera was set to, when the file names it;
-/// and where the points came from.
+/// reports; and where the points came from.
 ///
 /// A viewer draws the points over a preview, marks the primary and labels
-/// them with the [`FocusAreaMode`]; a caller that wants only one point reads
+/// them with the AF-area mode, a camera setting
+/// ([`CameraSettings::focus_area_mode`](crate::CameraSettings::focus_area_mode));
+/// a caller that wants only one point reads
 /// [`Metadata::focus`](crate::Metadata::focus) instead. The frame and the
 /// points follow the rules of [`Focus`]: the frame has the framing of the
 /// previews and no zero side, every center lies on the frame, its edges
@@ -606,7 +540,7 @@ impl FocusPoint {
 /// # Equality
 ///
 /// Two lists are equal when every value is the same as stored: the frame,
-/// the points in order, the primary, the area mode and the origin. There
+/// the points in order, the primary and the origin. There
 /// is no order, as there is none for [`Focus`]. There is no `Default`
 /// either, since a list has a frame: a file that records no point gives
 /// `None`, and a list built for a test starts from its frame and its
@@ -620,7 +554,7 @@ impl FocusPoint {
 /// the primary; then placed on a 1504 × 1004 preview:
 ///
 /// ```
-/// use raw_files::{FocusAreaMode, FocusOrigin, FocusPoint, FocusPoints, Point, Size};
+/// use raw_files::{FocusOrigin, FocusPoint, FocusPoints, Point, Size};
 ///
 /// # fn main() -> Result<(), raw_files::ValueError> {
 /// let frame = Size { width: 6016, height: 4016 };
@@ -628,8 +562,7 @@ impl FocusPoint {
 /// let points = FocusPoints::new(frame, FocusOrigin::Table)?
 ///     .with_point(FocusPoint::new(Point { x: 3008, y: 2007 }).with_number(1).with_size(area))?
 ///     .with_point(FocusPoint::new(Point { x: 2768, y: 1503 }).with_number(13).with_size(area))?
-///     .with_primary_index(1)?
-///     .with_area_mode(FocusAreaMode::Auto);
+///     .with_primary_index(1)?;
 ///
 /// let on_preview = points.scaled_to(Size { width: 1504, height: 1004 })?;
 /// let centers: Vec<Point> = on_preview.points().iter().map(FocusPoint::center).collect();
@@ -639,7 +572,6 @@ impl FocusPoint {
 ///     on_preview.primary().and_then(|point| point.size()),
 ///     Some(Size { width: 41, height: 41 })
 /// );
-/// assert_eq!(on_preview.area_mode(), Some(FocusAreaMode::Auto));
 /// assert_eq!(on_preview.origin(), FocusOrigin::Table);
 /// # Ok(())
 /// # }
@@ -649,16 +581,14 @@ pub struct FocusPoints {
     frame: Size,
     points: Vec<FocusPoint>,
     primary: Option<usize>,
-    area_mode: Option<FocusAreaMode>,
     origin: FocusOrigin,
 }
 
 impl FocusPoints {
     /// An empty list of points measured in `frame`, which came from
-    /// `origin`, with no primary and no area mode.
-    /// [`with_point`](Self::with_point) adds the points,
-    /// [`with_primary_index`](Self::with_primary_index) marks the primary
-    /// and [`with_area_mode`](Self::with_area_mode) sets the area mode.
+    /// `origin`, with no primary. [`with_point`](Self::with_point) adds the
+    /// points, and [`with_primary_index`](Self::with_primary_index) marks
+    /// the primary.
     ///
     /// This is how a caller starts a list for its tests. A file whose
     /// list would be empty gives none instead.
@@ -673,7 +603,6 @@ impl FocusPoints {
             frame,
             points: Vec::new(),
             primary: None,
-            area_mode: None,
             origin,
         })
     }
@@ -717,14 +646,6 @@ impl FocusPoints {
         }
         self.primary = Some(index);
         Ok(self)
-    }
-
-    /// This list with the area mode `mode`, in place of any it had;
-    /// [`area_mode`](Self::area_mode) reads it.
-    #[must_use]
-    pub fn with_area_mode(mut self, mode: FocusAreaMode) -> Self {
-        self.area_mode = Some(mode);
-        self
     }
 
     /// The size of the frame every point is measured in. It never has a
@@ -793,16 +714,10 @@ impl FocusPoints {
         self.primary
     }
 
-    /// How the camera chose its points, or `None` when the file does not
-    /// name the mode in a code raw-files knows.
-    pub fn area_mode(&self) -> Option<FocusAreaMode> {
-        self.area_mode
-    }
-
     /// The same list measured in `frame`, such as a preview's size: always
     /// a list when `frame` has no zero side, whose frame is `frame`, with
-    /// the same points in the same order, the same primary, the same area
-    /// mode and the same origin.
+    /// the same points in the same order, the same primary and the same
+    /// origin.
     ///
     /// Each point is scaled as [`Focus::scaled_to`] scales one, by the same
     /// rounding and the same trimming: the center lands where it rounds to,
@@ -834,7 +749,6 @@ impl FocusPoints {
             })?;
         }
         scaled.primary = self.primary;
-        scaled.area_mode = self.area_mode;
         Ok(scaled)
     }
 
@@ -860,8 +774,7 @@ impl FocusPoints {
 impl From<Focus> for FocusPoints {
     /// A list of one point, `focus`'s: in its frame and with its origin,
     /// the point with no number, `focus`'s center, area and whether focus
-    /// was confirmed, as the primary, and no area mode. A single point is
-    /// a list of one.
+    /// was confirmed, as the primary. A single point is a list of one.
     fn from(focus: Focus) -> Self {
         Self {
             frame: focus.frame,
@@ -872,7 +785,6 @@ impl From<Focus> for FocusPoints {
                 in_focus: focus.in_focus,
             }],
             primary: Some(0),
-            area_mode: None,
             origin: focus.origin,
         }
     }
@@ -2062,13 +1974,12 @@ mod tests {
             assert_eq!(FocusPoints::new(size(0, 100), origin), refused);
             assert_eq!(FocusPoints::new(size(100, 0), origin), refused);
             assert_eq!(FocusPoints::new(size(0, 0), origin), refused);
-            // A new list is empty, with no primary and no area mode.
+            // A new list is empty, with no primary.
             let list = FocusPoints::new(size(1, 1), origin).unwrap();
             assert_eq!(list.frame(), size(1, 1));
             assert_eq!(list.origin(), origin);
             assert!(list.points().is_empty());
             assert_eq!(list.primary(), None);
-            assert_eq!(list.area_mode(), None);
         }
     }
 
@@ -2203,29 +2114,6 @@ mod tests {
     }
 
     #[test]
-    fn a_later_area_mode_replaces_the_earlier_one() {
-        let list = list_of(
-            size(100, 100),
-            FocusOrigin::Table,
-            &[FocusPoint::new(point(50, 50))],
-        )
-        .and_then(|list| list.with_primary_index(0))
-        .unwrap();
-        for mode in all_area_modes() {
-            let set = list
-                .clone()
-                .with_area_mode(FocusAreaMode::Tracking)
-                .with_area_mode(mode);
-            assert_eq!(set.area_mode(), Some(mode), "{mode:?}");
-            // Nothing else changes.
-            assert_eq!(set.frame(), list.frame(), "{mode:?}");
-            assert_eq!(set.points(), list.points(), "{mode:?}");
-            assert_eq!(set.primary(), list.primary(), "{mode:?}");
-            assert_eq!(set.origin(), FocusOrigin::Table, "{mode:?}");
-        }
-    }
-
-    #[test]
     fn a_point_reads_back_what_was_built_and_a_later_value_replaces_an_earlier_one() {
         let bare = FocusPoint::new(point(3_008, 2_008));
         assert_eq!(bare.number(), None);
@@ -2263,7 +2151,6 @@ mod tests {
                 assert_eq!(list.origin(), origin, "{focus:?}");
                 assert_eq!(list.points(), [only], "{focus:?}");
                 assert_eq!(list.primary(), Some(only), "{focus:?}");
-                assert_eq!(list.area_mode(), None, "{focus:?}");
                 // The same list as the builders make, and its primary is
                 // the focus given.
                 let built = list_of(focus.frame(), origin, &[only])
@@ -2282,9 +2169,7 @@ mod tests {
             .with_size(size(291, 323))
             .with_in_focus(true);
         for origin in all_origins() {
-            let list = list_of(size(8_256, 5_504), origin, &[first, second])
-                .unwrap()
-                .with_area_mode(FocusAreaMode::Auto);
+            let list = list_of(size(8_256, 5_504), origin, &[first, second]).unwrap();
             // No primary, no focus.
             assert_eq!(list.primary_focus(), None, "{origin:?}");
             let on_second = list.clone().with_primary_index(1).unwrap().primary_focus();
@@ -2311,8 +2196,7 @@ mod tests {
             ],
         )
         .and_then(|list| list.with_primary_index(1))
-        .unwrap()
-        .with_area_mode(FocusAreaMode::Single);
+        .unwrap();
         let preview = list.scaled_to(size(1_920, 1_280)).unwrap();
         assert_eq!(preview.frame(), size(1_920, 1_280));
         assert_eq!(
@@ -2325,7 +2209,6 @@ mod tests {
             ]
         );
         assert_eq!(preview.primary(), preview.points().get(1).copied());
-        assert_eq!(preview.area_mode(), Some(FocusAreaMode::Single));
         assert_eq!(preview.origin(), FocusOrigin::Recorded);
     }
 
@@ -2333,7 +2216,6 @@ mod tests {
     fn a_list_scaled_to_its_own_frame_is_unchanged_and_to_a_zero_side_is_none() {
         for origin in all_origins() {
             let list = FocusPoints::from(z9_focus_from(origin))
-                .with_area_mode(FocusAreaMode::Dynamic)
                 .with_point(FocusPoint::new(point(8_256, 0)).with_number(3))
                 .unwrap();
             assert_eq!(list.scaled_to(list.frame()), Ok(list.clone()), "{origin:?}");
@@ -2373,19 +2255,13 @@ mod tests {
                     ];
                     let list = list_of(frame, FocusOrigin::Table, &points)
                         .and_then(|list| list.with_primary_index(1))
-                        .unwrap()
-                        .with_area_mode(FocusAreaMode::Dynamic);
+                        .unwrap();
                     for new in 1..=8_u32 {
                         let target = size(new, 9 - new);
                         let context = format!("{list:?} to {target:?}");
                         let scaled = list.scaled_to(target).expect(&context);
                         assert_eq!(scaled.frame(), target, "{context}");
                         assert_eq!(scaled.origin(), FocusOrigin::Table, "{context}");
-                        assert_eq!(
-                            scaled.area_mode(),
-                            Some(FocusAreaMode::Dynamic),
-                            "{context}"
-                        );
                         assert_eq!(scaled.points().len(), 2, "{context}");
                         assert_eq!(
                             scaled.primary(),
@@ -2416,66 +2292,41 @@ mod tests {
 
     #[test]
     fn focus_points_equality_is_by_every_value_and_collects_in_a_set() {
-        use FocusAreaMode::{Auto, Single};
         use FocusOrigin::{Recorded, Table};
         let (a, b) = (
             FocusPoint::new(point(10, 10)),
             FocusPoint::new(point(20, 20)),
         );
-        let list = |frame, origin, points: &[FocusPoint], primary, mode| {
+        let list = |frame, origin, points: &[FocusPoint], primary| {
             let mut list = list_of(frame, origin, points).unwrap();
             if let Some(primary) = primary {
                 list = list.with_primary_index(primary).unwrap();
             }
-            if let Some(mode) = mode {
-                list = list.with_area_mode(mode);
-            }
             list
         };
         let frame = size(100, 100);
-        let base = list(frame, Recorded, &[a, b], Some(0), Some(Single));
-        assert_eq!(base, list(frame, Recorded, &[a, b], Some(0), Some(Single)));
+        let base = list(frame, Recorded, &[a, b], Some(0));
+        assert_eq!(base, list(frame, Recorded, &[a, b], Some(0)));
         let others = [
-            list(size(101, 100), Recorded, &[a, b], Some(0), Some(Single)),
-            list(size(100, 101), Recorded, &[a, b], Some(0), Some(Single)),
-            list(frame, Table, &[a, b], Some(0), Some(Single)),
+            list(size(101, 100), Recorded, &[a, b], Some(0)),
+            list(size(100, 101), Recorded, &[a, b], Some(0)),
+            list(frame, Table, &[a, b], Some(0)),
             // The same points in the other order.
-            list(frame, Recorded, &[b, a], Some(0), Some(Single)),
-            list(frame, Recorded, &[a], Some(0), Some(Single)),
-            list(frame, Recorded, &[a, b, a], Some(0), Some(Single)),
-            list(frame, Recorded, &[a, b], Some(1), Some(Single)),
-            list(frame, Recorded, &[a, b], None, Some(Single)),
-            list(frame, Recorded, &[a, b], Some(0), Some(Auto)),
-            list(frame, Recorded, &[a, b], Some(0), None),
+            list(frame, Recorded, &[b, a], Some(0)),
+            list(frame, Recorded, &[a], Some(0)),
+            list(frame, Recorded, &[a, b, a], Some(0)),
+            list(frame, Recorded, &[a, b], Some(1)),
+            list(frame, Recorded, &[a, b], None),
             // A point that differs in one value.
-            list(
-                frame,
-                Recorded,
-                &[a.with_number(1), b],
-                Some(0),
-                Some(Single),
-            ),
+            list(frame, Recorded, &[a.with_number(1), b], Some(0)),
             list(
                 frame,
                 Recorded,
                 &[a, FocusPoint::new(point(20, 21))],
                 Some(0),
-                Some(Single),
             ),
-            list(
-                frame,
-                Recorded,
-                &[a.with_size(size(2, 2)), b],
-                Some(0),
-                Some(Single),
-            ),
-            list(
-                frame,
-                Recorded,
-                &[a.with_in_focus(false), b],
-                Some(0),
-                Some(Single),
-            ),
+            list(frame, Recorded, &[a.with_size(size(2, 2)), b], Some(0)),
+            list(frame, Recorded, &[a.with_in_focus(false), b], Some(0)),
         ];
         for (place, other) in others.iter().enumerate() {
             assert_ne!(&base, other, "value {place}");
@@ -2486,54 +2337,6 @@ mod tests {
         all.extend(others.iter().cloned());
         let set: std::collections::HashSet<FocusPoints> = all.into_iter().collect();
         assert_eq!(set.len(), others.len() + 1);
-    }
-
-    // Every area mode, in the order of its declaration. The `match` has no
-    // wildcard arm, so a variant added later does not compile until it is
-    // named here, beside the list it belongs in. Once it is in the list, the
-    // tests below fail until its name is listed there.
-    fn all_area_modes() -> [FocusAreaMode; 5] {
-        let all = [
-            FocusAreaMode::Single,
-            FocusAreaMode::Dynamic,
-            FocusAreaMode::Auto,
-            FocusAreaMode::Tracking,
-            FocusAreaMode::Pinpoint,
-        ];
-        for mode in all {
-            match mode {
-                FocusAreaMode::Single
-                | FocusAreaMode::Dynamic
-                | FocusAreaMode::Auto
-                | FocusAreaMode::Tracking
-                | FocusAreaMode::Pinpoint => {}
-            }
-        }
-        all
-    }
-
-    #[test]
-    fn every_area_mode_name_is_the_one_documented_and_display_writes_it() {
-        // The names are stable once released: a program may show or store
-        // them, so a changed one fails here.
-        assert_names(
-            &all_area_modes(),
-            FocusAreaMode::name,
-            &[
-                "Single point",
-                "Dynamic area",
-                "Auto area",
-                "Tracking",
-                "Pinpoint",
-            ],
-        );
-    }
-
-    #[test]
-    fn area_modes_order_as_their_variants_are_listed() {
-        // A program may key a sorted map by the mode, and the order is a
-        // promise: a variant moved, or added before the others, fails.
-        assert_ordered(&all_area_modes());
     }
 
     /// The D600's frame, its full-size output, and the box of every one of

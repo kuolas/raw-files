@@ -127,8 +127,8 @@
 //! - **Where they were taken**: how many files have a location, and how
 //!   many each of its parts. They are the altitude, the GPS time, the
 //!   image direction and the map datum.
-//! - **The camera settings**, from the exposure program to the color
-//!   space: how many files have the setting, and how many each kind of
+//! - **The camera settings**, from the exposure program to the AF-area
+//!   mode: how many files have the setting, and how many each kind of
 //!   it. Also how many flashes fired, and how many files had the
 //!   electronic front curtain setting on and how many off. Each white
 //!   balance fine-tuning is counted by its pair of shifts, such as
@@ -144,7 +144,7 @@
 //! - **The points used**: the files with a list, and how many of those
 //!   mark a primary. How many files have each number of points. How many
 //!   points the lists hold, and how many of those have a number. The
-//!   lists by area mode, and the lists of one point placed from a table.
+//!   lists of one point placed from a table.
 //! - **The layout**: the files with one, by its number of points, and
 //!   the files with one but no focus point.
 //! - **The layout placed on the picture**: the files with one, by its
@@ -425,6 +425,8 @@ struct SettingsTally {
     raw_image_sizes: BTreeMap<&'static str, usize>,
     color_space: usize,
     color_spaces: BTreeMap<&'static str, usize>,
+    focus_area_mode: usize,
+    focus_area_modes: BTreeMap<&'static str, usize>,
 }
 
 impl SettingsTally {
@@ -513,6 +515,13 @@ impl SettingsTally {
                 color_space.name(),
             );
         }
+        if let Some(mode) = settings.focus_area_mode() {
+            count(
+                &mut self.focus_area_mode,
+                &mut self.focus_area_modes,
+                mode.name(),
+            );
+        }
     }
 }
 
@@ -594,10 +603,6 @@ struct FocusTally {
     /// Points over every list, of which `numbered_points` have a number.
     list_points: usize,
     numbered_points: usize,
-    /// Lists by area mode, by the name the library gives the mode, and the
-    /// lists without one.
-    area_modes: BTreeMap<&'static str, usize>,
-    without_area_mode: usize,
     /// Lists placed from a table that hold one point: a shot whose mask
     /// names no point beside the primary, or a single-point shot. The
     /// library gives both the same list, so they are counted together.
@@ -745,10 +750,6 @@ impl FocusTally {
             .iter()
             .filter(|point| point.number().is_some())
             .count();
-        match list.area_mode() {
-            Some(mode) => *self.area_modes.entry(mode.name()).or_default() += 1,
-            None => self.without_area_mode += 1,
-        }
         self.list_outside_frame += usize::from(
             !points
                 .iter()
@@ -1172,6 +1173,10 @@ impl Tally {
             "files with a color space: {}, by color space: {:?}",
             s.color_space, s.color_spaces
         );
+        println!(
+            "files with an AF-area mode: {}, by mode: {:?}",
+            s.focus_area_mode, s.focus_area_modes
+        );
         let f = &self.focus;
         println!(
             "files with a focus point: {}, without: {}",
@@ -1199,11 +1204,6 @@ impl Tally {
         println!(
             "lists of one point placed from a table, a single-point shot or a mask naming no other point, which the library does not tell apart: {}",
             f.single_placed
-        );
-        println!(
-            "lists with an area mode: {}, by mode: {:?}",
-            f.with_list - f.without_area_mode,
-            f.area_modes
         );
         println!(
             "files with a layout of the body's autofocus points: {}, by number of points: {:?}",
@@ -1712,7 +1712,8 @@ fn every_file_of_the_local_corpus_opens_and_gives_a_whole_jpeg() {
 #[test]
 fn the_settings_tally_counts_the_makernote_settings() {
     use raw_files::{
-        CameraSettings, FineTune, ImageArea, RawImageSize, Shutter, SignedRational, WhiteBalance,
+        CameraSettings, FineTune, FocusAreaMode, ImageArea, RawImageSize, Shutter, SignedRational,
+        WhiteBalance,
     };
 
     let shift = |numerator, denominator| SignedRational {
@@ -1735,21 +1736,24 @@ fn the_settings_tally_counts_the_makernote_settings() {
         .with_electronic_front_curtain_setting(true)
         .with_shutter(Shutter::Mechanical)
         .with_image_area(ImageArea::ApsC)
-        .with_raw_image_size(RawImageSize::Small);
+        .with_raw_image_size(RawImageSize::Small)
+        .with_focus_area_mode(FocusAreaMode::Auto);
     let second = CameraSettings::default()
         .with_white_balance(
             WhiteBalance::default()
                 .with_color_temperature(3_050)
                 .with_fine_tune(towards_amber),
         )
-        .with_electronic_front_curtain_setting(false);
+        .with_electronic_front_curtain_setting(false)
+        .with_focus_area_mode(FocusAreaMode::Zone);
     let third = CameraSettings::default()
         .with_white_balance(
             WhiteBalance::default()
                 .with_color_temperature(5_200)
                 .with_fine_tune(FineTune::new(zero, zero)),
         )
-        .with_electronic_front_curtain_setting(true);
+        .with_electronic_front_curtain_setting(true)
+        .with_focus_area_mode(FocusAreaMode::Auto);
     let fourth = CameraSettings::default();
     let mut tally = SettingsTally::default();
     for settings in [first, second, third, fourth.clone()] {
@@ -1775,6 +1779,14 @@ fn the_settings_tally_counts_the_makernote_settings() {
     assert_eq!(tally.shutters, BTreeMap::from([("Mechanical", 1)]));
     assert_eq!(tally.image_areas, BTreeMap::from([("APS-C", 1)]));
     assert_eq!(tally.raw_image_sizes, BTreeMap::from([("Small", 1)]));
+
+    // The AF-area mode: two files in auto area, one in zone, one with
+    // none.
+    assert_eq!(tally.focus_area_mode, 3);
+    assert_eq!(
+        tally.focus_area_modes,
+        BTreeMap::from([("Auto area", 2), ("Zone", 1)])
+    );
 
     // Files without a color temperature leave the range empty.
     let mut without_color_temperature = SettingsTally::default();
@@ -1922,7 +1934,7 @@ fn placed_list(frame: Size, points: &[(u16, Point)], primary: usize) -> FocusPoi
 
 #[test]
 fn the_focus_tally_counts_the_lists_and_layouts_and_checks_them_against_each_other() {
-    use raw_files::{Focus, FocusAreaMode, FocusPoint};
+    use raw_files::{Focus, FocusPoint};
 
     let full = Size {
         width: 6016,
@@ -1945,14 +1957,12 @@ fn the_focus_tally_counts_the_lists_and_layouts_and_checks_them_against_each_oth
             (38, Point { x: 1812, y: 1705 }),
         ],
         1,
-    )
-    .with_area_mode(FocusAreaMode::Auto);
+    );
     let window = Size {
         width: 3936,
         height: 2624,
     };
-    let dx = placed_list(window, &[(38, Point { x: 772, y: 1009 })], 0)
-        .with_area_mode(FocusAreaMode::Single);
+    let dx = placed_list(window, &[(38, Point { x: 772, y: 1009 })], 0);
     let recorded = Focus::new(full, Point { x: 343, y: 343 }, FocusOrigin::Recorded)
         .unwrap()
         .with_size(Size {
@@ -1981,11 +1991,6 @@ fn the_focus_tally_counts_the_lists_and_layouts_and_checks_them_against_each_oth
     assert_eq!(tally.list_sizes, BTreeMap::from([(1, 2), (2, 1)]));
     assert_eq!((tally.list_points, tally.numbered_points), (4, 3));
     assert_eq!(tally.single_placed, 1);
-    assert_eq!(
-        tally.area_modes,
-        BTreeMap::from([("Auto area", 1), ("Single point", 1)])
-    );
-    assert_eq!(tally.without_area_mode, 1);
     assert_eq!(
         (tally.with_layout, tally.layout_sizes.clone()),
         (3, BTreeMap::from([(3, 3)]))
@@ -2088,7 +2093,7 @@ fn the_focus_tally_counts_the_lists_and_layouts_and_checks_them_against_each_oth
 
 #[test]
 fn the_focus_tally_checks_the_placed_layout_against_the_layout_and_the_list() {
-    use raw_files::{FocusAreaMode, FocusLayoutPoint};
+    use raw_files::FocusLayoutPoint;
 
     let full = Size {
         width: 6016,
@@ -2132,8 +2137,7 @@ fn the_focus_tally_checks_the_placed_layout_against_the_layout_and_the_list() {
             (38, Point { x: 1812, y: 1705 }),
         ],
         1,
-    )
-    .with_area_mode(FocusAreaMode::Auto);
+    );
     let dx = placed_list(window, &[(38, Point { x: 772, y: 1009 })], 0);
     // An FX shot and a DX shot with their placed layouts, a shot in the
     // narrow window with no list, and a shot with a layout and no placed

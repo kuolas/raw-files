@@ -386,7 +386,7 @@ gives it at (3005, 2002) in the 6010 by 4006 window, its center moved
 back by the window's origin, (3, 5); and that the Small JPEG gives it
 at (3008, 2007) in the 6016 by 4016 frame; each with its box of 164 by
 164, from a table, as the primary of a list of that point alone, with
-the area mode `Tracking`, and with the layout of the D600's 39 points,
+the AF-area mode `Tracking` as a camera setting, and with the layout of the D600's 39 points,
 placed on each picture in the frame or the window its point takes.
 
 ## License and changes

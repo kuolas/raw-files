@@ -450,7 +450,6 @@ mod tests {
     use super::super::{AF_INFO2, CROP_AREA, CROP_HI_SPEED};
     use super::*;
     use crate::container::tiff::tags::{DEFAULT_CROP_ORIGIN, DEFAULT_CROP_SIZE};
-    use crate::focus::FocusAreaMode;
     use crate::formats::makernote::points;
     use crate::metadata::Metadata;
     use crate::tiff_builder::{Order, UNDEFINED};
@@ -472,7 +471,7 @@ mod tests {
                 let file = raw_file_of(order, raw, &block, whole(&block), |_, _| {});
                 let metadata = metadata_of(file);
                 let placed = metadata.focus().expect(what);
-                let expected = FocusPoints::from(placed).with_area_mode(FocusAreaMode::Single);
+                let expected = FocusPoints::from(placed);
                 assert_eq!(
                     metadata.focus_points(),
                     Some(&expected),
@@ -492,7 +491,7 @@ mod tests {
                     height: 2688
                 }
             );
-            let expected = FocusPoints::from(placed).with_area_mode(FocusAreaMode::Single);
+            let expected = FocusPoints::from(placed);
             assert_eq!(
                 metadata.focus_points(),
                 Some(&expected),
@@ -553,7 +552,6 @@ mod tests {
             mask,
         };
         super::placed(named, &table, Some(crop), None)
-            .map(|points| points.with_area_mode(FocusAreaMode::Single))
     }
 
     /// The metadata of the file [`shot_file`] builds for a D600, in
@@ -590,7 +588,7 @@ mod tests {
                 assert_eq!(metadata.focus(), Some(expected), "{what}");
                 assert_eq!(
                     metadata.focus_points(),
-                    Some(&placed_list([6016, 4016], &[B1], 38, FocusAreaMode::Single)),
+                    Some(&placed_list([6016, 4016], &[B1], 38)),
                     "{what}"
                 );
             }
@@ -675,12 +673,7 @@ mod tests {
             ];
             assert_eq!(
                 metadata.focus_points(),
-                Some(&placed_list(
-                    [6016, 4016],
-                    &frame_44,
-                    4,
-                    FocusAreaMode::Auto
-                )),
+                Some(&placed_list([6016, 4016], &frame_44, 4)),
                 "{order:?}, frame 44"
             );
             // Every bit of the seven bytes set: the table's 39 points, in
@@ -694,7 +687,7 @@ mod tests {
             assert_eq!(points.primary().and_then(|point| point.number()), Some(38));
             // An empty mask, or one whose bits the table lacks: the primary
             // alone.
-            let alone = placed_list([6016, 4016], &[B1], 38, FocusAreaMode::Single);
+            let alone = placed_list([6016, 4016], &[B1], 38);
             for bits in [&[][..], &[39, 47, 55]] {
                 let metadata = d600(order, 38, bits);
                 assert_eq!(metadata.focus_points(), Some(&alone), "{order:?}, {bits:?}");
@@ -706,7 +699,6 @@ mod tests {
                 [6016, 4016],
                 &[(1, [3008, 2007]), B1, (39, [1812, 2308])],
                 38,
-                FocusAreaMode::Single,
             );
             assert_eq!(metadata.focus_points(), Some(&expected), "{order:?}");
             assert_eq!(
@@ -738,12 +730,7 @@ mod tests {
                 let metadata = shot(order, "NIKON D600", &value, Some(D600_DX));
                 assert_eq!(
                     metadata.focus_points(),
-                    Some(&placed_list(
-                        [3936, 2624],
-                        points,
-                        u16::from(primary),
-                        FocusAreaMode::Single
-                    )),
+                    Some(&placed_list([3936, 2624], points, u16::from(primary))),
                     "{order:?}, point {primary}"
                 );
             }
@@ -753,7 +740,7 @@ mod tests {
             let metadata = shot(order, "NIKON D600", &d600_viewfinder(order), Some(no_crop));
             assert_eq!(
                 metadata.focus_points(),
-                Some(&placed_list([6016, 4016], &[B1], 38, FocusAreaMode::Single)),
+                Some(&placed_list([6016, 4016], &[B1], 38)),
                 "{order:?}"
             );
         }
@@ -786,24 +773,14 @@ mod tests {
         // at (2463, 1311), whose box crosses the right one, are dropped;
         // points 1 and 11 stay.
         let narrow = d600_dx_at(1740, 696);
-        let expected = placed_list(
-            [2536, 2624],
-            &[(1, [1268, 1311]), (11, [1028, 1311])],
-            1,
-            FocusAreaMode::Single,
-        );
+        let expected = placed_list([2536, 2624], &[(1, [1268, 1311]), (11, [1028, 1311])], 1);
         assert_eq!(
             placed_in_window([2536, 2624], narrow, 1, &[10, 24, 37]),
             Some(expected)
         );
         // A window of 2556 by 2624, at the origin (1730, 696): point 38's
         // box reaches the left edge exactly, at (82, 1009), and is kept.
-        let expected = placed_list(
-            [2556, 2624],
-            &[(1, [1278, 1311]), (38, [82, 1009])],
-            1,
-            FocusAreaMode::Single,
-        );
+        let expected = placed_list([2556, 2624], &[(1, [1278, 1311]), (38, [82, 1009])], 1);
         assert_eq!(
             placed_in_window([2556, 2624], d600_dx_at(1730, 696), 1, &[37]),
             Some(expected)
@@ -811,7 +788,7 @@ mod tests {
         // A window of 2216 by 2624, at the origin (1900, 696): point 38's
         // center lies left of the window, dropped.
         let narrowest = d600_dx_at(1900, 696);
-        let expected = placed_list([2216, 2624], &[(1, [1108, 1311])], 1, FocusAreaMode::Single);
+        let expected = placed_list([2216, 2624], &[(1, [1108, 1311])], 1);
         assert_eq!(
             placed_in_window([2216, 2624], narrowest, 1, &[37]),
             Some(expected)
@@ -896,7 +873,7 @@ mod tests {
                 let metadata = d600_jpeg(order, &d600_viewfinder(order), Some(D600_FX), pixels);
                 assert_eq!(
                     metadata.focus_points(),
-                    Some(&placed_list([6016, 4016], &[B1], 38, FocusAreaMode::Single)),
+                    Some(&placed_list([6016, 4016], &[B1], 38)),
                     "{order:?}, {pixels:?}"
                 );
             }
@@ -905,12 +882,7 @@ mod tests {
             let metadata = d600_jpeg(order, &d600_viewfinder(order), Some(D600_DX), [3936, 2624]);
             assert_eq!(
                 metadata.focus_points(),
-                Some(&placed_list(
-                    [3936, 2624],
-                    &[(38, [772, 1009])],
-                    38,
-                    FocusAreaMode::Single
-                )),
+                Some(&placed_list([3936, 2624], &[(38, [772, 1009])], 38)),
                 "{order:?}"
             );
             // In DX at a smaller size, or a pixel off the window: none.
@@ -935,12 +907,7 @@ mod tests {
                 let metadata = d600_jpeg(order, &d600_viewfinder(order), crop, [4512, 3008]);
                 assert_eq!(
                     metadata.focus_points(),
-                    Some(&placed_list(
-                        [6010, 4006],
-                        &[(38, [1809, 1700])],
-                        38,
-                        FocusAreaMode::Single
-                    )),
+                    Some(&placed_list([6010, 4006], &[(38, [1809, 1700])], 38)),
                     "{what}"
                 );
                 let value = viewfinder(order, "0100", 3, 1, &[0, 26, 37]);
@@ -950,8 +917,7 @@ mod tests {
                     Some(&placed_list(
                         [6010, 4006],
                         &[(1, [3005, 2002]), (27, [4200, 2303]), (38, [1809, 1700])],
-                        1,
-                        FocusAreaMode::Single
+                        1
                     )),
                     "{what}"
                 );
@@ -960,7 +926,7 @@ mod tests {
                 let metadata = shot(order, "NIKON D600", &d600_viewfinder(order), crop);
                 assert_eq!(
                     metadata.focus_points(),
-                    Some(&placed_list([6016, 4016], &[B1], 38, FocusAreaMode::Single)),
+                    Some(&placed_list([6016, 4016], &[B1], 38)),
                     "{what}, raw"
                 );
             }
@@ -976,8 +942,7 @@ mod tests {
     /// names `primary` and sets the mask's `bits`, with no CropHiSpeed, as
     /// a file that is no crop, in a JPEG of `pixels`, as if the table's
     /// record listed that size as showing a window of `window` of the
-    /// frame, so that a test can place points in a window no body has. The
-    /// list is given the area mode single point, as the reader gives it.
+    /// frame, so that a test can place points in a window no body has.
     fn placed_on_jpeg(
         pixels: [u32; 2],
         window: [u32; 2],
@@ -1009,7 +974,6 @@ mod tests {
             mask,
         };
         super::placed(named, &table, None, Some(pixels))
-            .map(|points| points.with_area_mode(FocusAreaMode::Single))
     }
 
     #[test]
@@ -1020,12 +984,7 @@ mod tests {
         // JPEG of half its size. Point 38 at (72, 1009), whose box of 164
         // crosses the left edge, and point 25 at (2463, 1311), whose box
         // crosses the right one, are dropped; points 1 and 11 stay.
-        let expected = placed_list(
-            [2536, 2624],
-            &[(1, [1268, 1311]), (11, [1028, 1311])],
-            1,
-            FocusAreaMode::Single,
-        );
+        let expected = placed_list([2536, 2624], &[(1, [1268, 1311]), (11, [1028, 1311])], 1);
         assert_eq!(
             placed_on_jpeg([1268, 1312], [2536, 2624], 1, &[10, 24, 37]),
             Some(expected)

@@ -190,6 +190,27 @@ does. An entry that can break a caller opens with **Breaking:**.
   A file whose directories and dead links together pass the cap now
   fails with `LimitExceeded`, where it opened before. No camera file
   comes near: the most measured in one file is 9, under the default 256.
+- **Breaking:** the AF-area mode is now a camera setting,
+  `CameraSettings::focus_area_mode`; `FocusPoints::area_mode` and
+  `FocusPoints::with_area_mode` are removed
+  ([#214](https://github.com/kuolas/raw-files/issues/214)). The mode is
+  how the camera was set, not a part of the points:
+  - it is given whether or not the file gives focus points, and under
+    manual focus too, where a viewfinder shot of a body without a table,
+    a manual-focus shot and a point that cannot be placed gave none
+    before;
+  - `FocusAreaMode` keeps its path, `raw_files::FocusAreaMode`, and
+    gains `Zone`, named "Zone": an area the photographer placed, in
+    which the camera chose.
+
+  Read the mode from the settings, and build it there in a test:
+
+  ```rust
+  // 0.10.0
+  let mode = metadata.focus_points().and_then(|points| points.area_mode());
+  // 0.11.0
+  let mode = metadata.camera_settings().focus_area_mode();
+  ```
 - A tag that raw-files reads only at an exact count is now skipped,
   unread, when it holds another count
   ([#109](https://github.com/kuolas/raw-files/issues/109)). A tag of

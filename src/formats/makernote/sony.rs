@@ -237,13 +237,13 @@ impl Reader for MakerNote {
     ///
     /// - **the camera settings** that only the MakerNote records, and the
     ///   white balance setting, in place of the Exif tags' mode
-    ///   ([`camera_settings`]);
+    ///   ([`camera_settings`]). AFAreaModeSetting is not read, since no
+    ///   file shot in a known mode has checked what its codes mean, so the
+    ///   AF-area mode stays `None`;
     /// - **the focus point**, as recorded ([`focus`]), always read, since
     ///   the standard tags never give one. It is a list of one point, the
-    ///   primary, with no area mode: AFAreaModeSetting is not read, since
-    ///   no file shot in a known mode has checked what its codes mean. A
-    ///   shot whose focus mode, read with the settings, is manual gives
-    ///   none.
+    ///   primary. A shot whose focus mode, read with the settings, is
+    ///   manual gives none.
     ///
     /// The other values are the standard tags' alone.
     ///
@@ -2335,8 +2335,7 @@ mod tests {
                 )
                 .with_focus(focus_7m4());
             assert_eq!(found, expected, "{order:?}");
-            // The point as a list of one, its primary, recorded, with no
-            // area mode.
+            // The point as a list of one, its primary, recorded.
             let points = found.focus_points().expect("a list");
             assert_eq!(points.points().len(), 1, "{order:?}");
             assert_eq!(
@@ -2346,7 +2345,6 @@ mod tests {
             );
             assert_eq!(points.primary().unwrap().number(), None, "{order:?}");
             assert_eq!(points.origin(), FocusOrigin::Recorded, "{order:?}");
-            assert_eq!(points.area_mode(), None, "{order:?}");
             assert_eq!(found.focus(), Some(focus_7m4()), "{order:?}");
         }
     }
