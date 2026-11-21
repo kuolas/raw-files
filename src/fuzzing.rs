@@ -386,6 +386,9 @@ fn read_metadata(metadata: &Metadata) {
     let settings = metadata.camera_settings();
     let _ = settings.focus_mode().map(|mode| mode.to_string());
     let _ = settings.focus_area_mode().map(|mode| mode.to_string());
+    let _ = settings
+        .af_fine_tune()
+        .map(|fine_tune| (fine_tune.is_on(), fine_tune.value()));
     let tiny = Size {
         width: 1,
         height: 1,

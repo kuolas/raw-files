@@ -5,11 +5,11 @@
 //! Beside the exposure, a viewer's information panel shows how the camera
 //! was set for the shot: the white balance, the exposure program, the
 //! metering mode, the flash, the shutter, the image area, the raw image
-//! size, the color space, the focus mode and the AF-area mode.
-//! [`CameraSettings`] holds them all, and
+//! size, the color space, the focus mode, the AF-area mode and AF
+//! fine-tune. [`CameraSettings`] holds them all, and
 //! [`Metadata::camera_settings`](crate::Metadata::camera_settings) gives
-//! them for a file. [`WhiteBalance`], [`FineTune`] and [`Flash`] hold the
-//! settings made of several parts; each enum, such as [`ExposureProgram`],
+//! them for a file. [`WhiteBalance`], [`FineTune`], [`Flash`] and
+//! [`AfFineTune`] hold the settings made of several parts; each enum, such as [`ExposureProgram`],
 //! names one setting's choices in words that fit any maker, with a
 //! [`name`](ExposureProgram::name) to show.
 //!
@@ -23,23 +23,23 @@
 //! maker's own tags, its MakerNote. Nikon's, in NEF files and in the JPEGs
 //! of Nikon cameras, gives the white balance's color temperature and
 //! fine-tuning, the shutter, the image area, the focus mode, the AF-area
-//! mode and, in a raw file, the raw image size; the white balance setting, finer than Exif's,
+//! mode, AF fine-tune and, in a raw file, the raw image size; the white balance setting, finer than Exif's,
 //! in place of Exif's; and the color space where the Exif tags record
 //! none, as in every Nikon raw file checked. Sony's, in ARW files and
 //! their family and in the JPEGs of Sony cameras, gives the white
 //! balance's fine-tuning, the electronic front curtain setting, which only
 //! Sony records, the color temperature of a chosen color temperature or a
 //! custom white balance, the focus mode and the AF-area mode; and the
-//! white balance setting in place of Exif's. On Sony
-//! files the shutter, the image area and the raw image size are `None`:
-//! Sony records the first two only in enciphered blocks, which raw-files
-//! does not read, and gives an APS-C raw the raw size code of a medium
-//! one.
+//! white balance setting in place of Exif's. On Sony files the shutter,
+//! the image area, the raw image size and AF fine-tune are `None`: Sony
+//! records the first two only in enciphered blocks, which raw-files does
+//! not read, gives an APS-C raw the raw size code of a medium one, and
+//! keeps its AF micro adjustment in enciphered or unread blocks.
 //!
 //! A program that uses raw-files can build these values for its own
 //! tests, without a camera file: [`CameraSettings`] and [`WhiteBalance`]
-//! through their `with_…` methods, and a [`FineTune`] and a [`Flash`]
-//! through their constructors. [`CameraSettings`]'s docs show how.
+//! through their `with_…` methods, and a [`FineTune`], a [`Flash`] and an
+//! [`AfFineTune`] through their constructors. [`CameraSettings`]'s docs show how.
 
 use std::fmt;
 
@@ -47,8 +47,8 @@ use crate::rational::SignedRational;
 
 /// How the camera was set for a picture: its white balance, exposure
 /// program, metering mode, flash, shutter, image area, raw image size,
-/// color space, focus mode and AF-area mode, for a viewer's information
-/// panel beside the exposure.
+/// color space, focus mode, AF-area mode and AF fine-tune, for a viewer's
+/// information panel beside the exposure.
 ///
 /// Every value is `None` when the file does not record it or records it in
 /// a way that cannot be read, such as a code that no variant names. A
@@ -58,8 +58,8 @@ use crate::rational::SignedRational;
 /// the metering mode, the flash, the white balance mode and the color
 /// space. The others, which only a maker's MakerNote records, it gives
 /// from Nikon's MakerNote and Sony's, each those its MakerNote records in
-/// plain tags; the shutter, the image area and the raw image size are
-/// `None` for every Sony file. Each getter says where its value comes
+/// plain tags; the shutter, the image area, the raw image size and AF
+/// fine-tune are `None` for every Sony file. Each getter says where its value comes
 /// from.
 ///
 /// `CameraSettings::default()` is the empty record, with every value
@@ -138,6 +138,7 @@ pub struct CameraSettings {
     pub(crate) color_space: Option<ColorSpace>,
     pub(crate) focus_mode: Option<FocusMode>,
     pub(crate) focus_area_mode: Option<FocusAreaMode>,
+    pub(crate) af_fine_tune: Option<AfFineTune>,
 }
 
 impl CameraSettings {
@@ -342,6 +343,47 @@ impl CameraSettings {
         self.focus_area_mode
     }
 
+    /// AF fine-tune: whether the photographer's correction of where the
+    /// autofocus lands was on, and its value when it was; [`AfFineTune`]
+    /// says what each holds.
+    ///
+    /// Read from Nikon's MakerNote, its AFTune: four bytes, whether it is
+    /// on, the saved lens's index, the value, and the value at a zoom's
+    /// long end. The saved lens's index is not given.
+    ///
+    /// `None` when:
+    ///
+    /// - the file records no AF fine-tune, as every Sony file does: the
+    ///   E-mount bodies record their AF micro adjustment only in
+    ///   enciphered blocks, and the A-mount bodies in a plain block whose
+    ///   layout raw-files does not read;
+    /// - the first byte is a code no measured file holds, such as 3, which
+    ///   the documentation names "On (Zoom)";
+    /// - AFTune has another type or count than Nikon writes.
+    ///
+    /// What the files record is in the notes on
+    /// [Nikon's capture settings](https://github.com/kuolas/raw-files/blob/master/docs/formats/nef/makernote-and-metadata.md#810-more-capture-settings).
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use raw_files::CameraFile;
+    ///
+    /// # fn main() -> raw_files::Result<()> {
+    /// let file = CameraFile::open("photo.nef")?;
+    /// if let Some(fine_tune) = file.metadata().camera_settings().af_fine_tune() {
+    ///     match fine_tune.value() {
+    ///         Some(value) => println!("AF fine-tune: {value:+}"),
+    ///         None => println!("AF fine-tune: off"),
+    ///     }
+    /// }
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn af_fine_tune(&self) -> Option<AfFineTune> {
+        self.af_fine_tune
+    }
+
     /// Sets the white balance, in place of the one it had;
     /// [`white_balance`](Self::white_balance) reads it.
     #[must_use]
@@ -429,6 +471,14 @@ impl CameraSettings {
     #[must_use]
     pub fn with_focus_area_mode(mut self, mode: FocusAreaMode) -> Self {
         self.focus_area_mode = Some(mode);
+        self
+    }
+
+    /// Sets AF fine-tune, in place of any set before;
+    /// [`af_fine_tune`](Self::af_fine_tune) reads it.
+    #[must_use]
+    pub fn with_af_fine_tune(mut self, fine_tune: AfFineTune) -> Self {
+        self.af_fine_tune = Some(fine_tune);
         self
     }
 }
@@ -702,6 +752,71 @@ impl Flash {
     /// without a flash function does.
     pub fn mode(&self) -> Option<FlashMode> {
         self.mode
+    }
+}
+
+/// AF fine-tune: the photographer's correction of where the autofocus
+/// lands, for a lens that focuses a little in front of or behind its
+/// subject. Whether it was on, and, when it was, its value.
+///
+/// The value is in the camera's own steps, signed: the Nikon D600's menu
+/// sets it from -20 to +20. It is the value in effect for the lens on the
+/// camera; which saved lens it belongs to is not given.
+///
+/// There is no `Default`: a file that records no AF fine-tune gives `None`
+/// for [`CameraSettings::af_fine_tune`]. A file that records it off gives
+/// one that [`is_on`](Self::is_on) says is off, with no
+/// [`value`](Self::value).
+///
+/// # Examples
+///
+/// Fine-tune on, at -5, and off:
+///
+/// ```
+/// use raw_files::AfFineTune;
+///
+/// let on = AfFineTune::new(true).with_value(-5);
+/// assert!(on.is_on());
+/// assert_eq!(on.value(), Some(-5));
+///
+/// let off = AfFineTune::new(false);
+/// assert!(!off.is_on());
+/// assert_eq!(off.value(), None);
+/// ```
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct AfFineTune {
+    pub(crate) on: bool,
+    pub(crate) value: Option<i32>,
+}
+
+impl AfFineTune {
+    /// AF fine-tune, on or off, with no value;
+    /// [`with_value`](Self::with_value) adds it.
+    #[must_use]
+    pub fn new(on: bool) -> Self {
+        Self { on, value: None }
+    }
+
+    /// This AF fine-tune with the value `value`, in place of any it had.
+    /// It is stored as given, whether or not the fine-tune is on: the
+    /// readers give a value only when it is.
+    #[must_use]
+    pub fn with_value(self, value: i32) -> Self {
+        Self {
+            value: Some(value),
+            ..self
+        }
+    }
+
+    /// Whether AF fine-tune was on.
+    pub fn is_on(&self) -> bool {
+        self.on
+    }
+
+    /// The fine-tune value, in the camera's steps, or `None` when none is
+    /// recorded, as when the fine-tune is off.
+    pub fn value(&self) -> Option<i32> {
+        self.value
     }
 }
 
@@ -1384,6 +1499,10 @@ mod tests {
             color_space: Some(ColorSpace::AdobeRgb),
             focus_mode: Some(FocusMode::Continuous),
             focus_area_mode: Some(FocusAreaMode::Tracking),
+            af_fine_tune: Some(AfFineTune {
+                on: true,
+                value: Some(-5),
+            }),
         }
     }
 
@@ -1401,6 +1520,7 @@ mod tests {
         assert_eq!(settings.color_space(), None);
         assert_eq!(settings.focus_mode(), None);
         assert_eq!(settings.focus_area_mode(), None);
+        assert_eq!(settings.af_fine_tune(), None);
 
         let white_balance = WhiteBalance::default();
         assert_eq!(white_balance.mode(), None);
@@ -1431,6 +1551,13 @@ mod tests {
         assert_eq!(settings.color_space(), Some(ColorSpace::AdobeRgb));
         assert_eq!(settings.focus_mode(), Some(FocusMode::Continuous));
         assert_eq!(settings.focus_area_mode(), Some(FocusAreaMode::Tracking));
+        assert_eq!(
+            settings.af_fine_tune(),
+            Some(AfFineTune {
+                on: true,
+                value: Some(-5)
+            })
+        );
 
         let white_balance = nikon_white_balance();
         assert_eq!(white_balance.mode(), Some(WhiteBalanceMode::Auto));
@@ -1534,6 +1661,16 @@ mod tests {
                         ..start.clone()
                     },
                 ),
+                (
+                    start.clone().with_af_fine_tune(AfFineTune::new(false)),
+                    CameraSettings {
+                        af_fine_tune: Some(AfFineTune {
+                            on: false,
+                            value: None,
+                        }),
+                        ..start.clone()
+                    },
+                ),
             ];
             for (place, (built, expected)) in cases.into_iter().enumerate() {
                 assert_eq!(built, expected, "builder {place} from {start:?}");
@@ -1598,7 +1735,8 @@ mod tests {
             .with_raw_image_size(RawImageSize::Large)
             .with_color_space(ColorSpace::AdobeRgb)
             .with_focus_mode(FocusMode::Continuous)
-            .with_focus_area_mode(FocusAreaMode::Tracking);
+            .with_focus_area_mode(FocusAreaMode::Tracking)
+            .with_af_fine_tune(AfFineTune::new(true).with_value(-5));
         assert_eq!(settings, full_settings());
     }
 
@@ -1615,7 +1753,8 @@ mod tests {
             .with_raw_image_size(RawImageSize::Medium)
             .with_color_space(ColorSpace::Srgb)
             .with_focus_mode(FocusMode::Single)
-            .with_focus_area_mode(FocusAreaMode::Pinpoint);
+            .with_focus_area_mode(FocusAreaMode::Pinpoint)
+            .with_af_fine_tune(AfFineTune::new(false).with_value(3));
         // Every value of `earlier` differs from the full record's, so each
         // builder below has one to replace.
         let full = full_settings();
@@ -1630,7 +1769,8 @@ mod tests {
             .with_raw_image_size(RawImageSize::Large)
             .with_color_space(ColorSpace::AdobeRgb)
             .with_focus_mode(FocusMode::Continuous)
-            .with_focus_area_mode(FocusAreaMode::Tracking);
+            .with_focus_area_mode(FocusAreaMode::Tracking)
+            .with_af_fine_tune(AfFineTune::new(true).with_value(-5));
         assert_eq!(settings, full);
 
         let white_balance = WhiteBalance::default()
@@ -1676,6 +1816,23 @@ mod tests {
             assert_eq!(off.fired(), fired);
             assert_eq!(off.mode(), Some(FlashMode::Off));
         }
+    }
+
+    #[test]
+    fn an_af_fine_tune_starts_without_a_value_and_takes_one() {
+        for on in [false, true] {
+            let fine_tune = AfFineTune::new(on);
+            assert_eq!(fine_tune.is_on(), on);
+            assert_eq!(fine_tune.value(), None);
+            // A negative value, then a second that replaces it, each kept
+            // as given, whether on or off.
+            let nearer = fine_tune.with_value(-20);
+            assert_eq!((nearer.is_on(), nearer.value()), (on, Some(-20)));
+            let farther = nearer.with_value(7);
+            assert_eq!((farther.is_on(), farther.value()), (on, Some(7)));
+        }
+        assert_ne!(AfFineTune::new(true), AfFineTune::new(false));
+        assert_ne!(AfFineTune::new(true), AfFineTune::new(true).with_value(0));
     }
 
     // Every variant of each enum, in the order of its declaration. Each

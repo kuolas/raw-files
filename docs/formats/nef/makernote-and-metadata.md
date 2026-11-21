@@ -831,7 +831,7 @@ raw-files reads it or not:
 | 0x0088 AFInfo | 4 bytes: area mode, point number, mask of the points in focus [S] | the bodies without AFInfo2: D1H, D1X, D70, D100, D200, E5700, P7800 **[F]** | the point not read: a number only; the area mode, its first byte, read as a camera setting (below) |
 | 0x0021 FaceDetect | a frame size and up to twelve face rectangles in it [S] | none of the 35 files **[F]** | not read: no sample |
 | 0x0007 FocusMode | an ASCII string [S][1]: `MANUAL`, or an AF mode padded with spaces to six characters (`AF-S  `, `AF-C  `, `AF-A  `) **[F]** | `MANUAL` on the D300 and D850, both viewfinder shots with a zero frame (files 928, 1835), and on the Z fc, which records a position under it (file 8559); an AF mode on every other file with the embedded MakerNote, my Z 9 shots included **[F]** | read as the focus mode, a camera setting ([section 8.10](#810-more-capture-settings)); `MANUAL`, after trimming, gives no focus point |
-| 0x00B9 AFTune | AF fine-tune, a setting, not a position [S] | 225 public files of 49 bodies and 37,339 of mine ([section 8.10](#810-more-capture-settings)) **[F]** | will be read as a camera setting |
+| 0x00B9 AFTune | AF fine-tune, a setting, not a position [S] | 225 public files of 49 bodies and 37,339 of mine ([section 8.10](#810-more-capture-settings)) **[F]** | read as a camera setting |
 | 0x0085 ManualFocusDistance, the area modes in the MenuSettings blocks | settings, not a position [S] | not looked for | not read |
 
 **AFInfo2 layouts.** The value is UNDEFINED and starts with a version in
@@ -1754,7 +1754,7 @@ serves other makers, Sony's DMF among them.
 - the value at a zoom's long end, signed.
 
 The D600's menu tunes up to 12 lenses, from -20 to +20 [P][25] (p. 259).
-raw-files will read whether it is on, with its value:
+raw-files reads whether it is on, with its value:
 
 | Byte 0 | The documentation's name [S][1] | Read as | Mark | Files, public / mine |
 |---|---|---|---|---|
@@ -1765,7 +1765,10 @@ raw-files will read whether it is on, with its value:
 **[F]** The values seen run from -20 to +20 on my D600, and -20 and
 -2 on public D7000 and D300 files. Byte 3 is 0 on every file. The
 documentation calls it valid only under code 3, "On (Zoom)", which no
-file holds, so the value at the long end will stay `None`. What tells 1
+file holds, so a first byte of 3 gives no AF fine-tune, by
+[ADR011](../../architecture-decisions/adr011-metadata-from-standard-tags.md)'s
+rule on a documented code no measured file holds, and the value at the
+long end is not read. What tells 1
 from 2 is not documented: both read as on, and the difference stays
 open. **[F]**
 

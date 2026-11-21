@@ -149,6 +149,12 @@ does. An entry that can break a caller opens with **Breaking:**.
 
   The notes mark each code as confirmed by a frame or documented and
   agreed with by the files.
+- `CameraSettings::af_fine_tune` gives AF fine-tune, an `AfFineTune`:
+  whether it was on and, when it was, its value in the camera's steps
+  ([#214](https://github.com/kuolas/raw-files/issues/214)). Nikon files
+  give it from their MakerNote's AFTune; which saved lens the value
+  belongs to is not given. Sony files give none: they record their AF
+  micro adjustment only in enciphered or unread blocks.
 
 ### Changed
 

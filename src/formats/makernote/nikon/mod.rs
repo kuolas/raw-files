@@ -158,6 +158,11 @@ const AF_INFO: u16 = 0x0088;
 /// says whether focus was confirmed.
 const AF_INFO2: u16 = 0x00B7;
 
+/// The Nikon MakerNote tag that records AF fine-tune (AFTune): four
+/// UNDEFINED bytes, whether it is on, the index of the saved lens, the
+/// value, signed, and the value at a zoom's long end, signed.
+const AF_TUNE: u16 = 0x00B9;
+
 /// The rules of the tags this reader reads: each tag's number, from the
 /// constants above, and the type and count Nikon writes its value in on
 /// every file checked (ADR011). [`Ifd::get`] and [`Ifd::held`] read them.
@@ -199,6 +204,7 @@ mod rules {
     pub(super) const COLOR_TEMPERATURE: Held<[u32; 1]> = Held::new(super::COLOR_TEMPERATURE, SHORT);
     pub(super) const LENS: Rule<[Rational; 4]> = Rule::new(super::LENS, &[FieldType::Rational]);
     pub(super) const AF_INFO: Held<[u8; 4]> = Held::new(super::AF_INFO, &[FieldType::Undefined]);
+    pub(super) const AF_TUNE: Held<[u8; 4]> = Held::new(super::AF_TUNE, &[FieldType::Undefined]);
     pub(super) const AF_INFO2: Rule<Vec<u8>> = Rule::new(super::AF_INFO2, &[FieldType::Undefined]);
 
     // The PreviewIFD.

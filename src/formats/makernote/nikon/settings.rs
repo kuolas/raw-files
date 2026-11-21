@@ -2,7 +2,7 @@
 
 //! The camera settings in the Nikon MakerNote: the white balance, the
 //! shutter used, the image area, the raw size, the color space, the focus
-//! mode and the AF-area mode.
+//! mode, the AF-area mode and AF fine-tune.
 //!
 //! The MakerNote records how the camera was set for the picture beyond
 //! what the Exif tags record (ADR011). [`camera_settings`] reads each
@@ -19,7 +19,8 @@
 //! - the color space from ColorSpace ([`color_space`]);
 //! - the focus mode from FocusMode's text ([`focus_mode_of_text`]);
 //! - the AF-area mode from AFInfo2 ([`area_mode_of`]), else from AFInfo
-//!   ([`af_info_area_mode`]).
+//!   ([`af_info_area_mode`]);
+//! - AF fine-tune from AFTune ([`af_fine_tune`]).
 //!
 //! A code or a text gives a value only where a checked file, or a
 //! standard, shows what it means. Anything else costs that value alone.
@@ -41,8 +42,8 @@ use super::block::MakerNote;
 use super::crop::CropHiSpeed;
 use super::rules;
 use crate::camera_settings::{
-    CameraSettings, ColorSpace, FineTune, FocusAreaMode, FocusMode, ImageArea, RawImageSize,
-    Shutter, WhiteBalanceMode,
+    AfFineTune, CameraSettings, ColorSpace, FineTune, FocusAreaMode, FocusMode, ImageArea,
+    RawImageSize, Shutter, WhiteBalanceMode,
 };
 use crate::error::Result;
 use crate::formats::makernote::{Picture, checked_color_temperature};
@@ -83,6 +84,7 @@ use crate::rational::SignedRational;
 ///   mode and whether or not the record gives a point. On a body without
 ///   AFInfo2 it is AFInfo's ([`af_info_area_mode`]). A body with AFInfo2
 ///   never falls back on AFInfo, which no file holds beside it.
+/// - **AF fine-tune** is AFTune's ([`af_fine_tune`]).
 ///
 /// Nikon records no electronic front curtain setting, so it stays as
 /// `settings` has it, `None`. The exposure program, the metering mode and
@@ -136,6 +138,7 @@ pub(super) fn camera_settings<R: Read + Seek>(
             .held(rules::AF_INFO)
             .and_then(|[code, ..]| af_info_area_mode(code)),
     };
+    settings.af_fine_tune = ifd.held(rules::AF_TUNE).and_then(af_fine_tune);
     Ok(settings)
 }
 
@@ -392,6 +395,24 @@ fn af_info_area_mode(code: u8) -> Option<FocusAreaMode> {
     }
 }
 
+/// The AF fine-tune that AFTune's four bytes, `af_tune`, record: the
+/// first says whether it is on, 0 off and 1 or 2 on; the third is the
+/// value, signed, given when it is on. The second, the saved lens's index,
+/// is not given, and the fourth, the value at a zoom's long end, is read
+/// under no code a file holds.
+///
+/// ExifTool's published documentation, read as documentation, names the
+/// codes; what tells 1 from 2 is not documented, and both read as on, as
+/// the files agree: my D600 writes both. `None` for any other first byte,
+/// such as 3, "On (Zoom)", which no measured file holds.
+fn af_fine_tune([on, _lens, value, _zoom_value]: [u8; 4]) -> Option<AfFineTune> {
+    match on {
+        0 => Some(AfFineTune::new(false)),
+        1 | 2 => Some(AfFineTune::new(true).with_value(i32::from(value.cast_signed()))),
+        _ => None,
+    }
+}
+
 /// The color space a ColorSpace `code` of the MakerNote names: 1
 /// [`Srgb`](ColorSpace::Srgb) and 2 [`AdobeRgb`](ColorSpace::AdobeRgb).
 /// `None` for 4, BT.2100, which no variant names and no checked file
@@ -412,7 +433,7 @@ mod tests {
         nikon_file, retyped, tags_block, whole,
     };
     use super::super::{
-        AF_INFO, AF_INFO2, COLOR_SPACE, COLOR_TEMPERATURE, CROP_HI_SPEED, FINE_TUNE,
+        AF_INFO, AF_INFO2, AF_TUNE, COLOR_SPACE, COLOR_TEMPERATURE, CROP_HI_SPEED, FINE_TUNE,
         FINE_TUNE_STEPS, FOCUS_MODE, IMAGE_SIZE_RAW, SHUTTER_MODE, WHITE_BALANCE, metadata,
     };
     use super::*;
@@ -1386,6 +1407,61 @@ mod tests {
                 let label = format!("{order:?}, type {typ}, {} bytes", bytes.len());
                 assert_eq!(read.focus_area_mode, None, "{label}");
             }
+        }
+    }
+
+    /// The AF fine-tune of a raw file in byte order `order` whose
+    /// MakerNote's AFTune is `bytes`, as UNDEFINED.
+    fn af_fine_tune_of(order: Order, bytes: &[u8]) -> Option<AfFineTune> {
+        settings_of(order, |inner, ifd| {
+            inner.undefined(ifd, AF_TUNE, bytes);
+        })
+        .af_fine_tune
+    }
+
+    #[test]
+    fn af_tune_gives_whether_fine_tune_is_on_and_its_value() {
+        // Off, with a value it does not give; on at 1 and at 2, each with
+        // its value, negative ones as signed bytes, and at 0; the saved
+        // lens's index and the long end's byte play no part.
+        for order in ORDERS {
+            for (bytes, expected) in [
+                ([0, 0xFF, 0, 0], Some(AfFineTune::new(false))),
+                ([0, 3, 0xF6, 0], Some(AfFineTune::new(false))),
+                ([1, 0xFF, 0, 0], Some(AfFineTune::new(true).with_value(0))),
+                ([2, 0, 0xF6, 0], Some(AfFineTune::new(true).with_value(-10))),
+                ([2, 8, 0xEC, 0], Some(AfFineTune::new(true).with_value(-20))),
+                ([1, 2, 20, 0], Some(AfFineTune::new(true).with_value(20))),
+                (
+                    [2, 2, 0x80, 0x7F],
+                    Some(AfFineTune::new(true).with_value(-128)),
+                ),
+            ] {
+                assert_eq!(
+                    af_fine_tune_of(order, &bytes),
+                    expected,
+                    "{order:?}, {bytes:?}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn af_tune_of_a_code_no_file_holds_or_another_shape_is_none() {
+        for order in ORDERS {
+            // 3, "On (Zoom)", with a long end's value, 4 and 255.
+            for code in [3, 4, 255] {
+                let bytes = [code, 0, 5, 7];
+                assert_eq!(af_fine_tune_of(order, &bytes), None, "{order:?}, {code}");
+            }
+            // Three or five bytes.
+            assert_eq!(af_fine_tune_of(order, &[1, 0, 5]), None, "{order:?}");
+            assert_eq!(af_fine_tune_of(order, &[1, 0, 5, 0, 0]), None, "{order:?}");
+            // Four BYTEs.
+            let read = settings_of(order, |inner, ifd| {
+                inner.byte(ifd, AF_TUNE, &[1, 0, 5, 0]);
+            });
+            assert_eq!(read.af_fine_tune, None, "{order:?}");
         }
     }
 
