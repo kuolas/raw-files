@@ -132,7 +132,8 @@ does. An entry that can break a caller opens with **Breaking:**.
   - Nikon's AFInfo2: every code its published documentation names, under
     the detection method a measured file records it, in the version's
     list, such as the dynamic-area sizes, wide area and live view's
-    subject tracking;
+    subject tracking, and at the Nikon 1 versions, 0200 and 0201, which
+    record no focus point;
   - Nikon's AFInfo, on the bodies before AFInfo2: single and dynamic
     area;
   - Sony's AFAreaModeSetting, by the codes of the body's family: wide,

@@ -38,22 +38,31 @@ use crate::formats::makernote::points;
 use crate::geometry::{Point, Size};
 use crate::io::ByteOrder;
 
-/// Where one AFInfo2 version keeps the focus point: the byte offsets, from
-/// the start of the value, of the fields read, and the shortest value that
-/// version writes.
+/// What one AFInfo2 version holds and where: the shortest value that
+/// version writes, the list of area-mode codes it takes, and where it
+/// keeps the focus point, on the versions that record one.
 ///
-/// Each of the frame, the center and the area is two SHORTs in the
-/// MakerNote's byte order, the width or x first. The offsets are those of
+/// The area mode is at the same offsets on every version, bytes 4 and 5,
+/// so only the list of codes it takes is here. The offsets are those of
 /// ExifTool's published tag documentation, read as documentation and
-/// confirmed on the samples whose fields hold values. The area mode is at
-/// the same offsets on every version, bytes 4 and 5, so only the list of
-/// codes it takes is here.
+/// confirmed on the samples whose fields hold values.
 #[derive(Clone, Copy, Debug)]
 pub(super) struct Layout {
     /// How long a value of this version is, at least.
     min_len: usize,
     /// The list of area-mode codes the version takes ([`area_mode`]).
     codes: Codes,
+    /// Where the version keeps the focus point; `None` on the Nikon 1
+    /// versions, which record no position.
+    position: Option<Position>,
+}
+
+/// Where one AFInfo2 version keeps the focus point: the byte offsets, from
+/// the start of the value, of the fields read. Each of the frame, the
+/// center and the area is two SHORTs in the MakerNote's byte order, the
+/// width or x first.
+#[derive(Clone, Copy, Debug)]
+struct Position {
     /// The frame's width, then its height.
     frame: usize,
     /// The center's x, then its y.
@@ -69,50 +78,39 @@ pub(super) struct Layout {
 }
 
 /// The layout of AFInfo2 version `version`, its first four bytes. `None`
-/// for any version but the exact ones read, 0100, 0101, 0300, 0301, 0400,
-/// 0401 and 0402. A version that shares its first two digits with these,
-/// such as 0200 or a future 0403, may have moved its fields, and is not
-/// read at its neighbors' offsets (ADR012).
+/// for any version but the exact ones read, 0100, 0101, 0200, 0201, 0300,
+/// 0301, 0400, 0401 and 0402. A version that shares its first two digits
+/// with these, such as a future 0403, may have moved its fields, and is
+/// not read at its neighbors' offsets (ADR012).
+///
+/// The Nikon 1 versions, 0200 and 0201, record the area mode and no
+/// position: their point fields hold a number, which needs a table of the
+/// body's points. 0200 writes 42 bytes and 0201 52, on every file
+/// measured.
 pub(super) fn layout(version: &[u8]) -> Option<Layout> {
-    match version {
-        b"0100" => Some(Layout {
-            min_len: 30,
-            codes: Codes::TwoLists,
-            frame: 16,
-            center: 20,
-            area: 24,
-            in_focus: Some(28),
-            named: Some(6),
-        }),
-        b"0101" => Some(Layout {
-            min_len: 84,
-            codes: Codes::TwoLists,
-            frame: 70,
-            center: 74,
-            area: 78,
-            in_focus: Some(82),
-            named: None,
-        }),
-        b"0300" | b"0301" => Some(Layout {
-            min_len: 60,
-            codes: Codes::TwoLists,
-            frame: 42,
-            center: 46,
-            area: 50,
-            in_focus: None,
-            named: None,
-        }),
-        b"0400" | b"0401" | b"0402" => Some(Layout {
-            min_len: 80,
-            codes: Codes::Mirrorless,
-            frame: 62,
-            center: 66,
-            area: 70,
-            in_focus: Some(74),
-            named: None,
-        }),
-        _ => None,
-    }
+    let position = |frame, in_focus, named| {
+        Some(Position {
+            frame,
+            center: frame + 4,
+            area: frame + 8,
+            in_focus,
+            named,
+        })
+    };
+    let (min_len, codes, position) = match version {
+        b"0100" => (30, Codes::TwoLists, position(16, Some(28), Some(6))),
+        b"0101" => (84, Codes::TwoLists, position(70, Some(82), None)),
+        b"0200" => (42, Codes::Nikon1, None),
+        b"0201" => (52, Codes::Nikon1, None),
+        b"0300" | b"0301" => (60, Codes::TwoLists, position(42, None, None)),
+        b"0400" | b"0401" | b"0402" => (80, Codes::Mirrorless, position(62, Some(74), None)),
+        _ => return None,
+    };
+    Some(Layout {
+        min_len,
+        codes,
+        position,
+    })
 }
 
 /// What an AFInfo2 value records of the focus point, read but not yet
@@ -165,13 +163,15 @@ impl FocusRecord {
 /// The points the record names are read where the layout keeps them
 /// ([`named_points`]).
 ///
-/// `None` when the version is not one read, or the value is shorter than
-/// its layout. The values are not checked here.
+/// `None` when the version is not one read or records no position, as
+/// the Nikon 1 versions do, or the value is shorter than its layout. The
+/// values are not checked here.
 pub(super) fn af_info2_record(value: &[u8], order: ByteOrder) -> Option<FocusRecord> {
     let layout = layout(value.get(..4)?)?;
     if value.len() < layout.min_len {
         return None;
     }
+    let layout = layout.position?;
     let (width, height) = shorts_at(value, layout.frame, order)?;
     let frame = Size { width, height };
     let (x, y) = shorts_at(value, layout.center, order)?;
@@ -217,7 +217,7 @@ pub(super) fn area_mode_of(value: &[u8]) -> Option<FocusAreaMode> {
 /// What a record with no position names of the points the camera used:
 /// the layout of points the numbers belong to, the primary point's number
 /// and a mask of the points used. Only a table of the body's points places
-/// them ([`placed`]). Read on version 0100 alone ([`Layout::named`]), where
+/// them ([`placed`]). Read on version 0100 alone ([`Position::named`]), where
 /// the D600's frames checked them.
 ///
 /// [`placed`]: super::crop::placed
@@ -248,7 +248,7 @@ impl NamedPoints {
 }
 
 /// The points that the AFInfo2 value `value` names at `at`, where its
-/// layout keeps them ([`Layout::named`]): the layout code, then the primary
+/// layout keeps them ([`Position::named`]): the layout code, then the primary
 /// point's number, then the mask of the points used. `None` when they do
 /// not all lie inside the value.
 fn named_points(value: &[u8], at: usize) -> Option<NamedPoints> {
@@ -271,6 +271,9 @@ pub(super) enum Codes {
     TwoLists,
     /// Versions 0400 to 0402: the mirrorless list alone.
     Mirrorless,
+    /// The Nikon 1 versions, 0200 and 0201: a list of their own, with no
+    /// detection method at byte 4.
+    Nikon1,
 }
 
 /// The area mode, how the camera chose its points, that AFInfo2's byte 5
@@ -291,7 +294,9 @@ pub(super) enum Codes {
 ///
 /// - the DSLR codes, under [`TwoLists`](Codes::TwoLists) alone
 ///   ([`dslr_area_mode`]);
-/// - the mirrorless codes, under either list ([`mirrorless_area_mode`]).
+/// - the mirrorless codes, under either list ([`mirrorless_area_mode`]);
+/// - the Nikon 1 codes, under [`Nikon1`](Codes::Nikon1) alone, where byte 4
+///   holds no detection method ([`nikon_1_area_mode`]).
 ///
 /// `None` for every other pair: a code the documentation does not name,
 /// or one no measured file holds under that method, such as 192 under
@@ -303,6 +308,23 @@ pub(super) fn area_mode(codes: Codes, detection: u8, code: u8) -> Option<FocusAr
             dslr_area_mode(detection, code).or_else(|| mirrorless_area_mode(detection, code))
         }
         Codes::Mirrorless => mirrorless_area_mode(detection, code),
+        Codes::Nikon1 => nikon_1_area_mode(code),
+    }
+}
+
+/// The area mode a Nikon 1 code `code` names, whatever byte 4 holds: 128,
+/// single, [`Single`](FocusAreaMode::Single); 129, auto, the camera
+/// choosing among its 41 points, [`Auto`](FocusAreaMode::Auto); 130,
+/// subject tracking, [`Tracking`](FocusAreaMode::Tracking). Each is
+/// documented, and the files agree: 128 on both versions, 129 on 0200 and
+/// 130 on 0201. `None` for every other code, such as the 0 that two 0201
+/// files write, which the list does not hold.
+fn nikon_1_area_mode(code: u8) -> Option<FocusAreaMode> {
+    match code {
+        128 => Some(FocusAreaMode::Single),
+        129 => Some(FocusAreaMode::Auto),
+        130 => Some(FocusAreaMode::Tracking),
+        _ => None,
     }
 }
 
@@ -462,19 +484,17 @@ mod tests {
 
     #[test]
     fn an_af_info2_version_not_read_gives_none() {
-        // The Nikon 1's 0200 and 0201, 42 bytes long as the J1 writes it
-        // (public sample 2956), with a position at the 0100 offsets; then
-        // versions no file shows, each laid out as the read version nearest
-        // it, which a reader choosing by the first two digits would read;
-        // then bytes that are no version at all.
+        // The Nikon 1's 0200 and 0201, as long as each writes it, 42 and 52
+        // bytes (public samples 2956 and 5922), with a position at the 0100
+        // offsets, which those versions do not record; then versions no
+        // file shows, each laid out as the read version nearest it, which a
+        // reader choosing by the first two digits would read; then bytes
+        // that are no version at all.
         for order in ORDERS {
-            let nikon_1 = Fields {
-                len: 42,
-                ..FIELDS_0100
-            };
+            let nikon_1 = |len| Fields { len, ..FIELDS_0100 };
             for (version, fields, recorded) in [
-                ("0200", nikon_1, COOLPIX_A),
-                ("0201", nikon_1, COOLPIX_A),
+                ("0200", nikon_1(42), COOLPIX_A),
+                ("0201", nikon_1(52), COOLPIX_A),
                 ("0102", FIELDS_0101, MADE_UP_0101),
                 ("0302", FIELDS_03XX, Z6),
                 ("0403", FIELDS_04XX, Z9),
@@ -904,6 +924,45 @@ mod tests {
                     assert_eq!(metadata.camera_settings.focus_area_mode, mode, "{label}");
                     let points = metadata.focus_points().expect(&label);
                     assert_eq!(points.points().len(), 1, "{label}");
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn the_nikon_1_versions_give_the_area_mode_and_no_point() {
+        // 128 single, 129 auto and 130 subject tracking, whatever byte 4
+        // holds, on 0200 at 42 bytes and on 0201 at 52; codes of the other
+        // lists, and the 0 two 0201 files write, give none. No point
+        // either way: those versions record a number, not a position.
+        for order in ORDERS {
+            for (version, len) in [("0200", 42), ("0201", 52)] {
+                for (byte_4, code, mode) in [
+                    (0, 128, Some(FocusAreaMode::Single)),
+                    (0, 129, Some(FocusAreaMode::Auto)),
+                    (0, 130, Some(FocusAreaMode::Tracking)),
+                    (2, 128, Some(FocusAreaMode::Single)),
+                    (0, 0, None),
+                    (0, 8, None),
+                    (2, 193, None),
+                    (0, 131, None),
+                ] {
+                    let mut value = version.as_bytes().to_vec();
+                    value.resize(len, 0);
+                    value[4] = byte_4;
+                    value[5] = code;
+                    let label = format!("{order:?}, {version}, byte 4 {byte_4}, code {code}");
+                    let metadata = makernote_metadata(order, |inner, ifd| {
+                        inner.undefined(ifd, AF_INFO2, &value);
+                    });
+                    assert_eq!(metadata.camera_settings.focus_area_mode, mode, "{label}");
+                    assert_eq!(metadata.focus_points(), None, "{label}");
+                    // One byte short of its version's length: no mode.
+                    let short = &value[..len - 1];
+                    let metadata = makernote_metadata(order, |inner, ifd| {
+                        inner.undefined(ifd, AF_INFO2, short);
+                    });
+                    assert_eq!(metadata.camera_settings.focus_area_mode, None, "{label}");
                 }
             }
         }
