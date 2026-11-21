@@ -100,12 +100,13 @@ checked on the files the format notes count. A text no measured file
 records is checked on files built in the tests
 ([NEF notes, section 8.8](formats/nef/makernote-and-metadata.md#88-authorship)).
 
-**More capture settings** come next, as values of `CameraSettings`
-and of the values they belong to
+The focus mode, the AF-area mode and AF fine-tune are values of
+`CameraSettings`, the AF-area mode whether or not a file gives a focus
+point. **More capture settings** come next, as values of
+`CameraSettings` and of the values they belong to
 ([ADR011](architecture-decisions/adr011-metadata-from-standard-tags.md),
 [#214](https://github.com/kuolas/raw-files/issues/214)):
 
-- the focus mode, the AF-area mode and AF fine-tune;
 - stabilization, auto ISO and the exposure fine-tuning;
 - the release mode, bracketing and daylight saving time;
 - the flash's red-eye reduction, return light, source, control, sync

@@ -2,7 +2,7 @@
 
 - Status: Accepted
 - Date: 2026-10-15
-- Revision: 4, 2026-11-20
+- Revision: 5, 2026-11-20
 - Issue: #13; the camera settings #26, revised in #51; authorship and
   location #97; more capture settings #214
 
@@ -251,9 +251,10 @@ nothing standard records a value. Nothing is deciphered or decrypted.
     - the first byte of Nikon's older AFInfo, on the bodies without
       AFInfo2;
     - Sony's 0x201C.
-  - **AF fine-tune**, on or off with its value and its value at a
-    zoom's long end, from Nikon's AFTune. Which saved lens the value
-    belongs to is not read.
+  - **AF fine-tune**, on or off with its value, from Nikon's AFTune.
+    Which saved lens the value belongs to is not read, nor the value at
+    a zoom's long end, which the documentation gives only under a code
+    no measured file holds.
   - **Stabilization**, on or off with its mode (normal, active or
     sport), from Nikon's VRInfo at each documented version and Sony's
     0xB026. Which kind of stabilization, in the lens or the body, is
@@ -482,6 +483,10 @@ Rejected:
   SensitivityType, Nikon's program shift, exposure difference and ISO
   expansion, Sony's AF tracking among them. The work would double, and
   each is a named gap in the notes, with its count and why it waits.
+- **AF fine-tune's value at a zoom's long end**, read under AFTune's
+  "On (Zoom)" code. No measured file holds that code, so by the rule on
+  documented codes it stays unnamed, and the value would be `None` on
+  every file read.
 
 ## Consequences
 
