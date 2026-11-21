@@ -19,8 +19,8 @@
 //! - [`metadata`](mod@metadata) reads CropArea, the serial number, the ISO,
 //!   the lens's range and WorldTime;
 //! - [`settings`] reads the camera settings;
-//! - [`af_info2`] reads AFInfo2, the focus point it records and the points
-//!   it names;
+//! - [`af_info2`] reads AFInfo2: the AF-area mode it records, the focus
+//!   point and the points it names;
 //! - [`crop`] reads CropHiSpeed, and places a focus point on a crop or
 //!   from the body's table;
 //! - [`add_entries`](super::Reader::add_entries) lists both IFDs' entries
@@ -228,7 +228,8 @@ mod rules {
 ///   white balance setting, finer than Exif's, in place of the mode the
 ///   Exif tags gave when it names one ([`camera_settings`]). The color space is read only
 ///   when the Exif IFD holds no ColorSpace, and the raw image size only for
-///   a raw file's picture.
+///   a raw file's picture. The AF-area mode is AFInfo2's, whatever the
+///   focus mode and whether or not the record gives a point.
 /// - **The focus points**, from AFInfo2, always read, since the standard
 ///   tags never give one ([`focus`]); a shot whose focus mode, read with
 ///   the settings, is manual gives none. A recorded position is
@@ -240,7 +241,8 @@ mod rules {
 ///   ([`placed_layout`]).
 ///
 /// CropArea and CropHiSpeed are each read once, for the image size or the
-/// image area and for the focus point. Every other value is the standard
+/// image area and for the focus point, and AFInfo2 once, for the AF-area
+/// mode and the focus point. Every other value is the standard
 /// tags'. The layout of the body's autofocus points in the table's frame
 /// is not given here: detection gives it from the Model alone.
 ///
@@ -263,9 +265,9 @@ fn metadata<R: Read + Seek>(
         exif_records_color_space,
     } = standard;
     // None of the rules below is the short-header layout's.
-    if makernote.tagged().is_none() {
+    let Some(ifd) = makernote.tagged() else {
         return Ok(metadata);
-    }
+    };
     // Read once, for the image size and the focus point. Without a raw
     // size, as in a JPEG, CropArea is never a size (ADR014).
     let crop = crop_area(src, makernote, metadata.raw_size)?;
@@ -292,11 +294,14 @@ fn metadata<R: Read + Seek>(
     }
     // Read once, for the image area and the focus point.
     let crop_hi_speed = crop_hi_speed(src, makernote)?;
+    // Read once, for the AF-area mode and the focus point.
+    let af_info2 = ifd.get(src, rules::AF_INFO2)?;
     metadata.camera_settings = camera_settings(
         src,
         makernote,
         metadata.camera_settings,
         crop_hi_speed,
+        af_info2.as_deref(),
         exif_records_color_space,
         picture,
     )?;
@@ -313,15 +318,23 @@ fn metadata<R: Read + Seek>(
         .as_deref()
         .and_then(points::find);
     let manual = metadata.camera_settings.focus_mode == Some(FocusMode::Manual);
-    metadata.focus_points = focus(src, makernote, manual, crop_hi_speed, crop, pixels, table)?;
+    metadata.focus_points = focus(
+        makernote,
+        af_info2.as_deref(),
+        manual,
+        crop_hi_speed,
+        crop,
+        pixels,
+        table,
+    );
     // The table's layout on the picture, whatever the shot.
     metadata.placed_focus_layout =
         table.and_then(|table| placed_layout(table, crop_hi_speed, pixels));
     Ok(metadata)
 }
 
-/// Where the camera's autofocus aimed, as `makernote`'s AFInfo2 records
-/// it, with the area mode the record names ([`area_mode`]):
+/// Where the camera's autofocus aimed, as `af_info2`, `makernote`'s
+/// AFInfo2 read by its rule, records it:
 ///
 /// - a record of a position ([`FocusRecord::records_position`]) gives one
 ///   point, the primary. On a crop, which `crop` records, it is placed on
@@ -338,47 +351,30 @@ fn metadata<R: Read + Seek>(
 /// breaks its rule, or when its record cannot be read
 /// ([`af_info2_record`]), checked or placed.
 ///
-/// # Errors
-///
-/// `Io` when the reader fails.
-///
-/// [`area_mode`]: af_info2::area_mode
 /// [`FocusRecord::records_position`]: af_info2::FocusRecord::records_position
 /// [`NamedPoints`]: af_info2::NamedPoints
-fn focus<R: Read + Seek>(
-    src: &mut Source<R>,
+fn focus(
     makernote: &MakerNote,
+    af_info2: Option<&[u8]>,
     manual: bool,
     crop: Option<CropHiSpeed>,
     crop_area: CropArea,
     pixels: Option<Size>,
     table: Option<&PointTable>,
-) -> Result<Option<FocusPoints>> {
-    let Some(ifd) = makernote.tagged() else {
-        return Ok(None);
-    };
-    // With manual focus there is nothing to place, so AFInfo2 is not read.
+) -> Option<FocusPoints> {
+    let ifd = makernote.tagged()?;
     if manual {
-        return Ok(None);
+        return None;
     }
-    let Some(value) = ifd.get(src, rules::AF_INFO2)? else {
-        return Ok(None);
-    };
-    let Some(record) = af_info2_record(&value, ifd.order()) else {
-        return Ok(None);
-    };
-    let points = if record.records_position() {
+    let record = af_info2_record(af_info2?, ifd.order())?;
+    if record.records_position() {
         in_crop(record, crop, crop_area, pixels).map(FocusPoints::from)
     } else {
         record
             .named
             .zip(table)
             .and_then(|(named, table)| placed(named, table, crop, pixels))
-    };
-    Ok(points.map(|points| match record.area_mode {
-        Some(mode) => points.with_area_mode(mode),
-        None => points,
-    }))
+    }
 }
 
 #[cfg(test)]

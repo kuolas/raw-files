@@ -1064,9 +1064,8 @@ What the fields hold:
   as pinpoint in both lists [S][1], and my frames confirm it. The
   Z6III's five files write it under detection 2, in a mode not
   recorded, and take the name as every file that writes the code does.
-  Today the mode is reported with the focus points, so a file that
-  gives no point gives no mode either. Under the revised records it will
-  be a camera setting, named by the table that ends this section.
+  The mode is a camera setting, given whether or not the file gives a
+  point.
 - **Every AFInfo2 and CropHiSpeed value lies inside the MakerNote's
   declared length** on every checked file. **[F]**
 - **In a camera JPEG**, the D5300's AFInfo2 is version 0100 with a zero
@@ -1146,13 +1145,13 @@ and what raw-files gives; a row without a file is an open question
 | Camera JPEG in a crop mode (DX, 1:1, 16:9), at any image size | a position in the full frame, no CropArea | none public; my Z 9 shots | the point, placed on the JPEG's picture; unchecked on a public file |
 | Exported JPEG that keeps the camera's MakerNote | the camera's frame and position | none public | the point only when the frame has the export's aspect ratio |
 
-**The AF-area mode, a camera setting.** raw-files will give the AF-area
+**The AF-area mode, a camera setting.** raw-files gives the AF-area
 mode as a camera setting, whether or not the file gives a focus point,
 and under manual focus too
 ([ADR011](../../architecture-decisions/adr011-metadata-from-standard-tags.md)).
-It will come from AFInfo2's bytes 4 and 5, at every version of the
-layouts table above. On the bodies without AFInfo2, it will come from
-the first byte of AFInfo (0x0088). The codes were counted on 2026-11-20
+It comes from AFInfo2's bytes 4 and 5, and will come from them at every
+version of the layouts table above. On the bodies without AFInfo2, it
+will come from the first byte of AFInfo (0x0088). The codes were counted on 2026-11-20
 with a counting program over raw-files' own view of the entries. The
 files are the 289 public NEF and NRW files and 48,395 of my own, as
 counts only. Mine are 31,991 NEF files and 16,404 JPEGs with a Nikon
@@ -2099,9 +2098,9 @@ the MakerNote's AFInfo2 gives it where it records a position, at the
 versions of [section 8.6](#86-focus-point), scaled onto CropArea on a
 DX crop and moved into the window on an aspect crop; a FocusMode of
 `MANUAL` gives none, and a point number gives none until raw-files has
-a table of the body's points. The AF-area mode will be a camera
-setting, given with or without a point. It will come from AFInfo2 at
-every version of section 8.6 and from AFInfo's first byte, by the
+a table of the body's points. The AF-area mode is a camera setting,
+given with or without a point, from AFInfo2. It will come from AFInfo2
+at every version of section 8.6 and from AFInfo's first byte, by the
 table that ends that section.
 
 For the camera settings of [section 8.7](#87-camera-settings),

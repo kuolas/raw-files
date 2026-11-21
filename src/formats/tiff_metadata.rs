@@ -724,9 +724,10 @@ fn camera_settings<R: Read + Seek>(
         image_area: None,
         raw_image_size: None,
         color_space: color_space(src, exif, interop)?,
-        // No standard tag records the focus mode: Nikon's and Sony's
-        // readers fill it.
+        // No standard tag records the focus mode or the AF-area mode: the
+        // MakerNote readers fill them.
         focus_mode: None,
+        focus_area_mode: None,
     })
 }
 

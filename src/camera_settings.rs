@@ -5,8 +5,8 @@
 //! Beside the exposure, a viewer's information panel shows how the camera
 //! was set for the shot: the white balance, the exposure program, the
 //! metering mode, the flash, the shutter, the image area, the raw image
-//! size, the color space and the focus mode. [`CameraSettings`] holds them
-//! all, and
+//! size, the color space, the focus mode and the AF-area mode.
+//! [`CameraSettings`] holds them all, and
 //! [`Metadata::camera_settings`](crate::Metadata::camera_settings) gives
 //! them for a file. [`WhiteBalance`], [`FineTune`] and [`Flash`] hold the
 //! settings made of several parts; each enum, such as [`ExposureProgram`],
@@ -22,8 +22,8 @@
 //! balance mode and the color space. The others are recorded only in a
 //! maker's own tags, its MakerNote. Nikon's, in NEF files and in the JPEGs
 //! of Nikon cameras, gives the white balance's color temperature and
-//! fine-tuning, the shutter, the image area, the focus mode and, in a raw
-//! file, the raw image size; the white balance setting, finer than Exif's,
+//! fine-tuning, the shutter, the image area, the focus mode, the AF-area
+//! mode and, in a raw file, the raw image size; the white balance setting, finer than Exif's,
 //! in place of Exif's; and the color space where the Exif tags record
 //! none, as in every Nikon raw file checked. Sony's, in ARW files and
 //! their family and in the JPEGs of Sony cameras, gives the white
@@ -47,8 +47,8 @@ use crate::rational::SignedRational;
 
 /// How the camera was set for a picture: its white balance, exposure
 /// program, metering mode, flash, shutter, image area, raw image size,
-/// color space and focus mode, for a viewer's information panel beside the
-/// exposure.
+/// color space, focus mode and AF-area mode, for a viewer's information
+/// panel beside the exposure.
 ///
 /// Every value is `None` when the file does not record it or records it in
 /// a way that cannot be read, such as a code that no variant names. A
@@ -137,6 +137,7 @@ pub struct CameraSettings {
     pub(crate) raw_image_size: Option<RawImageSize>,
     pub(crate) color_space: Option<ColorSpace>,
     pub(crate) focus_mode: Option<FocusMode>,
+    pub(crate) focus_area_mode: Option<FocusAreaMode>,
 }
 
 impl CameraSettings {
@@ -288,6 +289,48 @@ impl CameraSettings {
         self.focus_mode
     }
 
+    /// How the camera chose its autofocus points, the AF-area mode, such
+    /// as [`Auto`](FocusAreaMode::Auto).
+    ///
+    /// It is a setting: it is given whatever the focus mode, manual focus
+    /// included, and whether or not the file gives
+    /// [focus points](crate::Metadata::focus_points). A viewer labels the
+    /// points with it, or shows it beside the other settings.
+    ///
+    /// Read from Nikon's MakerNote, the area mode its AFInfo2 records, at
+    /// the versions whose layout raw-files reads, by the code and the
+    /// detection method the record names.
+    ///
+    /// `None` when:
+    ///
+    /// - the file records no AF-area mode raw-files reads, as a Sony file
+    ///   does;
+    /// - it records a code that no variant names, such as a code no frame
+    ///   shot in a known mode has shown;
+    /// - AFInfo2 is of a version whose layout raw-files does not read, is
+    ///   shorter than its layout, or has another type than Nikon writes.
+    ///
+    /// The codes named are in the notes on
+    /// [Nikon's focus point](https://github.com/kuolas/raw-files/blob/master/docs/formats/nef/makernote-and-metadata.md#86-focus-point).
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use raw_files::CameraFile;
+    ///
+    /// # fn main() -> raw_files::Result<()> {
+    /// let file = CameraFile::open("photo.nef")?;
+    /// let settings = file.metadata().camera_settings();
+    /// if let Some(mode) = settings.focus_area_mode() {
+    ///     println!("AF-area mode: {mode}");
+    /// }
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn focus_area_mode(&self) -> Option<FocusAreaMode> {
+        self.focus_area_mode
+    }
+
     /// Sets the white balance, in place of the one it had;
     /// [`white_balance`](Self::white_balance) reads it.
     #[must_use]
@@ -367,6 +410,14 @@ impl CameraSettings {
     #[must_use]
     pub fn with_focus_mode(mut self, mode: FocusMode) -> Self {
         self.focus_mode = Some(mode);
+        self
+    }
+
+    /// Sets the AF-area mode, in place of any set before;
+    /// [`focus_area_mode`](Self::focus_area_mode) reads it.
+    #[must_use]
+    pub fn with_focus_area_mode(mut self, mode: FocusAreaMode) -> Self {
+        self.focus_area_mode = Some(mode);
         self
     }
 }
@@ -1200,6 +1251,80 @@ impl fmt::Display for FocusMode {
     }
 }
 
+/// How the camera chose its autofocus points: the AF-area mode the
+/// photographer set, in words that fit any maker.
+///
+/// A viewer labels the points of [`FocusPoints`](crate::FocusPoints) with
+/// it, or shows it beside the other settings: one point the photographer
+/// placed, a placed point that its neighbors stood in for while the
+/// subject left it, points the camera chose itself, a subject the camera
+/// followed across the frame, or an area the photographer placed in which
+/// the camera chose. A maker's code for a mode is named only once a file
+/// shot in a known mode shows what it means, as the codes of the camera
+/// settings are under the
+/// [decision to read the metadata from the standard tags](https://github.com/kuolas/raw-files/blob/master/docs/architecture-decisions/adr011-metadata-from-standard-tags.md),
+/// and any other code gives `None`.
+/// [The notes on Nikon's focus point](https://github.com/kuolas/raw-files/blob/master/docs/formats/nef/makernote-and-metadata.md#86-focus-point)
+/// list the codes named.
+///
+/// `FocusAreaMode` is `#[non_exhaustive]`, so match on it with a wildcard
+/// arm. It orders as its variants are listed, and a new variant is added
+/// after the existing ones, so an order once observed holds. Its
+/// [`name`](Self::name)s, which `Display` writes too, are "Single point",
+/// "Dynamic area", "Auto area", "Tracking", "Pinpoint" and "Zone".
+///
+/// # Examples
+///
+/// ```
+/// use raw_files::FocusAreaMode;
+///
+/// assert_eq!(FocusAreaMode::Single.name(), "Single point");
+/// assert_eq!(FocusAreaMode::Zone.to_string(), "Zone");
+/// ```
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[non_exhaustive]
+pub enum FocusAreaMode {
+    /// One point, which the photographer placed: Nikon's single-point AF.
+    Single,
+    /// A point the photographer placed, with the points around it standing
+    /// in for it when the subject briefly leaves it: Nikon's dynamic-area
+    /// AF.
+    Dynamic,
+    /// Points the camera chose itself: Nikon's auto-area AF.
+    Auto,
+    /// A subject the camera followed from the point where focus started:
+    /// Nikon's 3D-tracking.
+    Tracking,
+    /// One point, which the photographer placed, smaller than a single
+    /// point, for a precise spot: Nikon's pinpoint AF.
+    Pinpoint,
+    /// An area the photographer placed, larger than a single point,
+    /// inside which the camera chose the points.
+    Zone,
+}
+
+impl FocusAreaMode {
+    /// The mode's name, for an information panel, such as "Auto area"; the
+    /// type's docs list them all.
+    pub fn name(self) -> &'static str {
+        match self {
+            FocusAreaMode::Single => "Single point",
+            FocusAreaMode::Dynamic => "Dynamic area",
+            FocusAreaMode::Auto => "Auto area",
+            FocusAreaMode::Tracking => "Tracking",
+            FocusAreaMode::Pinpoint => "Pinpoint",
+            FocusAreaMode::Zone => "Zone",
+        }
+    }
+}
+
+impl fmt::Display for FocusAreaMode {
+    /// Writes [`name`](FocusAreaMode::name).
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.name())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1238,6 +1363,7 @@ mod tests {
             raw_image_size: Some(RawImageSize::Large),
             color_space: Some(ColorSpace::AdobeRgb),
             focus_mode: Some(FocusMode::Continuous),
+            focus_area_mode: Some(FocusAreaMode::Tracking),
         }
     }
 
@@ -1254,6 +1380,7 @@ mod tests {
         assert_eq!(settings.raw_image_size(), None);
         assert_eq!(settings.color_space(), None);
         assert_eq!(settings.focus_mode(), None);
+        assert_eq!(settings.focus_area_mode(), None);
 
         let white_balance = WhiteBalance::default();
         assert_eq!(white_balance.mode(), None);
@@ -1283,6 +1410,7 @@ mod tests {
         assert_eq!(settings.raw_image_size(), Some(RawImageSize::Large));
         assert_eq!(settings.color_space(), Some(ColorSpace::AdobeRgb));
         assert_eq!(settings.focus_mode(), Some(FocusMode::Continuous));
+        assert_eq!(settings.focus_area_mode(), Some(FocusAreaMode::Tracking));
 
         let white_balance = nikon_white_balance();
         assert_eq!(white_balance.mode(), Some(WhiteBalanceMode::Auto));
@@ -1379,6 +1507,13 @@ mod tests {
                         ..start.clone()
                     },
                 ),
+                (
+                    start.clone().with_focus_area_mode(FocusAreaMode::Zone),
+                    CameraSettings {
+                        focus_area_mode: Some(FocusAreaMode::Zone),
+                        ..start.clone()
+                    },
+                ),
             ];
             for (place, (built, expected)) in cases.into_iter().enumerate() {
                 assert_eq!(built, expected, "builder {place} from {start:?}");
@@ -1442,7 +1577,8 @@ mod tests {
             .with_image_area(ImageArea::FullFrame)
             .with_raw_image_size(RawImageSize::Large)
             .with_color_space(ColorSpace::AdobeRgb)
-            .with_focus_mode(FocusMode::Continuous);
+            .with_focus_mode(FocusMode::Continuous)
+            .with_focus_area_mode(FocusAreaMode::Tracking);
         assert_eq!(settings, full_settings());
     }
 
@@ -1458,7 +1594,8 @@ mod tests {
             .with_image_area(ImageArea::Crop2_7x)
             .with_raw_image_size(RawImageSize::Medium)
             .with_color_space(ColorSpace::Srgb)
-            .with_focus_mode(FocusMode::Single);
+            .with_focus_mode(FocusMode::Single)
+            .with_focus_area_mode(FocusAreaMode::Pinpoint);
         // Every value of `earlier` differs from the full record's, so each
         // builder below has one to replace.
         let full = full_settings();
@@ -1472,7 +1609,8 @@ mod tests {
             .with_image_area(ImageArea::FullFrame)
             .with_raw_image_size(RawImageSize::Large)
             .with_color_space(ColorSpace::AdobeRgb)
-            .with_focus_mode(FocusMode::Continuous);
+            .with_focus_mode(FocusMode::Continuous)
+            .with_focus_area_mode(FocusAreaMode::Tracking);
         assert_eq!(settings, full);
 
         let white_balance = WhiteBalance::default()
@@ -1668,6 +1806,17 @@ mod tests {
         all
     }
 
+    fn all_focus_area_modes() -> [FocusAreaMode; 6] {
+        use FocusAreaMode::*;
+        let all = [Single, Dynamic, Auto, Tracking, Pinpoint, Zone];
+        for mode in all {
+            match mode {
+                Single | Dynamic | Auto | Tracking | Pinpoint | Zone => {}
+            }
+        }
+        all
+    }
+
     #[test]
     fn every_name_is_the_one_documented_and_display_writes_it() {
         // The names are stable once released: a program may show or store
@@ -1762,6 +1911,18 @@ mod tests {
                 "Direct manual focus",
             ],
         );
+        assert_names(
+            &all_focus_area_modes(),
+            FocusAreaMode::name,
+            &[
+                "Single point",
+                "Dynamic area",
+                "Auto area",
+                "Tracking",
+                "Pinpoint",
+                "Zone",
+            ],
+        );
     }
 
     #[test]
@@ -1777,6 +1938,7 @@ mod tests {
         assert_ordered(&all_raw_image_sizes());
         assert_ordered(&all_color_spaces());
         assert_ordered(&all_focus_modes());
+        assert_ordered(&all_focus_area_modes());
     }
 
     #[test]

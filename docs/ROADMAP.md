@@ -115,10 +115,9 @@ and of the values they belong to
 
 Beside the capture time, `Metadata` will give the digitized time.
 
-The AF-area mode will move from `FocusPoints` to the camera settings,
-so that a file without a focus point still gives it. A Nikon body that
-records no image area or raw size will get them from a table of
-bodies. Each fact in it comes from the maker's published specification
+A Nikon body that records no image area or raw size will get them
+from a table of bodies. Each fact in it comes from the maker's
+published specification
 ([ADR022](architecture-decisions/adr022-names-as-their-makers-write-them.md),
 [the table](formats/camera-names.md)). The format notes say what each
 file records and where each code's meaning comes from
@@ -137,8 +136,7 @@ it, and its docs say which shots give none.
 
 - **Read from the MakerNote** of Nikon mirrorless bodies, Nikon DSLRs
   in live view and Sony bodies from the ILCE-7RM2 on. With the point
-  come the points the camera used and, on Nikon files, the area mode,
-  which will become a camera setting.
+  come the points the camera used.
 - **From a camera JPEG**, of a Nikon or Sony body, only when the
   point's frame has the picture's shape.
 - **From a table of the body's points**, for a shot that records only

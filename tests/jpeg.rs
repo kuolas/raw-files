@@ -1099,10 +1099,9 @@ fn recorded(mode: Z9Mode) -> Focus {
 }
 
 /// The focus points of a Z 9's JPEG built here whose focus point is
-/// `focus`: that point alone, the primary, in the area mode its AFInfo2
-/// records, 193, single point.
+/// `focus`: that point alone, the primary.
 fn z9_points(focus: Focus) -> FocusPoints {
-    FocusPoints::from(focus).with_area_mode(FocusAreaMode::Single)
+    FocusPoints::from(focus)
 }
 
 /// The previews of the Nikon JPEG `file`, laid out with the MPF index and
@@ -1122,18 +1121,25 @@ fn nikon_previews(file: &NikonJpeg, main: (u16, u16)) -> Vec<Seen> {
     )
 }
 
-/// `metadata` with the image area that the crop setting of `mode`'s
-/// CropHiSpeed gives, the one camera setting the Z 9's JPEGs built here
-/// record in their MakerNote: 11, FX uncropped, the full frame; 2, DX,
-/// APS-C; 17, FX 1:1, the square; and 6, the 16:9 crop.
-fn with_image_area(metadata: Metadata, mode: Z9Mode) -> Metadata {
+/// `metadata` with the camera settings the Z 9's JPEGs built here record
+/// in their MakerNote, taken in mode `mode`: the image area that the crop
+/// setting of the mode's CropHiSpeed gives, 11, FX uncropped, the full
+/// frame, 2, DX, APS-C, 17, FX 1:1, the square, and 6, the 16:9 crop; the
+/// focus mode of the FocusMode `AF-S`; and the AF-area mode of the
+/// AFInfo2's code 193 under hybrid detection, single point.
+fn with_z9_settings(metadata: Metadata, mode: Z9Mode) -> Metadata {
     let area = match mode {
         Z9Mode::Fx => ImageArea::FullFrame,
         Z9Mode::Dx => ImageArea::ApsC,
         Z9Mode::Square => ImageArea::Square,
         Z9Mode::Wide => ImageArea::Wide,
     };
-    let settings = metadata.camera_settings().clone().with_image_area(area);
+    let settings = metadata
+        .camera_settings()
+        .clone()
+        .with_image_area(area)
+        .with_focus_mode(FocusMode::Single)
+        .with_focus_area_mode(FocusAreaMode::Single);
     metadata.with_camera_settings(settings)
 }
 
@@ -1156,15 +1162,11 @@ fn with_camera_changed(metadata: Metadata, change: impl FnOnce(Camera) -> Camera
 
 /// The metadata of a Z 9's JPEG that [`z9_jpeg`] lays out in mode `mode`
 /// with a main image of `main`: every value [`camera_exif`] writes, the
-/// image area of `mode`, the focus mode of its FocusMode, `AF-S`, the
-/// image size `main`, and the focus point `focus`, as the focus points
-/// [`z9_points`] gives.
+/// settings of `mode` ([`with_z9_settings`]), the image size `main`, and
+/// the focus point `focus`, as the focus points [`z9_points`] gives.
 fn z9_metadata(mode: Z9Mode, main: (u16, u16), focus: Option<Focus>) -> Metadata {
-    let metadata = with_focus_mode(
-        with_image_area(camera_metadata_without(&[]), mode),
-        Some(FocusMode::Single),
-    )
-    .with_image_size(size_of(main));
+    let metadata =
+        with_z9_settings(camera_metadata_without(&[]), mode).with_image_size(size_of(main));
     match focus {
         Some(focus) => metadata.with_focus_points(z9_points(focus)),
         None => metadata,
@@ -1267,8 +1269,14 @@ fn an_older_nikon_jpeg_takes_what_its_exif_lacks_from_its_makernote() {
         .with_capture_time(capture_time_at(Some(D5300_TIME_ZONE)))
         .with_lens(lens_of_range(D5300_LENS))
         .with_image_size(size_of(D5300_MAIN));
-        // Its FocusMode, `AF-A`.
-        let metadata = with_focus_mode(metadata, Some(FocusMode::Automatic));
+        // Its FocusMode, `AF-A`, and its AFInfo2's code 0 under phase
+        // detection, single point, given though the record gives no point.
+        let settings = metadata
+            .camera_settings()
+            .clone()
+            .with_focus_mode(FocusMode::Automatic)
+            .with_focus_area_mode(FocusAreaMode::Single);
+        let metadata = metadata.with_camera_settings(settings);
         assert_eq!(metadata.exposure().iso(), Some(u32::from(D5300_ISO)));
         assert_opens(
             &file.built.bytes,
@@ -1484,10 +1492,7 @@ fn a_nikon_makernote_under_another_makers_make_is_not_read() {
             );
             let mut previews = nikon_previews(&file, MAIN);
             if make != "Canon" {
-                let settings = with_focus_mode(
-                    with_image_area(metadata, Z9Mode::Fx),
-                    Some(FocusMode::Single),
-                );
+                let settings = with_z9_settings(metadata, Z9Mode::Fx);
                 metadata =
                     with_camera_changed(settings, |camera| camera.with_serial_number("7654321"))
                         .with_focus_points(z9_points(recorded(Z9Mode::Fx)));
@@ -1686,10 +1691,7 @@ fn a_limit_crossed_inside_the_makernote_costs_the_makernote_only() {
             ),
         );
         let without = camera_metadata_without(&[BODY_SERIAL_NUMBER]);
-        let settings = with_focus_mode(
-            with_image_area(without.clone(), Z9Mode::Fx),
-            Some(FocusMode::Single),
-        );
+        let settings = with_z9_settings(without.clone(), Z9Mode::Fx);
         let with = with_camera_changed(settings, |camera| camera.with_serial_number("7654321"))
             .with_focus_points(z9_points(recorded(Z9Mode::Fx)));
         for (entries, previews, metadata) in
@@ -2503,7 +2505,6 @@ const FIXTURE_METADATA: &[SampleMetadata] = &[
             origin: FocusOrigin::Recorded,
             points: 1,
             primary_number: None,
-            area_mode: Some(FocusAreaMode::Tracking), // code 207
         }),
         // raw-files has no table of the Z 9's points.
         focus_layout: None,
@@ -2532,6 +2533,7 @@ const FIXTURE_METADATA: &[SampleMetadata] = &[
             image_area: Some(ImageArea::FullFrame),
             raw_image_size: None,
             color_space: Some(ColorSpace::Srgb),
+            focus_area_mode: Some(FocusAreaMode::Tracking), // code 207, detection 2
         },
     },
     // The Z 9's DX shot, at full size: CropHiSpeed `[2, 8280, 5520, 5408,
@@ -2577,7 +2579,6 @@ const FIXTURE_METADATA: &[SampleMetadata] = &[
             origin: FocusOrigin::Recorded,
             points: 1,
             primary_number: None,
-            area_mode: Some(FocusAreaMode::Pinpoint), // code 192
         }),
         focus_layout: None,
         placed_focus_layout: None,
@@ -2596,6 +2597,7 @@ const FIXTURE_METADATA: &[SampleMetadata] = &[
             image_area: Some(ImageArea::ApsC),
             raw_image_size: None,
             color_space: Some(ColorSpace::Srgb),
+            focus_area_mode: Some(FocusAreaMode::Pinpoint), // code 192, detection 1
         },
     },
     // The Z 9's 16:9 shot, at the middle size, 6192 by 3480, taken in
@@ -2643,7 +2645,6 @@ const FIXTURE_METADATA: &[SampleMetadata] = &[
             origin: FocusOrigin::Recorded,
             points: 1,
             primary_number: None,
-            area_mode: Some(FocusAreaMode::Pinpoint), // code 192
         }),
         focus_layout: None,
         placed_focus_layout: None,
@@ -2662,6 +2663,7 @@ const FIXTURE_METADATA: &[SampleMetadata] = &[
             image_area: Some(ImageArea::Wide),
             raw_image_size: None,
             color_space: Some(ColorSpace::Srgb),
+            focus_area_mode: Some(FocusAreaMode::Pinpoint), // code 192, detection 1
         },
     },
     // The JPEG of the Z 9's pinpoint shot, whose NEF `tests/nef.rs`
@@ -2706,7 +2708,6 @@ const FIXTURE_METADATA: &[SampleMetadata] = &[
             origin: FocusOrigin::Recorded,
             points: 1,
             primary_number: None,
-            area_mode: Some(FocusAreaMode::Pinpoint), // code 192
         }),
         focus_layout: None,
         placed_focus_layout: None,
@@ -2727,6 +2728,7 @@ const FIXTURE_METADATA: &[SampleMetadata] = &[
             image_area: Some(ImageArea::FullFrame),
             raw_image_size: None,
             color_space: Some(ColorSpace::Srgb),
+            focus_area_mode: Some(FocusAreaMode::Pinpoint), // code 192, detection 1
         },
     },
     // The JPEG of frame 4 of the D600 session, the shot whose NEF
@@ -2789,7 +2791,6 @@ const FIXTURE_METADATA: &[SampleMetadata] = &[
             origin: FocusOrigin::Table,
             points: 1,
             primary_number: Some(38),
-            area_mode: Some(FocusAreaMode::Single),
         }),
         focus_layout: Some("NIKON D600"),
         placed_focus_layout: Some(SamplePlacedLayout {
@@ -2818,6 +2819,7 @@ const FIXTURE_METADATA: &[SampleMetadata] = &[
             image_area: None,
             raw_image_size: None,
             color_space: Some(ColorSpace::Srgb),
+            focus_area_mode: Some(FocusAreaMode::Single), // code 0, detection 0
         },
     },
 ];
@@ -2938,9 +2940,13 @@ fn check_d600_jpeg_point_1(
             points.with_point(FocusPoint::new(center).with_number(1).with_size(box_164))
         })
         .and_then(|points| points.with_primary_index(0))
-        .map(|points| points.with_area_mode(FocusAreaMode::Tracking))
         .ok();
     assert_eq!(metadata.focus_points(), points.as_ref(), "{label}");
+    assert_eq!(
+        metadata.camera_settings().focus_area_mode(),
+        Some(FocusAreaMode::Tracking),
+        "{label}"
+    );
     let layout = metadata
         .focus_layout()
         .unwrap_or_else(|| panic!("{label}: no layout"));
@@ -3372,7 +3378,6 @@ const METADATA: &[SampleMetadata] = &[
             origin: FocusOrigin::Recorded,
             points: 1,
             primary_number: None,
-            area_mode: None,
         }),
         focus_layout: None,
         placed_focus_layout: None,
@@ -3391,6 +3396,7 @@ const METADATA: &[SampleMetadata] = &[
             image_area: None,
             raw_image_size: None,
             color_space: Some(ColorSpace::Srgb),
+            focus_area_mode: None,
         },
     },
     // ILCE-7RM2 (Wikimedia Commons Ulpu_Pajari_puhumassa_vastaanotettuaan_tiedonjulkistamisen_valtionpalkinnon_2.jpg)
@@ -3431,7 +3437,6 @@ const METADATA: &[SampleMetadata] = &[
             origin: FocusOrigin::Recorded,
             points: 1,
             primary_number: None,
-            area_mode: None,
         }),
         focus_layout: None,
         placed_focus_layout: None,
@@ -3450,6 +3455,7 @@ const METADATA: &[SampleMetadata] = &[
             image_area: None,
             raw_image_size: None,
             color_space: Some(ColorSpace::Srgb),
+            focus_area_mode: None,
         },
     },
     // DSC-RX100M4 (Wikimedia Commons 여의도한강공원샛강생태공원문화다리_09.jpg)
@@ -3500,6 +3506,7 @@ const METADATA: &[SampleMetadata] = &[
             image_area: None,
             raw_image_size: None,
             color_space: Some(ColorSpace::Srgb),
+            focus_area_mode: None,
         },
     },
     // ILCE-6000 (Wikimedia Commons 140319_MS_Queen_Elizabeth_Kobe_Japan01o.JPG)
@@ -3550,6 +3557,7 @@ const METADATA: &[SampleMetadata] = &[
             image_area: None,
             raw_image_size: None,
             color_space: Some(ColorSpace::Srgb),
+            focus_area_mode: None,
         },
     },
     // DSLR-A100 (Wikimedia Commons "Krone"_flag_on_line_5_tram_(2564030031).jpg)
@@ -3589,6 +3597,7 @@ const METADATA: &[SampleMetadata] = &[
             image_area: None,
             raw_image_size: None,
             color_space: Some(ColorSpace::Srgb),
+            focus_area_mode: None,
         },
     },
     // NIKON D5300 (Wikimedia Commons "Tours"_French_restaurant_in_Omotesando.JPG)
@@ -3642,6 +3651,7 @@ const METADATA: &[SampleMetadata] = &[
             image_area: None,
             raw_image_size: None,
             color_space: Some(ColorSpace::Srgb),
+            focus_area_mode: Some(FocusAreaMode::Auto), // code 8, detection 0
         },
     },
     // NIKON D70 (Wikimedia Commons "Stadswandeling".JPG)
@@ -3689,6 +3699,7 @@ const METADATA: &[SampleMetadata] = &[
             image_area: None,
             raw_image_size: None,
             color_space: Some(ColorSpace::Srgb),
+            focus_area_mode: None,
         },
     },
     // NIKON E800 (Wikimedia Commons MIKI-eki.jpg)
@@ -3728,6 +3739,7 @@ const METADATA: &[SampleMetadata] = &[
             image_area: None,
             raw_image_size: None,
             color_space: Some(ColorSpace::Srgb),
+            focus_area_mode: None,
         },
     },
     // NIKON E900 (Wikimedia Commons Petro_Star_refinery.jpg)
@@ -3767,6 +3779,7 @@ const METADATA: &[SampleMetadata] = &[
             image_area: None,
             raw_image_size: None,
             color_space: None,
+            focus_area_mode: None,
         },
     },
     // NIKON E950 (Wikimedia Commons Starr_020628-0045_Prosopis_pallida.jpg)
@@ -3806,6 +3819,7 @@ const METADATA: &[SampleMetadata] = &[
             image_area: None,
             raw_image_size: None,
             color_space: Some(ColorSpace::Srgb),
+            focus_area_mode: None,
         },
     },
     // Canon PowerShot G7 X (Wikimedia Commons DC-3_OH-LCH_at_EFJM_20160717.jpg)
@@ -3845,6 +3859,7 @@ const METADATA: &[SampleMetadata] = &[
             image_area: None,
             raw_image_size: None,
             color_space: Some(ColorSpace::Srgb),
+            focus_area_mode: None,
         },
     },
 ];

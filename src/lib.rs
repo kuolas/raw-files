@@ -143,11 +143,13 @@
 //! Say where a focus point came from, as a viewer's caption does.
 //! [`FocusPoints::origin`] tells a point the camera recorded from one named
 //! by number and placed from a table of the body's points.
-//! [`FocusPoints::area_mode`] gives the area mode the camera was set to:
+//! [`CameraSettings::focus_area_mode`] gives the AF-area mode the camera
+//! was set to:
 //!
 //! ```
 //! use raw_files::{
-//!     Focus, FocusAreaMode, FocusOrigin, FocusPoint, FocusPoints, Metadata, Point, Size,
+//!     CameraSettings, Focus, FocusAreaMode, FocusOrigin, FocusPoint, FocusPoints, Metadata,
+//!     Point, Size,
 //! };
 //!
 //! /// A caption for the point the camera focused on, if the file names one.
@@ -158,7 +160,7 @@
 //!         Some(number) => format!("point {number} at {}", primary.center()),
 //!         None => format!("at {}", primary.center()),
 //!     };
-//!     Some(match points.area_mode() {
+//!     Some(match metadata.camera_settings().focus_area_mode() {
 //!         Some(mode) => format!("{}: {point}, {mode}", points.origin()),
 //!         None => format!("{}: {point}", points.origin()),
 //!     })
@@ -180,9 +182,12 @@
 //! let placed = FocusPoints::new(frame, FocusOrigin::Table)
 //!     .and_then(|points| points.with_point(point_38))
 //!     .and_then(|points| points.with_primary_index(0))
-//!     .expect("the point lies on the frame")
-//!     .with_area_mode(FocusAreaMode::Single);
-//! let d600 = Metadata::default().with_focus_points(placed);
+//!     .expect("the point lies on the frame");
+//! let d600 = Metadata::default()
+//!     .with_focus_points(placed)
+//!     .with_camera_settings(
+//!         CameraSettings::default().with_focus_area_mode(FocusAreaMode::Single),
+//!     );
 //! assert_eq!(
 //!     caption(&d600).as_deref(),
 //!     Some("Placed from a table: point 38 at (1812, 1705), Single point"),
@@ -415,16 +420,15 @@ mod value_error;
 pub use authorship::Authorship;
 pub use camera::{Camera, Make};
 pub use camera_settings::{
-    CameraSettings, ColorSpace, ExposureProgram, FineTune, Flash, FlashMode, FocusMode, ImageArea,
-    MeteringMode, RawImageSize, Shutter, WhiteBalance, WhiteBalanceMode,
+    CameraSettings, ColorSpace, ExposureProgram, FineTune, Flash, FlashMode, FocusAreaMode,
+    FocusMode, ImageArea, MeteringMode, RawImageSize, Shutter, WhiteBalance, WhiteBalanceMode,
 };
 pub use datetime::DateTime;
 pub use entries::{Directory, Entries, Entry, FieldType, SkippedDirectory, Value, ValueDisplay};
 pub use error::{Error, ErrorKind, Result};
 pub use file::CameraFile;
 pub use focus::{
-    Focus, FocusAreaMode, FocusLayout, FocusLayoutPoint, FocusOrigin, FocusPoint, FocusPoints,
-    PlacedFocusLayout,
+    Focus, FocusLayout, FocusLayoutPoint, FocusOrigin, FocusPoint, FocusPoints, PlacedFocusLayout,
 };
 pub use format::Format;
 pub use geometry::{Point, Size};

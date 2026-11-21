@@ -4,8 +4,9 @@
 //! points a shot through a DSLR's viewfinder names by number.
 //!
 //! AFInfo2 records where the camera's autofocus aimed, which no standard
-//! tag records ([`AF_INFO2`](super::AF_INFO2)). It records it in one of
-//! two ways:
+//! tag records ([`AF_INFO2`](super::AF_INFO2)), and the AF-area mode the
+//! camera was set to, a camera setting ([`area_mode_of`]). It records the
+//! focus point in one of two ways:
 //!
 //! - **A position in pixels**, on mirrorless bodies and on DSLRs in live
 //!   view. It is the size of a frame, the center of the focus area in that
@@ -17,9 +18,9 @@
 //!   body's points places them, which [`crop`](super::crop) does.
 //!
 //! [`af_info2_record`] reads a value at its version's offsets ([`layout`])
-//! into a [`FocusRecord`], with the area mode ([`area_mode`]). It checks
-//! nothing more: [`crop`](super::crop) checks a record before it places
-//! it.
+//! into a [`FocusRecord`]. It checks nothing more: [`crop`](super::crop)
+//! checks a record before it places it. [`area_mode_of`] reads the area
+//! mode of the same value, whether or not the record gives a point.
 //!
 //! This reader does not give the layout of the body's points
 //! ([`Metadata::focus_layout`](crate::Metadata::focus_layout)). Detection
@@ -31,7 +32,8 @@
 //! the samples that confirm it (`docs/formats/nef/makernote-and-metadata.md`,
 //! section 8.6).
 
-use crate::focus::{Focus, FocusAreaMode, FocusOrigin};
+use crate::camera_settings::FocusAreaMode;
+use crate::focus::{Focus, FocusOrigin};
 use crate::formats::makernote::points;
 use crate::geometry::{Point, Size};
 use crate::io::ByteOrder;
@@ -119,9 +121,6 @@ pub(super) struct FocusRecord {
     /// Whether focus was confirmed: `None` when the version has no byte
     /// for it, or the byte is neither 1 nor 0.
     pub(super) in_focus: Option<bool>,
-    /// How the camera chose its points: `None` when [`area_mode`] names no
-    /// mode for the record's codes.
-    pub(super) area_mode: Option<FocusAreaMode>,
     /// The points the record names, read on version 0100 alone.
     pub(super) named: Option<NamedPoints>,
 }
@@ -156,8 +155,8 @@ impl FocusRecord {
 /// What the AFInfo2 value `value` records, its SHORTs in byte order
 /// `order`, at its version's [`layout`]. The in-focus byte, when the layout
 /// has one, is `true` for 1 and `false` for 0, and says nothing otherwise.
-/// The area mode is read at bytes 4 and 5 ([`area_mode`]), and the points
-/// the record names where the layout keeps them ([`named_points`]).
+/// The points the record names are read where the layout keeps them
+/// ([`named_points`]).
 ///
 /// `None` when the version is not one read, or the value is shorter than
 /// its layout. The values are not checked here.
@@ -179,21 +178,32 @@ pub(super) fn af_info2_record(value: &[u8], order: ByteOrder) -> Option<FocusRec
             1 => Some(true),
             _ => None,
         });
-    // Every layout is longer than six bytes, so both bytes are always
-    // there.
-    let area_mode = match (value.get(4), value.get(5)) {
-        (Some(&detection), Some(&code)) => area_mode(detection, code),
-        _ => None,
-    };
     let named = layout.named.and_then(|at| named_points(value, at));
     Some(FocusRecord {
         frame,
         center: Point { x, y },
         area,
         in_focus,
-        area_mode,
         named,
     })
+}
+
+/// The AF-area mode that the AFInfo2 value `value` records: the mode
+/// [`area_mode`] names for the code at byte 5, under the detection method
+/// at byte 4. It is read at every version [`layout`] reads, from a value
+/// at least as long as its layout, whatever the record holds besides: a
+/// record of no usable position gives its area mode too.
+///
+/// `None` when the version is not one read, or the value is shorter than
+/// its layout.
+pub(super) fn area_mode_of(value: &[u8]) -> Option<FocusAreaMode> {
+    let layout = layout(value.get(..4)?)?;
+    if value.len() < layout.min_len {
+        return None;
+    }
+    // Every layout is longer than six bytes, so both bytes are there.
+    let &[detection, code] = value.get(4..6)?.first_chunk::<2>()?;
+    area_mode(detection, code)
 }
 
 /// What a record with no position names of the points the camera used:
@@ -728,7 +738,7 @@ mod tests {
         // samples show in modes not named, 1 and 2 under detection 1 in
         // the live view of the D7000, the Coolpix A, the D5600 and the D5,
         // and 196 and 199 under detection 2; and codes no file shows. The
-        // point is kept either way.
+        // mode is a camera setting, and the point is kept either way.
         use FocusAreaMode::{Auto, Dynamic, Pinpoint, Single, Tracking};
         let mut named = vec![(0, 0, Single), (0, 5, Dynamic), (0, 8, Auto)];
         for detection in [0, 1, 2] {
@@ -758,11 +768,110 @@ mod tests {
                     value[4] = detection;
                     value[5] = code;
                     let label = format!("{order:?}, {version}, detection {detection}, code {code}");
-                    let points = points_from(order, &value).expect(&label);
-                    assert_eq!(points.area_mode(), mode, "{label}");
+                    let metadata = makernote_metadata(order, |inner, ifd| {
+                        inner.undefined(ifd, AF_INFO2, &value);
+                    });
+                    assert_eq!(metadata.camera_settings.focus_area_mode, mode, "{label}");
+                    let points = metadata.focus_points().expect(&label);
                     assert_eq!(points.points().len(), 1, "{label}");
                 }
             }
+        }
+    }
+
+    #[test]
+    fn the_area_mode_is_given_whether_or_not_the_file_gives_a_point() {
+        // Auto-area: code 197 under hybrid detection beside the Z 9's
+        // position, under `MANUAL`, which gives no point, and with the
+        // position off the frame; code 8 under phase detection in a record
+        // of no position, through the viewfinder of a body with no table,
+        // which gives none either. Each gives the area mode.
+        let viewfinder = Recorded {
+            frame: [0, 0],
+            center: [0, 0],
+            area: [0, 0],
+            in_focus: 0,
+        };
+        let off_frame = Recorded {
+            center: [8257, 2461],
+            ..Z9
+        };
+        for order in ORDERS {
+            for (what, version, recorded, focus_mode, [detection, code]) in [
+                ("manual focus", "0400", Z9, Some("MANUAL"), [2, 197]),
+                ("no position", "0100", viewfinder, None, [0, 8]),
+                (
+                    "a position off the frame",
+                    "0400",
+                    off_frame,
+                    None,
+                    [2, 197],
+                ),
+            ] {
+                let mut value = af_info2(order, version, recorded);
+                value[4] = detection;
+                value[5] = code;
+                let metadata = makernote_metadata(order, |inner, ifd| {
+                    if let Some(text) = focus_mode {
+                        inner.ascii(ifd, FOCUS_MODE, text);
+                    }
+                    inner.undefined(ifd, AF_INFO2, &value);
+                });
+                assert_eq!(metadata.focus_points(), None, "{order:?}, {what}");
+                assert_eq!(
+                    metadata.camera_settings.focus_area_mode,
+                    Some(FocusAreaMode::Auto),
+                    "{order:?}, {what}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn a_damaged_af_info2_costs_the_area_mode_and_nothing_else() {
+        // The Z 9's record with code 193, single point, beside FocusMode
+        // `AF-S`: one byte short of its layout, of a version not read, or
+        // stored as BYTEs, it gives no area mode and no point, and the
+        // focus mode is still read.
+        for order in ORDERS {
+            let mut value = af_info2(order, "0400", Z9);
+            value[4] = 2;
+            value[5] = 193;
+            let mut other_version = value.clone();
+            other_version[..4].copy_from_slice(b"0403");
+            for (what, value) in [
+                ("one byte short", value[..value.len() - 1].to_vec()),
+                ("a version not read", other_version),
+            ] {
+                let metadata = makernote_metadata(order, |inner, ifd| {
+                    inner
+                        .ascii(ifd, FOCUS_MODE, "AF-S  ")
+                        .undefined(ifd, AF_INFO2, &value);
+                });
+                let settings = &metadata.camera_settings;
+                assert_eq!(settings.focus_area_mode, None, "{order:?}, {what}");
+                assert_eq!(
+                    settings.focus_mode,
+                    Some(crate::camera_settings::FocusMode::Single),
+                    "{order:?}, {what}"
+                );
+                assert_eq!(metadata.focus_points(), None, "{order:?}, {what}");
+            }
+            let (block, entry) = tags_block(order, |inner, ifd| {
+                inner.undefined(ifd, AF_INFO2, &value);
+            });
+            let block = retyped(order, block, entry, BYTE, 80);
+            let metadata = exif_metadata(order, &block, |_, _| {});
+            assert_eq!(metadata.camera_settings.focus_area_mode, None, "{order:?}");
+            // The control: the sound record gives the mode.
+            let metadata = makernote_metadata(order, |inner, ifd| {
+                inner.undefined(ifd, AF_INFO2, &value);
+            });
+            assert_eq!(
+                metadata.camera_settings.focus_area_mode,
+                Some(FocusAreaMode::Single),
+                "{order:?}"
+            );
         }
     }
 
@@ -772,7 +881,8 @@ mod tests {
         // frame, recorded. `focus` is the list's primary by construction,
         // so the tests above that check `focus` check the point. The
         // builder writes zeros past the version, so bytes 4 and 5 are 0,
-        // code 0 under phase detection: single point.
+        // code 0 under phase detection: single point, given as a camera
+        // setting beside the list.
         for order in ORDERS {
             for (version, recorded) in RECORDS {
                 let label = format!("{order:?}, {version}");
@@ -789,7 +899,11 @@ mod tests {
                 let [width, height] = recorded.frame.map(u32::from);
                 assert_eq!(points.frame(), Size { width, height }, "{label}");
                 assert_eq!(points.origin(), FocusOrigin::Recorded, "{label}");
-                assert_eq!(points.area_mode(), Some(FocusAreaMode::Single), "{label}");
+                assert_eq!(
+                    metadata.camera_settings.focus_area_mode,
+                    Some(FocusAreaMode::Single),
+                    "{label}"
+                );
             }
         }
     }
@@ -870,7 +984,7 @@ mod tests {
                 let metadata = shot(order, "NIKON D600", &value, Some(D600_FX));
                 assert_eq!(
                     metadata.focus_points(),
-                    Some(&placed_list([6016, 4016], &[B1], 38, FocusAreaMode::Single)),
+                    Some(&placed_list([6016, 4016], &[B1], 38)),
                     "{order:?}, {what}"
                 );
             }
@@ -900,10 +1014,7 @@ mod tests {
             assert_eq!(metadata.focus(), focus, "{order:?}");
             assert_eq!(
                 metadata.focus_points(),
-                focus
-                    .map(FocusPoints::from)
-                    .map(|points| points.with_area_mode(FocusAreaMode::Single))
-                    .as_ref(),
+                focus.map(FocusPoints::from).as_ref(),
                 "{order:?}"
             );
             let value = naming(af_info2(order, "0100", off_frame), 3, 38, &[37]);

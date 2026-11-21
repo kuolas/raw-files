@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 //! The camera settings in the Nikon MakerNote: the white balance, the
-//! shutter used, the image area, the raw size, the color space and the
-//! focus mode.
+//! shutter used, the image area, the raw size, the color space, the focus
+//! mode and the AF-area mode.
 //!
 //! The MakerNote records how the camera was set for the picture beyond
 //! what the Exif tags record (ADR011). [`camera_settings`] reads each
@@ -17,7 +17,8 @@
 //! - the image area from CropHiSpeed's crop setting ([`image_area`]);
 //! - the raw size from ImageSizeRAW ([`raw_image_size`]);
 //! - the color space from ColorSpace ([`color_space`]);
-//! - the focus mode from FocusMode's text ([`focus_mode_of_text`]).
+//! - the focus mode from FocusMode's text ([`focus_mode_of_text`]);
+//! - the AF-area mode from AFInfo2 ([`area_mode_of`]).
 //!
 //! A code or a text gives a value only where a checked file, or a
 //! standard, shows what it means. Anything else costs that value alone.
@@ -34,6 +35,7 @@
 
 use std::io::{Read, Seek};
 
+use super::af_info2::area_mode_of;
 use super::block::MakerNote;
 use super::crop::CropHiSpeed;
 use super::rules;
@@ -75,6 +77,9 @@ use crate::rational::SignedRational;
 ///   ([`focus_mode_of_text`]), read by the text rule. The focus point's
 ///   reader takes manual focus from it, and does not read the tag again
 ///   ([`focus`](super::focus)).
+/// - **The AF-area mode** is the one `af_info2`, AFInfo2 as the MakerNote's
+///   reader read it once, records ([`area_mode_of`]), whatever the focus
+///   mode and whether or not the record gives a point.
 ///
 /// Nikon records no electronic front curtain setting, so it stays as
 /// `settings` has it, `None`. The exposure program, the metering mode and
@@ -90,6 +95,7 @@ pub(super) fn camera_settings<R: Read + Seek>(
     makernote: &MakerNote,
     mut settings: CameraSettings,
     crop_hi_speed: Option<CropHiSpeed>,
+    af_info2: Option<&[u8]>,
     exif_records_color_space: bool,
     picture: Picture,
 ) -> Result<CameraSettings> {
@@ -121,6 +127,7 @@ pub(super) fn camera_settings<R: Read + Seek>(
     }
     settings.focus_mode = tiff_metadata::text(src, ifd, rules::FOCUS_MODE)?
         .and_then(|text| focus_mode_of_text(&text));
+    settings.focus_area_mode = af_info2.and_then(area_mode_of);
     Ok(settings)
 }
 

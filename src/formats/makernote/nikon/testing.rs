@@ -13,7 +13,7 @@ use crate::container::tiff::tags::{
     MAKER_NOTE, MODEL, PHOTOMETRIC_INTERPRETATION,
 };
 use crate::container::tiff::{self, walk};
-use crate::focus::{Focus, FocusAreaMode, FocusOrigin, FocusPoint, FocusPoints};
+use crate::focus::{Focus, FocusOrigin, FocusPoint, FocusPoints};
 use crate::formats::tiff_metadata::{self, Standard};
 use crate::formats::tiff_previews::Candidate;
 use crate::geometry::{Point, Size};
@@ -657,7 +657,7 @@ pub(super) const D600_BOX: Size = Size {
 /// The points placed from a table in a frame of `frame`: each of
 /// `points`, its number and its center, in that order, with the D600's
 /// box and nothing said of focus; the one numbered `primary` the
-/// primary; the area mode `mode`; the origin a table. Built here from
+/// primary; the origin a table. Built here from
 /// the record's values in the NEF notes, apart from [`placed`].
 ///
 /// [`placed`]: super::crop::placed
@@ -665,7 +665,6 @@ pub(super) fn placed_list(
     frame: [u32; 2],
     points: &[(u16, [u32; 2])],
     primary: u16,
-    mode: FocusAreaMode,
 ) -> FocusPoints {
     let [width, height] = frame;
     let mut list = FocusPoints::new(Size { width, height }, FocusOrigin::Table).unwrap();
@@ -679,7 +678,7 @@ pub(super) fn placed_list(
         .iter()
         .position(|&(number, _)| number == primary)
         .expect("the primary among the points");
-    list.with_primary_index(index).unwrap().with_area_mode(mode)
+    list.with_primary_index(index).unwrap()
 }
 
 /// Point 38, B1, at (1812, 1705) in the D600's 6016 by 4016 frame, as

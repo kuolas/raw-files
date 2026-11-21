@@ -440,8 +440,9 @@ pub struct SamplePlacedLayout {
 /// fine-tuning ([`SampleFineTune`]). Then the exposure program, the metering
 /// mode, the flash, whether it fired and then its mode, `None` when the
 /// file records no mode, the shutter used, whether Sony's electronic front
-/// curtain setting was on, the image area, the raw image size and the
-/// color space.
+/// curtain setting was on, the image area, the raw image size, the color
+/// space and the AF-area mode, `None` when the file names none in a code
+/// raw-files knows, whether or not it gives focus points.
 ///
 /// Every row writes every field, `None` included, one to a line, so that
 /// a value read later changes one line of a row.
@@ -457,6 +458,7 @@ pub struct SampleSettings {
     pub image_area: Option<ImageArea>,
     pub raw_image_size: Option<RawImageSize>,
     pub color_space: Option<ColorSpace>,
+    pub focus_area_mode: Option<FocusAreaMode>,
 }
 
 /// The white balance fine-tuning of a sample file, as the reader must give
@@ -483,10 +485,9 @@ pub struct SampleFineTune {
 /// Then what the reader gives of the autofocus points
 /// ([`FocusPoints`](raw_files::FocusPoints)), whose primary the point above
 /// is, by construction, so that the values above check it: where they
-/// came from; how many there are, the length of the list; the primary's
-/// number, `None` when the file gives it none, as for a recorded position;
-/// and the area mode, `None` when the file names none in a code raw-files
-/// knows.
+/// came from; how many there are, the length of the list; and the
+/// primary's number, `None` when the file gives it none, as for a recorded
+/// position.
 pub struct SampleFocus {
     pub frame: (u32, u32),
     pub center: (u32, u32),
@@ -495,7 +496,6 @@ pub struct SampleFocus {
     pub origin: FocusOrigin,
     pub points: usize,
     pub primary_number: Option<u16>,
-    pub area_mode: Option<FocusAreaMode>,
 }
 
 /// The shape of a serial number, in place of its text: how many bytes
@@ -886,17 +886,12 @@ pub fn check_metadata(expected: &SampleMetadata, format: Format, folder: Folder)
             points.origin(),
             points.points().len(),
             points.primary().and_then(|point| point.number()),
-            points.area_mode(),
         )
     });
-    let expected_points = expected.focus.as_ref().map(|focus| {
-        (
-            focus.origin,
-            focus.points,
-            focus.primary_number,
-            focus.area_mode,
-        )
-    });
+    let expected_points = expected
+        .focus
+        .as_ref()
+        .map(|focus| (focus.origin, focus.points, focus.primary_number));
     assert_eq!(points, expected_points, "{label}: focus points");
     assert_eq!(
         metadata
@@ -972,6 +967,11 @@ pub fn check_metadata(expected: &SampleMetadata, format: Format, folder: Folder)
         settings.color_space(),
         expected.color_space,
         "{label}: color space"
+    );
+    assert_eq!(
+        settings.focus_area_mode(),
+        expected.focus_area_mode,
+        "{label}: AF-area mode"
     );
 }
 

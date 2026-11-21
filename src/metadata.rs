@@ -480,8 +480,11 @@ impl Metadata {
     /// (see [`FocusPoints`]): each with its number when the file gives one,
     /// the center of its area, the area's size when recorded, and whether
     /// the camera confirmed focus there when the file says; which of them
-    /// is the primary, the one [`focus`](Self::focus) reports; the area
-    /// mode; and where the points came from.
+    /// is the primary, the one [`focus`](Self::focus) reports; and where
+    /// the points came from. The AF-area mode the camera was set to is a
+    /// camera setting,
+    /// [`CameraSettings::focus_area_mode`](crate::CameraSettings::focus_area_mode),
+    /// given whether or not the file gives points.
     ///
     /// A position the camera recorded is a list of one point, its primary,
     /// with no number and the origin
@@ -497,29 +500,25 @@ impl Metadata {
     /// It is `None` for the reasons [`focus`](Self::focus) gives. Every list
     /// the readers give has a primary.
     ///
-    /// The area mode is named only for the codes that frames shot in a
-    /// known mode confirmed, and is `None` for any other code. On a Sony
-    /// file it is always `None`, since the codes of its AFAreaModeSetting
-    /// are not checked. The codes named on a Nikon file are in
-    /// [the notes on Nikon's focus point](https://github.com/kuolas/raw-files/blob/master/docs/formats/nef/makernote-and-metadata.md#86-focus-point).
-    ///
     /// # Examples
     ///
-    /// Every point the camera used, the primary marked, and the area mode:
+    /// Every point the camera used, the primary marked, and the AF-area
+    /// mode beside them:
     ///
     /// ```no_run
     /// use raw_files::CameraFile;
     ///
     /// # fn main() -> raw_files::Result<()> {
     /// let file = CameraFile::open("photo.nef")?;
-    /// if let Some(points) = file.metadata().focus_points() {
+    /// let metadata = file.metadata();
+    /// if let Some(points) = metadata.focus_points() {
     ///     for (index, point) in points.points().iter().enumerate() {
     ///         let primary = points.primary_index() == Some(index);
     ///         let mark = if primary { ", the primary" } else { "" };
     ///         println!("a point at {}{mark}", point.center());
     ///     }
-    ///     if let Some(mode) = points.area_mode() {
-    ///         println!("area mode: {mode}");
+    ///     if let Some(mode) = metadata.camera_settings().focus_area_mode() {
+    ///         println!("AF-area mode: {mode}");
     ///     }
     /// }
     /// # Ok(())
@@ -1219,7 +1218,7 @@ mod tests {
     use crate::camera_settings::{
         ColorSpace, ExposureProgram, MeteringMode, RawImageSize, Shutter,
     };
-    use crate::focus::{FocusAreaMode, FocusLayoutPoint, FocusOrigin, FocusPoint};
+    use crate::focus::{FocusLayoutPoint, FocusOrigin, FocusPoint};
     use crate::geometry::Point;
     use crate::location::{Altitude, Direction, Latitude, Longitude, North};
     use crate::testing::fraction;
@@ -1659,7 +1658,6 @@ mod tests {
             })
             .and_then(|list| list.with_primary_index(1))
             .unwrap()
-            .with_area_mode(FocusAreaMode::Auto)
     }
 
     #[test]
@@ -1751,8 +1749,7 @@ mod tests {
     fn a_list_without_a_primary_gives_no_focus() {
         let unmarked = FocusPoints::new(size(6_016, 4_016), FocusOrigin::Recorded)
             .and_then(|list| list.with_point(FocusPoint::new(point(3_008, 2_008))))
-            .unwrap()
-            .with_area_mode(FocusAreaMode::Single);
+            .unwrap();
         let metadata = Metadata::default().with_focus_points(unmarked.clone());
         assert_eq!(metadata.focus(), None);
         assert_eq!(metadata.focus_points(), Some(&unmarked));
@@ -1771,7 +1768,6 @@ mod tests {
             let points = metadata.focus_points().unwrap();
             assert_eq!(points.frame(), focus.frame(), "{focus:?}");
             assert_eq!(points.origin(), focus.origin(), "{focus:?}");
-            assert_eq!(points.area_mode(), None, "{focus:?}");
             let only = FocusPoint::new(focus.center());
             let only = match focus.size() {
                 Some(size) => only.with_size(size),
