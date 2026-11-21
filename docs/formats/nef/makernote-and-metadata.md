@@ -828,7 +828,7 @@ raw-files reads it or not:
 | 0x00B7 AFInfo2, in-focus byte | whether focus was confirmed: FocusResult on 04xx, ContrastDetectAFInFocus on 0100 and 0101 | Z 9, Z f, Z6III, Z50II, Z5II, D7000, D5600, D5, Coolpix A **[F]** | read; on 0100 the flag is byte 28, where ExifTool also lists a 20-byte AFPointsSelected that cannot fit in the 30-byte value |
 | 0x00B7 AFInfo2, point fields | the primary point's number, a mask of the points used, and the layout of points (FocusPointSchema) | DSLRs through the viewfinder, the Nikon 1 J1, the Z5II in auto-area mode **[F]** | read on `0100` alone, in a record with no position: the number is placed from a table of the body's points, measured by the project on frames shot with that body ([autofocus-points.md](autofocus-points.md), [ADR017](../../architecture-decisions/adr017-per-body-tables-measured-by-the-project.md)), with the points the mask names ([ADR018](../../architecture-decisions/adr018-focus-points-placed-from-a-table-and-the-points-used.md)); the D600's is the only table, and every other body gives none; the other versions' point fields are not read |
 | 0x00B7 AFInfo2, AFPointsInFocus | a mask of the points in focus, version 0101 only (byte 48) [S] | the D850, one point **[F]** | not read: a mask of version 0101, which needs a table of a body that writes that version |
-| 0x0088 AFInfo | 4 bytes: area mode, point number, mask of the points in focus [S] | the bodies without AFInfo2: D1H, D1X, D70, D100, D200, E5700, P7800 **[F]** | the point not read: a number only; the area mode, its first byte, will be read (below) |
+| 0x0088 AFInfo | 4 bytes: area mode, point number, mask of the points in focus [S] | the bodies without AFInfo2: D1H, D1X, D70, D100, D200, E5700, P7800 **[F]** | the point not read: a number only; the area mode, its first byte, read as a camera setting (below) |
 | 0x0021 FaceDetect | a frame size and up to twelve face rectangles in it [S] | none of the 35 files **[F]** | not read: no sample |
 | 0x0007 FocusMode | an ASCII string [S][1]: `MANUAL`, or an AF mode padded with spaces to six characters (`AF-S  `, `AF-C  `, `AF-A  `) **[F]** | `MANUAL` on the D300 and D850, both viewfinder shots with a zero frame (files 928, 1835), and on the Z fc, which records a position under it (file 8559); an AF mode on every other file with the embedded MakerNote, my Z 9 shots included **[F]** | read as the focus mode, a camera setting ([section 8.10](#810-more-capture-settings)); `MANUAL`, after trimming, gives no focus point |
 | 0x00B9 AFTune | AF fine-tune, a setting, not a position [S] | 225 public files of 49 bodies and 37,339 of mine ([section 8.10](#810-more-capture-settings)) **[F]** | will be read as a camera setting |
@@ -1042,15 +1042,12 @@ What the fields hold:
   agree: 0, 5, 8 and 9 came with detection 0 through the viewfinder, and
   the live-view frames wrote 4 with detection 1
   ([autofocus-points.md](autofocus-points.md#22-what-the-body-writes))
-  **[F]**. raw-files names the mode, on every version, only for the codes that frames shot in a known mode confirmed, under the detection
-  method the file records, and gives none for any other code, such as
-  196, 199, 1 or 2
-  ([ADR018](../../architecture-decisions/adr018-focus-points-placed-from-a-table-and-the-points-used.md)):
-  under phase detection, 0 single point, 5 dynamic area and 8 auto-area
-  on my D600 session, and 9 3D-tracking on eight D600 frames I shot in
-  that mode outside it **[F]**; 192 pinpoint, 193 single point and 197
-  auto-area under any detection method, on which the two lists agree
-  (192 on seven Z 9 frames I shot in pinpoint AF on 2026-11-19, four in
+  **[F]**. Frames shot in a known mode confirm these codes, under the
+  detection method the file records: under phase detection, 0 single
+  point, 5 dynamic area and 8 auto-area on my D600 session, and 9
+  3D-tracking on eight D600 frames I shot in that mode outside it
+  **[F]**; 192 pinpoint, 193 single point and 197 auto-area, on which
+  the two lists agree (192 on seven Z 9 frames I shot in pinpoint AF on 2026-11-19, four in
   FX and three in DX, each NEF and the JPEG of four of them writing it
   under detection 1, contrast detection, one of them committed as
   fixtures; 193 on the two Z 9 frames shot with a single point and
@@ -1060,10 +1057,14 @@ What the fields hold:
   and 207 3D-tracking under contrast or hybrid detection, the lists
   that carry it (on my Z 9 files, 8,877 of which carry it and were
   shot in 3D-tracking, under hybrid detection), counts only **[F]**.
+  raw-files names the mode by the table that ends this section, which
+  adds the codes the documentation names and the files agree with
+  ([ADR018](../../architecture-decisions/adr018-focus-points-placed-from-a-table-and-the-points-used.md)).
   ExifTool's published documentation, read as documentation, lists 192
   as pinpoint in both lists [S][1], and my frames confirm it. The
   Z6III's five files write it under detection 2, in a mode not
-  recorded, and take the name as every file that writes the code does.
+  recorded, and take the name as every file that writes the code under
+  contrast or hybrid detection does.
   The mode is a camera setting, given whether or not the file gives a
   point.
 - **Every AFInfo2 and CropHiSpeed value lies inside the MakerNote's
@@ -1149,9 +1150,9 @@ and what raw-files gives; a row without a file is an open question
 mode as a camera setting, whether or not the file gives a focus point,
 and under manual focus too
 ([ADR011](../../architecture-decisions/adr011-metadata-from-standard-tags.md)).
-It comes from AFInfo2's bytes 4 and 5, and will come from them at every
-version of the layouts table above. On the bodies without AFInfo2, it
-will come from the first byte of AFInfo (0x0088). The codes were counted on 2026-11-20
+It comes from AFInfo2's bytes 4 and 5, at the versions read, and will
+come from the Nikon 1 versions too. On the bodies without AFInfo2, it
+comes from the first byte of AFInfo (0x0088). The codes were counted on 2026-11-20
 with a counting program over raw-files' own view of the entries. The
 files are the 289 public NEF and NRW files and 48,395 of my own, as
 counts only. Mine are 31,991 NEF files and 16,404 JPEGs with a Nikon
@@ -1173,7 +1174,7 @@ The files agree when two things hold:
 A code the documentation does not name stays unnamed. So does a code
 it names two ways the files cannot tell apart, unless both fold into
 one variant, as code 199 does below. So does a documented code no measured
-file holds, such as 194 or 200 to 203. An unnamed code will give `None`
+file holds, such as 194 or 200 to 203. An unnamed code gives `None`
 ([ADR011](../../architecture-decisions/adr011-metadata-from-standard-tags.md)).
 
 The documentation gives versions 0100, 0101 and 03xx two lists for
@@ -1184,7 +1185,7 @@ which only the second list holds. Versions 02xx and 04xx have one list
 each. [S][1]
 
 Each variant folds in Nikon's finer kinds: the dynamic-area sizes are
-`Dynamic`, and the wide-area and group-area modes are the new `Zone`.
+`Dynamic`, and the wide-area and group-area modes are `Zone`.
 The detection column gives the methods the files record the code
 under; "none" means the version records no method:
 
@@ -2099,9 +2100,9 @@ versions of [section 8.6](#86-focus-point), scaled onto CropArea on a
 DX crop and moved into the window on an aspect crop; a FocusMode of
 `MANUAL` gives none, and a point number gives none until raw-files has
 a table of the body's points. The AF-area mode is a camera setting,
-given with or without a point, from AFInfo2. It will come from AFInfo2
-at every version of section 8.6 and from AFInfo's first byte, by the
-table that ends that section.
+given with or without a point, from AFInfo2 at the versions read and
+from AFInfo's first byte, by the table that ends that section. It will
+come from the Nikon 1 versions of AFInfo2 too.
 
 For the camera settings of [section 8.7](#87-camera-settings),
 [ADR011](../../architecture-decisions/adr011-metadata-from-standard-tags.md)

@@ -143,6 +143,13 @@ const COLOR_TEMPERATURE: u16 = 0x004F;
 /// RATIONALs in the order of the Exif LensSpecification.
 const LENS: u16 = 0x0084;
 
+/// The Nikon MakerNote tag that records the AF-area mode, the point the
+/// camera focused on and the points in focus on the bodies older than
+/// AFInfo2 (AFInfo): four UNDEFINED bytes, the area mode first. Only the
+/// area mode is read: the point is a number, which needs a table of the
+/// body's points.
+const AF_INFO: u16 = 0x0088;
+
 /// The Nikon MakerNote tag that records where the camera's autofocus
 /// aimed (AFInfo2): an UNDEFINED value that starts with its version, four
 /// ASCII digits. At offsets each version sets, it holds the size of a
@@ -191,6 +198,7 @@ mod rules {
         Rule::new(super::CROP_AREA, &[FieldType::Short, FieldType::Long]);
     pub(super) const COLOR_TEMPERATURE: Held<[u32; 1]> = Held::new(super::COLOR_TEMPERATURE, SHORT);
     pub(super) const LENS: Rule<[Rational; 4]> = Rule::new(super::LENS, &[FieldType::Rational]);
+    pub(super) const AF_INFO: Held<[u8; 4]> = Held::new(super::AF_INFO, &[FieldType::Undefined]);
     pub(super) const AF_INFO2: Rule<Vec<u8>> = Rule::new(super::AF_INFO2, &[FieldType::Undefined]);
 
     // The PreviewIFD.
@@ -229,7 +237,8 @@ mod rules {
 ///   Exif tags gave when it names one ([`camera_settings`]). The color space is read only
 ///   when the Exif IFD holds no ColorSpace, and the raw image size only for
 ///   a raw file's picture. The AF-area mode is AFInfo2's, whatever the
-///   focus mode and whether or not the record gives a point.
+///   focus mode and whether or not the record gives a point, and on a
+///   body without AFInfo2 AFInfo's.
 /// - **The focus points**, from AFInfo2, always read, since the standard
 ///   tags never give one ([`focus`]); a shot whose focus mode, read with
 ///   the settings, is manual gives none. A recorded position is

@@ -572,9 +572,10 @@ fn the_d300_file_gives_what_its_exif_tags_lack_from_the_makernote() {
 /// The metadata of the D1H file, built as a caller's test would, through
 /// the public constructors and the `with_…` methods alone: what its
 /// standard tags give, with the ISO, the lens's range, the white balance
-/// setting, `SUNNY`, daylight, and the focus mode, `AF-S`, that its
-/// MakerNote alone records when `with_makernote`; the error of the first
-/// constructor that refuses
+/// setting, `SUNNY`, daylight, the focus mode, `AF-S`, and the AF-area
+/// mode of AFInfo's first byte, 1, dynamic area, that its MakerNote alone
+/// records when `with_makernote`; the error of the first constructor that
+/// refuses
 /// a value. It records no serial number, no offset from UTC, no
 /// orientation, no focal length in 35 mm terms, no focus point and no
 /// other camera setting either way.
@@ -610,7 +611,8 @@ fn the_d1h_metadata_by_hand(with_makernote: bool) -> Result<Metadata, ValueError
         metadata = metadata.with_lens(lens).with_camera_settings(
             CameraSettings::default()
                 .with_white_balance(WhiteBalance::default().with_mode(WhiteBalanceMode::Daylight))
-                .with_focus_mode(FocusMode::Single),
+                .with_focus_mode(FocusMode::Single)
+                .with_focus_area_mode(FocusAreaMode::Dynamic),
         );
     }
     Ok(metadata.with_exposure(exposure))
@@ -2008,8 +2010,7 @@ fn check_d600_focus(label: &str, metadata: &Metadata, focus: D600Focus) {
             assert_eq!(focus.origin(), FocusOrigin::Recorded, "{label}");
             // The focus points: that point alone, the primary, with no
             // number. AFInfo2 records detection method 1, live view, with
-            // area mode 4, a code the reader names under no detection
-            // method: no AF-area mode.
+            // area mode 4, subject tracking under contrast detection.
             let points = metadata
                 .focus_points()
                 .unwrap_or_else(|| panic!("{label}: no focus points"));
@@ -2017,7 +2018,7 @@ fn check_d600_focus(label: &str, metadata: &Metadata, focus: D600Focus) {
             assert_eq!(points.origin(), FocusOrigin::Recorded, "{label}");
             assert_eq!(
                 metadata.camera_settings().focus_area_mode(),
-                None,
+                Some(FocusAreaMode::Tracking),
                 "{label}"
             );
             assert_eq!(points.points().len(), 1, "{label}");
@@ -3431,7 +3432,7 @@ const METADATA: &[SampleMetadata] = &[
             image_area: None,
             raw_image_size: None,
             color_space: None,
-            focus_area_mode: None,
+            focus_area_mode: Some(FocusAreaMode::Dynamic), // AFInfo 1
         },
     },
     // D1X, 12-bit lossy (raw.pixls.us 1785)
@@ -3479,7 +3480,7 @@ const METADATA: &[SampleMetadata] = &[
             image_area: None,
             raw_image_size: None,
             color_space: None,
-            focus_area_mode: None,
+            focus_area_mode: Some(FocusAreaMode::Dynamic), // AFInfo 1
         },
     },
     // D1X, 12-bit uncompressed (raw.pixls.us 1786)
@@ -3527,7 +3528,7 @@ const METADATA: &[SampleMetadata] = &[
             image_area: None,
             raw_image_size: None,
             color_space: None,
-            focus_area_mode: None,
+            focus_area_mode: Some(FocusAreaMode::Single), // AFInfo 0
         },
     },
     // D100, 12-bit uncompressed (raw.pixls.us 2996)
@@ -3575,7 +3576,7 @@ const METADATA: &[SampleMetadata] = &[
             image_area: None,
             raw_image_size: None,
             color_space: None,
-            focus_area_mode: None,
+            focus_area_mode: Some(FocusAreaMode::Single), // AFInfo 0
         },
     },
     // D70, 12-bit lossy (raw.pixls.us 2060)
@@ -3623,7 +3624,7 @@ const METADATA: &[SampleMetadata] = &[
             image_area: None,
             raw_image_size: None,
             color_space: None,
-            focus_area_mode: None,
+            focus_area_mode: Some(FocusAreaMode::Dynamic), // AFInfo 1
         },
     },
     // D200, 12-bit lossy (raw.pixls.us 8079)
@@ -3671,7 +3672,7 @@ const METADATA: &[SampleMetadata] = &[
             image_area: None,
             raw_image_size: None,
             color_space: Some(ColorSpace::AdobeRgb),
-            focus_area_mode: None,
+            focus_area_mode: Some(FocusAreaMode::Single), // AFInfo 0
         },
     },
     // D300, 12-bit lossy (raw.pixls.us 928)
@@ -3841,7 +3842,7 @@ const METADATA: &[SampleMetadata] = &[
             image_area: None,
             raw_image_size: None,
             color_space: Some(ColorSpace::Srgb),
-            focus_area_mode: None, // code 1, detection 1: not named
+            focus_area_mode: Some(FocusAreaMode::Single), // code 1, detection 1
         },
     },
     // D750, 12-bit lossy (raw.pixls.us 895)
@@ -4181,7 +4182,7 @@ const METADATA: &[SampleMetadata] = &[
             image_area: Some(ImageArea::FullFrame),
             raw_image_size: Some(RawImageSize::Large),
             color_space: Some(ColorSpace::Srgb),
-            focus_area_mode: None, // code 196, detection 2: not named
+            focus_area_mode: Some(FocusAreaMode::Zone), // code 196, detection 2
         },
     },
     // Z6III, 14-bit, 3:2 (raw.pixls.us 7810)
@@ -4421,7 +4422,7 @@ const METADATA: &[SampleMetadata] = &[
             image_area: None,
             raw_image_size: None,
             color_space: Some(ColorSpace::AdobeRgb),
-            focus_area_mode: None, // code 1, detection 1: not named
+            focus_area_mode: Some(FocusAreaMode::Single), // code 1, detection 1
         },
     },
     // Coolpix P7800, 12-bit, an NRW file (raw.pixls.us 1425)
@@ -4464,7 +4465,7 @@ const METADATA: &[SampleMetadata] = &[
             image_area: None,
             raw_image_size: None,
             color_space: None,
-            focus_area_mode: None,
+            focus_area_mode: Some(FocusAreaMode::Single), // AFInfo 0
         },
     },
     // E5700, 12-bit uncompressed (raw.pixls.us 4456)
@@ -4504,7 +4505,7 @@ const METADATA: &[SampleMetadata] = &[
             image_area: None,
             raw_image_size: None,
             color_space: None,
-            focus_area_mode: None,
+            focus_area_mode: Some(FocusAreaMode::Single), // AFInfo 0
         },
     },
     // Nikon 1 J1, 12-bit lossy (raw.pixls.us 2956)
@@ -4620,7 +4621,7 @@ const METADATA: &[SampleMetadata] = &[
             image_area: Some(ImageArea::ApsC),
             raw_image_size: Some(RawImageSize::Large),
             color_space: Some(ColorSpace::Srgb),
-            focus_area_mode: None, // code 2, detection 1: not named
+            focus_area_mode: Some(FocusAreaMode::Zone), // code 2, detection 1
         },
     },
     // Z5II, 14-bit, 1:1 (raw.pixls.us 7735)
@@ -5038,7 +5039,7 @@ const METADATA: &[SampleMetadata] = &[
             image_area: Some(ImageArea::FullFrame),
             raw_image_size: Some(RawImageSize::Large),
             color_space: Some(ColorSpace::Srgb),
-            focus_area_mode: None, // code 2, detection 1: not named
+            focus_area_mode: Some(FocusAreaMode::Zone), // code 2, detection 1
         },
     },
     // Z 30, 12-bit lossless, rotated (raw.pixls.us 5812)
@@ -5100,7 +5101,7 @@ const METADATA: &[SampleMetadata] = &[
             image_area: Some(ImageArea::ApsC),
             raw_image_size: Some(RawImageSize::Large),
             color_space: Some(ColorSpace::AdobeRgb),
-            focus_area_mode: None, // code 199, detection 2: not named
+            focus_area_mode: Some(FocusAreaMode::Auto), // code 199, detection 2
         },
     },
     // Z fc, 12-bit lossless, manual focus (raw.pixls.us 8559)

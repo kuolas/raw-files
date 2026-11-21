@@ -15,8 +15,9 @@ use std::io::Cursor;
 
 use raw_files::{
     CameraFile, CameraSettings, ColorSpace, Directory, ErrorKind, Exposure, ExposureProgram,
-    FlashMode, FocusMode, FocusOrigin, Format, Lens, Limits, Make, Metadata, MeteringMode, Options,
-    Orientation, Point, PreviewFormat, SignedRational, Size, WhiteBalanceMode,
+    FlashMode, FocusAreaMode, FocusMode, FocusOrigin, Format, Lens, Limits, Make, Metadata,
+    MeteringMode, Options, Orientation, Point, PreviewFormat, SignedRational, Size,
+    WhiteBalanceMode,
 };
 use support::arw::{
     A100_JPEG, A100_RAW_AS_COUNT, A100_TAG_SIZE, ARW4_FOCUS_CENTER, ARW4_FOCUS_FRAME,
@@ -1652,7 +1653,7 @@ const METADATA: &[SampleMetadata] = &[
             image_area: None,
             raw_image_size: None,
             color_space: Some(ColorSpace::Srgb),
-            focus_area_mode: None,
+            focus_area_mode: Some(FocusAreaMode::Single), // 0x201C 1
         },
     },
     // ILCE-7RM2 (raw.pixls.us 1311)
@@ -1703,7 +1704,7 @@ const METADATA: &[SampleMetadata] = &[
             image_area: None,
             raw_image_size: None,
             color_space: Some(ColorSpace::Srgb),
-            focus_area_mode: None,
+            focus_area_mode: Some(FocusAreaMode::Single), // 0x201C 1
         },
     },
     // DSC-F828 (raw.pixls.us 1351)
@@ -1850,7 +1851,7 @@ const METADATA: &[SampleMetadata] = &[
             image_area: None,
             raw_image_size: None,
             color_space: Some(ColorSpace::Srgb),
-            focus_area_mode: None,
+            focus_area_mode: Some(FocusAreaMode::Auto), // 0x201C 0
         },
     },
     // ILCE-9 (raw.pixls.us 1542)
@@ -1909,7 +1910,7 @@ const METADATA: &[SampleMetadata] = &[
             image_area: None,
             raw_image_size: None,
             color_space: Some(ColorSpace::Srgb),
-            focus_area_mode: None,
+            focus_area_mode: Some(FocusAreaMode::Auto), // 0x201C 0
         },
     },
     // ILCE-7S (raw.pixls.us 1582)
@@ -1952,7 +1953,7 @@ const METADATA: &[SampleMetadata] = &[
             image_area: None,
             raw_image_size: None,
             color_space: Some(ColorSpace::Srgb),
-            focus_area_mode: None,
+            focus_area_mode: Some(FocusAreaMode::Single), // 0x201C 1
         },
     },
     // DSLR-A200 (raw.pixls.us 2271)
@@ -2131,7 +2132,7 @@ const METADATA: &[SampleMetadata] = &[
             image_area: None,
             raw_image_size: None,
             color_space: Some(ColorSpace::Srgb),
-            focus_area_mode: None,
+            focus_area_mode: Some(FocusAreaMode::Zone), // 0x201C 11
         },
     },
     // DSC-RX100M6 (raw.pixls.us 3015)
@@ -2190,7 +2191,7 @@ const METADATA: &[SampleMetadata] = &[
             image_area: None,
             raw_image_size: None,
             color_space: Some(ColorSpace::Srgb),
-            focus_area_mode: None,
+            focus_area_mode: Some(FocusAreaMode::Zone), // 0x201C 11
         },
     },
     // DSC-R1 (raw.pixls.us 3221)
@@ -2289,7 +2290,7 @@ const METADATA: &[SampleMetadata] = &[
             image_area: None,
             raw_image_size: None,
             color_space: Some(ColorSpace::Srgb),
-            focus_area_mode: None,
+            focus_area_mode: Some(FocusAreaMode::Single), // 0x201C 3
         },
     },
     // SLT-A99 (raw.pixls.us 3751)
@@ -2340,7 +2341,7 @@ const METADATA: &[SampleMetadata] = &[
             image_area: None,
             raw_image_size: None,
             color_space: Some(ColorSpace::Srgb),
-            focus_area_mode: None,
+            focus_area_mode: None, // 0x201C 9: not named
         },
     },
     // Hasselblad Lunar (raw.pixls.us 4051)
@@ -2453,7 +2454,7 @@ const METADATA: &[SampleMetadata] = &[
             image_area: None,
             raw_image_size: None,
             color_space: Some(ColorSpace::Srgb),
-            focus_area_mode: None,
+            focus_area_mode: Some(FocusAreaMode::Dynamic), // 0x201C 12
         },
     },
     // ILCE-7SM3 (raw.pixls.us 5418)
@@ -2512,7 +2513,7 @@ const METADATA: &[SampleMetadata] = &[
             image_area: None,
             raw_image_size: None,
             color_space: Some(ColorSpace::Srgb),
-            focus_area_mode: None,
+            focus_area_mode: Some(FocusAreaMode::Auto), // 0x201C 0
         },
     },
     // DSC-RX100 (raw.pixls.us 5811)
@@ -2662,7 +2663,7 @@ const METADATA: &[SampleMetadata] = &[
             image_area: None,
             raw_image_size: None,
             color_space: Some(ColorSpace::Srgb),
-            focus_area_mode: None,
+            focus_area_mode: Some(FocusAreaMode::Auto), // 0x201C 0
         },
     },
     // ILCE-7M4 (raw.pixls.us 6929)
@@ -2721,7 +2722,7 @@ const METADATA: &[SampleMetadata] = &[
             image_area: None,
             raw_image_size: None,
             color_space: Some(ColorSpace::Srgb),
-            focus_area_mode: None,
+            focus_area_mode: Some(FocusAreaMode::Auto), // 0x201C 0
         },
     },
     // ILCE-7M4 (raw.pixls.us 6930)
@@ -2780,7 +2781,7 @@ const METADATA: &[SampleMetadata] = &[
             image_area: None,
             raw_image_size: None,
             color_space: Some(ColorSpace::Srgb),
-            focus_area_mode: None,
+            focus_area_mode: Some(FocusAreaMode::Auto), // 0x201C 0
         },
     },
     // ILCE-7M4 (raw.pixls.us 6931)
@@ -2839,7 +2840,7 @@ const METADATA: &[SampleMetadata] = &[
             image_area: None,
             raw_image_size: None,
             color_space: Some(ColorSpace::Srgb),
-            focus_area_mode: None,
+            focus_area_mode: Some(FocusAreaMode::Auto), // 0x201C 0
         },
     },
     // ILCE-7M4 (raw.pixls.us 6933)
@@ -2898,7 +2899,7 @@ const METADATA: &[SampleMetadata] = &[
             image_area: None,
             raw_image_size: None,
             color_space: Some(ColorSpace::Srgb),
-            focus_area_mode: None,
+            focus_area_mode: Some(FocusAreaMode::Auto), // 0x201C 0
         },
     },
     // ILCE-7M4 (raw.pixls.us 6936)
@@ -2957,7 +2958,7 @@ const METADATA: &[SampleMetadata] = &[
             image_area: None,
             raw_image_size: None,
             color_space: Some(ColorSpace::Srgb),
-            focus_area_mode: None,
+            focus_area_mode: Some(FocusAreaMode::Auto), // 0x201C 0
         },
     },
     // ILCE-9M3 (raw.pixls.us 7361)
@@ -3008,7 +3009,7 @@ const METADATA: &[SampleMetadata] = &[
             image_area: None,
             raw_image_size: None,
             color_space: Some(ColorSpace::Srgb),
-            focus_area_mode: None,
+            focus_area_mode: Some(FocusAreaMode::Dynamic), // 0x201C 12
         },
     },
     // ILCE-9M3 (raw.pixls.us 7364)
@@ -3059,7 +3060,7 @@ const METADATA: &[SampleMetadata] = &[
             image_area: None,
             raw_image_size: None,
             color_space: Some(ColorSpace::Srgb),
-            focus_area_mode: None,
+            focus_area_mode: Some(FocusAreaMode::Dynamic), // 0x201C 12
         },
     },
     // ILCE-1M2 (raw.pixls.us 7835)
@@ -3118,7 +3119,7 @@ const METADATA: &[SampleMetadata] = &[
             image_area: None,
             raw_image_size: None,
             color_space: Some(ColorSpace::Srgb),
-            focus_area_mode: None,
+            focus_area_mode: Some(FocusAreaMode::Single), // 0x201C 3
         },
     },
     // ILCE-7M5 (raw.pixls.us 8846)
@@ -3180,7 +3181,7 @@ const METADATA: &[SampleMetadata] = &[
             image_area: None,
             raw_image_size: None,
             color_space: Some(ColorSpace::Srgb),
-            focus_area_mode: None,
+            focus_area_mode: Some(FocusAreaMode::Single), // 0x201C 3
         },
     },
     // ILCE-7M5 (raw.pixls.us 8847)
@@ -3242,7 +3243,7 @@ const METADATA: &[SampleMetadata] = &[
             image_area: None,
             raw_image_size: None,
             color_space: Some(ColorSpace::Srgb),
-            focus_area_mode: None,
+            focus_area_mode: Some(FocusAreaMode::Single), // 0x201C 3
         },
     },
     // ILCE-7M5 (raw.pixls.us 8848)
@@ -3304,7 +3305,7 @@ const METADATA: &[SampleMetadata] = &[
             image_area: None,
             raw_image_size: None,
             color_space: Some(ColorSpace::Srgb),
-            focus_area_mode: None,
+            focus_area_mode: Some(FocusAreaMode::Single), // 0x201C 3
         },
     },
     // ILCE-7M5 (raw.pixls.us 8849)
@@ -3366,7 +3367,7 @@ const METADATA: &[SampleMetadata] = &[
             image_area: None,
             raw_image_size: None,
             color_space: Some(ColorSpace::Srgb),
-            focus_area_mode: None,
+            focus_area_mode: Some(FocusAreaMode::Single), // 0x201C 3
         },
     },
     // ILCE-7M5 (raw.pixls.us 8850)
@@ -3428,7 +3429,7 @@ const METADATA: &[SampleMetadata] = &[
             image_area: None,
             raw_image_size: None,
             color_space: Some(ColorSpace::Srgb),
-            focus_area_mode: None,
+            focus_area_mode: Some(FocusAreaMode::Single), // 0x201C 3
         },
     },
 ];
@@ -3492,7 +3493,7 @@ const LARGE_METADATA: &[SampleMetadata] = &[
             image_area: None,
             raw_image_size: None,
             color_space: Some(ColorSpace::Srgb),
-            focus_area_mode: None,
+            focus_area_mode: Some(FocusAreaMode::Single), // 0x201C 3
         },
     },
 ];

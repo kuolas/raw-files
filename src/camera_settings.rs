@@ -29,8 +29,8 @@
 //! their family and in the JPEGs of Sony cameras, gives the white
 //! balance's fine-tuning, the electronic front curtain setting, which only
 //! Sony records, the color temperature of a chosen color temperature or a
-//! custom white balance, and the focus mode; and the white balance setting
-//! in place of Exif's. On Sony
+//! custom white balance, the focus mode and the AF-area mode; and the
+//! white balance setting in place of Exif's. On Sony
 //! files the shutter, the image area and the raw image size are `None`:
 //! Sony records the first two only in enciphered blocks, which raw-files
 //! does not read, and gives an APS-C raw the raw size code of a medium
@@ -297,21 +297,32 @@ impl CameraSettings {
     /// [focus points](crate::Metadata::focus_points). A viewer labels the
     /// points with it, or shows it beside the other settings.
     ///
-    /// Read from Nikon's MakerNote, the area mode its AFInfo2 records, at
-    /// the versions whose layout raw-files reads, by the code and the
-    /// detection method the record names.
+    /// Read from the MakerNote:
+    ///
+    /// - Nikon's AFInfo2, at the versions whose layout raw-files reads, by
+    ///   the code and the detection method the record names, in the
+    ///   version's list of codes;
+    /// - on the Nikon bodies without AFInfo2, from the D1 to the D80 and
+    ///   the Coolpix bodies, AFInfo's first byte;
+    /// - Sony's AFAreaModeSetting, by the codes of the body's family,
+    ///   which the Model gives: the SLT bodies, the ILCA bodies, or every
+    ///   other body, the E-mount bodies and compacts among them.
     ///
     /// `None` when:
     ///
-    /// - the file records no AF-area mode raw-files reads, as a Sony file
-    ///   does;
-    /// - it records a code that no variant names, such as a code no frame
-    ///   shot in a known mode has shown;
+    /// - the file records no AF-area mode, as the Sony A-mount DSLRs, the
+    ///   first NEX and SLT bodies and the SR2 and SRF files do;
+    /// - it records a code that no variant names, such as Nikon's face
+    ///   priority in a DSLR's live view or Sony's spot on an SLT body, or
+    ///   a code no measured file holds;
     /// - AFInfo2 is of a version whose layout raw-files does not read, is
-    ///   shorter than its layout, or has another type than Nikon writes.
+    ///   shorter than its layout, or has another type than Nikon writes;
+    /// - a Sony file has no Model, which gives the body's family.
     ///
     /// The codes named are in the notes on
-    /// [Nikon's focus point](https://github.com/kuolas/raw-files/blob/master/docs/formats/nef/makernote-and-metadata.md#86-focus-point).
+    /// [Nikon's focus point](https://github.com/kuolas/raw-files/blob/master/docs/formats/nef/makernote-and-metadata.md#86-focus-point)
+    /// and
+    /// [Sony's capture settings](https://github.com/kuolas/raw-files/blob/master/docs/formats/arw/makernote-and-metadata.md#910-more-capture-settings).
     ///
     /// # Examples
     ///
@@ -1259,13 +1270,18 @@ impl fmt::Display for FocusMode {
 /// placed, a placed point that its neighbors stood in for while the
 /// subject left it, points the camera chose itself, a subject the camera
 /// followed across the frame, or an area the photographer placed in which
-/// the camera chose. A maker's code for a mode is named only once a file
-/// shot in a known mode shows what it means, as the codes of the camera
-/// settings are under the
-/// [decision to read the metadata from the standard tags](https://github.com/kuolas/raw-files/blob/master/docs/architecture-decisions/adr011-metadata-from-standard-tags.md),
-/// and any other code gives `None`.
-/// [The notes on Nikon's focus point](https://github.com/kuolas/raw-files/blob/master/docs/formats/nef/makernote-and-metadata.md#86-focus-point)
-/// list the codes named.
+/// the camera chose.
+///
+/// Each maker's finer kinds fold into one variant, as each variant's docs
+/// list. A maker's code is named where a frame shot in a known mode shows
+/// what it means, or where the maker's or another reader's published
+/// documentation names it and the measured files agree, as the
+/// [decision to read the metadata from the standard tags](https://github.com/kuolas/raw-files/blob/master/docs/architecture-decisions/adr011-metadata-from-standard-tags.md)
+/// says; any other code gives `None`. The notes list the codes named, with
+/// where each meaning comes from: on
+/// [Nikon's focus point](https://github.com/kuolas/raw-files/blob/master/docs/formats/nef/makernote-and-metadata.md#86-focus-point)
+/// and on
+/// [Sony's capture settings](https://github.com/kuolas/raw-files/blob/master/docs/formats/arw/makernote-and-metadata.md#910-more-capture-settings).
 ///
 /// `FocusAreaMode` is `#[non_exhaustive]`, so match on it with a wildcard
 /// arm. It orders as its variants are listed, and a new variant is added
@@ -1284,22 +1300,26 @@ impl fmt::Display for FocusMode {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[non_exhaustive]
 pub enum FocusAreaMode {
-    /// One point, which the photographer placed: Nikon's single-point AF.
+    /// One point, which the photographer placed: Nikon's single-point AF,
+    /// single area and, in a DSLR's live view, normal area; Sony's center
+    /// and flexible spot.
     Single,
     /// A point the photographer placed, with the points around it standing
     /// in for it when the subject briefly leaves it: Nikon's dynamic-area
-    /// AF.
+    /// AF, of every size; Sony's expanded flexible spot.
     Dynamic,
-    /// Points the camera chose itself: Nikon's auto-area AF.
+    /// Points the camera chose itself: Nikon's auto-area AF, the animal
+    /// auto-area of some bodies included; Sony's wide.
     Auto,
     /// A subject the camera followed from the point where focus started:
-    /// Nikon's 3D-tracking.
+    /// Nikon's 3D-tracking and, in a DSLR's live view, subject tracking.
     Tracking,
     /// One point, which the photographer placed, smaller than a single
     /// point, for a precise spot: Nikon's pinpoint AF.
     Pinpoint,
     /// An area the photographer placed, larger than a single point,
-    /// inside which the camera chose the points.
+    /// inside which the camera chose the points: Nikon's wide-area AF and,
+    /// in a DSLR's live view, wide area; Sony's zone.
     Zone,
 }
 

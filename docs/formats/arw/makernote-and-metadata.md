@@ -1058,7 +1058,7 @@ raw-files reads it or not; all are tags of the MakerNote IFD:
 | 0x204A FocusLocation2 | the same four values | the ILCE-9M3, ILCE-1M2 and ILCE-7M5, equal to FocusLocation on every one **[F]** | read when FocusLocation gives nothing, absent or of another shape, which no sample is |
 | 0x2037 FocusFrameSize | six bytes: the focus area's width and height as two u16, and a third u16 of 257 or 0 **[F]**; "width and height of FocusFrame, centered on FocusLocation" [S][1] | from the ILCE-7SM3 (2020) on: ILCE-7SM3, ILCE-1, ILCE-6700, ILCE-7M4, ILCE-9M3, ILCE-1M2, ILCE-7M5 **[F]** | read |
 | 0x201B FocusMode | 0 manual, 2 AF-S, 3 AF-C, 4 AF-A, 6 DMF, 7 AF-D [S][1] | the SLT-A99V, the ILCE-7S and every body with FocusLocation **[F]** | read as the focus mode ([section 9.10](#910-more-capture-settings)); 0 gives no focus point |
-| 0x201C AFAreaModeSetting | the AF-area mode the photographer chose, by codes that depend on the body family [S][1] | the same bodies as FocusMode **[F]** | not read with the focus point: to be read as a camera setting, given whether or not a point is ([section 9.10](#910-more-capture-settings)) |
+| 0x201C AFAreaModeSetting | the AF-area mode the photographer chose, by codes that depend on the body family [S][1] | the same bodies as FocusMode **[F]** | read as a camera setting, given whether or not a point is ([section 9.10](#910-more-capture-settings)) |
 | 0x201D FlexibleSpotPosition | the spot chosen in Flexible Spot mode, on a 640 × 480 grid; valid in that mode only [S][1] | the same bodies as FocusMode **[F]** | not read: the spot chosen, not where focus landed, which FocusLocation records on every body that has both |
 | 0x201E AFPointSelected, 0x2020 AFPointsUsed | the selected point or zone by number, a mask of the points used [S][1] | the same bodies; the SLT-A99V's mask has one bit set, every other is zero **[F]** | not read: a number needs a table of the body's points |
 | 0x2022 FocalPlaneAFPointsUsed | a mask of the on-sensor focus points used [S][1] | the SLT-A99V, ILCE-7S and ILCE-7RM2, all zero **[F]** | not read: a mask, needs the same table |
@@ -1168,8 +1168,8 @@ white balance setting itself, its color temperature and fine-tuning,
 and the electronic front curtain setting in plain tags; the shutter the
 camera used and whether it shot in APS-C mode are only in enciphered
 blocks ([section 4](#4-the-makernote-substitution-cipher)). The focus
-mode, the AF-area mode and the other settings raw-files will read next
-are in [section 9.10](#910-more-capture-settings).
+mode, the AF-area mode and the other settings of
+[section 9.10](#910-more-capture-settings) are there.
 
 Every value below was read on the 36 files of
 [test-data.md](test-data.md#files-checked) and on the five Sony JPEGs of
@@ -1638,7 +1638,7 @@ white balance frames of 2026-10-25
   - six early NEX bodies and seven SLT bodies up to the SLT-A77V.
 
 **AF-area mode.** 0x201C AFAreaModeSetting, one BYTE, is on the same
-175 files [S][1] **[F]**. raw-files will give it as a `FocusAreaMode`,
+175 files [S][1] **[F]**. raw-files gives it as a `FocusAreaMode`,
 whatever the focus mode, as ADR011 decides. Its codes depend on the
 body family, which the Model text gives:
 
@@ -1666,11 +1666,11 @@ named.
   code 3), FlexibleSpotPosition, which the documentation calls valid
   only in Flexible Spot mode, matches the focus location
   ([section 9.6](#96-focus-point)).
-- **Spot on the SLT bodies will stay unnamed.** The documentation does not
+- **Spot on the SLT bodies stays unnamed.** The documentation does not
   say whether it is the center point alone, which would be `Single`,
   or a larger area. A source that settles it can name it later.
 - **The other codes** the documentation gives for each family are on
-  no measured file and will stay unnamed.
+  no measured file and stay unnamed.
 - **My ILCE-7M2 files** hold 0, 1, 3 and 11. Of the 15 in the sample,
   eight hold 3, three hold 1, two hold 0 and two hold 11.
 - 0xB043 AFAreaMode, on the same seven older files as 0xB042, will
@@ -1996,8 +1996,8 @@ SHORTs), FocusFrameSize and
 FocusMode ([section 9.6](#96-focus-point)). Nothing is deciphered, and
 0xB000, 0xB001 and the lens tags stay unread. The capture settings of
 [section 9.10](#910-more-capture-settings) will add 0x0102, 0x0104,
-0x201C, 0x202D, 0x202E, 0xB026, 0xB047 and 0xB049. FocusMode also
-gives the focus mode.
+0x202D, 0x202E, 0xB026, 0xB047 and 0xB049. FocusMode also gives the
+focus mode, and 0x201C gives the AF-area mode.
 
 1. **Standard tags:** IFD0 Make, Model and Orientation; Exif
    DateTimeOriginal, SubSecTimeOriginal and OffsetTimeOriginal (the last two

@@ -126,6 +126,28 @@ does. An entry that can break a caller opens with **Breaking:**.
 
   Its names are "Manual focus", "Single AF", "Continuous AF",
   "Automatic AF", "Full-time AF" and "Direct manual focus".
+- `CameraSettings::focus_area_mode` names many more modes, and
+  `FocusAreaMode::Zone` is given, from Nikon's and Sony's MakerNotes
+  ([#214](https://github.com/kuolas/raw-files/issues/214)):
+  - Nikon's AFInfo2: every code its published documentation names, under
+    the detection method a measured file records it, in the version's
+    list, such as the dynamic-area sizes, wide area and live view's
+    subject tracking;
+  - Nikon's AFInfo, on the bodies before AFInfo2: single and dynamic
+    area;
+  - Sony's AFAreaModeSetting, by the codes of the body's family: wide,
+    center, flexible spot, zone and expanded flexible spot.
+
+  A code is now named only under the detection method and in the
+  version's list where the measured files record it, so some pairs
+  named before give `None`; no measured file records any of them:
+  - 192, 193 and 197 under phase detection, and 193 under contrast
+    detection;
+  - the DSLR codes 0, 5, 8 and 9 in versions 0400 to 0402, whose list
+    holds the mirrorless codes alone.
+
+  The notes mark each code as confirmed by a frame or documented and
+  agreed with by the files.
 
 ### Changed
 
