@@ -413,9 +413,11 @@ JPEGs **[F]**:
 - Lists of the points used: 51 of one point, 47 of them placed from the
   table and the 4 recorded, and one each of 12, 13 and 9 points, the
   auto-area frames; 85 points in all, 81 of them with a number.
-- Area modes: single point on 45 lists, dynamic area on 2, auto area
-  on 3; none on the 4 live-view frames, whose code the reader does not
-  name.
+- AF-area modes, a camera setting, counted on the NEF files, each of
+  which gives one: single point on 47, the 2 manual-focus frames among
+  them, dynamic area on 2, auto area on 3, and tracking on the 4
+  live-view frames, whose code 4 under contrast detection names subject
+  tracking.
 
 On 23 NEF and 16 JPEG files I shot with my D600 outside the session,
 every NEF gives a point: 22 placed from the table, 2 of them DX frames

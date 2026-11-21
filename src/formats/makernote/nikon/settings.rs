@@ -18,7 +18,8 @@
 //! - the raw size from ImageSizeRAW ([`raw_image_size`]);
 //! - the color space from ColorSpace ([`color_space`]);
 //! - the focus mode from FocusMode's text ([`focus_mode_of_text`]);
-//! - the AF-area mode from AFInfo2 ([`area_mode_of`]).
+//! - the AF-area mode from AFInfo2 ([`area_mode_of`]), else from AFInfo
+//!   ([`af_info_area_mode`]).
 //!
 //! A code or a text gives a value only where a checked file, or a
 //! standard, shows what it means. Anything else costs that value alone.
@@ -40,8 +41,8 @@ use super::block::MakerNote;
 use super::crop::CropHiSpeed;
 use super::rules;
 use crate::camera_settings::{
-    CameraSettings, ColorSpace, FineTune, FocusMode, ImageArea, RawImageSize, Shutter,
-    WhiteBalanceMode,
+    CameraSettings, ColorSpace, FineTune, FocusAreaMode, FocusMode, ImageArea, RawImageSize,
+    Shutter, WhiteBalanceMode,
 };
 use crate::error::Result;
 use crate::formats::makernote::{Picture, checked_color_temperature};
@@ -79,7 +80,9 @@ use crate::rational::SignedRational;
 ///   ([`focus`](super::focus)).
 /// - **The AF-area mode** is the one `af_info2`, AFInfo2 as the MakerNote's
 ///   reader read it once, records ([`area_mode_of`]), whatever the focus
-///   mode and whether or not the record gives a point.
+///   mode and whether or not the record gives a point. On a body without
+///   AFInfo2 it is AFInfo's ([`af_info_area_mode`]). A body with AFInfo2
+///   never falls back on AFInfo, which no file holds beside it.
 ///
 /// Nikon records no electronic front curtain setting, so it stays as
 /// `settings` has it, `None`. The exposure program, the metering mode and
@@ -127,7 +130,12 @@ pub(super) fn camera_settings<R: Read + Seek>(
     }
     settings.focus_mode = tiff_metadata::text(src, ifd, rules::FOCUS_MODE)?
         .and_then(|text| focus_mode_of_text(&text));
-    settings.focus_area_mode = af_info2.and_then(area_mode_of);
+    settings.focus_area_mode = match ifd.entry(super::AF_INFO2) {
+        Some(_) => af_info2.and_then(area_mode_of),
+        None => ifd
+            .held(rules::AF_INFO)
+            .and_then(|[code, ..]| af_info_area_mode(code)),
+    };
     Ok(settings)
 }
 
@@ -368,6 +376,22 @@ fn focus_mode_of_text(text: &str) -> Option<FocusMode> {
     })
 }
 
+/// The AF-area mode that AFInfo's first byte, `code`, names: 0, single
+/// area, [`Single`](FocusAreaMode::Single), and 1, dynamic area,
+/// [`Dynamic`](FocusAreaMode::Dynamic). Both are ExifTool's published
+/// documentation, read as documentation, and the files agree: the bodies
+/// without AFInfo2, from the D1 to the D80 and the Coolpix bodies, write
+/// 0 or 1. `None` for every other code: the notes name no other, though
+/// the documentation names 2 to 5, and one D70 JPEG among the samples
+/// writes 2, dynamic area with the closest subject.
+fn af_info_area_mode(code: u8) -> Option<FocusAreaMode> {
+    match code {
+        0 => Some(FocusAreaMode::Single),
+        1 => Some(FocusAreaMode::Dynamic),
+        _ => None,
+    }
+}
+
 /// The color space a ColorSpace `code` of the MakerNote names: 1
 /// [`Srgb`](ColorSpace::Srgb) and 2 [`AdobeRgb`](ColorSpace::AdobeRgb).
 /// `None` for 4, BT.2100, which no variant names and no checked file
@@ -388,8 +412,8 @@ mod tests {
         nikon_file, retyped, tags_block, whole,
     };
     use super::super::{
-        COLOR_SPACE, COLOR_TEMPERATURE, CROP_HI_SPEED, FINE_TUNE, FINE_TUNE_STEPS, FOCUS_MODE,
-        IMAGE_SIZE_RAW, SHUTTER_MODE, WHITE_BALANCE, metadata,
+        AF_INFO, AF_INFO2, COLOR_SPACE, COLOR_TEMPERATURE, CROP_HI_SPEED, FINE_TUNE,
+        FINE_TUNE_STEPS, FOCUS_MODE, IMAGE_SIZE_RAW, SHUTTER_MODE, WHITE_BALANCE, metadata,
     };
     use super::*;
     use crate::camera_settings::{ExposureProgram, WhiteBalance};
@@ -1310,6 +1334,58 @@ mod tests {
                 |_, _| {},
             );
             assert_eq!(read.focus_mode, Some(FocusMode::Automatic), "{order:?}");
+        }
+    }
+
+    #[test]
+    fn without_af_info2_the_area_mode_is_afinfos_first_byte() {
+        // 0 single area and 1 dynamic area; 2, which one D70 JPEG writes,
+        // and codes nothing names give none. The other three bytes, the
+        // point and the points in focus, play no part.
+        for order in ORDERS {
+            for (code, mode) in [
+                (0, Some(FocusAreaMode::Single)),
+                (1, Some(FocusAreaMode::Dynamic)),
+                (2, None),
+                (5, None),
+                (255, None),
+            ] {
+                let read = settings_of(order, |inner, ifd| {
+                    inner.undefined(ifd, AF_INFO, &[code, 3, 0xFF, 0x07]);
+                });
+                assert_eq!(read.focus_area_mode, mode, "{order:?}, {code}");
+            }
+        }
+    }
+
+    #[test]
+    fn afinfo_is_not_read_beside_af_info2_or_in_another_shape() {
+        for order in ORDERS {
+            // Beside an AFInfo2 of a version not read, AFInfo's 1 gives
+            // nothing: a body with AFInfo2 never falls back on AFInfo.
+            let mut af_info2 = b"0403".to_vec();
+            af_info2.resize(80, 0);
+            let read = settings_of(order, |inner, ifd| {
+                inner
+                    .undefined(ifd, AF_INFO, &[1, 0, 0, 0])
+                    .undefined(ifd, AF_INFO2, &af_info2);
+            });
+            assert_eq!(read.focus_area_mode, None, "{order:?}");
+            // As BYTEs, and of three or five bytes.
+            for (typ, bytes) in [
+                (BYTE, &[1_u8, 0, 0, 0][..]),
+                (UNDEFINED, &[1, 0, 0][..]),
+                (UNDEFINED, &[1, 0, 0, 0, 0][..]),
+            ] {
+                let read = settings_of(order, |inner, ifd| {
+                    match typ {
+                        BYTE => inner.byte(ifd, AF_INFO, bytes),
+                        _ => inner.undefined(ifd, AF_INFO, bytes),
+                    };
+                });
+                let label = format!("{order:?}, type {typ}, {} bytes", bytes.len());
+                assert_eq!(read.focus_area_mode, None, "{label}");
+            }
         }
     }
 

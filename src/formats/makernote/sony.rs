@@ -55,7 +55,9 @@
 use std::io::{Read, Seek};
 
 use super::{MakerNoteBlock, Picture, Reader, checked_color_temperature};
-use crate::camera_settings::{CameraSettings, FineTune, FocusMode, WhiteBalanceMode};
+use crate::camera_settings::{
+    CameraSettings, FineTune, FocusAreaMode, FocusMode, WhiteBalanceMode,
+};
 use crate::container::tiff::{Ifd, Rule, Tree};
 use crate::entries::{Directory, Entries, Lookup};
 use crate::error::Result;
@@ -90,6 +92,12 @@ pub(in crate::formats) const ELECTRONIC_FRONT_CURTAIN: u16 = 0x201A;
 /// autofocus modes AF-S, AF-C, AF-A, DMF and AF-D. Read once, as a camera
 /// setting, which also says whether the shot is in manual focus.
 pub(in crate::formats) const FOCUS_MODE: u16 = 0x201B;
+
+/// The Sony MakerNote tag that records the AF-area mode the photographer
+/// set (AFAreaModeSetting): one BYTE, a code whose meaning depends on the
+/// body family, such as 0 for wide on every family and 11 for zone on an
+/// E-mount body.
+pub(in crate::formats) const AF_AREA_MODE: u16 = 0x201C;
 
 /// The Sony MakerNote tag that records where the camera focused
 /// (FocusLocation): four SHORTs, the width and height of the frame, then
@@ -128,6 +136,8 @@ mod rules {
     pub(super) const ELECTRONIC_FRONT_CURTAIN: Held<[u32; 1]> =
         Held::new(super::ELECTRONIC_FRONT_CURTAIN, LONG);
     pub(super) const FOCUS_MODE: Held<[u8; 1]> = Held::new(super::FOCUS_MODE, &[FieldType::Byte]);
+    pub(super) const AF_AREA_MODE: Held<[u8; 1]> =
+        Held::new(super::AF_AREA_MODE, &[FieldType::Byte]);
     pub(super) const FOCUS_LOCATION: Rule<[u32; 4]> = Rule::new(super::FOCUS_LOCATION, SHORT);
     pub(super) const FOCUS_FRAME_SIZE: Rule<[u8; 6]> =
         Rule::new(super::FOCUS_FRAME_SIZE, &[FieldType::Undefined]);
@@ -236,10 +246,9 @@ impl Reader for MakerNote {
     /// or JPEG, and needs none of the other facts of `standard`:
     ///
     /// - **the camera settings** that only the MakerNote records, and the
-    ///   white balance setting, in place of the Exif tags' mode
-    ///   ([`camera_settings`]). AFAreaModeSetting is not read, since no
-    ///   file shot in a known mode has checked what its codes mean, so the
-    ///   AF-area mode stays `None`;
+    ///   white balance setting, in place of the Exif tags' mode, and the
+    ///   AF-area mode by the family of the body the Model names
+    ///   ([`camera_settings`]);
     /// - **the focus point**, as recorded ([`focus`]), always read, since
     ///   the standard tags never give one. It is a list of one point, the
     ///   primary. A shot whose focus mode, read with the settings, is
@@ -257,7 +266,8 @@ impl Reader for MakerNote {
         _picture: Picture,
     ) -> Result<Metadata> {
         let mut metadata = standard.metadata;
-        metadata.camera_settings = camera_settings(src, self, metadata.camera_settings)?;
+        let family = metadata.camera.recorded_model.as_deref().map(family);
+        metadata.camera_settings = camera_settings(src, self, metadata.camera_settings, family)?;
         let manual = metadata.camera_settings.focus_mode == Some(FocusMode::Manual);
         metadata.focus_points = focus(src, self, manual)?.map(FocusPoints::from);
         Ok(metadata)
@@ -415,6 +425,10 @@ fn area<R: Read + Seek>(src: &mut Source<R>, makernote: &MakerNote) -> Result<Op
 ///   ElectronicFrontCurtainShutter's ([`electronic_front_curtain_setting`]).
 /// - **The focus mode** is the one FocusMode's code names ([`focus_mode`]).
 ///   The focus point's reader takes manual focus from it ([`focus`]).
+/// - **The AF-area mode** is the one AFAreaModeSetting's code names in the
+///   list of `family`, the body's family ([`area_mode`]), whatever the
+///   focus mode and whether or not the file gives a point. Without a
+///   family, in a file with no Model, it is `None`.
 ///
 /// The shutter used, the image area and the raw image size stay as
 /// `settings` has them, `None`. Sony records the first two only in
@@ -431,6 +445,7 @@ fn camera_settings<R: Read + Seek>(
     src: &mut Source<R>,
     makernote: &MakerNote,
     mut settings: CameraSettings,
+    family: Option<Family>,
 ) -> Result<CameraSettings> {
     let ifd = &makernote.ifd;
     let mode = ifd
@@ -447,6 +462,9 @@ fn camera_settings<R: Read + Seek>(
         .held(rules::ELECTRONIC_FRONT_CURTAIN)
         .and_then(|[code]| electronic_front_curtain_setting(code));
     settings.focus_mode = recorded_focus_mode(makernote);
+    settings.focus_area_mode = family
+        .zip(ifd.held(rules::AF_AREA_MODE))
+        .and_then(|(family, [code])| area_mode(family, code));
     Ok(settings)
 }
 
@@ -535,6 +553,62 @@ fn electronic_front_curtain_setting(code: u32) -> Option<bool> {
         1 => Some(true),
         _ => None,
     }
+}
+
+/// A family of Sony bodies, whose AF-area codes are a list of their own in
+/// ExifTool's published tag documentation, read as documentation. The
+/// same code can mean two things across families: 9 is spot on an SLT
+/// body, and center with an A-mount adapter on an E-mount body.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Family {
+    /// The SLT bodies, whose Model starts `SLT-`.
+    Slt,
+    /// The A-mount ILCA bodies, whose Model starts `ILCA-`.
+    Ilca,
+    /// Every other body: the documentation's list for "NEX, ILCE and some
+    /// DSC models", which the E-mount bodies and the compacts take, the
+    /// NEX, ILCE, ILME, ZV, DSC and UMC bodies measured among them. Every
+    /// code of the ILME, ZV and UMC bodies measured falls in it.
+    EMount,
+}
+
+/// The family of the body whose Model is `model`, by the Model's start:
+/// `SLT-` and `ILCA-` name their own, and every other Model the E-mount
+/// family. A body with no AFAreaModeSetting, such as an A-mount DSLR, has
+/// a family too, which names nothing.
+fn family(model: &str) -> Family {
+    if model.starts_with("SLT-") {
+        Family::Slt
+    } else if model.starts_with("ILCA-") {
+        Family::Ilca
+    } else {
+        Family::EMount
+    }
+}
+
+/// The AF-area mode an AFAreaModeSetting `code` names in the list of
+/// `family`:
+///
+/// - on every family, 0, wide, the camera choosing within the whole frame,
+///   [`Auto`](FocusAreaMode::Auto);
+/// - on an E-mount body or a compact, 1, center, and 3, flexible spot,
+///   [`Single`](FocusAreaMode::Single); 11, zone,
+///   [`Zone`](FocusAreaMode::Zone); 12, expanded flexible spot,
+///   [`Dynamic`](FocusAreaMode::Dynamic);
+/// - on an ILCA body, 4, flexible spot, [`Single`](FocusAreaMode::Single).
+///
+/// Each is documented, and the measured files agree with it (the ARW
+/// notes, section 9.10). `None` for every other code: 9, spot, on an SLT
+/// body, which the documentation does not say is one point or an area;
+/// and the codes no measured file holds.
+fn area_mode(family: Family, code: u8) -> Option<FocusAreaMode> {
+    Some(match (family, code) {
+        (_, 0) => FocusAreaMode::Auto,
+        (Family::EMount, 1 | 3) | (Family::Ilca, 4) => FocusAreaMode::Single,
+        (Family::EMount, 11) => FocusAreaMode::Zone,
+        (Family::EMount, 12) => FocusAreaMode::Dynamic,
+        _ => return None,
+    })
 }
 
 /// The focus mode `makernote`'s FocusMode records, by its code
@@ -1802,7 +1876,7 @@ mod tests {
         tags: impl FnOnce(&mut TiffBuilder, IfdId),
     ) -> CameraSettings {
         let (mut src, makernote) = focus_file(order, b"", tags);
-        camera_settings(&mut src, &makernote, settings).unwrap()
+        camera_settings(&mut src, &makernote, settings, Some(Family::EMount)).unwrap()
     }
 
     /// As [`settings_from`], from the empty settings.
@@ -2161,6 +2235,134 @@ mod tests {
     }
 
     #[test]
+    fn each_body_family_names_its_own_area_mode_codes() {
+        // Wide, 0, on every family; on an E-mount body center 1 and
+        // flexible spot 3, zone 11, expanded flexible spot 12; on an ILCA
+        // body flexible spot 4. SLT's 9, spot, and codes a family does not
+        // name give none, such as 4 on an E-mount body and 9 on any.
+        use FocusAreaMode::{Auto, Dynamic, Single, Zone};
+        let cases = [
+            (Family::EMount, 0, Some(Auto)),
+            (Family::EMount, 1, Some(Single)),
+            (Family::EMount, 3, Some(Single)),
+            (Family::EMount, 11, Some(Zone)),
+            (Family::EMount, 12, Some(Dynamic)),
+            (Family::EMount, 4, None),
+            (Family::EMount, 9, None),
+            (Family::Ilca, 0, Some(Auto)),
+            (Family::Ilca, 4, Some(Single)),
+            (Family::Ilca, 1, None),
+            (Family::Ilca, 11, None),
+            (Family::Slt, 0, Some(Auto)),
+            (Family::Slt, 9, None),
+            (Family::Slt, 1, None),
+            (Family::Slt, 4, None),
+        ];
+        for order in ORDERS {
+            for (family, code, mode) in cases {
+                let (mut src, makernote) = focus_file(order, b"", |builder, ifd| {
+                    builder.byte(ifd, AF_AREA_MODE, &[code]);
+                });
+                let settings = camera_settings(
+                    &mut src,
+                    &makernote,
+                    CameraSettings::default(),
+                    Some(family),
+                )
+                .unwrap();
+                let label = format!("{order:?}, {family:?}, {code}");
+                assert_eq!(settings.focus_area_mode, mode, "{label}");
+            }
+        }
+    }
+
+    #[test]
+    fn the_model_tells_the_family_and_without_a_model_no_area_mode_is_given() {
+        for (model, expected) in [
+            ("SLT-A99V", Family::Slt),
+            ("ILCA-77M2", Family::Ilca),
+            ("ILCE-7M2", Family::EMount),
+            ("NEX-5", Family::EMount),
+            ("ILME-FX3", Family::EMount),
+            ("ZV-E10", Family::EMount),
+            ("DSC-RX100M6", Family::EMount),
+            ("UMC-R10C", Family::EMount),
+            ("slt-a99v", Family::EMount),
+            // A start without its dash is no SLT or ILCA body's.
+            ("SLTA99V", Family::EMount),
+            ("ILCA77M2", Family::EMount),
+            ("", Family::EMount),
+        ] {
+            assert_eq!(family(model), expected, "{model:?}");
+        }
+        // Wide, 0, which every family names, gives none without a family,
+        // as in a file with no Model.
+        for order in ORDERS {
+            let (mut src, makernote) = focus_file(order, b"", |builder, ifd| {
+                builder.byte(ifd, AF_AREA_MODE, &[0]);
+            });
+            let settings =
+                camera_settings(&mut src, &makernote, CameraSettings::default(), None).unwrap();
+            assert_eq!(settings.focus_area_mode, None, "{order:?}");
+        }
+    }
+
+    #[test]
+    fn an_area_mode_of_another_shape_gives_none() {
+        // Zone as a SHORT, an UNDEFINED byte and two BYTEs.
+        for order in ORDERS {
+            for (what, setting) in [
+                (
+                    "a SHORT",
+                    &(|builder: &mut TiffBuilder, ifd| {
+                        builder.short(ifd, AF_AREA_MODE, &[11]);
+                    }) as Tags,
+                ),
+                ("an UNDEFINED byte", &|builder, ifd| {
+                    builder.undefined(ifd, AF_AREA_MODE, &[11]);
+                }),
+                ("two BYTEs", &|builder, ifd| {
+                    builder.byte(ifd, AF_AREA_MODE, &[11, 11]);
+                }),
+            ] {
+                let settings = settings_of(order, setting);
+                assert_eq!(settings.focus_area_mode, None, "{order:?}, {what}");
+            }
+        }
+    }
+
+    #[test]
+    fn the_area_mode_is_given_under_manual_focus_from_the_model() {
+        // Zone on an ILCE-7M2 in manual focus, read through `metadata`:
+        // the mode, from the family the Model names, and no point.
+        for order in ORDERS {
+            let (mut src, makernote) = focus_file(order, b"", |builder, ifd| {
+                builder
+                    .byte(ifd, FOCUS_MODE, &[0])
+                    .byte(ifd, AF_AREA_MODE, &[11])
+                    .short(ifd, FOCUS_LOCATION, &[6000, 4000, 3000, 2000]);
+            });
+            let standard = Standard {
+                metadata: Metadata::default().with_camera(
+                    Camera::default()
+                        .with_recorded_make("SONY")
+                        .with_recorded_model("ILCE-7M2"),
+                ),
+                ..Standard::default()
+            };
+            let found = makernote
+                .metadata(&mut src, standard, Picture::Raw)
+                .unwrap();
+            assert_eq!(
+                found.camera_settings.focus_area_mode,
+                Some(FocusAreaMode::Zone),
+                "{order:?}"
+            );
+            assert_eq!(found.focus_points, None, "{order:?}");
+        }
+    }
+
+    #[test]
     fn a_focus_mode_of_another_shape_gives_none() {
         // AF-C as a SHORT, an UNDEFINED byte and two BYTEs.
         for order in ORDERS {
@@ -2292,7 +2494,8 @@ mod tests {
             let (mut src, found) = read_file(cut.build().bytes);
             let found = found.expect("a MakerNote");
             assert!(found.ifd.entry(FINE_TUNE).is_none(), "{order:?}");
-            let settings = camera_settings(&mut src, &found, exif_settings()).unwrap();
+            let settings =
+                camera_settings(&mut src, &found, exif_settings(), Some(Family::EMount)).unwrap();
             let mut expected = with_settings_tags(exif_settings());
             expected.white_balance.fine_tune = None;
             assert_eq!(settings, expected, "{order:?}");
@@ -2301,7 +2504,8 @@ mod tests {
             makernote_at(&mut builder, exif, UNDEFINED, len, block.start);
             let (mut src, found) = read_file(builder.build().bytes);
             let found = found.expect("a MakerNote");
-            let settings = camera_settings(&mut src, &found, exif_settings()).unwrap();
+            let settings =
+                camera_settings(&mut src, &found, exif_settings(), Some(Family::EMount)).unwrap();
             assert_eq!(settings, with_settings_tags(exif_settings()), "{order:?}");
         }
     }
@@ -2368,7 +2572,13 @@ mod tests {
         // The file is sound, for a reader that does not fail.
         let (mut src, found) = read_file(built.bytes.clone());
         let found = found.expect("a MakerNote");
-        let settings = camera_settings(&mut src, &found, CameraSettings::default()).unwrap();
+        let settings = camera_settings(
+            &mut src,
+            &found,
+            CameraSettings::default(),
+            Some(Family::EMount),
+        )
+        .unwrap();
         assert_eq!(settings.white_balance.fine_tune, Some(steps(-3, 0)));
 
         let limits = Limits::default();
@@ -2378,8 +2588,13 @@ mod tests {
         let makernote = read(&mut src, &tree, &limits)
             .unwrap()
             .expect("a MakerNote");
-        let err = camera_settings(&mut src, &makernote, CameraSettings::default())
-            .expect_err("the read fails");
+        let err = camera_settings(
+            &mut src,
+            &makernote,
+            CameraSettings::default(),
+            Some(Family::EMount),
+        )
+        .expect_err("the read fails");
         assert_eq!(err.kind(), ErrorKind::Io, "{err:?}");
     }
 }

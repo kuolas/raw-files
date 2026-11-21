@@ -3396,7 +3396,7 @@ const METADATA: &[SampleMetadata] = &[
             image_area: None,
             raw_image_size: None,
             color_space: Some(ColorSpace::Srgb),
-            focus_area_mode: None,
+            focus_area_mode: Some(FocusAreaMode::Single), // 0x201C 3
         },
     },
     // ILCE-7RM2 (Wikimedia Commons Ulpu_Pajari_puhumassa_vastaanotettuaan_tiedonjulkistamisen_valtionpalkinnon_2.jpg)
@@ -3455,7 +3455,7 @@ const METADATA: &[SampleMetadata] = &[
             image_area: None,
             raw_image_size: None,
             color_space: Some(ColorSpace::Srgb),
-            focus_area_mode: None,
+            focus_area_mode: Some(FocusAreaMode::Auto), // 0x201C 0
         },
     },
     // DSC-RX100M4 (Wikimedia Commons 여의도한강공원샛강생태공원문화다리_09.jpg)
@@ -3506,7 +3506,7 @@ const METADATA: &[SampleMetadata] = &[
             image_area: None,
             raw_image_size: None,
             color_space: Some(ColorSpace::Srgb),
-            focus_area_mode: None,
+            focus_area_mode: Some(FocusAreaMode::Auto), // 0x201C 0
         },
     },
     // ILCE-6000 (Wikimedia Commons 140319_MS_Queen_Elizabeth_Kobe_Japan01o.JPG)
@@ -3557,7 +3557,7 @@ const METADATA: &[SampleMetadata] = &[
             image_area: None,
             raw_image_size: None,
             color_space: Some(ColorSpace::Srgb),
-            focus_area_mode: None,
+            focus_area_mode: Some(FocusAreaMode::Auto), // 0x201C 0
         },
     },
     // DSLR-A100 (Wikimedia Commons "Krone"_flag_on_line_5_tram_(2564030031).jpg)
@@ -3699,7 +3699,7 @@ const METADATA: &[SampleMetadata] = &[
             image_area: None,
             raw_image_size: None,
             color_space: Some(ColorSpace::Srgb),
-            focus_area_mode: None,
+            focus_area_mode: None, // AFInfo 2: not named
         },
     },
     // NIKON E800 (Wikimedia Commons MIKI-eki.jpg)
