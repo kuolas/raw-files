@@ -566,12 +566,12 @@ const NO_POSITION: Recorded = Recorded {
 };
 
 /// `value`, an AFInfo2 value, naming points where version 0100 keeps
-/// them, written out here apart from [`Layout`]: the layout code
+/// them, written out here apart from [`layout`]: the layout code
 /// `layout_code` at byte 6, the primary point `primary` at byte 7, and
 /// the mask's `bits` set in bytes 8 to 14, bit k as bit k % 8 of byte
 /// 8 + k / 8.
 ///
-/// [`Layout`]: super::af_info2::Layout
+/// [`layout`]: super::af_info2::layout
 pub(super) fn naming(mut value: Vec<u8>, layout_code: u8, primary: u8, bits: &[usize]) -> Vec<u8> {
     value[6] = layout_code;
     value[7] = primary;

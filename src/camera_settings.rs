@@ -299,9 +299,9 @@ impl CameraSettings {
     ///
     /// Read from the MakerNote:
     ///
-    /// - Nikon's AFInfo2, at the versions whose layout raw-files reads, by
-    ///   the code and the detection method the record names, in the
-    ///   version's list of codes;
+    /// - Nikon's AFInfo2, at the versions whose layout raw-files reads,
+    ///   the Nikon 1 bodies' included, by the code and the detection
+    ///   method the record names, in the version's list of codes;
     /// - on the Nikon bodies without AFInfo2, from the D1 to the D80 and
     ///   the Coolpix bodies, AFInfo's first byte;
     /// - Sony's AFAreaModeSetting, by the codes of the body's family,

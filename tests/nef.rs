@@ -4559,7 +4559,7 @@ const METADATA: &[SampleMetadata] = &[
             image_area: None,
             raw_image_size: None,
             color_space: Some(ColorSpace::AdobeRgb),
-            focus_area_mode: None, // AFInfo2 0200: not read
+            focus_area_mode: Some(FocusAreaMode::Single), // code 128
         },
     },
     // D5600, 12-bit lossy, live view (raw.pixls.us 1415)

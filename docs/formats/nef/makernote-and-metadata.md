@@ -858,9 +858,9 @@ and no other; the bodies before the D3 and every Coolpix but the A have
 no AFInfo2 there. [S][22] Those listings decode only the 0100 offsets,
 and in one byte order whatever the file's, so they settle which version a
 body writes and nothing else. raw-files reads the position at the exact
-versions 0100, 0101, 0300, 0301, 0400, 0401 and 0402 (ADR012). It will
-also read the area mode at 0200 and 0201, the Nikon 1 versions, which
-record no position
+versions 0100, 0101, 0300, 0301, 0400, 0401 and 0402 (ADR012). It
+reads the area mode at those and at 0200 and 0201, the Nikon 1
+versions, which record no position
 ([ADR012](../../architecture-decisions/adr012-focus-points-as-the-camera-records-them.md)).
 The 0101
 offsets are checked on the D5's live-view file, the only one that fills
@@ -1150,9 +1150,9 @@ and what raw-files gives; a row without a file is an open question
 mode as a camera setting, whether or not the file gives a focus point,
 and under manual focus too
 ([ADR011](../../architecture-decisions/adr011-metadata-from-standard-tags.md)).
-It comes from AFInfo2's bytes 4 and 5, at the versions read, and will
-come from the Nikon 1 versions too. On the bodies without AFInfo2, it
-comes from the first byte of AFInfo (0x0088). The codes were counted on 2026-11-20
+It comes from AFInfo2's bytes 4 and 5, at every version of the layouts
+table above. On the bodies without AFInfo2, it comes from the first
+byte of AFInfo (0x0088). The codes were counted on 2026-11-20
 with a counting program over raw-files' own view of the entries. The
 files are the 289 public NEF and NRW files and 48,395 of my own, as
 counts only. Mine are 31,991 NEF files and 16,404 JPEGs with a Nikon
@@ -2100,9 +2100,8 @@ versions of [section 8.6](#86-focus-point), scaled onto CropArea on a
 DX crop and moved into the window on an aspect crop; a FocusMode of
 `MANUAL` gives none, and a point number gives none until raw-files has
 a table of the body's points. The AF-area mode is a camera setting,
-given with or without a point, from AFInfo2 at the versions read and
-from AFInfo's first byte, by the table that ends that section. It will
-come from the Nikon 1 versions of AFInfo2 too.
+given with or without a point, from AFInfo2 at every version of section
+8.6 and from AFInfo's first byte, by the table that ends that section.
 
 For the camera settings of [section 8.7](#87-camera-settings),
 [ADR011](../../architecture-decisions/adr011-metadata-from-standard-tags.md)
