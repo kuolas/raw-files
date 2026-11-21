@@ -1057,7 +1057,7 @@ raw-files reads it or not; all are tags of the MakerNote IFD:
 | 0x2027 FocusLocation | four SHORTs: the frame's width and height, the center's x and y | every sample from the ILCE-7RM2 (2015) on: ILCE-7RM2, ILCE-9, ILCE-7RM3 (ARW and ARQ), DSC-RX100M6, ILCE-1, ILCE-7SM3, ILCE-6700, ILCE-7M4, ILCE-9M3, ILCE-1M2, ILCE-7M5 **[F]** | read |
 | 0x204A FocusLocation2 | the same four values | the ILCE-9M3, ILCE-1M2 and ILCE-7M5, equal to FocusLocation on every one **[F]** | read when FocusLocation gives nothing, absent or of another shape, which no sample is |
 | 0x2037 FocusFrameSize | six bytes: the focus area's width and height as two u16, and a third u16 of 257 or 0 **[F]**; "width and height of FocusFrame, centered on FocusLocation" [S][1] | from the ILCE-7SM3 (2020) on: ILCE-7SM3, ILCE-1, ILCE-6700, ILCE-7M4, ILCE-9M3, ILCE-1M2, ILCE-7M5 **[F]** | read |
-| 0x201B FocusMode | 0 manual, 2 AF-S, 3 AF-C, 4 AF-A, 6 DMF, 7 AF-D [S][1] | the SLT-A99V, the ILCE-7S and every body with FocusLocation **[F]** | read: 0 gives no focus point; also to be read as the focus mode ([section 9.10](#910-more-capture-settings)) |
+| 0x201B FocusMode | 0 manual, 2 AF-S, 3 AF-C, 4 AF-A, 6 DMF, 7 AF-D [S][1] | the SLT-A99V, the ILCE-7S and every body with FocusLocation **[F]** | read as the focus mode ([section 9.10](#910-more-capture-settings)); 0 gives no focus point |
 | 0x201C AFAreaModeSetting | the AF-area mode the photographer chose, by codes that depend on the body family [S][1] | the same bodies as FocusMode **[F]** | not read with the focus point: to be read as a camera setting, given whether or not a point is ([section 9.10](#910-more-capture-settings)) |
 | 0x201D FlexibleSpotPosition | the spot chosen in Flexible Spot mode, on a 640 × 480 grid; valid in that mode only [S][1] | the same bodies as FocusMode **[F]** | not read: the spot chosen, not where focus landed, which FocusLocation records on every body that has both |
 | 0x201E AFPointSelected, 0x2020 AFPointsUsed | the selected point or zone by number, a mask of the points used [S][1] | the same bodies; the SLT-A99V's mask has one bit set, every other is zero **[F]** | not read: a number needs a table of the body's points |
@@ -1613,7 +1613,7 @@ white balance frames of 2026-10-25
 ([test-data.md](test-data.md#23-the-camera-settings-of-each-file)).
 
 **Focus mode.** 0x201B FocusMode, one BYTE, is on 175 public files of
-75 bodies [S][1] **[F]**. raw-files will give it as a `FocusMode`:
+75 bodies [S][1] **[F]**. raw-files gives it as a `FocusMode`:
 
 | 0x201B | ExifTool's word | `FocusMode` | Public files | Mark |
 |---|---|---|---|---|
@@ -1632,7 +1632,7 @@ white balance frames of 2026-10-25
 - Seven older files record a focus mode in 0xB042 and 0xB04E, which
   raw-files will not read. They are the DSC-R1's, the DSLR-A100's and
   five RX files (3221, 2346, 2647, 4050, 2188, 5811, 4731).
-- 34 public files have no 0x201B, and their focus mode will be `None`:
+- 34 public files have no 0x201B, and their focus mode is `None`:
   - the SRF, the SR2, the DSLR-A100 and the RX100 (5811);
   - the 16 other A-mount DSLRs and the Lunar;
   - six early NEX bodies and seven SLT bodies up to the SLT-A77V.
@@ -1996,8 +1996,8 @@ SHORTs), FocusFrameSize and
 FocusMode ([section 9.6](#96-focus-point)). Nothing is deciphered, and
 0xB000, 0xB001 and the lens tags stay unread. The capture settings of
 [section 9.10](#910-more-capture-settings) will add 0x0102, 0x0104,
-0x201C, 0x202D, 0x202E, 0xB026, 0xB047 and 0xB049, and FocusMode as
-the focus mode.
+0x201C, 0x202D, 0x202E, 0xB026, 0xB047 and 0xB049. FocusMode also
+gives the focus mode.
 
 1. **Standard tags:** IFD0 Make, Model and Orientation; Exif
    DateTimeOriginal, SubSecTimeOriginal and OffsetTimeOriginal (the last two

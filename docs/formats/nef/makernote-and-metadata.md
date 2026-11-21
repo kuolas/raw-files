@@ -830,7 +830,7 @@ raw-files reads it or not:
 | 0x00B7 AFInfo2, AFPointsInFocus | a mask of the points in focus, version 0101 only (byte 48) [S] | the D850, one point **[F]** | not read: a mask of version 0101, which needs a table of a body that writes that version |
 | 0x0088 AFInfo | 4 bytes: area mode, point number, mask of the points in focus [S] | the bodies without AFInfo2: D1H, D1X, D70, D100, D200, E5700, P7800 **[F]** | the point not read: a number only; the area mode, its first byte, will be read (below) |
 | 0x0021 FaceDetect | a frame size and up to twelve face rectangles in it [S] | none of the 35 files **[F]** | not read: no sample |
-| 0x0007 FocusMode | an ASCII string [S][1]: `MANUAL`, or an AF mode padded with spaces to six characters (`AF-S  `, `AF-C  `, `AF-A  `) **[F]** | `MANUAL` on the D300 and D850, both viewfinder shots with a zero frame (files 928, 1835), and on the Z fc, which records a position under it (file 8559); an AF mode on every other file with the embedded MakerNote, my Z 9 shots included **[F]** | read: `MANUAL`, after trimming, gives no focus point; the focus mode itself will be a camera setting ([section 8.10](#810-more-capture-settings)) |
+| 0x0007 FocusMode | an ASCII string [S][1]: `MANUAL`, or an AF mode padded with spaces to six characters (`AF-S  `, `AF-C  `, `AF-A  `) **[F]** | `MANUAL` on the D300 and D850, both viewfinder shots with a zero frame (files 928, 1835), and on the Z fc, which records a position under it (file 8559); an AF mode on every other file with the embedded MakerNote, my Z 9 shots included **[F]** | read as the focus mode, a camera setting ([section 8.10](#810-more-capture-settings)); `MANUAL`, after trimming, gives no focus point |
 | 0x00B9 AFTune | AF fine-tune, a setting, not a position [S] | 225 public files of 49 bodies and 37,339 of mine ([section 8.10](#810-more-capture-settings)) **[F]** | will be read as a camera setting |
 | 0x0085 ManualFocusDistance, the area modes in the MenuSettings blocks | settings, not a position [S] | not looked for | not read |
 
@@ -1239,8 +1239,8 @@ area, the raw image size and the color space, and with them the focal
 length in 35 mm terms and the software that wrote the file. The Exif
 tags record some of these on almost every body. Nikon records the rest
 only in its MakerNote, a few of them only in blocks that are encrypted
-or that have a record format of their own. The further settings that
-raw-files will read, from the focus mode to the JPEG quality, are in
+or that have a record format of their own. The further settings, from
+the focus mode to the JPEG quality, are in
 [section 8.10](#810-more-capture-settings).
 
 Every value below was read on the 35 NEF and NRW files of
@@ -1731,7 +1731,7 @@ the settings [P]. Every value read lies inside what `open` already
 reads. **[F]**
 
 **Focus mode.** 0x0007 FocusMode is ASCII, seven bytes with the NUL,
-padded with spaces. raw-files will trim it and read it as a camera
+padded with spaces. raw-files trims it and reads it as a camera
 setting:
 
 | Text | Setting [P][25][26] | `FocusMode` | Mark | Files, public / mine |
@@ -1743,8 +1743,8 @@ setting:
 | `MANUAL` | manual focus | `Manual` | confirmed: my D600's frames 45 and 46 | 61 / 1,087 |
 
 **[F]** ExifTool documents the tag as a string and lists no values
-[S][1]. Nikon writes no direct manual focus mode, so `DirectManual` will
-serve other makers.
+[S][1]. Nikon writes no direct manual focus mode, so `DirectManual`
+serves other makers, Sony's DMF among them.
 
 **AF fine-tune.** 0x00B9 AFTune is four UNDEFINED bytes [S][1]:
 

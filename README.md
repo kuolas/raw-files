@@ -41,7 +41,8 @@ Linux and Windows alike.
   - Sony's electronic front curtain setting;
   - the image area;
   - the raw image size;
-  - the color space.
+  - the color space;
+  - the focus mode.
   - [`CameraSettings`](https://docs.rs/raw-files/latest/raw_files/struct.CameraSettings.html)
     says which a maker's files leave out: Sony's give no shutter, image
     area or raw image size.

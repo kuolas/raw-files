@@ -41,8 +41,8 @@ use std::io::Cursor;
 
 use raw_files::{
     Camera, CameraFile, CameraSettings, ColorSpace, DateTime, Directory, ErrorKind, Exposure,
-    ExposureProgram, FlashMode, Focus, FocusAreaMode, FocusOrigin, FocusPoints, Format, ImageArea,
-    Lens, Limits, Make, Metadata, MeteringMode, Options, Orientation, Point, Preview,
+    ExposureProgram, FlashMode, Focus, FocusAreaMode, FocusMode, FocusOrigin, FocusPoints, Format,
+    ImageArea, Lens, Limits, Make, Metadata, MeteringMode, Options, Orientation, Point, Preview,
     PreviewFormat, Rational, RawImageSize, Shutter, SignedRational, Size, ValueError, WhiteBalance,
     WhiteBalanceMode,
 };
@@ -236,7 +236,9 @@ fn the_z9_metadata_by_hand(orientation: Orientation) -> Result<Metadata, ValueEr
             height: 5504,
         })
         // The fixture's AFInfo2 records the area mode 193, single point.
-        .with_focus_points(FocusPoints::from(focus).with_area_mode(FocusAreaMode::Single));
+        .with_focus_points(FocusPoints::from(focus).with_area_mode(FocusAreaMode::Single))
+        // Its FocusMode, `AF-S`.
+        .with_camera_settings(CameraSettings::default().with_focus_mode(FocusMode::Single));
     Ok(metadata)
 }
 
@@ -392,8 +394,8 @@ fn the_z6iii_metadata_by_hand(orientation: Orientation) -> Result<Metadata, Valu
     )?
     .with_size(as_size(Z6III_FOCUS_AREA))?
     .with_in_focus(Z6III_IN_FOCUS);
-    // Its MakerNote's one settings tag is CropHiSpeed, whose crop setting,
-    // 17, FX 1:1, gives the image area.
+    // Its MakerNote's settings tags are CropHiSpeed, whose crop setting,
+    // 17, FX 1:1, gives the image area, and FocusMode, `AF-S`.
     let camera = Camera::default()
         .with_recorded_make("NIKON CORPORATION")
         .with_recorded_model("NIKON Z6_3")
@@ -409,7 +411,11 @@ fn the_z6iii_metadata_by_hand(orientation: Orientation) -> Result<Metadata, Valu
         .with_image_size(as_size(Z6III_IMAGE))
         // The built file's AFInfo2 records the area mode 192, pinpoint.
         .with_focus_points(FocusPoints::from(focus).with_area_mode(FocusAreaMode::Pinpoint))
-        .with_camera_settings(CameraSettings::default().with_image_area(ImageArea::Square));
+        .with_camera_settings(
+            CameraSettings::default()
+                .with_image_area(ImageArea::Square)
+                .with_focus_mode(FocusMode::Single),
+        );
     Ok(metadata)
 }
 
@@ -544,11 +550,11 @@ fn the_d300_file_gives_what_its_exif_tags_lack_from_the_makernote() {
             assert_eq!(metadata.focus(), None, "{label}");
             // No layout: raw-files has no table of the D300's points.
             assert_eq!(metadata.focus_layout(), None, "{label}");
-            // The fixture writes no settings tag, so the settings are the
-            // empty record.
+            // The fixture writes no settings tag but FocusMode, `MANUAL`, so
+            // the settings are the empty record with manual focus.
             assert_eq!(
                 metadata.camera_settings(),
-                &CameraSettings::default(),
+                &CameraSettings::default().with_focus_mode(FocusMode::Manual),
                 "{label}"
             );
         }
@@ -557,9 +563,10 @@ fn the_d300_file_gives_what_its_exif_tags_lack_from_the_makernote() {
 
 /// The metadata of the D1H file, built as a caller's test would, through
 /// the public constructors and the `with_…` methods alone: what its
-/// standard tags give, with the ISO, the lens's range and the white
-/// balance setting, `SUNNY`, daylight, that its MakerNote alone records
-/// when `with_makernote`; the error of the first constructor that refuses
+/// standard tags give, with the ISO, the lens's range, the white balance
+/// setting, `SUNNY`, daylight, and the focus mode, `AF-S`, that its
+/// MakerNote alone records when `with_makernote`; the error of the first
+/// constructor that refuses
 /// a value. It records no serial number, no offset from UTC, no
 /// orientation, no focal length in 35 mm terms, no focus point and no
 /// other camera setting either way.
@@ -594,7 +601,8 @@ fn the_d1h_metadata_by_hand(with_makernote: bool) -> Result<Metadata, ValueError
             .with_f_number_at_max_focal_length(Rational::new(at_max, at_max_d)?);
         metadata = metadata.with_lens(lens).with_camera_settings(
             CameraSettings::default()
-                .with_white_balance(WhiteBalance::default().with_mode(WhiteBalanceMode::Daylight)),
+                .with_white_balance(WhiteBalance::default().with_mode(WhiteBalanceMode::Daylight))
+                .with_focus_mode(FocusMode::Single),
         );
     }
     Ok(metadata.with_exposure(exposure))

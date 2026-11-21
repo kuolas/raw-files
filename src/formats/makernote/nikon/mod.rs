@@ -50,11 +50,12 @@ pub(in crate::formats) use block::read;
 
 use std::io::{Read, Seek};
 
+use crate::camera_settings::FocusMode;
 use crate::error::Result;
 use crate::focus::FocusPoints;
 use crate::formats::makernote::Picture;
 use crate::formats::makernote::points::{self, PointTable};
-use crate::formats::tiff_metadata::{self, Standard};
+use crate::formats::tiff_metadata::Standard;
 use crate::geometry::Size;
 use crate::io::Source;
 use crate::metadata::Metadata;
@@ -75,7 +76,9 @@ const WHITE_BALANCE: u16 = 0x0005;
 
 /// The Nikon MakerNote tag that records how the camera focused
 /// (FocusMode), as ASCII text: `MANUAL` for manual focus, or an autofocus
-/// mode padded with spaces to six characters, such as `AF-S  `.
+/// mode padded with spaces to six characters, such as `AF-S  `. Read once,
+/// as a camera setting, which also says whether the shot is in manual
+/// focus.
 const FOCUS_MODE: u16 = 0x0007;
 
 /// The Nikon MakerNote tag that records the white balance fine-tuning in
@@ -226,8 +229,9 @@ mod rules {
 ///   Exif tags gave when it names one ([`camera_settings`]). The color space is read only
 ///   when the Exif IFD holds no ColorSpace, and the raw image size only for
 ///   a raw file's picture.
-/// - **The focus points**, from AFInfo2 and FocusMode, always read, since
-///   the standard tags never give one ([`focus`]). A recorded position is
+/// - **The focus points**, from AFInfo2, always read, since the standard
+///   tags never give one ([`focus`]); a shot whose focus mode, read with
+///   the settings, is manual gives none. A recorded position is
 ///   placed on a crop's picture. The points a record with no position names
 ///   are placed from the table of the body the Model names, matched as
 ///   [`points::find`] matches it. A file without a Model has no table.
@@ -308,7 +312,8 @@ fn metadata<R: Read + Seek>(
         .recorded_model
         .as_deref()
         .and_then(points::find);
-    metadata.focus_points = focus(src, makernote, crop_hi_speed, crop, pixels, table)?;
+    let manual = metadata.camera_settings.focus_mode == Some(FocusMode::Manual);
+    metadata.focus_points = focus(src, makernote, manual, crop_hi_speed, crop, pixels, table)?;
     // The table's layout on the picture, whatever the shot.
     metadata.placed_focus_layout =
         table.and_then(|table| placed_layout(table, crop_hi_speed, pixels));
@@ -327,9 +332,11 @@ fn metadata<R: Read + Seek>(
 ///   writes, gives the points it names ([`NamedPoints`]), placed from
 ///   `table` ([`placed`]). CropArea plays no part there.
 ///
-/// `None` when FocusMode records manual focus ([`manual_focus`]), when
-/// AFInfo2 is missing or breaks its rule, or when its record cannot be
-/// read ([`af_info2_record`]), checked or placed.
+/// `None` when `manual` says that the shot is in manual focus: the point
+/// of such a shot is not one the camera focused on, so it gives none,
+/// whatever AFInfo2 holds (ADR012). `None` too when AFInfo2 is missing or
+/// breaks its rule, or when its record cannot be read
+/// ([`af_info2_record`]), checked or placed.
 ///
 /// # Errors
 ///
@@ -341,6 +348,7 @@ fn metadata<R: Read + Seek>(
 fn focus<R: Read + Seek>(
     src: &mut Source<R>,
     makernote: &MakerNote,
+    manual: bool,
     crop: Option<CropHiSpeed>,
     crop_area: CropArea,
     pixels: Option<Size>,
@@ -349,10 +357,8 @@ fn focus<R: Read + Seek>(
     let Some(ifd) = makernote.tagged() else {
         return Ok(None);
     };
-    // Without AFInfo2 there is nothing to place, so FocusMode is not read;
-    // with manual focus there is nothing to place either, so AFInfo2 is not
-    // read.
-    if ifd.entry(AF_INFO2).is_none() || manual_focus(src, makernote)? {
+    // With manual focus there is nothing to place, so AFInfo2 is not read.
+    if manual {
         return Ok(None);
     }
     let Some(value) = ifd.get(src, rules::AF_INFO2)? else {
@@ -375,24 +381,6 @@ fn focus<R: Read + Seek>(
     }))
 }
 
-/// Whether `makernote`'s FocusMode reads `MANUAL`, exactly, by the text
-/// rule ([`tiff_metadata::text`]). A FocusMode that is missing, breaks its
-/// rule or reads anything else, such as `AF-S`, records no manual focus.
-///
-/// The point of a manual-focus shot is not one the camera focused on, so
-/// such a shot gives none, whatever AFInfo2 holds (ADR012).
-///
-/// # Errors
-///
-/// `Io` when the reader fails.
-fn manual_focus<R: Read + Seek>(src: &mut Source<R>, makernote: &MakerNote) -> Result<bool> {
-    let Some(ifd) = makernote.tagged() else {
-        return Ok(false);
-    };
-    let mode = tiff_metadata::text(src, ifd, rules::FOCUS_MODE)?;
-    Ok(mode.as_deref() == Some("MANUAL"))
-}
-
 #[cfg(test)]
 mod tests {
     use super::testing::{
@@ -402,6 +390,7 @@ mod tests {
     use crate::container::tiff::tags::MAKER_NOTE;
     use crate::container::tiff::{self, walk};
     use crate::error::ErrorKind;
+    use crate::formats::tiff_metadata;
     use crate::limits::Limits;
     use crate::testing::{FAR, FailsFar};
     use crate::tiff_builder::{Order, UNDEFINED};

@@ -43,7 +43,7 @@ use std::ops::Range;
 
 use raw_files::{
     Camera, CameraFile, CameraSettings, ColorSpace, DateTime, Directory, ErrorKind, Exposure,
-    ExposureProgram, FineTune, FlashMode, Focus, FocusAreaMode, FocusOrigin, FocusPoint,
+    ExposureProgram, FineTune, FlashMode, Focus, FocusAreaMode, FocusMode, FocusOrigin, FocusPoint,
     FocusPoints, Format, ImageArea, Lens, Limits, Make, Metadata, MeteringMode, Options,
     Orientation, Point, Preview, PreviewFormat, Rational, Shutter, SignedRational, Size, Value,
     WhiteBalance, WhiteBalanceMode,
@@ -1137,6 +1137,17 @@ fn with_image_area(metadata: Metadata, mode: Z9Mode) -> Metadata {
     metadata.with_camera_settings(settings)
 }
 
+/// `metadata` with the focus mode `mode`, which a fixture's MakerNote
+/// records, its other settings kept; `None` leaves the settings as they
+/// are.
+fn with_focus_mode(metadata: Metadata, mode: Option<FocusMode>) -> Metadata {
+    let Some(mode) = mode else {
+        return metadata;
+    };
+    let settings = metadata.camera_settings().clone().with_focus_mode(mode);
+    metadata.with_camera_settings(settings)
+}
+
 /// `metadata` with `change` made to its camera, its other values kept.
 fn with_camera_changed(metadata: Metadata, change: impl FnOnce(Camera) -> Camera) -> Metadata {
     let camera = change(metadata.camera().clone());
@@ -1145,11 +1156,15 @@ fn with_camera_changed(metadata: Metadata, change: impl FnOnce(Camera) -> Camera
 
 /// The metadata of a Z 9's JPEG that [`z9_jpeg`] lays out in mode `mode`
 /// with a main image of `main`: every value [`camera_exif`] writes, the
-/// image area of `mode`, the image size `main`, and the focus point
-/// `focus`, as the focus points [`z9_points`] gives.
+/// image area of `mode`, the focus mode of its FocusMode, `AF-S`, the
+/// image size `main`, and the focus point `focus`, as the focus points
+/// [`z9_points`] gives.
 fn z9_metadata(mode: Z9Mode, main: (u16, u16), focus: Option<Focus>) -> Metadata {
-    let metadata =
-        with_image_area(camera_metadata_without(&[]), mode).with_image_size(size_of(main));
+    let metadata = with_focus_mode(
+        with_image_area(camera_metadata_without(&[]), mode),
+        Some(FocusMode::Single),
+    )
+    .with_image_size(size_of(main));
     match focus {
         Some(focus) => metadata.with_focus_points(z9_points(focus)),
         None => metadata,
@@ -1252,6 +1267,8 @@ fn an_older_nikon_jpeg_takes_what_its_exif_lacks_from_its_makernote() {
         .with_capture_time(capture_time_at(Some(D5300_TIME_ZONE)))
         .with_lens(lens_of_range(D5300_LENS))
         .with_image_size(size_of(D5300_MAIN));
+        // Its FocusMode, `AF-A`.
+        let metadata = with_focus_mode(metadata, Some(FocusMode::Automatic));
         assert_eq!(metadata.exposure().iso(), Some(u32::from(D5300_ISO)));
         assert_opens(
             &file.built.bytes,
@@ -1264,14 +1281,15 @@ fn an_older_nikon_jpeg_takes_what_its_exif_lacks_from_its_makernote() {
 
 /// The metadata of the D70's JPEG that [`d70_jpeg`] lays out: what
 /// [`camera_exif`] writes but [`D70_LOST`], its own Model, and from its
-/// MakerNote the ISO and the lens's range, which its Exif segment lacks.
-/// Its MakerNote records no time zone and no AFInfo2.
+/// MakerNote the ISO, the lens's range, which its Exif segment lacks, and
+/// the focus mode of its FocusMode, `AF-S`. Its MakerNote records no time
+/// zone and no AFInfo2.
 fn d70_metadata() -> Metadata {
     let metadata = with_camera_changed(camera_metadata_without(&D70_LOST), |camera| {
         camera.with_recorded_model(D70_MODEL)
     });
     let exposure = metadata.exposure().clone().with_iso(u32::from(D70_ISO));
-    metadata
+    with_focus_mode(metadata, Some(FocusMode::Single))
         .with_exposure(exposure)
         .with_capture_time(capture_time_at(None))
         .with_lens(lens_of_range(D300_LENS))
@@ -1443,8 +1461,9 @@ fn makernote_with_everything(
 fn a_nikon_makernote_under_another_makers_make_is_not_read() {
     // A file of another make, whose Exif segment records no serial number,
     // with a sound Nikon MakerNote that records one, a focus point, a
-    // preview and a crop setting: nothing of it is read. The same file with
-    // Nikon's Make reads all four, the crop setting as the image area.
+    // preview, a crop setting and a focus mode: nothing of it is read. The
+    // same file with Nikon's Make reads all five, the crop setting as the
+    // image area.
     for order in ORDERS {
         let (block, at) = makernote_with_everything(order, |_, _| {});
         for make in ["Canon", "NIKON CORPORATION"] {
@@ -1465,10 +1484,13 @@ fn a_nikon_makernote_under_another_makers_make_is_not_read() {
             );
             let mut previews = nikon_previews(&file, MAIN);
             if make != "Canon" {
-                metadata = with_camera_changed(with_image_area(metadata, Z9Mode::Fx), |camera| {
-                    camera.with_serial_number("7654321")
-                })
-                .with_focus_points(z9_points(recorded(Z9Mode::Fx)));
+                let settings = with_focus_mode(
+                    with_image_area(metadata, Z9Mode::Fx),
+                    Some(FocusMode::Single),
+                );
+                metadata =
+                    with_camera_changed(settings, |camera| camera.with_serial_number("7654321"))
+                        .with_focus_points(z9_points(recorded(Z9Mode::Fx)));
                 let start = file.makernote.start + at;
                 let preview = start..start + to_u64(jpeg_stub(640, 424, 0xC0).len());
                 previews.insert(
@@ -1505,9 +1527,9 @@ fn d1h_previews(file: &NikonJpeg, preview: Range<u64>, read: bool) -> Vec<Seen> 
 
 /// The metadata of the D1H's JPEG that [`d1h_jpeg`] lays out under the
 /// Make `make`: what [`camera_exif`] writes but [`D1H_LOST`], that Make
-/// and its own Model, and, when `read`, the ISO and the lens's range that
-/// its MakerNote alone records. Its MakerNote records no time zone and no
-/// AFInfo2.
+/// and its own Model, and, when `read`, the ISO, the lens's range and the
+/// focus mode of its FocusMode, `AF-S`, that its MakerNote alone records.
+/// Its MakerNote records no time zone and no AFInfo2.
 fn d1h_metadata(make: &str, read: bool) -> Metadata {
     let metadata = with_camera_changed(camera_metadata_without(&D1H_LOST), |camera| {
         camera
@@ -1520,7 +1542,7 @@ fn d1h_metadata(make: &str, read: bool) -> Metadata {
         return metadata;
     }
     let exposure = metadata.exposure().clone().with_iso(u32::from(D1H_ISO));
-    metadata
+    with_focus_mode(metadata, Some(FocusMode::Single))
         .with_exposure(exposure)
         .with_lens(lens_of_range(D1H_LENS))
 }
@@ -1633,8 +1655,8 @@ fn a_limit_crossed_inside_the_makernote_costs_the_makernote_only() {
     // the four tags of `makernote_with_everything` and 14 more of no
     // meaning, beside an Exif IFD of 14, the most any other IFD of the file
     // holds. With a limit of 20 entries the MakerNote gives its serial
-    // number, focus point, preview and image area; with 19 it gives
-    // nothing, and the rest of the file is as without it.
+    // number, focus point, preview, image area and focus mode; with 19 it
+    // gives nothing, and the rest of the file is as without it.
     let fillers = |inner: &mut TiffBuilder, ifd: IfdId| {
         for tag in 0x1000..0x100E {
             inner.undefined(ifd, tag, &[0; 4]);
@@ -1664,10 +1686,12 @@ fn a_limit_crossed_inside_the_makernote_costs_the_makernote_only() {
             ),
         );
         let without = camera_metadata_without(&[BODY_SERIAL_NUMBER]);
-        let with = with_camera_changed(with_image_area(without.clone(), Z9Mode::Fx), |camera| {
-            camera.with_serial_number("7654321")
-        })
-        .with_focus_points(z9_points(recorded(Z9Mode::Fx)));
+        let settings = with_focus_mode(
+            with_image_area(without.clone(), Z9Mode::Fx),
+            Some(FocusMode::Single),
+        );
+        let with = with_camera_changed(settings, |camera| camera.with_serial_number("7654321"))
+            .with_focus_points(z9_points(recorded(Z9Mode::Fx)));
         for (entries, previews, metadata) in
             [(20, read, with), (19, nikon_previews(&file, MAIN), without)]
         {
@@ -1717,12 +1741,20 @@ fn sony_previews(file: &SonyJpeg, main: (u16, u16)) -> Vec<Seen> {
 /// The metadata of a Sony JPEG that `sony_jpeg` lays out with IFD0's
 /// Make `make` and Model `model` and a main image of `main`: every value
 /// [`camera_exif`] writes but [`SONY_LOST`], that Make and Model, the image
-/// size `main`, and the focus point `focus`.
-fn sony_metadata(make: &str, model: &str, main: (u16, u16), focus: Option<Focus>) -> Metadata {
+/// size `main`, the focus mode `focus_mode` that its MakerNote's FocusMode
+/// gives when the MakerNote is read, and the focus point `focus`.
+fn sony_metadata(
+    make: &str,
+    model: &str,
+    main: (u16, u16),
+    focus_mode: Option<FocusMode>,
+    focus: Option<Focus>,
+) -> Metadata {
     let metadata = with_camera_changed(camera_metadata_without(&SONY_LOST), |camera| {
         camera.with_recorded_make(make).with_recorded_model(model)
     })
     .with_image_size(size_of(main));
+    let metadata = with_focus_mode(metadata, focus_mode);
     match focus {
         Some(focus) => metadata.with_focus(focus),
         None => metadata,
@@ -1750,6 +1782,7 @@ fn a_sony_jpeg_gives_the_focus_point_its_makernote_records() {
                 SONY_MAKE,
                 ILCE7M3_MODEL,
                 ILCE7M3_MAIN,
+                Some(FocusMode::Continuous),
                 Some(sony_focus(ILCE7M3_FOCUS_LOCATION)),
             ),
             &format!("ILCE-7M3, {order:?}"),
@@ -1778,11 +1811,13 @@ fn a_sony_jpeg_gives_the_camera_settings_its_makernote_records() {
             .with_fine_tune(FineTune::new(step(-3), step(0)));
         let settings = CameraSettings::default()
             .with_white_balance(white_balance)
-            .with_electronic_front_curtain_setting(true);
+            .with_electronic_front_curtain_setting(true)
+            .with_focus_mode(FocusMode::Continuous);
         let metadata = sony_metadata(
             SONY_MAKE,
             ILCE7M3_MODEL,
             ILCE7M3_MAIN,
+            Some(FocusMode::Continuous),
             Some(sony_focus(ILCE7M3_FOCUS_LOCATION)),
         )
         .with_camera_settings(settings);
@@ -1810,7 +1845,13 @@ fn a_sony_jpeg_gives_the_area_its_makernote_records() {
         assert_opens(
             &file.built.bytes,
             &sony_previews(&file, ARW4_FULL_SIZE_JPEG),
-            &sony_metadata(SONY_MAKE, ILCE7M4_MODEL, ARW4_FULL_SIZE_JPEG, Some(focus)),
+            &sony_metadata(
+                SONY_MAKE,
+                ILCE7M4_MODEL,
+                ARW4_FULL_SIZE_JPEG,
+                Some(FocusMode::Continuous),
+                Some(focus),
+            ),
             &format!("ILCE-7M4, {order:?}"),
         );
     }
@@ -1831,6 +1872,7 @@ fn a_smaller_sony_jpeg_of_the_same_shape_keeps_its_point() {
                 SONY_MAKE,
                 ILCE7M3_MODEL,
                 main,
+                Some(FocusMode::Continuous),
                 Some(sony_focus(ILCE7M3_FOCUS_LOCATION)),
             ),
             &format!("{main:?}, {order:?}"),
@@ -1849,7 +1891,13 @@ fn a_sony_export_cut_to_another_shape_gives_no_focus_point() {
             assert_opens(
                 &file.built.bytes,
                 &sony_previews(&file, main),
-                &sony_metadata(SONY_MAKE, ILCE7M3_MODEL, main, None),
+                &sony_metadata(
+                    SONY_MAKE,
+                    ILCE7M3_MODEL,
+                    main,
+                    Some(FocusMode::Continuous),
+                    None,
+                ),
                 &format!("{main:?}, {order:?}"),
             );
         }
@@ -1865,7 +1913,13 @@ fn a_sony_jpeg_in_manual_focus_gives_no_focus_point() {
         assert_opens(
             &file.built.bytes,
             &sony_previews(&file, RX100M4_MAIN),
-            &sony_metadata(SONY_MAKE, RX100M4_MODEL, RX100M4_MAIN, None),
+            &sony_metadata(
+                SONY_MAKE,
+                RX100M4_MODEL,
+                RX100M4_MAIN,
+                Some(FocusMode::Manual),
+                None,
+            ),
             &format!("RX100M4, {order:?}"),
         );
     }
@@ -1880,7 +1934,13 @@ fn a_sony_jpeg_without_a_focus_location_gives_no_focus_point() {
         assert_opens(
             &file.built.bytes,
             &sony_previews(&file, ILCE6000_MAIN),
-            &sony_metadata(SONY_MAKE, ILCE6000_MODEL, ILCE6000_MAIN, None),
+            &sony_metadata(
+                SONY_MAKE,
+                ILCE6000_MODEL,
+                ILCE6000_MAIN,
+                Some(FocusMode::Automatic),
+                None,
+            ),
             &format!("ILCE-6000, {order:?}"),
         );
     }
@@ -1903,7 +1963,7 @@ fn an_a100_jpeg_opens_with_its_standard_metadata_and_no_focus_point() {
         assert_opens(
             &file.built.bytes,
             &previews,
-            &sony_metadata(SONY_MAKE, A100_MODEL, A100_MAIN, None),
+            &sony_metadata(SONY_MAKE, A100_MODEL, A100_MAIN, None, None),
             &format!("A100, {order:?}"),
         );
     }
@@ -1989,6 +2049,7 @@ fn a_sony_makernotes_offsets_count_from_the_exif_segments_tiff_header() {
                 SONY_MAKE,
                 ILCE7M3_MODEL,
                 ILCE7M3_MAIN,
+                Some(FocusMode::Continuous),
                 Some(sony_focus(ILCE7M3_FOCUS_LOCATION)),
             ),
             &format!("{order:?}"),
@@ -2014,10 +2075,11 @@ fn a_sony_makernote_under_another_makers_make_is_not_read() {
         ] {
             let file = ilce7m3_jpeg_with(order, make, ILCE7M3_MAIN, |_, _| {});
             let focus = read.then(|| sony_focus(ILCE7M3_FOCUS_LOCATION));
+            let focus_mode = read.then_some(FocusMode::Continuous);
             assert_opens(
                 &file.built.bytes,
                 &sony_previews(&file, ILCE7M3_MAIN),
-                &sony_metadata(make, ILCE7M3_MODEL, ILCE7M3_MAIN, focus),
+                &sony_metadata(make, ILCE7M3_MODEL, ILCE7M3_MAIN, focus_mode, focus),
                 &format!("{make}, {order:?}"),
             );
         }
@@ -2043,6 +2105,7 @@ fn a_make_longer_than_the_value_cap_costs_a_jpeg_its_make_and_makernote_only() {
         SONY_MAKE,
         ILCE7M3_MODEL,
         ILCE7M3_MAIN,
+        Some(FocusMode::Continuous),
         Some(sony_focus(ILCE7M3_FOCUS_LOCATION)),
     );
     for order in ORDERS {
@@ -2098,7 +2161,7 @@ fn a_damaged_sony_makernote_costs_only_its_focus_point() {
         assert_opens(
             &file.built.bytes,
             &sony_previews(&file, ILCE7M3_MAIN),
-            &sony_metadata(SONY_MAKE, ILCE7M3_MODEL, ILCE7M3_MAIN, None),
+            &sony_metadata(SONY_MAKE, ILCE7M3_MODEL, ILCE7M3_MAIN, None, None),
             &format!("{order:?}"),
         );
     }
@@ -2119,11 +2182,14 @@ fn a_limit_crossed_inside_the_sony_makernote_costs_its_focus_point_only() {
         });
         assert_eq!(u16_in(&file.built.bytes, file.makernote_ifd, order), 12);
         for (entries, focus) in [(12, Some(sony_focus(ILCE7M3_FOCUS_LOCATION))), (11, None)] {
+            // The MakerNote is read whole or not at all: its focus mode
+            // goes with its point.
+            let focus_mode = focus.map(|_| FocusMode::Continuous);
             assert_opens_with(
                 &Options::new().with_limits(Limits::default().with_max_ifd_entries(entries)),
                 &file.built.bytes,
                 &sony_previews(&file, ILCE7M3_MAIN),
-                &sony_metadata(SONY_MAKE, ILCE7M3_MODEL, ILCE7M3_MAIN, focus),
+                &sony_metadata(SONY_MAKE, ILCE7M3_MODEL, ILCE7M3_MAIN, focus_mode, focus),
                 &format!("{entries} entries, {order:?}"),
             );
         }

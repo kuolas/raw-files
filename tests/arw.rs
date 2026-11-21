@@ -15,7 +15,7 @@ use std::io::Cursor;
 
 use raw_files::{
     CameraFile, CameraSettings, ColorSpace, Directory, ErrorKind, Exposure, ExposureProgram,
-    FlashMode, FocusOrigin, Format, Lens, Limits, Make, Metadata, MeteringMode, Options,
+    FlashMode, FocusMode, FocusOrigin, Format, Lens, Limits, Make, Metadata, MeteringMode, Options,
     Orientation, Point, PreviewFormat, SignedRational, Size, WhiteBalanceMode,
 };
 use support::arw::{
@@ -339,11 +339,11 @@ fn the_arw4_file_gives_every_value_its_fixture_records() {
             assert_the_arw4_focus(metadata, &label);
             // No layout: raw-files has no table of the ILCE-7M4's points.
             assert_eq!(metadata.focus_layout(), None, "{label}");
-            // The fixture writes no settings tag, so the settings are the
-            // empty record.
+            // The fixture writes no settings tag but FocusMode, 3, AF-C,
+            // so the settings are the empty record with that focus mode.
             assert_eq!(
                 metadata.camera_settings(),
-                &CameraSettings::default(),
+                &CameraSettings::default().with_focus_mode(FocusMode::Continuous),
                 "{label}"
             );
             for preview in file.previews() {
@@ -476,12 +476,13 @@ fn every_layout_gives_the_metadata_its_fixture_records() {
             // No layout of autofocus points: raw-files has no table of a
             // Sony body's points.
             assert_eq!(metadata.focus_layout(), None, "{label}");
-            // No layout writes a settings tag.
-            assert_eq!(
-                metadata.camera_settings(),
-                &CameraSettings::default(),
-                "{label}"
-            );
+            // No layout writes a settings tag but the ARW 4 MakerNote's
+            // FocusMode, 3, AF-C, on the layouts that carry it.
+            let settings = match has_exposure_lens_and_focus {
+                true => CameraSettings::default().with_focus_mode(FocusMode::Continuous),
+                false => CameraSettings::default(),
+            };
+            assert_eq!(metadata.camera_settings(), &settings, "{label}");
             // Every layout is built upright, and the SRF has no
             // Orientation at all; the previews agree.
             assert_eq!(metadata.orientation(), Orientation::NoTransforms, "{label}");

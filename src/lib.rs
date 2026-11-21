@@ -415,7 +415,7 @@ mod value_error;
 pub use authorship::Authorship;
 pub use camera::{Camera, Make};
 pub use camera_settings::{
-    CameraSettings, ColorSpace, ExposureProgram, FineTune, Flash, FlashMode, ImageArea,
+    CameraSettings, ColorSpace, ExposureProgram, FineTune, Flash, FlashMode, FocusMode, ImageArea,
     MeteringMode, RawImageSize, Shutter, WhiteBalance, WhiteBalanceMode,
 };
 pub use datetime::DateTime;

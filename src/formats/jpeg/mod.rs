@@ -418,7 +418,7 @@ fn lookup<R: Read + Seek>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::camera_settings::{CameraSettings, ColorSpace, MeteringMode};
+    use crate::camera_settings::{CameraSettings, ColorSpace, FocusMode, MeteringMode};
     use crate::container::jpeg::segments;
     use crate::container::tiff::tags::{
         COLOR_SPACE, INTEROP_INDEX, MAKE, MAKER_NOTE, METERING_MODE,
@@ -592,7 +592,8 @@ mod tests {
     fn a_jpeg_keeps_the_camera_settings_its_exif_segment_records() {
         // Under each Make, through each way the MakerNote is read: Nikon's,
         // whose IFD holds one entry, its version; Sony's, as the test above
-        // builds it; and none, under another maker's Make.
+        // builds it, whose one entry, its FocusMode of 3, AF-C, adds the
+        // focus mode; and none, under another maker's Make.
         let mut nikon = b"Nikon\0\x02\x11\0\0II\x2A\0\x08\0\0\0".to_vec();
         nikon.extend_from_slice(&[0x01, 0, 0x01, 0, 0x07, 0, 0, 0, 0x04, 0, 0, 0]);
         nikon.extend_from_slice(b"0211");
@@ -622,13 +623,14 @@ mod tests {
             let (bytes, found) = read(&builder);
             let mut src = Source::new(Cursor::new(bytes)).unwrap();
             let parsed = parse(&mut src, &found, &Limits::default()).unwrap();
-            assert_eq!(
-                parsed.metadata.camera_settings,
-                CameraSettings::default()
-                    .with_metering_mode(MeteringMode::MultiSegment)
-                    .with_color_space(ColorSpace::AdobeRgb),
-                "{make}"
-            );
+            let exif = CameraSettings::default()
+                .with_metering_mode(MeteringMode::MultiSegment)
+                .with_color_space(ColorSpace::AdobeRgb);
+            let expected = match make {
+                "SONY" => exif.with_focus_mode(FocusMode::Continuous),
+                _ => exif,
+            };
+            assert_eq!(parsed.metadata.camera_settings, expected, "{make}");
         }
     }
 
