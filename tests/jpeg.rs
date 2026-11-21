@@ -2534,6 +2534,8 @@ const FIXTURE_METADATA: &[SampleMetadata] = &[
             raw_image_size: None,
             color_space: Some(ColorSpace::Srgb),
             focus_area_mode: Some(FocusAreaMode::Tracking), // code 207, detection 2
+            af_fine_tune: Some((false, None)),
+            focus_mode: Some(FocusMode::Continuous),
         },
     },
     // The Z 9's DX shot, at full size: CropHiSpeed `[2, 8280, 5520, 5408,
@@ -2598,6 +2600,8 @@ const FIXTURE_METADATA: &[SampleMetadata] = &[
             raw_image_size: None,
             color_space: Some(ColorSpace::Srgb),
             focus_area_mode: Some(FocusAreaMode::Pinpoint), // code 192, detection 1
+            af_fine_tune: Some((false, None)),
+            focus_mode: Some(FocusMode::Single),
         },
     },
     // The Z 9's 16:9 shot, at the middle size, 6192 by 3480, taken in
@@ -2664,6 +2668,8 @@ const FIXTURE_METADATA: &[SampleMetadata] = &[
             raw_image_size: None,
             color_space: Some(ColorSpace::Srgb),
             focus_area_mode: Some(FocusAreaMode::Pinpoint), // code 192, detection 1
+            af_fine_tune: Some((false, None)),
+            focus_mode: Some(FocusMode::Single),
         },
     },
     // The JPEG of the Z 9's pinpoint shot, whose NEF `tests/nef.rs`
@@ -2729,6 +2735,8 @@ const FIXTURE_METADATA: &[SampleMetadata] = &[
             raw_image_size: None,
             color_space: Some(ColorSpace::Srgb),
             focus_area_mode: Some(FocusAreaMode::Pinpoint), // code 192, detection 1
+            af_fine_tune: Some((false, None)),
+            focus_mode: Some(FocusMode::Single),
         },
     },
     // The JPEG of frame 4 of the D600 session, the shot whose NEF
@@ -2820,6 +2828,8 @@ const FIXTURE_METADATA: &[SampleMetadata] = &[
             raw_image_size: None,
             color_space: Some(ColorSpace::Srgb),
             focus_area_mode: Some(FocusAreaMode::Single), // code 0, detection 0
+            af_fine_tune: Some((true, Some(0))),
+            focus_mode: Some(FocusMode::Single),
         },
     },
 ];
@@ -3397,6 +3407,8 @@ const METADATA: &[SampleMetadata] = &[
             raw_image_size: None,
             color_space: Some(ColorSpace::Srgb),
             focus_area_mode: Some(FocusAreaMode::Single), // 0x201C 3
+            af_fine_tune: None,
+            focus_mode: Some(FocusMode::Continuous),
         },
     },
     // ILCE-7RM2 (Wikimedia Commons Ulpu_Pajari_puhumassa_vastaanotettuaan_tiedonjulkistamisen_valtionpalkinnon_2.jpg)
@@ -3456,6 +3468,8 @@ const METADATA: &[SampleMetadata] = &[
             raw_image_size: None,
             color_space: Some(ColorSpace::Srgb),
             focus_area_mode: Some(FocusAreaMode::Auto), // 0x201C 0
+            af_fine_tune: None,
+            focus_mode: Some(FocusMode::Single),
         },
     },
     // DSC-RX100M4 (Wikimedia Commons 여의도한강공원샛강생태공원문화다리_09.jpg)
@@ -3507,6 +3521,8 @@ const METADATA: &[SampleMetadata] = &[
             raw_image_size: None,
             color_space: Some(ColorSpace::Srgb),
             focus_area_mode: Some(FocusAreaMode::Auto), // 0x201C 0
+            af_fine_tune: None,
+            focus_mode: Some(FocusMode::Manual),
         },
     },
     // ILCE-6000 (Wikimedia Commons 140319_MS_Queen_Elizabeth_Kobe_Japan01o.JPG)
@@ -3558,6 +3574,8 @@ const METADATA: &[SampleMetadata] = &[
             raw_image_size: None,
             color_space: Some(ColorSpace::Srgb),
             focus_area_mode: Some(FocusAreaMode::Auto), // 0x201C 0
+            af_fine_tune: None,
+            focus_mode: Some(FocusMode::Automatic),
         },
     },
     // DSLR-A100 (Wikimedia Commons "Krone"_flag_on_line_5_tram_(2564030031).jpg)
@@ -3598,6 +3616,8 @@ const METADATA: &[SampleMetadata] = &[
             raw_image_size: None,
             color_space: Some(ColorSpace::Srgb),
             focus_area_mode: None,
+            af_fine_tune: None,
+            focus_mode: None,
         },
     },
     // NIKON D5300 (Wikimedia Commons "Tours"_French_restaurant_in_Omotesando.JPG)
@@ -3652,6 +3672,8 @@ const METADATA: &[SampleMetadata] = &[
             raw_image_size: None,
             color_space: Some(ColorSpace::Srgb),
             focus_area_mode: Some(FocusAreaMode::Auto), // code 8, detection 0
+            af_fine_tune: None,
+            focus_mode: Some(FocusMode::Automatic),
         },
     },
     // NIKON D70 (Wikimedia Commons "Stadswandeling".JPG)
@@ -3700,6 +3722,8 @@ const METADATA: &[SampleMetadata] = &[
             raw_image_size: None,
             color_space: Some(ColorSpace::Srgb),
             focus_area_mode: None, // AFInfo 2: not named
+            af_fine_tune: None,
+            focus_mode: Some(FocusMode::Single),
         },
     },
     // NIKON E800 (Wikimedia Commons MIKI-eki.jpg)
@@ -3740,6 +3764,8 @@ const METADATA: &[SampleMetadata] = &[
             raw_image_size: None,
             color_space: Some(ColorSpace::Srgb),
             focus_area_mode: None,
+            af_fine_tune: None,
+            focus_mode: None,
         },
     },
     // NIKON E900 (Wikimedia Commons Petro_Star_refinery.jpg)
@@ -3780,6 +3806,8 @@ const METADATA: &[SampleMetadata] = &[
             raw_image_size: None,
             color_space: None,
             focus_area_mode: None,
+            af_fine_tune: None,
+            focus_mode: None,
         },
     },
     // NIKON E950 (Wikimedia Commons Starr_020628-0045_Prosopis_pallida.jpg)
@@ -3820,6 +3848,8 @@ const METADATA: &[SampleMetadata] = &[
             raw_image_size: None,
             color_space: Some(ColorSpace::Srgb),
             focus_area_mode: None,
+            af_fine_tune: None,
+            focus_mode: None,
         },
     },
     // Canon PowerShot G7 X (Wikimedia Commons DC-3_OH-LCH_at_EFJM_20160717.jpg)
@@ -3860,6 +3890,8 @@ const METADATA: &[SampleMetadata] = &[
             raw_image_size: None,
             color_space: Some(ColorSpace::Srgb),
             focus_area_mode: None,
+            af_fine_tune: None,
+            focus_mode: None,
         },
     },
 ];
