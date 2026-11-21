@@ -24,9 +24,9 @@ use std::path::{Path, PathBuf};
 
 use raw_files::{
     Camera, CameraFile, ColorSpace, Directory, ErrorKind, ExposureProgram, FieldType, FlashMode,
-    FocusAreaMode, FocusLayoutPoint, FocusOrigin, Format, ImageArea, Make, Metadata, MeteringMode,
-    Orientation, Point, Preview, PreviewFormat, Rational, RawImageSize, Shutter, SignedRational,
-    Size, WhiteBalanceMode,
+    FocusAreaMode, FocusLayoutPoint, FocusMode, FocusOrigin, Format, ImageArea, Make, Metadata,
+    MeteringMode, Orientation, Point, Preview, PreviewFormat, Rational, RawImageSize, Shutter,
+    SignedRational, Size, WhiteBalanceMode,
 };
 
 /// The path of the sample file `name`, or `None`, with a note on stderr,
@@ -441,8 +441,9 @@ pub struct SamplePlacedLayout {
 /// mode, the flash, whether it fired and then its mode, `None` when the
 /// file records no mode, the shutter used, whether Sony's electronic front
 /// curtain setting was on, the image area, the raw image size, the color
-/// space and the AF-area mode, `None` when the file names none in a code
-/// raw-files knows, whether or not it gives focus points.
+/// space; the AF-area mode, `None` when the file names none in a code
+/// raw-files knows, whether or not it gives focus points; the focus mode;
+/// and AF fine-tune, whether it was on and then its value, `None` when off.
 ///
 /// Every row writes every field, `None` included, one to a line, so that
 /// a value read later changes one line of a row.
@@ -459,6 +460,8 @@ pub struct SampleSettings {
     pub raw_image_size: Option<RawImageSize>,
     pub color_space: Option<ColorSpace>,
     pub focus_area_mode: Option<FocusAreaMode>,
+    pub focus_mode: Option<FocusMode>,
+    pub af_fine_tune: Option<(bool, Option<i32>)>,
 }
 
 /// The white balance fine-tuning of a sample file, as the reader must give
@@ -972,6 +975,18 @@ pub fn check_metadata(expected: &SampleMetadata, format: Format, folder: Folder)
         settings.focus_area_mode(),
         expected.focus_area_mode,
         "{label}: AF-area mode"
+    );
+    assert_eq!(
+        settings.focus_mode(),
+        expected.focus_mode,
+        "{label}: focus mode"
+    );
+    assert_eq!(
+        settings
+            .af_fine_tune()
+            .map(|fine_tune| (fine_tune.is_on(), fine_tune.value())),
+        expected.af_fine_tune,
+        "{label}: AF fine-tune"
     );
 }
 

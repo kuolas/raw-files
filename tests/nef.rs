@@ -1183,6 +1183,8 @@ const FIXTURE_METADATA: &[SampleMetadata] = &[
             raw_image_size: Some(RawImageSize::Large),
             color_space: Some(ColorSpace::Srgb),
             focus_area_mode: Some(FocusAreaMode::Single), // code 193, detection 2
+            af_fine_tune: Some((false, None)),
+            focus_mode: Some(FocusMode::Single),
         },
     },
     // The Z 9's 1:1 shot, alike but for these values. CropHiSpeed `[17,
@@ -1245,6 +1247,8 @@ const FIXTURE_METADATA: &[SampleMetadata] = &[
             raw_image_size: Some(RawImageSize::Large),
             color_space: Some(ColorSpace::Srgb),
             focus_area_mode: Some(FocusAreaMode::Single), // code 193, detection 2
+            af_fine_tune: Some((false, None)),
+            focus_mode: Some(FocusMode::Single),
         },
     },
     // The Z 9's pinpoint shot, in FX. CropHiSpeed `[11, 8280, 5520, 8280,
@@ -1307,6 +1311,8 @@ const FIXTURE_METADATA: &[SampleMetadata] = &[
             raw_image_size: Some(RawImageSize::Large),
             color_space: Some(ColorSpace::Srgb),
             focus_area_mode: Some(FocusAreaMode::Pinpoint), // code 192, detection 1
+            af_fine_tune: Some((false, None)),
+            focus_mode: Some(FocusMode::Single),
         },
     },
     // The D600's frame 4.
@@ -1396,6 +1402,8 @@ const FIXTURE_METADATA: &[SampleMetadata] = &[
             raw_image_size: None,
             color_space: Some(ColorSpace::Srgb),
             focus_area_mode: Some(FocusAreaMode::Single), // code 0, detection 0
+            af_fine_tune: Some((true, Some(0))),
+            focus_mode: Some(FocusMode::Single),
         },
     },
 ];
@@ -3261,6 +3269,8 @@ const METADATA: &[SampleMetadata] = &[
             raw_image_size: Some(RawImageSize::Large),
             color_space: Some(ColorSpace::Srgb),
             focus_area_mode: Some(FocusAreaMode::Single), // code 193, detection 2
+            af_fine_tune: Some((false, None)),
+            focus_mode: Some(FocusMode::Single),
         },
     },
     // Z 9, High Efficiency* (raw.pixls.us 5147)
@@ -3323,6 +3333,8 @@ const METADATA: &[SampleMetadata] = &[
             raw_image_size: Some(RawImageSize::Large),
             color_space: Some(ColorSpace::Srgb),
             focus_area_mode: Some(FocusAreaMode::Single), // code 193, detection 2
+            af_fine_tune: Some((false, None)),
+            focus_mode: Some(FocusMode::Single),
         },
     },
     // Z 9, High Efficiency (raw.pixls.us 5148)
@@ -3385,6 +3397,8 @@ const METADATA: &[SampleMetadata] = &[
             raw_image_size: Some(RawImageSize::Large),
             color_space: Some(ColorSpace::Srgb),
             focus_area_mode: Some(FocusAreaMode::Single), // code 193, detection 2
+            af_fine_tune: Some((false, None)),
+            focus_mode: Some(FocusMode::Single),
         },
     },
     // D1H, 12-bit uncompressed (raw.pixls.us 5364)
@@ -3433,6 +3447,8 @@ const METADATA: &[SampleMetadata] = &[
             raw_image_size: None,
             color_space: None,
             focus_area_mode: Some(FocusAreaMode::Dynamic), // AFInfo 1
+            af_fine_tune: None,
+            focus_mode: Some(FocusMode::Single),
         },
     },
     // D1X, 12-bit lossy (raw.pixls.us 1785)
@@ -3481,6 +3497,8 @@ const METADATA: &[SampleMetadata] = &[
             raw_image_size: None,
             color_space: None,
             focus_area_mode: Some(FocusAreaMode::Dynamic), // AFInfo 1
+            af_fine_tune: None,
+            focus_mode: Some(FocusMode::Continuous),
         },
     },
     // D1X, 12-bit uncompressed (raw.pixls.us 1786)
@@ -3529,6 +3547,8 @@ const METADATA: &[SampleMetadata] = &[
             raw_image_size: None,
             color_space: None,
             focus_area_mode: Some(FocusAreaMode::Single), // AFInfo 0
+            af_fine_tune: None,
+            focus_mode: Some(FocusMode::Continuous),
         },
     },
     // D100, 12-bit uncompressed (raw.pixls.us 2996)
@@ -3577,6 +3597,8 @@ const METADATA: &[SampleMetadata] = &[
             raw_image_size: None,
             color_space: None,
             focus_area_mode: Some(FocusAreaMode::Single), // AFInfo 0
+            af_fine_tune: None,
+            focus_mode: Some(FocusMode::Single),
         },
     },
     // D70, 12-bit lossy (raw.pixls.us 2060)
@@ -3625,6 +3647,8 @@ const METADATA: &[SampleMetadata] = &[
             raw_image_size: None,
             color_space: None,
             focus_area_mode: Some(FocusAreaMode::Dynamic), // AFInfo 1
+            af_fine_tune: None,
+            focus_mode: Some(FocusMode::Single),
         },
     },
     // D200, 12-bit lossy (raw.pixls.us 8079)
@@ -3673,6 +3697,8 @@ const METADATA: &[SampleMetadata] = &[
             raw_image_size: None,
             color_space: Some(ColorSpace::AdobeRgb),
             focus_area_mode: Some(FocusAreaMode::Single), // AFInfo 0
+            af_fine_tune: None,
+            focus_mode: Some(FocusMode::Continuous),
         },
     },
     // D300, 12-bit lossy (raw.pixls.us 928)
@@ -3727,6 +3753,8 @@ const METADATA: &[SampleMetadata] = &[
             raw_image_size: None,
             color_space: Some(ColorSpace::Srgb),
             focus_area_mode: Some(FocusAreaMode::Single), // code 0, detection 0
+            af_fine_tune: Some((true, Some(-2))),
+            focus_mode: Some(FocusMode::Manual),
         },
     },
     // D700, 12-bit lossy (raw.pixls.us 2255)
@@ -3781,6 +3809,8 @@ const METADATA: &[SampleMetadata] = &[
             raw_image_size: None,
             color_space: Some(ColorSpace::AdobeRgb),
             focus_area_mode: Some(FocusAreaMode::Auto), // code 8, detection 0
+            af_fine_tune: Some((false, None)),
+            focus_mode: Some(FocusMode::Continuous),
         },
     },
     // D7000, 12-bit lossy (raw.pixls.us 961)
@@ -3843,6 +3873,8 @@ const METADATA: &[SampleMetadata] = &[
             raw_image_size: None,
             color_space: Some(ColorSpace::Srgb),
             focus_area_mode: Some(FocusAreaMode::Single), // code 1, detection 1
+            af_fine_tune: Some((true, Some(-20))),
+            focus_mode: Some(FocusMode::Single),
         },
     },
     // D750, 12-bit lossy (raw.pixls.us 895)
@@ -3897,6 +3929,8 @@ const METADATA: &[SampleMetadata] = &[
             raw_image_size: Some(RawImageSize::Large),
             color_space: Some(ColorSpace::Srgb),
             focus_area_mode: Some(FocusAreaMode::Tracking), // code 9, detection 0
+            af_fine_tune: Some((true, Some(0))),
+            focus_mode: Some(FocusMode::Continuous),
         },
     },
     // D810, 12-bit small raw (raw.pixls.us 2036)
@@ -3951,6 +3985,8 @@ const METADATA: &[SampleMetadata] = &[
             raw_image_size: Some(RawImageSize::Small),
             color_space: Some(ColorSpace::Srgb),
             focus_area_mode: Some(FocusAreaMode::Single), // code 0, detection 0
+            af_fine_tune: Some((false, None)),
+            focus_mode: Some(FocusMode::Continuous),
         },
     },
     // D850, 12-bit lossless small raw (raw.pixls.us 1835)
@@ -4005,6 +4041,8 @@ const METADATA: &[SampleMetadata] = &[
             raw_image_size: Some(RawImageSize::Small),
             color_space: Some(ColorSpace::Srgb),
             focus_area_mode: Some(FocusAreaMode::Single), // code 0, detection 0
+            af_fine_tune: Some((false, None)),
+            focus_mode: Some(FocusMode::Manual),
         },
     },
     // D780, 12-bit lossy (raw.pixls.us 3827)
@@ -4059,6 +4097,8 @@ const METADATA: &[SampleMetadata] = &[
             raw_image_size: Some(RawImageSize::Large),
             color_space: Some(ColorSpace::Srgb),
             focus_area_mode: Some(FocusAreaMode::Auto), // code 8, detection 0
+            af_fine_tune: Some((false, None)),
+            focus_mode: Some(FocusMode::Automatic),
         },
     },
     // Z 6, 12-bit small raw (raw.pixls.us 3587)
@@ -4121,6 +4161,8 @@ const METADATA: &[SampleMetadata] = &[
             raw_image_size: Some(RawImageSize::Small),
             color_space: Some(ColorSpace::Srgb),
             focus_area_mode: Some(FocusAreaMode::Single), // code 193, detection 2
+            af_fine_tune: Some((false, None)),
+            focus_mode: Some(FocusMode::Continuous),
         },
     },
     // Z f, 14-bit (raw.pixls.us 6887)
@@ -4183,6 +4225,8 @@ const METADATA: &[SampleMetadata] = &[
             raw_image_size: Some(RawImageSize::Large),
             color_space: Some(ColorSpace::Srgb),
             focus_area_mode: Some(FocusAreaMode::Zone), // code 196, detection 2
+            af_fine_tune: Some((false, None)),
+            focus_mode: Some(FocusMode::Continuous),
         },
     },
     // Z6III, 14-bit, 3:2 (raw.pixls.us 7810)
@@ -4245,6 +4289,8 @@ const METADATA: &[SampleMetadata] = &[
             raw_image_size: Some(RawImageSize::Large),
             color_space: Some(ColorSpace::Srgb),
             focus_area_mode: Some(FocusAreaMode::Pinpoint), // code 192, detection 2
+            af_fine_tune: Some((false, None)),
+            focus_mode: Some(FocusMode::Single),
         },
     },
     // Z6III, 14-bit, 16:9 (raw.pixls.us 7809)
@@ -4307,6 +4353,8 @@ const METADATA: &[SampleMetadata] = &[
             raw_image_size: Some(RawImageSize::Large),
             color_space: Some(ColorSpace::Srgb),
             focus_area_mode: Some(FocusAreaMode::Pinpoint), // code 192, detection 2
+            af_fine_tune: Some((false, None)),
+            focus_mode: Some(FocusMode::Single),
         },
     },
     // Z6III, 14-bit, 1:1 (raw.pixls.us 7808)
@@ -4369,6 +4417,8 @@ const METADATA: &[SampleMetadata] = &[
             raw_image_size: Some(RawImageSize::Large),
             color_space: Some(ColorSpace::Srgb),
             focus_area_mode: Some(FocusAreaMode::Pinpoint), // code 192, detection 2
+            af_fine_tune: Some((false, None)),
+            focus_mode: Some(FocusMode::Single),
         },
     },
     // Coolpix A, 14-bit lossy (raw.pixls.us 2238)
@@ -4423,6 +4473,8 @@ const METADATA: &[SampleMetadata] = &[
             raw_image_size: None,
             color_space: Some(ColorSpace::AdobeRgb),
             focus_area_mode: Some(FocusAreaMode::Single), // code 1, detection 1
+            af_fine_tune: None,
+            focus_mode: Some(FocusMode::Single),
         },
     },
     // Coolpix P7800, 12-bit, an NRW file (raw.pixls.us 1425)
@@ -4466,6 +4518,8 @@ const METADATA: &[SampleMetadata] = &[
             raw_image_size: None,
             color_space: None,
             focus_area_mode: Some(FocusAreaMode::Single), // AFInfo 0
+            af_fine_tune: None,
+            focus_mode: Some(FocusMode::Single),
         },
     },
     // E5700, 12-bit uncompressed (raw.pixls.us 4456)
@@ -4506,6 +4560,8 @@ const METADATA: &[SampleMetadata] = &[
             raw_image_size: None,
             color_space: None,
             focus_area_mode: Some(FocusAreaMode::Single), // AFInfo 0
+            af_fine_tune: None,
+            focus_mode: Some(FocusMode::Single),
         },
     },
     // Nikon 1 J1, 12-bit lossy (raw.pixls.us 2956)
@@ -4560,6 +4616,8 @@ const METADATA: &[SampleMetadata] = &[
             raw_image_size: None,
             color_space: Some(ColorSpace::AdobeRgb),
             focus_area_mode: Some(FocusAreaMode::Single), // code 128
+            af_fine_tune: Some((false, None)),
+            focus_mode: Some(FocusMode::Automatic),
         },
     },
     // D5600, 12-bit lossy, live view (raw.pixls.us 1415)
@@ -4622,6 +4680,8 @@ const METADATA: &[SampleMetadata] = &[
             raw_image_size: Some(RawImageSize::Large),
             color_space: Some(ColorSpace::Srgb),
             focus_area_mode: Some(FocusAreaMode::Zone), // code 2, detection 1
+            af_fine_tune: None,
+            focus_mode: Some(FocusMode::Single),
         },
     },
     // Z5II, 14-bit, 1:1 (raw.pixls.us 7735)
@@ -4676,6 +4736,8 @@ const METADATA: &[SampleMetadata] = &[
             raw_image_size: Some(RawImageSize::Large),
             color_space: Some(ColorSpace::Srgb),
             focus_area_mode: Some(FocusAreaMode::Auto), // code 197, detection 2
+            af_fine_tune: Some((false, None)),
+            focus_mode: Some(FocusMode::Automatic),
         },
     },
     // Z5II, 14-bit, 16:9 (raw.pixls.us 7736)
@@ -4730,6 +4792,8 @@ const METADATA: &[SampleMetadata] = &[
             raw_image_size: Some(RawImageSize::Large),
             color_space: Some(ColorSpace::Srgb),
             focus_area_mode: Some(FocusAreaMode::Auto), // code 197, detection 2
+            af_fine_tune: Some((false, None)),
+            focus_mode: Some(FocusMode::Automatic),
         },
     },
     // Z50II, 14-bit, 1:1 (raw.pixls.us 7767)
@@ -4792,6 +4856,8 @@ const METADATA: &[SampleMetadata] = &[
             raw_image_size: Some(RawImageSize::Large),
             color_space: Some(ColorSpace::Srgb),
             focus_area_mode: Some(FocusAreaMode::Tracking), // code 207, detection 2
+            af_fine_tune: Some((false, None)),
+            focus_mode: Some(FocusMode::Automatic),
         },
     },
     // Z50II, 14-bit, 16:9 (raw.pixls.us 7770)
@@ -4854,6 +4920,8 @@ const METADATA: &[SampleMetadata] = &[
             raw_image_size: Some(RawImageSize::Large),
             color_space: Some(ColorSpace::Srgb),
             focus_area_mode: Some(FocusAreaMode::Tracking), // code 207, detection 2
+            af_fine_tune: Some((false, None)),
+            focus_mode: Some(FocusMode::Automatic),
         },
     },
     // Z6III, 14-bit High Efficiency*, 1:1 (raw.pixls.us 7812)
@@ -4916,6 +4984,8 @@ const METADATA: &[SampleMetadata] = &[
             raw_image_size: Some(RawImageSize::Large),
             color_space: Some(ColorSpace::Srgb),
             focus_area_mode: Some(FocusAreaMode::Pinpoint), // code 192, detection 2
+            af_fine_tune: Some((false, None)),
+            focus_mode: Some(FocusMode::Single),
         },
     },
     // Z6III, 14-bit High Efficiency*, 16:9 (raw.pixls.us 7813)
@@ -4978,6 +5048,8 @@ const METADATA: &[SampleMetadata] = &[
             raw_image_size: Some(RawImageSize::Large),
             color_space: Some(ColorSpace::Srgb),
             focus_area_mode: Some(FocusAreaMode::Pinpoint), // code 192, detection 2
+            af_fine_tune: Some((false, None)),
+            focus_mode: Some(FocusMode::Single),
         },
     },
     // D5, 14-bit lossy, live view (raw.pixls.us 2218)
@@ -5040,6 +5112,8 @@ const METADATA: &[SampleMetadata] = &[
             raw_image_size: Some(RawImageSize::Large),
             color_space: Some(ColorSpace::Srgb),
             focus_area_mode: Some(FocusAreaMode::Zone), // code 2, detection 1
+            af_fine_tune: Some((true, Some(0))),
+            focus_mode: Some(FocusMode::Single),
         },
     },
     // Z 30, 12-bit lossless, rotated (raw.pixls.us 5812)
@@ -5102,6 +5176,8 @@ const METADATA: &[SampleMetadata] = &[
             raw_image_size: Some(RawImageSize::Large),
             color_space: Some(ColorSpace::AdobeRgb),
             focus_area_mode: Some(FocusAreaMode::Auto), // code 199, detection 2
+            af_fine_tune: Some((false, None)),
+            focus_mode: Some(FocusMode::Automatic),
         },
     },
     // Z fc, 12-bit lossless, manual focus (raw.pixls.us 8559)
@@ -5156,6 +5232,8 @@ const METADATA: &[SampleMetadata] = &[
             raw_image_size: Some(RawImageSize::Large),
             color_space: Some(ColorSpace::Srgb),
             focus_area_mode: Some(FocusAreaMode::Single), // code 193, detection 2
+            af_fine_tune: Some((false, None)),
+            focus_mode: Some(FocusMode::Manual),
         },
     },
 ];
