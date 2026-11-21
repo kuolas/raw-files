@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 //! The camera settings in the Nikon MakerNote: the white balance, the
-//! shutter used, the image area, the raw size and the color space.
+//! shutter used, the image area, the raw size, the color space and the
+//! focus mode.
 //!
 //! The MakerNote records how the camera was set for the picture beyond
 //! what the Exif tags record (ADR011). [`camera_settings`] reads each
@@ -15,16 +16,21 @@
 //! - the shutter used from ShutterMode ([`shutter`]);
 //! - the image area from CropHiSpeed's crop setting ([`image_area`]);
 //! - the raw size from ImageSizeRAW ([`raw_image_size`]);
-//! - the color space from ColorSpace ([`color_space`]).
+//! - the color space from ColorSpace ([`color_space`]);
+//! - the focus mode from FocusMode's text ([`focus_mode_of_text`]).
 //!
 //! A code or a text gives a value only where a checked file, or a
 //! standard, shows what it means. Anything else costs that value alone.
 //! Nothing the block holds is an error.
 //!
 //! The meaning of each code is ExifTool's, read in its published tag
-//! documentation. Each was confirmed on the public samples and on frames I
-//! shot for these values with a Z 9 and a D600, as the NEF notes record
-//! (`docs/formats/nef/makernote-and-metadata.md`, section 8.7).
+//! documentation, or Nikon's for a camera's own text. The codes of the
+//! settings of section 8.7 of the NEF notes were each confirmed on the
+//! public samples and on frames I shot for these values with a Z 9 and a
+//! D600. Those of sections 8.6 and 8.10, such as the focus modes, are each
+//! confirmed by such a frame or documented and agreed with by the
+//! measured files, and the notes say which
+//! (`docs/formats/nef/makernote-and-metadata.md`).
 
 use std::io::{Read, Seek};
 
@@ -32,7 +38,8 @@ use super::block::MakerNote;
 use super::crop::CropHiSpeed;
 use super::rules;
 use crate::camera_settings::{
-    CameraSettings, ColorSpace, FineTune, ImageArea, RawImageSize, Shutter, WhiteBalanceMode,
+    CameraSettings, ColorSpace, FineTune, FocusMode, ImageArea, RawImageSize, Shutter,
+    WhiteBalanceMode,
 };
 use crate::error::Result;
 use crate::formats::makernote::{Picture, checked_color_temperature};
@@ -64,6 +71,10 @@ use crate::rational::SignedRational;
 ///   `exif_records_color_space` is `false`. Where the Exif IFD keeps a
 ///   ColorSpace, it alone decides
 ///   ([`Standard`](tiff_metadata::Standard)).
+/// - **The focus mode** is the one FocusMode's text names
+///   ([`focus_mode_of_text`]), read by the text rule. The focus point's
+///   reader takes manual focus from it, and does not read the tag again
+///   ([`focus`](super::focus)).
 ///
 /// Nikon records no electronic front curtain setting, so it stays as
 /// `settings` has it, `None`. The exposure program, the metering mode and
@@ -108,6 +119,8 @@ pub(super) fn camera_settings<R: Read + Seek>(
             .held(rules::COLOR_SPACE)
             .and_then(|[code]| color_space(code));
     }
+    settings.focus_mode = tiff_metadata::text(src, ifd, rules::FOCUS_MODE)?
+        .and_then(|text| focus_mode_of_text(&text));
     Ok(settings)
 }
 
@@ -324,6 +337,30 @@ fn raw_image_size(code: u32) -> Option<RawImageSize> {
     })
 }
 
+/// The focus mode that the FocusMode text `text`, as read, names. Each
+/// text is looked up whole in a table of the texts that files hold, as the
+/// white balance texts are ([`white_balance_of_text`]):
+///
+/// - `MANUAL` [`Manual`](FocusMode::Manual);
+/// - `AF-S`, single-servo AF, [`Single`](FocusMode::Single);
+/// - `AF-C`, continuous-servo AF, [`Continuous`](FocusMode::Continuous);
+/// - `AF-A`, auto-servo AF, [`Automatic`](FocusMode::Automatic);
+/// - `AF-F`, full-time AF, [`FullTime`](FocusMode::FullTime).
+///
+/// The bodies pad an autofocus mode with spaces to six characters, which
+/// the text rule trims. `None` for every other text, such as `manual` in
+/// lower case.
+fn focus_mode_of_text(text: &str) -> Option<FocusMode> {
+    Some(match text {
+        "MANUAL" => FocusMode::Manual,
+        "AF-S" => FocusMode::Single,
+        "AF-C" => FocusMode::Continuous,
+        "AF-A" => FocusMode::Automatic,
+        "AF-F" => FocusMode::FullTime,
+        _ => return None,
+    })
+}
+
 /// The color space a ColorSpace `code` of the MakerNote names: 1
 /// [`Srgb`](ColorSpace::Srgb) and 2 [`AdobeRgb`](ColorSpace::AdobeRgb).
 /// `None` for 4, BT.2100, which no variant names and no checked file
@@ -344,8 +381,8 @@ mod tests {
         nikon_file, retyped, tags_block, whole,
     };
     use super::super::{
-        COLOR_SPACE, COLOR_TEMPERATURE, CROP_HI_SPEED, FINE_TUNE, FINE_TUNE_STEPS, IMAGE_SIZE_RAW,
-        SHUTTER_MODE, WHITE_BALANCE, metadata,
+        COLOR_SPACE, COLOR_TEMPERATURE, CROP_HI_SPEED, FINE_TUNE, FINE_TUNE_STEPS, FOCUS_MODE,
+        IMAGE_SIZE_RAW, SHUTTER_MODE, WHITE_BALANCE, metadata,
     };
     use super::*;
     use crate::camera_settings::{ExposureProgram, WhiteBalance};
@@ -1188,6 +1225,84 @@ mod tests {
                 assert_eq!(read.raw_image_size, None, "{order:?}, {code}");
                 assert_eq!(read.shutter, Some(Shutter::Electronic), "{order:?}");
             }
+        }
+    }
+
+    /// The focus mode of a raw file in byte order `order` whose
+    /// MakerNote's FocusMode is `text`, which the builder ends with a NUL.
+    fn focus_mode_of(order: Order, text: &str) -> Option<FocusMode> {
+        settings_of(order, |inner, ifd| {
+            inner.ascii(ifd, FOCUS_MODE, text);
+        })
+        .focus_mode
+    }
+
+    #[test]
+    fn each_focus_mode_text_of_the_table_gives_its_mode() {
+        // Padded with spaces to six characters, as the bodies write an
+        // autofocus mode, and `MANUAL`, which fills the six.
+        for order in ORDERS {
+            for (text, mode) in [
+                ("MANUAL", FocusMode::Manual),
+                ("AF-S  ", FocusMode::Single),
+                ("AF-C  ", FocusMode::Continuous),
+                ("AF-A  ", FocusMode::Automatic),
+                ("AF-F  ", FocusMode::FullTime),
+            ] {
+                assert_eq!(
+                    focus_mode_of(order, text),
+                    Some(mode),
+                    "{order:?}, {text:?}"
+                );
+                // The same without its padding.
+                let trimmed = text.trim_end();
+                assert_eq!(
+                    focus_mode_of(order, trimmed),
+                    Some(mode),
+                    "{order:?}, {trimmed:?}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn a_focus_mode_text_not_in_the_table_is_none() {
+        // Other letters, the right letters in lower case, a mode no file
+        // holds, a text cut short, one with more after it, and spaces.
+        for order in ORDERS {
+            for text in [
+                "manual", "af-s  ", "AF-D  ", "AF-", "AF-S1 ", "MANUAL1", "      ",
+            ] {
+                assert_eq!(focus_mode_of(order, text), None, "{order:?}, {text:?}");
+            }
+        }
+    }
+
+    #[test]
+    fn a_focus_mode_of_another_type_is_not_read() {
+        for order in ORDERS {
+            for typ in [UNDEFINED, BYTE] {
+                let (block, entry) = tags_block(order, |inner, ifd| {
+                    inner.ascii(ifd, FOCUS_MODE, "AF-C  ");
+                });
+                let block = retyped(order, block, entry, typ, 7);
+                let read = exif_metadata(order, &block, |_, _| {}).camera_settings;
+                assert_eq!(read.focus_mode, None, "{order:?}, type {typ}");
+            }
+        }
+    }
+
+    #[test]
+    fn a_jpeg_gives_the_focus_mode_as_a_raw_file_does() {
+        for order in ORDERS {
+            let read = jpeg_settings(
+                order,
+                |inner, ifd| {
+                    inner.ascii(ifd, FOCUS_MODE, "AF-A  ");
+                },
+                |_, _| {},
+            );
+            assert_eq!(read.focus_mode, Some(FocusMode::Automatic), "{order:?}");
         }
     }
 

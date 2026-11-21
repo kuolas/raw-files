@@ -5,7 +5,8 @@
 //! Beside the exposure, a viewer's information panel shows how the camera
 //! was set for the shot: the white balance, the exposure program, the
 //! metering mode, the flash, the shutter, the image area, the raw image
-//! size and the color space. [`CameraSettings`] holds them all, and
+//! size, the color space and the focus mode. [`CameraSettings`] holds them
+//! all, and
 //! [`Metadata::camera_settings`](crate::Metadata::camera_settings) gives
 //! them for a file. [`WhiteBalance`], [`FineTune`] and [`Flash`] hold the
 //! settings made of several parts; each enum, such as [`ExposureProgram`],
@@ -21,14 +22,15 @@
 //! balance mode and the color space. The others are recorded only in a
 //! maker's own tags, its MakerNote. Nikon's, in NEF files and in the JPEGs
 //! of Nikon cameras, gives the white balance's color temperature and
-//! fine-tuning, the shutter, the image area and, in a raw file, the raw
-//! image size; the white balance setting, finer than Exif's, in place of
-//! Exif's; and the color space where the Exif tags record none, as in
-//! every Nikon raw file checked. Sony's, in ARW files and their family and
-//! in the JPEGs of Sony cameras, gives the white balance's fine-tuning,
-//! the electronic front curtain setting, which only Sony records, and the
-//! color temperature of a chosen color temperature or a custom white
-//! balance; and the white balance setting in place of Exif's. On Sony
+//! fine-tuning, the shutter, the image area, the focus mode and, in a raw
+//! file, the raw image size; the white balance setting, finer than Exif's,
+//! in place of Exif's; and the color space where the Exif tags record
+//! none, as in every Nikon raw file checked. Sony's, in ARW files and
+//! their family and in the JPEGs of Sony cameras, gives the white
+//! balance's fine-tuning, the electronic front curtain setting, which only
+//! Sony records, the color temperature of a chosen color temperature or a
+//! custom white balance, and the focus mode; and the white balance setting
+//! in place of Exif's. On Sony
 //! files the shutter, the image area and the raw image size are `None`:
 //! Sony records the first two only in enciphered blocks, which raw-files
 //! does not read, and gives an APS-C raw the raw size code of a medium
@@ -44,8 +46,9 @@ use std::fmt;
 use crate::rational::SignedRational;
 
 /// How the camera was set for a picture: its white balance, exposure
-/// program, metering mode, flash, shutter, image area, raw image size and
-/// color space, for a viewer's information panel beside the exposure.
+/// program, metering mode, flash, shutter, image area, raw image size,
+/// color space and focus mode, for a viewer's information panel beside the
+/// exposure.
 ///
 /// Every value is `None` when the file does not record it or records it in
 /// a way that cannot be read, such as a code that no variant names. A
@@ -133,6 +136,7 @@ pub struct CameraSettings {
     pub(crate) image_area: Option<ImageArea>,
     pub(crate) raw_image_size: Option<RawImageSize>,
     pub(crate) color_space: Option<ColorSpace>,
+    pub(crate) focus_mode: Option<FocusMode>,
 }
 
 impl CameraSettings {
@@ -240,6 +244,50 @@ impl CameraSettings {
         self.color_space
     }
 
+    /// How the camera focused: by hand, or in which autofocus mode, such
+    /// as [`Continuous`](FocusMode::Continuous); [`FocusMode`] says which
+    /// of a maker's settings gives each.
+    ///
+    /// Read from the MakerNote:
+    ///
+    /// - Nikon's FocusMode text, without its padding, looked up whole:
+    ///   `MANUAL`, `AF-S`, `AF-C`, `AF-A` and `AF-F`;
+    /// - Sony's FocusMode code: 0 manual focus, 2 AF-S, 3 AF-C, 4 AF-A and
+    ///   6 DMF.
+    ///
+    /// `None` when:
+    ///
+    /// - the file records no focus mode, as the Coolpix JPEGs whose
+    ///   MakerNote has the short header do, and the Sony A-mount DSLRs,
+    ///   the first NEX and SLT bodies, the RX100 and the SR2 and SRF files;
+    /// - it records a text or a code that no variant names, such as Sony's
+    ///   7, AF-D, which no file checked holds;
+    /// - the tag has another type or count than the maker writes.
+    ///
+    /// What each maker's files record is in the notes on
+    /// [Nikon's capture settings](https://github.com/kuolas/raw-files/blob/master/docs/formats/nef/makernote-and-metadata.md#810-more-capture-settings)
+    /// and
+    /// [Sony's](https://github.com/kuolas/raw-files/blob/master/docs/formats/arw/makernote-and-metadata.md#910-more-capture-settings).
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use raw_files::{CameraFile, FocusMode};
+    ///
+    /// # fn main() -> raw_files::Result<()> {
+    /// let file = CameraFile::open("photo.nef")?;
+    /// match file.metadata().camera_settings().focus_mode() {
+    ///     Some(FocusMode::Manual) => println!("focused by hand"),
+    ///     Some(mode) => println!("focus: {mode}"),
+    ///     None => println!("no focus mode recorded"),
+    /// }
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn focus_mode(&self) -> Option<FocusMode> {
+        self.focus_mode
+    }
+
     /// Sets the white balance, in place of the one it had;
     /// [`white_balance`](Self::white_balance) reads it.
     #[must_use]
@@ -311,6 +359,14 @@ impl CameraSettings {
     #[must_use]
     pub fn with_color_space(mut self, color_space: ColorSpace) -> Self {
         self.color_space = Some(color_space);
+        self
+    }
+
+    /// Sets the focus mode, in place of any set before;
+    /// [`focus_mode`](Self::focus_mode) reads it.
+    #[must_use]
+    pub fn with_focus_mode(mut self, mode: FocusMode) -> Self {
+        self.focus_mode = Some(mode);
         self
     }
 }
@@ -1070,6 +1126,80 @@ impl fmt::Display for ColorSpace {
     }
 }
 
+/// How the camera focused, in words that fit any maker: by hand, or in
+/// which autofocus mode.
+///
+/// Each maker's setting folds into one variant:
+///
+/// - Nikon's `MANUAL` and Sony's manual focus:
+///   [`Manual`](Self::Manual);
+/// - AF-S, Nikon's single-servo AF and Sony's: [`Single`](Self::Single);
+/// - AF-C, Nikon's continuous-servo AF and Sony's:
+///   [`Continuous`](Self::Continuous);
+/// - AF-A, Nikon's auto-servo AF and Sony's:
+///   [`Automatic`](Self::Automatic);
+/// - Nikon's AF-F, full-time AF: [`FullTime`](Self::FullTime);
+/// - Sony's DMF, direct manual focus: [`DirectManual`](Self::DirectManual).
+///
+/// Sony's AF-D, which no file checked holds, has no variant.
+///
+/// `FocusMode` is `#[non_exhaustive]`, so match on it with a wildcard arm. It
+/// orders as its variants are listed, and a new variant is added after the
+/// existing ones, so an order once observed holds. Its [`name`](Self::name)s,
+/// which `Display` writes too, are "Manual focus", "Single AF", "Continuous
+/// AF", "Automatic AF", "Full-time AF" and "Direct manual focus".
+///
+/// # Examples
+///
+/// ```
+/// use raw_files::FocusMode;
+///
+/// assert_eq!(FocusMode::Continuous.name(), "Continuous AF");
+/// assert_eq!(FocusMode::DirectManual.to_string(), "Direct manual focus");
+/// ```
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[non_exhaustive]
+pub enum FocusMode {
+    /// The photographer focused by hand.
+    Manual,
+    /// The camera focused once, and held that focus while the shutter
+    /// button stayed half-pressed: for a still subject.
+    Single,
+    /// The camera kept focusing while the shutter button stayed
+    /// half-pressed: for a moving subject.
+    Continuous,
+    /// The camera chose between single and continuous autofocus, by
+    /// whether the subject moved.
+    Automatic,
+    /// The camera kept focusing without the shutter button pressed.
+    FullTime,
+    /// The camera focused once, and the photographer could then correct
+    /// focus by hand.
+    DirectManual,
+}
+
+impl FocusMode {
+    /// The mode's name, for an information panel, such as "Continuous
+    /// AF"; the type's docs list them all.
+    pub fn name(self) -> &'static str {
+        match self {
+            FocusMode::Manual => "Manual focus",
+            FocusMode::Single => "Single AF",
+            FocusMode::Continuous => "Continuous AF",
+            FocusMode::Automatic => "Automatic AF",
+            FocusMode::FullTime => "Full-time AF",
+            FocusMode::DirectManual => "Direct manual focus",
+        }
+    }
+}
+
+impl fmt::Display for FocusMode {
+    /// Writes [`name`](FocusMode::name).
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.name())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1107,6 +1237,7 @@ mod tests {
             image_area: Some(ImageArea::FullFrame),
             raw_image_size: Some(RawImageSize::Large),
             color_space: Some(ColorSpace::AdobeRgb),
+            focus_mode: Some(FocusMode::Continuous),
         }
     }
 
@@ -1122,6 +1253,7 @@ mod tests {
         assert_eq!(settings.image_area(), None);
         assert_eq!(settings.raw_image_size(), None);
         assert_eq!(settings.color_space(), None);
+        assert_eq!(settings.focus_mode(), None);
 
         let white_balance = WhiteBalance::default();
         assert_eq!(white_balance.mode(), None);
@@ -1150,6 +1282,7 @@ mod tests {
         assert_eq!(settings.image_area(), Some(ImageArea::FullFrame));
         assert_eq!(settings.raw_image_size(), Some(RawImageSize::Large));
         assert_eq!(settings.color_space(), Some(ColorSpace::AdobeRgb));
+        assert_eq!(settings.focus_mode(), Some(FocusMode::Continuous));
 
         let white_balance = nikon_white_balance();
         assert_eq!(white_balance.mode(), Some(WhiteBalanceMode::Auto));
@@ -1239,6 +1372,13 @@ mod tests {
                         ..start.clone()
                     },
                 ),
+                (
+                    start.clone().with_focus_mode(FocusMode::Manual),
+                    CameraSettings {
+                        focus_mode: Some(FocusMode::Manual),
+                        ..start.clone()
+                    },
+                ),
             ];
             for (place, (built, expected)) in cases.into_iter().enumerate() {
                 assert_eq!(built, expected, "builder {place} from {start:?}");
@@ -1301,7 +1441,8 @@ mod tests {
             .with_electronic_front_curtain_setting(true)
             .with_image_area(ImageArea::FullFrame)
             .with_raw_image_size(RawImageSize::Large)
-            .with_color_space(ColorSpace::AdobeRgb);
+            .with_color_space(ColorSpace::AdobeRgb)
+            .with_focus_mode(FocusMode::Continuous);
         assert_eq!(settings, full_settings());
     }
 
@@ -1316,7 +1457,8 @@ mod tests {
             .with_electronic_front_curtain_setting(false)
             .with_image_area(ImageArea::Crop2_7x)
             .with_raw_image_size(RawImageSize::Medium)
-            .with_color_space(ColorSpace::Srgb);
+            .with_color_space(ColorSpace::Srgb)
+            .with_focus_mode(FocusMode::Single);
         // Every value of `earlier` differs from the full record's, so each
         // builder below has one to replace.
         let full = full_settings();
@@ -1329,7 +1471,8 @@ mod tests {
             .with_electronic_front_curtain_setting(true)
             .with_image_area(ImageArea::FullFrame)
             .with_raw_image_size(RawImageSize::Large)
-            .with_color_space(ColorSpace::AdobeRgb);
+            .with_color_space(ColorSpace::AdobeRgb)
+            .with_focus_mode(FocusMode::Continuous);
         assert_eq!(settings, full);
 
         let white_balance = WhiteBalance::default()
@@ -1507,6 +1650,24 @@ mod tests {
         all
     }
 
+    fn all_focus_modes() -> [FocusMode; 6] {
+        use FocusMode::*;
+        let all = [
+            Manual,
+            Single,
+            Continuous,
+            Automatic,
+            FullTime,
+            DirectManual,
+        ];
+        for mode in all {
+            match mode {
+                Manual | Single | Continuous | Automatic | FullTime | DirectManual => {}
+            }
+        }
+        all
+    }
+
     #[test]
     fn every_name_is_the_one_documented_and_display_writes_it() {
         // The names are stable once released: a program may show or store
@@ -1589,6 +1750,18 @@ mod tests {
             ColorSpace::name,
             &["sRGB", "Adobe RGB"],
         );
+        assert_names(
+            &all_focus_modes(),
+            FocusMode::name,
+            &[
+                "Manual focus",
+                "Single AF",
+                "Continuous AF",
+                "Automatic AF",
+                "Full-time AF",
+                "Direct manual focus",
+            ],
+        );
     }
 
     #[test]
@@ -1603,6 +1776,7 @@ mod tests {
         assert_ordered(&all_image_areas());
         assert_ordered(&all_raw_image_sizes());
         assert_ordered(&all_color_spaces());
+        assert_ordered(&all_focus_modes());
     }
 
     #[test]

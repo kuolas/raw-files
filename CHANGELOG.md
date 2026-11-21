@@ -116,6 +116,16 @@ does. An entry that can break a caller opens with **Breaking:**.
   gave `None` before ([#63](https://github.com/kuolas/raw-files/issues/63)).
   Z 9 frames shot in pinpoint AF write the code, NEF and JPEG alike;
   the public Z6III samples write it too.
+- `CameraSettings::focus_mode` gives how the camera focused, a
+  `FocusMode`: by hand, or in which autofocus mode, such as continuous
+  AF ([#214](https://github.com/kuolas/raw-files/issues/214)). Nikon
+  and Sony files give it from their MakerNote, raw and JPEG alike:
+  - Nikon's FocusMode text: `MANUAL`, `AF-S`, `AF-C`, `AF-A` and
+    `AF-F`;
+  - Sony's FocusMode code: manual focus, AF-S, AF-C, AF-A and DMF.
+
+  Its names are "Manual focus", "Single AF", "Continuous AF",
+  "Automatic AF", "Full-time AF" and "Direct manual focus".
 
 ### Changed
 

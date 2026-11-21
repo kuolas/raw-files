@@ -724,6 +724,9 @@ fn camera_settings<R: Read + Seek>(
         image_area: None,
         raw_image_size: None,
         color_space: color_space(src, exif, interop)?,
+        // No standard tag records the focus mode: Nikon's and Sony's
+        // readers fill it.
+        focus_mode: None,
     })
 }
 

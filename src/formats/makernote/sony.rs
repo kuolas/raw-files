@@ -41,18 +41,21 @@
 //! more than the limits allow, costs the MakerNote, never the file.
 //!
 //! The meaning of each code is ExifTool's, read in its published tag
-//! documentation. Each was confirmed on the public samples and on frames I
-//! shot with an ILCE-7M2 under each setting, also read in Sony's Imaging
-//! Edge Desktop, run as a reader to compare with. The ARW notes record
-//! them, and give the layouts (`docs/formats/arw/makernote-and-metadata.md`,
-//! section 1), what each focus tag records (section 9.6) and each settings
-//! tag (section 9.7). A sample cited here by number is the file of that
+//! documentation. The codes of the settings of section 9.7 of the ARW
+//! notes were each confirmed on the public samples and on frames I shot
+//! with an ILCE-7M2 under each setting, also read in Sony's Imaging Edge
+//! Desktop, run as a reader to compare with. Those of section 9.10, the
+//! focus mode's among them, are documented and agreed with by the measured
+//! files, as the notes mark each. The ARW notes give the layouts
+//! (`docs/formats/arw/makernote-and-metadata.md`, section 1), what each
+//! focus tag records (section 9.6) and each settings tag (sections 9.7 and
+//! 9.10). A sample cited here by number is the file of that
 //! number on raw.pixls.us.
 
 use std::io::{Read, Seek};
 
 use super::{MakerNoteBlock, Picture, Reader, checked_color_temperature};
-use crate::camera_settings::{CameraSettings, FineTune, WhiteBalanceMode};
+use crate::camera_settings::{CameraSettings, FineTune, FocusMode, WhiteBalanceMode};
 use crate::container::tiff::{Ifd, Rule, Tree};
 use crate::entries::{Directory, Entries, Lookup};
 use crate::error::Result;
@@ -84,7 +87,8 @@ pub(in crate::formats) const ELECTRONIC_FRONT_CURTAIN: u16 = 0x201A;
 
 /// The Sony MakerNote tag that records how the camera focused
 /// (FocusMode): one BYTE, 0 for manual focus, and 2, 3, 4, 6 or 7 for the
-/// autofocus modes AF-S, AF-C, AF-A, DMF and AF-D.
+/// autofocus modes AF-S, AF-C, AF-A, DMF and AF-D. Read once, as a camera
+/// setting, which also says whether the shot is in manual focus.
 pub(in crate::formats) const FOCUS_MODE: u16 = 0x201B;
 
 /// The Sony MakerNote tag that records where the camera focused
@@ -237,7 +241,9 @@ impl Reader for MakerNote {
     /// - **the focus point**, as recorded ([`focus`]), always read, since
     ///   the standard tags never give one. It is a list of one point, the
     ///   primary, with no area mode: AFAreaModeSetting is not read, since
-    ///   no file shot in a known mode has checked what its codes mean.
+    ///   no file shot in a known mode has checked what its codes mean. A
+    ///   shot whose focus mode, read with the settings, is manual gives
+    ///   none.
     ///
     /// The other values are the standard tags' alone.
     ///
@@ -252,7 +258,8 @@ impl Reader for MakerNote {
     ) -> Result<Metadata> {
         let mut metadata = standard.metadata;
         metadata.camera_settings = camera_settings(src, self, metadata.camera_settings)?;
-        metadata.focus_points = focus(src, self)?.map(FocusPoints::from);
+        let manual = metadata.camera_settings.focus_mode == Some(FocusMode::Manual);
+        metadata.focus_points = focus(src, self, manual)?.map(FocusPoints::from);
         Ok(metadata)
     }
 
@@ -309,8 +316,13 @@ fn ifd_start(head: &[u8]) -> Option<u64> {
 /// missing or of another shape. No sample has FocusLocation2 alone, so
 /// such a file is unchecked.
 ///
-/// `None` when FocusMode records manual focus ([`manual_focus`]), or when
-/// neither tag gives a location. `None` too when [`Focus::new`] refuses the
+/// `None` when `manual` says that the shot is in manual focus, or when
+/// neither tag gives a location. A shot in manual focus still records a
+/// location, the frame's exact center, with FocusMode 0 (samples 1310 and
+/// 1311). The camera did not focus on that point, so manual focus gives
+/// none, whatever FocusLocation holds (ADR012). Nothing else in the plain
+/// tags says that no autofocus took place, so any other focus mode, or
+/// none, keeps the point. `None` too when [`Focus::new`] refuses the
 /// location, for a frame with a zero side or a center off the frame, or
 /// when [`Focus::with_size`] refuses an area that does not fit inside the
 /// frame around the center.
@@ -318,8 +330,12 @@ fn ifd_start(head: &[u8]) -> Option<u64> {
 /// # Errors
 ///
 /// `Io` when the reader fails.
-fn focus<R: Read + Seek>(src: &mut Source<R>, makernote: &MakerNote) -> Result<Option<Focus>> {
-    if manual_focus(makernote) {
+fn focus<R: Read + Seek>(
+    src: &mut Source<R>,
+    makernote: &MakerNote,
+    manual: bool,
+) -> Result<Option<Focus>> {
+    if manual {
         return Ok(None);
     }
     let mut found = location(src, makernote, rules::FOCUS_LOCATION)?;
@@ -337,19 +353,6 @@ fn focus<R: Read + Seek>(src: &mut Source<R>, makernote: &MakerNote) -> Result<O
         Some(size) => focus.with_size(size).ok(),
         None => Some(focus),
     })
-}
-
-/// Whether `makernote`'s FocusMode records manual focus: whether it is one
-/// BYTE, 0. A FocusMode that is missing, breaks its rule or holds any other
-/// value, such as 3 for AF-C, records none.
-///
-/// A shot in manual focus still records a location, the frame's exact
-/// center, with FocusMode 0 (samples 1310 and 1311). The camera did not
-/// focus on that point, so FocusMode 0 gives none, whatever FocusLocation
-/// holds (ADR012). Nothing else in the plain tags says that no autofocus
-/// took place, so any other FocusMode, or none, keeps the point.
-fn manual_focus(makernote: &MakerNote) -> bool {
-    makernote.ifd.held(rules::FOCUS_MODE) == Some([0])
 }
 
 /// The frame and the center that `makernote`'s tag `tag`, FocusLocation or
@@ -410,6 +413,8 @@ fn area<R: Read + Seek>(src: &mut Source<R>, makernote: &MakerNote) -> Result<Op
 /// - **The fine-tuning** is WBShiftAB_GM's ([`fine_tune`]).
 /// - **The electronic front curtain setting** is
 ///   ElectronicFrontCurtainShutter's ([`electronic_front_curtain_setting`]).
+/// - **The focus mode** is the one FocusMode's code names ([`focus_mode`]).
+///   The focus point's reader takes manual focus from it ([`focus`]).
 ///
 /// The shutter used, the image area and the raw image size stay as
 /// `settings` has them, `None`. Sony records the first two only in
@@ -441,6 +446,7 @@ fn camera_settings<R: Read + Seek>(
     settings.electronic_front_curtain_setting = ifd
         .held(rules::ELECTRONIC_FRONT_CURTAIN)
         .and_then(|[code]| electronic_front_curtain_setting(code));
+    settings.focus_mode = recorded_focus_mode(makernote);
     Ok(settings)
 }
 
@@ -529,6 +535,35 @@ fn electronic_front_curtain_setting(code: u32) -> Option<bool> {
         1 => Some(true),
         _ => None,
     }
+}
+
+/// The focus mode `makernote`'s FocusMode records, by its code
+/// ([`focus_mode`]). `None` when the tag is missing or breaks its rule,
+/// one BYTE.
+fn recorded_focus_mode(makernote: &MakerNote) -> Option<FocusMode> {
+    makernote
+        .ifd
+        .held(rules::FOCUS_MODE)
+        .and_then(|[code]| focus_mode(code))
+}
+
+/// The focus mode a FocusMode `code` names: 0
+/// [`Manual`](FocusMode::Manual), 2, AF-S, [`Single`](FocusMode::Single),
+/// 3, AF-C, [`Continuous`](FocusMode::Continuous), 4, AF-A,
+/// [`Automatic`](FocusMode::Automatic), and 6, DMF,
+/// [`DirectManual`](FocusMode::DirectManual).
+///
+/// `None` for every other code: 7, which ExifTool's documentation names
+/// AF-D, is on no file checked, and so stays unnamed (ADR011).
+fn focus_mode(code: u8) -> Option<FocusMode> {
+    Some(match code {
+        0 => FocusMode::Manual,
+        2 => FocusMode::Single,
+        3 => FocusMode::Continuous,
+        4 => FocusMode::Automatic,
+        6 => FocusMode::DirectManual,
+        _ => return None,
+    })
 }
 
 #[cfg(test)]
@@ -1235,11 +1270,18 @@ mod tests {
         (src, found.expect("a MakerNote"))
     }
 
+    /// Whether `makernote` records manual focus, as the reader's
+    /// [`metadata`](Reader::metadata) tells it from the focus mode it
+    /// reads.
+    fn manual(makernote: &MakerNote) -> bool {
+        recorded_focus_mode(makernote) == Some(FocusMode::Manual)
+    }
+
     /// What [`focus`] gives for a Sony file in byte order `order` whose
     /// headerless MakerNote holds what `tags` adds to its IFD.
     fn focus_of(order: Order, tags: impl FnOnce(&mut TiffBuilder, IfdId)) -> Option<Focus> {
         let (mut src, makernote) = focus_file(order, b"", tags);
-        focus(&mut src, &makernote).unwrap()
+        focus(&mut src, &makernote, manual(&makernote)).unwrap()
     }
 
     /// The focus centered at `center` in `frame`, with an area of `area`
@@ -1277,7 +1319,7 @@ mod tests {
                 let (mut src, makernote) = focus_file(order, prefix, |builder, ifd| {
                     tags_7m4(builder, ifd, order);
                 });
-                let found = focus(&mut src, &makernote).unwrap();
+                let found = focus(&mut src, &makernote, manual(&makernote)).unwrap();
                 let found = found.unwrap_or_else(|| panic!("{order:?}, {prefix:?}"));
                 let label = format!("{order:?}, {prefix:?}");
                 let size = |width, height| Size { width, height };
@@ -1327,7 +1369,7 @@ mod tests {
                     "{label}"
                 );
                 assert_eq!(found.invalid_entries(), 0, "{label}");
-                let focus = focus(&mut src, &makernote).unwrap();
+                let focus = focus(&mut src, &makernote, manual(&makernote)).unwrap();
                 assert_eq!(focus, Some(focus_7m4()), "{label}");
             }
         }
@@ -1630,7 +1672,7 @@ mod tests {
                 .get(&mut src, rules::FOCUS_FRAME_SIZE)
                 .unwrap();
             stored.push(bytes.expect("FocusFrameSize").to_vec());
-            let found = focus(&mut src, &makernote).unwrap();
+            let found = focus(&mut src, &makernote, manual(&makernote)).unwrap();
             assert_eq!(found, Some(focus_7m4()), "{order:?}");
         }
         assert_eq!(
@@ -1664,14 +1706,18 @@ mod tests {
             let (mut src, found) = read_file(cut.build().bytes);
             let found = found.expect("a MakerNote");
             assert!(found.ifd.entry(FOCUS_LOCATION).is_none(), "{order:?}");
-            assert_eq!(focus(&mut src, &found).unwrap(), None, "{order:?}");
+            assert_eq!(
+                focus(&mut src, &found, manual(&found)).unwrap(),
+                None,
+                "{order:?}"
+            );
 
             // The control: the whole block gives the point.
             makernote_at(&mut builder, exif, UNDEFINED, len, block.start);
             let (mut src, found) = read_file(builder.build().bytes);
             let found = found.expect("a MakerNote");
             assert_eq!(
-                focus(&mut src, &found).unwrap(),
+                focus(&mut src, &found, manual(&found)).unwrap(),
                 Some(expected(FRAME_7M4, CENTER_7M4, None)),
                 "{order:?}"
             );
@@ -1700,7 +1746,7 @@ mod tests {
         let (mut src, found) = read_file(built.bytes.clone());
         let found = found.expect("a MakerNote");
         assert_eq!(
-            focus(&mut src, &found).unwrap(),
+            focus(&mut src, &found, manual(&found)).unwrap(),
             Some(expected(FRAME_7M4, CENTER_7M4, None))
         );
 
@@ -1711,7 +1757,7 @@ mod tests {
         let makernote = read(&mut src, &tree, &limits)
             .unwrap()
             .expect("a MakerNote");
-        let err = focus(&mut src, &makernote).expect_err("the read fails");
+        let err = focus(&mut src, &makernote, manual(&makernote)).expect_err("the read fails");
         assert_eq!(err.kind(), ErrorKind::Io, "{err:?}");
     }
 
@@ -2090,6 +2136,83 @@ mod tests {
         }
     }
 
+    #[test]
+    fn each_focus_mode_code_named_gives_its_mode() {
+        // 0 manual focus, 2 AF-S, 3 AF-C, 4 AF-A and 6 DMF; 7, AF-D, on no
+        // file checked, and codes nothing names give none.
+        for order in ORDERS {
+            for (code, mode) in [
+                (0, Some(FocusMode::Manual)),
+                (2, Some(FocusMode::Single)),
+                (3, Some(FocusMode::Continuous)),
+                (4, Some(FocusMode::Automatic)),
+                (6, Some(FocusMode::DirectManual)),
+                (1, None),
+                (5, None),
+                (7, None),
+                (255, None),
+            ] {
+                let settings = settings_of(order, |builder, ifd| {
+                    builder.byte(ifd, FOCUS_MODE, &[code]);
+                });
+                assert_eq!(settings.focus_mode, mode, "{order:?}, {code}");
+            }
+        }
+    }
+
+    #[test]
+    fn a_focus_mode_of_another_shape_gives_none() {
+        // AF-C as a SHORT, an UNDEFINED byte and two BYTEs.
+        for order in ORDERS {
+            for (what, setting) in [
+                (
+                    "a SHORT",
+                    &(|builder: &mut TiffBuilder, ifd| {
+                        builder.short(ifd, FOCUS_MODE, &[3]);
+                    }) as Tags,
+                ),
+                ("an UNDEFINED byte", &|builder, ifd| {
+                    builder.undefined(ifd, FOCUS_MODE, &[3]);
+                }),
+                ("two BYTEs", &|builder, ifd| {
+                    builder.byte(ifd, FOCUS_MODE, &[3, 3]);
+                }),
+            ] {
+                let settings = settings_of(order, setting);
+                assert_eq!(settings.focus_mode, None, "{order:?}, {what}");
+            }
+        }
+    }
+
+    #[test]
+    fn manual_focus_gives_the_focus_mode_and_no_point() {
+        // The ILCE-7M4's focus tags with FocusMode 0, as a manual-focus
+        // shot records them: the focus mode, read once, and no point.
+        for order in ORDERS {
+            let (mut src, makernote) = focus_file(order, b"", |builder, ifd| {
+                builder.byte(ifd, FOCUS_MODE, &[0]).short(
+                    ifd,
+                    FOCUS_LOCATION,
+                    &[7008, 4672, 3504, 2336],
+                );
+            });
+            let standard = Standard {
+                metadata: Metadata::default()
+                    .with_camera(Camera::default().with_recorded_make("SONY")),
+                ..Standard::default()
+            };
+            let found = makernote
+                .metadata(&mut src, standard, Picture::Raw)
+                .unwrap();
+            assert_eq!(
+                found.camera_settings.focus_mode,
+                Some(FocusMode::Manual),
+                "{order:?}"
+            );
+            assert_eq!(found.focus_points, None, "{order:?}");
+        }
+    }
+
     /// Adds to `ifd` every settings tag the reader reads, as a frame shot
     /// on the ILCE-7M2 under a chosen color temperature of 3200 K might
     /// record them, shifted three steps towards amber, with the electronic
@@ -2205,8 +2328,11 @@ mod tests {
             let found = read(&mut src, Picture::Raw);
             // The same for a JPEG's picture.
             assert_eq!(read(&mut src, Picture::Jpeg), found, "{order:?}");
+            // The ILCE-7M4's tags include its FocusMode, 3, AF-C.
             let expected = standard
-                .with_camera_settings(with_settings_tags(exif_settings()))
+                .with_camera_settings(
+                    with_settings_tags(exif_settings()).with_focus_mode(FocusMode::Continuous),
+                )
                 .with_focus(focus_7m4());
             assert_eq!(found, expected, "{order:?}");
             // The point as a list of one, its primary, recorded, with no
