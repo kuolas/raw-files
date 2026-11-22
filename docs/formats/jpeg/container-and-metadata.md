@@ -243,17 +243,22 @@ in IFD0's Software [P][3]:
 **More of how the camera was set.** raw-files will read more settings
 from these Exif tags, as
 [ADR011](../../architecture-decisions/adr011-metadata-from-standard-tags.md)
-decides. Their codes rest on Exif 3.1 [P][3]. Two more marks say what
-else a code rests on, with the count of files:
+decides. Their codes rest on Exif 3.1 [P][3]. The MakerNote codes of
+section 10 rest on a reader's published documentation, and carry one
+of three marks, with the count of files:
 
-- **confirmed by a frame**: a frame shot in a known setting shows the
-  code;
-- **documented and agreed with**: a reader's published documentation
-  gives the code, and the measured files agree with it.
+- **confirmed**: a frame shot in a known setting shows the code;
+- **observed**: the documentation gives the code, and measured files
+  hold it; "in my files only" where no public file does;
+- **documented only**: the documentation gives the code, and no
+  measured file holds it.
 
-The files agree when the code occurs where the documentation places it
-(the record's version, the detection method, the body family). No other
-value of the same file may contradict it. ADR011 gives the rule.
+The documentation gives its codes in lists, each the codes of one tag
+at one place (the record's version, the detection method, the body
+family). Once a measured file holds a code of a list where the
+documentation places it, and no other value of that file contradicts
+it, every code of the list is named, those no file holds among them.
+ADR011 gives the rule.
 
 The counts below were taken on 20 November 2026 with a counting program
 of my own over raw-files' own `open`, with no other reader run. The
@@ -779,7 +784,7 @@ set". **[F]**
   quality or size priority. [P][7] (pp. 103 to 104, 952) It will give
   `JpegCompression`.
   - ExifTool's documentation names 1 size priority and 3 optimal
-    quality [S][8]. Both are documented and agreed with.
+    quality [S][8]. Both are observed, on the public fixtures and on my files.
   - 3 is on 274 of my Z 9's JPEGs, all `FINE`, and on one public
     fixture. 1 is on 27, all `BASIC`, and on three fixtures. **[F]**
   - So on every measured file, 3 goes with `FINE` and 1 with `BASIC`.

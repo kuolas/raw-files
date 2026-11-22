@@ -123,7 +123,10 @@ published specification
 [the table](formats/camera-names.md)). The format notes say what each
 file records and where each code's meaning comes from
 ([NEF](formats/nef/makernote-and-metadata.md#810-more-capture-settings),
-[ARW](formats/arw/makernote-and-metadata.md#910-more-capture-settings)).
+[ARW](formats/arw/makernote-and-metadata.md#910-more-capture-settings)). A list of codes that
+published documentation gives is read whole once the files hold part
+of it, and the notes mark each code as confirmed by a frame, observed
+on files, or documented only.
 
 The other groups of values follow, each read from the same
 directories. Enciphered and encrypted records are given only as their
