@@ -131,8 +131,8 @@
 //!   mode: how many files have the setting, and how many each kind of
 //!   it. Also how many flashes fired, and how many files had the
 //!   electronic front curtain setting on and how many off, and AF
-//!   fine-tune on and off. Each white
-//!   balance fine-tuning is counted by its pair of shifts, such as
+//!   fine-tune on and off, and with a value at a zoom's long end. Each
+//!   white balance fine-tuning is counted by its pair of shifts, such as
 //!   `(-24/4, 0/4)`. Of the color temperatures, the lowest and the
 //!   highest are printed.
 //! - **The focus point**: the files that have one, and how many of those
@@ -430,9 +430,11 @@ struct SettingsTally {
     focus_area_modes: BTreeMap<&'static str, usize>,
     focus_mode: usize,
     focus_modes: BTreeMap<&'static str, usize>,
-    /// Files with AF fine-tune, of which `af_fine_tune_on` had it on.
+    /// Files with AF fine-tune, of which `af_fine_tune_on` had it on, and
+    /// `af_fine_tune_tele` gave a value at a zoom's long end too.
     af_fine_tune: usize,
     af_fine_tune_on: usize,
+    af_fine_tune_tele: usize,
 }
 
 impl SettingsTally {
@@ -534,6 +536,7 @@ impl SettingsTally {
         if let Some(fine_tune) = settings.af_fine_tune() {
             self.af_fine_tune += 1;
             self.af_fine_tune_on += usize::from(fine_tune.is_on());
+            self.af_fine_tune_tele += usize::from(fine_tune.tele_value().is_some());
         }
     }
 }
@@ -1200,6 +1203,10 @@ impl Tally {
             s.af_fine_tune_on,
             s.af_fine_tune - s.af_fine_tune_on
         );
+        println!(
+            "files with AF fine-tune at a zoom's long end: {}",
+            s.af_fine_tune_tele
+        );
         let f = &self.focus;
         println!(
             "files with a focus point: {}, without: {}",
@@ -1762,7 +1769,7 @@ fn the_settings_tally_counts_the_makernote_settings() {
         .with_raw_image_size(RawImageSize::Small)
         .with_focus_area_mode(FocusAreaMode::Auto)
         .with_focus_mode(FocusMode::Continuous)
-        .with_af_fine_tune(AfFineTune::on().with_value(-3));
+        .with_af_fine_tune(AfFineTune::on().with_value(-3).with_tele_value(2));
     let second = CameraSettings::default()
         .with_white_balance(
             WhiteBalance::default()
@@ -1811,7 +1818,8 @@ fn the_settings_tally_counts_the_makernote_settings() {
 
     // The AF-area mode: two files in auto area, one in zone, one with
     // none; the focus mode, two in continuous AF and one in manual
-    // focus; AF fine-tune on one file, off on two.
+    // focus; AF fine-tune on one file, a zoom tuned at both ends, and off
+    // on two.
     assert_eq!(tally.focus_area_mode, 3);
     assert_eq!(
         tally.focus_area_modes,
@@ -1822,7 +1830,14 @@ fn the_settings_tally_counts_the_makernote_settings() {
         tally.focus_modes,
         BTreeMap::from([("Continuous AF", 2), ("Manual focus", 1)])
     );
-    assert_eq!((tally.af_fine_tune, tally.af_fine_tune_on), (3, 1));
+    assert_eq!(
+        (
+            tally.af_fine_tune,
+            tally.af_fine_tune_on,
+            tally.af_fine_tune_tele
+        ),
+        (3, 1, 1)
+    );
 
     // Files without a color temperature leave the range empty.
     let mut without_color_temperature = SettingsTally::default();
