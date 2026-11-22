@@ -461,7 +461,7 @@ pub struct SampleSettings {
     pub color_space: Option<ColorSpace>,
     pub focus_area_mode: Option<FocusAreaMode>,
     pub focus_mode: Option<FocusMode>,
-    pub af_fine_tune: Option<(bool, Option<i32>)>,
+    pub af_fine_tune: Option<(bool, Option<i32>, Option<i32>)>,
 }
 
 /// The white balance fine-tuning of a sample file, as the reader must give
@@ -982,9 +982,11 @@ pub fn check_metadata(expected: &SampleMetadata, format: Format, folder: Folder)
         "{label}: focus mode"
     );
     assert_eq!(
-        settings
-            .af_fine_tune()
-            .map(|fine_tune| (fine_tune.is_on(), fine_tune.value())),
+        settings.af_fine_tune().map(|fine_tune| (
+            fine_tune.is_on(),
+            fine_tune.value(),
+            fine_tune.tele_value()
+        )),
         expected.af_fine_tune,
         "{label}: AF fine-tune"
     );

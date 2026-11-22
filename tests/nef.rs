@@ -1183,7 +1183,7 @@ const FIXTURE_METADATA: &[SampleMetadata] = &[
             raw_image_size: Some(RawImageSize::Large),
             color_space: Some(ColorSpace::Srgb),
             focus_area_mode: Some(FocusAreaMode::Single), // code 193, detection 2
-            af_fine_tune: Some((false, None)),
+            af_fine_tune: Some((false, None, None)),
             focus_mode: Some(FocusMode::Single),
         },
     },
@@ -1247,7 +1247,7 @@ const FIXTURE_METADATA: &[SampleMetadata] = &[
             raw_image_size: Some(RawImageSize::Large),
             color_space: Some(ColorSpace::Srgb),
             focus_area_mode: Some(FocusAreaMode::Single), // code 193, detection 2
-            af_fine_tune: Some((false, None)),
+            af_fine_tune: Some((false, None, None)),
             focus_mode: Some(FocusMode::Single),
         },
     },
@@ -1311,7 +1311,7 @@ const FIXTURE_METADATA: &[SampleMetadata] = &[
             raw_image_size: Some(RawImageSize::Large),
             color_space: Some(ColorSpace::Srgb),
             focus_area_mode: Some(FocusAreaMode::Pinpoint), // code 192, detection 1
-            af_fine_tune: Some((false, None)),
+            af_fine_tune: Some((false, None, None)),
             focus_mode: Some(FocusMode::Single),
         },
     },
@@ -1402,7 +1402,7 @@ const FIXTURE_METADATA: &[SampleMetadata] = &[
             raw_image_size: None,
             color_space: Some(ColorSpace::Srgb),
             focus_area_mode: Some(FocusAreaMode::Single), // code 0, detection 0
-            af_fine_tune: Some((true, Some(0))),
+            af_fine_tune: Some((true, Some(0), None)),
             focus_mode: Some(FocusMode::Single),
         },
     },
@@ -3269,7 +3269,7 @@ const METADATA: &[SampleMetadata] = &[
             raw_image_size: Some(RawImageSize::Large),
             color_space: Some(ColorSpace::Srgb),
             focus_area_mode: Some(FocusAreaMode::Single), // code 193, detection 2
-            af_fine_tune: Some((false, None)),
+            af_fine_tune: Some((false, None, None)),
             focus_mode: Some(FocusMode::Single),
         },
     },
@@ -3333,7 +3333,7 @@ const METADATA: &[SampleMetadata] = &[
             raw_image_size: Some(RawImageSize::Large),
             color_space: Some(ColorSpace::Srgb),
             focus_area_mode: Some(FocusAreaMode::Single), // code 193, detection 2
-            af_fine_tune: Some((false, None)),
+            af_fine_tune: Some((false, None, None)),
             focus_mode: Some(FocusMode::Single),
         },
     },
@@ -3397,7 +3397,7 @@ const METADATA: &[SampleMetadata] = &[
             raw_image_size: Some(RawImageSize::Large),
             color_space: Some(ColorSpace::Srgb),
             focus_area_mode: Some(FocusAreaMode::Single), // code 193, detection 2
-            af_fine_tune: Some((false, None)),
+            af_fine_tune: Some((false, None, None)),
             focus_mode: Some(FocusMode::Single),
         },
     },
@@ -3753,7 +3753,7 @@ const METADATA: &[SampleMetadata] = &[
             raw_image_size: None,
             color_space: Some(ColorSpace::Srgb),
             focus_area_mode: Some(FocusAreaMode::Single), // code 0, detection 0
-            af_fine_tune: Some((true, Some(-2))),
+            af_fine_tune: Some((true, Some(-2), None)),
             focus_mode: Some(FocusMode::Manual),
         },
     },
@@ -3809,7 +3809,7 @@ const METADATA: &[SampleMetadata] = &[
             raw_image_size: None,
             color_space: Some(ColorSpace::AdobeRgb),
             focus_area_mode: Some(FocusAreaMode::Auto), // code 8, detection 0
-            af_fine_tune: Some((false, None)),
+            af_fine_tune: Some((false, None, None)),
             focus_mode: Some(FocusMode::Continuous),
         },
     },
@@ -3873,7 +3873,7 @@ const METADATA: &[SampleMetadata] = &[
             raw_image_size: None,
             color_space: Some(ColorSpace::Srgb),
             focus_area_mode: Some(FocusAreaMode::Single), // code 1, detection 1
-            af_fine_tune: Some((true, Some(-20))),
+            af_fine_tune: Some((true, Some(-20), None)),
             focus_mode: Some(FocusMode::Single),
         },
     },
@@ -3929,7 +3929,7 @@ const METADATA: &[SampleMetadata] = &[
             raw_image_size: Some(RawImageSize::Large),
             color_space: Some(ColorSpace::Srgb),
             focus_area_mode: Some(FocusAreaMode::Tracking), // code 9, detection 0
-            af_fine_tune: Some((true, Some(0))),
+            af_fine_tune: Some((true, Some(0), None)),
             focus_mode: Some(FocusMode::Continuous),
         },
     },
@@ -3985,7 +3985,7 @@ const METADATA: &[SampleMetadata] = &[
             raw_image_size: Some(RawImageSize::Small),
             color_space: Some(ColorSpace::Srgb),
             focus_area_mode: Some(FocusAreaMode::Single), // code 0, detection 0
-            af_fine_tune: Some((false, None)),
+            af_fine_tune: Some((false, None, None)),
             focus_mode: Some(FocusMode::Continuous),
         },
     },
@@ -4041,7 +4041,7 @@ const METADATA: &[SampleMetadata] = &[
             raw_image_size: Some(RawImageSize::Small),
             color_space: Some(ColorSpace::Srgb),
             focus_area_mode: Some(FocusAreaMode::Single), // code 0, detection 0
-            af_fine_tune: Some((false, None)),
+            af_fine_tune: Some((false, None, None)),
             focus_mode: Some(FocusMode::Manual),
         },
     },
@@ -4097,7 +4097,7 @@ const METADATA: &[SampleMetadata] = &[
             raw_image_size: Some(RawImageSize::Large),
             color_space: Some(ColorSpace::Srgb),
             focus_area_mode: Some(FocusAreaMode::Auto), // code 8, detection 0
-            af_fine_tune: Some((false, None)),
+            af_fine_tune: Some((false, None, None)),
             focus_mode: Some(FocusMode::Automatic),
         },
     },
@@ -4161,7 +4161,7 @@ const METADATA: &[SampleMetadata] = &[
             raw_image_size: Some(RawImageSize::Small),
             color_space: Some(ColorSpace::Srgb),
             focus_area_mode: Some(FocusAreaMode::Single), // code 193, detection 2
-            af_fine_tune: Some((false, None)),
+            af_fine_tune: Some((false, None, None)),
             focus_mode: Some(FocusMode::Continuous),
         },
     },
@@ -4225,7 +4225,7 @@ const METADATA: &[SampleMetadata] = &[
             raw_image_size: Some(RawImageSize::Large),
             color_space: Some(ColorSpace::Srgb),
             focus_area_mode: Some(FocusAreaMode::Zone), // code 196, detection 2
-            af_fine_tune: Some((false, None)),
+            af_fine_tune: Some((false, None, None)),
             focus_mode: Some(FocusMode::Continuous),
         },
     },
@@ -4289,7 +4289,7 @@ const METADATA: &[SampleMetadata] = &[
             raw_image_size: Some(RawImageSize::Large),
             color_space: Some(ColorSpace::Srgb),
             focus_area_mode: Some(FocusAreaMode::Pinpoint), // code 192, detection 2
-            af_fine_tune: Some((false, None)),
+            af_fine_tune: Some((false, None, None)),
             focus_mode: Some(FocusMode::Single),
         },
     },
@@ -4353,7 +4353,7 @@ const METADATA: &[SampleMetadata] = &[
             raw_image_size: Some(RawImageSize::Large),
             color_space: Some(ColorSpace::Srgb),
             focus_area_mode: Some(FocusAreaMode::Pinpoint), // code 192, detection 2
-            af_fine_tune: Some((false, None)),
+            af_fine_tune: Some((false, None, None)),
             focus_mode: Some(FocusMode::Single),
         },
     },
@@ -4417,7 +4417,7 @@ const METADATA: &[SampleMetadata] = &[
             raw_image_size: Some(RawImageSize::Large),
             color_space: Some(ColorSpace::Srgb),
             focus_area_mode: Some(FocusAreaMode::Pinpoint), // code 192, detection 2
-            af_fine_tune: Some((false, None)),
+            af_fine_tune: Some((false, None, None)),
             focus_mode: Some(FocusMode::Single),
         },
     },
@@ -4616,7 +4616,7 @@ const METADATA: &[SampleMetadata] = &[
             raw_image_size: None,
             color_space: Some(ColorSpace::AdobeRgb),
             focus_area_mode: Some(FocusAreaMode::Single), // code 128
-            af_fine_tune: Some((false, None)),
+            af_fine_tune: Some((false, None, None)),
             focus_mode: Some(FocusMode::Automatic),
         },
     },
@@ -4736,7 +4736,7 @@ const METADATA: &[SampleMetadata] = &[
             raw_image_size: Some(RawImageSize::Large),
             color_space: Some(ColorSpace::Srgb),
             focus_area_mode: Some(FocusAreaMode::Auto), // code 197, detection 2
-            af_fine_tune: Some((false, None)),
+            af_fine_tune: Some((false, None, None)),
             focus_mode: Some(FocusMode::Automatic),
         },
     },
@@ -4792,7 +4792,7 @@ const METADATA: &[SampleMetadata] = &[
             raw_image_size: Some(RawImageSize::Large),
             color_space: Some(ColorSpace::Srgb),
             focus_area_mode: Some(FocusAreaMode::Auto), // code 197, detection 2
-            af_fine_tune: Some((false, None)),
+            af_fine_tune: Some((false, None, None)),
             focus_mode: Some(FocusMode::Automatic),
         },
     },
@@ -4856,7 +4856,7 @@ const METADATA: &[SampleMetadata] = &[
             raw_image_size: Some(RawImageSize::Large),
             color_space: Some(ColorSpace::Srgb),
             focus_area_mode: Some(FocusAreaMode::Tracking), // code 207, detection 2
-            af_fine_tune: Some((false, None)),
+            af_fine_tune: Some((false, None, None)),
             focus_mode: Some(FocusMode::Automatic),
         },
     },
@@ -4920,7 +4920,7 @@ const METADATA: &[SampleMetadata] = &[
             raw_image_size: Some(RawImageSize::Large),
             color_space: Some(ColorSpace::Srgb),
             focus_area_mode: Some(FocusAreaMode::Tracking), // code 207, detection 2
-            af_fine_tune: Some((false, None)),
+            af_fine_tune: Some((false, None, None)),
             focus_mode: Some(FocusMode::Automatic),
         },
     },
@@ -4984,7 +4984,7 @@ const METADATA: &[SampleMetadata] = &[
             raw_image_size: Some(RawImageSize::Large),
             color_space: Some(ColorSpace::Srgb),
             focus_area_mode: Some(FocusAreaMode::Pinpoint), // code 192, detection 2
-            af_fine_tune: Some((false, None)),
+            af_fine_tune: Some((false, None, None)),
             focus_mode: Some(FocusMode::Single),
         },
     },
@@ -5048,7 +5048,7 @@ const METADATA: &[SampleMetadata] = &[
             raw_image_size: Some(RawImageSize::Large),
             color_space: Some(ColorSpace::Srgb),
             focus_area_mode: Some(FocusAreaMode::Pinpoint), // code 192, detection 2
-            af_fine_tune: Some((false, None)),
+            af_fine_tune: Some((false, None, None)),
             focus_mode: Some(FocusMode::Single),
         },
     },
@@ -5112,7 +5112,7 @@ const METADATA: &[SampleMetadata] = &[
             raw_image_size: Some(RawImageSize::Large),
             color_space: Some(ColorSpace::Srgb),
             focus_area_mode: Some(FocusAreaMode::Zone), // code 2, detection 1
-            af_fine_tune: Some((true, Some(0))),
+            af_fine_tune: Some((true, Some(0), None)),
             focus_mode: Some(FocusMode::Single),
         },
     },
@@ -5176,7 +5176,7 @@ const METADATA: &[SampleMetadata] = &[
             raw_image_size: Some(RawImageSize::Large),
             color_space: Some(ColorSpace::AdobeRgb),
             focus_area_mode: Some(FocusAreaMode::Auto), // code 199, detection 2
-            af_fine_tune: Some((false, None)),
+            af_fine_tune: Some((false, None, None)),
             focus_mode: Some(FocusMode::Automatic),
         },
     },
@@ -5232,7 +5232,7 @@ const METADATA: &[SampleMetadata] = &[
             raw_image_size: Some(RawImageSize::Large),
             color_space: Some(ColorSpace::Srgb),
             focus_area_mode: Some(FocusAreaMode::Single), // code 193, detection 2
-            af_fine_tune: Some((false, None)),
+            af_fine_tune: Some((false, None, None)),
             focus_mode: Some(FocusMode::Manual),
         },
     },

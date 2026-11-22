@@ -388,7 +388,7 @@ fn read_metadata(metadata: &Metadata) {
     let _ = settings.focus_area_mode().map(|mode| mode.to_string());
     let _ = settings
         .af_fine_tune()
-        .map(|fine_tune| (fine_tune.is_on(), fine_tune.value()));
+        .map(|fine_tune| (fine_tune.is_on(), fine_tune.value(), fine_tune.tele_value()));
     let tiny = Size {
         width: 1,
         height: 1,
