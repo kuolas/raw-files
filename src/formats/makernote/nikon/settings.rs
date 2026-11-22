@@ -407,8 +407,8 @@ fn af_info_area_mode(code: u8) -> Option<FocusAreaMode> {
 /// such as 3, "On (Zoom)", which no measured file holds.
 fn af_fine_tune([on, _lens, value, _zoom_value]: [u8; 4]) -> Option<AfFineTune> {
     match on {
-        0 => Some(AfFineTune::new(false)),
-        1 | 2 => Some(AfFineTune::new(true).with_value(i32::from(value.cast_signed()))),
+        0 => Some(AfFineTune::off()),
+        1 | 2 => Some(AfFineTune::on().with_value(i32::from(value.cast_signed()))),
         _ => None,
     }
 }
@@ -1426,16 +1426,13 @@ mod tests {
         // lens's index and the long end's byte play no part.
         for order in ORDERS {
             for (bytes, expected) in [
-                ([0, 0xFF, 0, 0], Some(AfFineTune::new(false))),
-                ([0, 3, 0xF6, 0], Some(AfFineTune::new(false))),
-                ([1, 0xFF, 0, 0], Some(AfFineTune::new(true).with_value(0))),
-                ([2, 0, 0xF6, 0], Some(AfFineTune::new(true).with_value(-10))),
-                ([2, 8, 0xEC, 0], Some(AfFineTune::new(true).with_value(-20))),
-                ([1, 2, 20, 0], Some(AfFineTune::new(true).with_value(20))),
-                (
-                    [2, 2, 0x80, 0x7F],
-                    Some(AfFineTune::new(true).with_value(-128)),
-                ),
+                ([0, 0xFF, 0, 0], Some(AfFineTune::off())),
+                ([0, 3, 0xF6, 0], Some(AfFineTune::off())),
+                ([1, 0xFF, 0, 0], Some(AfFineTune::on().with_value(0))),
+                ([2, 0, 0xF6, 0], Some(AfFineTune::on().with_value(-10))),
+                ([2, 8, 0xEC, 0], Some(AfFineTune::on().with_value(-20))),
+                ([1, 2, 20, 0], Some(AfFineTune::on().with_value(20))),
+                ([2, 2, 0x80, 0x7F], Some(AfFineTune::on().with_value(-128))),
             ] {
                 assert_eq!(
                     af_fine_tune_of(order, &bytes),

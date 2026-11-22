@@ -1762,7 +1762,7 @@ fn the_settings_tally_counts_the_makernote_settings() {
         .with_raw_image_size(RawImageSize::Small)
         .with_focus_area_mode(FocusAreaMode::Auto)
         .with_focus_mode(FocusMode::Continuous)
-        .with_af_fine_tune(AfFineTune::new(true).with_value(-3));
+        .with_af_fine_tune(AfFineTune::on().with_value(-3));
     let second = CameraSettings::default()
         .with_white_balance(
             WhiteBalance::default()
@@ -1772,7 +1772,7 @@ fn the_settings_tally_counts_the_makernote_settings() {
         .with_electronic_front_curtain_setting(false)
         .with_focus_area_mode(FocusAreaMode::Zone)
         .with_focus_mode(FocusMode::Continuous)
-        .with_af_fine_tune(AfFineTune::new(false));
+        .with_af_fine_tune(AfFineTune::off());
     let third = CameraSettings::default()
         .with_white_balance(
             WhiteBalance::default()
@@ -1782,7 +1782,7 @@ fn the_settings_tally_counts_the_makernote_settings() {
         .with_electronic_front_curtain_setting(true)
         .with_focus_area_mode(FocusAreaMode::Auto)
         .with_focus_mode(FocusMode::Manual)
-        .with_af_fine_tune(AfFineTune::new(false));
+        .with_af_fine_tune(AfFineTune::off());
     let fourth = CameraSettings::default();
     let mut tally = SettingsTally::default();
     for settings in [first, second, third, fourth.clone()] {
