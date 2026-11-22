@@ -160,9 +160,11 @@ does. An entry that can break a caller opens with **Breaking:**.
 - `CameraSettings::af_fine_tune` gives AF fine-tune, an `AfFineTune`:
   whether it was on and, when it was, its value in the camera's steps
   ([#214](https://github.com/kuolas/raw-files/issues/214)). It is built
-  with `AfFineTune::on()` or `AfFineTune::off()`. Nikon files
-  give it from their MakerNote's AFTune; which saved lens the value
-  belongs to is not given. Sony files give none: they record their AF
+  with `AfFineTune::on()` or `AfFineTune::off()`. For a zoom tuned at
+  both ends, `AfFineTune::tele_value` gives the value at the long end,
+  and `with_tele_value` sets it. Nikon files give it from their
+  MakerNote's AFTune, the long end's value under its "On (Zoom)" code;
+  which saved lens the value belongs to is not given. Sony files give none: they record their AF
   micro adjustment only in enciphered or unread blocks.
 
 ### Changed

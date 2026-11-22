@@ -353,7 +353,8 @@ impl CameraSettings {
     ///
     /// Read from Nikon's MakerNote, its AFTune: four bytes, whether it is
     /// on, the saved lens's index, the value, and the value at a zoom's
-    /// long end. The saved lens's index is not given.
+    /// long end, which is given when the first byte says the fine-tune is
+    /// on for a zoom. The saved lens's index is not given.
     ///
     /// `None` when:
     ///
@@ -764,7 +765,10 @@ impl Flash {
 ///
 /// The value is in the camera's own steps, signed: the Nikon D600's menu
 /// sets it from -20 to +20. It is the value in effect for the lens on the
-/// camera; which saved lens it belongs to is not given.
+/// camera; which saved lens it belongs to is not given. A zoom lens can
+/// be tuned at both ends of its range: then [`value`](Self::value) is the
+/// one at the short end, and [`tele_value`](Self::tele_value) the one at
+/// the long end.
 ///
 /// There is no `Default`: a file that records no AF fine-tune gives `None`
 /// for [`CameraSettings::af_fine_tune`]. A file that records it off gives
@@ -773,7 +777,7 @@ impl Flash {
 ///
 /// # Examples
 ///
-/// Fine-tune on, at -5, and off:
+/// Fine-tune on, at -5; on for a zoom, at +2 and +4; and off:
 ///
 /// ```
 /// use raw_files::AfFineTune;
@@ -781,6 +785,10 @@ impl Flash {
 /// let on = AfFineTune::on().with_value(-5);
 /// assert!(on.is_on());
 /// assert_eq!(on.value(), Some(-5));
+/// assert_eq!(on.tele_value(), None);
+///
+/// let zoom = AfFineTune::on().with_value(2).with_tele_value(4);
+/// assert_eq!((zoom.value(), zoom.tele_value()), (Some(2), Some(4)));
 ///
 /// let off = AfFineTune::off();
 /// assert!(!off.is_on());
@@ -790,6 +798,7 @@ impl Flash {
 pub struct AfFineTune {
     pub(crate) on: bool,
     pub(crate) value: Option<i32>,
+    pub(crate) tele_value: Option<i32>,
 }
 
 impl AfFineTune {
@@ -800,6 +809,7 @@ impl AfFineTune {
         Self {
             on: true,
             value: None,
+            tele_value: None,
         }
     }
 
@@ -809,6 +819,7 @@ impl AfFineTune {
         Self {
             on: false,
             value: None,
+            tele_value: None,
         }
     }
 
@@ -828,10 +839,30 @@ impl AfFineTune {
         self.on
     }
 
+    /// This AF fine-tune with the value `value` at a zoom's long end, in
+    /// place of any it had. It is stored as given, whether or not the
+    /// fine-tune is on: the readers give one only when the camera records
+    /// a zoom tuned at both ends.
+    #[must_use]
+    pub fn with_tele_value(self, value: i32) -> Self {
+        Self {
+            tele_value: Some(value),
+            ..self
+        }
+    }
+
     /// The fine-tune value, in the camera's steps, or `None` when none is
-    /// recorded, as when the fine-tune is off.
+    /// recorded, as when the fine-tune is off. For a zoom tuned at both
+    /// ends, it is the value at the short end.
     pub fn value(&self) -> Option<i32> {
         self.value
+    }
+
+    /// The fine-tune value at a zoom's long end, in the camera's steps, or
+    /// `None` when none is recorded: when the fine-tune is off, or tunes
+    /// the lens with one value.
+    pub fn tele_value(&self) -> Option<i32> {
+        self.tele_value
     }
 }
 
@@ -1521,6 +1552,7 @@ mod tests {
             af_fine_tune: Some(AfFineTune {
                 on: true,
                 value: Some(-5),
+                tele_value: None,
             }),
         }
     }
@@ -1574,7 +1606,8 @@ mod tests {
             settings.af_fine_tune(),
             Some(AfFineTune {
                 on: true,
-                value: Some(-5)
+                value: Some(-5),
+                tele_value: None,
             })
         );
 
@@ -1686,6 +1719,7 @@ mod tests {
                         af_fine_tune: Some(AfFineTune {
                             on: false,
                             value: None,
+                            tele_value: None,
                         }),
                         ..start.clone()
                     },
@@ -1854,9 +1888,21 @@ mod tests {
             assert_eq!((nearer.is_on(), nearer.value()), (on, Some(-20)));
             let farther = nearer.with_value(7);
             assert_eq!((farther.is_on(), farther.value()), (on, Some(7)));
+            assert_eq!(farther.tele_value(), None);
+            // A long end's value beside it, then a second that replaces
+            // it, the value at the short end kept.
+            let zoom = farther.with_tele_value(-3).with_tele_value(4);
+            assert_eq!(
+                (zoom.is_on(), zoom.value(), zoom.tele_value()),
+                (on, Some(7), Some(4))
+            );
         }
         assert_ne!(AfFineTune::on(), AfFineTune::off());
         assert_ne!(AfFineTune::on(), AfFineTune::on().with_value(0));
+        assert_ne!(
+            AfFineTune::on().with_value(0),
+            AfFineTune::on().with_value(0).with_tele_value(0)
+        );
     }
 
     // Every variant of each enum, in the order of its declaration. Each

@@ -406,20 +406,27 @@ fn af_info_area_mode(code: u8) -> Option<FocusAreaMode> {
     })
 }
 
-/// The AF fine-tune that AFTune's four bytes, `af_tune`, record: the
-/// first says whether it is on, 0 off and 1 or 2 on; the third is the
-/// value, signed, given when it is on. The second, the saved lens's index,
-/// is not given, and the fourth, the value at a zoom's long end, is read
-/// under no code a file holds.
+/// The AF fine-tune that AFTune's four bytes record: the first says
+/// whether it is on, 0 off, 1 or 2 on, 3 on for a zoom tuned at both ends;
+/// the third is the value, signed, given when it is on; the fourth is the
+/// value at the zoom's long end, signed, given under 3 alone. The second,
+/// the saved lens's index, is not given.
 ///
 /// ExifTool's published documentation, read as documentation, names the
-/// codes; what tells 1 from 2 is not documented, and both read as on, as
-/// the files agree: my D600 writes both. `None` for any other first byte,
-/// such as 3, "On (Zoom)", which no measured file holds.
-fn af_fine_tune([on, _lens, value, _zoom_value]: [u8; 4]) -> Option<AfFineTune> {
+/// codes, and calls the fourth byte valid only under 3. The list is read
+/// whole, since files hold part of it: my D600 writes 0, 1 and 2, and 3
+/// is documented only (NEF notes, section 8.10). What tells 1 from 2 is
+/// not documented, and both read as on. `None` for any other first byte.
+fn af_fine_tune([on, _lens, value, tele_value]: [u8; 4]) -> Option<AfFineTune> {
+    let value = i32::from(value.cast_signed());
     match on {
         0 => Some(AfFineTune::off()),
-        1 | 2 => Some(AfFineTune::on().with_value(i32::from(value.cast_signed()))),
+        1 | 2 => Some(AfFineTune::on().with_value(value)),
+        3 => Some(
+            AfFineTune::on()
+                .with_value(value)
+                .with_tele_value(i32::from(tele_value.cast_signed())),
+        ),
         _ => None,
     }
 }
@@ -1440,7 +1447,8 @@ mod tests {
     fn af_tune_gives_whether_fine_tune_is_on_and_its_value() {
         // Off, with a value it does not give; on at 1 and at 2, each with
         // its value, negative ones as signed bytes, and at 0; the saved
-        // lens's index and the long end's byte play no part.
+        // lens's index plays no part, nor does the long end's byte under
+        // 0, 1 and 2, where the documentation calls it not valid.
         for order in ORDERS {
             for (bytes, expected) in [
                 ([0, 0xFF, 0, 0], Some(AfFineTune::off())),
@@ -1450,6 +1458,22 @@ mod tests {
                 ([2, 8, 0xEC, 0], Some(AfFineTune::on().with_value(-20))),
                 ([1, 2, 20, 0], Some(AfFineTune::on().with_value(20))),
                 ([2, 2, 0x80, 0x7F], Some(AfFineTune::on().with_value(-128))),
+                ([1, 0, 5, 7], Some(AfFineTune::on().with_value(5))),
+                ([0, 0, 5, 7], Some(AfFineTune::off())),
+                // 3, on for a zoom: the value at the short end, then the
+                // long end's, each signed.
+                (
+                    [3, 0, 5, 7],
+                    Some(AfFineTune::on().with_value(5).with_tele_value(7)),
+                ),
+                (
+                    [3, 1, 0xFE, 0xF6],
+                    Some(AfFineTune::on().with_value(-2).with_tele_value(-10)),
+                ),
+                (
+                    [3, 0xFF, 0, 0],
+                    Some(AfFineTune::on().with_value(0).with_tele_value(0)),
+                ),
             ] {
                 assert_eq!(
                     af_fine_tune_of(order, &bytes),
@@ -1461,15 +1485,16 @@ mod tests {
     }
 
     #[test]
-    fn af_tune_of_a_code_no_file_holds_or_another_shape_is_none() {
+    fn af_tune_of_a_code_the_list_lacks_or_another_shape_is_none() {
         for order in ORDERS {
-            // 3, "On (Zoom)", with a long end's value, 4 and 255.
-            for code in [3, 4, 255] {
+            // Codes past the documented list.
+            for code in [4, 128, 255] {
                 let bytes = [code, 0, 5, 7];
                 assert_eq!(af_fine_tune_of(order, &bytes), None, "{order:?}, {code}");
             }
-            // Three or five bytes.
+            // Three or five bytes, and a zoom's three.
             assert_eq!(af_fine_tune_of(order, &[1, 0, 5]), None, "{order:?}");
+            assert_eq!(af_fine_tune_of(order, &[3, 0, 5]), None, "{order:?}");
             assert_eq!(af_fine_tune_of(order, &[1, 0, 5, 0, 0]), None, "{order:?}");
             // Four BYTEs.
             let read = settings_of(order, |inner, ifd| {
