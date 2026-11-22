@@ -267,9 +267,11 @@ fn named_points(value: &[u8], at: usize) -> Option<NamedPoints> {
 pub(super) enum Codes {
     /// Versions 0100, 0101, 0300 and 0301: two lists, the first for phase
     /// detection, the second for contrast detection, each with the DSLR
-    /// codes and the mirrorless ones.
+    /// codes, the Nikon 1 codes and the mirrorless ones; hybrid detection
+    /// takes what they share and the mirrorless codes of the second.
     TwoLists,
-    /// Versions 0400 to 0402: the mirrorless list alone.
+    /// Versions 0400 to 0402: one list of mirrorless codes, whatever the
+    /// detection method.
     Mirrorless,
     /// The Nikon 1 versions, 0200 and 0201: a list of their own, with no
     /// detection method at byte 4.
@@ -282,32 +284,38 @@ pub(super) enum Codes {
 /// viewfinder; 1 contrast detection, in a DSLR's live view and in my
 /// Z 9's pinpoint AF; 2 both, on the mirrorless bodies.
 ///
-/// A pair is named when the documentation names its code under that
-/// method, in that version's list, and a measured file holds it under
-/// that method in a version of the same list, though not always the
-/// version at hand: a single area under phase detection is named in a
-/// 0300 record too, as in the 0100 records that hold it (ADR011). The
-/// pairs are those of the NEF notes' table of the codes by detection method
-/// (`docs/formats/nef/makernote-and-metadata.md`, section 8.6), which
-/// marks each as confirmed by a frame shot in that mode or documented and
-/// agreed with by the files. Each maker's finer kind folds into a variant:
+/// Each list is read whole, as ExifTool's published tag documentation
+/// gives it: files hold part of every one, so every code it names is
+/// named, those no measured file holds among them (ADR011). The NEF notes
+/// (`docs/formats/nef/makernote-and-metadata.md`, section 8.6) list
+/// every code with its variant and mark it confirmed by a frame, observed
+/// on files, or documented only. Each maker's finer kind folds into a
+/// variant:
 ///
-/// - the DSLR codes, under [`TwoLists`](Codes::TwoLists) alone
-///   ([`dslr_area_mode`]);
-/// - the mirrorless codes, under either list ([`mirrorless_area_mode`]);
-/// - the Nikon 1 codes, under [`Nikon1`](Codes::Nikon1) alone, where byte 4
-///   holds no detection method ([`nikon_1_area_mode`]).
+/// - versions 0100 to 0301 under phase detection take the first list
+///   ([`phase_detection_area_mode`]), under contrast detection the second
+///   ([`contrast_detection_area_mode`]); under hybrid detection, which the
+///   documentation gives neither, a code takes the meaning both lists
+///   share, or the second list's for a mirrorless code it alone gives
+///   ([`hybrid_area_mode`]);
+/// - versions 0400 to 0402 have one list, whatever byte 4 holds
+///   ([`mirrorless_area_mode`]);
+/// - the Nikon 1 versions have a list of their own, with no detection
+///   method at byte 4 ([`nikon_1_area_mode`]).
 ///
-/// `None` for every other pair: a code the documentation does not name,
-/// or one no measured file holds under that method, such as 192 under
-/// phase detection or 194; 0 under contrast detection, which names no
-/// area; and 3, face priority, which no neutral word fits.
+/// `None` for any other pair: a code its list does not hold, a detection
+/// method the documentation does not name, the DSLR codes 0 to 18 under
+/// hybrid detection, and the codes no neutral word fits (face priority,
+/// and plain contrast detection, which names no area).
 pub(super) fn area_mode(codes: Codes, detection: u8, code: u8) -> Option<FocusAreaMode> {
     match codes {
-        Codes::TwoLists => {
-            dslr_area_mode(detection, code).or_else(|| mirrorless_area_mode(detection, code))
-        }
-        Codes::Mirrorless => mirrorless_area_mode(detection, code),
+        Codes::TwoLists => match detection {
+            0 => phase_detection_area_mode(code),
+            1 => contrast_detection_area_mode(code),
+            2 => hybrid_area_mode(code),
+            _ => None,
+        },
+        Codes::Mirrorless => mirrorless_area_mode(code),
         Codes::Nikon1 => nikon_1_area_mode(code),
     }
 }
@@ -315,10 +323,10 @@ pub(super) fn area_mode(codes: Codes, detection: u8, code: u8) -> Option<FocusAr
 /// The area mode a Nikon 1 code `code` names, whatever byte 4 holds: 128,
 /// single, [`Single`](FocusAreaMode::Single); 129, auto, the camera
 /// choosing among its 41 points, [`Auto`](FocusAreaMode::Auto); 130,
-/// subject tracking, [`Tracking`](FocusAreaMode::Tracking). Each is
-/// documented, and the files agree: 128 on both versions, 129 on 0200 and
-/// 130 on 0201. `None` for every other code, such as the 0 that two 0201
-/// files write, which the list does not hold.
+/// subject tracking, [`Tracking`](FocusAreaMode::Tracking). Files hold
+/// 128 on both versions, 129 on 0200 and 130 on 0201. `None` for 131,
+/// face priority, which no neutral word fits, and for every code the
+/// list does not hold, such as the 0 that two 0201 files write.
 fn nikon_1_area_mode(code: u8) -> Option<FocusAreaMode> {
     match code {
         128 => Some(FocusAreaMode::Single),
@@ -328,63 +336,118 @@ fn nikon_1_area_mode(code: u8) -> Option<FocusAreaMode> {
     }
 }
 
-/// The area mode a DSLR code `code` names under the detection method
-/// `detection`, in the two lists of versions 0100 to 0301:
+/// The area mode that `code` names in the first list of versions 0100 to
+/// 0301, the one phase detection takes, with the DSLR codes, the Nikon 1
+/// codes and the mirrorless ones:
 ///
-/// - under phase detection, 0, single area,
-///   [`Single`](FocusAreaMode::Single); 1, 4, 5 and 6, dynamic area of
-///   any size, [`Dynamic`](FocusAreaMode::Dynamic); 7 and 9, dynamic area
-///   with 3D-tracking, [`Tracking`](FocusAreaMode::Tracking); 8, auto-area,
-///   [`Auto`](FocusAreaMode::Auto);
-/// - under contrast detection, 1, normal area,
-///   [`Single`](FocusAreaMode::Single); 2, wide area,
-///   [`Zone`](FocusAreaMode::Zone); 4, subject tracking,
-///   [`Tracking`](FocusAreaMode::Tracking).
+/// - [`Single`](FocusAreaMode::Single): 0 single area, 10 single area
+///   with the wide focus frame, 128 and 193 single;
+/// - [`Dynamic`](FocusAreaMode::Dynamic): 1 dynamic area, 4, 5, 6, 14,
+///   15 and 18 its sizes of 9 to 72 points, 11 with the wide focus frame,
+///   194 dynamic;
+/// - [`Auto`](FocusAreaMode::Auto): 2 dynamic area with the closest
+///   subject, the camera picking the point; 8 auto-area; 129, 197 and 199
+///   auto;
+/// - [`Tracking`](FocusAreaMode::Tracking): 7, 9 and 12 dynamic area with
+///   3D-tracking, 130 subject tracking;
+/// - [`Zone`](FocusAreaMode::Zone): 3 group dynamic, 13, 16 and 17 group
+///   area, 195 and 196 wide area;
+/// - [`Pinpoint`](FocusAreaMode::Pinpoint): 192.
 ///
-/// Frames I shot in a known mode confirm 0, 5, 8 and 9 under phase
-/// detection; the others are documented, and the files agree.
-fn dslr_area_mode(detection: u8, code: u8) -> Option<FocusAreaMode> {
-    use FocusAreaMode::{Auto, Dynamic, Single, Tracking, Zone};
-    Some(match (detection, code) {
-        (0, 0) | (1, 1) => Single,
-        (0, 1 | 4 | 5 | 6) => Dynamic,
-        (0, 7 | 9) | (1, 4) => Tracking,
-        (0, 8) => Auto,
-        (1, 2) => Zone,
+/// Frames I shot in a known mode confirm 0, 5, 8 and 9; files hold 1, 4,
+/// 6 and 7 too; the rest are documented only. `None` for 131, face
+/// priority, and for every code the list does not hold.
+fn phase_detection_area_mode(code: u8) -> Option<FocusAreaMode> {
+    use FocusAreaMode::{Auto, Dynamic, Pinpoint, Single, Tracking, Zone};
+    Some(match code {
+        0 | 10 | 128 | 193 => Single,
+        1 | 4..=6 | 11 | 14 | 15 | 18 | 194 => Dynamic,
+        2 | 8 | 129 | 197 | 199 => Auto,
+        7 | 9 | 12 | 130 => Tracking,
+        3 | 13 | 16 | 17 | 195 | 196 => Zone,
+        192 => Pinpoint,
         _ => return None,
     })
 }
 
-/// The area mode a mirrorless code `code` names under the detection
-/// method `detection`, in the lists of versions 0100 to 0402, under the
-/// methods the files hold it:
+/// The area mode that `code` names in the second list of versions 0100
+/// to 0301, the one contrast detection takes:
 ///
-/// - 192, pinpoint, under contrast or hybrid detection,
-///   [`Pinpoint`](FocusAreaMode::Pinpoint);
-/// - 193, single point, under hybrid detection,
-///   [`Single`](FocusAreaMode::Single);
-/// - 195 and 196, wide area S and L, and 208, wide area C1 and C2, under
-///   contrast or hybrid detection, 196 under hybrid alone,
+/// - [`Single`](FocusAreaMode::Single): 1 normal area, 128 and 193
+///   single, 200 normal-area AF;
+/// - [`Dynamic`](FocusAreaMode::Dynamic): 194 dynamic, 204, 205 and 206
+///   dynamic area S, M and L;
+/// - [`Auto`](FocusAreaMode::Auto): 129 and 197 auto, 198 auto with
+///   people, 199 auto with animals;
+/// - [`Tracking`](FocusAreaMode::Tracking): 4 subject tracking, 130 and
+///   203 subject tracking, 207 3D-tracking;
+/// - [`Zone`](FocusAreaMode::Zone): 2 wide area, 195 and 196 wide area S
+///   and L, 201 wide-area AF, 208 wide area C1 and C2;
+/// - [`Pinpoint`](FocusAreaMode::Pinpoint): 192.
+///
+/// Files hold 0 to 4; the rest are documented only. `None` for 0, plain
+/// contrast detection, which names no area; for 3, 131 and 202, face
+/// priority; and for every code the list does not hold.
+fn contrast_detection_area_mode(code: u8) -> Option<FocusAreaMode> {
+    use FocusAreaMode::{Auto, Dynamic, Pinpoint, Single, Tracking, Zone};
+    Some(match code {
+        1 | 128 | 193 | 200 => Single,
+        194 | 204..=206 => Dynamic,
+        129 | 197..=199 => Auto,
+        4 | 130 | 203 | 207 => Tracking,
+        2 | 195 | 196 | 201 | 208 => Zone,
+        192 => Pinpoint,
+        _ => return None,
+    })
+}
+
+/// The area mode that `code` names under hybrid detection in versions
+/// 0100 to 0301, for which the documentation gives neither list:
+///
+/// - the meaning both lists share for 128 to 130 and 192 to 197, and for
+///   199, which folds auto and auto with animals into
+///   [`Auto`](FocusAreaMode::Auto);
+/// - the second list's for 198 and 200 to 208, the mirrorless codes it
+///   alone gives: version 0400's list holds 204 to 208, which my Z 9's
+///   frames write under hybrid detection, and 198 and 200 to 203 are
+///   named with them, though no file shows them.
+///
+/// Files hold 193, 195, 197 and 199. `None` for the DSLR codes 0 to 18:
+/// 0 to 4, which the two lists name differently (0 is a single area in the
+/// first and plain contrast detection in the second), and 5 to 18,
+/// viewfinder modes of the first list alone, which no file shows under
+/// hybrid detection; and for every code neither list holds.
+fn hybrid_area_mode(code: u8) -> Option<FocusAreaMode> {
+    match code {
+        0..=18 => None,
+        _ => contrast_detection_area_mode(code),
+    }
+}
+
+/// The area mode that `code` names in the one list of versions 0400 to
+/// 0402, whatever byte 4 holds:
+///
+/// - 192, pinpoint, [`Pinpoint`](FocusAreaMode::Pinpoint);
+/// - 193, single point, [`Single`](FocusAreaMode::Single);
+/// - 195 and 196, wide area S and L, and 208, wide area C1 and C2,
 ///   [`Zone`](FocusAreaMode::Zone);
-/// - 197, auto, under contrast or hybrid detection, and 199, auto in one
-///   list and animal auto in the other, both folding into one variant,
-///   under hybrid detection, [`Auto`](FocusAreaMode::Auto);
-/// - 204, 205 and 206, dynamic area S, M and L, under hybrid detection,
+/// - 197, auto, [`Auto`](FocusAreaMode::Auto);
+/// - 204, 205 and 206, dynamic area S, M and L,
 ///   [`Dynamic`](FocusAreaMode::Dynamic);
-/// - 207, 3D-tracking, under contrast or hybrid detection,
-///   [`Tracking`](FocusAreaMode::Tracking).
+/// - 207, 3D-tracking, [`Tracking`](FocusAreaMode::Tracking).
 ///
 /// Frames I shot with my Z 9 in each of its eleven modes confirm every
-/// code but 199, which is documented, and the files agree.
-fn mirrorless_area_mode(detection: u8, code: u8) -> Option<FocusAreaMode> {
+/// code. `None` for every code the list does not hold, the DSLR codes
+/// among them.
+fn mirrorless_area_mode(code: u8) -> Option<FocusAreaMode> {
     use FocusAreaMode::{Auto, Dynamic, Pinpoint, Single, Tracking, Zone};
-    Some(match (detection, code) {
-        (1 | 2, 192) => Pinpoint,
-        (2, 193) => Single,
-        (1 | 2, 195 | 208) | (2, 196) => Zone,
-        (1 | 2, 197) | (2, 199) => Auto,
-        (2, 204..=206) => Dynamic,
-        (1 | 2, 207) => Tracking,
+    Some(match code {
+        192 => Pinpoint,
+        193 => Single,
+        195 | 196 | 208 => Zone,
+        197 => Auto,
+        204..=206 => Dynamic,
+        207 => Tracking,
         _ => return None,
     })
 }
@@ -820,110 +883,192 @@ mod tests {
         ("0400", Z9),
     ];
 
-    #[test]
-    fn the_area_mode_is_named_for_the_pairs_the_notes_name() {
-        // Byte 5 under the detection method byte 4 records: 0 phase
-        // detection, 1 contrast detection, 2 hybrid. The DSLR codes are
-        // named in the two lists of 0100 to 0301 alone; the mirrorless
-        // codes in every list, under the methods the files hold them. Any
-        // other pair names none: a mirrorless code under phase detection,
-        // which no file holds; 0 under contrast detection, which names no
-        // area; 3, face priority; documented codes no file holds, such as
-        // 194 and 200; and codes nothing names. The point is kept either
-        // way.
-        use FocusAreaMode::{Auto, Dynamic, Pinpoint, Single, Tracking, Zone};
-        let dslr = [
-            (0, 0, Single),
-            (0, 1, Dynamic),
-            (0, 4, Dynamic),
-            (0, 5, Dynamic),
-            (0, 6, Dynamic),
-            (0, 7, Tracking),
-            (0, 8, Auto),
-            (0, 9, Tracking),
-            (1, 1, Single),
-            (1, 2, Zone),
-            (1, 4, Tracking),
-        ];
-        let mut mirrorless = vec![
-            (2, 193, Single),
-            (2, 196, Zone),
-            (2, 199, Auto),
-            (2, 204, Dynamic),
-            (2, 205, Dynamic),
-            (2, 206, Dynamic),
-        ];
-        for detection in [1, 2] {
-            mirrorless.extend([
-                (detection, 192, Pinpoint),
-                (detection, 195, Zone),
-                (detection, 197, Auto),
-                (detection, 207, Tracking),
-                (detection, 208, Zone),
-            ]);
+    // Every code of each list, with the variant the NEF notes' tables of
+    // section 8.6 give it, written out from those tables, not from the
+    // reader. A code a list does not hold, and 131 and 202, face
+    // priority, are absent: they name none.
+    use FocusAreaMode::{Auto, Dynamic, Pinpoint, Single, Tracking, Zone};
+
+    /// The first list of 0100 to 0301, which phase detection takes.
+    const PHASE_DETECTION: [(u8, FocusAreaMode); 29] = [
+        (0, Single),
+        (1, Dynamic),
+        (2, Auto),
+        (3, Zone),
+        (4, Dynamic),
+        (5, Dynamic),
+        (6, Dynamic),
+        (7, Tracking),
+        (8, Auto),
+        (9, Tracking),
+        (10, Single),
+        (11, Dynamic),
+        (12, Tracking),
+        (13, Zone),
+        (14, Dynamic),
+        (15, Dynamic),
+        (16, Zone),
+        (17, Zone),
+        (18, Dynamic),
+        (128, Single),
+        (129, Auto),
+        (130, Tracking),
+        (192, Pinpoint),
+        (193, Single),
+        (194, Dynamic),
+        (195, Zone),
+        (196, Zone),
+        (197, Auto),
+        (199, Auto),
+    ];
+
+    /// The second list of 0100 to 0301, which contrast detection takes;
+    /// its 0, plain contrast detection, names no area.
+    const CONTRAST_DETECTION: [(u8, FocusAreaMode); 22] = [
+        (1, Single),
+        (2, Zone),
+        (4, Tracking),
+        (128, Single),
+        (129, Auto),
+        (130, Tracking),
+        (192, Pinpoint),
+        (193, Single),
+        (194, Dynamic),
+        (195, Zone),
+        (196, Zone),
+        (197, Auto),
+        (198, Auto),
+        (199, Auto),
+        (200, Single),
+        (201, Zone),
+        (203, Tracking),
+        (204, Dynamic),
+        (205, Dynamic),
+        (206, Dynamic),
+        (207, Tracking),
+        (208, Zone),
+    ];
+
+    /// The one list of 0400 to 0402.
+    const MIRRORLESS: [(u8, FocusAreaMode); 10] = [
+        (192, Pinpoint),
+        (193, Single),
+        (195, Zone),
+        (196, Zone),
+        (197, Auto),
+        (204, Dynamic),
+        (205, Dynamic),
+        (206, Dynamic),
+        (207, Tracking),
+        (208, Zone),
+    ];
+
+    /// The Nikon 1 list of 0200 and 0201.
+    const NIKON_1: [(u8, FocusAreaMode); 3] = [(128, Single), (129, Auto), (130, Tracking)];
+
+    fn in_list(list: &[(u8, FocusAreaMode)], code: u8) -> Option<FocusAreaMode> {
+        list.iter()
+            .find(|&&(c, _)| c == code)
+            .map(|&(_, mode)| mode)
+    }
+
+    /// The variant the notes give `code` under `detection` in `codes`.
+    /// Under hybrid detection on 0100 to 0301, a code above 18 takes the
+    /// meaning of the list that gives it, both lists agreeing where both
+    /// do, and the DSLR codes 0 to 18 take none.
+    fn listed_mode(codes: Codes, detection: u8, code: u8) -> Option<FocusAreaMode> {
+        match (codes, detection) {
+            (Codes::TwoLists, 0) => in_list(&PHASE_DETECTION, code),
+            (Codes::TwoLists, 1) => in_list(&CONTRAST_DETECTION, code),
+            (Codes::TwoLists, 2) if code > 18 => {
+                in_list(&PHASE_DETECTION, code).or(in_list(&CONTRAST_DETECTION, code))
+            }
+            (Codes::TwoLists, _) => None,
+            (Codes::Mirrorless, _) => in_list(&MIRRORLESS, code),
+            (Codes::Nikon1, _) => in_list(&NIKON_1, code),
         }
-        let unnamed = [
-            (1, 0),
-            (2, 0),
-            (1, 3),
-            (2, 1),
-            (2, 4),
-            (1, 5),
-            (2, 8),
-            (0, 2),
-            (0, 3),
-            (0, 10),
-            (0, 192),
-            (0, 193),
-            (0, 197),
-            (0, 207),
-            (1, 193),
-            (1, 196),
-            (1, 199),
-            (1, 204),
-            (0, 194),
-            (2, 194),
-            (2, 200),
-            (2, 255),
+    }
+
+    #[test]
+    fn the_two_lists_agree_on_every_code_above_4_that_both_give() {
+        // So hybrid detection can name each of them: both lists give
+        // 128 to 130 and 192 to 199 one meaning, 199 folding auto and
+        // auto with animals into one variant.
+        for code in 5..=u8::MAX {
+            if let (Some(phase), Some(contrast)) = (
+                in_list(&PHASE_DETECTION, code),
+                in_list(&CONTRAST_DETECTION, code),
+            ) {
+                assert_eq!(phase, contrast, "code {code}");
+            }
+        }
+        // And 0 to 4 differ: 0 and 3 are named in one list alone, 1, 2
+        // and 4 with two variants.
+        for code in 0..=4 {
+            assert_ne!(
+                in_list(&PHASE_DETECTION, code),
+                in_list(&CONTRAST_DETECTION, code),
+                "code {code}"
+            );
+        }
+    }
+
+    #[test]
+    fn every_code_takes_the_meaning_of_its_list() {
+        // Every pair of a detection method and a code, in each kind of
+        // list; detection 3, which the documentation does not name, names
+        // none in the two lists, and the lists of one kind ignore byte 4.
+        for codes in [Codes::TwoLists, Codes::Mirrorless, Codes::Nikon1] {
+            for detection in 0..=3 {
+                for code in 0..=u8::MAX {
+                    assert_eq!(
+                        area_mode(codes, detection, code),
+                        listed_mode(codes, detection, code),
+                        "{codes:?}, detection {detection}, code {code}"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn the_area_mode_of_a_record_is_named_by_its_versions_list() {
+        // Through a whole record of each version that records a position:
+        // codes of each list and of none, under each detection method. The
+        // point is kept either way.
+        let codes_seen = [
+            0, 1, 2, 3, 4, 5, 8, 10, 12, 13, 18, 128, 131, 192, 193, 194, 196, 198, 199, 200, 202,
+            204, 207, 208, 255,
         ];
-        // Every version that records a position, each with the list its
-        // byte 5 takes, written out here.
         let versions = [
-            ("0100", COOLPIX_A, true),
-            ("0101", MADE_UP_0101, true),
-            ("0300", Z6, true),
-            ("0301", Z6, true),
-            ("0400", Z9, false),
-            ("0401", Z9, false),
-            ("0402", Z9, false),
+            ("0100", COOLPIX_A, Codes::TwoLists),
+            ("0101", MADE_UP_0101, Codes::TwoLists),
+            ("0300", Z6, Codes::TwoLists),
+            ("0301", Z6, Codes::TwoLists),
+            ("0400", Z9, Codes::Mirrorless),
+            ("0401", Z9, Codes::Mirrorless),
+            ("0402", Z9, Codes::Mirrorless),
         ];
         for order in ORDERS {
-            for (version, recorded, two_lists) in versions {
-                let named = mirrorless
-                    .iter()
-                    .chain(dslr.iter().filter(|_| two_lists))
-                    .map(|&(detection, code, mode)| (detection, code, Some(mode)));
-                // On 0400 to 0402, the DSLR codes too name none.
-                let none = unnamed
-                    .iter()
-                    .copied()
-                    .chain(
-                        dslr.iter()
-                            .filter(|_| !two_lists)
-                            .map(|&(detection, code, _)| (detection, code)),
-                    )
-                    .map(|(detection, code)| (detection, code, None));
-                for (detection, code, mode) in named.chain(none) {
-                    let mut value = af_info2(order, version, recorded);
-                    value[4] = detection;
-                    value[5] = code;
-                    let label = format!("{order:?}, {version}, detection {detection}, code {code}");
-                    let metadata = makernote_metadata(order, |inner, ifd| {
-                        inner.undefined(ifd, AF_INFO2, &value);
-                    });
-                    assert_eq!(metadata.camera_settings.focus_area_mode, mode, "{label}");
-                    let points = metadata.focus_points().expect(&label);
-                    assert_eq!(points.points().len(), 1, "{label}");
+            for (version, recorded, codes) in versions {
+                for detection in 0..=2 {
+                    for code in codes_seen {
+                        let mut value = af_info2(order, version, recorded);
+                        value[4] = detection;
+                        value[5] = code;
+                        let label =
+                            format!("{order:?}, {version}, detection {detection}, code {code}");
+                        let metadata = makernote_metadata(order, |inner, ifd| {
+                            inner.undefined(ifd, AF_INFO2, &value);
+                        });
+                        assert_eq!(
+                            metadata.camera_settings.focus_area_mode,
+                            listed_mode(codes, detection, code),
+                            "{label}"
+                        );
+                        let points = metadata.focus_points().expect(&label);
+                        assert_eq!(points.points().len(), 1, "{label}");
+                    }
                 }
             }
         }

@@ -22,17 +22,18 @@
 //!   ([`af_info_area_mode`]);
 //! - AF fine-tune from AFTune ([`af_fine_tune`]).
 //!
-//! A code or a text gives a value only where a checked file, or a
-//! standard, shows what it means. Anything else costs that value alone.
+//! A code or a text gives a value only where its meaning is known, as the
+//! next paragraph says. Anything else costs that value alone.
 //! Nothing the block holds is an error.
 //!
 //! The meaning of each code is ExifTool's, read in its published tag
 //! documentation, or Nikon's for a camera's own text. The codes of the
 //! settings of section 8.7 of the NEF notes were each confirmed on the
 //! public samples and on frames I shot for these values with a Z 9 and a
-//! D600. Those of sections 8.6 and 8.10, such as the focus modes, are each
-//! confirmed by such a frame or documented and agreed with by the
-//! measured files, and the notes say which
+//! D600. Those of sections 8.6 and 8.10, such as the focus modes, come
+//! from lists the documentation gives, each read whole once the measured
+//! files hold part of it: each code is confirmed by such a frame, observed
+//! on files, or documented only, and the notes say which
 //! (`docs/formats/nef/makernote-and-metadata.md`).
 
 use std::io::{Read, Seek};
@@ -379,20 +380,30 @@ fn focus_mode_of_text(text: &str) -> Option<FocusMode> {
     })
 }
 
-/// The AF-area mode that AFInfo's first byte, `code`, names: 0, single
-/// area, [`Single`](FocusAreaMode::Single), and 1, dynamic area,
-/// [`Dynamic`](FocusAreaMode::Dynamic). Both are ExifTool's published
-/// documentation, read as documentation, and the files agree: the bodies
-/// without AFInfo2, from the D1 to the D80 and the Coolpix bodies, write
-/// 0 or 1. `None` for every other code: the notes name no other, though
-/// the documentation names 2 to 5, and one D70 JPEG among the samples
-/// writes 2, dynamic area with the closest subject.
+/// The AF-area mode that AFInfo's first byte, `code`, names, in the list
+/// ExifTool's published documentation gives, read as documentation and
+/// read whole, since files hold part of it:
+///
+/// - 0, single area, and 4, single area with the wide focus frame,
+///   [`Single`](FocusAreaMode::Single);
+/// - 1, dynamic area, and 5, dynamic area with the wide focus frame,
+///   [`Dynamic`](FocusAreaMode::Dynamic);
+/// - 2, dynamic area with the closest subject, the camera picking the
+///   point, [`Auto`](FocusAreaMode::Auto);
+/// - 3, group dynamic, a group of points the photographer places, in
+///   which the camera chooses, [`Zone`](FocusAreaMode::Zone).
+///
+/// The bodies without AFInfo2, from the D1 to the D80 and the Coolpix
+/// bodies, write 0 or 1, and the public D70 JPEG writes 2; 3 to 5 are
+/// documented only (NEF notes, section 8.6). `None` for every other code.
 fn af_info_area_mode(code: u8) -> Option<FocusAreaMode> {
-    match code {
-        0 => Some(FocusAreaMode::Single),
-        1 => Some(FocusAreaMode::Dynamic),
-        _ => None,
-    }
+    Some(match code {
+        0 | 4 => FocusAreaMode::Single,
+        1 | 5 => FocusAreaMode::Dynamic,
+        2 => FocusAreaMode::Auto,
+        3 => FocusAreaMode::Zone,
+        _ => return None,
+    })
 }
 
 /// The AF fine-tune that AFTune's four bytes, `af_tune`, record: the
@@ -1360,15 +1371,21 @@ mod tests {
 
     #[test]
     fn without_af_info2_the_area_mode_is_afinfos_first_byte() {
-        // 0 single area and 1 dynamic area; 2, which one D70 JPEG writes,
-        // and codes nothing names give none. The other three bytes, the
-        // point and the points in focus, play no part.
+        // Every code of the list: 0 single area, 1 dynamic area, 2 the
+        // closest subject, which one D70 JPEG writes, 3 group dynamic, and
+        // 4 and 5 the wide focus frame's single and dynamic area. Codes
+        // past the list give none. The other three bytes, the point and
+        // the points in focus, play no part.
         for order in ORDERS {
             for (code, mode) in [
                 (0, Some(FocusAreaMode::Single)),
                 (1, Some(FocusAreaMode::Dynamic)),
-                (2, None),
-                (5, None),
+                (2, Some(FocusAreaMode::Auto)),
+                (3, Some(FocusAreaMode::Zone)),
+                (4, Some(FocusAreaMode::Single)),
+                (5, Some(FocusAreaMode::Dynamic)),
+                (6, None),
+                (128, None),
                 (255, None),
             ] {
                 let read = settings_of(order, |inner, ifd| {
