@@ -775,11 +775,11 @@ impl Flash {
 /// ```
 /// use raw_files::AfFineTune;
 ///
-/// let on = AfFineTune::new(true).with_value(-5);
+/// let on = AfFineTune::on().with_value(-5);
 /// assert!(on.is_on());
 /// assert_eq!(on.value(), Some(-5));
 ///
-/// let off = AfFineTune::new(false);
+/// let off = AfFineTune::off();
 /// assert!(!off.is_on());
 /// assert_eq!(off.value(), None);
 /// ```
@@ -790,11 +790,23 @@ pub struct AfFineTune {
 }
 
 impl AfFineTune {
-    /// AF fine-tune, on or off, with no value;
+    /// AF fine-tune that was on, with no value yet;
     /// [`with_value`](Self::with_value) adds it.
     #[must_use]
-    pub fn new(on: bool) -> Self {
-        Self { on, value: None }
+    pub fn on() -> Self {
+        Self {
+            on: true,
+            value: None,
+        }
+    }
+
+    /// AF fine-tune that was off, with no value.
+    #[must_use]
+    pub fn off() -> Self {
+        Self {
+            on: false,
+            value: None,
+        }
     }
 
     /// This AF fine-tune with the value `value`, in place of any it had.
@@ -1662,7 +1674,7 @@ mod tests {
                     },
                 ),
                 (
-                    start.clone().with_af_fine_tune(AfFineTune::new(false)),
+                    start.clone().with_af_fine_tune(AfFineTune::off()),
                     CameraSettings {
                         af_fine_tune: Some(AfFineTune {
                             on: false,
@@ -1736,7 +1748,7 @@ mod tests {
             .with_color_space(ColorSpace::AdobeRgb)
             .with_focus_mode(FocusMode::Continuous)
             .with_focus_area_mode(FocusAreaMode::Tracking)
-            .with_af_fine_tune(AfFineTune::new(true).with_value(-5));
+            .with_af_fine_tune(AfFineTune::on().with_value(-5));
         assert_eq!(settings, full_settings());
     }
 
@@ -1754,7 +1766,7 @@ mod tests {
             .with_color_space(ColorSpace::Srgb)
             .with_focus_mode(FocusMode::Single)
             .with_focus_area_mode(FocusAreaMode::Pinpoint)
-            .with_af_fine_tune(AfFineTune::new(false).with_value(3));
+            .with_af_fine_tune(AfFineTune::off().with_value(3));
         // Every value of `earlier` differs from the full record's, so each
         // builder below has one to replace.
         let full = full_settings();
@@ -1770,7 +1782,7 @@ mod tests {
             .with_color_space(ColorSpace::AdobeRgb)
             .with_focus_mode(FocusMode::Continuous)
             .with_focus_area_mode(FocusAreaMode::Tracking)
-            .with_af_fine_tune(AfFineTune::new(true).with_value(-5));
+            .with_af_fine_tune(AfFineTune::on().with_value(-5));
         assert_eq!(settings, full);
 
         let white_balance = WhiteBalance::default()
@@ -1819,9 +1831,14 @@ mod tests {
     }
 
     #[test]
+    fn on_and_off_build_an_af_fine_tune_that_says_so() {
+        assert!(AfFineTune::on().is_on());
+        assert!(!AfFineTune::off().is_on());
+    }
+
+    #[test]
     fn an_af_fine_tune_starts_without_a_value_and_takes_one() {
-        for on in [false, true] {
-            let fine_tune = AfFineTune::new(on);
+        for (fine_tune, on) in [(AfFineTune::off(), false), (AfFineTune::on(), true)] {
             assert_eq!(fine_tune.is_on(), on);
             assert_eq!(fine_tune.value(), None);
             // A negative value, then a second that replaces it, each kept
@@ -1831,8 +1848,8 @@ mod tests {
             let farther = nearer.with_value(7);
             assert_eq!((farther.is_on(), farther.value()), (on, Some(7)));
         }
-        assert_ne!(AfFineTune::new(true), AfFineTune::new(false));
-        assert_ne!(AfFineTune::new(true), AfFineTune::new(true).with_value(0));
+        assert_ne!(AfFineTune::on(), AfFineTune::off());
+        assert_ne!(AfFineTune::on(), AfFineTune::on().with_value(0));
     }
 
     // Every variant of each enum, in the order of its declaration. Each
