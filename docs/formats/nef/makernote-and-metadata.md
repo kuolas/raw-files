@@ -1158,77 +1158,144 @@ files are the 289 public NEF and NRW files and 48,395 of my own, as
 counts only. Mine are 31,991 NEF files and 16,404 JPEGs with a Nikon
 MakerNote, of seven bodies. **[F]**
 
-Each code carries one of two marks, with its count of files:
+Each code carries one of three marks, by the rule of
+[ADR011](../../architecture-decisions/adr011-metadata-from-standard-tags.md),
+with its count of files:
 
 - **confirmed**: a frame shot in a known setting shows it;
-- **documented**: ExifTool's published tag documentation names it
-  [S][1], or the maker's manual for a camera's own text, and the
-  measured files agree with it.
+- **observed**: ExifTool's published tag documentation names it
+  [S][1], and measured files hold it; "in my files only" where no
+  public file does;
+- **documented only**: the documentation names it, and no measured
+  file holds it.
 
-The files agree when two things hold:
-
-- the code occurs where the documentation places it, by the record's
-  version, the detection method and the body family;
-- no other value of the same file contradicts it.
-
-A code the documentation does not name stays unnamed. So does a code
-it names two ways the files cannot tell apart, unless both fold into
-one variant, as code 199 does below. So does a documented code no measured
-file holds, such as 194 or 200 to 203. An unnamed code gives `None`
-([ADR011](../../architecture-decisions/adr011-metadata-from-standard-tags.md)).
+The documentation gives its codes in lists, each the codes of one tag
+at one place: here a record's version and the detection method. Once a
+measured file holds a code of a list where the documentation places
+it, and no other value of that file contradicts it, every code of the
+list is named, those no file holds among them. A list no file holds
+any part of stays unread. A code the documentation does not name stays
+unnamed. So does a code it names two ways the files cannot tell apart,
+unless both fold into one variant, as code 199 does below. An unnamed
+code gives `None`.
 
 The documentation gives versions 0100, 0101 and 03xx two lists for
 byte 5. Detection 0, phase detection, takes the first; detection 1,
-contrast detection, the second. It does not say which list detection 2,
-hybrid, takes. My Z 9's frames confirm hybrid's codes 204 to 208,
-which only the second list holds. Versions 02xx and 04xx have one list
-each. [S][1]
+contrast detection, the second. It does not say which list detection
+2, hybrid, takes. So under hybrid detection on those versions:
+
+- a code both lists give, with one meaning or with two that fold into
+  one variant, is named: 128 to 130, 192 to 197 and 199;
+- a mirrorless code that only the second list gives is named by it:
+  198 and 200 to 208. Of these, version 0400's list holds 204 to 208,
+  which my Z 9's frames write under hybrid detection; 198 and 200 to
+  203 are named as the rest of the second list's mirrorless codes, and
+  no file shows them;
+- the DSLR codes 0 to 18 stay unnamed: 0 to 4, which the two lists
+  name differently (0 is a single area in one and plain contrast
+  detection in the other), and 5 to 18, viewfinder modes of the first
+  list alone, which no file shows under hybrid detection.
+
+Versions 02xx and 04xx have one list each, whatever byte 4 holds.
+[S][1] Every list is read: files hold part of each (the table below).
 
 Each variant folds in Nikon's finer kinds: the dynamic-area sizes are
-`Dynamic`, and the wide-area and group-area modes are `Zone`.
-The detection column gives the methods the files record the code
-under; "none" means the version records no method:
+`Dynamic`, and the wide-area and group-area modes are `Zone`. Two
+names need a reading of their own [I]. In "Dynamic Area (closest
+subject)" the camera picks the point with the closest subject, so it
+is `Auto`; in "Group Dynamic" the photographer places a group of points
+and the camera chooses within it, so it is `Zone`. "Wide" in "Single
+Area (wide)" and "Dynamic Area (wide)" names the size of the focus
+frame, so they are `Single` and `Dynamic`. Face priority picks faces
+for the photographer, a mode none of the neutral words fits, and
+plain contrast detection (0) names no area: both give `None`.
+
+**The codes files hold.** The counts were taken on 2026-11-20. The
+detection column gives the methods the files record the code under;
+"none" means the version records no method:
 
 | Versions | Detection | Code | The documentation's name [S][1] | `FocusAreaMode` | Mark | Files, public / mine |
 |---|---|---|---|---|---|---|
 | `0100`, `0101`, `0301` | 0 | 0 | Single Area | `Single` | confirmed: my D600's frames 1 to 41 and 47 to 50 | 90 / 13,980 |
-| `0100`, `0101` | 0 | 1 | Dynamic Area | `Dynamic` | documented | 2 / 62 |
-| `0100`, `0101` | 0 | 4 | Dynamic Area (9 points) | `Dynamic` | documented | 6 / 413 |
+| `0100`, `0101` | 0 | 1 | Dynamic Area | `Dynamic` | observed | 2 / 62 |
+| `0100`, `0101` | 0 | 4 | Dynamic Area (9 points) | `Dynamic` | observed | 6 / 413 |
 | `0100` | 0 | 5 | Dynamic Area (21 points) | `Dynamic` | confirmed: my D600's frames 51 and 52 | 4 / 3,999 |
-| `0100` | 0 | 6 | Dynamic Area (51 points) | `Dynamic` | documented | 5 / 0 |
-| `0100` | 0 | 7 | Dynamic Area (51 points, 3D-tracking) | `Tracking` | documented | 6 / 0 |
+| `0100` | 0 | 6 | Dynamic Area (51 points) | `Dynamic` | observed | 5 / 0 |
+| `0100` | 0 | 7 | Dynamic Area (51 points, 3D-tracking) | `Tracking` | observed | 6 / 0 |
 | `0100`, `0101`, `0300` | 0 | 8 | Auto-area | `Auto` | confirmed: my D600's frames 42 to 44 | 24 / 11,579 |
 | `0100` | 0 | 9 | Dynamic Area (3D-tracking) | `Tracking` | confirmed: my D600's frames 7852 to 7859 | 4 / 720 |
-| `0100` | 1 | 0 | Contrast-detect | none: it names no area | none | 1 / 1 |
-| `0100` | 1 | 1 | Contrast-detect (normal area) | `Single` | documented | 5 / 11 |
-| `0100`, `0101` | 1 | 2 | Contrast-detect (wide area) | `Zone` | documented | 3 / 402 |
-| `0100` | 1 | 3 | Contrast-detect (face priority) | none: no neutral word fits | none | 0 / 19 |
-| `0100` | 1 | 4 | Contrast-detect (subject tracking) | `Tracking` | documented; my D600's live-view frames 53 to 56 hold it, their mode not recorded | 0 / 12 |
-| `0200`, `0201` | none | 128 | Single | `Single` | documented | 7 / 0 |
-| `0200` | none | 129 | Auto (41 points) | `Auto` | documented | 5 / 0 |
-| `0201` | none | 130 | Subject Tracking (41 points) | `Tracking` | documented | 1 / 0 |
+| `0100` | 1 | 0 | Contrast-detect | none: it names no area | observed | 1 / 1 |
+| `0100` | 1 | 1 | Contrast-detect (normal area) | `Single` | observed | 5 / 11 |
+| `0100`, `0101` | 1 | 2 | Contrast-detect (wide area) | `Zone` | observed | 3 / 402 |
+| `0100` | 1 | 3 | Contrast-detect (face priority) | none: no neutral word fits | observed, in my files only | 0 / 19 |
+| `0100` | 1 | 4 | Contrast-detect (subject tracking) | `Tracking` | observed, in my files only; my D600's live-view frames 53 to 56 hold it, their mode not recorded | 0 / 12 |
+| `0200`, `0201` | none | 128 | Single | `Single` | observed | 7 / 0 |
+| `0200` | none | 129 | Auto (41 points) | `Auto` | observed | 5 / 0 |
+| `0201` | none | 130 | Subject Tracking (41 points) | `Tracking` | observed | 1 / 0 |
 | `0201` | none | 0 | none: not in the 02xx list | none | none | 2 / 0 |
 | `0400`, `0401` | 1, 2 | 192 | Pinpoint | `Pinpoint` | confirmed: my Z 9's frames 2484, 2485, 2509 and 2510 | 12 / 103 |
 | `0300`, `0301`, `0400` | 2 | 193 | Single | `Single` | confirmed: my Z 9's frame 2486 | 37 / 34 |
 | `0301`, `0400` | 1, 2 | 195 | Wide (S) | `Zone` | confirmed: my Z 9's frames 2493, 2494, 2497 and 2498 | 4 / 14 |
 | `0400`, `0401` | 2 | 196 | Wide (L) | `Zone` | confirmed: my Z 9's frames 2495, 2496, 2499, 2500 and 2507 | 3 / 12 |
 | `0301`, `0400`, `0402` | 1, 2 | 197 | Auto | `Auto` | confirmed: my Z 9's frame 2506 | 18 / 605 |
-| `0301` | 2 | 199 | Auto in the first list, Auto (Animal) in the second | `Auto` | documented: both meanings fold into `Auto` | 2 / 0 |
+| `0301` | 2 | 199 | Auto in the first list, Auto (Animal) in the second | `Auto` | observed: both meanings fold into `Auto` | 2 / 0 |
 | `0400` | 2 | 204, 205, 206 | Dynamic Area (S), (M), (L) | `Dynamic` | confirmed: my Z 9's frames 2487 to 2492 | 0 / 15 |
 | `0400`, `0402` | 1, 2 | 207 | 3D-tracking | `Tracking` | confirmed: my Z 9's frame 2505 | 9 / 16,328 |
 | `0400` | 1, 2 | 208 | Wide (C1/C2) | `Zone` | confirmed: my Z 9's frames 2501 to 2504 and 2508 | 0 / 86 |
-| AFInfo | none | 0 | Single Area | `Single` | documented | 22 / 0 |
-| AFInfo | none | 1 | Dynamic Area | `Dynamic` | documented | 15 / 0 |
+| AFInfo | none | 0 | Single Area | `Single` | observed | 22 / 0 |
+| AFInfo | none | 1 | Dynamic Area | `Dynamic` | observed | 15 / 0 |
+| AFInfo | none | 2 | Dynamic Area (closest subject) | `Auto` | observed: the D70 JPEG of the [JPEG test data](../jpeg/test-data.md), counted on 2026-11-22 | 1 / 0 |
 
 **[F]** The frames are listed in
 [test-data.md](test-data.md#24-files-checked-for-the-camera-settings).
 Every frame agrees with the documentation's name for its code. Under
 manual focus the mode is still recorded: 0 on my D600's frames 45 and
 46, and 193 on the Z fc (file 8559). Four Coolpix files write AFInfo's
-1, and no measured value of theirs contradicts it. **[F]** The codes
-mapped to `Single`, `Dynamic` and `Tracking` follow ADR011's neutral
-words. Face priority picks faces for the photographer, a mode none of
-them fits [I].
+1, and no measured value of theirs contradicts it. **[F]** The public
+counts of AFInfo are the NEF and NRW files' and, for 2, the D70 JPEG's;
+the other public JPEGs with AFInfo hold 0 or 1. **[F]**
+
+**The codes no file holds.** Each is documented only, named with its
+list, and checked on files built in the tests alone:
+
+| List | Code | The documentation's name [S][1] | `FocusAreaMode` |
+|---|---|---|---|
+| `0100` to `0301`, phase detection | 2 | Dynamic Area (closest subject) | `Auto` |
+| | 3 | Group Dynamic | `Zone` |
+| | 10 | Single Area (wide) | `Single` |
+| | 11 | Dynamic Area (wide) | `Dynamic` |
+| | 12 | Dynamic Area (wide, 3D-tracking) | `Tracking` |
+| | 13, 16, 17 | Group Area; (HL); (VL) | `Zone` |
+| | 14, 15, 18 | Dynamic Area (25, 72 and 49 points) | `Dynamic` |
+| | 128 | Single | `Single` |
+| | 129 | Auto (41 points) | `Auto` |
+| | 130 | Subject Tracking (41 points) | `Tracking` |
+| | 131 | Face Priority (41 points) | none: no neutral word fits |
+| | 192 | Pinpoint | `Pinpoint` |
+| | 193 | Single | `Single` |
+| | 194 | Dynamic | `Dynamic` |
+| | 195, 196 | Wide (S), Wide (L) | `Zone` |
+| | 197, 199 | Auto | `Auto` |
+| `0100` to `0301`, contrast detection | 128 to 131, 192 to 197 | as under phase detection | as under phase detection |
+| | 198 | Auto (People) | `Auto` |
+| | 199 | Auto (Animal) | `Auto` |
+| | 200 | Normal-area AF | `Single` |
+| | 201 | Wide-area AF | `Zone` |
+| | 202 | Face-priority AF | none: no neutral word fits |
+| | 203 | Subject-tracking AF | `Tracking` |
+| | 204, 205, 206 | Dynamic Area (S), (M), (L) | `Dynamic` |
+| | 207 | 3D-tracking | `Tracking` |
+| | 208 | Wide-Area (C1/C2) | `Zone` |
+| `0100` to `0301`, hybrid detection | 128 to 130, 192, 194, 196, 198, 200 to 208 | by the list that gives the code, as above | as above |
+| `0200`, `0201` | 131 | Face Priority (41 points) | none: no neutral word fits |
+| AFInfo | 3 | Group Dynamic | `Zone` |
+| | 4 | Single Area (wide) | `Single` |
+| | 5 | Dynamic Area (wide) | `Dynamic` |
+
+**[F]** Version 04xx's list, 192, 193, 195 to 197 and 204 to 208, is
+whole on the files: each code is in the first table, and each is named
+under any detection method, since that version has one list. The
+mapped codes follow ADR011's neutral words.
 
 ### 8.7 Camera settings
 
@@ -1721,8 +1788,9 @@ The AF-area mode is in [section 8.6](#86-focus-point).
 The values were counted on the files and on the day of section 8.6's
 AF-area table, by the same program **[F]**. Counts read "public / mine":
 the 289 public NEF and NRW files, then my 48,395. The marks
-**confirmed** and **documented** are those of [section
-8.6](#86-focus-point). The meaning of each MakerNote code comes from
+**confirmed**, **observed** and **documented only** are those of
+[section 8.6](#86-focus-point), and so is the rule that names every code
+of a documented list once files hold part of it. The meaning of each MakerNote code comes from
 ExifTool's published tag documentation [S][1], read as documentation,
 and no reader's source was read. ExifTool and exiv2 were not run for
 this section. Where a camera writes its own text, its meaning is the
@@ -1738,8 +1806,8 @@ setting:
 |---|---|---|---|---|
 | `AF-S` | single-servo AF | `Single` | confirmed: my Z 9's frames 2484 to 2486, 2497 to 2504 and 2506 to 2510 | 104 / 4,554 |
 | `AF-C` | continuous-servo AF | `Continuous` | confirmed: my Z 9's frames 2487 to 2496 and 2505, my D600's frames 7856 and 7858 | 65 / 27,526 |
-| `AF-A` | auto-servo AF, the camera choosing between the two | `Automatic` | documented | 54 / 15,228 |
-| `AF-F` | full-time AF, which the D600 offers in live view | `FullTime` | documented: 3 Coolpix files | 3 / 0 |
+| `AF-A` | auto-servo AF, the camera choosing between the two | `Automatic` | observed | 54 / 15,228 |
+| `AF-F` | full-time AF, which the D600 offers in live view | `FullTime` | observed: 3 Coolpix files | 3 / 0 |
 | `MANUAL` | manual focus | `Manual` | confirmed: my D600's frames 45 and 46 | 61 / 1,087 |
 
 **[F]** ExifTool documents the tag as a string and lists no values
@@ -1754,23 +1822,24 @@ serves other makers, Sony's DMF among them.
 - the value at a zoom's long end, signed.
 
 The D600's menu tunes up to 12 lenses, from -20 to +20 [P][25] (p. 259).
-raw-files reads whether it is on, with its value:
+raw-files reads whether it is on, with its value, and under code 3 the
+value at the long end too:
 
 | Byte 0 | The documentation's name [S][1] | Read as | Mark | Files, public / mine |
 |---|---|---|---|---|
-| 0 | Off | off | documented | 189 / 37,260 |
-| 1 | On (1) | on | documented | 15 / 3 |
-| 2 | On (2) | on | documented | 21 / 76 |
+| 0 | Off | off | observed | 189 / 37,260 |
+| 1 | On (1) | on, with byte 2's value | observed | 15 / 3 |
+| 2 | On (2) | on, with byte 2's value | observed | 21 / 76 |
+| 3 | On (Zoom) | on, with byte 2's value and byte 3's at the long end | documented only | 0 / 0 |
 
 **[F]** The values seen run from -20 to +20 on my D600, and -20 and
 -2 on public D7000 and D300 files. Byte 3 is 0 on every file. The
-documentation calls it valid only under code 3, "On (Zoom)", which no
-file holds, so a first byte of 3 gives no AF fine-tune, by
-[ADR011](../../architecture-decisions/adr011-metadata-from-standard-tags.md)'s
-rule on a documented code no measured file holds, and the value at the
-long end is not read. What tells 1
-from 2 is not documented: both read as on, and the difference stays
-open. **[F]**
+documentation calls it valid only under code 3, which no file holds,
+so under 1 and 2 it is not read. Code 3 is named with its list, as
+[ADR011](../../architecture-decisions/adr011-metadata-from-standard-tags.md)
+decides, and is checked on built files alone. What tells 1 from 2 is
+not documented: both read as on, and the difference stays open.
+**[F]**
 
 **Stabilization.** 0x001F VRInfo starts with a four-digit version. Byte
 4 says whether vibration reduction was on, and byte 6 its mode [S][1].
@@ -1783,28 +1852,43 @@ The versions agree with the bodies the documentation places them on:
 | `0200` | 9 | the Z bodies, the D6 and the D780 | 97 / 17,197 |
 
 **[F]** Mine are my six DSLRs' files at 0100 and my Z 9's at 0200. No
-frame was shot in a known stabilization setting, so every code here is
-documented, none confirmed.
+frame was shot in a known stabilization setting, so no code here is
+confirmed.
 
-| Byte | Code | The documentation's name [S][1] | Read as | Files, public / mine |
-|---|---|---|---|---|
-| 4 | 0 | n/a | `None` | 4 / 0 |
-| 4 | 1 | On | on | 113 / 41,910 |
-| 4 | 2 | Off | off | 142 / 6,485 |
-| 6, `0100` | 0 | Normal | `Normal` | 36 / 24,899 |
-| 6, `0101` | 2 | Active | `Active` | 6 / 0 |
-| 6, `0200` | 1 | Normal (Z bodies) | `Normal` | 71 / 2,345 |
-| 6, `0200` | 3 | Sport (Z bodies) | `Sport` | 0 / 14,666 |
+Byte 6 has two lists in the documentation: one for the Z bodies "thru
+July 2025", and one for the others. Each is read whole, since files hold
+part of each: the Z bodies' list at version 0200, the others' at 0100
+and 0101.
 
-**[F]** The counts of byte 6 count the files where byte 4 says on. Byte
-6 has two lists in the documentation. In the Z bodies' list 0 is off,
-and in the others' list 0 is normal. raw-files will read the mode only
-where byte 4 says on, so the two lists never meet on a file. On version
-0100 byte 6 is 0 on every file, on and off alike. Byte 5, which the
-documentation does not name, repeats byte 4 on 139 public 0100 files and
-on all of mine. Whether 0100's byte 6 ever holds another mode is open:
-the files cannot show it. Byte 8 of 0200, the kind of stabilization,
-will not be read ([section 12.5](#125-what-the-view-leaves-out)).
+| Byte | Code | The documentation's name [S][1] | Read as | Mark | Files, public / mine |
+|---|---|---|---|---|---|
+| 4 | 0 | n/a | `None` | observed | 4 / 0 |
+| 4 | 1 | On | on | observed | 113 / 41,910 |
+| 4 | 2 | Off | off | observed | 142 / 6,485 |
+| 6, `0100`, `0101` | 0 | Normal | `Normal` | observed, on `0100` | 36 / 24,899 |
+| 6, `0100`, `0101` | 1 | On (1) | no mode: it names none | documented only | 0 / 0 |
+| 6, `0100`, `0101` | 2 | Active | `Active` | observed, on `0101` | 6 / 0 |
+| 6, `0100`, `0101` | 3 | Sport | `Sport` | documented only | 0 / 0 |
+| 6, `0200` | 0 | Off (Z bodies) | no mode: byte 4 says whether it was on | documented only | 0 / 0 |
+| 6, `0200` | 1 | Normal (Z bodies) | `Normal` | observed | 71 / 2,345 |
+| 6, `0200` | 3 | Sport (Z bodies) | `Sport` | observed, in my files only | 0 / 14,666 |
+
+**[F]** The counts of byte 6 count the files where byte 4 says on.
+raw-files will read the mode only where byte 4 says on, so the two
+lists' 0 never meet on a file. On version 0100 byte 6 is 0 on every
+file, on and off alike. Byte 5, which the documentation does not name,
+repeats byte 4 on 139 public 0100 files and on all of mine. Still open,
+since no frame was shot to settle them:
+
+- whether 0100's byte 6 ever holds another mode, such as active on a
+  D600 with a lens that offers it;
+- whether the Z bodies' 1 and 3 are normal and sport as documented;
+- which version and list a Z body later than July 2025 writes: no
+  measured file shows one.
+
+Byte 8 of 0200, the kind of stabilization, will not be read: it is 2
+without a VR lens and 3 with one on my files, and what it records is
+open ([section 12.5](#125-what-the-view-leaves-out)).
 
 **Auto ISO.** Bit 5 of 0x0089 ShootingMode is auto ISO [S][1]. It is set
 on 71 of the 271 public files that have the tag and on 30,403 of my
@@ -1813,7 +1897,7 @@ and the one public D70 file sets it (value 33). So the D70 will give no
 auto ISO. The Coolpix bodies but the Coolpix A write no ShootingMode.
 Their 0x000F ISOSelection says `AUTO` or `MANUAL` instead, on 16 public
 files (9 and 7). **[F]** raw-files will read the bit, else that text.
-Both are documented; no frame was shot with auto ISO set either way.
+Both are observed; no frame was shot with auto ISO set either way.
 
 **Exposure fine-tuning.** The photographer's fine-tuning of the camera's
 metering, from -1 to +1 EV in sixths on the D600 [P][25] (p. 226).
@@ -1829,25 +1913,26 @@ count. **[F]**
 **Release mode and bracketing.** The bits of 0x0089 ShootingMode [S][1],
 with the files that set each:
 
-| Bit | The documentation's name [S][1] | Read as | Files, public / mine |
-|---|---|---|---|
-| 0 | Continuous | `ReleaseMode::Continuous` | 71 / 29,902 |
-| 1 | Delay | not read: the exposure delay mode [P][25] (p. 231) | 30 / 8 |
-| 2 | PC Control | not read: no neutral word fits | 12 / 0 |
-| 3 | Self-timer | `ReleaseMode::SelfTimer` | 10 / 0 |
-| 4 | Exposure Bracketing | `Bracketing::Exposure` | 3 / 18 |
-| 6 | White-Balance Bracketing | not read: on no file | 0 / 0 |
-| 7 | IR Control | `ReleaseMode::Remote` | 2 / 1,109 |
-| 8 | D-Lighting Bracketing | not read: on no file | 0 / 0 |
-| 9 | none | not read | 2 / 277 |
+| Bit | The documentation's name [S][1] | Read as | Mark | Files, public / mine |
+|---|---|---|---|---|
+| 0 | Continuous | `ReleaseMode::Continuous` | observed | 71 / 29,902 |
+| 1 | Delay | not read: the exposure delay mode [P][25] (p. 231) | observed | 30 / 8 |
+| 2 | PC Control | not read: no neutral word fits | observed | 12 / 0 |
+| 3 | Self-timer | `ReleaseMode::SelfTimer` | observed | 10 / 0 |
+| 4 | Exposure Bracketing | `Bracketing::Exposure` | observed | 3 / 18 |
+| 6 | White-Balance Bracketing | `Bracketing::WhiteBalance` | documented only | 0 / 0 |
+| 7 | IR Control | `ReleaseMode::Remote` | observed | 2 / 1,109 |
+| 8 | D-Lighting Bracketing | `Bracketing::DynamicRange` | documented only | 0 / 0 |
+| 9 | none | not read | none | 2 / 277 |
+| 11 | Pre-capture | not read: no release mode ([section 12.5](#125-what-the-view-leaves-out)) | documented only | 0 / 0 |
 
-**[F]** Each read bit is documented, none confirmed. Bits 6 and 8 are on
-no file, so they will stay unnamed until a file holds them. With none of
-bits 4, 6 and 8 set, bracketing is `Off`. No bit names a single frame,
+**[F]** None is confirmed. Bits 6 and 8 are on no file, and are
+named with the rest of the list, as section 8.6 says. With none of bits
+4, 6 and 8 set, bracketing is `Off`. No bit names a single frame,
 which the quiet release and mirror up share. So a release mode with none
-of bits 0, 3 and 7 set will stay `None`. Bit 9 is undocumented. One D600
-frame of mine, outside the counted sets, sets it too, its setting not
-recorded. Exif's ExposureMode 2, auto bracket [P][23] (4.6.6.7.36,
+of bits 0, 3 and 7 set will stay `None`. Bit 9 is undocumented. One
+D600 frame of mine, outside the counted sets, sets it too, its setting
+not recorded: what it records is open. Exif's ExposureMode 2, auto bracket [P][23] (4.6.6.7.36,
 p. 69), will give `Bracketing::Exposure` where no MakerNote says. No Nikon
 file holds 2: 177 and 102 public files hold 0 and 1, and mine 0 and 1
 too. **[F]**
@@ -1857,7 +1942,7 @@ too. **[F]**
 142 of the 251 public files with WorldTime, and on 8,913 of my 48,395,
 all D3200 and Z 9 files. **[F]** Section 8.2 found the offset equal to
 the zone plus 60 minutes where it is 1, so the files agree. raw-files
-will read it as a camera setting, documented.
+will read it as a camera setting, observed.
 
 **The flash's new parts.** Exif's Flash bits stay the flash's first
 source ([section 8.7](#87-camera-settings)). Plain MakerNote texts and
@@ -1926,31 +2011,33 @@ whether the data is compressed: 1 uncompressed [P], 34713 Nikon's
 compressed form ([raw-data.md](raw-data.md)). On 34713, Nikon's
 NEFCompression refines it
 ([section 3](#3-nefcompression-and-bit-depth)): 0x0093, or byte 10 of 0x0051 on
-the Z bodies that write no 0x0093. raw-files will read them so:
+the Z bodies that write no 0x0093. The documentation gives one list of
+NEFCompression's codes, and files hold part of it in each tag, so both
+read it whole. raw-files will read them so:
 
-| Source | Code | The documentation's name [S][1] | `RawCompression` | Mark | Files, public / mine |
+| Code | The documentation's name [S][1] | `RawCompression` | Mark | 0x0093, public / mine | 0x0051, public / mine |
 |---|---|---|---|---|---|
-| Compression | 1 | uncompressed [P] | `Uncompressed` | documented | 43 / 0 |
-| 0x0093 | 1 | Lossy (type 1) | `Lossy` | documented | 13 / 0 |
-| 0x0093 | 2 | Uncompressed | `Uncompressed` | documented | 1 / 0 |
-| 0x0093 | 3 | Lossless | `Lossless` | documented | 65 / 11,544 |
-| 0x0093 | 4 | Lossy (type 2) | `Lossy` | documented | 87 / 3,568 |
-| 0x0093 | 6 | Uncompressed (reduced to 12 bit) | `Uncompressed` | documented | 8 / 0 |
-| 0x0093 | 7 | Unpacked 12 bits | `Uncompressed` | documented | 3 / 0 |
-| 0x0093 | 8 | Small | none: a size, not a compression | none | 2 / 0 |
-| 0x0093 | 9 | Packed 12 bits | `Uncompressed` | documented | 1 / 0 |
-| 0x0093 | 10 | Packed 14 bits | `Uncompressed` | documented | 4 / 0 |
-| 0x0051 | 3 | Lossless | `Lossless` | documented | 23 / 1,080 |
-| 0x0051 | 4 | Lossy (type 2) | `Lossy` | documented | 4 / 0 |
-| 0x0051 | 6 | Uncompressed (reduced to 12 bit) | `Uncompressed` | documented | 2 / 0 |
-| 0x0051 | 10 | Packed 14 bits | `Uncompressed` | documented | 2 / 0 |
-| 0x0051 | 13 | High Efficiency | `HighEfficiency` | documented | 14 / 27 |
-| 0x0051 | 14 | High Efficiency\* | `HighEfficiencyStar` | documented | 14 / 15,772 |
+| 1 | Lossy (type 1) | `Lossy` | observed, in 0x0093 | 13 / 0 | 0 / 0 |
+| 2 | Uncompressed | `Uncompressed` | observed, in 0x0093 | 1 / 0 | 0 / 0 |
+| 3 | Lossless | `Lossless` | observed | 65 / 11,544 | 23 / 1,080 |
+| 4 | Lossy (type 2) | `Lossy` | observed | 87 / 3,568 | 4 / 0 |
+| 5 | Striped packed 12 bits | `Uncompressed` | documented only | 0 / 0 | 0 / 0 |
+| 6 | Uncompressed (reduced to 12 bit) | `Uncompressed` | observed | 8 / 0 | 2 / 0 |
+| 7 | Unpacked 12 bits | `Uncompressed` | observed, in 0x0093 | 3 / 0 | 0 / 0 |
+| 8 | Small | none: a size, not a compression | observed, in 0x0093 | 2 / 0 | 0 / 0 |
+| 9 | Packed 12 bits | `Uncompressed` | observed, in 0x0093 | 1 / 0 | 0 / 0 |
+| 10 | Packed 14 bits | `Uncompressed` | observed | 4 / 0 | 2 / 0 |
+| 13 | High Efficiency | `HighEfficiency` | observed, in 0x0051 | 0 / 0 | 14 / 27 |
+| 14 | High Efficiency\* | `HighEfficiencyStar` | observed, in 0x0051 | 0 / 0 | 14 / 15,772 |
+
+The raw IFD's Compression 1, uncompressed by TIFF 6.0 [P], is on 43
+public files and none of mine, and gives `Uncompressed`.
 
 **[F]** The Z 9 samples 5146 to 5148, which the
 [test data](test-data.md) lists as lossless, HE\* and HE, hold codes 3,
 14 and 13. Their catalog entries state no compression, so they confirm
-no code. Codes 7, 9 and 10 are packings of uncompressed data
+no code. Codes 5, 7, 9 and 10 are packings of uncompressed data, by
+their names and, for 7, 9 and 10, by the data
 ([raw-data.md](raw-data.md)), so they will fold into `Uncompressed`. The
 one public file whose Compression is a LONG, a Coolpix A1000's, will
 give none, by the rule on a value's type. **[F]** The raw bit depth will
@@ -1978,7 +2065,10 @@ file's NEFCompression too. A raw file's Quality, `RAW`, `NRW` or
 0x0044 JPGCompression is one SHORT: 1 size priority, 3 optimal quality
 [S][1]. The D600's menu names the two [P][25] (p. 94), and the Z 9 marks
 optimal quality with a star [P][26] (p. 103). raw-files will read 1 and
-3 as `JpegCompression::SizePriority` and `OptimalQuality`, documented:
+3 as `JpegCompression::SizePriority` and `OptimalQuality`, the whole
+list, both observed: on my files and on the public JPEG fixtures that
+the [JPEG notes](../jpeg/container-and-metadata.md#10-makernotes-in-a-jpeg)
+count, though on no public NEF or NRW file:
 
 | Code | Files, public / mine |
 |---|---|

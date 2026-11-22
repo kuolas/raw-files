@@ -1585,31 +1585,35 @@ these pages read each tag through raw-files' own raw view
   files and 10 JPEGs, one JPEG without a MakerNote.
 
 The meaning of each MakerNote code is ExifTool's, read in its published
-tag documentation, retrieved again on 20 November 2026 [S][1]. Only
-single codes were taken from it, never a table whole. No reader's
+tag documentation, retrieved again on 20 November 2026 [S][1]; for
+one code, Sony's own manual [P][33]. Its lists of a setting's kinds are
+read whole, as the rule below says, and no other table is taken from
+it. No reader's
 source code was read for this section, and ExifTool and exiv2 were not
 run for it. Every value counted lies inside what `open` already reads.
 **[F]**
 
-**Two marks.** Each code's meaning carries one of two marks, by the
+**Three marks.** Each code's meaning carries one of three marks, by the
 rule of
 [ADR011](../../architecture-decisions/adr011-metadata-from-standard-tags.md):
 
-- **confirmed by a frame**: a frame I shot in a known setting shows the
-  code;
-- **documented and agreed with**: ExifTool's documentation gives the
-  code, and the measured files agree with it.
+- **confirmed**: a frame I shot in a known setting shows the code;
+- **observed**: the documentation gives the code, and measured files
+  hold it, counted on the public files first; "in my files only" where
+  no public file does;
+- **documented only**: the documentation gives the code, and no
+  measured file holds it.
 
-The files agree when two things hold:
-
-- the code occurs where the documentation places it: the tag, the
-  body family, the version of the record;
-- no other value of the same file contradicts it.
-
-A code the documentation does not name, or that no measured file holds,
-stays unnamed, and raw-files will give `None`. Of the codes below, only
-the kinds of fluorescent lamp are confirmed by frames: my ILCE-7M2's
-white balance frames of 2026-10-25
+The documentation gives its codes in lists, each the codes of one tag
+at one place: here a tag and a body family. Once a measured file holds
+a code of a list where the documentation places it, and no other value
+of that file contradicts it, every code of the list is named, those no
+file holds among them. A code a file contradicts stays unnamed, and
+the rest of its list stands. A code the documentation does not name
+stays unnamed, and raw-files will give `None`. A code that is
+documented only is checked on files built in the tests alone. Of the
+codes below, only the kinds of fluorescent lamp are confirmed by
+frames: my ILCE-7M2's white balance frames of 2026-10-25
 ([test-data.md](test-data.md#23-the-camera-settings-of-each-file)).
 
 **Focus mode.** 0x201B FocusMode, one BYTE, is on 175 public files of
@@ -1617,12 +1621,19 @@ white balance frames of 2026-10-25
 
 | 0x201B | ExifTool's word | `FocusMode` | Public files | Mark |
 |---|---|---|---|---|
-| 0 | Manual | `Manual` | 46 | documented and agreed with |
-| 2 | AF-S | `Single` | 46 | documented and agreed with |
-| 3 | AF-C | `Continuous` | 49 | documented and agreed with |
-| 4 | AF-A | `Automatic` | 31 | documented and agreed with |
-| 6 | DMF | `DirectManual` | 3 (1816, 359, 6813) | documented and agreed with |
-| 7 | AF-D | none | 0 | on no file, so unnamed |
+| 0 | Manual | `Manual` | 46 | observed |
+| 2 | AF-S | `Single` | 46 | observed |
+| 3 | AF-C | `Continuous` | 49 | observed |
+| 4 | AF-A | `Automatic` | 31 | observed |
+| 6 | DMF | `DirectManual` | 3 (1816, 359, 6813) | observed |
+| 7 | AF-D | `Continuous` | 0 | documented only |
+
+- **AF-D is continuous AF.** ExifTool gives only the letters. Sony's
+  manual of the SLT-A99 and SLT-A99V lists "AF-D" in its index at the
+  page of "Depth Map Assist Continuous AF": "In addition to the
+  Continuous AF function, assist areas are displayed to help you to
+  continue to focus on subjects." [P][33] (p. 70 and the index) So it
+  folds into `Continuous`. No measured file holds it.
 
 - The manual-focus files that record a focus location record the
   frame's exact center ([section 9.6](#96-focus-point)), as manual
@@ -1654,23 +1665,36 @@ named.
 
 | Family | 0x201C | ExifTool's word | `FocusAreaMode` | Public files | Mark |
 |---|---|---|---|---|---|
-| any | 0 | Wide | `Auto` | 89: 86 E-mount and compact, 2 ILCA, 1 SLT | documented and agreed with |
-| E-mount and compact | 1 | Center | `Single` | 26 | documented and agreed with |
-| E-mount and compact | 3 | Flexible Spot | `Single` | 31 | documented and agreed with |
-| E-mount and compact | 11 | Zone | `Zone` | 8 | documented and agreed with |
-| E-mount and compact | 12 | Expanded Flexible Spot | `Dynamic` | 19 | documented and agreed with |
-| ILCA | 4 | Flexible Spot | `Single` | 1 (1068) | documented and agreed with |
-| SLT | 9 | Spot | none | 1 (3751) | documented; its fold is not settled |
+| any | 0 | Wide | `Auto` | 89: 86 E-mount and compact, 2 ILCA, 1 SLT | observed |
+| E-mount and compact | 1 | Center | `Single` | 26 | observed |
+| E-mount and compact | 3 | Flexible Spot | `Single` | 31 | observed |
+| E-mount and compact | 4 | Flexible Spot (LA-EA4) | `Single` | 0 | documented only |
+| E-mount and compact | 9 | Center (LA-EA4) | `Single` | 0 | documented only |
+| E-mount and compact | 11 | Zone | `Zone` | 8 | observed |
+| E-mount and compact | 12 | Expanded Flexible Spot | `Dynamic` | 19 | observed |
+| E-mount and compact | 13 | Custom AF Area | `Zone` | 0 | documented only |
+| ILCA | 4 | Flexible Spot | `Single` | 1 (1068) | observed |
+| ILCA | 8 | Zone | `Zone` | 0 | documented only |
+| ILCA | 9 | Center | `Single` | 0 | documented only |
+| ILCA | 12 | Expanded Flexible Spot | `Dynamic` | 0 | documented only |
+| SLT | 4 | Local | `Single` | 0 | documented only |
+| SLT | 8 | Zone | `Zone` | 0 | documented only |
+| SLT | 9 | Spot | `Single` | 1 (3751) | observed |
 
 - **Flexible Spot agrees with the file.** On the ILCE-7RM3 (file 3251,
   code 3), FlexibleSpotPosition, which the documentation calls valid
   only in Flexible Spot mode, matches the focus location
   ([section 9.6](#96-focus-point)).
-- **Spot on the SLT bodies stays unnamed.** The documentation does not
-  say whether it is the center point alone, which would be `Single`,
-  or a larger area. A source that settles it can name it later.
-- **The other codes** the documentation gives for each family are on
-  no measured file and stay unnamed.
+- **Every list is read whole**, since files hold part of each. The
+  LA-EA4 codes are the same areas through Sony's A-mount adapter.
+- **Spot and Local on the SLT bodies are one point.** The
+  documentation's own ILCA list gives Flexible Spot at 4 and Center at
+  9, where the SLT list gives Local and Spot; Sony's SLT-A99 manual
+  names the four areas Wide, Zone, Spot and Local without saying more
+  [P][33] (p. 35). So both fold into `Single` [I].
+- **Custom AF Area** folds into `Zone`: an area the photographer sets,
+  inside which the camera chooses [I]. The name does not say more, and
+  no file holds it.
 - **My ILCE-7M2 files** hold 0, 1, 3 and 11. Of the 15 in the sample,
   eight hold 3, three hold 1, two hold 0 and two hold 11.
 - 0xB043 AFAreaMode, on the same seven older files as 0xB042, will
@@ -1684,7 +1708,8 @@ the documentation's 4294967295, "n/a", is on none.
 - The fixed-lens RX1 bodies, which have no stabilization, record 0 on
   all their files (2647, 4050, 2466, 2467, 8544 to 8548) **[F]**.
 - raw-files will give it as a `Stabilization`, on or off, with no mode:
-  no plain Sony tag records one. Mark: documented and agreed with.
+  no plain Sony tag records one. Mark: observed for 0 and 1; the
+  documentation's 4294967295, "n/a", gives none.
 - It is 1 on every one of my ILCE-7M2 files, and 0 on none.
 
 **Exposure fine-tuning.** 0x202D ExposureStandardAdjustment, one
@@ -1695,7 +1720,7 @@ is zero.
 - The documentation gives only the name and the type. The sixths of a
   stop are the file's own denominator, and no file shows a value other
   than zero, or its sign.
-- Mark: documented and agreed with, for zero alone.
+- Mark: observed, for zero alone.
 - **The ILCE-7M2 records no 0x202D**: none of my files of that body
   holds it, so its exposure fine-tuning will be `None`.
 
@@ -1706,12 +1731,12 @@ is on 186 public files of 86 bodies **[F]**. Exif's ExposureMode
 
 | 0xB049 | ExifTool's word | `ReleaseMode` | `Bracketing` | Files | Mark |
 |---|---|---|---|---|---|
-| 0 | Normal | `Single` | `Off` | 152 public | documented and agreed with |
-| 2 | Continuous | `Continuous` | `Off` | 22 public | documented and agreed with |
+| 0 | Normal | `Single` | `Off` | 152 public | observed |
+| 2 | Continuous | `Continuous` | `Off` | 22 public | observed |
 | 5 | Exposure Bracketing | none | none (below) | 10 public | contradicted on 5 of them |
-| 6 | White Balance Bracketing | none | `WhiteBalance` | the ILCE-6000 JPEG; my ILCE-7M2 | documented and agreed with |
-| 8 | DRO Bracketing | none | `DynamicRange` | 1 public (1080) | documented and agreed with |
-| 65535 | n/a | none | none | 1 public (2346) | |
+| 6 | White Balance Bracketing | none | `WhiteBalance` | the ILCE-6000 JPEG; my ILCE-7M2 | observed |
+| 8 | DRO Bracketing | none | `DynamicRange` | 1 public (1080) | observed |
+| 65535 | n/a | none | none | 1 public (2346) | observed |
 
 - **A bracket will give no release mode.** The code does not say whether
   the frames were shot one by one or as a burst.
@@ -1727,8 +1752,10 @@ is on 186 public files of 86 bodies **[F]**. Exif's ExposureMode
   agree. The ILCE-7RM3's five pixel-shift files (3251 to 3255) hold 5
   too. There 0x202F marks a pixel-shift group and Exif's ExposureMode
   is 1, manual, so 5 is no exposure bracket.
-- So 5 will stay unnamed until a decision says how to tell the two. Exif's
-  ExposureMode 2 still gives `Exposure` on the RX100 files.
+- So 5 will stay unnamed until a decision says how to tell the two: a
+  code a file contradicts stays unnamed, and the rest of the list
+  stands. Exif's ExposureMode 2 still gives `Exposure` on the RX100
+  files. Every code of the list is on a file.
 - Exif's ExposureMode 2 is on 9 public files: the five above and four
   with no 0xB049. These are the DSLR-A330, A350, SLT-A33 and SLT-A35
   (355, 2053, 2050, 2052).
@@ -1754,8 +1781,7 @@ recorded, beside Exif's Flash bits ([section 9.7](#97-camera-settings)):
   -2 and -0.7, and 0 where it is 0 **[F]**.
 - So 0x0104 rounds two thirds of a stop to -0.7. FlashLevel will not
   be read, since it repeats 0x0104.
-- Mark: documented and agreed with; the two tags agree on every file
-  that has both.
+- Mark: observed; the two tags agree on every file that has both.
 - The DSLR-A100 and the DSC-R1 record FlashLevel (-1 and 0) but no
   0x0104, so their compensation will be `None`.
 - It is `0/10` on every one of my ILCE-7M2 files.
@@ -1768,9 +1794,9 @@ that have both, and will not be read **[F]**:
 | Compression | 0x2029 | `RawCompression` | Public files | Mark |
 |---|---|---|---|---|
 | 1 | 1 | `Uncompressed` | 39 | TIFF 6.0 [P] |
-| 7 | 2 | `Lossless` | 38 | documented and agreed with; lossless JPEG in the data ([raw-data.md](raw-data.md#tiff-compression-values)) |
-| 32767 | 0 | `Lossy`, for cRAW alone (below) | 125 | documented and agreed with |
-| 32766 | 3 | `Lossy` | 4 (8846, 8847, 8849, 8850) | documented and agreed with |
+| 7 | 2 | `Lossless` | 38 | observed; lossless JPEG in the data ([raw-data.md](raw-data.md#tiff-compression-values)) |
+| 32767 | 0 | `Lossy`, for cRAW alone (below) | 125 | observed |
+| 32766 | 3 | `Lossy` | 4 (8846, 8847, 8849, 8850) | observed |
 
 - **32767 holds three layouts**, which the strip's size tells apart
   ([raw-data.md](raw-data.md#telling-the-layouts-apart)). cRAW, with
@@ -1795,11 +1821,11 @@ that have both, and will not be read **[F]**:
 
 **JPEG quality.** Three tags give it [S][1] **[F]**:
 
-| Tag | Values the files hold | Public files |
-|---|---|---|
-| 0x202E Quality, second value | 0 without a JPEG (76), 2 fine (35), 3 extra fine (13) | 124, and the ILCE-7M3 JPEG (3) |
-| 0x0102 Quality | in a raw file 0 RAW (116), 6 RAW + JPEG (89), 7 compressed RAW (1); in a JPEG 2 fine, 5 extra fine | 206, and four JPEGs |
-| 0xB047 JPEGQuality | 1 fine (7), 65535 "n/a" (32) | 39 |
+| Tag | Values the files hold | Documented, on no file | Public files |
+|---|---|---|---|
+| 0x202E Quality, second value | 0 without a JPEG (76), 2 fine (35), 3 extra fine (13) | 1 standard, 4 light | 124, and the ILCE-7M3 JPEG (3) |
+| 0x0102 Quality | in a raw file 0 RAW (116), 6 RAW + JPEG (89), 7 compressed RAW (1); in a JPEG 2 fine, 5 extra fine | 1 super fine, 3 standard, 4 economy, 8 compressed RAW + JPEG, 9 light | 206, and four JPEGs |
+| 0xB047 JPEGQuality | 1 fine (7), 65535 "n/a" (32) | 0 standard, 2 extra fine | 39 |
 
 - **0x202E and 0x0102 agree** on every file with both: 0x0102's 0 with
   a second value of 0, and its 6 with 2 or 3. The ILCE-7M3 JPEG has 5,
@@ -1815,16 +1841,20 @@ that have both, and will not be read **[F]**:
   there it is the menu's step, not a JPEG written.
 
 raw-files will give a `JpegQuality` from the first of these that names
-a step:
+a step. Each list is read whole, since files hold part of each:
 
-1. 0x202E's second value: 2 `Fine`, 3 `ExtraFine`; 0 gives none.
-2. 0x0102 in a JPEG: 2 `Fine`, 5 `ExtraFine`.
-3. 0xB047's 1, `Fine`, where 0x0102 is absent or does not say RAW
-   alone.
+1. 0x202E's second value: 1 `Standard`, 2 `Fine`, 3 `ExtraFine`,
+   4 `Light`; 0 gives none.
+2. 0x0102 in a JPEG: 2 `Fine`, 3 `Standard`, 5 `ExtraFine`, 9 `Light`.
+3. 0xB047, where 0x0102 is absent or does not say RAW alone:
+   0 `Standard`, 1 `Fine`, 2 `ExtraFine`.
 
 A raw file of a RAW + JPEG pair so gives the step of the JPEG written
-beside it. The other documented steps are on no measured file and will
-stay unnamed. Mark: documented and agreed with, for each step named.
+beside it. Mark: observed for 0x202E's 2 and 3, 0x0102's 2 and 5 and
+0xB047's 1; documented only for the rest. 0x0102's 1, super fine, and
+4, economy, older compacts' steps, have no step of `JpegQuality` named
+for them yet: whether they get steps of their own is open, and until
+then they give none.
 
 **My ILCE-7M2 records no JPEG quality in a plain tag that the
 documentation names.** It writes no 0x202E, 0x0102 is 0 or 6, and
@@ -2373,6 +2403,8 @@ documentation for the meanings [S][1] **[F]**:
   0x940E, for the SLT bodies alone. It documents neither in a plain
   tag of the later SLT, ILCA and E-mount bodies.
   - So a Sony file's auto ISO and AF fine-tune will be `None`.
+  - Whether any plain tag changes between ISO AUTO and a fixed ISO is
+    open: no frame was shot to set the two apart.
 
 ## Sources
 
@@ -2452,6 +2484,8 @@ Retrieved October 2026.
 - [32] CIPA DC-009-Translation-2010, "Design rule for Camera File
   system: DCF Version 2.0 (Edition 2010)", read November 2026 —
   https://www.cipa.jp/std/documents/download_e.html?DC-009-2010_E
+- [33] Sony, "SLT-A99/SLT-A99V Instruction Manual" (English), read
+  November 2026 — https://sony.jp/ichigan/manual_english/A99_manual.pdf
 
 ### Sample files
 

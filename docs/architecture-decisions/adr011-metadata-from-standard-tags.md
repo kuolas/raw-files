@@ -2,7 +2,7 @@
 
 - Status: Accepted
 - Date: 2026-10-15
-- Revision: 5, 2026-11-20
+- Revision: 6, 2026-11-22
 - Issue: #13; the camera settings #26, revised in #51; authorship and
   location #97; more capture settings #214
 
@@ -58,7 +58,9 @@ In short:
   tag.
 - Nothing standard gives these settings' codes. ExifTool's published
   tag documentation names most of them, and the measured files agree
-  with what it says wherever they hold the code.
+  with what it says wherever they hold the code. The files hold only
+  part of each list it gives: a mode that nobody happened to shoot in
+  is on no file.
 - The authorship texts are plain ASCII on every file counted, and
   cameras fill unset ones with NULs or spaces. A GPS IFD seldom holds a
   position.
@@ -89,16 +91,33 @@ nothing standard records a value. Nothing is deciphered or decrypted.
   - a reader's published documentation that the measured files agree
     with.
 
-  The files agree when two things hold:
-  - the code occurs where the documentation places it, by the record's
-    version, the detection method and the body family;
-  - no other value of the same file contradicts it.
+  The documentation gives the codes in lists. A list is the codes it
+  gives for one tag at one place: a record's version, a detection
+  method or a body family. The files agree with a list when two things
+  hold:
+  - a measured file holds one of its codes where the documentation
+    places it;
+  - no other value of that file contradicts the code.
 
-  A code the documentation names and no measured file holds stays
-  unnamed. So does a code it names two ways the files cannot tell
-  apart, unless both meanings fold into one variant. The format notes
-  say for each code which source its meaning rests on, with the count
-  of files. The documentation's word reaches the codes of the capture
+  Then every code of the list is named, those that no file holds among
+  them. A code whose documented meaning a measured value contradicts
+  stays unnamed, and the rest of its list stands. A list, or a record
+  version, of which no file holds anything stays unread. A code the
+  documentation names two ways that the files cannot tell apart stays
+  unnamed, unless both meanings fold into one variant. Where the
+  documentation gives two lists for one place and does not say which
+  applies, as for one detection method of Nikon's AFInfo2, a code both
+  lists give alike is named, and a code one list gives alone is named
+  only where it belongs to the kind of body that writes that place; the
+  notes say which. The format notes
+  mark each code with what its meaning rests on, beside the count of
+  files:
+  - **confirmed**: a frame shot in a known setting shows it;
+  - **observed**: measured files hold it, the public files counted
+    first, and "in my files only" where no public file does;
+  - **documented only**: no measured file holds it.
+
+  The documentation's word reaches the codes of the capture
   settings below: focus, stabilization, exposure and drive, flash and
   image quality. The white balance texts and the shutter, image area
   and raw size codes keep the stricter rule of a standard or a measured
@@ -251,10 +270,9 @@ nothing standard records a value. Nothing is deciphered or decrypted.
     - the first byte of Nikon's older AFInfo, on the bodies without
       AFInfo2;
     - Sony's 0x201C.
-  - **AF fine-tune**, on or off with its value, from Nikon's AFTune.
-    Which saved lens the value belongs to is not read, nor the value at
-    a zoom's long end, which the documentation gives only under a code
-    no measured file holds.
+  - **AF fine-tune**, on or off with its value, from Nikon's AFTune,
+    and under its "On (Zoom)" code the value at a zoom's long end too.
+    Which saved lens the value belongs to is not read.
   - **Stabilization**, on or off with its mode (normal, active or
     sport), from Nikon's VRInfo at each documented version and Sony's
     0xB026. Which kind of stabilization, in the lens or the body, is
@@ -483,10 +501,13 @@ Rejected:
   SensitivityType, Nikon's program shift, exposure difference and ISO
   expansion, Sony's AF tracking among them. The work would double, and
   each is a named gap in the notes, with its count and why it waits.
-- **AF fine-tune's value at a zoom's long end**, read under AFTune's
-  "On (Zoom)" code. No measured file holds that code, so by the rule on
-  documented codes it stays unnamed, and the value would be `None` on
-  every file read.
+- **Only the codes a measured file holds**, as this record had it
+  before. Every named code would have met a real file. But the gaps
+  would follow what happened to be shot and uploaded, and with no frame
+  shot to fill them they would never close: a caller would get a mode
+  on one file and `None` on the next for two codes of one list.
+- **Every documented code, whatever the files hold.** A record version
+  that no file holds would be read at offsets nothing has checked.
 
 ## Consequences
 
@@ -533,12 +554,18 @@ Rejected:
   are named, which adds to the types without breaking them.
 - A code named from published documentation, where the files agree, can
   still be wrong where no file contradicts it. The notes mark which
-  codes rest on the documentation alone. A frame shot in a known
-  setting can later confirm or correct each of them.
+  codes files hold and which are documented only. A frame shot in a
+  known setting can later confirm or correct each of them.
+- A code that is documented only is checked on files built in the
+  tests, and on nothing else: if its documented meaning is wrong,
+  nothing shows it until a file holds it.
 - Some settings stay `None`:
   - Sony's AF micro adjustment and ISO setting: in no plain tag on
     later bodies, and in plain blocks not read on the older ones;
-  - a code or record version no measured file holds;
+  - a code of a list, or a record version, of which no measured file
+    holds anything;
+  - a code a measured value contradicts;
+  - a documented kind that no neutral word fits;
   - what the documentation leaves unsaid.
 - A caller cannot tell an image area or raw size the table of bodies
   gave from one the file recorded. A large raw size then also means a
