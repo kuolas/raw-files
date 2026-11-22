@@ -45,8 +45,9 @@
 //! notes were each confirmed on the public samples and on frames I shot
 //! with an ILCE-7M2 under each setting, also read in Sony's Imaging Edge
 //! Desktop, run as a reader to compare with. Those of section 9.10, the
-//! focus mode's among them, are documented and agreed with by the measured
-//! files, as the notes mark each. The ARW notes give the layouts
+//! focus mode's among them, come from lists the documentation gives, each
+//! read whole once the measured files hold part of it, and the notes mark
+//! each code observed or documented only. The ARW notes give the layouts
 //! (`docs/formats/arw/makernote-and-metadata.md`, section 1), what each
 //! focus tag records (section 9.6) and each settings tag (sections 9.7 and
 //! 9.10). A sample cited here by number is the file of that
@@ -557,8 +558,10 @@ fn electronic_front_curtain_setting(code: u32) -> Option<bool> {
 
 /// A family of Sony bodies, whose AF-area codes are a list of their own in
 /// ExifTool's published tag documentation, read as documentation. The
-/// same code can mean two things across families: 9 is spot on an SLT
-/// body, and center with an A-mount adapter on an E-mount body.
+/// same code can mean different things across families: 8 is zone on an
+/// SLT or ILCA body and in no list of an E-mount body, and 12 is expanded
+/// flexible spot on an E-mount or ILCA body and in no list of an SLT
+/// body.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Family {
     /// The SLT bodies, whose Model starts `SLT-`.
@@ -591,22 +594,30 @@ fn family(model: &str) -> Family {
 ///
 /// - on every family, 0, wide, the camera choosing within the whole frame,
 ///   [`Auto`](FocusAreaMode::Auto);
-/// - on an E-mount body or a compact, 1, center, and 3, flexible spot,
-///   [`Single`](FocusAreaMode::Single); 11, zone,
+/// - on an E-mount body or a compact, 1, center, 3, flexible spot, and 4
+///   and 9, flexible spot and center through Sony's A-mount adapter,
+///   [`Single`](FocusAreaMode::Single); 11, zone, and 13, a custom AF
+///   area, [`Zone`](FocusAreaMode::Zone); 12, expanded flexible spot,
+///   [`Dynamic`](FocusAreaMode::Dynamic);
+/// - on an ILCA body, 4, flexible spot, and 9, center,
+///   [`Single`](FocusAreaMode::Single); 8, zone,
 ///   [`Zone`](FocusAreaMode::Zone); 12, expanded flexible spot,
 ///   [`Dynamic`](FocusAreaMode::Dynamic);
-/// - on an ILCA body, 4, flexible spot, [`Single`](FocusAreaMode::Single).
+/// - on an SLT body, 4, local, and 9, spot, each one point,
+///   [`Single`](FocusAreaMode::Single); 8, zone,
+///   [`Zone`](FocusAreaMode::Zone).
 ///
-/// Each is documented, and the measured files agree with it (the ARW
-/// notes, section 9.10). `None` for every other code: 9, spot, on an SLT
-/// body, which the documentation does not say is one point or an area;
-/// and the codes no measured file holds.
+/// Each list is read whole, since files hold part of each; the ARW notes
+/// (section 9.10) mark each code observed or documented only. `None` for
+/// every code the family's list does not hold.
 fn area_mode(family: Family, code: u8) -> Option<FocusAreaMode> {
     Some(match (family, code) {
         (_, 0) => FocusAreaMode::Auto,
-        (Family::EMount, 1 | 3) | (Family::Ilca, 4) => FocusAreaMode::Single,
-        (Family::EMount, 11) => FocusAreaMode::Zone,
-        (Family::EMount, 12) => FocusAreaMode::Dynamic,
+        (Family::EMount, 1 | 3 | 4 | 9) | (Family::Ilca, 4 | 9) | (Family::Slt, 4 | 9) => {
+            FocusAreaMode::Single
+        }
+        (Family::EMount, 11 | 13) | (Family::Ilca | Family::Slt, 8) => FocusAreaMode::Zone,
+        (Family::EMount | Family::Ilca, 12) => FocusAreaMode::Dynamic,
         _ => return None,
     })
 }
@@ -623,17 +634,19 @@ fn recorded_focus_mode(makernote: &MakerNote) -> Option<FocusMode> {
 
 /// The focus mode a FocusMode `code` names: 0
 /// [`Manual`](FocusMode::Manual), 2, AF-S, [`Single`](FocusMode::Single),
-/// 3, AF-C, [`Continuous`](FocusMode::Continuous), 4, AF-A,
+/// 3, AF-C, and 7, AF-D, [`Continuous`](FocusMode::Continuous), 4, AF-A,
 /// [`Automatic`](FocusMode::Automatic), and 6, DMF,
 /// [`DirectManual`](FocusMode::DirectManual).
 ///
-/// `None` for every other code: 7, which ExifTool's documentation names
-/// AF-D, is on no file checked, and so stays unnamed (ADR011).
+/// The list is read whole, since files hold part of it. 7, which no
+/// measured file holds, is the depth map assist continuous AF of Sony's
+/// SLT-A99 manual (the ARW notes, section 9.10). `None` for every other
+/// code.
 fn focus_mode(code: u8) -> Option<FocusMode> {
     Some(match code {
         0 => FocusMode::Manual,
         2 => FocusMode::Single,
-        3 => FocusMode::Continuous,
+        3 | 7 => FocusMode::Continuous,
         4 => FocusMode::Automatic,
         6 => FocusMode::DirectManual,
         _ => return None,
@@ -2212,8 +2225,9 @@ mod tests {
 
     #[test]
     fn each_focus_mode_code_named_gives_its_mode() {
-        // 0 manual focus, 2 AF-S, 3 AF-C, 4 AF-A and 6 DMF; 7, AF-D, on no
-        // file checked, and codes nothing names give none.
+        // The whole list: 0 manual focus, 2 AF-S, 3 AF-C, 4 AF-A, 6 DMF
+        // and 7 AF-D, continuous AF with Sony's depth map assisting, which
+        // no file holds; codes nothing names give none.
         for order in ORDERS {
             for (code, mode) in [
                 (0, Some(FocusMode::Manual)),
@@ -2221,9 +2235,10 @@ mod tests {
                 (3, Some(FocusMode::Continuous)),
                 (4, Some(FocusMode::Automatic)),
                 (6, Some(FocusMode::DirectManual)),
+                (7, Some(FocusMode::Continuous)),
                 (1, None),
                 (5, None),
-                (7, None),
+                (8, None),
                 (255, None),
             ] {
                 let settings = settings_of(order, |builder, ifd| {
@@ -2236,27 +2251,43 @@ mod tests {
 
     #[test]
     fn each_body_family_names_its_own_area_mode_codes() {
-        // Wide, 0, on every family; on an E-mount body center 1 and
-        // flexible spot 3, zone 11, expanded flexible spot 12; on an ILCA
-        // body flexible spot 4. SLT's 9, spot, and codes a family does not
-        // name give none, such as 4 on an E-mount body and 9 on any.
+        // Each family's whole list, as the ARW notes' table of section
+        // 9.10 gives it: on an E-mount body wide 0, center 1, flexible
+        // spot 3, the A-mount adapter's flexible spot 4 and center 9, zone
+        // 11, expanded flexible spot 12, a custom AF area 13; on an ILCA
+        // body wide 0, flexible spot 4, zone 8, center 9, expanded
+        // flexible spot 12; on an SLT body wide 0, local 4, zone 8, spot
+        // 9. Codes a family's list does not hold give none, such as 1 and
+        // 11 on an A-mount body and 12 on an SLT body.
         use FocusAreaMode::{Auto, Dynamic, Single, Zone};
         let cases = [
             (Family::EMount, 0, Some(Auto)),
             (Family::EMount, 1, Some(Single)),
             (Family::EMount, 3, Some(Single)),
+            (Family::EMount, 4, Some(Single)),
+            (Family::EMount, 9, Some(Single)),
             (Family::EMount, 11, Some(Zone)),
             (Family::EMount, 12, Some(Dynamic)),
-            (Family::EMount, 4, None),
-            (Family::EMount, 9, None),
+            (Family::EMount, 13, Some(Zone)),
+            (Family::EMount, 2, None),
+            (Family::EMount, 8, None),
+            (Family::EMount, 14, None),
             (Family::Ilca, 0, Some(Auto)),
             (Family::Ilca, 4, Some(Single)),
+            (Family::Ilca, 8, Some(Zone)),
+            (Family::Ilca, 9, Some(Single)),
+            (Family::Ilca, 12, Some(Dynamic)),
             (Family::Ilca, 1, None),
             (Family::Ilca, 11, None),
+            (Family::Ilca, 13, None),
             (Family::Slt, 0, Some(Auto)),
-            (Family::Slt, 9, None),
+            (Family::Slt, 4, Some(Single)),
+            (Family::Slt, 8, Some(Zone)),
+            (Family::Slt, 9, Some(Single)),
             (Family::Slt, 1, None),
-            (Family::Slt, 4, None),
+            (Family::Slt, 11, None),
+            (Family::Slt, 12, None),
+            (Family::Slt, 255, None),
         ];
         for order in ORDERS {
             for (family, code, mode) in cases {

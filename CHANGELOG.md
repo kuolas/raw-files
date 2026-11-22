@@ -122,33 +122,41 @@ does. An entry that can break a caller opens with **Breaking:**.
   and Sony files give it from their MakerNote, raw and JPEG alike:
   - Nikon's FocusMode text: `MANUAL`, `AF-S`, `AF-C`, `AF-A` and
     `AF-F`;
-  - Sony's FocusMode code: manual focus, AF-S, AF-C, AF-A and DMF.
+  - Sony's FocusMode code: manual focus, AF-S, AF-C, AF-A, DMF and
+    AF-D, continuous AF with a depth map assisting.
 
   Its names are "Manual focus", "Single AF", "Continuous AF",
   "Automatic AF", "Full-time AF" and "Direct manual focus".
 - `CameraSettings::focus_area_mode` names many more modes, and
   `FocusAreaMode::Zone` is given, from Nikon's and Sony's MakerNotes
   ([#214](https://github.com/kuolas/raw-files/issues/214)):
-  - Nikon's AFInfo2: every code its published documentation names, under
-    the detection method a measured file records it, in the version's
-    list, such as the dynamic-area sizes, wide area and live view's
-    subject tracking, and at the Nikon 1 versions, 0200 and 0201, which
-    record no focus point;
+  - Nikon's AFInfo2: every code of the list its published documentation
+    gives for the version and the detection method, such as the
+    dynamic-area sizes, group area, wide area and live view's subject
+    tracking, and at the Nikon 1 versions, 0200 and 0201, which record
+    no focus point. Under hybrid detection at versions 0100 to 0301,
+    for which the documentation gives no list, the codes both lists
+    share and the mirrorless codes are named, and the DSLR codes 0 to 18
+    give `None`;
   - Nikon's AFInfo, on the bodies before AFInfo2: single and dynamic
-    area;
+    area, the closest subject, group dynamic, and single and dynamic
+    area with the wide focus frame;
   - Sony's AFAreaModeSetting, by the codes of the body's family: wide,
-    center, flexible spot, zone and expanded flexible spot.
+    center, flexible spot, zone, expanded flexible spot, the A-mount
+    adapter's flexible spot and center, a custom AF area, and on the SLT
+    bodies local and spot.
 
-  A code is now named only under the detection method and in the
-  version's list where the measured files record it, so some pairs
-  named before give `None`; no measured file records any of them:
-  - 192, 193 and 197 under phase detection, and 193 under contrast
-    detection;
+  A list is read whole once the measured files hold part of it, so
+  codes no measured file holds are named with their list. A few pairs
+  named before now give `None`, and no measured file records any of
+  them:
   - the DSLR codes 0, 5, 8 and 9 in versions 0400 to 0402, whose list
-    holds the mirrorless codes alone.
+    holds the mirrorless codes alone;
+  - 193 and 197 in versions 0100 to 0301 under a detection method the
+    documentation does not name (byte 4 above 2).
 
-  The notes mark each code as confirmed by a frame or documented and
-  agreed with by the files.
+  The notes mark each code as confirmed by a frame, observed on files,
+  or documented only.
 - `CameraSettings::af_fine_tune` gives AF fine-tune, an `AfFineTune`:
   whether it was on and, when it was, its value in the camera's steps
   ([#214](https://github.com/kuolas/raw-files/issues/214)). It is built

@@ -254,16 +254,16 @@ impl CameraSettings {
     ///
     /// - Nikon's FocusMode text, without its padding, looked up whole:
     ///   `MANUAL`, `AF-S`, `AF-C`, `AF-A` and `AF-F`;
-    /// - Sony's FocusMode code: 0 manual focus, 2 AF-S, 3 AF-C, 4 AF-A and
-    ///   6 DMF.
+    /// - Sony's FocusMode code: 0 manual focus, 2 AF-S, 3 AF-C, 4 AF-A,
+    ///   6 DMF and 7 AF-D, continuous AF with a depth map assisting.
     ///
     /// `None` when:
     ///
     /// - the file records no focus mode, as the Coolpix JPEGs whose
     ///   MakerNote has the short header do, and the Sony A-mount DSLRs,
     ///   the first NEX and SLT bodies, the RX100 and the SR2 and SRF files;
-    /// - it records a text or a code that no variant names, such as Sony's
-    ///   7, AF-D, which no file checked holds;
+    /// - it records a text outside the list above, or a code the
+    ///   documentation does not give, such as Sony's 1 or 5;
     /// - the tag has another type or count than the maker writes.
     ///
     /// What each maker's files record is in the notes on
@@ -314,8 +314,12 @@ impl CameraSettings {
     /// - the file records no AF-area mode, as the Sony A-mount DSLRs, the
     ///   first NEX and SLT bodies and the SR2 and SRF files do;
     /// - it records a code that no variant names, such as Nikon's face
-    ///   priority in a DSLR's live view or Sony's spot on an SLT body, or
-    ///   a code no measured file holds;
+    ///   priority in a DSLR's live view, or a code that its list does not
+    ///   hold;
+    /// - Nikon's AFInfo2 records hybrid detection at a version from 0100 to
+    ///   0301 with a DSLR code, from 0 to 18, which no list gives for that
+    ///   method, or a detection method the documentation does not name
+    ///   (byte 4 above 2) at those versions;
     /// - AFInfo2 is of a version whose layout raw-files does not read, is
     ///   shorter than its layout, or has another type than Nikon writes;
     /// - a Sony file has no Model, which gives the body's family.
@@ -357,8 +361,7 @@ impl CameraSettings {
     ///   E-mount bodies record their AF micro adjustment only in
     ///   enciphered blocks, and the A-mount bodies in a plain block whose
     ///   layout raw-files does not read;
-    /// - the first byte is a code no measured file holds, such as 3, which
-    ///   the documentation names "On (Zoom)";
+    /// - the first byte is a code the documentation does not name;
     /// - AFTune has another type or count than Nikon writes.
     ///
     /// What the files record is in the notes on
@@ -1323,14 +1326,13 @@ impl fmt::Display for ColorSpace {
 /// - Nikon's `MANUAL` and Sony's manual focus:
 ///   [`Manual`](Self::Manual);
 /// - AF-S, Nikon's single-servo AF and Sony's: [`Single`](Self::Single);
-/// - AF-C, Nikon's continuous-servo AF and Sony's:
+/// - AF-C, Nikon's continuous-servo AF and Sony's, and Sony's AF-D,
+///   continuous AF with a depth map assisting:
 ///   [`Continuous`](Self::Continuous);
 /// - AF-A, Nikon's auto-servo AF and Sony's:
 ///   [`Automatic`](Self::Automatic);
 /// - Nikon's AF-F, full-time AF: [`FullTime`](Self::FullTime);
 /// - Sony's DMF, direct manual focus: [`DirectManual`](Self::DirectManual).
-///
-/// Sony's AF-D, which no file checked holds, has no variant.
 ///
 /// `FocusMode` is `#[non_exhaustive]`, so match on it with a wildcard arm. It
 /// orders as its variants are listed, and a new variant is added after the
@@ -1401,8 +1403,9 @@ impl fmt::Display for FocusMode {
 ///
 /// Each maker's finer kinds fold into one variant, as each variant's docs
 /// list. A maker's code is named where a frame shot in a known mode shows
-/// what it means, or where the maker's or another reader's published
-/// documentation names it and the measured files agree, as the
+/// what it means, or where it is in a list that the maker's or another
+/// reader's published documentation gives and that the measured files
+/// agree with, as the
 /// [decision to read the metadata from the standard tags](https://github.com/kuolas/raw-files/blob/master/docs/architecture-decisions/adr011-metadata-from-standard-tags.md)
 /// says; any other code gives `None`. The notes list the codes named, with
 /// where each meaning comes from: on
@@ -1428,15 +1431,18 @@ impl fmt::Display for FocusMode {
 #[non_exhaustive]
 pub enum FocusAreaMode {
     /// One point, which the photographer placed: Nikon's single-point AF,
-    /// single area and, in a DSLR's live view, normal area; Sony's center
-    /// and flexible spot.
+    /// single area, with the normal or the wide focus frame, and, in a
+    /// DSLR's live view, normal area; Sony's center, flexible spot, and on
+    /// its SLT bodies local and spot.
     Single,
     /// A point the photographer placed, with the points around it standing
     /// in for it when the subject briefly leaves it: Nikon's dynamic-area
-    /// AF, of every size; Sony's expanded flexible spot.
+    /// AF, of every size and with either focus frame; Sony's expanded
+    /// flexible spot.
     Dynamic,
-    /// Points the camera chose itself: Nikon's auto-area AF, the animal
-    /// auto-area of some bodies included; Sony's wide.
+    /// Points the camera chose itself: Nikon's auto-area AF, with people or
+    /// animal detection on some bodies, and the older dynamic area with
+    /// the closest subject; Sony's wide.
     Auto,
     /// A subject the camera followed from the point where focus started:
     /// Nikon's 3D-tracking and, in a DSLR's live view, subject tracking.
@@ -1445,8 +1451,9 @@ pub enum FocusAreaMode {
     /// point, for a precise spot: Nikon's pinpoint AF.
     Pinpoint,
     /// An area the photographer placed, larger than a single point,
-    /// inside which the camera chose the points: Nikon's wide-area AF and,
-    /// in a DSLR's live view, wide area; Sony's zone.
+    /// inside which the camera chose the points: Nikon's wide-area AF,
+    /// group-area AF and the older group dynamic, and, in a DSLR's live
+    /// view, wide area; Sony's zone and custom AF area.
     Zone,
 }
 

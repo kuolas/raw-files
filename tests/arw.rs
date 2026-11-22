@@ -2371,7 +2371,7 @@ const METADATA: &[SampleMetadata] = &[
             image_area: None,
             raw_image_size: None,
             color_space: Some(ColorSpace::Srgb),
-            focus_area_mode: None, // 0x201C 9: not named
+            focus_area_mode: Some(FocusAreaMode::Single), // 0x201C 9, spot on an SLT body
             af_fine_tune: None,
             focus_mode: Some(FocusMode::Continuous),
         },
