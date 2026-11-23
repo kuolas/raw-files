@@ -45,7 +45,8 @@ Linux and Windows alike.
   - the color space;
   - the focus mode;
   - the AF-area mode, whether or not the file gives a focus point;
-  - AF fine-tune, on Nikon files.
+  - AF fine-tune, on Nikon files;
+  - whether the clock was on daylight saving time, on Nikon files.
   - [`CameraSettings`](https://docs.rs/raw-files/latest/raw_files/struct.CameraSettings.html)
     says which a maker's files leave out: Sony's give no shutter, image
     area or raw image size.

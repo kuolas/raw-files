@@ -166,6 +166,12 @@ does. An entry that can break a caller opens with **Breaking:**.
   MakerNote's AFTune, the long end's value under its "On (Zoom)" code;
   which saved lens the value belongs to is not given. Sony files give none: they record their AF
   micro adjustment only in enciphered or unread blocks.
+- `CameraSettings::daylight_saving_time` says whether the camera's
+  clock was on daylight saving time, and `with_daylight_saving_time`
+  sets it ([#214](https://github.com/kuolas/raw-files/issues/214)).
+  Nikon files from the D300 on give it from their MakerNote's
+  WorldTime, whose time zone already gives older bodies' capture time
+  its offset. Sony files give none.
 - `Metadata::digitized_time` gives when the picture was stored as
   digital data, and `with_digitized_time` sets it
   ([#214](https://github.com/kuolas/raw-files/issues/214)). It comes

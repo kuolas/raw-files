@@ -2,7 +2,7 @@
 
 //! The camera settings in the Nikon MakerNote: the white balance, the
 //! shutter used, the image area, the raw size, the color space, the focus
-//! mode, the AF-area mode and AF fine-tune.
+//! mode, the AF-area mode, AF fine-tune and daylight saving time.
 //!
 //! The MakerNote records how the camera was set for the picture beyond
 //! what the Exif tags record (ADR011). [`camera_settings`] reads each
@@ -20,7 +20,8 @@
 //! - the focus mode from FocusMode's text ([`focus_mode_of_text`]);
 //! - the AF-area mode from AFInfo2 ([`area_mode_of`]), else from AFInfo
 //!   ([`af_info_area_mode`]);
-//! - AF fine-tune from AFTune ([`af_fine_tune`]).
+//! - AF fine-tune from AFTune ([`af_fine_tune`]);
+//! - daylight saving time from WorldTime ([`daylight_saving_time`]).
 //!
 //! A code or a text gives a value only where its meaning is known, as the
 //! next paragraph says. Anything else costs that value alone.
@@ -86,6 +87,9 @@ use crate::rational::SignedRational;
 ///   AFInfo2 it is AFInfo's ([`af_info_area_mode`]). A body with AFInfo2
 ///   never falls back on AFInfo, which no file holds beside it.
 /// - **AF fine-tune** is AFTune's ([`af_fine_tune`]).
+/// - **Daylight saving time** is WorldTime's third byte
+///   ([`daylight_saving_time`]), read from the tag that gives the capture
+///   time its offset ([`world_time`](super::metadata::world_time)).
 ///
 /// Nikon records no electronic front curtain setting, so it stays as
 /// `settings` has it, `None`. The exposure program, the metering mode and
@@ -140,6 +144,9 @@ pub(super) fn camera_settings<R: Read + Seek>(
             .and_then(|[code, ..]| af_info_area_mode(code)),
     };
     settings.af_fine_tune = ifd.held(rules::AF_TUNE).and_then(af_fine_tune);
+    settings.daylight_saving_time = ifd
+        .held(rules::WORLD_TIME)
+        .and_then(|[_, _, daylight_saving, _]| daylight_saving_time(daylight_saving));
     Ok(settings)
 }
 
@@ -431,6 +438,20 @@ fn af_fine_tune([on, _lens, value, tele_value]: [u8; 4]) -> Option<AfFineTune> {
     }
 }
 
+/// Whether daylight saving time was on, as WorldTime's third byte,
+/// `daylight_saving`, records it: 0 off, `false`, and 1 on, `true`
+/// (ExifTool's published tag documentation, read as documentation; NEF
+/// notes, section 8.2). The files agree: where the byte is 1, the zone
+/// plus an hour equals the Exif offset (section 8.10). `None` for every
+/// other value, which no file holds, as the offset's reader refuses it.
+fn daylight_saving_time(daylight_saving: u8) -> Option<bool> {
+    match daylight_saving {
+        0 => Some(false),
+        1 => Some(true),
+        _ => None,
+    }
+}
+
 /// The color space a ColorSpace `code` of the MakerNote names: 1
 /// [`Srgb`](ColorSpace::Srgb) and 2 [`AdobeRgb`](ColorSpace::AdobeRgb).
 /// `None` for 4, BT.2100, which no variant names and no checked file
@@ -452,7 +473,8 @@ mod tests {
     };
     use super::super::{
         AF_INFO, AF_INFO2, AF_TUNE, COLOR_SPACE, COLOR_TEMPERATURE, CROP_HI_SPEED, FINE_TUNE,
-        FINE_TUNE_STEPS, FOCUS_MODE, IMAGE_SIZE_RAW, SHUTTER_MODE, WHITE_BALANCE, metadata,
+        FINE_TUNE_STEPS, FOCUS_MODE, IMAGE_SIZE_RAW, SHUTTER_MODE, WHITE_BALANCE, WORLD_TIME,
+        metadata,
     };
     use super::*;
     use crate::camera_settings::{ExposureProgram, WhiteBalance};
@@ -1501,6 +1523,61 @@ mod tests {
                 inner.byte(ifd, AF_TUNE, &[1, 0, 5, 0]);
             });
             assert_eq!(read.af_fine_tune, None, "{order:?}");
+        }
+    }
+
+    /// Whether daylight saving time was on, in the settings of a raw file
+    /// in byte order `order` whose MakerNote's WorldTime is `bytes`, of
+    /// type UNDEFINED.
+    fn daylight_saving_of(order: Order, bytes: &[u8]) -> Option<bool> {
+        settings_of(order, |inner, ifd| {
+            inner.undefined(ifd, WORLD_TIME, bytes);
+        })
+        .daylight_saving_time
+    }
+
+    #[test]
+    fn world_time_says_whether_daylight_saving_time_was_on() {
+        // The zones of public samples 928 and 6887 (60 and -300 minutes),
+        // and one past the offset's bound, which the setting does not
+        // depend on; the date format plays no part either.
+        for order in ORDERS {
+            for zone in [60_i16, -300, 15_360] {
+                let [zone0, zone1] = order.u16(zone.cast_unsigned());
+                for (byte, expected) in [(0, Some(false)), (1, Some(true))] {
+                    for format in [0, 2] {
+                        assert_eq!(
+                            daylight_saving_of(order, &[zone0, zone1, byte, format]),
+                            expected,
+                            "{order:?}, {zone}, {byte}, {format}"
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn a_daylight_saving_byte_of_another_value_or_another_shape_is_none() {
+        for order in ORDERS {
+            for byte in [2, 128, 255] {
+                assert_eq!(
+                    daylight_saving_of(order, &[60, 0, byte, 0]),
+                    None,
+                    "{order:?}, {byte}"
+                );
+            }
+            // Three bytes, and five; four BYTEs.
+            assert_eq!(daylight_saving_of(order, &[60, 0, 1]), None, "{order:?}");
+            assert_eq!(
+                daylight_saving_of(order, &[60, 0, 1, 0, 0]),
+                None,
+                "{order:?}"
+            );
+            let read = settings_of(order, |inner, ifd| {
+                inner.byte(ifd, WORLD_TIME, &[60, 0, 1, 0]);
+            });
+            assert_eq!(read.daylight_saving_time, None, "{order:?}");
         }
     }
 

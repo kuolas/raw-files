@@ -1273,10 +1273,17 @@ fn the_exif_values_win_over_the_makernotes() {
                 .undefined(ifd, AF_INFO2, &z9_af_info2(makernote_order));
         });
         let file = nikon_jpeg(order, MAIN, true, &[], |_, _, _| {}, &block, block.len());
+        // The settings the MakerNote adds: WorldTime's daylight saving time,
+        // off, beside the Z 9's own.
+        let metadata = z9_metadata(Z9Mode::Fx, MAIN, Some(recorded(Z9Mode::Fx)));
+        let settings = metadata
+            .camera_settings()
+            .clone()
+            .with_daylight_saving_time(false);
         assert_opens(
             &file.built.bytes,
             &nikon_previews(&file, MAIN),
-            &z9_metadata(Z9Mode::Fx, MAIN, Some(recorded(Z9Mode::Fx))),
+            &metadata.with_camera_settings(settings),
             &format!("{order:?}, MakerNote {makernote_order:?}"),
         );
     }
@@ -1300,12 +1307,14 @@ fn an_older_nikon_jpeg_takes_what_its_exif_lacks_from_its_makernote() {
         .with_lens(lens_of_range(D5300_LENS))
         .with_image_size(size_of(D5300_MAIN));
         // Its FocusMode, `AF-A`, and its AFInfo2's code 0 under phase
-        // detection, single point, given though the record gives no point.
+        // detection, single point, given though the record gives no point;
+        // its WorldTime, with daylight saving time off.
         let settings = metadata
             .camera_settings()
             .clone()
             .with_focus_mode(FocusMode::Automatic)
-            .with_focus_area_mode(FocusAreaMode::Single);
+            .with_focus_area_mode(FocusAreaMode::Single)
+            .with_daylight_saving_time(false);
         let metadata = metadata.with_camera_settings(settings);
         assert_eq!(metadata.exposure().iso(), Some(u32::from(D5300_ISO)));
         assert_opens(
