@@ -14,8 +14,8 @@
 //! - from IFD0, the camera's make and model, the software and the
 //!   orientation;
 //! - from the Exif IFD, the body's serial number and its owner, the capture
-//!   time ([`capture_time`]), the exposure ([`exposure`]) and the lens
-//!   ([`lens`]);
+//!   time ([`capture_time`]), the digitized time ([`digitized_time`]), the
+//!   exposure ([`exposure`]) and the lens ([`lens`]);
 //! - from the Exif IFD, with the Interoperability IFD, the camera settings
 //!   Exif records ([`camera_settings`]);
 //! - from IFD0 and the Exif IFD, who made the picture ([`authorship`]);
@@ -107,6 +107,11 @@ mod rules {
         Rule::new(tags::SUB_SEC_TIME_ORIGINAL, ASCII);
     pub(super) const OFFSET_TIME_ORIGINAL: Rule<Text> =
         Rule::new(tags::OFFSET_TIME_ORIGINAL, ASCII);
+    pub(super) const DATE_TIME_DIGITIZED: Rule<Text> = Rule::new(tags::DATE_TIME_DIGITIZED, ASCII);
+    pub(super) const SUB_SEC_TIME_DIGITIZED: Rule<Text> =
+        Rule::new(tags::SUB_SEC_TIME_DIGITIZED, ASCII);
+    pub(super) const OFFSET_TIME_DIGITIZED: Rule<Text> =
+        Rule::new(tags::OFFSET_TIME_DIGITIZED, ASCII);
     pub(super) const PHOTOGRAPHIC_SENSITIVITY: Rule<First<u32>> =
         Rule::new(tags::PHOTOGRAPHIC_SENSITIVITY, NUMBER);
     pub(super) const RECOMMENDED_EXPOSURE_INDEX: Rule<First<u32>> =
@@ -228,33 +233,35 @@ pub(crate) struct Standard {
 /// owner is the Exif CameraOwnerName, a fact of the camera beside its
 /// serial number. The orientation is the preview finder's
 /// ([`tiff_previews::orientation`]). A file without an Exif IFD has no
-/// capture time, serial number, owner, exposure, lens or camera settings,
-/// and a file without a GPS IFD has no location.
+/// capture or digitized time, serial number, owner, exposure, lens or
+/// camera settings, and a file without a GPS IFD has no location.
 ///
 /// # Errors
 ///
 /// `Io` when the reader fails.
 pub(crate) fn read<R: Read + Seek>(src: &mut Source<R>, tree: &Tree) -> Result<Standard> {
     let ifd0 = tree.ifd0();
-    let (serial_number, owner_name, capture_time, exposure, camera_settings, lens) =
-        match tree.exif() {
-            Some(exif) => (
-                text(src, exif, rules::BODY_SERIAL_NUMBER)?,
-                text(src, exif, rules::CAMERA_OWNER_NAME)?,
-                capture_time(src, exif)?,
-                exposure(src, exif)?,
-                camera_settings(src, exif, tree.interop())?,
-                lens(src, exif)?,
-            ),
-            None => (
-                None,
-                None,
-                None,
-                Exposure::default(),
-                CameraSettings::default(),
-                Lens::default(),
-            ),
-        };
+    let (serial_number, owner_name, capture_time, digitized_time) = match tree.exif() {
+        Some(exif) => (
+            text(src, exif, rules::BODY_SERIAL_NUMBER)?,
+            text(src, exif, rules::CAMERA_OWNER_NAME)?,
+            capture_time(src, exif)?,
+            digitized_time(src, exif)?,
+        ),
+        None => (None, None, None, None),
+    };
+    let (exposure, camera_settings, lens) = match tree.exif() {
+        Some(exif) => (
+            exposure(src, exif)?,
+            camera_settings(src, exif, tree.interop())?,
+            lens(src, exif)?,
+        ),
+        None => (
+            Exposure::default(),
+            CameraSettings::default(),
+            Lens::default(),
+        ),
+    };
     let (raw_size, default_crop) = sizes(src, tree)?;
     let metadata = Metadata {
         camera: Camera {
@@ -270,6 +277,7 @@ pub(crate) fn read<R: Read + Seek>(src: &mut Source<R>, tree: &Tree) -> Result<S
             None => None,
         },
         capture_time,
+        digitized_time,
         orientation: tiff_previews::orientation(tree),
         exposure,
         camera_settings,
@@ -488,24 +496,71 @@ fn location<R: Read + Seek>(src: &mut Source<R>, gps: &Ifd) -> Result<Option<Loc
 
 /// When the picture was taken, from the Exif IFD `exif`: its
 /// DateTimeOriginal, with its SubSecTimeOriginal and OffsetTimeOriginal
-/// when the file records them. All three are of type ASCII, as
-/// [`DateTime::from_exif`] reads them.
-///
-/// `None` when there is no DateTimeOriginal that can be read, or when it
-/// names no real date and time, such as an unset clock. A fraction of a
-/// second or an offset that cannot be read is left out, and the time
-/// stands without it. The time is never taken from DateTimeDigitized or
-/// from IFD0's DateTime, which editors change.
+/// when the file records them, read by [`exif_time`]. The time is never
+/// taken from DateTimeDigitized or from IFD0's DateTime, which editors
+/// change.
 ///
 /// # Errors
 ///
 /// `Io` when the reader fails.
 fn capture_time<R: Read + Seek>(src: &mut Source<R>, exif: &Ifd) -> Result<Option<DateTime>> {
-    let Some(date) = exif.get(src, rules::DATE_TIME_ORIGINAL)? else {
+    exif_time(
+        src,
+        exif,
+        [
+            rules::DATE_TIME_ORIGINAL,
+            rules::SUB_SEC_TIME_ORIGINAL,
+            rules::OFFSET_TIME_ORIGINAL,
+        ],
+    )
+}
+
+/// When the picture was stored as digital data, from the Exif IFD
+/// `exif`: its DateTimeDigitized, with its SubSecTimeDigitized and
+/// OffsetTimeDigitized when the file records them, read by [`exif_time`],
+/// as the capture time is. Each part comes from its own tag alone: a
+/// digitized time without its own offset has none, whatever
+/// OffsetTimeOriginal says, and without DateTimeDigitized there is no
+/// digitized time.
+///
+/// # Errors
+///
+/// `Io` when the reader fails.
+fn digitized_time<R: Read + Seek>(src: &mut Source<R>, exif: &Ifd) -> Result<Option<DateTime>> {
+    exif_time(
+        src,
+        exif,
+        [
+            rules::DATE_TIME_DIGITIZED,
+            rules::SUB_SEC_TIME_DIGITIZED,
+            rules::OFFSET_TIME_DIGITIZED,
+        ],
+    )
+}
+
+/// A time from the Exif IFD `exif`, as three tags record it: the date and
+/// time, the fraction of a second and the offset from UTC, `date`,
+/// `subsec` and `offset`. All three are of type ASCII, as
+/// [`DateTime::from_exif`] reads them.
+///
+/// `None` when the date and time cannot be read, or name no real date and
+/// time, such as an unset clock. A fraction of a second or an offset that
+/// cannot be read is left out, and the time stands without it. The other
+/// two tags are read only when the date and time are there.
+///
+/// # Errors
+///
+/// `Io` when the reader fails.
+fn exif_time<R: Read + Seek>(
+    src: &mut Source<R>,
+    exif: &Ifd,
+    [date, subsec, offset]: [Rule<Text>; 3],
+) -> Result<Option<DateTime>> {
+    let Some(date) = exif.get(src, date)? else {
         return Ok(None);
     };
-    let subsec = exif.get(src, rules::SUB_SEC_TIME_ORIGINAL)?;
-    let offset = exif.get(src, rules::OFFSET_TIME_ORIGINAL)?;
+    let subsec = exif.get(src, subsec)?;
+    let offset = exif.get(src, offset)?;
     Ok(DateTime::from_exif(
         &date,
         subsec.as_deref(),
@@ -1041,10 +1096,6 @@ mod tests {
     };
     use std::io::Cursor;
 
-    /// When the picture was stored or digitized (DateTimeDigitized), an
-    /// Exif tag the reader must never take the capture time from.
-    const DATE_TIME_DIGITIZED: u16 = 0x9004;
-
     /// When the file was last changed (DateTime), an IFD0 tag the reader
     /// must never take the capture time from.
     const DATE_TIME: u16 = 0x0132;
@@ -1059,12 +1110,16 @@ mod tests {
         (SOFTWARE, "Ver.01.00"),
     ];
     /// See [`IFD0_TEXT`]. The LensModel is stored padded, as
-    /// [`z9_bytes_except`] says.
-    const EXIF_TEXT: [(u16, &str); 7] = [
+    /// [`z9_bytes_except`] says. The digitized time repeats the capture
+    /// time, as the Z 9 writes it.
+    const EXIF_TEXT: [(u16, &str); 10] = [
         (BODY_SERIAL_NUMBER, "1234567"),
         (DATE_TIME_ORIGINAL, "2022:02:05 13:46:41"),
         (SUB_SEC_TIME_ORIGINAL, "85"),
         (OFFSET_TIME_ORIGINAL, "-05:00"),
+        (DATE_TIME_DIGITIZED, "2022:02:05 13:46:41"),
+        (SUB_SEC_TIME_DIGITIZED, "85"),
+        (OFFSET_TIME_DIGITIZED, "-05:00"),
         (LENS_MAKE, "NIKON"),
         (LENS_MODEL, "NIKKOR Z 14-30mm f/4 S"),
         (LENS_SERIAL_NUMBER, "12345678  "),
@@ -1303,6 +1358,7 @@ mod tests {
             camera: z9_camera(),
             software: Some("Ver.01.00".to_owned()),
             capture_time: z9_time(Some(b"85"), Some(b"-05:00")),
+            digitized_time: z9_time(Some(b"85"), Some(b"-05:00")),
             orientation: Orientation::Rotate270,
             exposure: z9_exposure(),
             camera_settings: z9_settings(),
@@ -2121,11 +2177,64 @@ mod tests {
 
     #[test]
     fn the_time_is_never_taken_from_date_time_digitized_or_ifd0s_date_time() {
-        let metadata = z9_except(DATE_TIME_ORIGINAL, |builder, ifd0, exif| {
-            builder.ascii(exif, DATE_TIME_DIGITIZED, "2022:02:05 13:46:41");
+        // The Z 9 file keeps its digitized time, which is read as itself.
+        let metadata = z9_except(DATE_TIME_ORIGINAL, |builder, ifd0, _| {
             builder.ascii(ifd0, DATE_TIME, "2022:02:05 13:46:41");
         });
         assert_eq!(metadata.capture_time(), None);
+        assert_eq!(
+            metadata.digitized_time(),
+            z9_time(Some(b"85"), Some(b"-05:00"))
+        );
+    }
+
+    #[test]
+    fn the_digitized_time_takes_its_own_sub_seconds_and_offset() {
+        // A JPEG the camera made later, from a raw file it held: each time
+        // keeps its own three tags.
+        let (mut src, tree) = testing::file(|builder, ifd| {
+            let exif = builder.ifd();
+            builder.exif(ifd, exif);
+            builder
+                .ascii(exif, DATE_TIME_ORIGINAL, "2020:07:28 16:57:07")
+                .ascii(exif, SUB_SEC_TIME_ORIGINAL, "70")
+                .ascii(exif, OFFSET_TIME_ORIGINAL, "-04:00")
+                .ascii(exif, DATE_TIME_DIGITIZED, "2020:08:07 16:27:04")
+                .ascii(exif, SUB_SEC_TIME_DIGITIZED, "87")
+                .ascii(exif, OFFSET_TIME_DIGITIZED, "-03:00");
+        });
+        let metadata = read(&mut src, &tree).unwrap().metadata;
+        assert_eq!(
+            metadata
+                .capture_time()
+                .map(|time| time.to_string())
+                .as_deref(),
+            Some("2020-07-28T16:57:07.70-04:00")
+        );
+        assert_eq!(
+            metadata
+                .digitized_time()
+                .map(|time| time.to_string())
+                .as_deref(),
+            Some("2020-08-07T16:27:04.87-03:00")
+        );
+    }
+
+    #[test]
+    fn the_digitized_time_never_borrows_the_capture_times_parts() {
+        // The Z 9 file's digitized time without its own fraction of a
+        // second and offset: it does not take the capture time's.
+        let metadata = z9_except(SUB_SEC_TIME_DIGITIZED, |_, _, _| {});
+        assert_eq!(metadata.digitized_time(), z9_time(None, Some(b"-05:00")));
+        let metadata = z9_except(OFFSET_TIME_DIGITIZED, |_, _, _| {});
+        assert_eq!(metadata.digitized_time(), z9_time(Some(b"85"), None));
+        // Its sub-seconds and offset alone give no time.
+        let metadata = z9_except(DATE_TIME_DIGITIZED, |_, _, _| {});
+        assert_eq!(metadata.digitized_time(), None);
+        assert_eq!(
+            metadata.capture_time(),
+            z9_time(Some(b"85"), Some(b"-05:00"))
+        );
     }
 
     #[test]
@@ -2208,7 +2317,7 @@ mod tests {
             change(&mut expected.camera_settings);
             expected
         }
-        let cases: [(&str, u16, Change, Metadata); 21] = [
+        let cases: [(&str, u16, Change, Metadata); 26] = [
             (
                 "a Model that is not text",
                 MODEL,
@@ -2312,6 +2421,57 @@ mod tests {
                 |builder, _, exif| too_long(builder, exif, OFFSET_TIME_ORIGINAL),
                 Metadata {
                     capture_time: z9_time(Some(b"85"), None),
+                    ..z9_expected()
+                },
+            ),
+            (
+                "a DateTimeDigitized too long to read",
+                DATE_TIME_DIGITIZED,
+                |builder, _, exif| too_long(builder, exif, DATE_TIME_DIGITIZED),
+                Metadata {
+                    digitized_time: None,
+                    ..z9_expected()
+                },
+            ),
+            (
+                "an impossible digitized date",
+                DATE_TIME_DIGITIZED,
+                |builder, _, exif| {
+                    builder.ascii(exif, DATE_TIME_DIGITIZED, "2022:02:30 13:46:41");
+                },
+                Metadata {
+                    digitized_time: None,
+                    ..z9_expected()
+                },
+            ),
+            (
+                "an unset clock's digitized time",
+                DATE_TIME_DIGITIZED,
+                |builder, _, exif| {
+                    builder.ascii(exif, DATE_TIME_DIGITIZED, "    :  :     :  :  ");
+                },
+                Metadata {
+                    digitized_time: None,
+                    ..z9_expected()
+                },
+            ),
+            (
+                "digitized sub-seconds that are not text",
+                SUB_SEC_TIME_DIGITIZED,
+                |builder, _, exif| {
+                    builder.undefined(exif, SUB_SEC_TIME_DIGITIZED, b"85\0");
+                },
+                Metadata {
+                    digitized_time: z9_time(None, Some(b"-05:00")),
+                    ..z9_expected()
+                },
+            ),
+            (
+                "a digitized offset too long to read",
+                OFFSET_TIME_DIGITIZED,
+                |builder, _, exif| too_long(builder, exif, OFFSET_TIME_DIGITIZED),
+                Metadata {
+                    digitized_time: z9_time(Some(b"85"), None),
                     ..z9_expected()
                 },
             ),

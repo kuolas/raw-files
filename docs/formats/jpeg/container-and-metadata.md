@@ -346,9 +346,10 @@ the capture time: DateTimeDigitized (0x9004), with SubSecTimeDigitized
   DateTimeOriginal." [P][3] (4.6.6.6.2, p. 53)
 - **The capture time does not use it**: it comes from DateTimeOriginal
   ([NEF notes](../nef/makernote-and-metadata.md#82-capture-date-and-time-zone)).
-- **raw-files will give it as a value of its own**,
+- **raw-files gives it as a value of its own**,
   `Metadata::digitized_time`, read from the three tags by the capture
-  time's rules (ADR011).
+  time's rules (ADR011). Where OffsetTimeDigitized gives no offset, a
+  Nikon file's WorldTime gives it, as for the capture time.
 
 | DateTimeDigitized against DateTimeOriginal | My JPEGs | Public JPEGs |
 |---|---|---|
@@ -362,9 +363,24 @@ The 22,660 JPEGs of mine and the 27 public ones. **[F]**
 - **The 519 that differ** are 506 from my D7200, 9 from my D3200,
   D7100 and D3300, and 4 from a phone. **[F]**
 - **The 506 D7200 JPEGs** are the same 506 that record 0 in
-  ImageSizeRAW (0x003E, [section 10](#10-makernotes-in-a-jpeg)). What
-  made them, the camera's own retouching or a program, these files do
-  not say. **[F]** [I]
+  ImageSizeRAW (0x003E, [section 10](#10-makernotes-in-a-jpeg)). On
+  every one, as checked on 2026-11-23, Software is the camera's
+  firmware, `Ver.1.03`, IFD0's DateTime equals the digitized time, and
+  the digitized time is from an hour to ten days after the capture
+  time. The 9 of the D3200, D7100 and D3300 also name their camera's
+  firmware, and none of the 515 records an offset. **[F]** So the camera
+  wrote them later, as its retouch menu writes a JPEG from a raw file
+  the card holds, and the zone of the camera's clock, WorldTime, is the
+  zone of the digitized time too. [I]
+- **A program's digitized time would take the camera's zone.** A
+  program that wrote the digitized time in its own zone, kept Nikon's
+  MakerNote and wrote no OffsetTimeDigitized would get WorldTime's
+  offset. No measured file does: the 705 JPEGs of mine whose Quality
+  says `RAW` keep the digitized time equal to the capture time, the 515
+  that differ say `FINE` or `NORMAL`, and the cameras measured write the
+  three OffsetTime tags together or none. **[F]** That a program made
+  those 705 from NEF files is read from their Quality
+  ([section 10](#10-makernotes-in-a-jpeg)). [I]
 - **The subseconds differ on 509**, 501 of them D7200 JPEGs. Only my
   Z 9's 318 JPEGs record OffsetTimeDigitized, and it equals
   OffsetTimeOriginal on each. **[F]**
@@ -760,7 +776,8 @@ and HE\* ones). [F]
   the JPEG's 0x003E is 1, 2 or 3 as its size is large, medium or
   small, while the NEF beside it holds 1 every time, the Z 9 making no
   medium or small raw. [F] On my own D7200 JPEGs it is 1 on 4,310 and
-  0 on 506, presumably those taken without a raw. [F][I] On neither
+  0 on 506, which the camera wrote later from a raw file
+  ([section 4](#4-exif-the-app1-segment)). [F][I] On neither
   body does a JPEG's 0x003E give a raw size. Quality (0x0004) is `FINE` or
   `BASIC`, the JPEG's compression, where the NEF's says `RAW`. [F]
   The 506 D7200 JPEGs with 0 are those whose digitized time differs
@@ -864,13 +881,14 @@ decided, as steps. [I]
    lossless; each takes IFD0's orientation.
 6. **The metadata** comes from the standard tags, then the MakerNote by
    IFD0's Make, as for a NEF or an ARW; the image size is the main frame
-   header's, and there is no raw size. The camera settings come the same
+   header's, and there is no raw size. The digitized time comes from
+   Exif's three tags (section 4). The camera settings come the same
    way, but a JPEG gives no raw image size, whatever its MakerNote's
    ImageSizeRAW says (section 10). More capture settings will come the
    same way:
    - from Exif (section 4): the flash's return light and red-eye
-     reduction, exposure bracketing from ExposureMode 2, the kind of
-     fluorescent lamp, and the digitized time;
+     reduction, exposure bracketing from ExposureMode 2 and the kind of
+     fluorescent lamp;
    - from the MakerNote (section 10): the JPEG quality, and Nikon's
      choice of optimal quality or size priority. A JPEG whose Nikon
      Quality says `RAW` will give no JPEG quality.

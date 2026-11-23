@@ -94,8 +94,8 @@ use std::ops::Range;
 use std::panic;
 
 use raw_files::{
-    CameraFile, Entry, Focus, FocusLayout, FocusPoints, Limits, Metadata, Rational, SignedRational,
-    Size, Value,
+    CameraFile, DateTime, Entry, Focus, FocusLayout, FocusPoints, Limits, Metadata, Rational,
+    SignedRational, Size, Value,
 };
 use support::arw::{ARW4_FULL_SIZE_JPEG, arw4_file};
 use support::fixtures::{
@@ -789,6 +789,27 @@ fn a_file_with_a_byte_overwritten_opens_or_fails_without_a_panic() {
 fn assert_all_but_the_capture_time(damaged: &Metadata, undamaged: &Metadata, what: &str) {
     assert_eq!(damaged.capture_time(), None, "{what}");
     assert!(undamaged.capture_time().is_some(), "{what}");
+    assert_eq!(
+        damaged.digitized_time(),
+        undamaged.digitized_time(),
+        "{what}"
+    );
+    assert_all_but_the_times(damaged, undamaged, what);
+}
+
+/// Asserts that `damaged`, read from a copy of a file whose DateTimeDigitized
+/// was made to name no real date, gives no digitized time, and every other
+/// value that `undamaged`, the file itself, gives.
+fn assert_all_but_the_digitized_time(damaged: &Metadata, undamaged: &Metadata, what: &str) {
+    assert_eq!(damaged.digitized_time(), None, "{what}");
+    assert!(undamaged.digitized_time().is_some(), "{what}");
+    assert_eq!(damaged.capture_time(), undamaged.capture_time(), "{what}");
+    assert_all_but_the_times(damaged, undamaged, what);
+}
+
+/// Asserts that `damaged` gives every value but the two times that
+/// `undamaged` gives.
+fn assert_all_but_the_times(damaged: &Metadata, undamaged: &Metadata, what: &str) {
     assert_eq!(damaged.camera(), undamaged.camera(), "{what}");
     assert_eq!(damaged.orientation(), undamaged.orientation(), "{what}");
     assert_eq!(damaged.exposure(), undamaged.exposure(), "{what}");
@@ -802,14 +823,18 @@ fn assert_all_but_the_capture_time(damaged: &Metadata, undamaged: &Metadata, wha
 
 /// A capture time that names no real date, in an otherwise undamaged file,
 /// costs the capture time and nothing else: every other value is the one
-/// the undamaged file gives, and so are the previews.
+/// the undamaged file gives, and so are the previews. A digitized time that
+/// names no real date costs the digitized time alone, in the same way.
 ///
 /// The damage goes into each copy of the time's text in turn. A file can
 /// hold the same text in other tags: the Z 9's DX and 1:1 files hold it in
 /// IFD0's DateTime and DateTimeOriginal and in the Exif IFD's
 /// DateTimeOriginal and DateTimeDigitized. The capture time is read from
-/// the Exif IFD's DateTimeOriginal alone, so damage to exactly one copy
-/// costs it, and damage to any other copy changes nothing.
+/// the Exif IFD's DateTimeOriginal alone, and the digitized time from its
+/// DateTimeDigitized alone. So damage to exactly one copy costs the
+/// capture time, damage to one more costs the digitized time when the file
+/// records it as the same text, and damage to any other copy changes
+/// nothing.
 #[test]
 fn an_impossible_capture_time_costs_only_the_capture_time() {
     let mut fixtures = Vec::new();
@@ -859,6 +884,9 @@ fn an_impossible_capture_time_costs_only_the_capture_time() {
             "2026:10:26 13:15:08",
         ),
     ]);
+    // Damage that cost a digitized time, over every fixture: at least one
+    // fixture records it as the same text as its capture time.
+    let mut digitized_costs = 0;
     for (name, undamaged_bytes, time) in fixtures {
         let undamaged = CameraFile::from_bytes(&undamaged_bytes).unwrap();
         let copies: Vec<usize> = undamaged_bytes
@@ -870,26 +898,41 @@ fn an_impossible_capture_time_costs_only_the_capture_time() {
         assert!(!copies.is_empty(), "{name}: no DateTimeOriginal");
         // Where the damage goes in `YYYY:MM:DD HH:MM:SS`, and what it
         // writes there.
+        // Whether the digitized time is the same text as the capture time,
+        // and so one of the copies.
+        let to_second = |time: DateTime| {
+            (
+                time.year(),
+                time.month(),
+                time.day(),
+                time.hour(),
+                time.minute(),
+                time.second(),
+            )
+        };
+        let undamaged_metadata = undamaged.metadata();
+        let same_text = undamaged_metadata.digitized_time().map(to_second)
+            == undamaged_metadata.capture_time().map(to_second);
         for (damage, offset, replacement) in
             [("month 13", 5, b"13"), ("a letter in the day", 8, b"0x")]
         {
-            let mut costly = 0;
+            let (mut costly, mut costly_digitized) = (0, 0);
             for &at in &copies {
                 let what = format!("{name}, {damage} in the copy at byte {at}");
                 let mut bytes = undamaged_bytes.clone();
                 let start = at + offset;
                 bytes[start..start + 2].copy_from_slice(replacement);
                 let damaged = CameraFile::from_bytes(&bytes).unwrap();
-                if damaged.metadata().capture_time().is_none() {
+                let damaged_metadata = damaged.metadata();
+                if damaged_metadata.capture_time().is_none() {
                     costly += 1;
-                    assert_all_but_the_capture_time(
-                        damaged.metadata(),
-                        undamaged.metadata(),
-                        &what,
-                    );
+                    assert_all_but_the_capture_time(damaged_metadata, undamaged_metadata, &what);
+                } else if damaged_metadata.digitized_time() != undamaged_metadata.digitized_time() {
+                    costly_digitized += 1;
+                    assert_all_but_the_digitized_time(damaged_metadata, undamaged_metadata, &what);
                 } else {
                     // A copy the reader does not read.
-                    assert_eq!(damaged.metadata(), undamaged.metadata(), "{what}");
+                    assert_eq!(damaged_metadata, undamaged_metadata, "{what}");
                 }
                 assert_eq!(damaged.previews(), undamaged.previews(), "{what}");
             }
@@ -897,6 +940,16 @@ fn an_impossible_capture_time_costs_only_the_capture_time() {
                 costly, 1,
                 "{name}, {damage}: the copies at {copies:?} hold one capture time"
             );
+            assert_eq!(
+                costly_digitized,
+                usize::from(same_text && undamaged_metadata.digitized_time().is_some()),
+                "{name}, {damage}: the copies at {copies:?} and the digitized time"
+            );
+            digitized_costs += costly_digitized;
         }
     }
+    assert!(
+        digitized_costs > 0,
+        "no fixture's digitized time was damaged"
+    );
 }

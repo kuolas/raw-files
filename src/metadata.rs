@@ -154,6 +154,7 @@ pub struct Metadata {
     pub(crate) authorship: Authorship,
     pub(crate) location: Option<Location>,
     pub(crate) capture_time: Option<DateTime>,
+    pub(crate) digitized_time: Option<DateTime>,
     pub(crate) orientation: Orientation,
     pub(crate) exposure: Exposure,
     pub(crate) camera_settings: CameraSettings,
@@ -288,6 +289,45 @@ impl Metadata {
     /// 2010-01-01 00:11, with its time-zone setting of +02:00.
     pub fn capture_time(&self) -> Option<DateTime> {
         self.capture_time
+    }
+
+    /// When the picture was stored as digital data: the Exif
+    /// DateTimeDigitized, with its own fraction of a second and offset from
+    /// UTC when the file records them, read by the rules of
+    /// [`capture_time`](Self::capture_time). On older Nikon bodies, which
+    /// record no offset, the offset is the time-zone setting of the
+    /// camera's clock, as for the capture time.
+    ///
+    /// A camera writes the capture time here too, as Exif asks of it, on
+    /// every public sample that records both. It writes a later time when
+    /// it stores the picture later, as when it makes a JPEG from a raw
+    /// file it holds. The capture time never falls back on this one, so a
+    /// file that records only this time gives no capture time.
+    ///
+    /// The time-zone setting stands in for a missing offset whether or not
+    /// this time equals the capture time. A program that wrote this time in
+    /// its own zone, kept a Nikon camera's MakerNote and wrote no offset
+    /// would get the camera's; no measured file does.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use raw_files::CameraFile;
+    ///
+    /// # fn main() -> raw_files::Result<()> {
+    /// let file = CameraFile::open("photo.jpg")?;
+    /// let metadata = file.metadata();
+    /// let times = (metadata.capture_time(), metadata.digitized_time());
+    /// if let (Some(taken), Some(stored)) = times
+    ///     && taken != stored
+    /// {
+    ///     println!("taken {taken}, stored {stored}");
+    /// }
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn digitized_time(&self) -> Option<DateTime> {
+        self.digitized_time
     }
 
     /// What a viewer must do to the stored pixels to show the picture
@@ -709,6 +749,14 @@ impl Metadata {
     #[must_use]
     pub fn with_capture_time(mut self, time: DateTime) -> Self {
         self.capture_time = Some(time);
+        self
+    }
+
+    /// Sets when the picture was stored as digital data, in place of any
+    /// time set before; [`digitized_time`](Self::digitized_time) reads it.
+    #[must_use]
+    pub fn with_digitized_time(mut self, time: DateTime) -> Self {
+        self.digitized_time = Some(time);
         self
     }
 
@@ -1595,6 +1643,11 @@ mod tests {
             authorship: z9_authorship(),
             location: Some(z9_location()),
             capture_time: DateTime::from_exif(b"2024:05:01 10:20:30", Some(b"85"), Some(b"+02:00")),
+            digitized_time: DateTime::from_exif(
+                b"2024:05:01 10:20:31",
+                Some(b"5"),
+                Some(b"+01:00"),
+            ),
             orientation: Orientation::Rotate90,
             exposure: z9_exposure(),
             camera_settings: z9_camera_settings(),
@@ -1668,6 +1721,7 @@ mod tests {
         assert_eq!(metadata.authorship(), &Authorship::default());
         assert_eq!(metadata.location(), None);
         assert_eq!(metadata.capture_time(), None);
+        assert_eq!(metadata.digitized_time(), None);
         assert_eq!(metadata.orientation(), Orientation::NoTransforms);
         assert_eq!(metadata.exposure(), &Exposure::default());
         assert_eq!(metadata.camera_settings(), &CameraSettings::default());
@@ -1689,6 +1743,8 @@ mod tests {
         assert_eq!(metadata.location(), Some(&z9_location()));
         let time = metadata.capture_time().unwrap();
         assert_eq!(time.to_string(), "2024-05-01T10:20:30.85+02:00");
+        let digitized = metadata.digitized_time().unwrap();
+        assert_eq!(digitized.to_string(), "2024-05-01T10:20:31.5+01:00");
         assert_eq!(metadata.orientation(), Orientation::Rotate90);
         assert_eq!(metadata.exposure(), &z9_exposure());
         assert_eq!(metadata.camera_settings(), &z9_camera_settings());
@@ -2016,6 +2072,13 @@ mod tests {
                     },
                 ),
                 (
+                    start.clone().with_digitized_time(time),
+                    Metadata {
+                        digitized_time: Some(time),
+                        ..start.clone()
+                    },
+                ),
+                (
                     start.clone().with_orientation(Orientation::Rotate270),
                     Metadata {
                         orientation: Orientation::Rotate270,
@@ -2085,7 +2148,7 @@ mod tests {
         }
     }
 
-    /// [`z9_metadata`] built through twelve of its fourteen builders, all but
+    /// [`z9_metadata`] built through thirteen of its fifteen builders, all but
     /// [`Metadata::with_focus_points`], whose list `with_focus` makes, and
     /// [`Metadata::with_focus_layout`], since a Z 9 has no layout.
     fn z9_metadata_built() -> Metadata {
@@ -2097,6 +2160,9 @@ mod tests {
             .with_location(z9_location())
             .with_capture_time(
                 DateTime::from_exif(b"2024:05:01 10:20:30", Some(b"85"), Some(b"+02:00")).unwrap(),
+            )
+            .with_digitized_time(
+                DateTime::from_exif(b"2024:05:01 10:20:31", Some(b"5"), Some(b"+01:00")).unwrap(),
             )
             .with_orientation(Orientation::Rotate90)
             .with_exposure(z9_exposure_built())
@@ -2188,6 +2254,7 @@ mod tests {
                 Longitude::west(fraction(1, 1), fraction(1, 1), fraction(1, 1)).unwrap(),
             ))
             .with_capture_time(DateTime::new(2000, 1, 1, 0, 0, 0).unwrap())
+            .with_digitized_time(DateTime::new(2000, 1, 1, 0, 0, 1).unwrap())
             .with_orientation(Orientation::Rotate180)
             .with_exposure(Exposure::default().with_iso(1))
             .with_camera_settings(
@@ -2211,6 +2278,7 @@ mod tests {
             .with_authorship(z9.authorship.clone())
             .with_location(z9.location.clone().unwrap())
             .with_capture_time(z9.capture_time.unwrap())
+            .with_digitized_time(z9.digitized_time.unwrap())
             .with_orientation(z9.orientation)
             .with_exposure(z9.exposure.clone())
             .with_camera_settings(z9.camera_settings.clone())

@@ -118,6 +118,10 @@ pub const PHOTOGRAPHIC_SENSITIVITY: u16 = 0x8827;
 /// When the picture was taken, in the Exif IFD (DateTimeOriginal).
 pub const DATE_TIME_ORIGINAL: u16 = 0x9003;
 
+/// When the picture was stored as digital data, in the Exif IFD
+/// (DateTimeDigitized).
+pub const DATE_TIME_DIGITIZED: u16 = 0x9004;
+
 /// The capture time's offset from UTC, in the Exif IFD
 /// (OffsetTimeOriginal).
 pub const OFFSET_TIME_ORIGINAL: u16 = 0x9011;
@@ -135,6 +139,10 @@ pub const FOCAL_LENGTH_IN_35MM_FILM: u16 = 0xA405;
 /// The capture time's fraction of a second, in the Exif IFD
 /// (SubSecTimeOriginal).
 pub const SUB_SEC_TIME_ORIGINAL: u16 = 0x9291;
+
+/// The digitized time's fraction of a second, in the Exif IFD
+/// (SubSecTimeDigitized).
+pub const SUB_SEC_TIME_DIGITIZED: u16 = 0x9292;
 
 /// The camera body's serial number, in the Exif IFD (BodySerialNumber).
 pub const BODY_SERIAL_NUMBER: u16 = 0xA431;

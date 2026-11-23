@@ -234,10 +234,16 @@ mod rules {
 ///   [`iso`], [`lens_range`], [`world_time`]). A range fills a lens whose
 ///   standard tags gave no value of its range, keeping their recorded make
 ///   and model and their serial number. An offset is given only to a
-///   capture time the standard tags gave without one: its
-///   OffsetTimeOriginal is missing or could not be read. It is held to the
-///   bound of every offset
+///   capture time or a digitized time the standard tags gave without one:
+///   its OffsetTimeOriginal or OffsetTimeDigitized is missing or could not
+///   be read. Each of the two times takes it on its own, and it is held to
+///   the bound of every offset
 ///   ([`DateTime::with_offset_minutes`](crate::datetime::DateTime::with_offset_minutes)).
+///   The camera's own JPEGs whose digitized time is later than the capture
+///   time, made from a raw file the camera held, name the camera's
+///   firmware as their software, so the zone of the camera's clock is the
+///   zone of that time too (`docs/formats/jpeg/container-and-metadata.md`,
+///   section 4).
 /// - **The camera settings** that only the MakerNote records, and its
 ///   white balance setting, finer than Exif's, in place of the mode the
 ///   Exif tags gave when it names one ([`camera_settings`]). The color space is read only
@@ -298,14 +304,17 @@ fn metadata<R: Read + Seek>(
     if !metadata.lens.has_range() {
         metadata.lens.set_range(lens_range(src, makernote)?);
     }
-    // An offset belongs to a time: without a capture time, WorldTime gives
-    // nothing.
-    if let Some(time) = metadata.capture_time
-        && time.offset_minutes().is_none()
-        && let Some(offset) = world_time(makernote)
-        && let Ok(time) = time.with_offset_minutes(offset)
-    {
-        metadata.capture_time = Some(time);
+    // An offset belongs to a time: without a capture or digitized time,
+    // WorldTime gives nothing.
+    if let Some(offset) = world_time(makernote) {
+        for time in [&mut metadata.capture_time, &mut metadata.digitized_time] {
+            if let Some(recorded) = *time
+                && recorded.offset_minutes().is_none()
+                && let Ok(with_offset) = recorded.with_offset_minutes(offset)
+            {
+                *time = Some(with_offset);
+            }
+        }
     }
     // Read once, for the image area and the focus point.
     let crop_hi_speed = crop_hi_speed(src, makernote)?;

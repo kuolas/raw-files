@@ -66,12 +66,13 @@ use support::jpeg_files::{
 };
 use support::jpeg_files::{
     APERTURE, BODY_SERIAL_NUMBER, CAMERA_MAKE, CAMERA_MODEL, CAMERA_SERIAL_NUMBER, CAMERA_SOFTWARE,
-    DATE_TIME_ORIGINAL, EXIF_IFD_TAGS, EXPOSURE_BIAS, EXPOSURE_BIAS_VALUE, EXPOSURE_SECONDS,
-    EXPOSURE_TIME, F_NUMBER, FOCAL_LENGTH, FOCAL_LENGTH_IN_35MM_FILM, FOCAL_MILLIMETERS,
-    FOCAL_MILLIMETERS_IN_35MM_FILM, ISO, LENS, LENS_MAKE, LENS_MODEL, LENS_RANGE,
-    LENS_SERIAL_NUMBER, LENS_SPECIFICATION, MAIN, MAKE, MODEL, MPF_IMAGES,
-    PHOTOGRAPHIC_SENSITIVITY, ROTATE_90, SOFTWARE, THUMBNAIL, camera_exif, camera_file,
-    camera_jpeg, camera_jpeg_with_metadata, exif, exif_jpeg, padded_jpeg, plain_jpeg,
+    DATE_TIME_DIGITIZED, DATE_TIME_ORIGINAL, EXIF_IFD_TAGS, EXPOSURE_BIAS, EXPOSURE_BIAS_VALUE,
+    EXPOSURE_SECONDS, EXPOSURE_TIME, F_NUMBER, FOCAL_LENGTH, FOCAL_LENGTH_IN_35MM_FILM,
+    FOCAL_MILLIMETERS, FOCAL_MILLIMETERS_IN_35MM_FILM, ISO, LENS, LENS_MAKE, LENS_MODEL,
+    LENS_RANGE, LENS_SERIAL_NUMBER, LENS_SPECIFICATION, MAIN, MAKE, MODEL, MPF_IMAGES,
+    PHOTOGRAPHIC_SENSITIVITY, ROTATE_90, SOFTWARE, SUB_SEC_TIME_DIGITIZED, SUB_SEC_TIME_ORIGINAL,
+    THUMBNAIL, camera_exif, camera_file, camera_jpeg, camera_jpeg_with_metadata, exif, exif_jpeg,
+    exif_with, padded_jpeg, plain_jpeg,
 };
 use support::jpeg_files::{
     D1H_LOST, D1H_MAIN, D1H_MODEL, D70_ISO, D70_LOST, D70_MAIN, D70_MODEL, D70_PREVIEW, D5300_ISO,
@@ -524,6 +525,35 @@ fn a_camera_jpeg_gives_every_value_its_exif_segment_records() {
     // The file writes no settings tag, so the settings are the empty
     // record.
     assert_eq!(read.camera_settings(), &CameraSettings::default());
+}
+
+#[test]
+fn a_jpeg_stored_later_gives_its_digitized_time_beside_the_capture_time() {
+    // As the JPEGs my D7200 made days later from raw files it held: the
+    // digitized time is later, with sub-seconds of its own, and neither
+    // time has an offset. The capture time stays DateTimeOriginal.
+    let (tiff, _) = exif_with(Order::Big, ROTATE_90, None, |builder, ifd0| {
+        let exif = builder.ifd();
+        builder
+            .exif(ifd0, exif)
+            .ascii(exif, DATE_TIME_ORIGINAL, "2020:07:28 16:57:07")
+            .ascii(exif, SUB_SEC_TIME_ORIGINAL, "70")
+            .ascii(exif, DATE_TIME_DIGITIZED, "2020:08:07 16:27:04")
+            .ascii(exif, SUB_SEC_TIME_DIGITIZED, "87");
+    });
+    let mut builder = JpegBuilder::new();
+    builder.exif(&tiff).frame(MAIN.0, MAIN.1, 0xC0);
+    let bytes = builder.build().bytes;
+    let file = CameraFile::from_bytes(&bytes).unwrap();
+    let shown = |time: Option<DateTime>| time.map(|time| time.to_string());
+    assert_eq!(
+        shown(file.metadata().capture_time()).as_deref(),
+        Some("2020-07-28T16:57:07.70")
+    );
+    assert_eq!(
+        shown(file.metadata().digitized_time()).as_deref(),
+        Some("2020-08-07T16:27:04.87")
+    );
 }
 
 #[test]

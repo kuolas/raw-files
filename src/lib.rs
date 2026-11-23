@@ -41,6 +41,7 @@
 //! | Who made the picture, and what they wrote about it | [`Metadata::authorship`] | [`Authorship`] |
 //! | Where the picture was taken | [`Metadata::location`] | [`Location`] |
 //! | When it was taken | [`Metadata::capture_time`] | [`DateTime`] |
+//! | When it was stored as digital data | [`Metadata::digitized_time`] | [`DateTime`] |
 //! | How to turn it upright | [`Metadata::orientation`] | [`Orientation`] |
 //! | The exposure | [`Metadata::exposure`] | [`Exposure`] |
 //! | How the camera was set | [`Metadata::camera_settings`] | [`CameraSettings`] |
