@@ -38,8 +38,8 @@ Linux and Windows alike.
   - the exposure program;
   - the metering mode;
   - the flash, with red-eye reduction and whether its return light was
-    detected, and on Nikon files which flash it was and how its output
-    was controlled;
+    detected, and on Nikon files which flash it was, how its output was
+    controlled and its sync;
   - the shutter;
   - Sony's electronic front curtain setting;
   - the image area;

@@ -235,6 +235,13 @@ does. An entry that can break a caller opens with **Breaking:**.
   `Built-in,TTL-BL` or `Optional,M`; commander mode is not given. Sony
   files give an external flash from their FlashAction. A file without
   Exif's Flash still gives no flash.
+- `Flash::sync` gives when in the exposure the flash fired, a
+  `FlashSync`: front curtain, rear curtain, slow sync or slow
+  rear-curtain sync, and `with_sync` sets it
+  ([#214](https://github.com/kuolas/raw-files/issues/214)). Nikon files
+  give it from their MakerNote's FlashSetting text, such as `NORMAL` or
+  `REAR SLOW`. Its red-eye reduction text, `RED-EYE`, gives front-curtain
+  sync and turns `Flash::red_eye_reduction` on.
 
 ### Changed
 

@@ -29,7 +29,7 @@
 //! fine-tuning, the shutter, the image area, the focus mode, the AF-area
 //! mode, AF fine-tune, the stabilization, auto ISO, the exposure
 //! fine-tuning, the release mode and bracketing, daylight saving time, the
-//! flash's source and control and,
+//! flash's source, control and sync and,
 //! in a raw file, the raw image size; the white balance setting,
 //! finer than Exif's,
 //! in place of Exif's; and the color space where the Exif tags record
@@ -1054,33 +1054,35 @@ impl FineTune {
 
 /// The flash: whether it fired and, when the file records them, its
 /// mode, whether red-eye reduction was on, whether the flash's return
-/// light was detected, which flash it was and how its output was
-/// controlled.
+/// light was detected, which flash it was, how its output was controlled
+/// and when in the exposure it fired.
 ///
 /// There is no `Default`: a file that records no flash gives `None` for
 /// [`CameraSettings::flash`].
 ///
 /// # Examples
 ///
-/// A flash unit that fired in fill mode, under TTL control, with red-eye
-/// reduction, its return light detected, and one that did not fire, with
-/// nothing else recorded:
+/// A flash unit that fired in fill mode, under TTL control, in slow sync,
+/// with red-eye reduction, its return light detected, and one that did
+/// not fire, with nothing else recorded:
 ///
 /// ```
-/// use raw_files::{Flash, FlashControl, FlashMode, FlashSource};
+/// use raw_files::{Flash, FlashControl, FlashMode, FlashSource, FlashSync};
 ///
 /// let fill = Flash::fired()
 ///     .with_mode(FlashMode::Fill)
 ///     .with_red_eye_reduction(true)
 ///     .with_return_light(true)
 ///     .with_source(FlashSource::External)
-///     .with_control(FlashControl::Ttl);
+///     .with_control(FlashControl::Ttl)
+///     .with_sync(FlashSync::Slow);
 /// assert!(fill.has_fired());
 /// assert_eq!(fill.mode(), Some(FlashMode::Fill));
 /// assert!(fill.red_eye_reduction());
 /// assert_eq!(fill.return_light(), Some(true));
 /// assert_eq!(fill.source(), Some(FlashSource::External));
 /// assert_eq!(fill.control(), Some(FlashControl::Ttl));
+/// assert_eq!(fill.sync(), Some(FlashSync::Slow));
 ///
 /// let off = Flash::not_fired();
 /// assert!(!off.has_fired());
@@ -1097,12 +1099,13 @@ pub struct Flash {
     pub(crate) return_light: Option<bool>,
     pub(crate) source: Option<FlashSource>,
     pub(crate) control: Option<FlashControl>,
+    pub(crate) sync: Option<FlashSync>,
 }
 
 impl Flash {
     /// A flash that fired, with nothing else yet: red-eye reduction off,
-    /// and no mode, return light, source or control. The `with_…` methods
-    /// add them.
+    /// and no mode, return light, source, control or sync. The `with_…`
+    /// methods add them.
     #[must_use]
     pub fn fired() -> Self {
         Self {
@@ -1112,8 +1115,8 @@ impl Flash {
     }
 
     /// A flash that did not fire, with nothing else yet: red-eye reduction
-    /// off, and no mode, return light, source or control. The `with_…`
-    /// methods add them.
+    /// off, and no mode, return light, source, control or sync. The
+    /// `with_…` methods add them.
     #[must_use]
     pub fn not_fired() -> Self {
         Self {
@@ -1123,6 +1126,7 @@ impl Flash {
             return_light: None,
             source: None,
             control: None,
+            sync: None,
         }
     }
 
@@ -1173,6 +1177,15 @@ impl Flash {
         }
     }
 
+    /// This flash with the sync `sync`, in place of any it had.
+    #[must_use]
+    pub fn with_sync(self, sync: FlashSync) -> Self {
+        Self {
+            sync: Some(sync),
+            ..self
+        }
+    }
+
     /// Whether the flash fired.
     pub fn has_fired(&self) -> bool {
         self.fired
@@ -1211,6 +1224,12 @@ impl Flash {
     /// metering through the lens, or `None` when the file does not say.
     pub fn control(&self) -> Option<FlashControl> {
         self.control
+    }
+
+    /// When in the exposure the flash was set to fire, such as at its end,
+    /// or `None` when the file does not say.
+    pub fn sync(&self) -> Option<FlashSync> {
+        self.sync
     }
 }
 
@@ -1539,6 +1558,62 @@ impl FlashControl {
 
 impl fmt::Display for FlashControl {
     /// Writes [`name`](FlashControl::name).
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.name())
+    }
+}
+
+/// When in the exposure the flash fired, and whether the shutter stayed
+/// open longer for the background: the flash sync mode.
+///
+/// `FlashSync` is `#[non_exhaustive]`, so match on it with a wildcard arm.
+/// It orders as its variants are listed, and a new variant is added after
+/// the existing ones, so an order once observed holds. Its
+/// [`name`](Self::name)s, which `Display` writes too, are "Front curtain",
+/// "Rear curtain", "Slow sync" and "Slow rear-curtain sync".
+///
+/// # Examples
+///
+/// ```
+/// use raw_files::FlashSync;
+///
+/// assert_eq!(FlashSync::FrontCurtain.name(), "Front curtain");
+/// assert_eq!(FlashSync::SlowRearCurtain.to_string(), "Slow rear-curtain sync");
+/// ```
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[non_exhaustive]
+pub enum FlashSync {
+    /// The flash fires as the exposure begins: front-curtain sync, the
+    /// usual setting. Nikon's `NORMAL`, and its red-eye reduction
+    /// (`RED-EYE`), which also gives
+    /// [`red_eye_reduction`](Flash::red_eye_reduction).
+    FrontCurtain,
+    /// The flash fires as the exposure ends: rear-curtain sync. Nikon's
+    /// `REAR`.
+    RearCurtain,
+    /// The flash fires as the exposure begins, with a slow shutter speed
+    /// for the background: slow sync. Nikon's `SLOW`.
+    Slow,
+    /// The flash fires as the exposure ends, with a slow shutter speed for
+    /// the background. Nikon's `REAR SLOW`.
+    SlowRearCurtain,
+}
+
+impl FlashSync {
+    /// The sync's name, for an information panel: "Front curtain", "Rear
+    /// curtain", "Slow sync" or "Slow rear-curtain sync".
+    pub fn name(self) -> &'static str {
+        match self {
+            FlashSync::FrontCurtain => "Front curtain",
+            FlashSync::RearCurtain => "Rear curtain",
+            FlashSync::Slow => "Slow sync",
+            FlashSync::SlowRearCurtain => "Slow rear-curtain sync",
+        }
+    }
+}
+
+impl fmt::Display for FlashSync {
+    /// Writes [`name`](FlashSync::name).
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(self.name())
     }
@@ -2360,6 +2435,7 @@ mod tests {
                 return_light: Some(true),
                 source: Some(FlashSource::External),
                 control: Some(FlashControl::Ttl),
+                sync: Some(FlashSync::Slow),
             }),
             shutter: Some(Shutter::ElectronicFrontCurtain),
             electronic_front_curtain_setting: Some(true),
@@ -2431,6 +2507,7 @@ mod tests {
                 return_light: Some(true),
                 source: Some(FlashSource::External),
                 control: Some(FlashControl::Ttl),
+                sync: Some(FlashSync::Slow),
             })
         );
         let flash = settings.flash().unwrap();
@@ -2440,6 +2517,7 @@ mod tests {
         assert_eq!(flash.return_light(), Some(true));
         assert_eq!(flash.source(), Some(FlashSource::External));
         assert_eq!(flash.control(), Some(FlashControl::Ttl));
+        assert_eq!(flash.sync(), Some(FlashSync::Slow));
         assert_eq!(settings.shutter(), Some(Shutter::ElectronicFrontCurtain));
         assert_eq!(settings.electronic_front_curtain_setting(), Some(true));
         assert_eq!(settings.image_area(), Some(ImageArea::FullFrame));
@@ -2489,6 +2567,7 @@ mod tests {
             return_light: Some(false),
             source: Some(FlashSource::BuiltIn),
             control: Some(FlashControl::Manual),
+            sync: Some(FlashSync::RearCurtain),
         };
         // From the empty record, and from a full one whose every value
         // differs from the one set. The expected value is built field by
@@ -2693,7 +2772,8 @@ mod tests {
                     .with_red_eye_reduction(true)
                     .with_return_light(true)
                     .with_source(FlashSource::External)
-                    .with_control(FlashControl::Ttl),
+                    .with_control(FlashControl::Ttl)
+                    .with_sync(FlashSync::Slow),
             )
             .with_shutter(Shutter::ElectronicFrontCurtain)
             .with_electronic_front_curtain_setting(true)
@@ -2809,7 +2889,22 @@ mod tests {
             assert_eq!(off.return_light(), None);
             assert_eq!(off.source(), None);
             assert_eq!(off.control(), None);
+            assert_eq!(off.sync(), None);
         }
+    }
+
+    #[test]
+    fn a_flash_takes_its_sync() {
+        let flash = Flash::not_fired().with_source(FlashSource::BuiltIn);
+        // Set, then set again, which replaces it.
+        let rear = flash.with_sync(FlashSync::RearCurtain);
+        assert_eq!(rear.sync(), Some(FlashSync::RearCurtain));
+        let slow = rear.with_sync(FlashSync::SlowRearCurtain);
+        assert_eq!(slow.sync(), Some(FlashSync::SlowRearCurtain));
+        // The other parts stay as they were.
+        assert!(!slow.has_fired());
+        assert_eq!(slow.source(), Some(FlashSource::BuiltIn));
+        assert_eq!(slow.control(), None);
     }
 
     #[test]
@@ -2947,6 +3042,17 @@ mod tests {
         for control in all {
             match control {
                 Ttl | AutoAperture | Manual | Repeating => {}
+            }
+        }
+        all
+    }
+
+    fn all_flash_syncs() -> [FlashSync; 4] {
+        use FlashSync::*;
+        let all = [FrontCurtain, RearCurtain, Slow, SlowRearCurtain];
+        for sync in all {
+            match sync {
+                FrontCurtain | RearCurtain | Slow | SlowRearCurtain => {}
             }
         }
         all
@@ -3149,6 +3255,16 @@ mod tests {
             &["TTL", "Auto aperture", "Manual", "Repeating"],
         );
         assert_names(
+            &all_flash_syncs(),
+            FlashSync::name,
+            &[
+                "Front curtain",
+                "Rear curtain",
+                "Slow sync",
+                "Slow rear-curtain sync",
+            ],
+        );
+        assert_names(
             &all_exposure_programs(),
             ExposureProgram::name,
             &[
@@ -3269,6 +3385,7 @@ mod tests {
         assert_ordered(&all_flash_modes());
         assert_ordered(&all_flash_sources());
         assert_ordered(&all_flash_controls());
+        assert_ordered(&all_flash_syncs());
         assert_ordered(&all_exposure_programs());
         assert_ordered(&all_metering_modes());
         assert_ordered(&all_white_balance_modes());

@@ -4,7 +4,7 @@
 //! shutter used, the image area, the raw size, the color space, the focus
 //! mode, the AF-area mode, AF fine-tune, the stabilization, auto ISO, the
 //! exposure fine-tuning, the release mode and bracketing, daylight saving
-//! time, and the flash's source and control.
+//! time, and the flash's source, control and sync.
 //!
 //! The MakerNote records how the camera was set for the picture beyond
 //! what the Exif tags record (ADR011). [`camera_settings`] reads each
@@ -32,7 +32,8 @@
 //!   ([`release_mode`], [`bracketing`]);
 //! - daylight saving time from WorldTime ([`daylight_saving_time`]);
 //! - the flash's source and control from FlashType's text
-//!   ([`flash_type_of_text`]).
+//!   ([`flash_type_of_text`]), and its sync from FlashSetting's
+//!   ([`flash_sync_of_text`]).
 //!
 //! A code or a text gives a value only where its meaning is known, as the
 //! next paragraph says. Anything else costs that value alone.
@@ -56,8 +57,8 @@ use super::crop::CropHiSpeed;
 use super::rules;
 use crate::camera_settings::{
     AfFineTune, Bracketing, CameraSettings, ColorSpace, FineTune, Flash, FlashControl, FlashSource,
-    FocusAreaMode, FocusMode, ImageArea, RawImageSize, ReleaseMode, Shutter, Stabilization,
-    StabilizationMode, WhiteBalanceMode,
+    FlashSync, FocusAreaMode, FocusMode, ImageArea, RawImageSize, ReleaseMode, Shutter,
+    Stabilization, StabilizationMode, WhiteBalanceMode,
 };
 use crate::container::tiff::Ifd;
 use crate::error::Result;
@@ -220,7 +221,10 @@ pub(super) fn camera_settings<R: Read + Seek>(
 /// one costs only itself and leaves the part as `exif_flash` has it:
 ///
 /// - the source and the control, from FlashType's text, read by the text
-///   rule ([`flash_type_of_text`]).
+///   rule ([`flash_type_of_text`]);
+/// - the sync, from FlashSetting's text, read the same way
+///   ([`flash_sync_of_text`]). Its red-eye reduction text turns red-eye
+///   reduction on, which Exif's bit for it, when clear, leaves unknown.
 ///
 /// # Errors
 ///
@@ -232,7 +236,45 @@ fn flash<R: Read + Seek>(src: &mut Source<R>, ifd: &Ifd, exif_flash: Flash) -> R
     {
         flash = flash.with_source(source).with_control(control);
     }
+    if let Some((sync, red_eye_reduction)) = tiff_metadata::text(src, ifd, rules::FLASH_SETTING)?
+        .and_then(|text| flash_sync_of_text(&text))
+    {
+        flash = flash.with_sync(sync);
+        if red_eye_reduction {
+            flash = flash.with_red_eye_reduction(true);
+        }
+    }
     Ok(flash)
+}
+
+/// The flash sync that a FlashSetting `text`, as read, names, and whether
+/// it also says red-eye reduction was on, looked up whole among the texts
+/// files hold:
+///
+/// - `NORMAL`, front-curtain sync, [`FrontCurtain`](FlashSync::FrontCurtain);
+/// - `REAR`, rear-curtain sync, [`RearCurtain`](FlashSync::RearCurtain);
+/// - `SLOW`, slow sync, [`Slow`](FlashSync::Slow);
+/// - `REAR SLOW`, rear-curtain with slow sync,
+///   [`SlowRearCurtain`](FlashSync::SlowRearCurtain);
+/// - `RED-EYE`, red-eye reduction, under which a lamp lights before the
+///   flash fires as the shutter opens,
+///   [`FrontCurtain`](FlashSync::FrontCurtain) with red-eye reduction on.
+///
+/// ExifTool's published documentation gives the tag as a string and lists
+/// no values; each text's meaning is Nikon's, as the D600's manual names
+/// the flash modes (NEF notes, section 8.10). `None` for every other text,
+/// and for the blank some bodies write. A mode the manual offers but no
+/// file shows, such as red-eye reduction with slow sync, gives none until
+/// a file shows its text.
+fn flash_sync_of_text(text: &str) -> Option<(FlashSync, bool)> {
+    Some(match text {
+        "NORMAL" => (FlashSync::FrontCurtain, false),
+        "REAR" => (FlashSync::RearCurtain, false),
+        "SLOW" => (FlashSync::Slow, false),
+        "REAR SLOW" => (FlashSync::SlowRearCurtain, false),
+        "RED-EYE" => (FlashSync::FrontCurtain, true),
+        _ => return None,
+    })
 }
 
 /// The flash's source and control that a FlashType `text`, as read,
@@ -769,8 +811,8 @@ mod tests {
     };
     use super::super::{
         AF_INFO, AF_INFO2, AF_TUNE, COLOR_SPACE, COLOR_TEMPERATURE, CROP_HI_SPEED, EXPOSURE_TUNING,
-        FINE_TUNE, FINE_TUNE_STEPS, FLASH_TYPE, FOCUS_MODE, IMAGE_SIZE_RAW, ISO_SELECTION,
-        SHOOTING_MODE, SHUTTER_MODE, VR_INFO, WHITE_BALANCE, WORLD_TIME, metadata,
+        FINE_TUNE, FINE_TUNE_STEPS, FLASH_SETTING, FLASH_TYPE, FOCUS_MODE, IMAGE_SIZE_RAW,
+        ISO_SELECTION, SHOOTING_MODE, SHUTTER_MODE, VR_INFO, WHITE_BALANCE, WORLD_TIME, metadata,
     };
     use super::*;
     use crate::camera_settings::{ExposureProgram, FlashMode, WhiteBalance};
@@ -2382,9 +2424,111 @@ mod tests {
         // to belong to.
         for order in ORDERS {
             let read = flash_of(order, None, |inner, ifd| {
-                inner.ascii(ifd, FLASH_TYPE, "Optional,TTL       ");
+                inner.ascii(ifd, FLASH_SETTING, "NORMAL      ").ascii(
+                    ifd,
+                    FLASH_TYPE,
+                    "Optional,TTL       ",
+                );
             });
             assert_eq!(read, None, "{order:?}");
+        }
+    }
+
+    /// The flash of a raw file in byte order `order` whose Exif Flash is
+    /// `exif_flash` and whose MakerNote's FlashSetting is `text`, padded
+    /// with spaces to 12 characters, as Nikon writes it; the builder adds
+    /// the NUL.
+    fn flash_setting_of(order: Order, exif_flash: u16, text: &str) -> Option<Flash> {
+        flash_of(order, Some(exif_flash), |inner, ifd| {
+            inner.ascii(ifd, FLASH_SETTING, &padded(text));
+        })
+    }
+
+    #[test]
+    fn each_flash_setting_text_of_the_table_gives_its_sync() {
+        let table = [
+            ("NORMAL", FlashSync::FrontCurtain),
+            ("REAR", FlashSync::RearCurtain),
+            ("SLOW", FlashSync::Slow),
+            ("REAR SLOW", FlashSync::SlowRearCurtain),
+        ];
+        for order in ORDERS {
+            for (text, sync) in table {
+                assert_eq!(
+                    flash_setting_of(order, FIRED, text),
+                    Some(fired().with_sync(sync)),
+                    "{order:?}, {text:?}"
+                );
+                // A flash that did not fire still records its setting, as
+                // the Z 9 writes NORMAL on every file.
+                assert_eq!(
+                    flash_setting_of(order, 0, text),
+                    Some(Flash::not_fired().with_sync(sync)),
+                    "{order:?}, {text:?}, not fired"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn the_red_eye_text_gives_front_curtain_sync_with_red_eye_reduction() {
+        // The Nikon 1 AW1's file: Exif's Flash 0, red-eye bit clear.
+        for order in ORDERS {
+            assert_eq!(
+                flash_setting_of(order, 0, "RED-EYE"),
+                Some(
+                    Flash::not_fired()
+                        .with_sync(FlashSync::FrontCurtain)
+                        .with_red_eye_reduction(true)
+                ),
+                "{order:?}"
+            );
+            // Exif's bit already set: it stays on.
+            assert_eq!(
+                flash_setting_of(order, 0x4F, "RED-EYE"),
+                Some(
+                    fired()
+                        .with_sync(FlashSync::FrontCurtain)
+                        .with_red_eye_reduction(true)
+                ),
+                "{order:?}, Exif's bit set"
+            );
+            // Another text leaves Exif's bit as it is.
+            assert_eq!(
+                flash_setting_of(order, 0x4F, "NORMAL"),
+                Some(
+                    fired()
+                        .with_sync(FlashSync::FrontCurtain)
+                        .with_red_eye_reduction(true)
+                ),
+                "{order:?}, NORMAL beside Exif's bit"
+            );
+        }
+    }
+
+    #[test]
+    fn a_flash_setting_text_not_in_the_table_adds_nothing() {
+        // The blank of 35 public files; the right letters in lower case;
+        // a text cut short, one with more after it, and two words run
+        // together.
+        for order in ORDERS {
+            for text in ["", "normal", "REA", "NORMAL1", "REARSLOW", "SLOW REAR"] {
+                assert_eq!(
+                    flash_setting_of(order, FIRED, text),
+                    Some(fired()),
+                    "{order:?}, {text:?}"
+                );
+            }
+            // Of another type.
+            let (block, entry) = tags_block(order, |inner, ifd| {
+                inner.ascii(ifd, FLASH_SETTING, &padded("REAR"));
+            });
+            let block = retyped(order, block, entry, UNDEFINED, 13);
+            let read = exif_metadata(order, &block, |builder, exif| {
+                builder.short(exif, EXIF_FLASH, &[FIRED]);
+            })
+            .camera_settings;
+            assert_eq!(read.flash, Some(fired()), "{order:?}, UNDEFINED");
         }
     }
 
