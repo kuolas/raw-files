@@ -37,9 +37,10 @@ Linux and Windows alike.
   - the white balance, with its color temperature and fine-tuning;
   - the exposure program;
   - the metering mode;
-  - the flash, with red-eye reduction and whether its return light was
-    detected, and on Nikon files which flash it was, how its output was
-    controlled and its sync;
+  - the flash, with red-eye reduction, whether its return light was
+    detected and its compensation; on Nikon files which flash it was,
+    how its output was controlled and its sync, and on Sony files
+    whether it was an external flash;
   - the shutter;
   - Sony's electronic front curtain setting;
   - the image area;

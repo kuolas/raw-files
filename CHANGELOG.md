@@ -242,6 +242,15 @@ does. An entry that can break a caller opens with **Breaking:**.
   give it from their MakerNote's FlashSetting text, such as `NORMAL` or
   `REAR SLOW`. Its red-eye reduction text, `RED-EYE`, gives front-curtain
   sync and turns `Flash::red_eye_reduction` on.
+- `Flash::compensation` gives the flash compensation the photographer
+  set, in EV as recorded, and `with_compensation` sets it
+  ([#214](https://github.com/kuolas/raw-files/issues/214)). Nikon files
+  give it from their MakerNote's FlashExposureComp, four bytes read as a
+  count times a factor over a divisor, so that `fa 01 06 00` is -6/6 EV;
+  a flash unit's own setting, which Nikon records beside it, is not
+  given. Sony files give it from their FlashExposureComp, one
+  SRATIONAL, such as `-7/10`. A recorded zero is a compensation of
+  zero.
 
 ### Changed
 

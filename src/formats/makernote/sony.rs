@@ -82,6 +82,11 @@ pub(in crate::formats) const WHITE_BALANCE: u16 = 0x0115;
 /// towards magenta.
 pub(in crate::formats) const FINE_TUNE: u16 = 0x2014;
 
+/// The Sony MakerNote tag that records the flash compensation the
+/// photographer set (FlashExposureComp): one SRATIONAL, in EV, such as
+/// `-7/10` for two thirds of a stop down, and `0/10` for none.
+pub(in crate::formats) const FLASH_EXPOSURE_COMP: u16 = 0x0104;
+
 /// The Sony MakerNote tag that records whether the flash fired, and which
 /// (FlashAction): one LONG, 0 did not fire, 1 fired, 2 an external flash
 /// fired, 3 a wirelessly controlled flash fired.
@@ -157,6 +162,8 @@ mod rules {
 
     pub(super) const WHITE_BALANCE: Held<[u32; 1]> = Held::new(super::WHITE_BALANCE, LONG);
     pub(super) const FINE_TUNE: Rule<[i32; 2]> = Rule::new(super::FINE_TUNE, &[FieldType::SLong]);
+    pub(super) const FLASH_EXPOSURE_COMP: Rule<[SignedRational; 1]> =
+        Rule::new(super::FLASH_EXPOSURE_COMP, &[FieldType::SRational]);
     pub(super) const FLASH_ACTION: Held<[u32; 1]> = Held::new(super::FLASH_ACTION, LONG);
     pub(super) const ELECTRONIC_FRONT_CURTAIN: Held<[u32; 1]> =
         Held::new(super::ELECTRONIC_FRONT_CURTAIN, LONG);
@@ -469,8 +476,12 @@ fn area<R: Read + Seek>(src: &mut Source<R>, makernote: &MakerNote) -> Result<Op
 ///   when it names one; when it names none, as for code 5, the Exif tags'
 ///   stays.
 /// - **The flash** the Exif tags gave gains its source, from FlashAction's
-///   code ([`flash_source`]). A file whose Exif tags give no flash gets
-///   none from the MakerNote either.
+///   code ([`flash_source`]), and its compensation, from
+///   FlashExposureComp ([`flash_compensation`]). A file whose Exif tags
+///   give no flash gets none from the MakerNote either, and one from a
+///   camera without a flash function gets what the MakerNote records: the
+///   RX0 and the FX30 record a compensation of zero. FlashLevel (0xB048), which repeats the
+///   compensation in thirds of a stop, is not read.
 ///
 /// The shutter used, the image area and the raw image size stay as
 /// `settings` has them, `None`. Sony records the first two only in
@@ -518,14 +529,42 @@ fn camera_settings<R: Read + Seek>(
             settings.bracketing = Some(bracketing);
         }
     }
-    if let Some(flash) = settings.flash.as_mut()
-        && let Some(source) = ifd
+    if let Some(flash) = settings.flash.as_mut() {
+        if let Some(source) = ifd
             .held(rules::FLASH_ACTION)
             .and_then(|[code]| flash_source(code))
-    {
-        *flash = flash.with_source(source);
+        {
+            *flash = flash.with_source(source);
+        }
+        if let Some(compensation) = flash_compensation(src, makernote)? {
+            *flash = flash.with_compensation(compensation);
+        }
     }
     Ok(settings)
+}
+
+/// The flash compensation that `makernote`'s FlashExposureComp records, in
+/// EV as stored: its one SRATIONAL, such as `-7/10`, which rounds two
+/// thirds of a stop, or `0/10`, a compensation of zero. ExifTool's
+/// published documentation gives the tag's name and type; the files agree
+/// with FlashLevel, which gives the same in thirds of a stop (ARW notes,
+/// section 9.10).
+///
+/// `None` when the tag is missing, as on the DSLR-A100 and the DSC-R1,
+/// breaks its rule or stores its value outside the block, and when its
+/// denominator is zero.
+///
+/// # Errors
+///
+/// `Io` when the reader fails.
+fn flash_compensation<R: Read + Seek>(
+    src: &mut Source<R>,
+    makernote: &MakerNote,
+) -> Result<Option<SignedRational>> {
+    let Some([value]) = makernote.ifd.get(src, rules::FLASH_EXPOSURE_COMP)? else {
+        return Ok(None);
+    };
+    Ok(SignedRational::new(value.numerator, value.denominator).ok())
 }
 
 /// The flash's source that a FlashAction `code` names, in the list
@@ -2614,6 +2653,48 @@ mod tests {
             // Without Exif's Flash, the MakerNote gives no flash.
             let without = settings_of(order, |builder, ifd| {
                 builder.long(ifd, FLASH_ACTION, &[2]);
+            });
+            assert_eq!(without.flash, None, "{order:?}, no Exif Flash");
+        }
+    }
+
+    #[test]
+    fn the_flash_compensation_is_its_srational_as_stored() {
+        let fired = Flash::fired().with_mode(FlashMode::Fill);
+        let exif = CameraSettings::default().with_flash(fired);
+        let signed = |n, d| SignedRational::new(n, d).expect("a denominator");
+        for order in ORDERS {
+            // As the files hold it: zero over 10 and over 1, -1, -2 and
+            // -0.7 EV; and a positive one.
+            for (numerator, denominator) in
+                [(0, 10), (0, 1), (-10, 10), (-20, 10), (-7, 10), (3, 10)]
+            {
+                let settings = settings_from(order, exif.clone(), |builder, ifd| {
+                    builder.srational(ifd, FLASH_EXPOSURE_COMP, &[(numerator, denominator)]);
+                });
+                assert_eq!(
+                    settings.flash,
+                    Some(fired.with_compensation(signed(numerator, denominator))),
+                    "{order:?}, {numerator}/{denominator}"
+                );
+            }
+            // A zero denominator, two values, and a RATIONAL leave the
+            // Exif tags' flash.
+            let zero = settings_from(order, exif.clone(), |builder, ifd| {
+                builder.srational(ifd, FLASH_EXPOSURE_COMP, &[(-7, 0)]);
+            });
+            let two = settings_from(order, exif.clone(), |builder, ifd| {
+                builder.srational(ifd, FLASH_EXPOSURE_COMP, &[(-7, 10), (0, 10)]);
+            });
+            let unsigned = settings_from(order, exif.clone(), |builder, ifd| {
+                builder.rational(ifd, FLASH_EXPOSURE_COMP, &[(7, 10)]);
+            });
+            assert_eq!(zero.flash, Some(fired), "{order:?}, zero denominator");
+            assert_eq!(two.flash, Some(fired), "{order:?}, two");
+            assert_eq!(unsigned.flash, Some(fired), "{order:?}, RATIONAL");
+            // Without Exif's Flash, none.
+            let without = settings_of(order, |builder, ifd| {
+                builder.srational(ifd, FLASH_EXPOSURE_COMP, &[(-7, 10)]);
             });
             assert_eq!(without.flash, None, "{order:?}, no Exif Flash");
         }

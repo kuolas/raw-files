@@ -197,8 +197,10 @@ nothing standard records a value. Nothing is deciphered or decrypted.
     text; an external flash from Sony's FlashAction too;
   - the sync, front or rear curtain and slow, from Nikon's FlashSetting
     text, whose red-eye reduction text also turns red-eye reduction on;
-  - the compensation, in EV as recorded: Nikon's for the built-in flash
-    and for an external unit, each in sixths of a stop, and Sony's.
+  - the compensation, in EV as recorded: Nikon's, the camera's setting
+    for whichever flash fires, in sixths of a stop, and Sony's. Nikon's
+    ExternalFlashExposureComp, a flash unit's own setting beside it, is
+    not read.
 
   Nikon's flash record (FlashInfo), whose layout changes over a dozen
   versions, is not read. So the unit's model and commander mode give
@@ -488,6 +490,11 @@ Rejected:
   changes over a dozen versions, each needing frames of its own.
 - **The flash from Exif's bits alone.** It gives no compensation and
   no unit, which plain tags record.
+- **Nikon's compensation for an external unit from
+  ExternalFlashExposureComp.** Files whose flash unit fired hold the
+  camera's compensation in FlashExposureComp, and both tags can be set
+  at once: the second is the unit's own setting, so reading it in the
+  first one's place would mix two settings in one value.
 - **Only the image area and raw size a file records.** A body that
   records neither would give none, though its sensor and its offer of
   raw sizes are published facts.

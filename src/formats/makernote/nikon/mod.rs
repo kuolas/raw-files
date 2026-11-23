@@ -107,6 +107,12 @@ const ISO_SELECTION: u16 = 0x000F;
 /// holding the small preview JPEG.
 const PREVIEW_IFD: u16 = 0x0011;
 
+/// The Nikon MakerNote tag that records the flash compensation the
+/// photographer set (FlashExposureComp): four UNDEFINED bytes, a signed
+/// count, then a factor and a divisor, 1 and 6 on every file but the
+/// Z 50's and the Z50II's, and a zero, so that `fa 01 06 00` is -6/6 EV.
+const FLASH_EXPOSURE_COMP: u16 = 0x0012;
+
 /// The Nikon MakerNote tag that records the crop mode the picture was
 /// taken in, and how large the picture was before and after the crop
 /// (CropHiSpeed). It holds seven SHORTs: the mode, the original width and
@@ -230,6 +236,8 @@ mod rules {
         Held::new(super::FINE_TUNE_STEPS, &[FieldType::SShort]);
     pub(super) const ISO_SELECTION: Rule<Text> = Rule::new(super::ISO_SELECTION, ASCII);
     pub(super) const PREVIEW_IFD: Held<[u32; 1]> = Held::new(super::PREVIEW_IFD, LONG);
+    pub(super) const FLASH_EXPOSURE_COMP: Held<[u8; 4]> =
+        Held::new(super::FLASH_EXPOSURE_COMP, &[FieldType::Undefined]);
     pub(super) const CROP_HI_SPEED: Rule<[u32; 7]> = Rule::new(super::CROP_HI_SPEED, SHORT);
     pub(super) const EXPOSURE_TUNING: Held<[u8; 3]> =
         Held::new(super::EXPOSURE_TUNING, &[FieldType::Undefined]);

@@ -387,6 +387,22 @@ fn read_metadata(metadata: &Metadata) {
     let _ = metadata.raw_size();
     let _ = metadata.image_size();
     let settings = metadata.camera_settings();
+    if let Some(flash) = settings.flash() {
+        let _ = (
+            flash.has_fired(),
+            flash.mode().map(|mode| mode.to_string()),
+            flash.red_eye_reduction(),
+            flash.return_light(),
+            flash.source().map(|source| source.to_string()),
+            flash.control().map(|control| control.to_string()),
+            flash.sync().map(|sync| sync.to_string()),
+        );
+        if let Some(compensation) = flash.compensation() {
+            let _ = compensation.to_string();
+            let _ = compensation.reduced();
+            let _ = compensation.to_f64();
+        }
+    }
     let _ = settings.focus_mode().map(|mode| mode.to_string());
     let _ = settings.focus_area_mode().map(|mode| mode.to_string());
     let _ = settings

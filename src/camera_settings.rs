@@ -29,7 +29,7 @@
 //! fine-tuning, the shutter, the image area, the focus mode, the AF-area
 //! mode, AF fine-tune, the stabilization, auto ISO, the exposure
 //! fine-tuning, the release mode and bracketing, daylight saving time, the
-//! flash's source, control and sync and,
+//! flash's source, control, sync and compensation and,
 //! in a raw file, the raw image size; the white balance setting,
 //! finer than Exif's,
 //! in place of Exif's; and the color space where the Exif tags record
@@ -39,8 +39,8 @@
 //! Sony records, the color temperature of a chosen color temperature or a
 //! custom white balance, the focus mode, the AF-area mode, the
 //! stabilization, without a mode, the exposure fine-tuning, the release
-//! mode and bracketing, an external flash as the flash's source; and the
-//! white balance
+//! mode and bracketing, the flash's source when it is external and its
+//! compensation; and the white balance
 //! setting in place of Exif's. On Sony files the shutter,
 //! the image area, the raw image size, AF fine-tune, auto ISO and daylight
 //! saving time are `None`: Sony records the first two only in enciphered
@@ -1054,8 +1054,8 @@ impl FineTune {
 
 /// The flash: whether it fired and, when the file records them, its
 /// mode, whether red-eye reduction was on, whether the flash's return
-/// light was detected, which flash it was, how its output was controlled
-/// and when in the exposure it fired.
+/// light was detected, which flash it was, how its output was
+/// controlled, when in the exposure it fired and its compensation.
 ///
 /// There is no `Default`: a file that records no flash gives `None` for
 /// [`CameraSettings::flash`].
@@ -1063,19 +1063,22 @@ impl FineTune {
 /// # Examples
 ///
 /// A flash unit that fired in fill mode, under TTL control, in slow sync,
-/// with red-eye reduction, its return light detected, and one that did
-/// not fire, with nothing else recorded:
+/// with red-eye reduction and a compensation of -1/3 EV, its return light
+/// detected, and one that did not fire, with nothing else recorded:
 ///
 /// ```
-/// use raw_files::{Flash, FlashControl, FlashMode, FlashSource, FlashSync};
+/// use raw_files::{Flash, FlashControl, FlashMode, FlashSource, FlashSync, SignedRational};
 ///
+/// # fn main() -> Result<(), raw_files::ValueError> {
+/// let minus_a_third = SignedRational::new(-2, 6)?;
 /// let fill = Flash::fired()
 ///     .with_mode(FlashMode::Fill)
 ///     .with_red_eye_reduction(true)
 ///     .with_return_light(true)
 ///     .with_source(FlashSource::External)
 ///     .with_control(FlashControl::Ttl)
-///     .with_sync(FlashSync::Slow);
+///     .with_sync(FlashSync::Slow)
+///     .with_compensation(minus_a_third);
 /// assert!(fill.has_fired());
 /// assert_eq!(fill.mode(), Some(FlashMode::Fill));
 /// assert!(fill.red_eye_reduction());
@@ -1083,6 +1086,7 @@ impl FineTune {
 /// assert_eq!(fill.source(), Some(FlashSource::External));
 /// assert_eq!(fill.control(), Some(FlashControl::Ttl));
 /// assert_eq!(fill.sync(), Some(FlashSync::Slow));
+/// assert_eq!(fill.compensation(), Some(minus_a_third));
 ///
 /// let off = Flash::not_fired();
 /// assert!(!off.has_fired());
@@ -1090,6 +1094,9 @@ impl FineTune {
 /// assert!(!off.red_eye_reduction());
 /// assert_eq!(off.return_light(), None);
 /// assert_eq!(off.source(), None);
+/// assert_eq!(off.compensation(), None);
+/// # Ok(())
+/// # }
 /// ```
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct Flash {
@@ -1100,12 +1107,13 @@ pub struct Flash {
     pub(crate) source: Option<FlashSource>,
     pub(crate) control: Option<FlashControl>,
     pub(crate) sync: Option<FlashSync>,
+    pub(crate) compensation: Option<SignedRational>,
 }
 
 impl Flash {
     /// A flash that fired, with nothing else yet: red-eye reduction off,
-    /// and no mode, return light, source, control or sync. The `with_…`
-    /// methods add them.
+    /// and no mode, return light, source, control, sync or compensation.
+    /// The `with_…` methods add them.
     #[must_use]
     pub fn fired() -> Self {
         Self {
@@ -1115,8 +1123,8 @@ impl Flash {
     }
 
     /// A flash that did not fire, with nothing else yet: red-eye reduction
-    /// off, and no mode, return light, source, control or sync. The
-    /// `with_…` methods add them.
+    /// off, and no mode, return light, source, control, sync or
+    /// compensation. The `with_…` methods add them.
     #[must_use]
     pub fn not_fired() -> Self {
         Self {
@@ -1127,6 +1135,7 @@ impl Flash {
             source: None,
             control: None,
             sync: None,
+            compensation: None,
         }
     }
 
@@ -1186,6 +1195,16 @@ impl Flash {
         }
     }
 
+    /// This flash with the compensation `compensation`, in EV, kept as
+    /// given, in place of any it had.
+    #[must_use]
+    pub fn with_compensation(self, compensation: SignedRational) -> Self {
+        Self {
+            compensation: Some(compensation),
+            ..self
+        }
+    }
+
     /// Whether the flash fired.
     pub fn has_fired(&self) -> bool {
         self.fired
@@ -1230,6 +1249,15 @@ impl Flash {
     /// or `None` when the file does not say.
     pub fn sync(&self) -> Option<FlashSync> {
         self.sync
+    }
+
+    /// The flash compensation the photographer set, in EV, as the file
+    /// records it: a fraction such as `-2/6`, which a caller reduces for
+    /// display. A recorded zero, such as `0/10`, is a compensation of
+    /// zero. `None` when the file does not say. A camera may record it
+    /// whether or not the flash fired.
+    pub fn compensation(&self) -> Option<SignedRational> {
+        self.compensation
     }
 }
 
@@ -2436,6 +2464,7 @@ mod tests {
                 source: Some(FlashSource::External),
                 control: Some(FlashControl::Ttl),
                 sync: Some(FlashSync::Slow),
+                compensation: Some(signed_fraction(-2, 6)),
             }),
             shutter: Some(Shutter::ElectronicFrontCurtain),
             electronic_front_curtain_setting: Some(true),
@@ -2508,6 +2537,7 @@ mod tests {
                 source: Some(FlashSource::External),
                 control: Some(FlashControl::Ttl),
                 sync: Some(FlashSync::Slow),
+                compensation: Some(signed_fraction(-2, 6)),
             })
         );
         let flash = settings.flash().unwrap();
@@ -2518,6 +2548,7 @@ mod tests {
         assert_eq!(flash.source(), Some(FlashSource::External));
         assert_eq!(flash.control(), Some(FlashControl::Ttl));
         assert_eq!(flash.sync(), Some(FlashSync::Slow));
+        assert_eq!(flash.compensation(), Some(signed_fraction(-2, 6)));
         assert_eq!(settings.shutter(), Some(Shutter::ElectronicFrontCurtain));
         assert_eq!(settings.electronic_front_curtain_setting(), Some(true));
         assert_eq!(settings.image_area(), Some(ImageArea::FullFrame));
@@ -2568,6 +2599,7 @@ mod tests {
             source: Some(FlashSource::BuiltIn),
             control: Some(FlashControl::Manual),
             sync: Some(FlashSync::RearCurtain),
+            compensation: Some(signed_fraction(7, 10)),
         };
         // From the empty record, and from a full one whose every value
         // differs from the one set. The expected value is built field by
@@ -2773,7 +2805,8 @@ mod tests {
                     .with_return_light(true)
                     .with_source(FlashSource::External)
                     .with_control(FlashControl::Ttl)
-                    .with_sync(FlashSync::Slow),
+                    .with_sync(FlashSync::Slow)
+                    .with_compensation(signed_fraction(-2, 6)),
             )
             .with_shutter(Shutter::ElectronicFrontCurtain)
             .with_electronic_front_curtain_setting(true)
@@ -2890,7 +2923,24 @@ mod tests {
             assert_eq!(off.source(), None);
             assert_eq!(off.control(), None);
             assert_eq!(off.sync(), None);
+            assert_eq!(off.compensation(), None);
         }
+    }
+
+    #[test]
+    fn a_flash_takes_its_compensation_as_given() {
+        let flash = Flash::fired().with_sync(FlashSync::RearCurtain);
+        // Set, then set again, which replaces it; each kept as given, so
+        // -10/10 is not -1/1, and a zero is a value.
+        let minus = flash.with_compensation(signed_fraction(-10, 10));
+        assert_eq!(minus.compensation(), Some(signed_fraction(-10, 10)));
+        assert_ne!(minus.compensation(), Some(signed_fraction(-1, 1)));
+        let zero = minus.with_compensation(signed_fraction(0, 6));
+        assert_eq!(zero.compensation(), Some(signed_fraction(0, 6)));
+        // The other parts stay as they were.
+        assert!(zero.has_fired());
+        assert_eq!(zero.sync(), Some(FlashSync::RearCurtain));
+        assert_eq!(zero.mode(), None);
     }
 
     #[test]

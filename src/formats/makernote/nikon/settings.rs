@@ -4,7 +4,7 @@
 //! shutter used, the image area, the raw size, the color space, the focus
 //! mode, the AF-area mode, AF fine-tune, the stabilization, auto ISO, the
 //! exposure fine-tuning, the release mode and bracketing, daylight saving
-//! time, and the flash's source, control and sync.
+//! time, and the flash's source, control, sync and compensation.
 //!
 //! The MakerNote records how the camera was set for the picture beyond
 //! what the Exif tags record (ADR011). [`camera_settings`] reads each
@@ -32,8 +32,9 @@
 //!   ([`release_mode`], [`bracketing`]);
 //! - daylight saving time from WorldTime ([`daylight_saving_time`]);
 //! - the flash's source and control from FlashType's text
-//!   ([`flash_type_of_text`]), and its sync from FlashSetting's
-//!   ([`flash_sync_of_text`]).
+//!   ([`flash_type_of_text`]), its sync from FlashSetting's
+//!   ([`flash_sync_of_text`]), and its compensation from
+//!   FlashExposureComp ([`flash_compensation`]).
 //!
 //! A code or a text gives a value only where its meaning is known, as the
 //! next paragraph says. Anything else costs that value alone.
@@ -224,7 +225,13 @@ pub(super) fn camera_settings<R: Read + Seek>(
 ///   rule ([`flash_type_of_text`]);
 /// - the sync, from FlashSetting's text, read the same way
 ///   ([`flash_sync_of_text`]). Its red-eye reduction text turns red-eye
-///   reduction on, which Exif's bit for it, when clear, leaves unknown.
+///   reduction on, which Exif's bit for it, when clear, leaves unknown;
+/// - the compensation, from FlashExposureComp
+///   ([`flash_compensation`]). ExternalFlashExposureComp (0x0017), which
+///   holds a flash unit's own setting beside it, is not read.
+///
+/// The parts are added to any flash Exif gives, one from a camera without
+/// a flash function included: they are what the MakerNote records.
 ///
 /// # Errors
 ///
@@ -244,7 +251,39 @@ fn flash<R: Read + Seek>(src: &mut Source<R>, ifd: &Ifd, exif_flash: Flash) -> R
             flash = flash.with_red_eye_reduction(true);
         }
     }
+    if let Some(compensation) = ifd
+        .held(rules::FLASH_EXPOSURE_COMP)
+        .and_then(flash_compensation)
+    {
+        flash = flash.with_compensation(compensation);
+    }
     Ok(flash)
+}
+
+/// The flash compensation, in EV, that FlashExposureComp's four bytes
+/// record: a signed count, then a factor and a divisor, read as the count
+/// times the factor over the divisor, as ExposureTuning is read
+/// ([`exposure_fine_tune`]), then a zero. So `fa 01 06 00` is -6/6 EV, and
+/// a recorded zero, `00 01 06 00`, is a compensation of zero, as stored.
+///
+/// ExifTool's published documentation gives the tag's name and its four
+/// bytes alone, and says the camera may record it whether or not the flash
+/// fires. The reading rests on the D600's manual, which sets the
+/// compensation from -3 to +1 EV in steps of 1/3 EV, and on the files:
+/// every count is a multiple of two, from -18 to +6, with 1 and 6 after it
+/// (NEF notes, section 8.10). It is the camera's setting for whichever
+/// flash fires: files whose flash unit fired hold counts other than zero.
+///
+/// `None` when the divisor is zero, as the Z 50 and the Z50II write it
+/// (`00 01 00 00`), and when the factor or the fourth byte breaks the
+/// shape, a factor of zero, which would read any count as zero, or a
+/// fourth byte other than zero; no file holds either.
+fn flash_compensation([count, factor, divisor, zero]: [u8; 4]) -> Option<SignedRational> {
+    if factor == 0 || zero != 0 {
+        return None;
+    }
+    let numerator = i32::from(count.cast_signed()) * i32::from(factor);
+    SignedRational::new(numerator, i32::from(divisor)).ok()
 }
 
 /// The flash sync that a FlashSetting `text`, as read, names, and whether
@@ -811,8 +850,9 @@ mod tests {
     };
     use super::super::{
         AF_INFO, AF_INFO2, AF_TUNE, COLOR_SPACE, COLOR_TEMPERATURE, CROP_HI_SPEED, EXPOSURE_TUNING,
-        FINE_TUNE, FINE_TUNE_STEPS, FLASH_SETTING, FLASH_TYPE, FOCUS_MODE, IMAGE_SIZE_RAW,
-        ISO_SELECTION, SHOOTING_MODE, SHUTTER_MODE, VR_INFO, WHITE_BALANCE, WORLD_TIME, metadata,
+        FINE_TUNE, FINE_TUNE_STEPS, FLASH_EXPOSURE_COMP, FLASH_SETTING, FLASH_TYPE, FOCUS_MODE,
+        IMAGE_SIZE_RAW, ISO_SELECTION, SHOOTING_MODE, SHUTTER_MODE, VR_INFO, WHITE_BALANCE,
+        WORLD_TIME, metadata,
     };
     use super::*;
     use crate::camera_settings::{ExposureProgram, FlashMode, WhiteBalance};
@@ -824,7 +864,9 @@ mod tests {
     use crate::error::ErrorKind;
     use crate::limits::Limits;
     use crate::testing::{FAR, FailsFar, signed_fraction};
-    use crate::tiff_builder::{BYTE, IfdId, Order, RawValue, SSHORT, TiffBuilder, UNDEFINED};
+    use crate::tiff_builder::{
+        ASCII, BYTE, IfdId, Order, RawValue, SSHORT, TiffBuilder, UNDEFINED,
+    };
     use std::io::Cursor;
 
     // The camera settings the MakerNote records. Each test builds a file
@@ -2502,6 +2544,131 @@ mod tests {
                         .with_red_eye_reduction(true)
                 ),
                 "{order:?}, NORMAL beside Exif's bit"
+            );
+        }
+    }
+
+    /// The flash of a raw file in byte order `order` whose Exif Flash is
+    /// [`FIRED`] and whose MakerNote's FlashExposureComp is `bytes`, of
+    /// type UNDEFINED.
+    fn flash_compensation_of(order: Order, bytes: &[u8]) -> Option<Flash> {
+        flash_of(order, Some(FIRED), |inner, ifd| {
+            inner.undefined(ifd, FLASH_EXPOSURE_COMP, bytes);
+        })
+    }
+
+    #[test]
+    fn flash_exposure_comp_gives_the_count_times_the_factor_over_the_divisor() {
+        for order in ORDERS {
+            for (bytes, expected) in [
+                // A zero, as on most files; the D100's -6/6; the D80's
+                // +6/6; the D5500's -10/6 and a D600's -2/6.
+                ([0, 1, 6, 0], (0, 6)),
+                ([0xFA, 1, 6, 0], (-6, 6)),
+                ([6, 1, 6, 0], (6, 6)),
+                ([0xF6, 1, 6, 0], (-10, 6)),
+                ([0xFE, 1, 6, 0], (-2, 6)),
+                // The ends of the counts seen, -18 and +6, and of a signed
+                // byte; another factor and divisor.
+                ([0xEE, 1, 6, 0], (-18, 6)),
+                ([0x80, 1, 6, 0], (-128, 6)),
+                ([0x7F, 1, 6, 0], (127, 6)),
+                ([3, 2, 6, 0], (6, 6)),
+                ([0xFF, 1, 3, 0], (-1, 3)),
+            ] {
+                assert_eq!(
+                    flash_compensation_of(order, &bytes),
+                    Some(fired().with_compensation(signed_fraction(expected.0, expected.1))),
+                    "{order:?}, {bytes:?}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn flash_exposure_comp_with_a_zero_divisor_or_of_another_shape_adds_nothing() {
+        for order in ORDERS {
+            // The Z 50's and the Z50II's zero divisor; a zero factor; a
+            // fourth byte that is not zero.
+            for bytes in [[0, 1, 0, 0], [0xFA, 0, 6, 0], [0, 0, 6, 0], [0xFA, 1, 6, 1]] {
+                assert_eq!(
+                    flash_compensation_of(order, &bytes),
+                    Some(fired()),
+                    "{order:?}, {bytes:?}"
+                );
+            }
+            // Three bytes, five, and four BYTEs or ASCII characters.
+            for bytes in [&[0xFA, 1, 6][..], &[0xFA, 1, 6, 0, 0]] {
+                assert_eq!(
+                    flash_compensation_of(order, bytes),
+                    Some(fired()),
+                    "{order:?}, {bytes:?}"
+                );
+            }
+            let byte = flash_of(order, Some(FIRED), |inner, ifd| {
+                inner.byte(ifd, FLASH_EXPOSURE_COMP, &[0xFA, 1, 6, 0]);
+            });
+            assert_eq!(byte, Some(fired()), "{order:?}, BYTE");
+            let (block, entry) = tags_block(order, |inner, ifd| {
+                inner.undefined(ifd, FLASH_EXPOSURE_COMP, &[0xFA, 1, 6, 0]);
+            });
+            let block = retyped(order, block, entry, ASCII, 4);
+            let read = exif_metadata(order, &block, |builder, exif| {
+                builder.short(exif, EXIF_FLASH, &[FIRED]);
+            })
+            .camera_settings;
+            assert_eq!(read.flash, Some(fired()), "{order:?}, ASCII");
+        }
+    }
+
+    #[test]
+    fn a_damaged_flash_part_costs_only_itself() {
+        // Every part sound, then each damaged in turn: the others stay.
+        let sound = fired()
+            .with_source(FlashSource::BuiltIn)
+            .with_control(FlashControl::Ttl)
+            .with_sync(FlashSync::Slow)
+            .with_compensation(signed_fraction(-2, 6));
+        for order in ORDERS {
+            let read = |flash_type: &str, flash_setting: &str, compensation: [u8; 4]| {
+                flash_of(order, Some(FIRED), |inner, ifd| {
+                    inner
+                        .ascii(ifd, FLASH_SETTING, &padded(flash_setting))
+                        .ascii(ifd, FLASH_TYPE, &format!("{flash_type:<19}"))
+                        .undefined(ifd, FLASH_EXPOSURE_COMP, &compensation);
+                })
+            };
+            let good = [0xFE, 1, 6, 0];
+            let bad = [0xFE, 1, 0, 0];
+            assert_eq!(read("Built-in,TTL", "SLOW", good), Some(sound), "{order:?}");
+            assert_eq!(
+                read("Built-in,XX", "SLOW", good),
+                Some(
+                    fired()
+                        .with_sync(FlashSync::Slow)
+                        .with_compensation(signed_fraction(-2, 6))
+                ),
+                "{order:?}, FlashType"
+            );
+            assert_eq!(
+                read("Built-in,TTL", "SLOWER", good),
+                Some(
+                    fired()
+                        .with_source(FlashSource::BuiltIn)
+                        .with_control(FlashControl::Ttl)
+                        .with_compensation(signed_fraction(-2, 6))
+                ),
+                "{order:?}, FlashSetting"
+            );
+            assert_eq!(
+                read("Built-in,TTL", "SLOW", bad),
+                Some(
+                    fired()
+                        .with_source(FlashSource::BuiltIn)
+                        .with_control(FlashControl::Ttl)
+                        .with_sync(FlashSync::Slow)
+                ),
+                "{order:?}, FlashExposureComp"
             );
         }
     }
