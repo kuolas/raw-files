@@ -352,6 +352,20 @@ does. An entry that can break a caller opens with **Breaking:**.
 
   A list costs at most five images to check, where a hostile one cost
   4,091. No camera JPEG measured lists another image, so none changes.
+- **Breaking:** a `Flash` is built with `Flash::fired()` or
+  `Flash::not_fired()`, no longer `Flash::new(bool)`, and whether it
+  fired is `Flash::has_fired`, no longer `Flash::fired`
+  ([#214](https://github.com/kuolas/raw-files/issues/214)). The call
+  says what it builds, as `Stabilization::on()` does:
+
+  ```rust
+  // 0.10.0
+  let flash = Flash::new(true).with_mode(FlashMode::Fill);
+  assert!(flash.fired());
+  // 0.11.0
+  let flash = Flash::fired().with_mode(FlashMode::Fill);
+  assert!(flash.has_fired());
+  ```
 
 ### Fixed
 

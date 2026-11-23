@@ -965,7 +965,9 @@ pub fn check_metadata(expected: &SampleMetadata, format: Format, folder: Folder)
         "{label}: metering mode"
     );
     assert_eq!(
-        settings.flash().map(|flash| (flash.fired(), flash.mode())),
+        settings
+            .flash()
+            .map(|flash| (flash.has_fired(), flash.mode())),
         expected.flash,
         "{label}: flash"
     );

@@ -103,7 +103,7 @@ use crate::rational::SignedRational;
 ///     println!("white balance: {mode}");
 /// }
 /// if let Some(flash) = settings.flash() {
-///     println!("flash fired: {}", flash.fired());
+///     println!("flash fired: {}", flash.has_fired());
 /// }
 /// # Ok(())
 /// # }
@@ -127,7 +127,7 @@ use crate::rational::SignedRational;
 ///             .with_mode(WhiteBalanceMode::Auto)
 ///             .with_color_temperature(5_200),
 ///     )
-///     .with_flash(Flash::new(false).with_mode(FlashMode::Off));
+///     .with_flash(Flash::not_fired().with_mode(FlashMode::Off));
 ///
 /// assert_eq!(
 ///     settings.exposure_program().map(ExposureProgram::name),
@@ -135,7 +135,7 @@ use crate::rational::SignedRational;
 /// );
 /// assert_eq!(settings.metering_mode(), Some(MeteringMode::MultiSegment));
 /// assert_eq!(settings.white_balance().color_temperature(), Some(5_200));
-/// assert_eq!(settings.flash().map(|flash| flash.fired()), Some(false));
+/// assert_eq!(settings.flash().map(|flash| flash.has_fired()), Some(false));
 /// assert_eq!(settings.shutter(), None);
 /// assert_eq!(settings.color_space(), None);
 /// ```
@@ -1063,12 +1063,12 @@ impl FineTune {
 /// ```
 /// use raw_files::{Flash, FlashMode};
 ///
-/// let fill = Flash::new(true).with_mode(FlashMode::Fill);
-/// assert!(fill.fired());
+/// let fill = Flash::fired().with_mode(FlashMode::Fill);
+/// assert!(fill.has_fired());
 /// assert_eq!(fill.mode(), Some(FlashMode::Fill));
 ///
-/// let off = Flash::new(false);
-/// assert!(!off.fired());
+/// let off = Flash::not_fired();
+/// assert!(!off.has_fired());
 /// assert_eq!(off.mode(), None);
 /// ```
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -1078,11 +1078,24 @@ pub struct Flash {
 }
 
 impl Flash {
-    /// The flash, fired or not, with no mode recorded;
+    /// A flash that fired, with no mode yet;
     /// [`with_mode`](Self::with_mode) adds it.
     #[must_use]
-    pub fn new(fired: bool) -> Self {
-        Self { fired, mode: None }
+    pub fn fired() -> Self {
+        Self {
+            fired: true,
+            mode: None,
+        }
+    }
+
+    /// A flash that did not fire, with no mode yet;
+    /// [`with_mode`](Self::with_mode) adds it.
+    #[must_use]
+    pub fn not_fired() -> Self {
+        Self {
+            fired: false,
+            mode: None,
+        }
     }
 
     /// This flash with the mode `mode`, in place of any it had.
@@ -1095,7 +1108,7 @@ impl Flash {
     }
 
     /// Whether the flash fired.
-    pub fn fired(&self) -> bool {
+    pub fn has_fired(&self) -> bool {
         self.fired
     }
 
@@ -2462,7 +2475,7 @@ mod tests {
             )
             .with_exposure_program(ExposureProgram::AperturePriority)
             .with_metering_mode(MeteringMode::MultiSegment)
-            .with_flash(Flash::new(true).with_mode(FlashMode::Fill))
+            .with_flash(Flash::fired().with_mode(FlashMode::Fill))
             .with_shutter(Shutter::ElectronicFrontCurtain)
             .with_electronic_front_curtain_setting(true)
             .with_image_area(ImageArea::FullFrame)
@@ -2486,7 +2499,7 @@ mod tests {
             .with_white_balance(WhiteBalance::default().with_color_temperature(1))
             .with_exposure_program(ExposureProgram::Manual)
             .with_metering_mode(MeteringMode::Average)
-            .with_flash(Flash::new(false))
+            .with_flash(Flash::not_fired())
             .with_shutter(Shutter::Mechanical)
             .with_electronic_front_curtain_setting(false)
             .with_image_area(ImageArea::Crop2_7x)
@@ -2555,17 +2568,22 @@ mod tests {
     }
 
     #[test]
+    fn fired_and_not_fired_build_a_flash_that_says_so() {
+        assert!(Flash::fired().has_fired());
+        assert!(!Flash::not_fired().has_fired());
+    }
+
+    #[test]
     fn a_flash_starts_without_a_mode_and_takes_one() {
-        for fired in [false, true] {
-            let flash = Flash::new(fired);
-            assert_eq!(flash.fired(), fired);
+        for (flash, fired) in [(Flash::not_fired(), false), (Flash::fired(), true)] {
+            assert_eq!(flash.has_fired(), fired);
             assert_eq!(flash.mode(), None);
             let auto = flash.with_mode(FlashMode::Auto);
-            assert_eq!(auto.fired(), fired);
+            assert_eq!(auto.has_fired(), fired);
             assert_eq!(auto.mode(), Some(FlashMode::Auto));
             // A second mode replaces the first.
             let off = auto.with_mode(FlashMode::Off);
-            assert_eq!(off.fired(), fired);
+            assert_eq!(off.has_fired(), fired);
             assert_eq!(off.mode(), Some(FlashMode::Off));
         }
     }
