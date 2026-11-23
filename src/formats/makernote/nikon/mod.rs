@@ -103,6 +103,12 @@ const PREVIEW_IFD: u16 = 0x0011;
 /// where the crop starts.
 const CROP_HI_SPEED: u16 = 0x001B;
 
+/// The Nikon MakerNote tag that records the photographer's fine-tuning of
+/// the camera's metering (ExposureTuning): three UNDEFINED bytes, a signed
+/// count, then a factor and a divisor, 1 and 6 on every file, so that
+/// `fd 01 06` is -3/6 EV.
+const EXPOSURE_TUNING: u16 = 0x001C;
+
 /// The Nikon MakerNote tag that records the camera body's serial number
 /// (SerialNumber), as ASCII text.
 const SERIAL_NUMBER: u16 = 0x001D;
@@ -206,6 +212,8 @@ mod rules {
     pub(super) const ISO_SELECTION: Rule<Text> = Rule::new(super::ISO_SELECTION, ASCII);
     pub(super) const PREVIEW_IFD: Held<[u32; 1]> = Held::new(super::PREVIEW_IFD, LONG);
     pub(super) const CROP_HI_SPEED: Rule<[u32; 7]> = Rule::new(super::CROP_HI_SPEED, SHORT);
+    pub(super) const EXPOSURE_TUNING: Held<[u8; 3]> =
+        Held::new(super::EXPOSURE_TUNING, &[FieldType::Undefined]);
     pub(super) const SERIAL_NUMBER: Rule<Text> = Rule::new(super::SERIAL_NUMBER, ASCII);
     pub(super) const COLOR_SPACE: Held<[u32; 1]> = Held::new(super::COLOR_SPACE, SHORT);
     pub(super) const WORLD_TIME: Held<[u8; 4]> =

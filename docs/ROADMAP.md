@@ -100,17 +100,17 @@ checked on the files the format notes count. A text no measured file
 records is checked on files built in the tests
 ([NEF notes, section 8.8](formats/nef/makernote-and-metadata.md#88-authorship)).
 
-The focus mode, the AF-area mode, AF fine-tune, auto ISO, the release
-mode, bracketing and daylight saving time are values of
-`CameraSettings`, the AF-area mode whether or not a file gives a focus
-point. Beside the
+The focus mode, the AF-area mode, AF fine-tune, auto ISO, the exposure
+fine-tuning, the release mode, bracketing and daylight saving time are
+values of `CameraSettings`, the AF-area mode whether or not a file
+gives a focus point. Beside the
 capture time, `Metadata` gives the digitized time. **More capture
 settings** come next, as values of `CameraSettings` and of the values
 they belong to
 ([ADR011](architecture-decisions/adr011-metadata-from-standard-tags.md),
 [#214](https://github.com/kuolas/raw-files/issues/214)):
 
-- stabilization and the exposure fine-tuning;
+- stabilization;
 - the flash's red-eye reduction, return light, source, control, sync
   and compensation;
 - the raw compression and bit depth, and the JPEG quality;

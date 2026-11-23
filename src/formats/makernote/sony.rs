@@ -105,6 +105,11 @@ pub(in crate::formats) const AF_AREA_MODE: u16 = 0x201C;
 /// the x and y of the focus area's center in it.
 pub(in crate::formats) const FOCUS_LOCATION: u16 = 0x2027;
 
+/// The Sony MakerNote tag that records the photographer's fine-tuning of
+/// the camera's metering (ExposureStandardAdjustment): one SRATIONAL, in
+/// EV, `0/6` on every file checked.
+pub(in crate::formats) const EXPOSURE_FINE_TUNE: u16 = 0x202D;
+
 /// The Sony MakerNote tag that records the size of the focus area
 /// (FocusFrameSize): six UNDEFINED bytes, the area's width and height as
 /// 16-bit numbers in the MakerNote's byte order, then a third, 257 or 0,
@@ -134,6 +139,7 @@ pub(in crate::formats) const RELEASE_MODE: u16 = 0xB049;
 /// never read as a large one.
 mod rules {
     use crate::container::tiff::{FieldType, Held, Rule};
+    use crate::rational::SignedRational;
 
     const LONG: &[FieldType] = &[FieldType::Long];
     const SHORT: &[FieldType] = &[FieldType::Short];
@@ -146,6 +152,8 @@ mod rules {
     pub(super) const AF_AREA_MODE: Held<[u8; 1]> =
         Held::new(super::AF_AREA_MODE, &[FieldType::Byte]);
     pub(super) const FOCUS_LOCATION: Rule<[u32; 4]> = Rule::new(super::FOCUS_LOCATION, SHORT);
+    pub(super) const EXPOSURE_FINE_TUNE: Rule<[SignedRational; 1]> =
+        Rule::new(super::EXPOSURE_FINE_TUNE, &[FieldType::SRational]);
     pub(super) const FOCUS_FRAME_SIZE: Rule<[u8; 6]> =
         Rule::new(super::FOCUS_FRAME_SIZE, &[FieldType::Undefined]);
     pub(super) const FOCUS_LOCATION2: Rule<[u32; 4]> = Rule::new(super::FOCUS_LOCATION2, SHORT);
@@ -437,6 +445,8 @@ fn area<R: Read + Seek>(src: &mut Source<R>, makernote: &MakerNote) -> Result<Op
 ///   list of `family`, the body's family ([`area_mode`]), whatever the
 ///   focus mode and whether or not the file gives a point. Without a
 ///   family, in a file with no Model, it is `None`.
+/// - **The exposure fine-tuning** is ExposureStandardAdjustment's
+///   ([`exposure_fine_tune`]).
 /// - **The release mode** is the one ReleaseMode's code names
 ///   ([`release_mode`]). **The bracketing** it names takes the place of
 ///   the one the Exif tags gave, exposure bracketing from ExposureMode 2,
@@ -478,6 +488,7 @@ fn camera_settings<R: Read + Seek>(
     settings.focus_area_mode = family
         .zip(ifd.held(rules::AF_AREA_MODE))
         .and_then(|(family, [code])| area_mode(family, code));
+    settings.exposure_fine_tune = exposure_fine_tune(src, makernote)?;
     if let Some([code]) = ifd.held(rules::RELEASE_MODE) {
         let (mode, bracketing) = release_mode(code);
         settings.release_mode = mode;
@@ -639,6 +650,28 @@ fn area_mode(family: Family, code: u8) -> Option<FocusAreaMode> {
         (Family::EMount | Family::Ilca, 12) => FocusAreaMode::Dynamic,
         _ => return None,
     })
+}
+
+/// The exposure fine-tuning that `makernote`'s ExposureStandardAdjustment
+/// records, in EV as stored: its one SRATIONAL, such as `0/6`, a
+/// fine-tuning of zero. ExifTool's published documentation gives the tag's
+/// name and type alone. Every file that holds it holds `0/6`, so its sign
+/// and its steps are the file's own (ARW notes, section 9.10).
+///
+/// `None` when the tag is missing, as on the ILCE-7M2, breaks its rule or
+/// stores its value outside the block, and when its denominator is zero.
+///
+/// # Errors
+///
+/// `Io` when the reader fails.
+fn exposure_fine_tune<R: Read + Seek>(
+    src: &mut Source<R>,
+    makernote: &MakerNote,
+) -> Result<Option<SignedRational>> {
+    let Some([value]) = makernote.ifd.get(src, rules::EXPOSURE_FINE_TUNE)? else {
+        return Ok(None);
+    };
+    Ok(SignedRational::new(value.numerator, value.denominator).ok())
 }
 
 /// The release mode and the bracketing a ReleaseMode `code` names, in the
@@ -2490,6 +2523,50 @@ mod tests {
                 "{order:?}"
             );
             assert_eq!(found.focus_points, None, "{order:?}");
+        }
+    }
+
+    #[test]
+    fn the_exposure_fine_tuning_is_its_srational_as_stored() {
+        // `0/6`, on every file that holds it; a value of each sign; a
+        // denominator of its own.
+        for order in ORDERS {
+            for (numerator, denominator) in [(0, 6), (-3, 6), (2, 6), (-1, 3)] {
+                let settings = settings_of(order, |builder, ifd| {
+                    builder.srational(ifd, EXPOSURE_FINE_TUNE, &[(numerator, denominator)]);
+                });
+                assert_eq!(
+                    settings.exposure_fine_tune,
+                    Some(SignedRational {
+                        numerator,
+                        denominator
+                    }),
+                    "{order:?}, {numerator}/{denominator}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn an_exposure_fine_tuning_of_zero_denominator_or_another_shape_is_none() {
+        for order in ORDERS {
+            for (what, setting) in [
+                (
+                    "a zero denominator",
+                    &(|builder: &mut TiffBuilder, ifd| {
+                        builder.srational(ifd, EXPOSURE_FINE_TUNE, &[(-3, 0)]);
+                    }) as Tags,
+                ),
+                ("two SRATIONALs", &|builder, ifd| {
+                    builder.srational(ifd, EXPOSURE_FINE_TUNE, &[(0, 6), (0, 6)]);
+                }),
+                ("a RATIONAL", &|builder, ifd| {
+                    builder.rational(ifd, EXPOSURE_FINE_TUNE, &[(0, 6)]);
+                }),
+            ] {
+                let settings = settings_of(order, setting);
+                assert_eq!(settings.exposure_fine_tune, None, "{order:?}, {what}");
+            }
         }
     }
 

@@ -1715,15 +1715,15 @@ the documentation's 4294967295, "n/a", is on none.
 
 **Exposure fine-tuning.** 0x202D ExposureStandardAdjustment, one
 SRATIONAL [S][1], is on 132 public files of 43 bodies, and is `0/6` on
-every one **[F]**. raw-files will give it in EV as recorded, so `0/6`
-is zero.
+every one **[F]**. raw-files gives it in EV as recorded, so `0/6`
+is zero; a zero denominator gives none.
 
 - The documentation gives only the name and the type. The sixths of a
   stop are the file's own denominator, and no file shows a value other
   than zero, or its sign.
 - Mark: observed, for zero alone.
 - **The ILCE-7M2 records no 0x202D**: none of my files of that body
-  holds it, so its exposure fine-tuning will be `None`.
+  holds it, so its exposure fine-tuning is `None`.
 
 **Release mode and bracketing.** 0xB049 ReleaseMode, one SHORT [S][1],
 is on 186 public files of 86 bodies **[F]**. Exif's ExposureMode
@@ -2027,8 +2027,8 @@ FocusLocation2 when FocusLocation gives nothing (absent, or not four
 SHORTs), FocusFrameSize and
 FocusMode ([section 9.6](#96-focus-point)). Nothing is deciphered, and
 0xB000, 0xB001 and the lens tags stay unread. The capture settings of
-[section 9.10](#910-more-capture-settings) add 0xB049, and will add
-0x0102, 0x0104, 0x202D, 0x202E, 0xB026 and 0xB047. FocusMode also gives
+[section 9.10](#910-more-capture-settings) add 0x202D and 0xB049, and
+will add 0x0102, 0x0104, 0x202E, 0xB026 and 0xB047. FocusMode also gives
 the focus mode, and 0x201C gives the AF-area mode.
 
 1. **Standard tags:** IFD0 Make, Model and Orientation; Exif

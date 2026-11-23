@@ -2,8 +2,8 @@
 
 //! The camera settings in the Nikon MakerNote: the white balance, the
 //! shutter used, the image area, the raw size, the color space, the focus
-//! mode, the AF-area mode, AF fine-tune, auto ISO, the release mode and
-//! bracketing, and daylight saving time.
+//! mode, the AF-area mode, AF fine-tune, auto ISO, the exposure
+//! fine-tuning, the release mode and bracketing, and daylight saving time.
 //!
 //! The MakerNote records how the camera was set for the picture beyond
 //! what the Exif tags record (ADR011). [`camera_settings`] reads each
@@ -24,6 +24,8 @@
 //! - AF fine-tune from AFTune ([`af_fine_tune`]);
 //! - auto ISO from ShootingMode's bit 5 ([`auto_iso`]), else from
 //!   ISOSelection's text ([`auto_iso_of_text`]);
+//! - the exposure fine-tuning from ExposureTuning
+//!   ([`exposure_fine_tune`]);
 //! - the release mode and bracketing from ShootingMode's bits
 //!   ([`release_mode`], [`bracketing`]);
 //! - daylight saving time from WorldTime ([`daylight_saving_time`]).
@@ -109,6 +111,8 @@ pub(super) struct FromStandardTags<'a> {
 ///   Only when the file has no ShootingMode that can be read is it the
 ///   text of ISOSelection ([`auto_iso_of_text`]), as the Coolpix bodies
 ///   record it.
+/// - **The exposure fine-tuning** is ExposureTuning's
+///   ([`exposure_fine_tune`]).
 /// - **The release mode** is the one ShootingMode's bits name
 ///   ([`release_mode`]). **The bracketing** they name ([`bracketing`])
 ///   takes the place of the one the Exif tags gave, exposure bracketing
@@ -175,6 +179,9 @@ pub(super) fn camera_settings<R: Read + Seek>(
             .and_then(|[code, ..]| af_info_area_mode(code)),
     };
     settings.af_fine_tune = ifd.held(rules::AF_TUNE).and_then(af_fine_tune);
+    settings.exposure_fine_tune = ifd
+        .held(rules::EXPOSURE_TUNING)
+        .and_then(exposure_fine_tune);
     if let Some([bits]) = ifd.held(rules::SHOOTING_MODE) {
         settings.auto_iso = auto_iso(bits, model);
         settings.release_mode = release_mode(bits);
@@ -479,6 +486,23 @@ fn af_fine_tune([on, _lens, value, tele_value]: [u8; 4]) -> Option<AfFineTune> {
     }
 }
 
+/// The exposure fine-tuning, in EV, that ExposureTuning's three bytes
+/// record: a signed count, then a factor and a divisor, read as the count
+/// times the factor over the divisor, so that `fd 01 06` is -3/6 EV. A
+/// recorded zero, `00 01 06`, is a fine-tuning of zero, as stored.
+///
+/// ExifTool's published documentation gives the tag's name and its three
+/// bytes alone. The reading rests on the D600's manual, which sets the
+/// fine-tuning from -1 to +1 EV in steps of 1/6 EV, and on the files:
+/// every one holds 1 and 6 after the count, and the four public D750 files
+/// that tune it hold -3 (NEF notes, section 8.10).
+///
+/// `None` when the divisor is zero, which records no fraction.
+fn exposure_fine_tune([count, factor, divisor]: [u8; 3]) -> Option<SignedRational> {
+    let numerator = i32::from(count.cast_signed()) * i32::from(factor);
+    SignedRational::new(numerator, i32::from(divisor)).ok()
+}
+
 /// ShootingMode's bit for continuous release.
 const CONTINUOUS: u32 = 1 << 0;
 /// ShootingMode's bit for the self-timer.
@@ -609,9 +633,9 @@ mod tests {
         nikon_file, nikon_file_with, retyped, tags_block, whole,
     };
     use super::super::{
-        AF_INFO, AF_INFO2, AF_TUNE, COLOR_SPACE, COLOR_TEMPERATURE, CROP_HI_SPEED, FINE_TUNE,
-        FINE_TUNE_STEPS, FOCUS_MODE, IMAGE_SIZE_RAW, ISO_SELECTION, SHOOTING_MODE, SHUTTER_MODE,
-        WHITE_BALANCE, WORLD_TIME, metadata,
+        AF_INFO, AF_INFO2, AF_TUNE, COLOR_SPACE, COLOR_TEMPERATURE, CROP_HI_SPEED, EXPOSURE_TUNING,
+        FINE_TUNE, FINE_TUNE_STEPS, FOCUS_MODE, IMAGE_SIZE_RAW, ISO_SELECTION, SHOOTING_MODE,
+        SHUTTER_MODE, WHITE_BALANCE, WORLD_TIME, metadata,
     };
     use super::*;
     use crate::camera_settings::{ExposureProgram, WhiteBalance};
@@ -1912,6 +1936,59 @@ mod tests {
                     .ascii(ifd, ISO_SELECTION, "AUTO");
             });
             assert_eq!(read, None, "{order:?}, D70");
+        }
+    }
+
+    /// The exposure fine-tuning of a raw file in byte order `order` whose
+    /// MakerNote's ExposureTuning is `bytes`, of type UNDEFINED.
+    fn exposure_tuning_of(order: Order, bytes: &[u8]) -> Option<SignedRational> {
+        settings_of(order, |inner, ifd| {
+            inner.undefined(ifd, EXPOSURE_TUNING, bytes);
+        })
+        .exposure_fine_tune
+    }
+
+    #[test]
+    fn exposure_tuning_gives_the_count_times_the_factor_over_the_divisor() {
+        for order in ORDERS {
+            for (bytes, expected) in [
+                // The four public D750 files, and every other file.
+                ([0xFD, 1, 6], (-3, 6)),
+                ([0, 1, 6], (0, 6)),
+                // The ends of the D600's menu, -1 and +1 EV; the ends of a
+                // signed byte; another factor and divisor.
+                ([0xFA, 1, 6], (-6, 6)),
+                ([6, 1, 6], (6, 6)),
+                ([0x80, 1, 6], (-128, 6)),
+                ([0x7F, 1, 6], (127, 6)),
+                ([3, 2, 6], (6, 6)),
+                ([0xFF, 1, 3], (-1, 3)),
+            ] {
+                assert_eq!(
+                    exposure_tuning_of(order, &bytes),
+                    Some(signed_fraction(expected.0, expected.1)),
+                    "{order:?}, {bytes:?}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn exposure_tuning_with_a_zero_divisor_or_of_another_shape_is_none() {
+        for order in ORDERS {
+            assert_eq!(exposure_tuning_of(order, &[0xFD, 1, 0]), None, "{order:?}");
+            // Four bytes, as some JPEGs a program made from a NEF hold;
+            // two; three BYTEs.
+            assert_eq!(
+                exposure_tuning_of(order, &[0xFD, 1, 6, 0]),
+                None,
+                "{order:?}"
+            );
+            assert_eq!(exposure_tuning_of(order, &[0xFD, 1]), None, "{order:?}");
+            let read = settings_of(order, |inner, ifd| {
+                inner.byte(ifd, EXPOSURE_TUNING, &[0xFD, 1, 6]);
+            });
+            assert_eq!(read.exposure_fine_tune, None, "{order:?}");
         }
     }
 

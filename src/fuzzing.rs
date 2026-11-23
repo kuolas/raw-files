@@ -393,6 +393,11 @@ fn read_metadata(metadata: &Metadata) {
         .af_fine_tune()
         .map(|fine_tune| (fine_tune.is_on(), fine_tune.value(), fine_tune.tele_value()));
     let _ = settings.auto_iso();
+    if let Some(fine_tune) = settings.exposure_fine_tune() {
+        let _ = fine_tune.to_string();
+        let _ = fine_tune.reduced();
+        let _ = fine_tune.to_f64();
+    }
     let _ = settings.release_mode().map(|mode| mode.to_string());
     let _ = settings
         .bracketing()
