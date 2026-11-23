@@ -392,6 +392,10 @@ fn read_metadata(metadata: &Metadata) {
     let _ = settings
         .af_fine_tune()
         .map(|fine_tune| (fine_tune.is_on(), fine_tune.value(), fine_tune.tele_value()));
+    let _ = settings.release_mode().map(|mode| mode.to_string());
+    let _ = settings
+        .bracketing()
+        .map(|bracketing| bracketing.to_string());
     let _ = settings.daylight_saving_time();
     let tiny = Size {
         width: 1,

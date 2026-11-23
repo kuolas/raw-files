@@ -166,6 +166,18 @@ does. An entry that can break a caller opens with **Breaking:**.
   MakerNote's AFTune, the long end's value under its "On (Zoom)" code;
   which saved lens the value belongs to is not given. Sony files give none: they record their AF
   micro adjustment only in enciphered or unread blocks.
+- `CameraSettings::release_mode` gives how the shutter was released, a
+  `ReleaseMode`: a single frame, continuous, the self-timer or a remote.
+  `CameraSettings::bracketing` gives whether the picture is one of a
+  bracketed series, a `Bracketing`: off, or the exposure, the white
+  balance or the dynamic range varied. Each has its `with_…` builder
+  ([#214](https://github.com/kuolas/raw-files/issues/214)). Nikon files
+  give both from their MakerNote's ShootingMode. Nikon's single frame,
+  quiet release and mirror up set none of its release bits, and read
+  as `Single`. Sony files give both from their ReleaseMode: a bracket
+  gives no release mode, and its code 5, which files contradict, gives
+  neither. Where the MakerNote gives no bracketing, Exif's ExposureMode
+  2, auto bracket, gives `Exposure`.
 - `CameraSettings::daylight_saving_time` says whether the camera's
   clock was on daylight saving time, and `with_daylight_saving_time`
   sets it ([#214](https://github.com/kuolas/raw-files/issues/214)).

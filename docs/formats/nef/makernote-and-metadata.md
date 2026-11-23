@@ -1920,24 +1920,31 @@ with the files that set each:
 | Bit | The documentation's name [S][1] | Read as | Mark | Files, public / mine |
 |---|---|---|---|---|
 | 0 | Continuous | `ReleaseMode::Continuous` | observed | 71 / 29,902 |
-| 1 | Delay | not read: the exposure delay mode [P][25] (p. 231) | observed | 30 / 8 |
-| 2 | PC Control | not read: no neutral word fits | observed | 12 / 0 |
+| 1 | Delay | not read: the exposure delay mode [P][25] (p. 231), beside any release mode | observed | 30 / 8 |
+| 2 | PC Control | not read: a release from a computer, beside any release mode | observed | 12 / 0 |
 | 3 | Self-timer | `ReleaseMode::SelfTimer` | observed | 10 / 0 |
 | 4 | Exposure Bracketing | `Bracketing::Exposure` | observed | 3 / 18 |
 | 6 | White-Balance Bracketing | `Bracketing::WhiteBalance` | documented only | 0 / 0 |
 | 7 | IR Control | `ReleaseMode::Remote` | observed | 2 / 1,109 |
 | 8 | D-Lighting Bracketing | `Bracketing::DynamicRange` | documented only | 0 / 0 |
 | 9 | none | not read | none | 2 / 277 |
-| 11 | Pre-capture | not read: no release mode ([section 12.5](#125-what-the-view-leaves-out)) | documented only | 0 / 0 |
+| 11 | Pre-capture | no release mode: a burst ([section 12.5](#125-what-the-view-leaves-out)) | documented only | 0 / 0 |
 
 **[F]** None is confirmed. Bits 6 and 8 are on no file, and are
 named with the rest of the list, as section 8.6 says. With none of bits
-4, 6 and 8 set, bracketing is `Off`. No bit names a single frame,
-which the quiet release and mirror up share. So a release mode with none
-of bits 0, 3 and 7 set will stay `None`. Bit 9 is undocumented. One
+4, 6 and 8 set, bracketing is `Off`. No bit names a single frame: the
+documentation names no value 0, and Nikon's single frame, quiet release
+and mirror up all set none of bits 0, 3 and 7. raw-files reads that as
+`ReleaseMode::Single`, the three folded into one, as Sony's 0 is read.
+Two of bits 0, 3 and 7 together, or two of bits 4, 6 and 8, name two
+kinds and give none; no file holds either, among the values seen: 0, 1,
+2, 4, 8, 16, 17, 24, 32, 33, 49, 128, 160, 512, 520, 528 and 544. Bit 11
+set gives no release mode, since a burst would otherwise read as a
+single frame. Bit 9 is undocumented. One
 D600 frame of mine, outside the counted sets, sets it too, its setting
 not recorded: what it records is open. Exif's ExposureMode 2, auto bracket [P][23] (4.6.6.7.36,
-p. 69), will give `Bracketing::Exposure` where no MakerNote says. No Nikon
+p. 69), gives `Bracketing::Exposure` where no MakerNote gives a
+bracketing value, not even `Off`. No Nikon
 file holds 2: 177 and 102 public files hold 0 and 1, and mine 0 and 1
 too. **[F]**
 
@@ -2612,7 +2619,7 @@ By the rule of section 4, on these files: **[F]**
 | Program shift | 0x000D | 271 / 48,395, not zero on 0 / 2 | reading every plain setting found would double the work |
 | Exposure difference | 0x000E | 271 / 48,395, not zero on 81 / 5,435 | the same |
 | ISO expansion | in 0x0025 ISOInfo | 260 / 48,395 | the same |
-| ShootingMode's other bits | 0x0089 bits 1 (delay), 2 (PC control), 9 and 11 (pre-capture) | bit 1 on 30 / 8, bit 2 on 12 / 0, bit 9 on 2 / 277, bit 11 on none | bit 9 is undocumented, seen also on one D600 frame of mine; the others are no release mode or bracketing |
+| ShootingMode's other bits | 0x0089 bits 1 (delay), 2 (PC control), 9 and 11 (pre-capture) | bit 1 on 30 / 8, bit 2 on 12 / 0, bit 9 on 2 / 277, bit 11 on none | bit 9 is undocumented, seen also on one D600 frame of mine; bits 1 and 2 come beside any release mode; bit 11, a burst, is not read, and gives the file no release mode ([section 8.10](#810-more-capture-settings)) |
 | Gain control | Exif 0xA407 GainControl | 279 / 48,514, every Nikon file of mine, with a MakerNote or not | the same as program shift |
 | Sensitivity type | Exif 0x8830 SensitivityType | 218 / 46,808 | the same |
 | Custom rendering | Exif 0xA401 CustomRendered | 279 / 48,514, as GainControl | the same |

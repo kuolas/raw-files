@@ -150,6 +150,15 @@ const LENS: u16 = 0x0084;
 /// body's points.
 const AF_INFO: u16 = 0x0088;
 
+/// The Nikon MakerNote tag that records how the shutter was released and
+/// more of the drive (ShootingMode): one SHORT of bits. Bit 0 is
+/// continuous release, 3 the self-timer and 7 an infrared remote; bits 4,
+/// 6 and 8 are exposure, white balance and Active D-Lighting bracketing;
+/// bit 5 is auto ISO. Bits 1 and 2, the exposure delay mode and a release
+/// from a computer, bit 9, which no documentation names, and bit 11,
+/// pre-capture, are not read.
+const SHOOTING_MODE: u16 = 0x0089;
+
 /// The Nikon MakerNote tag that records where the camera's autofocus
 /// aimed (AFInfo2): an UNDEFINED value that starts with its version, four
 /// ASCII digits. At offsets each version sets, it holds the size of a
@@ -204,6 +213,7 @@ mod rules {
     pub(super) const COLOR_TEMPERATURE: Held<[u32; 1]> = Held::new(super::COLOR_TEMPERATURE, SHORT);
     pub(super) const LENS: Rule<[Rational; 4]> = Rule::new(super::LENS, &[FieldType::Rational]);
     pub(super) const AF_INFO: Held<[u8; 4]> = Held::new(super::AF_INFO, &[FieldType::Undefined]);
+    pub(super) const SHOOTING_MODE: Held<[u32; 1]> = Held::new(super::SHOOTING_MODE, SHORT);
     pub(super) const AF_TUNE: Held<[u8; 4]> = Held::new(super::AF_TUNE, &[FieldType::Undefined]);
     pub(super) const AF_INFO2: Rule<Vec<u8>> = Rule::new(super::AF_INFO2, &[FieldType::Undefined]);
 

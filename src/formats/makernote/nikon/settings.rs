@@ -2,7 +2,8 @@
 
 //! The camera settings in the Nikon MakerNote: the white balance, the
 //! shutter used, the image area, the raw size, the color space, the focus
-//! mode, the AF-area mode, AF fine-tune and daylight saving time.
+//! mode, the AF-area mode, AF fine-tune, the release mode and bracketing,
+//! and daylight saving time.
 //!
 //! The MakerNote records how the camera was set for the picture beyond
 //! what the Exif tags record (ADR011). [`camera_settings`] reads each
@@ -21,6 +22,8 @@
 //! - the AF-area mode from AFInfo2 ([`area_mode_of`]), else from AFInfo
 //!   ([`af_info_area_mode`]);
 //! - AF fine-tune from AFTune ([`af_fine_tune`]);
+//! - the release mode and bracketing from ShootingMode's bits
+//!   ([`release_mode`], [`bracketing`]);
 //! - daylight saving time from WorldTime ([`daylight_saving_time`]).
 //!
 //! A code or a text gives a value only where its meaning is known, as the
@@ -44,8 +47,8 @@ use super::block::MakerNote;
 use super::crop::CropHiSpeed;
 use super::rules;
 use crate::camera_settings::{
-    AfFineTune, CameraSettings, ColorSpace, FineTune, FocusAreaMode, FocusMode, ImageArea,
-    RawImageSize, Shutter, WhiteBalanceMode,
+    AfFineTune, Bracketing, CameraSettings, ColorSpace, FineTune, FocusAreaMode, FocusMode,
+    ImageArea, RawImageSize, ReleaseMode, Shutter, WhiteBalanceMode,
 };
 use crate::error::Result;
 use crate::formats::makernote::{Picture, checked_color_temperature};
@@ -87,6 +90,11 @@ use crate::rational::SignedRational;
 ///   AFInfo2 it is AFInfo's ([`af_info_area_mode`]). A body with AFInfo2
 ///   never falls back on AFInfo, which no file holds beside it.
 /// - **AF fine-tune** is AFTune's ([`af_fine_tune`]).
+/// - **The release mode** is the one ShootingMode's bits name
+///   ([`release_mode`]). **The bracketing** they name ([`bracketing`])
+///   takes the place of the one the Exif tags gave, exposure bracketing
+///   from ExposureMode 2, when it names one; when it names none, as for
+///   two bracketing bits set together, the Exif tags' stays.
 /// - **Daylight saving time** is WorldTime's third byte
 ///   ([`daylight_saving_time`]), read from the tag that gives the capture
 ///   time its offset ([`world_time`](super::metadata::world_time)).
@@ -144,6 +152,12 @@ pub(super) fn camera_settings<R: Read + Seek>(
             .and_then(|[code, ..]| af_info_area_mode(code)),
     };
     settings.af_fine_tune = ifd.held(rules::AF_TUNE).and_then(af_fine_tune);
+    if let Some([bits]) = ifd.held(rules::SHOOTING_MODE) {
+        settings.release_mode = release_mode(bits);
+        if let Some(bracketing) = bracketing(bits) {
+            settings.bracketing = Some(bracketing);
+        }
+    }
     settings.daylight_saving_time = ifd
         .held(rules::WORLD_TIME)
         .and_then(|[_, _, daylight_saving, _]| daylight_saving_time(daylight_saving));
@@ -438,6 +452,73 @@ fn af_fine_tune([on, _lens, value, tele_value]: [u8; 4]) -> Option<AfFineTune> {
     }
 }
 
+/// ShootingMode's bit for continuous release.
+const CONTINUOUS: u32 = 1 << 0;
+/// ShootingMode's bit for the self-timer.
+const SELF_TIMER: u32 = 1 << 3;
+/// ShootingMode's bit for exposure bracketing.
+const EXPOSURE_BRACKETING: u32 = 1 << 4;
+/// ShootingMode's bit for white balance bracketing.
+const WHITE_BALANCE_BRACKETING: u32 = 1 << 6;
+/// ShootingMode's bit for a release by an infrared remote, which the
+/// documentation names IR Control.
+const REMOTE: u32 = 1 << 7;
+/// ShootingMode's bit for Active D-Lighting bracketing.
+const ACTIVE_D_LIGHTING_BRACKETING: u32 = 1 << 8;
+/// ShootingMode's bit for pre-capture, a burst that begins before the
+/// shutter button is pressed all the way.
+const PRE_CAPTURE: u32 = 1 << 11;
+
+/// The release mode that ShootingMode's `bits` record, in the list of bits
+/// ExifTool's published documentation gives, read as documentation and
+/// read whole, since files hold part of it:
+///
+/// - bit 0, continuous, [`Continuous`](ReleaseMode::Continuous);
+/// - bit 3, the self-timer, [`SelfTimer`](ReleaseMode::SelfTimer);
+/// - bit 7, IR Control, an infrared remote,
+///   [`Remote`](ReleaseMode::Remote);
+/// - none of the three, [`Single`](ReleaseMode::Single): no bit names a
+///   single frame, and Nikon's single frame, quiet release and mirror up
+///   all set none, so the three fold into one (NEF notes, section 8.10).
+///
+/// `None` when two of the three are set, which names two modes and which
+/// no file holds, and when bit 11, pre-capture, is set: a burst, which
+/// would otherwise read as a single frame, and which no file holds. The
+/// other bits play no part: the exposure delay mode and a release from a
+/// computer, bits 1 and 2, come with any of the modes.
+fn release_mode(bits: u32) -> Option<ReleaseMode> {
+    if bits & PRE_CAPTURE != 0 {
+        return None;
+    }
+    match bits & (CONTINUOUS | SELF_TIMER | REMOTE) {
+        0 => Some(ReleaseMode::Single),
+        CONTINUOUS => Some(ReleaseMode::Continuous),
+        SELF_TIMER => Some(ReleaseMode::SelfTimer),
+        REMOTE => Some(ReleaseMode::Remote),
+        _ => None,
+    }
+}
+
+/// The bracketing that ShootingMode's `bits` record, in the same list:
+///
+/// - bit 4 [`Exposure`](Bracketing::Exposure);
+/// - bit 6 [`WhiteBalance`](Bracketing::WhiteBalance);
+/// - bit 8, Active D-Lighting bracketing,
+///   [`DynamicRange`](Bracketing::DynamicRange);
+/// - none of the three [`Off`](Bracketing::Off).
+///
+/// Files hold bit 4; bits 6 and 8 are documented only, and named with the
+/// list. `None` when two of the three are set, which no file holds.
+fn bracketing(bits: u32) -> Option<Bracketing> {
+    match bits & (EXPOSURE_BRACKETING | WHITE_BALANCE_BRACKETING | ACTIVE_D_LIGHTING_BRACKETING) {
+        0 => Some(Bracketing::Off),
+        EXPOSURE_BRACKETING => Some(Bracketing::Exposure),
+        WHITE_BALANCE_BRACKETING => Some(Bracketing::WhiteBalance),
+        ACTIVE_D_LIGHTING_BRACKETING => Some(Bracketing::DynamicRange),
+        _ => None,
+    }
+}
+
 /// Whether daylight saving time was on, as WorldTime's third byte,
 /// `daylight_saving`, records it: 0 off, `false`, and 1 on, `true`
 /// (ExifTool's published tag documentation, read as documentation; NEF
@@ -473,14 +554,14 @@ mod tests {
     };
     use super::super::{
         AF_INFO, AF_INFO2, AF_TUNE, COLOR_SPACE, COLOR_TEMPERATURE, CROP_HI_SPEED, FINE_TUNE,
-        FINE_TUNE_STEPS, FOCUS_MODE, IMAGE_SIZE_RAW, SHUTTER_MODE, WHITE_BALANCE, WORLD_TIME,
-        metadata,
+        FINE_TUNE_STEPS, FOCUS_MODE, IMAGE_SIZE_RAW, SHOOTING_MODE, SHUTTER_MODE, WHITE_BALANCE,
+        WORLD_TIME, metadata,
     };
     use super::*;
     use crate::camera_settings::{ExposureProgram, WhiteBalance};
     use crate::container::tiff::tags::{
-        COLOR_SPACE as EXIF_COLOR_SPACE, EXPOSURE_PROGRAM, INTEROP_INDEX, LIGHT_SOURCE, MAKER_NOTE,
-        WHITE_BALANCE as EXIF_WHITE_BALANCE,
+        COLOR_SPACE as EXIF_COLOR_SPACE, EXPOSURE_MODE, EXPOSURE_PROGRAM, INTEROP_INDEX,
+        LIGHT_SOURCE, MAKER_NOTE, WHITE_BALANCE as EXIF_WHITE_BALANCE,
     };
     use crate::container::tiff::{self, walk};
     use crate::error::ErrorKind;
@@ -1523,6 +1604,152 @@ mod tests {
                 inner.byte(ifd, AF_TUNE, &[1, 0, 5, 0]);
             });
             assert_eq!(read.af_fine_tune, None, "{order:?}");
+        }
+    }
+
+    /// The release mode and the bracketing of a raw file in byte order
+    /// `order` whose MakerNote's ShootingMode is the one SHORT `bits`, and
+    /// whose Exif IFD holds what `exif` adds.
+    fn drive_of(
+        order: Order,
+        bits: u16,
+        exif: impl FnOnce(&mut TiffBuilder, IfdId),
+    ) -> (Option<ReleaseMode>, Option<Bracketing>) {
+        let settings = settings_with_exif(
+            order,
+            |inner, ifd| {
+                inner.short(ifd, SHOOTING_MODE, &[bits]);
+            },
+            exif,
+        );
+        (settings.release_mode, settings.bracketing)
+    }
+
+    #[test]
+    fn each_shooting_mode_bit_alone_and_together_gives_its_release_and_bracketing() {
+        use Bracketing::{DynamicRange, Exposure, Off, WhiteBalance};
+        use ReleaseMode::{Continuous, Remote, SelfTimer, Single};
+        let cases = [
+            // No bit: a single frame, as quiet release and mirror up too.
+            (0, Some(Single), Some(Off)),
+            (1, Some(Continuous), Some(Off)),
+            (8, Some(SelfTimer), Some(Off)),
+            (128, Some(Remote), Some(Off)),
+            (16, Some(Single), Some(Exposure)),
+            // Bits 6 and 8, which no file holds.
+            (64, Some(Single), Some(WhiteBalance)),
+            (256, Some(Single), Some(DynamicRange)),
+            // Values files hold: continuous with exposure bracketing, the
+            // self-timer with it, continuous with auto ISO (bit 5) and
+            // with both; bits 1, 2 and 9 beside the modes.
+            (17, Some(Continuous), Some(Exposure)),
+            (24, Some(SelfTimer), Some(Exposure)),
+            (33, Some(Continuous), Some(Off)),
+            (49, Some(Continuous), Some(Exposure)),
+            (2, Some(Single), Some(Off)),
+            (4, Some(Single), Some(Off)),
+            (160, Some(Remote), Some(Off)),
+            (512, Some(Single), Some(Off)),
+            (520, Some(SelfTimer), Some(Off)),
+            (528, Some(Single), Some(Exposure)),
+            // A release bit beside a bracketing bit of the documented two.
+            (65, Some(Continuous), Some(WhiteBalance)),
+            (264, Some(SelfTimer), Some(DynamicRange)),
+        ];
+        for order in ORDERS {
+            for (bits, release, bracketing) in cases {
+                assert_eq!(
+                    drive_of(order, bits, |_, _| {}),
+                    (release, bracketing),
+                    "{order:?}, {bits}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn two_release_bits_or_pre_capture_give_no_release_mode() {
+        for order in ORDERS {
+            // Two of bits 0, 3 and 7, and all three; pre-capture, alone and
+            // beside continuous release.
+            for bits in [9, 129, 136, 137, 2048, 2049] {
+                let (release, bracketing) = drive_of(order, bits, |_, _| {});
+                assert_eq!(release, None, "{order:?}, {bits}");
+                assert_eq!(bracketing, Some(Bracketing::Off), "{order:?}, {bits}");
+            }
+        }
+    }
+
+    #[test]
+    fn two_bracketing_bits_give_none_and_leave_the_exif_tags_bracketing() {
+        for order in ORDERS {
+            for bits in [80, 272, 320, 336] {
+                assert_eq!(
+                    drive_of(order, bits, |_, _| {}),
+                    (Some(ReleaseMode::Single), None),
+                    "{order:?}, {bits}"
+                );
+                // Exif's auto bracket stays where the MakerNote names none.
+                let with_exif = drive_of(order, bits, |builder, exif| {
+                    builder.short(exif, EXPOSURE_MODE, &[2]);
+                });
+                assert_eq!(
+                    with_exif,
+                    (Some(ReleaseMode::Single), Some(Bracketing::Exposure)),
+                    "{order:?}, {bits}, Exif"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn the_makernotes_bracketing_wins_over_the_exif_tags() {
+        // Exif's auto bracket beside a ShootingMode that sets no
+        // bracketing bit, which gives off, and one that names white balance
+        // bracketing: the MakerNote's word stands.
+        for order in ORDERS {
+            for (bits, expected) in [(0, Bracketing::Off), (64, Bracketing::WhiteBalance)] {
+                let (_, bracketing) = drive_of(order, bits, |builder, exif| {
+                    builder.short(exif, EXPOSURE_MODE, &[2]);
+                });
+                assert_eq!(bracketing, Some(expected), "{order:?}, {bits}");
+            }
+        }
+    }
+
+    #[test]
+    fn a_shooting_mode_of_another_type_or_count_gives_neither() {
+        for order in ORDERS {
+            // One BYTE, as the D1 bodies write it; one LONG; two SHORTs.
+            let byte = settings_of(order, |inner, ifd| {
+                inner.byte(ifd, SHOOTING_MODE, &[1]);
+            });
+            let long = settings_of(order, |inner, ifd| {
+                inner.long(ifd, SHOOTING_MODE, &[1]);
+            });
+            let two = settings_of(order, |inner, ifd| {
+                inner.short(ifd, SHOOTING_MODE, &[1, 1]);
+            });
+            for (what, settings) in [("BYTE", byte), ("LONG", long), ("two", two)] {
+                assert_eq!(
+                    (settings.release_mode, settings.bracketing),
+                    (None, None),
+                    "{order:?}, {what}"
+                );
+            }
+            // Without ShootingMode, Exif's auto bracket alone gives one.
+            let exif = settings_with_exif(
+                order,
+                |_, _| {},
+                |builder, exif| {
+                    builder.short(exif, EXPOSURE_MODE, &[2]);
+                },
+            );
+            assert_eq!(
+                (exif.release_mode, exif.bracketing),
+                (None, Some(Bracketing::Exposure)),
+                "{order:?}"
+            );
         }
     }
 

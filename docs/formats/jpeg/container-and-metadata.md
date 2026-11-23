@@ -884,11 +884,11 @@ decided, as steps. [I]
    header's, and there is no raw size. The digitized time comes from
    Exif's three tags (section 4). The camera settings come the same
    way, but a JPEG gives no raw image size, whatever its MakerNote's
-   ImageSizeRAW says (section 10). More capture settings will come the
-   same way:
+   ImageSizeRAW says (section 10). Exposure bracketing comes from Exif's
+   ExposureMode 2 where the MakerNote gives no bracketing value, not even
+   off. More capture settings will come the same way:
    - from Exif (section 4): the flash's return light and red-eye
-     reduction, exposure bracketing from ExposureMode 2 and the kind of
-     fluorescent lamp;
+     reduction and the kind of fluorescent lamp;
    - from the MakerNote (section 10): the JPEG quality, and Nikon's
      choice of optimal quality or size priority. A JPEG whose Nikon
      Quality says `RAW` will give no JPEG quality.

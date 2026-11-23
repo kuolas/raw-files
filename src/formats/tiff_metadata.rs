@@ -45,8 +45,8 @@ use std::io::{Read, Seek};
 use crate::authorship::Authorship;
 use crate::camera::Camera;
 use crate::camera_settings::{
-    CameraSettings, ColorSpace, ExposureProgram, Flash, FlashMode, MeteringMode, WhiteBalance,
-    WhiteBalanceMode,
+    Bracketing, CameraSettings, ColorSpace, ExposureProgram, Flash, FlashMode, MeteringMode,
+    WhiteBalance, WhiteBalanceMode,
 };
 use crate::container::tiff::tags::COLOR_SPACE;
 use crate::container::tiff::{First, Ifd, Rule, Text, Tree};
@@ -133,6 +133,7 @@ mod rules {
     pub(super) const EXPOSURE_PROGRAM: Held<[u32; 1]> = Held::new(tags::EXPOSURE_PROGRAM, SHORT);
     pub(super) const METERING_MODE: Held<[u32; 1]> = Held::new(tags::METERING_MODE, SHORT);
     pub(super) const FLASH: Held<[u32; 1]> = Held::new(tags::FLASH, SHORT);
+    pub(super) const EXPOSURE_MODE: Held<[u32; 1]> = Held::new(tags::EXPOSURE_MODE, SHORT);
     pub(super) const WHITE_BALANCE: Held<[u32; 1]> = Held::new(tags::WHITE_BALANCE, SHORT);
     pub(super) const LIGHT_SOURCE: Held<[u32; 1]> = Held::new(tags::LIGHT_SOURCE, SHORT);
     pub(super) const COLOR_SPACE: Held<[u32; 1]> = Held::new(tags::COLOR_SPACE, SHORT);
@@ -733,8 +734,9 @@ const DCF_OPTION_FILE: &str = "R03";
 
 /// How the camera was set for the picture, as the Exif IFD `exif` records
 /// it: the exposure program, the metering mode, the flash, the white
-/// balance mode and the color space. The color space also reads the
-/// Interoperability IFD `interop`, when the tree has one.
+/// balance mode, the color space, and exposure bracketing
+/// ([`bracketing`]). The color space also reads the Interoperability IFD
+/// `interop`, when the tree has one.
 ///
 /// Each tag must be exactly one SHORT, as the standard gives it. Each code
 /// Exif defines and a variant names gives that variant. Every other code,
@@ -784,10 +786,24 @@ fn camera_settings<R: Read + Seek>(
         focus_mode: None,
         focus_area_mode: None,
         af_fine_tune: None,
+        // Only a maker's MakerNote records how the shutter was released.
+        release_mode: None,
+        bracketing: exif
+            .held(rules::EXPOSURE_MODE)
+            .and_then(|[code]| bracketing(code)),
         // Only Nikon's MakerNote records whether daylight saving time was
         // on, with the clock's time zone.
         daylight_saving_time: None,
     })
+}
+
+/// The bracketing an Exif ExposureMode `code` records: 2, auto bracket,
+/// [`Exposure`](Bracketing::Exposure). `None` for 0 and 1, auto and manual
+/// exposure, which say nothing of a series, and for every code Exif does
+/// not define. A format's MakerNote reader puts its own in place of this
+/// one where it records one, as Nikon's and Sony's do.
+fn bracketing(code: u32) -> Option<Bracketing> {
+    (code == 2).then_some(Bracketing::Exposure)
 }
 
 /// The exposure program an Exif ExposureProgram `code` names: 1 manual,
@@ -3760,16 +3776,17 @@ mod tests {
 
     /// The settings of [`full_settings_except`]'s file, each one SHORT:
     /// aperture priority, multi-segment metering, a flash that fired in
-    /// fill mode, a manual white balance for shade, and a color space
-    /// that is "uncalibrated", which the InteropIndex `R03` beside it makes
-    /// Adobe RGB.
-    const FULL_SETTINGS: [(u16, u16); 6] = [
+    /// fill mode, a manual white balance for shade, a color space that is
+    /// "uncalibrated", which the InteropIndex `R03` beside it makes Adobe
+    /// RGB, and auto bracket, exposure bracketing.
+    const FULL_SETTINGS: [(u16, u16); 7] = [
         (EXPOSURE_PROGRAM, 3),
         (METERING_MODE, 5),
         (FLASH, 15),
         (WHITE_BALANCE, 1),
         (LIGHT_SOURCE, 11),
         (COLOR_SPACE, 65535),
+        (EXPOSURE_MODE, 2),
     ];
 
     /// The metadata of a file whose IFD0 holds the Make `SONY`, whose Exif
@@ -3811,6 +3828,7 @@ mod tests {
                 ..WhiteBalance::default()
             },
             color_space: Some(ColorSpace::AdobeRgb),
+            bracketing: Some(Bracketing::Exposure),
             ..CameraSettings::default()
         };
         change(&mut settings);
@@ -3836,7 +3854,7 @@ mod tests {
     #[test]
     fn a_setting_missing_or_of_another_type_or_count_is_none_and_costs_no_other() {
         type Unset = fn(&mut CameraSettings);
-        let settings: [(u16, Unset); 6] = [
+        let settings: [(u16, Unset); 7] = [
             (EXPOSURE_PROGRAM, |settings| {
                 settings.exposure_program = None
             }),
@@ -3845,6 +3863,7 @@ mod tests {
             (WHITE_BALANCE, |settings| settings.white_balance.mode = None),
             (LIGHT_SOURCE, |settings| settings.white_balance.mode = None),
             (COLOR_SPACE, |settings| settings.color_space = None),
+            (EXPOSURE_MODE, |settings| settings.bracketing = None),
         ];
         // Each with the code that gives a value as one SHORT.
         type Damage = fn(&mut TiffBuilder, IfdId, u16, u16);
@@ -3878,6 +3897,25 @@ mod tests {
                     "{tag:#06X}: {damage}"
                 );
             }
+        }
+    }
+
+    #[test]
+    fn only_an_exposure_mode_of_auto_bracket_gives_a_bracketing() {
+        // 2, auto bracket, is exposure bracketing; 0 and 1, auto and manual
+        // exposure, say nothing of a series, and 3 is no code Exif defines.
+        for (code, expected) in [
+            (2, Some(Bracketing::Exposure)),
+            (0, None),
+            (1, None),
+            (3, None),
+            (65535, None),
+        ] {
+            assert_eq!(
+                settings_of(EXPOSURE_MODE, code).bracketing,
+                expected,
+                "{code}"
+            );
         }
     }
 
