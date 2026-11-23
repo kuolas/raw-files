@@ -117,6 +117,12 @@ const SERIAL_NUMBER: u16 = 0x001D;
 /// set to for its JPEG output (ColorSpace): one SHORT, 1 sRGB, 2 Adobe RGB.
 const COLOR_SPACE: u16 = 0x001E;
 
+/// The Nikon MakerNote tag that records the vibration reduction, Nikon's
+/// image stabilization (VRInfo): an UNDEFINED value that starts with its
+/// version, four ASCII digits. Its fifth byte says whether it was on, and
+/// its seventh byte its mode, in a list of codes each version sets.
+const VR_INFO: u16 = 0x001F;
+
 /// The Nikon MakerNote tag that records the time zone and daylight-saving
 /// setting of the camera's clock (WorldTime): four UNDEFINED bytes. The
 /// first two are the zone in minutes east of UTC as a signed 16-bit number
@@ -216,6 +222,7 @@ mod rules {
         Held::new(super::EXPOSURE_TUNING, &[FieldType::Undefined]);
     pub(super) const SERIAL_NUMBER: Rule<Text> = Rule::new(super::SERIAL_NUMBER, ASCII);
     pub(super) const COLOR_SPACE: Held<[u32; 1]> = Held::new(super::COLOR_SPACE, SHORT);
+    pub(super) const VR_INFO: Rule<Vec<u8>> = Rule::new(super::VR_INFO, &[FieldType::Undefined]);
     pub(super) const WORLD_TIME: Held<[u8; 4]> =
         Held::new(super::WORLD_TIME, &[FieldType::Undefined]);
     pub(super) const SHUTTER_MODE: Held<[u32; 1]> = Held::new(super::SHUTTER_MODE, SHORT);

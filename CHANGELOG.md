@@ -166,6 +166,16 @@ does. An entry that can break a caller opens with **Breaking:**.
   MakerNote's AFTune, the long end's value under its "On (Zoom)" code;
   which saved lens the value belongs to is not given. Sony files give none: they record their AF
   micro adjustment only in enciphered or unread blocks.
+- `CameraSettings::stabilization` gives the camera's image
+  stabilization, a `Stabilization`: whether it was on and, when the file
+  records one, its mode, a `StabilizationMode`: normal, active or
+  sport. It is built with `Stabilization::on()` or
+  `Stabilization::off()`, and `with_stabilization` sets it
+  ([#214](https://github.com/kuolas/raw-files/issues/214)). Nikon files
+  give it from their MakerNote's VRInfo at versions 0100, 0101 and 0200,
+  the mode from each version's list of codes. Sony files give it from
+  their ImageStabilization, on or off, with no mode. Which kind of
+  stabilization it was, in the lens or the body, is not given.
 - `CameraSettings::auto_iso` says whether auto ISO was on, and
   `with_auto_iso` sets it
   ([#214](https://github.com/kuolas/raw-files/issues/214)). Nikon files

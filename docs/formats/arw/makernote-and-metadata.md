@@ -1568,10 +1568,11 @@ More of how the photographer set the camera:
 - the raw compression and bit depth, and the JPEG quality;
 - the kind of fluorescent lamp.
 
-raw-files
-will read each from a plain MakerNote tag or a standard tag, as
+raw-files reads each from a plain MakerNote tag or a standard tag, as
 [ADR011](../../architecture-decisions/adr011-metadata-from-standard-tags.md)
-decides, in the order it gives. Nothing needs deciphering.
+decides, in the order it gives: the first three lines now, the flash
+compensation, the raw compression and bit depth, the JPEG quality and
+the kind of fluorescent lamp still to come. Nothing needs deciphering.
 
 **How it was measured.** On 2026-11-20 a counting program written from
 these pages read each tag through raw-files' own raw view
@@ -1708,7 +1709,7 @@ the documentation's 4294967295, "n/a", is on none.
 
 - The fixed-lens RX1 bodies, which have no stabilization, record 0 on
   all their files (2647, 4050, 2466, 2467, 8544 to 8548) **[F]**.
-- raw-files will give it as a `Stabilization`, on or off, with no mode:
+- raw-files gives it as a `Stabilization`, on or off, with no mode:
   no plain Sony tag records one. Mark: observed for 0 and 1; the
   documentation's 4294967295, "n/a", gives none.
 - It is 1 on every one of my ILCE-7M2 files, and 0 on none.
@@ -2027,9 +2028,9 @@ FocusLocation2 when FocusLocation gives nothing (absent, or not four
 SHORTs), FocusFrameSize and
 FocusMode ([section 9.6](#96-focus-point)). Nothing is deciphered, and
 0xB000, 0xB001 and the lens tags stay unread. The capture settings of
-[section 9.10](#910-more-capture-settings) add 0x202D and 0xB049, and
-will add 0x0102, 0x0104, 0x202E, 0xB026 and 0xB047. FocusMode also gives
-the focus mode, and 0x201C gives the AF-area mode.
+[section 9.10](#910-more-capture-settings) add 0x202D, 0xB026 and
+0xB049, and will add 0x0102, 0x0104, 0x202E and 0xB047. FocusMode also
+gives the focus mode, and 0x201C gives the AF-area mode.
 
 1. **Standard tags:** IFD0 Make, Model and Orientation; Exif
    DateTimeOriginal, SubSecTimeOriginal and OffsetTimeOriginal (the last two

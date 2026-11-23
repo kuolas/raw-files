@@ -786,8 +786,10 @@ fn camera_settings<R: Read + Seek>(
         focus_mode: None,
         focus_area_mode: None,
         af_fine_tune: None,
-        // Only a maker's MakerNote records whether auto ISO was on, the
-        // exposure fine-tuning and how the shutter was released.
+        // Only a maker's MakerNote records the stabilization, whether auto
+        // ISO was on, the exposure fine-tuning and how the shutter was
+        // released.
+        stabilization: None,
         auto_iso: None,
         exposure_fine_tune: None,
         release_mode: None,
