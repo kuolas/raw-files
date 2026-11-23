@@ -196,7 +196,7 @@ nothing standard records a value. Nothing is deciphered or decrypted.
     (TTL, auto aperture, manual or repeating), from Nikon's FlashType
     text; an external flash from Sony's FlashAction too;
   - the sync, front or rear curtain and slow, from Nikon's FlashSetting
-    text;
+    text, whose red-eye reduction text also turns red-eye reduction on;
   - the compensation, in EV as recorded: Nikon's for the built-in flash
     and for an external unit, each in sixths of a stop, and Sony's.
 

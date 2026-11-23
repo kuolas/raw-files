@@ -81,6 +81,11 @@ const WHITE_BALANCE: u16 = 0x0005;
 /// focus.
 const FOCUS_MODE: u16 = 0x0007;
 
+/// The Nikon MakerNote tag that records the flash sync mode
+/// (FlashSetting), as ASCII text, such as `NORMAL` for front-curtain sync
+/// or `REAR SLOW`, padded with spaces. Blank on some bodies.
+const FLASH_SETTING: u16 = 0x0008;
+
 /// The Nikon MakerNote tag that records which flash fired and how its
 /// output was controlled (FlashType), as ASCII text: the source, then a
 /// comma and the control, such as `Built-in,TTL` or `Optional,M`. Blank
@@ -219,6 +224,7 @@ mod rules {
     pub(super) const ISO: Held<[u32; 2]> = Held::new(super::ISO, SHORT);
     pub(super) const WHITE_BALANCE: Rule<Text> = Rule::new(super::WHITE_BALANCE, ASCII);
     pub(super) const FOCUS_MODE: Rule<Text> = Rule::new(super::FOCUS_MODE, ASCII);
+    pub(super) const FLASH_SETTING: Rule<Text> = Rule::new(super::FLASH_SETTING, ASCII);
     pub(super) const FLASH_TYPE: Rule<Text> = Rule::new(super::FLASH_TYPE, ASCII);
     pub(super) const FINE_TUNE_STEPS: Held<[i16; 2]> =
         Held::new(super::FINE_TUNE_STEPS, &[FieldType::SShort]);

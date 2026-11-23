@@ -1783,11 +1783,11 @@ raw-files reads:
 - the focus mode, AF fine-tune, stabilization and auto ISO;
 - the exposure fine-tuning, the release mode and bracketing, and
   daylight saving time;
-- the flash's source and control.
+- the flash's source, control and sync.
 
 It will read:
 
-- the flash's sync and compensation;
+- the flash's compensation;
 - the raw compression and bit depth, and the JPEG quality;
 - the white balance's preset slot and fluorescent lamp.
 
@@ -1999,7 +1999,8 @@ gives neither part. No file holds a FlashType text where Exif's Flash
 says the flash did not fire; a file without Exif's Flash gives no
 flash, whatever FlashType holds.
 
-0x0008 FlashSetting gives the sync:
+0x0008 FlashSetting gives the sync. raw-files reads it, looking each text
+up whole in this table:
 
 | Text | Setting [P][25] (p. 144) | `FlashSync` | Files, public / mine |
 |---|---|---|---|
@@ -2008,12 +2009,17 @@ flash, whatever FlashType holds.
 | `SLOW` | slow sync | `Slow` | 2 / 57 |
 | `REAR` | rear-curtain sync | `RearCurtain` | 7 / 1 |
 | `REAR SLOW` | rear curtain with slow sync | `SlowRearCurtain` | 15 / 10 |
-| `RED-EYE` | red-eye reduction | none | 1 / 0 |
+| `RED-EYE` | red-eye reduction | `FrontCurtain`, red-eye reduction on | 1 / 0 |
 
 **[F]** My Z 9 writes `NORMAL` on every NEF file, though it has no
-built-in flash. The one `RED-EYE` file, a Nikon 1 AW1, has an Exif Flash
-of 0. Red-eye reduction will come from Exif's bit 6, which no Nikon file
-sets. **[F]**
+built-in flash: the text is the setting, given whether or not the flash
+fired. Under Nikon's red-eye reduction a lamp lights before the flash
+fires, and the flash fires as the shutter opens unless rear-curtain sync
+is set [P][25] (p. 145), so `RED-EYE` gives front-curtain sync and turns
+red-eye reduction on. Exif's bit 6, which no Nikon file sets,
+reads "no red-eye reduction mode or unknown" when clear, so the two
+never contradict. The one `RED-EYE` file, a Nikon 1 AW1, has an Exif
+Flash of 0, a flash that did not fire. **[F]**
 
 0x0012 FlashExposureComp (the built-in flash) and 0x0017
 ExternalFlashExposureComp (a flash unit) are four UNDEFINED bytes: a
