@@ -218,6 +218,14 @@ does. An entry that can break a caller opens with **Breaking:**.
   time. A camera writes the capture time here too, unless it stores the
   picture later, as when it makes a JPEG from a raw file. The capture
   time never falls back on it.
+- `Flash::red_eye_reduction` says whether red-eye reduction was on, and
+  `Flash::return_light` whether the camera detected the light the
+  flash sent back, `None` when the file does not say or the flash did
+  not fire; each has its `with_…` builder
+  ([#214](https://github.com/kuolas/raw-files/issues/214)). Both come
+  from Exif's Flash, beside whether the flash fired and its mode. Exif
+  gives red-eye reduction one bit, whose clear value reads "no red-eye
+  reduction mode or unknown", so `false` also means not known.
 
 ### Changed
 

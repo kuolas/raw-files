@@ -849,16 +849,25 @@ fn metering_mode(code: u32) -> Option<MeteringMode> {
 /// The flash an Exif Flash value `bits` records, by its bits:
 ///
 /// - bit 0, whether it fired;
+/// - bits 1 and 2, whether its return light was detected;
 /// - bits 3 and 4, its mode;
-/// - bit 5, that the camera has no flash function.
+/// - bit 5, that the camera has no flash function;
+/// - bit 6, red-eye reduction.
 ///
-/// Bits 1 and 2, whether the flash's return light was detected, and bit 6,
-/// red-eye reduction, are not read.
+/// The return light is 2 not detected and 3 detected, read only when the
+/// flash fired: a flash that did not fire sent no light back. 0, "no
+/// strobe return detection function", and the reserved 1 give none.
 ///
 /// The mode is 1 [`Fill`](FlashMode::Fill) ("compulsory flash firing"), 2
 /// [`Off`](FlashMode::Off) ("compulsory flash suppression") and 3
-/// [`Auto`](FlashMode::Auto). 0, "unknown", gives no mode, and so does
-/// bit 5, since a camera without a flash function has no flash mode.
+/// [`Auto`](FlashMode::Auto). 0, "unknown", gives no mode.
+///
+/// Bit 6 set is red-eye reduction on. Clear, Exif's "no red-eye reduction
+/// mode or unknown", it reads as off.
+///
+/// Under bit 5 the flash did not fire, and the other bits are not read: a
+/// camera without a flash function has no flash mode, no red-eye
+/// reduction and no return light.
 ///
 /// `None` when any of the reserved bits 7 to 15 is set, which no camera
 /// writes. `None` too when bits 0 and 5 are both set, a flash that fired on
@@ -867,6 +876,7 @@ fn metering_mode(code: u32) -> Option<MeteringMode> {
 fn flash(bits: u32) -> Option<Flash> {
     const FIRED: u32 = 1;
     const NO_FLASH_FUNCTION: u32 = 1 << 5;
+    const RED_EYE_REDUCTION: u32 = 1 << 6;
     const RESERVED: u32 = 0xFF80;
     if bits & RESERVED != 0 {
         return None;
@@ -879,6 +889,12 @@ fn flash(bits: u32) -> Option<Flash> {
         Flash::fired()
     } else {
         Flash::not_fired()
+    };
+    let flash = flash.with_red_eye_reduction(bits & RED_EYE_REDUCTION != 0);
+    let flash = match (fired, (bits >> 1) & 0b11) {
+        (true, 2) => flash.with_return_light(false),
+        (true, 3) => flash.with_return_light(true),
+        _ => flash,
     };
     Some(match (bits >> 3) & 0b11 {
         1 => flash.with_mode(FlashMode::Fill),
@@ -3440,15 +3456,12 @@ mod tests {
 
     #[test]
     fn a_flash_gives_whether_it_fired_and_its_mode() {
-        let fired = |mode| Some(Flash { fired: true, mode });
-        let not_fired = |mode| Some(Flash { fired: false, mode });
+        let fired = |mode| Some(with_mode(Flash::fired(), mode));
+        let not_fired = |mode| Some(with_mode(Flash::not_fired(), mode));
         let cases = [
-            // The four values of the public samples: the Z 9's and many
-            // more, the D100's, the D750's and the D810's, and most Sony
-            // bodies'. Bits 1 and 2, the return light, are not read.
+            // Values of the public samples, the return light aside: the
+            // Z 9's and many more, and most Sony bodies'.
             (0x00, not_fired(None)),
-            (0x07, fired(None)),
-            (0x0F, fired(Some(FlashMode::Fill))),
             (0x10, not_fired(Some(FlashMode::Off))),
             // Each mode, fired and not.
             (0x01, fired(None)),
@@ -3457,11 +3470,38 @@ mod tests {
             (0x11, fired(Some(FlashMode::Off))),
             (0x18, not_fired(Some(FlashMode::Auto))),
             (0x19, fired(Some(FlashMode::Auto))),
-            // Red-eye reduction, bit 6, is not read either: 0x5F is every
-            // defined bit but bit 5.
-            (0x40, not_fired(None)),
-            (0x59, fired(Some(FlashMode::Auto))),
-            (0x5F, fired(Some(FlashMode::Auto))),
+        ];
+        for (bits, flash) in cases {
+            assert_eq!(settings_of(FLASH, bits).flash, flash, "{bits:#06X}");
+        }
+    }
+
+    /// `flash` with the mode `mode`, when there is one.
+    fn with_mode(flash: Flash, mode: Option<FlashMode>) -> Flash {
+        match mode {
+            Some(mode) => flash.with_mode(mode),
+            None => flash,
+        }
+    }
+
+    #[test]
+    fn a_flash_gives_its_return_light_by_bits_1_and_2() {
+        let fill = Flash::fired().with_mode(FlashMode::Fill);
+        let cases = [
+            // The D750's and the D810's, fired with the return light
+            // detected; the D100's, the same without a mode; and the
+            // D3200's JPEGs', not detected.
+            (0x0F, Some(fill.with_return_light(true))),
+            (0x07, Some(Flash::fired().with_return_light(true))),
+            (0x0D, Some(fill.with_return_light(false))),
+            // 0, no detection function, and the reserved 1 give none.
+            (0x09, Some(fill)),
+            (0x0B, Some(fill)),
+            // A flash that did not fire sent no light back, whatever the
+            // bits say.
+            (0x04, Some(Flash::not_fired())),
+            (0x06, Some(Flash::not_fired())),
+            (0x14, Some(Flash::not_fired().with_mode(FlashMode::Off))),
         ];
         for (bits, flash) in cases {
             assert_eq!(settings_of(FLASH, bits).flash, flash, "{bits:#06X}");
@@ -3469,8 +3509,49 @@ mod tests {
     }
 
     #[test]
+    fn a_flash_gives_red_eye_reduction_by_bit_6() {
+        let cases = [
+            // Fired, compulsory, red-eye reduction: as on Canon JPEGs.
+            (
+                0x49,
+                Flash::fired()
+                    .with_mode(FlashMode::Fill)
+                    .with_red_eye_reduction(true),
+            ),
+            // Fired in auto mode, red-eye reduction: as on Fujifilm JPEGs.
+            (
+                0x59,
+                Flash::fired()
+                    .with_mode(FlashMode::Auto)
+                    .with_red_eye_reduction(true),
+            ),
+            // Alone, and as every defined bit but bit 5.
+            (0x40, Flash::not_fired().with_red_eye_reduction(true)),
+            (
+                0x5F,
+                Flash::fired()
+                    .with_mode(FlashMode::Auto)
+                    .with_red_eye_reduction(true)
+                    .with_return_light(true),
+            ),
+        ];
+        for (bits, flash) in cases {
+            let read = settings_of(FLASH, bits).flash;
+            assert_eq!(read, Some(flash), "{bits:#06X}");
+            // The same value with bit 6 clear reads as off.
+            let clear = settings_of(FLASH, bits & !0x40).flash;
+            assert_eq!(
+                clear,
+                Some(flash.with_red_eye_reduction(false)),
+                "{bits:#06X}"
+            );
+        }
+    }
+
+    #[test]
     fn a_camera_without_a_flash_function_has_a_flash_that_did_not_fire_with_no_mode() {
-        // Bit 5 alone, and with each mode and the bits that are not read.
+        // Bit 5 alone, and with each mode, the return light and red-eye
+        // reduction, which it leaves unread.
         for bits in [0x20, 0x28, 0x30, 0x38, 0x26, 0x60, 0x7E] {
             assert_eq!(
                 settings_of(FLASH, bits).flash,
@@ -3791,7 +3872,9 @@ mod tests {
     const FULL_SETTINGS: [(u16, u16); 7] = [
         (EXPOSURE_PROGRAM, 3),
         (METERING_MODE, 5),
-        (FLASH, 15),
+        // Fired in fill mode, the return light detected, red-eye
+        // reduction on.
+        (FLASH, 0x4F),
         (WHITE_BALANCE, 1),
         (LIGHT_SOURCE, 11),
         (COLOR_SPACE, 65535),
@@ -3831,7 +3914,12 @@ mod tests {
         let mut settings = CameraSettings {
             exposure_program: Some(ExposureProgram::AperturePriority),
             metering_mode: Some(MeteringMode::MultiSegment),
-            flash: Some(Flash::fired().with_mode(FlashMode::Fill)),
+            flash: Some(
+                Flash::fired()
+                    .with_mode(FlashMode::Fill)
+                    .with_return_light(true)
+                    .with_red_eye_reduction(true),
+            ),
             white_balance: WhiteBalance {
                 mode: Some(WhiteBalanceMode::Shade),
                 ..WhiteBalance::default()

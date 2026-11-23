@@ -37,7 +37,8 @@ Linux and Windows alike.
   - the white balance, with its color temperature and fine-tuning;
   - the exposure program;
   - the metering mode;
-  - the flash;
+  - the flash, with red-eye reduction and whether its return light was
+    detected;
   - the shutter;
   - Sony's electronic front curtain setting;
   - the image area;
