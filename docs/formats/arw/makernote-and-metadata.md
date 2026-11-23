@@ -1571,9 +1571,9 @@ More of how the photographer set the camera:
 
 raw-files reads each from a plain MakerNote tag or a standard tag, as
 [ADR011](../../architecture-decisions/adr011-metadata-from-standard-tags.md)
-decides, in the order it gives: the first three lines and the flash's
-source now, the flash compensation, the raw compression and bit depth,
-the JPEG quality and the kind of fluorescent lamp still to come.
+decides, in the order it gives: the first four lines now, the raw
+compression and bit depth, the JPEG quality and the kind of fluorescent
+lamp still to come.
 Nothing needs deciphering.
 
 **How it was measured.** On 2026-11-20 a counting program written from
@@ -1791,7 +1791,7 @@ My files hold 0 on every one that has the tag (149).
 
 **Flash compensation.** 0x0104 FlashExposureComp, one SRATIONAL
 [S][1], is on 206 public files of 106 bodies, every one but the SRF,
-the SR2 and the DSLR-A100's **[F]**. raw-files will give it in EV as
+the SR2 and the DSLR-A100's **[F]**. raw-files gives it in EV as
 recorded, beside Exif's Flash bits ([section 9.7](#97-camera-settings)):
 
 | 0x0104 | EV | Files |
@@ -1806,11 +1806,12 @@ recorded, beside Exif's Flash bits ([section 9.7](#97-camera-settings)):
 - 0xB048 FlashLevel, one SSHORT, gives the same in thirds of a stop
   [S][1]. It is on 186 files, and is -3, -6 and -2 where 0x0104 is -1,
   -2 and -0.7, and 0 where it is 0 **[F]**.
-- So 0x0104 rounds two thirds of a stop to -0.7. FlashLevel will not
-  be read, since it repeats 0x0104.
+- So 0x0104 rounds two thirds of a stop to -0.7. FlashLevel is not
+  read, since it repeats 0x0104.
 - Mark: observed; the two tags agree on every file that has both.
 - The DSLR-A100 and the DSC-R1 record FlashLevel (-1 and 0) but no
-  0x0104, so their compensation will be `None`.
+  0x0104, so their compensation is `None`, as it is for a zero
+  denominator, which no file holds.
 - It is `0/10` on every one of my ILCE-7M2 files.
 
 **Raw compression and bit depth.** raw-files will read both from the

@@ -1783,11 +1783,10 @@ raw-files reads:
 - the focus mode, AF fine-tune, stabilization and auto ISO;
 - the exposure fine-tuning, the release mode and bracketing, and
   daylight saving time;
-- the flash's source, control and sync.
+- the flash's source, control, sync and compensation.
 
 It will read:
 
-- the flash's compensation;
 - the raw compression and bit depth, and the JPEG quality;
 - the white balance's preset slot and fluorescent lamp.
 
@@ -2021,10 +2020,12 @@ reads "no red-eye reduction mode or unknown" when clear, so the two
 never contradict. The one `RED-EYE` file, a Nikon 1 AW1, has an Exif
 Flash of 0, a flash that did not fire. **[F]**
 
-0x0012 FlashExposureComp (the built-in flash) and 0x0017
-ExternalFlashExposureComp (a flash unit) are four UNDEFINED bytes: a
-signed count, then 1, 6 and 0. raw-files will read the count over six,
-in EV:
+0x0012 FlashExposureComp and 0x0017 ExternalFlashExposureComp are four
+UNDEFINED bytes: a signed count, then 1, 6 and 0. ExifTool's
+documentation gives their names and four bytes, and says 0x0012 may be
+set even when the flash does not fire [S][1]. raw-files reads 0x0012 as
+the count times the second byte over the third, in EV, as it reads the
+exposure fine-tuning, so that `fa 01 06 00` is -6/6 EV:
 
 | Tag | Files, public / mine | Not zero, public / mine | Counts seen |
 |---|---|---|---|
@@ -2033,12 +2034,24 @@ in EV:
 
 **[F]** Every count of 0x0012 is a multiple of two, so a third of a
 stop, from -3 EV to +1 EV. That is the range and step the D600's manual
-gives [P][25] (p. 148). Whether the unit is a sixth of a stop is open,
-as for the exposure fine-tuning. The Z 50 and Z50II write 0x0012 as
-`00 01 00 00` (11 public files), with 0 for the 6. raw-files will read the
-count only where bytes 1 and 2 are 1 and 6 [I]. 0x0012 is absent on my
-Z 9, which has no built-in flash. Whether a unit's compensation on it lies
-in 0x0017 or only in FlashInfo is open. **[F]**
+gives [P][25] (p. 148), so the reading in sixths rests on the manual and
+the files, as the exposure fine-tuning's does. The Z 50 and Z50II write
+0x0012 as `00 01 00 00` (11 public files), a zero divisor, which gives
+no compensation; so do a zero factor and a fourth byte other than zero,
+which no file holds. A recorded zero, `00 01 06 00`, is a compensation of zero.
+**[F]**
+
+0x0012 is the camera's compensation for whichever flash fires, not the
+built-in flash's alone. Measured on 2026-11-23 over the runs of
+2026-11-20: on my files whose flash unit fired (FlashType
+`Optional,…`), 0x0012 is not zero on 224 while 0x0017 is zero
+there; 0x0017 is not zero on 8 of my files and 5 public ones, and both
+are not zero on 3, such as the public D800E's, +1 EV in 0x0012 and +3 EV
+in 0x0017. So 0x0017 holds a flash unit's own setting beside the
+camera's, and is not read. 0x0012 is absent on my Z 9, which has no
+built-in flash, and on the other bodies without one, which give no
+compensation; whether the Z 9's 0x0017 or only FlashInfo holds a unit's
+compensation is open. **[F]**
 
 **Raw compression and bit depth.** The raw IFD's Compression says
 whether the data is compressed: 1 uncompressed [P], 34713 Nikon's
@@ -2241,7 +2254,8 @@ plain MakerNote tags where Exif has no value, and decrypt nothing [I]:
 - the flash from Exif's Flash bits, with red-eye reduction and the
   return light. Three plain MakerNote tags add the rest: the source and
   control from 0x0009's text, the sync from 0x0008's, the compensation
-  from 0x0012 and 0x0017. A file without Exif's Flash gives no flash.
+  from 0x0012; 0x0017, a flash unit's own setting, is not read. A file
+  without Exif's Flash gives no flash.
   So the D1 family gives none, whose 0x0087 says "did not fire" even on
   a shot whose white balance is set to flash. Neither 0x0087 nor
   FlashInfo is read
@@ -2637,6 +2651,7 @@ By the rule of section 4, on these files: **[F]**
 |---|---|---|---|
 | The flash record's fields, the unit's model among them | 0x00A8 FlashInfo, in 12 versions: 0100 to 0108, 0200, 0300, 0301 | 278 / 48,359 | its layout changes with each version, each needing frames of its own; the model is named only by another reader's table of firmware numbers |
 | Commander mode | `&Comdr.` in 0x0009's text; 0x0087's code 8 | 0 / 82; 0 / 538 | the commander settings lie in FlashInfo, and 0x0087 is not read |
+| A flash unit's own compensation | 0x0017 ExternalFlashExposureComp | 266 / 48,359, not zero on 5 / 8 | one getter gives the camera's compensation, 0x0012; a second for the unit's waits for a caller who needs it |
 | Which saved lens AF fine-tune belongs to | byte 1 of 0x00B9, when not 255 | 8 / 56 | an index into the camera's list of saved lenses, which no file records [I] |
 | The kind of stabilization, in the body or the lens too | byte 8 of 0x001F at 0200 | 97 / 2,571, my Z 9 card folders, the only files of mine on which byte 8 was counted | 0 and 1, on 33 public files, are undocumented; 1 is on the D780 and the Z bodies without in-body stabilization |
 | Program shift | 0x000D | 271 / 48,395, not zero on 0 / 2 | reading every plain setting found would double the work |
