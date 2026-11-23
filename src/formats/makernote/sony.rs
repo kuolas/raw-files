@@ -1982,7 +1982,7 @@ mod tests {
             .with_white_balance(WhiteBalance::default().with_mode(WhiteBalanceMode::Daylight))
             .with_exposure_program(ExposureProgram::AperturePriority)
             .with_metering_mode(MeteringMode::MultiSegment)
-            .with_flash(Flash::new(false).with_mode(FlashMode::Off))
+            .with_flash(Flash::not_fired().with_mode(FlashMode::Off))
             .with_color_space(ColorSpace::Srgb)
     }
 

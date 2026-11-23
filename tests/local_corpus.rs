@@ -495,7 +495,7 @@ impl SettingsTally {
         }
         if let Some(flash) = settings.flash() {
             self.flash += 1;
-            self.flash_fired += usize::from(flash.fired());
+            self.flash_fired += usize::from(flash.has_fired());
             match flash.mode() {
                 Some(mode) => *self.flash_modes.entry(mode.name()).or_default() += 1,
                 None => self.flash_without_mode += 1,

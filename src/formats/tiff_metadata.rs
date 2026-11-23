@@ -873,9 +873,13 @@ fn flash(bits: u32) -> Option<Flash> {
     }
     let fired = bits & FIRED != 0;
     if bits & NO_FLASH_FUNCTION != 0 {
-        return (!fired).then_some(Flash::new(false));
+        return (!fired).then_some(Flash::not_fired());
     }
-    let flash = Flash::new(fired);
+    let flash = if fired {
+        Flash::fired()
+    } else {
+        Flash::not_fired()
+    };
     Some(match (bits >> 3) & 0b11 {
         1 => flash.with_mode(FlashMode::Fill),
         2 => flash.with_mode(FlashMode::Off),
@@ -1219,7 +1223,7 @@ mod tests {
         CameraSettings {
             exposure_program: Some(ExposureProgram::Program),
             metering_mode: Some(MeteringMode::CenterWeighted),
-            flash: Some(Flash::new(false)),
+            flash: Some(Flash::not_fired()),
             white_balance: WhiteBalance {
                 mode: Some(WhiteBalanceMode::Auto),
                 ..WhiteBalance::default()
@@ -1464,7 +1468,7 @@ mod tests {
         let settings = metadata.camera_settings();
         assert_eq!(settings.exposure_program(), Some(ExposureProgram::Program));
         assert_eq!(settings.metering_mode(), Some(MeteringMode::CenterWeighted));
-        assert_eq!(settings.flash(), Some(Flash::new(false)));
+        assert_eq!(settings.flash(), Some(Flash::not_fired()));
         assert_eq!(
             settings.white_balance().mode(),
             Some(WhiteBalanceMode::Auto)
@@ -3470,7 +3474,7 @@ mod tests {
         for bits in [0x20, 0x28, 0x30, 0x38, 0x26, 0x60, 0x7E] {
             assert_eq!(
                 settings_of(FLASH, bits).flash,
-                Some(Flash::new(false)),
+                Some(Flash::not_fired()),
                 "{bits:#06X}"
             );
         }
@@ -3827,7 +3831,7 @@ mod tests {
         let mut settings = CameraSettings {
             exposure_program: Some(ExposureProgram::AperturePriority),
             metering_mode: Some(MeteringMode::MultiSegment),
-            flash: Some(Flash::new(true).with_mode(FlashMode::Fill)),
+            flash: Some(Flash::fired().with_mode(FlashMode::Fill)),
             white_balance: WhiteBalance {
                 mode: Some(WhiteBalanceMode::Shade),
                 ..WhiteBalance::default()
