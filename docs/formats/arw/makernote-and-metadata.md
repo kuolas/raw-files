@@ -2109,7 +2109,7 @@ raw from a medium one; and the shutter used and APS-C mode, because only
 enciphered blocks hold them. The A100's Minolta-format IFD stays unread
 too, so its white balance comes from Exif alone. The AF micro
 adjustment and the ISO setting stay unread, so a Sony file's AF
-fine-tune and auto ISO will be `None` ([section 14.5](#145-what-the-view-leaves-out)).
+fine-tune and auto ISO are `None` ([section 14.5](#145-what-the-view-leaves-out)).
 
 **Raw sensor data needs the SR2 keystream for older files.**
 
@@ -2404,7 +2404,7 @@ documentation for the meanings [S][1] **[F]**:
   table) [S][1]. It decodes the AF micro adjustment from the enciphered
   0x940E, for the SLT bodies alone. It documents neither in a plain
   tag of the later SLT, ILCA and E-mount bodies.
-  - So a Sony file's auto ISO and AF fine-tune will be `None`.
+  - So a Sony file's auto ISO and AF fine-tune are `None`.
   - Whether any plain tag changes between ISO AUTO and a fixed ISO is
     open: no frame was shot to set the two apart.
 

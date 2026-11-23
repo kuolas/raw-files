@@ -62,7 +62,7 @@ use crate::metadata::Metadata;
 use af_info2::af_info2_record;
 use crop::{CropHiSpeed, crop_hi_speed, in_crop, placed, placed_layout};
 use metadata::{CropArea, crop_area, iso, lens_range, serial_number, world_time};
-use settings::camera_settings;
+use settings::{FromStandardTags, camera_settings};
 
 /// The Nikon MakerNote tag that records the ISO the picture was taken at
 /// (ISO): two SHORTs, the second of them the ISO.
@@ -86,6 +86,11 @@ const FOCUS_MODE: u16 = 0x0007;
 /// magenta to green. The oldest bodies write one, whose axis and sign no
 /// file shows.
 const FINE_TUNE_STEPS: u16 = 0x000B;
+
+/// The Nikon MakerNote tag that records the ISO setting on the Coolpix
+/// bodies (ISOSelection), as ASCII text: `AUTO` for auto ISO, `MANUAL`
+/// for a chosen ISO. The other bodies record auto ISO in ShootingMode.
+const ISO_SELECTION: u16 = 0x000F;
 
 /// The Nikon MakerNote tag that points at the PreviewIFD, the sub-IFD
 /// holding the small preview JPEG.
@@ -154,9 +159,9 @@ const AF_INFO: u16 = 0x0088;
 /// more of the drive (ShootingMode): one SHORT of bits. Bit 0 is
 /// continuous release, 3 the self-timer and 7 an infrared remote; bits 4,
 /// 6 and 8 are exposure, white balance and Active D-Lighting bracketing;
-/// bit 5 is auto ISO. Bits 1 and 2, the exposure delay mode and a release
-/// from a computer, bit 9, which no documentation names, and bit 11,
-/// pre-capture, are not read.
+/// bit 5 is auto ISO, on every body but the D70. Bits 1 and 2, the
+/// exposure delay mode and a release from a computer, bit 9, which no
+/// documentation names, and bit 11, pre-capture, are not read.
 const SHOOTING_MODE: u16 = 0x0089;
 
 /// The Nikon MakerNote tag that records where the camera's autofocus
@@ -198,6 +203,7 @@ mod rules {
     pub(super) const FOCUS_MODE: Rule<Text> = Rule::new(super::FOCUS_MODE, ASCII);
     pub(super) const FINE_TUNE_STEPS: Held<[i16; 2]> =
         Held::new(super::FINE_TUNE_STEPS, &[FieldType::SShort]);
+    pub(super) const ISO_SELECTION: Rule<Text> = Rule::new(super::ISO_SELECTION, ASCII);
     pub(super) const PREVIEW_IFD: Held<[u32; 1]> = Held::new(super::PREVIEW_IFD, LONG);
     pub(super) const CROP_HI_SPEED: Rule<[u32; 7]> = Rule::new(super::CROP_HI_SPEED, SHORT);
     pub(super) const SERIAL_NUMBER: Rule<Text> = Rule::new(super::SERIAL_NUMBER, ASCII);
@@ -330,13 +336,17 @@ fn metadata<R: Read + Seek>(
     let crop_hi_speed = crop_hi_speed(src, makernote)?;
     // Read once, for the AF-area mode and the focus point.
     let af_info2 = ifd.get(src, rules::AF_INFO2)?;
+    let standard = FromStandardTags {
+        settings: metadata.camera_settings,
+        model: metadata.camera.recorded_model.as_deref(),
+        exif_records_color_space,
+    };
     metadata.camera_settings = camera_settings(
         src,
         makernote,
-        metadata.camera_settings,
+        standard,
         crop_hi_speed,
         af_info2.as_deref(),
-        exif_records_color_space,
         picture,
     )?;
     // What a crop without a CropArea is placed on: a raw file has no

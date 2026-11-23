@@ -166,6 +166,13 @@ does. An entry that can break a caller opens with **Breaking:**.
   MakerNote's AFTune, the long end's value under its "On (Zoom)" code;
   which saved lens the value belongs to is not given. Sony files give none: they record their AF
   micro adjustment only in enciphered or unread blocks.
+- `CameraSettings::auto_iso` says whether auto ISO was on, and
+  `with_auto_iso` sets it
+  ([#214](https://github.com/kuolas/raw-files/issues/214)). Nikon files
+  give it from bit 5 of their MakerNote's ShootingMode, but the D70's,
+  whose bit 5 has another meaning; the Coolpix bodies from their
+  ISOSelection text, `AUTO` or `MANUAL`. Sony files give none: they
+  record the ISO setting only in enciphered or unread blocks.
 - `CameraSettings::release_mode` gives how the shutter was released, a
   `ReleaseMode`: a single frame, continuous, the self-timer or a remote.
   `CameraSettings::bracketing` gives whether the picture is one of a

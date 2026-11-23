@@ -2,8 +2,8 @@
 
 //! The camera settings in the Nikon MakerNote: the white balance, the
 //! shutter used, the image area, the raw size, the color space, the focus
-//! mode, the AF-area mode, AF fine-tune, the release mode and bracketing,
-//! and daylight saving time.
+//! mode, the AF-area mode, AF fine-tune, auto ISO, the release mode and
+//! bracketing, and daylight saving time.
 //!
 //! The MakerNote records how the camera was set for the picture beyond
 //! what the Exif tags record (ADR011). [`camera_settings`] reads each
@@ -22,6 +22,8 @@
 //! - the AF-area mode from AFInfo2 ([`area_mode_of`]), else from AFInfo
 //!   ([`af_info_area_mode`]);
 //! - AF fine-tune from AFTune ([`af_fine_tune`]);
+//! - auto ISO from ShootingMode's bit 5 ([`auto_iso`]), else from
+//!   ISOSelection's text ([`auto_iso_of_text`]);
 //! - the release mode and bracketing from ShootingMode's bits
 //!   ([`release_mode`], [`bracketing`]);
 //! - daylight saving time from WorldTime ([`daylight_saving_time`]).
@@ -56,9 +58,20 @@ use crate::formats::tiff_metadata;
 use crate::io::Source;
 use crate::rational::SignedRational;
 
-/// How the camera was set for the picture: `settings`, what the standard
-/// tags gave, with what `makernote` records. Each value is read by its own
-/// rule, so that a damaged one costs only itself:
+/// What the standard tags gave that the camera settings build on.
+pub(super) struct FromStandardTags<'a> {
+    /// The camera settings the Exif tags record.
+    pub(super) settings: CameraSettings,
+    /// The Model, read by the text rule, if any.
+    pub(super) model: Option<&'a str>,
+    /// Whether the Exif IFD keeps a ColorSpace entry
+    /// ([`Standard`](tiff_metadata::Standard)).
+    pub(super) exif_records_color_space: bool,
+}
+
+/// How the camera was set for the picture: `standard.settings`, what the
+/// standard tags gave, with what `makernote` records. Each value is read
+/// by its own rule, so that a damaged one costs only itself:
 ///
 /// - **The white balance mode** is the one WhiteBalance's text names
 ///   ([`white_balance_of_text`]), in place of the Exif tags' mode, which
@@ -77,8 +90,8 @@ use crate::rational::SignedRational;
 ///   [`Picture::Jpeg`], the tag follows the JPEG's own size, and a JPEG
 ///   holds no raw data (ADR014).
 /// - **The color space** is ColorSpace's code ([`color_space`]), only when
-///   `exif_records_color_space` is `false`. Where the Exif IFD keeps a
-///   ColorSpace, it alone decides
+///   `standard.exif_records_color_space` is `false`. Where the Exif IFD
+///   keeps a ColorSpace, it alone decides
 ///   ([`Standard`](tiff_metadata::Standard)).
 /// - **The focus mode** is the one FocusMode's text names
 ///   ([`focus_mode_of_text`]), read by the text rule. The focus point's
@@ -90,6 +103,12 @@ use crate::rational::SignedRational;
 ///   AFInfo2 it is AFInfo's ([`af_info_area_mode`]). A body with AFInfo2
 ///   never falls back on AFInfo, which no file holds beside it.
 /// - **AF fine-tune** is AFTune's ([`af_fine_tune`]).
+/// - **Auto ISO** is ShootingMode's bit 5 ([`auto_iso`]), on a body other
+///   than the D70, which `standard.model`, the Model the standard tags
+///   read, names.
+///   Only when the file has no ShootingMode that can be read is it the
+///   text of ISOSelection ([`auto_iso_of_text`]), as the Coolpix bodies
+///   record it.
 /// - **The release mode** is the one ShootingMode's bits name
 ///   ([`release_mode`]). **The bracketing** they name ([`bracketing`])
 ///   takes the place of the one the Exif tags gave, exposure bracketing
@@ -111,12 +130,16 @@ use crate::rational::SignedRational;
 pub(super) fn camera_settings<R: Read + Seek>(
     src: &mut Source<R>,
     makernote: &MakerNote,
-    mut settings: CameraSettings,
+    standard: FromStandardTags<'_>,
     crop_hi_speed: Option<CropHiSpeed>,
     af_info2: Option<&[u8]>,
-    exif_records_color_space: bool,
     picture: Picture,
 ) -> Result<CameraSettings> {
+    let FromStandardTags {
+        mut settings,
+        model,
+        exif_records_color_space,
+    } = standard;
     let Some(ifd) = makernote.tagged() else {
         return Ok(settings);
     };
@@ -153,10 +176,14 @@ pub(super) fn camera_settings<R: Read + Seek>(
     };
     settings.af_fine_tune = ifd.held(rules::AF_TUNE).and_then(af_fine_tune);
     if let Some([bits]) = ifd.held(rules::SHOOTING_MODE) {
+        settings.auto_iso = auto_iso(bits, model);
         settings.release_mode = release_mode(bits);
         if let Some(bracketing) = bracketing(bits) {
             settings.bracketing = Some(bracketing);
         }
+    } else {
+        settings.auto_iso = tiff_metadata::text(src, ifd, rules::ISO_SELECTION)?
+            .and_then(|text| auto_iso_of_text(&text));
     }
     settings.daylight_saving_time = ifd
         .held(rules::WORLD_TIME)
@@ -458,6 +485,8 @@ const CONTINUOUS: u32 = 1 << 0;
 const SELF_TIMER: u32 = 1 << 3;
 /// ShootingMode's bit for exposure bracketing.
 const EXPOSURE_BRACKETING: u32 = 1 << 4;
+/// ShootingMode's bit for auto ISO, on every body but the D70.
+const AUTO_ISO: u32 = 1 << 5;
 /// ShootingMode's bit for white balance bracketing.
 const WHITE_BALANCE_BRACKETING: u32 = 1 << 6;
 /// ShootingMode's bit for a release by an infrared remote, which the
@@ -468,6 +497,33 @@ const ACTIVE_D_LIGHTING_BRACKETING: u32 = 1 << 8;
 /// ShootingMode's bit for pre-capture, a burst that begins before the
 /// shutter button is pressed all the way.
 const PRE_CAPTURE: u32 = 1 << 11;
+
+/// The Model of the one body whose ShootingMode gives bit 5 another
+/// meaning than auto ISO, as ExifTool's published documentation says.
+const D70: &str = "NIKON D70";
+
+/// Whether auto ISO was on, as ShootingMode's `bits` record it in bit 5:
+/// `true` when set, `false` when clear.
+///
+/// `None` when `model`, the file's Model, is the D70's: the documentation
+/// gives its bit 5 another meaning, and the one public D70 file sets it.
+/// A file without a Model takes the meaning every other body's bit has
+/// (NEF notes, section 8.10).
+fn auto_iso(bits: u32, model: Option<&str>) -> Option<bool> {
+    (model != Some(D70)).then_some(bits & AUTO_ISO != 0)
+}
+
+/// Whether auto ISO was on, as the Coolpix bodies' ISOSelection `text`,
+/// as read, records it: `AUTO` `true`, and `MANUAL`, a chosen ISO,
+/// `false`. Both are on public files. `None` for every other text, such
+/// as `auto` in lower case.
+fn auto_iso_of_text(text: &str) -> Option<bool> {
+    match text {
+        "AUTO" => Some(true),
+        "MANUAL" => Some(false),
+        _ => None,
+    }
+}
 
 /// The release mode that ShootingMode's `bits` record, in the list of bits
 /// ExifTool's published documentation gives, read as documentation and
@@ -549,19 +605,19 @@ fn color_space(code: u32) -> Option<ColorSpace> {
 mod tests {
     use super::super::block::read;
     use super::super::testing::{
-        ORDERS, Tags, entry_at, exif_file, exif_metadata, jpeg_metadata_of, metadata_of,
-        nikon_file, retyped, tags_block, whole,
+        AT, ORDERS, TAIL, Tags, entry_at, exif_file, exif_metadata, jpeg_metadata_of, metadata_of,
+        nikon_file, nikon_file_with, retyped, tags_block, whole,
     };
     use super::super::{
         AF_INFO, AF_INFO2, AF_TUNE, COLOR_SPACE, COLOR_TEMPERATURE, CROP_HI_SPEED, FINE_TUNE,
-        FINE_TUNE_STEPS, FOCUS_MODE, IMAGE_SIZE_RAW, SHOOTING_MODE, SHUTTER_MODE, WHITE_BALANCE,
-        WORLD_TIME, metadata,
+        FINE_TUNE_STEPS, FOCUS_MODE, IMAGE_SIZE_RAW, ISO_SELECTION, SHOOTING_MODE, SHUTTER_MODE,
+        WHITE_BALANCE, WORLD_TIME, metadata,
     };
     use super::*;
     use crate::camera_settings::{ExposureProgram, WhiteBalance};
     use crate::container::tiff::tags::{
         COLOR_SPACE as EXIF_COLOR_SPACE, EXPOSURE_MODE, EXPOSURE_PROGRAM, INTEROP_INDEX,
-        LIGHT_SOURCE, MAKER_NOTE, WHITE_BALANCE as EXIF_WHITE_BALANCE,
+        LIGHT_SOURCE, MAKER_NOTE, MODEL, WHITE_BALANCE as EXIF_WHITE_BALANCE,
     };
     use crate::container::tiff::{self, walk};
     use crate::error::ErrorKind;
@@ -1750,6 +1806,112 @@ mod tests {
                 (None, Some(Bracketing::Exposure)),
                 "{order:?}"
             );
+        }
+    }
+
+    /// Whether auto ISO was on, in the settings of a raw file in byte order
+    /// `order` whose IFD0 holds the Model `model`, when there is one, and
+    /// whose MakerNote holds what `tags` adds to its MakerNote IFD.
+    fn auto_iso_of(
+        order: Order,
+        model: Option<&str>,
+        tags: impl FnOnce(&mut TiffBuilder, IfdId),
+    ) -> Option<bool> {
+        let block = tags_block(order, tags).0;
+        let count = whole(&block);
+        let bytes = nikon_file_with(order, AT, &block, TAIL, |builder, ifd0, exif| {
+            if let Some(model) = model {
+                builder.ascii(ifd0, MODEL, model);
+            }
+            entry_at(builder, exif, MAKER_NOTE, UNDEFINED, AT, count);
+        });
+        metadata_of(bytes).camera_settings.auto_iso
+    }
+
+    #[test]
+    fn shooting_modes_bit_5_says_whether_auto_iso_was_on() {
+        // Bit 5 alone, beside continuous release as the D70's file and
+        // others set it (33), and beside exposure bracketing too (49);
+        // clear, alone and beside other bits.
+        for order in ORDERS {
+            for model in [None, Some("NIKON D600"), Some("NIKON D70s")] {
+                for (bits, expected) in [
+                    (32, true),
+                    (33, true),
+                    (49, true),
+                    (544, true),
+                    (0, false),
+                    (1, false),
+                    (16, false),
+                    (512, false),
+                ] {
+                    let read = auto_iso_of(order, model, |inner, ifd| {
+                        inner.short(ifd, SHOOTING_MODE, &[bits]);
+                    });
+                    assert_eq!(read, Some(expected), "{order:?}, {model:?}, {bits}");
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn the_d70s_bit_5_gives_no_auto_iso() {
+        for order in ORDERS {
+            for bits in [0, 32, 33] {
+                let read = auto_iso_of(order, Some("NIKON D70"), |inner, ifd| {
+                    inner.short(ifd, SHOOTING_MODE, &[bits]);
+                });
+                assert_eq!(read, None, "{order:?}, {bits}");
+            }
+        }
+    }
+
+    #[test]
+    fn without_shooting_mode_the_coolpix_iso_selection_text_gives_auto_iso() {
+        for order in ORDERS {
+            for (text, expected) in [
+                ("AUTO", Some(true)),
+                ("MANUAL", Some(false)),
+                ("auto", None),
+                ("AUTO1", None),
+            ] {
+                let read = auto_iso_of(order, Some("COOLPIX P7800"), |inner, ifd| {
+                    inner.ascii(ifd, ISO_SELECTION, text);
+                });
+                assert_eq!(read, expected, "{order:?}, {text}");
+            }
+            // As one SHORT, the text is not read.
+            let read = auto_iso_of(order, None, |inner, ifd| {
+                inner.short(ifd, ISO_SELECTION, &[1]);
+            });
+            assert_eq!(read, None, "{order:?}, a SHORT");
+        }
+    }
+
+    #[test]
+    fn a_shooting_mode_that_can_be_read_wins_over_iso_selection() {
+        for order in ORDERS {
+            // ShootingMode says off, ISOSelection on: ShootingMode stands.
+            let read = auto_iso_of(order, None, |inner, ifd| {
+                inner
+                    .short(ifd, SHOOTING_MODE, &[0])
+                    .ascii(ifd, ISO_SELECTION, "AUTO");
+            });
+            assert_eq!(read, Some(false), "{order:?}");
+            // A ShootingMode of one BYTE cannot be read: the text gives it.
+            let read = auto_iso_of(order, None, |inner, ifd| {
+                inner
+                    .byte(ifd, SHOOTING_MODE, &[0])
+                    .ascii(ifd, ISO_SELECTION, "AUTO");
+            });
+            assert_eq!(read, Some(true), "{order:?}, BYTE");
+            // On the D70, the bit gives none, and the text is not read.
+            let read = auto_iso_of(order, Some("NIKON D70"), |inner, ifd| {
+                inner
+                    .short(ifd, SHOOTING_MODE, &[32])
+                    .ascii(ifd, ISO_SELECTION, "AUTO");
+            });
+            assert_eq!(read, None, "{order:?}, D70");
         }
     }
 
