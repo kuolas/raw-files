@@ -5,8 +5,9 @@
 //! Beside the exposure, a viewer's information panel shows how the camera
 //! was set for the shot: the white balance, the exposure program, the
 //! metering mode, the flash, the shutter, the image area, the raw image
-//! size, the color space, the focus mode, the AF-area mode and AF
-//! fine-tune. [`CameraSettings`] holds them all, and
+//! size, the color space, the focus mode, the AF-area mode, AF fine-tune
+//! and whether the clock was on daylight saving time. [`CameraSettings`]
+//! holds them all, and
 //! [`Metadata::camera_settings`](crate::Metadata::camera_settings) gives
 //! them for a file. [`WhiteBalance`], [`FineTune`], [`Flash`] and
 //! [`AfFineTune`] hold the settings made of several parts; each enum, such as [`ExposureProgram`],
@@ -23,7 +24,8 @@
 //! maker's own tags, its MakerNote. Nikon's, in NEF files and in the JPEGs
 //! of Nikon cameras, gives the white balance's color temperature and
 //! fine-tuning, the shutter, the image area, the focus mode, the AF-area
-//! mode, AF fine-tune and, in a raw file, the raw image size; the white balance setting, finer than Exif's,
+//! mode, AF fine-tune, daylight saving time and, in a raw file, the raw
+//! image size; the white balance setting, finer than Exif's,
 //! in place of Exif's; and the color space where the Exif tags record
 //! none, as in every Nikon raw file checked. Sony's, in ARW files and
 //! their family and in the JPEGs of Sony cameras, gives the white
@@ -31,10 +33,11 @@
 //! Sony records, the color temperature of a chosen color temperature or a
 //! custom white balance, the focus mode and the AF-area mode; and the
 //! white balance setting in place of Exif's. On Sony files the shutter,
-//! the image area, the raw image size and AF fine-tune are `None`: Sony
-//! records the first two only in enciphered blocks, which raw-files does
-//! not read, gives an APS-C raw the raw size code of a medium one, and
-//! keeps its AF micro adjustment in enciphered or unread blocks.
+//! the image area, the raw image size, AF fine-tune and daylight saving
+//! time are `None`: Sony records the first two only in enciphered blocks,
+//! which raw-files does not read, gives an APS-C raw the raw size code of
+//! a medium one, keeps its AF micro adjustment in enciphered or unread
+//! blocks, and records no daylight saving time in a plain tag.
 //!
 //! A program that uses raw-files can build these values for its own
 //! tests, without a camera file: [`CameraSettings`] and [`WhiteBalance`]
@@ -47,8 +50,8 @@ use crate::rational::SignedRational;
 
 /// How the camera was set for a picture: its white balance, exposure
 /// program, metering mode, flash, shutter, image area, raw image size,
-/// color space, focus mode, AF-area mode and AF fine-tune, for a viewer's
-/// information panel beside the exposure.
+/// color space, focus mode, AF-area mode, AF fine-tune and daylight saving
+/// time, for a viewer's information panel beside the exposure.
 ///
 /// Every value is `None` when the file does not record it or records it in
 /// a way that cannot be read, such as a code that no variant names. A
@@ -58,9 +61,9 @@ use crate::rational::SignedRational;
 /// the metering mode, the flash, the white balance mode and the color
 /// space. The others, which only a maker's MakerNote records, it gives
 /// from Nikon's MakerNote and Sony's, each those its MakerNote records in
-/// plain tags; the shutter, the image area, the raw image size and AF
-/// fine-tune are `None` for every Sony file. Each getter says where its value comes
-/// from.
+/// plain tags; the shutter, the image area, the raw image size, AF
+/// fine-tune and daylight saving time are `None` for every Sony file. Each
+/// getter says where its value comes from.
 ///
 /// `CameraSettings::default()` is the empty record, with every value
 /// `None` and an empty [`WhiteBalance`]. A caller's tests start from it and
@@ -139,6 +142,7 @@ pub struct CameraSettings {
     pub(crate) focus_mode: Option<FocusMode>,
     pub(crate) focus_area_mode: Option<FocusAreaMode>,
     pub(crate) af_fine_tune: Option<AfFineTune>,
+    pub(crate) daylight_saving_time: Option<bool>,
 }
 
 impl CameraSettings {
@@ -388,6 +392,38 @@ impl CameraSettings {
         self.af_fine_tune
     }
 
+    /// Whether daylight saving time was on in the camera's clock:
+    /// `Some(true)` when on, `Some(false)` when off.
+    ///
+    /// It is a setting of the clock, as the time zone is. Where the
+    /// capture time's offset from UTC comes from the clock's time zone, on
+    /// the Nikon bodies that record no Exif offset, the offset already
+    /// includes the daylight hour
+    /// ([`Metadata::capture_time`](crate::Metadata::capture_time)).
+    ///
+    /// Read from Nikon's MakerNote, the third byte of its WorldTime, 0 off
+    /// and 1 on, which the D300 and every later body checked record, and
+    /// the Coolpix A; any other value gives `None`. The older Nikon bodies
+    /// and the other Coolpix bodies record no WorldTime, and Sony records
+    /// no such setting in a plain tag, so their files give `None`.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use raw_files::CameraFile;
+    ///
+    /// # fn main() -> raw_files::Result<()> {
+    /// let file = CameraFile::open("photo.nef")?;
+    /// if file.metadata().camera_settings().daylight_saving_time() == Some(true) {
+    ///     println!("the clock was on daylight saving time");
+    /// }
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn daylight_saving_time(&self) -> Option<bool> {
+        self.daylight_saving_time
+    }
+
     /// Sets the white balance, in place of the one it had;
     /// [`white_balance`](Self::white_balance) reads it.
     #[must_use]
@@ -483,6 +519,15 @@ impl CameraSettings {
     #[must_use]
     pub fn with_af_fine_tune(mut self, fine_tune: AfFineTune) -> Self {
         self.af_fine_tune = Some(fine_tune);
+        self
+    }
+
+    /// Sets whether daylight saving time was on, in place of any value set
+    /// before; [`daylight_saving_time`](Self::daylight_saving_time) reads
+    /// it.
+    #[must_use]
+    pub fn with_daylight_saving_time(mut self, on: bool) -> Self {
+        self.daylight_saving_time = Some(on);
         self
     }
 }
@@ -1554,6 +1599,7 @@ mod tests {
                 value: Some(-5),
                 tele_value: None,
             }),
+            daylight_saving_time: Some(true),
         }
     }
 
@@ -1572,6 +1618,7 @@ mod tests {
         assert_eq!(settings.focus_mode(), None);
         assert_eq!(settings.focus_area_mode(), None);
         assert_eq!(settings.af_fine_tune(), None);
+        assert_eq!(settings.daylight_saving_time(), None);
 
         let white_balance = WhiteBalance::default();
         assert_eq!(white_balance.mode(), None);
@@ -1610,6 +1657,7 @@ mod tests {
                 tele_value: None,
             })
         );
+        assert_eq!(settings.daylight_saving_time(), Some(true));
 
         let white_balance = nikon_white_balance();
         assert_eq!(white_balance.mode(), Some(WhiteBalanceMode::Auto));
@@ -1724,6 +1772,13 @@ mod tests {
                         ..start.clone()
                     },
                 ),
+                (
+                    start.clone().with_daylight_saving_time(false),
+                    CameraSettings {
+                        daylight_saving_time: Some(false),
+                        ..start.clone()
+                    },
+                ),
             ];
             for (place, (built, expected)) in cases.into_iter().enumerate() {
                 assert_eq!(built, expected, "builder {place} from {start:?}");
@@ -1789,7 +1844,8 @@ mod tests {
             .with_color_space(ColorSpace::AdobeRgb)
             .with_focus_mode(FocusMode::Continuous)
             .with_focus_area_mode(FocusAreaMode::Tracking)
-            .with_af_fine_tune(AfFineTune::on().with_value(-5));
+            .with_af_fine_tune(AfFineTune::on().with_value(-5))
+            .with_daylight_saving_time(true);
         assert_eq!(settings, full_settings());
     }
 
@@ -1807,7 +1863,8 @@ mod tests {
             .with_color_space(ColorSpace::Srgb)
             .with_focus_mode(FocusMode::Single)
             .with_focus_area_mode(FocusAreaMode::Pinpoint)
-            .with_af_fine_tune(AfFineTune::off().with_value(3));
+            .with_af_fine_tune(AfFineTune::off().with_value(3))
+            .with_daylight_saving_time(false);
         // Every value of `earlier` differs from the full record's, so each
         // builder below has one to replace.
         let full = full_settings();
@@ -1823,7 +1880,8 @@ mod tests {
             .with_color_space(ColorSpace::AdobeRgb)
             .with_focus_mode(FocusMode::Continuous)
             .with_focus_area_mode(FocusAreaMode::Tracking)
-            .with_af_fine_tune(AfFineTune::on().with_value(-5));
+            .with_af_fine_tune(AfFineTune::on().with_value(-5))
+            .with_daylight_saving_time(true);
         assert_eq!(settings, full);
 
         let white_balance = WhiteBalance::default()

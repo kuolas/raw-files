@@ -1946,7 +1946,7 @@ too. **[F]**
 142 of the 251 public files with WorldTime, and on 8,913 of my 48,395,
 all D3200 and Z 9 files. **[F]** Section 8.2 found the offset equal to
 the zone plus 60 minutes where it is 1, so the files agree. raw-files
-will read it as a camera setting, observed.
+reads it as a camera setting, observed; any other value gives none.
 
 **The flash's new parts.** Exif's Flash bits stay the flash's first
 source ([section 8.7](#87-camera-settings)). Plain MakerNote texts and

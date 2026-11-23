@@ -784,6 +784,9 @@ fn camera_settings<R: Read + Seek>(
         focus_mode: None,
         focus_area_mode: None,
         af_fine_tune: None,
+        // Only Nikon's MakerNote records whether daylight saving time was
+        // on, with the clock's time zone.
+        daylight_saving_time: None,
     })
 }
 

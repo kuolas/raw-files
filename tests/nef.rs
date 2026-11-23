@@ -555,14 +555,16 @@ fn the_d300_file_gives_what_its_exif_tags_lack_from_the_makernote() {
             assert_eq!(metadata.focus(), None, "{label}");
             // No layout: raw-files has no table of the D300's points.
             assert_eq!(metadata.focus_layout(), None, "{label}");
-            // The fixture writes no settings tag but FocusMode, `MANUAL`, and
+            // The fixture writes no settings tag but FocusMode, `MANUAL`,
             // AFInfo2, zero past its version: code 0 under phase detection,
-            // single point, which manual focus does not hide.
+            // single point, which manual focus does not hide; and WorldTime,
+            // with daylight saving time off.
             assert_eq!(
                 metadata.camera_settings(),
                 &CameraSettings::default()
                     .with_focus_mode(FocusMode::Manual)
-                    .with_focus_area_mode(FocusAreaMode::Single),
+                    .with_focus_area_mode(FocusAreaMode::Single)
+                    .with_daylight_saving_time(false),
                 "{label}"
             );
         }
