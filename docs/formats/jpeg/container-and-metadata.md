@@ -240,12 +240,14 @@ in IFD0's Software [P][3]:
   ([NEF notes](../nef/makernote-and-metadata.md#87-camera-settings)).
   [F]
 
-**More of how the camera was set.** raw-files will read more settings
-from these Exif tags, as
+**More of how the camera was set.** raw-files reads more settings from
+these Exif tags, as
 [ADR011](../../architecture-decisions/adr011-metadata-from-standard-tags.md)
-decides. Their codes rest on Exif 3.1 [P][3]. The MakerNote codes of
-section 10 rest on a reader's published documentation, and carry one
-of three marks, with the count of files:
+decides: the flash's return light and red-eye reduction, and exposure
+bracketing. It will read the kind of fluorescent lamp. The codes of
+these tags rest on Exif 3.1 [P][3]. The MakerNote codes of section 10
+rest on a reader's published documentation, and carry one of three
+marks, with the count of files:
 
 - **confirmed**: a frame shot in a known setting shows the code;
 - **observed**: the documentation gives the code, and measured files
@@ -266,17 +268,19 @@ public JPEGs are the 18 of the test fixtures and `raw-samples/`, and the
 9 files of raw.pixls.us that raw-files opens as JPEG. Mine are 22,660
 JPEGs, given as counts only. **[F]** marks a count over these files.
 
-- **The flash.** raw-files reads bits 0, 3 and 4 today: whether the
-  flash fired, and its mode. It will also read bits 1, 2 and 6 as parts
-  of `Flash`:
+- **The flash.** raw-files reads bits 0 to 6: whether the flash fired
+  and its mode, as before, and bits 1, 2 and 6 as parts of `Flash`:
   - `Flash::return_light()`, an `Option<bool>`: `Some(true)` for 3,
     "Strobe return light detected"; `Some(false)` for 2, "not detected".
     0, "No strobe return detection function", and the reserved 1 give
-    `None`.
+    `None`, and so does any value of a flash that did not fire, which
+    sent no light back; no file holds one.
   - `Flash::red_eye_reduction()`, a `bool`, from bit 6. Exif names its
     1 "Red-eye reduction supported" and its 0 "No red-eye reduction mode
-    or unknown".
-  - A file without Exif's Flash will still give no `Flash`.
+    or unknown", which reads as `false`.
+  - Under bit 5, a camera without a flash function, the flash did not
+    fire, and the other bits are not read.
+  - A file without Exif's Flash gives no `Flash`.
 
   [P][3] (4.6.6.7.21 and Figure 19, pp. 61 to 62)
 
@@ -299,7 +303,7 @@ JPEGs, given as counts only. **[F]** marks a count over these files.
   - The return light is recorded only on my Nikon DSLRs' JPEGs. It is 3
     on 1,932, from the D7200, D3200, D300S, D7100, D600 and D3300. It is
     2 on 249, all from the D3200. **[F]**
-  - No JPEG holds the reserved 1. My Z 9's 318 JPEGs hold 0, so they will
+  - No JPEG holds the reserved 1. My Z 9's 318 JPEGs hold 0, so they
     give no return light. **[F]**
   - The red-eye bit is set on 144, all from Fujifilm and Canon cameras,
     each with the flash fired. **[F]**
@@ -307,7 +311,7 @@ JPEGs, given as counts only. **[F]** marks a count over these files.
     Flash. **[F]**
   - The public JPEGs hold 16 (10 files) and 0 (15 files). None sets bit
     1, 2 or 6. **[F]**
-- **Exposure bracketing.** ExposureMode's 2, auto bracket, will give
+- **Exposure bracketing.** ExposureMode's 2, auto bracket, gives
   exposure bracketing, `Bracketing::Exposure`, where no MakerNote says.
   [P][3] (4.6.6.7.36, p. 69) None of these JPEGs holds it. **[F]**
   - My JPEGs hold 0 on 19,921 and 1 on 1,931. **[F]**

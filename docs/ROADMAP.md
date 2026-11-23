@@ -103,15 +103,15 @@ records is checked on files built in the tests
 The focus mode, the AF-area mode, AF fine-tune, the stabilization, auto
 ISO, the exposure fine-tuning, the release mode, bracketing and
 daylight saving time are values of `CameraSettings`, the AF-area mode
-whether or not a file gives a focus point. Beside the
+whether or not a file gives a focus point. The flash gives its red-eye
+reduction and return light. Beside the
 capture time, `Metadata` gives the digitized time. **More capture
 settings** come next, as values of `CameraSettings` and of the values
 they belong to
 ([ADR011](architecture-decisions/adr011-metadata-from-standard-tags.md),
 [#214](https://github.com/kuolas/raw-files/issues/214)):
 
-- the flash's red-eye reduction, return light, source, control, sync
-  and compensation;
+- the flash's source, control, sync and compensation;
 - the raw compression and bit depth, and the JPEG quality;
 - the white balance's preset slot and fluorescent lamp.
 

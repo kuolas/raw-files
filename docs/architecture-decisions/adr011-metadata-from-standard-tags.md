@@ -189,7 +189,7 @@ nothing standard records a value. Nothing is deciphered or decrypted.
 - **The flash is Exif's Flash first.** Its bits give whether the flash
   fired and its mode: compulsory firing, compulsory suppression or
   auto. They also give red-eye reduction, and whether return light was
-  detected, when the unit can detect it. A file without Exif's Flash
+  detected, when the unit can detect it and the flash fired. A file without Exif's Flash
   gives no flash. Plain
   MakerNote tags add what Exif does not record:
   - the source, built-in or external, and how the unit was controlled

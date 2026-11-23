@@ -1047,54 +1047,64 @@ impl FineTune {
     }
 }
 
-/// The flash: whether it fired, and its mode when the file records one.
-///
-/// Red-eye reduction and whether the flash's return light was detected,
-/// which Exif records beside them, are not given.
+/// The flash: whether it fired, and its mode, whether red-eye reduction
+/// was on and whether the flash's return light was detected, when the
+/// file records them.
 ///
 /// There is no `Default`: a file that records no flash gives `None` for
 /// [`CameraSettings::flash`].
 ///
 /// # Examples
 ///
-/// A flash that fired in fill mode, and one that did not fire, with no
-/// mode recorded:
+/// A flash that fired in fill mode with red-eye reduction, its return
+/// light detected, and one that did not fire, with nothing else recorded:
 ///
 /// ```
 /// use raw_files::{Flash, FlashMode};
 ///
-/// let fill = Flash::fired().with_mode(FlashMode::Fill);
+/// let fill = Flash::fired()
+///     .with_mode(FlashMode::Fill)
+///     .with_red_eye_reduction(true)
+///     .with_return_light(true);
 /// assert!(fill.has_fired());
 /// assert_eq!(fill.mode(), Some(FlashMode::Fill));
+/// assert!(fill.red_eye_reduction());
+/// assert_eq!(fill.return_light(), Some(true));
 ///
 /// let off = Flash::not_fired();
 /// assert!(!off.has_fired());
 /// assert_eq!(off.mode(), None);
+/// assert!(!off.red_eye_reduction());
+/// assert_eq!(off.return_light(), None);
 /// ```
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct Flash {
     pub(crate) fired: bool,
     pub(crate) mode: Option<FlashMode>,
+    pub(crate) red_eye_reduction: bool,
+    pub(crate) return_light: Option<bool>,
 }
 
 impl Flash {
-    /// A flash that fired, with no mode yet;
-    /// [`with_mode`](Self::with_mode) adds it.
+    /// A flash that fired, with nothing else yet: no mode, red-eye
+    /// reduction off and no return light. The `with_…` methods add them.
     #[must_use]
     pub fn fired() -> Self {
         Self {
             fired: true,
-            mode: None,
+            ..Self::not_fired()
         }
     }
 
-    /// A flash that did not fire, with no mode yet;
-    /// [`with_mode`](Self::with_mode) adds it.
+    /// A flash that did not fire, with nothing else yet: no mode, red-eye
+    /// reduction off and no return light. The `with_…` methods add them.
     #[must_use]
     pub fn not_fired() -> Self {
         Self {
             fired: false,
             mode: None,
+            red_eye_reduction: false,
+            return_light: None,
         }
     }
 
@@ -1103,6 +1113,26 @@ impl Flash {
     pub fn with_mode(self, mode: FlashMode) -> Self {
         Self {
             mode: Some(mode),
+            ..self
+        }
+    }
+
+    /// This flash with red-eye reduction on or off, as `on` says, in place
+    /// of what it had.
+    #[must_use]
+    pub fn with_red_eye_reduction(self, on: bool) -> Self {
+        Self {
+            red_eye_reduction: on,
+            ..self
+        }
+    }
+
+    /// This flash with its return light detected or not, as `detected`
+    /// says, in place of what it had.
+    #[must_use]
+    pub fn with_return_light(self, detected: bool) -> Self {
+        Self {
+            return_light: Some(detected),
             ..self
         }
     }
@@ -1116,6 +1146,23 @@ impl Flash {
     /// without a flash function does.
     pub fn mode(&self) -> Option<FlashMode> {
         self.mode
+    }
+
+    /// Whether red-eye reduction was on: a light before the flash fires,
+    /// from a lamp or weak flashes, so that the subject's pupils narrow.
+    /// `false` also when the file does not say: Exif's one bit for it reads
+    /// "no red-eye reduction mode or unknown" when clear.
+    pub fn red_eye_reduction(&self) -> bool {
+        self.red_eye_reduction
+    }
+
+    /// Whether the camera detected the light the flash sent back, which
+    /// tells whether the flash reached the subject: `Some(true)` detected,
+    /// `Some(false)` not detected. `None` when the file does not say, as
+    /// when the flash cannot detect it, and when the flash did not fire,
+    /// since it sent no light back.
+    pub fn return_light(&self) -> Option<bool> {
+        self.return_light
     }
 }
 
@@ -2163,6 +2210,8 @@ mod tests {
             flash: Some(Flash {
                 fired: true,
                 mode: Some(FlashMode::Fill),
+                red_eye_reduction: true,
+                return_light: Some(true),
             }),
             shutter: Some(Shutter::ElectronicFrontCurtain),
             electronic_front_curtain_setting: Some(true),
@@ -2230,8 +2279,15 @@ mod tests {
             Some(Flash {
                 fired: true,
                 mode: Some(FlashMode::Fill),
+                red_eye_reduction: true,
+                return_light: Some(true),
             })
         );
+        let flash = settings.flash().unwrap();
+        assert!(flash.has_fired());
+        assert_eq!(flash.mode(), Some(FlashMode::Fill));
+        assert!(flash.red_eye_reduction());
+        assert_eq!(flash.return_light(), Some(true));
         assert_eq!(settings.shutter(), Some(Shutter::ElectronicFrontCurtain));
         assert_eq!(settings.electronic_front_curtain_setting(), Some(true));
         assert_eq!(settings.image_area(), Some(ImageArea::FullFrame));
@@ -2277,6 +2333,8 @@ mod tests {
         let flash = Flash {
             fired: false,
             mode: Some(FlashMode::Off),
+            red_eye_reduction: false,
+            return_light: Some(false),
         };
         // From the empty record, and from a full one whose every value
         // differs from the one set. The expected value is built field by
@@ -2475,7 +2533,12 @@ mod tests {
             )
             .with_exposure_program(ExposureProgram::AperturePriority)
             .with_metering_mode(MeteringMode::MultiSegment)
-            .with_flash(Flash::fired().with_mode(FlashMode::Fill))
+            .with_flash(
+                Flash::fired()
+                    .with_mode(FlashMode::Fill)
+                    .with_red_eye_reduction(true)
+                    .with_return_light(true),
+            )
             .with_shutter(Shutter::ElectronicFrontCurtain)
             .with_electronic_front_curtain_setting(true)
             .with_image_area(ImageArea::FullFrame)
@@ -2585,6 +2648,29 @@ mod tests {
             let off = auto.with_mode(FlashMode::Off);
             assert_eq!(off.has_fired(), fired);
             assert_eq!(off.mode(), Some(FlashMode::Off));
+            // Nothing else was set.
+            assert!(!off.red_eye_reduction());
+            assert_eq!(off.return_light(), None);
+        }
+    }
+
+    #[test]
+    fn a_flash_takes_red_eye_reduction_and_its_return_light() {
+        for (flash, fired) in [(Flash::not_fired(), false), (Flash::fired(), true)] {
+            assert!(!flash.red_eye_reduction());
+            assert_eq!(flash.return_light(), None);
+            // Each set, then set again the other way, which replaces it.
+            let on = flash.with_red_eye_reduction(true);
+            assert!(on.red_eye_reduction());
+            assert!(!on.with_red_eye_reduction(false).red_eye_reduction());
+            let detected = on.with_return_light(true);
+            assert_eq!(detected.return_light(), Some(true));
+            let missed = detected.with_return_light(false);
+            assert_eq!(missed.return_light(), Some(false));
+            // The other parts stay as they were.
+            assert_eq!(missed.has_fired(), fired);
+            assert_eq!(missed.mode(), None);
+            assert!(missed.red_eye_reduction());
         }
     }
 
