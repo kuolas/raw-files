@@ -24,9 +24,10 @@ use std::path::{Path, PathBuf};
 
 use raw_files::{
     Bracketing, Camera, CameraFile, ColorSpace, Directory, ErrorKind, ExposureProgram, FieldType,
-    FlashMode, FocusAreaMode, FocusLayoutPoint, FocusMode, FocusOrigin, Format, ImageArea, Make,
-    Metadata, MeteringMode, Orientation, Point, Preview, PreviewFormat, Rational, RawImageSize,
-    ReleaseMode, Shutter, SignedRational, Size, StabilizationMode, WhiteBalanceMode,
+    FlashControl, FlashMode, FlashSource, FlashSync, FocusAreaMode, FocusLayoutPoint, FocusMode,
+    FocusOrigin, Format, ImageArea, Make, Metadata, MeteringMode, Orientation, Point, Preview,
+    PreviewFormat, Rational, RawImageSize, ReleaseMode, Shutter, SignedRational, Size,
+    StabilizationMode, WhiteBalanceMode,
 };
 
 /// The path of the sample file `name`, or `None`, with a note on stderr,
@@ -439,10 +440,9 @@ pub struct SamplePlacedLayout {
 /// enums, so that a row reads as what a caller gets. The white balance is
 /// its three parts: its mode, its color temperature in kelvin, and its
 /// fine-tuning ([`SampleFineTune`]). Then the exposure program, the metering
-/// mode, the flash, whether it fired and then its mode, `None` when the
-/// file records no mode, the shutter used, whether Sony's electronic front
-/// curtain setting was on, the image area, the raw image size, the color
-/// space; the AF-area mode, `None` when the file names none in a code
+/// mode, the flash ([`SampleFlash`]), the shutter used, whether Sony's
+/// electronic front curtain setting was on, the image area, the raw image
+/// size, the color space; the AF-area mode, `None` when the file names none in a code
 /// raw-files knows, whether or not it gives focus points; the focus mode;
 /// AF fine-tune, whether it was on and then its value, `None` when off;
 /// the stabilization, whether it was on and then its mode, `None` when the
@@ -458,7 +458,7 @@ pub struct SampleSettings {
     pub fine_tune: Option<SampleFineTune>,
     pub exposure_program: Option<ExposureProgram>,
     pub metering_mode: Option<MeteringMode>,
-    pub flash: Option<(bool, Option<FlashMode>)>,
+    pub flash: Option<SampleFlash>,
     pub shutter: Option<Shutter>,
     pub electronic_front_curtain_setting: Option<bool>,
     pub image_area: Option<ImageArea>,
@@ -473,6 +473,24 @@ pub struct SampleSettings {
     pub release_mode: Option<ReleaseMode>,
     pub bracketing: Option<Bracketing>,
     pub daylight_saving_time: Option<bool>,
+}
+
+/// The flash of a sample file, as the reader must give it
+/// ([`Flash`](raw_files::Flash)): whether it fired; its mode, `None` when
+/// the file records none; whether red-eye reduction was on; whether its
+/// return light was detected, `None` when the file does not say; its
+/// source, its control and its sync, each `None` when the file names none;
+/// and its compensation, its numerator and denominator as stored.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct SampleFlash {
+    pub fired: bool,
+    pub mode: Option<FlashMode>,
+    pub red_eye_reduction: bool,
+    pub return_light: Option<bool>,
+    pub source: Option<FlashSource>,
+    pub control: Option<FlashControl>,
+    pub sync: Option<FlashSync>,
+    pub compensation: Option<(i32, i32)>,
 }
 
 /// The white balance fine-tuning of a sample file, as the reader must give
@@ -965,9 +983,18 @@ pub fn check_metadata(expected: &SampleMetadata, format: Format, folder: Folder)
         "{label}: metering mode"
     );
     assert_eq!(
-        settings
-            .flash()
-            .map(|flash| (flash.has_fired(), flash.mode())),
+        settings.flash().map(|flash| SampleFlash {
+            fired: flash.has_fired(),
+            mode: flash.mode(),
+            red_eye_reduction: flash.red_eye_reduction(),
+            return_light: flash.return_light(),
+            source: flash.source(),
+            control: flash.control(),
+            sync: flash.sync(),
+            compensation: flash
+                .compensation()
+                .map(|compensation| (compensation.numerator, compensation.denominator)),
+        }),
         expected.flash,
         "{label}: flash"
     );
