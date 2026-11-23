@@ -1564,15 +1564,17 @@ More of how the photographer set the camera:
 
 - the focus mode and the AF-area mode;
 - stabilization and the exposure fine-tuning;
-- the release mode and bracketing, and the flash compensation;
+- the release mode and bracketing;
+- the flash's source and compensation;
 - the raw compression and bit depth, and the JPEG quality;
 - the kind of fluorescent lamp.
 
 raw-files reads each from a plain MakerNote tag or a standard tag, as
 [ADR011](../../architecture-decisions/adr011-metadata-from-standard-tags.md)
-decides, in the order it gives: the first three lines now, the flash
-compensation, the raw compression and bit depth, the JPEG quality and
-the kind of fluorescent lamp still to come. Nothing needs deciphering.
+decides, in the order it gives: the first three lines and the flash's
+source now, the flash compensation, the raw compression and bit depth,
+the JPEG quality and the kind of fluorescent lamp still to come.
+Nothing needs deciphering.
 
 **How it was measured.** On 2026-11-20 a counting program written from
 these pages read each tag through raw-files' own raw view
@@ -1764,6 +1766,28 @@ is on 186 public files of 86 bodies **[F]**. Exif's ExposureMode
   (355, 2053, 2050, 2052).
 - My ILCE-7M2 files hold 0, 2, 5, 6 and 8, and Exif's ExposureMode 2
   occurs on them. Of the 15 in the sample, 14 hold 0 and one holds 2.
+
+**The flash's source.** 0x2017 FlashAction, one LONG, repeats whether
+the flash fired, and for two of its codes says which flash it was
+[S][1]. Exif's Flash stays the flash's first source
+([section 9.7](#97-camera-settings)), and a file without it gives no
+flash. The documentation gives one list, read whole, since files hold
+part of it:
+
+| 0x2017 | The documentation's name [S][1] | `FlashSource` | Mark | Public files |
+|---|---|---|---|---|
+| 0 | Did not fire | none | observed | 174 |
+| 1 | Flash Fired | none | observed: the ILCE-3500 (2047) | 1 |
+| 2 | External Flash Fired | `External` | documented only | 0 |
+| 3 | Wireless Controlled Flash Fired | `External` | documented only | 0 |
+
+**[F]** It is on 175 public files. The 33 without it are of older
+bodies: the DSLRs, the NEX bodies, the SLT bodies up to the SLT-A77V,
+the first RX100, the DSC-R1 and the DSC-F828. It
+agrees with Exif wherever both are: 1 where Exif's Flash is 15, on the
+one file whose flash fired, and 0 where it is 16, 24 or 32. Code 1
+names no source: the documentation does not say which flash fired.
+My files hold 0 on every one that has the tag (149).
 
 **Flash compensation.** 0x0104 FlashExposureComp, one SRATIONAL
 [S][1], is on 206 public files of 106 bodies, every one but the SRF,
@@ -2065,8 +2089,9 @@ plain MakerNote tags where Exif has no value, and decipher nothing [I]:
   two. It has no 35 mm focal length for the F828 and R1 either, which
   lack it in Exif;
 - the flash from Exif's Flash bits: whether it fired, its mode,
-  red-eye reduction and the return light; 0x2017 only repeats whether
-  it fired;
+  red-eye reduction and the return light. 0x2017 repeats whether it
+  fired, and its codes 2 and 3 give the source, an external flash
+  ([section 9.10](#910-more-capture-settings));
 - the flash compensation from 0x0104, in EV as recorded, never from
   0xB048, which repeats it in thirds of a stop;
 - the white balance from 0x0115, which is finer than Exif's auto or

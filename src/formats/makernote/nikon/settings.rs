@@ -3,8 +3,8 @@
 //! The camera settings in the Nikon MakerNote: the white balance, the
 //! shutter used, the image area, the raw size, the color space, the focus
 //! mode, the AF-area mode, AF fine-tune, the stabilization, auto ISO, the
-//! exposure fine-tuning, the release mode and bracketing, and daylight
-//! saving time.
+//! exposure fine-tuning, the release mode and bracketing, daylight saving
+//! time, and the flash's source and control.
 //!
 //! The MakerNote records how the camera was set for the picture beyond
 //! what the Exif tags record (ADR011). [`camera_settings`] reads each
@@ -30,7 +30,9 @@
 //!   ([`exposure_fine_tune`]);
 //! - the release mode and bracketing from ShootingMode's bits
 //!   ([`release_mode`], [`bracketing`]);
-//! - daylight saving time from WorldTime ([`daylight_saving_time`]).
+//! - daylight saving time from WorldTime ([`daylight_saving_time`]);
+//! - the flash's source and control from FlashType's text
+//!   ([`flash_type_of_text`]).
 //!
 //! A code or a text gives a value only where its meaning is known, as the
 //! next paragraph says. Anything else costs that value alone.
@@ -53,10 +55,11 @@ use super::block::MakerNote;
 use super::crop::CropHiSpeed;
 use super::rules;
 use crate::camera_settings::{
-    AfFineTune, Bracketing, CameraSettings, ColorSpace, FineTune, FocusAreaMode, FocusMode,
-    ImageArea, RawImageSize, ReleaseMode, Shutter, Stabilization, StabilizationMode,
-    WhiteBalanceMode,
+    AfFineTune, Bracketing, CameraSettings, ColorSpace, FineTune, Flash, FlashControl, FlashSource,
+    FocusAreaMode, FocusMode, ImageArea, RawImageSize, ReleaseMode, Shutter, Stabilization,
+    StabilizationMode, WhiteBalanceMode,
 };
+use crate::container::tiff::Ifd;
 use crate::error::Result;
 use crate::formats::makernote::{Picture, checked_color_temperature};
 use crate::formats::tiff_metadata;
@@ -125,10 +128,13 @@ pub(super) struct FromStandardTags<'a> {
 /// - **Daylight saving time** is WorldTime's third byte
 ///   ([`daylight_saving_time`]), read from the tag that gives the capture
 ///   time its offset ([`world_time`](super::metadata::world_time)).
+/// - **The flash** the Exif tags gave gains the parts the MakerNote
+///   records ([`flash`]). A file whose Exif tags give no flash gets none
+///   from the MakerNote either: its parts have nothing to belong to.
 ///
 /// Nikon records no electronic front curtain setting, so it stays as
-/// `settings` has it, `None`. The exposure program, the metering mode and
-/// the flash are the Exif tags' alone.
+/// `settings` has it, `None`. The exposure program and the metering mode
+/// are the Exif tags' alone.
 ///
 /// # Errors
 ///
@@ -203,7 +209,65 @@ pub(super) fn camera_settings<R: Read + Seek>(
     settings.daylight_saving_time = ifd
         .held(rules::WORLD_TIME)
         .and_then(|[_, _, daylight_saving, _]| daylight_saving_time(daylight_saving));
+    if let Some(exif_flash) = settings.flash {
+        settings.flash = Some(flash(src, ifd, exif_flash)?);
+    }
     Ok(settings)
+}
+
+/// `exif_flash`, the flash the Exif tags gave, with the parts the
+/// MakerNote's IFD `ifd` records, each by its own rule, so that a damaged
+/// one costs only itself and leaves the part as `exif_flash` has it:
+///
+/// - the source and the control, from FlashType's text, read by the text
+///   rule ([`flash_type_of_text`]).
+///
+/// # Errors
+///
+/// `Io` when the reader fails.
+fn flash<R: Read + Seek>(src: &mut Source<R>, ifd: &Ifd, exif_flash: Flash) -> Result<Flash> {
+    let mut flash = exif_flash;
+    if let Some((source, control)) =
+        tiff_metadata::text(src, ifd, rules::FLASH_TYPE)?.and_then(|text| flash_type_of_text(&text))
+    {
+        flash = flash.with_source(source).with_control(control);
+    }
+    Ok(flash)
+}
+
+/// The flash's source and control that a FlashType `text`, as read,
+/// names, looked up whole among the texts files hold. The part before the
+/// comma is the source, `Built-in` [`BuiltIn`](FlashSource::BuiltIn) and
+/// `Optional`, a flash unit, [`External`](FlashSource::External); the
+/// part after it the control:
+///
+/// - `TTL` and `TTL-BL`, i-TTL and i-TTL balanced fill-flash,
+///   [`Ttl`](FlashControl::Ttl);
+/// - `AA`, auto aperture, [`AutoAperture`](FlashControl::AutoAperture);
+/// - `M` [`Manual`](FlashControl::Manual);
+/// - `RPT&Comdr.`, repeating flash in commander mode,
+///   [`Repeating`](FlashControl::Repeating), and `TTL&Comdr.`, i-TTL in
+///   commander mode, [`Ttl`](FlashControl::Ttl). Commander mode, in which
+///   the camera fires other units, is not given.
+///
+/// ExifTool's published documentation gives the tag as a string and lists
+/// no values; each text's meaning is Nikon's, as the D600's manual names
+/// the settings (NEF notes, section 8.10). `None` for every other text:
+/// the D100's `NEW_TTL`, which names neither a source nor a control, a
+/// text the table lacks, and the blank a body writes when no flash fired.
+/// A setting the manual offers but no file shows, such as the built-in
+/// flash under manual control, gives none until a file shows its text.
+fn flash_type_of_text(text: &str) -> Option<(FlashSource, FlashControl)> {
+    use FlashControl::{AutoAperture, Manual, Repeating, Ttl};
+    use FlashSource::{BuiltIn, External};
+    Some(match text {
+        "Built-in,TTL" | "Built-in,TTL-BL" => (BuiltIn, Ttl),
+        "Optional,TTL" | "Optional,TTL-BL" | "Optional,TTL&Comdr." => (External, Ttl),
+        "Optional,AA" => (External, AutoAperture),
+        "Optional,M" => (External, Manual),
+        "Optional,RPT&Comdr." => (External, Repeating),
+        _ => return None,
+    })
 }
 
 /// The color temperature, in kelvin, of the white balance `makernote`
@@ -705,14 +769,14 @@ mod tests {
     };
     use super::super::{
         AF_INFO, AF_INFO2, AF_TUNE, COLOR_SPACE, COLOR_TEMPERATURE, CROP_HI_SPEED, EXPOSURE_TUNING,
-        FINE_TUNE, FINE_TUNE_STEPS, FOCUS_MODE, IMAGE_SIZE_RAW, ISO_SELECTION, SHOOTING_MODE,
-        SHUTTER_MODE, VR_INFO, WHITE_BALANCE, WORLD_TIME, metadata,
+        FINE_TUNE, FINE_TUNE_STEPS, FLASH_TYPE, FOCUS_MODE, IMAGE_SIZE_RAW, ISO_SELECTION,
+        SHOOTING_MODE, SHUTTER_MODE, VR_INFO, WHITE_BALANCE, WORLD_TIME, metadata,
     };
     use super::*;
-    use crate::camera_settings::{ExposureProgram, WhiteBalance};
+    use crate::camera_settings::{ExposureProgram, FlashMode, WhiteBalance};
     use crate::container::tiff::tags::{
-        COLOR_SPACE as EXIF_COLOR_SPACE, EXPOSURE_MODE, EXPOSURE_PROGRAM, INTEROP_INDEX,
-        LIGHT_SOURCE, MAKER_NOTE, MODEL, WHITE_BALANCE as EXIF_WHITE_BALANCE,
+        COLOR_SPACE as EXIF_COLOR_SPACE, EXPOSURE_MODE, EXPOSURE_PROGRAM, FLASH as EXIF_FLASH,
+        INTEROP_INDEX, LIGHT_SOURCE, MAKER_NOTE, MODEL, WHITE_BALANCE as EXIF_WHITE_BALANCE,
     };
     use crate::container::tiff::{self, walk};
     use crate::error::ErrorKind;
@@ -2202,6 +2266,125 @@ mod tests {
                 inner.byte(ifd, WORLD_TIME, &[60, 0, 1, 0]);
             });
             assert_eq!(read.daylight_saving_time, None, "{order:?}");
+        }
+    }
+
+    /// The flash of a raw file in byte order `order` whose Exif Flash is
+    /// `exif_flash`, when `Some`, and whose MakerNote holds what `tags`
+    /// adds to its MakerNote IFD.
+    fn flash_of(
+        order: Order,
+        exif_flash: Option<u16>,
+        tags: impl FnOnce(&mut TiffBuilder, IfdId),
+    ) -> Option<Flash> {
+        settings_with_exif(order, tags, |builder, exif| {
+            if let Some(bits) = exif_flash {
+                builder.short(exif, EXIF_FLASH, &[bits]);
+            }
+        })
+        .flash
+    }
+
+    /// Exif's Flash 15: fired in fill mode, the return light detected, as
+    /// most files whose flash fired hold.
+    const FIRED: u16 = 0x0F;
+
+    /// The flash [`FIRED`] reads as.
+    fn fired() -> Flash {
+        Flash::fired()
+            .with_mode(FlashMode::Fill)
+            .with_return_light(true)
+    }
+
+    /// The flash of a raw file in byte order `order` whose Exif Flash is
+    /// [`FIRED`] and whose MakerNote's FlashType is `text`, padded with
+    /// spaces to 19 characters, as Nikon writes it; the builder adds the
+    /// NUL.
+    fn flash_type_of(order: Order, text: &str) -> Option<Flash> {
+        flash_of(order, Some(FIRED), |inner, ifd| {
+            inner.ascii(ifd, FLASH_TYPE, &format!("{text:<19}"));
+        })
+    }
+
+    #[test]
+    fn each_flash_type_text_of_the_table_gives_its_source_and_control() {
+        use FlashControl::{AutoAperture, Manual, Repeating, Ttl};
+        use FlashSource::{BuiltIn, External};
+        let table = [
+            ("Built-in,TTL", BuiltIn, Ttl),
+            ("Built-in,TTL-BL", BuiltIn, Ttl),
+            ("Optional,TTL", External, Ttl),
+            ("Optional,TTL-BL", External, Ttl),
+            ("Optional,AA", External, AutoAperture),
+            ("Optional,M", External, Manual),
+            ("Optional,RPT&Comdr.", External, Repeating),
+            ("Optional,TTL&Comdr.", External, Ttl),
+        ];
+        for order in ORDERS {
+            for (text, source, control) in table {
+                let expected = fired().with_source(source).with_control(control);
+                assert_eq!(
+                    flash_type_of(order, text),
+                    Some(expected),
+                    "{order:?}, {text:?}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn a_flash_type_text_not_in_the_table_adds_nothing() {
+        // The D100's NEW_TTL, which names neither part; the blank of a
+        // flash that did not fire; the right letters in lower case; a
+        // text no file holds, though the built-in flash offers manual
+        // control, so its form is not known; a text cut short, and one
+        // with more after it.
+        for order in ORDERS {
+            for text in [
+                "NEW_TTL",
+                "",
+                "optional,ttl",
+                "Built-in,M",
+                "Optional",
+                "Optional,",
+                "Optional,TTL1",
+                "TTL",
+            ] {
+                assert_eq!(
+                    flash_type_of(order, text),
+                    Some(fired()),
+                    "{order:?}, {text:?}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn a_flash_type_of_another_type_adds_nothing() {
+        for order in ORDERS {
+            for typ in [UNDEFINED, BYTE] {
+                let (block, entry) = tags_block(order, |inner, ifd| {
+                    inner.ascii(ifd, FLASH_TYPE, "Optional,TTL       ");
+                });
+                let block = retyped(order, block, entry, typ, 20);
+                let read = exif_metadata(order, &block, |builder, exif| {
+                    builder.short(exif, EXIF_FLASH, &[FIRED]);
+                })
+                .camera_settings;
+                assert_eq!(read.flash, Some(fired()), "{order:?}, type {typ}");
+            }
+        }
+    }
+
+    #[test]
+    fn without_an_exif_flash_the_makernote_gives_no_flash() {
+        // As on the D1 family's files: the MakerNote's parts have nothing
+        // to belong to.
+        for order in ORDERS {
+            let read = flash_of(order, None, |inner, ifd| {
+                inner.ascii(ifd, FLASH_TYPE, "Optional,TTL       ");
+            });
+            assert_eq!(read, None, "{order:?}");
         }
     }
 

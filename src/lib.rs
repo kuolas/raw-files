@@ -422,8 +422,9 @@ pub use authorship::Authorship;
 pub use camera::{Camera, Make};
 pub use camera_settings::{
     AfFineTune, Bracketing, CameraSettings, ColorSpace, ExposureProgram, FineTune, Flash,
-    FlashMode, FocusAreaMode, FocusMode, ImageArea, MeteringMode, RawImageSize, ReleaseMode,
-    Shutter, Stabilization, StabilizationMode, WhiteBalance, WhiteBalanceMode,
+    FlashControl, FlashMode, FlashSource, FocusAreaMode, FocusMode, ImageArea, MeteringMode,
+    RawImageSize, ReleaseMode, Shutter, Stabilization, StabilizationMode, WhiteBalance,
+    WhiteBalanceMode,
 };
 pub use datetime::DateTime;
 pub use entries::{Directory, Entries, Entry, FieldType, SkippedDirectory, Value, ValueDisplay};

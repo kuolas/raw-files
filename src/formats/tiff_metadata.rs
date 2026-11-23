@@ -867,7 +867,8 @@ fn metering_mode(code: u32) -> Option<MeteringMode> {
 ///
 /// Under bit 5 the flash did not fire, and the other bits are not read: a
 /// camera without a flash function has no flash mode, no red-eye
-/// reduction and no return light.
+/// reduction and no return light. A maker's tags may still add the parts
+/// they record, as the MakerNote readers do for any flash Exif gives.
 ///
 /// `None` when any of the reserved bits 7 to 15 is set, which no camera
 /// writes. `None` too when bits 0 and 5 are both set, a flash that fired on

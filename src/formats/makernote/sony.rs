@@ -57,8 +57,8 @@ use std::io::{Read, Seek};
 
 use super::{MakerNoteBlock, Picture, Reader, checked_color_temperature};
 use crate::camera_settings::{
-    Bracketing, CameraSettings, FineTune, FocusAreaMode, FocusMode, ReleaseMode, Stabilization,
-    WhiteBalanceMode,
+    Bracketing, CameraSettings, FineTune, FlashSource, FocusAreaMode, FocusMode, ReleaseMode,
+    Stabilization, WhiteBalanceMode,
 };
 use crate::container::tiff::{Ifd, Rule, Tree};
 use crate::entries::{Directory, Entries, Lookup};
@@ -81,6 +81,11 @@ pub(in crate::formats) const WHITE_BALANCE: u16 = 0x0115;
 /// positive towards amber, then the one from green to magenta, positive
 /// towards magenta.
 pub(in crate::formats) const FINE_TUNE: u16 = 0x2014;
+
+/// The Sony MakerNote tag that records whether the flash fired, and which
+/// (FlashAction): one LONG, 0 did not fire, 1 fired, 2 an external flash
+/// fired, 3 a wirelessly controlled flash fired.
+pub(in crate::formats) const FLASH_ACTION: u16 = 0x2017;
 
 /// The Sony MakerNote tag that records the electronic front curtain
 /// setting (ElectronicFrontCurtainShutter): one LONG, 0 off and 1 on. It is
@@ -152,6 +157,7 @@ mod rules {
 
     pub(super) const WHITE_BALANCE: Held<[u32; 1]> = Held::new(super::WHITE_BALANCE, LONG);
     pub(super) const FINE_TUNE: Rule<[i32; 2]> = Rule::new(super::FINE_TUNE, &[FieldType::SLong]);
+    pub(super) const FLASH_ACTION: Held<[u32; 1]> = Held::new(super::FLASH_ACTION, LONG);
     pub(super) const ELECTRONIC_FRONT_CURTAIN: Held<[u32; 1]> =
         Held::new(super::ELECTRONIC_FRONT_CURTAIN, LONG);
     pub(super) const FOCUS_MODE: Held<[u8; 1]> = Held::new(super::FOCUS_MODE, &[FieldType::Byte]);
@@ -462,12 +468,15 @@ fn area<R: Read + Seek>(src: &mut Source<R>, makernote: &MakerNote) -> Result<Op
 ///   the one the Exif tags gave, exposure bracketing from ExposureMode 2,
 ///   when it names one; when it names none, as for code 5, the Exif tags'
 ///   stays.
+/// - **The flash** the Exif tags gave gains its source, from FlashAction's
+///   code ([`flash_source`]). A file whose Exif tags give no flash gets
+///   none from the MakerNote either.
 ///
 /// The shutter used, the image area and the raw image size stay as
 /// `settings` has them, `None`. Sony records the first two only in
 /// enciphered blocks, and gives an APS-C raw the raw size code of a medium
-/// one. The exposure program, the metering mode, the flash and the color
-/// space are the Exif tags' alone. Neither 0xB054 nor 0x0112, which
+/// one. The exposure program, the metering mode and the color space are
+/// the Exif tags' alone. Neither 0xB054 nor 0x0112, which
 /// ExifTool's documentation names for the white balance, is read: on the
 /// files checked, neither records the setting.
 ///
@@ -509,7 +518,25 @@ fn camera_settings<R: Read + Seek>(
             settings.bracketing = Some(bracketing);
         }
     }
+    if let Some(flash) = settings.flash.as_mut()
+        && let Some(source) = ifd
+            .held(rules::FLASH_ACTION)
+            .and_then(|[code]| flash_source(code))
+    {
+        *flash = flash.with_source(source);
+    }
     Ok(settings)
+}
+
+/// The flash's source that a FlashAction `code` names, in the list
+/// ExifTool's published documentation gives, read as documentation and
+/// read whole, since files hold part of it: 2, an external flash fired,
+/// and 3, a wirelessly controlled flash fired,
+/// [`External`](FlashSource::External). 0, did not fire, and 1, fired,
+/// name no source, and nor does any other code. Files hold 0 and 1; 2 and
+/// 3 are documented only (ARW notes, section 9.10).
+fn flash_source(code: u32) -> Option<FlashSource> {
+    matches!(code, 2 | 3).then_some(FlashSource::External)
 }
 
 /// The white balance mode a WhiteBalance `code` names:
@@ -2549,6 +2576,46 @@ mod tests {
                 "{order:?}"
             );
             assert_eq!(found.focus_points, None, "{order:?}");
+        }
+    }
+
+    #[test]
+    fn flash_action_gives_an_external_flash_source() {
+        // The flash of the ILCE-3500's file, which fired: Exif's 15.
+        let fired = Flash::fired()
+            .with_mode(FlashMode::Fill)
+            .with_return_light(true);
+        let exif = CameraSettings::default().with_flash(fired);
+        for order in ORDERS {
+            for (code, expected) in [
+                // 0, did not fire, and 1, fired, which files hold.
+                (0, fired),
+                (1, fired),
+                // 2 an external flash, 3 a wirelessly controlled one.
+                (2, fired.with_source(FlashSource::External)),
+                (3, fired.with_source(FlashSource::External)),
+                (4, fired),
+                (u32::MAX, fired),
+            ] {
+                let settings = settings_from(order, exif.clone(), |builder, ifd| {
+                    builder.long(ifd, FLASH_ACTION, &[code]);
+                });
+                assert_eq!(settings.flash, Some(expected), "{order:?}, {code}");
+            }
+            // One SHORT, and two LONGs, leave the Exif tags' flash.
+            let short = settings_from(order, exif.clone(), |builder, ifd| {
+                builder.short(ifd, FLASH_ACTION, &[2]);
+            });
+            let two = settings_from(order, exif.clone(), |builder, ifd| {
+                builder.long(ifd, FLASH_ACTION, &[2, 2]);
+            });
+            assert_eq!(short.flash, Some(fired), "{order:?}, SHORT");
+            assert_eq!(two.flash, Some(fired), "{order:?}, two");
+            // Without Exif's Flash, the MakerNote gives no flash.
+            let without = settings_of(order, |builder, ifd| {
+                builder.long(ifd, FLASH_ACTION, &[2]);
+            });
+            assert_eq!(without.flash, None, "{order:?}, no Exif Flash");
         }
     }
 
