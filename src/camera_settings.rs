@@ -6,8 +6,8 @@
 //! was set for the shot: the white balance, the exposure program, the
 //! metering mode, the flash, the shutter, the image area, the raw image
 //! size, the color space, the focus mode, the AF-area mode, AF fine-tune,
-//! the release mode, bracketing and whether the clock was on daylight
-//! saving time. [`CameraSettings`] holds them all, and
+//! auto ISO, the release mode, bracketing and whether the clock was on
+//! daylight saving time. [`CameraSettings`] holds them all, and
 //! [`Metadata::camera_settings`](crate::Metadata::camera_settings) gives
 //! them for a file. [`WhiteBalance`], [`FineTune`], [`Flash`] and
 //! [`AfFineTune`] hold the settings made of several parts; each enum, such as [`ExposureProgram`],
@@ -25,8 +25,8 @@
 //! maker's own tags, its MakerNote. Nikon's, in NEF files and in the JPEGs
 //! of Nikon cameras, gives the white balance's color temperature and
 //! fine-tuning, the shutter, the image area, the focus mode, the AF-area
-//! mode, AF fine-tune, the release mode and bracketing, daylight saving
-//! time and, in a raw file, the raw image size; the white balance setting,
+//! mode, AF fine-tune, auto ISO, the release mode and bracketing, daylight
+//! saving time and, in a raw file, the raw image size; the white balance setting,
 //! finer than Exif's,
 //! in place of Exif's; and the color space where the Exif tags record
 //! none, as in every Nikon raw file checked. Sony's, in ARW files and
@@ -35,11 +35,12 @@
 //! Sony records, the color temperature of a chosen color temperature or a
 //! custom white balance, the focus mode, the AF-area mode, the release
 //! mode and bracketing; and the white balance setting in place of Exif's. On Sony files the shutter,
-//! the image area, the raw image size, AF fine-tune and daylight saving
-//! time are `None`: Sony records the first two only in enciphered blocks,
-//! which raw-files does not read, gives an APS-C raw the raw size code of
-//! a medium one, keeps its AF micro adjustment in enciphered or unread
-//! blocks, and records no daylight saving time in a plain tag.
+//! the image area, the raw image size, AF fine-tune, auto ISO and daylight
+//! saving time are `None`: Sony records the first two only in enciphered
+//! blocks, which raw-files does not read, gives an APS-C raw the raw size
+//! code of a medium one, keeps its AF micro adjustment and ISO setting in
+//! enciphered or unread blocks, and records no daylight saving time in a
+//! plain tag.
 //!
 //! A program that uses raw-files can build these values for its own
 //! tests, without a camera file: [`CameraSettings`] and [`WhiteBalance`]
@@ -52,8 +53,8 @@ use crate::rational::SignedRational;
 
 /// How the camera was set for a picture: its white balance, exposure
 /// program, metering mode, flash, shutter, image area, raw image size,
-/// color space, focus mode, AF-area mode, AF fine-tune, release mode,
-/// bracketing and daylight saving time, for a viewer's information panel
+/// color space, focus mode, AF-area mode, AF fine-tune, auto ISO, release
+/// mode, bracketing and daylight saving time, for a viewer's information panel
 /// beside the exposure.
 ///
 /// Every value is `None` when the file does not record it or records it in
@@ -62,11 +63,11 @@ use crate::rational::SignedRational;
 /// [`Metadata::camera_settings`](crate::Metadata::camera_settings) gives
 /// the values a file's standard Exif tags record: the exposure program,
 /// the metering mode, the flash, the white balance mode, the color space
-/// and exposure bracketing. The others, which only a maker's MakerNote records, it gives
-/// from Nikon's MakerNote and Sony's, each those its MakerNote records in
-/// plain tags; the shutter, the image area, the raw image size, AF
-/// fine-tune and daylight saving time are `None` for every Sony file. Each
-/// getter says where its value comes from.
+/// and exposure bracketing. The others, which only a maker's MakerNote
+/// records, it gives from Nikon's MakerNote and Sony's, each those its
+/// MakerNote records in plain tags; the shutter, the image area, the raw
+/// image size, AF fine-tune, auto ISO and daylight saving time are `None`
+/// for every Sony file. Each getter says where its value comes from.
 ///
 /// `CameraSettings::default()` is the empty record, with every value
 /// `None` and an empty [`WhiteBalance`]. A caller's tests start from it and
@@ -145,6 +146,7 @@ pub struct CameraSettings {
     pub(crate) focus_mode: Option<FocusMode>,
     pub(crate) focus_area_mode: Option<FocusAreaMode>,
     pub(crate) af_fine_tune: Option<AfFineTune>,
+    pub(crate) auto_iso: Option<bool>,
     pub(crate) release_mode: Option<ReleaseMode>,
     pub(crate) bracketing: Option<Bracketing>,
     pub(crate) daylight_saving_time: Option<bool>,
@@ -397,6 +399,49 @@ impl CameraSettings {
         self.af_fine_tune
     }
 
+    /// Whether auto ISO was on: `Some(true)` when the camera chose the ISO,
+    /// `Some(false)` when the photographer set it.
+    ///
+    /// The ISO the camera took the picture at is
+    /// [`Exposure::iso`](crate::Exposure::iso), whichever chose it.
+    ///
+    /// Read from Nikon's MakerNote:
+    ///
+    /// - bit 5 of its ShootingMode, which every Nikon DSLR checked but the
+    ///   D1 bodies, the D100 and the D2H records as one SHORT, as do the
+    ///   Nikon 1 and Z bodies and the Coolpix A; but not on the D70, whose
+    ///   bit 5 has another meaning;
+    /// - on the other Coolpix bodies, which record no ShootingMode, the
+    ///   text of ISOSelection, `AUTO` or `MANUAL`; any other text gives
+    ///   `None`.
+    ///
+    /// `None` too for the D1 bodies, the D100 and the D2H, which write
+    /// ShootingMode as one BYTE, which is not read, and no ISOSelection;
+    /// and for Sony files: the E-mount bodies record the ISO setting only
+    /// in enciphered blocks, and the A-mount bodies in a plain block whose
+    /// layout raw-files does not read.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use raw_files::CameraFile;
+    ///
+    /// # fn main() -> raw_files::Result<()> {
+    /// let file = CameraFile::open("photo.nef")?;
+    /// let metadata = file.metadata();
+    /// if let Some(iso) = metadata.exposure().iso() {
+    ///     match metadata.camera_settings().auto_iso() {
+    ///         Some(true) => println!("ISO {iso}, chosen by the camera"),
+    ///         _ => println!("ISO {iso}"),
+    ///     }
+    /// }
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn auto_iso(&self) -> Option<bool> {
+        self.auto_iso
+    }
+
     /// How the shutter was released for the picture: one frame for each
     /// press, a burst, by the self-timer or by a remote, such as
     /// [`Continuous`](ReleaseMode::Continuous); [`ReleaseMode`] says which
@@ -411,16 +456,17 @@ impl CameraSettings {
     ///
     /// `None` when:
     ///
-    /// - the file records no release mode, as the Nikon bodies before the
-    ///   D2X, the Coolpix bodies but the Coolpix A, and the oldest Sony
-    ///   bodies do;
+    /// - the file records no release mode, as the Coolpix bodies but the
+    ///   Coolpix A and the oldest Sony bodies do;
     /// - Nikon's ShootingMode sets two of bits 0, 3 and 7, which no file
     ///   does, or bit 11, pre-capture, a burst that begins before the
     ///   shutter button is pressed all the way, which no file does either;
     /// - Sony's code records a bracketed series, which does not say
     ///   whether the frames were shot one at a time or as a burst, or is a
     ///   code the documentation does not give;
-    /// - the tag has another type or count than the maker writes.
+    /// - the tag has another type or count than the maker writes, as
+    ///   Nikon's D1 bodies, D100 and D2H, which write ShootingMode as one
+    ///   BYTE, do.
     ///
     /// Sony records the self-timer and the remote only in blocks raw-files
     /// does not read, and whether a self-timer release writes 0 is not
@@ -629,6 +675,14 @@ impl CameraSettings {
     #[must_use]
     pub fn with_af_fine_tune(mut self, fine_tune: AfFineTune) -> Self {
         self.af_fine_tune = Some(fine_tune);
+        self
+    }
+
+    /// Sets whether auto ISO was on, in place of any value set before;
+    /// [`auto_iso`](Self::auto_iso) reads it.
+    #[must_use]
+    pub fn with_auto_iso(mut self, on: bool) -> Self {
+        self.auto_iso = Some(on);
         self
     }
 
@@ -1855,6 +1909,7 @@ mod tests {
                 value: Some(-5),
                 tele_value: None,
             }),
+            auto_iso: Some(true),
             release_mode: Some(ReleaseMode::Continuous),
             bracketing: Some(Bracketing::Exposure),
             daylight_saving_time: Some(true),
@@ -1876,6 +1931,7 @@ mod tests {
         assert_eq!(settings.focus_mode(), None);
         assert_eq!(settings.focus_area_mode(), None);
         assert_eq!(settings.af_fine_tune(), None);
+        assert_eq!(settings.auto_iso(), None);
         assert_eq!(settings.release_mode(), None);
         assert_eq!(settings.bracketing(), None);
         assert_eq!(settings.daylight_saving_time(), None);
@@ -1917,6 +1973,7 @@ mod tests {
                 tele_value: None,
             })
         );
+        assert_eq!(settings.auto_iso(), Some(true));
         assert_eq!(settings.release_mode(), Some(ReleaseMode::Continuous));
         assert_eq!(settings.bracketing(), Some(Bracketing::Exposure));
         assert_eq!(settings.daylight_saving_time(), Some(true));
@@ -2035,6 +2092,13 @@ mod tests {
                     },
                 ),
                 (
+                    start.clone().with_auto_iso(false),
+                    CameraSettings {
+                        auto_iso: Some(false),
+                        ..start.clone()
+                    },
+                ),
+                (
                     start.clone().with_release_mode(ReleaseMode::Remote),
                     CameraSettings {
                         release_mode: Some(ReleaseMode::Remote),
@@ -2121,6 +2185,7 @@ mod tests {
             .with_focus_mode(FocusMode::Continuous)
             .with_focus_area_mode(FocusAreaMode::Tracking)
             .with_af_fine_tune(AfFineTune::on().with_value(-5))
+            .with_auto_iso(true)
             .with_release_mode(ReleaseMode::Continuous)
             .with_bracketing(Bracketing::Exposure)
             .with_daylight_saving_time(true);
@@ -2142,6 +2207,7 @@ mod tests {
             .with_focus_mode(FocusMode::Single)
             .with_focus_area_mode(FocusAreaMode::Pinpoint)
             .with_af_fine_tune(AfFineTune::off().with_value(3))
+            .with_auto_iso(false)
             .with_release_mode(ReleaseMode::SelfTimer)
             .with_bracketing(Bracketing::DynamicRange)
             .with_daylight_saving_time(false);
@@ -2161,6 +2227,7 @@ mod tests {
             .with_focus_mode(FocusMode::Continuous)
             .with_focus_area_mode(FocusAreaMode::Tracking)
             .with_af_fine_tune(AfFineTune::on().with_value(-5))
+            .with_auto_iso(true)
             .with_release_mode(ReleaseMode::Continuous)
             .with_bracketing(Bracketing::Exposure)
             .with_daylight_saving_time(true);

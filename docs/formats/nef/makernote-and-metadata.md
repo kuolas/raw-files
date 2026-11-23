@@ -1897,11 +1897,15 @@ open ([section 12.5](#125-what-the-view-leaves-out)).
 **Auto ISO.** Bit 5 of 0x0089 ShootingMode is auto ISO [S][1]. It is set
 on 71 of the 271 public files that have the tag and on 30,403 of my
 48,395. **[F]** The documentation gives the D70's bit 5 another meaning,
-and the one public D70 file sets it (value 33). So the D70 will give no
+and the one public D70 file sets it (value 33). So the D70 gives no
 auto ISO. The Coolpix bodies but the Coolpix A write no ShootingMode.
 Their 0x000F ISOSelection says `AUTO` or `MANUAL` instead, on 16 public
-files (9 and 7). **[F]** raw-files will read the bit, else that text.
-Both are observed; no frame was shot with auto ISO set either way.
+files (9 and 7). **[F]** raw-files reads the bit, else that text:
+`AUTO` on, `MANUAL` off, and any other text none. A file without a
+Model takes the bit as every body but the D70 has it. Both are
+observed; no frame was shot with auto ISO set either way. The D1
+bodies, the D100 and the D2H write ShootingMode as one BYTE, and give
+none of its values. **[F]**
 
 **Exposure fine-tuning.** The photographer's fine-tuning of the camera's
 metering, from -1 to +1 EV in sixths on the D600 [P][25] (p. 226).
