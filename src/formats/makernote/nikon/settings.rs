@@ -2,8 +2,9 @@
 
 //! The camera settings in the Nikon MakerNote: the white balance, the
 //! shutter used, the image area, the raw size, the color space, the focus
-//! mode, the AF-area mode, AF fine-tune, auto ISO, the exposure
-//! fine-tuning, the release mode and bracketing, and daylight saving time.
+//! mode, the AF-area mode, AF fine-tune, the stabilization, auto ISO, the
+//! exposure fine-tuning, the release mode and bracketing, and daylight
+//! saving time.
 //!
 //! The MakerNote records how the camera was set for the picture beyond
 //! what the Exif tags record (ADR011). [`camera_settings`] reads each
@@ -22,6 +23,7 @@
 //! - the AF-area mode from AFInfo2 ([`area_mode_of`]), else from AFInfo
 //!   ([`af_info_area_mode`]);
 //! - AF fine-tune from AFTune ([`af_fine_tune`]);
+//! - the stabilization from VRInfo ([`stabilization`]);
 //! - auto ISO from ShootingMode's bit 5 ([`auto_iso`]), else from
 //!   ISOSelection's text ([`auto_iso_of_text`]);
 //! - the exposure fine-tuning from ExposureTuning
@@ -52,7 +54,8 @@ use super::crop::CropHiSpeed;
 use super::rules;
 use crate::camera_settings::{
     AfFineTune, Bracketing, CameraSettings, ColorSpace, FineTune, FocusAreaMode, FocusMode,
-    ImageArea, RawImageSize, ReleaseMode, Shutter, WhiteBalanceMode,
+    ImageArea, RawImageSize, ReleaseMode, Shutter, Stabilization, StabilizationMode,
+    WhiteBalanceMode,
 };
 use crate::error::Result;
 use crate::formats::makernote::{Picture, checked_color_temperature};
@@ -105,6 +108,7 @@ pub(super) struct FromStandardTags<'a> {
 ///   AFInfo2 it is AFInfo's ([`af_info_area_mode`]). A body with AFInfo2
 ///   never falls back on AFInfo, which no file holds beside it.
 /// - **AF fine-tune** is AFTune's ([`af_fine_tune`]).
+/// - **The stabilization** is VRInfo's ([`stabilization`]).
 /// - **Auto ISO** is ShootingMode's bit 5 ([`auto_iso`]), on a body other
 ///   than the D70, which `standard.model`, the Model the standard tags
 ///   read, names.
@@ -179,6 +183,10 @@ pub(super) fn camera_settings<R: Read + Seek>(
             .and_then(|[code, ..]| af_info_area_mode(code)),
     };
     settings.af_fine_tune = ifd.held(rules::AF_TUNE).and_then(af_fine_tune);
+    settings.stabilization = ifd
+        .get(src, rules::VR_INFO)?
+        .as_deref()
+        .and_then(stabilization);
     settings.exposure_fine_tune = ifd
         .held(rules::EXPOSURE_TUNING)
         .and_then(exposure_fine_tune);
@@ -486,6 +494,69 @@ fn af_fine_tune([on, _lens, value, tele_value]: [u8; 4]) -> Option<AfFineTune> {
     }
 }
 
+/// The stabilization that VRInfo's `record` holds, at the versions whose
+/// layout ExifTool's published documentation gives and measured files
+/// hold, each of its length: 0100, on the DSLRs from the D2Hs and the D2X
+/// on, and 0101, on the Nikon 1 bodies, of 8 bytes; 0200, on the Z
+/// bodies, the D6 and the D780, of 9 bytes.
+///
+/// Byte 4 is 1 on and 2 off. Under on, byte 6 gives the mode by the
+/// version's list ([`stabilization_mode`]), and a code the list does not
+/// name gives none. Under off, the record gives no mode.
+///
+/// `None` for any other version, for a record of another length than its
+/// version's, and for any other byte 4, such as the 0 four public files
+/// hold. Byte 5, which repeats byte 4 on the files, and byte 8 of version
+/// 0200, the kind of stabilization, are not read (NEF notes, section
+/// 8.10).
+fn stabilization(record: &[u8]) -> Option<Stabilization> {
+    let len = match record.get(..4)? {
+        b"0100" | b"0101" => 8,
+        b"0200" => 9,
+        _ => return None,
+    };
+    if record.len() != len {
+        return None;
+    }
+    let &[v0, v1, v2, v3, on, _, mode, ..] = record else {
+        return None;
+    };
+    match on {
+        1 => {
+            let on = Stabilization::on();
+            Some(match stabilization_mode([v0, v1, v2, v3], mode) {
+                Some(mode) => on.with_mode(mode),
+                None => on,
+            })
+        }
+        2 => Some(Stabilization::off()),
+        _ => None,
+    }
+}
+
+/// The stabilization mode VRInfo's seventh byte, `code`, names in the list
+/// the documentation gives for the record's `version`, each read whole,
+/// since files hold part of each:
+///
+/// - at 0100 and 0101, 0 [`Normal`](StabilizationMode::Normal), 2
+///   [`Active`](StabilizationMode::Active) and 3
+///   [`Sport`](StabilizationMode::Sport); 1, which the documentation calls
+///   "On (1)", names no mode;
+/// - at 0200, the list for the Z bodies, 1
+///   [`Normal`](StabilizationMode::Normal) and 3
+///   [`Sport`](StabilizationMode::Sport); 0, which it calls "Off", names
+///   no mode, since byte 4 says whether it was on.
+///
+/// `None` for every other code.
+fn stabilization_mode(version: [u8; 4], code: u8) -> Option<StabilizationMode> {
+    Some(match (&version, code) {
+        (b"0100" | b"0101", 0) | (b"0200", 1) => StabilizationMode::Normal,
+        (b"0100" | b"0101", 2) => StabilizationMode::Active,
+        (b"0100" | b"0101" | b"0200", 3) => StabilizationMode::Sport,
+        _ => return None,
+    })
+}
+
 /// The exposure fine-tuning, in EV, that ExposureTuning's three bytes
 /// record: a signed count, then a factor and a divisor, read as the count
 /// times the factor over the divisor, so that `fd 01 06` is -3/6 EV. A
@@ -635,7 +706,7 @@ mod tests {
     use super::super::{
         AF_INFO, AF_INFO2, AF_TUNE, COLOR_SPACE, COLOR_TEMPERATURE, CROP_HI_SPEED, EXPOSURE_TUNING,
         FINE_TUNE, FINE_TUNE_STEPS, FOCUS_MODE, IMAGE_SIZE_RAW, ISO_SELECTION, SHOOTING_MODE,
-        SHUTTER_MODE, WHITE_BALANCE, WORLD_TIME, metadata,
+        SHUTTER_MODE, VR_INFO, WHITE_BALANCE, WORLD_TIME, metadata,
     };
     use super::*;
     use crate::camera_settings::{ExposureProgram, WhiteBalance};
@@ -1936,6 +2007,93 @@ mod tests {
                     .ascii(ifd, ISO_SELECTION, "AUTO");
             });
             assert_eq!(read, None, "{order:?}, D70");
+        }
+    }
+
+    /// A VRInfo record of version `version`: byte 4 `on`, byte 5 repeating
+    /// it, as the files do, byte 6 `mode`, then zeros to `len` bytes.
+    fn vr_info(version: &[u8; 4], on: u8, mode: u8, len: usize) -> Vec<u8> {
+        let mut record = version.to_vec();
+        record.extend_from_slice(&[on, on, mode]);
+        record.resize(len, 0);
+        record
+    }
+
+    /// The stabilization of a raw file in byte order `order` whose
+    /// MakerNote's VRInfo is `record`, of type UNDEFINED.
+    fn stabilization_of(order: Order, record: &[u8]) -> Option<Stabilization> {
+        settings_of(order, |inner, ifd| {
+            inner.undefined(ifd, VR_INFO, record);
+        })
+        .stabilization
+    }
+
+    #[test]
+    fn vr_info_gives_on_or_off_and_the_mode_of_its_versions_list() {
+        use StabilizationMode::{Active, Normal, Sport};
+        let on = Stabilization::on;
+        let cases = [
+            // The DSLRs' 0100 and the Nikon 1 bodies' 0101, of 8 bytes: 0
+            // normal, 1 "On (1)", no mode, 2 active, 3 sport.
+            (vr_info(b"0100", 1, 0, 8), on().with_mode(Normal)),
+            (vr_info(b"0100", 1, 1, 8), on()),
+            (vr_info(b"0100", 1, 2, 8), on().with_mode(Active)),
+            (vr_info(b"0100", 1, 3, 8), on().with_mode(Sport)),
+            (vr_info(b"0100", 1, 4, 8), on()),
+            (vr_info(b"0101", 1, 0, 8), on().with_mode(Normal)),
+            (vr_info(b"0101", 1, 2, 8), on().with_mode(Active)),
+            (vr_info(b"0101", 1, 3, 8), on().with_mode(Sport)),
+            // The Z bodies' 0200, of 9 bytes: 0 "Off", no mode, 1 normal, 3
+            // sport, and 2, which its list lacks.
+            (vr_info(b"0200", 1, 0, 9), on()),
+            (vr_info(b"0200", 1, 1, 9), on().with_mode(Normal)),
+            (vr_info(b"0200", 1, 2, 9), on()),
+            (vr_info(b"0200", 1, 3, 9), on().with_mode(Sport)),
+            // Off, whatever byte 6 holds.
+            (vr_info(b"0100", 2, 0, 8), Stabilization::off()),
+            (vr_info(b"0100", 2, 3, 8), Stabilization::off()),
+            (vr_info(b"0200", 2, 1, 9), Stabilization::off()),
+        ];
+        for order in ORDERS {
+            for (record, expected) in &cases {
+                assert_eq!(
+                    stabilization_of(order, record),
+                    Some(*expected),
+                    "{order:?}, {record:?}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn vr_info_of_another_byte_4_version_or_length_is_none() {
+        let records = [
+            // Byte 4 zero, as four public files hold, and 3.
+            vr_info(b"0100", 0, 0, 8),
+            vr_info(b"0200", 3, 1, 9),
+            // A record of 7 bytes, and 0100 of 9 and 0200 of 8.
+            vr_info(b"0100", 1, 0, 7),
+            vr_info(b"0100", 1, 0, 9),
+            vr_info(b"0200", 1, 1, 8),
+            // Versions no measured file holds.
+            vr_info(b"0102", 1, 0, 8),
+            vr_info(b"0201", 1, 1, 9),
+            vr_info(b"0300", 1, 1, 9),
+            b"010".to_vec(),
+        ];
+        for order in ORDERS {
+            for record in &records {
+                assert_eq!(
+                    stabilization_of(order, record),
+                    None,
+                    "{order:?}, {record:?}"
+                );
+            }
+            // Eight BYTEs.
+            let read = settings_of(order, |inner, ifd| {
+                inner.byte(ifd, VR_INFO, &vr_info(b"0100", 1, 0, 8));
+            });
+            assert_eq!(read.stabilization, None, "{order:?}");
         }
     }
 

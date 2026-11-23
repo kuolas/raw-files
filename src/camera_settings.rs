@@ -6,12 +6,14 @@
 //! was set for the shot: the white balance, the exposure program, the
 //! metering mode, the flash, the shutter, the image area, the raw image
 //! size, the color space, the focus mode, the AF-area mode, AF fine-tune,
-//! auto ISO, the exposure fine-tuning, the release mode, bracketing and
-//! whether the clock was on daylight saving time. [`CameraSettings`] holds them all, and
+//! the stabilization, auto ISO, the exposure fine-tuning, the release
+//! mode, bracketing and whether the clock was on daylight saving time.
+//! [`CameraSettings`] holds them all, and
 //! [`Metadata::camera_settings`](crate::Metadata::camera_settings) gives
-//! them for a file. [`WhiteBalance`], [`FineTune`], [`Flash`] and
-//! [`AfFineTune`] hold the settings made of several parts; each enum, such as [`ExposureProgram`],
-//! names one setting's choices in words that fit any maker, with a
+//! them for a file. [`WhiteBalance`], [`FineTune`], [`Flash`],
+//! [`AfFineTune`] and [`Stabilization`] hold the settings made of several
+//! parts; each enum, such as [`ExposureProgram`], names one setting's
+//! choices in words that fit any maker, with a
 //! [`name`](ExposureProgram::name) to show.
 //!
 //! Every value is optional. A file may not record it, or may record it in
@@ -25,17 +27,18 @@
 //! maker's own tags, its MakerNote. Nikon's, in NEF files and in the JPEGs
 //! of Nikon cameras, gives the white balance's color temperature and
 //! fine-tuning, the shutter, the image area, the focus mode, the AF-area
-//! mode, AF fine-tune, auto ISO, the exposure fine-tuning, the release
-//! mode and bracketing, daylight saving time and, in a raw file, the raw
-//! image size; the white balance setting,
+//! mode, AF fine-tune, the stabilization, auto ISO, the exposure
+//! fine-tuning, the release mode and bracketing, daylight saving time and,
+//! in a raw file, the raw image size; the white balance setting,
 //! finer than Exif's,
 //! in place of Exif's; and the color space where the Exif tags record
 //! none, as in every Nikon raw file checked. Sony's, in ARW files and
 //! their family and in the JPEGs of Sony cameras, gives the white
 //! balance's fine-tuning, the electronic front curtain setting, which only
 //! Sony records, the color temperature of a chosen color temperature or a
-//! custom white balance, the focus mode, the AF-area mode, the exposure
-//! fine-tuning, the release mode and bracketing; and the white balance
+//! custom white balance, the focus mode, the AF-area mode, the
+//! stabilization, without a mode, the exposure fine-tuning, the release
+//! mode and bracketing; and the white balance
 //! setting in place of Exif's. On Sony files the shutter,
 //! the image area, the raw image size, AF fine-tune, auto ISO and daylight
 //! saving time are `None`: Sony records the first two only in enciphered
@@ -46,8 +49,9 @@
 //!
 //! A program that uses raw-files can build these values for its own
 //! tests, without a camera file: [`CameraSettings`] and [`WhiteBalance`]
-//! through their `with_…` methods, and a [`FineTune`], a [`Flash`] and an
-//! [`AfFineTune`] through their constructors. [`CameraSettings`]'s docs show how.
+//! through their `with_…` methods, and a [`FineTune`], a [`Flash`], an
+//! [`AfFineTune`] and a [`Stabilization`] through their constructors.
+//! [`CameraSettings`]'s docs show how.
 
 use std::fmt;
 
@@ -55,8 +59,9 @@ use crate::rational::SignedRational;
 
 /// How the camera was set for a picture: its white balance, exposure
 /// program, metering mode, flash, shutter, image area, raw image size,
-/// color space, focus mode, AF-area mode, AF fine-tune, auto ISO, exposure
-/// fine-tuning, release mode, bracketing and daylight saving time, for a viewer's information panel
+/// color space, focus mode, AF-area mode, AF fine-tune, stabilization, auto
+/// ISO, exposure fine-tuning, release mode, bracketing and daylight saving
+/// time, for a viewer's information panel
 /// beside the exposure.
 ///
 /// Every value is `None` when the file does not record it or records it in
@@ -148,6 +153,7 @@ pub struct CameraSettings {
     pub(crate) focus_mode: Option<FocusMode>,
     pub(crate) focus_area_mode: Option<FocusAreaMode>,
     pub(crate) af_fine_tune: Option<AfFineTune>,
+    pub(crate) stabilization: Option<Stabilization>,
     pub(crate) auto_iso: Option<bool>,
     pub(crate) exposure_fine_tune: Option<SignedRational>,
     pub(crate) release_mode: Option<ReleaseMode>,
@@ -400,6 +406,59 @@ impl CameraSettings {
     /// ```
     pub fn af_fine_tune(&self) -> Option<AfFineTune> {
         self.af_fine_tune
+    }
+
+    /// Whether the camera's image stabilization was on, and its mode when
+    /// the file records one; [`Stabilization`] says what each holds.
+    ///
+    /// Read from the MakerNote:
+    ///
+    /// - Nikon's VRInfo, at its versions 0100, 0101 and 0200, each of the
+    ///   length the published documentation gives: its fifth byte says on
+    ///   or off, and its seventh byte the mode, read only when on, in the
+    ///   version's list of codes. Nikon calls it vibration reduction (VR);
+    /// - Sony's ImageStabilization, 1 on and 0 off; no plain Sony tag
+    ///   records a mode.
+    ///
+    /// Which kind of stabilization it was, in the lens, in the body or
+    /// both, is not given.
+    ///
+    /// `None` when:
+    ///
+    /// - the file records none, as Nikon's Coolpix bodies but the Coolpix
+    ///   A, its DSLRs from the D1 to the D200, and Sony's SR2 and SRF files
+    ///   do;
+    /// - Nikon's fifth byte is neither 1 nor 2, as some files hold 0, or
+    ///   Sony's value is neither 0 nor 1, as its documented 4294967295,
+    ///   "n/a";
+    /// - VRInfo is of a version no measured file holds, or of another
+    ///   length than its version's, or the tag has another type or count
+    ///   than the maker writes.
+    ///
+    /// What each maker's files record is in the notes on
+    /// [Nikon's capture settings](https://github.com/kuolas/raw-files/blob/master/docs/formats/nef/makernote-and-metadata.md#810-more-capture-settings)
+    /// and
+    /// [Sony's](https://github.com/kuolas/raw-files/blob/master/docs/formats/arw/makernote-and-metadata.md#910-more-capture-settings).
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use raw_files::CameraFile;
+    ///
+    /// # fn main() -> raw_files::Result<()> {
+    /// let file = CameraFile::open("photo.nef")?;
+    /// if let Some(stabilization) = file.metadata().camera_settings().stabilization() {
+    ///     match (stabilization.is_on(), stabilization.mode()) {
+    ///         (true, Some(mode)) => println!("stabilization: {mode}"),
+    ///         (true, None) => println!("stabilization: on"),
+    ///         (false, _) => println!("stabilization: off"),
+    ///     }
+    /// }
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn stabilization(&self) -> Option<Stabilization> {
+        self.stabilization
     }
 
     /// Whether auto ISO was on: `Some(true)` when the camera chose the ISO,
@@ -722,6 +781,14 @@ impl CameraSettings {
     #[must_use]
     pub fn with_af_fine_tune(mut self, fine_tune: AfFineTune) -> Self {
         self.af_fine_tune = Some(fine_tune);
+        self
+    }
+
+    /// Sets the stabilization, in place of any set before;
+    /// [`stabilization`](Self::stabilization) reads it.
+    #[must_use]
+    pub fn with_stabilization(mut self, stabilization: Stabilization) -> Self {
+        self.stabilization = Some(stabilization);
         self
     }
 
@@ -1143,6 +1210,85 @@ impl AfFineTune {
     /// the lens with one value.
     pub fn tele_value(&self) -> Option<i32> {
         self.tele_value
+    }
+}
+
+/// The camera's image stabilization: whether it was on, and, when it was,
+/// its mode, when the file records one.
+///
+/// It is what the camera recorded of the setting, whichever part
+/// stabilized the picture: the lens, the body or both. Nikon calls it
+/// vibration reduction (VR).
+///
+/// There is no `Default`: a file that records no stabilization gives
+/// `None` for [`CameraSettings::stabilization`]. A file that records it off
+/// gives one that [`is_on`](Self::is_on) says is off, with no
+/// [`mode`](Self::mode).
+///
+/// # Examples
+///
+/// Stabilization on in sport mode, on with no mode recorded, and off:
+///
+/// ```
+/// use raw_files::{Stabilization, StabilizationMode};
+///
+/// let sport = Stabilization::on().with_mode(StabilizationMode::Sport);
+/// assert!(sport.is_on());
+/// assert_eq!(sport.mode(), Some(StabilizationMode::Sport));
+///
+/// let on = Stabilization::on();
+/// assert_eq!(on.mode(), None);
+///
+/// let off = Stabilization::off();
+/// assert!(!off.is_on());
+/// assert_eq!(off.mode(), None);
+/// ```
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct Stabilization {
+    pub(crate) on: bool,
+    pub(crate) mode: Option<StabilizationMode>,
+}
+
+impl Stabilization {
+    /// Stabilization that was on, with no mode yet;
+    /// [`with_mode`](Self::with_mode) adds it.
+    #[must_use]
+    pub fn on() -> Self {
+        Self {
+            on: true,
+            mode: None,
+        }
+    }
+
+    /// Stabilization that was off, with no mode.
+    #[must_use]
+    pub fn off() -> Self {
+        Self {
+            on: false,
+            mode: None,
+        }
+    }
+
+    /// This stabilization with the mode `mode`, in place of any it had. It
+    /// is stored as given, whether or not the stabilization is on: the
+    /// readers give a mode only when it is.
+    #[must_use]
+    pub fn with_mode(self, mode: StabilizationMode) -> Self {
+        Self {
+            mode: Some(mode),
+            ..self
+        }
+    }
+
+    /// Whether the stabilization was on.
+    pub fn is_on(&self) -> bool {
+        self.on
+    }
+
+    /// The stabilization's mode, or `None` when none is recorded: when it
+    /// is off, or the file records no mode, as every Sony file does.
+    pub fn mode(&self) -> Option<StabilizationMode> {
+        self.mode
     }
 }
 
@@ -1790,6 +1936,59 @@ impl fmt::Display for FocusAreaMode {
     }
 }
 
+/// The mode of a camera's image stabilization, in words that fit any
+/// maker: Nikon's normal, active and sport vibration reduction.
+///
+/// A maker's code is named where it is in a list that its published
+/// documentation gives and that the measured files agree with, as the
+/// [decision to read the metadata from the standard tags](https://github.com/kuolas/raw-files/blob/master/docs/architecture-decisions/adr011-metadata-from-standard-tags.md)
+/// says; any other code gives no mode.
+///
+/// `StabilizationMode` is `#[non_exhaustive]`, so match on it with a
+/// wildcard arm. It orders as its variants are listed, and a new variant is
+/// added after the existing ones, so an order once observed holds. Its
+/// [`name`](Self::name)s, which `Display` writes too, are "Normal",
+/// "Active" and "Sport".
+///
+/// # Examples
+///
+/// ```
+/// use raw_files::StabilizationMode;
+///
+/// assert_eq!(StabilizationMode::Active.name(), "Active");
+/// assert_eq!(StabilizationMode::Sport.to_string(), "Sport");
+/// ```
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[non_exhaustive]
+pub enum StabilizationMode {
+    /// The mode for most pictures: Nikon's normal VR.
+    Normal,
+    /// The mode for pictures taken from a moving vehicle or another
+    /// shaking stand: Nikon's active VR.
+    Active,
+    /// The mode for following moving subjects: Nikon's sport VR.
+    Sport,
+}
+
+impl StabilizationMode {
+    /// The mode's name, for an information panel, such as "Active"; the
+    /// type's docs list them all.
+    pub fn name(self) -> &'static str {
+        match self {
+            StabilizationMode::Normal => "Normal",
+            StabilizationMode::Active => "Active",
+            StabilizationMode::Sport => "Sport",
+        }
+    }
+}
+
+impl fmt::Display for StabilizationMode {
+    /// Writes [`name`](StabilizationMode::name).
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.name())
+    }
+}
+
 /// How the shutter was released for a picture, in words that fit any
 /// maker. Each maker's finer kinds fold into one variant:
 ///
@@ -1964,6 +2163,10 @@ mod tests {
                 value: Some(-5),
                 tele_value: None,
             }),
+            stabilization: Some(Stabilization {
+                on: true,
+                mode: Some(StabilizationMode::Active),
+            }),
             auto_iso: Some(true),
             exposure_fine_tune: Some(signed_fraction(-3, 6)),
             release_mode: Some(ReleaseMode::Continuous),
@@ -1987,6 +2190,7 @@ mod tests {
         assert_eq!(settings.focus_mode(), None);
         assert_eq!(settings.focus_area_mode(), None);
         assert_eq!(settings.af_fine_tune(), None);
+        assert_eq!(settings.stabilization(), None);
         assert_eq!(settings.auto_iso(), None);
         assert_eq!(settings.exposure_fine_tune(), None);
         assert_eq!(settings.release_mode(), None);
@@ -2028,6 +2232,13 @@ mod tests {
                 on: true,
                 value: Some(-5),
                 tele_value: None,
+            })
+        );
+        assert_eq!(
+            settings.stabilization(),
+            Some(Stabilization {
+                on: true,
+                mode: Some(StabilizationMode::Active),
             })
         );
         assert_eq!(settings.auto_iso(), Some(true));
@@ -2150,6 +2361,16 @@ mod tests {
                     },
                 ),
                 (
+                    start.clone().with_stabilization(Stabilization::off()),
+                    CameraSettings {
+                        stabilization: Some(Stabilization {
+                            on: false,
+                            mode: None,
+                        }),
+                        ..start.clone()
+                    },
+                ),
+                (
                     start.clone().with_auto_iso(false),
                     CameraSettings {
                         auto_iso: Some(false),
@@ -2250,6 +2471,7 @@ mod tests {
             .with_focus_mode(FocusMode::Continuous)
             .with_focus_area_mode(FocusAreaMode::Tracking)
             .with_af_fine_tune(AfFineTune::on().with_value(-5))
+            .with_stabilization(Stabilization::on().with_mode(StabilizationMode::Active))
             .with_auto_iso(true)
             .with_exposure_fine_tune(signed_fraction(-3, 6))
             .with_release_mode(ReleaseMode::Continuous)
@@ -2273,6 +2495,7 @@ mod tests {
             .with_focus_mode(FocusMode::Single)
             .with_focus_area_mode(FocusAreaMode::Pinpoint)
             .with_af_fine_tune(AfFineTune::off().with_value(3))
+            .with_stabilization(Stabilization::off().with_mode(StabilizationMode::Sport))
             .with_auto_iso(false)
             .with_exposure_fine_tune(signed_fraction(1, 6))
             .with_release_mode(ReleaseMode::SelfTimer)
@@ -2294,6 +2517,7 @@ mod tests {
             .with_focus_mode(FocusMode::Continuous)
             .with_focus_area_mode(FocusAreaMode::Tracking)
             .with_af_fine_tune(AfFineTune::on().with_value(-5))
+            .with_stabilization(Stabilization::on().with_mode(StabilizationMode::Active))
             .with_auto_iso(true)
             .with_exposure_fine_tune(signed_fraction(-3, 6))
             .with_release_mode(ReleaseMode::Continuous)
@@ -2377,6 +2601,37 @@ mod tests {
         assert_ne!(
             AfFineTune::on().with_value(0),
             AfFineTune::on().with_value(0).with_tele_value(0)
+        );
+    }
+
+    #[test]
+    fn on_and_off_build_a_stabilization_that_says_so() {
+        assert!(Stabilization::on().is_on());
+        assert!(!Stabilization::off().is_on());
+    }
+
+    #[test]
+    fn a_stabilization_starts_without_a_mode_and_takes_one() {
+        for (stabilization, on) in [(Stabilization::off(), false), (Stabilization::on(), true)] {
+            assert_eq!(stabilization.is_on(), on);
+            assert_eq!(stabilization.mode(), None);
+            // A mode, then a second that replaces it, each kept as given,
+            // whether on or off.
+            let normal = stabilization.with_mode(StabilizationMode::Normal);
+            assert_eq!(
+                (normal.is_on(), normal.mode()),
+                (on, Some(StabilizationMode::Normal))
+            );
+            let sport = normal.with_mode(StabilizationMode::Sport);
+            assert_eq!(
+                (sport.is_on(), sport.mode()),
+                (on, Some(StabilizationMode::Sport))
+            );
+        }
+        assert_ne!(Stabilization::on(), Stabilization::off());
+        assert_ne!(
+            Stabilization::on(),
+            Stabilization::on().with_mode(StabilizationMode::Normal)
         );
     }
 
@@ -2539,6 +2794,17 @@ mod tests {
         all
     }
 
+    fn all_stabilization_modes() -> [StabilizationMode; 3] {
+        use StabilizationMode::*;
+        let all = [Normal, Active, Sport];
+        for mode in all {
+            match mode {
+                Normal | Active | Sport => {}
+            }
+        }
+        all
+    }
+
     fn all_release_modes() -> [ReleaseMode; 4] {
         use ReleaseMode::*;
         let all = [Single, Continuous, SelfTimer, Remote];
@@ -2668,6 +2934,11 @@ mod tests {
             ],
         );
         assert_names(
+            &all_stabilization_modes(),
+            StabilizationMode::name,
+            &["Normal", "Active", "Sport"],
+        );
+        assert_names(
             &all_release_modes(),
             ReleaseMode::name,
             &["Single frame", "Continuous", "Self-timer", "Remote"],
@@ -2693,6 +2964,7 @@ mod tests {
         assert_ordered(&all_color_spaces());
         assert_ordered(&all_focus_modes());
         assert_ordered(&all_focus_area_modes());
+        assert_ordered(&all_stabilization_modes());
         assert_ordered(&all_release_modes());
         assert_ordered(&all_bracketings());
     }

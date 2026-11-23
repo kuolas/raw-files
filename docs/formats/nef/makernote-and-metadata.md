@@ -1776,13 +1776,16 @@ Every text and GPS value counted lies inside the blocks raw-files'
 
 ### 8.10 More capture settings
 
-More of how the camera was set, which raw-files will read as camera
-settings
-([ADR011](../../architecture-decisions/adr011-metadata-from-standard-tags.md)):
+More of how the camera was set, as camera settings
+([ADR011](../../architecture-decisions/adr011-metadata-from-standard-tags.md)).
+raw-files reads:
 
 - the focus mode, AF fine-tune, stabilization and auto ISO;
 - the exposure fine-tuning, the release mode and bracketing, and
-  daylight saving time;
+  daylight saving time.
+
+It will read:
+
 - the flash's source, control, sync and compensation;
 - the raw compression and bit depth, and the JPEG quality;
 - the white balance's preset slot and fluorescent lamp.
@@ -1878,8 +1881,10 @@ and 0101.
 | 6, `0200` | 3 | Sport (Z bodies) | `Sport` | observed, in my files only | 0 / 14,666 |
 
 **[F]** The counts of byte 6 count the files where byte 4 says on.
-raw-files will read the mode only where byte 4 says on, so the two
-lists' 0 never meet on a file. On version 0100 byte 6 is 0 on every
+raw-files reads the mode only where byte 4 says on, so the two
+lists' 0 never meet on a file. A record of another version, or of
+another length than its version's, gives no stabilization, and so does
+byte 4's 0. On version 0100 byte 6 is 0 on every
 file, on and off alike. Byte 5, which the documentation does not name,
 repeats byte 4 on 139 public 0100 files and on all of mine. Still open,
 since no frame was shot to settle them:
@@ -1890,7 +1895,7 @@ since no frame was shot to settle them:
 - which version and list a Z body later than July 2025 writes: no
   measured file shows one.
 
-Byte 8 of 0200, the kind of stabilization, will not be read: it is 2
+Byte 8 of 0200, the kind of stabilization, is not read: it is 2
 without a VR lens and 3 with one on my files, and what it records is
 open ([section 12.5](#125-what-the-view-leaves-out)).
 

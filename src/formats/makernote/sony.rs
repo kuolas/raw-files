@@ -57,7 +57,8 @@ use std::io::{Read, Seek};
 
 use super::{MakerNoteBlock, Picture, Reader, checked_color_temperature};
 use crate::camera_settings::{
-    Bracketing, CameraSettings, FineTune, FocusAreaMode, FocusMode, ReleaseMode, WhiteBalanceMode,
+    Bracketing, CameraSettings, FineTune, FocusAreaMode, FocusMode, ReleaseMode, Stabilization,
+    WhiteBalanceMode,
 };
 use crate::container::tiff::{Ifd, Rule, Tree};
 use crate::entries::{Directory, Entries, Lookup};
@@ -126,6 +127,11 @@ const FOCUS_LOCATION2: u16 = 0x204A;
 /// none was recorded.
 const COLOR_TEMPERATURE: u16 = 0xB021;
 
+/// The Sony MakerNote tag that records whether the image stabilization was
+/// on (ImageStabilization): one LONG, 0 off and 1 on; 4294967295, "n/a",
+/// records none.
+pub(in crate::formats) const IMAGE_STABILIZATION: u16 = 0xB026;
+
 /// The Sony MakerNote tag that records how the shutter was released
 /// (ReleaseMode): one SHORT, 0 for a normal release, one frame for each
 /// press, 2 for continuous release, and 5, 6 and 8 for exposure, white
@@ -158,6 +164,8 @@ mod rules {
         Rule::new(super::FOCUS_FRAME_SIZE, &[FieldType::Undefined]);
     pub(super) const FOCUS_LOCATION2: Rule<[u32; 4]> = Rule::new(super::FOCUS_LOCATION2, SHORT);
     pub(super) const COLOR_TEMPERATURE: Held<[u32; 1]> = Held::new(super::COLOR_TEMPERATURE, LONG);
+    pub(super) const IMAGE_STABILIZATION: Held<[u32; 1]> =
+        Held::new(super::IMAGE_STABILIZATION, LONG);
     pub(super) const RELEASE_MODE: Held<[u32; 1]> = Held::new(super::RELEASE_MODE, SHORT);
 }
 
@@ -445,6 +453,8 @@ fn area<R: Read + Seek>(src: &mut Source<R>, makernote: &MakerNote) -> Result<Op
 ///   list of `family`, the body's family ([`area_mode`]), whatever the
 ///   focus mode and whether or not the file gives a point. Without a
 ///   family, in a file with no Model, it is `None`.
+/// - **The stabilization** is ImageStabilization's, on or off
+///   ([`stabilization`]), with no mode.
 /// - **The exposure fine-tuning** is ExposureStandardAdjustment's
 ///   ([`exposure_fine_tune`]).
 /// - **The release mode** is the one ReleaseMode's code names
@@ -488,6 +498,9 @@ fn camera_settings<R: Read + Seek>(
     settings.focus_area_mode = family
         .zip(ifd.held(rules::AF_AREA_MODE))
         .and_then(|(family, [code])| area_mode(family, code));
+    settings.stabilization = ifd
+        .held(rules::IMAGE_STABILIZATION)
+        .and_then(|[code]| stabilization(code));
     settings.exposure_fine_tune = exposure_fine_tune(src, makernote)?;
     if let Some([code]) = ifd.held(rules::RELEASE_MODE) {
         let (mode, bracketing) = release_mode(code);
@@ -650,6 +663,19 @@ fn area_mode(family: Family, code: u8) -> Option<FocusAreaMode> {
         (Family::EMount | Family::Ilca, 12) => FocusAreaMode::Dynamic,
         _ => return None,
     })
+}
+
+/// The stabilization an ImageStabilization `code` records: 0
+/// [`off`](Stabilization::off) and 1 [`on`](Stabilization::on), with no
+/// mode, which no plain Sony tag records. The fixed-lens RX1 bodies, which
+/// have none, record 0 (ARW notes, section 9.10). `None` for every other
+/// code, the documentation's 4294967295, "n/a", among them.
+fn stabilization(code: u32) -> Option<Stabilization> {
+    match code {
+        0 => Some(Stabilization::off()),
+        1 => Some(Stabilization::on()),
+        _ => None,
+    }
 }
 
 /// The exposure fine-tuning that `makernote`'s ExposureStandardAdjustment
@@ -2523,6 +2549,32 @@ mod tests {
                 "{order:?}"
             );
             assert_eq!(found.focus_points, None, "{order:?}");
+        }
+    }
+
+    #[test]
+    fn image_stabilization_gives_on_or_off_with_no_mode() {
+        for order in ORDERS {
+            for (code, expected) in [
+                (1, Some(Stabilization::on())),
+                (0, Some(Stabilization::off())),
+                (2, None),
+                (u32::MAX, None),
+            ] {
+                let settings = settings_of(order, |builder, ifd| {
+                    builder.long(ifd, IMAGE_STABILIZATION, &[code]);
+                });
+                assert_eq!(settings.stabilization, expected, "{order:?}, {code}");
+            }
+            // One SHORT, and two LONGs.
+            let short = settings_of(order, |builder, ifd| {
+                builder.short(ifd, IMAGE_STABILIZATION, &[1]);
+            });
+            let two = settings_of(order, |builder, ifd| {
+                builder.long(ifd, IMAGE_STABILIZATION, &[1, 1]);
+            });
+            assert_eq!(short.stabilization, None, "{order:?}, SHORT");
+            assert_eq!(two.stabilization, None, "{order:?}, two");
         }
     }
 

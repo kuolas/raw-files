@@ -45,8 +45,8 @@ use raw_files::{
     Camera, CameraFile, CameraSettings, ColorSpace, DateTime, Directory, ErrorKind, Exposure,
     ExposureProgram, FineTune, FlashMode, Focus, FocusAreaMode, FocusMode, FocusOrigin, FocusPoint,
     FocusPoints, Format, ImageArea, Lens, Limits, Make, Metadata, MeteringMode, Options,
-    Orientation, Point, Preview, PreviewFormat, Rational, Shutter, SignedRational, Size, Value,
-    WhiteBalance, WhiteBalanceMode,
+    Orientation, Point, Preview, PreviewFormat, Rational, Shutter, SignedRational, Size,
+    Stabilization, Value, WhiteBalance, WhiteBalanceMode,
 };
 use support::arw::{
     ARW4_FOCUS_CENTER, ARW4_FOCUS_FRAME, ARW4_FOCUS_SIZE, ARW4_FULL_SIZE_JPEG,
@@ -2001,10 +2001,17 @@ fn an_a100_jpeg_opens_with_its_standard_metadata_and_no_focus_point() {
             ],
             Orientation::Rotate90,
         );
+        // Its ImageStabilization, 0 as on the A100's own JPEG, gives the
+        // stabilization off.
+        let metadata = sony_metadata(SONY_MAKE, A100_MODEL, A100_MAIN, None, None);
+        let settings = metadata
+            .camera_settings()
+            .clone()
+            .with_stabilization(Stabilization::off());
         assert_opens(
             &file.built.bytes,
             &previews,
-            &sony_metadata(SONY_MAKE, A100_MODEL, A100_MAIN, None, None),
+            &metadata.with_camera_settings(settings),
             &format!("A100, {order:?}"),
         );
     }
