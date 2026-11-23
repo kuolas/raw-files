@@ -173,6 +173,14 @@ does. An entry that can break a caller opens with **Breaking:**.
   whose bit 5 has another meaning; the Coolpix bodies from their
   ISOSelection text, `AUTO` or `MANUAL`. Sony files give none: they
   record the ISO setting only in enciphered or unread blocks.
+- `CameraSettings::exposure_fine_tune` gives the photographer's
+  fine-tuning of the camera's metering, in EV as recorded, and
+  `with_exposure_fine_tune` sets it
+  ([#214](https://github.com/kuolas/raw-files/issues/214)). Nikon files
+  give it from their MakerNote's ExposureTuning, three bytes read as a
+  count times a factor over a divisor, so that `fd 01 06` is -3/6 EV.
+  Sony files give it from their ExposureStandardAdjustment, one
+  SRATIONAL.
 - `CameraSettings::release_mode` gives how the shutter was released, a
   `ReleaseMode`: a single frame, continuous, the self-timer or a remote.
   `CameraSettings::bracketing` gives whether the picture is one of a

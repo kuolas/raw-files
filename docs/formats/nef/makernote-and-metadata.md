@@ -1910,13 +1910,16 @@ none of its values. **[F]**
 **Exposure fine-tuning.** The photographer's fine-tuning of the camera's
 metering, from -1 to +1 EV in sixths on the D600 [P][25] (p. 226).
 0x001C ExposureTuning is three UNDEFINED bytes: a signed count, then 1
-and 6. raw-files will read the count over six, in EV. Of 242 public
-files, 238 hold `00 01 06` and four D750 files `fd 01 06`, -3/6 EV. All
-of mine hold `00 01 06`. **[F]** That the count is in sixths of a stop
-agrees with the menu, but no frame shows it, and the meaning stays open.
-36 of my JPEGs store the tag with four bytes, 35 of them made by a
-program from a raw file. They will give none, by the rule on a value's
-count. **[F]**
+and 6. ExifTool's documentation gives the tag's name and its three
+bytes alone [S][1]. raw-files reads the count times the second byte
+over the third, in EV: `fd 01 06` is -3/6. Of 242 public files, 238
+hold `00 01 06` and four D750 files `fd 01 06`, -3/6 EV. All of mine
+hold `00 01 06`. **[F]** The reading rests on the D600's manual, whose
+steps of 1/6 EV the bytes 1 and 6 match, and on every file agreeing
+with it, -3 lying inside the menu's ±6 steps; no frame shows it. A
+divisor of zero gives none. 36 of my JPEGs store the tag with four
+bytes, 35 of them made by a program from a raw file. They give none, by
+the rule on a value's count. **[F]**
 
 **Release mode and bracketing.** The bits of 0x0089 ShootingMode [S][1],
 with the files that set each:

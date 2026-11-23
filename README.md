@@ -46,6 +46,7 @@ Linux and Windows alike.
   - the focus mode;
   - the AF-area mode, whether or not the file gives a focus point;
   - AF fine-tune and whether auto ISO was on, on Nikon files;
+  - the exposure fine-tuning;
   - the release mode, and whether the picture is one of a bracketed
     series;
   - whether the clock was on daylight saving time, on Nikon files.
