@@ -129,7 +129,9 @@
 //!   image direction and the map datum.
 //! - **The camera settings**, from the exposure program to the focus
 //!   mode: how many files have the setting, and how many each kind of
-//!   it. Also how many flashes fired, and how many files had the
+//!   it. Also how many flashes fired, how many had red-eye reduction on,
+//!   a return light detected or not, and a compensation other than zero,
+//!   and the flashes by source, control and sync; how many files had the
 //!   electronic front curtain setting on and how many off, and AF
 //!   fine-tune on and off, and with a value at a zoom's long end. Each
 //!   white balance fine-tuning is counted by its pair of shifts, such as
@@ -414,6 +416,21 @@ struct SettingsTally {
     flash_fired: usize,
     flash_modes: BTreeMap<&'static str, usize>,
     flash_without_mode: usize,
+    /// Flashes with red-eye reduction on; with a return light, of which
+    /// `flash_return_light_detected` detected; by source, control and
+    /// sync; and with a compensation, of which
+    /// `flash_compensation_not_zero` record one other than zero.
+    flash_red_eye_reduction: usize,
+    flash_return_light: usize,
+    flash_return_light_detected: usize,
+    flash_source: usize,
+    flash_sources: BTreeMap<&'static str, usize>,
+    flash_control: usize,
+    flash_controls: BTreeMap<&'static str, usize>,
+    flash_sync: usize,
+    flash_syncs: BTreeMap<&'static str, usize>,
+    flash_compensation: usize,
+    flash_compensation_not_zero: usize,
     white_balance_mode: usize,
     white_balance_modes: BTreeMap<&'static str, usize>,
     /// Files with a color temperature, and the lowest and the highest
@@ -499,6 +516,32 @@ impl SettingsTally {
             match flash.mode() {
                 Some(mode) => *self.flash_modes.entry(mode.name()).or_default() += 1,
                 None => self.flash_without_mode += 1,
+            }
+            self.flash_red_eye_reduction += usize::from(flash.red_eye_reduction());
+            if let Some(detected) = flash.return_light() {
+                self.flash_return_light += 1;
+                self.flash_return_light_detected += usize::from(detected);
+            }
+            if let Some(source) = flash.source() {
+                count(
+                    &mut self.flash_source,
+                    &mut self.flash_sources,
+                    source.name(),
+                );
+            }
+            if let Some(control) = flash.control() {
+                count(
+                    &mut self.flash_control,
+                    &mut self.flash_controls,
+                    control.name(),
+                );
+            }
+            if let Some(sync) = flash.sync() {
+                count(&mut self.flash_sync, &mut self.flash_syncs, sync.name());
+            }
+            if let Some(compensation) = flash.compensation() {
+                self.flash_compensation += 1;
+                self.flash_compensation_not_zero += usize::from(compensation.numerator != 0);
             }
         }
         let white_balance = settings.white_balance();
@@ -1202,6 +1245,18 @@ impl Tally {
             s.flash - s.flash_fired,
             s.flash_modes,
             s.flash_without_mode
+        );
+        println!(
+            "flashes with red-eye reduction: {}; with a return light: {}, of which detected: {}",
+            s.flash_red_eye_reduction, s.flash_return_light, s.flash_return_light_detected
+        );
+        println!(
+            "flashes with a source: {}, by source: {:?}; with a control: {}, by control: {:?}",
+            s.flash_source, s.flash_sources, s.flash_control, s.flash_controls
+        );
+        println!(
+            "flashes with a sync: {}, by sync: {:?}; with a compensation: {}, of which not zero: {}",
+            s.flash_sync, s.flash_syncs, s.flash_compensation, s.flash_compensation_not_zero
         );
         println!(
             "files with a white balance mode: {}, by mode: {:?}",
@@ -1973,6 +2028,68 @@ fn the_settings_tally_counts_the_makernote_settings() {
     without_color_temperature.record(&Metadata::default().with_camera_settings(fourth));
     assert_eq!(without_color_temperature.color_temperature, 0);
     assert_eq!(without_color_temperature.color_temperature_range, None);
+}
+
+#[test]
+fn the_settings_tally_counts_the_flash() {
+    use raw_files::{CameraSettings, Flash, FlashControl, FlashSource, FlashSync, SignedRational};
+
+    let ev = |numerator, denominator| SignedRational {
+        numerator,
+        denominator,
+    };
+    // A flash unit that fired, everything recorded; a built-in flash with
+    // red-eye reduction, its return light not detected, a compensation of
+    // zero; a flash that did not fire, with a sync alone; and a file with
+    // no flash.
+    let unit = Flash::fired()
+        .with_return_light(true)
+        .with_source(FlashSource::External)
+        .with_control(FlashControl::Manual)
+        .with_sync(FlashSync::RearCurtain)
+        .with_compensation(ev(-2, 6));
+    let built_in = Flash::fired()
+        .with_red_eye_reduction(true)
+        .with_return_light(false)
+        .with_source(FlashSource::BuiltIn)
+        .with_control(FlashControl::Ttl)
+        .with_sync(FlashSync::FrontCurtain)
+        .with_compensation(ev(0, 6));
+    let not_fired = Flash::not_fired().with_sync(FlashSync::FrontCurtain);
+    let mut tally = SettingsTally::default();
+    for flash in [Some(unit), Some(built_in), Some(not_fired), None] {
+        let settings = match flash {
+            Some(flash) => CameraSettings::default().with_flash(flash),
+            None => CameraSettings::default(),
+        };
+        tally.record(&Metadata::default().with_camera_settings(settings));
+    }
+
+    assert_eq!((tally.flash, tally.flash_fired), (3, 2));
+    assert_eq!(tally.flash_red_eye_reduction, 1);
+    assert_eq!(
+        (tally.flash_return_light, tally.flash_return_light_detected),
+        (2, 1)
+    );
+    assert_eq!(tally.flash_source, 2);
+    assert_eq!(
+        tally.flash_sources,
+        BTreeMap::from([("Built-in", 1), ("External", 1)])
+    );
+    assert_eq!(tally.flash_control, 2);
+    assert_eq!(
+        tally.flash_controls,
+        BTreeMap::from([("Manual", 1), ("TTL", 1)])
+    );
+    assert_eq!(tally.flash_sync, 3);
+    assert_eq!(
+        tally.flash_syncs,
+        BTreeMap::from([("Front curtain", 2), ("Rear curtain", 1)])
+    );
+    assert_eq!(
+        (tally.flash_compensation, tally.flash_compensation_not_zero),
+        (2, 1)
+    );
 }
 
 #[test]
