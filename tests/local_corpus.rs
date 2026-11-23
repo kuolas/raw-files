@@ -244,6 +244,10 @@ struct MetadataTally {
     capture_time: usize,
     with_subseconds: usize,
     with_offset: usize,
+    /// Files with a digitized time, of which `digitized_time_differs` gave
+    /// one other than their capture time, or no capture time.
+    digitized_time: usize,
+    digitized_time_differs: usize,
     iso: usize,
     exposure_time: usize,
     f_number: usize,
@@ -338,6 +342,10 @@ impl MetadataTally {
             self.with_subseconds += usize::from(time.subsecond_digits() > 0);
             self.with_offset += usize::from(time.offset_minutes().is_some());
             *self.capture_times.entry(time).or_default() += 1;
+        }
+        if let Some(time) = metadata.digitized_time() {
+            self.digitized_time += 1;
+            self.digitized_time_differs += usize::from(metadata.capture_time() != Some(time));
         }
         let exposure = metadata.exposure();
         self.iso += usize::from(exposure.iso().is_some());
@@ -435,6 +443,26 @@ struct SettingsTally {
     af_fine_tune: usize,
     af_fine_tune_on: usize,
     af_fine_tune_tele: usize,
+    /// Files with a stabilization, of which `stabilization_on` had it on;
+    /// the modes of those that record one.
+    stabilization: usize,
+    stabilization_on: usize,
+    stabilization_modes: BTreeMap<&'static str, usize>,
+    /// Files with auto ISO, of which `auto_iso_on` had it on.
+    auto_iso: usize,
+    auto_iso_on: usize,
+    /// Files with an exposure fine-tuning, of which
+    /// `exposure_fine_tune_not_zero` record one other than zero.
+    exposure_fine_tune: usize,
+    exposure_fine_tune_not_zero: usize,
+    release_mode: usize,
+    release_modes: BTreeMap<&'static str, usize>,
+    bracketing: usize,
+    bracketings: BTreeMap<&'static str, usize>,
+    /// Files with daylight saving time, of which `daylight_saving_time_on`
+    /// had it on.
+    daylight_saving_time: usize,
+    daylight_saving_time_on: usize,
 }
 
 impl SettingsTally {
@@ -537,6 +565,35 @@ impl SettingsTally {
             self.af_fine_tune += 1;
             self.af_fine_tune_on += usize::from(fine_tune.is_on());
             self.af_fine_tune_tele += usize::from(fine_tune.tele_value().is_some());
+        }
+        if let Some(stabilization) = settings.stabilization() {
+            self.stabilization += 1;
+            self.stabilization_on += usize::from(stabilization.is_on());
+            if let Some(mode) = stabilization.mode() {
+                *self.stabilization_modes.entry(mode.name()).or_default() += 1;
+            }
+        }
+        if let Some(on) = settings.auto_iso() {
+            self.auto_iso += 1;
+            self.auto_iso_on += usize::from(on);
+        }
+        if let Some(fine_tune) = settings.exposure_fine_tune() {
+            self.exposure_fine_tune += 1;
+            self.exposure_fine_tune_not_zero += usize::from(fine_tune.numerator != 0);
+        }
+        if let Some(mode) = settings.release_mode() {
+            count(&mut self.release_mode, &mut self.release_modes, mode.name());
+        }
+        if let Some(bracketing) = settings.bracketing() {
+            count(
+                &mut self.bracketing,
+                &mut self.bracketings,
+                bracketing.name(),
+            );
+        }
+        if let Some(on) = settings.daylight_saving_time() {
+            self.daylight_saving_time += 1;
+            self.daylight_saving_time_on += usize::from(on);
         }
     }
 }
@@ -1111,6 +1168,10 @@ impl Tally {
             m.shared_capture_times()
         );
         println!(
+            "files with a digitized time: {}, of which other than the capture time: {}",
+            m.digitized_time, m.digitized_time_differs
+        );
+        println!(
             "files with an ISO: {}, an exposure time: {}, an f-number: {}, a focal length: {}, a focal length in 35 mm terms: {}, an exposure compensation: {}",
             m.iso,
             m.exposure_time,
@@ -1206,6 +1267,30 @@ impl Tally {
         println!(
             "files with AF fine-tune at a zoom's long end: {}",
             s.af_fine_tune_tele
+        );
+        println!(
+            "files with a stabilization: {}, of which on: {}, by mode: {:?}",
+            s.stabilization, s.stabilization_on, s.stabilization_modes
+        );
+        println!(
+            "files with auto ISO: {}, of which on: {}",
+            s.auto_iso, s.auto_iso_on
+        );
+        println!(
+            "files with an exposure fine-tuning: {}, of which not zero: {}",
+            s.exposure_fine_tune, s.exposure_fine_tune_not_zero
+        );
+        println!(
+            "files with a release mode: {}, by mode: {:?}",
+            s.release_mode, s.release_modes
+        );
+        println!(
+            "files with a bracketing: {}, by kind: {:?}",
+            s.bracketing, s.bracketings
+        );
+        println!(
+            "files with daylight saving time: {}, of which on: {}",
+            s.daylight_saving_time, s.daylight_saving_time_on
         );
         let f = &self.focus;
         println!(
@@ -1742,8 +1827,9 @@ fn every_file_of_the_local_corpus_opens_and_gives_a_whole_jpeg() {
 #[test]
 fn the_settings_tally_counts_the_makernote_settings() {
     use raw_files::{
-        AfFineTune, CameraSettings, FineTune, FocusAreaMode, FocusMode, ImageArea, RawImageSize,
-        Shutter, SignedRational, WhiteBalance,
+        AfFineTune, Bracketing, CameraSettings, FineTune, FocusAreaMode, FocusMode, ImageArea,
+        RawImageSize, ReleaseMode, Shutter, SignedRational, Stabilization, StabilizationMode,
+        WhiteBalance,
     };
 
     let shift = |numerator, denominator| SignedRational {
@@ -1769,7 +1855,13 @@ fn the_settings_tally_counts_the_makernote_settings() {
         .with_raw_image_size(RawImageSize::Small)
         .with_focus_area_mode(FocusAreaMode::Auto)
         .with_focus_mode(FocusMode::Continuous)
-        .with_af_fine_tune(AfFineTune::on().with_value(-3).with_tele_value(2));
+        .with_af_fine_tune(AfFineTune::on().with_value(-3).with_tele_value(2))
+        .with_stabilization(Stabilization::on().with_mode(StabilizationMode::Sport))
+        .with_auto_iso(true)
+        .with_exposure_fine_tune(shift(-3, 6))
+        .with_release_mode(ReleaseMode::Continuous)
+        .with_bracketing(Bracketing::Off)
+        .with_daylight_saving_time(true);
     let second = CameraSettings::default()
         .with_white_balance(
             WhiteBalance::default()
@@ -1779,7 +1871,13 @@ fn the_settings_tally_counts_the_makernote_settings() {
         .with_electronic_front_curtain_setting(false)
         .with_focus_area_mode(FocusAreaMode::Zone)
         .with_focus_mode(FocusMode::Continuous)
-        .with_af_fine_tune(AfFineTune::off());
+        .with_af_fine_tune(AfFineTune::off())
+        .with_stabilization(Stabilization::on())
+        .with_auto_iso(false)
+        .with_exposure_fine_tune(shift(0, 6))
+        .with_release_mode(ReleaseMode::Continuous)
+        .with_bracketing(Bracketing::WhiteBalance)
+        .with_daylight_saving_time(false);
     let third = CameraSettings::default()
         .with_white_balance(
             WhiteBalance::default()
@@ -1789,7 +1887,11 @@ fn the_settings_tally_counts_the_makernote_settings() {
         .with_electronic_front_curtain_setting(true)
         .with_focus_area_mode(FocusAreaMode::Auto)
         .with_focus_mode(FocusMode::Manual)
-        .with_af_fine_tune(AfFineTune::off());
+        .with_af_fine_tune(AfFineTune::off())
+        .with_stabilization(Stabilization::off())
+        .with_auto_iso(false)
+        .with_release_mode(ReleaseMode::Single)
+        .with_daylight_saving_time(false);
     let fourth = CameraSettings::default();
     let mut tally = SettingsTally::default();
     for settings in [first, second, third, fourth.clone()] {
@@ -1837,6 +1939,33 @@ fn the_settings_tally_counts_the_makernote_settings() {
             tally.af_fine_tune_tele
         ),
         (3, 1, 1)
+    );
+
+    // Stabilization on two files, one in sport mode and one with no mode,
+    // and off on one; auto ISO on one of three; the exposure fine-tuning
+    // on two, one of them zero; the release mode continuous on two and a
+    // single frame on one; the bracketing off on one and white balance on
+    // one; daylight saving time on one of three.
+    assert_eq!((tally.stabilization, tally.stabilization_on), (3, 2));
+    assert_eq!(tally.stabilization_modes, BTreeMap::from([("Sport", 1)]));
+    assert_eq!((tally.auto_iso, tally.auto_iso_on), (3, 1));
+    assert_eq!(
+        (tally.exposure_fine_tune, tally.exposure_fine_tune_not_zero),
+        (2, 1)
+    );
+    assert_eq!(tally.release_mode, 3);
+    assert_eq!(
+        tally.release_modes,
+        BTreeMap::from([("Continuous", 2), ("Single frame", 1)])
+    );
+    assert_eq!(tally.bracketing, 2);
+    assert_eq!(
+        tally.bracketings,
+        BTreeMap::from([("Off", 1), ("White balance", 1)])
+    );
+    assert_eq!(
+        (tally.daylight_saving_time, tally.daylight_saving_time_on),
+        (3, 1)
     );
 
     // Files without a color temperature leave the range empty.
@@ -1947,6 +2076,28 @@ fn the_metadata_tally_counts_a_location_and_each_of_its_parts() {
     }
     tally.record(&Metadata::default());
     assert_eq!(tally.location, [5, 1, 2, 3, 4]);
+}
+
+#[test]
+fn the_metadata_tally_counts_the_digitized_times_and_those_that_differ() {
+    // A digitized time equal to the capture time; one later; one on a file
+    // without a capture time; and a file with a capture time alone.
+    let taken = DateTime::new(2020, 7, 28, 16, 57, 7).unwrap();
+    let stored = DateTime::new(2020, 8, 7, 16, 27, 4).unwrap();
+    let mut tally = MetadataTally::default();
+    for metadata in [
+        Metadata::default()
+            .with_capture_time(taken)
+            .with_digitized_time(taken),
+        Metadata::default()
+            .with_capture_time(taken)
+            .with_digitized_time(stored),
+        Metadata::default().with_digitized_time(stored),
+        Metadata::default().with_capture_time(taken),
+    ] {
+        tally.record(&metadata);
+    }
+    assert_eq!((tally.digitized_time, tally.digitized_time_differs), (3, 2));
 }
 
 /// Three points of a 39-point layout in a 6016 × 4016 frame, from the
