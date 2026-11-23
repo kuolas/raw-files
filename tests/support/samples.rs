@@ -23,10 +23,10 @@ use std::panic::{self, AssertUnwindSafe};
 use std::path::{Path, PathBuf};
 
 use raw_files::{
-    Camera, CameraFile, ColorSpace, Directory, ErrorKind, ExposureProgram, FieldType, FlashMode,
-    FocusAreaMode, FocusLayoutPoint, FocusMode, FocusOrigin, Format, ImageArea, Make, Metadata,
-    MeteringMode, Orientation, Point, Preview, PreviewFormat, Rational, RawImageSize, Shutter,
-    SignedRational, Size, WhiteBalanceMode,
+    Bracketing, Camera, CameraFile, ColorSpace, Directory, ErrorKind, ExposureProgram, FieldType,
+    FlashMode, FocusAreaMode, FocusLayoutPoint, FocusMode, FocusOrigin, Format, ImageArea, Make,
+    Metadata, MeteringMode, Orientation, Point, Preview, PreviewFormat, Rational, RawImageSize,
+    ReleaseMode, Shutter, SignedRational, Size, StabilizationMode, WhiteBalanceMode,
 };
 
 /// The path of the sample file `name`, or `None`, with a note on stderr,
@@ -373,8 +373,8 @@ pub fn check(sample: &Sample, format: Format, folder: Folder) {
 /// them. Fractions are the numerator and denominator as stored,
 /// so `(10, 3200)` is not `(1, 320)`. The software is its text, as the
 /// reader cleans it, and the focal length in 35 mm terms its whole
-/// millimeters. The capture time is its ISO 8601 form, as
-/// [`DateTime`](raw_files::DateTime) displays it. The focus point is the
+/// millimeters. The capture time and the digitized time are each its
+/// ISO 8601 form, as [`DateTime`](raw_files::DateTime) displays it. The focus point is the
 /// one the reader gives ([`SampleFocus`]), and so are the camera settings
 /// ([`SampleSettings`]). The lens is `None` where the file describes none,
 /// which the reader gives as a lens with every value `None`. The layout of
@@ -405,6 +405,7 @@ pub struct SampleMetadata {
     pub texts: &'static [Text],
     pub location: Option<&'static [LocationPart]>,
     pub capture_time: Option<&'static str>,
+    pub digitized_time: Option<&'static str>,
     pub orientation: Orientation,
     pub iso: Option<u32>,
     pub exposure_time: Option<(u32, u32)>,
@@ -443,7 +444,11 @@ pub struct SamplePlacedLayout {
 /// curtain setting was on, the image area, the raw image size, the color
 /// space; the AF-area mode, `None` when the file names none in a code
 /// raw-files knows, whether or not it gives focus points; the focus mode;
-/// and AF fine-tune, whether it was on and then its value, `None` when off.
+/// AF fine-tune, whether it was on and then its value, `None` when off;
+/// the stabilization, whether it was on and then its mode, `None` when the
+/// file records none; whether auto ISO was on; the exposure fine-tuning,
+/// its numerator and denominator as stored; the release mode; the
+/// bracketing; and whether daylight saving time was on.
 ///
 /// Every row writes every field, `None` included, one to a line, so that
 /// a value read later changes one line of a row.
@@ -462,6 +467,12 @@ pub struct SampleSettings {
     pub focus_area_mode: Option<FocusAreaMode>,
     pub focus_mode: Option<FocusMode>,
     pub af_fine_tune: Option<(bool, Option<i32>, Option<i32>)>,
+    pub stabilization: Option<(bool, Option<StabilizationMode>)>,
+    pub auto_iso: Option<bool>,
+    pub exposure_fine_tune: Option<(i32, i32)>,
+    pub release_mode: Option<ReleaseMode>,
+    pub bracketing: Option<Bracketing>,
+    pub daylight_saving_time: Option<bool>,
 }
 
 /// The white balance fine-tuning of a sample file, as the reader must give
@@ -762,6 +773,14 @@ pub fn check_metadata(expected: &SampleMetadata, format: Format, folder: Folder)
         "{label}: capture time"
     );
     assert_eq!(
+        metadata
+            .digitized_time()
+            .map(|time| time.to_string())
+            .as_deref(),
+        expected.digitized_time,
+        "{label}: digitized time"
+    );
+    assert_eq!(
         metadata.orientation(),
         expected.orientation,
         "{label}: orientation"
@@ -989,6 +1008,36 @@ pub fn check_metadata(expected: &SampleMetadata, format: Format, folder: Folder)
         )),
         expected.af_fine_tune,
         "{label}: AF fine-tune"
+    );
+    assert_eq!(
+        settings
+            .stabilization()
+            .map(|stabilization| (stabilization.is_on(), stabilization.mode())),
+        expected.stabilization,
+        "{label}: stabilization"
+    );
+    assert_eq!(settings.auto_iso(), expected.auto_iso, "{label}: auto ISO");
+    assert_eq!(
+        settings
+            .exposure_fine_tune()
+            .map(|fine_tune| (fine_tune.numerator, fine_tune.denominator)),
+        expected.exposure_fine_tune,
+        "{label}: exposure fine-tuning"
+    );
+    assert_eq!(
+        settings.release_mode(),
+        expected.release_mode,
+        "{label}: release mode"
+    );
+    assert_eq!(
+        settings.bracketing(),
+        expected.bracketing,
+        "{label}: bracketing"
+    );
+    assert_eq!(
+        settings.daylight_saving_time(),
+        expected.daylight_saving_time,
+        "{label}: daylight saving time"
     );
 }
 
