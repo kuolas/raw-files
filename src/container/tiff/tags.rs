@@ -279,6 +279,11 @@ pub(crate) const COLOR_SPACE: u16 = crate::tags::exif::COLOR_SPACE;
 /// ([`INTEROP_INDEX`]) names the rule the file follows.
 pub(crate) const INTEROP_IFD: u16 = crate::tags::exif::INTEROPERABILITY_IFD_POINTER;
 
+/// How the camera set the exposure, as a SHORT (ExposureMode), read from
+/// the Exif IFD: 0 auto exposure, 1 manual exposure and 2 auto bracket,
+/// which raw-files reads as exposure bracketing.
+pub(crate) const EXPOSURE_MODE: u16 = crate::tags::exif::EXPOSURE_MODE;
+
 /// Whether the white balance was set automatically or by hand, as a SHORT
 /// (WhiteBalance), read from the Exif IFD: 0 auto, 1 manual, the kind of
 /// light then in [`LIGHT_SOURCE`].

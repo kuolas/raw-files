@@ -57,7 +57,7 @@ use std::io::{Read, Seek};
 
 use super::{MakerNoteBlock, Picture, Reader, checked_color_temperature};
 use crate::camera_settings::{
-    CameraSettings, FineTune, FocusAreaMode, FocusMode, WhiteBalanceMode,
+    Bracketing, CameraSettings, FineTune, FocusAreaMode, FocusMode, ReleaseMode, WhiteBalanceMode,
 };
 use crate::container::tiff::{Ifd, Rule, Tree};
 use crate::entries::{Directory, Entries, Lookup};
@@ -121,6 +121,12 @@ const FOCUS_LOCATION2: u16 = 0x204A;
 /// none was recorded.
 const COLOR_TEMPERATURE: u16 = 0xB021;
 
+/// The Sony MakerNote tag that records how the shutter was released
+/// (ReleaseMode): one SHORT, 0 for a normal release, one frame for each
+/// press, 2 for continuous release, and 5, 6 and 8 for exposure, white
+/// balance and DRO bracketing. 65535 records none.
+pub(in crate::formats) const RELEASE_MODE: u16 = 0xB049;
+
 /// The rules of the tags this reader reads: each tag's number, from the
 /// constants above, and the type and count Sony writes its value in on
 /// every file checked (ADR011). [`Ifd::get`] and [`Ifd::held`] read them.
@@ -144,6 +150,7 @@ mod rules {
         Rule::new(super::FOCUS_FRAME_SIZE, &[FieldType::Undefined]);
     pub(super) const FOCUS_LOCATION2: Rule<[u32; 4]> = Rule::new(super::FOCUS_LOCATION2, SHORT);
     pub(super) const COLOR_TEMPERATURE: Held<[u32; 1]> = Held::new(super::COLOR_TEMPERATURE, LONG);
+    pub(super) const RELEASE_MODE: Held<[u32; 1]> = Held::new(super::RELEASE_MODE, SHORT);
 }
 
 /// The header of the DSLR-A100's MakerNote (`SONY DSC `, then three NULs),
@@ -430,6 +437,11 @@ fn area<R: Read + Seek>(src: &mut Source<R>, makernote: &MakerNote) -> Result<Op
 ///   list of `family`, the body's family ([`area_mode`]), whatever the
 ///   focus mode and whether or not the file gives a point. Without a
 ///   family, in a file with no Model, it is `None`.
+/// - **The release mode** is the one ReleaseMode's code names
+///   ([`release_mode`]). **The bracketing** it names takes the place of
+///   the one the Exif tags gave, exposure bracketing from ExposureMode 2,
+///   when it names one; when it names none, as for code 5, the Exif tags'
+///   stays.
 ///
 /// The shutter used, the image area and the raw image size stay as
 /// `settings` has them, `None`. Sony records the first two only in
@@ -466,6 +478,13 @@ fn camera_settings<R: Read + Seek>(
     settings.focus_area_mode = family
         .zip(ifd.held(rules::AF_AREA_MODE))
         .and_then(|(family, [code])| area_mode(family, code));
+    if let Some([code]) = ifd.held(rules::RELEASE_MODE) {
+        let (mode, bracketing) = release_mode(code);
+        settings.release_mode = mode;
+        if let Some(bracketing) = bracketing {
+            settings.bracketing = Some(bracketing);
+        }
+    }
     Ok(settings)
 }
 
@@ -620,6 +639,34 @@ fn area_mode(family: Family, code: u8) -> Option<FocusAreaMode> {
         (Family::EMount | Family::Ilca, 12) => FocusAreaMode::Dynamic,
         _ => return None,
     })
+}
+
+/// The release mode and the bracketing a ReleaseMode `code` names, in the
+/// list ExifTool's published documentation gives, read as documentation
+/// and read whole, since files hold every code of it:
+///
+/// - 0, a normal release, one frame for each press,
+///   [`Single`](ReleaseMode::Single), and no bracketing,
+///   [`Off`](Bracketing::Off);
+/// - 2, continuous release, [`Continuous`](ReleaseMode::Continuous), and
+///   [`Off`](Bracketing::Off);
+/// - 6 and 8, white balance and DRO bracketing, no release mode and
+///   [`WhiteBalance`](Bracketing::WhiteBalance) or
+///   [`DynamicRange`](Bracketing::DynamicRange): a bracket does not say
+///   whether its frames were shot one at a time or as a burst.
+///
+/// 5, which the documentation names exposure bracketing, gives neither:
+/// the ILCE-7RM3's pixel-shift frames hold it with Exif's ExposureMode 1,
+/// manual exposure, which contradicts it (ARW notes, section 9.10). Every
+/// other code gives neither, 65535, "n/a", among them.
+fn release_mode(code: u32) -> (Option<ReleaseMode>, Option<Bracketing>) {
+    match code {
+        0 => (Some(ReleaseMode::Single), Some(Bracketing::Off)),
+        2 => (Some(ReleaseMode::Continuous), Some(Bracketing::Off)),
+        6 => (None, Some(Bracketing::WhiteBalance)),
+        8 => (None, Some(Bracketing::DynamicRange)),
+        _ => (None, None),
+    }
 }
 
 /// The focus mode `makernote`'s FocusMode records, by its code
@@ -2443,6 +2490,91 @@ mod tests {
                 "{order:?}"
             );
             assert_eq!(found.focus_points, None, "{order:?}");
+        }
+    }
+
+    /// The release mode and the bracketing a Sony file in byte order
+    /// `order` gives from `settings`, the standard tags' settings, when its
+    /// MakerNote holds what `tags` adds.
+    fn drive_from(
+        order: Order,
+        settings: CameraSettings,
+        tags: impl FnOnce(&mut TiffBuilder, IfdId),
+    ) -> (Option<ReleaseMode>, Option<Bracketing>) {
+        let settings = settings_from(order, settings, tags);
+        (settings.release_mode, settings.bracketing)
+    }
+
+    #[test]
+    fn each_release_mode_code_gives_its_release_and_bracketing() {
+        let cases = [
+            (0, Some(ReleaseMode::Single), Some(Bracketing::Off)),
+            (2, Some(ReleaseMode::Continuous), Some(Bracketing::Off)),
+            (6, None, Some(Bracketing::WhiteBalance)),
+            (8, None, Some(Bracketing::DynamicRange)),
+            // 5, which files contradict; 65535, "n/a"; codes the list
+            // lacks.
+            (5, None, None),
+            (65535, None, None),
+            (1, None, None),
+            (3, None, None),
+            (7, None, None),
+        ];
+        for order in ORDERS {
+            for (code, release, bracketing) in cases {
+                let drive = drive_from(order, CameraSettings::default(), |builder, ifd| {
+                    builder.short(ifd, RELEASE_MODE, &[code]);
+                });
+                assert_eq!(drive, (release, bracketing), "{order:?}, {code}");
+            }
+        }
+    }
+
+    #[test]
+    fn a_release_mode_that_names_no_bracketing_leaves_the_exif_tags() {
+        // Exif's auto bracket, as the RX100M3 records it beside 5: it stays
+        // under 5 and any code that gives no bracketing, and gives way to
+        // a code that names one.
+        let exif = CameraSettings::default().with_bracketing(Bracketing::Exposure);
+        for order in ORDERS {
+            for (code, expected) in [
+                (5, Bracketing::Exposure),
+                (65535, Bracketing::Exposure),
+                (0, Bracketing::Off),
+                (6, Bracketing::WhiteBalance),
+            ] {
+                let (_, bracketing) = drive_from(order, exif.clone(), |builder, ifd| {
+                    builder.short(ifd, RELEASE_MODE, &[code]);
+                });
+                assert_eq!(bracketing, Some(expected), "{order:?}, {code}");
+            }
+        }
+    }
+
+    #[test]
+    fn a_release_mode_of_another_shape_gives_neither() {
+        for order in ORDERS {
+            for (what, setting) in [
+                (
+                    "a LONG",
+                    &(|builder: &mut TiffBuilder, ifd| {
+                        builder.long(ifd, RELEASE_MODE, &[2]);
+                    }) as Tags,
+                ),
+                ("a BYTE", &|builder, ifd| {
+                    builder.byte(ifd, RELEASE_MODE, &[2]);
+                }),
+                ("two SHORTs", &|builder, ifd| {
+                    builder.short(ifd, RELEASE_MODE, &[2, 2]);
+                }),
+            ] {
+                let settings = settings_of(order, setting);
+                assert_eq!(
+                    (settings.release_mode, settings.bracketing),
+                    (None, None),
+                    "{order:?}, {what}"
+                );
+            }
         }
     }
 

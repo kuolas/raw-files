@@ -1739,13 +1739,13 @@ is on 186 public files of 86 bodies **[F]**. Exif's ExposureMode
 | 8 | DRO Bracketing | none | `DynamicRange` | 1 public (1080) | observed |
 | 65535 | n/a | none | none | 1 public (2346) | observed |
 
-- **A bracket will give no release mode.** The code does not say whether
+- **A bracket gives no release mode.** The code does not say whether
   the frames were shot one by one or as a burst.
 - **`Single` reads Normal as a single release.** The documentation
   names no self-timer or remote code for 0xB049. Whether a self-timer
   release writes 0 is not known.
-- **Self-timer and remote releases will not come from Sony.** ExifTool
-  decodes them only from blocks raw-files will not read: the plain
+- **Self-timer and remote releases do not come from Sony.** ExifTool
+  decodes them only from blocks raw-files does not read: the plain
   CameraSettings (0x0114) and the enciphered 0x2010, 0x9050 and 0x9400
   [S][1].
 - **5 is not always a bracket.** On the RX100M3 and RX100M6 (files
@@ -1753,10 +1753,11 @@ is on 186 public files of 86 bodies **[F]**. Exif's ExposureMode
   agree. The ILCE-7RM3's five pixel-shift files (3251 to 3255) hold 5
   too. There 0x202F marks a pixel-shift group and Exif's ExposureMode
   is 1, manual, so 5 is no exposure bracket.
-- So 5 will stay unnamed until a decision says how to tell the two: a
+- So 5 stays unnamed until a decision says how to tell the two: a
   code a file contradicts stays unnamed, and the rest of the list
-  stands. Exif's ExposureMode 2 still gives `Exposure` on the RX100
-  files. Every code of the list is on a file.
+  stands. Where the code gives no bracketing, Exif's ExposureMode 2
+  gives `Exposure`, as on the RX100 files. Every code of the list is on
+  a file.
 - Exif's ExposureMode 2 is on 9 public files: the five above and four
   with no 0xB049. These are the DSLR-A330, A350, SLT-A33 and SLT-A35
   (355, 2053, 2050, 2052).
@@ -2026,9 +2027,9 @@ FocusLocation2 when FocusLocation gives nothing (absent, or not four
 SHORTs), FocusFrameSize and
 FocusMode ([section 9.6](#96-focus-point)). Nothing is deciphered, and
 0xB000, 0xB001 and the lens tags stay unread. The capture settings of
-[section 9.10](#910-more-capture-settings) will add 0x0102, 0x0104,
-0x202D, 0x202E, 0xB026, 0xB047 and 0xB049. FocusMode also gives the
-focus mode, and 0x201C gives the AF-area mode.
+[section 9.10](#910-more-capture-settings) add 0xB049, and will add
+0x0102, 0x0104, 0x202D, 0x202E, 0xB026 and 0xB047. FocusMode also gives
+the focus mode, and 0x201C gives the AF-area mode.
 
 1. **Standard tags:** IFD0 Make, Model and Orientation; Exif
    DateTimeOriginal, SubSecTimeOriginal and OffsetTimeOriginal (the last two

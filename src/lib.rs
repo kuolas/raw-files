@@ -421,9 +421,9 @@ mod value_error;
 pub use authorship::Authorship;
 pub use camera::{Camera, Make};
 pub use camera_settings::{
-    AfFineTune, CameraSettings, ColorSpace, ExposureProgram, FineTune, Flash, FlashMode,
-    FocusAreaMode, FocusMode, ImageArea, MeteringMode, RawImageSize, Shutter, WhiteBalance,
-    WhiteBalanceMode,
+    AfFineTune, Bracketing, CameraSettings, ColorSpace, ExposureProgram, FineTune, Flash,
+    FlashMode, FocusAreaMode, FocusMode, ImageArea, MeteringMode, RawImageSize, ReleaseMode,
+    Shutter, WhiteBalance, WhiteBalanceMode,
 };
 pub use datetime::DateTime;
 pub use entries::{Directory, Entries, Entry, FieldType, SkippedDirectory, Value, ValueDisplay};

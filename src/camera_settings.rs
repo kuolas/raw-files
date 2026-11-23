@@ -5,9 +5,9 @@
 //! Beside the exposure, a viewer's information panel shows how the camera
 //! was set for the shot: the white balance, the exposure program, the
 //! metering mode, the flash, the shutter, the image area, the raw image
-//! size, the color space, the focus mode, the AF-area mode, AF fine-tune
-//! and whether the clock was on daylight saving time. [`CameraSettings`]
-//! holds them all, and
+//! size, the color space, the focus mode, the AF-area mode, AF fine-tune,
+//! the release mode, bracketing and whether the clock was on daylight
+//! saving time. [`CameraSettings`] holds them all, and
 //! [`Metadata::camera_settings`](crate::Metadata::camera_settings) gives
 //! them for a file. [`WhiteBalance`], [`FineTune`], [`Flash`] and
 //! [`AfFineTune`] hold the settings made of several parts; each enum, such as [`ExposureProgram`],
@@ -20,19 +20,21 @@
 //!
 //! NEF, ARW and JPEG files give the settings that their standard Exif tags
 //! record: the exposure program, the metering mode, the flash, the white
-//! balance mode and the color space. The others are recorded only in a
+//! balance mode, the color space and exposure bracketing. The others are
+//! recorded only in a
 //! maker's own tags, its MakerNote. Nikon's, in NEF files and in the JPEGs
 //! of Nikon cameras, gives the white balance's color temperature and
 //! fine-tuning, the shutter, the image area, the focus mode, the AF-area
-//! mode, AF fine-tune, daylight saving time and, in a raw file, the raw
-//! image size; the white balance setting, finer than Exif's,
+//! mode, AF fine-tune, the release mode and bracketing, daylight saving
+//! time and, in a raw file, the raw image size; the white balance setting,
+//! finer than Exif's,
 //! in place of Exif's; and the color space where the Exif tags record
 //! none, as in every Nikon raw file checked. Sony's, in ARW files and
 //! their family and in the JPEGs of Sony cameras, gives the white
 //! balance's fine-tuning, the electronic front curtain setting, which only
 //! Sony records, the color temperature of a chosen color temperature or a
-//! custom white balance, the focus mode and the AF-area mode; and the
-//! white balance setting in place of Exif's. On Sony files the shutter,
+//! custom white balance, the focus mode, the AF-area mode, the release
+//! mode and bracketing; and the white balance setting in place of Exif's. On Sony files the shutter,
 //! the image area, the raw image size, AF fine-tune and daylight saving
 //! time are `None`: Sony records the first two only in enciphered blocks,
 //! which raw-files does not read, gives an APS-C raw the raw size code of
@@ -50,16 +52,17 @@ use crate::rational::SignedRational;
 
 /// How the camera was set for a picture: its white balance, exposure
 /// program, metering mode, flash, shutter, image area, raw image size,
-/// color space, focus mode, AF-area mode, AF fine-tune and daylight saving
-/// time, for a viewer's information panel beside the exposure.
+/// color space, focus mode, AF-area mode, AF fine-tune, release mode,
+/// bracketing and daylight saving time, for a viewer's information panel
+/// beside the exposure.
 ///
 /// Every value is `None` when the file does not record it or records it in
 /// a way that cannot be read, such as a code that no variant names. A
 /// damaged value costs only itself.
 /// [`Metadata::camera_settings`](crate::Metadata::camera_settings) gives
 /// the values a file's standard Exif tags record: the exposure program,
-/// the metering mode, the flash, the white balance mode and the color
-/// space. The others, which only a maker's MakerNote records, it gives
+/// the metering mode, the flash, the white balance mode, the color space
+/// and exposure bracketing. The others, which only a maker's MakerNote records, it gives
 /// from Nikon's MakerNote and Sony's, each those its MakerNote records in
 /// plain tags; the shutter, the image area, the raw image size, AF
 /// fine-tune and daylight saving time are `None` for every Sony file. Each
@@ -142,6 +145,8 @@ pub struct CameraSettings {
     pub(crate) focus_mode: Option<FocusMode>,
     pub(crate) focus_area_mode: Option<FocusAreaMode>,
     pub(crate) af_fine_tune: Option<AfFineTune>,
+    pub(crate) release_mode: Option<ReleaseMode>,
+    pub(crate) bracketing: Option<Bracketing>,
     pub(crate) daylight_saving_time: Option<bool>,
 }
 
@@ -392,6 +397,111 @@ impl CameraSettings {
         self.af_fine_tune
     }
 
+    /// How the shutter was released for the picture: one frame for each
+    /// press, a burst, by the self-timer or by a remote, such as
+    /// [`Continuous`](ReleaseMode::Continuous); [`ReleaseMode`] says which
+    /// of a maker's settings gives each.
+    ///
+    /// Read from the MakerNote:
+    ///
+    /// - Nikon's ShootingMode, a value of bits: bit 0 continuous, bit 3
+    ///   the self-timer, bit 7 an infrared remote, and none of the three a
+    ///   single frame;
+    /// - Sony's ReleaseMode code: 0 a single frame, 2 continuous.
+    ///
+    /// `None` when:
+    ///
+    /// - the file records no release mode, as the Nikon bodies before the
+    ///   D2X, the Coolpix bodies but the Coolpix A, and the oldest Sony
+    ///   bodies do;
+    /// - Nikon's ShootingMode sets two of bits 0, 3 and 7, which no file
+    ///   does, or bit 11, pre-capture, a burst that begins before the
+    ///   shutter button is pressed all the way, which no file does either;
+    /// - Sony's code records a bracketed series, which does not say
+    ///   whether the frames were shot one at a time or as a burst, or is a
+    ///   code the documentation does not give;
+    /// - the tag has another type or count than the maker writes.
+    ///
+    /// Sony records the self-timer and the remote only in blocks raw-files
+    /// does not read, and whether a self-timer release writes 0 is not
+    /// known: a Sony file gives [`Single`](ReleaseMode::Single) or
+    /// [`Continuous`](ReleaseMode::Continuous) alone.
+    ///
+    /// What each maker's files record is in the notes on
+    /// [Nikon's capture settings](https://github.com/kuolas/raw-files/blob/master/docs/formats/nef/makernote-and-metadata.md#810-more-capture-settings)
+    /// and
+    /// [Sony's](https://github.com/kuolas/raw-files/blob/master/docs/formats/arw/makernote-and-metadata.md#910-more-capture-settings).
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use raw_files::{CameraFile, ReleaseMode};
+    ///
+    /// # fn main() -> raw_files::Result<()> {
+    /// let file = CameraFile::open("photo.nef")?;
+    /// if file.metadata().camera_settings().release_mode() == Some(ReleaseMode::Continuous) {
+    ///     println!("one frame of a burst");
+    /// }
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn release_mode(&self) -> Option<ReleaseMode> {
+        self.release_mode
+    }
+
+    /// Whether the picture is one of a bracketed series, and of which kind:
+    /// [`Off`](Bracketing::Off) when it is not, or the setting the series
+    /// varied, such as [`Exposure`](Bracketing::Exposure); [`Bracketing`]
+    /// says which of a maker's settings gives each.
+    ///
+    /// Read from the MakerNote where it records the bracketing:
+    ///
+    /// - Nikon's ShootingMode, a value of bits: bit 4 exposure, bit 6
+    ///   white balance and bit 8 Active D-Lighting bracketing, and none of
+    ///   the three [`Off`](Bracketing::Off);
+    /// - Sony's ReleaseMode code: 6 white balance and 8 DRO bracketing,
+    ///   and 0 and 2, a single frame and continuous release,
+    ///   [`Off`](Bracketing::Off).
+    ///
+    /// Where the MakerNote gives none, Exif's ExposureMode 2, auto
+    /// bracket, gives [`Exposure`](Bracketing::Exposure); Exif records no
+    /// other bracketing, so its other codes give none.
+    ///
+    /// The MakerNote gives no value, and Exif's stands, when:
+    ///
+    /// - Nikon's ShootingMode sets two of bits 4, 6 and 8, which no file
+    ///   does;
+    /// - Sony's code is 5, which ExifTool's documentation names exposure
+    ///   bracketing but files contradict: the ILCE-7RM3 writes it on
+    ///   pixel-shift frames too, while the RX100M3 and RX100M6 write it
+    ///   with Exif's auto bracket, and so give
+    ///   [`Exposure`](Bracketing::Exposure);
+    /// - the tag has another type or count than its maker writes.
+    ///
+    /// `None` when neither the MakerNote nor Exif gives one.
+    ///
+    /// Nikon's bits 6 and 8 are named from the documentation, with the rest
+    /// of their list, though no measured file holds either; the notes say
+    /// which codes files hold.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use raw_files::{Bracketing, CameraFile};
+    ///
+    /// # fn main() -> raw_files::Result<()> {
+    /// let file = CameraFile::open("photo.arw")?;
+    /// match file.metadata().camera_settings().bracketing() {
+    ///     Some(Bracketing::Off) | None => {}
+    ///     Some(kind) => println!("one of a series: {kind}"),
+    /// }
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn bracketing(&self) -> Option<Bracketing> {
+        self.bracketing
+    }
+
     /// Whether daylight saving time was on in the camera's clock:
     /// `Some(true)` when on, `Some(false)` when off.
     ///
@@ -519,6 +629,22 @@ impl CameraSettings {
     #[must_use]
     pub fn with_af_fine_tune(mut self, fine_tune: AfFineTune) -> Self {
         self.af_fine_tune = Some(fine_tune);
+        self
+    }
+
+    /// Sets the release mode, in place of any set before;
+    /// [`release_mode`](Self::release_mode) reads it.
+    #[must_use]
+    pub fn with_release_mode(mut self, mode: ReleaseMode) -> Self {
+        self.release_mode = Some(mode);
+        self
+    }
+
+    /// Sets the bracketing, in place of any set before;
+    /// [`bracketing`](Self::bracketing) reads it.
+    #[must_use]
+    pub fn with_bracketing(mut self, bracketing: Bracketing) -> Self {
+        self.bracketing = Some(bracketing);
         self
     }
 
@@ -1555,6 +1681,136 @@ impl fmt::Display for FocusAreaMode {
     }
 }
 
+/// How the shutter was released for a picture, in words that fit any
+/// maker. Each maker's finer kinds fold into one variant:
+///
+/// - one frame for each press of the shutter button, Nikon's single
+///   frame, quiet release and mirror up, which its ShootingMode records
+///   alike, and Sony's normal release: [`Single`](Self::Single);
+/// - frames for as long as the button is held, Nikon's continuous low and
+///   high speed and Sony's continuous release:
+///   [`Continuous`](Self::Continuous);
+/// - Nikon's self-timer: [`SelfTimer`](Self::SelfTimer);
+/// - Nikon's infrared remote: [`Remote`](Self::Remote).
+///
+/// A maker's code is named where it is in a list that its published
+/// documentation gives and that the measured files agree with, as the
+/// [decision to read the metadata from the standard tags](https://github.com/kuolas/raw-files/blob/master/docs/architecture-decisions/adr011-metadata-from-standard-tags.md)
+/// says; any other code gives `None`.
+///
+/// `ReleaseMode` is `#[non_exhaustive]`, so match on it with a wildcard
+/// arm. It orders as its variants are listed, and a new variant is added
+/// after the existing ones, so an order once observed holds. Its
+/// [`name`](Self::name)s, which `Display` writes too, are "Single frame",
+/// "Continuous", "Self-timer" and "Remote".
+///
+/// # Examples
+///
+/// ```
+/// use raw_files::ReleaseMode;
+///
+/// assert_eq!(ReleaseMode::Single.name(), "Single frame");
+/// assert_eq!(ReleaseMode::SelfTimer.to_string(), "Self-timer");
+/// ```
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[non_exhaustive]
+pub enum ReleaseMode {
+    /// One frame for each press of the shutter button.
+    Single,
+    /// Frames for as long as the shutter button was held.
+    Continuous,
+    /// The camera's self-timer released the shutter, after a delay.
+    SelfTimer,
+    /// A remote control released the shutter.
+    Remote,
+}
+
+impl ReleaseMode {
+    /// The mode's name, for an information panel, such as "Self-timer";
+    /// the type's docs list them all.
+    pub fn name(self) -> &'static str {
+        match self {
+            ReleaseMode::Single => "Single frame",
+            ReleaseMode::Continuous => "Continuous",
+            ReleaseMode::SelfTimer => "Self-timer",
+            ReleaseMode::Remote => "Remote",
+        }
+    }
+}
+
+impl fmt::Display for ReleaseMode {
+    /// Writes [`name`](ReleaseMode::name).
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.name())
+    }
+}
+
+/// Whether a picture is one of a bracketed series, a few frames shot one
+/// after the other with one setting varied, and which setting: in words
+/// that fit any maker. Each maker's kinds fold into one variant:
+///
+/// - not part of a series: [`Off`](Self::Off);
+/// - the exposure varied, Nikon's exposure bracketing and Exif's auto
+///   bracket: [`Exposure`](Self::Exposure);
+/// - the white balance varied, Nikon's and Sony's white balance
+///   bracketing: [`WhiteBalance`](Self::WhiteBalance);
+/// - how far shadows and highlights were brought in, Nikon's Active
+///   D-Lighting bracketing and Sony's DRO bracketing:
+///   [`DynamicRange`](Self::DynamicRange).
+///
+/// A maker's code is named where it is in a list that its published
+/// documentation gives and that the measured files agree with, as the
+/// [decision to read the metadata from the standard tags](https://github.com/kuolas/raw-files/blob/master/docs/architecture-decisions/adr011-metadata-from-standard-tags.md)
+/// says; any other code gives `None`.
+///
+/// `Bracketing` is `#[non_exhaustive]`, so match on it with a wildcard
+/// arm. It orders as its variants are listed, and a new variant is added
+/// after the existing ones, so an order once observed holds. Its
+/// [`name`](Self::name)s, which `Display` writes too, are "Off",
+/// "Exposure", "White balance" and "Dynamic range".
+///
+/// # Examples
+///
+/// ```
+/// use raw_files::Bracketing;
+///
+/// assert_eq!(Bracketing::WhiteBalance.name(), "White balance");
+/// assert_eq!(Bracketing::Off.to_string(), "Off");
+/// ```
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[non_exhaustive]
+pub enum Bracketing {
+    /// The picture is not one of a bracketed series.
+    Off,
+    /// One of a series shot at different exposures.
+    Exposure,
+    /// One of a series shot at different white balances.
+    WhiteBalance,
+    /// One of a series shot with shadows and highlights brought in by
+    /// different amounts.
+    DynamicRange,
+}
+
+impl Bracketing {
+    /// The bracketing's name, for an information panel, such as "White
+    /// balance"; the type's docs list them all.
+    pub fn name(self) -> &'static str {
+        match self {
+            Bracketing::Off => "Off",
+            Bracketing::Exposure => "Exposure",
+            Bracketing::WhiteBalance => "White balance",
+            Bracketing::DynamicRange => "Dynamic range",
+        }
+    }
+}
+
+impl fmt::Display for Bracketing {
+    /// Writes [`name`](Bracketing::name).
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.name())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1599,6 +1855,8 @@ mod tests {
                 value: Some(-5),
                 tele_value: None,
             }),
+            release_mode: Some(ReleaseMode::Continuous),
+            bracketing: Some(Bracketing::Exposure),
             daylight_saving_time: Some(true),
         }
     }
@@ -1618,6 +1876,8 @@ mod tests {
         assert_eq!(settings.focus_mode(), None);
         assert_eq!(settings.focus_area_mode(), None);
         assert_eq!(settings.af_fine_tune(), None);
+        assert_eq!(settings.release_mode(), None);
+        assert_eq!(settings.bracketing(), None);
         assert_eq!(settings.daylight_saving_time(), None);
 
         let white_balance = WhiteBalance::default();
@@ -1657,6 +1917,8 @@ mod tests {
                 tele_value: None,
             })
         );
+        assert_eq!(settings.release_mode(), Some(ReleaseMode::Continuous));
+        assert_eq!(settings.bracketing(), Some(Bracketing::Exposure));
         assert_eq!(settings.daylight_saving_time(), Some(true));
 
         let white_balance = nikon_white_balance();
@@ -1773,6 +2035,20 @@ mod tests {
                     },
                 ),
                 (
+                    start.clone().with_release_mode(ReleaseMode::Remote),
+                    CameraSettings {
+                        release_mode: Some(ReleaseMode::Remote),
+                        ..start.clone()
+                    },
+                ),
+                (
+                    start.clone().with_bracketing(Bracketing::Off),
+                    CameraSettings {
+                        bracketing: Some(Bracketing::Off),
+                        ..start.clone()
+                    },
+                ),
+                (
                     start.clone().with_daylight_saving_time(false),
                     CameraSettings {
                         daylight_saving_time: Some(false),
@@ -1845,6 +2121,8 @@ mod tests {
             .with_focus_mode(FocusMode::Continuous)
             .with_focus_area_mode(FocusAreaMode::Tracking)
             .with_af_fine_tune(AfFineTune::on().with_value(-5))
+            .with_release_mode(ReleaseMode::Continuous)
+            .with_bracketing(Bracketing::Exposure)
             .with_daylight_saving_time(true);
         assert_eq!(settings, full_settings());
     }
@@ -1864,6 +2142,8 @@ mod tests {
             .with_focus_mode(FocusMode::Single)
             .with_focus_area_mode(FocusAreaMode::Pinpoint)
             .with_af_fine_tune(AfFineTune::off().with_value(3))
+            .with_release_mode(ReleaseMode::SelfTimer)
+            .with_bracketing(Bracketing::DynamicRange)
             .with_daylight_saving_time(false);
         // Every value of `earlier` differs from the full record's, so each
         // builder below has one to replace.
@@ -1881,6 +2161,8 @@ mod tests {
             .with_focus_mode(FocusMode::Continuous)
             .with_focus_area_mode(FocusAreaMode::Tracking)
             .with_af_fine_tune(AfFineTune::on().with_value(-5))
+            .with_release_mode(ReleaseMode::Continuous)
+            .with_bracketing(Bracketing::Exposure)
             .with_daylight_saving_time(true);
         assert_eq!(settings, full);
 
@@ -2122,6 +2404,28 @@ mod tests {
         all
     }
 
+    fn all_release_modes() -> [ReleaseMode; 4] {
+        use ReleaseMode::*;
+        let all = [Single, Continuous, SelfTimer, Remote];
+        for mode in all {
+            match mode {
+                Single | Continuous | SelfTimer | Remote => {}
+            }
+        }
+        all
+    }
+
+    fn all_bracketings() -> [Bracketing; 4] {
+        use Bracketing::*;
+        let all = [Off, Exposure, WhiteBalance, DynamicRange];
+        for bracketing in all {
+            match bracketing {
+                Off | Exposure | WhiteBalance | DynamicRange => {}
+            }
+        }
+        all
+    }
+
     #[test]
     fn every_name_is_the_one_documented_and_display_writes_it() {
         // The names are stable once released: a program may show or store
@@ -2228,6 +2532,16 @@ mod tests {
                 "Zone",
             ],
         );
+        assert_names(
+            &all_release_modes(),
+            ReleaseMode::name,
+            &["Single frame", "Continuous", "Self-timer", "Remote"],
+        );
+        assert_names(
+            &all_bracketings(),
+            Bracketing::name,
+            &["Off", "Exposure", "White balance", "Dynamic range"],
+        );
     }
 
     #[test]
@@ -2244,6 +2558,8 @@ mod tests {
         assert_ordered(&all_color_spaces());
         assert_ordered(&all_focus_modes());
         assert_ordered(&all_focus_area_modes());
+        assert_ordered(&all_release_modes());
+        assert_ordered(&all_bracketings());
     }
 
     #[test]
