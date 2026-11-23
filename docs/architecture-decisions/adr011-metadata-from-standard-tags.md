@@ -2,7 +2,7 @@
 
 - Status: Accepted
 - Date: 2026-10-15
-- Revision: 6, 2026-11-22
+- Revision: 7, 2026-11-23
 - Issue: #13; the camera settings #26, revised in #51; authorship and
   location #97; more capture settings #214
 
@@ -194,7 +194,7 @@ nothing standard records a value. Nothing is deciphered or decrypted.
   MakerNote tags add what Exif does not record:
   - the source, built-in or external, and how the unit was controlled
     (TTL, auto aperture, manual or repeating), from Nikon's FlashType
-    text;
+    text; an external flash from Sony's FlashAction too;
   - the sync, front or rear curtain and slow, from Nikon's FlashSetting
     text;
   - the compensation, in EV as recorded: Nikon's for the built-in flash

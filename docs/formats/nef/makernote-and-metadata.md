@@ -1782,11 +1782,12 @@ raw-files reads:
 
 - the focus mode, AF fine-tune, stabilization and auto ISO;
 - the exposure fine-tuning, the release mode and bracketing, and
-  daylight saving time.
+  daylight saving time;
+- the flash's source and control.
 
 It will read:
 
-- the flash's source, control, sync and compensation;
+- the flash's sync and compensation;
 - the raw compression and bit depth, and the JPEG quality;
 - the white balance's preset slot and fluorescent lamp.
 
@@ -1975,7 +1976,8 @@ flash setting, so each text is documented by the maker's manual, none
 confirmed.
 
 0x0009 FlashType gives the source before the comma and the control after
-it. raw-files will read both:
+it. raw-files reads both, looking each text up whole in this table of the
+texts files hold:
 
 | Text | Setting [P][25] (pp. 143 to 146) | Source, control | Files, public / mine |
 |---|---|---|---|
@@ -1991,8 +1993,11 @@ it. raw-files will read both:
 | `NEW_TTL` | none known | none | 1 / 0 |
 
 **[F]** The D100's `NEW_TTL` names neither a source nor a control, so it
-will stay unnamed. The commander part will not be read
-([section 12.5](#125-what-the-view-leaves-out)).
+stays unnamed. The commander part is not read
+([section 12.5](#125-what-the-view-leaves-out)). A text the table lacks
+gives neither part. No file holds a FlashType text where Exif's Flash
+says the flash did not fire; a file without Exif's Flash gives no
+flash, whatever FlashType holds.
 
 0x0008 FlashSetting gives the sync:
 

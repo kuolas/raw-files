@@ -226,6 +226,15 @@ does. An entry that can break a caller opens with **Breaking:**.
   from Exif's Flash, beside whether the flash fired and its mode. Exif
   gives red-eye reduction one bit, whose clear value reads "no red-eye
   reduction mode or unknown", so `false` also means not known.
+- `Flash::source` gives which flash fired, a `FlashSource`: the
+  camera's own or an external unit. `Flash::control` gives how its
+  output was controlled, a `FlashControl`: TTL, auto aperture, manual
+  or repeating. Each has its `with_…` builder
+  ([#214](https://github.com/kuolas/raw-files/issues/214)). Nikon files
+  give both from their MakerNote's FlashType text, such as
+  `Built-in,TTL-BL` or `Optional,M`; commander mode is not given. Sony
+  files give an external flash from their FlashAction. A file without
+  Exif's Flash still gives no flash.
 
 ### Changed
 

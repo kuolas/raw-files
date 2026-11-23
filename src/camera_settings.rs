@@ -28,7 +28,8 @@
 //! of Nikon cameras, gives the white balance's color temperature and
 //! fine-tuning, the shutter, the image area, the focus mode, the AF-area
 //! mode, AF fine-tune, the stabilization, auto ISO, the exposure
-//! fine-tuning, the release mode and bracketing, daylight saving time and,
+//! fine-tuning, the release mode and bracketing, daylight saving time, the
+//! flash's source and control and,
 //! in a raw file, the raw image size; the white balance setting,
 //! finer than Exif's,
 //! in place of Exif's; and the color space where the Exif tags record
@@ -38,7 +39,8 @@
 //! Sony records, the color temperature of a chosen color temperature or a
 //! custom white balance, the focus mode, the AF-area mode, the
 //! stabilization, without a mode, the exposure fine-tuning, the release
-//! mode and bracketing; and the white balance
+//! mode and bracketing, an external flash as the flash's source; and the
+//! white balance
 //! setting in place of Exif's. On Sony files the shutter,
 //! the image area, the raw image size, AF fine-tune, auto ISO and daylight
 //! saving time are `None`: Sony records the first two only in enciphered
@@ -186,11 +188,14 @@ impl CameraSettings {
         self.metering_mode
     }
 
-    /// Whether the flash fired, and its mode when the file records one.
+    /// Whether the flash fired, and the parts of its setting the file
+    /// records, such as its mode.
     ///
-    /// Read from Exif's Flash. `None` also when the value contradicts
-    /// itself, as a flash that fired on a camera without a flash function
-    /// does, or sets bits Exif reserves.
+    /// Read from Exif's Flash, to which a maker's tags add the parts Exif
+    /// does not record. `None` when the file has no Exif Flash, whatever
+    /// the maker's tags hold, and when the value contradicts itself, as a
+    /// flash that fired on a camera without a flash function does, or sets
+    /// bits Exif reserves.
     pub fn flash(&self) -> Option<Flash> {
         self.flash
     }
@@ -1047,35 +1052,42 @@ impl FineTune {
     }
 }
 
-/// The flash: whether it fired, and its mode, whether red-eye reduction
-/// was on and whether the flash's return light was detected, when the
-/// file records them.
+/// The flash: whether it fired and, when the file records them, its
+/// mode, whether red-eye reduction was on, whether the flash's return
+/// light was detected, which flash it was and how its output was
+/// controlled.
 ///
 /// There is no `Default`: a file that records no flash gives `None` for
 /// [`CameraSettings::flash`].
 ///
 /// # Examples
 ///
-/// A flash that fired in fill mode with red-eye reduction, its return
-/// light detected, and one that did not fire, with nothing else recorded:
+/// A flash unit that fired in fill mode, under TTL control, with red-eye
+/// reduction, its return light detected, and one that did not fire, with
+/// nothing else recorded:
 ///
 /// ```
-/// use raw_files::{Flash, FlashMode};
+/// use raw_files::{Flash, FlashControl, FlashMode, FlashSource};
 ///
 /// let fill = Flash::fired()
 ///     .with_mode(FlashMode::Fill)
 ///     .with_red_eye_reduction(true)
-///     .with_return_light(true);
+///     .with_return_light(true)
+///     .with_source(FlashSource::External)
+///     .with_control(FlashControl::Ttl);
 /// assert!(fill.has_fired());
 /// assert_eq!(fill.mode(), Some(FlashMode::Fill));
 /// assert!(fill.red_eye_reduction());
 /// assert_eq!(fill.return_light(), Some(true));
+/// assert_eq!(fill.source(), Some(FlashSource::External));
+/// assert_eq!(fill.control(), Some(FlashControl::Ttl));
 ///
 /// let off = Flash::not_fired();
 /// assert!(!off.has_fired());
 /// assert_eq!(off.mode(), None);
 /// assert!(!off.red_eye_reduction());
 /// assert_eq!(off.return_light(), None);
+/// assert_eq!(off.source(), None);
 /// ```
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct Flash {
@@ -1083,11 +1095,14 @@ pub struct Flash {
     pub(crate) mode: Option<FlashMode>,
     pub(crate) red_eye_reduction: bool,
     pub(crate) return_light: Option<bool>,
+    pub(crate) source: Option<FlashSource>,
+    pub(crate) control: Option<FlashControl>,
 }
 
 impl Flash {
-    /// A flash that fired, with nothing else yet: no mode, red-eye
-    /// reduction off and no return light. The `with_…` methods add them.
+    /// A flash that fired, with nothing else yet: red-eye reduction off,
+    /// and no mode, return light, source or control. The `with_…` methods
+    /// add them.
     #[must_use]
     pub fn fired() -> Self {
         Self {
@@ -1096,8 +1111,9 @@ impl Flash {
         }
     }
 
-    /// A flash that did not fire, with nothing else yet: no mode, red-eye
-    /// reduction off and no return light. The `with_…` methods add them.
+    /// A flash that did not fire, with nothing else yet: red-eye reduction
+    /// off, and no mode, return light, source or control. The `with_…`
+    /// methods add them.
     #[must_use]
     pub fn not_fired() -> Self {
         Self {
@@ -1105,6 +1121,8 @@ impl Flash {
             mode: None,
             red_eye_reduction: false,
             return_light: None,
+            source: None,
+            control: None,
         }
     }
 
@@ -1137,6 +1155,24 @@ impl Flash {
         }
     }
 
+    /// This flash with the source `source`, in place of any it had.
+    #[must_use]
+    pub fn with_source(self, source: FlashSource) -> Self {
+        Self {
+            source: Some(source),
+            ..self
+        }
+    }
+
+    /// This flash with the control `control`, in place of any it had.
+    #[must_use]
+    pub fn with_control(self, control: FlashControl) -> Self {
+        Self {
+            control: Some(control),
+            ..self
+        }
+    }
+
     /// Whether the flash fired.
     pub fn has_fired(&self) -> bool {
         self.fired
@@ -1163,6 +1199,18 @@ impl Flash {
     /// since it sent no light back.
     pub fn return_light(&self) -> Option<bool> {
         self.return_light
+    }
+
+    /// Which flash it was, the camera's own or a flash unit, or `None` when
+    /// the file does not say.
+    pub fn source(&self) -> Option<FlashSource> {
+        self.source
+    }
+
+    /// How the flash's output was controlled, such as by the camera's
+    /// metering through the lens, or `None` when the file does not say.
+    pub fn control(&self) -> Option<FlashControl> {
+        self.control
     }
 }
 
@@ -1393,6 +1441,104 @@ impl FlashMode {
 
 impl fmt::Display for FlashMode {
     /// Writes [`name`](FlashMode::name).
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.name())
+    }
+}
+
+/// Which flash lit the picture: the camera's own, or a flash unit.
+///
+/// `FlashSource` is `#[non_exhaustive]`, so match on it with a wildcard
+/// arm. It orders as its variants are listed, and a new variant is added
+/// after the existing ones, so an order once observed holds. Its
+/// [`name`](Self::name)s, which `Display` writes too, are "Built-in" and
+/// "External".
+///
+/// # Examples
+///
+/// ```
+/// use raw_files::FlashSource;
+///
+/// assert_eq!(FlashSource::BuiltIn.name(), "Built-in");
+/// assert_eq!(FlashSource::External.to_string(), "External");
+/// ```
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[non_exhaustive]
+pub enum FlashSource {
+    /// The camera's own flash. Nikon's `Built-in`.
+    BuiltIn,
+    /// A flash unit, on the camera or fired by it from a distance.
+    /// Nikon's `Optional`, and Sony's external and wirelessly controlled
+    /// flash.
+    External,
+}
+
+impl FlashSource {
+    /// The source's name, for an information panel: "Built-in" or
+    /// "External".
+    pub fn name(self) -> &'static str {
+        match self {
+            FlashSource::BuiltIn => "Built-in",
+            FlashSource::External => "External",
+        }
+    }
+}
+
+impl fmt::Display for FlashSource {
+    /// Writes [`name`](FlashSource::name).
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.name())
+    }
+}
+
+/// How the flash's output was controlled.
+///
+/// `FlashControl` is `#[non_exhaustive]`, so match on it with a wildcard
+/// arm. It orders as its variants are listed, and a new variant is added
+/// after the existing ones, so an order once observed holds. Its
+/// [`name`](Self::name)s, which `Display` writes too, are "TTL", "Auto
+/// aperture", "Manual" and "Repeating".
+///
+/// # Examples
+///
+/// ```
+/// use raw_files::FlashControl;
+///
+/// assert_eq!(FlashControl::Ttl.name(), "TTL");
+/// assert_eq!(FlashControl::AutoAperture.to_string(), "Auto aperture");
+/// ```
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[non_exhaustive]
+pub enum FlashControl {
+    /// The camera metered the flash through the lens and set its output:
+    /// TTL. Nikon's i-TTL and i-TTL balanced fill-flash (`TTL`,
+    /// `TTL-BL`).
+    Ttl,
+    /// The flash unit metered the light itself and set its output for the
+    /// aperture: Nikon's auto aperture (`AA`).
+    AutoAperture,
+    /// The photographer set the flash's output: Nikon's `M`.
+    Manual,
+    /// The flash fired several times during one exposure, as the
+    /// photographer set it: Nikon's repeating flash (`RPT`).
+    Repeating,
+}
+
+impl FlashControl {
+    /// The control's name, for an information panel: "TTL", "Auto
+    /// aperture", "Manual" or "Repeating".
+    pub fn name(self) -> &'static str {
+        match self {
+            FlashControl::Ttl => "TTL",
+            FlashControl::AutoAperture => "Auto aperture",
+            FlashControl::Manual => "Manual",
+            FlashControl::Repeating => "Repeating",
+        }
+    }
+}
+
+impl fmt::Display for FlashControl {
+    /// Writes [`name`](FlashControl::name).
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(self.name())
     }
@@ -2212,6 +2358,8 @@ mod tests {
                 mode: Some(FlashMode::Fill),
                 red_eye_reduction: true,
                 return_light: Some(true),
+                source: Some(FlashSource::External),
+                control: Some(FlashControl::Ttl),
             }),
             shutter: Some(Shutter::ElectronicFrontCurtain),
             electronic_front_curtain_setting: Some(true),
@@ -2281,6 +2429,8 @@ mod tests {
                 mode: Some(FlashMode::Fill),
                 red_eye_reduction: true,
                 return_light: Some(true),
+                source: Some(FlashSource::External),
+                control: Some(FlashControl::Ttl),
             })
         );
         let flash = settings.flash().unwrap();
@@ -2288,6 +2438,8 @@ mod tests {
         assert_eq!(flash.mode(), Some(FlashMode::Fill));
         assert!(flash.red_eye_reduction());
         assert_eq!(flash.return_light(), Some(true));
+        assert_eq!(flash.source(), Some(FlashSource::External));
+        assert_eq!(flash.control(), Some(FlashControl::Ttl));
         assert_eq!(settings.shutter(), Some(Shutter::ElectronicFrontCurtain));
         assert_eq!(settings.electronic_front_curtain_setting(), Some(true));
         assert_eq!(settings.image_area(), Some(ImageArea::FullFrame));
@@ -2335,6 +2487,8 @@ mod tests {
             mode: Some(FlashMode::Off),
             red_eye_reduction: false,
             return_light: Some(false),
+            source: Some(FlashSource::BuiltIn),
+            control: Some(FlashControl::Manual),
         };
         // From the empty record, and from a full one whose every value
         // differs from the one set. The expected value is built field by
@@ -2537,7 +2691,9 @@ mod tests {
                 Flash::fired()
                     .with_mode(FlashMode::Fill)
                     .with_red_eye_reduction(true)
-                    .with_return_light(true),
+                    .with_return_light(true)
+                    .with_source(FlashSource::External)
+                    .with_control(FlashControl::Ttl),
             )
             .with_shutter(Shutter::ElectronicFrontCurtain)
             .with_electronic_front_curtain_setting(true)
@@ -2651,7 +2807,28 @@ mod tests {
             // Nothing else was set.
             assert!(!off.red_eye_reduction());
             assert_eq!(off.return_light(), None);
+            assert_eq!(off.source(), None);
+            assert_eq!(off.control(), None);
         }
+    }
+
+    #[test]
+    fn a_flash_takes_its_source_and_control() {
+        let flash = Flash::fired().with_mode(FlashMode::Auto);
+        // Each set, then set again, which replaces it.
+        let built_in = flash.with_source(FlashSource::BuiltIn);
+        assert_eq!(built_in.source(), Some(FlashSource::BuiltIn));
+        let unit = built_in.with_source(FlashSource::External);
+        assert_eq!(unit.source(), Some(FlashSource::External));
+        let manual = unit.with_control(FlashControl::Manual);
+        assert_eq!(manual.control(), Some(FlashControl::Manual));
+        let repeating = manual.with_control(FlashControl::Repeating);
+        assert_eq!(repeating.control(), Some(FlashControl::Repeating));
+        // The other parts stay as they were.
+        assert!(repeating.has_fired());
+        assert_eq!(repeating.mode(), Some(FlashMode::Auto));
+        assert_eq!(repeating.source(), Some(FlashSource::External));
+        assert_eq!(repeating.return_light(), None);
     }
 
     #[test]
@@ -2749,6 +2926,27 @@ mod tests {
         for mode in all {
             match mode {
                 FlashMode::Fill | FlashMode::Off | FlashMode::Auto => {}
+            }
+        }
+        all
+    }
+
+    fn all_flash_sources() -> [FlashSource; 2] {
+        let all = [FlashSource::BuiltIn, FlashSource::External];
+        for source in all {
+            match source {
+                FlashSource::BuiltIn | FlashSource::External => {}
+            }
+        }
+        all
+    }
+
+    fn all_flash_controls() -> [FlashControl; 4] {
+        use FlashControl::*;
+        let all = [Ttl, AutoAperture, Manual, Repeating];
+        for control in all {
+            match control {
+                Ttl | AutoAperture | Manual | Repeating => {}
             }
         }
         all
@@ -2941,6 +3139,16 @@ mod tests {
             &["Fill flash", "Flash off", "Auto flash"],
         );
         assert_names(
+            &all_flash_sources(),
+            FlashSource::name,
+            &["Built-in", "External"],
+        );
+        assert_names(
+            &all_flash_controls(),
+            FlashControl::name,
+            &["TTL", "Auto aperture", "Manual", "Repeating"],
+        );
+        assert_names(
             &all_exposure_programs(),
             ExposureProgram::name,
             &[
@@ -3059,6 +3267,8 @@ mod tests {
         // A program may key a sorted map by these enums, and the order is
         // a promise: a variant moved, or added before the others, fails.
         assert_ordered(&all_flash_modes());
+        assert_ordered(&all_flash_sources());
+        assert_ordered(&all_flash_controls());
         assert_ordered(&all_exposure_programs());
         assert_ordered(&all_metering_modes());
         assert_ordered(&all_white_balance_modes());

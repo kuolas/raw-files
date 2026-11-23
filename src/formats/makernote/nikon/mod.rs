@@ -81,6 +81,12 @@ const WHITE_BALANCE: u16 = 0x0005;
 /// focus.
 const FOCUS_MODE: u16 = 0x0007;
 
+/// The Nikon MakerNote tag that records which flash fired and how its
+/// output was controlled (FlashType), as ASCII text: the source, then a
+/// comma and the control, such as `Built-in,TTL` or `Optional,M`. Blank
+/// when no flash fired.
+const FLASH_TYPE: u16 = 0x0009;
+
 /// The Nikon MakerNote tag that records the white balance fine-tuning in
 /// whole steps (WhiteBalanceFineTune): two SSHORTs, amber to blue then
 /// magenta to green. The oldest bodies write one, whose axis and sign no
@@ -213,6 +219,7 @@ mod rules {
     pub(super) const ISO: Held<[u32; 2]> = Held::new(super::ISO, SHORT);
     pub(super) const WHITE_BALANCE: Rule<Text> = Rule::new(super::WHITE_BALANCE, ASCII);
     pub(super) const FOCUS_MODE: Rule<Text> = Rule::new(super::FOCUS_MODE, ASCII);
+    pub(super) const FLASH_TYPE: Rule<Text> = Rule::new(super::FLASH_TYPE, ASCII);
     pub(super) const FINE_TUNE_STEPS: Held<[i16; 2]> =
         Held::new(super::FINE_TUNE_STEPS, &[FieldType::SShort]);
     pub(super) const ISO_SELECTION: Rule<Text> = Rule::new(super::ISO_SELECTION, ASCII);
