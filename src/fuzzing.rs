@@ -350,7 +350,10 @@ fn read_metadata(metadata: &Metadata) {
     if let Some(location) = metadata.location() {
         read_location(location);
     }
-    if let Some(time) = metadata.capture_time() {
+    for time in [metadata.capture_time(), metadata.digitized_time()]
+        .into_iter()
+        .flatten()
+    {
         read_time(&time);
     }
     let _ = metadata.orientation();

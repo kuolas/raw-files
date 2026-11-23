@@ -166,6 +166,15 @@ does. An entry that can break a caller opens with **Breaking:**.
   MakerNote's AFTune, the long end's value under its "On (Zoom)" code;
   which saved lens the value belongs to is not given. Sony files give none: they record their AF
   micro adjustment only in enciphered or unread blocks.
+- `Metadata::digitized_time` gives when the picture was stored as
+  digital data, and `with_digitized_time` sets it
+  ([#214](https://github.com/kuolas/raw-files/issues/214)). It comes
+  from Exif's DateTimeDigitized, with its own fraction of a second and
+  offset, by the capture time's rules. On older Nikon bodies the offset
+  is the time-zone setting of the camera's clock, as for the capture
+  time. A camera writes the capture time here too, unless it stores the
+  picture later, as when it makes a JPEG from a raw file. The capture
+  time never falls back on it.
 
 ### Changed
 

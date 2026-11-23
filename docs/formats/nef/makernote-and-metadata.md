@@ -648,14 +648,18 @@ IFD0 0x0112 wins. [S] See
 | Sub-seconds | Exif IFD 0x9291 SubSecTimeOriginal | decimal fraction digits |
 | Offset from UTC | Exif IFD 0x9011 OffsetTimeOriginal, form `+HH:MM` | optional |
 | Fallback zone | MakerNote 0x0024 WorldTime | the time zone and daylight saving setting of the camera's clock; agrees with OffsetTimeOriginal wherever both exist **[F]** |
+| Digitized time | Exif IFD 0x9004 DateTimeDigitized, with 0x9292 SubSecTimeDigitized and 0x9012 OffsetTimeDigitized | read as the digitized time, by the capture time's rules, WorldTime included; equal to the capture time on every public file that records both **[F]** |
 
-The three Exif tags and their forms: [P][23] (4.6.6.6.1, p. 52;
-4.6.6.6.4, p. 53; 4.6.6.6.7, p. 54)
+The six Exif tags and their forms: [P][23] (4.6.6.6.1 and 4.6.6.6.2,
+pp. 52 to 53; 4.6.6.6.4 and 4.6.6.6.5, pp. 53 to 54; 4.6.6.6.7 and
+4.6.6.6.8, p. 54)
 
-Also present: 0x9004 DateTimeDigitized and IFD0 0x0132 DateTime, the
-last modification time [P][23] (4.6.6.6.2, p. 53; 4.6.5.4.5, p. 43).
-The census of [tag-names.md](../tag-names.md#3-the-ifd-chain-and-the-subifds)
-finds both in NEF files. **[F]**
+Also present: IFD0 0x0132 DateTime, the last modification time [P][23]
+(4.6.5.4.5, p. 43). The census of
+[tag-names.md](../tag-names.md#3-the-ifd-chain-and-the-subifds) finds
+it and DateTimeDigitized in NEF files. **[F]** Where the digitized time
+differs from the capture time, on JPEGs a Nikon camera wrote later, see
+the [JPEG notes, section 4](../jpeg/container-and-metadata.md#4-exif-the-app1-segment).
 
 An unset camera clock yields a blank or space-filled string (spaces where the digits would be); return "none" for the date rather than an error. [I]
 

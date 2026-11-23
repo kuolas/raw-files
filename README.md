@@ -16,7 +16,8 @@ Linux and Windows alike.
   a given size, with the orientation to show it in.
 - **Metadata.** What a viewer or a file renamer needs next to a preview:
   - when the picture was taken, to the sub-second and with the offset
-    from UTC where the file records them;
+    from UTC where the file records them, and when it was stored as
+    digital data;
   - the camera's make, model, serial number and owner's name;
   - the maker raw-files recognizes in them, such as Nikon;
   - the name the body is sold under, such as Z6III, for the bodies the

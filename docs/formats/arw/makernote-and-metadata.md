@@ -870,11 +870,12 @@ No Sony tag overrides IFD0. [S][I]
 | Local capture time | Exif 0x9003 DateTimeOriginal | `YYYY:MM:DD HH:MM:SS`, present in every Sony file of the sweep [S][24] |
 | Sub-seconds | Exif 0x9291 SubSecTimeOriginal | from some ARW 2.3.5 bodies on; every ARW 4.0 and later sample |
 | Offset from UTC | Exif 0x9011 OffsetTimeOriginal, form `+HH:MM` | from ARW 2.3.3 on in the samples |
+| Digitized time | Exif 0x9004 DateTimeDigitized, with 0x9292 SubSecTimeDigitized and 0x9012 OffsetTimeDigitized | read as the digitized time, by the capture time's rules; equal to the capture time on every public file that records both [F] |
 | Last modification | IFD0 0x0132 DateTime | repeated in IFD1 |
 
-Sources: the four tags and their forms [P][30] (4.6.5.4.5, p. 43;
-4.6.6.6.1, p. 52; 4.6.6.6.4, p. 53; 4.6.6.6.7, p. 54); the rest [4][F]
-and as cited.
+Sources: the seven tags and their forms [P][30] (4.6.5.4.5, p. 43;
+4.6.6.6.1 and 4.6.6.6.2, pp. 52 to 53; 4.6.6.6.4 and 4.6.6.6.5, pp. 53
+to 54; 4.6.6.6.7 and 4.6.6.6.8, p. 54); the rest [4][F] and as cited.
 
 **OffsetTime\*.** OffsetTime, OffsetTimeOriginal and OffsetTimeDigitized are
 present, all three together, in the ILCE-9 (1541, 1542; firmware 1.00,

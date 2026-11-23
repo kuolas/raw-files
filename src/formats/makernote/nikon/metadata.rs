@@ -189,10 +189,10 @@ mod tests {
     use super::super::{CROP_HI_SPEED, ISO, LENS, Picture, SERIAL_NUMBER, WORLD_TIME, metadata};
     use super::*;
     use crate::container::tiff::tags::{
-        BODY_SERIAL_NUMBER, DATE_TIME_ORIGINAL, DEFAULT_CROP_ORIGIN, DEFAULT_CROP_SIZE,
-        IMAGE_LENGTH, IMAGE_WIDTH, LENS_MAKE, LENS_MODEL, LENS_SERIAL_NUMBER, LENS_SPECIFICATION,
-        MAKER_NOTE, OFFSET_TIME_ORIGINAL, PHOTOGRAPHIC_SENSITIVITY, PHOTOMETRIC_INTERPRETATION,
-        SUB_SEC_TIME_ORIGINAL,
+        BODY_SERIAL_NUMBER, DATE_TIME_DIGITIZED, DATE_TIME_ORIGINAL, DEFAULT_CROP_ORIGIN,
+        DEFAULT_CROP_SIZE, IMAGE_LENGTH, IMAGE_WIDTH, LENS_MAKE, LENS_MODEL, LENS_SERIAL_NUMBER,
+        LENS_SPECIFICATION, MAKER_NOTE, OFFSET_TIME_DIGITIZED, OFFSET_TIME_ORIGINAL,
+        PHOTOGRAPHIC_SENSITIVITY, PHOTOMETRIC_INTERPRETATION, SUB_SEC_TIME_ORIGINAL,
     };
     use crate::container::tiff::{self, walk};
     use crate::datetime::DateTime;
@@ -1113,6 +1113,91 @@ mod tests {
                 builder.ascii(exif, SUB_SEC_TIME_ORIGINAL, "34");
             });
             assert_eq!(time, None, "{order:?}");
+        }
+    }
+
+    /// The capture and digitized times of a file in byte order `order`
+    /// whose MakerNote holds a WorldTime of -180 minutes, daylight saving
+    /// time off, as my D7200 writes it, and whose Exif IFD holds the
+    /// capture time of 2020-07-28 16:57:07 and what `exif` adds.
+    fn times_with_world_time(
+        order: Order,
+        exif: impl FnOnce(&mut TiffBuilder, IfdId),
+    ) -> (Option<String>, Option<String>) {
+        let block = tags_block(order, |inner, ifd| {
+            inner.undefined(ifd, WORLD_TIME, &world_time_bytes(order, -180, 0));
+        })
+        .0;
+        let metadata = exif_metadata(order, &block, |builder, exif_ifd| {
+            builder.ascii(exif_ifd, DATE_TIME_ORIGINAL, "2020:07:28 16:57:07");
+            exif(builder, exif_ifd);
+        });
+        let shown = |time: Option<DateTime>| time.map(|time| time.to_string());
+        (shown(metadata.capture_time), shown(metadata.digitized_time))
+    }
+
+    #[test]
+    fn world_time_gives_the_digitized_time_its_offset_too() {
+        // As the JPEGs my D7200 made later from raw files it held: a later
+        // digitized time, and no offset of either time in the Exif IFD.
+        let taken = Some("2020-07-28T16:57:07-03:00".to_owned());
+        for order in ORDERS {
+            let times = times_with_world_time(order, |builder, exif| {
+                builder.ascii(exif, DATE_TIME_DIGITIZED, "2020:08:07 16:27:04");
+            });
+            assert_eq!(
+                times,
+                (taken.clone(), Some("2020-08-07T16:27:04-03:00".to_owned())),
+                "{order:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn each_time_takes_world_time_only_without_an_exif_offset_of_its_own() {
+        for order in ORDERS {
+            // The capture time's own offset: the digitized time still takes
+            // WorldTime's.
+            let times = times_with_world_time(order, |builder, exif| {
+                builder.ascii(exif, OFFSET_TIME_ORIGINAL, "+01:00").ascii(
+                    exif,
+                    DATE_TIME_DIGITIZED,
+                    "2020:08:07 16:27:04",
+                );
+            });
+            assert_eq!(
+                times,
+                (
+                    Some("2020-07-28T16:57:07+01:00".to_owned()),
+                    Some("2020-08-07T16:27:04-03:00".to_owned())
+                ),
+                "{order:?}"
+            );
+            // The digitized time's own offset: the capture time still takes
+            // WorldTime's.
+            let times = times_with_world_time(order, |builder, exif| {
+                builder
+                    .ascii(exif, DATE_TIME_DIGITIZED, "2020:08:07 16:27:04")
+                    .ascii(exif, OFFSET_TIME_DIGITIZED, "+02:00");
+            });
+            assert_eq!(
+                times,
+                (
+                    Some("2020-07-28T16:57:07-03:00".to_owned()),
+                    Some("2020-08-07T16:27:04+02:00".to_owned())
+                ),
+                "{order:?}"
+            );
+            // No digitized time: WorldTime gives none, and only its offset
+            // for the capture time.
+            let times = times_with_world_time(order, |builder, exif| {
+                builder.ascii(exif, OFFSET_TIME_DIGITIZED, "+02:00");
+            });
+            assert_eq!(
+                times,
+                (Some("2020-07-28T16:57:07-03:00".to_owned()), None),
+                "{order:?}"
+            );
         }
     }
 

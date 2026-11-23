@@ -205,10 +205,21 @@ pub(crate) const ISO_SPEED: u16 = crate::tags::exif::ISO_SPEED;
 /// IFD: the capture time.
 pub(crate) const DATE_TIME_ORIGINAL: u16 = crate::tags::exif::DATE_TIME_ORIGINAL;
 
+/// When the picture was stored as digital data, as text in the form
+/// `YYYY:MM:DD HH:MM:SS` (DateTimeDigitized), read from the Exif IFD: the
+/// digitized time. A camera writes the capture time here too, unless it
+/// writes the picture later, as when it makes a JPEG from a raw file.
+pub(crate) const DATE_TIME_DIGITIZED: u16 = crate::tags::exif::DATE_TIME_DIGITIZED;
+
 /// The offset from UTC of the camera's clock when the picture was taken,
 /// as text in the form `+HH:MM` or `-HH:MM` (OffsetTimeOriginal), read from
 /// the Exif IFD.
 pub(crate) const OFFSET_TIME_ORIGINAL: u16 = crate::tags::exif::OFFSET_TIME_ORIGINAL;
+
+/// The offset from UTC of the camera's clock when the picture was stored
+/// as digital data, as text in the form `+HH:MM` or `-HH:MM`
+/// (OffsetTimeDigitized), read from the Exif IFD.
+pub(crate) const OFFSET_TIME_DIGITIZED: u16 = crate::tags::exif::OFFSET_TIME_DIGITIZED;
 
 /// The exposure compensation chosen, in EV, as a fraction of type
 /// SRATIONAL (ExposureBiasValue), read from the Exif IFD, such as -3/10;
@@ -248,6 +259,10 @@ pub(crate) const USER_COMMENT: u16 = crate::tags::exif::USER_COMMENT;
 /// The fraction of a second of the capture time, as text holding its
 /// digits alone (SubSecTimeOriginal), read from the Exif IFD.
 pub(crate) const SUB_SEC_TIME_ORIGINAL: u16 = crate::tags::exif::SUB_SEC_TIME_ORIGINAL;
+
+/// The fraction of a second of the digitized time, as text holding its
+/// digits alone (SubSecTimeDigitized), read from the Exif IFD.
+pub(crate) const SUB_SEC_TIME_DIGITIZED: u16 = crate::tags::exif::SUB_SEC_TIME_DIGITIZED;
 
 /// The camera maker's own metadata block, whose layout each vendor defines
 /// (MakerNote): an Exif tag, read from the Exif IFD, whose value is the
