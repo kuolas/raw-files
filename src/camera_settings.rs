@@ -1646,11 +1646,6 @@ impl AfFineTune {
         }
     }
 
-    /// Whether AF fine-tune was on.
-    pub fn is_on(&self) -> bool {
-        self.on
-    }
-
     /// This AF fine-tune with the value `value` at a zoom's long end, in
     /// place of any it had. It is stored as given, whether or not the
     /// fine-tune is on: the readers give one only when the camera records
@@ -1661,6 +1656,11 @@ impl AfFineTune {
             tele_value: Some(value),
             ..self
         }
+    }
+
+    /// Whether AF fine-tune was on.
+    pub fn is_on(&self) -> bool {
+        self.on
     }
 
     /// The fine-tune value, in the camera's steps, or `None` when none is
