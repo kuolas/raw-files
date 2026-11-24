@@ -44,8 +44,8 @@ use raw_files::{
     Exposure, ExposureProgram, FlashControl, FlashMode, FlashSource, FlashSync, Focus,
     FocusAreaMode, FocusMode, FocusOrigin, FocusPoints, Format, ImageArea, Lens, Limits, Make,
     Metadata, MeteringMode, Options, Orientation, Point, Preview, PreviewFormat, Rational,
-    RawImageSize, ReleaseMode, Shutter, SignedRational, Size, StabilizationMode, ValueError,
-    WhiteBalance, WhiteBalanceMode,
+    RawCompression, RawImageSize, ReleaseMode, Shutter, SignedRational, Size, StabilizationMode,
+    ValueError, WhiteBalance, WhiteBalanceMode,
 };
 use support::jpeg_stub::{stub, stub_len};
 use support::nef::{
@@ -602,8 +602,13 @@ fn the_d1h_metadata_by_hand(with_makernote: bool) -> Result<Metadata, ValueError
         .with_capture_time(time)
         .with_raw_size(as_size(D1H_RAW))
         .with_image_size(as_size(D1H_RAW))
-        // The raw SubIFD's 12 bits, with or without the MakerNote.
-        .with_camera_settings(CameraSettings::default().with_raw_bit_depth(12));
+        // The raw SubIFD's 12 bits, uncompressed, with or without the
+        // MakerNote.
+        .with_camera_settings(
+            CameraSettings::default()
+                .with_raw_bit_depth(12)
+                .with_raw_compression(RawCompression::Uncompressed),
+        );
     if with_makernote {
         exposure = exposure.with_iso(u32::from(D1H_ISO));
         let [
@@ -622,7 +627,8 @@ fn the_d1h_metadata_by_hand(with_makernote: bool) -> Result<Metadata, ValueError
                 .with_white_balance(WhiteBalance::default().with_mode(WhiteBalanceMode::Daylight))
                 .with_focus_mode(FocusMode::Single)
                 .with_focus_area_mode(FocusAreaMode::Dynamic)
-                .with_raw_bit_depth(12),
+                .with_raw_bit_depth(12)
+                .with_raw_compression(RawCompression::Uncompressed),
         );
     }
     Ok(metadata.with_exposure(exposure))

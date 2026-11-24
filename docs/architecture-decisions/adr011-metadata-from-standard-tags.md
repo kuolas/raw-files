@@ -287,8 +287,11 @@ nothing standard records a value. Nothing is deciphered or decrypted.
     Sony's 0xB049. Exif's ExposureMode 2 gives exposure bracketing
     where no MakerNote says.
   - **Daylight saving time**, from Nikon's WorldTime.
-  - **The raw compression**, from the raw IFD's Compression, refined
-    by Nikon's NEFCompression or its record 0x0051.
+  - **The raw compression**, from the raw IFD's Compression: TIFF's
+    uncompressed code whatever the maker, Nikon's compressed form
+    refined by its NEFCompression or its record 0x0051, and Sony's own
+    codes, whose cRAW code is told from two older layouts by the size of
+    the data's one strip.
   - **The raw bit depth**, from the raw IFD's BitsPerSample when it
     holds one value above zero.
   - **The JPEG quality**, from Nikon's Quality text in a JPEG and

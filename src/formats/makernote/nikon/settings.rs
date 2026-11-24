@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 //! The camera settings in the Nikon MakerNote: the white balance, the
-//! shutter used, the image area, the raw size, the color space, the focus
-//! mode, the AF-area mode, AF fine-tune, the stabilization, auto ISO, the
-//! exposure fine-tuning, the release mode and bracketing, daylight saving
-//! time, and the flash's source, control, sync and compensation.
+//! shutter used, the image area, the raw size and compression, the color
+//! space, the focus mode, the AF-area mode, AF fine-tune, the
+//! stabilization, auto ISO, the exposure fine-tuning, the release mode and
+//! bracketing, daylight saving time, and the flash's source, control, sync
+//! and compensation.
 //!
 //! The MakerNote records how the camera was set for the picture beyond
 //! what the Exif tags record (ADR011). [`camera_settings`] reads each
@@ -18,6 +19,8 @@
 //! - the shutter used from ShutterMode ([`shutter`]);
 //! - the image area from CropHiSpeed's crop setting ([`image_area`]);
 //! - the raw size from ImageSizeRAW ([`raw_image_size`]);
+//! - the raw compression from NEFCompression, else from tag 0x0051
+//!   ([`nef_compression_code`], [`nef_compression`]);
 //! - the color space from ColorSpace ([`color_space`]);
 //! - the focus mode from FocusMode's text ([`focus_mode_of_text`]);
 //! - the AF-area mode from AFInfo2 ([`area_mode_of`]), else from AFInfo
@@ -58,8 +61,8 @@ use super::crop::CropHiSpeed;
 use super::rules;
 use crate::camera_settings::{
     AfFineTune, Bracketing, CameraSettings, ColorSpace, FineTune, Flash, FlashControl, FlashSource,
-    FlashSync, FocusAreaMode, FocusMode, ImageArea, RawImageSize, ReleaseMode, Shutter,
-    Stabilization, StabilizationMode, WhiteBalanceMode,
+    FlashSync, FocusAreaMode, FocusMode, ImageArea, RawCompression, RawImageSize, ReleaseMode,
+    Shutter, Stabilization, StabilizationMode, WhiteBalanceMode,
 };
 use crate::container::tiff::Ifd;
 use crate::error::Result;
@@ -77,7 +80,14 @@ pub(super) struct FromStandardTags<'a> {
     /// Whether the Exif IFD keeps a ColorSpace entry
     /// ([`Standard`](tiff_metadata::Standard)).
     pub(super) exif_records_color_space: bool,
+    /// The Compression of the raw data, as the IFD that gives the raw size
+    /// records it ([`RawStorage`](tiff_metadata::RawStorage)).
+    pub(super) raw_compression: Option<u32>,
 }
+
+/// The Compression of raw data in Nikon's compressed form
+/// (`docs/formats/nef/raw-data.md`), which NEFCompression refines.
+const NIKON_COMPRESSED: u32 = 34713;
 
 /// How the camera was set for the picture: `standard.settings`, what the
 /// standard tags gave, with what `makernote` records. Each value is read
@@ -99,6 +109,12 @@ pub(super) struct FromStandardTags<'a> {
 ///   for a raw file's picture alone. In a JPEG, whose `picture` is
 ///   [`Picture::Jpeg`], the tag follows the JPEG's own size, and a JPEG
 ///   holds no raw data (ADR014).
+/// - **The raw compression**, for a raw file's picture whose
+///   `standard.raw_compression` is Nikon's compressed form, 34713, is the
+///   one NEFCompression's code names, read from NEFCompression or, on the
+///   bodies without it, from tag 0x0051 ([`nef_compression_code`],
+///   [`nef_compression`]). Under any other Compression it stays as
+///   `settings` has it: uncompressed for 1, else `None`.
 /// - **The color space** is ColorSpace's code ([`color_space`]), only when
 ///   `standard.exif_records_color_space` is `false`. Where the Exif IFD
 ///   keeps a ColorSpace, it alone decides
@@ -155,6 +171,7 @@ pub(super) fn camera_settings<R: Read + Seek>(
         mut settings,
         model,
         exif_records_color_space,
+        raw_compression,
     } = standard;
     let Some(ifd) = makernote.tagged() else {
         return Ok(settings);
@@ -177,6 +194,9 @@ pub(super) fn camera_settings<R: Read + Seek>(
             .and_then(|[code]| raw_image_size(code)),
         Picture::Jpeg => None,
     };
+    if picture == Picture::Raw && raw_compression == Some(NIKON_COMPRESSED) {
+        settings.raw_compression = nef_compression_code(src, ifd)?.and_then(nef_compression);
+    }
     if !exif_records_color_space {
         settings.color_space = ifd
             .held(rules::COLOR_SPACE)
@@ -564,6 +584,62 @@ fn raw_image_size(code: u32) -> Option<RawImageSize> {
     })
 }
 
+/// The code of Nikon's NEFCompression list that the MakerNote's IFD `ifd`
+/// records for a compressed raw: NEFCompression's one SHORT, or, on a body
+/// that writes no NEFCompression, the 16-bit number at bytes 10 and 11 of
+/// tag 0x0051, in the MakerNote's byte order, as the NEF notes give it
+/// (section 2). A body that writes NEFCompression never falls back on
+/// 0x0051, which no file holds beside it.
+///
+/// `None` when NEFCompression breaks its rule, and when 0x0051 is missing,
+/// is not UNDEFINED, stores its value outside the block or is shorter
+/// than 12 bytes.
+///
+/// # Errors
+///
+/// `Io` when the reader fails.
+fn nef_compression_code<R: Read + Seek>(src: &mut Source<R>, ifd: &Ifd) -> Result<Option<u32>> {
+    if ifd.entry(super::NEF_COMPRESSION).is_some() {
+        return Ok(ifd.held(rules::NEF_COMPRESSION).map(|[code]| code));
+    }
+    let Some(record) = ifd.get(src, rules::COMPRESSION_RECORD)? else {
+        return Ok(None);
+    };
+    Ok(record
+        .get(10..12)
+        .map(|code| u32::from(ifd.order().u16([code[0], code[1]]))))
+}
+
+/// The raw compression a NEFCompression `code` names, in the one list
+/// ExifTool's published documentation gives for NEFCompression and for
+/// tag 0x0051, read whole, since files hold part of it in each tag (NEF
+/// notes, section 8.10):
+///
+/// - 1, lossy (type 1), and 4, lossy (type 2),
+///   [`Lossy`](RawCompression::Lossy);
+/// - 2, uncompressed; 5, striped packed 12 bits; 6, uncompressed reduced
+///   to 12 bits; 7, unpacked 12 bits; 9, packed 12 bits; and 10, packed 14
+///   bits, [`Uncompressed`](RawCompression::Uncompressed): packings of
+///   uncompressed data;
+/// - 3, lossless, [`Lossless`](RawCompression::Lossless);
+/// - 13, High Efficiency, [`HighEfficiency`](RawCompression::HighEfficiency);
+/// - 14, High Efficiency\*,
+///   [`HighEfficiencyStar`](RawCompression::HighEfficiencyStar).
+///
+/// Code 5 is documented only; the others are on files. `None` for 8,
+/// small, which names a size and not a compression, and for every code the
+/// list lacks.
+fn nef_compression(code: u32) -> Option<RawCompression> {
+    Some(match code {
+        1 | 4 => RawCompression::Lossy,
+        2 | 5 | 6 | 7 | 9 | 10 => RawCompression::Uncompressed,
+        3 => RawCompression::Lossless,
+        13 => RawCompression::HighEfficiency,
+        14 => RawCompression::HighEfficiencyStar,
+        _ => return None,
+    })
+}
+
 /// The focus mode that the FocusMode text `text`, as read, names. Each
 /// text is looked up whole in a table of the texts that files hold, as the
 /// white balance texts are ([`white_balance_of_text`]):
@@ -846,19 +922,20 @@ mod tests {
     use super::super::block::read;
     use super::super::testing::{
         AT, ORDERS, TAIL, Tags, entry_at, exif_file, exif_metadata, jpeg_metadata_of, metadata_of,
-        nikon_file, nikon_file_with, retyped, tags_block, whole,
+        nikon_file, nikon_file_with, raw_file, read_file, retyped, tags_block, whole,
     };
     use super::super::{
-        AF_INFO, AF_INFO2, AF_TUNE, COLOR_SPACE, COLOR_TEMPERATURE, CROP_HI_SPEED, EXPOSURE_TUNING,
-        FINE_TUNE, FINE_TUNE_STEPS, FLASH_EXPOSURE_COMP, FLASH_SETTING, FLASH_TYPE, FOCUS_MODE,
-        IMAGE_SIZE_RAW, ISO_SELECTION, SHOOTING_MODE, SHUTTER_MODE, VR_INFO, WHITE_BALANCE,
-        WORLD_TIME, metadata,
+        AF_INFO, AF_INFO2, AF_TUNE, COLOR_SPACE, COLOR_TEMPERATURE, COMPRESSION_RECORD,
+        CROP_HI_SPEED, EXPOSURE_TUNING, FINE_TUNE, FINE_TUNE_STEPS, FLASH_EXPOSURE_COMP,
+        FLASH_SETTING, FLASH_TYPE, FOCUS_MODE, IMAGE_SIZE_RAW, ISO_SELECTION, NEF_COMPRESSION,
+        SHOOTING_MODE, SHUTTER_MODE, VR_INFO, WHITE_BALANCE, WORLD_TIME, metadata,
     };
     use super::*;
     use crate::camera_settings::{ExposureProgram, FlashMode, WhiteBalance};
     use crate::container::tiff::tags::{
-        COLOR_SPACE as EXIF_COLOR_SPACE, EXPOSURE_MODE, EXPOSURE_PROGRAM, FLASH as EXIF_FLASH,
-        INTEROP_INDEX, LIGHT_SOURCE, MAKER_NOTE, MODEL, WHITE_BALANCE as EXIF_WHITE_BALANCE,
+        COLOR_SPACE as EXIF_COLOR_SPACE, COMPRESSION, EXPOSURE_MODE, EXPOSURE_PROGRAM,
+        FLASH as EXIF_FLASH, INTEROP_INDEX, LIGHT_SOURCE, MAKER_NOTE, MODEL,
+        WHITE_BALANCE as EXIF_WHITE_BALANCE,
     };
     use crate::container::tiff::{self, walk};
     use crate::error::ErrorKind;
@@ -1697,6 +1774,194 @@ mod tests {
                 assert_eq!(read.raw_image_size, None, "{order:?}, {code}");
                 assert_eq!(read.shutter, Some(Shutter::Electronic), "{order:?}");
             }
+        }
+    }
+
+    /// The raw compression of a raw file in byte order `order` whose raw
+    /// IFD's Compression is `compression`, when there is one, and whose
+    /// MakerNote holds what `tags` adds to its MakerNote IFD.
+    fn compression_of(
+        order: Order,
+        compression: Option<u16>,
+        tags: impl FnOnce(&mut TiffBuilder, IfdId),
+    ) -> Option<RawCompression> {
+        let block = tags_block(order, tags).0;
+        let file = raw_file(order, &block, whole(&block), |builder, ifd0| {
+            if let Some(code) = compression {
+                builder.short(ifd0, COMPRESSION, &[code]);
+            }
+        });
+        metadata_of(file).camera_settings.raw_compression
+    }
+
+    /// The 24 bytes of a tag 0x0051 as the Z 9 writes it, in byte order
+    /// `order`, with NEFCompression's `code` at bytes 10 and 11.
+    fn compression_record(order: Order, code: u16) -> Vec<u8> {
+        let mut record = b"01010500".to_vec();
+        record.extend_from_slice(&[0x18, 0x00]);
+        record.extend_from_slice(&order.u16(code));
+        record.resize(24, 0);
+        record
+    }
+
+    /// Each code of NEFCompression's list with the raw compression it
+    /// names, and the codes that name none: 8, small, and codes the list
+    /// lacks.
+    const NEF_COMPRESSIONS: [(u16, Option<RawCompression>); 16] = [
+        (1, Some(RawCompression::Lossy)),
+        (2, Some(RawCompression::Uncompressed)),
+        (3, Some(RawCompression::Lossless)),
+        (4, Some(RawCompression::Lossy)),
+        (5, Some(RawCompression::Uncompressed)),
+        (6, Some(RawCompression::Uncompressed)),
+        (7, Some(RawCompression::Uncompressed)),
+        (8, None),
+        (9, Some(RawCompression::Uncompressed)),
+        (10, Some(RawCompression::Uncompressed)),
+        (13, Some(RawCompression::HighEfficiency)),
+        (14, Some(RawCompression::HighEfficiencyStar)),
+        (0, None),
+        (11, None),
+        (12, None),
+        (15, None),
+    ];
+
+    #[test]
+    fn each_nef_compression_code_refines_nikons_compressed_form() {
+        for order in ORDERS {
+            for (code, expected) in NEF_COMPRESSIONS {
+                let read = compression_of(order, Some(34713), |inner, ifd| {
+                    inner.short(ifd, NEF_COMPRESSION, &[code]);
+                });
+                assert_eq!(read, expected, "{order:?}, {code}");
+            }
+        }
+    }
+
+    #[test]
+    fn without_nef_compression_the_code_is_at_byte_10_of_0x0051() {
+        // In the MakerNote's byte order: 13 is `0d 00` in a little-endian
+        // MakerNote, as on the Z 9's HE file, and `00 0d` in a big-endian
+        // one.
+        for order in ORDERS {
+            for (code, expected) in NEF_COMPRESSIONS {
+                let read = compression_of(order, Some(34713), |inner, ifd| {
+                    inner.undefined(ifd, COMPRESSION_RECORD, &compression_record(order, code));
+                });
+                assert_eq!(read, expected, "{order:?}, {code}");
+            }
+        }
+    }
+
+    #[test]
+    fn byte_10_of_0x0051_is_read_in_the_makernotes_byte_order() {
+        // A MakerNote whose byte order is not the file's: read in the
+        // file's, 13 would be 3328.
+        for (file, inner_order) in [(Order::Little, Order::Big), (Order::Big, Order::Little)] {
+            let block = tags_block(inner_order, |inner, ifd| {
+                inner.undefined(
+                    ifd,
+                    COMPRESSION_RECORD,
+                    &compression_record(inner_order, 13),
+                );
+            })
+            .0;
+            let built = raw_file(file, &block, whole(&block), |builder, ifd0| {
+                builder.short(ifd0, COMPRESSION, &[34713]);
+            });
+            assert_eq!(
+                metadata_of(built).camera_settings.raw_compression,
+                Some(RawCompression::HighEfficiency),
+                "{file:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_0x0051_too_short_or_of_another_type_gives_no_compression() {
+        for order in ORDERS {
+            let record = compression_record(order, 13);
+            // 12 bytes hold the code; 11 do not.
+            let read = compression_of(order, Some(34713), |inner, ifd| {
+                inner.undefined(ifd, COMPRESSION_RECORD, &record[..12]);
+            });
+            assert_eq!(read, Some(RawCompression::HighEfficiency), "{order:?}");
+            let read = compression_of(order, Some(34713), |inner, ifd| {
+                inner.undefined(ifd, COMPRESSION_RECORD, &record[..11]);
+            });
+            assert_eq!(read, None, "{order:?}, 11 bytes");
+            let read = compression_of(order, Some(34713), |inner, ifd| {
+                inner.byte(ifd, COMPRESSION_RECORD, &record);
+            });
+            assert_eq!(read, None, "{order:?}, BYTEs");
+        }
+    }
+
+    #[test]
+    fn nef_compression_wins_over_0x0051_even_when_it_gives_none() {
+        for order in ORDERS {
+            let record = compression_record(order, 13);
+            let read = compression_of(order, Some(34713), |inner, ifd| {
+                inner
+                    .short(ifd, NEF_COMPRESSION, &[3])
+                    .undefined(ifd, COMPRESSION_RECORD, &record);
+            });
+            assert_eq!(read, Some(RawCompression::Lossless), "{order:?}");
+            // A NEFCompression of another type gives none, and 0x0051 is
+            // not read in its place.
+            let read = compression_of(order, Some(34713), |inner, ifd| {
+                inner
+                    .long(ifd, NEF_COMPRESSION, &[3])
+                    .undefined(ifd, COMPRESSION_RECORD, &record);
+            });
+            assert_eq!(read, None, "{order:?}, a LONG");
+        }
+    }
+
+    #[test]
+    fn only_nikons_compressed_form_is_refined() {
+        for order in ORDERS {
+            let lossy = |inner: &mut TiffBuilder, ifd| {
+                inner.short(ifd, NEF_COMPRESSION, &[4]);
+            };
+            // TIFF's 1 is uncompressed, whatever NEFCompression says.
+            assert_eq!(
+                compression_of(order, Some(1), lossy),
+                Some(RawCompression::Uncompressed),
+                "{order:?}"
+            );
+            // Another maker's code, or none, is not Nikon's to refine.
+            for compression in [Some(7), Some(32767), Some(6), None] {
+                assert_eq!(
+                    compression_of(order, compression, lossy),
+                    None,
+                    "{order:?}, {compression:?}"
+                );
+            }
+            // Nikon's compressed form with nothing to refine it.
+            assert_eq!(
+                compression_of(order, Some(34713), |_, _| {}),
+                None,
+                "{order:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_jpeg_has_no_raw_compression() {
+        // Even if the standard tags gave Nikon's compressed form, the
+        // MakerNote of a JPEG's picture refines nothing: a JPEG holds no
+        // raw data.
+        for order in ORDERS {
+            let block = tags_block(order, |inner, ifd| {
+                inner.short(ifd, NEF_COMPRESSION, &[3]);
+            })
+            .0;
+            let (mut src, makernote, mut standard) =
+                read_file(exif_file(order, &block, whole(&block), |_, _| {}));
+            standard.raw_storage.compression = Some(34713);
+            let read = metadata(&mut src, &makernote, standard, Picture::Jpeg).unwrap();
+            assert_eq!(read.camera_settings.raw_compression, None, "{order:?}");
         }
     }
 

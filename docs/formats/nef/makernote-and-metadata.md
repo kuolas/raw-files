@@ -1784,11 +1784,11 @@ raw-files reads:
 - the exposure fine-tuning, the release mode and bracketing, and
   daylight saving time;
 - the flash's source, control, sync and compensation;
-- the raw bit depth.
+- the raw compression and bit depth.
 
 It will read:
 
-- the raw compression and the JPEG quality;
+- the JPEG quality;
 - the white balance's preset slot and fluorescent lamp.
 
 The AF-area mode is in [section 8.6](#86-focus-point).
@@ -2059,9 +2059,12 @@ whether the data is compressed: 1 uncompressed [P], 34713 Nikon's
 compressed form ([raw-data.md](raw-data.md)). On 34713, Nikon's
 NEFCompression refines it
 ([section 3](#3-nefcompression-and-bit-depth)): 0x0093, or byte 10 of 0x0051 on
-the Z bodies that write no 0x0093. The documentation gives one list of
-NEFCompression's codes, and files hold part of it in each tag, so both
-read it whole. raw-files will read them so:
+the Z bodies that write no 0x0093. Byte 10 of 0x0051 is read as a
+16-bit number in the MakerNote's byte order: the two readings section 2
+cites, the MakerNote's order and little-endian, agree on every Z file
+measured, whose MakerNotes are little-endian. The documentation gives
+one list of NEFCompression's codes, and files hold part of it in each
+tag, so both read it whole. raw-files reads them so:
 
 | Code | The documentation's name [S][1] | `RawCompression` | Mark | 0x0093, public / mine | 0x0051, public / mine |
 |---|---|---|---|---|---|
@@ -2079,16 +2082,17 @@ read it whole. raw-files will read them so:
 | 14 | High Efficiency\* | `HighEfficiencyStar` | observed, in 0x0051 | 0 / 0 | 14 / 15,772 |
 
 The raw IFD's Compression 1, uncompressed by TIFF 6.0 [P], is on 43
-public files and none of mine, and gives `Uncompressed`.
+public camera files and none of mine, and gives `Uncompressed`. The
+files of Nikon's two Coolscan film scanners in the set hold it too.
 
 **[F]** The Z 9 samples 5146 to 5148, which the
 [test data](test-data.md) lists as lossless, HE\* and HE, hold codes 3,
 14 and 13. Their catalog entries state no compression, so they confirm
 no code. Codes 5, 7, 9 and 10 are packings of uncompressed data, by
 their names and, for 7, 9 and 10, by the data
-([raw-data.md](raw-data.md)), so they will fold into `Uncompressed`. The
-one public file whose Compression is a LONG, a Coolpix A1000's, will
-give none, by the rule on a value's type. **[F]** The raw bit depth is
+([raw-data.md](raw-data.md)), so they fold into `Uncompressed`. The
+one public file whose Compression is a LONG, a Coolpix A1000's, gives
+none, by the rule on a value's type. **[F]** The raw bit depth is
 the raw IFD's BitsPerSample where it holds one value. It is 12 on 153
 public files and 3,568 of mine, and 14 on 134 and 28,423. **[F]** It is
 the depth as recorded, which section 3 says a lossy curve can exceed by

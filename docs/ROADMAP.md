@@ -102,16 +102,16 @@ records is checked on files built in the tests
 
 The focus mode, the AF-area mode, AF fine-tune, the stabilization, auto
 ISO, the exposure fine-tuning, the release mode, bracketing, daylight
-saving time and the raw bit depth are values of `CameraSettings`, the
-AF-area mode whether or not a file gives a focus point. The flash gives its red-eye
-reduction, return light, source, control, sync and compensation. Beside the
-capture time, `Metadata` gives the digitized time. **More capture
-settings** come next, as values of `CameraSettings` and of the values
-they belong to
+saving time, and the raw bit depth and compression are values of
+`CameraSettings`, the AF-area mode whether or not a file gives a focus
+point. The flash gives its red-eye reduction, return light, source,
+control, sync and compensation. Beside the capture time, `Metadata`
+gives the digitized time. **More capture settings** come next, as
+values of `CameraSettings` and of the values they belong to
 ([ADR011](architecture-decisions/adr011-metadata-from-standard-tags.md),
 [#214](https://github.com/kuolas/raw-files/issues/214)):
 
-- the raw compression and the JPEG quality;
+- the JPEG quality;
 - the white balance's preset slot and fluorescent lamp.
 
 A Nikon body that records no image area or raw size will get them

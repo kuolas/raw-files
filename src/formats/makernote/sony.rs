@@ -57,14 +57,14 @@ use std::io::{Read, Seek};
 
 use super::{MakerNoteBlock, Picture, Reader, checked_color_temperature};
 use crate::camera_settings::{
-    Bracketing, CameraSettings, FineTune, FlashSource, FocusAreaMode, FocusMode, ReleaseMode,
-    Stabilization, WhiteBalanceMode,
+    Bracketing, CameraSettings, FineTune, FlashSource, FocusAreaMode, FocusMode, RawCompression,
+    ReleaseMode, Stabilization, WhiteBalanceMode,
 };
 use crate::container::tiff::{Ifd, Rule, Tree};
 use crate::entries::{Directory, Entries, Lookup};
 use crate::error::Result;
 use crate::focus::{Focus, FocusOrigin, FocusPoints};
-use crate::formats::tiff_metadata::Standard;
+use crate::formats::tiff_metadata::{RawStorage, Standard};
 use crate::geometry::{Point, Size};
 use crate::io::Source;
 use crate::limits::Limits;
@@ -279,13 +279,17 @@ impl Reader for MakerNote {
 
     /// The metadata of the file whose Sony MakerNote this is: the metadata
     /// of `standard`, what the standard tags gave, with what the MakerNote
-    /// records that they lack. It is the same whatever the `picture`, raw
-    /// or JPEG, and needs none of the other facts of `standard`:
+    /// records that they lack, and what Sony's own codes say. It is the same
+    /// whatever the `picture`, raw or JPEG, but for the raw compression:
     ///
     /// - **the camera settings** that only the MakerNote records, and the
     ///   white balance setting, in place of the Exif tags' mode, and the
     ///   AF-area mode by the family of the body the Model names
     ///   ([`camera_settings`]);
+    /// - **the raw compression**, for a raw file's picture, from Sony's
+    ///   codes in the raw data's Compression, which `standard.raw_storage`
+    ///   gives with the bytes the data takes ([`raw_compression`]). Under
+    ///   TIFF's 1 it stays uncompressed, as the standard tags gave it;
     /// - **the focus point**, as recorded ([`focus`]), always read, since
     ///   the standard tags never give one. It is a list of one point, the
     ///   primary. A shot whose focus mode, read with the settings, is
@@ -300,11 +304,16 @@ impl Reader for MakerNote {
         &self,
         src: &mut Source<R>,
         standard: Standard,
-        _picture: Picture,
+        picture: Picture,
     ) -> Result<Metadata> {
         let mut metadata = standard.metadata;
         let family = metadata.camera.recorded_model.as_deref().map(family);
         metadata.camera_settings = camera_settings(src, self, metadata.camera_settings, family)?;
+        if picture == Picture::Raw
+            && let Some(compression) = raw_compression(standard.raw_storage, metadata.raw_size)
+        {
+            metadata.camera_settings.raw_compression = Some(compression);
+        }
         let manual = metadata.camera_settings.focus_mode == Some(FocusMode::Manual);
         metadata.focus_points = focus(src, self, manual)?.map(FocusPoints::from);
         Ok(metadata)
@@ -542,6 +551,48 @@ fn camera_settings<R: Read + Seek>(
     }
     Ok(settings)
 }
+
+/// The raw compression that Sony's own codes in the raw data's
+/// Compression name, as `storage` records it, in raw data of `raw_size`
+/// (ARW notes, section 9.10):
+///
+/// - 7, lossless compressed, [`Lossless`](RawCompression::Lossless);
+/// - 32767, Sony's compressed raw, [`Lossy`](RawCompression::Lossy), only
+///   where the data is one strip of one byte a pixel: the strip's bytes are
+///   as many as the raw size's pixels. The code also holds two layouts that
+///   are not compressed so, the 12-bit packed data of the DSLR-A850 and
+///   A900 and the stream of the DSLR-A200 to A390, which the data's size
+///   tells apart and which give none (`docs/formats/arw/raw-data.md`);
+/// - 32766, the ILCE-7M5's compressed and compressed HQ raws,
+///   [`Lossy`](RawCompression::Lossy): the body writes its lossless raws
+///   under 7, so these two lose data, an inference the notes mark.
+///
+/// `None` for every other code, 1 among them, which the standard tags
+/// already give as uncompressed, and for 32767 without a raw size or the
+/// byte count of one strip. 0x2029, RAWFileType, repeats the Compression on
+/// every file that has both, and is not read.
+fn raw_compression(storage: RawStorage, raw_size: Option<Size>) -> Option<RawCompression> {
+    match storage.compression? {
+        LOSSLESS => Some(RawCompression::Lossless),
+        COMPRESSED_7M5 => Some(RawCompression::Lossy),
+        COMPRESSED => {
+            let raw_size = raw_size?;
+            let pixels = u64::from(raw_size.width) * u64::from(raw_size.height);
+            (u64::from(storage.strip_bytes?) == pixels).then_some(RawCompression::Lossy)
+        }
+        _ => None,
+    }
+}
+
+/// The Compression of Sony's lossless compressed raw data.
+const LOSSLESS: u32 = 7;
+
+/// The Compression of Sony's compressed raw data, cRAW, and of two older
+/// layouts that are not compressed so ([`raw_compression`]).
+const COMPRESSED: u32 = 32767;
+
+/// The Compression of the ILCE-7M5's compressed and compressed HQ raw data.
+const COMPRESSED_7M5: u32 = 32766;
 
 /// The flash compensation that `makernote`'s FlashExposureComp records, in
 /// EV as stored: its one SRATIONAL, such as `-7/10`, which rounds two
@@ -2990,6 +3041,104 @@ mod tests {
             assert_eq!(points.primary().unwrap().number(), None, "{order:?}");
             assert_eq!(points.origin(), FocusOrigin::Recorded, "{order:?}");
             assert_eq!(found.focus(), Some(focus_7m4()), "{order:?}");
+        }
+    }
+
+    /// The storage of raw data compressed under `compression`, in one
+    /// strip of `bytes` bytes.
+    fn stored(compression: u32, bytes: u32) -> RawStorage {
+        RawStorage {
+            compression: Some(compression),
+            strip_bytes: Some(bytes),
+        }
+    }
+
+    #[test]
+    fn each_sony_compression_code_gives_its_compression() {
+        // The ILCE-7M4's 7008 by 4672 crop, as a raw size, and the bytes of
+        // each layout the ARW notes measure: one a pixel for cRAW, one and a
+        // half for the 12-bit packed data, 2 for 16-bit words and a stream
+        // of H + 8 rows of another length for the A200's.
+        let size = Size {
+            width: 7008,
+            height: 4672,
+        };
+        let pixels = 7008 * 4672;
+        let cases = [
+            (stored(7, 2 * pixels), Some(RawCompression::Lossless)),
+            (stored(32766, pixels / 2), Some(RawCompression::Lossy)),
+            (stored(32767, pixels), Some(RawCompression::Lossy)),
+            (stored(32767, pixels * 3 / 2), None),
+            (stored(32767, 2 * pixels), None),
+            (stored(32767, pixels + 7008), None),
+            // TIFF's 1 is the standard tags' to give, and the others no
+            // one names.
+            (stored(1, 2 * pixels), None),
+            (stored(34713, pixels), None),
+            (stored(32765, pixels), None),
+            (RawStorage::default(), None),
+        ];
+        for (storage, expected) in cases {
+            assert_eq!(
+                raw_compression(storage, Some(size)),
+                expected,
+                "{storage:?}"
+            );
+        }
+        // cRAW is told by its size: without the raw size or the bytes, the
+        // layout is unknown. The other codes need neither.
+        let unknown = [
+            (stored(32767, pixels), None),
+            (
+                RawStorage {
+                    strip_bytes: None,
+                    ..stored(32767, pixels)
+                },
+                Some(size),
+            ),
+        ];
+        for (storage, size) in unknown {
+            assert_eq!(
+                raw_compression(storage, size),
+                None,
+                "{storage:?}, {size:?}"
+            );
+        }
+        assert_eq!(
+            raw_compression(stored(7, 0), None),
+            Some(RawCompression::Lossless)
+        );
+    }
+
+    #[test]
+    fn only_a_raw_files_picture_gives_a_raw_compression() {
+        // Lossless storage beside the MakerNote's settings tags, read for a
+        // raw file's picture and for a JPEG's.
+        for order in ORDERS {
+            let (mut src, makernote) = focus_file(order, b"", settings_tags);
+            let read = |src: &mut Src, picture| {
+                let standard = Standard {
+                    metadata: Metadata::default().with_raw_size(Size {
+                        width: 6000,
+                        height: 4000,
+                    }),
+                    raw_storage: stored(7, 1_000_000),
+                    ..Standard::default()
+                };
+                makernote.metadata(src, standard, picture).unwrap()
+            };
+            assert_eq!(
+                read(&mut src, Picture::Raw).camera_settings.raw_compression,
+                Some(RawCompression::Lossless),
+                "{order:?}"
+            );
+            assert_eq!(
+                read(&mut src, Picture::Jpeg)
+                    .camera_settings
+                    .raw_compression,
+                None,
+                "{order:?}"
+            );
         }
     }
 

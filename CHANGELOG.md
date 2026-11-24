@@ -258,6 +258,17 @@ does. An entry that can break a caller opens with **Breaking:**.
   value: 12 or 14 on most Nikon and Sony raw files. Sony's medium and
   small raws in YCbCr record three values and give none, and a JPEG
   gives none.
+- `CameraSettings::raw_compression` gives how the raw data is
+  compressed, a `RawCompression`: uncompressed, lossless, lossy, or
+  Nikon's High Efficiency and High Efficiency with its star, and
+  `with_raw_compression` sets it
+  ([#214](https://github.com/kuolas/raw-files/issues/214)). It comes from
+  the raw data's Compression: TIFF's 1 is uncompressed whatever the
+  maker. Nikon's compressed form is refined by the MakerNote's
+  NEFCompression, or on the Z bodies that write none by the code at byte
+  10 of its tag 0x0051; NEFCompression's code 8, a small raw, gives none.
+  Sony's 7 is lossless, its 32767 lossy where the data takes one byte a
+  pixel, and the ILCE-7M5's 32766 lossy. A JPEG gives none.
 
 ### Changed
 
