@@ -1836,9 +1836,12 @@ that have both, and is not read **[F]**:
   so these two are lossy [I].
 - A camera JPEG of a RAW + JPEG pair also carries 0x2029; it holds no
   raw, so it gives no raw compression.
-- **Bit depth.** BitsPerSample is 14 on 99 files, 12 on 87 and 8 on the
-  DSLR-A700 (2521). It is `15 15 15`, three values, on the 19 YCbCr
-  medium and small raws, which give `None`.
+- **Bit depth.** BitsPerSample is 14 on 100 files, 12 on 87 and 8 on
+  the DSLR-A700 (2521). The other 21 files give `None`:
+  - the 19 YCbCr medium and small raws hold `15 15 15`, three values;
+  - the DSC-F828's SRF (1351) holds `14 14 14`, three values too, in
+    IFD0;
+  - the DSLR-A100 (2346) records no BitsPerSample for its raw data.
 - The bit depth is what the file records. It is not always the depth
   of the stored samples ([raw-data.md](raw-data.md#bitspersample-is-not-reliable)).
 - My ILCE-7M2 raws are all Compression 1, and hold BitsPerSample 14
