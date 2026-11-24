@@ -239,6 +239,19 @@ Read again on 2026-11-20, each holds:
 Each frame's ARW file and JPEG hold the same values; LGS03150's JPEG
 was not among the files read.
 
+The picture style and the processing settings of
+[makernote-and-metadata.md](makernote-and-metadata.md#911-picture-style-and-processing)
+were counted on 2026-11-24, by a counting program over
+`CameraFile::entries`. It read the 209 ARW-family files of
+raw.pixls.us.
+As counts only, it read the files of my ILCE-7M2 that hold a
+MakerNote, 3,217 ARW files and 2,024 camera JPEGs. ExifTool and exiv2
+were not run, and no frame was shot in a known setting.
+
+2,024 shots of mine have one ARW file and one camera JPEG. The two
+files of a shot hold the same values but one. The high ISO noise
+reduction is 0 in every ARW file and 2 in every JPEG.
+
 ## 3. What raw.pixls.us holds for Sony
 
 ### 3.1 Access
