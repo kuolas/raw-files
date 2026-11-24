@@ -24,10 +24,11 @@ use std::path::{Path, PathBuf};
 
 use raw_files::{
     Bracketing, Camera, CameraFile, ColorSpace, Directory, ErrorKind, ExposureProgram, FieldType,
-    FlashControl, FlashMode, FlashSource, FlashSync, FocusAreaMode, FocusLayoutPoint, FocusMode,
-    FocusOrigin, Format, ImageArea, Make, Metadata, MeteringMode, Orientation, Point, Preview,
-    PreviewFormat, Rational, RawImageSize, ReleaseMode, Shutter, SignedRational, Size,
-    StabilizationMode, WhiteBalanceMode,
+    FlashControl, FlashMode, FlashSource, FlashSync, FluorescentLamp, FocusAreaMode,
+    FocusLayoutPoint, FocusMode, FocusOrigin, Format, ImageArea, JpegCompression, JpegQuality,
+    Make, Metadata, MeteringMode, Orientation, Point, Preview, PreviewFormat, Rational,
+    RawCompression, RawImageSize, ReleaseMode, Shutter, SignedRational, Size, StabilizationMode,
+    WhiteBalanceMode,
 };
 
 /// The path of the sample file `name`, or `None`, with a note on stderr,
@@ -438,17 +439,19 @@ pub struct SamplePlacedLayout {
 /// ([`CameraSettings`](raw_files::CameraSettings)): every value, `None`
 /// where the file must give none, each a variant of the library's own
 /// enums, so that a row reads as what a caller gets. The white balance is
-/// its three parts: its mode, its color temperature in kelvin, and its
-/// fine-tuning ([`SampleFineTune`]). Then the exposure program, the metering
-/// mode, the flash ([`SampleFlash`]), the shutter used, whether Sony's
-/// electronic front curtain setting was on, the image area, the raw image
-/// size, the color space; the AF-area mode, `None` when the file names none in a code
+/// its five parts: its mode, its color temperature in kelvin, its
+/// fine-tuning ([`SampleFineTune`]), its preset slot and its kind of
+/// fluorescent lamp. Then the exposure program, the metering mode, the
+/// flash ([`SampleFlash`]), the shutter used, whether Sony's electronic
+/// front curtain setting was on, the image area, the raw image size, the
+/// color space; the AF-area mode, `None` when the file names none in a code
 /// raw-files knows, whether or not it gives focus points; the focus mode;
-/// AF fine-tune, whether it was on and then its value, `None` when off;
-/// the stabilization, whether it was on and then its mode, `None` when the
-/// file records none; whether auto ISO was on; the exposure fine-tuning,
-/// its numerator and denominator as stored; the release mode; the
-/// bracketing; and whether daylight saving time was on.
+/// AF fine-tune, whether it was on and then its value, `None` when off; the
+/// stabilization, whether it was on and then its mode, `None` when the file
+/// records none; whether auto ISO was on; the exposure fine-tuning, its
+/// numerator and denominator as stored; the release mode; the bracketing;
+/// whether daylight saving time was on; the raw bit depth and compression;
+/// and the JPEG quality and compression.
 ///
 /// Every row writes every field, `None` included, one to a line, so that
 /// a value read later changes one line of a row.
@@ -456,6 +459,8 @@ pub struct SampleSettings {
     pub white_balance_mode: Option<WhiteBalanceMode>,
     pub color_temperature: Option<u32>,
     pub fine_tune: Option<SampleFineTune>,
+    pub preset_slot: Option<u32>,
+    pub fluorescent_lamp: Option<FluorescentLamp>,
     pub exposure_program: Option<ExposureProgram>,
     pub metering_mode: Option<MeteringMode>,
     pub flash: Option<SampleFlash>,
@@ -473,6 +478,10 @@ pub struct SampleSettings {
     pub release_mode: Option<ReleaseMode>,
     pub bracketing: Option<Bracketing>,
     pub daylight_saving_time: Option<bool>,
+    pub raw_bit_depth: Option<u32>,
+    pub raw_compression: Option<RawCompression>,
+    pub jpeg_quality: Option<JpegQuality>,
+    pub jpeg_compression: Option<JpegCompression>,
 }
 
 /// The flash of a sample file, as the reader must give it
@@ -973,6 +982,16 @@ pub fn check_metadata(expected: &SampleMetadata, format: Format, folder: Folder)
         "{label}: white balance fine-tuning"
     );
     assert_eq!(
+        white_balance.preset_slot(),
+        expected.preset_slot,
+        "{label}: white balance preset slot"
+    );
+    assert_eq!(
+        white_balance.fluorescent_lamp(),
+        expected.fluorescent_lamp,
+        "{label}: white balance fluorescent lamp"
+    );
+    assert_eq!(
         settings.exposure_program(),
         expected.exposure_program,
         "{label}: exposure program"
@@ -1067,6 +1086,26 @@ pub fn check_metadata(expected: &SampleMetadata, format: Format, folder: Folder)
         settings.daylight_saving_time(),
         expected.daylight_saving_time,
         "{label}: daylight saving time"
+    );
+    assert_eq!(
+        settings.raw_bit_depth(),
+        expected.raw_bit_depth,
+        "{label}: raw bit depth"
+    );
+    assert_eq!(
+        settings.raw_compression(),
+        expected.raw_compression,
+        "{label}: raw compression"
+    );
+    assert_eq!(
+        settings.jpeg_quality(),
+        expected.jpeg_quality,
+        "{label}: JPEG quality"
+    );
+    assert_eq!(
+        settings.jpeg_compression(),
+        expected.jpeg_compression,
+        "{label}: JPEG compression"
     );
 }
 

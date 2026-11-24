@@ -135,8 +135,10 @@
 //!   electronic front curtain setting on and how many off, and AF
 //!   fine-tune on and off, and with a value at a zoom's long end. Each
 //!   white balance fine-tuning is counted by its pair of shifts, such as
-//!   `(-24/4, 0/4)`. Of the color temperatures, the lowest and the
-//!   highest are printed.
+//!   `(-24/4, 0/4)`, and each preset slot by its number. Of the color
+//!   temperatures, the lowest and the highest are printed. The raw files
+//!   are counted by bit depth and by compression, and the files with a
+//!   JPEG quality by its step.
 //! - **The focus point**: the files that have one, and how many of those
 //!   record that the camera confirmed focus, that it missed, or
 //!   neither. The points by origin: "Recorded" is a position the camera
@@ -480,6 +482,23 @@ struct SettingsTally {
     /// had it on.
     daylight_saving_time: usize,
     daylight_saving_time_on: usize,
+    /// Files with a preset slot, by slot, and with a kind of fluorescent
+    /// lamp, by lamp.
+    preset_slot: usize,
+    preset_slots: BTreeMap<u32, usize>,
+    fluorescent_lamp: usize,
+    fluorescent_lamps: BTreeMap<&'static str, usize>,
+    /// Files with a raw bit depth, by depth; with a raw compression, by
+    /// compression; with a JPEG quality, by step; and with a JPEG
+    /// compression, by compression.
+    raw_bit_depth: usize,
+    raw_bit_depths: BTreeMap<u32, usize>,
+    raw_compression: usize,
+    raw_compressions: BTreeMap<&'static str, usize>,
+    jpeg_quality: usize,
+    jpeg_qualities: BTreeMap<&'static str, usize>,
+    jpeg_compression: usize,
+    jpeg_compressions: BTreeMap<&'static str, usize>,
 }
 
 impl SettingsTally {
@@ -637,6 +656,42 @@ impl SettingsTally {
         if let Some(on) = settings.daylight_saving_time() {
             self.daylight_saving_time += 1;
             self.daylight_saving_time_on += usize::from(on);
+        }
+        if let Some(slot) = white_balance.preset_slot() {
+            self.preset_slot += 1;
+            *self.preset_slots.entry(slot).or_default() += 1;
+        }
+        if let Some(lamp) = white_balance.fluorescent_lamp() {
+            count(
+                &mut self.fluorescent_lamp,
+                &mut self.fluorescent_lamps,
+                lamp.name(),
+            );
+        }
+        if let Some(bits) = settings.raw_bit_depth() {
+            self.raw_bit_depth += 1;
+            *self.raw_bit_depths.entry(bits).or_default() += 1;
+        }
+        if let Some(compression) = settings.raw_compression() {
+            count(
+                &mut self.raw_compression,
+                &mut self.raw_compressions,
+                compression.name(),
+            );
+        }
+        if let Some(quality) = settings.jpeg_quality() {
+            count(
+                &mut self.jpeg_quality,
+                &mut self.jpeg_qualities,
+                quality.name(),
+            );
+        }
+        if let Some(compression) = settings.jpeg_compression() {
+            count(
+                &mut self.jpeg_compression,
+                &mut self.jpeg_compressions,
+                compression.name(),
+            );
         }
     }
 }
@@ -1346,6 +1401,22 @@ impl Tally {
         println!(
             "files with daylight saving time: {}, of which on: {}",
             s.daylight_saving_time, s.daylight_saving_time_on
+        );
+        println!(
+            "files with a preset slot: {}, by slot: {:?}; with a fluorescent lamp: {}, by lamp: {:?}",
+            s.preset_slot, s.preset_slots, s.fluorescent_lamp, s.fluorescent_lamps
+        );
+        println!(
+            "files with a raw bit depth: {}, by depth: {:?}",
+            s.raw_bit_depth, s.raw_bit_depths
+        );
+        println!(
+            "files with a raw compression: {}, by compression: {:?}",
+            s.raw_compression, s.raw_compressions
+        );
+        println!(
+            "files with a JPEG quality: {}, by step: {:?}; with a JPEG compression: {}, by compression: {:?}",
+            s.jpeg_quality, s.jpeg_qualities, s.jpeg_compression, s.jpeg_compressions
         );
         let f = &self.focus;
         println!(
@@ -2089,6 +2160,67 @@ fn the_settings_tally_counts_the_flash() {
     assert_eq!(
         (tally.flash_compensation, tally.flash_compensation_not_zero),
         (2, 1)
+    );
+}
+
+#[test]
+fn the_settings_tally_counts_the_image_quality_and_the_white_balance_parts() {
+    use raw_files::{
+        CameraSettings, FluorescentLamp, JpegCompression, JpegQuality, RawCompression, WhiteBalance,
+    };
+
+    // Two lossless 14-bit raw files, one from preset slot 1; a 12-bit
+    // raw file with no compression the library names; a Nikon JPEG, fine
+    // and compressed for quality, under a cool white lamp; a Sony JPEG,
+    // extra fine, from preset slot 1 too; and a file with none of these.
+    let lossless = CameraSettings::default()
+        .with_raw_bit_depth(14)
+        .with_raw_compression(RawCompression::Lossless);
+    let files = [
+        lossless
+            .clone()
+            .with_white_balance(WhiteBalance::default().with_preset_slot(1)),
+        lossless,
+        CameraSettings::default().with_raw_bit_depth(12),
+        CameraSettings::default()
+            .with_jpeg_quality(JpegQuality::Fine)
+            .with_jpeg_compression(JpegCompression::OptimalQuality)
+            .with_white_balance(
+                WhiteBalance::default().with_fluorescent_lamp(FluorescentLamp::CoolWhite),
+            ),
+        CameraSettings::default()
+            .with_jpeg_quality(JpegQuality::ExtraFine)
+            .with_white_balance(WhiteBalance::default().with_preset_slot(1)),
+        CameraSettings::default(),
+    ];
+    let mut tally = SettingsTally::default();
+    for settings in files {
+        tally.record(&Metadata::default().with_camera_settings(settings));
+    }
+
+    assert_eq!(tally.raw_bit_depth, 3);
+    assert_eq!(tally.raw_bit_depths, BTreeMap::from([(12, 1), (14, 2)]));
+    assert_eq!(tally.raw_compression, 2);
+    assert_eq!(
+        tally.raw_compressions,
+        BTreeMap::from([("Lossless compressed", 2)])
+    );
+    assert_eq!(tally.jpeg_quality, 2);
+    assert_eq!(
+        tally.jpeg_qualities,
+        BTreeMap::from([("Extra fine", 1), ("Fine", 1)])
+    );
+    assert_eq!(tally.jpeg_compression, 1);
+    assert_eq!(
+        tally.jpeg_compressions,
+        BTreeMap::from([("Optimal quality", 1)])
+    );
+    assert_eq!(tally.preset_slot, 2);
+    assert_eq!(tally.preset_slots, BTreeMap::from([(1, 2)]));
+    assert_eq!(tally.fluorescent_lamp, 1);
+    assert_eq!(
+        tally.fluorescent_lamps,
+        BTreeMap::from([("Cool white fluorescent", 1)])
     );
 }
 

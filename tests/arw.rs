@@ -15,9 +15,9 @@ use std::io::Cursor;
 
 use raw_files::{
     Bracketing, CameraFile, CameraSettings, ColorSpace, Directory, ErrorKind, Exposure,
-    ExposureProgram, FlashMode, FocusAreaMode, FocusMode, FocusOrigin, Format, Lens, Limits, Make,
-    Metadata, MeteringMode, Options, Orientation, Point, PreviewFormat, RawCompression,
-    ReleaseMode, SignedRational, Size, WhiteBalanceMode,
+    ExposureProgram, FlashMode, FocusAreaMode, FocusMode, FocusOrigin, Format, JpegQuality, Lens,
+    Limits, Make, Metadata, MeteringMode, Options, Orientation, Point, PreviewFormat,
+    RawCompression, ReleaseMode, SignedRational, Size, WhiteBalanceMode,
 };
 use support::arw::{
     A100_JPEG, A100_RAW_AS_COUNT, A100_TAG_SIZE, ARW4_FOCUS_CENTER, ARW4_FOCUS_FRAME,
@@ -1626,6 +1626,8 @@ const METADATA: &[SampleMetadata] = &[
             white_balance_mode: Some(WhiteBalanceMode::Auto),
             color_temperature: None,
             fine_tune: None,
+            preset_slot: None,
+            fluorescent_lamp: None,
             exposure_program: Some(ExposureProgram::Program),
             metering_mode: Some(MeteringMode::MultiSegment),
             flash: Some(SampleFlash {
@@ -1652,6 +1654,10 @@ const METADATA: &[SampleMetadata] = &[
             release_mode: None,
             bracketing: None,
             daylight_saving_time: None,
+            raw_bit_depth: Some(12),
+            raw_compression: Some(RawCompression::Lossy),
+            jpeg_quality: None,
+            jpeg_compression: None,
         },
     },
     // ILCE-7RM2 (raw.pixls.us 1310)
@@ -1695,6 +1701,8 @@ const METADATA: &[SampleMetadata] = &[
                 amber_blue: (0, 1),
                 green_magenta: (0, 1),
             }),
+            preset_slot: None,
+            fluorescent_lamp: None,
             exposure_program: Some(ExposureProgram::Manual),
             metering_mode: Some(MeteringMode::MultiSegment),
             flash: Some(SampleFlash {
@@ -1721,6 +1729,10 @@ const METADATA: &[SampleMetadata] = &[
             release_mode: Some(ReleaseMode::Continuous),
             bracketing: Some(Bracketing::Off),
             daylight_saving_time: None,
+            raw_bit_depth: Some(12),
+            raw_compression: Some(RawCompression::Lossy),
+            jpeg_quality: None,
+            jpeg_compression: None,
         },
     },
     // ILCE-7RM2 (raw.pixls.us 1311)
@@ -1764,6 +1776,8 @@ const METADATA: &[SampleMetadata] = &[
                 amber_blue: (0, 1),
                 green_magenta: (0, 1),
             }),
+            preset_slot: None,
+            fluorescent_lamp: None,
             exposure_program: Some(ExposureProgram::Manual),
             metering_mode: Some(MeteringMode::MultiSegment),
             flash: Some(SampleFlash {
@@ -1790,6 +1804,10 @@ const METADATA: &[SampleMetadata] = &[
             release_mode: Some(ReleaseMode::Continuous),
             bracketing: Some(Bracketing::Off),
             daylight_saving_time: None,
+            raw_bit_depth: Some(12),
+            raw_compression: Some(RawCompression::Uncompressed),
+            jpeg_quality: None,
+            jpeg_compression: None,
         },
     },
     // DSC-F828 (raw.pixls.us 1351)
@@ -1822,6 +1840,8 @@ const METADATA: &[SampleMetadata] = &[
             white_balance_mode: Some(WhiteBalanceMode::Auto),
             color_temperature: None,
             fine_tune: None,
+            preset_slot: None,
+            fluorescent_lamp: None,
             exposure_program: Some(ExposureProgram::Program),
             metering_mode: Some(MeteringMode::MultiSegment),
             flash: Some(SampleFlash {
@@ -1848,6 +1868,10 @@ const METADATA: &[SampleMetadata] = &[
             release_mode: None,
             bracketing: None,
             daylight_saving_time: None,
+            raw_bit_depth: None,
+            raw_compression: Some(RawCompression::Uncompressed),
+            jpeg_quality: None,
+            jpeg_compression: None,
         },
     },
     // NEX-5 (raw.pixls.us 1457)
@@ -1888,6 +1912,8 @@ const METADATA: &[SampleMetadata] = &[
             white_balance_mode: Some(WhiteBalanceMode::Auto),
             color_temperature: None,
             fine_tune: None,
+            preset_slot: None,
+            fluorescent_lamp: None,
             exposure_program: Some(ExposureProgram::Program),
             metering_mode: Some(MeteringMode::CenterWeighted),
             flash: Some(SampleFlash {
@@ -1914,6 +1940,10 @@ const METADATA: &[SampleMetadata] = &[
             release_mode: None,
             bracketing: None,
             daylight_saving_time: None,
+            raw_bit_depth: Some(12),
+            raw_compression: Some(RawCompression::Lossy),
+            jpeg_quality: None,
+            jpeg_compression: None,
         },
     },
     // ILCE-9 (raw.pixls.us 1541)
@@ -1965,6 +1995,8 @@ const METADATA: &[SampleMetadata] = &[
                 amber_blue: (0, 1),
                 green_magenta: (0, 1),
             }),
+            preset_slot: None,
+            fluorescent_lamp: None,
             exposure_program: Some(ExposureProgram::AperturePriority),
             metering_mode: Some(MeteringMode::MultiSegment),
             flash: Some(SampleFlash {
@@ -1991,6 +2023,10 @@ const METADATA: &[SampleMetadata] = &[
             release_mode: Some(ReleaseMode::Single),
             bracketing: Some(Bracketing::Off),
             daylight_saving_time: None,
+            raw_bit_depth: Some(14),
+            raw_compression: Some(RawCompression::Lossy),
+            jpeg_quality: None,
+            jpeg_compression: None,
         },
     },
     // ILCE-9 (raw.pixls.us 1542)
@@ -2042,6 +2078,8 @@ const METADATA: &[SampleMetadata] = &[
                 amber_blue: (0, 1),
                 green_magenta: (0, 1),
             }),
+            preset_slot: None,
+            fluorescent_lamp: None,
             exposure_program: Some(ExposureProgram::AperturePriority),
             metering_mode: Some(MeteringMode::MultiSegment),
             flash: Some(SampleFlash {
@@ -2068,6 +2106,10 @@ const METADATA: &[SampleMetadata] = &[
             release_mode: Some(ReleaseMode::Single),
             bracketing: Some(Bracketing::Off),
             daylight_saving_time: None,
+            raw_bit_depth: Some(14),
+            raw_compression: Some(RawCompression::Uncompressed),
+            jpeg_quality: None,
+            jpeg_compression: None,
         },
     },
     // ILCE-7S (raw.pixls.us 1582)
@@ -2103,6 +2145,8 @@ const METADATA: &[SampleMetadata] = &[
                 amber_blue: (0, 1),
                 green_magenta: (0, 1),
             }),
+            preset_slot: None,
+            fluorescent_lamp: None,
             exposure_program: Some(ExposureProgram::Manual),
             metering_mode: Some(MeteringMode::MultiSegment),
             flash: Some(SampleFlash {
@@ -2129,6 +2173,10 @@ const METADATA: &[SampleMetadata] = &[
             release_mode: Some(ReleaseMode::Single),
             bracketing: Some(Bracketing::Off),
             daylight_saving_time: None,
+            raw_bit_depth: Some(14),
+            raw_compression: Some(RawCompression::Lossy),
+            jpeg_quality: None,
+            jpeg_compression: None,
         },
     },
     // DSLR-A200 (raw.pixls.us 2271)
@@ -2161,6 +2209,8 @@ const METADATA: &[SampleMetadata] = &[
             white_balance_mode: Some(WhiteBalanceMode::Auto),
             color_temperature: None,
             fine_tune: None,
+            preset_slot: None,
+            fluorescent_lamp: None,
             exposure_program: Some(ExposureProgram::Action),
             metering_mode: Some(MeteringMode::MultiSegment),
             flash: Some(SampleFlash {
@@ -2187,6 +2237,10 @@ const METADATA: &[SampleMetadata] = &[
             release_mode: None,
             bracketing: None,
             daylight_saving_time: None,
+            raw_bit_depth: Some(12),
+            raw_compression: None,
+            jpeg_quality: None,
+            jpeg_compression: None,
         },
     },
     // DSLR-A100 (raw.pixls.us 2346)
@@ -2219,6 +2273,8 @@ const METADATA: &[SampleMetadata] = &[
             white_balance_mode: Some(WhiteBalanceMode::Auto),
             color_temperature: None,
             fine_tune: None,
+            preset_slot: None,
+            fluorescent_lamp: None,
             exposure_program: Some(ExposureProgram::Manual),
             metering_mode: Some(MeteringMode::CenterWeighted),
             flash: Some(SampleFlash {
@@ -2245,6 +2301,10 @@ const METADATA: &[SampleMetadata] = &[
             release_mode: None,
             bracketing: None,
             daylight_saving_time: None,
+            raw_bit_depth: None,
+            raw_compression: None,
+            jpeg_quality: None,
+            jpeg_compression: None,
         },
     },
     // DSLR-A700 (raw.pixls.us 2521)
@@ -2277,6 +2337,8 @@ const METADATA: &[SampleMetadata] = &[
             white_balance_mode: Some(WhiteBalanceMode::Auto),
             color_temperature: None,
             fine_tune: None,
+            preset_slot: None,
+            fluorescent_lamp: None,
             exposure_program: Some(ExposureProgram::AperturePriority),
             metering_mode: Some(MeteringMode::CenterWeighted),
             flash: Some(SampleFlash {
@@ -2303,6 +2365,10 @@ const METADATA: &[SampleMetadata] = &[
             release_mode: None,
             bracketing: None,
             daylight_saving_time: None,
+            raw_bit_depth: Some(8),
+            raw_compression: Some(RawCompression::Lossy),
+            jpeg_quality: None,
+            jpeg_compression: None,
         },
     },
     // DSC-RX100M6 (raw.pixls.us 3012)
@@ -2354,6 +2420,8 @@ const METADATA: &[SampleMetadata] = &[
                 amber_blue: (0, 1),
                 green_magenta: (0, 1),
             }),
+            preset_slot: None,
+            fluorescent_lamp: None,
             exposure_program: Some(ExposureProgram::AperturePriority),
             metering_mode: Some(MeteringMode::Spot),
             flash: Some(SampleFlash {
@@ -2380,6 +2448,10 @@ const METADATA: &[SampleMetadata] = &[
             release_mode: None,
             bracketing: Some(Bracketing::Exposure),
             daylight_saving_time: None,
+            raw_bit_depth: Some(12),
+            raw_compression: Some(RawCompression::Lossy),
+            jpeg_quality: Some(JpegQuality::Fine),
+            jpeg_compression: None,
         },
     },
     // DSC-RX100M6 (raw.pixls.us 3015)
@@ -2431,6 +2503,8 @@ const METADATA: &[SampleMetadata] = &[
                 amber_blue: (0, 1),
                 green_magenta: (0, 1),
             }),
+            preset_slot: None,
+            fluorescent_lamp: None,
             exposure_program: Some(ExposureProgram::AperturePriority),
             metering_mode: Some(MeteringMode::Spot),
             flash: Some(SampleFlash {
@@ -2457,6 +2531,10 @@ const METADATA: &[SampleMetadata] = &[
             release_mode: None,
             bracketing: Some(Bracketing::Exposure),
             daylight_saving_time: None,
+            raw_bit_depth: Some(12),
+            raw_compression: Some(RawCompression::Lossy),
+            jpeg_quality: Some(JpegQuality::Fine),
+            jpeg_compression: None,
         },
     },
     // DSC-R1 (raw.pixls.us 3221)
@@ -2489,6 +2567,8 @@ const METADATA: &[SampleMetadata] = &[
             white_balance_mode: Some(WhiteBalanceMode::Auto),
             color_temperature: None,
             fine_tune: None,
+            preset_slot: None,
+            fluorescent_lamp: None,
             exposure_program: Some(ExposureProgram::AperturePriority),
             metering_mode: Some(MeteringMode::MultiSegment),
             flash: Some(SampleFlash {
@@ -2515,6 +2595,10 @@ const METADATA: &[SampleMetadata] = &[
             release_mode: Some(ReleaseMode::Single),
             bracketing: Some(Bracketing::Off),
             daylight_saving_time: None,
+            raw_bit_depth: Some(14),
+            raw_compression: Some(RawCompression::Uncompressed),
+            jpeg_quality: Some(JpegQuality::Fine),
+            jpeg_compression: None,
         },
     },
     // ILCE-7RM3 (raw.pixls.us 3251)
@@ -2566,6 +2650,8 @@ const METADATA: &[SampleMetadata] = &[
                 amber_blue: (0, 1),
                 green_magenta: (0, 1),
             }),
+            preset_slot: None,
+            fluorescent_lamp: None,
             exposure_program: Some(ExposureProgram::Manual),
             metering_mode: Some(MeteringMode::MultiSegment),
             flash: Some(SampleFlash {
@@ -2592,6 +2678,10 @@ const METADATA: &[SampleMetadata] = &[
             release_mode: None,
             bracketing: None,
             daylight_saving_time: None,
+            raw_bit_depth: Some(14),
+            raw_compression: Some(RawCompression::Uncompressed),
+            jpeg_quality: None,
+            jpeg_compression: None,
         },
     },
     // SLT-A99 (raw.pixls.us 3751)
@@ -2635,6 +2725,8 @@ const METADATA: &[SampleMetadata] = &[
                 amber_blue: (0, 1),
                 green_magenta: (0, 1),
             }),
+            preset_slot: None,
+            fluorescent_lamp: None,
             exposure_program: Some(ExposureProgram::Program),
             metering_mode: Some(MeteringMode::Spot),
             flash: Some(SampleFlash {
@@ -2661,6 +2753,10 @@ const METADATA: &[SampleMetadata] = &[
             release_mode: Some(ReleaseMode::Continuous),
             bracketing: Some(Bracketing::Off),
             daylight_saving_time: None,
+            raw_bit_depth: Some(12),
+            raw_compression: Some(RawCompression::Lossy),
+            jpeg_quality: None,
+            jpeg_compression: None,
         },
     },
     // Hasselblad Lunar (raw.pixls.us 4051)
@@ -2704,6 +2800,8 @@ const METADATA: &[SampleMetadata] = &[
                 amber_blue: (0, 1),
                 green_magenta: (0, 1),
             }),
+            preset_slot: None,
+            fluorescent_lamp: None,
             exposure_program: Some(ExposureProgram::Program),
             metering_mode: Some(MeteringMode::MultiSegment),
             flash: Some(SampleFlash {
@@ -2730,6 +2828,10 @@ const METADATA: &[SampleMetadata] = &[
             release_mode: Some(ReleaseMode::Single),
             bracketing: Some(Bracketing::Off),
             daylight_saving_time: None,
+            raw_bit_depth: Some(12),
+            raw_compression: Some(RawCompression::Lossy),
+            jpeg_quality: None,
+            jpeg_compression: None,
         },
     },
     // ILCE-1 (raw.pixls.us 4466)
@@ -2784,6 +2886,8 @@ const METADATA: &[SampleMetadata] = &[
                 amber_blue: (0, 1),
                 green_magenta: (0, 1),
             }),
+            preset_slot: None,
+            fluorescent_lamp: None,
             exposure_program: Some(ExposureProgram::AperturePriority),
             metering_mode: Some(MeteringMode::MultiSegment),
             flash: Some(SampleFlash {
@@ -2810,6 +2914,10 @@ const METADATA: &[SampleMetadata] = &[
             release_mode: Some(ReleaseMode::Single),
             bracketing: Some(Bracketing::Off),
             daylight_saving_time: None,
+            raw_bit_depth: Some(14),
+            raw_compression: Some(RawCompression::Lossless),
+            jpeg_quality: None,
+            jpeg_compression: None,
         },
     },
     // ILCE-7SM3 (raw.pixls.us 5418)
@@ -2861,6 +2969,8 @@ const METADATA: &[SampleMetadata] = &[
                 amber_blue: (0, 1),
                 green_magenta: (0, 1),
             }),
+            preset_slot: None,
+            fluorescent_lamp: None,
             exposure_program: Some(ExposureProgram::AperturePriority),
             metering_mode: Some(MeteringMode::MultiSegment),
             flash: Some(SampleFlash {
@@ -2887,6 +2997,10 @@ const METADATA: &[SampleMetadata] = &[
             release_mode: Some(ReleaseMode::Continuous),
             bracketing: Some(Bracketing::Off),
             daylight_saving_time: None,
+            raw_bit_depth: Some(14),
+            raw_compression: Some(RawCompression::Lossy),
+            jpeg_quality: Some(JpegQuality::ExtraFine),
+            jpeg_compression: None,
         },
     },
     // DSC-RX100 (raw.pixls.us 5811)
@@ -2930,6 +3044,8 @@ const METADATA: &[SampleMetadata] = &[
                 amber_blue: (0, 1),
                 green_magenta: (0, 1),
             }),
+            preset_slot: None,
+            fluorescent_lamp: None,
             exposure_program: Some(ExposureProgram::AperturePriority),
             metering_mode: Some(MeteringMode::MultiSegment),
             flash: Some(SampleFlash {
@@ -2956,6 +3072,10 @@ const METADATA: &[SampleMetadata] = &[
             release_mode: Some(ReleaseMode::Single),
             bracketing: Some(Bracketing::Off),
             daylight_saving_time: None,
+            raw_bit_depth: Some(12),
+            raw_compression: Some(RawCompression::Lossy),
+            jpeg_quality: Some(JpegQuality::Fine),
+            jpeg_compression: None,
         },
     },
     // DSLR-A900 (raw.pixls.us 5858)
@@ -2988,6 +3108,8 @@ const METADATA: &[SampleMetadata] = &[
             white_balance_mode: Some(WhiteBalanceMode::Auto),
             color_temperature: None,
             fine_tune: None,
+            preset_slot: None,
+            fluorescent_lamp: None,
             exposure_program: Some(ExposureProgram::Manual),
             metering_mode: Some(MeteringMode::Spot),
             flash: Some(SampleFlash {
@@ -3014,6 +3136,10 @@ const METADATA: &[SampleMetadata] = &[
             release_mode: None,
             bracketing: None,
             daylight_saving_time: None,
+            raw_bit_depth: Some(12),
+            raw_compression: None,
+            jpeg_quality: None,
+            jpeg_compression: None,
         },
     },
     // ILCE-6700 (raw.pixls.us 6736)
@@ -3065,6 +3191,8 @@ const METADATA: &[SampleMetadata] = &[
                 amber_blue: (0, 1),
                 green_magenta: (0, 1),
             }),
+            preset_slot: None,
+            fluorescent_lamp: None,
             exposure_program: Some(ExposureProgram::Manual),
             metering_mode: Some(MeteringMode::MultiSegment),
             flash: Some(SampleFlash {
@@ -3091,6 +3219,10 @@ const METADATA: &[SampleMetadata] = &[
             release_mode: Some(ReleaseMode::Single),
             bracketing: Some(Bracketing::Off),
             daylight_saving_time: None,
+            raw_bit_depth: Some(14),
+            raw_compression: Some(RawCompression::Lossless),
+            jpeg_quality: None,
+            jpeg_compression: None,
         },
     },
     // ILCE-7M4 (raw.pixls.us 6929)
@@ -3142,6 +3274,8 @@ const METADATA: &[SampleMetadata] = &[
                 amber_blue: (0, 1),
                 green_magenta: (0, 1),
             }),
+            preset_slot: None,
+            fluorescent_lamp: None,
             exposure_program: Some(ExposureProgram::AperturePriority),
             metering_mode: Some(MeteringMode::MultiSegment),
             flash: Some(SampleFlash {
@@ -3168,6 +3302,10 @@ const METADATA: &[SampleMetadata] = &[
             release_mode: Some(ReleaseMode::Single),
             bracketing: Some(Bracketing::Off),
             daylight_saving_time: None,
+            raw_bit_depth: Some(14),
+            raw_compression: Some(RawCompression::Lossless),
+            jpeg_quality: Some(JpegQuality::Fine),
+            jpeg_compression: None,
         },
     },
     // ILCE-7M4 (raw.pixls.us 6930)
@@ -3219,6 +3357,8 @@ const METADATA: &[SampleMetadata] = &[
                 amber_blue: (0, 1),
                 green_magenta: (0, 1),
             }),
+            preset_slot: None,
+            fluorescent_lamp: None,
             exposure_program: Some(ExposureProgram::AperturePriority),
             metering_mode: Some(MeteringMode::MultiSegment),
             flash: Some(SampleFlash {
@@ -3245,6 +3385,10 @@ const METADATA: &[SampleMetadata] = &[
             release_mode: Some(ReleaseMode::Single),
             bracketing: Some(Bracketing::Off),
             daylight_saving_time: None,
+            raw_bit_depth: None,
+            raw_compression: Some(RawCompression::Lossless),
+            jpeg_quality: Some(JpegQuality::Fine),
+            jpeg_compression: None,
         },
     },
     // ILCE-7M4 (raw.pixls.us 6931)
@@ -3296,6 +3440,8 @@ const METADATA: &[SampleMetadata] = &[
                 amber_blue: (0, 1),
                 green_magenta: (0, 1),
             }),
+            preset_slot: None,
+            fluorescent_lamp: None,
             exposure_program: Some(ExposureProgram::AperturePriority),
             metering_mode: Some(MeteringMode::MultiSegment),
             flash: Some(SampleFlash {
@@ -3322,6 +3468,10 @@ const METADATA: &[SampleMetadata] = &[
             release_mode: Some(ReleaseMode::Single),
             bracketing: Some(Bracketing::Off),
             daylight_saving_time: None,
+            raw_bit_depth: None,
+            raw_compression: Some(RawCompression::Lossless),
+            jpeg_quality: Some(JpegQuality::Fine),
+            jpeg_compression: None,
         },
     },
     // ILCE-7M4 (raw.pixls.us 6933)
@@ -3373,6 +3523,8 @@ const METADATA: &[SampleMetadata] = &[
                 amber_blue: (0, 1),
                 green_magenta: (0, 1),
             }),
+            preset_slot: None,
+            fluorescent_lamp: None,
             exposure_program: Some(ExposureProgram::AperturePriority),
             metering_mode: Some(MeteringMode::MultiSegment),
             flash: Some(SampleFlash {
@@ -3399,6 +3551,10 @@ const METADATA: &[SampleMetadata] = &[
             release_mode: Some(ReleaseMode::Single),
             bracketing: Some(Bracketing::Off),
             daylight_saving_time: None,
+            raw_bit_depth: Some(14),
+            raw_compression: Some(RawCompression::Uncompressed),
+            jpeg_quality: Some(JpegQuality::Fine),
+            jpeg_compression: None,
         },
     },
     // ILCE-7M4 (raw.pixls.us 6936)
@@ -3450,6 +3606,8 @@ const METADATA: &[SampleMetadata] = &[
                 amber_blue: (0, 1),
                 green_magenta: (0, 1),
             }),
+            preset_slot: None,
+            fluorescent_lamp: None,
             exposure_program: Some(ExposureProgram::AperturePriority),
             metering_mode: Some(MeteringMode::MultiSegment),
             flash: Some(SampleFlash {
@@ -3476,6 +3634,10 @@ const METADATA: &[SampleMetadata] = &[
             release_mode: Some(ReleaseMode::Single),
             bracketing: Some(Bracketing::Off),
             daylight_saving_time: None,
+            raw_bit_depth: Some(14),
+            raw_compression: Some(RawCompression::Lossy),
+            jpeg_quality: Some(JpegQuality::Fine),
+            jpeg_compression: None,
         },
     },
     // ILCE-9M3 (raw.pixls.us 7361)
@@ -3519,6 +3681,8 @@ const METADATA: &[SampleMetadata] = &[
                 amber_blue: (0, 1),
                 green_magenta: (0, 1),
             }),
+            preset_slot: None,
+            fluorescent_lamp: None,
             exposure_program: Some(ExposureProgram::Manual),
             metering_mode: Some(MeteringMode::MultiSegment),
             flash: Some(SampleFlash {
@@ -3545,6 +3709,10 @@ const METADATA: &[SampleMetadata] = &[
             release_mode: Some(ReleaseMode::Single),
             bracketing: Some(Bracketing::Off),
             daylight_saving_time: None,
+            raw_bit_depth: Some(14),
+            raw_compression: Some(RawCompression::Lossy),
+            jpeg_quality: None,
+            jpeg_compression: None,
         },
     },
     // ILCE-9M3 (raw.pixls.us 7364)
@@ -3588,6 +3756,8 @@ const METADATA: &[SampleMetadata] = &[
                 amber_blue: (0, 1),
                 green_magenta: (0, 1),
             }),
+            preset_slot: None,
+            fluorescent_lamp: None,
             exposure_program: Some(ExposureProgram::Manual),
             metering_mode: Some(MeteringMode::MultiSegment),
             flash: Some(SampleFlash {
@@ -3614,6 +3784,10 @@ const METADATA: &[SampleMetadata] = &[
             release_mode: Some(ReleaseMode::Single),
             bracketing: Some(Bracketing::Off),
             daylight_saving_time: None,
+            raw_bit_depth: None,
+            raw_compression: Some(RawCompression::Lossless),
+            jpeg_quality: None,
+            jpeg_compression: None,
         },
     },
     // ILCE-1M2 (raw.pixls.us 7835)
@@ -3665,6 +3839,8 @@ const METADATA: &[SampleMetadata] = &[
                 amber_blue: (0, 1),
                 green_magenta: (0, 1),
             }),
+            preset_slot: None,
+            fluorescent_lamp: None,
             exposure_program: Some(ExposureProgram::AperturePriority),
             metering_mode: Some(MeteringMode::MultiSegment),
             flash: Some(SampleFlash {
@@ -3691,6 +3867,10 @@ const METADATA: &[SampleMetadata] = &[
             release_mode: Some(ReleaseMode::Single),
             bracketing: Some(Bracketing::Off),
             daylight_saving_time: None,
+            raw_bit_depth: Some(14),
+            raw_compression: Some(RawCompression::Lossy),
+            jpeg_quality: Some(JpegQuality::Fine),
+            jpeg_compression: None,
         },
     },
     // ILCE-7M5 (raw.pixls.us 8846)
@@ -3745,6 +3925,8 @@ const METADATA: &[SampleMetadata] = &[
                 amber_blue: (0, 1),
                 green_magenta: (0, 1),
             }),
+            preset_slot: None,
+            fluorescent_lamp: None,
             exposure_program: Some(ExposureProgram::AperturePriority),
             metering_mode: Some(MeteringMode::MultiSegment),
             flash: Some(SampleFlash {
@@ -3771,6 +3953,10 @@ const METADATA: &[SampleMetadata] = &[
             release_mode: Some(ReleaseMode::Single),
             bracketing: Some(Bracketing::Off),
             daylight_saving_time: None,
+            raw_bit_depth: Some(14),
+            raw_compression: Some(RawCompression::Lossy),
+            jpeg_quality: None,
+            jpeg_compression: None,
         },
     },
     // ILCE-7M5 (raw.pixls.us 8847)
@@ -3825,6 +4011,8 @@ const METADATA: &[SampleMetadata] = &[
                 amber_blue: (0, 1),
                 green_magenta: (0, 1),
             }),
+            preset_slot: None,
+            fluorescent_lamp: None,
             exposure_program: Some(ExposureProgram::AperturePriority),
             metering_mode: Some(MeteringMode::MultiSegment),
             flash: Some(SampleFlash {
@@ -3851,6 +4039,10 @@ const METADATA: &[SampleMetadata] = &[
             release_mode: Some(ReleaseMode::Single),
             bracketing: Some(Bracketing::Off),
             daylight_saving_time: None,
+            raw_bit_depth: Some(14),
+            raw_compression: Some(RawCompression::Lossy),
+            jpeg_quality: None,
+            jpeg_compression: None,
         },
     },
     // ILCE-7M5 (raw.pixls.us 8848)
@@ -3905,6 +4097,8 @@ const METADATA: &[SampleMetadata] = &[
                 amber_blue: (0, 1),
                 green_magenta: (0, 1),
             }),
+            preset_slot: None,
+            fluorescent_lamp: None,
             exposure_program: Some(ExposureProgram::AperturePriority),
             metering_mode: Some(MeteringMode::MultiSegment),
             flash: Some(SampleFlash {
@@ -3931,6 +4125,10 @@ const METADATA: &[SampleMetadata] = &[
             release_mode: Some(ReleaseMode::Single),
             bracketing: Some(Bracketing::Off),
             daylight_saving_time: None,
+            raw_bit_depth: Some(14),
+            raw_compression: Some(RawCompression::Lossless),
+            jpeg_quality: None,
+            jpeg_compression: None,
         },
     },
     // ILCE-7M5 (raw.pixls.us 8849)
@@ -3985,6 +4183,8 @@ const METADATA: &[SampleMetadata] = &[
                 amber_blue: (0, 1),
                 green_magenta: (0, 1),
             }),
+            preset_slot: None,
+            fluorescent_lamp: None,
             exposure_program: Some(ExposureProgram::AperturePriority),
             metering_mode: Some(MeteringMode::MultiSegment),
             flash: Some(SampleFlash {
@@ -4011,6 +4211,10 @@ const METADATA: &[SampleMetadata] = &[
             release_mode: Some(ReleaseMode::Single),
             bracketing: Some(Bracketing::Off),
             daylight_saving_time: None,
+            raw_bit_depth: Some(14),
+            raw_compression: Some(RawCompression::Lossy),
+            jpeg_quality: None,
+            jpeg_compression: None,
         },
     },
     // ILCE-7M5 (raw.pixls.us 8850)
@@ -4065,6 +4269,8 @@ const METADATA: &[SampleMetadata] = &[
                 amber_blue: (0, 1),
                 green_magenta: (0, 1),
             }),
+            preset_slot: None,
+            fluorescent_lamp: None,
             exposure_program: Some(ExposureProgram::AperturePriority),
             metering_mode: Some(MeteringMode::MultiSegment),
             flash: Some(SampleFlash {
@@ -4091,6 +4297,10 @@ const METADATA: &[SampleMetadata] = &[
             release_mode: Some(ReleaseMode::Single),
             bracketing: Some(Bracketing::Off),
             daylight_saving_time: None,
+            raw_bit_depth: Some(14),
+            raw_compression: Some(RawCompression::Lossy),
+            jpeg_quality: None,
+            jpeg_compression: None,
         },
     },
 ];
@@ -4147,6 +4357,8 @@ const LARGE_METADATA: &[SampleMetadata] = &[
                 amber_blue: (0, 1),
                 green_magenta: (0, 1),
             }),
+            preset_slot: None,
+            fluorescent_lamp: None,
             exposure_program: Some(ExposureProgram::Manual),
             metering_mode: Some(MeteringMode::MultiSegment),
             flash: Some(SampleFlash {
@@ -4173,6 +4385,10 @@ const LARGE_METADATA: &[SampleMetadata] = &[
             release_mode: None,
             bracketing: None,
             daylight_saving_time: None,
+            raw_bit_depth: Some(14),
+            raw_compression: Some(RawCompression::Uncompressed),
+            jpeg_quality: None,
+            jpeg_compression: None,
         },
     },
 ];
