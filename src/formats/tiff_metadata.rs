@@ -20,8 +20,10 @@
 //!   Exif records ([`camera_settings`]);
 //! - from IFD0 and the Exif IFD, who made the picture ([`authorship`]);
 //! - from the GPS IFD, where the picture was taken ([`location`]);
-//! - from the IFD of the raw data, the raw size, the image size and the
-//!   raw bit depth ([`raw_data`]).
+//! - from the IFD of the raw data, the raw size, the image size, the raw
+//!   bit depth and, for an uncompressed raw, its compression; and for the
+//!   MakerNote readers, how the raw data is stored ([`raw_data`],
+//!   [`RawStorage`]).
 //!
 //! Each tag's type and count are its rule, in [`rules`], checked before
 //! anything is read ([`Ifd::get`]). Every name and serial number is read by
@@ -46,7 +48,7 @@ use crate::authorship::Authorship;
 use crate::camera::Camera;
 use crate::camera_settings::{
     Bracketing, CameraSettings, ColorSpace, ExposureProgram, Flash, FlashMode, MeteringMode,
-    WhiteBalance, WhiteBalanceMode,
+    RawCompression, WhiteBalance, WhiteBalanceMode,
 };
 use crate::container::tiff::tags::COLOR_SPACE;
 use crate::container::tiff::{First, Ifd, Rule, Text, Tree};
@@ -82,6 +84,8 @@ mod rules {
     /// One number of a tag Exif gives as SHORT or LONG, IFD taken as a LONG.
     const NUMBER: &[FieldType] = &[FieldType::Short, FieldType::Long, FieldType::Ifd];
     const SHORT: &[FieldType] = &[FieldType::Short];
+    /// A strip's byte count, which TIFF 6.0 gives as SHORT or LONG.
+    const SHORT_OR_LONG: &[FieldType] = &[FieldType::Short, FieldType::Long];
     const RATIONAL: &[FieldType] = &[FieldType::Rational];
 
     // IFD0.
@@ -169,6 +173,9 @@ mod rules {
     pub(super) const DEFAULT_CROP_SIZE_FRACTIONS: Rule<[Rational; 2]> =
         Rule::new(tags::DEFAULT_CROP_SIZE, RATIONAL);
     pub(super) const BITS_PER_SAMPLE: Held<[u32; 1]> = Held::new(tags::BITS_PER_SAMPLE, SHORT);
+    pub(super) const COMPRESSION: Held<[u32; 1]> = Held::new(tags::COMPRESSION, SHORT);
+    pub(super) const STRIP_BYTE_COUNTS: Held<[u32; 1]> =
+        Held::new(tags::STRIP_BYTE_COUNTS, SHORT_OR_LONG);
 }
 
 /// The longest text, in bytes as stored, that is taken for a value rather
@@ -198,9 +205,10 @@ const ASCII_CODE: &[u8; 8] = b"ASCII\0\0\0";
 /// ISOSpeed replaces when the file records one.
 const ISO_65535_OR_MORE: u32 = 65535;
 
-/// What [`read`] reads from the standard tags: the metadata, and two facts
-/// that a format's own structures need. They say whether the standard tags
-/// recorded the image size as a crop, and the color space.
+/// What [`read`] reads from the standard tags: the metadata, and three
+/// facts that a format's own structures need. They say whether the
+/// standard tags recorded the image size as a crop, and the color space,
+/// and how the raw data is stored.
 ///
 /// The standard tags come first (ADR011). A format's own crop, such as
 /// Nikon's crop area, may replace the raw size the image size otherwise
@@ -224,6 +232,27 @@ pub(crate) struct Standard {
     /// is no Exif IFD, and when the IFD's reader skipped the entry as
     /// damaged ([`Ifd::entry`]), so that the MakerNote may stand in.
     pub(crate) exif_records_color_space: bool,
+    /// How the raw data is stored, as the IFD that gives the raw size
+    /// records it; empty when there is no raw size. A maker's MakerNote
+    /// reader reads its raw compression from it, since the codes beyond
+    /// TIFF 6.0's are each maker's own.
+    pub(crate) raw_storage: RawStorage,
+}
+
+/// How a file's raw data is stored, as the IFD that holds it records it
+/// in its standard tags. The MakerNote readers read a raw compression from
+/// it: a code beyond TIFF 6.0's 1, uncompressed, is a maker's own, and
+/// Sony's 32767 holds three layouts that only the data's size tells apart
+/// (`docs/formats/arw/raw-data.md`).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(crate) struct RawStorage {
+    /// The IFD's Compression, when it is one SHORT.
+    pub(crate) compression: Option<u32>,
+    /// How many bytes the raw data takes when it is one strip: the IFD's
+    /// StripByteCounts, when it is one SHORT or LONG. `None` for data in
+    /// several strips or in tiles, whose counts may lie outside what
+    /// opening a file reads: no maker's code needs them.
+    pub(crate) strip_bytes: Option<u32>,
 }
 
 /// Reads the metadata that `tree` records, the IFDs of a TIFF-based file
@@ -234,10 +263,11 @@ pub(crate) struct Standard {
 /// the file. The
 /// owner is the Exif CameraOwnerName, a fact of the camera beside its
 /// serial number. The orientation is the preview finder's
-/// ([`tiff_previews::orientation`]). The raw bit depth is the raw data's
+/// ([`tiff_previews::orientation`]). The raw bit depth, and the raw
+/// compression when the data is uncompressed, are the raw data's
 /// ([`raw_data`]). A file without an Exif IFD has no capture or digitized
 /// time, serial number, owner, exposure, lens or camera settings other than
-/// the raw bit depth, and a file without a GPS IFD has no location.
+/// those two, and a file without a GPS IFD has no location.
 ///
 /// # Errors
 ///
@@ -269,6 +299,9 @@ pub(crate) fn read<R: Read + Seek>(src: &mut Source<R>, tree: &Tree) -> Result<S
     let raw_size = raw.as_ref().map(|raw| raw.size);
     let default_crop = raw.as_ref().and_then(|raw| raw.default_crop);
     camera_settings.raw_bit_depth = raw.as_ref().and_then(|raw| raw.bit_depth);
+    let raw_storage = raw.as_ref().map(|raw| raw.storage).unwrap_or_default();
+    camera_settings.raw_compression =
+        (raw_storage.compression == Some(UNCOMPRESSED)).then_some(RawCompression::Uncompressed);
     let metadata = Metadata {
         camera: Camera {
             recorded_make: text(src, ifd0, rules::MAKE)?,
@@ -303,8 +336,13 @@ pub(crate) fn read<R: Read + Seek>(src: &mut Source<R>, tree: &Tree) -> Result<S
         exif_records_color_space: tree
             .exif()
             .is_some_and(|exif| exif.entry(COLOR_SPACE).is_some()),
+        raw_storage,
     })
 }
+
+/// The Compression of raw data stored uncompressed, by TIFF 6.0 (section 8,
+/// p. 30): the one code whose meaning is the same whatever the maker.
+const UNCOMPRESSED: u32 = 1;
 
 /// The text of the tag `rule` names in `ifd`, by the one rule every text
 /// value of the metadata is read by. A format's own tags use it too, such
@@ -804,9 +842,11 @@ fn camera_settings<R: Read + Seek>(
         // Only Nikon's MakerNote records whether daylight saving time was
         // on, with the clock's time zone.
         daylight_saving_time: None,
-        // The IFD of the raw data records it, not the Exif IFD: `read`
-        // fills it.
+        // The IFD of the raw data records these, not the Exif IFD: `read`
+        // fills them, the raw compression when it is uncompressed, and a
+        // maker's MakerNote reader any other.
         raw_bit_depth: None,
+        raw_compression: None,
     })
 }
 
@@ -1011,6 +1051,8 @@ struct RawData {
     /// SHORT above zero. Sony's YCbCr medium and small raws record three
     /// values, one a sample, and have none.
     bit_depth: Option<u32>,
+    /// How the data is stored ([`RawStorage`]).
+    storage: RawStorage,
 }
 
 /// What the raw data of the file whose IFDs are `tree` records
@@ -1027,7 +1069,8 @@ struct RawData {
 /// pixels gives the raw size, the first on a tie. The Coolpix E5700 writes
 /// a 656 by 484 raw image before its 2576 by 1924 one, both full-resolution
 /// (sample 4456). The crop is then that IFD's [`default_crop`], `None` when
-/// it has none, and the bit depth its BitsPerSample.
+/// it has none, the bit depth its BitsPerSample and the storage its
+/// Compression and byte counts ([`raw_storage`]).
 ///
 /// # Errors
 ///
@@ -1058,7 +1101,19 @@ fn raw_data<R: Read + Seek>(src: &mut Source<R>, tree: &Tree) -> Result<Option<R
         bit_depth: ifd
             .held(rules::BITS_PER_SAMPLE)
             .and_then(|[bits]| (bits > 0).then_some(bits)),
+        storage: raw_storage(ifd),
     }))
+}
+
+/// How the raw data `ifd` describes is stored ([`RawStorage`]): its
+/// Compression, and the byte count of its one strip. Both are held in
+/// their entries, so nothing more is read from the file: the counts of an
+/// uncompressed raw stored a row to a strip lie far into the file.
+fn raw_storage(ifd: &Ifd) -> RawStorage {
+    RawStorage {
+        compression: ifd.held(rules::COMPRESSION).map(|[code]| code),
+        strip_bytes: ifd.held(rules::STRIP_BYTE_COUNTS).map(|[bytes]| bytes),
+    }
 }
 
 /// The size of the raw data `ifd` describes: its ImageWidth and
@@ -4541,6 +4596,124 @@ mod tests {
                 "{first:?} then {second:?}"
             );
         }
+    }
+
+    /// What [`read`] gives of a file whose IFD0 holds raw data of size
+    /// [`RAW`] and what `tags` adds; the raw size must be read.
+    fn raw_standard(tags: impl FnOnce(&mut TiffBuilder, IfdId)) -> Standard {
+        let standard = standard_of(|builder, ifd| {
+            raw_tags(builder, ifd, RAW.width, RAW.height);
+            tags(builder, ifd);
+        });
+        assert_eq!(standard.metadata.raw_size, Some(RAW));
+        standard
+    }
+
+    #[test]
+    fn an_uncompressed_raw_is_uncompressed_whatever_the_maker() {
+        // TIFF's 1 gives the compression; a maker's own code is left to its
+        // MakerNote's reader, which gets it in the storage.
+        for (code, expected) in [
+            (1, Some(RawCompression::Uncompressed)),
+            (7, None),
+            (34713, None),
+            (32767, None),
+            (6, None),
+        ] {
+            let standard = raw_standard(|builder, ifd| {
+                builder.short(ifd, COMPRESSION, &[code]);
+            });
+            assert_eq!(
+                standard.metadata.camera_settings.raw_compression, expected,
+                "{code}"
+            );
+            assert_eq!(
+                standard.raw_storage.compression,
+                Some(u32::from(code)),
+                "{code}"
+            );
+        }
+        // A Compression of another type or count is none.
+        type Compression = fn(&mut TiffBuilder, IfdId);
+        let cases: [(&str, Compression); 3] = [
+            ("a LONG", |builder, ifd| {
+                builder.long(ifd, COMPRESSION, &[1]);
+            }),
+            ("two values", |builder, ifd| {
+                builder.short(ifd, COMPRESSION, &[1, 1]);
+            }),
+            ("none", |_, _| {}),
+        ];
+        for (case, compression) in cases {
+            let standard = raw_standard(compression);
+            assert_eq!(
+                standard.metadata.camera_settings.raw_compression, None,
+                "{case}"
+            );
+            assert_eq!(standard.raw_storage.compression, None, "{case}");
+        }
+    }
+
+    #[test]
+    fn the_raw_storage_holds_the_byte_count_of_one_strip_alone() {
+        type Counts = fn(&mut TiffBuilder, IfdId);
+        let cases: [(&str, Counts, Option<u32>); 6] = [
+            (
+                "one strip, a LONG",
+                |builder, ifd| {
+                    builder.long(ifd, STRIP_BYTE_COUNTS, &[24_000_000]);
+                },
+                Some(24_000_000),
+            ),
+            (
+                "one strip, a SHORT",
+                |builder, ifd| {
+                    builder.short(ifd, STRIP_BYTE_COUNTS, &[60_000]);
+                },
+                Some(60_000),
+            ),
+            (
+                "two strips",
+                |builder, ifd| {
+                    builder.short(ifd, STRIP_BYTE_COUNTS, &[60_000, 5]);
+                },
+                None,
+            ),
+            (
+                "tiles",
+                |builder, ifd| {
+                    builder.long(ifd, TILE_BYTE_COUNTS, &[7]);
+                },
+                None,
+            ),
+            (
+                "a RATIONAL",
+                |builder, ifd| {
+                    builder.rational(ifd, STRIP_BYTE_COUNTS, &[(9, 1)]);
+                },
+                None,
+            ),
+            ("none", |_, _| {}, None),
+        ];
+        for (case, counts, expected) in cases {
+            let standard = raw_standard(counts);
+            assert_eq!(standard.raw_storage.strip_bytes, expected, "{case}");
+        }
+    }
+
+    #[test]
+    fn a_file_without_raw_data_has_no_raw_storage() {
+        // A preview's IFD, with a Compression and a strip of its own.
+        let standard = standard_of(|builder, ifd| {
+            builder
+                .long(ifd, NEW_SUBFILE_TYPE, &[1])
+                .short(ifd, COMPRESSION, &[1])
+                .long(ifd, STRIP_BYTE_COUNTS, &[640 * 480 * 3])
+                .long(ifd, IMAGE_WIDTH, &[640])
+                .long(ifd, IMAGE_LENGTH, &[480]);
+        });
+        assert_eq!(standard.raw_storage, RawStorage::default());
+        assert_eq!(standard.metadata.camera_settings.raw_compression, None);
     }
 
     #[test]

@@ -172,6 +172,14 @@ const CROP_AREA: u16 = 0x0045;
 /// SHORT, 0 when none was recorded.
 const COLOR_TEMPERATURE: u16 = 0x004F;
 
+/// The Nikon MakerNote tag the Z bodies but the Z fc and the Z 30 write in
+/// place of NEFCompression, which ExifTool's documentation calls
+/// FirmwareVersion51: an UNDEFINED value of 24 bytes that starts with eight
+/// ASCII digits. Its bytes 10 and 11 hold NEFCompression's code, as a
+/// 16-bit number in the MakerNote's byte order; what the rest records is
+/// not known.
+const COMPRESSION_RECORD: u16 = 0x0051;
+
 /// The Nikon MakerNote tag that records the lens's range (Lens): its
 /// shortest and longest focal length and the f-number at each, as four
 /// RATIONALs in the order of the Exif LensSpecification.
@@ -192,6 +200,12 @@ const AF_INFO: u16 = 0x0088;
 /// exposure delay mode and a release from a computer, bit 9, which no
 /// documentation names, and bit 11, pre-capture, are not read.
 const SHOOTING_MODE: u16 = 0x0089;
+
+/// The Nikon MakerNote tag that records how the raw data is compressed
+/// (NEFCompression): one SHORT, a code of Nikon's own. The bodies before
+/// the Z bodies write it, and the Z fc and the Z 30; the other Z bodies
+/// write the same code in [`COMPRESSION_RECORD`].
+const NEF_COMPRESSION: u16 = 0x0093;
 
 /// The Nikon MakerNote tag that records where the camera's autofocus
 /// aimed (AFInfo2): an UNDEFINED value that starts with its version, four
@@ -258,6 +272,9 @@ mod rules {
     pub(super) const SHOOTING_MODE: Held<[u32; 1]> = Held::new(super::SHOOTING_MODE, SHORT);
     pub(super) const AF_TUNE: Held<[u8; 4]> = Held::new(super::AF_TUNE, &[FieldType::Undefined]);
     pub(super) const AF_INFO2: Rule<Vec<u8>> = Rule::new(super::AF_INFO2, &[FieldType::Undefined]);
+    pub(super) const NEF_COMPRESSION: Held<[u32; 1]> = Held::new(super::NEF_COMPRESSION, SHORT);
+    pub(super) const COMPRESSION_RECORD: Rule<Vec<u8>> =
+        Rule::new(super::COMPRESSION_RECORD, &[FieldType::Undefined]);
 
     // The PreviewIFD.
     pub(super) const JPEG_INTERCHANGE_FORMAT: Held<[u32; 1]> =
@@ -296,13 +313,13 @@ mod rules {
 ///   firmware as their software, so the zone of the camera's clock is the
 ///   zone of that time too (`docs/formats/jpeg/container-and-metadata.md`,
 ///   section 4).
-/// - **The camera settings** that only the MakerNote records, and its
-///   white balance setting, finer than Exif's, in place of the mode the
-///   Exif tags gave when it names one ([`camera_settings`]). The color space is read only
-///   when the Exif IFD holds no ColorSpace, and the raw image size only for
-///   a raw file's picture. The AF-area mode is AFInfo2's, whatever the
-///   focus mode and whether or not the record gives a point, and on a
-///   body without AFInfo2 AFInfo's.
+/// - **The camera settings** that only the MakerNote records, and its white
+///   balance setting, finer than Exif's, in place of the mode the Exif tags
+///   gave when it names one ([`camera_settings`]). The color space is read
+///   only when the Exif IFD holds no ColorSpace, and the raw image size and
+///   the raw compression only for a raw file's picture. The AF-area mode is
+///   AFInfo2's, whatever the focus mode and whether or not the record gives
+///   a point, and on a body without AFInfo2 AFInfo's.
 /// - **The focus points**, from AFInfo2, always read, since the standard
 ///   tags never give one ([`focus`]); a shot whose focus mode, read with
 ///   the settings, is manual gives none. A recorded position is
@@ -336,6 +353,7 @@ fn metadata<R: Read + Seek>(
         mut metadata,
         from_default_crop,
         exif_records_color_space,
+        raw_storage,
     } = standard;
     // None of the rules below is the short-header layout's.
     let Some(ifd) = makernote.tagged() else {
@@ -376,6 +394,7 @@ fn metadata<R: Read + Seek>(
         settings: metadata.camera_settings,
         model: metadata.camera.recorded_model.as_deref(),
         exif_records_color_space,
+        raw_compression: raw_storage.compression,
     };
     metadata.camera_settings = camera_settings(
         src,

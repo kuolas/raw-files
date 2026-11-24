@@ -7,8 +7,9 @@
 //! metering mode, the flash, the shutter, the image area, the raw image
 //! size, the color space, the focus mode, the AF-area mode, AF fine-tune,
 //! the stabilization, auto ISO, the exposure fine-tuning, the release
-//! mode, bracketing, whether the clock was on daylight saving time and
-//! the raw data's bit depth. [`CameraSettings`] holds them all, and
+//! mode, bracketing, whether the clock was on daylight saving time, and
+//! the raw data's bit depth and compression. [`CameraSettings`] holds them
+//! all, and
 //! [`Metadata::camera_settings`](crate::Metadata::camera_settings) gives
 //! them for a file. [`WhiteBalance`], [`FineTune`], [`Flash`],
 //! [`AfFineTune`] and [`Stabilization`] hold the settings made of several
@@ -23,32 +24,36 @@
 //! NEF, ARW and JPEG files give the settings that their standard Exif tags
 //! record: the exposure program, the metering mode, the flash, the white
 //! balance mode, the color space and exposure bracketing. Raw files give
-//! the bit depth from the standard tags of their raw data. The others are
-//! recorded only in a
-//! maker's own tags, its MakerNote. Nikon's, in NEF files and in the JPEGs
-//! of Nikon cameras, gives the white balance's color temperature and
-//! fine-tuning, the shutter, the image area, the focus mode, the AF-area
-//! mode, AF fine-tune, the stabilization, auto ISO, the exposure
-//! fine-tuning, the release mode and bracketing, daylight saving time, the
-//! flash's source, control, sync and compensation and,
-//! in a raw file, the raw image size; the white balance setting,
-//! finer than Exif's,
-//! in place of Exif's; and the color space where the Exif tags record
-//! none, as in every Nikon raw file checked. Sony's, in ARW files and
-//! their family and in the JPEGs of Sony cameras, gives the white
-//! balance's fine-tuning, the electronic front curtain setting, which only
-//! Sony records, the color temperature of a chosen color temperature or a
-//! custom white balance, the focus mode, the AF-area mode, the
-//! stabilization, without a mode, the exposure fine-tuning, the release
-//! mode and bracketing, the flash's source when it is external and its
-//! compensation; and the white balance
-//! setting in place of Exif's. On Sony files the shutter,
-//! the image area, the raw image size, AF fine-tune, auto ISO and daylight
-//! saving time are `None`: Sony records the first two only in enciphered
-//! blocks, which raw-files does not read, gives an APS-C raw the raw size
-//! code of a medium one, keeps its AF micro adjustment and ISO setting in
-//! enciphered or unread blocks, and records no daylight saving time in a
-//! plain tag.
+//! the raw data's bit depth from its own standard tags, and its
+//! compression where those tags say it is uncompressed. The others are
+//! recorded only in a maker's own tags, its MakerNote, or in a maker's own
+//! codes:
+//!
+//! - Nikon's MakerNote, in NEF files and in the JPEGs of Nikon cameras,
+//!   gives the white balance setting, finer than Exif's, in place of
+//!   Exif's, with its color temperature and fine-tuning; the shutter, the
+//!   image area, the focus mode, the AF-area mode, AF fine-tune, the
+//!   stabilization, auto ISO, the exposure fine-tuning, the release mode
+//!   and bracketing, daylight saving time, and the flash's source,
+//!   control, sync and compensation; the color space where the Exif tags
+//!   record none, as in every Nikon raw file checked; and, in a raw file,
+//!   the raw image size and how a compressed raw is compressed.
+//! - Sony's MakerNote, in ARW files and their family and in the JPEGs of
+//!   Sony cameras, gives the white balance setting in place of Exif's,
+//!   with its fine-tuning and the color temperature of a chosen color
+//!   temperature or a custom white balance; the electronic front curtain
+//!   setting, which only Sony records; the focus mode, the AF-area mode,
+//!   the stabilization, without a mode, the exposure fine-tuning, the
+//!   release mode and bracketing, and the flash's source when it is
+//!   external and its compensation. A Sony raw file says how a compressed
+//!   raw is compressed in codes of Sony's own.
+//!
+//! On Sony files the shutter, the image area, the raw image size, AF
+//! fine-tune, auto ISO and daylight saving time are `None`: Sony records
+//! the first two only in enciphered blocks, which raw-files does not read,
+//! gives an APS-C raw the raw size code of a medium one, keeps its AF
+//! micro adjustment and ISO setting in enciphered or unread blocks, and
+//! records no daylight saving time in a plain tag.
 //!
 //! A program that uses raw-files can build these values for its own
 //! tests, without a camera file: [`CameraSettings`] and [`WhiteBalance`]
@@ -64,8 +69,8 @@ use crate::rational::SignedRational;
 /// program, metering mode, flash, shutter, image area, raw image size,
 /// color space, focus mode, AF-area mode, AF fine-tune, stabilization, auto
 /// ISO, exposure fine-tuning, release mode, bracketing, daylight saving
-/// time and raw bit depth, for a viewer's information panel beside the
-/// exposure.
+/// time, and raw bit depth and compression, for a viewer's information
+/// panel beside the exposure.
 ///
 /// Every value is `None` when the file does not record it or records it in
 /// a way that cannot be read, such as a code that no variant names. A
@@ -73,12 +78,14 @@ use crate::rational::SignedRational;
 /// [`Metadata::camera_settings`](crate::Metadata::camera_settings) gives
 /// the values a file's standard Exif tags record: the exposure program,
 /// the metering mode, the flash, the white balance mode, the color space
-/// and exposure bracketing, and the raw bit depth that the standard tags of
-/// a raw file's raw data record. The others, which only a maker's MakerNote
-/// records, it gives from Nikon's MakerNote and Sony's, each those its
-/// MakerNote records in plain tags; the shutter, the image area, the raw
-/// image size, AF fine-tune, auto ISO and daylight saving time are `None`
-/// for every Sony file. Each getter says where its value comes from.
+/// and exposure bracketing, and the raw bit depth and an uncompressed raw's
+/// compression that the standard tags of a raw file's raw data record. The
+/// others, which only a maker's MakerNote or its own codes record, it gives
+/// from Nikon's MakerNote and Sony's, each those its MakerNote records in
+/// plain tags, and from each maker's compression codes; the shutter, the
+/// image area, the raw image size, AF fine-tune, auto ISO and daylight
+/// saving time are `None` for every Sony file. Each getter says where its
+/// value comes from.
 ///
 /// `CameraSettings::default()` is the empty record, with every value
 /// `None` and an empty [`WhiteBalance`]. A caller's tests start from it and
@@ -164,6 +171,7 @@ pub struct CameraSettings {
     pub(crate) bracketing: Option<Bracketing>,
     pub(crate) daylight_saving_time: Option<bool>,
     pub(crate) raw_bit_depth: Option<u32>,
+    pub(crate) raw_compression: Option<RawCompression>,
 }
 
 impl CameraSettings {
@@ -722,6 +730,57 @@ impl CameraSettings {
         self.raw_bit_depth
     }
 
+    /// How the raw data is compressed, such as
+    /// [`Lossless`](RawCompression::Lossless); [`RawCompression`] says
+    /// which of a maker's codes gives each.
+    ///
+    /// Read from the Compression of the raw data, in the IFD that gives
+    /// [`Metadata::raw_size`](crate::Metadata::raw_size), one SHORT:
+    ///
+    /// - 1, uncompressed by TIFF 6.0, whatever the maker;
+    /// - on a Nikon file, 34713, Nikon's compressed form, refined by its
+    ///   MakerNote's NEFCompression or, on the Z bodies that record none,
+    ///   by the code at byte 10 of its tag 0x0051;
+    /// - on a Sony file, 7, lossless; 32767, lossy where the data is one
+    ///   strip of one byte a pixel, Sony's compressed raw; and 32766, lossy,
+    ///   the ILCE-7M5's compressed raws.
+    ///
+    /// `None` when:
+    ///
+    /// - the file is a JPEG, which holds no raw data;
+    /// - Nikon's code is 8, which names a small raw, a size and not a
+    ///   compression, or one the documentation does not give, or Nikon's
+    ///   34713 comes without a code to refine it;
+    /// - Sony's 32767 holds one of its two other layouts, the 12-bit
+    ///   packed data of the DSLR-A850 and A900 and the stream of the
+    ///   DSLR-A200 to A390;
+    /// - the Compression is another code, or another type or count, or the
+    ///   maker's MakerNote cannot be read.
+    ///
+    /// What each maker's files record is in the notes on
+    /// [Nikon's capture settings](https://github.com/kuolas/raw-files/blob/master/docs/formats/nef/makernote-and-metadata.md#810-more-capture-settings)
+    /// and
+    /// [Sony's](https://github.com/kuolas/raw-files/blob/master/docs/formats/arw/makernote-and-metadata.md#910-more-capture-settings).
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use raw_files::{CameraFile, RawCompression};
+    ///
+    /// # fn main() -> raw_files::Result<()> {
+    /// let file = CameraFile::open("photo.nef")?;
+    /// match file.metadata().camera_settings().raw_compression() {
+    ///     Some(RawCompression::Uncompressed) => println!("uncompressed raw"),
+    ///     Some(compression) => println!("raw: {compression}"),
+    ///     None => println!("no raw compression recorded"),
+    /// }
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn raw_compression(&self) -> Option<RawCompression> {
+        self.raw_compression
+    }
+
     /// Sets the white balance, in place of the one it had;
     /// [`white_balance`](Self::white_balance) reads it.
     #[must_use]
@@ -874,6 +933,14 @@ impl CameraSettings {
     #[must_use]
     pub fn with_raw_bit_depth(mut self, bits: u32) -> Self {
         self.raw_bit_depth = Some(bits);
+        self
+    }
+
+    /// Sets the raw compression, in place of any set before;
+    /// [`raw_compression`](Self::raw_compression) reads it.
+    #[must_use]
+    pub fn with_raw_compression(mut self, compression: RawCompression) -> Self {
+        self.raw_compression = Some(compression);
         self
     }
 }
@@ -2467,6 +2534,79 @@ impl fmt::Display for Bracketing {
     }
 }
 
+/// How the raw data is compressed, in words that fit any maker, each
+/// maker's finer kinds folded in:
+///
+/// - stored as it is, TIFF's code 1 and Nikon's uncompressed raws, those
+///   reduced to 12 bits and those packed into 12 or 14 bits:
+///   [`Uncompressed`](Self::Uncompressed);
+/// - compressed with no loss, Nikon's and Sony's lossless compressed raws:
+///   [`Lossless`](Self::Lossless);
+/// - compressed with a loss, Nikon's two lossy compressed forms, Sony's
+///   compressed raw and the ILCE-7M5's compressed and compressed HQ raws:
+///   [`Lossy`](Self::Lossy);
+/// - Nikon's High Efficiency raws: [`HighEfficiency`](Self::HighEfficiency),
+///   the smaller files of the two, and
+///   [`HighEfficiencyStar`](Self::HighEfficiencyStar), marked with a star,
+///   the higher quality.
+///
+/// A maker's code is named where it is in a list that its published
+/// documentation gives and that the measured files agree with, as the
+/// [decision to read the metadata from the standard tags](https://github.com/kuolas/raw-files/blob/master/docs/architecture-decisions/adr011-metadata-from-standard-tags.md)
+/// says; any other code gives `None`.
+///
+/// `RawCompression` is `#[non_exhaustive]`, so match on it with a wildcard
+/// arm. It orders as its variants are listed, and a new variant is added
+/// after the existing ones, so an order once observed holds. Its
+/// [`name`](Self::name)s, which `Display` writes too, are "Uncompressed",
+/// "Lossless compressed", "Lossy compressed", "High efficiency" and "High
+/// efficiency*".
+///
+/// # Examples
+///
+/// ```
+/// use raw_files::RawCompression;
+///
+/// assert_eq!(RawCompression::Lossless.name(), "Lossless compressed");
+/// assert_eq!(RawCompression::HighEfficiencyStar.to_string(), "High efficiency*");
+/// ```
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[non_exhaustive]
+pub enum RawCompression {
+    /// The raw data is stored without compression, though it may be packed.
+    Uncompressed,
+    /// The raw data is compressed without loss.
+    Lossless,
+    /// The raw data is compressed with a loss.
+    Lossy,
+    /// Nikon's High Efficiency compression, the smaller files of its two.
+    HighEfficiency,
+    /// Nikon's High Efficiency compression marked with a star, the higher
+    /// quality of its two.
+    HighEfficiencyStar,
+}
+
+impl RawCompression {
+    /// The compression's name, for an information panel, such as
+    /// "Lossless compressed"; the type's docs list them all.
+    pub fn name(self) -> &'static str {
+        match self {
+            RawCompression::Uncompressed => "Uncompressed",
+            RawCompression::Lossless => "Lossless compressed",
+            RawCompression::Lossy => "Lossy compressed",
+            RawCompression::HighEfficiency => "High efficiency",
+            RawCompression::HighEfficiencyStar => "High efficiency*",
+        }
+    }
+}
+
+impl fmt::Display for RawCompression {
+    /// Writes [`name`](RawCompression::name).
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.name())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -2527,6 +2667,7 @@ mod tests {
             bracketing: Some(Bracketing::Exposure),
             daylight_saving_time: Some(true),
             raw_bit_depth: Some(14),
+            raw_compression: Some(RawCompression::Lossless),
         }
     }
 
@@ -2552,6 +2693,7 @@ mod tests {
         assert_eq!(settings.bracketing(), None);
         assert_eq!(settings.daylight_saving_time(), None);
         assert_eq!(settings.raw_bit_depth(), None);
+        assert_eq!(settings.raw_compression(), None);
 
         let white_balance = WhiteBalance::default();
         assert_eq!(white_balance.mode(), None);
@@ -2618,6 +2760,7 @@ mod tests {
         assert_eq!(settings.bracketing(), Some(Bracketing::Exposure));
         assert_eq!(settings.daylight_saving_time(), Some(true));
         assert_eq!(settings.raw_bit_depth(), Some(14));
+        assert_eq!(settings.raw_compression(), Some(RawCompression::Lossless));
 
         let white_balance = nikon_white_balance();
         assert_eq!(white_balance.mode(), Some(WhiteBalanceMode::Auto));
@@ -2790,6 +2933,15 @@ mod tests {
                         ..start.clone()
                     },
                 ),
+                (
+                    start
+                        .clone()
+                        .with_raw_compression(RawCompression::HighEfficiency),
+                    CameraSettings {
+                        raw_compression: Some(RawCompression::HighEfficiency),
+                        ..start.clone()
+                    },
+                ),
             ];
             for (place, (built, expected)) in cases.into_iter().enumerate() {
                 assert_eq!(built, expected, "builder {place} from {start:?}");
@@ -2871,7 +3023,8 @@ mod tests {
             .with_release_mode(ReleaseMode::Continuous)
             .with_bracketing(Bracketing::Exposure)
             .with_daylight_saving_time(true)
-            .with_raw_bit_depth(14);
+            .with_raw_bit_depth(14)
+            .with_raw_compression(RawCompression::Lossless);
         assert_eq!(settings, full_settings());
     }
 
@@ -2896,7 +3049,8 @@ mod tests {
             .with_release_mode(ReleaseMode::SelfTimer)
             .with_bracketing(Bracketing::DynamicRange)
             .with_daylight_saving_time(false)
-            .with_raw_bit_depth(12);
+            .with_raw_bit_depth(12)
+            .with_raw_compression(RawCompression::Lossy);
         // Every value of `earlier` differs from the full record's, so each
         // builder below has one to replace.
         let full = full_settings();
@@ -2919,7 +3073,8 @@ mod tests {
             .with_release_mode(ReleaseMode::Continuous)
             .with_bracketing(Bracketing::Exposure)
             .with_daylight_saving_time(true)
-            .with_raw_bit_depth(14);
+            .with_raw_bit_depth(14)
+            .with_raw_compression(RawCompression::Lossless);
         assert_eq!(settings, full);
 
         let white_balance = WhiteBalance::default()
@@ -3337,6 +3492,23 @@ mod tests {
         all
     }
 
+    fn all_raw_compressions() -> [RawCompression; 5] {
+        use RawCompression::*;
+        let all = [
+            Uncompressed,
+            Lossless,
+            Lossy,
+            HighEfficiency,
+            HighEfficiencyStar,
+        ];
+        for compression in all {
+            match compression {
+                Uncompressed | Lossless | Lossy | HighEfficiency | HighEfficiencyStar => {}
+            }
+        }
+        all
+    }
+
     #[test]
     fn every_name_is_the_one_documented_and_display_writes_it() {
         // The names are stable once released: a program may show or store
@@ -3478,6 +3650,17 @@ mod tests {
             Bracketing::name,
             &["Off", "Exposure", "White balance", "Dynamic range"],
         );
+        assert_names(
+            &all_raw_compressions(),
+            RawCompression::name,
+            &[
+                "Uncompressed",
+                "Lossless compressed",
+                "Lossy compressed",
+                "High efficiency",
+                "High efficiency*",
+            ],
+        );
     }
 
     #[test]
@@ -3500,6 +3683,7 @@ mod tests {
         assert_ordered(&all_stabilization_modes());
         assert_ordered(&all_release_modes());
         assert_ordered(&all_bracketings());
+        assert_ordered(&all_raw_compressions());
     }
 
     #[test]

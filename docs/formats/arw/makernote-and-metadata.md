@@ -1571,9 +1571,8 @@ More of how the photographer set the camera:
 
 raw-files reads each from a plain MakerNote tag or a standard tag, as
 [ADR011](../../architecture-decisions/adr011-metadata-from-standard-tags.md)
-decides, in the order it gives: the first four lines and the raw bit
-depth now, the raw compression, the JPEG quality and the kind of
-fluorescent lamp still to come.
+decides, in the order it gives: the first five lines now, the JPEG
+quality and the kind of fluorescent lamp still to come.
 Nothing needs deciphering.
 
 **How it was measured.** On 2026-11-20 a counting program written from
@@ -1814,11 +1813,10 @@ recorded, beside Exif's Flash bits ([section 9.7](#97-camera-settings)):
   denominator, which no file holds.
 - It is `0/10` on every one of my ILCE-7M2 files.
 
-**Raw compression and bit depth.** raw-files reads the bit depth from the
-raw IFD's BitsPerSample, and will read the compression from its
-Compression ([section 7](#7-raw-relevant-tags)). 0x2029 RAWFileType
-repeats Compression on all 139 files that have both, and will not be
-read **[F]**:
+**Raw compression and bit depth.** raw-files reads both from the raw
+IFD ([section 7](#7-raw-relevant-tags)): Compression and
+BitsPerSample. 0x2029 RAWFileType repeats Compression on all 139 files
+that have both, and is not read **[F]**:
 
 | Compression | 0x2029 | `RawCompression` | Public files | Mark |
 |---|---|---|---|---|
@@ -1833,13 +1831,13 @@ read **[F]**:
 - The 12-bit packed data of the DSLR-A850 and A900 (356, 5858) is not
   compressed. The ARW1 stream of eight A-mount DSLRs, from the A200
   to the A390, is not described here.
-- So raw-files will give `Lossy` for 32767 only where the strip holds
-  one byte per pixel, and `None` for the other two layouts.
+- So raw-files gives `Lossy` for 32767 only where the strip holds one
+  byte per pixel, and `None` for the other two layouts.
 - 32766 is the ILCE-7M5's "compressed" and "compressed HQ", which
   0x202E tells apart (4 and 5). The body writes lossless data under 7,
   so these two are lossy [I].
 - A camera JPEG of a RAW + JPEG pair also carries 0x2029; it holds no
-  raw, so it will give no raw compression.
+  raw, so it gives no raw compression.
 - **Bit depth.** BitsPerSample is 14 on 99 files, 12 on 87 and 8 on the
   DSLR-A700 (2521). It is `15 15 15`, three values, on the 19 YCbCr
   medium and small raws, which give `None`.

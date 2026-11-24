@@ -16,8 +16,8 @@ use std::io::Cursor;
 use raw_files::{
     Bracketing, CameraFile, CameraSettings, ColorSpace, Directory, ErrorKind, Exposure,
     ExposureProgram, FlashMode, FocusAreaMode, FocusMode, FocusOrigin, Format, Lens, Limits, Make,
-    Metadata, MeteringMode, Options, Orientation, Point, PreviewFormat, ReleaseMode,
-    SignedRational, Size, WhiteBalanceMode,
+    Metadata, MeteringMode, Options, Orientation, Point, PreviewFormat, RawCompression,
+    ReleaseMode, SignedRational, Size, WhiteBalanceMode,
 };
 use support::arw::{
     A100_JPEG, A100_RAW_AS_COUNT, A100_TAG_SIZE, ARW4_FOCUS_CENTER, ARW4_FOCUS_FRAME,
@@ -340,12 +340,13 @@ fn the_arw4_file_gives_every_value_its_fixture_records() {
             assert_eq!(metadata.focus_layout(), None, "{label}");
             // The fixture writes no settings tag but FocusMode, 3, AF-C,
             // so the settings are the empty record with that focus mode and
-            // the raw IFD's 14 bits.
+            // the raw IFD's 14 bits, compressed losslessly, its Compression 7.
             assert_eq!(
                 metadata.camera_settings(),
                 &CameraSettings::default()
                     .with_focus_mode(FocusMode::Continuous)
-                    .with_raw_bit_depth(14),
+                    .with_raw_bit_depth(14)
+                    .with_raw_compression(RawCompression::Lossless),
                 "{label}"
             );
             for preview in file.previews() {
@@ -360,7 +361,9 @@ fn every_layout_gives_the_metadata_its_fixture_records() {
     let arw4_time = Some("2023-10-19T16:13:48.776+02:00");
     // Each layout's name, model, software, capture time, whether it
     // records an exposure, a lens and a focus point, its raw size and
-    // image size, and the raw bit depth its raw IFD records.
+    // image size, and the raw bit depth and compression its raw IFD
+    // records. The ARW 2 layout's Compression, 32767, is cRAW only when
+    // its data takes a byte a pixel, which the built strip does not.
     // The medium file's MakerNote is the lossless file's, so its focus
     // point is too, in the full-size frame.
     let expected = [
@@ -374,6 +377,7 @@ fn every_layout_gives_the_metadata_its_fixture_records() {
             Some(size(7168, 5120)),
             Some(size(7008, 4672)),
             Some(14),
+            Some(RawCompression::Lossless),
         ),
         (
             "ARW 4 medium",
@@ -384,6 +388,7 @@ fn every_layout_gives_the_metadata_its_fixture_records() {
             Some(size(5120, 3584)),
             Some(size(4608, 3072)),
             None,
+            Some(RawCompression::Lossless),
         ),
         (
             "ARW 2",
@@ -394,6 +399,7 @@ fn every_layout_gives_the_metadata_its_fixture_records() {
             Some(size(6024, 4024)),
             Some(size(6024, 4024)),
             Some(12),
+            None,
         ),
         (
             "ARQ",
@@ -404,6 +410,7 @@ fn every_layout_gives_the_metadata_its_fixture_records() {
             Some(size(8000, 5320)),
             Some(size(8000, 5320)),
             None,
+            Some(RawCompression::Uncompressed),
         ),
         (
             "SR2",
@@ -414,6 +421,7 @@ fn every_layout_gives_the_metadata_its_fixture_records() {
             Some(size(3984, 2608)),
             Some(size(3984, 2608)),
             Some(14),
+            Some(RawCompression::Uncompressed),
         ),
         // IFD0 is the raw data, by its 14-bit samples.
         (
@@ -425,6 +433,7 @@ fn every_layout_gives_the_metadata_its_fixture_records() {
             Some(size(3360, 2460)),
             Some(size(3360, 2460)),
             None,
+            Some(RawCompression::Uncompressed),
         ),
         // Its Make is `SONY` and eleven spaces, which are padding. Its
         // SubIFD pointer leads to no IFD, and its IFDs are previews, so no
@@ -435,6 +444,7 @@ fn every_layout_gives_the_metadata_its_fixture_records() {
             Some("DSLR-A100 v1.04"),
             None,
             false,
+            None,
             None,
             None,
             None,
@@ -454,6 +464,7 @@ fn every_layout_gives_the_metadata_its_fixture_records() {
                 raw_size,
                 image_size,
                 raw_bit_depth,
+                raw_compression,
             ),
         ) in layouts.into_iter().zip(expected)
         {
@@ -488,13 +499,17 @@ fn every_layout_gives_the_metadata_its_fixture_records() {
             assert_eq!(metadata.focus_layout(), None, "{label}");
             // No layout writes a settings tag but the ARW 4 MakerNote's
             // FocusMode, 3, AF-C, on the layouts that carry it, beside the
-            // raw IFD's BitsPerSample.
+            // raw IFD's BitsPerSample and Compression.
             let settings = match has_exposure_lens_and_focus {
                 true => CameraSettings::default().with_focus_mode(FocusMode::Continuous),
                 false => CameraSettings::default(),
             };
             let settings = match raw_bit_depth {
                 Some(bits) => settings.with_raw_bit_depth(bits),
+                None => settings,
+            };
+            let settings = match raw_compression {
+                Some(compression) => settings.with_raw_compression(compression),
                 None => settings,
             };
             assert_eq!(metadata.camera_settings(), &settings, "{label}");
