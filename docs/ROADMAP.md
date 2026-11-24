@@ -68,15 +68,6 @@ Under way, and next: **full metadata**, every metadata value a file
 records. A program then needs no second reader beside raw-files. It
 comes before raw sensor data
 ([ADR016](architecture-decisions/adr016-full-metadata-before-raw-data.md)).
-Full metadata covers:
-
-- more capture settings;
-- how the camera processed its JPEG;
-- the lens by name;
-- the XMP and IPTC fields;
-- what editing software, such as Nikon's, writes into the file;
-- what a maker records only in enciphered or encrypted blocks. Reading
-  these needs a decision of its own first.
 
 raw-files gives these steps of it:
 
@@ -92,6 +83,9 @@ raw-files gives these steps of it:
    texts `Authorship` lists, and the camera owner's name.
 3. **Where it was taken**, from `Metadata::location`, with the parts
    `Location` lists.
+4. **More of how the camera was set**, from `Metadata::camera_settings`,
+   with the settings `CameraSettings` lists, and
+   `Metadata::digitized_time`.
 
 Steps 2 and 3 read the standard tags alone
 ([ADR011](architecture-decisions/adr011-metadata-from-standard-tags.md),
@@ -100,16 +94,19 @@ checked on the files the format notes count. A text no measured file
 records is checked on files built in the tests
 ([NEF notes, section 8.8](formats/nef/makernote-and-metadata.md#88-authorship)).
 
-The focus mode, the AF-area mode, AF fine-tune, the stabilization, auto
-ISO, the exposure fine-tuning, the release mode, bracketing, daylight
-saving time, the raw bit depth and compression, and the JPEG quality
-and compression are values of `CameraSettings`, the AF-area mode
-whether or not a file gives a focus point. The flash gives its red-eye
-reduction, return light, source, control, sync and compensation, and the
-white balance its preset slot and fluorescent lamp. Beside the capture
-time, `Metadata` gives the digitized time
+Step 4 adds these values
 ([ADR011](architecture-decisions/adr011-metadata-from-standard-tags.md),
-[#214](https://github.com/kuolas/raw-files/issues/214)).
+[#214](https://github.com/kuolas/raw-files/issues/214)):
+
+- on `CameraSettings`: the focus mode, the AF-area mode, AF fine-tune,
+  the stabilization, auto ISO, the exposure fine-tuning, the release
+  mode, bracketing, daylight saving time, the raw bit depth and
+  compression, and the JPEG quality and compression. The AF-area mode
+  is given whether or not a file gives a focus point;
+- on `Flash`: its red-eye reduction, return light, source, control,
+  sync and compensation;
+- on `WhiteBalance`: its preset slot and fluorescent lamp;
+- on `Metadata`: the digitized time, beside the capture time.
 
 A Nikon body that records no image area or raw size gets them from a
 table of bodies, for the bodies the table holds. Each fact in it comes
@@ -118,14 +115,20 @@ from the maker's published specification
 [the table](formats/camera-names.md)). The format notes say what each
 file records and where each code's meaning comes from
 ([NEF](formats/nef/makernote-and-metadata.md#810-more-capture-settings),
-[ARW](formats/arw/makernote-and-metadata.md#910-more-capture-settings)). A list of codes that
-published documentation gives is read whole once the files hold part
-of it, and the notes mark each code as confirmed by a frame, observed
-on files, or documented only.
+[ARW](formats/arw/makernote-and-metadata.md#910-more-capture-settings)).
+A list of codes that published documentation gives is read whole once
+the files hold part of it, and the notes mark each code as confirmed by
+a frame, observed on files, or documented only.
 
-The other groups of values follow, each read from the same
-directories. Enciphered and encrypted records are given only as their
-bytes until the decision on reading them.
+These groups of values follow, each read from the same directories:
+
+- how the camera processed its JPEG;
+- the lens by name;
+- the XMP and IPTC fields;
+- what editing software, such as Nikon's, writes into the file;
+- what a maker records only in enciphered or encrypted blocks. Reading
+  these needs a decision of its own first, and they are given only as
+  their bytes until then.
 
 ### Focus points
 
@@ -225,12 +228,14 @@ release's changes.
   [#107](https://github.com/kuolas/raw-files/issues/107),
   [#150](https://github.com/kuolas/raw-files/issues/150)).
 - **On master, not released**: what the CHANGELOG lists under
-  [Unreleased](../CHANGELOG.md#unreleased), the handle named
-  `CameraFile` and the layout of a body's points placed on the picture
-  among it.
-- **Next**: more of full metadata, group by group, beginning with more
-  capture settings ([#50](https://github.com/kuolas/raw-files/issues/50)).
-  The values only enciphered or encrypted blocks hold come last.
+  [Unreleased](../CHANGELOG.md#unreleased), among it the handle named
+  `CameraFile`, the layout of a body's points placed on the picture, and
+  more capture settings
+  ([#214](https://github.com/kuolas/raw-files/issues/214)).
+- **Next**: more of full metadata, group by group, beginning with how
+  the camera processed its JPEG
+  ([#50](https://github.com/kuolas/raw-files/issues/50)). The values
+  only enciphered or encrypted blocks hold come last.
 
 ## Open questions
 
