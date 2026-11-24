@@ -227,7 +227,13 @@ offset to data nothing reads or a tag no ARW holds. [S][1][2]
 | 0x0114 | CameraSettings | no | layout by count; aspect ratio, drive mode, a Sony-coded orientation | full metadata |
 | 0x0115 | WhiteBalance | no | u32; the white balance setting: 0 auto, 16 daylight, 48 shade, 112 custom and others; not on the F828, R1 and A100 [F] | metadata |
 | 0x2001 | PreviewImage | no | a JPEG-file feature; absent from every ARW, SR2 and ARQ sample [F] | none |
+| 0x2004 to 0x2006 | Contrast, Saturation, Sharpness | no | i32 each; the three values of the Creative Style or the Creative Look, in the camera's steps; [section 9.11](#911-picture-style-and-processing) [F] | full metadata |
+| 0x2008 | LongExposureNoiseReduction | no | u32, or i32 on eleven older bodies; the low half is the setting, 0 off and 1 on, and the high half whether the dark frame was taken; [section 9.11](#911-picture-style-and-processing) [F] | full metadata |
+| 0x2009 | HighISONoiseReduction | no | u16; 0 off, 1 low, 2 normal, 3 high, 256 auto; 0 in every raw file of my ILCE-7M2, whose JPEGs say 2; [section 9.11](#911-picture-style-and-processing) [F] | full metadata |
+| 0x200A | HDR | no | u32, read as two 16-bit numbers: the Auto HDR setting, then whether the HDR image was made; 0 on every file measured; [section 9.11](#911-picture-style-and-processing) [F] | full metadata |
+| 0x200B | MultiFrameNoiseReduction | no | u32; 0 off, 1 on; 0 on every file measured; [section 9.11](#911-picture-style-and-processing) [F] | full metadata |
 | 0x2010 | Tag2010 | yes | settings, a date string, aspect ratio; not written from the ILCE-7SM3 on [F] | full metadata |
+| 0x2011 to 0x2013 | VignettingCorrection, LateralChromaticAberration, DistortionCorrectionSetting | no | u32 each; the menu's three lens compensations: 0 off, 2 auto, 4294967295 "n/a" on fixed-lens bodies; [section 9.11](#911-picture-style-and-processing) [F] | full metadata |
 | 0x2014 | WBShiftAB_GM | no | i32[2]; the white balance fine-tuning, amber to blue then green to magenta, positive towards amber and towards magenta; [section 9.7](#97-camera-settings) [F] | metadata |
 | 0x201A | ElectronicFrontCurtainShutter | no | u32; the electronic front curtain setting, 0 off, 1 on; not the shutter used [F] | metadata |
 | 0x201B | FocusMode | no | 0 manual, 2 AF-S, 3 AF-C, 4 AF-A, 6 DMF, 7 AF-D; sections [9.6](#96-focus-point) and [9.10](#910-more-capture-settings) | focus points, metadata |
@@ -241,6 +247,7 @@ offset to data nothing reads or a tag no ARW holds. [S][1][2]
 | 0x202D | ExposureStandardAdjustment | no | SRATIONAL; the exposure fine-tuning in EV, in sixths; [section 9.10](#910-more-capture-settings) [F] | metadata |
 | 0x202E | Quality | no | u16[2]; first value 1 RAW, 2 S-size, 3 M-size, 4 compressed, 5 compressed HQ; APS-C files say 3 too, and the ILCE-7M5 gives the compression whatever the size; second value the JPEG's quality step, 0 without a JPEG [F] | metadata, raw data (hint) |
 | 0x202F | PixelShiftInfo | no | group ID and shot number; marks ARQ composites | full metadata |
+| 0x2032 to 0x2036 | Shadows, Highlights, Fade, SharpnessRange, Clarity | no | i32 each; the further values of a Creative Look, on the bodies from the ILCE-7SM3 on; where a file records them, its style is a Creative Look; [section 9.11](#911-picture-style-and-processing) [F] | full metadata |
 | 0x2037 | FocusFrameSize | no | 6 bytes: the focus area's width and height and a third value | focus points |
 | 0x2044 | HiddenInfo | no | offset and size of an unknown block | none |
 | 0x204A | FocusLocation2 | no | u16[4], as FocusLocation | focus points |
@@ -251,7 +258,10 @@ offset to data nothing reads or a tag no ARW holds. [S][1][2]
 | 0x9401 to 0x9406, 0x940C, 0x940E, 0x9416 | Tag94xx | yes | ISO, lens, focus and AF data, and in 0x9416 the APS-C mode flag; 0x9416 replaces 0x9405 from the ILCE-7SM3 on [F] | full metadata |
 | 0xB000 | FileFormat | no | u8[4] format version | metadata, full metadata, raw data |
 | 0xB001 | SonyModelID | no | u16 body identifier | metadata, full metadata, raw data |
+| 0xB020 | CreativeStyle | no | text; the name of the Creative Style or the Creative Look, such as `Standard` or `Vivid`; [section 9.11](#911-picture-style-and-processing) [F] | full metadata |
 | 0xB021 | ColorTemperature | no | u32; kelvin: the chosen temperature under the color-temperature setting (0x0115 code 1) and the custom white balance's own under custom (code 112); 0 under every other setting on every file checked [F] | metadata |
+| 0xB023 | SceneMode | no | u32; the scene or the auto mode: 0 under the program, priority and manual modes, 16 auto, and a code for each scene; [section 9.11](#911-picture-style-and-processing) [F] | full metadata |
+| 0xB025 | DynamicRangeOptimizer | no | u32; the D-Range Optimizer: 0 off, 3 auto, and codes for its levels; [section 9.11](#911-picture-style-and-processing) [F] | full metadata |
 | 0xB026 | ImageStabilization | no | u32; 0 off, 1 on; [section 9.10](#910-more-capture-settings) [F] | metadata |
 | 0xB027 | LensType | no | A-mount lens ID; 65535 for E-mount lenses | metadata (lens) |
 | 0xB028 | MinoltaMakerNote | no | A100 only: offset of a Minolta-format IFD; 0 means absent | full metadata |
@@ -675,7 +685,7 @@ column is as in [section 2](#2-key-tags).
 |---|---|---|---|---|
 | 0x7000 | SonyRawFileType | u16 | ExifTool: 0 uncompressed 14-bit, 1 uncompressed 12-bit, 2 compressed, 3 lossless, 4 lossless 2, 6 compressed 2. **The samples do not match** (below) | full metadata |
 | 0x7010 | SonyToneCurve | u16[4] | four knots of the cRAW decompression curve | raw data |
-| 0x7031 to 0x7037 | lens corrections | i16 | vignetting, chromatic aberration, distortion: mode and parameters | full metadata |
+| 0x7031 to 0x7037 | lens corrections | i16; the parameters i16[17], i16[33] and i16[17] | three codes, each followed by its parameters: 0x7031 vignetting (256 off, 257 auto, 272 auto on the later bodies, 511 no parameters), 0x7034 chromatic aberration (0 off, 1 auto, 255 no parameters), 0x7036 distortion (0 off, 1 auto, 17 auto fixed by the lens, 255 no parameters) [S][28]; on 171 public raw files of 71 bodies [F]; they say what a raw developer may apply, not the menu's settings, and wait with raw sensor data ([section 9.11](#911-picture-style-and-processing)) | raw data |
 | 0x7038 | SonyRawImageSize | u32[2] | width, height of the usable area of a tile-padded raw | metadata, raw data |
 | 0x7310 | BlackLevel | u16[4] | plain copy, ARW 2.3.3 and later | raw data |
 | 0x7313 | WB_RGGBLevels | i16[4] | plain copy, ARW 2.3.3 and later | full metadata, raw data |
@@ -1904,6 +1914,325 @@ another mode drops it.
   15 is `White`, Exif's word.
 - LightSource 16, warm white, is on no Sony file. Exif names it.
 
+### 9.11 Picture style and processing
+
+How the camera made its JPEG from the shot. raw-files will read, as
+camera settings
+([ADR011](../../architecture-decisions/adr011-metadata-from-standard-tags.md)):
+
+- the picture style, Sony's Creative Style or Creative Look, with its
+  contrast, saturation and sharpness;
+- the D-Range Optimizer and Auto HDR;
+- the high ISO, long exposure and multi-frame noise reductions;
+- the three lens compensations;
+- the scene;
+- Exif's six processing values.
+
+Each setting will keep Sony's own name and kinds. Where Nikon has a
+setting for the same thing, one value of the camera settings will hold
+either maker's
+([NEF notes](../nef/makernote-and-metadata.md#811-picture-style-and-processing)).
+Nothing needs deciphering.
+
+**How it was measured.** On 2026-11-24 a counting program written from
+these pages read each tag through raw-files' own raw view
+(`CameraFile::entries` and `CameraFile::read_value`) **[F]**. It read:
+
+- the 209 ARW-family files of raw.pixls.us, one of them a Hasselblad
+  Lunar;
+- as counts only, every file of my ILCE-7M2 that holds a MakerNote:
+  3,217 ARW files and 2,024 camera JPEGs.
+
+Counts read "public / mine". The three marks are those of
+[section 9.10](#910-more-capture-settings). So is the rule that names
+every code of a documented list once files hold part of it. The
+tag numbers and the meaning of each code come from ExifTool's published
+tag documentation [S][1][28], read as documentation. No reader's
+source was read, and ExifTool and exiv2 were not run. Each setting's
+name is Sony's own, from its manual and its Help Guide [P][33][34].
+No frame was shot in a known setting for this section, so no code is
+confirmed. Every value read lies inside what `open` already reads.
+**[F]**
+
+**The Creative Style.** Sony's picture style is a preset of image
+processing, whose contrast, saturation and sharpness the photographer
+may adjust [P][33] (p. 74). Four MakerNote tags record it [S][1]:
+
+| Tag | Type | Records | Public files |
+|---|---|---|---|
+| 0xB020 CreativeStyle | ASCII, 16 bytes with the NUL on all but two files | the style's name | 197 |
+| 0x2004 Contrast | one SLONG | the contrast | 202 |
+| 0x2005 Saturation | one SLONG | the saturation | 202 |
+| 0x2006 Sharpness | one SLONG | the sharpness | 202 |
+
+**[F]** All four are on every one of my files. raw-files will give a
+style when the file records any of the four, each part from its own
+tag. Of the public files, 195 hold all four, seven DSLRs hold the three
+numbers alone, and the DSC-R1 and the DSLR-A100 the name alone. Five
+hold none: the DSC-F828 and the DSLR-A200, A300, A350 and A700.
+
+**The Creative Look is another setting.** Sony's later bodies have a
+Creative Look in the Creative Style's place. It has eight values:
+contrast, highlights, shadows, fade, saturation, sharpness, sharpness
+range and clarity [P][34]. They write it in the same four tags, and
+the five further values in 0x2032 to 0x2036 [S][1]. **[F]**
+
+- **79 public files of 17 bodies hold 0x2032 to 0x2036**, every one
+  with all five and with all four of the style's tags. None of mine
+  does. The oldest of the 17 is the ILCE-7SM3.
+- **The sharpness has another scale.** It is 4 on 78 of the 79 files,
+  where Exif's Sharpness says normal. It is 3 on the ZV-1M2's file,
+  where Exif says soft. On the public files without the five tags it
+  is 0 wherever Exif says normal.
+- raw-files will read a file that records any of 0x2032 to 0x2036 as
+  a `CreativeLook`, and any other as a `CreativeStyle`. Each will give
+  its name, contrast, saturation and sharpness as recorded.
+- The five further tags will be read for their presence alone. Their
+  values will not be given
+  ([section 14.5](#145-what-the-view-leaves-out)).
+
+| Name in 0xB020 | Creative Style files, public / mine | Creative Look files, public |
+|---|---|---|
+| `Standard` | 97 / 1,664 | 56 |
+| `Vivid` | 4 / 3,573 | 11 |
+| `Neutral` | 12 / 0 | 9 |
+| `Portrait` | 2 / 0 | 1 |
+| `Clear` | 0 / 4 | 0 |
+| `BW` | 1 / 0 | 0 |
+| `Real`, on the DSC-R1 | 1 / 0 | 0 |
+| `None`, on the DSLR-A100 | 1 / 0 | 0 |
+| `Off`, on the ILME-FX3 and ILME-FX30 | 0 / 0 | 2 |
+
+**[F]** raw-files will give the name as recorded, cleaned as every
+text, `Off` and `None` included, and will keep no list of names. A
+Creative Look's name is written out: the bodies whose menu says VV
+write `Vivid`.
+
+| Value | Creative Style files, public | Mine | Creative Look files, public |
+|---|---|---|---|
+| Contrast | -3 to 1; 0 on 113 of 123 | 0 on 5,237, 2 on 4 | 0 on all 79 |
+| Saturation | -2 to 2; 0 on 117 of 123 | 0 on 5,217, 1 on 24 | 0 on 70, -3 on 9 |
+| Sharpness | -3 to 3; 0 on 107 of 123 | 0 on 5,237, 2 on 4 | 4 on 78, 3 on 1 |
+
+**[F]**
+
+- **Exif agrees on the direction.** 123 public Creative Style files
+  hold both. On every one, Exif's Contrast, Saturation and Sharpness
+  say normal at 0, soft or low below it, and hard or high above it. On
+  my files they agree too.
+- **The numbers are the camera's steps**, as recorded. The
+  documentation gives the three tags' names and types alone [S][1].
+  Sony's manual says the three can be adjusted, without a range
+  [P][33] (p. 74).
+- 0x2007 Brightness is 0 on all 189 public files that hold it and on
+  all of mine. It will not be read.
+- 0xB029 ColorMode repeats the name as a code on every file with both.
+  It will not be read.
+
+**The D-Range Optimizer.** The camera analyzes the picture's contrast
+area by area, and sets its brightness and gradation from it [P][33]
+(p. 75). 0xB025 DynamicRangeOptimizer is one LONG
+[S][1], on 207 public files of 107 bodies and on all of mine. Only the
+DSC-F828 and the DSC-R1 lack it. raw-files will read it as the
+`DRangeOptimizer` of a `DynamicRangeOptimization`:
+
+| Code | The documentation's name [S][1] | Mark | Files, public / mine |
+|---|---|---|---|
+| 0 | Off | observed | 50 / 499 |
+| 1 | Standard | observed | 5 / 0 |
+| 2 | Advanced Auto | observed | 1 / 0 |
+| 3 | Auto | observed | 149 / 4,742 |
+| 8 to 12 | Advanced Lv1 to Advanced Lv5 | documented only | 0 / 0 |
+| 16 | Lv1 | observed | 1 / 0 |
+| 17 to 19 | Lv2 to Lv4 | documented only | 0 / 0 |
+| 20 | Lv5 | observed | 1 / 0 |
+| 21 to 23 | Lv6 to Lv8 | documented only | 0 / 0 |
+
+**[F]** The standard and advanced codes are on A-mount DSLRs alone:
+the DSLR-A200, A300, A350, A700 and A900 hold 1, and the DSLR-A390
+holds 2. 0xB04F repeats the setting as off, standard or plus on 184
+public files, and will not be read. Sony's manual at hand names the
+setting and gives no list of levels [P][33] (p. 75).
+
+**Auto HDR.** The camera shoots three exposures and overlays them into
+one image [P][33] (p. 75). 0x200A HDR is one LONG, which the
+documentation reads as two 16-bit numbers [S][1]. It is on 184 public
+files of 84 bodies and on all of mine, and is 0 on every one. **[F]**
+raw-files will read the first number as the `AutoHdr` of a
+`HighDynamicRange`:
+
+| First number | The documentation's name [S][1] | Read as | Mark |
+|---|---|---|---|
+| 0 | Off | off | observed |
+| 1 | Auto | on, with no exposure difference: the camera chooses it | documented only |
+| 0x10 to 0x1A | 1.0 EV to 6.0 EV, in steps of half an EV | on, with that exposure difference | documented only |
+
+- The second number says whether the camera made the HDR image. It is
+  0 for "uncorrected image", 1 for "HDR image (good)", and 2 or 3 for
+  two kinds of failure [S][1]. It will not be read.
+- The first number is the value's first two bytes. Every measured file
+  that holds the tag is little-endian, so it is the LONG's low half
+  there. **[F]**
+- No file shows a value other than 0. Which half holds the setting
+  rests on the documentation alone.
+
+**High ISO noise reduction.** 0x2009 HighISONoiseReduction is one SHORT
+[S][1], on 203 public files of 103 bodies and on all of mine. raw-files
+will read it as a `HighIsoNoiseReduction`, the list of steps that
+Nikon's code shares:
+
+| Code | The documentation's name [S][1] | Mark | Raw files, public / mine | My JPEGs |
+|---|---|---|---|---|
+| 0 | Off | none in a raw file (below); documented only in a JPEG | 154 / 3,217 | 0 |
+| 1 | Low | documented only | 0 / 0 | 0 |
+| 2 | Normal | observed | 48 / 0 | 2,024 |
+| 3 | High | observed | 1 / 0 | 0 |
+| 256 | Auto | documented only | 0 / 0 | 0 |
+| 65535 | n/a | will give none | 0 / 0 | 0 |
+
+**[F]** Sony's menu offers normal, low and off [P][33] (p. 38).
+
+- **A raw file's 0 does not say the setting.** 2,024 shots of my
+  ILCE-7M2 have one ARW file and one JPEG. On every one the ARW file
+  holds 0 and the JPEG holds 2. A shot is a file name and a capture
+  time that both files share. **[F]**
+- **So a raw file's 0 will give `None`**, by the rule on a code that a
+  file contradicts. The rest of the list stands, in a raw file as in a
+  JPEG.
+- **Other raw files hold a step.** The 2 is on eight bodies from 2023
+  on and on the DSLR-A230 and A380. The 3 is on the DSLR-A900. Those
+  files are RAW alone and RAW with a JPEG alike. **[F]** No shot of
+  those bodies with both files was measured, so a raw file's 2 or 3
+  rests on the documentation alone.
+- **A setting of off reads as none in a raw file.** No measured file
+  shows a JPEG with 0.
+- 0xB050, a second high ISO tag of the compact bodies, will not be
+  read ([section 14.5](#145-what-the-view-leaves-out)).
+
+**Long exposure noise reduction.** With the setting on, the camera
+subtracts a dark frame on exposures of 1 second or longer [P][33]
+(p. 37). 0x2008 LongExposureNoiseReduction is one LONG on 192 public
+files and one SLONG on 11 [S][1] **[F]**. The 11 are one file each of
+eleven bodies, from the DSLR-A450 to the NEX-C3. It is on all of mine. The documentation names
+whole values. Their low half is the setting, and their high half
+whether the dark frame was taken:
+
+| Value | The documentation's name [S][1] | Setting | Mark | Files, public / mine |
+|---|---|---|---|---|
+| 0 | Off | off | observed | 83 / 6 |
+| 1 | On (unused) | on | observed | 106 / 5,192 |
+| 0x00010001 | On (dark subtracted) | on | observed | 6 / 43 |
+| 0xFFFF0000 | Off (65535) | off | observed | 5 / 0 |
+| 0xFFFF0001 | On (65535) | on | observed | 3 / 0 |
+| 0xFFFFFFFF | n/a | will give none | documented only | 0 / 0 |
+
+**[F]**
+
+- **The files agree with the two halves.** All 49 files with the dark
+  frame taken are exposures of 1 s or longer. No file of 1 s or longer
+  holds 1, and three public exposures of 1.3 s hold 0. The exposure
+  time is Exif's ExposureTime.
+- **raw-files will read the low half**, 0 off and 1 on, from a LONG or
+  a SLONG. The high half, whether the dark frame was taken, will not
+  be read ([section 14.5](#145-what-the-view-leaves-out)).
+- The 0xFFFF in the high half is on eight A-mount DSLRs, the DSLR-A700
+  and A900 among them.
+
+**Multi-frame noise reduction.** The camera combines a burst into one
+picture with less noise [P][33] (p. 73). 0x200B
+MultiFrameNoiseReduction is one LONG: 0 off, 1 on, 255 "n/a" [S][1].
+It is on 184 public files and on all of mine, and is 0 on every one.
+**[F]** raw-files will read 0 as off and 1 as on. Off is observed, and
+on is documented only. 0x2023, the effect's level, will not be read.
+
+**The lens compensations.** Three menu settings, each auto or off:
+shading, chromatic aberration and distortion [P][33] (p. 43). Three
+MakerNote tags record them, one LONG each [S][1]:
+
+| Code | The documentation's name [S][1] | Mark | 0x2011 shading, public / mine | 0x2012 chromatic aberration | 0x2013 distortion |
+|---|---|---|---|---|---|
+| 0 | Off | observed | 9 / 0 | 9 / 0 | 71 / 4,459 |
+| 2 | Auto | observed | 153 / 5,241 | 153 / 5,241 | 91 / 782 |
+| 4294967295 | n/a | will give none | 22 / 0 | 22 / 0 | 22 / 0 |
+
+**[F]** They are on 184 public files of 84 bodies. The 22 files that
+say "n/a" are of fixed-lens bodies. raw-files will read:
+
+- 0x2011 as the shading compensation of a `VignettingCorrection`;
+- 0x2013 as the distortion compensation of a `DistortionCorrection`;
+- 0x2012 as the chromatic aberration compensation, a setting Sony
+  alone records.
+
+The raw SubIFD holds three more codes, with parameters
+([section 7](#7-raw-relevant-tags)). They are not the menu settings: on
+seven public files the shading setting is auto where the SubIFD says
+that it has no parameters. And a JPEG has none of them. So raw-files
+will read the MakerNote's three, in a raw file and a JPEG alike.
+
+**The scene.** 0xB023, which the documentation calls SceneMode, is one
+LONG [S][1], on 207 public files of 107 bodies and on all of mine.
+Sony's mode dial has an Auto Mode and a Scene Selection among its
+positions [P][33] (p. 35). raw-files will read the code as the
+`SceneSelection` of a `Scene`:
+
+| Code | The documentation's name [S][1] | Sony's word [P][33] (p. 35) | Mark | Files, public / mine |
+|---|---|---|---|---|
+| 0 | Standard | none | will give none (below) | 194 / 4,865 |
+| 1 | Portrait | Portrait | observed | 1 / 0 |
+| 5 | Sports | Sports Action | observed | 1 / 0 |
+| 6 | Landscape | Landscape | observed | 1 / 0 |
+| 8 | Macro | Macro | observed | 1 / 0 |
+| 16 | Auto | Intelligent Auto | observed | 5 / 374 |
+| 17 | Night View/Portrait | none | observed, in my files only | 0 / 2 |
+| 22 | Auto+ | none | observed | 4 / 0 |
+| 3, 4, 7 | Night Scene, Sunset, Night Portrait | the same words | documented only | 0 / 0 |
+| 19 | Handheld Night Shot | Hand-held Twilight | documented only | 0 / 0 |
+| 24 | Superior Auto | Superior Auto | documented only | 0 / 0 |
+| 2, 9, 18, 20, 21, 23, 25 to 28, 33 | Text, Super Macro, Sweep Panorama, Anti Motion Blur, Cont. Priority AE, 3D Sweep Panorama, High Sensitivity, Fireworks, Food, Pet, HDR | none | documented only | 0 / 0 |
+| 65535 | n/a | none | will give none | 0 / 0 |
+
+**[F]** "Sony's word" is the SLT-A99's menu, for the codes whose
+documented name matches it. That code 19 is its Hand-held Twilight,
+and code 5 its Sports Action, is my reading of the names [I].
+
+- **0 will give `None`.** On every file that holds 0, Exif's
+  ExposureProgram is 1 to 4: manual, program, aperture priority or
+  shutter priority. The photographer chose no scene.
+- **The auto modes are kinds of the scene.** 16 and 22 come with
+  Sony's exposure mode 6, "Auto", in 0xB041, and with IntelligentAuto,
+  0xB052, on. Nikon's scene text holds its auto modes the same way.
+- **The scenes agree with Exif.** The files with 1, 5 and 6 hold the
+  ExposureProgram codes for portrait, action and landscape. Exif's
+  SceneCaptureType says portrait beside 1, landscape beside 6 and
+  night scene beside 17.
+- The list will be read whole, since files hold part of it. raw-files
+  will not read 0xB041 or 0xB052, which add no mode that 0xB023 lacks
+  on the measured files.
+
+**Exif's six values.** Each is one SHORT in the Exif IFD, with the
+standard's codes [P][30] (4.6.6.7.35, p. 69; 4.6.6.7.40 to 4.6.6.7.44,
+pp. 70 to 71). The
+[JPEG notes](../jpeg/container-and-metadata.md#4-exif-the-app1-segment)
+give the codes. raw-files will read them from Exif alone.
+
+| Tag | Values, public | Values, mine |
+|---|---|---|
+| 0xA408 Contrast | 0 on 198, 1 on 5, 2 on 5 | 0 on 5,448, 2 on 4 |
+| 0xA409 Saturation | 0 on 193, 1 on 10, 2 on 5 | 0 on 5,428, 2 on 24 |
+| 0xA40A Sharpness | 0 on 191, 1 on 11, 2 on 6 | 0 on 5,448, 2 on 4 |
+| 0xA406 SceneCaptureType | 0 on 207, 1 and 2 on one each | 0 on 5,450, 3 on 2 |
+| 0xA401 CustomRendered | 0 on all 209 | 0 on all 5,452 |
+| 0xA407 GainControl | on one file, 0 | on none |
+
+**[F]** Mine are the 5,452 files of my ILCE-7M2 that record the tags,
+211 JPEGs without a MakerNote among them. The three directions are on
+208 public files: the DSC-F828's SRF has none.
+
+**A raw file and its JPEG agree.** 2,024 shots of mine have both
+files. Every MakerNote value of this section is the same in the two,
+but the high ISO noise reduction. **[F]** The raw SubIFD's codes
+are in the raw file alone.
+
 ## 10. A100, SR2 and SRF
 
 ### DSLR-A100 (ARW 1.0)
@@ -2133,6 +2462,26 @@ plain MakerNote tags where Exif has no value, and decipher nothing [I]:
 
 [Section 9.10](#910-more-capture-settings) gives each list of codes
 and what stays unnamed.
+
+For the picture style and the processing settings of
+[section 9.11](#911-picture-style-and-processing), raw-files will read
+[I]:
+
+- the Creative Style from 0xB020 and 0x2004 to 0x2006. Where the file
+  records any of 0x2032 to 0x2036, the same four tags are a Creative
+  Look;
+- the D-Range Optimizer from 0xB025, never from 0xB04F, which repeats
+  it in three steps;
+- Auto HDR from the first half of 0x200A;
+- the high ISO noise reduction from 0x2009, where a raw file's 0 will
+  give none;
+- the long exposure noise reduction from the low half of 0x2008;
+- the multi-frame noise reduction from 0x200B;
+- the shading, chromatic aberration and distortion compensations from
+  0x2011 to 0x2013, never from the raw SubIFD's codes;
+- the scene from 0xB023, where 0 will give none;
+- contrast, saturation, sharpness, the scene capture type, custom
+  rendering and gain control from Exif alone.
 
 The raw image size stays unread, because 0x202E cannot tell an APS-C
 raw from a medium one; and the shutter used and APS-C mode, because only
@@ -2419,6 +2768,28 @@ documentation for the meanings [S][1] **[F]**:
 | White balance priority | 0x202B PrioritySetInAWB, one BYTE: 0 standard on every file | 132 | left for later; no file shows another value |
 | The fluorescent lamp in Sony's code | 0x0112, one LONG | 206 | repeats Exif's LightSource on every frame measured ([section 9.7](#97-camera-settings)); 3 on the DSLR-A290 (2730), set to daylight, where it may be the fine-tuning its name says |
 
+The picture style and the processing settings of
+[section 9.11](#911-picture-style-and-processing) leave out these plain
+values too. Counted on 2026-11-24, public files / my ILCE-7M2's
+**[F]**, with ExifTool's documentation for the meanings [S][1]:
+
+| Value | Where | Files, public / mine | Why it waits |
+|---|---|---|---|
+| Zone matching | 0xB024 ZoneMatching, one LONG: 0, "ISO setting used", on every file | 207 / 5,241 | it says the same on every measured file |
+| A Creative Look's five further values | 0x2032 to 0x2036, one SLONG each: shadows 0, highlights 0, fade 0, sharpness range 3, and clarity 1 on all but one file | 79 / 0 | each holds one value on nearly every measured file; their presence marks a Creative Look, and their values will not be given |
+| Picture effect | 0x200E, one SHORT: 0, off, on every file | 188 / 5,241 | reading every plain value found would add about ten values, most of them off on every measured file |
+| Soft skin effect | 0x200F, one LONG: 0, off, on all but one file, which says "n/a" | 186 / 5,241 | the same |
+| Auto portrait framing | 0x2016, one SHORT: 0 on every file | 179 / 5,241 | the same |
+| The low-pass filter setting | 0x2028 VariableLowPassFilter, two SHORTs: "n/a" on 145 files, off on the DSC-RX1RM2's two | 147 / 0 | one measured body offers the setting |
+| Brightness | 0x2007, one SLONG: 0 on every file | 189 / 5,241 | it says the same on every measured file |
+| The level of multi-frame noise reduction | 0x2023 MultiFrameNREffect, one LONG: 0 on every file | 169 / 5,241 | the same |
+| Whether the dark frame was taken | the high half of 0x2008 | 203 / 5,241 | a fact about the shot, not a setting; it waits for a caller who needs it |
+| Whether the HDR image was made | the second half of 0x200A | 184 / 5,241 | the same; 0 on every measured file |
+| The compact bodies' second high ISO tag | 0xB050 HighISONoiseReduction2, one SHORT: 65535, "n/a", on 153 public files and on all of mine; a step on 31 | 184 / 5,241 | the documentation gives it for the DSC bodies alone, with another list of steps |
+| The style and the D-Range Optimizer once more | 0xB029 ColorMode, the style's name as a code; 0xB04F, the D-Range Optimizer in three steps | 207 and 184 / 5,241 | each repeats a value read from another tag |
+| The exposure mode and the auto flag | 0xB041 ExposureMode, 0xB052 IntelligentAuto | 186 and 184 / 5,241 | on the measured files they add no mode that the scene code lacks |
+| The raw SubIFD's lens correction codes and parameters | 0x7031 to 0x7037 ([section 7](#7-raw-relevant-tags)) | 171 / 3,217 | a raw developer needs them; they wait with raw sensor data |
+
 - **The plain CameraInfo (0x0010) and CameraSettings (0x0114) blocks.**
   The same 22 public files have both: the DSLR-A200 to A900, the
   SLT-A33, A35 and A55 and the NEX-3, NEX-5 and NEX-C3. **[F]**
@@ -2518,6 +2889,9 @@ Retrieved October 2026.
   https://www.cipa.jp/std/documents/download_e.html?DC-009-2010_E
 - [33] Sony, "SLT-A99/SLT-A99V Instruction Manual" (English), read
   November 2026 — https://sony.jp/ichigan/manual_english/A99_manual.pdf
+- [34] Sony, Help Guide of the ILCE-7M4, "Creative Look (still
+  image/movie)", read November 2026 —
+  https://helpguide.sony.net/ilc/2110/v1/en/contents/TP1000640837.html
 
 ### Sample files
 
