@@ -340,6 +340,65 @@ JPEGs, given as counts only. **[F]** marks a count over these files.
   - The count of each value is not known: LightSource is not among the
     tags counted on my 22,660 JPEGs.
 
+**How the camera made the picture.** Six tags of the Exif IFD record
+how the camera processed the picture, each one SHORT [P][3]:
+
+| Value | Tag | Codes | Exif 3.1 |
+|---|---|---|---|
+| Custom rendering | 0xA401 CustomRendered | 0 normal process, 1 custom process; others reserved | 4.6.6.7.35, p. 69 |
+| Scene capture type | 0xA406 SceneCaptureType | 0 standard, 1 landscape, 2 portrait, 3 night scene; others reserved | 4.6.6.7.40, p. 70 |
+| Gain control | 0xA407 GainControl | 0 none, 1 low gain up, 2 high gain up, 3 low gain down, 4 high gain down; others reserved | 4.6.6.7.41, p. 70 |
+| Contrast | 0xA408 Contrast | 0 normal, 1 soft, 2 hard; others reserved | 4.6.6.7.42, pp. 70 to 71 |
+| Saturation | 0xA409 Saturation | 0 normal, 1 low saturation, 2 high saturation; others reserved | 4.6.6.7.43, p. 71 |
+| Sharpness | 0xA40A Sharpness | 0 normal, 1 soft, 2 hard; others reserved | 4.6.6.7.44, p. 71 |
+
+- **Contrast, saturation and sharpness give a direction only**: the
+  direction of the processing the camera applied. A maker's finer
+  values are in its MakerNote (section 10).
+- **Custom rendering** marks special processing of the image data. A
+  reader is then expected to hold back its own.
+- **The scene capture type** is the type of scene. The standard says
+  it may also record the mode the picture was shot in.
+- **Gain control** is the degree of overall gain adjustment.
+- raw-files will read each from one SHORT, in the standard's words, as
+  ADR011 decides: `CameraSettings::contrast`, `saturation`,
+  `sharpness`, `scene_capture_type`, `custom_rendered` and
+  `gain_control`. A reserved code will give `None`. No MakerNote will
+  fill one of the six.
+
+The six tags were counted on 24 November 2026. A counting program of
+my own read them through `CameraFile::entries` and
+`CameraFile::read_value`, and no other reader was run. The public
+JPEGs are the same 27 as above. Mine
+are 132,700 JPEGs, given as counts only: 16,641 of my Nikon bodies,
+7,326 of Sony cameras, and 108,733 of other makers' cameras and
+phones. **[F]**
+
+| Tag | Public JPEGs that hold it | My JPEGs that hold it | Values, mine |
+|---|---|---|---|
+| CustomRendered | 15: 0 on 11, 1 on 4 | 45,011 | 0 on 42,107, 1 on 2,782, the reserved 3 and 4 on 61 each |
+| SceneCaptureType | 15: 0 on all | 104,017 | 0 on 100,873, 1 on 270, 2 on 498, 3 on 424, reserved codes on 1,952 |
+| GainControl | 10: 0 on 4, 1 on 5, 2 on 1 | 16,919 | 0 on 9,473, 1 on 4,436, 2 on 3,010 |
+| Contrast | 14: 0 on all | 36,936 | 0 on 36,931, 2 on 5 |
+| Saturation | 14: 0 on all | 36,936 | 0 on 36,913, 1 on 5, 2 on 18 |
+| Sharpness | 14: 0 on 7, 2 on 7 | 41,431 | 0 on 34,809, 1 on 6,442, 2 on 180 |
+
+- **The 9 raw.pixls.us JPEGs hold none of the six.** They are a
+  phone's file, seven files of camera modules and one with no Make.
+  **[F]**
+- **Reserved codes are on phones' files.** SceneCaptureType holds 5 on
+  1,466 of my JPEGs, 4 on 254, 64 on 231 and 6 on one. CustomRendered
+  holds 3 and 4 on JPEGs of an Apple phone. **[F]** ExifTool's
+  documentation says that Apple's phones use other CustomRendered
+  values, and some Samsung bodies a SceneCaptureType of 4 [S][6]. Each
+  will give `None`.
+- **Gain control is a Nikon tag in practice.** Of the 16,919 JPEGs of
+  mine that hold it, 16,624 are my Nikon bodies'. **[F]**
+- **The four Z 9 JPEG fixtures hold CustomRendered 1**, as every file
+  of my Z 9 does
+  ([NEF notes](../nef/makernote-and-metadata.md#811-picture-style-and-processing)).
+  What that body marks with it is open. **[F]**
+
 **When it was digitized.** The Exif IFD records a second time beside
 the capture time: DateTimeDigitized (0x9004), with SubSecTimeDigitized
 (0x9292) and OffsetTimeDigitized (0x9012). [P][3] (4.6.6.6.2, p. 53;
@@ -829,6 +888,42 @@ The [NEF notes §8.10](../nef/makernote-and-metadata.md#810-more-capture-setting
 [ARW notes §9.10](../arw/makernote-and-metadata.md#910-more-capture-settings) give each maker's
 quality tags and what their codes rest on.
 
+**The picture style and the processing settings** are in the maker's
+MakerNote too, in the tags of the raw file. raw-files will read them
+in a JPEG as in a raw file (ADR011). The
+[NEF notes](../nef/makernote-and-metadata.md#811-picture-style-and-processing)
+and the
+[ARW notes](../arw/makernote-and-metadata.md#911-picture-style-and-processing)
+give each tag's codes and counts. Measured on 24 November 2026, this
+is what a JPEG adds, and where it differs from the raw file of the
+same shot **[F]**:
+
+- **A shot's two files agree.** A shot is one raw file and one camera
+  JPEG of one body, with the same file name and capture time. Mine are
+  1,887 Nikon shots and 2,024 of my ILCE-7M2. Every value of this kind
+  is the same in the two files, with the exceptions below.
+- **Nikon's HDR record is in the JPEG alone.** 0x0035 is on 7,841 of
+  my Nikon JPEGs and on no NEF of mine: the camera cannot record a NEF
+  under HDR. HDR is on on four of them.
+- **Sony's high ISO noise reduction differs.** On all 2,024 shots the
+  JPEG holds 2, normal, and the ARW file 0. The four public Sony JPEGs
+  that hold the tag hold 2 as well. A raw file's 0 will give none
+  (ADR011).
+- **A JPEG has none of the raw SubIFD's lens correction codes.** Sony's
+  three lens compensations will be read from the MakerNote, which both
+  files hold.
+- **A JPEG that a program wrote can differ.** A program wrote 15 of my
+  Z 9's JPEGs from the NEF [I]. Six hold none of these tags, and five
+  another Picture Control than the NEF.
+- **The public JPEGs** hold these tags as their makers' raw files do:
+  - the D5300 file holds a Picture Control of version 0100,
+    `STANDARD`, and the scene text `AUTO(FLASH OFF)`;
+  - the four Z 9 fixtures hold one of version 0310, `VIVID`. One of
+    them is the file read in Nikon's NX Studio;
+  - the D70 file, of a body before the Picture Control, holds none;
+  - the ILCE-6000 file holds the Creative Style `Landscape`, and the
+    ILCE-7RM2 file the scene code 16, an auto mode.
+
 ## 11. The camera files, segment by segment
 
 Each segment as marker and length, in file order up to SOS. [F]
@@ -897,6 +992,10 @@ decided, as steps. [I]
      choice of optimal quality or size priority. A JPEG whose Nikon
      Quality says `RAW` gives no JPEG quality, and no JPEG gives a raw
      bit depth or compression.
+
+   The picture style and the processing settings will come the same
+   way. Exif's six values lie in the Exif IFD (section 4), and each
+   maker's settings in its MakerNote (section 10).
 7. **The focus point** is kept only when its frame has the JPEG's aspect
    ratio, to within one pixel of rounding in either size:
    `|fw × jh − fh × jw|` at most the longest of `fw`, `fh`, `jw` and
