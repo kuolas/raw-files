@@ -490,10 +490,12 @@ A few conventions:
     ([ADR021](docs/architecture-decisions/adr021-what-the-file-records-and-what-raw-files-reads-into-it.md)).
   - A value whose parts mean nothing alone has no `default()`.
     `FocusPoints` needs a frame and an origin, and `Flash` needs whether
-    it fired. Such a value's constructor takes those parts, and its
-    `with_…` methods set the rest. Where a file may not record such a
-    value, the getter that gives it returns an `Option`, as
-    `Metadata::focus_points` and `CameraSettings::flash` do.
+    it fired. Such a value's constructor takes those parts, or one
+    constructor names each state, as `Flash::fired()` and
+    `Flash::not_fired()` do. Its `with_…` methods set the rest. Where a
+    file may not record such a value, the getter that gives it returns
+    an `Option`, as `Metadata::focus_points` and `CameraSettings::flash`
+    do.
   - `Options`, which opens files, starts from `new()`. Its setters
     follow the same rule: `with_limits` sets what `limits()` returns.
 - **A function that can refuse its arguments returns

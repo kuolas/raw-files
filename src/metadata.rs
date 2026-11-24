@@ -345,31 +345,20 @@ impl Metadata {
         &self.exposure
     }
 
-    /// How the camera was set for the picture (see [`CameraSettings`]),
-    /// for a viewer's information panel beside the exposure: the white
-    /// balance, the exposure program, the metering mode, the flash, the
-    /// shutter, the image area, the raw image size and the color space.
-    /// Always present, though each of its values is optional: `None` when
-    /// the file does not record it or records it in a way that cannot be
-    /// read, a damaged value costing only itself.
+    /// How the camera was set for the picture, for a viewer's information
+    /// panel beside the exposure: the white balance, the exposure program,
+    /// the flash, the focus mode and the other settings that
+    /// [`CameraSettings`] lists. Always present, though each of its values
+    /// is optional: `None` when the file does not record it or records it
+    /// in a way that cannot be read, a damaged value costing only itself.
     ///
-    /// NEF, ARW and JPEG files give the settings that their standard Exif
-    /// tags record: the exposure program, the metering mode, the flash, the
-    /// white balance mode and the color space. NEF files and the JPEGs of
-    /// Nikon cameras give, from Nikon's MakerNote, the white balance
-    /// setting, finer than Exif's, in place of Exif's, the color
-    /// temperature, the fine-tuning, the shutter, the image area, in a NEF
-    /// file alone the raw image size, and the color space where Exif
-    /// records none, as in every NEF file checked; Nikon records no
-    /// electronic front curtain setting. ARW files and the JPEGs of Sony
-    /// cameras give, from Sony's MakerNote, the white balance setting in
-    /// place of Exif's, the fine-tuning, the electronic front curtain
-    /// setting and the color temperature of a chosen color temperature
-    /// or a custom white balance, and no shutter, image area or raw image
-    /// size, which Sony does not record in a form raw-files reads. Each
-    /// getter of [`CameraSettings`] says where its value comes from. A
-    /// program's tests build the settings with the `with_…` methods of
-    /// [`CameraSettings`] and set them with
+    /// NEF, ARW and JPEG files give the settings that their standard tags
+    /// record. The files of Nikon and Sony cameras, raw and JPEG, also
+    /// give those their MakerNote records in plain tags.
+    /// [`CameraSettings`] says which settings each maker's files give, and
+    /// each of its getters where its value comes from. A program's tests
+    /// build the settings with the `with_…` methods of [`CameraSettings`]
+    /// and set them with
     /// [`with_camera_settings`](Self::with_camera_settings).
     pub fn camera_settings(&self) -> &CameraSettings {
         &self.camera_settings

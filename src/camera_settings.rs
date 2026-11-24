@@ -8,7 +8,8 @@
 //! size, the color space, the focus mode, the AF-area mode, AF fine-tune,
 //! the stabilization, auto ISO, the exposure fine-tuning, the release
 //! mode, bracketing, whether the clock was on daylight saving time, the
-//! raw data's bit depth and compression, and the JPEG quality.
+//! raw data's bit depth and compression, and the JPEG quality and
+//! compression.
 //! [`CameraSettings`] holds them all, and
 //! [`Metadata::camera_settings`](crate::Metadata::camera_settings) gives
 //! them for a file. [`WhiteBalance`], [`WhiteBalanceFineTune`], [`Flash`],
@@ -56,12 +57,16 @@
 //! holds no raw size, it gives large for a body the table says offers no
 //! raw sizes.
 //!
-//! On Sony files the shutter, the image area, the raw image size, AF
-//! fine-tune, auto ISO and daylight saving time are `None`: Sony records
-//! the first two only in enciphered blocks, which raw-files does not read,
-//! gives an APS-C raw the raw size code of a medium one, keeps its AF
-//! micro adjustment and ISO setting in enciphered or unread blocks, and
-//! records no daylight saving time in a plain tag.
+//! On Sony files seven settings are `None`:
+//!
+//! - the shutter and the image area: Sony records them only in enciphered
+//!   blocks, which raw-files does not read;
+//! - the raw image size: Sony's tag gives an APS-C raw the code of a
+//!   medium one;
+//! - AF fine-tune and auto ISO: Sony keeps its AF micro adjustment and
+//!   ISO setting in enciphered or unread blocks;
+//! - daylight saving time: Sony records none in a plain tag;
+//! - the JPEG compression: it is a setting of Nikon's alone.
 //!
 //! A program that uses raw-files can build these values for its own
 //! tests, without a camera file: [`CameraSettings`] and [`WhiteBalance`]
@@ -93,8 +98,9 @@ use crate::rational::SignedRational;
 /// MakerNote or its own codes record, it gives from Nikon's MakerNote and
 /// Sony's, each those its MakerNote records in plain tags, and from each
 /// maker's compression codes; the shutter, the image area, the raw image
-/// size, AF fine-tune, auto ISO and daylight saving time are `None` for
-/// every Sony file. Each getter says where its value comes from.
+/// size, AF fine-tune, auto ISO, daylight saving time and the JPEG
+/// compression are `None` for every Sony file. Each getter says where its
+/// value comes from.
 ///
 /// `CameraSettings::default()` is the empty record, with every value
 /// `None` and an empty [`WhiteBalance`]. A caller's tests start from it and
