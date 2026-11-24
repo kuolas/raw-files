@@ -1783,11 +1783,12 @@ raw-files reads:
 - the focus mode, AF fine-tune, stabilization and auto ISO;
 - the exposure fine-tuning, the release mode and bracketing, and
   daylight saving time;
-- the flash's source, control, sync and compensation.
+- the flash's source, control, sync and compensation;
+- the raw bit depth.
 
 It will read:
 
-- the raw compression and bit depth, and the JPEG quality;
+- the raw compression and the JPEG quality;
 - the white balance's preset slot and fluorescent lamp.
 
 The AF-area mode is in [section 8.6](#86-focus-point).
@@ -2087,8 +2088,8 @@ no code. Codes 5, 7, 9 and 10 are packings of uncompressed data, by
 their names and, for 7, 9 and 10, by the data
 ([raw-data.md](raw-data.md)), so they will fold into `Uncompressed`. The
 one public file whose Compression is a LONG, a Coolpix A1000's, will
-give none, by the rule on a value's type. **[F]** The raw bit depth will
-be the raw IFD's BitsPerSample where it holds one value. It is 12 on 153
+give none, by the rule on a value's type. **[F]** The raw bit depth is
+the raw IFD's BitsPerSample where it holds one value. It is 12 on 153
 public files and 3,568 of mine, and 14 on 134 and 28,423. **[F]** It is
 the depth as recorded, which section 3 says a lossy curve can exceed by
 two bits.

@@ -1571,9 +1571,9 @@ More of how the photographer set the camera:
 
 raw-files reads each from a plain MakerNote tag or a standard tag, as
 [ADR011](../../architecture-decisions/adr011-metadata-from-standard-tags.md)
-decides, in the order it gives: the first four lines now, the raw
-compression and bit depth, the JPEG quality and the kind of fluorescent
-lamp still to come.
+decides, in the order it gives: the first four lines and the raw bit
+depth now, the raw compression, the JPEG quality and the kind of
+fluorescent lamp still to come.
 Nothing needs deciphering.
 
 **How it was measured.** On 2026-11-20 a counting program written from
@@ -1814,10 +1814,11 @@ recorded, beside Exif's Flash bits ([section 9.7](#97-camera-settings)):
   denominator, which no file holds.
 - It is `0/10` on every one of my ILCE-7M2 files.
 
-**Raw compression and bit depth.** raw-files will read both from the
-raw IFD ([section 7](#7-raw-relevant-tags)): Compression and
-BitsPerSample. 0x2029 RAWFileType repeats Compression on all 139 files
-that have both, and will not be read **[F]**:
+**Raw compression and bit depth.** raw-files reads the bit depth from the
+raw IFD's BitsPerSample, and will read the compression from its
+Compression ([section 7](#7-raw-relevant-tags)). 0x2029 RAWFileType
+repeats Compression on all 139 files that have both, and will not be
+read **[F]**:
 
 | Compression | 0x2029 | `RawCompression` | Public files | Mark |
 |---|---|---|---|---|

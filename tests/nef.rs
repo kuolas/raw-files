@@ -237,12 +237,13 @@ fn the_z9_metadata_by_hand(orientation: Orientation) -> Result<Metadata, ValueEr
             height: 5504,
         })
         .with_focus_points(FocusPoints::from(focus))
-        // Its FocusMode, `AF-S`, and its AFInfo2's area mode 193 under
-        // hybrid detection, single point.
+        // Its FocusMode, `AF-S`, its AFInfo2's area mode 193 under hybrid
+        // detection, single point, and its raw SubIFD's 14 bits.
         .with_camera_settings(
             CameraSettings::default()
                 .with_focus_mode(FocusMode::Single)
-                .with_focus_area_mode(FocusAreaMode::Single),
+                .with_focus_area_mode(FocusAreaMode::Single)
+                .with_raw_bit_depth(14),
         );
     Ok(metadata)
 }
@@ -415,12 +416,14 @@ fn the_z6iii_metadata_by_hand(orientation: Orientation) -> Result<Metadata, Valu
         .with_raw_size(as_size(Z6III_RAW))
         .with_image_size(as_size(Z6III_IMAGE))
         .with_focus_points(FocusPoints::from(focus))
-        // The built file's AFInfo2 records the area mode 192, pinpoint.
+        // The built file's AFInfo2 records the area mode 192, pinpoint,
+        // and its raw SubIFD 14 bits.
         .with_camera_settings(
             CameraSettings::default()
                 .with_image_area(ImageArea::Square)
                 .with_focus_area_mode(FocusAreaMode::Pinpoint)
-                .with_focus_mode(FocusMode::Single),
+                .with_focus_mode(FocusMode::Single)
+                .with_raw_bit_depth(14),
         );
     Ok(metadata)
 }
@@ -558,14 +561,15 @@ fn the_d300_file_gives_what_its_exif_tags_lack_from_the_makernote() {
             assert_eq!(metadata.focus_layout(), None, "{label}");
             // The fixture writes no settings tag but FocusMode, `MANUAL`,
             // AFInfo2, zero past its version: code 0 under phase detection,
-            // single point, which manual focus does not hide; and WorldTime,
-            // with daylight saving time off.
+            // single point, which manual focus does not hide; WorldTime,
+            // with daylight saving time off; and the raw SubIFD's 12 bits.
             assert_eq!(
                 metadata.camera_settings(),
                 &CameraSettings::default()
                     .with_focus_mode(FocusMode::Manual)
                     .with_focus_area_mode(FocusAreaMode::Single)
-                    .with_daylight_saving_time(false),
+                    .with_daylight_saving_time(false)
+                    .with_raw_bit_depth(12),
                 "{label}"
             );
         }
@@ -597,7 +601,9 @@ fn the_d1h_metadata_by_hand(with_makernote: bool) -> Result<Metadata, ValueError
         .with_software("Ver.1.00")
         .with_capture_time(time)
         .with_raw_size(as_size(D1H_RAW))
-        .with_image_size(as_size(D1H_RAW));
+        .with_image_size(as_size(D1H_RAW))
+        // The raw SubIFD's 12 bits, with or without the MakerNote.
+        .with_camera_settings(CameraSettings::default().with_raw_bit_depth(12));
     if with_makernote {
         exposure = exposure.with_iso(u32::from(D1H_ISO));
         let [
@@ -615,7 +621,8 @@ fn the_d1h_metadata_by_hand(with_makernote: bool) -> Result<Metadata, ValueError
             CameraSettings::default()
                 .with_white_balance(WhiteBalance::default().with_mode(WhiteBalanceMode::Daylight))
                 .with_focus_mode(FocusMode::Single)
-                .with_focus_area_mode(FocusAreaMode::Dynamic),
+                .with_focus_area_mode(FocusAreaMode::Dynamic)
+                .with_raw_bit_depth(12),
         );
     }
     Ok(metadata.with_exposure(exposure))

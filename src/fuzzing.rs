@@ -425,6 +425,7 @@ fn read_metadata(metadata: &Metadata) {
         .bracketing()
         .map(|bracketing| bracketing.to_string());
     let _ = settings.daylight_saving_time();
+    let _ = settings.raw_bit_depth();
     let tiny = Size {
         width: 1,
         height: 1,
