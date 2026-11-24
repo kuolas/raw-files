@@ -429,6 +429,10 @@ fn read_metadata(metadata: &Metadata) {
     let _ = settings
         .raw_compression()
         .map(|compression| compression.to_string());
+    let _ = settings.jpeg_quality().map(|quality| quality.to_string());
+    let _ = settings
+        .jpeg_compression()
+        .map(|compression| compression.to_string());
     let tiny = Size {
         width: 1,
         height: 1,

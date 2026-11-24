@@ -269,6 +269,24 @@ does. An entry that can break a caller opens with **Breaking:**.
   10 of its tag 0x0051; NEFCompression's code 8, a small raw, gives none.
   Sony's 7 is lossless, its 32767 lossy where the data takes one byte a
   pixel, and the ILCE-7M5's 32766 lossy. A JPEG gives none.
+- `CameraSettings::jpeg_quality` gives the quality step of the JPEG the
+  camera wrote, a `JpegQuality`, in its maker's own words, and
+  `with_jpeg_quality` sets it
+  ([#214](https://github.com/kuolas/raw-files/issues/214)). Its variants
+  list each maker's steps from the smallest files to the finest detail,
+  so the order ranks one maker's steps and says nothing across makers.
+  Nikon JPEGs give it from their MakerNote's Quality text, `FINE`,
+  `NORMAL` or `BASIC`; a Nikon raw file gives none, and so does a JPEG
+  whose Quality says `RAW`. Sony files give it from the first of their
+  tag 0x202E's second value, tag 0x0102 in a JPEG and JPEGQuality that
+  names a step, so a Sony raw file shot with a JPEG gives that JPEG's
+  step. The ILCE-7M2 records it in no plain tag and gives none.
+- `CameraSettings::jpeg_compression` gives how Nikon's JPEG compression
+  was set, a `JpegCompression`: size priority or optimal quality, the Z
+  bodies' starred step. `with_jpeg_compression` sets it
+  ([#214](https://github.com/kuolas/raw-files/issues/214)). Nikon JPEGs
+  give it from their MakerNote's JPGCompression; a raw file gives none,
+  as it gives no JPEG quality.
 
 ### Changed
 

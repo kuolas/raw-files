@@ -1784,11 +1784,10 @@ raw-files reads:
 - the exposure fine-tuning, the release mode and bracketing, and
   daylight saving time;
 - the flash's source, control, sync and compensation;
-- the raw compression and bit depth.
+- the raw compression and bit depth, and the JPEG quality.
 
 It will read:
 
-- the JPEG quality;
 - the white balance's preset slot and fluorescent lamp.
 
 The AF-area mode is in [section 8.6](#86-focus-point).
@@ -2099,7 +2098,7 @@ the depth as recorded, which section 3 says a lossy curve can exceed by
 two bits.
 
 **JPEG quality.** 0x0004 Quality in a camera JPEG names the JPEG's
-quality step. raw-files will read it in a JPEG only:
+quality step. raw-files reads it in a JPEG only:
 
 | Text | Setting [P][25] (p. 93) [26] (p. 103) | `JpegQuality` | Files, mine |
 |---|---|---|---|
@@ -2112,14 +2111,15 @@ quality step. raw-files will read it in a JPEG only:
 quality, so each text is documented by the manual. The 705 JPEGs that
 say `RAW` came from a program, not the camera: 670 of them carry the raw
 file's NEFCompression too. A raw file's Quality, `RAW`, `NRW` or
-`RAW2.7M`, will give no JPEG quality. **[F]**
+`RAW2.7M`, gives no JPEG quality. **[F]**
 
 0x0044 JPGCompression is one SHORT: 1 size priority, 3 optimal quality
 [S][1]. The D600's menu names the two [P][25] (p. 94), and the Z 9 marks
-optimal quality with a star [P][26] (p. 103). raw-files will read 1 and
-3 as `JpegCompression::SizePriority` and `OptimalQuality`, the whole
-list, both observed: on my files and on the public JPEG fixtures that
-the [JPEG notes](../jpeg/container-and-metadata.md#10-makernotes-in-a-jpeg)
+optimal quality with a star [P][26] (p. 103). raw-files reads 1 and 3 in
+a JPEG as `JpegCompression::SizePriority` and `OptimalQuality`, the
+whole list, both observed: on my files and on the public JPEG fixtures
+that the
+[JPEG notes](../jpeg/container-and-metadata.md#10-makernotes-in-a-jpeg)
 count, though on no public NEF or NRW file:
 
 | Code | Files, public / mine |
@@ -2128,7 +2128,7 @@ count, though on no public NEF or NRW file:
 | 1, on my Z 9's JPEGs with `BASIC` | 0 / 27 |
 | 3, on my Z 9's JPEGs with `FINE` | 0 / 274 |
 
-**[F]** 0 is undocumented and will give none. Whether the Z 9's 3 and 1
+**[F]** 0 is undocumented and gives none. Whether the Z 9's 3 and 1
 mark the star or follow the step is open: no frame set both apart.
 
 **The white balance preset slot and fluorescent lamp.** Two parts of the

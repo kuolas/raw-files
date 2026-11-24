@@ -7,9 +7,9 @@
 //! metering mode, the flash, the shutter, the image area, the raw image
 //! size, the color space, the focus mode, the AF-area mode, AF fine-tune,
 //! the stabilization, auto ISO, the exposure fine-tuning, the release
-//! mode, bracketing, whether the clock was on daylight saving time, and
-//! the raw data's bit depth and compression. [`CameraSettings`] holds them
-//! all, and
+//! mode, bracketing, whether the clock was on daylight saving time, the
+//! raw data's bit depth and compression, and the JPEG quality.
+//! [`CameraSettings`] holds them all, and
 //! [`Metadata::camera_settings`](crate::Metadata::camera_settings) gives
 //! them for a file. [`WhiteBalance`], [`FineTune`], [`Flash`],
 //! [`AfFineTune`] and [`Stabilization`] hold the settings made of several
@@ -36,17 +36,19 @@
 //!   stabilization, auto ISO, the exposure fine-tuning, the release mode
 //!   and bracketing, daylight saving time, and the flash's source,
 //!   control, sync and compensation; the color space where the Exif tags
-//!   record none, as in every Nikon raw file checked; and, in a raw file,
-//!   the raw image size and how a compressed raw is compressed.
+//!   record none, as in every Nikon raw file checked; in a raw file, the
+//!   raw image size and how a compressed raw is compressed; and in a JPEG,
+//!   its quality and the choice between size priority and optimal
+//!   quality.
 //! - Sony's MakerNote, in ARW files and their family and in the JPEGs of
 //!   Sony cameras, gives the white balance setting in place of Exif's,
 //!   with its fine-tuning and the color temperature of a chosen color
 //!   temperature or a custom white balance; the electronic front curtain
 //!   setting, which only Sony records; the focus mode, the AF-area mode,
 //!   the stabilization, without a mode, the exposure fine-tuning, the
-//!   release mode and bracketing, and the flash's source when it is
-//!   external and its compensation. A Sony raw file says how a compressed
-//!   raw is compressed in codes of Sony's own.
+//!   release mode and bracketing, the flash's source when it is external
+//!   and its compensation, and the JPEG quality. A Sony raw file says how
+//!   a compressed raw is compressed in codes of Sony's own.
 //!
 //! On Sony files the shutter, the image area, the raw image size, AF
 //! fine-tune, auto ISO and daylight saving time are `None`: Sony records
@@ -69,8 +71,8 @@ use crate::rational::SignedRational;
 /// program, metering mode, flash, shutter, image area, raw image size,
 /// color space, focus mode, AF-area mode, AF fine-tune, stabilization, auto
 /// ISO, exposure fine-tuning, release mode, bracketing, daylight saving
-/// time, and raw bit depth and compression, for a viewer's information
-/// panel beside the exposure.
+/// time, raw bit depth and compression, and JPEG quality and compression,
+/// for a viewer's information panel beside the exposure.
 ///
 /// Every value is `None` when the file does not record it or records it in
 /// a way that cannot be read, such as a code that no variant names. A
@@ -172,6 +174,8 @@ pub struct CameraSettings {
     pub(crate) daylight_saving_time: Option<bool>,
     pub(crate) raw_bit_depth: Option<u32>,
     pub(crate) raw_compression: Option<RawCompression>,
+    pub(crate) jpeg_quality: Option<JpegQuality>,
+    pub(crate) jpeg_compression: Option<JpegCompression>,
 }
 
 impl CameraSettings {
@@ -781,6 +785,76 @@ impl CameraSettings {
         self.raw_compression
     }
 
+    /// The quality step of the JPEG the camera wrote, such as
+    /// [`Fine`](JpegQuality::Fine), in its maker's own words; on a Sony raw
+    /// file shot with a JPEG beside it, the step of that JPEG.
+    ///
+    /// Read from the MakerNote:
+    ///
+    /// - in a Nikon JPEG, its Quality text: `FINE`, `NORMAL` and `BASIC`.
+    ///   A Nikon raw file gives none, and so does a JPEG whose Quality says
+    ///   `RAW`, one that a program made from a raw file;
+    /// - in a Sony file, the first of three tags that names a step: the
+    ///   second value of its tag 0x202E, which the ILCE-7RM3, the RX100M6
+    ///   and later bodies write, in raw files too; in a JPEG, its tag
+    ///   0x0102; and its JPEGQuality, unless 0x0102, or in a raw file
+    ///   0x202E, says the camera wrote the raw file alone.
+    ///
+    /// `None` when the file records none of these, or records a code the
+    /// documentation does not give. The ILCE-7M2 records its JPEG quality
+    /// in no plain tag the documentation names, so its files give `None`.
+    ///
+    /// What each maker's files record is in the notes on
+    /// [Nikon's capture settings](https://github.com/kuolas/raw-files/blob/master/docs/formats/nef/makernote-and-metadata.md#810-more-capture-settings)
+    /// and
+    /// [Sony's](https://github.com/kuolas/raw-files/blob/master/docs/formats/arw/makernote-and-metadata.md#910-more-capture-settings).
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use raw_files::CameraFile;
+    ///
+    /// # fn main() -> raw_files::Result<()> {
+    /// let file = CameraFile::open("photo.jpg")?;
+    /// if let Some(quality) = file.metadata().camera_settings().jpeg_quality() {
+    ///     println!("JPEG quality: {quality}");
+    /// }
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn jpeg_quality(&self) -> Option<JpegQuality> {
+        self.jpeg_quality
+    }
+
+    /// How Nikon's JPEG compression was set: for a file size kept even, or
+    /// for the best quality the picture allows, which the Z bodies mark
+    /// with a star.
+    ///
+    /// Read from the MakerNote of a Nikon JPEG, its JPGCompression, one
+    /// SHORT: 1 size priority and 3 optimal quality. `None` for every other
+    /// code, such as 0, which the JPEGs a program made from a raw file hold.
+    /// A raw file gives `None`, as it gives no JPEG quality: every Nikon raw
+    /// file checked holds 0. Only Nikon records it, so a file of any other
+    /// maker gives `None`.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use raw_files::{CameraFile, JpegCompression};
+    ///
+    /// # fn main() -> raw_files::Result<()> {
+    /// let file = CameraFile::open("photo.jpg")?;
+    /// let settings = file.metadata().camera_settings();
+    /// if settings.jpeg_compression() == Some(JpegCompression::OptimalQuality) {
+    ///     println!("JPEG compressed for quality");
+    /// }
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn jpeg_compression(&self) -> Option<JpegCompression> {
+        self.jpeg_compression
+    }
+
     /// Sets the white balance, in place of the one it had;
     /// [`white_balance`](Self::white_balance) reads it.
     #[must_use]
@@ -941,6 +1015,22 @@ impl CameraSettings {
     #[must_use]
     pub fn with_raw_compression(mut self, compression: RawCompression) -> Self {
         self.raw_compression = Some(compression);
+        self
+    }
+
+    /// Sets the JPEG quality, in place of any set before;
+    /// [`jpeg_quality`](Self::jpeg_quality) reads it.
+    #[must_use]
+    pub fn with_jpeg_quality(mut self, quality: JpegQuality) -> Self {
+        self.jpeg_quality = Some(quality);
+        self
+    }
+
+    /// Sets the JPEG compression, in place of any set before;
+    /// [`jpeg_compression`](Self::jpeg_compression) reads it.
+    #[must_use]
+    pub fn with_jpeg_compression(mut self, compression: JpegCompression) -> Self {
+        self.jpeg_compression = Some(compression);
         self
     }
 }
@@ -2607,6 +2697,143 @@ impl fmt::Display for RawCompression {
     }
 }
 
+/// The quality step of a JPEG the camera wrote, in its maker's own words.
+///
+/// The makers cut the ladder from small files to fine detail into
+/// different steps, so each keeps its own names, as variants of one enum:
+///
+/// - Nikon's steps, from its Quality text: [`Basic`](Self::Basic),
+///   [`Normal`](Self::Normal) and [`Fine`](Self::Fine);
+/// - Sony's steps: [`Light`](Self::Light), [`Standard`](Self::Standard),
+///   [`Fine`](Self::Fine) and [`ExtraFine`](Self::ExtraFine), and on its
+///   older compacts [`Economy`](Self::Economy), [`Standard`](Self::Standard),
+///   [`Fine`](Self::Fine) and [`SuperFine`](Self::SuperFine).
+///
+/// The variants are listed so that each maker's ladder runs from its
+/// smallest files to its finest detail, and `JpegQuality` orders as they
+/// are listed. So two steps of one maker compare as their ladder ranks
+/// them, Nikon's [`Basic`](Self::Basic) below its [`Fine`](Self::Fine).
+/// Across makers the order is only the list's: Nikon's
+/// [`Normal`](Self::Normal) and Sony's [`Standard`](Self::Standard) say
+/// nothing of each other's size or detail.
+///
+/// A maker's code is named where it is in a list that its published
+/// documentation gives and that the measured files agree with, as the
+/// [decision to read the metadata from the standard tags](https://github.com/kuolas/raw-files/blob/master/docs/architecture-decisions/adr011-metadata-from-standard-tags.md)
+/// says; any other code gives `None`.
+///
+/// `JpegQuality` is `#[non_exhaustive]`, so match on it with a wildcard
+/// arm. A new variant is added where its maker's ladder puts it, between
+/// the existing ones if need be, so two steps keep the order once observed
+/// between them. Its [`name`](Self::name)s, which `Display` writes too,
+/// are "Economy", "Light", "Basic", "Standard", "Normal", "Fine", "Super
+/// fine" and "Extra fine".
+///
+/// # Examples
+///
+/// ```
+/// use raw_files::JpegQuality;
+///
+/// assert_eq!(JpegQuality::ExtraFine.name(), "Extra fine");
+/// assert_eq!(JpegQuality::Normal.to_string(), "Normal");
+/// // Within one maker's ladder, the order ranks the steps.
+/// assert!(JpegQuality::Basic < JpegQuality::Fine);
+/// ```
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[non_exhaustive]
+pub enum JpegQuality {
+    /// Sony's economy step, on its older compacts, the smallest of their
+    /// files.
+    Economy,
+    /// Sony's light step, the smallest of its files.
+    Light,
+    /// Nikon's basic step, the smallest of its files.
+    Basic,
+    /// Sony's standard step.
+    Standard,
+    /// Nikon's normal step.
+    Normal,
+    /// Nikon's and Sony's fine step.
+    Fine,
+    /// Sony's super fine step, the finest of its older compacts.
+    SuperFine,
+    /// Sony's extra fine step, its finest.
+    ExtraFine,
+}
+
+impl JpegQuality {
+    /// The step's name, for an information panel, such as "Extra fine";
+    /// the type's docs list them all.
+    pub fn name(self) -> &'static str {
+        match self {
+            JpegQuality::Economy => "Economy",
+            JpegQuality::Light => "Light",
+            JpegQuality::Basic => "Basic",
+            JpegQuality::Standard => "Standard",
+            JpegQuality::Normal => "Normal",
+            JpegQuality::Fine => "Fine",
+            JpegQuality::SuperFine => "Super fine",
+            JpegQuality::ExtraFine => "Extra fine",
+        }
+    }
+}
+
+impl fmt::Display for JpegQuality {
+    /// Writes [`name`](JpegQuality::name).
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.name())
+    }
+}
+
+/// How Nikon's JPEG compression was set: for a file size kept even across
+/// pictures, or for the best quality each picture allows.
+///
+/// The D600's menu names the two "size priority" and "optimal quality",
+/// and the Z bodies mark optimal quality with a star beside the JPEG
+/// quality step.
+///
+/// `JpegCompression` is `#[non_exhaustive]`, so match on it with a
+/// wildcard arm. It orders as its variants are listed, and a new variant is
+/// added after the existing ones, so an order once observed holds. Its
+/// [`name`](Self::name)s, which `Display` writes too, are "Size priority"
+/// and "Optimal quality".
+///
+/// # Examples
+///
+/// ```
+/// use raw_files::JpegCompression;
+///
+/// assert_eq!(JpegCompression::SizePriority.name(), "Size priority");
+/// assert_eq!(JpegCompression::OptimalQuality.to_string(), "Optimal quality");
+/// ```
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[non_exhaustive]
+pub enum JpegCompression {
+    /// Compressed so that the files keep about the same size.
+    SizePriority,
+    /// Compressed for the best quality each picture allows, the Z bodies'
+    /// starred step.
+    OptimalQuality,
+}
+
+impl JpegCompression {
+    /// The compression's name, for an information panel: "Size priority"
+    /// or "Optimal quality".
+    pub fn name(self) -> &'static str {
+        match self {
+            JpegCompression::SizePriority => "Size priority",
+            JpegCompression::OptimalQuality => "Optimal quality",
+        }
+    }
+}
+
+impl fmt::Display for JpegCompression {
+    /// Writes [`name`](JpegCompression::name).
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.name())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -2668,6 +2895,8 @@ mod tests {
             daylight_saving_time: Some(true),
             raw_bit_depth: Some(14),
             raw_compression: Some(RawCompression::Lossless),
+            jpeg_quality: Some(JpegQuality::Fine),
+            jpeg_compression: Some(JpegCompression::OptimalQuality),
         }
     }
 
@@ -2694,6 +2923,8 @@ mod tests {
         assert_eq!(settings.daylight_saving_time(), None);
         assert_eq!(settings.raw_bit_depth(), None);
         assert_eq!(settings.raw_compression(), None);
+        assert_eq!(settings.jpeg_quality(), None);
+        assert_eq!(settings.jpeg_compression(), None);
 
         let white_balance = WhiteBalance::default();
         assert_eq!(white_balance.mode(), None);
@@ -2761,6 +2992,11 @@ mod tests {
         assert_eq!(settings.daylight_saving_time(), Some(true));
         assert_eq!(settings.raw_bit_depth(), Some(14));
         assert_eq!(settings.raw_compression(), Some(RawCompression::Lossless));
+        assert_eq!(settings.jpeg_quality(), Some(JpegQuality::Fine));
+        assert_eq!(
+            settings.jpeg_compression(),
+            Some(JpegCompression::OptimalQuality)
+        );
 
         let white_balance = nikon_white_balance();
         assert_eq!(white_balance.mode(), Some(WhiteBalanceMode::Auto));
@@ -2942,6 +3178,22 @@ mod tests {
                         ..start.clone()
                     },
                 ),
+                (
+                    start.clone().with_jpeg_quality(JpegQuality::Basic),
+                    CameraSettings {
+                        jpeg_quality: Some(JpegQuality::Basic),
+                        ..start.clone()
+                    },
+                ),
+                (
+                    start
+                        .clone()
+                        .with_jpeg_compression(JpegCompression::SizePriority),
+                    CameraSettings {
+                        jpeg_compression: Some(JpegCompression::SizePriority),
+                        ..start.clone()
+                    },
+                ),
             ];
             for (place, (built, expected)) in cases.into_iter().enumerate() {
                 assert_eq!(built, expected, "builder {place} from {start:?}");
@@ -3024,7 +3276,9 @@ mod tests {
             .with_bracketing(Bracketing::Exposure)
             .with_daylight_saving_time(true)
             .with_raw_bit_depth(14)
-            .with_raw_compression(RawCompression::Lossless);
+            .with_raw_compression(RawCompression::Lossless)
+            .with_jpeg_quality(JpegQuality::Fine)
+            .with_jpeg_compression(JpegCompression::OptimalQuality);
         assert_eq!(settings, full_settings());
     }
 
@@ -3050,7 +3304,9 @@ mod tests {
             .with_bracketing(Bracketing::DynamicRange)
             .with_daylight_saving_time(false)
             .with_raw_bit_depth(12)
-            .with_raw_compression(RawCompression::Lossy);
+            .with_raw_compression(RawCompression::Lossy)
+            .with_jpeg_quality(JpegQuality::Light)
+            .with_jpeg_compression(JpegCompression::SizePriority);
         // Every value of `earlier` differs from the full record's, so each
         // builder below has one to replace.
         let full = full_settings();
@@ -3074,7 +3330,9 @@ mod tests {
             .with_bracketing(Bracketing::Exposure)
             .with_daylight_saving_time(true)
             .with_raw_bit_depth(14)
-            .with_raw_compression(RawCompression::Lossless);
+            .with_raw_compression(RawCompression::Lossless)
+            .with_jpeg_quality(JpegQuality::Fine)
+            .with_jpeg_compression(JpegCompression::OptimalQuality);
         assert_eq!(settings, full);
 
         let white_balance = WhiteBalance::default()
@@ -3509,6 +3767,30 @@ mod tests {
         all
     }
 
+    fn all_jpeg_qualities() -> [JpegQuality; 8] {
+        use JpegQuality::*;
+        let all = [
+            Economy, Light, Basic, Standard, Normal, Fine, SuperFine, ExtraFine,
+        ];
+        for quality in all {
+            match quality {
+                Economy | Light | Basic | Standard | Normal | Fine | SuperFine | ExtraFine => {}
+            }
+        }
+        all
+    }
+
+    fn all_jpeg_compressions() -> [JpegCompression; 2] {
+        use JpegCompression::*;
+        let all = [SizePriority, OptimalQuality];
+        for compression in all {
+            match compression {
+                SizePriority | OptimalQuality => {}
+            }
+        }
+        all
+    }
+
     #[test]
     fn every_name_is_the_one_documented_and_display_writes_it() {
         // The names are stable once released: a program may show or store
@@ -3661,6 +3943,25 @@ mod tests {
                 "High efficiency*",
             ],
         );
+        assert_names(
+            &all_jpeg_qualities(),
+            JpegQuality::name,
+            &[
+                "Economy",
+                "Light",
+                "Basic",
+                "Standard",
+                "Normal",
+                "Fine",
+                "Super fine",
+                "Extra fine",
+            ],
+        );
+        assert_names(
+            &all_jpeg_compressions(),
+            JpegCompression::name,
+            &["Size priority", "Optimal quality"],
+        );
     }
 
     #[test]
@@ -3684,6 +3985,8 @@ mod tests {
         assert_ordered(&all_release_modes());
         assert_ordered(&all_bracketings());
         assert_ordered(&all_raw_compressions());
+        assert_ordered(&all_jpeg_qualities());
+        assert_ordered(&all_jpeg_compressions());
     }
 
     #[test]

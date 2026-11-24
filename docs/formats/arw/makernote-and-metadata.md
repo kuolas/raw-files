@@ -1571,8 +1571,8 @@ More of how the photographer set the camera:
 
 raw-files reads each from a plain MakerNote tag or a standard tag, as
 [ADR011](../../architecture-decisions/adr011-metadata-from-standard-tags.md)
-decides, in the order it gives: the first five lines now, the JPEG
-quality and the kind of fluorescent lamp still to come.
+decides, in the order it gives: the first five lines now, the kind of
+fluorescent lamp still to come.
 Nothing needs deciphering.
 
 **How it was measured.** On 2026-11-20 a counting program written from
@@ -1867,26 +1867,27 @@ that have both, and is not read **[F]**:
 - On the RX1's file (2647) 0x0102 says RAW alone, yet 0xB047 says fine:
   there it is the menu's step, not a JPEG written.
 
-raw-files will give a `JpegQuality` from the first of these that names
-a step. Each list is read whole, since files hold part of each:
+raw-files gives a `JpegQuality` from the first of these that names a
+step. Each list is read whole, since files hold part of each:
 
 1. 0x202E's second value: 1 `Standard`, 2 `Fine`, 3 `ExtraFine`,
-   4 `Light`; 0 gives none.
-2. 0x0102 in a JPEG: 2 `Fine`, 3 `Standard`, 5 `ExtraFine`, 9 `Light`.
+   4 `Light`; 0, no JPEG written, gives none, and in a raw file the two
+   tags below are not read after it.
+2. 0x0102 in a JPEG: 1 `SuperFine`, 2 `Fine`, 3 `Standard`, 4 `Economy`,
+   5 `ExtraFine`, 9 `Light`.
 3. 0xB047, where 0x0102 is absent or does not say RAW alone:
    0 `Standard`, 1 `Fine`, 2 `ExtraFine`.
 
 A raw file of a RAW + JPEG pair so gives the step of the JPEG written
 beside it. Mark: observed for 0x202E's 2 and 3, 0x0102's 2 and 5 and
 0xB047's 1; documented only for the rest. 0x0102's 1, super fine, and
-4, economy, older compacts' steps, have no step of `JpegQuality` named
-for them yet: whether they get steps of their own is open, and until
-then they give none.
+4, economy, are older compacts' steps, which keep their own names, as
+every maker's steps do.
 
 **My ILCE-7M2 records no JPEG quality in a plain tag that the
 documentation names.** It writes no 0x202E, 0x0102 is 0 or 6, and
 0xB047 is 65535 on every file. Which plain tag, if any, gives it is
-not settled, so its JPEG quality will be `None`.
+not settled, so its JPEG quality is `None`.
 
 **The fluorescent lamp.** raw-files will give the kind of fluorescent
 lamp from Exif's LightSource 12 to 16 [P][30] (4.6.6.7.20, pp. 60 to 61), as a part
