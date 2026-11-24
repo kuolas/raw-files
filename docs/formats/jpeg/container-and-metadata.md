@@ -787,22 +787,22 @@ and HE\* ones). [F]
   The 506 D7200 JPEGs with 0 are those whose digitized time differs
   from the capture time ([section 4](#4-exif-the-app1-segment)). [F]
 
-**The JPEG quality** is recorded in the maker's MakerNote: raw-files will
-read it as `JpegQuality`, keeping each maker's step names (ADR011). The
+**The JPEG quality** is recorded in the maker's MakerNote: raw-files reads
+it as `JpegQuality`, keeping each maker's step names (ADR011). The
 counts are over the JPEGs of section 4's "More of how the camera was
 set". **[F]**
 
 - **Nikon's Quality (0x0004)** is text. In a JPEG it says `FINE`,
-  `NORMAL` or `BASIC`, and will give `Fine`, `Normal` or `Basic`.
+  `NORMAL` or `BASIC`, and gives `Fine`, `Normal` or `Basic`.
   - These are the camera's words for its JPEG fine, normal and basic
     steps, as the Z 9's manual names them. [P][7] (pp. 103 to 104)
   - My 16,404 Nikon JPEGs with the tag hold `FINE` on 14,894, `NORMAL`
     on 764, `BASIC` on 41 and `RAW` on 705. **[F]**
   - The public ones hold `BASIC` on 6, `FINE` on 2 and `NORMAL` on 1.
-    The E800, E900 and E950 files write a SHORT, not text, and will
-    give none. **[F]**
+    The E800, E900 and E950 files write a SHORT, not text, and give
+    none. **[F]**
 - **Nikon's 0x0044** is the choice the Z 9's manual calls optimal
-  quality or size priority. [P][7] (pp. 103 to 104, 952) It will give
+  quality or size priority. [P][7] (pp. 103 to 104, 952) It gives
   `JpegCompression`.
   - ExifTool's documentation names 1 size priority and 3 optimal
     quality [S][8]. Both are observed, on the public fixtures and on my files.
@@ -812,8 +812,8 @@ set". **[F]**
     No frame shot in a known setting yet tells the star from the
     quality step. [I]
   - 0 is on the 17 Z 9 JPEGs whose Quality says `RAW`. The
-    documentation does not name it, so it will give none. **[F]**
-- **A JPEG whose Nikon Quality says `RAW`** will give no JPEG quality.
+    documentation does not name it, so it gives none. **[F]**
+- **A JPEG whose Nikon Quality says `RAW`** gives no JPEG quality.
   - 705 of my JPEGs say so: 662 from my D3200, 19 from my D7200, 17
     from my Z 9 and 7 from my D600. **[F]**
   - 670 of them also hold NEFCompression (0x0093), a raw file's tag. The
@@ -890,12 +890,13 @@ decided, as steps. [I]
    way, but a JPEG gives no raw image size, whatever its MakerNote's
    ImageSizeRAW says (section 10). Exposure bracketing comes from Exif's
    ExposureMode 2 where the MakerNote gives no bracketing value, not even
-   off. More capture settings will come the same way:
+   off. More capture settings come the same way:
    - from Exif (section 4): the flash's return light and red-eye
-     reduction and the kind of fluorescent lamp;
+     reduction, and, still to come, the kind of fluorescent lamp;
    - from the MakerNote (section 10): the JPEG quality, and Nikon's
      choice of optimal quality or size priority. A JPEG whose Nikon
-     Quality says `RAW` will give no JPEG quality.
+     Quality says `RAW` gives no JPEG quality, and no JPEG gives a raw
+     bit depth or compression.
 7. **The focus point** is kept only when its frame has the JPEG's aspect
    ratio, to within one pixel of rounding in either size:
    `|fw × jh − fh × jw|` at most the longest of `fw`, `fh`, `jw` and

@@ -68,6 +68,11 @@ use settings::{FromStandardTags, camera_settings};
 /// (ISO): two SHORTs, the second of them the ISO.
 const ISO: u16 = 0x0002;
 
+/// The Nikon MakerNote tag that records the image quality (Quality), as
+/// ASCII text: in a camera JPEG its quality step, such as `FINE`, and in a
+/// raw file `RAW`, or `NRW` on a Coolpix.
+const QUALITY: u16 = 0x0004;
+
 /// The Nikon MakerNote tag that records the white balance setting
 /// (WhiteBalance), as ASCII text. It is an upper-case word padded with
 /// spaces, such as `AUTO1` or `SUNNY`, or a chosen color temperature as
@@ -162,6 +167,11 @@ const IMAGE_SIZE_RAW: u16 = 0x003E;
 /// blue then magenta to green.
 const FINE_TUNE: u16 = 0x003F;
 
+/// The Nikon MakerNote tag that records how the JPEG compression was set
+/// (JPGCompression): one SHORT, 1 for size priority and 3 for optimal
+/// quality. Every raw file that records it holds 0.
+const JPG_COMPRESSION: u16 = 0x0044;
+
 /// The Nikon MakerNote tag that records the visible image, the rectangle
 /// of the stored raw data inside its border (CropArea): its left column,
 /// top row, width and height.
@@ -242,6 +252,7 @@ mod rules {
     const ASCII: &[FieldType] = &[FieldType::Ascii];
 
     pub(super) const ISO: Held<[u32; 2]> = Held::new(super::ISO, SHORT);
+    pub(super) const QUALITY: Rule<Text> = Rule::new(super::QUALITY, ASCII);
     pub(super) const WHITE_BALANCE: Rule<Text> = Rule::new(super::WHITE_BALANCE, ASCII);
     pub(super) const FOCUS_MODE: Rule<Text> = Rule::new(super::FOCUS_MODE, ASCII);
     pub(super) const FLASH_SETTING: Rule<Text> = Rule::new(super::FLASH_SETTING, ASCII);
@@ -262,6 +273,7 @@ mod rules {
         Held::new(super::WORLD_TIME, &[FieldType::Undefined]);
     pub(super) const SHUTTER_MODE: Held<[u32; 1]> = Held::new(super::SHUTTER_MODE, SHORT);
     pub(super) const IMAGE_SIZE_RAW: Held<[u32; 1]> = Held::new(super::IMAGE_SIZE_RAW, SHORT);
+    pub(super) const JPG_COMPRESSION: Held<[u32; 1]> = Held::new(super::JPG_COMPRESSION, SHORT);
     pub(super) const FINE_TUNE: Rule<[SignedRational; 2]> =
         Rule::new(super::FINE_TUNE, &[FieldType::SRational]);
     pub(super) const CROP_AREA: Rule<[u32; 4]> =
@@ -316,10 +328,11 @@ mod rules {
 /// - **The camera settings** that only the MakerNote records, and its white
 ///   balance setting, finer than Exif's, in place of the mode the Exif tags
 ///   gave when it names one ([`camera_settings`]). The color space is read
-///   only when the Exif IFD holds no ColorSpace, and the raw image size and
-///   the raw compression only for a raw file's picture. The AF-area mode is
-///   AFInfo2's, whatever the focus mode and whether or not the record gives
-///   a point, and on a body without AFInfo2 AFInfo's.
+///   only when the Exif IFD holds no ColorSpace, the raw image size and the
+///   raw compression only for a raw file's picture, and the JPEG quality
+///   and compression only for a JPEG's. The AF-area mode is AFInfo2's,
+///   whatever the focus mode and whether or not the record gives a point,
+///   and on a body without AFInfo2 AFInfo's.
 /// - **The focus points**, from AFInfo2, always read, since the standard
 ///   tags never give one ([`focus`]); a shot whose focus mode, read with
 ///   the settings, is manual gives none. A recorded position is

@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 //! The camera settings in the Nikon MakerNote: the white balance, the
-//! shutter used, the image area, the raw size and compression, the color
-//! space, the focus mode, the AF-area mode, AF fine-tune, the
-//! stabilization, auto ISO, the exposure fine-tuning, the release mode and
-//! bracketing, daylight saving time, and the flash's source, control, sync
-//! and compensation.
+//! shutter used, the image area, the raw size and compression, the JPEG
+//! quality and compression, the color space, the focus mode, the AF-area
+//! mode, AF fine-tune, the stabilization, auto ISO, the exposure
+//! fine-tuning, the release mode and bracketing, daylight saving time, and
+//! the flash's source, control, sync and compensation.
 //!
 //! The MakerNote records how the camera was set for the picture beyond
 //! what the Exif tags record (ADR011). [`camera_settings`] reads each
@@ -21,6 +21,8 @@
 //! - the raw size from ImageSizeRAW ([`raw_image_size`]);
 //! - the raw compression from NEFCompression, else from tag 0x0051
 //!   ([`nef_compression_code`], [`nef_compression`]);
+//! - the JPEG quality from Quality's text ([`jpeg_quality_of_text`]), and
+//!   the JPEG compression from JPGCompression ([`jpeg_compression`]);
 //! - the color space from ColorSpace ([`color_space`]);
 //! - the focus mode from FocusMode's text ([`focus_mode_of_text`]);
 //! - the AF-area mode from AFInfo2 ([`area_mode_of`]), else from AFInfo
@@ -61,8 +63,8 @@ use super::crop::CropHiSpeed;
 use super::rules;
 use crate::camera_settings::{
     AfFineTune, Bracketing, CameraSettings, ColorSpace, FineTune, Flash, FlashControl, FlashSource,
-    FlashSync, FocusAreaMode, FocusMode, ImageArea, RawCompression, RawImageSize, ReleaseMode,
-    Shutter, Stabilization, StabilizationMode, WhiteBalanceMode,
+    FlashSync, FocusAreaMode, FocusMode, ImageArea, JpegCompression, JpegQuality, RawCompression,
+    RawImageSize, ReleaseMode, Shutter, Stabilization, StabilizationMode, WhiteBalanceMode,
 };
 use crate::container::tiff::Ifd;
 use crate::error::Result;
@@ -115,6 +117,11 @@ const NIKON_COMPRESSED: u32 = 34713;
 ///   bodies without it, from tag 0x0051 ([`nef_compression_code`],
 ///   [`nef_compression`]). Under any other Compression it stays as
 ///   `settings` has it: uncompressed for 1, else `None`.
+/// - **The JPEG quality** is the one Quality's text names
+///   ([`jpeg_quality_of_text`]), read by the text rule, for a JPEG's
+///   picture alone: a raw file's Quality says `RAW`, whatever JPEG the
+///   camera wrote beside it. **The JPEG compression** is JPGCompression's
+///   code ([`jpeg_compression`]), for a JPEG's picture alone too.
 /// - **The color space** is ColorSpace's code ([`color_space`]), only when
 ///   `standard.exif_records_color_space` is `false`. Where the Exif IFD
 ///   keeps a ColorSpace, it alone decides
@@ -197,6 +204,17 @@ pub(super) fn camera_settings<R: Read + Seek>(
     if picture == Picture::Raw && raw_compression == Some(NIKON_COMPRESSED) {
         settings.raw_compression = nef_compression_code(src, ifd)?.and_then(nef_compression);
     }
+    settings.jpeg_quality = match picture {
+        Picture::Jpeg => tiff_metadata::text(src, ifd, rules::QUALITY)?
+            .and_then(|text| jpeg_quality_of_text(&text)),
+        Picture::Raw => None,
+    };
+    settings.jpeg_compression = match picture {
+        Picture::Jpeg => ifd
+            .held(rules::JPG_COMPRESSION)
+            .and_then(|[code]| jpeg_compression(code)),
+        Picture::Raw => None,
+    };
     if !exif_records_color_space {
         settings.color_space = ifd
             .held(rules::COLOR_SPACE)
@@ -640,6 +658,44 @@ fn nef_compression(code: u32) -> Option<RawCompression> {
     })
 }
 
+/// The JPEG quality step that a JPEG's Quality text `text`, as read,
+/// names, looked up whole among the texts files hold, as the D600's
+/// manual and the Z 9's Reference Guide name the steps (NEF notes,
+/// section 8.10):
+///
+/// - `FINE`, JPEG fine, [`Fine`](JpegQuality::Fine);
+/// - `NORMAL`, JPEG normal, [`Normal`](JpegQuality::Normal);
+/// - `BASIC`, JPEG basic, [`Basic`](JpegQuality::Basic).
+///
+/// `None` for every other text: `RAW`, which a JPEG holds when a program
+/// made it from a raw file and kept the raw file's MakerNote, and a text
+/// the table lacks.
+fn jpeg_quality_of_text(text: &str) -> Option<JpegQuality> {
+    Some(match text {
+        "FINE" => JpegQuality::Fine,
+        "NORMAL" => JpegQuality::Normal,
+        "BASIC" => JpegQuality::Basic,
+        _ => return None,
+    })
+}
+
+/// The JPEG compression a JPGCompression `code` names, in the list
+/// ExifTool's published documentation gives, read whole: 1
+/// [`SizePriority`](JpegCompression::SizePriority) and 3
+/// [`OptimalQuality`](JpegCompression::OptimalQuality), both on files.
+/// `None` for 0, which the documentation does not give and every raw file
+/// that records the tag holds, and for every other code. On every measured
+/// file, 3 comes with a JPEG fine and 1 with a JPEG basic; that the code
+/// is the star and not the step rests on the documentation and the Z 9's
+/// Reference Guide (NEF notes, section 8.10).
+fn jpeg_compression(code: u32) -> Option<JpegCompression> {
+    Some(match code {
+        1 => JpegCompression::SizePriority,
+        3 => JpegCompression::OptimalQuality,
+        _ => return None,
+    })
+}
+
 /// The focus mode that the FocusMode text `text`, as read, names. Each
 /// text is looked up whole in a table of the texts that files hold, as the
 /// white balance texts are ([`white_balance_of_text`]):
@@ -927,8 +983,9 @@ mod tests {
     use super::super::{
         AF_INFO, AF_INFO2, AF_TUNE, COLOR_SPACE, COLOR_TEMPERATURE, COMPRESSION_RECORD,
         CROP_HI_SPEED, EXPOSURE_TUNING, FINE_TUNE, FINE_TUNE_STEPS, FLASH_EXPOSURE_COMP,
-        FLASH_SETTING, FLASH_TYPE, FOCUS_MODE, IMAGE_SIZE_RAW, ISO_SELECTION, NEF_COMPRESSION,
-        SHOOTING_MODE, SHUTTER_MODE, VR_INFO, WHITE_BALANCE, WORLD_TIME, metadata,
+        FLASH_SETTING, FLASH_TYPE, FOCUS_MODE, IMAGE_SIZE_RAW, ISO_SELECTION, JPG_COMPRESSION,
+        NEF_COMPRESSION, QUALITY, SHOOTING_MODE, SHUTTER_MODE, VR_INFO, WHITE_BALANCE, WORLD_TIME,
+        metadata,
     };
     use super::*;
     use crate::camera_settings::{ExposureProgram, FlashMode, WhiteBalance};
@@ -1962,6 +2019,96 @@ mod tests {
             standard.raw_storage.compression = Some(34713);
             let read = metadata(&mut src, &makernote, standard, Picture::Jpeg).unwrap();
             assert_eq!(read.camera_settings.raw_compression, None, "{order:?}");
+        }
+    }
+
+    #[test]
+    fn each_quality_text_gives_its_step_in_a_jpeg() {
+        // Padded with spaces, as the bodies write it, or not.
+        let cases = [
+            ("FINE", Some(JpegQuality::Fine)),
+            ("NORMAL", Some(JpegQuality::Normal)),
+            ("BASIC", Some(JpegQuality::Basic)),
+            ("FINE   ", Some(JpegQuality::Fine)),
+            // A JPEG a program made from a raw file, a raw file's texts,
+            // and texts the table lacks.
+            ("RAW", None),
+            ("NRW", None),
+            ("RAW2.7M", None),
+            ("fine", None),
+            ("FINE*", None),
+        ];
+        for order in ORDERS {
+            for (text, expected) in cases {
+                let read = jpeg_settings(
+                    order,
+                    |inner, ifd| {
+                        inner.ascii(ifd, QUALITY, text);
+                    },
+                    |_, _| {},
+                );
+                assert_eq!(read.jpeg_quality, expected, "{order:?}, {text:?}");
+            }
+        }
+    }
+
+    #[test]
+    fn a_raw_files_quality_gives_no_jpeg_quality() {
+        // Whatever the text, even a JPEG's step: a raw file's picture is
+        // its raw data.
+        for order in ORDERS {
+            for text in ["RAW", "FINE"] {
+                let read = settings_of(order, |inner, ifd| {
+                    inner.ascii(ifd, QUALITY, text);
+                });
+                assert_eq!(read.jpeg_quality, None, "{order:?}, {text:?}");
+            }
+        }
+    }
+
+    #[test]
+    fn a_quality_of_another_type_gives_no_jpeg_quality() {
+        // The E800, E900 and E950 write a SHORT.
+        for order in ORDERS {
+            let read = jpeg_settings(
+                order,
+                |inner, ifd| {
+                    inner.short(ifd, QUALITY, &[2]);
+                },
+                |_, _| {},
+            );
+            assert_eq!(read.jpeg_quality, None, "{order:?}");
+        }
+    }
+
+    #[test]
+    fn each_jpg_compression_code_gives_its_compression_in_a_jpeg_alone() {
+        let cases = [
+            (1, Some(JpegCompression::SizePriority)),
+            (3, Some(JpegCompression::OptimalQuality)),
+            (0, None),
+            (2, None),
+            (4, None),
+        ];
+        for order in ORDERS {
+            for (code, expected) in cases {
+                let tags = |inner: &mut TiffBuilder, ifd| {
+                    inner.short(ifd, JPG_COMPRESSION, &[code]);
+                };
+                let read = jpeg_settings(order, tags, |_, _| {});
+                assert_eq!(read.jpeg_compression, expected, "{order:?}, {code}");
+                // A raw file gives none, as it gives no JPEG quality.
+                let read = settings_of(order, tags);
+                assert_eq!(read.jpeg_compression, None, "{order:?}, {code}, raw");
+            }
+            let read = jpeg_settings(
+                order,
+                |inner, ifd| {
+                    inner.long(ifd, JPG_COMPRESSION, &[3]);
+                },
+                |_, _| {},
+            );
+            assert_eq!(read.jpeg_compression, None, "{order:?}, a LONG");
         }
     }
 

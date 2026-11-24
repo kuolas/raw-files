@@ -847,6 +847,10 @@ fn camera_settings<R: Read + Seek>(
         // maker's MakerNote reader any other.
         raw_bit_depth: None,
         raw_compression: None,
+        // Only a maker's MakerNote records the JPEG quality and how the
+        // JPEG was compressed.
+        jpeg_quality: None,
+        jpeg_compression: None,
     })
 }
 

@@ -57,8 +57,8 @@ use std::io::{Read, Seek};
 
 use super::{MakerNoteBlock, Picture, Reader, checked_color_temperature};
 use crate::camera_settings::{
-    Bracketing, CameraSettings, FineTune, FlashSource, FocusAreaMode, FocusMode, RawCompression,
-    ReleaseMode, Stabilization, WhiteBalanceMode,
+    Bracketing, CameraSettings, FineTune, FlashSource, FocusAreaMode, FocusMode, JpegQuality,
+    RawCompression, ReleaseMode, Stabilization, WhiteBalanceMode,
 };
 use crate::container::tiff::{Ifd, Rule, Tree};
 use crate::entries::{Directory, Entries, Lookup};
@@ -70,6 +70,13 @@ use crate::io::Source;
 use crate::limits::Limits;
 use crate::metadata::Metadata;
 use crate::rational::SignedRational;
+
+/// The Sony MakerNote tag that records the image quality (Quality): one
+/// LONG. In a raw file it says whether a JPEG was written beside it: 0 the
+/// raw file alone, 6 with a JPEG, 7 a compressed raw file alone and 8 with
+/// a JPEG. In a JPEG it is the JPEG's quality step, such as 2 for fine, or
+/// 6 for the JPEG of a raw and JPEG pair.
+const QUALITY: u16 = 0x0102;
 
 /// The Sony MakerNote tag that records the white balance setting
 /// (WhiteBalance): one LONG, a code for the setting, such as 0 for auto,
@@ -121,6 +128,12 @@ pub(in crate::formats) const FOCUS_LOCATION: u16 = 0x2027;
 /// EV, `0/6` on every file checked.
 pub(in crate::formats) const EXPOSURE_FINE_TUNE: u16 = 0x202D;
 
+/// The Sony MakerNote tag that records the image quality on the ILCE-7RM3,
+/// the RX100M6 and later bodies (0x202E, which ExifTool's documentation
+/// calls Quality2): two SHORTs, the kind of raw file, then the quality step
+/// of the JPEG written with it, such as 2 for fine, or 0 when none was.
+const QUALITY2: u16 = 0x202E;
+
 /// The Sony MakerNote tag that records the size of the focus area
 /// (FocusFrameSize): six UNDEFINED bytes, the area's width and height as
 /// 16-bit numbers in the MakerNote's byte order, then a third, 257 or 0,
@@ -136,6 +149,12 @@ const FOCUS_LOCATION2: u16 = 0x204A;
 /// temperature and the custom white balance's own under custom, and 0 when
 /// none was recorded.
 const COLOR_TEMPERATURE: u16 = 0xB021;
+
+/// The Sony MakerNote tag that records the JPEG quality step the camera was
+/// set to (JPEGQuality): one SHORT, 0 standard, 1 fine and 2 extra fine;
+/// 65535, which every interchangeable-lens body that records it writes,
+/// records none.
+const JPEG_QUALITY: u16 = 0xB047;
 
 /// The Sony MakerNote tag that records whether the image stabilization was
 /// on (ImageStabilization): one LONG, 0 off and 1 on; 4294967295, "n/a",
@@ -180,6 +199,9 @@ mod rules {
     pub(super) const IMAGE_STABILIZATION: Held<[u32; 1]> =
         Held::new(super::IMAGE_STABILIZATION, LONG);
     pub(super) const RELEASE_MODE: Held<[u32; 1]> = Held::new(super::RELEASE_MODE, SHORT);
+    pub(super) const QUALITY: Held<[u32; 1]> = Held::new(super::QUALITY, LONG);
+    pub(super) const QUALITY2: Held<[u32; 2]> = Held::new(super::QUALITY2, SHORT);
+    pub(super) const JPEG_QUALITY: Held<[u32; 1]> = Held::new(super::JPEG_QUALITY, SHORT);
 }
 
 /// The header of the DSLR-A100's MakerNote (`SONY DSC `, then three NULs),
@@ -280,12 +302,14 @@ impl Reader for MakerNote {
     /// The metadata of the file whose Sony MakerNote this is: the metadata
     /// of `standard`, what the standard tags gave, with what the MakerNote
     /// records that they lack, and what Sony's own codes say. It is the same
-    /// whatever the `picture`, raw or JPEG, but for the raw compression:
+    /// whatever the `picture`, raw or JPEG, but for the JPEG quality and the
+    /// raw compression:
     ///
     /// - **the camera settings** that only the MakerNote records, and the
     ///   white balance setting, in place of the Exif tags' mode, and the
     ///   AF-area mode by the family of the body the Model names
-    ///   ([`camera_settings`]);
+    ///   ([`camera_settings`]). Of them, the JPEG quality depends on the
+    ///   `picture`: tag 0x0102 names a quality step only in a JPEG;
     /// - **the raw compression**, for a raw file's picture, from Sony's
     ///   codes in the raw data's Compression, which `standard.raw_storage`
     ///   gives with the bytes the data takes ([`raw_compression`]). Under
@@ -308,7 +332,8 @@ impl Reader for MakerNote {
     ) -> Result<Metadata> {
         let mut metadata = standard.metadata;
         let family = metadata.camera.recorded_model.as_deref().map(family);
-        metadata.camera_settings = camera_settings(src, self, metadata.camera_settings, family)?;
+        metadata.camera_settings =
+            camera_settings(src, self, metadata.camera_settings, family, picture)?;
         if picture == Picture::Raw
             && let Some(compression) = raw_compression(standard.raw_storage, metadata.raw_size)
         {
@@ -491,6 +516,9 @@ fn area<R: Read + Seek>(src: &mut Source<R>, makernote: &MakerNote) -> Result<Op
 ///   camera without a flash function gets what the MakerNote records: the
 ///   RX0 and the FX30 record a compensation of zero. FlashLevel (0xB048), which repeats the
 ///   compensation in thirds of a stop, is not read.
+/// - **The JPEG quality** is the first of Quality2, Quality in the JPEG
+///   that `picture` says the file is, and JPEGQuality that names a step
+///   ([`jpeg_quality`]).
 ///
 /// The shutter used, the image area and the raw image size stay as
 /// `settings` has them, `None`. Sony records the first two only in
@@ -508,8 +536,10 @@ fn camera_settings<R: Read + Seek>(
     makernote: &MakerNote,
     mut settings: CameraSettings,
     family: Option<Family>,
+    picture: Picture,
 ) -> Result<CameraSettings> {
     let ifd = &makernote.ifd;
+    settings.jpeg_quality = jpeg_quality(ifd, picture);
     let mode = ifd
         .held(rules::WHITE_BALANCE)
         .and_then(|[code]| white_balance_mode(code));
@@ -550,6 +580,105 @@ fn camera_settings<R: Read + Seek>(
         }
     }
     Ok(settings)
+}
+
+/// The JPEG quality step that the MakerNote's IFD `ifd` records, from the
+/// first of three tags that names one, as the ARW notes give their lists,
+/// each read whole, since files hold part of each (section 9.10):
+///
+/// 1. Quality2's second value ([`quality2_step`]), the step of the JPEG
+///    written with the file. Its 0, no JPEG, names none, and in a raw file
+///    ends the search: with no JPEG written, a step the tags below record
+///    would be the menu's.
+/// 2. Quality, in a JPEG alone, whose `picture` is [`Picture::Jpeg`]
+///    ([`quality_step`]). In a raw file its codes say whether a JPEG was
+///    written beside it, and name no step; so does its 6 in a JPEG of a
+///    raw and JPEG pair.
+/// 3. JPEGQuality ([`jpeg_quality_step`]), unless Quality says the camera
+///    wrote the raw file alone, 0 or 7: the RX1 records a step there (file
+///    2647) that is the menu's, not that of a JPEG it wrote.
+///
+/// A raw file of a raw and JPEG pair so gives the step of the JPEG written
+/// beside it. The ILCE-7M2 writes no Quality2, a Quality of 0 or 6 and a
+/// JPEGQuality of 65535, so it gives none: which plain tag, if any, records
+/// its step is not known.
+fn jpeg_quality(ifd: &Ifd, picture: Picture) -> Option<JpegQuality> {
+    if let Some([_, code]) = ifd.held(rules::QUALITY2) {
+        if let Some(step) = quality2_step(code) {
+            return Some(step);
+        }
+        if code == NO_JPEG && picture == Picture::Raw {
+            return None;
+        }
+    }
+    let quality = ifd.held(rules::QUALITY).map(|[code]| code);
+    if picture == Picture::Jpeg
+        && let Some(step) = quality.and_then(quality_step)
+    {
+        return Some(step);
+    }
+    if quality.is_some_and(|code| matches!(code, RAW | COMPRESSED_RAW)) {
+        return None;
+    }
+    ifd.held(rules::JPEG_QUALITY)
+        .and_then(|[code]| jpeg_quality_step(code))
+}
+
+/// Quality2's second value when no JPEG was written with the file.
+const NO_JPEG: u32 = 0;
+
+/// Quality's code for a raw file written alone.
+const RAW: u32 = 0;
+
+/// Quality's code for a compressed raw file written alone.
+const COMPRESSED_RAW: u32 = 7;
+
+/// The step that Quality2's second value `code` names: 1
+/// [`Standard`](JpegQuality::Standard), 2 [`Fine`](JpegQuality::Fine), 3
+/// [`ExtraFine`](JpegQuality::ExtraFine) and 4
+/// [`Light`](JpegQuality::Light). Files hold 2 and 3; 1 and 4 are
+/// documented only. `None` for 0, no JPEG written, and every other code.
+fn quality2_step(code: u32) -> Option<JpegQuality> {
+    Some(match code {
+        1 => JpegQuality::Standard,
+        2 => JpegQuality::Fine,
+        3 => JpegQuality::ExtraFine,
+        4 => JpegQuality::Light,
+        _ => return None,
+    })
+}
+
+/// The step that a JPEG's Quality `code` names: 1
+/// [`SuperFine`](JpegQuality::SuperFine) and 4
+/// [`Economy`](JpegQuality::Economy), the steps of Sony's older compacts;
+/// 2 [`Fine`](JpegQuality::Fine), 3 [`Standard`](JpegQuality::Standard),
+/// 5 [`ExtraFine`](JpegQuality::ExtraFine) and 9
+/// [`Light`](JpegQuality::Light). Files hold 2 and 5; the others are
+/// documented only. `None` for the codes that say what files were
+/// written, 0 and 6 to 8, and every other code.
+fn quality_step(code: u32) -> Option<JpegQuality> {
+    Some(match code {
+        1 => JpegQuality::SuperFine,
+        2 => JpegQuality::Fine,
+        3 => JpegQuality::Standard,
+        4 => JpegQuality::Economy,
+        5 => JpegQuality::ExtraFine,
+        9 => JpegQuality::Light,
+        _ => return None,
+    })
+}
+
+/// The step that a JPEGQuality `code` names: 0
+/// [`Standard`](JpegQuality::Standard), 1 [`Fine`](JpegQuality::Fine) and
+/// 2 [`ExtraFine`](JpegQuality::ExtraFine). Files hold 1; 0 and 2 are
+/// documented only. `None` for 65535, "n/a", and every other code.
+fn jpeg_quality_step(code: u32) -> Option<JpegQuality> {
+    Some(match code {
+        0 => JpegQuality::Standard,
+        1 => JpegQuality::Fine,
+        2 => JpegQuality::ExtraFine,
+        _ => return None,
+    })
 }
 
 /// The raw compression that Sony's own codes in the raw data's
@@ -2085,11 +2214,6 @@ mod tests {
     /// fluorescent lamp, not the fine-tuning, and is never read.
     const FLUORESCENT_LAMP: u16 = 0x0112;
 
-    /// The Sony MakerNote tag that records the kind of raw and the JPEG
-    /// quality (Quality, 0x202E): two SHORTs, whose first value gives an
-    /// APS-C raw the code of a medium one, and which is never read.
-    const QUALITY: u16 = 0x202E;
-
     /// The settings that the standard tags of a file set to daylight might
     /// give: Exif's daylight white balance, aperture priority,
     /// multi-segment metering, a flash that did not fire, set off, and
@@ -2112,7 +2236,14 @@ mod tests {
         tags: impl FnOnce(&mut TiffBuilder, IfdId),
     ) -> CameraSettings {
         let (mut src, makernote) = focus_file(order, b"", tags);
-        camera_settings(&mut src, &makernote, settings, Some(Family::EMount)).unwrap()
+        camera_settings(
+            &mut src,
+            &makernote,
+            settings,
+            Some(Family::EMount),
+            Picture::Raw,
+        )
+        .unwrap()
     }
 
     /// As [`settings_from`], from the empty settings.
@@ -2522,6 +2653,7 @@ mod tests {
                     &makernote,
                     CameraSettings::default(),
                     Some(family),
+                    Picture::Raw,
                 )
                 .unwrap();
                 let label = format!("{order:?}, {family:?}, {code}");
@@ -2555,8 +2687,14 @@ mod tests {
             let (mut src, makernote) = focus_file(order, b"", |builder, ifd| {
                 builder.byte(ifd, AF_AREA_MODE, &[0]);
             });
-            let settings =
-                camera_settings(&mut src, &makernote, CameraSettings::default(), None).unwrap();
+            let settings = camera_settings(
+                &mut src,
+                &makernote,
+                CameraSettings::default(),
+                None,
+                Picture::Raw,
+            )
+            .unwrap();
             assert_eq!(settings.focus_area_mode, None, "{order:?}");
         }
     }
@@ -2933,13 +3071,19 @@ mod tests {
     fn the_settings_the_makernote_does_not_record_are_the_standard_tags() {
         // The exposure program, the metering mode, the flash and the
         // color space stay as Exif gave them; and the shutter, the image
-        // area and the raw image size stay `None`, whatever Quality says.
+        // area and the raw image size stay `None`, whatever Quality2 says:
+        // its first value gives an APS-C raw the code of a medium one, and
+        // only its second, the JPEG's step, is read.
         for order in ORDERS {
             let settings = settings_from(order, exif_settings(), |builder, ifd| {
                 settings_tags(builder, ifd);
-                builder.short(ifd, QUALITY, &[3, 2]);
+                builder.short(ifd, QUALITY2, &[3, 2]);
             });
-            assert_eq!(settings, with_settings_tags(exif_settings()), "{order:?}");
+            assert_eq!(
+                settings,
+                with_settings_tags(exif_settings()).with_jpeg_quality(JpegQuality::Fine),
+                "{order:?}"
+            );
             assert_eq!(settings.shutter, None);
             assert_eq!(settings.image_area, None);
             assert_eq!(settings.raw_image_size, None);
@@ -2985,8 +3129,14 @@ mod tests {
             let (mut src, found) = read_file(cut.build().bytes);
             let found = found.expect("a MakerNote");
             assert!(found.ifd.entry(FINE_TUNE).is_none(), "{order:?}");
-            let settings =
-                camera_settings(&mut src, &found, exif_settings(), Some(Family::EMount)).unwrap();
+            let settings = camera_settings(
+                &mut src,
+                &found,
+                exif_settings(),
+                Some(Family::EMount),
+                Picture::Raw,
+            )
+            .unwrap();
             let mut expected = with_settings_tags(exif_settings());
             expected.white_balance.fine_tune = None;
             assert_eq!(settings, expected, "{order:?}");
@@ -2995,8 +3145,14 @@ mod tests {
             makernote_at(&mut builder, exif, UNDEFINED, len, block.start);
             let (mut src, found) = read_file(builder.build().bytes);
             let found = found.expect("a MakerNote");
-            let settings =
-                camera_settings(&mut src, &found, exif_settings(), Some(Family::EMount)).unwrap();
+            let settings = camera_settings(
+                &mut src,
+                &found,
+                exif_settings(),
+                Some(Family::EMount),
+                Picture::Raw,
+            )
+            .unwrap();
             assert_eq!(settings, with_settings_tags(exif_settings()), "{order:?}");
         }
     }
@@ -3110,6 +3266,198 @@ mod tests {
         );
     }
 
+    /// The JPEG quality of a Sony file in byte order `order`, read for
+    /// `picture`, whose MakerNote holds what `tags` adds to its IFD.
+    fn jpeg_quality_of(
+        order: Order,
+        picture: Picture,
+        tags: impl FnOnce(&mut TiffBuilder, IfdId),
+    ) -> Option<JpegQuality> {
+        let (mut src, makernote) = focus_file(order, b"", tags);
+        camera_settings(
+            &mut src,
+            &makernote,
+            CameraSettings::default(),
+            Some(Family::EMount),
+            picture,
+        )
+        .unwrap()
+        .jpeg_quality
+    }
+
+    #[test]
+    fn each_quality2_code_gives_its_step_in_either_picture() {
+        // Its first value, the kind of raw file, is not read.
+        let cases = [
+            (1, Some(JpegQuality::Standard)),
+            (2, Some(JpegQuality::Fine)),
+            (3, Some(JpegQuality::ExtraFine)),
+            (4, Some(JpegQuality::Light)),
+            (0, None),
+            (5, None),
+        ];
+        for order in ORDERS {
+            for picture in [Picture::Raw, Picture::Jpeg] {
+                for (code, expected) in cases {
+                    let read = jpeg_quality_of(order, picture, |builder, ifd| {
+                        builder.short(ifd, QUALITY2, &[3, code]);
+                    });
+                    assert_eq!(read, expected, "{order:?}, {picture:?}, {code}");
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn each_quality_code_gives_its_step_in_a_jpeg_alone() {
+        let cases = [
+            (1, Some(JpegQuality::SuperFine)),
+            (2, Some(JpegQuality::Fine)),
+            (3, Some(JpegQuality::Standard)),
+            (4, Some(JpegQuality::Economy)),
+            (5, Some(JpegQuality::ExtraFine)),
+            (9, Some(JpegQuality::Light)),
+            // What files were written, not a step.
+            (0, None),
+            (6, None),
+            (7, None),
+            (8, None),
+            (10, None),
+        ];
+        for order in ORDERS {
+            for (code, expected) in cases {
+                let tags = |builder: &mut TiffBuilder, ifd| {
+                    builder.long(ifd, QUALITY, &[code]);
+                };
+                let read = jpeg_quality_of(order, Picture::Jpeg, tags);
+                assert_eq!(read, expected, "{order:?}, {code}");
+                let read = jpeg_quality_of(order, Picture::Raw, tags);
+                assert_eq!(read, None, "{order:?}, {code} in a raw file");
+            }
+        }
+    }
+
+    #[test]
+    fn jpeg_quality_gives_the_step_unless_quality_says_raw_alone() {
+        let steps = [
+            (0, Some(JpegQuality::Standard)),
+            (1, Some(JpegQuality::Fine)),
+            (2, Some(JpegQuality::ExtraFine)),
+            (65535, None),
+            (3, None),
+        ];
+        for order in ORDERS {
+            for picture in [Picture::Raw, Picture::Jpeg] {
+                for (code, expected) in steps {
+                    // Without Quality, as on the DSC-R1, and beside a
+                    // Quality of 6, a raw file with a JPEG, as on the
+                    // RX100.
+                    let read = jpeg_quality_of(order, picture, |builder, ifd| {
+                        builder.short(ifd, JPEG_QUALITY, &[code]);
+                    });
+                    assert_eq!(read, expected, "{order:?}, {picture:?}, {code}");
+                    let read = jpeg_quality_of(order, picture, |builder, ifd| {
+                        builder
+                            .long(ifd, QUALITY, &[6])
+                            .short(ifd, JPEG_QUALITY, &[code]);
+                    });
+                    assert_eq!(read, expected, "{order:?}, {picture:?}, {code}, beside 6");
+                }
+                // Beside a Quality of 0 or 7, a raw file alone, as on the
+                // RX1's file 2647, it is the menu's step, not a JPEG's.
+                for raw_alone in [0, 7] {
+                    let read = jpeg_quality_of(order, picture, |builder, ifd| {
+                        builder
+                            .long(ifd, QUALITY, &[raw_alone])
+                            .short(ifd, JPEG_QUALITY, &[1]);
+                    });
+                    assert_eq!(read, None, "{order:?}, {picture:?}, beside {raw_alone}");
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn the_first_tag_that_names_a_step_gives_the_jpeg_quality() {
+        for order in ORDERS {
+            // Quality2 before Quality and JPEGQuality.
+            let read = jpeg_quality_of(order, Picture::Jpeg, |builder, ifd| {
+                builder
+                    .long(ifd, QUALITY, &[2])
+                    .short(ifd, QUALITY2, &[1, 3])
+                    .short(ifd, JPEG_QUALITY, &[0]);
+            });
+            assert_eq!(read, Some(JpegQuality::ExtraFine), "{order:?}");
+            // A Quality2 of 0, no JPEG, gives way to Quality in a JPEG.
+            let read = jpeg_quality_of(order, Picture::Jpeg, |builder, ifd| {
+                builder
+                    .long(ifd, QUALITY, &[5])
+                    .short(ifd, QUALITY2, &[1, 0])
+                    .short(ifd, JPEG_QUALITY, &[0]);
+            });
+            assert_eq!(read, Some(JpegQuality::ExtraFine), "{order:?}");
+            // Quality before JPEGQuality in a JPEG.
+            let read = jpeg_quality_of(order, Picture::Jpeg, |builder, ifd| {
+                builder
+                    .long(ifd, QUALITY, &[9])
+                    .short(ifd, JPEG_QUALITY, &[2]);
+            });
+            assert_eq!(read, Some(JpegQuality::Light), "{order:?}");
+            // In a raw file, a Quality2 of 0, no JPEG written, ends the
+            // search: JPEGQuality would give the menu's step.
+            let read = jpeg_quality_of(order, Picture::Raw, |builder, ifd| {
+                builder
+                    .short(ifd, QUALITY2, &[1, 0])
+                    .short(ifd, JPEG_QUALITY, &[1]);
+            });
+            assert_eq!(read, None, "{order:?}");
+            // Without the 0, or under a code the list lacks, JPEGQuality
+            // gives the step.
+            for quality2 in [None, Some(5)] {
+                let read = jpeg_quality_of(order, Picture::Raw, |builder, ifd| {
+                    if let Some(code) = quality2 {
+                        builder.short(ifd, QUALITY2, &[1, code]);
+                    }
+                    builder.short(ifd, JPEG_QUALITY, &[1]);
+                });
+                assert_eq!(read, Some(JpegQuality::Fine), "{order:?}, {quality2:?}");
+            }
+            // The ILCE-7M2's tags: no Quality2, Quality 6, JPEGQuality
+            // 65535.
+            let read = jpeg_quality_of(order, Picture::Raw, |builder, ifd| {
+                builder
+                    .long(ifd, QUALITY, &[6])
+                    .short(ifd, JPEG_QUALITY, &[65535]);
+            });
+            assert_eq!(read, None, "{order:?}");
+        }
+    }
+
+    #[test]
+    fn a_quality_tag_of_another_shape_gives_no_step() {
+        for order in ORDERS {
+            type Tags = fn(&mut TiffBuilder, IfdId);
+            let cases: [(&str, Tags); 3] = [
+                ("Quality2 of one value", |builder, ifd| {
+                    builder.short(ifd, QUALITY2, &[2]);
+                }),
+                ("Quality as a SHORT", |builder, ifd| {
+                    builder.short(ifd, QUALITY, &[2]);
+                }),
+                ("JPEGQuality as a LONG", |builder, ifd| {
+                    builder.long(ifd, JPEG_QUALITY, &[1]);
+                }),
+            ];
+            for (case, tags) in cases {
+                assert_eq!(
+                    jpeg_quality_of(order, Picture::Jpeg, tags),
+                    None,
+                    "{order:?}, {case}"
+                );
+            }
+        }
+    }
+
     #[test]
     fn only_a_raw_files_picture_gives_a_raw_compression() {
         // Lossless storage beside the MakerNote's settings tags, read for a
@@ -3166,6 +3514,7 @@ mod tests {
             &found,
             CameraSettings::default(),
             Some(Family::EMount),
+            Picture::Raw,
         )
         .unwrap();
         assert_eq!(settings.white_balance.fine_tune, Some(steps(-3, 0)));
@@ -3182,6 +3531,7 @@ mod tests {
             &makernote,
             CameraSettings::default(),
             Some(Family::EMount),
+            Picture::Raw,
         )
         .expect_err("the read fails");
         assert_eq!(err.kind(), ErrorKind::Io, "{err:?}");
