@@ -26,8 +26,9 @@ Make and Model texts in its raw files and its JPEGs.
 **The texts.** Every Make and Model text below is one that raw-files
 reads from the files named, cleaned as every text value is: cut at the
 first NUL and trimmed of spaces at both ends. The tests check each of
-them but the five cited from my own files alone: the ILCE-7M2 and
-four Nikon DSLRs. The tables of the public samples
+them but five: the ILCE-7M2, which only my own files show, and four
+Nikon DSLRs, whose public files are not among the tests' samples. The
+tables of the public samples
 ([NEF](nef/test-data.md), [ARW](arw/test-data.md),
 [JPEG](jpeg/test-data.md#2-the-sample-files)) expect each file's Make
 and Model, and the fixtures' tests their Model. ExifTool, run on the same files as a
@@ -37,7 +38,8 @@ named as `tests/samples.tsv` names them. My own files are cited by
 count. The ILCE-7M2 is the one body that no sample or fixture shows.
 My own files of it were read on 2 November 2026 by raw-files and by
 ExifTool as a reader. My own files of the D300S, D3200, D3300 and
-D7100 were read on 20 November 2026 by raw-files alone.
+D7100 were read on 20 November 2026 by raw-files alone, and the public
+files of the same bodies on 24 November 2026, by raw-files alone too.
 
 **The names.** Every name was read from the maker's own published
 documents. A product page or manual page on the maker's website was
@@ -94,6 +96,10 @@ names follow Nikon body by body. The one other spelling found is
 | Model text | Files | Name | Maker's documents |
 |---|---|---|---|
 | `NIKON D600` | the frames of my own D600 in `tests/fixtures/nikon-d600/` | D600 | *D600 User's Manual*, 6MB15311-01, page 326 (specifications): "Nikon D600 Digital Camera" |
+| `NIKON D300S` | files 3049 and 3052 to 3056; 647 NEF files and 1,033 JPEGs of my own | D300S | *D300S User's Manual*, 6MB05611-06, page 385 (specifications): "Nikon D300S Digital Camera"; [download center](https://downloadcenter.nikonimglib.com/en/products/12/D300S.html), title "Nikon \| Download center \| D300S" |
+| `NIKON D3200` | file 743; 3,568 NEF files and 6,829 JPEGs of my own | D3200 | *D3200 Reference Manual*, 6MB22611-03, page 196 (specifications): "Nikon D3200 Digital Camera"; [download center](https://downloadcenter.nikonimglib.com/en/products/20/D3200.html), title "Nikon \| Download center \| D3200" |
+| `NIKON D3300` | file 1734; 659 JPEGs of my own | D3300 | *D3300 Reference Manual*, 6MB19911-03, page 342 (specifications): "Nikon D3300 Digital Camera"; [download center](https://downloadcenter.nikonimglib.com/en/products/21/D3300.html), title "Nikon \| Download center \| D3300" |
+| `NIKON D7100` | files 1855 to 1858; 400 NEF files and 2,707 JPEGs of my own | D7100 | *D7100 User's Manual*, 6MB18111-04, page 336 (specifications): "Nikon D7100 Digital Camera"; [download center](https://downloadcenter.nikonimglib.com/en/products/27/D7100.html), title "Nikon \| Download center \| D7100" |
 | `NIKON Z 9` | files 5146 to 5148; the fixtures of my own Z 9 | Z 9 | *Z 9 Reference Guide*, for firmware 5.20, page 951 (specifications): "Nikon Z 9 Digital Camera"; [online manual](https://onlinemanual.nikonimglib.com/z9/en/), title "Z 9 Reference Guide"; [product page](https://imaging.nikon.com/imaging/lineup/mirrorless/z_9/), title "Z 9 \| Mirrorless Cameras \| Nikon Consumer"; [Nikon USA](https://www.nikonusa.com/p/z-9/1669/overview), title "Nikon Z 9 Mirrorless Camera …" |
 | `NIKON Z 6` | file 3587 | Z 6 | [online manual](https://onlinemanual.nikonimglib.com/z7_z6/en/), title "Z 7/Z 6 Online Manual"; [product page](https://imaging.nikon.com/imaging/lineup/mirrorless/z_6/), title "Z 6 \| Mirrorless Cameras …" |
 | `NIKON Z 30` | file 5812 | Z 30 | [online manual](https://onlinemanual.nikonimglib.com/z30/en/), title "Z 30 Reference Guide"; [product page](https://imaging.nikon.com/imaging/lineup/mirrorless/z_30/), title "Z 30 \| Mirrorless Cameras …" |
@@ -153,17 +159,6 @@ neither fact.
 | `NIKON D3300` | DX | none | *D3300 Reference Manual*, 6MB19911-03, pages 342 (specifications) and 86 (image size) |
 | `NIKON D7100` | DX | none | *D7100 User's Manual*, 6MB18111-04, pages 336 (specifications) and 67 (image size) |
 
-The D300S, D3200, D3300 and D7100 have no row in §3 yet, so raw-files
-gives them no name today. Each will join §3 when raw-files reads this
-table, with my own files of it and the name its manual gives:
-
-| Model text | Files | Name | Maker's documents |
-|---|---|---|---|
-| `NIKON D300S` | 647 NEF files and 1,033 JPEGs of my own | D300S | *D300S User's Manual*, 6MB05611-06, page 385 (specifications): "Nikon D300S Digital Camera"; [download center](https://downloadcenter.nikonimglib.com/en/products/12/D300S.html), title "Nikon \| Download center \| D300S" |
-| `NIKON D3200` | 3,568 NEF files and 6,829 JPEGs of my own | D3200 | *D3200 Reference Manual*, 6MB22611-03, page 196 (specifications): "Nikon D3200 Digital Camera"; [download center](https://downloadcenter.nikonimglib.com/en/products/20/D3200.html), title "Nikon \| Download center \| D3200" |
-| `NIKON D3300` | 659 JPEGs of my own | D3300 | *D3300 Reference Manual*, 6MB19911-03, page 342 (specifications): "Nikon D3300 Digital Camera"; [download center](https://downloadcenter.nikonimglib.com/en/products/21/D3300.html), title "Nikon \| Download center \| D3300" |
-| `NIKON D7100` | 400 NEF files and 2,707 JPEGs of my own | D7100 | *D7100 User's Manual*, 6MB18111-04, page 336 (specifications): "Nikon D7100 Digital Camera"; [download center](https://downloadcenter.nikonimglib.com/en/products/27/D7100.html), title "Nikon \| Download center \| D7100" |
-
 The D600's specifications name its format beside the image sensor. The
 others name it beside the angle of view. "None" means the image size
 chosen applies to JPEG images alone, or also to TIFF on the D300S. Each
@@ -178,10 +173,11 @@ reading its file gets the recorded text alone. The table holds:
 
 - the Nikon Z bodies and Sony ILCE bodies the public samples and
   fixtures show;
+- Nikon's D300S, D3200, D3300 and D7100, which public files and my own
+  show;
 - my own D600 and ILCE-7M2.
 
-The other bodies the samples show wait for an entry of their own, as
-do the four DSLRs of my own files that §5 names:
+The other bodies the samples show wait for an entry of their own:
 
 - Nikon's other DSLRs, Sony's DSLRs, and both makers' compacts;
 - Sony's SLT-A55V and SLT-A99V;
