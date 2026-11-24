@@ -1621,7 +1621,7 @@ a code of a list where the documentation places it, and no other value
 of that file contradicts it, every code of the list is named, those no
 file holds among them. A code a file contradicts stays unnamed, and
 the rest of its list stands. A code the documentation does not name
-stays unnamed, and raw-files will give `None`. A code that is
+stays unnamed, and raw-files gives `None`. A code that is
 documented only is checked on files built in the tests alone. Of the
 codes below, only the kinds of fluorescent lamp are confirmed by
 frames: my ILCE-7M2's white balance frames of 2026-10-25
@@ -2385,9 +2385,9 @@ FocusLocation2 when FocusLocation gives nothing (absent, or not four
 SHORTs), FocusFrameSize and
 FocusMode ([section 9.6](#96-focus-point)). Nothing is deciphered, and
 0xB000, 0xB001 and the lens tags stay unread. The capture settings of
-[section 9.10](#910-more-capture-settings) add 0x202D, 0xB026 and
-0xB049, and will add 0x0102, 0x0104, 0x202E and 0xB047. FocusMode also
-gives the focus mode, and 0x201C gives the AF-area mode.
+[section 9.10](#910-more-capture-settings) add 0x0102, 0x0104, 0x2017,
+0x202D, 0x202E, 0xB026, 0xB047 and 0xB049. FocusMode also gives the
+focus mode, and 0x201C gives the AF-area mode.
 
 1. **Standard tags:** IFD0 Make, Model and Orientation; Exif
    DateTimeOriginal, SubSecTimeOriginal and OffsetTimeOriginal (the last two
