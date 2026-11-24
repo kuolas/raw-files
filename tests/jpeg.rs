@@ -2947,7 +2947,9 @@ const FIXTURE_METADATA: &[SampleMetadata] = &[
         // white balance text `AUTO1`, which Exif's auto agrees with, and
         // the fine-tuning 0x000B records, no shift, whole steps. The D600
         // writes no ColorTemperatureAuto, ShutterMode or ImageSizeRAW, and
-        // CropHiSpeed's crop setting, 0, names no image area.
+        // CropHiSpeed's crop setting, 0, "off", names no image area, so
+        // the area is the D600's sensor format from raw-files' table of
+        // bodies, full frame.
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
             color_temperature: None,
@@ -2971,7 +2973,7 @@ const FIXTURE_METADATA: &[SampleMetadata] = &[
             }),
             shutter: None,
             electronic_front_curtain_setting: None,
-            image_area: None,
+            image_area: Some(ImageArea::FullFrame),
             raw_image_size: None,
             color_space: Some(ColorSpace::Srgb),
             focus_area_mode: Some(FocusAreaMode::Single), // code 0, detection 0

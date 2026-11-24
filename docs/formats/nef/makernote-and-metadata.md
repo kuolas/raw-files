@@ -1487,7 +1487,15 @@ checked files hold **[F]**:
 | 9 "DX movie 16:9 crop" | the Z50II's 16:9 file (7770), a still |
 
 So 0 does not say which sensor the body has: the D700 (FX) and the
-D300 (DX) both write it. And code 9, which ExifTool names for movies,
+D300 (DX) both write it. The five bodies of raw-files' table of bodies
+([camera-names.md](../camera-names.md), section 5), the D600, D300S,
+D3200, D3300 and D7100, write 0 on every shot that uses the whole
+sensor: on 16 public files (916 to 919, 3049, 3052 to 3056, 743, 1734,
+1855 to 1858) and 17,215 of mine, CropHiSpeed's cropped size equals its
+original, and every raw file stores the whole sensor **[F]**. Where
+they crop, they write the crop's code: 2 on my D600's DX frames, 9 on
+two files of my D7100. raw-files gives a file of 0 the body's sensor
+format from the table. And code 9, which ExifTool names for movies,
 is a DX body's 16:9 still too. The bodies before the D200 and the
 Coolpix E5700 and P7800 write no CropHiSpeed (seven NEF files and the
 D70 JPEG). ShotInfo holds an ImageArea in the part ExifTool calls
@@ -2277,11 +2285,13 @@ plain MakerNote tags where Exif has no value, and decrypt nothing [I]:
 - the fine-tuning from 0x003F, else from 0x000B;
 - the shutter from 0x0034;
 - the image area from CropHiSpeed's first value. 0 does not say which
-  sensor the body has. Where the code is 0 or missing, the body's
-  sensor format will come from raw-files' table of bodies
-  ([camera-names.md](../camera-names.md)). A body the table lacks will give none. 4 (3:2) and the movie codes give none, but 9 and 10, which DX
-  bodies write on stills. 9 is the APS-C 16:9 crop, and 10 the 1.3x
-  crop;
+  sensor the body has. Where the code is 0 or the tag is missing, the
+  body's sensor format comes from raw-files' table of bodies
+  ([camera-names.md](../camera-names.md)). A body the table lacks gives
+  none, and so does a tag that breaks its rule or a MakerNote with an
+  entry too damaged to read, which may be the tag. 4 (3:2) and the movie
+  codes give none, but 9 and 10, which DX bodies write on stills. 9 is
+  the APS-C 16:9 crop, and 10 the 1.3x crop;
 - the raw image size from 0x003E, else large where the table says the
   body offers no raw sizes;
 - the color space from Exif whenever it records ColorSpace, 65535

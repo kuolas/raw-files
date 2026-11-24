@@ -18,7 +18,9 @@
 //!   WhiteBalance text that records a chosen one ([`color_temperature`]);
 //! - the fine-tuning from 0x003F, else from 0x000B ([`fine_tune`]);
 //! - the shutter used from ShutterMode ([`shutter`]);
-//! - the image area from CropHiSpeed's crop setting ([`image_area`]);
+//! - the image area from CropHiSpeed's crop setting ([`image_area`]), or,
+//!   where it is "off" or missing, from the body's sensor format in
+//!   raw-files' table;
 //! - the raw size from ImageSizeRAW ([`raw_image_size`]);
 //! - the raw compression from NEFCompression, else from tag 0x0051
 //!   ([`nef_compression_code`], [`nef_compression`]);
@@ -62,6 +64,7 @@ use super::af_info2::area_mode_of;
 use super::block::MakerNote;
 use super::crop::CropHiSpeed;
 use super::rules;
+use crate::camera::BodyFacts;
 use crate::camera_settings::{
     AfFineTune, Bracketing, CameraSettings, ColorSpace, FineTune, Flash, FlashControl, FlashSource,
     FlashSync, FocusAreaMode, FocusMode, ImageArea, JpegCompression, JpegQuality, RawCompression,
@@ -80,6 +83,11 @@ pub(super) struct FromStandardTags<'a> {
     pub(super) settings: CameraSettings,
     /// The Model, read by the text rule, if any.
     pub(super) model: Option<&'a str>,
+    /// The published facts of the body the Make and Model name, from
+    /// raw-files' table ([`Camera::body_facts`]), if it holds any.
+    ///
+    /// [`Camera::body_facts`]: crate::camera::Camera::body_facts
+    pub(super) body: Option<BodyFacts>,
     /// Whether the Exif IFD keeps a ColorSpace entry
     /// ([`Standard`](tiff_metadata::Standard)).
     pub(super) exif_records_color_space: bool,
@@ -111,7 +119,15 @@ const NIKON_COMPRESSED: u32 = 34713;
 ///   ([`fine_tune`]).
 /// - **The shutter used** is ShutterMode's code ([`shutter`]).
 /// - **The image area** is the crop setting of `crop_hi_speed`,
-///   CropHiSpeed as [`crop_hi_speed`] read it ([`image_area`]).
+///   CropHiSpeed as [`crop_hi_speed`] read it ([`image_area`]). Where the
+///   setting is 0, "off", or the MakerNote holds no CropHiSpeed at all, it
+///   is the sensor format of `standard.body`, the body's facts from
+///   raw-files' table, when the table holds them (ADR011). A CropHiSpeed
+///   that breaks its rule gives none, since its setting may have named a
+///   crop, and so does one the IFD skipped as damaged ([`holds_no`]); so
+///   does a setting that names no area for another reason, such as a 3:2
+///   crop or a movie crop, and a setting of "off" whose cropped size is
+///   smaller than its original, which no measured file holds.
 /// - **The raw image size** is ImageSizeRAW's code ([`raw_image_size`]),
 ///   for a raw file's picture alone. In a JPEG, whose `picture` is
 ///   [`Picture::Jpeg`], the tag follows the JPEG's own size, and a JPEG
@@ -182,6 +198,7 @@ pub(super) fn camera_settings<R: Read + Seek>(
     let FromStandardTags {
         mut settings,
         model,
+        body,
         exif_records_color_space,
         raw_compression,
     } = standard;
@@ -205,7 +222,16 @@ pub(super) fn camera_settings<R: Read + Seek>(
     settings.shutter = ifd
         .held(rules::SHUTTER_MODE)
         .and_then(|[code]| shutter(code));
-    settings.image_area = crop_hi_speed.and_then(|crop| image_area(crop.mode));
+    let sensor = body.map(|facts| facts.sensor);
+    settings.image_area = match crop_hi_speed {
+        // "Off" says nothing of the sensor; the body's facts do, for a
+        // picture the crop kept whole.
+        Some(crop @ CropHiSpeed { mode: 0, .. }) if crop.is_uncropped() => sensor,
+        Some(CropHiSpeed { mode: 0, .. }) => None,
+        Some(crop) => image_area(crop.mode),
+        None if holds_no(ifd, super::CROP_HI_SPEED) => sensor,
+        None => None,
+    };
     settings.raw_image_size = match picture {
         Picture::Raw => ifd
             .held(rules::IMAGE_SIZE_RAW)
@@ -603,6 +629,15 @@ fn shutter(code: u32) -> Option<Shutter> {
     })
 }
 
+/// Whether the MakerNote's IFD `ifd` holds no entry of tag `tag` at all.
+/// An entry the IFD skipped as damaged, such as one of an unknown type or
+/// whose value lies outside the block, is not kept by its tag, so `true`
+/// only when the IFD skipped none: a skipped entry might be the tag's, and
+/// what it recorded unknown.
+fn holds_no(ifd: &Ifd, tag: u16) -> bool {
+    ifd.entry(tag).is_none() && ifd.invalid_entries() == 0
+}
+
 /// The image area a CropHiSpeed crop setting `mode` names:
 ///
 /// - 11, FX uncropped, [`FullFrame`](ImageArea::FullFrame);
@@ -616,9 +651,10 @@ fn shutter(code: u32) -> Option<Shutter> {
 ///   on still pictures too, [`Crop1_3x`](ImageArea::Crop1_3x).
 ///
 /// `None` for 0, "off", which FX and DX bodies both write, so it does not
-/// say which sensor the body has. `None` too for 3, a 5:4 crop, 4, a 3:2
-/// crop, and 8, a 2.7x crop, which no checked file holds; for the other
-/// movie crops; and for every code nothing names.
+/// say which sensor the body has: [`camera_settings`] then takes the
+/// body's sensor format from raw-files' table. `None` too for 3, a 5:4
+/// crop, 4, a 3:2 crop, and 8, a 2.7x crop, which no checked file holds;
+/// for the other movie crops; and for every code nothing names.
 pub(super) fn image_area(mode: u32) -> Option<ImageArea> {
     Some(match mode {
         11 => ImageArea::FullFrame,
@@ -1019,8 +1055,8 @@ fn color_space(code: u32) -> Option<ColorSpace> {
 mod tests {
     use super::super::block::read;
     use super::super::testing::{
-        AT, ORDERS, TAIL, Tags, entry_at, exif_file, exif_metadata, jpeg_metadata_of, metadata_of,
-        nikon_file, nikon_file_with, raw_file, read_file, retyped, tags_block, whole,
+        AT, D600_FX, ORDERS, TAIL, Tags, entry_at, exif_file, exif_metadata, jpeg_metadata_of,
+        metadata_of, nikon_file, nikon_file_with, raw_file, read_file, retyped, tags_block, whole,
     };
     use super::super::{
         AF_INFO, AF_INFO2, AF_TUNE, COLOR_SPACE, COLOR_TEMPERATURE, COMPRESSION_RECORD,
@@ -1033,7 +1069,7 @@ mod tests {
     use crate::camera_settings::{ExposureProgram, FlashMode, FluorescentLamp, WhiteBalance};
     use crate::container::tiff::tags::{
         COLOR_SPACE as EXIF_COLOR_SPACE, COMPRESSION, EXPOSURE_MODE, EXPOSURE_PROGRAM,
-        FLASH as EXIF_FLASH, INTEROP_INDEX, LIGHT_SOURCE, MAKER_NOTE, MODEL,
+        FLASH as EXIF_FLASH, INTEROP_INDEX, LIGHT_SOURCE, MAKE, MAKER_NOTE, MODEL,
         WHITE_BALANCE as EXIF_WHITE_BALANCE,
     };
     use crate::container::tiff::{self, walk};
@@ -1924,6 +1960,228 @@ mod tests {
                 Some(ImageArea::FullFrame),
                 "{order:?}"
             );
+        }
+    }
+
+    /// A file in byte order `order` whose IFD0 holds the Make `make` and
+    /// the Model `model`, and whose MakerNote holds what `tags` adds to its
+    /// MakerNote IFD.
+    fn body_file(order: Order, make: &str, model: &str, tags: Tags) -> Vec<u8> {
+        let block = tags_block(order, tags).0;
+        let count = whole(&block);
+        body_file_of(order, make, model, &block, count)
+    }
+
+    /// As [`body_file`], with the MakerNote the first `count` bytes of
+    /// `block`.
+    fn body_file_of(order: Order, make: &str, model: &str, block: &[u8], count: u64) -> Vec<u8> {
+        let mut builder = TiffBuilder::new(order);
+        let ifd0 = builder.ifd();
+        let exif = builder.ifd();
+        builder
+            .ascii(ifd0, MAKE, make)
+            .ascii(ifd0, MODEL, model)
+            .exif(ifd0, exif);
+        builder.undefined(exif, 0x9000, b"0232");
+        entry_at(&mut builder, exif, MAKER_NOTE, UNDEFINED, AT, count);
+        builder.blob_at(AT, block);
+        builder.pad_to(AT + whole(block) + TAIL);
+        builder.build().bytes
+    }
+
+    /// The camera settings of the file [`body_file`] builds, of a Nikon
+    /// body, read as a raw file.
+    fn body_settings(order: Order, model: &str, tags: Tags) -> CameraSettings {
+        metadata_of(body_file(order, "NIKON CORPORATION", model, tags)).camera_settings
+    }
+
+    /// The CropHiSpeed of the D600's DX crop, as its DX frames record it.
+    const D600_DX: [u16; 7] = [2, 6080, 4028, 3968, 2636, 1040, 696];
+
+    #[test]
+    fn a_crop_setting_of_off_gives_the_sensor_format_of_a_body_the_table_holds() {
+        // The D600's FX frames record 0 and the D300S's frames too: the
+        // table says which sensor each has.
+        let cases: [(&str, Tags, ImageArea); 4] = [
+            (
+                "NIKON D600",
+                |inner, ifd| {
+                    inner.short(ifd, CROP_HI_SPEED, &D600_FX);
+                },
+                ImageArea::FullFrame,
+            ),
+            (
+                "NIKON D300S",
+                |inner, ifd| {
+                    inner.short(ifd, CROP_HI_SPEED, &[0, 4352, 2868, 4352, 2868, 0, 0]);
+                },
+                ImageArea::ApsC,
+            ),
+            // No CropHiSpeed at all.
+            ("NIKON D600", |_, _| {}, ImageArea::FullFrame),
+            ("NIKON D7100", |_, _| {}, ImageArea::ApsC),
+        ];
+        for order in ORDERS {
+            for (model, tags, area) in cases {
+                let read = body_settings(order, model, tags);
+                assert_eq!(read.image_area, Some(area), "{order:?}, {model}");
+            }
+        }
+    }
+
+    #[test]
+    fn a_crop_setting_that_names_an_area_comes_before_the_table() {
+        // The D600's DX frames record 2: the crop, not the sensor.
+        for order in ORDERS {
+            let read = body_settings(order, "NIKON D600", |inner, ifd| {
+                inner.short(ifd, CROP_HI_SPEED, &D600_DX);
+            });
+            assert_eq!(read.image_area, Some(ImageArea::ApsC), "{order:?}");
+        }
+    }
+
+    #[test]
+    fn a_crop_setting_that_names_no_area_for_another_reason_gives_none_from_the_table() {
+        // A 3:2 crop, a movie crop and a code nothing names say something
+        // other than "off", so the sensor's format would not be the
+        // picture's area.
+        let cases: [(u16, Tags); 3] = [
+            (4, |inner, ifd| {
+                inner.short(ifd, CROP_HI_SPEED, &[4, 6080, 4028, 6080, 4028, 0, 0]);
+            }),
+            (13, |inner, ifd| {
+                inner.short(ifd, CROP_HI_SPEED, &[13, 6080, 4028, 6080, 4028, 0, 0]);
+            }),
+            (u16::MAX, |inner, ifd| {
+                inner.short(
+                    ifd,
+                    CROP_HI_SPEED,
+                    &[u16::MAX, 6080, 4028, 6080, 4028, 0, 0],
+                );
+            }),
+        ];
+        for order in ORDERS {
+            for (mode, tags) in cases {
+                let read = body_settings(order, "NIKON D600", tags);
+                assert_eq!(read.image_area, None, "{order:?}, {mode}");
+            }
+        }
+    }
+
+    #[test]
+    fn a_crop_hi_speed_that_breaks_its_rule_gives_none_from_the_table() {
+        // Six values and seven LONGs: the setting cannot be read, and may
+        // have named a crop.
+        let cases: [Tags; 2] = [
+            |inner, ifd| {
+                inner.short(ifd, CROP_HI_SPEED, &D600_FX[..6]);
+            },
+            |inner, ifd| {
+                inner.long(ifd, CROP_HI_SPEED, &D600_FX.map(u32::from));
+            },
+        ];
+        for order in ORDERS {
+            for (place, tags) in cases.into_iter().enumerate() {
+                let read = body_settings(order, "NIKON D600", tags);
+                assert_eq!(read.image_area, None, "{order:?}, case {place}");
+            }
+        }
+    }
+
+    #[test]
+    fn a_crop_setting_of_off_with_a_smaller_cropped_size_gives_none_from_the_table() {
+        // "Off" beside the sizes of the D600's DX crop: the picture was
+        // cut, so the whole sensor's format would not be its area. On the
+        // measured files of the table's bodies, "off" never comes so.
+        for order in ORDERS {
+            let read = body_settings(order, "NIKON D600", |inner, ifd| {
+                inner.short(ifd, CROP_HI_SPEED, &[0, 6080, 4028, 3968, 2636, 1040, 696]);
+            });
+            assert_eq!(read.image_area, None, "{order:?}");
+        }
+    }
+
+    #[test]
+    fn a_crop_hi_speed_the_ifd_skipped_as_damaged_gives_none_from_the_table() {
+        // The D600's DX crop with an unknown type, or with its value, the
+        // block's last 14 bytes, cut off by the MakerNote's end: the IFD
+        // skips it, so it is not seen by its tag, and the shot was a crop.
+        for order in ORDERS {
+            let (block, entry) = tags_block(order, |inner, ifd| {
+                inner.short(ifd, CROP_HI_SPEED, &D600_DX);
+            });
+            let unknown = retyped(order, block.clone(), entry, 99, 7);
+            for (what, block, count) in [
+                ("unknown type", &unknown, whole(&unknown)),
+                ("past the block", &block, whole(&block) - 1),
+            ] {
+                let file = body_file_of(order, "NIKON CORPORATION", "NIKON D600", block, count);
+                let read = metadata_of(file).camera_settings;
+                assert_eq!(read.image_area, None, "{order:?}, {what}");
+            }
+            // The control: the same block, whole, gives the crop.
+            let file = body_file_of(
+                order,
+                "NIKON CORPORATION",
+                "NIKON D600",
+                &block,
+                whole(&block),
+            );
+            let read = metadata_of(file).camera_settings;
+            assert_eq!(read.image_area, Some(ImageArea::ApsC), "{order:?}");
+        }
+    }
+
+    #[test]
+    fn a_body_the_table_holds_no_facts_for_gives_no_area_for_off() {
+        // A body outside the table, one with a name and no facts, and no
+        // Model at all.
+        for order in ORDERS {
+            for model in ["NIKON D7200", "NIKON Z 9"] {
+                let read = body_settings(order, model, |inner, ifd| {
+                    inner.short(ifd, CROP_HI_SPEED, &D600_FX);
+                });
+                assert_eq!(read.image_area, None, "{order:?}, {model}");
+                let read = body_settings(order, model, |_, _| {});
+                assert_eq!(read.image_area, None, "{order:?}, {model}, no tag");
+            }
+            assert_eq!(image_area_of(order, 0), None, "{order:?}, no Model");
+        }
+    }
+
+    #[test]
+    fn the_table_is_looked_up_by_the_maker_and_the_model_together() {
+        // A Make no maker is recognized from: the Nikon reader still reads
+        // the file, by its looser test, but the table names no body.
+        for order in ORDERS {
+            let tags: Tags = |inner, ifd| {
+                inner.short(ifd, CROP_HI_SPEED, &D600_FX);
+            };
+            let file = body_file(order, "Nikon", "NIKON D600", tags);
+            assert_eq!(
+                metadata_of(file).camera_settings.image_area,
+                None,
+                "{order:?}"
+            );
+            // The control: the Make the D600 writes.
+            let file = body_file(order, "NIKON CORPORATION", "NIKON D600", tags);
+            assert_eq!(
+                metadata_of(file).camera_settings.image_area,
+                Some(ImageArea::FullFrame),
+                "{order:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_d600_jpeg_gives_the_sensor_format_too() {
+        // The image area is the shot's, in a JPEG as in a raw file.
+        for order in ORDERS {
+            let file = body_file(order, "NIKON CORPORATION", "NIKON D600", |inner, ifd| {
+                inner.short(ifd, CROP_HI_SPEED, &D600_FX);
+            });
+            let read = jpeg_metadata_of(file, [6016, 4016]).camera_settings;
+            assert_eq!(read.image_area, Some(ImageArea::FullFrame), "{order:?}");
         }
     }
 

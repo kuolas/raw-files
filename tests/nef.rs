@@ -1468,7 +1468,9 @@ const FIXTURE_METADATA: &[SampleMetadata] = &[
         // no ColorSpace, the MakerNote's color space, sRGB. The stripping
         // removed the WhiteBalance text, so the mode is Exif's; the D600
         // writes no ColorTemperatureAuto, ShutterMode or ImageSizeRAW, and
-        // CropHiSpeed's crop setting, 0, names no image area.
+        // CropHiSpeed's crop setting, 0, "off", names no image area, so
+        // the area is the D600's sensor format from raw-files' table of
+        // bodies, full frame.
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
             color_temperature: None,
@@ -1492,7 +1494,7 @@ const FIXTURE_METADATA: &[SampleMetadata] = &[
             }),
             shutter: None,
             electronic_front_curtain_setting: None,
-            image_area: None,
+            image_area: Some(ImageArea::FullFrame),
             raw_image_size: None,
             color_space: Some(ColorSpace::Srgb),
             focus_area_mode: Some(FocusAreaMode::Single), // code 0, detection 0
@@ -1565,8 +1567,9 @@ const D600_LANDSCAPE: Orientation = Orientation::NoTransforms;
 const D600_PORTRAIT: Orientation = Orientation::Rotate270;
 
 /// CropHiSpeed's crop setting 0, the crop off, which names no image area,
-/// since FX and DX bodies both write it.
-const D600_FX: Option<ImageArea> = None;
+/// since FX and DX bodies both write it: the area is the D600's sensor
+/// format, from raw-files' table of bodies.
+const D600_FX: Option<ImageArea> = Some(ImageArea::FullFrame);
 
 /// CropHiSpeed's crop setting 2, the DX crop.
 const D600_DX: Option<ImageArea> = Some(ImageArea::ApsC);
