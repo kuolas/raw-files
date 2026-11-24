@@ -439,6 +439,23 @@ and 2506 to 2510 were shot under AF-S, the others under AF-C. The
 D600's live-view frames confirm the method and the code, not the mode:
 the mode was not written down while shooting.
 
+The picture style and the processing settings of
+[makernote-and-metadata.md](makernote-and-metadata.md#811-picture-style-and-processing)
+were counted on 2026-11-24, by a counting program over
+`CameraFile::entries`. It read every NEF and NRW file of raw.pixls.us.
+As counts only, it read 48,632 files of my seven Nikon bodies, NEF
+files and camera JPEGs. ExifTool and exiv2 were not run, and no frame
+was shot in a known setting. One fixture was read in the maker's
+program:
+
+| File | Body | Read with | What the program shows |
+|---|---|---|---|
+| `tests/fixtures/nikon-z9-fx.jpg` | Z 9 | Nikon's NX Studio, run as a reader to compare with | Quick sharp +1, where byte 53 of the 108-byte Picture Control holds one step; sharpening +5, mid-range sharpening +3.5 and clarity +2, where their bytes hold 20, 14 and 8 quarter steps |
+
+1,887 shots of mine have one NEF and one camera JPEG. They are 933 of
+the D7200, 633 of the D3200, 315 of the Z 9 and 6 of the D600. That
+section says where the two files of a shot differ.
+
 ## 3. What raw.pixls.us holds for Nikon
 
 Directory listings, 2026-10-10. **[P]** The data lives under

@@ -341,8 +341,13 @@ sensor data. [S][1]
 | 0x001E | ColorSpace | u16 | the color space setting: 1 sRGB, 2 Adobe RGB, 4 BT.2100; from the D200 on, but not on the Coolpix P7800, while no checked NEF has the Exif ColorSpace **[F]** | metadata |
 | 0x001F | VRInfo | undef[8 or 9] | vibration reduction: a four-digit version, 0100, 0101 or 0200, then whether it was on and its mode **[F]** | full metadata |
 | 0x0021 | FaceDetect | u16 | the size of a frame and up to twelve face rectangles in it; on none of the 30 checked files **[F]** | full metadata |
+| 0x0022 | ActiveD-Lighting | u16 | Active D-Lighting: 0 off, 1 low, 3 normal, 5 high, 7 and 8 to 11 the extra high steps, 65535 auto; [section 8.11](#811-picture-style-and-processing) **[F]** | full metadata |
+| 0x0023 | PictureControlData | undef[58, 68 or 108] | the Picture Control: a four-digit version, the name, the base and the values, in three layouts by version; [section 8.11](#811-picture-style-and-processing) **[F]** | full metadata |
 | 0x0024 | WorldTime | undef | the time zone and daylight saving setting of the camera's clock; layout in [section 8.2](#82-capture-date-and-time-zone) | metadata, full metadata |
+| 0x002A | VignetteControl | u16 | vignette control: 0 off, 1 low, 3 normal, 5 high; not written by the D300S, D3200, D3300 and D7100; [section 8.11](#811-picture-style-and-processing) **[F]** | full metadata |
+| 0x002B | DistortInfo | undef[16] | a record of version `0100`, whose byte 4 is auto distortion control: 0 off, 1 on, 2 on for underwater; [section 8.11](#811-picture-style-and-processing) **[F]** | full metadata |
 | 0x0034 | ShutterMode | u16 | the shutter used: mechanical, electronic front curtain or electronic, and whether the camera chose it in its auto mode; on the Nikon 1 J1, D850, D780 and every Z body; codes in [section 8.7](#87-camera-settings) **[F]** | metadata |
+| 0x0035 | HDRInfo | undef[6 or 8] | HDR: a four-digit version, 0100, 0101 or 0200, then on or off and its parts; in JPEGs, and in the raw files of Coolpix and Nikon 1 bodies; [section 8.11](#811-picture-style-and-processing) **[F]** | full metadata |
 | 0x0037 | MechanicalShutterCount | u32 | newer bodies; mechanical frames only | full metadata |
 | 0x003D | BlackLevel | u16[4] | per-channel black level, recorded at 14-bit scale | raw data |
 | 0x003E | ImageSizeRAW | u16 | the raw size setting: 1 large, 2 medium, 3 small; from the D750, D810 and D5600 on **[F]** | metadata, raw data |
@@ -355,15 +360,20 @@ sensor data. [S][1]
 | 0x0087 | FlashMode | u8 | whether and how the flash fired; not read, since it contradicts Exif's "fired" on hundreds of files ([ADR011](../../architecture-decisions/adr011-metadata-from-standard-tags.md)); [section 8.7](#87-camera-settings) **[F]** | full metadata |
 | 0x0088 | AFInfo | undef[4] | area mode, the number of the focus point and a mask of the points in focus; no position. The only focus data of the checked bodies without AFInfo2: the D1H, D70, D100, D200 and Coolpix E5700 and P7800, and written by no checked body that has AFInfo2 **[F]**; its first byte, the area mode, will be read; [section 8.6](#86-focus-point) | focus points, full metadata |
 | 0x0089 | ShootingMode | u16 (u8 on the D1 family and the D100) | bits for the release mode, bracketing and auto ISO; [section 8.10](#810-more-capture-settings) **[F]** | full metadata |
+| 0x008F | SceneMode | string | the scene mode as text, on the Coolpix bodies; blank outside a scene or auto mode; [section 8.11](#811-picture-style-and-processing) **[F]** | full metadata |
 | 0x0091 | ShotInfo | undef | model-specific; encrypted for versions 02xx and 08xx | full metadata |
 | 0x0093 | NEFCompression | u16 | compression hint; absent on the Z bodies checked but the Z fc and Z 30, which write 0x0051 instead, and on the D1H and E5700; present on the Z fc and Z 30, with the value 3 (lossless), where 0x0051 is absent (files 8559, 5812) **[F]** | full metadata, raw data |
+| 0x0095 | NoiseReduction | string | `FPNR` where the long exposure noise reduction ran on the picture, else `OFF`; [section 8.11](#811-picture-style-and-processing) **[F]** | full metadata |
 | 0x0096 | NEFLinearizationTable | undef | curve and predictor seeds; unencrypted | raw data |
 | 0x008C | (older curve) | undef | the curve on a file without 0x0096 | raw data |
 | 0x0097 | ColorBalance | undef | white balance on older bodies; encrypted from version 0200 | full metadata, raw data |
 | 0x0098 | LensData | undef | lens description; encrypted from version 0201 | full metadata |
 | 0x00A7 | ShutterCount | u32 | decryption key input | full metadata, raw data |
+| 0x00AB | VariProgram | string | the scene mode as text, such as `AUTO(FLASH OFF)`, on the DSLR and Z bodies; blank outside a scene or auto mode; [section 8.11](#811-picture-style-and-processing) **[F]** | full metadata |
+| 0x00B1 | HighISONoiseReduction | u16 | high ISO noise reduction: 0 off, 1 minimal, 2 low, 3 medium low, 4 normal, 5 medium high, 6 high; [section 8.11](#811-picture-style-and-processing) **[F]** | full metadata |
 | 0x00B7 | AFInfo2 | undef | where the camera focused and the AF-area mode: a block that starts with a four-character version, plain on every version; layouts in [section 8.6](#86-focus-point) | focus points, full metadata |
 | 0x00B9 | AFTune | undef[4] | AF fine-tune: on or off, the saved lens's index, the value and the value at a zoom's long end; [section 8.10](#810-more-capture-settings) **[F]** | full metadata |
+| 0x00BD | PictureControlData | undef[58] | the Picture Control of the Coolpix bodies, in the first of its layouts; [section 8.11](#811-picture-style-and-processing) **[F]** | full metadata |
 | 0x0E01 | NikonCaptureData | undef | Capture NX edit data (optional) | full metadata |
 | 0x0E22 | NEFBitDepth | u16[4] | secondary bit-depth source | full metadata, raw data |
 
@@ -624,6 +634,10 @@ SubIFD reached through tag 0x014A.
 Decryption is never needed for these fields. [S][1][2] On every Nikon Z
 sample, the Exif and MakerNote values raw-files reads lie in the first
 105 KB of the file. **[F]**
+
+The picture style and the processing settings are in
+[section 8.11](#811-picture-style-and-processing). Exif records six of
+their values, and the MakerNote the rest.
 
 ### 8.1 Orientation
 
@@ -2162,6 +2176,457 @@ with `COOL WHT FL` on 15 of my D300S JPEGs and on my Z 9's frame of that
 setting in the series above. **[F]** Nikon's text agrees with the
 standard's code wherever both exist.
 
+### 8.11 Picture style and processing
+
+How the camera made its JPEG from the shot, which a maker's own
+software shows beside the capture settings. raw-files will read, as
+camera settings
+([ADR011](../../architecture-decisions/adr011-metadata-from-standard-tags.md)):
+
+- the picture style, Nikon's Picture Control, with its values;
+- Active D-Lighting and HDR;
+- the high ISO and long exposure noise reductions;
+- vignette control and auto distortion control;
+- the scene mode;
+- Exif's six processing values.
+
+Each setting will keep Nikon's own name and kinds. Where Sony has a
+setting for the same thing, one value of the camera settings will hold
+either maker's
+([ARW notes](../arw/makernote-and-metadata.md#911-picture-style-and-processing)).
+
+**How it was measured.** On 2026-11-24 a counting program written from
+these pages read each tag through raw-files' own raw view
+(`CameraFile::entries` and `CameraFile::read_value`) **[F]**. It read:
+
+- the 289 public NEF and NRW files of raw.pixls.us;
+- as counts only, 48,632 files of my seven Nikon bodies: 31,991 NEF
+  files and 16,641 JPEGs. 48,428 of them hold the MakerNote tags below.
+
+Counts read "public / mine". The marks **confirmed**, **observed** and
+**documented only** are those of [section 8.6](#86-focus-point), and so
+is the rule that names every code of a documented list once files hold
+part of it. The tag numbers, the offsets inside each record and the
+meaning of each code come from ExifTool's published tag documentation
+[S][1], read as documentation. No reader's source was read, and
+ExifTool and exiv2 were not run. Each setting's name is Nikon's own,
+from its manuals [P][25][26][27][28]. No frame was shot in a known
+setting for this section, so no code is confirmed. I read one frame in
+Nikon's NX Studio, run as a reader to compare with, and the text says
+where it shows a value (below).
+
+Every value read lies inside what `open` already reads, on every file
+but one. The COOLPIX P6000's file (651) has a MakerNote of 70,052
+bytes. Its last 206 bytes hold the scene text, the long exposure text
+and the Picture Control. Reading them will cost that file one more
+read. **[F]**
+
+**The Picture Control.** Nikon's picture style is a preset of
+sharpening, contrast, brightness, saturation and hue. The photographer
+picks one and may adjust it [P][25] (pp. 129 to 133). 0x0023
+PictureControlData records it, as UNDEFINED bytes that start with a
+four-digit version. The Coolpix bodies write the same record under
+0x00BD [S][1]. No measured file holds both tags. raw-files will read
+0x0023, else 0x00BD.
+
+The documentation gives three layouts, and does not say which version
+takes which [S][1]. The files do: each version has one length, and
+each length fits one layout. **[F]**
+
+| Version | Length | Layout | Bodies | Files, public / mine |
+|---|---|---|---|---|
+| `0100` | 58 | first | 36 public bodies: the DSLRs from the D3, D300 and D90 to the D4S, D5300 and Df, the Nikon 1 bodies and the Coolpix A; my D300S, D3200, D3300, D600 and D7100 | 106 / 18,403 |
+| `0100`, under 0x00BD | 58 | first | 12 Coolpix bodies, from the P6000 to the P1100 | 12 / 0 |
+| `0200` | 68 | second | 11 public bodies: the D810, D750, D5500, D7200, D5, D500, D3400, D5600, D7500, D850 and D3500; my D7200 | 47 / 12,814 |
+| `0300` | 108 | third | the D6, D780, Z 5, Z 6, Z 6II, Z 7, Z 7II, Z 30, Z 50 and Z fc | 56 / 0 |
+| `0301` | 108 | third | the Z 9, on firmware 1.00 | 3 / 0 |
+| `0302` | 108 | third | the Z 8 | 3 / 0 |
+| `0310` | 108 | third | the Z f, Z5II, Z50II and Z6III; my Z 9 | 35 / 17,211 |
+
+raw-files will read the record at these six versions, each at its one
+length. A record of another version, or of another length than its
+version's, will give no picture style: no file shows which layout it
+takes.
+
+The three layouts, as offsets from the record's first byte. The fields'
+names and places are the documentation's [S][1], but for the rows the
+text below explains. **[F]**
+
+| Field | First, 58 bytes | Second, 68 bytes | Third, 108 bytes |
+|---|---|---|---|
+| Version, four ASCII digits | 0 | 0 | 0, and again at 4 |
+| Name, 20 bytes | 4 | 4 | 8 |
+| Base, 20 bytes | 24 | 24 | 28 |
+| The control's number, not documented | 44 to 47 | 44 to 47 | 48 to 51 |
+| Adjustment kind | 48 | 48 | 52 |
+| Quick adjust | 49 | 49, divisor at 50 | none |
+| Quick sharp | none | none | 53, divisor at 54 |
+| Not documented | none | none | 55, divisor at 56 |
+| Sharpening | 50 | 51 | 57 |
+| Mid-range sharpening | none | none | 59 |
+| Clarity | none | 53 | 61 |
+| Contrast | 51 | 55 | 63 |
+| Brightness | 52 | 57 | 65 |
+| Saturation | 53 | 59 | 67 |
+| Hue | 54 | 61 | 69 |
+| Filter effect | 55 | 63 | 71 |
+| Toning | 56 | 64 | 72 |
+| Toning saturation | 57 | 65 | 73 |
+| Not documented | none | 67 | 75 to 107 |
+
+In the second and third layouts the byte after a value is its divisor.
+The documentation does not name these bytes. **[F]**
+
+**Two fields lie two bytes before their documented places** in the
+third layout. The documentation puts the adjustment kind at byte 54
+and quick adjust at byte 55 [S][1]. The files contradict it:
+
+- Bytes 54 and 55 hold `01 FF` on every file, 97 public and 17,211 of
+  mine, whatever the control. **[F]**
+- From the second layout to the third, the name, the base and the
+  control's number each move four bytes. So do these two, to bytes 52
+  and 53. The values after them move further, since the third layout
+  adds fields before and among them. **[F]**
+- Byte 52 holds 0, 1 or 2, the documented list of the adjustment kind.
+  Byte 53 holds 0x80, 0x81, 0x82 or 0xFF, with a divisor of 1 at byte
+  54, as quick adjust has in the second layout. **[F]**
+- Byte 53 moves the three sharpening values with it. My Z 9's `VIVID`
+  holds sharpening +4, mid-range sharpening +2 and clarity +1 where
+  byte 53 is 0x80 (3 files). It holds +5, +3.5 and +2 where byte 53 is
+  0x81 (4,197 files). Its `LANDSCAPE` holds +6, +4.5 and +3 at 0x82
+  (one file). **[F]** The Z 9's Quick sharp does that: it adjusts
+  sharpening, mid-range sharpening and clarity together [P][26]
+  (p. 181).
+- Byte 52 is 0 wherever byte 53 is 0x80 or 0xFF, and 1 or 2 wherever
+  it is 0x81 or 0x82. **[F]**
+- NX Studio shows the same. I opened the fixture `nikon-z9-fx.jpg`, a
+  JPEG of my Z 9, in Nikon's NX Studio. Its bytes 52 to 54 are
+  `02 81 01`, and its bytes 57, 59 and 61 are `94 8E 88`. NX Studio
+  shows the Picture Control VIVID with Quick sharp +1, Sharpening +5,
+  Mid-range sharpening +3.5 and Clarity +2. It shows 0 for contrast,
+  brightness, saturation and hue. **[F]**
+
+So raw-files will read the adjustment kind at byte 52 and Quick sharp
+at byte 53. NX Studio shows Quick sharp there on that one file, and
+with it the quarter steps of sharpening, mid-range sharpening and
+clarity. It does not show the adjustment kind. Byte 52 rests on the
+files, and on its place before quick adjust in all three layouts [I].
+
+**Quick adjust and Quick sharp are two settings.** The D600's and the
+D7200's Quick adjust mutes or heightens the whole Picture Control
+[P][25] (p. 132) [28] (p. 133). The Z 9's Quick sharp balances the
+three sharpening values. Its guide gives the older description to
+another setting, the effect level of the Creative Picture Controls
+[P][26] (p. 181). The documentation names the field quick adjust in
+all three layouts [S][1]. raw-files will give each under Nikon's word:
+quick adjust from the first and second layouts, Quick sharp from the
+third. Bytes 55 and 56 of the third layout hold `FF 0A` on every file.
+They may hold the effect level [I], and will not be read.
+
+**Reading a value.** A value is one byte in all three layouts.
+**[F]**
+
+- **A count of steps** is the byte less 0x80, over its divisor. The
+  first layout records no divisor, and counts whole steps. In the
+  second and third the divisor is 4, so a step can be a quarter. The
+  divisor of quick adjust and of Quick sharp is 1. The Z 9 changes a
+  value by 0.25 with its sub-command dial [P][26] (p. 180).
+- **0x00 is "auto".** It stands only in sharpening, contrast and
+  saturation, and in clarity in the second layout. Those are the
+  settings that Nikon's manuals offer an "A" for [P][25] (p. 132) [28]
+  (p. 133). No 108-byte record holds it.
+- **0xFF is "not available"**, and will give `None`. It stands:
+  - in quick adjust on every file under `NEUTRAL`, `FLAT`, `MONOCHROME`
+    and a typed name, where the manuals say it is not available
+    [P][25] (p. 132) [28] (p. 133);
+  - in quick adjust on 11,327 files under the other controls, where
+    11,778 hold 0;
+  - in Quick sharp under a typed name (6 public files);
+  - in the filter effect and the toning on every file but my one
+    `MONOCHROME` file, and in the toning's saturation on every file;
+  - in every value of the `AUTO` control, in the second and third
+    layouts;
+  - in brightness and hue on the 12 Coolpix records, and in
+    sharpening, contrast and saturation on three of them.
+
+| Field | Values the files hold | Read as | Mark |
+|---|---|---|---|
+| Adjustment kind | 0 on 16,147, 12,067 and 13,109 files of the three layouts; 2 on 2,374, 794 and 4,184; 1 on 15, all JPEGs of my Z 9 | the documentation's 0 default settings, 1 quick adjust, 2 full control [S][1] | observed; 1 in my files only |
+| Quick adjust | 0, or not available | steps | observed, for 0 alone |
+| Quick sharp | 0, +1 and +2, or not available | steps | observed; NX Studio shows the +1 of one file |
+| Sharpening | 1 to 8 in the first layout, 0 to 7 in the second, 1 to 9 in the third; auto in the first two | steps, or auto | observed; NX Studio shows the +5 of one file of the third layout |
+| Mid-range sharpening | 0 to 4.5 | steps | observed; NX Studio shows the +3.5 of one file |
+| Clarity | 0 and 1 in the second layout, 0 to 3 in the third; auto in the second | steps, or auto | observed; NX Studio shows the +2 of one file of the third layout |
+| Contrast | -1 to 3; auto in the first two layouts | steps, or auto | observed |
+| Brightness | -1 to 1 | steps | observed |
+| Saturation | 0 to 3; auto in the first two layouts | steps, or auto | observed |
+| Hue | 0 on every file | steps | observed, for 0 alone |
+| Filter effect | 0x80 on my one `MONOCHROME` file; else not available | 0x80 off, 0x81 yellow, 0x82 orange, 0x83 red, 0x84 green [S][1] | 0x80 observed, in my files only; the rest documented only |
+| Toning | 0x80 on the same file; else not available | 0x80 B&W, 0x81 sepia, 0x82 cyanotype, 0x83 to 0x89 red, yellow, green, blue green, blue, purple blue and red purple [S][1] | 0x80 observed, in my files only; the rest documented only |
+| Toning saturation | not available on every file | steps | documented only |
+
+**[F]** The filter effects and the tonings are the D600 manual's own
+lists [P][25] (p. 132).
+
+**The name and the base.** Each is 20 bytes of ASCII, ended by a NUL.
+The base is the preset a control was made from. raw-files will give
+both as recorded, cleaned as every text, and will keep no list of
+names.
+
+| Name | Files, public / mine |
+|---|---|
+| `STANDARD` | 151 / 20,381 |
+| `AUTO` | 67 / 13,009 |
+| `NEUTRAL` | 7 / 8,030 |
+| `VIVID` | 3 / 5,576 |
+| `PORTRAIT` | 8 / 1,116 |
+| `LANDSCAPE` | 8 / 86 |
+| `FLAT` | 10 / 0 |
+| `MONOCHROME` | 0 / 1 |
+| a name its owner typed | 8 / 229 |
+
+**[F]** The counts take both tags. The typed names are `STANDARD-02`
+on a D5300 and `VIVID-KR` on a Z 6II, with the bases `STANDARD` and
+`VIVID`. Mine are 229 files of one name, with the base `VIVID`. On
+every other file the name equals the base.
+
+**What the record holds beside these.** None of it will be read:
+
+- **The control's number.** Of the four bytes before the adjustment
+  kind, two hold a number for each preset, in the MakerNote's byte
+  order. It is 0x0001 under `STANDARD`, 0x00C3 under `VIVID` and 0x02CF
+  under `AUTO`. A third byte is 1 under a typed name. The documentation
+  does not name them. **[F]**
+- **Bytes 75 to 78** of versions 0302 and 0310: two values with a
+  divisor of 4, both 0xFF on every file. **[F]**
+- **Bytes 90 to 99** of the third layout: five values with a divisor
+  of 1. They hold a step under `AUTO` and 0xFF under every other
+  control, where the documented values hold the reverse. They may be the `AUTO`
+  control's own adjustments, which the Z 9 sets from A-2 to A+2 [P][26]
+  (p. 183) [I].
+
+**Active D-Lighting.** It keeps detail in highlights and shadows, by
+adjusting the exposure before the shot [P][25] (pp. 137 to 138).
+0x0022 ActiveD-Lighting is one SHORT [S][1], on 263 public files of 76
+bodies and on all 48,428 of mine. raw-files will read it as the
+`ActiveDLighting` of a `DynamicRangeOptimization`:
+
+| Code | The documentation's name [S][1] | Mark | Files, public / mine |
+|---|---|---|---|
+| 0 | Off | observed | 161 / 8,683 |
+| 1 | Low | observed | 2 / 0 |
+| 3 | Normal | observed | 18 / 0 |
+| 5 | High | observed | 7 / 269 |
+| 7 | Extra High | documented only | 0 / 0 |
+| 8 to 11 | Extra High 1 to Extra High 4 | documented only | 0 / 0 |
+| 65535 | Auto | observed | 75 / 39,476 |
+
+**[F]** The D600 offers auto, extra high, high, normal, low and off
+[P][25] (p. 137). No manual read for this section names the four
+numbered steps. The list will be read whole, since files hold part of
+it.
+
+**HDR.** The camera combines two exposures into one JPEG, and cannot
+record a NEF under it [P][25] (pp. 139 to 141). 0x0035 HDRInfo is a
+record that starts with a four-digit version [S][1]. raw-files will
+read it as the `Hdr` of a `HighDynamicRange`, on or off with its parts:
+
+| Version | Length | Byte 4 | The parts | Files, public / mine |
+|---|---|---|---|---|
+| `0100` | 8 | 0 off, 1 on, 48 auto | byte 5 the exposure differential: 0 auto, 1 to 3 that many EV; byte 6 the smoothing: 0 off, 1 normal, 2 low, 3 high, 48 auto | 1 / 14 |
+| `0101` | 8 | the same | the same | 9 / 0 |
+| `0200` | 6 | 0 off, 1 on | byte 5 the strength: 0 not available, 1 normal, 2 low, 3 high, 4 high+, 5 auto | 0 / 7,827 |
+
+**[F]** The codes' meanings are the documentation's [S][1].
+
+- **Where it is.** The public files are a Nikon 1 J2's raw file at 0100
+  and nine Coolpix NRW files at 0101. Mine are JPEGs: 14 of my D600 at
+  0100, and 7,827 of my D7100, D7200 and Z 9 at 0200. No NEF of mine
+  holds the record.
+- **On or off.** HDR is on on four files, all JPEGs of my D7100, whose
+  bytes 4 and 5 are `01 05`: on, with the strength auto. It is off on
+  every other file. So 1 is observed in my files only, and 0 on both
+  sets.
+- **The parts are Nikon's words.** The D600 sets an exposure
+  differential and a smoothing [P][25] (pp. 140 to 141). The D7100
+  sets an HDR strength of auto, extra high, high, normal or low
+  [P][27] (p. 116). The documentation's "high+" is that manual's extra
+  high.
+- **The parts will be read only where HDR is on**, as the mode of
+  vibration reduction is. With HDR off, my D600's files hold 0 for
+  both parts, which reads as a smoothing of off, a step its menu does
+  not offer.
+- **Byte 4's 48, "auto"**, names neither on nor off. No file holds it,
+  and it will give no value.
+- **Byte 7** of the 8-byte versions, a second level in the
+  documentation, will not be read. It is 0xFF on my D600's files and 0
+  on the public ones.
+- **Any other record will give none.** One public file, a COOLPIX P7100's,
+  holds eight bytes with no version.
+
+**High ISO noise reduction.** 0x00B1 HighISONoiseReduction is one
+SHORT [S][1], on 270 public files of 80 bodies and on all 48,428 of
+mine. raw-files will read it as a `HighIsoNoiseReduction`, one list of
+steps for both makers:
+
+| Code | The documentation's name [S][1] | Mark | Files, public / mine |
+|---|---|---|---|
+| 0 | Off | observed | 97 / 14,164 |
+| 1 | Minimal | observed | 2 / 1,927 |
+| 2 | Low | observed | 22 / 0 |
+| 3 | Medium Low | documented only | 0 / 0 |
+| 4 | Normal | observed | 149 / 31,629 |
+| 5 | Medium High | documented only | 0 / 0 |
+| 6 | High | observed, in my files only | 0 / 708 |
+
+**[F]** The D600's menu offers high, normal, low and off. Under off
+the camera still reduces noise at high sensitivities, by less than
+under low [P][25] (p. 218). Code 1 is on my D3200, D600 and D7100,
+beside code 0 on the same bodies. What sets the two apart is open.
+
+**Long exposure noise reduction.** With the setting on, the camera
+takes a dark frame after an exposure slower than 1 s and subtracts it
+[P][25] (p. 218). 0x0095 NoiseReduction is ASCII, five bytes with the
+NUL [S][1]. It is on 283 public files of 92 bodies and on all 48,428
+of mine. The documentation lists no values. The files hold two texts,
+counted here by the exposure time, Exif's ExposureTime:
+
+| Text | Under 1 s | Exactly 1 s | Over 1 s |
+|---|---|---|---|
+| `FPNR`, mine | 0 | 2 | 264 |
+| `OFF`, mine | 48,079 | 12 | 71 |
+| `FPNR`, public | 0 | 0 | 1 |
+| `OFF`, public | 269 | 11 | 2 |
+
+**[F]** Mine are the D3200's 250 `FPNR` files and the D7200's 16. The
+public one is a COOLPIX P7000's, at 4.81 s.
+
+- **The text says whether the reduction ran**, not how the camera was
+  set. On my D3200 every exposure over 1 s says `FPNR` (248 files), and
+  every shorter one says `OFF` (10,139). A setting does not change
+  with each exposure.
+- **So `FPNR` will give on, and `OFF` will give `None`.** `FPNR` shows
+  that the setting was on. `OFF` shows nothing below 1 s. Above it,
+  `OFF` can also stand with the setting on: a camera switched off
+  while it processes saves the picture without the reduction [P][25]
+  (p. 218).
+- **Exif's CustomRendered follows it on two bodies.** On my D3200 and
+  D7200 it is 1 on exactly the `FPNR` files. On my Z 9 it is 1 on
+  every file, and on the public P7000's file it is 0.
+- Both texts are observed. Any other text will give `None`.
+
+**Vignette control.** It reduces the drop in brightness at a picture's
+edges [P][25] (p. 218). 0x002A VignetteControl is one SHORT [S][1], on
+199 public files of 38 bodies and on 32,584 of mine, of the D600, D7200
+and Z 9. raw-files will read it as the `VignetteControl` of a
+`VignettingCorrection`:
+
+| Code | The documentation's name [S][1] | Mark | Files, public / mine |
+|---|---|---|---|
+| 0 | Off | observed | 45 / 8,441 |
+| 1 | Low | observed | 6 / 0 |
+| 3 | Normal | observed | 148 / 24,143 |
+| 5 | High | documented only | 0 / 0 |
+
+**[F]** The four steps are the D600's menu [P][25] (p. 218). My D300S,
+D3200, D3300 and D7100 write no 0x002A, and will give none.
+
+**Auto distortion control.** It reduces barrel and pin-cushion
+distortion [P][25] (p. 217). 0x002B DistortInfo is a record of 16
+bytes at version `0100`, whose byte 4 is the setting [S][1]. It is on
+219 public files and 46,747 of mine. raw-files will read it as the
+`AutoDistortionControl` of a `DistortionCorrection`:
+
+| Byte 4 | The documentation's name [S][1] | Mark | Files, public / mine |
+|---|---|---|---|
+| 0 | Off | observed | 103 / 19,308 |
+| 1 | On | observed | 116 / 27,439 |
+| 2 | On (underwater) | documented only | 0 / 0 |
+
+**[F]** Bytes 5 to 7 vary with the lens and are not documented. A
+record of another shape will give none. Two files hold one: a public
+D3000's holds one SHORT, and one JPEG of mine a text that an editor
+left. My D300S writes no 0x002B.
+
+**The scene mode.** In a scene mode the camera sets itself for a kind
+of picture, such as a portrait or a sport [P][25] (p. 40). The DSLR and
+Z bodies record the mode as text in 0x00AB, which the documentation
+calls VariProgram. The Coolpix bodies record it in 0x008F SceneMode
+[S][1]. Each is ASCII, 16 bytes with the NUL, padded with spaces. No
+measured file holds both. raw-files will read 0x00AB, else 0x008F, as
+the scene mode of a `Scene`: the text as recorded, cleaned as every
+text.
+
+| Text | Files, public / mine |
+|---|---|
+| blank | 164 / 35,428 |
+| `AUTO(FLASH OFF)` | 1 / 5,811 |
+| `AUTO` | 26 / 5,146 |
+| `CLOSE UP` | 0 / 107 |
+| `SCENE AUTO` | 1 / 82 |
+| `LANDSCAPE` | 1 / 77 |
+| `SPORT` | 0 / 67 |
+| `PORTRAIT` | 0 / 16 |
+| `CHILD` | 4 / 0 |
+| 13 more texts, of my D3300's scenes and effects | 0 / 14 |
+
+**[F]** The counts take both tags: 197 public files and 46,748 of
+mine.
+
+- **A blank text will give `None`.** It is blank under the program,
+  priority and manual modes.
+- **The text is set exactly where Exif names no program.** On my
+  files, ExposureProgram is 0 on every file whose text is set, and 1
+  to 4 on every file whose text is blank.
+- **The auto modes will be given too.** The D600's mode dial has an
+  auto mode and an auto mode with the flash off beside its scene
+  position [P][25] (pp. 35 and 40). The files hold them as `AUTO` and
+  `AUTO(FLASH OFF)`.
+- **No list of texts enters raw-files.** A camera's effects are
+  recorded here too, such as `TOY CAMERA` on my D3300, and a later
+  body writes texts no file here holds.
+- My D300S writes neither tag, and will give no scene.
+
+**Exif's six values.** Each is one SHORT in the Exif IFD, with the
+standard's codes [P][23] (4.6.6.7.35, p. 69; 4.6.6.7.40 to 4.6.6.7.44,
+pp. 70 to 71). The
+[JPEG notes](../jpeg/container-and-metadata.md#4-exif-the-app1-segment)
+give the codes. raw-files will read them from Exif alone, in a raw
+file as in a JPEG. They are on 279 public files and on 48,615 of mine;
+CustomRendered is on 48,561 of mine.
+
+| Tag | Values, public | Values, mine |
+|---|---|---|
+| 0xA408 Contrast | 0 on 274, 1 on 3, 2 on 2 | 0 on 48,613, 2 on 2 |
+| 0xA409 Saturation | 0 on 272, 2 on 7 | 0 on 48,611, 2 on 4 |
+| 0xA40A Sharpness | 0 on 245, 2 on 20, 1 on 14 | 0 on 41,157, 2 on 7,458 |
+| 0xA406 SceneCaptureType | 0 on 263, 1 on 8, 2 on 8 | 0 on 47,671, 2 on 858, 1 on 86 |
+| 0xA401 CustomRendered | 0 on 182, 1 on 97 | 0 on 31,075, 1 on 17,486 |
+| 0xA407 GainControl | 0 on 237, 1 on 28, 2 on 14 | 0 on 31,521, 1 on 10,197, 2 on 6,897 |
+
+**[F]**
+
+- **SceneCaptureType follows the Picture Control on the public
+  files.** It is 1, landscape, on the eight files whose control is
+  `LANDSCAPE`, and 2, portrait, on the eight whose control is
+  `PORTRAIT`. Each was shot with a program set.
+- **CustomRendered marks different things by body.** It is 1 on every
+  file of my Z 9, and on my D3200 and D7200 only where the long
+  exposure text is `FPNR`.
+- No Nikon file holds a code that the standard reserves.
+
+**A raw file and its JPEG agree.** 1,887 shots of mine have one NEF
+and one camera JPEG. They are 933 of my D7200, 633 of my D3200, 315 of
+my Z 9 and 6 of my D600. A shot is a file name and a capture time that both
+files share. Every value of this section is the same in the two files,
+with two exceptions **[F]**:
+
+- the HDR record, which only the JPEG holds, on the D600, D7200 and
+  Z 9;
+- 15 shots of my Z 9 whose JPEG a program wrote [I]. Six of those
+  JPEGs hold none of the MakerNote tags. Nine hold a scene tag of two
+  bytes, and five of the nine another Picture Control than the NEF.
+
 ## 9. Robustness pitfalls
 
 The raw-files rule is that a malformed file returns an error and never panics.
@@ -2317,7 +2782,25 @@ plain MakerNote tags where Exif has no value, and decrypt nothing [I]:
 - the JPEG quality from 0x0004 in a JPEG, a `RAW` there giving none,
   and the size priority or optimal quality from 0x0044;
 - the white balance's preset slot from the number after `PRESET`, and
-  its fluorescent lamp from Exif's LightSource 12 to 16.
+  its fluorescent lamp from Exif's LightSource 12 to 16;
+- the picture style and the processing settings of
+  [section 8.11](#811-picture-style-and-processing), which raw-files
+  will read:
+  - the Picture Control from 0x0023, else 0x00BD, at its six versions.
+    In the 108-byte record the adjustment kind and Quick sharp lie at
+    bytes 52 and 53;
+  - Active D-Lighting from 0x0022;
+  - HDR from 0x0035 at its three versions, its parts only where it is
+    on;
+  - the high ISO noise reduction from 0x00B1;
+  - the long exposure noise reduction from 0x0095, where `FPNR` will
+    give on and `OFF` none;
+  - vignette control from 0x002A, and auto distortion control from
+    byte 4 of 0x002B;
+  - the scene mode from 0x00AB, else 0x008F, where a blank text will
+    give none;
+  - contrast, saturation, sharpness, the scene capture type, custom
+    rendering and gain control from Exif alone.
 
 ShotInfo's firmware version and image area, NikonSettings, and the
 digits that 0x0051 and 0x0056 start with stay unread: the first two are
@@ -2679,9 +3162,26 @@ By the rule of section 4, on these files: **[F]**
 | Exposure difference | 0x000E | 271 / 48,395, not zero on 81 / 5,435 | the same |
 | ISO expansion | in 0x0025 ISOInfo | 260 / 48,395 | the same |
 | ShootingMode's other bits | 0x0089 bits 1 (delay), 2 (PC control), 9 and 11 (pre-capture) | bit 1 on 30 / 8, bit 2 on 12 / 0, bit 9 on 2 / 277, bit 11 on none | bit 9 is undocumented, seen also on one D600 frame of mine; bits 1 and 2 come beside any release mode; bit 11, a burst, is not read, and gives the file no release mode ([section 8.10](#810-more-capture-settings)) |
-| Gain control | Exif 0xA407 GainControl | 279 / 48,514, every Nikon file of mine, with a MakerNote or not | the same as program shift |
-| Sensitivity type | Exif 0x8830 SensitivityType | 218 / 46,808 | the same |
-| Custom rendering | Exif 0xA401 CustomRendered | 279 / 48,514, as GainControl | the same |
+| Sensitivity type | Exif 0x8830 SensitivityType | 218 / 46,808 | the same as program shift |
+
+- **Processing values the typed values will not read.** Each stays in
+  the view with its bytes, and is a named gap
+  ([ADR011](../../architecture-decisions/adr011-metadata-from-standard-tags.md)),
+  counted on the files of
+  [section 8.11](#811-picture-style-and-processing), public / mine
+  **[F]**:
+
+| Value | Where | Files, public / mine | Why it waits |
+|---|---|---|---|
+| Diffraction compensation | the menu settings of the encrypted ShotInfo, where the documentation places it [S][1]; no plain tag | none | it waits with the encrypted records (ADR016) |
+| A Picture Control's number, and its bytes beside the documented fields | 0x0023 and 0x00BD: the bytes before the adjustment kind, and bytes 55, 56 and 75 to 107 of the 108-byte record | 262 / 48,428 | not documented; section 8.11 says what the files show |
+| A Picture Control of another version | 0x0023 | 0 / 0 | no file shows which layout it takes |
+| HDR's second level, and its "auto" | byte 7 of 0x0035 at 0100 and 0101; byte 4's code 48 | 10 / 14; 0 / 0 | the documentation does not say what the second level adds; 48 names neither on nor off |
+| Multiple exposure | 0x00B0 MultiExposure, at versions 0100 to 0103 | 260 / 48,428, on on 0 / 5 | reading every plain value found would add about ten values, most of them off on every measured file |
+| Retouch history | 0x009E RetouchHistory, ten SHORTs | 270 / 48,428, a retouch on 0 / 510 | the same; it describes a copy the camera made, not the shot |
+| Retouch record | 0x00BB RetouchInfo | 214 / 48,428 | the same |
+| The texts of the bodies before the Picture Control | 0x0006, 0x0080, 0x0081, 0x008D, 0x0092, 0x0094, 0x00A9, 0x00AA, 0x00B3 | 0x0006 on 31 / 0; the others on 3 to 28 / 0 | the same; texts with no documented list, on the DSLRs before the D300 and on Coolpix bodies |
+| The lens correction parameters | 0xC7D5 NEFInfo, in a SubIFD, with distortion and vignette parameters [S][1] | 102 / 16,879 | a raw developer needs them; they wait with raw sensor data |
 
 ## Sources
 
@@ -2738,3 +3238,8 @@ Retrieved October 2026.
   as printed
 - [26] Nikon, *Z 9 Reference Guide*, for firmware 5.20, read as
   documentation November 2026 — https://onlinemanual.nikonimglib.com/z9/en/
+- [27] Nikon, *D7100 User's Manual*, 6MB18111-04, the edition Nikon's
+  download center gives, read as documentation November 2026; pages
+  as printed
+- [28] Nikon, *D7200 User's Manual*, 6MB27011-03, read as
+  documentation November 2026; pages as printed
