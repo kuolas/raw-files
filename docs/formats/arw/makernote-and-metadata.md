@@ -1571,9 +1571,7 @@ More of how the photographer set the camera:
 
 raw-files reads each from a plain MakerNote tag or a standard tag, as
 [ADR011](../../architecture-decisions/adr011-metadata-from-standard-tags.md)
-decides, in the order it gives: the first five lines now, the kind of
-fluorescent lamp still to come.
-Nothing needs deciphering.
+decides. Nothing needs deciphering.
 
 **How it was measured.** On 2026-11-20 a counting program written from
 these pages read each tag through raw-files' own raw view
@@ -1889,16 +1887,18 @@ documentation names.** It writes no 0x202E, 0x0102 is 0 or 6, and
 0xB047 is 65535 on every file. Which plain tag, if any, gives it is
 not settled, so its JPEG quality is `None`.
 
-**The fluorescent lamp.** raw-files will give the kind of fluorescent
-lamp from Exif's LightSource 12 to 16 [P][30] (4.6.6.7.20, pp. 60 to 61), as a part
-of the white balance ([section 9.7](#97-camera-settings)).
+**The fluorescent lamp.** raw-files gives the kind of fluorescent
+lamp from Exif's LightSource 12 to 16 [P][30] (4.6.6.7.20, pp. 60 to
+61) under a manual white balance, WhiteBalance 1, as a part of the
+white balance ([section 9.7](#97-camera-settings)). A 0x0115 that names
+another mode drops it.
 
 - Sony's 0x0112 gives the same lamp as -1 to 2. It repeats Exif on
-  every frame measured, so it will not be read.
+  every frame measured, so it is not read.
 - My ILCE-7M2's frames under the four lamps (LGS03156 to 03159) hold
   LightSource 15, 14, 13 and 12, with 0x0112 -1, 0, 1 and 2.
 - These codes are confirmed by a frame. The lamp the body writes as
-  15 will be `White`, Exif's word.
+  15 is `White`, Exif's word.
 - LightSource 16, warm white, is on no Sony file. Exif names it.
 
 ## 10. A100, SR2 and SRF

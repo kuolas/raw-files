@@ -23,23 +23,23 @@
 //!
 //! NEF, ARW and JPEG files give the settings that their standard Exif tags
 //! record: the exposure program, the metering mode, the flash, the white
-//! balance mode, the color space and exposure bracketing. Raw files give
-//! the raw data's bit depth from its own standard tags, and its
-//! compression where those tags say it is uncompressed. The others are
-//! recorded only in a maker's own tags, its MakerNote, or in a maker's own
-//! codes:
+//! balance mode and the kind of fluorescent lamp it was set for, the color
+//! space and exposure bracketing. Raw files give the raw data's bit depth
+//! from its own standard tags, and its compression where those tags say it
+//! is uncompressed. The others are recorded only in a maker's own tags, its
+//! MakerNote, or in a maker's own codes:
 //!
 //! - Nikon's MakerNote, in NEF files and in the JPEGs of Nikon cameras,
 //!   gives the white balance setting, finer than Exif's, in place of
-//!   Exif's, with its color temperature and fine-tuning; the shutter, the
-//!   image area, the focus mode, the AF-area mode, AF fine-tune, the
-//!   stabilization, auto ISO, the exposure fine-tuning, the release mode
-//!   and bracketing, daylight saving time, and the flash's source,
-//!   control, sync and compensation; the color space where the Exif tags
-//!   record none, as in every Nikon raw file checked; in a raw file, the
-//!   raw image size and how a compressed raw is compressed; and in a JPEG,
-//!   its quality and the choice between size priority and optimal
-//!   quality.
+//!   Exif's, with its color temperature, fine-tuning and preset slot; the
+//!   shutter, the image area, the focus mode, the AF-area mode, AF
+//!   fine-tune, the stabilization, auto ISO, the exposure fine-tuning, the
+//!   release mode and bracketing, daylight saving time, and the flash's
+//!   source, control, sync and compensation; the color space where the
+//!   Exif tags record none, as in every Nikon raw file checked; in a raw
+//!   file, the raw image size and how a compressed raw is compressed; and
+//!   in a JPEG, its quality and the choice between size priority and
+//!   optimal quality.
 //! - Sony's MakerNote, in ARW files and their family and in the JPEGs of
 //!   Sony cameras, gives the white balance setting in place of Exif's,
 //!   with its fine-tuning and the color temperature of a chosen color
@@ -79,15 +79,15 @@ use crate::rational::SignedRational;
 /// damaged value costs only itself.
 /// [`Metadata::camera_settings`](crate::Metadata::camera_settings) gives
 /// the values a file's standard Exif tags record: the exposure program,
-/// the metering mode, the flash, the white balance mode, the color space
-/// and exposure bracketing, and the raw bit depth and an uncompressed raw's
-/// compression that the standard tags of a raw file's raw data record. The
-/// others, which only a maker's MakerNote or its own codes record, it gives
-/// from Nikon's MakerNote and Sony's, each those its MakerNote records in
-/// plain tags, and from each maker's compression codes; the shutter, the
-/// image area, the raw image size, AF fine-tune, auto ISO and daylight
-/// saving time are `None` for every Sony file. Each getter says where its
-/// value comes from.
+/// the metering mode, the flash, the white balance mode and its kind of
+/// fluorescent lamp, the color space and exposure bracketing, and the raw
+/// bit depth and an uncompressed raw's compression that the standard tags
+/// of a raw file's raw data record. The others, which only a maker's
+/// MakerNote or its own codes record, it gives from Nikon's MakerNote and
+/// Sony's, each those its MakerNote records in plain tags, and from each
+/// maker's compression codes; the shutter, the image area, the raw image
+/// size, AF fine-tune, auto ISO and daylight saving time are `None` for
+/// every Sony file. Each getter says where its value comes from.
 ///
 /// `CameraSettings::default()` is the empty record, with every value
 /// `None` and an empty [`WhiteBalance`]. A caller's tests start from it and
@@ -1036,7 +1036,8 @@ impl CameraSettings {
 }
 
 /// The white balance the camera was set to: its mode, the color
-/// temperature the file records, and the photographer's fine-tuning.
+/// temperature the file records, the photographer's fine-tuning, the
+/// preset slot of a custom white balance and the kind of fluorescent lamp.
 ///
 /// Every part is `None` when the file does not record it or records it in
 /// a way that cannot be read. `WhiteBalance::default()` is the empty one,
@@ -1070,11 +1071,31 @@ impl CameraSettings {
 /// );
 /// assert_eq!(WhiteBalance::default().mode(), None);
 /// ```
+///
+/// A Nikon body's custom white balance from its first preset slot, and a
+/// white balance set for a cool white fluorescent lamp:
+///
+/// ```
+/// use raw_files::{FluorescentLamp, WhiteBalance, WhiteBalanceMode};
+///
+/// let preset = WhiteBalance::default()
+///     .with_mode(WhiteBalanceMode::Custom)
+///     .with_preset_slot(1);
+/// assert_eq!(preset.preset_slot(), Some(1));
+///
+/// let lamp = WhiteBalance::default()
+///     .with_mode(WhiteBalanceMode::Fluorescent)
+///     .with_fluorescent_lamp(FluorescentLamp::CoolWhite);
+/// assert_eq!(lamp.fluorescent_lamp(), Some(FluorescentLamp::CoolWhite));
+/// assert_eq!(lamp.preset_slot(), None);
+/// ```
 #[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
 pub struct WhiteBalance {
     pub(crate) mode: Option<WhiteBalanceMode>,
     pub(crate) color_temperature: Option<u32>,
     pub(crate) fine_tune: Option<FineTune>,
+    pub(crate) preset_slot: Option<u32>,
+    pub(crate) fluorescent_lamp: Option<FluorescentLamp>,
 }
 
 impl WhiteBalance {
@@ -1088,8 +1109,10 @@ impl WhiteBalance {
     /// setting as text, which is looked up in a table of the texts files
     /// are known to hold, such as `AUTO1` or `COOL WHT FL`; a chosen color
     /// temperature, written as its number, such as `3230K`, gives
-    /// [`ColorTemperature`](WhiteBalanceMode::ColorTemperature). A text the
-    /// table lacks gives way to Exif's mode, never to a guess from its letters.
+    /// [`ColorTemperature`](WhiteBalanceMode::ColorTemperature), and a
+    /// preset slot, `PRESET` and its number, such as `PRESET1`, gives
+    /// [`Custom`](WhiteBalanceMode::Custom). A text the table lacks gives
+    /// way to Exif's mode, never to a guess from its letters.
     /// Sony's MakerNote records the setting as a code, which gives a mode only
     /// where a file shows what the code means, such as
     /// [`Underwater`](WhiteBalanceMode::Underwater), which Exif calls auto, or
@@ -1144,6 +1167,49 @@ impl WhiteBalance {
         self.fine_tune
     }
 
+    /// The slot of a custom white balance, the preset the photographer
+    /// measured and saved under a number, such as 1.
+    ///
+    /// Read from Nikon's MakerNote, the number after `PRESET` in its
+    /// WhiteBalance text: `PRESET1` is the slot NX Studio calls "d-1", and
+    /// the D3X's `PRESET0` is slot 0. A bare `PRESET`, which most bodies
+    /// write, gives the [`Custom`](WhiteBalanceMode::Custom) mode and no
+    /// slot. Only Nikon records it, so a file of any other maker gives
+    /// `None`.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use raw_files::CameraFile;
+    ///
+    /// # fn main() -> raw_files::Result<()> {
+    /// let file = CameraFile::open("photo.nef")?;
+    /// if let Some(slot) = file.metadata().camera_settings().white_balance().preset_slot() {
+    ///     println!("white balance preset d-{slot}");
+    /// }
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn preset_slot(&self) -> Option<u32> {
+        self.preset_slot
+    }
+
+    /// The kind of fluorescent lamp the white balance was set for, such as
+    /// [`CoolWhite`](FluorescentLamp::CoolWhite).
+    ///
+    /// Read from Exif's LightSource, 12 to 16, the five kinds of
+    /// fluorescent lamp Exif names, whatever the maker, under Exif's manual
+    /// white balance: as for the [`mode`](Self::mode), LightSource gives
+    /// the light a manual white balance was set for. Any other light, an
+    /// auto white balance and a file without Exif's WhiteBalance give
+    /// `None`, and so does a maker's MakerNote that names a
+    /// [`mode`](Self::mode) other than
+    /// [`Fluorescent`](WhiteBalanceMode::Fluorescent). Sony's MakerNote also records the lamp, in its tag 0x0112,
+    /// which repeats Exif's on every frame checked and is not read.
+    pub fn fluorescent_lamp(&self) -> Option<FluorescentLamp> {
+        self.fluorescent_lamp
+    }
+
     /// Sets the white balance setting, in place of any set before;
     /// [`mode`](Self::mode) reads it.
     #[must_use]
@@ -1165,6 +1231,22 @@ impl WhiteBalance {
     #[must_use]
     pub fn with_fine_tune(mut self, fine_tune: FineTune) -> Self {
         self.fine_tune = Some(fine_tune);
+        self
+    }
+
+    /// Sets the preset slot, in place of any set before;
+    /// [`preset_slot`](Self::preset_slot) reads it.
+    #[must_use]
+    pub fn with_preset_slot(mut self, slot: u32) -> Self {
+        self.preset_slot = Some(slot);
+        self
+    }
+
+    /// Sets the kind of fluorescent lamp, in place of any set before;
+    /// [`fluorescent_lamp`](Self::fluorescent_lamp) reads it.
+    #[must_use]
+    pub fn with_fluorescent_lamp(mut self, lamp: FluorescentLamp) -> Self {
+        self.fluorescent_lamp = Some(lamp);
         self
     }
 }
@@ -2834,6 +2916,69 @@ impl fmt::Display for JpegCompression {
     }
 }
 
+/// The kind of fluorescent lamp a white balance was set for, as Exif's
+/// LightSource names the five kinds, from the coolest light to the warmest
+/// (Exif 3.1, 4.6.6.7.20):
+///
+/// - 12, daylight fluorescent, 5700 to 7100 K: [`Daylight`](Self::Daylight);
+/// - 13, day white fluorescent, 4600 to 5500 K: [`DayWhite`](Self::DayWhite);
+/// - 14, cool white fluorescent, 3800 to 4500 K:
+///   [`CoolWhite`](Self::CoolWhite);
+/// - 15, white fluorescent, 3250 to 3800 K: [`White`](Self::White);
+/// - 16, warm white fluorescent, 2600 to 3250 K:
+///   [`WarmWhite`](Self::WarmWhite).
+///
+/// `FluorescentLamp` is `#[non_exhaustive]`, so match on it with a wildcard
+/// arm. It orders as its variants are listed, and a new variant is added
+/// after the existing ones, so an order once observed holds. Its
+/// [`name`](Self::name)s, which `Display` writes too, are "Daylight
+/// fluorescent", "Day white fluorescent", "Cool white fluorescent", "White
+/// fluorescent" and "Warm white fluorescent".
+///
+/// # Examples
+///
+/// ```
+/// use raw_files::FluorescentLamp;
+///
+/// assert_eq!(FluorescentLamp::CoolWhite.name(), "Cool white fluorescent");
+/// assert_eq!(FluorescentLamp::Daylight.to_string(), "Daylight fluorescent");
+/// ```
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[non_exhaustive]
+pub enum FluorescentLamp {
+    /// A daylight fluorescent lamp, Exif's D, 5700 to 7100 K.
+    Daylight,
+    /// A day white fluorescent lamp, Exif's N, 4600 to 5500 K.
+    DayWhite,
+    /// A cool white fluorescent lamp, Exif's W, 3800 to 4500 K.
+    CoolWhite,
+    /// A white fluorescent lamp, Exif's WW, 3250 to 3800 K.
+    White,
+    /// A warm white fluorescent lamp, Exif's L, 2600 to 3250 K.
+    WarmWhite,
+}
+
+impl FluorescentLamp {
+    /// The lamp's name, for an information panel, such as "Cool white
+    /// fluorescent"; the type's docs list them all.
+    pub fn name(self) -> &'static str {
+        match self {
+            FluorescentLamp::Daylight => "Daylight fluorescent",
+            FluorescentLamp::DayWhite => "Day white fluorescent",
+            FluorescentLamp::CoolWhite => "Cool white fluorescent",
+            FluorescentLamp::White => "White fluorescent",
+            FluorescentLamp::WarmWhite => "Warm white fluorescent",
+        }
+    }
+}
+
+impl fmt::Display for FluorescentLamp {
+    /// Writes [`name`](FluorescentLamp::name).
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.name())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -2841,8 +2986,9 @@ mod tests {
     use crate::testing::{assert_names, assert_ordered};
 
     /// A white balance with every part set: Nikon's auto, the temperature
-    /// it chose, and a shift in quarter steps along both axes, each value
-    /// different from the others.
+    /// it chose, a shift in quarter steps along both axes, each value
+    /// different from the others, and a preset slot and a lamp, which no
+    /// camera records beside an auto setting.
     fn nikon_white_balance() -> WhiteBalance {
         WhiteBalance {
             mode: Some(WhiteBalanceMode::Auto),
@@ -2851,6 +2997,8 @@ mod tests {
                 amber_blue: signed_fraction(-24, 4),
                 green_magenta: signed_fraction(4, 4),
             }),
+            preset_slot: Some(2),
+            fluorescent_lamp: Some(FluorescentLamp::CoolWhite),
         }
     }
 
@@ -2930,6 +3078,8 @@ mod tests {
         assert_eq!(white_balance.mode(), None);
         assert_eq!(white_balance.color_temperature(), None);
         assert_eq!(white_balance.fine_tune(), None);
+        assert_eq!(white_balance.preset_slot(), None);
+        assert_eq!(white_balance.fluorescent_lamp(), None);
     }
 
     #[test]
@@ -3004,6 +3154,11 @@ mod tests {
         let fine_tune = white_balance.fine_tune().unwrap();
         assert_eq!(fine_tune.amber_blue(), signed_fraction(-24, 4));
         assert_eq!(fine_tune.green_magenta(), signed_fraction(4, 4));
+        assert_eq!(white_balance.preset_slot(), Some(2));
+        assert_eq!(
+            white_balance.fluorescent_lamp(),
+            Some(FluorescentLamp::CoolWhite)
+        );
     }
 
     #[test]
@@ -3230,6 +3385,22 @@ mod tests {
                         ..start.clone()
                     },
                 ),
+                (
+                    start.clone().with_preset_slot(0),
+                    WhiteBalance {
+                        preset_slot: Some(0),
+                        ..start.clone()
+                    },
+                ),
+                (
+                    start
+                        .clone()
+                        .with_fluorescent_lamp(FluorescentLamp::WarmWhite),
+                    WhiteBalance {
+                        fluorescent_lamp: Some(FluorescentLamp::WarmWhite),
+                        ..start.clone()
+                    },
+                ),
             ];
             for (place, (built, expected)) in cases.into_iter().enumerate() {
                 assert_eq!(built, expected, "builder {place} from {start:?}");
@@ -3247,7 +3418,9 @@ mod tests {
                     .with_fine_tune(FineTune::new(
                         signed_fraction(-24, 4),
                         signed_fraction(4, 4),
-                    )),
+                    ))
+                    .with_preset_slot(2)
+                    .with_fluorescent_lamp(FluorescentLamp::CoolWhite),
             )
             .with_exposure_program(ExposureProgram::AperturePriority)
             .with_metering_mode(MeteringMode::MultiSegment)
@@ -3339,12 +3512,16 @@ mod tests {
             .with_mode(WhiteBalanceMode::Daylight)
             .with_color_temperature(1)
             .with_fine_tune(FineTune::new(signed_fraction(1, 1), signed_fraction(1, 1)))
+            .with_preset_slot(4)
+            .with_fluorescent_lamp(FluorescentLamp::Daylight)
             .with_mode(WhiteBalanceMode::Auto)
             .with_color_temperature(5_200)
             .with_fine_tune(FineTune::new(
                 signed_fraction(-24, 4),
                 signed_fraction(4, 4),
-            ));
+            ))
+            .with_preset_slot(2)
+            .with_fluorescent_lamp(FluorescentLamp::CoolWhite);
         assert_eq!(white_balance, nikon_white_balance());
     }
 
@@ -3791,6 +3968,17 @@ mod tests {
         all
     }
 
+    fn all_fluorescent_lamps() -> [FluorescentLamp; 5] {
+        use FluorescentLamp::*;
+        let all = [Daylight, DayWhite, CoolWhite, White, WarmWhite];
+        for lamp in all {
+            match lamp {
+                Daylight | DayWhite | CoolWhite | White | WarmWhite => {}
+            }
+        }
+        all
+    }
+
     #[test]
     fn every_name_is_the_one_documented_and_display_writes_it() {
         // The names are stable once released: a program may show or store
@@ -3962,6 +4150,17 @@ mod tests {
             JpegCompression::name,
             &["Size priority", "Optimal quality"],
         );
+        assert_names(
+            &all_fluorescent_lamps(),
+            FluorescentLamp::name,
+            &[
+                "Daylight fluorescent",
+                "Day white fluorescent",
+                "Cool white fluorescent",
+                "White fluorescent",
+                "Warm white fluorescent",
+            ],
+        );
     }
 
     #[test]
@@ -3987,6 +4186,7 @@ mod tests {
         assert_ordered(&all_raw_compressions());
         assert_ordered(&all_jpeg_qualities());
         assert_ordered(&all_jpeg_compressions());
+        assert_ordered(&all_fluorescent_lamps());
     }
 
     #[test]

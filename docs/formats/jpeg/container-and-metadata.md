@@ -243,11 +243,11 @@ in IFD0's Software [P][3]:
 **More of how the camera was set.** raw-files reads more settings from
 these Exif tags, as
 [ADR011](../../architecture-decisions/adr011-metadata-from-standard-tags.md)
-decides: the flash's return light and red-eye reduction, and exposure
-bracketing. It will read the kind of fluorescent lamp. The codes of
-these tags rest on Exif 3.1 [P][3]. The MakerNote codes of section 10
-rest on a reader's published documentation, and carry one of three
-marks, with the count of files:
+decides: the flash's return light and red-eye reduction, exposure
+bracketing and the kind of fluorescent lamp. The codes of these tags
+rest on Exif 3.1 [P][3]. The MakerNote codes of section 10 rest on a
+reader's published documentation, and carry one of three marks, with the
+count of files:
 
 - **confirmed**: a frame shot in a known setting shows the code;
 - **observed**: the documentation gives the code, and measured files
@@ -317,8 +317,9 @@ JPEGs, given as counts only. **[F]** marks a count over these files.
   - My JPEGs hold 0 on 19,921 and 1 on 1,931. **[F]**
   - The public JPEGs hold 0 on 21, and 1 on the ILCE-7M3 file. **[F]**
   - Of the public raw files, 9 Sony ones hold 2. **[F]**
-- **The kind of fluorescent lamp.** LightSource's 12 to 16 will give
-  `WhiteBalance::fluorescent_lamp()`, a `FluorescentLamp`. [P][3]
+- **The kind of fluorescent lamp.** LightSource's 12 to 16 give
+  `WhiteBalance::fluorescent_lamp()`, a `FluorescentLamp`, under a
+  manual white balance, WhiteBalance 1, as the mode is read. [P][3]
   (4.6.6.7.20, pp. 60 to 61)
 
   | LightSource | Exif's name | `FluorescentLamp` |
@@ -333,9 +334,8 @@ JPEGs, given as counts only. **[F]** marks a count over these files.
     ILCE-7M2's white balance frames, shot in known settings
     ([ARW notes](../arw/makernote-and-metadata.md#97-camera-settings)).
     **[F]**
-  - 16 is on no JPEG measured. Exif names it, so it will be named.
-    **[F]**
-  - Sony's 0x0112 also gives the lamp. It will not be read, since it
+  - 16 is on no JPEG measured. Exif names it, so it is named. **[F]**
+  - Sony's 0x0112 also gives the lamp. It is not read, since it
     repeats Exif on every frame measured (ADR011).
   - The count of each value is not known: LightSource is not among the
     tags counted on my 22,660 JPEGs.
@@ -892,7 +892,7 @@ decided, as steps. [I]
    ExposureMode 2 where the MakerNote gives no bracketing value, not even
    off. More capture settings come the same way:
    - from Exif (section 4): the flash's return light and red-eye
-     reduction, and, still to come, the kind of fluorescent lamp;
+     reduction, and the kind of fluorescent lamp;
    - from the MakerNote (section 10): the JPEG quality, and Nikon's
      choice of optimal quality or size priority. A JPEG whose Nikon
      Quality says `RAW` gives no JPEG quality, and no JPEG gives a raw

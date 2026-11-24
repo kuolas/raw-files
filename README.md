@@ -34,7 +34,8 @@ Linux and Windows alike.
   - the orientation;
   - the sizes of the raw data and of the visible image.
 - **Camera settings.**
-  - the white balance, with its color temperature and fine-tuning;
+  - the white balance, with its color temperature and fine-tuning, the
+    kind of fluorescent lamp and on Nikon files the preset slot;
   - the exposure program;
   - the metering mode;
   - the flash, with red-eye reduction, whether its return light was

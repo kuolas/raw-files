@@ -287,6 +287,22 @@ does. An entry that can break a caller opens with **Breaking:**.
   ([#214](https://github.com/kuolas/raw-files/issues/214)). Nikon JPEGs
   give it from their MakerNote's JPGCompression; a raw file gives none,
   as it gives no JPEG quality.
+- `WhiteBalance::preset_slot` gives the slot of a custom white balance,
+  and `with_preset_slot` sets it
+  ([#214](https://github.com/kuolas/raw-files/issues/214)). Nikon files
+  give it from their MakerNote's WhiteBalance text, the number after
+  `PRESET`: `PRESET1` is slot 1, which NX Studio calls "d-1". The text is
+  read by its form, as a chosen color temperature's is, so the D3X's
+  `PRESET0` gives the custom mode and slot 0; a bare `PRESET` gives the
+  custom mode and no slot.
+- `WhiteBalance::fluorescent_lamp` gives the kind of fluorescent lamp a
+  white balance was set for, a `FluorescentLamp`, and
+  `with_fluorescent_lamp` sets it
+  ([#214](https://github.com/kuolas/raw-files/issues/214)). Every file
+  gives it from Exif's LightSource, 12 to 16, the five kinds Exif names,
+  from daylight to warm white, under a manual white balance, as the mode
+  reads it; a MakerNote that names a mode other than fluorescent drops
+  it. Sony's MakerNote tag 0x0112, which repeats it, is not read.
 
 ### Changed
 

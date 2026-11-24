@@ -486,6 +486,9 @@ fn area<R: Read + Seek>(src: &mut Source<R>, makernote: &MakerNote) -> Result<Op
 ///   ([`white_balance_mode`]), in place of the Exif tags' mode, which
 ///   records only auto or the kind of light, and calls the underwater
 ///   setting auto. When the code names none, the Exif tags' mode stays.
+///   When it names a mode other than fluorescent, the lamp the Exif tags
+///   gave is dropped: a lamp belongs to a fluorescent white balance alone.
+///   No measured file shows them disagreeing.
 /// - **The color temperature** is ColorTemperature, from 1 to 99,999 K
 ///   ([`checked_color_temperature`]), under whichever white balance
 ///   setting: the chosen color temperature under that setting, and the
@@ -545,6 +548,10 @@ fn camera_settings<R: Read + Seek>(
         .and_then(|[code]| white_balance_mode(code));
     if let Some(mode) = mode {
         settings.white_balance.mode = Some(mode);
+        // A lamp belongs to a fluorescent white balance alone.
+        if mode != WhiteBalanceMode::Fluorescent {
+            settings.white_balance.fluorescent_lamp = None;
+        }
     }
     settings.white_balance.color_temperature = ifd
         .held(rules::COLOR_TEMPERATURE)
@@ -1010,7 +1017,7 @@ mod tests {
     use super::*;
     use crate::camera::Camera;
     use crate::camera_settings::{
-        ColorSpace, ExposureProgram, Flash, FlashMode, MeteringMode, WhiteBalance,
+        ColorSpace, ExposureProgram, Flash, FlashMode, FluorescentLamp, MeteringMode, WhiteBalance,
     };
     use crate::container::tiff::tags::{MAKE, MAKER_NOTE};
     use crate::container::tiff::{Block, ifd_in, walk};
@@ -2316,6 +2323,35 @@ mod tests {
                     builder.long(ifd, WHITE_BALANCE, &[code]);
                 });
                 assert_eq!(settings.white_balance.mode, None, "{order:?}, {code}");
+            }
+        }
+    }
+
+    #[test]
+    fn a_white_balance_other_than_fluorescent_drops_exifs_lamp() {
+        // Exif's manual white balance for a cool white lamp, beside each
+        // of Sony's codes: the lamp stays under 96, fluorescent, and goes
+        // under a code that names another mode. Under a code no mode
+        // stands for, Exif's fluorescent mode and lamp stay.
+        let exif = CameraSettings::default().with_white_balance(
+            WhiteBalance::default()
+                .with_mode(WhiteBalanceMode::Fluorescent)
+                .with_fluorescent_lamp(FluorescentLamp::CoolWhite),
+        );
+        for order in ORDERS {
+            for (code, lamp) in [
+                (96, Some(FluorescentLamp::CoolWhite)),
+                (16, None),
+                (112, None),
+                (2, Some(FluorescentLamp::CoolWhite)),
+            ] {
+                let read = settings_from(order, exif.clone(), |builder, ifd| {
+                    builder.long(ifd, WHITE_BALANCE, &[code]);
+                });
+                assert_eq!(
+                    read.white_balance.fluorescent_lamp, lamp,
+                    "{order:?}, {code}"
+                );
             }
         }
     }

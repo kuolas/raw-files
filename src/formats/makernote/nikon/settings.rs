@@ -1,18 +1,19 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! The camera settings in the Nikon MakerNote: the white balance, the
-//! shutter used, the image area, the raw size and compression, the JPEG
-//! quality and compression, the color space, the focus mode, the AF-area
-//! mode, AF fine-tune, the stabilization, auto ISO, the exposure
-//! fine-tuning, the release mode and bracketing, daylight saving time, and
-//! the flash's source, control, sync and compensation.
+//! The camera settings in the Nikon MakerNote: the white balance with its
+//! preset slot, the shutter used, the image area, the raw size and
+//! compression, the JPEG quality and compression, the color space, the
+//! focus mode, the AF-area mode, AF fine-tune, the stabilization, auto ISO,
+//! the exposure fine-tuning, the release mode and bracketing, daylight
+//! saving time, and the flash's source, control, sync and compensation.
 //!
 //! The MakerNote records how the camera was set for the picture beyond
 //! what the Exif tags record (ADR011). [`camera_settings`] reads each
 //! setting from one tag, by its own rule:
 //!
 //! - the white balance mode from WhiteBalance's text
-//!   ([`white_balance_of_text`]), finer than Exif's;
+//!   ([`white_balance_of_text`]), finer than Exif's, and the preset slot
+//!   from the same text ([`preset_slot_of_text`]);
 //! - the color temperature from ColorTemperatureAuto, else from a
 //!   WhiteBalance text that records a chosen one ([`color_temperature`]);
 //! - the fine-tuning from 0x003F, else from 0x000B ([`fine_tune`]);
@@ -99,7 +100,11 @@ const NIKON_COMPRESSED: u32 = 34713;
 ///   ([`white_balance_of_text`]), in place of the Exif tags' mode, which
 ///   records only auto or the kind of light. The text is read once, by the
 ///   text rule ([`tiff_metadata::text`]). When it names no mode, the Exif
-///   tags' mode stays.
+///   tags' mode stays. When it names a mode other than fluorescent, the
+///   lamp the Exif tags gave is dropped: a lamp belongs to a fluorescent
+///   white balance alone. No measured file shows them disagreeing.
+/// - **The preset slot** is the number a WhiteBalance text that names a
+///   preset records ([`preset_slot_of_text`]).
 /// - **The color temperature** is ColorTemperatureAuto's, or a chosen one
 ///   that the WhiteBalance text records ([`color_temperature`]).
 /// - **The fine-tuning** is read from 0x003F, else from 0x000B
@@ -183,12 +188,18 @@ pub(super) fn camera_settings<R: Read + Seek>(
     let Some(ifd) = makernote.tagged() else {
         return Ok(settings);
     };
-    // Read once, for the white balance mode and the color temperature.
+    // Read once, for the white balance mode, the preset slot and the color
+    // temperature.
     let white_balance = tiff_metadata::text(src, ifd, rules::WHITE_BALANCE)?;
     let white_balance = white_balance.as_deref();
     if let Some(mode) = white_balance.and_then(white_balance_of_text) {
         settings.white_balance.mode = Some(mode);
+        // A lamp belongs to a fluorescent white balance alone.
+        if mode != WhiteBalanceMode::Fluorescent {
+            settings.white_balance.fluorescent_lamp = None;
+        }
     }
+    settings.white_balance.preset_slot = white_balance.and_then(preset_slot_of_text);
     settings.white_balance.color_temperature = color_temperature(makernote, white_balance);
     settings.white_balance.fine_tune = fine_tune(src, makernote)?;
     settings.shutter = ifd
@@ -426,14 +437,20 @@ fn color_temperature(makernote: &MakerNote, white_balance: Option<&str>) -> Opti
 /// - `INCANDESCENT` [`Tungsten`](WhiteBalanceMode::Tungsten) and `COOL WHT
 ///   FL` [`Fluorescent`](WhiteBalanceMode::Fluorescent);
 /// - `FLASH` [`Flash`](WhiteBalanceMode::Flash);
-/// - `PRESET` and `PRESET1` to `PRESET4`
+/// - `PRESET`, a custom white balance whose slot the text does not give,
 ///   [`Custom`](WhiteBalanceMode::Custom).
 ///
-/// A chosen color temperature, written as its number, is the one text read
-/// by its form ([`kelvin_of_text`]). Whatever the number, it gives
-/// [`ColorTemperature`](WhiteBalanceMode::ColorTemperature).
+/// Two texts are read by their form, since no table could list every
+/// number:
 ///
-/// `None` for every other text, such as `PRESET5`, which no checked file
+/// - a chosen color temperature, written as its number
+///   ([`kelvin_of_text`]), gives
+///   [`ColorTemperature`](WhiteBalanceMode::ColorTemperature);
+/// - a preset slot, `PRESET` and the slot's number, such as `PRESET1` or
+///   the D3X's `PRESET0` ([`preset_slot_of_text`]), gives
+///   [`Custom`](WhiteBalanceMode::Custom).
+///
+/// `None` for every other text, such as `AUTO3`, which no checked file
 /// holds. A text joins the table only once a file shows it, and until then
 /// the Exif tags' mode stands.
 fn white_balance_of_text(text: &str) -> Option<WhiteBalanceMode> {
@@ -445,8 +462,9 @@ fn white_balance_of_text(text: &str) -> Option<WhiteBalanceMode> {
         "INCANDESCENT" => WhiteBalanceMode::Tungsten,
         "COOL WHT FL" => WhiteBalanceMode::Fluorescent,
         "FLASH" => WhiteBalanceMode::Flash,
-        "PRESET" | "PRESET1" | "PRESET2" | "PRESET3" | "PRESET4" => WhiteBalanceMode::Custom,
+        "PRESET" => WhiteBalanceMode::Custom,
         _ if kelvin_of_text(text).is_some() => WhiteBalanceMode::ColorTemperature,
+        _ if preset_slot_of_text(text).is_some() => WhiteBalanceMode::Custom,
         _ => return None,
     })
 }
@@ -480,6 +498,30 @@ fn kelvin_of_text(text: &str) -> Option<u32> {
         return None;
     }
     // At most five ASCII digits always parse into a u32.
+    digits.parse().ok()
+}
+
+/// The most digits the number of a WhiteBalance text that records a preset
+/// slot may have: the rule's own bound, past the one digit of every such
+/// text checked. The bodies number their slots from 0 or 1 to at most 6.
+const MAX_PRESET_DIGITS: usize = 2;
+
+/// The preset slot that the WhiteBalance text `text`, as read, records as
+/// the number after `PRESET`: `PRESET1` for slot 1, the one NX Studio
+/// calls "d-1", and the D3X's `PRESET0` for slot 0. That is `PRESET`, then
+/// one to [`MAX_PRESET_DIGITS`] ASCII digits, and nothing else, so `PRESET`
+/// alone, `PRESETX`, `PRESET 1` and `preset1` give `None`.
+///
+/// The NEF notes mark `PRESET1` to `PRESET4` confirmed by my frames, and
+/// `PRESET0` read by its form from the D3X's file (section 8.10).
+fn preset_slot_of_text(text: &str) -> Option<u32> {
+    let digits = text.strip_prefix("PRESET")?;
+    if !(1..=MAX_PRESET_DIGITS).contains(&digits.len())
+        || !digits.bytes().all(|byte| byte.is_ascii_digit())
+    {
+        return None;
+    }
+    // At most two ASCII digits always parse into a u32.
     digits.parse().ok()
 }
 
@@ -988,7 +1030,7 @@ mod tests {
         metadata,
     };
     use super::*;
-    use crate::camera_settings::{ExposureProgram, FlashMode, WhiteBalance};
+    use crate::camera_settings::{ExposureProgram, FlashMode, FluorescentLamp, WhiteBalance};
     use crate::container::tiff::tags::{
         COLOR_SPACE as EXIF_COLOR_SPACE, COMPRESSION, EXPOSURE_MODE, EXPOSURE_PROGRAM,
         FLASH as EXIF_FLASH, INTEROP_INDEX, LIGHT_SOURCE, MAKER_NOTE, MODEL,
@@ -1140,12 +1182,25 @@ mod tests {
     #[test]
     fn a_white_balance_text_not_in_the_table_leaves_the_exif_tags_mode() {
         let unknown = [
-            // A preset slot no checked file shows, and an auto setting.
-            "PRESET5", "AUTO3",
+            // An auto setting no checked file shows.
+            "AUTO3",
             // The table's texts in other cases, or cut short: no prefix
             // or case rule.
-            "Auto1", "SUN", "PRESET1X", // Near a color temperature, but not its form.
-            "K", "123456K", "3230k", "3230 K", "K3230", "32.5K",
+            "Auto1",
+            "SUN",
+            // Near a preset slot, but not its form.
+            "PRESET1X",
+            "PRESETX",
+            "PRESET 1",
+            "preset1",
+            "PRESET123",
+            // Near a color temperature, but not its form.
+            "K",
+            "123456K",
+            "3230k",
+            "3230 K",
+            "K3230",
+            "32.5K",
         ];
         for order in ORDERS {
             for text in unknown {
@@ -1161,6 +1216,91 @@ mod tests {
                     "{what}"
                 );
                 assert_eq!(white_balance_of(order, text, |_, _| {}), None, "{what}");
+            }
+        }
+    }
+
+    #[test]
+    fn a_white_balance_text_other_than_fluorescent_drops_exifs_lamp() {
+        // Exif's manual white balance for a cool white lamp, beside each
+        // text: the lamp stays under `COOL WHT FL` and goes under a text
+        // that names another mode. Under a text the table lacks, Exif's
+        // fluorescent mode and lamp stay.
+        let cool_white = |builder: &mut TiffBuilder, exif: IfdId| {
+            builder
+                .short(exif, EXIF_WHITE_BALANCE, &[1])
+                .short(exif, LIGHT_SOURCE, &[14]);
+        };
+        for order in ORDERS {
+            for (text, mode, lamp) in [
+                (
+                    "COOL WHT FL",
+                    WhiteBalanceMode::Fluorescent,
+                    Some(FluorescentLamp::CoolWhite),
+                ),
+                ("SUNNY", WhiteBalanceMode::Daylight, None),
+                ("PRESET1", WhiteBalanceMode::Custom, None),
+                ("3230K", WhiteBalanceMode::ColorTemperature, None),
+                (
+                    "AUTO3",
+                    WhiteBalanceMode::Fluorescent,
+                    Some(FluorescentLamp::CoolWhite),
+                ),
+            ] {
+                let read = settings_with_exif(
+                    order,
+                    |inner, ifd| {
+                        inner.ascii(ifd, WHITE_BALANCE, &padded(text));
+                    },
+                    cool_white,
+                )
+                .white_balance;
+                assert_eq!(read.mode, Some(mode), "{order:?}, {text:?}");
+                assert_eq!(read.fluorescent_lamp, lamp, "{order:?}, {text:?}");
+            }
+        }
+    }
+
+    #[test]
+    fn a_preset_texts_number_is_its_slot() {
+        // A bare `PRESET` is custom with no slot; `PRESET` and a number of
+        // one or two digits is custom with that slot, whatever the number,
+        // as a chosen color temperature is read by its form. Beside Exif's
+        // shade, to show the MakerNote's mode wins.
+        let cases = [
+            ("PRESET", None),
+            ("PRESET0", Some(0)),
+            ("PRESET1", Some(1)),
+            ("PRESET4", Some(4)),
+            ("PRESET5", Some(5)),
+            ("PRESET12", Some(12)),
+            ("PRESET07", Some(7)),
+        ];
+        for order in ORDERS {
+            for (text, slot) in cases {
+                let read = settings_with_exif(
+                    order,
+                    |inner, ifd| {
+                        inner.ascii(ifd, WHITE_BALANCE, &padded(text));
+                    },
+                    exif_shade,
+                )
+                .white_balance;
+                let what = format!("{order:?}, {text:?}");
+                assert_eq!(read.mode, Some(WhiteBalanceMode::Custom), "{what}");
+                assert_eq!(read.preset_slot, slot, "{what}");
+            }
+            // Not the form: no slot, and Exif's mode stands.
+            for text in ["PRESETX", "PRESET123", "PRESET 1", "SUNNY", "3230K"] {
+                let read = settings_with_exif(
+                    order,
+                    |inner, ifd| {
+                        inner.ascii(ifd, WHITE_BALANCE, &padded(text));
+                    },
+                    exif_shade,
+                )
+                .white_balance;
+                assert_eq!(read.preset_slot, None, "{order:?}, {text:?}");
             }
         }
     }
