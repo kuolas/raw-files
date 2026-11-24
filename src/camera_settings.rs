@@ -50,6 +50,10 @@
 //!   and its compensation, and the JPEG quality. A Sony raw file says how
 //!   a compressed raw is compressed in codes of Sony's own.
 //!
+//! Where a Nikon MakerNote records its crop as "off", or holds no crop,
+//! raw-files gives the body's sensor format from a table of its own, for
+//! the bodies that table holds.
+//!
 //! On Sony files the shutter, the image area, the raw image size, AF
 //! fine-tune, auto ISO and daylight saving time are `None`: Sony records
 //! the first two only in enciphered blocks, which raw-files does not read,
@@ -251,9 +255,24 @@ impl CameraSettings {
     /// Read from Nikon's MakerNote, the crop setting of its CropHiSpeed,
     /// which the D200 and every later body checked but the Coolpix P7800
     /// record. Nikon's "off" setting, which some of those bodies write,
-    /// gives `None`, since it does not say which sensor the body has. A
-    /// Sony body records its APS-C mode only in an enciphered block, which
-    /// raw-files does not read.
+    /// does not say which sensor the body has. For it, and for a MakerNote
+    /// that holds no CropHiSpeed, the value is the body's sensor format
+    /// from raw-files' table of bodies, such as
+    /// [`FullFrame`](ImageArea::FullFrame) for the D600 and
+    /// [`ApsC`](ImageArea::ApsC) for the D7100. The table holds the bodies
+    /// whose sensor format the
+    /// [notes on camera names](https://github.com/kuolas/raw-files/blob/master/docs/formats/camera-names.md)
+    /// give from the maker's manual, and a caller cannot tell an area the
+    /// table gave from one the file recorded.
+    ///
+    /// It is `None` for "off" on a body the table does not hold, and for a
+    /// CropHiSpeed that cannot be read, whose setting may have named a
+    /// crop; a MakerNote with any entry too damaged to read gives the table
+    /// no say, since that entry may be the CropHiSpeed. So does a crop
+    /// setting of "off" beside a cropped size smaller than the original,
+    /// which no measured file holds. A Sony body records its APS-C mode only
+    /// in an enciphered block, which raw-files does not read, so a Sony
+    /// file gives `None` whatever its body.
     pub fn image_area(&self) -> Option<ImageArea> {
         self.image_area
     }
@@ -2198,10 +2217,12 @@ impl fmt::Display for Shutter {
 /// 5:4 one and a 2.7x one. Nikon's user manual for the D850, for one,
 /// lists a 5:4 image area.
 ///
-/// Nikon's "off" setting has no variant, since it does not say which
-/// sensor the body has; nor have its 3:2 crop and its other movie crops. A
-/// Sony body records its APS-C mode only in an enciphered block, which
-/// raw-files does not read.
+/// Nikon's "off" setting has no variant of its own, since it does not say
+/// which sensor the body has: for a body raw-files' table of bodies holds,
+/// it gives the body's sensor format, [`FullFrame`](Self::FullFrame) or
+/// [`ApsC`](Self::ApsC) ([`CameraSettings::image_area`]). Its 3:2 crop and
+/// its other movie crops have no variant either. A Sony body records its
+/// APS-C mode only in an enciphered block, which raw-files does not read.
 ///
 /// `ImageArea` is `#[non_exhaustive]`, so match on it with a wildcard arm. It
 /// orders as its variants are listed, and a new variant is added after the

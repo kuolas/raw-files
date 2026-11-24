@@ -138,12 +138,12 @@ Guide's spelling is in the last column.
 
 ## 5. Sensor format and raw sizes
 
-Some Nikon files record neither an image area nor a raw size. raw-files
-will then take both from the body's row below
+Some Nikon files record no image area or no raw size. raw-files then
+takes each one it lacks from the body's row below
 ([ADR011](../architecture-decisions/adr011-metadata-from-standard-tags.md)):
 
-- Where Nikon's crop code is "off" or missing, the image area will be
-  the body's sensor format.
+- Where Nikon's crop code is "off" or missing, the image area is the
+  body's sensor format.
 - Where a raw file records no raw size and the body offers none, the
   raw size will be large.
 

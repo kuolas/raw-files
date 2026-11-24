@@ -69,6 +69,12 @@ pub(super) struct CropHiSpeed {
 }
 
 impl CropHiSpeed {
+    /// Whether the crop kept the whole picture: its cropped size equals its
+    /// original size.
+    pub(super) fn is_uncropped(self) -> bool {
+        self.cropped == self.original
+    }
+
     /// What this crop cut, by its cropped size against its original size on
     /// each side. `None` for no crop, the two sizes equal, and for a crop
     /// that fits neither shape, such as one with a cropped side larger than
@@ -120,7 +126,9 @@ enum Onto {
 
 /// What `makernote`'s CropHiSpeed records of the crop. `None` when the tag
 /// is missing, breaks its rule or stores its values outside the block: the
-/// file is then read as no crop, and has no image area.
+/// file is then read as no crop. Its image area is then none, or, for a
+/// missing tag, the body's sensor format from raw-files' table
+/// ([`camera_settings`](super::settings::camera_settings)).
 ///
 /// # Errors
 ///

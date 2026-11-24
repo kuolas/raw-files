@@ -458,6 +458,16 @@ does. An entry that can break a caller opens with **Breaking:**.
   files now show as "Nikon D300S" and so on through
   `Camera::display_name`, where they showed the recorded text, such as
   "NIKON D300S", before.
+- `CameraSettings::image_area` now gives the body's sensor format where
+  a Nikon file records its crop as "off", or records no crop
+  ([#214](https://github.com/kuolas/raw-files/issues/214)). It does so
+  for the bodies raw-files' table holds: full frame on the D600, APS-C
+  on the D300S, D3200, D3300 and D7100. The format
+  comes from Nikon's manual for each body, as the notes on camera names
+  record. Such a file gave `None` before, so a caller that took `None`
+  for an older body now gets a value, and cannot tell it from one the
+  file recorded. A crop the file names still comes first, such as the
+  D600's DX crop, and a Sony file still gives `None`.
 
 ### Fixed
 

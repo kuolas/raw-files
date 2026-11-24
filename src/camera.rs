@@ -218,7 +218,6 @@ impl Camera {
     /// recorded Model text together. `None` for a body the table holds no
     /// facts for, and when the file records no Model or no Make that
     /// raw-files recognizes.
-    #[cfg_attr(not(test), expect(dead_code, reason = "nothing reads this method yet"))]
     pub(crate) fn body_facts(&self) -> Option<BodyFacts> {
         entry(self.make()?, self.recorded_model.as_deref()?)?.facts
     }

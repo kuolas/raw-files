@@ -330,7 +330,10 @@ mod rules {
 ///   gave when it names one ([`camera_settings`]). The color space is read
 ///   only when the Exif IFD holds no ColorSpace, the raw image size and the
 ///   raw compression only for a raw file's picture, and the JPEG quality
-///   and compression only for a JPEG's. The AF-area mode is AFInfo2's,
+///   and compression only for a JPEG's. Where the crop setting is "off",
+///   or the MakerNote holds no CropHiSpeed, the image area is the sensor
+///   format of the body the Make and Model name, when raw-files' table
+///   holds it ([`Camera::body_facts`]). The AF-area mode is AFInfo2's,
 ///   whatever the focus mode and whether or not the record gives a point,
 ///   and on a body without AFInfo2 AFInfo's.
 /// - **The focus points**, from AFInfo2, always read, since the standard
@@ -356,6 +359,8 @@ mod rules {
 /// # Errors
 ///
 /// `Io` when the reader fails.
+///
+/// [`Camera::body_facts`]: crate::camera::Camera::body_facts
 fn metadata<R: Read + Seek>(
     src: &mut Source<R>,
     makernote: &MakerNote,
@@ -406,6 +411,7 @@ fn metadata<R: Read + Seek>(
     let standard = FromStandardTags {
         settings: metadata.camera_settings,
         model: metadata.camera.recorded_model.as_deref(),
+        body: metadata.camera.body_facts(),
         exif_records_color_space,
         raw_compression: raw_storage.compression,
     };
