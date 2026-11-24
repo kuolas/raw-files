@@ -24,6 +24,8 @@
 
 use std::fmt;
 
+use crate::camera_settings::ImageArea;
+
 /// The camera body a picture was taken with, as the file names it: its
 /// maker and its model as the file records them, its serial number and its
 /// owner's name;
@@ -208,6 +210,17 @@ impl Camera {
     /// ```
     pub fn model(&self) -> Option<&'static str> {
         marketing_name(self.make()?, self.recorded_model.as_deref()?)
+    }
+
+    /// The published facts of the body, its sensor format and whether it
+    /// offers raw sizes, from raw-files' table, looked up as
+    /// [`model`](Self::model) looks up the name: by the maker and the whole
+    /// recorded Model text together. `None` for a body the table holds no
+    /// facts for, and when the file records no Model or no Make that
+    /// raw-files recognizes.
+    #[cfg_attr(not(test), expect(dead_code, reason = "nothing reads this method yet"))]
+    pub(crate) fn body_facts(&self) -> Option<BodyFacts> {
+        entry(self.make()?, self.recorded_model.as_deref()?)?.facts
     }
 
     /// The camera's name to show a person, for every file that records a
@@ -451,7 +464,8 @@ impl fmt::Display for Make {
 }
 
 /// One body's name, as its maker sells it, by the maker and the Model text
-/// the body's files record.
+/// the body's files record, with the facts its maker publishes about it
+/// where the notes give them.
 struct Name {
     /// The maker, as [`Make::from_recorded`] recognizes it from the Make
     /// text the body's files record.
@@ -462,6 +476,25 @@ struct Name {
     /// The name, as its maker writes it, without the brand, such as
     /// `Z6III`.
     name: &'static str,
+    /// The body's sensor format and whether it offers raw sizes, for a body
+    /// whose row in section 5 of the notes on camera names gives them;
+    /// `None` for any other. A body may have a name and no facts.
+    facts: Option<BodyFacts>,
+}
+
+/// What a body's maker publishes about it that fills two camera settings
+/// its files may not record: the image area and the raw image size. The
+/// Nikon reader gives each where a file does not record it
+/// ([`Camera::body_facts`]).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct BodyFacts {
+    /// The format of the body's sensor, as the image area of the whole
+    /// sensor: [`ImageArea::FullFrame`] for what Nikon calls FX, and
+    /// [`ImageArea::ApsC`] for DX.
+    pub(crate) sensor: ImageArea,
+    /// Whether the body offers a raw size other than its largest. A body
+    /// that offers none writes every raw file at the large size.
+    pub(crate) offers_raw_sizes: bool,
 }
 
 /// The name of every body raw-files names, by its maker and its recorded
@@ -470,16 +503,70 @@ struct Name {
 /// Sony's. The notes record, for every entry, a file that shows its Model
 /// text and the maker's document that gives its name, and an entry needs
 /// both
-/// ([the decision to take names as their makers write them](https://github.com/kuolas/raw-files/blob/master/docs/architecture-decisions/adr022-names-as-their-makers-write-them.md),
+/// ([the decision to take names and published facts as their makers write them](https://github.com/kuolas/raw-files/blob/master/docs/architecture-decisions/adr022-names-as-their-makers-write-them.md),
 /// ADR022). Each name is copied from the notes as they write it, its
 /// spaces plain U+0020 spaces and Sony's α the Greek small letter alpha,
 /// U+03B1.
+///
+/// A body's facts come from the same notes, section 5, which give the
+/// maker's document that states each one; each row's comment names it. A
+/// fact enters only with such a document, so most bodies have none.
 static NAMES: &[Name] = &[
-    // Nikon's D600 User's Manual, page 326.
+    // Nikon's D600 User's Manual: its name on page 326 (specifications)
+    // of edition 6MB15311-01, its facts on pages 326 and 94 (image size)
+    // of edition 6MB15211-06.
     Name {
         make: Make::Nikon,
         recorded_model: "NIKON D600",
         name: "D600",
+        facts: Some(BodyFacts {
+            sensor: ImageArea::FullFrame,
+            offers_raw_sizes: false,
+        }),
+    },
+    // Nikon's D300S User's Manual: pages 385 (specifications) and 69
+    // (image size).
+    Name {
+        make: Make::Nikon,
+        recorded_model: "NIKON D300S",
+        name: "D300S",
+        facts: Some(BodyFacts {
+            sensor: ImageArea::ApsC,
+            offers_raw_sizes: false,
+        }),
+    },
+    // Nikon's D3200 Reference Manual: pages 196 (specifications) and 45
+    // (image size).
+    Name {
+        make: Make::Nikon,
+        recorded_model: "NIKON D3200",
+        name: "D3200",
+        facts: Some(BodyFacts {
+            sensor: ImageArea::ApsC,
+            offers_raw_sizes: false,
+        }),
+    },
+    // Nikon's D3300 Reference Manual: pages 342 (specifications) and 86
+    // (image size).
+    Name {
+        make: Make::Nikon,
+        recorded_model: "NIKON D3300",
+        name: "D3300",
+        facts: Some(BodyFacts {
+            sensor: ImageArea::ApsC,
+            offers_raw_sizes: false,
+        }),
+    },
+    // Nikon's D7100 User's Manual: pages 336 (specifications) and 67
+    // (image size).
+    Name {
+        make: Make::Nikon,
+        recorded_model: "NIKON D7100",
+        name: "D7100",
+        facts: Some(BodyFacts {
+            sensor: ImageArea::ApsC,
+            offers_raw_sizes: false,
+        }),
     },
     // Nikon's Z 9 Reference Guide, page 951, its online manual and its
     // product pages.
@@ -487,124 +574,151 @@ static NAMES: &[Name] = &[
         make: Make::Nikon,
         recorded_model: "NIKON Z 9",
         name: "Z 9",
+        facts: None,
     },
     // The Z bodies below: each one's online manual and product page.
     Name {
         make: Make::Nikon,
         recorded_model: "NIKON Z 6",
         name: "Z 6",
+        facts: None,
     },
     Name {
         make: Make::Nikon,
         recorded_model: "NIKON Z 30",
         name: "Z 30",
+        facts: None,
     },
     Name {
         make: Make::Nikon,
         recorded_model: "NIKON Z f",
         name: "Z f",
+        facts: None,
     },
     Name {
         make: Make::Nikon,
         recorded_model: "NIKON Z fc",
         name: "Z fc",
+        facts: None,
     },
     Name {
         make: Make::Nikon,
         recorded_model: "NIKON Z50_2",
         name: "Z50II",
+        facts: None,
     },
     Name {
         make: Make::Nikon,
         recorded_model: "NIKON Z5_2",
         name: "Z5II",
+        facts: None,
     },
     Name {
         make: Make::Nikon,
         recorded_model: "NIKON Z6_3",
         name: "Z6III",
+        facts: None,
     },
     // Sony's bodies: each one's page in Sony's photo gallery.
     Name {
         make: Make::Sony,
         recorded_model: "ILCE-1",
         name: "α1",
+        facts: None,
     },
     Name {
         make: Make::Sony,
         recorded_model: "ILCE-1M2",
         name: "α1 II",
+        facts: None,
     },
     Name {
         make: Make::Sony,
         recorded_model: "ILCE-6000",
         name: "α6000",
+        facts: None,
     },
     Name {
         make: Make::Sony,
         recorded_model: "ILCE-6700",
         name: "α6700",
+        facts: None,
     },
     Name {
         make: Make::Sony,
         recorded_model: "ILCE-7M2",
         name: "α7 II",
+        facts: None,
     },
     Name {
         make: Make::Sony,
         recorded_model: "ILCE-7M3",
         name: "α7 III",
+        facts: None,
     },
     Name {
         make: Make::Sony,
         recorded_model: "ILCE-7M4",
         name: "α7 IV",
+        facts: None,
     },
     Name {
         make: Make::Sony,
         recorded_model: "ILCE-7M5",
         name: "α7 V",
+        facts: None,
     },
     Name {
         make: Make::Sony,
         recorded_model: "ILCE-7RM2",
         name: "α7R II",
+        facts: None,
     },
     Name {
         make: Make::Sony,
         recorded_model: "ILCE-7RM3",
         name: "α7R III",
+        facts: None,
     },
     Name {
         make: Make::Sony,
         recorded_model: "ILCE-7S",
         name: "α7S",
+        facts: None,
     },
     Name {
         make: Make::Sony,
         recorded_model: "ILCE-7SM3",
         name: "α7S III",
+        facts: None,
     },
     Name {
         make: Make::Sony,
         recorded_model: "ILCE-9",
         name: "α9",
+        facts: None,
     },
     Name {
         make: Make::Sony,
         recorded_model: "ILCE-9M3",
         name: "α9 III",
+        facts: None,
     },
 ];
 
-/// The name of the body of `make` whose files record the Model text
+/// The entry of the body of `make` whose files record the Model text
 /// `recorded_model`, matched whole and with its case, or `None` for a body
 /// [`NAMES`] does not hold.
-fn marketing_name(make: Make, recorded_model: &str) -> Option<&'static str> {
+fn entry(make: Make, recorded_model: &str) -> Option<&'static Name> {
     NAMES
         .iter()
         .find(|entry| entry.make == make && entry.recorded_model == recorded_model)
-        .map(|entry| entry.name)
+}
+
+/// The name of the body of `make` whose files record the Model text
+/// `recorded_model`, or `None` for a body [`NAMES`] does not hold.
+fn marketing_name(make: Make, recorded_model: &str) -> Option<&'static str> {
+    entry(make, recorded_model).map(|entry| entry.name)
 }
 
 #[cfg(test)]
@@ -1061,6 +1175,22 @@ mod tests {
     /// backticks, and its third, the name. No cell before the name holds a
     /// `|`, so a row splits on it.
     fn rows_under(notes: &str, heading: &str) -> Vec<(String, String)> {
+        cells_under(notes, heading)
+            .into_iter()
+            .map(|(text, cells)| {
+                let Some(name) = cells.get(1).cloned() else {
+                    panic!("the row of {text:?} has fewer than three cells");
+                };
+                (text, name)
+            })
+            .collect()
+    }
+
+    /// The rows of the tables under the heading `## {heading}` of the notes
+    /// on camera names, in their order: each row's first cell, a text in
+    /// backticks, and its other cells, trimmed. A cell that holds a `|`
+    /// splits, so only the cells before the first such one are sound.
+    fn cells_under(notes: &str, heading: &str) -> Vec<(String, Vec<String>)> {
         let mut rows = Vec::new();
         let mut inside = false;
         for line in notes.lines() {
@@ -1078,14 +1208,19 @@ mod tests {
             {
                 continue;
             }
-            let (Some(text), Some(name)) = (cells.get(1), cells.get(3)) else {
-                panic!("a row with fewer than three cells: {line}");
+            let (Some(text), true) = (cells.get(1), line.ends_with('|')) else {
+                panic!("a row with no cell, or not closed by a `|`: {line}");
             };
             let text = text
                 .strip_prefix('`')
                 .and_then(|cell| cell.strip_suffix('`'))
                 .unwrap_or_else(|| panic!("a row whose first cell is not in backticks: {line}"));
-            rows.push((text.to_owned(), (*name).to_owned()));
+            // The cells between the first and the line's closing `|`.
+            let rest = &cells[2..cells.len() - 1];
+            rows.push((
+                text.to_owned(),
+                rest.iter().map(|&cell| cell.to_owned()).collect(),
+            ));
         }
         assert!(!rows.is_empty(), "no rows under \"## {heading}\"");
         rows
@@ -1139,6 +1274,107 @@ mod tests {
         // Both ways, and in order: every row is an entry with its name, and
         // every entry a row.
         assert_eq!(table, listed);
+    }
+
+    #[test]
+    fn the_facts_are_the_ones_the_notes_list_in_their_order() {
+        let Some(notes) = notes() else {
+            return;
+        };
+        // Both ways, and in order: every row of section 5 is a body of the
+        // table with those facts, and every body with facts a row. Each
+        // fact is written as the notes write it: the sensor format by
+        // Nikon's name, and "none" for a body that offers no raw sizes.
+        let table: Vec<(String, Vec<String>)> = NAMES
+            .iter()
+            .filter_map(|entry| {
+                let facts = entry.facts?;
+                let sensor = match facts.sensor {
+                    ImageArea::FullFrame => "FX",
+                    ImageArea::ApsC => "DX",
+                    other => panic!("{:?}: {other:?} is no sensor format", entry.recorded_model),
+                };
+                let raw_sizes = if facts.offers_raw_sizes {
+                    "offered"
+                } else {
+                    "none"
+                };
+                Some((
+                    entry.recorded_model.to_owned(),
+                    vec![sensor.to_owned(), raw_sizes.to_owned()],
+                ))
+            })
+            .collect();
+        let listed: Vec<(String, Vec<String>)> =
+            cells_under(&notes, "5. Sensor format and raw sizes")
+                .into_iter()
+                .map(|(model, cells)| {
+                    let Some(facts) = cells.get(..2) else {
+                        panic!("the row of {model:?} has fewer than three cells");
+                    };
+                    (model, facts.to_vec())
+                })
+                .collect();
+        assert_eq!(table, listed);
+    }
+
+    #[test]
+    fn every_body_of_the_table_gives_its_facts_by_its_texts() {
+        // Each entry as a file of the body records it, as for its name: a
+        // body with facts gives them, and any other none.
+        for entry in NAMES {
+            let make = MAKE_TEXTS
+                .iter()
+                .find(|&&(_, make)| make == entry.make)
+                .map(|&(text, _)| text)
+                .unwrap_or_else(|| panic!("no Make text for {}", entry.make));
+            let camera = Camera::default()
+                .with_recorded_make(make)
+                .with_recorded_model(entry.recorded_model);
+            assert_eq!(camera.body_facts(), entry.facts, "{}", entry.recorded_model);
+        }
+    }
+
+    #[test]
+    fn the_facts_need_the_maker_and_the_whole_model_text() {
+        let d600 = BodyFacts {
+            sensor: ImageArea::FullFrame,
+            offers_raw_sizes: false,
+        };
+        let camera = |make: Option<&str>, model: Option<&str>| {
+            let mut camera = Camera::default();
+            if let Some(make) = make {
+                camera = camera.with_recorded_make(make);
+            }
+            if let Some(model) = model {
+                camera = camera.with_recorded_model(model);
+            }
+            camera.body_facts()
+        };
+        assert_eq!(
+            camera(Some("NIKON CORPORATION"), Some("NIKON D600")),
+            Some(d600)
+        );
+        assert_eq!(camera(Some("NIKON"), Some("NIKON D600")), Some(d600));
+        // Under another maker, under a Make no maker is recognized from,
+        // without a Make or a Model, and for a text in another case, part
+        // of the text or more than it: none.
+        let none = [
+            (Some("SONY"), Some("NIKON D600")),
+            (Some("Nikon"), Some("NIKON D600")),
+            (None, Some("NIKON D600")),
+            (Some("NIKON CORPORATION"), None),
+            (Some("NIKON CORPORATION"), Some("nikon d600")),
+            (Some("NIKON CORPORATION"), Some("NIKON D60")),
+            (Some("NIKON CORPORATION"), Some("NIKON D600 ")),
+        ];
+        for (make, model) in none {
+            assert_eq!(camera(make, model), None, "{make:?} {model:?}");
+        }
+        // A body with a name and no facts, and one with neither.
+        assert_eq!(camera(Some("NIKON CORPORATION"), Some("NIKON Z 9")), None);
+        assert_eq!(camera(Some("SONY"), Some("ILCE-7M2")), None);
+        assert_eq!(camera(Some("NIKON CORPORATION"), Some("NIKON D7200")), None);
     }
 
     #[test]

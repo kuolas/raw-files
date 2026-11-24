@@ -451,6 +451,13 @@ does. An entry that can break a caller opens with **Breaking:**.
   let flash = Flash::fired().with_mode(FlashMode::Fill);
   assert!(flash.has_fired());
   ```
+- `Camera::model` now names four more Nikon bodies: the D300S, D3200,
+  D3300 and D7100
+  ([#214](https://github.com/kuolas/raw-files/issues/214)). Public files
+  show each one's Model text, and Nikon's manual gives its name. Their
+  files now show as "Nikon D300S" and so on through
+  `Camera::display_name`, where they showed the recorded text, such as
+  "NIKON D300S", before.
 
 ### Fixed
 
