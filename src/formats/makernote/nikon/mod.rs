@@ -333,9 +333,11 @@ mod rules {
 ///   and compression only for a JPEG's. Where the crop setting is "off",
 ///   or the MakerNote holds no CropHiSpeed, the image area is the sensor
 ///   format of the body the Make and Model name, when raw-files' table
-///   holds it ([`Camera::body_facts`]). The AF-area mode is AFInfo2's,
-///   whatever the focus mode and whether or not the record gives a point,
-///   and on a body without AFInfo2 AFInfo's.
+///   holds it ([`Camera::body_facts`]). Where a raw file's MakerNote holds
+///   no ImageSizeRAW, the raw size is large for a body the table says
+///   offers no raw sizes, when the file holds raw data. The AF-area mode
+///   is AFInfo2's, whatever the focus mode and whether or not the record
+///   gives a point, and on a body without AFInfo2 AFInfo's.
 /// - **The focus points**, from AFInfo2, always read, since the standard
 ///   tags never give one ([`focus`]); a shot whose focus mode, read with
 ///   the settings, is manual gives none. A recorded position is
@@ -412,6 +414,7 @@ fn metadata<R: Read + Seek>(
         settings: metadata.camera_settings,
         model: metadata.camera.recorded_model.as_deref(),
         body: metadata.camera.body_facts(),
+        holds_raw_data: metadata.raw_size.is_some(),
         exif_records_color_space,
         raw_compression: raw_storage.compression,
     };

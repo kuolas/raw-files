@@ -1467,10 +1467,11 @@ const FIXTURE_METADATA: &[SampleMetadata] = &[
         // records, no shift, whole steps; and, since the Exif IFD records
         // no ColorSpace, the MakerNote's color space, sRGB. The stripping
         // removed the WhiteBalance text, so the mode is Exif's; the D600
-        // writes no ColorTemperatureAuto, ShutterMode or ImageSizeRAW, and
-        // CropHiSpeed's crop setting, 0, "off", names no image area, so
-        // the area is the D600's sensor format from raw-files' table of
-        // bodies, full frame.
+        // writes no ColorTemperatureAuto or ShutterMode. CropHiSpeed's
+        // crop setting, 0, "off", names no image area, so the area is the
+        // D600's sensor format from raw-files' table of bodies, full
+        // frame; and the D600 writes no ImageSizeRAW, so the raw size is
+        // large, the one size the table says it offers.
         settings: SampleSettings {
             white_balance_mode: Some(WhiteBalanceMode::Auto),
             color_temperature: None,
@@ -1495,7 +1496,7 @@ const FIXTURE_METADATA: &[SampleMetadata] = &[
             shutter: None,
             electronic_front_curtain_setting: None,
             image_area: Some(ImageArea::FullFrame),
-            raw_image_size: None,
+            raw_image_size: Some(RawImageSize::Large),
             color_space: Some(ColorSpace::Srgb),
             focus_area_mode: Some(FocusAreaMode::Single), // code 0, detection 0
             af_fine_tune: Some((true, Some(0), None)),

@@ -145,7 +145,7 @@ takes each one it lacks from the body's row below
 - Where Nikon's crop code is "off" or missing, the image area is the
   body's sensor format.
 - Where a raw file records no raw size and the body offers none, the
-  raw size will be large.
+  raw size is large.
 
 Each row joins a body to the manual that states its two facts.
 The other bodies of §3 and §4 have no row yet, so this table gives them

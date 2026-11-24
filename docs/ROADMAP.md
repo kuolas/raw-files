@@ -111,9 +111,9 @@ time, `Metadata` gives the digitized time
 ([ADR011](architecture-decisions/adr011-metadata-from-standard-tags.md),
 [#214](https://github.com/kuolas/raw-files/issues/214)).
 
-A Nikon body that records no image area or raw size will get them
-from a table of bodies. Each fact in it comes from the maker's
-published specification
+A Nikon body that records no image area or raw size gets them from a
+table of bodies, for the bodies the table holds. Each fact in it comes
+from the maker's published specification
 ([ADR022](architecture-decisions/adr022-names-as-their-makers-write-them.md),
 [the table](formats/camera-names.md)). The format notes say what each
 file records and where each code's meaning comes from
