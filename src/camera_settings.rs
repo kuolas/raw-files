@@ -269,14 +269,22 @@ impl CameraSettings {
     /// give from the maker's manual, and a caller cannot tell an area the
     /// table gave from one the file recorded.
     ///
-    /// It is `None` for "off" on a body the table does not hold, and for a
-    /// CropHiSpeed that cannot be read, whose setting may have named a
-    /// crop; a MakerNote with any entry too damaged to read gives the table
-    /// no say, since that entry may be the CropHiSpeed. So does a crop
-    /// setting of "off" beside a cropped size smaller than the original,
-    /// which no measured file holds. A Sony body records its APS-C mode only
-    /// in an enciphered block, which raw-files does not read, so a Sony
-    /// file gives `None` whatever its body.
+    /// `None` when:
+    ///
+    /// - the crop setting is "off", or the MakerNote holds no CropHiSpeed,
+    ///   on a body the table does not hold;
+    /// - the crop setting is "off" beside a cropped size smaller than the
+    ///   original, which no measured file holds;
+    /// - the CropHiSpeed cannot be read, since its setting may have named
+    ///   a crop;
+    /// - the MakerNote holds no CropHiSpeed but has an entry too damaged
+    ///   to read, which may be it;
+    /// - the crop setting is one that gives no area: the 5:4, 3:2 and
+    ///   2.7x crops, which no file checked holds, a movie's crop other
+    ///   than the two [`ImageArea`] lists, or a code nothing names;
+    /// - the file is a Sony body's, whatever the body: Sony records its
+    ///   APS-C mode only in an enciphered block, which raw-files does not
+    ///   read.
     pub fn image_area(&self) -> Option<ImageArea> {
         self.image_area
     }
@@ -287,21 +295,32 @@ impl CameraSettings {
     /// Read from Nikon's MakerNote, its ImageSizeRAW, which the D750, the
     /// D810, the D5600 and every later body checked record in their raw
     /// files. No raw file checked is a medium one, so no file gives
-    /// [`Medium`](RawImageSize::Medium) yet. A raw file whose MakerNote
-    /// holds no ImageSizeRAW, and which holds raw data, unlike a TIFF image
-    /// a Nikon body writes, is [`Large`](RawImageSize::Large) when
-    /// raw-files' table of bodies says the body offers no raw sizes, as for
-    /// the D600: the table holds the bodies the
+    /// [`Medium`](RawImageSize::Medium) yet.
+    ///
+    /// A raw file whose MakerNote holds no ImageSizeRAW, and which holds
+    /// raw data, is [`Large`](RawImageSize::Large) when raw-files' table of
+    /// bodies says the body offers no raw sizes, as for the D600. The table
+    /// holds the bodies the
     /// [notes on camera names](https://github.com/kuolas/raw-files/blob/master/docs/formats/camera-names.md)
     /// say this of, from the maker's manual. So large also means a body
     /// that offers no other size, and a caller cannot tell a size the
-    /// table gave from one the file recorded. Any other body's raw file
-    /// without the tag gives `None`, and so does one whose MakerNote holds
-    /// an entry too damaged to read, since that entry may be the tag. A
-    /// JPEG file has none, whatever its MakerNote records, since it holds
-    /// no raw data: the Z 9 writes the JPEG's own size there. A Sony file
-    /// has none either, since its tag gives an APS-C raw the code of a
-    /// medium one.
+    /// table gave from one the file recorded.
+    ///
+    /// `None` when:
+    ///
+    /// - a raw file's MakerNote holds no ImageSizeRAW, and the table does
+    ///   not hold the body or says it offers raw sizes;
+    /// - the MakerNote holds no ImageSizeRAW and the file holds no raw
+    ///   data, as a TIFF image a Nikon body writes;
+    /// - the MakerNote holds no ImageSizeRAW but has an entry too damaged
+    ///   to read, which may be it;
+    /// - ImageSizeRAW holds a code other than 1, large, and 3, small. The
+    ///   medium size's 2 is among them, until a raw file shows it;
+    /// - ImageSizeRAW has another type or count than Nikon writes;
+    /// - the file is a JPEG, whatever its MakerNote records, since it
+    ///   holds no raw data: the Z 9 writes the JPEG's own size there;
+    /// - the file is a Sony body's, since its tag gives an APS-C raw the
+    ///   code of a medium one.
     pub fn raw_image_size(&self) -> Option<RawImageSize> {
         self.raw_image_size
     }
@@ -525,17 +544,20 @@ impl CameraSettings {
     ///
     /// - bit 5 of its ShootingMode, which every Nikon DSLR checked but the
     ///   D1 bodies, the D100 and the D2H records as one SHORT, as do the
-    ///   Nikon 1 and Z bodies and the Coolpix A; but not on the D70, whose
-    ///   bit 5 has another meaning;
+    ///   Nikon 1 and Z bodies and the Coolpix A;
     /// - on the other Coolpix bodies, which record no ShootingMode, the
-    ///   text of ISOSelection, `AUTO` or `MANUAL`; any other text gives
-    ///   `None`.
+    ///   text of ISOSelection, `AUTO` or `MANUAL`.
     ///
-    /// `None` too for the D1 bodies, the D100 and the D2H, which write
-    /// ShootingMode as one BYTE, which is not read, and no ISOSelection;
-    /// and for Sony files: the E-mount bodies record the ISO setting only
-    /// in enciphered blocks, and the A-mount bodies in a plain block whose
-    /// layout raw-files does not read.
+    /// `None` when:
+    ///
+    /// - the file is a D70's, whose bit 5 has another meaning;
+    /// - ISOSelection holds any other text, or is not a text;
+    /// - ShootingMode is not one SHORT and the file records no
+    ///   ISOSelection, as on the D1 bodies, the D100 and the D2H, which
+    ///   write ShootingMode as one BYTE, which is not read;
+    /// - the file is a Sony body's: the E-mount bodies record the ISO
+    ///   setting only in enciphered blocks, and the A-mount bodies in a
+    ///   plain block whose layout raw-files does not read.
     ///
     /// # Examples
     ///
@@ -576,12 +598,15 @@ impl CameraSettings {
     /// - Sony's ExposureStandardAdjustment, one SRATIONAL, `0/6` on every
     ///   file checked.
     ///
-    /// `None` when the file records none, as the Coolpix and Nikon 1
-    /// bodies, the oldest Nikon DSLRs and the D40 to the D80, and many Sony
-    /// bodies older than the ILCE-9, the ILCE-7M2 among them, do; when the
-    /// denominator is zero; and when the tag has another type or count than
-    /// the maker writes: some JPEGs that a program made from a NEF file
-    /// store Nikon's with four bytes.
+    /// `None` when:
+    ///
+    /// - the file records none, as the Coolpix and Nikon 1 bodies, the
+    ///   oldest Nikon DSLRs and the D40 to the D80, and many Sony bodies
+    ///   older than the ILCE-9, the ILCE-7M2 among them, do;
+    /// - the denominator is zero;
+    /// - the tag has another type or count than the maker writes: some
+    ///   JPEGs that a program made from a NEF file store Nikon's with four
+    ///   bytes.
     ///
     /// # Examples
     ///
@@ -719,9 +744,16 @@ impl CameraSettings {
     ///
     /// Read from Nikon's MakerNote, the third byte of its WorldTime, 0 off
     /// and 1 on, which the D300 and every later body checked record, and
-    /// the Coolpix A; any other value gives `None`. The older Nikon bodies
-    /// and the other Coolpix bodies record no WorldTime, and Sony records
-    /// no such setting in a plain tag, so their files give `None`.
+    /// the Coolpix A.
+    ///
+    /// `None` when:
+    ///
+    /// - the byte holds any other value;
+    /// - the file records no WorldTime, as the older Nikon bodies and the
+    ///   other Coolpix bodies do;
+    /// - WorldTime has another type or count than Nikon writes;
+    /// - the file is a Sony body's, since Sony records no such setting in
+    ///   a plain tag.
     ///
     /// # Examples
     ///
@@ -747,9 +779,14 @@ impl CameraSettings {
     /// [`Metadata::raw_size`](crate::Metadata::raw_size), when it is one
     /// SHORT above zero. It is the depth the file records, which is not
     /// always the depth of the stored samples: a lossy curve may store
-    /// fewer bits. Sony's medium and small raws in YCbCr record three
-    /// values, one a sample, and give `None`. A JPEG file has none, since
-    /// it holds no raw data.
+    /// fewer bits.
+    ///
+    /// `None` when:
+    ///
+    /// - the file holds no raw data, as a JPEG;
+    /// - BitsPerSample holds several values, as Sony's medium and small
+    ///   raws in YCbCr do, which record three, one a sample;
+    /// - it is missing, is zero or has another type than SHORT.
     ///
     /// # Examples
     ///
@@ -825,18 +862,22 @@ impl CameraSettings {
     ///
     /// Read from the MakerNote:
     ///
-    /// - in a Nikon JPEG, its Quality text: `FINE`, `NORMAL` and `BASIC`.
-    ///   A Nikon raw file gives none, and so does a JPEG whose Quality says
-    ///   `RAW`, one that a program made from a raw file;
+    /// - in a Nikon JPEG, its Quality text: `FINE`, `NORMAL` and `BASIC`;
     /// - in a Sony file, the first of three tags that names a step: the
     ///   second value of its tag 0x202E, which the ILCE-7RM3, the RX100M6
     ///   and later bodies write, in raw files too; in a JPEG, its tag
-    ///   0x0102; and its JPEGQuality, unless 0x0102, or in a raw file
-    ///   0x202E, says the camera wrote the raw file alone.
+    ///   0x0102; and its JPEGQuality.
     ///
-    /// `None` when the file records none of these, or records a code the
-    /// documentation does not give. The ILCE-7M2 records its JPEG quality
-    /// in no plain tag the documentation names, so its files give `None`.
+    /// `None` when:
+    ///
+    /// - the file is a Nikon raw file, or a Nikon JPEG whose Quality says
+    ///   `RAW`, one that a program made from a raw file;
+    /// - Sony's 0x0102, or in a raw file its 0x202E, says the camera wrote
+    ///   the raw file alone, so that JPEGQuality is not read;
+    /// - the file records none of these tags. The ILCE-7M2 records its
+    ///   JPEG quality in no plain tag the documentation names, so its
+    ///   files give `None`;
+    /// - the tag holds a text or a code the documentation does not give.
     ///
     /// What each maker's files record is in the notes on
     /// [Nikon's capture settings](https://github.com/kuolas/raw-files/blob/master/docs/formats/nef/makernote-and-metadata.md#810-more-capture-settings)
@@ -865,11 +906,16 @@ impl CameraSettings {
     /// with a star.
     ///
     /// Read from the MakerNote of a Nikon JPEG, its JPGCompression, one
-    /// SHORT: 1 size priority and 3 optimal quality. `None` for every other
-    /// code, such as 0, which the JPEGs a program made from a raw file hold.
-    /// A raw file gives `None`, as it gives no JPEG quality: every Nikon raw
-    /// file checked holds 0. Only Nikon records it, so a file of any other
-    /// maker gives `None`.
+    /// SHORT: 1 size priority and 3 optimal quality.
+    ///
+    /// `None` when:
+    ///
+    /// - the code is any other, such as 0, which the JPEGs a program made
+    ///   from a raw file hold;
+    /// - JPGCompression is not one SHORT;
+    /// - the file is a Nikon raw file, which gives no JPEG quality either:
+    ///   every one checked holds 0;
+    /// - the file is of any other maker, since only Nikon records it.
     ///
     /// # Examples
     ///
@@ -1235,12 +1281,17 @@ impl WhiteBalance {
     /// Read from Exif's LightSource, 12 to 16, the five kinds of
     /// fluorescent lamp Exif names, whatever the maker, under Exif's manual
     /// white balance: as for the [`mode`](Self::mode), LightSource gives
-    /// the light a manual white balance was set for. Any other light, an
-    /// auto white balance and a file without Exif's WhiteBalance give
-    /// `None`, and so does a maker's MakerNote that names a
-    /// [`mode`](Self::mode) other than
-    /// [`Fluorescent`](WhiteBalanceMode::Fluorescent). Sony's MakerNote also records the lamp, in its tag 0x0112,
-    /// which repeats Exif's on every frame checked and is not read.
+    /// the light a manual white balance was set for. Sony's MakerNote also
+    /// records the lamp, in its tag 0x0112, which repeats Exif's on every
+    /// frame checked and is not read.
+    ///
+    /// `None` when:
+    ///
+    /// - LightSource names any other light;
+    /// - Exif's WhiteBalance says auto, or the file has none;
+    /// - LightSource or Exif's WhiteBalance is not one SHORT;
+    /// - the maker's MakerNote names a [`mode`](Self::mode) other than
+    ///   [`Fluorescent`](WhiteBalanceMode::Fluorescent).
     pub fn fluorescent_lamp(&self) -> Option<FluorescentLamp> {
         self.fluorescent_lamp
     }
